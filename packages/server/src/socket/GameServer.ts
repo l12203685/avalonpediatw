@@ -1,8 +1,9 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { Room, Player, PlayerStatus } from '@avalon/shared';
+import { Room, Player, PlayerStatus, User } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { GameEngine } from '../game/GameEngine';
+import { updateUserStats } from '../services/firebase';
 
 export class GameServer {
   private io: SocketIOServer;
@@ -16,15 +17,22 @@ export class GameServer {
 
   public start(): void {
     this.io.on('connection', (socket: Socket) => {
-      console.log(`✓ Player connected: ${socket.id}`);
+      const user = socket.data.user as User;
+      console.log(`✓ Player connected: ${user.displayName} (${socket.id})`);
+
+      // Emit user authenticated
+      socket.emit('auth:success', {
+        user,
+        isAuthenticated: true,
+      });
 
       // Game events
       socket.on('game:create-room', (playerName: string) => {
-        this.handleCreateRoom(socket, playerName);
+        this.handleCreateRoom(socket, playerName, user);
       });
 
-      socket.on('game:join-room', (roomId: string, playerId: string) => {
-        this.handleJoinRoom(socket, roomId, playerId);
+      socket.on('game:join-room', (roomId: string) => {
+        this.handleJoinRoom(socket, roomId, user);
       });
 
       socket.on('game:start-game', (roomId: string) => {
@@ -53,12 +61,12 @@ export class GameServer {
     });
   }
 
-  private handleCreateRoom(socket: Socket, playerName: string): void {
+  private handleCreateRoom(socket: Socket, playerName: string, user: User): void {
     try {
       const roomId = uuidv4();
-      const playerId = uuidv4();
+      const playerId = user.uid;
 
-      const room = this.roomManager.createRoom(roomId, playerName, playerId);
+      const room = this.roomManager.createRoom(roomId, playerName || user.displayName, playerId);
       const gameEngine = new GameEngine(room);
       this.gameEngines.set(roomId, gameEngine);
 
@@ -66,16 +74,19 @@ export class GameServer {
       socket.data.roomId = roomId;
       socket.data.playerId = playerId;
 
+      // Update player info with user avatar
+      room.players[playerId].avatar = user.photoURL;
+
       this.io.to(roomId).emit('game:state-updated', room);
 
-      console.log(`✓ Room created: ${roomId} by ${playerName}`);
+      console.log(`✓ Room created: ${roomId} by ${user.displayName}`);
     } catch (error) {
       console.error('Error creating room:', error);
       socket.emit('error', 'Failed to create room');
     }
   }
 
-  private handleJoinRoom(socket: Socket, roomId: string, playerId: string): void {
+  private handleJoinRoom(socket: Socket, roomId: string, user: User): void {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -88,9 +99,18 @@ export class GameServer {
         return;
       }
 
+      const playerId = user.uid;
+
+      // Check if already in room
+      if (room.players[playerId]) {
+        socket.emit('error', 'Already in this room');
+        return;
+      }
+
       const player: Player = {
         id: playerId,
-        name: `Player${uuidv4().substring(0, 4)}`,
+        name: user.displayName,
+        avatar: user.photoURL,
         role: null,
         team: null,
         status: 'active',
@@ -105,7 +125,7 @@ export class GameServer {
       this.io.to(roomId).emit('game:state-updated', room);
       this.io.to(roomId).emit('game:player-joined', player);
 
-      console.log(`✓ Player ${playerId} joined room ${roomId}`);
+      console.log(`✓ Player ${user.displayName} joined room ${roomId}`);
     } catch (error) {
       console.error('Error joining room:', error);
       socket.emit('error', 'Failed to join room');

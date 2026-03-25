@@ -1,6 +1,8 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
+import { getDatabase, ref, set, get, child } from 'firebase/database';
+import { getAuth, signInWithCustomToken } from 'firebase/auth';
+import * as admin from 'firebase-admin';
+import { User } from '@avalon/shared';
 
 // Firebase config (will be set from environment)
 const firebaseConfig = {
@@ -16,15 +18,23 @@ const firebaseConfig = {
 let firebaseApp: any;
 let database: any;
 let auth: any;
+let adminApp: any;
 
 export async function initializeFirebase(): Promise<void> {
   try {
-    // Initialize Firebase App
+    // Initialize Firebase App (client SDK)
     firebaseApp = initializeApp(firebaseConfig);
-
-    // Get database and auth references
     database = getDatabase(firebaseApp);
     auth = getAuth(firebaseApp);
+
+    // Initialize Firebase Admin (server SDK)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      adminApp = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
+      });
+    }
 
     console.log('✓ Firebase initialized successfully');
   } catch (error) {
@@ -52,4 +62,135 @@ export function getFirebaseApp(): any {
     throw new Error('Firebase app not initialized');
   }
   return firebaseApp;
+}
+
+export function getAdminAuth(): admin.auth.Auth {
+  if (!adminApp) {
+    throw new Error('Firebase admin not initialized');
+  }
+  return admin.auth(adminApp);
+}
+
+export function getAdminDB(): admin.database.Database {
+  if (!adminApp) {
+    throw new Error('Firebase admin not initialized');
+  }
+  return admin.database(adminApp);
+}
+
+/**
+ * Verify Firebase ID Token
+ */
+export async function verifyIdToken(idToken: string): Promise<admin.auth.DecodedIdToken> {
+  try {
+    const decodedToken = await getAdminAuth().verifyIdToken(idToken);
+    return decodedToken;
+  } catch (error) {
+    console.error('Token verification error:', error);
+    throw new Error('Invalid token');
+  }
+}
+
+/**
+ * Create a new user in Realtime Database
+ */
+export async function createUserProfile(user: User): Promise<void> {
+  const db = getAdminDB();
+  const userRef = db.ref(`users/${user.uid}`);
+
+  await userRef.set({
+    ...user,
+    totalGames: 0,
+    gamesWon: 0,
+    gamesLost: 0,
+    winRate: 0,
+    eloRating: 1000,
+    badges: [],
+  });
+}
+
+/**
+ * Get user profile from database
+ */
+export async function getUserProfile(uid: string): Promise<any> {
+  const db = getAdminDB();
+  const userRef = db.ref(`users/${uid}`);
+
+  const snapshot = await userRef.once('value');
+  return snapshot.val();
+}
+
+/**
+ * Update user profile
+ */
+export async function updateUserProfile(uid: string, updates: Partial<User>): Promise<void> {
+  const db = getAdminDB();
+  const userRef = db.ref(`users/${uid}`);
+
+  await userRef.update({
+    ...updates,
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Get user game statistics
+ */
+export async function getUserStats(uid: string): Promise<any> {
+  const db = getAdminDB();
+  const statsRef = db.ref(`user-stats/${uid}`);
+
+  const snapshot = await statsRef.once('value');
+  return snapshot.val() || null;
+}
+
+/**
+ * Update user statistics after game
+ */
+export async function updateUserStats(
+  uid: string,
+  gameResult: {
+    won: boolean;
+    role: string;
+    duration: number;
+    kills?: number;
+  }
+): Promise<void> {
+  const db = getAdminDB();
+  const statsRef = db.ref(`user-stats/${uid}`);
+
+  const current = (await statsRef.once('value')).val() || {
+    totalGames: 0,
+    gamesWon: 0,
+    gamesLost: 0,
+    rolesPlayed: {},
+    eloRating: 1000,
+  };
+
+  const newElo = calculateElo(current.eloRating, gameResult.won);
+
+  await statsRef.update({
+    totalGames: (current.totalGames || 0) + 1,
+    gamesWon: gameResult.won ? (current.gamesWon || 0) + 1 : current.gamesWon,
+    gamesLost: !gameResult.won ? (current.gamesLost || 0) + 1 : current.gamesLost,
+    [`rolesPlayed/${gameResult.role}`]: (current.rolesPlayed?.[gameResult.role] || 0) + 1,
+    totalKills: (current.totalKills || 0) + (gameResult.kills || 0),
+    averageGameDuration:
+      ((current.averageGameDuration || 0) * (current.totalGames || 1) + gameResult.duration) /
+      ((current.totalGames || 1) + 1),
+    eloRating: newElo,
+    lastGameAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Simple ELO calculation
+ */
+function calculateElo(currentElo: number, won: boolean, K = 32): number {
+  if (won) {
+    return currentElo + K;
+  } else {
+    return Math.max(0, currentElo - K);
+  }
 }

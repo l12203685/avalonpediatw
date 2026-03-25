@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/gameStore';
-import { Room, Player } from '@avalon/shared';
+import { Room, Player, User, AuthSession } from '@avalon/shared';
+import { getIdToken } from './auth';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -13,10 +14,13 @@ export function getSocket(): Socket {
   return socket;
 }
 
-export function initializeSocket(): void {
+export async function initializeSocket(token: string): Promise<void> {
   if (socket) return;
 
   socket = io(SERVER_URL, {
+    auth: {
+      token,
+    },
     transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionDelay: 1000,
@@ -28,6 +32,19 @@ export function initializeSocket(): void {
 
   socket.on('connect', () => {
     console.log('✓ Connected to server');
+  });
+
+  socket.on('auth:success', (session: AuthSession) => {
+    console.log('✓ Authenticated:', session.user.displayName);
+    store.setCurrentPlayer({
+      id: session.user.uid,
+      name: session.user.displayName,
+      avatar: session.user.photoURL,
+      role: null,
+      team: null,
+      status: 'active',
+      createdAt: session.user.createdAt,
+    });
   });
 
   socket.on('game:state-updated', (room: Room) => {
@@ -54,6 +71,13 @@ export function initializeSocket(): void {
   socket.on('disconnect', () => {
     console.log('Disconnected from server');
   });
+}
+
+export function disconnectSocket(): void {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
 }
 
 export function createRoom(playerName: string): void {

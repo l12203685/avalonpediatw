@@ -4,6 +4,7 @@ import cors from 'cors';
 import http from 'http';
 import { GameServer } from './socket/GameServer';
 import { initializeFirebase } from './services/firebase';
+import { authenticateSocket } from './middleware/auth';
 
 const app = express();
 const server = http.createServer(app);
@@ -22,6 +23,20 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Auth endpoint (for testing)
+app.post('/auth/validate', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ error: 'No token provided' });
+    }
+    // Token will be validated in Socket.IO middleware
+    res.json({ valid: true });
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
 // Socket.IO Setup
 const io = new SocketIOServer(server, {
   cors: {
@@ -30,6 +45,9 @@ const io = new SocketIOServer(server, {
   },
   transports: ['websocket', 'polling'],
 });
+
+// Apply authentication middleware
+io.use(authenticateSocket);
 
 // Initialize services
 async function startServer(): Promise<void> {

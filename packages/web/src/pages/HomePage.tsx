@@ -2,13 +2,24 @@ import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { createRoom, joinRoom } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
-import { Play, LogIn } from 'lucide-react';
+import { logout } from '../services/auth';
+import { Play, LogIn, LogOut } from 'lucide-react';
 
 export default function HomePage(): JSX.Element {
   const [playerName, setPlayerName] = useState('');
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
-  const { setGameState, setCurrentPlayer } = useGameStore();
+  const { setGameState, setCurrentPlayer, currentPlayer } = useGameStore();
+
+  const handleLogout = async (): Promise<void> => {
+    try {
+      await logout();
+      setCurrentPlayer(null);
+      setGameState('home');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   const handleCreateRoom = (): void => {
     if (!playerName.trim()) {
@@ -57,6 +68,22 @@ export default function HomePage(): JSX.Element {
 
   return (
     <div className="flex items-center justify-center min-h-screen p-4">
+      {/* User Profile / Logout Button */}
+      {currentPlayer && (
+        <div className="absolute top-4 right-4 flex items-center gap-4 bg-avalon-card/50 px-4 py-2 rounded-lg border border-gray-600">
+          <div className="text-sm">
+            <p className="font-bold text-white">{currentPlayer.name}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-2"
+            title="Logout"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+      )}
+
       <div className="w-full max-w-md">
         {mode === 'home' && (
           <div className="text-center space-y-8">
