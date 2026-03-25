@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "avalon-game-platform"
+  },
+  "targets": {
+    "avalon-game-platform": {
+      "hosting": [
+        "avalon-web"
+      ]
+    }
+  }
+}
