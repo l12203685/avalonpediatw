@@ -43,7 +43,7 @@ export default function HomePage(): JSX.Element {
     setGameState('lobby');
   };
 
-  const handleJoinRoom = (): void {
+  const handleJoinRoom = (): void => {
     if (!playerName.trim()) {
       alert('Please enter your name');
       return;
@@ -120,8 +120,8 @@ export default function HomePage(): JSX.Element {
         )}
 
         <div className="w-full max-w-md">
-        {mode === 'home' && (
-          <motion.div
+          {mode === 'home' && (
+            <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-center space-y-8 w-full max-w-md"
@@ -282,6 +282,7 @@ export default function HomePage(): JSX.Element {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

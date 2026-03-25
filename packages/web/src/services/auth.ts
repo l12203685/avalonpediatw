@@ -102,13 +102,17 @@ export async function getCurrentUserWithToken(): Promise<{
  * Convert Firebase user to App User
  */
 export function firebaseUserToAppUser(firebaseUser: FirebaseUser, provider: string): User {
+  const email = firebaseUser.email || '';
+  const creationTime = firebaseUser.metadata?.creationTime;
+  const createdAt = creationTime instanceof Date ? creationTime.getTime() : Date.now();
+
   return {
     uid: firebaseUser.uid,
-    email: firebaseUser.email,
-    displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Unknown',
+    email,
+    displayName: firebaseUser.displayName || email.split('@')[0] || 'Unknown',
     photoURL: firebaseUser.photoURL || undefined,
     provider: provider as 'google' | 'github',
-    createdAt: firebaseUser.metadata?.creationTime?.getTime() || Date.now(),
+    createdAt,
     updatedAt: Date.now(),
   };
 }

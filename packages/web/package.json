@@ -18,11 +18,13 @@
     "zustand": "^4.4.1",
     "lucide-react": "^0.294.0",
     "firebase": "^10.7.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "framer-motion": "^10.16.16"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
+    "@types/uuid": "^9.0.7",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@vitejs/plugin-react": "^4.2.1",
