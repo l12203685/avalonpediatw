@@ -28,6 +28,8 @@ jobs:
         run: npm install && npm run build
 
       - name: Deploy to Firebase
+        env:
+          FIREBASE_CREDENTIAL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AVALON }}
         run: |
           npm install -g firebase-tools
-          firebase deploy --token "${{ secrets.FIREBASE_TOKEN }}" --project avalon-game-platform
+          firebase deploy --project avalon-game-platform
