@@ -5,28 +5,28 @@ on:
     branches: [main, claude/avalon-game-platform-*]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
 
-      - name: Setup pnpm
-        run: npm install -g pnpm@latest
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
 
-      - name: Install and build all packages
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm run build
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
 
       - name: Deploy to Firebase
         run: |
-          npm install -g firebase-tools
-          firebase deploy --project avalon-game-platform --non-interactive
+          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_AVALON }}" > firebase-key.json
+          npx firebase-tools deploy \
+            --project avalon-game-platform \
+            --non-interactive
         env:
-          FIREBASE_CREDENTIAL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AVALON }}
+          GOOGLE_APPLICATION_CREDENTIALS: firebase-key.json
