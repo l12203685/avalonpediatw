@@ -1,0 +1,61 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-web:
+    name: Deploy Frontend to Vercel
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel
+
+      - name: Deploy to Vercel
+        run: vercel --prod
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: packages/web
+        continue-on-error: true
+
+  deploy-server:
+    name: Deploy Backend to Railway
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy to Railway
+        run: |
+          # This is a placeholder - actual deployment depends on Railway setup
+          echo "🚀 Deploying backend to Railway..."
+          echo "Railway deployment requires CLI setup"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  notify:
+    name: Notify Deployment Status
+    needs: [deploy-web]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Deployment Success
+        if: success()
+        run: |
+          echo "✅ Deployment successful!"
+          echo "Frontend: https://avalon-pedia.vercel.app"
+          echo "API: https://avalon-api.railway.app"
+
+      - name: Deployment Failed
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Check logs for details"

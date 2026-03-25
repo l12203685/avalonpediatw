@@ -1,0 +1,32 @@
+{
+  "name": "Avalon Pedia API",
+  "description": "Real-time Avalon game server with Discord and Line bot integration",
+  "builder": "nixpacks",
+  "env": {
+    "NODE_ENV": "production",
+    "PORT": 3001,
+    "FIREBASE_PROJECT_ID": {
+      "description": "Firebase Project ID"
+    },
+    "FIREBASE_PRIVATE_KEY": {
+      "description": "Firebase Private Key (base64 encoded)"
+    },
+    "FIREBASE_CLIENT_EMAIL": {
+      "description": "Firebase Client Email"
+    },
+    "DISCORD_BOT_TOKEN": {
+      "description": "Discord Bot Token"
+    },
+    "DISCORD_CLIENT_ID": {
+      "description": "Discord Client ID"
+    },
+    "LINE_CHANNEL_ACCESS_TOKEN": {
+      "description": "Line Channel Access Token"
+    },
+    "LINE_CHANNEL_SECRET": {
+      "description": "Line Channel Secret"
+    }
+  },
+  "start": "pnpm start",
+  "build": "pnpm build"
+}
