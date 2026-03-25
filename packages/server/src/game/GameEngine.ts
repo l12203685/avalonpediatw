@@ -34,7 +34,15 @@ export class GameEngine {
     // Clear existing timeout
     if (this.voteTimeout) {
       clearTimeout(this.voteTimeout);
+      this.voteTimeout = null;
     }
+
+    // Log voting phase start
+    this.logEvent('voting_phase_started', {
+      round: this.room.currentRound,
+      failCount: this.room.failCount,
+      playerCount: Object.keys(this.room.players).length
+    });
 
     // Set vote timeout
     this.voteTimeout = setTimeout(() => {
@@ -127,13 +135,21 @@ export class GameEngine {
 
     const approved = approvals > rejections;
 
+    // Clear voting timeout
+    if (this.voteTimeout) {
+      clearTimeout(this.voteTimeout);
+      this.voteTimeout = null;
+    }
+
+    this.logEvent('voting_resolved', {
+      approvals,
+      rejections,
+      result: approved ? 'approved' : 'rejected'
+    });
+
     if (approved) {
       // Move to quest phase
       this.room.state = 'quest';
-      if (this.voteTimeout) {
-        clearTimeout(this.voteTimeout);
-        this.voteTimeout = null;
-      }
     } else {
       // Another voting round
       this.room.failCount++;
@@ -143,10 +159,10 @@ export class GameEngine {
         // Evil wins
         this.room.state = 'ended';
         this.room.evilWins = true;
-        if (this.voteTimeout) {
-          clearTimeout(this.voteTimeout);
-          this.voteTimeout = null;
-        }
+        this.logEvent('game_ended', {
+          winner: 'evil',
+          reason: 'vote_rejections_limit'
+        });
       } else {
         // Start new voting round with timeout
         this.startVotingPhase();
@@ -222,5 +238,14 @@ export class GameEngine {
       voted: Object.keys(this.room.votes).length,
       total: Object.keys(this.room.players).length,
     };
+  }
+
+  private logEvent(event: string, data: Record<string, any>): void {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      roomId: this.room.id,
+      event,
+      ...data
+    }));
   }
 }

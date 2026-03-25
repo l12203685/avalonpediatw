@@ -2,6 +2,23 @@ import { Socket } from 'socket.io';
 import { verifyIdToken, getUserProfile, createUserProfile } from '../services/firebase';
 import { User } from '@avalon/shared';
 
+enum AuthErrorCode {
+  NO_TOKEN = 'NO_TOKEN',
+  INVALID_TOKEN = 'INVALID_TOKEN',
+  EXPIRED_TOKEN = 'EXPIRED_TOKEN',
+  UNKNOWN = 'UNKNOWN'
+}
+
+class AuthError extends Error {
+  constructor(
+    message: string,
+    public code: AuthErrorCode
+  ) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
 /**
  * Middleware to authenticate Socket.IO connections
  */
@@ -10,11 +27,21 @@ export async function authenticateSocket(socket: Socket, next: Function): Promis
     const token = socket.handshake.auth.token;
 
     if (!token) {
-      return next(new Error('Authentication error: No token provided'));
+      return next(new AuthError('No token provided', AuthErrorCode.NO_TOKEN));
     }
 
     // Verify Firebase ID token
-    const decodedToken = await verifyIdToken(token);
+    let decodedToken;
+    try {
+      decodedToken = await verifyIdToken(token);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMsg.includes('expired') || errorMsg.includes('auth/id-token-expired')) {
+        throw new AuthError('Token has expired', AuthErrorCode.EXPIRED_TOKEN);
+      }
+      throw new AuthError('Invalid token', AuthErrorCode.INVALID_TOKEN);
+    }
+
     const uid = decodedToken.uid;
     const email = decodedToken.email || '';
     const name = decodedToken.name || email.split('@')[0];
@@ -43,11 +70,28 @@ export async function authenticateSocket(socket: Socket, next: Function): Promis
     socket.data.user = userProfile;
     socket.data.uid = uid;
 
-    console.log(`✓ Socket authenticated: ${userProfile.displayName} (${uid})`);
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      event: 'socket_authenticated',
+      uid,
+      displayName: userProfile.displayName,
+      provider: userProfile.provider
+    }));
+
     next();
   } catch (error) {
+    if (error instanceof AuthError) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        event: 'auth_error',
+        code: error.code,
+        message: error.message
+      }));
+      return next(new Error(`Auth error [${error.code}]: ${error.message}`));
+    }
+
     console.error('Socket authentication error:', error);
-    next(new Error(`Authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`));
+    next(new AuthError('Authentication failed', AuthErrorCode.UNKNOWN));
   }
 }
 

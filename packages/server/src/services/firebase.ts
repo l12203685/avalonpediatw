@@ -1,6 +1,6 @@
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, child } from 'firebase/database';
-import { getAuth, signInWithCustomToken } from 'firebase/auth';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import { getDatabase, Database } from 'firebase/database';
+import { getAuth, Auth } from 'firebase/auth';
 import * as admin from 'firebase-admin';
 import { User } from '@avalon/shared';
 
@@ -15,10 +15,10 @@ const firebaseConfig = {
   databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
 };
 
-let firebaseApp: any;
-let database: any;
-let auth: any;
-let adminApp: any;
+let firebaseApp: FirebaseApp | null = null;
+let database: Database | null = null;
+let auth: Auth | null = null;
+let adminApp: admin.app.App | null = null;
 
 export async function initializeFirebase(): Promise<void> {
   try {
@@ -43,21 +43,21 @@ export async function initializeFirebase(): Promise<void> {
   }
 }
 
-export function getFirebaseDB(): any {
+export function getFirebaseDB(): Database {
   if (!database) {
     throw new Error('Firebase database not initialized');
   }
   return database;
 }
 
-export function getFirebaseAuth(): any {
+export function getFirebaseAuth(): Auth {
   if (!auth) {
     throw new Error('Firebase auth not initialized');
   }
   return auth;
 }
 
-export function getFirebaseApp(): any {
+export function getFirebaseApp(): FirebaseApp {
   if (!firebaseApp) {
     throw new Error('Firebase app not initialized');
   }
@@ -112,12 +112,12 @@ export async function createUserProfile(user: User): Promise<void> {
 /**
  * Get user profile from database
  */
-export async function getUserProfile(uid: string): Promise<any> {
+export async function getUserProfile(uid: string): Promise<User | null> {
   const db = getAdminDB();
   const userRef = db.ref(`users/${uid}`);
 
   const snapshot = await userRef.once('value');
-  return snapshot.val();
+  return snapshot.val() as User | null;
 }
 
 /**
@@ -133,15 +133,27 @@ export async function updateUserProfile(uid: string, updates: Partial<User>): Pr
   });
 }
 
+interface UserStats {
+  totalGames: number;
+  gamesWon: number;
+  gamesLost: number;
+  rolesPlayed: Record<string, number>;
+  eloRating: number;
+  totalKills?: number;
+  averageGameDuration?: number;
+  lastGameAt?: number;
+  updatedAt?: number;
+}
+
 /**
  * Get user game statistics
  */
-export async function getUserStats(uid: string): Promise<any> {
+export async function getUserStats(uid: string): Promise<UserStats | null> {
   const db = getAdminDB();
   const statsRef = db.ref(`user-stats/${uid}`);
 
   const snapshot = await statsRef.once('value');
-  return snapshot.val() || null;
+  return snapshot.val() as UserStats | null;
 }
 
 /**

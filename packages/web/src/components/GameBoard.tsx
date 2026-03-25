@@ -15,12 +15,21 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
 
   // Play sound on state change
   useEffect(() => {
-    if (room.state === 'voting') {
-      audioService.playSound('vote');
-    } else if (room.state === 'quest') {
-      audioService.playSound('game-start');
-    } else if (room.state === 'ended') {
-      room.evilWins ? audioService.playFailureSound() : audioService.playSuccessChord();
+    try {
+      if (room.state === 'voting') {
+        audioService.playSound('vote');
+      } else if (room.state === 'quest') {
+        audioService.playSound('game-start');
+      } else if (room.state === 'ended') {
+        if (room.evilWins) {
+          audioService.playFailureSound();
+        } else {
+          audioService.playSuccessChord();
+        }
+      }
+    } catch (error) {
+      // Silently fail - audio is not critical to gameplay
+      console.warn('Failed to play game sound:', error instanceof Error ? error.message : 'Unknown error');
     }
   }, [room.state, room.evilWins]);
 
