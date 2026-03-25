@@ -4,7 +4,7 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
-# 複製所有文件到容器
+# 複製所有文件
 COPY . .
 
 # 安裝依賴
