@@ -55,12 +55,16 @@ export class GameServer {
         this.handleVote(socket, roomId, playerId, vote);
       });
 
-      socket.on('game:submit-quest-result', (roomId: string, result: 'success' | 'fail') => {
-        this.handleQuestResult(socket, roomId, result);
+      socket.on('game:select-quest-team', (roomId: string, teamMemberIds: string[]) => {
+        this.handleSelectQuestTeam(socket, roomId, teamMemberIds);
       });
 
-      socket.on('game:assassinate', (roomId: string, targetId: string) => {
-        this.handleAssassinate(socket, roomId, targetId);
+      socket.on('game:submit-quest-vote', (roomId: string, playerId: string, vote: 'success' | 'fail') => {
+        this.handleSubmitQuestVote(socket, roomId, playerId, vote);
+      });
+
+      socket.on('game:assassinate', (roomId: string, assassinId: string, targetId: string) => {
+        this.handleAssassinate(socket, roomId, assassinId, targetId);
       });
 
       socket.on('chat:send-message', (roomId: string, message: string) => {
@@ -236,10 +240,51 @@ export class GameServer {
     }
   }
 
-  private handleQuestResult(
+  private handleSelectQuestTeam(socket: Socket, roomId: string, teamMemberIds: string[]): void {
+    try {
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) {
+        socket.emit('error', 'Room not found');
+        return;
+      }
+
+      // Verify room is in voting state
+      if (room.state !== 'voting') {
+        socket.emit('error', 'Not in voting phase');
+        return;
+      }
+
+      const gameEngine = this.gameEngines.get(roomId);
+      if (!gameEngine) {
+        socket.emit('error', 'Game engine not found');
+        return;
+      }
+
+      // Verify the player is the current leader
+      const currentLeader = gameEngine.getCurrentLeaderId();
+      const playerId = socket.data.playerId;
+      if (playerId !== currentLeader) {
+        socket.emit('error', 'Only the leader can select the quest team');
+        return;
+      }
+
+      gameEngine.selectQuestTeam(teamMemberIds);
+      const updatedRoom = this.roomManager.getRoom(roomId)!;
+
+      this.io.to(roomId).emit('game:state-updated', updatedRoom);
+      console.log(`✓ Quest team selected in room ${roomId}: ${teamMemberIds.length} players`);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error selecting quest team:', errorMsg);
+      socket.emit('error', `Failed to select quest team: ${errorMsg}`);
+    }
+  }
+
+  private handleSubmitQuestVote(
     socket: Socket,
     roomId: string,
-    result: 'success' | 'fail'
+    playerId: string,
+    vote: 'success' | 'fail'
   ): void {
     try {
       const room = this.roomManager.getRoom(roomId);
@@ -248,23 +293,36 @@ export class GameServer {
         return;
       }
 
+      // Verify room is in quest state
+      if (room.state !== 'quest') {
+        socket.emit('error', 'Not in quest phase');
+        return;
+      }
+
+      // Verify player is in room
+      if (!(playerId in room.players)) {
+        socket.emit('error', 'Player not in room');
+        return;
+      }
+
       const gameEngine = this.gameEngines.get(roomId);
       if (!gameEngine) {
         socket.emit('error', 'Game engine not found');
         return;
       }
 
-      gameEngine.submitQuestResult(result);
+      gameEngine.submitQuestVote(playerId, vote);
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.io.to(roomId).emit('game:state-updated', updatedRoom);
     } catch (error) {
-      console.error('Error processing quest result:', error);
-      socket.emit('error', 'Failed to submit quest result');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error processing quest vote:', errorMsg);
+      socket.emit('error', `Failed to submit quest vote: ${errorMsg}`);
     }
   }
 
-  private handleAssassinate(socket: Socket, roomId: string, targetId: string): void {
+  private handleAssassinate(socket: Socket, roomId: string, assassinId: string, targetId: string): void {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -272,19 +330,34 @@ export class GameServer {
         return;
       }
 
+      // Verify room is in discussion state
+      if (room.state !== 'discussion') {
+        socket.emit('error', 'Not in discussion phase');
+        return;
+      }
+
+      // Verify assassin is in room
+      if (!(assassinId in room.players)) {
+        socket.emit('error', 'Assassin not in room');
+        return;
+      }
+
       const gameEngine = this.gameEngines.get(roomId);
       if (!gameEngine) {
         socket.emit('error', 'Game engine not found');
         return;
       }
 
-      gameEngine.submitAssassination(targetId);
+      gameEngine.submitAssassination(assassinId, targetId);
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
+      this.io.to(roomId).emit('game:state-updated', updatedRoom);
       this.io.to(roomId).emit('game:ended', updatedRoom);
+      console.log(`✓ Game ended in room ${roomId}. Winner: ${updatedRoom.evilWins ? 'Evil' : 'Good'}`);
     } catch (error) {
-      console.error('Error processing assassination:', error);
-      socket.emit('error', 'Failed to submit assassination');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error processing assassination:', errorMsg);
+      socket.emit('error', `Failed to submit assassination: ${errorMsg}`);
     }
   }
 

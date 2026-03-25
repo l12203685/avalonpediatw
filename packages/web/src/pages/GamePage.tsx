@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { submitVote } from '../services/socket';
+import { submitVote, submitAssassination } from '../services/socket';
 import GameBoard from '../components/GameBoard';
 import VotePanel from '../components/VotePanel';
+import QuestPanel from '../components/QuestPanel';
+import TeamSelectionPanel from '../components/TeamSelectionPanel';
 
 export default function GamePage(): JSX.Element {
   const { room, currentPlayer } = useGameStore();
   const [isVoting, setIsVoting] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [isAssassinating, setIsAssassinating] = useState(false);
 
   if (!room || !currentPlayer) {
     return <div className="text-center text-white">Loading...</div>;
@@ -18,6 +22,16 @@ export default function GamePage(): JSX.Element {
       await submitVote(room.id, currentPlayer.id, approve);
     } finally {
       setIsVoting(false);
+    }
+  };
+
+  const handleAssassinate = async (targetId: string) => {
+    setSelectedTarget(targetId);
+    setIsAssassinating(true);
+    try {
+      submitAssassination(room.id, currentPlayer.id, targetId);
+    } finally {
+      setIsAssassinating(false);
     }
   };
 
@@ -43,48 +57,65 @@ export default function GamePage(): JSX.Element {
         {/* Game Board */}
         <GameBoard room={room} currentPlayer={currentPlayer} />
 
-        {/* Voting Phase */}
+        {/* Voting Phase - Team Proposal */}
         {room.state === 'voting' && (
-          <VotePanel
-            room={room}
-            currentPlayer={currentPlayer}
-            onVote={handleVote}
-            isLoading={isVoting}
-          />
+          <>
+            {/* Check if current player is the leader */}
+            {currentPlayer.id === (room.players[Object.keys(room.players)[0]]?.id) ? (
+              <TeamSelectionPanel
+                room={room}
+                currentPlayer={currentPlayer}
+                isLoading={isVoting}
+              />
+            ) : (
+              <VotePanel
+                room={room}
+                currentPlayer={currentPlayer}
+                onVote={handleVote}
+                isLoading={isVoting}
+              />
+            )}
+          </>
         )}
 
-        {/* Quest Phase */}
-        {room.state === 'quest' && (
-          <div className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 text-center space-y-4">
-            <h2 className="text-3xl font-bold text-white">⚔️ Quest in Progress</h2>
-            <p className="text-gray-300">Quest Team Size: <span className="text-blue-400 font-bold">{room.questTeam.length}</span></p>
-            <p className="text-sm text-gray-400">Waiting for quest results...</p>
-          </div>
-        )}
+        {/* Quest Phase - Team Members Vote */}
+        {room.state === 'quest' && <QuestPanel room={room} currentPlayer={currentPlayer} />}
 
-        {/* Discussion Phase */}
+        {/* Discussion Phase - Assassination */}
         {room.state === 'discussion' && (
-          <div className="bg-avalon-card/50 border-2 border-purple-600 rounded-lg p-8 text-center space-y-4">
+          <div className="bg-avalon-card/50 border-2 border-purple-600 rounded-lg p-8 space-y-6">
             {currentPlayer.role === 'assassin' ? (
               <>
-                <h2 className="text-3xl font-bold text-red-400">🗡️ Assassinate Merlin</h2>
-                <p className="text-gray-300">Choose who you think Merlin is</p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <h2 className="text-3xl font-bold text-red-400 mb-2">🗡️ Assassinate Merlin</h2>
+                  <p className="text-gray-300">Choose who you think Merlin is</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
                   {Object.values(room.players).map((player) => (
                     <button
                       key={player.id}
-                      className="bg-avalon-evil/30 hover:bg-avalon-evil/60 border border-red-600 rounded-lg p-3 text-white transition-all"
+                      onClick={() => handleAssassinate(player.id)}
+                      disabled={isAssassinating || selectedTarget !== null}
+                      className={`p-4 rounded-lg border-2 transition-all font-semibold ${
+                        selectedTarget === player.id
+                          ? 'bg-red-600/40 border-red-400 text-white'
+                          : 'bg-avalon-evil/30 border-red-600 text-white hover:bg-avalon-evil/60 disabled:opacity-50'
+                      }`}
                     >
                       {player.name}
+                      {selectedTarget === player.id && ' ✓'}
                     </button>
                   ))}
                 </div>
               </>
             ) : (
-              <>
+              <div className="text-center space-y-4">
                 <h2 className="text-3xl font-bold text-purple-400">💬 Discussion Phase</h2>
                 <p className="text-gray-300">The assassin is choosing their target...</p>
-              </>
+                <div className="text-sm text-gray-500">
+                  Waiting for the assassin to make their choice...
+                </div>
+              </div>
             )}
           </div>
         )}

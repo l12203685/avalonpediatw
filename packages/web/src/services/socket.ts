@@ -100,9 +100,19 @@ export function submitVote(roomId: string, playerId: string, vote: boolean): voi
   socket.emit('game:vote', roomId, playerId, vote);
 }
 
-export function submitQuestResult(roomId: string, result: 'success' | 'fail'): void {
+export function selectQuestTeam(roomId: string, teamMemberIds: string[]): void {
   const socket = getSocket();
-  socket.emit('game:submit-quest-result', roomId, result);
+  socket.emit('game:select-quest-team', roomId, teamMemberIds);
+}
+
+export function submitQuestVote(roomId: string, playerId: string, vote: 'success' | 'fail'): void {
+  const socket = getSocket();
+  socket.emit('game:submit-quest-vote', roomId, playerId, vote);
+}
+
+export function submitAssassination(roomId: string, assassinId: string, targetId: string): void {
+  const socket = getSocket();
+  socket.emit('game:assassinate', roomId, assassinId, targetId);
 }
 
 export function sendChatMessage(roomId: string, message: string): void {
