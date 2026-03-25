@@ -1,61 +1,109 @@
-name: Deploy to Production
+name: Deploy to Vercel and Railway
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches:
+      - main
+
+env:
+  PNPM_VERSION: 8.15.4
 
 jobs:
-  deploy-web:
-    name: Deploy Frontend to Vercel
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Install Vercel CLI
-        run: npm i -g vercel
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+  deploy-frontend:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Deploy to Vercel
-        run: vercel --prod
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          npm install -g vercel@latest
+          vercel pull --yes --environment=production \
+            --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          vercel deploy --prod --prebuilt \
+            --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: packages/web
-        continue-on-error: true
 
-  deploy-server:
-    name: Deploy Backend to Railway
+  deploy-backend:
+    needs: build-and-test
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Deploy to Railway
-        run: |
-          # This is a placeholder - actual deployment depends on Railway setup
-          echo "🚀 Deploying backend to Railway..."
-          echo "Railway deployment requires CLI setup"
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          npm install -g @railway/cli
+          railway deploy --service server
+        working-directory: packages/server
 
-  notify:
-    name: Notify Deployment Status
-    needs: [deploy-web]
+  verify-deployment:
+    needs: [deploy-frontend, deploy-backend]
     runs-on: ubuntu-latest
-    if: always()
+    if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Deployment Success
-        if: success()
+      - name: Wait for deployments
+        run: sleep 30
+
+      - name: Verify backend health
+        run: |
+          BACKEND_URL="${{ secrets.RAILWAY_URL }}"
+          curl -f ${BACKEND_URL}/health || exit 1
+
+      - name: Notify deployment success
         run: |
           echo "✅ Deployment successful!"
-          echo "Frontend: https://avalon-pedia.vercel.app"
-          echo "API: https://avalon-api.railway.app"
-
-      - name: Deployment Failed
-        if: failure()
-        run: |
-          echo "❌ Deployment failed!"
-          echo "Check logs for details"
+          echo "Frontend: https://${{ secrets.VERCEL_URL }}"
+          echo "Backend: ${{ secrets.RAILWAY_URL }}"
