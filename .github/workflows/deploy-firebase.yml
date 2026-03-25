@@ -11,25 +11,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Setup pnpm
+        run: npm install -g pnpm@latest
 
-      - name: Build frontend
-        working-directory: packages/web
-        run: npm install && npm run build
-
-      - name: Build backend
-        working-directory: packages/server
-        run: npm install && npm run build
+      - name: Install and build all packages
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
 
       - name: Deploy to Firebase
-        env:
-          FIREBASE_CREDENTIAL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AVALON }}
         run: |
           npm install -g firebase-tools
-          firebase deploy --project avalon-game-platform
+          firebase deploy --project avalon-game-platform --non-interactive
+        env:
+          FIREBASE_CREDENTIAL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AVALON }}
