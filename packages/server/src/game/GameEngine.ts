@@ -1,8 +1,11 @@
 import { Room, Role, AVALON_CONFIG, Player } from '@avalon/shared';
 
+const VOTE_TIMEOUT_MS = 30000; // 30秒投票時限
+
 export class GameEngine {
   private room: Room;
   private roleAssignments: Map<string, Role> = new Map();
+  private voteTimeout: NodeJS.Timeout | null = null;
 
   constructor(room: Room) {
     this.room = room;
@@ -21,6 +24,41 @@ export class GameEngine {
     // Set initial state
     this.room.state = 'voting';
     this.room.currentRound = 1;
+    this.room.votes = {};
+
+    // Start voting phase with timeout
+    this.startVotingPhase();
+  }
+
+  private startVotingPhase(): void {
+    // Clear existing timeout
+    if (this.voteTimeout) {
+      clearTimeout(this.voteTimeout);
+    }
+
+    // Set vote timeout
+    this.voteTimeout = setTimeout(() => {
+      if (this.room.state === 'voting') {
+        this.handleVoteTimeout();
+      }
+    }, VOTE_TIMEOUT_MS);
+  }
+
+  private handleVoteTimeout(): void {
+    const playerCount = Object.keys(this.room.players).length;
+    const votedCount = Object.keys(this.room.votes).length;
+
+    // Auto-vote for players who didn't vote (reject as default)
+    const unvotedPlayers = Object.keys(this.room.players).filter(
+      (id) => !(id in this.room.votes)
+    );
+
+    unvotedPlayers.forEach((playerId) => {
+      this.room.votes[playerId] = false;
+    });
+
+    // Resolve voting
+    this.resolveVoting();
   }
 
   private assignRoles(playerCount: number): void {
@@ -50,16 +88,34 @@ export class GameEngine {
   }
 
   public submitVote(playerId: string, vote: boolean): void {
+    // Validate game state
     if (this.room.state !== 'voting') {
       throw new Error('Not in voting phase');
     }
 
+    // Validate player exists
+    if (!(playerId in this.room.players)) {
+      throw new Error(`Player ${playerId} not found in room`);
+    }
+
+    // Validate player hasn't already voted
+    if (playerId in this.room.votes) {
+      throw new Error(`Player ${playerId} has already voted`);
+    }
+
+    // Record vote
     this.room.votes[playerId] = vote;
 
     // Check if all players have voted
-    const allVoted = Object.keys(this.room.players).every((id) => id in this.room.votes);
+    const playerCount = Object.keys(this.room.players).length;
+    const votedCount = Object.keys(this.room.votes).length;
 
-    if (allVoted) {
+    if (votedCount === playerCount) {
+      // Clear timeout and resolve voting
+      if (this.voteTimeout) {
+        clearTimeout(this.voteTimeout);
+        this.voteTimeout = null;
+      }
       this.resolveVoting();
     }
   }
@@ -74,6 +130,10 @@ export class GameEngine {
     if (approved) {
       // Move to quest phase
       this.room.state = 'quest';
+      if (this.voteTimeout) {
+        clearTimeout(this.voteTimeout);
+        this.voteTimeout = null;
+      }
     } else {
       // Another voting round
       this.room.failCount++;
@@ -83,6 +143,13 @@ export class GameEngine {
         // Evil wins
         this.room.state = 'ended';
         this.room.evilWins = true;
+        if (this.voteTimeout) {
+          clearTimeout(this.voteTimeout);
+          this.voteTimeout = null;
+        }
+      } else {
+        // Start new voting round with timeout
+        this.startVotingPhase();
       }
     }
   }
@@ -141,5 +208,19 @@ export class GameEngine {
 
   public getRoom(): Room {
     return this.room;
+  }
+
+  public cleanup(): void {
+    if (this.voteTimeout) {
+      clearTimeout(this.voteTimeout);
+      this.voteTimeout = null;
+    }
+  }
+
+  public getVoteCount(): { voted: number; total: number } {
+    return {
+      voted: Object.keys(this.room.votes).length,
+      total: Object.keys(this.room.players).length,
+    };
   }
 }
