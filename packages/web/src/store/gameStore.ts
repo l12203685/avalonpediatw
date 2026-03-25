@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Room, Player } from '@avalon/shared';
 
-type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended';
+type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki';
 
 interface GameStore {
   gameState: GameState;

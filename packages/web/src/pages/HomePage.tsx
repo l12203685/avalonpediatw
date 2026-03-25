@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createRoom, joinRoom } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
-import { Play, LogIn, LogOut } from 'lucide-react';
+import { Play, LogIn, LogOut, BookOpen } from 'lucide-react';
 
 export default function HomePage(): JSX.Element {
   const [playerName, setPlayerName] = useState('');
@@ -109,6 +109,14 @@ export default function HomePage(): JSX.Element {
               >
                 <LogIn size={20} />
                 Join Game
+              </button>
+
+              <button
+                onClick={() => setGameState('wiki')}
+                className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2"
+              >
+                <BookOpen size={20} />
+                Wiki & Guide
               </button>
             </div>
           </div>
