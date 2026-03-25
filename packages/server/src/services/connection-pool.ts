@@ -145,9 +145,9 @@ class ConnectionPool {
 
       // Clean up timeout when resolved
       const originalResolve = request.resolve;
-      request.resolve = (connId: string) => {
+      request.resolve = (value: string | PromiseLike<string>) => {
         clearTimeout(timeoutId);
-        originalResolve(connId);
+        originalResolve(value);
       };
     });
   }

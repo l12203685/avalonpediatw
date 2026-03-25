@@ -12,16 +12,20 @@
   },
   "dependencies": {
     "@avalon/shared": "workspace:*",
+    "@line/bot-sdk": "^10.6.0",
+    "cors": "^2.8.5",
+    "discord.js": "^14.25.1",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "socket.io": "^4.7.2",
     "firebase": "^10.7.0",
     "firebase-admin": "^12.1.0",
-    "cors": "^2.8.5",
+    "socket.io": "^4.7.2",
     "uuid": "^9.0.1",
-    "zod": "^3.22.4",
-    "dotenv": "^16.3.1"
+    "vitest": "^4.1.1",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/node": "^20.10.6",
     "@types/uuid": "^9.0.7",

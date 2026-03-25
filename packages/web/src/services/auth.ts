@@ -104,7 +104,7 @@ export async function getCurrentUserWithToken(): Promise<{
 export function firebaseUserToAppUser(firebaseUser: FirebaseUser, provider: string): User {
   const email = firebaseUser.email || '';
   const creationTime = firebaseUser.metadata?.creationTime;
-  const createdAt = creationTime instanceof Date ? creationTime.getTime() : Date.now();
+  const createdAt = creationTime ? (creationTime as any as Date).getTime() : Date.now();
 
   return {
     uid: firebaseUser.uid,
