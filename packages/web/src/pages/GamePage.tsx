@@ -60,8 +60,8 @@ export default function GamePage(): JSX.Element {
         {/* Voting Phase - Team Proposal */}
         {room.state === 'voting' && (
           <>
-            {/* Check if current player is the leader */}
-            {currentPlayer.id === (room.players[Object.keys(room.players)[0]]?.id) ? (
+            {/* Check if current player is the leader based on leaderIndex */}
+            {currentPlayer.id === Object.keys(room.players)[room.leaderIndex % Object.keys(room.players).length] ? (
               <TeamSelectionPanel
                 room={room}
                 currentPlayer={currentPlayer}

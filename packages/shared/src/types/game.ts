@@ -54,6 +54,7 @@ export interface Room {
   questResults: QuestResult[]; // History of quest results
   failCount: number; // Number of failed votes
   evilWins: boolean | null; // null = not ended, true = evil won, false = good won
+  leaderIndex: number; // Index of current quest leader in player list
   createdAt: number;
   updatedAt: number;
 }

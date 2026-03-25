@@ -42,6 +42,7 @@ export class GameEngine {
     this.room.questResults = [];
     this.room.failCount = 0;
     this.room.evilWins = null;
+    this.room.leaderIndex = 0;
     this.questVotes = [];
     this.currentLeaderIndex = 0;
 
@@ -442,6 +443,7 @@ export class GameEngine {
    */
   private rotateLeader(): void {
     this.currentLeaderIndex++;
+    this.room.leaderIndex = this.currentLeaderIndex;
   }
 
   /**
