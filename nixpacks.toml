@@ -1,0 +1,9 @@
+[build]
+cmds = [
+  "npm install -g pnpm",
+  "pnpm install --frozen-lockfile",
+  "pnpm -C packages/server build"
+]
+
+[start]
+cmd = "node packages/server/dist/index.js"
