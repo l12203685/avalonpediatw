@@ -2,7 +2,7 @@
   "name": "@avalon/server",
   "version": "0.0.1",
   "private": true,
-  "main": "./dist/index.js",
+  "main": "./dist/functions.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

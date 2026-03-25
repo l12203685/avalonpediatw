@@ -1,8 +1,8 @@
-import express from 'express';
+import express, { Express } from 'express';
 import cors from 'cors';
 import { initializeFirebase } from './services/firebase';
 
-const app = express();
+const app: Express = express();
 
 // Environment
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
