@@ -1,6 +1,8 @@
 import { Room, Player } from '@avalon/shared';
 import PlayerCard from './PlayerCard';
 import { motion } from 'framer-motion';
+import audioService from '../services/audio';
+import { useEffect } from 'react';
 
 interface GameBoardProps {
   room: Room;
@@ -11,30 +13,90 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
   const playerCount = Object.values(room.players).length;
   const angleSlice = 360 / playerCount;
 
+  // Play sound on state change
+  useEffect(() => {
+    if (room.state === 'voting') {
+      audioService.playSound('vote');
+    } else if (room.state === 'quest') {
+      audioService.playSound('game-start');
+    } else if (room.state === 'ended') {
+      room.evilWins ? audioService.playFailureSound() : audioService.playSuccessChord();
+    }
+  }, [room.state, room.evilWins]);
+
   return (
     <div className="relative w-full h-96 max-w-2xl mx-auto">
-      {/* 背景圓形 */}
-      <div className="absolute inset-0 rounded-full border-2 border-gray-600 bg-gradient-to-b from-avalon-dark/50 to-transparent" />
+      {/* 背景圓形 - 動畫光環 */}
+      <motion.div
+        animate={{
+          boxShadow: [
+            '0 0 20px rgba(59, 130, 246, 0.3)',
+            '0 0 40px rgba(59, 130, 246, 0.5)',
+            '0 0 20px rgba(59, 130, 246, 0.3)',
+          ],
+        }}
+        transition={{ duration: 3, repeat: Infinity }}
+        className="absolute inset-0 rounded-full border-2 border-gray-600 bg-gradient-to-b from-avalon-dark/50 to-transparent"
+      />
 
       {/* 遊戲狀態中心 */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center z-10">
-        <p className="text-sm text-gray-400">Round {room.currentRound}/{room.maxRounds}</p>
-        <p className="text-2xl font-bold text-white capitalize">{room.state}</p>
-        <div className="mt-2">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center z-10"
+      >
+        <motion.div
+          animate={{ y: [0, -5, 0] }}
+          transition={{ duration: 2, repeat: Infinity }}
+          className="mb-2"
+        >
+          <p className="text-sm text-gray-400">Round {room.currentRound}/{room.maxRounds}</p>
+        </motion.div>
+
+        <motion.p
+          key={room.state}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="text-2xl font-bold text-white capitalize bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
+        >
+          {room.state}
+        </motion.p>
+
+        {/* 任務結果指示器 */}
+        <div className="mt-4">
           {room.questResults.length > 0 && (
-            <div className="flex justify-center gap-2">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex justify-center gap-2"
+            >
               {room.questResults.map((result, i) => (
-                <div
+                <motion.div
                   key={i}
-                  className={`w-3 h-3 rounded-full ${
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                  className={`w-4 h-4 rounded-full shadow-lg ${
                     result === 'success' ? 'bg-avalon-good' : 'bg-avalon-evil'
                   }`}
                 />
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
-      </div>
+
+        {/* 投票計數 */}
+        {room.state === 'voting' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 text-xs text-gray-400"
+          >
+            <p>{Object.keys(room.votes).length}/{playerCount} voted</p>
+          </motion.div>
+        )}
+      </motion.div>
 
       {/* 玩家環形排列 */}
       {Object.values(room.players).map((player, index) => {
