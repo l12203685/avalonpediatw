@@ -19,14 +19,26 @@ jobs:
         with:
           version: 8
 
-      - run: pnpm install --frozen-lockfile
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        name: Setup pnpm cache
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - run: pnpm install
       - run: pnpm run build
 
       - name: Deploy to Firebase
         run: |
           echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_AVALON }}" > firebase-key.json
-          npx firebase-tools deploy \
-            --project avalon-game-platform \
-            --non-interactive
+          npx firebase-tools deploy --project avalon-game-platform --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: firebase-key.json
