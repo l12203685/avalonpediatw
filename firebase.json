@@ -8,19 +8,10 @@
     ],
     "rewrites": [
       {
-        "source": "/api/**",
-        "function": "api"
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }
     ]
-  },
-  "functions": {
-    "source": "packages/server",
-    "runtime": "nodejs20",
-    "codebase": "default"
   },
   "emulators": {
     "auth": {
@@ -32,17 +23,8 @@
     "realtime_database": {
       "port": 9000
     },
-    "storage": {
-      "port": 4000
-    },
     "hosting": {
       "port": 5000
-    },
-    "pubsub": {
-      "port": 8085
-    },
-    "functions": {
-      "port": 5001
     }
   }
 }
