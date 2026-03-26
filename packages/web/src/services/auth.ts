@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   signInWithPopup,
@@ -7,6 +7,7 @@ import {
   GithubAuthProvider,
   User as FirebaseUser,
   onAuthStateChanged,
+  Auth,
 } from 'firebase/auth';
 import { User, AuthSession } from '@avalon/shared';
 
@@ -20,8 +21,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-let firebaseApp: any;
-let auth: any;
+let firebaseApp: FirebaseApp | undefined;
+let auth: Auth | undefined;
 
 export function initializeAuth(): void {
   if (!firebaseApp) {
@@ -30,7 +31,7 @@ export function initializeAuth(): void {
   }
 }
 
-export function getFirebaseAuth(): any {
+export function getFirebaseAuth(): Auth {
   if (!auth) {
     throw new Error('Firebase auth not initialized');
   }
@@ -104,7 +105,7 @@ export async function getCurrentUserWithToken(): Promise<{
 export function firebaseUserToAppUser(firebaseUser: FirebaseUser, provider: string): User {
   const email = firebaseUser.email || '';
   const creationTime = firebaseUser.metadata?.creationTime;
-  const createdAt = creationTime ? (creationTime as any as Date).getTime() : Date.now();
+  const createdAt = creationTime ? new Date(creationTime).getTime() : Date.now();
 
   return {
     uid: firebaseUser.uid,

@@ -174,13 +174,16 @@ export class GameEngine {
     });
 
     if (approved) {
-      // Team is approved - leader will select quest team
+      // Team is approved - transition to quest phase
       this.logEvent('team_approved', {
         round: this.room.currentRound,
         leaderId: this.getLeaderId()
       });
 
-      // Wait for leader to select quest team (no timeout yet, client handles UI)
+      // Move to quest phase
+      this.room.state = 'quest';
+      this.room.votes = {};
+      this.questVotes = [];
     } else {
       // Team rejected - another voting round
       this.room.failCount++;
@@ -233,11 +236,7 @@ export class GameEngine {
       teamSize: teamMemberIds.length,
       leaderId: this.getLeaderId()
     });
-
-    // Move to quest phase and reset votes
-    this.room.state = 'quest';
-    this.room.votes = {};
-    this.questVotes = [];
+    // State stays 'voting' - voting will transition to 'quest' when approved
   }
 
   /**
@@ -364,8 +363,8 @@ export class GameEngine {
       throw new Error('Not in discussion phase');
     }
 
-    // Validate assassin
-    const assassinRole = this.roleAssignments.get(assassinId);
+    // Validate assassin (room.players is authoritative as it can be updated)
+    const assassinRole = this.room.players[assassinId]?.role ?? this.roleAssignments.get(assassinId);
     if (assassinRole !== 'assassin') {
       throw new Error(`Player ${assassinId} is not the assassin`);
     }
@@ -403,7 +402,8 @@ export class GameEngine {
         reason: 'assassination_timeout'
       });
     } else {
-      const targetRole = this.roleAssignments.get(targetId);
+      // room.players is authoritative as it can be updated externally
+      const targetRole = this.room.players[targetId]?.role ?? this.roleAssignments.get(targetId);
 
       if (targetRole === 'merlin') {
         // Assassinated Merlin - evil wins
@@ -517,7 +517,7 @@ export class GameEngine {
     return this.room.questTeam;
   }
 
-  private logEvent(event: string, data: Record<string, any>): void {
+  private logEvent(event: string, data: Record<string, unknown>): void {
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),
       roomId: this.room.id,

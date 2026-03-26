@@ -10,26 +10,31 @@ describe('GameEngine', () => {
   beforeEach(() => {
     // Create mock players
     players = {
-      player1: { id: 'player1', name: 'Alice', role: undefined, team: undefined },
-      player2: { id: 'player2', name: 'Bob', role: undefined, team: undefined },
-      player3: { id: 'player3', name: 'Charlie', role: undefined, team: undefined },
-      player4: { id: 'player4', name: 'David', role: undefined, team: undefined },
-      player5: { id: 'player5', name: 'Eve', role: undefined, team: undefined },
+      player1: { id: 'player1', name: 'Alice', role: null, team: null, status: 'active', createdAt: Date.now() },
+      player2: { id: 'player2', name: 'Bob', role: null, team: null, status: 'active', createdAt: Date.now() },
+      player3: { id: 'player3', name: 'Charlie', role: null, team: null, status: 'active', createdAt: Date.now() },
+      player4: { id: 'player4', name: 'David', role: null, team: null, status: 'active', createdAt: Date.now() },
+      player5: { id: 'player5', name: 'Eve', role: null, team: null, status: 'active', createdAt: Date.now() },
     };
 
     // Create mock room
     room = {
       id: 'room1',
-      hostId: 'player1',
-      players,
+      name: 'Test Room',
+      host: 'player1',
       state: 'lobby',
+      players,
+      maxPlayers: 10,
       currentRound: 0,
       maxRounds: 5,
       votes: {},
       questTeam: [],
       questResults: [],
       failCount: 0,
-      evilWins: false,
+      evilWins: null,
+      leaderIndex: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
 
     gameEngine = new GameEngine(room);
@@ -48,7 +53,14 @@ describe('GameEngine', () => {
     });
 
     it('should throw error with invalid player count', () => {
-      const smallRoom = { ...room, players: { player1, player2, player3 } };
+      const smallRoom: Room = {
+        ...room,
+        players: {
+          player1: players.player1,
+          player2: players.player2,
+          player3: players.player3,
+        },
+      };
       const engine = new GameEngine(smallRoom);
       expect(() => engine.startGame()).toThrow('Invalid player count');
     });
@@ -107,6 +119,8 @@ describe('GameEngine', () => {
   describe('Voting Resolution', () => {
     beforeEach(() => {
       gameEngine.startGame();
+      // Pre-set quest team (leader proposes before voting)
+      room.questTeam = ['player1', 'player2'];
     });
 
     it('should move to quest phase when voting passes', () => {
@@ -152,26 +166,28 @@ describe('GameEngine', () => {
     beforeEach(() => {
       gameEngine.startGame();
       room.state = 'discussion';
-      // Set a merlin role for testing
+      // Set roles for testing - override both room.players and align with game engine
       room.players['player1'].role = 'merlin';
       room.players['player2'].role = 'assassin';
     });
 
     it('should end game with evil win when merlin is assassinated', () => {
-      gameEngine.submitAssassination('player1'); // Assassinate merlin
+      // player2 (assassin) assassinates player1 (merlin)
+      gameEngine.submitAssassination('player2', 'player1');
       expect(room.state).toBe('ended');
       expect(room.evilWins).toBe(true);
     });
 
     it('should end game with good win when merlin is not assassinated', () => {
-      gameEngine.submitAssassination('player3'); // Assassinate wrong player
+      // player2 (assassin) assassinates wrong player (player3)
+      gameEngine.submitAssassination('player2', 'player3');
       expect(room.state).toBe('ended');
       expect(room.evilWins).toBe(false);
     });
 
     it('should reject assassination outside discussion phase', () => {
       room.state = 'voting';
-      expect(() => gameEngine.submitAssassination('player3')).toThrow(
+      expect(() => gameEngine.submitAssassination('player2', 'player3')).toThrow(
         'Not in discussion phase'
       );
     });
@@ -185,11 +201,12 @@ describe('GameEngine', () => {
       room.questTeam = ['player1', 'player2'];
     });
 
-    it('should track quest votes', () => {
+    it('should track quest votes and resolve quest result', () => {
       gameEngine.submitQuestVote('player1', 'success');
       gameEngine.submitQuestVote('player2', 'fail');
 
-      expect(room.questResults).toHaveLength(2);
+      // After all votes submitted, quest resolves into ONE result (fail if any fail vote)
+      expect(room.questResults).toHaveLength(1);
       expect(room.questResults[0]).toBe('fail'); // One fail causes quest to fail
     });
 

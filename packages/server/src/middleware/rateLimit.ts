@@ -99,8 +99,8 @@ export class SocketRateLimiter {
 export function createRateLimitMiddleware(
   limiter: SocketRateLimiter,
   eventName: string
-): (socket: Socket, next: Function) => void {
-  return (socket: Socket, next: Function) => {
+): (socket: Socket, next: (err?: Error) => void) => void {
+  return (socket: Socket, next: (err?: Error) => void) => {
     const identifier = `${socket.id}:${eventName}`;
     if (!limiter.isAllowed(identifier)) {
       const remaining = limiter.getRemaining(identifier);

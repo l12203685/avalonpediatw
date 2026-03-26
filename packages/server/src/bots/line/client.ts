@@ -59,7 +59,7 @@ export class LineBotClient {
         }
 
         const messageEvent = event as MessageEvent;
-        const userMessage = (messageEvent.message as any).text.toLowerCase().trim();
+        const userMessage = (messageEvent.message as { text: string }).text.toLowerCase().trim();
 
         await this.handleMessage(
           messageEvent.replyToken,

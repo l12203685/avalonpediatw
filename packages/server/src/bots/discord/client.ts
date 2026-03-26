@@ -5,6 +5,7 @@ import {
   REST,
   Routes,
   CommandInteraction,
+  ActivityType,
 } from 'discord.js';
 import { DISCORD_CONFIG, COMMANDS } from './config';
 import {
@@ -118,7 +119,7 @@ export class DiscordBotClient {
     const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
 
     this.client.user?.setActivity(randomStatus.name, {
-      type: randomStatus.type as any,
+      type: randomStatus.type as ActivityType,
     });
   }
 

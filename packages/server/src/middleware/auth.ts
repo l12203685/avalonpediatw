@@ -22,7 +22,7 @@ class AuthError extends Error {
 /**
  * Middleware to authenticate Socket.IO connections
  */
-export async function authenticateSocket(socket: Socket, next: Function): Promise<void> {
+export async function authenticateSocket(socket: Socket, next: (err?: Error) => void): Promise<void> {
   try {
     const token = socket.handshake.auth.token;
 
@@ -98,7 +98,7 @@ export async function authenticateSocket(socket: Socket, next: Function): Promis
 /**
  * Middleware to require authentication
  */
-export function requireAuth(socket: Socket, next: Function): void {
+export function requireAuth(socket: Socket, next: (err?: Error) => void): void {
   if (!socket.data.user) {
     return next(new Error('Not authenticated'));
   }
