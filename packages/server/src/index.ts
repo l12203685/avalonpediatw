@@ -44,15 +44,13 @@ app.post('/auth/validate', async (req, res) => {
   }
 });
 
-// For local development
+// Start server (always — for Render, Railway, or local dev)
 const PORT = process.env.PORT || 3001;
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`\n🚀 Avalon server running on port ${PORT}`);
-    console.log(`📡 CORS Origin: ${CORS_ORIGIN}`);
-    console.log(`🌍 Environment: ${NODE_ENV}\n`);
-  });
-}
+app.listen(PORT, () => {
+  console.log(`\n🚀 Avalon server running on port ${PORT}`);
+  console.log(`📡 CORS Origin: ${CORS_ORIGIN}`);
+  console.log(`🌍 Environment: ${NODE_ENV}\n`);
+});
 
-// Export for Firebase Functions
+// Export for Firebase Functions (if used)
 export { app };

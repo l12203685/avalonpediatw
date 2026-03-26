@@ -1,12 +1,15 @@
-name: Deploy to Vercel & Railway
+name: Deploy Frontend to Vercel
 
 on:
   push:
     branches: [main]
 
+# Backend (Socket.IO server) deploys automatically via Render's GitHub integration
+# Configure at: https://dashboard.render.com → New Web Service → Connect repo
+
 jobs:
   deploy-frontend:
-    name: Deploy Frontend to Vercel
+    name: Deploy to Vercel
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -47,25 +50,7 @@ jobs:
           npm install -g vercel
           vercel deploy packages/web/dist --prod \
             --token ${{ secrets.VERCEL_TOKEN }} \
-            --scope ${{ secrets.VERCEL_ORG_ID }} \
             --yes
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-  deploy-backend:
-    name: Deploy Backend to Railway
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Deploy to Railway
-        run: railway up --service server --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

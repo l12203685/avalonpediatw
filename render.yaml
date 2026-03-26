@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: avalon-server
+    runtime: node
+    region: singapore  # 亞洲節點，台灣低延遲
+    plan: free
+    rootDir: packages/server
+    buildCommand: cd ../.. && npm install -g pnpm && pnpm install --frozen-lockfile && pnpm --filter @avalon/shared build && pnpm --filter @avalon/server build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CORS_ORIGIN
+        sync: false  # 在 Render dashboard 手動填入前端 URL
+      - key: FIREBASE_PROJECT_ID
+        value: avalon-game-platform
+      - key: FIREBASE_CLIENT_EMAIL
+        value: firebase-adminsdk-fbsvc@avalon-game-platform.iam.gserviceaccount.com
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false  # 在 Render dashboard 填入 service account private key
