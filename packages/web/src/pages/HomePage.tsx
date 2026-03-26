@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { motion } from 'framer-motion';
 import { createRoom, joinRoom } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
@@ -29,15 +28,10 @@ export default function HomePage(): JSX.Element {
       return;
     }
 
-    const playerId = uuidv4();
-    setCurrentPlayer({
-      id: playerId,
-      name: playerName,
-      role: null,
-      team: null,
-      status: 'active',
-      createdAt: Date.now(),
-    });
+    // Preserve Firebase UID — server uses uid as player ID
+    if (currentPlayer) {
+      setCurrentPlayer({ ...currentPlayer, name: playerName });
+    }
 
     createRoom(playerName);
     setGameState('lobby');
@@ -54,15 +48,10 @@ export default function HomePage(): JSX.Element {
       return;
     }
 
-    const playerId = uuidv4();
-    setCurrentPlayer({
-      id: playerId,
-      name: playerName,
-      role: null,
-      team: null,
-      status: 'active',
-      createdAt: Date.now(),
-    });
+    // Preserve Firebase UID — server uses uid as player ID
+    if (currentPlayer) {
+      setCurrentPlayer({ ...currentPlayer, name: playerName });
+    }
 
     joinRoom(roomId);
     setGameState('lobby');
