@@ -2,29 +2,70 @@ name: Deploy to Vercel & Railway
 
 on:
   push:
-    branches: [main, claude/avalon-game-platform-*]
+    branches: [main]
 
 jobs:
-  deploy:
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
     runs-on: ubuntu-latest
     permissions:
       contents: read
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Deploy Frontend to Vercel
-        uses: vercel/action@main
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: packages/web
-      
-      - name: Deploy Backend to Railway
-        uses: railway/railway-action@main
+          version: 8
+
+      - uses: actions/setup-node@v4
         with:
-          railway-token: ${{ secrets.RAILWAY_TOKEN }}
-          service: server
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package first
+        run: pnpm --filter @avalon/shared build
+
+      - name: Build frontend
+        run: pnpm --filter @avalon/web build
         env:
-          FIREBASE_PROJECT_ID: avalon-game-platform
-          FIREBASE_CLIENT_EMAIL: firebase-adminsdk-fbsvc@avalon-game-platform.iam.gserviceaccount.com
+          VITE_SERVER_URL: ${{ secrets.VITE_SERVER_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+
+      - name: Deploy to Vercel
+        run: |
+          npm install -g vercel
+          vercel deploy packages/web/dist --prod \
+            --token ${{ secrets.VERCEL_TOKEN }} \
+            --scope ${{ secrets.VERCEL_ORG_ID }} \
+            --yes
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  deploy-backend:
+    name: Deploy Backend to Railway
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service server --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
