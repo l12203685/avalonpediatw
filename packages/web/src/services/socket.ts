@@ -85,9 +85,9 @@ export function createRoom(playerName: string): void {
   socket.emit('game:create-room', playerName);
 }
 
-export function joinRoom(roomId: string, playerId: string): void {
+export function joinRoom(roomId: string): void {
   const socket = getSocket();
-  socket.emit('game:join-room', roomId, playerId);
+  socket.emit('game:join-room', roomId);
 }
 
 export function startGame(roomId: string): void {

@@ -1,6 +1,10 @@
+import { createServer } from 'http';
 import express, { Express } from 'express';
 import cors from 'cors';
+import { Server as SocketIOServer } from 'socket.io';
 import { initializeFirebase } from './services/firebase';
+import { authenticateSocket } from './middleware/auth';
+import { GameServer } from './socket/GameServer';
 
 const app: Express = express();
 
@@ -12,45 +16,56 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 
-// Initialize Firebase once
-let firebaseInitialized = false;
-initializeFirebase().then(() => {
-  firebaseInitialized = true;
-  console.log('✓ Firebase initialized');
-}).catch(err => {
-  console.error('❌ Firebase initialization failed:', err);
+// HTTP server (needed for Socket.IO)
+const httpServer = createServer(app);
+
+// Socket.IO server
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: CORS_ORIGIN,
+    methods: ['GET', 'POST'],
+  },
+  transports: ['websocket', 'polling'],
 });
+
+// Socket.IO auth middleware
+io.use(authenticateSocket);
+
+// Initialize Firebase, then start Socket.IO game server
+let firebaseInitialized = false;
+initializeFirebase()
+  .then(() => {
+    firebaseInitialized = true;
+    console.log('✓ Firebase initialized');
+    // Start game server after Firebase is ready
+    const gameServer = new GameServer(io);
+    gameServer.start();
+    console.log('✓ Socket.IO game server started');
+  })
+  .catch(err => {
+    console.error('❌ Firebase initialization failed:', err);
+    // Start game server anyway — auth will fail for individual connections
+    // but the server itself should still be reachable for health checks
+    const gameServer = new GameServer(io);
+    gameServer.start();
+    console.log('⚠️  Socket.IO game server started (Firebase unavailable)');
+  });
 
 // Health check
 app.get('/health', (_req, res) => {
   res.json({
     status: firebaseInitialized ? 'ok' : 'initializing',
     timestamp: new Date().toISOString(),
-    environment: NODE_ENV
+    environment: NODE_ENV,
   });
 });
 
-// Auth endpoint (for testing)
-app.post('/auth/validate', async (req, res) => {
-  try {
-    const { token } = req.body;
-    if (!token) {
-      return res.status(400).json({ error: 'No token provided' });
-    }
-    // Token validation logic here
-    res.json({ valid: true });
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
-  }
-});
-
-// Start server (always — for Render, Railway, or local dev)
+// Start server
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`\n🚀 Avalon server running on port ${PORT}`);
   console.log(`📡 CORS Origin: ${CORS_ORIGIN}`);
   console.log(`🌍 Environment: ${NODE_ENV}\n`);
 });
 
-// Export for Firebase Functions (if used)
 export { app };

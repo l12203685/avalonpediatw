@@ -64,7 +64,7 @@ export default function HomePage(): JSX.Element {
       createdAt: Date.now(),
     });
 
-    joinRoom(roomId, playerId);
+    joinRoom(roomId);
     setGameState('lobby');
   };
 
