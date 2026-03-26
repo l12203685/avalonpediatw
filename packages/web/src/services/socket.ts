@@ -60,6 +60,10 @@ export async function initializeSocket(token: string): Promise<void> {
     store.setGameState('voting');
   });
 
+  socket.on('game:ended', (room: Room) => {
+    store.updateRoom(room);
+  });
+
   socket.on('chat:message-received', (message) => {
     console.log('Message:', message);
   });

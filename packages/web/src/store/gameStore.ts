@@ -30,12 +30,10 @@ export const useGameStore = create<GameStore>((set) => ({
       gameState:
         room.state === 'lobby'
           ? 'lobby'
-          : room.state === 'voting'
-            ? 'voting'
+          : room.state === 'ended'
+            ? 'ended'
             : room.state === 'quest'
               ? 'playing'
-              : room.state === 'ended'
-                ? 'ended'
-                : 'voting',
+              : 'voting', // covers 'voting' and 'discussion'
     })),
 }));

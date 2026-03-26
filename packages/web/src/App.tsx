@@ -52,7 +52,7 @@ function App(): JSX.Element {
         <>
           {gameState === 'home' && <HomePage />}
           {gameState === 'lobby' && <LobbyPage />}
-          {(gameState === 'playing' || gameState === 'voting') && <GamePage />}
+          {(gameState === 'playing' || gameState === 'voting' || gameState === 'ended') && <GamePage />}
           {gameState === 'wiki' && <WikiPage />}
         </>
       )}
