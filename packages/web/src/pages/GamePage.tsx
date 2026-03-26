@@ -1,118 +1,142 @@
+import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { submitVote } from '../services/socket';
-import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import { submitVote, submitAssassination } from '../services/socket';
+import GameBoard from '../components/GameBoard';
+import VotePanel from '../components/VotePanel';
+import QuestPanel from '../components/QuestPanel';
+import TeamSelectionPanel from '../components/TeamSelectionPanel';
 
 export default function GamePage(): JSX.Element {
   const { room, currentPlayer } = useGameStore();
+  const [isVoting, setIsVoting] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [isAssassinating, setIsAssassinating] = useState(false);
 
   if (!room || !currentPlayer) {
     return <div className="text-center text-white">Loading...</div>;
   }
 
-  const playerList = Object.values(room.players);
+  const handleVote = async (approve: boolean) => {
+    setIsVoting(true);
+    try {
+      await submitVote(room.id, currentPlayer.id, approve);
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
+  const handleAssassinate = async (targetId: string) => {
+    setSelectedTarget(targetId);
+    setIsAssassinating(true);
+    try {
+      submitAssassination(room.id, currentPlayer.id, targetId);
+    } finally {
+      setIsAssassinating(false);
+    }
+  };
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4">
-      <div className="w-full max-w-4xl space-y-8">
+    <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4">
+      <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-white mb-2">Avalon</h1>
+          <h1 className="text-5xl font-bold text-white mb-2">🎭 Avalon</h1>
           <p className="text-gray-400">Round {room.currentRound}/{room.maxRounds}</p>
-          <p className="text-sm text-gray-500 mt-2">Game State: {room.state}</p>
-        </div>
-
-        {/* Players Circle */}
-        <div className="flex flex-wrap justify-center gap-6">
-          {playerList.map((player) => (
-            <div
-              key={player.id}
-              className="flex flex-col items-center gap-3"
-            >
-              <div
-                className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-lg border-4 ${
-                  player.id === currentPlayer.id
-                    ? 'border-yellow-400 bg-gradient-to-br from-yellow-400 to-yellow-500'
-                    : 'border-gray-600 bg-gradient-to-br from-blue-400 to-purple-400'
-                }`}
-              >
-                {player.name.charAt(0).toUpperCase()}
+          <div className="flex justify-center gap-4 mt-4 text-sm">
+            <div className="bg-avalon-card/50 px-4 py-2 rounded-lg">
+              <p className="text-gray-300">State: <span className="text-yellow-400 capitalize font-bold">{room.state}</span></p>
+            </div>
+            {room.failCount > 0 && (
+              <div className="bg-avalon-card/50 px-4 py-2 rounded-lg">
+                <p className="text-gray-300">Failed Votes: <span className="text-red-400 font-bold">{room.failCount}</span></p>
               </div>
-              <p className="font-bold text-white text-sm">{player.name}</p>
-              {player.role && (
-                <p className="text-xs text-gray-400 capitalize">
-                  {player.role}
-                </p>
-              )}
-            </div>
-          ))}
+            )}
+          </div>
         </div>
 
-        {/* Voting Phase */}
-        {room.state === 'voting' && !room.votes[currentPlayer.id] && (
-          <div className="bg-avalon-card/50 border border-yellow-600 rounded-lg p-8 text-center space-y-6">
-            <h2 className="text-2xl font-bold">Vote on the Proposed Team</h2>
+        {/* Game Board */}
+        <GameBoard room={room} currentPlayer={currentPlayer} />
 
-            <div className="flex justify-center gap-6">
-              <button
-                onClick={() => submitVote(room.id, currentPlayer.id, true)}
-                className="flex items-center gap-2 bg-avalon-good hover:bg-avalon-good/90 text-white font-bold py-3 px-8 rounded-lg transition-all"
-              >
-                <ThumbsUp size={20} />
-                Approve
-              </button>
-
-              <button
-                onClick={() => submitVote(room.id, currentPlayer.id, false)}
-                className="flex items-center gap-2 bg-avalon-evil hover:bg-avalon-evil/90 text-white font-bold py-3 px-8 rounded-lg transition-all"
-              >
-                <ThumbsDown size={20} />
-                Reject
-              </button>
-            </div>
-          </div>
+        {/* Voting Phase - Team Proposal */}
+        {room.state === 'voting' && (
+          <>
+            {/* Check if current player is the leader based on leaderIndex */}
+            {currentPlayer.id === Object.keys(room.players)[room.leaderIndex % Object.keys(room.players).length] ? (
+              <TeamSelectionPanel
+                room={room}
+                currentPlayer={currentPlayer}
+                isLoading={isVoting}
+              />
+            ) : (
+              <VotePanel
+                room={room}
+                currentPlayer={currentPlayer}
+                onVote={handleVote}
+                isLoading={isVoting}
+              />
+            )}
+          </>
         )}
 
-        {/* Vote Results */}
-        {room.state === 'voting' && room.votes[currentPlayer.id] !== undefined && (
-          <div className="bg-avalon-card/50 border border-gray-600 rounded-lg p-8 text-center">
-            <p className="text-gray-300">Your vote: {room.votes[currentPlayer.id] ? '👍 Approve' : '👎 Reject'}</p>
-            <p className="text-sm text-gray-500 mt-2">Waiting for other players...</p>
-          </div>
-        )}
+        {/* Quest Phase - Team Members Vote */}
+        {room.state === 'quest' && <QuestPanel room={room} currentPlayer={currentPlayer} />}
 
-        {/* Quest Phase */}
-        {room.state === 'quest' && (
-          <div className="bg-avalon-card/50 border border-blue-600 rounded-lg p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Quest in Progress</h2>
-            <p className="text-gray-300">Quest Team Size: {room.questTeam.length}</p>
-          </div>
-        )}
-
-        {/* Discussion Phase (Assassination) */}
-        {room.state === 'discussion' && currentPlayer.role === 'assassin' && (
-          <div className="bg-avalon-card/50 border border-red-600 rounded-lg p-8 text-center space-y-6">
-            <h2 className="text-2xl font-bold">Assassinate Merlin</h2>
-            <p className="text-gray-300">Choose who you think Merlin is</p>
+        {/* Discussion Phase - Assassination */}
+        {room.state === 'discussion' && (
+          <div className="bg-avalon-card/50 border-2 border-purple-600 rounded-lg p-8 space-y-6">
+            {currentPlayer.role === 'assassin' ? (
+              <>
+                <div className="text-center">
+                  <h2 className="text-3xl font-bold text-red-400 mb-2">🗡️ Assassinate Merlin</h2>
+                  <p className="text-gray-300">Choose who you think Merlin is</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+                  {Object.values(room.players).map((player) => (
+                    <button
+                      key={player.id}
+                      onClick={() => handleAssassinate(player.id)}
+                      disabled={isAssassinating || selectedTarget !== null}
+                      className={`p-4 rounded-lg border-2 transition-all font-semibold ${
+                        selectedTarget === player.id
+                          ? 'bg-red-600/40 border-red-400 text-white'
+                          : 'bg-avalon-evil/30 border-red-600 text-white hover:bg-avalon-evil/60 disabled:opacity-50'
+                      }`}
+                    >
+                      {player.name}
+                      {selectedTarget === player.id && ' ✓'}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-center space-y-4">
+                <h2 className="text-3xl font-bold text-purple-400">💬 Discussion Phase</h2>
+                <p className="text-gray-300">The assassin is choosing their target...</p>
+                <div className="text-sm text-gray-500">
+                  Waiting for the assassin to make their choice...
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Game Ended */}
         {room.state === 'ended' && (
           <div
-            className={`rounded-lg p-8 text-center border-4 ${
+            className={`rounded-lg p-8 text-center border-4 space-y-6 ${
               room.evilWins
                 ? 'bg-avalon-evil/20 border-avalon-evil'
                 : 'bg-avalon-good/20 border-avalon-good'
             }`}
           >
-            <h2 className="text-3xl font-bold mb-4">
+            <h2 className="text-4xl font-bold">
               {room.evilWins ? '👹 Evil Wins!' : '⚔️ Good Wins!'}
             </h2>
             <p className="text-gray-300">Final Roles:</p>
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              {playerList.map((player) => (
-                <div key={player.id} className="text-sm">
-                  <p className="font-bold">{player.name}</p>
+            <div className="grid grid-cols-2 gap-4">
+              {Object.values(room.players).map((player) => (
+                <div key={player.id} className="text-sm bg-avalon-card/30 p-3 rounded-lg">
+                  <p className="font-bold text-white">{player.name}</p>
                   <p className="text-gray-400 capitalize">{player.role}</p>
                 </div>
               ))}

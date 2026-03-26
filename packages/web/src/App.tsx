@@ -6,6 +6,7 @@ import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
 import LobbyPage from './pages/LobbyPage';
 import LoginPage from './pages/LoginPage';
+import WikiPage from './pages/WikiPage';
 import { User } from '@avalon/shared';
 
 function App(): JSX.Element {
@@ -52,6 +53,7 @@ function App(): JSX.Element {
           {gameState === 'home' && <HomePage />}
           {gameState === 'lobby' && <LobbyPage />}
           {(gameState === 'playing' || gameState === 'voting') && <GamePage />}
+          {gameState === 'wiki' && <WikiPage />}
         </>
       )}
     </div>

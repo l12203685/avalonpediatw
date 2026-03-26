@@ -1,0 +1,30 @@
+name: Deploy to Vercel & Railway
+
+on:
+  push:
+    branches: [main, claude/avalon-game-platform-*]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy Frontend to Vercel
+        uses: vercel/action@main
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: packages/web
+      
+      - name: Deploy Backend to Railway
+        uses: railway/railway-action@main
+        with:
+          railway-token: ${{ secrets.RAILWAY_TOKEN }}
+          service: server
+        env:
+          FIREBASE_PROJECT_ID: avalon-game-platform
+          FIREBASE_CLIENT_EMAIL: firebase-adminsdk-fbsvc@avalon-game-platform.iam.gserviceaccount.com
