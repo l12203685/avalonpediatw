@@ -45,12 +45,45 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
 
-      - name: Deploy to Vercel
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Fix Vercel project env vars (remove secret references)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          npm install -g vercel
-          vercel deploy packages/web/dist --prod \
-            --token ${{ secrets.VERCEL_TOKEN }} \
-            --yes
+          # Get all env var IDs that reference Vercel Secrets (type=secret)
+          curl -sf "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -o /tmp/vercel_envs.json
+
+          # Extract and delete secret-type env vars
+          python3 - <<'EOF'
+          import json, subprocess, os
+
+          with open('/tmp/vercel_envs.json') as f:
+              data = json.load(f)
+
+          token = os.environ['VERCEL_TOKEN']
+          project_id = os.environ['VERCEL_PROJECT_ID']
+
+          for env in data.get('envs', []):
+              if env.get('type') == 'secret':
+                  print(f"Deleting broken secret-ref: {env['key']} (id: {env['id']})")
+                  result = subprocess.run([
+                      'curl', '-sf', '-X', 'DELETE',
+                      f'https://api.vercel.com/v9/projects/{project_id}/env/{env["id"]}',
+                      '-H', f'Authorization: Bearer {token}'
+                  ], capture_output=True)
+                  print('OK' if result.returncode == 0 else 'Failed')
+          EOF
+
+      - name: Deploy to Vercel
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel deploy packages/web/dist --prod \
+            --token ${{ secrets.VERCEL_TOKEN }} \
+            --yes
