@@ -47,9 +47,10 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
 
+      - name: Write Firebase credentials
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_AVALON }}' > firebase-key.json
+
       - name: Deploy to Firebase
-        run: |
-          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_AVALON }}" > firebase-key.json
-          npx firebase-tools deploy --project avalon-game-platform --non-interactive
+        run: npx firebase-tools deploy --project avalon-game-platform --non-interactive
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: firebase-key.json
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/firebase-key.json
