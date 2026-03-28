@@ -9,6 +9,13 @@ interface QuestVote {
   vote: 'success' | 'fail';
 }
 
+export interface GameEventRecord {
+  seq:        number;
+  event_type: string;
+  actor_id:   string | null;
+  event_data: Record<string, unknown>;
+}
+
 export class GameEngine {
   private room: Room;
   private roleAssignments: Map<string, Role> = new Map();
@@ -20,8 +27,17 @@ export class GameEngine {
   private questVotes: QuestVote[] = [];
   private currentLeaderIndex: number = 0;
 
+  // In-memory event buffer (flushed to Supabase on game end)
+  private eventBuffer: GameEventRecord[] = [];
+  private eventSeq: number = 0;
+
   constructor(room: Room) {
     this.room = room;
+  }
+
+  /** Returns the buffered event log for persistence */
+  public getEventLog(): GameEventRecord[] {
+    return this.eventBuffer;
   }
 
   public startGame(): void {
@@ -517,12 +533,14 @@ export class GameEngine {
     return this.room.questTeam;
   }
 
-  private logEvent(event: string, data: Record<string, unknown>): void {
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      roomId: this.room.id,
-      event,
-      ...data
-    }));
+  private logEvent(event: string, data: Record<string, unknown>, actorId: string | null = null): void {
+    const record: GameEventRecord = {
+      seq:        this.eventSeq++,
+      event_type: event,
+      actor_id:   actorId,
+      event_data: { roomId: this.room.id, timestamp: new Date().toISOString(), ...data },
+    };
+    this.eventBuffer.push(record);
+    console.log(JSON.stringify({ ...record.event_data, event }));
   }
 }

@@ -188,6 +188,40 @@ export async function saveGameRecords(records: DbGameRecord[]): Promise<void> {
   }
 }
 
+// ── 遊戲事件 ─────────────────────────────────────────────────
+
+export interface DbGameEvent {
+  room_id:    string;
+  seq:        number;
+  event_type: string;
+  actor_id:   string | null;
+  event_data: Record<string, unknown>;
+}
+
+/**
+ * 批次儲存一局的所有遊戲事件（AI 訓練資料 & 回放用）
+ */
+export async function saveGameEvents(events: DbGameEvent[]): Promise<void> {
+  const db = getSupabaseClient();
+  if (!db || events.length === 0) return;
+  const { error } = await db.from('game_events').insert(events);
+  if (error) console.error('[supabase] saveGameEvents error:', error.message);
+}
+
+/**
+ * 取得一局的完整事件序列（供回放用）
+ */
+export async function getGameEvents(roomId: string): Promise<DbGameEvent[]> {
+  const db = getSupabaseClient();
+  if (!db) return [];
+  const { data } = await db
+    .from('game_events')
+    .select('room_id, seq, event_type, actor_id, event_data')
+    .eq('room_id', roomId)
+    .order('seq', { ascending: true });
+  return (data ?? []) as DbGameEvent[];
+}
+
 // ── OAuth session（CSRF state）────────────────────────────────
 
 export async function createOAuthSession(stateToken: string, provider: 'discord' | 'line'): Promise<void> {
@@ -230,6 +264,7 @@ export interface UserProfile {
 
 export interface RecentGame {
   id: string;
+  room_id: string;
   role: string;
   team: 'good' | 'evil';
   won: boolean;
@@ -277,7 +312,7 @@ export async function getDbUserProfile(userId: string): Promise<UserProfile | nu
 
   const { data: games } = await db
     .from('game_records')
-    .select('id, role, team, won, elo_delta, player_count, created_at')
+    .select('id, room_id, role, team, won, elo_delta, player_count, created_at')
     .eq('player_user_id', userId)
     .order('created_at', { ascending: false })
     .limit(10);

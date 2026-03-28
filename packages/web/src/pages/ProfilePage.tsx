@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy } from 'lucide-react';
+import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
-import { fetchMyProfile, fetchUserProfile, UserProfile, RecentGame } from '../services/api';
+import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
 import { getStoredToken } from '../services/socket';
 
 const ROLE_NAMES: Record<string, string> = {
@@ -25,7 +25,7 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' });
 }
 
-function GameRow({ game }: { game: RecentGame }): JSX.Element {
+function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: string) => void }): JSX.Element {
   const won = game.won;
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-gray-700/50 last:border-0">
@@ -42,15 +42,24 @@ function GameRow({ game }: { game: RecentGame }): JSX.Element {
         {game.elo_delta >= 0 ? `+${game.elo_delta}` : game.elo_delta}
       </div>
       <div className="text-xs text-gray-600 w-14 text-right">{formatDate(game.created_at)}</div>
+      <button
+        onClick={() => onReplay(game.room_id)}
+        className="p-1 text-gray-600 hover:text-blue-400 transition-colors"
+        title="查看回放"
+      >
+        <ExternalLink size={12} />
+      </button>
     </div>
   );
 }
 
 export default function ProfilePage(): JSX.Element {
   const { setGameState, profileUserId, navigateToProfile } = useGameStore();
-  const [profile, setProfile]   = useState<UserProfile | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
+  const [profile, setProfile]       = useState<UserProfile | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState('');
+  const [replay, setReplay]         = useState<{ roomId: string; events: GameEvent[] } | null>(null);
+  const [replayLoading, setReplayLoading] = useState(false);
 
   useEffect(() => {
     const token = getStoredToken();
@@ -67,6 +76,14 @@ export default function ProfilePage(): JSX.Element {
       .catch(() => setError('無法載入用戶資料'))
       .finally(() => setLoading(false));
   }, [profileUserId]);
+
+  const handleReplay = (roomId: string): void => {
+    setReplayLoading(true);
+    fetchGameReplay(roomId)
+      .then(events => setReplay({ roomId, events }))
+      .catch(() => setReplay({ roomId, events: [] }))
+      .finally(() => setReplayLoading(false));
+  };
 
   const winRate = profile && profile.total_games > 0
     ? Math.round((profile.games_won / profile.total_games) * 100)
@@ -164,10 +181,39 @@ export default function ProfilePage(): JSX.Element {
                 <p className="text-center text-gray-500 text-sm py-4">尚無遊戲記錄</p>
               ) : (
                 <div>
-                  {profile.recent_games.map(g => <GameRow key={g.id} game={g} />)}
+                  {profile.recent_games.map(g => (
+                    <GameRow key={g.id} game={g} onReplay={handleReplay} />
+                  ))}
                 </div>
               )}
             </div>
+
+            {/* Replay modal */}
+            {(replay || replayLoading) && (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+                onClick={() => setReplay(null)}>
+                <div className="bg-avalon-card border border-gray-600 rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto"
+                  onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-white">遊戲回放 — {replay?.roomId}</h3>
+                    <button onClick={() => setReplay(null)} className="text-gray-500 hover:text-white">✕</button>
+                  </div>
+                  {replayLoading && <div className="flex justify-center py-8"><Loader size={24} className="animate-spin text-blue-400" /></div>}
+                  {replay && replay.events.length === 0 && (
+                    <p className="text-center text-gray-500 py-4">無回放資料（此局在事件記錄功能上線前進行）</p>
+                  )}
+                  {replay && replay.events.map(ev => (
+                    <div key={ev.seq} className="flex gap-3 py-1.5 border-b border-gray-700/50 text-sm">
+                      <span className="text-gray-600 w-6 text-right flex-shrink-0">{ev.seq}</span>
+                      <span className="text-blue-400 font-mono w-36 flex-shrink-0">{ev.event_type}</span>
+                      <span className="text-gray-400 text-xs truncate">
+                        {JSON.stringify(ev.event_data).slice(0, 80)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* View on leaderboard */}
             <button

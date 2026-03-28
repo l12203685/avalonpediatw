@@ -19,6 +19,7 @@ export interface LeaderboardEntry {
 
 export interface RecentGame {
   id: string;
+  room_id: string;
   role: string;
   team: 'good' | 'evil';
   won: boolean;
@@ -61,4 +62,16 @@ export async function fetchMyProfile(token: string): Promise<UserProfile> {
 export async function fetchUserProfile(userId: string): Promise<UserProfile> {
   const data = await apiFetch<{ profile: UserProfile }>(`/api/profile/${userId}`);
   return data.profile;
+}
+
+export interface GameEvent {
+  seq:        number;
+  event_type: string;
+  actor_id:   string | null;
+  event_data: Record<string, unknown>;
+}
+
+export async function fetchGameReplay(roomId: string): Promise<GameEvent[]> {
+  const data = await apiFetch<{ room_id: string; events: GameEvent[] }>(`/api/replay/${roomId}`);
+  return data.events;
 }

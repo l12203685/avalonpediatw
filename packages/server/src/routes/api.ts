@@ -5,6 +5,7 @@ import {
   getLeaderboard,
   getDbUserProfile,
   getSupabaseIdByFirebaseUid,
+  getGameEvents,
   isSupabaseReady,
 } from '../services/supabase';
 
@@ -74,6 +75,18 @@ router.get('/profile/:id', async (req: Request, res: Response) => {
     return res.status(404).json({ error: 'Profile not found' });
   }
   return res.json({ profile });
+});
+
+// ── GET /api/replay/:roomId ───────────────────────────────────
+router.get('/replay/:roomId', async (req: Request, res: Response) => {
+  if (!isSupabaseReady()) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  const events = await getGameEvents(req.params.roomId);
+  if (events.length === 0) {
+    return res.status(404).json({ error: 'No events found for this room' });
+  }
+  return res.json({ room_id: req.params.roomId, events });
 });
 
 export { router as apiRouter };

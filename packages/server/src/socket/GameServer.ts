@@ -8,6 +8,7 @@ import {
   saveRoom,
   updateRoomState,
   saveGameRecords,
+  saveGameEvents,
   getUserElo,
   DbGameRecord,
 } from '../services/supabase';
@@ -478,6 +479,20 @@ export class GameServer {
     if (records.length > 0) {
       await saveGameRecords(records);
       console.log(`[supabase] Saved ${records.length} game records for room ${roomId}`);
+    }
+
+    // Flush event log for replay & AI training
+    const engine = this.gameEngines.get(roomId);
+    if (engine) {
+      const events = engine.getEventLog().map(e => ({
+        room_id:    roomId,
+        seq:        e.seq,
+        event_type: e.event_type,
+        actor_id:   e.actor_id,
+        event_data: e.event_data,
+      }));
+      await saveGameEvents(events);
+      console.log(`[supabase] Saved ${events.length} game events for room ${roomId}`);
     }
   }
 

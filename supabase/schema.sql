@@ -131,6 +131,20 @@ CREATE POLICY "service_role_all" ON votes         FOR ALL USING (true);
 CREATE POLICY "service_role_all" ON quest_results FOR ALL USING (true);
 CREATE POLICY "service_role_all" ON oauth_sessions FOR ALL USING (true);
 
+-- 遊戲事件表（供回放 & AI 訓練用）
+-- 每個遊戲動作存一筆，event_data 為 JSON 完整狀態快照
+CREATE TABLE IF NOT EXISTS game_events (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id     TEXT NOT NULL,
+  seq         INTEGER NOT NULL,              -- 事件序號（遊戲內順序）
+  event_type  TEXT NOT NULL,                 -- 'game_started'|'team_selected'|'vote_cast'|'quest_resolved'|'game_ended' 等
+  actor_id    TEXT,                          -- 觸發事件的玩家 uid（可 NULL）
+  event_data  JSONB NOT NULL DEFAULT '{}',   -- 完整事件資料（角色、投票、結果等）
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_events_room ON game_events(room_id, seq);
+
 -- ============================================================
 -- update_player_stats — 原子更新用戶統計與 ELO
 -- 由 saveGameRecords() 在每局結束後逐筆呼叫
