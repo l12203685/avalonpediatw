@@ -126,7 +126,8 @@ export async function upsertUser(data: DbUser): Promise<string | null> {
 export async function getUserElo(userId: string): Promise<number> {
   const db = getSupabaseClient();
   if (!db) return 1000;
-  const { data } = await db.from('users').select('elo_rating').eq('id', userId).single();
+  const { data, error } = await db.from('users').select('elo_rating').eq('id', userId).single();
+  if (error) return 1000;
   return data?.elo_rating ?? 1000;
 }
 

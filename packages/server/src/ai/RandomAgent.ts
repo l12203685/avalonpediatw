@@ -48,7 +48,8 @@ export class RandomAgent implements AvalonAgent {
 
       case 'assassination': {
         const goodPlayers = allPlayerIds.filter(id => !obs.knownEvils.includes(id) && id !== obs.myPlayerId);
-        const target = goodPlayers[Math.floor(Math.random() * goodPlayers.length)] ?? allPlayerIds[0];
+        const pool   = goodPlayers.length > 0 ? goodPlayers : allPlayerIds.filter(id => id !== obs.myPlayerId);
+        const target = pool[Math.floor(Math.random() * pool.length)] ?? allPlayerIds[0];
         return { type: 'assassinate', targetId: target };
       }
     }
