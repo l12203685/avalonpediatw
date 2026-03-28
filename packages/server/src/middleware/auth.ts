@@ -1,45 +1,62 @@
 import { Socket } from 'socket.io';
-import { verifyIdToken, getUserProfile, createUserProfile } from '../services/firebase';
+import { verifyIdToken, getUserProfile, createUserProfile, isFirebaseAdminReady } from '../services/firebase';
 import { User } from '@avalon/shared';
-
-enum AuthErrorCode {
-  NO_TOKEN = 'NO_TOKEN',
-  INVALID_TOKEN = 'INVALID_TOKEN',
-  EXPIRED_TOKEN = 'EXPIRED_TOKEN',
-  UNKNOWN = 'UNKNOWN'
-}
-
-class AuthError extends Error {
-  constructor(
-    message: string,
-    public code: AuthErrorCode
-  ) {
-    super(message);
-    this.name = 'AuthError';
-  }
-}
+import { v4 as uuidv4 } from 'uuid';
 
 /**
- * Middleware to authenticate Socket.IO connections
+ * Middleware to authenticate Socket.IO connections.
+ *
+ * Guest mode: if Firebase Admin SDK is not configured (no service account),
+ * the server accepts a plain JSON token { uid, displayName } so users can
+ * play without setting up Firebase credentials.
  */
 export async function authenticateSocket(socket: Socket, next: (err?: Error) => void): Promise<void> {
   try {
-    const token = socket.handshake.auth.token;
+    const token = socket.handshake.auth.token as string | undefined;
 
     if (!token) {
-      return next(new AuthError('No token provided', AuthErrorCode.NO_TOKEN));
+      return next(new Error('No token provided'));
     }
 
-    // Verify Firebase ID token
+    // Guest / prototype mode — Firebase Admin not configured
+    if (!isFirebaseAdminReady()) {
+      let guestUser: User;
+      try {
+        const parsed = JSON.parse(token) as { uid?: string; displayName?: string };
+        guestUser = {
+          uid: parsed.uid || uuidv4(),
+          email: '',
+          displayName: parsed.displayName || 'Guest',
+          photoURL: undefined,
+          provider: 'google',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+      } catch {
+        // token is not JSON — create a fully anonymous user
+        guestUser = {
+          uid: uuidv4(),
+          email: '',
+          displayName: 'Guest',
+          photoURL: undefined,
+          provider: 'google',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+      }
+      socket.data.user = guestUser;
+      socket.data.uid = guestUser.uid;
+      console.log(`[guest] ${guestUser.displayName} (${guestUser.uid})`);
+      return next();
+    }
+
+    // Normal mode — verify Firebase ID token
     let decodedToken;
     try {
       decodedToken = await verifyIdToken(token);
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      if (errorMsg.includes('expired') || errorMsg.includes('auth/id-token-expired')) {
-        throw new AuthError('Token has expired', AuthErrorCode.EXPIRED_TOKEN);
-      }
-      throw new AuthError('Invalid token', AuthErrorCode.INVALID_TOKEN);
+      const msg = error instanceof Error ? error.message : '';
+      return next(new Error(msg.includes('expired') ? 'Token expired' : 'Invalid token'));
     }
 
     const uid = decodedToken.uid;
@@ -47,11 +64,8 @@ export async function authenticateSocket(socket: Socket, next: (err?: Error) => 
     const name = decodedToken.name || email.split('@')[0];
     const photoURL = decodedToken.picture;
 
-    // Get or create user profile
     let userProfile = await getUserProfile(uid);
-
     if (!userProfile) {
-      // Create new user profile
       const newUser: User = {
         uid,
         email,
@@ -61,46 +75,21 @@ export async function authenticateSocket(socket: Socket, next: (err?: Error) => 
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-
       await createUserProfile(newUser);
       userProfile = newUser;
     }
 
-    // Attach user to socket
     socket.data.user = userProfile;
     socket.data.uid = uid;
-
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      event: 'socket_authenticated',
-      uid,
-      displayName: userProfile.displayName,
-      provider: userProfile.provider
-    }));
-
+    console.log(`[auth] ${userProfile.displayName} (${uid})`);
     next();
   } catch (error) {
-    if (error instanceof AuthError) {
-      console.error(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        event: 'auth_error',
-        code: error.code,
-        message: error.message
-      }));
-      return next(new Error(`Auth error [${error.code}]: ${error.message}`));
-    }
-
-    console.error('Socket authentication error:', error);
-    next(new AuthError('Authentication failed', AuthErrorCode.UNKNOWN));
+    console.error('Socket auth error:', error);
+    next(new Error('Authentication failed'));
   }
 }
 
-/**
- * Middleware to require authentication
- */
 export function requireAuth(socket: Socket, next: (err?: Error) => void): void {
-  if (!socket.data.user) {
-    return next(new Error('Not authenticated'));
-  }
+  if (!socket.data.user) return next(new Error('Not authenticated'));
   next();
 }

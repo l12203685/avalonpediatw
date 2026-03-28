@@ -64,6 +64,10 @@ export function getFirebaseApp(): FirebaseApp {
   return firebaseApp;
 }
 
+export function isFirebaseAdminReady(): boolean {
+  return adminApp !== null;
+}
+
 export function getAdminAuth(): admin.auth.Auth {
   if (!adminApp) {
     throw new Error('Firebase admin not initialized');
