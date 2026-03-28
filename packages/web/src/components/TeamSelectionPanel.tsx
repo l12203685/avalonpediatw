@@ -53,10 +53,9 @@ export default function TeamSelectionPanel({
     >
       {/* 標題和信息 */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">👑 Select Quest Team</h2>
+        <h2 className="text-3xl font-bold text-white mb-2">👑 選擇任務隊伍</h2>
         <p className="text-gray-300">
-          You are the leader. Choose {expectedTeamSize} player
-          {expectedTeamSize > 1 ? 's' : ''} for the quest.
+          你是隊長，請選擇 {expectedTeamSize} 名隊員執行任務。
         </p>
       </div>
 
@@ -64,7 +63,7 @@ export default function TeamSelectionPanel({
       <div className="flex justify-center">
         <div className="bg-avalon-card/70 rounded-full px-6 py-2">
           <p className="text-white font-bold">
-            Team Size: <span className="text-purple-400">{selectedPlayers.size}</span>/
+            已選人數：<span className="text-purple-400">{selectedPlayers.size}</span>/
             <span className="text-gray-400">{expectedTeamSize}</span>
           </p>
         </div>
@@ -72,7 +71,7 @@ export default function TeamSelectionPanel({
 
       {/* 玩家選擇列表 */}
       <div className="space-y-2">
-        <p className="text-gray-300 text-sm font-semibold">Select Team Members:</p>
+        <p className="text-gray-300 text-sm font-semibold">選擇隊員：</p>
         <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto">
           {Object.entries(room.players).map(([playerId, player]) => {
             const isSelected = selectedPlayers.has(playerId);
@@ -104,7 +103,7 @@ export default function TeamSelectionPanel({
                 </div>
                 <span className="font-semibold flex-1 text-left">
                   {player.name}
-                  {isYou && ' (You)'}
+                  {isYou && '（你）'}
                 </span>
               </motion.button>
             );
@@ -124,15 +123,15 @@ export default function TeamSelectionPanel({
             : 'bg-gray-600 text-gray-300 cursor-not-allowed opacity-50'
         }`}
       >
-        {isSubmitting ? 'Submitting Team...' : 'Confirm Quest Team'}
+        {isSubmitting ? '提交中…' : '確認任務隊伍'}
       </motion.button>
 
       {/* 幫助文本 */}
       <div className="text-center text-sm text-gray-400">
         <p>
           {isFull
-            ? 'Team is ready! Click Confirm to proceed to the vote.'
-            : `Select ${expectedTeamSize - selectedPlayers.size} more player(s)`}
+            ? '隊伍已選完！點擊確認進行投票。'
+            : `還需選擇 ${expectedTeamSize - selectedPlayers.size} 名隊員`}
         </p>
       </div>
     </motion.div>
