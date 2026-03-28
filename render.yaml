@@ -16,7 +16,6 @@ services:
   - type: web
     name: avalonpediatw-web
     runtime: static
-    region: singapore
     plan: free
     buildCommand: npm install -g pnpm@8 && pnpm install --frozen-lockfile && pnpm --filter @avalon/shared build && pnpm --filter @avalon/web build
     staticPublishPath: packages/web/dist
