@@ -8,7 +8,7 @@ export default function LobbyPage(): JSX.Element {
   const [copied, setCopied] = useState(false);
 
   if (!room || !currentPlayer) {
-    return <div className="text-center text-white">Loading...</div>;
+    return <div className="text-center text-white">載入中…</div>;
   }
 
   const playerList = Object.values(room.players);

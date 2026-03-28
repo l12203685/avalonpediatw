@@ -24,7 +24,7 @@ export default function HomePage(): JSX.Element {
 
   const handleCreateRoom = (): void => {
     if (!playerName.trim()) {
-      alert('Please enter your name');
+      alert('請輸入你的名字');
       return;
     }
 
@@ -39,12 +39,12 @@ export default function HomePage(): JSX.Element {
 
   const handleJoinRoom = (): void => {
     if (!playerName.trim()) {
-      alert('Please enter your name');
+      alert('請輸入你的名字');
       return;
     }
 
     if (!roomId.trim()) {
-      alert('Please enter a room ID');
+      alert('請輸入房間代碼');
       return;
     }
 
@@ -130,8 +130,8 @@ export default function HomePage(): JSX.Element {
               <h1 className="text-6xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent drop-shadow-2xl">
                 AVALON
               </h1>
-              <p className="text-2xl text-gray-300 font-semibold">The Resistance</p>
-              <p className="text-gray-400 text-sm">5-10 players • 20-30 minutes</p>
+              <p className="text-2xl text-gray-300 font-semibold">抵抗組織</p>
+              <p className="text-gray-400 text-sm">5–10 人 • 即時連線對戰</p>
             </motion.div>
 
             {/* Stats Cards */}
@@ -143,11 +143,11 @@ export default function HomePage(): JSX.Element {
             >
               <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3">
                 <Users size={20} className="text-blue-400 mx-auto mb-1" />
-                <p className="text-xs text-gray-300">Team-Based</p>
+                <p className="text-xs text-gray-300">陣營對戰</p>
               </div>
               <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3">
                 <Zap size={20} className="text-purple-400 mx-auto mb-1" />
-                <p className="text-xs text-gray-300">Real-Time</p>
+                <p className="text-xs text-gray-300">即時連線</p>
               </div>
             </motion.div>
 
@@ -165,7 +165,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-blue-500/50"
               >
                 <Play size={20} />
-                Create Game
+                建立房間
               </motion.button>
 
               <motion.button
@@ -175,7 +175,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-purple-500/50"
               >
                 <LogIn size={20} />
-                Join Game
+                加入房間
               </motion.button>
 
               <motion.button
@@ -185,7 +185,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-yellow-500/50"
               >
                 <BookOpen size={20} />
-                Wiki & Guide
+                百科 & 攻略
               </motion.button>
 
               <motion.button
@@ -206,20 +206,22 @@ export default function HomePage(): JSX.Element {
               transition={{ delay: 0.4 }}
               className="text-xs text-gray-500 pt-4 border-t border-gray-700"
             >
-              <p>🎭 A game of deception and logic</p>
+              <p>🎭 欺騙與邏輯的推理遊戲</p>
             </motion.div>
           </motion.div>
         )}
 
         {mode === 'create' && (
           <div className="space-y-6 bg-avalon-card/50 p-8 rounded-lg border border-blue-500/30">
-            <h2 className="text-2xl font-bold text-center">Create a Game</h2>
+            <h2 className="text-2xl font-bold text-center">建立房間</h2>
 
             <input
               type="text"
-              placeholder="Your Name"
+              placeholder="你的名字"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreateRoom()}
+              autoFocus
               className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
             />
 
@@ -228,7 +230,7 @@ export default function HomePage(): JSX.Element {
                 onClick={handleCreateRoom}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
               >
-                Create
+                建立
               </button>
 
               <button
@@ -238,7 +240,7 @@ export default function HomePage(): JSX.Element {
                 }}
                 className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
               >
-                Back
+                返回
               </button>
             </div>
           </div>
@@ -246,22 +248,25 @@ export default function HomePage(): JSX.Element {
 
         {mode === 'join' && (
           <div className="space-y-6 bg-avalon-card/50 p-8 rounded-lg border border-purple-500/30">
-            <h2 className="text-2xl font-bold text-center">Join a Game</h2>
+            <h2 className="text-2xl font-bold text-center">加入房間</h2>
 
             <input
               type="text"
-              placeholder="Your Name"
+              placeholder="你的名字"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
+              autoFocus
               className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
             />
 
             <input
               type="text"
-              placeholder="Room ID"
+              placeholder="房間代碼（6 碼）"
               value={roomId}
-              onChange={(e) => setRoomId(e.target.value)}
-              className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+              onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && handleJoinRoom()}
+              maxLength={6}
+              className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 uppercase font-mono tracking-widest"
             />
 
             <div className="space-y-3">
@@ -269,7 +274,7 @@ export default function HomePage(): JSX.Element {
                 onClick={handleJoinRoom}
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
               >
-                Join
+                加入
               </button>
 
               <button
@@ -280,7 +285,7 @@ export default function HomePage(): JSX.Element {
                 }}
                 className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
               >
-                Back
+                返回
               </button>
             </div>
           </div>

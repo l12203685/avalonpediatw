@@ -17,7 +17,7 @@ export default function WikiPage(): JSX.Element {
           className="flex items-center gap-2 bg-avalon-card/50 hover:bg-avalon-card/80 text-white px-4 py-2 rounded-lg border border-gray-600 transition-all"
         >
           <ArrowLeft size={18} />
-          Back
+          返回
         </motion.button>
       </div>
 

@@ -188,6 +188,24 @@ export async function saveGameRecords(records: DbGameRecord[]): Promise<void> {
   }
 }
 
+// ── 徽章系統 ─────────────────────────────────────────────────
+
+/** 依成就條件檢查並新增徽章（冪等 — 重複傳相同徽章不會重複寫入） */
+export async function awardBadges(userId: string, newBadges: string[]): Promise<void> {
+  const db = getSupabaseClient();
+  if (!db || newBadges.length === 0) return;
+
+  const { data: user } = await db.from('users').select('badges').eq('id', userId).single();
+  if (!user) return;
+
+  const existing: string[] = user.badges ?? [];
+  const toAdd = newBadges.filter(b => !existing.includes(b));
+  if (toAdd.length === 0) return;
+
+  await db.from('users').update({ badges: [...existing, ...toAdd] }).eq('id', userId);
+  console.log(`[supabase] Awarded badges to ${userId}: ${toAdd.join(', ')}`);
+}
+
 // ── 遊戲事件 ─────────────────────────────────────────────────
 
 export interface DbGameEvent {

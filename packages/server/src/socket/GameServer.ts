@@ -9,6 +9,7 @@ import {
   updateRoomState,
   saveGameRecords,
   saveGameEvents,
+  awardBadges,
   getUserElo,
   DbGameRecord,
 } from '../services/supabase';
@@ -43,6 +44,16 @@ export class GameServer {
   }
 
   public start(): void {
+    // Periodic cleanup: remove engine references for rooms that no longer exist
+    setInterval(() => {
+      for (const roomId of this.gameEngines.keys()) {
+        if (!this.roomManager.getRoom(roomId)) {
+          this.gameEngines.delete(roomId);
+          this.roomStartTimes.delete(roomId);
+        }
+      }
+    }, 10 * 60 * 1000); // every 10 minutes
+
     this.io.on('connection', (socket: Socket) => {
       const user = socket.data.user as User;
       console.log(`✓ Player connected: ${user.displayName} (${socket.id})`);
@@ -479,6 +490,14 @@ export class GameServer {
     if (records.length > 0) {
       await saveGameRecords(records);
       console.log(`[supabase] Saved ${records.length} game records for room ${roomId}`);
+
+      // Award badges based on this game's results
+      for (const record of records) {
+        const badges = this.evaluateBadges(record, playerCount, records);
+        if (badges.length > 0) {
+          await awardBadges(record.player_user_id, badges);
+        }
+      }
     }
 
     // Flush event log for replay & AI training
@@ -494,6 +513,30 @@ export class GameServer {
       await saveGameEvents(events);
       console.log(`[supabase] Saved ${events.length} game events for room ${roomId}`);
     }
+  }
+
+  private evaluateBadges(record: DbGameRecord, playerCount: number, allRecords: DbGameRecord[]): string[] {
+    const badges: string[] = [];
+
+    // 首次勝利
+    if (record.won) badges.push('初勝');
+
+    // 梅林之盾 — 以梅林身份獲勝
+    if (record.won && record.role === 'merlin') badges.push('梅林之盾');
+
+    // 刺客之影 — 以刺客身份獲勝
+    if (record.won && record.role === 'assassin') badges.push('刺客之影');
+
+    // 全場最大局 — 10人局
+    if (playerCount >= 10) badges.push('十人戰場');
+
+    // 滿血 — ELO 從未低於 1000 且本局獲勝
+    if (record.won && record.elo_before >= 1000) badges.push('穩健');
+
+    // 浴火重生 — ELO 低於 800 時獲勝
+    if (record.won && record.elo_before < 800) badges.push('浴火重生');
+
+    return badges;
   }
 
   private handleChatMessage(socket: Socket, roomId: string, message: string): void {
@@ -541,6 +584,17 @@ export class GameServer {
       if (room && room.players[playerId]) {
         room.players[playerId].status = 'disconnected';
         this.io.to(roomId).emit('game:player-left', playerId);
+
+        // If all players are disconnected and game hasn't started, clean up lobby immediately
+        if (room.state === 'lobby') {
+          const allGone = Object.values(room.players).every(p => p.status === 'disconnected');
+          if (allGone) {
+            this.roomManager.deleteRoom(roomId);
+            this.gameEngines.delete(roomId);
+            this.roomStartTimes.delete(roomId);
+            console.log(`✓ Empty lobby cleaned up: ${roomId}`);
+          }
+        }
       }
     }
 

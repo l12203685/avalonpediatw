@@ -48,7 +48,7 @@ function App(): JSX.Element {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-avalon-dark to-avalon-card">
         <div className="text-white text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-400 mb-4"></div>
-          <p>Loading...</p>
+          <p>載入中…</p>
         </div>
       </div>
     );

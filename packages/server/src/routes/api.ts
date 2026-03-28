@@ -8,6 +8,9 @@ import {
   getGameEvents,
   isSupabaseReady,
 } from '../services/supabase';
+import { SelfPlayEngine } from '../ai/SelfPlayEngine';
+import { RandomAgent } from '../ai/RandomAgent';
+
 
 const router: IRouter = Router();
 
@@ -87,6 +90,58 @@ router.get('/replay/:roomId', async (req: Request, res: Response) => {
     return res.status(404).json({ error: 'No events found for this room' });
   }
   return res.json({ room_id: req.params.roomId, events });
+});
+
+// ── POST /api/ai/selfplay ─────────────────────────────────────
+// Admin-only endpoint to trigger self-play data generation
+// Body: { playerCount?: 5-10, games?: 1-100, persist?: boolean }
+router.post('/ai/selfplay', async (req: Request, res: Response) => {
+  const secret = req.headers['x-admin-secret'];
+  if (!secret || secret !== process.env.ADMIN_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const playerCount = Math.min(10, Math.max(5, Number(req.body?.playerCount) || 5));
+  const games       = Math.min(100, Math.max(1, Number(req.body?.games) || 10));
+  const persist     = req.body?.persist !== false;
+
+  try {
+    const engine = new SelfPlayEngine();
+    const agents = Array.from({ length: playerCount }, (_, i) =>
+      new RandomAgent(`AI-${i + 1}`)
+    );
+    const stats = await engine.runBatch(agents, games, persist);
+    return res.json({ ok: true, ...stats });
+  } catch (err) {
+    console.error('[ai/selfplay]', err);
+    return res.status(500).json({ error: 'Self-play failed' });
+  }
+});
+
+// ── GET /api/ai/stats ─────────────────────────────────────────
+router.get('/ai/stats', async (_req: Request, res: Response) => {
+  if (!isSupabaseReady()) {
+    return res.json({ message: 'Database not configured', totalGames: 0, totalEvents: 0 });
+  }
+  // Quick stats from game_events table
+  const { getSupabaseClient } = await import('../services/supabase');
+  const db = getSupabaseClient();
+  if (!db) return res.json({ totalGames: 0, totalEvents: 0 });
+
+  const { count: eventCount } = await db
+    .from('game_events')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: gameCount } = await db
+    .from('game_events')
+    .select('room_id', { count: 'exact', head: true })
+    .like('room_id', 'AI-%');
+
+  return res.json({
+    totalEvents:   eventCount ?? 0,
+    aiGames:       gameCount  ?? 0,
+    message:       'AI self-play data stats',
+  });
 });
 
 export { router as apiRouter };
