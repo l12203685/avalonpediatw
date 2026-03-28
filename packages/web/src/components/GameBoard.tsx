@@ -9,6 +9,11 @@ interface GameBoardProps {
   currentPlayer: Player;
 }
 
+const STATE_LABELS: Record<string, string> = {
+  lobby: '等待中', voting: '投票中', quest: '任務中',
+  discussion: '刺殺', ended: '結束',
+};
+
 export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.Element {
   const playerCount = Object.values(room.players).length;
   const angleSlice = 360 / playerCount;
@@ -59,7 +64,7 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
           transition={{ duration: 2, repeat: Infinity }}
           className="mb-2"
         >
-          <p className="text-sm text-gray-400">Round {room.currentRound}/{room.maxRounds}</p>
+          <p className="text-sm text-gray-400">第 {room.currentRound}/{room.maxRounds} 輪</p>
         </motion.div>
 
         <motion.p
@@ -69,7 +74,7 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
           exit={{ opacity: 0, y: -10 }}
           className="text-2xl font-bold text-white capitalize bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
         >
-          {room.state}
+          {STATE_LABELS[room.state] ?? room.state}
         </motion.p>
 
         {/* 任務結果指示器 */}
