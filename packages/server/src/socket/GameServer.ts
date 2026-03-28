@@ -330,7 +330,7 @@ export class GameServer {
     }
   }
 
-  private handleVote(socket: Socket, roomId: string, playerId: string, vote: boolean): void {
+  private handleVote(socket: Socket, roomId: string, _clientPlayerId: string, vote: boolean): void {
     try {
       // Rate limiting
       const voteIdentifier = `${socket.id}:vote`;
@@ -338,6 +338,9 @@ export class GameServer {
         socket.emit('error', 'Voting too frequently. Please wait.');
         return;
       }
+
+      // Use server-verified player ID — ignore client-supplied ID to prevent spoofing
+      const playerId = socket.data.playerId as string;
 
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -421,10 +424,13 @@ export class GameServer {
   private handleSubmitQuestVote(
     socket: Socket,
     roomId: string,
-    playerId: string,
+    _clientPlayerId: string,
     vote: 'success' | 'fail'
   ): void {
     try {
+      // Use server-verified player ID — ignore client-supplied ID to prevent spoofing
+      const playerId = socket.data.playerId as string;
+
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
         socket.emit('error', 'Room not found');
@@ -437,7 +443,7 @@ export class GameServer {
         return;
       }
 
-      // Verify player is in room
+      // Verify player is in room and on the quest team
       if (!(playerId in room.players)) {
         socket.emit('error', 'Player not in room');
         return;
@@ -464,8 +470,11 @@ export class GameServer {
     }
   }
 
-  private handleAssassinate(socket: Socket, roomId: string, assassinId: string, targetId: string): void {
+  private handleAssassinate(socket: Socket, roomId: string, _clientAssassinId: string, targetId: string): void {
     try {
+      // Use server-verified player ID — ignore client-supplied assassinId to prevent spoofing
+      const assassinId = socket.data.playerId as string;
+
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
         socket.emit('error', 'Room not found');
@@ -478,7 +487,7 @@ export class GameServer {
         return;
       }
 
-      // Verify assassin is in room
+      // Verify this player is actually the assassin
       if (!(assassinId in room.players)) {
         socket.emit('error', 'Assassin not in room');
         return;
