@@ -6,6 +6,7 @@ import {
   signUpWithEmail,
   signInWithDiscord,
   signInWithLine,
+  extractOAuthErrorFromUrl,
 } from '../services/auth';
 import { useGameStore } from '../store/gameStore';
 import { initializeSocket } from '../services/socket';
@@ -15,7 +16,7 @@ type Tab = 'social' | 'email' | 'guest';
 
 export default function LoginPage(): JSX.Element {
   const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState('');
+  const [error, setError]   = useState(() => extractOAuthErrorFromUrl() ?? '');
   const [tab, setTab]       = useState<Tab>('social');
 
   // Email 表單
@@ -69,6 +70,7 @@ export default function LoginPage(): JSX.Element {
   const handleGuest = () => go(async () => {
     const name = guestName.trim();
     if (!name) throw new Error('請輸入你的名字');
+    if (name.length < 2) throw new Error('名字至少需要 2 個字元');
     const token = JSON.stringify({ uid: uuidv4(), displayName: name });
     await initializeSocket(token);
     setGameState('home');
@@ -240,7 +242,7 @@ export default function LoginPage(): JSX.Element {
                 />
                 <button
                   onClick={handleGuest}
-                  disabled={loading || !guestName.trim()}
+                  disabled={loading || guestName.trim().length < 2}
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
                 >
                   {loading ? <Loader size={18} className="animate-spin" /> : null}

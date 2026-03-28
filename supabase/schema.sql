@@ -130,3 +130,24 @@ CREATE POLICY "service_role_all" ON game_records  FOR ALL USING (true);
 CREATE POLICY "service_role_all" ON votes         FOR ALL USING (true);
 CREATE POLICY "service_role_all" ON quest_results FOR ALL USING (true);
 CREATE POLICY "service_role_all" ON oauth_sessions FOR ALL USING (true);
+
+-- ============================================================
+-- update_player_stats — 原子更新用戶統計與 ELO
+-- 由 saveGameRecords() 在每局結束後逐筆呼叫
+-- ============================================================
+CREATE OR REPLACE FUNCTION update_player_stats(
+  p_user_id  UUID,
+  p_won      BOOLEAN,
+  p_elo_delta INTEGER
+)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE users SET
+    total_games = total_games + 1,
+    games_won   = games_won   + CASE WHEN p_won THEN 1 ELSE 0 END,
+    games_lost  = games_lost  + CASE WHEN p_won THEN 0 ELSE 1 END,
+    elo_rating  = GREATEST(0, elo_rating + p_elo_delta),
+    updated_at  = NOW()
+  WHERE id = p_user_id;
+END;
+$$ LANGUAGE plpgsql;

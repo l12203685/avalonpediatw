@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
-import { initializeAuth, onAuthStateChange, logout, extractOAuthTokenFromUrl } from './services/auth';
-import { disconnectSocket } from './services/socket';
+import { initializeAuth, onAuthStateChange, extractOAuthTokenFromUrl } from './services/auth';
+import { initializeSocket, disconnectSocket } from './services/socket';
 import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
 import LobbyPage from './pages/LobbyPage';
 import LoginPage from './pages/LoginPage';
 import WikiPage from './pages/WikiPage';
-import { User } from '@avalon/shared';
 
 function App(): JSX.Element {
   const { gameState, currentPlayer } = useGameStore();
@@ -19,11 +18,9 @@ function App(): JSX.Element {
     const oauthResult = extractOAuthTokenFromUrl();
     if (oauthResult) {
       const { setGameState } = useGameStore.getState();
-      import('./services/socket').then(({ initializeSocket }) => {
-        initializeSocket(oauthResult.token)
-          .then(() => { setGameState('home'); setIsLoading(false); })
-          .catch(() => { setIsLoading(false); });
-      });
+      initializeSocket(oauthResult.token)
+        .then(() => { setGameState('home'); setIsLoading(false); })
+        .catch(() => { setIsLoading(false); });
       return;
     }
 

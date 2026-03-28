@@ -1,9 +1,9 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, IRouter } from 'express';
 import { sign } from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { upsertUser, createOAuthSession, verifyAndDeleteOAuthSession } from '../services/supabase';
 
-const router = Router();
+const router: IRouter = Router();
 
 const JWT_SECRET   = process.env.JWT_SECRET   || 'avalon-dev-secret-change-in-prod';
 const JWT_EXPIRES  = process.env.JWT_EXPIRES_IN || '7d';
@@ -92,9 +92,11 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
     const discordUser = await userRes.json() as {
-      id: string; username: string; avatar?: string; email?: string;
+      id: string; username: string; global_name?: string; avatar?: string; email?: string;
     };
 
+    // Discord 新 API：global_name 是顯示名稱，username 是 unique handle
+    const displayName = discordUser.global_name || discordUser.username;
     const avatarUrl = discordUser.avatar
       ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
       : undefined;
@@ -102,7 +104,7 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     // 3. 查/建 Supabase 用戶
     const dbUserId = await upsertUser({
       discord_id:   discordUser.id,
-      display_name: discordUser.username,
+      display_name: displayName,
       email:        discordUser.email,
       photo_url:    avatarUrl,
       provider:     'discord',
@@ -111,7 +113,7 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     // 4. 發行自訂 JWT（sub = discord_id 或 dbUserId）
     const jwt = issueJwt({
       sub:         dbUserId || discordUser.id,
-      displayName: discordUser.username,
+      displayName: displayName,
       provider:    'discord',
     });
 

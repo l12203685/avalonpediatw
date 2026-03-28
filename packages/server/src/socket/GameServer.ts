@@ -1,10 +1,16 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { Room, Player, PlayerStatus, User } from '@avalon/shared';
+import { Room, Player, User } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { GameEngine } from '../game/GameEngine';
-import { updateUserStats } from '../services/firebase';
 import { SocketRateLimiter } from '../middleware/rateLimit';
+import {
+  saveRoom,
+  updateRoomState,
+  saveGameRecords,
+  getUserElo,
+  DbGameRecord,
+} from '../services/supabase';
 
 // Rate limiters for different events
 const voteLimiter = new SocketRateLimiter({
@@ -17,10 +23,18 @@ const chatLimiter = new SocketRateLimiter({
   maxRequests: 2, // Max 2 messages per second
 });
 
+// ELO constants
+const ELO_WIN  =  20;
+const ELO_LOSE = -15;
+
 export class GameServer {
   private io: SocketIOServer;
   private roomManager: RoomManager;
   private gameEngines: Map<string, GameEngine> = new Map();
+  // uid → supabase UUID (set from socket.data.supabaseId on join/create)
+  private supabaseIds: Map<string, string> = new Map();
+  // roomId → start timestamp (ms)
+  private roomStartTimes: Map<string, number> = new Map();
 
   constructor(io: SocketIOServer) {
     this.io = io;
@@ -101,11 +115,21 @@ export class GameServer {
       socket.data.roomId = roomId;
       socket.data.playerId = playerId;
 
+      // Track supabase UUID for ELO persistence
+      if (socket.data.supabaseId) {
+        this.supabaseIds.set(playerId, socket.data.supabaseId as string);
+      }
+
       // Update player info with user avatar
       room.players[playerId].avatar = user.photoURL;
 
-      this.io.to(roomId).emit('game:state-updated', room);
+      // Persist to Supabase (non-blocking)
+      const hostSupabaseId = this.supabaseIds.get(playerId) || null;
+      saveRoom(roomId, hostSupabaseId, room.maxPlayers).catch(err =>
+        console.error('[supabase] saveRoom error:', err)
+      );
 
+      this.io.to(roomId).emit('game:state-updated', room);
       console.log(`✓ Room created: ${roomId} by ${user.displayName}`);
     } catch (error) {
       console.error('Error creating room:', error);
@@ -172,6 +196,11 @@ export class GameServer {
       socket.data.roomId = roomId;
       socket.data.playerId = playerId;
 
+      // Track supabase UUID for ELO persistence
+      if (socket.data.supabaseId) {
+        this.supabaseIds.set(playerId, socket.data.supabaseId as string);
+      }
+
       this.io.to(roomId).emit('game:state-updated', room);
       this.io.to(roomId).emit('game:player-joined', player);
 
@@ -198,6 +227,11 @@ export class GameServer {
 
       gameEngine.startGame();
       const updatedRoom = this.roomManager.getRoom(roomId)!;
+
+      this.roomStartTimes.set(roomId, Date.now());
+      updateRoomState(roomId, 'playing').catch(err =>
+        console.error('[supabase] updateRoomState error:', err)
+      );
 
       this.io.to(roomId).emit('game:started', updatedRoom);
       console.log(`✓ Game started in room ${roomId}`);
@@ -244,6 +278,10 @@ export class GameServer {
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.io.to(roomId).emit('game:state-updated', updatedRoom);
+
+      if (updatedRoom.state === 'ended') {
+        this.onGameEnded(roomId, updatedRoom);
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error processing vote:', errorMsg);
@@ -273,8 +311,8 @@ export class GameServer {
 
       // Verify the player is the current leader
       const currentLeader = gameEngine.getCurrentLeaderId();
-      const playerId = socket.data.playerId;
-      if (playerId !== currentLeader) {
+      const requestingPlayerId = socket.data.playerId;
+      if (requestingPlayerId !== currentLeader) {
         socket.emit('error', 'Only the leader can select the quest team');
         return;
       }
@@ -326,6 +364,10 @@ export class GameServer {
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.io.to(roomId).emit('game:state-updated', updatedRoom);
+
+      if (updatedRoom.state === 'ended') {
+        this.onGameEnded(roomId, updatedRoom);
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error processing quest vote:', errorMsg);
@@ -363,12 +405,79 @@ export class GameServer {
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.io.to(roomId).emit('game:state-updated', updatedRoom);
-      this.io.to(roomId).emit('game:ended', updatedRoom);
-      console.log(`✓ Game ended in room ${roomId}. Winner: ${updatedRoom.evilWins ? 'Evil' : 'Good'}`);
+      this.onGameEnded(roomId, updatedRoom);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error processing assassination:', errorMsg);
       socket.emit('error', `Failed to submit assassination: ${errorMsg}`);
+    }
+  }
+
+  /** Called whenever a room transitions to 'ended' state */
+  private onGameEnded(roomId: string, room: Room): void {
+    const evilWins = room.evilWins === true;
+    const playerCount = Object.keys(room.players).length;
+    const startTime = this.roomStartTimes.get(roomId);
+    const durationSec = startTime ? Math.round((Date.now() - startTime) / 1000) : undefined;
+
+    console.log(`✓ Game ended in room ${roomId}. Winner: ${evilWins ? 'Evil' : 'Good'}`);
+
+    // Emit game:ended to all players in room
+    this.io.to(roomId).emit('game:ended', room);
+
+    // Persist asynchronously — never blocks the game flow
+    this.persistGameResult(roomId, room, evilWins, playerCount, durationSec).catch(err =>
+      console.error('[supabase] persistGameResult error:', err)
+    );
+
+    // Cleanup engine reference after a short delay (allow late stragglers to reconnect)
+    setTimeout(() => {
+      this.gameEngines.delete(roomId);
+      this.roomStartTimes.delete(roomId);
+    }, 5 * 60 * 1000); // 5 minutes
+  }
+
+  private async persistGameResult(
+    roomId: string,
+    room: Room,
+    evilWins: boolean,
+    playerCount: number,
+    durationSec?: number
+  ): Promise<void> {
+    // Update room state in Supabase
+    await updateRoomState(roomId, 'ended', evilWins);
+
+    // Build game records for Supabase users (skip guests with no supabase ID)
+    const records: DbGameRecord[] = [];
+    for (const [uid, player] of Object.entries(room.players)) {
+      const supabaseId = this.supabaseIds.get(uid);
+      if (!supabaseId) continue; // guest or unregistered — skip
+
+      const team = player.team as 'good' | 'evil' | null;
+      if (!team) continue;
+
+      const playerWon = evilWins ? team === 'evil' : team === 'good';
+      const eloBefore = await getUserElo(supabaseId);
+      const eloDelta  = playerWon ? ELO_WIN : ELO_LOSE;
+      const eloAfter  = Math.max(0, eloBefore + eloDelta);
+
+      records.push({
+        room_id:        roomId,
+        player_user_id: supabaseId,
+        role:           player.role || 'unknown',
+        team,
+        won:            playerWon,
+        elo_before:     eloBefore,
+        elo_after:      eloAfter,
+        elo_delta:      eloDelta,
+        player_count:   playerCount,
+        duration_sec:   durationSec,
+      });
+    }
+
+    if (records.length > 0) {
+      await saveGameRecords(records);
+      console.log(`[supabase] Saved ${records.length} game records for room ${roomId}`);
     }
   }
 
@@ -422,4 +531,5 @@ export class GameServer {
 
     console.log(`✓ Player disconnected: ${socket.id}`);
   }
+
 }

@@ -70,13 +70,30 @@ export function signInWithLine(): void {
  */
 export function extractOAuthTokenFromUrl(): { token: string; provider: string } | null {
   const params = new URLSearchParams(window.location.search);
-  const token  = params.get('oauth_token');
+  const token    = params.get('oauth_token');
   const provider = params.get('provider') || 'oauth';
   if (!token) return null;
   // 清除 URL 參數，避免 token 留在瀏覽器記錄
   const cleanUrl = window.location.pathname + window.location.hash;
   window.history.replaceState({}, '', cleanUrl);
   return { token: decodeURIComponent(token), provider };
+}
+
+/** 從 URL 讀取 OAuth 錯誤參數（?auth_error=...），清除後回傳錯誤訊息，無則回傳 null */
+export function extractOAuthErrorFromUrl(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  const error  = params.get('auth_error');
+  if (!error) return null;
+  const cleanUrl = window.location.pathname + window.location.hash;
+  window.history.replaceState({}, '', cleanUrl);
+  const messages: Record<string, string> = {
+    discord_denied:  'Discord 登入已取消',
+    discord_failed:  'Discord 登入失敗，請再試一次',
+    line_denied:     'Line 登入已取消',
+    line_failed:     'Line 登入失敗，請再試一次',
+    invalid_state:   '登入驗證失敗（CSRF），請重新嘗試',
+  };
+  return messages[error] || '登入失敗，請再試一次';
 }
 
 export async function logout(): Promise<void> {
@@ -109,7 +126,7 @@ export function onAuthStateChange(
             email,
             displayName: firebaseUser.displayName || email.split('@')[0] || 'Guest',
             photoURL: firebaseUser.photoURL || undefined,
-            provider: provider as 'google' | 'github',
+            provider: (provider === 'password' ? 'email' : 'google') as 'google' | 'email',
             createdAt: Date.now(),
             updatedAt: Date.now(),
           },

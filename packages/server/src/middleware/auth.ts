@@ -45,8 +45,9 @@ export async function authenticateSocket(socket: Socket, next: (err?: Error) => 
         createdAt:   Date.now(),
         updatedAt:   Date.now(),
       };
-      socket.data.user = user;
-      socket.data.uid  = user.uid;
+      socket.data.user       = user;
+      socket.data.uid        = user.uid;
+      socket.data.supabaseId = customPayload.sub; // sub IS the supabase UUID for Discord/Line
       console.log(`[custom-jwt] ${user.displayName} (${customPayload.provider})`);
       return next();
     }
@@ -79,12 +80,14 @@ export async function authenticateSocket(socket: Socket, next: (err?: Error) => 
           const newUser: User = { uid, email, displayName: name, photoURL, provider, createdAt: Date.now(), updatedAt: Date.now() };
           await createUserProfile(newUser);
           userProfile = newUser;
-          // 同步到 Supabase
-          await upsertUser({ firebase_uid: uid, display_name: name, email, photo_url: photoURL, provider });
         }
 
-        socket.data.user = userProfile;
-        socket.data.uid  = uid;
+        // 每次登入都 upsert Supabase（保持 display_name/photo_url 最新）
+        const supabaseUserId = await upsertUser({ firebase_uid: uid, display_name: name, email, photo_url: photoURL, provider });
+
+        socket.data.user       = userProfile;
+        socket.data.uid        = uid;
+        socket.data.supabaseId = supabaseUserId;
         console.log(`[firebase] ${userProfile.displayName} (${uid})`);
         return next();
       }
