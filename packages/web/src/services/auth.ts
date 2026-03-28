@@ -1,156 +1,97 @@
-import { initializeApp, FirebaseApp } from 'firebase/app';
-import {
-  getAuth,
-  signInWithPopup,
-  signOut,
-  GoogleAuthProvider,
-  GithubAuthProvider,
-  User as FirebaseUser,
-  onAuthStateChanged,
-  Auth,
-} from 'firebase/auth';
-import { User, AuthSession } from '@avalon/shared';
+import { User } from '@avalon/shared';
 
-// Firebase config
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
+// Check if Firebase is configured
+const hasFirebaseConfig = !!(
+  import.meta.env.VITE_FIREBASE_API_KEY &&
+  import.meta.env.VITE_FIREBASE_PROJECT_ID
+);
 
-let firebaseApp: FirebaseApp | undefined;
-let auth: Auth | undefined;
+// Lazy-load Firebase only when config is present
+let _firebaseAuth: import('firebase/auth').Auth | undefined;
+
+async function getFirebaseAuth() {
+  if (!hasFirebaseConfig) throw new Error('Firebase not configured');
+  if (_firebaseAuth) return _firebaseAuth;
+  const { initializeApp } = await import('firebase/app');
+  const { getAuth } = await import('firebase/auth');
+  const app = initializeApp({
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  });
+  _firebaseAuth = getAuth(app);
+  return _firebaseAuth;
+}
 
 export function initializeAuth(): void {
-  if (!firebaseApp) {
-    firebaseApp = initializeApp(firebaseConfig);
-    auth = getAuth(firebaseApp);
-  }
+  // no-op in guest mode; Firebase init happens lazily on sign-in
 }
 
-export function getFirebaseAuth(): Auth {
-  if (!auth) {
-    throw new Error('Firebase auth not initialized');
-  }
-  return auth;
+export async function signInWithGoogle() {
+  const { signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
+  const auth = await getFirebaseAuth();
+  const result = await signInWithPopup(auth, new GoogleAuthProvider());
+  return result.user;
 }
 
-/**
- * Sign in with Google
- */
-export async function signInWithGoogle(): Promise<FirebaseUser> {
-  try {
-    const auth = getFirebaseAuth();
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    return result.user;
-  } catch (error) {
-    console.error('Google sign-in error:', error);
-    throw error;
-  }
+export async function signInWithGithub() {
+  const { signInWithPopup, GithubAuthProvider } = await import('firebase/auth');
+  const auth = await getFirebaseAuth();
+  const result = await signInWithPopup(auth, new GithubAuthProvider());
+  return result.user;
 }
 
-/**
- * Sign in with GitHub
- */
-export async function signInWithGithub(): Promise<FirebaseUser> {
-  try {
-    const auth = getFirebaseAuth();
-    const provider = new GithubAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    return result.user;
-  } catch (error) {
-    console.error('GitHub sign-in error:', error);
-    throw error;
-  }
-}
-
-/**
- * Sign out
- */
 export async function logout(): Promise<void> {
-  try {
-    const auth = getFirebaseAuth();
-    await signOut(auth);
-  } catch (error) {
-    console.error('Sign-out error:', error);
-    throw error;
-  }
+  if (!hasFirebaseConfig) return;
+  const { signOut } = await import('firebase/auth');
+  const auth = await getFirebaseAuth();
+  await signOut(auth);
 }
 
-/**
- * Get current user and ID token
- */
-export async function getCurrentUserWithToken(): Promise<{
-  user: FirebaseUser;
-  token: string;
-} | null> {
-  const auth = getFirebaseAuth();
-  const user = auth.currentUser;
-
-  if (!user) {
-    return null;
-  }
-
-  const token = await user.getIdToken();
-  return { user, token };
-}
-
-/**
- * Convert Firebase user to App User
- */
-export function firebaseUserToAppUser(firebaseUser: FirebaseUser, provider: string): User {
-  const email = firebaseUser.email || '';
-  const creationTime = firebaseUser.metadata?.creationTime;
-  const createdAt = creationTime ? new Date(creationTime).getTime() : Date.now();
-
-  return {
-    uid: firebaseUser.uid,
-    email,
-    displayName: firebaseUser.displayName || email.split('@')[0] || 'Unknown',
-    photoURL: firebaseUser.photoURL || undefined,
-    provider: provider as 'google' | 'github',
-    createdAt,
-    updatedAt: Date.now(),
-  };
-}
-
-/**
- * Listen to auth state changes
- */
 export function onAuthStateChange(
   callback: (userWithToken: { user: User; token: string } | null) => void
 ): () => void {
-  const auth = getFirebaseAuth();
-
-  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-    if (firebaseUser) {
-      const token = await firebaseUser.getIdToken();
-      const provider = firebaseUser.providerData[0]?.providerId?.split('.')[0] || 'google';
-      const appUser = firebaseUserToAppUser(firebaseUser, provider);
-
-      callback({ user: appUser, token });
-    } else {
-      callback(null);
-    }
-  });
-
-  return unsubscribe;
-}
-
-/**
- * Get fresh ID token
- */
-export async function getIdToken(): Promise<string> {
-  const auth = getFirebaseAuth();
-  const user = auth.currentUser;
-
-  if (!user) {
-    throw new Error('No user signed in');
+  if (!hasFirebaseConfig) {
+    // Guest mode — immediately signal "not authenticated" so LoginPage shows
+    setTimeout(() => callback(null), 0);
+    return () => {};
   }
 
+  let unsubscribe = () => {};
+  getFirebaseAuth().then(async (auth) => {
+    const { onAuthStateChanged } = await import('firebase/auth');
+    unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        const provider = firebaseUser.providerData[0]?.providerId?.split('.')[0] || 'google';
+        const email = firebaseUser.email || '';
+        callback({
+          user: {
+            uid: firebaseUser.uid,
+            email,
+            displayName: firebaseUser.displayName || email.split('@')[0] || 'Guest',
+            photoURL: firebaseUser.photoURL || undefined,
+            provider: provider as 'google' | 'github',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          token,
+        });
+      } else {
+        callback(null);
+      }
+    });
+  });
+
+  return () => unsubscribe();
+}
+
+export async function getIdToken(): Promise<string> {
+  const auth = await getFirebaseAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error('No user signed in');
   return await user.getIdToken(true);
 }
