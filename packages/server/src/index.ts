@@ -9,8 +9,9 @@ import { GameServer } from './socket/GameServer';
 const app: Express = express();
 
 // Environment
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
 const NODE_ENV = process.env.NODE_ENV || 'development';
+// Allow all origins for prototype; lock down later with CORS_ORIGIN env var
+const CORS_ORIGIN = process.env.CORS_ORIGIN || true;
 
 // Middleware
 app.use(cors({ origin: CORS_ORIGIN }));
