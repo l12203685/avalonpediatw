@@ -127,9 +127,7 @@ export async function initializeSocket(token: string): Promise<void> {
     }
   });
 
-  socket.on('chat:message-received', (message) => {
-    console.log('Message:', message);
-  });
+  // chat:message-received is handled by ChatPanel component via getSocket().on()
 
   socket.on('error', (error: string) => {
     console.error('Socket error:', error);

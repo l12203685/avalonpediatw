@@ -6,6 +6,7 @@ import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
 import TeamSelectionPanel from '../components/TeamSelectionPanel';
 import RoleRevealModal from '../components/RoleRevealModal';
+import ChatPanel from '../components/ChatPanel';
 import { motion } from 'framer-motion';
 import { Home } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
@@ -253,6 +254,11 @@ export default function GamePage(): JSX.Element {
           </motion.div>
         )}
       </div>
+
+      {/* Floating chat — available during all game phases */}
+      {room.state !== 'lobby' && (
+        <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} />
+      )}
     </div>
   );
 }
