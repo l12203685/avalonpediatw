@@ -37,11 +37,46 @@ export async function signInWithGoogle() {
   return result.user;
 }
 
-export async function signInWithGithub() {
-  const { signInWithPopup, GithubAuthProvider } = await import('firebase/auth');
+export async function signInWithEmail(email: string, password: string) {
+  const { signInWithEmailAndPassword } = await import('firebase/auth');
   const auth = await getFirebaseAuth();
-  const result = await signInWithPopup(auth, new GithubAuthProvider());
+  const result = await signInWithEmailAndPassword(auth, email, password);
   return result.user;
+}
+
+export async function signUpWithEmail(email: string, password: string, displayName: string) {
+  const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
+  const auth = await getFirebaseAuth();
+  const result = await createUserWithEmailAndPassword(auth, email, password);
+  await updateProfile(result.user, { displayName });
+  return result.user;
+}
+
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+
+/** Discord OAuth：重導向到後端 → Discord → 後端 callback → 前端 */
+export function signInWithDiscord(): void {
+  window.location.href = `${SERVER_URL}/auth/discord`;
+}
+
+/** Line Login：重導向到後端 → Line → 後端 callback → 前端 */
+export function signInWithLine(): void {
+  window.location.href = `${SERVER_URL}/auth/line`;
+}
+
+/**
+ * 處理 OAuth callback：從 URL 讀取 ?oauth_token=...
+ * 回傳 token 字串，或 null（代表沒有 OAuth callback）
+ */
+export function extractOAuthTokenFromUrl(): { token: string; provider: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  const token  = params.get('oauth_token');
+  const provider = params.get('provider') || 'oauth';
+  if (!token) return null;
+  // 清除 URL 參數，避免 token 留在瀏覽器記錄
+  const cleanUrl = window.location.pathname + window.location.hash;
+  window.history.replaceState({}, '', cleanUrl);
+  return { token: decodeURIComponent(token), provider };
 }
 
 export async function logout(): Promise<void> {

@@ -3,8 +3,10 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import { Server as SocketIOServer } from 'socket.io';
 import { initializeFirebase } from './services/firebase';
+import { isSupabaseReady } from './services/supabase';
 import { authenticateSocket } from './middleware/auth';
 import { GameServer } from './socket/GameServer';
+import { authRouter } from './routes/auth';
 
 const app: Express = express();
 
@@ -16,6 +18,9 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || true;
 // Middleware
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
+
+// OAuth routes（不需要 Socket 認證，掛在 Socket 之前）
+app.use('/auth', authRouter);
 
 // HTTP server (needed for Socket.IO)
 const httpServer = createServer(app);
@@ -58,6 +63,7 @@ app.get('/health', (_req, res) => {
     status: firebaseInitialized ? 'ok' : 'initializing',
     timestamp: new Date().toISOString(),
     environment: NODE_ENV,
+    supabase: isSupabaseReady() ? 'connected' : 'not configured',
   });
 });
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
-import { initializeAuth, onAuthStateChange, logout } from './services/auth';
+import { initializeAuth, onAuthStateChange, logout, extractOAuthTokenFromUrl } from './services/auth';
 import { disconnectSocket } from './services/socket';
 import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
@@ -15,6 +15,18 @@ function App(): JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // 處理 Discord / Line OAuth callback（URL 帶有 ?oauth_token=...）
+    const oauthResult = extractOAuthTokenFromUrl();
+    if (oauthResult) {
+      const { setGameState } = useGameStore.getState();
+      import('./services/socket').then(({ initializeSocket }) => {
+        initializeSocket(oauthResult.token)
+          .then(() => { setGameState('home'); setIsLoading(false); })
+          .catch(() => { setIsLoading(false); });
+      });
+      return;
+    }
+
     // Initialize Firebase Auth
     initializeAuth();
 
@@ -22,7 +34,6 @@ function App(): JSX.Element {
     const unsubscribe = onAuthStateChange(async (userWithToken) => {
       if (userWithToken) {
         setIsAuthenticated(true);
-        // Socket will be initialized in LoginPage after auth
       } else {
         setIsAuthenticated(false);
         disconnectSocket();
