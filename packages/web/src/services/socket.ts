@@ -81,10 +81,23 @@ export async function initializeSocket(token: string): Promise<void> {
 
   socket.on('game:state-updated', (room: Room) => {
     store.updateRoom(room);
+    // Sync current player's role on reconnect (role only visible if server sanitized it for us)
+    const cp = useGameStore.getState().currentPlayer;
+    if (cp && room.players[cp.id]?.role && !cp.role) {
+      store.setCurrentPlayer({
+        ...cp,
+        role: room.players[cp.id].role,
+        team: room.players[cp.id].team,
+      });
+    }
   });
 
   socket.on('game:player-joined', (player: Player) => {
     console.log('Player joined:', player);
+  });
+
+  socket.on('game:player-reconnected', (playerId: string) => {
+    console.log('Player reconnected:', playerId);
   });
 
   socket.on('game:started', (room: Room) => {
@@ -103,6 +116,15 @@ export async function initializeSocket(token: string): Promise<void> {
 
   socket.on('game:ended', (room: Room) => {
     store.updateRoom(room);
+    // game:ended reveals all roles — sync currentPlayer's confirmed role/team
+    const cp = useGameStore.getState().currentPlayer;
+    if (cp && room.players[cp.id]) {
+      store.setCurrentPlayer({
+        ...cp,
+        role: room.players[cp.id].role,
+        team: room.players[cp.id].team,
+      });
+    }
   });
 
   socket.on('chat:message-received', (message) => {
