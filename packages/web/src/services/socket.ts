@@ -83,6 +83,15 @@ export async function initializeSocket(token: string): Promise<void> {
   socket.on('game:started', (room: Room) => {
     store.updateRoom(room);
     store.setGameState('voting');
+    // Sync current player's role from room (server assigns roles on start)
+    const cp = useGameStore.getState().currentPlayer;
+    if (cp && room.players[cp.id]) {
+      store.setCurrentPlayer({
+        ...cp,
+        role: room.players[cp.id].role,
+        team: room.players[cp.id].team,
+      });
+    }
   });
 
   socket.on('game:ended', (room: Room) => {

@@ -7,10 +7,10 @@ import { Play, LogIn, LogOut, BookOpen, Users, Zap } from 'lucide-react';
 import FloatingControls from '../components/FloatingControls';
 
 export default function HomePage(): JSX.Element {
-  const [playerName, setPlayerName] = useState('');
+  const { setGameState, setCurrentPlayer, currentPlayer } = useGameStore();
+  const [playerName, setPlayerName] = useState(currentPlayer?.name ?? '');
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
-  const { setGameState, setCurrentPlayer, currentPlayer } = useGameStore();
 
   const handleLogout = async (): Promise<void> => {
     try {

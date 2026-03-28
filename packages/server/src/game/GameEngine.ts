@@ -1,8 +1,8 @@
 import { Room, Role, AVALON_CONFIG, Player, GameState } from '@avalon/shared';
 
-const VOTE_TIMEOUT_MS = 30000; // 30秒投票時限
-const QUEST_TIMEOUT_MS = 30000; // 30秒任務投票時限
-const ASSASSINATION_TIMEOUT_MS = 30000; // 30秒刺殺時限
+const VOTE_TIMEOUT_MS = 60000; // 60秒隊伍投票時限
+const QUEST_TIMEOUT_MS = 60000; // 60秒任務投票時限
+const ASSASSINATION_TIMEOUT_MS = 120000; // 2分鐘刺殺時限
 
 interface QuestVote {
   playerId: string;
@@ -51,8 +51,7 @@ export class GameEngine {
       roles: Array.from(this.roleAssignments.values())
     });
 
-    // Start voting phase with timeout
-    this.startVotingPhase();
+    // Don't start vote timer yet — it starts when leader confirms the quest team
   }
 
   private startVotingPhase(): void {
@@ -236,7 +235,8 @@ export class GameEngine {
       teamSize: teamMemberIds.length,
       leaderId: this.getLeaderId()
     });
-    // State stays 'voting' - voting will transition to 'quest' when approved
+    // Start the approval vote timer now that team is proposed
+    this.startVotingPhase();
   }
 
   /**

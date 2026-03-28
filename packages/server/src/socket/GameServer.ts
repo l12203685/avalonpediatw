@@ -77,9 +77,20 @@ export class GameServer {
     });
   }
 
+  private generateRoomCode(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // avoid confusing chars (0/O, 1/I)
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    // Ensure uniqueness
+    if (this.roomManager.getRoom(code)) return this.generateRoomCode();
+    return code;
+  }
+
   private handleCreateRoom(socket: Socket, playerName: string, user: User): void {
     try {
-      const roomId = uuidv4();
+      const roomId = this.generateRoomCode();
       const playerId = user.uid;
 
       const room = this.roomManager.createRoom(roomId, playerName || user.displayName, playerId);
