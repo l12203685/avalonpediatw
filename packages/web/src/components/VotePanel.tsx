@@ -20,6 +20,7 @@ export default function VotePanel({
   const playerCount = Object.keys(room.players).length;
   const votedCount = Object.keys(room.votes).length;
   const hasVoted = room.votes[currentPlayer.id] !== undefined;
+  const questTeamPlayers = room.questTeam.map(id => room.players[id]).filter(Boolean);
 
   // 投票倒計時
   useEffect(() => {
@@ -40,9 +41,34 @@ export default function VotePanel({
     >
       {/* 標題 */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">Team Proposal Vote</h2>
-        <p className="text-gray-300">Vote to approve or reject the proposed quest team</p>
+        <h2 className="text-3xl font-bold text-white mb-2">隊伍提案投票</h2>
+        <p className="text-gray-300">同意或拒絕此次任務隊伍</p>
       </div>
+
+      {/* 提案隊伍 */}
+      {questTeamPlayers.length > 0 && (
+        <div className="bg-black/30 rounded-xl p-4">
+          <p className="text-sm text-gray-400 mb-3 text-center">本次任務隊伍：</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {questTeamPlayers.map(player => (
+              <div
+                key={player.id}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border font-semibold text-sm ${
+                  player.id === currentPlayer.id
+                    ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300'
+                    : 'bg-avalon-card/60 border-gray-600 text-white'
+                }`}
+              >
+                <span className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center text-xs font-bold text-white">
+                  {player.name.charAt(0).toUpperCase()}
+                </span>
+                {player.name}
+                {player.id === currentPlayer.id && ' (你)'}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 投票進度 */}
       <div className="flex justify-between items-center text-sm">
