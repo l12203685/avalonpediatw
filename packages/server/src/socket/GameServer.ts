@@ -37,6 +37,8 @@ export class GameServer {
   private supabaseIds: Map<string, string> = new Map();
   // roomId → start timestamp (ms)
   private roomStartTimes: Map<string, number> = new Map();
+  // playerId → socketId (for per-player state delivery)
+  private playerToSocket: Map<string, string> = new Map();
 
   constructor(io: SocketIOServer) {
     this.io = io;
@@ -114,6 +116,42 @@ export class GameServer {
     return code;
   }
 
+  /**
+   * Returns a copy of room with other players' role/team hidden.
+   * Pass revealAll=true at game end when all roles are disclosed.
+   */
+  private sanitizeRoomForPlayer(room: Room, playerId: string, revealAll = false): Room {
+    const players: Record<string, Player> = {};
+    for (const [pid, player] of Object.entries(room.players)) {
+      if (pid === playerId || revealAll) {
+        players[pid] = player;
+      } else {
+        players[pid] = { ...player, role: null, team: null, vote: undefined };
+      }
+    }
+    // During voting: hide other players' vote direction (show only who has voted, not which way).
+    // After voting resolves or at game end: reveal all votes.
+    let votes = room.votes;
+    if (room.state === 'voting' && !revealAll) {
+      votes = {};
+      for (const [vid, v] of Object.entries(room.votes)) {
+        votes[vid] = vid === playerId ? v : true; // mask direction as "voted" placeholder
+      }
+    }
+    return { ...room, players, votes };
+  }
+
+  /**
+   * Broadcast room state to every socket in the room, each receiving only their own role.
+   */
+  private broadcastRoomState(roomId: string, room: Room, revealAll = false): void {
+    for (const [pid, socketId] of this.playerToSocket.entries()) {
+      if (room.players[pid]) {
+        this.io.to(socketId).emit('game:state-updated', this.sanitizeRoomForPlayer(room, pid, revealAll));
+      }
+    }
+  }
+
   private handleCreateRoom(socket: Socket, playerName: string, user: User): void {
     try {
       const roomId = this.generateRoomCode();
@@ -126,6 +164,7 @@ export class GameServer {
       socket.join(roomId);
       socket.data.roomId = roomId;
       socket.data.playerId = playerId;
+      this.playerToSocket.set(playerId, socket.id);
 
       // Track supabase UUID for ELO persistence
       if (socket.data.supabaseId) {
@@ -141,7 +180,7 @@ export class GameServer {
         console.error('[supabase] saveRoom error:', err)
       );
 
-      this.io.to(roomId).emit('game:state-updated', room);
+      this.broadcastRoomState(roomId, room);
       console.log(`✓ Room created: ${roomId} by ${user.displayName}`);
     } catch (error) {
       console.error('Error creating room:', error);
@@ -168,9 +207,10 @@ export class GameServer {
           socket.join(roomId);
           socket.data.roomId = roomId;
           socket.data.playerId = playerId;
+          this.playerToSocket.set(playerId, socket.id);
 
           this.io.to(roomId).emit('game:player-reconnected', playerId);
-          this.io.to(roomId).emit('game:state-updated', room);
+          this.broadcastRoomState(roomId, room);
 
           console.log(`✓ Player ${user.displayName} reconnected to room ${roomId}`);
           return;
@@ -207,13 +247,14 @@ export class GameServer {
       socket.join(roomId);
       socket.data.roomId = roomId;
       socket.data.playerId = playerId;
+      this.playerToSocket.set(playerId, socket.id);
 
       // Track supabase UUID for ELO persistence
       if (socket.data.supabaseId) {
         this.supabaseIds.set(playerId, socket.data.supabaseId as string);
       }
 
-      this.io.to(roomId).emit('game:state-updated', room);
+      this.broadcastRoomState(roomId, room);
       this.io.to(roomId).emit('game:player-joined', player);
 
       console.log(`✓ Player ${user.displayName} joined room ${roomId} (${Object.keys(room.players).length}/${room.maxPlayers})`);
@@ -245,7 +286,12 @@ export class GameServer {
         console.error('[supabase] updateRoomState error:', err)
       );
 
-      this.io.to(roomId).emit('game:started', updatedRoom);
+      // game:started reveals each player's own role only
+      for (const [pid, socketId] of this.playerToSocket.entries()) {
+        if (updatedRoom.players[pid]) {
+          this.io.to(socketId).emit('game:started', this.sanitizeRoomForPlayer(updatedRoom, pid));
+        }
+      }
       console.log(`✓ Game started in room ${roomId}`);
     } catch (error) {
       console.error('Error starting game:', error);
@@ -289,7 +335,7 @@ export class GameServer {
       gameEngine.submitVote(playerId, vote);
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
-      this.io.to(roomId).emit('game:state-updated', updatedRoom);
+      this.broadcastRoomState(roomId, updatedRoom);
 
       if (updatedRoom.state === 'ended') {
         this.onGameEnded(roomId, updatedRoom);
@@ -332,7 +378,7 @@ export class GameServer {
       gameEngine.selectQuestTeam(teamMemberIds);
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
-      this.io.to(roomId).emit('game:state-updated', updatedRoom);
+      this.broadcastRoomState(roomId, updatedRoom);
       console.log(`✓ Quest team selected in room ${roomId}: ${teamMemberIds.length} players`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -375,7 +421,7 @@ export class GameServer {
       gameEngine.submitQuestVote(playerId, vote);
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
-      this.io.to(roomId).emit('game:state-updated', updatedRoom);
+      this.broadcastRoomState(roomId, updatedRoom);
 
       if (updatedRoom.state === 'ended') {
         this.onGameEnded(roomId, updatedRoom);
@@ -416,7 +462,7 @@ export class GameServer {
       gameEngine.submitAssassination(assassinId, targetId);
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
-      this.io.to(roomId).emit('game:state-updated', updatedRoom);
+      this.broadcastRoomState(roomId, updatedRoom);
       this.onGameEnded(roomId, updatedRoom);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -434,7 +480,8 @@ export class GameServer {
 
     console.log(`✓ Game ended in room ${roomId}. Winner: ${evilWins ? 'Evil' : 'Good'}`);
 
-    // Emit game:ended to all players in room
+    // Emit game:ended — reveal all roles to all players
+    this.broadcastRoomState(roomId, room, true);
     this.io.to(roomId).emit('game:ended', room);
 
     // Persist asynchronously — never blocks the game flow
@@ -576,8 +623,9 @@ export class GameServer {
   }
 
   private handleDisconnect(socket: Socket): void {
-    const roomId = socket.data.roomId;
+    const roomId   = socket.data.roomId;
     const playerId = socket.data.playerId;
+    if (playerId) this.playerToSocket.delete(playerId);
 
     if (roomId && playerId) {
       const room = this.roomManager.getRoom(roomId);
