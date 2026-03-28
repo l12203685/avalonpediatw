@@ -10,6 +10,7 @@ import {
 } from '../services/supabase';
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { RandomAgent } from '../ai/RandomAgent';
+import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 
 const router: IRouter = Router();
@@ -111,14 +112,17 @@ router.post('/ai/selfplay', adminLimiter, async (req: Request, res: Response) =>
   const playerCount = Math.min(10, Math.max(5, Number(req.body?.playerCount) || 5));
   const games       = Math.min(100, Math.max(1, Number(req.body?.games) || 10));
   const persist     = req.body?.persist !== false;
+  const agentType   = req.body?.agentType === 'heuristic' ? 'heuristic' : 'random';
 
   try {
     const engine = new SelfPlayEngine();
     const agents = Array.from({ length: playerCount }, (_, i) =>
-      new RandomAgent(`AI-${i + 1}`)
+      agentType === 'heuristic'
+        ? new HeuristicAgent(`AI-${i + 1}`)
+        : new RandomAgent(`AI-${i + 1}`)
     );
     const stats = await engine.runBatch(agents, games, persist);
-    return res.json({ ok: true, ...stats });
+    return res.json({ ok: true, agentType, ...stats });
   } catch (err) {
     console.error('[ai/selfplay]', err);
     return res.status(500).json({ error: 'Self-play failed' });
