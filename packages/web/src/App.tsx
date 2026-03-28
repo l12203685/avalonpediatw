@@ -7,6 +7,8 @@ import GamePage from './pages/GamePage';
 import LobbyPage from './pages/LobbyPage';
 import LoginPage from './pages/LoginPage';
 import WikiPage from './pages/WikiPage';
+import LeaderboardPage from './pages/LeaderboardPage';
+import ProfilePage from './pages/ProfilePage';
 
 function App(): JSX.Element {
   const { gameState, currentPlayer } = useGameStore();
@@ -62,6 +64,8 @@ function App(): JSX.Element {
           {gameState === 'lobby' && <LobbyPage />}
           {(gameState === 'playing' || gameState === 'voting' || gameState === 'ended') && <GamePage />}
           {gameState === 'wiki' && <WikiPage />}
+          {gameState === 'leaderboard' && <LeaderboardPage />}
+          {gameState === 'profile' && <ProfilePage />}
         </>
       )}
     </div>

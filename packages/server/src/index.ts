@@ -7,6 +7,7 @@ import { isSupabaseReady } from './services/supabase';
 import { authenticateSocket } from './middleware/auth';
 import { GameServer } from './socket/GameServer';
 import { authRouter } from './routes/auth';
+import { apiRouter } from './routes/api';
 
 const app: Express = express();
 
@@ -21,6 +22,9 @@ app.use(express.json());
 
 // OAuth routes（不需要 Socket 認證，掛在 Socket 之前）
 app.use('/auth', authRouter);
+
+// REST API routes
+app.use('/api', apiRouter);
 
 // HTTP server (needed for Socket.IO)
 const httpServer = createServer(app);

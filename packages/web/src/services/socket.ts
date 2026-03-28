@@ -6,6 +6,12 @@ import { getIdToken } from './auth';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 let socket: Socket | null = null;
+let _storedToken: string | null = null;
+
+/** Returns the token used to initialise the current socket connection */
+export function getStoredToken(): string | null {
+  return _storedToken;
+}
 
 export function getSocket(): Socket {
   if (!socket) {
@@ -16,6 +22,7 @@ export function getSocket(): Socket {
 
 export async function initializeSocket(token: string): Promise<void> {
   if (socket) return;
+  _storedToken = token;
 
   const store = useGameStore.getState();
 
@@ -115,6 +122,7 @@ export function disconnectSocket(): void {
   if (socket) {
     socket.disconnect();
     socket = null;
+    _storedToken = null;
   }
 }
 

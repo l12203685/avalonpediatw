@@ -3,11 +3,11 @@ import { motion } from 'framer-motion';
 import { createRoom, joinRoom } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
-import { Play, LogIn, LogOut, BookOpen, Users, Zap } from 'lucide-react';
+import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle } from 'lucide-react';
 import FloatingControls from '../components/FloatingControls';
 
 export default function HomePage(): JSX.Element {
-  const { setGameState, setCurrentPlayer, currentPlayer } = useGameStore();
+  const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile } = useGameStore();
   const [playerName, setPlayerName] = useState(currentPlayer?.name ?? '');
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
@@ -90,18 +90,23 @@ export default function HomePage(): JSX.Element {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="absolute top-6 right-6 flex items-center gap-4 bg-avalon-card/50 backdrop-blur-sm px-4 py-2 rounded-lg border border-gray-600 hover:border-yellow-400 transition-colors"
+            className="absolute top-6 right-6 flex items-center gap-2"
           >
-            <div className="text-sm">
-              <p className="font-bold text-white">{currentPlayer.name}</p>
-              <p className="text-xs text-gray-400">Ready to play</p>
-            </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => navigateToProfile('me')}
+              className="flex items-center gap-2 bg-avalon-card/50 backdrop-blur-sm px-3 py-2 rounded-lg border border-gray-600 hover:border-blue-400 transition-colors"
+            >
+              <UserCircle size={16} className="text-blue-400" />
+              <span className="text-sm font-semibold text-white">{currentPlayer.name}</span>
+            </motion.button>
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleLogout}
-              className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-2"
-              title="Logout"
+              className="p-2 bg-avalon-card/50 backdrop-blur-sm rounded-lg border border-gray-600 hover:border-red-400 text-red-400 hover:text-red-300 transition-colors"
+              title="登出"
             >
               <LogOut size={18} />
             </motion.button>
@@ -181,6 +186,16 @@ export default function HomePage(): JSX.Element {
               >
                 <BookOpen size={20} />
                 Wiki & Guide
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setGameState('leaderboard')}
+                className="w-full bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-700 hover:to-yellow-600 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-amber-500/50"
+              >
+                <Trophy size={20} />
+                排行榜
               </motion.button>
             </motion.div>
 

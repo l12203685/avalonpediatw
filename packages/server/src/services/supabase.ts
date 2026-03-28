@@ -201,6 +201,103 @@ export async function createOAuthSession(stateToken: string, provider: 'discord'
   });
 }
 
+// ── 排行榜 & 用戶資料 ─────────────────────────────────────────
+
+export interface LeaderboardEntry {
+  id: string;
+  display_name: string;
+  photo_url: string | null;
+  provider: string;
+  elo_rating: number;
+  total_games: number;
+  games_won: number;
+  games_lost: number;
+  win_rate: number;
+}
+
+export interface UserProfile {
+  id: string;
+  display_name: string;
+  photo_url: string | null;
+  provider: string;
+  elo_rating: number;
+  total_games: number;
+  games_won: number;
+  games_lost: number;
+  badges: string[];
+  recent_games: RecentGame[];
+}
+
+export interface RecentGame {
+  id: string;
+  role: string;
+  team: 'good' | 'evil';
+  won: boolean;
+  elo_delta: number;
+  player_count: number;
+  created_at: string;
+}
+
+/**
+ * 取得排行榜（依 ELO 降序，最多 50 人）
+ */
+export async function getLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
+  const db = getSupabaseClient();
+  if (!db) return [];
+
+  const { data, error } = await db
+    .from('users')
+    .select('id, display_name, photo_url, provider, elo_rating, total_games, games_won, games_lost')
+    .gte('total_games', 1)
+    .order('elo_rating', { ascending: false })
+    .limit(limit);
+
+  if (error || !data) return [];
+
+  return data.map(row => ({
+    ...row,
+    win_rate: row.total_games > 0 ? Math.round((row.games_won / row.total_games) * 100) : 0,
+  }));
+}
+
+/**
+ * 取得單一用戶資料（含最近 10 局遊戲）
+ */
+export async function getDbUserProfile(userId: string): Promise<UserProfile | null> {
+  const db = getSupabaseClient();
+  if (!db) return null;
+
+  const { data: user, error } = await db
+    .from('users')
+    .select('id, display_name, photo_url, provider, elo_rating, total_games, games_won, games_lost, badges')
+    .eq('id', userId)
+    .single();
+
+  if (error || !user) return null;
+
+  const { data: games } = await db
+    .from('game_records')
+    .select('id, role, team, won, elo_delta, player_count, created_at')
+    .eq('player_user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  return {
+    ...user,
+    recent_games: (games || []) as RecentGame[],
+  };
+}
+
+/**
+ * 依 firebase_uid 查 Supabase UUID（用於 profile 路由）
+ */
+export async function getSupabaseIdByFirebaseUid(firebaseUid: string): Promise<string | null> {
+  const db = getSupabaseClient();
+  if (!db) return null;
+  const { data } = await db.from('users').select('id').eq('firebase_uid', firebaseUid).single();
+  return data?.id ?? null;
+}
+
 export async function verifyAndDeleteOAuthSession(
   stateToken: string,
   provider: 'discord' | 'line'
