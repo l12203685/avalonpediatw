@@ -117,13 +117,44 @@ export class GameServer {
   }
 
   /**
+   * Determine which player IDs are visible (role/team revealed) to the given player
+   * based on Avalon knowledge rules. Called only during an active game (not revealAll).
+   */
+  private getVisiblePlayerIds(playerId: string, room: Room): Set<string> {
+    const visible = new Set<string>([playerId]); // always see yourself
+    const myPlayer = room.players[playerId];
+    if (!myPlayer?.role) return visible;
+
+    const myRole  = myPlayer.role;
+    const myTeam  = myPlayer.team;
+
+    for (const [pid, p] of Object.entries(room.players)) {
+      if (pid === playerId || !p.role) continue;
+
+      if (myRole === 'merlin') {
+        // Merlin sees all evil except Oberon
+        if (p.team === 'evil' && p.role !== 'oberon') visible.add(pid);
+      } else if (myRole === 'percival') {
+        // Percival sees Merlin and Morgana (can't distinguish)
+        if (p.role === 'merlin' || p.role === 'morgana') visible.add(pid);
+      } else if (myTeam === 'evil' && myRole !== 'oberon') {
+        // Evil (except Oberon) sees other evil except Oberon
+        if (p.team === 'evil' && p.role !== 'oberon') visible.add(pid);
+      }
+    }
+    return visible;
+  }
+
+  /**
    * Returns a copy of room with other players' role/team hidden.
+   * Applies Avalon knowledge rules so Merlin/Percival/Evil see correct players.
    * Pass revealAll=true at game end when all roles are disclosed.
    */
   private sanitizeRoomForPlayer(room: Room, playerId: string, revealAll = false): Room {
+    const visibleIds = revealAll ? null : this.getVisiblePlayerIds(playerId, room);
     const players: Record<string, Player> = {};
     for (const [pid, player] of Object.entries(room.players)) {
-      if (pid === playerId || revealAll) {
+      if (pid === playerId || revealAll || visibleIds?.has(pid)) {
         players[pid] = player;
       } else {
         players[pid] = { ...player, role: null, team: null, vote: undefined };
