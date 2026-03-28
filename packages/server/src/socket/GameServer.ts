@@ -448,6 +448,10 @@ export class GameServer {
         socket.emit('error', 'Player not in room');
         return;
       }
+      if (!room.questTeam.includes(playerId)) {
+        socket.emit('error', 'Not on quest team');
+        return;
+      }
 
       const gameEngine = this.gameEngines.get(roomId);
       if (!gameEngine) {

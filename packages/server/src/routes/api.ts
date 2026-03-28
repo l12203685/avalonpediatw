@@ -10,11 +10,18 @@ import {
 } from '../services/supabase';
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { RandomAgent } from '../ai/RandomAgent';
-
+import { createHttpRateLimit } from '../middleware/rateLimit';
 
 const router: IRouter = Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'avalon-dev-secret-change-in-prod';
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.warn('[SECURITY] JWT_SECRET not set — using insecure default. Set JWT_SECRET in environment!');
+}
+
+// Rate limiting: 60 requests/min per IP for public routes, 10/min for admin
+const publicLimiter = createHttpRateLimit(60 * 1000, 60);
+const adminLimiter  = createHttpRateLimit(60 * 1000, 10);
 
 // ── 工具：從 Authorization header 解析 supabase UUID ─────────
 // 支援 Firebase ID Token 和自訂 JWT（Discord/Line）
@@ -44,7 +51,7 @@ async function resolveSupabaseId(authHeader: string | undefined): Promise<string
 }
 
 // ── GET /api/leaderboard ──────────────────────────────────────
-router.get('/leaderboard', async (_req: Request, res: Response) => {
+router.get('/leaderboard', publicLimiter, async (_req: Request, res: Response) => {
   if (!isSupabaseReady()) {
     return res.json({ leaderboard: [], message: 'Database not configured' });
   }
@@ -53,7 +60,7 @@ router.get('/leaderboard', async (_req: Request, res: Response) => {
 });
 
 // ── GET /api/profile/me ───────────────────────────────────────
-router.get('/profile/me', async (req: Request, res: Response) => {
+router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => {
   if (!isSupabaseReady()) {
     return res.status(503).json({ error: 'Database not configured' });
   }
@@ -69,7 +76,7 @@ router.get('/profile/me', async (req: Request, res: Response) => {
 });
 
 // ── GET /api/profile/:id ──────────────────────────────────────
-router.get('/profile/:id', async (req: Request, res: Response) => {
+router.get('/profile/:id', publicLimiter, async (req: Request, res: Response) => {
   if (!isSupabaseReady()) {
     return res.status(503).json({ error: 'Database not configured' });
   }
@@ -81,7 +88,7 @@ router.get('/profile/:id', async (req: Request, res: Response) => {
 });
 
 // ── GET /api/replay/:roomId ───────────────────────────────────
-router.get('/replay/:roomId', async (req: Request, res: Response) => {
+router.get('/replay/:roomId', publicLimiter, async (req: Request, res: Response) => {
   if (!isSupabaseReady()) {
     return res.status(503).json({ error: 'Database not configured' });
   }
@@ -95,7 +102,7 @@ router.get('/replay/:roomId', async (req: Request, res: Response) => {
 // ── POST /api/ai/selfplay ─────────────────────────────────────
 // Admin-only endpoint to trigger self-play data generation
 // Body: { playerCount?: 5-10, games?: 1-100, persist?: boolean }
-router.post('/ai/selfplay', async (req: Request, res: Response) => {
+router.post('/ai/selfplay', adminLimiter, async (req: Request, res: Response) => {
   const secret = req.headers['x-admin-secret'];
   if (!secret || secret !== process.env.ADMIN_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -119,7 +126,7 @@ router.post('/ai/selfplay', async (req: Request, res: Response) => {
 });
 
 // ── GET /api/ai/stats ─────────────────────────────────────────
-router.get('/ai/stats', async (_req: Request, res: Response) => {
+router.get('/ai/stats', publicLimiter, async (_req: Request, res: Response) => {
   if (!isSupabaseReady()) {
     return res.json({ message: 'Database not configured', totalGames: 0, totalEvents: 0 });
   }
