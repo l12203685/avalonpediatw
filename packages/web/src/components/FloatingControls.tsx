@@ -48,7 +48,7 @@ export default function FloatingControls(): JSX.Element {
             {/* Audio Controls */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-white">Audio</label>
+                <label className="text-sm font-semibold text-white">音效</label>
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
@@ -93,7 +93,7 @@ export default function FloatingControls(): JSX.Element {
 
             {/* Theme Controls */}
             <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold text-white">Theme</label>
+              <label className="text-sm font-semibold text-white">主題</label>
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
@@ -110,8 +110,8 @@ export default function FloatingControls(): JSX.Element {
 
             {/* Info */}
             <div className="text-xs text-gray-400 border-t border-gray-700 pt-2">
-              <p>Audio: {audioEnabled ? 'Enabled' : 'Disabled'}</p>
-              <p>Theme: {theme}</p>
+              <p>音效：{audioEnabled ? '開啟' : '關閉'}</p>
+              <p>主題：{theme === 'dark' ? '深色' : '淺色'}</p>
             </div>
           </motion.div>
         )}

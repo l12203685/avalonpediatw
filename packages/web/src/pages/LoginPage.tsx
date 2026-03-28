@@ -186,7 +186,7 @@ export default function LoginPage(): JSX.Element {
 
             <input
               type="email"
-              placeholder="Email"
+              placeholder="電子郵件"
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="w-full bg-avalon-dark border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
