@@ -46,7 +46,7 @@ function App(): JSX.Element {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-avalon-dark to-avalon-card">
-      {!isAuthenticated ? (
+      {!isAuthenticated && !currentPlayer ? (
         <LoginPage />
       ) : (
         <>

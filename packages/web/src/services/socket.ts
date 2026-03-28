@@ -17,10 +17,10 @@ export function getSocket(): Socket {
 export async function initializeSocket(token: string): Promise<void> {
   if (socket) return;
 
+  const store = useGameStore.getState();
+
   socket = io(SERVER_URL, {
-    auth: {
-      token,
-    },
+    auth: { token },
     transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionDelay: 1000,
@@ -28,7 +28,32 @@ export async function initializeSocket(token: string): Promise<void> {
     reconnectionAttempts: 5,
   });
 
-  const store = useGameStore.getState();
+  // Wait for auth:success or connect_error before resolving
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('連線逾時，請確認伺服器是否運行'));
+    }, 10000);
+
+    socket!.once('auth:success', (session: AuthSession) => {
+      clearTimeout(timeout);
+      store.setCurrentPlayer({
+        id: session.user.uid,
+        name: session.user.displayName,
+        avatar: session.user.photoURL,
+        role: null,
+        team: null,
+        status: 'active',
+        createdAt: session.user.createdAt,
+      });
+      resolve();
+    });
+
+    socket!.once('connect_error', (err) => {
+      clearTimeout(timeout);
+      socket = null;
+      reject(new Error(`無法連線伺服器：${err.message}`));
+    });
+  });
 
   socket.on('connect', () => {
     console.log('✓ Connected to server');
