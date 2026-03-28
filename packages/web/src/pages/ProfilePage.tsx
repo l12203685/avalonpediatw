@@ -25,6 +25,55 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' });
 }
 
+const EVENT_ICONS: Record<string, string> = {
+  game_started:              '🎮',
+  voting_phase_started:      '🗳️',
+  quest_team_selected:       '⚔️',
+  voting_resolved:           '📊',
+  team_approved:             '✅',
+  quest_vote_submitted:      '🗡️',
+  quest_resolved:            '🏰',
+  round_ended:               '🔄',
+  discussion_phase_started:  '🎯',
+  assassination_submitted:   '🗡️',
+  game_ended:                '🏁',
+  game_final_stats:          '📈',
+};
+
+function formatReplayEvent(ev: GameEvent): string {
+  const d = ev.event_data as Record<string, unknown>;
+  switch (ev.event_type) {
+    case 'game_started':
+      return `遊戲開始 — ${d.playerCount as number}人局，領袖：${d.leaderId as string}`;
+    case 'voting_phase_started':
+      return `第${d.round as number}局開始 — 第${d.failedVotes as number}次提案，領袖：${d.leaderId as string}`;
+    case 'quest_team_selected':
+      return `領袖提案：${(d.team as string[])?.join('、')}`;
+    case 'voting_resolved': {
+      const approved = d.approved ? '✅ 通過' : '❌ 否決';
+      return `投票結果：${approved}（${d.approveCount as number}贊成，${d.rejectCount as number}反對）`;
+    }
+    case 'team_approved':
+      return `提案通過，任務開始`;
+    case 'quest_resolved': {
+      const result = d.result === 'success' ? '✅ 成功' : '❌ 失敗';
+      return `任務結果：${result}（${d.failCount as number}張失敗票）`;
+    }
+    case 'round_ended':
+      return `第${d.round as number}局結束 — 任務${d.result === 'success' ? '成功' : '失敗'}`;
+    case 'discussion_phase_started':
+      return `進入暗殺階段 — 好人贏得3個任務`;
+    case 'assassination_submitted':
+      return `刺客 ${d.assassinId as string} 刺殺 ${d.targetId as string}`;
+    case 'game_ended': {
+      const winner = d.evilWins ? '邪惡方' : '好人方';
+      return `遊戲結束 — ${winner}獲勝（${d.reason as string}）`;
+    }
+    default:
+      return ev.event_type;
+  }
+}
+
 function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: string) => void }): JSX.Element {
   const won = game.won;
   return (
@@ -203,12 +252,10 @@ export default function ProfilePage(): JSX.Element {
                     <p className="text-center text-gray-500 py-4">無回放資料（此局在事件記錄功能上線前進行）</p>
                   )}
                   {replay && replay.events.map(ev => (
-                    <div key={ev.seq} className="flex gap-3 py-1.5 border-b border-gray-700/50 text-sm">
-                      <span className="text-gray-600 w-6 text-right flex-shrink-0">{ev.seq}</span>
-                      <span className="text-blue-400 font-mono w-36 flex-shrink-0">{ev.event_type}</span>
-                      <span className="text-gray-400 text-xs truncate">
-                        {JSON.stringify(ev.event_data).slice(0, 80)}
-                      </span>
+                    <div key={ev.seq} className="flex gap-2 py-1.5 border-b border-gray-700/50 text-sm items-start">
+                      <span className="text-gray-600 w-5 text-right flex-shrink-0 text-xs pt-0.5">{ev.seq}</span>
+                      <span className="flex-shrink-0">{EVENT_ICONS[ev.event_type] ?? '•'}</span>
+                      <span className="text-gray-300">{formatReplayEvent(ev)}</span>
                     </div>
                   ))}
                 </div>
