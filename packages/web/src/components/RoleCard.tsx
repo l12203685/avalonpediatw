@@ -78,7 +78,7 @@ export default function RoleCard({
           <div className="flex-1">
             <h3 className={`text-2xl font-bold capitalize ${colors.text}`}>{role}</h3>
             <p className="text-gray-300 text-sm">
-              {team === 'good' ? '🔵 Good Team' : '🔴 Evil Team'}
+              {team === 'good' ? '🔵 好人陣營' : '🔴 邪惡陣營'}
             </p>
           </div>
         </div>

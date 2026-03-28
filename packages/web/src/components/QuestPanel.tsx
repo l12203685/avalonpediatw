@@ -48,12 +48,12 @@ export default function QuestPanel({
         animate={{ opacity: 1, y: 0 }}
         className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 text-center space-y-4"
       >
-        <h2 className="text-2xl font-bold text-white">⚔️ Quest in Progress</h2>
+        <h2 className="text-2xl font-bold text-white">⚔️ 任務進行中</h2>
         <p className="text-gray-300">
-          Quest team size: <span className="text-blue-400 font-bold">{room.questTeam.length}</span>
+          任務隊伍人數：<span className="text-blue-400 font-bold">{room.questTeam.length}</span>
         </p>
         <p className="text-sm text-gray-400">
-          Waiting for the quest team to vote on the mission result...
+          等待任務隊伍成員投票…
         </p>
       </motion.div>
     );
@@ -67,8 +67,8 @@ export default function QuestPanel({
     >
       {/* 標題 */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">⚔️ Quest Vote</h2>
-        <p className="text-gray-300">Vote on the success or failure of this quest</p>
+        <h2 className="text-3xl font-bold text-white mb-2">⚔️ 任務投票</h2>
+        <p className="text-gray-300">選擇讓此次任務成功或失敗</p>
       </div>
 
       {/* 計時器 */}
@@ -87,7 +87,7 @@ export default function QuestPanel({
 
       {/* 隊伍成員列表 */}
       <div className="space-y-2">
-        <p className="text-gray-300 text-sm font-semibold">Quest Team:</p>
+        <p className="text-gray-300 text-sm font-semibold">任務隊伍：</p>
         <div className="grid grid-cols-2 gap-2">
           {room.questTeam.map((memberId) => (
             <div
@@ -99,7 +99,7 @@ export default function QuestPanel({
               }`}
             >
               {room.players[memberId].name}
-              {memberId === currentPlayer.id && ' (You)'}
+              {memberId === currentPlayer.id && '（你）'}
             </div>
           ))}
         </div>
@@ -115,7 +115,7 @@ export default function QuestPanel({
           className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
         >
           <CheckCircle size={20} />
-          {isSubmitting ? 'Voting...' : 'Success'}
+          {isSubmitting ? '投票中…' : '任務成功'}
         </motion.button>
 
         <motion.button
@@ -126,7 +126,7 @@ export default function QuestPanel({
           className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
         >
           <XCircle size={20} />
-          {isSubmitting ? 'Voting...' : 'Fail'}
+          {isSubmitting ? '投票中…' : '任務失敗'}
         </motion.button>
       </div>
 
@@ -134,8 +134,8 @@ export default function QuestPanel({
       <div className="text-center text-sm text-gray-400">
         <p>
           {room.questTeam.length === 1
-            ? 'Only you are voting...'
-            : `${room.questTeam.length} team members voting...`}
+            ? '只有你在投票…'
+            : `${room.questTeam.length} 位隊員投票中…`}
         </p>
       </div>
     </motion.div>

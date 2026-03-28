@@ -23,7 +23,7 @@ export default function GamePage(): JSX.Element {
   }, []);
 
   if (!room || !currentPlayer) {
-    return <div className="text-center text-white">Loading...</div>;
+    return <div className="text-center text-white">載入中…</div>;
   }
 
   const playerIds = Object.keys(room.players);

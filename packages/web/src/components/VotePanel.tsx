@@ -73,7 +73,7 @@ export default function VotePanel({
       {/* 投票進度 */}
       <div className="flex justify-between items-center text-sm">
         <span className="text-gray-300">
-          Votes: {votedCount}/{playerCount}
+          已投票：{votedCount}/{playerCount}
         </span>
         <motion.div
           animate={{
@@ -107,7 +107,7 @@ export default function VotePanel({
             className="flex items-center gap-2 bg-avalon-good hover:bg-avalon-good/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
           >
             <ThumbsUp size={20} />
-            {isLoading ? 'Voting...' : 'Approve'}
+            {isLoading ? '投票中…' : '贊成'}
           </motion.button>
 
           <motion.button
@@ -118,7 +118,7 @@ export default function VotePanel({
             className="flex items-center gap-2 bg-avalon-evil hover:bg-avalon-evil/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
           >
             <ThumbsDown size={20} />
-            {isLoading ? 'Voting...' : 'Reject'}
+            {isLoading ? '投票中…' : '拒絕'}
           </motion.button>
         </div>
       ) : (
@@ -128,9 +128,9 @@ export default function VotePanel({
           className="text-center py-3"
         >
           <p className="text-gray-300">
-            Your vote: {room.votes[currentPlayer.id] ? '👍 Approved' : '👎 Rejected'}
+            你的票：{room.votes[currentPlayer.id] ? '👍 贊成' : '👎 拒絕'}
           </p>
-          <p className="text-sm text-gray-500 mt-1">Waiting for other players...</p>
+          <p className="text-sm text-gray-500 mt-1">等待其他玩家投票…</p>
         </motion.div>
       )}
 
@@ -138,9 +138,9 @@ export default function VotePanel({
       {votedCount > 0 && (
         <div className="text-center text-sm text-gray-400">
           {votedCount === playerCount ? (
-            <p className="text-yellow-400 font-bold">Votes are in! Calculating results...</p>
+            <p className="text-yellow-400 font-bold">所有人已投票！計算結果中…</p>
           ) : (
-            <p>{playerCount - votedCount} player(s) still voting</p>
+            <p>還有 {playerCount - votedCount} 人尚未投票</p>
           )}
         </div>
       )}

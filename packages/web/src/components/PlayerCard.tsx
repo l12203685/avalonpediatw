@@ -2,6 +2,11 @@ import { Player } from '@avalon/shared';
 import { motion } from 'framer-motion';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 
+const ROLE_NAMES: Record<string, string> = {
+  merlin: '梅林', percival: '派西維爾', loyal: '忠臣',
+  assassin: '刺客', morgana: '莫甘娜', oberon: '奧伯倫',
+};
+
 interface PlayerCardProps {
   player: Player;
   isCurrentPlayer: boolean;
@@ -59,14 +64,14 @@ export default function PlayerCard({
           animate={{ opacity: 1, y: 0 }}
           className="text-xs font-semibold bg-yellow-600/80 text-white px-3 py-1 rounded-full"
         >
-          {player.role.toUpperCase()}
+          {ROLE_NAMES[player.role] ?? player.role}
         </motion.p>
       )}
 
       {/* 隊伍提示 */}
       {isCurrentPlayer && player.team && (
         <p className="text-xs text-gray-400">
-          Team: {player.team === 'good' ? '⚔️ Good' : '👹 Evil'}
+          陣營：{player.team === 'good' ? '⚔️ 好人' : '👹 邪惡'}
         </p>
       )}
     </motion.div>
