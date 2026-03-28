@@ -21,6 +21,13 @@ let auth: Auth | null = null;
 let adminApp: admin.app.App | null = null;
 
 export async function initializeFirebase(): Promise<void> {
+  const hasConfig = !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_API_KEY);
+
+  if (!hasConfig) {
+    console.log('⚠ Firebase config missing — running in guest-only mode');
+    return;
+  }
+
   try {
     // Initialize Firebase App (client SDK)
     firebaseApp = initializeApp(firebaseConfig);
@@ -39,7 +46,7 @@ export async function initializeFirebase(): Promise<void> {
     console.log('✓ Firebase initialized successfully');
   } catch (error) {
     console.error('Firebase initialization error:', error);
-    throw error;
+    // Don't crash — fall back to guest-only mode
   }
 }
 
