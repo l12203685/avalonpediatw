@@ -96,9 +96,21 @@ export default function LeaderboardPage(): JSX.Element {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-                    <span>{entry.total_games} 局 (games)</span>
-                    <span className="text-green-400">{entry.win_rate}% 勝率 (win rate)</span>
+                    <span>{entry.games_won}勝 {entry.games_lost}敗</span>
+                    <span className="text-green-400">{entry.win_rate}%</span>
                   </div>
+                  {entry.badges.length > 0 && (
+                    <div className="flex gap-1 mt-1.5 flex-wrap">
+                      {entry.badges.slice(0, 4).map(b => (
+                        <span key={b} className="text-xs px-1.5 py-0.5 bg-purple-900/50 border border-purple-700/50 text-purple-300 rounded-full">
+                          {b}
+                        </span>
+                      ))}
+                      {entry.badges.length > 4 && (
+                        <span className="text-xs text-gray-600">+{entry.badges.length - 4}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* ELO */}

@@ -14,6 +14,7 @@ export interface LeaderboardEntry {
   total_games: number;
   games_won: number;
   games_lost: number;
+  badges: string[];
   win_rate: number;
 }
 
