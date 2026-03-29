@@ -14,7 +14,6 @@ import FriendsPage from './pages/FriendsPage';
 import AiStatsPage from './pages/AiStatsPage';
 import ToastContainer from './components/ToastContainer';
 import FloatingControls from './components/FloatingControls';
-import FeedbackButton from './components/FeedbackButton';
 import { submitError } from './services/api';
 
 function App(): JSX.Element {
@@ -123,10 +122,8 @@ function App(): JSX.Element {
         </>
       )}
       <ToastContainer />
-      {/* Global floating controls — audio & theme, always accessible */}
+      {/* Global floating controls — audio, theme & feedback, always accessible */}
       {currentPlayer && <FloatingControls />}
-      {/* Feedback button — always visible for authenticated users */}
-      {currentPlayer && <FeedbackButton />}
     </div>
   );
 }
