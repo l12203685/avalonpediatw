@@ -221,13 +221,17 @@ export default function LobbyPage(): JSX.Element {
                     : 'border-gray-600'
                 }`}
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
-                  player.isBot
-                    ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
-                    : 'bg-gradient-to-br from-blue-400 to-purple-400'
-                }`}>
-                  {player.isBot ? <Bot size={18} /> : player.name.charAt(0).toUpperCase()}
-                </div>
+                {player.isBot ? (
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600">
+                    <Bot size={18} />
+                  </div>
+                ) : player.avatar ? (
+                  <img src={player.avatar} alt={player.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-gray-600" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-gradient-to-br from-blue-400 to-purple-400">
+                    {player.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className={`font-bold truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
                     {player.name}

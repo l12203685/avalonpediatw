@@ -124,7 +124,8 @@ function getKnowledgeList(role: Role, room: Room, currentPlayer: Player): string
     }
     case 'assassin':
     case 'morgana':
-    case 'mordred': {
+    case 'mordred':
+    case 'minion': {
       // Evil players see each other (except Oberon)
       const evilTeam = players.filter(
         p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal') && p.role !== 'oberon'

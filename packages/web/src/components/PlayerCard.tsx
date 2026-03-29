@@ -45,7 +45,12 @@ export default function PlayerCard({
             : 'border-gray-600 bg-gradient-to-br from-blue-400 to-purple-400'
         }`}
       >
-        {player.isBot ? '🤖' : player.name.charAt(0).toUpperCase()}
+        {player.isBot
+          ? '🤖'
+          : player.avatar
+            ? <img src={player.avatar} alt={player.name} className="w-full h-full rounded-full object-cover" />
+            : player.name.charAt(0).toUpperCase()
+        }
 
         {/* 隊長皇冠 */}
         {isLeader && (
