@@ -104,7 +104,7 @@ export class HeuristicAgent implements AvalonAgent {
 
       // Calculate average suspicion of proposed team
       const avgSuspicion = proposedTeam.reduce((s, id) => s + this.getSuspicion(id), 0) / proposedTeam.length;
-      const threshold = failCount >= 2 ? 5 : 3; // more lenient when 3rd reject would hand evil victory
+      const threshold = failCount >= 4 ? 5 : 3; // more lenient when 5th reject would hand evil victory
 
       return { type: 'team_vote', vote: avgSuspicion < threshold };
     } else {

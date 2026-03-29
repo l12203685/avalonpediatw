@@ -207,8 +207,8 @@ export class GameEngine {
       // Rotate leader
       this.rotateLeader();
 
-      if (this.room.failCount >= 3) {
-        // 3 failed votes = evil wins
+      if (this.room.failCount >= 5) {
+        // 5 consecutive rejections = evil wins (standard Avalon rules)
         this.room.state = 'ended';
         this.room.evilWins = true;
         this.logEvent('game_ended', {
