@@ -106,3 +106,34 @@ export async function checkFollowing(token: string, targetUserId: string): Promi
   const data = await apiFetch<{ following: boolean }>(`/api/friends/check/${targetUserId}`, token);
   return data.following;
 }
+
+// ── Feedback / Error Reporting ────────────────────────────────
+
+export async function submitFeedback(
+  data: { type: 'bug' | 'suggestion'; message: string; gameState?: string },
+  token?: string
+): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  await fetch(`${SERVER_URL}/api/feedback`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function submitError(data: {
+  message: string;
+  stack?: string;
+  gameState?: string;
+}): Promise<void> {
+  try {
+    await fetch(`${SERVER_URL}/api/feedback/errors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    // Swallow — error reporting must never throw
+  }
+}
