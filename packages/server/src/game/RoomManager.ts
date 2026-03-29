@@ -38,6 +38,12 @@ export class RoomManager {
       voteHistory: [],
       questHistory: [],
       questVotedCount: 0,
+      roleOptions: {
+        percival: true,
+        morgana: true,
+        oberon: false,
+        mordred: false,
+      },
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

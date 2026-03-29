@@ -14,7 +14,8 @@ export type Role =
   | 'assassin'    // Evil - Can kill Merlin at end; knows teammates
   | 'morgana'     // Evil - Appears to Percival as possible Merlin; knows teammates
   | 'oberon'      // Evil - Hidden from Evil players (and can't see them)
-  | 'mordred';    // Evil - Hidden from Merlin; knows other evil teammates
+  | 'mordred'     // Evil - Hidden from Merlin; knows other evil teammates
+  | 'minion';     // Evil - Generic evil minion (substitute when optional evil roles disabled)
 
 export type Team = 'good' | 'evil';
 
@@ -62,8 +63,17 @@ export interface Room {
   questVotedCount: number;     // How many quest team members have submitted their vote (count only, not direction)
   endReason?: 'failed_quests' | 'vote_rejections' | 'merlin_assassinated' | 'assassination_failed' | 'assassination_timeout'; // Why game ended
   assassinTargetId?: string;   // ID of the player the assassin targeted (set on game end)
+  roleOptions: RoleOptions;    // Host-configured optional role toggles
   createdAt: number;
   updatedAt: number;
+}
+
+/** Host-configurable role toggles for optional special roles */
+export interface RoleOptions {
+  percival: boolean;  // Include Percival + Morgana (must be toggled together for balance)
+  morgana: boolean;   // Include Morgana (paired with Percival)
+  oberon: boolean;    // Include Oberon (evil unknown to other evil)
+  mordred: boolean;   // Include Mordred (hidden from Merlin)
 }
 
 export interface GameConfig {

@@ -141,8 +141,18 @@ export class GameEngine {
       throw new Error(`No config for ${playerCount} players`);
     }
 
+    const opts = this.room.roleOptions;
+    // Build role list from config, substituting disabled optional roles
+    const roles = config.roles.map(role => {
+      if (role === 'percival'  && !opts.percival)  return 'loyal' as Role;
+      if (role === 'morgana'   && !opts.morgana)   return 'minion' as Role;
+      if (role === 'oberon'    && !opts.oberon)    return 'minion' as Role;
+      if (role === 'mordred'   && !opts.mordred)   return 'minion' as Role;
+      return role;
+    });
+
     const playerIds = Object.keys(this.room.players);
-    const rolesShuffled = this.shuffleArray([...config.roles]);
+    const rolesShuffled = this.shuffleArray([...roles]);
 
     // Assign roles to players
     playerIds.forEach((playerId, index) => {

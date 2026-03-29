@@ -129,6 +129,10 @@ export class GameServer {
         this.handleSetMaxPlayers(socket, roomId, count);
       });
 
+      socket.on('game:set-role-options', (roomId: string, options: Record<string, boolean>) => {
+        this.handleSetRoleOptions(socket, roomId, options);
+      });
+
       socket.on('game:spectate-room', (roomId: string) => {
         this.handleSpectateRoom(socket, roomId);
       });
@@ -1132,6 +1136,27 @@ export class GameServer {
     } catch (error) {
       console.error('Error leaving room:', error);
       socket.emit('error', 'Failed to leave room');
+    }
+  }
+
+  private handleSetRoleOptions(socket: Socket, roomId: string, options: Record<string, boolean>): void {
+    try {
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.host !== (socket.data.playerId as string)) { socket.emit('error', 'Only the host can change role options'); return; }
+      if (room.state !== 'lobby') { socket.emit('error', 'Cannot change roles after game starts'); return; }
+
+      const allowed = ['percival', 'morgana', 'oberon', 'mordred'];
+      for (const key of allowed) {
+        if (key in options) {
+          ((room.roleOptions as unknown) as Record<string, boolean>)[key] = Boolean(options[key]);
+        }
+      }
+      room.updatedAt = Date.now();
+      this.broadcastRoomState(roomId, room);
+    } catch (error) {
+      console.error('Error setting role options:', error);
+      socket.emit('error', 'Failed to set role options');
     }
   }
 

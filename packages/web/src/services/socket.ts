@@ -337,3 +337,8 @@ export function setMaxPlayers(roomId: string, count: number): void {
   const socket = getSocket();
   socket.emit('game:set-max-players', roomId, count);
 }
+
+export function setRoleOptions(roomId: string, options: Record<string, boolean>): void {
+  const socket = getSocket();
+  socket.emit('game:set-role-options', roomId, options);
+}

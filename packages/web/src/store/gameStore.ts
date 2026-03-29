@@ -60,14 +60,16 @@ export const useGameStore = create<GameStore>((set) => ({
 
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter(t => t.id !== id) })),
 
-  updateRoom: (room: Room) => {
-    // Persist room ID for auto-rejoin on page refresh (clear on game end)
-    if (room.state === 'ended') {
-      localStorage.removeItem('avalon_room');
-    } else {
-      localStorage.setItem('avalon_room', room.id);
+  updateRoom: (room: Room) => set((s) => {
+    // Persist room ID for auto-rejoin on page refresh — skip for spectators
+    if (!s.isSpectator) {
+      if (room.state === 'ended') {
+        localStorage.removeItem('avalon_room');
+      } else {
+        localStorage.setItem('avalon_room', room.id);
+      }
     }
-    set(() => ({
+    return {
       room,
       gameState:
         room.state === 'lobby'
@@ -77,6 +79,6 @@ export const useGameStore = create<GameStore>((set) => ({
             : (room.state === 'quest' || room.state === 'discussion')
               ? 'playing'
               : 'voting',
-    }));
-  },
+    };
+  }),
 }));

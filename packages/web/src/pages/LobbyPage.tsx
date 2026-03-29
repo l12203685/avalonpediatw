@@ -1,15 +1,23 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers } from '../services/socket';
+import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions } from '../services/socket';
 import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
 import ChatPanel from '../components/ChatPanel';
 
 const ROLE_LABEL: Record<string, string> = {
   merlin: '梅林', percival: '派西維爾', loyal: '忠臣',
-  assassin: '刺客', morgana: '莫甘娜', oberon: '奧伯倫', mordred: '莫德雷德',
+  assassin: '刺客', morgana: '莫甘娜', oberon: '奧伯倫', mordred: '莫德雷德', minion: '爪牙',
 };
 const GOOD_ROLES = new Set(['merlin', 'percival', 'loyal']);
+
+// Describe what enabling each optional role does
+const ROLE_OPTION_INFO: Record<string, { label: string; description: string; paired?: string }> = {
+  percival: { label: '派西維爾', description: '派西維爾看到梅林（以及莫甘娜，若啟用）', paired: 'morgana' },
+  morgana:  { label: '莫甘娜',   description: '莫甘娜偽裝成梅林，混淆派西維爾',        paired: 'percival' },
+  mordred:  { label: '莫德雷德', description: '莫德雷德對梅林隱形，危險的隱藏邪惡' },
+  oberon:   { label: '奧伯倫',   description: '奧伯倫對邪惡陣營隱形（孤獨邪惡）' },
+};
 
 export default function LobbyPage(): JSX.Element {
   const { room, currentPlayer } = useGameStore();
@@ -26,8 +34,27 @@ export default function LobbyPage(): JSX.Element {
 
   // Role preview based on current player count
   const previewConfig = AVALON_CONFIG[playerList.length];
-  const goodRoles  = previewConfig?.roles.filter(r => GOOD_ROLES.has(r)) ?? [];
-  const evilRoles  = previewConfig?.roles.filter(r => !GOOD_ROLES.has(r)) ?? [];
+  // Apply roleOptions to get effective role list for preview
+  const effectiveRoles = previewConfig?.roles.map(r => {
+    if (r === 'percival' && !room.roleOptions?.percival) return 'loyal';
+    if (r === 'morgana'  && !room.roleOptions?.morgana)  return 'minion';
+    if (r === 'oberon'   && !room.roleOptions?.oberon)   return 'minion';
+    if (r === 'mordred'  && !room.roleOptions?.mordred)  return 'minion';
+    return r;
+  }) ?? [];
+  const goodRoles  = effectiveRoles.filter(r => GOOD_ROLES.has(r));
+  const evilRoles  = effectiveRoles.filter(r => !GOOD_ROLES.has(r));
+
+  const handleToggleRole = (key: string) => {
+    if (!room.roleOptions) return;
+    const opts = (room.roleOptions as unknown) as Record<string, boolean>;
+    const newVal = !opts[key];
+    // Percival and Morgana are paired — toggle together
+    const info = ROLE_OPTION_INFO[key];
+    const updates: Record<string, boolean> = { [key]: newVal };
+    if (info.paired) updates[info.paired] = newVal;
+    setRoleOptions(room.id, updates);
+  };
 
   const handleCopyRoomId = () => {
     navigator.clipboard.writeText(shortCode).then(() => {
@@ -84,25 +111,64 @@ export default function LobbyPage(): JSX.Element {
           </div>
         </div>
 
-        {/* Role preview for current player count */}
+        {/* Role configuration + preview */}
         {previewConfig && (
-          <div className="bg-avalon-card/30 border border-gray-700 rounded-xl px-4 py-3">
-            <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
-              {playerList.length} 人局角色預覽
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {[...goodRoles, ...evilRoles].map((role, i) => (
-                <span
-                  key={i}
-                  className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
-                    GOOD_ROLES.has(role)
-                      ? 'bg-blue-900/40 border-blue-700/60 text-blue-300'
-                      : 'bg-red-900/40 border-red-700/60 text-red-300'
-                  }`}
-                >
-                  {ROLE_LABEL[role] ?? role}
-                </span>
-              ))}
+          <div className="bg-avalon-card/30 border border-gray-700 rounded-xl px-4 py-3 space-y-3">
+            {/* Optional role toggles (host only) */}
+            {isHost && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">特殊角色設定 (Role Configuration)</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.keys(ROLE_OPTION_INFO) as (keyof typeof ROLE_OPTION_INFO)[]).map(key => {
+                    const info = ROLE_OPTION_INFO[key];
+                    const enabled = Boolean(((room.roleOptions as unknown) as Record<string, boolean>)?.[key]);
+                    // Skip paired role (morgana is controlled by percival toggle)
+                    if (key === 'morgana') return null;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => handleToggleRole(key)}
+                        className={`text-left px-3 py-2 rounded-lg border text-xs transition-all ${
+                          enabled
+                            ? 'bg-purple-900/40 border-purple-600 text-purple-200'
+                            : 'bg-gray-800/40 border-gray-700 text-gray-500 hover:border-gray-500'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-bold">
+                            {key === 'percival' ? '派西維爾 + 莫甘娜' : info.label}
+                          </span>
+                          <span className={`text-xs font-bold ${enabled ? 'text-purple-400' : 'text-gray-600'}`}>
+                            {enabled ? '開' : '關'}
+                          </span>
+                        </div>
+                        <p className="text-gray-500 text-xs leading-tight">{info.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Role preview */}
+            <div>
+              <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
+                {playerList.length} 人局角色預覽
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {[...goodRoles, ...evilRoles].map((role, i) => (
+                  <span
+                    key={i}
+                    className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
+                      GOOD_ROLES.has(role)
+                        ? 'bg-blue-900/40 border-blue-700/60 text-blue-300'
+                        : 'bg-red-900/40 border-red-700/60 text-red-300'
+                    }`}
+                  >
+                    {ROLE_LABEL[role] ?? role}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         )}

@@ -88,11 +88,21 @@ const ROLE_INFO: Record<Role, {
     description: '你是隱藏在梅林視野之外的邪惡領袖。梅林看不到你，但你知道誰是邪惡方。',
     knowledge: '你知道邪惡方隊友的身分。梅林無法察覺你——善加利用這個優勢！',
   },
+  minion: {
+    name: '爪牙 (Minion)',
+    icon: '😈',
+    team: 'evil',
+    color: 'text-red-300',
+    bg: 'from-red-900/80 to-red-800/60',
+    border: 'border-red-500',
+    description: '你是邪惡陣營的普通爪牙。你認識其他邪惡隊友，破壞任務是你的目標。',
+    knowledge: '你知道邪惡方隊友的身分。',
+  },
 };
 
 function getKnowledgeList(role: Role, room: Room, currentPlayer: Player): string[] {
   const players = Object.values(room.players);
-  const evilRoles: Role[] = ['assassin', 'morgana', 'oberon', 'mordred'];
+  const evilRoles: Role[] = ['assassin', 'morgana', 'oberon', 'mordred', 'minion'];
 
   switch (role) {
     case 'merlin': {
