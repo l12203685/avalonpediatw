@@ -235,6 +235,71 @@ export default function ProfilePage(): JSX.Element {
               </div>
             </div>
 
+            {/* ELO trend sparkline */}
+            {profile.recent_games.length >= 2 && (() => {
+              // Compute ELO at each game (games are newest-first, so reconstruct chronologically)
+              const games = [...profile.recent_games].reverse(); // oldest first
+              const points: number[] = [];
+              let elo = profile.elo_rating;
+              // Work backwards to get starting ELO
+              const startElo = games.reduce((acc, g) => acc - g.elo_delta, profile.elo_rating);
+              elo = startElo;
+              points.push(elo);
+              for (const g of games) {
+                elo += g.elo_delta;
+                points.push(elo);
+              }
+
+              const W = 320, H = 80, PAD = 12;
+              const minElo = Math.min(...points) - 10;
+              const maxElo = Math.max(...points) + 10;
+              const range = maxElo - minElo || 1;
+              const toX = (i: number) => PAD + (i / (points.length - 1)) * (W - PAD * 2);
+              const toY = (v: number) => PAD + (1 - (v - minElo) / range) * (H - PAD * 2);
+
+              const pathD = points.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+              const trend = points[points.length - 1] - points[0];
+              const strokeColor = trend >= 0 ? '#4ade80' : '#f87171';
+              const fillId = `elo-fill-${trend >= 0 ? 'up' : 'down'}`;
+
+              // Area fill path (close to bottom)
+              const areaD = pathD
+                + ` L${toX(points.length - 1).toFixed(1)},${(H - PAD).toFixed(1)}`
+                + ` L${toX(0).toFixed(1)},${(H - PAD).toFixed(1)} Z`;
+
+              return (
+                <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-bold text-gray-300">ELO 趨勢 (近 {games.length} 局)</h3>
+                    <span className={`text-sm font-bold ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {trend >= 0 ? '+' : ''}{trend.toFixed(0)} pts
+                    </span>
+                  </div>
+                  <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 80 }}>
+                    <defs>
+                      <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={strokeColor} stopOpacity="0.25" />
+                        <stop offset="100%" stopColor={strokeColor} stopOpacity="0.02" />
+                      </linearGradient>
+                    </defs>
+                    {/* Area */}
+                    <path d={areaD} fill={`url(#${fillId})`} />
+                    {/* Line */}
+                    <path d={pathD} fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    {/* Dots */}
+                    {points.map((v, i) => {
+                      const g = games[i - 1];
+                      const dotColor = !g ? '#9ca3af' : g.won ? '#4ade80' : '#f87171';
+                      return <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill={dotColor} />;
+                    })}
+                    {/* Start/end labels */}
+                    <text x={toX(0)} y={H - 2} textAnchor="middle" fontSize="9" fill="#6b7280">{points[0].toFixed(0)}</text>
+                    <text x={toX(points.length - 1)} y={H - 2} textAnchor="middle" fontSize="9" fill={strokeColor}>{points[points.length - 1].toFixed(0)}</text>
+                  </svg>
+                </div>
+              );
+            })()}
+
             {/* Role stats (from recent games) */}
             {roleStats.length > 0 && (
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">

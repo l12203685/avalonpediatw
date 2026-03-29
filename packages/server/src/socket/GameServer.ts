@@ -904,20 +904,28 @@ export class GameServer {
             this.scheduleBotActions(roomId); // schedule voting bots
           }
         } else if (r.state === 'voting' && r.questTeam.length > 0) {
-          // Team vote — submit votes for all bots that haven't voted yet
-          let anyBotVoted = false;
-          for (const [pid, player] of Object.entries(r.players)) {
-            if (player.isBot && !(pid in r.votes)) {
+          // Team vote — stagger each bot vote by 600–1400 ms so they feel human
+          const botVoters = Object.entries(r.players).filter(
+            ([pid, player]) => player.isBot && !(pid in r.votes)
+          );
+          let offset = 0;
+          for (const [pid] of botVoters) {
+            const stagger = offset;
+            offset += 600 + Math.random() * 800;
+            setTimeout(() => {
+              const snapshot = this.roomManager.getRoom(roomId);
+              if (!snapshot || snapshot.state !== 'voting' || pid in snapshot.votes) return;
+              const eng = this.gameEngines.get(roomId);
+              if (!eng) return;
               const agent = this.botAgents.get(pid);
               const vote = agent
                 ? (() => {
-                    const obs = this.buildBotObservation(r, pid, engine, 'team_vote');
+                    const obs = this.buildBotObservation(snapshot, pid, eng, 'team_vote');
                     const action = agent.act(obs);
                     return action.type === 'team_vote' ? action.vote : Math.random() > 0.3;
                   })()
                 : Math.random() > 0.3;
-              engine.submitVote(pid, vote);
-              anyBotVoted = true;
+              eng.submitVote(pid, vote);
               const updated = this.roomManager.getRoom(roomId)!;
               if (updated.state === 'ended') {
                 this.broadcastRoomState(roomId, updated);
@@ -925,23 +933,35 @@ export class GameServer {
                 return;
               }
               this.broadcastRoomState(roomId, updated);
-            }
+              // After last bot votes, check if all humans have voted too
+              if (Object.keys(updated.votes).length === Object.keys(updated.players).length) {
+                this.scheduleBotActions(roomId);
+              }
+            }, stagger);
           }
-          if (anyBotVoted) this.scheduleBotActions(roomId);
         } else if (r.state === 'quest') {
-          // Quest vote — submit for bots on quest team
-          for (const memberId of r.questTeam) {
-            const player = r.players[memberId];
-            if (player?.isBot) {
+          // Quest vote — stagger each bot member vote by 700–1500 ms
+          const botMembers = r.questTeam.filter(id => r.players[id]?.isBot);
+          let offset = 0;
+          for (const memberId of botMembers) {
+            const stagger = offset;
+            offset += 700 + Math.random() * 800;
+            setTimeout(() => {
+              const snapshot = this.roomManager.getRoom(roomId);
+              if (!snapshot || snapshot.state !== 'quest') return;
+              const eng = this.gameEngines.get(roomId);
+              if (!eng) return;
+              const player = snapshot.players[memberId];
+              if (!player?.isBot) return;
               const agent = this.botAgents.get(memberId);
               const vote = agent
                 ? (() => {
-                    const obs = this.buildBotObservation(r, memberId, engine, 'quest_vote');
+                    const obs = this.buildBotObservation(snapshot, memberId, eng, 'quest_vote');
                     const action = agent.act(obs);
                     return action.type === 'quest_vote' ? action.vote : 'success';
                   })()
                 : (player.team === 'evil' && Math.random() > 0.5 ? 'fail' : 'success');
-              engine.submitQuestVote(memberId, vote);
+              eng.submitQuestVote(memberId, vote);
               const updated = this.roomManager.getRoom(roomId)!;
               if (updated.state === 'ended') {
                 this.broadcastRoomState(roomId, updated, true);
@@ -949,9 +969,12 @@ export class GameServer {
                 return;
               }
               this.broadcastRoomState(roomId, updated);
-            }
+            }, stagger);
           }
-          this.scheduleBotActions(roomId);
+          // After all bots have submitted, check state (human members may still need to vote)
+          if (botMembers.length > 0) {
+            setTimeout(() => { this.scheduleBotActions(roomId); }, offset);
+          }
         } else if (r.state === 'discussion') {
           // Find assassin — if bot, use HeuristicAgent to pick the most Merlin-like target
           const assassinEntry = Object.entries(r.players).find(([, p]) => p.role === 'assassin');
