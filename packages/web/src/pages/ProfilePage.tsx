@@ -286,20 +286,76 @@ export default function ProfilePage(): JSX.Element {
                 <div className="bg-avalon-card border border-gray-600 rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto"
                   onClick={e => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-white">遊戲回放 — {replay?.roomId}</h3>
+                    <h3 className="font-bold text-white">遊戲回放 (Replay) — <span className="font-mono text-yellow-400 text-sm">{replay?.roomId}</span></h3>
                     <button onClick={() => setReplay(null)} className="text-gray-500 hover:text-white">✕</button>
                   </div>
                   {replayLoading && <div className="flex justify-center py-8"><Loader size={24} className="animate-spin text-blue-400" /></div>}
                   {replay && replay.events.length === 0 && (
                     <p className="text-center text-gray-500 py-4">無回放資料（此局在事件記錄功能上線前進行）</p>
                   )}
-                  {replay && replay.events.map(ev => (
-                    <div key={ev.seq} className="flex gap-2 py-1.5 border-b border-gray-700/50 text-sm items-start">
-                      <span className="text-gray-600 w-5 text-right flex-shrink-0 text-xs pt-0.5">{ev.seq}</span>
-                      <span className="flex-shrink-0">{EVENT_ICONS[ev.event_type] ?? '•'}</span>
-                      <span className="text-gray-300">{formatReplayEvent(ev)}</span>
-                    </div>
-                  ))}
+                  {replay && replay.events.length > 0 && (() => {
+                    // Extract quest results and winner for visual summary
+                    const questResults = replay.events
+                      .filter(e => e.event_type === 'round_ended')
+                      .map(e => (e.event_data as Record<string, unknown>).result as string);
+                    const endEvent = replay.events.find(e => e.event_type === 'game_ended');
+                    const evilWins = endEvent ? (endEvent.event_data as Record<string, unknown>).evilWins as boolean : null;
+                    const playerCount = (replay.events[0]?.event_data as Record<string, unknown>)?.playerCount as number | undefined;
+
+                    return (
+                      <>
+                        {/* Visual summary */}
+                        <div className="bg-gray-800/60 rounded-xl p-4 mb-4 space-y-3">
+                          {playerCount && (
+                            <p className="text-xs text-gray-400">{playerCount} 人局 ({playerCount}-player game)</p>
+                          )}
+                          {/* Quest dots */}
+                          {questResults.length > 0 && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-2">任務結果 (Quest Results)</p>
+                              <div className="flex gap-2">
+                                {questResults.map((r, i) => (
+                                  <div key={i} className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 ${
+                                    r === 'success'
+                                      ? 'bg-blue-600/40 border-blue-400 text-blue-300'
+                                      : 'bg-red-600/40 border-red-400 text-red-300'
+                                  }`}>
+                                    {r === 'success' ? '藍' : '紅'}
+                                  </div>
+                                ))}
+                                {/* remaining quests */}
+                                {Array.from({ length: Math.max(0, 5 - questResults.length) }).map((_, i) => (
+                                  <div key={`empty-${i}`} className="w-9 h-9 rounded-full border-2 border-gray-600 bg-gray-700/30" />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {/* Winner */}
+                          {evilWins !== null && (
+                            <div className={`text-sm font-bold px-3 py-1 rounded-lg inline-block ${
+                              evilWins
+                                ? 'bg-red-900/50 text-red-300 border border-red-600'
+                                : 'bg-blue-900/50 text-blue-300 border border-blue-600'
+                            }`}>
+                              {evilWins ? '🔴 邪惡方獲勝 (Evil Wins)' : '🔵 正義方獲勝 (Good Wins)'}
+                            </div>
+                          )}
+                        </div>
+                        {/* Event log */}
+                        <div className="space-y-0">
+                          {replay.events.map(ev => (
+                            <div key={ev.seq} className={`flex gap-2 py-1.5 border-b border-gray-700/30 text-sm items-start ${
+                              ev.event_type === 'round_ended' || ev.event_type === 'game_ended' ? 'bg-gray-700/20' : ''
+                            }`}>
+                              <span className="text-gray-600 w-5 text-right flex-shrink-0 text-xs pt-0.5">{ev.seq}</span>
+                              <span className="flex-shrink-0">{EVENT_ICONS[ev.event_type] ?? '•'}</span>
+                              <span className="text-gray-300">{formatReplayEvent(ev)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             )}
