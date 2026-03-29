@@ -10,6 +10,8 @@ import LoginPage from './pages/LoginPage';
 import WikiPage from './pages/WikiPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
+import FriendsPage from './pages/FriendsPage';
+import AiStatsPage from './pages/AiStatsPage';
 import ToastContainer from './components/ToastContainer';
 import FloatingControls from './components/FloatingControls';
 
@@ -94,6 +96,8 @@ function App(): JSX.Element {
           {gameState === 'wiki' && <WikiPage />}
           {gameState === 'leaderboard' && <LeaderboardPage />}
           {gameState === 'profile' && <ProfilePage />}
+          {gameState === 'friends' && <FriendsPage />}
+          {gameState === 'aiStats' && <AiStatsPage />}
         </>
       )}
       <ToastContainer />

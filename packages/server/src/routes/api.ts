@@ -132,29 +132,130 @@ router.post('/ai/selfplay', adminLimiter, async (req: Request, res: Response) =>
 
 // ── GET /api/ai/stats ─────────────────────────────────────────
 router.get('/ai/stats', publicLimiter, async (_req: Request, res: Response) => {
+  const defaultResponse = {
+    totalGames: 0,
+    goodWinRate: 0,
+    evilWinRate: 0,
+    avgRounds: 0,
+    roleWinRates: {} as Record<string, { wins: number; total: number; rate: number }>,
+    gamesLast7Days: [] as { date: string; count: number }[],
+    playerCountBreakdown: {} as Record<string, number>,
+    scheduler: getSelfPlayStatus(),
+  };
+
   if (!isSupabaseReady()) {
-    return res.json({ message: 'Database not configured', totalGames: 0, totalEvents: 0 });
+    return res.json({ ...defaultResponse, message: 'Database not configured' });
   }
-  // Quick stats from game_events table
+
   const { getSupabaseClient } = await import('../services/supabase');
   const db = getSupabaseClient();
-  if (!db) return res.json({ totalGames: 0, totalEvents: 0 });
+  if (!db) return res.json(defaultResponse);
 
-  const { count: eventCount } = await db
-    .from('game_events')
-    .select('*', { count: 'exact', head: true });
+  try {
+    // ── 1. All AI game records (room_id starts with AI-) ──────────────────
+    const { data: records } = await db
+      .from('game_records')
+      .select('room_id, role, team, won, player_count, created_at')
+      .like('room_id', 'AI-%');
 
-  const { count: gameCount } = await db
-    .from('game_events')
-    .select('room_id', { count: 'exact', head: true })
-    .like('room_id', 'AI-%');
+    const allRecords = (records ?? []) as {
+      room_id: string;
+      role: string;
+      team: string;
+      won: boolean;
+      player_count: number;
+      created_at: string;
+    }[];
 
-  return res.json({
-    totalEvents:   eventCount ?? 0,
-    aiGames:       gameCount  ?? 0,
-    message:       'AI self-play data stats',
-    scheduler:     getSelfPlayStatus(),
-  });
+    // ── Unique games ───────────────────────────────────────────────────────
+    const uniqueRooms = new Set(allRecords.map(r => r.room_id));
+    const totalGames = uniqueRooms.size;
+
+    // ── Good/Evil win rates ────────────────────────────────────────────────
+    // Determine winner per room: find any record where won=true to learn which team won
+    const roomWinTeam = new Map<string, string>();
+    for (const r of allRecords) {
+      if (r.won && !roomWinTeam.has(r.room_id)) {
+        roomWinTeam.set(r.room_id, r.team);
+      }
+    }
+    let goodWins = 0, evilWins = 0;
+    for (const team of roomWinTeam.values()) {
+      if (team === 'good') goodWins++;
+      else if (team === 'evil') evilWins++;
+    }
+    const goodWinRate = totalGames > 0 ? Math.round((goodWins / totalGames) * 100) : 0;
+    const evilWinRate = totalGames > 0 ? Math.round((evilWins / totalGames) * 100) : 0;
+
+    // ── Average rounds per game (quest_resolved events) ───────────────────
+    const { data: questEvents } = await db
+      .from('game_events')
+      .select('room_id')
+      .like('room_id', 'AI-%')
+      .eq('event_type', 'quest_resolved');
+
+    const roundsPerRoom = new Map<string, number>();
+    for (const ev of (questEvents ?? []) as { room_id: string }[]) {
+      roundsPerRoom.set(ev.room_id, (roundsPerRoom.get(ev.room_id) ?? 0) + 1);
+    }
+    const totalRounds = [...roundsPerRoom.values()].reduce((a, b) => a + b, 0);
+    const avgRounds = roundsPerRoom.size > 0
+      ? Math.round((totalRounds / roundsPerRoom.size) * 10) / 10
+      : 0;
+
+    // ── Role win rates ─────────────────────────────────────────────────────
+    const roleMap = new Map<string, { wins: number; total: number }>();
+    for (const r of allRecords) {
+      if (!roleMap.has(r.role)) roleMap.set(r.role, { wins: 0, total: 0 });
+      const entry = roleMap.get(r.role)!;
+      entry.total++;
+      if (r.won) entry.wins++;
+    }
+    const roleWinRates: Record<string, { wins: number; total: number; rate: number }> = {};
+    for (const [role, { wins, total }] of roleMap) {
+      roleWinRates[role] = { wins, total, rate: total > 0 ? Math.round((wins / total) * 100) : 0 };
+    }
+
+    // ── Games per day for last 7 days ─────────────────────────────────────
+    const roomDayMap = new Map<string, Set<string>>();
+    for (const r of allRecords) {
+      const d = new Date(r.created_at).toISOString().slice(0, 10);
+      if (!roomDayMap.has(d)) roomDayMap.set(d, new Set());
+      roomDayMap.get(d)!.add(r.room_id);
+    }
+    const now = new Date();
+    const gamesLast7Days: { date: string; count: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000).toISOString().slice(0, 10);
+      gamesLast7Days.push({ date: d, count: roomDayMap.get(d)?.size ?? 0 });
+    }
+
+    // ── Player count breakdown ─────────────────────────────────────────────
+    const pcRoomMap = new Map<number, Set<string>>();
+    for (const r of allRecords) {
+      const pc = r.player_count;
+      if (!pcRoomMap.has(pc)) pcRoomMap.set(pc, new Set());
+      pcRoomMap.get(pc)!.add(r.room_id);
+    }
+    const playerCountBreakdown: Record<string, number> = {};
+    for (const [pc, rooms] of pcRoomMap) {
+      playerCountBreakdown[String(pc)] = rooms.size;
+    }
+
+    return res.json({
+      totalGames,
+      goodWinRate,
+      evilWinRate,
+      avgRounds,
+      roleWinRates,
+      gamesLast7Days,
+      playerCountBreakdown,
+      scheduler: getSelfPlayStatus(),
+    });
+  } catch (err) {
+    console.error('[ai/stats]', err);
+    return res.status(500).json({ error: 'Failed to fetch AI stats' });
+  }
 });
 
 export { router as apiRouter };

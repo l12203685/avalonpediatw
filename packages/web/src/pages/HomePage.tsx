@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { createRoom, joinRoom, listRooms, spectateRoom, getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
-import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock } from 'lucide-react';
+import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot } from 'lucide-react';
 
 interface OpenRoom {
   id: string;
@@ -270,6 +270,16 @@ export default function HomePage(): JSX.Element {
               >
                 <Zap size={20} />
                 快速單人練習 vs 機器人
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setGameState('aiStats')}
+                className="w-full bg-gradient-to-r from-purple-700 to-violet-700 hover:from-purple-800 hover:to-violet-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-purple-500/50"
+              >
+                <Bot size={20} />
+                AI 自對弈統計 (AI Stats)
               </motion.button>
             </motion.div>
 
