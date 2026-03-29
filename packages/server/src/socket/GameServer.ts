@@ -916,12 +916,20 @@ export class GameServer {
         .map(([id]) => id);
     }
 
+    // Percival sees both Merlin and Morgana — can't tell which is which
+    const knownWizards: string[] | undefined = myRole === 'percival'
+      ? Object.entries(r.players)
+          .filter(([id, p]) => id !== botId && (p.role === 'merlin' || p.role === 'morgana'))
+          .map(([id]) => id)
+      : undefined;
+
     return {
       myPlayerId:    botId,
       myRole,
       myTeam,
       playerCount:   Object.keys(r.players).length,
       knownEvils,
+      knownWizards,
       currentRound:  r.currentRound,
       currentLeader: engine.getCurrentLeaderId(),
       failCount:     r.failCount,

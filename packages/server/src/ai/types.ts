@@ -18,6 +18,7 @@ export interface PlayerObservation {
   myTeam:        'good' | 'evil';
   playerCount:   number;
   knownEvils:    string[];    // IDs of players I know are evil (my role's knowledge)
+  knownWizards?: string[];   // IDs that look like Merlin/Morgana to Percival (can't tell which)
 
   // Dynamic game state
   currentRound:  number;

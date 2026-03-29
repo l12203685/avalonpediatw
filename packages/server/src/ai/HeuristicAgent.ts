@@ -58,7 +58,7 @@ export class HeuristicAgent implements AvalonAgent {
   // ── Team Selection ───────────────────────────────────────────
 
   private selectTeam(obs: PlayerObservation): AgentAction {
-    const { playerCount, currentRound, myPlayerId, myTeam, knownEvils } = obs;
+    const { playerCount, currentRound, myPlayerId, myTeam, knownEvils, knownWizards } = obs;
     const teamSize = this.getTeamSize(playerCount, currentRound);
     const allIds   = this.getPlayerIds(obs);
 
@@ -67,6 +67,21 @@ export class HeuristicAgent implements AvalonAgent {
       const candidates = allIds
         .filter(id => id !== myPlayerId)
         .sort((a, b) => this.getSuspicion(a) - this.getSuspicion(b));
+
+      // Percival: prioritise including at least one wizard candidate (Merlin or Morgana) on the team
+      // so quests can be protected. If a quest fails with a wizard on it, they're more likely Morgana.
+      if (knownWizards && knownWizards.length > 0) {
+        const team: string[] = [myPlayerId];
+        // Always include at least one wizard candidate when there's room
+        const preferredWizard = knownWizards[0];
+        if (team.length < teamSize) team.push(preferredWizard);
+        for (const id of candidates) {
+          if (team.length >= teamSize) break;
+          if (!team.includes(id)) team.push(id);
+        }
+        return { type: 'team_select', teamIds: team.slice(0, teamSize) };
+      }
+
       const team = [myPlayerId, ...candidates].slice(0, teamSize);
       return { type: 'team_select', teamIds: team };
     } else {
@@ -96,13 +111,23 @@ export class HeuristicAgent implements AvalonAgent {
   // ── Team Vote ────────────────────────────────────────────────
 
   private voteOnTeam(obs: PlayerObservation): AgentAction {
-    const { proposedTeam, myTeam, knownEvils, failCount } = obs;
+    const { proposedTeam, myTeam, knownEvils, knownWizards, failCount } = obs;
 
     if (myTeam === 'good') {
       // Approve if no known evils on team
       const hasKnownEvil = proposedTeam.some(id => knownEvils.includes(id));
       if (hasKnownEvil) {
         return { type: 'team_vote', vote: false };
+      }
+
+      // Percival: be skeptical of large teams with no wizard candidate (Merlin/Morgana)
+      // A team without either potential Merlin is suspicious — they may be hiding evil.
+      if (knownWizards && knownWizards.length > 0 && proposedTeam.length >= 3) {
+        const hasWizard = proposedTeam.some(id => knownWizards.includes(id));
+        if (!hasWizard) {
+          // Reject with high probability — teams without Merlin candidates are risky
+          return { type: 'team_vote', vote: this.difficulty === 'hard' ? false : Math.random() > 0.65 };
+        }
       }
 
       // Calculate average suspicion of proposed team
