@@ -205,3 +205,8 @@ export function sendChatMessage(roomId: string, message: string): void {
   const socket = getSocket();
   socket.emit('chat:send-message', roomId, message);
 }
+
+export function listRooms(): void {
+  const socket = getSocket();
+  socket.emit('game:list-rooms');
+}

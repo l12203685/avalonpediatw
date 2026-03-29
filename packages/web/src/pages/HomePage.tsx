@@ -1,16 +1,25 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { createRoom, joinRoom } from '../services/socket';
+import { createRoom, joinRoom, listRooms, getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
-import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle } from 'lucide-react';
+import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw } from 'lucide-react';
 import FloatingControls from '../components/FloatingControls';
+
+interface OpenRoom {
+  id: string;
+  name: string;
+  playerCount: number;
+  maxPlayers: number;
+  createdAt: number;
+}
 
 export default function HomePage(): JSX.Element {
   const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile, addToast } = useGameStore();
   const [playerName, setPlayerName] = useState(currentPlayer?.name ?? '');
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
+  const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
 
   // Auto-populate join form from ?room=XXXXXXXX invite link
   useEffect(() => {
@@ -19,9 +28,20 @@ export default function HomePage(): JSX.Element {
     if (inviteCode) {
       setRoomId(inviteCode.toUpperCase().slice(0, 8));
       setMode('join');
-      // Clean the URL without reloading
       window.history.replaceState({}, '', window.location.pathname);
     }
+  }, []);
+
+  // Subscribe to room list updates
+  useEffect(() => {
+    let socket: ReturnType<typeof getSocket> | null = null;
+    try { socket = getSocket(); } catch { return; }
+
+    const handler = (rooms: OpenRoom[]) => setOpenRooms(rooms);
+    socket.on('game:rooms-list', handler);
+    listRooms(); // initial fetch
+
+    return () => { socket!.off('game:rooms-list', handler); };
   }, []);
 
   const handleLogout = async (): Promise<void> => {
@@ -210,6 +230,46 @@ export default function HomePage(): JSX.Element {
                 排行榜 (Leaderboard)
               </motion.button>
             </motion.div>
+
+            {/* Open rooms */}
+            {openRooms.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.45 }}
+                className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 text-left"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    開放房間 (Open Rooms)
+                  </h3>
+                  <button
+                    onClick={listRooms}
+                    className="p-1 text-gray-600 hover:text-gray-300 transition-colors"
+                    title="重新整理 (Refresh)"
+                  >
+                    <RefreshCw size={12} />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {openRooms.map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => { setRoomId(r.id); setMode('join'); }}
+                      className="w-full flex items-center justify-between bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-all"
+                    >
+                      <span className="text-sm font-semibold text-white truncate">{r.name}</span>
+                      <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                        <span className={r.playerCount >= 5 ? 'text-green-400' : 'text-yellow-400'}>
+                          {r.playerCount}
+                        </span>
+                        /{r.maxPlayers} 人
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
 
             {/* Footer */}
             <motion.div

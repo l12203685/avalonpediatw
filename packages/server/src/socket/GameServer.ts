@@ -99,6 +99,20 @@ export class GameServer {
         this.handleChatMessage(socket, roomId, message);
       });
 
+      socket.on('game:list-rooms', () => {
+        const openRooms = this.roomManager.getAllRooms()
+          .filter(r => r.state === 'lobby' && !r.id.startsWith('AI-'))
+          .map(r => ({
+            id:          r.id.slice(0, 8).toUpperCase(),
+            name:        r.name,
+            playerCount: Object.values(r.players).filter(p => p.status === 'active').length,
+            maxPlayers:  r.maxPlayers,
+            createdAt:   r.createdAt,
+          }))
+          .sort((a, b) => b.createdAt - a.createdAt);
+        socket.emit('game:rooms-list', openRooms);
+      });
+
       socket.on('disconnect', () => {
         this.handleDisconnect(socket);
       });
