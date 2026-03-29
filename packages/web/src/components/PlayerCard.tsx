@@ -1,6 +1,6 @@
 import { Player } from '@avalon/shared';
 import { motion } from 'framer-motion';
-import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Crown, Sword } from 'lucide-react';
 
 const ROLE_NAMES: Record<string, string> = {
   merlin:   '梅林 (Merlin)',
@@ -17,6 +17,8 @@ interface PlayerCardProps {
   isCurrentPlayer: boolean;
   hasVoted: boolean;
   voted?: boolean;
+  isLeader?: boolean;
+  isOnQuestTeam?: boolean;
 }
 
 export default function PlayerCard({
@@ -24,6 +26,8 @@ export default function PlayerCard({
   isCurrentPlayer,
   hasVoted,
   voted,
+  isLeader = false,
+  isOnQuestTeam = false,
 }: PlayerCardProps): JSX.Element {
   return (
     <motion.div
@@ -42,6 +46,28 @@ export default function PlayerCard({
         }`}
       >
         {player.isBot ? '🤖' : player.name.charAt(0).toUpperCase()}
+
+        {/* 隊長皇冠 */}
+        {isLeader && (
+          <motion.div
+            initial={{ scale: 0, y: -5 }}
+            animate={{ scale: 1, y: 0 }}
+            className="absolute -top-3 left-1/2 -translate-x-1/2"
+          >
+            <Crown size={18} className="text-yellow-400 drop-shadow-md" />
+          </motion.div>
+        )}
+
+        {/* 任務隊伍標記 */}
+        {isOnQuestTeam && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute -top-2 -right-2 bg-blue-600 rounded-full p-1"
+          >
+            <Sword size={12} className="text-white" />
+          </motion.div>
+        )}
 
         {/* 投票指示器 */}
         {hasVoted && (

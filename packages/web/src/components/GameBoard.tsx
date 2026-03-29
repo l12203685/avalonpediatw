@@ -20,6 +20,8 @@ const STATE_LABELS: Record<string, string> = {
 export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.Element {
   const playerCount = Object.values(room.players).length;
   const angleSlice = 360 / playerCount;
+  const playerIds = Object.keys(room.players);
+  const leaderId = playerIds[room.leaderIndex % playerIds.length];
 
   // Play sound on state change
   useEffect(() => {
@@ -140,6 +142,8 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
               isCurrentPlayer={player.id === currentPlayer.id}
               hasVoted={room.votes[player.id] !== undefined}
               voted={room.votes[player.id]}
+              isLeader={player.id === leaderId}
+              isOnQuestTeam={room.questTeam.includes(player.id)}
             />
           </motion.div>
         );
