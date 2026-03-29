@@ -329,6 +329,7 @@ export class GameServer {
 
       this.broadcastRoomState(roomId, room);
       this.io.to(roomId).emit('game:player-joined', player);
+      this.emitSystemChat(roomId, `${player.name} 加入了房間`);
 
       console.log(`✓ Player ${user.displayName} joined room ${roomId} (${Object.keys(room.players).length}/${room.maxPlayers})`);
     } catch (error) {
@@ -373,6 +374,8 @@ export class GameServer {
           this.io.to(socketId).emit('game:started', this.sanitizeRoomForPlayer(updatedRoom, pid));
         }
       }
+      const firstLeader = updatedRoom.players[Object.keys(updatedRoom.players)[updatedRoom.leaderIndex % Object.keys(updatedRoom.players).length]];
+      this.emitSystemChat(roomId, `🎭 遊戲開始！第一輪隊長：${firstLeader?.name ?? '?'}`);
       console.log(`✓ Game started in room ${roomId}`);
 
       // Kick off bot actions if the first leader is a bot
@@ -582,6 +585,10 @@ export class GameServer {
 
     console.log(`✓ Game ended in room ${roomId}. Winner: ${evilWins ? 'Evil' : 'Good'}`);
 
+    // System chat: announce winner
+    const endMsg = evilWins ? '👹 邪惡方獲勝！遊戲結束。' : '⚔️ 正義方獲勝！遊戲結束。';
+    this.emitSystemChat(roomId, endMsg);
+
     // Emit game:ended — reveal all roles to all players
     this.broadcastRoomState(roomId, room, true);
     this.io.to(roomId).emit('game:ended', room);
@@ -686,6 +693,19 @@ export class GameServer {
     if (record.won && record.elo_before < 800) badges.push('浴火重生');
 
     return badges;
+  }
+
+  /** Broadcast a system chat message to all players in a room */
+  private emitSystemChat(roomId: string, message: string): void {
+    this.io.to(roomId).emit('chat:message-received', {
+      id: uuidv4(),
+      roomId,
+      playerId: 'system',
+      playerName: '系統',
+      message,
+      timestamp: Date.now(),
+      isSystem: true,
+    });
   }
 
   private handleChatMessage(socket: Socket, roomId: string, message: string): void {

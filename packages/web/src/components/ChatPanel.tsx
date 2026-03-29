@@ -10,6 +10,7 @@ interface ChatMessage {
   playerName: string;
   message: string;
   timestamp: number;
+  isSystem?: boolean;
 }
 
 interface ChatPanelProps {
@@ -81,6 +82,15 @@ export default function ChatPanel({ roomId, currentPlayerId }: ChatPanelProps): 
                 <p className="text-center text-gray-600 text-xs py-4">還沒有訊息</p>
               )}
               {messages.map(msg => {
+                if (msg.isSystem) {
+                  return (
+                    <div key={msg.id} className="flex justify-center">
+                      <span className="text-xs text-gray-500 bg-gray-800/60 px-2 py-0.5 rounded-full italic">
+                        {msg.message}
+                      </span>
+                    </div>
+                  );
+                }
                 const isMe = msg.playerId === currentPlayerId;
                 return (
                   <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>

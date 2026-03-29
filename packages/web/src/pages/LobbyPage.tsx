@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { startGame, kickPlayer, addBot, removeBot } from '../services/socket';
-import { Users, Play, Copy, Check, Link, X, Bot } from 'lucide-react';
+import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers } from '../services/socket';
+import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
+import { AVALON_CONFIG } from '@avalon/shared';
+import ChatPanel from '../components/ChatPanel';
+
+const ROLE_LABEL: Record<string, string> = {
+  merlin: '梅林', percival: '派西維爾', loyal: '忠臣',
+  assassin: '刺客', morgana: '莫甘娜', oberon: '奧伯倫', mordred: '莫德雷德',
+};
+const GOOD_ROLES = new Set(['merlin', 'percival', 'loyal']);
 
 export default function LobbyPage(): JSX.Element {
   const { room, currentPlayer } = useGameStore();
@@ -15,6 +23,11 @@ export default function LobbyPage(): JSX.Element {
   const isHost = room.host === currentPlayer.id;
   const canStart = playerList.length >= 5;
   const shortCode = room.id.slice(0, 8).toUpperCase();
+
+  // Role preview based on current player count
+  const previewConfig = AVALON_CONFIG[playerList.length];
+  const goodRoles  = previewConfig?.roles.filter(r => GOOD_ROLES.has(r)) ?? [];
+  const evilRoles  = previewConfig?.roles.filter(r => !GOOD_ROLES.has(r)) ?? [];
 
   const handleCopyRoomId = () => {
     navigator.clipboard.writeText(shortCode).then(() => {
@@ -32,6 +45,7 @@ export default function LobbyPage(): JSX.Element {
   };
 
   return (
+    <>
     <div className="flex items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-2xl space-y-6">
         {/* Header */}
@@ -70,14 +84,59 @@ export default function LobbyPage(): JSX.Element {
           </div>
         </div>
 
+        {/* Role preview for current player count */}
+        {previewConfig && (
+          <div className="bg-avalon-card/30 border border-gray-700 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
+              {playerList.length} 人局角色預覽
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {[...goodRoles, ...evilRoles].map((role, i) => (
+                <span
+                  key={i}
+                  className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
+                    GOOD_ROLES.has(role)
+                      ? 'bg-blue-900/40 border-blue-700/60 text-blue-300'
+                      : 'bg-red-900/40 border-red-700/60 text-red-300'
+                  }`}
+                >
+                  {ROLE_LABEL[role] ?? role}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Players */}
         <div className="bg-avalon-card/50 border border-gray-600 rounded-lg p-6">
           <div className="flex items-center gap-2 mb-5">
             <Users size={22} />
             <h2 className="text-xl font-bold">
-              玩家列表 (Players) ({playerList.length}/{room.maxPlayers})
+              玩家列表 ({playerList.length}/{room.maxPlayers})
             </h2>
-            {!canStart && (
+            {/* Host: adjust max players */}
+            {isHost && (
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  onClick={() => setMaxPlayers(room.id, room.maxPlayers - 1)}
+                  disabled={room.maxPlayers <= Math.max(5, playerList.length)}
+                  className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="減少人數上限"
+                >
+                  <ChevronDown size={14} />
+                </button>
+                <span className="text-xs text-gray-400 w-8 text-center">{room.maxPlayers}人</span>
+                <button
+                  onClick={() => setMaxPlayers(room.id, room.maxPlayers + 1)}
+                  disabled={room.maxPlayers >= 10}
+                  className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="增加人數上限"
+                >
+                  <ChevronUp size={14} />
+                </button>
+              </div>
+            )}
+            {!isHost && !canStart && (
               <span className="ml-auto text-xs text-yellow-400 bg-yellow-900/30 border border-yellow-700 px-2 py-1 rounded-full">
                 還需要 {5 - playerList.length} 人
               </span>
@@ -130,6 +189,13 @@ export default function LobbyPage(): JSX.Element {
         {/* Start Button */}
         {isHost && (
           <div className="space-y-3">
+            <button
+              onClick={() => leaveRoom(room.id)}
+              className="w-full flex items-center justify-center gap-2 bg-gray-800/40 hover:bg-red-900/20 border border-gray-700 hover:border-red-700 text-gray-500 hover:text-red-400 font-medium py-1.5 px-4 rounded-lg transition-all text-xs"
+            >
+              <LogOut size={13} />
+              解散房間 / 移交房主 (Leave / Transfer host)
+            </button>
             {!canStart && (
               <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-yellow-200 text-sm text-center">
                 至少需要 5 名玩家才能開始（目前 {playerList.length} 人）(At least 5 players required to start)
@@ -161,11 +227,24 @@ export default function LobbyPage(): JSX.Element {
         )}
 
         {!isHost && (
-          <div className="text-center text-gray-400 py-2">
-            等待房主開始遊戲... (Waiting for host to start the game...)
+          <div className="space-y-3">
+            <div className="text-center text-gray-400 py-2">
+              等待房主開始遊戲... (Waiting for host to start the game...)
+            </div>
+            <button
+              onClick={() => leaveRoom(room.id)}
+              className="w-full flex items-center justify-center gap-2 bg-gray-800/60 hover:bg-red-900/30 border border-gray-600 hover:border-red-600 text-gray-400 hover:text-red-400 font-semibold py-2 px-4 rounded-lg transition-all text-sm"
+            >
+              <LogOut size={16} />
+              離開房間 (Leave Room)
+            </button>
           </div>
         )}
       </div>
     </div>
+
+    {/* Floating chat — available in lobby */}
+    <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} />
+    </>
   );
 }
