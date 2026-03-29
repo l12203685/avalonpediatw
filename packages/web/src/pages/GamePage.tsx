@@ -12,6 +12,7 @@ import ChatPanel from '../components/ChatPanel';
 import HistoryPanel from '../components/HistoryPanel';
 import MissionTrack from '../components/MissionTrack';
 import SuspicionBoard from '../components/SuspicionBoard';
+import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
 import audioService from '../services/audio';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Bell, RefreshCw, Volume2, VolumeX } from 'lucide-react';
@@ -493,6 +494,9 @@ export default function GamePage(): JSX.Element {
                 );
               })}
             </div>
+
+            {/* Vote analysis — collapsible, only shown when there's history */}
+            <VoteAnalysisPanel room={room} currentPlayer={currentPlayer} />
 
             <div className="flex items-center justify-center gap-3 flex-wrap">
               {room.host === currentPlayer.id && (

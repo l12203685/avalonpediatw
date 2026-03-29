@@ -41,6 +41,23 @@ export default function VotePanel({
   // 時間警告
   const isUrgent = timeLeft < 10;
 
+  // Keyboard shortcuts: Y/1 = approve, N/2 = reject
+  useEffect(() => {
+    if (hasVoted || isLoading) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'y' || e.key === 'Y' || e.key === '1') {
+        audioService.playSound('vote');
+        onVote(true);
+      } else if (e.key === 'n' || e.key === 'N' || e.key === '2') {
+        audioService.playSound('vote');
+        onVote(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [hasVoted, isLoading, onVote]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -105,31 +122,35 @@ export default function VotePanel({
       </div>
 
       {/* 投票按鈕 */}
-      {!hasVoted ? (
-        <div className="flex justify-center gap-6">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => { audioService.playSound('vote'); onVote(true); }}
-            disabled={isLoading}
-            className="flex items-center gap-2 bg-avalon-good hover:bg-avalon-good/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
-          >
-            <ThumbsUp size={20} />
-            {isLoading ? '投票中…' : '贊成 (Approve)'}
-          </motion.button>
+      {!hasVoted && (
+        <div className="space-y-3">
+          <div className="flex justify-center gap-6">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => { audioService.playSound('vote'); onVote(true); }}
+              disabled={isLoading}
+              className="flex items-center gap-2 bg-avalon-good hover:bg-avalon-good/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
+            >
+              <ThumbsUp size={20} />
+              {isLoading ? '投票中…' : '贊成 (Approve)'}
+            </motion.button>
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => { audioService.playSound('vote'); onVote(false); }}
-            disabled={isLoading}
-            className="flex items-center gap-2 bg-avalon-evil hover:bg-avalon-evil/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
-          >
-            <ThumbsDown size={20} />
-            {isLoading ? '投票中…' : '拒絕 (Reject)'}
-          </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => { audioService.playSound('vote'); onVote(false); }}
+              disabled={isLoading}
+              className="flex items-center gap-2 bg-avalon-evil hover:bg-avalon-evil/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
+            >
+              <ThumbsDown size={20} />
+              {isLoading ? '投票中…' : '拒絕 (Reject)'}
+            </motion.button>
+          </div>
+          <p className="text-center text-xs text-gray-600">快捷鍵 (Shortcuts)：<kbd className="bg-gray-800 px-1 rounded">Y</kbd> 贊成・<kbd className="bg-gray-800 px-1 rounded">N</kbd> 拒絕</p>
         </div>
-      ) : (
+      )}
+      {hasVoted && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

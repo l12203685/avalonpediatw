@@ -45,6 +45,18 @@ export default function QuestPanel({
     }
   };
 
+  // Keyboard shortcuts: S = success, F = fail
+  useEffect(() => {
+    if (!isInTeam || hasVoted || isSubmitting) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 's' || e.key === 'S') handleVote('success');
+      else if (e.key === 'f' || e.key === 'F') handleVote('fail');
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isInTeam, hasVoted, isSubmitting]);
+
   if (!isInTeam) {
     const votedCount = room.questVotedCount ?? 0;
     const teamSize = room.questTeam.length;
@@ -154,12 +166,13 @@ export default function QuestPanel({
 
       {/* 提示信息 */}
       {!hasVoted && (
-        <div className="text-center text-sm text-gray-400">
+        <div className="text-center text-sm text-gray-400 space-y-1">
           <p>
             {room.questTeam.length === 1
               ? '只有你在投票…'
               : `${room.questTeam.length} 位隊員投票中…`}
           </p>
+          <p className="text-xs text-gray-600">快捷鍵 (Shortcuts)：<kbd className="bg-gray-800 px-1 rounded">S</kbd> 成功・<kbd className="bg-gray-800 px-1 rounded">F</kbd> 失敗</p>
         </div>
       )}
     </motion.div>
