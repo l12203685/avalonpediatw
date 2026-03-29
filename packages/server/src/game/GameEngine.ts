@@ -154,7 +154,8 @@ export class GameEngine {
       throw new Error(`No config for ${playerCount} players`);
     }
 
-    const opts = this.room.roleOptions;
+    // Fallback: if roleOptions is missing (legacy room), treat all as enabled
+    const opts = this.room.roleOptions ?? { percival: true, morgana: true, oberon: true, mordred: true };
     // Build role list from config, substituting disabled optional roles
     const roles = config.roles.map(role => {
       if (role === 'percival'  && !opts.percival)  return 'loyal' as Role;
