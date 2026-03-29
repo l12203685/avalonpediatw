@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { startGame } from '../services/socket';
-import { Users, Play, Copy, Check, Link } from 'lucide-react';
+import { startGame, kickPlayer } from '../services/socket';
+import { Users, Play, Copy, Check, Link, X } from 'lucide-react';
 
 export default function LobbyPage(): JSX.Element {
   const { room, currentPlayer } = useGameStore();
@@ -107,6 +107,15 @@ export default function LobbyPage(): JSX.Element {
                     {player.status === 'disconnected' && <span className="text-red-400"> · 斷線 (Disconnected)</span>}
                   </p>
                 </div>
+                {isHost && player.id !== currentPlayer.id && (
+                  <button
+                    onClick={() => kickPlayer(room.id, player.id)}
+                    className="flex-shrink-0 p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                    title={`踢出 ${player.name} (Kick)`}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
             ))}
           </div>

@@ -99,6 +99,10 @@ export class GameServer {
         this.handleChatMessage(socket, roomId, message);
       });
 
+      socket.on('game:kick-player', (roomId: string, targetPlayerId: string) => {
+        this.handleKickPlayer(socket, roomId, targetPlayerId);
+      });
+
       socket.on('game:list-rooms', () => {
         const openRooms = this.roomManager.getAllRooms()
           .filter(r => r.state === 'lobby' && !r.id.startsWith('AI-'))
@@ -146,8 +150,8 @@ export class GameServer {
       if (pid === playerId || !p.role) continue;
 
       if (myRole === 'merlin') {
-        // Merlin sees all evil except Oberon
-        if (p.team === 'evil' && p.role !== 'oberon') visible.add(pid);
+        // Merlin sees all evil except Oberon and Mordred
+        if (p.team === 'evil' && p.role !== 'oberon' && p.role !== 'mordred') visible.add(pid);
       } else if (myRole === 'percival') {
         // Percival sees Merlin and Morgana (can't distinguish)
         if (p.role === 'merlin' || p.role === 'morgana') visible.add(pid);
@@ -677,6 +681,53 @@ export class GameServer {
       });
     } catch (error) {
       console.error('Error sending chat message:', error);
+    }
+  }
+
+  private handleKickPlayer(socket: Socket, roomId: string, targetPlayerId: string): void {
+    try {
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+
+      // Only host can kick
+      const requesterId = socket.data.playerId as string;
+      if (room.host !== requesterId) {
+        socket.emit('error', 'Only the host can kick players');
+        return;
+      }
+
+      // Can only kick during lobby
+      if (room.state !== 'lobby') {
+        socket.emit('error', 'Cannot kick players after game has started');
+        return;
+      }
+
+      // Cannot kick yourself
+      if (targetPlayerId === requesterId) {
+        socket.emit('error', 'Cannot kick yourself');
+        return;
+      }
+
+      if (!(targetPlayerId in room.players)) {
+        socket.emit('error', 'Player not in room');
+        return;
+      }
+
+      // Remove player from room
+      delete room.players[targetPlayerId];
+
+      // Notify the kicked player
+      const kickedSocketId = this.playerToSocket.get(targetPlayerId);
+      if (kickedSocketId) {
+        this.io.to(kickedSocketId).emit('game:kicked', roomId);
+        this.playerToSocket.delete(targetPlayerId);
+      }
+
+      this.broadcastRoomState(roomId, room);
+      console.log(`✓ Player ${targetPlayerId} kicked from room ${roomId} by host ${requesterId}`);
+    } catch (error) {
+      console.error('Error kicking player:', error);
+      socket.emit('error', 'Failed to kick player');
     }
   }
 

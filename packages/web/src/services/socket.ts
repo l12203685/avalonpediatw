@@ -118,6 +118,12 @@ export async function initializeSocket(token: string): Promise<void> {
     store.addToast(`${name} 斷線`, 'info');
   });
 
+  socket.on('game:kicked', (_roomId: string) => {
+    store.addToast('你已被房主移出房間 (You were kicked from the room)', 'error');
+    store.setRoom(null);
+    store.setGameState('home');
+  });
+
   socket.on('game:started', (room: Room) => {
     store.updateRoom(room);
     store.setGameState('voting');
@@ -209,4 +215,9 @@ export function sendChatMessage(roomId: string, message: string): void {
 export function listRooms(): void {
   const socket = getSocket();
   socket.emit('game:list-rooms');
+}
+
+export function kickPlayer(roomId: string, targetPlayerId: string): void {
+  const socket = getSocket();
+  socket.emit('game:kick-player', roomId, targetPlayerId);
 }
