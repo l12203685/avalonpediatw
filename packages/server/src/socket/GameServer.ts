@@ -43,6 +43,8 @@ export class GameServer {
   private roomStartTimes: Map<string, number> = new Map();
   // playerId → socketId (for per-player state delivery)
   private playerToSocket: Map<string, string> = new Map();
+  // roomId → Set of spectator socketIds
+  private spectators: Map<string, Set<string>> = new Map();
 
   constructor(io: SocketIOServer) {
     this.io = io;
@@ -127,17 +129,27 @@ export class GameServer {
         this.handleSetMaxPlayers(socket, roomId, count);
       });
 
+      socket.on('game:spectate-room', (roomId: string) => {
+        this.handleSpectateRoom(socket, roomId);
+      });
+
+      socket.on('game:leave-spectate', (roomId: string) => {
+        this.handleLeaveSpectate(socket, roomId);
+      });
+
       socket.on('game:list-rooms', () => {
         const openRooms = this.roomManager.getAllRooms()
-          .filter(r => r.state === 'lobby' && !r.id.startsWith('AI-'))
+          .filter(r => r.state !== 'ended' && !r.id.startsWith('AI-'))
           .map(r => ({
             id:          r.id.slice(0, 8).toUpperCase(),
+            fullId:      r.id,
             name:        r.name,
-            playerCount: Object.values(r.players).filter(p => p.status === 'active').length,
+            playerCount: Object.values(r.players).filter(p => !p.isBot).length,
             maxPlayers:  r.maxPlayers,
             createdAt:   r.createdAt,
+            inProgress:  r.state !== 'lobby',
           }))
-          .sort((a, b) => b.createdAt - a.createdAt);
+          .sort((a, b) => (a.inProgress ? 1 : 0) - (b.inProgress ? 1 : 0) || b.createdAt - a.createdAt);
         socket.emit('game:rooms-list', openRooms);
       });
 
@@ -216,6 +228,7 @@ export class GameServer {
 
   /**
    * Broadcast room state to every socket in the room, each receiving only their own role.
+   * Also broadcasts spectator-sanitized state to any watching sockets.
    */
   private broadcastRoomState(roomId: string, room: Room, revealAll = false): void {
     for (const [pid, socketId] of this.playerToSocket.entries()) {
@@ -223,6 +236,27 @@ export class GameServer {
         this.io.to(socketId).emit('game:state-updated', this.sanitizeRoomForPlayer(room, pid, revealAll));
       }
     }
+    // Spectators get the room with all roles hidden (unless ended)
+    const spectatorSet = this.spectators.get(roomId);
+    if (spectatorSet && spectatorSet.size > 0) {
+      const spectatorRoom = this.sanitizeRoomForSpectator(room, revealAll);
+      for (const sid of spectatorSet) {
+        this.io.to(sid).emit('game:state-updated', spectatorRoom);
+      }
+    }
+  }
+
+  private sanitizeRoomForSpectator(room: Room, revealAll = false): Room {
+    const players: Record<string, Player> = {};
+    for (const [pid, player] of Object.entries(room.players)) {
+      players[pid] = revealAll ? player : { ...player, role: null, team: null, vote: undefined };
+    }
+    // Spectators never see individual vote directions
+    const votes: Record<string, boolean> = {};
+    for (const vid of Object.keys(room.votes)) {
+      votes[vid] = true; // just show "has voted"
+    }
+    return { ...room, players, votes };
   }
 
   private handleCreateRoom(socket: Socket, playerName: string, user: User): void {
@@ -1006,6 +1040,49 @@ export class GameServer {
     }, delay);
   }
 
+  private handleSpectateRoom(socket: Socket, roomId: string): void {
+    try {
+      // Normalize short code to full ID
+      const allRooms = this.roomManager.getAllRooms();
+      const room = allRooms.find(r => r.id === roomId || r.id.slice(0, 8).toUpperCase() === roomId.toUpperCase());
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.state === 'lobby' || room.state === 'ended') {
+        socket.emit('error', '此房間不可觀戰 (No spectating in lobby/ended rooms)');
+        return;
+      }
+      // Cannot spectate if already a player
+      const playerId = socket.data.user?.uid as string;
+      if (room.players[playerId]) {
+        socket.emit('error', 'Already a player in this room');
+        return;
+      }
+
+      const fullRoomId = room.id;
+      socket.join(fullRoomId);
+      socket.data.spectatingRoomId = fullRoomId;
+      if (!this.spectators.has(fullRoomId)) {
+        this.spectators.set(fullRoomId, new Set());
+      }
+      this.spectators.get(fullRoomId)!.add(socket.id);
+
+      // Send current state immediately
+      const spectatorRoom = this.sanitizeRoomForSpectator(room);
+      socket.emit('game:state-updated', spectatorRoom);
+      socket.emit('game:spectating', fullRoomId);
+      console.log(`👁 Spectator joined room ${fullRoomId} (${socket.id})`);
+    } catch (err) {
+      console.error('Error handling spectate-room:', err);
+    }
+  }
+
+  private handleLeaveSpectate(socket: Socket, roomId: string): void {
+    const spectatorSet = this.spectators.get(roomId);
+    if (spectatorSet) spectatorSet.delete(socket.id);
+    socket.leave(roomId);
+    socket.data.spectatingRoomId = undefined;
+    socket.emit('game:left-room');
+  }
+
   private handleLeaveRoom(socket: Socket, roomId: string): void {
     try {
       const room = this.roomManager.getRoom(roomId);
@@ -1204,6 +1281,13 @@ export class GameServer {
   }
 
   private handleDisconnect(socket: Socket): void {
+    // Clean up spectator registration
+    const spectatingRoomId = socket.data.spectatingRoomId as string | undefined;
+    if (spectatingRoomId) {
+      const spectatorSet = this.spectators.get(spectatingRoomId);
+      if (spectatorSet) spectatorSet.delete(socket.id);
+    }
+
     const roomId   = socket.data.roomId;
     const playerId = socket.data.playerId;
     if (playerId) this.playerToSocket.delete(playerId);

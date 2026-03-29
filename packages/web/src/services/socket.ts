@@ -175,6 +175,11 @@ export async function initializeSocket(token: string): Promise<void> {
     store.addToast(`${name} 斷線`, 'info');
   });
 
+  socket.on('game:spectating', (roomId: string) => {
+    useGameStore.getState().setSpectating(true);
+    console.log('👁 Spectating room:', roomId);
+  });
+
   socket.on('game:kicked', (_roomId: string) => {
     store.addToast('你已被房主移出房間 (You were kicked from the room)', 'error');
     store.setRoom(null);
@@ -184,6 +189,7 @@ export async function initializeSocket(token: string): Promise<void> {
   socket.on('game:left-room', () => {
     store.setRoom(null);
     store.setGameState('home');
+    store.setSpectating(false);
   });
 
   socket.on('game:started', (room: Room) => {
@@ -315,6 +321,16 @@ export function requestRematch(roomId: string): void {
 export function leaveRoom(roomId: string): void {
   const socket = getSocket();
   socket.emit('game:leave-room', roomId);
+}
+
+export function spectateRoom(roomId: string): void {
+  const socket = getSocket();
+  socket.emit('game:spectate-room', roomId);
+}
+
+export function leaveSpectate(roomId: string): void {
+  const socket = getSocket();
+  socket.emit('game:leave-spectate', roomId);
 }
 
 export function setMaxPlayers(roomId: string, count: number): void {

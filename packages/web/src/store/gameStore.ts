@@ -17,6 +17,7 @@ interface GameStore {
   profileUserId: string | null;
   toasts: Toast[];
   socketStatus: SocketStatus;
+  isSpectator: boolean;
   setGameState: (state: GameState) => void;
   setRoom: (room: Room | null) => void;
   setCurrentPlayer: (player: Player | null) => void;
@@ -25,6 +26,7 @@ interface GameStore {
   addToast: (message: string, type?: Toast['type']) => void;
   removeToast: (id: string) => void;
   setSocketStatus: (status: SocketStatus) => void;
+  setSpectating: (value: boolean) => void;
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -34,10 +36,12 @@ export const useGameStore = create<GameStore>((set) => ({
   profileUserId: null,
   toasts: [],
   socketStatus: 'disconnected',
+  isSpectator: false,
 
   setGameState: (state: GameState) => set({ gameState: state }),
   navigateToProfile: (userId) => set({ gameState: 'profile', profileUserId: userId }),
   setSocketStatus: (status: SocketStatus) => set({ socketStatus: status }),
+  setSpectating: (value: boolean) => set({ isSpectator: value }),
 
   setRoom: (room: Room | null) => {
     if (!room) localStorage.removeItem('avalon_room');

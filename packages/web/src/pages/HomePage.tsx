@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { createRoom, joinRoom, listRooms, getSocket } from '../services/socket';
+import { createRoom, joinRoom, listRooms, spectateRoom, getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
-import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw } from 'lucide-react';
+import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye } from 'lucide-react';
 
 interface OpenRoom {
   id: string;
+  fullId: string;
   name: string;
   playerCount: number;
   maxPlayers: number;
   createdAt: number;
+  inProgress: boolean;
 }
 
 export default function HomePage(): JSX.Element {
@@ -266,19 +268,43 @@ export default function HomePage(): JSX.Element {
                 </div>
                 <div className="space-y-2">
                   {openRooms.map(r => (
-                    <button
+                    <div
                       key={r.id}
-                      onClick={() => { setRoomId(r.id); setMode('join'); }}
-                      className="w-full flex items-center justify-between bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 hover:border-gray-500 rounded-lg px-3 py-2 transition-all"
+                      className="w-full flex items-center justify-between bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2"
                     >
-                      <span className="text-sm font-semibold text-white truncate">{r.name}</span>
-                      <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
-                        <span className={r.playerCount >= 5 ? 'text-green-400' : 'text-yellow-400'}>
-                          {r.playerCount}
+                      <div className="flex items-center gap-2 min-w-0">
+                        {r.inProgress && (
+                          <span className="text-xs px-1.5 py-0.5 bg-red-900/50 border border-red-700 text-red-400 rounded font-semibold flex-shrink-0">進行中</span>
+                        )}
+                        <span className="text-sm font-semibold text-white truncate">{r.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <span className="text-xs text-gray-400">
+                          <span className={r.playerCount >= 5 ? 'text-green-400' : 'text-yellow-400'}>
+                            {r.playerCount}
+                          </span>
+                          /{r.maxPlayers}
                         </span>
-                        /{r.maxPlayers} 人
-                      </span>
-                    </button>
+                        {r.inProgress ? (
+                          <button
+                            onClick={() => spectateRoom(r.fullId)}
+                            className="flex items-center gap-1 text-xs px-2 py-1 bg-purple-900/50 hover:bg-purple-800/60 border border-purple-700 text-purple-300 rounded transition-colors"
+                            title="觀戰 (Spectate)"
+                          >
+                            <Eye size={11} />
+                            觀戰
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => { setRoomId(r.id); setMode('join'); }}
+                            className="flex items-center gap-1 text-xs px-2 py-1 bg-blue-900/50 hover:bg-blue-800/60 border border-blue-700 text-blue-300 rounded transition-colors"
+                          >
+                            <LogIn size={11} />
+                            加入
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </motion.div>

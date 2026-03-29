@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { submitVote, submitAssassination, requestRematch } from '../services/socket';
+import { submitVote, submitAssassination, requestRematch, leaveSpectate } from '../services/socket';
 import GameBoard from '../components/GameBoard';
 import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
@@ -15,7 +15,7 @@ import { AVALON_CONFIG } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 
 export default function GamePage(): JSX.Element {
-  const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer } = useGameStore();
+  const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer, isSpectator } = useGameStore();
   const [isVoting, setIsVoting] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [isAssassinating, setIsAssassinating] = useState(false);
@@ -108,7 +108,7 @@ export default function GamePage(): JSX.Element {
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4">
       {/* Role Reveal Modal */}
-      {showRoleReveal && room.state !== 'ended' && (
+      {showRoleReveal && room.state !== 'ended' && !isSpectator && (
         <RoleRevealModal
           room={room}
           currentPlayer={currentPlayer}
@@ -117,6 +117,19 @@ export default function GamePage(): JSX.Element {
       )}
 
       <div className="max-w-6xl mx-auto space-y-8">
+        {/* Spectator banner */}
+        {isSpectator && (
+          <div className="flex items-center justify-between bg-purple-900/40 border border-purple-600 rounded-xl px-4 py-2">
+            <span className="text-purple-300 text-sm font-semibold">👁 觀戰模式 — 角色已隱藏 (Spectating — roles hidden)</span>
+            <button
+              onClick={() => room && leaveSpectate(room.id)}
+              className="text-xs text-purple-400 hover:text-white border border-purple-600 hover:border-white px-3 py-1 rounded-lg transition-colors"
+            >
+              離開觀戰
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="text-center">
           <h1 className="text-5xl font-bold text-white mb-2">🎭 Avalon</h1>
@@ -174,7 +187,7 @@ export default function GamePage(): JSX.Element {
         <HistoryPanel room={room} currentPlayer={currentPlayer} />
 
         {/* Voting Phase */}
-        {room.state === 'voting' && (
+        {room.state === 'voting' && !isSpectator && (
           <>
             {!teamSelected ? (
               /* Step 1: Leader selects team */
@@ -214,10 +227,10 @@ export default function GamePage(): JSX.Element {
         )}
 
         {/* Quest Phase */}
-        {room.state === 'quest' && <QuestPanel room={room} currentPlayer={currentPlayer} />}
+        {room.state === 'quest' && !isSpectator && <QuestPanel room={room} currentPlayer={currentPlayer} />}
 
         {/* Discussion Phase - Assassination */}
-        {room.state === 'discussion' && (
+        {room.state === 'discussion' && !isSpectator && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
