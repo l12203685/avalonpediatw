@@ -44,6 +44,7 @@ export class RoomManager {
         oberon: false,
         mordred: false,
       },
+      readyPlayerIds: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

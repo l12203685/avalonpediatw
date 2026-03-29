@@ -133,6 +133,10 @@ export class GameServer {
         this.handleSetRoleOptions(socket, roomId, options);
       });
 
+      socket.on('game:toggle-ready', (roomId: string, playerId: string) => {
+        this.handleToggleReady(socket, roomId, playerId);
+      });
+
       socket.on('game:spectate-room', (roomId: string) => {
         this.handleSpectateRoom(socket, roomId);
       });
@@ -392,6 +396,8 @@ export class GameServer {
 
       gameEngine.startGame();
       const updatedRoom = this.roomManager.getRoom(roomId)!;
+      // Clear ready flags now that the game has started
+      updatedRoom.readyPlayerIds = [];
 
       this.roomStartTimes.set(roomId, Date.now());
       updateRoomState(roomId, 'playing').catch(err =>
@@ -1157,6 +1163,28 @@ export class GameServer {
     } catch (error) {
       console.error('Error setting role options:', error);
       socket.emit('error', 'Failed to set role options');
+    }
+  }
+
+  private handleToggleReady(socket: Socket, roomId: string, playerId: string): void {
+    try {
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.state !== 'lobby') return; // only in lobby
+
+      // Ensure readyPlayerIds exists (backward compat)
+      if (!room.readyPlayerIds) room.readyPlayerIds = [];
+
+      const idx = room.readyPlayerIds.indexOf(playerId);
+      if (idx >= 0) {
+        room.readyPlayerIds.splice(idx, 1); // un-ready
+      } else {
+        room.readyPlayerIds.push(playerId); // ready
+      }
+      room.updatedAt = Date.now();
+      this.broadcastRoomState(roomId, room);
+    } catch (error) {
+      console.error('Error toggling ready:', error);
     }
   }
 

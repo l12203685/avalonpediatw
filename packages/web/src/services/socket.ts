@@ -313,3 +313,8 @@ export function setRoleOptions(roomId: string, options: Record<string, boolean>)
   const socket = getSocket();
   socket.emit('game:set-role-options', roomId, options);
 }
+
+export function toggleReady(roomId: string, playerId: string): void {
+  const socket = getSocket();
+  socket.emit('game:toggle-ready', roomId, playerId);
+}

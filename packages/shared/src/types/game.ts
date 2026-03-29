@@ -64,6 +64,7 @@ export interface Room {
   endReason?: 'failed_quests' | 'vote_rejections' | 'merlin_assassinated' | 'assassination_failed' | 'assassination_timeout'; // Why game ended
   assassinTargetId?: string;   // ID of the player the assassin targeted (set on game end)
   roleOptions: RoleOptions;    // Host-configured optional role toggles
+  readyPlayerIds: string[];    // Player IDs who clicked "Ready" in lobby
   createdAt: number;
   updatedAt: number;
 }

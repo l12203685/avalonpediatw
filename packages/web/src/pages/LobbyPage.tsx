@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions } from '../services/socket';
+import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady } from '../services/socket';
 import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
 import ChatPanel from '../components/ChatPanel';
@@ -30,6 +30,10 @@ export default function LobbyPage(): JSX.Element {
   const playerList = Object.values(room.players);
   const isHost = room.host === currentPlayer.id;
   const canStart = playerList.length >= 5;
+  const readyIds = room.readyPlayerIds ?? [];
+  const isReady = readyIds.includes(currentPlayer.id);
+  const humanPlayers = playerList.filter(p => !p.isBot && p.id !== room.host);
+  const readyCount = humanPlayers.filter(p => readyIds.includes(p.id)).length;
   const shortCode = room.id.slice(0, 8).toUpperCase();
 
   // Role preview based on current player count
@@ -242,6 +246,16 @@ export default function LobbyPage(): JSX.Element {
                     {player.status === 'disconnected' && !player.isBot && <span className="text-red-400"> · 斷線 (Disconnected)</span>}
                   </p>
                 </div>
+                {/* Ready badge */}
+                {!player.isBot && player.id !== room.host && (
+                  <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-bold border ${
+                    readyIds.includes(player.id)
+                      ? 'bg-green-900/50 border-green-600 text-green-300'
+                      : 'bg-gray-800/50 border-gray-700 text-gray-600'
+                  }`}>
+                    {readyIds.includes(player.id) ? '✓ 準備' : '…'}
+                  </span>
+                )}
                 {isHost && player.id !== currentPlayer.id && (
                   <button
                     onClick={() => player.isBot ? removeBot(room.id, player.id) : kickPlayer(room.id, player.id)}
@@ -271,6 +285,18 @@ export default function LobbyPage(): JSX.Element {
                 至少需要 5 名玩家才能開始（目前 {playerList.length} 人）(At least 5 players required to start)
               </div>
             )}
+            {/* Ready status summary */}
+            {humanPlayers.length > 0 && (
+              <div className={`text-sm text-center py-2 rounded-lg border ${
+                readyCount === humanPlayers.length
+                  ? 'bg-green-900/30 border-green-700 text-green-300'
+                  : 'bg-gray-800/30 border-gray-700 text-gray-400'
+              }`}>
+                {readyCount === humanPlayers.length
+                  ? `✓ 所有玩家已準備好！(All ${readyCount} players ready)`
+                  : `${readyCount}/${humanPlayers.length} 位玩家已準備 (players ready)`}
+              </div>
+            )}
             {/* Add Bot button (only if room not full) */}
             {playerList.length < room.maxPlayers && (
               <button
@@ -298,7 +324,18 @@ export default function LobbyPage(): JSX.Element {
 
         {!isHost && (
           <div className="space-y-3">
-            <div className="text-center text-gray-400 py-2">
+            {/* Ready button for non-host players */}
+            <button
+              onClick={() => toggleReady(room.id, currentPlayer.id)}
+              className={`w-full font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 border-2 ${
+                isReady
+                  ? 'bg-green-900/50 border-green-500 text-green-300 hover:bg-red-900/30 hover:border-red-600 hover:text-red-300'
+                  : 'bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-green-900/30 hover:border-green-600 hover:text-green-300'
+              }`}
+            >
+              {isReady ? '✓ 已準備（點擊取消）' : '準備好了 (Ready)'}
+            </button>
+            <div className="text-center text-gray-500 text-sm py-1">
               等待房主開始遊戲... (Waiting for host to start the game...)
             </div>
             <button
