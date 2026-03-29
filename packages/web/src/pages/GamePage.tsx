@@ -8,8 +8,8 @@ import TeamSelectionPanel from '../components/TeamSelectionPanel';
 import RoleRevealModal from '../components/RoleRevealModal';
 import ChatPanel from '../components/ChatPanel';
 import HistoryPanel from '../components/HistoryPanel';
-import { motion } from 'framer-motion';
-import { Home } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Home, Bell } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
 
 export default function GamePage(): JSX.Element {
@@ -66,6 +66,27 @@ export default function GamePage(): JSX.Element {
     lobby: '等待中 (Lobby)',
   };
 
+  // Determine if this player needs to act right now
+  const alreadyVoted = room.votes[currentPlayer.id] !== undefined;
+  const isOnQuestTeam = room.questTeam.includes(currentPlayer.id);
+  const isAssassin = currentPlayer.role === 'assassin';
+  type ActionBanner = { msg: string; color: string } | null;
+  const actionBanner: ActionBanner =
+    room.state === 'voting' && !teamSelected && isCurrentPlayerLeader
+      ? { msg: '👑 輪到你了！請選擇任務隊伍 (Your turn — select a quest team)', color: 'border-purple-500 bg-purple-900/30 text-purple-200' }
+      : room.state === 'voting' && teamSelected && !alreadyVoted
+      ? { msg: '🗳️ 輪到你投票！贊成或拒絕此隊伍 (Your turn to vote — approve or reject)', color: 'border-yellow-500 bg-yellow-900/30 text-yellow-200' }
+      : room.state === 'quest' && isOnQuestTeam
+      ? { msg: '⚔️ 你在任務隊伍中！請投票成功或失敗 (You are on the quest — vote success or fail)', color: 'border-blue-500 bg-blue-900/30 text-blue-200' }
+      : room.state === 'discussion' && isAssassin
+      ? { msg: '🗡️ 你是刺客！選擇目標刺殺梅林 (You are the Assassin — choose your target)', color: 'border-red-500 bg-red-900/30 text-red-200' }
+      : null;
+
+  // Role composition from config
+  const config = AVALON_CONFIG[playerIds.length];
+  const goodCount = config?.roles.filter(r => ['merlin','percival','loyal'].includes(r)).length ?? 0;
+  const evilCount = config?.roles.filter(r => !['merlin','percival','loyal'].includes(r)).length ?? 0;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4">
       {/* Role Reveal Modal */}
@@ -98,6 +119,37 @@ export default function GamePage(): JSX.Element {
               查看角色
             </button>
           </div>
+        </div>
+
+        {/* Role composition + action banner row */}
+        <div className="flex flex-col gap-2">
+          {/* Role composition strip */}
+          {room.state !== 'ended' && config && (
+            <div className="flex justify-center gap-3 text-xs text-gray-400 flex-wrap">
+              <span className="bg-blue-900/30 border border-blue-700/50 px-3 py-1 rounded-full">
+                🔵 正義方 {goodCount} 人
+              </span>
+              <span className="bg-red-900/30 border border-red-700/50 px-3 py-1 rounded-full">
+                🔴 邪惡方 {evilCount} 人
+              </span>
+            </div>
+          )}
+
+          {/* Your-turn action banner */}
+          <AnimatePresence>
+            {actionBanner && (
+              <motion.div
+                key={actionBanner.msg}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className={`flex items-center gap-2 border rounded-lg px-4 py-3 text-sm font-semibold ${actionBanner.color}`}
+              >
+                <Bell size={16} className="flex-shrink-0" />
+                {actionBanner.msg}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Game Board */}
