@@ -30,9 +30,10 @@ const EVENT_ICONS: Record<string, string> = {
   game_started:              '🎮',
   voting_phase_started:      '🗳️',
   quest_team_selected:       '⚔️',
+  team_auto_selected:        '⏱️',
   voting_resolved:           '📊',
   team_approved:             '✅',
-  quest_vote_submitted:      '🗡️',
+  quest_vote_submitted:      '⚔️',
   quest_resolved:            '🏰',
   round_ended:               '🔄',
   discussion_phase_started:  '🎯',
@@ -52,6 +53,8 @@ function formatReplayEvent(ev: GameEvent): string {
     }
     case 'quest_team_selected':
       return `領袖提案：${(d.team as string[])?.join('、')}`;
+    case 'team_auto_selected':
+      return `⏱ 領袖超時，自動選隊：${(d.team as string[])?.join('、')}`;
     case 'voting_resolved': {
       const approved = (d.result === 'approved' || d.approved) ? '✅ 通過' : '❌ 否決';
       return `投票結果：${approved}（${(d.approvals ?? d.approveCount) as number}贊成，${(d.rejections ?? d.rejectCount) as number}反對）`;

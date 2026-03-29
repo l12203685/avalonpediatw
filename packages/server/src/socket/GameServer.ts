@@ -694,7 +694,7 @@ export class GameServer {
 
       // Award badges based on this game's results
       for (const record of records) {
-        const badges = this.evaluateBadges(record, playerCount, records);
+        const badges = this.evaluateBadges(record, playerCount, records, room);
         if (badges.length > 0) {
           await awardBadges(record.player_user_id, badges);
         }
@@ -716,26 +716,38 @@ export class GameServer {
     }
   }
 
-  private evaluateBadges(record: DbGameRecord, playerCount: number, allRecords: DbGameRecord[]): string[] {
+  private evaluateBadges(record: DbGameRecord, playerCount: number, _allRecords: DbGameRecord[], room: Room): string[] {
     const badges: string[] = [];
 
     // 首次勝利
     if (record.won) badges.push('初勝');
 
-    // 梅林之盾 — 以梅林身份獲勝
+    // 梅林之盾 — 以梅林身份獲勝（且未被暗殺）
     if (record.won && record.role === 'merlin') badges.push('梅林之盾');
 
     // 刺客之影 — 以刺客身份獲勝
     if (record.won && record.role === 'assassin') badges.push('刺客之影');
 
-    // 全場最大局 — 10人局
+    // 完美刺客 — 暗殺階段成功找出梅林
+    if (record.role === 'assassin' && room.endReason === 'merlin_assassinated') badges.push('完美刺客');
+
+    // 梅林逃脫 — 刺客猜錯，梅林存活並獲勝
+    if (record.role === 'merlin' && record.won && room.endReason === 'assassination_failed') badges.push('梅林逃脫');
+
+    // 十人戰場 — 10人局
     if (playerCount >= 10) badges.push('十人戰場');
 
-    // 滿血 — ELO 從未低於 1000 且本局獲勝
+    // 大局觀 — 8人以上獲勝
+    if (record.won && playerCount >= 8) badges.push('大局觀');
+
+    // 穩健 — ELO 1000 以上時獲勝
     if (record.won && record.elo_before >= 1000) badges.push('穩健');
 
-    // 浴火重生 — ELO 低於 800 時獲勝
+    // 浴火重生 — ELO 800 以下時獲勝
     if (record.won && record.elo_before < 800) badges.push('浴火重生');
+
+    // 速戰速決 — 5 分鐘內獲勝
+    if (record.won && record.duration_sec != null && record.duration_sec < 300) badges.push('速戰速決');
 
     return badges;
   }

@@ -8,14 +8,18 @@ import type { Role, Team } from './game';
 
 // ── Badge Names ──────────────────────────────────────────────────────────────
 
-/** The six badges awarded at game end. Stored as TEXT[] in the users table. */
+/** Badges awarded at game end. Stored as TEXT[] in the users table. */
 export type BadgeName =
   | '初勝'      // First Victory — first win
   | '梅林之盾'  // Merlin's Shield — won as Merlin without being assassinated
   | '刺客之影'  // Shadow Assassin — successfully assassinated Merlin as Assassin
+  | '完美刺客'  // Perfect Assassin — won by correctly identifying and assassinating Merlin
+  | '梅林逃脫'  // Merlin Escaped — Merlin survived the assassination (assassin guessed wrong)
   | '十人戰場'  // 10-Player Battlefield — participated in a 10-player game
-  | '穩健'      // Steady — played 10+ games
-  | '浴火重生'; // Phoenix Rising — won after 3+ consecutive losses
+  | '大局觀'    // Big Picture — won a game with 8+ players
+  | '穩健'      // Steady — won with ELO ≥ 1000
+  | '浴火重生'  // Phoenix Rising — won with ELO < 800
+  | '速戰速決'; // Quick Victory — won a game in under 5 minutes
 
 // ── Game Event Types ─────────────────────────────────────────────────────────
 
