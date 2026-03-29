@@ -43,8 +43,13 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
     }
   }, [room.state, room.evilWins]);
 
+  // Scale radius based on player count so cards don't overlap
+  const radius = playerCount <= 6 ? 140 : playerCount <= 8 ? 155 : 170;
+  const boardSize = (radius + 80) * 2; // card is ~80px, board must fit all
+
   return (
-    <div className="relative w-full h-96 max-w-2xl mx-auto">
+    <div className="w-full max-w-2xl mx-auto flex justify-center">
+    <div className="relative" style={{ width: boardSize, height: boardSize }}>
       {/* 背景圓形 - 動畫光環 */}
       <motion.div
         animate={{
@@ -55,7 +60,8 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
           ],
         }}
         transition={{ duration: 3, repeat: Infinity }}
-        className="absolute inset-0 rounded-full border-2 border-gray-600 bg-gradient-to-b from-avalon-dark/50 to-transparent"
+        style={{ width: radius * 2, height: radius * 2, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+        className="absolute rounded-full border-2 border-gray-600 bg-gradient-to-b from-avalon-dark/50 to-transparent"
       />
 
       {/* 遊戲狀態中心 */}
@@ -89,7 +95,6 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
       {/* 玩家環形排列 */}
       {Object.values(room.players).map((player, index) => {
         const angle = (angleSlice * index) * (Math.PI / 180);
-        const radius = 140;
         const x = Math.cos(angle) * radius;
         const y = Math.sin(angle) * radius;
 
@@ -122,6 +127,7 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
           </motion.div>
         );
       })}
+    </div>
     </div>
   );
 }
