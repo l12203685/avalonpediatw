@@ -301,7 +301,7 @@ export default function LobbyPage(): JSX.Element {
             )}
             {/* Add Bot buttons with difficulty selection */}
             {playerList.length < room.maxPlayers && (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <p className="text-xs text-gray-500 text-center font-semibold">加入 AI 機器人 (Add AI Bot)</p>
                 <div className="grid grid-cols-3 gap-2">
                   {([
@@ -319,6 +319,19 @@ export default function LobbyPage(): JSX.Element {
                     </button>
                   ))}
                 </div>
+                {/* Quick fill — fills remaining slots to minimum 5 with normal bots */}
+                {playerList.length < 5 && (
+                  <button
+                    onClick={() => {
+                      const needed = 5 - playerList.length;
+                      for (let i = 0; i < needed; i++) addBot(room.id, 'normal');
+                    }}
+                    className="w-full text-xs py-1.5 bg-gray-800/40 hover:bg-gray-700/50 border border-gray-700 text-gray-400 hover:text-gray-200 rounded-lg transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Bot size={12} />
+                    快速填滿至 5 人 (Fill to 5 with Normal bots)
+                  </button>
+                )}
               </div>
             )}
             <button
