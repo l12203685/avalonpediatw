@@ -25,6 +25,7 @@ export default function GamePage(): JSX.Element {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [isAssassinating, setIsAssassinating] = useState(false);
   const [showRoleReveal, setShowRoleReveal] = useState(true);
+  const prevRoomState = useRef<string | null>(null);
   const [assassinTimer, setAssassinTimer] = useState(120); // 120s matches server ASSASSINATION_TIMEOUT_MS
   const [pendingVoteReveal, setPendingVoteReveal] = useState<VoteRecord | null>(null);
   const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
@@ -38,10 +39,21 @@ export default function GamePage(): JSX.Element {
     requestNotificationPermission();
   }, []);
 
-  // Show role reveal modal each time game starts (state goes from lobby → voting)
+  // Show role reveal modal each time game starts (state transitions lobby → voting)
   useEffect(() => {
-    setShowRoleReveal(true);
-  }, []);
+    if (!room) return;
+    if (prevRoomState.current === 'lobby' && room.state === 'voting') {
+      setShowRoleReveal(true);
+      setIsVoting(false);
+      setIsAssassinating(false);
+      setSelectedTarget(null);
+    }
+    if (prevRoomState.current === null) {
+      // First mount — show roles immediately
+      setShowRoleReveal(true);
+    }
+    prevRoomState.current = room.state;
+  }, [room?.state]);
 
   // Team-select countdown (mirrors the 90s server AFK timeout)
   useEffect(() => {
@@ -62,6 +74,14 @@ export default function GamePage(): JSX.Element {
     }, 1000);
     return () => clearInterval(interval);
   }, [room?.state]);
+
+  // Reset isVoting once server confirms player's vote is registered
+  useEffect(() => {
+    if (!room || !currentPlayer) return;
+    if (room.votes[currentPlayer.id] !== undefined) {
+      setIsVoting(false);
+    }
+  }, [room?.votes]);
 
   // Show vote reveal overlay when a new vote record is added
   useEffect(() => {
@@ -92,23 +112,20 @@ export default function GamePage(): JSX.Element {
   const isCurrentPlayerLeader = currentPlayer.id === leaderId;
   const teamSelected = room.questTeam.length > 0;
 
-  const handleVote = (approve: boolean) => {
+  const handleVote = (approve: boolean): void => {
+    if (isVoting) return;
     setIsVoting(true);
-    try {
-      submitVote(room.id, currentPlayer.id, approve);
-    } finally {
-      setIsVoting(false);
-    }
+    submitVote(room.id, currentPlayer.id, approve);
+    // Reset after server ACK arrives (room.votes updates), with 3s safety fallback
+    setTimeout(() => setIsVoting(false), 3000);
   };
 
-  const handleAssassinate = (targetId: string) => {
+  const handleAssassinate = (targetId: string): void => {
+    if (isAssassinating) return;
     setSelectedTarget(targetId);
     setIsAssassinating(true);
-    try {
-      submitAssassination(room.id, currentPlayer.id, targetId);
-    } finally {
-      setIsAssassinating(false);
-    }
+    submitAssassination(room.id, currentPlayer.id, targetId);
+    setTimeout(() => setIsAssassinating(false), 3000);
   };
 
   const handleToggleAudio = () => {

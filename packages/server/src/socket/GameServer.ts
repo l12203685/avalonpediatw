@@ -173,14 +173,14 @@ export class GameServer {
     });
   }
 
-  private generateRoomCode(): string {
+  private generateRoomCode(attempt = 0): string {
+    if (attempt > 50) throw new Error('Could not generate unique room code after 50 attempts');
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // avoid confusing chars (0/O, 1/I)
     let code = '';
     for (let i = 0; i < 6; i++) {
       code += chars[Math.floor(Math.random() * chars.length)];
     }
-    // Ensure uniqueness
-    if (this.roomManager.getRoom(code)) return this.generateRoomCode();
+    if (this.roomManager.getRoom(code)) return this.generateRoomCode(attempt + 1);
     return code;
   }
 
@@ -464,7 +464,8 @@ export class GameServer {
       }
 
       // Use server-verified player ID — ignore client-supplied ID to prevent spoofing
-      const playerId = socket.data.playerId as string;
+      const playerId = socket.data.playerId as string | undefined;
+      if (!playerId) { socket.emit('error', 'Not authenticated in room'); return; }
 
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -556,7 +557,8 @@ export class GameServer {
   ): void {
     try {
       // Use server-verified player ID — ignore client-supplied ID to prevent spoofing
-      const playerId = socket.data.playerId as string;
+      const playerId = socket.data.playerId as string | undefined;
+      if (!playerId) { socket.emit('error', 'Not authenticated in room'); return; }
 
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -606,7 +608,8 @@ export class GameServer {
   private handleAssassinate(socket: Socket, roomId: string, _clientAssassinId: string, targetId: string): void {
     try {
       // Use server-verified player ID — ignore client-supplied assassinId to prevent spoofing
-      const assassinId = socket.data.playerId as string;
+      const assassinId = socket.data.playerId as string | undefined;
+      if (!assassinId) { socket.emit('error', 'Not authenticated in room'); return; }
 
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -727,10 +730,10 @@ export class GameServer {
         }
       }
       if (Object.keys(eloDeltas).length > 0) {
-        // Update room state with eloDeltas and re-broadcast
+        // Attach eloDeltas to room and re-broadcast so end screen can show +/- ELO
         const currentRoom = this.roomManager.getRoom(roomId);
         if (currentRoom) {
-          (currentRoom as Room & { eloDeltas: Record<string, number> }).eloDeltas = eloDeltas;
+          currentRoom.eloDeltas = eloDeltas;
           this.broadcastRoomState(roomId, currentRoom, true);
         }
       }
@@ -762,7 +765,7 @@ export class GameServer {
   private evaluateBadges(record: DbGameRecord, playerCount: number, _allRecords: DbGameRecord[], room: Room): string[] {
     const badges: string[] = [];
 
-    // 首次勝利
+    // 首次勝利 — pushed on every win; awardBadges() deduplicates so it only stores once
     if (record.won) badges.push('初勝');
 
     // 梅林之盾 — 以梅林身份獲勝（且未被暗殺）
@@ -1131,9 +1134,9 @@ export class GameServer {
         socket.emit('error', '此房間不可觀戰 (No spectating in lobby/ended rooms)');
         return;
       }
-      // Cannot spectate if already a player
-      const playerId = socket.data.user?.uid as string;
-      if (room.players[playerId]) {
+      // Cannot spectate if already a player — use canonical playerId, fall back to uid
+      const spectatorPlayerId = (socket.data.playerId as string | undefined) || (socket.data.user?.uid as string | undefined);
+      if (spectatorPlayerId && room.players[spectatorPlayerId]) {
         socket.emit('error', 'Already a player in this room');
         return;
       }
