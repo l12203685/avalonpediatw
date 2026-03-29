@@ -28,6 +28,7 @@ export default function GamePage(): JSX.Element {
   const [pendingVoteReveal, setPendingVoteReveal] = useState<VoteRecord | null>(null);
   const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(() => audioService.isEnabled());
+  const [teamSelectTimer, setTeamSelectTimer] = useState(90);
   const prevVoteHistoryLen = useRef(0);
   const prevQuestHistoryLen = useRef(0);
 
@@ -40,6 +41,16 @@ export default function GamePage(): JSX.Element {
   useEffect(() => {
     setShowRoleReveal(true);
   }, []);
+
+  // Team-select countdown (mirrors the 90s server AFK timeout)
+  useEffect(() => {
+    if (!room || room.state !== 'voting' || room.questTeam.length > 0) return;
+    setTeamSelectTimer(90);
+    const interval = setInterval(() => {
+      setTeamSelectTimer(t => Math.max(0, t - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [room?.state, room?.questTeam?.length, room?.leaderIndex]);
 
   // Assassination countdown
   useEffect(() => {
@@ -270,6 +281,7 @@ export default function GamePage(): JSX.Element {
                   room={room}
                   currentPlayer={currentPlayer}
                   isLoading={isVoting}
+                  timer={teamSelectTimer}
                 />
               ) : (
                 /* Non-leaders wait for leader */
@@ -283,8 +295,11 @@ export default function GamePage(): JSX.Element {
                   <p className="text-gray-300">
                     隊長 <span className="text-yellow-400 font-bold">{room.players[leaderId]?.name}</span> 正在選擇任務隊員...
                   </p>
-                  <div className="text-sm text-gray-500">
-                    本輪需要 {AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? '?'} 名隊員
+                  <div className="flex items-center justify-center gap-3 text-sm text-gray-500">
+                    <span>本輪需要 {AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? '?'} 名隊員</span>
+                    <span className={`px-3 py-1 rounded-full font-bold ${teamSelectTimer < 20 ? 'bg-red-900/60 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
+                      ⏱ {teamSelectTimer}s
+                    </span>
                   </div>
                 </motion.div>
               )
