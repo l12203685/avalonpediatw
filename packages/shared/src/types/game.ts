@@ -8,12 +8,13 @@ export type GameState = 'lobby' | 'voting' | 'quest' | 'discussion' | 'ended';
 
 // Player Roles (Standard Avalon)
 export type Role =
-  | 'merlin'      // Good - Knows all Evil players
+  | 'merlin'      // Good - Knows all Evil players (except Mordred)
   | 'percival'    // Good - Knows Merlin (but might see Morgana)
   | 'loyal'       // Good - No special info
-  | 'assassin'    // Evil - Can kill Merlin at end
-  | 'morgana'     // Evil - Appears to Merlin as Evil
-  | 'oberon';     // Evil - Hidden from Evil players (optional)
+  | 'assassin'    // Evil - Can kill Merlin at end; knows teammates
+  | 'morgana'     // Evil - Appears to Percival as possible Merlin; knows teammates
+  | 'oberon'      // Evil - Hidden from Evil players (and can't see them)
+  | 'mordred';    // Evil - Hidden from Merlin; knows other evil teammates
 
 export type Team = 'good' | 'evil';
 
@@ -112,57 +113,63 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-// Avalon Game Rules
+// Avalon Game Rules — standard player counts, team sizes, and role assignments
 export const AVALON_CONFIG: Record<number, GameConfig> = {
   5: {
+    // 3 good, 2 evil
     minPlayers: 5,
     maxPlayers: 5,
-    maxFailedVotes: 3,
+    maxFailedVotes: 5,
     roles: ['merlin', 'percival', 'loyal', 'assassin', 'morgana'],
     questTeams: [2, 3, 2, 3, 3],
   },
   6: {
+    // 4 good, 2 evil
     minPlayers: 6,
     maxPlayers: 6,
-    maxFailedVotes: 3,
+    maxFailedVotes: 5,
     roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana'],
     questTeams: [2, 3, 4, 3, 4],
   },
   7: {
+    // 4 good, 3 evil
     minPlayers: 7,
     maxPlayers: 7,
-    maxFailedVotes: 3,
-    roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana', 'morgana'],
+    maxFailedVotes: 5,
+    roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana', 'oberon'],
     questTeams: [2, 3, 3, 4, 4],
   },
   8: {
+    // 5 good, 3 evil
     minPlayers: 8,
     maxPlayers: 8,
-    maxFailedVotes: 3,
-    roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana', 'morgana', 'oberon'],
+    maxFailedVotes: 5,
+    roles: ['merlin', 'percival', 'loyal', 'loyal', 'loyal', 'assassin', 'morgana', 'mordred'],
     questTeams: [3, 4, 4, 5, 5],
   },
   9: {
+    // 6 good, 3 evil
     minPlayers: 9,
     maxPlayers: 9,
-    maxFailedVotes: 3,
+    maxFailedVotes: 5,
     roles: [
       'merlin',
       'percival',
       'loyal',
       'loyal',
       'loyal',
+      'loyal',
       'assassin',
       'morgana',
-      'morgana',
-      'oberon',
+      'mordred',
     ],
     questTeams: [3, 4, 4, 5, 5],
   },
   10: {
+    // 6 good, 4 evil
     minPlayers: 10,
     maxPlayers: 10,
-    maxFailedVotes: 3,
+    maxFailedVotes: 5,
     roles: [
       'merlin',
       'percival',
@@ -172,10 +179,10 @@ export const AVALON_CONFIG: Record<number, GameConfig> = {
       'loyal',
       'assassin',
       'morgana',
-      'morgana',
+      'mordred',
       'oberon',
     ],
-    questTeams: [3, 4, 5, 5, 5],
+    questTeams: [3, 4, 4, 5, 5],
   },
 };
 

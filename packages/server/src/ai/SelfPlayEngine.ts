@@ -259,9 +259,10 @@ export class SelfPlayEngine {
   ): string[] {
     switch (role) {
       case 'merlin': {
-        // Merlin sees all evil (no Mordred role in this config)
+        // Merlin sees all evil except Oberon and Mordred
         return Array.from(teamMap.entries())
-          .filter(([id, team]) => team === 'evil' && id !== playerId)
+          .filter(([id, team]) => team === 'evil' && id !== playerId
+            && roleMap.get(id) !== 'oberon' && roleMap.get(id) !== 'mordred')
           .map(([id]) => id);
       }
       case 'percival': {
@@ -271,7 +272,8 @@ export class SelfPlayEngine {
           .map(([id]) => id);
       }
       case 'assassin':
-      case 'morgana': {
+      case 'morgana':
+      case 'mordred': {
         // Evil sees other evil (except Oberon)
         return Array.from(teamMap.entries())
           .filter(([id, team]) => team === 'evil' && roleMap.get(id) !== 'oberon' && id !== playerId)

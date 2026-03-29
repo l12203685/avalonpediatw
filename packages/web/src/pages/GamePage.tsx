@@ -223,6 +223,7 @@ export default function GamePage(): JSX.Element {
                   assassin: '刺客 (Assassin)',
                   morgana:  '莫甘娜 (Morgana)',
                   oberon:   '奧伯倫 (Oberon)',
+                  mordred:  '莫德雷德 (Mordred)',
                 };
                 const isGood = ['merlin', 'percival', 'loyal'].includes(player.role ?? '');
 

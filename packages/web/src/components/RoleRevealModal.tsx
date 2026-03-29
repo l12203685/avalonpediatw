@@ -78,18 +78,28 @@ const ROLE_INFO: Record<Role, {
     description: '你是隱藏在陰影中的邪惡。你不知道隊友，隊友也不知道你。',
     knowledge: '你不知道其他邪惡方的身分，他們也不知道你。獨自行動，製造混亂。',
   },
+  mordred: {
+    name: '莫德雷德 (Mordred)',
+    icon: '🦹',
+    team: 'evil',
+    color: 'text-orange-300',
+    bg: 'from-orange-900/80 to-orange-800/60',
+    border: 'border-orange-500',
+    description: '你是隱藏在梅林視野之外的邪惡領袖。梅林看不到你，但你知道誰是邪惡方。',
+    knowledge: '你知道邪惡方隊友的身分。梅林無法察覺你——善加利用這個優勢！',
+  },
 };
 
 function getKnowledgeList(role: Role, room: Room, currentPlayer: Player): string[] {
   const players = Object.values(room.players);
-  const evilRoles: Role[] = ['assassin', 'morgana', 'oberon'];
-  const goodRoles: Role[] = ['merlin', 'percival', 'loyal'];
+  const evilRoles: Role[] = ['assassin', 'morgana', 'oberon', 'mordred'];
 
   switch (role) {
     case 'merlin': {
-      // Merlin sees evil players except Oberon
+      // Merlin sees evil players except Oberon and Mordred
       const evilPlayers = players.filter(
-        p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal') && p.role !== 'oberon'
+        p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal')
+          && p.role !== 'oberon' && p.role !== 'mordred'
       );
       if (evilPlayers.length === 0) return ['（無邪惡方玩家）'];
       return evilPlayers.map(p => `${p.name} — 邪惡方`);
@@ -103,7 +113,8 @@ function getKnowledgeList(role: Role, room: Room, currentPlayer: Player): string
       return merlinLike.map(p => `${p.name} — 可能是梅林`);
     }
     case 'assassin':
-    case 'morgana': {
+    case 'morgana':
+    case 'mordred': {
       // Evil players see each other (except Oberon)
       const evilTeam = players.filter(
         p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal') && p.role !== 'oberon'
