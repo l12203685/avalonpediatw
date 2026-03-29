@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { startGame } from '../services/socket';
-import { Users, Play, Copy, Check } from 'lucide-react';
+import { Users, Play, Copy, Check, Link } from 'lucide-react';
 
 export default function LobbyPage(): JSX.Element {
   const { room, currentPlayer } = useGameStore();
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
 
   if (!room || !currentPlayer) {
     return <div className="text-center text-white">載入中…</div>;
@@ -14,11 +14,20 @@ export default function LobbyPage(): JSX.Element {
   const playerList = Object.values(room.players);
   const isHost = room.host === currentPlayer.id;
   const canStart = playerList.length >= 5;
+  const shortCode = room.id.slice(0, 8).toUpperCase();
 
   const handleCopyRoomId = () => {
-    navigator.clipboard.writeText(room.id).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(shortCode).then(() => {
+      setCopied('code');
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const handleCopyLink = () => {
+    const link = `${window.location.origin}/?room=${shortCode}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied('link');
+      setTimeout(() => setCopied(null), 2000);
     });
   };
 
@@ -29,22 +38,34 @@ export default function LobbyPage(): JSX.Element {
         <div className="text-center">
           <h1 className="text-4xl font-bold text-white mb-3">{room.name}</h1>
 
-          {/* Room ID with copy button */}
+          {/* Room ID with copy buttons */}
           <div className="inline-flex items-center gap-3 bg-avalon-card/50 border border-gray-600 rounded-xl px-5 py-3">
             <div className="text-left">
               <p className="text-xs text-gray-500 mb-1">房間代碼 (Room Code — share with friends)</p>
-              <p className="text-lg font-mono font-bold text-yellow-400 tracking-widest">{room.id.slice(0, 8).toUpperCase()}</p>
+              <p className="text-lg font-mono font-bold text-yellow-400 tracking-widest">{shortCode}</p>
             </div>
             <button
               onClick={handleCopyRoomId}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
-                copied
+                copied === 'code'
                   ? 'bg-green-700/60 text-green-300 border border-green-600'
                   : 'bg-gray-700/60 hover:bg-gray-600/60 text-gray-300 border border-gray-600'
               }`}
             >
-              {copied ? <Check size={15} /> : <Copy size={15} />}
-              {copied ? '已複製！' : '複製'}
+              {copied === 'code' ? <Check size={15} /> : <Copy size={15} />}
+              {copied === 'code' ? '已複製！' : '複製'}
+            </button>
+            <button
+              onClick={handleCopyLink}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                copied === 'link'
+                  ? 'bg-green-700/60 text-green-300 border border-green-600'
+                  : 'bg-blue-700/60 hover:bg-blue-600/60 text-blue-300 border border-blue-600'
+              }`}
+              title="複製邀請連結 (Copy invite link)"
+            >
+              {copied === 'link' ? <Check size={15} /> : <Link size={15} />}
+              {copied === 'link' ? '已複製！' : '邀請連結 (Invite Link)'}
             </button>
           </div>
         </div>

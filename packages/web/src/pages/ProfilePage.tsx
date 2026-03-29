@@ -138,6 +138,18 @@ export default function ProfilePage(): JSX.Element {
     ? Math.round((profile.games_won / profile.total_games) * 100)
     : 0;
 
+  // Compute per-role stats from recent games
+  const roleStats = profile
+    ? Object.entries(
+        profile.recent_games.reduce<Record<string, { wins: number; total: number }>>((acc, g) => {
+          if (!acc[g.role]) acc[g.role] = { wins: 0, total: 0 };
+          acc[g.role].total++;
+          if (g.won) acc[g.role].wins++;
+          return acc;
+        }, {})
+      ).sort((a, b) => b[1].total - a[1].total)
+    : [];
+
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-lg mx-auto space-y-6">
@@ -222,6 +234,36 @@ export default function ProfilePage(): JSX.Element {
                 </div>
               </div>
             </div>
+
+            {/* Role stats (from recent games) */}
+            {roleStats.length > 0 && (
+              <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-gray-300 mb-3">角色勝率 (Role Win Rates) <span className="text-gray-500 font-normal">— 近 {profile!.recent_games.length} 局</span></h3>
+                <div className="space-y-2">
+                  {roleStats.map(([role, { wins, total }]) => {
+                    const pct = Math.round((wins / total) * 100);
+                    const color = ROLE_COLORS[role] ?? 'text-gray-300';
+                    return (
+                      <div key={role} className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold w-36 truncate ${color}`}>
+                          {ROLE_NAMES[role] ?? role}
+                        </span>
+                        <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${pct >= 50 ? 'bg-green-500' : 'bg-red-500'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs font-bold w-10 text-right ${pct >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                          {pct}%
+                        </span>
+                        <span className="text-xs text-gray-600 w-10 text-right">{wins}/{total}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Recent games */}
             <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">

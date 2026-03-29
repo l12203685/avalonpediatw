@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { createRoom, joinRoom } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
@@ -11,6 +11,18 @@ export default function HomePage(): JSX.Element {
   const [playerName, setPlayerName] = useState(currentPlayer?.name ?? '');
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
+
+  // Auto-populate join form from ?room=XXXXXXXX invite link
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteCode = params.get('room');
+    if (inviteCode) {
+      setRoomId(inviteCode.toUpperCase().slice(0, 8));
+      setMode('join');
+      // Clean the URL without reloading
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const handleLogout = async (): Promise<void> => {
     try {
