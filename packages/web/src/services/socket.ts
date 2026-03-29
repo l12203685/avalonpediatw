@@ -2,6 +2,8 @@ import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/gameStore';
 import { Room, Player, User, AuthSession } from '@avalon/shared';
 import { getIdToken } from './auth';
+import { sendTurnNotification } from './notifications';
+import audioService from './audio';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -44,6 +46,7 @@ export async function initializeSocket(token: string): Promise<void> {
 
     socket!.once('auth:success', (session: AuthSession) => {
       clearTimeout(timeout);
+      store.setSocketStatus('connected');
       store.setCurrentPlayer({
         id: session.user.uid,
         name: session.user.displayName,
@@ -53,6 +56,12 @@ export async function initializeSocket(token: string): Promise<void> {
         status: 'active',
         createdAt: session.user.createdAt,
       });
+      // Auto-rejoin room if player was in one before page refresh
+      const savedRoom = localStorage.getItem('avalon_room');
+      if (savedRoom) {
+        console.log('↩ Auto-rejoining room after refresh:', savedRoom);
+        socket!.emit('game:join-room', savedRoom);
+      }
       resolve();
     });
 
@@ -64,6 +73,7 @@ export async function initializeSocket(token: string): Promise<void> {
   });
 
   socket.on('connect', () => {
+    useGameStore.getState().setSocketStatus('connected');
     if (_hasConnectedOnce) {
       // This is a reconnect — re-join the current room if we were in one
       const { room } = useGameStore.getState();
@@ -90,7 +100,39 @@ export async function initializeSocket(token: string): Promise<void> {
   });
 
   socket.on('game:state-updated', (room: Room) => {
+    // Capture previous history lengths before updating store
+    const prevRoom = useGameStore.getState().room;
+    const prevVoteLen  = prevRoom?.voteHistory?.length  ?? 0;
+    const prevQuestLen = prevRoom?.questHistory?.length ?? 0;
+
     store.updateRoom(room);
+
+    // Announce vote result if a new vote record was added
+    if (room.voteHistory.length > prevVoteLen) {
+      const latest = room.voteHistory[room.voteHistory.length - 1];
+      const approveCount = Object.values(latest.votes).filter(Boolean).length;
+      const rejectCount  = Object.values(latest.votes).length - approveCount;
+      if (latest.approved) {
+        store.addToast(`✅ 隊伍提案通過！(${approveCount}贊成 / ${rejectCount}反對)`, 'success');
+        audioService.playSound('approval');
+      } else {
+        store.addToast(`❌ 隊伍提案否決 (${approveCount}贊成 / ${rejectCount}反對)`, 'info');
+        audioService.playSound('rejection');
+      }
+    }
+
+    // Announce quest result if a new quest record was added
+    if (room.questHistory.length > prevQuestLen) {
+      const latest = room.questHistory[room.questHistory.length - 1];
+      if (latest.result === 'success') {
+        store.addToast(`⚔️ 第 ${latest.round} 輪任務成功！`, 'success');
+        audioService.playSound('quest-success');
+      } else {
+        store.addToast(`💀 第 ${latest.round} 輪任務失敗 (${latest.failCount} 張失敗票)`, 'error');
+        audioService.playSound('quest-fail');
+      }
+    }
+
     // Sync current player's role on reconnect (role only visible if server sanitized it for us)
     const cp = useGameStore.getState().currentPlayer;
     if (cp && room.players[cp.id]?.role && !cp.role) {
@@ -99,6 +141,21 @@ export async function initializeSocket(token: string): Promise<void> {
         role: room.players[cp.id].role,
         team: room.players[cp.id].team,
       });
+    }
+
+    // Send browser notification when it's the player's turn
+    if (cp) {
+      const playerIds = Object.keys(room.players);
+      const leaderId = playerIds[room.leaderIndex % playerIds.length];
+      if (room.state === 'voting' && room.questTeam.length === 0 && leaderId === cp.id) {
+        sendTurnNotification('⚔️ Avalon — 輪到你了！', '你是隊長，請選擇任務隊伍');
+      } else if (room.state === 'voting' && room.questTeam.length > 0 && !(cp.id in room.votes)) {
+        sendTurnNotification('🗳️ Avalon — 輪到你投票！', '贊成或拒絕此次任務隊伍');
+      } else if (room.state === 'quest' && room.questTeam.includes(cp.id)) {
+        sendTurnNotification('⚔️ Avalon — 任務投票！', '你在任務隊伍中，請投票成功或失敗');
+      } else if (room.state === 'discussion' && room.players[cp.id]?.role === 'assassin') {
+        sendTurnNotification('🗡️ Avalon — 你是刺客！', '好人贏得了任務。選擇你的目標刺殺梅林！');
+      }
     }
   });
 
@@ -124,9 +181,16 @@ export async function initializeSocket(token: string): Promise<void> {
     store.setGameState('home');
   });
 
+  socket.on('game:left-room', () => {
+    store.setRoom(null);
+    store.setGameState('home');
+  });
+
   socket.on('game:started', (room: Room) => {
     store.updateRoom(room);
     store.setGameState('voting');
+    store.addToast('🎭 遊戲開始！查看你的角色', 'success');
+    audioService.playSound('game-start');
     // Sync current player's role from room (server assigns roles on start)
     const cp = useGameStore.getState().currentPlayer;
     if (cp && room.players[cp.id]) {
@@ -140,7 +204,7 @@ export async function initializeSocket(token: string): Promise<void> {
 
   socket.on('game:ended', (room: Room) => {
     store.updateRoom(room);
-    // game:ended reveals all roles — sync currentPlayer's confirmed role/team
+    audioService.playSound('game-end');
     const cp = useGameStore.getState().currentPlayer;
     if (cp && room.players[cp.id]) {
       store.setCurrentPlayer({
@@ -148,6 +212,9 @@ export async function initializeSocket(token: string): Promise<void> {
         role: room.players[cp.id].role,
         team: room.players[cp.id].team,
       });
+      const myTeam = room.players[cp.id].team;
+      const won = room.evilWins ? myTeam === 'evil' : myTeam === 'good';
+      store.addToast(won ? '🏆 你贏了！' : '😔 你輸了', won ? 'success' : 'error');
     }
   });
 
@@ -156,10 +223,19 @@ export async function initializeSocket(token: string): Promise<void> {
   socket.on('error', (error: string) => {
     console.error('Socket error:', error);
     useGameStore.getState().addToast(error, 'error');
+    // Clear stale room on "not found" so auto-rejoin doesn't loop
+    if (error === 'Room not found' || error === 'Game already in progress') {
+      localStorage.removeItem('avalon_room');
+    }
   });
 
   socket.on('disconnect', () => {
+    useGameStore.getState().setSocketStatus('disconnected');
     console.log('Disconnected from server');
+  });
+
+  socket.on('reconnect_attempt', () => {
+    useGameStore.getState().setSocketStatus('reconnecting');
   });
 }
 
@@ -230,4 +306,19 @@ export function addBot(roomId: string): void {
 export function removeBot(roomId: string, botId: string): void {
   const socket = getSocket();
   socket.emit('game:remove-bot', roomId, botId);
+}
+
+export function requestRematch(roomId: string): void {
+  const socket = getSocket();
+  socket.emit('game:rematch', roomId);
+}
+
+export function leaveRoom(roomId: string): void {
+  const socket = getSocket();
+  socket.emit('game:leave-room', roomId);
+}
+
+export function setMaxPlayers(roomId: string, count: number): void {
+  const socket = getSocket();
+  socket.emit('game:set-max-players', roomId, count);
 }

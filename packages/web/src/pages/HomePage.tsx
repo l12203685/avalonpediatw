@@ -4,7 +4,6 @@ import { createRoom, joinRoom, listRooms, getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
 import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw } from 'lucide-react';
-import FloatingControls from '../components/FloatingControls';
 
 interface OpenRoom {
   id: string;
@@ -21,18 +20,31 @@ export default function HomePage(): JSX.Element {
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
 
-  // Auto-populate join form from ?room=XXXXXXXX invite link
+  // Auto-populate (and auto-join) from ?room=XXXXXXXX invite link
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const inviteCode = params.get('room');
-    if (inviteCode) {
-      setRoomId(inviteCode.toUpperCase().slice(0, 8));
+    if (!inviteCode) return;
+
+    const code = inviteCode.toUpperCase().slice(0, 8);
+    setRoomId(code);
+    window.history.replaceState({}, '', window.location.pathname);
+
+    // If player already has a name, auto-join immediately
+    const name = currentPlayer?.name ?? playerName;
+    if (name.trim()) {
+      if (currentPlayer) {
+        setCurrentPlayer({ ...currentPlayer, name });
+      }
+      joinRoom(code);
+      setGameState('lobby');
+    } else {
       setMode('join');
-      window.history.replaceState({}, '', window.location.pathname);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Subscribe to room list updates
+  // Subscribe to room list updates + auto-refresh every 15 s
   useEffect(() => {
     let socket: ReturnType<typeof getSocket> | null = null;
     try { socket = getSocket(); } catch { return; }
@@ -41,7 +53,11 @@ export default function HomePage(): JSX.Element {
     socket.on('game:rooms-list', handler);
     listRooms(); // initial fetch
 
-    return () => { socket!.off('game:rooms-list', handler); };
+    const interval = setInterval(listRooms, 15_000);
+    return () => {
+      socket!.off('game:rooms-list', handler);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleLogout = async (): Promise<void> => {
@@ -91,9 +107,6 @@ export default function HomePage(): JSX.Element {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-avalon-dark via-avalon-card to-avalon-dark p-4">
-      {/* Floating Controls */}
-      <FloatingControls />
-
       {/* Background decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <motion.div

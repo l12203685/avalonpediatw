@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Room, Player } from '@avalon/shared';
 
 type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile';
+export type SocketStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 export interface Toast {
   id: string;
@@ -15,6 +16,7 @@ interface GameStore {
   currentPlayer: Player | null;
   profileUserId: string | null;
   toasts: Toast[];
+  socketStatus: SocketStatus;
   setGameState: (state: GameState) => void;
   setRoom: (room: Room | null) => void;
   setCurrentPlayer: (player: Player | null) => void;
@@ -22,6 +24,7 @@ interface GameStore {
   navigateToProfile: (userId: string | 'me') => void;
   addToast: (message: string, type?: Toast['type']) => void;
   removeToast: (id: string) => void;
+  setSocketStatus: (status: SocketStatus) => void;
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -30,11 +33,16 @@ export const useGameStore = create<GameStore>((set) => ({
   currentPlayer: null,
   profileUserId: null,
   toasts: [],
+  socketStatus: 'disconnected',
 
   setGameState: (state: GameState) => set({ gameState: state }),
   navigateToProfile: (userId) => set({ gameState: 'profile', profileUserId: userId }),
+  setSocketStatus: (status: SocketStatus) => set({ socketStatus: status }),
 
-  setRoom: (room: Room | null) => set({ room }),
+  setRoom: (room: Room | null) => {
+    if (!room) localStorage.removeItem('avalon_room');
+    set({ room });
+  },
 
   setCurrentPlayer: (player: Player | null) => set({ currentPlayer: player }),
 
@@ -48,7 +56,13 @@ export const useGameStore = create<GameStore>((set) => ({
 
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter(t => t.id !== id) })),
 
-  updateRoom: (room: Room) =>
+  updateRoom: (room: Room) => {
+    // Persist room ID for auto-rejoin on page refresh (clear on game end)
+    if (room.state === 'ended') {
+      localStorage.removeItem('avalon_room');
+    } else {
+      localStorage.setItem('avalon_room', room.id);
+    }
     set(() => ({
       room,
       gameState:
@@ -56,8 +70,9 @@ export const useGameStore = create<GameStore>((set) => ({
           ? 'lobby'
           : room.state === 'ended'
             ? 'ended'
-            : room.state === 'quest'
+            : (room.state === 'quest' || room.state === 'discussion')
               ? 'playing'
               : 'voting',
-    })),
+    }));
+  },
 }));

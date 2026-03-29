@@ -35,7 +35,7 @@ export default function FloatingControls(): JSX.Element {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-6 left-6 z-50">
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -43,7 +43,7 @@ export default function FloatingControls(): JSX.Element {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="absolute bottom-16 right-0 bg-avalon-card border border-gray-600 rounded-lg p-4 w-64 space-y-4 shadow-2xl"
+            className="absolute bottom-16 left-0 bg-avalon-card border border-gray-600 rounded-lg p-4 w-64 space-y-4 shadow-2xl"
           >
             {/* Audio Controls */}
             <div className="space-y-2">

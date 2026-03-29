@@ -22,6 +22,7 @@ export class GameEngine {
   private voteTimeout: NodeJS.Timeout | null = null;
   private questVoteTimeout: NodeJS.Timeout | null = null;
   private assassinationTimeout: NodeJS.Timeout | null = null;
+  private onStateChange: ((room: Room) => void) | null = null;
 
   // Quest phase tracking
   private questVotes: QuestVote[] = [];
@@ -32,8 +33,9 @@ export class GameEngine {
   private eventBuffer: GameEventRecord[] = [];
   private eventSeq: number = 0;
 
-  constructor(room: Room) {
+  constructor(room: Room, onStateChange?: (room: Room) => void) {
     this.room = room;
+    this.onStateChange = onStateChange ?? null;
   }
 
   /** Returns the buffered event log for persistence */
@@ -62,6 +64,7 @@ export class GameEngine {
     this.room.leaderIndex = 0;
     this.room.voteHistory = [];
     this.room.questHistory = [];
+    this.room.questVotedCount = 0;
     this.questVotes = [];
     this.currentLeaderIndex = 0;
     this.voteAttemptInRound = 0;
@@ -72,6 +75,27 @@ export class GameEngine {
     });
 
     // Don't start vote timer yet — it starts when leader confirms the quest team
+  }
+
+  private startQuestPhase(): void {
+    if (this.questVoteTimeout) {
+      clearTimeout(this.questVoteTimeout);
+      this.questVoteTimeout = null;
+    }
+
+    this.questVoteTimeout = setTimeout(() => {
+      if (this.room.state === 'quest') {
+        // Auto-vote success for any team members who didn't vote in time
+        const unvoted = this.room.questTeam.filter(
+          id => !this.questVotes.some(q => q.playerId === id)
+        );
+        unvoted.forEach(id => {
+          this.questVotes.push({ playerId: id, vote: 'success' });
+        });
+        this.resolveQuestPhase();
+        this.onStateChange?.(this.room);
+      }
+    }, QUEST_TIMEOUT_MS);
   }
 
   private startVotingPhase(): void {
@@ -97,9 +121,6 @@ export class GameEngine {
   }
 
   private handleVoteTimeout(): void {
-    const playerCount = Object.keys(this.room.players).length;
-    const votedCount = Object.keys(this.room.votes).length;
-
     // Auto-vote for players who didn't vote (reject as default)
     const unvotedPlayers = Object.keys(this.room.players).filter(
       (id) => !(id in this.room.votes)
@@ -109,8 +130,9 @@ export class GameEngine {
       this.room.votes[playerId] = false;
     });
 
-    // Resolve voting
+    // Resolve voting and broadcast
     this.resolveVoting();
+    this.onStateChange?.(this.room);
   }
 
   private assignRoles(playerCount: number): void {
@@ -211,14 +233,18 @@ export class GameEngine {
         leaderId: this.getLeaderId()
       });
 
-      // Move to quest phase
+      // Move to quest phase; reset consecutive reject counter
       this.room.state = 'quest';
       this.room.votes = {};
+      this.room.failCount = 0;
+      this.room.questVotedCount = 0;
       this.questVotes = [];
+      this.startQuestPhase();
     } else {
       // Team rejected - another voting round
       this.room.failCount++;
       this.room.votes = {};
+      this.room.questTeam = []; // Clear team so new leader can propose fresh team
 
       // Rotate leader
       this.rotateLeader();
@@ -227,6 +253,7 @@ export class GameEngine {
         // 5 consecutive rejections = evil wins (standard Avalon rules)
         this.room.state = 'ended';
         this.room.evilWins = true;
+        this.room.endReason = 'vote_rejections';
         this.logEvent('game_ended', {
           winner: 'evil',
           reason: 'vote_rejections_limit'
@@ -290,6 +317,7 @@ export class GameEngine {
     }
 
     this.questVotes.push({ playerId, vote });
+    this.room.questVotedCount = this.questVotes.length;
 
     this.logEvent('quest_vote_submitted', {
       round: this.room.currentRound,
@@ -315,9 +343,12 @@ export class GameEngine {
       this.questVoteTimeout = null;
     }
 
-    // Count fail votes
+    // Count fail votes — some rounds require 2 fails (round 4 in 7+ player games)
+    const playerCount = Object.keys(this.room.players).length;
+    const config = AVALON_CONFIG[playerCount];
+    const failsRequired = config?.questFailsRequired[this.room.currentRound - 1] ?? 1;
     const failCount = this.questVotes.filter((q) => q.vote === 'fail').length;
-    const questFailed = failCount >= 1; // 1 fail = quest fails
+    const questFailed = failCount >= failsRequired;
 
     const result: 'success' | 'fail' = questFailed ? 'fail' : 'success';
     this.room.questResults.push(result);
@@ -349,6 +380,7 @@ export class GameEngine {
       // Evil wins 3 quests - game over
       this.room.state = 'ended';
       this.room.evilWins = true;
+      this.room.endReason = 'failed_quests';
       this.logEvent('game_ended', {
         winner: 'evil',
         reason: 'failed_quests_limit'
@@ -358,6 +390,7 @@ export class GameEngine {
       this.room.currentRound++;
       this.room.state = 'voting';
       this.room.votes = {};
+      this.room.questTeam = [];
       this.questVotes = [];
       this.voteAttemptInRound = 0;
 
@@ -393,6 +426,7 @@ export class GameEngine {
       if (this.room.state === 'discussion') {
         // If assassin doesn't choose in time, good wins
         this.resolveAssassination(null);
+        this.onStateChange?.(this.room);
       }
     }, ASSASSINATION_TIMEOUT_MS);
   }
@@ -439,6 +473,7 @@ export class GameEngine {
     if (targetId === null) {
       // No target - good wins
       this.room.evilWins = false;
+      this.room.endReason = 'assassination_timeout';
       this.logEvent('game_ended', {
         winner: 'good',
         reason: 'assassination_timeout'
@@ -446,10 +481,12 @@ export class GameEngine {
     } else {
       // room.players is authoritative as it can be updated externally
       const targetRole = this.room.players[targetId]?.role ?? this.roleAssignments.get(targetId);
+      this.room.assassinTargetId = targetId;
 
       if (targetRole === 'merlin') {
         // Assassinated Merlin - evil wins
         this.room.evilWins = true;
+        this.room.endReason = 'merlin_assassinated';
         this.logEvent('game_ended', {
           winner: 'evil',
           reason: 'merlin_assassinated',
@@ -459,6 +496,7 @@ export class GameEngine {
       } else {
         // Killed non-Merlin - good wins
         this.room.evilWins = false;
+        this.room.endReason = 'assassination_failed';
         this.logEvent('game_ended', {
           winner: 'good',
           reason: 'assassination_failed',
@@ -535,6 +573,7 @@ export class GameEngine {
       clearTimeout(this.assassinationTimeout);
       this.assassinationTimeout = null;
     }
+    this.onStateChange = null;
   }
 
   public getVoteCount(): { voted: number; total: number } {
