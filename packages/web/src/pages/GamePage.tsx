@@ -229,6 +229,21 @@ export default function GamePage(): JSX.Element {
         {/* Quest Phase */}
         {room.state === 'quest' && !isSpectator && <QuestPanel room={room} currentPlayer={currentPlayer} />}
 
+        {/* Spectator phase hint */}
+        {isSpectator && (room.state === 'voting' || room.state === 'quest' || room.state === 'discussion') && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-avalon-card/30 border border-purple-700/50 rounded-xl p-4 text-center"
+          >
+            <p className="text-purple-400 text-sm">
+              {room.state === 'voting' && '👁 觀戰中 — 等待玩家投票...'}
+              {room.state === 'quest' && '👁 觀戰中 — 任務隊伍正在行動...'}
+              {room.state === 'discussion' && '👁 觀戰中 — 刺客正在選擇目標...'}
+            </p>
+          </motion.div>
+        )}
+
         {/* Discussion Phase - Assassination */}
         {room.state === 'discussion' && !isSpectator && (
           <motion.div
@@ -236,6 +251,25 @@ export default function GamePage(): JSX.Element {
             animate={{ opacity: 1, y: 0 }}
             className="bg-avalon-card/50 border-2 border-purple-600 rounded-lg p-8 space-y-6"
           >
+            {/* Quest history aide for assassin */}
+            {room.questHistory.length > 0 && (
+              <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-3">
+                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">任務隊伍歷史 (Quest Team History)</p>
+                <div className="space-y-1.5">
+                  {room.questHistory.map(q => (
+                    <div key={q.round} className="flex items-center gap-2 text-xs">
+                      <span className={`w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full font-bold ${q.result === 'success' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>
+                        {q.result === 'success' ? '✓' : '✗'}
+                      </span>
+                      <span className="text-gray-400">R{q.round}:</span>
+                      <span className="text-gray-300">{q.team.map(id => room.players[id]?.name ?? id).join('、')}</span>
+                      {q.result === 'fail' && q.failCount > 0 && <span className="text-red-400 ml-1">({q.failCount}票失敗)</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {currentPlayer.role === 'assassin' ? (
               <>
                 <div className="text-center">
