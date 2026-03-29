@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Trophy, ArrowLeft, Crown, TrendingUp, Users, Loader, Search } from 'lucide-react';
+import { Trophy, ArrowLeft, Crown, TrendingUp, Users, Loader, Search, AlertTriangle } from 'lucide-react';
 import { getEloRank, ELO_RANKS } from '../utils/eloRank';
 import { useGameStore } from '../store/gameStore';
-import { fetchLeaderboard, LeaderboardEntry } from '../services/api';
+import type { LeaderboardEntry } from '../services/api';
+
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || 'http://localhost:3001';
 
 const PROVIDER_BADGE: Record<string, string> = {
   google:  'G',
@@ -21,12 +23,18 @@ export default function LeaderboardPage(): JSX.Element {
   const [entries, setEntries]   = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
+  const [dbOffline, setDbOffline] = useState(false);
   const [search, setSearch]     = useState('');
   const [rankFilter, setRankFilter] = useState('全部');
 
   useEffect(() => {
-    fetchLeaderboard()
-      .then(setEntries)
+    // Fetch raw to detect "Database not configured" message
+    fetch(`${SERVER_URL}/api/leaderboard`)
+      .then(r => r.json() as Promise<{ leaderboard?: LeaderboardEntry[]; message?: string }>)
+      .then(data => {
+        if (data.message === 'Database not configured') setDbOffline(true);
+        setEntries(data.leaderboard ?? []);
+      })
       .catch(() => setError('無法載入排行榜，請確認伺服器連線'))
       .finally(() => setLoading(false));
   }, []);
@@ -62,6 +70,17 @@ export default function LeaderboardPage(): JSX.Element {
             <h1 className="text-2xl font-black text-white">排行榜 (Leaderboard)</h1>
           </div>
         </div>
+
+        {/* DB offline banner */}
+        {dbOffline && (
+          <div className="flex items-start gap-3 bg-yellow-900/30 border border-yellow-700/50 rounded-xl px-4 py-3 text-sm text-yellow-300">
+            <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">資料庫未連線 (Database offline)</p>
+              <p className="text-xs text-yellow-400/70 mt-0.5">ELO 排名暫時不可用。遊戲功能正常運作，數據將在資料庫恢復後顯示。</p>
+            </div>
+          </div>
+        )}
 
         {/* Search + Rank Filter */}
         {!loading && !error && entries.length > 0 && (
