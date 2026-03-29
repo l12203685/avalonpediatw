@@ -2,7 +2,7 @@ import { Room, Player } from '@avalon/shared';
 import PlayerCard from './PlayerCard';
 import { motion } from 'framer-motion';
 import audioService from '../services/audio';
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface GameBoardProps {
   room: Room;
@@ -47,9 +47,24 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
   const radius = playerCount <= 6 ? 140 : playerCount <= 8 ? 155 : 170;
   const boardSize = (radius + 80) * 2; // card is ~80px, board must fit all
 
+  // Responsive scale: shrink board on narrow viewports so nothing clips
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const update = () => {
+      const w = containerRef.current?.offsetWidth ?? window.innerWidth;
+      setScale(Math.min(1, w / boardSize));
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [boardSize]);
+
   return (
-    <div className="w-full max-w-2xl mx-auto flex justify-center">
-    <div className="relative" style={{ width: boardSize, height: boardSize }}>
+    <div ref={containerRef} className="w-full max-w-2xl mx-auto flex justify-center overflow-hidden">
+    {/* The inner board uses a fixed size then scales down to fit the container */}
+    <div style={{ width: boardSize * scale, height: boardSize * scale, flexShrink: 0 }}>
+    <div className="relative" style={{ width: boardSize, height: boardSize, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
       {/* 背景圓形 - 動畫光環 */}
       <motion.div
         animate={{
@@ -127,6 +142,7 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
           </motion.div>
         );
       })}
+    </div>
     </div>
     </div>
   );
