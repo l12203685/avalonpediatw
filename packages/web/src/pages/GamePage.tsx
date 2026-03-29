@@ -427,6 +427,7 @@ export default function GamePage(): JSX.Element {
                   morgana:  '莫甘娜 (Morgana)',
                   oberon:   '奧伯倫 (Oberon)',
                   mordred:  '莫德雷德 (Mordred)',
+                  minion:   '爪牙 (Minion)',
                 };
                 const isGood = ['merlin', 'percival', 'loyal'].includes(player.role ?? '');
                 const wasAssassinated = room.assassinTargetId === player.id;

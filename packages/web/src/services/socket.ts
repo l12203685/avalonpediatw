@@ -100,38 +100,9 @@ export async function initializeSocket(token: string): Promise<void> {
   });
 
   socket.on('game:state-updated', (room: Room) => {
-    // Capture previous history lengths before updating store
-    const prevRoom = useGameStore.getState().room;
-    const prevVoteLen  = prevRoom?.voteHistory?.length  ?? 0;
-    const prevQuestLen = prevRoom?.questHistory?.length ?? 0;
-
     store.updateRoom(room);
 
-    // Announce vote result if a new vote record was added
-    if (room.voteHistory.length > prevVoteLen) {
-      const latest = room.voteHistory[room.voteHistory.length - 1];
-      const approveCount = Object.values(latest.votes).filter(Boolean).length;
-      const rejectCount  = Object.values(latest.votes).length - approveCount;
-      if (latest.approved) {
-        store.addToast(`✅ 隊伍提案通過！(${approveCount}贊成 / ${rejectCount}反對)`, 'success');
-        audioService.playSound('approval');
-      } else {
-        store.addToast(`❌ 隊伍提案否決 (${approveCount}贊成 / ${rejectCount}反對)`, 'info');
-        audioService.playSound('rejection');
-      }
-    }
-
-    // Announce quest result if a new quest record was added
-    if (room.questHistory.length > prevQuestLen) {
-      const latest = room.questHistory[room.questHistory.length - 1];
-      if (latest.result === 'success') {
-        store.addToast(`⚔️ 第 ${latest.round} 輪任務成功！`, 'success');
-        audioService.playSound('quest-success');
-      } else {
-        store.addToast(`💀 第 ${latest.round} 輪任務失敗 (${latest.failCount} 張失敗票)`, 'error');
-        audioService.playSound('quest-fail');
-      }
-    }
+    // Vote + quest result toasts/sounds are handled by VoteRevealOverlay / QuestResultOverlay in GamePage
 
     // Sync current player's role on reconnect (role only visible if server sanitized it for us)
     const cp = useGameStore.getState().currentPlayer;

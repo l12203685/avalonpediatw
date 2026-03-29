@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { QuestRecord, Room } from '@avalon/shared';
+import audioService from '../services/audio';
 
 interface QuestResultOverlayProps {
   record: QuestRecord;
@@ -19,6 +20,8 @@ export default function QuestResultOverlay({
   const success = record.result === 'success';
 
   useEffect(() => {
+    audioService.playSound(success ? 'quest-success' : 'quest-fail');
+
     const start = Date.now();
     const interval = setInterval(() => {
       const elapsed = Date.now() - start;

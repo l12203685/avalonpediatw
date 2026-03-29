@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { VoteRecord, Room } from '@avalon/shared';
+import audioService from '../services/audio';
 
 interface VoteRevealOverlayProps {
   record: VoteRecord;
@@ -19,6 +20,8 @@ export default function VoteRevealOverlay({
   const [progress, setProgress] = useState(100);
 
   useEffect(() => {
+    audioService.playSound(record.approved ? 'approval' : 'rejection');
+
     const start = Date.now();
     const interval = setInterval(() => {
       const elapsed = Date.now() - start;

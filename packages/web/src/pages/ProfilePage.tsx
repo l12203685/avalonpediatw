@@ -12,13 +12,14 @@ const ROLE_NAMES: Record<string, string> = {
   morgana:  '莫甘娜 (Morgana)',
   mordred:  '莫德雷德 (Mordred)',
   oberon:   '奧伯倫 (Oberon)',
+  minion:   '爪牙 (Minion)',
   unknown:  '未知 (Unknown)',
 };
 
 const ROLE_COLORS: Record<string, string> = {
   merlin: 'text-blue-300', percival: 'text-cyan-300', loyal: 'text-green-300',
   assassin: 'text-red-400', morgana: 'text-pink-400', mordred: 'text-red-600',
-  oberon: 'text-purple-400',
+  oberon: 'text-purple-400', minion: 'text-orange-400',
 };
 
 function formatDate(iso: string): string {
