@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { submitVote, submitAssassination, requestRematch, leaveSpectate } from '../services/socket';
 import GameBoard from '../components/GameBoard';
@@ -6,12 +6,14 @@ import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
 import TeamSelectionPanel from '../components/TeamSelectionPanel';
 import RoleRevealModal from '../components/RoleRevealModal';
+import VoteRevealOverlay from '../components/VoteRevealOverlay';
+import QuestResultOverlay from '../components/QuestResultOverlay';
 import ChatPanel from '../components/ChatPanel';
 import HistoryPanel from '../components/HistoryPanel';
 import MissionTrack from '../components/MissionTrack';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Bell, RefreshCw } from 'lucide-react';
-import { AVALON_CONFIG } from '@avalon/shared';
+import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 
 export default function GamePage(): JSX.Element {
@@ -21,6 +23,10 @@ export default function GamePage(): JSX.Element {
   const [isAssassinating, setIsAssassinating] = useState(false);
   const [showRoleReveal, setShowRoleReveal] = useState(true);
   const [assassinTimer, setAssassinTimer] = useState(120); // 120s matches server ASSASSINATION_TIMEOUT_MS
+  const [pendingVoteReveal, setPendingVoteReveal] = useState<VoteRecord | null>(null);
+  const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
+  const prevVoteHistoryLen = useRef(0);
+  const prevQuestHistoryLen = useRef(0);
 
   // Request browser notification permission on mount
   useEffect(() => {
@@ -41,6 +47,26 @@ export default function GamePage(): JSX.Element {
     }, 1000);
     return () => clearInterval(interval);
   }, [room?.state]);
+
+  // Show vote reveal overlay when a new vote record is added
+  useEffect(() => {
+    if (!room) return;
+    const len = room.voteHistory.length;
+    if (len > prevVoteHistoryLen.current) {
+      setPendingVoteReveal(room.voteHistory[len - 1]);
+    }
+    prevVoteHistoryLen.current = len;
+  }, [room?.voteHistory?.length]);
+
+  // Show quest result overlay when a new quest completes
+  useEffect(() => {
+    if (!room) return;
+    const len = room.questHistory.length;
+    if (len > prevQuestHistoryLen.current) {
+      setPendingQuestReveal(room.questHistory[len - 1]);
+    }
+    prevQuestHistoryLen.current = len;
+  }, [room?.questHistory?.length]);
 
   if (!room || !currentPlayer) {
     return <div className="text-center text-white">載入中…</div>;
@@ -107,6 +133,30 @@ export default function GamePage(): JSX.Element {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4">
+      {/* Vote Reveal Overlay */}
+      <AnimatePresence>
+        {pendingVoteReveal && (
+          <VoteRevealOverlay
+            key={`vote-${pendingVoteReveal.round}-${pendingVoteReveal.attempt}`}
+            record={pendingVoteReveal}
+            room={room}
+            onDismiss={() => setPendingVoteReveal(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Quest Result Overlay */}
+      <AnimatePresence>
+        {pendingQuestReveal && !pendingVoteReveal && (
+          <QuestResultOverlay
+            key={`quest-${pendingQuestReveal.round}`}
+            record={pendingQuestReveal}
+            room={room}
+            onDismiss={() => setPendingQuestReveal(null)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Role Reveal Modal */}
       {showRoleReveal && room.state !== 'ended' && !isSpectator && (
         <RoleRevealModal
