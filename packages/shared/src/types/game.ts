@@ -38,6 +38,7 @@ export interface Player {
   team: Team | null;
   status: PlayerStatus;
   isBot?: boolean;  // true = AI-controlled player
+  botDifficulty?: 'easy' | 'normal' | 'hard'; // AI difficulty level (only set when isBot=true)
   vote?: boolean | null; // true = approve, false = reject, null = not voted
   kills?: string[]; // IDs of players killed (for assassin)
   createdAt: number;

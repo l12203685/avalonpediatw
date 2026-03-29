@@ -4,7 +4,8 @@ import { Room, Player, User, AVALON_CONFIG } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { GameEngine } from '../game/GameEngine';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
-import { PlayerObservation } from '../ai/types';
+import { RandomAgent } from '../ai/RandomAgent';
+import { PlayerObservation, AvalonAgent } from '../ai/types';
 import { SocketRateLimiter } from '../middleware/rateLimit';
 import {
   saveRoom,
@@ -36,7 +37,7 @@ export class GameServer {
   private roomManager: RoomManager;
   private gameEngines: Map<string, GameEngine> = new Map();
   // botId → HeuristicAgent instance (for bot-controlled players)
-  private botAgents: Map<string, HeuristicAgent> = new Map();
+  private botAgents: Map<string, AvalonAgent> = new Map();
   // uid → supabase UUID (set from socket.data.supabaseId on join/create)
   private supabaseIds: Map<string, string> = new Map();
   // roomId → start timestamp (ms)
@@ -109,8 +110,8 @@ export class GameServer {
         this.handleKickPlayer(socket, roomId, targetPlayerId);
       });
 
-      socket.on('game:add-bot', (roomId: string) => {
-        this.handleAddBot(socket, roomId);
+      socket.on('game:add-bot', (roomId: string, difficulty?: string) => {
+        this.handleAddBot(socket, roomId, difficulty as 'easy' | 'normal' | 'hard' | undefined);
       });
 
       socket.on('game:remove-bot', (roomId: string, botId: string) => {
@@ -788,7 +789,7 @@ export class GameServer {
     }
   }
 
-  private handleAddBot(socket: Socket, roomId: string): void {
+  private handleAddBot(socket: Socket, roomId: string, difficulty: 'easy' | 'normal' | 'hard' = 'normal'): void {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) { socket.emit('error', 'Room not found'); return; }
@@ -803,9 +804,10 @@ export class GameServer {
       }
 
       const BOT_NAMES = ['阿爾比斯', '蘭斯洛特', '加拉哈德', '崔斯坦', '帕西法爾', '貝狄維爾'];
+      const DIFFICULTY_EMOJI: Record<string, string> = { easy: '🟢', normal: '🤖', hard: '🔴' };
       const existingBotCount = Object.values(room.players).filter(p => p.isBot).length;
       const botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
-      const botName = `🤖 ${BOT_NAMES[existingBotCount % BOT_NAMES.length]}`;
+      const botName = `${DIFFICULTY_EMOJI[difficulty] ?? '🤖'} ${BOT_NAMES[existingBotCount % BOT_NAMES.length]}`;
 
       room.players[botId] = {
         id: botId,
@@ -814,12 +816,18 @@ export class GameServer {
         team: null,
         status: 'active',
         isBot: true,
+        botDifficulty: difficulty,
         createdAt: Date.now(),
       };
 
-      this.botAgents.set(botId, new HeuristicAgent(botId));
+      // Choose agent based on difficulty
+      const agent = difficulty === 'easy'
+        ? new RandomAgent(botId)
+        : new HeuristicAgent(botId);
+
+      this.botAgents.set(botId, agent);
       this.broadcastRoomState(roomId, room);
-      console.log(`✓ Bot ${botName} added to room ${roomId}`);
+      console.log(`✓ Bot ${botName} (${difficulty}) added to room ${roomId}`);
     } catch (error) {
       console.error('Error adding bot:', error);
       socket.emit('error', 'Failed to add bot');

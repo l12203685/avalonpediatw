@@ -241,7 +241,9 @@ export default function LobbyPage(): JSX.Element {
                     {player.name}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {player.id === room.host ? '👑 房主 (Host)' : player.isBot ? '🤖 AI 機器人 (Bot)' : '玩家 (Player)'}
+                    {player.id === room.host ? '👑 房主 (Host)' : player.isBot ? (
+                      `🤖 AI 機器人 (${player.botDifficulty === 'easy' ? '簡單' : player.botDifficulty === 'hard' ? '困難' : '普通'})`
+                    ) : '玩家 (Player)'}
                     {player.id === currentPlayer.id && ' · 你 (You)'}
                     {player.status === 'disconnected' && !player.isBot && <span className="text-red-400"> · 斷線 (Disconnected)</span>}
                   </p>
@@ -297,15 +299,27 @@ export default function LobbyPage(): JSX.Element {
                   : `${readyCount}/${humanPlayers.length} 位玩家已準備 (players ready)`}
               </div>
             )}
-            {/* Add Bot button (only if room not full) */}
+            {/* Add Bot buttons with difficulty selection */}
             {playerList.length < room.maxPlayers && (
-              <button
-                onClick={() => addBot(room.id)}
-                className="w-full bg-indigo-700/60 hover:bg-indigo-600/80 border border-indigo-500 text-indigo-200 font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
-              >
-                <Bot size={18} />
-                加入 AI 機器人 (Add AI Bot)
-              </button>
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500 text-center font-semibold">加入 AI 機器人 (Add AI Bot)</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { diff: 'easy',   label: '🟢 簡單', desc: '隨機', bg: 'bg-green-900/40 hover:bg-green-800/60 border-green-700 text-green-300' },
+                    { diff: 'normal', label: '🤖 普通', desc: '策略', bg: 'bg-indigo-900/40 hover:bg-indigo-800/60 border-indigo-600 text-indigo-300' },
+                    { diff: 'hard',   label: '🔴 困難', desc: '強化', bg: 'bg-red-900/40 hover:bg-red-800/60 border-red-700 text-red-300' },
+                  ] as const).map(({ diff, label, desc, bg }) => (
+                    <button
+                      key={diff}
+                      onClick={() => addBot(room.id, diff)}
+                      className={`flex flex-col items-center py-2 px-2 rounded-lg border font-semibold text-sm transition-all ${bg}`}
+                    >
+                      <span>{label}</span>
+                      <span className="text-xs opacity-70">{desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
             <button
               onClick={() => startGame(room.id)}

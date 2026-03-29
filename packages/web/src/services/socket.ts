@@ -274,9 +274,9 @@ export function kickPlayer(roomId: string, targetPlayerId: string): void {
   socket.emit('game:kick-player', roomId, targetPlayerId);
 }
 
-export function addBot(roomId: string): void {
+export function addBot(roomId: string, difficulty: 'easy' | 'normal' | 'hard' = 'normal'): void {
   const socket = getSocket();
-  socket.emit('game:add-bot', roomId);
+  socket.emit('game:add-bot', roomId, difficulty);
 }
 
 export function removeBot(roomId: string, botId: string): void {
