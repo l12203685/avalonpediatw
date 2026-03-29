@@ -1,6 +1,6 @@
 import { Player } from '@avalon/shared';
 import { motion } from 'framer-motion';
-import { ThumbsUp, ThumbsDown, Crown, Sword } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Crown, Sword, WifiOff } from 'lucide-react';
 
 const ROLE_NAMES: Record<string, string> = {
   merlin:   '梅林 (Merlin)',
@@ -39,7 +39,9 @@ export default function PlayerCard({
       {/* 玩家頭像 */}
       <motion.div
         className={`w-20 h-20 rounded-full flex items-center justify-center font-bold text-lg border-4 transition-all relative ${
-          isCurrentPlayer
+          player.status === 'disconnected'
+            ? 'border-gray-600 bg-gradient-to-br from-gray-600 to-gray-700 opacity-50'
+            : isCurrentPlayer
             ? 'border-yellow-400 bg-gradient-to-br from-yellow-400 to-yellow-500 shadow-lg shadow-yellow-400/50'
             : player.isBot
             ? 'border-indigo-500 bg-gradient-to-br from-indigo-600 to-purple-700'
@@ -75,6 +77,18 @@ export default function PlayerCard({
           </motion.div>
         )}
 
+        {/* 斷線標記 */}
+        {player.status === 'disconnected' && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute -bottom-2 -left-2 bg-red-700 rounded-full p-1"
+            title="斷線 (Disconnected)"
+          >
+            <WifiOff size={12} className="text-white" />
+          </motion.div>
+        )}
+
         {/* 投票指示器 */}
         {hasVoted && (
           <motion.div
@@ -95,7 +109,7 @@ export default function PlayerCard({
       </motion.div>
 
       {/* 玩家名字 */}
-      <p className="font-bold text-white text-sm text-center max-w-20 truncate">
+      <p className={`font-bold text-sm text-center max-w-20 truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
         {player.name}
       </p>
 

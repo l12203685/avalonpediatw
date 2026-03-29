@@ -15,12 +15,12 @@ import SuspicionBoard from '../components/SuspicionBoard';
 import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
 import audioService from '../services/audio';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Bell, RefreshCw, Volume2, VolumeX } from 'lucide-react';
+import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2 } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 
 export default function GamePage(): JSX.Element {
-  const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer, isSpectator } = useGameStore();
+  const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer, isSpectator, socketStatus } = useGameStore();
   const [isVoting, setIsVoting] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [isAssassinating, setIsAssassinating] = useState(false);
@@ -187,6 +187,29 @@ export default function GamePage(): JSX.Element {
       )}
 
       <div className="max-w-6xl mx-auto space-y-8">
+        {/* Reconnection status banner */}
+        <AnimatePresence>
+          {(socketStatus === 'reconnecting' || socketStatus === 'disconnected') && (
+            <motion.div
+              key="reconnect-banner"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ${
+                socketStatus === 'reconnecting'
+                  ? 'bg-yellow-900/60 border border-yellow-600 text-yellow-200'
+                  : 'bg-red-900/60 border border-red-600 text-red-200'
+              }`}
+            >
+              {socketStatus === 'reconnecting' ? (
+                <><Loader2 size={16} className="animate-spin flex-shrink-0" />正在重新連線… (Reconnecting…)</>
+              ) : (
+                <><WifiOff size={16} className="flex-shrink-0" />已斷線，請檢查網路連線 (Disconnected — check your connection)</>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Spectator banner */}
         {isSpectator && (
           <div className="flex items-center justify-between bg-purple-900/40 border border-purple-600 rounded-xl px-4 py-2">
