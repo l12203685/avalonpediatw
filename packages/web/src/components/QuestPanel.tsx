@@ -3,6 +3,7 @@ import { CheckCircle, XCircle, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { submitQuestVote } from '../services/socket';
+import audioService from '../services/audio';
 
 interface QuestPanelProps {
   room: Room;
@@ -36,6 +37,7 @@ export default function QuestPanel({
 
     setIsSubmitting(true);
     try {
+      audioService.playSound('vote');
       submitQuestVote(room.id, currentPlayer.id, vote);
       setHasVoted(true);
     } finally {

@@ -2,6 +2,7 @@ import { Room, Player } from '@avalon/shared';
 import { ThumbsUp, ThumbsDown, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import audioService from '../services/audio';
 
 interface VotePanelProps {
   room: Room;
@@ -109,7 +110,7 @@ export default function VotePanel({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => onVote(true)}
+            onClick={() => { audioService.playSound('vote'); onVote(true); }}
             disabled={isLoading}
             className="flex items-center gap-2 bg-avalon-good hover:bg-avalon-good/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
           >
@@ -120,7 +121,7 @@ export default function VotePanel({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => onVote(false)}
+            onClick={() => { audioService.playSound('vote'); onVote(false); }}
             disabled={isLoading}
             className="flex items-center gap-2 bg-avalon-evil hover:bg-avalon-evil/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
           >
