@@ -22,6 +22,8 @@ services:
         sync: false
       - key: DISCORD_BOT_TOKEN
         sync: false
+      - key: DISCORD_WEBHOOK_URL
+        value: https://discord.com/api/webhooks/1138802075753521153/fTxo8tJMVP8ee-g-HAYHNOn7EsaFbFozPnfDhDL8KpI1FV7sr-OF5UdX-nmbJiEykWrj
 
   # ── Frontend (React static site) ─────────────────────────────────────────
   - type: web
