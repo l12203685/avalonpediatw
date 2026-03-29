@@ -715,6 +715,26 @@ export class GameServer {
       await saveGameRecords(records);
       console.log(`[supabase] Saved ${records.length} game records for room ${roomId}`);
 
+      // Emit ELO deltas to all players in room so end screen can show +/- ELO
+      const eloDeltas: Record<string, number> = {};
+      for (const record of records) {
+        // Map supabase ID back to socket uid
+        for (const [uid, sid] of this.supabaseIds.entries()) {
+          if (sid === record.player_user_id) {
+            eloDeltas[uid] = record.elo_delta;
+            break;
+          }
+        }
+      }
+      if (Object.keys(eloDeltas).length > 0) {
+        // Update room state with eloDeltas and re-broadcast
+        const currentRoom = this.roomManager.getRoom(roomId);
+        if (currentRoom) {
+          (currentRoom as Room & { eloDeltas: Record<string, number> }).eloDeltas = eloDeltas;
+          this.broadcastRoomState(roomId, currentRoom, true);
+        }
+      }
+
       // Award badges based on this game's results
       for (const record of records) {
         const badges = this.evaluateBadges(record, playerCount, records, room);

@@ -67,6 +67,7 @@ export interface Room {
   roleOptions: RoleOptions;    // Host-configured optional role toggles
   readyPlayerIds: string[];    // Player IDs who clicked "Ready" in lobby
   isPrivate?: boolean;         // Room requires password to join
+  eloDeltas?: Record<string, number>; // playerId -> elo delta (populated on game end)
   createdAt: number;
   updatedAt: number;
 }

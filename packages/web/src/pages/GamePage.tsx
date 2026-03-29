@@ -506,7 +506,14 @@ export default function GamePage(): JSX.Element {
                         : 'bg-red-900/30 border-red-600'
                     }`}
                   >
-                    <p className="font-bold text-white">{player.name}{wasAssassinated && ' 🗡️'}</p>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="font-bold text-white truncate">{player.name}{wasAssassinated && ' 🗡️'}</p>
+                      {room.eloDeltas?.[player.id] !== undefined && (
+                        <span className={`text-xs font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {room.eloDeltas[player.id] >= 0 ? '+' : ''}{room.eloDeltas[player.id]}
+                        </span>
+                      )}
+                    </div>
                     <p className={isGood ? 'text-blue-400' : 'text-red-400'}>
                       {roleLabel[player.role ?? ''] ?? player.role}
                     </p>

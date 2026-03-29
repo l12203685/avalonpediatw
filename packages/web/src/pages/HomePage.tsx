@@ -18,7 +18,9 @@ interface OpenRoom {
 
 export default function HomePage(): JSX.Element {
   const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile, addToast, setQuickSoloMode } = useGameStore();
-  const [playerName, setPlayerName] = useState(currentPlayer?.name ?? '');
+  const [playerName, setPlayerName] = useState(
+    currentPlayer?.name ?? localStorage.getItem('avalon_player_name') ?? ''
+  );
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
@@ -87,6 +89,7 @@ export default function HomePage(): JSX.Element {
       setCurrentPlayer({ ...currentPlayer, name: playerName });
     }
 
+    localStorage.setItem('avalon_player_name', playerName.trim());
     createRoom(playerName, roomPassword.trim() || undefined);
     setGameState('lobby');
   };
@@ -120,6 +123,7 @@ export default function HomePage(): JSX.Element {
       setCurrentPlayer({ ...currentPlayer, name: playerName });
     }
 
+    localStorage.setItem('avalon_player_name', playerName.trim());
     joinRoom(roomId, joinPassword.trim() || undefined);
     setGameState('lobby');
   };
