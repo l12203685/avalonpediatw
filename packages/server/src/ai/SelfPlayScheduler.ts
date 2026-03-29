@@ -12,11 +12,43 @@
 
 import { SelfPlayEngine } from './SelfPlayEngine';
 import { HeuristicAgent } from './HeuristicAgent';
+import { RandomAgent } from './RandomAgent';
+import { AvalonAgent } from './types';
 import { isSupabaseReady } from '../services/supabase';
 
-const INTERVAL_MS      = 30 * 60 * 1000; // 30 minutes between batches
-const GAMES_PER_BATCH  = 5;               // games per batch (keeps each run short)
-const PLAYER_COUNTS    = [5, 6, 7, 8];   // rotate through common player counts
+const INTERVAL_MS     = 30 * 60 * 1000; // 30 minutes between batches
+const GAMES_PER_BATCH = 5;               // games per batch (keeps each run short)
+
+// Rotate through player counts and population configs for diverse training data
+const BATCH_CONFIGS: Array<{ playerCount: number; mode: 'normal' | 'hard' | 'mixed' | 'baseline' }> = [
+  { playerCount: 5,  mode: 'normal'   },
+  { playerCount: 6,  mode: 'hard'     },
+  { playerCount: 7,  mode: 'mixed'    },
+  { playerCount: 8,  mode: 'normal'   },
+  { playerCount: 5,  mode: 'baseline' }, // heuristic vs random for baseline comparison
+  { playerCount: 9,  mode: 'hard'     },
+  { playerCount: 10, mode: 'mixed'    },
+  { playerCount: 6,  mode: 'baseline' },
+];
+
+function buildAgents(playerCount: number, mode: typeof BATCH_CONFIGS[0]['mode']): AvalonAgent[] {
+  return Array.from({ length: playerCount }, (_, i) => {
+    switch (mode) {
+      case 'hard':
+        return new HeuristicAgent(`H-${i + 1}`, 'hard');
+      case 'mixed':
+        // Alternate hard/normal heuristic agents
+        return new HeuristicAgent(`H-${i + 1}`, i % 2 === 0 ? 'hard' : 'normal');
+      case 'baseline':
+        // Even-indexed = heuristic normal, odd-indexed = random (for win-rate baseline)
+        return i % 2 === 0
+          ? new HeuristicAgent(`H-${i + 1}`, 'normal')
+          : new RandomAgent(`R-${i + 1}`);
+      default: // 'normal'
+        return new HeuristicAgent(`H-${i + 1}`, 'normal');
+    }
+  });
+}
 
 let batchRunning = false;
 let batchCount   = 0;
@@ -26,16 +58,16 @@ async function runBatch(): Promise<void> {
   if (batchRunning || !isSupabaseReady()) return;
 
   batchRunning = true;
-  const playerCount = PLAYER_COUNTS[batchCount % PLAYER_COUNTS.length];
+  const config = BATCH_CONFIGS[batchCount % BATCH_CONFIGS.length];
   batchCount++;
 
   try {
     const engine = new SelfPlayEngine();
-    const agents = Array.from({ length: playerCount }, (_, i) => new HeuristicAgent(`H-${i + 1}`));
+    const agents = buildAgents(config.playerCount, config.mode);
     const stats  = await engine.runBatch(agents, GAMES_PER_BATCH, true);
 
     console.log(
-      `[SelfPlay] batch #${batchCount} — ${playerCount}p × ${GAMES_PER_BATCH} games | ` +
+      `[SelfPlay] batch #${batchCount} — ${config.playerCount}p×${GAMES_PER_BATCH} [${config.mode}] | ` +
       `good ${stats.goodWins}/${stats.total}, evil ${stats.evilWins}/${stats.total}, ` +
       `avgRounds ${stats.avgRounds}`
     );
@@ -82,6 +114,14 @@ export function stopSelfPlayScheduler(): void {
 }
 
 /** Returns current scheduler status (for health checks). */
-export function getSelfPlayStatus(): { enabled: boolean; batchCount: number; batchRunning: boolean } {
-  return { enabled: schedulerTimer !== null, batchCount, batchRunning };
+export function getSelfPlayStatus(): { enabled: boolean; batchCount: number; batchRunning: boolean; nextConfig: typeof BATCH_CONFIGS[0] } {
+  return {
+    enabled:    schedulerTimer !== null,
+    batchCount,
+    batchRunning,
+    nextConfig: BATCH_CONFIGS[batchCount % BATCH_CONFIGS.length],
+  };
 }
+
+/** Exposed for external use (admin API) */
+export { buildAgents, BATCH_CONFIGS };

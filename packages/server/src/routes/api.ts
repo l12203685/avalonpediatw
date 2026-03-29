@@ -9,9 +9,7 @@ import {
   isSupabaseReady,
 } from '../services/supabase';
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
-import { RandomAgent } from '../ai/RandomAgent';
-import { HeuristicAgent } from '../ai/HeuristicAgent';
-import { getSelfPlayStatus } from '../ai/SelfPlayScheduler';
+import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 
 const router: IRouter = Router();
@@ -103,7 +101,7 @@ router.get('/replay/:roomId', publicLimiter, async (req: Request, res: Response)
 
 // ── POST /api/ai/selfplay ─────────────────────────────────────
 // Admin-only endpoint to trigger self-play data generation
-// Body: { playerCount?: 5-10, games?: 1-100, persist?: boolean }
+// Body: { playerCount?: 5-10, games?: 1-100, persist?: boolean, mode?: 'normal'|'hard'|'mixed'|'baseline' }
 router.post('/ai/selfplay', adminLimiter, async (req: Request, res: Response) => {
   const secret = req.headers['x-admin-secret'];
   if (!secret || secret !== process.env.ADMIN_SECRET) {
@@ -113,17 +111,14 @@ router.post('/ai/selfplay', adminLimiter, async (req: Request, res: Response) =>
   const playerCount = Math.min(10, Math.max(5, Number(req.body?.playerCount) || 5));
   const games       = Math.min(100, Math.max(1, Number(req.body?.games) || 10));
   const persist     = req.body?.persist !== false;
-  const agentType   = req.body?.agentType === 'heuristic' ? 'heuristic' : 'random';
+  const validModes  = ['normal', 'hard', 'mixed', 'baseline'] as const;
+  const mode        = validModes.includes(req.body?.mode) ? req.body.mode as typeof validModes[number] : 'normal';
 
   try {
     const engine = new SelfPlayEngine();
-    const agents = Array.from({ length: playerCount }, (_, i) =>
-      agentType === 'heuristic'
-        ? new HeuristicAgent(`AI-${i + 1}`)
-        : new RandomAgent(`AI-${i + 1}`)
-    );
+    const agents = buildAgents(playerCount, mode);
     const stats = await engine.runBatch(agents, games, persist);
-    return res.json({ ok: true, agentType, ...stats });
+    return res.json({ ok: true, mode, playerCount, ...stats });
   } catch (err) {
     console.error('[ai/selfplay]', err);
     return res.status(500).json({ error: 'Self-play failed' });
