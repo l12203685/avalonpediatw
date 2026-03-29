@@ -1251,11 +1251,19 @@ export class GameServer {
       }
       this.roomStartTimes.delete(roomId);
 
-      // Remove bot agents from previous game
+      // Remove old bot agents, then re-create them for bots still in the room
       for (const pid of Object.keys(room.players)) {
         if (room.players[pid].isBot) {
           this.botAgents.delete(pid);
         }
+      }
+      for (const [pid, player] of Object.entries(room.players)) {
+        if (!player.isBot) continue;
+        const difficulty = player.botDifficulty ?? 'normal';
+        const agent = difficulty === 'easy'
+          ? new RandomAgent(pid)
+          : new HeuristicAgent(pid, difficulty === 'hard' ? 'hard' : 'normal');
+        this.botAgents.set(pid, agent);
       }
 
       // Reset room state (keep players and host, clear all game data)
