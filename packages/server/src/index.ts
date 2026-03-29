@@ -8,6 +8,7 @@ import { authenticateSocket } from './middleware/auth';
 import { GameServer } from './socket/GameServer';
 import { authRouter } from './routes/auth';
 import { apiRouter } from './routes/api';
+import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
 
 const app: Express = express();
 
@@ -51,6 +52,7 @@ initializeFirebase()
     const gameServer = new GameServer(io);
     gameServer.start();
     console.log('✓ Socket.IO game server started');
+    startSelfPlayScheduler();
   })
   .catch(err => {
     console.error('❌ Firebase initialization failed:', err);
@@ -59,6 +61,7 @@ initializeFirebase()
     const gameServer = new GameServer(io);
     gameServer.start();
     console.log('⚠️  Socket.IO game server started (Firebase unavailable)');
+    startSelfPlayScheduler();
   });
 
 // Health check
@@ -68,6 +71,7 @@ app.get('/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     environment: NODE_ENV,
     supabase: isSupabaseReady() ? 'connected' : 'not configured',
+    selfPlay: getSelfPlayStatus(),
   });
 });
 

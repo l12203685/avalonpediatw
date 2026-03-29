@@ -11,6 +11,7 @@ import {
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { RandomAgent } from '../ai/RandomAgent';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
+import { getSelfPlayStatus } from '../ai/SelfPlayScheduler';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 
 const router: IRouter = Router();
@@ -152,6 +153,7 @@ router.get('/ai/stats', publicLimiter, async (_req: Request, res: Response) => {
     totalEvents:   eventCount ?? 0,
     aiGames:       gameCount  ?? 0,
     message:       'AI self-play data stats',
+    scheduler:     getSelfPlayStatus(),
   });
 });
 
