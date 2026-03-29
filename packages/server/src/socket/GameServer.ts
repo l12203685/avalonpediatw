@@ -1280,6 +1280,7 @@ export class GameServer {
       room.questVotedCount = 0;
       room.endReason = undefined;
       room.assassinTargetId = undefined;
+      room.readyPlayerIds = [];
       room.updatedAt = Date.now();
 
       // Reset each player's role and team
