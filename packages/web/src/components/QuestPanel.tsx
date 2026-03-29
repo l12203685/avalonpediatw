@@ -15,7 +15,7 @@ export default function QuestPanel({
   currentPlayer,
   isLoading = false,
 }: QuestPanelProps): JSX.Element {
-  const [timeLeft, setTimeLeft] = useState(30); // 30秒任務投票時限
+  const [timeLeft, setTimeLeft] = useState(60); // 60秒任務投票時限 (matches server QUEST_TIMEOUT_MS)
   const isInTeam = room.questTeam.includes(currentPlayer.id);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);

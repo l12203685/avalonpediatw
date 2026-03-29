@@ -16,7 +16,7 @@ export default function VotePanel({
   onVote,
   isLoading = false,
 }: VotePanelProps): JSX.Element {
-  const [timeLeft, setTimeLeft] = useState(30); // 30秒投票時限
+  const [timeLeft, setTimeLeft] = useState(60); // 60秒投票時限 (matches server VOTE_TIMEOUT_MS)
   const playerCount = Object.keys(room.players).length;
   const votedCount = Object.keys(room.votes).length;
   const hasVoted = room.votes[currentPlayer.id] !== undefined;

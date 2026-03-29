@@ -18,11 +18,22 @@ export default function GamePage(): JSX.Element {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [isAssassinating, setIsAssassinating] = useState(false);
   const [showRoleReveal, setShowRoleReveal] = useState(true);
+  const [assassinTimer, setAssassinTimer] = useState(120); // 120s matches server ASSASSINATION_TIMEOUT_MS
 
   // Show role reveal modal each time game starts (state goes from lobby → voting)
   useEffect(() => {
     setShowRoleReveal(true);
   }, []);
+
+  // Assassination countdown
+  useEffect(() => {
+    if (!room || room.state !== 'discussion') return;
+    setAssassinTimer(120);
+    const interval = setInterval(() => {
+      setAssassinTimer(t => Math.max(0, t - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [room?.state]);
 
   if (!room || !currentPlayer) {
     return <div className="text-center text-white">載入中…</div>;
@@ -213,6 +224,9 @@ export default function GamePage(): JSX.Element {
                 <div className="text-center">
                   <h2 className="text-3xl font-bold text-red-400 mb-2">🗡️ 刺殺梅林 (Assassinate Merlin)</h2>
                   <p className="text-gray-300">你認為誰是梅林？選擇你的目標 (Who do you think is Merlin? Choose your target)</p>
+                  <div className={`inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full font-bold text-sm ${assassinTimer < 30 ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                    ⏱ {assassinTimer}s
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
                   {Object.values(room.players)
