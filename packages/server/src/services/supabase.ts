@@ -375,3 +375,97 @@ export async function verifyAndDeleteOAuthSession(
   await db.from('oauth_sessions').delete().eq('id', data.id);
   return true;
 }
+
+// ── 好友 / 追蹤系統 ───────────────────────────────────────────
+
+export interface FriendEntry {
+  id: string;
+  display_name: string;
+  photo_url: string | null;
+  elo_rating: number;
+  badges: string[];
+}
+
+/**
+ * 取得我追蹤的用戶清單（join friendships → users）
+ */
+export async function getFriends(followerId: string): Promise<FriendEntry[]> {
+  const db = getSupabaseClient();
+  if (!db) return [];
+
+  const { data, error } = await db
+    .from('friendships')
+    .select('following_id, users!friendships_following_id_fkey(id, display_name, photo_url, elo_rating, badges)')
+    .eq('follower_id', followerId);
+
+  if (error || !data) return [];
+
+  type FriendshipRow = {
+    following_id: string;
+    users: { id: string; display_name: string; photo_url: string | null; elo_rating: number; badges: string[] | null }[] | null;
+  };
+
+  return (data as unknown as FriendshipRow[])
+    .map((row) => {
+      const u = Array.isArray(row.users) ? row.users[0] : row.users;
+      if (!u) return null;
+      return {
+        id:           u.id,
+        display_name: u.display_name,
+        photo_url:    u.photo_url ?? null,
+        elo_rating:   u.elo_rating ?? 1000,
+        badges:       u.badges ?? [],
+      };
+    })
+    .filter((entry): entry is FriendEntry => entry !== null);
+}
+
+/**
+ * 追蹤用戶（重複追蹤靜默忽略）
+ */
+export async function followUser(followerId: string, followingId: string): Promise<void> {
+  const db = getSupabaseClient();
+  if (!db) return;
+
+  const { error } = await db
+    .from('friendships')
+    .insert({ follower_id: followerId, following_id: followingId });
+
+  // Ignore unique constraint violation (duplicate follow)
+  if (error && !error.message.includes('duplicate') && !error.code?.includes('23505')) {
+    console.error('[supabase] followUser error:', error.message);
+  }
+}
+
+/**
+ * 取消追蹤用戶
+ */
+export async function unfollowUser(followerId: string, followingId: string): Promise<void> {
+  const db = getSupabaseClient();
+  if (!db) return;
+
+  const { error } = await db
+    .from('friendships')
+    .delete()
+    .eq('follower_id', followerId)
+    .eq('following_id', followingId);
+
+  if (error) console.error('[supabase] unfollowUser error:', error.message);
+}
+
+/**
+ * 檢查是否已追蹤某用戶
+ */
+export async function isFollowing(followerId: string, followingId: string): Promise<boolean> {
+  const db = getSupabaseClient();
+  if (!db) return false;
+
+  const { data } = await db
+    .from('friendships')
+    .select('id')
+    .eq('follower_id', followerId)
+    .eq('following_id', followingId)
+    .single();
+
+  return !!data;
+}
