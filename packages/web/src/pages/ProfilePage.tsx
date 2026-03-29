@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
+import { checkFollowing, followUser, unfollowUser } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
 import { getStoredToken } from '../services/socket';
@@ -110,16 +111,19 @@ function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: stri
 }
 
 export default function ProfilePage(): JSX.Element {
-  const { setGameState, profileUserId, navigateToProfile } = useGameStore();
+  const { setGameState, profileUserId, navigateToProfile, addToast } = useGameStore();
   const [profile, setProfile]       = useState<UserProfile | null>(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [replay, setReplay]         = useState<{ roomId: string; events: GameEvent[] } | null>(null);
   const [replayLoading, setReplayLoading] = useState(false);
+  const [isFollowingUser, setIsFollowingUser] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  const isMe = !profileUserId || profileUserId === 'me';
 
   useEffect(() => {
     const token = getStoredToken();
-    const isMe  = !profileUserId || profileUserId === 'me';
 
     const fetch = isMe && token
       ? fetchMyProfile(token)
@@ -132,6 +136,36 @@ export default function ProfilePage(): JSX.Element {
       .catch(() => setError('無法載入用戶資料'))
       .finally(() => setLoading(false));
   }, [profileUserId]);
+
+  useEffect(() => {
+    if (isMe || !profileUserId) return;
+    const token = getStoredToken();
+    if (!token) return;
+    checkFollowing(token, profileUserId)
+      .then(setIsFollowingUser)
+      .catch(() => {});
+  }, [profileUserId, isMe]);
+
+  const handleFollowToggle = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token || !profileUserId) return;
+    setFollowLoading(true);
+    try {
+      if (isFollowingUser) {
+        await unfollowUser(token, profileUserId);
+        setIsFollowingUser(false);
+        addToast(`已取消追蹤 ${profile?.display_name ?? ''}`, 'info');
+      } else {
+        await followUser(token, profileUserId);
+        setIsFollowingUser(true);
+        addToast(`已追蹤 ${profile?.display_name ?? ''}`, 'success');
+      }
+    } catch {
+      addToast('操作失敗，請稍後再試', 'error');
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   const handleReplay = (roomId: string): void => {
     setReplayLoading(true);
@@ -244,6 +278,20 @@ export default function ProfilePage(): JSX.Element {
                       </span>
                     ))}
                   </div>
+                )}
+                {!isMe && (
+                  <button
+                    onClick={handleFollowToggle}
+                    disabled={followLoading}
+                    className={`mt-3 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all disabled:opacity-50 ${
+                      isFollowingUser
+                        ? 'bg-gray-800 hover:bg-red-900/40 border-gray-600 hover:border-red-700 text-gray-300 hover:text-red-400'
+                        : 'bg-blue-900/40 hover:bg-blue-800/60 border-blue-700 text-blue-300 hover:text-white'
+                    }`}
+                  >
+                    {isFollowingUser ? <UserMinus size={12} /> : <UserPlus size={12} />}
+                    {followLoading ? '…' : isFollowingUser ? '取消追蹤' : '追蹤'}
+                  </button>
                 )}
               </div>
             </div>
@@ -427,7 +475,7 @@ export default function ProfilePage(): JSX.Element {
 
             {/* Recent games */}
             <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
-              <h3 className="text-sm font-bold text-gray-300 mb-3">最近 10 局</h3>
+              <h3 className="text-sm font-bold text-gray-300 mb-3">最近 {profile.recent_games.length} 局</h3>
               {profile.recent_games.length === 0 ? (
                 <p className="text-center text-gray-500 text-sm py-4">尚無遊戲記錄</p>
               ) : (

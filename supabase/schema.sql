@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   player_count    INTEGER NOT NULL DEFAULT 1,
   max_players     INTEGER NOT NULL DEFAULT 10,
   evil_wins       BOOLEAN,                        -- NULL = 進行中
+  is_private      BOOLEAN NOT NULL DEFAULT FALSE,  -- TRUE = 需要密碼才能加入
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ended_at        TIMESTAMPTZ
@@ -208,7 +209,7 @@ $$ LANGUAGE plpgsql;
 
 -- 頒發徽章（冪等：已有則不重複添加）
 -- 由後端在遊戲結束後依條件呼叫
--- 六種徽章：初勝 / 梅林之盾 / 刺客之影 / 十人戰場 / 穩健 / 浴火重生
+-- 徽章清單：初勝 / 梅林之盾 / 刺客之影 / 完美刺客 / 梅林逃脫 / 十人戰場 / 大局觀 / 穩健 / 浴火重生 / 速戰速決
 CREATE OR REPLACE FUNCTION award_badge(
   p_user_id UUID,
   p_badge   TEXT

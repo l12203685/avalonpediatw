@@ -83,7 +83,6 @@ export default function PlayerCard({
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             className="absolute -bottom-2 -left-2 bg-red-700 rounded-full p-1"
-            title="斷線 (Disconnected)"
           >
             <WifiOff size={12} className="text-white" />
           </motion.div>

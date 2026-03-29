@@ -262,15 +262,27 @@ export default function HomePage(): JSX.Element {
                 排行榜 (Leaderboard)
               </motion.button>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleQuickSolo}
-                className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-teal-500/50"
-              >
-                <Zap size={20} />
-                快速單人練習 vs 機器人
-              </motion.button>
+              <div className="grid grid-cols-2 gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setGameState('friends')}
+                  className="w-full bg-gradient-to-r from-sky-700 to-blue-600 hover:from-sky-800 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-sky-500/50"
+                >
+                  <Users size={18} />
+                  追蹤列表
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleQuickSolo}
+                  className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-teal-500/50"
+                >
+                  <Zap size={18} />
+                  快速練習
+                </motion.button>
+              </div>
 
               <motion.button
                 whileHover={{ scale: 1.02 }}

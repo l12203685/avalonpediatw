@@ -67,6 +67,7 @@ export interface DbRoom {
   player_count: number;
   max_players: number;
   evil_wins: boolean | null;   // null = in progress
+  is_private: boolean;         // true = requires password to join
   created_at: string;
   updated_at: string;
   ended_at: string | null;
