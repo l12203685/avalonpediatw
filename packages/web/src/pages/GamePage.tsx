@@ -11,6 +11,7 @@ import QuestResultOverlay from '../components/QuestResultOverlay';
 import ChatPanel from '../components/ChatPanel';
 import HistoryPanel from '../components/HistoryPanel';
 import MissionTrack from '../components/MissionTrack';
+import SuspicionBoard from '../components/SuspicionBoard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Bell, RefreshCw } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
@@ -235,6 +236,11 @@ export default function GamePage(): JSX.Element {
 
         {/* Round History */}
         <HistoryPanel room={room} currentPlayer={currentPlayer} />
+
+        {/* Suspicion Notes — personal private notepad, only shown during active game */}
+        {room.state !== 'ended' && room.state !== 'lobby' && !isSpectator && (
+          <SuspicionBoard room={room} currentPlayer={currentPlayer} />
+        )}
 
         {/* Voting Phase */}
         {room.state === 'voting' && !isSpectator && (
