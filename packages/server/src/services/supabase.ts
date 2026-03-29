@@ -317,7 +317,7 @@ export async function getLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
 }
 
 /**
- * 取得單一用戶資料（含最近 10 局遊戲）
+ * 取得單一用戶資料（含最近 20 局遊戲）
  */
 export async function getDbUserProfile(userId: string): Promise<UserProfile | null> {
   const db = getSupabaseClient();
@@ -336,7 +336,7 @@ export async function getDbUserProfile(userId: string): Promise<UserProfile | nu
     .select('id, room_id, role, team, won, elo_delta, player_count, created_at')
     .eq('player_user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(10);
+    .limit(20);
 
   return {
     ...user,

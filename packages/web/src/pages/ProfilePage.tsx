@@ -145,6 +145,20 @@ export default function ProfilePage(): JSX.Element {
     ? Math.round((profile.games_won / profile.total_games) * 100)
     : 0;
 
+  // Compute good/evil win rates from recent game data
+  const teamStats = profile
+    ? profile.recent_games.reduce<Record<'good' | 'evil', { wins: number; total: number }>>(
+        (acc, g) => {
+          const t = g.team as 'good' | 'evil';
+          if (!acc[t]) return acc;
+          acc[t].total++;
+          if (g.won) acc[t].wins++;
+          return acc;
+        },
+        { good: { wins: 0, total: 0 }, evil: { wins: 0, total: 0 } }
+      )
+    : null;
+
   // Compute per-role stats from recent games
   const roleStats = profile
     ? Object.entries(
@@ -249,6 +263,31 @@ export default function ProfilePage(): JSX.Element {
                 </div>
               </div>
             </div>
+
+            {/* Good/Evil split */}
+            {teamStats && (teamStats.good.total > 0 || teamStats.evil.total > 0) && (
+              <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
+                <p className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">陣營勝率 (Team Win Rates) <span className="font-normal text-gray-500">— 近 {profile.recent_games.length} 局</span></p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['good', 'evil'] as const).map(team => {
+                    const { wins, total } = teamStats[team];
+                    const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
+                    const isGood = team === 'good';
+                    return (
+                      <div key={team} className={`rounded-lg border p-3 text-center ${isGood ? 'bg-blue-900/20 border-blue-700/50' : 'bg-red-900/20 border-red-700/50'}`}>
+                        <div className={`text-2xl font-black ${pct >= 50 ? (isGood ? 'text-blue-300' : 'text-red-300') : 'text-gray-400'}`}>
+                          {total > 0 ? `${pct}%` : '—'}
+                        </div>
+                        <div className={`text-xs mt-1 ${isGood ? 'text-blue-400' : 'text-red-400'}`}>
+                          {isGood ? '⚔️ 正義方' : '👹 邪惡方'}
+                        </div>
+                        {total > 0 && <div className="text-xs text-gray-600 mt-0.5">{wins}/{total}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* ELO trend sparkline */}
             {profile.recent_games.length >= 2 && (() => {
