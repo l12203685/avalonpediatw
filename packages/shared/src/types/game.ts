@@ -59,6 +59,9 @@ export interface Room {
   leaderIndex: number; // Index of current quest leader in player list
   voteHistory: VoteRecord[];   // All team-vote records (public info for deduction)
   questHistory: QuestRecord[]; // All completed quest records
+  questVotedCount: number;     // How many quest team members have submitted their vote (count only, not direction)
+  endReason?: 'failed_quests' | 'vote_rejections' | 'merlin_assassinated' | 'assassination_failed' | 'assassination_timeout'; // Why game ended
+  assassinTargetId?: string;   // ID of the player the assassin targeted (set on game end)
   createdAt: number;
   updatedAt: number;
 }
@@ -69,6 +72,7 @@ export interface GameConfig {
   maxFailedVotes: number;
   roles: Role[];
   questTeams: number[]; // Team sizes for each round
+  questFailsRequired: number[]; // Fail votes needed per round (usually 1; round 4 in 7+ player = 2)
 }
 
 // Game Statistics
@@ -143,6 +147,7 @@ export const AVALON_CONFIG: Record<number, GameConfig> = {
     maxFailedVotes: 5,
     roles: ['merlin', 'percival', 'loyal', 'assassin', 'morgana'],
     questTeams: [2, 3, 2, 3, 3],
+    questFailsRequired: [1, 1, 1, 1, 1],
   },
   6: {
     // 4 good, 2 evil
@@ -151,25 +156,28 @@ export const AVALON_CONFIG: Record<number, GameConfig> = {
     maxFailedVotes: 5,
     roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana'],
     questTeams: [2, 3, 4, 3, 4],
+    questFailsRequired: [1, 1, 1, 1, 1],
   },
   7: {
-    // 4 good, 3 evil
+    // 4 good, 3 evil — Round 4 requires 2 fail votes
     minPlayers: 7,
     maxPlayers: 7,
     maxFailedVotes: 5,
     roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana', 'oberon'],
     questTeams: [2, 3, 3, 4, 4],
+    questFailsRequired: [1, 1, 1, 2, 1],
   },
   8: {
-    // 5 good, 3 evil
+    // 5 good, 3 evil — Round 4 requires 2 fail votes
     minPlayers: 8,
     maxPlayers: 8,
     maxFailedVotes: 5,
     roles: ['merlin', 'percival', 'loyal', 'loyal', 'loyal', 'assassin', 'morgana', 'mordred'],
     questTeams: [3, 4, 4, 5, 5],
+    questFailsRequired: [1, 1, 1, 2, 1],
   },
   9: {
-    // 6 good, 3 evil
+    // 6 good, 3 evil — Round 4 requires 2 fail votes
     minPlayers: 9,
     maxPlayers: 9,
     maxFailedVotes: 5,
@@ -185,9 +193,10 @@ export const AVALON_CONFIG: Record<number, GameConfig> = {
       'mordred',
     ],
     questTeams: [3, 4, 4, 5, 5],
+    questFailsRequired: [1, 1, 1, 2, 1],
   },
   10: {
-    // 6 good, 4 evil
+    // 6 good, 4 evil — Round 4 requires 2 fail votes
     minPlayers: 10,
     maxPlayers: 10,
     maxFailedVotes: 5,
@@ -204,6 +213,7 @@ export const AVALON_CONFIG: Record<number, GameConfig> = {
       'oberon',
     ],
     questTeams: [3, 4, 4, 5, 5],
+    questFailsRequired: [1, 1, 1, 2, 1],
   },
 };
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { submitVote, submitAssassination } from '../services/socket';
+import { submitVote, submitAssassination, requestRematch } from '../services/socket';
 import GameBoard from '../components/GameBoard';
 import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
@@ -8,9 +8,11 @@ import TeamSelectionPanel from '../components/TeamSelectionPanel';
 import RoleRevealModal from '../components/RoleRevealModal';
 import ChatPanel from '../components/ChatPanel';
 import HistoryPanel from '../components/HistoryPanel';
+import MissionTrack from '../components/MissionTrack';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Bell } from 'lucide-react';
+import { Home, Bell, RefreshCw } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
+import { requestNotificationPermission } from '../services/notifications';
 
 export default function GamePage(): JSX.Element {
   const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer } = useGameStore();
@@ -19,6 +21,11 @@ export default function GamePage(): JSX.Element {
   const [isAssassinating, setIsAssassinating] = useState(false);
   const [showRoleReveal, setShowRoleReveal] = useState(true);
   const [assassinTimer, setAssassinTimer] = useState(120); // 120s matches server ASSASSINATION_TIMEOUT_MS
+
+  // Request browser notification permission on mount
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
 
   // Show role reveal modal each time game starts (state goes from lobby → voting)
   useEffect(() => {
@@ -113,16 +120,13 @@ export default function GamePage(): JSX.Element {
         {/* Header */}
         <div className="text-center">
           <h1 className="text-5xl font-bold text-white mb-2">🎭 Avalon</h1>
-          <p className="text-gray-400">第 {room.currentRound}/{room.maxRounds} 輪</p>
-          <div className="flex justify-center gap-3 mt-4 text-sm flex-wrap">
+          <div className="mt-2">
+            <MissionTrack room={room} />
+          </div>
+          <div className="flex justify-center gap-3 mt-3 text-sm flex-wrap">
             <div className="bg-avalon-card/50 px-4 py-2 rounded-lg">
               <p className="text-gray-300">狀態：<span className="text-yellow-400 font-bold">{stateLabel[room.state] ?? room.state}</span></p>
             </div>
-            {room.failCount > 0 && (
-              <div className="bg-avalon-card/50 px-4 py-2 rounded-lg">
-                <p className="text-gray-300">拒絕次數：<span className={`font-bold ${room.failCount >= 4 ? 'text-red-400' : 'text-yellow-400'}`}>{room.failCount}/5</span></p>
-              </div>
-            )}
             <button
               onClick={() => setShowRoleReveal(true)}
               className="bg-blue-900/50 hover:bg-blue-800/70 border border-blue-600 px-4 py-2 rounded-lg text-blue-300 text-sm transition-colors"
@@ -280,8 +284,40 @@ export default function GamePage(): JSX.Element {
               animate={{ y: 0 }}
               className="text-5xl font-bold"
             >
-              {room.evilWins ? '👹 邪惡方獲勝！(Evil Wins!)' : '⚔️ 正義方獲勝！(Good Wins!)'}
+              {room.evilWins ? '👹 邪惡方獲勝！' : '⚔️ 正義方獲勝！'}
             </motion.h2>
+
+            {/* End reason banner */}
+            {room.endReason && (
+              <div className={`inline-block px-5 py-2 rounded-full text-sm font-semibold ${
+                room.evilWins ? 'bg-red-900/50 border border-red-600 text-red-200' : 'bg-blue-900/50 border border-blue-600 text-blue-200'
+              }`}>
+                {room.endReason === 'failed_quests' && '💀 邪惡方破壞了 3 次任務'}
+                {room.endReason === 'vote_rejections' && '🚫 5 次提案全數否決，邪惡方自動獲勝'}
+                {room.endReason === 'merlin_assassinated' && (
+                  <>🗡️ 刺客成功刺殺梅林！<span className="text-red-300 font-bold">{room.players[room.assassinTargetId ?? '']?.name ?? '?'}</span> 是梅林</>
+                )}
+                {room.endReason === 'assassination_failed' && (
+                  <>🛡️ 刺客誤殺 <span className="text-blue-300 font-bold">{room.players[room.assassinTargetId ?? '']?.name ?? '?'}</span>，正義方獲勝！</>
+                )}
+                {room.endReason === 'assassination_timeout' && '⏱️ 刺殺超時，正義方獲勝！'}
+              </div>
+            )}
+
+            {/* Quest result summary */}
+            {room.questHistory.length > 0 && (
+              <div className="flex justify-center gap-2 flex-wrap">
+                {room.questHistory.map((q) => (
+                  <div key={q.round} className={`flex flex-col items-center px-3 py-2 rounded-lg border text-xs ${
+                    q.result === 'success' ? 'bg-blue-900/30 border-blue-600' : 'bg-red-900/30 border-red-600'
+                  }`}>
+                    <span className="text-lg">{q.result === 'success' ? '✓' : '✗'}</span>
+                    <span className="text-gray-400">R{q.round}</span>
+                    {q.failCount > 0 && <span className="text-red-400">{q.failCount}張失敗</span>}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <p className="text-gray-300 text-lg">最終角色揭曉：</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -296,17 +332,20 @@ export default function GamePage(): JSX.Element {
                   mordred:  '莫德雷德 (Mordred)',
                 };
                 const isGood = ['merlin', 'percival', 'loyal'].includes(player.role ?? '');
+                const wasAssassinated = room.assassinTargetId === player.id;
 
                 return (
                   <div
                     key={player.id}
                     className={`text-sm p-3 rounded-lg border ${
-                      isGood
+                      wasAssassinated
+                        ? 'bg-red-900/50 border-red-400 ring-2 ring-red-500'
+                        : isGood
                         ? 'bg-blue-900/30 border-blue-600'
                         : 'bg-red-900/30 border-red-600'
                     }`}
                   >
-                    <p className="font-bold text-white">{player.name}</p>
+                    <p className="font-bold text-white">{player.name}{wasAssassinated && ' 🗡️'}</p>
                     <p className={isGood ? 'text-blue-400' : 'text-red-400'}>
                       {roleLabel[player.role ?? ''] ?? player.role}
                     </p>
@@ -318,15 +357,28 @@ export default function GamePage(): JSX.Element {
               })}
             </div>
 
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handlePlayAgain}
-              className="flex items-center gap-2 mx-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-8 rounded-lg transition-all"
-            >
-              <Home size={20} />
-              返回首頁
-            </motion.button>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              {room.host === currentPlayer.id && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => requestRematch(room.id)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-bold py-3 px-8 rounded-lg transition-all"
+                >
+                  <RefreshCw size={20} />
+                  再來一局 (Rematch)
+                </motion.button>
+              )}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handlePlayAgain}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-8 rounded-lg transition-all"
+              >
+                <Home size={20} />
+                返回首頁
+              </motion.button>
+            </div>
           </motion.div>
         )}
       </div>

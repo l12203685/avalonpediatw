@@ -204,7 +204,6 @@ export async function initializeSocket(token: string): Promise<void> {
 
   socket.on('game:ended', (room: Room) => {
     store.updateRoom(room);
-    audioService.playSound('game-end');
     const cp = useGameStore.getState().currentPlayer;
     if (cp && room.players[cp.id]) {
       store.setCurrentPlayer({

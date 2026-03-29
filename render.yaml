@@ -11,6 +11,17 @@ services:
         value: production
       - key: PORT
         value: 10000
+      # ── Bot secrets (set via Render dashboard or env group) ───────────────
+      - key: LINE_BOT_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_BOT_CHANNEL_SECRET
+        sync: false
+      - key: LINE_NOTIFY_CLIENT_ID
+        sync: false
+      - key: LINE_NOTIFY_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
 
   # ── Frontend (React static site) ─────────────────────────────────────────
   - type: web

@@ -330,7 +330,7 @@ export function createRolesMessage() {
               },
               {
                 type: 'text',
-                text: 'Appears as good to Merlin. Merlin cannot see you as evil.',
+                text: 'Appears to Percival as a possible Merlin. Merlin can still see you as evil.',
                 size: 'sm',
                 wrap: true,
                 margin: 'md',

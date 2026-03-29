@@ -3,11 +3,21 @@
  */
 
 export const LINE_CONFIG = {
-  // Channel access token
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
+  // Channel access token (prefer new BOT_ prefix; fall back to legacy name)
+  channelAccessToken:
+    process.env.LINE_BOT_CHANNEL_ACCESS_TOKEN ||
+    process.env.LINE_CHANNEL_ACCESS_TOKEN ||
+    '',
 
-  // Channel secret (for signature verification)
-  channelSecret: process.env.LINE_CHANNEL_SECRET || '',
+  // Channel secret (prefer new BOT_ prefix; fall back to legacy name)
+  channelSecret:
+    process.env.LINE_BOT_CHANNEL_SECRET ||
+    process.env.LINE_CHANNEL_SECRET ||
+    '',
+
+  // LINE Notify OAuth credentials (for push notifications via LINE Notify API)
+  notifyClientId:     process.env.LINE_NOTIFY_CLIENT_ID     || '',
+  notifyClientSecret: process.env.LINE_NOTIFY_CLIENT_SECRET || '',
 
   // Webhook endpoint
   webhookPath: '/webhook/line',
@@ -27,7 +37,7 @@ export const LINE_CONFIG = {
 
   // User IDs
   groupId: process.env.LINE_GROUP_ID || '',
-  userId: process.env.LINE_USER_ID || '',
+  userId:  process.env.LINE_USER_ID  || '',
 
   // Commands
   commands: {

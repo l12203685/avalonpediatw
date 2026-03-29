@@ -15,6 +15,7 @@ import {
   AgentAction,
   VoteRecord,
 } from './types';
+import { AVALON_CONFIG } from '@avalon/shared';
 
 export class HeuristicAgent implements AvalonAgent {
   readonly agentId: string;
@@ -122,7 +123,7 @@ export class HeuristicAgent implements AvalonAgent {
   // ── Quest Vote ───────────────────────────────────────────────
 
   private voteOnQuest(obs: PlayerObservation): AgentAction {
-    const { myTeam, myRole, questResults } = obs;
+    const { myTeam, myRole, questResults, playerCount, currentRound } = obs;
 
     if (myTeam === 'good') {
       return { type: 'quest_vote', vote: 'success' };
@@ -132,6 +133,21 @@ export class HeuristicAgent implements AvalonAgent {
     const goodQuestWins = questResults.filter(r => r === 'success').length;
     const evilQuestWins = questResults.filter(r => r === 'fail').length;
 
+    // Check if this round requires 2 fail votes (7+ players, round 4)
+    const config = AVALON_CONFIG[playerCount];
+    const failsRequired = config?.questFailsRequired[currentRound - 1] ?? 1;
+
+    // If 2 fails required this round, a single fail is wasted — be strategic
+    if (failsRequired >= 2) {
+      // Only fail if we're desperate (evil about to lose or already winning)
+      if (evilQuestWins >= 2 || goodQuestWins >= 2) {
+        return { type: 'quest_vote', vote: 'fail' };
+      }
+      // Otherwise appear cooperative to stay hidden (failing alone won't help)
+      return { type: 'quest_vote', vote: Math.random() > 0.7 ? 'fail' : 'success' };
+    }
+
+    // Standard 1-fail round logic
     // If evil already has 2 failed quests, always fail to win
     if (evilQuestWins >= 2) {
       return { type: 'quest_vote', vote: 'fail' };

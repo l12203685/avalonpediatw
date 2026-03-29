@@ -35,6 +35,7 @@ describe('GameEngine', () => {
       leaderIndex: 0,
       voteHistory: [],
       questHistory: [],
+      questVotedCount: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

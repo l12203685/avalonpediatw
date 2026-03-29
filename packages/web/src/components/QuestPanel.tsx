@@ -44,6 +44,8 @@ export default function QuestPanel({
   };
 
   if (!isInTeam) {
+    const votedCount = room.questVotedCount ?? 0;
+    const teamSize = room.questTeam.length;
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -52,10 +54,16 @@ export default function QuestPanel({
       >
         <h2 className="text-2xl font-bold text-white">⚔️ 任務進行中 (Quest in Progress)</h2>
         <p className="text-gray-300">
-          任務隊伍人數 (Team size)：<span className="text-blue-400 font-bold">{room.questTeam.length}</span>
+          隊員已提交：<span className="text-blue-400 font-bold">{votedCount}/{teamSize}</span>
         </p>
-        <p className="text-sm text-gray-400">
-          等待任務隊伍成員投票… (Waiting for team members to vote…)
+        <div className="w-full max-w-xs mx-auto h-2 bg-gray-700 rounded-full overflow-hidden">
+          <motion.div
+            animate={{ width: `${teamSize > 0 ? (votedCount / teamSize) * 100 : 0}%` }}
+            className="h-full bg-gradient-to-r from-blue-500 to-blue-400"
+          />
+        </div>
+        <p className="text-sm text-gray-500">
+          投票結果將在所有人提交後揭曉… (Results revealed when all votes are in…)
         </p>
       </motion.div>
     );

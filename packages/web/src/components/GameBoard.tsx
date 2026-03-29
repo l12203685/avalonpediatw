@@ -64,46 +64,15 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
         animate={{ opacity: 1, scale: 1 }}
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center z-10"
       >
-        <motion.div
-          animate={{ y: [0, -5, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="mb-2"
-        >
-          <p className="text-sm text-gray-400">第 {room.currentRound}/{room.maxRounds} 輪</p>
-        </motion.div>
-
         <motion.p
           key={room.state}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="text-2xl font-bold text-white capitalize bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
+          className="text-xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
         >
           {STATE_LABELS[room.state] ?? room.state}
         </motion.p>
-
-        {/* 任務結果指示器 */}
-        <div className="mt-4">
-          {room.questResults.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex justify-center gap-2"
-            >
-              {room.questResults.map((result, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ scale: 0, rotate: -180 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className={`w-4 h-4 rounded-full shadow-lg ${
-                    result === 'success' ? 'bg-avalon-good' : 'bg-avalon-evil'
-                  }`}
-                />
-              ))}
-            </motion.div>
-          )}
-        </div>
 
         {/* 投票計數 */}
         {room.state === 'voting' && (

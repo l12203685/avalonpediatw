@@ -109,17 +109,24 @@ export class SelfPlayEngine {
           if ((room.state as string) !== 'voting') break; // state changed, stop
         }
 
-        // Record vote outcome
-        const approved = Object.values(votes).filter(Boolean).length > agents.length / 2;
-        voteHistory.push({
-          round:    room.currentRound,
-          attempt:  voteAttempt,
-          leader:   currentLeaderId,
-          team:     [...room.questTeam],
-          approved,
-          votes,
-        });
+        // Use the engine-resolved vote record (already pushed to room.voteHistory)
+        const latestVoteRecord = room.voteHistory[room.voteHistory.length - 1];
+        if (latestVoteRecord) {
+          voteHistory.push(latestVoteRecord);
+        } else {
+          // Fallback: compute locally
+          const approved = Object.values(votes).filter(Boolean).length > agents.length / 2;
+          voteHistory.push({
+            round:    room.currentRound,
+            attempt:  voteAttempt,
+            leader:   currentLeaderId,
+            team:     [...room.questTeam],
+            approved,
+            votes,
+          });
+        }
 
+        const approved = latestVoteRecord?.approved ?? (Object.values(votes).filter(Boolean).length > agents.length / 2);
         if (approved) voteAttempt = 0;
         if ((room.state as string) === 'ended') break;
       }
@@ -140,8 +147,9 @@ export class SelfPlayEngine {
           if ((room.state as string) !== 'quest') break;
         }
 
-        const result = failCount > 0 ? 'fail' : 'success';
-        questHistory.push({ round: preRound, team: preTeam, result, failCount });
+        // Use the engine-resolved result (respects 2-fail rule for round 4 in 7+ player games)
+        const result = room.questResults[preRound - 1] ?? (failCount > 0 ? 'fail' : 'success');
+        questHistory.push({ round: preRound, team: preTeam, result: result as 'success' | 'fail', failCount });
 
         if ((room.state as string) === 'ended') break;
       }

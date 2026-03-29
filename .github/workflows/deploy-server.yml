@@ -1,0 +1,66 @@
+name: Deploy Server to Render
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/**'
+      - 'packages/shared/**'
+      - 'render.yaml'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Trigger Render Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trigger Render deploy hook
+        run: |
+          curl -s --fail \
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            -X POST \
+            --retry 3 \
+            --retry-delay 5
+        # RENDER_DEPLOY_HOOK_URL:
+        #   Render Dashboard → Service → Settings → Deploy Hook
+        #   Copy the URL and save it as a GitHub Secret named RENDER_DEPLOY_HOOK_URL
+
+  verify-secrets:
+    name: Verify bot secrets are set
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check required secrets
+        run: |
+          MISSING=0
+
+          check_secret() {
+            if [ -z "$1" ]; then
+              echo "⚠️  WARNING: $2 is not set in GitHub Secrets"
+              MISSING=$((MISSING + 1))
+            else
+              echo "✅ $2 is set"
+            fi
+          }
+
+          check_secret "$LINE_BOT_CHANNEL_ACCESS_TOKEN" "LINE_BOT_CHANNEL_ACCESS_TOKEN"
+          check_secret "$LINE_BOT_CHANNEL_SECRET"        "LINE_BOT_CHANNEL_SECRET"
+          check_secret "$LINE_NOTIFY_CLIENT_ID"          "LINE_NOTIFY_CLIENT_ID"
+          check_secret "$LINE_NOTIFY_CLIENT_SECRET"      "LINE_NOTIFY_CLIENT_SECRET"
+          check_secret "$DISCORD_BOT_TOKEN"              "DISCORD_BOT_TOKEN"
+
+          if [ $MISSING -gt 0 ]; then
+            echo ""
+            echo "Set missing secrets at:"
+            echo "  https://github.com/l12203685/avalonpediatw/settings/secrets/actions"
+          fi
+        env:
+          LINE_BOT_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_BOT_CHANNEL_ACCESS_TOKEN }}
+          LINE_BOT_CHANNEL_SECRET:       ${{ secrets.LINE_BOT_CHANNEL_SECRET }}
+          LINE_NOTIFY_CLIENT_ID:         ${{ secrets.LINE_NOTIFY_CLIENT_ID }}
+          LINE_NOTIFY_CLIENT_SECRET:     ${{ secrets.LINE_NOTIFY_CLIENT_SECRET }}
+          DISCORD_BOT_TOKEN:             ${{ secrets.DISCORD_BOT_TOKEN }}

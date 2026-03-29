@@ -21,11 +21,18 @@ export default function VotePanel({
   const votedCount = Object.keys(room.votes).length;
   const hasVoted = room.votes[currentPlayer.id] !== undefined;
   const questTeamPlayers = room.questTeam.map(id => room.players[id]).filter(Boolean);
+  // Use questTeam + failCount as a key to reset timer on new vote round
+  const voteRoundKey = room.questTeam.join(',') + ':' + room.failCount;
+
+  // Reset timer when a new vote round starts
+  useEffect(() => {
+    setTimeLeft(60);
+  }, [voteRoundKey]);
 
   // 投票倒計時
   useEffect(() => {
     if (!hasVoted && timeLeft > 0) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+      const timer = setTimeout(() => setTimeLeft(t => Math.max(0, t - 1)), 1000);
       return () => clearTimeout(timer);
     }
   }, [timeLeft, hasVoted]);
@@ -134,16 +141,35 @@ export default function VotePanel({
         </motion.div>
       )}
 
-      {/* 投票結果預覽（可選） */}
-      {votedCount > 0 && (
-        <div className="text-center text-sm text-gray-400">
-          {votedCount === playerCount ? (
-            <p className="text-yellow-400 font-bold">所有人已投票！計算結果中…</p>
-          ) : (
-            <p>還有 {playerCount - votedCount} 人尚未投票</p>
-          )}
+      {/* Per-player voting status */}
+      {playerCount > 0 && (
+        <div className="flex flex-wrap justify-center gap-2">
+          {Object.values(room.players).map(player => {
+            const hasPlayerVoted = player.id in room.votes;
+            return (
+              <div
+                key={player.id}
+                className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-all ${
+                  hasPlayerVoted
+                    ? 'bg-green-900/50 border border-green-700 text-green-300'
+                    : 'bg-gray-800/50 border border-gray-700 text-gray-500'
+                } ${player.id === currentPlayer.id ? 'ring-1 ring-yellow-500/50' : ''}`}
+              >
+                {player.name}{hasPlayerVoted ? ' ✓' : ' …'}
+              </div>
+            );
+          })}
         </div>
       )}
+
+      {/* Status */}
+      <div className="text-center text-sm text-gray-400">
+        {votedCount === playerCount ? (
+          <p className="text-yellow-400 font-bold">所有人已投票！計算結果中…</p>
+        ) : votedCount > 0 ? (
+          <p>還有 {playerCount - votedCount} 人尚未投票</p>
+        ) : null}
+      </div>
     </motion.div>
   );
 }
