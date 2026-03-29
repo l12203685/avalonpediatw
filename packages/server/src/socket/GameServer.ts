@@ -1430,6 +1430,20 @@ export class GameServer {
                     console.log(`[auto] Selected quest team for disconnected leader ${playerId}`);
                   }
                 }
+              } else if (r.state === 'discussion') {
+                // Disconnected assassin — auto-target a random good player
+                const assassinId = Object.keys(r.players).find(id => r.players[id].role === 'assassin');
+                if (assassinId === playerId) {
+                  const goodPlayers = Object.keys(r.players).filter(id => id !== playerId && r.players[id].team === 'good');
+                  if (goodPlayers.length > 0) {
+                    const target = goodPlayers[Math.floor(Math.random() * goodPlayers.length)];
+                    engine.submitAssassination(playerId, target);
+                    const updated = this.roomManager.getRoom(roomId)!;
+                    this.broadcastRoomState(roomId, updated, true);
+                    this.onGameEnded(roomId, updated);
+                    console.log(`[auto] Submitted assassination for disconnected assassin ${playerId} → ${target}`);
+                  }
+                }
               }
             } catch (err) {
               // Silently swallow — player may have reconnected or state may have changed
