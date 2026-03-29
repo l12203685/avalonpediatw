@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady } from '../services/socket';
 import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
@@ -20,8 +20,21 @@ const ROLE_OPTION_INFO: Record<string, { label: string; description: string; pai
 };
 
 export default function LobbyPage(): JSX.Element {
-  const { room, currentPlayer } = useGameStore();
+  const { room, currentPlayer, quickSoloMode, setQuickSoloMode } = useGameStore();
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+
+  // Quick solo mode: auto-fill with 4 normal bots then start when room is ready
+  useEffect(() => {
+    if (!quickSoloMode || !room || !currentPlayer || room.host !== currentPlayer.id) return;
+    const playerCount = Object.keys(room.players).length;
+    if (playerCount < 5) {
+      addBot(room.id, 'normal');
+      return;
+    }
+    // All 4 bots added — start the game and clear the flag
+    setQuickSoloMode(false);
+    setTimeout(() => startGame(room.id), 300);
+  }, [quickSoloMode, room?.id, Object.keys(room?.players ?? {}).length]);
 
   if (!room || !currentPlayer) {
     return <div className="text-center text-white">載入中…</div>;

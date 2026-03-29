@@ -53,8 +53,8 @@ function formatReplayEvent(ev: GameEvent): string {
     case 'quest_team_selected':
       return `領袖提案：${(d.team as string[])?.join('、')}`;
     case 'voting_resolved': {
-      const approved = d.approved ? '✅ 通過' : '❌ 否決';
-      return `投票結果：${approved}（${d.approveCount as number}贊成，${d.rejectCount as number}反對）`;
+      const approved = (d.result === 'approved' || d.approved) ? '✅ 通過' : '❌ 否決';
+      return `投票結果：${approved}（${(d.approvals ?? d.approveCount) as number}贊成，${(d.rejections ?? d.rejectCount) as number}反對）`;
     }
     case 'team_approved':
       return `提案通過，任務開始`;

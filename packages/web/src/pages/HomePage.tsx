@@ -16,7 +16,7 @@ interface OpenRoom {
 }
 
 export default function HomePage(): JSX.Element {
-  const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile, addToast } = useGameStore();
+  const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile, addToast, setQuickSoloMode } = useGameStore();
   const [playerName, setPlayerName] = useState(currentPlayer?.name ?? '');
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
@@ -84,6 +84,19 @@ export default function HomePage(): JSX.Element {
     }
 
     createRoom(playerName);
+    setGameState('lobby');
+  };
+
+  const handleQuickSolo = (): void => {
+    const name = currentPlayer?.name || playerName.trim();
+    if (!name) {
+      addToast('請輸入你的名字再開始', 'info');
+      setMode('create');
+      return;
+    }
+    if (currentPlayer) setCurrentPlayer({ ...currentPlayer, name });
+    setQuickSoloMode(true);
+    createRoom(name);
     setGameState('lobby');
   };
 
@@ -243,6 +256,16 @@ export default function HomePage(): JSX.Element {
               >
                 <Trophy size={20} />
                 排行榜 (Leaderboard)
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleQuickSolo}
+                className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-teal-500/50"
+              >
+                <Zap size={20} />
+                快速單人練習 vs 機器人
               </motion.button>
             </motion.div>
 
