@@ -56,6 +56,8 @@ export interface Room {
   failCount: number; // Number of failed votes
   evilWins: boolean | null; // null = not ended, true = evil won, false = good won
   leaderIndex: number; // Index of current quest leader in player list
+  voteHistory: VoteRecord[];   // All team-vote records (public info for deduction)
+  questHistory: QuestRecord[]; // All completed quest records
   createdAt: number;
   updatedAt: number;
 }
@@ -102,6 +104,24 @@ export interface ServerToClientEvents {
   'game:ended': (room: Room, winner: 'good' | 'evil') => void;
   'chat:message-received': (message: ChatMessage) => void;
   'error': (message: string) => void;
+}
+
+// Public vote record (all votes are public in Avalon)
+export interface VoteRecord {
+  round:    number;
+  attempt:  number;   // attempt number within the round (1-5)
+  leader:   string;   // player ID of the leader who proposed the team
+  team:     string[]; // proposed team player IDs
+  approved: boolean;  // true = team approved, false = rejected
+  votes:    Record<string, boolean>; // playerId -> vote
+}
+
+// Quest outcome record
+export interface QuestRecord {
+  round:     number;
+  team:      string[]; // player IDs on the quest
+  result:    'success' | 'fail';
+  failCount: number;   // number of fail votes submitted
 }
 
 export interface ChatMessage {

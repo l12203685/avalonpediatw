@@ -1,4 +1,4 @@
-import { Room, Role, AVALON_CONFIG, Player, GameState } from '@avalon/shared';
+import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord } from '@avalon/shared';
 
 const VOTE_TIMEOUT_MS = 60000; // 60秒隊伍投票時限
 const QUEST_TIMEOUT_MS = 60000; // 60秒任務投票時限
@@ -26,6 +26,7 @@ export class GameEngine {
   // Quest phase tracking
   private questVotes: QuestVote[] = [];
   private currentLeaderIndex: number = 0;
+  private voteAttemptInRound: number = 0; // tracks attempt number within a round
 
   // In-memory event buffer (flushed to Supabase on game end)
   private eventBuffer: GameEventRecord[] = [];
@@ -59,8 +60,11 @@ export class GameEngine {
     this.room.failCount = 0;
     this.room.evilWins = null;
     this.room.leaderIndex = 0;
+    this.room.voteHistory = [];
+    this.room.questHistory = [];
     this.questVotes = [];
     this.currentLeaderIndex = 0;
+    this.voteAttemptInRound = 0;
 
     this.logEvent('game_started', {
       playerCount,
@@ -180,6 +184,18 @@ export class GameEngine {
       clearTimeout(this.voteTimeout);
       this.voteTimeout = null;
     }
+
+    // Record this vote round in public history
+    this.voteAttemptInRound++;
+    const voteRecord: VoteRecord = {
+      round:    this.room.currentRound,
+      attempt:  this.voteAttemptInRound,
+      leader:   this.getLeaderId(),
+      team:     [...this.room.questTeam],
+      approved,
+      votes:    { ...this.room.votes },
+    };
+    this.room.voteHistory.push(voteRecord);
 
     this.logEvent('voting_resolved', {
       round: this.room.currentRound,
@@ -306,6 +322,15 @@ export class GameEngine {
     const result: 'success' | 'fail' = questFailed ? 'fail' : 'success';
     this.room.questResults.push(result);
 
+    // Record quest outcome in public history
+    const questRecord: QuestRecord = {
+      round:     this.room.currentRound,
+      team:      [...this.room.questTeam],
+      result,
+      failCount,
+    };
+    this.room.questHistory.push(questRecord);
+
     this.logEvent('quest_resolved', {
       round: this.room.currentRound,
       result,
@@ -334,6 +359,7 @@ export class GameEngine {
       this.room.state = 'voting';
       this.room.votes = {};
       this.questVotes = [];
+      this.voteAttemptInRound = 0;
 
       // Rotate leader for next round
       this.rotateLeader();

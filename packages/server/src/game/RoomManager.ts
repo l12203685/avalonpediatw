@@ -35,6 +35,8 @@ export class RoomManager {
       failCount: 0,
       evilWins: null,
       leaderIndex: 0,
+      voteHistory: [],
+      questHistory: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

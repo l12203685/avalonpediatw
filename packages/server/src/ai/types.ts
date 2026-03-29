@@ -5,7 +5,8 @@
  * These types form the interface between the game engine and the AI model.
  */
 
-import { Role } from '@avalon/shared';
+import { Role, VoteRecord, QuestRecord } from '@avalon/shared';
+export type { VoteRecord, QuestRecord };
 
 // ── Observation ────────────────────────────────────────────────
 
@@ -29,22 +30,6 @@ export interface PlayerObservation {
   voteHistory:   VoteRecord[];
   questHistory:  QuestRecord[];
   proposedTeam:  string[];   // current proposed team (if in vote phase)
-}
-
-export interface VoteRecord {
-  round:    number;
-  attempt:  number;
-  leader:   string;
-  team:     string[];
-  approved: boolean;         // true = team approved, false = rejected
-  votes:    Record<string, boolean>; // all votes are public in Avalon
-}
-
-export interface QuestRecord {
-  round:      number;
-  team:       string[];
-  result:     'success' | 'fail';
-  failCount:  number;
 }
 
 // ── Actions ────────────────────────────────────────────────────

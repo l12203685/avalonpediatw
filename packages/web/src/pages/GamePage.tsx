@@ -7,6 +7,7 @@ import QuestPanel from '../components/QuestPanel';
 import TeamSelectionPanel from '../components/TeamSelectionPanel';
 import RoleRevealModal from '../components/RoleRevealModal';
 import ChatPanel from '../components/ChatPanel';
+import HistoryPanel from '../components/HistoryPanel';
 import { motion } from 'framer-motion';
 import { Home } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
@@ -101,6 +102,9 @@ export default function GamePage(): JSX.Element {
 
         {/* Game Board */}
         <GameBoard room={room} currentPlayer={currentPlayer} />
+
+        {/* Round History */}
+        <HistoryPanel room={room} currentPlayer={currentPlayer} />
 
         {/* Voting Phase */}
         {room.state === 'voting' && (
