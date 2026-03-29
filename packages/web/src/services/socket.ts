@@ -221,3 +221,13 @@ export function kickPlayer(roomId: string, targetPlayerId: string): void {
   const socket = getSocket();
   socket.emit('game:kick-player', roomId, targetPlayerId);
 }
+
+export function addBot(roomId: string): void {
+  const socket = getSocket();
+  socket.emit('game:add-bot', roomId);
+}
+
+export function removeBot(roomId: string, botId: string): void {
+  const socket = getSocket();
+  socket.emit('game:remove-bot', roomId, botId);
+}

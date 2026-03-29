@@ -1,8 +1,9 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { Room, Player, User } from '@avalon/shared';
+import { Room, Player, User, AVALON_CONFIG } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { GameEngine } from '../game/GameEngine';
+import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { SocketRateLimiter } from '../middleware/rateLimit';
 import {
   saveRoom,
@@ -33,6 +34,8 @@ export class GameServer {
   private io: SocketIOServer;
   private roomManager: RoomManager;
   private gameEngines: Map<string, GameEngine> = new Map();
+  // botId → HeuristicAgent instance (for bot-controlled players)
+  private botAgents: Map<string, HeuristicAgent> = new Map();
   // uid → supabase UUID (set from socket.data.supabaseId on join/create)
   private supabaseIds: Map<string, string> = new Map();
   // roomId → start timestamp (ms)
@@ -101,6 +104,14 @@ export class GameServer {
 
       socket.on('game:kick-player', (roomId: string, targetPlayerId: string) => {
         this.handleKickPlayer(socket, roomId, targetPlayerId);
+      });
+
+      socket.on('game:add-bot', (roomId: string) => {
+        this.handleAddBot(socket, roomId);
+      });
+
+      socket.on('game:remove-bot', (roomId: string, botId: string) => {
+        this.handleRemoveBot(socket, roomId, botId);
       });
 
       socket.on('game:list-rooms', () => {
@@ -342,6 +353,9 @@ export class GameServer {
         }
       }
       console.log(`✓ Game started in room ${roomId}`);
+
+      // Kick off bot actions if the first leader is a bot
+      this.scheduleBotActions(roomId);
     } catch (error) {
       console.error('Error starting game:', error);
       socket.emit('error', 'Failed to start game');
@@ -391,6 +405,8 @@ export class GameServer {
 
       if (updatedRoom.state === 'ended') {
         this.onGameEnded(roomId, updatedRoom);
+      } else {
+        this.scheduleBotActions(roomId);
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -431,6 +447,7 @@ export class GameServer {
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.broadcastRoomState(roomId, updatedRoom);
+      this.scheduleBotActions(roomId);
       console.log(`✓ Quest team selected in room ${roomId}: ${teamMemberIds.length} players`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -484,6 +501,8 @@ export class GameServer {
 
       if (updatedRoom.state === 'ended') {
         this.onGameEnded(roomId, updatedRoom);
+      } else {
+        this.scheduleBotActions(roomId);
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -682,6 +701,161 @@ export class GameServer {
     } catch (error) {
       console.error('Error sending chat message:', error);
     }
+  }
+
+  private handleAddBot(socket: Socket, roomId: string): void {
+    try {
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.host !== (socket.data.playerId as string)) {
+        socket.emit('error', 'Only the host can add bots'); return;
+      }
+      if (room.state !== 'lobby') {
+        socket.emit('error', 'Cannot add bots after game has started'); return;
+      }
+      if (Object.keys(room.players).length >= room.maxPlayers) {
+        socket.emit('error', 'Room is full'); return;
+      }
+
+      const BOT_NAMES = ['阿爾比斯', '蘭斯洛特', '加拉哈德', '崔斯坦', '帕西法爾', '貝狄維爾'];
+      const existingBotCount = Object.values(room.players).filter(p => p.isBot).length;
+      const botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
+      const botName = `🤖 ${BOT_NAMES[existingBotCount % BOT_NAMES.length]}`;
+
+      room.players[botId] = {
+        id: botId,
+        name: botName,
+        role: null,
+        team: null,
+        status: 'active',
+        isBot: true,
+        createdAt: Date.now(),
+      };
+
+      this.botAgents.set(botId, new HeuristicAgent(botId));
+      this.broadcastRoomState(roomId, room);
+      console.log(`✓ Bot ${botName} added to room ${roomId}`);
+    } catch (error) {
+      console.error('Error adding bot:', error);
+      socket.emit('error', 'Failed to add bot');
+    }
+  }
+
+  private handleRemoveBot(socket: Socket, roomId: string, botId: string): void {
+    try {
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.host !== (socket.data.playerId as string)) {
+        socket.emit('error', 'Only the host can remove bots'); return;
+      }
+      if (room.state !== 'lobby') {
+        socket.emit('error', 'Cannot remove bots after game has started'); return;
+      }
+      if (!room.players[botId]?.isBot) {
+        socket.emit('error', 'Player is not a bot'); return;
+      }
+
+      delete room.players[botId];
+      this.botAgents.delete(botId);
+      this.broadcastRoomState(roomId, room);
+    } catch (error) {
+      console.error('Error removing bot:', error);
+      socket.emit('error', 'Failed to remove bot');
+    }
+  }
+
+  /**
+   * After each state broadcast, schedule bot actions for any pending bot turns.
+   * Uses a small random delay (0.5–1.5s) to simulate thinking.
+   */
+  private scheduleBotActions(roomId: string): void {
+    const room = this.roomManager.getRoom(roomId);
+    if (!room || room.state === 'lobby' || room.state === 'ended') return;
+
+    const engine = this.gameEngines.get(roomId);
+    if (!engine) return;
+
+    const delay = 600 + Math.random() * 900; // 0.6–1.5s
+
+    setTimeout(() => {
+      const r = this.roomManager.getRoom(roomId);
+      if (!r || r.state === 'ended') return;
+
+      try {
+        if (r.state === 'voting' && r.questTeam.length === 0) {
+          // Team selection — check if leader is a bot
+          const leaderId = engine.getCurrentLeaderId();
+          const leader = r.players[leaderId];
+          if (leader?.isBot) {
+            const agent = this.botAgents.get(leaderId);
+            if (!agent) return;
+            const playerCount = Object.keys(r.players).length;
+            const config = AVALON_CONFIG[playerCount];
+            const teamSize = config.questTeams[r.currentRound - 1];
+            const allIds = Object.keys(r.players);
+            // Simple: include self + random others (good bots avoid known evils — we keep it simple here)
+            const others = allIds.filter(id => id !== leaderId).sort(() => Math.random() - 0.5);
+            const team = [leaderId, ...others].slice(0, teamSize);
+            engine.selectQuestTeam(team);
+            const updated = this.roomManager.getRoom(roomId)!;
+            this.broadcastRoomState(roomId, updated);
+            this.scheduleBotActions(roomId); // schedule voting bots
+          }
+        } else if (r.state === 'voting' && r.questTeam.length > 0) {
+          // Team vote — submit votes for all bots that haven't voted yet
+          let anyBotVoted = false;
+          for (const [pid, player] of Object.entries(r.players)) {
+            if (player.isBot && !(pid in r.votes)) {
+              // Simple heuristic: approve 70% of the time
+              engine.submitVote(pid, Math.random() > 0.3);
+              anyBotVoted = true;
+              const updated = this.roomManager.getRoom(roomId)!;
+              if (updated.state === 'ended') {
+                this.broadcastRoomState(roomId, updated);
+                this.onGameEnded(roomId, updated);
+                return;
+              }
+              this.broadcastRoomState(roomId, updated);
+            }
+          }
+          if (anyBotVoted) this.scheduleBotActions(roomId);
+        } else if (r.state === 'quest') {
+          // Quest vote — submit for bots on quest team
+          for (const memberId of r.questTeam) {
+            const player = r.players[memberId];
+            if (player?.isBot) {
+              const vote = player.team === 'evil' && Math.random() > 0.5 ? 'fail' : 'success';
+              engine.submitQuestVote(memberId, vote);
+              const updated = this.roomManager.getRoom(roomId)!;
+              if (updated.state === 'ended') {
+                this.broadcastRoomState(roomId, updated, true);
+                this.onGameEnded(roomId, updated);
+                return;
+              }
+              this.broadcastRoomState(roomId, updated);
+            }
+          }
+          this.scheduleBotActions(roomId);
+        } else if (r.state === 'discussion') {
+          // Find assassin — if bot, pick a random good player
+          const assassinEntry = Object.entries(r.players).find(([, p]) => p.role === 'assassin');
+          if (assassinEntry && r.players[assassinEntry[0]]?.isBot) {
+            const goodPlayers = Object.keys(r.players).filter(
+              id => r.players[id].team === 'good' && id !== assassinEntry[0]
+            );
+            if (goodPlayers.length > 0) {
+              const target = goodPlayers[Math.floor(Math.random() * goodPlayers.length)];
+              engine.submitAssassination(assassinEntry[0], target);
+              const updated = this.roomManager.getRoom(roomId)!;
+              this.broadcastRoomState(roomId, updated, true);
+              this.onGameEnded(roomId, updated);
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[bot] Error processing bot action in room ${roomId}:`, err);
+      }
+    }, delay);
   }
 
   private handleKickPlayer(socket: Socket, roomId: string, targetPlayerId: string): void {

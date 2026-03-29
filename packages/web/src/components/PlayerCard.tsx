@@ -9,6 +9,7 @@ const ROLE_NAMES: Record<string, string> = {
   assassin: '刺客 (Assassin)',
   morgana:  '莫甘娜 (Morgana)',
   oberon:   '奧伯倫 (Oberon)',
+  mordred:  '莫德雷德 (Mordred)',
 };
 
 interface PlayerCardProps {
@@ -35,10 +36,12 @@ export default function PlayerCard({
         className={`w-20 h-20 rounded-full flex items-center justify-center font-bold text-lg border-4 transition-all relative ${
           isCurrentPlayer
             ? 'border-yellow-400 bg-gradient-to-br from-yellow-400 to-yellow-500 shadow-lg shadow-yellow-400/50'
+            : player.isBot
+            ? 'border-indigo-500 bg-gradient-to-br from-indigo-600 to-purple-700'
             : 'border-gray-600 bg-gradient-to-br from-blue-400 to-purple-400'
         }`}
       >
-        {player.name.charAt(0).toUpperCase()}
+        {player.isBot ? '🤖' : player.name.charAt(0).toUpperCase()}
 
         {/* 投票指示器 */}
         {hasVoted && (

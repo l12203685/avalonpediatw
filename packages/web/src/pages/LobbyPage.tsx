@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { startGame, kickPlayer } from '../services/socket';
-import { Users, Play, Copy, Check, Link, X } from 'lucide-react';
+import { startGame, kickPlayer, addBot, removeBot } from '../services/socket';
+import { Users, Play, Copy, Check, Link, X, Bot } from 'lucide-react';
 
 export default function LobbyPage(): JSX.Element {
   const { room, currentPlayer } = useGameStore();
@@ -91,27 +91,33 @@ export default function LobbyPage(): JSX.Element {
                 className={`bg-avalon-dark rounded-lg p-3 border flex items-center gap-3 ${
                   player.id === currentPlayer.id
                     ? 'border-blue-500/60 bg-blue-900/20'
+                    : player.isBot
+                    ? 'border-indigo-600/50 bg-indigo-900/10'
                     : 'border-gray-600'
                 }`}
               >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                  {player.name.charAt(0).toUpperCase()}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                  player.isBot
+                    ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                    : 'bg-gradient-to-br from-blue-400 to-purple-400'
+                }`}>
+                  {player.isBot ? <Bot size={18} /> : player.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={`font-bold truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
                     {player.name}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {player.id === room.host ? '👑 房主 (Host)' : '玩家 (Player)'}
+                    {player.id === room.host ? '👑 房主 (Host)' : player.isBot ? '🤖 AI 機器人 (Bot)' : '玩家 (Player)'}
                     {player.id === currentPlayer.id && ' · 你 (You)'}
-                    {player.status === 'disconnected' && <span className="text-red-400"> · 斷線 (Disconnected)</span>}
+                    {player.status === 'disconnected' && !player.isBot && <span className="text-red-400"> · 斷線 (Disconnected)</span>}
                   </p>
                 </div>
                 {isHost && player.id !== currentPlayer.id && (
                   <button
-                    onClick={() => kickPlayer(room.id, player.id)}
+                    onClick={() => player.isBot ? removeBot(room.id, player.id) : kickPlayer(room.id, player.id)}
                     className="flex-shrink-0 p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                    title={`踢出 ${player.name} (Kick)`}
+                    title={player.isBot ? `移除機器人 (Remove Bot)` : `踢出 ${player.name} (Kick)`}
                   >
                     <X size={14} />
                   </button>
@@ -128,6 +134,16 @@ export default function LobbyPage(): JSX.Element {
               <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-yellow-200 text-sm text-center">
                 至少需要 5 名玩家才能開始（目前 {playerList.length} 人）(At least 5 players required to start)
               </div>
+            )}
+            {/* Add Bot button (only if room not full) */}
+            {playerList.length < room.maxPlayers && (
+              <button
+                onClick={() => addBot(room.id)}
+                className="w-full bg-indigo-700/60 hover:bg-indigo-600/80 border border-indigo-500 text-indigo-200 font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+              >
+                <Bot size={18} />
+                加入 AI 機器人 (Add AI Bot)
+              </button>
             )}
             <button
               onClick={() => startGame(room.id)}

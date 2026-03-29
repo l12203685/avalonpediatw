@@ -36,6 +36,7 @@ export interface Player {
   role: Role | null;
   team: Team | null;
   status: PlayerStatus;
+  isBot?: boolean;  // true = AI-controlled player
   vote?: boolean | null; // true = approve, false = reject, null = not voted
   kills?: string[]; // IDs of players killed (for assassin)
   createdAt: number;
