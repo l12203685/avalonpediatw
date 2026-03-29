@@ -20,12 +20,14 @@ import { AVALON_CONFIG } from '@avalon/shared';
 export class HeuristicAgent implements AvalonAgent {
   readonly agentId: string;
   readonly agentType = 'heuristic' as const;
+  private readonly difficulty: 'normal' | 'hard';
 
   // Suspicion score per player: higher = more likely evil (from this agent's perspective)
   private suspicion: Map<string, number> = new Map();
 
-  constructor(agentId: string) {
+  constructor(agentId: string, difficulty: 'normal' | 'hard' = 'normal') {
     this.agentId = agentId;
+    this.difficulty = difficulty;
   }
 
   onGameStart(obs: PlayerObservation): void {
@@ -105,18 +107,24 @@ export class HeuristicAgent implements AvalonAgent {
 
       // Calculate average suspicion of proposed team
       const avgSuspicion = proposedTeam.reduce((s, id) => s + this.getSuspicion(id), 0) / proposedTeam.length;
-      const threshold = failCount >= 4 ? 5 : 3; // more lenient when 5th reject would hand evil victory
+      // Hard mode: stricter suspicion threshold, also considers current round (later rounds = more info)
+      const threshold = failCount >= 4
+        ? 5
+        : this.difficulty === 'hard'
+          ? 2.5  // harder: reject more suspicious teams
+          : 3;
 
       return { type: 'team_vote', vote: avgSuspicion < threshold };
     } else {
-      // Evil: approve if own ally or self is on team, reject otherwise (80%)
+      // Evil: approve if own ally or self is on team, reject otherwise
       const hasSelf  = proposedTeam.includes(obs.myPlayerId);
       const hasAlly  = proposedTeam.some(id => knownEvils.includes(id));
 
       if (hasSelf || hasAlly) return { type: 'team_vote', vote: true };
 
-      // Sometimes approve to not look suspicious
-      return { type: 'team_vote', vote: Math.random() > 0.7 };
+      // Hard mode: more strategically sometimes approves to appear cooperative
+      const approveChance = this.difficulty === 'hard' ? 0.35 : 0.3;
+      return { type: 'team_vote', vote: Math.random() < approveChance };
     }
   }
 
@@ -203,15 +211,34 @@ export class HeuristicAgent implements AvalonAgent {
       const theirVote = vote.votes[playerId];
       if (theirVote === undefined) continue;
 
-      // If they voted against a team that later failed, that's Merlin behavior
-      if (!theirVote && !vote.approved) score += 0.5;
-      // If they rejected a team — cautious behavior
-      if (!theirVote) score += 0.3;
+      if (this.difficulty === 'hard') {
+        // Hard: weight by how "informative" the rejection was
+        // Rejecting a team that contained an evil player is very Merlin-like
+        const teamHadEvil = vote.team.some(id => obs.knownEvils.includes(id));
+        if (!theirVote && teamHadEvil) score += 2.0;   // Rejected a team with evil — Merlin behavior
+        else if (!theirVote && !vote.approved) score += 0.8; // Rejected a team that was ultimately rejected
+        else if (!theirVote) score += 0.4;              // Cautious rejection
+        // If they approved a team with evil, they're probably NOT Merlin
+        if (theirVote && teamHadEvil) score -= 1.5;
+      } else {
+        // Normal mode
+        if (!theirVote && !vote.approved) score += 0.5;
+        if (!theirVote) score += 0.3;
+      }
     }
 
     // Never on a failed quest → suspicious of being the protected Merlin
     const onFailedQuest = obs.questHistory.some(q => q.result === 'fail' && q.team.includes(playerId));
-    if (!onFailedQuest && obs.questHistory.length > 0) score += 1;
+    if (!onFailedQuest && obs.questHistory.length > 0) {
+      score += this.difficulty === 'hard' ? 1.5 : 1;
+    }
+
+    // Hard: was always on successful quests = likely trusted good role (Merlin is always trusted)
+    if (this.difficulty === 'hard') {
+      const questAppearances = obs.questHistory.filter(q => q.team.includes(playerId));
+      const allSucceeded = questAppearances.every(q => q.result === 'success');
+      if (allSucceeded && questAppearances.length >= 2) score += 1.0;
+    }
 
     return score;
   }

@@ -823,7 +823,7 @@ export class GameServer {
       // Choose agent based on difficulty
       const agent = difficulty === 'easy'
         ? new RandomAgent(botId)
-        : new HeuristicAgent(botId);
+        : new HeuristicAgent(botId, difficulty === 'hard' ? 'hard' : 'normal');
 
       this.botAgents.set(botId, agent);
       this.broadcastRoomState(roomId, room);
