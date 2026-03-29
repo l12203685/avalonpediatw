@@ -41,8 +41,8 @@ export default function VotePanel({
     >
       {/* 標題 */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">隊伍提案投票</h2>
-        <p className="text-gray-300">同意或拒絕此次任務隊伍</p>
+        <h2 className="text-3xl font-bold text-white mb-2">隊伍提案投票 (Team Vote)</h2>
+        <p className="text-gray-300">同意或拒絕此次任務隊伍 (Approve or Reject the proposed team)</p>
       </div>
 
       {/* 提案隊伍 */}
@@ -107,7 +107,7 @@ export default function VotePanel({
             className="flex items-center gap-2 bg-avalon-good hover:bg-avalon-good/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
           >
             <ThumbsUp size={20} />
-            {isLoading ? '投票中…' : '贊成'}
+            {isLoading ? '投票中…' : '贊成 (Approve)'}
           </motion.button>
 
           <motion.button
@@ -118,7 +118,7 @@ export default function VotePanel({
             className="flex items-center gap-2 bg-avalon-evil hover:bg-avalon-evil/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
           >
             <ThumbsDown size={20} />
-            {isLoading ? '投票中…' : '拒絕'}
+            {isLoading ? '投票中…' : '拒絕 (Reject)'}
           </motion.button>
         </div>
       ) : (
@@ -128,7 +128,7 @@ export default function VotePanel({
           className="text-center py-3"
         >
           <p className="text-gray-300">
-            你的票：{room.votes[currentPlayer.id] ? '👍 贊成' : '👎 拒絕'}
+            你的票 (Your vote)：{room.votes[currentPlayer.id] ? '👍 贊成 (Approve)' : '👎 拒絕 (Reject)'}
           </p>
           <p className="text-sm text-gray-500 mt-1">等待其他玩家投票…</p>
         </motion.div>

@@ -97,8 +97,8 @@ export default function LoginPage(): JSX.Element {
           <h1 className="text-6xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
             AVALON
           </h1>
-          <p className="text-xl text-gray-300">阿瓦隆：抵抗組織</p>
-          <p className="text-sm text-gray-500">5–10 人 • 即時連線對戰</p>
+          <p className="text-xl text-gray-300">阿瓦隆：抵抗組織 (Avalon: The Resistance)</p>
+          <p className="text-sm text-gray-500">5–10 人 (players) • 即時連線對戰 (Real-time Online)</p>
         </div>
 
         {/* Error */}
@@ -110,9 +110,9 @@ export default function LoginPage(): JSX.Element {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-avalon-card/40 p-1 rounded-xl">
-          <TabBtn id="social" label="社群登入" />
-          <TabBtn id="email"  label="Email 登入" />
-          <TabBtn id="guest"  label="訪客" />
+          <TabBtn id="social" label="社群登入 (Social Login)" />
+          <TabBtn id="email"  label="Email 登入 (Email Login)" />
+          <TabBtn id="guest"  label="訪客 (Guest)" />
         </div>
 
         {/* ── 社群登入 ── */}
@@ -216,7 +216,7 @@ export default function LoginPage(): JSX.Element {
               className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
             >
               {loading ? <Loader size={18} className="animate-spin" /> : <Mail size={18} />}
-              {emailMode === 'signup' ? '建立帳號' : '登入'}
+              {emailMode === 'signup' ? '建立帳號 (Sign Up)' : '登入 (Sign In)'}
             </button>
           </div>
         )}
@@ -226,7 +226,7 @@ export default function LoginPage(): JSX.Element {
           <div className="bg-avalon-card/40 border-2 border-blue-500/40 rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-2">
               <UserCircle size={20} className="text-blue-400" />
-              <p className="font-bold text-white text-sm">訪客模式（重整後身分重置）</p>
+              <p className="font-bold text-white text-sm">訪客模式 (Guest Mode — identity resets on refresh)</p>
             </div>
             {showGuest ? (
               <>
@@ -254,7 +254,7 @@ export default function LoginPage(): JSX.Element {
                 onClick={() => setShowGuest(true)}
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-2.5 rounded-xl transition-all"
               >
-                訪客進入（不需帳號）
+                訪客進入（不需帳號）(Guest — No account needed)
               </button>
             )}
           </div>

@@ -677,6 +677,9 @@ export class GameServer {
         room.players[playerId].status = 'disconnected';
         this.io.to(roomId).emit('game:player-left', playerId);
 
+        // Push updated room state so all clients reflect the disconnect immediately
+        this.broadcastRoomState(roomId, room);
+
         // If all players are disconnected and game hasn't started, clean up lobby immediately
         if (room.state === 'lobby') {
           const allGone = Object.values(room.players).every(p => p.status === 'disconnected');

@@ -7,7 +7,7 @@ import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle } from 'l
 import FloatingControls from '../components/FloatingControls';
 
 export default function HomePage(): JSX.Element {
-  const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile } = useGameStore();
+  const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile, addToast } = useGameStore();
   const [playerName, setPlayerName] = useState(currentPlayer?.name ?? '');
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
@@ -17,14 +17,14 @@ export default function HomePage(): JSX.Element {
       await logout();
       setCurrentPlayer(null);
       setGameState('home');
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch {
+      addToast('登出失敗，請稍後再試', 'error');
     }
   };
 
   const handleCreateRoom = (): void => {
     if (!playerName.trim()) {
-      alert('請輸入你的名字');
+      addToast('請輸入你的名字', 'info');
       return;
     }
 
@@ -39,12 +39,12 @@ export default function HomePage(): JSX.Element {
 
   const handleJoinRoom = (): void => {
     if (!playerName.trim()) {
-      alert('請輸入你的名字');
+      addToast('請輸入你的名字', 'info');
       return;
     }
 
     if (!roomId.trim()) {
-      alert('請輸入房間代碼');
+      addToast('請輸入房間代碼', 'info');
       return;
     }
 
@@ -130,8 +130,8 @@ export default function HomePage(): JSX.Element {
               <h1 className="text-6xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent drop-shadow-2xl">
                 AVALON
               </h1>
-              <p className="text-2xl text-gray-300 font-semibold">抵抗組織</p>
-              <p className="text-gray-400 text-sm">5–10 人 • 即時連線對戰</p>
+              <p className="text-2xl text-gray-300 font-semibold">抵抗組織 (The Resistance)</p>
+              <p className="text-gray-400 text-sm">5–10 人 (players) • 即時連線對戰 (Real-time Online)</p>
             </motion.div>
 
             {/* Stats Cards */}
@@ -143,11 +143,11 @@ export default function HomePage(): JSX.Element {
             >
               <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-3">
                 <Users size={20} className="text-blue-400 mx-auto mb-1" />
-                <p className="text-xs text-gray-300">陣營對戰</p>
+                <p className="text-xs text-gray-300">陣營對戰 (Team Battle)</p>
               </div>
               <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3">
                 <Zap size={20} className="text-purple-400 mx-auto mb-1" />
-                <p className="text-xs text-gray-300">即時連線</p>
+                <p className="text-xs text-gray-300">即時連線 (Real-time)</p>
               </div>
             </motion.div>
 
@@ -165,7 +165,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-blue-500/50"
               >
                 <Play size={20} />
-                建立房間
+                建立房間 (Create Room)
               </motion.button>
 
               <motion.button
@@ -175,7 +175,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-purple-500/50"
               >
                 <LogIn size={20} />
-                加入房間
+                加入房間 (Join Room)
               </motion.button>
 
               <motion.button
@@ -185,7 +185,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-yellow-500/50"
               >
                 <BookOpen size={20} />
-                百科 & 攻略
+                百科 & 攻略 (Wiki & Guide)
               </motion.button>
 
               <motion.button
@@ -195,7 +195,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-700 hover:to-yellow-600 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-amber-500/50"
               >
                 <Trophy size={20} />
-                排行榜
+                排行榜 (Leaderboard)
               </motion.button>
             </motion.div>
 
@@ -206,7 +206,7 @@ export default function HomePage(): JSX.Element {
               transition={{ delay: 0.4 }}
               className="text-xs text-gray-500 pt-4 border-t border-gray-700"
             >
-              <p>🎭 欺騙與邏輯的推理遊戲</p>
+              <p>🎭 欺騙與邏輯的推理遊戲 (A game of deception and logical deduction)</p>
             </motion.div>
           </motion.div>
         )}

@@ -19,7 +19,7 @@ const ROLE_INFO: Record<Role, {
   knowledge: string;
 }> = {
   merlin: {
-    name: '梅林',
+    name: '梅林 (Merlin)',
     icon: '🧙',
     team: 'good',
     color: 'text-blue-300',
@@ -29,7 +29,7 @@ const ROLE_INFO: Record<Role, {
     knowledge: '你能看到所有邪惡方成員（除了奧伯龍）。小心刺客的注目！',
   },
   percival: {
-    name: '帕西瓦爾',
+    name: '派西維爾 (Percival)',
     icon: '🛡️',
     team: 'good',
     color: 'text-cyan-300',
@@ -39,7 +39,7 @@ const ROLE_INFO: Record<Role, {
     knowledge: '你能看到梅林（及莫甘娜），但無法分辨誰是真正的梅林。',
   },
   loyal: {
-    name: '忠臣',
+    name: '忠臣 (Loyal Servant)',
     icon: '⚔️',
     team: 'good',
     color: 'text-indigo-300',
@@ -49,7 +49,7 @@ const ROLE_INFO: Record<Role, {
     knowledge: '你沒有額外資訊。觀察其他玩家的行為來找出邪惡方！',
   },
   assassin: {
-    name: '刺客',
+    name: '刺客 (Assassin)',
     icon: '🗡️',
     team: 'evil',
     color: 'text-red-300',
@@ -59,7 +59,7 @@ const ROLE_INFO: Record<Role, {
     knowledge: '你知道隊友的身分。遊戲結束時，猜出梅林並刺殺他！',
   },
   morgana: {
-    name: '莫甘娜',
+    name: '莫甘娜 (Morgana)',
     icon: '👑',
     team: 'evil',
     color: 'text-purple-300',
@@ -69,7 +69,7 @@ const ROLE_INFO: Record<Role, {
     knowledge: '你知道邪惡方隊友。帕西瓦爾眼中，你看起來像梅林。',
   },
   oberon: {
-    name: '奧伯龍',
+    name: '奧伯倫 (Oberon)',
     icon: '👻',
     team: 'evil',
     color: 'text-gray-300',
@@ -177,7 +177,7 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
                   : 'bg-blue-900/60 text-blue-300 border border-blue-700'
               }`}
             >
-              {isEvil ? '🔴 邪惡方' : '🔵 正義方'}
+              {isEvil ? '🔴 邪惡方 (Evil)' : '🔵 正義方 (Good)'}
             </motion.div>
           </div>
 

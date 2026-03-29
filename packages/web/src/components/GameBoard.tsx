@@ -10,8 +10,11 @@ interface GameBoardProps {
 }
 
 const STATE_LABELS: Record<string, string> = {
-  lobby: '等待中', voting: '投票中', quest: '任務中',
-  discussion: '刺殺', ended: '結束',
+  lobby:      '等待中 (Lobby)',
+  voting:     '投票中 (Voting)',
+  quest:      '任務中 (Quest)',
+  discussion: '刺殺 (Assassination)',
+  ended:      '結束 (Ended)',
 };
 
 export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.Element {
@@ -107,7 +110,7 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
             animate={{ opacity: 1, y: 0 }}
             className="mt-3 text-xs text-gray-400"
           >
-            <p>{Object.keys(room.votes).length}/{playerCount} voted</p>
+            <p>{Object.keys(room.votes).length}/{playerCount} 人已投票</p>
           </motion.div>
         )}
       </motion.div>

@@ -40,7 +40,7 @@ export default function LeaderboardPage(): JSX.Element {
           </button>
           <div className="flex items-center gap-2">
             <Trophy size={24} className="text-yellow-400" />
-            <h1 className="text-2xl font-black text-white">排行榜</h1>
+            <h1 className="text-2xl font-black text-white">排行榜 (Leaderboard)</h1>
           </div>
         </div>
 
@@ -59,8 +59,8 @@ export default function LeaderboardPage(): JSX.Element {
         {!loading && !error && entries.length === 0 && (
           <div className="text-center py-16 text-gray-500">
             <Users size={48} className="mx-auto mb-3 opacity-40" />
-            <p>還沒有排行榜資料</p>
-            <p className="text-sm mt-1">完成遊戲後將自動更新</p>
+            <p>還沒有排行榜資料 (No leaderboard data yet)</p>
+            <p className="text-sm mt-1">完成遊戲後將自動更新 (Auto-updates after completing games)</p>
           </div>
         )}
 
@@ -96,8 +96,8 @@ export default function LeaderboardPage(): JSX.Element {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-                    <span>{entry.total_games} 局</span>
-                    <span className="text-green-400">{entry.win_rate}% 勝率</span>
+                    <span>{entry.total_games} 局 (games)</span>
+                    <span className="text-green-400">{entry.win_rate}% 勝率 (win rate)</span>
                   </div>
                 </div>
 

@@ -53,9 +53,9 @@ export default function TeamSelectionPanel({
     >
       {/* 標題和信息 */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">👑 選擇任務隊伍</h2>
+        <h2 className="text-3xl font-bold text-white mb-2">👑 選擇任務隊伍 (Select Quest Team)</h2>
         <p className="text-gray-300">
-          你是隊長，請選擇 {expectedTeamSize} 名隊員執行任務。
+          你是隊長，請選擇 {expectedTeamSize} 名隊員執行任務。(You are the Leader — select {expectedTeamSize} team members for the quest.)
         </p>
       </div>
 
@@ -63,7 +63,7 @@ export default function TeamSelectionPanel({
       <div className="flex justify-center">
         <div className="bg-avalon-card/70 rounded-full px-6 py-2">
           <p className="text-white font-bold">
-            已選人數：<span className="text-purple-400">{selectedPlayers.size}</span>/
+            已選 (Selected)：<span className="text-purple-400">{selectedPlayers.size}</span>/
             <span className="text-gray-400">{expectedTeamSize}</span>
           </p>
         </div>
@@ -123,15 +123,15 @@ export default function TeamSelectionPanel({
             : 'bg-gray-600 text-gray-300 cursor-not-allowed opacity-50'
         }`}
       >
-        {isSubmitting ? '提交中…' : '確認任務隊伍'}
+        {isSubmitting ? '提交中…' : '確認任務隊伍 (Confirm Team)'}
       </motion.button>
 
       {/* 幫助文本 */}
       <div className="text-center text-sm text-gray-400">
         <p>
           {isFull
-            ? '隊伍已選完！點擊確認進行投票。'
-            : `還需選擇 ${expectedTeamSize - selectedPlayers.size} 名隊員`}
+            ? '隊伍已選完！點擊確認進行投票。(Team complete! Click confirm to vote.)'
+            : `還需選擇 ${expectedTeamSize - selectedPlayers.size} 名隊員 (more member${expectedTeamSize - selectedPlayers.size > 1 ? 's' : ''} needed)`}
         </p>
       </div>
     </motion.div>

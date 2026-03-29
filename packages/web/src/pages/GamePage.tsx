@@ -58,11 +58,11 @@ export default function GamePage(): JSX.Element {
   };
 
   const stateLabel: Record<string, string> = {
-    voting: teamSelected ? '投票中' : '選隊中',
-    quest: '任務中',
-    discussion: '刺殺階段',
-    ended: '遊戲結束',
-    lobby: '等待中',
+    voting: teamSelected ? '投票中 (Voting)' : '選隊中 (Team Select)',
+    quest: '任務中 (Quest)',
+    discussion: '刺殺階段 (Assassination)',
+    ended: '遊戲結束 (Game Over)',
+    lobby: '等待中 (Lobby)',
   };
 
   return (
@@ -155,8 +155,8 @@ export default function GamePage(): JSX.Element {
             {currentPlayer.role === 'assassin' ? (
               <>
                 <div className="text-center">
-                  <h2 className="text-3xl font-bold text-red-400 mb-2">🗡️ 刺殺梅林</h2>
-                  <p className="text-gray-300">你認為誰是梅林？選擇你的目標</p>
+                  <h2 className="text-3xl font-bold text-red-400 mb-2">🗡️ 刺殺梅林 (Assassinate Merlin)</h2>
+                  <p className="text-gray-300">你認為誰是梅林？選擇你的目標 (Who do you think is Merlin? Choose your target)</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
                   {Object.values(room.players)
@@ -183,11 +183,11 @@ export default function GamePage(): JSX.Element {
               </>
             ) : (
               <div className="text-center space-y-4">
-                <h2 className="text-3xl font-bold text-purple-400">💬 刺殺階段</h2>
-                <p className="text-gray-300">好人贏得了 3 次任務！</p>
-                <p className="text-gray-400">刺客正在選擇目標，試圖找出梅林...</p>
+                <h2 className="text-3xl font-bold text-purple-400">💬 刺殺階段 (Assassination Phase)</h2>
+                <p className="text-gray-300">好人贏得了 3 次任務！(Good team won 3 quests!)</p>
+                <p className="text-gray-400">刺客正在選擇目標，試圖找出梅林... (The Assassin is choosing a target, trying to find Merlin...)</p>
                 <div className="text-sm text-yellow-500 bg-yellow-900/20 border border-yellow-700 rounded-lg p-3">
-                  若刺客成功刺殺梅林，邪惡方獲勝！
+                  若刺客成功刺殺梅林，邪惡方獲勝！(If the Assassin kills Merlin, Evil wins!)
                 </div>
               </div>
             )}
@@ -210,17 +210,22 @@ export default function GamePage(): JSX.Element {
               animate={{ y: 0 }}
               className="text-5xl font-bold"
             >
-              {room.evilWins ? '👹 邪惡方獲勝！' : '⚔️ 正義方獲勝！'}
+              {room.evilWins ? '👹 邪惡方獲勝！(Evil Wins!)' : '⚔️ 正義方獲勝！(Good Wins!)'}
             </motion.h2>
 
             <p className="text-gray-300 text-lg">最終角色揭曉：</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {Object.values(room.players).map((player) => {
                 const roleLabel: Record<string, string> = {
-                  merlin: '梅林', percival: '帕西瓦爾', loyal: '忠臣',
-                  assassin: '刺客', morgana: '莫甘娜', oberon: '奧伯龍',
+                  merlin:   '梅林 (Merlin)',
+                  percival: '派西維爾 (Percival)',
+                  loyal:    '忠臣 (Loyal Servant)',
+                  assassin: '刺客 (Assassin)',
+                  morgana:  '莫甘娜 (Morgana)',
+                  oberon:   '奧伯倫 (Oberon)',
                 };
                 const isGood = ['merlin', 'percival', 'loyal'].includes(player.role ?? '');
+
                 return (
                   <div
                     key={player.id}

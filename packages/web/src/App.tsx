@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage';
 import WikiPage from './pages/WikiPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
+import ToastContainer from './components/ToastContainer';
 
 function App(): JSX.Element {
   const { gameState, currentPlayer } = useGameStore();
@@ -68,6 +69,7 @@ function App(): JSX.Element {
           {gameState === 'profile' && <ProfilePage />}
         </>
       )}
+      <ToastContainer />
     </div>
   );
 }

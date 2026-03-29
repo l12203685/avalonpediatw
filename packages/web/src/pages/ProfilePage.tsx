@@ -5,14 +5,14 @@ import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentG
 import { getStoredToken } from '../services/socket';
 
 const ROLE_NAMES: Record<string, string> = {
-  merlin:    '梅林',
-  percival:  '派西維爾',
-  loyal:     '忠臣',
-  assassin:  '刺客',
-  morgana:   '莫甘娜',
-  mordred:   '莫德雷德',
-  oberon:    '奧伯倫',
-  unknown:   '未知',
+  merlin:   '梅林 (Merlin)',
+  percival: '派西維爾 (Percival)',
+  loyal:    '忠臣 (Loyal Servant)',
+  assassin: '刺客 (Assassin)',
+  morgana:  '莫甘娜 (Morgana)',
+  mordred:  '莫德雷德 (Mordred)',
+  oberon:   '奧伯倫 (Oberon)',
+  unknown:  '未知 (Unknown)',
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -150,7 +150,7 @@ export default function ProfilePage(): JSX.Element {
           >
             <ArrowLeft size={20} />
           </button>
-          <h1 className="text-2xl font-black text-white">個人資料</h1>
+          <h1 className="text-2xl font-black text-white">個人資料 (Profile)</h1>
         </div>
 
         {loading && (

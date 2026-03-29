@@ -7,6 +7,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 let socket: Socket | null = null;
 let _storedToken: string | null = null;
+let _hasConnectedOnce = false;
 
 /** Returns the token used to initialise the current socket connection */
 export function getStoredToken(): string | null {
@@ -63,6 +64,15 @@ export async function initializeSocket(token: string): Promise<void> {
   });
 
   socket.on('connect', () => {
+    if (_hasConnectedOnce) {
+      // This is a reconnect — re-join the current room if we were in one
+      const { room } = useGameStore.getState();
+      if (room?.id) {
+        console.log('↩ Reconnected — rejoining room', room.id);
+        socket!.emit('game:join-room', room.id);
+      }
+    }
+    _hasConnectedOnce = true;
     console.log('✓ Connected to server');
   });
 
@@ -93,11 +103,19 @@ export async function initializeSocket(token: string): Promise<void> {
   });
 
   socket.on('game:player-joined', (player: Player) => {
-    console.log('Player joined:', player);
+    store.addToast(`${player.name} 加入了房間`, 'info');
   });
 
   socket.on('game:player-reconnected', (playerId: string) => {
-    console.log('Player reconnected:', playerId);
+    const { room } = useGameStore.getState();
+    const name = room?.players[playerId]?.name ?? playerId;
+    store.addToast(`${name} 重新連線`, 'success');
+  });
+
+  socket.on('game:player-left', (playerId: string) => {
+    const { room } = useGameStore.getState();
+    const name = room?.players[playerId]?.name ?? playerId;
+    store.addToast(`${name} 斷線`, 'info');
   });
 
   socket.on('game:started', (room: Room) => {
@@ -131,6 +149,7 @@ export async function initializeSocket(token: string): Promise<void> {
 
   socket.on('error', (error: string) => {
     console.error('Socket error:', error);
+    useGameStore.getState().addToast(error, 'error');
   });
 
   socket.on('disconnect', () => {
@@ -143,6 +162,7 @@ export function disconnectSocket(): void {
     socket.disconnect();
     socket = null;
     _storedToken = null;
+    _hasConnectedOnce = false;
   }
 }
 

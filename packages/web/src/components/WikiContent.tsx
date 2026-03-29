@@ -39,7 +39,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="搜索百科內容..."
+              placeholder="搜尋百科內容 (Search wiki)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-avalon-card/50 border border-gray-600 rounded-lg pl-12 pr-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-all"
@@ -70,7 +70,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                 : 'bg-avalon-card/50 text-gray-300 hover:bg-avalon-card border border-gray-600'
             }`}
           >
-            全部
+            全部 (All)
           </button>
 
           {WIKI_CATEGORIES.map((category) => (
@@ -96,7 +96,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
             animate={{ opacity: 1 }}
             className="text-gray-400"
           >
-            找到 <span className="text-yellow-400 font-bold">{filteredArticles.length}</span> 篇文章
+            找到 (Found) <span className="text-yellow-400 font-bold">{filteredArticles.length}</span> 篇文章 (articles)
           </motion.div>
         )}
 
@@ -109,8 +109,8 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                 animate={{ opacity: 1 }}
                 className="text-center py-12"
               >
-                <p className="text-gray-400 text-lg">未找到相關文章</p>
-                <p className="text-gray-500 text-sm mt-2">試試其他搜尋詞或選擇不同的分類</p>
+                <p className="text-gray-400 text-lg">未找到相關文章 (No articles found)</p>
+                <p className="text-gray-500 text-sm mt-2">試試其他搜尋詞或選擇不同的分類 (Try different keywords or select another category)</p>
               </motion.div>
             ) : (
               filteredArticles.map((article, index) => (
@@ -145,7 +145,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                   <div className="flex items-center gap-4 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-700">
                     <div className="flex items-center gap-1">
                       <Eye size={14} />
-                      {article.views.toLocaleString()} 次閱讀
+                      {article.views.toLocaleString()} 次閱讀 (views)
                     </div>
                     <div className="flex items-center gap-1">
                       <Calendar size={14} />
@@ -227,7 +227,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                 animate={{ opacity: 1 }}
                 className="bg-avalon-card/50 border border-gray-600 rounded-lg p-6 text-center text-gray-400 sticky top-4"
               >
-                <p className="text-sm">選擇一篇文章查看詳細內容</p>
+                <p className="text-sm">選擇一篇文章查看詳細內容 (Select an article to read)</p>
               </motion.div>
             )}
           </div>

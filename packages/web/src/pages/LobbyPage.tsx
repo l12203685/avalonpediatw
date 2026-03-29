@@ -32,7 +32,7 @@ export default function LobbyPage(): JSX.Element {
           {/* Room ID with copy button */}
           <div className="inline-flex items-center gap-3 bg-avalon-card/50 border border-gray-600 rounded-xl px-5 py-3">
             <div className="text-left">
-              <p className="text-xs text-gray-500 mb-1">房間代碼（分享給朋友）</p>
+              <p className="text-xs text-gray-500 mb-1">房間代碼 (Room Code — share with friends)</p>
               <p className="text-lg font-mono font-bold text-yellow-400 tracking-widest">{room.id.slice(0, 8).toUpperCase()}</p>
             </div>
             <button
@@ -54,7 +54,7 @@ export default function LobbyPage(): JSX.Element {
           <div className="flex items-center gap-2 mb-5">
             <Users size={22} />
             <h2 className="text-xl font-bold">
-              玩家列表 ({playerList.length}/{room.maxPlayers})
+              玩家列表 (Players) ({playerList.length}/{room.maxPlayers})
             </h2>
             {!canStart && (
               <span className="ml-auto text-xs text-yellow-400 bg-yellow-900/30 border border-yellow-700 px-2 py-1 rounded-full">
@@ -77,10 +77,13 @@ export default function LobbyPage(): JSX.Element {
                   {player.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-white truncate">{player.name}</p>
+                  <p className={`font-bold truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
+                    {player.name}
+                  </p>
                   <p className="text-xs text-gray-400">
-                    {player.id === room.host ? '👑 房主' : '玩家'}
-                    {player.id === currentPlayer.id && ' · 你'}
+                    {player.id === room.host ? '👑 房主 (Host)' : '玩家 (Player)'}
+                    {player.id === currentPlayer.id && ' · 你 (You)'}
+                    {player.status === 'disconnected' && <span className="text-red-400"> · 斷線 (Disconnected)</span>}
                   </p>
                 </div>
               </div>
@@ -93,7 +96,7 @@ export default function LobbyPage(): JSX.Element {
           <div className="space-y-3">
             {!canStart && (
               <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-yellow-200 text-sm text-center">
-                至少需要 5 名玩家才能開始（目前 {playerList.length} 人）
+                至少需要 5 名玩家才能開始（目前 {playerList.length} 人）(At least 5 players required to start)
               </div>
             )}
             <button
@@ -106,14 +109,14 @@ export default function LobbyPage(): JSX.Element {
               }`}
             >
               <Play size={20} />
-              開始遊戲
+              開始遊戲 (Start Game)
             </button>
           </div>
         )}
 
         {!isHost && (
           <div className="text-center text-gray-400 py-2">
-            等待房主開始遊戲...
+            等待房主開始遊戲... (Waiting for host to start the game...)
           </div>
         )}
       </div>

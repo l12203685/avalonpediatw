@@ -30,10 +30,10 @@ export default function WikiPage(): JSX.Element {
         <div className="max-w-6xl mx-auto text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
             <BookOpen size={32} className="text-yellow-400" />
-            <h1 className="text-4xl md:text-5xl font-bold text-white">Avalon 百科</h1>
+            <h1 className="text-4xl md:text-5xl font-bold text-white">Avalon 百科 (Wiki)</h1>
           </div>
           <p className="text-gray-300 text-lg mb-8">
-            完整的遊戲規則、角色指南、策略分析和常見問題解答
+            完整的遊戲規則、角色指南、策略分析和常見問題解答 (Game rules, role guides, strategy analysis and FAQ)
           </p>
 
           {/* 快速統計 */}
@@ -43,21 +43,21 @@ export default function WikiPage(): JSX.Element {
               className="bg-avalon-card/50 border border-gray-600 rounded-lg p-4"
             >
               <div className="text-2xl font-bold text-yellow-400">6</div>
-              <div className="text-gray-400 text-sm">個文章分類</div>
+              <div className="text-gray-400 text-sm">個文章分類 (categories)</div>
             </motion.div>
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="bg-avalon-card/50 border border-gray-600 rounded-lg p-4"
             >
               <div className="text-2xl font-bold text-yellow-400">17+</div>
-              <div className="text-gray-400 text-sm">篇詳細文章</div>
+              <div className="text-gray-400 text-sm">篇詳細文章 (articles)</div>
             </motion.div>
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="bg-avalon-card/50 border border-gray-600 rounded-lg p-4"
             >
               <div className="text-2xl font-bold text-yellow-400">100%</div>
-              <div className="text-gray-400 text-sm">搜尋功能</div>
+              <div className="text-gray-400 text-sm">搜尋功能 (Search)</div>
             </motion.div>
           </div>
 
@@ -93,13 +93,13 @@ export default function WikiPage(): JSX.Element {
             <div>
               <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
                 <Users size={24} />
-                社群貢獻
+                社群貢獻 (Community Contribution)
               </h2>
               <p className="text-gray-300 mb-4">
-                幫助改進這個百科！您可以提交新文章或改進現有內容。
+                幫助改進這個百科！您可以提交新文章或改進現有內容。(Help improve this wiki! You can submit new articles or improve existing content.)
               </p>
               <button className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2 px-6 rounded-lg transition-all">
-                提交貢獻
+                提交貢獻 (Submit)
               </button>
             </div>
 
@@ -107,13 +107,13 @@ export default function WikiPage(): JSX.Element {
             <div>
               <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
                 <Lightbulb size={24} />
-                遊戲提示
+                遊戲提示 (Game Tips)
               </h2>
               <p className="text-gray-300 mb-4">
-                新手玩家？從「遊戲規則」開始，然後探索「角色指南」以瞭解各個角色！
+                新手玩家？從「遊戲規則 (Rules)」開始，然後探索「角色指南 (Roles)」以瞭解各個角色！(New player? Start with Rules, then explore the Role Guide!)
               </p>
               <button className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg transition-all">
-                新手指南
+                新手指南 (Beginner Guide)
               </button>
             </div>
           </div>

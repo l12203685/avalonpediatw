@@ -18,6 +18,7 @@ export default function QuestPanel({
   const [timeLeft, setTimeLeft] = useState(30); // 30秒任務投票時限
   const isInTeam = room.questTeam.includes(currentPlayer.id);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasVoted, setHasVoted] = useState(false);
 
   // 任務倒計時
   useEffect(() => {
@@ -31,11 +32,12 @@ export default function QuestPanel({
   const isUrgent = timeLeft < 10;
 
   const handleVote = async (vote: 'success' | 'fail') => {
-    if (!isInTeam || isSubmitting) return;
+    if (!isInTeam || isSubmitting || hasVoted) return;
 
     setIsSubmitting(true);
     try {
       submitQuestVote(room.id, currentPlayer.id, vote);
+      setHasVoted(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -48,12 +50,12 @@ export default function QuestPanel({
         animate={{ opacity: 1, y: 0 }}
         className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 text-center space-y-4"
       >
-        <h2 className="text-2xl font-bold text-white">⚔️ 任務進行中</h2>
+        <h2 className="text-2xl font-bold text-white">⚔️ 任務進行中 (Quest in Progress)</h2>
         <p className="text-gray-300">
-          任務隊伍人數：<span className="text-blue-400 font-bold">{room.questTeam.length}</span>
+          任務隊伍人數 (Team size)：<span className="text-blue-400 font-bold">{room.questTeam.length}</span>
         </p>
         <p className="text-sm text-gray-400">
-          等待任務隊伍成員投票…
+          等待任務隊伍成員投票… (Waiting for team members to vote…)
         </p>
       </motion.div>
     );
@@ -67,8 +69,8 @@ export default function QuestPanel({
     >
       {/* 標題 */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">⚔️ 任務投票</h2>
-        <p className="text-gray-300">選擇讓此次任務成功或失敗</p>
+        <h2 className="text-3xl font-bold text-white mb-2">⚔️ 任務投票 (Quest Vote)</h2>
+        <p className="text-gray-300">選擇讓此次任務成功或失敗 (Choose to succeed or fail this quest)</p>
       </div>
 
       {/* 計時器 */}
@@ -106,38 +108,50 @@ export default function QuestPanel({
       </div>
 
       {/* 投票按鈕 */}
-      <div className="flex justify-center gap-6">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => handleVote('success')}
-          disabled={isSubmitting || isLoading}
-          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
+      {hasVoted ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center py-4 text-green-400 font-semibold"
         >
-          <CheckCircle size={20} />
-          {isSubmitting ? '投票中…' : '任務成功'}
-        </motion.button>
+          ✓ 已提交，等待其他隊員投票…
+        </motion.div>
+      ) : (
+        <div className="flex justify-center gap-6">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => handleVote('success')}
+            disabled={isSubmitting || isLoading}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
+          >
+            <CheckCircle size={20} />
+            {isSubmitting ? '投票中…' : '任務成功 (Quest Success)'}
+          </motion.button>
 
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => handleVote('fail')}
-          disabled={isSubmitting || isLoading}
-          className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
-        >
-          <XCircle size={20} />
-          {isSubmitting ? '投票中…' : '任務失敗'}
-        </motion.button>
-      </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => handleVote('fail')}
+            disabled={isSubmitting || isLoading}
+            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
+          >
+            <XCircle size={20} />
+            {isSubmitting ? '投票中…' : '任務失敗 (Quest Fail)'}
+          </motion.button>
+        </div>
+      )}
 
       {/* 提示信息 */}
-      <div className="text-center text-sm text-gray-400">
-        <p>
-          {room.questTeam.length === 1
-            ? '只有你在投票…'
-            : `${room.questTeam.length} 位隊員投票中…`}
-        </p>
-      </div>
+      {!hasVoted && (
+        <div className="text-center text-sm text-gray-400">
+          <p>
+            {room.questTeam.length === 1
+              ? '只有你在投票…'
+              : `${room.questTeam.length} 位隊員投票中…`}
+          </p>
+        </div>
+      )}
     </motion.div>
   );
 }

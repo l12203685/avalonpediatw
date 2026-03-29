@@ -3,8 +3,12 @@ import { motion } from 'framer-motion';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 
 const ROLE_NAMES: Record<string, string> = {
-  merlin: '梅林', percival: '派西維爾', loyal: '忠臣',
-  assassin: '刺客', morgana: '莫甘娜', oberon: '奧伯倫',
+  merlin:   '梅林 (Merlin)',
+  percival: '派西維爾 (Percival)',
+  loyal:    '忠臣 (Loyal Servant)',
+  assassin: '刺客 (Assassin)',
+  morgana:  '莫甘娜 (Morgana)',
+  oberon:   '奧伯倫 (Oberon)',
 };
 
 interface PlayerCardProps {
@@ -71,7 +75,7 @@ export default function PlayerCard({
       {/* 隊伍提示 */}
       {isCurrentPlayer && player.team && (
         <p className="text-xs text-gray-400">
-          陣營：{player.team === 'good' ? '⚔️ 好人' : '👹 邪惡'}
+          陣營 (Team)：{player.team === 'good' ? '⚔️ 好人 (Good)' : '👹 邪惡 (Evil)'}
         </p>
       )}
     </motion.div>
