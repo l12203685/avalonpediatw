@@ -110,7 +110,12 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
               player={player}
               isCurrentPlayer={player.id === currentPlayer.id}
               hasVoted={room.votes[player.id] !== undefined}
-              voted={room.votes[player.id]}
+              // During voting, only reveal own vote direction; others show as undefined (just "has voted")
+              voted={
+                room.state === 'voting' && player.id !== currentPlayer.id
+                  ? undefined
+                  : room.votes[player.id]
+              }
               isLeader={player.id === leaderId}
               isOnQuestTeam={room.questTeam.includes(player.id)}
             />

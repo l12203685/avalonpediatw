@@ -10,6 +10,7 @@ const ROLE_NAMES: Record<string, string> = {
   morgana:  '莫甘娜 (Morgana)',
   oberon:   '奧伯倫 (Oberon)',
   mordred:  '莫德雷德 (Mordred)',
+  minion:   '爪牙 (Minion)',
 };
 
 interface PlayerCardProps {
@@ -79,9 +80,12 @@ export default function PlayerCard({
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -bottom-2 -right-2 bg-white rounded-full p-1"
+            className={`absolute -bottom-2 -right-2 rounded-full p-1 ${voted === undefined ? 'bg-gray-700' : 'bg-white'}`}
           >
-            {voted ? (
+            {voted === undefined ? (
+              // Vote direction unknown — just show a neutral "voted" checkmark
+              <span className="text-xs text-gray-300 font-bold px-0.5">✓</span>
+            ) : voted ? (
               <ThumbsUp size={16} className="text-green-500" />
             ) : (
               <ThumbsDown size={16} className="text-red-500" />
