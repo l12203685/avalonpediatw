@@ -45,8 +45,10 @@ function formatReplayEvent(ev: GameEvent): string {
   switch (ev.event_type) {
     case 'game_started':
       return `遊戲開始 — ${d.playerCount as number}人局，領袖：${d.leaderId as string}`;
-    case 'voting_phase_started':
-      return `第${d.round as number}局開始 — 第${d.failedVotes as number}次提案，領袖：${d.leaderId as string}`;
+    case 'voting_phase_started': {
+      const leaderLabel = (d.leaderName as string) || (d.leaderId as string) || '?';
+      return `第${d.round as number}輪 — 第${(d.failedVotes ?? d.failCount) as number}次提案，領袖：${leaderLabel}`;
+    }
     case 'quest_team_selected':
       return `領袖提案：${(d.team as string[])?.join('、')}`;
     case 'voting_resolved': {

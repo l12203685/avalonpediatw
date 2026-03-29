@@ -69,9 +69,17 @@ export class GameEngine {
     this.currentLeaderIndex = 0;
     this.voteAttemptInRound = 0;
 
+    // Build player name map for replay readability
+    const playerNames: Record<string, string> = {};
+    for (const [id, p] of Object.entries(this.room.players)) {
+      playerNames[id] = p.name;
+    }
     this.logEvent('game_started', {
       playerCount,
-      roles: Array.from(this.roleAssignments.values())
+      roles: Array.from(this.roleAssignments.values()),
+      playerNames,
+      leaderId: Object.keys(this.room.players)[0],
+      leaderName: Object.values(this.room.players)[0]?.name ?? '',
     });
 
     // Don't start vote timer yet — it starts when leader confirms the quest team
@@ -105,11 +113,16 @@ export class GameEngine {
       this.voteTimeout = null;
     }
 
-    // Log voting phase start
+    // Log voting phase start (include leaderId and failedVotes for replay display)
+    const playerIds = Object.keys(this.room.players);
+    const leaderId = playerIds[this.currentLeaderIndex % playerIds.length];
     this.logEvent('voting_phase_started', {
       round: this.room.currentRound,
+      failedVotes: this.room.failCount,
       failCount: this.room.failCount,
-      playerCount: Object.keys(this.room.players).length
+      playerCount: playerIds.length,
+      leaderId,
+      leaderName: this.room.players[leaderId]?.name ?? leaderId,
     });
 
     // Set vote timeout
@@ -299,10 +312,12 @@ export class GameEngine {
 
     this.room.questTeam = teamMemberIds;
 
+    const teamNames = teamMemberIds.map(id => this.room.players[id]?.name ?? id);
     this.logEvent('quest_team_selected', {
       round: this.room.currentRound,
       teamSize: teamMemberIds.length,
-      leaderId: this.getLeaderId()
+      leaderId: this.getLeaderId(),
+      team: teamNames,
     });
     // Start the approval vote timer now that team is proposed
     this.startVotingPhase();
