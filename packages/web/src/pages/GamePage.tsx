@@ -12,8 +12,9 @@ import ChatPanel from '../components/ChatPanel';
 import HistoryPanel from '../components/HistoryPanel';
 import MissionTrack from '../components/MissionTrack';
 import SuspicionBoard from '../components/SuspicionBoard';
+import audioService from '../services/audio';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Bell, RefreshCw } from 'lucide-react';
+import { Home, Bell, RefreshCw, Volume2, VolumeX } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 
@@ -26,6 +27,7 @@ export default function GamePage(): JSX.Element {
   const [assassinTimer, setAssassinTimer] = useState(120); // 120s matches server ASSASSINATION_TIMEOUT_MS
   const [pendingVoteReveal, setPendingVoteReveal] = useState<VoteRecord | null>(null);
   const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
+  const [audioEnabled, setAudioEnabled] = useState(() => audioService.isEnabled());
   const prevVoteHistoryLen = useRef(0);
   const prevQuestHistoryLen = useRef(0);
 
@@ -95,6 +97,11 @@ export default function GamePage(): JSX.Element {
     } finally {
       setIsAssassinating(false);
     }
+  };
+
+  const handleToggleAudio = () => {
+    audioService.toggleAudio();
+    setAudioEnabled(audioService.isEnabled());
   };
 
   const handlePlayAgain = () => {
@@ -196,6 +203,17 @@ export default function GamePage(): JSX.Element {
               className="bg-blue-900/50 hover:bg-blue-800/70 border border-blue-600 px-4 py-2 rounded-lg text-blue-300 text-sm transition-colors"
             >
               查看角色
+            </button>
+            <button
+              onClick={handleToggleAudio}
+              title={audioEnabled ? '靜音 (Mute)' : '開啟音效 (Unmute)'}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${
+                audioEnabled
+                  ? 'bg-gray-800/50 hover:bg-gray-700/70 border-gray-600 text-gray-300'
+                  : 'bg-gray-900/50 hover:bg-gray-800/70 border-gray-700 text-gray-500'
+              }`}
+            >
+              {audioEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord } from '@avalon/shared';
 
+const TEAM_SELECT_TIMEOUT_MS = 90000; // 90秒隊伍選擇時限（隊長AFK保護）
 const VOTE_TIMEOUT_MS = 60000; // 60秒隊伍投票時限
 const QUEST_TIMEOUT_MS = 60000; // 60秒任務投票時限
 const ASSASSINATION_TIMEOUT_MS = 120000; // 2分鐘刺殺時限
@@ -19,6 +20,7 @@ export interface GameEventRecord {
 export class GameEngine {
   private room: Room;
   private roleAssignments: Map<string, Role> = new Map();
+  private teamSelectTimeout: NodeJS.Timeout | null = null;
   private voteTimeout: NodeJS.Timeout | null = null;
   private questVoteTimeout: NodeJS.Timeout | null = null;
   private assassinationTimeout: NodeJS.Timeout | null = null;
@@ -83,6 +85,36 @@ export class GameEngine {
     });
 
     // Don't start vote timer yet — it starts when leader confirms the quest team
+    // Start team-selection timer to handle AFK leader
+    this.startTeamSelectPhase();
+  }
+
+  private startTeamSelectPhase(): void {
+    if (this.teamSelectTimeout) {
+      clearTimeout(this.teamSelectTimeout);
+      this.teamSelectTimeout = null;
+    }
+    this.teamSelectTimeout = setTimeout(() => {
+      if (this.room.state === 'voting' && this.room.questTeam.length === 0) {
+        // Auto-select: leader + random other players to fill required size
+        const playerCount = Object.keys(this.room.players).length;
+        const config = AVALON_CONFIG[playerCount];
+        const requiredSize = config?.questTeams[this.room.currentRound - 1] ?? 2;
+        const leaderId = this.getLeaderId();
+        const others = Object.keys(this.room.players).filter(id => id !== leaderId);
+        const shuffled = this.shuffleArray(others);
+        const autoTeam = [leaderId, ...shuffled].slice(0, requiredSize);
+        this.room.questTeam = autoTeam;
+        this.logEvent('team_auto_selected', {
+          round: this.room.currentRound,
+          leaderId,
+          team: autoTeam,
+          reason: 'leader_afk_timeout',
+        });
+        this.startVotingPhase();
+        this.onStateChange?.(this.room);
+      }
+    }, TEAM_SELECT_TIMEOUT_MS);
   }
 
   private startQuestPhase(): void {
@@ -283,8 +315,8 @@ export class GameEngine {
           reason: 'vote_rejections_limit'
         });
       } else {
-        // Start new voting round with new leader
-        this.startVotingPhase();
+        // Start new team-select window for the new leader
+        this.startTeamSelectPhase();
       }
     }
   }
@@ -310,6 +342,12 @@ export class GameEngine {
         throw new Error(`Player ${id} not found in room`);
       }
     });
+
+    // Clear AFK timeout — leader has responded
+    if (this.teamSelectTimeout) {
+      clearTimeout(this.teamSelectTimeout);
+      this.teamSelectTimeout = null;
+    }
 
     this.room.questTeam = teamMemberIds;
 
@@ -422,6 +460,8 @@ export class GameEngine {
 
       // Rotate leader for next round
       this.rotateLeader();
+      // New leader must select a team — start AFK timer
+      this.startTeamSelectPhase();
 
       this.logEvent('round_ended', {
         round: this.room.currentRound - 1,
@@ -587,6 +627,10 @@ export class GameEngine {
   }
 
   public cleanup(): void {
+    if (this.teamSelectTimeout) {
+      clearTimeout(this.teamSelectTimeout);
+      this.teamSelectTimeout = null;
+    }
     if (this.voteTimeout) {
       clearTimeout(this.voteTimeout);
       this.voteTimeout = null;
