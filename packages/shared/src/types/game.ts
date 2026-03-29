@@ -66,6 +66,7 @@ export interface Room {
   assassinTargetId?: string;   // ID of the player the assassin targeted (set on game end)
   roleOptions: RoleOptions;    // Host-configured optional role toggles
   readyPlayerIds: string[];    // Player IDs who clicked "Ready" in lobby
+  isPrivate?: boolean;         // Room requires password to join
   createdAt: number;
   updatedAt: number;
 }

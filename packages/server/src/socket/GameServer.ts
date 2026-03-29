@@ -74,12 +74,16 @@ export class GameServer {
       });
 
       // Game events
-      socket.on('game:create-room', (playerName: string) => {
-        this.handleCreateRoom(socket, playerName, user);
+      socket.on('game:create-room', (playerName: string, password?: string) => {
+        this.handleCreateRoom(socket, playerName, user, password);
       });
 
-      socket.on('game:join-room', (roomId: string) => {
-        this.handleJoinRoom(socket, roomId, user);
+      socket.on('game:join-room', (roomId: string, password?: string) => {
+        this.handleJoinRoom(socket, roomId, user, password);
+      });
+
+      socket.on('game:set-room-password', (roomId: string, password: string | null) => {
+        this.handleSetRoomPassword(socket, roomId, password);
       });
 
       socket.on('game:start-game', (roomId: string) => {
@@ -157,6 +161,7 @@ export class GameServer {
             maxPlayers:  r.maxPlayers,
             createdAt:   r.createdAt,
             inProgress:  r.state !== 'lobby',
+            isPrivate:   r.isPrivate ?? false,
           }))
           .sort((a, b) => (a.inProgress ? 1 : 0) - (b.inProgress ? 1 : 0) || b.createdAt - a.createdAt);
         socket.emit('game:rooms-list', openRooms);
@@ -268,12 +273,24 @@ export class GameServer {
     return { ...room, players, votes };
   }
 
-  private handleCreateRoom(socket: Socket, playerName: string, user: User): void {
+  private handleSetRoomPassword(socket: Socket, roomId: string, password: string | null): void {
+    const room = this.roomManager.getRoom(roomId);
+    if (!room) { socket.emit('error', 'Room not found'); return; }
+    if (room.host !== socket.data.playerId) { socket.emit('error', 'Only the host can set a password'); return; }
+    const pw = password?.trim() || null;
+    this.roomManager.setRoomPassword(roomId, pw);
+    this.broadcastRoomState(roomId, this.roomManager.getRoom(roomId)!);
+  }
+
+  private handleCreateRoom(socket: Socket, playerName: string, user: User, password?: string): void {
     try {
       const roomId = this.generateRoomCode();
       const playerId = user.uid;
 
       const room = this.roomManager.createRoom(roomId, playerName || user.displayName, playerId);
+      if (password?.trim()) {
+        this.roomManager.setRoomPassword(roomId, password.trim());
+      }
       const gameEngine = this.createGameEngine(roomId, room);
       this.gameEngines.set(roomId, gameEngine);
 
@@ -304,7 +321,7 @@ export class GameServer {
     }
   }
 
-  private handleJoinRoom(socket: Socket, roomId: string, user: User): void {
+  private handleJoinRoom(socket: Socket, roomId: string, user: User, password?: string): void {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -314,6 +331,12 @@ export class GameServer {
 
       const playerId = user.uid;
       const playerExists = room.players[playerId];
+
+      // Check password for non-members (reconnects bypass password check)
+      if (!playerExists && !this.roomManager.checkRoomPassword(roomId, password)) {
+        socket.emit('error', '密碼錯誤 (Wrong password)');
+        return;
+      }
 
       // Handle rejoin scenario (player was disconnected and reconnecting)
       if (playerExists) {

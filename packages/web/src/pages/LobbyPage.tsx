@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady } from '../services/socket';
-import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
+import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady, setRoomPassword } from '../services/socket';
+import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown, Lock, Unlock } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
 import ChatPanel from '../components/ChatPanel';
 
@@ -22,6 +22,8 @@ const ROLE_OPTION_INFO: Record<string, { label: string; description: string; pai
 export default function LobbyPage(): JSX.Element {
   const { room, currentPlayer, quickSoloMode, setQuickSoloMode } = useGameStore();
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
 
   // Quick solo mode: auto-fill with 4 normal bots then start when room is ready
   useEffect(() => {
@@ -164,6 +166,61 @@ export default function LobbyPage(): JSX.Element {
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* Password lock (host only) */}
+            {isHost && (
+              <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">房間密碼 (Room Password)</p>
+                  <button
+                    onClick={() => {
+                      if (room.isPrivate) {
+                        setRoomPassword(room.id, null);
+                      } else {
+                        setShowPasswordInput(v => !v);
+                      }
+                    }}
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors ${
+                      room.isPrivate
+                        ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300 hover:bg-yellow-900/60'
+                        : 'bg-gray-800/40 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                    }`}
+                  >
+                    {room.isPrivate ? <><Lock size={11} /> 已加密 — 點擊解鎖</> : <><Unlock size={11} /> 公開 — 點擊設定密碼</>}
+                  </button>
+                </div>
+                {showPasswordInput && !room.isPrivate && (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="password"
+                      placeholder="設定密碼"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newPassword.trim()) {
+                          setRoomPassword(room.id, newPassword.trim());
+                          setNewPassword('');
+                          setShowPasswordInput(false);
+                        }
+                      }}
+                      className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                    />
+                    <button
+                      onClick={() => {
+                        if (newPassword.trim()) {
+                          setRoomPassword(room.id, newPassword.trim());
+                          setNewPassword('');
+                          setShowPasswordInput(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded-lg transition-colors"
+                    >
+                      確認
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

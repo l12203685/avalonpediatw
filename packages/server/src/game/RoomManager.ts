@@ -2,12 +2,32 @@ import { Room, Player } from '@avalon/shared';
 
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();
+  private roomPasswords: Map<string, string> = new Map(); // roomId -> hashed/raw password (never broadcast)
   private readonly ROOM_EXPIRY_TIME = 30 * 60 * 1000; // 30 minutes
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     // Start cleanup timer
     this.startCleanupTimer();
+  }
+
+  public setRoomPassword(roomId: string, password: string | null): void {
+    if (password) {
+      this.roomPasswords.set(roomId, password);
+    } else {
+      this.roomPasswords.delete(roomId);
+    }
+    const room = this.rooms.get(roomId);
+    if (room) {
+      room.isPrivate = !!password;
+      room.updatedAt = Date.now();
+    }
+  }
+
+  public checkRoomPassword(roomId: string, password?: string): boolean {
+    const stored = this.roomPasswords.get(roomId);
+    if (!stored) return true; // no password set
+    return stored === password;
   }
 
   public createRoom(roomId: string, hostName: string, hostId: string): Room {
@@ -59,6 +79,7 @@ export class RoomManager {
 
   public deleteRoom(roomId: string): void {
     this.rooms.delete(roomId);
+    this.roomPasswords.delete(roomId);
   }
 
   public getAllRooms(): Room[] {
@@ -121,6 +142,7 @@ export class RoomManager {
 
     roomsToDelete.forEach((roomId) => {
       this.rooms.delete(roomId);
+      this.roomPasswords.delete(roomId);
       deletedCount++;
     });
 
@@ -140,5 +162,6 @@ export class RoomManager {
       this.cleanupInterval = null;
     }
     this.rooms.clear();
+    this.roomPasswords.clear();
   }
 }
