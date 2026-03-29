@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink } from 'lucide-react';
+import { getEloRank } from '../utils/eloRank';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
 import { getStoredToken } from '../services/socket';
@@ -200,6 +201,14 @@ export default function ProfilePage(): JSX.Element {
                   <TrendingUp size={16} className="text-blue-400" />
                   <span className="text-blue-300 font-bold text-lg">{profile.elo_rating}</span>
                   <span className="text-gray-500 text-sm">ELO</span>
+                  {(() => {
+                    const rank = getEloRank(profile.elo_rating);
+                    return (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
+                        {rank.label}
+                      </span>
+                    );
+                  })()}
                 </div>
                 {profile.badges.length > 0 && (
                   <div className="flex gap-1 mt-2 flex-wrap">

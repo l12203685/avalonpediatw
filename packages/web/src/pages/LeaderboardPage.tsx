@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trophy, ArrowLeft, Crown, TrendingUp, Users, Loader } from 'lucide-react';
+import { getEloRank } from '../utils/eloRank';
 import { useGameStore } from '../store/gameStore';
 import { fetchLeaderboard, LeaderboardEntry } from '../services/api';
 
@@ -113,13 +114,20 @@ export default function LeaderboardPage(): JSX.Element {
                   )}
                 </div>
 
-                {/* ELO */}
+                {/* ELO + Rank */}
                 <div className="text-right">
                   <div className="flex items-center gap-1 justify-end">
                     <TrendingUp size={14} className="text-blue-400" />
                     <span className="font-bold text-white text-lg">{entry.elo_rating}</span>
                   </div>
-                  <div className="text-xs text-gray-500">ELO</div>
+                  {(() => {
+                    const rank = getEloRank(entry.elo_rating);
+                    return (
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
+                        {rank.label}
+                      </span>
+                    );
+                  })()}
                 </div>
               </button>
             ))}
