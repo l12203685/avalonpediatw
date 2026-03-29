@@ -265,6 +265,7 @@ export interface LeaderboardEntry {
   total_games: number;
   games_won: number;
   games_lost: number;
+  badges: string[];
   win_rate: number;
 }
 
@@ -301,7 +302,7 @@ export async function getLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
 
   const { data, error } = await db
     .from('users')
-    .select('id, display_name, photo_url, provider, elo_rating, total_games, games_won, games_lost')
+    .select('id, display_name, photo_url, provider, elo_rating, total_games, games_won, games_lost, badges')
     .gte('total_games', 1)
     .order('elo_rating', { ascending: false })
     .limit(limit);
@@ -310,6 +311,7 @@ export async function getLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
 
   return data.map(row => ({
     ...row,
+    badges: row.badges ?? [],
     win_rate: row.total_games > 0 ? Math.round((row.games_won / row.total_games) * 100) : 0,
   }));
 }
