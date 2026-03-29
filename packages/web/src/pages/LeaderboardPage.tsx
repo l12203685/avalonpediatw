@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Trophy, ArrowLeft, Crown, TrendingUp, Users, Loader } from 'lucide-react';
-import { getEloRank } from '../utils/eloRank';
+import { useState, useEffect, useMemo } from 'react';
+import { Trophy, ArrowLeft, Crown, TrendingUp, Users, Loader, Search } from 'lucide-react';
+import { getEloRank, ELO_RANKS } from '../utils/eloRank';
 import { useGameStore } from '../store/gameStore';
 import { fetchLeaderboard, LeaderboardEntry } from '../services/api';
 
@@ -14,11 +14,15 @@ const PROVIDER_BADGE: Record<string, string> = {
 
 const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600'];
 
+const ALL_RANKS = ['全部', ...ELO_RANKS.map(r => r.label)];
+
 export default function LeaderboardPage(): JSX.Element {
   const { setGameState, navigateToProfile } = useGameStore();
   const [entries, setEntries]   = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
+  const [search, setSearch]     = useState('');
+  const [rankFilter, setRankFilter] = useState('全部');
 
   useEffect(() => {
     fetchLeaderboard()
@@ -26,6 +30,20 @@ export default function LeaderboardPage(): JSX.Element {
       .catch(() => setError('無法載入排行榜，請確認伺服器連線'))
       .finally(() => setLoading(false));
   }, []);
+
+  const filtered = useMemo(() => {
+    let result = entries;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(e => e.display_name.toLowerCase().includes(q));
+    }
+    if (rankFilter !== '全部') {
+      result = result.filter(e => getEloRank(e.elo_rating).label === rankFilter);
+    }
+    return result;
+  }, [entries, search, rankFilter]);
+
+  const isFiltered = search.trim() !== '' || rankFilter !== '全部';
 
   return (
     <div className="min-h-screen p-4">
@@ -44,6 +62,67 @@ export default function LeaderboardPage(): JSX.Element {
             <h1 className="text-2xl font-black text-white">排行榜 (Leaderboard)</h1>
           </div>
         </div>
+
+        {/* Search + Rank Filter */}
+        {!loading && !error && entries.length > 0 && (
+          <div className="space-y-3">
+            {/* Search bar */}
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="搜尋玩家名稱..."
+                className="w-full bg-avalon-card/60 border border-gray-700 focus:border-blue-500/70 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors"
+              />
+            </div>
+
+            {/* Rank tier pills */}
+            <div className="flex flex-wrap gap-1.5">
+              {ALL_RANKS.map(label => {
+                const rankDef = ELO_RANKS.find(r => r.label === label);
+                const isActive = rankFilter === label;
+                if (label === '全部') {
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => setRankFilter('全部')}
+                      className={`text-xs px-2.5 py-1 rounded-full border font-semibold transition-all ${
+                        isActive
+                          ? 'bg-white/20 border-white/50 text-white'
+                          : 'bg-gray-800/60 border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      全部
+                    </button>
+                  );
+                }
+                if (!rankDef) return null;
+                return (
+                  <button
+                    key={label}
+                    onClick={() => setRankFilter(label)}
+                    className={`text-xs px-2.5 py-1 rounded-full border font-semibold transition-all ${
+                      isActive
+                        ? `${rankDef.color} ${rankDef.bgColor} ${rankDef.borderColor}`
+                        : 'bg-gray-800/60 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Result count when filtered */}
+            {isFiltered && (
+              <p className="text-xs text-gray-500">
+                顯示 <span className="text-gray-300 font-semibold">{filtered.length}</span> / 總計 <span className="text-gray-300 font-semibold">{entries.length}</span> 人
+              </p>
+            )}
+          </div>
+        )}
 
         {loading && (
           <div className="flex justify-center pt-10">
@@ -65,10 +144,19 @@ export default function LeaderboardPage(): JSX.Element {
           </div>
         )}
 
+        {/* Empty state when search/filter yields no results */}
+        {!loading && !error && entries.length > 0 && filtered.length === 0 && (
+          <div className="text-center py-12 text-gray-500">
+            <Search size={40} className="mx-auto mb-3 opacity-30" />
+            <p className="text-sm">找不到符合條件的玩家</p>
+            <p className="text-xs mt-1 text-gray-600">請嘗試其他搜尋條件</p>
+          </div>
+        )}
+
         {/* List */}
-        {entries.length > 0 && (
+        {filtered.length > 0 && (
           <div className="space-y-2">
-            {entries.map((entry, idx) => (
+            {filtered.map((entry, idx) => (
               <button
                 key={entry.id}
                 onClick={() => navigateToProfile(entry.id)}

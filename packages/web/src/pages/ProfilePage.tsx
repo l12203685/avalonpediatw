@@ -171,6 +171,18 @@ export default function ProfilePage(): JSX.Element {
       ).sort((a, b) => b[1].total - a[1].total)
     : [];
 
+  // Compute per-player-count stats from recent games
+  const playerCountStats: Array<{ count: number; wins: number; total: number }> = profile
+    ? [5, 6, 7, 8, 9, 10]
+        .reduce<Array<{ count: number; wins: number; total: number }>>((acc, count) => {
+          const games = profile.recent_games.filter(g => g.player_count === count);
+          if (games.length > 0) {
+            acc.push({ count, wins: games.filter(g => g.won).length, total: games.length });
+          }
+          return acc;
+        }, [])
+    : [];
+
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-lg mx-auto space-y-6">
@@ -366,6 +378,35 @@ export default function ProfilePage(): JSX.Element {
                       <div key={role} className="flex items-center gap-2">
                         <span className={`text-xs font-semibold w-36 truncate ${color}`}>
                           {ROLE_NAMES[role] ?? role}
+                        </span>
+                        <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${pct >= 50 ? 'bg-green-500' : 'bg-red-500'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs font-bold w-10 text-right ${pct >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                          {pct}%
+                        </span>
+                        <span className="text-xs text-gray-600 w-10 text-right">{wins}/{total}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Win rate by player count */}
+            {playerCountStats.length > 0 && (
+              <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-gray-300 mb-3">人數勝率 (Win Rate by Player Count) <span className="text-gray-500 font-normal">— 近 {profile!.recent_games.length} 局</span></h3>
+                <div className="space-y-2">
+                  {playerCountStats.map(({ count, wins, total }) => {
+                    const pct = Math.round((wins / total) * 100);
+                    return (
+                      <div key={count} className="flex items-center gap-2">
+                        <span className="text-xs font-semibold w-10 text-gray-300 flex-shrink-0">
+                          {count} 人局
                         </span>
                         <div className="flex-1 bg-gray-800 rounded-full h-1.5">
                           <div
