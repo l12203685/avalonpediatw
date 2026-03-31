@@ -2,7 +2,8 @@ import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getDatabase, Database } from 'firebase/database';
 import { getAuth, Auth } from 'firebase/auth';
 import * as admin from 'firebase-admin';
-import { User } from '@avalon/shared';
+import { User, UserProfile } from '@avalon/shared';
+import { Firestore } from 'firebase-admin/firestore';
 
 // Firebase config (will be set from environment)
 const firebaseConfig = {
@@ -32,6 +33,11 @@ export async function initializeFirebase(): Promise<void> {
       const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
       adminApp = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
+        databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
+      });
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      // Support ADC (Application Default Credentials) for local dev
+      adminApp = admin.initializeApp({
         databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
       });
     }
@@ -76,6 +82,13 @@ export function getAdminDB(): admin.database.Database {
     throw new Error('Firebase admin not initialized');
   }
   return admin.database(adminApp);
+}
+
+export function getAdminFirestore(): Firestore {
+  if (!adminApp) {
+    throw new Error('Firebase admin not initialized');
+  }
+  return admin.firestore(adminApp);
 }
 
 /**
@@ -205,4 +218,43 @@ function calculateElo(currentElo: number, won: boolean, K = 32): number {
   } else {
     return Math.max(0, currentElo - K);
   }
+}
+
+/**
+ * Get leaderboard — top N players sorted by ELO descending
+ */
+export async function getLeaderboard(limit = 50): Promise<(UserStats & { uid: string })[]> {
+  const db = getAdminDB();
+  const snapshot = await db.ref('user-stats')
+    .orderByChild('eloRating')
+    .limitToLast(limit)
+    .once('value');
+
+  const results: (UserStats & { uid: string })[] = [];
+  snapshot.forEach((child) => {
+    const val = child.val() as UserStats;
+    if (val) results.push({ ...val, uid: child.key as string });
+  });
+
+  return results.reverse(); // highest ELO first
+}
+
+/**
+ * Get full user profile merged with stats — used for profile page
+ */
+export async function getFullUserProfile(uid: string): Promise<UserProfile | null> {
+  const [user, stats] = await Promise.all([getUserProfile(uid), getUserStats(uid)]);
+  if (!user) return null;
+
+  return {
+    ...user,
+    totalGames: stats?.totalGames ?? 0,
+    gamesWon: stats?.gamesWon ?? 0,
+    gamesLost: stats?.gamesLost ?? 0,
+    totalKills: stats?.totalKills ?? 0,
+    winRate: stats?.totalGames ? (stats.gamesWon / stats.totalGames) * 100 : 0,
+    averageGameDuration: stats?.averageGameDuration ?? 0,
+    eloRating: stats?.eloRating ?? 1000,
+    badges: [],
+  };
 }

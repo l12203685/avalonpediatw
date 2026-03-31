@@ -2,10 +2,12 @@ import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/gameStore';
 import { Room, Player, User, AuthSession } from '@avalon/shared';
 import { getIdToken } from './auth';
+import { toast } from '../store/toastStore';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 let socket: Socket | null = null;
+let _hasConnectedOnce = false;
 
 export function getSocket(): Socket {
   if (!socket) {
@@ -32,6 +34,15 @@ export async function initializeSocket(token: string): Promise<void> {
 
   socket.on('connect', () => {
     console.log('✓ Connected to server');
+    if (_hasConnectedOnce) {
+      toast.success('已重新連接伺服器');
+      // Re-join room if in one
+      const { room, currentPlayer } = useGameStore.getState();
+      if (room && currentPlayer) {
+        socket!.emit('game:rejoin-room', room.id, currentPlayer.id);
+      }
+    }
+    _hasConnectedOnce = true;
   });
 
   socket.on('auth:success', (session: AuthSession) => {
@@ -61,15 +72,17 @@ export async function initializeSocket(token: string): Promise<void> {
   });
 
   socket.on('chat:message-received', (message) => {
-    console.log('Message:', message);
+    store.addChatMessage(message);
   });
 
   socket.on('error', (error: string) => {
     console.error('Socket error:', error);
+    toast.error(error || '伺服器錯誤');
   });
 
   socket.on('disconnect', () => {
     console.log('Disconnected from server');
+    toast.warning('與伺服器斷線，嘗試重新連接中...');
   });
 }
 

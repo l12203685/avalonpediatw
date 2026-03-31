@@ -1,13 +1,30 @@
 import { Room, Player } from '@avalon/shared';
 
+const MAX_REPLAYS = 200;
+
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();
+  private replays: Map<string, Room> = new Map();
   private readonly ROOM_EXPIRY_TIME = 30 * 60 * 1000; // 30 minutes
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     // Start cleanup timer
     this.startCleanupTimer();
+  }
+
+  /**
+   * Rehydrate rooms from an external source (e.g. Firebase RTD on server restart).
+   * Only loads rooms that are not in 'ended' state.
+   */
+  public rehydrate(rooms: Room[]): number {
+    let loaded = 0;
+    for (const room of rooms) {
+      if (room.state === 'ended') continue;
+      this.rooms.set(room.id, room);
+      loaded++;
+    }
+    return loaded;
   }
 
   public createRoom(roomId: string, hostName: string, hostId: string): Room {
@@ -49,6 +66,22 @@ export class RoomManager {
 
   public deleteRoom(roomId: string): void {
     this.rooms.delete(roomId);
+  }
+
+  /**
+   * Save a snapshot of a completed room as a replay record.
+   */
+  public saveReplay(room: Room): void {
+    // Evict oldest entry if at capacity
+    if (this.replays.size >= MAX_REPLAYS) {
+      const oldestKey = this.replays.keys().next().value;
+      if (oldestKey) this.replays.delete(oldestKey);
+    }
+    this.replays.set(room.id, { ...room });
+  }
+
+  public getReplay(roomId: string): Room | undefined {
+    return this.replays.get(roomId);
   }
 
   public getAllRooms(): Room[] {

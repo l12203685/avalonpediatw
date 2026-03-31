@@ -12,6 +12,15 @@ export const DISCORD_CONFIG = {
   // Guild ID (for testing)
   guildId: process.env.DISCORD_GUILD_ID || '',
 
+  // Channel IDs
+  channels: {
+    // #同步閒聊 — game results and invite announcements
+    syncChat: process.env.DISCORD_SYNC_CHANNEL_ID || '1132901301802504242',
+  },
+
+  // Web platform base URL for invite links
+  webBaseUrl: process.env.WEB_BASE_URL || 'http://localhost:3000',
+
   // Command prefix
   prefix: '!avalon',
 

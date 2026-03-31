@@ -5,6 +5,9 @@ import { RoomManager } from '../game/RoomManager';
 import { GameEngine } from '../game/GameEngine';
 import { updateUserStats } from '../services/firebase';
 import { SocketRateLimiter } from '../middleware/rateLimit';
+import { GameStatePersistence } from '../services/GameStatePersistence';
+import { GameHistoryRepository } from '../services/GameHistoryRepository';
+import { broadcastGameResult } from '../bots/discord/broadcaster';
 
 // Rate limiters for different events
 const voteLimiter = new SocketRateLimiter({
@@ -21,10 +24,14 @@ export class GameServer {
   private io: SocketIOServer;
   private roomManager: RoomManager;
   private gameEngines: Map<string, GameEngine> = new Map();
+  private persistence: GameStatePersistence;
+  private gameHistory: GameHistoryRepository;
 
-  constructor(io: SocketIOServer) {
+  constructor(io: SocketIOServer, roomManager: RoomManager) {
     this.io = io;
-    this.roomManager = new RoomManager();
+    this.roomManager = roomManager;
+    this.persistence = new GameStatePersistence();
+    this.gameHistory = new GameHistoryRepository();
   }
 
   public start(): void {
@@ -77,13 +84,100 @@ export class GameServer {
     });
   }
 
+  /**
+   * Persist room state (and engine state for in-progress rooms) to Firebase RTD.
+   * Fire-and-forget -- errors are logged, not thrown.
+   */
+  private persistRoom(room: Room): void {
+    const inProgress = room.state !== 'lobby' && room.state !== 'ended';
+    const engineState = inProgress
+      ? this.gameEngines.get(room.id)?.serialize()
+      : undefined;
+
+    this.persistence.saveRoom(room, engineState).catch(() => {
+      // Error already logged inside saveRoom
+    });
+  }
+
+  /**
+   * Rehydrate rooms from Firebase RTD on server startup.
+   * Call this after Firebase is initialised.
+   *
+   * For rooms in progress (voting/quest/discussion), attempts to restore the
+   * GameEngine from the saved engine state snapshot. Falls back to a fresh
+   * engine (no internal state) when no snapshot is available — the room
+   * remains accessible but mid-vote progress is lost.
+   */
+  public async rehydrateRooms(): Promise<number> {
+    const entries = await this.persistence.loadAllRooms();
+    const rooms = entries.map((e) => e.room);
+    const count = this.roomManager.rehydrate(rooms);
+
+    // Recreate GameEngine instances for in-progress rooms
+    for (const { room, engineState } of entries) {
+      if (room.state === 'ended' || room.state === 'lobby') continue;
+
+      const onUpdate = (updatedRoom: Room): void => {
+        this.io.to(room.id).emit('game:state-updated', updatedRoom);
+        this.persistRoom(updatedRoom);
+        if (updatedRoom.state === 'ended') {
+          this.io.to(room.id).emit('game:ended', updatedRoom, updatedRoom.evilWins ? 'evil' : 'good');
+          this.onGameEnd(room.id, updatedRoom);
+        }
+      };
+
+      let engine: GameEngine;
+
+      if (engineState !== null) {
+        try {
+          engine = GameEngine.restore(engineState, room, onUpdate);
+          console.log(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            event: 'engine_restored',
+            roomId: room.id,
+            state: room.state,
+          }));
+        } catch (restoreError) {
+          // Snapshot present but corrupt/mismatched — fall back to a blank engine
+          console.error(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            event: 'engine_restore_failed',
+            roomId: room.id,
+            error: restoreError instanceof Error ? restoreError.message : 'Unknown error',
+          }));
+          engine = new GameEngine(room, onUpdate);
+        }
+      } else {
+        // No engine snapshot saved (legacy room or lobby-only persist) — blank engine
+        console.log(JSON.stringify({
+          timestamp: new Date().toISOString(),
+          event: 'engine_restored_blank',
+          roomId: room.id,
+          state: room.state,
+        }));
+        engine = new GameEngine(room, onUpdate);
+      }
+
+      this.gameEngines.set(room.id, engine);
+    }
+
+    return count;
+  }
+
   private handleCreateRoom(socket: Socket, playerName: string, user: User): void {
     try {
       const roomId = uuidv4();
       const playerId = user.uid;
 
       const room = this.roomManager.createRoom(roomId, playerName || user.displayName, playerId);
-      const gameEngine = new GameEngine(room);
+      const gameEngine = new GameEngine(room, (updatedRoom) => {
+        this.io.to(roomId).emit('game:state-updated', updatedRoom);
+        this.persistRoom(updatedRoom);
+        if (updatedRoom.state === 'ended') {
+          this.io.to(roomId).emit('game:ended', updatedRoom, updatedRoom.evilWins ? 'evil' : 'good');
+          this.onGameEnd(roomId, updatedRoom);
+        }
+      });
       this.gameEngines.set(roomId, gameEngine);
 
       socket.join(roomId);
@@ -94,8 +188,9 @@ export class GameServer {
       room.players[playerId].avatar = user.photoURL;
 
       this.io.to(roomId).emit('game:state-updated', room);
+      this.persistRoom(room);
 
-      console.log(`✓ Room created: ${roomId} by ${user.displayName}`);
+      console.log(`Room created: ${roomId} by ${user.displayName}`);
     } catch (error) {
       console.error('Error creating room:', error);
       socket.emit('error', 'Failed to create room');
@@ -124,8 +219,9 @@ export class GameServer {
 
           this.io.to(roomId).emit('game:player-reconnected', playerId);
           this.io.to(roomId).emit('game:state-updated', room);
+          this.persistRoom(room);
 
-          console.log(`✓ Player ${user.displayName} reconnected to room ${roomId}`);
+          console.log(`Player ${user.displayName} reconnected to room ${roomId}`);
           return;
         } else {
           // Player already active in room
@@ -163,8 +259,9 @@ export class GameServer {
 
       this.io.to(roomId).emit('game:state-updated', room);
       this.io.to(roomId).emit('game:player-joined', player);
+      this.persistRoom(room);
 
-      console.log(`✓ Player ${user.displayName} joined room ${roomId} (${Object.keys(room.players).length}/${room.maxPlayers})`);
+      console.log(`Player ${user.displayName} joined room ${roomId} (${Object.keys(room.players).length}/${room.maxPlayers})`);
     } catch (error) {
       console.error('Error joining room:', error);
       socket.emit('error', 'Failed to join room');
@@ -189,7 +286,8 @@ export class GameServer {
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.io.to(roomId).emit('game:started', updatedRoom);
-      console.log(`✓ Game started in room ${roomId}`);
+      this.persistRoom(updatedRoom);
+      console.log(`Game started in room ${roomId}`);
     } catch (error) {
       console.error('Error starting game:', error);
       socket.emit('error', 'Failed to start game');
@@ -233,6 +331,12 @@ export class GameServer {
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.io.to(roomId).emit('game:state-updated', updatedRoom);
+      this.persistRoom(updatedRoom);
+
+      if (updatedRoom.state === 'ended') {
+        this.io.to(roomId).emit('game:ended', updatedRoom, updatedRoom.evilWins ? 'evil' : 'good');
+        this.onGameEnd(roomId, updatedRoom);
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error processing vote:', errorMsg);
@@ -272,7 +376,8 @@ export class GameServer {
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.io.to(roomId).emit('game:state-updated', updatedRoom);
-      console.log(`✓ Quest team selected in room ${roomId}: ${teamMemberIds.length} players`);
+      this.persistRoom(updatedRoom);
+      console.log(`Quest team selected in room ${roomId}: ${teamMemberIds.length} players`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error selecting quest team:', errorMsg);
@@ -315,6 +420,12 @@ export class GameServer {
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.io.to(roomId).emit('game:state-updated', updatedRoom);
+      this.persistRoom(updatedRoom);
+
+      if (updatedRoom.state === 'ended') {
+        this.io.to(roomId).emit('game:ended', updatedRoom, updatedRoom.evilWins ? 'evil' : 'good');
+        this.onGameEnd(roomId, updatedRoom);
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error processing quest vote:', errorMsg);
@@ -352,13 +463,90 @@ export class GameServer {
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
       this.io.to(roomId).emit('game:state-updated', updatedRoom);
-      this.io.to(roomId).emit('game:ended', updatedRoom);
-      console.log(`✓ Game ended in room ${roomId}. Winner: ${updatedRoom.evilWins ? 'Evil' : 'Good'}`);
+      this.io.to(roomId).emit('game:ended', updatedRoom, updatedRoom.evilWins ? 'evil' : 'good');
+      this.persistRoom(updatedRoom);
+      console.log(`Game ended in room ${roomId}. Winner: ${updatedRoom.evilWins ? 'Evil' : 'Good'}`);
+
+      this.onGameEnd(roomId, updatedRoom);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error processing assassination:', errorMsg);
       socket.emit('error', `Failed to submit assassination: ${errorMsg}`);
     }
+  }
+
+  /**
+   * Called whenever a game transitions to 'ended'.
+   * 1. Saves in-memory replay snapshot
+   * 2. Persists game record to Firestore (game history)
+   * 3. Updates per-player stats in RTD
+   * 4. Removes active room from RTD (archived to Firestore)
+   */
+  private onGameEnd(roomId: string, room: Room): void {
+    this.roomManager.saveReplay(room);
+
+    const winner = room.evilWins ? 'evil' : 'good';
+    const duration = room.updatedAt - room.createdAt;
+
+    // Determine win reason from the last game engine log (best-effort)
+    const winReason = this.inferWinReason(room);
+
+    // Archive to Firestore
+    this.gameHistory.saveGameRecord(room, winReason).catch((err) =>
+      console.error(`Failed to save game history for room ${roomId}:`, err)
+    );
+
+    // Remove active room from RTD (it's now in Firestore)
+    this.persistence.removeRoom(roomId).catch((err) =>
+      console.error(`Failed to remove room ${roomId} from RTD:`, err)
+    );
+
+    // Broadcast result to Discord #同步閒聊
+    broadcastGameResult(room, winReason).catch((err) =>
+      console.error(`Failed to broadcast game result to Discord for room ${roomId}:`, err)
+    );
+
+    // Update per-player stats
+    for (const [playerId, player] of Object.entries(room.players)) {
+      const playerWon =
+        (winner === 'good' && player.team === 'good') ||
+        (winner === 'evil' && player.team === 'evil');
+
+      updateUserStats(playerId, {
+        won: playerWon,
+        role: player.role ?? 'loyal',
+        duration,
+        kills: player.kills?.length ?? 0,
+      }).catch((err) =>
+        console.error(`Failed to update stats for player ${playerId}:`, err)
+      );
+    }
+
+    // Clean up engine
+    const engine = this.gameEngines.get(roomId);
+    if (engine) {
+      engine.cleanup();
+      this.gameEngines.delete(roomId);
+    }
+  }
+
+  /**
+   * Infer why the game ended based on room state.
+   */
+  private inferWinReason(room: Room): string {
+    if (room.evilWins === null) return 'unknown';
+
+    const successCount = room.questResults.filter((r) => r === 'success').length;
+    const failCount = room.questResults.filter((r) => r === 'fail').length;
+
+    if (room.evilWins) {
+      if (failCount >= 3) return 'failed_quests_limit';
+      if (room.failCount >= 3) return 'vote_rejections_limit';
+      return 'merlin_assassinated';
+    }
+
+    if (successCount >= 3) return 'assassination_failed';
+    return 'assassination_timeout';
   }
 
   private handleChatMessage(socket: Socket, roomId: string, message: string): void {
@@ -406,9 +594,10 @@ export class GameServer {
       if (room && room.players[playerId]) {
         room.players[playerId].status = 'disconnected';
         this.io.to(roomId).emit('game:player-left', playerId);
+        this.persistRoom(room);
       }
     }
 
-    console.log(`✓ Player disconnected: ${socket.id}`);
+    console.log(`Player disconnected: ${socket.id}`);
   }
 }

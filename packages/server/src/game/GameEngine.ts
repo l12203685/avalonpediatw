@@ -9,19 +9,37 @@ interface QuestVote {
   vote: 'success' | 'fail';
 }
 
+/** Called by GameServer to receive room updates triggered by internal timeouts. */
+export type RoomUpdateCallback = (room: Room) => void;
+
+/**
+ * Serialised snapshot of all GameEngine internal state.
+ * Used for mid-game server-restart recovery.
+ */
+export interface GameEngineState {
+  /** Schema version — bump when fields are added/removed. */
+  version: 1;
+  roomId: string;
+  roleAssignments: Record<string, Role>;
+  questVotes: QuestVote[];
+  currentLeaderIndex: number;
+}
+
 export class GameEngine {
   private room: Room;
   private roleAssignments: Map<string, Role> = new Map();
   private voteTimeout: NodeJS.Timeout | null = null;
   private questVoteTimeout: NodeJS.Timeout | null = null;
   private assassinationTimeout: NodeJS.Timeout | null = null;
+  private onUpdate: RoomUpdateCallback;
 
   // Quest phase tracking
   private questVotes: QuestVote[] = [];
   private currentLeaderIndex: number = 0;
 
-  constructor(room: Room) {
+  constructor(room: Room, onUpdate: RoomUpdateCallback = () => {}) {
     this.room = room;
+    this.onUpdate = onUpdate;
   }
 
   public startGame(): void {
@@ -78,20 +96,17 @@ export class GameEngine {
   }
 
   private handleVoteTimeout(): void {
-    const playerCount = Object.keys(this.room.players).length;
-    const votedCount = Object.keys(this.room.votes).length;
-
-    // Auto-vote for players who didn't vote (reject as default)
+    // Auto-vote reject for players who didn't vote
     const unvotedPlayers = Object.keys(this.room.players).filter(
       (id) => !(id in this.room.votes)
     );
-
     unvotedPlayers.forEach((playerId) => {
       this.room.votes[playerId] = false;
     });
 
-    // Resolve voting
     this.resolveVoting();
+    // Notify GameServer that state changed due to timeout
+    this.onUpdate(this.room);
   }
 
   private assignRoles(playerCount: number): void {
@@ -395,12 +410,14 @@ export class GameEngine {
     this.room.state = 'ended';
 
     if (targetId === null) {
-      // No target - good wins
+      // Assassination timeout — good wins
       this.room.evilWins = false;
       this.logEvent('game_ended', {
         winner: 'good',
         reason: 'assassination_timeout'
       });
+      // Notify GameServer (timeout-triggered, not a direct socket call)
+      this.onUpdate(this.room);
     } else {
       // room.players is authoritative as it can be updated externally
       const targetRole = this.room.players[targetId]?.role ?? this.roleAssignments.get(targetId);
@@ -478,6 +495,47 @@ export class GameEngine {
 
   public getRoom(): Room {
     return this.room;
+  }
+
+  /**
+   * Export all internal engine state as a plain JSON-safe object.
+   * Pair with `GameEngine.restore()` to survive server restarts mid-game.
+   */
+  public serialize(): GameEngineState {
+    return {
+      version: 1,
+      roomId: this.room.id,
+      roleAssignments: Object.fromEntries(this.roleAssignments) as Record<string, Role>,
+      questVotes: this.questVotes.map((qv) => ({ ...qv })),
+      currentLeaderIndex: this.currentLeaderIndex,
+    };
+  }
+
+  /**
+   * Recreate a GameEngine from a previously serialised state snapshot.
+   * The `room` object is the rehydrated Room from RTD — it must match the
+   * roomId stored in `state`, otherwise an error is thrown.
+   *
+   * Timeouts are NOT restarted here — the caller (GameServer) is responsible
+   * for deciding whether to restart them after restore.
+   */
+  public static restore(
+    state: GameEngineState,
+    room: Room,
+    onUpdate: RoomUpdateCallback = () => {}
+  ): GameEngine {
+    if (state.roomId !== room.id) {
+      throw new Error(
+        `GameEngineState roomId "${state.roomId}" does not match room.id "${room.id}"`
+      );
+    }
+
+    const engine = new GameEngine(room, onUpdate);
+    engine.roleAssignments = new Map(Object.entries(state.roleAssignments) as [string, Role][]);
+    engine.questVotes = state.questVotes.map((qv) => ({ ...qv }));
+    engine.currentLeaderIndex = state.currentLeaderIndex;
+
+    return engine;
   }
 
   public cleanup(): void {

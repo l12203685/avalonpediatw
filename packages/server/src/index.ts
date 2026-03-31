@@ -1,58 +1,77 @@
-import express, { Express } from 'express';
+import 'dotenv/config';
+import express from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { initializeFirebase } from './services/firebase';
+import { authenticateSocket } from './middleware/auth';
+import { GameServer } from './socket/GameServer';
+import { createApiRouter } from './routes/api';
+import { RoomManager } from './game/RoomManager';
 
-const app: Express = express();
+const app = express();
+const httpServer = createServer(app);
 
-// Environment
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Middleware
-app.use(cors({ origin: CORS_ORIGIN }));
+// ── Middleware ────────────────────────────────────────────────────────────────
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json());
 
-// Initialize Firebase once
-let firebaseInitialized = false;
-initializeFirebase().then(() => {
-  firebaseInitialized = true;
-  console.log('✓ Firebase initialized');
-}).catch(err => {
-  console.error('❌ Firebase initialization failed:', err);
+// ── Socket.IO ─────────────────────────────────────────────────────────────────
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: CORS_ORIGIN,
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
 });
 
-// Health check
+io.use(authenticateSocket);
+
+// Shared RoomManager so REST routes can read active/replay rooms
+const roomManager = new RoomManager();
+const gameServer = new GameServer(io, roomManager);
+gameServer.start();
+
+// ── REST API ──────────────────────────────────────────────────────────────────
+app.use('/api', createApiRouter(roomManager));
+
+// ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({
-    status: firebaseInitialized ? 'ok' : 'initializing',
+    status: 'ok',
     timestamp: new Date().toISOString(),
-    environment: NODE_ENV
+    environment: NODE_ENV,
+    rooms: roomManager.getRoomCount(),
   });
 });
 
-// Auth endpoint (for testing)
-app.post('/auth/validate', async (req, res) => {
-  try {
-    const { token } = req.body;
-    if (!token) {
-      return res.status(400).json({ error: 'No token provided' });
+// ── Firebase init + room rehydration ─────────────────────────────────────────
+initializeFirebase()
+  .then(async () => {
+    console.log('Firebase initialized');
+    const count = await gameServer.rehydrateRooms();
+    if (count > 0) {
+      console.log(`Rehydrated ${count} active rooms from Firebase RTD`);
     }
-    // Token validation logic here
-    res.json({ valid: true });
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
-  }
-});
+  })
+  .catch((err) => console.error('Firebase initialization failed:', err));
 
-// For local development
-const PORT = process.env.PORT || 3001;
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
+// ── Start server ──────────────────────────────────────────────────────────────
+// FUNCTION_NAME / K_SERVICE are set by Firebase Functions / Cloud Run runtimes.
+// In those environments Firebase manages the listener; we must not call listen().
+const isFirebaseFunctions = !!(process.env.FUNCTION_NAME || process.env.K_SERVICE);
+
+if (!isFirebaseFunctions) {
+  httpServer.listen(PORT, () => {
     console.log(`\n🚀 Avalon server running on port ${PORT}`);
     console.log(`📡 CORS Origin: ${CORS_ORIGIN}`);
     console.log(`🌍 Environment: ${NODE_ENV}\n`);
   });
 }
 
-// Export for Firebase Functions
+// Export Express app for Firebase Functions (REST only — no WebSocket in Functions context)
 export { app };

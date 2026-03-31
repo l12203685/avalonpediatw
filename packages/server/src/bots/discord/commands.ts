@@ -1,5 +1,6 @@
 import { CommandInteraction, EmbedBuilder, ChannelType } from 'discord.js';
 import { DISCORD_CONFIG, COMMANDS } from './config';
+import { buildInviteEmbed, buildGameJoinUrl, postGameInvite } from './invite';
 
 /**
  * Discord Command Handlers
@@ -53,25 +54,26 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
 }
 
 export async function handleCreateCommand(interaction: CommandInteraction): Promise<void> {
-  const gameId = `discord-${interaction.guildId}-${Date.now()}`;
+  // Generate a short room ID anchored to this Discord context
+  const roomId = `dc-${interaction.guildId?.slice(-6) ?? 'unk'}-${Date.now().toString(36)}`;
+  const hostName = interaction.user.displayName || interaction.user.username;
+  const joinUrl = buildGameJoinUrl(roomId);
 
-  const embed = new EmbedBuilder()
-    .setColor(DISCORD_CONFIG.colors.neutral)
-    .setTitle('🎭 New Game Created')
-    .addFields(
-      { name: 'Game ID', value: gameId, inline: true },
-      { name: 'Host', value: `<@${interaction.user.id}>`, inline: true },
-      { name: 'Max Players', value: '10', inline: true },
-      { name: 'Status', value: '⏳ Waiting for players', inline: false },
-      {
-        name: 'How to Join',
-        value: `Others can join using:\n\`/${COMMANDS.JOIN} ${gameId}\``,
-        inline: false,
-      }
-    )
-    .setFooter({ text: 'Use /start when ready to begin!' });
+  const embed = buildInviteEmbed({
+    roomId,
+    hostName,
+    playerCount: 1,
+    maxPlayers: 10,
+    joinUrl,
+  });
 
+  // Reply to the slash command so Discord acknowledges it
   await interaction.reply({ embeds: [embed] });
+
+  // Also post to #同步閒聊 for visibility (non-blocking)
+  postGameInvite({ roomId, hostName }).catch((err) =>
+    console.error('handleCreateCommand: failed to post to sync channel:', err)
+  );
 }
 
 export async function handleJoinCommand(
