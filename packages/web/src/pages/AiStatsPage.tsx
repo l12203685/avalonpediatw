@@ -1,7 +1,13 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Bot, TrendingUp, Clock, Zap, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Bot, TrendingUp, Clock, Zap, RefreshCw, AlertCircle, Loader } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { MOCK_AI_STATS, ROLE_DISPLAY } from '../data/mockData';
+import {
+  fetchAnalyticsOverview,
+  getErrorMessage,
+  AiStatsDataApi,
+} from '../services/api';
 
 // ─── Simple Bar ───────────────────────────────────────────────────────────────
 
@@ -20,10 +26,7 @@ function Bar({ value, max, color }: { value: number; max: number; color: string 
 
 // ─── Daily Sparkline ──────────────────────────────────────────────────────────
 
-function DailyChart(): JSX.Element {
-  const data = MOCK_AI_STATS.recentDaily;
-  const maxGames = Math.max(...data.map((d) => d.gamesPlayed));
-
+function DailyChart({ data }: { data: AiStatsDataApi['recentDaily'] }): JSX.Element {
   return (
     <div className="space-y-3">
       {data.map((day) => {
@@ -34,7 +37,9 @@ function DailyChart(): JSX.Element {
           <div key={day.date} className="space-y-1">
             <div className="flex justify-between text-xs text-gray-400">
               <span>{date}</span>
-              <span>{day.gamesPlayed} 局 · 好陣營 {goodPct.toFixed(0)}%</span>
+              <span>
+                {day.gamesPlayed} 局 · 好陣營 {goodPct.toFixed(0)}%
+              </span>
             </div>
             <div className="h-3 bg-gray-700 rounded-full overflow-hidden flex">
               <motion.div
@@ -54,8 +59,12 @@ function DailyChart(): JSX.Element {
         );
       })}
       <div className="flex gap-4 text-xs text-gray-500 pt-1">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-500 inline-block" /> 好陣營勝</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-500 inline-block" /> 邪惡陣營勝</span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded-sm bg-green-500 inline-block" /> 好陣營勝
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded-sm bg-red-500 inline-block" /> 邪惡陣營勝
+        </span>
       </div>
     </div>
   );
@@ -65,7 +74,31 @@ function DailyChart(): JSX.Element {
 
 export default function AiStatsPage(): JSX.Element {
   const { setGameState } = useGameStore();
-  const stats = MOCK_AI_STATS;
+  const [stats, setStats] = useState<AiStatsDataApi>(MOCK_AI_STATS);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetchAnalyticsOverview()
+      .then((data) => {
+        if (!cancelled) setStats(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(getErrorMessage(err));
+        // Keep mock data already in state
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const nextRunIn = Math.max(0, Math.floor((stats.nextRunAt - Date.now()) / 60000));
 
@@ -97,23 +130,44 @@ export default function AiStatsPage(): JSX.Element {
           </div>
           <p className="text-gray-400">HeuristicAgent vs RandomAgent 自動對局數據</p>
 
-          {/* Scheduler status */}
-          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm border ${
-            stats.schedulerEnabled
-              ? 'bg-green-900/30 border-green-600/40 text-green-300'
-              : 'bg-gray-800 border-gray-600 text-gray-400'
-          }`}>
-            <motion.div
-              animate={stats.schedulerEnabled ? { scale: [1, 1.3, 1] } : {}}
-              transition={{ duration: 2, repeat: Infinity }}
-              className={`w-2 h-2 rounded-full ${stats.schedulerEnabled ? 'bg-green-400' : 'bg-gray-500'}`}
-            />
-            {stats.schedulerEnabled ? `排程器運行中 · ${nextRunIn} 分鐘後下次執行` : '排程器已停用'}
-          </div>
+          {/* Loading indicator in hero */}
+          {loading ? (
+            <div className="inline-flex items-center gap-2 text-gray-400 text-sm">
+              <Loader size={16} className="animate-spin" />
+              載入統計資料...
+            </div>
+          ) : (
+            <div
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm border ${
+                stats.schedulerEnabled
+                  ? 'bg-green-900/30 border-green-600/40 text-green-300'
+                  : 'bg-gray-800 border-gray-600 text-gray-400'
+              }`}
+            >
+              <motion.div
+                animate={stats.schedulerEnabled ? { scale: [1, 1.3, 1] } : {}}
+                transition={{ duration: 2, repeat: Infinity }}
+                className={`w-2 h-2 rounded-full ${
+                  stats.schedulerEnabled ? 'bg-green-400' : 'bg-gray-500'
+                }`}
+              />
+              {stats.schedulerEnabled
+                ? `排程器運行中 · ${nextRunIn} 分鐘後下次執行`
+                : '排程器已停用'}
+            </div>
+          )}
         </div>
       </motion.div>
 
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+        {/* Error banner */}
+        {!loading && error && (
+          <div className="flex items-center gap-2 text-yellow-400 bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-4 py-2 text-sm">
+            <AlertCircle size={16} />
+            無法從伺服器載入（顯示範例資料）：{error}
+          </div>
+        )}
+
         {/* Summary Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -121,10 +175,30 @@ export default function AiStatsPage(): JSX.Element {
           className="grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {[
-            { label: '總對局數', value: stats.totalGames.toLocaleString(), icon: <Zap size={20} className="text-blue-400" />, color: 'border-blue-600/40 bg-blue-900/20' },
-            { label: '好陣營勝率', value: `${stats.goodWinRate}%`, icon: <TrendingUp size={20} className="text-green-400" />, color: 'border-green-600/40 bg-green-900/20' },
-            { label: '邪惡陣營勝率', value: `${stats.evilWinRate}%`, icon: <TrendingUp size={20} className="text-red-400" />, color: 'border-red-600/40 bg-red-900/20' },
-            { label: '平均局時', value: `${stats.avgDurationSeconds}s`, icon: <Clock size={20} className="text-yellow-400" />, color: 'border-yellow-600/40 bg-yellow-900/20' },
+            {
+              label: '總對局數',
+              value: stats.totalGames.toLocaleString(),
+              icon: <Zap size={20} className="text-blue-400" />,
+              color: 'border-blue-600/40 bg-blue-900/20',
+            },
+            {
+              label: '好陣營勝率',
+              value: `${stats.goodWinRate}%`,
+              icon: <TrendingUp size={20} className="text-green-400" />,
+              color: 'border-green-600/40 bg-green-900/20',
+            },
+            {
+              label: '邪惡陣營勝率',
+              value: `${stats.evilWinRate}%`,
+              icon: <TrendingUp size={20} className="text-red-400" />,
+              color: 'border-red-600/40 bg-red-900/20',
+            },
+            {
+              label: '平均局時',
+              value: `${stats.avgDurationSeconds}s`,
+              icon: <Clock size={20} className="text-yellow-400" />,
+              color: 'border-yellow-600/40 bg-yellow-900/20',
+            },
           ].map((card) => (
             <motion.div
               key={card.label}
@@ -154,9 +228,16 @@ export default function AiStatsPage(): JSX.Element {
               <div key={agent.agent} className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-300 font-medium">{agent.agent}</span>
-                  <span className="text-gray-400">{agent.games} 局 · <span className="text-blue-300">{agent.winRate.toFixed(1)}%</span></span>
+                  <span className="text-gray-400">
+                    {agent.games} 局 ·{' '}
+                    <span className="text-blue-300">{agent.winRate.toFixed(1)}%</span>
+                  </span>
                 </div>
-                <Bar value={agent.wins} max={agent.games} color="bg-gradient-to-r from-cyan-500 to-blue-500" />
+                <Bar
+                  value={agent.wins}
+                  max={agent.games}
+                  color="bg-gradient-to-r from-cyan-500 to-blue-500"
+                />
               </div>
             ))}
 
@@ -186,13 +267,20 @@ export default function AiStatsPage(): JSX.Element {
                       {display?.icon ?? ''} {display?.label ?? r.role}
                     </span>
                     <span className="text-gray-400">
-                      {r.gamesAsRole} 局 · <span className="text-blue-300">{r.winRate.toFixed(1)}%</span>
+                      {r.gamesAsRole} 局 ·{' '}
+                      <span className="text-blue-300">{r.winRate.toFixed(1)}%</span>
                     </span>
                   </div>
                   <Bar
                     value={r.wins}
                     max={r.gamesAsRole}
-                    color={r.winRate >= 55 ? 'bg-gradient-to-r from-green-500 to-green-400' : r.winRate >= 45 ? 'bg-gradient-to-r from-blue-500 to-blue-400' : 'bg-gradient-to-r from-red-600 to-red-500'}
+                    color={
+                      r.winRate >= 55
+                        ? 'bg-gradient-to-r from-green-500 to-green-400'
+                        : r.winRate >= 45
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-400'
+                        : 'bg-gradient-to-r from-red-600 to-red-500'
+                    }
                   />
                 </div>
               );
@@ -211,12 +299,8 @@ export default function AiStatsPage(): JSX.Element {
             <RefreshCw size={18} className="text-purple-400" />
             近 7 日每日對局（每 30 分鐘 5 局）
           </h2>
-          <DailyChart />
+          <DailyChart data={stats.recentDaily} />
         </motion.div>
-
-        <p className="text-center text-xs text-gray-600 pb-4">
-          資料來源：/api/ai/stats（目前顯示模擬資料）
-        </p>
       </div>
     </div>
   );

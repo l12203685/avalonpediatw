@@ -1,7 +1,49 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, X, Eye, Calendar } from 'lucide-react';
-import { WikiArticle, WIKI_ARTICLES, WIKI_CATEGORIES } from '../data/wiki';
+import { Search, X, Eye, Calendar, AlertCircle, Loader } from 'lucide-react';
+import { WIKI_ARTICLES, WIKI_CATEGORIES, WikiArticle, WikiCategory } from '../data/wiki';
+import { fetchWiki, getErrorMessage, WikiArticleApi, WikiCategoryApi } from '../services/api';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface NormArticle {
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+  excerpt: string;
+  tags: string[];
+  author: string;
+  updatedAt: Date;
+  views: number;
+}
+
+interface NormCategory {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+}
+
+// ─── Normalisers ─────────────────────────────────────────────────────────────
+
+function normArticle(a: WikiArticleApi): NormArticle {
+  return { ...a, updatedAt: new Date(a.updatedAt) };
+}
+
+function normCategory(c: WikiCategoryApi): NormCategory {
+  return c;
+}
+
+function staticArticles(): NormArticle[] {
+  return (WIKI_ARTICLES as WikiArticle[]).map((a) => ({ ...a }));
+}
+
+function staticCategories(): NormCategory[] {
+  return (WIKI_CATEGORIES as WikiCategory[]).map((c) => ({ ...c }));
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 interface WikiContentProps {
   selectedCategory?: string;
@@ -9,27 +51,71 @@ interface WikiContentProps {
 
 export default function WikiContent({ selectedCategory }: WikiContentProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState(selectedCategory || '');
-  const [selectedArticle, setSelectedArticle] = useState<WikiArticle | null>(null);
+  const [activeCategory, setActiveCategory] = useState(selectedCategory ?? '');
+  const [selectedArticle, setSelectedArticle] = useState<NormArticle | null>(null);
 
-  // 搜索和過濾文章
+  const [articles, setArticles] = useState<NormArticle[]>(staticArticles());
+  const [categories, setCategories] = useState<NormCategory[]>(staticCategories());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetchWiki()
+      .then((data) => {
+        if (cancelled) return;
+        setArticles(data.articles.map(normArticle));
+        setCategories(data.categories.map(normCategory));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(getErrorMessage(err));
+        // Keep static data already in state
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredArticles = useMemo(() => {
-    return WIKI_ARTICLES.filter((article) => {
+    return articles.filter((article) => {
       const matchesCategory = !activeCategory || article.category === activeCategory;
+      const q = searchQuery.toLowerCase();
       const matchesSearch =
-        !searchQuery ||
-        article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        article.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        article.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-
+        !q ||
+        article.title.toLowerCase().includes(q) ||
+        article.excerpt.toLowerCase().includes(q) ||
+        article.tags.some((tag) => tag.toLowerCase().includes(q));
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, searchQuery]);
+  }, [articles, activeCategory, searchQuery]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4">
       <div className="max-w-6xl mx-auto space-y-8">
-        {/* 搜索欄 */}
+
+        {/* Loading / error banner */}
+        {loading && (
+          <div className="flex items-center gap-2 text-gray-400 text-sm">
+            <Loader size={16} className="animate-spin" />
+            載入百科內容...
+          </div>
+        )}
+        {!loading && error && (
+          <div className="flex items-center gap-2 text-yellow-400 text-sm bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-4 py-2">
+            <AlertCircle size={16} />
+            無法從伺服器載入（顯示本地資料）：{error}
+          </div>
+        )}
+
+        {/* Search bar */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -55,7 +141,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
           </div>
         </motion.div>
 
-        {/* 分類過濾 */}
+        {/* Category filter */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -73,7 +159,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
             全部
           </button>
 
-          {WIKI_CATEGORIES.map((category) => (
+          {categories.map((category) => (
             <button
               key={category.id}
               onClick={() => setActiveCategory(category.id)}
@@ -89,7 +175,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
           ))}
         </motion.div>
 
-        {/* 搜索結果提示 */}
+        {/* Search result count */}
         {searchQuery && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -101,7 +187,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* 文章列表 */}
+          {/* Article list */}
           <div className="lg:col-span-2 space-y-4">
             {filteredArticles.length === 0 ? (
               <motion.div
@@ -157,7 +243,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
             )}
           </div>
 
-          {/* 文章詳情 */}
+          {/* Article detail panel */}
           <div className="lg:col-span-1">
             {selectedArticle ? (
               <motion.div
@@ -176,7 +262,6 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                     </button>
                   </div>
 
-                  {/* 文章元數據 */}
                   <div className="flex flex-wrap gap-4 text-xs text-gray-400 pb-4 border-b border-gray-700">
                     <div className="flex items-center gap-1">
                       <Eye size={14} />
@@ -190,7 +275,6 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                   </div>
                 </div>
 
-                {/* 文章內容 */}
                 <div className="prose prose-invert max-w-none text-gray-200">
                   <div
                     className="space-y-4 text-sm leading-relaxed"
@@ -198,7 +282,6 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                       __html: selectedArticle.content
                         .split('\n')
                         .map((line) => {
-                          // 簡單的 Markdown 支持
                           if (line.startsWith('# ')) {
                             return `<h1 class="text-lg font-bold text-white mt-4 mb-2">${line.substring(2)}</h1>`;
                           } else if (line.startsWith('## ')) {
