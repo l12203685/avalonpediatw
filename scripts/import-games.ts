@@ -10,23 +10,28 @@
  * ── Google Sheets source ──────────────────────────────────────────────────────
  *
  * Sheet ID:   174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU
- * Sheet name: Games  (tab must exist; row 1 = header)
+ * Sheet name: 牌譜  (tab must exist; row 1 = header)
  *
- * Expected column headers (exact, case-sensitive):
- *   gameId          string   unique ID (e.g. game_20240101_001)
- *   roomName        string   e.g. "Room 7"
- *   playerCount     number   5–10
- *   winner          string   "good" | "evil"
- *   winReason       string   free text
- *   questResults    string   comma-separated: "success,fail,success,success,fail"
- *   duration        number   seconds (converted to ms internally)
- *   createdAt       string   ISO 8601 or Excel serial date
- *   endedAt         string   ISO 8601 or Excel serial date
- *   players         string   JSON array of GamePlayerRecord objects (see below)
- *
- * players JSON format (inline in cell):
- *   [{"playerId":"alice","displayName":"Alice","role":"merlin","team":"good","won":true}, ...]
- *   role can be null or omitted.
+ * Expected column headers (Chinese, 48 columns total):
+ *   流水號         string   unique game ID
+ *   日期時間       string   ISO 8601 or Excel serial date → createdAt
+ *   結果           string   "好人勝" / "壞人勝" / numeric → winner (good|evil)
+ *   玩1–玩0        string   10 player name columns → players array + playerCount
+ *   第一局成功失敗–第五局成功失敗   string  "成功"/"失敗" → questResults
+ *   配置           string   game configuration (stored as metadata)
+ *   刺殺           string   assassination result (stored as metadata)
+ *   分類           string   game category/type (stored as metadata)
+ *   場次           string   session/round
+ *   頁碼           string   page reference
+ *   note           string   free-form note
+ *   文字記錄       string   text log
+ *   第一局–第五局  string   quest detail columns (stored as metadata)
+ *   組成           string   team composition
+ *   強人,戳人,局勢 string   game dynamics
+ *   首湖–三湖      string   lake info
+ *   首湖玩家–三湖玩家 string lake player info
+ *   角1,角4,角5,角0 string  role assignments
+ *   1-1,派5,派0,外灑 string mission/dispatch info
  *
  * Auth: set GOOGLE_SHEETS_CREDENTIALS env var to the path of the service account
  *       JSON file, or GOOGLE_SHEETS_CREDENTIALS_JSON to the raw JSON string.
@@ -40,7 +45,7 @@
  * ── Sheets usage ─────────────────────────────────────────────────────────────
  *
  *   export GOOGLE_SHEETS_CREDENTIALS=/path/to/gs-creds.json
- *   npx tsx scripts/import-games.ts --source=sheets [--sheet-name Games] [--dry-run] [--limit N]
+ *   npx tsx scripts/import-games.ts --source=sheets [--sheet-name 牌譜] [--dry-run] [--limit N]
  *
  * ── Firestore auth (both sources) ────────────────────────────────────────────
  *
@@ -87,6 +92,14 @@ interface GameRecord {
   createdAt: number;
   endedAt: number;
   source: 'import';
+  // Additional fields from Chinese sheet
+  configuration?: string;    // 配置
+  assassination?: string;    // 刺殺
+  category?: string;         // 分類
+  session?: string;          // 場次
+  pageRef?: string;          // 頁碼
+  note?: string;             // note
+  textLog?: string;          // 文字記錄
 }
 
 // ── Role mapping (ProAvalon JSON → project schema) ───────────────────────────
@@ -195,65 +208,157 @@ async function buildSheetsClient() {
   return google.sheets({ version: 'v4', auth: googleAuth });
 }
 
-/** Validate and parse a single sheets row against the header map. */
+// ── Chinese sheet column constants ───────────────────────────────────────────
+
+/** The 10 player columns in the sheet, ordered 玩1 … 玩0. */
+const PLAYER_COLS = ['玩1', '玩2', '玩3', '玩4', '玩5', '玩6', '玩7', '玩8', '玩9', '玩0'];
+
+/** The 5 quest success/fail columns. */
+const QUEST_RESULT_COLS = [
+  '第一局成功失敗',
+  '第二局成功失敗',
+  '第三局成功失敗',
+  '第四局成功失敗',
+  '第五局成功失敗',
+];
+
+/**
+ * Parse the 結果 cell into winner 'good' | 'evil'.
+ * Accepts Chinese text ("好人", "藍", "成功") for good and
+ * ("壞人", "紅", "刺殺成功", "evil") for evil, plus numeric 0/1.
+ */
+function parseWinner(raw: string): 'good' | 'evil' | null {
+  const v = raw.trim().toLowerCase();
+  if (!v) return null;
+  if (v === '0' || v === 'good' || v.startsWith('好') || v.startsWith('藍') || v === '成功') {
+    return 'good';
+  }
+  if (v === '1' || v === 'evil' || v.startsWith('壞') || v.startsWith('紅') || v.startsWith('刺殺')) {
+    return 'evil';
+  }
+  return null;
+}
+
+/**
+ * Parse a single 第N局成功失敗 cell into a QuestResult.
+ * Accepts "成功" / "success" for success, "失敗" / "fail" for fail.
+ */
+function parseQuestCell(raw: string): QuestResult | null {
+  const v = raw.trim().toLowerCase();
+  if (v === '成功' || v === 'success' || v === 'o' || v === '○') return 'success';
+  if (v === '失敗' || v === 'fail' || v === 'x' || v === '×' || v === '✗') return 'fail';
+  return null;
+}
+
+/**
+ * Build the players array from the 10 player name columns (玩1–玩0).
+ * Returns both the player list (non-empty cells) and the count.
+ */
+function parsePlayers(
+  row: string[],
+  headerIndex: Map<string, number>,
+  winner: 'good' | 'evil'
+): { players: GamePlayerRecord[]; playerCount: number } {
+  const names: string[] = [];
+  for (const col of PLAYER_COLS) {
+    const idx = headerIndex.get(col);
+    const name = idx !== undefined ? (row[idx] ?? '').trim() : '';
+    if (name) names.push(name);
+  }
+
+  const players: GamePlayerRecord[] = names.map((name) => ({
+    playerId: name,
+    displayName: name,
+    role: null,
+    team: null,
+    won: false, // team/won unknown without role data
+  }));
+
+  return { players, playerCount: names.length };
+}
+
+/** Validate and parse a single sheets row against the Chinese header map. */
 function rowToGameRecord(
   row: string[],
   headerIndex: Map<string, number>
 ): GameRecord | null {
-  const get = (col: string): string => row[headerIndex.get(col) ?? -1] ?? '';
+  const get = (col: string): string => {
+    const idx = headerIndex.get(col);
+    return idx !== undefined ? (row[idx] ?? '').toString().trim() : '';
+  };
 
-  const gameId = get('gameId').trim();
+  // ── gameId ────────────────────────────────────────────────────────────────
+  const gameId = get('流水號');
   if (!gameId) return null;
 
-  const winner = get('winner').trim().toLowerCase();
-  if (winner !== 'good' && winner !== 'evil') {
-    console.warn(`  [skip] gameId="${gameId}" invalid winner="${winner}"`);
+  // ── winner ────────────────────────────────────────────────────────────────
+  const winner = parseWinner(get('結果'));
+  if (winner === null) {
+    console.warn(`  [skip] gameId="${gameId}" invalid 結果="${get('結果')}"`);
     return null;
   }
 
-  const playerCount = parseInt(get('playerCount'), 10);
-  if (Number.isNaN(playerCount)) {
-    console.warn(`  [skip] gameId="${gameId}" invalid playerCount`);
+  // ── createdAt ─────────────────────────────────────────────────────────────
+  const createdAt = parseTimestamp(get('日期時間'));
+  if (createdAt === null) {
+    console.warn(`  [skip] gameId="${gameId}" invalid 日期時間="${get('日期時間')}"`);
     return null;
   }
 
-  const durationSec = parseFloat(get('duration'));
-  const duration = Number.isNaN(durationSec) ? 0 : Math.round(durationSec * 1000);
-
-  const createdAt = parseTimestamp(get('createdAt'));
-  const endedAt = parseTimestamp(get('endedAt'));
-  if (createdAt === null || endedAt === null) {
-    console.warn(`  [skip] gameId="${gameId}" invalid timestamps`);
+  // ── players + playerCount ─────────────────────────────────────────────────
+  const { players, playerCount } = parsePlayers(row, headerIndex, winner);
+  if (playerCount === 0) {
+    console.warn(`  [skip] gameId="${gameId}" no player columns found`);
     return null;
   }
 
-  const questResults = parseQuestResults(get('questResults'));
-
-  const players = parsePlayerRecords(get('players'));
-  if (players === null) {
-    console.warn(`  [skip] gameId="${gameId}" invalid players JSON`);
-    return null;
+  // ── questResults ──────────────────────────────────────────────────────────
+  const questResults: QuestResult[] = [];
+  for (const col of QUEST_RESULT_COLS) {
+    const cell = get(col);
+    if (!cell) break; // stop at first empty — quests are sequential
+    const r = parseQuestCell(cell);
+    if (r !== null) questResults.push(r);
   }
+
+  // ── optional metadata ─────────────────────────────────────────────────────
+  const configuration = get('配置') || undefined;
+  const assassination = get('刺殺') || undefined;
+  const category = get('分類') || undefined;
+  const session = get('場次') || undefined;
+  const pageRef = get('頁碼') || undefined;
+  const note = get('note') || undefined;
+  const textLog = get('文字記錄') || undefined;
 
   return {
     gameId,
-    roomName: get('roomName').trim() || `Imported Game ${gameId.slice(-6)}`,
+    roomName: session ? `場次 ${session}` : `Imported Game ${gameId.slice(-6)}`,
     playerCount,
     winner,
-    winReason: get('winReason').trim() || (winner === 'good' ? 'Good team won' : 'Evil team won'),
+    winReason: assassination
+      ? assassination
+      : winner === 'good' ? '好人勝' : '壞人勝',
     questResults,
-    duration,
+    duration: 0,
     players,
     createdAt,
-    endedAt,
+    endedAt: createdAt, // sheet has no separate end time
     source: 'import',
+    configuration,
+    assassination,
+    category,
+    session,
+    pageRef,
+    note,
+    textLog,
   };
 }
 
 async function loadFromSheets(sheetName: string, limit: number): Promise<GameRecord[]> {
   const sheets = await buildSheetsClient();
 
-  const range = `${sheetName}!A1:Z`;
+  // Sheet has 48 columns — use A1:AV to cover all of them
+  const range = `${sheetName}!A1:AV`;
   console.log(`Fetching: spreadsheet=${SHEET_ID} range="${range}"`);
 
   const resp = await sheets.spreadsheets.values.get({
@@ -276,7 +381,8 @@ async function loadFromSheets(sheetName: string, limit: number): Promise<GameRec
     if (h.trim()) headerIndex.set(h.trim(), i);
   });
 
-  const requiredCols = ['gameId', 'winner', 'playerCount', 'createdAt', 'endedAt'];
+  // Required Chinese column names
+  const requiredCols = ['流水號', '結果', '日期時間'];
   const missing = requiredCols.filter((c) => !headerIndex.has(c));
   if (missing.length > 0) {
     throw new Error(
@@ -285,7 +391,13 @@ async function loadFromSheets(sheetName: string, limit: number): Promise<GameRec
     );
   }
 
-  console.log(`Header columns: ${[...headerIndex.keys()].join(', ')}`);
+  // Warn if player columns are absent (soft warning — not fatal)
+  const missingPlayers = PLAYER_COLS.filter((c) => !headerIndex.has(c));
+  if (missingPlayers.length > 0) {
+    console.warn(`  [warn] Missing player columns: ${missingPlayers.join(', ')}`);
+  }
+
+  console.log(`Header columns (${headerIndex.size}): ${[...headerIndex.keys()].join(', ')}`);
   console.log(`Data rows: ${rows.length - 1}`);
 
   const dataRows = rows.slice(1, isFinite(limit) ? limit + 1 : undefined);
@@ -506,7 +618,7 @@ function printUsage(): void {
   console.log(`
 Usage:
   # From Google Sheets (default):
-  npx tsx scripts/import-games.ts [--source=sheets] [--sheet-name Games] [--dry-run] [--limit N]
+  npx tsx scripts/import-games.ts [--source=sheets] [--sheet-name 牌譜] [--dry-run] [--limit N]
 
   # From ProAvalon JSON (legacy):
   npx tsx scripts/import-games.ts --source=json --file path/to/records.json [--dry-run] [--limit N]
@@ -519,13 +631,25 @@ Environment:
   FIREBASE_PROJECT_ID            Firebase project ID (when using ADC)
 
 Google Sheet: https://docs.google.com/spreadsheets/d/174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU
-Sheet tab name: Games (configurable via --sheet-name)
+Sheet tab name: 牌譜 (configurable via --sheet-name)
 
-Required columns in "Games" tab:
-  gameId, winner, playerCount, createdAt, endedAt
+Required columns (Chinese headers):
+  流水號       game ID
+  結果         winner: accepts 好人/藍/0 → good; 壞人/紅/刺殺/1 → evil
+  日期時間     created timestamp (ISO 8601 or Excel serial)
+
+Player columns (non-empty cells counted as playerCount):
+  玩1, 玩2, 玩3, 玩4, 玩5, 玩6, 玩7, 玩8, 玩9, 玩0
+
+Quest result columns (成功 / 失敗):
+  第一局成功失敗 through 第五局成功失敗
 
 Optional columns:
-  roomName, winReason, questResults (comma-separated), duration (seconds), players (JSON array)
+  配置  刺殺  分類  場次  頁碼  note  文字記錄
+  第一局 through 第五局 (detail)
+  組成  強人  戳人  局勢
+  首湖  二湖  三湖  首湖玩家  二湖玩家  三湖玩家
+  角1  角4  角5  角0  1-1  派5  派0  外灑
 `);
 }
 
