@@ -166,9 +166,12 @@ describe('GameEngine', () => {
     beforeEach(() => {
       gameEngine.startGame();
       room.state = 'discussion';
-      // Set roles for testing - override both room.players and align with game engine
+      // Set roles for testing - override room.players to ensure deterministic results
       room.players['player1'].role = 'merlin';
       room.players['player2'].role = 'assassin';
+      room.players['player3'].role = 'loyal';
+      room.players['player4'].role = 'percival';
+      room.players['player5'].role = 'morgana';
     });
 
     it('should end game with evil win when merlin is assassinated', () => {

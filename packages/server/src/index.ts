@@ -8,6 +8,7 @@ import { authenticateSocket } from './middleware/auth';
 import { GameServer } from './socket/GameServer';
 import { createApiRouter } from './routes/api';
 import { RoomManager } from './game/RoomManager';
+import { setSharedRoomManager } from './game/roomManagerSingleton';
 
 const app = express();
 const httpServer = createServer(app);
@@ -33,6 +34,7 @@ io.use(authenticateSocket);
 
 // Shared RoomManager so REST routes can read active/replay rooms
 const roomManager = new RoomManager();
+setSharedRoomManager(roomManager);
 const gameServer = new GameServer(io, roomManager);
 gameServer.start();
 
