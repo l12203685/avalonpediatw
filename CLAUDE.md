@@ -18,7 +18,7 @@ pnpm --filter @avalon/server build   # or @avalon/web
 
 ## Key URLs
 
-- Frontend: https://avalonpediatw.vercel.app / https://avalon-game-platform.web.app
+- Frontend: https://avalon-game-platform.web.app
 - Backend: https://avalonpediatw.onrender.com
 - Health check: https://avalonpediatw.onrender.com/health
 
