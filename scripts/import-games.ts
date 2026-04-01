@@ -224,18 +224,45 @@ const QUEST_RESULT_COLS = [
 
 /**
  * Parse the 結果 cell into winner 'good' | 'evil'.
- * Accepts Chinese text ("好人", "藍", "成功") for good and
- * ("壞人", "紅", "刺殺成功", "evil") for evil, plus numeric 0/1.
+ *
+ * Handles the following formats from the Google Sheet:
+ *   Numeric:  '0' → good, '1' → evil
+ *   English:  'good' → good, 'evil' → evil
+ *   Simple Chinese: '好人' → good, '壞人' → evil, '成功' → good
+ *   Color Chinese:  '藍' / '三藍' → good, '紅' / '三紅' → evil
+ *   Outcome suffixes:
+ *     '三藍活' (blue alive — merlin survived)  → good
+ *     '三藍死' (blue dead — assassination win) → evil
+ *   Assassination:  '刺殺' anywhere            → evil
  */
 function parseWinner(raw: string): 'good' | 'evil' | null {
-  const v = raw.trim().toLowerCase();
+  const v = raw.trim();
   if (!v) return null;
-  if (v === '0' || v === 'good' || v.startsWith('好') || v.startsWith('藍') || v === '成功') {
-    return 'good';
-  }
-  if (v === '1' || v === 'evil' || v.startsWith('壞') || v.startsWith('紅') || v.startsWith('刺殺')) {
-    return 'evil';
-  }
+
+  // Assassination explicit win for evil (check before blue checks)
+  if (v.includes('刺殺')) return 'evil';
+
+  // Blue (good team) with death suffix → evil wins via assassination
+  if (v.includes('藍死')) return 'evil';
+
+  // Blue (good team) with alive suffix → good wins, merlin survived
+  if (v.includes('藍活')) return 'good';
+
+  // Red (evil team) — any format like '三紅', '紅', '二紅', etc.
+  if (v.includes('紅')) return 'evil';
+
+  // Blue (good team) — any format like '三藍', '藍', '二藍', etc.
+  if (v.includes('藍')) return 'good';
+
+  // Simple Chinese
+  if (v.includes('好人') || v.startsWith('成功')) return 'good';
+  if (v.includes('壞人')) return 'evil';
+
+  // English / numeric fallback
+  const lower = v.toLowerCase();
+  if (lower === '0' || lower === 'good') return 'good';
+  if (lower === '1' || lower === 'evil') return 'evil';
+
   return null;
 }
 
@@ -330,14 +357,27 @@ function rowToGameRecord(
   const note = get('note') || undefined;
   const textLog = get('文字記錄') || undefined;
 
+  // Derive winReason from 結果 cell content, falling back to 刺殺 column or defaults
+  const resultCell = get('結果');
+  let winReason: string;
+  if (resultCell.includes('藍死')) {
+    winReason = '刺殺梅林';
+  } else if (resultCell.includes('藍活')) {
+    winReason = '好人勝（梅林存活）';
+  } else if (resultCell.includes('刺殺')) {
+    winReason = '刺殺梅林';
+  } else if (assassination) {
+    winReason = assassination;
+  } else {
+    winReason = winner === 'good' ? '好人勝' : '壞人勝';
+  }
+
   return {
     gameId,
     roomName: session ? `場次 ${session}` : `Imported Game ${gameId.slice(-6)}`,
     playerCount,
     winner,
-    winReason: assassination
-      ? assassination
-      : winner === 'good' ? '好人勝' : '壞人勝',
+    winReason,
     questResults,
     duration: 0,
     players,
@@ -534,16 +574,21 @@ function initAdmin(): void {
   if (admin.apps.length > 0) return;
 
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const credsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const projectId = process.env.FIREBASE_PROJECT_ID;
 
   if (serviceAccountJson) {
     const serviceAccount = JSON.parse(serviceAccountJson);
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    admin.initializeApp(
-      process.env.FIREBASE_PROJECT_ID
-        ? { projectId: process.env.FIREBASE_PROJECT_ID }
-        : {}
-    );
+  } else if (credsPath) {
+    // Load from file if GOOGLE_APPLICATION_CREDENTIALS is set
+    const fs = require('fs');
+    const raw = fs.readFileSync(credsPath, 'utf-8');
+    const serviceAccount = JSON.parse(raw);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: projectId || serviceAccount.project_id
+    });
   } else {
     throw new Error(
       'No Firebase credentials found.\n' +
@@ -572,9 +617,8 @@ async function importBatch(
   // Check which IDs already exist
   const existingIds = new Set<string>();
   for (const chunk of chunks) {
-    const refs = chunk.map((r) => firestore.collection('games').doc(r.gameId));
-    const snaps = await firestore.getAll(...refs);
-    for (const snap of snaps) {
+    for (const record of chunk) {
+      const snap = await firestore.collection('games').doc(record.gameId).get();
       if (snap.exists) existingIds.add(snap.id);
     }
   }
@@ -598,7 +642,11 @@ async function importBatch(
         continue;
       }
 
-      batch.set(firestore.collection('games').doc(record.gameId), record);
+      // Clean undefined values before writing to Firestore
+      const cleanRecord = Object.fromEntries(
+        Object.entries(record).filter(([_, v]) => v !== undefined)
+      );
+      batch.set(firestore.collection('games').doc(record.gameId), cleanRecord);
       batchCount++;
       imported++;
     }
