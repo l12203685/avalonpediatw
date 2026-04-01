@@ -12,20 +12,25 @@ import ChatPanel from '../components/ChatPanel';
 import HistoryPanel from '../components/HistoryPanel';
 import MissionTrack from '../components/MissionTrack';
 import SuspicionBoard from '../components/SuspicionBoard';
+import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
+import audioService from '../services/audio';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Bell, RefreshCw } from 'lucide-react';
+import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2 } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 
 export default function GamePage(): JSX.Element {
-  const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer, isSpectator } = useGameStore();
+  const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer, isSpectator, socketStatus } = useGameStore();
   const [isVoting, setIsVoting] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [isAssassinating, setIsAssassinating] = useState(false);
   const [showRoleReveal, setShowRoleReveal] = useState(true);
+  const prevRoomState = useRef<string | null>(null);
   const [assassinTimer, setAssassinTimer] = useState(120); // 120s matches server ASSASSINATION_TIMEOUT_MS
   const [pendingVoteReveal, setPendingVoteReveal] = useState<VoteRecord | null>(null);
   const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
+  const [audioEnabled, setAudioEnabled] = useState(() => audioService.isEnabled());
+  const [teamSelectTimer, setTeamSelectTimer] = useState(90);
   const prevVoteHistoryLen = useRef(0);
   const prevQuestHistoryLen = useRef(0);
 
@@ -34,10 +39,31 @@ export default function GamePage(): JSX.Element {
     requestNotificationPermission();
   }, []);
 
-  // Show role reveal modal each time game starts (state goes from lobby → voting)
+  // Show role reveal modal each time game starts (state transitions lobby → voting)
   useEffect(() => {
-    setShowRoleReveal(true);
-  }, []);
+    if (!room) return;
+    if (prevRoomState.current === 'lobby' && room.state === 'voting') {
+      setShowRoleReveal(true);
+      setIsVoting(false);
+      setIsAssassinating(false);
+      setSelectedTarget(null);
+    }
+    if (prevRoomState.current === null) {
+      // First mount — show roles immediately
+      setShowRoleReveal(true);
+    }
+    prevRoomState.current = room.state;
+  }, [room?.state]);
+
+  // Team-select countdown (mirrors the 90s server AFK timeout)
+  useEffect(() => {
+    if (!room || room.state !== 'voting' || room.questTeam.length > 0) return;
+    setTeamSelectTimer(90);
+    const interval = setInterval(() => {
+      setTeamSelectTimer(t => Math.max(0, t - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [room?.state, room?.questTeam?.length, room?.leaderIndex]);
 
   // Assassination countdown
   useEffect(() => {
@@ -48,6 +74,14 @@ export default function GamePage(): JSX.Element {
     }, 1000);
     return () => clearInterval(interval);
   }, [room?.state]);
+
+  // Reset isVoting once server confirms player's vote is registered
+  useEffect(() => {
+    if (!room || !currentPlayer) return;
+    if (room.votes[currentPlayer.id] !== undefined) {
+      setIsVoting(false);
+    }
+  }, [room?.votes]);
 
   // Show vote reveal overlay when a new vote record is added
   useEffect(() => {
@@ -78,23 +112,25 @@ export default function GamePage(): JSX.Element {
   const isCurrentPlayerLeader = currentPlayer.id === leaderId;
   const teamSelected = room.questTeam.length > 0;
 
-  const handleVote = (approve: boolean) => {
+  const handleVote = (approve: boolean): void => {
+    if (isVoting) return;
     setIsVoting(true);
-    try {
-      submitVote(room.id, currentPlayer.id, approve);
-    } finally {
-      setIsVoting(false);
-    }
+    submitVote(room.id, currentPlayer.id, approve);
+    // Reset after server ACK arrives (room.votes updates), with 3s safety fallback
+    setTimeout(() => setIsVoting(false), 3000);
   };
 
-  const handleAssassinate = (targetId: string) => {
+  const handleAssassinate = (targetId: string): void => {
+    if (isAssassinating) return;
     setSelectedTarget(targetId);
     setIsAssassinating(true);
-    try {
-      submitAssassination(room.id, currentPlayer.id, targetId);
-    } finally {
-      setIsAssassinating(false);
-    }
+    submitAssassination(room.id, currentPlayer.id, targetId);
+    setTimeout(() => setIsAssassinating(false), 3000);
+  };
+
+  const handleToggleAudio = () => {
+    audioService.toggleAudio();
+    setAudioEnabled(audioService.isEnabled());
   };
 
   const handlePlayAgain = () => {
@@ -168,6 +204,29 @@ export default function GamePage(): JSX.Element {
       )}
 
       <div className="max-w-6xl mx-auto space-y-8">
+        {/* Reconnection status banner */}
+        <AnimatePresence>
+          {(socketStatus === 'reconnecting' || socketStatus === 'disconnected') && (
+            <motion.div
+              key="reconnect-banner"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ${
+                socketStatus === 'reconnecting'
+                  ? 'bg-yellow-900/60 border border-yellow-600 text-yellow-200'
+                  : 'bg-red-900/60 border border-red-600 text-red-200'
+              }`}
+            >
+              {socketStatus === 'reconnecting' ? (
+                <><Loader2 size={16} className="animate-spin flex-shrink-0" />正在重新連線… (Reconnecting…)</>
+              ) : (
+                <><WifiOff size={16} className="flex-shrink-0" />已斷線，請檢查網路連線 (Disconnected — check your connection)</>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Spectator banner */}
         {isSpectator && (
           <div className="flex items-center justify-between bg-purple-900/40 border border-purple-600 rounded-xl px-4 py-2">
@@ -196,6 +255,17 @@ export default function GamePage(): JSX.Element {
               className="bg-blue-900/50 hover:bg-blue-800/70 border border-blue-600 px-4 py-2 rounded-lg text-blue-300 text-sm transition-colors"
             >
               查看角色
+            </button>
+            <button
+              onClick={handleToggleAudio}
+              title={audioEnabled ? '靜音 (Mute)' : '開啟音效 (Unmute)'}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${
+                audioEnabled
+                  ? 'bg-gray-800/50 hover:bg-gray-700/70 border-gray-600 text-gray-300'
+                  : 'bg-gray-900/50 hover:bg-gray-800/70 border-gray-700 text-gray-500'
+              }`}
+            >
+              {audioEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
           </div>
         </div>
@@ -252,6 +322,7 @@ export default function GamePage(): JSX.Element {
                   room={room}
                   currentPlayer={currentPlayer}
                   isLoading={isVoting}
+                  timer={teamSelectTimer}
                 />
               ) : (
                 /* Non-leaders wait for leader */
@@ -265,8 +336,11 @@ export default function GamePage(): JSX.Element {
                   <p className="text-gray-300">
                     隊長 <span className="text-yellow-400 font-bold">{room.players[leaderId]?.name}</span> 正在選擇任務隊員...
                   </p>
-                  <div className="text-sm text-gray-500">
-                    本輪需要 {AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? '?'} 名隊員
+                  <div className="flex items-center justify-center gap-3 text-sm text-gray-500">
+                    <span>本輪需要 {AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? '?'} 名隊員</span>
+                    <span className={`px-3 py-1 rounded-full font-bold ${teamSelectTimer < 20 ? 'bg-red-900/60 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
+                      ⏱ {teamSelectTimer}s
+                    </span>
                   </div>
                 </motion.div>
               )
@@ -449,7 +523,14 @@ export default function GamePage(): JSX.Element {
                         : 'bg-red-900/30 border-red-600'
                     }`}
                   >
-                    <p className="font-bold text-white">{player.name}{wasAssassinated && ' 🗡️'}</p>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="font-bold text-white truncate">{player.name}{wasAssassinated && ' 🗡️'}</p>
+                      {room.eloDeltas?.[player.id] !== undefined && (
+                        <span className={`text-xs font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {room.eloDeltas[player.id] >= 0 ? '+' : ''}{room.eloDeltas[player.id]}
+                        </span>
+                      )}
+                    </div>
                     <p className={isGood ? 'text-blue-400' : 'text-red-400'}>
                       {roleLabel[player.role ?? ''] ?? player.role}
                     </p>
@@ -460,6 +541,9 @@ export default function GamePage(): JSX.Element {
                 );
               })}
             </div>
+
+            {/* Vote analysis — collapsible, only shown when there's history */}
+            <VoteAnalysisPanel room={room} currentPlayer={currentPlayer} />
 
             <div className="flex items-center justify-center gap-3 flex-wrap">
               {room.host === currentPlayer.id && (

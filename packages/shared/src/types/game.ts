@@ -38,6 +38,7 @@ export interface Player {
   team: Team | null;
   status: PlayerStatus;
   isBot?: boolean;  // true = AI-controlled player
+  botDifficulty?: 'easy' | 'normal' | 'hard'; // AI difficulty level (only set when isBot=true)
   vote?: boolean | null; // true = approve, false = reject, null = not voted
   kills?: string[]; // IDs of players killed (for assassin)
   createdAt: number;
@@ -65,6 +66,8 @@ export interface Room {
   assassinTargetId?: string;   // ID of the player the assassin targeted (set on game end)
   roleOptions: RoleOptions;    // Host-configured optional role toggles
   readyPlayerIds: string[];    // Player IDs who clicked "Ready" in lobby
+  isPrivate?: boolean;         // Room requires password to join
+  eloDeltas?: Record<string, number>; // playerId -> elo delta (populated on game end)
   createdAt: number;
   updatedAt: number;
 }

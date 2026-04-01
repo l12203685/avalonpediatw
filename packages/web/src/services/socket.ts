@@ -224,14 +224,19 @@ export function disconnectSocket(): void {
   }
 }
 
-export function createRoom(playerName: string): void {
+export function createRoom(playerName: string, password?: string): void {
   const socket = getSocket();
-  socket.emit('game:create-room', playerName);
+  socket.emit('game:create-room', playerName, password);
 }
 
-export function joinRoom(roomId: string): void {
+export function joinRoom(roomId: string, password?: string): void {
   const socket = getSocket();
-  socket.emit('game:join-room', roomId);
+  socket.emit('game:join-room', roomId, password);
+}
+
+export function setRoomPassword(roomId: string, password: string | null): void {
+  const socket = getSocket();
+  socket.emit('game:set-room-password', roomId, password);
 }
 
 export function startGame(roomId: string): void {
@@ -274,9 +279,9 @@ export function kickPlayer(roomId: string, targetPlayerId: string): void {
   socket.emit('game:kick-player', roomId, targetPlayerId);
 }
 
-export function addBot(roomId: string): void {
+export function addBot(roomId: string, difficulty: 'easy' | 'normal' | 'hard' = 'normal'): void {
   const socket = getSocket();
-  socket.emit('game:add-bot', roomId);
+  socket.emit('game:add-bot', roomId, difficulty);
 }
 
 export function removeBot(roomId: string, botId: string): void {

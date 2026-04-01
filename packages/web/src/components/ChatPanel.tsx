@@ -110,6 +110,20 @@ export default function ChatPanel({ roomId, currentPlayerId }: ChatPanelProps): 
               <div ref={bottomRef} />
             </div>
 
+            {/* Quick reactions */}
+            <div className="flex gap-1.5 px-2 pt-2 pb-1 border-t border-gray-700/50 flex-wrap">
+              {['👍', '👎', '🤔', '😱', '🎭', '🗡️'].map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => sendChatMessage(roomId, emoji)}
+                  className="text-base hover:scale-125 transition-transform leading-none px-1 py-0.5 rounded hover:bg-gray-700"
+                  title={emoji}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
             {/* Input */}
             <div className="flex gap-2 p-2 border-t border-gray-700">
               <input

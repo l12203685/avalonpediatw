@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus } from 'lucide-react';
+import { getEloRank } from '../utils/eloRank';
+import { checkFollowing, followUser, unfollowUser } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
 import { getStoredToken } from '../services/socket';
@@ -30,9 +32,10 @@ const EVENT_ICONS: Record<string, string> = {
   game_started:              '🎮',
   voting_phase_started:      '🗳️',
   quest_team_selected:       '⚔️',
+  team_auto_selected:        '⏱️',
   voting_resolved:           '📊',
   team_approved:             '✅',
-  quest_vote_submitted:      '🗡️',
+  quest_vote_submitted:      '⚔️',
   quest_resolved:            '🏰',
   round_ended:               '🔄',
   discussion_phase_started:  '🎯',
@@ -52,9 +55,11 @@ function formatReplayEvent(ev: GameEvent): string {
     }
     case 'quest_team_selected':
       return `領袖提案：${(d.team as string[])?.join('、')}`;
+    case 'team_auto_selected':
+      return `⏱ 領袖超時，自動選隊：${(d.team as string[])?.join('、')}`;
     case 'voting_resolved': {
-      const approved = d.approved ? '✅ 通過' : '❌ 否決';
-      return `投票結果：${approved}（${d.approveCount as number}贊成，${d.rejectCount as number}反對）`;
+      const approved = (d.result === 'approved' || d.approved) ? '✅ 通過' : '❌ 否決';
+      return `投票結果：${approved}（${(d.approvals ?? d.approveCount) as number}贊成，${(d.rejections ?? d.rejectCount) as number}反對）`;
     }
     case 'team_approved':
       return `提案通過，任務開始`;
@@ -106,16 +111,19 @@ function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: stri
 }
 
 export default function ProfilePage(): JSX.Element {
-  const { setGameState, profileUserId, navigateToProfile } = useGameStore();
+  const { setGameState, profileUserId, navigateToProfile, addToast } = useGameStore();
   const [profile, setProfile]       = useState<UserProfile | null>(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [replay, setReplay]         = useState<{ roomId: string; events: GameEvent[] } | null>(null);
   const [replayLoading, setReplayLoading] = useState(false);
+  const [isFollowingUser, setIsFollowingUser] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  const isMe = !profileUserId || profileUserId === 'me';
 
   useEffect(() => {
     const token = getStoredToken();
-    const isMe  = !profileUserId || profileUserId === 'me';
 
     const fetch = isMe && token
       ? fetchMyProfile(token)
@@ -129,6 +137,36 @@ export default function ProfilePage(): JSX.Element {
       .finally(() => setLoading(false));
   }, [profileUserId]);
 
+  useEffect(() => {
+    if (isMe || !profileUserId) return;
+    const token = getStoredToken();
+    if (!token) return;
+    checkFollowing(token, profileUserId)
+      .then(setIsFollowingUser)
+      .catch(() => {});
+  }, [profileUserId, isMe]);
+
+  const handleFollowToggle = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token || !profileUserId) return;
+    setFollowLoading(true);
+    try {
+      if (isFollowingUser) {
+        await unfollowUser(token, profileUserId);
+        setIsFollowingUser(false);
+        addToast(`已取消追蹤 ${profile?.display_name ?? ''}`, 'info');
+      } else {
+        await followUser(token, profileUserId);
+        setIsFollowingUser(true);
+        addToast(`已追蹤 ${profile?.display_name ?? ''}`, 'success');
+      }
+    } catch {
+      addToast('操作失敗，請稍後再試', 'error');
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
   const handleReplay = (roomId: string): void => {
     setReplayLoading(true);
     fetchGameReplay(roomId)
@@ -141,6 +179,20 @@ export default function ProfilePage(): JSX.Element {
     ? Math.round((profile.games_won / profile.total_games) * 100)
     : 0;
 
+  // Compute good/evil win rates from recent game data
+  const teamStats = profile
+    ? profile.recent_games.reduce<Record<'good' | 'evil', { wins: number; total: number }>>(
+        (acc, g) => {
+          const t = g.team as 'good' | 'evil';
+          if (!acc[t]) return acc;
+          acc[t].total++;
+          if (g.won) acc[t].wins++;
+          return acc;
+        },
+        { good: { wins: 0, total: 0 }, evil: { wins: 0, total: 0 } }
+      )
+    : null;
+
   // Compute per-role stats from recent games
   const roleStats = profile
     ? Object.entries(
@@ -151,6 +203,18 @@ export default function ProfilePage(): JSX.Element {
           return acc;
         }, {})
       ).sort((a, b) => b[1].total - a[1].total)
+    : [];
+
+  // Compute per-player-count stats from recent games
+  const playerCountStats: Array<{ count: number; wins: number; total: number }> = profile
+    ? [5, 6, 7, 8, 9, 10]
+        .reduce<Array<{ count: number; wins: number; total: number }>>((acc, count) => {
+          const games = profile.recent_games.filter(g => g.player_count === count);
+          if (games.length > 0) {
+            acc.push({ count, wins: games.filter(g => g.won).length, total: games.length });
+          }
+          return acc;
+        }, [])
     : [];
 
   return (
@@ -197,6 +261,14 @@ export default function ProfilePage(): JSX.Element {
                   <TrendingUp size={16} className="text-blue-400" />
                   <span className="text-blue-300 font-bold text-lg">{profile.elo_rating}</span>
                   <span className="text-gray-500 text-sm">ELO</span>
+                  {(() => {
+                    const rank = getEloRank(profile.elo_rating);
+                    return (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
+                        {rank.label}
+                      </span>
+                    );
+                  })()}
                 </div>
                 {profile.badges.length > 0 && (
                   <div className="flex gap-1 mt-2 flex-wrap">
@@ -206,6 +278,20 @@ export default function ProfilePage(): JSX.Element {
                       </span>
                     ))}
                   </div>
+                )}
+                {!isMe && (
+                  <button
+                    onClick={handleFollowToggle}
+                    disabled={followLoading}
+                    className={`mt-3 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all disabled:opacity-50 ${
+                      isFollowingUser
+                        ? 'bg-gray-800 hover:bg-red-900/40 border-gray-600 hover:border-red-700 text-gray-300 hover:text-red-400'
+                        : 'bg-blue-900/40 hover:bg-blue-800/60 border-blue-700 text-blue-300 hover:text-white'
+                    }`}
+                  >
+                    {isFollowingUser ? <UserMinus size={12} /> : <UserPlus size={12} />}
+                    {followLoading ? '…' : isFollowingUser ? '取消追蹤' : '追蹤'}
+                  </button>
                 )}
               </div>
             </div>
@@ -237,6 +323,31 @@ export default function ProfilePage(): JSX.Element {
                 </div>
               </div>
             </div>
+
+            {/* Good/Evil split */}
+            {teamStats && (teamStats.good.total > 0 || teamStats.evil.total > 0) && (
+              <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
+                <p className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">陣營勝率 (Team Win Rates) <span className="font-normal text-gray-500">— 近 {profile.recent_games.length} 局</span></p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['good', 'evil'] as const).map(team => {
+                    const { wins, total } = teamStats[team];
+                    const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
+                    const isGood = team === 'good';
+                    return (
+                      <div key={team} className={`rounded-lg border p-3 text-center ${isGood ? 'bg-blue-900/20 border-blue-700/50' : 'bg-red-900/20 border-red-700/50'}`}>
+                        <div className={`text-2xl font-black ${pct >= 50 ? (isGood ? 'text-blue-300' : 'text-red-300') : 'text-gray-400'}`}>
+                          {total > 0 ? `${pct}%` : '—'}
+                        </div>
+                        <div className={`text-xs mt-1 ${isGood ? 'text-blue-400' : 'text-red-400'}`}>
+                          {isGood ? '⚔️ 正義方' : '👹 邪惡方'}
+                        </div>
+                        {total > 0 && <div className="text-xs text-gray-600 mt-0.5">{wins}/{total}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* ELO trend sparkline */}
             {profile.recent_games.length >= 2 && (() => {
@@ -333,9 +444,38 @@ export default function ProfilePage(): JSX.Element {
               </div>
             )}
 
+            {/* Win rate by player count */}
+            {playerCountStats.length > 0 && (
+              <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-gray-300 mb-3">人數勝率 (Win Rate by Player Count) <span className="text-gray-500 font-normal">— 近 {profile!.recent_games.length} 局</span></h3>
+                <div className="space-y-2">
+                  {playerCountStats.map(({ count, wins, total }) => {
+                    const pct = Math.round((wins / total) * 100);
+                    return (
+                      <div key={count} className="flex items-center gap-2">
+                        <span className="text-xs font-semibold w-10 text-gray-300 flex-shrink-0">
+                          {count} 人局
+                        </span>
+                        <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${pct >= 50 ? 'bg-green-500' : 'bg-red-500'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs font-bold w-10 text-right ${pct >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                          {pct}%
+                        </span>
+                        <span className="text-xs text-gray-600 w-10 text-right">{wins}/{total}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Recent games */}
             <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
-              <h3 className="text-sm font-bold text-gray-300 mb-3">最近 10 局</h3>
+              <h3 className="text-sm font-bold text-gray-300 mb-3">最近 {profile.recent_games.length} 局</h3>
               {profile.recent_games.length === 0 ? (
                 <p className="text-center text-gray-500 text-sm py-4">尚無遊戲記錄</p>
               ) : (

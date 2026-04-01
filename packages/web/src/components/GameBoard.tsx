@@ -2,7 +2,7 @@ import { Room, Player } from '@avalon/shared';
 import PlayerCard from './PlayerCard';
 import { motion } from 'framer-motion';
 import audioService from '../services/audio';
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface GameBoardProps {
   room: Room;
@@ -43,8 +43,28 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
     }
   }, [room.state, room.evilWins]);
 
+  // Scale radius based on player count so cards don't overlap
+  const radius = playerCount <= 6 ? 140 : playerCount <= 8 ? 155 : 170;
+  const boardSize = (radius + 80) * 2; // card is ~80px, board must fit all
+
+  // Responsive scale: shrink board on narrow viewports so nothing clips
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const update = () => {
+      const w = containerRef.current?.offsetWidth ?? window.innerWidth;
+      setScale(Math.min(1, w / boardSize));
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [boardSize]);
+
   return (
-    <div className="relative w-full h-96 max-w-2xl mx-auto">
+    <div ref={containerRef} className="w-full max-w-2xl mx-auto flex justify-center overflow-hidden">
+    {/* The inner board uses a fixed size then scales down to fit the container */}
+    <div style={{ width: boardSize * scale, height: boardSize * scale, flexShrink: 0 }}>
+    <div className="relative" style={{ width: boardSize, height: boardSize, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
       {/* 背景圓形 - 動畫光環 */}
       <motion.div
         animate={{
@@ -55,7 +75,8 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
           ],
         }}
         transition={{ duration: 3, repeat: Infinity }}
-        className="absolute inset-0 rounded-full border-2 border-gray-600 bg-gradient-to-b from-avalon-dark/50 to-transparent"
+        style={{ width: radius * 2, height: radius * 2, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+        className="absolute rounded-full border-2 border-gray-600 bg-gradient-to-b from-avalon-dark/50 to-transparent"
       />
 
       {/* 遊戲狀態中心 */}
@@ -89,7 +110,6 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
       {/* 玩家環形排列 */}
       {Object.values(room.players).map((player, index) => {
         const angle = (angleSlice * index) * (Math.PI / 180);
-        const radius = 140;
         const x = Math.cos(angle) * radius;
         const y = Math.sin(angle) * radius;
 
@@ -122,6 +142,8 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
           </motion.div>
         );
       })}
+    </div>
+    </div>
     </div>
   );
 }

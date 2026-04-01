@@ -4,7 +4,8 @@ import { Room, Player, User, AVALON_CONFIG } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { GameEngine } from '../game/GameEngine';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
-import { PlayerObservation } from '../ai/types';
+import { RandomAgent } from '../ai/RandomAgent';
+import { PlayerObservation, AvalonAgent } from '../ai/types';
 import { SocketRateLimiter } from '../middleware/rateLimit';
 import {
   saveRoom,
@@ -36,7 +37,7 @@ export class GameServer {
   private roomManager: RoomManager;
   private gameEngines: Map<string, GameEngine> = new Map();
   // botId → HeuristicAgent instance (for bot-controlled players)
-  private botAgents: Map<string, HeuristicAgent> = new Map();
+  private botAgents: Map<string, AvalonAgent> = new Map();
   // uid → supabase UUID (set from socket.data.supabaseId on join/create)
   private supabaseIds: Map<string, string> = new Map();
   // roomId → start timestamp (ms)
@@ -73,12 +74,16 @@ export class GameServer {
       });
 
       // Game events
-      socket.on('game:create-room', (playerName: string) => {
-        this.handleCreateRoom(socket, playerName, user);
+      socket.on('game:create-room', (playerName: string, password?: string) => {
+        this.handleCreateRoom(socket, playerName, user, password);
       });
 
-      socket.on('game:join-room', (roomId: string) => {
-        this.handleJoinRoom(socket, roomId, user);
+      socket.on('game:join-room', (roomId: string, password?: string) => {
+        this.handleJoinRoom(socket, roomId, user, password);
+      });
+
+      socket.on('game:set-room-password', (roomId: string, password: string | null) => {
+        this.handleSetRoomPassword(socket, roomId, password);
       });
 
       socket.on('game:start-game', (roomId: string) => {
@@ -109,8 +114,8 @@ export class GameServer {
         this.handleKickPlayer(socket, roomId, targetPlayerId);
       });
 
-      socket.on('game:add-bot', (roomId: string) => {
-        this.handleAddBot(socket, roomId);
+      socket.on('game:add-bot', (roomId: string, difficulty?: string) => {
+        this.handleAddBot(socket, roomId, difficulty as 'easy' | 'normal' | 'hard' | undefined);
       });
 
       socket.on('game:remove-bot', (roomId: string, botId: string) => {
@@ -156,6 +161,7 @@ export class GameServer {
             maxPlayers:  r.maxPlayers,
             createdAt:   r.createdAt,
             inProgress:  r.state !== 'lobby',
+            isPrivate:   r.isPrivate ?? false,
           }))
           .sort((a, b) => (a.inProgress ? 1 : 0) - (b.inProgress ? 1 : 0) || b.createdAt - a.createdAt);
         socket.emit('game:rooms-list', openRooms);
@@ -167,14 +173,14 @@ export class GameServer {
     });
   }
 
-  private generateRoomCode(): string {
+  private generateRoomCode(attempt = 0): string {
+    if (attempt > 50) throw new Error('Could not generate unique room code after 50 attempts');
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // avoid confusing chars (0/O, 1/I)
     let code = '';
     for (let i = 0; i < 6; i++) {
       code += chars[Math.floor(Math.random() * chars.length)];
     }
-    // Ensure uniqueness
-    if (this.roomManager.getRoom(code)) return this.generateRoomCode();
+    if (this.roomManager.getRoom(code)) return this.generateRoomCode(attempt + 1);
     return code;
   }
 
@@ -267,12 +273,24 @@ export class GameServer {
     return { ...room, players, votes };
   }
 
-  private handleCreateRoom(socket: Socket, playerName: string, user: User): void {
+  private handleSetRoomPassword(socket: Socket, roomId: string, password: string | null): void {
+    const room = this.roomManager.getRoom(roomId);
+    if (!room) { socket.emit('error', 'Room not found'); return; }
+    if (room.host !== socket.data.playerId) { socket.emit('error', 'Only the host can set a password'); return; }
+    const pw = password?.trim() || null;
+    this.roomManager.setRoomPassword(roomId, pw);
+    this.broadcastRoomState(roomId, this.roomManager.getRoom(roomId)!);
+  }
+
+  private handleCreateRoom(socket: Socket, playerName: string, user: User, password?: string): void {
     try {
       const roomId = this.generateRoomCode();
       const playerId = user.uid;
 
       const room = this.roomManager.createRoom(roomId, playerName || user.displayName, playerId);
+      if (password?.trim()) {
+        this.roomManager.setRoomPassword(roomId, password.trim());
+      }
       const gameEngine = this.createGameEngine(roomId, room);
       this.gameEngines.set(roomId, gameEngine);
 
@@ -303,7 +321,7 @@ export class GameServer {
     }
   }
 
-  private handleJoinRoom(socket: Socket, roomId: string, user: User): void {
+  private handleJoinRoom(socket: Socket, roomId: string, user: User, password?: string): void {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -313,6 +331,12 @@ export class GameServer {
 
       const playerId = user.uid;
       const playerExists = room.players[playerId];
+
+      // Check password for non-members (reconnects bypass password check)
+      if (!playerExists && !this.roomManager.checkRoomPassword(roomId, password)) {
+        socket.emit('error', '密碼錯誤 (Wrong password)');
+        return;
+      }
 
       // Handle rejoin scenario (player was disconnected and reconnecting)
       if (playerExists) {
@@ -440,7 +464,8 @@ export class GameServer {
       }
 
       // Use server-verified player ID — ignore client-supplied ID to prevent spoofing
-      const playerId = socket.data.playerId as string;
+      const playerId = socket.data.playerId as string | undefined;
+      if (!playerId) { socket.emit('error', 'Not authenticated in room'); return; }
 
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -532,7 +557,8 @@ export class GameServer {
   ): void {
     try {
       // Use server-verified player ID — ignore client-supplied ID to prevent spoofing
-      const playerId = socket.data.playerId as string;
+      const playerId = socket.data.playerId as string | undefined;
+      if (!playerId) { socket.emit('error', 'Not authenticated in room'); return; }
 
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -582,7 +608,8 @@ export class GameServer {
   private handleAssassinate(socket: Socket, roomId: string, _clientAssassinId: string, targetId: string): void {
     try {
       // Use server-verified player ID — ignore client-supplied assassinId to prevent spoofing
-      const assassinId = socket.data.playerId as string;
+      const assassinId = socket.data.playerId as string | undefined;
+      if (!assassinId) { socket.emit('error', 'Not authenticated in room'); return; }
 
       const room = this.roomManager.getRoom(roomId);
       if (!room) {
@@ -691,9 +718,29 @@ export class GameServer {
       await saveGameRecords(records);
       console.log(`[supabase] Saved ${records.length} game records for room ${roomId}`);
 
+      // Emit ELO deltas to all players in room so end screen can show +/- ELO
+      const eloDeltas: Record<string, number> = {};
+      for (const record of records) {
+        // Map supabase ID back to socket uid
+        for (const [uid, sid] of this.supabaseIds.entries()) {
+          if (sid === record.player_user_id) {
+            eloDeltas[uid] = record.elo_delta;
+            break;
+          }
+        }
+      }
+      if (Object.keys(eloDeltas).length > 0) {
+        // Attach eloDeltas to room and re-broadcast so end screen can show +/- ELO
+        const currentRoom = this.roomManager.getRoom(roomId);
+        if (currentRoom) {
+          currentRoom.eloDeltas = eloDeltas;
+          this.broadcastRoomState(roomId, currentRoom, true);
+        }
+      }
+
       // Award badges based on this game's results
       for (const record of records) {
-        const badges = this.evaluateBadges(record, playerCount, records);
+        const badges = this.evaluateBadges(record, playerCount, records, room);
         if (badges.length > 0) {
           await awardBadges(record.player_user_id, badges);
         }
@@ -715,26 +762,38 @@ export class GameServer {
     }
   }
 
-  private evaluateBadges(record: DbGameRecord, playerCount: number, allRecords: DbGameRecord[]): string[] {
+  private evaluateBadges(record: DbGameRecord, playerCount: number, _allRecords: DbGameRecord[], room: Room): string[] {
     const badges: string[] = [];
 
-    // 首次勝利
+    // 首次勝利 — pushed on every win; awardBadges() deduplicates so it only stores once
     if (record.won) badges.push('初勝');
 
-    // 梅林之盾 — 以梅林身份獲勝
+    // 梅林之盾 — 以梅林身份獲勝（且未被暗殺）
     if (record.won && record.role === 'merlin') badges.push('梅林之盾');
 
     // 刺客之影 — 以刺客身份獲勝
     if (record.won && record.role === 'assassin') badges.push('刺客之影');
 
-    // 全場最大局 — 10人局
+    // 完美刺客 — 暗殺階段成功找出梅林
+    if (record.role === 'assassin' && room.endReason === 'merlin_assassinated') badges.push('完美刺客');
+
+    // 梅林逃脫 — 刺客猜錯，梅林存活並獲勝
+    if (record.role === 'merlin' && record.won && room.endReason === 'assassination_failed') badges.push('梅林逃脫');
+
+    // 十人戰場 — 10人局
     if (playerCount >= 10) badges.push('十人戰場');
 
-    // 滿血 — ELO 從未低於 1000 且本局獲勝
+    // 大局觀 — 8人以上獲勝
+    if (record.won && playerCount >= 8) badges.push('大局觀');
+
+    // 穩健 — ELO 1000 以上時獲勝
     if (record.won && record.elo_before >= 1000) badges.push('穩健');
 
-    // 浴火重生 — ELO 低於 800 時獲勝
+    // 浴火重生 — ELO 800 以下時獲勝
     if (record.won && record.elo_before < 800) badges.push('浴火重生');
+
+    // 速戰速決 — 5 分鐘內獲勝
+    if (record.won && record.duration_sec != null && record.duration_sec < 300) badges.push('速戰速決');
 
     return badges;
   }
@@ -788,7 +847,7 @@ export class GameServer {
     }
   }
 
-  private handleAddBot(socket: Socket, roomId: string): void {
+  private handleAddBot(socket: Socket, roomId: string, difficulty: 'easy' | 'normal' | 'hard' = 'normal'): void {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) { socket.emit('error', 'Room not found'); return; }
@@ -803,9 +862,10 @@ export class GameServer {
       }
 
       const BOT_NAMES = ['阿爾比斯', '蘭斯洛特', '加拉哈德', '崔斯坦', '帕西法爾', '貝狄維爾'];
+      const DIFFICULTY_EMOJI: Record<string, string> = { easy: '🟢', normal: '🤖', hard: '🔴' };
       const existingBotCount = Object.values(room.players).filter(p => p.isBot).length;
       const botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
-      const botName = `🤖 ${BOT_NAMES[existingBotCount % BOT_NAMES.length]}`;
+      const botName = `${DIFFICULTY_EMOJI[difficulty] ?? '🤖'} ${BOT_NAMES[existingBotCount % BOT_NAMES.length]}`;
 
       room.players[botId] = {
         id: botId,
@@ -814,12 +874,18 @@ export class GameServer {
         team: null,
         status: 'active',
         isBot: true,
+        botDifficulty: difficulty,
         createdAt: Date.now(),
       };
 
-      this.botAgents.set(botId, new HeuristicAgent(botId));
+      // Choose agent based on difficulty
+      const agent = difficulty === 'easy'
+        ? new RandomAgent(botId)
+        : new HeuristicAgent(botId, difficulty === 'hard' ? 'hard' : 'normal');
+
+      this.botAgents.set(botId, agent);
       this.broadcastRoomState(roomId, room);
-      console.log(`✓ Bot ${botName} added to room ${roomId}`);
+      console.log(`✓ Bot ${botName} (${difficulty}) added to room ${roomId}`);
     } catch (error) {
       console.error('Error adding bot:', error);
       socket.emit('error', 'Failed to add bot');
@@ -896,12 +962,20 @@ export class GameServer {
         .map(([id]) => id);
     }
 
+    // Percival sees both Merlin and Morgana — can't tell which is which
+    const knownWizards: string[] | undefined = myRole === 'percival'
+      ? Object.entries(r.players)
+          .filter(([id, p]) => id !== botId && (p.role === 'merlin' || p.role === 'morgana'))
+          .map(([id]) => id)
+      : undefined;
+
     return {
       myPlayerId:    botId,
       myRole,
       myTeam,
       playerCount:   Object.keys(r.players).length,
       knownEvils,
+      knownWizards,
       currentRound:  r.currentRound,
       currentLeader: engine.getCurrentLeaderId(),
       failCount:     r.failCount,
@@ -1060,9 +1134,9 @@ export class GameServer {
         socket.emit('error', '此房間不可觀戰 (No spectating in lobby/ended rooms)');
         return;
       }
-      // Cannot spectate if already a player
-      const playerId = socket.data.user?.uid as string;
-      if (room.players[playerId]) {
+      // Cannot spectate if already a player — use canonical playerId, fall back to uid
+      const spectatorPlayerId = (socket.data.playerId as string | undefined) || (socket.data.user?.uid as string | undefined);
+      if (spectatorPlayerId && room.players[spectatorPlayerId]) {
         socket.emit('error', 'Already a player in this room');
         return;
       }
@@ -1243,11 +1317,19 @@ export class GameServer {
       }
       this.roomStartTimes.delete(roomId);
 
-      // Remove bot agents from previous game
+      // Remove old bot agents, then re-create them for bots still in the room
       for (const pid of Object.keys(room.players)) {
         if (room.players[pid].isBot) {
           this.botAgents.delete(pid);
         }
+      }
+      for (const [pid, player] of Object.entries(room.players)) {
+        if (!player.isBot) continue;
+        const difficulty = player.botDifficulty ?? 'normal';
+        const agent = difficulty === 'easy'
+          ? new RandomAgent(pid)
+          : new HeuristicAgent(pid, difficulty === 'hard' ? 'hard' : 'normal');
+        this.botAgents.set(pid, agent);
       }
 
       // Reset room state (keep players and host, clear all game data)
@@ -1264,6 +1346,7 @@ export class GameServer {
       room.questVotedCount = 0;
       room.endReason = undefined;
       room.assassinTargetId = undefined;
+      room.readyPlayerIds = [];
       room.updatedAt = Date.now();
 
       // Reset each player's role and team
@@ -1411,6 +1494,20 @@ export class GameServer {
                     this.broadcastRoomState(roomId, updated);
                     this.scheduleBotActions(roomId);
                     console.log(`[auto] Selected quest team for disconnected leader ${playerId}`);
+                  }
+                }
+              } else if (r.state === 'discussion') {
+                // Disconnected assassin — auto-target a random good player
+                const assassinId = Object.keys(r.players).find(id => r.players[id].role === 'assassin');
+                if (assassinId === playerId) {
+                  const goodPlayers = Object.keys(r.players).filter(id => id !== playerId && r.players[id].team === 'good');
+                  if (goodPlayers.length > 0) {
+                    const target = goodPlayers[Math.floor(Math.random() * goodPlayers.length)];
+                    engine.submitAssassination(playerId, target);
+                    const updated = this.roomManager.getRoom(roomId)!;
+                    this.broadcastRoomState(roomId, updated, true);
+                    this.onGameEnded(roomId, updated);
+                    console.log(`[auto] Submitted assassination for disconnected assassin ${playerId} → ${target}`);
                   }
                 }
               }

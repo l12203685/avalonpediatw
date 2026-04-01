@@ -14,6 +14,7 @@ export interface LeaderboardEntry {
   total_games: number;
   games_won: number;
   games_lost: number;
+  badges: string[];
   win_rate: number;
 }
 
@@ -74,4 +75,65 @@ export interface GameEvent {
 export async function fetchGameReplay(roomId: string): Promise<GameEvent[]> {
   const data = await apiFetch<{ room_id: string; events: GameEvent[] }>(`/api/replay/${roomId}`);
   return data.events;
+}
+
+// ── Friend / Follow API ───────────────────────────────────────
+
+export interface FriendEntry {
+  id: string;
+  display_name: string;
+  photo_url: string | null;
+  elo_rating: number;
+  badges: string[];
+}
+
+export async function fetchFriends(token: string): Promise<FriendEntry[]> {
+  const data = await apiFetch<{ friends: FriendEntry[] }>('/api/friends', token);
+  return data.friends;
+}
+
+export async function followUser(token: string, targetUserId: string): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+  await fetch(`${SERVER_URL}/api/friends/${targetUserId}`, { method: 'POST', headers });
+}
+
+export async function unfollowUser(token: string, targetUserId: string): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+  await fetch(`${SERVER_URL}/api/friends/${targetUserId}`, { method: 'DELETE', headers });
+}
+
+export async function checkFollowing(token: string, targetUserId: string): Promise<boolean> {
+  const data = await apiFetch<{ following: boolean }>(`/api/friends/check/${targetUserId}`, token);
+  return data.following;
+}
+
+// ── Feedback / Error Reporting ────────────────────────────────
+
+export async function submitFeedback(
+  data: { type: 'bug' | 'suggestion'; message: string; gameState?: string },
+  token?: string
+): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  await fetch(`${SERVER_URL}/api/feedback`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function submitError(data: {
+  message: string;
+  stack?: string;
+  gameState?: string;
+}): Promise<void> {
+  try {
+    await fetch(`${SERVER_URL}/api/feedback/errors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    // Swallow — error reporting must never throw
+  }
 }

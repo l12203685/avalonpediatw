@@ -8,12 +8,14 @@ interface TeamSelectionPanelProps {
   room: Room;
   currentPlayer: Player;
   isLoading?: boolean;
+  timer?: number;
 }
 
 export default function TeamSelectionPanel({
   room,
   currentPlayer,
   isLoading = false,
+  timer,
 }: TeamSelectionPanelProps): JSX.Element {
   const playerCount = Object.keys(room.players).length;
   const config = AVALON_CONFIG[playerCount];
@@ -53,7 +55,14 @@ export default function TeamSelectionPanel({
     >
       {/* 標題和信息 */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">👑 選擇任務隊伍 (Select Quest Team)</h2>
+        <div className="flex items-center justify-center gap-3 mb-2">
+          <h2 className="text-3xl font-bold text-white">👑 選擇任務隊伍 (Select Quest Team)</h2>
+          {timer !== undefined && (
+            <span className={`text-sm font-bold px-3 py-1 rounded-full ${timer < 20 ? 'bg-red-900/70 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
+              ⏱ {timer}s
+            </span>
+          )}
+        </div>
         <p className="text-gray-300">
           你是隊長，請選擇 {expectedTeamSize} 名隊員執行任務。(You are the Leader — select {expectedTeamSize} team members for the quest.)
         </p>

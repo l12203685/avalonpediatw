@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { createRoom, joinRoom, listRooms, spectateRoom, getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
-import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye } from 'lucide-react';
+import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot } from 'lucide-react';
 
 interface OpenRoom {
   id: string;
@@ -13,14 +13,20 @@ interface OpenRoom {
   maxPlayers: number;
   createdAt: number;
   inProgress: boolean;
+  isPrivate: boolean;
 }
 
 export default function HomePage(): JSX.Element {
-  const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile, addToast } = useGameStore();
-  const [playerName, setPlayerName] = useState(currentPlayer?.name ?? '');
+  const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile, addToast, setQuickSoloMode } = useGameStore();
+  const [playerName, setPlayerName] = useState(
+    currentPlayer?.name ?? localStorage.getItem('avalon_player_name') ?? ''
+  );
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
   const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
+  const [roomPassword, setRoomPassword] = useState('');
+  const [joinPassword, setJoinPassword] = useState('');
+  const [pendingJoinRoom, setPendingJoinRoom] = useState<OpenRoom | null>(null);
 
   // Auto-populate (and auto-join) from ?room=XXXXXXXX invite link
   useEffect(() => {
@@ -83,7 +89,21 @@ export default function HomePage(): JSX.Element {
       setCurrentPlayer({ ...currentPlayer, name: playerName });
     }
 
-    createRoom(playerName);
+    localStorage.setItem('avalon_player_name', playerName.trim());
+    createRoom(playerName, roomPassword.trim() || undefined);
+    setGameState('lobby');
+  };
+
+  const handleQuickSolo = (): void => {
+    const name = currentPlayer?.name || playerName.trim();
+    if (!name) {
+      addToast('請輸入你的名字再開始', 'info');
+      setMode('create');
+      return;
+    }
+    if (currentPlayer) setCurrentPlayer({ ...currentPlayer, name });
+    setQuickSoloMode(true);
+    createRoom(name);
     setGameState('lobby');
   };
 
@@ -103,7 +123,8 @@ export default function HomePage(): JSX.Element {
       setCurrentPlayer({ ...currentPlayer, name: playerName });
     }
 
-    joinRoom(roomId);
+    localStorage.setItem('avalon_player_name', playerName.trim());
+    joinRoom(roomId, joinPassword.trim() || undefined);
     setGameState('lobby');
   };
 
@@ -244,6 +265,38 @@ export default function HomePage(): JSX.Element {
                 <Trophy size={20} />
                 排行榜 (Leaderboard)
               </motion.button>
+
+              <div className="grid grid-cols-2 gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setGameState('friends')}
+                  className="w-full bg-gradient-to-r from-sky-700 to-blue-600 hover:from-sky-800 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-sky-500/50"
+                >
+                  <Users size={18} />
+                  追蹤列表
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleQuickSolo}
+                  className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-teal-500/50"
+                >
+                  <Zap size={18} />
+                  快速練習
+                </motion.button>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setGameState('aiStats')}
+                className="w-full bg-gradient-to-r from-purple-700 to-violet-700 hover:from-purple-800 hover:to-violet-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-purple-500/50"
+              >
+                <Bot size={20} />
+                AI 自對弈統計 (AI Stats)
+              </motion.button>
             </motion.div>
 
             {/* Open rooms */}
@@ -276,6 +329,9 @@ export default function HomePage(): JSX.Element {
                         {r.inProgress && (
                           <span className="text-xs px-1.5 py-0.5 bg-red-900/50 border border-red-700 text-red-400 rounded font-semibold flex-shrink-0">進行中</span>
                         )}
+                        {r.isPrivate && (
+                          <Lock size={11} className="text-yellow-500 flex-shrink-0" />
+                        )}
                         <span className="text-sm font-semibold text-white truncate">{r.name}</span>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 ml-2">
@@ -293,6 +349,14 @@ export default function HomePage(): JSX.Element {
                           >
                             <Eye size={11} />
                             觀戰
+                          </button>
+                        ) : r.isPrivate ? (
+                          <button
+                            onClick={() => { setPendingJoinRoom(r); setRoomId(r.id); setJoinPassword(''); }}
+                            className="flex items-center gap-1 text-xs px-2 py-1 bg-yellow-900/50 hover:bg-yellow-800/60 border border-yellow-700 text-yellow-300 rounded transition-colors"
+                          >
+                            <Lock size={11} />
+                            加入
                           </button>
                         ) : (
                           <button
@@ -336,6 +400,18 @@ export default function HomePage(): JSX.Element {
               className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
             />
 
+            <div className="relative">
+              <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                type="password"
+                placeholder="房間密碼（選填，留空為公開房間）"
+                value={roomPassword}
+                onChange={(e) => setRoomPassword(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreateRoom()}
+                className="w-full bg-avalon-card border border-gray-600 rounded-lg pl-8 pr-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
             <div className="space-y-3">
               <button
                 onClick={handleCreateRoom}
@@ -348,6 +424,7 @@ export default function HomePage(): JSX.Element {
                 onClick={() => {
                   setMode('home');
                   setPlayerName('');
+                  setRoomPassword('');
                 }}
                 className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
               >
@@ -403,6 +480,54 @@ export default function HomePage(): JSX.Element {
         )}
       </div>
     </div>
+
+    {/* Password modal for private rooms */}
+    {pendingJoinRoom && (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+        onClick={() => setPendingJoinRoom(null)}>
+        <div className="bg-avalon-card border border-yellow-600/50 rounded-2xl p-6 w-full max-w-sm space-y-4"
+          onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-2">
+            <Lock size={18} className="text-yellow-400" />
+            <h3 className="font-bold text-white text-lg">私人房間</h3>
+          </div>
+          <p className="text-sm text-gray-400">請輸入 <span className="text-white font-semibold">{pendingJoinRoom.name}</span> 的房間密碼</p>
+          <input
+            type="password"
+            placeholder="房間密碼"
+            value={joinPassword}
+            onChange={e => setJoinPassword(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                joinRoom(pendingJoinRoom.fullId, joinPassword.trim() || undefined);
+                setGameState('lobby');
+                setPendingJoinRoom(null);
+              }
+            }}
+            autoFocus
+            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+          />
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                joinRoom(pendingJoinRoom.fullId, joinPassword.trim() || undefined);
+                setGameState('lobby');
+                setPendingJoinRoom(null);
+              }}
+              className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
+            >
+              加入
+            </button>
+            <button
+              onClick={() => setPendingJoinRoom(null)}
+              className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

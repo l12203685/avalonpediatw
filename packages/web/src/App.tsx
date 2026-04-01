@@ -10,13 +10,36 @@ import LoginPage from './pages/LoginPage';
 import WikiPage from './pages/WikiPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
+import FriendsPage from './pages/FriendsPage';
+import AiStatsPage from './pages/AiStatsPage';
 import ToastContainer from './components/ToastContainer';
 import FloatingControls from './components/FloatingControls';
+import { submitError } from './services/api';
 
 function App(): JSX.Element {
   const { gameState, currentPlayer, socketStatus } = useGameStore();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Global error capture — auto-report JS errors to server
+  useEffect(() => {
+    const handleError = (event: ErrorEvent): void => {
+      const { gameState: gs } = useGameStore.getState();
+      submitError({ message: event.message, stack: event.error?.stack, gameState: gs });
+    };
+    const handleUnhandled = (event: PromiseRejectionEvent): void => {
+      const { gameState: gs } = useGameStore.getState();
+      const msg = event.reason instanceof Error ? event.reason.message : String(event.reason);
+      const stack = event.reason instanceof Error ? event.reason.stack : undefined;
+      submitError({ message: `Unhandled: ${msg}`, stack, gameState: gs });
+    };
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandled);
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandled);
+    };
+  }, []);
 
   useEffect(() => {
     // 處理 Discord / Line OAuth callback（URL 帶有 ?oauth_token=...）
@@ -94,10 +117,12 @@ function App(): JSX.Element {
           {gameState === 'wiki' && <WikiPage />}
           {gameState === 'leaderboard' && <LeaderboardPage />}
           {gameState === 'profile' && <ProfilePage />}
+          {gameState === 'friends' && <FriendsPage />}
+          {gameState === 'aiStats' && <AiStatsPage />}
         </>
       )}
       <ToastContainer />
-      {/* Global floating controls — audio & theme, always accessible */}
+      {/* Global floating controls — audio, theme & feedback, always accessible */}
       {currentPlayer && <FloatingControls />}
     </div>
   );

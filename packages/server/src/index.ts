@@ -8,6 +8,8 @@ import { authenticateSocket } from './middleware/auth';
 import { GameServer } from './socket/GameServer';
 import { authRouter } from './routes/auth';
 import { apiRouter } from './routes/api';
+import { friendsRouter } from './routes/friends';
+import { feedbackRouter } from './routes/feedback';
 import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
 
 const app: Express = express();
@@ -26,6 +28,8 @@ app.use('/auth', authRouter);
 
 // REST API routes
 app.use('/api', apiRouter);
+app.use('/api/friends', friendsRouter);
+app.use('/api/feedback', feedbackRouter);
 
 // HTTP server (needed for Socket.IO)
 const httpServer = createServer(app);

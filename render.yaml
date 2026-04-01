@@ -11,6 +11,11 @@ services:
         value: production
       - key: PORT
         value: 10000
+      # ── Supabase (set via Render dashboard) ──────────────────────────────
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
       # ── Bot secrets (set via Render dashboard or env group) ───────────────
       - key: LINE_BOT_CHANNEL_ACCESS_TOKEN
         sync: false

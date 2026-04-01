@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady } from '../services/socket';
-import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
+import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady, setRoomPassword } from '../services/socket';
+import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown, Lock, Unlock } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
 import ChatPanel from '../components/ChatPanel';
 
@@ -20,8 +20,23 @@ const ROLE_OPTION_INFO: Record<string, { label: string; description: string; pai
 };
 
 export default function LobbyPage(): JSX.Element {
-  const { room, currentPlayer } = useGameStore();
+  const { room, currentPlayer, quickSoloMode, setQuickSoloMode } = useGameStore();
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+
+  // Quick solo mode: auto-fill with 4 normal bots then start when room is ready
+  useEffect(() => {
+    if (!quickSoloMode || !room || !currentPlayer || room.host !== currentPlayer.id) return;
+    const playerCount = Object.keys(room.players).length;
+    if (playerCount < 5) {
+      addBot(room.id, 'normal');
+      return;
+    }
+    // All 4 bots added — start the game and clear the flag
+    setQuickSoloMode(false);
+    setTimeout(() => startGame(room.id), 300);
+  }, [quickSoloMode, room?.id, Object.keys(room?.players ?? {}).length]);
 
   if (!room || !currentPlayer) {
     return <div className="text-center text-white">載入中…</div>;
@@ -154,6 +169,61 @@ export default function LobbyPage(): JSX.Element {
               </div>
             )}
 
+            {/* Password lock (host only) */}
+            {isHost && (
+              <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">房間密碼 (Room Password)</p>
+                  <button
+                    onClick={() => {
+                      if (room.isPrivate) {
+                        setRoomPassword(room.id, null);
+                      } else {
+                        setShowPasswordInput(v => !v);
+                      }
+                    }}
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors ${
+                      room.isPrivate
+                        ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300 hover:bg-yellow-900/60'
+                        : 'bg-gray-800/40 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                    }`}
+                  >
+                    {room.isPrivate ? <><Lock size={11} /> 已加密 — 點擊解鎖</> : <><Unlock size={11} /> 公開 — 點擊設定密碼</>}
+                  </button>
+                </div>
+                {showPasswordInput && !room.isPrivate && (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="password"
+                      placeholder="設定密碼"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newPassword.trim()) {
+                          setRoomPassword(room.id, newPassword.trim());
+                          setNewPassword('');
+                          setShowPasswordInput(false);
+                        }
+                      }}
+                      className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                    />
+                    <button
+                      onClick={() => {
+                        if (newPassword.trim()) {
+                          setRoomPassword(room.id, newPassword.trim());
+                          setNewPassword('');
+                          setShowPasswordInput(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded-lg transition-colors"
+                    >
+                      確認
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Role preview */}
             <div>
               <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
@@ -241,7 +311,9 @@ export default function LobbyPage(): JSX.Element {
                     {player.name}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {player.id === room.host ? '👑 房主 (Host)' : player.isBot ? '🤖 AI 機器人 (Bot)' : '玩家 (Player)'}
+                    {player.id === room.host ? '👑 房主 (Host)' : player.isBot ? (
+                      `🤖 AI 機器人 (${player.botDifficulty === 'easy' ? '簡單' : player.botDifficulty === 'hard' ? '困難' : '普通'})`
+                    ) : '玩家 (Player)'}
                     {player.id === currentPlayer.id && ' · 你 (You)'}
                     {player.status === 'disconnected' && !player.isBot && <span className="text-red-400"> · 斷線 (Disconnected)</span>}
                   </p>
@@ -297,15 +369,40 @@ export default function LobbyPage(): JSX.Element {
                   : `${readyCount}/${humanPlayers.length} 位玩家已準備 (players ready)`}
               </div>
             )}
-            {/* Add Bot button (only if room not full) */}
+            {/* Add Bot buttons with difficulty selection */}
             {playerList.length < room.maxPlayers && (
-              <button
-                onClick={() => addBot(room.id)}
-                className="w-full bg-indigo-700/60 hover:bg-indigo-600/80 border border-indigo-500 text-indigo-200 font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
-              >
-                <Bot size={18} />
-                加入 AI 機器人 (Add AI Bot)
-              </button>
+              <div className="space-y-1.5">
+                <p className="text-xs text-gray-500 text-center font-semibold">加入 AI 機器人 (Add AI Bot)</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { diff: 'easy',   label: '🟢 簡單', desc: '隨機', bg: 'bg-green-900/40 hover:bg-green-800/60 border-green-700 text-green-300' },
+                    { diff: 'normal', label: '🤖 普通', desc: '策略', bg: 'bg-indigo-900/40 hover:bg-indigo-800/60 border-indigo-600 text-indigo-300' },
+                    { diff: 'hard',   label: '🔴 困難', desc: '強化', bg: 'bg-red-900/40 hover:bg-red-800/60 border-red-700 text-red-300' },
+                  ] as const).map(({ diff, label, desc, bg }) => (
+                    <button
+                      key={diff}
+                      onClick={() => addBot(room.id, diff)}
+                      className={`flex flex-col items-center py-2 px-2 rounded-lg border font-semibold text-sm transition-all ${bg}`}
+                    >
+                      <span>{label}</span>
+                      <span className="text-xs opacity-70">{desc}</span>
+                    </button>
+                  ))}
+                </div>
+                {/* Quick fill — fills remaining slots to minimum 5 with normal bots */}
+                {playerList.length < 5 && (
+                  <button
+                    onClick={() => {
+                      const needed = 5 - playerList.length;
+                      for (let i = 0; i < needed; i++) addBot(room.id, 'normal');
+                    }}
+                    className="w-full text-xs py-1.5 bg-gray-800/40 hover:bg-gray-700/50 border border-gray-700 text-gray-400 hover:text-gray-200 rounded-lg transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Bot size={12} />
+                    快速填滿至 5 人 (Fill to 5 with Normal bots)
+                  </button>
+                )}
+              </div>
             )}
             <button
               onClick={() => startGame(room.id)}

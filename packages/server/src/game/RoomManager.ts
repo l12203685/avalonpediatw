@@ -76,6 +76,7 @@ export class RoomManager {
 
   public deleteRoom(roomId: string): void {
     this.rooms.delete(roomId);
+    this.roomPasswords.delete(roomId);
   }
 
   /**
@@ -154,6 +155,7 @@ export class RoomManager {
 
     roomsToDelete.forEach((roomId) => {
       this.rooms.delete(roomId);
+      this.roomPasswords.delete(roomId);
       deletedCount++;
     });
 
@@ -173,5 +175,6 @@ export class RoomManager {
       this.cleanupInterval = null;
     }
     this.rooms.clear();
+    this.roomPasswords.clear();
   }
 }
