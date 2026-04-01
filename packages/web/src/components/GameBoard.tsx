@@ -9,9 +9,19 @@ interface GameBoardProps {
   currentPlayer: Player;
 }
 
+const STATE_LABELS: Record<string, string> = {
+  lobby:      '等待中 (Lobby)',
+  voting:     '投票中 (Voting)',
+  quest:      '任務中 (Quest)',
+  discussion: '刺殺 (Assassination)',
+  ended:      '結束 (Ended)',
+};
+
 export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.Element {
   const playerCount = Object.values(room.players).length;
   const angleSlice = 360 / playerCount;
+  const playerIds = Object.keys(room.players);
+  const leaderId = playerIds[room.leaderIndex % playerIds.length];
 
   // Play sound on state change
   useEffect(() => {
@@ -54,46 +64,15 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
         animate={{ opacity: 1, scale: 1 }}
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center z-10"
       >
-        <motion.div
-          animate={{ y: [0, -5, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="mb-2"
-        >
-          <p className="text-sm text-gray-400">Round {room.currentRound}/{room.maxRounds}</p>
-        </motion.div>
-
         <motion.p
           key={room.state}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="text-2xl font-bold text-white capitalize bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
+          className="text-xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
         >
-          {room.state}
+          {STATE_LABELS[room.state] ?? room.state}
         </motion.p>
-
-        {/* 任務結果指示器 */}
-        <div className="mt-4">
-          {room.questResults.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex justify-center gap-2"
-            >
-              {room.questResults.map((result, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ scale: 0, rotate: -180 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className={`w-4 h-4 rounded-full shadow-lg ${
-                    result === 'success' ? 'bg-avalon-good' : 'bg-avalon-evil'
-                  }`}
-                />
-              ))}
-            </motion.div>
-          )}
-        </div>
 
         {/* 投票計數 */}
         {room.state === 'voting' && (
@@ -102,7 +81,7 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
             animate={{ opacity: 1, y: 0 }}
             className="mt-3 text-xs text-gray-400"
           >
-            <p>{Object.keys(room.votes).length}/{playerCount} voted</p>
+            <p>{Object.keys(room.votes).length}/{playerCount} 人已投票</p>
           </motion.div>
         )}
       </motion.div>
@@ -131,7 +110,14 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
               player={player}
               isCurrentPlayer={player.id === currentPlayer.id}
               hasVoted={room.votes[player.id] !== undefined}
-              voted={room.votes[player.id]}
+              // During voting, only reveal own vote direction; others show as undefined (just "has voted")
+              voted={
+                room.state === 'voting' && player.id !== currentPlayer.id
+                  ? undefined
+                  : room.votes[player.id]
+              }
+              isLeader={player.id === leaderId}
+              isOnQuestTeam={room.questTeam.includes(player.id)}
             />
           </motion.div>
         );

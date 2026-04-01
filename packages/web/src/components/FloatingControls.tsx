@@ -35,7 +35,7 @@ export default function FloatingControls(): JSX.Element {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-6 left-6 z-50">
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -43,12 +43,12 @@ export default function FloatingControls(): JSX.Element {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="absolute bottom-16 right-0 bg-avalon-card border border-gray-600 rounded-lg p-4 w-64 space-y-4 shadow-2xl"
+            className="absolute bottom-16 left-0 bg-avalon-card border border-gray-600 rounded-lg p-4 w-64 space-y-4 shadow-2xl"
           >
             {/* Audio Controls */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-white">Audio</label>
+                <label className="text-sm font-semibold text-white">音效</label>
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
@@ -93,7 +93,7 @@ export default function FloatingControls(): JSX.Element {
 
             {/* Theme Controls */}
             <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold text-white">Theme</label>
+              <label className="text-sm font-semibold text-white">主題</label>
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
@@ -110,8 +110,8 @@ export default function FloatingControls(): JSX.Element {
 
             {/* Info */}
             <div className="text-xs text-gray-400 border-t border-gray-700 pt-2">
-              <p>Audio: {audioEnabled ? 'Enabled' : 'Disabled'}</p>
-              <p>Theme: {theme}</p>
+              <p>音效：{audioEnabled ? '開啟' : '關閉'}</p>
+              <p>主題：{theme === 'dark' ? '深色' : '淺色'}</p>
             </div>
           </motion.div>
         )}

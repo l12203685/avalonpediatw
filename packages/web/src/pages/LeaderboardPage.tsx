@@ -1,357 +1,117 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Trophy, TrendingUp, Users, AlertCircle, Loader } from 'lucide-react';
+import { Trophy, ArrowLeft, Crown, TrendingUp, Users, Loader } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
-import { ALL_BADGES, BADGE_RARITY_COLORS, ROLE_DISPLAY } from '../data/mockData';
-import {
-  fetchLeaderboard,
-  getErrorMessage,
-  LeaderboardEntryApi,
-} from '../services/api';
+import { fetchLeaderboard, LeaderboardEntry } from '../services/api';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const ELO_TIER = (elo: number): { label: string; color: string; icon: string } => {
-  if (elo >= 1800) return { label: '傳奇', color: 'text-yellow-400', icon: '👑' };
-  if (elo >= 1700) return { label: '大師', color: 'text-purple-400', icon: '💎' };
-  if (elo >= 1600) return { label: '白金', color: 'text-cyan-400', icon: '🏆' };
-  if (elo >= 1500) return { label: '黃金', color: 'text-yellow-500', icon: '🥇' };
-  if (elo >= 1400) return { label: '白銀', color: 'text-gray-300', icon: '🥈' };
-  return { label: '青銅', color: 'text-orange-400', icon: '🥉' };
+const PROVIDER_BADGE: Record<string, string> = {
+  google:  'G',
+  discord: 'D',
+  line:    'L',
+  email:   'E',
+  guest:   '?',
 };
 
-function RankMedal({ rank }: { rank: number }): JSX.Element {
-  if (rank === 1) return <span className="text-2xl">🥇</span>;
-  if (rank === 2) return <span className="text-2xl">🥈</span>;
-  if (rank === 3) return <span className="text-2xl">🥉</span>;
-  return <span className="text-gray-400 font-bold text-lg w-8 text-center">{rank}</span>;
-}
-
-// ─── Entry Row ────────────────────────────────────────────────────────────────
-
-function EntryRow({
-  entry,
-  isHighlighted,
-  onClick,
-}: {
-  entry: LeaderboardEntryApi;
-  isHighlighted: boolean;
-  onClick: () => void;
-}): JSX.Element {
-  const tier = ELO_TIER(entry.eloRating);
-  const role = ROLE_DISPLAY[entry.favoriteRole ?? ''];
-
-  return (
-    <motion.tr
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: entry.rank * 0.04 }}
-      whileHover={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
-      onClick={onClick}
-      className={`cursor-pointer border-b border-gray-700/50 transition-colors ${
-        isHighlighted ? 'bg-yellow-900/20 border-yellow-600/30' : ''
-      }`}
-    >
-      <td className="px-4 py-3 text-center w-12">
-        <RankMedal rank={entry.rank} />
-      </td>
-
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold text-white shrink-0">
-            {entry.displayName.charAt(0)}
-          </div>
-          <div>
-            <p className="font-bold text-white">{entry.displayName}</p>
-            <div className="flex items-center gap-1 mt-0.5">
-              {entry.badges.slice(0, 3).map((b) => {
-                const badge = ALL_BADGES.find((x) => x.id === b);
-                return badge ? (
-                  <span key={b} title={badge.name} className="text-sm">
-                    {badge.icon}
-                  </span>
-                ) : null;
-              })}
-              {entry.badges.length > 3 && (
-                <span className="text-xs text-gray-500">+{entry.badges.length - 3}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </td>
-
-      <td className="px-4 py-3 text-center">
-        <div>
-          <span className={`font-bold text-lg ${tier.color}`}>{entry.eloRating}</span>
-          <p className={`text-xs ${tier.color}`}>
-            {tier.icon} {tier.label}
-          </p>
-        </div>
-      </td>
-
-      <td className="px-4 py-3 text-center">
-        <div>
-          <p className="text-white font-semibold">{entry.winRate.toFixed(1)}%</p>
-          <p className="text-xs text-gray-400">
-            {entry.gamesWon}W / {entry.totalGames - entry.gamesWon}L
-          </p>
-        </div>
-      </td>
-
-      <td className="px-4 py-3 text-center hidden md:table-cell">
-        {role ? (
-          <span className={`text-sm font-medium ${role.color}`}>
-            {role.icon} {role.label}
-          </span>
-        ) : (
-          <span className="text-gray-500">—</span>
-        )}
-      </td>
-
-      <td className="px-4 py-3 text-center hidden lg:table-cell">
-        <span className="text-gray-300">{entry.totalGames}</span>
-      </td>
-    </motion.tr>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
+const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600'];
 
 export default function LeaderboardPage(): JSX.Element {
-  const { setGameState } = useGameStore();
-  const [entries, setEntries] = useState<LeaderboardEntryApi[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<LeaderboardEntryApi | null>(null);
+  const { setGameState, navigateToProfile } = useGameStore();
+  const [entries, setEntries]   = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
     fetchLeaderboard()
-      .then((data) => {
-        if (!cancelled) setEntries(data);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(getErrorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+      .then(setEntries)
+      .catch(() => setError('無法載入排行榜，請確認伺服器連線'))
+      .finally(() => setLoading(false));
   }, []);
 
-  const totalGames = entries.reduce((s, e) => s + e.totalGames, 0);
-  const topElo = entries[0]?.eloRating ?? 0;
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black">
-      {/* Back */}
-      <div className="absolute top-4 left-4 z-10">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setGameState('home')}
-          className="flex items-center gap-2 bg-avalon-card/50 hover:bg-avalon-card/80 text-white px-4 py-2 rounded-lg border border-gray-600 transition-all"
-        >
-          <ArrowLeft size={18} />
-          返回
-        </motion.button>
-      </div>
+    <div className="min-h-screen p-4">
+      <div className="max-w-2xl mx-auto space-y-6">
 
-      {/* Hero */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-yellow-600/20 to-orange-600/20 border-b border-gray-700 px-8 pt-16 pb-8 mb-8"
-      >
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <Trophy size={32} className="text-yellow-400" />
-            <h1 className="text-4xl font-bold text-white">排行榜</h1>
-          </div>
-          <p className="text-gray-400 mb-6">全球 Avalon 玩家 ELO 排名</p>
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
-            <div className="bg-avalon-card/50 border border-gray-600 rounded-lg p-3">
-              <p className="text-2xl font-bold text-yellow-400">
-                {loading ? '—' : entries.length}
-              </p>
-              <p className="text-xs text-gray-400">排名玩家</p>
-            </div>
-            <div className="bg-avalon-card/50 border border-gray-600 rounded-lg p-3">
-              <p className="text-2xl font-bold text-blue-400">
-                {loading ? '—' : totalGames}
-              </p>
-              <p className="text-xs text-gray-400">總遊戲場次</p>
-            </div>
-            <div className="bg-avalon-card/50 border border-gray-600 rounded-lg p-3">
-              <p className="text-2xl font-bold text-purple-400">
-                {loading ? '—' : topElo}
-              </p>
-              <p className="text-xs text-gray-400">最高 ELO</p>
-            </div>
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setGameState('home')}
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-avalon-card/50 transition-all"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex items-center gap-2">
+            <Trophy size={24} className="text-yellow-400" />
+            <h1 className="text-2xl font-black text-white">排行榜 (Leaderboard)</h1>
           </div>
         </div>
-      </motion.div>
 
-      <div className="max-w-4xl mx-auto px-4 pb-16">
-        {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center gap-2 text-gray-400 py-16">
-            <Loader size={20} className="animate-spin" />
-            載入排行榜...
+          <div className="flex justify-center pt-10">
+            <Loader size={32} className="animate-spin text-blue-400" />
           </div>
         )}
 
-        {/* Error */}
-        {!loading && error && (
-          <div className="flex items-center gap-2 text-red-400 bg-red-900/20 border border-red-700/40 rounded-lg px-4 py-3 mb-6">
-            <AlertCircle size={18} />
-            載入失敗：{error}
+        {error && (
+          <div className="bg-red-900/50 border border-red-600 rounded-xl p-4 text-red-200 text-sm text-center">
+            {error}
           </div>
         )}
 
-        {/* Tier Legend */}
-        {!loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="flex flex-wrap justify-center gap-3 mb-6"
-          >
-            {[
-              { label: '傳奇', color: 'text-yellow-400', min: 1800, icon: '👑' },
-              { label: '大師', color: 'text-purple-400', min: 1700, icon: '💎' },
-              { label: '白金', color: 'text-cyan-400', min: 1600, icon: '🏆' },
-              { label: '黃金', color: 'text-yellow-500', min: 1500, icon: '🥇' },
-              { label: '白銀', color: 'text-gray-300', min: 1400, icon: '🥈' },
-              { label: '青銅', color: 'text-orange-400', min: 0, icon: '🥉' },
-            ].map((t) => (
-              <span
-                key={t.label}
-                className={`text-xs px-3 py-1 rounded-full bg-gray-800 border border-gray-600 ${t.color}`}
-              >
-                {t.icon} {t.label} ({t.min}+)
-              </span>
-            ))}
-          </motion.div>
-        )}
-
-        {/* Table */}
-        {!loading && entries.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-avalon-card/50 border border-gray-600 rounded-xl overflow-hidden"
-          >
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-600 bg-gray-800/50 text-gray-400 text-sm">
-                  <th className="px-4 py-3 text-center w-12">#</th>
-                  <th className="px-4 py-3 text-left">玩家</th>
-                  <th className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <TrendingUp size={14} />
-                      ELO
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-center">勝率</th>
-                  <th className="px-4 py-3 text-center hidden md:table-cell">慣用角色</th>
-                  <th className="px-4 py-3 text-center hidden lg:table-cell">
-                    <div className="flex items-center justify-center gap-1">
-                      <Users size={14} />
-                      場次
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((entry) => (
-                  <EntryRow
-                    key={entry.userId}
-                    entry={entry}
-                    isHighlighted={selected?.userId === entry.userId}
-                    onClick={() =>
-                      setSelected(selected?.userId === entry.userId ? null : entry)
-                    }
-                  />
-                ))}
-              </tbody>
-            </table>
-          </motion.div>
-        )}
-
-        {/* No data */}
         {!loading && !error && entries.length === 0 && (
-          <div className="text-center text-gray-400 py-16">尚無排行榜資料</div>
+          <div className="text-center py-16 text-gray-500">
+            <Users size={48} className="mx-auto mb-3 opacity-40" />
+            <p>還沒有排行榜資料 (No leaderboard data yet)</p>
+            <p className="text-sm mt-1">完成遊戲後將自動更新 (Auto-updates after completing games)</p>
+          </div>
         )}
 
-        {/* Selected Player Detail */}
-        {selected && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-6 bg-avalon-card/50 border border-yellow-600/40 rounded-xl p-6"
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold text-2xl text-white shrink-0">
-                {selected.displayName.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h3 className="text-2xl font-bold text-white">{selected.displayName}</h3>
-                  <span className={`text-sm font-semibold ${ELO_TIER(selected.eloRating).color}`}>
-                    {ELO_TIER(selected.eloRating).icon} {ELO_TIER(selected.eloRating).label}
-                  </span>
+        {/* List */}
+        {entries.length > 0 && (
+          <div className="space-y-2">
+            {entries.map((entry, idx) => (
+              <button
+                key={entry.id}
+                onClick={() => navigateToProfile(entry.id)}
+                className="w-full bg-avalon-card/60 hover:bg-avalon-card/90 border border-gray-700 hover:border-blue-500/50 rounded-xl p-4 flex items-center gap-4 transition-all text-left"
+              >
+                {/* Rank */}
+                <div className={`w-8 text-center font-black text-lg ${RANK_COLORS[idx] ?? 'text-gray-500'}`}>
+                  {idx === 0 ? <Crown size={20} className="mx-auto text-yellow-400" /> : idx + 1}
                 </div>
-                <p className="text-gray-400 text-sm mt-1">
-                  ELO {selected.eloRating} · {selected.totalGames} 場 ·{' '}
-                  {selected.winRate.toFixed(1)}% 勝率
-                </p>
 
-                {/* Badges */}
-                <div className="mt-4">
-                  <p className="text-xs text-gray-500 mb-2">徽章</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selected.badges.map((bid) => {
-                      const badge = ALL_BADGES.find((b) => b.id === bid);
-                      if (!badge) return null;
-                      return (
-                        <motion.div
-                          key={bid}
-                          whileHover={{ scale: 1.05 }}
-                          title={badge.description}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-gray-800/60 text-xs font-medium cursor-default ${BADGE_RARITY_COLORS[badge.rarity]}`}
-                        >
-                          <span>{badge.icon}</span>
-                          <span>{badge.name}</span>
-                        </motion.div>
-                      );
-                    })}
+                {/* Avatar */}
+                {entry.photo_url ? (
+                  <img src={entry.photo_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                    {entry.display_name[0]?.toUpperCase()}
+                  </div>
+                )}
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-white truncate">{entry.display_name}</span>
+                    <span className="text-xs px-1.5 py-0.5 bg-gray-700 rounded text-gray-400">
+                      {PROVIDER_BADGE[entry.provider] ?? '?'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                    <span>{entry.total_games} 局 (games)</span>
+                    <span className="text-green-400">{entry.win_rate}% 勝率 (win rate)</span>
                   </div>
                 </div>
-              </div>
 
-              <div className="text-4xl shrink-0">
-                {selected.rank === 1
-                  ? '🥇'
-                  : selected.rank === 2
-                  ? '🥈'
-                  : selected.rank === 3
-                  ? '🥉'
-                  : (
-                    <span className="text-gray-400 font-bold text-2xl">#{selected.rank}</span>
-                  )}
-              </div>
-            </div>
-          </motion.div>
+                {/* ELO */}
+                <div className="text-right">
+                  <div className="flex items-center gap-1 justify-end">
+                    <TrendingUp size={14} className="text-blue-400" />
+                    <span className="font-bold text-white text-lg">{entry.elo_rating}</span>
+                  </div>
+                  <div className="text-xs text-gray-500">ELO</div>
+                </div>
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>

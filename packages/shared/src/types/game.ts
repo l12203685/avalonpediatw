@@ -8,12 +8,14 @@ export type GameState = 'lobby' | 'voting' | 'quest' | 'discussion' | 'ended';
 
 // Player Roles (Standard Avalon)
 export type Role =
-  | 'merlin'      // Good - Knows all Evil players
+  | 'merlin'      // Good - Knows all Evil players (except Mordred)
   | 'percival'    // Good - Knows Merlin (but might see Morgana)
   | 'loyal'       // Good - No special info
-  | 'assassin'    // Evil - Can kill Merlin at end
-  | 'morgana'     // Evil - Appears to Merlin as Evil
-  | 'oberon';     // Evil - Hidden from Evil players (optional)
+  | 'assassin'    // Evil - Can kill Merlin at end; knows teammates
+  | 'morgana'     // Evil - Appears to Percival as possible Merlin; knows teammates
+  | 'oberon'      // Evil - Hidden from Evil players (and can't see them)
+  | 'mordred'     // Evil - Hidden from Merlin; knows other evil teammates
+  | 'minion';     // Evil - Generic evil minion (substitute when optional evil roles disabled)
 
 export type Team = 'good' | 'evil';
 
@@ -35,6 +37,7 @@ export interface Player {
   role: Role | null;
   team: Team | null;
   status: PlayerStatus;
+  isBot?: boolean;  // true = AI-controlled player
   vote?: boolean | null; // true = approve, false = reject, null = not voted
   kills?: string[]; // IDs of players killed (for assassin)
   createdAt: number;
@@ -55,8 +58,23 @@ export interface Room {
   failCount: number; // Number of failed votes
   evilWins: boolean | null; // null = not ended, true = evil won, false = good won
   leaderIndex: number; // Index of current quest leader in player list
+  voteHistory: VoteRecord[];   // All team-vote records (public info for deduction)
+  questHistory: QuestRecord[]; // All completed quest records
+  questVotedCount: number;     // How many quest team members have submitted their vote (count only, not direction)
+  endReason?: 'failed_quests' | 'vote_rejections' | 'merlin_assassinated' | 'assassination_failed' | 'assassination_timeout'; // Why game ended
+  assassinTargetId?: string;   // ID of the player the assassin targeted (set on game end)
+  roleOptions: RoleOptions;    // Host-configured optional role toggles
+  readyPlayerIds: string[];    // Player IDs who clicked "Ready" in lobby
   createdAt: number;
   updatedAt: number;
+}
+
+/** Host-configurable role toggles for optional special roles */
+export interface RoleOptions {
+  percival: boolean;  // Include Percival + Morgana (must be toggled together for balance)
+  morgana: boolean;   // Include Morgana (paired with Percival)
+  oberon: boolean;    // Include Oberon (evil unknown to other evil)
+  mordred: boolean;   // Include Mordred (hidden from Merlin)
 }
 
 export interface GameConfig {
@@ -65,6 +83,7 @@ export interface GameConfig {
   maxFailedVotes: number;
   roles: Role[];
   questTeams: number[]; // Team sizes for each round
+  questFailsRequired: number[]; // Fail votes needed per round (usually 1; round 4 in 7+ player = 2)
 }
 
 // Game Statistics
@@ -103,6 +122,24 @@ export interface ServerToClientEvents {
   'error': (message: string) => void;
 }
 
+// Public vote record (all votes are public in Avalon)
+export interface VoteRecord {
+  round:    number;
+  attempt:  number;   // attempt number within the round (1-5)
+  leader:   string;   // player ID of the leader who proposed the team
+  team:     string[]; // proposed team player IDs
+  approved: boolean;  // true = team approved, false = rejected
+  votes:    Record<string, boolean>; // playerId -> vote
+}
+
+// Quest outcome record
+export interface QuestRecord {
+  round:     number;
+  team:      string[]; // player IDs on the quest
+  result:    'success' | 'fail';
+  failCount: number;   // number of fail votes submitted
+}
+
 export interface ChatMessage {
   id: string;
   roomId: string;
@@ -112,70 +149,82 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-// Avalon Game Rules
+// Avalon Game Rules — standard player counts, team sizes, and role assignments
 export const AVALON_CONFIG: Record<number, GameConfig> = {
   5: {
+    // 3 good, 2 evil
     minPlayers: 5,
     maxPlayers: 5,
-    maxFailedVotes: 3,
+    maxFailedVotes: 5,
     roles: ['merlin', 'percival', 'loyal', 'assassin', 'morgana'],
     questTeams: [2, 3, 2, 3, 3],
+    questFailsRequired: [1, 1, 1, 1, 1],
   },
   6: {
+    // 4 good, 2 evil
     minPlayers: 6,
     maxPlayers: 6,
-    maxFailedVotes: 3,
+    maxFailedVotes: 5,
     roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana'],
     questTeams: [2, 3, 4, 3, 4],
+    questFailsRequired: [1, 1, 1, 1, 1],
   },
   7: {
+    // 4 good, 3 evil — Round 4 requires 2 fail votes
     minPlayers: 7,
     maxPlayers: 7,
-    maxFailedVotes: 3,
-    roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana', 'morgana'],
+    maxFailedVotes: 5,
+    roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana', 'oberon'],
     questTeams: [2, 3, 3, 4, 4],
+    questFailsRequired: [1, 1, 1, 2, 1],
   },
   8: {
+    // 5 good, 3 evil — Round 4 requires 2 fail votes
     minPlayers: 8,
     maxPlayers: 8,
-    maxFailedVotes: 3,
-    roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana', 'morgana', 'oberon'],
+    maxFailedVotes: 5,
+    roles: ['merlin', 'percival', 'loyal', 'loyal', 'loyal', 'assassin', 'morgana', 'mordred'],
     questTeams: [3, 4, 4, 5, 5],
+    questFailsRequired: [1, 1, 1, 2, 1],
   },
   9: {
+    // 6 good, 3 evil — Round 4 requires 2 fail votes
     minPlayers: 9,
     maxPlayers: 9,
-    maxFailedVotes: 3,
+    maxFailedVotes: 5,
     roles: [
       'merlin',
       'percival',
       'loyal',
       'loyal',
       'loyal',
+      'loyal',
       'assassin',
       'morgana',
+      'mordred',
+    ],
+    questTeams: [3, 4, 4, 5, 5],
+    questFailsRequired: [1, 1, 1, 2, 1],
+  },
+  10: {
+    // 6 good, 4 evil — Round 4 requires 2 fail votes
+    minPlayers: 10,
+    maxPlayers: 10,
+    maxFailedVotes: 5,
+    roles: [
+      'merlin',
+      'percival',
+      'loyal',
+      'loyal',
+      'loyal',
+      'loyal',
+      'assassin',
       'morgana',
+      'mordred',
       'oberon',
     ],
     questTeams: [3, 4, 4, 5, 5],
-  },
-  10: {
-    minPlayers: 10,
-    maxPlayers: 10,
-    maxFailedVotes: 3,
-    roles: [
-      'merlin',
-      'percival',
-      'loyal',
-      'loyal',
-      'loyal',
-      'loyal',
-      'assassin',
-      'morgana',
-      'morgana',
-      'oberon',
-    ],
-    questTeams: [3, 4, 5, 5, 5],
+    questFailsRequired: [1, 1, 1, 2, 1],
   },
 };
 

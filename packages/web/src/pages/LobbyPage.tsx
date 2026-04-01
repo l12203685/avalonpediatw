@@ -1,193 +1,357 @@
-import { motion } from 'framer-motion';
+import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { startGame } from '../services/socket';
-import { toast } from '../store/toastStore';
-import { Users, Play, Link, Crown } from 'lucide-react';
+import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady } from '../services/socket';
+import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
+import { AVALON_CONFIG } from '@avalon/shared';
+import ChatPanel from '../components/ChatPanel';
+
+const ROLE_LABEL: Record<string, string> = {
+  merlin: '梅林', percival: '派西維爾', loyal: '忠臣',
+  assassin: '刺客', morgana: '莫甘娜', oberon: '奧伯倫', mordred: '莫德雷德', minion: '爪牙',
+};
+const GOOD_ROLES = new Set(['merlin', 'percival', 'loyal']);
+
+// Describe what enabling each optional role does
+const ROLE_OPTION_INFO: Record<string, { label: string; description: string; paired?: string }> = {
+  percival: { label: '派西維爾', description: '派西維爾看到梅林（以及莫甘娜，若啟用）', paired: 'morgana' },
+  morgana:  { label: '莫甘娜',   description: '莫甘娜偽裝成梅林，混淆派西維爾',        paired: 'percival' },
+  mordred:  { label: '莫德雷德', description: '莫德雷德對梅林隱形，危險的隱藏邪惡' },
+  oberon:   { label: '奧伯倫',   description: '奧伯倫對邪惡陣營隱形（孤獨邪惡）' },
+};
 
 export default function LobbyPage(): JSX.Element {
   const { room, currentPlayer } = useGameStore();
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
 
   if (!room || !currentPlayer) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-white text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-400 mb-3" />
-          <p>連接中...</p>
-        </div>
-      </div>
-    );
+    return <div className="text-center text-white">載入中…</div>;
   }
 
   const playerList = Object.values(room.players);
   const isHost = room.host === currentPlayer.id;
   const canStart = playerList.length >= 5;
+  const readyIds = room.readyPlayerIds ?? [];
+  const isReady = readyIds.includes(currentPlayer.id);
+  const humanPlayers = playerList.filter(p => !p.isBot && p.id !== room.host);
+  const readyCount = humanPlayers.filter(p => readyIds.includes(p.id)).length;
+  const shortCode = room.id.slice(0, 8).toUpperCase();
 
-  const handleCopyInvite = () => {
-    const url = `${window.location.origin}${window.location.pathname}?room=${room.id}`;
-    navigator.clipboard
-      .writeText(url)
-      .then(() => toast.success('邀請連結已複製！'))
-      .catch(() => toast.error('複製失敗，請手動複製'));
+  // Role preview based on current player count
+  const previewConfig = AVALON_CONFIG[playerList.length];
+  // Apply roleOptions to get effective role list for preview
+  const effectiveRoles = previewConfig?.roles.map(r => {
+    if (r === 'percival' && !room.roleOptions?.percival) return 'loyal';
+    if (r === 'morgana'  && !room.roleOptions?.morgana)  return 'minion';
+    if (r === 'oberon'   && !room.roleOptions?.oberon)   return 'minion';
+    if (r === 'mordred'  && !room.roleOptions?.mordred)  return 'minion';
+    return r;
+  }) ?? [];
+  const goodRoles  = effectiveRoles.filter(r => GOOD_ROLES.has(r));
+  const evilRoles  = effectiveRoles.filter(r => !GOOD_ROLES.has(r));
+
+  const handleToggleRole = (key: string) => {
+    if (!room.roleOptions) return;
+    const opts = (room.roleOptions as unknown) as Record<string, boolean>;
+    const newVal = !opts[key];
+    // Percival and Morgana are paired — toggle together
+    const info = ROLE_OPTION_INFO[key];
+    const updates: Record<string, boolean> = { [key]: newVal };
+    if (info.paired) updates[info.paired] = newVal;
+    setRoleOptions(room.id, updates);
   };
 
-  const handleStartGame = () => {
-    try {
-      startGame(room.id);
-    } catch {
-      toast.error('無法啟動遊戲，請確認連線狀態');
-    }
+  const handleCopyRoomId = () => {
+    navigator.clipboard.writeText(shortCode).then(() => {
+      setCopied('code');
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const handleCopyLink = () => {
+    const link = `${window.location.origin}/?room=${shortCode}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied('link');
+      setTimeout(() => setCopied(null), 2000);
+    });
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4 bg-gradient-to-br from-avalon-dark via-avalon-card to-avalon-dark">
+    <>
+    <div className="flex items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-2xl space-y-6">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <h1 className="text-4xl font-bold text-white mb-1">{room.name}</h1>
-          <div className="flex items-center justify-center gap-3 mt-2">
-            <span className="text-gray-400 text-sm font-mono tracking-widest bg-gray-800 px-3 py-1 rounded-lg">
-              {room.id}
-            </span>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleCopyInvite}
-              className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-sm bg-blue-900/30 border border-blue-600/40 px-3 py-1 rounded-lg transition-colors"
-            >
-              <Link size={14} />
-              邀請連結
-            </motion.button>
-          </div>
-        </motion.div>
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-white mb-3">{room.name}</h1>
 
-        {/* Player Grid */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-avalon-card/50 border border-gray-600 rounded-xl p-6"
-        >
+          {/* Room ID with copy buttons */}
+          <div className="inline-flex items-center gap-3 bg-avalon-card/50 border border-gray-600 rounded-xl px-5 py-3">
+            <div className="text-left">
+              <p className="text-xs text-gray-500 mb-1">房間代碼 (Room Code — share with friends)</p>
+              <p className="text-lg font-mono font-bold text-yellow-400 tracking-widest">{shortCode}</p>
+            </div>
+            <button
+              onClick={handleCopyRoomId}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                copied === 'code'
+                  ? 'bg-green-700/60 text-green-300 border border-green-600'
+                  : 'bg-gray-700/60 hover:bg-gray-600/60 text-gray-300 border border-gray-600'
+              }`}
+            >
+              {copied === 'code' ? <Check size={15} /> : <Copy size={15} />}
+              {copied === 'code' ? '已複製！' : '複製'}
+            </button>
+            <button
+              onClick={handleCopyLink}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                copied === 'link'
+                  ? 'bg-green-700/60 text-green-300 border border-green-600'
+                  : 'bg-blue-700/60 hover:bg-blue-600/60 text-blue-300 border border-blue-600'
+              }`}
+              title="複製邀請連結 (Copy invite link)"
+            >
+              {copied === 'link' ? <Check size={15} /> : <Link size={15} />}
+              {copied === 'link' ? '已複製！' : '邀請連結 (Invite Link)'}
+            </button>
+          </div>
+        </div>
+
+        {/* Role configuration + preview */}
+        {previewConfig && (
+          <div className="bg-avalon-card/30 border border-gray-700 rounded-xl px-4 py-3 space-y-3">
+            {/* Optional role toggles (host only) */}
+            {isHost && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">特殊角色設定 (Role Configuration)</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.keys(ROLE_OPTION_INFO) as (keyof typeof ROLE_OPTION_INFO)[]).map(key => {
+                    const info = ROLE_OPTION_INFO[key];
+                    const enabled = Boolean(((room.roleOptions as unknown) as Record<string, boolean>)?.[key]);
+                    // Skip paired role (morgana is controlled by percival toggle)
+                    if (key === 'morgana') return null;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => handleToggleRole(key)}
+                        className={`text-left px-3 py-2 rounded-lg border text-xs transition-all ${
+                          enabled
+                            ? 'bg-purple-900/40 border-purple-600 text-purple-200'
+                            : 'bg-gray-800/40 border-gray-700 text-gray-500 hover:border-gray-500'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-bold">
+                            {key === 'percival' ? '派西維爾 + 莫甘娜' : info.label}
+                          </span>
+                          <span className={`text-xs font-bold ${enabled ? 'text-purple-400' : 'text-gray-600'}`}>
+                            {enabled ? '開' : '關'}
+                          </span>
+                        </div>
+                        <p className="text-gray-500 text-xs leading-tight">{info.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Role preview */}
+            <div>
+              <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
+                {playerList.length} 人局角色預覽
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {[...goodRoles, ...evilRoles].map((role, i) => (
+                  <span
+                    key={i}
+                    className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
+                      GOOD_ROLES.has(role)
+                        ? 'bg-blue-900/40 border-blue-700/60 text-blue-300'
+                        : 'bg-red-900/40 border-red-700/60 text-red-300'
+                    }`}
+                  >
+                    {ROLE_LABEL[role] ?? role}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Players */}
+        <div className="bg-avalon-card/50 border border-gray-600 rounded-lg p-6">
           <div className="flex items-center gap-2 mb-5">
-            <Users size={20} className="text-blue-400" />
-            <h2 className="text-lg font-bold text-white">
+            <Users size={22} />
+            <h2 className="text-xl font-bold">
               玩家列表 ({playerList.length}/{room.maxPlayers})
             </h2>
-            {!canStart && (
-              <span className="text-xs text-yellow-400 bg-yellow-900/30 border border-yellow-600/40 px-2 py-0.5 rounded-full ml-auto">
-                至少 5 人才能開始
+            {/* Host: adjust max players */}
+            {isHost && (
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  onClick={() => setMaxPlayers(room.id, room.maxPlayers - 1)}
+                  disabled={room.maxPlayers <= Math.max(5, playerList.length)}
+                  className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="減少人數上限"
+                >
+                  <ChevronDown size={14} />
+                </button>
+                <span className="text-xs text-gray-400 w-8 text-center">{room.maxPlayers}人</span>
+                <button
+                  onClick={() => setMaxPlayers(room.id, room.maxPlayers + 1)}
+                  disabled={room.maxPlayers >= 10}
+                  className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="增加人數上限"
+                >
+                  <ChevronUp size={14} />
+                </button>
+              </div>
+            )}
+            {!isHost && !canStart && (
+              <span className="ml-auto text-xs text-yellow-400 bg-yellow-900/30 border border-yellow-700 px-2 py-1 rounded-full">
+                還需要 {5 - playerList.length} 人
               </span>
             )}
           </div>
 
-          {/* Player slots */}
           <div className="grid grid-cols-2 gap-3">
-            {playerList.map((player, idx) => {
-              const isMe = player.id === currentPlayer.id;
-              const isDisconnected = player.status === 'disconnected';
-              const isRoomHost = player.id === room.host;
-
-              return (
-                <motion.div
-                  key={player.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                    isMe
-                      ? 'border-yellow-500/60 bg-yellow-900/20'
-                      : isDisconnected
-                      ? 'border-gray-600/30 bg-gray-800/20 opacity-60'
-                      : 'border-gray-600 bg-avalon-dark/60'
-                  }`}
-                >
-                  {/* Avatar */}
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
-                      isMe
-                        ? 'bg-gradient-to-br from-yellow-400 to-yellow-500 text-black'
-                        : 'bg-gradient-to-br from-blue-500 to-purple-500 text-white'
-                    }`}
-                  >
+            {playerList.map((player) => (
+              <div
+                key={player.id}
+                className={`bg-avalon-dark rounded-lg p-3 border flex items-center gap-3 ${
+                  player.id === currentPlayer.id
+                    ? 'border-blue-500/60 bg-blue-900/20'
+                    : player.isBot
+                    ? 'border-indigo-600/50 bg-indigo-900/10'
+                    : 'border-gray-600'
+                }`}
+              >
+                {player.isBot ? (
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600">
+                    <Bot size={18} />
+                  </div>
+                ) : player.avatar ? (
+                  <img src={player.avatar} alt={player.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-gray-600" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-gradient-to-br from-blue-400 to-purple-400">
                     {player.name.charAt(0).toUpperCase()}
                   </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-semibold text-white text-sm truncate">{player.name}</p>
-                      {isMe && (
-                        <span className="text-xs text-yellow-400 shrink-0">（我）</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      {isRoomHost && (
-                        <span className="flex items-center gap-0.5 text-xs text-yellow-400">
-                          <Crown size={11} />
-                          房主
-                        </span>
-                      )}
-                      {isDisconnected && (
-                        <span className="text-xs text-red-400">斷線</span>
-                      )}
-                      {!isRoomHost && !isDisconnected && (
-                        <span className="text-xs text-gray-500">玩家</span>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-
-            {/* Empty slots */}
-            {Array.from({ length: room.maxPlayers - playerList.length }).map((_, i) => (
-              <div
-                key={`empty-${i}`}
-                className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-gray-700 opacity-40"
-              >
-                <div className="w-10 h-10 rounded-full bg-gray-700 shrink-0" />
-                <p className="text-gray-600 text-sm">等待玩家加入...</p>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className={`font-bold truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
+                    {player.name}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {player.id === room.host ? '👑 房主 (Host)' : player.isBot ? '🤖 AI 機器人 (Bot)' : '玩家 (Player)'}
+                    {player.id === currentPlayer.id && ' · 你 (You)'}
+                    {player.status === 'disconnected' && !player.isBot && <span className="text-red-400"> · 斷線 (Disconnected)</span>}
+                  </p>
+                </div>
+                {/* Ready badge */}
+                {!player.isBot && player.id !== room.host && (
+                  <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-bold border ${
+                    readyIds.includes(player.id)
+                      ? 'bg-green-900/50 border-green-600 text-green-300'
+                      : 'bg-gray-800/50 border-gray-700 text-gray-600'
+                  }`}>
+                    {readyIds.includes(player.id) ? '✓ 準備' : '…'}
+                  </span>
+                )}
+                {isHost && player.id !== currentPlayer.id && (
+                  <button
+                    onClick={() => player.isBot ? removeBot(room.id, player.id) : kickPlayer(room.id, player.id)}
+                    className="flex-shrink-0 p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                    title={player.isBot ? `移除機器人 (Remove Bot)` : `踢出 ${player.name} (Kick)`}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
 
-        {/* Start / Waiting */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          {isHost ? (
-            <motion.button
-              whileHover={canStart ? { scale: 1.02 } : {}}
-              whileTap={canStart ? { scale: 0.98 } : {}}
-              onClick={handleStartGame}
+        {/* Start Button */}
+        {isHost && (
+          <div className="space-y-3">
+            <button
+              onClick={() => leaveRoom(room.id)}
+              className="w-full flex items-center justify-center gap-2 bg-gray-800/40 hover:bg-red-900/20 border border-gray-700 hover:border-red-700 text-gray-500 hover:text-red-400 font-medium py-1.5 px-4 rounded-lg transition-all text-xs"
+            >
+              <LogOut size={13} />
+              解散房間 / 移交房主 (Leave / Transfer host)
+            </button>
+            {!canStart && (
+              <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 text-yellow-200 text-sm text-center">
+                至少需要 5 名玩家才能開始（目前 {playerList.length} 人）(At least 5 players required to start)
+              </div>
+            )}
+            {/* Ready status summary */}
+            {humanPlayers.length > 0 && (
+              <div className={`text-sm text-center py-2 rounded-lg border ${
+                readyCount === humanPlayers.length
+                  ? 'bg-green-900/30 border-green-700 text-green-300'
+                  : 'bg-gray-800/30 border-gray-700 text-gray-400'
+              }`}>
+                {readyCount === humanPlayers.length
+                  ? `✓ 所有玩家已準備好！(All ${readyCount} players ready)`
+                  : `${readyCount}/${humanPlayers.length} 位玩家已準備 (players ready)`}
+              </div>
+            )}
+            {/* Add Bot button (only if room not full) */}
+            {playerList.length < room.maxPlayers && (
+              <button
+                onClick={() => addBot(room.id)}
+                className="w-full bg-indigo-700/60 hover:bg-indigo-600/80 border border-indigo-500 text-indigo-200 font-semibold py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2"
+              >
+                <Bot size={18} />
+                加入 AI 機器人 (Add AI Bot)
+              </button>
+            )}
+            <button
+              onClick={() => startGame(room.id)}
               disabled={!canStart}
-              className={`w-full font-bold py-4 px-6 rounded-xl transition-all flex items-center justify-center gap-2 text-lg ${
+              className={`w-full font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 ${
                 canStart
                   ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-green-500/30'
                   : 'bg-gray-700 text-gray-500 cursor-not-allowed'
               }`}
             >
-              <Play size={22} />
-              開始遊戲
-            </motion.button>
-          ) : (
-            <div className="text-center py-4 bg-avalon-card/30 border border-gray-700 rounded-xl">
-              <motion.div
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="text-gray-400"
-              >
-                等待房主開始遊戲...
-              </motion.div>
+              <Play size={20} />
+              開始遊戲 (Start Game)
+            </button>
+          </div>
+        )}
+
+        {!isHost && (
+          <div className="space-y-3">
+            {/* Ready button for non-host players */}
+            <button
+              onClick={() => toggleReady(room.id, currentPlayer.id)}
+              className={`w-full font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 border-2 ${
+                isReady
+                  ? 'bg-green-900/50 border-green-500 text-green-300 hover:bg-red-900/30 hover:border-red-600 hover:text-red-300'
+                  : 'bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-green-900/30 hover:border-green-600 hover:text-green-300'
+              }`}
+            >
+              {isReady ? '✓ 已準備（點擊取消）' : '準備好了 (Ready)'}
+            </button>
+            <div className="text-center text-gray-500 text-sm py-1">
+              等待房主開始遊戲... (Waiting for host to start the game...)
             </div>
-          )}
-        </motion.div>
+            <button
+              onClick={() => leaveRoom(room.id)}
+              className="w-full flex items-center justify-center gap-2 bg-gray-800/60 hover:bg-red-900/30 border border-gray-600 hover:border-red-600 text-gray-400 hover:text-red-400 font-semibold py-2 px-4 rounded-lg transition-all text-sm"
+            >
+              <LogOut size={16} />
+              離開房間 (Leave Room)
+            </button>
+          </div>
+        )}
       </div>
     </div>
+
+    {/* Floating chat — available in lobby */}
+    <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} />
+    </>
   );
 }

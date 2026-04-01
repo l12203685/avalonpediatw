@@ -3,7 +3,7 @@
  * Shared between frontend and backend
  */
 
-export type AuthProvider = 'google' | 'github' | 'anonymous';
+export type AuthProvider = 'google' | 'discord' | 'line' | 'email' | 'guest';
 
 export interface User {
   uid: string;

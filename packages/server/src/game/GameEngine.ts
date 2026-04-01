@@ -1,28 +1,19 @@
-import { Room, Role, AVALON_CONFIG, Player, GameState } from '@avalon/shared';
+import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord } from '@avalon/shared';
 
-const VOTE_TIMEOUT_MS = 30000; // 30秒投票時限
-const QUEST_TIMEOUT_MS = 30000; // 30秒任務投票時限
-const ASSASSINATION_TIMEOUT_MS = 30000; // 30秒刺殺時限
+const VOTE_TIMEOUT_MS = 60000; // 60秒隊伍投票時限
+const QUEST_TIMEOUT_MS = 60000; // 60秒任務投票時限
+const ASSASSINATION_TIMEOUT_MS = 120000; // 2分鐘刺殺時限
 
 interface QuestVote {
   playerId: string;
   vote: 'success' | 'fail';
 }
 
-/** Called by GameServer to receive room updates triggered by internal timeouts. */
-export type RoomUpdateCallback = (room: Room) => void;
-
-/**
- * Serialised snapshot of all GameEngine internal state.
- * Used for mid-game server-restart recovery.
- */
-export interface GameEngineState {
-  /** Schema version — bump when fields are added/removed. */
-  version: 1;
-  roomId: string;
-  roleAssignments: Record<string, Role>;
-  questVotes: QuestVote[];
-  currentLeaderIndex: number;
+export interface GameEventRecord {
+  seq:        number;
+  event_type: string;
+  actor_id:   string | null;
+  event_data: Record<string, unknown>;
 }
 
 export class GameEngine {
@@ -31,15 +22,25 @@ export class GameEngine {
   private voteTimeout: NodeJS.Timeout | null = null;
   private questVoteTimeout: NodeJS.Timeout | null = null;
   private assassinationTimeout: NodeJS.Timeout | null = null;
-  private onUpdate: RoomUpdateCallback;
+  private onStateChange: ((room: Room) => void) | null = null;
 
   // Quest phase tracking
   private questVotes: QuestVote[] = [];
   private currentLeaderIndex: number = 0;
+  private voteAttemptInRound: number = 0; // tracks attempt number within a round
 
-  constructor(room: Room, onUpdate: RoomUpdateCallback = () => {}) {
+  // In-memory event buffer (flushed to Supabase on game end)
+  private eventBuffer: GameEventRecord[] = [];
+  private eventSeq: number = 0;
+
+  constructor(room: Room, onStateChange?: (room: Room) => void) {
     this.room = room;
-    this.onUpdate = onUpdate;
+    this.onStateChange = onStateChange ?? null;
+  }
+
+  /** Returns the buffered event log for persistence */
+  public getEventLog(): GameEventRecord[] {
+    return this.eventBuffer;
   }
 
   public startGame(): void {
@@ -61,16 +62,48 @@ export class GameEngine {
     this.room.failCount = 0;
     this.room.evilWins = null;
     this.room.leaderIndex = 0;
+    this.room.voteHistory = [];
+    this.room.questHistory = [];
+    this.room.questVotedCount = 0;
     this.questVotes = [];
     this.currentLeaderIndex = 0;
+    this.voteAttemptInRound = 0;
 
+    // Build player name map for replay readability
+    const playerNames: Record<string, string> = {};
+    for (const [id, p] of Object.entries(this.room.players)) {
+      playerNames[id] = p.name;
+    }
     this.logEvent('game_started', {
       playerCount,
-      roles: Array.from(this.roleAssignments.values())
+      roles: Array.from(this.roleAssignments.values()),
+      playerNames,
+      leaderId: Object.keys(this.room.players)[0],
+      leaderName: Object.values(this.room.players)[0]?.name ?? '',
     });
 
-    // Start voting phase with timeout
-    this.startVotingPhase();
+    // Don't start vote timer yet — it starts when leader confirms the quest team
+  }
+
+  private startQuestPhase(): void {
+    if (this.questVoteTimeout) {
+      clearTimeout(this.questVoteTimeout);
+      this.questVoteTimeout = null;
+    }
+
+    this.questVoteTimeout = setTimeout(() => {
+      if (this.room.state === 'quest') {
+        // Auto-vote success for any team members who didn't vote in time
+        const unvoted = this.room.questTeam.filter(
+          id => !this.questVotes.some(q => q.playerId === id)
+        );
+        unvoted.forEach(id => {
+          this.questVotes.push({ playerId: id, vote: 'success' });
+        });
+        this.resolveQuestPhase();
+        this.onStateChange?.(this.room);
+      }
+    }, QUEST_TIMEOUT_MS);
   }
 
   private startVotingPhase(): void {
@@ -80,11 +113,16 @@ export class GameEngine {
       this.voteTimeout = null;
     }
 
-    // Log voting phase start
+    // Log voting phase start (include leaderId and failedVotes for replay display)
+    const playerIds = Object.keys(this.room.players);
+    const leaderId = playerIds[this.currentLeaderIndex % playerIds.length];
     this.logEvent('voting_phase_started', {
       round: this.room.currentRound,
+      failedVotes: this.room.failCount,
       failCount: this.room.failCount,
-      playerCount: Object.keys(this.room.players).length
+      playerCount: playerIds.length,
+      leaderId,
+      leaderName: this.room.players[leaderId]?.name ?? leaderId,
     });
 
     // Set vote timeout
@@ -96,17 +134,18 @@ export class GameEngine {
   }
 
   private handleVoteTimeout(): void {
-    // Auto-vote reject for players who didn't vote
+    // Auto-vote for players who didn't vote (reject as default)
     const unvotedPlayers = Object.keys(this.room.players).filter(
       (id) => !(id in this.room.votes)
     );
+
     unvotedPlayers.forEach((playerId) => {
       this.room.votes[playerId] = false;
     });
 
+    // Resolve voting and broadcast
     this.resolveVoting();
-    // Notify GameServer that state changed due to timeout
-    this.onUpdate(this.room);
+    this.onStateChange?.(this.room);
   }
 
   private assignRoles(playerCount: number): void {
@@ -115,8 +154,19 @@ export class GameEngine {
       throw new Error(`No config for ${playerCount} players`);
     }
 
+    // Fallback: if roleOptions is missing (legacy room), treat all as enabled
+    const opts = this.room.roleOptions ?? { percival: true, morgana: true, oberon: true, mordred: true };
+    // Build role list from config, substituting disabled optional roles
+    const roles = config.roles.map(role => {
+      if (role === 'percival'  && !opts.percival)  return 'loyal' as Role;
+      if (role === 'morgana'   && !opts.morgana)   return 'minion' as Role;
+      if (role === 'oberon'    && !opts.oberon)    return 'minion' as Role;
+      if (role === 'mordred'   && !opts.mordred)   return 'minion' as Role;
+      return role;
+    });
+
     const playerIds = Object.keys(this.room.players);
-    const rolesShuffled = this.shuffleArray([...config.roles]);
+    const rolesShuffled = this.shuffleArray([...roles]);
 
     // Assign roles to players
     playerIds.forEach((playerId, index) => {
@@ -181,6 +231,18 @@ export class GameEngine {
       this.voteTimeout = null;
     }
 
+    // Record this vote round in public history
+    this.voteAttemptInRound++;
+    const voteRecord: VoteRecord = {
+      round:    this.room.currentRound,
+      attempt:  this.voteAttemptInRound,
+      leader:   this.getLeaderId(),
+      team:     [...this.room.questTeam],
+      approved,
+      votes:    { ...this.room.votes },
+    };
+    this.room.voteHistory.push(voteRecord);
+
     this.logEvent('voting_resolved', {
       round: this.room.currentRound,
       approvals,
@@ -195,22 +257,27 @@ export class GameEngine {
         leaderId: this.getLeaderId()
       });
 
-      // Move to quest phase
+      // Move to quest phase; reset consecutive reject counter
       this.room.state = 'quest';
       this.room.votes = {};
+      this.room.failCount = 0;
+      this.room.questVotedCount = 0;
       this.questVotes = [];
+      this.startQuestPhase();
     } else {
       // Team rejected - another voting round
       this.room.failCount++;
       this.room.votes = {};
+      this.room.questTeam = []; // Clear team so new leader can propose fresh team
 
       // Rotate leader
       this.rotateLeader();
 
-      if (this.room.failCount >= 3) {
-        // 3 failed votes = evil wins
+      if (this.room.failCount >= 5) {
+        // 5 consecutive rejections = evil wins (standard Avalon rules)
         this.room.state = 'ended';
         this.room.evilWins = true;
+        this.room.endReason = 'vote_rejections';
         this.logEvent('game_ended', {
           winner: 'evil',
           reason: 'vote_rejections_limit'
@@ -246,12 +313,15 @@ export class GameEngine {
 
     this.room.questTeam = teamMemberIds;
 
+    const teamNames = teamMemberIds.map(id => this.room.players[id]?.name ?? id);
     this.logEvent('quest_team_selected', {
       round: this.room.currentRound,
       teamSize: teamMemberIds.length,
-      leaderId: this.getLeaderId()
+      leaderId: this.getLeaderId(),
+      team: teamNames,
     });
-    // State stays 'voting' - voting will transition to 'quest' when approved
+    // Start the approval vote timer now that team is proposed
+    this.startVotingPhase();
   }
 
   /**
@@ -273,6 +343,7 @@ export class GameEngine {
     }
 
     this.questVotes.push({ playerId, vote });
+    this.room.questVotedCount = this.questVotes.length;
 
     this.logEvent('quest_vote_submitted', {
       round: this.room.currentRound,
@@ -298,12 +369,24 @@ export class GameEngine {
       this.questVoteTimeout = null;
     }
 
-    // Count fail votes
+    // Count fail votes — some rounds require 2 fails (round 4 in 7+ player games)
+    const playerCount = Object.keys(this.room.players).length;
+    const config = AVALON_CONFIG[playerCount];
+    const failsRequired = config?.questFailsRequired[this.room.currentRound - 1] ?? 1;
     const failCount = this.questVotes.filter((q) => q.vote === 'fail').length;
-    const questFailed = failCount >= 1; // 1 fail = quest fails
+    const questFailed = failCount >= failsRequired;
 
     const result: 'success' | 'fail' = questFailed ? 'fail' : 'success';
     this.room.questResults.push(result);
+
+    // Record quest outcome in public history
+    const questRecord: QuestRecord = {
+      round:     this.room.currentRound,
+      team:      [...this.room.questTeam],
+      result,
+      failCount,
+    };
+    this.room.questHistory.push(questRecord);
 
     this.logEvent('quest_resolved', {
       round: this.room.currentRound,
@@ -323,6 +406,7 @@ export class GameEngine {
       // Evil wins 3 quests - game over
       this.room.state = 'ended';
       this.room.evilWins = true;
+      this.room.endReason = 'failed_quests';
       this.logEvent('game_ended', {
         winner: 'evil',
         reason: 'failed_quests_limit'
@@ -332,7 +416,9 @@ export class GameEngine {
       this.room.currentRound++;
       this.room.state = 'voting';
       this.room.votes = {};
+      this.room.questTeam = [];
       this.questVotes = [];
+      this.voteAttemptInRound = 0;
 
       // Rotate leader for next round
       this.rotateLeader();
@@ -366,6 +452,7 @@ export class GameEngine {
       if (this.room.state === 'discussion') {
         // If assassin doesn't choose in time, good wins
         this.resolveAssassination(null);
+        this.onStateChange?.(this.room);
       }
     }, ASSASSINATION_TIMEOUT_MS);
   }
@@ -410,21 +497,22 @@ export class GameEngine {
     this.room.state = 'ended';
 
     if (targetId === null) {
-      // Assassination timeout — good wins
+      // No target - good wins
       this.room.evilWins = false;
+      this.room.endReason = 'assassination_timeout';
       this.logEvent('game_ended', {
         winner: 'good',
         reason: 'assassination_timeout'
       });
-      // Notify GameServer (timeout-triggered, not a direct socket call)
-      this.onUpdate(this.room);
     } else {
       // room.players is authoritative as it can be updated externally
       const targetRole = this.room.players[targetId]?.role ?? this.roleAssignments.get(targetId);
+      this.room.assassinTargetId = targetId;
 
       if (targetRole === 'merlin') {
         // Assassinated Merlin - evil wins
         this.room.evilWins = true;
+        this.room.endReason = 'merlin_assassinated';
         this.logEvent('game_ended', {
           winner: 'evil',
           reason: 'merlin_assassinated',
@@ -434,6 +522,7 @@ export class GameEngine {
       } else {
         // Killed non-Merlin - good wins
         this.room.evilWins = false;
+        this.room.endReason = 'assassination_failed';
         this.logEvent('game_ended', {
           winner: 'good',
           reason: 'assassination_failed',
@@ -497,47 +586,6 @@ export class GameEngine {
     return this.room;
   }
 
-  /**
-   * Export all internal engine state as a plain JSON-safe object.
-   * Pair with `GameEngine.restore()` to survive server restarts mid-game.
-   */
-  public serialize(): GameEngineState {
-    return {
-      version: 1,
-      roomId: this.room.id,
-      roleAssignments: Object.fromEntries(this.roleAssignments) as Record<string, Role>,
-      questVotes: this.questVotes.map((qv) => ({ ...qv })),
-      currentLeaderIndex: this.currentLeaderIndex,
-    };
-  }
-
-  /**
-   * Recreate a GameEngine from a previously serialised state snapshot.
-   * The `room` object is the rehydrated Room from RTD — it must match the
-   * roomId stored in `state`, otherwise an error is thrown.
-   *
-   * Timeouts are NOT restarted here — the caller (GameServer) is responsible
-   * for deciding whether to restart them after restore.
-   */
-  public static restore(
-    state: GameEngineState,
-    room: Room,
-    onUpdate: RoomUpdateCallback = () => {}
-  ): GameEngine {
-    if (state.roomId !== room.id) {
-      throw new Error(
-        `GameEngineState roomId "${state.roomId}" does not match room.id "${room.id}"`
-      );
-    }
-
-    const engine = new GameEngine(room, onUpdate);
-    engine.roleAssignments = new Map(Object.entries(state.roleAssignments) as [string, Role][]);
-    engine.questVotes = state.questVotes.map((qv) => ({ ...qv }));
-    engine.currentLeaderIndex = state.currentLeaderIndex;
-
-    return engine;
-  }
-
   public cleanup(): void {
     if (this.voteTimeout) {
       clearTimeout(this.voteTimeout);
@@ -551,6 +599,7 @@ export class GameEngine {
       clearTimeout(this.assassinationTimeout);
       this.assassinationTimeout = null;
     }
+    this.onStateChange = null;
   }
 
   public getVoteCount(): { voted: number; total: number } {
@@ -575,12 +624,14 @@ export class GameEngine {
     return this.room.questTeam;
   }
 
-  private logEvent(event: string, data: Record<string, unknown>): void {
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      roomId: this.room.id,
-      event,
-      ...data
-    }));
+  private logEvent(event: string, data: Record<string, unknown>, actorId: string | null = null): void {
+    const record: GameEventRecord = {
+      seq:        this.eventSeq++,
+      event_type: event,
+      actor_id:   actorId,
+      event_data: { roomId: this.room.id, timestamp: new Date().toISOString(), ...data },
+    };
+    this.eventBuffer.push(record);
+    console.log(JSON.stringify({ ...record.event_data, event }));
   }
 }

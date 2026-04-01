@@ -1,62 +1,84 @@
 import { create } from 'zustand';
-import { Room, Player, ChatMessage } from '@avalon/shared';
+import { Room, Player } from '@avalon/shared';
 
-type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'replay' | 'ai-stats';
+type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile';
+export type SocketStatus = 'connected' | 'disconnected' | 'reconnecting';
+
+export interface Toast {
+  id: string;
+  message: string;
+  type: 'error' | 'info' | 'success';
+}
 
 interface GameStore {
   gameState: GameState;
   room: Room | null;
   currentPlayer: Player | null;
-  chatMessages: ChatMessage[];
-  guestMode: boolean;
-  replayRoomId: string | null;
+  profileUserId: string | null;
+  toasts: Toast[];
+  socketStatus: SocketStatus;
+  isSpectator: boolean;
   setGameState: (state: GameState) => void;
   setRoom: (room: Room | null) => void;
   setCurrentPlayer: (player: Player | null) => void;
   updateRoom: (room: Room) => void;
-  addChatMessage: (message: ChatMessage) => void;
-  clearChat: () => void;
-  setGuestMode: (v: boolean) => void;
-  setReplayRoomId: (id: string | null) => void;
+  navigateToProfile: (userId: string | 'me') => void;
+  addToast: (message: string, type?: Toast['type']) => void;
+  removeToast: (id: string) => void;
+  setSocketStatus: (status: SocketStatus) => void;
+  setSpectating: (value: boolean) => void;
 }
 
 export const useGameStore = create<GameStore>((set) => ({
   gameState: 'home',
   room: null,
   currentPlayer: null,
-  chatMessages: [],
-  guestMode: false,
-  replayRoomId: null,
+  profileUserId: null,
+  toasts: [],
+  socketStatus: 'disconnected',
+  isSpectator: false,
 
   setGameState: (state: GameState) => set({ gameState: state }),
+  navigateToProfile: (userId) => set({ gameState: 'profile', profileUserId: userId }),
+  setSocketStatus: (status: SocketStatus) => set({ socketStatus: status }),
+  setSpectating: (value: boolean) => set({ isSpectator: value }),
 
-  setRoom: (room: Room | null) => set({ room }),
+  setRoom: (room: Room | null) => {
+    if (!room) localStorage.removeItem('avalon_room');
+    set({ room });
+  },
 
   setCurrentPlayer: (player: Player | null) => set({ currentPlayer: player }),
 
-  updateRoom: (room: Room) =>
-    set(() => ({
+  addToast: (message, type = 'error') => {
+    const id = Math.random().toString(36).slice(2);
+    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
+    setTimeout(() => {
+      set((s) => ({ toasts: s.toasts.filter(t => t.id !== id) }));
+    }, 4000);
+  },
+
+  removeToast: (id) => set((s) => ({ toasts: s.toasts.filter(t => t.id !== id) })),
+
+  updateRoom: (room: Room) => set((s) => {
+    // Persist room ID for auto-rejoin on page refresh — skip for spectators
+    if (!s.isSpectator) {
+      if (room.state === 'ended') {
+        localStorage.removeItem('avalon_room');
+      } else {
+        localStorage.setItem('avalon_room', room.id);
+      }
+    }
+    return {
       room,
       gameState:
         room.state === 'lobby'
           ? 'lobby'
-          : room.state === 'voting'
-            ? 'voting'
-            : room.state === 'quest'
+          : room.state === 'ended'
+            ? 'ended'
+            : (room.state === 'quest' || room.state === 'discussion')
               ? 'playing'
-              : room.state === 'ended'
-                ? 'ended'
-                : 'voting',
-    })),
-
-  addChatMessage: (message: ChatMessage) =>
-    set((state) => ({
-      chatMessages: [...state.chatMessages, message],
-    })),
-
-  clearChat: () => set({ chatMessages: [] }),
-
-  setGuestMode: (v: boolean) => set({ guestMode: v }),
-
-  setReplayRoomId: (id: string | null) => set({ replayRoomId: id }),
+              : 'voting',
+    };
+  }),
 }));

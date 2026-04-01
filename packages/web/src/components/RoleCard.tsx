@@ -78,7 +78,7 @@ export default function RoleCard({
           <div className="flex-1">
             <h3 className={`text-2xl font-bold capitalize ${colors.text}`}>{role}</h3>
             <p className="text-gray-300 text-sm">
-              {team === 'good' ? '🔵 Good Team' : '🔴 Evil Team'}
+              {team === 'good' ? '🔵 好人陣營 (Good)' : '🔴 邪惡陣營 (Evil)'}
             </p>
           </div>
         </div>
@@ -92,7 +92,7 @@ export default function RoleCard({
         {/* Team badge */}
         <div className="flex items-center gap-2 mb-4">
           <Shield size={16} className={colors.text} />
-          <span className="text-xs text-gray-300">{team === 'good' ? 'Loyal' : 'Deceptive'}</span>
+          <span className="text-xs text-gray-300">{team === 'good' ? '忠誠 (Loyal)' : '欺騙 (Deceptive)'}</span>
         </div>
 
         {/* Quick abilities preview */}
@@ -123,7 +123,7 @@ export default function RoleCard({
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <Info size={14} className={colors.text} />
-              <p className={`text-sm font-bold ${colors.text}`}>Win Condition</p>
+              <p className={`text-sm font-bold ${colors.text}`}>勝利條件 (Win Condition)</p>
             </div>
             <p className="text-sm text-gray-300 ml-6">{winCondition}</p>
           </div>
@@ -131,7 +131,7 @@ export default function RoleCard({
           {/* Full abilities list */}
           {abilities.length > 2 && (
             <div className="mb-4">
-              <p className={`text-sm font-bold ${colors.text} mb-2`}>All Abilities</p>
+              <p className={`text-sm font-bold ${colors.text} mb-2`}>所有能力 (All Abilities)</p>
               <ul className="space-y-1 ml-2">
                 {abilities.map((ability, idx) => (
                   <motion.li
@@ -151,7 +151,7 @@ export default function RoleCard({
 
           {/* Tips */}
           <div>
-            <p className={`text-sm font-bold ${colors.text} mb-2`}>💡 Tips</p>
+            <p className={`text-sm font-bold ${colors.text} mb-2`}>💡 技巧 (Tips)</p>
             <ul className="space-y-1 ml-2">
               {tips.map((tip, idx) => (
                 <motion.li
@@ -173,7 +173,7 @@ export default function RoleCard({
           animate={{ opacity: expanded ? 0 : 1 }}
           className="absolute bottom-3 right-3 text-xs text-gray-400"
         >
-          Hover to expand
+          懸停展開 (Hover to expand)
         </motion.div>
       </motion.div>
     </motion.div>

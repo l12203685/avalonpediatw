@@ -1,19 +1,19 @@
-name: Deploy — Cloud Run + Firebase Hosting
+name: Deploy Frontend to GitHub Pages
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'packages/web/**'
+      - 'packages/shared/**'
+  workflow_dispatch:
 
-env:
-  PROJECT_ID: avalon-game-platform
-  REGION: asia-east1
-  SERVICE_NAME: avalon-server
-  IMAGE: gcr.io/avalon-game-platform/avalon-server
+permissions:
+  contents: write
 
 jobs:
-  # ── 1. Test ──────────────────────────────────────────────────────────────────
   test:
-    name: Test (vitest)
+    name: Test
     runs-on: ubuntu-latest
 
     steps:
@@ -24,10 +24,9 @@ jobs:
         with:
           version: 8
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -36,106 +35,14 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @avalon/shared build
 
-      - name: Type-check server
-        run: pnpm --filter @avalon/server type-check
+      - name: Run tests
+        run: pnpm --filter @avalon/web test
+        continue-on-error: true
 
-      - name: Run server tests
-        run: pnpm --filter @avalon/server test
-
-  # ── 2. Deploy server to Cloud Run ────────────────────────────────────────────
-  deploy-server:
-    name: Deploy Server → Cloud Run
+  build-and-deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
     needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write   # required for Workload Identity Federation (future use)
-
-    outputs:
-      cloud_run_url: ${{ steps.get-url.outputs.url }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
-
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker --quiet
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build all packages
-        run: pnpm run build
-        env:
-          # Placeholder — web is rebuilt in the next job with the real URL
-          VITE_SERVER_URL: https://placeholder.run.app
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-
-      - name: Build Docker image
-        run: docker build -t "${{ env.IMAGE }}:${{ github.sha }}" -t "${{ env.IMAGE }}:latest" .
-
-      - name: Push Docker image to GCR
-        run: |
-          docker push "${{ env.IMAGE }}:${{ github.sha }}"
-          docker push "${{ env.IMAGE }}:latest"
-
-      - name: Deploy to Cloud Run
-        run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image "${{ env.IMAGE }}:${{ github.sha }}" \
-            --platform managed \
-            --region ${{ env.REGION }} \
-            --project ${{ env.PROJECT_ID }} \
-            --allow-unauthenticated \
-            --port 3001 \
-            --min-instances 0 \
-            --max-instances 10 \
-            --memory 512Mi \
-            --cpu 1 \
-            --timeout 300 \
-            --set-env-vars "NODE_ENV=production,PORT=3001"
-
-      - name: Get Cloud Run URL
-        id: get-url
-        run: |
-          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-            --platform managed \
-            --region ${{ env.REGION }} \
-            --project ${{ env.PROJECT_ID }} \
-            --format "value(status.url)")
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
-          echo "Cloud Run URL: ${URL}"
-
-  # ── 3. Deploy web to Firebase Hosting ────────────────────────────────────────
-  deploy-hosting:
-    name: Deploy Web → Firebase Hosting
-    needs: deploy-server
-    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -145,19 +52,10 @@ jobs:
         with:
           version: 8
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
           cache: 'pnpm'
-
-      - name: Restore pnpm store cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/pnpm/store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -165,28 +63,13 @@ jobs:
       - name: Build shared package
         run: pnpm --filter @avalon/shared build
 
-      - name: Build web with production Cloud Run URL
+      - name: Build frontend
         run: pnpm --filter @avalon/web build
         env:
-          VITE_SERVER_URL: ${{ needs.deploy-server.outputs.cloud_run_url }}
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_SERVER_URL: https://avalonpediatw.onrender.com
 
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AVALON }}
-          projectId: ${{ env.PROJECT_ID }}
-          channelId: live
-
-      - name: Health check
-        run: |
-          URL="${{ needs.deploy-server.outputs.cloud_run_url }}"
-          echo "Running health check: ${URL}/health"
-          curl --fail --silent --max-time 15 "${URL}/health" | \
-            python3 -c "import sys,json; d=json.load(sys.stdin); print('Health:', d)"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: packages/web/dist

@@ -1,153 +1,77 @@
 /**
- * Central API client.
- * Server URL comes from VITE_SERVER_URL env var, falling back to same-domain origin.
+ * REST API client for Avalon backend
+ * Handles leaderboard & user profile endpoints
  */
 
-const BASE_URL =
-  (import.meta.env.VITE_SERVER_URL as string | undefined) ?? window.location.origin;
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return 'Unexpected error';
+export interface LeaderboardEntry {
+  id: string;
+  display_name: string;
+  photo_url: string | null;
+  provider: string;
+  elo_rating: number;
+  total_games: number;
+  games_won: number;
+  games_lost: number;
+  win_rate: number;
 }
 
-async function apiFetch<T>(path: string): Promise<T> {
-  const url = `${BASE_URL}${path}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status} ${res.statusText}`);
-  }
+export interface RecentGame {
+  id: string;
+  room_id: string;
+  role: string;
+  team: 'good' | 'evil';
+  won: boolean;
+  elo_delta: number;
+  player_count: number;
+  created_at: string;
+}
+
+export interface UserProfile {
+  id: string;
+  display_name: string;
+  photo_url: string | null;
+  provider: string;
+  elo_rating: number;
+  total_games: number;
+  games_won: number;
+  games_lost: number;
+  badges: string[];
+  recent_games: RecentGame[];
+}
+
+async function apiFetch<T>(path: string, token?: string): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${SERVER_URL}${path}`, { headers });
+  if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
   return res.json() as Promise<T>;
 }
 
-// ─── Wiki ────────────────────────────────────────────────────────────────────
-
-export interface WikiArticleApi {
-  id: string;
-  title: string;
-  category: string;
-  content: string;
-  excerpt: string;
-  tags: string[];
-  author: string;
-  updatedAt: string; // ISO string from server
-  views: number;
+export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
+  const data = await apiFetch<{ leaderboard: LeaderboardEntry[] }>('/api/leaderboard');
+  return data.leaderboard;
 }
 
-export interface WikiCategoryApi {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
+export async function fetchMyProfile(token: string): Promise<UserProfile> {
+  const data = await apiFetch<{ profile: UserProfile }>('/api/profile/me', token);
+  return data.profile;
 }
 
-export interface WikiListResponse {
-  categories: WikiCategoryApi[];
-  articles: WikiArticleApi[];
+export async function fetchUserProfile(userId: string): Promise<UserProfile> {
+  const data = await apiFetch<{ profile: UserProfile }>(`/api/profile/${userId}`);
+  return data.profile;
 }
 
-export async function fetchWiki(): Promise<WikiListResponse> {
-  return apiFetch<WikiListResponse>('/api/wiki');
+export interface GameEvent {
+  seq:        number;
+  event_type: string;
+  actor_id:   string | null;
+  event_data: Record<string, unknown>;
 }
 
-export async function fetchWikiArticle(id: string): Promise<WikiArticleApi> {
-  return apiFetch<WikiArticleApi>(`/api/wiki/article/${id}`);
+export async function fetchGameReplay(roomId: string): Promise<GameEvent[]> {
+  const data = await apiFetch<{ room_id: string; events: GameEvent[] }>(`/api/replay/${roomId}`);
+  return data.events;
 }
-
-// ─── Leaderboard ─────────────────────────────────────────────────────────────
-
-export interface LeaderboardEntryApi {
-  rank: number;
-  userId: string;
-  displayName: string;
-  photoURL?: string;
-  eloRating: number;
-  totalGames: number;
-  gamesWon: number;
-  winRate: number;
-  favoriteRole?: string;
-  badges: string[];
-}
-
-export async function fetchLeaderboard(): Promise<LeaderboardEntryApi[]> {
-  return apiFetch<LeaderboardEntryApi[]>('/api/elo/leaderboard');
-}
-
-// ─── Replay ───────────────────────────────────────────────────────────────────
-
-export type ReplayEventTypeApi =
-  | 'team-proposed'
-  | 'vote-result'
-  | 'quest-result'
-  | 'assassination'
-  | 'game-end';
-
-export interface ReplayEventApi {
-  round: number;
-  type: ReplayEventTypeApi;
-  leader?: string;
-  team?: string[];
-  approvals?: number;
-  rejections?: number;
-  approved?: boolean;
-  failCount?: number;
-  questResult?: 'success' | 'fail';
-  successVotes?: number;
-  failVotes?: number;
-  assassin?: string;
-  target?: string;
-  targetWasMerlin?: boolean;
-  winner?: 'good' | 'evil';
-  reason?: string;
-}
-
-export interface ReplayDataApi {
-  roomId: string;
-  playedAt: number;
-  durationMinutes: number;
-  playerCount: number;
-  winner: 'good' | 'evil';
-  players: Array<{ id: string; name: string; role: string; team: 'good' | 'evil' }>;
-  questResults: ('success' | 'fail')[];
-  events: ReplayEventApi[];
-}
-
-export async function fetchReplay(gameId: string): Promise<ReplayDataApi> {
-  return apiFetch<ReplayDataApi>(`/api/replay/${gameId}`);
-}
-
-// ─── Analytics ───────────────────────────────────────────────────────────────
-
-export interface AiGameStatApi {
-  date: string;
-  gamesPlayed: number;
-  goodWins: number;
-  evilWins: number;
-  avgDurationSeconds: number;
-}
-
-export interface AiRoleWinRateApi {
-  role: string;
-  gamesAsRole: number;
-  wins: number;
-  winRate: number;
-}
-
-export interface AiStatsDataApi {
-  totalGames: number;
-  goodWinRate: number;
-  evilWinRate: number;
-  avgDurationSeconds: number;
-  schedulerEnabled: boolean;
-  lastRunAt: number;
-  nextRunAt: number;
-  agentBreakdown: Array<{ agent: string; games: number; wins: number; winRate: number }>;
-  roleWinRates: AiRoleWinRateApi[];
-  recentDaily: AiGameStatApi[];
-}
-
-export async function fetchAnalyticsOverview(): Promise<AiStatsDataApi> {
-  return apiFetch<AiStatsDataApi>('/api/analytics/overview');
-}
-
-export { getErrorMessage };

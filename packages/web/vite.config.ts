@@ -4,10 +4,13 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  // GitHub Pages 部署路徑；本地開發用 '/'
+  base: process.env.GITHUB_ACTIONS ? '/avalonpediatw/' : '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@shared': path.resolve(__dirname, '../shared/src'),
+      '@avalon/shared': path.resolve(__dirname, '../shared/src'),
     },
   },
   server: {

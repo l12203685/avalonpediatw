@@ -1,4 +1,5 @@
 import { Socket } from 'socket.io';
+import { Request, Response, NextFunction } from 'express';
 
 interface RateLimitConfig {
   windowMs: number; // Time window in milliseconds
@@ -105,6 +106,27 @@ export function createRateLimitMiddleware(
     if (!limiter.isAllowed(identifier)) {
       const remaining = limiter.getRemaining(identifier);
       return next(new Error(`Rate limit exceeded for ${eventName}. Remaining: ${remaining}`));
+    }
+    next();
+  };
+}
+
+/**
+ * Create Express middleware for rate limiting HTTP routes.
+ * Uses client IP as the identifier.
+ */
+export function createHttpRateLimit(
+  windowMs: number,
+  maxRequests: number,
+): (req: Request, res: Response, next: NextFunction) => void {
+  const limiter = new SocketRateLimiter({ windowMs, maxRequests });
+  return (req: Request, res: Response, next: NextFunction) => {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+      || req.socket.remoteAddress
+      || 'unknown';
+    if (!limiter.isAllowed(ip)) {
+      res.status(429).json({ error: 'Too many requests, please try again later.' });
+      return;
     }
     next();
   };
