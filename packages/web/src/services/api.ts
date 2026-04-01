@@ -137,3 +137,78 @@ export async function submitError(data: {
     // Swallow — error reporting must never throw
   }
 }
+
+// ── Error Utility ─────────────────────────────────────────────────────────────
+
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+// ── AI Stats API ──────────────────────────────────────────────────────────────
+
+export interface AiStatsDataApi {
+  totalGames: number;
+  goodWinRate: number;
+  evilWinRate: number;
+  avgDurationSeconds: number;
+  schedulerEnabled: boolean;
+  lastRunAt: number;
+  nextRunAt: number;
+  agentBreakdown: Array<{ agent: string; games: number; wins: number; winRate: number }>;
+  roleWinRates: Array<{ role: string; gamesAsRole: number; wins: number; winRate: number }>;
+  recentDaily: Array<{
+    date: string;
+    gamesPlayed: number;
+    goodWins: number;
+    evilWins: number;
+    avgDurationSeconds: number;
+  }>;
+}
+
+export async function fetchAnalyticsOverview(): Promise<AiStatsDataApi> {
+  return apiFetch<AiStatsDataApi>('/api/analytics/overview');
+}
+
+// ── Replay API ────────────────────────────────────────────────────────────────
+
+export type ReplayEventType =
+  | 'team-proposed'
+  | 'vote-result'
+  | 'quest-result'
+  | 'assassination'
+  | 'game-end';
+
+export interface ReplayEventApi {
+  round: number;
+  type: ReplayEventType;
+  leader?: string;
+  team?: string[];
+  approvals?: number;
+  rejections?: number;
+  approved?: boolean;
+  failCount?: number;
+  questResult?: 'success' | 'fail';
+  successVotes?: number;
+  failVotes?: number;
+  assassin?: string;
+  target?: string;
+  targetWasMerlin?: boolean;
+  winner?: 'good' | 'evil';
+  reason?: string;
+}
+
+export interface ReplayDataApi {
+  roomId: string;
+  playedAt: number;
+  durationMinutes: number;
+  playerCount: number;
+  winner: 'good' | 'evil';
+  players: Array<{ id: string; name: string; role: string; team: 'good' | 'evil' }>;
+  questResults: ('success' | 'fail')[];
+  events: ReplayEventApi[];
+}
+
+export async function fetchReplay(roomId: string): Promise<ReplayDataApi> {
+  return apiFetch<ReplayDataApi>(`/api/replay/${roomId}/structured`);
+}

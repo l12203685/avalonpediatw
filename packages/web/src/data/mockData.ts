@@ -34,6 +34,11 @@ export const MOCK_ROOM_VOTING: Room = {
   failCount: 1,
   evilWins: null,
   leaderIndex: 0,
+  voteHistory: [],
+  questHistory: [],
+  questVotedCount: 0,
+  roleOptions: { percival: true, morgana: true, oberon: true, mordred: false },
+  readyPlayerIds: [],
   createdAt: Date.now() - 600000,
   updatedAt: Date.now(),
 };

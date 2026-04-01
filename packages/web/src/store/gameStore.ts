@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Room, Player } from '@avalon/shared';
 
-type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends';
+type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends' | 'replay';
 export type SocketStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 export interface Toast {
@@ -15,6 +15,7 @@ interface GameStore {
   room: Room | null;
   currentPlayer: Player | null;
   profileUserId: string | null;
+  replayRoomId: string | null;
   toasts: Toast[];
   socketStatus: SocketStatus;
   isSpectator: boolean;
@@ -24,6 +25,7 @@ interface GameStore {
   setCurrentPlayer: (player: Player | null) => void;
   updateRoom: (room: Room) => void;
   navigateToProfile: (userId: string | 'me') => void;
+  navigateToReplay: (roomId: string) => void;
   addToast: (message: string, type?: Toast['type']) => void;
   removeToast: (id: string) => void;
   setSocketStatus: (status: SocketStatus) => void;
@@ -36,6 +38,7 @@ export const useGameStore = create<GameStore>((set) => ({
   room: null,
   currentPlayer: null,
   profileUserId: null,
+  replayRoomId: null,
   toasts: [],
   socketStatus: 'disconnected',
   isSpectator: false,
@@ -43,6 +46,7 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setGameState: (state: GameState) => set({ gameState: state }),
   navigateToProfile: (userId) => set({ gameState: 'profile', profileUserId: userId }),
+  navigateToReplay: (roomId) => set({ gameState: 'replay', replayRoomId: roomId }),
   setSocketStatus: (status: SocketStatus) => set({ socketStatus: status }),
   setSpectating: (value: boolean) => set({ isSpectator: value }),
   setQuickSoloMode: (value: boolean) => set({ quickSoloMode: value }),
