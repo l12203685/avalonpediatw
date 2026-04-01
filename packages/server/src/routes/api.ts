@@ -2,12 +2,13 @@ import { Router, Request, Response, IRouter } from 'express';
 import { verify, JwtPayload } from 'jsonwebtoken';
 import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import {
-  getLeaderboard,
-  getDbUserProfile,
-  getSupabaseIdByFirebaseUid,
   getGameEvents,
   isSupabaseReady,
 } from '../services/supabase';
+import {
+  getFirestoreLeaderboard,
+  getFirestoreUserProfile,
+} from '../services/FirestoreLeaderboard';
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
 import { createHttpRateLimit } from '../middleware/rateLimit';
@@ -23,13 +24,14 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
 const publicLimiter = createHttpRateLimit(60 * 1000, 60);
 const adminLimiter  = createHttpRateLimit(60 * 1000, 10);
 
-// ── 工具：從 Authorization header 解析 supabase UUID ─────────
+// ── 工具：從 Authorization header 解析玩家 ID ──────────────────
 // 支援 Firebase ID Token 和自訂 JWT（Discord/Line）
-async function resolveSupabaseId(authHeader: string | undefined): Promise<string | null> {
+// 回傳 playerId（Firestore games 中的 playerId，可能是 firebase uid 或 display name）
+async function resolvePlayerId(authHeader: string | undefined): Promise<string | null> {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
 
-  // 嘗試自訂 JWT（Discord/Line：sub 就是 supabase UUID）
+  // 嘗試自訂 JWT（Discord/Line：sub 是 player ID）
   try {
     const payload = verify(token, JWT_SECRET) as JwtPayload;
     if (payload.sub) return payload.sub;
@@ -37,11 +39,11 @@ async function resolveSupabaseId(authHeader: string | undefined): Promise<string
     // not a custom JWT, continue
   }
 
-  // 嘗試 Firebase ID Token
+  // 嘗試 Firebase ID Token → uid 就是 playerId
   if (isFirebaseAdminReady()) {
     try {
       const decoded = await verifyIdToken(token);
-      return await getSupabaseIdByFirebaseUid(decoded.uid);
+      return decoded.uid;
     } catch {
       // invalid token
     }
@@ -52,39 +54,46 @@ async function resolveSupabaseId(authHeader: string | undefined): Promise<string
 
 // ── GET /api/leaderboard ──────────────────────────────────────
 router.get('/leaderboard', publicLimiter, async (_req: Request, res: Response) => {
-  if (!isSupabaseReady()) {
+  try {
+    const leaderboard = await getFirestoreLeaderboard(50);
+    return res.json({ leaderboard });
+  } catch (err) {
+    console.error('[api/leaderboard] Firestore error:', err);
     return res.json({ leaderboard: [], message: 'Database not configured' });
   }
-  const leaderboard = await getLeaderboard(50);
-  return res.json({ leaderboard });
 });
 
 // ── GET /api/profile/me ───────────────────────────────────────
 router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => {
-  if (!isSupabaseReady()) {
-    return res.status(503).json({ error: 'Database not configured' });
-  }
-  const supabaseId = await resolveSupabaseId(req.headers.authorization);
-  if (!supabaseId) {
+  // Resolve player ID from auth token
+  const playerId = await resolvePlayerId(req.headers.authorization);
+  if (!playerId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const profile = await getDbUserProfile(supabaseId);
-  if (!profile) {
-    return res.status(404).json({ error: 'Profile not found' });
+  try {
+    const profile = await getFirestoreUserProfile(playerId);
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    return res.json({ profile });
+  } catch (err) {
+    console.error('[api/profile/me] Firestore error:', err);
+    return res.status(503).json({ error: 'Database not configured' });
   }
-  return res.json({ profile });
 });
 
 // ── GET /api/profile/:id ──────────────────────────────────────
 router.get('/profile/:id', publicLimiter, async (req: Request, res: Response) => {
-  if (!isSupabaseReady()) {
+  try {
+    const profile = await getFirestoreUserProfile(req.params.id);
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    return res.json({ profile });
+  } catch (err) {
+    console.error('[api/profile] Firestore error:', err);
     return res.status(503).json({ error: 'Database not configured' });
   }
-  const profile = await getDbUserProfile(req.params.id);
-  if (!profile) {
-    return res.status(404).json({ error: 'Profile not found' });
-  }
-  return res.json({ profile });
 });
 
 // ── GET /api/replay/:roomId ───────────────────────────────────

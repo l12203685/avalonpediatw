@@ -1,5 +1,6 @@
 import { Room, Player, Role, QuestResult } from '@avalon/shared';
 import { getAdminFirestore } from './firebase';
+import { invalidateLeaderboardCache } from './FirestoreLeaderboard';
 
 /**
  * Completed game record stored in Firestore.
@@ -77,6 +78,9 @@ export class GameHistoryRepository {
 
       const docRef = firestore.collection(this.collection).doc(room.id);
       await docRef.set(record);
+
+      // Invalidate leaderboard cache so next request picks up the new game
+      invalidateLeaderboardCache();
 
       console.log(JSON.stringify({
         timestamp: new Date().toISOString(),
