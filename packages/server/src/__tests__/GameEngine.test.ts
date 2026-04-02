@@ -41,6 +41,16 @@ function makeRoom(playerCount = 5): Room {
     failCount: 0,
     evilWins: null,
     leaderIndex: 0,
+    voteHistory: [],
+    questHistory: [],
+    questVotedCount: 0,
+    roleOptions: {
+      percival: true,
+      morgana: true,
+      oberon: true,
+      mordred: true,
+    },
+    readyPlayerIds: [],
     createdAt: Date.now() - 1000,
     updatedAt: Date.now(),
   };
@@ -201,11 +211,16 @@ describe('GameEngine — voting resolution', () => {
     engine.cleanup();
   });
 
-  it('evil wins after 3 consecutive vote rejections', () => {
+  it('evil wins after 5 consecutive vote rejections', () => {
     const { room, engine } = startedEngine(5);
-    // first two rejections
-    room.failCount = 2;
-    voteAll(engine, room, false);
+    const config = AVALON_CONFIG[5];
+    const team = Object.keys(room.players).slice(0, config.questTeams[0]);
+    // Reject 5 times in a row
+    for (let i = 0; i < 5; i++) {
+      engine.selectQuestTeam(team);
+      voteAll(engine, room, false);
+      if (room.state === 'ended') break;
+    }
     expect(room.state).toBe('ended');
     expect(room.evilWins).toBe(true);
     engine.cleanup();
@@ -437,15 +452,20 @@ describe('GameEngine — timeout handling', () => {
     const engine = new GameEngine(room, onUpdate);
     engine.startGame();
 
+    // Select team first (starts the vote timeout)
+    const config = AVALON_CONFIG[5];
+    const team = Object.keys(room.players).slice(0, config.questTeams[0]);
+    engine.selectQuestTeam(team);
+
     // Only one player votes before timeout
     engine.submitVote('p1', true);
 
-    // Advance past vote timeout (30s)
-    vi.advanceTimersByTime(31_000);
+    // Advance past vote timeout (60s)
+    vi.advanceTimersByTime(61_000);
 
-    // After timeout, voting is resolved and votes are cleared (reject path)
-    // The room.votes gets cleared after resolveVoting(), so just check state
-    expect(room.state).toBe('voting'); // majority rejected → still voting
+    // After timeout, voting is resolved (majority reject) → back to team_selection
+    // failCount increments and leader rotates
+    expect(room.state).toBe('team_selection');
     expect(room.failCount).toBe(1);
     expect(onUpdate).toHaveBeenCalledWith(room);
     engine.cleanup();
@@ -461,13 +481,17 @@ describe('GameEngine — timeout handling', () => {
     const config = AVALON_CONFIG[5];
     const playerIds = Object.keys(room.players);
 
-    // Play 3 successful quest rounds to reach discussion phase
+    // Play 3 successful quest rounds to reach discussion (assassination) phase
     for (let round = 0; round < 3; round++) {
-      if (room.state !== 'voting') break;
+      if (room.state === 'ended' || room.state === 'discussion') break;
       const teamSize = config.questTeams[round];
       const team = playerIds.slice(0, teamSize);
-      engine.selectQuestTeam(team);
-      playerIds.forEach((id) => engine.submitVote(id, true));
+      if (room.state === 'team_selection') {
+        engine.selectQuestTeam(team);
+      }
+      if (room.state === 'voting') {
+        playerIds.forEach((id) => engine.submitVote(id, true));
+      }
       if (room.state === 'quest') {
         team.forEach((id) => engine.submitQuestVote(id, 'success'));
       }
@@ -475,8 +499,8 @@ describe('GameEngine — timeout handling', () => {
 
     expect(room.state).toBe('discussion');
 
-    // Advance past assassination timeout (30s)
-    vi.advanceTimersByTime(31_000);
+    // Advance past assassination timeout (120s)
+    vi.advanceTimersByTime(121_000);
 
     expect(room.state).toBe('ended');
     expect(room.evilWins).toBe(false);
