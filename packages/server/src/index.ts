@@ -17,7 +17,12 @@ const app: Express = express();
 // Environment
 const NODE_ENV = process.env.NODE_ENV || 'development';
 // Allow all origins for prototype; lock down later with CORS_ORIGIN env var
-const CORS_ORIGIN = process.env.CORS_ORIGIN || true;
+// Parse comma-separated origins into an array so cors() matches per-request
+const CORS_ORIGIN: string | string[] | true = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.includes(',')
+    ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+    : process.env.CORS_ORIGIN
+  : true;
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
