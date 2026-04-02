@@ -106,6 +106,10 @@ export class GameServer {
         this.handleAssassinate(socket, roomId, assassinId, targetId);
       });
 
+      socket.on('game:lady-of-the-lake', (roomId: string, holderId: string, targetId: string) => {
+        this.handleLadyOfTheLake(socket, roomId, holderId, targetId);
+      });
+
       socket.on('chat:send-message', (roomId: string, message: string) => {
         this.handleChatMessage(socket, roomId, message);
       });
@@ -237,7 +241,14 @@ export class GameServer {
         votes[vid] = vid === playerId ? v : true; // mask direction as "voted" placeholder
       }
     }
-    return { ...room, players, votes };
+    // Lady of the Lake history: hide inspection result from non-holders
+    // (only the holder who performed each inspection knows the actual result)
+    const ladyHistory = room.ladyOfTheLakeHistory?.map(record =>
+      record.holderId === playerId || revealAll
+        ? record
+        : { ...record, result: undefined as unknown as 'good' | 'evil' }
+    );
+    return { ...room, players, votes, ladyOfTheLakeHistory: ladyHistory };
   }
 
   /**
@@ -270,7 +281,11 @@ export class GameServer {
     for (const vid of Object.keys(room.votes)) {
       votes[vid] = true; // just show "has voted"
     }
-    return { ...room, players, votes };
+    // Spectators see Lady inspections but never the result
+    const ladyHistory = room.ladyOfTheLakeHistory?.map(record =>
+      revealAll ? record : { ...record, result: undefined as unknown as 'good' | 'evil' }
+    );
+    return { ...room, players, votes, ladyOfTheLakeHistory: ladyHistory };
   }
 
   private handleSetRoomPassword(socket: Socket, roomId: string, password: string | null): void {
@@ -644,6 +659,27 @@ export class GameServer {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error processing assassination:', errorMsg);
       socket.emit('error', `Failed to submit assassination: ${errorMsg}`);
+    }
+  }
+
+  private handleLadyOfTheLake(socket: Socket, roomId: string, _clientHolderId: string, targetId: string): void {
+    try {
+      const holderId = socket.data.playerId as string | undefined;
+      if (!holderId) { socket.emit('error', 'Not authenticated in room'); return; }
+
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.state !== 'lady_of_the_lake') { socket.emit('error', 'Not in Lady of the Lake phase'); return; }
+
+      const gameEngine = this.gameEngines.get(roomId);
+      if (!gameEngine) { socket.emit('error', 'Game engine not found'); return; }
+
+      gameEngine.submitLadyOfTheLakeTarget(holderId, targetId);
+      // Note: the engine broadcasts via onStateChange callback; result is shown via room state
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error processing Lady of the Lake:', errorMsg);
+      socket.emit('error', `Failed to submit Lady of the Lake: ${errorMsg}`);
     }
   }
 
@@ -1093,6 +1129,23 @@ export class GameServer {
           if (botMembers.length > 0) {
             setTimeout(() => { this.scheduleBotActions(roomId); }, offset);
           }
+        } else if (r.state === 'lady_of_the_lake') {
+          // Lady of the Lake — if bot holds the Lady, pick a random eligible target
+          const holderId = r.ladyOfTheLakeHolder;
+          if (holderId && r.players[holderId]?.isBot) {
+            const usedIds = r.ladyOfTheLakeUsed ?? [];
+            const eligible = Object.keys(r.players).filter(id => id !== holderId && !usedIds.includes(id));
+            const targetId = eligible[Math.floor(Math.random() * eligible.length)];
+            if (targetId) {
+              setTimeout(() => {
+                const snapshot = this.roomManager.getRoom(roomId);
+                if (!snapshot || snapshot.state !== 'lady_of_the_lake') return;
+                const eng = this.gameEngines.get(roomId);
+                if (!eng) return;
+                eng.submitLadyOfTheLakeTarget(holderId, targetId);
+              }, 1000 + Math.random() * 1000);
+            }
+          }
         } else if (r.state === 'discussion') {
           // Find assassin — if bot, use HeuristicAgent to pick the most Merlin-like target
           const assassinEntry = Object.entries(r.players).find(([, p]) => p.role === 'assassin');
@@ -1346,6 +1399,10 @@ export class GameServer {
       room.questVotedCount = 0;
       room.endReason = undefined;
       room.assassinTargetId = undefined;
+      room.ladyOfTheLakeHolder = undefined;
+      room.ladyOfTheLakeTarget = undefined;
+      room.ladyOfTheLakeResult = undefined;
+      room.ladyOfTheLakeUsed = [];
       room.readyPlayerIds = [];
       room.updatedAt = Date.now();
 

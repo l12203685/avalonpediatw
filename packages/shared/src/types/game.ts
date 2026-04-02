@@ -4,7 +4,7 @@
  */
 
 // Game States
-export type GameState = 'lobby' | 'voting' | 'quest' | 'discussion' | 'ended';
+export type GameState = 'lobby' | 'voting' | 'quest' | 'lady_of_the_lake' | 'discussion' | 'ended';
 
 // Player Roles (Standard Avalon)
 export type Role =
@@ -68,6 +68,13 @@ export interface Room {
   readyPlayerIds: string[];    // Player IDs who clicked "Ready" in lobby
   isPrivate?: boolean;         // Room requires password to join
   eloDeltas?: Record<string, number>; // playerId -> elo delta (populated on game end)
+  // Lady of the Lake
+  ladyOfTheLakeHolder?: string;     // Player ID who currently holds the Lady token
+  ladyOfTheLakeTarget?: string;     // Player ID being inspected (during lady_of_the_lake phase)
+  ladyOfTheLakeResult?: 'good' | 'evil'; // Result shown to the holder (private, cleared after phase)
+  ladyOfTheLakeUsed?: string[];     // Player IDs who have already held the Lady (cannot be targeted again)
+  ladyOfTheLakeEnabled?: boolean;   // Whether Lady of the Lake is active in this game
+  ladyOfTheLakeHistory?: LadyOfTheLakeRecord[]; // Completed Lady inspections (public info: holder->target, result visible only to holder)
   createdAt: number;
   updatedAt: number;
 }
@@ -78,6 +85,7 @@ export interface RoleOptions {
   morgana: boolean;   // Include Morgana (paired with Percival)
   oberon: boolean;    // Include Oberon (evil unknown to other evil)
   mordred: boolean;   // Include Mordred (hidden from Merlin)
+  ladyOfTheLake?: boolean; // Include Lady of the Lake ability (default: true for 7+ players)
 }
 
 export interface GameConfig {
@@ -141,6 +149,14 @@ export interface QuestRecord {
   team:      string[]; // player IDs on the quest
   result:    'success' | 'fail';
   failCount: number;   // number of fail votes submitted
+}
+
+// Lady of the Lake inspection record
+export interface LadyOfTheLakeRecord {
+  round:    number;
+  holderId: string;   // player who held the Lady
+  targetId: string;   // player who was inspected
+  result:   'good' | 'evil'; // what the holder saw
 }
 
 export interface ChatMessage {

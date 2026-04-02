@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { QuestRecord, Room } from '@avalon/shared';
 import audioService from '../services/audio';
@@ -18,6 +18,10 @@ export default function QuestResultOverlay({
 }: QuestResultOverlayProps): JSX.Element {
   const [progress, setProgress] = useState(100);
   const success = record.result === 'success';
+  // Stabilize onDismiss so the timer effect does not restart on parent re-renders
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  const stableDismiss = useCallback(() => onDismissRef.current(), []);
 
   useEffect(() => {
     audioService.playSound(success ? 'quest-success' : 'quest-fail');
@@ -29,12 +33,12 @@ export default function QuestResultOverlay({
       setProgress(pct);
       if (pct === 0) clearInterval(interval);
     }, 50);
-    const timeout = setTimeout(onDismiss, duration);
+    const timeout = setTimeout(stableDismiss, duration);
     return () => {
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  }, [duration, onDismiss]);
+  }, [duration, stableDismiss, success]);
 
   const teamPlayers = record.team.map(id => room.players[id]).filter(Boolean);
 
@@ -44,7 +48,7 @@ export default function QuestResultOverlay({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-      onClick={onDismiss}
+      onClick={stableDismiss}
     >
       <motion.div
         initial={{ scale: 0.6, y: 60 }}

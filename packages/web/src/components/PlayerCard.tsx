@@ -36,9 +36,9 @@ export default function PlayerCard({
       whileTap={{ scale: 0.95 }}
       className="flex flex-col items-center gap-2"
     >
-      {/* 玩家頭像 */}
+      {/* 玩家頭像 — smaller on mobile */}
       <motion.div
-        className={`w-20 h-20 rounded-full flex items-center justify-center font-bold text-lg border-4 transition-all relative ${
+        className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center font-bold text-sm sm:text-lg border-3 sm:border-4 transition-all relative ${
           player.status === 'disconnected'
             ? 'border-gray-600 bg-gradient-to-br from-gray-600 to-gray-700 opacity-50'
             : isCurrentPlayer
@@ -108,7 +108,7 @@ export default function PlayerCard({
       </motion.div>
 
       {/* 玩家名字 */}
-      <p className={`font-bold text-sm text-center max-w-20 truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
+      <p className={`font-bold text-xs sm:text-sm text-center max-w-16 sm:max-w-20 truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
         {player.name}
       </p>
 
@@ -117,7 +117,7 @@ export default function PlayerCard({
         <motion.p
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-xs font-semibold bg-yellow-600/80 text-white px-3 py-1 rounded-full"
+          className="text-[10px] sm:text-xs font-semibold bg-yellow-600/80 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full"
         >
           {ROLE_NAMES[player.role] ?? player.role}
         </motion.p>

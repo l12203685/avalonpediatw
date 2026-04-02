@@ -10,11 +10,12 @@ interface GameBoardProps {
 }
 
 const STATE_LABELS: Record<string, string> = {
-  lobby:      '等待中 (Lobby)',
-  voting:     '投票中 (Voting)',
-  quest:      '任務中 (Quest)',
-  discussion: '刺殺 (Assassination)',
-  ended:      '結束 (Ended)',
+  lobby:            '等待中 (Lobby)',
+  voting:           '投票中 (Voting)',
+  quest:            '任務中 (Quest)',
+  lady_of_the_lake: '湖中女神 (Lady)',
+  discussion:       '刺殺 (Assassination)',
+  ended:            '結束 (Ended)',
 };
 
 export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.Element {
@@ -44,8 +45,13 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
   }, [room.state, room.evilWins]);
 
   // Scale radius based on player count so cards don't overlap
-  const radius = playerCount <= 6 ? 140 : playerCount <= 8 ? 155 : 170;
-  const boardSize = (radius + 80) * 2; // card is ~80px, board must fit all
+  // Use smaller radii on mobile (< 480px) to keep the board readable
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 480;
+  const radius = isMobile
+    ? (playerCount <= 6 ? 100 : playerCount <= 8 ? 115 : 125)
+    : (playerCount <= 6 ? 140 : playerCount <= 8 ? 155 : 170);
+  const cardAllowance = isMobile ? 60 : 80;
+  const boardSize = (radius + cardAllowance) * 2;
 
   // Responsive scale: shrink board on narrow viewports so nothing clips
   const containerRef = useRef<HTMLDivElement>(null);
@@ -53,7 +59,7 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
   useEffect(() => {
     const update = () => {
       const w = containerRef.current?.offsetWidth ?? window.innerWidth;
-      setScale(Math.min(1, w / boardSize));
+      setScale(Math.min(1, (w - 16) / boardSize)); // 16px safety margin
     };
     update();
     window.addEventListener('resize', update);

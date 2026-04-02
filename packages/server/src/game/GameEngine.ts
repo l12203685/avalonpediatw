@@ -4,6 +4,7 @@ const TEAM_SELECT_TIMEOUT_MS = 90000; // 90秒隊伍選擇時限（隊長AFK保�
 const VOTE_TIMEOUT_MS = 60000; // 60秒隊伍投票時限
 const QUEST_TIMEOUT_MS = 60000; // 60秒任務投票時限
 const ASSASSINATION_TIMEOUT_MS = 120000; // 2分鐘刺殺時限
+const LADY_OF_THE_LAKE_TIMEOUT_MS = 60000; // 60秒湖中女神時限
 
 interface QuestVote {
   playerId: string;
@@ -24,6 +25,7 @@ export class GameEngine {
   private voteTimeout: NodeJS.Timeout | null = null;
   private questVoteTimeout: NodeJS.Timeout | null = null;
   private assassinationTimeout: NodeJS.Timeout | null = null;
+  private ladyOfTheLakeTimeout: NodeJS.Timeout | null = null;
   private onStateChange: ((room: Room) => void) | null = null;
 
   // Quest phase tracking
@@ -70,6 +72,23 @@ export class GameEngine {
     this.questVotes = [];
     this.currentLeaderIndex = 0;
     this.voteAttemptInRound = 0;
+
+    // Initialize Lady of the Lake (standard Avalon: enabled for 7+ players unless host disabled it)
+    const ladyEnabled = this.room.roleOptions?.ladyOfTheLake !== false && playerCount >= 7;
+    this.room.ladyOfTheLakeEnabled = ladyEnabled;
+    if (ladyEnabled) {
+      // Lady starts with the player to the right of the first leader (index 1 in player list, wrapping)
+      const playerIds = Object.keys(this.room.players);
+      const ladyStartIndex = (0 + playerIds.length - 1) % playerIds.length; // player to the "right" of leader
+      this.room.ladyOfTheLakeHolder = playerIds[ladyStartIndex];
+      this.room.ladyOfTheLakeUsed = [playerIds[ladyStartIndex]]; // holder cannot be targeted
+    } else {
+      this.room.ladyOfTheLakeHolder = undefined;
+      this.room.ladyOfTheLakeUsed = [];
+    }
+    this.room.ladyOfTheLakeTarget = undefined;
+    this.room.ladyOfTheLakeResult = undefined;
+    this.room.ladyOfTheLakeHistory = [];
 
     // Build player name map for replay readability
     const playerNames: Record<string, string> = {};
@@ -450,25 +469,128 @@ export class GameEngine {
         reason: 'failed_quests_limit'
       });
     } else {
-      // Continue to next voting round
-      this.room.currentRound++;
-      this.room.state = 'voting';
-      this.room.votes = {};
-      this.room.questTeam = [];
-      this.questVotes = [];
-      this.voteAttemptInRound = 0;
-
-      // Rotate leader for next round
-      this.rotateLeader();
-      // New leader must select a team — start AFK timer
-      this.startTeamSelectPhase();
-
-      this.logEvent('round_ended', {
-        round: this.room.currentRound - 1,
-        questResults: this.room.questResults,
-        nextRound: this.room.currentRound
-      });
+      // Lady of the Lake: after quest 2+ (currentRound >= 2), holder must inspect a player
+      if (this.room.ladyOfTheLakeEnabled && this.room.currentRound >= 2 && this.room.ladyOfTheLakeHolder) {
+        this.startLadyOfTheLakePhase();
+      } else {
+        this.advanceToNextRound();
+      }
     }
+  }
+
+  /**
+   * Advance to next voting round (extracted so Lady of the Lake can call it after inspection)
+   */
+  private advanceToNextRound(): void {
+    const prevRound = this.room.currentRound;
+    this.room.currentRound++;
+    this.room.state = 'voting';
+    this.room.votes = {};
+    this.room.questTeam = [];
+    this.questVotes = [];
+    this.voteAttemptInRound = 0;
+
+    // Rotate leader for next round
+    this.rotateLeader();
+    // New leader must select a team -- start AFK timer
+    this.startTeamSelectPhase();
+
+    this.logEvent('round_ended', {
+      round: prevRound,
+      questResults: this.room.questResults,
+      nextRound: this.room.currentRound,
+    });
+  }
+
+  /**
+   * Lady of the Lake phase: holder must choose a player to inspect
+   */
+  private startLadyOfTheLakePhase(): void {
+    this.room.state = 'lady_of_the_lake';
+    this.room.ladyOfTheLakeTarget = undefined;
+    this.room.ladyOfTheLakeResult = undefined;
+
+    this.logEvent('lady_of_the_lake_started', {
+      round: this.room.currentRound,
+      holderId: this.room.ladyOfTheLakeHolder,
+    });
+
+    // Timeout: if holder doesn't choose, skip the phase
+    if (this.ladyOfTheLakeTimeout) {
+      clearTimeout(this.ladyOfTheLakeTimeout);
+      this.ladyOfTheLakeTimeout = null;
+    }
+    this.ladyOfTheLakeTimeout = setTimeout(() => {
+      if (this.room.state === 'lady_of_the_lake') {
+        this.logEvent('lady_of_the_lake_timeout', { holderId: this.room.ladyOfTheLakeHolder });
+        this.room.ladyOfTheLakeTarget = undefined;
+        this.room.ladyOfTheLakeResult = undefined;
+        this.advanceToNextRound();
+        this.onStateChange?.(this.room);
+      }
+    }, LADY_OF_THE_LAKE_TIMEOUT_MS);
+  }
+
+  /**
+   * Lady of the Lake: holder chooses a target to inspect
+   */
+  public submitLadyOfTheLakeTarget(holderId: string, targetId: string): void {
+    if (this.room.state !== 'lady_of_the_lake') {
+      throw new Error('Not in Lady of the Lake phase');
+    }
+    if (holderId !== this.room.ladyOfTheLakeHolder) {
+      throw new Error(`Player ${holderId} is not the Lady of the Lake holder`);
+    }
+    if (!(targetId in this.room.players)) {
+      throw new Error(`Target player ${targetId} not found`);
+    }
+    if (this.room.ladyOfTheLakeUsed?.includes(targetId)) {
+      throw new Error(`Player ${targetId} has already been inspected / held the Lady`);
+    }
+    if (targetId === holderId) {
+      throw new Error('Cannot inspect yourself');
+    }
+
+    // Clear timeout
+    if (this.ladyOfTheLakeTimeout) {
+      clearTimeout(this.ladyOfTheLakeTimeout);
+      this.ladyOfTheLakeTimeout = null;
+    }
+
+    // Reveal target's team to the holder
+    const targetTeam = this.room.players[targetId]?.team ?? this.getRoleTeam(this.roleAssignments.get(targetId) ?? 'loyal');
+    this.room.ladyOfTheLakeTarget = targetId;
+    this.room.ladyOfTheLakeResult = targetTeam;
+
+    // Record in history (the result is public knowledge since holder can claim anything)
+    this.room.ladyOfTheLakeHistory = [
+      ...(this.room.ladyOfTheLakeHistory ?? []),
+      { round: this.room.currentRound, holderId, targetId, result: targetTeam },
+    ];
+
+    this.logEvent('lady_of_the_lake_inspected', {
+      holderId,
+      targetId,
+      targetTeam,
+      round: this.room.currentRound,
+    });
+
+    // Transfer the Lady token to the inspected player
+    this.room.ladyOfTheLakeUsed = [...(this.room.ladyOfTheLakeUsed ?? []), targetId];
+    this.room.ladyOfTheLakeHolder = targetId;
+
+    // Broadcast the result so the holder can see it, then advance after a short delay
+    this.onStateChange?.(this.room);
+
+    // Auto-advance to next round after 3 seconds (let the holder see the result)
+    setTimeout(() => {
+      if (this.room.state === 'lady_of_the_lake') {
+        this.room.ladyOfTheLakeTarget = undefined;
+        this.room.ladyOfTheLakeResult = undefined;
+        this.advanceToNextRound();
+        this.onStateChange?.(this.room);
+      }
+    }, 3000);
   }
 
   /**
@@ -642,6 +764,10 @@ export class GameEngine {
     if (this.assassinationTimeout) {
       clearTimeout(this.assassinationTimeout);
       this.assassinationTimeout = null;
+    }
+    if (this.ladyOfTheLakeTimeout) {
+      clearTimeout(this.ladyOfTheLakeTimeout);
+      this.ladyOfTheLakeTimeout = null;
     }
     this.onStateChange = null;
   }

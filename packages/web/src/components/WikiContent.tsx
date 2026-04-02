@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Search, X, Eye, Calendar } from 'lucide-react';
+import { Search, X, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { WikiArticle, WIKI_ARTICLES, WIKI_CATEGORIES } from '../data/wiki';
 
 interface WikiContentProps {
@@ -11,6 +11,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState(selectedCategory || '');
   const [selectedArticle, setSelectedArticle] = useState<WikiArticle | null>(null);
+  const [mobileListExpanded, setMobileListExpanded] = useState(true);
 
   // 搜索和過濾文章
   const filteredArticles = useMemo(() => {
@@ -100,9 +101,72 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
           </motion.div>
         )}
 
+        {/* Mobile: show article content first when selected */}
+        {selectedArticle && (
+          <div className="lg:hidden">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-avalon-card/50 border border-yellow-500 rounded-lg p-4 max-h-[70vh] overflow-y-auto"
+            >
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xl font-bold text-white flex-1">{selectedArticle.title}</h2>
+                  <button
+                    onClick={() => setSelectedArticle(null)}
+                    className="text-gray-400 hover:text-white ml-2"
+                  >
+                    <X size={22} />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs text-gray-400 pb-3 border-b border-gray-700">
+                  <div className="flex items-center gap-1">
+                    <Eye size={14} />
+                    {selectedArticle.views.toLocaleString()}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Calendar size={14} />
+                    {selectedArticle.updatedAt.toLocaleDateString('zh-TW')}
+                  </div>
+                  <span>{selectedArticle.author}</span>
+                </div>
+              </div>
+              <div className="prose prose-invert max-w-none text-gray-200">
+                <div
+                  className="space-y-4 text-sm leading-relaxed"
+                  dangerouslySetInnerHTML={{
+                    __html: selectedArticle.content
+                      .split('\n')
+                      .map((line) => {
+                        if (line.startsWith('# ')) return `<h1 class="text-lg font-bold text-white mt-4 mb-2">${line.substring(2)}</h1>`;
+                        if (line.startsWith('## ')) return `<h2 class="text-base font-bold text-yellow-400 mt-3 mb-2">${line.substring(3)}</h2>`;
+                        if (line.startsWith('### ')) return `<h3 class="text-sm font-semibold text-gray-300 mt-2 mb-1">${line.substring(4)}</h3>`;
+                        if (line.startsWith('- ')) return `<li class="ml-4">${line.substring(2)}</li>`;
+                        if (line.startsWith('❌') || line.startsWith('✅')) return `<div class="flex items-start gap-2">${line}</div>`;
+                        if (line.startsWith('**') && line.endsWith('**')) return `<strong class="text-white">${line.substring(2, line.length - 2)}</strong>`;
+                        if (line.trim()) return `<p>${line}</p>`;
+                        return '';
+                      })
+                      .join(''),
+                  }}
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Mobile: collapsible article list toggle */}
+        <button
+          onClick={() => setMobileListExpanded(v => !v)}
+          className="lg:hidden flex items-center justify-between w-full bg-avalon-card/50 border border-gray-600 rounded-lg px-4 py-3 text-gray-300 text-sm font-semibold"
+        >
+          <span>{filteredArticles.length} 篇文章 (articles)</span>
+          {mobileListExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </button>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* 文章列表 */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* Article list -- hidden on mobile when collapsed or when an article is selected */}
+          <div className={`lg:col-span-1 space-y-4 ${!mobileListExpanded || selectedArticle ? 'hidden lg:block' : ''}`}>
             {filteredArticles.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -119,7 +183,11 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  onClick={() => setSelectedArticle(article)}
+                  onClick={() => {
+                    setSelectedArticle(article);
+                    setMobileListExpanded(false);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                     selectedArticle?.id === article.id
                       ? 'bg-yellow-500/20 border-yellow-500'
@@ -157,8 +225,8 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
             )}
           </div>
 
-          {/* 文章詳情 */}
-          <div className="lg:col-span-1">
+          {/* Article detail -- desktop only (mobile version is above) */}
+          <div className="hidden lg:block lg:col-span-2">
             {selectedArticle ? (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -175,8 +243,6 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                       <X size={24} />
                     </button>
                   </div>
-
-                  {/* 文章元數據 */}
                   <div className="flex flex-wrap gap-4 text-xs text-gray-400 pb-4 border-b border-gray-700">
                     <div className="flex items-center gap-1">
                       <Eye size={14} />
@@ -189,8 +255,6 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                     <span>{selectedArticle.author}</span>
                   </div>
                 </div>
-
-                {/* 文章內容 */}
                 <div className="prose prose-invert max-w-none text-gray-200">
                   <div
                     className="space-y-4 text-sm leading-relaxed"
@@ -198,22 +262,13 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                       __html: selectedArticle.content
                         .split('\n')
                         .map((line) => {
-                          // 簡單的 Markdown 支持
-                          if (line.startsWith('# ')) {
-                            return `<h1 class="text-lg font-bold text-white mt-4 mb-2">${line.substring(2)}</h1>`;
-                          } else if (line.startsWith('## ')) {
-                            return `<h2 class="text-base font-bold text-yellow-400 mt-3 mb-2">${line.substring(3)}</h2>`;
-                          } else if (line.startsWith('### ')) {
-                            return `<h3 class="text-sm font-semibold text-gray-300 mt-2 mb-1">${line.substring(4)}</h3>`;
-                          } else if (line.startsWith('- ')) {
-                            return `<li class="ml-4">${line.substring(2)}</li>`;
-                          } else if (line.startsWith('❌') || line.startsWith('✅')) {
-                            return `<div class="flex items-start gap-2">${line}</div>`;
-                          } else if (line.startsWith('**') && line.endsWith('**')) {
-                            return `<strong class="text-white">${line.substring(2, line.length - 2)}</strong>`;
-                          } else if (line.trim()) {
-                            return `<p>${line}</p>`;
-                          }
+                          if (line.startsWith('# ')) return `<h1 class="text-lg font-bold text-white mt-4 mb-2">${line.substring(2)}</h1>`;
+                          if (line.startsWith('## ')) return `<h2 class="text-base font-bold text-yellow-400 mt-3 mb-2">${line.substring(3)}</h2>`;
+                          if (line.startsWith('### ')) return `<h3 class="text-sm font-semibold text-gray-300 mt-2 mb-1">${line.substring(4)}</h3>`;
+                          if (line.startsWith('- ')) return `<li class="ml-4">${line.substring(2)}</li>`;
+                          if (line.startsWith('❌') || line.startsWith('✅')) return `<div class="flex items-start gap-2">${line}</div>`;
+                          if (line.startsWith('**') && line.endsWith('**')) return `<strong class="text-white">${line.substring(2, line.length - 2)}</strong>`;
+                          if (line.trim()) return `<p>${line}</p>`;
                           return '';
                         })
                         .join(''),

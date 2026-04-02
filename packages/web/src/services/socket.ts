@@ -264,6 +264,11 @@ export function submitAssassination(roomId: string, assassinId: string, targetId
   socket.emit('game:assassinate', roomId, assassinId, targetId);
 }
 
+export function submitLadyOfTheLake(roomId: string, holderId: string, targetId: string): void {
+  const socket = getSocket();
+  socket.emit('game:lady-of-the-lake', roomId, holderId, targetId);
+}
+
 export function sendChatMessage(roomId: string, message: string): void {
   const socket = getSocket();
   socket.emit('chat:send-message', roomId, message);

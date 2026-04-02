@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { VoteRecord, Room } from '@avalon/shared';
@@ -18,6 +18,10 @@ export default function VoteRevealOverlay({
   duration = 3500,
 }: VoteRevealOverlayProps): JSX.Element {
   const [progress, setProgress] = useState(100);
+  // Stabilize onDismiss so the timer effect does not restart on parent re-renders
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  const stableDismiss = useCallback(() => onDismissRef.current(), []);
 
   useEffect(() => {
     audioService.playSound(record.approved ? 'approval' : 'rejection');
@@ -30,12 +34,12 @@ export default function VoteRevealOverlay({
       if (pct === 0) clearInterval(interval);
     }, 50);
 
-    const timeout = setTimeout(onDismiss, duration);
+    const timeout = setTimeout(stableDismiss, duration);
     return () => {
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  }, [duration, onDismiss]);
+  }, [duration, stableDismiss, record.approved]);
 
   const approvals = Object.values(record.votes).filter(Boolean).length;
   const rejections = Object.values(record.votes).filter(v => !v).length;
@@ -47,7 +51,7 @@ export default function VoteRevealOverlay({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm"
-      onClick={onDismiss}
+      onClick={stableDismiss}
     >
       <motion.div
         initial={{ scale: 0.7, y: 40 }}
