@@ -5,6 +5,7 @@ const MAX_REPLAYS = 200;
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();
   private replays: Map<string, Room> = new Map();
+  private roomPasswords: Map<string, string> = new Map();
   private readonly ROOM_EXPIRY_TIME = 30 * 60 * 1000; // 30 minutes
   private cleanupInterval: NodeJS.Timeout | null = null;
 
@@ -101,6 +102,24 @@ export class RoomManager {
 
   public getRoomCount(): number {
     return this.rooms.size;
+  }
+
+  public setRoomPassword(roomId: string, password: string | null): void {
+    if (password) {
+      this.roomPasswords.set(roomId, password);
+      const room = this.rooms.get(roomId);
+      if (room) room.isPrivate = true;
+    } else {
+      this.roomPasswords.delete(roomId);
+      const room = this.rooms.get(roomId);
+      if (room) room.isPrivate = false;
+    }
+  }
+
+  public checkRoomPassword(roomId: string, password?: string): boolean {
+    const stored = this.roomPasswords.get(roomId);
+    if (!stored) return true; // no password set
+    return stored === password;
   }
 
   public updateRoom(roomId: string, room: Partial<Room>): Room | undefined {

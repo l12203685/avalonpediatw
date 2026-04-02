@@ -41,6 +41,16 @@ function makeRoom(playerCount = 5): Room {
     failCount: 0,
     evilWins: null,
     leaderIndex: 0,
+    voteHistory: [],
+    questHistory: [],
+    questVotedCount: 0,
+    roleOptions: {
+      percival: true,
+      morgana: true,
+      oberon: true,
+      mordred: true,
+    },
+    readyPlayerIds: [],
     createdAt: Date.now() - 1000,
     updatedAt: Date.now(),
   };
@@ -237,19 +247,21 @@ describe('Integration: Vote approval and rejection flows', () => {
     engine.cleanup();
   });
 
-  it('3 consecutive rejections ends game with evil win', () => {
+  it('5 consecutive rejections ends game with evil win', () => {
     const room = makeRoom(5);
     const engine = new GameEngine(room);
     engine.startGame();
 
-    // Reject 3 times
+    // Reject 5 times (standard Avalon rules: 5 consecutive rejections = evil wins)
     voteAll(engine, room, false); // failCount = 1
     voteAll(engine, room, false); // failCount = 2
     voteAll(engine, room, false); // failCount = 3
+    voteAll(engine, room, false); // failCount = 4
+    voteAll(engine, room, false); // failCount = 5
 
     expect(room.state).toBe('ended');
     expect(room.evilWins).toBe(true);
-    expect(room.failCount).toBe(3);
+    expect(room.failCount).toBe(5);
 
     engine.cleanup();
   });
@@ -436,8 +448,8 @@ describe('Integration: Assassination phase', () => {
 
     expect(room.state).toBe('discussion');
 
-    // Advance past assassination timeout (30s)
-    vi.advanceTimersByTime(31_000);
+    // Advance past assassination timeout (120s)
+    vi.advanceTimersByTime(121_000);
 
     expect(room.state).toBe('ended');
     expect(room.evilWins).toBe(false);
@@ -477,8 +489,8 @@ describe('Integration: Multi-round game with rejection + quest interleaving', ()
     expect(room.questResults).toEqual(['success']);
     expect(room.currentRound).toBe(2);
 
-    // failCount should still be 1 (only resets to 0 on new game, not new round)
-    expect(room.failCount).toBe(1);
+    // failCount resets to 0 when a vote is approved (standard Avalon rules)
+    expect(room.failCount).toBe(0);
 
     engine.cleanup();
   });

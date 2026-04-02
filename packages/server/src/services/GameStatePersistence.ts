@@ -1,6 +1,6 @@
-import { Room } from '@avalon/shared';
+import { Room, Role } from '@avalon/shared';
 import { getAdminDB } from './firebase';
-import { GameEngineState } from '../game/GameEngine';
+import { GameEngineState, GameEventRecord } from '../game/GameEngine';
 
 /**
  * Persists active game room state to Firebase Realtime Database.
@@ -184,6 +184,16 @@ export class GameStatePersistence {
       failCount: (data.failCount as number) ?? 0,
       evilWins: (data.evilWins as boolean | null) ?? null,
       leaderIndex: (data.leaderIndex as number) ?? 0,
+      voteHistory: (data.voteHistory as Room['voteHistory']) ?? [],
+      questHistory: (data.questHistory as Room['questHistory']) ?? [],
+      questVotedCount: (data.questVotedCount as number) ?? 0,
+      roleOptions: (data.roleOptions as Room['roleOptions']) ?? {
+        percival: true,
+        morgana: true,
+        oberon: false,
+        mordred: false,
+      },
+      readyPlayerIds: (data.readyPlayerIds as string[]) ?? [],
       createdAt: (data.createdAt as number) ?? Date.now(),
       updatedAt: (data.updatedAt as number) ?? Date.now(),
     };
@@ -206,9 +216,12 @@ export class GameStatePersistence {
     return {
       version: 1,
       roomId: data.roomId as string,
-      roleAssignments: (data.roleAssignments as Record<string, string>) ?? {},
+      roleAssignments: (data.roleAssignments as Record<string, Role>) ?? {},
       questVotes: (data.questVotes as Array<{ playerId: string; vote: 'success' | 'fail' }>) ?? [],
       currentLeaderIndex: (data.currentLeaderIndex as number) ?? 0,
+      voteAttemptInRound: (data.voteAttemptInRound as number) ?? 0,
+      eventBuffer: (data.eventBuffer as GameEventRecord[]) ?? [],
+      eventSeq: (data.eventSeq as number) ?? 0,
     };
   }
 }

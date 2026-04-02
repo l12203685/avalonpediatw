@@ -21,6 +21,8 @@ const ROLE_K_WEIGHTS: Record<Role, number> = {
   percival: 1.2,
   morgana: 1.2,
   oberon: 1.1,
+  mordred: 1.3,
+  minion: 1.0,
   loyal: 1.0,
 };
 
