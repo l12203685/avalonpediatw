@@ -3,6 +3,7 @@ import { verifyIdToken, getUserProfile, createUserProfile } from '../services/fi
 import { User } from '@avalon/shared';
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: User;

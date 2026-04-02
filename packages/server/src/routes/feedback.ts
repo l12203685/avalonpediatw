@@ -56,7 +56,7 @@ async function resolveUser(authHeader: string | undefined): Promise<{ supabaseId
     if (payload.sub && payload.displayName) {
       return { supabaseId: payload.sub as string, displayName: payload.displayName as string };
     }
-  } catch {}
+  } catch { /* ignore */ }
 
   // Try Firebase
   if (isFirebaseAdminReady()) {
@@ -67,7 +67,7 @@ async function resolveUser(authHeader: string | undefined): Promise<{ supabaseId
         supabaseId: supabaseId || decoded.uid,
         displayName: (decoded.name as string) || (decoded.email as string) || '匿名',
       };
-    } catch {}
+    } catch { /* ignore */ }
   }
 
   return null;
