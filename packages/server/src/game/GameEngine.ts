@@ -18,6 +18,17 @@ export interface GameEventRecord {
   event_data: Record<string, unknown>;
 }
 
+export interface GameEngineState {
+  version: number;
+  roomId: string;
+  roleAssignments: Record<string, Role>;
+  questVotes: QuestVote[];
+  currentLeaderIndex: number;
+  voteAttemptInRound: number;
+  eventBuffer: GameEventRecord[];
+  eventSeq: number;
+}
+
 export class GameEngine {
   private room: Room;
   private roleAssignments: Map<string, Role> = new Map();
@@ -746,6 +757,48 @@ export class GameEngine {
 
   public getRoom(): Room {
     return this.room;
+  }
+
+  /**
+   * Serialize engine-private state into a plain object for persistence (e.g. Firebase).
+   * Room state is NOT included — persist the Room object separately.
+   */
+  public serialize(): GameEngineState {
+    const roleAssignments: Record<string, Role> = {};
+    for (const [id, role] of this.roleAssignments) {
+      roleAssignments[id] = role;
+    }
+    return {
+      version: 1,
+      roomId: this.room.id,
+      roleAssignments,
+      questVotes: [...this.questVotes],
+      currentLeaderIndex: this.currentLeaderIndex,
+      voteAttemptInRound: this.voteAttemptInRound,
+      eventBuffer: [...this.eventBuffer],
+      eventSeq: this.eventSeq,
+    };
+  }
+
+  /**
+   * Restore a GameEngine from a serialized snapshot + the live Room object.
+   */
+  public static restore(snapshot: GameEngineState, room: Room): GameEngine {
+    if (snapshot.roomId !== room.id) {
+      throw new Error(
+        `Snapshot roomId "${snapshot.roomId}" does not match room.id "${room.id}"`
+      );
+    }
+    const engine = new GameEngine(room);
+    for (const [id, role] of Object.entries(snapshot.roleAssignments)) {
+      engine.roleAssignments.set(id, role);
+    }
+    engine.questVotes = [...snapshot.questVotes];
+    engine.currentLeaderIndex = snapshot.currentLeaderIndex;
+    engine.voteAttemptInRound = snapshot.voteAttemptInRound;
+    engine.eventBuffer = [...snapshot.eventBuffer];
+    engine.eventSeq = snapshot.eventSeq;
+    return engine;
   }
 
   public cleanup(): void {
