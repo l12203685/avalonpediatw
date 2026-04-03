@@ -10,7 +10,7 @@
  *   - Aggregate stats from raw data columns
  */
 
-import { google, sheets_v4 } from 'googleapis';
+import { sheets_v4, auth as gauth, sheets } from '@googleapis/sheets';
 import path from 'path';
 import fs from 'fs';
 
@@ -188,12 +188,12 @@ function getSheetsClient(): sheets_v4.Sheets {
     );
   }
 
-  const auth = new google.auth.GoogleAuth({
+  const authClient = new gauth.GoogleAuth({
     keyFile: credPath,
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
 
-  sheetsClient = google.sheets({ version: 'v4', auth });
+  sheetsClient = sheets({ version: 'v4', auth: authClient });
   return sheetsClient;
 }
 
