@@ -181,18 +181,30 @@ function findCredentials(): string | null {
 function getSheetsClient(): sheets_v4.Sheets {
   if (sheetsClient) return sheetsClient;
 
+  const scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
+
+  // Option 1: Credentials JSON inline via env var (Render / cloud)
+  const credJson = process.env.GOOGLE_SHEETS_CREDENTIALS_JSON;
+  if (credJson) {
+    try {
+      const credentials = JSON.parse(credJson);
+      const authClient = new gauth.GoogleAuth({ credentials, scopes });
+      sheetsClient = sheets({ version: 'v4', auth: authClient });
+      return sheetsClient;
+    } catch (e) {
+      console.error('[sheetsAnalysis] Failed to parse GOOGLE_SHEETS_CREDENTIALS_JSON:', e);
+    }
+  }
+
+  // Option 2: Credentials file path
   const credPath = findCredentials();
   if (!credPath) {
     throw new Error(
-      'Google Sheets credentials not found. Set GOOGLE_SHEETS_CREDENTIALS env var or place credentials at ~/.claude/credentials/google_sheets_avalonpediatw.json',
+      'Google Sheets credentials not found. Set GOOGLE_SHEETS_CREDENTIALS_JSON env var (JSON string) or GOOGLE_SHEETS_CREDENTIALS (file path)',
     );
   }
 
-  const authClient = new gauth.GoogleAuth({
-    keyFile: credPath,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-
+  const authClient = new gauth.GoogleAuth({ keyFile: credPath, scopes });
   sheetsClient = sheets({ version: 'v4', auth: authClient });
   return sheetsClient;
 }
