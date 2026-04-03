@@ -7,15 +7,21 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm@8
 
-# Copy workspace files
-COPY pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json turbo.json package.json ./
+# Copy workspace config
+COPY pnpm-workspace.yaml tsconfig.json turbo.json package.json ./
 
-# Copy packages
-COPY packages ./packages
+# Copy package manifests for all workspace members
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/server/package.json packages/server/package.json
+# Web stub: needed for workspace resolution but deps skipped
+RUN mkdir -p packages/web && echo '{"name":"@avalon/web","version":"0.0.1","private":true}' > packages/web/package.json
 
-# Install dependencies (limit memory for Render free tier)
-ENV NODE_OPTIONS="--max-old-space-size=480"
-RUN pnpm install --frozen-lockfile --filter @avalon/shared... --filter @avalon/server...
+# Install server + shared dependencies only (no lockfile — web stub differs)
+RUN pnpm install --no-frozen-lockfile
+
+# Copy source code
+COPY packages/shared ./packages/shared
+COPY packages/server ./packages/server
 
 # Build shared first, then server
 RUN pnpm --filter @avalon/shared build
