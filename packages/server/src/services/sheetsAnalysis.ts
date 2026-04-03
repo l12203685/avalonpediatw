@@ -287,33 +287,29 @@ async function readSheet(
 ): Promise<string[][]> {
   const sheetName = range.split('!')[0];
 
-  // Try local cache first (instant, no network)
-  const cache = loadSheetsCache();
+  // Try cache first (local file → GitHub download → Sheets API as last resort)
+  const cache = await ensureCache();
   if (cache && cache[sheetName]) {
     console.log(`[sheetsAnalysis] Cache hit: ${sheetName} (${cache[sheetName].length} rows)`);
     return cache[sheetName];
   }
 
-  // No cache — try Sheets API with 15s timeout
-  try {
-    const client = getSheetsClient();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const res = await client.spreadsheets.values.get({
-      spreadsheetId,
-      range,
-    });
-    clearTimeout(timeout);
-    return (res.data.values as string[][]) || [];
-  } catch (e: any) {
-    console.warn(`[sheetsAnalysis] API failed for ${sheetName}:`, e?.message?.slice(0, 80));
-    // Last resort: try GitHub download
-    const downloaded = await downloadCache();
-    if (downloaded && sheetsCache && sheetsCache[sheetName]) {
-      return sheetsCache[sheetName];
+  // Cache miss for this specific sheet — try Sheets API
+  if (sheets && gauth) {
+    try {
+      const client = getSheetsClient();
+      const res = await Promise.race([
+        client.spreadsheets.values.get({ spreadsheetId, range }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Sheets API timeout')), 15000)),
+      ]) as any;
+      return (res.data.values as string[][]) || [];
+    } catch (e: any) {
+      console.warn(`[sheetsAnalysis] API failed for ${sheetName}:`, e?.message?.slice(0, 80));
+      throw e;
     }
-    throw e;
   }
+
+  throw new Error(`No data for ${sheetName}: cache miss and Sheets API unavailable`);
 }
 
 // ---------------------------------------------------------------------------
