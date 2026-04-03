@@ -213,16 +213,49 @@ function getSheetsClient(): sheets_v4.Sheets {
 // Low-level sheet reading
 // ---------------------------------------------------------------------------
 
+// Cache file fallback — pre-exported Sheets data
+const CACHE_PATH = require('path').resolve(__dirname, '..', '..', 'sheets_cache.json');
+let sheetsCache: Record<string, string[][]> | null = null;
+
+function loadSheetsCache(): Record<string, string[][]> | null {
+  if (sheetsCache) return sheetsCache;
+  try {
+    const fs = require('fs');
+    if (fs.existsSync(CACHE_PATH)) {
+      sheetsCache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf-8'));
+      console.log('[sheetsAnalysis] Loaded cache from', CACHE_PATH, Object.keys(sheetsCache!).length, 'sheets');
+      return sheetsCache;
+    }
+  } catch (e) {
+    console.warn('[sheetsAnalysis] Cache load failed:', e);
+  }
+  return null;
+}
+
 async function readSheet(
   spreadsheetId: string,
   range: string,
 ): Promise<string[][]> {
-  const sheets = getSheetsClient();
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range,
-  });
-  return (res.data.values as string[][]) || [];
+  // Extract sheet name from range (e.g., "牌譜!A:ZZ" -> "牌譜")
+  const sheetName = range.split('!')[0];
+
+  try {
+    const sheets = getSheetsClient();
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range,
+    });
+    return (res.data.values as string[][]) || [];
+  } catch (e: any) {
+    // Fallback to cache on quota/network errors
+    console.warn(`[sheetsAnalysis] API failed for ${sheetName}, trying cache:`, e?.message?.slice(0, 80));
+    const cache = loadSheetsCache();
+    if (cache && cache[sheetName]) {
+      console.log(`[sheetsAnalysis] Using cached ${sheetName}: ${cache[sheetName].length} rows`);
+      return cache[sheetName];
+    }
+    throw e;
+  }
 }
 
 // ---------------------------------------------------------------------------
