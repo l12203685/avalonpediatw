@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady, setRoomPassword } from '../services/socket';
-import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown, Lock, Unlock } from 'lucide-react';
+import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown, Lock, Unlock, ArrowLeft } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
 import ChatPanel from '../components/ChatPanel';
+
+const LOBBY_TIMEOUT_MS = 12_000; // 12 seconds to receive room state
 
 const ROLE_LABEL: Record<string, string> = {
   merlin: '梅林', percival: '派西維爾', loyal: '忠臣',
@@ -20,10 +22,24 @@ const ROLE_OPTION_INFO: Record<string, { label: string; description: string; pai
 };
 
 export default function LobbyPage(): JSX.Element {
-  const { room, currentPlayer, quickSoloMode, setQuickSoloMode } = useGameStore();
+  const { room, currentPlayer, quickSoloMode, setQuickSoloMode, setGameState, addToast } = useGameStore();
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [timedOut, setTimedOut] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Timeout: if room state never arrives, let the user go back
+  useEffect(() => {
+    if (room) {
+      // Room arrived — clear any pending timeout
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+      setTimedOut(false);
+      return;
+    }
+    timerRef.current = setTimeout(() => setTimedOut(true), LOBBY_TIMEOUT_MS);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [room]);
 
   // Quick solo mode: auto-fill with 4 normal bots then start when room is ready
   useEffect(() => {
@@ -39,7 +55,38 @@ export default function LobbyPage(): JSX.Element {
   }, [quickSoloMode, room?.id, Object.keys(room?.players ?? {}).length]);
 
   if (!room || !currentPlayer) {
-    return <div className="text-center text-white">載入中…</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 text-white">
+        {timedOut ? (
+          <>
+            <p className="text-red-400 font-semibold">
+              連線逾時 — 伺服器未回應房間資料 (Connection timed out)
+            </p>
+            <p className="text-sm text-gray-400">
+              可能原因：伺服器冷啟動中、網路不穩、或 WebSocket 連線失敗
+            </p>
+            <button
+              onClick={() => { addToast('已返回首頁', 'info'); setGameState('home'); }}
+              className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              <ArrowLeft size={16} />
+              返回首頁 (Back to Home)
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-400" />
+            <p>連線中... (Connecting to room...)</p>
+            <button
+              onClick={() => setGameState('home')}
+              className="mt-2 text-sm text-gray-500 hover:text-gray-300 transition-colors underline"
+            >
+              取消 (Cancel)
+            </button>
+          </>
+        )}
+      </div>
+    );
   }
 
   const playerList = Object.values(room.players);

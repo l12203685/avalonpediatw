@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Room, Player } from '@avalon/shared';
 
-type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends' | 'replay';
+type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends' | 'replay' | 'analysis';
 export type SocketStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 export interface Toast {

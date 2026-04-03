@@ -12,6 +12,7 @@ import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
 import FriendsPage from './pages/FriendsPage';
 import AiStatsPage from './pages/AiStatsPage';
+import AnalysisPage from './pages/AnalysisPage';
 import ToastContainer from './components/ToastContainer';
 import FloatingControls from './components/FloatingControls';
 import { submitError } from './services/api';
@@ -55,10 +56,15 @@ function App(): JSX.Element {
     // Initialize Firebase Auth
     initializeAuth();
 
-    // Listen to auth state changes
+    // Listen to auth state changes — re-init socket on page refresh
     const unsubscribe = onAuthStateChange(async (userWithToken) => {
       if (userWithToken) {
         setIsAuthenticated(true);
+        try {
+          await initializeSocket(userWithToken.token);
+        } catch {
+          // Socket init failed — user will see connection banner
+        }
       } else {
         setIsAuthenticated(false);
         disconnectSocket();
@@ -119,6 +125,7 @@ function App(): JSX.Element {
           {gameState === 'profile' && <ProfilePage />}
           {gameState === 'friends' && <FriendsPage />}
           {gameState === 'aiStats' && <AiStatsPage />}
+          {gameState === 'analysis' && <AnalysisPage />}
         </>
       )}
       <ToastContainer />

@@ -10,6 +10,7 @@ import { authRouter } from './routes/auth';
 import { apiRouter } from './routes/api';
 import { friendsRouter } from './routes/friends';
 import { feedbackRouter } from './routes/feedback';
+import { analysisRouter } from './routes/analysis';
 import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
 
 const app: Express = express();
@@ -35,6 +36,7 @@ app.use('/auth', authRouter);
 app.use('/api', apiRouter);
 app.use('/api/friends', friendsRouter);
 app.use('/api/feedback', feedbackRouter);
+app.use('/api/analysis', analysisRouter);
 
 // HTTP server (needed for Socket.IO)
 const httpServer = createServer(app);

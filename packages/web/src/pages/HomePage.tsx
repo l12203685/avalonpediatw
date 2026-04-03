@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { createRoom, joinRoom, listRooms, spectateRoom, getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
-import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot } from 'lucide-react';
+import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot, BarChart3 } from 'lucide-react';
 
 interface OpenRoom {
   id: string;
@@ -90,8 +90,12 @@ export default function HomePage(): JSX.Element {
     }
 
     localStorage.setItem('avalon_player_name', playerName.trim());
-    createRoom(playerName, roomPassword.trim() || undefined);
-    setGameState('lobby');
+    try {
+      createRoom(playerName, roomPassword.trim() || undefined);
+      setGameState('lobby');
+    } catch {
+      addToast('無法建立房間 — 伺服器連線失敗，請重新整理頁面', 'error');
+    }
   };
 
   const handleQuickSolo = (): void => {
@@ -102,9 +106,14 @@ export default function HomePage(): JSX.Element {
       return;
     }
     if (currentPlayer) setCurrentPlayer({ ...currentPlayer, name });
-    setQuickSoloMode(true);
-    createRoom(name);
-    setGameState('lobby');
+    try {
+      setQuickSoloMode(true);
+      createRoom(name);
+      setGameState('lobby');
+    } catch {
+      setQuickSoloMode(false);
+      addToast('無法建立房間 — 伺服器連線失敗，請重新整理頁面', 'error');
+    }
   };
 
   const handleJoinRoom = (): void => {
@@ -124,8 +133,12 @@ export default function HomePage(): JSX.Element {
     }
 
     localStorage.setItem('avalon_player_name', playerName.trim());
-    joinRoom(roomId, joinPassword.trim() || undefined);
-    setGameState('lobby');
+    try {
+      joinRoom(roomId, joinPassword.trim() || undefined);
+      setGameState('lobby');
+    } catch {
+      addToast('無法加入房間 — 伺服器連線失敗，請重新整理頁面', 'error');
+    }
   };
 
   return (
@@ -296,6 +309,16 @@ export default function HomePage(): JSX.Element {
               >
                 <Bot size={20} />
                 AI 自對弈統計 (AI Stats)
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setGameState('analysis')}
+                className="w-full bg-gradient-to-r from-cyan-700 to-blue-700 hover:from-cyan-800 hover:to-blue-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-cyan-500/50"
+              >
+                <BarChart3 size={20} />
+                數據分析 (Game Analysis)
               </motion.button>
             </motion.div>
 

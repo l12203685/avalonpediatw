@@ -145,6 +145,120 @@ export function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+// ── Analysis API (Google Sheets data) ────────────────────────────────────────
+
+export interface AnalysisOverview {
+  totalGames: number;
+  totalPlayers: number;
+  redWinRate: number;
+  blueWinRate: number;
+  merlinKillRate: number;
+  topPlayersByWinRate: Array<{ name: string; winRate: number; games: number }>;
+  topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
+}
+
+export interface AnalysisPlayerStats {
+  name: string;
+  totalGames: number;
+  winRate: number;
+  roleTheory: number;
+  positionTheory: number;
+  redWin: number;
+  blueWin: number;
+  red3Red: number;
+  redMerlinDead: number;
+  redMerlinAlive: number;
+  blue3Red: number;
+  blueMerlinDead: number;
+  blueMerlinAlive: number;
+  roleWinRates: Record<string, number>;
+  roleDistribution: Record<string, number>;
+  redRoleRate: number;
+  blueRoleRate: number;
+  seatWinRates: Record<string, number>;
+  seatRedWinRates: Record<string, number>;
+  seatBlueWinRates: Record<string, number>;
+  rawRoleGames: Record<string, number>;
+}
+
+export interface AnalysisPlayerRadar {
+  player: AnalysisPlayerStats;
+  radar: {
+    winRate: number;
+    redWinRate: number;
+    blueMerlinProtect: number;
+    roleTheory: number;
+    positionTheory: number;
+    redMerlinKillRate: number;
+    experience: number;
+  };
+}
+
+export interface ChemistryMatrix {
+  players: string[];
+  values: number[][];
+}
+
+export interface ChemistryData {
+  coWin: ChemistryMatrix;
+  coLose: ChemistryMatrix;
+  winCorr: ChemistryMatrix;
+  coWinMinusLose: ChemistryMatrix;
+}
+
+export interface MissionAnalysisData {
+  missionPassRates: Array<{ round: number; passRate: number; totalGames: number }>;
+  failDistribution: Array<{ fails: number; count: number; percentage: number }>;
+  missionOutcomeByRound: Array<{ round: number; allPass: number; oneFail: number; twoFail: number; total: number }>;
+}
+
+export interface RoundsAnalysisData {
+  visionStats: {
+    merlinInTeam: { games: number; mission1PassRate: number; redWinRate: number; blueWinRate: number };
+    merlinNotInTeam: { games: number; mission1PassRate: number; redWinRate: number; blueWinRate: number };
+    percivalInTeam: { games: number; mission1PassRate: number; redWinRate: number };
+    percivalNotInTeam: { games: number; mission1PassRate: number; redWinRate: number };
+  };
+  redInR11: Array<{ redCount: number; games: number; mission1PassRate: number; redWinRate: number }>;
+  mission1Branch: Array<{ passed: boolean; games: number; redWinRate: number; merlinKillRate: number }>;
+  roundProgression: Record<string, { bluePct: number; redPct: number; total: number }>;
+  gameStates: Array<{ state: string; games: number; redWinRate: number }>;
+}
+
+interface ApiEnvelope<T> { success: boolean; data?: T; error?: string }
+
+async function analysisApiFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${SERVER_URL}/api/analysis${path}`);
+  if (!res.ok) throw new Error(`Analysis API ${res.status}: ${path}`);
+  const body = (await res.json()) as ApiEnvelope<T>;
+  if (!body.success || !body.data) throw new Error(body.error || 'Unknown error');
+  return body.data;
+}
+
+export async function fetchAnalysisOverview(): Promise<AnalysisOverview> {
+  return analysisApiFetch<AnalysisOverview>('/overview');
+}
+
+export async function fetchAnalysisPlayers(): Promise<{ players: AnalysisPlayerStats[]; total: number }> {
+  return analysisApiFetch<{ players: AnalysisPlayerStats[]; total: number }>('/players');
+}
+
+export async function fetchAnalysisPlayerByName(name: string): Promise<AnalysisPlayerRadar> {
+  return analysisApiFetch<AnalysisPlayerRadar>(`/players/${encodeURIComponent(name)}`);
+}
+
+export async function fetchAnalysisChemistry(): Promise<ChemistryData> {
+  return analysisApiFetch<ChemistryData>('/chemistry');
+}
+
+export async function fetchAnalysisMissions(): Promise<MissionAnalysisData> {
+  return analysisApiFetch<MissionAnalysisData>('/missions');
+}
+
+export async function fetchAnalysisRounds(): Promise<RoundsAnalysisData> {
+  return analysisApiFetch<RoundsAnalysisData>('/rounds');
+}
+
 // ── AI Stats API ──────────────────────────────────────────────────────────────
 
 export interface AiStatsDataApi {
