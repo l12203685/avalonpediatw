@@ -223,18 +223,21 @@ async function downloadCache(): Promise<boolean> {
   try {
     const https = await import('https');
     return new Promise((resolve) => {
-      https.get(CACHE_URL, (res: any) => {
-        if (res.statusCode !== 200) { resolve(false); return; }
+      const timer = setTimeout(() => { resolve(false); }, 10000); // 10s timeout
+      const req = https.get(CACHE_URL, (res: any) => {
+        if (res.statusCode !== 200) { clearTimeout(timer); resolve(false); return; }
         let data = '';
         res.on('data', (chunk: string) => { data += chunk; });
         res.on('end', () => {
+          clearTimeout(timer);
           try {
             sheetsCache = JSON.parse(data);
             console.log('[sheetsAnalysis] Downloaded cache from GitHub:', Object.keys(sheetsCache!).length, 'sheets');
             resolve(true);
           } catch { resolve(false); }
         });
-      }).on('error', () => resolve(false));
+      });
+      req.on('error', () => { clearTimeout(timer); resolve(false); });
     });
   } catch { return false; }
 }
@@ -269,23 +272,31 @@ async function readSheet(
 ): Promise<string[][]> {
   const sheetName = range.split('!')[0];
 
-  // Try cache FIRST (fast, no API call — local file or GitHub download)
-  const cache = await ensureCache();
+  // Try local cache first (instant, no network)
+  const cache = loadSheetsCache();
   if (cache && cache[sheetName]) {
-    console.log(`[sheetsAnalysis] Using cached ${sheetName}: ${cache[sheetName].length} rows`);
+    console.log(`[sheetsAnalysis] Cache hit: ${sheetName} (${cache[sheetName].length} rows)`);
     return cache[sheetName];
   }
 
-  // Cache miss — try API
+  // No cache — try Sheets API with 15s timeout
   try {
     const client = getSheetsClient();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const res = await client.spreadsheets.values.get({
       spreadsheetId,
       range,
     });
+    clearTimeout(timeout);
     return (res.data.values as string[][]) || [];
   } catch (e: any) {
     console.warn(`[sheetsAnalysis] API failed for ${sheetName}:`, e?.message?.slice(0, 80));
+    // Last resort: try GitHub download
+    const downloaded = await downloadCache();
+    if (downloaded && sheetsCache && sheetsCache[sheetName]) {
+      return sheetsCache[sheetName];
+    }
     throw e;
   }
 }
