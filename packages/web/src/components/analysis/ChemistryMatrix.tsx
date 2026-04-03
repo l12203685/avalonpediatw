@@ -105,6 +105,44 @@ export default function ChemistryMatrixPanel(): JSX.Element {
         {MATRIX_OPTIONS.find(o => o.key === activeKey)?.desc}
       </p>
 
+      {/* Fix #5: Interpretation guide */}
+      <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-3 text-[10px] text-gray-500 space-y-1">
+        <p className="font-bold text-gray-400">如何解讀:</p>
+        {activeKey === 'coWin' && (
+          <p>數值 = 兩人同時在同一場遊戲中勝利的次數比率(%). 越高表示兩人越常一起贏.</p>
+        )}
+        {activeKey === 'coLose' && (
+          <p>數值 = 兩人同時輸的次數比率(%). 越高表示兩人越常一起輸.</p>
+        )}
+        {activeKey === 'winCorr' && (
+          <>
+            <p>數值 = 勝率相關係數. 正數(綠色) = 一人贏時另一人也傾向贏; 負數(紅色) = 一人贏時另一人傾向輸.</p>
+            <p>接近 0 = 兩人勝負無明顯關聯.</p>
+          </>
+        )}
+        {activeKey === 'coWinMinusLose' && (
+          <>
+            <p>數值 = 同贏次數 - 同輸次數. 正數(綠色) = 默契好, 一起贏多於一起輸; 負數(紅色) = 默契差, 一起輸多於一起贏.</p>
+            <p>數值越大, 兩人合作效果越好.</p>
+          </>
+        )}
+        <div className="flex gap-3 mt-1">
+          {(activeKey === 'coWinMinusLose' || activeKey === 'winCorr') ? (
+            <>
+              <span className="text-green-400">+15 以上 = 非常好</span>
+              <span className="text-gray-400">-5 ~ +5 = 中性</span>
+              <span className="text-red-400">-15 以下 = 非常差</span>
+            </>
+          ) : (
+            <>
+              <span className="text-blue-400">60%+ = 高</span>
+              <span className="text-gray-400">40-50% = 中</span>
+              <span className="text-purple-400">30% 以下 = 低</span>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Scrollable matrix */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -135,12 +173,16 @@ export default function ChemistryMatrixPanel(): JSX.Element {
                 {values[ri]?.map((val, ci) => (
                   <td key={ci} className="p-0.5">
                     <div
-                      className={`w-8 h-6 flex items-center justify-center rounded text-[9px] font-bold ${
+                      className={`group relative w-8 h-6 flex items-center justify-center rounded text-[9px] font-bold cursor-default ${
                         ri === ci ? 'bg-gray-800/60 text-gray-600' : cellColor(val, activeKey)
                       }`}
-                      title={`${rowName} x ${players[ci]}: ${isNaN(val) ? 'N/A' : val.toFixed(1)}`}
                     >
                       {ri === ci ? '-' : isNaN(val) ? '' : val.toFixed(0)}
+                      {ri !== ci && !isNaN(val) && (
+                        <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-[10px] text-gray-200 whitespace-nowrap shadow-lg pointer-events-none">
+                          {rowName} x {players[ci]}: {val.toFixed(1)}
+                        </div>
+                      )}
                     </div>
                   </td>
                 )) ?? null}

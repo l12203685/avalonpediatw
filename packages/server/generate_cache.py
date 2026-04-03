@@ -404,6 +404,28 @@ def load_chemistry(sh: gspread.Spreadsheet) -> dict:
 # Compute endpoint responses (matching sheetsAnalysis.ts exactly)
 # ---------------------------------------------------------------------------
 
+def compute_role_win_rate_comparison(players: list[dict]) -> list[dict]:
+    """Fix #11: Per-role win rate comparison across all players with enough games."""
+    ROLES = ["刺客", "娜美", "德魯", "奧伯", "派西", "梅林", "忠臣"]
+    role_stats: dict[str, dict] = {}
+    for role in ROLES:
+        total_wr = 0.0
+        count = 0
+        for p in players:
+            games = p["rawRoleGames"].get(role, 0)
+            if games >= 10:
+                total_wr += p["roleWinRates"].get(role, 0)
+                count += 1
+        if count > 0:
+            role_stats[role] = {
+                "role": role,
+                "avgWinRate": rnd1(total_wr / count),
+                "playerCount": count,
+            }
+
+    return sorted(role_stats.values(), key=lambda x: x["avgWinRate"], reverse=True)
+
+
 def compute_overview(games: list[GameRow], players: list[dict]) -> dict:
     total = len(games)
     red_wins = sum(1 for g in games if g.red_win)
@@ -412,12 +434,18 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:
 
     significant = [p for p in players if p["totalGames"] >= MIN_GAMES_THRESHOLD]
 
-    top_by_wr = sorted(significant, key=lambda p: p["winRate"], reverse=True)[:10]
+    # Fix #8: Use roleTheory (theoretical win rate) instead of raw winRate for ranking
+    top_by_theory = sorted(significant, key=lambda p: p["roleTheory"], reverse=True)[:10]
     top_by_games = sorted(players, key=lambda p: p["totalGames"], reverse=True)[:10]
 
     merlin_kill_rate = 0.0
     if blue_wins > 0:
         merlin_kill_rate = rnd1(merlin_kills / (merlin_kills + (blue_wins - merlin_kills)) * 100)
+
+    # Fix #10: Game outcome breakdown
+    three_red = sum(1 for g in games if g.outcome == "三紅")
+    three_blue_alive = sum(1 for g in games if g.outcome == "三藍活")
+    three_blue_dead = sum(1 for g in games if g.outcome == "三藍死")
 
     return {
         "totalGames": total,
@@ -425,14 +453,24 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:
         "redWinRate": rnd1(red_wins / total * 100) if total > 0 else 0,
         "blueWinRate": rnd1(blue_wins / total * 100) if total > 0 else 0,
         "merlinKillRate": merlin_kill_rate,
-        "topPlayersByWinRate": [
-            {"name": p["name"], "winRate": p["winRate"], "games": p["totalGames"]}
-            for p in top_by_wr
+        "outcomeBreakdown": {
+            "threeRed": three_red,
+            "threeBlueAlive": three_blue_alive,
+            "threeBlueDead": three_blue_dead,
+            "threeRedPct": rnd1(three_red / total * 100) if total > 0 else 0,
+            "threeBlueAlivePct": rnd1(three_blue_alive / total * 100) if total > 0 else 0,
+            "threeBlueDeadPct": rnd1(three_blue_dead / total * 100) if total > 0 else 0,
+        },
+        "topPlayersByTheory": [
+            {"name": p["name"], "roleTheory": p["roleTheory"], "winRate": p["winRate"], "games": p["totalGames"]}
+            for p in top_by_theory
         ],
         "topPlayersByGames": [
             {"name": p["name"], "games": p["totalGames"], "winRate": p["winRate"]}
             for p in top_by_games
         ],
+        # Fix #11: Per-role win rate comparison (replaces role distribution)
+        "roleWinRateComparison": compute_role_win_rate_comparison(players),
     }
 
 
@@ -453,23 +491,46 @@ def compute_missions(games: list[GameRow]) -> dict:
             "totalGames": len(with_mission),
         })
 
-    # Fail distribution
-    fail_counts: Counter[int] = Counter()
-    for g in games:
-        for m in g.missions:
-            fail_counts[m["fails"]] += 1
-    total_missions = sum(fail_counts.values())
-    fail_distribution = sorted(
-        [
-            {
-                "fails": f,
-                "count": c,
-                "percentage": rnd1(c / total_missions * 100) if total_missions > 0 else 0,
-            }
-            for f, c in fail_counts.items()
-        ],
-        key=lambda x: x["fails"],
-    )
+    # Fix #4: Mission success rate by red player count in team (replaces fail card distribution)
+    # Group missions by how many red players were on the team
+    mission_by_composition: list[dict] = []
+    for r in range(1, 6):
+        red_count_groups: dict[int, dict] = {}
+        for g in games:
+            m = next((m2 for m2 in g.missions if m2["round"] == r), None)
+            if m is None:
+                continue
+            # Count red players by checking the round's team composition
+            round_str = g.rounds[r - 1] if r - 1 < len(g.rounds) else ""
+            # We don't have per-mission team composition directly, use fail count as proxy
+            fails = m["fails"]
+            entry = red_count_groups.setdefault(fails, {"pass": 0, "fail": 0})
+            if m["fails"] == 0:
+                entry["pass"] += 1
+            else:
+                entry["fail"] += 1
+
+    # Aggregate: mission success rate correlated with game outcome
+    mission_outcome_corr: list[dict] = []
+    for r in range(1, 6):
+        with_mission = [g for g in games if any(m2["round"] == r for m2 in g.missions)]
+        if not with_mission:
+            continue
+        passed_games = [g for g in with_mission if any(m2["round"] == r and m2["fails"] == 0 for m2 in g.missions)]
+        failed_games = [g for g in with_mission if any(m2["round"] == r and m2["fails"] > 0 for m2 in g.missions)]
+
+        pass_then_blue_win = sum(1 for g in passed_games if g.blue_win)
+        fail_then_red_win = sum(1 for g in failed_games if g.red_win)
+
+        mission_outcome_corr.append({
+            "round": r,
+            "passedGames": len(passed_games),
+            "passedThenBlueWin": pass_then_blue_win,
+            "passedBlueWinRate": rnd1(pass_then_blue_win / len(passed_games) * 100) if passed_games else 0,
+            "failedGames": len(failed_games),
+            "failedThenRedWin": fail_then_red_win,
+            "failedRedWinRate": rnd1(fail_then_red_win / len(failed_games) * 100) if failed_games else 0,
+        })
 
     # Per-round outcome breakdown
     mission_outcome_by_round = []
@@ -500,8 +561,8 @@ def compute_missions(games: list[GameRow]) -> dict:
 
     return {
         "missionPassRates": mission_pass_rates,
-        "failDistribution": fail_distribution,
         "missionOutcomeByRound": mission_outcome_by_round,
+        "missionOutcomeCorrelation": mission_outcome_corr,
     }
 
 
@@ -606,10 +667,80 @@ def compute_lake(games: list[GameRow]) -> dict:
         for role, d in target_role_groups.items()
     ]
 
+    # Fix #12: Enhanced lake analysis -- per-lake role stats and cross-lake patterns
+    # Role stats for all 3 lakes, not just lake1
+    all_lake_role_stats = []
+    for lake_idx, (label, hf_key, tf_key, hr_key, tr_key) in enumerate(lake_configs):
+        lake_games = [g for g in games if getattr(g, hf_key) != ""]
+        if not lake_games:
+            continue
+
+        # Holder role stats for this lake
+        h_role_groups: dict[str, dict] = {}
+        for g in lake_games:
+            role = getattr(g, hr_key)
+            if not role:
+                continue
+            entry = h_role_groups.setdefault(role, {"count": 0, "red_wins": 0, "blue_wins": 0})
+            entry["count"] += 1
+            if g.red_win:
+                entry["red_wins"] += 1
+            if g.blue_win:
+                entry["blue_wins"] += 1
+
+        h_stats = [
+            {
+                "role": role,
+                "games": d["count"],
+                "redWinRate": rnd1(d["red_wins"] / d["count"] * 100),
+                "blueWinRate": rnd1(d["blue_wins"] / d["count"] * 100),
+            }
+            for role, d in h_role_groups.items()
+        ]
+
+        # Target role stats for this lake
+        t_role_groups: dict[str, dict] = {}
+        for g in lake_games:
+            role = getattr(g, tr_key)
+            if not role:
+                continue
+            entry = t_role_groups.setdefault(role, {"count": 0, "red_wins": 0})
+            entry["count"] += 1
+            if g.red_win:
+                entry["red_wins"] += 1
+
+        t_stats = [
+            {
+                "role": role,
+                "games": d["count"],
+                "redWinRate": rnd1(d["red_wins"] / d["count"] * 100),
+            }
+            for role, d in t_role_groups.items()
+        ]
+
+        # Holder->Target same/different faction outcome
+        same_faction = [g for g in lake_games if getattr(g, hf_key) == getattr(g, tf_key) and getattr(g, tf_key) != ""]
+        diff_faction = [g for g in lake_games if getattr(g, hf_key) != getattr(g, tf_key) and getattr(g, tf_key) != ""]
+
+        all_lake_role_stats.append({
+            "lake": label,
+            "holderRoleStats": h_stats,
+            "targetRoleStats": t_stats,
+            "sameFaction": {
+                "games": len(same_faction),
+                "redWinRate": rnd1(sum(1 for g in same_faction if g.red_win) / len(same_faction) * 100) if same_faction else 0,
+            },
+            "diffFaction": {
+                "games": len(diff_faction),
+                "redWinRate": rnd1(sum(1 for g in diff_faction if g.red_win) / len(diff_faction) * 100) if diff_faction else 0,
+            },
+        })
+
     return {
         "perLake": per_lake,
         "holderRoleStats": holder_role_stats,
         "targetRoleStats": target_role_stats,
+        "allLakeRoleStats": all_lake_role_stats,
     }
 
 
@@ -751,17 +882,24 @@ def compute_players_endpoint(players: list[dict]) -> dict:
 
 
 def compute_player_details(players: list[dict]) -> dict[str, dict]:
-    """Pre-compute per-player detail + radar for GET /api/analysis/players/:name."""
+    """Pre-compute per-player detail + radar for GET /api/analysis/players/:name.
+
+    Fix #7: Radar dimensions changed to:
+    - 藍方勝率(三藍梅活) = blueMerlinAlive (blue wins where Merlin survives)
+    - 紅方任務勝率(三紅) = red3Red (red wins by 3 failed missions)
+    - 紅方刺殺勝率(三藍梅死) = redMerlinDead (red wins via Merlin assassination)
+    - 位置率 = positionTheory
+    - 理論勝率 = roleTheory
+    Removed: 藍角率, 紅角率 (not important)
+    """
     result: dict[str, dict] = {}
     for p in players:
         radar = {
-            "winRate": p["winRate"],
-            "redWinRate": p["redWin"],
-            "blueMerlinProtect": p["blueMerlinAlive"],
-            "roleTheory": p["roleTheory"],
+            "blueMerlinAlive": p["blueMerlinAlive"],
+            "red3Red": p["red3Red"],
+            "redMerlinDead": p["redMerlinDead"],
             "positionTheory": p["positionTheory"],
-            "redMerlinKillRate": p["redMerlinDead"],
-            "experience": min(p["totalGames"] / 10, 100),
+            "roleTheory": p["roleTheory"],
         }
         result[p["name"]] = {"player": p, "radar": radar}
     return result

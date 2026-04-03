@@ -12,14 +12,13 @@ import {
 } from '../../services/api';
 import type { AnalysisPlayerStats, AnalysisPlayerRadar } from '../../services/api';
 
+// Fix #7: New radar dimensions
 const RADAR_LABELS: Record<string, string> = {
-  winRate: '勝率',
-  redWinRate: '紅方勝率',
-  blueMerlinProtect: '梅林保護',
-  roleTheory: '角色理論',
-  positionTheory: '位置理論',
-  redMerlinKillRate: '梅林擊殺',
-  experience: '經驗值',
+  blueMerlinAlive: '藍方勝率(三藍梅活)',
+  red3Red: '紅方任務勝率(三紅)',
+  redMerlinDead: '紅方刺殺勝率(三藍梅死)',
+  positionTheory: '位置率',
+  roleTheory: '理論勝率',
 };
 
 export default function PlayerRadarChart(): JSX.Element {
@@ -142,7 +141,7 @@ export default function PlayerRadarChart(): JSX.Element {
             <ResponsiveContainer width="100%" height={300}>
               <RadarChart data={chartData}>
                 <PolarGrid stroke="#374151" />
-                <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 10, fill: '#d1d5db' }} />
+                <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 9, fill: '#d1d5db' }} />
                 <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#6b7280' }} />
                 <Radar
                   name={radarData.player.name}
@@ -151,9 +150,21 @@ export default function PlayerRadarChart(): JSX.Element {
                   fill="#3b82f6"
                   fillOpacity={0.3}
                 />
-                <Tooltip formatter={(val) => `${Number(val).toFixed(1)}%`} />
+                <Tooltip
+                  formatter={(val: unknown) => `${Number(val).toFixed(1)}%`}
+                  contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                  itemStyle={{ color: '#d1d5db' }}
+                />
               </RadarChart>
             </ResponsiveContainer>
+            {/* Fix #7: Dimension explanation */}
+            <div className="mt-2 text-[10px] text-gray-600 space-y-0.5">
+              <p>藍方勝率(三藍梅活): 藍方陣營完成三任務且梅林未被刺殺的勝率</p>
+              <p>紅方任務勝率(三紅): 紅方陣營通過三次失敗任務的勝率</p>
+              <p>紅方刺殺勝率(三藍梅死): 藍方完成三任務但梅林被刺殺, 紅方勝</p>
+              <p>位置率: 座位位置對勝率的影響</p>
+              <p>理論勝率: 考慮角色分配後的理論勝率</p>
+            </div>
           </motion.div>
 
           {/* Player stats sidebar */}
@@ -168,12 +179,13 @@ export default function PlayerRadarChart(): JSX.Element {
             <div className="grid grid-cols-2 gap-2 text-sm">
               <StatRow label="總場次" value={radarData.player.totalGames.toString()} />
               <StatRow label="勝率" value={`${radarData.player.winRate}%`} />
+              <StatRow label="理論勝率" value={`${radarData.player.roleTheory}%`} />
+              <StatRow label="位置率" value={`${radarData.player.positionTheory}%`} />
               <StatRow label="紅方勝率" value={`${radarData.player.redWin}%`} color="text-red-400" />
               <StatRow label="藍方勝率" value={`${radarData.player.blueWin}%`} color="text-blue-400" />
-              <StatRow label="角色理論" value={`${radarData.player.roleTheory}%`} />
-              <StatRow label="位置理論" value={`${radarData.player.positionTheory}%`} />
-              <StatRow label="紅角率" value={`${radarData.player.redRoleRate}%`} color="text-red-400" />
-              <StatRow label="藍角率" value={`${radarData.player.blueRoleRate}%`} color="text-blue-400" />
+              <StatRow label="三紅(紅方)" value={`${radarData.player.red3Red}%`} color="text-red-400" />
+              <StatRow label="三藍梅死(紅方)" value={`${radarData.player.redMerlinDead}%`} color="text-yellow-400" />
+              <StatRow label="三藍梅活(藍方)" value={`${radarData.player.blueMerlinAlive}%`} color="text-blue-400" />
             </div>
 
             {/* Role win rates */}

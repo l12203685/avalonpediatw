@@ -18,7 +18,7 @@ function VisionCard({ title, data }: {
       <div className="grid grid-cols-2 gap-1 text-xs">
         <span className="text-gray-500">場次</span>
         <span className="text-white font-bold text-right">{data.games}</span>
-        <span className="text-gray-500">M1 通過率</span>
+        <span className="text-gray-500">任務1通過率</span>
         <span className="text-green-400 font-bold text-right">{data.mission1PassRate}%</span>
         <span className="text-gray-500">紅方勝率</span>
         <span className="text-red-400 font-bold text-right">{data.redWinRate}%</span>
@@ -77,7 +77,7 @@ export default function RoundsAnalysis(): JSX.Element {
     total: v.total,
   }));
 
-  // Red in R1-1
+  // Fix #1: "1-1" = 第一局第一次派票 (Mission 1, Vote 1)
   const redInR11Data = data.redInR11.map(r => ({
     name: `${r.redCount} 紅`,
     games: r.games,
@@ -87,13 +87,13 @@ export default function RoundsAnalysis(): JSX.Element {
 
   // Mission 1 branch
   const branchData = data.mission1Branch.map(b => ({
-    name: b.passed ? 'M1 通過' : 'M1 失敗',
+    name: b.passed ? '任務1 通過' : '任務1 失敗',
     games: b.games,
     redWinRate: b.redWinRate,
     merlinKillRate: b.merlinKillRate,
   }));
 
-  // Game states (top 10)
+  // Game states (top 12)
   const stateData = data.gameStates.slice(0, 12).map(s => ({
     name: s.state,
     games: s.games,
@@ -102,15 +102,18 @@ export default function RoundsAnalysis(): JSX.Element {
 
   return (
     <div className="space-y-6">
-      {/* Vision stats cards */}
+      {/* Fix #1: Vision stats - clarify "1-1" means mission 1 vote 1 */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">
-          1-1 視野效果 (R1-1 Vision Impact)
+        <h3 className="text-sm font-bold text-gray-400 mb-1">
+          第一局第一次派票分析 (Mission 1, Vote 1)
         </h3>
+        <p className="text-[10px] text-gray-600 mb-3">
+          1-1 = 第一局(任務1)的第一次派票組合, 分析該隊伍組成對後續局勢的影響
+        </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <VisionCard title="梅林在隊" data={data.visionStats.merlinInTeam} />
           <VisionCard title="梅林不在隊" data={data.visionStats.merlinNotInTeam} />
@@ -126,20 +129,24 @@ export default function RoundsAnalysis(): JSX.Element {
         transition={{ delay: 0.1 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">回合進度 (Round Progression %)</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">各任務藍紅勝負比例 (Round Progression %)</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={progressionData}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
             <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <Tooltip formatter={(val) => `${val}%`} />
+            <Tooltip
+              formatter={(val: unknown) => `${val}%`}
+              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+              itemStyle={{ color: '#d1d5db' }}
+            />
             <Legend />
-            <Bar dataKey="bluePct" name="藍方" fill="#3b82f6" stackId="a" />
-            <Bar dataKey="redPct" name="紅方" fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="bluePct" name="藍方(通過)" fill="#3b82f6" stackId="a" />
+            <Bar dataKey="redPct" name="紅方(失敗)" fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </motion.div>
 
-      {/* Red count in R1-1 */}
+      {/* Red count in first vote + Mission 1 branch */}
       <div className="grid md:grid-cols-2 gap-4">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -147,12 +154,19 @@ export default function RoundsAnalysis(): JSX.Element {
           transition={{ delay: 0.15 }}
           className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
         >
-          <h3 className="text-sm font-bold text-gray-400 mb-3">1-1 紅方人數 vs 紅方勝率</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-1">第一次派票紅方人數 vs 紅方勝率</h3>
+          <p className="text-[10px] text-gray-600 mb-2">
+            任務1第一次派票隊伍中紅方角色的數量
+          </p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={redInR11Data}>
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
-              <Tooltip formatter={(val) => `${val}%`} />
+              <Tooltip
+                formatter={(val: unknown) => `${val}%`}
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                itemStyle={{ color: '#d1d5db' }}
+              />
               <Bar dataKey="redWinRate" name="紅方勝率" radius={[4, 4, 0, 0]}>
                 {redInR11Data.map((d, i) => (
                   <Cell key={i} fill={d.redWinRate >= 50 ? '#ef4444' : '#3b82f6'} />
@@ -169,7 +183,7 @@ export default function RoundsAnalysis(): JSX.Element {
           transition={{ delay: 0.2 }}
           className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
         >
-          <h3 className="text-sm font-bold text-gray-400 mb-3">第一局分岐 (Mission 1 Branch)</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-3">任務1分岐 (Mission 1 Branch)</h3>
           <div className="space-y-3">
             {branchData.map(b => (
               <div key={b.name} className="bg-gray-800/40 rounded-lg p-3">
@@ -195,7 +209,7 @@ export default function RoundsAnalysis(): JSX.Element {
         </motion.div>
       </div>
 
-      {/* Game states */}
+      {/* Fix #2: Game states -- display with game count alongside win rate */}
       {stateData.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -203,13 +217,23 @@ export default function RoundsAnalysis(): JSX.Element {
           transition={{ delay: 0.25 }}
           className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
         >
-          <h3 className="text-sm font-bold text-gray-400 mb-3">常見局勢 (Common Game States)</h3>
-          <ResponsiveContainer width="100%" height={260}>
+          <h3 className="text-sm font-bold text-gray-400 mb-1">常見局勢 (Common Game States)</h3>
+          <p className="text-[10px] text-gray-600 mb-3">
+            局勢 = 各任務結果序列 (紅=任務失敗, 藍=任務成功), 顯示該局勢下紅方最終勝率
+          </p>
+          <ResponsiveContainer width="100%" height={280}>
             <BarChart data={stateData} layout="vertical">
               <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
-              <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 10, fill: '#d1d5db' }} />
+              <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 10, fill: '#d1d5db' }} />
               <Tooltip
-                formatter={(val, name) => [`${val}${name === '紅方勝率' ? '%' : ''}`, name]}
+                formatter={(val: unknown, name: unknown) => [`${val}${name === 'redWinRate' ? '%' : ''}`, name === 'redWinRate' ? '紅方勝率' : '場次']}
+                labelFormatter={(label: unknown) => {
+                  const lbl = String(label);
+                  const item = stateData.find(s => s.name === lbl);
+                  return item ? `${lbl} (${item.games} 場)` : lbl;
+                }}
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                itemStyle={{ color: '#d1d5db' }}
               />
               <Bar dataKey="redWinRate" name="紅方勝率" radius={[0, 4, 4, 0]}>
                 {stateData.map((d, i) => (

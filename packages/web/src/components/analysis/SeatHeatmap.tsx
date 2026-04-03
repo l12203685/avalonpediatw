@@ -82,6 +82,14 @@ export default function SeatHeatmap(): JSX.Element {
         ))}
       </div>
 
+      {/* Fix #6: Seat position explanation */}
+      <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-3 text-[10px] text-gray-500 space-y-1">
+        <p className="font-bold text-gray-400">座位分析說明:</p>
+        <p>Avalon 的座位順序影響資訊流和投票順序. 座位號碼 = 遊戲中的固定位置(1-10).</p>
+        <p>不同座位有不同的策略優劣: 靠近隊長的位置更容易被選入任務, 發言順序影響資訊判斷.</p>
+        <p>數值 = 該玩家在該座位的{mode === 'red' ? '紅方' : mode === 'blue' ? '藍方' : '總'}勝率(%). 綠色 = 高於50%, 紅色 = 低於50%.</p>
+      </div>
+
       {/* Heatmap grid */}
       <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 overflow-x-auto">
         <table className="w-full text-xs">
@@ -113,12 +121,16 @@ export default function SeatHeatmap(): JSX.Element {
                   return (
                     <td key={seat} className="px-1 py-1">
                       <div
-                        className={`text-center rounded px-1 py-0.5 font-bold ${
+                        className={`group relative text-center rounded px-1 py-0.5 font-bold cursor-default ${
                           rate > 0 ? colorForRate(rate) : 'bg-gray-800/40 text-gray-700'
                         }`}
-                        title={`${p.name} 座位${seat === '0' ? '10' : seat}: ${rate}%`}
                       >
                         {rate > 0 ? `${rate}` : '-'}
+                        {rate > 0 && (
+                          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-[10px] text-gray-200 whitespace-nowrap shadow-lg pointer-events-none">
+                            {p.name} 座位{seat === '0' ? '10' : seat}: {rate}%
+                          </div>
+                        )}
                       </div>
                     </td>
                   );

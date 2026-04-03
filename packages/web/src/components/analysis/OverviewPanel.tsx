@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { Loader, AlertCircle, Trophy, Users, Swords, Skull } from 'lucide-react';
-import { fetchAnalysisOverview, fetchAnalysisPlayers, getErrorMessage } from '../../services/api';
-import type { AnalysisOverview, AnalysisPlayerStats } from '../../services/api';
+import { fetchAnalysisOverview, getErrorMessage } from '../../services/api';
+import type { AnalysisOverview } from '../../services/api';
 
 function StatCard({ icon: Icon, label, value, sub, color }: {
   icon: typeof Trophy;
@@ -28,7 +28,6 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
 
 export default function OverviewPanel(): JSX.Element {
   const [overview, setOverview] = useState<AnalysisOverview | null>(null);
-  const [players, setPlayers] = useState<AnalysisPlayerStats[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -36,14 +35,8 @@ export default function OverviewPanel(): JSX.Element {
     let cancelled = false;
     (async () => {
       try {
-        const [ov, pl] = await Promise.all([
-          fetchAnalysisOverview(),
-          fetchAnalysisPlayers().then(r => r.players).catch(() => [] as AnalysisPlayerStats[]),
-        ]);
-        if (!cancelled) {
-          setOverview(ov);
-          setPlayers(pl);
-        }
+        const ov = await fetchAnalysisOverview();
+        if (!cancelled) setOverview(ov);
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err));
       } finally {
@@ -69,16 +62,24 @@ export default function OverviewPanel(): JSX.Element {
     );
   }
 
-  const factionData = [
-    { name: '紅方 (Evil)', value: overview.redWinRate, fill: '#ef4444' },
-    { name: '藍方 (Good)', value: overview.blueWinRate, fill: '#3b82f6' },
+  // Fix #10: Three-way outcome breakdown
+  const outcomeData = [
+    { name: '三紅 (3 Failed Missions)', value: overview.outcomeBreakdown.threeRedPct, fill: '#ef4444' },
+    { name: '三藍梅活 (Blue Win, Merlin Alive)', value: overview.outcomeBreakdown.threeBlueAlivePct, fill: '#3b82f6' },
+    { name: '三藍梅死 (Merlin Killed)', value: overview.outcomeBreakdown.threeBlueDeadPct, fill: '#f59e0b' },
   ];
 
-  // Role distribution from players data
-  const ROLE_LABELS: Record<string, string> = {
-    '刺客': 'Assassin', '娜美': 'Morgana', '德魯': 'Mordred',
-    '奧伯': 'Oberon', '派西': 'Percival', '梅林': 'Merlin', '忠臣': 'Loyal',
+  // Fix #11: Per-role win rate comparison
+  const ROLE_COLORS: Record<string, string> = {
+    '刺客': '#ef4444', '娜美': '#ef4444', '德魯': '#ef4444', '奧伯': '#ef4444',
+    '派西': '#3b82f6', '梅林': '#3b82f6', '忠臣': '#3b82f6',
   };
+
+  const roleWrData = overview.roleWinRateComparison.map(r => ({
+    role: r.role,
+    avgWinRate: r.avgWinRate,
+    fill: ROLE_COLORS[r.role] || '#6b7280',
+  }));
 
   return (
     <div className="space-y-6">
@@ -112,41 +113,57 @@ export default function OverviewPanel(): JSX.Element {
         />
       </div>
 
-      {/* Faction win rate pie + bar */}
+      {/* Fix #10: Three-way outcome pie + Fix #8: Theory ranking */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-gray-400 mb-3">陣營勝率 (Faction Win Rate)</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-3">勝負結構 (Game Outcome Breakdown)</h3>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie
-                data={factionData}
+                data={outcomeData}
                 cx="50%"
                 cy="50%"
                 innerRadius={50}
                 outerRadius={80}
                 dataKey="value"
-                label={({ name, value }) => `${name} ${value}%`}
+                label={({ name, value }: { name?: string; value?: number }) => `${(name ?? '').split(' ')[0]} ${value}%`}
                 labelLine={false}
               >
-                {factionData.map((entry, idx) => (
+                {outcomeData.map((entry, idx) => (
                   <Cell key={idx} fill={entry.fill} />
                 ))}
               </Pie>
-              <Tooltip formatter={(val) => `${val}%`} />
+              <Tooltip
+                formatter={(val: unknown, _name: unknown, entry: unknown) => {
+                  const e = entry as { payload?: { name?: string } };
+                  return [`${val}%`, e?.payload?.name ?? ''];
+                }}
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                itemStyle={{ color: '#d1d5db' }}
+              />
             </PieChart>
           </ResponsiveContainer>
+          <div className="flex justify-center gap-4 mt-2 text-[10px]">
+            <span className="text-red-400">三紅: {overview.outcomeBreakdown.threeRed} 場</span>
+            <span className="text-blue-400">三藍梅活: {overview.outcomeBreakdown.threeBlueAlive} 場</span>
+            <span className="text-yellow-400">三藍梅死: {overview.outcomeBreakdown.threeBlueDead} 場</span>
+          </div>
         </div>
 
-        {/* Top players by win rate */}
+        {/* Fix #8: Top players by theoretical win rate */}
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-gray-400 mb-3">勝率排行 (Top Win Rate, 50+ games)</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-3">理論勝率排行 (Theoretical Win Rate, 50+ games)</h3>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={overview.topPlayersByWinRate.slice(0, 8)} layout="vertical">
+            <BarChart data={overview.topPlayersByTheory.slice(0, 8)} layout="vertical">
               <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
               <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 11, fill: '#d1d5db' }} />
-              <Tooltip formatter={(val) => `${val}%`} />
-              <Bar dataKey="winRate" radius={[0, 4, 4, 0]}>
-                {overview.topPlayersByWinRate.slice(0, 8).map((_, i) => (
+              <Tooltip
+                formatter={(val: unknown, name: unknown) => [`${val}%`, name === 'roleTheory' ? '理論勝率' : String(name)]}
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                itemStyle={{ color: '#d1d5db' }}
+              />
+              <Bar dataKey="roleTheory" name="理論勝率" radius={[0, 4, 4, 0]}>
+                {overview.topPlayersByTheory.slice(0, 8).map((_, i) => (
                   <Cell key={i} fill={i === 0 ? '#f59e0b' : i < 3 ? '#3b82f6' : '#6b7280'} />
                 ))}
               </Bar>
@@ -162,49 +179,38 @@ export default function OverviewPanel(): JSX.Element {
           <BarChart data={overview.topPlayersByGames.slice(0, 10)}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <Tooltip />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+              itemStyle={{ color: '#d1d5db' }}
+            />
             <Bar dataKey="games" name="場次" fill="#6366f1" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Role distribution (if player data available) */}
-      {players.length > 0 && (() => {
-        const roleAgg: Record<string, number> = {};
-        for (const p of players) {
-          for (const [role, games] of Object.entries(p.rawRoleGames || {})) {
-            roleAgg[role] = (roleAgg[role] || 0) + games;
-          }
-        }
-        const roleData = Object.entries(roleAgg)
-          .filter(([, v]) => v > 0)
-          .map(([role, games]) => ({
-            role: `${role} ${ROLE_LABELS[role] || ''}`.trim(),
-            games,
-            fill: ['刺客', '娜美', '德魯', '奧伯'].includes(role) ? '#ef4444' : '#3b82f6',
-          }))
-          .sort((a, b) => b.games - a.games);
-
-        if (roleData.length === 0) return null;
-
-        return (
-          <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-            <h3 className="text-sm font-bold text-gray-400 mb-3">角色分布 (Role Distribution)</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={roleData}>
-                <XAxis dataKey="role" tick={{ fontSize: 10, fill: '#d1d5db' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
-                <Tooltip />
-                <Bar dataKey="games" name="場次" radius={[4, 4, 0, 0]}>
-                  {roleData.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        );
-      })()}
+      {/* Fix #11: Per-role win rate comparison (replaces role distribution) */}
+      {roleWrData.length > 0 && (
+        <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
+          <h3 className="text-sm font-bold text-gray-400 mb-3">各角色平均勝率 (Role Win Rate Comparison)</h3>
+          <p className="text-[10px] text-gray-600 mb-2">10+ 場該角色的玩家平均勝率</p>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={roleWrData}>
+              <XAxis dataKey="role" tick={{ fontSize: 11, fill: '#d1d5db' }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+              <Tooltip
+                formatter={(val: unknown) => [`${val}%`, '平均勝率']}
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                itemStyle={{ color: '#d1d5db' }}
+              />
+              <Bar dataKey="avgWinRate" name="平均勝率" radius={[4, 4, 0, 0]}>
+                {roleWrData.map((entry, i) => (
+                  <Cell key={i} fill={entry.fill} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, BarChart3, Users, Target, Swords, Map, Compass } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, Target, Swords, Map, Compass, Droplets } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import OverviewPanel from '../components/analysis/OverviewPanel';
 import PlayerRadarChart from '../components/analysis/PlayerRadarChart';
@@ -8,16 +8,18 @@ import SeatHeatmap from '../components/analysis/SeatHeatmap';
 import ChemistryMatrix from '../components/analysis/ChemistryMatrix';
 import MissionAnalysis from '../components/analysis/MissionAnalysis';
 import RoundsAnalysis from '../components/analysis/RoundsAnalysis';
+import LakeAnalysis from '../components/analysis/LakeAnalysis';
 
-type Tab = 'overview' | 'player' | 'seat' | 'chemistry' | 'mission' | 'rounds';
+type Tab = 'overview' | 'player' | 'seat' | 'chemistry' | 'mission' | 'rounds' | 'lake';
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof BarChart3 }> = [
-  { id: 'overview',  label: '總覽',     icon: BarChart3 },
-  { id: 'player',    label: '玩家雷達', icon: Users },
-  { id: 'seat',      label: '座位分析', icon: Map },
-  { id: 'chemistry', label: '默契矩陣', icon: Target },
-  { id: 'mission',   label: '任務分析', icon: Swords },
-  { id: 'rounds',    label: '回合分析', icon: Compass },
+  { id: 'overview',  label: '總覽',       icon: BarChart3 },
+  { id: 'player',    label: '玩家雷達',   icon: Users },
+  { id: 'seat',      label: '座位分析',   icon: Map },
+  { id: 'chemistry', label: '默契矩陣',   icon: Target },
+  { id: 'mission',   label: '任務分析',   icon: Swords },
+  { id: 'rounds',    label: '回合分析',   icon: Compass },
+  { id: 'lake',      label: '湖中女神',   icon: Droplets },
 ];
 
 export default function AnalysisPage(): JSX.Element {
@@ -80,6 +82,7 @@ export default function AnalysisPage(): JSX.Element {
             {activeTab === 'chemistry' && <ChemistryMatrix />}
             {activeTab === 'mission' && <MissionAnalysis />}
             {activeTab === 'rounds' && <RoundsAnalysis />}
+            {activeTab === 'lake' && <LakeAnalysis />}
           </motion.div>
         </AnimatePresence>
       </div>

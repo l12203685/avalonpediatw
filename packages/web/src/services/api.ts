@@ -153,8 +153,17 @@ export interface AnalysisOverview {
   redWinRate: number;
   blueWinRate: number;
   merlinKillRate: number;
-  topPlayersByWinRate: Array<{ name: string; winRate: number; games: number }>;
+  outcomeBreakdown: {
+    threeRed: number;
+    threeBlueAlive: number;
+    threeBlueDead: number;
+    threeRedPct: number;
+    threeBlueAlivePct: number;
+    threeBlueDeadPct: number;
+  };
+  topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
+  roleWinRateComparison: Array<{ role: string; avgWinRate: number; playerCount: number }>;
 }
 
 export interface AnalysisPlayerStats {
@@ -184,13 +193,11 @@ export interface AnalysisPlayerStats {
 export interface AnalysisPlayerRadar {
   player: AnalysisPlayerStats;
   radar: {
-    winRate: number;
-    redWinRate: number;
-    blueMerlinProtect: number;
-    roleTheory: number;
+    blueMerlinAlive: number;
+    red3Red: number;
+    redMerlinDead: number;
     positionTheory: number;
-    redMerlinKillRate: number;
-    experience: number;
+    roleTheory: number;
   };
 }
 
@@ -208,8 +215,16 @@ export interface ChemistryData {
 
 export interface MissionAnalysisData {
   missionPassRates: Array<{ round: number; passRate: number; totalGames: number }>;
-  failDistribution: Array<{ fails: number; count: number; percentage: number }>;
   missionOutcomeByRound: Array<{ round: number; allPass: number; oneFail: number; twoFail: number; total: number }>;
+  missionOutcomeCorrelation: Array<{
+    round: number;
+    passedGames: number;
+    passedThenBlueWin: number;
+    passedBlueWinRate: number;
+    failedGames: number;
+    failedThenRedWin: number;
+    failedRedWinRate: number;
+  }>;
 }
 
 export interface RoundsAnalysisData {
@@ -257,6 +272,39 @@ export async function fetchAnalysisMissions(): Promise<MissionAnalysisData> {
 
 export async function fetchAnalysisRounds(): Promise<RoundsAnalysisData> {
   return analysisApiFetch<RoundsAnalysisData>('/rounds');
+}
+
+export interface LakeRoleStat {
+  role: string;
+  games: number;
+  redWinRate: number;
+  blueWinRate?: number;
+}
+
+export interface LakePerLake {
+  lake: string;
+  totalGames: number;
+  holderStats: Array<{ faction: string; games: number; redWinRate: number }>;
+  comboStats: Array<{ holderFaction: string; targetFaction: string; games: number; redWinRate: number }>;
+}
+
+export interface LakeDetailedStats {
+  lake: string;
+  holderRoleStats: LakeRoleStat[];
+  targetRoleStats: LakeRoleStat[];
+  sameFaction: { games: number; redWinRate: number };
+  diffFaction: { games: number; redWinRate: number };
+}
+
+export interface LakeAnalysisData {
+  perLake: LakePerLake[];
+  holderRoleStats: LakeRoleStat[];
+  targetRoleStats: LakeRoleStat[];
+  allLakeRoleStats: LakeDetailedStats[];
+}
+
+export async function fetchAnalysisLake(): Promise<LakeAnalysisData> {
+  return analysisApiFetch<LakeAnalysisData>('/lake');
 }
 
 // ── AI Stats API ──────────────────────────────────────────────────────────────

@@ -5,56 +5,74 @@
     "redWinRate": 45.2,
     "blueWinRate": 54.8,
     "merlinKillRate": 43.9,
-    "topPlayersByWinRate": [
-      {
-        "name": "豬羊",
-        "winRate": 55.5,
-        "games": 247.0
-      },
+    "outcomeBreakdown": {
+      "threeRed": 971,
+      "threeBlueAlive": 659,
+      "threeBlueDead": 516,
+      "threeRedPct": 45.2,
+      "threeBlueAlivePct": 30.7,
+      "threeBlueDeadPct": 24.0
+    },
+    "topPlayersByTheory": [
       {
         "name": "HAO",
+        "roleTheory": 54.8,
         "winRate": 53.3,
         "games": 901.0
       },
       {
-        "name": "DAL",
-        "winRate": 53.0,
-        "games": 83.0
+        "name": "豬羊",
+        "roleTheory": 54.2,
+        "winRate": 55.5,
+        "games": 247.0
       },
       {
-        "name": "ALAN",
-        "winRate": 50.5,
-        "games": 95.0
-      },
-      {
-        "name": "轆",
-        "winRate": 50.4,
-        "games": 417.0
-      },
-      {
-        "name": "LORI",
-        "winRate": 50.3,
-        "games": 324.0
+        "name": "嚇到吃手手",
+        "roleTheory": 51.5,
+        "winRate": 47.7,
+        "games": 128.0
       },
       {
         "name": "爾勵",
+        "roleTheory": 51.1,
         "winRate": 50.0,
         "games": 82.0
       },
       {
+        "name": "ALAN",
+        "roleTheory": 51.0,
+        "winRate": 50.5,
+        "games": 95.0
+      },
+      {
         "name": "DEAN",
+        "roleTheory": 50.1,
         "winRate": 49.1,
         "games": 411.0
       },
       {
-        "name": "洋蔥",
-        "winRate": 49.0,
-        "games": 561.0
+        "name": "DAL",
+        "roleTheory": 49.8,
+        "winRate": 53.0,
+        "games": 83.0
       },
       {
-        "name": "ED",
-        "winRate": 48.6,
-        "games": 286.0
+        "name": "LORI",
+        "roleTheory": 49.1,
+        "winRate": 50.3,
+        "games": 324.0
+      },
+      {
+        "name": "轆",
+        "roleTheory": 48.5,
+        "winRate": 50.4,
+        "games": 417.0
+      },
+      {
+        "name": "RAY",
+        "roleTheory": 48.4,
+        "winRate": 47.3,
+        "games": 146.0
       }
     ],
     "topPlayersByGames": [
@@ -107,6 +125,43 @@
         "name": "LIANG",
         "games": 485.0,
         "winRate": 44.5
+      }
+    ],
+    "roleWinRateComparison": [
+      {
+        "role": "德魯",
+        "avgWinRate": 69.5,
+        "playerCount": 43
+      },
+      {
+        "role": "奧伯",
+        "avgWinRate": 69.4,
+        "playerCount": 38
+      },
+      {
+        "role": "刺客",
+        "avgWinRate": 68.6,
+        "playerCount": 41
+      },
+      {
+        "role": "娜美",
+        "avgWinRate": 68.6,
+        "playerCount": 39
+      },
+      {
+        "role": "忠臣",
+        "avgWinRate": 30.7,
+        "playerCount": 61
+      },
+      {
+        "role": "派西",
+        "avgWinRate": 30.3,
+        "playerCount": 42
+      },
+      {
+        "role": "梅林",
+        "avgWinRate": 29.3,
+        "playerCount": 44
       }
     ]
   },
@@ -5473,13 +5528,11 @@
         "rawBlueGames": 577.0
       },
       "radar": {
-        "winRate": 47.0,
-        "redWinRate": 71.5,
-        "blueMerlinProtect": 29.8,
-        "roleTheory": 46.4,
+        "blueMerlinAlive": 29.8,
+        "red3Red": 49.0,
+        "redMerlinDead": 22.5,
         "positionTheory": 46.7,
-        "redMerlinKillRate": 22.5,
-        "experience": 98.1
+        "roleTheory": 46.4
       }
     },
     "HAO": {
@@ -5569,13 +5622,11 @@
         "rawBlueGames": 567.0
       },
       "radar": {
-        "winRate": 53.3,
-        "redWinRate": 79.6,
-        "blueMerlinProtect": 37.7,
-        "roleTheory": 54.8,
+        "blueMerlinAlive": 37.7,
+        "red3Red": 53.9,
+        "redMerlinDead": 25.7,
         "positionTheory": 54.7,
-        "redMerlinKillRate": 25.7,
-        "experience": 90.1
+        "roleTheory": 54.8
       }
     },
     "30場以下": {
@@ -5665,13 +5716,11 @@
         "rawBlueGames": 508.0
       },
       "radar": {
-        "winRate": 45.1,
-        "redWinRate": 66.6,
-        "blueMerlinProtect": 31.3,
-        "roleTheory": 45.5,
+        "blueMerlinAlive": 31.3,
+        "red3Red": 43.6,
+        "redMerlinDead": 23.0,
         "positionTheory": 45.4,
-        "redMerlinKillRate": 23.0,
-        "experience": 83.4
+        "roleTheory": 45.5
       }
     },
     "尼克": {
@@ -5761,13 +5810,11 @@
         "rawBlueGames": 474.0
       },
       "radar": {
-        "winRate": 44.8,
-        "redWinRate": 70.8,
-        "blueMerlinProtect": 28.5,
-        "roleTheory": 45.3,
+        "blueMerlinAlive": 28.5,
+        "red3Red": 43.0,
+        "redMerlinDead": 27.9,
         "positionTheory": 45.6,
-        "redMerlinKillRate": 27.9,
-        "experience": 77.2
+        "roleTheory": 45.3
       }
     },
     "軒": {
@@ -5857,13 +5904,11 @@
         "rawBlueGames": 449.0
       },
       "radar": {
-        "winRate": 44.6,
-        "redWinRate": 69.4,
-        "blueMerlinProtect": 27.2,
-        "roleTheory": 44.2,
+        "blueMerlinAlive": 27.2,
+        "red3Red": 46.5,
+        "redMerlinDead": 22.9,
         "positionTheory": 43.7,
-        "redMerlinKillRate": 22.9,
-        "experience": 76.3
+        "roleTheory": 44.2
       }
     },
     "海月": {
@@ -5953,13 +5998,11 @@
         "rawBlueGames": 370.0
       },
       "radar": {
-        "winRate": 45.4,
-        "redWinRate": 61.9,
-        "blueMerlinProtect": 32.4,
-        "roleTheory": 44.4,
+        "blueMerlinAlive": 32.4,
+        "red3Red": 38.8,
+        "redMerlinDead": 23.2,
         "positionTheory": 44.4,
-        "redMerlinKillRate": 23.2,
-        "experience": 65.9
+        "roleTheory": 44.4
       }
     },
     "池": {
@@ -6049,13 +6092,11 @@
         "rawBlueGames": 371.0
       },
       "radar": {
-        "winRate": 48.1,
-        "redWinRate": 68.7,
-        "blueMerlinProtect": 32.6,
-        "roleTheory": 47.0,
+        "blueMerlinAlive": 32.6,
+        "red3Red": 51.1,
+        "redMerlinDead": 17.6,
         "positionTheory": 47.0,
-        "redMerlinKillRate": 17.6,
-        "experience": 64.9
+        "roleTheory": 47.0
       }
     },
     "黑羊": {
@@ -6145,13 +6186,11 @@
         "rawBlueGames": 357.0
       },
       "radar": {
-        "winRate": 45.9,
-        "redWinRate": 70.9,
-        "blueMerlinProtect": 28.6,
-        "roleTheory": 45.5,
+        "blueMerlinAlive": 28.6,
+        "red3Red": 48.2,
+        "redMerlinDead": 22.7,
         "positionTheory": 45.1,
-        "redMerlinKillRate": 22.7,
-        "experience": 60.4
+        "roleTheory": 45.5
       }
     },
     "洋蔥": {
@@ -6241,13 +6280,11 @@
         "rawBlueGames": 317.0
       },
       "radar": {
-        "winRate": 49.0,
-        "redWinRate": 73.0,
-        "blueMerlinProtect": 30.6,
-        "roleTheory": 47.3,
+        "blueMerlinAlive": 30.6,
+        "red3Red": 45.9,
+        "redMerlinDead": 27.0,
         "positionTheory": 47.1,
-        "redMerlinKillRate": 27.0,
-        "experience": 56.1
+        "roleTheory": 47.3
       }
     },
     "LIANG": {
@@ -6337,13 +6374,11 @@
         "rawBlueGames": 296.0
       },
       "radar": {
-        "winRate": 44.5,
-        "redWinRate": 67.7,
-        "blueMerlinProtect": 29.7,
-        "roleTheory": 45.0,
+        "blueMerlinAlive": 29.7,
+        "red3Red": 45.5,
+        "redMerlinDead": 22.2,
         "positionTheory": 44.5,
-        "redMerlinKillRate": 22.2,
-        "experience": 48.5
+        "roleTheory": 45.0
       }
     },
     "KEVIN": {
@@ -6433,13 +6468,11 @@
         "rawBlueGames": 268.0
       },
       "radar": {
-        "winRate": 44.5,
-        "redWinRate": 73.2,
-        "blueMerlinProtect": 27.6,
-        "roleTheory": 45.6,
+        "blueMerlinAlive": 27.6,
+        "red3Red": 49.7,
+        "redMerlinDead": 23.6,
         "positionTheory": 46.3,
-        "redMerlinKillRate": 23.6,
-        "experience": 42.5
+        "roleTheory": 45.6
       }
     },
     "轆": {
@@ -6529,13 +6562,11 @@
         "rawBlueGames": 238.0
       },
       "radar": {
-        "winRate": 50.4,
-        "redWinRate": 76.0,
-        "blueMerlinProtect": 31.1,
-        "roleTheory": 48.5,
+        "blueMerlinAlive": 31.1,
+        "red3Red": 48.0,
+        "redMerlinDead": 27.9,
         "positionTheory": 49.3,
-        "redMerlinKillRate": 27.9,
-        "experience": 41.7
+        "roleTheory": 48.5
       }
     },
     "JOY": {
@@ -6625,13 +6656,11 @@
         "rawBlueGames": 253.0
       },
       "radar": {
-        "winRate": 46.8,
-        "redWinRate": 66.7,
-        "blueMerlinProtect": 34.4,
-        "roleTheory": 47.2,
+        "blueMerlinAlive": 34.4,
+        "red3Red": 45.3,
+        "redMerlinDead": 21.4,
         "positionTheory": 47.2,
-        "redMerlinKillRate": 21.4,
-        "experience": 41.2
+        "roleTheory": 47.2
       }
     },
     "DEAN": {
@@ -6721,13 +6750,11 @@
         "rawBlueGames": 254.0
       },
       "radar": {
-        "winRate": 49.1,
-        "redWinRate": 68.2,
-        "blueMerlinProtect": 37.4,
-        "roleTheory": 50.1,
+        "blueMerlinAlive": 37.4,
+        "red3Red": 43.9,
+        "redMerlinDead": 24.2,
         "positionTheory": 49.7,
-        "redMerlinKillRate": 24.2,
-        "experience": 41.1
+        "roleTheory": 50.1
       }
     },
     "豬豬": {
@@ -6817,13 +6844,11 @@
         "rawBlueGames": 251.0
       },
       "radar": {
-        "winRate": 40.5,
-        "redWinRate": 68.1,
-        "blueMerlinProtect": 24.7,
-        "roleTheory": 42.3,
+        "blueMerlinAlive": 24.7,
+        "red3Red": 40.3,
+        "redMerlinDead": 27.8,
         "positionTheory": 42.1,
-        "redMerlinKillRate": 27.8,
-        "experience": 39.5
+        "roleTheory": 42.3
       }
     },
     "發達": {
@@ -6913,13 +6938,11 @@
         "rawBlueGames": 226.0
       },
       "radar": {
-        "winRate": 47.1,
-        "redWinRate": 68.7,
-        "blueMerlinProtect": 32.7,
-        "roleTheory": 46.9,
+        "blueMerlinAlive": 32.7,
+        "red3Red": 48.0,
+        "redMerlinDead": 20.7,
         "positionTheory": 45.9,
-        "redMerlinKillRate": 20.7,
-        "experience": 37.6
+        "roleTheory": 46.9
       }
     },
     "雪怪": {
@@ -7009,13 +7032,11 @@
         "rawBlueGames": 234.0
       },
       "radar": {
-        "winRate": 45.3,
-        "redWinRate": 68.1,
-        "blueMerlinProtect": 32.1,
-        "roleTheory": 46.0,
+        "blueMerlinAlive": 32.1,
+        "red3Red": 47.4,
+        "redMerlinDead": 20.7,
         "positionTheory": 46.5,
-        "redMerlinKillRate": 20.7,
-        "experience": 36.9
+        "roleTheory": 46.0
       }
     },
     "黃某人": {
@@ -7105,13 +7126,11 @@
         "rawBlueGames": 198.0
       },
       "radar": {
-        "winRate": 44.3,
-        "redWinRate": 66.9,
-        "blueMerlinProtect": 26.8,
-        "roleTheory": 42.7,
+        "blueMerlinAlive": 26.8,
+        "red3Red": 44.8,
+        "redMerlinDead": 22.1,
         "positionTheory": 43.3,
-        "redMerlinKillRate": 22.1,
-        "experience": 35.2
+        "roleTheory": 42.7
       }
     },
     "大星": {
@@ -7201,13 +7220,11 @@
         "rawBlueGames": 211.0
       },
       "radar": {
-        "winRate": 40.1,
-        "redWinRate": 67.5,
-        "blueMerlinProtect": 23.7,
-        "roleTheory": 41.2,
+        "blueMerlinAlive": 23.7,
+        "red3Red": 43.7,
+        "redMerlinDead": 23.8,
         "positionTheory": 41.5,
-        "redMerlinKillRate": 23.8,
-        "experience": 33.7
+        "roleTheory": 41.2
       }
     },
     "LORI": {
@@ -7297,13 +7314,11 @@
         "rawBlueGames": 181.0
       },
       "radar": {
-        "winRate": 50.3,
-        "redWinRate": 67.8,
-        "blueMerlinProtect": 36.5,
-        "roleTheory": 49.1,
+        "blueMerlinAlive": 36.5,
+        "red3Red": 43.4,
+        "redMerlinDead": 24.5,
         "positionTheory": 49.5,
-        "redMerlinKillRate": 24.5,
-        "experience": 32.4
+        "roleTheory": 49.1
       }
     },
     "菜": {
@@ -7393,13 +7408,11 @@
         "rawBlueGames": 179.0
       },
       "radar": {
-        "winRate": 46.6,
-        "redWinRate": 69.5,
-        "blueMerlinProtect": 30.2,
-        "roleTheory": 45.6,
+        "blueMerlinAlive": 30.2,
+        "red3Red": 38.3,
+        "redMerlinDead": 31.3,
         "positionTheory": 46.2,
-        "redMerlinKillRate": 31.3,
-        "experience": 30.7
+        "roleTheory": 45.6
       }
     },
     "ED": {
@@ -7489,13 +7502,11 @@
         "rawBlueGames": 173.0
       },
       "radar": {
-        "winRate": 48.6,
-        "redWinRate": 61.9,
-        "blueMerlinProtect": 39.9,
-        "roleTheory": 48.2,
+        "blueMerlinAlive": 39.9,
+        "red3Red": 37.2,
+        "redMerlinDead": 24.8,
         "positionTheory": 47.8,
-        "redMerlinKillRate": 24.8,
-        "experience": 28.6
+        "roleTheory": 48.2
       }
     },
     "TEN": {
@@ -7585,13 +7596,11 @@
         "rawBlueGames": 162.0
       },
       "radar": {
-        "winRate": 39.5,
-        "redWinRate": 65.6,
-        "blueMerlinProtect": 24.1,
-        "roleTheory": 41.0,
+        "blueMerlinAlive": 24.1,
+        "red3Red": 44.8,
+        "redMerlinDead": 20.8,
         "positionTheory": 40.3,
-        "redMerlinKillRate": 20.8,
-        "experience": 25.8
+        "roleTheory": 41.0
       }
     },
     "午夜": {
@@ -7681,13 +7690,11 @@
         "rawBlueGames": 150.0
       },
       "radar": {
-        "winRate": 41.4,
-        "redWinRate": 59.4,
-        "blueMerlinProtect": 28.7,
-        "roleTheory": 41.3,
+        "blueMerlinAlive": 28.7,
+        "red3Red": 42.5,
+        "redMerlinDead": 17.0,
         "positionTheory": 41.6,
-        "redMerlinKillRate": 17.0,
-        "experience": 25.6
+        "roleTheory": 41.3
       }
     },
     "豬羊": {
@@ -7777,13 +7784,11 @@
         "rawBlueGames": 141.0
       },
       "radar": {
-        "winRate": 55.5,
-        "redWinRate": 77.4,
-        "blueMerlinProtect": 39.0,
-        "roleTheory": 54.2,
+        "blueMerlinAlive": 39.0,
+        "red3Red": 52.8,
+        "redMerlinDead": 24.5,
         "positionTheory": 55.5,
-        "redMerlinKillRate": 24.5,
-        "experience": 24.7
+        "roleTheory": 54.2
       }
     },
     "很乖": {
@@ -7873,13 +7878,11 @@
         "rawBlueGames": 133.0
       },
       "radar": {
-        "winRate": 47.7,
-        "redWinRate": 70.0,
-        "blueMerlinProtect": 29.3,
-        "roleTheory": 46.0,
+        "blueMerlinAlive": 29.3,
+        "red3Red": 47.3,
+        "redMerlinDead": 22.7,
         "positionTheory": 46.8,
-        "redMerlinKillRate": 22.7,
-        "experience": 24.3
+        "roleTheory": 46.0
       }
     },
     "呂安": {
@@ -7969,13 +7972,11 @@
         "rawBlueGames": 136.0
       },
       "radar": {
-        "winRate": 47.6,
-        "redWinRate": 69.5,
-        "blueMerlinProtect": 32.4,
-        "roleTheory": 46.9,
+        "blueMerlinAlive": 32.4,
+        "red3Red": 45.3,
+        "redMerlinDead": 24.2,
         "positionTheory": 47.6,
-        "redMerlinKillRate": 24.2,
-        "experience": 23.1
+        "roleTheory": 46.9
       }
     },
     "VASH": {
@@ -8065,13 +8066,11 @@
         "rawBlueGames": 124.0
       },
       "radar": {
-        "winRate": 48.1,
-        "redWinRate": 64.1,
-        "blueMerlinProtect": 36.3,
-        "roleTheory": 47.8,
+        "blueMerlinAlive": 36.3,
+        "red3Red": 40.2,
+        "redMerlinDead": 23.9,
         "positionTheory": 49.5,
-        "redMerlinKillRate": 23.9,
-        "experience": 21.6
+        "roleTheory": 47.8
       }
     },
     "布冬": {
@@ -8161,13 +8160,11 @@
         "rawBlueGames": 128.0
       },
       "radar": {
-        "winRate": 43.6,
-        "redWinRate": 69.9,
-        "blueMerlinProtect": 26.6,
-        "roleTheory": 44.6,
+        "blueMerlinAlive": 26.6,
+        "red3Red": 51.8,
+        "redMerlinDead": 18.1,
         "positionTheory": 45.1,
-        "redMerlinKillRate": 18.1,
-        "experience": 21.1
+        "roleTheory": 44.6
       }
     },
     "開司": {
@@ -8257,13 +8254,11 @@
         "rawBlueGames": 99.0
       },
       "radar": {
-        "winRate": 38.8,
-        "redWinRate": 66.0,
-        "blueMerlinProtect": 24.2,
-        "roleTheory": 40.5,
+        "blueMerlinAlive": 24.2,
+        "red3Red": 41.5,
+        "redMerlinDead": 24.5,
         "positionTheory": 40.8,
-        "redMerlinKillRate": 24.5,
-        "experience": 15.2
+        "roleTheory": 40.5
       }
     },
     "小背包": {
@@ -8353,13 +8348,11 @@
         "rawBlueGames": 90.0
       },
       "radar": {
-        "winRate": 45.4,
-        "redWinRate": 74.2,
-        "blueMerlinProtect": 25.6,
-        "roleTheory": 45.4,
+        "blueMerlinAlive": 25.6,
+        "red3Red": 46.8,
+        "redMerlinDead": 27.4,
         "positionTheory": 43.9,
-        "redMerlinKillRate": 27.4,
-        "experience": 15.2
+        "roleTheory": 45.4
       }
     },
     "RAY": {
@@ -8449,13 +8442,11 @@
         "rawBlueGames": 98.0
       },
       "radar": {
-        "winRate": 47.3,
-        "redWinRate": 62.5,
-        "blueMerlinProtect": 39.8,
-        "roleTheory": 48.4,
+        "blueMerlinAlive": 39.8,
+        "red3Red": 41.7,
+        "redMerlinDead": 20.8,
         "positionTheory": 47.9,
-        "redMerlinKillRate": 20.8,
-        "experience": 14.6
+        "roleTheory": 48.4
       }
     },
     "夆": {
@@ -8545,13 +8536,11 @@
         "rawBlueGames": 93.0
       },
       "radar": {
-        "winRate": 40.0,
-        "redWinRate": 70.2,
-        "blueMerlinProtect": 24.7,
-        "roleTheory": 44.0,
+        "blueMerlinAlive": 24.7,
+        "red3Red": 44.7,
+        "redMerlinDead": 25.5,
         "positionTheory": 41.0,
-        "redMerlinKillRate": 25.5,
-        "experience": 14.0
+        "roleTheory": 44.0
       }
     },
     "EMMA": {
@@ -8641,13 +8630,11 @@
         "rawBlueGames": 81.0
       },
       "radar": {
-        "winRate": 47.1,
-        "redWinRate": 74.5,
-        "blueMerlinProtect": 28.4,
-        "roleTheory": 45.8,
+        "blueMerlinAlive": 28.4,
+        "red3Red": 54.5,
+        "redMerlinDead": 20.0,
         "positionTheory": 48.3,
-        "redMerlinKillRate": 20.0,
-        "experience": 13.6
+        "roleTheory": 45.8
       }
     },
     "SBEAR": {
@@ -8737,13 +8724,11 @@
         "rawBlueGames": 80.0
       },
       "radar": {
-        "winRate": 43.0,
-        "redWinRate": 65.5,
-        "blueMerlinProtect": 27.5,
-        "roleTheory": 43.9,
+        "blueMerlinAlive": 27.5,
+        "red3Red": 41.8,
+        "redMerlinDead": 23.6,
         "positionTheory": 40.0,
-        "redMerlinKillRate": 23.6,
-        "experience": 13.5
+        "roleTheory": 43.9
       }
     },
     "嚇到吃手手": {
@@ -8833,13 +8818,11 @@
         "rawBlueGames": 84.0
       },
       "radar": {
-        "winRate": 47.7,
-        "redWinRate": 84.1,
-        "blueMerlinProtect": 28.6,
-        "roleTheory": 51.5,
+        "blueMerlinAlive": 28.6,
+        "red3Red": 63.6,
+        "redMerlinDead": 20.5,
         "positionTheory": 50.5,
-        "redMerlinKillRate": 20.5,
-        "experience": 12.8
+        "roleTheory": 51.5
       }
     },
     "FANCY": {
@@ -8929,13 +8912,11 @@
         "rawBlueGames": 74.0
       },
       "radar": {
-        "winRate": 47.2,
-        "redWinRate": 75.5,
-        "blueMerlinProtect": 27.0,
-        "roleTheory": 47.4,
+        "blueMerlinAlive": 27.0,
+        "red3Red": 62.3,
+        "redMerlinDead": 13.2,
         "positionTheory": 45.9,
-        "redMerlinKillRate": 13.2,
-        "experience": 12.7
+        "roleTheory": 47.4
       }
     },
     "FOX": {
@@ -9025,13 +9006,11 @@
         "rawBlueGames": 69.0
       },
       "radar": {
-        "winRate": 45.0,
-        "redWinRate": 67.5,
-        "blueMerlinProtect": 31.9,
-        "roleTheory": 46.9,
+        "blueMerlinAlive": 31.9,
+        "red3Red": 50.0,
+        "redMerlinDead": 17.5,
         "positionTheory": 45.1,
-        "redMerlinKillRate": 17.5,
-        "experience": 10.9
+        "roleTheory": 46.9
       }
     },
     "小向": {
@@ -9121,13 +9100,11 @@
         "rawBlueGames": 63.0
       },
       "radar": {
-        "winRate": 40.2,
-        "redWinRate": 61.4,
-        "blueMerlinProtect": 25.4,
-        "roleTheory": 38.8,
+        "blueMerlinAlive": 25.4,
+        "red3Red": 31.8,
+        "redMerlinDead": 29.5,
         "positionTheory": 38.0,
-        "redMerlinKillRate": 29.5,
-        "experience": 10.7
+        "roleTheory": 38.8
       }
     },
     "K810": {
@@ -9217,13 +9194,11 @@
         "rawBlueGames": 63.0
       },
       "radar": {
-        "winRate": 41.9,
-        "redWinRate": 66.7,
-        "blueMerlinProtect": 25.4,
-        "roleTheory": 41.2,
+        "blueMerlinAlive": 25.4,
+        "red3Red": 40.5,
+        "redMerlinDead": 26.2,
         "positionTheory": 39.7,
-        "redMerlinKillRate": 26.2,
-        "experience": 10.5
+        "roleTheory": 41.2
       }
     },
     "YUMI": {
@@ -9313,13 +9288,11 @@
         "rawBlueGames": 58.0
       },
       "radar": {
-        "winRate": 45.6,
-        "redWinRate": 51.1,
-        "blueMerlinProtect": 41.4,
-        "roleTheory": 45.4,
+        "blueMerlinAlive": 41.4,
+        "red3Red": 37.8,
+        "redMerlinDead": 13.3,
         "positionTheory": 47.2,
-        "redMerlinKillRate": 13.3,
-        "experience": 10.3
+        "roleTheory": 45.4
       }
     },
     "阿寶": {
@@ -9409,13 +9382,11 @@
         "rawBlueGames": 52.0
       },
       "radar": {
-        "winRate": 40.0,
-        "redWinRate": 69.8,
-        "blueMerlinProtect": 15.4,
-        "roleTheory": 37.9,
+        "blueMerlinAlive": 15.4,
+        "red3Red": 48.8,
+        "redMerlinDead": 20.9,
         "positionTheory": 36.9,
-        "redMerlinKillRate": 20.9,
-        "experience": 9.5
+        "roleTheory": 37.9
       }
     },
     "ALAN": {
@@ -9505,13 +9476,11 @@
         "rawBlueGames": 55.0
       },
       "radar": {
-        "winRate": 50.5,
-        "redWinRate": 65.0,
-        "blueMerlinProtect": 40.0,
-        "roleTheory": 51.0,
+        "blueMerlinAlive": 40.0,
+        "red3Red": 45.0,
+        "redMerlinDead": 20.0,
         "positionTheory": 48.0,
-        "redMerlinKillRate": 20.0,
-        "experience": 9.5
+        "roleTheory": 51.0
       }
     },
     "DAL": {
@@ -9601,13 +9570,11 @@
         "rawBlueGames": 47.0
       },
       "radar": {
-        "winRate": 53.0,
-        "redWinRate": 77.8,
-        "blueMerlinProtect": 34.0,
-        "roleTheory": 49.8,
+        "blueMerlinAlive": 34.0,
+        "red3Red": 33.3,
+        "redMerlinDead": 44.4,
         "positionTheory": 52.4,
-        "redMerlinKillRate": 44.4,
-        "experience": 8.3
+        "roleTheory": 49.8
       }
     },
     "爾勵": {
@@ -9697,13 +9664,11 @@
         "rawBlueGames": 59.0
       },
       "radar": {
-        "winRate": 50.0,
-        "redWinRate": 69.6,
-        "blueMerlinProtect": 42.4,
-        "roleTheory": 51.1,
+        "blueMerlinAlive": 42.4,
+        "red3Red": 43.5,
+        "redMerlinDead": 26.1,
         "positionTheory": 56.8,
-        "redMerlinKillRate": 26.1,
-        "experience": 8.2
+        "roleTheory": 51.1
       }
     },
     "毛爸": {
@@ -9793,13 +9758,11 @@
         "rawBlueGames": 48.0
       },
       "radar": {
-        "winRate": 46.8,
-        "redWinRate": 67.7,
-        "blueMerlinProtect": 33.3,
-        "roleTheory": 45.5,
+        "blueMerlinAlive": 33.3,
+        "red3Red": 48.4,
+        "redMerlinDead": 19.4,
         "positionTheory": 41.3,
-        "redMerlinKillRate": 19.4,
-        "experience": 7.9
+        "roleTheory": 45.5
       }
     },
     "SIRIUS": {
@@ -9889,13 +9852,11 @@
         "rawBlueGames": 44.0
       },
       "radar": {
-        "winRate": 39.5,
-        "redWinRate": 65.6,
-        "blueMerlinProtect": 20.5,
-        "roleTheory": 39.5,
+        "blueMerlinAlive": 20.5,
+        "red3Red": 50.0,
+        "redMerlinDead": 15.6,
         "positionTheory": 40.2,
-        "redMerlinKillRate": 15.6,
-        "experience": 7.6
+        "roleTheory": 39.5
       }
     },
     "冰雪塵": {
@@ -9985,13 +9946,11 @@
         "rawBlueGames": 41.0
       },
       "radar": {
-        "winRate": 40.0,
-        "redWinRate": 69.0,
-        "blueMerlinProtect": 19.5,
-        "roleTheory": 38.4,
+        "blueMerlinAlive": 19.5,
+        "red3Red": 31.0,
+        "redMerlinDead": 37.9,
         "positionTheory": 37.2,
-        "redMerlinKillRate": 37.9,
-        "experience": 7.0
+        "roleTheory": 38.4
       }
     },
     "奈奈": {
@@ -10081,13 +10040,11 @@
         "rawBlueGames": 40.0
       },
       "radar": {
-        "winRate": 43.3,
-        "redWinRate": 65.0,
-        "blueMerlinProtect": 32.5,
-        "roleTheory": 45.6,
+        "blueMerlinAlive": 32.5,
+        "red3Red": 45.0,
+        "redMerlinDead": 20.0,
         "positionTheory": 48.9,
-        "redMerlinKillRate": 20.0,
-        "experience": 6.0
+        "roleTheory": 45.6
       }
     },
     "W": {
@@ -10177,13 +10134,11 @@
         "rawBlueGames": 27.0
       },
       "radar": {
-        "winRate": 43.6,
-        "redWinRate": 60.7,
-        "blueMerlinProtect": 25.9,
-        "roleTheory": 36.3,
+        "blueMerlinAlive": 25.9,
+        "red3Red": 32.1,
+        "redMerlinDead": 28.6,
         "positionTheory": 41.5,
-        "redMerlinKillRate": 28.6,
-        "experience": 5.5
+        "roleTheory": 36.3
       }
     },
     "亞可": {
@@ -10273,13 +10228,11 @@
         "rawBlueGames": 35.0
       },
       "radar": {
-        "winRate": 35.3,
-        "redWinRate": 75.0,
-        "blueMerlinProtect": 17.1,
-        "roleTheory": 43.6,
+        "blueMerlinAlive": 17.1,
+        "red3Red": 37.5,
+        "redMerlinDead": 37.5,
         "positionTheory": 39.6,
-        "redMerlinKillRate": 37.5,
-        "experience": 5.1
+        "roleTheory": 43.6
       }
     },
     "婷婷": {
@@ -10369,13 +10322,11 @@
         "rawBlueGames": 32.0
       },
       "radar": {
-        "winRate": 41.7,
-        "redWinRate": 62.5,
-        "blueMerlinProtect": 31.3,
-        "roleTheory": 46.5,
+        "blueMerlinAlive": 31.3,
+        "red3Red": 43.8,
+        "redMerlinDead": 18.8,
         "positionTheory": 49.7,
-        "redMerlinKillRate": 18.8,
-        "experience": 4.8
+        "roleTheory": 46.5
       }
     },
     "熊": {
@@ -10465,13 +10416,11 @@
         "rawBlueGames": 21.0
       },
       "radar": {
-        "winRate": 42.6,
-        "redWinRate": 53.8,
-        "blueMerlinProtect": 28.6,
-        "roleTheory": 40.2,
+        "blueMerlinAlive": 28.6,
+        "red3Red": 30.8,
+        "redMerlinDead": 23.1,
         "positionTheory": 42.8,
-        "redMerlinKillRate": 23.1,
-        "experience": 4.7
+        "roleTheory": 40.2
       }
     },
     "叉燒": {
@@ -10561,13 +10510,11 @@
         "rawBlueGames": 21.0
       },
       "radar": {
-        "winRate": 41.5,
-        "redWinRate": 60.0,
-        "blueMerlinProtect": 23.8,
-        "roleTheory": 38.3,
+        "blueMerlinAlive": 23.8,
+        "red3Red": 40.0,
+        "redMerlinDead": 20.0,
         "positionTheory": 37.1,
-        "redMerlinKillRate": 20.0,
-        "experience": 4.1
+        "roleTheory": 38.3
       }
     },
     "YJ": {
@@ -10657,13 +10604,11 @@
         "rawBlueGames": 24.0
       },
       "radar": {
-        "winRate": 41.5,
-        "redWinRate": 76.5,
-        "blueMerlinProtect": 16.7,
-        "roleTheory": 41.1,
+        "blueMerlinAlive": 16.7,
+        "red3Red": 52.9,
+        "redMerlinDead": 23.5,
         "positionTheory": 43.8,
-        "redMerlinKillRate": 23.5,
-        "experience": 4.1
+        "roleTheory": 41.1
       }
     },
     "皮皮": {
@@ -10753,13 +10698,11 @@
         "rawBlueGames": 25.0
       },
       "radar": {
-        "winRate": 47.5,
-        "redWinRate": 80.0,
-        "blueMerlinProtect": 28.0,
-        "roleTheory": 47.9,
+        "blueMerlinAlive": 28.0,
+        "red3Red": 60.0,
+        "redMerlinDead": 20.0,
         "positionTheory": 42.9,
-        "redMerlinKillRate": 20.0,
-        "experience": 4.0
+        "roleTheory": 47.9
       }
     },
     "米奇": {
@@ -10849,13 +10792,11 @@
         "rawBlueGames": 26.0
       },
       "radar": {
-        "winRate": 38.5,
-        "redWinRate": 61.5,
-        "blueMerlinProtect": 26.9,
-        "roleTheory": 40.4,
+        "blueMerlinAlive": 26.9,
+        "red3Red": 46.2,
+        "redMerlinDead": 15.4,
         "positionTheory": 44.8,
-        "redMerlinKillRate": 15.4,
-        "experience": 3.9
+        "roleTheory": 40.4
       }
     },
     "ERIC": {
@@ -10945,13 +10886,11 @@
         "rawBlueGames": 27.0
       },
       "radar": {
-        "winRate": 44.7,
-        "redWinRate": 54.5,
-        "blueMerlinProtect": 40.7,
-        "roleTheory": 45.2,
+        "blueMerlinAlive": 40.7,
+        "red3Red": 36.4,
+        "redMerlinDead": 18.2,
         "positionTheory": 44.5,
-        "redMerlinKillRate": 18.2,
-        "experience": 3.8
+        "roleTheory": 45.2
       }
     },
     "C5": {
@@ -11041,13 +10980,11 @@
         "rawBlueGames": 25.0
       },
       "radar": {
-        "winRate": 52.6,
-        "redWinRate": 84.6,
-        "blueMerlinProtect": 36.0,
-        "roleTheory": 54.8,
+        "blueMerlinAlive": 36.0,
+        "red3Red": 53.8,
+        "redMerlinDead": 30.8,
         "positionTheory": 52.9,
-        "redMerlinKillRate": 30.8,
-        "experience": 3.8
+        "roleTheory": 54.8
       }
     },
     "溫": {
@@ -11137,13 +11074,11 @@
         "rawBlueGames": 17.0
       },
       "radar": {
-        "winRate": 54.8,
-        "redWinRate": 92.9,
-        "blueMerlinProtect": 23.5,
-        "roleTheory": 50.3,
+        "blueMerlinAlive": 23.5,
+        "red3Red": 71.4,
+        "redMerlinDead": 21.4,
         "positionTheory": 60.2,
-        "redMerlinKillRate": 21.4,
-        "experience": 3.1
+        "roleTheory": 50.3
       }
     },
     "梅粉": {
@@ -11233,13 +11168,11 @@
         "rawBlueGames": 22.0
       },
       "radar": {
-        "winRate": 40.0,
-        "redWinRate": 50.0,
-        "blueMerlinProtect": 36.4,
-        "roleTheory": 41.4,
+        "blueMerlinAlive": 36.4,
+        "red3Red": 37.5,
+        "redMerlinDead": 12.5,
         "positionTheory": 39.6,
-        "redMerlinKillRate": 12.5,
-        "experience": 3.0
+        "roleTheory": 41.4
       }
     },
     "UD": {
@@ -11329,13 +11262,11 @@
         "rawBlueGames": 22.0
       },
       "radar": {
-        "winRate": 53.3,
-        "redWinRate": 50.0,
-        "blueMerlinProtect": 54.5,
-        "roleTheory": 52.0,
+        "blueMerlinAlive": 54.5,
+        "red3Red": 0.0,
+        "redMerlinDead": 50.0,
         "positionTheory": 52.0,
-        "redMerlinKillRate": 50.0,
-        "experience": 3.0
+        "roleTheory": 52.0
       }
     }
   },
@@ -14865,33 +14796,6 @@
         "totalGames": 688
       }
     ],
-    "failDistribution": [
-      {
-        "fails": 0,
-        "count": 3814,
-        "percentage": 45.3
-      },
-      {
-        "fails": 1,
-        "count": 3672,
-        "percentage": 43.6
-      },
-      {
-        "fails": 2,
-        "count": 698,
-        "percentage": 8.3
-      },
-      {
-        "fails": 3,
-        "count": 93,
-        "percentage": 1.1
-      },
-      {
-        "fails": 4,
-        "count": 137,
-        "percentage": 1.6
-      }
-    ],
     "missionOutcomeByRound": [
       {
         "round": 1,
@@ -14927,6 +14831,53 @@
         "oneFail": 169,
         "twoFail": 38,
         "total": 688
+      }
+    ],
+    "missionOutcomeCorrelation": [
+      {
+        "round": 1,
+        "passedGames": 888,
+        "passedThenBlueWin": 631,
+        "passedBlueWinRate": 71.1,
+        "failedGames": 1258,
+        "failedThenRedWin": 714,
+        "failedRedWinRate": 56.8
+      },
+      {
+        "round": 2,
+        "passedGames": 607,
+        "passedThenBlueWin": 545,
+        "passedBlueWinRate": 89.8,
+        "failedGames": 1539,
+        "failedThenRedWin": 909,
+        "failedRedWinRate": 59.1
+      },
+      {
+        "round": 3,
+        "passedGames": 985,
+        "passedThenBlueWin": 936,
+        "passedBlueWinRate": 95.0,
+        "failedGames": 1158,
+        "failedThenRedWin": 922,
+        "failedRedWinRate": 79.6
+      },
+      {
+        "round": 4,
+        "passedGames": 853,
+        "passedThenBlueWin": 689,
+        "passedBlueWinRate": 80.8,
+        "failedGames": 438,
+        "failedThenRedWin": 178,
+        "failedRedWinRate": 40.6
+      },
+      {
+        "round": 5,
+        "passedGames": 481,
+        "passedThenBlueWin": 480,
+        "passedBlueWinRate": 99.8,
+        "failedGames": 207,
+        "failedThenRedWin": 207,
+        "failedRedWinRate": 100.0
       }
     ]
   },
@@ -15156,6 +15107,284 @@
         "role": "娜美",
         "games": 119,
         "redWinRate": 65.5
+      }
+    ],
+    "allLakeRoleStats": [
+      {
+        "lake": "首湖",
+        "holderRoleStats": [
+          {
+            "role": "娜美",
+            "games": 227,
+            "redWinRate": 49.8,
+            "blueWinRate": 50.2
+          },
+          {
+            "role": "派西",
+            "games": 223,
+            "redWinRate": 35.9,
+            "blueWinRate": 64.1
+          },
+          {
+            "role": "刺客",
+            "games": 192,
+            "redWinRate": 56.8,
+            "blueWinRate": 43.2
+          },
+          {
+            "role": "德魯",
+            "games": 214,
+            "redWinRate": 49.5,
+            "blueWinRate": 50.5
+          },
+          {
+            "role": "奧伯",
+            "games": 202,
+            "redWinRate": 53.0,
+            "blueWinRate": 47.0
+          },
+          {
+            "role": "忠臣",
+            "games": 889,
+            "redWinRate": 43.3,
+            "blueWinRate": 56.7
+          },
+          {
+            "role": "梅林",
+            "games": 199,
+            "redWinRate": 35.7,
+            "blueWinRate": 64.3
+          }
+        ],
+        "targetRoleStats": [
+          {
+            "role": "忠臣",
+            "games": 1033,
+            "redWinRate": 41.2
+          },
+          {
+            "role": "奧伯",
+            "games": 134,
+            "redWinRate": 64.9
+          },
+          {
+            "role": "刺客",
+            "games": 131,
+            "redWinRate": 61.1
+          },
+          {
+            "role": "派西",
+            "games": 242,
+            "redWinRate": 41.3
+          },
+          {
+            "role": "梅林",
+            "games": 272,
+            "redWinRate": 30.1
+          },
+          {
+            "role": "德魯",
+            "games": 214,
+            "redWinRate": 55.1
+          },
+          {
+            "role": "娜美",
+            "games": 119,
+            "redWinRate": 65.5
+          }
+        ],
+        "sameFaction": {
+          "games": 1258,
+          "redWinRate": 39.8
+        },
+        "diffFaction": {
+          "games": 887,
+          "redWinRate": 53.0
+        }
+      },
+      {
+        "lake": "二湖",
+        "holderRoleStats": [
+          {
+            "role": "忠臣",
+            "games": 592,
+            "redWinRate": 22.1,
+            "blueWinRate": 77.9
+          },
+          {
+            "role": "奧伯",
+            "games": 82,
+            "redWinRate": 48.8,
+            "blueWinRate": 51.2
+          },
+          {
+            "role": "刺客",
+            "games": 68,
+            "redWinRate": 32.4,
+            "blueWinRate": 67.6
+          },
+          {
+            "role": "派西",
+            "games": 151,
+            "redWinRate": 27.8,
+            "blueWinRate": 72.2
+          },
+          {
+            "role": "梅林",
+            "games": 180,
+            "redWinRate": 17.2,
+            "blueWinRate": 82.8
+          },
+          {
+            "role": "德魯",
+            "games": 127,
+            "redWinRate": 27.6,
+            "blueWinRate": 72.4
+          },
+          {
+            "role": "娜美",
+            "games": 77,
+            "redWinRate": 49.4,
+            "blueWinRate": 50.6
+          }
+        ],
+        "targetRoleStats": [
+          {
+            "role": "奧伯",
+            "games": 80,
+            "redWinRate": 40.0
+          },
+          {
+            "role": "刺客",
+            "games": 88,
+            "redWinRate": 44.3
+          },
+          {
+            "role": "娜美",
+            "games": 80,
+            "redWinRate": 45.0
+          },
+          {
+            "role": "派西",
+            "games": 159,
+            "redWinRate": 17.6
+          },
+          {
+            "role": "忠臣",
+            "games": 621,
+            "redWinRate": 21.9
+          },
+          {
+            "role": "德魯",
+            "games": 100,
+            "redWinRate": 35.0
+          },
+          {
+            "role": "梅林",
+            "games": 147,
+            "redWinRate": 22.4
+          }
+        ],
+        "sameFaction": {
+          "games": 849,
+          "redWinRate": 21.0
+        },
+        "diffFaction": {
+          "games": 426,
+          "redWinRate": 37.8
+        }
+      },
+      {
+        "lake": "三湖",
+        "holderRoleStats": [
+          {
+            "role": "刺客",
+            "games": 59,
+            "redWinRate": 44.1,
+            "blueWinRate": 55.9
+          },
+          {
+            "role": "娜美",
+            "games": 51,
+            "redWinRate": 45.1,
+            "blueWinRate": 54.9
+          },
+          {
+            "role": "派西",
+            "games": 68,
+            "redWinRate": 20.6,
+            "blueWinRate": 79.4
+          },
+          {
+            "role": "忠臣",
+            "games": 289,
+            "redWinRate": 27.3,
+            "blueWinRate": 72.7
+          },
+          {
+            "role": "德魯",
+            "games": 65,
+            "redWinRate": 30.8,
+            "blueWinRate": 69.2
+          },
+          {
+            "role": "奧伯",
+            "games": 42,
+            "redWinRate": 35.7,
+            "blueWinRate": 64.3
+          },
+          {
+            "role": "梅林",
+            "games": 76,
+            "redWinRate": 32.9,
+            "blueWinRate": 67.1
+          }
+        ],
+        "targetRoleStats": [
+          {
+            "role": "忠臣",
+            "games": 279,
+            "redWinRate": 31.9
+          },
+          {
+            "role": "梅林",
+            "games": 61,
+            "redWinRate": 34.4
+          },
+          {
+            "role": "派西",
+            "games": 62,
+            "redWinRate": 21.0
+          },
+          {
+            "role": "刺客",
+            "games": 55,
+            "redWinRate": 32.7
+          },
+          {
+            "role": "德魯",
+            "games": 56,
+            "redWinRate": 25.0
+          },
+          {
+            "role": "奧伯",
+            "games": 86,
+            "redWinRate": 38.4
+          },
+          {
+            "role": "娜美",
+            "games": 47,
+            "redWinRate": 25.5
+          }
+        ],
+        "sameFaction": {
+          "games": 357,
+          "redWinRate": 26.1
+        },
+        "diffFaction": {
+          "games": 289,
+          "redWinRate": 37.0
+        }
       }
     ]
   },
