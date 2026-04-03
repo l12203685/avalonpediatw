@@ -214,9 +214,6 @@ function getSheetsClient(): sheets_v4.Sheets {
 // ---------------------------------------------------------------------------
 
 // Cache file fallback — pre-exported Sheets data
-import * as path from 'path';
-import * as fs from 'fs';
-
 const CACHE_PATH = path.resolve(__dirname, '..', '..', 'sheets_cache.json');
 let sheetsCache: Record<string, string[][]> | null = null;
 
