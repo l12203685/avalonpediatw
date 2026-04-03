@@ -208,11 +208,16 @@ export default function HomePage(): JSX.Element {
               transition={{ type: 'spring', stiffness: 200 }}
               className="space-y-4"
             >
+              <img
+                src="/logo.png"
+                alt="阿瓦隆百科"
+                className="w-24 h-24 mx-auto rounded-2xl shadow-lg shadow-blue-500/20"
+              />
               <h1 className="text-6xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent drop-shadow-2xl">
                 AVALON
               </h1>
               <p className="text-2xl text-gray-300 font-semibold">抵抗組織 (The Resistance)</p>
-              <p className="text-gray-400 text-sm">5–10 人 (players) • 即時連線對戰 (Real-time Online)</p>
+              <p className="text-gray-400 text-sm">5-10 人 (players) / 即時連線對戰 (Real-time Online)</p>
             </motion.div>
 
             {/* Stats Cards */}

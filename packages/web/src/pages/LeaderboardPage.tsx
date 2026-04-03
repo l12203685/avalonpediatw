@@ -155,7 +155,7 @@ export default function LeaderboardPage(): JSX.Element {
           </div>
         )}
 
-        {!loading && !error && entries.length === 0 && (
+        {!loading && !error && !dbOffline && entries.length === 0 && (
           <div className="text-center py-16 text-gray-500">
             <Users size={48} className="mx-auto mb-3 opacity-40" />
             <p>還沒有排行榜資料 (No leaderboard data yet)</p>
