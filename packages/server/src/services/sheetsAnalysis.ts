@@ -214,18 +214,21 @@ function getSheetsClient(): sheets_v4.Sheets {
 // ---------------------------------------------------------------------------
 
 // Cache file fallback — pre-exported Sheets data
-const CACHE_PATH = require('path').resolve(__dirname, '..', '..', 'sheets_cache.json');
+import * as path from 'path';
+import * as fs from 'fs';
+
+const CACHE_PATH = path.resolve(__dirname, '..', '..', 'sheets_cache.json');
 let sheetsCache: Record<string, string[][]> | null = null;
 
 function loadSheetsCache(): Record<string, string[][]> | null {
   if (sheetsCache) return sheetsCache;
   try {
-    const fs = require('fs');
     if (fs.existsSync(CACHE_PATH)) {
       sheetsCache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf-8'));
       console.log('[sheetsAnalysis] Loaded cache from', CACHE_PATH, Object.keys(sheetsCache!).length, 'sheets');
       return sheetsCache;
     }
+    console.warn('[sheetsAnalysis] Cache file not found at', CACHE_PATH);
   } catch (e) {
     console.warn('[sheetsAnalysis] Cache load failed:', e);
   }
