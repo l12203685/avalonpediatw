@@ -307,6 +307,47 @@ export async function fetchAnalysisLake(): Promise<LakeAnalysisData> {
   return analysisApiFetch<LakeAnalysisData>('/lake');
 }
 
+// ── Seat Order Analysis API ──────────────────────────────────────────────────
+
+export interface SeatOrderPermutation {
+  order: string;
+  total: number;
+  '\u4e09\u85cd\u6885\u6d3b': number;
+  '\u4e09\u85cd\u6885\u6b7b': number;
+  '\u4e09\u7d05': number;
+  '\u7a7f\u63d2\u4efb\u52d9': number;
+  redWinRate: number;
+  blueWinRate: number;
+  merlinKillRate: number;
+  '\u7a7f\u63d2\u7387': number;
+}
+
+export interface SeatOrderData {
+  permutations: SeatOrderPermutation[];
+  totalGames: number;
+  overallRedWinRate: number;
+}
+
+export async function fetchAnalysisSeatOrder(): Promise<SeatOrderData> {
+  return analysisApiFetch<SeatOrderData>('/seat-order');
+}
+
+// ── Wiki API ─────────────────────────────────────────────────────────────────
+
+export interface WikiArticleApi {
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+  excerpt: string;
+  tags: string[];
+  source: string;
+}
+
+export async function fetchWikiArticles(): Promise<{ articles: WikiArticleApi[]; total: number }> {
+  return analysisApiFetch<{ articles: WikiArticleApi[]; total: number }>('/wiki');
+}
+
 // ── AI Stats API ──────────────────────────────────────────────────────────────
 
 export interface AiStatsDataApi {

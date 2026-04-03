@@ -15582,5 +15582,83 @@
         "redWinRate": 100.0
       }
     ]
+  },
+  "seatOrder": {
+    "permutations": [
+      {
+        "order": "派梅娜",
+        "total": 357,
+        "三藍梅活": 97,
+        "三藍梅死": 100,
+        "三紅": 160,
+        "穿插任務": 0,
+        "redWinRate": 44.8,
+        "blueWinRate": 55.2,
+        "merlinKillRate": 28.0,
+        "穿插率": 0.0
+      },
+      {
+        "order": "派娜梅",
+        "total": 359,
+        "三藍梅活": 110,
+        "三藍梅死": 79,
+        "三紅": 170,
+        "穿插任務": 0,
+        "redWinRate": 47.4,
+        "blueWinRate": 52.6,
+        "merlinKillRate": 22.0,
+        "穿插率": 0.0
+      },
+      {
+        "order": "梅派娜",
+        "total": 377,
+        "三藍梅活": 106,
+        "三藍梅死": 90,
+        "三紅": 181,
+        "穿插任務": 0,
+        "redWinRate": 48.0,
+        "blueWinRate": 52.0,
+        "merlinKillRate": 23.9,
+        "穿插率": 0.0
+      },
+      {
+        "order": "梅娜派",
+        "total": 382,
+        "三藍梅活": 119,
+        "三藍梅死": 105,
+        "三紅": 158,
+        "穿插任務": 0,
+        "redWinRate": 41.4,
+        "blueWinRate": 58.6,
+        "merlinKillRate": 27.5,
+        "穿插率": 0.0
+      },
+      {
+        "order": "娜派梅",
+        "total": 310,
+        "三藍梅活": 110,
+        "三藍梅死": 55,
+        "三紅": 145,
+        "穿插任務": 0,
+        "redWinRate": 46.8,
+        "blueWinRate": 53.2,
+        "merlinKillRate": 17.7,
+        "穿插率": 0.0
+      },
+      {
+        "order": "娜梅派",
+        "total": 361,
+        "三藍梅活": 117,
+        "三藍梅死": 87,
+        "三紅": 157,
+        "穿插任務": 0,
+        "redWinRate": 43.5,
+        "blueWinRate": 56.5,
+        "merlinKillRate": 24.1,
+        "穿插率": 0.0
+      }
+    ],
+    "totalGames": 2146,
+    "overallRedWinRate": 45.2
   }
 }

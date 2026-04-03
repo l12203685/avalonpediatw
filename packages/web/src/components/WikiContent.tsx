@@ -1,7 +1,23 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, X, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, X, Eye, Calendar, ChevronDown, ChevronUp, Loader } from 'lucide-react';
 import { WikiArticle, WIKI_ARTICLES, WIKI_CATEGORIES } from '../data/wiki';
+import { fetchWikiArticles } from '../services/api';
+import type { WikiArticleApi } from '../services/api';
+
+function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
+  return {
+    id: a.id,
+    title: a.title,
+    category: a.category,
+    content: a.content,
+    excerpt: a.excerpt,
+    tags: a.tags,
+    author: a.source === 'hackmd' ? 'HackMD Archive' : 'Avalon Wiki',
+    updatedAt: new Date('2024-01-01'),
+    views: 0,
+  };
+}
 
 interface WikiContentProps {
   selectedCategory?: string;
@@ -12,20 +28,45 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
   const [activeCategory, setActiveCategory] = useState(selectedCategory || '');
   const [selectedArticle, setSelectedArticle] = useState<WikiArticle | null>(null);
   const [mobileListExpanded, setMobileListExpanded] = useState(true);
+  const [allArticles, setAllArticles] = useState<WikiArticle[]>(WIKI_ARTICLES);
+  const [wikiLoading, setWikiLoading] = useState(true);
+
+  // Fetch wiki articles from API, merge with hardcoded
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { articles } = await fetchWikiArticles();
+        if (!cancelled && articles.length > 0) {
+          const apiArticles = articles.map(apiToWikiArticle);
+          // Merge: hardcoded first (they have better formatting), then API articles not already present
+          const existingIds = new Set(WIKI_ARTICLES.map(a => a.title.toLowerCase()));
+          const newArticles = apiArticles.filter(a => !existingIds.has(a.title.toLowerCase()));
+          setAllArticles([...WIKI_ARTICLES, ...newArticles]);
+        }
+      } catch {
+        // API not available, use hardcoded only
+      } finally {
+        if (!cancelled) setWikiLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // 搜索和過濾文章
   const filteredArticles = useMemo(() => {
-    return WIKI_ARTICLES.filter((article) => {
+    return allArticles.filter((article) => {
       const matchesCategory = !activeCategory || article.category === activeCategory;
       const matchesSearch =
         !searchQuery ||
         article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         article.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        article.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
         article.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, searchQuery]);
+  }, [activeCategory, searchQuery, allArticles]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4">

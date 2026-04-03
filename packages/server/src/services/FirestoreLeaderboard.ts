@@ -242,52 +242,53 @@ export async function getFirestoreLeaderboard(limit = 50): Promise<LeaderboardEn
 /**
  * Compute ELO ratings from Google Sheets aggregate player stats.
  *
- * Algorithm: iterative ELO simulation. Each player's win/loss record is
- * replayed against the population average ELO to derive a final rating.
- * Players with more games and higher win rates will naturally get higher ELO.
+ * Algorithm: two-factor composite scoring.
+ *   1. Win rate contribution (dominant factor) -- maps win rate to a wide ELO
+ *      range using a linear scale centered at 1000.
+ *   2. Volume bonus -- players with more games get a small ELO bump to reward
+ *      experience and statistical significance.
+ *   3. Role theory bonus -- higher roleTheory (theoretical win rate based on
+ *      role composition) gives a small additional bump.
+ *
+ * This produces an ELO spread of roughly 750-1500, matching the frontend
+ * tier system (新手 0, 見習 850, 中堅 950, 老手 1050, 精英 1150, 大師 1300, 傳奇 1500).
  */
 function computeEloFromSheets(players: PlayerStats[]): Map<string, { elo: number; stats: PlayerStats }> {
   const result = new Map<string, { elo: number; stats: PlayerStats }>();
 
-  // Phase 1: Initial ELO estimate from win rate (quick convergence seed)
+  // Find max games for normalization
+  let maxGames = 1;
   for (const p of players) {
-    if (p.totalGames < 1) continue;
-    // Seed: map win rate to an initial ELO range
-    // 50% win rate = 1000, each 10% deviation = ~200 ELO points
-    const winRateFraction = (p.winRate || 0) / 100;
-    const seedElo = Math.round(1000 + (winRateFraction - 0.5) * 400);
-    result.set(p.name, { elo: Math.max(100, seedElo), stats: p });
+    if (p.totalGames > maxGames) maxGames = p.totalGames;
   }
 
-  // Phase 2: Iterative refinement (3 passes)
-  // Simulate games against population average to converge ELO
-  for (let pass = 0; pass < 3; pass++) {
-    const allElos = [...result.values()].map(v => v.elo);
-    const populationAvg = allElos.length > 0
-      ? allElos.reduce((a, b) => a + b, 0) / allElos.length
-      : STARTING_ELO;
+  for (const p of players) {
+    if (p.totalGames < 1) continue;
 
-    for (const [name, entry] of result) {
-      const { stats } = entry;
-      let elo = entry.elo;
+    const winRateFraction = (p.winRate || 0) / 100;
 
-      // Simulate wins and losses against population average
-      const totalWins = Math.round(stats.totalGames * (stats.winRate / 100));
-      const totalLosses = stats.totalGames - totalWins;
+    // Win rate contribution: 50% -> 1000, spread +/- 500
+    // A 55% win rate player = 1050, 60% = 1100, etc.
+    const winRateElo = 1000 + (winRateFraction - 0.5) * 1000;
 
-      // K-factor decreases with more games (established players change slower)
-      const kFactor = stats.totalGames >= 100 ? 16 : stats.totalGames >= 50 ? 24 : 32;
+    // Volume bonus: up to +150 for the most experienced player
+    // Uses log scale so early games matter more
+    const volumeBonus = Math.min(
+      Math.log2(Math.max(p.totalGames, 1)) / Math.log2(maxGames) * 150,
+      150,
+    );
 
-      // Apply batch ELO update
-      const expected = expectedScore(elo, populationAvg);
-      const actualWinRate = totalWins / stats.totalGames;
-      // Scale the update by sqrt of games to avoid extreme values
-      const gameScale = Math.min(Math.sqrt(stats.totalGames) / 10, 3);
-      elo = Math.round(elo + kFactor * gameScale * (actualWinRate - expected));
-      elo = Math.max(100, elo);
+    // Role theory bonus: theoretical win rate above average gives +0..100
+    const roleTheoryFraction = (p.roleTheory || 50) / 100;
+    const theoryBonus = (roleTheoryFraction - 0.5) * 200;
 
-      result.set(name, { elo, stats });
-    }
+    // Minimum 10 games for reliable rating; penalize low-game players
+    const reliabilityFactor = Math.min(p.totalGames / 30, 1);
+
+    let elo = winRateElo + (volumeBonus + theoryBonus) * reliabilityFactor;
+    elo = Math.max(100, Math.round(elo));
+
+    result.set(p.name, { elo, stats: p });
   }
 
   return result;
@@ -339,21 +340,29 @@ async function getSheetsLeaderboard(limit: number): Promise<LeaderboardEntry[]> 
 function deriveBadgesFromStats(stats: PlayerStats, elo: number): string[] {
   const badges: string[] = [];
 
-  if (stats.totalGames >= 100) badges.push('百戰老將');
+  // Experience badges
+  if (stats.totalGames >= 500) badges.push('千錘百鍊');
+  else if (stats.totalGames >= 100) badges.push('百戰老將');
   else if (stats.totalGames >= 50) badges.push('資深玩家');
   else if (stats.totalGames >= 10) badges.push('常客');
 
+  // Win rate badges
   const winRate = (stats.winRate || 0) / 100;
   if (stats.totalGames >= 10 && winRate >= 0.7) badges.push('勝率王');
-  if (stats.totalGames >= 10 && winRate >= 0.6) badges.push('穩定發揮');
+  else if (stats.totalGames >= 10 && winRate >= 0.6) badges.push('穩定發揮');
 
+  // ELO tier badges (thresholds match frontend eloRank.ts)
   if (elo >= 1500) badges.push('傳奇');
   else if (elo >= 1300) badges.push('大師');
   else if (elo >= 1150) badges.push('精英');
+  else if (elo >= 1050) badges.push('老手');
+  else if (elo >= 950) badges.push('中堅');
 
   // Role-specific badges from Sheets data
   if (stats.roleWinRates['梅林'] >= 70 && (stats.rawRoleGames['梅林'] || 0) >= 10) badges.push('梅林大師');
   if (stats.roleWinRates['刺客'] >= 70 && (stats.rawRoleGames['刺客'] || 0) >= 10) badges.push('刺客達人');
+  if (stats.roleWinRates['派西'] >= 70 && (stats.rawRoleGames['派西'] || 0) >= 10) badges.push('派西專家');
+  if (stats.roleWinRates['娜美'] >= 70 && (stats.rawRoleGames['娜美'] || 0) >= 10) badges.push('娜美達人');
 
   return badges;
 }

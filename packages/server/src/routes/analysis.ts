@@ -15,9 +15,12 @@ import {
   getMissionAnalysis,
   getLakeAnalysis,
   getRoundsAnalysis,
+  getSeatOrderAnalysis,
   invalidateCache,
   isSheetsReady,
 } from '../services/sheetsAnalysis';
+import fs from 'fs';
+import path from 'path';
 
 const router: IRouter = Router();
 
@@ -177,6 +180,55 @@ router.get('/rounds', limiter, async (_req: Request, res: Response) => {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/rounds]', msg);
     return fail(res, 500, 'Failed to load rounds analysis');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/seat-order
+// Percival/Merlin/Morgana seat order permutation analysis
+// ---------------------------------------------------------------------------
+router.get('/seat-order', limiter, async (_req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const seatOrder = await getSeatOrderAnalysis();
+    return ok(res, seatOrder);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/seat-order]', msg);
+    return fail(res, 500, 'Failed to load seat order analysis');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/wiki
+// Serve wiki articles from wiki_data.json
+// ---------------------------------------------------------------------------
+let wikiCache: unknown[] | null = null;
+
+function loadWikiData(): unknown[] {
+  if (wikiCache) return wikiCache;
+  const wikiPaths = [
+    path.resolve(__dirname, '..', '..', 'wiki_data.json'),
+    path.resolve(__dirname, '..', '..', '..', '..', '..', 'packages', 'server', 'wiki_data.json'),
+  ];
+  for (const p of wikiPaths) {
+    if (fs.existsSync(p)) {
+      const raw = fs.readFileSync(p, 'utf-8');
+      wikiCache = JSON.parse(raw) as unknown[];
+      return wikiCache;
+    }
+  }
+  return [];
+}
+
+router.get('/wiki', limiter, (_req: Request, res: Response) => {
+  try {
+    const articles = loadWikiData();
+    return ok(res, { articles, total: articles.length });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/wiki]', msg);
+    return fail(res, 500, 'Failed to load wiki data');
   }
 });
 

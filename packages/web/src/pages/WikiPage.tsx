@@ -52,7 +52,7 @@ export default function WikiPage(): JSX.Element {
               whileHover={{ scale: 1.05 }}
               className="bg-avalon-card/50 border border-gray-600 rounded-lg p-4"
             >
-              <div className="text-2xl font-bold text-yellow-400">20+</div>
+              <div className="text-2xl font-bold text-yellow-400">140+</div>
               <div className="text-gray-400 text-sm">篇詳細文章 (articles)</div>
             </motion.div>
             <motion.div

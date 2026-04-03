@@ -66,6 +66,25 @@ export interface OverviewData {
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
 }
 
+export interface SeatOrderPermutation {
+  order: string;
+  total: number;
+  '\u4e09\u85cd\u6885\u6d3b': number;
+  '\u4e09\u85cd\u6885\u6b7b': number;
+  '\u4e09\u7d05': number;
+  '\u7a7f\u63d2\u4efb\u52d9': number;
+  redWinRate: number;
+  blueWinRate: number;
+  merlinKillRate: number;
+  '\u7a7f\u63d2\u7387': number;
+}
+
+export interface SeatOrderData {
+  permutations: SeatOrderPermutation[];
+  totalGames: number;
+  overallRedWinRate: number;
+}
+
 interface AnalysisCache {
   overview: OverviewData;
   players: { players: PlayerStats[]; total: number };
@@ -98,6 +117,7 @@ interface AnalysisCache {
     roundProgression: Record<string, { bluePct: number; redPct: number; total: number }>;
     gameStates: Array<{ state: string; games: number; redWinRate: number }>;
   };
+  seatOrder?: SeatOrderData;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +179,14 @@ export async function getLakeAnalysis(): Promise<AnalysisCache['lake']> {
 
 export async function getRoundsAnalysis(): Promise<AnalysisCache['rounds']> {
   return loadCache().rounds;
+}
+
+export async function getSeatOrderAnalysis(): Promise<SeatOrderData> {
+  const c = loadCache();
+  if (!c.seatOrder) {
+    return { permutations: [], totalGames: 0, overallRedWinRate: 0 };
+  }
+  return c.seatOrder;
 }
 
 /** No-op: cache is static, no runtime invalidation needed. */

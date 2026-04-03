@@ -744,6 +744,142 @@ def compute_lake(games: list[GameRow]) -> dict:
     }
 
 
+def compute_seat_order(games: list[GameRow]) -> dict:
+    """Analyze the 6 permutations of Percival(派)/Merlin(梅)/Morgana(娜) seating order.
+
+    For each game, find seats of 派西, 梅林, 娜美, determine their clockwise order,
+    then split by outcome: 三藍梅活, 三藍梅死, 三紅.
+    Also check if missions fall between (穿插) these three players.
+    """
+    from itertools import permutations
+
+    TRIO_ROLES = {"派西", "梅林", "娜美"}
+    PERM_LABELS = [
+        "派梅娜", "派娜梅", "梅派娜", "梅娜派", "娜派梅", "娜梅派",
+    ]
+
+    def get_trio_order(seat_roles: dict[str, str]) -> str | None:
+        """Return the clockwise order of 派/梅/娜 as a string like '派梅娜'."""
+        role_to_seat: dict[str, int] = {}
+        for seat_char, role in seat_roles.items():
+            if role in TRIO_ROLES:
+                try:
+                    role_to_seat[role] = int(seat_char) if seat_char != "0" else 10
+                except ValueError:
+                    continue
+        if len(role_to_seat) != 3:
+            return None
+
+        # Sort by seat number to get clockwise order
+        sorted_roles = sorted(role_to_seat.items(), key=lambda x: x[1])
+        # Generate the 3 possible rotations and pick the one starting with lowest seat
+        trio = [r[0] for r in sorted_roles]
+        # Map role names to short labels
+        short = {"派西": "派", "梅林": "梅", "娜美": "娜"}
+        return "".join(short.get(r, r[0]) for r in trio)
+
+    def has_mission_between(seat_roles: dict[str, str], game: GameRow) -> bool:
+        """Check if any mission team member sits between the trio players."""
+        role_to_seat: dict[str, int] = {}
+        for seat_char, role in seat_roles.items():
+            if role in TRIO_ROLES:
+                try:
+                    role_to_seat[role] = int(seat_char) if seat_char != "0" else 10
+                except ValueError:
+                    continue
+        if len(role_to_seat) != 3:
+            return False
+
+        trio_seats = sorted(role_to_seat.values())
+        # Check if any mission participant seat falls between trio members
+        for m in game.missions:
+            round_idx = m["round"] - 1
+            if round_idx < len(game.rounds):
+                round_str = game.rounds[round_idx]
+                if not round_str:
+                    continue
+                for seat_char in round_str:
+                    try:
+                        seat_num = int(seat_char) if seat_char != "0" else 10
+                    except ValueError:
+                        continue
+                    if seat_num in trio_seats:
+                        continue
+                    # Check if seat is between any pair of trio members
+                    for i in range(3):
+                        s1 = trio_seats[i]
+                        s2 = trio_seats[(i + 1) % 3]
+                        if s1 < s2:
+                            if s1 < seat_num < s2:
+                                return True
+                        else:
+                            if seat_num > s1 or seat_num < s2:
+                                return True
+        return False
+
+    # Collect stats per permutation
+    perm_stats: dict[str, dict] = {}
+    for label in PERM_LABELS:
+        perm_stats[label] = {
+            "total": 0,
+            "三藍梅活": 0, "三藍梅死": 0, "三紅": 0,
+            "穿插任務": 0,
+            "redWins": 0, "blueWins": 0,
+        }
+
+    for g in games:
+        order = get_trio_order(g.seat_roles)
+        if order is None or order not in perm_stats:
+            continue
+
+        stats = perm_stats[order]
+        stats["total"] += 1
+
+        if g.outcome == "三藍活":
+            stats["三藍梅活"] += 1
+        elif g.outcome == "三藍死":
+            stats["三藍梅死"] += 1
+        elif g.outcome == "三紅":
+            stats["三紅"] += 1
+
+        if g.red_win:
+            stats["redWins"] += 1
+        if g.blue_win:
+            stats["blueWins"] += 1
+
+        if has_mission_between(g.seat_roles, g):
+            stats["穿插任務"] += 1
+
+    result = []
+    for label in PERM_LABELS:
+        s = perm_stats[label]
+        total = s["total"]
+        if total == 0:
+            continue
+        result.append({
+            "order": label,
+            "total": total,
+            "三藍梅活": s["三藍梅活"],
+            "三藍梅死": s["三藍梅死"],
+            "三紅": s["三紅"],
+            "穿插任務": s["穿插任務"],
+            "redWinRate": rnd1(s["redWins"] / total * 100),
+            "blueWinRate": rnd1(s["blueWins"] / total * 100),
+            "merlinKillRate": rnd1(s["三藍梅死"] / total * 100),
+            "穿插率": rnd1(s["穿插任務"] / total * 100),
+        })
+
+    # Overall summary
+    total_games = sum(s["total"] for s in perm_stats.values())
+    total_red = sum(s["redWins"] for s in perm_stats.values())
+
+    return {
+        "permutations": result,
+        "totalGames": total_games,
+        "overallRedWinRate": rnd1(total_red / total_games * 100) if total_games > 0 else 0,
+    }
+
+
 def compute_rounds(games: list[GameRow]) -> dict:
     valid = [g for g in games if len(g.r11_seats) > 0]
 
@@ -934,6 +1070,7 @@ def main() -> None:
         "missions": compute_missions(games),
         "lake": compute_lake(games),
         "rounds": compute_rounds(games),
+        "seatOrder": compute_seat_order(games),
     }
 
     print(f"Writing to {OUTPUT_PATH}...")
