@@ -10,12 +10,11 @@ RUN npm install -g pnpm@8
 # Copy workspace files
 COPY pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json turbo.json package.json ./
 
-# Copy only shared and server packages (skip web to save RAM on Render free tier)
-COPY packages/shared ./packages/shared
-COPY packages/server ./packages/server
+# Copy packages
+COPY packages ./packages
 
-# Install dependencies (server + shared only, no web frontend)
-RUN pnpm install --frozen-lockfile --filter @avalon/server --filter @avalon/shared
+# Install dependencies
+RUN pnpm install --frozen-lockfile
 
 # Build shared first, then server
 RUN pnpm --filter @avalon/shared build
