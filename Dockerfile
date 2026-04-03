@@ -38,7 +38,8 @@ COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
 COPY --from=builder /app/packages/server/package.json ./packages/server/package.json
 COPY --from=builder /app/packages/server/node_modules ./packages/server/node_modules
-COPY --from=builder /app/packages/server/sheets_cache.json ./packages/server/sheets_cache.json
+# sheets_cache.json downloaded at runtime from GitHub if needed
+# COPY --from=builder /app/packages/server/sheets_cache.json ./packages/server/sheets_cache.json
 
 # Set environment
 ENV NODE_ENV=production

@@ -217,19 +217,50 @@ function getSheetsClient(): sheets_v4.Sheets {
 const CACHE_PATH = path.resolve(__dirname, '..', '..', 'sheets_cache.json');
 let sheetsCache: Record<string, string[][]> | null = null;
 
+const CACHE_URL = 'https://raw.githubusercontent.com/l12203685/avalonpediatw/main/packages/server/sheets_cache.json';
+
+async function downloadCache(): Promise<boolean> {
+  try {
+    const https = await import('https');
+    return new Promise((resolve) => {
+      https.get(CACHE_URL, (res: any) => {
+        if (res.statusCode !== 200) { resolve(false); return; }
+        let data = '';
+        res.on('data', (chunk: string) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            sheetsCache = JSON.parse(data);
+            console.log('[sheetsAnalysis] Downloaded cache from GitHub:', Object.keys(sheetsCache!).length, 'sheets');
+            resolve(true);
+          } catch { resolve(false); }
+        });
+      }).on('error', () => resolve(false));
+    });
+  } catch { return false; }
+}
+
 function loadSheetsCache(): Record<string, string[][]> | null {
   if (sheetsCache) return sheetsCache;
+  // Try local file first
   try {
     if (fs.existsSync(CACHE_PATH)) {
       sheetsCache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf-8'));
       console.log('[sheetsAnalysis] Loaded cache from', CACHE_PATH, Object.keys(sheetsCache!).length, 'sheets');
       return sheetsCache;
     }
-    console.warn('[sheetsAnalysis] Cache file not found at', CACHE_PATH);
   } catch (e) {
-    console.warn('[sheetsAnalysis] Cache load failed:', e);
+    console.warn('[sheetsAnalysis] Local cache load failed:', e);
   }
   return null;
+}
+
+async function ensureCache(): Promise<Record<string, string[][]> | null> {
+  if (sheetsCache) return sheetsCache;
+  const local = loadSheetsCache();
+  if (local) return local;
+  // Try downloading from GitHub
+  await downloadCache();
+  return sheetsCache;
 }
 
 async function readSheet(
@@ -238,8 +269,8 @@ async function readSheet(
 ): Promise<string[][]> {
   const sheetName = range.split('!')[0];
 
-  // Try cache FIRST (fast, no API call)
-  const cache = loadSheetsCache();
+  // Try cache FIRST (fast, no API call — local file or GitHub download)
+  const cache = await ensureCache();
   if (cache && cache[sheetName]) {
     console.log(`[sheetsAnalysis] Using cached ${sheetName}: ${cache[sheetName].length} rows`);
     return cache[sheetName];
