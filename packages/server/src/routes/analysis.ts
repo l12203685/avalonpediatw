@@ -63,8 +63,9 @@ router.get('/overview', limiter, async (_req: Request, res: Response) => {
     return ok(res, overview);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[analysis/overview]', msg);
-    return fail(res, 500, 'Failed to load overview data');
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error('[analysis/overview]', msg, stack);
+    return fail(res, 500, `Failed to load overview data: ${msg}`);
   }
 });
 
