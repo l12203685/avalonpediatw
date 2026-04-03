@@ -1,0 +1,1201 @@
+﻿<!DOCTYPE html>
+<html>
+
+	<head>
+		<title>阿瓦隆練習台1.42版</title>
+		<meta charset="utf-8">
+		<meta name=description content="avalon,線上阿瓦隆,avalon online">
+   		<meta name=author content="avalon,線上阿瓦隆,avalon online">
+		<meta name=”viewport” content=”width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+		<!--
+		<link rel="stylesheet" href="css/bootstrap.min.css">
+		<link rel="stylesheet" href="css/font-awesome.min.css">
+		<link rel="stylesheet" href="css/element.css">
+		<script src="js/socket.io.js"></script>
+		<script src="js/jquery.min.js"></script>
+		<script src="js/popper.min.js"></script>
+		<script src="js/bootstrap.min.js"></script>
+		<script src="js/vue.js"></script>
+		<script src="js/element.js"></script>
+		<script src="js/underscore.js"></script>
+		-->
+
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.4.0/css/font-awesome.min.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/element-ui/1.4.9/theme-default/index.css">
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.4.4/vue.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/vuex/3.1.1/vuex.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/element-ui/1.4.9/index.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
+
+		
+
+		<style>
+			body{
+				font-weight:bold;
+				overscroll-behavior-y: contain;
+			}
+
+			.blink {
+
+				animation: blink ease-in-out 0.5s;
+				animation-iteration-count: infinite;
+				animation-direction: alternate;
+
+				-webkit-animation: blink ease-in-out 0.5s;
+				-webkit-animation-iteration-count: infinite;
+				-webkit-animation-direction: alternate;
+
+				-moz-animation: blink ease-in-out 0.5s;
+				-moz-animation-iteration-count: infinite;
+				-moz-animation-direction: alternate;
+
+				-o-animation: blink ease-in-out 0.5s;
+				-o-animation-iteration-count: infinite;
+				-o-animation-direction: alternate;
+
+				-ms-animation: blink ease-in-out 0.5s;
+				-ms-animation-iteration-count: infinite;
+				-ms-animation-direction: alternate;
+			}
+			@keyframes blink {
+				from {
+					color: black;
+				}
+				to {
+					color: blue;
+				}
+			}
+
+			.in_out {
+
+				-webkit-animation: in_out ease-in 0.5s;
+				-webkit-animation-iteration-count: infinite;
+				-webkit-animation-direction: alternate;
+
+				-moz-animation: in_out ease-in 0.5s;
+				-moz-animation-iteration-count: infinite;
+				-moz-animation-direction: alternate;
+
+				-o-animation: in_out ease-in 0.5s;
+				-o-animation-iteration-count: infinite;
+				-o-animation-direction: alternate;
+
+				-ms-animation: in_out ease-in 0.5s;
+				-ms-animation-iteration-count: infinite;
+				-ms-animation-direction: alternate;
+
+				animation: in_out ease-in 0.5s;
+				animation-iteration-count: infinite;
+				animation-direction: alternate;
+			}
+			@keyframes in_out {
+				from {
+					color: blue;
+					opacity : 1;
+				}
+				to {
+					color: blue;
+					opacity : 0;
+				}
+			}
+
+			.give_animation {
+
+				animation: give_animation ease-in-out 0.5s;
+				animation-iteration-count: 1;
+
+				-webkit-animation: give_animation ease-in-out 0.5s;
+				-webkit-animation-iteration-count: 1;
+
+				-moz-animation: give_animation ease-in-out 0.5s;
+				-moz-animation-iteration-count: 1;
+
+				-o-animation: give_animation ease-in-out 0.5s;
+				-o-animation-iteration-count: 1;
+
+				-ms-animation: give_animation ease-in-out 0.5s;
+				-ms-animation-iteration-count: 1;
+			}
+			@keyframes give_animation {
+				from {
+					width: 50%;
+					height:auto;
+				}
+				to {
+					width: 30%;
+					height:auto;
+				}
+			}
+
+			.rotate {
+
+				animation: rotate linear 1s;
+				animation-iteration-count: infinite;
+
+				-webkit-animation: rotate linear 1s;
+				-webkit-animation-iteration-count: infinite;
+
+				-moz-animation: rotate linear 1s;
+				-moz-animation-iteration-count: infinite;
+
+				-o-animation: rotate linear 1s;
+				-o-animation-iteration-count: infinite;
+
+				-ms-animation: rotate linear 1s;
+				-ms-animation-iteration-count: infinite;
+			}
+			@keyframes rotate {
+				from {
+					transform: rotate3d(0,1,0,0deg);
+				}
+				to {
+					transform: rotate3d(0,1,0,360deg);
+				}
+			}
+
+			.justis_card {
+
+				animation: justis_card ease-in-out 0.5s;
+				animation-iteration-count: 1;
+
+				-webkit-animation: justis_card ease-in-out 0.5s;
+				-webkit-animation-iteration-count: 1;
+
+				-moz-animation: justis_card ease-in-out 0.5s;
+				-moz-animation-iteration-count: 1;
+
+				-o-animation: justis_card ease-in-out 0.5s;
+				-o-animation-iteration-count: 1;
+
+				-ms-animation: justis_card ease-in-out 0.5s;
+				-ms-animation-iteration-count: 1;
+			}
+			@keyframes justis_card {
+				from {
+					width: 60%;
+					height:auto;
+				}
+				to {
+					width: 100%;
+					height:auto;
+				}
+			}
+
+		</style>
+	</head>
+
+
+	<body background="image/bg.jpg">
+
+		
+
+        <div id="room"></div>
+		<div id="audit_room"></div>
+
+        <div id="lobby"></div>
+
+        <div id="login"></div>
+
+		<div id="prompt"></div>
+
+		<div id="offline"></div>
+
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		<br>
+		
+		<script type="text/x-template" id="room_template">
+    <div class="container-fluid" v-if="show">
+    
+
+        
+        <div class="row">
+            <div class="col-sm-7">
+                <stage v-bind:self="self()"></stage>
+                <game-statistics v-bind:self="self()"></game-statistics>
+            </div>
+
+            <div class="col-sm-1">
+                <room-info v-bind:self="self()"></room-info>
+            </div>
+
+            <div class="col-sm-4">
+                <roles-pad v-bind:self="self()"></roles-pad>
+                <master-pad v-bind:self="self()"></master-pad>
+                <player-pads v-bind:self="self()"></player-pads>
+            </div>
+        </div>
+
+
+      
+    </div>
+</script>
+
+<script type="text/x-template" id="set">
+    <div v-if="user" class="row">
+        <p align="center">{{user.name}}</p>
+        <div class="col-sm-12">
+            <img style="width:100%; height:auto;" class="img-rounded" v-on:click="self.touch(user)" v-bind:title="self.user_tip(user)" v-bind:src="self.enable_q ? self.role_q_img(user.role) : self.role_img(user.role)">
+            <img v-on:click="self.touch(user)" style="z-index: 999; position:absolute; top: 0%; left: 2%; width:30%; height:auto;" v-bind:class="{ 'in_out': self.is_me(user) }" v-bind:src="self.num_img(user)">
+            
+            <img v-if="self.can_not_see_vote_bag(user)" v-on:click="self.touch(user)" src="image/vote.jpg" style="z-index: 999; position:absolute; top: 70%; left: 10%; width:30%; height:auto; background-color: darkgray;" class="img-circle" title="投票袋">
+            <img v-else-if="user.vote_bag" v-on:click="self.touch(user)" src="image/yes.jpg" style="z-index: 999; position:absolute; top: 70%; left: 10%; width:30%; height:auto; background-color: darkgray;" class="img-circle give_animation" title="投票袋">
+            <img v-else v-on:click="self.touch(user)" src="image/no.jpg" style="z-index: 999; position:absolute; top: 70%; left: 10%; width:30%; height:auto; background-color: darkgray;" class="img-circle give_animation" title="投票袋">
+            
+            <img v-if="user.crown" v-on:click="self.touch(user)" class="give_animation" style="z-index: 999; position:absolute; top: 0px; left: 35%; width:30%; height:auto; background-color: darkgray;" title="派票隊長" src="image/caption.jpg">
+            
+            <img v-if="user.lake===user.id" v-on:click="self.touch(user)" style="z-index: 999; position:absolute; top: 0px; left: 70%; width:20%; height:auto; background-color: darkgray;" title="湖中女神" src="image/lake.jpg">
+            <img v-if="user.lake!==null && user.lake!==user.id" v-on:click="self.touch(user)" style="z-index: 999; position:absolute; top: 0px; left: 70%; width:20%; height:auto; background-color: darkgray; opacity: 0.4;" title="前任女神" src="image/lake.jpg">
+            
+            <img v-if="user.tick" v-on:click="self.touch(user)" style="z-index: 999; position:absolute; top: 70%; left: 60%; width:30%; height:auto; background-color: darkgray;" title="騎士出任務" class="img-circle give_animation" src="image/mission.jpg">
+            <img v-if="user.tick===undefined" v-on:click="self.touch(user)" style="z-index: 999; position:absolute; top: 70%; left: 60%; width:30%; height:auto; background-color: darkgray;" title="出完任務" class="img-circle rotate" src="image/mission.jpg">
+        </div>
+    </div>
+</script>
+
+<script type="text/x-template" id="stage">
+    <div>
+
+        <div class="row">
+            <div class="col-sm-2">
+                <set v-bind:user=" self.mask( self.user(0) ) " v-bind:self="self"></set>
+            </div>
+            <div class="col-sm-2">
+                <set v-bind:user=" self.mask( self.user(1) ) " v-bind:self="self"></set>
+            </div>
+            <div class="col-sm-2">
+                <set v-bind:user=" self.mask( self.user(2) ) " v-bind:self="self"></set>
+            </div>
+            <div class="col-sm-2">
+                <set v-bind:user=" self.mask( self.user(3) ) " v-bind:self="self"></set>
+            </div>
+            <div class="col-sm-2">
+                <set v-bind:user=" self.mask( self.user(4) ) " v-bind:self="self"></set>
+            </div>
+            <div class="col-sm-2">
+                <set v-bind:user=" self.mask( self.user(5) ) " v-bind:self="self"></set>
+            </div>
+          </div>
+
+        <br>
+        <br>
+
+        <div class="row">
+            <div class="col-sm-2">
+                <set v-bind:user=" self.mask( self.user(9) ) " v-bind:self="self"></set>
+                <set v-bind:user=" self.mask( self.user(8) ) " v-bind:self="self"></set>
+            </div>
+            <div class="col-sm-8">
+                <img v-bind:src="self.board()" style="width:100%; height: 100%;">
+
+                <img v-if="self.mission_result[0]===true" src="image/good_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 10%; width:10%; height:auto;">
+                <img v-if="self.mission_result[0]===false" src="image/bad_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 10%; width:10%; height:auto;">
+                <img v-if="self.mission_result[1]===true" src="image/good_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 22%; width:10%; height:auto;">
+                <img v-if="self.mission_result[1]===false" src="image/bad_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 22%; width:10%; height:auto;">
+                <img v-if="self.mission_result[2]===true" src="image/good_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 34%; width:10%; height:auto;">
+                <img v-if="self.mission_result[2]===false" src="image/bad_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 34%; width:10%; height:auto;">
+                <img v-if="self.mission_result[3]===true" src="image/good_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 46%; width:10%; height:auto;">
+                <img v-if="self.mission_result[3]===false" src="image/bad_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 46%; width:10%; height:auto;">
+                <img v-if="self.mission_result[4]===true" src="image/good_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 60%; width:10%; height:auto;">
+                <img v-if="self.mission_result[4]===false" src="image/bad_cup.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 2%; left: 60%; width:10%; height:auto;">
+
+                <img v-if="self.missions[0]===true" src="image/success.png" style="z-index: 999; position:absolute; top: 32%; left: 5%; width:17%; height:auto;">
+                <img v-if="self.missions[0]===false" src="image/fail.png" style="z-index: 999; position:absolute; top: 32%; left: 5%; width:17%; height:auto;">
+                <img v-if="self.missions[1]===true" src="image/success.png" style="z-index: 999; position:absolute; top: 32%; left: 23%; width:17%; height:auto;">
+                <img v-if="self.missions[1]===false" src="image/fail.png" style="z-index: 999; position:absolute; top: 32%; left: 23%; width:17%; height:auto;">
+                <img v-if="self.missions[2]===true" src="image/success.png" style="z-index: 999; position:absolute; top: 32%; left: 41%; width:17%; height:auto;">
+                <img v-if="self.missions[2]===false" src="image/fail.png" style="z-index: 999; position:absolute; top: 32%; left: 41%; width:17%; height:auto;">
+                <img v-if="self.missions[3]===true" src="image/success.png" style="z-index: 999; position:absolute; top: 32%; left: 59%; width:17%; height:auto;">
+                <img v-if="self.missions[3]===false" src="image/fail.png" style="z-index: 999; position:absolute; top: 32%; left: 59%; width:17%; height:auto;">
+                <img v-if="self.missions[4]===true" src="image/success.png" style="z-index: 999; position:absolute; top: 32%; left: 78%; width:17%; height:auto;">
+                <img v-if="self.missions[4]===false" src="image/fail.png" style="z-index: 999; position:absolute; top: 32%; left: 78%; width:17%; height:auto;">
+
+                <img v-if="self.day_time>=2" src="image/vote_token.png" style="z-index: 999; position:absolute; top: 75%; left: 3%; width:14%; height:auto;">
+                <img v-if="self.day_time>=3" src="image/vote_token.png" style="z-index: 999; position:absolute; top: 75%; left: 20%; width:14%; height:auto;">
+                <img v-if="self.day_time>=4" src="image/vote_token.png" style="z-index: 999; position:absolute; top: 75%; left: 35%; width:14%; height:auto;">
+                <img v-if="self.day_time>=5" src="image/vote_token.png" style="z-index: 999; position:absolute; top: 75%; left: 50%; width:14%; height:auto;">
+                <img v-if="self.day_time>=6" src="image/vote_token.png" style="z-index: 999; position:absolute; top: 75%; left: 65%; width:14%; height:auto;">
+            </div>
+            <div class="col-sm-2">
+                <set v-bind:user=" self.mask( self.user(6) ) " v-bind:self="self"></set>
+                <set v-bind:user=" self.mask( self.user(7) ) " v-bind:self="self"></set>
+            </div>
+        </div>
+
+        <br>
+
+
+    </div>
+
+</script>
+<script type="text/x-template" id="room_info">
+    <div class="row">
+        <div class="col-sm-12">
+            <p>室長: {{self.master_user().name}}</p>
+        </div>
+
+        <div v-for="(flip,index) in self.lance_flip_turn" class="col-sm-12">
+            <img v-if="flip==true" style="width:100%; height:auto;" v-bind:class="{ 'justis_card': !self.is_round_match(index), 'rotate': self.is_round_match(index) }" title="蘭斯洛特交換身分" src="image/混蘭斯.jpg">
+            <img v-if="flip==false" style="width:100%; height:auto;" v-bind:class="{ 'justis_card': !self.is_round_match(index), 'in_out': self.is_round_match(index) }" title="風和日麗" src="image/正蘭斯.jpg">
+        </div>
+    </div>
+</script>
+<script type="text/x-template" id="roles_pad">
+    <div v-on:mouseleave="self.clear_select_role()" style="border: double orange 1em;border-image: url('image/border.png') 27 round stretch;">
+
+        <div class="row">
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=1">
+                <game-role v-bind:self="self" v-bind:index="0"></game-role>
+            </div>
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=3">
+                <game-role v-bind:self="self" v-bind:index="2"></game-role>
+            </div>
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=4">
+                <game-role v-bind:self="self" v-bind:index="3"></game-role>
+            </div>
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=6">
+                <game-role v-bind:self="self" v-bind:index="5"></game-role>
+            </div>
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=8">
+                <game-role v-bind:self="self" v-bind:index="7"></game-role>
+            </div>
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=9">
+                <game-role v-bind:self="self" v-bind:index="8"></game-role>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=2">
+                <game-role v-bind:self="self" v-bind:index="1"></game-role>
+            </div>
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=5">
+                <game-role v-bind:self="self" v-bind:index="4"></game-role>
+            </div>
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=7">
+                <game-role v-bind:self="self" v-bind:index="6"></game-role>
+            </div>
+            <div class="col-sm-2" style="padding: 3%;" v-if="self.users.length>=10">
+                <game-role v-bind:self="self" v-bind:index="9"></game-role>
+            </div>
+        </div>
+
+    </div>
+</script>
+
+
+<script type="text/x-template" id="game_role">
+    <div>
+        <img class="img-rounded" style="width:100%; height:auto;" v-on:click="self.role_on(index)" v-bind:src="self.enable_q ? self.index_q_img(index) : self.index_img(index)">
+        <div v-show="self.show_roles[index]" style="margin-top: 10%;">
+            <el-collapse-transition>
+                <div v-show="self.show_roles[index]">
+                    <div class="transition-box" v-for="role_name in self.remender_roles(index)">
+                        <img class="img-rounded" style="width:100%; height:auto;" v-on:click="self.select_role(index,role_name)" v-bind:src="self.enable_q ? self.role_q_img(role_name) : self.role_img(role_name)">
+                    </div>
+                </div>
+            </el-collapse-transition>
+        </div>
+    </div>
+</script>
+<script type="text/x-template" id="master_pad">
+    <div v-if="self.is_master()" style="border: double orange 1em;border-image: url('image/border.png') 27 round stretch;">
+        <div class="row">
+        
+            <div class="col-sm-12">
+                <label for="r_disable">蘭斯洛特</label>
+
+                <input type="radio" v-model="self.enable_lance" value="-1" name="lance_rule" id="r_disable" v-on:change="self.set_lance()"/>
+                <label for="r_disable">停用</label>
+                
+                <input type="radio" v-model="self.enable_lance" value="1" name="lance_rule" id="r1" v-on:change="self.set_lance()"/>
+                <label for="r1">規則1</label>
+                
+                <input type="radio" v-model="self.enable_lance" value="2" name="lance_rule" id="r2" v-on:change="self.set_lance()"/>
+                <label for="r2">規則2</label>
+                                
+                <input type="radio" v-model="self.enable_lance" value="3" name="lance_rule" id="r3" v-on:change="self.set_lance()"/>
+                <label for="r3">規則3</label>
+
+                <input type="radio" v-model="self.enable_lance" value="0" name="lance_rule" id="r0" v-on:change="self.set_lance()"/>
+                <label for="r0">規則0</label>
+            </div>
+
+            <br>
+            <br>
+
+
+
+            <div class="col-sm-6">
+                <input type="checkbox" id="lake" v-model="self.enable_lake" v-on:change="self.set_lake()">
+                <label for="lake">啟用湖中女神</label>
+            </div>
+
+
+
+            <div class="col-sm-6">
+                <select v-show="self.enable_lake" v-model="self.lake_type" v-on:change="self.set_lake_type()" class="form-control">
+                    <option value="1">最後一個玩家為首湖</option>
+                    <option value="2">首湖隨機分配</option>
+                </select>
+            </div>
+
+ 
+
+            <div class="col-sm-6">
+                <input type="checkbox" id="q_v" v-model="self.enable_q" v-on:change="self.set_q()">
+                <label for="q_v">啟用Q版頭像</label>
+            </div>
+
+            <div class="col-sm-6">
+                <input type="checkbox" id="q_o" v-model="self.oberon_hidden" v-on:change="self.set_oberon_hidden()">
+                <label for="q_o">刺殺時不允許奧伯倫現身</label>
+            </div>
+
+
+            <br>
+            <br>
+
+            <div class="col-sm-6">
+                <button v-if="self.can_start_game()" type="button" v-on:click="self.start_game()" class="btn btn-danger form-control">開始遊戲</button>
+                <button v-else type="button" class="btn btn-danger form-control" disabled>開始遊戲</button>
+            </div>
+            <div class="dropdown col-sm-6">
+                <button class="btn btn-primary form-control dropdown-toggle" id="menu1" type="button" data-toggle="dropdown">
+                    更換室長<span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu" role="menu" aria-labelledby="menu1">
+                    <li v-for="user in self.users" role="presentation">
+                        <a role="menuitem" href="#" v-on:click="self.change_master(user.id)">{{user.name}}</a>
+                    </li>
+                </ul>
+            </div>
+
+            <br>
+            <br>
+            
+            <div class="col-sm-6">
+                <button type="button" v-on:click="self.summon_robot()" class="btn btn-primary form-control">召喚人造人</button>
+            </div>
+
+            <div class="col-sm-6">
+                <button type="button" v-on:click="self.cancel_robot()" class="btn btn-danger form-control">遣返人造人</button>
+            </div>
+
+        </div>
+    </div>
+</script>
+<script type="text/x-template" id="player_pads">
+    <div class="row">
+        <div class="col-sm-12" v-if="self.gaming">
+            <game-pad v-bind:self="self"></game-pad>           
+            <game-info v-bind:self="self"></game-info>
+            <vote-pad v-bind:self="self"></vote-pad>
+            <ticks-pad v-bind:self="self"></ticks-pad>
+            <mission-pad v-bind:self="self"></mission-pad>
+        </div>
+        <div class="col-sm-6" v-else>
+            <button type="button" v-on:click="self.leave()" class="btn btn-primary form-control">離開</button>
+        </div>
+        <div class="col-sm-12">
+            <blog-pad v-bind:self="self"></blog-pad>
+        </div>
+    </div>
+</script>
+
+
+<script type="text/x-template" id="game_pad">
+    <div class="row">
+        <div class="col-sm-4">
+            遊戲狀態:<span style="color: blue;">{{self.game_status}}</span>
+        </div>
+        
+        <div class="col-sm-4">
+            我的角色:<span style="color: blue;">{{self.my_role()}}</span>
+        </div>
+
+        <div class="col-sm-4">
+            <button v-if="self.enable_mask" type="button" v-on:click="self.do_fish()" class="btn btn-danger form-control">辦理出院</button>
+            <button v-else type="button" v-on:click="self.do_fish()" class="btn btn-info form-control">裝雜魚</button>
+        </div>
+    </div>
+</script>
+
+<script type="text/x-template" id="game_info">
+    <div class="row">
+        <div class="col-sm-6">
+            <span class="blink">{{self.action_tip()}}</span>
+        </div>
+    </div>
+</script>
+
+<script type="text/x-template" id="vote_pad">
+    <div class="row" v-if="self.is_vote_status()">
+
+        <div v-if="self.me().vote_bag===null">
+            <div class="col-sm-3">
+                <img v-if="!self.vote_yes" v-on:click="self.select_vote(true)" class="img-rounded" style="width:85%; height:auto;" src="image/yes.jpg">
+                <img v-if="self.vote_yes" style="width:100%; height:auto;" class="img-rounded" src="image/yes.jpg">
+            </div>
+            <div class="col-sm-3">
+                <img v-if="self.vote_yes" v-on:click="self.select_vote(false)" class="img-rounded" style="width:85%; height:auto;" src="image/no.jpg">
+                <img v-if="!self.vote_yes" style="width:100%; height:auto;" class="img-rounded" src="image/no.jpg">
+            </div>
+            <div class="col-sm-3">
+                <button v-on:click="self.vote()" class="btn btn-primary">
+                    <span v-if="self.me().crown">
+                        <span v-if="self.vote_yes">
+                            贊成
+                        </span>
+                        <span v-else style="color:black;">
+                            反對(自派自反)
+                        </span>
+                    </span>
+                    <span v-else>
+                        <span v-if="self.vote_yes">
+                            贊成{{self.me().tick ? "":"(場外白)"}}
+                        </span>
+                        <span v-else style="color:black;">
+                            反對{{self.me().tick ? "(場內黑)":""}}
+                        </span>
+                    </span>
+                </button>
+            </div>
+        </div>
+        <div v-else>
+            <div class="col-sm-3">
+                <img style="width:100%; height:auto;" class="img-rounded" v-bind:src="self.vote_img()">
+            </div>
+        </div>
+
+    </div>
+</script>
+
+<script type="text/x-template" id="ticks_pad">
+    <div class="row" v-if="self.can_dispatch_ticks()">
+        <div v-if="self.free_ticks() > 0">
+            <div class="col-sm-2" v-for="count in self.free_ticks()">
+                <img class="img-rounded" src="image/mission.jpg" style="width:100%; height:auto;">
+            </div>
+        </div>
+        <div class="col-sm-2" v-else>
+            <button class="btn btn-danger" v-on:click="self.start_vote()">開始投票</button>
+        </div>
+    </div>
+</script>
+
+<script type="text/x-template" id="mission_pad">
+    <div class="row" v-if="self.can_to_mission()">
+        
+        <div v-if="self.is_fine() || self.is_evil()" class="col-sm-3">
+            <img v-if="!self.mission_success" v-on:click="self.select_mission(true)" src="image/good.jpg" class="img-rounded" style="width:85%; height:auto;">
+            <img v-if="self.mission_success" src="image/good.jpg" class="img-rounded" style="width:100%; height:auto;">
+        </div>
+        <div v-if="self.is_mad() || self.is_evil()" class="col-sm-3">
+            <img v-if="self.mission_success" v-on:click="self.select_mission(false)" src="image/bad.jpg" class="img-rounded" style="width:85%; height:auto;">
+            <img v-if="!self.mission_success" src="image/bad.jpg" class="img-rounded" style="width:100%; height:auto;">
+        </div>
+
+        <div class="col-sm-3">
+            <button v-on:click="self.excute_mission()" class="btn btn-primary">
+
+                <span v-if="self.is_evil()">
+                    <span v-if="self.mission_success">
+                        任務成功
+                    </span>
+                    <span v-else style="color:black;">
+                        任務失敗
+                    </span>
+                </span>
+                <span v-if="self.is_mad()" style="color:black;">
+                    任務失敗
+                </span>
+                <span v-if="self.is_fine()">
+                    任務成功
+                </span>
+            
+            </button>
+        </div>      
+    </div>
+</script>
+
+
+
+
+<script type="text/x-template" id="blog_pad">
+    <div class="row">
+
+        <br>
+
+        <div class="col-sm-10">
+            <input type="text" class="form-control" v-on:keyup.enter="self.send_dialog()" v-model="self.dialog">
+        </div>
+        <div class="col-sm-2">
+            <button type="button" class="btn btn-primary" v-on:click="self.send_dialog()">送出</button>
+        </div>
+
+        <div class="col-sm-12">
+            <div class="embed-responsive embed-responsive-16by9">
+                <div class="embed-responsive-item" style="border: double orange 1em;border-image: url('image/border.png') 27 round stretch;">
+                    <ul style="width: 100%; height: 100%; overflow: auto;  background: darkgray;">
+                        <li v-for="log in self.logs" v-bind:style="{ color: self.color(log) }">
+                            {{ self.transform(log) }}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</script>
+<script type="text/x-template" id="game_statistics">
+    <div>
+
+         <!-- Modal START -->
+        <div class="row">
+            <button type="button" class="btn btn-primary" data-toggle="modal" v-on:click="self.sync_game_statistics()">派票紀錄</button>
+            
+            <div v-if="self.game_statistics" class="modal fade" id="game_statistics_modal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg" role="document">
+                    <div class="modal-content" style="background-color: gray; color: purple;">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="exampleModalLabel">派票紀錄</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                關閉
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="container-fluid">
+                                
+                                    <ul class="nav nav-tabs">
+                                        <li class="active"><a data-toggle="tab" href="#round_1">第一局</a></li>
+                                        <li v-show="self.missions.length >= 1"><a data-toggle="tab" href="#round_2">第二局</a></li>
+                                        <li v-show="self.missions.length >= 2"><a data-toggle="tab" href="#round_3">第三局</a></li>
+                                        <li v-show="self.missions.length >= 3"><a data-toggle="tab" href="#round_4">第四局</a></li>
+                                        <li v-show="self.missions.length >= 4"><a data-toggle="tab" href="#round_5">第五局</a></li>
+                                    </ul>
+
+                                    <div class="tab-content">
+           
+
+                                        <div id="round_1" class="tab-pane fade in active">
+                                            <h3>第一局</h3>
+                                            <history-info v-if="self.game_statistics.round_1.mission_history" v-bind:history="self.game_statistics.round_1.mission_history"></history-info>
+                                            <game-statistics-table v-bind:self="self" v-bind:set_counts="self.game_statistics.set_counts" v-bind:round_n="self.game_statistics.round_1"></game-statistics-table>
+                                        </div>
+                                        
+                                        <div id="round_2" class="tab-pane fade">
+                                            <h3>第二局</h3>
+                                            <history-info v-if="self.game_statistics.round_2.mission_history" v-bind:history="self.game_statistics.round_2.mission_history"></history-info>
+                                            <game-statistics-table v-bind:self="self" v-bind:set_counts="self.game_statistics.set_counts" v-bind:round_n="self.game_statistics.round_2"></game-statistics-table>
+                                        </div>
+
+                                        <div id="round_3" class="tab-pane fade">
+                                            <h3>第三局</h3>
+                                            <history-info v-if="self.game_statistics.round_3.mission_history" v-bind:history="self.game_statistics.round_3.mission_history"></history-info>
+                                            <game-statistics-table v-bind:self="self" v-bind:set_counts="self.game_statistics.set_counts" v-bind:round_n="self.game_statistics.round_3"></game-statistics-table>
+                                        </div>
+
+                                        <div id="round_4" class="tab-pane fade">
+                                            <h3>第四局</h3>
+                                            <history-info v-if="self.game_statistics.round_4.mission_history" v-bind:history="self.game_statistics.round_4.mission_history"></history-info>
+                                            <game-statistics-table v-bind:self="self" v-bind:set_counts="self.game_statistics.set_counts" v-bind:round_n="self.game_statistics.round_4"></game-statistics-table>
+                                        </div>
+
+                                        <div id="round_5" class="tab-pane fade">
+                                            <h3>第五局</h3>
+                                            <history-info v-if="self.game_statistics.round_5.mission_history" v-bind:history="self.game_statistics.round_5.mission_history"></history-info>
+                                            <game-statistics-table v-bind:self="self" v-bind:set_counts="self.game_statistics.set_counts" v-bind:round_n="self.game_statistics.round_5"></game-statistics-table>
+                                        </div>
+
+                                    </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Modal END -->
+
+        <div class="row">
+            <div class="col-sm-2">投票結果: </div>
+            <div class="col-sm-1" v-for="(result,index) in self.last_vote_result">
+                <div v-show="result.vote!==null">
+                    <img v-bind:src="result.vote ? 'image/yes.jpg' : 'image/no.jpg' " class="img-rounded" style="width:100%; height:auto;">
+                    <img v-show="result.tick" src="image/mission.jpg" class="img-rounded" style="z-index: 999; position:absolute; top: 0%; left: 0%; width:30%; height:auto; opacity: 0.7;">
+                    <label>{{result.set}}家</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="row" v-for="history in self.missions_history">
+            <history-info v-bind:history="history"></history-info>
+        </div>
+
+    </div>
+</script>
+
+
+<script type="text/x-template" id="game_statistics_table">
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th v-for="set in set_counts">{{set}}家</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr v-for="(meeting,index) in round_n.meetings">
+                <td>{{ meeting.captain_index+1 }}家派票</td>
+                <td v-for="set in set_counts" v-bind:style="{ 'background-color': self.ball_color(set,meeting) }">
+                    <span v-bind:style="{ color: self.description_color( set, meeting, index) }"> {{ self.description( set, meeting, index)  }}</span>
+                    <div v-if="self.has_tick(set,meeting)" class="embed-responsive embed-responsive-4by3">
+                        <div class="embed-responsive-item">
+                            <img class="img-circle" style="width:75%; height:100%;" src="image/mission.jpg">
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+</script>
+<script type="text/x-template" id="vue_history">
+
+    <div>
+
+        <div class="col-sm-2">
+            <label>{{history.crown_set}}家派票</label>
+        </div>
+                    
+        <div class="col-sm-6">
+            <div class="row">
+                <div class="col-sm-2" style="padding: 3%;" v-for="result in history.result">
+                    <img v-bind:src="result ? 'image/good_cup.jpg' : 'image/bad_cup.jpg' " class="img-rounded" style="width:100%; height:auto;">
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-4 text-left">
+            <br>
+            <button class="btn btn-primary" v-for="set in history.member" disabled>
+                ({{set}}家)
+            </button>
+        </div>
+
+
+    </div>
+
+</script>
+
+<script>
+
+    (function(){
+
+
+        Vue.component('stage', {
+
+            props: ["self"],
+            template: '#stage'
+        });
+
+
+        Vue.component('master-pad', {
+
+            props: ["self"],
+            template: '#master_pad'
+        });
+
+        Vue.component('roles-pad', {
+
+            props: ["self"],
+            template: '#roles_pad'
+        });
+
+        Vue.component('player-pads', {
+
+            props: ["self"],
+            template: '#player_pads'
+        });
+
+        Vue.component('game-pad', {
+
+            props: ["self"],
+            template: '#game_pad'
+        });
+
+        Vue.component('vote-pad', {
+
+            props: ["self"],
+            template: '#vote_pad'
+        });
+
+        Vue.component('ticks-pad', {
+
+            props: ["self"],
+            template: '#ticks_pad'
+        });
+
+        Vue.component('mission-pad', {
+
+            props: ["self"],
+            template: '#mission_pad'
+        });
+
+        Vue.component('blog-pad', {
+
+            props: ["self"],
+            template: '#blog_pad'
+        });
+
+        Vue.component('game-info', {
+
+            props: ["self"],
+            template: '#game_info'
+        });
+
+        Vue.component('game-role', {
+
+            props: ["self","index"],
+            template: '#game_role'
+        });
+        
+
+        Vue.component('set', {
+
+            props: ["self","user"],
+            template: '#set'
+        });
+
+        Vue.component('room-info', {
+
+            props: ["self"],
+            template: '#room_info'
+        });
+
+        Vue.component('game-statistics', {
+
+            props: ["self"],
+            template: '#game_statistics'
+        });
+
+        Vue.component('game-statistics-table', {
+
+            props: [ "self", "set_counts", "round_n"],
+            template: '#game_statistics_table'
+        });
+
+
+        Vue.component('history-info', {
+
+            props: [ "history" ],
+            template: '#vue_history'
+        });
+
+    })();
+
+</script>
+		<script type="text/x-template" id="audit_room_template">
+
+
+    
+
+    <div class="container-fluid" v-if="show">
+
+        <div class="row">
+
+            <div class="col-sm-7">
+                <stage v-bind:self="self()"></stage>
+                <game-statistics v-bind:self="self()"></game-statistics>
+            </div>
+
+            <div class="col-sm-1">
+                <room-info v-bind:self="self()"></room-info>
+            </div>
+
+            <div class="col-sm-4">
+                <roles-pad v-bind:self="self()"></roles-pad>
+                <div v-if="is_practice_room">
+                    <h3 style="color: blue">遊戲進行時可從上方選擇視角</h3>
+                </div>
+                <button type="button" v-on:click="leave()" class="btn btn-primary form-control">
+                    <span v-if="is_practice_room">離開教學席</span>
+                    <span v-else>離開觀眾席</span>
+                </button>
+                <blog-pad v-bind:self="self()"></blog-pad>
+            </div>
+                               
+        </div>
+
+    </div>
+
+</script>
+		
+		<script type="text/x-template" id="lobby_template">
+
+<div>
+    <div class="container" v-if="show">
+        <div class="row">
+
+            <div class="col-md-9">
+                
+                <div class="row">
+                    <div class="col-md-2">
+                        <button type="button" v-on:click="create_room()" class="btn btn-primary form-control" title="觀眾為雜魚視角,公平競技">開啟一般房</button>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" v-on:click="create_practice_room()" class="btn btn-warning form-control" title="觀眾可選擇任意視角,教學用">開啟教學房</button>
+                    </div>
+                    <div class="col-md-4">
+                        <input class="form-control" type="text" v-model="my_room_title" v-bind:placeholder=" password==='' ? '房間描述: 如, 歡迎大家來玩' : '房間描述: 如, 私團同學請入' ">
+                    </div>
+                    <div class="col-md-4">
+                        <input class="form-control" type="text" v-model="password" maxlength="12" placeholder="密碼: 空白代表野團">
+                    </div>
+                </div>
+                <p>共 {{rooms.length}} 個房間 </p>
+
+
+                <ul class="list-group">
+
+                    <li class="list-group-item" v-for="room in rooms">
+                    
+                        <div v-if="room.gaming" class="row">
+                            <div class="col-sm-2" v-if="room.missions[0]===true">
+                                <img src="image/success.png" style="width:100%; height:auto;">
+                            </div>
+                            <div class="col-sm-2" v-if="room.missions[0]===false">
+                                <img src="image/fail.png" style="width:100%; height:auto;">
+                            </div>
+                            <div class="col-sm-2" v-if="room.missions[1]===true">
+                                <img src="image/success.png" style="width:100%; height:auto;">
+                            </div>
+                            <div class="col-sm-2" v-if="room.missions[1]===false">
+                                <img src="image/fail.png" style="width:100%; height:auto;">
+                            </div>
+                            <div class="col-sm-2" v-if="room.missions[2]===true">
+                                <img src="image/success.png" style="width:100%; height:auto;">
+                            </div>
+                            <div class="col-sm-2" v-if="room.missions[2]===false">
+                                <img src="image/fail.png" style="width:100%; height:auto;">
+                            </div>
+                            <div class="col-sm-2" v-if="room.missions[3]===true">
+                                <img src="image/success.png" style="width:100%; height:auto;">
+                            </div>
+                            <div class="col-sm-2" v-if="room.missions[3]===false">
+                                <img src="image/fail.png" style="width:100%; height:auto;">
+                            </div>
+                            <div class="col-sm-2" v-if="room.missions[4]===true">
+                                <img src="image/success.png" style="width:100%; height:auto;">
+                            </div>
+                            <div class="col-sm-2" v-if="room.missions[4]===false">
+                                <img src="image/fail.png" style="width:100%; height:auto;">
+                            </div>
+                        </div>
+
+
+
+                        <span>
+                            {{ room.description_title }}
+                        </span>
+
+                        <span v-if="room.is_practice_room" style="color: green;">
+                            教學房
+                        </span>
+                        <span v-else style="color: purple;">
+                            一般房
+                        </span>
+
+                        <span v-if="room.is_publish_room" style="color: blue;">
+                            (野團 密碼退散)
+                        </span>
+                        <span v-else style="color: red;">
+                            (私房 請輸入密碼)
+                        </span>
+                        
+
+                        <span class="badge">
+                            {{room.length}}/10
+                        </span>
+                        <span class="badge">
+                            {{ room.name }}
+                        </span>
+
+
+
+
+                        <div v-if="can_recover(room)" class="row">
+                            <div class="col-md-6">
+                                <button type="button" v-on:click="re_join_game(room)" class="btn btn-lg btn-info btn-block btn-signin">( 戰友在等待你{{room.missions.length+1}}-{{room.day_time}} )</button>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="button" v-on:click="join_audit(room)" class="btn btn-lg btn-info btn-block btn-signin">
+                                    <span v-if="room.is_practice_room" style="color: green;">教學席 (上帝視角)</span>
+                                    <span v-else style="color: purple;">觀眾席 (雜魚視角)</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div v-else-if="is_oblivion(room)">
+                            <button type="button" v-on:click="re_join_game(room)" class="btn btn-lg btn-warning btn-block btn-signin">( 戰友在等待你{{room.missions.length+1}}-{{room.day_time}} )</button>
+                        </div>
+                        <div class="row" v-else-if="room.gaming">
+                            <div class="col-md-6">
+                                <button type="button" class="btn btn-lg btn-danger btn-block btn-signin">遊戲進行中( {{room.missions.length+1}}-{{room.day_time}} )</button>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="button" v-on:click="join_audit(room)" class="btn btn-lg btn-info btn-block btn-signin">
+                                    <span v-if="room.is_practice_room" style="color: green;">教學席 (上帝視角)</span>
+                                    <span v-else style="color: purple;">觀眾席 (雜魚視角)</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="row" v-else>
+                            <div class="col-md-4">
+                                <button type="button" v-on:click="join_room(room)" class="btn btn-lg btn-primary btn-block btn-signin">加入</button>
+                            </div>
+                            <div class="col-md-4" v-show="!room.is_publish_room">
+                                <input v-model="room.password" class="form-control" type="text" maxlength="12" placeholder="密碼">
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" v-on:click="join_audit(room)" class="btn btn-lg btn-info btn-block btn-signin">
+                                    <span v-if="room.is_practice_room" style="color: green;">教學席 (上帝視角)</span>
+                                    <span v-else style="color: purple;">觀眾席 (雜魚視角)</span>
+                                </button>
+                            </div>
+                        </div>
+
+                    </li>
+                
+                </ul>
+            </div>
+
+            <div class="col-md-3">
+                <p>共 {{users.length}} 個玩家在遊戲大廳</p>
+                <ul>
+                    <li v-for="user in users">
+                        {{ user.name }}
+                    </li>
+                </ul>
+            </div>
+
+        </div>
+
+        <br>
+
+        <button type="button" v-on:click="leave()" class="btn btn-lg btn-primary btn-block btn-signin">離開大廳</button>
+
+        <br>
+        <br>
+        <br>
+        <br>
+        <br>
+
+        <button type="button" class="btn btn-info" v-on:click="toggle_logs">{{ show_logs ? "關閉大廳廣播" : "啟用大廳廣播"  }}</button>
+
+        <div class="row" v-if="show_logs">
+            <div class="col-sm-8">
+                <input type="text" class="form-control" v-on:keyup.enter="send_lobby_log()" v-model="lobby_dialog">
+            </div>
+            <div class="col-sm-4">
+                <button type="button" class="btn btn-primary" v-on:click="send_lobby_log()">廣播</button>
+            </div>
+
+            <div class="col-sm-12">
+                <div class="embed-responsive embed-responsive-4by3">
+                    <div class="embed-responsive-item" style="border: double orange 1em;border-image: url('image/border.png') 27 round stretch;">
+                        <ul style="width: 100%; height: 100%; overflow: auto;  background: darkgray;">
+                            <li v-for="log in logs">
+                                <div class="row">
+                                    <span class="col-xs-2" style="color:purple;">{{ log.name }} 廣播:</span>
+                                    <span class="col-xs-10">{{ log.dialog }}</span>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
+    </div>
+</div>
+</script>
+
+		<script type="text/x-template" id="login_template">
+    <div class="container" v-if="show">
+
+        <div class="row">
+            <div class="col-md-4"></div>
+            <div class="col-md-4">
+                <form>
+                    <img src="image/table.jpg" class="img-rounded" style="width:100%;">
+                    <br><br><br><br>
+                    <input type="text" v-model="name" class="form-control" placeholder="Enter Your Name" autofocus>
+                    <button type="button" v-on:click="login()" class="btn btn-lg btn-primary btn-block btn-signin">Go to Lobby</button>
+                </form>
+            </div>
+        </div>
+
+        
+        <br><p>公告:</p>
+        <ol>
+	    <li style="color:purple;">好吧,我承認我很混,還是找個時間還點利息吧</li>
+            <li>有bug或希望的功能可以留言<a href="http://gaussian1998.pixnet.net/blog/post/401206574-%E6%A1%8C%E9%81%8A%E7%B7%9A%E4%B8%8A%E9%98%BF%E7%93%A6%E9%9A%86s">荒廢的部落格</a></li>
+        </ol>
+
+        <br><p>工具:</p>
+        <ul>
+            <li><a href="http://avalon-fish-view.signage-cloud.org" style="color:purple;" target="_blank">阿瓦隆之雜魚視角分析器</a></li>
+            <li><a href="https://drive.google.com/file/d/1CPq0kng6BHvr7_fHcNZZB5dK2LGj8xG0/preview" style="color:purple;" target="_blank">視角分析器使用說明影片 (雲端空間)</a></li>
+        </ul>
+
+        <br><p>更新備忘錄:</p>
+        <ul>
+            <li>糾團公告</li>
+            <li>投派票紀錄匯出與重播</li>
+        </ul>
+
+        
+        <br><p>斷線重連機制:</p>
+        <ul style="color:blue;">
+            <li>在遊戲中如果斷線,使用相同的名字,還可以加入剛才的遊戲</li>
+            <li>如果有人知道你的名子,搶先登入,那就殘念了</li>
+            <li>遊戲會不限時間等待</li>
+            <li>這個機制使得中途換人成為可能</li>
+            <li>玩家斷線伺服器未必會立即偵測到,可能需要稍等一下</li>
+        </ul>
+        
+    </div>
+</script>
+
+		<script type="text/x-template" id="prompt_template">
+
+    <div v-if="show" style="z-index: 999; position:absolute; top: 0px; left: 0px; width:105%; height: 200%; background-color: darkgray; opacity: 0.7;">
+        <h1><center style="color:red;">{{message}}</center></h1>
+    </div>
+
+</script>
+
+		<script type="text/x-template" id="offline_template">
+
+    <div v-if="show">
+        <h1 style="color:purple;">嘗試連接伺服器.....</h1>
+    </div>
+
+</script>
+		<script> var exports = {}; </script>
+		<script src="js/game.js"></script>
+
+	</body>
+</html>

@@ -93,12 +93,15 @@ export default function RoundsAnalysis(): JSX.Element {
     merlinKillRate: b.merlinKillRate,
   }));
 
-  // Game states (top 12)
-  const stateData = data.gameStates.slice(0, 12).map(s => ({
-    name: s.state,
-    games: s.games,
-    redWinRate: s.redWinRate,
-  }));
+  // Game states: stacked bar (red + blue = 100%), filter trivial & low-count
+  const stateData = data.gameStates
+    .filter(s => s.state !== '紅紅紅' && s.state !== '藍藍藍' && s.games >= 20)
+    .map(s => ({
+      name: s.state,
+      games: s.games,
+      redWinRate: s.redWinRate,
+      blueWinRate: Math.round((100 - s.redWinRate) * 10) / 10,
+    }));
 
   return (
     <div className="space-y-6">
@@ -209,7 +212,7 @@ export default function RoundsAnalysis(): JSX.Element {
         </motion.div>
       </div>
 
-      {/* Fix #2: Game states -- display with game count alongside win rate */}
+      {/* Game states: stacked red/blue bar, filtered trivial & low-count */}
       {stateData.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -219,14 +222,17 @@ export default function RoundsAnalysis(): JSX.Element {
         >
           <h3 className="text-sm font-bold text-gray-400 mb-1">常見局勢 (Common Game States)</h3>
           <p className="text-[10px] text-gray-600 mb-3">
-            局勢 = 各任務結果序列 (紅=任務失敗, 藍=任務成功), 顯示該局勢下紅方最終勝率
+            局勢 = 各任務結果序列 (紅=任務失敗, 藍=任務成功), 紅+藍=100%, 僅顯示20場以上且非全紅/全藍
           </p>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={Math.max(280, stateData.length * 32)}>
             <BarChart data={stateData} layout="vertical">
-              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: number) => `${v}%`} />
               <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 10, fill: '#d1d5db' }} />
               <Tooltip
-                formatter={(val: unknown, name: unknown) => [`${val}${name === 'redWinRate' ? '%' : ''}`, name === 'redWinRate' ? '紅方勝率' : '場次']}
+                formatter={(val: unknown, name: unknown) => [
+                  `${val}%`,
+                  name === 'redWinRate' ? '紅方勝率' : '藍方勝率',
+                ]}
                 labelFormatter={(label: unknown) => {
                   const lbl = String(label);
                   const item = stateData.find(s => s.name === lbl);
@@ -235,11 +241,9 @@ export default function RoundsAnalysis(): JSX.Element {
                 contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
                 itemStyle={{ color: '#d1d5db' }}
               />
-              <Bar dataKey="redWinRate" name="紅方勝率" radius={[0, 4, 4, 0]}>
-                {stateData.map((d, i) => (
-                  <Cell key={i} fill={d.redWinRate >= 50 ? '#ef4444' : '#3b82f6'} />
-                ))}
-              </Bar>
+              <Legend />
+              <Bar dataKey="redWinRate" name="紅方勝率" fill="#ef4444" stackId="a" />
+              <Bar dataKey="blueWinRate" name="藍方勝率" fill="#3b82f6" stackId="a" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </motion.div>

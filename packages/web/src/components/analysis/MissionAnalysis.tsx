@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Legend,
 } from 'recharts';
 import { Loader, AlertCircle } from 'lucide-react';
@@ -60,14 +60,28 @@ export default function MissionAnalysis(): JSX.Element {
     twoFail: Math.round((m.twoFail / m.total) * 1000) / 10,
   }));
 
-  // Fix #4: Mission outcome correlation (replaces fail card distribution)
-  const corrData = data.missionOutcomeCorrelation.map(c => ({
-    name: `任務 ${c.round}`,
-    passedBlueWinRate: c.passedBlueWinRate,
-    failedRedWinRate: c.failedRedWinRate,
-    passedGames: c.passedGames,
-    failedGames: c.failedGames,
-  }));
+  // Mission outcome correlation table data (missions 1-4 only, skip 5)
+  const corrRows = data.missionOutcomeCorrelation
+    .filter(c => c.round <= 4)
+    .map(c => {
+      const passedBlueWin = c.passedThenBlueWin;
+      const passedRedWin = c.passedGames - c.passedThenBlueWin;
+      const failedBlueWin = c.failedGames - c.failedThenRedWin;
+      const failedRedWin = c.failedThenRedWin;
+      return {
+        round: c.round,
+        passedGames: c.passedGames,
+        passedBlueWin,
+        passedRedWin,
+        passedBlueWinPct: c.passedGames > 0 ? Math.round((passedBlueWin / c.passedGames) * 1000) / 10 : 0,
+        passedRedWinPct: c.passedGames > 0 ? Math.round((passedRedWin / c.passedGames) * 1000) / 10 : 0,
+        failedGames: c.failedGames,
+        failedBlueWin,
+        failedRedWin,
+        failedBlueWinPct: c.failedGames > 0 ? Math.round((failedBlueWin / c.failedGames) * 1000) / 10 : 0,
+        failedRedWinPct: c.failedGames > 0 ? Math.round((failedRedWin / c.failedGames) * 1000) / 10 : 0,
+      };
+    });
 
   return (
     <div className="space-y-6">
@@ -120,32 +134,55 @@ export default function MissionAnalysis(): JSX.Element {
         </ResponsiveContainer>
       </motion.div>
 
-      {/* Fix #4: Mission outcome correlation (replaces fail card distribution chart) */}
+      {/* Mission outcome correlation table (missions 1-4) */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">任務結果與最終勝負關聯 (Mission Outcome vs Game Result)</h3>
-        <p className="text-[10px] text-gray-600 mb-2">任務通過後藍方最終勝率 vs 任務失敗後紅方最終勝率</p>
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={corrData}>
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <Tooltip
-              formatter={(val: unknown, name: unknown) => [
-                `${val}%`,
-                name === 'passedBlueWinRate' ? '通過後藍方勝率' : '失敗後紅方勝率',
-              ]}
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-              itemStyle={{ color: '#d1d5db' }}
-            />
-            <Legend />
-            <Bar dataKey="passedBlueWinRate" name="通過後藍方勝率" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="failedRedWinRate" name="失敗後紅方勝率" fill="#ef4444" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <h3 className="text-sm font-bold text-gray-400 mb-1">任務結果與最終勝負關聯 (Mission Outcome vs Game Result)</h3>
+        <p className="text-[10px] text-gray-600 mb-3">各任務通過/失敗後, 最終藍方勝 vs 紅方勝的次數與比例 (任務5省略, 必為100%)</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-gray-700">
+                <th rowSpan={2} className="text-left text-gray-500 py-2 px-2">任務</th>
+                <th colSpan={3} className="text-center text-green-400 py-1 px-2 border-b border-gray-700">任務通過 (Pass)</th>
+                <th colSpan={3} className="text-center text-red-400 py-1 px-2 border-b border-gray-700">任務失敗 (Fail)</th>
+              </tr>
+              <tr className="border-b border-gray-700">
+                <th className="text-center text-blue-400 py-1 px-2">藍方勝</th>
+                <th className="text-center text-red-400 py-1 px-2">紅方勝</th>
+                <th className="text-center text-gray-500 py-1 px-2">場次</th>
+                <th className="text-center text-blue-400 py-1 px-2">藍方勝</th>
+                <th className="text-center text-red-400 py-1 px-2">紅方勝</th>
+                <th className="text-center text-gray-500 py-1 px-2">場次</th>
+              </tr>
+            </thead>
+            <tbody>
+              {corrRows.map(r => (
+                <tr key={r.round} className="border-b border-gray-800 hover:bg-gray-800/30">
+                  <td className="text-gray-300 font-bold py-2 px-2">任務 {r.round}</td>
+                  <td className="text-center text-blue-400 py-2 px-2">
+                    {r.passedBlueWin} <span className="text-gray-600">({r.passedBlueWinPct}%)</span>
+                  </td>
+                  <td className="text-center text-red-400 py-2 px-2">
+                    {r.passedRedWin} <span className="text-gray-600">({r.passedRedWinPct}%)</span>
+                  </td>
+                  <td className="text-center text-gray-500 py-2 px-2">{r.passedGames}</td>
+                  <td className="text-center text-blue-400 py-2 px-2">
+                    {r.failedBlueWin} <span className="text-gray-600">({r.failedBlueWinPct}%)</span>
+                  </td>
+                  <td className="text-center text-red-400 py-2 px-2">
+                    {r.failedRedWin} <span className="text-gray-600">({r.failedRedWinPct}%)</span>
+                  </td>
+                  <td className="text-center text-gray-500 py-2 px-2">{r.failedGames}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </motion.div>
     </div>
   );

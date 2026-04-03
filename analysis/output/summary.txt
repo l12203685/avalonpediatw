@@ -1,0 +1,103 @@
+============================================================
+  AVALON DATA ANALYSIS SUMMARY
+  阿瓦隆百科 統計摘要
+============================================================
+
+Total players in dataset: 62
+Players with 50+ games: 51
+Most games by single player: 981
+
+--- TOP 10 BY WIN RATE (50+ games) ---
+  豬羊             55.5%  (247 games)
+  HAO            53.3%  (901 games)
+  DAL            53.0%  (83 games)
+  ALAN           50.5%  (95 games)
+  轆              50.4%  (417 games)
+  LORI           50.3%  (324 games)
+  爾勵             50.0%  (82 games)
+  DEAN           49.1%  (411 games)
+  洋蔥             49.0%  (561 games)
+  ED             48.6%  (286 games)
+
+--- BEST BY ROLE (10+ role games, 50+ total) ---
+  刺客: 轆              85.0%  (40 games as 刺客)
+  娜美: 豬羊             88.0%  (28 games as 娜美)
+  德魯: DAL            92.0%  (12 games as 德魯)
+  奧伯: FANCY         100.0%  (11 games as 奧伯)
+  派西: ED             53.0%  (16 games as 派西)
+  梅林: HAO            58.0%  (50 games as 梅林)
+  忠臣: 爾勵             47.0%  (17 games as 忠臣)
+
+--- SEAT POSITION INSIGHTS ---
+  Best avg seat: Seat 5 (45.4%)
+  Worst avg seat: Seat 7 (39.6%)
+
+--- MERLIN DYNAMICS ---
+  Avg Merlin kill rate (red side): 23.7%
+  Avg Merlin survive rate (blue side): 30.0%
+  Best Merlin killer: DAL (44.4%)
+  Best Merlin protector: 爾勵 (42.4%)
+
+--- FACTION BALANCE ---
+  Avg red role assignment rate: 39.8%
+  Avg blue role assignment rate: 60.2%
+
+============================================================
+  PER-GAME ANALYSIS RESULTS
+  (from Google Sheets: 牌譜)
+============================================================
+
+Total games analyzed: 2145
+Games with outcome: 2145
+  三紅 (Red win): 971
+  三藍死 (Blue win, Merlin killed): 516
+  三藍活 (Blue win, Merlin survived): 658
+
+--- LADY OF THE LAKE ---
+  首湖 (2145 games, overall Red WR: 45.3%):
+    紅方>紅方: Red WR 60.1% (n=273)
+    紅方>藍方: Red WR 48.3% (n=561)
+    藍方>紅方: Red WR 61.2% (n=325)
+    藍方>藍方: Red WR 34.2% (n=985)
+  二湖 (1276 games, overall Red WR: 26.6%):
+    紅方>紅方: Red WR 42.0% (n=138)
+    紅方>藍方: Red WR 35.6% (n=216)
+    藍方>紅方: Red WR 40.0% (n=210)
+    藍方>藍方: Red WR 16.9% (n=710)
+  三湖 (650 games, overall Red WR: 31.1%):
+    紅方>紅方: Red WR 31.4% (n=86)
+    紅方>藍方: Red WR 43.5% (n=131)
+    藍方>: Red WR 50.0% (n=4)
+    藍方>紅方: Red WR 31.6% (n=158)
+    藍方>藍方: Red WR 24.4% (n=271)
+  Lake 1 Holder Role:
+    刺客: Red WR 56.8% (n=192)
+    奧伯: Red WR 53.0% (n=202)
+    娜美: Red WR 50.0% (n=226)
+    德魯: Red WR 49.5% (n=214)
+    忠臣: Red WR 43.3% (n=889)
+    派西: Red WR 35.9% (n=223)
+    梅林: Red WR 35.7% (n=199)
+  Lake 1 Target Role:
+    娜美: Red WR 65.5% (n=119)
+    奧伯: Red WR 64.9% (n=134)
+    刺客: Red WR 61.1% (n=131)
+    德魯: Red WR 55.1% (n=214)
+    派西: Red WR 41.3% (n=242)
+    忠臣: Red WR 41.2% (n=1033)
+    梅林: Red WR 30.3% (n=271)
+
+--- ROUND 1-1 VISION ANALYSIS ---
+  Merlin in 1-1 team: M1 pass 40.1% (566 games)
+  Merlin NOT in 1-1 team: M1 pass 41.8% (1579 games)
+  Percival in 1-1 team: M1 pass 40.5% (691 games)
+
+--- RED IN 1-1 TEAM ---
+  0 red in team: M1 pass 40.8%, Red WR 43.5% (n=444)
+  1 red in team: M1 pass 41.9%, Red WR 46.6% (n=1028)
+  2 red in team: M1 pass 40.9%, Red WR 44.4% (n=606)
+  3 red in team: M1 pass 40.3%, Red WR 44.8% (n=67)
+
+--- MISSION BRANCHING ---
+  M1 FAIL: Red WR 56.8%, Merlin Kill 19.2% (n=1258)
+  M1 PASS: Red WR 29.0%, Merlin Kill 31.0% (n=887)
