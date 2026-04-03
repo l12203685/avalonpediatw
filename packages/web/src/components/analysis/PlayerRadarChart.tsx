@@ -158,7 +158,7 @@ export default function PlayerRadarChart(): JSX.Element {
               </RadarChart>
             </ResponsiveContainer>
             {/* Fix #7: Dimension explanation */}
-            <div className="mt-2 text-[10px] text-gray-600 space-y-0.5">
+            <div className="mt-3 text-xs text-gray-500 space-y-1">
               <p>藍方勝率(三藍梅活): 藍方陣營完成三任務且梅林未被刺殺的勝率</p>
               <p>紅方任務勝率(三紅): 紅方陣營通過三次失敗任務的勝率</p>
               <p>紅方刺殺勝率(三藍梅死): 藍方完成三任務但梅林被刺殺, 紅方勝</p>

@@ -8,11 +8,13 @@ const SEATS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
 type Mode = 'overall' | 'red' | 'blue';
 
-function colorForRate(rate: number): string {
-  if (rate >= 60) return 'bg-green-600/80 text-green-100';
-  if (rate >= 55) return 'bg-green-700/60 text-green-200';
-  if (rate >= 50) return 'bg-gray-600/60 text-gray-200';
-  if (rate >= 45) return 'bg-red-700/60 text-red-200';
+function colorForDeviation(deviation: number): string {
+  // deviation = (this cell's win rate) - (seat average win rate)
+  // Green = above seat average, Red = below seat average
+  if (deviation >= 8) return 'bg-green-600/80 text-green-100';
+  if (deviation >= 3) return 'bg-green-700/60 text-green-200';
+  if (deviation >= -3) return 'bg-gray-600/60 text-gray-200';
+  if (deviation >= -8) return 'bg-red-700/60 text-red-200';
   return 'bg-red-600/80 text-red-100';
 }
 
@@ -59,6 +61,14 @@ export default function SeatHeatmap(): JSX.Element {
     return p.seatWinRates[seat] || 0;
   };
 
+  // Compute seat averages across all displayed players for deviation-based coloring
+  const displayedPlayers = players.slice(0, 25);
+  const seatAverages: Record<string, number> = {};
+  for (const seat of SEATS) {
+    const rates = displayedPlayers.map(p => getSeatRate(p, seat)).filter(r => r > 0);
+    seatAverages[seat] = rates.length > 0 ? rates.reduce((a, b) => a + b, 0) / rates.length : 50;
+  }
+
   return (
     <div className="space-y-4">
       {/* Mode toggle */}
@@ -87,7 +97,7 @@ export default function SeatHeatmap(): JSX.Element {
         <p className="font-bold text-gray-400">座位分析說明:</p>
         <p>Avalon 的座位順序影響資訊流和投票順序. 座位號碼 = 遊戲中的固定位置(1-10).</p>
         <p>不同座位有不同的策略優劣: 靠近隊長的位置更容易被選入任務, 發言順序影響資訊判斷.</p>
-        <p>數值 = 該玩家在該座位的{mode === 'red' ? '紅方' : mode === 'blue' ? '藍方' : '總'}勝率(%). 綠色 = 高於50%, 紅色 = 低於50%.</p>
+        <p>數值 = 該玩家在該座位的{mode === 'red' ? '紅方' : mode === 'blue' ? '藍方' : '總'}勝率(%). 顏色 = 與該座位所有玩家平均勝率的偏差. 綠色 = 高於座位平均, 紅色 = 低於座位平均.</p>
       </div>
 
       {/* Heatmap grid */}
@@ -118,17 +128,18 @@ export default function SeatHeatmap(): JSX.Element {
                 </td>
                 {SEATS.map(seat => {
                   const rate = getSeatRate(p, seat);
+                  const deviation = rate > 0 ? rate - seatAverages[seat] : 0;
                   return (
                     <td key={seat} className="px-1 py-1">
                       <div
                         className={`group relative text-center rounded px-1 py-0.5 font-bold cursor-default ${
-                          rate > 0 ? colorForRate(rate) : 'bg-gray-800/40 text-gray-700'
+                          rate > 0 ? colorForDeviation(deviation) : 'bg-gray-800/40 text-gray-700'
                         }`}
                       >
                         {rate > 0 ? `${rate}` : '-'}
                         {rate > 0 && (
                           <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-[10px] text-gray-200 whitespace-nowrap shadow-lg pointer-events-none">
-                            {p.name} 座位{seat === '0' ? '10' : seat}: {rate}%
+                            {p.name} 座位{seat === '0' ? '10' : seat}: {rate}% (平均 {seatAverages[seat].toFixed(1)}%, {deviation >= 0 ? '+' : ''}{deviation.toFixed(1)}%)
                           </div>
                         )}
                       </div>
