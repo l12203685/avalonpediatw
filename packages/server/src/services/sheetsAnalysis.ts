@@ -10,9 +10,21 @@
  *   - Aggregate stats from raw data columns
  */
 
-import { sheets_v4, auth as gauth, sheets } from '@googleapis/sheets';
 import path from 'path';
 import fs from 'fs';
+
+// Optional googleapis import — works without it if cache file exists
+let sheets_v4: any;
+let gauth: any;
+let sheets: any;
+try {
+  const googleapis = require('@googleapis/sheets');
+  sheets_v4 = googleapis.sheets_v4;
+  gauth = googleapis.auth;
+  sheets = googleapis.sheets;
+} catch {
+  console.warn('[sheetsAnalysis] @googleapis/sheets not available, cache-only mode');
+}
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -167,7 +179,7 @@ export interface AnalysisCache {
 // Sheets client singleton
 // ---------------------------------------------------------------------------
 
-let sheetsClient: sheets_v4.Sheets | null = null;
+let sheetsClient: any = null;
 
 function findCredentials(): string | null {
   for (const p of CREDENTIALS_PATHS) {
@@ -178,8 +190,11 @@ function findCredentials(): string | null {
   return null;
 }
 
-function getSheetsClient(): sheets_v4.Sheets {
+function getSheetsClient(): any {
   if (sheetsClient) return sheetsClient;
+  if (!sheets || !gauth) {
+    throw new Error('Google Sheets SDK not available — running in cache-only mode');
+  }
 
   const scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 
