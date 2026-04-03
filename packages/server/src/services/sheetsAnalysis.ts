@@ -986,8 +986,8 @@ export function invalidateCache(): void {
 
 /** Check if the service can connect to Sheets. */
 export function isSheetsReady(): boolean {
+  if (process.env.GOOGLE_SHEETS_CREDENTIALS_JSON) return true;
   try {
-    findCredentials();
     return !!findCredentials();
   } catch {
     return false;
