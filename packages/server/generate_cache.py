@@ -809,44 +809,41 @@ def compute_seat_order(games: list[GameRow]) -> dict:
         short = {"派西": "派", "梅林": "梅", "娜美": "娜"}
         return "".join(short.get(r, r[0]) for r in trio)
 
-    def has_mission_between(seat_roles: dict[str, str], game: GameRow) -> bool:
-        """Check if any mission team member sits between the trio players."""
-        role_to_seat: dict[str, int] = {}
+    def has_interleaving(seat_roles: dict[str, str]) -> bool:
+        """Check if other players' seats are between the trio (派/梅/娜).
+
+        On a 10-seat circular table, find the 3 trio seats and check whether
+        they are all adjacent (no interleaving) or have gaps with other
+        players between them.
+
+        Example: seats 1=梅林, 2=忠臣, 3=莫甘娜, 4=派西 → True (忠臣 between)
+        Example: seats 1=梅林, 2=莫甘娜, 3=派西 → False (all adjacent)
+        """
+        trio_seats: list[int] = []
         for seat_char, role in seat_roles.items():
             if role in TRIO_ROLES:
                 try:
-                    role_to_seat[role] = int(seat_char) if seat_char != "0" else 10
+                    trio_seats.append(int(seat_char) if seat_char != "0" else 10)
                 except ValueError:
                     continue
-        if len(role_to_seat) != 3:
+        if len(trio_seats) != 3:
             return False
 
-        trio_seats = sorted(role_to_seat.values())
-        # Check if any mission participant seat falls between trio members
-        for m in game.missions:
-            round_idx = m["round"] - 1
-            if round_idx < len(game.rounds):
-                round_str = game.rounds[round_idx]
-                if not round_str:
-                    continue
-                for seat_char in round_str:
-                    try:
-                        seat_num = int(seat_char) if seat_char != "0" else 10
-                    except ValueError:
-                        continue
-                    if seat_num in trio_seats:
-                        continue
-                    # Check if seat is between any pair of trio members
-                    for i in range(3):
-                        s1 = trio_seats[i]
-                        s2 = trio_seats[(i + 1) % 3]
-                        if s1 < s2:
-                            if s1 < seat_num < s2:
-                                return True
-                        else:
-                            if seat_num > s1 or seat_num < s2:
-                                return True
-        return False
+        trio_seats.sort()
+        num_players = 10
+
+        # Calculate the 3 arc gaps between consecutive trio members on the
+        # circular table.  If they are all adjacent, the gaps should be
+        # {1, 1, num_players - 2} in some order.
+        gaps = [
+            (trio_seats[1] - trio_seats[0]) % num_players,
+            (trio_seats[2] - trio_seats[1]) % num_players,
+            (trio_seats[0] - trio_seats[2]) % num_players,
+        ]
+        # Sort the gaps: for adjacent trio the smallest two gaps are both 1
+        gaps.sort()
+        # Adjacent means the two smallest gaps are 1 (directly next to each other)
+        return not (gaps[0] == 1 and gaps[1] == 1)
 
     # Collect stats per permutation
     perm_stats: dict[str, dict] = {}
@@ -856,6 +853,8 @@ def compute_seat_order(games: list[GameRow]) -> dict:
             "三藍梅活": 0, "三藍梅死": 0, "三紅": 0,
             "穿插任務": 0,
             "redWins": 0, "blueWins": 0,
+            "穿插紅勝": 0, "無穿插紅勝": 0,
+            "無穿插": 0,
         }
 
     for g in games:
@@ -878,8 +877,15 @@ def compute_seat_order(games: list[GameRow]) -> dict:
         if g.blue_win:
             stats["blueWins"] += 1
 
-        if has_mission_between(g.seat_roles, g):
+        interleaved = has_interleaving(g.seat_roles)
+        if interleaved:
             stats["穿插任務"] += 1
+            if g.red_win:
+                stats["穿插紅勝"] += 1
+        else:
+            stats["無穿插"] += 1
+            if g.red_win:
+                stats["無穿插紅勝"] += 1
 
     result = []
     for label in PERM_LABELS:
@@ -887,17 +893,24 @@ def compute_seat_order(games: list[GameRow]) -> dict:
         total = s["total"]
         if total == 0:
             continue
+        interleave_count = s["穿插任務"]
+        no_interleave_count = s["無穿插"]
         result.append({
             "order": label,
             "total": total,
             "三藍梅活": s["三藍梅活"],
             "三藍梅死": s["三藍梅死"],
             "三紅": s["三紅"],
-            "穿插任務": s["穿插任務"],
+            "三藍梅活pct": rnd1(s["三藍梅活"] / total * 100),
+            "三藍梅死pct": rnd1(s["三藍梅死"] / total * 100),
+            "三紅pct": rnd1(s["三紅"] / total * 100),
+            "穿插任務": interleave_count,
             "redWinRate": rnd1(s["redWins"] / total * 100),
             "blueWinRate": rnd1(s["blueWins"] / total * 100),
             "merlinKillRate": rnd1(s["三藍梅死"] / total * 100),
-            "穿插率": rnd1(s["穿插任務"] / total * 100),
+            "穿插率": rnd1(interleave_count / total * 100),
+            "穿插紅勝率": rnd1(s["穿插紅勝"] / interleave_count * 100) if interleave_count > 0 else 0,
+            "無穿插紅勝率": rnd1(s["無穿插紅勝"] / no_interleave_count * 100) if no_interleave_count > 0 else 0,
         })
 
     # Overall summary

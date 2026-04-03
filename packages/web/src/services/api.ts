@@ -320,11 +320,16 @@ export interface SeatOrderPermutation {
   '\u4e09\u85cd\u6885\u6d3b': number;
   '\u4e09\u85cd\u6885\u6b7b': number;
   '\u4e09\u7d05': number;
+  '\u4e09\u85cd\u6885\u6d3bpct': number;
+  '\u4e09\u85cd\u6885\u6b7bpct': number;
+  '\u4e09\u7d05pct': number;
   '\u7a7f\u63d2\u4efb\u52d9': number;
   redWinRate: number;
   blueWinRate: number;
   merlinKillRate: number;
   '\u7a7f\u63d2\u7387': number;
+  '\u7a7f\u63d2\u7d05\u52dd\u7387': number;
+  '\u7121\u7a7f\u63d2\u7d05\u52dd\u7387': number;
 }
 
 export interface SeatOrderData {

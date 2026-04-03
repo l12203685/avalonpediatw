@@ -62,9 +62,9 @@ export default function SeatOrderAnalysis(): JSX.Element {
 
   const outcomeData = data.permutations.map(p => ({
     name: p.order,
-    '\u4e09\u85cd\u6885\u6d3b': p['\u4e09\u85cd\u6885\u6d3b'],
-    '\u4e09\u85cd\u6885\u6b7b': p['\u4e09\u85cd\u6885\u6b7b'],
-    '\u4e09\u7d05': p['\u4e09\u7d05'],
+    '\u4e09\u85cd\u6885\u6d3b': p['\u4e09\u85cd\u6885\u6d3bpct'],
+    '\u4e09\u85cd\u6885\u6b7b': p['\u4e09\u85cd\u6885\u6b7bpct'],
+    '\u4e09\u7d05': p['\u4e09\u7d05pct'],
   }));
 
   return (
@@ -137,12 +137,13 @@ export default function SeatOrderAnalysis(): JSX.Element {
         transition={{ delay: 0.15 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">結果分布 (三藍梅活/三藍梅死/三紅)</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">結果分布比例 (三藍梅活/三藍梅死/三紅)</h3>
         <ResponsiveContainer width="100%" height={250}>
           <BarChart data={outcomeData}>
             <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#d1d5db' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
+            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: number) => `${v}%`} />
             <Tooltip
+              formatter={(val: unknown) => `${val}%`}
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
               itemStyle={{ color: '#d1d5db' }}
             />
@@ -154,16 +155,16 @@ export default function SeatOrderAnalysis(): JSX.Element {
         </ResponsiveContainer>
       </motion.div>
 
-      {/* Mission interleaving table */}
+      {/* Interleaving table */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-1">穿插任務分析</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-1">穿插分析</h3>
         <p className="text-[10px] text-gray-600 mb-3">
-          「穿插任務」= 任務隊員的座位穿插在派/梅/娜三人之間
+          「穿插」= 派/梅/娜三人的座位之間有其他玩家（非相鄰）
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -173,7 +174,9 @@ export default function SeatOrderAnalysis(): JSX.Element {
                 <th className="text-right py-2 px-2 text-gray-400">場次</th>
                 <th className="text-right py-2 px-2 text-gray-400">穿插數</th>
                 <th className="text-right py-2 px-2 text-gray-400">穿插率</th>
-                <th className="text-right py-2 px-2 text-gray-400">紅勝率</th>
+                <th className="text-right py-2 px-2 text-gray-400">穿插紅勝率</th>
+                <th className="text-right py-2 px-2 text-gray-400">無穿插紅勝率</th>
+                <th className="text-right py-2 px-2 text-gray-400">整體紅勝率</th>
               </tr>
             </thead>
             <tbody>
@@ -183,6 +186,12 @@ export default function SeatOrderAnalysis(): JSX.Element {
                   <td className="py-2 px-2 text-right text-gray-300">{p.total}</td>
                   <td className="py-2 px-2 text-right text-purple-400">{p['\u7a7f\u63d2\u4efb\u52d9']}</td>
                   <td className="py-2 px-2 text-right text-purple-400">{p['\u7a7f\u63d2\u7387']}%</td>
+                  <td className={`py-2 px-2 text-right font-bold ${p['\u7a7f\u63d2\u7d05\u52dd\u7387'] >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {p['\u7a7f\u63d2\u7d05\u52dd\u7387']}%
+                  </td>
+                  <td className={`py-2 px-2 text-right font-bold ${p['\u7121\u7a7f\u63d2\u7d05\u52dd\u7387'] >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {p['\u7121\u7a7f\u63d2\u7d05\u52dd\u7387']}%
+                  </td>
                   <td className={`py-2 px-2 text-right font-bold ${p.redWinRate >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
                     {p.redWinRate}%
                   </td>
@@ -191,6 +200,28 @@ export default function SeatOrderAnalysis(): JSX.Element {
             </tbody>
           </table>
         </div>
+      </motion.div>
+
+      {/* Interpretation */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
+      >
+        <h3 className="text-sm font-bold text-gray-400 mb-2">分析結論</h3>
+        <ul className="text-xs text-gray-300 space-y-2 list-disc list-inside">
+          <li>
+            <span className="text-white font-bold">梅娜派</span> 紅勝率最低(~41%) -- 梅林和莫甘娜相鄰，派西更容易辨別真假梅林
+          </li>
+          <li>
+            <span className="text-white font-bold">梅派娜</span> 紅勝率最高(~48%) -- 派西夾在中間，對隊友的資訊傳遞效率降低
+          </li>
+          <li>
+            穿插場次中紅方勝率是否有差異 -- 比較上表「穿插紅勝率」vs「無穿插紅勝率」，
+            穿插代表三人之間有其他玩家，可能干擾資訊傳遞
+          </li>
+        </ul>
       </motion.div>
     </div>
   );
