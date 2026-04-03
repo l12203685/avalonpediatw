@@ -236,24 +236,25 @@ async function readSheet(
   spreadsheetId: string,
   range: string,
 ): Promise<string[][]> {
-  // Extract sheet name from range (e.g., "牌譜!A:ZZ" -> "牌譜")
   const sheetName = range.split('!')[0];
 
+  // Try cache FIRST (fast, no API call)
+  const cache = loadSheetsCache();
+  if (cache && cache[sheetName]) {
+    console.log(`[sheetsAnalysis] Using cached ${sheetName}: ${cache[sheetName].length} rows`);
+    return cache[sheetName];
+  }
+
+  // Cache miss — try API
   try {
-    const sheets = getSheetsClient();
-    const res = await sheets.spreadsheets.values.get({
+    const client = getSheetsClient();
+    const res = await client.spreadsheets.values.get({
       spreadsheetId,
       range,
     });
     return (res.data.values as string[][]) || [];
   } catch (e: any) {
-    // Fallback to cache on quota/network errors
-    console.warn(`[sheetsAnalysis] API failed for ${sheetName}, trying cache:`, e?.message?.slice(0, 80));
-    const cache = loadSheetsCache();
-    if (cache && cache[sheetName]) {
-      console.log(`[sheetsAnalysis] Using cached ${sheetName}: ${cache[sheetName].length} rows`);
-      return cache[sheetName];
-    }
+    console.warn(`[sheetsAnalysis] API failed for ${sheetName}:`, e?.message?.slice(0, 80));
     throw e;
   }
 }
