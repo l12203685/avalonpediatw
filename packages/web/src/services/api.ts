@@ -163,7 +163,12 @@ export interface AnalysisOverview {
   };
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
-  roleWinRateComparison: Array<{ role: string; avgWinRate: number; playerCount: number }>;
+  seatPositionWinRates: Array<{
+    seat: string;
+    overallWinRate: number;
+    totalGames: number;
+    roles: Array<{ role: string; winRate: number; games: number }>;
+  }>;
 }
 
 export interface AnalysisPlayerStats {

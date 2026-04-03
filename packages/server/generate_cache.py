@@ -404,29 +404,60 @@ def load_chemistry(sh: gspread.Spreadsheet) -> dict:
 # Compute endpoint responses (matching sheetsAnalysis.ts exactly)
 # ---------------------------------------------------------------------------
 
-def compute_role_win_rate_comparison(players: list[dict]) -> list[dict]:
-    """Fix #11: Per-role win rate comparison across all players with enough games."""
-    ROLES = ["刺客", "娜美", "德魯", "奧伯", "派西", "梅林", "忠臣"]
-    role_stats: dict[str, dict] = {}
-    for role in ROLES:
-        total_wr = 0.0
-        count = 0
-        for p in players:
-            games = p["rawRoleGames"].get(role, 0)
-            if games >= 10:
-                total_wr += p["roleWinRates"].get(role, 0)
-                count += 1
-        if count > 0:
-            role_stats[role] = {
+def compute_seat_position_win_rates(games: list[GameRow]) -> list[dict]:
+    """Win rate by seat position (1-10), broken down by role assigned to that seat."""
+    SEATS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+    SEAT_LABELS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+    ALL_ROLES = ["刺客", "娜美", "德魯", "奧伯", "派西", "梅林", "忠臣"]
+
+    # seat_char -> role -> {wins, total}
+    seat_role_stats: dict[str, dict[str, dict]] = {}
+    for s in SEATS:
+        seat_role_stats[s] = {}
+
+    for g in games:
+        for seat_char in SEATS:
+            role = g.seat_roles.get(seat_char, "")
+            if not role:
+                continue
+            entry = seat_role_stats[seat_char].setdefault(role, {"wins": 0, "total": 0})
+            entry["total"] += 1
+            # Win = the faction of that role won
+            if role in RED_ROLES and g.red_win:
+                entry["wins"] += 1
+            elif role in BLUE_ROLES and g.blue_win:
+                entry["wins"] += 1
+
+    result: list[dict] = []
+    for seat_char, label in zip(SEATS, SEAT_LABELS):
+        roles_data: list[dict] = []
+        total_wins = 0
+        total_games_seat = 0
+        for role in ALL_ROLES:
+            stats = seat_role_stats[seat_char].get(role)
+            if not stats or stats["total"] == 0:
+                continue
+            wr = rnd1(stats["wins"] / stats["total"] * 100)
+            roles_data.append({
                 "role": role,
-                "avgWinRate": rnd1(total_wr / count),
-                "playerCount": count,
-            }
+                "winRate": wr,
+                "games": stats["total"],
+            })
+            total_wins += stats["wins"]
+            total_games_seat += stats["total"]
 
-    return sorted(role_stats.values(), key=lambda x: x["avgWinRate"], reverse=True)
+        overall_wr = rnd1(total_wins / total_games_seat * 100) if total_games_seat > 0 else 0
+        result.append({
+            "seat": label,
+            "overallWinRate": overall_wr,
+            "totalGames": total_games_seat,
+            "roles": roles_data,
+        })
+
+    return result
 
 
-def compute_overview(games: list[GameRow], players: list[dict]) -> dict:
+def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa: C901
     total = len(games)
     red_wins = sum(1 for g in games if g.red_win)
     blue_wins = sum(1 for g in games if g.blue_win)
@@ -469,8 +500,8 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:
             {"name": p["name"], "games": p["totalGames"], "winRate": p["winRate"]}
             for p in top_by_games
         ],
-        # Fix #11: Per-role win rate comparison (replaces role distribution)
-        "roleWinRateComparison": compute_role_win_rate_comparison(players),
+        # Seat position win rates (replaces useless per-role win rate comparison)
+        "seatPositionWinRates": compute_seat_position_win_rates(games),
     }
 
 

@@ -69,17 +69,13 @@ export default function OverviewPanel(): JSX.Element {
     { name: '三藍梅死 (Merlin Killed)', value: overview.outcomeBreakdown.threeBlueDeadPct, fill: '#f59e0b' },
   ];
 
-  // Fix #11: Per-role win rate comparison
+  // Seat position win rates
   const ROLE_COLORS: Record<string, string> = {
-    '刺客': '#ef4444', '娜美': '#ef4444', '德魯': '#ef4444', '奧伯': '#ef4444',
-    '派西': '#3b82f6', '梅林': '#3b82f6', '忠臣': '#3b82f6',
+    '刺客': '#ef4444', '娜美': '#f87171', '德魯': '#fb923c', '奧伯': '#fbbf24',
+    '派西': '#3b82f6', '梅林': '#60a5fa', '忠臣': '#93c5fd',
   };
 
-  const roleWrData = overview.roleWinRateComparison.map(r => ({
-    role: r.role,
-    avgWinRate: r.avgWinRate,
-    fill: ROLE_COLORS[r.role] || '#6b7280',
-  }));
+  const seatData = overview.seatPositionWinRates;
 
   return (
     <div className="space-y-6">
@@ -188,23 +184,35 @@ export default function OverviewPanel(): JSX.Element {
         </ResponsiveContainer>
       </div>
 
-      {/* Fix #11: Per-role win rate comparison (replaces role distribution) */}
-      {roleWrData.length > 0 && (
+      {/* Seat position win rates by role */}
+      {seatData.length > 0 && (
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-gray-400 mb-3">各角色平均勝率 (Role Win Rate Comparison)</h3>
-          <p className="text-[10px] text-gray-600 mb-2">10+ 場該角色的玩家平均勝率</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={roleWrData}>
-              <XAxis dataKey="role" tick={{ fontSize: 11, fill: '#d1d5db' }} />
+          <h3 className="text-sm font-bold text-gray-400 mb-3">位置勝率 (Win Rate by Seat Position)</h3>
+          <p className="text-[10px] text-gray-600 mb-2">各位置整體勝率及角色勝率分布</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={seatData}>
+              <XAxis dataKey="seat" tick={{ fontSize: 11, fill: '#d1d5db' }} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
               <Tooltip
-                formatter={(val: unknown) => [`${val}%`, '平均勝率']}
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                itemStyle={{ color: '#d1d5db' }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.[0]) return null;
+                  const d = payload[0].payload as typeof seatData[number];
+                  return (
+                    <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 text-xs">
+                      <p className="font-bold text-gray-200 mb-1">位置 {d.seat} ({d.totalGames} 場)</p>
+                      <p className="text-gray-300 mb-2">整體勝率: {d.overallWinRate}%</p>
+                      {d.roles.map(r => (
+                        <p key={r.role} style={{ color: ROLE_COLORS[r.role] || '#9ca3af' }}>
+                          {r.role}: {r.winRate}% ({r.games} 場)
+                        </p>
+                      ))}
+                    </div>
+                  );
+                }}
               />
-              <Bar dataKey="avgWinRate" name="平均勝率" radius={[4, 4, 0, 0]}>
-                {roleWrData.map((entry, i) => (
-                  <Cell key={i} fill={entry.fill} />
+              <Bar dataKey="overallWinRate" name="整體勝率" radius={[4, 4, 0, 0]}>
+                {seatData.map((_, i) => (
+                  <Cell key={i} fill={i < 5 ? '#6366f1' : '#8b5cf6'} />
                 ))}
               </Bar>
             </BarChart>

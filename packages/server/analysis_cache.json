@@ -127,41 +127,426 @@
         "winRate": 44.5
       }
     ],
-    "roleWinRateComparison": [
+    "seatPositionWinRates": [
       {
-        "role": "德魯",
-        "avgWinRate": 69.5,
-        "playerCount": 43
+        "seat": "1",
+        "overallWinRate": 50.2,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 45.3,
+            "games": 223
+          },
+          {
+            "role": "娜美",
+            "winRate": 44.9,
+            "games": 196
+          },
+          {
+            "role": "德魯",
+            "winRate": 47.0,
+            "games": 219
+          },
+          {
+            "role": "奧伯",
+            "winRate": 39.8,
+            "games": 211
+          },
+          {
+            "role": "派西",
+            "winRate": 56.7,
+            "games": 203
+          },
+          {
+            "role": "梅林",
+            "winRate": 52.4,
+            "games": 208
+          },
+          {
+            "role": "忠臣",
+            "winRate": 54.0,
+            "games": 886
+          }
+        ]
       },
       {
-        "role": "奧伯",
-        "avgWinRate": 69.4,
-        "playerCount": 38
+        "seat": "2",
+        "overallWinRate": 47.1,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 34.5,
+            "games": 220
+          },
+          {
+            "role": "娜美",
+            "winRate": 39.0,
+            "games": 195
+          },
+          {
+            "role": "德魯",
+            "winRate": 40.6,
+            "games": 212
+          },
+          {
+            "role": "奧伯",
+            "winRate": 47.3,
+            "games": 237
+          },
+          {
+            "role": "派西",
+            "winRate": 49.8,
+            "games": 225
+          },
+          {
+            "role": "梅林",
+            "winRate": 47.9,
+            "games": 211
+          },
+          {
+            "role": "忠臣",
+            "winRate": 53.0,
+            "games": 846
+          }
+        ]
       },
       {
-        "role": "刺客",
-        "avgWinRate": 68.6,
-        "playerCount": 41
+        "seat": "3",
+        "overallWinRate": 48.9,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 39.2,
+            "games": 212
+          },
+          {
+            "role": "娜美",
+            "winRate": 48.6,
+            "games": 212
+          },
+          {
+            "role": "德魯",
+            "winRate": 42.1,
+            "games": 221
+          },
+          {
+            "role": "奧伯",
+            "winRate": 41.9,
+            "games": 241
+          },
+          {
+            "role": "派西",
+            "winRate": 53.7,
+            "games": 201
+          },
+          {
+            "role": "梅林",
+            "winRate": 51.0,
+            "games": 206
+          },
+          {
+            "role": "忠臣",
+            "winRate": 53.5,
+            "games": 853
+          }
+        ]
       },
       {
-        "role": "娜美",
-        "avgWinRate": 68.6,
-        "playerCount": 39
+        "seat": "4",
+        "overallWinRate": 50.6,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 46.8,
+            "games": 190
+          },
+          {
+            "role": "娜美",
+            "winRate": 48.3,
+            "games": 209
+          },
+          {
+            "role": "德魯",
+            "winRate": 43.2,
+            "games": 229
+          },
+          {
+            "role": "奧伯",
+            "winRate": 40.9,
+            "games": 220
+          },
+          {
+            "role": "派西",
+            "winRate": 50.7,
+            "games": 209
+          },
+          {
+            "role": "梅林",
+            "winRate": 57.3,
+            "games": 227
+          },
+          {
+            "role": "忠臣",
+            "winRate": 54.5,
+            "games": 862
+          }
+        ]
       },
       {
-        "role": "忠臣",
-        "avgWinRate": 30.7,
-        "playerCount": 61
+        "seat": "5",
+        "overallWinRate": 59.6,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 60.4,
+            "games": 222
+          },
+          {
+            "role": "娜美",
+            "winRate": 53.4,
+            "games": 208
+          },
+          {
+            "role": "德魯",
+            "winRate": 54.2,
+            "games": 238
+          },
+          {
+            "role": "奧伯",
+            "winRate": 55.3,
+            "games": 228
+          },
+          {
+            "role": "派西",
+            "winRate": 66.8,
+            "games": 187
+          },
+          {
+            "role": "梅林",
+            "winRate": 75.2,
+            "games": 226
+          },
+          {
+            "role": "忠臣",
+            "winRate": 57.8,
+            "games": 837
+          }
+        ]
       },
       {
-        "role": "派西",
-        "avgWinRate": 30.3,
-        "playerCount": 42
+        "seat": "6",
+        "overallWinRate": 50.6,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 47.5,
+            "games": 221
+          },
+          {
+            "role": "娜美",
+            "winRate": 45.6,
+            "games": 239
+          },
+          {
+            "role": "德魯",
+            "winRate": 44.9,
+            "games": 176
+          },
+          {
+            "role": "奧伯",
+            "winRate": 40.8,
+            "games": 211
+          },
+          {
+            "role": "派西",
+            "winRate": 50.5,
+            "games": 218
+          },
+          {
+            "role": "梅林",
+            "winRate": 53.5,
+            "games": 243
+          },
+          {
+            "role": "忠臣",
+            "winRate": 55.7,
+            "games": 838
+          }
+        ]
       },
       {
-        "role": "梅林",
-        "avgWinRate": 29.3,
-        "playerCount": 44
+        "seat": "7",
+        "overallWinRate": 47.6,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 37.1,
+            "games": 229
+          },
+          {
+            "role": "娜美",
+            "winRate": 41.6,
+            "games": 214
+          },
+          {
+            "role": "德魯",
+            "winRate": 42.7,
+            "games": 185
+          },
+          {
+            "role": "奧伯",
+            "winRate": 42.0,
+            "games": 200
+          },
+          {
+            "role": "派西",
+            "winRate": 52.8,
+            "games": 229
+          },
+          {
+            "role": "梅林",
+            "winRate": 48.5,
+            "games": 196
+          },
+          {
+            "role": "忠臣",
+            "winRate": 52.4,
+            "games": 893
+          }
+        ]
+      },
+      {
+        "seat": "8",
+        "overallWinRate": 49.0,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 45.6,
+            "games": 217
+          },
+          {
+            "role": "娜美",
+            "winRate": 38.0,
+            "games": 213
+          },
+          {
+            "role": "德魯",
+            "winRate": 42.9,
+            "games": 231
+          },
+          {
+            "role": "奧伯",
+            "winRate": 44.6,
+            "games": 184
+          },
+          {
+            "role": "派西",
+            "winRate": 49.2,
+            "games": 240
+          },
+          {
+            "role": "梅林",
+            "winRate": 44.0,
+            "games": 218
+          },
+          {
+            "role": "忠臣",
+            "winRate": 56.6,
+            "games": 843
+          }
+        ]
+      },
+      {
+        "seat": "9",
+        "overallWinRate": 49.7,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 41.1,
+            "games": 219
+          },
+          {
+            "role": "娜美",
+            "winRate": 42.9,
+            "games": 233
+          },
+          {
+            "role": "德魯",
+            "winRate": 44.6,
+            "games": 222
+          },
+          {
+            "role": "奧伯",
+            "winRate": 46.9,
+            "games": 213
+          },
+          {
+            "role": "派西",
+            "winRate": 55.7,
+            "games": 210
+          },
+          {
+            "role": "梅林",
+            "winRate": 52.8,
+            "games": 212
+          },
+          {
+            "role": "忠臣",
+            "winRate": 53.5,
+            "games": 837
+          }
+        ]
+      },
+      {
+        "seat": "10",
+        "overallWinRate": 56.2,
+        "totalGames": 2146,
+        "roles": [
+          {
+            "role": "刺客",
+            "winRate": 56.5,
+            "games": 193
+          },
+          {
+            "role": "娜美",
+            "winRate": 49.8,
+            "games": 227
+          },
+          {
+            "role": "德魯",
+            "winRate": 49.3,
+            "games": 213
+          },
+          {
+            "role": "奧伯",
+            "winRate": 52.7,
+            "games": 201
+          },
+          {
+            "role": "派西",
+            "winRate": 63.8,
+            "games": 224
+          },
+          {
+            "role": "梅林",
+            "winRate": 63.8,
+            "games": 199
+          },
+          {
+            "role": "忠臣",
+            "winRate": 56.7,
+            "games": 889
+          }
+        ]
       }
     ]
   },
