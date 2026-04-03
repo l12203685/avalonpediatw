@@ -13,8 +13,9 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json turbo.json package.json ./
 # Copy packages
 COPY packages ./packages
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies (limit memory for Render free tier)
+ENV NODE_OPTIONS="--max-old-space-size=480"
+RUN pnpm install --frozen-lockfile --filter @avalon/shared... --filter @avalon/server...
 
 # Build shared first, then server
 RUN pnpm --filter @avalon/shared build
