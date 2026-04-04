@@ -373,7 +373,18 @@ function deriveBadgesFromStats(stats: PlayerStats, elo: number): string[] {
 export async function getFirestoreUserProfile(playerId: string): Promise<UserProfile | null> {
   // Try Firestore first (has per-game history)
   const players = await getAggregated();
-  const p = players.get(playerId);
+  let p = players.get(playerId);
+
+  // Fallback: search by display name (JWT sub may differ from Firestore playerId)
+  if (!p) {
+    const lower = playerId.toLowerCase();
+    for (const [, candidate] of players) {
+      if (candidate.displayName.toLowerCase() === lower) {
+        p = candidate;
+        break;
+      }
+    }
+  }
   if (p) {
     const recent = p.gameHistory
       .slice(-20)
