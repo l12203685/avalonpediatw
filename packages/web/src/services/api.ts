@@ -342,6 +342,40 @@ export async function fetchAnalysisSeatOrder(): Promise<SeatOrderData> {
   return analysisApiFetch<SeatOrderData>('/seat-order');
 }
 
+// ── Captain Analysis API ─────────────────────────────────────────────────────
+
+export interface CaptainMissionEntry {
+  mission: number;
+  redCaptainRate: number;
+  blueCaptainRate: number;
+  games: number;
+}
+
+export interface CaptainFactionVsOutcome {
+  captainFaction: string;
+  missionResult: 'pass' | 'fail';
+  count: number;
+  percentage: number;
+}
+
+export interface CaptainMissionGameWinRate {
+  captainFaction: string;
+  missionResult: 'pass' | 'fail';
+  totalMissions: number;
+  redGameWinRate: number;
+  blueGameWinRate: number;
+}
+
+export interface CaptainAnalysisData {
+  perMission: CaptainMissionEntry[];
+  captainFactionVsOutcome: CaptainFactionVsOutcome[];
+  captainMissionGameWinRates: CaptainMissionGameWinRate[];
+}
+
+export async function fetchAnalysisCaptain(): Promise<CaptainAnalysisData> {
+  return analysisApiFetch<CaptainAnalysisData>('/captain');
+}
+
 // ── Wiki API ─────────────────────────────────────────────────────────────────
 
 export interface WikiArticleApi {

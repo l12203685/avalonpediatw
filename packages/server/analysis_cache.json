@@ -16075,5 +16075,95 @@
     ],
     "totalGames": 2146,
     "overallRedWinRate": 45.2
+  },
+  "captainAnalysis": {
+    "perMission": [
+      {
+        "mission": 1,
+        "redCaptainRate": 35.6,
+        "blueCaptainRate": 64.4,
+        "games": 2146
+      },
+      {
+        "mission": 2,
+        "redCaptainRate": 28.2,
+        "blueCaptainRate": 71.8,
+        "games": 2146
+      },
+      {
+        "mission": 3,
+        "redCaptainRate": 24.6,
+        "blueCaptainRate": 75.4,
+        "games": 2142
+      },
+      {
+        "mission": 4,
+        "redCaptainRate": 19.2,
+        "blueCaptainRate": 80.8,
+        "games": 1289
+      },
+      {
+        "mission": 5,
+        "redCaptainRate": 10.0,
+        "blueCaptainRate": 90.0,
+        "games": 687
+      }
+    ],
+    "captainFactionVsOutcome": [
+      {
+        "captainFaction": "紅方",
+        "missionResult": "fail",
+        "count": 1860,
+        "percentage": 84.0
+      },
+      {
+        "captainFaction": "紅方",
+        "missionResult": "pass",
+        "count": 353,
+        "percentage": 16.0
+      },
+      {
+        "captainFaction": "藍方",
+        "missionResult": "fail",
+        "count": 2740,
+        "percentage": 44.2
+      },
+      {
+        "captainFaction": "藍方",
+        "missionResult": "pass",
+        "count": 3457,
+        "percentage": 55.8
+      }
+    ],
+    "captainMissionGameWinRates": [
+      {
+        "captainFaction": "紅方",
+        "missionResult": "fail",
+        "totalMissions": 1860,
+        "redGameWinRate": 66.0,
+        "blueGameWinRate": 34.0
+      },
+      {
+        "captainFaction": "紅方",
+        "missionResult": "pass",
+        "totalMissions": 353,
+        "redGameWinRate": 45.0,
+        "blueGameWinRate": 55.0
+      },
+      {
+        "captainFaction": "藍方",
+        "missionResult": "fail",
+        "totalMissions": 2740,
+        "redGameWinRate": 62.2,
+        "blueGameWinRate": 37.8
+      },
+      {
+        "captainFaction": "藍方",
+        "missionResult": "pass",
+        "totalMissions": 3457,
+        "redGameWinRate": 10.8,
+        "blueGameWinRate": 89.2
+      }
+    ]
   }
 }

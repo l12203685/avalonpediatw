@@ -11,6 +11,7 @@ Usage:
 
 import json
 import math
+import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -115,6 +116,7 @@ class GameRow:
         "lake3_holder_faction", "lake3_target_faction",
         "lake3_holder_role", "lake3_target_role",
         "game_state", "rounds", "round_results",
+        "text_record",
     )
 
 
@@ -161,6 +163,7 @@ def load_game_log(sh: gspread.Spreadsheet) -> list[GameRow]:
         g.id = gid
         g.config = config
         g.seat_roles = decode_config(config)
+        g.text_record = col(row, "文字記錄")
         g.outcome = col(row, "結果").strip()
         g.red_win = g.outcome == "三紅"
         g.blue_win = g.outcome in ("三藍死", "三藍活")
@@ -1086,6 +1089,176 @@ def compute_player_details(players: list[dict]) -> dict[str, dict]:
 
 
 # ---------------------------------------------------------------------------
+# Captain Analysis
+# ---------------------------------------------------------------------------
+
+_MISSION_RESULT_RE = re.compile(r'^[oxOX]+$')
+_LAKE_RE = re.compile(r'^\d+>\d+')
+
+
+def _parse_captain_per_mission(text_record: str) -> list[str | None]:
+    """Return captain seat char for each completed mission in a game record.
+
+    The captain is the first digit of the last team proposal line immediately
+    before a mission result line (ooo / ooox / OOX etc).  Lake lines (N>M)
+    reset the current candidate and are not treated as proposals.
+
+    Returns a list of up to 5 elements; an element is None when no proposal
+    precedes the corresponding result line.
+    """
+    missions: list[str | None] = []
+    last_proposal_captain: str | None = None
+
+    for raw_line in re.split(r'\r?\n', text_record.strip()):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if _LAKE_RE.match(line):
+            last_proposal_captain = None
+            continue
+        if _MISSION_RESULT_RE.match(line):
+            missions.append(last_proposal_captain)
+            last_proposal_captain = None
+            continue
+        if line[0].isdigit():
+            last_proposal_captain = line[0]
+
+    return missions
+
+
+def compute_captain_analysis(games: list[GameRow]) -> dict:
+    """Compute captain faction vs mission outcome statistics.
+
+    For each game we parse the 文字記錄 (text_record stored in GameRow) and
+    identify which seat captained each mission.  We then map the seat to its
+    role and faction (red / blue).
+
+    Two output tables:
+    - perMission: for missions 1-5, what fraction of captains were red vs blue
+    - captainFactionVsOutcome: for each (captainFaction, missionResult) combo,
+      count and percentage of occurrences
+    """
+    # Per-mission counters: mission_idx (0-4) -> {"red": n, "blue": n, "total": n}
+    per_mission: list[dict[str, int]] = [
+        {"red": 0, "blue": 0, "total": 0} for _ in range(5)
+    ]
+
+    # Faction x outcome counters
+    # keys: (faction_str, mission_pass_bool) -> count
+    faction_outcome: dict[tuple[str, bool], int] = defaultdict(int)
+    faction_outcome_total: dict[str, int] = defaultdict(int)
+
+    for g in games:
+        # text_record must be fetched from the raw sheet; GameRow doesn't store
+        # it directly.  We attach it in load_game_log below via a new attribute.
+        text_record: str = getattr(g, "text_record", "") or ""
+        if not text_record:
+            continue
+
+        captains = _parse_captain_per_mission(text_record)
+
+        for m_idx, captain_seat in enumerate(captains):
+            if m_idx >= 5:
+                break
+            if captain_seat is None:
+                continue
+
+            role = g.seat_roles.get(captain_seat, "忠臣")
+            faction = role_faction(role)
+            if not faction:
+                faction = "藍方"  # 忠臣 → blue
+
+            # Determine mission pass/fail from missions list
+            mission_data = next(
+                (m for m in g.missions if m["round"] == m_idx + 1), None
+            )
+            if mission_data is None:
+                continue
+            passed = mission_data["fails"] == 0
+
+            per_mission[m_idx]["total"] += 1
+            if faction == "紅方":
+                per_mission[m_idx]["red"] += 1
+            else:
+                per_mission[m_idx]["blue"] += 1
+
+            faction_outcome[(faction, passed)] += 1
+            faction_outcome_total[faction] += 1
+
+    # Build perMission output
+    per_mission_out: list[dict] = []
+    for m_idx, counts in enumerate(per_mission):
+        total = counts["total"]
+        if total == 0:
+            continue
+        per_mission_out.append({
+            "mission": m_idx + 1,
+            "redCaptainRate": rnd1(counts["red"] / total * 100),
+            "blueCaptainRate": rnd1(counts["blue"] / total * 100),
+            "games": total,
+        })
+
+    # Build captainFactionVsOutcome output
+    faction_vs_outcome_out: list[dict] = []
+    for (faction, passed), count in sorted(faction_outcome.items()):
+        total_for_faction = faction_outcome_total[faction]
+        faction_vs_outcome_out.append({
+            "captainFaction": faction,
+            "missionResult": "pass" if passed else "fail",
+            "count": count,
+            "percentage": rnd1(count / total_for_faction * 100) if total_for_faction > 0 else 0.0,
+        })
+
+    # Win-rate when red/blue captain leads a mission that passes vs fails
+    # Extra cut: among games where red captain led, how often did blue win?
+    # Group by faction -> outcome -> game outcome
+    faction_mission_game: dict[tuple[str, bool], dict[str, int]] = defaultdict(
+        lambda: {"red_game_win": 0, "blue_game_win": 0, "total": 0}
+    )
+    for g in games:
+        text_record = getattr(g, "text_record", "") or ""
+        if not text_record:
+            continue
+        captains = _parse_captain_per_mission(text_record)
+        for m_idx, captain_seat in enumerate(captains):
+            if m_idx >= 5 or captain_seat is None:
+                continue
+            role = g.seat_roles.get(captain_seat, "忠臣")
+            faction = role_faction(role) or "藍方"
+            mission_data = next(
+                (m for m in g.missions if m["round"] == m_idx + 1), None
+            )
+            if mission_data is None:
+                continue
+            passed = mission_data["fails"] == 0
+            entry = faction_mission_game[(faction, passed)]
+            entry["total"] += 1
+            if g.red_win:
+                entry["red_game_win"] += 1
+            if g.blue_win:
+                entry["blue_game_win"] += 1
+
+    captain_mission_game_win_rates: list[dict] = []
+    for (faction, passed), entry in sorted(faction_mission_game.items()):
+        total = entry["total"]
+        if total == 0:
+            continue
+        captain_mission_game_win_rates.append({
+            "captainFaction": faction,
+            "missionResult": "pass" if passed else "fail",
+            "totalMissions": total,
+            "redGameWinRate": rnd1(entry["red_game_win"] / total * 100),
+            "blueGameWinRate": rnd1(entry["blue_game_win"] / total * 100),
+        })
+
+    return {
+        "perMission": per_mission_out,
+        "captainFactionVsOutcome": faction_vs_outcome_out,
+        "captainMissionGameWinRates": captain_mission_game_win_rates,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -1115,6 +1288,7 @@ def main() -> None:
         "lake": compute_lake(games),
         "rounds": compute_rounds(games),
         "seatOrder": compute_seat_order(games),
+        "captainAnalysis": compute_captain_analysis(games),
     }
 
     print(f"Writing to {OUTPUT_PATH}...")

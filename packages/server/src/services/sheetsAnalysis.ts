@@ -85,6 +85,34 @@ export interface SeatOrderData {
   overallRedWinRate: number;
 }
 
+export interface CaptainMissionEntry {
+  mission: number;
+  redCaptainRate: number;
+  blueCaptainRate: number;
+  games: number;
+}
+
+export interface CaptainFactionVsOutcome {
+  captainFaction: string;
+  missionResult: 'pass' | 'fail';
+  count: number;
+  percentage: number;
+}
+
+export interface CaptainMissionGameWinRate {
+  captainFaction: string;
+  missionResult: 'pass' | 'fail';
+  totalMissions: number;
+  redGameWinRate: number;
+  blueGameWinRate: number;
+}
+
+export interface CaptainAnalysisData {
+  perMission: CaptainMissionEntry[];
+  captainFactionVsOutcome: CaptainFactionVsOutcome[];
+  captainMissionGameWinRates: CaptainMissionGameWinRate[];
+}
+
 interface AnalysisCache {
   overview: OverviewData;
   players: { players: PlayerStats[]; total: number };
@@ -118,6 +146,7 @@ interface AnalysisCache {
     gameStates: Array<{ state: string; games: number; redWinRate: number }>;
   };
   seatOrder?: SeatOrderData;
+  captainAnalysis?: CaptainAnalysisData;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,6 +216,14 @@ export async function getSeatOrderAnalysis(): Promise<SeatOrderData> {
     return { permutations: [], totalGames: 0, overallRedWinRate: 0 };
   }
   return c.seatOrder;
+}
+
+export async function getCaptainAnalysis(): Promise<CaptainAnalysisData> {
+  const c = loadCache();
+  if (!c.captainAnalysis) {
+    return { perMission: [], captainFactionVsOutcome: [], captainMissionGameWinRates: [] };
+  }
+  return c.captainAnalysis;
 }
 
 /** No-op: cache is static, no runtime invalidation needed. */

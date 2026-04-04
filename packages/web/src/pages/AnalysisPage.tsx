@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, BarChart3, Users, Target, Swords, Map, Compass, Droplets, Shuffle } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, Target, Swords, Map, Compass, Droplets, Shuffle, Crown } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import OverviewPanel from '../components/analysis/OverviewPanel';
 import PlayerRadarChart from '../components/analysis/PlayerRadarChart';
@@ -10,8 +10,9 @@ import MissionAnalysis from '../components/analysis/MissionAnalysis';
 import RoundsAnalysis from '../components/analysis/RoundsAnalysis';
 import LakeAnalysis from '../components/analysis/LakeAnalysis';
 import SeatOrderAnalysis from '../components/analysis/SeatOrderAnalysis';
+import CaptainAnalysis from '../components/analysis/CaptainAnalysis';
 
-type Tab = 'overview' | 'player' | 'seat' | 'chemistry' | 'mission' | 'rounds' | 'lake' | 'seatOrder';
+type Tab = 'overview' | 'player' | 'seat' | 'chemistry' | 'mission' | 'rounds' | 'lake' | 'seatOrder' | 'captain';
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof BarChart3 }> = [
   { id: 'overview',   label: '總覽',       icon: BarChart3 },
@@ -22,6 +23,7 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof BarChart3 }> = [
   { id: 'mission',    label: '任務分析',   icon: Swords },
   { id: 'rounds',     label: '回合分析',   icon: Compass },
   { id: 'lake',       label: '湖中女神',   icon: Droplets },
+  { id: 'captain',    label: '隊長分析',   icon: Crown },
 ];
 
 export default function AnalysisPage(): JSX.Element {
@@ -86,6 +88,7 @@ export default function AnalysisPage(): JSX.Element {
             {activeTab === 'rounds' && <RoundsAnalysis />}
             {activeTab === 'lake' && <LakeAnalysis />}
             {activeTab === 'seatOrder' && <SeatOrderAnalysis />}
+            {activeTab === 'captain' && <CaptainAnalysis />}
           </motion.div>
         </AnimatePresence>
       </div>

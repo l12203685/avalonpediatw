@@ -16,6 +16,7 @@ import {
   getLakeAnalysis,
   getRoundsAnalysis,
   getSeatOrderAnalysis,
+  getCaptainAnalysis,
   invalidateCache,
   isSheetsReady,
 } from '../services/sheetsAnalysis';
@@ -196,6 +197,22 @@ router.get('/seat-order', limiter, async (_req: Request, res: Response) => {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/seat-order]', msg);
     return fail(res, 500, 'Failed to load seat order analysis');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/captain
+// Captain faction vs mission outcome analysis
+// ---------------------------------------------------------------------------
+router.get('/captain', limiter, async (_req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const captainData = await getCaptainAnalysis();
+    return ok(res, captainData);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/captain]', msg);
+    return fail(res, 500, 'Failed to load captain analysis');
   }
 });
 
