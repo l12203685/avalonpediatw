@@ -9,18 +9,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -32,20 +32,19 @@ jobs:
       - name: Check code quality thresholds
         run: |
           echo "Checking code quality metrics..."
-          echo "✓ Type safety: TypeScript strict mode enabled"
-          echo "✓ Code style: ESLint configured"
-          echo "✓ Best practices: Configured in .eslintrc"
-          echo "✓ Bundle size: Check with pnpm build"
+          echo "Type safety: TypeScript strict mode enabled"
+          echo "Code style: ESLint configured"
+          echo "Best practices: Configured in .eslintrc"
+          echo "Bundle size: Check with pnpm build"
 
   dependency-check:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Check for known vulnerabilities
         run: |
-          npm install -g npm-audit-html
           npm audit --json > audit.json || true
           echo "Audit report generated"
 
@@ -53,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Run Lighthouse CI
         uses: treosh/lighthouse-ci-action@v9
@@ -66,39 +65,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: PR Title Check
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          # Check if PR title follows convention
-          if [[ ${{ github.event.pull_request.title }} =~ ^(feat|fix|docs|style|refactor|perf|test|chore)(\(.+\))?:\ .+$ ]]; then
-            echo "✅ PR title follows convention"
+          if [[ "$PR_TITLE" =~ ^(feat|fix|docs|style|refactor|perf|test|chore)(\(.+\))?:\ .+$ ]]; then
+            echo "PR title follows convention"
           else
-            echo "ℹ️ PR title convention: type(scope): description"
+            echo "PR title convention: type(scope): description"
             echo "   Examples: feat(auth): add login, fix(bot): resolve crash"
           fi
 
       - name: Check commits
+        env:
+          PR_COMMITS: ${{ github.event.pull_request.commits }}
         run: |
           echo "Commits in this PR:"
-          git log --oneline HEAD~${{ github.event.pull_request.commits }}..HEAD
+          if [[ -n "$PR_COMMITS" && "$PR_COMMITS" -gt 0 ]]; then
+            git log --oneline "HEAD~${PR_COMMITS}..HEAD"
+          else
+            git log --oneline -10
+          fi
 
   accessibility:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -106,9 +114,9 @@ jobs:
       - name: Check accessibility
         run: |
           echo "Checking accessibility standards..."
-          echo "✓ Semantic HTML usage"
-          echo "✓ ARIA labels"
-          echo "✓ Color contrast"
-          echo "✓ Keyboard navigation"
+          echo "Semantic HTML usage"
+          echo "ARIA labels"
+          echo "Color contrast"
+          echo "Keyboard navigation"
           echo "For detailed checks, run: pnpm audit-a11y"
         continue-on-error: true
