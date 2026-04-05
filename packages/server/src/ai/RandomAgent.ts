@@ -60,18 +60,7 @@ export class RandomAgent implements AvalonAgent {
   }
 
   private getPlayerIds(obs: PlayerObservation): string[] {
-    // Reconstruct player ID list from observations
-    const ids = new Set<string>();
-    ids.add(obs.myPlayerId);
-    ids.add(obs.currentLeader);
-    obs.knownEvils.forEach(id => ids.add(id));
-    obs.proposedTeam.forEach(id => ids.add(id));
-    obs.voteHistory.forEach(v => {
-      ids.add(v.leader);
-      v.team.forEach(id => ids.add(id));
-    });
-    obs.questHistory.forEach(q => q.team.forEach(id => ids.add(id)));
-    return Array.from(ids);
+    return obs.allPlayerIds;
   }
 
   private getTeamSize(playerCount: number, round: number): number {

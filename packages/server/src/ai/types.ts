@@ -17,6 +17,7 @@ export interface PlayerObservation {
   myRole:        Role;
   myTeam:        'good' | 'evil';
   playerCount:   number;
+  allPlayerIds:  string[];    // All player IDs in the game (always complete)
   knownEvils:    string[];    // IDs of players I know are evil (my role's knowledge)
   knownWizards?: string[];   // IDs that look like Merlin/Morgana to Percival (can't tell which)
 

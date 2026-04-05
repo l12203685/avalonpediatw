@@ -312,16 +312,7 @@ export class HeuristicAgent implements AvalonAgent {
   // ── Helpers ──────────────────────────────────────────────────
 
   private getPlayerIds(obs: PlayerObservation): string[] {
-    const ids = new Set<string>([obs.myPlayerId, obs.currentLeader]);
-    obs.knownEvils.forEach(id => ids.add(id));
-    obs.proposedTeam.forEach(id => ids.add(id));
-    obs.voteHistory.forEach((v: VoteRecord) => {
-      ids.add(v.leader);
-      v.team.forEach(id => ids.add(id));
-      Object.keys(v.votes).forEach(id => ids.add(id));
-    });
-    obs.questHistory.forEach(q => q.team.forEach(id => ids.add(id)));
-    return Array.from(ids);
+    return obs.allPlayerIds;
   }
 
   private getTeamSize(playerCount: number, round: number): number {

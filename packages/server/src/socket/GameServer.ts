@@ -1010,6 +1010,7 @@ export class GameServer {
       myRole,
       myTeam,
       playerCount:   Object.keys(r.players).length,
+      allPlayerIds:  Object.keys(r.players),
       knownEvils,
       knownWizards,
       currentRound:  r.currentRound,

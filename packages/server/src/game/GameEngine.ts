@@ -605,6 +605,21 @@ export class GameEngine {
   }
 
   /**
+   * Force-advance the Lady of the Lake phase immediately (skips the 3-second display delay).
+   * Used by SelfPlayEngine to avoid waiting for the timeout in automated games.
+   */
+  public completeLadyPhase(): void {
+    if (this.room.state !== 'lady_of_the_lake') return;
+    if (this.ladyOfTheLakeTimeout) {
+      clearTimeout(this.ladyOfTheLakeTimeout);
+      this.ladyOfTheLakeTimeout = null;
+    }
+    this.room.ladyOfTheLakeTarget = undefined;
+    this.room.ladyOfTheLakeResult = undefined;
+    this.advanceToNextRound();
+  }
+
+  /**
    * 開始討論階段（好人贏得3次任務後）
    */
   private startDiscussionPhase(): void {

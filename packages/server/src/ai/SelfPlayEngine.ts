@@ -154,6 +154,37 @@ export class SelfPlayEngine {
         if ((room.state as string) === 'ended') break;
       }
 
+      // ── Lady of the Lake phase ─────────────────────────────
+      if (room.state === 'lady_of_the_lake') {
+        const holderId  = room.ladyOfTheLakeHolder!;
+        const used      = new Set(room.ladyOfTheLakeUsed ?? []);
+        const holder    = agents.find(a => a.agentId === holderId);
+        const validTargets = Object.keys(room.players).filter(id => id !== holderId && !used.has(id));
+        if (holder && validTargets.length > 0) {
+          // Simple heuristic: good holders pick their most suspicious player, evil picks randomly
+          const holderTeam = teamMap.get(holderId);
+          let targetId: string;
+          if (holderTeam === 'good') {
+            // Use HeuristicAgent suspicion by checking knownEvils fallback to random
+            const obs = this.buildObservation(holderId, room, roleMap, teamMap, voteHistory, questHistory);
+            // Prefer known evils not yet used; otherwise random from valid
+            const knownEvilTarget = obs.knownEvils.find(id => validTargets.includes(id));
+            targetId = knownEvilTarget ?? validTargets[Math.floor(Math.random() * validTargets.length)];
+          } else {
+            // Evil: pick random to avoid revealing strategy
+            targetId = validTargets[Math.floor(Math.random() * validTargets.length)];
+          }
+          engine.submitLadyOfTheLakeTarget(holderId, targetId);
+          // Skip the 3-second display delay used in real-time games
+          engine.completeLadyPhase();
+        } else {
+          // No valid targets — force-advance to avoid hang
+          engine.completeLadyPhase();
+        }
+        if ((room.state as string) === 'ended') break;
+        continue;
+      }
+
       // ── Assassination phase ─────────────────────────────────
       if (room.state === 'discussion') {
         const assassin = agents.find(a => roleMap.get(a.agentId) === 'assassin');
@@ -247,6 +278,7 @@ export class SelfPlayEngine {
       myRole,
       myTeam,
       playerCount:   Object.keys(room.players).length,
+      allPlayerIds:  Object.keys(room.players),
       knownEvils,
       currentRound:  room.currentRound,
       currentLeader: this.getCurrentLeader(room),
