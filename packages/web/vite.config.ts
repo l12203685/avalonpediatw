@@ -4,8 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  // GitHub Pages 部署路徑；本地開發用 '/'
-  base: process.env.GITHUB_ACTIONS ? '/avalonpediatw/' : '/',
+  base: '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
