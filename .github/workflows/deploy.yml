@@ -67,6 +67,7 @@ jobs:
         run: pnpm --filter @avalon/web build
         env:
           VITE_SERVER_URL: https://avalonpediatw.onrender.com
+          VITE_BASE: /avalonpediatw/
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v3
