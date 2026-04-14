@@ -1,0 +1,13 @@
+# Cloudflare Pages — redirects for avalonpediatw.com
+# Docs: https://developers.cloudflare.com/pages/platform/redirects/
+# Syntax: <from> <to> <status>
+# Evaluated top-to-bottom; first match wins.
+
+# Canonical host: force apex (avalonpediatw.com), drop www.
+https://www.avalonpediatw.com/*  https://avalonpediatw.com/:splat  301
+
+# Legacy GitHub Pages paths (pre-M0.4) → new root
+/avalonpediatw/*  /:splat  301
+
+# 404 fallback handled by Astro's built-in 404.astro; no SPA rewrite needed
+# for a static site. Add per-page redirects below as content moves.

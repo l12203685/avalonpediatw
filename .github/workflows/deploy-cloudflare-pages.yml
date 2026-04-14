@@ -1,0 +1,66 @@
+name: Deploy Wiki to Cloudflare Pages
+
+# Triggers only on wiki content changes. The existing game-frontend deploy
+# (deploy.yml → GitHub Pages) is NOT touched by this workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/wiki/**'
+      - 'content/**'
+      - 'wrangler.toml'
+      - '.github/workflows/deploy-cloudflare-pages.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/wiki/**'
+      - 'content/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+  pull-requests: write   # needed for PR preview URL comment
+
+jobs:
+  deploy:
+    name: Build & Deploy to Cloudflare Pages
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build wiki (Astro)
+        # M1 Astro scaffold will provide this script. Until then, the step
+        # no-ops cleanly if apps/wiki isn't present yet.
+        run: |
+          if [ -d "apps/wiki" ]; then
+            pnpm --filter @avalon/wiki build
+          else
+            echo "apps/wiki not yet scaffolded (M1 pending) — skipping build."
+            mkdir -p apps/wiki/dist
+            echo "<!doctype html><title>avalonpediatw — coming soon</title>" > apps/wiki/dist/index.html
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: avalonpediatw
+          directory: apps/wiki/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.head_ref || github.ref_name }}
