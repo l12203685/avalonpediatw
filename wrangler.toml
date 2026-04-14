@@ -1,0 +1,31 @@
+# Cloudflare Pages project config — avalonpediatw.com
+# Created for M0.4 (2026-04-14). Do not run `wrangler deploy` until Edward
+# has created the Cloudflare account + linked API token (see docs/DEPLOY_CLOUDFLARE.md).
+#
+# Rationale: Pages projects can be configured either via the CF dashboard OR
+# via a checked-in wrangler.toml. Keeping it here makes infra reproducible
+# and reviewable in git.
+
+name = "avalonpediatw"
+compatibility_date = "2026-04-14"
+pages_build_output_dir = "apps/wiki/dist"
+
+# When M0.5 R2 bucket lands, uncomment + fill account_id after Edward creates
+# the account. Binding exposes the bucket to Pages Functions as env.MEDIA.
+#
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "avalonpediatw-media"
+
+# Production branch (CF Pages calls this the "production branch").
+# All pushes to main auto-deploy to avalonpediatw.com; all other branches
+# get preview deployments at <hash>.avalonpediatw.pages.dev.
+[env.production]
+name = "avalonpediatw"
+
+# NOTE on output dir:
+# - Wiki site (Astro) target is `apps/wiki/dist` per docs/FULL_PLATFORM_PLAN.md.
+# - The existing `packages/web/dist` (game frontend) stays on its own Firebase/
+#   Render pipeline and is NOT deployed to CF Pages by this config.
+# - If M1 (Astro scaffold) lands under a different path, update
+#   `pages_build_output_dir` above and the workflow `directory:` input.
