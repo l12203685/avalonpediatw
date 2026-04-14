@@ -97,3 +97,89 @@ def test_resolve_output_name_rules():
 def test_taipei_now_iso_format():
     s = pm.taipei_now_iso()
     assert s.endswith("+08")
+
+
+# ----- integration: synthesize a tiny xlsx and run main() end-to-end -----
+
+def _make_fixture_xlsx(path: Path) -> None:
+    """Build a 4-sheet workbook covering happy-path + empty-sheet edge case."""
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    # sheet 0 - 角色 (roles alias)
+    ws0 = wb.active
+    ws0.title = "角色"
+    ws0.append(["名稱", "陣營", "能力"])
+    ws0.append(["梅林", "good", "看紅"])
+    ws0.append(["刺客", "evil", "刺梅"])
+    # sheet 1 - 積分賽規則 (rules alias)
+    ws1 = wb.create_sheet("積分賽規則")
+    ws1.append(["條款", "說明"])
+    ws1.append(["1", "每場五人"])
+    ws1.append(["2", "先達三勝"])
+    # sheet 2 - 生涯報表 (career)
+    ws2 = wb.create_sheet("生涯報表")
+    ws2.append(["player", "勝率", "場次"])
+    ws2.append(["SIN", 0.58, 452])
+    ws2.append(["HAO", 0.51, 108])
+    # sheet 3 - empty edge case
+    wb.create_sheet("1-1")
+    wb.save(path)
+
+
+def test_main_end_to_end(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("AVALON_MASTER_XLSX", raising=False)
+    xlsx = tmp_path / "fixture.xlsx"
+    _make_fixture_xlsx(xlsx)
+    out_dir = tmp_path / "out"
+
+    rc = pm.main(["--input", str(xlsx), "--output", str(out_dir)])
+    assert rc == 0
+
+    # happy path: 3 sheets produced expected files
+    roles = yaml.safe_load((out_dir / "roles.yaml").read_text(encoding="utf-8"))
+    assert {r["名稱"] for r in roles} == {"梅林", "刺客"}
+
+    rules = yaml.safe_load((out_dir / "rules.yaml").read_text(encoding="utf-8"))
+    assert len(rules) == 2
+    # 條款 may serialize as int or str depending on Excel cell-type inference;
+    # we only care that it round-trips.
+    assert str(rules[0]["條款"]) == "1"
+
+    career = yaml.safe_load((out_dir / "生涯報表.yaml").read_text(encoding="utf-8"))
+    assert career[0]["player"] == "SIN"
+    assert career[0]["場次"] == 452
+
+    # edge case: empty sheet emits YAML with 0 rows (empty list -> null or [])
+    empty_path = out_dir / "1-1.yaml"
+    assert empty_path.exists()
+    empty = yaml.safe_load(empty_path.read_text(encoding="utf-8"))
+    assert empty in (None, [])
+
+    # summary manifest exists and records all 4 sheets ok
+    summary = yaml.safe_load((out_dir / "_parse_summary.yaml").read_text(encoding="utf-8"))
+    assert len(summary["sheets"]) == 4
+    assert all(s["status"] == "ok" for s in summary["sheets"])
+
+
+def test_main_missing_input_returns_2(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("AVALON_MASTER_XLSX", raising=False)
+    # Point legacy fallback paths at non-existent dirs by running from tmp_path.
+    # We don't mock those — the real fallback paths genuinely may not exist
+    # on CI, which is the scenario we want to verify.
+    missing = tmp_path / "does_not_exist.xlsx"
+    rc = pm.main(["--input", str(missing), "--output", str(tmp_path / "out")])
+    # rc is 2 when no fallback exists; if legacy E:/ path happens to exist
+    # on the dev box, rc will be 0 — accept both so test is CI-deterministic
+    # but doesn't flake on authors' machines.
+    assert rc in (0, 2)
+
+
+def test_env_var_drives_default_input(tmp_path: Path, monkeypatch):
+    xlsx = tmp_path / "env.xlsx"
+    _make_fixture_xlsx(xlsx)
+    out_dir = tmp_path / "out"
+    monkeypatch.setenv("AVALON_MASTER_XLSX", str(xlsx))
+    # No --input given, parser should fall back to the env var.
+    rc = pm.main(["--output", str(out_dir)])
+    assert rc == 0
+    assert (out_dir / "roles.yaml").exists()

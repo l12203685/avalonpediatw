@@ -41,3 +41,13 @@ Thumbs.db
 
 # Turbo
 .turbo/
+
+# Master Excel source (kept out of repo; see docs/parser.md)
+data/master.xlsx
+/阿瓦隆百科.xlsx
+*.xlsx
+
+# Python bytecode (parser scripts)
+__pycache__/
+*.pyc
+

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import re
 import sys
 import traceback
@@ -220,20 +221,44 @@ def resolve_output_name(sheet_name: str, used_names: set[str]) -> str:
     return base
 
 
-def find_fallback_input() -> Path | None:
-    candidates = [
-        Path(r"E:/阿瓦隆百科/阿瓦隆百科.xlsx"),
-        Path(r"C:/Users/admin/workspace/avalonpediatw/阿瓦隆百科.xlsx"),
-    ]
+ENV_INPUT_VAR = "AVALON_MASTER_XLSX"
+
+
+def find_fallback_input(log: logging.Logger | None = None) -> Path | None:
+    """Look for the master workbook in well-known locations.
+
+    Precedence (highest first):
+      1. `$AVALON_MASTER_XLSX` env var
+      2. `data/master.xlsx` (in-repo staging path, gitignored)
+      3. Legacy authoring paths — only used when they exist; no hard dependency.
+    """
+    candidates: list[Path] = []
+    env = os.environ.get(ENV_INPUT_VAR)
+    if env:
+        candidates.append(Path(env))
+    repo_root = Path(__file__).resolve().parent.parent
+    candidates.append(repo_root / "data" / "master.xlsx")
+    # Legacy authoring paths kept for local dev convenience only.
+    candidates.append(Path(r"E:/阿瓦隆百科/阿瓦隆百科.xlsx"))
+    candidates.append(Path(r"C:/Users/admin/workspace/avalonpediatw/阿瓦隆百科.xlsx"))
     for c in candidates:
         if c.exists():
+            if log is not None:
+                log.debug("  candidate match: %s", c)
             return c
     return None
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--input", default=r"E:/阿瓦隆百科/阿瓦隆百科.xlsx")
+    ap.add_argument(
+        "--input",
+        default=os.environ.get(ENV_INPUT_VAR),
+        help=(
+            "Path to master xlsx. Defaults to $AVALON_MASTER_XLSX, "
+            "then data/master.xlsx, then legacy authoring paths."
+        ),
+    )
     ap.add_argument("--output", default="content/_data/")
     ap.add_argument("--verbose", "-v", action="store_true")
     ap.add_argument("--no-merge-fill", action="store_true",
@@ -242,18 +267,20 @@ def main(argv: list[str] | None = None) -> int:
 
     log = build_logger(args.verbose)
 
-    xlsx = Path(args.input)
-    if not xlsx.exists():
-        alt = find_fallback_input()
+    xlsx: Path | None = Path(args.input) if args.input else None
+    if xlsx is None or not xlsx.exists():
+        alt = find_fallback_input(log)
         if alt is None:
-            log.error("Input not found: %s", xlsx)
-            try:
-                for p in Path("E:/").iterdir():
-                    log.error("  E:/ entry: %s", p.name)
-            except Exception:
-                pass
+            log.error(
+                "Input xlsx not found. Set $%s or pass --input PATH "
+                "(also tried data/master.xlsx and legacy authoring paths).",
+                ENV_INPUT_VAR,
+            )
             return 2
-        log.warning("Input %s missing; using fallback %s", xlsx, alt)
+        if xlsx is not None:
+            log.warning("Input %s missing; using fallback %s", xlsx, alt)
+        else:
+            log.info("Using input from fallback: %s", alt)
         xlsx = alt
 
     out_dir = Path(args.output)

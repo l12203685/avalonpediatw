@@ -1,0 +1,74 @@
+name: Master Parser
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "scripts/parse_master.py"
+      - "scripts/test_parse_master.py"
+      - "scripts/requirements-parser.txt"
+      - "content/_data/**"
+      - "content/schemas/**"
+      - ".github/workflows/parser.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/parse_master.py"
+      - "content/_data/**"
+
+jobs:
+  pytest:
+    name: pytest parser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install parser deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-parser.txt
+
+      - name: Run pytest
+        working-directory: scripts
+        run: pytest -v --tb=short
+
+  validate-yaml:
+    name: validate committed YAML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install yaml
+        run: pip install "pyyaml>=6.0"
+
+      - name: Validate every content/_data/*.yaml is loadable
+        run: |
+          python - <<'PY'
+          import sys, yaml, pathlib
+          data = pathlib.Path("content/_data")
+          if not data.exists():
+              print("no content/_data — skipping")
+              sys.exit(0)
+          bad = []
+          for p in sorted(data.glob("*.yaml")):
+              try:
+                  yaml.safe_load(p.read_text(encoding="utf-8"))
+              except Exception as e:
+                  bad.append((p.name, str(e)))
+          if bad:
+              for n, e in bad:
+                  print(f"INVALID {n}: {e}")
+              sys.exit(1)
+          print(f"ok — {len(list(data.glob('*.yaml')))} YAML files parse clean")
+          PY

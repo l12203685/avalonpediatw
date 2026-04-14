@@ -9,6 +9,7 @@ A modern, real-time Avalon (The Resistance) game platform with encyclopedia, soc
 ### Prerequisites
 - Node.js >= 18
 - pnpm >= 8.0
+- Python >= 3.12 (only for regenerating game-data YAML — see [docs/parser.md](docs/parser.md))
 
 ### Installation
 
