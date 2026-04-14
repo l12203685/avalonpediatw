@@ -1,0 +1,7 @@
+flask
+flask-socketio
+fastapi
+uvicorn
+celery
+redis
+python-jose

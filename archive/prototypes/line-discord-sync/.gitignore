@@ -1,0 +1,17 @@
+# Config File
+config.yml
+sync_channels.json
+binding_codes.json
+
+# Downloaded Files
+downloads
+
+# IDE Files and Environment
+.idea
+__pycache__
+venv
+
+# PyInstaller
+*.spec
+build
+dist
