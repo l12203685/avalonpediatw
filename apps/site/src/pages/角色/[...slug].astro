@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const roles = await getCollection('roles');
+  return roles.map((role) => ({
+    params: { slug: role.slug },
+    props: { role }
+  }));
+}
+
+const { role } = Astro.props;
+const { Content } = await role.render();
+---
+<BaseLayout title={role.data.title} description={role.data.summary}>
+  <article class="prose max-w-none" data-pagefind-body data-pagefind-meta={`faction:${role.data.faction}`}>
+    <div class="mb-4">
+      <a href="/角色/" class="text-sm text-blue-600 hover:underline">← 返回角色列表</a>
+    </div>
+    <div class="mb-6">
+      <span class={role.data.faction === 'good' ? 'inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded' : 'inline-block px-2 py-1 text-xs bg-red-100 text-red-800 rounded'}>
+        {role.data.faction === 'good' ? '好人陣營' : '邪惡陣營'}
+      </span>
+    </div>
+    <Content />
+  </article>
+</BaseLayout>

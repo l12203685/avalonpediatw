@@ -1,0 +1,17 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+const roles = await getCollection('roles');
+---
+<BaseLayout title="首頁">
+  <article class="prose max-w-none" data-pagefind-body>
+    <h1 class="text-3xl font-bold mb-4">Avalonpedia TW</h1>
+    <p class="mb-6">繁體中文亞瓦隆（Avalon）百科全書 POC。</p>
+    <h2 class="text-xl font-semibold mb-2">角色索引</h2>
+    <ul class="list-disc pl-6">
+      {roles.map((r) => (
+        <li><a class="text-blue-600 hover:underline" href={`/角色/${r.slug}/`}>{r.data.title}</a> — {r.data.summary}</li>
+      ))}
+    </ul>
+  </article>
+</BaseLayout>

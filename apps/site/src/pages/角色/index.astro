@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+const roles = await getCollection('roles');
+const good = roles.filter(r => r.data.faction === 'good');
+const evil = roles.filter(r => r.data.faction === 'evil');
+---
+<BaseLayout title="角色">
+  <article class="prose max-w-none" data-pagefind-body>
+    <h1 class="text-3xl font-bold mb-6">角色列表</h1>
+    <section class="mb-8">
+      <h2 class="text-xl font-semibold mb-2">好人陣營</h2>
+      <ul class="list-disc pl-6">
+        {good.map((r) => (
+          <li><a class="text-blue-600 hover:underline" href={`/角色/${r.slug}/`}>{r.data.title}</a> — {r.data.summary}</li>
+        ))}
+      </ul>
+    </section>
+    <section>
+      <h2 class="text-xl font-semibold mb-2">邪惡陣營</h2>
+      <ul class="list-disc pl-6">
+        {evil.map((r) => (
+          <li><a class="text-blue-600 hover:underline" href={`/角色/${r.slug}/`}>{r.data.title}</a> — {r.data.summary}</li>
+        ))}
+      </ul>
+    </section>
+  </article>
+</BaseLayout>

@@ -1,0 +1,33 @@
+name: Site build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/site/**'
+      - '.github/workflows/site.yml'
+      - 'pnpm-workspace.yaml'
+  pull_request:
+    paths:
+      - 'apps/site/**'
+      - '.github/workflows/site.yml'
+      - 'pnpm-workspace.yaml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install deps (workspace)
+        run: pnpm install --frozen-lockfile
+      - name: Build site
+        run: pnpm --filter @avalonpediatw/site build
+      - name: Verify pagefind index
+        run: test -d apps/site/dist/pagefind && echo "pagefind index OK"
