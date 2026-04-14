@@ -20,8 +20,8 @@ See `docs/M0.5_r2_spike.md` for cost + rollout plan.
 | mordred-strong       | 莫德雷德有多強   | mordred  | 8.16 MB | `videos/shorts/mordred-strong.mp4`       | Staged, not uploaded |
 | oberon-weak          | 奧伯倫到底有多爛 | oberon   | 6.55 MB | `videos/shorts/oberon-weak.mp4`          | Staged, not uploaded |
 
-**License:** Original work by Edward. Pending confirmation — default to "All rights reserved,
-educational fair-use on site" until Edward specifies CC license.
+**License:** All Rights Reserved (locked 2026-04-14). Original work by Edward; full rights
+reserved. Future relicensing to CC remains possible but is not the default.
 
 ## 2. Upstream content sources
 
@@ -41,7 +41,8 @@ educational fair-use on site" until Edward specifies CC license.
 | Firebase Realtime DB + Auth | Session state, user auth | Yes (Spark plan) | same |
 | Firebase Firestore | Game history, rankings | Yes (Spark plan) | same |
 | Render.com (Singapore) | Backend Socket.IO server | Free web service tier | same |
-| Cloudflare R2 | Media (videos, images, audio) | Yes — 10 GB storage + free egress | **Not yet created (pending Edward)** |
+| Cloudflare R2 | Media (videos, images, audio) | Yes — 10 GB storage + free egress | Shares CF account with M0.4 Pages (due 2026-04-20); no separate signup |
+| Cloudflare Pages | Static hosting for avalonpediatw.com (M0.4) | Yes | Opens the single shared CF account |
 | Discord API | Bot (slash commands, broadcast) | Yes | `~/.claude/credentials/all_bot_tokens.json` |
 | LINE Messaging API | Bot (webhook, flex messages) | Yes | same |
 
