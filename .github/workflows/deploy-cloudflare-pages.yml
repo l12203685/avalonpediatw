@@ -45,10 +45,10 @@ jobs:
         # M1 Astro scaffold will provide this script. Until then, the step
         # no-ops cleanly if apps/wiki isn't present yet.
         run: |
-          if [ -d "apps/wiki" ]; then
+          if [ -f "apps/wiki/package.json" ]; then
             pnpm --filter @avalon/wiki build
           else
-            echo "apps/wiki not yet scaffolded (M1 pending) — skipping build."
+            echo "apps/wiki not yet scaffolded (M1 pending) — generating placeholder."
             mkdir -p apps/wiki/dist
             echo "<!doctype html><title>avalonpediatw — coming soon</title>" > apps/wiki/dist/index.html
           fi
