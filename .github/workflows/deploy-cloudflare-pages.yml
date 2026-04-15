@@ -1,20 +1,21 @@
 name: Deploy Wiki to Cloudflare Pages
 
-# Triggers only on wiki content changes. The existing game-frontend deploy
-# (deploy.yml → GitHub Pages) is NOT touched by this workflow.
+# Serves the same React wiki (packages/web) that Firebase hosts, at the root
+# path. GitHub Pages deploy (deploy.yml) is independent and builds with a
+# subpath base.
 on:
   push:
     branches: [main]
     paths:
-      - 'apps/wiki/**'
-      - 'content/**'
-      - 'wrangler.toml'
+      - 'packages/web/**'
+      - 'packages/shared/**'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-cloudflare-pages.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'apps/wiki/**'
-      - 'content/**'
+      - 'packages/web/**'
+      - 'packages/shared/**'
   workflow_dispatch:
 
 permissions:
@@ -31,7 +32,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
 
       - uses: actions/setup-node@v4
         with:
@@ -41,17 +44,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build wiki (Astro)
-        # M1 Astro scaffold will provide this script. Until then, the step
-        # no-ops cleanly if apps/wiki isn't present yet.
-        run: |
-          if [ -f "apps/wiki/package.json" ]; then
-            pnpm --filter @avalon/wiki build
-          else
-            echo "apps/wiki not yet scaffolded (M1 pending) — generating placeholder."
-            mkdir -p apps/wiki/dist
-            echo "<!doctype html><title>avalonpediatw — coming soon</title>" > apps/wiki/dist/index.html
-          fi
+      - name: Build shared package
+        run: pnpm --filter @avalon/shared build
+
+      - name: Build frontend (root base)
+        run: pnpm --filter @avalon/web build
+        env:
+          VITE_SERVER_URL: https://avalonpediatw.onrender.com
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
@@ -59,6 +65,6 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: avalonpediatw
-          directory: apps/wiki/dist
+          directory: packages/web/dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.head_ref || github.ref_name }}
