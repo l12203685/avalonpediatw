@@ -1,0 +1,5 @@
+# Avalon Pedia TW — robots.txt (Cloudflare Pages host)
+User-agent: *
+Allow: /
+
+Sitemap: https://avalonpediatw.com/sitemap.xml

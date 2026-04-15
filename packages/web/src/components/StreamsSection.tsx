@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, Eye, Calendar, Clock, Youtube, ArrowDown, ArrowUp } from 'lucide-react';
+import { Search, X, Eye, Calendar, Clock, Youtube, ArrowDown, ArrowUp, LayoutGrid, List } from 'lucide-react';
 import streamsData from '../data/streams.json';
 
 interface Stream {
@@ -21,8 +21,22 @@ interface StreamsFile {
 }
 
 type SortKey = 'date' | 'duration' | 'views';
+type ViewMode = 'grid' | 'timeline';
 
 const STREAMS = streamsData as StreamsFile;
+
+// Extract season (S1/S2/S3/S4/S5) from a stream title. Returns 'Other' when none.
+function extractSeason(title: string): string {
+  const m = title.match(/S\s*([1-9])/i);
+  if (m) return `S${m[1]}`;
+  return 'Other';
+}
+
+// Extract EP number (EP01, EP 02, etc.) from title, returns null when absent.
+function extractEpisode(title: string): number | null {
+  const m = title.match(/EP\s*0*(\d+)/i);
+  return m ? Number(m[1]) : null;
+}
 
 function formatDuration(sec: number): string {
   if (!sec || sec <= 0) return '—';
@@ -49,6 +63,7 @@ export default function StreamsSection(): JSX.Element {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDesc, setSortDesc] = useState(true);
   const [selected, setSelected] = useState<Stream | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -64,6 +79,21 @@ export default function StreamsSection(): JSX.Element {
     });
     return sorted;
   }, [search, sortKey, sortDesc]);
+
+  // Group by season for timeline view (keeps filtered/sorted order within each season).
+  const bySeason = useMemo(() => {
+    const groups: Record<string, Stream[]> = {};
+    for (const s of filtered) {
+      const key = extractSeason(s.title);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(s);
+    }
+    // Order: S5, S4, S3, S2, S1, Other (newest season first)
+    const order = ['S5', 'S4', 'S3', 'S2', 'S1', 'Other'];
+    return order
+      .filter((k) => groups[k] && groups[k].length > 0)
+      .map((k) => ({ season: k, items: groups[k] }));
+  }, [filtered]);
 
   const toggleSort = (key: SortKey): void => {
     if (sortKey === key) {
@@ -126,17 +156,100 @@ export default function StreamsSection(): JSX.Element {
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-gray-400">排序:</span>
           <SortButton label="日期" myKey="date" />
           <SortButton label="長度" myKey="duration" />
           <SortButton label="觀看" myKey="views" />
+          <span className="text-xs text-gray-400 ml-2">檢視:</span>
+          <button
+            onClick={() => setViewMode('grid')}
+            aria-label="Grid view"
+            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all border ${
+              viewMode === 'grid'
+                ? 'bg-yellow-500 text-black border-yellow-500'
+                : 'bg-avalon-card/50 text-gray-300 border-gray-600 hover:border-yellow-500'
+            }`}
+          >
+            <LayoutGrid size={12} />
+            格狀
+          </button>
+          <button
+            onClick={() => setViewMode('timeline')}
+            aria-label="Timeline view"
+            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all border ${
+              viewMode === 'timeline'
+                ? 'bg-yellow-500 text-black border-yellow-500'
+                : 'bg-avalon-card/50 text-gray-300 border-gray-600 hover:border-yellow-500'
+            }`}
+          >
+            <List size={12} />
+            賽季時間線
+          </button>
         </div>
       </div>
 
-      {/* Grid */}
+      {/* Grid / Timeline */}
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-gray-400">沒有符合的直播 (No streams match)</div>
+      ) : viewMode === 'timeline' ? (
+        <div className="space-y-8">
+          {bySeason.map(({ season, items }) => (
+            <div key={season} className="relative">
+              <div className="sticky top-0 z-10 bg-gradient-to-r from-yellow-500/20 to-transparent backdrop-blur-sm border-l-4 border-yellow-500 pl-3 py-2 mb-4">
+                <h3 className="text-lg font-bold text-yellow-300">
+                  {season === 'Other' ? '其他 (Other)' : `賽季 ${season} (Season ${season.slice(1)})`}
+                  <span className="text-xs text-gray-400 ml-2 font-normal">· {items.length} 場</span>
+                </h3>
+              </div>
+              <ol className="relative border-l-2 border-gray-700 ml-2 space-y-3">
+                {items.map((s) => {
+                  const ep = extractEpisode(s.title);
+                  return (
+                    <li key={s.videoId} className="ml-4">
+                      <span className="absolute -left-2 w-3 h-3 bg-yellow-500 rounded-full mt-2 border-2 border-avalon-dark" />
+                      <button
+                        onClick={() => setSelected(s)}
+                        className="w-full text-left bg-avalon-card/40 hover:bg-avalon-card/70 border border-gray-600 hover:border-yellow-400 rounded-lg p-3 transition-all flex gap-3 items-start"
+                      >
+                        <img
+                          src={`https://i.ytimg.com/vi/${s.videoId}/default.jpg`}
+                          alt=""
+                          loading="lazy"
+                          className="w-24 h-16 object-cover rounded shrink-0 bg-black"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {ep !== null && (
+                              <span className="inline-block bg-yellow-500/20 text-yellow-300 text-xs px-1.5 py-0.5 rounded font-mono">
+                                EP{ep.toString().padStart(2, '0')}
+                              </span>
+                            )}
+                            <span className="text-xs text-gray-400 inline-flex items-center gap-1">
+                              <Calendar size={11} />
+                              {formatDate(s.uploadDate)}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-semibold text-white line-clamp-2">{s.title}</h4>
+                          <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock size={11} />
+                              {formatDuration(s.duration)}
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <Eye size={11} />
+                              {formatViews(s.viewCount)}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((s) => (
