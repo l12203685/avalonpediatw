@@ -1,0 +1,42 @@
+# Avalon short-video manifest
+# Source of truth for slug ↔ original filename mapping.
+# Consumed by scripts/upload_videos_r2.py and frontend <video> components.
+# See docs/M0.5_r2_spike.md §5 for context.
+
+videos:
+  - slug: assassin-key
+    original_filename: "刺客有多關鍵 #刺客 #桌上遊戲 #梅林 #魔甘娜 #阿瓦隆 #魔甘娜 #莫德雷德 #抵抗組織.mp4"
+    title_zh: "刺客有多關鍵"
+    role_tag: assassin
+    category: shorts
+    size_bytes: 8581494
+  - slug: percival-hard
+    original_filename: "派西維爾有多難分 #派西維爾 #桌上遊戲 #梅林 #魔甘娜 #阿瓦隆 #抵抗組織 #莫德雷德 #刺客.mp4"
+    title_zh: "派西維爾有多難分"
+    role_tag: percival
+    category: shorts
+    size_bytes: 9311436
+  - slug: merlin-importance
+    original_filename: "梅林有多重要 #梅林 #桌上遊戲 #魔甘娜 #莫德雷德 #阿瓦隆 #抵抗組織 #抵抗組織 #刺客.mp4"
+    title_zh: "梅林有多重要"
+    role_tag: merlin
+    category: shorts
+    size_bytes: 8859001
+  - slug: morgana-hard-to-play
+    original_filename: "莫甘娜有多難玩 #阿瓦隆 #桌上遊戲 #梅林 #魔甘娜 #派西維爾 #抵抗組織 #shorts.mp4"
+    title_zh: "莫甘娜有多難玩"
+    role_tag: morgana
+    category: shorts
+    size_bytes: 9787433
+  - slug: mordred-strong
+    original_filename: "莫德雷德有多強 #桌上遊戲 #梅林 #莫德雷德 #阿瓦隆 #魔甘娜.mp4"
+    title_zh: "莫德雷德有多強"
+    role_tag: mordred
+    category: shorts
+    size_bytes: 8554551
+  - slug: oberon-weak
+    original_filename: "奧伯倫到底有多爛_ #桌上遊戲 #阿瓦隆 #奧伯倫 #梅林 #魔甘娜 #莫德雷德 #shorts #阿瓦隆百科.mp4"
+    title_zh: "奧伯倫到底有多爛"
+    role_tag: oberon
+    category: shorts
+    size_bytes: 6871574
