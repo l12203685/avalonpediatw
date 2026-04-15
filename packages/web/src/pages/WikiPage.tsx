@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store/gameStore';
 import WikiContent from '../components/WikiContent';
+import StreamsSection from '../components/StreamsSection';
 import { WIKI_CATEGORIES } from '../data/wiki';
 import { BookOpen, Users, Lightbulb, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
@@ -87,6 +88,9 @@ export default function WikiPage(): JSX.Element {
           </div>
         </div>
       </motion.div>
+
+      {/* 直播回顧 */}
+      <StreamsSection />
 
       {/* Wiki 內容 */}
       <div id="wiki-content">
