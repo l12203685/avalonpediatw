@@ -232,24 +232,28 @@ export class SelfPlayEngine {
   }
 
   /**
-   * Run N games in sequence and return aggregate stats
+   * Run N games in sequence and return per-game results plus aggregate stats
    */
   async runBatch(agents: AvalonAgent[], n: number, persist = true): Promise<{
+    results: SelfPlayResult[];
     total: number;
     goodWins: number;
     evilWins: number;
     avgRounds: number;
   }> {
+    const results: SelfPlayResult[] = [];
     let goodWins = 0, evilWins = 0, totalRounds = 0;
 
     for (let i = 0; i < n; i++) {
       const result = await this.runGame(agents, persist);
+      results.push(result);
       if (result.winner === 'good') goodWins++;
       else evilWins++;
       totalRounds += result.rounds;
     }
 
     return {
+      results,
       total: n,
       goodWins,
       evilWins,
