@@ -1,0 +1,9 @@
+# Avalon Pedia TW — robots.txt
+User-agent: *
+Allow: /
+
+# Block internal/admin routes if introduced later
+Disallow: /api/
+Disallow: /internal/
+
+Sitemap: https://avalonpediatw.com/sitemap.xml
