@@ -1,0 +1,248 @@
+{
+  "generated_at": "2026-04-16 15:39:00 +08",
+  "canonical_roles": 7,
+  "factions": {
+    "good": [
+      {
+        "id": "merlin",
+        "slug": "merlin",
+        "name_zh": "梅林",
+        "name_en": "Merlin",
+        "faction": "good",
+        "abbrev": "梅",
+        "ability": "知道所有紅方身份（除莫德雷德），但需隱藏自己不被刺殺",
+        "stats": {
+          "total_games": 859,
+          "wins": 535,
+          "losses": 324,
+          "win_rate": 0.6228,
+          "aggregate_win_rate": 0.284,
+          "result_breakdown": {
+            "三紅": 324,
+            "三藍死": 247,
+            "三藍活": 288
+          },
+          "seat_distribution": {
+            "0": 198,
+            "1": 208,
+            "4": 227,
+            "5": 226
+          },
+          "seat_win_rates": {
+            "0": 0.6364,
+            "1": 0.524,
+            "4": 0.5727,
+            "5": 0.7522
+          }
+        },
+        "generated_at": "2026-04-16 15:39:00 +08"
+      },
+      {
+        "id": "percival",
+        "slug": "percival",
+        "name_zh": "派西維爾",
+        "name_en": "Percival",
+        "faction": "good",
+        "abbrev": "派",
+        "ability": "知道梅林和莫甘娜的身份（但無法分辨誰是誰）",
+        "stats": {
+          "total_games": 823,
+          "wins": 489,
+          "losses": 334,
+          "win_rate": 0.5942,
+          "aggregate_win_rate": 0.7346,
+          "result_breakdown": {
+            "三紅": 334,
+            "三藍死": 223,
+            "三藍活": 266
+          },
+          "seat_distribution": {
+            "0": 224,
+            "1": 203,
+            "4": 209,
+            "5": 187
+          },
+          "seat_win_rates": {
+            "0": 0.6384,
+            "1": 0.5665,
+            "4": 0.5072,
+            "5": 0.6684
+          }
+        },
+        "generated_at": "2026-04-16 15:39:00 +08"
+      },
+      {
+        "id": "loyal_servant",
+        "slug": "loyal-servant",
+        "name_zh": "忠臣",
+        "name_en": "Loyal Servant",
+        "faction": "good",
+        "abbrev": "忠",
+        "ability": "無特殊能力，依靠推理和投票幫助藍方",
+        "stats": {
+          "total_games": 3475,
+          "wins": 1935,
+          "losses": 1540,
+          "win_rate": 0.5568,
+          "aggregate_win_rate": 0.275,
+          "result_breakdown": {
+            "三紅": 1540,
+            "三藍死": 828,
+            "三藍活": 1107
+          },
+          "seat_distribution": {
+            "0": 890,
+            "1": 886,
+            "4": 862,
+            "5": 837
+          },
+          "seat_win_rates": {
+            "0": 0.5663,
+            "1": 0.5395,
+            "4": 0.5441,
+            "5": 0.5783
+          }
+        },
+        "generated_at": "2026-04-16 15:39:00 +08"
+      }
+    ],
+    "evil": [
+      {
+        "id": "mordred",
+        "slug": "mordred",
+        "name_zh": "莫德雷德",
+        "name_en": "Mordred",
+        "faction": "evil",
+        "abbrev": "德",
+        "ability": "梅林無法看到莫德雷德，是紅方最強的隱藏角色",
+        "stats": {
+          "total_games": 899,
+          "wins": 435,
+          "losses": 464,
+          "win_rate": 0.4839,
+          "aggregate_win_rate": 0.725,
+          "result_breakdown": {
+            "三紅": 435,
+            "三藍死": 217,
+            "三藍活": 247
+          },
+          "seat_distribution": {
+            "0": 213,
+            "1": 219,
+            "4": 229,
+            "5": 238
+          },
+          "seat_win_rates": {
+            "0": 0.4883,
+            "1": 0.4703,
+            "4": 0.4323,
+            "5": 0.542
+          }
+        },
+        "generated_at": "2026-04-16 15:39:00 +08"
+      },
+      {
+        "id": "morgana",
+        "slug": "morgana",
+        "name_zh": "莫甘娜",
+        "name_en": "Morgana",
+        "faction": "evil",
+        "abbrev": "娜",
+        "ability": "在派西維爾眼中與梅林相同，用來迷惑藍方",
+        "stats": {
+          "total_games": 840,
+          "wins": 413,
+          "losses": 427,
+          "win_rate": 0.4917,
+          "aggregate_win_rate": 0.7152,
+          "result_breakdown": {
+            "三紅": 413,
+            "三藍死": 194,
+            "三藍活": 233
+          },
+          "seat_distribution": {
+            "0": 227,
+            "1": 196,
+            "4": 209,
+            "5": 208
+          },
+          "seat_win_rates": {
+            "0": 0.4978,
+            "1": 0.449,
+            "4": 0.4833,
+            "5": 0.5337
+          }
+        },
+        "generated_at": "2026-04-16 15:39:00 +08"
+      },
+      {
+        "id": "assassin",
+        "slug": "assassin",
+        "name_zh": "刺客",
+        "name_en": "Assassin",
+        "faction": "evil",
+        "abbrev": "刺",
+        "ability": "藍方三勝後可刺殺梅林，刺中則紅方逆轉勝",
+        "stats": {
+          "total_games": 828,
+          "wins": 432,
+          "losses": 396,
+          "win_rate": 0.5217,
+          "aggregate_win_rate": 0.6254,
+          "result_breakdown": {
+            "三紅": 432,
+            "三藍死": 154,
+            "三藍活": 242
+          },
+          "seat_distribution": {
+            "0": 193,
+            "1": 223,
+            "4": 190,
+            "5": 222
+          },
+          "seat_win_rates": {
+            "0": 0.5648,
+            "1": 0.4529,
+            "4": 0.4632,
+            "5": 0.6036
+          }
+        },
+        "generated_at": "2026-04-16 15:39:00 +08"
+      },
+      {
+        "id": "oberon",
+        "slug": "oberon",
+        "name_zh": "奧伯倫",
+        "name_en": "Oberon",
+        "faction": "evil",
+        "abbrev": "奧",
+        "ability": "不知道其他紅方是誰，其他紅方也看不到奧伯倫",
+        "stats": {
+          "total_games": 860,
+          "wins": 406,
+          "losses": 454,
+          "win_rate": 0.4721,
+          "aggregate_win_rate": 0.7329,
+          "result_breakdown": {
+            "三紅": 406,
+            "三藍死": 201,
+            "三藍活": 253
+          },
+          "seat_distribution": {
+            "0": 201,
+            "1": 211,
+            "4": 220,
+            "5": 228
+          },
+          "seat_win_rates": {
+            "0": 0.5274,
+            "1": 0.3981,
+            "4": 0.4091,
+            "5": 0.5526
+          }
+        },
+        "generated_at": "2026-04-16 15:39:00 +08"
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "id": "mordred",
+  "slug": "mordred",
+  "name_zh": "莫德雷德",
+  "name_en": "Mordred",
+  "faction": "evil",
+  "abbrev": "德",
+  "ability": "梅林無法看到莫德雷德，是紅方最強的隱藏角色",
+  "stats": {
+    "total_games": 899,
+    "wins": 435,
+    "losses": 464,
+    "win_rate": 0.4839,
+    "aggregate_win_rate": 0.725,
+    "result_breakdown": {
+      "三紅": 435,
+      "三藍死": 217,
+      "三藍活": 247
+    },
+    "seat_distribution": {
+      "0": 213,
+      "1": 219,
+      "4": 229,
+      "5": 238
+    },
+    "seat_win_rates": {
+      "0": 0.4883,
+      "1": 0.4703,
+      "4": 0.4323,
+      "5": 0.542
+    }
+  },
+  "generated_at": "2026-04-16 15:39:00 +08"
+}

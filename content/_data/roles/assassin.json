@@ -1,0 +1,34 @@
+{
+  "id": "assassin",
+  "slug": "assassin",
+  "name_zh": "刺客",
+  "name_en": "Assassin",
+  "faction": "evil",
+  "abbrev": "刺",
+  "ability": "藍方三勝後可刺殺梅林，刺中則紅方逆轉勝",
+  "stats": {
+    "total_games": 828,
+    "wins": 432,
+    "losses": 396,
+    "win_rate": 0.5217,
+    "aggregate_win_rate": 0.6254,
+    "result_breakdown": {
+      "三紅": 432,
+      "三藍死": 154,
+      "三藍活": 242
+    },
+    "seat_distribution": {
+      "0": 193,
+      "1": 223,
+      "4": 190,
+      "5": 222
+    },
+    "seat_win_rates": {
+      "0": 0.5648,
+      "1": 0.4529,
+      "4": 0.4632,
+      "5": 0.6036
+    }
+  },
+  "generated_at": "2026-04-16 15:39:00 +08"
+}

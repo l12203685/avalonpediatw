@@ -1,0 +1,34 @@
+{
+  "id": "oberon",
+  "slug": "oberon",
+  "name_zh": "奧伯倫",
+  "name_en": "Oberon",
+  "faction": "evil",
+  "abbrev": "奧",
+  "ability": "不知道其他紅方是誰，其他紅方也看不到奧伯倫",
+  "stats": {
+    "total_games": 860,
+    "wins": 406,
+    "losses": 454,
+    "win_rate": 0.4721,
+    "aggregate_win_rate": 0.7329,
+    "result_breakdown": {
+      "三紅": 406,
+      "三藍死": 201,
+      "三藍活": 253
+    },
+    "seat_distribution": {
+      "0": 201,
+      "1": 211,
+      "4": 220,
+      "5": 228
+    },
+    "seat_win_rates": {
+      "0": 0.5274,
+      "1": 0.3981,
+      "4": 0.4091,
+      "5": 0.5526
+    }
+  },
+  "generated_at": "2026-04-16 15:39:00 +08"
+}

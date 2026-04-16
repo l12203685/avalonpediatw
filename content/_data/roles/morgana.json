@@ -1,0 +1,34 @@
+{
+  "id": "morgana",
+  "slug": "morgana",
+  "name_zh": "莫甘娜",
+  "name_en": "Morgana",
+  "faction": "evil",
+  "abbrev": "娜",
+  "ability": "在派西維爾眼中與梅林相同，用來迷惑藍方",
+  "stats": {
+    "total_games": 840,
+    "wins": 413,
+    "losses": 427,
+    "win_rate": 0.4917,
+    "aggregate_win_rate": 0.7152,
+    "result_breakdown": {
+      "三紅": 413,
+      "三藍死": 194,
+      "三藍活": 233
+    },
+    "seat_distribution": {
+      "0": 227,
+      "1": 196,
+      "4": 209,
+      "5": 208
+    },
+    "seat_win_rates": {
+      "0": 0.4978,
+      "1": 0.449,
+      "4": 0.4833,
+      "5": 0.5337
+    }
+  },
+  "generated_at": "2026-04-16 15:39:00 +08"
+}

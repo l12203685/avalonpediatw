@@ -1,0 +1,34 @@
+{
+  "id": "loyal_servant",
+  "slug": "loyal-servant",
+  "name_zh": "忠臣",
+  "name_en": "Loyal Servant",
+  "faction": "good",
+  "abbrev": "忠",
+  "ability": "無特殊能力，依靠推理和投票幫助藍方",
+  "stats": {
+    "total_games": 3475,
+    "wins": 1935,
+    "losses": 1540,
+    "win_rate": 0.5568,
+    "aggregate_win_rate": 0.275,
+    "result_breakdown": {
+      "三紅": 1540,
+      "三藍死": 828,
+      "三藍活": 1107
+    },
+    "seat_distribution": {
+      "0": 890,
+      "1": 886,
+      "4": 862,
+      "5": 837
+    },
+    "seat_win_rates": {
+      "0": 0.5663,
+      "1": 0.5395,
+      "4": 0.5441,
+      "5": 0.5783
+    }
+  },
+  "generated_at": "2026-04-16 15:39:00 +08"
+}

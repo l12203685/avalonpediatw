@@ -1,0 +1,34 @@
+{
+  "id": "percival",
+  "slug": "percival",
+  "name_zh": "派西維爾",
+  "name_en": "Percival",
+  "faction": "good",
+  "abbrev": "派",
+  "ability": "知道梅林和莫甘娜的身份（但無法分辨誰是誰）",
+  "stats": {
+    "total_games": 823,
+    "wins": 489,
+    "losses": 334,
+    "win_rate": 0.5942,
+    "aggregate_win_rate": 0.7346,
+    "result_breakdown": {
+      "三紅": 334,
+      "三藍死": 223,
+      "三藍活": 266
+    },
+    "seat_distribution": {
+      "0": 224,
+      "1": 203,
+      "4": 209,
+      "5": 187
+    },
+    "seat_win_rates": {
+      "0": 0.6384,
+      "1": 0.5665,
+      "4": 0.5072,
+      "5": 0.6684
+    }
+  },
+  "generated_at": "2026-04-16 15:39:00 +08"
+}
