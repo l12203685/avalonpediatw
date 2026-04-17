@@ -10,8 +10,13 @@ name = "avalonpediatw"
 compatibility_date = "2026-04-14"
 pages_build_output_dir = "packages/web/dist"
 
-# When M0.5 R2 bucket lands, uncomment + fill account_id after Edward creates
-# the account. Binding exposes the bucket to Pages Functions as env.MEDIA.
+# M0.5 R2 binding — GATED on M0.4 CF account creation (due 2026-04-20).
+# After account exists:
+#   1. Create bucket: wrangler r2 bucket create avalonpediatw-media
+#   2. Set VITE_R2_PUBLIC_BASE as a CF Pages env var (the pub-*.r2.dev URL)
+#   3. Run: python scripts/upload_videos_r2.py --bucket avalonpediatw-media
+#   4. Uncomment the binding below so Pages Functions can access the bucket.
+# See docs/M0.5_r2_spike.md §9 for full checklist.
 #
 # [[r2_buckets]]
 # binding = "MEDIA"

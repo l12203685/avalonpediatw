@@ -1,6 +1,6 @@
 # External References — avalonpediatw
 
-> Draft — 2026-04-14 +08. Tracks external resources consumed or linked by the Avalonpedia site.
+> Updated 2026-04-17 +08. Tracks external resources consumed or linked by the Avalonpedia site.
 > Scope = media assets, third-party services, upstream content. Source code deps live in `package.json` / `pyproject.toml`, not here.
 
 ## 1. Video assets (M0.5)
@@ -11,14 +11,21 @@ All 6 assets produced by Edward in 2023-10. Currently stored in Google Drive at
 Planned destination: Cloudflare R2 bucket `avalonpediatw-media`, prefix `videos/shorts/`.
 See `docs/M0.5_r2_spike.md` for cost + rollout plan.
 
+**Frontend integration status (2026-04-17):** `RoleVideoCard` component is live in
+`packages/web/src/components/RoleVideoCard.tsx`. It is wired into `WikiContent.tsx`
+for all 6 role articles. When `VITE_R2_PUBLIC_BASE` env var is unset (current state),
+the component renders a "coming soon" placeholder with a link to the YouTube channel.
+Once the R2 bucket is live and the env var is set, the HTML5 player activates
+automatically — no further code changes needed.
+
 | Slug | Title (zh) | Role | Size | R2 key (planned) | Status |
 |---|---|---|---:|---|---|
-| assassin-key         | 刺客有多關鍵     | assassin | 8.18 MB | `videos/shorts/assassin-key.mp4`         | Staged, not uploaded |
-| percival-hard        | 派西維爾有多難分 | percival | 8.88 MB | `videos/shorts/percival-hard.mp4`        | Staged, not uploaded |
-| merlin-importance    | 梅林有多重要     | merlin   | 8.45 MB | `videos/shorts/merlin-importance.mp4`    | Staged, not uploaded |
-| morgana-hard-to-play | 莫甘娜有多難玩   | morgana  | 9.33 MB | `videos/shorts/morgana-hard-to-play.mp4` | Staged, not uploaded |
-| mordred-strong       | 莫德雷德有多強   | mordred  | 8.16 MB | `videos/shorts/mordred-strong.mp4`       | Staged, not uploaded |
-| oberon-weak          | 奧伯倫到底有多爛 | oberon   | 6.55 MB | `videos/shorts/oberon-weak.mp4`          | Staged, not uploaded |
+| assassin-key         | 刺客有多關鍵     | assassin | 8.18 MB | `videos/shorts/assassin-key.mp4`         | On disk; upload pending M0.4 CF account |
+| percival-hard        | 派西維爾有多難分 | percival | 8.88 MB | `videos/shorts/percival-hard.mp4`        | On disk; upload pending M0.4 CF account |
+| merlin-importance    | 梅林有多重要     | merlin   | 8.45 MB | `videos/shorts/merlin-importance.mp4`    | On disk; upload pending M0.4 CF account |
+| morgana-hard-to-play | 莫甘娜有多難玩   | morgana  | 9.33 MB | `videos/shorts/morgana-hard-to-play.mp4` | On disk; upload pending M0.4 CF account |
+| mordred-strong       | 莫德雷德有多強   | mordred  | 8.16 MB | `videos/shorts/mordred-strong.mp4`       | On disk; upload pending M0.4 CF account |
+| oberon-weak          | 奧伯倫到底有多爛 | oberon   | 6.55 MB | `videos/shorts/oberon-weak.mp4`          | On disk; upload pending M0.4 CF account |
 
 **License:** All Rights Reserved (locked 2026-04-14). Original work by Edward; full rights
 reserved. Future relicensing to CC remains possible but is not the default.

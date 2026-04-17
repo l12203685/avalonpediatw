@@ -5,7 +5,9 @@ import { WikiArticle, WIKI_ARTICLES, WIKI_CATEGORIES } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
 import type { WikiArticleApi } from '../services/api';
 import { ARTICLE_TO_ROLE, ROLE_STATS } from '../data/roleStats';
+import { VIDEO_BY_ROLE } from '../data/roleVideos';
 import RoleStatsCard from './RoleStatsCard';
+import RoleVideoCard from './RoleVideoCard';
 
 function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
   return {
@@ -200,6 +202,12 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                   <RoleStatsCard role={ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]]} />
                 </div>
               )}
+              {/* Role short video (mobile) — shown when R2 bucket is live or as placeholder */}
+              {selectedArticle && ARTICLE_TO_ROLE[selectedArticle.id] && VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]] && (
+                <div className="mt-4">
+                  <RoleVideoCard video={VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]]} />
+                </div>
+              )}
             </motion.div>
           </div>
         )}
@@ -328,6 +336,12 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                 {selectedArticle && ARTICLE_TO_ROLE[selectedArticle.id] && ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]] && (
                   <div className="mt-6">
                     <RoleStatsCard role={ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]]} />
+                  </div>
+                )}
+                {/* Role short video (desktop) — shown when R2 bucket is live or as placeholder */}
+                {selectedArticle && ARTICLE_TO_ROLE[selectedArticle.id] && VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]] && (
+                  <div className="mt-6">
+                    <RoleVideoCard video={VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]]} />
                   </div>
                 )}
               </motion.div>
