@@ -3,8 +3,9 @@ import { useGameStore } from '../store/gameStore';
 import WikiContent from '../components/WikiContent';
 import StreamsSection from '../components/StreamsSection';
 import { WIKI_CATEGORIES } from '../data/wiki';
-import { BookOpen, Users, Lightbulb, ArrowLeft } from 'lucide-react';
+import { BookOpen, Users, Lightbulb, ArrowLeft, BarChart3 } from 'lucide-react';
 import { useState } from 'react';
+import { TOTAL_UNIQUE_GAMES } from '../data/roleStats';
 
 export default function WikiPage(): JSX.Element {
   const { setGameState } = useGameStore();
@@ -60,8 +61,8 @@ export default function WikiPage(): JSX.Element {
               whileHover={{ scale: 1.05 }}
               className="bg-avalon-card/50 border border-gray-600 rounded-lg p-4"
             >
-              <div className="text-2xl font-bold text-yellow-400">100%</div>
-              <div className="text-gray-400 text-sm">搜尋功能 (Search)</div>
+              <div className="text-2xl font-bold text-yellow-400">{TOTAL_UNIQUE_GAMES.toLocaleString()}</div>
+              <div className="text-gray-400 text-sm">局實戰數據 (Games Analyzed)</div>
             </motion.div>
           </div>
 

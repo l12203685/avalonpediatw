@@ -8,7 +8,7 @@
 
 name = "avalonpediatw"
 compatibility_date = "2026-04-14"
-pages_build_output_dir = "apps/wiki/dist"
+pages_build_output_dir = "packages/web/dist"
 
 # When M0.5 R2 bucket lands, uncomment + fill account_id after Edward creates
 # the account. Binding exposes the bucket to Pages Functions as env.MEDIA.
@@ -24,8 +24,6 @@ pages_build_output_dir = "apps/wiki/dist"
 name = "avalonpediatw"
 
 # NOTE on output dir:
-# - Wiki site (Astro) target is `apps/wiki/dist` per docs/FULL_PLATFORM_PLAN.md.
-# - The existing `packages/web/dist` (game frontend) stays on its own Firebase/
-#   Render pipeline and is NOT deployed to CF Pages by this config.
-# - If M1 (Astro scaffold) lands under a different path, update
-#   `pages_build_output_dir` above and the workflow `directory:` input.
+# - CF Pages now serves the same React game frontend as Firebase hosting.
+# - Both Firebase and CF Pages deploy from `packages/web/dist`.
+# - The Astro wiki (apps/wiki/) is deferred to a future milestone.

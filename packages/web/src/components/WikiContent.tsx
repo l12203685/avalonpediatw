@@ -4,6 +4,8 @@ import { Search, X, Eye, Calendar, ChevronDown, ChevronUp, Loader } from 'lucide
 import { WikiArticle, WIKI_ARTICLES, WIKI_CATEGORIES } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
 import type { WikiArticleApi } from '../services/api';
+import { ARTICLE_TO_ROLE, ROLE_STATS } from '../data/roleStats';
+import RoleStatsCard from './RoleStatsCard';
 
 function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
   return {
@@ -192,6 +194,12 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                   }}
                 />
               </div>
+              {/* Role stats card for character articles (mobile) */}
+              {selectedArticle && ARTICLE_TO_ROLE[selectedArticle.id] && ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]] && (
+                <div className="mt-4">
+                  <RoleStatsCard role={ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]]} />
+                </div>
+              )}
             </motion.div>
           </div>
         )}
@@ -316,6 +324,12 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                     }}
                   />
                 </div>
+                {/* Role stats card for character articles (desktop) */}
+                {selectedArticle && ARTICLE_TO_ROLE[selectedArticle.id] && ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]] && (
+                  <div className="mt-6">
+                    <RoleStatsCard role={ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]]} />
+                  </div>
+                )}
               </motion.div>
             ) : (
               <motion.div
