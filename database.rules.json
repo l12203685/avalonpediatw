@@ -1,0 +1,69 @@
+{
+  "rules": {
+    // Avalon Pedia TW Realtime Database Security Rules (M2 audit 2026-04-18).
+    // All RTDB reads/writes flow through the backend Firebase Admin SDK
+    // (packages/server/src/services/firebase.ts). Admin SDK bypasses these rules.
+    // Web client (packages/web) uses firebase/auth only — no direct RTDB calls.
+    // Therefore: deny all client access by default; owner-scoped reads on
+    // user profile / stats / presence only.
+    ".read": false,
+    ".write": false,
+
+    // Active game room state + engine snapshot. Server-only.
+    "rooms": {
+      ".read": false,
+      ".write": false,
+      "$roomId": {
+        ".read": false,
+        ".write": false,
+        "room": { ".read": false, ".write": false },
+        "engine": { ".read": false, ".write": false }
+      }
+    },
+
+    // ELO entries. Server writes only; public leaderboard goes via /api/*.
+    "rankings": {
+      ".read": false,
+      ".write": false,
+      "$uid": {
+        ".read": false,
+        ".write": false,
+        ".validate": "newData.hasChildren(['uid','eloRating','totalGames','gamesWon','gamesLost','updatedAt'])"
+      }
+    },
+
+    // Legacy user profile docs written by createUserProfile().
+    // Owner may read own record when authenticated; writes remain server-only.
+    "users": {
+      ".read": false,
+      ".write": false,
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    // Aggregate per-user stats. Server writes only; owner may read own.
+    "user-stats": {
+      ".read": false,
+      ".write": false,
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    // Reserved for future presence channel. Owner-scoped if opened.
+    "presence": {
+      ".read": false,
+      ".write": false,
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['online','lastSeen'])",
+        "online": { ".validate": "newData.isBoolean()" },
+        "lastSeen": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" }
+      }
+    }
+  }
+}
