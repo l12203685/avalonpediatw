@@ -1,4 +1,24 @@
-import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord } from '@avalon/shared';
+import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord, CANONICAL_ROLES, isCanonicalRole } from '@avalon/shared';
+
+/**
+ * Error thrown when a role outside the canonical 7-role Avalon scope is
+ * about to be assigned to a player. The lock is enforced at assignment
+ * time so that even if an upstream change leaks a non-canonical role into
+ * AVALON_CONFIG or roleOptions, the game refuses to start loudly.
+ *
+ * Memory: project_avalon_scope_canonical_7.md. Do NOT relax.
+ */
+export class CanonicalRoleLockError extends Error {
+  constructor(public readonly offendingRoles: string[]) {
+    super(
+      `Canonical 7-role scope violation: ${offendingRoles.join(', ')}. ` +
+      `Allowed: ${CANONICAL_ROLES.join(', ')}. ` +
+      `See packages/shared/src/types/game.ts CANONICAL_ROLES and memory ` +
+      `project_avalon_scope_canonical_7.md before modifying.`
+    );
+    this.name = 'CanonicalRoleLockError';
+  }
+}
 
 const TEAM_SELECT_TIMEOUT_MS = 90000; // 90秒隊伍選擇時限（隊長AFK保護）
 const VOTE_TIMEOUT_MS = 60000; // 60秒隊伍投票時限
@@ -84,8 +104,11 @@ export class GameEngine {
     this.currentLeaderIndex = 0;
     this.voteAttemptInRound = 0;
 
-    // Initialize Lady of the Lake (standard Avalon: enabled for 7+ players unless host disabled it)
-    const ladyEnabled = this.room.roleOptions?.ladyOfTheLake !== false && playerCount >= 7;
+    // Lady of the Lake is OUTSIDE the canonical 7-role scope lock
+    // (memory project_avalon_scope_canonical_7.md). Default OFF; only
+    // enabled when the host explicitly opts in (=== true). The prior
+    // default of "enabled unless disabled" caused accidental activation.
+    const ladyEnabled = this.room.roleOptions?.ladyOfTheLake === true && playerCount >= 7;
     this.room.ladyOfTheLakeEnabled = ladyEnabled;
     if (ladyEnabled) {
       // Lady starts with the player to the right of the first leader (index 1 in player list, wrapping)
@@ -216,8 +239,12 @@ export class GameEngine {
       throw new Error(`No config for ${playerCount} players`);
     }
 
-    // Fallback: if roleOptions is missing (legacy room), treat all as enabled
-    const opts = this.room.roleOptions ?? { percival: true, morgana: true, oberon: true, mordred: true };
+    // Default all canonical evil toggles ON so the legacy 'minion'
+    // substitution never triggers on the happy path. A caller that wants
+    // a reduced-role game must explicitly disable a toggle.
+    const opts = this.room.roleOptions ?? {
+      percival: true, morgana: true, oberon: true, mordred: true, ladyOfTheLake: false
+    };
     // Build role list from config, substituting disabled optional roles
     const roles = config.roles.map(role => {
       if (role === 'percival'  && !opts.percival)  return 'loyal' as Role;
@@ -226,6 +253,15 @@ export class GameEngine {
       if (role === 'mordred'   && !opts.mordred)   return 'minion' as Role;
       return role;
     });
+
+    // Canonical 7-role scope assertion. Throws CanonicalRoleLockError if
+    // any role outside CANONICAL_ROLES would be assigned. This is the
+    // backstop that rejects future Lancelot/Galahad/Troublemaker/etc.
+    // additions. See memory project_avalon_scope_canonical_7.md.
+    const offending = roles.filter(r => !isCanonicalRole(r));
+    if (offending.length > 0) {
+      throw new CanonicalRoleLockError(Array.from(new Set(offending)));
+    }
 
     const playerIds = Object.keys(this.room.players);
     const rolesShuffled = this.shuffleArray([...roles]);

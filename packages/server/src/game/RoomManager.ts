@@ -56,11 +56,16 @@ export class RoomManager {
       voteHistory: [],
       questHistory: [],
       questVotedCount: 0,
+      // Canonical 7-role defaults. All four evil-role toggles on so the
+      // role pool for 7+ player games is drawn from the canonical 7 and
+      // never falls back to the legacy 'minion' substitute. Lady of the
+      // Lake is explicitly disabled (scope lock — see CANONICAL_ROLES).
       roleOptions: {
         percival: true,
         morgana: true,
-        oberon: false,
-        mordred: false,
+        oberon: true,
+        mordred: true,
+        ladyOfTheLake: false,
       },
       readyPlayerIds: [],
       createdAt: Date.now(),

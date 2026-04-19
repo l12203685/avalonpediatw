@@ -15,7 +15,36 @@ export type Role =
   | 'morgana'     // Evil - Appears to Percival as possible Merlin; knows teammates
   | 'oberon'      // Evil - Hidden from Evil players (and can't see them)
   | 'mordred'     // Evil - Hidden from Merlin; knows other evil teammates
-  | 'minion';     // Evil - Generic evil minion (substitute when optional evil roles disabled)
+  | 'minion';     // Evil - Legacy substitute type; NOT canonical, NOT emitted in default games (see CANONICAL_ROLES)
+
+/**
+ * Canonical Avalon 7 roles — scope lock.
+ *
+ * This is the ONLY set of roles allowed in a shipped game. Memory rule
+ * `project_avalon_scope_canonical_7.md` forbids adding Lancelot, Galahad,
+ * Troublemaker, Lady of the Lake (role-form), Minion of Mordred, etc.
+ *
+ * Adding a new role to `Role` above WITHOUT also adding it here will trip
+ * the canonical-role assertion in GameEngine.assignRoles and fail CI. This
+ * is intentional — do NOT relax the lock to unblock a PR. Discuss with
+ * Edward first and update the scope memory.
+ */
+export const CANONICAL_ROLES = [
+  'merlin',
+  'percival',
+  'loyal',
+  'assassin',
+  'morgana',
+  'mordred',
+  'oberon',
+] as const;
+
+export type CanonicalRole = typeof CANONICAL_ROLES[number];
+
+/** True iff the role is part of the canonical 7-role Avalon scope. */
+export function isCanonicalRole(role: unknown): role is CanonicalRole {
+  return typeof role === 'string' && (CANONICAL_ROLES as readonly string[]).includes(role);
+}
 
 export type Team = 'good' | 'evil';
 
@@ -85,7 +114,7 @@ export interface RoleOptions {
   morgana: boolean;   // Include Morgana (paired with Percival)
   oberon: boolean;    // Include Oberon (evil unknown to other evil)
   mordred: boolean;   // Include Mordred (hidden from Merlin)
-  ladyOfTheLake?: boolean; // Include Lady of the Lake ability (default: true for 7+ players)
+  ladyOfTheLake?: boolean; // Post-MVP feature; canonical-7 scope lock keeps this OFF. Ignored unless explicitly === true.
 }
 
 export interface GameConfig {
