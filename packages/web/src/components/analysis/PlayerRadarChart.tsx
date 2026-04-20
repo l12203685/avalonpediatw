@@ -12,13 +12,15 @@ import {
 } from '../../services/api';
 import type { AnalysisPlayerStats, AnalysisPlayerRadar } from '../../services/api';
 
-// Fix #7: New radar dimensions
+// Radar axis labels (zh-TW). Keys match backend /api/analysis/players/:name radar payload.
 const RADAR_LABELS: Record<string, string> = {
-  blueMerlinAlive: '藍方勝率(三藍梅活)',
-  red3Red: '紅方任務勝率(三紅)',
-  redMerlinDead: '紅方刺殺勝率(三藍梅死)',
-  positionTheory: '位置率',
+  winRate: '勝率',
+  redWinRate: '紅方勝率',
+  blueMerlinProtect: '藍方守梅',
   roleTheory: '理論勝率',
+  positionTheory: '位置率',
+  redMerlinKillRate: '紅方刺梅',
+  experience: '經驗值',
 };
 
 export default function PlayerRadarChart(): JSX.Element {
@@ -157,13 +159,15 @@ export default function PlayerRadarChart(): JSX.Element {
                 />
               </RadarChart>
             </ResponsiveContainer>
-            {/* Fix #7: Dimension explanation */}
+            {/* Radar dimension explanation */}
             <div className="mt-3 text-xs text-gray-500 space-y-1">
-              <p>藍方勝率(三藍梅活): 藍方陣營完成三任務且梅林未被刺殺的勝率</p>
-              <p>紅方任務勝率(三紅): 紅方陣營通過三次失敗任務的勝率</p>
-              <p>紅方刺殺勝率(三藍梅死): 藍方完成三任務但梅林被刺殺, 紅方勝</p>
-              <p>位置率: 座位位置對勝率的影響</p>
+              <p>勝率: 整體遊戲勝率</p>
+              <p>紅方勝率: 擔任紅方(邪惡)時的勝率</p>
+              <p>藍方守梅: 擔任藍方時完成三任務且梅林未被刺殺的勝率</p>
               <p>理論勝率: 考慮角色分配後的理論勝率</p>
+              <p>位置率: 座位位置對勝率的影響</p>
+              <p>紅方刺梅: 擔任紅方時藍方完成三任務但梅林被刺殺的勝率</p>
+              <p>經驗值: 依總場次換算的經驗指標 (上限 100)</p>
             </div>
           </motion.div>
 
