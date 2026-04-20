@@ -1,20 +1,24 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../store/gameStore';
 import WikiContent from '../components/WikiContent';
 import StreamsSection from '../components/StreamsSection';
 import { WIKI_CATEGORIES } from '../data/wiki';
-import { BookOpen, Users, Lightbulb, ArrowLeft, BarChart3 } from 'lucide-react';
+import { BookOpen, Users, Lightbulb, ArrowLeft, BarChart3, Youtube } from 'lucide-react';
 import { useState } from 'react';
 import { TOTAL_UNIQUE_GAMES } from '../data/roleStats';
 
+type WikiTab = 'articles' | 'streams';
+
 export default function WikiPage(): JSX.Element {
   const { setGameState } = useGameStore();
+  const [activeTab, setActiveTab] = useState<WikiTab>('articles');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showContributeMsg, setShowContributeMsg] = useState(false);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black">
       {/* 返回按钮 */}
-      <div className="absolute top-4 left-4">
+      <div className="absolute top-4 left-4 z-20">
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -30,19 +34,19 @@ export default function WikiPage(): JSX.Element {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-yellow-600/20 to-purple-600/20 border-b border-gray-700 p-8 mb-8"
+        className="bg-gradient-to-r from-yellow-600/20 to-purple-600/20 border-b border-gray-700 p-8"
       >
         <div className="max-w-6xl mx-auto text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
             <BookOpen size={32} className="text-yellow-400" />
             <h1 className="text-4xl md:text-5xl font-bold text-white">Avalon 百科 (Wiki)</h1>
           </div>
-          <p className="text-gray-300 text-lg mb-8">
-            完整的遊戲規則、角色指南、策略分析和常見問題解答 (Game rules, role guides, strategy analysis and FAQ)
+          <p className="text-gray-300 text-lg mb-6">
+            完整的遊戲規則、角色指南、策略分析、實戰直播與數據回放 (Game rules, role guides, strategy analysis, live streams and analysis replays)
           </p>
 
           {/* 快速統計 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="bg-avalon-card/50 border border-gray-600 rounded-lg p-4"
@@ -65,40 +69,112 @@ export default function WikiPage(): JSX.Element {
               <div className="text-gray-400 text-sm">局實戰數據 (Games Analyzed)</div>
             </motion.div>
           </div>
-
-          {/* 分類快速導航 */}
-          <div className="flex flex-wrap justify-center gap-3">
-            {WIKI_CATEGORIES.map((category) => (
-              <motion.button
-                key={category.id}
-                whileHover={{ scale: 1.05 }}
-                onClick={() => {
-                  setSelectedCategory(category.id);
-                  document.getElementById('wiki-content')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className={`inline-flex items-center gap-2 border px-4 py-2 rounded-lg transition-all ${
-                  selectedCategory === category.id
-                    ? 'bg-yellow-500 text-black border-yellow-500'
-                    : 'bg-yellow-500/20 hover:bg-yellow-500/40 border-yellow-600/50 text-yellow-300'
-                }`}
-              >
-                <span>{category.icon}</span>
-                {category.name}
-              </motion.button>
-            ))}
-          </div>
         </div>
       </motion.div>
 
-      {/* 直播回顧 */}
-      <StreamsSection />
-
-      {/* Wiki 內容 */}
-      <div id="wiki-content">
-        <WikiContent selectedCategory={selectedCategory} key={selectedCategory} />
+      {/* Tab 切換 — sticky 讓使用者在內容深處仍可切換 */}
+      <div className="sticky top-0 z-10 bg-avalon-dark/95 backdrop-blur-sm border-b border-gray-700">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap gap-2">
+          <button
+            onClick={() => setActiveTab('articles')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
+              activeTab === 'articles'
+                ? 'bg-yellow-500 text-black shadow-lg'
+                : 'bg-avalon-card/50 text-gray-300 hover:bg-avalon-card border border-gray-600'
+            }`}
+          >
+            <BookOpen size={18} />
+            阿瓦隆百科文章 (Articles)
+          </button>
+          <button
+            onClick={() => setActiveTab('streams')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
+              activeTab === 'streams'
+                ? 'bg-yellow-500 text-black shadow-lg'
+                : 'bg-avalon-card/50 text-gray-300 hover:bg-avalon-card border border-gray-600'
+            }`}
+          >
+            <Youtube size={18} />
+            線上實戰直播 & 數據分析回放 (Streams & Replays)
+          </button>
+        </div>
       </div>
 
-      {/* 貢獻提示 */}
+      {/* Tab 內容 */}
+      <AnimatePresence mode="wait">
+        {activeTab === 'articles' ? (
+          <motion.div
+            key="articles"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.2 }}
+          >
+            {/* 分類快速導航（只在文章 tab 顯示） */}
+            <div className="max-w-6xl mx-auto px-4 pt-6">
+              <div className="flex flex-wrap justify-center gap-3">
+                {WIKI_CATEGORIES.map((category) => (
+                  <motion.button
+                    key={category.id}
+                    whileHover={{ scale: 1.05 }}
+                    onClick={() => setSelectedCategory(category.id)}
+                    className={`inline-flex items-center gap-2 border px-4 py-2 rounded-lg transition-all ${
+                      selectedCategory === category.id
+                        ? 'bg-yellow-500 text-black border-yellow-500'
+                        : 'bg-yellow-500/20 hover:bg-yellow-500/40 border-yellow-600/50 text-yellow-300'
+                    }`}
+                  >
+                    <span>{category.icon}</span>
+                    {category.name}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+
+            {/* Wiki 文章列表 + modal 呈現（不跳頁） */}
+            <div id="wiki-content">
+              <WikiContent selectedCategory={selectedCategory} key={selectedCategory} />
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="streams"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.2 }}
+          >
+            {/* 直播回顧 */}
+            <StreamsSection />
+
+            {/* 進入數據分析頁的入口 */}
+            <div className="max-w-6xl mx-auto px-4 pb-8">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setGameState('analysis')}
+                className="w-full bg-gradient-to-r from-blue-600/30 to-purple-600/30 hover:from-blue-600/50 hover:to-purple-600/50 border border-blue-500/50 rounded-lg p-6 text-left transition-all group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-500/20 rounded-lg border border-blue-400/40">
+                    <BarChart3 size={28} className="text-blue-300" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-white mb-1">
+                      完整數據分析 (Full Game Analysis) →
+                    </h3>
+                    <p className="text-sm text-gray-300">
+                      {TOTAL_UNIQUE_GAMES.toLocaleString()} 局實戰：總覽 / 玩家雷達 / 座位 / 默契 / 任務 / 回合 / 湖中女神 / 隊長分析
+                    </p>
+                  </div>
+                </div>
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 貢獻提示 — 全頁底部 */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -139,6 +215,7 @@ export default function WikiPage(): JSX.Element {
               </p>
               <button
                 onClick={() => {
+                  setActiveTab('articles');
                   setSelectedCategory('rules');
                   document.getElementById('wiki-content')?.scrollIntoView({ behavior: 'smooth' });
                 }}
