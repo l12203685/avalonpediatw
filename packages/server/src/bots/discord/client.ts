@@ -19,6 +19,7 @@ import {
   handleStartCommand,
   handleQuestCommand,
   handleAssassinateCommand,
+  handleEndCommand,
 } from './commands';
 
 /**
@@ -88,6 +89,10 @@ export class DiscordBotClient {
 
         case COMMANDS.START:
           await handleStartCommand(interaction);
+          break;
+
+        case COMMANDS.END:
+          await handleEndCommand(interaction);
           break;
 
         case COMMANDS.STATUS:
@@ -196,6 +201,10 @@ export class DiscordBotClient {
       new SlashCommandBuilder()
         .setName(COMMANDS.START)
         .setDescription('Get the web link so the host can start the game'),
+
+      new SlashCommandBuilder()
+        .setName(COMMANDS.END)
+        .setDescription('Force-end the current room (host only)'),
 
       new SlashCommandBuilder()
         .setName(COMMANDS.STATUS)

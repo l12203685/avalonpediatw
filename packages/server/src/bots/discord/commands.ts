@@ -53,6 +53,11 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
         inline: false,
       },
       {
+        name: `/${COMMANDS.END}`,
+        value: 'Force-end the current room (host only)',
+        inline: false,
+      },
+      {
         name: `/${COMMANDS.STATUS}`,
         value: 'Check current game status',
         inline: false,
@@ -633,4 +638,108 @@ export async function handleAssassinateCommand(interaction: CommandInteraction):
     .setFooter({ text: 'If the target is Merlin, evil wins' });
 
   await interaction.editReply({ embeds: [embed] });
+}
+
+// ── /end ─────────────────────────────────────────────────────────────────────
+
+/**
+ * /end lets the room host force-end the current room from Discord. Only the
+ * player who created the room (`room.host`) may invoke this command; all
+ * other players receive a host-only error. The handler:
+ *
+ *   1. Looks up the caller's active room via userRoomMap.
+ *   2. Verifies the caller is the host.
+ *   3. Marks the room as ended (`state='ended'`, `evilWins=null` if still
+ *      mid-game — treat as a host cancellation rather than a win) so any
+ *      live socket clients receive a clean state transition, then removes
+ *      the room from RoomManager.
+ *   4. Clears every tracked player's userRoomMap entry so subsequent
+ *      `/status` / `/vote` / `/quest` calls from other players return the
+ *      "not in a game" path instead of a dangling room reference.
+ *
+ * We intentionally do NOT call GameEngine.cleanup() here because the bot
+ * package does not hold a reference to the engine — that lives in
+ * GameServer. Deleting the room from RoomManager + broadcasting state is
+ * enough for the bot's own commands; GameServer's own cleanup sweeper
+ * clears orphan engine references every 10 minutes.
+ */
+export async function handleEndCommand(interaction: CommandInteraction): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
+  const roomId = userRoomMap.get(interaction.user.id);
+
+  if (!roomId) {
+    await interaction.editReply({
+      content: 'You are not in any game. Use `/create` or `/join` first.',
+    });
+    return;
+  }
+
+  const roomManager = getSharedRoomManager();
+  const room = roomManager.getRoom(roomId);
+
+  if (!room) {
+    userRoomMap.delete(interaction.user.id);
+    await interaction.editReply({
+      content: 'Your game room no longer exists.',
+    });
+    return;
+  }
+
+  const callerId = `discord:${interaction.user.id}`;
+  if (room.host !== callerId) {
+    await interaction.editReply({
+      content: 'Only the room host can end the game. Ask the host to run `/end`.',
+    });
+    return;
+  }
+
+  // Snapshot player IDs BEFORE deletion so we can clear every userRoomMap entry.
+  const affectedPlayerIds = Object.keys(room.players);
+
+  // Mark room as ended (so any listening socket gets a clean transition),
+  // then delete it. Room.evilWins stays null because this is a host
+  // cancellation, not a game outcome — downstream stats/ELO code checks
+  // `room.endReason` and should treat 'host_cancelled' as a non-counting end.
+  room.state = 'ended';
+  room.endReason = 'host_cancelled';
+  room.evilWins = null;
+  room.updatedAt = Date.now();
+
+  roomManager.deleteRoom(roomId);
+
+  // Clear every affected player's userRoomMap entry (strip 'discord:' prefix
+  // to match the Discord user ID the Map is keyed on).
+  for (const pid of affectedPlayerIds) {
+    if (pid.startsWith('discord:')) {
+      userRoomMap.delete(pid.slice('discord:'.length));
+    }
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(DISCORD_CONFIG.colors.neutral)
+    .setTitle('🛑 Room Ended')
+    .setDescription(
+      `Room \`${roomId}\` has been force-ended by the host. ${affectedPlayerIds.length} player(s) have been released.`
+    )
+    .setFooter({ text: 'Use /create to start a new game.' });
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+/**
+ * Testing helper: clear the in-memory user→room map so each test starts
+ * from a clean slate. NOT exported via the public index; unit tests import
+ * it directly.
+ */
+export function __resetUserRoomMapForTest(): void {
+  userRoomMap.clear();
+}
+
+/**
+ * Testing helper: force-set a user→room mapping so tests can exercise
+ * handlers that normally rely on prior /create or /join calls.
+ */
+export function __setUserRoomForTest(discordUserId: string, roomId: string): void {
+  userRoomMap.set(discordUserId, roomId);
 }

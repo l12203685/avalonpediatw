@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { Room, Player, User, AVALON_CONFIG } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
+import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { RandomAgent } from '../ai/RandomAgent';
@@ -50,6 +51,11 @@ export class GameServer {
   constructor(io: SocketIOServer) {
     this.io = io;
     this.roomManager = new RoomManager();
+    // Make the same RoomManager visible to non-socket callers (Discord /
+    // LINE bot handlers) so a room created via /create can be started,
+    // joined, and ended from either the web or Discord. Without this wiring
+    // the bot throws "RoomManager not initialised" on its first command.
+    setSharedRoomManager(this.roomManager);
   }
 
   public start(): void {
@@ -457,6 +463,29 @@ export class GameServer {
           this.io.to(socketId).emit('game:started', this.sanitizeRoomForPlayer(updatedRoom, pid));
         }
       }
+
+      // DM role reveal to every Discord player. Fire-and-forget: a DM
+      // failure (user has DMs off, transient Discord outage, …) must not
+      // block game start. The helper internally skips non-Discord players
+      // (e.g. socket/web clients) — those already got their role via the
+      // `game:started` event above.
+      //
+      // Dynamic require() is intentional: the server tsconfig excludes
+      // `src/bots/**/*` from typecheck (pre-existing discord.js typing
+      // issues in that subtree), so a static import would pull those
+      // files into the typecheck graph. This keeps them out at build
+      // time while still loading at runtime.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { sendRoleRevealToRoom } = require('../bots/discord/roleReveal');
+        Promise.resolve(sendRoleRevealToRoom(updatedRoom)).catch((err: unknown) =>
+          console.error(`[roleReveal] unexpected error in room ${roomId}:`, err)
+        );
+      } catch (loadErr) {
+        // Module not present (e.g. bot build disabled) — log and continue.
+        console.warn(`[roleReveal] could not load DM helper:`, loadErr);
+      }
+
       const firstLeader = updatedRoom.players[Object.keys(updatedRoom.players)[updatedRoom.leaderIndex % Object.keys(updatedRoom.players).length]];
       this.emitSystemChat(roomId, `🎭 遊戲開始！第一輪隊長：${firstLeader?.name ?? '?'}`);
       console.log(`✓ Game started in room ${roomId}`);
