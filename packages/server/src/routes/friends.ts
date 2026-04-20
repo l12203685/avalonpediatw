@@ -20,6 +20,7 @@ import {
   unfollowUser,
   isFollowing,
   getSupabaseClient,
+  searchUsers,
 } from '../services/supabase';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 
@@ -63,6 +64,22 @@ async function userExists(userId: string): Promise<boolean> {
   const { data } = await db.from('users').select('id').eq('id', userId).single();
   return !!data;
 }
+
+// ── GET /api/friends/search?q=<query> ─────────────────────────
+// Search users by display_name (ILIKE) or UUID substring.
+// Requires login; query <= 60 chars. Excludes self.
+router.get('/search', publicLimiter, async (req: Request, res: Response) => {
+  if (!isSupabaseReady()) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  const supabaseId = await resolveSupabaseId(req.headers.authorization);
+  if (!supabaseId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const raw = typeof req.query.q === 'string' ? req.query.q : '';
+  const results = await searchUsers(raw, supabaseId, 20);
+  return res.json({ results });
+});
 
 // ── GET /api/friends ──────────────────────────────────────────
 // List users I follow (join friendships → users)
