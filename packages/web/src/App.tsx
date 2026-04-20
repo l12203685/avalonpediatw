@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from './store/gameStore';
 import { initializeAuth, onAuthStateChange, extractOAuthTokenFromUrl } from './services/auth';
-import { initializeSocket, disconnectSocket } from './services/socket';
+import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
 import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
 import LobbyPage from './pages/LobbyPage';
@@ -56,7 +56,12 @@ function App(): JSX.Element {
     // Initialize Firebase Auth
     initializeAuth();
 
-    // Listen to auth state changes — re-init socket on page refresh
+    // Listen to auth state changes — re-init socket on page refresh.
+    // Firebase's listener fires `null` for every unauthenticated session,
+    // including guest sessions that have already established a socket via
+    // LoginPage.handleGuest. Do NOT disconnect in that case, or the guest
+    // loses their live socket (+ stored token) and every subsequent action
+    // (create-room / fetch friends) fails with "Socket not initialized".
     const unsubscribe = onAuthStateChange(async (userWithToken) => {
       if (userWithToken) {
         setIsAuthenticated(true);
@@ -65,7 +70,10 @@ function App(): JSX.Element {
         } catch {
           // Socket init failed — user will see connection banner
         }
-      } else {
+      } else if (!getStoredToken()) {
+        // Only tear down when there is no active session at all. A guest
+        // who just finished initializeSocket() in LoginPage already has a
+        // stored token and must be left alone.
         setIsAuthenticated(false);
         disconnectSocket();
       }

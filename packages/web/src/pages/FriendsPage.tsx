@@ -15,6 +15,14 @@ export default function FriendsPage(): JSX.Element {
   useEffect(() => {
     const token = getStoredToken();
     if (!token) { setError('請先登入'); setLoading(false); return; }
+    // Guest tokens are JSON (not a 3-part JWT) and carry no Supabase identity,
+    // so the /api/friends endpoint will always 401/503 for them. Short-circuit
+    // with a clearer message instead of showing "伺服器連線失敗".
+    if (token.split('.').length !== 3) {
+      setError('訪客模式無法使用追蹤功能，請先登入帳號');
+      setLoading(false);
+      return;
+    }
     fetchFriends(token)
       .then(setFriends)
       .catch(() => setError('無法載入好友列表，請確認伺服器連線'))
