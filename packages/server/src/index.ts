@@ -12,6 +12,7 @@ import { friendsRouter } from './routes/friends';
 import { feedbackRouter } from './routes/feedback';
 import { analysisRouter } from './routes/analysis';
 import { claimsRouter } from './routes/claims';
+import { healthDeepRouter } from './routes/healthDeep';
 import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
 import { ensureAdminsSeed } from './services/AdminService';
 
@@ -41,6 +42,8 @@ app.use('/api/feedback', feedbackRouter);
 app.use('/api/analysis', analysisRouter);
 // Claim system: /api/claims/* (player) + /api/admin/* (admin whitelist)
 app.use('/api', claimsRouter);
+// Deep health: /api/health/deep — dependency probe (Plan v2 R0-C)
+app.use('/api', healthDeepRouter);
 
 // HTTP server (needed for Socket.IO)
 const httpServer = createServer(app);
