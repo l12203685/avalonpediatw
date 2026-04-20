@@ -18,6 +18,7 @@ export default function QuestPanel({
 }: QuestPanelProps): JSX.Element {
   const [timeLeft, setTimeLeft] = useState(60); // 60秒任務投票時限 (matches server QUEST_TIMEOUT_MS)
   const isInTeam = room.questTeam.includes(currentPlayer.id);
+  const isGoodSide = currentPlayer.team === 'good';
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
 
@@ -34,6 +35,8 @@ export default function QuestPanel({
 
   const handleVote = async (vote: 'success' | 'fail') => {
     if (!isInTeam || isSubmitting || hasVoted) return;
+    // Client-side guard: good-side can only vote success
+    if (isGoodSide && vote === 'fail') return;
 
     setIsSubmitting(true);
     try {
@@ -45,17 +48,17 @@ export default function QuestPanel({
     }
   };
 
-  // Keyboard shortcuts: S = success, F = fail
+  // Keyboard shortcuts: S = success, F = fail (fail only for evil side)
   useEffect(() => {
     if (!isInTeam || hasVoted || isSubmitting) return;
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 's' || e.key === 'S') handleVote('success');
-      else if (e.key === 'f' || e.key === 'F') handleVote('fail');
+      else if ((e.key === 'f' || e.key === 'F') && !isGoodSide) handleVote('fail');
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isInTeam, hasVoted, isSubmitting]);
+  }, [isInTeam, hasVoted, isSubmitting, isGoodSide]);
 
   if (!isInTeam) {
     const votedCount = room.questVotedCount ?? 0;
@@ -151,16 +154,18 @@ export default function QuestPanel({
             {isSubmitting ? '投票中…' : '任務成功 (Quest Success)'}
           </motion.button>
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => handleVote('fail')}
-            disabled={isSubmitting || isLoading}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
-          >
-            <XCircle size={20} />
-            {isSubmitting ? '投票中…' : '任務失敗 (Quest Fail)'}
-          </motion.button>
+          {!isGoodSide && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleVote('fail')}
+              disabled={isSubmitting || isLoading}
+              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
+            >
+              <XCircle size={20} />
+              {isSubmitting ? '投票中…' : '任務失敗 (Quest Fail)'}
+            </motion.button>
+          )}
         </div>
       )}
 
@@ -172,7 +177,11 @@ export default function QuestPanel({
               ? '只有你在投票…'
               : `${room.questTeam.length} 位隊員投票中…`}
           </p>
-          <p className="text-xs text-gray-600">快捷鍵 (Shortcuts)：<kbd className="bg-gray-800 px-1 rounded">S</kbd> 成功・<kbd className="bg-gray-800 px-1 rounded">F</kbd> 失敗</p>
+          {isGoodSide ? (
+            <p className="text-xs text-gray-600">好人陣營：只能投成功 (Good side can only vote success)・快捷鍵 <kbd className="bg-gray-800 px-1 rounded">S</kbd></p>
+          ) : (
+            <p className="text-xs text-gray-600">快捷鍵 (Shortcuts)：<kbd className="bg-gray-800 px-1 rounded">S</kbd> 成功・<kbd className="bg-gray-800 px-1 rounded">F</kbd> 失敗</p>
+          )}
         </div>
       )}
     </motion.div>

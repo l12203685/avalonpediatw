@@ -626,6 +626,14 @@ export class GameServer {
         return;
       }
 
+      // Avalon rule: good-side players can only vote success.
+      // Server-side guard prevents cheating/modified clients from sending fail.
+      const playerTeam = room.players[playerId]?.team;
+      if (playerTeam === 'good' && vote === 'fail') {
+        socket.emit('error', 'Good players can only vote success');
+        return;
+      }
+
       const gameEngine = this.gameEngines.get(roomId);
       if (!gameEngine) {
         socket.emit('error', 'Game engine not found');
