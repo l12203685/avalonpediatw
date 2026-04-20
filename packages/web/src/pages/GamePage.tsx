@@ -11,7 +11,6 @@ import PersistentNightInfoPanel from '../components/PersistentNightInfoPanel';
 import VoteRevealOverlay from '../components/VoteRevealOverlay';
 import QuestResultOverlay from '../components/QuestResultOverlay';
 import ChatPanel from '../components/ChatPanel';
-import HistoryPanel from '../components/HistoryPanel';
 import MissionTrack from '../components/MissionTrack';
 import SuspicionBoard from '../components/SuspicionBoard';
 import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
@@ -33,7 +32,6 @@ export default function GamePage(): JSX.Element {
   const [pendingVoteReveal, setPendingVoteReveal] = useState<VoteRecord | null>(null);
   const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(() => audioService.isEnabled());
-  const [showScoresheet, setShowScoresheet] = useState(false);
   const [teamSelectTimer, setTeamSelectTimer] = useState(90);
   const prevVoteHistoryLen = useRef(0);
   const prevQuestHistoryLen = useRef(0);
@@ -265,18 +263,6 @@ export default function GamePage(): JSX.Element {
               查看角色
             </button>
             <button
-              onClick={() => setShowScoresheet(s => !s)}
-              title="即時牌譜 (Live Scoresheet)"
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${
-                showScoresheet
-                  ? 'bg-emerald-900/60 hover:bg-emerald-800/70 border-emerald-500 text-emerald-300'
-                  : 'bg-gray-800/50 hover:bg-gray-700/70 border-gray-600 text-gray-300'
-              }`}
-            >
-              <ClipboardList size={16} />
-              <span className="hidden sm:inline">牌譜</span>
-            </button>
-            <button
               onClick={handleToggleAudio}
               title={audioEnabled ? '靜音 (Mute)' : '開啟音效 (Unmute)'}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${
@@ -367,39 +353,25 @@ export default function GamePage(): JSX.Element {
           {/* Quest Phase */}
           {room.state === 'quest' && !isSpectator && <QuestPanel room={room} currentPlayer={currentPlayer} />}
 
-          {/* Round History — always shown in center column under the phase panel */}
-          <HistoryPanel room={room} currentPlayer={currentPlayer} />
+          {/*
+            Live Scoresheet — traditional Avalon paper scoresheet, 固定展開放在中間區下方。
+            空牌譜顯示 "--"，手機直立 10 人 13 欄可完整顯示不橫捲。
+          */}
+          <div className="bg-avalon-card/50 border border-gray-700 rounded-lg overflow-hidden">
+            <div className="px-3 py-2 border-b border-gray-700/50 flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-300 flex items-center gap-1.5">
+                <ClipboardList size={14} className="-mt-0.5" />
+                牌譜
+              </span>
+              <span className="text-[10px] text-gray-500">
+                {room.questHistory.length} 輪任務・{room.voteHistory.length} 次投票
+              </span>
+            </div>
+            <div className="px-2 sm:px-3 py-2">
+              <LiveScoresheet room={room} currentPlayer={currentPlayer} />
+            </div>
+          </div>
         </GameBoard>
-
-        {/* Live Scoresheet — toggled via header button */}
-        <AnimatePresence>
-          {showScoresheet && (
-            <motion.div
-              key="live-scoresheet"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="bg-avalon-card/50 border border-gray-700 rounded-lg overflow-hidden"
-            >
-              <div className="px-4 py-3 border-b border-gray-700/50 flex items-center justify-between">
-                <span className="text-sm font-bold text-gray-300">
-                  <ClipboardList size={14} className="inline mr-1.5 -mt-0.5" />
-                  即時牌譜 (Live Scoresheet)
-                </span>
-                <button
-                  onClick={() => setShowScoresheet(false)}
-                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-                >
-                  收起
-                </button>
-              </div>
-              <div className="px-4 py-3 overflow-y-auto max-h-[60vh]">
-                <LiveScoresheet room={room} currentPlayer={currentPlayer} />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Suspicion Notes — personal private notepad, only shown during active game */}
         {room.state !== 'ended' && room.state !== 'lobby' && !isSpectator && (
