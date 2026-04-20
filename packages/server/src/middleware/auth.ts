@@ -53,18 +53,18 @@ export async function authenticateSocket(socket: Socket, next: (err?: Error) => 
     }
 
     // ── 路徑 2：Firebase Admin 驗證（Google / Email）────────
-    if (isFirebaseAdminReady()) {
+    // 只對看起來像 JWT 的 token（三段 dot-separated）才嘗試 Firebase 驗證；
+    // 否則直接 fallthrough 到 guest path，避免 guest JSON 被誤判成 Invalid token。
+    const looksLikeJwt = typeof token === 'string' && token.split('.').length === 3;
+    if (isFirebaseAdminReady() && looksLikeJwt) {
       let decodedToken;
       try {
         decodedToken = await verifyIdToken(token);
       } catch (error) {
-        const msg = error instanceof Error ? error.message : '';
-        // 如果是明確的 Firebase token 錯誤，直接拒絕
+        const msg = (error instanceof Error ? error.message : '').toLowerCase();
         if (msg.includes('expired')) return next(new Error('Token expired'));
-        if (!msg.includes('JSON') && !msg.includes('invalid')) {
-          return next(new Error('Invalid token'));
-        }
-        // 否則 fallthrough 到路徑 3（guest JSON）
+        // token 結構長得像 JWT 但驗不過 = 偽造/壞掉 → 直接拒絕
+        return next(new Error('Invalid token'));
       }
 
       if (decodedToken) {
