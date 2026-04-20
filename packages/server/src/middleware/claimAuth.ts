@@ -23,7 +23,7 @@ import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import { getUserEmailById } from '../services/supabase';
 import { isAdmin } from '../services/AdminService';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'avalon-dev-secret-change-in-prod';
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
 export interface ClaimAuth {
   /** Stable identifier across requests (JWT sub / Firebase uid / guest uuid) */

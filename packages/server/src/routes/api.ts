@@ -22,10 +22,7 @@ import { createHttpRateLimit } from '../middleware/rateLimit';
 
 const router: IRouter = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'avalon-dev-secret-change-in-prod';
-if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-  console.warn('[SECURITY] JWT_SECRET not set — using insecure default. Set JWT_SECRET in environment!');
-}
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
 // Rate limiting: 60 requests/min per IP for public routes, 10/min for admin
 const publicLimiter = createHttpRateLimit(60 * 1000, 60);

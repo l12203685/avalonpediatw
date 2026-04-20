@@ -5,7 +5,7 @@ import { upsertUser } from '../services/supabase';
 import { User } from '@avalon/shared';
 import { v4 as uuidv4 } from 'uuid';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'avalon-dev-secret-change-in-prod';
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
 /** 嘗試以自訂 JWT 驗證（Discord / Line OAuth 發行） */
 function verifyCustomJwt(token: string): (JwtPayload & { sub: string; displayName: string; provider: string }) | null {

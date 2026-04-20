@@ -73,6 +73,12 @@ const PORT = process.env.PORT || 3001;
 // clients connected into a listening socket whose connection handler wasn't attached
 // yet, causing `socket.once('auth:success')` to time out on the client.
 async function main() {
+  // 0. Critical env vars — fail fast before binding any port
+  if (!process.env.JWT_SECRET) {
+    console.error('[FATAL] JWT_SECRET env var is not set. Refusing to start.');
+    process.exit(1);
+  }
+
   // 1. Firebase — required for ID-token verification in authenticateSocket middleware
   try {
     await initializeFirebase();

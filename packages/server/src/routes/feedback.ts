@@ -23,7 +23,7 @@ import { getSupabaseClient, isSupabaseReady, getSupabaseIdByFirebaseUid } from '
 import { createHttpRateLimit } from '../middleware/rateLimit';
 
 const router: IRouter = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'avalon-dev-secret-change-in-prod';
+const JWT_SECRET = process.env.JWT_SECRET as string;
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
 
 const feedbackLimit = createHttpRateLimit(60_000, 10);  // 10 per min per IP

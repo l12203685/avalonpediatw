@@ -5,7 +5,7 @@ import { upsertUser, createOAuthSession, verifyAndDeleteOAuthSession } from '../
 
 const router: IRouter = Router();
 
-const JWT_SECRET   = process.env.JWT_SECRET   || 'avalon-dev-secret-change-in-prod';
+const JWT_SECRET   = process.env.JWT_SECRET as string;
 const JWT_EXPIRES  = process.env.JWT_EXPIRES_IN || '7d';
 const FRONTEND_URL = process.env.FRONTEND_URL  || 'http://localhost:5173';
 
