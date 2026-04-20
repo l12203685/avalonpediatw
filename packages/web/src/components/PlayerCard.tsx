@@ -34,11 +34,15 @@ export default function PlayerCard({
     <motion.div
       whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.95 }}
-      className="flex flex-col items-center gap-2"
+      // Fixed bounding box so the current player's extra labels don't spill out
+      // and push neighbouring cards off their ring position. `relative` anchors
+      // the absolutely-positioned role hint below the avatar without expanding
+      // the layout box.
+      className="relative flex flex-col items-center gap-1.5 w-16 sm:w-20"
     >
-      {/* 玩家頭像 — smaller on mobile */}
+      {/* Avatar — smaller on mobile */}
       <motion.div
-        className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center font-bold text-sm sm:text-lg border-3 sm:border-4 transition-all relative ${
+        className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm sm:text-lg border-[3px] sm:border-4 transition-all relative overflow-hidden ${
           player.status === 'disconnected'
             ? 'border-gray-600 bg-gradient-to-br from-gray-600 to-gray-700 opacity-50'
             : isCurrentPlayer
@@ -55,79 +59,80 @@ export default function PlayerCard({
             : player.name.charAt(0).toUpperCase()
         }
 
-        {/* 隊長皇冠 */}
+        {/* Leader crown */}
         {isLeader && (
           <motion.div
             initial={{ scale: 0, y: -5 }}
             animate={{ scale: 1, y: 0 }}
-            className="absolute -top-3 left-1/2 -translate-x-1/2"
+            className="absolute -top-3 left-1/2 -translate-x-1/2 pointer-events-none"
           >
-            <Crown size={18} className="text-yellow-400 drop-shadow-md" />
+            <Crown size={16} className="text-yellow-400 drop-shadow-md" />
           </motion.div>
         )}
 
-        {/* 任務隊伍標記 */}
+        {/* Quest team marker */}
         {isOnQuestTeam && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -top-2 -right-2 bg-blue-600 rounded-full p-1"
+            className="absolute -top-1.5 -right-1.5 bg-blue-600 rounded-full p-0.5 pointer-events-none"
           >
-            <Sword size={12} className="text-white" />
+            <Sword size={10} className="text-white" />
           </motion.div>
         )}
 
-        {/* 斷線標記 */}
+        {/* Disconnected marker */}
         {player.status === 'disconnected' && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -bottom-2 -left-2 bg-red-700 rounded-full p-1"
+            className="absolute -bottom-1.5 -left-1.5 bg-red-700 rounded-full p-0.5 pointer-events-none"
           >
-            <WifiOff size={12} className="text-white" />
+            <WifiOff size={10} className="text-white" />
           </motion.div>
         )}
 
-        {/* 投票指示器 */}
+        {/* Vote indicator */}
         {hasVoted && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className={`absolute -bottom-2 -right-2 rounded-full p-1 ${voted === undefined ? 'bg-gray-700' : 'bg-white'}`}
+            className={`absolute -bottom-1.5 -right-1.5 rounded-full p-0.5 pointer-events-none ${voted === undefined ? 'bg-gray-700' : 'bg-white'}`}
           >
             {voted === undefined ? (
               // Vote direction unknown — just show a neutral "voted" checkmark
-              <span className="text-xs text-gray-300 font-bold px-0.5">✓</span>
+              <span className="block text-[10px] leading-none text-gray-300 font-bold px-0.5 py-0.5">✓</span>
             ) : voted ? (
-              <ThumbsUp size={16} className="text-green-500" />
+              <ThumbsUp size={12} className="text-green-500" />
             ) : (
-              <ThumbsDown size={16} className="text-red-500" />
+              <ThumbsDown size={12} className="text-red-500" />
             )}
           </motion.div>
         )}
       </motion.div>
 
-      {/* 玩家名字 */}
-      <p className={`font-bold text-xs sm:text-sm text-center max-w-16 sm:max-w-20 truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
+      {/* Player name — bounded so long names don't widen the card */}
+      <p className={`font-bold text-[11px] sm:text-xs text-center w-full truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
         {player.name}
       </p>
 
-      {/* 角色提示（只有玩家自己可以看） */}
+      {/* Own-role hint — absolutely positioned so it doesn't extend the card's
+          layout box (prevents pushing adjacent ring positions). */}
       {isCurrentPlayer && player.role && (
-        <motion.p
-          initial={{ opacity: 0, y: -10 }}
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-[10px] sm:text-xs font-semibold bg-yellow-600/80 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full"
+          className="absolute left-1/2 top-full mt-1 -translate-x-1/2 flex flex-col items-center gap-0.5 pointer-events-none"
         >
-          {ROLE_NAMES[player.role] ?? player.role}
-        </motion.p>
-      )}
-
-      {/* 隊伍提示 */}
-      {isCurrentPlayer && player.team && (
-        <p className="text-xs text-gray-400">
-          陣營 (Team)：{player.team === 'good' ? '⚔️ 好人 (Good)' : '👹 邪惡 (Evil)'}
-        </p>
+          <span className="text-[10px] sm:text-xs font-semibold bg-yellow-600/90 text-white px-2 py-0.5 rounded-full whitespace-nowrap shadow-md">
+            {ROLE_NAMES[player.role] ?? player.role}
+          </span>
+          {player.team && (
+            <span className="text-[10px] text-gray-300 bg-black/60 px-2 py-0.5 rounded-full whitespace-nowrap">
+              {player.team === 'good' ? '⚔️ 好人' : '👹 邪惡'}
+            </span>
+          )}
+        </motion.div>
       )}
     </motion.div>
   );
