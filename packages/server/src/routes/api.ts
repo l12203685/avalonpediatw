@@ -126,9 +126,11 @@ function emptyProfile(auth: ResolvedAuth): {
 }
 
 // ── GET /api/leaderboard ──────────────────────────────────────
+// 回傳全部有遊戲紀錄的玩家（預估 300-500 位），含 <30 場的菜雞。
+// 前端依 tier 分組顯示；若只拿前 50 名會砍掉菜雞 tab 的所有玩家。
 router.get('/leaderboard', publicLimiter, async (_req: Request, res: Response) => {
   try {
-    const leaderboard = await getFirestoreLeaderboard(50);
+    const leaderboard = await getFirestoreLeaderboard();
     return res.json({ leaderboard });
   } catch (err) {
     console.error('[api/leaderboard] Firestore error:', err);

@@ -200,13 +200,16 @@ export function invalidateLeaderboardCache(): void {
 }
 
 /**
- * Get leaderboard: top N players sorted by ELO descending.
+ * Get leaderboard: all players who have played at least 1 game, sorted by ELO
+ * descending. The full list is returned so the frontend can split into tiers
+ * (including the 菜雞 pre-tier for < 30 games). A cap of 10000 is applied as
+ * a safety net; realistic populations are ~300-500 players.
  *
  * Strategy:
  *   1. Try Google Sheets player stats (primary source, 2145+ games).
  *   2. Fall back to Firestore games collection (online games only).
  */
-export async function getFirestoreLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
+export async function getFirestoreLeaderboard(limit = 10000): Promise<LeaderboardEntry[]> {
   // Try Sheets-based leaderboard first (has the most data)
   const sheetsBoard = await getSheetsLeaderboard(limit);
   if (sheetsBoard.length > 0) {
@@ -298,6 +301,11 @@ function computeEloFromSheets(players: PlayerStats[]): Map<string, { elo: number
 /**
  * Get leaderboard from Google Sheets player stats.
  * This is the primary leaderboard source since it contains 2145+ games of history.
+ *
+ * Returns every player with >= 1 recorded game (capped by `limit`, default
+ * effectively unlimited). The frontend's `rankLeaderboard` splits them into
+ * tiers — crucially, players with < 30 games form the 菜雞 pre-tier and would
+ * be silently dropped if we truncated to top-N by ELO here.
  */
 async function getSheetsLeaderboard(limit: number): Promise<LeaderboardEntry[]> {
   if (!isSheetsReady()) return [];
