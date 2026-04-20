@@ -26,7 +26,7 @@ const ROLE_INFO: Record<Role, {
     bg: 'from-blue-900/80 to-blue-800/60',
     border: 'border-blue-500',
     description: '你是好人的精神領袖。你知道誰是邪惡方，但必須隱藏這個秘密。',
-    knowledge: '你能看到所有邪惡方成員（除了奧伯龍）。小心刺客的注目！',
+    knowledge: '你能看到所有邪惡方成員（除了奧伯倫）。小心刺客的注目！',
   },
   percival: {
     name: '派西維爾 (Percival)',
@@ -65,8 +65,8 @@ const ROLE_INFO: Record<Role, {
     color: 'text-purple-300',
     bg: 'from-purple-900/80 to-purple-800/60',
     border: 'border-purple-500',
-    description: '你偽裝成梅林迷惑帕西瓦爾。讓帕西瓦爾無法分辨你和梅林的差異。',
-    knowledge: '你知道邪惡方隊友。帕西瓦爾眼中，你看起來像梅林。',
+    description: '你偽裝成梅林迷惑派西維爾。讓派西維爾無法分辨你和梅林的差異。',
+    knowledge: '你知道邪惡方隊友。派西維爾眼中，你看起來像梅林。',
   },
   oberon: {
     name: '奧伯倫 (Oberon)',

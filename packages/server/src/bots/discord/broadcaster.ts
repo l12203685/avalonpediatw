@@ -14,7 +14,7 @@ const SYNC_CHANNEL_ID = '1132901301802504242'; // #同步閒聊
 const ROLE_LABELS: Record<Role, string> = {
   merlin: '梅林 (Merlin)',
   percival: '派西維爾 (Percival)',
-  loyal: '忠誠臣民',
+  loyal: '亞瑟的忠臣',
   assassin: '刺客 (Assassin)',
   morgana: '莫甘娜 (Morgana)',
   oberon: '奧伯倫 (Oberon)',
