@@ -4,7 +4,8 @@ import { createRoom, joinRoom, listRooms, spectateRoom, getSocket, getStoredToke
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
 import { fetchAdminMe } from '../services/api';
-import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot, BarChart3, ShieldCheck } from 'lucide-react';
+import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot, BarChart3, ShieldCheck, Clock } from 'lucide-react';
+import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 
 interface OpenRoom {
   id: string;
@@ -328,6 +329,18 @@ export default function HomePage(): JSX.Element {
                   快速練習
                 </motion.button>
               </div>
+
+              {currentPlayer && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigateToProfile('me')}
+                  className="w-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-gray-600 hover:border-gray-500"
+                >
+                  <UserCircle size={20} />
+                  個人資訊維護 (Profile)
+                </motion.button>
+              )}
 
               <motion.button
                 whileHover={{ scale: 1.02 }}
