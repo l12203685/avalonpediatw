@@ -13,9 +13,22 @@ const SYNC_CHANNEL_ID = '1132901301802504242'; // #同步閒聊
 
 /**
  * Build the web platform join URL for a given room.
+ *
+ * In production the WEB_BASE_URL environment variable MUST be set — otherwise
+ * we throw rather than fall back to `http://localhost:3000`, which would be a
+ * broken link for real Discord users. Local/dev environments still fall back
+ * to localhost for convenience.
  */
 export function buildGameJoinUrl(roomId: string): string {
-  const baseUrl = process.env.WEB_BASE_URL || 'http://localhost:3000';
+  const baseUrl = process.env.WEB_BASE_URL;
+  if (!baseUrl) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'WEB_BASE_URL is not configured. Set WEB_BASE_URL before starting the Discord bot in production.'
+      );
+    }
+    return `http://localhost:3000/game/${roomId}`;
+  }
   return `${baseUrl}/game/${roomId}`;
 }
 

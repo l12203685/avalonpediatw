@@ -43,6 +43,7 @@ export const COMMANDS = {
   CREATE: 'create',
   JOIN: 'join',
   START: 'start',
+  END: 'end',
   STATUS: 'status',
   VOTE: 'vote',
   QUEST: 'quest',

@@ -91,7 +91,7 @@ export interface Room {
   voteHistory: VoteRecord[];   // All team-vote records (public info for deduction)
   questHistory: QuestRecord[]; // All completed quest records
   questVotedCount: number;     // How many quest team members have submitted their vote (count only, not direction)
-  endReason?: 'failed_quests' | 'vote_rejections' | 'merlin_assassinated' | 'assassination_failed' | 'assassination_timeout'; // Why game ended
+  endReason?: 'failed_quests' | 'vote_rejections' | 'merlin_assassinated' | 'assassination_failed' | 'assassination_timeout' | 'host_cancelled'; // Why game ended
   assassinTargetId?: string;   // ID of the player the assassin targeted (set on game end)
   roleOptions: RoleOptions;    // Host-configured optional role toggles
   readyPlayerIds: string[];    // Player IDs who clicked "Ready" in lobby
