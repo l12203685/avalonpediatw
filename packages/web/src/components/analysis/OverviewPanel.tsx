@@ -69,10 +69,17 @@ export default function OverviewPanel(): JSX.Element {
     { name: '三藍梅死 (Merlin Killed)', value: overview.outcomeBreakdown.threeBlueDeadPct, fill: '#f59e0b' },
   ];
 
-  // Seat position win rates
+  // Seat position win rates.
+  // Map includes both canonical role names and legacy short forms (娜美/德魯/奧伯/派西)
+  // so colors stay consistent while analysis_cache.json is pending regeneration.
   const ROLE_COLORS: Record<string, string> = {
-    '刺客': '#ef4444', '娜美': '#f87171', '德魯': '#fb923c', '奧伯': '#fbbf24',
-    '派西': '#3b82f6', '梅林': '#60a5fa', '忠臣': '#93c5fd',
+    '刺客': '#ef4444',
+    '莫甘娜': '#f87171', '娜美': '#f87171',
+    '莫德雷德': '#fb923c', '德魯': '#fb923c',
+    '奧伯倫': '#fbbf24', '奧伯': '#fbbf24',
+    '派西維爾': '#3b82f6', '派西': '#3b82f6',
+    '梅林': '#60a5fa',
+    '忠臣': '#93c5fd',
   };
 
   const seatData = overview.seatPositionWinRates;

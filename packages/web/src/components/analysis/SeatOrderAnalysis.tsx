@@ -79,7 +79,7 @@ export default function SeatOrderAnalysis(): JSX.Element {
           派/梅/娜 座位順序分析 (Percival/Merlin/Morgana Seat Order)
         </h3>
         <p className="text-[10px] text-gray-600 mb-3">
-          分析派西(派)/梅林(梅)/娜美(娜) 三位關鍵角色的 6 種座位排列順序對勝率的影響。共 {data.totalGames} 局有效資料, 整體紅方勝率 {data.overallRedWinRate}%
+          分析派西維爾(派)/梅林(梅)/莫甘娜(娜) 三位關鍵角色的 6 種座位排列順序對勝率的影響。共 {data.totalGames} 局有效資料, 整體紅方勝率 {data.overallRedWinRate}%
         </p>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -212,10 +212,10 @@ export default function SeatOrderAnalysis(): JSX.Element {
         <h3 className="text-sm font-bold text-gray-400 mb-2">分析結論</h3>
         <ul className="text-xs text-gray-300 space-y-2 list-disc list-inside">
           <li>
-            <span className="text-white font-bold">梅娜派</span> 紅勝率最低(~41%) -- 梅林和莫甘娜相鄰，派西更容易辨別真假梅林
+            <span className="text-white font-bold">梅娜派</span> 紅勝率最低(~41%) -- 梅林和莫甘娜相鄰，派西維爾更容易辨別真假梅林
           </li>
           <li>
-            <span className="text-white font-bold">梅派娜</span> 紅勝率最高(~48%) -- 派西夾在中間，對隊友的資訊傳遞效率降低
+            <span className="text-white font-bold">梅派娜</span> 紅勝率最高(~48%) -- 派西維爾夾在中間，對隊友的資訊傳遞效率降低
           </li>
           <li>
             穿插場次中紅方勝率是否有差異 -- 比較上表「穿插紅勝率」vs「無穿插紅勝率」，

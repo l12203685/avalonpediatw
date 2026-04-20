@@ -120,8 +120,8 @@ export default function RoundsAnalysis(): JSX.Element {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <VisionCard title="梅林在隊" data={data.visionStats.merlinInTeam} />
           <VisionCard title="梅林不在隊" data={data.visionStats.merlinNotInTeam} />
-          <VisionCard title="派西在隊" data={data.visionStats.percivalInTeam} />
-          <VisionCard title="派西不在隊" data={data.visionStats.percivalNotInTeam} />
+          <VisionCard title="派西維爾在隊" data={data.visionStats.percivalInTeam} />
+          <VisionCard title="派西維爾不在隊" data={data.visionStats.percivalNotInTeam} />
         </div>
       </motion.div>
 

@@ -74,7 +74,7 @@ export default function LakeAnalysis(): JSX.Element {
       redWinRate: r.redWinRate,
       blueWinRate: r.blueWinRate ?? 0,
       games: r.games,
-      fill: ['刺客', '娜美', '德魯', '奧伯'].includes(r.role) ? '#ef4444' : '#3b82f6',
+      fill: ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '娜美', '德魯', '奧伯'].includes(r.role) ? '#ef4444' : '#3b82f6',
     })) ?? [];
 
   // Target role stats for selected lake
@@ -85,7 +85,7 @@ export default function LakeAnalysis(): JSX.Element {
       role: r.role,
       redWinRate: r.redWinRate,
       games: r.games,
-      fill: ['刺客', '娜美', '德魯', '奧伯'].includes(r.role) ? '#ef4444' : '#3b82f6',
+      fill: ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '娜美', '德魯', '奧伯'].includes(r.role) ? '#ef4444' : '#3b82f6',
     })) ?? [];
 
   return (

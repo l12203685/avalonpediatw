@@ -201,12 +201,12 @@ export default function PlayerRadarChart(): JSX.Element {
                   .map(([role, wr]) => (
                     <div key={role} className="flex items-center gap-2">
                       <span className={`text-xs w-10 font-semibold ${
-                        ['刺客', '娜美', '德魯', '奧伯'].includes(role) ? 'text-red-400' : 'text-blue-400'
+                        ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '娜美', '德魯', '奧伯'].includes(role) ? 'text-red-400' : 'text-blue-400'
                       }`}>{role}</span>
                       <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
-                            ['刺客', '娜美', '德魯', '奧伯'].includes(role) ? 'bg-red-500' : 'bg-blue-500'
+                            ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '娜美', '德魯', '奧伯'].includes(role) ? 'bg-red-500' : 'bg-blue-500'
                           }`}
                           style={{ width: `${wr}%` }}
                         />
