@@ -20,11 +20,19 @@ export function getSocket(): Socket {
   if (!socket) {
     throw new Error('Socket not initialized');
   }
+  if (!socket.connected) {
+    throw new Error('尚未連線 - 請稍候再試');
+  }
   return socket;
 }
 
 export async function initializeSocket(token: string): Promise<void> {
-  if (socket) return;
+  if (socket?.connected) return;
+  // Tear down a stale disconnected socket before re-creating
+  if (socket && !socket.connected) {
+    socket.disconnect();
+    socket = null;
+  }
   _storedToken = token;
 
   const store = useGameStore.getState();
