@@ -6,6 +6,8 @@ import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
 import TeamSelectionPanel from '../components/TeamSelectionPanel';
 import RoleRevealModal from '../components/RoleRevealModal';
+// [TASK #41 night-info] persistent panel so per-player night info never disappears
+import PersistentNightInfoPanel from '../components/PersistentNightInfoPanel';
 import VoteRevealOverlay from '../components/VoteRevealOverlay';
 import QuestResultOverlay from '../components/QuestResultOverlay';
 import ChatPanel from '../components/ChatPanel';
@@ -209,7 +211,7 @@ export default function GamePage(): JSX.Element {
         />
       )}
 
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Reconnection status banner */}
         <AnimatePresence>
           {(socketStatus === 'reconnecting' || socketStatus === 'disconnected') && (
@@ -319,11 +321,55 @@ export default function GamePage(): JSX.Element {
           </AnimatePresence>
         </div>
 
-        {/* Game Board */}
-        <GameBoard room={room} currentPlayer={currentPlayer} />
+        {/* Game Board — 5v5 rails with center panel (quest/vote/history) per Edward spec */}
+        <GameBoard room={room} currentPlayer={currentPlayer}>
+          {/* Center column content — phase panel + history */}
 
-        {/* Round History */}
-        <HistoryPanel room={room} currentPlayer={currentPlayer} />
+          {/* Voting Phase */}
+          {room.state === 'voting' && !isSpectator && (
+            !teamSelected ? (
+              isCurrentPlayerLeader ? (
+                <TeamSelectionPanel
+                  room={room}
+                  currentPlayer={currentPlayer}
+                  isLoading={isVoting}
+                  timer={teamSelectTimer}
+                />
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-avalon-card/50 border-2 border-yellow-700 rounded-lg p-6 text-center space-y-3"
+                >
+                  <div className="text-4xl">⏳</div>
+                  <h2 className="text-xl font-bold text-white">等待隊長選隊</h2>
+                  <p className="text-gray-300 text-sm">
+                    隊長 <span className="text-yellow-400 font-bold">{room.players[leaderId]?.name}</span> 正在選擇任務隊員...
+                  </p>
+                  <div className="flex items-center justify-center gap-3 text-xs text-gray-500 flex-wrap">
+                    <span>本輪需要 {AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? '?'} 名隊員</span>
+                    <span className={`px-3 py-1 rounded-full font-bold ${teamSelectTimer < 20 ? 'bg-red-900/60 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
+                      ⏱ {teamSelectTimer}s
+                    </span>
+                  </div>
+                </motion.div>
+              )
+            ) : (
+              <VotePanel
+                room={room}
+                currentPlayer={currentPlayer}
+                onVote={handleVote}
+                isLoading={isVoting}
+              />
+            )
+          )}
+
+          {/* Quest Phase */}
+          {room.state === 'quest' && !isSpectator && <QuestPanel room={room} currentPlayer={currentPlayer} />}
+
+          {/* Round History — always shown in center column under the phase panel */}
+          <HistoryPanel room={room} currentPlayer={currentPlayer} />
+        </GameBoard>
 
         {/* Live Scoresheet — toggled via header button */}
         <AnimatePresence>
@@ -359,53 +405,6 @@ export default function GamePage(): JSX.Element {
         {room.state !== 'ended' && room.state !== 'lobby' && !isSpectator && (
           <SuspicionBoard room={room} currentPlayer={currentPlayer} />
         )}
-
-        {/* Voting Phase */}
-        {room.state === 'voting' && !isSpectator && (
-          <>
-            {!teamSelected ? (
-              /* Step 1: Leader selects team */
-              isCurrentPlayerLeader ? (
-                <TeamSelectionPanel
-                  room={room}
-                  currentPlayer={currentPlayer}
-                  isLoading={isVoting}
-                  timer={teamSelectTimer}
-                />
-              ) : (
-                /* Non-leaders wait for leader */
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-avalon-card/50 border-2 border-yellow-700 rounded-lg p-8 text-center space-y-4"
-                >
-                  <div className="text-4xl">⏳</div>
-                  <h2 className="text-2xl font-bold text-white">等待隊長選隊</h2>
-                  <p className="text-gray-300">
-                    隊長 <span className="text-yellow-400 font-bold">{room.players[leaderId]?.name}</span> 正在選擇任務隊員...
-                  </p>
-                  <div className="flex items-center justify-center gap-3 text-sm text-gray-500">
-                    <span>本輪需要 {AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? '?'} 名隊員</span>
-                    <span className={`px-3 py-1 rounded-full font-bold ${teamSelectTimer < 20 ? 'bg-red-900/60 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
-                      ⏱ {teamSelectTimer}s
-                    </span>
-                  </div>
-                </motion.div>
-              )
-            ) : (
-              /* Step 2: All players vote on the proposed team */
-              <VotePanel
-                room={room}
-                currentPlayer={currentPlayer}
-                onVote={handleVote}
-                isLoading={isVoting}
-              />
-            )}
-          </>
-        )}
-
-        {/* Quest Phase */}
-        {room.state === 'quest' && !isSpectator && <QuestPanel room={room} currentPlayer={currentPlayer} />}
 
         {/* Lady of the Lake Phase */}
         {room.state === 'lady_of_the_lake' && !isSpectator && (
@@ -682,6 +681,13 @@ export default function GamePage(): JSX.Element {
       {/* Floating chat — available during all game phases */}
       {room.state !== 'lobby' && (
         <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} />
+      )}
+
+      {/* [TASK #41 night-info] Always-on role + night-info panel. Docked bottom-left so
+          players can re-check their night vision any time without hunting for a button.
+          Shows only the viewer's own role — never leaks other players' secrets. */}
+      {room.state !== 'lobby' && room.state !== 'ended' && !isSpectator && currentPlayer.role && (
+        <PersistentNightInfoPanel room={room} currentPlayer={currentPlayer} />
       )}
     </div>
   );

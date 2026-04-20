@@ -2,11 +2,13 @@ import { Room, Player } from '@avalon/shared';
 import PlayerCard from './PlayerCard';
 import { motion } from 'framer-motion';
 import audioService from '../services/audio';
-import { useEffect, useLayoutEffect, useState, useRef } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 interface GameBoardProps {
   room: Room;
   currentPlayer: Player;
+  /** Content rendered in the center column (quest/vote/history panels). */
+  children?: ReactNode;
 }
 
 const STATE_LABELS: Record<string, string> = {
@@ -18,15 +20,26 @@ const STATE_LABELS: Record<string, string> = {
   ended:            '結束 (Ended)',
 };
 
-// Offset so the first player sits at the top (12 o'clock) instead of the right (3 o'clock).
-// This makes the ring feel natural and matches tabletop seating conventions.
-const ANGLE_OFFSET_DEG = -90;
-
-export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.Element {
-  const playerCount = Object.values(room.players).length;
-  const angleSlice = playerCount > 0 ? 360 / playerCount : 0;
+/**
+ * 5v5 rails layout per Edward 2026-04-20 spec:
+ *   ┌─────────┬──────────────────────┬─────────┐
+ *   │ left    │   center (children)  │ right   │
+ *   │ players │   quest + history    │ players │
+ *   │ 1..N/2  │   + chat            │ N/2..N  │
+ *   └─────────┴──────────────────────┴─────────┘
+ * Desktop: three columns (~210px | flex-1 | ~210px).
+ * Mobile (<768px): stacked — left rail (horizontal scroll) over center over right rail.
+ */
+export default function GameBoard({ room, currentPlayer, children }: GameBoardProps): JSX.Element {
+  const players = Object.values(room.players);
   const playerIds = Object.keys(room.players);
   const leaderId = playerIds[room.leaderIndex % playerIds.length];
+
+  // Split players into left/right halves. Ceil puts the extra player on the left for odd counts.
+  // 5→3+2, 6→3+3, 7→4+3, 8→4+4, 9→5+4, 10→5+5.
+  const splitIndex = Math.ceil(players.length / 2);
+  const leftPlayers = players.slice(0, splitIndex);
+  const rightPlayers = players.slice(splitIndex);
 
   // Play sound on state change
   useEffect(() => {
@@ -48,148 +61,120 @@ export default function GameBoard({ room, currentPlayer }: GameBoardProps): JSX.
     }
   }, [room.state, room.evilWins]);
 
-  // Measure the container width with ResizeObserver so the board reacts to
-  // orientation changes, DevTools mobile mode, and container resizes without
-  // relying on `window.innerWidth` read at render time (which breaks when the
-  // viewport changes after mount). Falling back to `window.innerWidth` only
-  // for the very first paint before layout completes.
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number>(() =>
-    typeof window !== 'undefined' ? window.innerWidth : 480,
+  const renderPlayerCard = (player: Player, seatIndex: number, side: 'left' | 'right'): JSX.Element => (
+    <motion.div
+      key={player.id}
+      initial={{ opacity: 0, x: side === 'left' ? -20 : 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: seatIndex * 0.05 }}
+    >
+      <PlayerCard
+        player={player}
+        isCurrentPlayer={player.id === currentPlayer.id}
+        hasVoted={room.votes[player.id] !== undefined}
+        // During voting, only reveal own vote direction; others show as undefined (just "has voted")
+        voted={
+          room.state === 'voting' && player.id !== currentPlayer.id
+            ? undefined
+            : room.votes[player.id]
+        }
+        isLeader={player.id === leaderId}
+        isOnQuestTeam={room.questTeam.includes(player.id)}
+        seatNumber={seatIndex + 1}
+        side={side}
+      />
+    </motion.div>
   );
-  useLayoutEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const measure = (): void => {
-      const w = el.clientWidth;
-      if (w > 0) setContainerWidth(w);
-    };
-    measure();
-    let ro: ResizeObserver | undefined;
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(measure);
-      ro.observe(el);
-    }
-    window.addEventListener('resize', measure);
-    return (): void => {
-      ro?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, []);
-
-  // Derive all sizes from the actual container width rather than mutating a
-  // post-render transform. The ring never needs scale-hacks that previously
-  // shifted children off-centre.
-  const isMobile = containerWidth < 480;
-  // Card bounding box (wide enough for role/team labels on the current player).
-  const cardAllowance = isMobile ? 56 : 72;
-  // Safety gutter so the outermost card edge doesn't kiss the container edge.
-  const gutter = 12;
-  // Ideal ring radius per player count — larger counts need more circumference
-  // so neighbouring cards don't collide.
-  const idealRadius = isMobile
-    ? (playerCount <= 6 ? 110 : playerCount <= 8 ? 130 : 150)
-    : (playerCount <= 6 ? 150 : playerCount <= 8 ? 175 : 200);
-  // Shrink radius if the container is narrower than the ideal ring + card edge.
-  const maxRadiusForWidth = Math.max(60, (containerWidth - gutter * 2) / 2 - cardAllowance);
-  const radius = Math.min(idealRadius, maxRadiusForWidth);
-  // Board is just big enough to fit the ring + card edges; keeps the layout
-  // compact on desktop while still filling narrow phones.
-  const boardSize = Math.max(200, radius * 2 + cardAllowance * 2);
 
   return (
-    <div
-      ref={containerRef}
-      className="w-full max-w-2xl mx-auto flex justify-center"
-    >
-      <div
-        className="relative"
-        style={{ width: boardSize, height: boardSize }}
-      >
-        {/* Background ring — sized in sync with the avatar ring so cards sit on its edge */}
-        <motion.div
-          animate={{
-            boxShadow: [
-              '0 0 20px rgba(59, 130, 246, 0.3)',
-              '0 0 40px rgba(59, 130, 246, 0.5)',
-              '0 0 20px rgba(59, 130, 246, 0.3)',
-            ],
-          }}
-          transition={{ duration: 3, repeat: Infinity }}
-          style={{
-            width: radius * 2,
-            height: radius * 2,
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-          }}
-          className="absolute rounded-full border-2 border-gray-600 bg-gradient-to-b from-avalon-dark/50 to-transparent pointer-events-none"
-        />
+    <div className="w-full">
+      {/* Desktop / tablet: three-column grid */}
+      <div className="hidden md:grid gap-3 lg:gap-4" style={{ gridTemplateColumns: '210px minmax(0, 1fr) 210px' }}>
+        {/* Left player rail */}
+        <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
+          {leftPlayers.map((p, i) => renderPlayerCard(p, i, 'left'))}
+        </aside>
 
-        {/* Centre status text — sits behind player cards so it never masks avatars */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none z-0"
-        >
-          <motion.p
-            key={room.state}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="text-lg sm:text-xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent whitespace-nowrap"
+        {/* Center — state banner + children (quest/vote/history) */}
+        <section className="flex flex-col gap-3 min-w-0">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-3 px-4"
           >
-            {STATE_LABELS[room.state] ?? room.state}
-          </motion.p>
-
-          {/* Vote progress counter */}
-          {room.state === 'voting' && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
+            <motion.p
+              key={room.state}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-2 text-xs text-gray-400"
+              className="text-lg sm:text-xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
             >
-              <p>{Object.keys(room.votes).length}/{playerCount} 人已投票</p>
-            </motion.div>
-          )}
-        </motion.div>
+              {STATE_LABELS[room.state] ?? room.state}
+            </motion.p>
+            {room.state === 'voting' && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-1 text-xs text-gray-400"
+              >
+                {Object.keys(room.votes).length}/{players.length} 人已投票
+              </motion.p>
+            )}
+          </motion.div>
 
-        {/* Players arranged around the ring — z-10 keeps them above the centre text */}
-        {Object.values(room.players).map((player, index) => {
-          const angle = (angleSlice * index + ANGLE_OFFSET_DEG) * (Math.PI / 180);
-          const x = Math.cos(angle) * radius;
-          const y = Math.sin(angle) * radius;
+          {children}
+        </section>
 
-          return (
-            <motion.div
-              key={player.id}
-              initial={{ opacity: 0, scale: 0 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.08 }}
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
-              }}
-              className="z-10"
+        {/* Right player rail */}
+        <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
+          {rightPlayers.map((p, i) => renderPlayerCard(p, splitIndex + i, 'right'))}
+        </aside>
+      </div>
+
+      {/* Mobile: stack rails horizontally above/below the center */}
+      <div className="md:hidden flex flex-col gap-3">
+        <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {leftPlayers.map((p, i) => (
+              <div key={p.id} className="min-w-[160px] flex-shrink-0">
+                {renderPlayerCard(p, i, 'left')}
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <section className="flex flex-col gap-3 min-w-0">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-2 px-3"
+          >
+            <motion.p
+              key={room.state}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-base font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
             >
-              <PlayerCard
-                player={player}
-                isCurrentPlayer={player.id === currentPlayer.id}
-                hasVoted={room.votes[player.id] !== undefined}
-                // During voting, only reveal own vote direction; others show as undefined (just "has voted")
-                voted={
-                  room.state === 'voting' && player.id !== currentPlayer.id
-                    ? undefined
-                    : room.votes[player.id]
-                }
-                isLeader={player.id === leaderId}
-                isOnQuestTeam={room.questTeam.includes(player.id)}
-              />
-            </motion.div>
-          );
-        })}
+              {STATE_LABELS[room.state] ?? room.state}
+            </motion.p>
+            {room.state === 'voting' && (
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                {Object.keys(room.votes).length}/{players.length} 人已投票
+              </p>
+            )}
+          </motion.div>
+
+          {children}
+        </section>
+
+        <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {rightPlayers.map((p, i) => (
+              <div key={p.id} className="min-w-[160px] flex-shrink-0">
+                {renderPlayerCard(p, splitIndex + i, 'right')}
+              </div>
+            ))}
+          </div>
+        </aside>
       </div>
     </div>
   );
