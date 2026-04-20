@@ -24,32 +24,105 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
 const publicLimiter = createHttpRateLimit(60 * 1000, 60);
 const adminLimiter  = createHttpRateLimit(60 * 1000, 10);
 
-// ── 工具：從 Authorization header 解析玩家 ID ──────────────────
-// 支援 Firebase ID Token 和自訂 JWT（Discord/Line）
-// 回傳 playerId（Firestore games 中的 playerId，可能是 firebase uid 或 display name）
-async function resolvePlayerId(authHeader: string | undefined): Promise<string | null> {
+// ── 工具：從 Authorization header 解析玩家身份 ─────────────────
+// 支援 Firebase ID Token、自訂 JWT（Discord/Line）、Guest JSON
+// 回傳 { playerId, displayName?, provider? }，以便在 Firestore/Sheets 找不到記錄時
+// 仍可回傳空 profile（顯示玩家名稱 + 零遊戲）。
+interface ResolvedAuth {
+  playerId: string;
+  displayName?: string;
+  provider?: string;
+}
+
+async function resolvePlayerAuth(authHeader: string | undefined): Promise<ResolvedAuth | null> {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
 
-  // 嘗試自訂 JWT（Discord/Line：sub 是 player ID）
-  try {
-    const payload = verify(token, JWT_SECRET) as JwtPayload;
-    if (payload.sub) return payload.sub;
-  } catch {
-    // not a custom JWT, continue
-  }
-
-  // 嘗試 Firebase ID Token → uid 就是 playerId
-  if (isFirebaseAdminReady()) {
+  // 路徑 1：自訂 JWT（Discord/Line：sub 是 player ID）
+  // 僅對看起來像 JWT 的 token（三段 dot-separated）才嘗試 JWT verify。
+  const looksLikeJwt = typeof token === 'string' && token.split('.').length === 3;
+  if (looksLikeJwt) {
     try {
-      const decoded = await verifyIdToken(token);
-      return decoded.uid;
+      const payload = verify(token, JWT_SECRET) as JwtPayload & {
+        sub?: string;
+        displayName?: string;
+        provider?: string;
+      };
+      if (payload.sub) {
+        return {
+          playerId:    payload.sub,
+          displayName: payload.displayName,
+          provider:    payload.provider,
+        };
+      }
     } catch {
-      // invalid token
+      // not a custom JWT, continue
+    }
+
+    // 路徑 2：Firebase ID Token → uid 就是 playerId
+    if (isFirebaseAdminReady()) {
+      try {
+        const decoded = await verifyIdToken(token);
+        return {
+          playerId:    decoded.uid,
+          displayName: decoded.name || (decoded.email?.split('@')[0] ?? undefined),
+          provider:    'google',
+        };
+      } catch {
+        // invalid token
+      }
     }
   }
 
+  // 路徑 3：Guest JSON { uid, displayName }
+  try {
+    const parsed = JSON.parse(token) as { uid?: string; displayName?: string };
+    if (parsed.uid) {
+      return {
+        playerId:    parsed.uid,
+        displayName: parsed.displayName || 'Guest',
+        provider:    'guest',
+      };
+    }
+  } catch {
+    // not JSON, give up
+  }
+
   return null;
+}
+
+/** @deprecated 保留以防其他呼叫者，內部改用 resolvePlayerAuth */
+async function resolvePlayerId(authHeader: string | undefined): Promise<string | null> {
+  const auth = await resolvePlayerAuth(authHeader);
+  return auth?.playerId ?? null;
+}
+void resolvePlayerId;
+
+/** 建立空 profile（新登入但尚無遊戲記錄的玩家） */
+function emptyProfile(auth: ResolvedAuth): {
+  id: string;
+  display_name: string;
+  photo_url: null;
+  provider: string;
+  elo_rating: number;
+  total_games: number;
+  games_won: number;
+  games_lost: number;
+  badges: string[];
+  recent_games: [];
+} {
+  return {
+    id:           auth.playerId,
+    display_name: auth.displayName || auth.playerId,
+    photo_url:    null,
+    provider:     auth.provider || 'guest',
+    elo_rating:   1000,
+    total_games:  0,
+    games_won:    0,
+    games_lost:   0,
+    badges:       [],
+    recent_games: [],
+  };
 }
 
 // ── GET /api/leaderboard ──────────────────────────────────────
@@ -65,20 +138,27 @@ router.get('/leaderboard', publicLimiter, async (_req: Request, res: Response) =
 
 // ── GET /api/profile/me ───────────────────────────────────────
 router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => {
-  // Resolve player ID from auth token
-  const playerId = await resolvePlayerId(req.headers.authorization);
-  if (!playerId) {
+  // Resolve player from auth token
+  const auth = await resolvePlayerAuth(req.headers.authorization);
+  if (!auth) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
-    const profile = await getFirestoreUserProfile(playerId);
+    // 先用 playerId 試查
+    let profile = await getFirestoreUserProfile(auth.playerId);
+    // 若找不到，再嘗試用 displayName 查（Firestore games 有時用 display name 當 playerId）
+    if (!profile && auth.displayName) {
+      profile = await getFirestoreUserProfile(auth.displayName);
+    }
+    // 仍找不到 → 回空 profile（新玩家尚無遊戲記錄）
     if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
+      return res.json({ profile: emptyProfile(auth) });
     }
     return res.json({ profile });
   } catch (err) {
     console.error('[api/profile/me] Firestore error:', err);
-    return res.status(503).json({ error: 'Database not configured' });
+    // 退化成空 profile 而非 503，避免個人資料頁整個壞掉
+    return res.json({ profile: emptyProfile(auth) });
   }
 });
 

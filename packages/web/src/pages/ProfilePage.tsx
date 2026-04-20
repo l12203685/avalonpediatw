@@ -133,7 +133,16 @@ export default function ProfilePage(): JSX.Element {
 
     fetch
       .then(setProfile)
-      .catch(() => setError('無法載入用戶資料'))
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.includes('404')) {
+          setError('尚無遊戲記錄 — 完成一場遊戲後就能看到你的個人資料');
+        } else if (msg.includes('401')) {
+          setError('請先登入才能查看個人資料');
+        } else {
+          setError('無法載入用戶資料，請稍後再試');
+        }
+      })
       .finally(() => setLoading(false));
   }, [profileUserId]);
 
