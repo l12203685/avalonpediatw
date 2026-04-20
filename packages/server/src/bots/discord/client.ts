@@ -16,6 +16,9 @@ import {
   handleVoteCommand,
   handleRulesCommand,
   handleRolesCommand,
+  handleStartCommand,
+  handleQuestCommand,
+  handleAssassinateCommand,
 } from './commands';
 
 /**
@@ -83,6 +86,10 @@ export class DiscordBotClient {
           break;
         }
 
+        case COMMANDS.START:
+          await handleStartCommand(interaction);
+          break;
+
         case COMMANDS.STATUS:
           await handleStatusCommand(interaction);
           break;
@@ -93,6 +100,16 @@ export class DiscordBotClient {
           break;
         }
 
+        case COMMANDS.QUEST: {
+          const vote = interaction.options.getString('result') as 'success' | 'fail';
+          await handleQuestCommand(interaction, vote);
+          break;
+        }
+
+        case COMMANDS.ASSASSINATE:
+          await handleAssassinateCommand(interaction);
+          break;
+
         case COMMANDS.RULES:
           await handleRulesCommand(interaction);
           break;
@@ -101,13 +118,29 @@ export class DiscordBotClient {
           await handleRolesCommand(interaction);
           break;
 
-        default:
-          await interaction.reply('❌ Unknown command!');
+        default: {
+          const msg = '❌ Unknown command!';
+          if (interaction.deferred) {
+            await interaction.editReply(msg);
+          } else if (!interaction.replied) {
+            await interaction.reply(msg);
+          }
+        }
       }
     } catch (error) {
       console.error(`Error handling command ${commandName}:`, error);
-      if (!interaction.replied) {
-        await interaction.reply('❌ An error occurred while executing the command.');
+      // Safe fallback that works whether the handler deferred, replied, or neither
+      const errMsg = '❌ An error occurred while executing the command.';
+      try {
+        if (interaction.deferred && !interaction.replied) {
+          await interaction.editReply(errMsg);
+        } else if (!interaction.replied) {
+          await interaction.reply({ content: errMsg, ephemeral: true });
+        } else {
+          await interaction.followUp({ content: errMsg, ephemeral: true });
+        }
+      } catch (followErr) {
+        console.error(`Error sending failure message for ${commandName}:`, followErr);
       }
     }
   }
@@ -161,6 +194,10 @@ export class DiscordBotClient {
         ),
 
       new SlashCommandBuilder()
+        .setName(COMMANDS.START)
+        .setDescription('Get the web link so the host can start the game'),
+
+      new SlashCommandBuilder()
         .setName(COMMANDS.STATUS)
         .setDescription('Check the current game status'),
 
@@ -174,6 +211,21 @@ export class DiscordBotClient {
             .setRequired(true)
             .addChoices({ name: 'Approve', value: 'approve' }, { name: 'Reject', value: 'reject' })
         ),
+
+      new SlashCommandBuilder()
+        .setName(COMMANDS.QUEST)
+        .setDescription('Open the web to submit your quest vote (quest team only)')
+        .addStringOption((option) =>
+          option
+            .setName('result')
+            .setDescription('Your intended quest vote (actual submission is on the web)')
+            .setRequired(true)
+            .addChoices({ name: 'Success', value: 'success' }, { name: 'Fail', value: 'fail' })
+        ),
+
+      new SlashCommandBuilder()
+        .setName(COMMANDS.ASSASSINATE)
+        .setDescription('Open the web to pick the assassination target (assassin only)'),
 
       new SlashCommandBuilder()
         .setName(COMMANDS.RULES)
