@@ -2,6 +2,7 @@ import { Router, Request, Response, IRouter } from 'express';
 import { sign } from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { upsertUser, createOAuthSession, verifyAndDeleteOAuthSession } from '../services/supabase';
+import { mintGuestToken } from '../middleware/guestAuth';
 
 const router: IRouter = Router();
 
@@ -208,6 +209,43 @@ router.get('/line/callback', async (req: Request, res: Response) => {
     console.error('[line-oauth]', err);
     return res.redirect(`${FRONTEND_URL}?auth_error=line_failed`);
   }
+});
+
+// ── Guest Mint ────────────────────────────────────────────────
+//
+// S10 fix (Plan v2 R1.0): guest uid is now server-minted. Clients used to
+// build `JSON.stringify({uid: uuidv4(), displayName})` locally and send it as
+// socket handshake, which let attackers impersonate other users by supplying
+// their uid. Clients now POST here and receive a JWT whose `sub` is
+// server-generated; the attacker can no longer choose their own uid.
+//
+// A 3-day grace window in middleware/guestAuth.ts keeps existing legacy JSON
+// tokens working so already-connected players aren't kicked out the moment
+// this ships (see GUEST_LEGACY_CUTOFF in .env.example).
+
+/**
+ * POST /auth/guest
+ * body: { displayName: string }
+ * → { token: string, user: { uid, displayName, provider: 'guest' } }
+ */
+router.post('/guest', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { displayName?: unknown };
+  if (typeof body.displayName !== 'string') {
+    return res.status(400).json({ error: 'displayName is required' });
+  }
+  const trimmed = body.displayName.trim();
+  if (trimmed.length < 1 || trimmed.length > 40) {
+    return res.status(400).json({ error: 'displayName must be 1-40 chars' });
+  }
+  const { token, uid, displayName } = mintGuestToken(trimmed);
+  return res.json({
+    token,
+    user: {
+      uid,
+      displayName,
+      provider: 'guest',
+    },
+  });
 });
 
 export { router as authRouter };

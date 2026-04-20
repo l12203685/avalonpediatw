@@ -54,6 +54,31 @@ export async function signUpWithEmail(email: string, password: string, displayNa
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
+/**
+ * 取得 server-signed guest token（Plan v2 R1.0 / S10 修補）。
+ *
+ * 舊做法是 client 自己 `JSON.stringify({uid: uuidv4(), displayName})` 當 token
+ * 送給 server，攻擊者能用別人的 uid 冒充身份污染戰績。現在改由 server 發 token：
+ * client POST `/auth/guest` 帶 displayName，server 回傳 JWT（uid 由 server mint）。
+ * 3 天 grace 期內若此 API 失敗（server 還沒部署到新版），前端自動 fallback 成舊
+ * JSON token，確保現有玩家無感過渡。
+ */
+export async function getGuestToken(displayName: string): Promise<string> {
+  const res = await fetch(`${SERVER_URL}/auth/guest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ displayName }),
+  });
+  if (!res.ok) {
+    throw new Error(`Guest token mint failed: ${res.status}`);
+  }
+  const data = await res.json() as { token?: string };
+  if (!data.token) {
+    throw new Error('Guest token mint returned no token');
+  }
+  return data.token;
+}
+
 /** Discord OAuth：重導向到後端 → Discord → 後端 callback → 前端 */
 export function signInWithDiscord(): void {
   window.location.href = `${SERVER_URL}/auth/discord`;

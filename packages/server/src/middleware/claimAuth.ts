@@ -22,6 +22,7 @@ import { verify, JwtPayload } from 'jsonwebtoken';
 import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import { getUserEmailById } from '../services/supabase';
 import { isAdmin } from '../services/AdminService';
+import { verifyGuestToken } from './guestAuth';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
@@ -54,7 +55,8 @@ async function resolveFromToken(token: string): Promise<ClaimAuth | null> {
         provider?: string;
         email?: string;
       };
-      if (payload.sub) {
+      // Guest JWT 也會 verify 通過但 provider === 'guest'，交給下面的 guest 路徑統一處理。
+      if (payload.sub && payload.provider !== 'guest') {
         const provider = (payload.provider as ClaimAuth['provider']) || 'discord';
         // Email may be present (Discord) — otherwise look it up in Supabase.
         let email: string | null = typeof payload.email === 'string' && payload.email
@@ -93,19 +95,16 @@ async function resolveFromToken(token: string): Promise<ClaimAuth | null> {
     }
   }
 
-  // Path 3: Guest JSON
-  try {
-    const parsed = JSON.parse(token) as { uid?: string; displayName?: string };
-    if (parsed.uid) {
-      return {
-        uid: parsed.uid,
-        displayName: parsed.displayName || 'Guest',
-        email: null,
-        provider: 'guest',
-      };
-    }
-  } catch {
-    // not JSON
+  // Path 3: Guest — server-signed JWT (new) or legacy JSON within 3-day grace.
+  // See middleware/guestAuth.ts for S10 impersonation fix (Plan v2 R1.0).
+  const guest = verifyGuestToken(token);
+  if (guest) {
+    return {
+      uid: guest.uid,
+      displayName: guest.displayName,
+      email: null,
+      provider: 'guest',
+    };
   }
 
   return null;

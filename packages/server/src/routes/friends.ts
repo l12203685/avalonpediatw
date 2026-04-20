@@ -36,10 +36,12 @@ async function resolveSupabaseId(authHeader: string | undefined): Promise<string
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
 
-  // Try custom JWT (Discord/Line: sub is the supabase UUID)
+  // Try custom JWT (Discord/Line: sub is the supabase UUID).
+  // Guest JWT 也會 verify 成功但 sub 是 server-minted guest uuid（非 users.id），
+  // 跳過以免把 guest 當成 Discord/Line 帳號查 friendships。
   try {
-    const payload = verify(token, JWT_SECRET) as JwtPayload;
-    if (payload.sub) return payload.sub;
+    const payload = verify(token, JWT_SECRET) as JwtPayload & { provider?: string };
+    if (payload.sub && payload.provider !== 'guest') return payload.sub;
   } catch {
     // not a custom JWT, continue
   }

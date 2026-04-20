@@ -50,10 +50,12 @@ async function resolveUser(authHeader: string | undefined): Promise<{ supabaseId
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
 
-  // Try custom JWT (Discord / Line)
+  // Try custom JWT (Discord / Line).
+  // Guest JWT 也會 verify 成功但 sub 是 server-minted guest uuid（非 users.id），
+  // 跳過以免把 guest 當成 Discord/Line 帳號查 feedback user_id。
   try {
-    const payload = verify(token, JWT_SECRET) as JwtPayload;
-    if (payload.sub && payload.displayName) {
+    const payload = verify(token, JWT_SECRET) as JwtPayload & { provider?: string };
+    if (payload.sub && payload.displayName && payload.provider !== 'guest') {
       return { supabaseId: payload.sub as string, displayName: payload.displayName as string };
     }
   } catch { /* ignore */ }

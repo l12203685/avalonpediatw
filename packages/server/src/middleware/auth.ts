@@ -3,18 +3,19 @@ import { verify, JwtPayload } from 'jsonwebtoken';
 import { verifyIdToken, getUserProfile, createUserProfile, isFirebaseAdminReady } from '../services/firebase';
 import { upsertUser } from '../services/supabase';
 import { User } from '@avalon/shared';
-import { v4 as uuidv4 } from 'uuid';
+import { verifyGuestToken } from './guestAuth';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
-/** 嘗試以自訂 JWT 驗證（Discord / Line OAuth 發行） */
+/** 嘗試以自訂 JWT 驗證（Discord / Line OAuth 發行）；不吞 guest JWT。 */
 function verifyCustomJwt(token: string): (JwtPayload & { sub: string; displayName: string; provider: string }) | null {
   try {
-    const payload = verify(token, JWT_SECRET) as JwtPayload;
-    if (payload.sub && payload.displayName) {
-      return payload as JwtPayload & { sub: string; displayName: string; provider: string };
-    }
-    return null;
+    const payload = verify(token, JWT_SECRET) as JwtPayload & { provider?: string };
+    if (!payload.sub || !payload.displayName) return null;
+    // 我們自己簽的 guest JWT 也會過 verify，但 provider === 'guest' 表示應走 guest
+    // 路徑（socket.data.supabaseId 不是 Supabase UUID），這裡必須跳過。
+    if (payload.provider === 'guest') return null;
+    return payload as JwtPayload & { sub: string; displayName: string; provider: string };
   } catch {
     return null;
   }
@@ -93,25 +94,28 @@ export async function authenticateSocket(socket: Socket, next: (err?: Error) => 
       }
     }
 
-    // ── 路徑 3：Guest JSON { uid, displayName }──────────────
-    let guestUser: User;
-    try {
-      const parsed = JSON.parse(token) as { uid?: string; displayName?: string };
-      guestUser = {
-        uid:         parsed.uid || uuidv4(),
-        email:       '',
-        displayName: parsed.displayName || 'Guest',
-        photoURL:    undefined,
-        provider:    'guest',
-        createdAt:   Date.now(),
-        updatedAt:   Date.now(),
-      };
-    } catch {
-      guestUser = { uid: uuidv4(), email: '', displayName: 'Guest', photoURL: undefined, provider: 'guest', createdAt: Date.now(), updatedAt: Date.now() };
+    // ── 路徑 3：Guest — server-signed JWT (新) 或 legacy JSON (3 天 grace)───
+    //
+    // S10 fix (Plan v2 R1.0): 過去這裡信任 client 送的 JSON `{uid, displayName}`，
+    // 攻擊者能用受害者 uid 偽造連線污染其統計。現在統一透過 verifyGuestToken
+    // 驗證：新 client 拿到 server-signed JWT；舊 client 的 JSON token 保留 3 天
+    // grace 期讓現有玩家無感升級，之後強制重新取 token。
+    const guestIdentity = verifyGuestToken(token);
+    if (!guestIdentity) {
+      return next(new Error('Guest token expired — please re-enter as guest'));
     }
+    const guestUser: User = {
+      uid:         guestIdentity.uid,
+      email:       '',
+      displayName: guestIdentity.displayName,
+      photoURL:    undefined,
+      provider:    'guest',
+      createdAt:   Date.now(),
+      updatedAt:   Date.now(),
+    };
     socket.data.user = guestUser;
     socket.data.uid  = guestUser.uid;
-    console.log(`[guest] ${guestUser.displayName} (${guestUser.uid})`);
+    console.log(`[guest${guestIdentity.signed ? ':signed' : ':legacy'}] ${guestUser.displayName} (${guestUser.uid})`);
     return next();
 
   } catch (error) {

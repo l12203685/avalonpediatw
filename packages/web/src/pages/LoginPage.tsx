@@ -7,6 +7,7 @@ import {
   signInWithDiscord,
   signInWithLine,
   extractOAuthErrorFromUrl,
+  getGuestToken,
 } from '../services/auth';
 import { useGameStore } from '../store/gameStore';
 import { initializeSocket } from '../services/socket';
@@ -67,11 +68,21 @@ export default function LoginPage(): JSX.Element {
   });
 
   // ── Guest ──────────────────────────────────────────────────
+  // S10 fix (Plan v2 R1.0)：uid 改由 server mint，避免 client 偽造 uid 冒用他人
+  // 身份。若新 endpoint 還沒部署（3 天 grace 內），fallback 回舊格式維持運作。
   const handleGuest = () => go(async () => {
     const name = guestName.trim();
     if (!name) throw new Error('請輸入你的名字');
     if (name.length < 2) throw new Error('名字至少需要 2 個字元');
-    const token = JSON.stringify({ uid: uuidv4(), displayName: name });
+
+    let token: string;
+    try {
+      token = await getGuestToken(name);
+    } catch (err) {
+      // Server 還是舊版（沒 /auth/guest endpoint）→ 回退舊格式；legacy server 會接受。
+      console.warn('[guest] server-signed token unavailable, falling back to legacy format', err);
+      token = JSON.stringify({ uid: uuidv4(), displayName: name });
+    }
     await initializeSocket(token);
     setGameState('home');
   });

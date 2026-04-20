@@ -19,6 +19,7 @@ import {
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
 import { createHttpRateLimit } from '../middleware/rateLimit';
+import { verifyGuestToken } from '../middleware/guestAuth';
 
 const router: IRouter = Router();
 
@@ -55,7 +56,8 @@ async function resolvePlayerAuth(authHeader: string | undefined): Promise<Resolv
         displayName?: string;
         provider?: string;
       };
-      if (payload.sub) {
+      // Guest JWT 也會 verify 通過但 provider === 'guest'，交給下面的 guest 路徑統一處理。
+      if (payload.sub && payload.provider !== 'guest') {
         return {
           playerId:    payload.sub,
           displayName: payload.displayName,
@@ -85,18 +87,15 @@ async function resolvePlayerAuth(authHeader: string | undefined): Promise<Resolv
     }
   }
 
-  // 路徑 3：Guest JSON { uid, displayName }
-  try {
-    const parsed = JSON.parse(token) as { uid?: string; displayName?: string };
-    if (parsed.uid) {
-      return {
-        playerId:    parsed.uid,
-        displayName: parsed.displayName || 'Guest',
-        provider:    'guest',
-      };
-    }
-  } catch {
-    // not JSON, give up
+  // 路徑 3：Guest — server-signed JWT (new) or legacy JSON within 3-day grace.
+  // See middleware/guestAuth.ts for S10 impersonation fix (Plan v2 R1.0).
+  const guest = verifyGuestToken(token);
+  if (guest) {
+    return {
+      playerId:    guest.uid,
+      displayName: guest.displayName,
+      provider:    'guest',
+    };
   }
 
   return null;
