@@ -70,14 +70,14 @@ export default function OverviewPanel(): JSX.Element {
   ];
 
   // Seat position win rates.
-  // Map includes both canonical role names and legacy short forms (娜美/德魯/奧伯/派西)
-  // so colors stay consistent while analysis_cache.json is pending regeneration.
+  // Canonical role names only. The old short forms (娜美/德魯/奧伯/派西)
+  // have been purged from analysis_cache.json.
   const ROLE_COLORS: Record<string, string> = {
     '刺客': '#ef4444',
-    '莫甘娜': '#f87171', '娜美': '#f87171',
-    '莫德雷德': '#fb923c', '德魯': '#fb923c',
-    '奧伯倫': '#fbbf24', '奧伯': '#fbbf24',
-    '派西維爾': '#3b82f6', '派西': '#3b82f6',
+    '莫甘娜': '#f87171',
+    '莫德雷德': '#fb923c',
+    '奧伯倫': '#fbbf24',
+    '派西維爾': '#3b82f6',
     '梅林': '#60a5fa',
     '忠臣': '#93c5fd',
   };

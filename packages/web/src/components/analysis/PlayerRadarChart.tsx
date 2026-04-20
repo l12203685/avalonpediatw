@@ -198,22 +198,21 @@ export default function PlayerRadarChart(): JSX.Element {
               <div className="space-y-1">
                 {Object.entries(radarData.player.roleWinRates)
                   .filter(([, v]) => v > 0)
-                  .map(([role, wr]) => (
+                  .map(([role, wr]) => {
+                    const isRed = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫'].includes(role);
+                    return (
                     <div key={role} className="flex items-center gap-2">
-                      <span className={`text-xs w-10 font-semibold ${
-                        ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '娜美', '德魯', '奧伯'].includes(role) ? 'text-red-400' : 'text-blue-400'
-                      }`}>{role}</span>
+                      <span className={`text-xs w-10 font-semibold ${isRed ? 'text-red-400' : 'text-blue-400'}`}>{role}</span>
                       <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${
-                            ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '娜美', '德魯', '奧伯'].includes(role) ? 'bg-red-500' : 'bg-blue-500'
-                          }`}
+                          className={`h-full rounded-full ${isRed ? 'bg-red-500' : 'bg-blue-500'}`}
                           style={{ width: `${wr}%` }}
                         />
                       </div>
                       <span className="text-xs text-gray-400 w-10 text-right">{wr}%</span>
                     </div>
-                  ))}
+                    );
+                  })}
               </div>
             </div>
           </motion.div>
