@@ -271,7 +271,7 @@ export default function ProfilePage(): JSX.Element {
                   <span className="text-blue-300 font-bold text-lg">{profile.elo_rating}</span>
                   <span className="text-gray-500 text-sm">ELO</span>
                   {(() => {
-                    const rank = getEloRank(profile.elo_rating);
+                    const rank = getEloRank(profile.elo_rating, profile.total_games);
                     return (
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
                         {rank.label}

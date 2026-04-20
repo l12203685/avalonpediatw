@@ -251,7 +251,8 @@ export async function getFirestoreLeaderboard(limit = 50): Promise<LeaderboardEn
  *      role composition) gives a small additional bump.
  *
  * This produces an ELO spread of roughly 750-1500, matching the frontend
- * tier system (新手 0, 見習 850, 中堅 950, 老手 1050, 精英 1150, 大師 1300, 傳奇 1500).
+ * tier system (菜雞 <30 games, 初學 ≥0, 新手 ≥950, 中堅 ≥1050, 高手 ≥1150, 大師 ≥1300).
+ * LeaderboardPage re-ranks by percentile (15/25/30/25/15) at render time.
  */
 function computeEloFromSheets(players: PlayerStats[]): Map<string, { elo: number; stats: PlayerStats }> {
   const result = new Map<string, { elo: number; stats: PlayerStats }>();
@@ -352,11 +353,10 @@ function deriveBadgesFromStats(stats: PlayerStats, elo: number): string[] {
   else if (stats.totalGames >= 10 && winRate >= 0.6) badges.push('穩定發揮');
 
   // ELO tier badges (thresholds match frontend eloRank.ts)
-  if (elo >= 1500) badges.push('傳奇');
-  else if (elo >= 1300) badges.push('大師');
-  else if (elo >= 1150) badges.push('精英');
-  else if (elo >= 1050) badges.push('老手');
-  else if (elo >= 950) badges.push('中堅');
+  if (elo >= 1300) badges.push('大師');
+  else if (elo >= 1150) badges.push('高手');
+  else if (elo >= 1050) badges.push('中堅');
+  else if (elo >= 950) badges.push('新手');
 
   // Role-specific badges from Sheets data
   if (stats.roleWinRates['梅林'] >= 70 && (stats.rawRoleGames['梅林'] || 0) >= 10) badges.push('梅林大師');
@@ -494,9 +494,9 @@ function deriveBadges(p: PlayerAgg): string[] {
   if (p.totalGames >= 10 && winRate >= 0.7) badges.push('勝率王');
   if (p.totalGames >= 10 && winRate >= 0.6) badges.push('穩定發揮');
 
-  if (p.elo >= 1500) badges.push('傳奇');
-  else if (p.elo >= 1300) badges.push('大師');
-  else if (p.elo >= 1150) badges.push('精英');
+  if (p.elo >= 1300) badges.push('大師');
+  else if (p.elo >= 1150) badges.push('高手');
+  else if (p.elo >= 1050) badges.push('中堅');
 
   // Streak detection
   const history = p.gameHistory;

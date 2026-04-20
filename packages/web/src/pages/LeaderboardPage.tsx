@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Trophy, ArrowLeft, Crown, TrendingUp, Users, Loader, Search, AlertTriangle } from 'lucide-react';
-import { getEloRank, ELO_RANKS } from '../utils/eloRank';
+import { ALL_TIERS, ROOKIE_TIER, rankLeaderboard, type EloRank } from '../utils/eloRank';
 import { useGameStore } from '../store/gameStore';
 import type { LeaderboardEntry } from '../services/api';
 
@@ -16,7 +16,7 @@ const PROVIDER_BADGE: Record<string, string> = {
 
 const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600'];
 
-const ALL_RANKS = ['全部', ...ELO_RANKS.map(r => r.label)];
+const ALL_RANK_LABELS = ['全部', ...ALL_TIERS.map(r => r.label)];
 
 export default function LeaderboardPage(): JSX.Element {
   const { setGameState, navigateToProfile } = useGameStore();
@@ -39,6 +39,13 @@ export default function LeaderboardPage(): JSX.Element {
       .finally(() => setLoading(false));
   }, []);
 
+  // Compute tier per entry using the percentile-based distribution.
+  // Re-runs only when the underlying entries change.
+  const tierMap = useMemo(() => rankLeaderboard(entries), [entries]);
+
+  const getTier = (entry: LeaderboardEntry): EloRank =>
+    tierMap.get(entry.id) ?? ROOKIE_TIER;
+
   const filtered = useMemo(() => {
     let result = entries;
     if (search.trim()) {
@@ -46,10 +53,11 @@ export default function LeaderboardPage(): JSX.Element {
       result = result.filter(e => e.display_name.toLowerCase().includes(q));
     }
     if (rankFilter !== '全部') {
-      result = result.filter(e => getEloRank(e.elo_rating).label === rankFilter);
+      result = result.filter(e => getTier(e).label === rankFilter);
     }
     return result;
-  }, [entries, search, rankFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, search, rankFilter, tierMap]);
 
   const isFiltered = search.trim() !== '' || rankFilter !== '全部';
 
@@ -99,8 +107,8 @@ export default function LeaderboardPage(): JSX.Element {
 
             {/* Rank tier pills */}
             <div className="flex flex-wrap gap-1.5">
-              {ALL_RANKS.map(label => {
-                const rankDef = ELO_RANKS.find(r => r.label === label);
+              {ALL_RANK_LABELS.map(label => {
+                const rankDef = ALL_TIERS.find(r => r.label === label);
                 const isActive = rankFilter === label;
                 if (label === '全部') {
                   return (
@@ -228,7 +236,7 @@ export default function LeaderboardPage(): JSX.Element {
                     <span className="font-bold text-white text-lg">{entry.elo_rating}</span>
                   </div>
                   {(() => {
-                    const rank = getEloRank(entry.elo_rating);
+                    const rank = getTier(entry);
                     return (
                       <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
                         {rank.label}
