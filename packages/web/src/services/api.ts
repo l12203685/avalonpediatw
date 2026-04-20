@@ -33,6 +33,7 @@ export interface UserProfile {
   id: string;
   display_name: string;
   photo_url: string | null;
+  email?: string | null;
   provider: string;
   elo_rating: number;
   total_games: number;
@@ -63,6 +64,31 @@ export async function fetchMyProfile(token: string): Promise<UserProfile> {
 export async function fetchUserProfile(userId: string): Promise<UserProfile> {
   const data = await apiFetch<{ profile: UserProfile }>(`/api/profile/${userId}`);
   return data.profile;
+}
+
+export interface ProfileUpdatePatch {
+  display_name?: string;
+  photo_url?: string | null;
+}
+
+export async function updateMyProfile(
+  token: string,
+  patch: ProfileUpdatePatch,
+): Promise<UserProfile> {
+  const res = await fetch(`${SERVER_URL}/api/profile/me`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(patch),
+  });
+  const body = await res.json().catch(() => ({} as { profile?: UserProfile; error?: string }));
+  if (!res.ok || !('profile' in body) || !body.profile) {
+    const err = (body as { error?: string }).error || `API ${res.status}: PATCH /api/profile/me`;
+    throw new Error(err);
+  }
+  return (body as { profile: UserProfile }).profile;
 }
 
 export interface GameEvent {
@@ -105,6 +131,26 @@ export async function unfollowUser(token: string, targetUserId: string): Promise
 export async function checkFollowing(token: string, targetUserId: string): Promise<boolean> {
   const data = await apiFetch<{ following: boolean }>(`/api/friends/check/${targetUserId}`, token);
   return data.following;
+}
+
+// ── User Search (for Friends page) ────────────────────────────
+export interface UserSearchEntry {
+  id: string;
+  display_name: string;
+  photo_url: string | null;
+  provider: string;
+  elo_rating: number;
+  badges: string[];
+  following: boolean;
+  short_code: string;
+}
+
+export async function searchUsers(token: string, query: string): Promise<UserSearchEntry[]> {
+  const data = await apiFetch<{ results: UserSearchEntry[] }>(
+    `/api/friends/search?q=${encodeURIComponent(query)}`,
+    token,
+  );
+  return data.results;
 }
 
 // ── Feedback / Error Reporting ────────────────────────────────

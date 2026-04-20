@@ -4,10 +4,17 @@ import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import {
   getGameEvents,
   isSupabaseReady,
+  getDbUserOverrides,
+  updateDbUserProfile,
+  ensureSupabaseUserForFirebase,
+  getSupabaseIdByFirebaseUid,
+  type ProfileEditableFields,
+  type DbUserOverrides,
 } from '../services/supabase';
 import {
   getFirestoreLeaderboard,
   getFirestoreUserProfile,
+  type UserProfile as FirestoreUserProfile,
 } from '../services/FirestoreLeaderboard';
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
@@ -32,6 +39,9 @@ interface ResolvedAuth {
   playerId: string;
   displayName?: string;
   provider?: string;
+  email?: string;
+  firebaseUid?: string;
+  photoUrl?: string;
 }
 
 async function resolvePlayerAuth(authHeader: string | undefined): Promise<ResolvedAuth | null> {
@@ -63,10 +73,14 @@ async function resolvePlayerAuth(authHeader: string | undefined): Promise<Resolv
     if (isFirebaseAdminReady()) {
       try {
         const decoded = await verifyIdToken(token);
+        const decodedTyped = decoded as typeof decoded & { picture?: string };
         return {
           playerId:    decoded.uid,
           displayName: decoded.name || (decoded.email?.split('@')[0] ?? undefined),
           provider:    'google',
+          email:       decoded.email,
+          firebaseUid: decoded.uid,
+          photoUrl:    decodedTyped.picture,
         };
       } catch {
         // invalid token
@@ -102,7 +116,8 @@ void resolvePlayerId;
 function emptyProfile(auth: ResolvedAuth): {
   id: string;
   display_name: string;
-  photo_url: null;
+  photo_url: string | null;
+  email: string | null;
   provider: string;
   elo_rating: number;
   total_games: number;
@@ -114,7 +129,8 @@ function emptyProfile(auth: ResolvedAuth): {
   return {
     id:           auth.playerId,
     display_name: auth.displayName || auth.playerId,
-    photo_url:    null,
+    photo_url:    auth.photoUrl ?? null,
+    email:        auth.email ?? null,
     provider:     auth.provider || 'guest',
     elo_rating:   1000,
     total_games:  0,
@@ -123,6 +139,48 @@ function emptyProfile(auth: ResolvedAuth): {
     badges:       [],
     recent_games: [],
   };
+}
+
+/**
+ * 將 auth 轉成 Supabase users.id（UUID）：
+ * - Firebase → 查/建 users row 回 UUID
+ * - Discord/Line：JWT sub 若本身是 UUID 直接用；否則 null
+ * - Guest → null（不能編輯）
+ */
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+async function resolveSupabaseUserId(auth: ResolvedAuth): Promise<string | null> {
+  if (auth.provider === 'google' && auth.firebaseUid) {
+    return ensureSupabaseUserForFirebase(
+      auth.firebaseUid,
+      auth.displayName || auth.firebaseUid,
+      auth.email,
+      auth.photoUrl,
+    );
+  }
+  if (auth.provider === 'google') {
+    return getSupabaseIdByFirebaseUid(auth.playerId);
+  }
+  if ((auth.provider === 'discord' || auth.provider === 'line') && UUID_RE.test(auth.playerId)) {
+    return auth.playerId;
+  }
+  return null;
+}
+
+/** 把 Supabase override 欄位合併到 Firestore profile 上面 */
+function mergeOverrides<T extends FirestoreUserProfile>(
+  profile: T,
+  overrides: DbUserOverrides | null,
+): T & { email: string | null } {
+  if (!overrides) {
+    return { ...profile, email: null } as T & { email: string | null };
+  }
+  return {
+    ...profile,
+    display_name: overrides.display_name ?? profile.display_name,
+    photo_url:    overrides.photo_url ?? profile.photo_url,
+    provider:     overrides.provider ?? profile.provider,
+    email:        overrides.email,
+  } as T & { email: string | null };
 }
 
 // ── GET /api/leaderboard ──────────────────────────────────────
@@ -152,15 +210,143 @@ router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => 
     if (!profile && auth.displayName) {
       profile = await getFirestoreUserProfile(auth.displayName);
     }
-    // 仍找不到 → 回空 profile（新玩家尚無遊戲記錄）
+
+    // 拉 Supabase users table 的權威 override（display_name / photo_url / email / provider）
+    const supabaseId = await resolveSupabaseUserId(auth);
+    const overrides = supabaseId ? await getDbUserOverrides(supabaseId) : null;
+
+    // 仍找不到 Firestore profile → 回空 profile + overrides
     if (!profile) {
-      return res.json({ profile: emptyProfile(auth) });
+      const empty = emptyProfile(auth);
+      if (overrides) {
+        return res.json({
+          profile: {
+            ...empty,
+            id:           supabaseId ?? empty.id,
+            display_name: overrides.display_name,
+            photo_url:    overrides.photo_url,
+            email:        overrides.email,
+            provider:     overrides.provider,
+          },
+        });
+      }
+      return res.json({ profile: empty });
     }
-    return res.json({ profile });
+
+    const merged = mergeOverrides(profile, overrides);
+    // 若有 Supabase id 就以 UUID 為 id，供 PATCH/friend 關聯
+    if (supabaseId) {
+      (merged as { id: string }).id = supabaseId;
+    }
+    return res.json({ profile: merged });
   } catch (err) {
     console.error('[api/profile/me] Firestore error:', err);
     // 退化成空 profile 而非 503，避免個人資料頁整個壞掉
     return res.json({ profile: emptyProfile(auth) });
+  }
+});
+
+// ── PATCH /api/profile/me ─────────────────────────────────────
+// 僅允許編輯自己的 display_name 與 photo_url；guest 禁止。
+router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) => {
+  const auth = await resolvePlayerAuth(req.headers.authorization);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (auth.provider === 'guest') {
+    return res.status(403).json({ error: 'Guest accounts cannot edit profile' });
+  }
+  if (!isSupabaseReady()) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+
+  const body = (req.body ?? {}) as { display_name?: unknown; photo_url?: unknown };
+  const patch: ProfileEditableFields = {};
+
+  // display_name 驗證
+  if (body.display_name !== undefined) {
+    if (typeof body.display_name !== 'string') {
+      return res.status(400).json({ error: 'display_name must be a string' });
+    }
+    const trimmed = body.display_name.trim();
+    if (trimmed.length === 0 || trimmed.length > 40) {
+      return res.status(400).json({ error: 'display_name must be 1-40 chars' });
+    }
+    patch.display_name = trimmed;
+  }
+
+  // photo_url 驗證（null/空字串 → 清除；http(s) URL → 設定）
+  if (body.photo_url !== undefined) {
+    if (body.photo_url === null) {
+      patch.photo_url = null;
+    } else if (typeof body.photo_url === 'string') {
+      const trimmed = body.photo_url.trim();
+      if (trimmed.length === 0) {
+        patch.photo_url = null;
+      } else if (trimmed.length > 500) {
+        return res.status(400).json({ error: 'photo_url too long (max 500)' });
+      } else if (!/^https?:\/\//i.test(trimmed)) {
+        return res.status(400).json({ error: 'photo_url must be http(s) URL' });
+      } else {
+        patch.photo_url = trimmed;
+      }
+    } else {
+      return res.status(400).json({ error: 'photo_url must be string or null' });
+    }
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return res.status(400).json({ error: 'No editable fields provided' });
+  }
+
+  const supabaseId = await resolveSupabaseUserId(auth);
+  if (!supabaseId) {
+    return res.status(503).json({ error: 'User row not found in database' });
+  }
+
+  const updated = await updateDbUserProfile(supabaseId, patch);
+  if (!updated) {
+    return res.status(500).json({ error: 'Update failed' });
+  }
+
+  // 回傳更新後的 profile（合併 Firestore + Supabase 最新 override）
+  try {
+    let profile = await getFirestoreUserProfile(supabaseId);
+    if (!profile && auth.displayName) {
+      profile = await getFirestoreUserProfile(auth.displayName);
+    }
+    const overrides = await getDbUserOverrides(supabaseId);
+    if (!profile) {
+      const empty = emptyProfile(auth);
+      return res.json({
+        profile: {
+          ...empty,
+          id:           supabaseId,
+          display_name: updated.display_name,
+          photo_url:    updated.photo_url,
+          email:        overrides?.email ?? auth.email ?? null,
+          provider:     overrides?.provider ?? auth.provider ?? 'unknown',
+        },
+      });
+    }
+    const merged = mergeOverrides(profile, overrides);
+    (merged as { id: string }).id = supabaseId;
+    return res.json({ profile: merged });
+  } catch {
+    // 讀不到 Firestore 也回成功—改以 updated+overrides 合成
+    return res.json({
+      profile: {
+        id:           supabaseId,
+        display_name: updated.display_name,
+        photo_url:    updated.photo_url,
+        email:        auth.email ?? null,
+        provider:     auth.provider ?? 'unknown',
+        elo_rating:   1000,
+        total_games:  0,
+        games_won:    0,
+        games_lost:   0,
+        badges:       [] as string[],
+        recent_games: [],
+      },
+    });
   }
 });
 
@@ -170,6 +356,11 @@ router.get('/profile/:id', publicLimiter, async (req: Request, res: Response) =>
     const profile = await getFirestoreUserProfile(req.params.id);
     if (!profile) {
       return res.status(404).json({ error: 'Profile not found' });
+    }
+    // 若 :id 長得像 UUID，順便合併 Supabase override（display_name/photo_url）
+    if (UUID_RE.test(req.params.id)) {
+      const overrides = await getDbUserOverrides(req.params.id);
+      return res.json({ profile: mergeOverrides(profile, overrides) });
     }
     return res.json({ profile });
   } catch (err) {

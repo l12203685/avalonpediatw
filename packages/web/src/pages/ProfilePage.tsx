@@ -198,6 +198,78 @@ export default function ProfilePage(): JSX.Element {
     }
   };
 
+  const handleStartEdit = (): void => {
+    if (!profile) return;
+    setEditName(profile.display_name ?? '');
+    setEditPhotoUrl(profile.photo_url ?? '');
+    setEditError('');
+    setEditing(true);
+  };
+
+  const handleCancelEdit = (): void => {
+    setEditing(false);
+    setEditError('');
+  };
+
+  const handleSaveEdit = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token || !profile) {
+      setEditError('請先登入');
+      return;
+    }
+    const trimmedName = editName.trim();
+    if (trimmedName.length === 0 || trimmedName.length > 40) {
+      setEditError('暱稱需為 1-40 個字');
+      return;
+    }
+    const trimmedUrl = editPhotoUrl.trim();
+    if (trimmedUrl.length > 0 && !/^https?:\/\//i.test(trimmedUrl)) {
+      setEditError('頭像連結需為 http(s) 網址');
+      return;
+    }
+    if (trimmedUrl.length > 500) {
+      setEditError('頭像連結過長（上限 500 字元）');
+      return;
+    }
+
+    setEditSaving(true);
+    setEditError('');
+    try {
+      const patch: { display_name?: string; photo_url?: string | null } = {};
+      if (trimmedName !== (profile.display_name ?? '')) {
+        patch.display_name = trimmedName;
+      }
+      if (trimmedUrl !== (profile.photo_url ?? '')) {
+        patch.photo_url = trimmedUrl.length === 0 ? null : trimmedUrl;
+      }
+      if (Object.keys(patch).length === 0) {
+        setEditing(false);
+        return;
+      }
+      const updated = await updateMyProfile(token, patch);
+      setProfile(updated);
+      setEditing(false);
+      addToast('個人資料已更新', 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '更新失敗';
+      setEditError(msg);
+      addToast('更新失敗', 'error');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleCopyId = (): void => {
+    if (!profile) return;
+    const id = profile.id;
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(id).then(
+        () => addToast('已複製用戶編號', 'success'),
+        () => addToast('複製失敗', 'error'),
+      );
+    }
+  };
+
   const handleReplay = (roomId: string, game: RecentGame | null = null): void => {
     setReplayLoading(true);
     fetchGameReplay(roomId)
@@ -316,53 +388,152 @@ export default function ProfilePage(): JSX.Element {
             )}
 
             {/* Avatar + name */}
-            <div className="bg-avalon-card/60 border border-gray-700 rounded-2xl p-6 flex items-center gap-5">
-              {profile.photo_url ? (
-                <img src={profile.photo_url} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-blue-500/50" />
+            <div className="bg-avalon-card/60 border border-gray-700 rounded-2xl p-6">
+              {editing && isMe ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-5">
+                    {editPhotoUrl.trim() ? (
+                      <img
+                        src={editPhotoUrl.trim()}
+                        alt=""
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+                        className="w-20 h-20 rounded-full object-cover border-2 border-blue-500/50 bg-gray-800"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-black text-3xl border-2 border-blue-500/50">
+                        {(editName || profile.display_name)[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-bold text-gray-400 mb-1">顯示暱稱</label>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        maxLength={40}
+                        placeholder="1-40 個字"
+                        className="w-full bg-avalon-card/80 border border-gray-600 focus:border-blue-500 rounded-lg px-3 py-2 text-white text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 mb-1">大頭照連結 (http(s) URL，留空則清除)</label>
+                    <input
+                      type="url"
+                      value={editPhotoUrl}
+                      onChange={(e) => setEditPhotoUrl(e.target.value)}
+                      maxLength={500}
+                      placeholder="https://..."
+                      className="w-full bg-avalon-card/80 border border-gray-600 focus:border-blue-500 rounded-lg px-3 py-2 text-white text-sm outline-none"
+                    />
+                  </div>
+                  {editError && (
+                    <div className="text-xs text-red-400 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2">
+                      {editError}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={editSaving}
+                      className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-blue-700 bg-blue-900/40 hover:bg-blue-800/60 text-blue-200 hover:text-white font-semibold transition-all disabled:opacity-50"
+                    >
+                      <Check size={14} />
+                      {editSaving ? '儲存中…' : '儲存'}
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      disabled={editSaving}
+                      className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-gray-600 bg-gray-800/40 hover:bg-gray-700/60 text-gray-300 hover:text-white font-semibold transition-all disabled:opacity-50"
+                    >
+                      <XIcon size={14} /> 取消
+                    </button>
+                  </div>
+                </div>
               ) : (
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-black text-3xl border-2 border-blue-500/50">
-                  {profile.display_name[0]?.toUpperCase()}
+                <div className="flex items-center gap-5">
+                  {profile.photo_url ? (
+                    <img src={profile.photo_url} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-blue-500/50" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-black text-3xl border-2 border-blue-500/50">
+                      {profile.display_name[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-2xl font-black text-white">{profile.display_name}</h2>
+                      {isMe && (
+                        <button
+                          onClick={handleStartEdit}
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-gray-600 bg-gray-800/40 hover:bg-gray-700/60 text-gray-300 hover:text-white transition-all"
+                          title="編輯個人資料"
+                        >
+                          <Pencil size={12} /> 編輯
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <TrendingUp size={16} className="text-blue-400" />
+                      <span className="text-blue-300 font-bold text-lg">{profile.elo_rating}</span>
+                      <span className="text-gray-500 text-sm">ELO</span>
+                      {(() => {
+                        const rank = getEloRank(profile.elo_rating, profile.total_games);
+                        return (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
+                            {rank.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    {profile.badges.length > 0 && (
+                      <div className="flex gap-1 mt-2 flex-wrap">
+                        {profile.badges.map(b => (
+                          <span key={b} className="text-xs px-2 py-0.5 bg-amber-900/60 border border-amber-600/50 text-amber-300 rounded-full">
+                            {b}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {!isMe && (
+                      <button
+                        onClick={handleFollowToggle}
+                        disabled={followLoading}
+                        className={`mt-3 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all disabled:opacity-50 ${
+                          isFollowingUser
+                            ? 'bg-gray-800 hover:bg-red-900/40 border-gray-600 hover:border-red-700 text-gray-300 hover:text-red-400'
+                            : 'bg-blue-900/40 hover:bg-blue-800/60 border-blue-700 text-blue-300 hover:text-white'
+                        }`}
+                      >
+                        {isFollowingUser ? <UserMinus size={12} /> : <UserPlus size={12} />}
+                        {followLoading ? '…' : isFollowingUser ? '取消追蹤' : '追蹤'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
-              <div>
-                <h2 className="text-2xl font-black text-white">{profile.display_name}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <TrendingUp size={16} className="text-blue-400" />
-                  <span className="text-blue-300 font-bold text-lg">{profile.elo_rating}</span>
-                  <span className="text-gray-500 text-sm">ELO</span>
-                  {(() => {
-                    const rank = getEloRank(profile.elo_rating, profile.total_games);
-                    return (
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
-                        {rank.label}
-                      </span>
-                    );
-                  })()}
-                </div>
-                {profile.badges.length > 0 && (
-                  <div className="flex gap-1 mt-2 flex-wrap">
-                    {profile.badges.map(b => (
-                      <span key={b} className="text-xs px-2 py-0.5 bg-amber-900/60 border border-amber-600/50 text-amber-300 rounded-full">
-                        {b}
-                      </span>
-                    ))}
+
+              {/* Identity block — user ID + email (own profile only) */}
+              {isMe && !editing && (
+                <div className="mt-4 pt-4 border-t border-gray-700/60 space-y-2">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500 min-w-[72px]">用戶編號</span>
+                    <code className="flex-1 text-gray-300 font-mono text-[10px] break-all">{profile.id}</code>
+                    <button
+                      onClick={handleCopyId}
+                      className="flex items-center gap-1 px-2 py-1 rounded border border-gray-600 bg-gray-800/40 hover:bg-gray-700/60 text-gray-400 hover:text-white transition-all"
+                      title="複製用戶編號"
+                    >
+                      <Copy size={10} />
+                    </button>
                   </div>
-                )}
-                {!isMe && (
-                  <button
-                    onClick={handleFollowToggle}
-                    disabled={followLoading}
-                    className={`mt-3 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all disabled:opacity-50 ${
-                      isFollowingUser
-                        ? 'bg-gray-800 hover:bg-red-900/40 border-gray-600 hover:border-red-700 text-gray-300 hover:text-red-400'
-                        : 'bg-blue-900/40 hover:bg-blue-800/60 border-blue-700 text-blue-300 hover:text-white'
-                    }`}
-                  >
-                    {isFollowingUser ? <UserMinus size={12} /> : <UserPlus size={12} />}
-                    {followLoading ? '…' : isFollowingUser ? '取消追蹤' : '追蹤'}
-                  </button>
-                )}
-              </div>
+                  {profile.email && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-500 min-w-[72px] flex items-center gap-1"><Mail size={11} /> 信箱</span>
+                      <span className="flex-1 text-gray-300 break-all">{profile.email}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Stats grid */}

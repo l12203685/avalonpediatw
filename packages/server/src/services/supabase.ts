@@ -375,6 +375,97 @@ export async function getUserEmailById(userId: string): Promise<string | null> {
   }
 }
 
+// ── Profile Overrides ──────────────────────────────────────
+
+export interface ProfileEditableFields {
+  display_name?: string;
+  photo_url?: string | null;
+}
+
+export interface DbUserOverrides {
+  display_name: string;
+  photo_url: string | null;
+  email: string | null;
+  provider: string;
+}
+
+export async function getDbUserOverrides(userId: string): Promise<DbUserOverrides | null> {
+  const db = getSupabaseClient();
+  if (!db) return null;
+  try {
+    const { data, error } = await db
+      .from('users')
+      .select('display_name, photo_url, email, provider')
+      .eq('id', userId)
+      .single();
+    if (error || !data) return null;
+    return {
+      display_name: data.display_name as string,
+      photo_url:    (data.photo_url as string | null) ?? null,
+      email:        (data.email as string | null) ?? null,
+      provider:     (data.provider as string) ?? 'unknown',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function updateDbUserProfile(
+  userId: string,
+  patch: ProfileEditableFields,
+): Promise<{ display_name: string; photo_url: string | null } | null> {
+  const db = getSupabaseClient();
+  if (!db) return null;
+
+  const update: Record<string, string | null> = {};
+  if (typeof patch.display_name === 'string') {
+    const trimmed = patch.display_name.trim().slice(0, 40);
+    if (trimmed.length === 0) return null;
+    update.display_name = trimmed;
+  }
+  if (patch.photo_url === null) {
+    update.photo_url = null;
+  } else if (typeof patch.photo_url === 'string') {
+    const trimmed = patch.photo_url.trim().slice(0, 500);
+    update.photo_url = trimmed.length === 0 ? null : trimmed;
+  }
+
+  if (Object.keys(update).length === 0) return null;
+
+  try {
+    const { data, error } = await db
+      .from('users')
+      .update(update)
+      .eq('id', userId)
+      .select('display_name, photo_url')
+      .single();
+    if (error || !data) return null;
+    return {
+      display_name: data.display_name as string,
+      photo_url:    (data.photo_url as string | null) ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function ensureSupabaseUserForFirebase(
+  firebaseUid: string,
+  displayName: string,
+  email?: string,
+  photoUrl?: string,
+): Promise<string | null> {
+  const existing = await getSupabaseIdByFirebaseUid(firebaseUid);
+  if (existing) return existing;
+  return upsertUser({
+    firebase_uid: firebaseUid,
+    display_name: displayName,
+    email:        email ?? '',
+    photo_url:    photoUrl ?? null,
+    provider:     'google',
+  });
+}
+
 export async function verifyAndDeleteOAuthSession(
   stateToken: string,
   provider: 'discord' | 'line'
@@ -489,4 +580,94 @@ export async function isFollowing(followerId: string, followingId: string): Prom
     .single();
 
   return !!data;
+}
+
+// ── 玩家搜尋（供好友搜尋/加好友頁用）────────────────────────
+export interface UserSearchEntry {
+  id: string;
+  display_name: string;
+  photo_url: string | null;
+  provider: string;
+  elo_rating: number;
+  badges: string[];
+  following: boolean;   // 搜尋者是否已追蹤此人
+  short_code: string;   // UUID 末 6 碼（暫代正式玩家代碼，方便精準配對）
+}
+
+/**
+ * 搜尋玩家：依暱稱（ilike 模糊）或 UUID 末 6 碼（精準）匹配
+ * - query 為空字串：回傳最近 20 位 ELO 最高玩家（方便探索）
+ * - 自動排除搜尋者自己
+ * - 最多回 20 筆
+ * - 同時 join 檢查 searcher 是否已追蹤結果玩家
+ */
+export async function searchUsers(
+  query: string,
+  searcherId: string | null,
+  limit = 20,
+): Promise<UserSearchEntry[]> {
+  const db = getSupabaseClient();
+  if (!db) return [];
+
+  const safeQuery = (query || '').trim().slice(0, 60);
+  // 防 LIKE 萬用字元注入：% 和 _ 要 escape
+  const likePattern = safeQuery.replace(/[\\%_]/g, (m) => `\\${m}`);
+
+  try {
+    let builder = db
+      .from('users')
+      .select('id, display_name, photo_url, provider, elo_rating, badges')
+      .order('elo_rating', { ascending: false })
+      .limit(limit);
+
+    if (safeQuery.length > 0) {
+      // 暱稱模糊 OR UUID 字串包含（支援貼上完整/末 6 碼的 ID）
+      builder = builder.or(
+        `display_name.ilike.%${likePattern}%,id.ilike.%${likePattern}%`,
+      );
+    }
+
+    if (searcherId) {
+      builder = builder.neq('id', searcherId);
+    }
+
+    const { data, error } = await builder;
+    if (error || !data) {
+      if (error) console.error('[supabase] searchUsers error:', error.message);
+      return [];
+    }
+
+    // 取出結果 id 清單，一次查 searcher 的 follow 關係
+    let followingSet = new Set<string>();
+    if (searcherId && data.length > 0) {
+      const ids = data.map((u) => u.id as string);
+      const { data: rel } = await db
+        .from('friendships')
+        .select('following_id')
+        .eq('follower_id', searcherId)
+        .in('following_id', ids);
+      if (rel) {
+        followingSet = new Set(
+          (rel as { following_id: string }[]).map((r) => r.following_id),
+        );
+      }
+    }
+
+    return data.map((u) => {
+      const id = u.id as string;
+      return {
+        id,
+        display_name: (u.display_name as string) || '',
+        photo_url:    (u.photo_url as string | null) ?? null,
+        provider:     (u.provider as string) || 'guest',
+        elo_rating:   (u.elo_rating as number) ?? 1000,
+        badges:       (u.badges as string[] | null) ?? [],
+        following:    followingSet.has(id),
+        short_code:   id.replace(/-/g, '').slice(-6).toUpperCase(),
+      };
+    });
+  } catch (err) {
+    console.error('[supabase] searchUsers exception:', err);
+    return [];
+  }
 }
