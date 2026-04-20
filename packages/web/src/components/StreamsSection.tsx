@@ -58,6 +58,33 @@ function formatViews(n: number): string {
   return String(n);
 }
 
+// Declared at module scope so it is not recreated on each render (React 19
+// react-hooks/static-components rule).
+interface SortButtonProps {
+  label: string;
+  myKey: SortKey;
+  activeKey: SortKey;
+  sortDesc: boolean;
+  onToggle: (key: SortKey) => void;
+}
+
+function SortButton({ label, myKey, activeKey, sortDesc, onToggle }: SortButtonProps): JSX.Element {
+  const isActive = activeKey === myKey;
+  return (
+    <button
+      onClick={() => onToggle(myKey)}
+      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all border ${
+        isActive
+          ? 'bg-yellow-500 text-black border-yellow-500'
+          : 'bg-avalon-card/50 text-gray-300 border-gray-600 hover:border-yellow-500'
+      }`}
+    >
+      {label}
+      {isActive && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}
+    </button>
+  );
+}
+
 export default function StreamsSection(): JSX.Element {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('date');
@@ -104,20 +131,6 @@ export default function StreamsSection(): JSX.Element {
     }
   };
 
-  const SortButton = ({ label, myKey }: { label: string; myKey: SortKey }): JSX.Element => (
-    <button
-      onClick={() => toggleSort(myKey)}
-      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all border ${
-        sortKey === myKey
-          ? 'bg-yellow-500 text-black border-yellow-500'
-          : 'bg-avalon-card/50 text-gray-300 border-gray-600 hover:border-yellow-500'
-      }`}
-    >
-      {label}
-      {sortKey === myKey && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}
-    </button>
-  );
-
   return (
     <section className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -158,9 +171,9 @@ export default function StreamsSection(): JSX.Element {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-gray-400">排序:</span>
-          <SortButton label="日期" myKey="date" />
-          <SortButton label="長度" myKey="duration" />
-          <SortButton label="觀看" myKey="views" />
+          <SortButton label="日期" myKey="date" activeKey={sortKey} sortDesc={sortDesc} onToggle={toggleSort} />
+          <SortButton label="長度" myKey="duration" activeKey={sortKey} sortDesc={sortDesc} onToggle={toggleSort} />
+          <SortButton label="觀看" myKey="views" activeKey={sortKey} sortDesc={sortDesc} onToggle={toggleSort} />
           <span className="text-xs text-gray-400 ml-2">檢視:</span>
           <button
             onClick={() => setViewMode('grid')}

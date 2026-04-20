@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -276,13 +276,15 @@ export default function ReplayPage(): JSX.Element {
   const canPrev = step > 0;
   const canNext = step < totalSteps - 1;
 
-  const ago = (() => {
+  // `Date.now()` is impure; capture it once when `replay.playedAt` changes so
+  // render stays deterministic (React 19 react-hooks/purity rule).
+  const ago = useMemo(() => {
     const diffMs = Date.now() - replay.playedAt;
     const d = Math.floor(diffMs / 86400000);
     const h = Math.floor(diffMs / 3600000);
     if (d > 0) return `${d} 天前`;
     return `${h} 小時前`;
-  })();
+  }, [replay.playedAt]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black">
