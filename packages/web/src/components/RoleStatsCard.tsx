@@ -76,7 +76,7 @@ export default function RoleStatsCard({ role }: RoleStatsCardProps): JSX.Element
           <div className="text-[10px] text-gray-400 mt-0.5">勝率</div>
         </div>
         <div className="bg-gray-800/50 rounded-lg p-3 text-center">
-          <div className="text-lg font-bold text-green-400">{stats.wins}</div>
+          <div className="text-lg font-bold text-blue-400">{stats.wins}</div>
           <div className="text-[10px] text-gray-400 mt-0.5">勝場</div>
         </div>
         <div className="bg-gray-800/50 rounded-lg p-3 text-center">
@@ -102,8 +102,8 @@ export default function RoleStatsCard({ role }: RoleStatsCardProps): JSX.Element
             <div className="text-gray-500 text-[10px]">三藍死</div>
             <div className="text-gray-500 text-[10px]">{totalBreakdown > 0 ? formatWinRate(breakdown['\u4e09\u85cd\u6b7b'] / totalBreakdown) : '-'}</div>
           </div>
-          <div className="bg-emerald-900/30 border border-emerald-800/40 rounded p-2">
-            <div className="font-bold text-emerald-400">{breakdown['\u4e09\u85cd\u6d3b']}</div>
+          <div className="bg-amber-900/30 border border-amber-800/40 rounded p-2">
+            <div className="font-bold text-amber-400">{breakdown['\u4e09\u85cd\u6d3b']}</div>
             <div className="text-gray-500 text-[10px]">三藍活</div>
             <div className="text-gray-500 text-[10px]">{totalBreakdown > 0 ? formatWinRate(breakdown['\u4e09\u85cd\u6d3b'] / totalBreakdown) : '-'}</div>
           </div>

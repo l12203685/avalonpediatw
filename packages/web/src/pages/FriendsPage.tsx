@@ -110,7 +110,7 @@ export default function FriendsPage(): JSX.Element {
                       className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                       {friend.display_name[0]?.toUpperCase()}
                     </div>
                   )}
@@ -131,7 +131,7 @@ export default function FriendsPage(): JSX.Element {
                     {friend.badges.length > 0 && (
                       <div className="flex gap-1 mt-1 flex-wrap">
                         {friend.badges.slice(0, 3).map(b => (
-                          <span key={b} className="text-xs px-1.5 py-0.5 bg-purple-900/50 border border-purple-700/50 text-purple-300 rounded-full">
+                          <span key={b} className="text-xs px-1.5 py-0.5 bg-amber-900/50 border border-amber-700/50 text-amber-300 rounded-full">
                             {b}
                           </span>
                         ))}

@@ -61,7 +61,7 @@ export default function PlayerCard({
               : player.team === 'good'
               ? 'border-blue-500 bg-gradient-to-br from-blue-500 to-blue-700'
               : player.isBot
-              ? 'border-indigo-500 bg-gradient-to-br from-indigo-600 to-purple-700'
+              ? 'border-slate-500 bg-gradient-to-br from-slate-600 to-slate-800'
               : 'border-gray-500 bg-gradient-to-br from-slate-500 to-slate-700'
           }`}
         >

@@ -59,7 +59,7 @@ export default function VoteRevealOverlay({
         exit={{ scale: 0.8, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
         className="bg-avalon-card border-2 rounded-2xl p-8 max-w-md w-full mx-4 space-y-6 shadow-2xl"
-        style={{ borderColor: record.approved ? '#22c55e' : '#ef4444' }}
+        style={{ borderColor: record.approved ? '#3b82f6' : '#ef4444' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Title */}
@@ -77,7 +77,7 @@ export default function VoteRevealOverlay({
           transition={{ delay: 0.15, type: 'spring', stiffness: 400, damping: 20 }}
           className={`text-center py-5 rounded-xl border-2 ${
             record.approved
-              ? 'bg-green-900/40 border-green-500 text-green-300'
+              ? 'bg-blue-900/40 border-blue-500 text-blue-300'
               : 'bg-red-900/40 border-red-500 text-red-300'
           }`}
         >
@@ -118,12 +118,12 @@ export default function VoteRevealOverlay({
                 transition={{ delay: 0.3 + i * 0.07 }}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold ${
                   vote
-                    ? 'bg-green-900/30 border-green-700 text-green-200'
+                    ? 'bg-blue-900/30 border-blue-700 text-blue-200'
                     : 'bg-red-900/30 border-red-700 text-red-200'
                 }`}
               >
                 {vote
-                  ? <ThumbsUp size={14} className="flex-shrink-0 text-green-400" />
+                  ? <ThumbsUp size={14} className="flex-shrink-0 text-blue-400" />
                   : <ThumbsDown size={14} className="flex-shrink-0 text-red-400" />
                 }
                 <span className="truncate">{player.name}</span>
@@ -138,7 +138,7 @@ export default function VoteRevealOverlay({
             className="h-full rounded-full"
             style={{
               width: `${progress}%`,
-              backgroundColor: record.approved ? '#22c55e' : '#ef4444',
+              backgroundColor: record.approved ? '#3b82f6' : '#ef4444',
             }}
           />
         </div>

@@ -198,7 +198,7 @@ export default function LeaderboardPage(): JSX.Element {
                 {entry.photo_url ? (
                   <img src={entry.photo_url} alt="" className="w-10 h-10 rounded-full object-cover" />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-bold text-sm">
                     {entry.display_name[0]?.toUpperCase()}
                   </div>
                 )}
@@ -213,12 +213,12 @@ export default function LeaderboardPage(): JSX.Element {
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
                     <span>{entry.games_won}勝 {entry.games_lost}敗</span>
-                    <span className="text-green-400">{entry.win_rate}%</span>
+                    <span className="text-blue-400">{entry.win_rate}%</span>
                   </div>
                   {entry.badges.length > 0 && (
                     <div className="flex gap-1 mt-1.5 flex-wrap">
                       {entry.badges.slice(0, 4).map(b => (
-                        <span key={b} className="text-xs px-1.5 py-0.5 bg-purple-900/50 border border-purple-700/50 text-purple-300 rounded-full">
+                        <span key={b} className="text-xs px-1.5 py-0.5 bg-amber-900/50 border border-amber-700/50 text-amber-300 rounded-full">
                           {b}
                         </span>
                       ))}

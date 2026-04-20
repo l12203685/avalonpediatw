@@ -93,7 +93,7 @@ export default function VotePanel({
                     : 'bg-avalon-card/60 border-gray-600 text-white'
                 }`}
               >
-                <span className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center text-xs font-bold text-white">
+                <span className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-amber-400 flex items-center justify-center text-xs font-bold text-white">
                   {player.name.charAt(0).toUpperCase()}
                 </span>
                 {player.name}
@@ -189,7 +189,7 @@ export default function VotePanel({
                 key={player.id}
                 className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-all ${
                   hasPlayerVoted
-                    ? 'bg-green-900/50 border border-green-700 text-green-300'
+                    ? 'bg-blue-900/50 border border-blue-700 text-blue-300'
                     : 'bg-gray-800/50 border border-gray-700 text-gray-500'
                 } ${player.id === currentPlayer.id ? 'ring-1 ring-yellow-500/50' : ''}`}
               >

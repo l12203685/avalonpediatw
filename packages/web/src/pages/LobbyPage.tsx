@@ -164,7 +164,7 @@ export default function LobbyPage(): JSX.Element {
               onClick={handleCopyRoomId}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                 copied === 'code'
-                  ? 'bg-green-700/60 text-green-300 border border-green-600'
+                  ? 'bg-blue-700/60 text-blue-300 border border-blue-600'
                   : 'bg-gray-700/60 hover:bg-gray-600/60 text-gray-300 border border-gray-600'
               }`}
             >
@@ -175,7 +175,7 @@ export default function LobbyPage(): JSX.Element {
               onClick={handleCopyLink}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                 copied === 'link'
-                  ? 'bg-green-700/60 text-green-300 border border-green-600'
+                  ? 'bg-amber-700/60 text-amber-300 border border-amber-600'
                   : 'bg-blue-700/60 hover:bg-blue-600/60 text-blue-300 border border-blue-600'
               }`}
               title="複製邀請連結 (Copy invite link)"
@@ -205,7 +205,7 @@ export default function LobbyPage(): JSX.Element {
                         onClick={() => handleToggleRole(key)}
                         className={`text-left px-3 py-2 rounded-lg border text-xs transition-all ${
                           enabled
-                            ? 'bg-purple-900/40 border-purple-600 text-purple-200'
+                            ? 'bg-amber-900/40 border-amber-600 text-amber-200'
                             : 'bg-gray-800/40 border-gray-700 text-gray-500 hover:border-gray-500'
                         }`}
                       >
@@ -213,7 +213,7 @@ export default function LobbyPage(): JSX.Element {
                           <span className="font-bold">
                             {key === 'percival' ? '派西維爾 + 莫甘娜' : info.label}
                           </span>
-                          <span className={`text-xs font-bold ${enabled ? 'text-purple-400' : 'text-gray-600'}`}>
+                          <span className={`text-xs font-bold ${enabled ? 'text-amber-400' : 'text-gray-600'}`}>
                             {enabled ? '開' : '關'}
                           </span>
                         </div>
@@ -358,18 +358,18 @@ export default function LobbyPage(): JSX.Element {
                   player.id === currentPlayer.id
                     ? 'border-blue-500/60 bg-blue-900/20'
                     : player.isBot
-                    ? 'border-indigo-600/50 bg-indigo-900/10'
+                    ? 'border-slate-600/50 bg-slate-900/10'
                     : 'border-gray-600'
                 }`}
               >
                 {player.isBot ? (
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-gradient-to-br from-slate-500 to-slate-700">
                     <Bot size={18} />
                   </div>
                 ) : player.avatar ? (
                   <img src={player.avatar} alt={player.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-gray-600" />
                 ) : (
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-gradient-to-br from-blue-400 to-purple-400">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-gradient-to-br from-blue-500 to-amber-500">
                     {player.name.charAt(0).toUpperCase()}
                   </div>
                 )}
@@ -389,7 +389,7 @@ export default function LobbyPage(): JSX.Element {
                 {!player.isBot && player.id !== room.host && (
                   <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-bold border ${
                     readyIds.includes(player.id)
-                      ? 'bg-green-900/50 border-green-600 text-green-300'
+                      ? 'bg-blue-900/50 border-blue-600 text-blue-300'
                       : 'bg-gray-800/50 border-gray-700 text-gray-600'
                   }`}>
                     {readyIds.includes(player.id) ? '✓ 準備' : '…'}
@@ -428,7 +428,7 @@ export default function LobbyPage(): JSX.Element {
             {humanPlayers.length > 0 && (
               <div className={`text-sm text-center py-2 rounded-lg border ${
                 readyCount === humanPlayers.length
-                  ? 'bg-green-900/30 border-green-700 text-green-300'
+                  ? 'bg-blue-900/30 border-blue-700 text-blue-300'
                   : 'bg-gray-800/30 border-gray-700 text-gray-400'
               }`}>
                 {readyCount === humanPlayers.length
@@ -442,8 +442,8 @@ export default function LobbyPage(): JSX.Element {
                 <p className="text-xs text-gray-500 text-center font-semibold">加入 AI 機器人 (Add AI Bot)</p>
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    { diff: 'easy',   label: '🟢 簡單', desc: '隨機', bg: 'bg-green-900/40 hover:bg-green-800/60 border-green-700 text-green-300' },
-                    { diff: 'normal', label: '🤖 普通', desc: '策略', bg: 'bg-indigo-900/40 hover:bg-indigo-800/60 border-indigo-600 text-indigo-300' },
+                    { diff: 'easy',   label: '🟢 簡單', desc: '隨機', bg: 'bg-blue-900/40 hover:bg-blue-800/60 border-blue-700 text-blue-300' },
+                    { diff: 'normal', label: '🤖 普通', desc: '策略', bg: 'bg-slate-700/60 hover:bg-slate-600/80 border-slate-500 text-slate-200' },
                     { diff: 'hard',   label: '🔴 困難', desc: '強化', bg: 'bg-red-900/40 hover:bg-red-800/60 border-red-700 text-red-300' },
                   ] as const).map(({ diff, label, desc, bg }) => (
                     <button
@@ -476,7 +476,7 @@ export default function LobbyPage(): JSX.Element {
               disabled={!canStart}
               className={`w-full font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 ${
                 canStart
-                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-green-500/30'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg hover:shadow-amber-500/30'
                   : 'bg-gray-700 text-gray-500 cursor-not-allowed'
               }`}
             >
@@ -493,8 +493,8 @@ export default function LobbyPage(): JSX.Element {
               onClick={() => toggleReady(room.id, currentPlayer.id)}
               className={`w-full font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 border-2 ${
                 isReady
-                  ? 'bg-green-900/50 border-green-500 text-green-300 hover:bg-red-900/30 hover:border-red-600 hover:text-red-300'
-                  : 'bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-green-900/30 hover:border-green-600 hover:text-green-300'
+                  ? 'bg-blue-900/50 border-blue-500 text-blue-300 hover:bg-red-900/30 hover:border-red-600 hover:text-red-300'
+                  : 'bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-blue-900/30 hover:border-blue-600 hover:text-blue-300'
               }`}
             >
               {isReady ? '✓ 已準備（點擊取消）' : '準備好了 (Ready)'}

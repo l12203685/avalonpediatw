@@ -19,9 +19,9 @@ const ROLE_NAMES: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  merlin: 'text-blue-300', percival: 'text-cyan-300', loyal: 'text-green-300',
-  assassin: 'text-red-400', morgana: 'text-pink-400', mordred: 'text-red-600',
-  oberon: 'text-purple-400', minion: 'text-orange-400',
+  merlin: 'text-blue-300', percival: 'text-blue-200', loyal: 'text-blue-400',
+  assassin: 'text-red-400', morgana: 'text-rose-400', mordred: 'text-red-600',
+  oberon: 'text-slate-400', minion: 'text-red-300',
 };
 
 function formatDate(iso: string): string {
@@ -86,7 +86,7 @@ function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: stri
   const won = game.won;
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-gray-700/50 last:border-0">
-      <div className={`w-14 text-center text-xs font-bold py-1 rounded ${won ? 'bg-green-900/60 text-green-400' : 'bg-red-900/60 text-red-400'}`}>
+      <div className={`w-14 text-center text-xs font-bold py-1 rounded ${won ? 'bg-blue-900/60 text-blue-400' : 'bg-red-900/60 text-red-400'}`}>
         {won ? '勝' : '敗'}
       </div>
       <div className="flex-1">
@@ -95,7 +95,7 @@ function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: stri
         </span>
         <span className="text-xs text-gray-500 ml-2">{game.player_count}人局</span>
       </div>
-      <div className={`text-sm font-bold ${game.elo_delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+      <div className={`text-sm font-bold ${game.elo_delta >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
         {game.elo_delta >= 0 ? `+${game.elo_delta}` : game.elo_delta}
       </div>
       <div className="text-xs text-gray-600 w-14 text-right">{formatDate(game.created_at)}</div>
@@ -274,13 +274,13 @@ export default function ProfilePage(): JSX.Element {
             {isMe && (autoMatchCount !== null && autoMatchCount > 0) && (
               <button
                 onClick={() => setGameState('claimsNew')}
-                className="w-full bg-gradient-to-r from-blue-900/50 to-purple-900/50 hover:from-blue-800/60 hover:to-purple-800/60 border border-blue-700/60 rounded-xl p-4 text-left transition-all group"
+                className="w-full bg-gradient-to-r from-blue-900/50 to-amber-900/50 hover:from-blue-800/60 hover:to-amber-800/60 border border-blue-700/60 rounded-xl p-4 text-left transition-all group"
               >
                 <div className="flex items-center gap-3">
-                  <Sparkles size={24} className="text-purple-300 flex-shrink-0" />
+                  <Sparkles size={24} className="text-amber-300 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-white">
-                      你有 <span className="text-purple-300">{autoMatchCount}</span> 場可能的舊戰績
+                      你有 <span className="text-amber-300">{autoMatchCount}</span> 場可能的舊戰績
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       系統比對到你可能擁有的舊紀錄 — 申請綁定後就能顯示在你的統計裡
@@ -313,7 +313,7 @@ export default function ProfilePage(): JSX.Element {
               {profile.photo_url ? (
                 <img src={profile.photo_url} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-blue-500/50" />
               ) : (
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-black text-3xl border-2 border-blue-500/50">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-black text-3xl border-2 border-blue-500/50">
                   {profile.display_name[0]?.toUpperCase()}
                 </div>
               )}
@@ -335,7 +335,7 @@ export default function ProfilePage(): JSX.Element {
                 {profile.badges.length > 0 && (
                   <div className="flex gap-1 mt-2 flex-wrap">
                     {profile.badges.map(b => (
-                      <span key={b} className="text-xs px-2 py-0.5 bg-purple-900/60 border border-purple-600/50 text-purple-300 rounded-full">
+                      <span key={b} className="text-xs px-2 py-0.5 bg-amber-900/60 border border-amber-600/50 text-amber-300 rounded-full">
                         {b}
                       </span>
                     ))}
@@ -367,13 +367,13 @@ export default function ProfilePage(): JSX.Element {
                 </div>
               </div>
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
-                <div className="text-3xl font-black text-green-400">{winRate}%</div>
+                <div className="text-3xl font-black text-blue-400">{winRate}%</div>
                 <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
                   <Trophy size={12} /> 勝率
                 </div>
               </div>
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
-                <div className="text-3xl font-black text-green-400">{profile.games_won}</div>
+                <div className="text-3xl font-black text-blue-400">{profile.games_won}</div>
                 <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
                   <Shield size={12} /> 勝場
                 </div>
@@ -435,7 +435,7 @@ export default function ProfilePage(): JSX.Element {
 
               const pathD = points.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
               const trend = points[points.length - 1] - points[0];
-              const strokeColor = trend >= 0 ? '#4ade80' : '#f87171';
+              const strokeColor = trend >= 0 ? '#60a5fa' : '#f87171';
               const fillId = `elo-fill-${trend >= 0 ? 'up' : 'down'}`;
 
               // Area fill path (close to bottom)
@@ -447,7 +447,7 @@ export default function ProfilePage(): JSX.Element {
                 <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-bold text-gray-300">ELO 趨勢 (近 {games.length} 局)</h3>
-                    <span className={`text-sm font-bold ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className={`text-sm font-bold ${trend >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                       {trend >= 0 ? '+' : ''}{trend.toFixed(0)} pts
                     </span>
                   </div>
@@ -465,7 +465,7 @@ export default function ProfilePage(): JSX.Element {
                     {/* Dots */}
                     {points.map((v, i) => {
                       const g = games[i - 1];
-                      const dotColor = !g ? '#9ca3af' : g.won ? '#4ade80' : '#f87171';
+                      const dotColor = !g ? '#9ca3af' : g.won ? '#60a5fa' : '#f87171';
                       return <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill={dotColor} />;
                     })}
                     {/* Start/end labels */}
@@ -491,11 +491,11 @@ export default function ProfilePage(): JSX.Element {
                         </span>
                         <div className="flex-1 bg-gray-800 rounded-full h-1.5">
                           <div
-                            className={`h-1.5 rounded-full ${pct >= 50 ? 'bg-green-500' : 'bg-red-500'}`}
+                            className={`h-1.5 rounded-full ${pct >= 50 ? 'bg-blue-500' : 'bg-red-500'}`}
                             style={{ width: `${pct}%` }}
                           />
                         </div>
-                        <span className={`text-xs font-bold w-10 text-right ${pct >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                        <span className={`text-xs font-bold w-10 text-right ${pct >= 50 ? 'text-blue-400' : 'text-red-400'}`}>
                           {pct}%
                         </span>
                         <span className="text-xs text-gray-600 w-10 text-right">{wins}/{total}</span>
@@ -520,11 +520,11 @@ export default function ProfilePage(): JSX.Element {
                         </span>
                         <div className="flex-1 bg-gray-800 rounded-full h-1.5">
                           <div
-                            className={`h-1.5 rounded-full ${pct >= 50 ? 'bg-green-500' : 'bg-red-500'}`}
+                            className={`h-1.5 rounded-full ${pct >= 50 ? 'bg-blue-500' : 'bg-red-500'}`}
                             style={{ width: `${pct}%` }}
                           />
                         </div>
-                        <span className={`text-xs font-bold w-10 text-right ${pct >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                        <span className={`text-xs font-bold w-10 text-right ${pct >= 50 ? 'text-blue-400' : 'text-red-400'}`}>
                           {pct}%
                         </span>
                         <span className="text-xs text-gray-600 w-10 text-right">{wins}/{total}</span>

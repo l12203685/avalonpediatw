@@ -106,7 +106,7 @@ export default function GameBoard({ room, currentPlayer, children }: GameBoardPr
               key={room.state}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-lg sm:text-xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
+              className="text-lg sm:text-xl font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent"
             >
               {STATE_LABELS[room.state] ?? room.state}
             </motion.p>
@@ -152,7 +152,7 @@ export default function GameBoard({ room, currentPlayer, children }: GameBoardPr
               key={room.state}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-base font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent"
+              className="text-base font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent"
             >
               {STATE_LABELS[room.state] ?? room.state}
             </motion.p>

@@ -94,7 +94,7 @@ export default function LoginPage(): JSX.Element {
 
         {/* Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-6xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+          <h1 className="text-6xl font-black bg-gradient-to-r from-blue-400 via-amber-400 to-yellow-300 bg-clip-text text-transparent">
             AVALON
           </h1>
           <p className="text-xl text-gray-300">阿瓦隆：抵抗組織 (Avalon: The Resistance)</p>
@@ -170,7 +170,7 @@ export default function LoginPage(): JSX.Element {
               >登入</button>
               <button
                 onClick={() => setEmailMode('signup')}
-                className={`flex-1 py-1.5 rounded-lg font-semibold transition-all ${emailMode === 'signup' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                className={`flex-1 py-1.5 rounded-lg font-semibold transition-all ${emailMode === 'signup' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-white'}`}
               >註冊</button>
             </div>
 
@@ -213,7 +213,7 @@ export default function LoginPage(): JSX.Element {
             <button
               onClick={handleEmail}
               disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+              className="w-full bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
             >
               {loading ? <Loader size={18} className="animate-spin" /> : <Mail size={18} />}
               {emailMode === 'signup' ? '建立帳號 (Sign Up)' : '登入 (Sign In)'}
@@ -243,7 +243,7 @@ export default function LoginPage(): JSX.Element {
                 <button
                   onClick={handleGuest}
                   disabled={loading || guestName.trim().length < 2}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
                 >
                   {loading ? <Loader size={18} className="animate-spin" /> : null}
                   進入遊戲
@@ -252,7 +252,7 @@ export default function LoginPage(): JSX.Element {
             ) : (
               <button
                 onClick={() => setShowGuest(true)}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-2.5 rounded-xl transition-all"
+                className="w-full bg-gradient-to-r from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white font-bold py-2.5 rounded-xl transition-all"
               >
                 訪客進入（不需帳號）(Guest — No account needed)
               </button>

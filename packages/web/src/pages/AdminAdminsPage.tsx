@@ -21,7 +21,7 @@ function formatDateTime(ts: number): string {
 
 function actionLabel(action: AuditLogEntryApi['action']): { text: string; className: string } {
   switch (action) {
-    case 'approve':     return { text: '批准', className: 'bg-green-900/60 text-green-300 border-green-600/50' };
+    case 'approve':     return { text: '批准', className: 'bg-blue-900/60 text-blue-300 border-blue-600/50' };
     case 'reject':      return { text: '否決', className: 'bg-red-900/60 text-red-300 border-red-600/50' };
     case 'addAdmin':    return { text: '新增管理員', className: 'bg-blue-900/60 text-blue-300 border-blue-600/50' };
     case 'removeAdmin': return { text: '移除管理員', className: 'bg-yellow-900/60 text-yellow-300 border-yellow-600/50' };
@@ -168,7 +168,7 @@ export default function AdminAdminsPage(): JSX.Element {
             {/* Admin list */}
             <section className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
               <h2 className="text-sm font-bold text-gray-300 mb-3 flex items-center gap-2">
-                <ShieldCheck size={16} className="text-green-400" /> 管理員白名單
+                <ShieldCheck size={16} className="text-amber-400" /> 管理員白名單
                 <span className="text-xs text-gray-500 font-normal">({admins.length})</span>
               </h2>
               <div className="space-y-2 mb-3">
@@ -178,7 +178,7 @@ export default function AdminAdminsPage(): JSX.Element {
                   admins.map(email => (
                     <div key={email} className="flex items-center justify-between bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <ShieldCheck size={14} className="text-green-500 flex-shrink-0" />
+                        <ShieldCheck size={14} className="text-amber-500 flex-shrink-0" />
                         <span className="text-sm text-gray-200 truncate">{email}</span>
                         {email === myEmail && (
                           <span className="text-xs px-1.5 py-0.5 bg-blue-900/40 border border-blue-700/50 text-blue-300 rounded-full flex-shrink-0">你</span>
@@ -221,7 +221,7 @@ export default function AdminAdminsPage(): JSX.Element {
             {/* Audit log */}
             <section className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
               <h2 className="text-sm font-bold text-gray-300 mb-3 flex items-center gap-2">
-                <ClipboardList size={16} className="text-cyan-400" /> 操作軌跡
+                <ClipboardList size={16} className="text-blue-400" /> 操作軌跡
                 <span className="text-xs text-gray-500 font-normal">(最新 {auditLog.length})</span>
               </h2>
               {auditLog.length === 0 ? (

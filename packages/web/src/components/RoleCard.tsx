@@ -24,11 +24,11 @@ const ROLE_ICONS: Record<string, string> = {
 
 const ROLE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   merlin: { bg: 'from-blue-900 to-blue-700', border: 'border-blue-500', text: 'text-blue-400' },
-  percival: { bg: 'from-cyan-900 to-cyan-700', border: 'border-cyan-500', text: 'text-cyan-400' },
-  loyal: { bg: 'from-indigo-900 to-indigo-700', border: 'border-indigo-500', text: 'text-indigo-400' },
+  percival: { bg: 'from-blue-900 to-sky-800', border: 'border-sky-500', text: 'text-sky-400' },
+  loyal: { bg: 'from-blue-900 to-blue-800', border: 'border-blue-500', text: 'text-blue-300' },
   assassin: { bg: 'from-red-900 to-red-700', border: 'border-red-500', text: 'text-red-400' },
-  morgana: { bg: 'from-purple-900 to-purple-700', border: 'border-purple-500', text: 'text-purple-400' },
-  oberon: { bg: 'from-gray-900 to-gray-700', border: 'border-gray-500', text: 'text-gray-400' },
+  morgana: { bg: 'from-red-900 to-rose-800', border: 'border-rose-500', text: 'text-rose-400' },
+  oberon: { bg: 'from-slate-900 to-slate-700', border: 'border-slate-500', text: 'text-slate-300' },
 };
 
 export default function RoleCard({

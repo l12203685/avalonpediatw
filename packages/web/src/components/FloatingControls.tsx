@@ -210,7 +210,7 @@ export default function FloatingControls(): JSX.Element {
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => { setIsOpen(!isOpen); if (isOpen) { setFeedbackOpen(false); setFeedbackMsg(''); } }}
-        className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg flex items-center justify-center transition-all relative"
+        className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 hover:from-blue-700 hover:to-amber-700 text-white shadow-lg flex items-center justify-center transition-all relative"
       >
         <motion.div
           animate={{ rotate: isOpen ? 90 : 0 }}

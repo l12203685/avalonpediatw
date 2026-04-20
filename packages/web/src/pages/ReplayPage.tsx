@@ -33,11 +33,11 @@ function EventCard({ event, visible }: { event: ReplayEventApi; visible: boolean
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: visible ? 1 : 0.2, y: 0 }}
-        className={`${base} bg-purple-900/20 border-purple-600/40`}
+        className={`${base} bg-amber-900/20 border-amber-600/40`}
       >
         <div className="flex items-center gap-2">
-          <Users size={16} className="text-purple-400" />
-          <span className="text-purple-300 font-semibold text-sm">隊伍提案</span>
+          <Users size={16} className="text-amber-400" />
+          <span className="text-amber-300 font-semibold text-sm">隊伍提案</span>
           <span className="text-gray-500 text-xs ml-auto">第 {event.round} 輪</span>
         </div>
         <p className="text-white text-sm">
@@ -47,7 +47,7 @@ function EventCard({ event, visible }: { event: ReplayEventApi; visible: boolean
           {event.team?.map((name) => (
             <span
               key={name}
-              className="text-xs bg-purple-800/50 text-purple-200 border border-purple-600/40 px-2 py-1 rounded-full"
+              className="text-xs bg-amber-800/50 text-amber-200 border border-amber-600/40 px-2 py-1 rounded-full"
             >
               {name}
             </span>
@@ -58,23 +58,25 @@ function EventCard({ event, visible }: { event: ReplayEventApi; visible: boolean
   }
 
   if (event.type === 'vote-result') {
-    const color = event.approved ? 'green' : 'red';
+    const approvedCls = 'bg-blue-900/20 border-blue-600/40';
+    const rejectedCls = 'bg-red-900/20 border-red-600/40';
+    const labelCls = event.approved ? 'text-blue-300' : 'text-red-300';
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: visible ? 1 : 0.2, y: 0 }}
-        className={`${base} bg-${color}-900/20 border-${color}-600/40`}
+        className={`${base} ${event.approved ? approvedCls : rejectedCls}`}
       >
         <div className="flex items-center gap-2">
           {event.approved
-            ? <ThumbsUp size={16} className="text-green-400" />
+            ? <ThumbsUp size={16} className="text-blue-400" />
             : <ThumbsDown size={16} className="text-red-400" />}
-          <span className={`text-${color}-300 font-semibold text-sm`}>
+          <span className={`${labelCls} font-semibold text-sm`}>
             投票結果：{event.approved ? '通過' : '否決'}
           </span>
         </div>
         <div className="flex gap-4 text-sm">
-          <span className="text-green-400">✓ 贊成 {event.approvals}</span>
+          <span className="text-blue-400">✓ 贊成 {event.approvals}</span>
           <span className="text-red-400">✗ 反對 {event.rejections}</span>
           {(event.failCount ?? 0) > 0 && (
             <span className="text-yellow-400 ml-auto text-xs">
@@ -93,19 +95,19 @@ function EventCard({ event, visible }: { event: ReplayEventApi; visible: boolean
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: visible ? 1 : 0.2, y: 0 }}
         className={`${base} ${
-          success ? 'bg-green-900/25 border-green-600/50' : 'bg-red-900/25 border-red-600/50'
+          success ? 'bg-blue-900/25 border-blue-600/50' : 'bg-red-900/25 border-red-600/50'
         }`}
       >
         <div className="flex items-center gap-2">
           {success
-            ? <CheckCircle size={16} className="text-green-400" />
+            ? <CheckCircle size={16} className="text-blue-400" />
             : <XCircle size={16} className="text-red-400" />}
-          <span className={`${success ? 'text-green-300' : 'text-red-300'} font-bold`}>
+          <span className={`${success ? 'text-blue-300' : 'text-red-300'} font-bold`}>
             任務{success ? '成功' : '失敗'}
           </span>
         </div>
         <div className="flex gap-4 text-sm">
-          <span className="text-green-400">成功票 {event.successVotes}</span>
+          <span className="text-blue-400">成功票 {event.successVotes}</span>
           <span className="text-red-400">失敗票 {event.failVotes}</span>
         </div>
       </motion.div>
@@ -136,7 +138,7 @@ function EventCard({ event, visible }: { event: ReplayEventApi; visible: boolean
         </p>
         <p
           className={`text-sm font-semibold ${
-            event.targetWasMerlin ? 'text-red-400' : 'text-green-400'
+            event.targetWasMerlin ? 'text-red-400' : 'text-blue-400'
           }`}
         >
           {event.targetWasMerlin
@@ -154,11 +156,11 @@ function EventCard({ event, visible }: { event: ReplayEventApi; visible: boolean
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: visible ? 1 : 0.2, scale: 1 }}
         className={`${base} ${
-          good ? 'bg-green-900/30 border-green-500' : 'bg-red-900/30 border-red-500'
+          good ? 'bg-blue-900/30 border-blue-500' : 'bg-red-900/30 border-red-500'
         } text-center`}
       >
-        <Trophy size={24} className={`mx-auto ${good ? 'text-green-400' : 'text-red-400'}`} />
-        <p className={`font-black text-xl ${good ? 'text-green-300' : 'text-red-300'}`}>
+        <Trophy size={24} className={`mx-auto ${good ? 'text-blue-400' : 'text-red-400'}`} />
+        <p className={`font-black text-xl ${good ? 'text-blue-300' : 'text-red-300'}`}>
           {good ? '⚔️ 好陣營勝利' : '👹 邪惡陣營勝利'}
         </p>
         <p className="text-gray-300 text-sm">{event.reason}</p>
@@ -185,7 +187,7 @@ function RoundTrack({
           animate={{ scale: 1 }}
           transition={{ delay: i * 0.1 }}
           className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-lg ${
-            r === 'success' ? 'bg-green-500 shadow-green-500/30' : 'bg-red-500 shadow-red-500/30'
+            r === 'success' ? 'bg-blue-500 shadow-blue-500/30' : 'bg-red-500 shadow-red-500/30'
           }`}
         >
           {r === 'success' ? '✓' : '✗'}
@@ -325,7 +327,7 @@ export default function ReplayPage(): JSX.Element {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-gray-700 px-8 pt-16 pb-6"
+            className="bg-gradient-to-r from-blue-600/20 to-amber-600/20 border-b border-gray-700 px-8 pt-16 pb-6"
           >
             <div className="max-w-2xl mx-auto text-center space-y-3">
               <h1 className="text-3xl font-bold text-white">對戰回放</h1>
@@ -343,7 +345,7 @@ export default function ReplayPage(): JSX.Element {
 
               <p
                 className={`text-lg font-bold ${
-                  replay.winner === 'good' ? 'text-green-400' : 'text-red-400'
+                  replay.winner === 'good' ? 'text-blue-400' : 'text-red-400'
                 }`}
               >
                 {replay.winner === 'good' ? '⚔️ 好陣營勝利' : '👹 邪惡陣營勝利'}
@@ -384,7 +386,7 @@ export default function ReplayPage(): JSX.Element {
               <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
                 <motion.div
                   animate={{ width: `${((step + 1) / totalSteps) * 100}%` }}
-                  className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
+                  className="h-full bg-gradient-to-r from-blue-500 to-amber-500 rounded-full"
                 />
               </div>
             </div>

@@ -153,7 +153,7 @@ export default function QuestPanel({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-center py-4 text-green-400 font-semibold"
+          className="text-center py-4 text-blue-400 font-semibold"
         >
           ✓ 已提交，等待其他隊員投票…
         </motion.div>
@@ -164,7 +164,7 @@ export default function QuestPanel({
             whileTap={{ scale: 0.95 }}
             onClick={() => handleVote('success')}
             disabled={isSubmitting || isLoading}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
           >
             <CheckCircle size={20} />
             {isSubmitting ? '投票中…' : '任務成功 (Quest Success)'}

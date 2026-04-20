@@ -174,13 +174,13 @@ export default function GamePage(): JSX.Element {
   type ActionBanner = { msg: string; color: string } | null;
   const actionBanner: ActionBanner =
     room.state === 'voting' && !teamSelected && isCurrentPlayerLeader
-      ? { msg: '👑 輪到你了！請選擇任務隊伍 (Your turn — select a quest team)', color: 'border-purple-500 bg-purple-900/30 text-purple-200' }
+      ? { msg: '👑 輪到你了！請選擇任務隊伍 (Your turn — select a quest team)', color: 'border-amber-500 bg-amber-900/30 text-amber-200' }
       : room.state === 'voting' && teamSelected && !alreadyVoted
       ? { msg: '🗳️ 輪到你投票！贊成或拒絕此隊伍 (Your turn to vote — approve or reject)', color: 'border-yellow-500 bg-yellow-900/30 text-yellow-200' }
       : room.state === 'quest' && isOnQuestTeam
       ? { msg: '⚔️ 你在任務隊伍中！請投票成功或失敗 (You are on the quest — vote success or fail)', color: 'border-blue-500 bg-blue-900/30 text-blue-200' }
       : room.state === 'lady_of_the_lake' && isLadyHolder
-      ? { msg: '🔮 你持有湖中女神！選擇一位玩家查看陣營 (You hold the Lady — inspect a player)', color: 'border-cyan-500 bg-cyan-900/30 text-cyan-200' }
+      ? { msg: '🔮 你持有湖中女神！選擇一位玩家查看陣營 (You hold the Lady — inspect a player)', color: 'border-blue-500 bg-blue-900/30 text-blue-200' }
       : room.state === 'discussion' && isAssassin
       ? { msg: '🗡️ 你是刺客！選擇目標刺殺梅林 (You are the Assassin — choose your target)', color: 'border-red-500 bg-red-900/30 text-red-200' }
       : null;
@@ -251,11 +251,11 @@ export default function GamePage(): JSX.Element {
 
         {/* Spectator banner */}
         {isSpectator && (
-          <div className="flex items-center justify-between bg-purple-900/40 border border-purple-600 rounded-xl px-4 py-2">
-            <span className="text-purple-300 text-sm font-semibold">👁 觀戰模式 — 角色已隱藏 (Spectating — roles hidden)</span>
+          <div className="flex items-center justify-between bg-slate-800/40 border border-slate-600 rounded-xl px-4 py-2">
+            <span className="text-slate-300 text-sm font-semibold">👁 觀戰模式 — 角色已隱藏 (Spectating — roles hidden)</span>
             <button
               onClick={() => room && leaveSpectate(room.id)}
-              className="text-xs text-purple-400 hover:text-white border border-purple-600 hover:border-white px-3 py-1 rounded-lg transition-colors"
+              className="text-xs text-slate-400 hover:text-white border border-slate-600 hover:border-white px-3 py-1 rounded-lg transition-colors"
             >
               離開觀戰
             </button>
@@ -405,13 +405,13 @@ export default function GamePage(): JSX.Element {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-avalon-card/50 border-2 border-cyan-600 rounded-lg p-8 space-y-6"
+            className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 space-y-6"
           >
             {isLadyHolder ? (
               room.ladyOfTheLakeResult ? (
                 // Result revealed to holder
                 <div className="text-center space-y-4">
-                  <h2 className="text-3xl font-bold text-cyan-400">🔮 湖中女神 (Lady of the Lake)</h2>
+                  <h2 className="text-3xl font-bold text-blue-400">🔮 湖中女神 (Lady of the Lake)</h2>
                   <p className="text-gray-300">
                     <span className="font-bold text-white">{room.players[room.ladyOfTheLakeTarget ?? '']?.name}</span> 的陣營是：
                   </p>
@@ -428,7 +428,7 @@ export default function GamePage(): JSX.Element {
                 // Holder selects target
                 <>
                   <div className="text-center">
-                    <h2 className="text-3xl font-bold text-cyan-400">🔮 湖中女神 (Lady of the Lake)</h2>
+                    <h2 className="text-3xl font-bold text-blue-400">🔮 湖中女神 (Lady of the Lake)</h2>
                     <p className="text-gray-300 mt-2">選擇一位玩家查看其陣營 (Choose a player to inspect their team alignment)</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
@@ -438,7 +438,7 @@ export default function GamePage(): JSX.Element {
                         <button
                           key={player.id}
                           onClick={() => submitLadyOfTheLake(room.id, currentPlayer.id, player.id)}
-                          className="p-4 rounded-lg border-2 transition-all font-semibold bg-cyan-900/30 border-cyan-600 text-white hover:bg-cyan-800/60"
+                          className="p-4 rounded-lg border-2 transition-all font-semibold bg-blue-900/30 border-blue-600 text-white hover:bg-blue-800/60"
                         >
                           {player.name}
                         </button>
@@ -449,9 +449,9 @@ export default function GamePage(): JSX.Element {
             ) : (
               // Other players wait
               <div className="text-center space-y-4">
-                <h2 className="text-3xl font-bold text-cyan-400">🔮 湖中女神 (Lady of the Lake)</h2>
+                <h2 className="text-3xl font-bold text-blue-400">🔮 湖中女神 (Lady of the Lake)</h2>
                 <p className="text-gray-300">
-                  <span className="text-cyan-400 font-bold">{room.players[room.ladyOfTheLakeHolder ?? '']?.name}</span> 正在使用湖中女神查看一位玩家的陣營...
+                  <span className="text-blue-400 font-bold">{room.players[room.ladyOfTheLakeHolder ?? '']?.name}</span> 正在使用湖中女神查看一位玩家的陣營...
                 </p>
                 <p className="text-gray-500 text-sm">(The Lady holder is inspecting a player's team alignment...)</p>
               </div>
@@ -464,9 +464,9 @@ export default function GamePage(): JSX.Element {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-avalon-card/30 border border-purple-700/50 rounded-xl p-4 text-center"
+            className="bg-avalon-card/30 border border-slate-700/50 rounded-xl p-4 text-center"
           >
-            <p className="text-purple-400 text-sm">
+            <p className="text-slate-400 text-sm">
               {room.state === 'voting' && '👁 觀戰中 — 等待玩家投票...'}
               {room.state === 'quest' && '👁 觀戰中 — 任務隊伍正在行動...'}
               {room.state === 'lady_of_the_lake' && '👁 觀戰中 — 湖中女神查看中...'}
@@ -480,7 +480,7 @@ export default function GamePage(): JSX.Element {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-avalon-card/50 border-2 border-purple-600 rounded-lg p-8 space-y-6"
+            className="bg-avalon-card/50 border-2 border-red-700 rounded-lg p-8 space-y-6"
           >
             {/* Quest history aide for assassin */}
             {room.questHistory.length > 0 && (
@@ -541,7 +541,7 @@ export default function GamePage(): JSX.Element {
               </>
             ) : (
               <div className="text-center space-y-4">
-                <h2 className="text-3xl font-bold text-purple-400">💬 刺殺階段 (Assassination Phase)</h2>
+                <h2 className="text-3xl font-bold text-red-400">💬 刺殺階段 (Assassination Phase)</h2>
                 <p className="text-gray-300">好人贏得了 3 次任務！(Good team won 3 quests!)</p>
                 <p className="text-gray-400">刺客正在選擇目標，試圖找出梅林... (The Assassin is choosing a target, trying to find Merlin...)</p>
                 <div className="text-sm text-yellow-500 bg-yellow-900/20 border border-yellow-700 rounded-lg p-3">
@@ -633,7 +633,7 @@ export default function GamePage(): JSX.Element {
                     <div className="flex items-center justify-between gap-1">
                       <p className="font-bold text-white truncate">{player.name}{wasAssassinated && ' 🗡️'}</p>
                       {room.eloDeltas?.[player.id] !== undefined && (
-                        <span className={`text-xs font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <span className={`text-xs font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                           {room.eloDeltas[player.id] >= 0 ? '+' : ''}{room.eloDeltas[player.id]}
                         </span>
                       )}
@@ -658,7 +658,7 @@ export default function GamePage(): JSX.Element {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => requestRematch(room.id)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-bold py-3 px-8 rounded-lg transition-all"
+                  className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition-all"
                 >
                   <RefreshCw size={20} />
                   再來一局 (Rematch)
@@ -668,7 +668,7 @@ export default function GamePage(): JSX.Element {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handlePlayAgain}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-8 rounded-lg transition-all"
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 px-8 rounded-lg transition-all"
               >
                 <Home size={20} />
                 返回首頁

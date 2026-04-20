@@ -94,7 +94,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                           </td>
                           <td className="py-1.5 px-1 text-center text-gray-300">
                             {cast.length > 0
-                              ? <span className={approves / cast.length > 0.7 ? 'text-green-400' : approves / cast.length < 0.35 ? 'text-red-400' : 'text-gray-300'}>
+                              ? <span className={approves / cast.length > 0.7 ? 'text-blue-400' : approves / cast.length < 0.35 ? 'text-red-400' : 'text-gray-300'}>
                                   {approves}/{cast.length}
                                 </span>
                               : <span className="text-gray-600">—</span>}
@@ -156,7 +156,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                                   {vote === undefined ? (
                                     <span className="text-gray-700">·</span>
                                   ) : (
-                                    <span className={vote ? 'text-green-400' : 'text-red-400'}>
+                                    <span className={vote ? 'text-blue-400' : 'text-red-400'}>
                                       {vote ? '👍' : '👎'}
                                     </span>
                                   )}

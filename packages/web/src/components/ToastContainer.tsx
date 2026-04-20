@@ -8,7 +8,7 @@ function ToastItem({ toast }: { toast: Toast }): JSX.Element {
   const styles = {
     error:   { bg: 'bg-red-900/90 border-red-500',     icon: <AlertCircle size={18} className="text-red-400 shrink-0" /> },
     info:    { bg: 'bg-blue-900/90 border-blue-500',   icon: <Info         size={18} className="text-blue-400 shrink-0" /> },
-    success: { bg: 'bg-green-900/90 border-green-500', icon: <CheckCircle  size={18} className="text-green-400 shrink-0" /> },
+    success: { bg: 'bg-blue-900/90 border-blue-500', icon: <CheckCircle  size={18} className="text-blue-400 shrink-0" /> },
   }[toast.type];
 
   return (

@@ -33,7 +33,7 @@ function roleLabel(role: string | null): string {
 }
 
 function statusPill(status: ClaimRequestApi['status']): { label: string; className: string; Icon: typeof Clock } {
-  if (status === 'approved') return { label: '已核准', className: 'bg-green-900/60 text-green-300 border-green-600/50', Icon: CheckCircle2 };
+  if (status === 'approved') return { label: '已核准', className: 'bg-blue-900/60 text-blue-300 border-blue-600/50', Icon: CheckCircle2 };
   if (status === 'rejected') return { label: '已否決', className: 'bg-red-900/60 text-red-300 border-red-600/50', Icon: XCircle };
   return { label: '審核中', className: 'bg-yellow-900/60 text-yellow-300 border-yellow-600/50', Icon: Clock };
 }
@@ -51,7 +51,7 @@ function RecordRow({ record, checked, onToggle }: RecordRowProps): JSX.Element {
       ? 'text-blue-300'
       : 'text-gray-400';
   const wonLabel = record.won ? '勝' : '敗';
-  const wonColor = record.won ? 'bg-green-900/60 text-green-300' : 'bg-red-900/60 text-red-300';
+  const wonColor = record.won ? 'bg-blue-900/60 text-blue-300' : 'bg-red-900/60 text-red-300';
   return (
     <label className={`flex items-center gap-3 py-2 px-3 border-b border-gray-700/50 last:border-0 cursor-pointer hover:bg-avalon-card/80 transition-colors ${
       checked ? 'bg-blue-900/20' : ''
@@ -68,7 +68,7 @@ function RecordRow({ record, checked, onToggle }: RecordRowProps): JSX.Element {
           <span className={`text-sm font-semibold ${teamColor} truncate`}>{roleLabel(record.role)}</span>
           <span className="text-xs text-gray-500">{record.playerCount}人局</span>
           {record.matchScore !== undefined && (
-            <span className="text-xs px-1.5 py-0.5 bg-purple-900/40 border border-purple-700/50 text-purple-300 rounded-full">
+            <span className="text-xs px-1.5 py-0.5 bg-amber-900/40 border border-amber-700/50 text-amber-300 rounded-full">
               相似度 {record.matchScore.toFixed(0)}%
             </span>
           )}
@@ -266,7 +266,7 @@ export default function ClaimsNewPage(): JSX.Element {
                       <p>
                         送出於 {formatDate(claim.submittedAt)} · 申請 {claim.targetRecordIds.length} 場
                         {claim.status === 'approved' && claim.approvedRecordIds && (
-                          <> · 核准 <span className="text-green-400 font-semibold">{claim.approvedRecordIds.length}</span> 場</>
+                          <> · 核准 <span className="text-blue-400 font-semibold">{claim.approvedRecordIds.length}</span> 場</>
                         )}
                       </p>
                       {claim.status === 'rejected' && claim.rejectReason && (
@@ -287,7 +287,7 @@ export default function ClaimsNewPage(): JSX.Element {
         <section className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-bold text-gray-300 flex items-center gap-2">
-              <Sparkles size={16} className="text-purple-400" /> 系統自動比對
+              <Sparkles size={16} className="text-amber-400" /> 系統自動比對
             </h2>
             {autoRecords.length > 0 && (
               <button
@@ -324,7 +324,7 @@ export default function ClaimsNewPage(): JSX.Element {
         {/* Manual search */}
         <section className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
           <h2 className="text-sm font-bold text-gray-300 mb-3 flex items-center gap-2">
-            <Search size={16} className="text-cyan-400" /> 手動搜尋（輸入舊暱稱）
+            <Search size={16} className="text-blue-400" /> 手動搜尋（輸入舊暱稱）
           </h2>
           <div className="space-y-2">
             <input
@@ -358,7 +358,7 @@ export default function ClaimsNewPage(): JSX.Element {
             <button
               onClick={() => void handleManualSearch()}
               disabled={manualLoading}
-              className="w-full bg-cyan-700 hover:bg-cyan-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               {manualLoading ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
               搜尋

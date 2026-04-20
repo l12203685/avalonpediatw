@@ -176,7 +176,7 @@ export default function HomePage(): JSX.Element {
             opacity: [0.1, 0.2, 0.1],
           }}
           transition={{ duration: 25, repeat: Infinity }}
-          className="absolute bottom-10 left-10 w-96 h-96 bg-purple-500 rounded-full blur-3xl"
+          className="absolute bottom-10 left-10 w-96 h-96 bg-amber-500 rounded-full blur-3xl"
         />
       </div>
 
@@ -202,7 +202,7 @@ export default function HomePage(): JSX.Element {
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setGameState('adminClaims')}
-                className="p-2 bg-avalon-card/50 backdrop-blur-sm rounded-lg border border-green-700 hover:border-green-400 text-green-400 hover:text-green-300 transition-colors"
+                className="p-2 bg-avalon-card/50 backdrop-blur-sm rounded-lg border border-amber-700 hover:border-amber-400 text-amber-400 hover:text-amber-300 transition-colors"
                 title="管理 (Admin)"
               >
                 <ShieldCheck size={18} />
@@ -239,7 +239,7 @@ export default function HomePage(): JSX.Element {
                 alt="阿瓦隆百科"
                 className="w-24 h-24 mx-auto rounded-2xl shadow-lg shadow-blue-500/20"
               />
-              <h1 className="text-6xl font-black bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent drop-shadow-2xl">
+              <h1 className="text-6xl font-black bg-gradient-to-r from-blue-400 via-amber-400 to-yellow-300 bg-clip-text text-transparent drop-shadow-2xl">
                 AVALON
               </h1>
               <p className="text-2xl text-gray-300 font-semibold">抵抗組織 (The Resistance)</p>
@@ -257,8 +257,8 @@ export default function HomePage(): JSX.Element {
                 <Users size={20} className="text-blue-400 mx-auto mb-1" />
                 <p className="text-xs text-gray-300">陣營對戰 (Team Battle)</p>
               </div>
-              <div className="bg-purple-900/30 border border-purple-500/50 rounded-lg p-3">
-                <Zap size={20} className="text-purple-400 mx-auto mb-1" />
+              <div className="bg-amber-900/30 border border-amber-500/50 rounded-lg p-3">
+                <Zap size={20} className="text-amber-400 mx-auto mb-1" />
                 <p className="text-xs text-gray-300">即時連線 (Real-time)</p>
               </div>
             </motion.div>
@@ -284,7 +284,7 @@ export default function HomePage(): JSX.Element {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setMode('join')}
-                className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-purple-500/50"
+                className="w-full bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-amber-500/50"
               >
                 <LogIn size={20} />
                 加入房間 (Join Room)
@@ -294,7 +294,7 @@ export default function HomePage(): JSX.Element {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setGameState('wiki')}
-                className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-yellow-500/50"
+                className="w-full bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-700 hover:to-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-yellow-500/50"
               >
                 <BookOpen size={20} />
                 百科 & 攻略 (Wiki & Guide)
@@ -315,7 +315,7 @@ export default function HomePage(): JSX.Element {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setGameState('friends')}
-                  className="w-full bg-gradient-to-r from-sky-700 to-blue-600 hover:from-sky-800 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-sky-500/50"
+                  className="w-full bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-blue-500/50"
                 >
                   <Users size={18} />
                   追蹤列表
@@ -325,7 +325,7 @@ export default function HomePage(): JSX.Element {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleQuickSolo}
-                  className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-teal-500/50"
+                  className="w-full bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-800 hover:to-slate-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-slate-500/50"
                 >
                   <Zap size={18} />
                   快速練習
@@ -348,7 +348,7 @@ export default function HomePage(): JSX.Element {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setGameState('aiStats')}
-                className="w-full bg-gradient-to-r from-purple-700 to-violet-700 hover:from-purple-800 hover:to-violet-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-purple-500/50"
+                className="w-full bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-slate-500/50"
               >
                 <Bot size={20} />
                 AI 自對弈統計 (AI Stats)
@@ -358,7 +358,7 @@ export default function HomePage(): JSX.Element {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setGameState('analysis')}
-                className="w-full bg-gradient-to-r from-cyan-700 to-blue-700 hover:from-cyan-800 hover:to-blue-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-cyan-500/50"
+                className="w-full bg-gradient-to-r from-blue-700 to-blue-800 hover:from-blue-800 hover:to-blue-900 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-blue-500/50"
               >
                 <BarChart3 size={20} />
                 數據分析 (Game Analysis)
@@ -402,7 +402,7 @@ export default function HomePage(): JSX.Element {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                         <span className="text-xs text-gray-400">
-                          <span className={r.playerCount >= 5 ? 'text-green-400' : 'text-yellow-400'}>
+                          <span className={r.playerCount >= 5 ? 'text-blue-400' : 'text-yellow-400'}>
                             {r.playerCount}
                           </span>
                           /{r.maxPlayers}
@@ -410,7 +410,7 @@ export default function HomePage(): JSX.Element {
                         {r.inProgress ? (
                           <button
                             onClick={() => spectateRoom(r.fullId)}
-                            className="flex items-center gap-1 text-xs px-2 py-1 bg-purple-900/50 hover:bg-purple-800/60 border border-purple-700 text-purple-300 rounded transition-colors"
+                            className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-900/50 hover:bg-amber-800/60 border border-amber-700 text-amber-300 rounded transition-colors"
                             title="觀戰 (Spectate)"
                           >
                             <Eye size={11} />
@@ -525,7 +525,7 @@ export default function HomePage(): JSX.Element {
         )}
 
         {mode === 'join' && (
-          <div className="space-y-6 bg-avalon-card/50 p-8 rounded-lg border border-purple-500/30">
+          <div className="space-y-6 bg-avalon-card/50 p-8 rounded-lg border border-amber-500/30">
             <h2 className="text-2xl font-bold text-center">加入房間</h2>
 
             <input
@@ -534,7 +534,7 @@ export default function HomePage(): JSX.Element {
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
               autoFocus
-              className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
             />
 
             <input
@@ -544,13 +544,13 @@ export default function HomePage(): JSX.Element {
               onChange={(e) => setRoomId(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && handleJoinRoom()}
               maxLength={6}
-              className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 uppercase font-mono tracking-widest"
+              className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 uppercase font-mono tracking-widest"
             />
 
             <div className="space-y-3">
               <button
                 onClick={handleJoinRoom}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
               >
                 加入
               </button>

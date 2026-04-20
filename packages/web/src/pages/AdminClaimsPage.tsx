@@ -53,16 +53,16 @@ function AdminRecordRow({ record, checked, onToggle }: AdminRecordRowProps): JSX
       ? 'text-blue-300'
       : 'text-gray-400';
   const wonLabel = record.won ? '勝' : '敗';
-  const wonColor = record.won ? 'bg-green-900/60 text-green-300' : 'bg-red-900/60 text-red-300';
+  const wonColor = record.won ? 'bg-blue-900/60 text-blue-300' : 'bg-red-900/60 text-red-300';
   return (
     <label className={`flex items-center gap-3 py-2 px-3 border-b border-gray-700/50 last:border-0 cursor-pointer hover:bg-avalon-card/60 transition-colors ${
-      checked ? 'bg-green-900/10' : ''
+      checked ? 'bg-blue-900/10' : ''
     }`}>
       <input
         type="checkbox"
         checked={checked}
         onChange={onToggle}
-        className="w-4 h-4 accent-green-500 flex-shrink-0"
+        className="w-4 h-4 accent-blue-500 flex-shrink-0"
       />
       <div className={`w-10 text-center text-xs font-bold py-0.5 rounded ${wonColor}`}>{wonLabel}</div>
       <div className="flex-1 min-w-0">
@@ -70,7 +70,7 @@ function AdminRecordRow({ record, checked, onToggle }: AdminRecordRowProps): JSX
           <span className={`text-sm font-semibold ${teamColor}`}>{roleLabel(record.role)}</span>
           <span className="text-xs text-gray-500">{record.playerCount}人局</span>
           {record.matchScore !== undefined && (
-            <span className="text-xs px-1.5 py-0.5 bg-purple-900/40 border border-purple-700/50 text-purple-300 rounded-full">
+            <span className="text-xs px-1.5 py-0.5 bg-amber-900/40 border border-amber-700/50 text-amber-300 rounded-full">
               相似度 {record.matchScore.toFixed(0)}%
             </span>
           )}
@@ -143,7 +143,7 @@ function ClaimCard({ view, onApprove, onReject, working }: ClaimCardProps): JSX.
               <span className="text-xs text-gray-400 truncate">({claim.email})</span>
             )}
             {claim.autoMatched && (
-              <span className="text-xs px-1.5 py-0.5 bg-purple-900/40 border border-purple-700/50 text-purple-300 rounded-full">
+              <span className="text-xs px-1.5 py-0.5 bg-amber-900/40 border border-amber-700/50 text-amber-300 rounded-full">
                 自動比對
               </span>
             )}
@@ -200,7 +200,7 @@ function ClaimCard({ view, onApprove, onReject, working }: ClaimCardProps): JSX.
               <button
                 onClick={() => void handleApprove()}
                 disabled={working || selected.size === 0}
-                className="flex-1 bg-green-700 hover:bg-green-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-sm font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="flex-1 bg-blue-700 hover:bg-blue-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-sm font-bold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {working ? <Loader size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
                 批准 {selected.size} 場
@@ -348,7 +348,7 @@ export default function AdminClaimsPage(): JSX.Element {
           </button>
           <div className="flex-1">
             <h1 className="text-2xl font-black text-white flex items-center gap-2">
-              <ShieldCheck size={24} className="text-green-400" /> 申請審核
+              <ShieldCheck size={24} className="text-amber-400" /> 申請審核
             </h1>
             <p className="text-xs text-gray-500 mt-0.5">審核玩家綁定舊戰績的申請</p>
           </div>
@@ -364,7 +364,7 @@ export default function AdminClaimsPage(): JSX.Element {
 
         {loading && (
           <div className="flex justify-center pt-10">
-            <Loader size={32} className="animate-spin text-green-400" />
+            <Loader size={32} className="animate-spin text-amber-400" />
           </div>
         )}
 

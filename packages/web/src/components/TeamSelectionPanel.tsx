@@ -51,7 +51,7 @@ export default function TeamSelectionPanel({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-avalon-card/50 border-2 border-purple-600 rounded-lg p-8 space-y-6"
+      className="bg-avalon-card/50 border-2 border-amber-600 rounded-lg p-8 space-y-6"
     >
       {/* 標題和信息 */}
       <div className="text-center">
@@ -79,7 +79,7 @@ export default function TeamSelectionPanel({
       <div className="flex justify-center">
         <div className="bg-avalon-card/70 rounded-full px-6 py-2">
           <p className="text-white font-bold">
-            已選 (Selected)：<span className="text-purple-400">{selectedPlayers.size}</span>/
+            已選 (Selected)：<span className="text-amber-400">{selectedPlayers.size}</span>/
             <span className="text-gray-400">{expectedTeamSize}</span>
           </p>
         </div>
@@ -106,13 +106,13 @@ export default function TeamSelectionPanel({
                 }
                 className={`flex items-center gap-3 p-3 rounded-lg transition-all border-2 ${
                   isSelected
-                    ? 'bg-purple-600/40 border-purple-400 text-white'
+                    ? 'bg-amber-600/40 border-amber-400 text-white'
                     : 'bg-avalon-card/30 border-gray-600 text-gray-300 hover:border-gray-400'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 <div className="relative">
                   {isSelected ? (
-                    <CheckCircle size={20} className="text-purple-400" />
+                    <CheckCircle size={20} className="text-amber-400" />
                   ) : (
                     <Circle size={20} className="text-gray-500" />
                   )}
@@ -135,7 +135,7 @@ export default function TeamSelectionPanel({
         disabled={!isFull || isSubmitting || isLoading}
         className={`w-full font-bold py-3 px-6 rounded-lg transition-all ${
           isFull && !isSubmitting
-            ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer'
+            ? 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
             : 'bg-gray-600 text-gray-300 cursor-not-allowed opacity-50'
         }`}
       >

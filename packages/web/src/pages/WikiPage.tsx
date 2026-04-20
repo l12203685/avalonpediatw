@@ -34,7 +34,7 @@ export default function WikiPage(): JSX.Element {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-yellow-600/20 to-purple-600/20 border-b border-gray-700 p-8"
+        className="bg-gradient-to-r from-yellow-600/20 to-amber-600/20 border-b border-gray-700 p-8"
       >
         <div className="max-w-6xl mx-auto text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
@@ -153,7 +153,7 @@ export default function WikiPage(): JSX.Element {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setGameState('analysis')}
-                className="w-full bg-gradient-to-r from-blue-600/30 to-purple-600/30 hover:from-blue-600/50 hover:to-purple-600/50 border border-blue-500/50 rounded-lg p-6 text-left transition-all group"
+                className="w-full bg-gradient-to-r from-blue-600/30 to-amber-600/30 hover:from-blue-600/50 hover:to-amber-600/50 border border-blue-500/50 rounded-lg p-6 text-left transition-all group"
               >
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-blue-500/20 rounded-lg border border-blue-400/40">
@@ -219,7 +219,7 @@ export default function WikiPage(): JSX.Element {
                   setSelectedCategory('rules');
                   document.getElementById('wiki-content')?.scrollIntoView({ behavior: 'smooth' });
                 }}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg transition-all"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-all"
               >
                 新手指南 (Beginner Guide)
               </button>

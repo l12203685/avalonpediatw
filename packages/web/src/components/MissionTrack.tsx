@@ -68,13 +68,13 @@ export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
                 {result === 'success' && (
                   <div className="flex flex-col items-center">
                     <span className="text-lg leading-none">✓</span>
-                    {failsRequired[i] >= 2 && <span className="text-orange-300 text-xs font-black leading-none">×2</span>}
+                    {failsRequired[i] >= 2 && <span className="text-amber-300 text-xs font-black leading-none">×2</span>}
                   </div>
                 )}
                 {result === 'fail' && (
                   <div className="flex flex-col items-center">
                     <span className="text-lg leading-none">✗</span>
-                    {failsRequired[i] >= 2 && <span className="text-orange-300 text-xs font-black leading-none">×2</span>}
+                    {failsRequired[i] >= 2 && <span className="text-amber-300 text-xs font-black leading-none">×2</span>}
                   </div>
                 )}
                 {!result && (
@@ -84,7 +84,7 @@ export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
                       <span className="text-xs font-bold">{size}</span>
                     </div>
                     {failsRequired[i] >= 2 && (
-                      <span className="text-orange-400 text-xs font-black leading-none">×2</span>
+                      <span className="text-amber-400 text-xs font-black leading-none">×2</span>
                     )}
                   </div>
                 )}
@@ -112,7 +112,7 @@ export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
                 room.failCount > i
                   ? i >= 4
                     ? 'bg-red-500'
-                    : 'bg-orange-500'
+                    : 'bg-amber-500'
                   : 'bg-gray-700 border border-gray-600'
               }`}
             />

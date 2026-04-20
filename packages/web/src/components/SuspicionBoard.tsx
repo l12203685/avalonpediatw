@@ -66,7 +66,7 @@ export default function SuspicionBoard({ room, currentPlayer }: SuspicionBoardPr
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-700/30 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <ClipboardList size={16} className="text-purple-400" />
+          <ClipboardList size={16} className="text-amber-400" />
           <span className="text-sm font-bold text-gray-300">嫌疑筆記 (Suspicion Notes)</span>
           <span className="text-xs text-gray-600">— 私人記錄</span>
           {(evilCount > 0 || trustCount > 0) && (
