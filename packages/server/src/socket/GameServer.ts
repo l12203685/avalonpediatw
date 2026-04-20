@@ -926,11 +926,9 @@ export class GameServer {
         socket.emit('error', 'Room is full'); return;
       }
 
-      const BOT_NAMES = ['阿爾比斯', '蘭斯洛特', '加拉哈德', '崔斯坦', '帕西法爾', '貝狄維爾'];
-      const DIFFICULTY_EMOJI: Record<string, string> = { easy: '🟢', normal: '🤖', hard: '🔴' };
       const existingBotCount = Object.values(room.players).filter(p => p.isBot).length;
       const botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
-      const botName = `${DIFFICULTY_EMOJI[difficulty] ?? '🤖'} ${BOT_NAMES[existingBotCount % BOT_NAMES.length]}`;
+      const botName = `AI${existingBotCount + 1}`;
 
       room.players[botId] = {
         id: botId,
