@@ -41,6 +41,7 @@
     "@typescript-eslint/parser": "^7.0.0",
     "@vitest/coverage-v8": "4.1.1",
     "eslint": "^8.57.0",
+    "socket.io-client": "^4.8.3",
     "supertest": "^7.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
