@@ -16,6 +16,7 @@ import AnalysisPage from './pages/AnalysisPage';
 import ClaimsNewPage from './pages/ClaimsNewPage';
 import AdminClaimsPage from './pages/AdminClaimsPage';
 import AdminAdminsPage from './pages/AdminAdminsPage';
+import HelpPage from './pages/HelpPage';
 import ToastContainer from './components/ToastContainer';
 import FloatingControls from './components/FloatingControls';
 import { submitError } from './services/api';
@@ -140,6 +141,7 @@ function App(): JSX.Element {
           {gameState === 'claimsNew' && <ClaimsNewPage />}
           {gameState === 'adminClaims' && <AdminClaimsPage />}
           {gameState === 'adminAdmins' && <AdminAdminsPage />}
+          {gameState === 'help' && <HelpPage />}
         </>
       )}
       <ToastContainer />

@@ -4,7 +4,7 @@ import { createRoom, joinRoom, listRooms, spectateRoom, getSocket, getStoredToke
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
 import { fetchAdminMe } from '../services/api';
-import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot, BarChart3, ShieldCheck, Clock } from 'lucide-react';
+import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot, BarChart3, ShieldCheck, Clock, HelpCircle } from 'lucide-react';
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 
 interface OpenRoom {
@@ -362,6 +362,16 @@ export default function HomePage(): JSX.Element {
               >
                 <BarChart3 size={20} />
                 數據分析 (Game Analysis)
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setGameState('help')}
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
+              >
+                <HelpCircle size={20} />
+                常見問題 & 隱私 (Help & Privacy)
               </motion.button>
             </motion.div>
 
