@@ -384,9 +384,79 @@ function deriveBadgesFromStats(stats: PlayerStats, elo: number): string[] {
 
 /**
  * Get a single player's profile with recent games.
+ *
+ * Lookup priority (aligned with `getFirestoreLeaderboard` which is Sheets-first):
+ *   1. Sheets player stats (primary — matches leaderboard list IDs, avoids
+ *      Firestore playerId collision pollution where guest records share keys)
+ *   2. Best-effort enrichment: if a Firestore aggregated player has the same
+ *      displayName as the Sheets entry, merge its per-game `recent_games`
+ *   3. Firestore aggregated map (fallback — only when Sheets has no entry;
+ *      preserves profile access for Firestore-only players)
  */
 export async function getFirestoreUserProfile(playerId: string): Promise<UserProfile | null> {
-  // Try Firestore first (has per-game history)
+  // 1. Try Sheets first (leaderboard list is Sheets-first; IDs are display names)
+  if (isSheetsReady()) {
+    try {
+      const sheetsPlayers = await getAllPlayerStats();
+      const eloMap = computeEloFromSheets(sheetsPlayers);
+      const entry = eloMap.get(playerId);
+      if (entry) {
+        const { elo, stats } = entry;
+        const totalWins = Math.round(stats.totalGames * (stats.winRate / 100));
+        const totalLosses = stats.totalGames - totalWins;
+
+        // 2. Best-effort enrichment: pull recent_games from Firestore if a
+        //    matching displayName exists. If merge causes issues later, this
+        //    block is the place to gate behind a feature flag.
+        // TODO: resolve displayName collisions across Firestore aggregated map
+        //       (currently picks the first match which may still be a polluted
+        //       guest record — safe because we only borrow its gameHistory
+        //       recency, not its stats).
+        let recent: RecentGame[] = [];
+        try {
+          const players = await getAggregated();
+          const lower = playerId.toLowerCase();
+          for (const [, candidate] of players) {
+            if (candidate.displayName.toLowerCase() === lower) {
+              recent = candidate.gameHistory
+                .slice(-20)
+                .reverse()
+                .map(g => ({
+                  id: g.gameId,
+                  room_id: g.gameId,
+                  role: g.role,
+                  team: g.team,
+                  won: g.won,
+                  elo_delta: g.eloAfter - g.eloBefore,
+                  player_count: g.playerCount,
+                  created_at: new Date(g.createdAt).toISOString(),
+                }));
+              break;
+            }
+          }
+        } catch {
+          // Firestore unavailable — leave recent_games empty, still return Sheets profile
+        }
+
+        return {
+          id: playerId,
+          display_name: playerId,
+          photo_url: null,
+          provider: 'sheets',
+          elo_rating: elo,
+          total_games: stats.totalGames,
+          games_won: totalWins,
+          games_lost: totalLosses,
+          badges: deriveBadgesFromStats(stats, elo),
+          recent_games: recent,
+        };
+      }
+    } catch {
+      // Sheets not available — fall through to Firestore
+    }
+  }
+
+  // 3. Fallback: Firestore aggregated (per-game history available)
   const players = await getAggregated();
   let p = players.get(playerId);
 
@@ -427,34 +497,6 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
       badges: deriveBadges(p),
       recent_games: recent,
     };
-  }
-
-  // Fallback: Sheets-based profile (no per-game history available)
-  if (isSheetsReady()) {
-    try {
-      const sheetsPlayers = await getAllPlayerStats();
-      const eloMap = computeEloFromSheets(sheetsPlayers);
-      const entry = eloMap.get(playerId);
-      if (entry) {
-        const { elo, stats } = entry;
-        const totalWins = Math.round(stats.totalGames * (stats.winRate / 100));
-        const totalLosses = stats.totalGames - totalWins;
-        return {
-          id: playerId,
-          display_name: playerId,
-          photo_url: null,
-          provider: 'sheets',
-          elo_rating: elo,
-          total_games: stats.totalGames,
-          games_won: totalWins,
-          games_lost: totalLosses,
-          badges: deriveBadgesFromStats(stats, elo),
-          recent_games: [],
-        };
-      }
-    } catch {
-      // Sheets not available
-    }
   }
 
   return null;
