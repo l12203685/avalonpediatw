@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
-import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims } from '../services/api';
+import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
 import { getStoredToken } from '../services/socket';
@@ -82,7 +82,7 @@ function formatReplayEvent(ev: GameEvent): string {
   }
 }
 
-function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: string) => void }): JSX.Element {
+function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: string, game: RecentGame) => void }): JSX.Element {
   const won = game.won;
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-gray-700/50 last:border-0">
@@ -100,9 +100,9 @@ function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: stri
       </div>
       <div className="text-xs text-gray-600 w-14 text-right">{formatDate(game.created_at)}</div>
       <button
-        onClick={() => onReplay(game.room_id)}
+        onClick={() => onReplay(game.room_id, game)}
         className="p-1 text-gray-600 hover:text-blue-400 transition-colors"
-        title="查看回放"
+        title="查看遊戲紀錄"
       >
         <ExternalLink size={12} />
       </button>
@@ -115,12 +115,19 @@ export default function ProfilePage(): JSX.Element {
   const [profile, setProfile]       = useState<UserProfile | null>(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
-  const [replay, setReplay]         = useState<{ roomId: string; events: GameEvent[] } | null>(null);
+  const [replay, setReplay]         = useState<{ roomId: string; events: GameEvent[]; game: RecentGame | null } | null>(null);
   const [replayLoading, setReplayLoading] = useState(false);
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [autoMatchCount, setAutoMatchCount] = useState<number | null>(null);
   const [hasPendingClaim, setHasPendingClaim] = useState(false);
+
+  // Profile edit mode — only visible on own profile
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhotoUrl, setEditPhotoUrl] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const isMe = !profileUserId || profileUserId === 'me';
 
@@ -191,11 +198,11 @@ export default function ProfilePage(): JSX.Element {
     }
   };
 
-  const handleReplay = (roomId: string): void => {
+  const handleReplay = (roomId: string, game: RecentGame | null = null): void => {
     setReplayLoading(true);
     fetchGameReplay(roomId)
-      .then(events => setReplay({ roomId, events }))
-      .catch(() => setReplay({ roomId, events: [] }))
+      .then(events => setReplay({ roomId, events, game }))
+      .catch(() => setReplay({ roomId, events: [], game }))
       .finally(() => setReplayLoading(false));
   };
 
@@ -556,12 +563,53 @@ export default function ProfilePage(): JSX.Element {
                 <div className="bg-avalon-card border border-gray-600 rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto"
                   onClick={e => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-white">遊戲回放 (Replay) — <span className="font-mono text-yellow-400 text-sm">{replay?.roomId}</span></h3>
+                    <h3 className="font-bold text-white">遊戲紀錄 — <span className="font-mono text-yellow-400 text-sm">{replay?.roomId}</span></h3>
                     <button onClick={() => setReplay(null)} className="text-gray-500 hover:text-white">✕</button>
                   </div>
                   {replayLoading && <div className="flex justify-center py-8"><Loader size={24} className="animate-spin text-blue-400" /></div>}
                   {replay && replay.events.length === 0 && (
-                    <p className="text-center text-gray-500 py-4">無回放資料（此局在事件記錄功能上線前進行）</p>
+                    <div className="space-y-3">
+                      {replay.game ? (
+                        <>
+                          <div className="bg-gray-800/60 rounded-xl p-4 space-y-2.5">
+                            <p className="text-xs text-gray-400">{replay.game.player_count} 人局</p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500">你的角色</span>
+                              <span className={`text-sm font-semibold ${ROLE_COLORS[replay.game.role] ?? 'text-gray-300'}`}>
+                                {ROLE_NAMES[replay.game.role] ?? replay.game.role}
+                              </span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full ml-auto ${
+                                replay.game.team === 'good'
+                                  ? 'bg-blue-900/60 text-blue-300 border border-blue-700/60'
+                                  : 'bg-red-900/60 text-red-300 border border-red-700/60'
+                              }`}>
+                                {replay.game.team === 'good' ? '好人方' : '邪惡方'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 pt-1">
+                              <div className={`text-sm font-bold px-3 py-1 rounded-lg ${
+                                replay.game.won
+                                  ? 'bg-blue-900/50 text-blue-300 border border-blue-600'
+                                  : 'bg-red-900/50 text-red-300 border border-red-600'
+                              }`}>
+                                {replay.game.won ? '🔵 勝利' : '🔴 落敗'}
+                              </div>
+                              <div className={`text-sm font-bold ${replay.game.elo_delta >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                                ELO {replay.game.elo_delta >= 0 ? `+${replay.game.elo_delta}` : replay.game.elo_delta}
+                              </div>
+                              <div className="text-xs text-gray-500 ml-auto">
+                                {formatDate(replay.game.created_at)}
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-xs text-center text-gray-600 pt-1">
+                            此局為牌譜記錄功能上線前的舊局，僅顯示基本戰績
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-center text-gray-500 py-4">此局無紀錄資料</p>
+                      )}
+                    </div>
                   )}
                   {replay && replay.events.length > 0 && (() => {
                     // Extract quest results and winner for visual summary
