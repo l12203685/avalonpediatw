@@ -198,16 +198,20 @@ export interface AnalysisPlayerStats {
 export interface AnalysisPlayerRadar {
   player: AnalysisPlayerStats;
   radar: {
-    blueMerlinAlive: number;
-    red3Red: number;
-    redMerlinDead: number;
-    positionTheory: number;
+    winRate: number;
+    redWinRate: number;
+    blueMerlinProtect: number;
     roleTheory: number;
+    positionTheory: number;
+    redMerlinKillRate: number;
+    experience: number;
   };
 }
 
 export interface ChemistryMatrix {
   players: string[];
+  /** Row labels (from sheet first column). Falls back to `players` if missing. */
+  rowLabels?: string[];
   values: number[][];
 }
 

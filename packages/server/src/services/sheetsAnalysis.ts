@@ -46,6 +46,13 @@ export interface PlayerStats {
 
 export interface ChemistryMatrix {
   players: string[];
+  /**
+   * Optional row labels (from the spreadsheet's first column of each row).
+   * When present, the UI should use this for row headers instead of
+   * `players` — the two arrays only align when the sheet is symmetric.
+   * Older caches without this field fall back to `players`.
+   */
+  rowLabels?: string[];
   values: (number | null)[][];
 }
 

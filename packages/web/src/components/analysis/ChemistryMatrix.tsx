@@ -72,6 +72,14 @@ export default function ChemistryMatrixPanel(): JSX.Element {
 
   const matrix: ChemistryMatrixType = data[activeKey];
   const { players, values } = matrix;
+  // Row labels come from the sheet's first column, column labels from row 0.
+  // Older caches may not ship `rowLabels` — fall back to `players` in that
+  // case (only valid when the sheet is symmetric). Once the backend has been
+  // redeployed with row labels, this branch stops mattering and the axes stay
+  // consistent even if row order drifts from column order.
+  const rowLabels: string[] = matrix.rowLabels && matrix.rowLabels.length > 0
+    ? matrix.rowLabels
+    : players;
 
   if (players.length === 0) {
     return (
@@ -157,35 +165,59 @@ export default function ChemistryMatrixPanel(): JSX.Element {
                 <th
                   key={i}
                   className="sticky top-0 z-10 bg-avalon-card p-1 text-gray-400 font-semibold whitespace-nowrap"
-                  style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)' }}
+                  /*
+                   * Column headers rotate counter-clockwise so the ID reads
+                   * bottom-to-top next to its column. The previous
+                   * `writingMode: vertical-lr + rotate(180deg)` combo flipped
+                   * the text so IDs appeared upside-down and visually
+                   * mis-aligned with their cells. Using a single
+                   * `rotate(-90deg)` on the text span keeps the header width
+                   * stable and each label sits cleanly above its column.
+                   */
+                  style={{ height: 80, verticalAlign: 'bottom', padding: 2 }}
                 >
-                  {name}
+                  <span
+                    className="inline-block"
+                    style={{
+                      transform: 'rotate(-90deg)',
+                      transformOrigin: 'center',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {name}
+                  </span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {players.map((rowName, ri) => (
+            {rowLabels.map((rowName, ri) => (
               <tr key={ri}>
                 <td className="sticky left-0 z-10 bg-avalon-card px-2 py-0.5 text-gray-300 font-semibold whitespace-nowrap">
                   {rowName}
                 </td>
-                {values[ri]?.map((val, ci) => (
-                  <td key={ci} className="p-0.5">
-                    <div
-                      className={`group relative w-8 h-6 flex items-center justify-center rounded text-[9px] font-bold cursor-default ${
-                        ri === ci ? 'bg-gray-800/60 text-gray-600' : cellColor(val, activeKey)
-                      }`}
-                    >
-                      {ri === ci ? '-' : isNaN(val) ? '' : val.toFixed(0)}
-                      {ri !== ci && !isNaN(val) && (
-                        <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-[10px] text-gray-200 whitespace-nowrap shadow-lg pointer-events-none">
-                          {rowName} x {players[ci]}: {val.toFixed(1)}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                )) ?? null}
+                {values[ri]?.map((val, ci) => {
+                  // Diagonal cells are self-vs-self only when the row and
+                  // column labels truly match (symmetric sheet). If they
+                  // drift we still want to show the value rather than a dash.
+                  const isSelf = rowLabels[ri] === players[ci];
+                  return (
+                    <td key={ci} className="p-0.5">
+                      <div
+                        className={`group relative w-8 h-6 flex items-center justify-center rounded text-[9px] font-bold cursor-default ${
+                          isSelf ? 'bg-gray-800/60 text-gray-600' : cellColor(val, activeKey)
+                        }`}
+                      >
+                        {isSelf ? '-' : isNaN(val) ? '' : val.toFixed(0)}
+                        {!isSelf && !isNaN(val) && (
+                          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-[10px] text-gray-200 whitespace-nowrap shadow-lg pointer-events-none">
+                            {rowName} x {players[ci]}: {val.toFixed(1)}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  );
+                }) ?? null}
               </tr>
             ))}
           </tbody>

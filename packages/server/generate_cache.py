@@ -385,10 +385,16 @@ def load_chemistry(sh: gspread.Spreadsheet) -> dict:
             continue
 
         players = [p for p in rows[0][1:] if p]
+        # Track row labels separately — earlier versions assumed sheet row order
+        # matched column order which caused visible ID mismatches when the
+        # Google Sheets template reordered rows. Keep both arrays so the
+        # frontend can label axes independently.
+        row_labels: list[str] = []
         values: list[list[float | None]] = []
         for r in range(1, len(rows)):
             if not rows[r][0]:
                 continue
+            row_labels.append(rows[r][0])
             row_vals: list[float | None] = []
             for v in rows[r][1:]:
                 cleaned = v.replace("%", "").strip() if v else ""
@@ -398,7 +404,7 @@ def load_chemistry(sh: gspread.Spreadsheet) -> dict:
                     row_vals.append(None)
             values.append(row_vals)
 
-        result[key] = {"players": players, "values": values}
+        result[key] = {"players": players, "rowLabels": row_labels, "values": values}
 
     return result
 
