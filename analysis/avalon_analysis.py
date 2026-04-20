@@ -41,16 +41,16 @@ NEW_SHEET_ID = "174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU"
 OLD_SHEET_ID = "13Mm_sZYQ9EOjrKd-NGLoIr_0B_t_KEMsb9tQEbU5oWE"
 
 # Role config: position in 配置 string -> role name
-CONFIG_ROLE_ORDER = ['刺客', '娜美', '德魯', '奧伯', '派西', '梅林']
-ROLE_ABBR = {'刺客': '刺', '娜美': '娜', '德魯': '德', '奧伯': '奧', '派西': '派', '梅林': '梅', '忠臣': '忠'}
+CONFIG_ROLE_ORDER = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林']
+ROLE_ABBR = {'刺客': '刺', '莫甘娜': '娜', '莫德雷德': '德', '奧伯倫': '奧', '派西維爾': '派', '梅林': '梅', '忠臣': '忠'}
 ABBR_TO_ROLE = {v: k for k, v in ROLE_ABBR.items()}
 
-RED_ROLES = {'刺客', '娜美', '德魯', '奧伯'}
-BLUE_ROLES = {'派西', '梅林', '忠臣'}
+RED_ROLES = {'刺客', '莫甘娜', '莫德雷德', '奧伯倫'}
+BLUE_ROLES = {'派西維爾', '梅林', '忠臣'}
 
 # Vision roles: roles that can see other players' identities
-VISION_ROLES = {'梅林', '派西', '娜美', '奧伯'}  # Merlin sees evil (except Mordred), Percival sees Merlin+Morgana, Morgana seen by Percival, Oberon sees nothing but is evil
-MERLIN_VISION = True  # Merlin sees all evil except 德魯(Mordred)
+VISION_ROLES = {'梅林', '派西維爾', '莫甘娜', '奧伯倫'}  # Merlin sees evil (except Mordred), Percival sees Merlin+Morgana, Morgana seen by Percival, Oberon sees nothing but is evil
+MERLIN_VISION = True  # Merlin sees all evil except 莫德雷德(Mordred)
 
 
 # =============================================================================
@@ -160,7 +160,7 @@ def load_game_log(sh: gspread.Spreadsheet) -> pd.DataFrame:
 
     # Has Percival in 1-1
     def r11_has_percival(roles: list[str]) -> bool:
-        return '派西' in roles
+        return '派西維爾' in roles
 
     df['r11_has_percival'] = df['r11_roles'].apply(r11_has_percival)
 
@@ -274,9 +274,9 @@ def load_raw_data(path: Path) -> pd.DataFrame:
         'red_3red', 'red_merlin_dead', 'red_merlin_alive', 'red_win',
         'blue_3red', 'blue_merlin_dead', 'blue_merlin_alive',
         # Role win rates (8 roles)
-        'wr_三藍', 'wr_刺客', 'wr_娜美', 'wr_德魯', 'wr_奧伯', 'wr_派西', 'wr_梅林', 'wr_忠臣',
+        'wr_三藍', 'wr_刺客', 'wr_莫甘娜', 'wr_莫德雷德', 'wr_奧伯倫', 'wr_派西維爾', 'wr_梅林', 'wr_忠臣',
         # Role distribution (7 roles)
-        'dist_刺客', 'dist_娜美', 'dist_德魯', 'dist_奧伯', 'dist_派西', 'dist_梅林', 'dist_忠臣',
+        'dist_刺客', 'dist_莫甘娜', 'dist_莫德雷德', 'dist_奧伯倫', 'dist_派西維爾', 'dist_梅林', 'dist_忠臣',
         # Faction rate
         'red_role_rate', 'blue_role_rate',
         # Seat win rates (seats 1-9, 0)
@@ -300,11 +300,11 @@ def load_raw_data(path: Path) -> pd.DataFrame:
         'raw_red_3red', 'raw_red_3blue_dead', 'raw_red_3blue_alive',
         'raw_blue_3red', 'raw_blue_3blue_dead', 'raw_blue_3blue_alive',
         # Raw counts - role games
-        'raw_刺客', 'raw_娜美', 'raw_德魯', 'raw_奧伯', 'raw_派西', 'raw_梅林', 'raw_忠臣',
+        'raw_刺客', 'raw_莫甘娜', 'raw_莫德雷德', 'raw_奧伯倫', 'raw_派西維爾', 'raw_梅林', 'raw_忠臣',
         # Raw counts - faction wins
         'raw_red_wins', 'raw_blue_wins', 'raw_total_wins',
         # Raw counts - role game counts (second set)
-        'raw2_刺客', 'raw2_娜美', 'raw2_德魯', 'raw2_奧伯', 'raw2_派西', 'raw2_梅林',
+        'raw2_刺客', 'raw2_莫甘娜', 'raw2_莫德雷德', 'raw2_奧伯倫', 'raw2_派西維爾', 'raw2_梅林',
         # Raw faction game counts
         'raw_red_games', 'raw_blue_games',
         # Raw total games (verification)
@@ -623,7 +623,7 @@ def analyze_mission_voting(df: pd.DataFrame) -> dict:
     for _, row in players.iterrows():
         name = row['player']
         roles = {}
-        for role in ['刺客', '娜美', '德魯', '奧伯', '派西', '梅林', '忠臣']:
+        for role in ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林', '忠臣']:
             wr = row.get(f'wr_{role}', np.nan)
             dist = row.get(f'dist_{role}', np.nan)
             raw_games = row.get(f'raw_{role}', 0)
@@ -821,7 +821,7 @@ def plot_chemistry_matrix(df: pd.DataFrame, save: bool = True, matrices: dict[st
         data = data.nlargest(12, 'total_games')
         players_list = data['player'].tolist()
         n = len(players_list)
-        role_wr_cols = ['wr_刺客', 'wr_娜美', 'wr_德魯', 'wr_奧伯', 'wr_派西', 'wr_梅林', 'wr_忠臣']
+        role_wr_cols = ['wr_刺客', 'wr_莫甘娜', 'wr_莫德雷德', 'wr_奧伯倫', 'wr_派西維爾', 'wr_梅林', 'wr_忠臣']
         chemistry = np.zeros((n, n))
         for i in range(n):
             for j in range(n):
@@ -861,10 +861,10 @@ def plot_role_aptitude(df: pd.DataFrame, save: bool = True):
 
     roles = {
         '刺客 (Assassin)': ('wr_刺客', 'raw_刺客'),
-        '娜美 (Morgana)': ('wr_娜美', 'raw_娜美'),
-        '德魯 (Mordred)': ('wr_德魯', 'raw_德魯'),
-        '奧伯 (Oberon)': ('wr_奧伯', 'raw_奧伯'),
-        '派西 (Percival)': ('wr_派西', 'raw_派西'),
+        '莫甘娜 (Morgana)': ('wr_莫甘娜', 'raw_莫甘娜'),
+        '莫德雷德 (Mordred)': ('wr_莫德雷德', 'raw_莫德雷德'),
+        '奧伯倫 (Oberon)': ('wr_奧伯倫', 'raw_奧伯倫'),
+        '派西維爾 (Percival)': ('wr_派西維爾', 'raw_派西維爾'),
         '梅林 (Merlin)': ('wr_梅林', 'raw_梅林'),
         '忠臣 (Loyal)': ('wr_忠臣', 'raw_忠臣'),
     }
@@ -915,8 +915,8 @@ def plot_role_distribution_comparison(df: pd.DataFrame, save: bool = True):
     data = filter_significant_players(df, min_games=200)
     data = data.nlargest(15, 'total_games')
 
-    role_cols = ['dist_刺客', 'dist_娜美', 'dist_德魯', 'dist_奧伯', 'dist_派西', 'dist_梅林', 'dist_忠臣']
-    role_labels = ['刺客', '娜美', '德魯', '奧伯', '派西', '梅林', '忠臣']
+    role_cols = ['dist_刺客', 'dist_莫甘娜', 'dist_莫德雷德', 'dist_奧伯倫', 'dist_派西維爾', 'dist_梅林', 'dist_忠臣']
+    role_labels = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林', '忠臣']
 
     fig, ax = plt.subplots(figsize=(14, 7))
 
@@ -1164,8 +1164,8 @@ def plot_lady_of_lake(lake_results: dict[str, Any], save: bool = True):
     if 'holder_role_stats' in lake_results:
         hr = lake_results['holder_role_stats']
         hr_sorted = hr.sort_values('red_wr', ascending=True)
-        role_colors = {'刺客':'#e74c3c', '娜美':'#9b59b6', '德魯':'#2c3e50', '奧伯':'#7f8c8d',
-                      '派西':'#3498db', '梅林':'#2ecc71', '忠臣':'#f39c12'}
+        role_colors = {'刺客':'#e74c3c', '莫甘娜':'#9b59b6', '莫德雷德':'#2c3e50', '奧伯倫':'#7f8c8d',
+                      '派西維爾':'#3498db', '梅林':'#2ecc71', '忠臣':'#f39c12'}
         colors_hr = [role_colors.get(r, '#95a5a6') for r in hr_sorted['首湖_holder_role']]
         ax_hr.barh(range(len(hr_sorted)), hr_sorted['red_wr'].values, color=colors_hr, alpha=0.8)
         ax_hr.set_yticks(range(len(hr_sorted)))
@@ -1635,7 +1635,7 @@ def generate_summary_stats(df: pd.DataFrame) -> str:
 
     # Best by role
     lines.append("--- BEST BY ROLE (10+ role games, 50+ total) ---")
-    for role in ['刺客', '娜美', '德魯', '奧伯', '派西', '梅林', '忠臣']:
+    for role in ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林', '忠臣']:
         role_data = data[data[f'raw_{role}'] >= 10]
         if len(role_data) > 0:
             best = role_data.nlargest(1, f'wr_{role}').iloc[0]

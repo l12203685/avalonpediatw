@@ -366,11 +366,18 @@ function deriveBadgesFromStats(stats: PlayerStats, elo: number): string[] {
   else if (elo >= 1050) badges.push('中堅');
   else if (elo >= 950) badges.push('新手');
 
-  // Role-specific badges from Sheets data
-  if (stats.roleWinRates['梅林'] >= 70 && (stats.rawRoleGames['梅林'] || 0) >= 10) badges.push('梅林大師');
-  if (stats.roleWinRates['刺客'] >= 70 && (stats.rawRoleGames['刺客'] || 0) >= 10) badges.push('刺客達人');
-  if (stats.roleWinRates['派西'] >= 70 && (stats.rawRoleGames['派西'] || 0) >= 10) badges.push('派西專家');
-  if (stats.roleWinRates['娜美'] >= 70 && (stats.rawRoleGames['娜美'] || 0) >= 10) badges.push('娜美達人');
+  // Role-specific badges from Sheets data.
+  // Accept both canonical role names and legacy short forms so badges keep
+  // working against pre-rename analysis_cache.json until it is regenerated.
+  const roleWr = (role: string, legacy?: string): number =>
+    stats.roleWinRates[role] ?? (legacy ? stats.roleWinRates[legacy] ?? 0 : 0);
+  const roleGames = (role: string, legacy?: string): number =>
+    stats.rawRoleGames[role] ?? (legacy ? stats.rawRoleGames[legacy] ?? 0 : 0);
+
+  if (roleWr('梅林') >= 70 && roleGames('梅林') >= 10) badges.push('梅林大師');
+  if (roleWr('刺客') >= 70 && roleGames('刺客') >= 10) badges.push('刺客達人');
+  if (roleWr('派西維爾', '派西') >= 70 && roleGames('派西維爾', '派西') >= 10) badges.push('派西維爾專家');
+  if (roleWr('莫甘娜', '娜美') >= 70 && roleGames('莫甘娜', '娜美') >= 10) badges.push('莫甘娜達人');
 
   return badges;
 }

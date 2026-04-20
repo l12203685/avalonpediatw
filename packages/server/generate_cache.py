@@ -29,9 +29,9 @@ OUTPUT_PATH = Path(__file__).parent / "analysis_cache.json"
 
 MIN_GAMES_THRESHOLD = 50
 
-CONFIG_ROLE_ORDER = ["刺客", "娜美", "德魯", "奧伯", "派西", "梅林"]
-RED_ROLES = {"刺客", "娜美", "德魯", "奧伯"}
-BLUE_ROLES = {"派西", "梅林", "忠臣"}
+CONFIG_ROLE_ORDER = ["刺客", "莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林"]
+RED_ROLES = {"刺客", "莫甘娜", "莫德雷德", "奧伯倫"}
+BLUE_ROLES = {"派西維爾", "梅林", "忠臣"}
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +176,7 @@ def load_game_log(sh: gspread.Spreadsheet) -> list[GameRow]:
         g.r11_red_count = sum(1 for r in g.r11_roles if r in RED_ROLES)
         g.r11_blue_count = sum(1 for r in g.r11_roles if r in BLUE_ROLES)
         g.r11_has_merlin = "梅林" in g.r11_roles
-        g.r11_has_percival = "派西" in g.r11_roles
+        g.r11_has_percival = "派西維爾" in g.r11_roles
 
         # Missions
         g.missions = []
@@ -233,8 +233,9 @@ def load_player_stats(sh: gspread.Spreadsheet) -> list[dict]:
     """Load player stats from the aggregate sheet.
 
     Sheet structure: row[0] = aggregate totals, row[1] = header, row[2+] = player data.
-    Headers have many duplicate names (刺, 娜, etc.) so we use positional indexing
-    based on the known column layout from the Python analysis script.
+    Headers have many duplicate 1-char role abbreviations (刺/娜/德/奧/派/梅/忠) so we
+    use positional indexing based on the known column layout. Code expands the
+    1-char abbreviations into full role names (刺客/莫甘娜/莫德雷德/奧伯倫/派西維爾/梅林/忠臣).
     """
     rows = None
     for tab in ["生涯報表", "戰績報表", "統計", "個人統計", "Stats"]:
@@ -271,7 +272,7 @@ def load_player_stats(sh: gspread.Spreadsheet) -> list[dict]:
     # 98-104: 刺娜德奧派梅忠 (raw role game counts)
     # 105: 紅場, 106: 藍場
 
-    ROLES = ["刺客", "娜美", "德魯", "奧伯", "派西", "梅林", "忠臣"]
+    ROLES = ["刺客", "莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林", "忠臣"]
     SEATS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
 
     def safe(row: list[str], idx: int) -> str:
@@ -417,7 +418,7 @@ def compute_seat_position_win_rates(games: list[GameRow]) -> list[dict]:
     """Win rate by seat position (1-10), broken down by role assigned to that seat."""
     SEATS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
     SEAT_LABELS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
-    ALL_ROLES = ["刺客", "娜美", "德魯", "奧伯", "派西", "梅林", "忠臣"]
+    ALL_ROLES = ["刺客", "莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林", "忠臣"]
 
     # seat_char -> role -> {wins, total}
     seat_role_stats: dict[str, dict[str, dict]] = {}
@@ -787,13 +788,13 @@ def compute_lake(games: list[GameRow]) -> dict:
 def compute_seat_order(games: list[GameRow]) -> dict:
     """Analyze the 6 permutations of Percival(派)/Merlin(梅)/Morgana(娜) seating order.
 
-    For each game, find seats of 派西, 梅林, 娜美, determine their clockwise order,
+    For each game, find seats of 派西維爾, 梅林, 莫甘娜, determine their clockwise order,
     then split by outcome: 三藍梅活, 三藍梅死, 三紅.
     Also check if missions fall between (穿插) these three players.
     """
     from itertools import permutations
 
-    TRIO_ROLES = {"派西", "梅林", "娜美"}
+    TRIO_ROLES = {"派西維爾", "梅林", "莫甘娜"}
     PERM_LABELS = [
         "派梅娜", "派娜梅", "梅派娜", "梅娜派", "娜派梅", "娜梅派",
     ]
@@ -815,7 +816,7 @@ def compute_seat_order(games: list[GameRow]) -> dict:
         # Generate the 3 possible rotations and pick the one starting with lowest seat
         trio = [r[0] for r in sorted_roles]
         # Map role names to short labels
-        short = {"派西": "派", "梅林": "梅", "娜美": "娜"}
+        short = {"派西維爾": "派", "梅林": "梅", "莫甘娜": "娜"}
         return "".join(short.get(r, r[0]) for r in trio)
 
     def has_interleaving(seat_roles: dict[str, str]) -> bool:
@@ -825,8 +826,8 @@ def compute_seat_order(games: list[GameRow]) -> dict:
         they are all adjacent (no interleaving) or have gaps with other
         players between them.
 
-        Example: seats 1=梅林, 2=忠臣, 3=莫甘娜, 4=派西 → True (忠臣 between)
-        Example: seats 1=梅林, 2=莫甘娜, 3=派西 → False (all adjacent)
+        Example: seats 1=梅林, 2=忠臣, 3=莫甘娜, 4=派西維爾 → True (忠臣 between)
+        Example: seats 1=梅林, 2=莫甘娜, 3=派西維爾 → False (all adjacent)
         """
         trio_seats: list[int] = []
         for seat_char, role in seat_roles.items():
