@@ -1,4 +1,4 @@
-import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord, CANONICAL_ROLES, isCanonicalRole } from '@avalon/shared';
+import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord, CANONICAL_ROLES, isCanonicalRole, TimerMultiplier } from '@avalon/shared';
 
 /**
  * Error thrown when a role outside the canonical 7-role Avalon scope is
@@ -20,11 +20,17 @@ export class CanonicalRoleLockError extends Error {
   }
 }
 
-const TEAM_SELECT_TIMEOUT_MS = 90000; // 90秒隊伍選擇時限（隊長AFK保護）
-const VOTE_TIMEOUT_MS = 60000; // 60秒隊伍投票時限
-const QUEST_TIMEOUT_MS = 60000; // 60秒任務投票時限
-const ASSASSINATION_TIMEOUT_MS = 120000; // 2分鐘刺殺時限
-const LADY_OF_THE_LAKE_TIMEOUT_MS = 60000; // 60秒湖中女神時限
+// Base phase-timer limits (at 1x multiplier). Effective timeout = base * multiplier.
+// A `null` multiplier disables the timer entirely (unlimited thinking time).
+// Spec (Edward 2026-04-20):
+//   Team vote (派票) = 90s, Quest vote (黑白球) = 30s,
+//   Lady of the Lake (湖中女神) = 90s, Assassin (刺殺) = 180s.
+// TEAM_SELECT keeps the 90s AFK guard (same kind of operation as team vote).
+const TEAM_SELECT_TIMEOUT_MS = 90000;
+const VOTE_TIMEOUT_MS = 90000;
+const QUEST_TIMEOUT_MS = 30000;
+const ASSASSINATION_TIMEOUT_MS = 180000;
+const LADY_OF_THE_LAKE_TIMEOUT_MS = 90000;
 
 interface QuestVote {
   playerId: string;
@@ -76,6 +82,29 @@ export class GameEngine {
   /** Returns the buffered event log for persistence */
   public getEventLog(): GameEventRecord[] {
     return this.eventBuffer;
+  }
+
+  /**
+   * Resolve the configured timer multiplier, defaulting to 1x when the room
+   * has no explicit timerConfig (backward compat for rooms created before
+   * this feature shipped).
+   */
+  private getTimerMultiplier(): TimerMultiplier {
+    const m = this.room.timerConfig?.multiplier;
+    if (m === null) return null;
+    if (m === 0.5 || m === 1 || m === 1.5 || m === 2) return m;
+    return 1;
+  }
+
+  /**
+   * Compute the effective timeout in ms for a given base value, honoring the
+   * room's multiplier. Returns `null` when the room selects "unlimited"
+   * (callers MUST skip scheduling a setTimeout in that case).
+   */
+  private getTimeoutMs(base: number): number | null {
+    const m = this.getTimerMultiplier();
+    if (m === null) return null;
+    return Math.round(base * m);
   }
 
   public startGame(): void {
@@ -147,6 +176,11 @@ export class GameEngine {
       clearTimeout(this.teamSelectTimeout);
       this.teamSelectTimeout = null;
     }
+    const timeoutMs = this.getTimeoutMs(TEAM_SELECT_TIMEOUT_MS);
+    if (timeoutMs === null) {
+      // Unlimited mode — no AFK auto-select.
+      return;
+    }
     this.teamSelectTimeout = setTimeout(() => {
       if (this.room.state === 'voting' && this.room.questTeam.length === 0) {
         // Auto-select: leader + random other players to fill required size
@@ -167,7 +201,7 @@ export class GameEngine {
         this.startVotingPhase();
         this.onStateChange?.(this.room);
       }
-    }, TEAM_SELECT_TIMEOUT_MS);
+    }, timeoutMs);
   }
 
   private startQuestPhase(): void {
@@ -176,9 +210,16 @@ export class GameEngine {
       this.questVoteTimeout = null;
     }
 
+    const timeoutMs = this.getTimeoutMs(QUEST_TIMEOUT_MS);
+    if (timeoutMs === null) {
+      // Unlimited mode — wait indefinitely for quest team votes.
+      return;
+    }
     this.questVoteTimeout = setTimeout(() => {
       if (this.room.state === 'quest') {
-        // Auto-vote success for any team members who didn't vote in time
+        // Auto-vote success for any team members who didn't vote in time.
+        // Default = success is the safe fallback: it does NOT bypass the
+        // server-side good-player guard and avoids handing evil an easy fail.
         const unvoted = this.room.questTeam.filter(
           id => !this.questVotes.some(q => q.playerId === id)
         );
@@ -188,7 +229,7 @@ export class GameEngine {
         this.resolveQuestPhase();
         this.onStateChange?.(this.room);
       }
-    }, QUEST_TIMEOUT_MS);
+    }, timeoutMs);
   }
 
   private startVotingPhase(): void {
@@ -211,21 +252,32 @@ export class GameEngine {
     });
 
     // Set vote timeout
+    const timeoutMs = this.getTimeoutMs(VOTE_TIMEOUT_MS);
+    if (timeoutMs === null) {
+      // Unlimited mode — wait indefinitely for all players to vote.
+      return;
+    }
     this.voteTimeout = setTimeout(() => {
       if (this.room.state === 'voting') {
         this.handleVoteTimeout();
       }
-    }, VOTE_TIMEOUT_MS);
+    }, timeoutMs);
   }
 
   private handleVoteTimeout(): void {
-    // Auto-vote for players who didn't vote (reject as default)
+    // Auto-vote for players who didn't vote. Edward 2026-04-20 spec:
+    //   Players IN the proposed quest team default to APPROVE (they are
+    //   already signed onto going, so silence ~= "fine by me").
+    //   Players OUT of the team default to REJECT (silent non-team member
+    //   is treated as implicit opposition, keeping the failed-vote counter
+    //   honest).
+    const teamSet = new Set(this.room.questTeam);
     const unvotedPlayers = Object.keys(this.room.players).filter(
       (id) => !(id in this.room.votes)
     );
 
     unvotedPlayers.forEach((playerId) => {
-      this.room.votes[playerId] = false;
+      this.room.votes[playerId] = teamSet.has(playerId);
     });
 
     // Resolve voting and broadcast
@@ -562,10 +614,15 @@ export class GameEngine {
       holderId: this.room.ladyOfTheLakeHolder,
     });
 
-    // Timeout: if holder doesn't choose, skip the phase
+    // Timeout: if holder doesn't choose, skip the phase.
+    // Spec: Lady auto-pick is NOT allowed — unlimited mode simply waits.
     if (this.ladyOfTheLakeTimeout) {
       clearTimeout(this.ladyOfTheLakeTimeout);
       this.ladyOfTheLakeTimeout = null;
+    }
+    const timeoutMs = this.getTimeoutMs(LADY_OF_THE_LAKE_TIMEOUT_MS);
+    if (timeoutMs === null) {
+      return;
     }
     this.ladyOfTheLakeTimeout = setTimeout(() => {
       if (this.room.state === 'lady_of_the_lake') {
@@ -575,7 +632,7 @@ export class GameEngine {
         this.advanceToNextRound();
         this.onStateChange?.(this.room);
       }
-    }, LADY_OF_THE_LAKE_TIMEOUT_MS);
+    }, timeoutMs);
   }
 
   /**
@@ -671,14 +728,20 @@ export class GameEngine {
       questResults: this.room.questResults
     });
 
-    // Set assassination timeout
+    // Set assassination timeout. Default on timeout = don't assassinate =>
+    // good wins (handled by resolveAssassination(null)).
+    const timeoutMs = this.getTimeoutMs(ASSASSINATION_TIMEOUT_MS);
+    if (timeoutMs === null) {
+      // Unlimited mode — assassin takes as long as needed.
+      return;
+    }
     this.assassinationTimeout = setTimeout(() => {
       if (this.room.state === 'discussion') {
         // If assassin doesn't choose in time, good wins
         this.resolveAssassination(null);
         this.onStateChange?.(this.room);
       }
-    }, ASSASSINATION_TIMEOUT_MS);
+    }, timeoutMs);
   }
 
   /**

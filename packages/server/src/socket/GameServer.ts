@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { Room, Player, User, AVALON_CONFIG } from '@avalon/shared';
+import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTimerMultiplier } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
@@ -80,9 +80,16 @@ export class GameServer {
       });
 
       // Game events
-      socket.on('game:create-room', (playerName: string, password?: string) => {
-        this.handleCreateRoom(socket, playerName, user, password);
-      });
+      socket.on(
+        'game:create-room',
+        (
+          playerName: string,
+          password?: string,
+          timerMultiplier?: TimerMultiplier,
+        ) => {
+          this.handleCreateRoom(socket, playerName, user, password, timerMultiplier);
+        },
+      );
 
       socket.on('game:join-room', (roomId: string, password?: string) => {
         this.handleJoinRoom(socket, roomId, user, password);
@@ -303,12 +310,29 @@ export class GameServer {
     this.broadcastRoomState(roomId, this.roomManager.getRoom(roomId)!);
   }
 
-  private handleCreateRoom(socket: Socket, playerName: string, user: User, password?: string): void {
+  private handleCreateRoom(
+    socket: Socket,
+    playerName: string,
+    user: User,
+    password?: string,
+    timerMultiplier?: TimerMultiplier,
+  ): void {
     try {
       const roomId = this.generateRoomCode();
       const playerId = user.uid;
 
-      const room = this.roomManager.createRoom(roomId, playerName || user.displayName, playerId);
+      // Only honor the multiplier if it passes the shared validator; fall
+      // back to 1x for anything else (including legacy clients that don't
+      // send the field).
+      const timerConfig: TimerConfig | undefined = isTimerMultiplier(timerMultiplier)
+        ? { multiplier: timerMultiplier }
+        : undefined;
+      const room = this.roomManager.createRoom(
+        roomId,
+        playerName || user.displayName,
+        playerId,
+        timerConfig,
+      );
       if (password?.trim()) {
         this.roomManager.setRoomPassword(roomId, password.trim());
       }

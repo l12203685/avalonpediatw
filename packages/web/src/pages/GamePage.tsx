@@ -28,11 +28,18 @@ export default function GamePage(): JSX.Element {
   const [isAssassinating, setIsAssassinating] = useState(false);
   const [showRoleReveal, setShowRoleReveal] = useState(true);
   const prevRoomState = useRef<string | null>(null);
-  const [assassinTimer, setAssassinTimer] = useState(120); // 120s matches server ASSASSINATION_TIMEOUT_MS
+  // Base seconds per phase (match server constants at 1x multiplier).
+  const TEAM_SELECT_BASE = 90;
+  const ASSASSIN_BASE = 180;
+  const timerMultiplier = room?.timerConfig?.multiplier ?? 1;
+  const isUnlimitedTimer = timerMultiplier === null;
+  const teamSelectBase = isUnlimitedTimer ? 0 : Math.round(TEAM_SELECT_BASE * (timerMultiplier as number));
+  const assassinBase = isUnlimitedTimer ? 0 : Math.round(ASSASSIN_BASE * (timerMultiplier as number));
+  const [assassinTimer, setAssassinTimer] = useState(assassinBase);
   const [pendingVoteReveal, setPendingVoteReveal] = useState<VoteRecord | null>(null);
   const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(() => audioService.isEnabled());
-  const [teamSelectTimer, setTeamSelectTimer] = useState(90);
+  const [teamSelectTimer, setTeamSelectTimer] = useState(teamSelectBase);
   const prevVoteHistoryLen = useRef(0);
   const prevQuestHistoryLen = useRef(0);
 
@@ -57,25 +64,34 @@ export default function GamePage(): JSX.Element {
     prevRoomState.current = room.state;
   }, [room?.state]);
 
-  // Team-select countdown (mirrors the 90s server AFK timeout)
+  // Team-select countdown (mirrors the server AFK timeout, scaled by multiplier).
+  // Unlimited mode: skip the interval entirely.
   useEffect(() => {
     if (!room || room.state !== 'voting' || room.questTeam.length > 0) return;
-    setTeamSelectTimer(90);
+    if (isUnlimitedTimer) {
+      setTeamSelectTimer(0);
+      return;
+    }
+    setTeamSelectTimer(teamSelectBase);
     const interval = setInterval(() => {
       setTeamSelectTimer(t => Math.max(0, t - 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, [room?.state, room?.questTeam?.length, room?.leaderIndex]);
+  }, [room?.state, room?.questTeam?.length, room?.leaderIndex, isUnlimitedTimer, teamSelectBase]);
 
-  // Assassination countdown
+  // Assassination countdown (scaled by multiplier; skipped when unlimited).
   useEffect(() => {
     if (!room || room.state !== 'discussion') return;
-    setAssassinTimer(120);
+    if (isUnlimitedTimer) {
+      setAssassinTimer(0);
+      return;
+    }
+    setAssassinTimer(assassinBase);
     const interval = setInterval(() => {
       setAssassinTimer(t => Math.max(0, t - 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, [room?.state]);
+  }, [room?.state, isUnlimitedTimer, assassinBase]);
 
   // Reset isVoting once server confirms player's vote is registered
   useEffect(() => {
@@ -334,9 +350,15 @@ export default function GamePage(): JSX.Element {
                   </p>
                   <div className="flex items-center justify-center gap-3 text-xs text-gray-500 flex-wrap">
                     <span>本輪需要 {AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? '?'} 名隊員</span>
-                    <span className={`px-3 py-1 rounded-full font-bold ${teamSelectTimer < 20 ? 'bg-red-900/60 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
-                      ⏱ {teamSelectTimer}s
-                    </span>
+                    {isUnlimitedTimer ? (
+                      <span className="px-3 py-1 rounded-full font-bold bg-blue-900/60 text-blue-300">
+                        ⏱ 不計時
+                      </span>
+                    ) : (
+                      <span className={`px-3 py-1 rounded-full font-bold ${teamSelectTimer < 20 ? 'bg-red-900/60 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
+                        ⏱ {teamSelectTimer}s
+                      </span>
+                    )}
                   </div>
                 </motion.div>
               )
@@ -484,9 +506,15 @@ export default function GamePage(): JSX.Element {
                 <div className="text-center">
                   <h2 className="text-3xl font-bold text-red-400 mb-2">🗡️ 刺殺梅林 (Assassinate Merlin)</h2>
                   <p className="text-gray-300">你認為誰是梅林？選擇你的目標 (Who do you think is Merlin? Choose your target)</p>
-                  <div className={`inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full font-bold text-sm ${assassinTimer < 30 ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                    ⏱ {assassinTimer}s
-                  </div>
+                  {isUnlimitedTimer ? (
+                    <div className="inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full font-bold text-sm bg-blue-700 text-blue-100">
+                      ⏱ 不計時
+                    </div>
+                  ) : (
+                    <div className={`inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full font-bold text-sm ${assassinTimer < 30 ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                      ⏱ {assassinTimer}s
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
                   {Object.values(room.players)

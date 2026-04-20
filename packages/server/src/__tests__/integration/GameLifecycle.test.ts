@@ -448,8 +448,8 @@ describe('Integration: Assassination phase', () => {
 
     expect(room.state).toBe('discussion');
 
-    // Advance past assassination timeout (120s)
-    vi.advanceTimersByTime(121_000);
+    // Advance past assassination timeout (180s at 1x multiplier)
+    vi.advanceTimersByTime(181_000);
 
     expect(room.state).toBe('ended');
     expect(room.evilWins).toBe(false);

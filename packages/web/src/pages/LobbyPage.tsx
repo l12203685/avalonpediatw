@@ -1,8 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady, setRoomPassword } from '../services/socket';
-import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown, Lock, Unlock, ArrowLeft } from 'lucide-react';
+import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown, Lock, Unlock, ArrowLeft, Clock } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
+
+// Friendly label for the room-level thinking-time multiplier.
+function timerLabel(multiplier: number | null | undefined): string {
+  if (multiplier === null) return '無限 (不計時)';
+  if (multiplier === 0.5) return '0.5x (加速)';
+  if (multiplier === 1.5) return '1.5x';
+  if (multiplier === 2) return '2x (慢節奏)';
+  return '1x (標準)';
+}
 import ChatPanel from '../components/ChatPanel';
 
 const LOBBY_TIMEOUT_MS = 12_000; // 12 seconds to receive room state
@@ -270,6 +279,17 @@ export default function LobbyPage(): JSX.Element {
                 )}
               </div>
             )}
+
+            {/* Thinking-time multiplier (read-only info; host sets it on create) */}
+            <div>
+              <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
+                思考時間倍率 (Thinking Time)
+              </p>
+              <div className="inline-flex items-center gap-2 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-1.5">
+                <Clock size={13} className="text-blue-400" />
+                <span className="text-sm text-gray-200 font-semibold">{timerLabel(room.timerConfig?.multiplier)}</span>
+              </div>
+            </div>
 
             {/* Role preview */}
             <div>

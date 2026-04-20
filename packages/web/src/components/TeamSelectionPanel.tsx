@@ -57,10 +57,17 @@ export default function TeamSelectionPanel({
       <div className="text-center">
         <div className="flex items-center justify-center gap-3 mb-2">
           <h2 className="text-3xl font-bold text-white">👑 選擇任務隊伍 (Select Quest Team)</h2>
-          {timer !== undefined && (
-            <span className={`text-sm font-bold px-3 py-1 rounded-full ${timer < 20 ? 'bg-red-900/70 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
-              ⏱ {timer}s
+          {/* When room is in unlimited-timer mode, show "不計時" instead of countdown. */}
+          {room.timerConfig?.multiplier === null ? (
+            <span className="text-sm font-bold px-3 py-1 rounded-full bg-blue-900/70 text-blue-200">
+              ⏱ 不計時
             </span>
+          ) : (
+            timer !== undefined && (
+              <span className={`text-sm font-bold px-3 py-1 rounded-full ${timer < 20 ? 'bg-red-900/70 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
+                ⏱ {timer}s
+              </span>
+            )
           )}
         </div>
         <p className="text-gray-300">

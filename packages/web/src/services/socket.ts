@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/gameStore';
-import { Room, Player, User, AuthSession } from '@avalon/shared';
+import { Room, Player, User, AuthSession, TimerMultiplier } from '@avalon/shared';
 import { getIdToken } from './auth';
 import { sendTurnNotification } from './notifications';
 import audioService from './audio';
@@ -224,9 +224,13 @@ export function disconnectSocket(): void {
   }
 }
 
-export function createRoom(playerName: string, password?: string): void {
+export function createRoom(
+  playerName: string,
+  password?: string,
+  timerMultiplier?: TimerMultiplier,
+): void {
   const socket = getSocket();
-  socket.emit('game:create-room', playerName, password);
+  socket.emit('game:create-room', playerName, password, timerMultiplier);
 }
 
 export function joinRoom(roomId: string, password?: string): void {

@@ -54,6 +54,31 @@ export type PlayerStatus = 'active' | 'disconnected' | 'idle';
 // Voting Status
 export type VoteStatus = 'pending' | 'approved' | 'rejected';
 
+// Phase Timer Multipliers — per-room setting.
+// `null` = unlimited time (no timer runs, no auto-default).
+// Numeric values multiply the base timeout (team vote 90s, quest vote 30s,
+// lady of the lake 90s, assassin 180s).
+export type TimerMultiplier = 0.5 | 1 | 1.5 | 2 | null;
+
+export interface TimerConfig {
+  multiplier: TimerMultiplier;
+}
+
+export const DEFAULT_TIMER_CONFIG: TimerConfig = { multiplier: 1 };
+
+export const TIMER_MULTIPLIER_OPTIONS: ReadonlyArray<{ label: string; value: TimerMultiplier }> = [
+  { label: '0.5x (加速)', value: 0.5 },
+  { label: '1x (標準)', value: 1 },
+  { label: '1.5x', value: 1.5 },
+  { label: '2x (慢節奏)', value: 2 },
+  { label: '無限 (不計時)', value: null },
+];
+
+/** True iff the value is a valid TimerMultiplier. */
+export function isTimerMultiplier(value: unknown): value is TimerMultiplier {
+  return value === null || value === 0.5 || value === 1 || value === 1.5 || value === 2;
+}
+
 // Quest Result
 export type QuestResult = 'success' | 'fail' | 'pending';
 
@@ -104,6 +129,7 @@ export interface Room {
   ladyOfTheLakeUsed?: string[];     // Player IDs who have already held the Lady (cannot be targeted again)
   ladyOfTheLakeEnabled?: boolean;   // Whether Lady of the Lake is active in this game
   ladyOfTheLakeHistory?: LadyOfTheLakeRecord[]; // Completed Lady inspections (public info: holder->target, result visible only to holder)
+  timerConfig?: TimerConfig;        // Per-room phase-timer multiplier; undefined = { multiplier: 1 } (backward compat)
   createdAt: number;
   updatedAt: number;
 }

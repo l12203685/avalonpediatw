@@ -1,4 +1,4 @@
-import { Room, Player } from '@avalon/shared';
+import { Room, Player, TimerConfig, DEFAULT_TIMER_CONFIG, isTimerMultiplier } from '@avalon/shared';
 
 const MAX_REPLAYS = 200;
 
@@ -28,7 +28,16 @@ export class RoomManager {
     return loaded;
   }
 
-  public createRoom(roomId: string, hostName: string, hostId: string): Room {
+  public createRoom(
+    roomId: string,
+    hostName: string,
+    hostId: string,
+    timerConfig?: TimerConfig,
+  ): Room {
+    const safeTimerConfig: TimerConfig = isTimerMultiplier(timerConfig?.multiplier)
+      ? { multiplier: timerConfig!.multiplier }
+      : { ...DEFAULT_TIMER_CONFIG };
+
     const room: Room = {
       id: roomId,
       name: `${hostName}'s Game`,
@@ -68,6 +77,7 @@ export class RoomManager {
         ladyOfTheLake: false,
       },
       readyPlayerIds: [],
+      timerConfig: safeTimerConfig,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

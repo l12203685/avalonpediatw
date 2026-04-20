@@ -5,6 +5,9 @@ import { useState, useEffect } from 'react';
 import { submitQuestVote } from '../services/socket';
 import audioService from '../services/audio';
 
+// Base seconds for the quest-vote phase. Matches server QUEST_TIMEOUT_MS at 1x.
+const QUEST_BASE_SECONDS = 30;
+
 interface QuestPanelProps {
   room: Room;
   currentPlayer: Player;
@@ -16,22 +19,28 @@ export default function QuestPanel({
   currentPlayer,
   isLoading = false,
 }: QuestPanelProps): JSX.Element {
-  const [timeLeft, setTimeLeft] = useState(60); // 60秒任務投票時限 (matches server QUEST_TIMEOUT_MS)
+  // Derive per-room effective timer: base * multiplier. `null` = unlimited.
+  const multiplier = room.timerConfig?.multiplier ?? 1;
+  const isUnlimited = multiplier === null;
+  const effectiveSeconds = isUnlimited ? 0 : Math.round(QUEST_BASE_SECONDS * (multiplier as number));
+
+  const [timeLeft, setTimeLeft] = useState(effectiveSeconds);
   const isInTeam = room.questTeam.includes(currentPlayer.id);
   const isGoodSide = currentPlayer.team === 'good';
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
 
-  // 任務倒計時
+  // 任務倒計時 (skip when unlimited)
   useEffect(() => {
+    if (isUnlimited) return;
     if (timeLeft > 0) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
     }
-  }, [timeLeft]);
+  }, [timeLeft, isUnlimited]);
 
   // 時間警告
-  const isUrgent = timeLeft < 10;
+  const isUrgent = !isUnlimited && timeLeft < 10;
 
   const handleVote = async (vote: 'success' | 'fail') => {
     if (!isInTeam || isSubmitting || hasVoted) return;
@@ -100,16 +109,23 @@ export default function QuestPanel({
 
       {/* 計時器 */}
       <div className="flex justify-center">
-        <motion.div
-          animate={{
-            backgroundColor: isUrgent ? '#ef4444' : '#3b82f6',
-            color: '#fff',
-          }}
-          className="flex items-center gap-2 px-4 py-2 rounded-full font-bold"
-        >
-          <Clock size={18} />
-          {timeLeft}s
-        </motion.div>
+        {isUnlimited ? (
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full font-bold bg-blue-500/30 text-blue-200 border border-blue-500/40">
+            <Clock size={18} />
+            不計時
+          </div>
+        ) : (
+          <motion.div
+            animate={{
+              backgroundColor: isUrgent ? '#ef4444' : '#3b82f6',
+              color: '#fff',
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-full font-bold"
+          >
+            <Clock size={18} />
+            {timeLeft}s
+          </motion.div>
+        )}
       </div>
 
       {/* 隊伍成員列表 */}

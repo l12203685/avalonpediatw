@@ -4,6 +4,9 @@ import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import audioService from '../services/audio';
 
+// Base seconds for the team-vote phase. Matches server VOTE_TIMEOUT_MS at 1x.
+const VOTE_BASE_SECONDS = 90;
+
 interface VotePanelProps {
   room: Room;
   currentPlayer: Player;
@@ -17,7 +20,12 @@ export default function VotePanel({
   onVote,
   isLoading = false,
 }: VotePanelProps): JSX.Element {
-  const [timeLeft, setTimeLeft] = useState(60); // 60秒投票時限 (matches server VOTE_TIMEOUT_MS)
+  // Derive per-room effective timer: base * multiplier. `null` = unlimited.
+  const multiplier = room.timerConfig?.multiplier ?? 1;
+  const isUnlimited = multiplier === null;
+  const effectiveSeconds = isUnlimited ? 0 : Math.round(VOTE_BASE_SECONDS * (multiplier as number));
+
+  const [timeLeft, setTimeLeft] = useState(effectiveSeconds);
   const playerCount = Object.keys(room.players).length;
   const votedCount = Object.keys(room.votes).length;
   const hasVoted = room.votes[currentPlayer.id] !== undefined;
@@ -27,19 +35,20 @@ export default function VotePanel({
 
   // Reset timer when a new vote round starts
   useEffect(() => {
-    setTimeLeft(60);
-  }, [voteRoundKey]);
+    setTimeLeft(effectiveSeconds);
+  }, [voteRoundKey, effectiveSeconds]);
 
-  // 投票倒計時
+  // 投票倒計時 (skip when unlimited)
   useEffect(() => {
+    if (isUnlimited) return;
     if (!hasVoted && timeLeft > 0) {
       const timer = setTimeout(() => setTimeLeft(t => Math.max(0, t - 1)), 1000);
       return () => clearTimeout(timer);
     }
-  }, [timeLeft, hasVoted]);
+  }, [timeLeft, hasVoted, isUnlimited]);
 
   // 時間警告
-  const isUrgent = timeLeft < 10;
+  const isUrgent = !isUnlimited && timeLeft < 10;
 
   // Keyboard shortcuts: Y/1 = approve, N/2 = reject
   useEffect(() => {
@@ -100,16 +109,23 @@ export default function VotePanel({
         <span className="text-gray-300">
           已投票：{votedCount}/{playerCount}
         </span>
-        <motion.div
-          animate={{
-            backgroundColor: isUrgent ? '#ef4444' : '#fbbf24',
-            color: isUrgent ? '#fff' : '#000',
-          }}
-          className="flex items-center gap-2 px-3 py-1 rounded-full font-bold"
-        >
-          <Clock size={16} />
-          {timeLeft}s
-        </motion.div>
+        {isUnlimited ? (
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full font-bold bg-blue-500/30 text-blue-200 border border-blue-500/40">
+            <Clock size={16} />
+            不計時
+          </div>
+        ) : (
+          <motion.div
+            animate={{
+              backgroundColor: isUrgent ? '#ef4444' : '#fbbf24',
+              color: isUrgent ? '#fff' : '#000',
+            }}
+            className="flex items-center gap-2 px-3 py-1 rounded-full font-bold"
+          >
+            <Clock size={16} />
+            {timeLeft}s
+          </motion.div>
+        )}
       </div>
 
       {/* 投票進度條 */}

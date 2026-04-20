@@ -30,6 +30,8 @@ export default function HomePage(): JSX.Element {
   const [joinPassword, setJoinPassword] = useState('');
   const [pendingJoinRoom, setPendingJoinRoom] = useState<OpenRoom | null>(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
+  // Per-room phase-timer multiplier (1x default). null = unlimited.
+  const [timerMultiplier, setTimerMultiplier] = useState<TimerMultiplier>(1);
 
   // Check admin status for UI conditional (shown after logged-in player loads)
   useEffect(() => {
@@ -104,7 +106,7 @@ export default function HomePage(): JSX.Element {
 
     localStorage.setItem('avalon_player_name', playerName.trim());
     try {
-      createRoom(playerName, roomPassword.trim() || undefined);
+      createRoom(playerName, roomPassword.trim() || undefined, timerMultiplier);
       setGameState('lobby');
     } catch {
       addToast('無法建立房間 — 伺服器連線失敗，請重新整理頁面', 'error');
@@ -474,6 +476,30 @@ export default function HomePage(): JSX.Element {
                 onKeyDown={e => e.key === 'Enter' && handleCreateRoom()}
                 className="w-full bg-avalon-card border border-gray-600 rounded-lg pl-8 pr-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-gray-400 font-semibold">
+                <Clock size={14} className="text-blue-400" />
+                思考時間倍率 (Thinking Time Multiplier)
+              </label>
+              <select
+                value={timerMultiplier === null ? 'null' : String(timerMultiplier)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setTimerMultiplier(v === 'null' ? null : (Number(v) as TimerMultiplier));
+                }}
+                className="w-full bg-avalon-card border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+              >
+                {TIMER_MULTIPLIER_OPTIONS.map(opt => (
+                  <option key={opt.value === null ? 'null' : String(opt.value)} value={opt.value === null ? 'null' : String(opt.value)}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-500 leading-relaxed">
+                基準：派票 90s / 黑白球 30s / 湖中女神 90s / 刺殺 180s。倍率將按比例套用至每個階段。
+              </p>
             </div>
 
             <div className="space-y-3">
