@@ -11,7 +11,9 @@ import { apiRouter } from './routes/api';
 import { friendsRouter } from './routes/friends';
 import { feedbackRouter } from './routes/feedback';
 import { analysisRouter } from './routes/analysis';
+import { claimsRouter } from './routes/claims';
 import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
+import { ensureAdminsSeed } from './services/AdminService';
 
 const app: Express = express();
 
@@ -37,6 +39,8 @@ app.use('/api', apiRouter);
 app.use('/api/friends', friendsRouter);
 app.use('/api/feedback', feedbackRouter);
 app.use('/api/analysis', analysisRouter);
+// Claim system: /api/claims/* (player) + /api/admin/* (admin whitelist)
+app.use('/api', claimsRouter);
 
 // HTTP server (needed for Socket.IO)
 const httpServer = createServer(app);
@@ -56,9 +60,11 @@ io.use(authenticateSocket);
 // Initialize Firebase, then start Socket.IO game server
 let firebaseInitialized = false;
 initializeFirebase()
-  .then(() => {
+  .then(async () => {
     firebaseInitialized = true;
     console.log('✓ Firebase initialized');
+    // Seed admin whitelist (idempotent — no-op if already seeded)
+    await ensureAdminsSeed();
     // Start game server after Firebase is ready
     const gameServer = new GameServer(io);
     gameServer.start();

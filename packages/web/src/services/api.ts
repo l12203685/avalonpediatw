@@ -463,3 +463,175 @@ export interface ReplayDataApi {
 export async function fetchReplay(roomId: string): Promise<ReplayDataApi> {
   return apiFetch<ReplayDataApi>(`/api/replay/${roomId}/structured`);
 }
+
+// ── Claim System API ─────────────────────────────────────────────────────────
+
+export interface ClaimableRecord {
+  recordId: string;
+  gameId: string;
+  playerId: string;
+  displayName: string;
+  role: string | null;
+  team: 'good' | 'evil' | null;
+  won: boolean;
+  playerCount: number;
+  roomName: string;
+  createdAt: number;
+  ownerUid: string | null;
+  matchScore?: number;
+}
+
+export type ClaimStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ClaimRequestApi {
+  id: string;
+  uid: string;
+  email: string | null;
+  displayName: string;
+  targetRecordIds: string[];
+  evidenceNote: string;
+  autoMatched: boolean;
+  status: ClaimStatus;
+  submittedAt: number;
+  reviewedBy: string | null;
+  reviewedAt: number | null;
+  rejectReason: string | null;
+  approvedRecordIds: string[] | null;
+}
+
+export interface PendingClaimView {
+  claim: ClaimRequestApi;
+  records: ClaimableRecord[];
+}
+
+export interface AdminMe {
+  isAdmin: boolean;
+  email: string | null;
+  displayName: string;
+  provider: string;
+}
+
+export interface AuditLogEntryApi {
+  id: string;
+  action: 'approve' | 'reject' | 'addAdmin' | 'removeAdmin';
+  adminEmail: string;
+  targetClaimId?: string;
+  targetRecordIds?: string[];
+  ts: number;
+  details?: string;
+}
+
+async function claimApi<T>(path: string, init?: RequestInit & { token?: string }): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (init?.token) headers['Authorization'] = `Bearer ${init.token}`;
+  const res = await fetch(`${SERVER_URL}${path}`, {
+    method: init?.method ?? 'GET',
+    headers,
+    body: init?.body,
+  });
+  const body = (await res.json().catch(() => ({}))) as { success?: boolean; data?: T; error?: string };
+  if (!res.ok || body.success === false) {
+    throw new Error(body.error || `API ${res.status}: ${path}`);
+  }
+  return (body.data ?? (body as unknown as T));
+}
+
+// ── Player ────────────────────────────────────────────────────────────────────
+
+export async function fetchMyClaims(token: string): Promise<ClaimRequestApi[]> {
+  const data = await claimApi<{ claims: ClaimRequestApi[] }>('/api/claims/mine', { token });
+  return data.claims;
+}
+
+export async function submitClaim(
+  token: string,
+  body: { targetRecordIds: string[]; evidenceNote?: string; autoMatched?: boolean }
+): Promise<ClaimRequestApi> {
+  const data = await claimApi<{ claim: ClaimRequestApi }>('/api/claims', {
+    token,
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return data.claim;
+}
+
+export async function fetchAutoMatchCandidates(token: string): Promise<ClaimableRecord[]> {
+  const data = await claimApi<{ records: ClaimableRecord[] }>('/api/claims/auto-match', { token });
+  return data.records;
+}
+
+export async function searchManualRecords(
+  token: string,
+  body: { oldNickname: string; since?: number; until?: number }
+): Promise<ClaimableRecord[]> {
+  const data = await claimApi<{ records: ClaimableRecord[] }>('/api/claims/search-manual', {
+    token,
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return data.records;
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+export async function fetchAdminMe(token: string): Promise<AdminMe> {
+  return claimApi<AdminMe>('/api/admin/me', { token });
+}
+
+export async function fetchPendingClaims(token: string): Promise<PendingClaimView[]> {
+  const data = await claimApi<{ pending: PendingClaimView[] }>('/api/admin/claims/pending', { token });
+  return data.pending;
+}
+
+export async function approveClaimApi(
+  token: string,
+  claimId: string,
+  approvedRecordIds: string[]
+): Promise<ClaimRequestApi> {
+  const data = await claimApi<{ claim: ClaimRequestApi }>(`/api/admin/claims/${claimId}/approve`, {
+    token,
+    method: 'POST',
+    body: JSON.stringify({ approvedRecordIds }),
+  });
+  return data.claim;
+}
+
+export async function rejectClaimApi(
+  token: string,
+  claimId: string,
+  reason: string
+): Promise<ClaimRequestApi> {
+  const data = await claimApi<{ claim: ClaimRequestApi }>(`/api/admin/claims/${claimId}/reject`, {
+    token,
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+  return data.claim;
+}
+
+export async function fetchAdminList(token: string): Promise<string[]> {
+  const data = await claimApi<{ emails: string[] }>('/api/admin/admins', { token });
+  return data.emails;
+}
+
+export async function addAdminApi(token: string, email: string): Promise<string[]> {
+  const data = await claimApi<{ emails: string[] }>('/api/admin/admins', {
+    token,
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+  return data.emails;
+}
+
+export async function removeAdminApi(token: string, email: string): Promise<string[]> {
+  const data = await claimApi<{ emails: string[] }>(
+    `/api/admin/admins/${encodeURIComponent(email)}`,
+    { token, method: 'DELETE' },
+  );
+  return data.emails;
+}
+
+export async function fetchAuditLog(token: string): Promise<AuditLogEntryApi[]> {
+  const data = await claimApi<{ entries: AuditLogEntryApi[] }>('/api/admin/audit', { token });
+  return data.entries;
+}

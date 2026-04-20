@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus } from 'lucide-react';
+import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
-import { checkFollowing, followUser, unfollowUser } from '../services/api';
+import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
 import { getStoredToken } from '../services/socket';
@@ -119,6 +119,8 @@ export default function ProfilePage(): JSX.Element {
   const [replayLoading, setReplayLoading] = useState(false);
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [autoMatchCount, setAutoMatchCount] = useState<number | null>(null);
+  const [hasPendingClaim, setHasPendingClaim] = useState(false);
 
   const isMe = !profileUserId || profileUserId === 'me';
 
@@ -154,6 +156,19 @@ export default function ProfilePage(): JSX.Element {
       .then(setIsFollowingUser)
       .catch(() => {});
   }, [profileUserId, isMe]);
+
+  // On own profile, probe unclaimed records + outstanding claim applications
+  useEffect(() => {
+    if (!isMe) return;
+    const token = getStoredToken();
+    if (!token) return;
+    fetchAutoMatchCandidates(token)
+      .then(records => setAutoMatchCount(records.length))
+      .catch(() => setAutoMatchCount(null));
+    fetchMyClaims(token)
+      .then(claims => setHasPendingClaim(claims.some(c => c.status === 'pending')))
+      .catch(() => setHasPendingClaim(false));
+  }, [isMe]);
 
   const handleFollowToggle = async (): Promise<void> => {
     const token = getStoredToken();
@@ -255,6 +270,44 @@ export default function ProfilePage(): JSX.Element {
 
         {profile && (
           <>
+            {/* Claim banner — own profile only */}
+            {isMe && (autoMatchCount !== null && autoMatchCount > 0) && (
+              <button
+                onClick={() => setGameState('claimsNew')}
+                className="w-full bg-gradient-to-r from-blue-900/50 to-purple-900/50 hover:from-blue-800/60 hover:to-purple-800/60 border border-blue-700/60 rounded-xl p-4 text-left transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <Sparkles size={24} className="text-purple-300 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-white">
+                      你有 <span className="text-purple-300">{autoMatchCount}</span> 場可能的舊戰績
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      系統比對到你可能擁有的舊紀錄 — 申請綁定後就能顯示在你的統計裡
+                    </p>
+                  </div>
+                  <Link2 size={16} className="text-blue-300 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
+                </div>
+              </button>
+            )}
+            {isMe && autoMatchCount === 0 && hasPendingClaim && (
+              <button
+                onClick={() => setGameState('claimsNew')}
+                className="w-full bg-yellow-900/40 hover:bg-yellow-900/50 border border-yellow-700/50 rounded-xl p-3 text-left transition-all flex items-center gap-3"
+              >
+                <Clock size={16} className="text-yellow-300 flex-shrink-0" />
+                <p className="text-xs text-yellow-200 flex-1">你有尚未審核的綁定申請 — 點我查看進度</p>
+              </button>
+            )}
+            {isMe && autoMatchCount === 0 && !hasPendingClaim && (
+              <button
+                onClick={() => setGameState('claimsNew')}
+                className="w-full bg-avalon-card/30 hover:bg-avalon-card/50 border border-gray-700 rounded-xl p-2.5 text-center text-xs text-gray-500 hover:text-gray-300 transition-all flex items-center justify-center gap-2"
+              >
+                <Link2 size={12} /> 用舊暱稱搜尋並綁定舊戰績
+              </button>
+            )}
+
             {/* Avatar + name */}
             <div className="bg-avalon-card/60 border border-gray-700 rounded-2xl p-6 flex items-center gap-5">
               {profile.photo_url ? (

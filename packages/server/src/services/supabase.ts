@@ -354,6 +354,27 @@ export async function getSupabaseIdByFirebaseUid(firebaseUid: string): Promise<s
   return data?.id ?? null;
 }
 
+/**
+ * 以 Supabase 用戶 UUID 查回用戶的 email（可能為空字串）。
+ * 用於 admin 白名單檢核 — Discord/Line JWT 本身不攜帶 email。
+ */
+export async function getUserEmailById(userId: string): Promise<string | null> {
+  const db = getSupabaseClient();
+  if (!db) return null;
+  try {
+    const { data, error } = await db
+      .from('users')
+      .select('email')
+      .eq('id', userId)
+      .single();
+    if (error || !data) return null;
+    const email = (data.email as string | null) ?? '';
+    return email || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyAndDeleteOAuthSession(
   stateToken: string,
   provider: 'discord' | 'line'

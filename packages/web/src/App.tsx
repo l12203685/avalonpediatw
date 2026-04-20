@@ -13,6 +13,9 @@ import ProfilePage from './pages/ProfilePage';
 import FriendsPage from './pages/FriendsPage';
 import AiStatsPage from './pages/AiStatsPage';
 import AnalysisPage from './pages/AnalysisPage';
+import ClaimsNewPage from './pages/ClaimsNewPage';
+import AdminClaimsPage from './pages/AdminClaimsPage';
+import AdminAdminsPage from './pages/AdminAdminsPage';
 import ToastContainer from './components/ToastContainer';
 import FloatingControls from './components/FloatingControls';
 import { submitError } from './services/api';
@@ -134,6 +137,9 @@ function App(): JSX.Element {
           {gameState === 'friends' && <FriendsPage />}
           {gameState === 'aiStats' && <AiStatsPage />}
           {gameState === 'analysis' && <AnalysisPage />}
+          {gameState === 'claimsNew' && <ClaimsNewPage />}
+          {gameState === 'adminClaims' && <AdminClaimsPage />}
+          {gameState === 'adminAdmins' && <AdminAdminsPage />}
         </>
       )}
       <ToastContainer />

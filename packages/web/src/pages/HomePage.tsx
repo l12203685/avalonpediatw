@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { createRoom, joinRoom, listRooms, spectateRoom, getSocket } from '../services/socket';
+import { createRoom, joinRoom, listRooms, spectateRoom, getSocket, getStoredToken } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
-import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot, BarChart3 } from 'lucide-react';
+import { fetchAdminMe } from '../services/api';
+import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot, BarChart3, ShieldCheck } from 'lucide-react';
 
 interface OpenRoom {
   id: string;
@@ -27,6 +28,17 @@ export default function HomePage(): JSX.Element {
   const [roomPassword, setRoomPassword] = useState('');
   const [joinPassword, setJoinPassword] = useState('');
   const [pendingJoinRoom, setPendingJoinRoom] = useState<OpenRoom | null>(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  // Check admin status for UI conditional (shown after logged-in player loads)
+  useEffect(() => {
+    if (!currentPlayer) return;
+    const token = getStoredToken();
+    if (!token) return;
+    fetchAdminMe(token)
+      .then(me => setIsAdminUser(me.isAdmin))
+      .catch(() => setIsAdminUser(false));
+  }, [currentPlayer]);
 
   // Auto-populate (and auto-join) from ?room=XXXXXXXX invite link
   useEffect(() => {
@@ -182,6 +194,17 @@ export default function HomePage(): JSX.Element {
               <UserCircle size={16} className="text-blue-400" />
               <span className="text-sm font-semibold text-white">{currentPlayer.name}</span>
             </motion.button>
+            {isAdminUser && (
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setGameState('adminClaims')}
+                className="p-2 bg-avalon-card/50 backdrop-blur-sm rounded-lg border border-green-700 hover:border-green-400 text-green-400 hover:text-green-300 transition-colors"
+                title="管理 (Admin)"
+              >
+                <ShieldCheck size={18} />
+              </motion.button>
+            )}
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}

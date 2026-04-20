@@ -27,6 +27,11 @@ export interface GamePlayerRecord {
   role: Role | null;
   team: 'good' | 'evil' | null;
   won: boolean;
+  /**
+   * Optional owner UID once a claim for this participation row has been
+   * approved. Absent / null on legacy records and for non-claimed slots.
+   */
+  ownerUid?: string | null;
 }
 
 /**
