@@ -11,7 +11,8 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e:5p": "vitest run src/__tests__/integration/FivePlayerSocketSmoke.test.ts"
   },
   "dependencies": {
     "@avalon/shared": "workspace:*",
@@ -41,6 +42,7 @@
     "@typescript-eslint/parser": "^7.0.0",
     "@vitest/coverage-v8": "4.1.1",
     "eslint": "^8.57.0",
+    "socket.io-client": "^4.8.3",
     "supertest": "^7.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
