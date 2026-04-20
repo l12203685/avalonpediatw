@@ -54,34 +54,8 @@ const io = new SocketIOServer(httpServer, {
   },
 });
 
-// Socket.IO auth middleware
-io.use(authenticateSocket);
-
-// Initialize Firebase, then start Socket.IO game server
+// Health check — must be defined before main() so listen() can serve it immediately
 let firebaseInitialized = false;
-initializeFirebase()
-  .then(async () => {
-    firebaseInitialized = true;
-    console.log('✓ Firebase initialized');
-    // Seed admin whitelist (idempotent — no-op if already seeded)
-    await ensureAdminsSeed();
-    // Start game server after Firebase is ready
-    const gameServer = new GameServer(io);
-    gameServer.start();
-    console.log('✓ Socket.IO game server started');
-    startSelfPlayScheduler();
-  })
-  .catch(err => {
-    console.error('Firebase initialization failed:', err);
-    // Start game server anyway — auth will fail for individual connections
-    // but the server itself should still be reachable for health checks
-    const gameServer = new GameServer(io);
-    gameServer.start();
-    console.log('Socket.IO game server started (Firebase unavailable)');
-    startSelfPlayScheduler();
-  });
-
-// Health check
 app.get('/health', (_req, res) => {
   res.json({
     status: firebaseInitialized ? 'ok' : 'initializing',
@@ -92,12 +66,52 @@ app.get('/health', (_req, res) => {
   });
 });
 
-// Start server
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
-  console.log(`\nAvalon server running on port ${PORT}`);
-  console.log(`CORS Origin: ${CORS_ORIGIN}`);
-  console.log(`Environment: ${NODE_ENV}\n`);
+
+// Bootstrap: fully prepare Socket.IO (Firebase + auth middleware + connection handler)
+// BEFORE binding the HTTP port. This eliminates the Render cold-start race where
+// clients connected into a listening socket whose connection handler wasn't attached
+// yet, causing `socket.once('auth:success')` to time out on the client.
+async function main() {
+  // 1. Firebase — required for ID-token verification in authenticateSocket middleware
+  try {
+    await initializeFirebase();
+    firebaseInitialized = true;
+    console.log('✓ Firebase initialized');
+    // Seed admin whitelist (idempotent — no-op if already seeded)
+    await ensureAdminsSeed();
+  } catch (err) {
+    console.error('Firebase initialization failed:', err);
+    // Continue anyway — individual auth will fail but health checks + guest-only
+    // flows should still be reachable. Flag stays false so /health reports 'initializing'.
+  }
+
+  // 2. Attach Socket.IO auth middleware (must run before any connection lands)
+  io.use(authenticateSocket);
+
+  // 3. Start GameServer — this binds `io.on('connection', ...)` handlers
+  const gameServer = new GameServer(io);
+  gameServer.start();
+  console.log(
+    firebaseInitialized
+      ? '✓ Socket.IO game server started'
+      : 'Socket.IO game server started (Firebase unavailable)'
+  );
+
+  // 4. Start self-play scheduler after game server is ready
+  startSelfPlayScheduler();
+
+  // 5. Finally bind the HTTP port — now any connection has a complete handler chain
+  httpServer.listen(PORT, () => {
+    console.log(`\nAvalon server running on port ${PORT}`);
+    console.log(`CORS Origin: ${CORS_ORIGIN}`);
+    console.log(`Environment: ${NODE_ENV}\n`);
+  });
+}
+
+main().catch(err => {
+  console.error('Fatal: server bootstrap failed', err);
+  process.exit(1);
 });
 
 export { app };

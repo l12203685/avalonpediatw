@@ -38,6 +38,25 @@ export async function initializeSocket(token: string): Promise<void> {
     reconnectionAttempts: 5,
   });
 
+  // Refresh Firebase ID token before each reconnect attempt so expired tokens
+  // (Firebase tokens last 1h) don't cause `connect_error: Token expired`. Guest
+  // users have no Firebase currentUser — getIdToken() throws, and we fall back
+  // to the originally-stored token so guest flows keep working.
+  socket.io.on('reconnect_attempt', async () => {
+    try {
+      const freshToken = await getIdToken();
+      _storedToken = freshToken;
+      if (socket) {
+        socket.auth = { ...(socket.auth as Record<string, unknown>), token: freshToken };
+      }
+    } catch {
+      // Guest mode or Firebase not configured — keep the stored token as-is.
+      if (socket && _storedToken) {
+        socket.auth = { ...(socket.auth as Record<string, unknown>), token: _storedToken };
+      }
+    }
+  });
+
   // Wait for auth:success or connect_error before resolving
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
