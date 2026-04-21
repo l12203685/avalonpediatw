@@ -41,17 +41,22 @@ const SECTIONS: SectionConfig[] = [
 ];
 
 /**
- * #84 訪客判定 heuristic：目前 `currentPlayer` 沒帶 provider 欄位，而唯一會產生
- * `Guest_NNN` 預設名或是透過 cookie resume 續簽的都是訪客身份，這邊用最實用的
- * fallback — 名稱形如 `Guest_###` 或沒 avatar 都視為訪客。之後 Phase 2 會把
- * provider 塞進 Player 型別，這段就可以收斂成一行 `player.provider === 'guest'`。
+ * #84 訪客判定：Player 型別現已帶 `provider` 欄位（socket.ts auth:success 從
+ * session.user.provider 塞進來），所以判斷「是否為訪客」直接看 provider 即可。
+ *
+ * Regression note: 初版用 name 形如 Guest_NNN 或 avatar 空值作 heuristic，但
+ * Discord / Line 綁定的正式使用者有可能沒有 photoURL，會被誤判為訪客 → 綁定後
+ * 仍顯示訪客 UI。改用 provider 後，此誤判被修掉。
+ *
+ * Fallback：若 provider 未定義（legacy state、極早期 bot、或 server 還沒補完
+ * 舊 socket 重連事件），就只認 name 形如 Guest_NNN 才當訪客；沒頭像不再視為
+ * 訪客指標。
  */
-function looksLikeGuest(name: string | undefined, avatar: string | null | undefined): boolean {
-  if (!name) return true;
-  if (/^Guest_\d{3}$/.test(name)) return true;
-  // 沒頭像 + 沒社群登入資訊 → 視為訪客
-  if (!avatar) return true;
-  return false;
+function isGuestPlayer(player: { name?: string; provider?: string } | null | undefined): boolean {
+  if (!player) return true;
+  if (player.provider) return player.provider === 'guest';
+  // Legacy fallback — provider 缺值時只認 Guest_NNN 預設名
+  return /^Guest_\d{3,}$/i.test(player.name ?? '');
 }
 
 export default function ProfileSettingsPage(): JSX.Element {
@@ -69,7 +74,7 @@ export default function ProfileSettingsPage(): JSX.Element {
   // 訪客轉正式註冊 state
   const [upgrading, setUpgrading] = useState(false);
 
-  const isGuest = looksLikeGuest(currentPlayer?.name, currentPlayer?.avatar);
+  const isGuest = isGuestPlayer(currentPlayer);
 
   const handleLogoutConfirmed = async (): Promise<void> => {
     setLoggingOut(true);
@@ -110,6 +115,15 @@ export default function ProfileSettingsPage(): JSX.Element {
         // Map server error codes to i18n keys; fall back to raw error text.
         let message = result.error ?? t('guest.renameFailed');
         if (result.code === 'RESERVED_PREFIX') message = t('guest.renameReservedPrefix');
+        // 404 means the /auth/guest/rename endpoint isn't available on the
+        // deployed server yet (commit #84 shipped the client before the server
+        // build/redeploy caught up). Surface a friendlier message instead of
+        // the raw "rename failed: 404" so users don't think their input is bad.
+        else if (/rename failed: 404/i.test(message)) {
+          message = t('guest.renameUnavailable', {
+            defaultValue: '伺服器尚未支援改名，請稍候再試',
+          });
+        }
         setRenameError(message);
         return;
       }

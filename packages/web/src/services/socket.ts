@@ -94,6 +94,10 @@ export async function initializeSocket(token: string): Promise<void> {
         team: null,
         status: 'active',
         createdAt: session.user.createdAt,
+        // #84 hotfix: propagate provider so ProfileSettingsPage can tell guests
+        // apart from registered users without relying on avatar presence (which
+        // misclassified Discord/Line users lacking a photoURL as guests).
+        provider: session.user.provider,
       });
       // Auto-rejoin room if player was in one before page refresh
       const savedRoom = localStorage.getItem('avalon_room');
@@ -135,6 +139,9 @@ export async function initializeSocket(token: string): Promise<void> {
       team: null,
       status: 'active',
       createdAt: session.user.createdAt,
+      // #84 hotfix: keep provider in sync across reconnects so the settings
+      // page never regresses back to the guest UI after a socket hiccup.
+      provider: session.user.provider,
     });
   });
 

@@ -96,6 +96,16 @@ export interface Player {
   vote?: boolean | null; // true = approve, false = reject, null = not voted
   kills?: string[]; // IDs of players killed (for assassin)
   createdAt: number;
+  /**
+   * Auth provider of the backing User record. Populated on the web client when
+   * `auth:success` fires (socket.ts copies it from `session.user.provider`).
+   * Optional because legacy Player rows (bots, pre-#84 reconstructed state) may
+   * not have it; UI that needs to distinguish guests from registered users
+   * should check `provider === 'guest'` rather than heuristics on name/avatar
+   * (#84 regression: registered users without a `photoURL` were misclassified
+   * as guests).
+   */
+  provider?: 'google' | 'github' | 'discord' | 'line' | 'email' | 'guest';
 }
 
 export interface Room {
