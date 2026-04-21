@@ -231,159 +231,145 @@ export default function HomePage(): JSX.Element {
           </motion.div>
         )}
 
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-5xl">
           {mode === 'home' && (
             <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-8 w-full max-w-md"
+            className="text-center space-y-6 w-full"
           >
             {/* Title */}
             <motion.div
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 200 }}
-              className="space-y-4"
+              className="space-y-3"
             >
               <img
                 src="/logo.png"
                 alt={t('app.name')}
-                className="w-24 h-24 mx-auto rounded-2xl shadow-lg shadow-white/10"
+                className="w-20 h-20 mx-auto rounded-2xl shadow-lg shadow-white/10"
               />
-              <h1 className="text-6xl font-black text-white drop-shadow-2xl">
+              <h1 className="text-5xl md:text-6xl font-black text-white drop-shadow-2xl">
                 AVALON
               </h1>
-              <p className="text-2xl text-zinc-300 font-semibold">{t('app.tagline')}</p>
-              <p className="text-zinc-500 text-sm">{t('app.playersRange')}</p>
+              <p className="text-xl md:text-2xl text-zinc-300 font-semibold">{t('app.tagline')}</p>
             </motion.div>
 
-            {/* Stats Cards */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="grid grid-cols-2 gap-3 py-4"
-            >
-              <div className="bg-zinc-900/60 border border-zinc-700 rounded-lg p-3">
-                <Users size={20} className="text-white mx-auto mb-1" />
-                <p className="text-xs text-zinc-300">{t('app.teamBattle')}</p>
-              </div>
-              <div className="bg-zinc-900/60 border border-zinc-700 rounded-lg p-3">
-                <Zap size={20} className="text-white mx-auto mb-1" />
-                <p className="text-xs text-zinc-300">{t('app.realtime')}</p>
-              </div>
-            </motion.div>
-
-            {/* Buttons */}
+            {/* Main content: buttons + lobby chat (side-by-side on desktop, stacked on mobile) */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
-              className="space-y-3 pt-4"
+              className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-2"
             >
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setMode('create')}
-                className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-white/20"
-              >
-                <Play size={20} />
-                {t('home.createRoom')}
-              </motion.button>
+              {/* Buttons area (2-col grid + standalone FAQ) */}
+              <div className="md:col-span-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setMode('join')}
+                    className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <LogIn size={18} />
+                    {t('home.joinRoom')}
+                  </motion.button>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setMode('join')}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
-              >
-                <LogIn size={20} />
-                {t('home.joinRoom')}
-              </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setMode('create')}
+                    className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <Play size={18} />
+                    {t('home.createRoom')}
+                  </motion.button>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setGameState('wiki')}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
-              >
-                <BookOpen size={20} />
-                {t('home.wikiAndGuide')}
-              </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleQuickSolo}
+                    className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <Zap size={18} />
+                    {t('home.quickSolo')}
+                  </motion.button>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setGameState('leaderboard')}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
-              >
-                <Trophy size={20} />
-                {t('home.leaderboard')}
-              </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setGameState('leaderboard')}
+                    className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <Trophy size={18} />
+                    {t('home.leaderboard')}
+                  </motion.button>
 
-              <div className="grid grid-cols-2 gap-3">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setGameState('wiki')}
+                    className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <BookOpen size={18} />
+                    {t('home.wikiAndGuide')}
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setGameState('analysis')}
+                    className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <BarChart3 size={18} />
+                    {t('home.analysis')}
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setGameState('friends')}
+                    className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <Users size={18} />
+                    {t('home.friendsShort')}
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setGameState('aiStats')}
+                    className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <Bot size={18} />
+                    {t('home.aiStats')}
+                  </motion.button>
+                </div>
+
+                {/* FAQ — standalone centered */}
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setGameState('friends')}
-                  className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
+                  onClick={() => setGameState('help')}
+                  className="mx-auto block w-1/2 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-md"
                 >
-                  <Users size={18} />
-                  {t('home.friendsShort')}
-                </motion.button>
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleQuickSolo}
-                  className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
-                >
-                  <Zap size={18} />
-                  {t('home.quickSolo')}
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <HelpCircle size={18} />
+                    {t('home.faq')}
+                  </span>
                 </motion.button>
               </div>
 
-              {currentPlayer && (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => navigateToProfile('me')}
-                  className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
-                >
-                  <UserCircle size={20} />
-                  {t('home.profileShort')}
-                </motion.button>
-              )}
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setGameState('aiStats')}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
-              >
-                <Bot size={20} />
-                {t('home.aiStats')}
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setGameState('analysis')}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
-              >
-                <BarChart3 size={20} />
-                {t('home.analysis')}
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setGameState('help')}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
-              >
-                <HelpCircle size={20} />
-                {t('nav.home')} FAQ
-              </motion.button>
+              {/* Lobby chat placeholder */}
+              <div className="md:col-span-2 bg-zinc-900/60 border border-zinc-700 rounded-lg p-4 flex flex-col min-h-[280px]">
+                <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-wider mb-3 text-left">
+                  {t('home.lobbyChat')}
+                </h3>
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-zinc-500 text-sm">{t('home.lobbyChatPlaceholder')}</p>
+                </div>
+              </div>
             </motion.div>
 
             {/* Open rooms */}
