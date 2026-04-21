@@ -22,6 +22,8 @@
     "wiki": "Wiki & Guide",
     "aiStats": "AI Stats",
     "analysis": "Analysis",
+    "analytics": "Analytics",
+    "profileSettings": "Settings",
     "admin": "Admin"
   },
   "auth": {
@@ -57,6 +59,9 @@
     "quickSolo": "Quick Start",
     "aiStats": "AI Self-play",
     "analysis": "Analytics",
+    "analytics": "Analytics",
+    "profileSettings": "Settings",
+    "currentAs": "Current: {{name}}",
     "faq": "FAQ",
     "lobbyChat": "Lobby Chat",
     "lobbyChatPlaceholder": "Not available yet — coming soon",
@@ -91,5 +96,31 @@
     "suggestionPlaceholder": "What feature would you like to suggest?",
     "feedbackThanks": "Thanks for the report! We'll handle it ASAP",
     "feedbackFailed": "Submission failed, please try again later"
+  },
+  "settings": {
+    "basic": "Basic Info",
+    "binding": "Account Binding",
+    "history": "Match History",
+    "watchlist": "Watchlist",
+    "pairStats": "Watchlist Matchups",
+    "logout": "Log Out",
+    "logoutHint": "Logging out clears local cache; next visit will require login or guest mode again.",
+    "logoutConfirm": "Log out?",
+    "logoutConfirmBody": "Logging out clears your local game cache and player name. Continue?",
+    "upgradeGuest": "Upgrade guest data to a registered account (Google/Discord/Line) while keeping all records and ELO.",
+    "currentName": "Current name",
+    "comingSoon": "Coming soon"
+  },
+  "analytics": {
+    "tab": {
+      "leaderboard": "Win Rate",
+      "radar": "Player Radar",
+      "aiSelfplay": "AI Self-play",
+      "deepAnalysis": "Deep Analysis"
+    }
+  },
+  "guest": {
+    "rename": "Rename Guest",
+    "renameLimit": "Up to 3 renames per 24 hours"
   }
 }

@@ -22,6 +22,8 @@
     "wiki": "百科 & 攻略",
     "aiStats": "AI 自對弈統計",
     "analysis": "數據分析",
+    "analytics": "數據分析",
+    "profileSettings": "資料設定",
     "admin": "管理"
   },
   "auth": {
@@ -57,6 +59,9 @@
     "quickSolo": "快速開始",
     "aiStats": "AI自對弈",
     "analysis": "數據分析",
+    "analytics": "數據分析",
+    "profileSettings": "資料設定",
+    "currentAs": "當前：{{name}}",
     "faq": "FAQ",
     "lobbyChat": "大廳聊天",
     "lobbyChatPlaceholder": "尚未開放 — 即將上線",
@@ -91,5 +96,31 @@
     "suggestionPlaceholder": "有什麼功能建議？",
     "feedbackThanks": "感謝回報！我們會盡快處理",
     "feedbackFailed": "送出失敗，請稍後再試"
+  },
+  "settings": {
+    "basic": "基本資料",
+    "binding": "帳號綁定",
+    "history": "歷史戰績",
+    "watchlist": "追蹤列表",
+    "pairStats": "追蹤對戰歷史",
+    "logout": "登出",
+    "logoutHint": "登出後將清除本機暫存，下次開啟需重新登入或使用訪客模式。",
+    "logoutConfirm": "確定要登出？",
+    "logoutConfirmBody": "登出將清除本機遊戲暫存與玩家名稱。確定繼續？",
+    "upgradeGuest": "將訪客資料升級為正式帳號（Google/Discord/Line），保留所有戰績與 ELO。",
+    "currentName": "目前名稱",
+    "comingSoon": "即將上線"
+  },
+  "analytics": {
+    "tab": {
+      "leaderboard": "勝率排行",
+      "radar": "玩家雷達",
+      "aiSelfplay": "AI 自對弈",
+      "deepAnalysis": "深度分析"
+    }
+  },
+  "guest": {
+    "rename": "更改訪客名稱",
+    "renameLimit": "24 小時內最多可更改 3 次"
   }
 }

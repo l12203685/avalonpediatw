@@ -14,6 +14,8 @@ import ProfilePage from './pages/ProfilePage';
 import FriendsPage from './pages/FriendsPage';
 import AiStatsPage from './pages/AiStatsPage';
 import AnalysisPage from './pages/AnalysisPage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import ProfileSettingsPage from './pages/ProfileSettingsPage';
 import ClaimsNewPage from './pages/ClaimsNewPage';
 import AdminClaimsPage from './pages/AdminClaimsPage';
 import AdminAdminsPage from './pages/AdminAdminsPage';
@@ -140,6 +142,8 @@ function App(): JSX.Element {
           {gameState === 'friends' && <FriendsPage />}
           {gameState === 'aiStats' && <AiStatsPage />}
           {gameState === 'analysis' && <AnalysisPage />}
+          {gameState === 'analytics' && <AnalyticsPage />}
+          {gameState === 'profileSettings' && <ProfileSettingsPage />}
           {gameState === 'claimsNew' && <ClaimsNewPage />}
           {gameState === 'adminClaims' && <AdminClaimsPage />}
           {gameState === 'adminAdmins' && <AdminAdminsPage />}

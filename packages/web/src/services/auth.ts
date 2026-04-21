@@ -63,12 +63,16 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
  * client POST `/auth/guest` 帶 displayName，server 回傳 JWT（uid 由 server mint）。
  * 3 天 grace 期內若此 API 失敗（server 還沒部署到新版），前端自動 fallback 成舊
  * JSON token，確保現有玩家無感過渡。
+ *
+ * Phase 1 IA 重構：同時讓 server 設 `guest_session` HttpOnly cookie，之後冷啟動
+ * 可以呼叫 `/auth/guest/resume` 續簽而不需要使用者再輸入一次名字。
  */
 export async function getGuestToken(displayName: string): Promise<string> {
   const res = await fetch(`${SERVER_URL}/auth/guest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
     body: JSON.stringify({ displayName }),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Guest token mint failed: ${res.status}`);
@@ -78,6 +82,82 @@ export async function getGuestToken(displayName: string): Promise<string> {
     throw new Error('Guest token mint returned no token');
   }
   return data.token;
+}
+
+/**
+ * 嘗試從 `guest_session` cookie 續接訪客 session。
+ * 成功回傳新的 JWT + uid + displayName，失敗回 null（沒 cookie 或已失效）。
+ * App mount 時先試這個，才決定要不要叫使用者點「訪客登入」。
+ */
+export async function resumeGuestFromCookie(): Promise<
+  { token: string; uid: string; displayName: string } | null
+> {
+  try {
+    const res = await fetch(`${SERVER_URL}/auth/guest/resume`, {
+      method: 'GET',
+      headers: { ...NGROK_SKIP_HEADER },
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      token?: string;
+      user?: { uid?: string; displayName?: string };
+    };
+    if (!data.token || !data.user?.uid) return null;
+    return {
+      token: data.token,
+      uid: data.user.uid,
+      displayName: data.user.displayName ?? 'Guest',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 訪客改名（Phase 1 stub — server 目前回 200 OK，24hr × 3 限制 Phase 2 再加）。
+ */
+export async function renameGuest(newName: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${SERVER_URL}/auth/guest/rename`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+      body: JSON.stringify({ newName }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      // TODO(phase2): surface rate-limit (429) details to caller
+      return { ok: false, error: `rename failed: ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'network error' };
+  }
+}
+
+/**
+ * 訪客轉正式註冊（Phase 1 stub — server 目前回 501）。
+ * Phase 2 會驗證 providerToken、檢查 email 衝突、合併戰績與 ELO。
+ */
+export async function upgradeGuestToRegistered(
+  provider: string,
+  providerToken: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${SERVER_URL}/auth/guest/upgrade`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+      body: JSON.stringify({ provider, providerToken }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      // TODO(phase2): handle 409 duplicate-email + 501 not-implemented UI
+      return { ok: false, error: `upgrade failed: ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'network error' };
+  }
 }
 
 /** Discord OAuth：重導向到後端 → Discord → 後端 callback → 前端 */

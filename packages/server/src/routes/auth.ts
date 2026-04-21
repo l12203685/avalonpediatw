@@ -2,7 +2,7 @@ import { Router, Request, Response, IRouter } from 'express';
 import { sign } from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { upsertUser, createOAuthSession, verifyAndDeleteOAuthSession } from '../services/supabase';
-import { mintGuestToken } from '../middleware/guestAuth';
+import { mintGuestToken, verifyGuestToken } from '../middleware/guestAuth';
 
 const router: IRouter = Router();
 
@@ -21,6 +21,51 @@ const LINE_CHANNEL_ID       = process.env.LINE_CHANNEL_ID       || '';
 const LINE_CHANNEL_SECRET   = process.env.LINE_CHANNEL_SECRET   || '';
 const LINE_REDIRECT_URI     = process.env.LINE_REDIRECT_URI     ||
   'http://localhost:3001/auth/line/callback';
+
+// ── Guest cookie helpers (no cookie-parser dependency) ──────────────────────
+
+const GUEST_COOKIE_NAME = 'guest_session';
+const GUEST_COOKIE_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
+const IS_PROD = (process.env.NODE_ENV || 'development') === 'production';
+
+/**
+ * 從 raw `Cookie` header 取出指定名稱的 cookie 值，不引入 cookie-parser 相依。
+ * 沒找到回 null。
+ */
+function readCookie(req: Request, name: string): string | null {
+  const header = req.headers.cookie;
+  if (typeof header !== 'string' || header.length === 0) return null;
+  const parts = header.split(';');
+  for (const p of parts) {
+    const eq = p.indexOf('=');
+    if (eq < 0) continue;
+    const k = p.slice(0, eq).trim();
+    if (k !== name) continue;
+    const v = p.slice(eq + 1).trim();
+    try {
+      return decodeURIComponent(v);
+    } catch {
+      return v;
+    }
+  }
+  return null;
+}
+
+/**
+ * 設 `guest_session` 長效 cookie。HttpOnly + SameSite=Lax，讓 JS 讀不到但瀏覽器
+ * 同站導覽時仍會帶；正式環境加 Secure 強制 HTTPS。
+ */
+function setGuestSessionCookie(res: Response, token: string): void {
+  const parts = [
+    `${GUEST_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    'Path=/',
+    `Max-Age=${GUEST_COOKIE_MAX_AGE_SEC}`,
+    'HttpOnly',
+    'SameSite=Lax',
+  ];
+  if (IS_PROD) parts.push('Secure');
+  res.setHeader('Set-Cookie', parts.join('; '));
+}
 
 // ── 工具函式 ─────────────────────────────────────────────────
 
@@ -222,6 +267,10 @@ router.get('/line/callback', async (req: Request, res: Response) => {
 // A 3-day grace window in middleware/guestAuth.ts keeps existing legacy JSON
 // tokens working so already-connected players aren't kicked out the moment
 // this ships (see GUEST_LEGACY_CUTOFF in .env.example).
+//
+// Phase 1 IA 重構：POST /auth/guest 同時種 guest_session HttpOnly cookie；
+// 新增 GET /auth/guest/resume、POST /auth/guest/rename、POST /auth/guest/upgrade
+// 作為大廳 IA 的 foundation endpoint。
 
 /**
  * POST /auth/guest
@@ -238,6 +287,9 @@ router.post('/guest', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'displayName must be 1-40 chars' });
   }
   const { token, uid, displayName } = mintGuestToken(trimmed);
+  // 種一份 HttpOnly cookie 讓冷啟動可以從 /auth/guest/resume 續簽，
+  // 不需要讓 client JS 自己暫存 token。
+  setGuestSessionCookie(res, token);
   return res.json({
     token,
     user: {
@@ -245,6 +297,74 @@ router.post('/guest', (req: Request, res: Response) => {
       displayName,
       provider: 'guest',
     },
+  });
+});
+
+/**
+ * GET /auth/guest/resume
+ * 讀 guest_session cookie → 若有效，發一個新的 JWT 給該 guest 使用。
+ * 缺 cookie 或 cookie 過期 → 401，前端會落回訪客登入流程。
+ *
+ * Phase 1 stub：直接用 cookie 內的 JWT 再 mint 一個新 token（uid 會換）。
+ * Phase 2 會改成 sessionId → uid 的 Supabase lookup，保留原 uid + ELO 與戰績。
+ */
+router.get('/guest/resume', (req: Request, res: Response) => {
+  const cookieToken = readCookie(req, GUEST_COOKIE_NAME);
+  if (!cookieToken) {
+    return res.status(401).json({ error: 'no guest session cookie' });
+  }
+  const identity = verifyGuestToken(cookieToken);
+  if (!identity) {
+    return res.status(401).json({ error: 'guest session expired or invalid' });
+  }
+  // 保留原 displayName，但發新 JWT 讓 client 的過期時鐘重置。
+  const { token, uid, displayName } = mintGuestToken(identity.displayName);
+  // 刷新 max-age，保持原 cookie token 不動，讓下次 resume 還能找到同一 signed uid。
+  setGuestSessionCookie(res, cookieToken);
+  return res.json({
+    token,
+    user: {
+      uid,
+      displayName,
+      provider: 'guest',
+      // Phase 2 migration 會用 cookieUid 對齊兩邊
+      cookieUid: identity.uid,
+    },
+  });
+});
+
+/**
+ * POST /auth/guest/rename
+ * body: { newName: string }
+ *
+ * Phase 1 stub：輸入驗證 + 200 OK。24hr × 3 rate limit 與 persistence
+ * Phase 2 搭配 guest registry table 再補上。
+ */
+router.post('/guest/rename', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { newName?: unknown };
+  if (typeof body.newName !== 'string') {
+    return res.status(400).json({ error: 'newName is required' });
+  }
+  const trimmed = body.newName.trim();
+  if (trimmed.length < 1 || trimmed.length > 40) {
+    return res.status(400).json({ error: 'newName must be 1-40 chars' });
+  }
+  // TODO(phase2): 讀 guest_session cookie → 驗證 rate-limit 3/24h → 寫 DB
+  return res.json({ ok: true, newName: trimmed });
+});
+
+/**
+ * POST /auth/guest/upgrade
+ * body: { provider: string, providerToken: string }
+ *
+ * Phase 1 stub：直接回 501。Phase 2 會做完整合併：驗證 providerToken、
+ * 檢查 email 衝突（409 duplicate）、把 guest uid 的 ELO/戰績/badge 搬到
+ * provider 帳號。
+ */
+router.post('/guest/upgrade', (_req: Request, res: Response) => {
+  return res.status(501).json({
+    error: 'guest upgrade not implemented',
+    phase: 'Phase 2 will merge guest records into registered account',
   });
 });
 
