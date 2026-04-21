@@ -13,17 +13,43 @@ import {
   AvalonAgent,
   PlayerObservation,
   AgentAction,
-  VoteRecord,
 } from './types';
 import { AVALON_CONFIG } from '@avalon/shared';
+
+// ── Agent Memory ───────────────────────────────────────────────
+/**
+ * Per-agent, per-game memory. Populated via idempotent ingest methods
+ * in `act()` so repeated observations do not double-count.
+ *
+ * Reset at every `onGameStart()` and cleared at `onGameEnd()`.
+ */
+interface AgentMemory {
+  /** playerId → suspicion score (higher = more likely evil) */
+  suspicion: Map<string, number>;
+  /** playerId → number of failed quests this player appeared in */
+  failedTeamMembers: Map<string, number>;
+  /** chronological list of failed quest rounds (for blacklist decay) */
+  failedTeamHistory: Array<{ round: number; team: string[] }>;
+  /** playerId → times approved a team that was later proven evil-tainted */
+  approvedSuspiciousVoters: Map<string, number>;
+  /** playerId → times this leader led a team that failed its quest */
+  leaderCoverScore: Map<string, number>;
+  /** playerId → number of quests this player participated in */
+  questsParticipated: Map<string, number>;
+  /** last phase seen (dedup helper) */
+  lastKnownPhase: 'team_select' | 'team_vote' | 'quest_vote' | 'assassination' | null;
+  /** dedup key `${round}-${attempt}` for already-ingested vote records */
+  processedVoteAttempts: Set<string>;
+  /** dedup key `round` for already-ingested quest records */
+  processedQuestRounds: Set<number>;
+}
 
 export class HeuristicAgent implements AvalonAgent {
   readonly agentId: string;
   readonly agentType = 'heuristic' as const;
   private readonly difficulty: 'normal' | 'hard';
 
-  // Suspicion score per player: higher = more likely evil (from this agent's perspective)
-  private suspicion: Map<string, number> = new Map();
+  private memory: AgentMemory = this.createEmptyMemory();
 
   constructor(agentId: string, difficulty: 'normal' | 'hard' = 'normal') {
     this.agentId = agentId;
@@ -31,17 +57,19 @@ export class HeuristicAgent implements AvalonAgent {
   }
 
   onGameStart(obs: PlayerObservation): void {
-    // Initialize suspicion for all players (reconstructed from initial obs)
-    // Known evils get max suspicion, known good (self if good) get 0
-    this.suspicion = new Map();
+    this.resetMemory();
+    // Known evils get max suspicion, known good (self if good) stay at 0.
     for (const knownEvil of obs.knownEvils) {
-      this.suspicion.set(knownEvil, 10);
+      this.memory.suspicion.set(knownEvil, 10);
     }
   }
 
   act(obs: PlayerObservation): AgentAction {
-    // Update suspicion from latest vote history
-    this.updateSuspicion(obs);
+    // Idempotent ingestion: update cross-round memory from public history.
+    this.ingestVoteHistory(obs);
+    this.ingestQuestHistory(obs);
+    this.ingestLeaderStats(obs);
+    this.memory.lastKnownPhase = obs.gamePhase;
 
     switch (obs.gamePhase) {
       case 'team_select':  return this.selectTeam(obs);
@@ -52,7 +80,144 @@ export class HeuristicAgent implements AvalonAgent {
   }
 
   onGameEnd(_obs: PlayerObservation, _won: boolean): void {
-    this.suspicion.clear();
+    this.resetMemory();
+  }
+
+  // ── Memory lifecycle ────────────────────────────────────────
+
+  private createEmptyMemory(): AgentMemory {
+    return {
+      suspicion:                new Map(),
+      failedTeamMembers:        new Map(),
+      failedTeamHistory:        [],
+      approvedSuspiciousVoters: new Map(),
+      leaderCoverScore:         new Map(),
+      questsParticipated:       new Map(),
+      lastKnownPhase:           null,
+      processedVoteAttempts:    new Set(),
+      processedQuestRounds:     new Set(),
+    };
+  }
+
+  private resetMemory(): void {
+    this.memory = this.createEmptyMemory();
+  }
+
+  // ── Ingest (idempotent) ─────────────────────────────────────
+
+  /**
+   * Consume every new vote record since last call. Dedup key = `${round}-${attempt}`.
+   * Per record:
+   *   - Approvers get +0.1 baseline suspicion (covering evil)
+   *   - Rejecters get -0.2 (less suspicious)
+   * When a fail quest has already been ingested for this round, approvers of that
+   * record's team get accumulated to `approvedSuspiciousVoters`.
+   */
+  private ingestVoteHistory(obs: PlayerObservation): void {
+    for (const record of obs.voteHistory) {
+      const key = `${record.round}-${record.attempt}`;
+      if (this.memory.processedVoteAttempts.has(key)) continue;
+      this.memory.processedVoteAttempts.add(key);
+
+      for (const [pid, approved] of Object.entries(record.votes)) {
+        if (approved) {
+          this.addSuspicion(pid, 0.1);
+        } else {
+          this.addSuspicion(pid, -0.2);
+        }
+      }
+    }
+  }
+
+  /**
+   * Consume every new quest record since last call. Dedup key = `round`.
+   * For each fail quest:
+   *   - Every team member gets +2 suspicion and +1 failedTeamMembers count
+   *   - History entry appended for blacklist decay
+   *   - Approvers of the corresponding vote record get +1.5 suspicion
+   *     and +1 approvedSuspiciousVoters
+   *   - Every participant gets questsParticipated++.
+   */
+  private ingestQuestHistory(obs: PlayerObservation): void {
+    for (const quest of obs.questHistory) {
+      if (this.memory.processedQuestRounds.has(quest.round)) continue;
+      this.memory.processedQuestRounds.add(quest.round);
+
+      // Participation count (all quests, not just fails)
+      for (const pid of quest.team) {
+        this.memory.questsParticipated.set(
+          pid,
+          (this.memory.questsParticipated.get(pid) ?? 0) + 1,
+        );
+      }
+
+      if (quest.result !== 'fail') continue;
+
+      // Blacklist bookkeeping for failed quests
+      for (const pid of quest.team) {
+        this.addSuspicion(pid, 2);
+        this.memory.failedTeamMembers.set(
+          pid,
+          (this.memory.failedTeamMembers.get(pid) ?? 0) + 1,
+        );
+      }
+      this.memory.failedTeamHistory.push({ round: quest.round, team: [...quest.team] });
+
+      // Penalise everyone who approved the approved team for this round
+      const approvingRecord = obs.voteHistory.find(
+        (r) => r.round === quest.round && r.approved,
+      );
+      if (!approvingRecord) continue;
+
+      for (const [pid, approved] of Object.entries(approvingRecord.votes)) {
+        if (approved && approvingRecord.team.includes(pid)) {
+          this.addSuspicion(pid, 1.5);
+        }
+        if (approved) {
+          this.memory.approvedSuspiciousVoters.set(
+            pid,
+            (this.memory.approvedSuspiciousVoters.get(pid) ?? 0) + 1,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Recompute `leaderCoverScore` from authoritative history every call.
+   * For every failed quest, the leader of the approved vote record earns +1.
+   * Idempotent because the map is overwritten from source each time.
+   */
+  private ingestLeaderStats(obs: PlayerObservation): void {
+    const tally = new Map<string, number>();
+    for (const quest of obs.questHistory) {
+      if (quest.result !== 'fail') continue;
+      const approvingRecord = obs.voteHistory.find(
+        (r) => r.round === quest.round && r.approved,
+      );
+      if (!approvingRecord) continue;
+      tally.set(
+        approvingRecord.leader,
+        (tally.get(approvingRecord.leader) ?? 0) + 1,
+      );
+    }
+    this.memory.leaderCoverScore = tally;
+  }
+
+  // ── Noise helper ────────────────────────────────────────────
+
+  /**
+   * Flip a decision with probability `rate`. When `critical` is true
+   * the rate is forced to 0 (finish-line decisions never flip).
+   * Works for any value — only flips when T is boolean.
+   */
+  private applyNoise<T>(decision: T, rate: number, critical = false): T {
+    if (critical || rate <= 0) return decision;
+    if (Math.random() >= rate) return decision;
+    if (typeof decision === 'boolean') {
+      return !decision as unknown as T;
+    }
+    return decision;
   }
 
   // ── Team Selection ───────────────────────────────────────────
@@ -268,45 +433,35 @@ export class HeuristicAgent implements AvalonAgent {
     return score;
   }
 
-  // ── Suspicion Tracking ───────────────────────────────────────
-
-  private updateSuspicion(obs: PlayerObservation): void {
-    // Only update from new votes (last entry in history)
-    if (obs.voteHistory.length === 0) return;
-    const latest = obs.voteHistory[obs.voteHistory.length - 1];
-
-    // If a quest failed, suspect everyone who voted to approve that team
-    if (obs.questHistory.length > 0) {
-      const lastQuest = obs.questHistory[obs.questHistory.length - 1];
-      if (lastQuest.result === 'fail') {
-        for (const [pid, approved] of Object.entries(latest.votes)) {
-          if (approved && latest.team.includes(pid)) {
-            this.addSuspicion(pid, 1.5);
-          }
-        }
-        for (const teamMember of lastQuest.team) {
-          this.addSuspicion(teamMember, 2);
-        }
-      }
-    }
-
-    // Players who always approve teams are slightly suspicious (covering for evil)
-    for (const [pid, approved] of Object.entries(latest.votes)) {
-      if (approved && !this.getSuspicion(pid)) {
-        this.addSuspicion(pid, 0.1);
-      } else if (!approved) {
-        // Rejecting teams = slightly less suspicious
-        this.addSuspicion(pid, -0.2);
-      }
-    }
-  }
+  // ── Suspicion accessors ─────────────────────────────────────
 
   private getSuspicion(playerId: string): number {
-    return this.suspicion.get(playerId) ?? 0;
+    return this.memory.suspicion.get(playerId) ?? 0;
   }
 
   private addSuspicion(playerId: string, delta: number): void {
-    this.suspicion.set(playerId, Math.max(0, (this.suspicion.get(playerId) ?? 0) + delta));
+    this.memory.suspicion.set(
+      playerId,
+      Math.max(0, (this.memory.suspicion.get(playerId) ?? 0) + delta),
+    );
+  }
+
+  // ── Test hooks ──────────────────────────────────────────────
+
+  /** Read-only snapshot of internal memory (tests only — do not call from game code). */
+  _memoryForTesting(): Readonly<AgentMemory> {
+    return this.memory;
+  }
+
+  /** Direct access to ingest / noise helpers (tests only). */
+  _ingestForTesting(obs: PlayerObservation): void {
+    this.ingestVoteHistory(obs);
+    this.ingestQuestHistory(obs);
+    this.ingestLeaderStats(obs);
+  }
+
+  _applyNoiseForTesting<T>(decision: T, rate: number, critical = false): T {
+    return this.applyNoise(decision, rate, critical);
   }
 
   // ── Helpers ──────────────────────────────────────────────────
