@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Trophy, ArrowLeft, Crown, TrendingUp, Users, Loader, Search, AlertTriangle } from 'lucide-react';
 import { ALL_TIERS, ROOKIE_TIER, rankLeaderboard, type EloRank } from '../utils/eloRank';
 import { useGameStore } from '../store/gameStore';
-import type { LeaderboardEntry } from '../services/api';
+import { NGROK_SKIP_HEADER, type LeaderboardEntry } from '../services/api';
 
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || 'http://localhost:3001';
 
@@ -31,7 +31,7 @@ export default function LeaderboardPage(): JSX.Element {
 
   useEffect(() => {
     // Fetch raw to detect "Database not configured" message
-    fetch(`${SERVER_URL}/api/leaderboard`)
+    fetch(`${SERVER_URL}/api/leaderboard`, { headers: NGROK_SKIP_HEADER })
       .then(r => r.json() as Promise<{ leaderboard?: LeaderboardEntry[]; message?: string }>)
       .then(data => {
         if (data.message === 'Database not configured') setDbOffline(true);

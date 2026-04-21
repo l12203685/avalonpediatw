@@ -1,4 +1,5 @@
 import { User } from '@avalon/shared';
+import { NGROK_SKIP_HEADER } from './api';
 
 // Check if Firebase is configured
 const hasFirebaseConfig = !!(
@@ -66,7 +67,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 export async function getGuestToken(displayName: string): Promise<string> {
   const res = await fetch(`${SERVER_URL}/auth/guest`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
     body: JSON.stringify({ displayName }),
   });
   if (!res.ok) {

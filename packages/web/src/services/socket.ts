@@ -37,6 +37,10 @@ export async function initializeSocket(token: string): Promise<void> {
 
   const store = useGameStore.getState();
 
+  // `ngrok-skip-browser-warning` bypasses ngrok's free-plan interstitial for the
+  // initial polling handshake (Socket.IO always starts on polling before the
+  // websocket upgrade). The `extraHeaders` top-level key is picked up by
+  // polling; we also set it on `transportOptions.polling` for belt-and-braces.
   socket = io(SERVER_URL, {
     auth: { token },
     transports: ['websocket', 'polling'],
@@ -44,6 +48,10 @@ export async function initializeSocket(token: string): Promise<void> {
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     reconnectionAttempts: 5,
+    extraHeaders: { 'ngrok-skip-browser-warning': 'true' },
+    transportOptions: {
+      polling: { extraHeaders: { 'ngrok-skip-browser-warning': 'true' } },
+    },
   });
 
   // Refresh Firebase ID token before each reconnect attempt so expired tokens
