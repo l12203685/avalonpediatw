@@ -27,8 +27,11 @@ export default function LoginPage(): JSX.Element {
   const [displayName, setDisplayName] = useState('');
   const [showPw, setShowPw]           = useState(false);
 
-  // 訪客表單
-  const [guestName, setGuestName]   = useState('');
+  // 訪客表單 — 預設 Guest_{###}（3 位隨機數，前補零）
+  const [guestName, setGuestName]   = useState(() => {
+    const n = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `Guest_${n}`;
+  });
   const [showGuest, setShowGuest]   = useState(false);
 
   const { setGameState } = useGameStore();
