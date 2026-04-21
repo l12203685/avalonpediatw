@@ -1,30 +1,21 @@
 import { Role } from '@avalon/shared';
 import { getAdminDB } from './firebase';
 import { GameRecord, GamePlayerRecord } from './GameHistoryRepository';
+import {
+  EloOutcome,
+  deriveEloOutcome,
+  getEloConfig,
+} from './EloConfig';
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants (data-driven via EloConfig — see EloConfig.ts for seed values)
 // ---------------------------------------------------------------------------
-
-const DEFAULT_K_FACTOR = 32;
-const STARTING_ELO = 1000;
-const MIN_ELO = 100;
-
-/**
- * Role weight multipliers for K-factor adjustment.
- * Higher-stakes roles (Merlin, Assassin) get a larger K-factor
- * because their individual performance has outsized game impact.
- */
-const ROLE_K_WEIGHTS: Record<Role, number> = {
-  merlin: 1.5,
-  assassin: 1.5,
-  percival: 1.2,
-  morgana: 1.2,
-  oberon: 1.1,
-  mordred: 1.3,
-  minion: 1.0,
-  loyal: 1.0,
-};
+//
+// #54 Phase 1: the hardcoded STARTING_ELO / DEFAULT_K_FACTOR / MIN_ELO /
+// ROLE_K_WEIGHTS constants were migrated into EloConfig.ts so that Phase 2
+// can expose them through an admin UI and Phase 3 can replay history with
+// alternative snapshots. The lookups below read from getEloConfig() on
+// every call (no-op indirection today — cheap single-object deref).
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,6 +40,8 @@ export interface EloUpdate {
   delta: number;
   role: Role | null;
   won: boolean;
+  /** Which of the three Avalon outcomes drove this ELO update. */
+  outcome?: EloOutcome;
 }
 
 export interface LeaderboardEntry extends EloEntry {
@@ -70,34 +63,42 @@ export function expectedScore(eloA: number, eloB: number): number {
 /**
  * Compute new ELO for a single player after a game result.
  *
- * @param currentElo  Player's current rating
- * @param won         Whether the player won
- * @param opponentAvgElo  Average ELO of opposing team
- * @param role        Player's role (used to weight K-factor)
- * @param kFactor     Base K-factor (default 32)
+ * @param currentElo       Player's current rating.
+ * @param won              Whether the player won.
+ * @param opponentAvgElo   Average ELO of opposing team.
+ * @param role             Player's role (used to weight K-factor).
+ * @param kFactor          Base K-factor. Defaults to EloConfig.baseKFactor.
+ * @param outcome          Optional EloOutcome; when provided, its multiplier
+ *                         (EloConfig.outcomeWeights) is applied on top of the
+ *                         role weight. Omitting keeps legacy behaviour.
  */
 export function computeNewElo(
   currentElo: number,
   won: boolean,
   opponentAvgElo: number,
   role: Role | null,
-  kFactor: number = DEFAULT_K_FACTOR
+  kFactor?: number,
+  outcome?: EloOutcome
 ): number {
+  const config = getEloConfig();
+  const baseK = kFactor ?? config.baseKFactor;
+
   const expected = expectedScore(currentElo, opponentAvgElo);
   const actual = won ? 1 : 0;
-  const roleWeight = role ? (ROLE_K_WEIGHTS[role] ?? 1.0) : 1.0;
-  const adjustedK = kFactor * roleWeight;
+  const roleWeight = role ? (config.roleKWeights[role] ?? 1.0) : 1.0;
+  const outcomeWeight = outcome ? (config.outcomeWeights[outcome] ?? 1.0) : 1.0;
+  const adjustedK = baseK * roleWeight * outcomeWeight;
 
   const newElo = Math.round(currentElo + adjustedK * (actual - expected));
-  return Math.max(MIN_ELO, newElo);
+  return Math.max(config.minElo, newElo);
 }
 
 /**
  * Compute average ELO for a list of players.
- * Falls back to STARTING_ELO if the list is empty.
+ * Falls back to the team baseline from EloConfig.teamBaselines when empty.
  */
-function averageElo(elos: number[]): number {
-  if (elos.length === 0) return STARTING_ELO;
+function averageElo(elos: number[], team: 'good' | 'evil'): number {
+  if (elos.length === 0) return getEloConfig().teamBaselines[team];
   return elos.reduce((sum, e) => sum + e, 0) / elos.length;
 }
 
@@ -110,14 +111,15 @@ export class EloRankingService {
 
   /**
    * Fetch the current ELO for a player.
-   * Returns STARTING_ELO if no record exists.
+   * Returns the active config's startingElo (EloConfig.startingElo) when
+   * no record exists.
    */
   async getPlayerElo(uid: string): Promise<number> {
     try {
       const db = getAdminDB();
       const snap = await db.ref(`${this.rankingsPath}/${uid}`).once('value');
       const entry = snap.val() as EloEntry | null;
-      return entry?.eloRating ?? STARTING_ELO;
+      return entry?.eloRating ?? getEloConfig().startingElo;
     } catch (err) {
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(),
@@ -125,7 +127,7 @@ export class EloRankingService {
         uid,
         error: err instanceof Error ? err.message : 'Unknown',
       }));
-      return STARTING_ELO;
+      return getEloConfig().startingElo;
     }
   }
 
@@ -135,11 +137,15 @@ export class EloRankingService {
    */
   async processGameResult(
     record: GameRecord,
-    kFactor: number = DEFAULT_K_FACTOR
+    kFactor?: number
   ): Promise<EloUpdate[]> {
     const db = getAdminDB();
 
-    // Fetch current ELOs for all participants
+    // Derive once per game — the outcome multiplier is identical for every
+    // player in the match. No DB round-trip needed (config is in-memory).
+    const outcome = deriveEloOutcome(record.winner, record.winReason);
+
+    // Fetch current ELOs for all participants (single batch; N-of-N)
     const elos = await Promise.all(
       record.players.map(async (p) => ({
         player: p,
@@ -154,15 +160,22 @@ export class EloRankingService {
       .filter((e) => e.player.team === 'evil')
       .map((e) => e.elo);
 
-    const goodAvg = averageElo(goodTeamElos);
-    const evilAvg = averageElo(evilTeamElos);
+    const goodAvg = averageElo(goodTeamElos, 'good');
+    const evilAvg = averageElo(evilTeamElos, 'evil');
 
     const updates: EloUpdate[] = [];
     const now = Date.now();
 
     for (const { player, elo } of elos) {
       const opponentAvg = player.team === 'good' ? evilAvg : goodAvg;
-      const newElo = computeNewElo(elo, player.won, opponentAvg, player.role, kFactor);
+      const newElo = computeNewElo(
+        elo,
+        player.won,
+        opponentAvg,
+        player.role,
+        kFactor,
+        outcome
+      );
 
       updates.push({
         uid: player.playerId,
@@ -171,6 +184,7 @@ export class EloRankingService {
         delta: newElo - elo,
         role: player.role,
         won: player.won,
+        outcome,
       });
 
       await this.upsertEntry(db, player, elo, newElo, now);
@@ -181,6 +195,7 @@ export class EloRankingService {
       event: 'elo_processed',
       gameId: record.gameId,
       playerCount: record.players.length,
+      outcome,
     }));
 
     return updates;

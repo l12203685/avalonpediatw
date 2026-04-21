@@ -1,10 +1,16 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   expectedScore,
   computeNewElo,
   EloRankingService,
   EloEntry,
 } from '../services/EloRanking';
+import {
+  DEFAULT_ELO_CONFIG,
+  deriveEloOutcome,
+  getEloConfig,
+  setEloConfig,
+} from '../services/EloConfig';
 import { GameRecord } from '../services/GameHistoryRepository';
 
 // ---------------------------------------------------------------------------
@@ -283,5 +289,254 @@ describe('EloRankingService — getPlayerEntry', () => {
     mockRef.once.mockRejectedValue(new Error('Timeout'));
     const result = await service.getPlayerEntry('p1');
     expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #54 Phase 1 — data-driven config + three-outcome weighting
+// ---------------------------------------------------------------------------
+
+describe('#54 EloConfig — data-driven defaults', () => {
+  afterEach(() => {
+    // Reset to defaults so later tests aren't polluted.
+    setEloConfig();
+  });
+
+  it('exposes the seed config (baselines + outcome weights)', () => {
+    const cfg = getEloConfig();
+    expect(cfg.teamBaselines.good).toBe(1500);
+    expect(cfg.teamBaselines.evil).toBe(1500);
+    expect(cfg.outcomeWeights.good_wins_quests).toBe(1.0);
+    expect(cfg.outcomeWeights.evil_wins_quests).toBe(1.0);
+    expect(cfg.outcomeWeights.assassin_kills_merlin).toBe(1.5);
+    expect(cfg.startingElo).toBe(1000);
+    expect(cfg.minElo).toBe(100);
+  });
+
+  it('setEloConfig merges partial overrides and resets on undefined', () => {
+    const merged = setEloConfig({ baseKFactor: 48 });
+    expect(merged.baseKFactor).toBe(48);
+    expect(merged.outcomeWeights.assassin_kills_merlin).toBe(1.5); // preserved
+
+    setEloConfig();
+    expect(getEloConfig()).toEqual(DEFAULT_ELO_CONFIG);
+  });
+});
+
+describe('#54 deriveEloOutcome — winReason -> EloOutcome', () => {
+  it('maps assassination_success → assassin_kills_merlin', () => {
+    expect(deriveEloOutcome('evil', 'assassination_success')).toBe(
+      'assassin_kills_merlin'
+    );
+  });
+
+  it('maps merlin_assassinated → assassin_kills_merlin', () => {
+    expect(deriveEloOutcome('evil', 'merlin_assassinated')).toBe(
+      'assassin_kills_merlin'
+    );
+  });
+
+  it('maps legacy CJK "刺殺梅林" → assassin_kills_merlin', () => {
+    expect(deriveEloOutcome('evil', '刺殺梅林')).toBe('assassin_kills_merlin');
+  });
+
+  it('maps assassination_failed (good winner) → good_wins_quests', () => {
+    expect(deriveEloOutcome('good', 'assassination_failed')).toBe(
+      'good_wins_quests'
+    );
+  });
+
+  it('maps assassination_timeout (good winner) → good_wins_quests', () => {
+    expect(deriveEloOutcome('good', 'assassination_timeout')).toBe(
+      'good_wins_quests'
+    );
+  });
+
+  it('maps failed_quests_limit (evil winner) → evil_wins_quests', () => {
+    expect(deriveEloOutcome('evil', 'failed_quests_limit')).toBe(
+      'evil_wins_quests'
+    );
+  });
+
+  it('maps vote_rejections_limit (evil winner) → evil_wins_quests', () => {
+    expect(deriveEloOutcome('evil', 'vote_rejections_limit')).toBe(
+      'evil_wins_quests'
+    );
+  });
+
+  it('falls back to team flag when winReason is null/unknown', () => {
+    expect(deriveEloOutcome('good', null)).toBe('good_wins_quests');
+    expect(deriveEloOutcome('evil', undefined)).toBe('evil_wins_quests');
+    expect(deriveEloOutcome('good', 'something_new')).toBe('good_wins_quests');
+  });
+});
+
+describe('#54 computeNewElo — three-outcome weighting', () => {
+  afterEach(() => {
+    setEloConfig();
+  });
+
+  it('good_wins_quests uses 1.0x multiplier (same as no outcome)', () => {
+    const withOutcome = computeNewElo(
+      1000,
+      true,
+      1000,
+      null,
+      32,
+      'good_wins_quests'
+    );
+    const noOutcome = computeNewElo(1000, true, 1000, null, 32);
+    expect(withOutcome).toBe(noOutcome);
+  });
+
+  it('evil_wins_quests uses 1.0x multiplier (same as no outcome)', () => {
+    const withOutcome = computeNewElo(
+      1000,
+      true,
+      1000,
+      null,
+      32,
+      'evil_wins_quests'
+    );
+    const noOutcome = computeNewElo(1000, true, 1000, null, 32);
+    expect(withOutcome).toBe(noOutcome);
+  });
+
+  it('assassin_kills_merlin applies 1.5x multiplier (larger delta)', () => {
+    const baseElo = computeNewElo(
+      1000,
+      true,
+      1000,
+      null,
+      32,
+      'good_wins_quests'
+    );
+    const killElo = computeNewElo(
+      1000,
+      true,
+      1000,
+      null,
+      32,
+      'assassin_kills_merlin'
+    );
+    expect(killElo).toBeGreaterThan(baseElo);
+  });
+
+  it('respects config overrides for outcome weights', () => {
+    setEloConfig({ outcomeWeights: { ...DEFAULT_ELO_CONFIG.outcomeWeights, good_wins_quests: 2.0 } });
+    const boosted = computeNewElo(1000, true, 1000, null, 32, 'good_wins_quests');
+    const baseline = computeNewElo(1000, true, 1000, null, 32, 'evil_wins_quests');
+    expect(boosted - 1000).toBeGreaterThan(baseline - 1000);
+  });
+
+  it('falls back to default minElo from config (100)', () => {
+    const newElo = computeNewElo(105, false, 3000, null, 32, 'evil_wins_quests');
+    expect(newElo).toBeGreaterThanOrEqual(getEloConfig().minElo);
+  });
+
+  it('honours custom minElo override', () => {
+    setEloConfig({ minElo: 500 });
+    const newElo = computeNewElo(510, false, 3000, null, 32, 'evil_wins_quests');
+    expect(newElo).toBeGreaterThanOrEqual(500);
+  });
+});
+
+describe('#54 processGameResult — stamps outcome on every update', () => {
+  let service: EloRankingService;
+
+  beforeEach(() => {
+    service = new EloRankingService();
+    vi.clearAllMocks();
+    mockAdminDB.ref.mockReturnValue(mockRef);
+    mockRef.orderByChild.mockReturnValue(mockRef);
+    mockRef.limitToLast.mockReturnValue(mockRef);
+    mockRef.set.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    setEloConfig();
+  });
+
+  it('stamps good_wins_quests on assassination_failed games', async () => {
+    mockRef.once.mockResolvedValue({ val: () => null });
+    const record = makeGameRecord({
+      winner: 'good',
+      winReason: 'assassination_failed',
+    });
+    const updates = await service.processGameResult(record);
+    updates.forEach((u) => expect(u.outcome).toBe('good_wins_quests'));
+  });
+
+  it('stamps evil_wins_quests on failed_quests_limit games', async () => {
+    mockRef.once.mockResolvedValue({ val: () => null });
+    const record = makeGameRecord({
+      winner: 'evil',
+      winReason: 'failed_quests_limit',
+      players: [
+        { playerId: 'p1', displayName: 'Alice', role: 'merlin', team: 'good', won: false },
+        { playerId: 'p2', displayName: 'Bob', role: 'assassin', team: 'evil', won: true },
+        { playerId: 'p3', displayName: 'Carol', role: 'loyal', team: 'good', won: false },
+        { playerId: 'p4', displayName: 'Dave', role: 'morgana', team: 'evil', won: true },
+        { playerId: 'p5', displayName: 'Eve', role: 'percival', team: 'good', won: false },
+      ],
+    });
+    const updates = await service.processGameResult(record);
+    updates.forEach((u) => expect(u.outcome).toBe('evil_wins_quests'));
+  });
+
+  it('stamps assassin_kills_merlin on assassination_success games', async () => {
+    mockRef.once.mockResolvedValue({ val: () => null });
+    const record = makeGameRecord({
+      winner: 'evil',
+      winReason: 'assassination_success',
+      players: [
+        { playerId: 'p1', displayName: 'Alice', role: 'merlin', team: 'good', won: false },
+        { playerId: 'p2', displayName: 'Bob', role: 'assassin', team: 'evil', won: true },
+        { playerId: 'p3', displayName: 'Carol', role: 'loyal', team: 'good', won: false },
+        { playerId: 'p4', displayName: 'Dave', role: 'morgana', team: 'evil', won: true },
+        { playerId: 'p5', displayName: 'Eve', role: 'percival', team: 'good', won: false },
+      ],
+    });
+    const updates = await service.processGameResult(record);
+    updates.forEach((u) => expect(u.outcome).toBe('assassin_kills_merlin'));
+  });
+
+  it('assassin_kills_merlin produces larger absolute delta than good_wins_quests', async () => {
+    mockRef.once.mockResolvedValue({ val: () => null });
+
+    const goodWinRecord = makeGameRecord({
+      winner: 'good',
+      winReason: 'assassination_failed',
+    });
+    const goodWinUpdates = await service.processGameResult(goodWinRecord);
+    const goodWinMerlinDelta = Math.abs(
+      goodWinUpdates.find((u) => u.role === 'merlin')?.delta ?? 0
+    );
+
+    vi.clearAllMocks();
+    mockAdminDB.ref.mockReturnValue(mockRef);
+    mockRef.orderByChild.mockReturnValue(mockRef);
+    mockRef.limitToLast.mockReturnValue(mockRef);
+    mockRef.set.mockResolvedValue(undefined);
+    mockRef.once.mockResolvedValue({ val: () => null });
+
+    const killRecord = makeGameRecord({
+      winner: 'evil',
+      winReason: 'assassination_success',
+      players: [
+        { playerId: 'p1', displayName: 'Alice', role: 'merlin', team: 'good', won: false },
+        { playerId: 'p2', displayName: 'Bob', role: 'assassin', team: 'evil', won: true },
+        { playerId: 'p3', displayName: 'Carol', role: 'loyal', team: 'good', won: false },
+        { playerId: 'p4', displayName: 'Dave', role: 'morgana', team: 'evil', won: true },
+        { playerId: 'p5', displayName: 'Eve', role: 'percival', team: 'good', won: false },
+      ],
+    });
+    const killUpdates = await service.processGameResult(killRecord);
+    const killMerlinDelta = Math.abs(
+      killUpdates.find((u) => u.role === 'merlin')?.delta ?? 0
+    );
+
+    // 1.5x outcome weight should produce a larger magnitude for merlin
+    expect(killMerlinDelta).toBeGreaterThan(goodWinMerlinDelta);
   });
 });
