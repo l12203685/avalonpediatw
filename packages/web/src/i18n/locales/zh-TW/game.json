@@ -249,6 +249,7 @@
     "votingCount_other": "{{count}} 位隊員投票中…",
     "goodSideHint": "好人陣營：只能投成功 (Good side can only vote success)・快捷鍵 <key>S</key>",
     "evilSideHint": "快捷鍵 (Shortcuts)：<success>S</success> 成功・<fail>F</fail> 失敗",
+    "oberonMustFailHint": "房規「奧伯倫必出失敗」已啟用 — 你只能投出失敗票 (House rule: Oberon must fail — success button hidden)",
     "countdownLabel": "任務倒數 (Quest countdown)"
   },
   "teamSelect": {

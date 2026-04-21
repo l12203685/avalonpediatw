@@ -30,6 +30,14 @@ export default function QuestPanel({
   const [timeLeft, setTimeLeft] = useState(effectiveSeconds);
   const isInTeam = room.questTeam.includes(currentPlayer.id);
   const isGoodSide = currentPlayer.team === 'good';
+  // "Oberon must fail" house rule: when the host-enabled `oberonAlwaysFail`
+  // flag is on AND the viewer is Oberon, the UI must show only the fail
+  // button (success is not a legal choice — server will coerce anyway,
+  // but mirroring the rule in the UI prevents confusion and mis-clicks).
+  const oberonMustFail = Boolean(
+    (room.roleOptions as unknown as Record<string, boolean>)?.oberonAlwaysFail
+    && currentPlayer.role === 'oberon',
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
 
@@ -49,6 +57,9 @@ export default function QuestPanel({
     if (!isInTeam || isSubmitting || hasVoted) return;
     // Client-side guard: good-side can only vote success
     if (isGoodSide && vote === 'fail') return;
+    // "Oberon must fail" guard: swallow any stray success calls when the
+    // rule is on. Server coerces anyway, but this keeps the UI honest.
+    if (oberonMustFail && vote === 'success') return;
 
     setIsSubmitting(true);
     try {
@@ -60,17 +71,19 @@ export default function QuestPanel({
     }
   };
 
-  // Keyboard shortcuts: S = success, F = fail (fail only for evil side)
+  // Keyboard shortcuts: S = success, F = fail (fail only for evil side).
+  // When Oberon-must-fail is on, `S` is intentionally ignored so the only
+  // legal key matches the only rendered button.
   useEffect(() => {
     if (!isInTeam || hasVoted || isSubmitting) return;
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === 's' || e.key === 'S') handleVote('success');
+      if ((e.key === 's' || e.key === 'S') && !oberonMustFail) handleVote('success');
       else if ((e.key === 'f' || e.key === 'F') && !isGoodSide) handleVote('fail');
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isInTeam, hasVoted, isSubmitting, isGoodSide]);
+  }, [isInTeam, hasVoted, isSubmitting, isGoodSide, oberonMustFail]);
 
   if (!isInTeam) {
     const votedCount = room.questVotedCount ?? 0;
@@ -187,16 +200,21 @@ export default function QuestPanel({
         </motion.div>
       ) : (
         <div className="flex justify-center gap-6">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => handleVote('success')}
-            disabled={isSubmitting || isLoading}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
-          >
-            <CheckCircle size={20} />
-            {isSubmitting ? t('game:questPanel.submitting') : t('game:questPanel.successBtn')}
-          </motion.button>
+          {/* Success is rendered for every player EXCEPT Oberon-must-fail,
+              where the rule forces a single-button UI matching server
+              coercion. */}
+          {!oberonMustFail && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleVote('success')}
+              disabled={isSubmitting || isLoading}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
+            >
+              <CheckCircle size={20} />
+              {isSubmitting ? t('game:questPanel.submitting') : t('game:questPanel.successBtn')}
+            </motion.button>
+          )}
 
           {!isGoodSide && (
             <motion.button
@@ -221,7 +239,11 @@ export default function QuestPanel({
               ? t('game:questPanel.votingCount_one')
               : t('game:questPanel.votingCount_other', { count: room.questTeam.length })}
           </p>
-          {isGoodSide ? (
+          {oberonMustFail ? (
+            <p className="text-xs text-amber-400">
+              {t('game:questPanel.oberonMustFailHint')}
+            </p>
+          ) : isGoodSide ? (
             <p className="text-xs text-gray-600">
               <Trans i18nKey="game:questPanel.goodSideHint" components={{ key: <kbd className="bg-gray-800 px-1 rounded" /> }} />
             </p>

@@ -170,6 +170,20 @@ export interface RoleOptions {
    * "leader's right neighbour"); 'seat1'..'seat9' map to playerIds[0]..[8].
    */
   ladyStart?: 'random' | 'seat0' | 'seat1' | 'seat2' | 'seat3' | 'seat4' | 'seat5' | 'seat6' | 'seat7' | 'seat8' | 'seat9';
+  /**
+   * "Oberon must fail" house-rule toggle. When `true`, any player holding
+   * the `oberon` role is forced to vote `fail` during the quest phase,
+   * regardless of whether they are AI or human:
+   *
+   *   - AI: `GameEngine.submitQuestVote` coerces their submitted vote to
+   *     `'fail'` at the entry point (no change to `HeuristicAgent`).
+   *   - Human: UI (QuestPanel) hides the success button and shows only
+   *     the fail option, matching the engine-side coercion.
+   *
+   * Default `false` = vanilla Avalon (Oberon may freely pick success or
+   * fail). Edward 2026-04-21 principle: every variant rule is opt-in.
+   */
+  oberonAlwaysFail?: boolean;
 }
 
 export interface GameConfig {

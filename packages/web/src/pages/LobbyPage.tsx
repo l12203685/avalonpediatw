@@ -337,6 +337,24 @@ export default function LobbyPage(): JSX.Element {
                     />
                   </label>
 
+                  {/* Oberon must always fail — applies whenever Oberon is in
+                      play (canonical evil toggle or 9-variant forces him in).
+                      Default OFF so vanilla Avalon is unchanged. */}
+                  <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer">
+                    <div className="flex-1 pr-3">
+                      <div className="text-sm font-bold text-white">奧伯倫必出失敗 (Oberon Must Fail)</div>
+                      <p className="text-xs text-gray-500 leading-tight mt-0.5">
+                        開啟後任務階段奧伯倫強制投出失敗票，無論 AI 或真人（介面僅顯示失敗按鈕）
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean((room.roleOptions as unknown as Record<string, boolean>)?.oberonAlwaysFail)}
+                      onChange={() => handleToggleAdvanced('oberonAlwaysFail')}
+                      className="w-5 h-5 accent-amber-500 flex-shrink-0"
+                    />
+                  </label>
+
                   {/* 9-player variant (only shown for 9-player tables) */}
                   {playerList.length === 9 && (
                     <div className="bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 space-y-2">

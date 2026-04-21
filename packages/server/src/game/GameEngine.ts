@@ -629,13 +629,31 @@ export class GameEngine {
       throw new Error(`Player ${playerId} has already voted`);
     }
 
-    this.questVotes.push({ playerId, vote });
+    // House-rule override: when `oberonAlwaysFail` is on, any Oberon
+    // player's vote is coerced to `'fail'` regardless of what the caller
+    // submitted. This is the single choke-point covering both AI (which
+    // goes through GameEngine.submitQuestVote directly via the server
+    // bot scheduler) and human players (whose votes flow through the
+    // socket handler into this same method). Kept out of HeuristicAgent
+    // so AI decision code is untouched — the engine is authoritative.
+    // Role is read from `room.players` (same source used everywhere
+    // else in the engine) so externally-mutated roles are honoured.
+    const voterRole = this.room.players[playerId]?.role
+      ?? this.roleAssignments.get(playerId);
+    const effectiveVote: 'success' | 'fail' =
+      this.room.roleOptions?.oberonAlwaysFail === true && voterRole === 'oberon'
+        ? 'fail'
+        : vote;
+
+    this.questVotes.push({ playerId, vote: effectiveVote });
     this.room.questVotedCount = this.questVotes.length;
 
     this.logEvent('quest_vote_submitted', {
       round: this.room.currentRound,
       playerId,
-      vote,
+      vote: effectiveVote,
+      submittedVote: vote,
+      coerced: effectiveVote !== vote,
       votedCount: this.questVotes.length,
       totalInTeam: this.room.questTeam.length
     });

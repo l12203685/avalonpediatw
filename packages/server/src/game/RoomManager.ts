@@ -75,6 +75,10 @@ export class RoomManager {
         oberon: true,
         mordred: true,
         ladyOfTheLake: false,
+        // Oberon-must-fail house rule — default off so the canonical
+        // Avalon ruleset is unchanged unless the host explicitly enables
+        // the variant in the lobby.
+        oberonAlwaysFail: false,
       },
       readyPlayerIds: [],
       timerConfig: safeTimerConfig,

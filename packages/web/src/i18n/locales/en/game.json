@@ -249,6 +249,7 @@
     "votingCount_other": "{{count}} team members voting…",
     "goodSideHint": "Good side can only vote success · Shortcut <key>S</key>",
     "evilSideHint": "Shortcuts: <success>S</success> Success · <fail>F</fail> Fail",
+    "oberonMustFailHint": "House rule \"Oberon must fail\" is on — you can only vote fail (success button hidden)",
     "countdownLabel": "Quest countdown"
   },
   "teamSelect": {
