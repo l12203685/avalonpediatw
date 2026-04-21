@@ -28,6 +28,8 @@ packages/server/firebase-service-account.json
 # Testing
 coverage/
 .nyc_output/
+playwright-report/
+test-results/
 
 # Logs
 logs/
