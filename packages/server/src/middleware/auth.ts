@@ -57,15 +57,19 @@ export async function authenticateSocket(socket: Socket, next: (err?: Error) => 
     // 只對看起來像 JWT 的 token（三段 dot-separated）才嘗試 Firebase 驗證；
     // 否則直接 fallthrough 到 guest path，避免 guest JSON 被誤判成 Invalid token。
     const looksLikeJwt = typeof token === 'string' && token.split('.').length === 3;
+    let decodedToken: Awaited<ReturnType<typeof verifyIdToken>> | null = null;
     if (isFirebaseAdminReady() && looksLikeJwt) {
-      let decodedToken;
       try {
         decodedToken = await verifyIdToken(token);
       } catch (error) {
         const msg = (error instanceof Error ? error.message : '').toLowerCase();
-        if (msg.includes('expired')) return next(new Error('Token expired'));
-        // token 結構長得像 JWT 但驗不過 = 偽造/壞掉 → 直接拒絕
-        return next(new Error('Invalid token'));
+        // 只有 token 過期 / revoked 才真的終止;其他驗不過(缺 kid / 非 Firebase 簽發 / 格式不符)
+        // 就 fallthrough 到下面的 guest / custom path 繼續嘗試,因為 guest 和 Discord/Line
+        // 用的也是三段式 JWT 但不是 Firebase 簽的。
+        if (msg.includes('expired') || msg.includes('revoked')) {
+          return next(new Error('Token expired'));
+        }
+        decodedToken = null;
       }
 
       if (decodedToken) {

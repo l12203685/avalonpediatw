@@ -110,7 +110,11 @@ export async function verifyIdToken(idToken: string): Promise<admin.auth.Decoded
     const decodedToken = await getAdminAuth().verifyIdToken(idToken);
     return decodedToken;
   } catch (error) {
-    console.error('Token verification error:', error);
+    // 呼叫端(auth middleware) 會處理「非 Firebase token」的 fallthrough,不是每次失敗
+    // 都是 error。這裡壓成 throw 讓呼叫端決定嚴重性;verbose log 留給 DEBUG_FIREBASE_AUTH。
+    if (process.env.DEBUG_FIREBASE_AUTH === 'true') {
+      console.error('Token verification error:', error);
+    }
     throw new Error('Invalid token');
   }
 }
