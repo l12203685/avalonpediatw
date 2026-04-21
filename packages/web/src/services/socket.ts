@@ -47,7 +47,11 @@ export async function initializeSocket(token: string): Promise<void> {
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    reconnectionAttempts: 5,
+    // Keep retrying forever — backend restarts (ngrok hiccups / redeploys) can
+    // take longer than 5 × 5s to come back. If we give up, getSocket() throws
+    // "尚未連線" forever and the only fix is a full page refresh, which Edward
+    // observed as "無法建立房間" (P0 diag 2026-04-21 19:26 +08).
+    reconnectionAttempts: Infinity,
     extraHeaders: { 'ngrok-skip-browser-warning': 'true' },
     transportOptions: {
       polling: { extraHeaders: { 'ngrok-skip-browser-warning': 'true' } },
