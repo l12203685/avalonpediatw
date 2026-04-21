@@ -153,6 +153,15 @@ export interface RoleOptions {
    * to [4,3,4,5,5].
    */
   variant9Player?: 'standard' | 'oberonMandatory';
+  /**
+   * 9-player variant option 2 ("inverted protection"). Only meaningful when
+   * `variant9Player === 'oberonMandatory'`. Inverts quest result logic on
+   * rounds 1/2/3/5 so that EXACTLY ONE fail vote flips the quest to
+   * "failed", while 0 or 2+ fails count as success. Round 4 (the "protection
+   * round" that already requires 2 fails in 7+ player games) keeps its
+   * standard rule. Ignored when `variant9Player !== 'oberonMandatory'`.
+   */
+  variant9Option2?: boolean;
   /** Swap the team sizes for quests 1 and 2 when true. */
   swapR1R2?: boolean;
   /**

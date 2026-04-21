@@ -1438,8 +1438,9 @@ export class GameServer {
       if (room.host !== (socket.data.playerId as string)) { socket.emit('error', 'Only the host can change role options'); return; }
       if (room.state !== 'lobby') { socket.emit('error', 'Cannot change roles after game starts'); return; }
 
-      // Boolean toggles (canonical evil roles + Lady enable + R1/R2 swap).
-      const boolKeys = ['percival', 'morgana', 'oberon', 'mordred', 'ladyOfTheLake', 'swapR1R2'] as const;
+      // Boolean toggles (canonical evil roles + Lady enable + R1/R2 swap +
+      // 9-variant option 2 inverted protection).
+      const boolKeys = ['percival', 'morgana', 'oberon', 'mordred', 'ladyOfTheLake', 'swapR1R2', 'variant9Option2'] as const;
       for (const key of boolKeys) {
         if (key in options) {
           ((room.roleOptions as unknown) as Record<string, boolean>)[key] = Boolean(options[key]);
@@ -1447,10 +1448,15 @@ export class GameServer {
       }
 
       // `variant9Player` — enum 'standard' | 'oberonMandatory' (Part 6).
+      // When reverting to 'standard', clear the dependent `variant9Option2`
+      // flag so stale state can never leak into a non-9-variant game.
       if ('variant9Player' in options) {
         const v = options.variant9Player;
         if (v === 'standard' || v === 'oberonMandatory') {
           ((room.roleOptions as unknown) as Record<string, string>).variant9Player = v;
+          if (v === 'standard') {
+            ((room.roleOptions as unknown) as Record<string, boolean>).variant9Option2 = false;
+          }
         }
       }
 

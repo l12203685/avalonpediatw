@@ -661,7 +661,24 @@ export class GameEngine {
     const config = AVALON_CONFIG[playerCount];
     const failsRequired = config?.questFailsRequired[this.room.currentRound - 1] ?? 1;
     const failCount = this.questVotes.filter((q) => q.vote === 'fail').length;
-    const questFailed = failCount >= failsRequired;
+
+    // 9-player variant · Option 2 ("inverted protection"): on rounds
+    // 1/2/3/5 in a 9-player oberonMandatory game with the flag set,
+    // EXACTLY ONE fail vote flips the quest to failed; 0 or 2+ fails all
+    // count as success. Round 4 keeps its standard 2-fail protection rule.
+    // All other configurations fall through to the classic
+    // `failCount >= failsRequired` check.
+    const roundIdx = this.room.currentRound - 1;
+    const isProtectionRound = roundIdx === 3;
+    const isInvert9Option2 =
+      playerCount === 9 &&
+      this.room.roleOptions?.variant9Player === 'oberonMandatory' &&
+      (this.room.roleOptions as Partial<{ variant9Option2: boolean }> | undefined)
+        ?.variant9Option2 === true &&
+      !isProtectionRound;
+    const questFailed = isInvert9Option2
+      ? failCount === 1
+      : failCount >= failsRequired;
 
     const result: 'success' | 'fail' = questFailed ? 'fail' : 'success';
     this.room.questResults.push(result);
