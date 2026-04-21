@@ -192,6 +192,32 @@ export default function GamePage(): JSX.Element {
   const goodCount = config?.roles.filter(r => ['merlin','percival','loyal'].includes(r)).length ?? 0;
   const evilCount = config?.roles.filter(r => !['merlin','percival','loyal'].includes(r)).length ?? 0;
 
+  // Current-actor summary — small strip shown to EVERYONE (including the current actor) so
+  // spectators / non-leaders always know whose turn it is. Pairs with the pulsing ring on
+  // PlayerCard for the visual cue.
+  const currentActorLabel: string | null = (() => {
+    if (room.state === 'voting' && !teamSelected) {
+      const name = room.players[leaderId]?.name ?? '';
+      return t('game:currentActor.leaderLabel', { name });
+    }
+    if (room.state === 'voting' && teamSelected) {
+      const pending = playerIds.length - Object.keys(room.votes).length;
+      return pending > 0 ? t('game:currentActor.voteWaitingLabel', { count: pending }) : null;
+    }
+    if (room.state === 'quest') {
+      const voted = room.questVotedCount ?? 0;
+      return t('game:currentActor.questWaitingLabel', { voted, total: room.questTeam.length });
+    }
+    if (room.state === 'lady_of_the_lake') {
+      const name = room.players[room.ladyOfTheLakeHolder ?? '']?.name ?? '';
+      return t('game:currentActor.ladyLabel', { name });
+    }
+    if (room.state === 'discussion') {
+      return t('game:currentActor.assassinLabel');
+    }
+    return null;
+  })();
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4">
       {/* Vote Reveal Overlay */}
@@ -308,6 +334,15 @@ export default function GamePage(): JSX.Element {
             </div>
           )}
 
+          {/* Current-actor strip — tells every player whose move it is right now */}
+          {currentActorLabel && room.state !== 'ended' && room.state !== 'lobby' && (
+            <div className="flex justify-center">
+              <span className="bg-amber-950/50 border border-amber-700/60 text-amber-200 px-3 py-1 rounded-full text-xs font-semibold">
+                {currentActorLabel}
+              </span>
+            </div>
+          )}
+
           {/* Your-turn action banner */}
           <AnimatePresence>
             {actionBanner && (
@@ -338,6 +373,7 @@ export default function GamePage(): JSX.Element {
                   currentPlayer={currentPlayer}
                   isLoading={isVoting}
                   timer={teamSelectTimer}
+                  timerTotal={teamSelectBase}
                 />
               ) : (
                 <motion.div
@@ -366,6 +402,21 @@ export default function GamePage(): JSX.Element {
                       </span>
                     )}
                   </div>
+                  {/* Countdown bar so everyone (not just the leader) can see how long until auto-select kicks in */}
+                  {!isUnlimitedTimer && teamSelectBase > 0 && (
+                    <div className="mt-1 w-full max-w-sm mx-auto">
+                      <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+                        <motion.div
+                          animate={{ width: `${Math.max(0, Math.min(100, (teamSelectTimer / teamSelectBase) * 100))}%` }}
+                          transition={{ duration: 0.6, ease: 'linear' }}
+                          className={`h-full rounded-full ${teamSelectTimer < 20 ? 'bg-gradient-to-r from-red-500 to-red-400' : 'bg-gradient-to-r from-amber-500 to-yellow-400'}`}
+                        />
+                      </div>
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        {t('game:teamSelect.autoSelectHint')}
+                      </p>
+                    </div>
+                  )}
                 </motion.div>
               )
             ) : (

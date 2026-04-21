@@ -139,6 +139,27 @@ export default function VotePanel({
         />
       </div>
 
+      {/* ⏱ Vote countdown bar — mirrors the server's VOTE_TIMEOUT so players know when auto-vote kicks in */}
+      {!isUnlimited && effectiveSeconds > 0 && (
+        <div className="space-y-1">
+          <div className="flex justify-between text-[11px] font-semibold">
+            <span className={isUrgent ? 'text-red-300' : 'text-gray-500'}>
+              {t('game:votePanel.countdownLabel')}
+            </span>
+            <span className={isUrgent ? 'text-red-300 font-bold' : 'text-gray-500'}>
+              {timeLeft}s / {effectiveSeconds}s
+            </span>
+          </div>
+          <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+            <motion.div
+              animate={{ width: `${Math.max(0, Math.min(100, (timeLeft / effectiveSeconds) * 100))}%` }}
+              transition={{ duration: 0.6, ease: 'linear' }}
+              className={`h-full rounded-full ${isUrgent ? 'bg-gradient-to-r from-red-500 to-red-400' : 'bg-gradient-to-r from-amber-500 to-yellow-400'}`}
+            />
+          </div>
+        </div>
+      )}
+
       {/* 投票按鈕 */}
       {!hasVoted && (
         <div className="space-y-3">

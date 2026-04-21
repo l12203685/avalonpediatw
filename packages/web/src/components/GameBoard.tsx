@@ -61,6 +61,30 @@ export default function GameBoard({ room, currentPlayer, children }: GameBoardPr
     }
   }, [room.state, room.evilWins]);
 
+  // Determine whose turn it currently is, so the UI can draw a pulsing ring on their card.
+  // Rules (match the game engine's phase semantics):
+  //   • voting + empty team → leader is picking
+  //   • voting + team set   → everyone who hasn't voted yet is acting
+  //   • quest               → quest team members who haven't submitted
+  //   • lady_of_the_lake    → holder of the Lady
+  //   • discussion          → the Assassin
+  const teamSelected = room.questTeam.length > 0;
+  const isActiveTurn = (playerId: string): boolean => {
+    if (room.state === 'voting' && !teamSelected) return playerId === leaderId;
+    if (room.state === 'voting' && teamSelected) return room.votes[playerId] === undefined;
+    if (room.state === 'quest') return room.questTeam.includes(playerId);
+    if (room.state === 'lady_of_the_lake') return playerId === room.ladyOfTheLakeHolder;
+    if (room.state === 'discussion') {
+      // Only the assassin acts, but we don't always know their id client-side —
+      // the server reveals the role to the assassin themselves, and others see
+      // the generic "assassin is choosing" banner, so leaving this as no-ring
+      // is safe for non-assassins.
+      const role = room.players[playerId]?.role;
+      return role === 'assassin';
+    }
+    return false;
+  };
+
   const renderPlayerCard = (player: Player, seatIndex: number, side: 'left' | 'right'): JSX.Element => (
     <motion.div
       key={player.id}
@@ -82,6 +106,7 @@ export default function GameBoard({ room, currentPlayer, children }: GameBoardPr
         isOnQuestTeam={room.questTeam.includes(player.id)}
         seatNumber={seatIndex + 1}
         side={side}
+        isActiveTurn={isActiveTurn(player.id)}
       />
     </motion.div>
   );

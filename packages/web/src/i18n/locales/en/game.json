@@ -102,6 +102,13 @@
     "ladyTurn": "🔮 You hold the Lady — inspect a player",
     "assassinTurn": "🗡️ You are the Assassin — choose your target"
   },
+  "currentActor": {
+    "leaderLabel": "👑 Leader: {{name}}",
+    "voteWaitingLabel": "🗳️ Vote pending: {{count}} left",
+    "questWaitingLabel": "⚔️ Quest votes: {{voted}}/{{total}}",
+    "ladyLabel": "🔮 Lady of the Lake: {{name}}",
+    "assassinLabel": "🗡️ Assassin is choosing a target"
+  },
   "scoresheet": {
     "title": "Scoresheet",
     "stats": "{{quests}} quests · {{votes}} votes"
@@ -160,7 +167,8 @@
     "yourVoteApprove": "Your vote: 👍 Approved",
     "yourVoteReject": "Your vote: 👎 Rejected",
     "waitingOthers": "Waiting for other players to vote…",
-    "shortcuts": "Shortcuts: <approve>Y</approve> Approve · <reject>N</reject> Reject"
+    "shortcuts": "Shortcuts: <approve>Y</approve> Approve · <reject>N</reject> Reject",
+    "countdownLabel": "Vote countdown"
   },
   "questPanel": {
     "title": "⚔️ Quest Vote",
@@ -178,7 +186,8 @@
     "votingCount_one": "Only you are voting…",
     "votingCount_other": "{{count}} team members voting…",
     "goodSideHint": "Good side can only vote success · Shortcut <key>S</key>",
-    "evilSideHint": "Shortcuts: <success>S</success> Success · <fail>F</fail> Fail"
+    "evilSideHint": "Shortcuts: <success>S</success> Success · <fail>F</fail> Fail",
+    "countdownLabel": "Quest countdown"
   },
   "teamSelect": {
     "waitingTitle": "Waiting for leader to pick a team",
@@ -196,7 +205,14 @@
     "submitting": "Submitting…",
     "teamComplete": "Team complete! Click confirm to proceed to vote.",
     "moreNeeded_one": "{{count}} more member needed",
-    "moreNeeded_other": "{{count}} more members needed"
+    "moreNeeded_other": "{{count}} more members needed",
+    "youAreLeaderBanner": "👑 YOU ARE THE LEADER",
+    "youAreLeaderInstruction": "Pick {{count}} team members before time runs out, or the system will auto-select for you.",
+    "timeoutWarning": "⚠ {{seconds}}s left — pick your team now!",
+    "autoSelectHint": "If time runs out, the system auto-selects a team and moves to vote",
+    "countdownLabel": "Team-select countdown",
+    "leaderChangedBanner": "🔁 New leader: {{name}}",
+    "leaderChangedHint": "Previous team was rejected — a new leader is picking."
   },
   "roleReveal": {
     "evilBadge": "🔴 Evil",

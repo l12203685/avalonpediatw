@@ -102,6 +102,13 @@
     "ladyTurn": "🔮 你持有湖中女神！選擇一位玩家查看陣營 (You hold the Lady — inspect a player)",
     "assassinTurn": "🗡️ 你是刺客！選擇目標刺殺梅林 (You are the Assassin — choose your target)"
   },
+  "currentActor": {
+    "leaderLabel": "👑 本輪隊長：{{name}}",
+    "voteWaitingLabel": "🗳️ 等待投票：{{count}} 人未投",
+    "questWaitingLabel": "⚔️ 任務隊員投票中：{{voted}}/{{total}}",
+    "ladyLabel": "🔮 湖中女神：{{name}}",
+    "assassinLabel": "🗡️ 刺客選擇目標中"
+  },
   "scoresheet": {
     "title": "牌譜",
     "stats": "{{quests}} 輪任務・{{votes}} 次投票"
@@ -160,7 +167,8 @@
     "yourVoteApprove": "你的票 (Your vote)：👍 贊成 (Approve)",
     "yourVoteReject": "你的票 (Your vote)：👎 拒絕 (Reject)",
     "waitingOthers": "等待其他玩家投票…",
-    "shortcuts": "快捷鍵 (Shortcuts)：<approve>Y</approve> 贊成・<reject>N</reject> 拒絕"
+    "shortcuts": "快捷鍵 (Shortcuts)：<approve>Y</approve> 贊成・<reject>N</reject> 拒絕",
+    "countdownLabel": "投票倒數 (Vote countdown)"
   },
   "questPanel": {
     "title": "⚔️ 任務投票 (Quest Vote)",
@@ -178,7 +186,8 @@
     "votingCount_one": "只有你在投票…",
     "votingCount_other": "{{count}} 位隊員投票中…",
     "goodSideHint": "好人陣營：只能投成功 (Good side can only vote success)・快捷鍵 <key>S</key>",
-    "evilSideHint": "快捷鍵 (Shortcuts)：<success>S</success> 成功・<fail>F</fail> 失敗"
+    "evilSideHint": "快捷鍵 (Shortcuts)：<success>S</success> 成功・<fail>F</fail> 失敗",
+    "countdownLabel": "任務倒數 (Quest countdown)"
   },
   "teamSelect": {
     "waitingTitle": "等待隊長選擇",
@@ -196,7 +205,14 @@
     "submitting": "提交中…",
     "teamComplete": "隊伍已選完！點擊確認進行投票。(Team complete! Click confirm to vote.)",
     "moreNeeded_one": "還需選擇 {{count}} 名隊員 ({{count}} more member needed)",
-    "moreNeeded_other": "還需選擇 {{count}} 名隊員 ({{count}} more members needed)"
+    "moreNeeded_other": "還需選擇 {{count}} 名隊員 ({{count}} more members needed)",
+    "youAreLeaderBanner": "👑 你是本輪隊長 (YOU ARE THE LEADER)",
+    "youAreLeaderInstruction": "請在時間內挑出 {{count}} 名隊員執行任務，逾時系統會自動代選。",
+    "timeoutWarning": "⚠ 剩下 {{seconds}} 秒，請盡快選隊！",
+    "autoSelectHint": "逾時未選 → 系統自動代選隊員進入投票",
+    "countdownLabel": "組隊倒數 (Team-select countdown)",
+    "leaderChangedBanner": "🔁 新隊長：{{name}}",
+    "leaderChangedHint": "上次組隊被否決，換人組隊。"
   },
   "roleReveal": {
     "evilBadge": "🔴 邪惡方 (Evil)",

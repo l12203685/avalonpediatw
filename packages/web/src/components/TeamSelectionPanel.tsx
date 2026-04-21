@@ -1,5 +1,5 @@
 import { Room, Player, AVALON_CONFIG } from '@avalon/shared';
-import { CheckCircle, Circle } from 'lucide-react';
+import { CheckCircle, Circle, Crown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
@@ -10,6 +10,8 @@ interface TeamSelectionPanelProps {
   currentPlayer: Player;
   isLoading?: boolean;
   timer?: number;
+  /** Total seconds at the start of this countdown (used to draw the progress bar). */
+  timerTotal?: number;
 }
 
 export default function TeamSelectionPanel({
@@ -17,6 +19,7 @@ export default function TeamSelectionPanel({
   currentPlayer,
   isLoading = false,
   timer,
+  timerTotal,
 }: TeamSelectionPanelProps): JSX.Element {
   const playerCount = Object.keys(room.players).length;
   const config = AVALON_CONFIG[playerCount];
@@ -48,25 +51,48 @@ export default function TeamSelectionPanel({
   };
 
   const isFull = selectedPlayers.size === expectedTeamSize;
+  const isUnlimited = room.timerConfig?.multiplier === null;
+  const showCountdown = !isUnlimited && timer !== undefined && (timerTotal ?? 0) > 0;
+  const progressPct = showCountdown
+    ? Math.max(0, Math.min(100, ((timer ?? 0) / (timerTotal ?? 1)) * 100))
+    : 0;
+  const isUrgent = showCountdown && (timer ?? 0) <= 20;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-avalon-card/50 border-2 border-amber-600 rounded-lg p-8 space-y-6"
+      className="bg-avalon-card/50 border-2 border-amber-600 rounded-lg p-6 sm:p-8 space-y-6"
     >
+      {/* 👑 YOU ARE THE LEADER — unmissable banner so solo / AI-room players can't miss their turn */}
+      <motion.div
+        animate={{ scale: [1, 1.01, 1] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative overflow-hidden rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-600/40 via-yellow-500/30 to-amber-600/40 p-4 sm:p-5 text-center shadow-lg shadow-amber-500/30"
+      >
+        <div className="flex items-center justify-center gap-3">
+          <Crown size={28} className="text-amber-300 drop-shadow-md flex-shrink-0" />
+          <h2 className="text-2xl sm:text-3xl font-black text-white tracking-wide">
+            {t('game:teamSelect.youAreLeaderBanner')}
+          </h2>
+          <Crown size={28} className="text-amber-300 drop-shadow-md flex-shrink-0" />
+        </div>
+        <p className="mt-2 text-amber-100 text-sm sm:text-base font-semibold">
+          {t('game:teamSelect.youAreLeaderInstruction', { count: expectedTeamSize })}
+        </p>
+      </motion.div>
+
       {/* 標題和信息 */}
       <div className="text-center">
-        <div className="flex items-center justify-center gap-3 mb-2">
-          <h2 className="text-3xl font-bold text-white">{t('game:teamSelect.title')}</h2>
-          {/* When room is in unlimited-timer mode, show untimed label instead of countdown. */}
-          {room.timerConfig?.multiplier === null ? (
+        <div className="flex items-center justify-center gap-3 mb-2 flex-wrap">
+          <h3 className="text-xl sm:text-2xl font-bold text-white">{t('game:teamSelect.title')}</h3>
+          {isUnlimited ? (
             <span className="text-sm font-bold px-3 py-1 rounded-full bg-blue-900/70 text-blue-200">
               {t('game:teamSelect.unlimitedTimer')}
             </span>
           ) : (
             timer !== undefined && (
-              <span className={`text-sm font-bold px-3 py-1 rounded-full ${timer < 20 ? 'bg-red-900/70 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
+              <span className={`text-sm font-bold px-3 py-1 rounded-full ${isUrgent ? 'bg-red-900/70 text-red-100 animate-pulse' : 'bg-gray-800 text-gray-300'}`}>
                 {t('game:teamSelect.timer', { seconds: timer })}
               </span>
             )
@@ -76,6 +102,36 @@ export default function TeamSelectionPanel({
           {t('game:teamSelect.subtitle', { count: expectedTeamSize })}
         </p>
       </div>
+
+      {/* ⏱ Countdown progress bar — big and unmissable so players notice they're on the clock */}
+      {showCountdown && (
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs font-semibold">
+            <span className={isUrgent ? 'text-red-300' : 'text-gray-400'}>
+              {t('game:teamSelect.countdownLabel')}
+            </span>
+            <span className={isUrgent ? 'text-red-300 font-bold' : 'text-gray-400'}>
+              {timer}s / {timerTotal}s
+            </span>
+          </div>
+          <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+            <motion.div
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.6, ease: 'linear' }}
+              className={`h-full rounded-full ${isUrgent ? 'bg-gradient-to-r from-red-500 to-red-400' : 'bg-gradient-to-r from-amber-500 to-yellow-400'}`}
+            />
+          </div>
+          {isUrgent ? (
+            <p className="text-center text-sm text-red-300 font-bold animate-pulse">
+              {t('game:teamSelect.timeoutWarning', { seconds: timer })}
+            </p>
+          ) : (
+            <p className="text-center text-[11px] text-gray-500">
+              {t('game:teamSelect.autoSelectHint')}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* 隊伍大小指示 */}
       <div className="flex justify-center">

@@ -24,6 +24,8 @@ interface PlayerCardProps {
   seatNumber?: number;
   /** Direction the card leans — affects inner flex order for the 5v5 rail layout. */
   side?: 'left' | 'right';
+  /** Pulses a ring around this player when it's their turn to act. */
+  isActiveTurn?: boolean;
 }
 
 export default function PlayerCard({
@@ -35,6 +37,7 @@ export default function PlayerCard({
   isOnQuestTeam = false,
   seatNumber,
   side = 'left',
+  isActiveTurn = false,
 }: PlayerCardProps): JSX.Element {
   // Horizontal row layout: left side → avatar on right edge (info-left), right side → avatar on left edge (info-right)
   const rowDirection = side === 'left' ? 'flex-row' : 'flex-row-reverse';
@@ -45,9 +48,23 @@ export default function PlayerCard({
       whileHover={{ scale: 1.03 }}
       whileTap={{ scale: 0.97 }}
       className={`relative flex ${rowDirection} items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors ${
-        isCurrentPlayer ? 'bg-yellow-500/10 ring-1 ring-yellow-400/60' : 'hover:bg-white/5'
+        isActiveTurn
+          ? 'bg-amber-500/20 ring-2 ring-amber-400 shadow-md shadow-amber-400/30'
+          : isCurrentPlayer
+          ? 'bg-yellow-500/10 ring-1 ring-yellow-400/60'
+          : 'hover:bg-white/5'
       }`}
     >
+      {/* Pulsing halo around the active-turn player so everyone can see whose move it is */}
+      {isActiveTurn && (
+        <motion.span
+          aria-hidden="true"
+          initial={{ opacity: 0.5, scale: 1 }}
+          animate={{ opacity: [0.5, 0, 0.5], scale: [1, 1.04, 1] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+          className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-amber-300"
+        />
+      )}
       {/* Avatar with all status markers */}
       <div className="relative flex-shrink-0">
         <motion.div
