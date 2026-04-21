@@ -9,6 +9,14 @@ interface GameBoardProps {
   currentPlayer: Player;
   /** Content rendered in the center column (quest/vote/history panels). */
   children?: ReactNode;
+  /**
+   * Leader team-selection wiring (#83 Phase 1). When `isPicking` is true, every
+   * rail `PlayerCard` becomes a shield candidate; clicking toggles membership in
+   * `selectedTeamIds` via `onSeatClick`.
+   */
+  isPicking?: boolean;
+  selectedTeamIds?: Set<string>;
+  onSeatClick?: (playerId: string) => void;
 }
 
 const STATE_LABELS: Record<string, string> = {
@@ -28,9 +36,17 @@ const STATE_LABELS: Record<string, string> = {
  *   │ 1..N/2  │   + chat            │ N/2..N  │
  *   └─────────┴──────────────────────┴─────────┘
  * Desktop: three columns (~210px | flex-1 | ~210px).
- * Mobile (<768px): stacked — left rail (horizontal scroll) over center over right rail.
+ * Mobile (<768px): two vertical rails side-by-side (1fr | 1fr), center column wraps
+ *   below spanning both columns. No horizontal scroll — every seat visible at once.
  */
-export default function GameBoard({ room, currentPlayer, children }: GameBoardProps): JSX.Element {
+export default function GameBoard({
+  room,
+  currentPlayer,
+  children,
+  isPicking = false,
+  selectedTeamIds,
+  onSeatClick,
+}: GameBoardProps): JSX.Element {
   const players = Object.values(room.players);
   const playerIds = Object.keys(room.players);
   const leaderId = playerIds[room.leaderIndex % playerIds.length];
@@ -85,31 +101,41 @@ export default function GameBoard({ room, currentPlayer, children }: GameBoardPr
     return false;
   };
 
-  const renderPlayerCard = (player: Player, seatIndex: number, side: 'left' | 'right'): JSX.Element => (
-    <motion.div
-      key={player.id}
-      initial={{ opacity: 0, x: side === 'left' ? -20 : 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: seatIndex * 0.05 }}
-    >
-      <PlayerCard
-        player={player}
-        isCurrentPlayer={player.id === currentPlayer.id}
-        hasVoted={room.votes[player.id] !== undefined}
-        // During voting, only reveal own vote direction; others show as undefined (just "has voted")
-        voted={
-          room.state === 'voting' && player.id !== currentPlayer.id
-            ? undefined
-            : room.votes[player.id]
-        }
-        isLeader={player.id === leaderId}
-        isOnQuestTeam={room.questTeam.includes(player.id)}
-        seatNumber={seatIndex + 1}
-        side={side}
-        isActiveTurn={isActiveTurn(player.id)}
-      />
-    </motion.div>
-  );
+  const renderPlayerCard = (player: Player, seatIndex: number, side: 'left' | 'right'): JSX.Element => {
+    const shieldSelected = Boolean(selectedTeamIds?.has(player.id));
+    // All seats are valid picks (including leader's own seat — canonical Avalon allows
+    // the leader to include themselves). We hand the click handler down only when in
+    // picking mode so normal gameplay ignores the shield layer.
+    const isShieldCandidate = isPicking;
+    return (
+      <motion.div
+        key={player.id}
+        initial={{ opacity: 0, x: side === 'left' ? -20 : 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: seatIndex * 0.05 }}
+      >
+        <PlayerCard
+          player={player}
+          isCurrentPlayer={player.id === currentPlayer.id}
+          hasVoted={room.votes[player.id] !== undefined}
+          // During voting, only reveal own vote direction; others show as undefined (just "has voted")
+          voted={
+            room.state === 'voting' && player.id !== currentPlayer.id
+              ? undefined
+              : room.votes[player.id]
+          }
+          isLeader={player.id === leaderId}
+          isOnQuestTeam={room.questTeam.includes(player.id)}
+          seatNumber={seatIndex + 1}
+          side={side}
+          isActiveTurn={isActiveTurn(player.id)}
+          isShieldCandidate={isShieldCandidate}
+          shieldSelected={shieldSelected}
+          onShieldClick={isPicking ? onSeatClick : undefined}
+        />
+      </motion.div>
+    );
+  };
 
   return (
     <div className="w-full">
@@ -155,19 +181,23 @@ export default function GameBoard({ room, currentPlayer, children }: GameBoardPr
         </aside>
       </div>
 
-      {/* Mobile: stack rails horizontally above/below the center */}
-      <div className="md:hidden flex flex-col gap-3">
-        <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            {leftPlayers.map((p, i) => (
-              <div key={p.id} className="min-w-[160px] flex-shrink-0">
-                {renderPlayerCard(p, i, 'left')}
-              </div>
-            ))}
-          </div>
+      {/*
+        Mobile (<md): two narrow vertical rails flanking a center column (2-col grid).
+        #83 Phase 1 killed horizontal rail scroll — 10-player rooms need to show every seat
+        without a swipe, so we shrink cards to fit iPhone SE (375px).
+        Column widths sum ~335px at 375 viewport → leaves ~20px grid gap + safe-area inset.
+      */}
+      <div className="md:hidden grid gap-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
+        <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5">
+          {leftPlayers.map((p, i) => renderPlayerCard(p, i, 'left'))}
         </aside>
 
-        <section className="flex flex-col gap-3 min-w-0">
+        <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5">
+          {rightPlayers.map((p, i) => renderPlayerCard(p, splitIndex + i, 'right'))}
+        </aside>
+
+        {/* Full-width center spans both columns below the rails on mobile */}
+        <section className="col-span-2 flex flex-col gap-3 min-w-0 mt-2">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -190,16 +220,6 @@ export default function GameBoard({ room, currentPlayer, children }: GameBoardPr
 
           {children}
         </section>
-
-        <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            {rightPlayers.map((p, i) => (
-              <div key={p.id} className="min-w-[160px] flex-shrink-0">
-                {renderPlayerCard(p, splitIndex + i, 'right')}
-              </div>
-            ))}
-          </div>
-        </aside>
       </div>
     </div>
   );

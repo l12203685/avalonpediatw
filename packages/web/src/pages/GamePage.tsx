@@ -5,7 +5,7 @@ import { submitVote, submitAssassination, submitLadyOfTheLake, requestRematch, l
 import GameBoard from '../components/GameBoard';
 import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
-import TeamSelectionPanel from '../components/TeamSelectionPanel';
+import QuestTeamToolbar from '../components/QuestTeamToolbar';
 import RoleRevealModal from '../components/RoleRevealModal';
 // [TASK #41 night-info] persistent panel so per-player night info never disappears
 import PersistentNightInfoPanel from '../components/PersistentNightInfoPanel';
@@ -42,6 +42,9 @@ export default function GamePage(): JSX.Element {
   const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(() => audioService.isEnabled());
   const [teamSelectTimer, setTeamSelectTimer] = useState(teamSelectBase);
+  // Leader team-selection state lifted from the old TeamSelectionPanel so rail clicks
+  // (#83 Phase 1) can toggle membership directly on PlayerCards.
+  const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
   const prevVoteHistoryLen = useRef(0);
   const prevQuestHistoryLen = useRef(0);
 
@@ -103,6 +106,16 @@ export default function GamePage(): JSX.Element {
     }
   }, [room?.votes]);
 
+  // Reset leader's selected-team picks whenever a new team-select phase starts (new round,
+  // new leader after a rejection, or server auto-fill clearing the board). Once the server
+  // locks in a questTeam we also clear so stale Set<string> doesn't linger into the next round.
+  useEffect(() => {
+    if (!room) return;
+    if (room.state !== 'voting' || room.questTeam.length > 0) {
+      setSelectedTeamIds(new Set());
+    }
+  }, [room?.state, room?.questTeam?.length, room?.leaderIndex, room?.currentRound]);
+
   // Show vote reveal overlay when a new vote record is added
   useEffect(() => {
     if (!room) return;
@@ -131,6 +144,10 @@ export default function GamePage(): JSX.Element {
   const leaderId = playerIds[room.leaderIndex % playerIds.length];
   const isCurrentPlayerLeader = currentPlayer.id === leaderId;
   const teamSelected = room.questTeam.length > 0;
+  // Role composition from config — hoisted up because team-select handlers below also need it.
+  const config = AVALON_CONFIG[playerIds.length];
+  const goodCount = config?.roles.filter(r => ['merlin','percival','loyal'].includes(r)).length ?? 0;
+  const evilCount = config?.roles.filter(r => !['merlin','percival','loyal'].includes(r)).length ?? 0;
 
   const handleVote = (approve: boolean): void => {
     if (isVoting) return;
@@ -139,6 +156,25 @@ export default function GamePage(): JSX.Element {
     // Reset after server ACK arrives (room.votes updates), with 3s safety fallback
     setTimeout(() => setIsVoting(false), 3000);
   };
+
+  // Rail-click handler for leader team-selection (#83 Phase 1).
+  // Toggles membership in `selectedTeamIds`; silently ignores adds beyond the quest team
+  // size so the UI never out-picks the server's accept cap.
+  const expectedTeamSize = config?.questTeams[room.currentRound - 1] ?? 0;
+  const handleSeatClick = (playerId: string): void => {
+    setSelectedTeamIds(prev => {
+      const next = new Set(prev);
+      if (next.has(playerId)) {
+        next.delete(playerId);
+      } else if (next.size < expectedTeamSize) {
+        next.add(playerId);
+      }
+      return next;
+    });
+  };
+  const clearSelectedTeam = (): void => setSelectedTeamIds(new Set());
+  const isLeaderPicking =
+    room.state === 'voting' && !teamSelected && isCurrentPlayerLeader && !isSpectator;
 
   const handleAssassinate = (targetId: string): void => {
     if (isAssassinating) return;
@@ -187,11 +223,6 @@ export default function GamePage(): JSX.Element {
       ? { msg: t('game:action.assassinTurn'), color: 'border-red-500 bg-red-900/30 text-red-200' }
       : null;
 
-  // Role composition from config
-  const config = AVALON_CONFIG[playerIds.length];
-  const goodCount = config?.roles.filter(r => ['merlin','percival','loyal'].includes(r)).length ?? 0;
-  const evilCount = config?.roles.filter(r => !['merlin','percival','loyal'].includes(r)).length ?? 0;
-
   // Current-actor summary — small strip shown to EVERYONE (including the current actor) so
   // spectators / non-leaders always know whose turn it is. Pairs with the pulsing ring on
   // PlayerCard for the visual cue.
@@ -219,7 +250,9 @@ export default function GamePage(): JSX.Element {
   })();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4">
+    <div className={`min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4 ${
+      isLeaderPicking ? 'pb-32 sm:pb-28' : ''
+    }`}>
       {/* Vote Reveal Overlay */}
       <AnimatePresence>
         {pendingVoteReveal && (
@@ -361,20 +394,37 @@ export default function GamePage(): JSX.Element {
         </div>
 
         {/* Game Board — 5v5 rails with center panel (quest/vote/history) per Edward spec */}
-        <GameBoard room={room} currentPlayer={currentPlayer}>
+        <GameBoard
+          room={room}
+          currentPlayer={currentPlayer}
+          isPicking={isLeaderPicking}
+          selectedTeamIds={selectedTeamIds}
+          onSeatClick={handleSeatClick}
+        >
           {/* Center column content — phase panel + history */}
 
           {/* Voting Phase */}
           {room.state === 'voting' && !isSpectator && (
             !teamSelected ? (
               isCurrentPlayerLeader ? (
-                <TeamSelectionPanel
-                  room={room}
-                  currentPlayer={currentPlayer}
-                  isLoading={isVoting}
-                  timer={teamSelectTimer}
-                  timerTotal={teamSelectBase}
-                />
+                // #83 Phase 1: picking happens on rail PlayerCards + bottom QuestTeamToolbar.
+                // Keep a slim prompt in the center column so leaders immediately understand the
+                // new interaction model (no more modal player picker).
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-avalon-card/50 border-2 border-amber-500 rounded-lg p-4 sm:p-5 text-center space-y-2"
+                >
+                  <h2 className="text-lg sm:text-xl font-bold text-amber-200">
+                    {t('game:teamSelect.youAreLeaderBanner')}
+                  </h2>
+                  <p className="text-sm text-amber-100">
+                    {t('game:teamSelect.youAreLeaderInstruction', { count: expectedTeamSize })}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {t('game:teamSelect.shieldHint')}
+                  </p>
+                </motion.div>
               ) : (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -735,6 +785,25 @@ export default function GamePage(): JSX.Element {
       {room.state !== 'lobby' && (
         <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} />
       )}
+
+      {/*
+        #83 Phase 1 — Leader team-select toolbar. Renders sticky at the bottom only when
+        the leader is currently picking a team; auto-unmounts when the server confirms
+        the questTeam or when AFK auto-fill fires.
+      */}
+      <AnimatePresence>
+        {isLeaderPicking && (
+          <QuestTeamToolbar
+            key="quest-team-toolbar"
+            room={room}
+            selectedTeamIds={selectedTeamIds}
+            onClear={clearSelectedTeam}
+            isSubmitting={isVoting}
+            timer={teamSelectTimer}
+            timerTotal={teamSelectBase}
+          />
+        )}
+      </AnimatePresence>
 
       {/* [TASK #41 night-info] Always-on role + night-info panel. Docked bottom-left so
           players can re-check their night vision any time without hunting for a button.

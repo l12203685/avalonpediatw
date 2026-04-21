@@ -26,6 +26,15 @@ interface PlayerCardProps {
   side?: 'left' | 'right';
   /** Pulses a ring around this player when it's their turn to act. */
   isActiveTurn?: boolean;
+  /**
+   * Team-selection shield props — active only while the leader is picking a quest team.
+   * When `isShieldCandidate` is true, the card becomes clickable and surfaces a dim
+   * outline shield to signal "tap to add". When `shieldSelected` is true, a big solid
+   * 黃盾 overlay dominates the avatar so the leader can see the active pick at a glance.
+   */
+  isShieldCandidate?: boolean;
+  shieldSelected?: boolean;
+  onShieldClick?: (playerId: string) => void;
 }
 
 export default function PlayerCard({
@@ -38,22 +47,50 @@ export default function PlayerCard({
   seatNumber,
   side = 'left',
   isActiveTurn = false,
+  isShieldCandidate = false,
+  shieldSelected = false,
+  onShieldClick,
 }: PlayerCardProps): JSX.Element {
   // Horizontal row layout: left side → avatar on right edge (info-left), right side → avatar on left edge (info-right)
   const rowDirection = side === 'left' ? 'flex-row' : 'flex-row-reverse';
   const textAlign = side === 'left' ? 'text-right items-end' : 'text-left items-start';
 
+  // Shield click wiring: leader picking a quest team. Only clickable when this card is a
+  // candidate (plan #83 Phase 1 swap from center modal → rail-click + bottom toolbar).
+  const isShieldInteractive = isShieldCandidate && typeof onShieldClick === 'function';
+  const handleShieldClick = (): void => {
+    if (isShieldInteractive) {
+      onShieldClick?.(player.id);
+    }
+  };
+
   return (
     <motion.div
       whileHover={{ scale: 1.03 }}
       whileTap={{ scale: 0.97 }}
+      onClick={isShieldInteractive ? handleShieldClick : undefined}
+      role={isShieldInteractive ? 'button' : undefined}
+      aria-pressed={isShieldInteractive ? shieldSelected : undefined}
+      tabIndex={isShieldInteractive ? 0 : undefined}
+      onKeyDown={
+        isShieldInteractive
+          ? (event): void => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                handleShieldClick();
+              }
+            }
+          : undefined
+      }
       className={`relative flex ${rowDirection} items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors ${
-        isActiveTurn
+        shieldSelected
+          ? 'bg-yellow-500/25 ring-2 ring-yellow-400 shadow-md shadow-yellow-400/30'
+          : isActiveTurn
           ? 'bg-amber-500/20 ring-2 ring-amber-400 shadow-md shadow-amber-400/30'
           : isCurrentPlayer
           ? 'bg-yellow-500/10 ring-1 ring-yellow-400/60'
           : 'hover:bg-white/5'
-      }`}
+      } ${isShieldInteractive ? 'cursor-pointer' : ''}`}
     >
       {/* Pulsing halo around the active-turn player so everyone can see whose move it is */}
       {isActiveTurn && (
@@ -112,7 +149,7 @@ export default function PlayerCard({
         )}
 
         {/* Quest team shield — top-right gold shield */}
-        {isOnQuestTeam && (
+        {isOnQuestTeam && !shieldSelected && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -120,6 +157,44 @@ export default function PlayerCard({
             aria-label="任務隊員"
           >
             <Shield size={10} className="text-yellow-900" fill="currentColor" />
+          </motion.div>
+        )}
+
+        {/*
+          Team-select shield overlay — plan #83 Phase 1.
+          - `shieldSelected` → big solid 黃盾 (28px) sitting on the top-right quadrant so the
+            leader spots selected players instantly across the rail.
+          - `isShieldCandidate && !shieldSelected` → dim outline shield hinting "tap to add".
+          The two are mutually exclusive; once picked, the solid overlay takes over.
+        */}
+        {shieldSelected && (
+          <motion.div
+            initial={{ scale: 0, rotate: -12 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+            className="absolute -top-1.5 -right-1.5 pointer-events-none drop-shadow-[0_2px_4px_rgba(250,204,21,0.55)]"
+            aria-label="已選入任務隊伍"
+          >
+            <Shield
+              size={28}
+              className="text-yellow-400"
+              fill="#facc15"
+              strokeWidth={2}
+            />
+          </motion.div>
+        )}
+        {isShieldCandidate && !shieldSelected && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.55 }}
+            className="absolute -top-1.5 -right-1.5 pointer-events-none"
+            aria-hidden="true"
+          >
+            <Shield
+              size={24}
+              className="text-yellow-300/70"
+              strokeWidth={2}
+            />
           </motion.div>
         )}
 
