@@ -354,10 +354,10 @@ export default function LobbyPage(): JSX.Element {
             {playerList.map((player) => {
               const botDifficultyLabel = player.isBot
                 ? player.botDifficulty === 'easy'
-                  ? '新手'
+                  ? '弱AI'
                   : player.botDifficulty === 'hard'
-                  ? '高手'
-                  : '中堅'
+                  ? '強AI'
+                  : '中AI'
                 : null;
               return (
               <div
