@@ -394,15 +394,25 @@ export default function GamePage(): JSX.Element {
           </AnimatePresence>
         </div>
 
-        {/* Game Board — 5v5 rails with center panel (quest/vote/history) per Edward spec */}
+        {/* Game Board — 5v5 rails with center panel (quest/vote/history) per Edward spec.
+            #83 Phase 5: chat + scoresheet dock in the center column via `chatSlot`
+            /`scoresheetSlot` (side-by-side on lg, stacked on mobile). The floating
+            ChatPanel below is gated on `room.state === 'lobby'` to avoid duplicate
+            chat surfaces mid-game. */}
         <GameBoard
           room={room}
           currentPlayer={currentPlayer}
           isPicking={isLeaderPicking}
           selectedTeamIds={selectedTeamIds}
           onSeatClick={handleSeatClick}
+          chatSlot={
+            room.state !== 'lobby'
+              ? <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} variant="inline" />
+              : undefined
+          }
+          scoresheetSlot={<CompactScoresheet room={room} currentPlayer={currentPlayer} />}
         >
-          {/* Center column content — phase panel + history */}
+          {/* Center column content — phase panel only; scoresheet now lives in scoresheetSlot */}
 
           {/* Voting Phase */}
           {room.state === 'voting' && !isSpectator && (
@@ -484,11 +494,10 @@ export default function GamePage(): JSX.Element {
           {room.state === 'quest' && !isSpectator && <QuestPanel room={room} currentPlayer={currentPlayer} />}
 
           {/*
-            Live Scoresheet — collapsible wrapper (#83 Phase 2). Defaults collapsed mid-game;
-            auto-expands on `room.state === 'ended'`. Owns its own chrome so the outer div
-            wrapper from the pre-collapse era is gone.
+            Live Scoresheet moved to GameBoard `scoresheetSlot` (#83 Phase 5) so it
+            docks next to the inline chat on desktop. Collapsible wrapper owns its
+            own chrome (border + title + toggle) and auto-expands when game ends.
           */}
-          <CompactScoresheet room={room} currentPlayer={currentPlayer} />
         </GameBoard>
 
         {/* Suspicion Notes — personal private notepad, only shown during active game */}
@@ -782,8 +791,11 @@ export default function GamePage(): JSX.Element {
         )}
       </div>
 
-      {/* Floating chat — available during all game phases */}
-      {room.state !== 'lobby' && (
+      {/* #83 Phase 5 — chat docks inline inside GameBoard center column via
+          `chatSlot`, so no floating ChatPanel here during active game. If you
+          land on GamePage in the lobby state (shouldn't happen, but defensive),
+          render the floating launcher so players still have chat access. */}
+      {room.state === 'lobby' && (
         <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} />
       )}
 

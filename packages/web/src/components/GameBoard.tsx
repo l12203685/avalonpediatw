@@ -10,6 +10,17 @@ interface GameBoardProps {
   /** Content rendered in the center column (quest/vote/history panels). */
   children?: ReactNode;
   /**
+   * #83 Phase 5 — chat + scoresheet slots for the center-column 2-col layout.
+   * When both are provided, the center column renders:
+   *   state banner → {children} (phase panel) → [chatSlot | scoresheetSlot]
+   * On `lg:` screens the pair sits side-by-side (chat=flex-1, scoresheet=320px);
+   * on mobile/tablet they stack vertically (chat first with a min-height). When
+   * either slot is omitted the component falls back to the pre-Phase-5 layout
+   * (just children under the banner) so GameBoard stays backward-compatible.
+   */
+  chatSlot?: ReactNode;
+  scoresheetSlot?: ReactNode;
+  /**
    * Leader team-selection wiring (#83 Phase 1). When `isPicking` is true, every
    * rail `PlayerCard` becomes a shield candidate; clicking toggles membership in
    * `selectedTeamIds` via `onSeatClick`.
@@ -53,6 +64,8 @@ export default function GameBoard({
   room,
   currentPlayer,
   children,
+  chatSlot,
+  scoresheetSlot,
   isPicking = false,
   selectedTeamIds,
   onSeatClick,
@@ -158,6 +171,26 @@ export default function GameBoard({
     );
   };
 
+  // #83 Phase 5 — chat + scoresheet 2-col block. Rendered below `children` in
+  // both desktop and mobile center columns when both slots are provided.
+  // Desktop ≥lg: side-by-side (chat flex-1, scoresheet 320px).
+  // <lg (tablet/mobile): stacked vertically — chat first with min-height so it
+  // stays usable, scoresheet flows naturally below.
+  const centerExtras = (chatSlot || scoresheetSlot) ? (
+    <div className="flex flex-col lg:flex-row gap-3 min-h-0">
+      {chatSlot && (
+        <div className="flex-1 min-h-[240px] lg:min-h-[320px]">
+          {chatSlot}
+        </div>
+      )}
+      {scoresheetSlot && (
+        <div className="lg:w-[320px] lg:flex-shrink-0">
+          {scoresheetSlot}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="w-full">
       {/* Desktop / tablet: three-column grid */}
@@ -194,6 +227,7 @@ export default function GameBoard({
           </motion.div>
 
           {children}
+          {centerExtras}
         </section>
 
         {/* Right player rail — seats 1..splitIndex top-to-bottom (clockwise start) */}
@@ -240,6 +274,7 @@ export default function GameBoard({
           </motion.div>
 
           {children}
+          {centerExtras}
         </section>
       </div>
     </div>
