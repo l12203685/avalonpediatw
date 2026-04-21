@@ -133,11 +133,13 @@ export class GameEngine {
     this.currentLeaderIndex = 0;
     this.voteAttemptInRound = 0;
 
-    // Lady of the Lake is OUTSIDE the canonical 7-role scope lock
-    // (memory project_avalon_scope_canonical_7.md). Default OFF; only
-    // enabled when the host explicitly opts in (=== true). The prior
-    // default of "enabled unless disabled" caused accidental activation.
-    const ladyEnabled = this.room.roleOptions?.ladyOfTheLake === true && playerCount >= 7;
+    // Lady of the Lake default policy (Edward 2026-04-21):
+    // 7+ player games enable Lady by default to match the official Avalon
+    // rules, which bundle Lady with larger games. The host can still opt
+    // out via the lobby toggle (roleOptions.ladyOfTheLake === false).
+    // Player counts below 7 never enable Lady regardless of flag state.
+    const ladyExplicitlyDisabled = this.room.roleOptions?.ladyOfTheLake === false;
+    const ladyEnabled = playerCount >= 7 && !ladyExplicitlyDisabled;
     this.room.ladyOfTheLakeEnabled = ladyEnabled;
     if (ladyEnabled) {
       // Lady starts with the player to the right of the first leader (index 1 in player list, wrapping)

@@ -451,9 +451,9 @@ export default function LobbyPage(): JSX.Element {
                 <p className="text-[11px] sm:text-xs text-gray-500 text-center font-semibold">加入 AI 機器人</p>
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    { diff: 'easy',   label: '新手', bg: 'bg-white hover:bg-gray-200 border-gray-300 text-black' },
-                    { diff: 'normal', label: '中堅', bg: 'bg-slate-500 hover:bg-slate-400 border-slate-400 text-white' },
-                    { diff: 'hard',   label: '高手', bg: 'bg-black hover:bg-gray-900 border-gray-700 text-white' },
+                    { diff: 'easy',   label: '弱AI', bg: 'bg-white hover:bg-gray-200 border-gray-300 text-black' },
+                    { diff: 'normal', label: '中AI', bg: 'bg-slate-500 hover:bg-slate-400 border-slate-400 text-white' },
+                    { diff: 'hard',   label: '強AI', bg: 'bg-black hover:bg-gray-900 border-gray-700 text-white' },
                   ] as const).map(({ diff, label, bg }) => (
                     <button
                       key={diff}

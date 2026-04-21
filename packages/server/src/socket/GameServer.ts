@@ -1003,9 +1003,15 @@ export class GameServer {
         socket.emit('error', 'Room is full'); return;
       }
 
-      const existingBotCount = Object.values(room.players).filter(p => p.isBot).length;
       const botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
-      const botName = `AI${existingBotCount + 1}`;
+      // Bot names encode difficulty tier directly (弱AI / 中AI / 強AI).
+      // Per-player seat numbers (the PlayerCard chip) disambiguate
+      // multiple bots sharing the same strength label.
+      const botName = difficulty === 'easy'
+        ? '弱AI'
+        : difficulty === 'hard'
+          ? '強AI'
+          : '中AI';
 
       room.players[botId] = {
         id: botId,

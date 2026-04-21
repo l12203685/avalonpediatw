@@ -240,9 +240,9 @@
   "bot": {
     "label": "AI 機器人",
     "labelShort": "AI",
-    "newbie": "新手",
-    "core": "中堅",
-    "expert": "高手",
+    "newbie": "弱AI",
+    "core": "中AI",
+    "expert": "強AI",
     "fillTitle": "加入 AI 機器人",
     "quickFill": "快速填滿至 5 人"
   }

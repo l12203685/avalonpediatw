@@ -184,8 +184,11 @@ describe('Canonical 7-role scope lock', () => {
     });
   });
 
-  describe('Lady of the Lake — scope-locked OFF by default', () => {
-    it('RoomManager.createRoom defaults ladyOfTheLake to false', () => {
+  describe('Lady of the Lake — 7+ ON by default, explicit opt-out honoured', () => {
+    it('RoomManager.createRoom leaves ladyOfTheLake flag set to false (UI explicit opt-out baseline)', () => {
+      // RoomManager still seeds the flag as false so the lobby UI can render
+      // a de-selected toggle by default. The engine's 7+ default-ON policy
+      // is independent of this seed value — see startGame() lady logic.
       const rm = new RoomManager();
       const room = rm.createRoom('r1', 'Alice', 'p1');
       expect(room.roleOptions?.ladyOfTheLake).toBe(false);
@@ -202,7 +205,9 @@ describe('Canonical 7-role scope lock', () => {
       rm.destroy();
     });
 
-    it('startGame does NOT enable Lady of the Lake with default roleOptions (7-player game)', () => {
+    it('startGame honours explicit ladyOfTheLake=false opt-out for 7+ player games', () => {
+      // When the host explicitly disables Lady via the lobby toggle, Lady
+      // stays off even at 7+ players.
       const room = makeRoom(7); // uses default ladyOfTheLake: false
       const engine = new GameEngine(room);
       engine.startGame();
@@ -211,20 +216,44 @@ describe('Canonical 7-role scope lock', () => {
       engine.cleanup();
     });
 
-    it('startGame does NOT enable Lady of the Lake when roleOptions is missing entirely', () => {
+    it('startGame enables Lady of the Lake by default when roleOptions is missing entirely (7+ players)', () => {
+      // "Missing roleOptions" represents a host who has not touched the
+      // toggle. Default policy (2026-04-21) is ON for 7+ players.
       const room = makeRoom(7);
       delete (room as Partial<Room>).roleOptions;
       const engine = new GameEngine(room);
       engine.startGame();
-      // With no roleOptions the default is "off"; prior behaviour was "on"
-      // which is the bug this lock fixes.
-      expect(room.ladyOfTheLakeEnabled).toBe(false);
+      expect(room.ladyOfTheLakeEnabled).toBe(true);
       engine.cleanup();
     });
 
-    it('startGame does NOT auto-enable Lady of the Lake for 7+ players (scope lock)', () => {
+    it('startGame auto-enables Lady of the Lake for 7+ players when not explicitly disabled', () => {
       for (const count of [7, 8, 9, 10]) {
-        const room = makeRoom(count);
+        const room = makeRoom(count, {
+          percival: true,
+          morgana: true,
+          oberon: true,
+          mordred: true,
+          // ladyOfTheLake intentionally omitted — default policy applies
+        });
+        const engine = new GameEngine(room);
+        engine.startGame();
+        expect(room.ladyOfTheLakeEnabled).toBe(true);
+        engine.cleanup();
+      }
+    });
+
+    it('startGame never enables Lady of the Lake for 5-6 player games regardless of flag', () => {
+      for (const count of [5, 6]) {
+        // Even with ladyOfTheLake: true (explicit opt-in), <7 player games
+        // must not activate Lady — this matches official Avalon rules.
+        const room = makeRoom(count, {
+          percival: true,
+          morgana: true,
+          oberon: true,
+          mordred: true,
+          ladyOfTheLake: true,
+        });
         const engine = new GameEngine(room);
         engine.startGame();
         expect(room.ladyOfTheLakeEnabled).toBe(false);
@@ -232,10 +261,8 @@ describe('Canonical 7-role scope lock', () => {
       }
     });
 
-    it('Lady of the Lake can still be explicitly opted-in (post-MVP path stays available)', () => {
-      // The feature code is not deleted — it is flag-closed. An explicit
-      // opt-in still works for future post-MVP use, but this does NOT
-      // change the canonical 7-role lock: roles remain canonical.
+    it('Lady of the Lake respects explicit opt-in with canonical role lock intact', () => {
+      // Explicit opt-in path still works and canonical role lock holds.
       const room = makeRoom(7, {
         percival: true,
         morgana: true,
