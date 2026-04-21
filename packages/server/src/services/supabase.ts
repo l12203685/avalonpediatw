@@ -162,18 +162,23 @@ export async function updateRoomState(
 // ── 遊戲記錄 ─────────────────────────────────────────────────
 
 /**
- * 一局結束後，批次儲存所有玩家的遊戲記錄並更新 ELO
+ * 一局結束後，批次儲存所有玩家的遊戲記錄並更新 ELO。
+ *
+ * Returns true when the insert + stats update actually ran against Supabase,
+ * false when the call was a no-op (client not configured, empty input, or
+ * insert/rpc error). Callers should gate their success log on this return
+ * value so that "Saved N records" never appears when nothing was persisted.
  */
-export async function saveGameRecords(records: DbGameRecord[]): Promise<void> {
+export async function saveGameRecords(records: DbGameRecord[]): Promise<boolean> {
   const db = getSupabaseClient();
-  if (!db || records.length === 0) return;
+  if (!db || records.length === 0) return false;
 
   try {
     // 寫入 game_records
     const { error } = await db.from('game_records').insert(records);
     if (error) {
       console.error('[supabase] saveGameRecords error:', error.message);
-      return;
+      return false;
     }
 
     // 更新每位玩家的 ELO 和勝負統計
@@ -184,8 +189,10 @@ export async function saveGameRecords(records: DbGameRecord[]): Promise<void> {
         p_elo_delta: record.elo_delta,
       });
     }
+    return true;
   } catch (err) {
     console.error('[supabase] saveGameRecords exception:', err);
+    return false;
   }
 }
 
@@ -218,13 +225,21 @@ export interface DbGameEvent {
 }
 
 /**
- * 批次儲存一局的所有遊戲事件（AI 訓練資料 & 回放用）
+ * 批次儲存一局的所有遊戲事件（AI 訓練資料 & 回放用）。
+ *
+ * Returns true when the insert actually completed against Supabase, false
+ * when the call was a no-op (client not configured, empty input, or insert
+ * error). Callers should gate their success log on this return value.
  */
-export async function saveGameEvents(events: DbGameEvent[]): Promise<void> {
+export async function saveGameEvents(events: DbGameEvent[]): Promise<boolean> {
   const db = getSupabaseClient();
-  if (!db || events.length === 0) return;
+  if (!db || events.length === 0) return false;
   const { error } = await db.from('game_events').insert(events);
-  if (error) console.error('[supabase] saveGameEvents error:', error.message);
+  if (error) {
+    console.error('[supabase] saveGameEvents error:', error.message);
+    return false;
+  }
+  return true;
 }
 
 /**

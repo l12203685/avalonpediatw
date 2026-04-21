@@ -33,6 +33,50 @@ const chatLimiter = new SocketRateLimiter({
 const ELO_WIN  =  20;
 const ELO_LOSE = -15;
 
+// ─── Discord role-reveal lazy loader ─────────────────────────────────────
+//
+// `src/bots/**/*` is excluded from the server TypeScript build (pre-existing
+// discord.js typing issues in that subtree), so `dist/bots/` is never emitted
+// and a static import would fail at build time. We keep the runtime dynamic
+// and cache the load outcome in module scope so failed loads warn exactly
+// once on first use — not every time a game starts — and successful loads
+// avoid paying the require cost on every subsequent game.
+type RoleRevealFn = (room: Room) => Promise<unknown>;
+let cachedRoleRevealFn: RoleRevealFn | null = null;
+let roleRevealLoadAttempted = false;
+let roleRevealLoadFailed = false;
+
+function getRoleRevealFn(): RoleRevealFn | null {
+  if (roleRevealLoadAttempted) {
+    return roleRevealLoadFailed ? null : cachedRoleRevealFn;
+  }
+  roleRevealLoadAttempted = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('../bots/discord/roleReveal');
+    const fn = mod?.sendRoleRevealToRoom;
+    if (typeof fn !== 'function') {
+      roleRevealLoadFailed = true;
+      console.warn('[roleReveal] module loaded but sendRoleRevealToRoom is not a function — DM reveal disabled');
+      return null;
+    }
+    cachedRoleRevealFn = fn as RoleRevealFn;
+    return cachedRoleRevealFn;
+  } catch (loadErr) {
+    roleRevealLoadFailed = true;
+    const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+    console.warn(`[roleReveal] DM helper not available — disabled for this process (${msg})`);
+    return null;
+  }
+}
+
+function roomHasDiscordPlayer(room: Room): boolean {
+  for (const pid of Object.keys(room.players)) {
+    if (pid.startsWith('discord:')) return true;
+  }
+  return false;
+}
+
 export class GameServer {
   private io: SocketIOServer;
   private roomManager: RoomManager;
@@ -494,20 +538,17 @@ export class GameServer {
       // (e.g. socket/web clients) — those already got their role via the
       // `game:started` event above.
       //
-      // Dynamic require() is intentional: the server tsconfig excludes
-      // `src/bots/**/*` from typecheck (pre-existing discord.js typing
-      // issues in that subtree), so a static import would pull those
-      // files into the typecheck graph. This keeps them out at build
-      // time while still loading at runtime.
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { sendRoleRevealToRoom } = require('../bots/discord/roleReveal');
-        Promise.resolve(sendRoleRevealToRoom(updatedRoom)).catch((err: unknown) =>
-          console.error(`[roleReveal] unexpected error in room ${roomId}:`, err)
-        );
-      } catch (loadErr) {
-        // Module not present (e.g. bot build disabled) — log and continue.
-        console.warn(`[roleReveal] could not load DM helper:`, loadErr);
+      // Skip loading entirely when no Discord player is in the room — most
+      // socket/bot-only games never need this helper, and loading it would
+      // just emit noise in the log. Also skip if a previous load failed (the
+      // lazy loader caches the outcome so we warn once, not every game).
+      if (roomHasDiscordPlayer(updatedRoom)) {
+        const sendRoleRevealToRoom = getRoleRevealFn();
+        if (sendRoleRevealToRoom) {
+          Promise.resolve(sendRoleRevealToRoom(updatedRoom)).catch((err: unknown) =>
+            console.error(`[roleReveal] unexpected error in room ${roomId}:`, err)
+          );
+        }
       }
 
       const firstLeader = updatedRoom.players[Object.keys(updatedRoom.players)[updatedRoom.leaderIndex % Object.keys(updatedRoom.players).length]];
@@ -812,8 +853,10 @@ export class GameServer {
     }
 
     if (records.length > 0) {
-      await saveGameRecords(records);
-      console.log(`[supabase] Saved ${records.length} game records for room ${roomId}`);
+      const recordsSaved = await saveGameRecords(records);
+      if (recordsSaved) {
+        console.log(`[supabase] Saved ${records.length} game records for room ${roomId}`);
+      }
 
       // Emit ELO deltas to all players in room so end screen can show +/- ELO
       const eloDeltas: Record<string, number> = {};
@@ -854,8 +897,10 @@ export class GameServer {
         actor_id:   e.actor_id,
         event_data: e.event_data,
       }));
-      await saveGameEvents(events);
-      console.log(`[supabase] Saved ${events.length} game events for room ${roomId}`);
+      const eventsSaved = await saveGameEvents(events);
+      if (eventsSaved) {
+        console.log(`[supabase] Saved ${events.length} game events for room ${roomId}`);
+      }
     }
   }
 
