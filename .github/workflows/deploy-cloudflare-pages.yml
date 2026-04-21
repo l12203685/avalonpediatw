@@ -60,4 +60,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         # --commit-message forced to ASCII because CF Pages API rejects non-UTF-8 commit messages (code 8000111)
-        run: wrangler pages deploy packages/web/dist --project-name=avalonpediatw --branch=${{ github.head_ref || github.ref_name }} --commit-dirty=true --commit-hash=${{ github.sha }} --commit-message="ci: deploy ${{ github.sha }}"
+        run: |
+          wrangler pages deploy packages/web/dist \
+            --project-name=avalonpediatw \
+            --branch=${{ github.head_ref || github.ref_name }} \
+            --commit-dirty=true \
+            --commit-hash=${{ github.sha }} \
+            --commit-message="ci deploy ${{ github.sha }}"
