@@ -7,6 +7,16 @@ const hasFirebaseConfig = !!(
   import.meta.env.VITE_FIREBASE_PROJECT_ID
 );
 
+/**
+ * 提示目前 client 是否具備 Firebase（正式帳號）能力。
+ *
+ * `ProfileSettingsPage` 的「升級訪客」區塊要據此決定 Google 按鈕可不可按：
+ * 沒 Firebase 配置就只剩 Discord / Line。
+ */
+export function hasFirebaseAuthConfigured(): boolean {
+  return hasFirebaseConfig;
+}
+
 // Lazy-load Firebase only when config is present
 let _firebaseAuth: import('firebase/auth').Auth | undefined;
 

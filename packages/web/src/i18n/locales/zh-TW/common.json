@@ -108,6 +108,13 @@
     "logoutConfirm": "確定要登出？",
     "logoutConfirmBody": "登出將清除本機遊戲暫存與玩家名稱。確定繼續？",
     "upgradeGuest": "將訪客資料升級為正式帳號（Google/Discord/Line），保留所有戰績與 ELO。",
+    "upgradeWithGoogle": "升級 Google",
+    "upgradeWithDiscord": "升級 Discord",
+    "upgradeWithLine": "升級 Line",
+    "upgradeGoogleUnavailable": "此環境未設定 Google 登入",
+    "upgradeFailed": "升級失敗，請稍後再試",
+    "upgradeHint": "完成社群登入後，系統會把訪客 ELO / 戰績 / 追蹤列表合併到新帳號。",
+    "alreadyRegistered": "目前為正式帳號，不需要再升級。",
     "currentName": "目前名稱",
     "comingSoon": "即將上線"
   },
@@ -121,9 +128,12 @@
   },
   "guest": {
     "rename": "更改訪客名稱",
+    "renamePlaceholder": "新名稱（2–20 字）",
     "renameLimit": "24 小時內最多可更改 3 次",
     "renameLengthError": "名稱長度需介於 2–20 字",
     "renameReservedPrefix": "名稱不能以 Guest_ 開頭（保留給系統預設）",
-    "renameEmptyError": "名稱不能為空白"
+    "renameEmptyError": "名稱不能為空白",
+    "renameFailed": "改名失敗，請稍後再試",
+    "renameSuccess": "名稱已更新"
   }
 }

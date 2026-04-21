@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from './store/gameStore';
-import { initializeAuth, onAuthStateChange, extractOAuthTokenFromUrl } from './services/auth';
+import { initializeAuth, onAuthStateChange, extractOAuthTokenFromUrl, resumeGuestFromCookie } from './services/auth';
 import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
 import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
@@ -64,6 +64,23 @@ function App(): JSX.Element {
     // Initialize Firebase Auth
     initializeAuth();
 
+    // #84 訪客 cookie 綁定：冷啟動若發現還沒有活 socket，且 Firebase 也沒 signed-in
+    // user（下面的 onAuthStateChange 會先觸發 null），就先試 `guest_session` cookie
+    // 續簽；成功就直接起 socket，省掉 LoginPage 再走一次「訪客進入」。失敗就 fall
+    // through 到 LoginPage，使用者自己選登入方式。
+    let guestResumeCancelled = false;
+    const tryGuestResume = async (): Promise<boolean> => {
+      if (getStoredToken()) return true; // 已經有 token（另一條路接上了）
+      try {
+        const resumed = await resumeGuestFromCookie();
+        if (!resumed || guestResumeCancelled) return false;
+        await initializeSocket(resumed.token);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     // Listen to auth state changes — re-init socket on page refresh.
     // Firebase's listener fires `null` for every unauthenticated session,
     // including guest sessions that have already established a socket via
@@ -79,16 +96,21 @@ function App(): JSX.Element {
           // Socket init failed — user will see connection banner
         }
       } else if (!getStoredToken()) {
-        // Only tear down when there is no active session at all. A guest
-        // who just finished initializeSocket() in LoginPage already has a
-        // stored token and must be left alone.
-        setIsAuthenticated(false);
-        disconnectSocket();
+        // 沒 Firebase user + 沒 stored token → 先嘗試 guest cookie 續簽；不成再
+        // 進入登出狀態讓 LoginPage 出現。
+        const resumed = await tryGuestResume();
+        if (!resumed) {
+          setIsAuthenticated(false);
+          disconnectSocket();
+        }
       }
       setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      guestResumeCancelled = true;
+      unsubscribe();
+    };
   }, []);
 
   if (isLoading) {

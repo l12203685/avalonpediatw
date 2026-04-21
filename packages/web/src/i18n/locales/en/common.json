@@ -108,6 +108,13 @@
     "logoutConfirm": "Log out?",
     "logoutConfirmBody": "Logging out clears your local game cache and player name. Continue?",
     "upgradeGuest": "Upgrade guest data to a registered account (Google/Discord/Line) while keeping all records and ELO.",
+    "upgradeWithGoogle": "Upgrade with Google",
+    "upgradeWithDiscord": "Upgrade with Discord",
+    "upgradeWithLine": "Upgrade with Line",
+    "upgradeGoogleUnavailable": "Google login is not configured in this environment",
+    "upgradeFailed": "Upgrade failed, please try again later",
+    "upgradeHint": "After the social login completes, your guest ELO / match history / watchlist will be merged into the new account.",
+    "alreadyRegistered": "Already a registered account — no upgrade needed.",
     "currentName": "Current name",
     "comingSoon": "Coming soon"
   },
@@ -121,9 +128,12 @@
   },
   "guest": {
     "rename": "Rename Guest",
+    "renamePlaceholder": "New name (2–20 chars)",
     "renameLimit": "Up to 3 renames per 24 hours",
     "renameLengthError": "Name must be 2–20 characters",
     "renameReservedPrefix": "Name cannot start with \"Guest_\" (reserved for system defaults)",
-    "renameEmptyError": "Name cannot be blank"
+    "renameEmptyError": "Name cannot be blank",
+    "renameFailed": "Rename failed, please try again later",
+    "renameSuccess": "Name updated"
   }
 }
