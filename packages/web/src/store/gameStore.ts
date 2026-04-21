@@ -19,7 +19,6 @@ interface GameStore {
   toasts: Toast[];
   socketStatus: SocketStatus;
   isSpectator: boolean;
-  quickSoloMode: boolean;
   setGameState: (state: GameState) => void;
   setRoom: (room: Room | null) => void;
   setCurrentPlayer: (player: Player | null) => void;
@@ -30,7 +29,6 @@ interface GameStore {
   removeToast: (id: string) => void;
   setSocketStatus: (status: SocketStatus) => void;
   setSpectating: (value: boolean) => void;
-  setQuickSoloMode: (value: boolean) => void;
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -42,14 +40,12 @@ export const useGameStore = create<GameStore>((set) => ({
   toasts: [],
   socketStatus: 'disconnected',
   isSpectator: false,
-  quickSoloMode: false,
 
   setGameState: (state: GameState) => set({ gameState: state }),
   navigateToProfile: (userId) => set({ gameState: 'profile', profileUserId: userId }),
   navigateToReplay: (roomId) => set({ gameState: 'replay', replayRoomId: roomId }),
   setSocketStatus: (status: SocketStatus) => set({ socketStatus: status }),
   setSpectating: (value: boolean) => set({ isSpectator: value }),
-  setQuickSoloMode: (value: boolean) => set({ quickSoloMode: value }),
 
   setRoom: (room: Room | null) => {
     if (!room) localStorage.removeItem('avalon_room');

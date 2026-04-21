@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { startGame, kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady, setRoomPassword } from '../services/socket';
+import { kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady, setRoomPassword, startGame } from '../services/socket';
 import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown, Lock, Unlock, ArrowLeft, Clock } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
 
@@ -31,7 +31,7 @@ const ROLE_OPTION_INFO: Record<string, { label: string; description: string; pai
 };
 
 export default function LobbyPage(): JSX.Element {
-  const { room, currentPlayer, quickSoloMode, setQuickSoloMode, setGameState, addToast } = useGameStore();
+  const { room, currentPlayer, setGameState, addToast } = useGameStore();
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -49,19 +49,6 @@ export default function LobbyPage(): JSX.Element {
     timerRef.current = setTimeout(() => setTimedOut(true), LOBBY_TIMEOUT_MS);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [room]);
-
-  // Quick solo mode: auto-fill with 4 normal bots then start when room is ready
-  useEffect(() => {
-    if (!quickSoloMode || !room || !currentPlayer || room.host !== currentPlayer.id) return;
-    const playerCount = Object.keys(room.players).length;
-    if (playerCount < 5) {
-      addBot(room.id, 'normal');
-      return;
-    }
-    // All 4 bots added — start the game and clear the flag
-    setQuickSoloMode(false);
-    setTimeout(() => startGame(room.id), 300);
-  }, [quickSoloMode, room?.id, Object.keys(room?.players ?? {}).length]);
 
   if (!room || !currentPlayer) {
     return (
