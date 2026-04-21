@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { QuestRecord, Room } from '@avalon/shared';
 import audioService from '../services/audio';
 import { seatPrefix } from '../utils/seatDisplay';
@@ -17,6 +18,7 @@ export default function QuestResultOverlay({
   onDismiss,
   duration = 4000,
 }: QuestResultOverlayProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   const [progress, setProgress] = useState(100);
   const success = record.result === 'success';
   // Stabilize onDismiss so the timer effect does not restart on parent re-renders
@@ -60,7 +62,7 @@ export default function QuestResultOverlay({
         style={{ borderColor: success ? '#22c55e' : '#ef4444' }}
         onClick={e => e.stopPropagation()}
       >
-        <p className="text-sm text-gray-400">第 {record.round} 關任務 (Quest {record.round})</p>
+        <p className="text-sm text-gray-400">{t('game:questResult.roundLabel', { round: record.round })}</p>
 
         {/* Dramatic icon */}
         <motion.div
@@ -82,14 +84,14 @@ export default function QuestResultOverlay({
             className="text-4xl font-extrabold"
             style={{ color: success ? '#4ade80' : '#f87171' }}
           >
-            {success ? '任務成功！' : '任務失敗！'}
+            {success ? t('game:questResult.success') : t('game:questResult.fail')}
           </h2>
           <p className="text-gray-400 text-sm mt-1">
-            {success ? 'Quest Succeeded' : 'Quest Failed'}
+            {success ? t('game:questResult.successEn') : t('game:questResult.failEn')}
           </p>
           {record.failCount > 0 && (
             <p className="text-red-400 text-sm mt-2">
-              {record.failCount} 張失敗票 ({record.failCount} fail vote{record.failCount > 1 ? 's' : ''})
+              {t('game:questResult.failCount', { count: record.failCount })}
             </p>
           )}
         </motion.div>
@@ -97,7 +99,7 @@ export default function QuestResultOverlay({
         {/* Team members — seat# prefix so "#3 Guest_444" format (#93) */}
         {teamPlayers.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs text-gray-500">本次任務隊伍：</p>
+            <p className="text-xs text-gray-500">{t('game:questResult.teamLabel')}</p>
             <div className="flex flex-wrap justify-center gap-2">
               {teamPlayers.map((player, i) => (
                 <motion.span

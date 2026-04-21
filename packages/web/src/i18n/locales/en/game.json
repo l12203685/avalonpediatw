@@ -113,7 +113,62 @@
     "title": "Scoresheet",
     "stats": "{{quests}} quests · {{votes}} votes",
     "collapsedSummary": "{{quests}} quests · {{votes}} votes · tap to expand",
-    "expanded": "Collapse"
+    "expanded": "Collapse",
+    "leaderSeat": "Leader seat",
+    "resultTooltip": "Result",
+    "memoTooltip": "Memo",
+    "questLabel": "Quest",
+    "ladyLabel": "Lady",
+    "ladyRowLabel": "Lady",
+    "questSuccessChar": "S",
+    "questFailChar": "F",
+    "legendTeam": "Team",
+    "legendApprove": "Approve",
+    "legendReject": "Reject",
+    "legendQuestSuccess": "Quest Success",
+    "legendQuestFail": "Quest Fail",
+    "legendLady": "Lady of the Lake"
+  },
+  "suspicionBoard": {
+    "headerTitle": "Suspicion Notes",
+    "privateLabel": "— private notes",
+    "hint": "Click to cycle status — visible to you only",
+    "statusEvil": "Suspected Evil",
+    "statusNeutral": "Unsure",
+    "statusTrusted": "Trusted"
+  },
+  "voteAnalysis": {
+    "title": "📊 Vote Analysis",
+    "proposalCount": "{{count}} proposals",
+    "colPlayer": "Player",
+    "colRole": "Role",
+    "colApproveRate": "Approve rate",
+    "colLeaderCount": "Leader",
+    "colQuestCount": "On quest",
+    "youSuffix": "(You)",
+    "matrixTitle": "Vote matrix (rows = players, columns = proposals)",
+    "matrixHeader": "Player ↓ / Proposal →",
+    "matrixTeamTooltip": "Leader proposal: {{team}}",
+    "matrixLegend": "✓ = proposal passed · ✗ = rejected · Yellow frame = round leader · 👍 = approve · 👎 = reject",
+    "roundPrefix": "R{{round}}"
+  },
+  "voteReveal": {
+    "roundProposal": "Round {{round}} — Proposal #{{attempt}}",
+    "title": "Vote Results",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "approveRejectCount": "{{approvals}} approve / {{rejections}} reject",
+    "teamLabel": "Quest Team"
+  },
+  "questResult": {
+    "roundLabel": "Quest {{round}}",
+    "success": "Quest Succeeded!",
+    "successEn": "Quest Succeeded",
+    "fail": "Quest Failed!",
+    "failEn": "Quest Failed",
+    "failCount_one": "{{count}} fail vote",
+    "failCount_other": "{{count}} fail votes",
+    "teamLabel": "Quest team:"
   },
   "lady": {
     "title": "🔮 Lady of the Lake",

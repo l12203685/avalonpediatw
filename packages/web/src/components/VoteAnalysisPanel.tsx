@@ -2,26 +2,25 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Room, Player } from '@avalon/shared';
+import { useTranslation } from 'react-i18next';
 
 interface VoteAnalysisPanelProps {
   room: Room;
   currentPlayer: Player;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  merlin:   '梅林',
-  percival: '派西維爾',
-  loyal:    '忠臣',
-  assassin: '刺客',
-  morgana:  '莫甘娜',
-  oberon:   '奧伯倫',
-  mordred:  '莫德雷德',
-  minion:   '爪牙',
-};
 const GOOD_ROLES = new Set(['merlin', 'percival', 'loyal']);
 
 export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisPanelProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   const [open, setOpen] = useState(false);
+
+  const roleLabel = (role: string | undefined): string => {
+    if (!role) return '?';
+    const key = `game:role.${role}`;
+    const translated = t(key);
+    return translated === key ? role : translated;
+  };
 
   if (room.voteHistory.length === 0) return <></>;
 
@@ -41,8 +40,8 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-700/30 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-gray-300">📊 投票行為分析 (Vote Analysis)</span>
-          <span className="text-xs text-gray-600">{room.voteHistory.length} 次提案</span>
+          <span className="text-sm font-bold text-gray-300">{t('game:voteAnalysis.title')}</span>
+          <span className="text-xs text-gray-600">{t('game:voteAnalysis.proposalCount', { count: room.voteHistory.length })}</span>
         </div>
         {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
       </button>
@@ -63,11 +62,11 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                 <table className="w-full text-xs min-w-[340px]">
                   <thead>
                     <tr className="text-gray-500 border-b border-gray-700/60">
-                      <th className="text-left py-1.5 pr-2 font-semibold">玩家</th>
-                      <th className="text-left py-1.5 pr-2 font-semibold">角色</th>
-                      <th className="text-center py-1.5 px-1 font-semibold">贊成率</th>
-                      <th className="text-center py-1.5 px-1 font-semibold">領隊</th>
-                      <th className="text-center py-1.5 px-1 font-semibold">參與任務</th>
+                      <th className="text-left py-1.5 pr-2 font-semibold">{t('game:voteAnalysis.colPlayer')}</th>
+                      <th className="text-left py-1.5 pr-2 font-semibold">{t('game:voteAnalysis.colRole')}</th>
+                      <th className="text-center py-1.5 px-1 font-semibold">{t('game:voteAnalysis.colApproveRate')}</th>
+                      <th className="text-center py-1.5 px-1 font-semibold">{t('game:voteAnalysis.colLeaderCount')}</th>
+                      <th className="text-center py-1.5 px-1 font-semibold">{t('game:voteAnalysis.colQuestCount')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -87,10 +86,10 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                         >
                           <td className="py-1.5 pr-2 font-semibold text-white whitespace-nowrap">
                             {player.name}
-                            {isMe && <span className="text-yellow-500 text-xs ml-1">(你)</span>}
+                            {isMe && <span className="text-yellow-500 text-xs ml-1">{t('game:voteAnalysis.youSuffix')}</span>}
                           </td>
                           <td className={`py-1.5 pr-2 whitespace-nowrap ${isGood ? 'text-blue-400' : 'text-red-400'}`}>
-                            {ROLE_LABEL[player.role ?? ''] ?? player.role ?? '?'}
+                            {roleLabel(player.role ?? undefined)}
                           </td>
                           <td className="py-1.5 px-1 text-center text-gray-300">
                             {cast.length > 0
@@ -115,7 +114,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
               {/* ── Vote matrix ── */}
               <div>
                 <p className="text-xs text-gray-600 mb-2 font-semibold uppercase tracking-wider">
-                  投票矩陣 (每列 = 玩家，每欄 = 一次提案)
+                  {t('game:voteAnalysis.matrixTitle')}
                 </p>
                 <div className="overflow-x-auto">
                   <table className="text-xs border-collapse">
@@ -123,11 +122,11 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                       <tr>
                         {/* player name column */}
                         <th className="text-left pr-3 pb-1.5 text-gray-600 font-normal whitespace-nowrap" style={{ minWidth: 72 }}>
-                          玩家 ↓ / 提案 →
+                          {t('game:voteAnalysis.matrixHeader')}
                         </th>
                         {room.voteHistory.map((v, i) => (
                           <th key={i} className="text-center px-1 pb-1.5" style={{ minWidth: 34 }}>
-                            <div className="text-gray-600 leading-none">R{v.round}</div>
+                            <div className="text-gray-600 leading-none">{t('game:voteAnalysis.roundPrefix', { round: v.round })}</div>
                             <div className={`font-bold leading-none mt-0.5 ${v.approved ? 'text-blue-400' : 'text-red-400'}`}>
                               {v.approved ? '✓' : '✗'}
                             </div>
@@ -150,7 +149,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                               return (
                                 <td
                                   key={i}
-                                  title={isLeader ? `隊長提案：${v.team.map(id => room.players[id]?.name ?? id).join('、')}` : undefined}
+                                  title={isLeader ? t('game:voteAnalysis.matrixTeamTooltip', { team: v.team.map(id => room.players[id]?.name ?? id).join('、') }) : undefined}
                                   className={`text-center px-1 py-0.5 ${isLeader ? 'ring-1 ring-yellow-500/40 rounded bg-yellow-900/10' : ''}`}
                                 >
                                   {vote === undefined ? (
@@ -170,7 +169,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                   </table>
                 </div>
                 <p className="text-xs text-gray-700 mt-2">
-                  ✓ = 提案通過 · ✗ = 提案否決 · 黃框 = 該輪隊長 · 👍 = 贊成 · 👎 = 反對
+                  {t('game:voteAnalysis.matrixLegend')}
                 </p>
               </div>
 

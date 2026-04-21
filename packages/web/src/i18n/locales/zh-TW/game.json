@@ -113,7 +113,62 @@
     "title": "牌譜",
     "stats": "{{quests}} 輪任務・{{votes}} 次投票",
     "collapsedSummary": "{{quests}} 輪任務・{{votes}} 次投票・點擊展開",
-    "expanded": "收合牌譜"
+    "expanded": "收合牌譜",
+    "leaderSeat": "隊長座位 (Leader seat)",
+    "resultTooltip": "結果 (Result)",
+    "memoTooltip": "簡碼 (Memo)",
+    "questLabel": "任務",
+    "ladyLabel": "湖",
+    "ladyRowLabel": "湖中",
+    "questSuccessChar": "成",
+    "questFailChar": "敗",
+    "legendTeam": "組隊",
+    "legendApprove": "同意",
+    "legendReject": "否決",
+    "legendQuestSuccess": "任務成功",
+    "legendQuestFail": "任務失敗",
+    "legendLady": "湖中女神"
+  },
+  "suspicionBoard": {
+    "headerTitle": "嫌疑筆記 (Suspicion Notes)",
+    "privateLabel": "— 私人記錄",
+    "hint": "點擊循環切換狀態 — 僅你自己可見 (Click to cycle status — visible to you only)",
+    "statusEvil": "疑似邪惡",
+    "statusNeutral": "不確定",
+    "statusTrusted": "信任"
+  },
+  "voteAnalysis": {
+    "title": "📊 投票行為分析 (Vote Analysis)",
+    "proposalCount": "{{count}} 次提案",
+    "colPlayer": "玩家",
+    "colRole": "角色",
+    "colApproveRate": "贊成率",
+    "colLeaderCount": "領隊",
+    "colQuestCount": "參與任務",
+    "youSuffix": "(你)",
+    "matrixTitle": "投票矩陣 (每列 = 玩家，每欄 = 一次提案)",
+    "matrixHeader": "玩家 ↓ / 提案 →",
+    "matrixTeamTooltip": "隊長提案：{{team}}",
+    "matrixLegend": "✓ = 提案通過 · ✗ = 提案否決 · 黃框 = 該輪隊長 · 👍 = 贊成 · 👎 = 反對",
+    "roundPrefix": "R{{round}}"
+  },
+  "voteReveal": {
+    "roundProposal": "第 {{round}} 關 — 第 {{attempt}} 次提案",
+    "title": "投票結果 (Vote Results)",
+    "approved": "通過 (Approved)",
+    "rejected": "否決 (Rejected)",
+    "approveRejectCount": "{{approvals}} 贊成 / {{rejections}} 拒絕",
+    "teamLabel": "任務隊伍 (Quest Team)"
+  },
+  "questResult": {
+    "roundLabel": "第 {{round}} 關任務 (Quest {{round}})",
+    "success": "任務成功！",
+    "successEn": "Quest Succeeded",
+    "fail": "任務失敗！",
+    "failEn": "Quest Failed",
+    "failCount_one": "{{count}} 張失敗票 ({{count}} fail vote)",
+    "failCount_other": "{{count}} 張失敗票 ({{count}} fail votes)",
+    "teamLabel": "本次任務隊伍："
   },
   "lady": {
     "title": "🔮 湖中女神 (Lady of the Lake)",

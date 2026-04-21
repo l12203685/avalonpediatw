@@ -8,13 +8,14 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player } from '@avalon/shared';
 import { ChevronDown, ChevronUp, ClipboardList } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 type Suspicion = 'evil' | 'neutral' | 'trusted';
 
-const SUSPICION_CONFIG: Record<Suspicion, { label: string; emoji: string; bg: string; text: string }> = {
-  evil:    { label: '疑似邪惡',  emoji: '👹', bg: 'bg-red-900/50 border-red-600',   text: 'text-red-300' },
-  neutral: { label: '不確定',    emoji: '❓', bg: 'bg-gray-800/50 border-gray-600', text: 'text-gray-400' },
-  trusted: { label: '信任',      emoji: '✅', bg: 'bg-blue-900/50 border-blue-600',  text: 'text-blue-300' },
+const SUSPICION_STYLE: Record<Suspicion, { emoji: string; bg: string; text: string }> = {
+  evil:    { emoji: '👹', bg: 'bg-red-900/50 border-red-600',   text: 'text-red-300' },
+  neutral: { emoji: '❓', bg: 'bg-gray-800/50 border-gray-600', text: 'text-gray-400' },
+  trusted: { emoji: '✅', bg: 'bg-blue-900/50 border-blue-600',  text: 'text-blue-300' },
 };
 
 const CYCLE_ORDER: Suspicion[] = ['neutral', 'trusted', 'evil'];
@@ -25,8 +26,15 @@ interface SuspicionBoardProps {
 }
 
 export default function SuspicionBoard({ room, currentPlayer }: SuspicionBoardProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   const [expanded, setExpanded] = useState(false);
   const storageKey = `suspicion:${room.id}:${currentPlayer.id}`;
+
+  const statusLabel: Record<Suspicion, string> = {
+    evil: t('game:suspicionBoard.statusEvil'),
+    neutral: t('game:suspicionBoard.statusNeutral'),
+    trusted: t('game:suspicionBoard.statusTrusted'),
+  };
 
   const [suspicions, setSuspicions] = useState<Record<string, Suspicion>>(() => {
     try {
@@ -67,8 +75,8 @@ export default function SuspicionBoard({ room, currentPlayer }: SuspicionBoardPr
       >
         <div className="flex items-center gap-2">
           <ClipboardList size={16} className="text-amber-400" />
-          <span className="text-sm font-bold text-gray-300">嫌疑筆記 (Suspicion Notes)</span>
-          <span className="text-xs text-gray-600">— 私人記錄</span>
+          <span className="text-sm font-bold text-gray-300">{t('game:suspicionBoard.headerTitle')}</span>
+          <span className="text-xs text-gray-600">{t('game:suspicionBoard.privateLabel')}</span>
           {(evilCount > 0 || trustCount > 0) && (
             <span className="text-xs bg-gray-700 rounded-full px-2 py-0.5 text-gray-400">
               {evilCount > 0 && <span className="text-red-400">{evilCount}👹</span>}
@@ -90,11 +98,11 @@ export default function SuspicionBoard({ room, currentPlayer }: SuspicionBoardPr
             className="overflow-hidden"
           >
             <div className="px-4 pb-4 space-y-2">
-              <p className="text-xs text-gray-600 italic">點擊循環切換狀態 — 僅你自己可見 (Click to cycle status — visible to you only)</p>
+              <p className="text-xs text-gray-600 italic">{t('game:suspicionBoard.hint')}</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {otherPlayers.map(player => {
                   const status: Suspicion = suspicions[player.id] ?? 'neutral';
-                  const cfg = SUSPICION_CONFIG[status];
+                  const cfg = SUSPICION_STYLE[status];
                   return (
                     <motion.button
                       key={player.id}
@@ -105,7 +113,7 @@ export default function SuspicionBoard({ room, currentPlayer }: SuspicionBoardPr
                       <span className="text-base">{cfg.emoji}</span>
                       <div className="text-left min-w-0">
                         <div className="font-bold truncate">{player.name}</div>
-                        <div className="opacity-70">{cfg.label}</div>
+                        <div className="opacity-70">{statusLabel[status]}</div>
                       </div>
                     </motion.button>
                   );

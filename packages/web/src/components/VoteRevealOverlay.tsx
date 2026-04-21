@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { VoteRecord, Room } from '@avalon/shared';
 import audioService from '../services/audio';
 import { seatPrefix } from '../utils/seatDisplay';
@@ -18,6 +19,7 @@ export default function VoteRevealOverlay({
   onDismiss,
   duration = 3500,
 }: VoteRevealOverlayProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   const [progress, setProgress] = useState(100);
   // Stabilize onDismiss so the timer effect does not restart on parent re-renders
   const onDismissRef = useRef(onDismiss);
@@ -66,9 +68,9 @@ export default function VoteRevealOverlay({
         {/* Title */}
         <div className="text-center">
           <p className="text-sm text-gray-400 mb-1">
-            第 {record.round} 關 — 第 {record.attempt} 次提案
+            {t('game:voteReveal.roundProposal', { round: record.round, attempt: record.attempt })}
           </p>
-          <h2 className="text-2xl font-bold text-white">投票結果 (Vote Results)</h2>
+          <h2 className="text-2xl font-bold text-white">{t('game:voteReveal.title')}</h2>
         </div>
 
         {/* Result */}
@@ -84,17 +86,17 @@ export default function VoteRevealOverlay({
         >
           <div className="text-5xl mb-2">{record.approved ? '✅' : '❌'}</div>
           <div className="text-3xl font-bold">
-            {record.approved ? '通過 (Approved)' : '否決 (Rejected)'}
+            {record.approved ? t('game:voteReveal.approved') : t('game:voteReveal.rejected')}
           </div>
           <div className="text-sm mt-1 opacity-80">
-            {approvals} 贊成 / {rejections} 拒絕
+            {t('game:voteReveal.approveRejectCount', { approvals, rejections })}
           </div>
         </motion.div>
 
         {/* Proposed team — seat# prefix so "#3 Guest_444" format (#93) */}
         {record.team.length > 0 && (
           <div className="bg-gray-800/40 border border-gray-700 rounded-xl px-4 py-2">
-            <p className="text-xs text-gray-500 mb-1.5 font-semibold uppercase tracking-wider">任務隊伍 (Quest Team)</p>
+            <p className="text-xs text-gray-500 mb-1.5 font-semibold uppercase tracking-wider">{t('game:voteReveal.teamLabel')}</p>
             <div className="flex flex-wrap gap-1.5">
               {record.team.map(id => (
                 <span key={id} className="text-xs bg-blue-900/40 border border-blue-700/50 text-blue-200 px-2 py-0.5 rounded-full">

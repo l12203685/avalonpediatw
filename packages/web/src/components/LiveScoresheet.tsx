@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Room, Player, VoteRecord, QuestRecord, LadyOfTheLakeRecord } from '@avalon/shared';
 import {
   ShieldIcon,
@@ -40,6 +41,7 @@ function nominationShorthand(leaderSeat: number, teamSeats: number[]): string {
 }
 
 export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   const playerIds = useMemo(() => Object.keys(room.players), [room.players]);
   const playerCount = playerIds.length;
 
@@ -119,7 +121,7 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
               <th
                 scope="col"
                 className="px-0.5 py-1 text-gray-500 font-semibold text-center bg-avalon-dark"
-                title="隊長座位 (Leader seat)"
+                title={t('game:scoresheet.leaderSeat')}
               >
                 L
               </th>
@@ -143,7 +145,7 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
               <th
                 scope="col"
                 className="px-0.5 py-1 text-gray-500 font-semibold text-center"
-                title="結果 (Result)"
+                title={t('game:scoresheet.resultTooltip')}
               >
                 R
               </th>
@@ -151,9 +153,9 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
               <th
                 scope="col"
                 className="px-0.5 py-1 text-gray-500 font-semibold text-center"
-                title="簡碼 (Memo)"
+                title={t('game:scoresheet.memoTooltip')}
               >
-                備
+                M
               </th>
             </tr>
           </thead>
@@ -188,6 +190,9 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
                     key={`quest-${idx}`}
                     row={row}
                     playerCount={playerCount}
+                    questLabel={t('game:scoresheet.questLabel')}
+                    successChar={t('game:scoresheet.questSuccessChar')}
+                    failChar={t('game:scoresheet.questFailChar')}
                   />
                 );
               }
@@ -199,6 +204,8 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
                     playerCount={playerCount}
                     seatMap={seatMap}
                     currentPlayerId={currentPlayer.id}
+                    ladyColLabel={t('game:scoresheet.ladyLabel')}
+                    ladyRowLabel={t('game:scoresheet.ladyRowLabel')}
                   />
                 );
               }
@@ -208,41 +215,41 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
         </table>
       </div>
 
-      {/* Legend — 中文 (2026-04-21 recolor: 黃盾/白勾/黑方/藍圓/紅圓) */}
+      {/* Legend — i18n aware (2026-04-21 recolor: 黃盾/白勾/黑方/藍圓/紅圓) */}
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] sm:text-xs text-gray-400">
         <LegendItem>
           <span className="inline-flex items-center justify-center w-3.5 h-3.5 text-yellow-400">
             <ShieldIcon className="w-3.5 h-3.5" />
           </span>
-          組隊
+          {t('game:scoresheet.legendTeam')}
         </LegendItem>
         <LegendItem>
           <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded bg-yellow-500/40 text-white">
             <ApproveMark className="w-3 h-3" />
           </span>
-          同意
+          {t('game:scoresheet.legendApprove')}
         </LegendItem>
         <LegendItem>
           <span className="inline-flex items-center justify-center w-3.5 h-3.5 text-black">
             <RejectMark className="w-3.5 h-3.5" />
           </span>
-          否決
+          {t('game:scoresheet.legendReject')}
         </LegendItem>
         <LegendItem>
           <span className="inline-flex items-center justify-center w-3.5 h-3.5 text-blue-500">
             <QuestSuccessMark className="w-3 h-3" />
           </span>
-          任務成功
+          {t('game:scoresheet.legendQuestSuccess')}
         </LegendItem>
         <LegendItem>
           <span className="inline-flex items-center justify-center w-3.5 h-3.5 text-red-500">
             <QuestFailMark className="w-3 h-3" />
           </span>
-          任務失敗
+          {t('game:scoresheet.legendQuestFail')}
         </LegendItem>
         <LegendItem>
           <span className="inline-block w-3.5 h-3.5 rounded bg-cyan-600/50" />
-          湖中女神
+          {t('game:scoresheet.legendLady')}
         </LegendItem>
       </div>
     </div>
@@ -344,9 +351,15 @@ function NominationRow({
 function QuestRow({
   row,
   playerCount,
+  questLabel,
+  successChar,
+  failChar,
 }: {
   row: Extract<ScoresheetRow, { type: 'quest' }>;
   playerCount: number;
+  questLabel: string;
+  successChar: string;
+  failChar: string;
 }): JSX.Element {
   const { record, round } = row;
   const successCount = record.team.length - record.failCount;
@@ -365,10 +378,10 @@ function QuestRow({
         {round}
       </td>
 
-      {/* Quest result spans all seat cols — "任務" label + oxx dots */}
+      {/* Quest result spans all seat cols — quest label + oxx dots */}
       <td colSpan={playerCount} className="px-1 py-1">
         <div className="flex items-center justify-center gap-1 sm:gap-2 text-yellow-200">
-          <span className="text-[9px] sm:text-[11px] font-bold tracking-wider">任務</span>
+          <span className="text-[9px] sm:text-[11px] font-bold tracking-wider">{questLabel}</span>
           <div className="flex items-center gap-[2px]">
             {symbols.map((sym, i) =>
               sym === 'o' ? (
@@ -393,7 +406,7 @@ function QuestRow({
           record.result === 'success' ? 'text-blue-300' : 'text-red-300'
         }`}
       >
-        <div className="text-[10px] sm:text-xs">{record.result === 'success' ? '成' : '敗'}</div>
+        <div className="text-[10px] sm:text-xs">{record.result === 'success' ? successChar : failChar}</div>
       </td>
 
       {/* Memo col — oxx shorthand */}
@@ -409,11 +422,15 @@ function LadyRow({
   playerCount,
   seatMap,
   currentPlayerId,
+  ladyColLabel,
+  ladyRowLabel,
 }: {
   row: Extract<ScoresheetRow, { type: 'lady' }>;
   playerCount: number;
   seatMap: Map<string, number>;
   currentPlayerId: string;
+  ladyColLabel: string;
+  ladyRowLabel: string;
 }): JSX.Element {
   const { record } = row;
   const holderSeat = (seatMap.get(record.holderId) ?? -1) + 1; // 1-based
@@ -434,13 +451,13 @@ function LadyRow({
     <tr className="border-b border-cyan-900/50 bg-cyan-800/25">
       {/* Lady label in leader col */}
       <td className="px-0 py-1 text-center text-cyan-200 font-bold bg-cyan-900/60 text-[9px] sm:text-[11px]">
-        湖
+        {ladyColLabel}
       </td>
 
       {/* Center — holder>target arrow + result (if visible) */}
       <td colSpan={playerCount} className="px-1 py-1">
         <div className="flex items-center justify-center gap-1 sm:gap-2 text-cyan-100">
-          <span className="text-[9px] sm:text-[11px] font-bold tracking-wider">湖中</span>
+          <span className="text-[9px] sm:text-[11px] font-bold tracking-wider">{ladyRowLabel}</span>
           <span className="font-mono text-[10px] sm:text-xs">
             {displaySeatNumber(holderSeat)}&gt;{displaySeatNumber(targetSeat)}
           </span>
