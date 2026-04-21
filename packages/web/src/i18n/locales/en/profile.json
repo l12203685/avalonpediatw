@@ -1,18 +1,115 @@
 {
   "title": "Profile",
+  "headerTitle": "Profile",
   "matchRecords": "Match Records",
   "recentGames": "Recent Games",
   "winRate": "Win Rate",
   "wins": "W",
   "losses": "L",
   "totalGames": "Total Games",
+  "totalGamesLabel": "Games Played",
   "eloRating": "ELO Rating",
   "rank": "Rank",
   "viewReplay": "View Replay",
   "follow": "Follow",
   "unfollow": "Unfollow",
   "editProfile": "Edit Profile",
+  "editShort": "Edit",
   "displayName": "Display Name",
+  "displayNameLabel": "Display Name",
+  "displayNamePlaceholder": "1-40 characters",
+  "photoUrlLabel": "Avatar URL (http(s), leave blank to clear)",
   "noGamesYet": "No game records yet",
-  "loading": "Loading…"
+  "noGamesShort": "No game records yet",
+  "loading": "Loading…",
+  "saving": "Saving…",
+  "save": "Save",
+  "cancel": "Cancel",
+  "claims": {
+    "maybeOld": "You have <count>{{count}}</count> potential legacy match records",
+    "maybeOldHint": "We matched records that may belong to you — claim them to have them counted in your stats",
+    "pending": "You have a pending claim application — tap to view status",
+    "searchOld": "Search by old nickname and claim legacy records"
+  },
+  "identity": {
+    "userId": "User ID",
+    "email": "Email",
+    "copyId": "Copy User ID"
+  },
+  "edit": {
+    "errLogin": "Please log in first",
+    "errNameLength": "Display name must be 1-40 characters",
+    "errUrlFormat": "Avatar URL must be an http(s) URL",
+    "errUrlTooLong": "Avatar URL too long (max 500 characters)",
+    "updateSuccess": "Profile updated",
+    "updateFail": "Update failed"
+  },
+  "error": {
+    "noRecords": "No game records yet — complete a game to see your profile",
+    "notLoggedIn": "Please log in to view your profile",
+    "loadFailed": "Failed to load user data, please try again later",
+    "operationFailed": "Operation failed, please try again later",
+    "copyFailed": "Copy failed"
+  },
+  "stats": {
+    "winsLabel": "Wins",
+    "lossesLabel": "Losses",
+    "teamWinRates": "Team Win Rates",
+    "recentGamesSuffix": "— last {{count}} games",
+    "good": "⚔️ Good",
+    "evil": "👹 Evil",
+    "eloTrend": "ELO Trend (last {{count}} games)",
+    "roleWinRates": "Role Win Rates",
+    "playerCountWinRates": "Win Rate by Player Count",
+    "playersCount": "{{count}}-player",
+    "recentNGames": "Recent {{count}} Games"
+  },
+  "record": {
+    "win": "W",
+    "loss": "L",
+    "playerCount": "{{count}}-player"
+  },
+  "follow": {
+    "followSuccess": "Following {{name}}",
+    "unfollowSuccess": "Unfollowed {{name}}",
+    "loading": "…"
+  },
+  "replay": {
+    "title": "Game Record —",
+    "playerCount": "{{count}}-player game",
+    "playerCountFull": "{{count}}-player game",
+    "yourRole": "Your role",
+    "teamGood": "Good",
+    "teamEvil": "Evil",
+    "win": "🔵 Victory",
+    "loss": "🔴 Defeat",
+    "legacyNote": "This match pre-dates the replay feature — only basic stats are shown",
+    "noData": "No replay data for this match",
+    "questResults": "Quest Results",
+    "winnerEvil": "🔴 Evil Wins",
+    "winnerGood": "🔵 Good Wins",
+    "questSuccessChar": "B",
+    "questFailChar": "R"
+  },
+  "replayEvent": {
+    "gameStarted": "Game started — {{playerCount}}-player, leader: {{leaderId}}",
+    "votingPhaseStarted": "Round {{round}} — Proposal #{{proposal}}, leader: {{leader}}",
+    "questTeamSelected": "Leader proposes: {{team}}",
+    "teamAutoSelected": "⏱ Leader timed out, team auto-selected: {{team}}",
+    "voteApproved": "✅ Approved",
+    "voteRejected": "❌ Rejected",
+    "votingResolved": "Vote result: {{result}} ({{approvals}} approve, {{rejections}} reject)",
+    "teamApproved": "Proposal approved, quest begins",
+    "questSuccess": "✅ Success",
+    "questFail": "❌ Fail",
+    "questResolved": "Quest result: {{result}} ({{failCount}} fail votes)",
+    "roundEndedSuccess": "Round {{round}} ended — quest succeeded",
+    "roundEndedFail": "Round {{round}} ended — quest failed",
+    "discussionPhaseStarted": "Assassination phase — Good team won 3 quests",
+    "assassinationSubmitted": "Assassin {{assassin}} strikes {{target}}",
+    "gameEndedEvil": "Evil",
+    "gameEndedGood": "Good",
+    "gameEnded": "Game ended — {{winner}} wins ({{reason}})"
+  },
+  "viewLeaderboard": "View Leaderboard"
 }

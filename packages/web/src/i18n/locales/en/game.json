@@ -10,6 +10,17 @@
     "minion": "Minion of Mordred",
     "unknown": "Unknown"
   },
+  "roleLabel": {
+    "merlin": "Merlin",
+    "percival": "Percival",
+    "loyal": "Loyal Servant",
+    "assassin": "Assassin",
+    "morgana": "Morgana",
+    "mordred": "Mordred",
+    "oberon": "Oberon",
+    "minion": "Minion of Mordred",
+    "unknown": "Unknown"
+  },
   "phase": {
     "selectTeam": "Select Team",
     "vote": "Vote",
@@ -17,6 +28,15 @@
     "discussion": "Discussion",
     "assassination": "Assassination",
     "ended": "Game Ended"
+  },
+  "phaseLabel": {
+    "voting": "Team Select",
+    "votingInProgress": "Voting",
+    "quest": "Quest",
+    "ladyOfTheLake": "Lady of the Lake",
+    "discussion": "Assassination",
+    "ended": "Game Over",
+    "lobby": "Lobby"
   },
   "vote": {
     "approve": "Approve",
@@ -51,5 +71,85 @@
     "waiting": "Waiting for players…",
     "start": "Start Game",
     "leave": "Leave Room"
+  },
+  "header": {
+    "title": "Avalon",
+    "state": "State: ",
+    "viewRole": "View Role",
+    "mute": "Mute",
+    "unmute": "Unmute"
+  },
+  "roster": {
+    "goodCount": "🔵 Good team — {{count}}",
+    "evilCount": "🔴 Evil team — {{count}}"
+  },
+  "connection": {
+    "reconnecting": "Reconnecting…",
+    "disconnected": "Disconnected — check your connection"
+  },
+  "spectator": {
+    "bannerTitle": "👁 Spectating — roles hidden",
+    "leave": "Leave Spectate",
+    "hintVoting": "👁 Spectating — waiting for players to vote...",
+    "hintQuest": "👁 Spectating — the quest team is acting...",
+    "hintLady": "👁 Spectating — Lady of the Lake is inspecting...",
+    "hintDiscussion": "👁 Spectating — the Assassin is choosing a target..."
+  },
+  "action": {
+    "leaderTurn": "👑 Your turn — select a quest team",
+    "voteTurn": "🗳️ Your turn to vote — approve or reject the team",
+    "questTurn": "⚔️ You are on the quest — vote success or fail",
+    "ladyTurn": "🔮 You hold the Lady — inspect a player",
+    "assassinTurn": "🗡️ You are the Assassin — choose your target"
+  },
+  "teamSelect": {
+    "waitingTitle": "Waiting for leader to pick a team",
+    "waitingDesc": "Leader <leader>{{name}}</leader> is choosing the quest team...",
+    "needMembers": "This round requires {{count}} members",
+    "unknownCount": "?",
+    "unlimitedTimer": "⏱ Untimed",
+    "timer": "⏱ {{seconds}}s"
+  },
+  "scoresheet": {
+    "title": "Scoresheet",
+    "stats": "{{quests}} quests · {{votes}} votes"
+  },
+  "lady": {
+    "title": "🔮 Lady of the Lake",
+    "targetTeamLabel": "<target>{{name}}</target>'s alignment is:",
+    "resultGood": "⚔️ Good",
+    "resultEvil": "👹 Evil",
+    "pass": "The Lady passes to this player...",
+    "pickTitle": "Choose a player to inspect their team alignment",
+    "waitingDesc": "<holder>{{name}}</holder> is using the Lady of the Lake to inspect a player...",
+    "waitingNote": "(The Lady holder is inspecting a player's team alignment...)"
+  },
+  "assassin": {
+    "questHistoryHeader": "Quest Team History",
+    "roundPrefix": "R{{round}}:",
+    "failBadge": "({{count}} fail)",
+    "title": "🗡️ Assassinate Merlin",
+    "prompt": "Who do you think is Merlin? Choose your target",
+    "selectedHint": "Target selected, awaiting result...",
+    "discussionTitle": "💬 Assassination Phase",
+    "goodWonIntro": "The Good team won 3 quests!",
+    "pickingTarget": "The Assassin is choosing a target, trying to find Merlin...",
+    "warning": "If the Assassin kills Merlin, Evil wins!"
+  },
+  "ended": {
+    "evilWins": "👹 Evil Wins!",
+    "goodWins": "⚔️ Good Wins!",
+    "reasonFailedQuests": "💀 Evil failed 3 quests",
+    "reasonVoteRejections": "🚫 5 proposals all rejected — Evil wins by default",
+    "reasonMerlinKilledPrefix": "🗡️ The Assassin killed Merlin!",
+    "reasonMerlinKilledSuffix": "was Merlin",
+    "reasonWrongKillPrefix": "🛡️ The Assassin mistakenly killed",
+    "reasonWrongKillSuffix": ", Good wins!",
+    "reasonAssassinationTimeout": "⏱️ Assassination timed out, Good wins!",
+    "roundFailLabel": "{{count}} fail",
+    "rolesReveal": "Final Role Reveal:",
+    "youLabel": "(You)",
+    "rematch": "Rematch",
+    "backHome": "Back to Home"
   }
 }

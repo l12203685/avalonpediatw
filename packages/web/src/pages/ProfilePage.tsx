@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
 import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile } from '../services/api';
@@ -6,26 +7,14 @@ import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
 import { getStoredToken } from '../services/socket';
 
-const ROLE_NAMES: Record<string, string> = {
-  merlin:   '梅林 (Merlin)',
-  percival: '派西維爾 (Percival)',
-  loyal:    '忠臣 (Loyal Servant)',
-  assassin: '刺客 (Assassin)',
-  morgana:  '莫甘娜 (Morgana)',
-  mordred:  '莫德雷德 (Mordred)',
-  oberon:   '奧伯倫 (Oberon)',
-  minion:   '爪牙 (Minion)',
-  unknown:  '未知 (Unknown)',
-};
-
 const ROLE_COLORS: Record<string, string> = {
   merlin: 'text-blue-300', percival: 'text-blue-200', loyal: 'text-blue-400',
   assassin: 'text-red-400', morgana: 'text-rose-400', mordred: 'text-red-600',
   oberon: 'text-slate-400', minion: 'text-red-300',
 };
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' });
+function formatDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
 const EVENT_ICONS: Record<string, string> = {
@@ -44,65 +33,107 @@ const EVENT_ICONS: Record<string, string> = {
   game_final_stats:          '📈',
 };
 
-function formatReplayEvent(ev: GameEvent): string {
+type TranslateFn = (key: string, values?: Record<string, unknown>) => string;
+
+function formatReplayEvent(ev: GameEvent, t: TranslateFn): string {
   const d = ev.event_data as Record<string, unknown>;
   switch (ev.event_type) {
     case 'game_started':
-      return `遊戲開始 — ${d.playerCount as number}人局，領袖：${d.leaderId as string}`;
+      return t('profile:replayEvent.gameStarted', {
+        playerCount: d.playerCount as number,
+        leaderId: d.leaderId as string,
+      });
     case 'voting_phase_started': {
       const leaderLabel = (d.leaderName as string) || (d.leaderId as string) || '?';
-      return `第${d.round as number}輪 — 第${(d.failedVotes ?? d.failCount) as number}次提案，領袖：${leaderLabel}`;
+      return t('profile:replayEvent.votingPhaseStarted', {
+        round: d.round as number,
+        proposal: (d.failedVotes ?? d.failCount) as number,
+        leader: leaderLabel,
+      });
     }
     case 'quest_team_selected':
-      return `領袖提案：${(d.team as string[])?.join('、')}`;
+      return t('profile:replayEvent.questTeamSelected', {
+        team: (d.team as string[])?.join('、'),
+      });
     case 'team_auto_selected':
-      return `⏱ 領袖超時，自動選隊：${(d.team as string[])?.join('、')}`;
+      return t('profile:replayEvent.teamAutoSelected', {
+        team: (d.team as string[])?.join('、'),
+      });
     case 'voting_resolved': {
-      const approved = (d.result === 'approved' || d.approved) ? '✅ 通過' : '❌ 否決';
-      return `投票結果：${approved}（${(d.approvals ?? d.approveCount) as number}贊成，${(d.rejections ?? d.rejectCount) as number}反對）`;
+      const approved = (d.result === 'approved' || d.approved)
+        ? t('profile:replayEvent.voteApproved')
+        : t('profile:replayEvent.voteRejected');
+      return t('profile:replayEvent.votingResolved', {
+        result: approved,
+        approvals: (d.approvals ?? d.approveCount) as number,
+        rejections: (d.rejections ?? d.rejectCount) as number,
+      });
     }
     case 'team_approved':
-      return `提案通過，任務開始`;
+      return t('profile:replayEvent.teamApproved');
     case 'quest_resolved': {
-      const result = d.result === 'success' ? '✅ 成功' : '❌ 失敗';
-      return `任務結果：${result}（${d.failCount as number}張失敗票）`;
+      const result = d.result === 'success'
+        ? t('profile:replayEvent.questSuccess')
+        : t('profile:replayEvent.questFail');
+      return t('profile:replayEvent.questResolved', {
+        result,
+        failCount: d.failCount as number,
+      });
     }
     case 'round_ended':
-      return `第${d.round as number}局結束 — 任務${d.result === 'success' ? '成功' : '失敗'}`;
+      return d.result === 'success'
+        ? t('profile:replayEvent.roundEndedSuccess', { round: d.round as number })
+        : t('profile:replayEvent.roundEndedFail', { round: d.round as number });
     case 'discussion_phase_started':
-      return `進入暗殺階段 — 好人贏得3個任務`;
+      return t('profile:replayEvent.discussionPhaseStarted');
     case 'assassination_submitted':
-      return `刺客 ${d.assassinId as string} 刺殺 ${d.targetId as string}`;
+      return t('profile:replayEvent.assassinationSubmitted', {
+        assassin: d.assassinId as string,
+        target: d.targetId as string,
+      });
     case 'game_ended': {
-      const winner = d.evilWins ? '邪惡方' : '好人方';
-      return `遊戲結束 — ${winner}獲勝（${d.reason as string}）`;
+      const winner = d.evilWins
+        ? t('profile:replayEvent.gameEndedEvil')
+        : t('profile:replayEvent.gameEndedGood');
+      return t('profile:replayEvent.gameEnded', {
+        winner,
+        reason: d.reason as string,
+      });
     }
     default:
       return ev.event_type;
   }
 }
 
-function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: string, game: RecentGame) => void }): JSX.Element {
+interface GameRowProps {
+  game: RecentGame;
+  onReplay: (roomId: string, game: RecentGame) => void;
+  roleNames: Record<string, string>;
+  t: TranslateFn;
+  locale: string;
+}
+
+function GameRow({ game, onReplay, roleNames, t, locale }: GameRowProps): JSX.Element {
   const won = game.won;
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-gray-700/50 last:border-0">
       <div className={`w-14 text-center text-xs font-bold py-1 rounded ${won ? 'bg-blue-900/60 text-blue-400' : 'bg-red-900/60 text-red-400'}`}>
-        {won ? '勝' : '敗'}
+        {won ? t('profile:record.win') : t('profile:record.loss')}
       </div>
       <div className="flex-1">
         <span className={`text-sm font-semibold ${ROLE_COLORS[game.role] ?? 'text-gray-300'}`}>
-          {ROLE_NAMES[game.role] ?? game.role}
+          {roleNames[game.role] ?? game.role}
         </span>
-        <span className="text-xs text-gray-500 ml-2">{game.player_count}人局</span>
+        <span className="text-xs text-gray-500 ml-2">{t('profile:record.playerCount', { count: game.player_count })}</span>
       </div>
       <div className={`text-sm font-bold ${game.elo_delta >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
         {game.elo_delta >= 0 ? `+${game.elo_delta}` : game.elo_delta}
       </div>
-      <div className="text-xs text-gray-600 w-14 text-right">{formatDate(game.created_at)}</div>
+      <div className="text-xs text-gray-600 w-14 text-right">{formatDate(game.created_at, locale)}</div>
       <button
         onClick={() => onReplay(game.room_id, game)}
         className="p-1 text-gray-600 hover:text-blue-400 transition-colors"
-        title="查看遊戲紀錄"
+        title={t('profile:viewReplay')}
       >
         <ExternalLink size={12} />
       </button>
@@ -111,6 +142,19 @@ function GameRow({ game, onReplay }: { game: RecentGame; onReplay: (roomId: stri
 }
 
 export default function ProfilePage(): JSX.Element {
+  const { t, i18n } = useTranslation(['profile', 'common', 'game']);
+  const locale = i18n.language.startsWith('en') ? 'en-US' : 'zh-TW';
+  const roleNames: Record<string, string> = {
+    merlin:   t('game:roleLabel.merlin'),
+    percival: t('game:roleLabel.percival'),
+    loyal:    t('game:roleLabel.loyal'),
+    assassin: t('game:roleLabel.assassin'),
+    morgana:  t('game:roleLabel.morgana'),
+    mordred:  t('game:roleLabel.mordred'),
+    oberon:   t('game:roleLabel.oberon'),
+    minion:   t('game:roleLabel.minion'),
+    unknown:  t('game:roleLabel.unknown'),
+  };
   const { setGameState, profileUserId, navigateToProfile, addToast } = useGameStore();
   const [profile, setProfile]       = useState<UserProfile | null>(null);
   const [loading, setLoading]       = useState(true);
@@ -145,11 +189,11 @@ export default function ProfilePage(): JSX.Element {
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : '';
         if (msg.includes('404')) {
-          setError('尚無遊戲記錄 — 完成一場遊戲後就能看到你的個人資料');
+          setError(t('profile:error.noRecords'));
         } else if (msg.includes('401')) {
-          setError('請先登入才能查看個人資料');
+          setError(t('profile:error.notLoggedIn'));
         } else {
-          setError('無法載入用戶資料，請稍後再試');
+          setError(t('profile:error.loadFailed'));
         }
       })
       .finally(() => setLoading(false));
@@ -185,14 +229,14 @@ export default function ProfilePage(): JSX.Element {
       if (isFollowingUser) {
         await unfollowUser(token, profileUserId);
         setIsFollowingUser(false);
-        addToast(`已取消追蹤 ${profile?.display_name ?? ''}`, 'info');
+        addToast(t('profile:follow.unfollowSuccess', { name: profile?.display_name ?? '' }), 'info');
       } else {
         await followUser(token, profileUserId);
         setIsFollowingUser(true);
-        addToast(`已追蹤 ${profile?.display_name ?? ''}`, 'success');
+        addToast(t('profile:follow.followSuccess', { name: profile?.display_name ?? '' }), 'success');
       }
     } catch {
-      addToast('操作失敗，請稍後再試', 'error');
+      addToast(t('profile:error.operationFailed'), 'error');
     } finally {
       setFollowLoading(false);
     }
@@ -214,21 +258,21 @@ export default function ProfilePage(): JSX.Element {
   const handleSaveEdit = async (): Promise<void> => {
     const token = getStoredToken();
     if (!token || !profile) {
-      setEditError('請先登入');
+      setEditError(t('profile:edit.errLogin'));
       return;
     }
     const trimmedName = editName.trim();
     if (trimmedName.length === 0 || trimmedName.length > 40) {
-      setEditError('暱稱需為 1-40 個字');
+      setEditError(t('profile:edit.errNameLength'));
       return;
     }
     const trimmedUrl = editPhotoUrl.trim();
     if (trimmedUrl.length > 0 && !/^https?:\/\//i.test(trimmedUrl)) {
-      setEditError('頭像連結需為 http(s) 網址');
+      setEditError(t('profile:edit.errUrlFormat'));
       return;
     }
     if (trimmedUrl.length > 500) {
-      setEditError('頭像連結過長（上限 500 字元）');
+      setEditError(t('profile:edit.errUrlTooLong'));
       return;
     }
 
@@ -249,11 +293,11 @@ export default function ProfilePage(): JSX.Element {
       const updated = await updateMyProfile(token, patch);
       setProfile(updated);
       setEditing(false);
-      addToast('個人資料已更新', 'success');
+      addToast(t('profile:edit.updateSuccess'), 'success');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '更新失敗';
+      const msg = err instanceof Error ? err.message : t('profile:edit.updateFail');
       setEditError(msg);
-      addToast('更新失敗', 'error');
+      addToast(t('profile:edit.updateFail'), 'error');
     } finally {
       setEditSaving(false);
     }
@@ -264,8 +308,8 @@ export default function ProfilePage(): JSX.Element {
     const id = profile.id;
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(id).then(
-        () => addToast('已複製用戶編號', 'success'),
-        () => addToast('複製失敗', 'error'),
+        () => addToast(t('profile:identity.copyId'), 'success'),
+        () => addToast(t('profile:error.copyFailed'), 'error'),
       );
     }
   };
@@ -332,7 +376,7 @@ export default function ProfilePage(): JSX.Element {
           >
             <ArrowLeft size={20} />
           </button>
-          <h1 className="text-2xl font-black text-white">個人資料 (Profile)</h1>
+          <h1 className="text-2xl font-black text-white">{t('profile:headerTitle')}</h1>
         </div>
 
         {loading && (
@@ -359,10 +403,14 @@ export default function ProfilePage(): JSX.Element {
                   <Sparkles size={24} className="text-amber-300 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-white">
-                      你有 <span className="text-amber-300">{autoMatchCount}</span> 場可能的舊戰績
+                      <Trans
+                        i18nKey="profile:claims.maybeOld"
+                        values={{ count: autoMatchCount }}
+                        components={{ count: <span className="text-amber-300" /> }}
+                      />
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      系統比對到你可能擁有的舊紀錄 — 申請綁定後就能顯示在你的統計裡
+                      {t('profile:claims.maybeOldHint')}
                     </p>
                   </div>
                   <Link2 size={16} className="text-blue-300 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
@@ -375,7 +423,7 @@ export default function ProfilePage(): JSX.Element {
                 className="w-full bg-yellow-900/40 hover:bg-yellow-900/50 border border-yellow-700/50 rounded-xl p-3 text-left transition-all flex items-center gap-3"
               >
                 <Clock size={16} className="text-yellow-300 flex-shrink-0" />
-                <p className="text-xs text-yellow-200 flex-1">你有尚未審核的綁定申請 — 點我查看進度</p>
+                <p className="text-xs text-yellow-200 flex-1">{t('profile:claims.pending')}</p>
               </button>
             )}
             {isMe && autoMatchCount === 0 && !hasPendingClaim && (
@@ -383,7 +431,7 @@ export default function ProfilePage(): JSX.Element {
                 onClick={() => setGameState('claimsNew')}
                 className="w-full bg-avalon-card/30 hover:bg-avalon-card/50 border border-gray-700 rounded-xl p-2.5 text-center text-xs text-gray-500 hover:text-gray-300 transition-all flex items-center justify-center gap-2"
               >
-                <Link2 size={12} /> 用舊暱稱搜尋並綁定舊戰績
+                <Link2 size={12} /> {t('profile:claims.searchOld')}
               </button>
             )}
 
@@ -405,19 +453,19 @@ export default function ProfilePage(): JSX.Element {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-bold text-gray-400 mb-1">顯示暱稱</label>
+                      <label className="block text-xs font-bold text-gray-400 mb-1">{t('profile:displayNameLabel')}</label>
                       <input
                         type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         maxLength={40}
-                        placeholder="1-40 個字"
+                        placeholder={t('profile:displayNamePlaceholder')}
                         className="w-full bg-avalon-card/80 border border-gray-600 focus:border-blue-500 rounded-lg px-3 py-2 text-white text-sm outline-none"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 mb-1">大頭照連結 (http(s) URL，留空則清除)</label>
+                    <label className="block text-xs font-bold text-gray-400 mb-1">{t('profile:photoUrlLabel')}</label>
                     <input
                       type="url"
                       value={editPhotoUrl}
@@ -439,14 +487,14 @@ export default function ProfilePage(): JSX.Element {
                       className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-blue-700 bg-blue-900/40 hover:bg-blue-800/60 text-blue-200 hover:text-white font-semibold transition-all disabled:opacity-50"
                     >
                       <Check size={14} />
-                      {editSaving ? '儲存中…' : '儲存'}
+                      {editSaving ? t('profile:saving') : t('profile:save')}
                     </button>
                     <button
                       onClick={handleCancelEdit}
                       disabled={editSaving}
                       className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-gray-600 bg-gray-800/40 hover:bg-gray-700/60 text-gray-300 hover:text-white font-semibold transition-all disabled:opacity-50"
                     >
-                      <XIcon size={14} /> 取消
+                      <XIcon size={14} /> {t('profile:cancel')}
                     </button>
                   </div>
                 </div>
@@ -466,9 +514,9 @@ export default function ProfilePage(): JSX.Element {
                         <button
                           onClick={handleStartEdit}
                           className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-gray-600 bg-gray-800/40 hover:bg-gray-700/60 text-gray-300 hover:text-white transition-all"
-                          title="編輯個人資料"
+                          title={t('profile:editProfile')}
                         >
-                          <Pencil size={12} /> 編輯
+                          <Pencil size={12} /> {t('profile:editShort')}
                         </button>
                       )}
                     </div>
@@ -505,7 +553,7 @@ export default function ProfilePage(): JSX.Element {
                         }`}
                       >
                         {isFollowingUser ? <UserMinus size={12} /> : <UserPlus size={12} />}
-                        {followLoading ? '…' : isFollowingUser ? '取消追蹤' : '追蹤'}
+                        {followLoading ? t('profile:follow.loading') : isFollowingUser ? t('profile:unfollow') : t('profile:follow')}
                       </button>
                     )}
                   </div>
@@ -516,19 +564,19 @@ export default function ProfilePage(): JSX.Element {
               {isMe && !editing && (
                 <div className="mt-4 pt-4 border-t border-gray-700/60 space-y-2">
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="text-gray-500 min-w-[72px]">用戶編號</span>
+                    <span className="text-gray-500 min-w-[72px]">{t('profile:identity.userId')}</span>
                     <code className="flex-1 text-gray-300 font-mono text-[10px] break-all">{profile.id}</code>
                     <button
                       onClick={handleCopyId}
                       className="flex items-center gap-1 px-2 py-1 rounded border border-gray-600 bg-gray-800/40 hover:bg-gray-700/60 text-gray-400 hover:text-white transition-all"
-                      title="複製用戶編號"
+                      title={t('profile:identity.copyId')}
                     >
                       <Copy size={10} />
                     </button>
                   </div>
                   {profile.email && (
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-gray-500 min-w-[72px] flex items-center gap-1"><Mail size={11} /> 信箱</span>
+                      <span className="text-gray-500 min-w-[72px] flex items-center gap-1"><Mail size={11} /> {t('profile:identity.email')}</span>
                       <span className="flex-1 text-gray-300 break-all">{profile.email}</span>
                     </div>
                   )}
@@ -541,25 +589,25 @@ export default function ProfilePage(): JSX.Element {
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
                 <div className="text-3xl font-black text-white">{profile.total_games}</div>
                 <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
-                  <Clock size={12} /> 總場次
+                  <Clock size={12} /> {t('profile:totalGamesLabel')}
                 </div>
               </div>
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
                 <div className="text-3xl font-black text-blue-400">{winRate}%</div>
                 <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
-                  <Trophy size={12} /> 勝率
+                  <Trophy size={12} /> {t('profile:winRate')}
                 </div>
               </div>
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
                 <div className="text-3xl font-black text-blue-400">{profile.games_won}</div>
                 <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
-                  <Shield size={12} /> 勝場
+                  <Shield size={12} /> {t('profile:stats.winsLabel')}
                 </div>
               </div>
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
                 <div className="text-3xl font-black text-red-400">{profile.games_lost}</div>
                 <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
-                  <Swords size={12} /> 敗場
+                  <Swords size={12} /> {t('profile:stats.lossesLabel')}
                 </div>
               </div>
             </div>
@@ -567,7 +615,7 @@ export default function ProfilePage(): JSX.Element {
             {/* Good/Evil split */}
             {teamStats && (teamStats.good.total > 0 || teamStats.evil.total > 0) && (
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
-                <p className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">陣營勝率 (Team Win Rates) <span className="font-normal text-gray-500">— 近 {profile.recent_games.length} 局</span></p>
+                <p className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">{t('profile:stats.teamWinRates')} <span className="font-normal text-gray-500">{t('profile:stats.recentGamesSuffix', { count: profile.recent_games.length })}</span></p>
                 <div className="grid grid-cols-2 gap-3">
                   {(['good', 'evil'] as const).map(team => {
                     const { wins, total } = teamStats[team];
@@ -579,7 +627,7 @@ export default function ProfilePage(): JSX.Element {
                           {total > 0 ? `${pct}%` : '—'}
                         </div>
                         <div className={`text-xs mt-1 ${isGood ? 'text-blue-400' : 'text-red-400'}`}>
-                          {isGood ? '⚔️ 正義方' : '👹 邪惡方'}
+                          {isGood ? t('profile:stats.good') : t('profile:stats.evil')}
                         </div>
                         {total > 0 && <div className="text-xs text-gray-600 mt-0.5">{wins}/{total}</div>}
                       </div>
@@ -624,7 +672,7 @@ export default function ProfilePage(): JSX.Element {
               return (
                 <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-bold text-gray-300">ELO 趨勢 (近 {games.length} 局)</h3>
+                    <h3 className="text-sm font-bold text-gray-300">{t('profile:stats.eloTrend', { count: games.length })}</h3>
                     <span className={`text-sm font-bold ${trend >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                       {trend >= 0 ? '+' : ''}{trend.toFixed(0)} pts
                     </span>
@@ -657,7 +705,7 @@ export default function ProfilePage(): JSX.Element {
             {/* Role stats (from recent games) */}
             {roleStats.length > 0 && (
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
-                <h3 className="text-sm font-bold text-gray-300 mb-3">角色勝率 (Role Win Rates) <span className="text-gray-500 font-normal">— 近 {profile!.recent_games.length} 局</span></h3>
+                <h3 className="text-sm font-bold text-gray-300 mb-3">{t('profile:stats.roleWinRates')} <span className="text-gray-500 font-normal">{t('profile:stats.recentGamesSuffix', { count: profile!.recent_games.length })}</span></h3>
                 <div className="space-y-2">
                   {roleStats.map(([role, { wins, total }]) => {
                     const pct = Math.round((wins / total) * 100);
@@ -665,7 +713,7 @@ export default function ProfilePage(): JSX.Element {
                     return (
                       <div key={role} className="flex items-center gap-2">
                         <span className={`text-xs font-semibold w-36 truncate ${color}`}>
-                          {ROLE_NAMES[role] ?? role}
+                          {roleNames[role] ?? role}
                         </span>
                         <div className="flex-1 bg-gray-800 rounded-full h-1.5">
                           <div
@@ -687,14 +735,14 @@ export default function ProfilePage(): JSX.Element {
             {/* Win rate by player count */}
             {playerCountStats.length > 0 && (
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
-                <h3 className="text-sm font-bold text-gray-300 mb-3">人數勝率 (Win Rate by Player Count) <span className="text-gray-500 font-normal">— 近 {profile!.recent_games.length} 局</span></h3>
+                <h3 className="text-sm font-bold text-gray-300 mb-3">{t('profile:stats.playerCountWinRates')} <span className="text-gray-500 font-normal">{t('profile:stats.recentGamesSuffix', { count: profile!.recent_games.length })}</span></h3>
                 <div className="space-y-2">
                   {playerCountStats.map(({ count, wins, total }) => {
                     const pct = Math.round((wins / total) * 100);
                     return (
                       <div key={count} className="flex items-center gap-2">
                         <span className="text-xs font-semibold w-10 text-gray-300 flex-shrink-0">
-                          {count} 人局
+                          {t('profile:stats.playersCount', { count })}
                         </span>
                         <div className="flex-1 bg-gray-800 rounded-full h-1.5">
                           <div
@@ -715,13 +763,13 @@ export default function ProfilePage(): JSX.Element {
 
             {/* Recent games */}
             <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
-              <h3 className="text-sm font-bold text-gray-300 mb-3">最近 {profile.recent_games.length} 局</h3>
+              <h3 className="text-sm font-bold text-gray-300 mb-3">{t('profile:stats.recentNGames', { count: profile.recent_games.length })}</h3>
               {profile.recent_games.length === 0 ? (
-                <p className="text-center text-gray-500 text-sm py-4">尚無遊戲記錄</p>
+                <p className="text-center text-gray-500 text-sm py-4">{t('profile:noGamesShort')}</p>
               ) : (
                 <div>
                   {profile.recent_games.map(g => (
-                    <GameRow key={g.id} game={g} onReplay={handleReplay} />
+                    <GameRow key={g.id} game={g} onReplay={handleReplay} roleNames={roleNames} t={t} locale={locale} />
                   ))}
                 </div>
               )}
@@ -734,7 +782,7 @@ export default function ProfilePage(): JSX.Element {
                 <div className="bg-avalon-card border border-gray-600 rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto"
                   onClick={e => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-white">遊戲紀錄 — <span className="font-mono text-yellow-400 text-sm">{replay?.roomId}</span></h3>
+                    <h3 className="font-bold text-white">{t('profile:replay.title')} <span className="font-mono text-yellow-400 text-sm">{replay?.roomId}</span></h3>
                     <button onClick={() => setReplay(null)} className="text-gray-500 hover:text-white">✕</button>
                   </div>
                   {replayLoading && <div className="flex justify-center py-8"><Loader size={24} className="animate-spin text-blue-400" /></div>}
@@ -743,18 +791,18 @@ export default function ProfilePage(): JSX.Element {
                       {replay.game ? (
                         <>
                           <div className="bg-gray-800/60 rounded-xl p-4 space-y-2.5">
-                            <p className="text-xs text-gray-400">{replay.game.player_count} 人局</p>
+                            <p className="text-xs text-gray-400">{t('profile:replay.playerCount', { count: replay.game.player_count })}</p>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500">你的角色</span>
+                              <span className="text-xs text-gray-500">{t('profile:replay.yourRole')}</span>
                               <span className={`text-sm font-semibold ${ROLE_COLORS[replay.game.role] ?? 'text-gray-300'}`}>
-                                {ROLE_NAMES[replay.game.role] ?? replay.game.role}
+                                {roleNames[replay.game.role] ?? replay.game.role}
                               </span>
                               <span className={`text-[10px] px-2 py-0.5 rounded-full ml-auto ${
                                 replay.game.team === 'good'
                                   ? 'bg-blue-900/60 text-blue-300 border border-blue-700/60'
                                   : 'bg-red-900/60 text-red-300 border border-red-700/60'
                               }`}>
-                                {replay.game.team === 'good' ? '好人方' : '邪惡方'}
+                                {replay.game.team === 'good' ? t('profile:replay.teamGood') : t('profile:replay.teamEvil')}
                               </span>
                             </div>
                             <div className="flex items-center gap-3 pt-1">
@@ -763,22 +811,22 @@ export default function ProfilePage(): JSX.Element {
                                   ? 'bg-blue-900/50 text-blue-300 border border-blue-600'
                                   : 'bg-red-900/50 text-red-300 border border-red-600'
                               }`}>
-                                {replay.game.won ? '🔵 勝利' : '🔴 落敗'}
+                                {replay.game.won ? t('profile:replay.win') : t('profile:replay.loss')}
                               </div>
                               <div className={`text-sm font-bold ${replay.game.elo_delta >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                                 ELO {replay.game.elo_delta >= 0 ? `+${replay.game.elo_delta}` : replay.game.elo_delta}
                               </div>
                               <div className="text-xs text-gray-500 ml-auto">
-                                {formatDate(replay.game.created_at)}
+                                {formatDate(replay.game.created_at, locale)}
                               </div>
                             </div>
                           </div>
                           <p className="text-xs text-center text-gray-600 pt-1">
-                            此局為牌譜記錄功能上線前的舊局，僅顯示基本戰績
+                            {t('profile:replay.legacyNote')}
                           </p>
                         </>
                       ) : (
-                        <p className="text-center text-gray-500 py-4">此局無紀錄資料</p>
+                        <p className="text-center text-gray-500 py-4">{t('profile:replay.noData')}</p>
                       )}
                     </div>
                   )}
@@ -796,12 +844,12 @@ export default function ProfilePage(): JSX.Element {
                         {/* Visual summary */}
                         <div className="bg-gray-800/60 rounded-xl p-4 mb-4 space-y-3">
                           {playerCount && (
-                            <p className="text-xs text-gray-400">{playerCount} 人局 ({playerCount}-player game)</p>
+                            <p className="text-xs text-gray-400">{t('profile:replay.playerCountFull', { count: playerCount })}</p>
                           )}
                           {/* Quest dots */}
                           {questResults.length > 0 && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-2">任務結果 (Quest Results)</p>
+                              <p className="text-xs text-gray-500 mb-2">{t('profile:replay.questResults')}</p>
                               <div className="flex gap-2">
                                 {questResults.map((r, i) => (
                                   <div key={i} className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 ${
@@ -809,7 +857,7 @@ export default function ProfilePage(): JSX.Element {
                                       ? 'bg-blue-600/40 border-blue-400 text-blue-300'
                                       : 'bg-red-600/40 border-red-400 text-red-300'
                                   }`}>
-                                    {r === 'success' ? '藍' : '紅'}
+                                    {r === 'success' ? t('profile:replay.questSuccessChar') : t('profile:replay.questFailChar')}
                                   </div>
                                 ))}
                                 {/* remaining quests */}
@@ -826,7 +874,7 @@ export default function ProfilePage(): JSX.Element {
                                 ? 'bg-red-900/50 text-red-300 border border-red-600'
                                 : 'bg-blue-900/50 text-blue-300 border border-blue-600'
                             }`}>
-                              {evilWins ? '🔴 邪惡方獲勝 (Evil Wins)' : '🔵 正義方獲勝 (Good Wins)'}
+                              {evilWins ? t('profile:replay.winnerEvil') : t('profile:replay.winnerGood')}
                             </div>
                           )}
                         </div>
@@ -838,7 +886,7 @@ export default function ProfilePage(): JSX.Element {
                             }`}>
                               <span className="text-gray-600 w-5 text-right flex-shrink-0 text-xs pt-0.5">{ev.seq}</span>
                               <span className="flex-shrink-0">{EVENT_ICONS[ev.event_type] ?? '•'}</span>
-                              <span className="text-gray-300">{formatReplayEvent(ev)}</span>
+                              <span className="text-gray-300">{formatReplayEvent(ev, t)}</span>
                             </div>
                           ))}
                         </div>
@@ -854,7 +902,7 @@ export default function ProfilePage(): JSX.Element {
               onClick={() => setGameState('leaderboard')}
               className="w-full text-sm text-gray-400 hover:text-white transition-colors py-2"
             >
-              查看排行榜
+              {t('profile:viewLeaderboard')}
             </button>
           </>
         )}

@@ -1,18 +1,115 @@
 {
   "title": "個人資訊",
+  "headerTitle": "個人資料 (Profile)",
   "matchRecords": "戰績",
   "recentGames": "近期遊戲",
   "winRate": "勝率",
   "wins": "勝",
   "losses": "敗",
   "totalGames": "總場數",
+  "totalGamesLabel": "總場次",
   "eloRating": "ELO 分數",
   "rank": "段位",
   "viewReplay": "查看遊戲紀錄",
   "follow": "追蹤",
   "unfollow": "取消追蹤",
-  "editProfile": "編輯個人資訊",
+  "editProfile": "編輯個人資料",
+  "editShort": "編輯",
   "displayName": "顯示名稱",
+  "displayNameLabel": "顯示暱稱",
+  "displayNamePlaceholder": "1-40 個字",
+  "photoUrlLabel": "大頭照連結 (http(s) URL，留空則清除)",
   "noGamesYet": "還沒有遊戲紀錄",
-  "loading": "載入中…"
+  "noGamesShort": "尚無遊戲記錄",
+  "loading": "載入中…",
+  "saving": "儲存中…",
+  "save": "儲存",
+  "cancel": "取消",
+  "claims": {
+    "maybeOld": "你有 <count>{{count}}</count> 場可能的舊戰績",
+    "maybeOldHint": "系統比對到你可能擁有的舊紀錄 — 申請綁定後就能顯示在你的統計裡",
+    "pending": "你有尚未審核的綁定申請 — 點我查看進度",
+    "searchOld": "用舊暱稱搜尋並綁定舊戰績"
+  },
+  "identity": {
+    "userId": "用戶編號",
+    "email": "信箱",
+    "copyId": "複製用戶編號"
+  },
+  "edit": {
+    "errLogin": "請先登入",
+    "errNameLength": "暱稱需為 1-40 個字",
+    "errUrlFormat": "頭像連結需為 http(s) 網址",
+    "errUrlTooLong": "頭像連結過長（上限 500 字元）",
+    "updateSuccess": "個人資料已更新",
+    "updateFail": "更新失敗"
+  },
+  "error": {
+    "noRecords": "尚無遊戲記錄 — 完成一場遊戲後就能看到你的個人資料",
+    "notLoggedIn": "請先登入才能查看個人資料",
+    "loadFailed": "無法載入用戶資料，請稍後再試",
+    "operationFailed": "操作失敗，請稍後再試",
+    "copyFailed": "複製失敗"
+  },
+  "stats": {
+    "winsLabel": "勝場",
+    "lossesLabel": "敗場",
+    "teamWinRates": "陣營勝率 (Team Win Rates)",
+    "recentGamesSuffix": "— 近 {{count}} 局",
+    "good": "⚔️ 正義方",
+    "evil": "👹 邪惡方",
+    "eloTrend": "ELO 趨勢 (近 {{count}} 局)",
+    "roleWinRates": "角色勝率 (Role Win Rates)",
+    "playerCountWinRates": "人數勝率 (Win Rate by Player Count)",
+    "playersCount": "{{count}} 人局",
+    "recentNGames": "最近 {{count}} 局"
+  },
+  "record": {
+    "win": "勝",
+    "loss": "敗",
+    "playerCount": "{{count}}人局"
+  },
+  "follow": {
+    "followSuccess": "已追蹤 {{name}}",
+    "unfollowSuccess": "已取消追蹤 {{name}}",
+    "loading": "…"
+  },
+  "replay": {
+    "title": "遊戲紀錄 —",
+    "playerCount": "{{count}} 人局",
+    "playerCountFull": "{{count}} 人局 ({{count}}-player game)",
+    "yourRole": "你的角色",
+    "teamGood": "好人方",
+    "teamEvil": "邪惡方",
+    "win": "🔵 勝利",
+    "loss": "🔴 落敗",
+    "legacyNote": "此局為牌譜記錄功能上線前的舊局，僅顯示基本戰績",
+    "noData": "此局無紀錄資料",
+    "questResults": "任務結果 (Quest Results)",
+    "winnerEvil": "🔴 邪惡方獲勝 (Evil Wins)",
+    "winnerGood": "🔵 正義方獲勝 (Good Wins)",
+    "questSuccessChar": "藍",
+    "questFailChar": "紅"
+  },
+  "replayEvent": {
+    "gameStarted": "遊戲開始 — {{playerCount}}人局，領袖：{{leaderId}}",
+    "votingPhaseStarted": "第{{round}}輪 — 第{{proposal}}次提案，領袖：{{leader}}",
+    "questTeamSelected": "領袖提案：{{team}}",
+    "teamAutoSelected": "⏱ 領袖超時，自動選隊：{{team}}",
+    "voteApproved": "✅ 通過",
+    "voteRejected": "❌ 否決",
+    "votingResolved": "投票結果：{{result}}（{{approvals}}贊成，{{rejections}}反對）",
+    "teamApproved": "提案通過，任務開始",
+    "questSuccess": "✅ 成功",
+    "questFail": "❌ 失敗",
+    "questResolved": "任務結果：{{result}}（{{failCount}}張失敗票）",
+    "roundEndedSuccess": "第{{round}}局結束 — 任務成功",
+    "roundEndedFail": "第{{round}}局結束 — 任務失敗",
+    "discussionPhaseStarted": "進入暗殺階段 — 好人贏得3個任務",
+    "assassinationSubmitted": "刺客 {{assassin}} 刺殺 {{target}}",
+    "gameEndedEvil": "邪惡方",
+    "gameEndedGood": "好人方",
+    "gameEnded": "遊戲結束 — {{winner}}獲勝（{{reason}}）"
+  },
+  "viewLeaderboard": "查看排行榜"
 }

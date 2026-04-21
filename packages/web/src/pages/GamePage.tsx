@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import { submitVote, submitAssassination, submitLadyOfTheLake, requestRematch, leaveSpectate } from '../services/socket';
 import GameBoard from '../components/GameBoard';
@@ -22,6 +23,7 @@ import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 
 export default function GamePage(): JSX.Element {
+  const { t } = useTranslation(['game', 'common']);
   const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer, isSpectator, socketStatus } = useGameStore();
   const [isVoting, setIsVoting] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
@@ -122,7 +124,7 @@ export default function GamePage(): JSX.Element {
   }, [room?.questHistory?.length]);
 
   if (!room || !currentPlayer) {
-    return <div className="text-center text-white">載入中…</div>;
+    return <div className="text-center text-white">{t('common:app.loading')}</div>;
   }
 
   const playerIds = Object.keys(room.players);
@@ -158,12 +160,12 @@ export default function GamePage(): JSX.Element {
   };
 
   const stateLabel: Record<string, string> = {
-    voting: teamSelected ? '投票中 (Voting)' : '選隊中 (Team Select)',
-    quest: '任務中 (Quest)',
-    lady_of_the_lake: '湖中女神 (Lady of the Lake)',
-    discussion: '刺殺階段 (Assassination)',
-    ended: '遊戲結束 (Game Over)',
-    lobby: '等待中 (Lobby)',
+    voting: teamSelected ? t('game:phaseLabel.votingInProgress') : t('game:phaseLabel.voting'),
+    quest: t('game:phaseLabel.quest'),
+    lady_of_the_lake: t('game:phaseLabel.ladyOfTheLake'),
+    discussion: t('game:phaseLabel.discussion'),
+    ended: t('game:phaseLabel.ended'),
+    lobby: t('game:phaseLabel.lobby'),
   };
 
   // Determine if this player needs to act right now
@@ -174,15 +176,15 @@ export default function GamePage(): JSX.Element {
   type ActionBanner = { msg: string; color: string } | null;
   const actionBanner: ActionBanner =
     room.state === 'voting' && !teamSelected && isCurrentPlayerLeader
-      ? { msg: '👑 輪到你了！請選擇任務隊伍 (Your turn — select a quest team)', color: 'border-amber-500 bg-amber-900/30 text-amber-200' }
+      ? { msg: t('game:action.leaderTurn'), color: 'border-amber-500 bg-amber-900/30 text-amber-200' }
       : room.state === 'voting' && teamSelected && !alreadyVoted
-      ? { msg: '🗳️ 輪到你投票！贊成或拒絕此隊伍 (Your turn to vote — approve or reject)', color: 'border-yellow-500 bg-yellow-900/30 text-yellow-200' }
+      ? { msg: t('game:action.voteTurn'), color: 'border-yellow-500 bg-yellow-900/30 text-yellow-200' }
       : room.state === 'quest' && isOnQuestTeam
-      ? { msg: '⚔️ 你在任務隊伍中！請投票成功或失敗 (You are on the quest — vote success or fail)', color: 'border-blue-500 bg-blue-900/30 text-blue-200' }
+      ? { msg: t('game:action.questTurn'), color: 'border-blue-500 bg-blue-900/30 text-blue-200' }
       : room.state === 'lady_of_the_lake' && isLadyHolder
-      ? { msg: '🔮 你持有湖中女神！選擇一位玩家查看陣營 (You hold the Lady — inspect a player)', color: 'border-blue-500 bg-blue-900/30 text-blue-200' }
+      ? { msg: t('game:action.ladyTurn'), color: 'border-blue-500 bg-blue-900/30 text-blue-200' }
       : room.state === 'discussion' && isAssassin
-      ? { msg: '🗡️ 你是刺客！選擇目標刺殺梅林 (You are the Assassin — choose your target)', color: 'border-red-500 bg-red-900/30 text-red-200' }
+      ? { msg: t('game:action.assassinTurn'), color: 'border-red-500 bg-red-900/30 text-red-200' }
       : null;
 
   // Role composition from config
@@ -241,9 +243,9 @@ export default function GamePage(): JSX.Element {
               }`}
             >
               {socketStatus === 'reconnecting' ? (
-                <><Loader2 size={16} className="animate-spin flex-shrink-0" />正在重新連線… (Reconnecting…)</>
+                <><Loader2 size={16} className="animate-spin flex-shrink-0" />{t('game:connection.reconnecting')}</>
               ) : (
-                <><WifiOff size={16} className="flex-shrink-0" />已斷線，請檢查網路連線 (Disconnected — check your connection)</>
+                <><WifiOff size={16} className="flex-shrink-0" />{t('game:connection.disconnected')}</>
               )}
             </motion.div>
           )}
@@ -252,35 +254,35 @@ export default function GamePage(): JSX.Element {
         {/* Spectator banner */}
         {isSpectator && (
           <div className="flex items-center justify-between bg-slate-800/40 border border-slate-600 rounded-xl px-4 py-2">
-            <span className="text-slate-300 text-sm font-semibold">👁 觀戰模式 — 角色已隱藏 (Spectating — roles hidden)</span>
+            <span className="text-slate-300 text-sm font-semibold">{t('game:spectator.bannerTitle')}</span>
             <button
               onClick={() => room && leaveSpectate(room.id)}
               className="text-xs text-slate-400 hover:text-white border border-slate-600 hover:border-white px-3 py-1 rounded-lg transition-colors"
             >
-              離開觀戰
+              {t('game:spectator.leave')}
             </button>
           </div>
         )}
 
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-5xl font-bold text-white mb-2">🎭 Avalon</h1>
+          <h1 className="text-5xl font-bold text-white mb-2">🎭 {t('game:header.title')}</h1>
           <div className="mt-2">
             <MissionTrack room={room} />
           </div>
           <div className="flex justify-center gap-3 mt-3 text-sm flex-wrap">
             <div className="bg-avalon-card/50 px-4 py-2 rounded-lg">
-              <p className="text-gray-300">狀態：<span className="text-yellow-400 font-bold">{stateLabel[room.state] ?? room.state}</span></p>
+              <p className="text-gray-300">{t('game:header.state')}<span className="text-yellow-400 font-bold">{stateLabel[room.state] ?? room.state}</span></p>
             </div>
             <button
               onClick={() => setShowRoleReveal(true)}
               className="bg-blue-900/50 hover:bg-blue-800/70 border border-blue-600 px-4 py-2 rounded-lg text-blue-300 text-sm transition-colors"
             >
-              查看角色
+              {t('game:header.viewRole')}
             </button>
             <button
               onClick={handleToggleAudio}
-              title={audioEnabled ? '靜音 (Mute)' : '開啟音效 (Unmute)'}
+              title={audioEnabled ? t('game:header.mute') : t('game:header.unmute')}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${
                 audioEnabled
                   ? 'bg-gray-800/50 hover:bg-gray-700/70 border-gray-600 text-gray-300'
@@ -298,10 +300,10 @@ export default function GamePage(): JSX.Element {
           {room.state !== 'ended' && config && (
             <div className="flex justify-center gap-3 text-xs text-gray-400 flex-wrap">
               <span className="bg-blue-900/30 border border-blue-700/50 px-3 py-1 rounded-full">
-                🔵 正義方 {goodCount} 人
+                {t('game:roster.goodCount', { count: goodCount })}
               </span>
               <span className="bg-red-900/30 border border-red-700/50 px-3 py-1 rounded-full">
-                🔴 邪惡方 {evilCount} 人
+                {t('game:roster.evilCount', { count: evilCount })}
               </span>
             </div>
           )}
@@ -344,19 +346,23 @@ export default function GamePage(): JSX.Element {
                   className="bg-avalon-card/50 border-2 border-yellow-700 rounded-lg p-6 text-center space-y-3"
                 >
                   <div className="text-4xl">⏳</div>
-                  <h2 className="text-xl font-bold text-white">等待隊長選隊</h2>
+                  <h2 className="text-xl font-bold text-white">{t('game:teamSelect.waitingTitle')}</h2>
                   <p className="text-gray-300 text-sm">
-                    隊長 <span className="text-yellow-400 font-bold">{room.players[leaderId]?.name}</span> 正在選擇任務隊員...
+                    <Trans
+                      i18nKey="game:teamSelect.waitingDesc"
+                      values={{ name: room.players[leaderId]?.name ?? '' }}
+                      components={{ leader: <span className="text-yellow-400 font-bold" /> }}
+                    />
                   </p>
                   <div className="flex items-center justify-center gap-3 text-xs text-gray-500 flex-wrap">
-                    <span>本輪需要 {AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? '?'} 名隊員</span>
+                    <span>{t('game:teamSelect.needMembers', { count: AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? 0 })}</span>
                     {isUnlimitedTimer ? (
                       <span className="px-3 py-1 rounded-full font-bold bg-blue-900/60 text-blue-300">
-                        ⏱ 不計時
+                        {t('game:teamSelect.unlimitedTimer')}
                       </span>
                     ) : (
                       <span className={`px-3 py-1 rounded-full font-bold ${teamSelectTimer < 20 ? 'bg-red-900/60 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
-                        ⏱ {teamSelectTimer}s
+                        {t('game:teamSelect.timer', { seconds: teamSelectTimer })}
                       </span>
                     )}
                   </div>
@@ -383,10 +389,10 @@ export default function GamePage(): JSX.Element {
             <div className="px-3 py-2 border-b border-gray-700/50 flex items-center justify-between">
               <span className="text-sm font-bold text-gray-300 flex items-center gap-1.5">
                 <ClipboardList size={14} className="-mt-0.5" />
-                牌譜
+                {t('game:scoresheet.title')}
               </span>
               <span className="text-[10px] text-gray-500">
-                {room.questHistory.length} 輪任務・{room.voteHistory.length} 次投票
+                {t('game:scoresheet.stats', { quests: room.questHistory.length, votes: room.voteHistory.length })}
               </span>
             </div>
             <div className="px-2 sm:px-3 py-2">
@@ -411,25 +417,29 @@ export default function GamePage(): JSX.Element {
               room.ladyOfTheLakeResult ? (
                 // Result revealed to holder
                 <div className="text-center space-y-4">
-                  <h2 className="text-3xl font-bold text-blue-400">🔮 湖中女神 (Lady of the Lake)</h2>
+                  <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
                   <p className="text-gray-300">
-                    <span className="font-bold text-white">{room.players[room.ladyOfTheLakeTarget ?? '']?.name}</span> 的陣營是：
+                    <Trans
+                      i18nKey="game:lady.targetTeamLabel"
+                      values={{ name: room.players[room.ladyOfTheLakeTarget ?? '']?.name ?? '' }}
+                      components={{ target: <span className="font-bold text-white" /> }}
+                    />
                   </p>
                   <div className={`inline-block px-6 py-3 rounded-xl text-2xl font-bold border-2 ${
                     room.ladyOfTheLakeResult === 'good'
                       ? 'bg-blue-900/40 border-blue-500 text-blue-300'
                       : 'bg-red-900/40 border-red-500 text-red-300'
                   }`}>
-                    {room.ladyOfTheLakeResult === 'good' ? '⚔️ 好人 (Good)' : '👹 邪惡 (Evil)'}
+                    {room.ladyOfTheLakeResult === 'good' ? t('game:lady.resultGood') : t('game:lady.resultEvil')}
                   </div>
-                  <p className="text-gray-500 text-sm">湖中女神將傳遞給此玩家... (The Lady passes to this player...)</p>
+                  <p className="text-gray-500 text-sm">{t('game:lady.pass')}</p>
                 </div>
               ) : (
                 // Holder selects target
                 <>
                   <div className="text-center">
-                    <h2 className="text-3xl font-bold text-blue-400">🔮 湖中女神 (Lady of the Lake)</h2>
-                    <p className="text-gray-300 mt-2">選擇一位玩家查看其陣營 (Choose a player to inspect their team alignment)</p>
+                    <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
+                    <p className="text-gray-300 mt-2">{t('game:lady.pickTitle')}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
                     {Object.values(room.players)
@@ -449,11 +459,15 @@ export default function GamePage(): JSX.Element {
             ) : (
               // Other players wait
               <div className="text-center space-y-4">
-                <h2 className="text-3xl font-bold text-blue-400">🔮 湖中女神 (Lady of the Lake)</h2>
+                <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
                 <p className="text-gray-300">
-                  <span className="text-blue-400 font-bold">{room.players[room.ladyOfTheLakeHolder ?? '']?.name}</span> 正在使用湖中女神查看一位玩家的陣營...
+                  <Trans
+                    i18nKey="game:lady.waitingDesc"
+                    values={{ name: room.players[room.ladyOfTheLakeHolder ?? '']?.name ?? '' }}
+                    components={{ holder: <span className="text-blue-400 font-bold" /> }}
+                  />
                 </p>
-                <p className="text-gray-500 text-sm">(The Lady holder is inspecting a player's team alignment...)</p>
+                <p className="text-gray-500 text-sm">{t('game:lady.waitingNote')}</p>
               </div>
             )}
           </motion.div>
@@ -467,10 +481,10 @@ export default function GamePage(): JSX.Element {
             className="bg-avalon-card/30 border border-slate-700/50 rounded-xl p-4 text-center"
           >
             <p className="text-slate-400 text-sm">
-              {room.state === 'voting' && '👁 觀戰中 — 等待玩家投票...'}
-              {room.state === 'quest' && '👁 觀戰中 — 任務隊伍正在行動...'}
-              {room.state === 'lady_of_the_lake' && '👁 觀戰中 — 湖中女神查看中...'}
-              {room.state === 'discussion' && '👁 觀戰中 — 刺客正在選擇目標...'}
+              {room.state === 'voting' && t('game:spectator.hintVoting')}
+              {room.state === 'quest' && t('game:spectator.hintQuest')}
+              {room.state === 'lady_of_the_lake' && t('game:spectator.hintLady')}
+              {room.state === 'discussion' && t('game:spectator.hintDiscussion')}
             </p>
           </motion.div>
         )}
@@ -485,16 +499,16 @@ export default function GamePage(): JSX.Element {
             {/* Quest history aide for assassin */}
             {room.questHistory.length > 0 && (
               <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-3">
-                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">任務隊伍歷史 (Quest Team History)</p>
+                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">{t('game:assassin.questHistoryHeader')}</p>
                 <div className="space-y-1.5">
                   {room.questHistory.map(q => (
                     <div key={q.round} className="flex items-center gap-2 text-xs">
                       <span className={`w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full font-bold ${q.result === 'success' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>
                         {q.result === 'success' ? '✓' : '✗'}
                       </span>
-                      <span className="text-gray-400">R{q.round}:</span>
+                      <span className="text-gray-400">{t('game:assassin.roundPrefix', { round: q.round })}</span>
                       <span className="text-gray-300">{q.team.map(id => room.players[id]?.name ?? id).join('、')}</span>
-                      {q.result === 'fail' && q.failCount > 0 && <span className="text-red-400 ml-1">({q.failCount}票失敗)</span>}
+                      {q.result === 'fail' && q.failCount > 0 && <span className="text-red-400 ml-1">{t('game:assassin.failBadge', { count: q.failCount })}</span>}
                     </div>
                   ))}
                 </div>
@@ -504,15 +518,15 @@ export default function GamePage(): JSX.Element {
             {currentPlayer.role === 'assassin' ? (
               <>
                 <div className="text-center">
-                  <h2 className="text-3xl font-bold text-red-400 mb-2">🗡️ 刺殺梅林 (Assassinate Merlin)</h2>
-                  <p className="text-gray-300">你認為誰是梅林？選擇你的目標 (Who do you think is Merlin? Choose your target)</p>
+                  <h2 className="text-3xl font-bold text-red-400 mb-2">{t('game:assassin.title')}</h2>
+                  <p className="text-gray-300">{t('game:assassin.prompt')}</p>
                   {isUnlimitedTimer ? (
                     <div className="inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full font-bold text-sm bg-blue-700 text-blue-100">
-                      ⏱ 不計時
+                      {t('game:teamSelect.unlimitedTimer')}
                     </div>
                   ) : (
                     <div className={`inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full font-bold text-sm ${assassinTimer < 30 ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                      ⏱ {assassinTimer}s
+                      {t('game:teamSelect.timer', { seconds: assassinTimer })}
                     </div>
                   )}
                 </div>
@@ -536,16 +550,16 @@ export default function GamePage(): JSX.Element {
                   ))}
                 </div>
                 {selectedTarget && (
-                  <p className="text-center text-gray-400 text-sm">已選擇目標，等待結果...</p>
+                  <p className="text-center text-gray-400 text-sm">{t('game:assassin.selectedHint')}</p>
                 )}
               </>
             ) : (
               <div className="text-center space-y-4">
-                <h2 className="text-3xl font-bold text-red-400">💬 刺殺階段 (Assassination Phase)</h2>
-                <p className="text-gray-300">好人贏得了 3 次任務！(Good team won 3 quests!)</p>
-                <p className="text-gray-400">刺客正在選擇目標，試圖找出梅林... (The Assassin is choosing a target, trying to find Merlin...)</p>
+                <h2 className="text-3xl font-bold text-red-400">{t('game:assassin.discussionTitle')}</h2>
+                <p className="text-gray-300">{t('game:assassin.goodWonIntro')}</p>
+                <p className="text-gray-400">{t('game:assassin.pickingTarget')}</p>
                 <div className="text-sm text-yellow-500 bg-yellow-900/20 border border-yellow-700 rounded-lg p-3">
-                  若刺客成功刺殺梅林，邪惡方獲勝！(If the Assassin kills Merlin, Evil wins!)
+                  {t('game:assassin.warning')}
                 </div>
               </div>
             )}
@@ -568,7 +582,7 @@ export default function GamePage(): JSX.Element {
               animate={{ y: 0 }}
               className="text-5xl font-bold"
             >
-              {room.evilWins ? '👹 邪惡方獲勝！' : '⚔️ 正義方獲勝！'}
+              {room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
             </motion.h2>
 
             {/* End reason banner */}
@@ -576,15 +590,15 @@ export default function GamePage(): JSX.Element {
               <div className={`inline-block px-5 py-2 rounded-full text-sm font-semibold ${
                 room.evilWins ? 'bg-red-900/50 border border-red-600 text-red-200' : 'bg-blue-900/50 border border-blue-600 text-blue-200'
               }`}>
-                {room.endReason === 'failed_quests' && '💀 邪惡方破壞了 3 次任務'}
-                {room.endReason === 'vote_rejections' && '🚫 5 次提案全數否決，邪惡方自動獲勝'}
+                {room.endReason === 'failed_quests' && t('game:ended.reasonFailedQuests')}
+                {room.endReason === 'vote_rejections' && t('game:ended.reasonVoteRejections')}
                 {room.endReason === 'merlin_assassinated' && (
-                  <>🗡️ 刺客成功刺殺梅林！<span className="text-red-300 font-bold">{room.players[room.assassinTargetId ?? '']?.name ?? '?'}</span> 是梅林</>
+                  <>{t('game:ended.reasonMerlinKilledPrefix')}<span className="text-red-300 font-bold"> {room.players[room.assassinTargetId ?? '']?.name ?? '?'} </span>{t('game:ended.reasonMerlinKilledSuffix')}</>
                 )}
                 {room.endReason === 'assassination_failed' && (
-                  <>🛡️ 刺客誤殺 <span className="text-blue-300 font-bold">{room.players[room.assassinTargetId ?? '']?.name ?? '?'}</span>，正義方獲勝！</>
+                  <>{t('game:ended.reasonWrongKillPrefix')} <span className="text-blue-300 font-bold">{room.players[room.assassinTargetId ?? '']?.name ?? '?'}</span>{t('game:ended.reasonWrongKillSuffix')}</>
                 )}
-                {room.endReason === 'assassination_timeout' && '⏱️ 刺殺超時，正義方獲勝！'}
+                {room.endReason === 'assassination_timeout' && t('game:ended.reasonAssassinationTimeout')}
               </div>
             )}
 
@@ -597,24 +611,24 @@ export default function GamePage(): JSX.Element {
                   }`}>
                     <span className="text-lg">{q.result === 'success' ? '✓' : '✗'}</span>
                     <span className="text-gray-400">R{q.round}</span>
-                    {q.failCount > 0 && <span className="text-red-400">{q.failCount}張失敗</span>}
+                    {q.failCount > 0 && <span className="text-red-400">{t('game:ended.roundFailLabel', { count: q.failCount })}</span>}
                   </div>
                 ))}
               </div>
             )}
 
-            <p className="text-gray-300 text-lg">最終角色揭曉：</p>
+            <p className="text-gray-300 text-lg">{t('game:ended.rolesReveal')}</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {Object.values(room.players).map((player) => {
                 const roleLabel: Record<string, string> = {
-                  merlin:   '梅林 (Merlin)',
-                  percival: '派西維爾 (Percival)',
-                  loyal:    '忠臣 (Loyal Servant)',
-                  assassin: '刺客 (Assassin)',
-                  morgana:  '莫甘娜 (Morgana)',
-                  oberon:   '奧伯倫 (Oberon)',
-                  mordred:  '莫德雷德 (Mordred)',
-                  minion:   '爪牙 (Minion)',
+                  merlin:   t('game:roleLabel.merlin'),
+                  percival: t('game:roleLabel.percival'),
+                  loyal:    t('game:roleLabel.loyal'),
+                  assassin: t('game:roleLabel.assassin'),
+                  morgana:  t('game:roleLabel.morgana'),
+                  oberon:   t('game:roleLabel.oberon'),
+                  mordred:  t('game:roleLabel.mordred'),
+                  minion:   t('game:roleLabel.minion'),
                 };
                 const isGood = ['merlin', 'percival', 'loyal'].includes(player.role ?? '');
                 const wasAssassinated = room.assassinTargetId === player.id;
@@ -642,7 +656,7 @@ export default function GamePage(): JSX.Element {
                       {roleLabel[player.role ?? ''] ?? player.role}
                     </p>
                     {player.id === currentPlayer.id && (
-                      <p className="text-xs text-gray-500 mt-1">（你）</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('game:ended.youLabel')}</p>
                     )}
                   </div>
                 );
@@ -661,7 +675,7 @@ export default function GamePage(): JSX.Element {
                   className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition-all"
                 >
                   <RefreshCw size={20} />
-                  再來一局 (Rematch)
+                  {t('game:ended.rematch')}
                 </motion.button>
               )}
               <motion.button
@@ -671,7 +685,7 @@ export default function GamePage(): JSX.Element {
                 className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 px-8 rounded-lg transition-all"
               >
                 <Home size={20} />
-                返回首頁
+                {t('game:ended.backHome')}
               </motion.button>
             </div>
           </motion.div>

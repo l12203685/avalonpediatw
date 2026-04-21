@@ -10,6 +10,17 @@
     "minion": "爪牙",
     "unknown": "未知"
   },
+  "roleLabel": {
+    "merlin": "梅林 (Merlin)",
+    "percival": "派西維爾 (Percival)",
+    "loyal": "忠臣 (Loyal Servant)",
+    "assassin": "刺客 (Assassin)",
+    "morgana": "莫甘娜 (Morgana)",
+    "mordred": "莫德雷德 (Mordred)",
+    "oberon": "奧伯倫 (Oberon)",
+    "minion": "爪牙 (Minion)",
+    "unknown": "未知 (Unknown)"
+  },
   "phase": {
     "selectTeam": "選擇隊伍",
     "vote": "投票",
@@ -17,6 +28,15 @@
     "discussion": "討論階段",
     "assassination": "刺殺階段",
     "ended": "遊戲結束"
+  },
+  "phaseLabel": {
+    "voting": "選隊中 (Team Select)",
+    "votingInProgress": "投票中 (Voting)",
+    "quest": "任務中 (Quest)",
+    "ladyOfTheLake": "湖中女神 (Lady of the Lake)",
+    "discussion": "刺殺階段 (Assassination)",
+    "ended": "遊戲結束 (Game Over)",
+    "lobby": "等待中 (Lobby)"
   },
   "vote": {
     "approve": "通過",
@@ -51,5 +71,85 @@
     "waiting": "等待玩家加入…",
     "start": "開始遊戲",
     "leave": "離開房間"
+  },
+  "header": {
+    "title": "Avalon",
+    "state": "狀態：",
+    "viewRole": "查看角色",
+    "mute": "靜音 (Mute)",
+    "unmute": "開啟音效 (Unmute)"
+  },
+  "roster": {
+    "goodCount": "🔵 正義方 {{count}} 人",
+    "evilCount": "🔴 邪惡方 {{count}} 人"
+  },
+  "connection": {
+    "reconnecting": "正在重新連線… (Reconnecting…)",
+    "disconnected": "已斷線，請檢查網路連線 (Disconnected — check your connection)"
+  },
+  "spectator": {
+    "bannerTitle": "👁 觀戰模式 — 角色已隱藏 (Spectating — roles hidden)",
+    "leave": "離開觀戰",
+    "hintVoting": "👁 觀戰中 — 等待玩家投票...",
+    "hintQuest": "👁 觀戰中 — 任務隊伍正在行動...",
+    "hintLady": "👁 觀戰中 — 湖中女神查看中...",
+    "hintDiscussion": "👁 觀戰中 — 刺客正在選擇目標..."
+  },
+  "action": {
+    "leaderTurn": "👑 輪到你了！請選擇任務隊伍 (Your turn — select a quest team)",
+    "voteTurn": "🗳️ 輪到你投票！贊成或拒絕此隊伍 (Your turn to vote — approve or reject)",
+    "questTurn": "⚔️ 你在任務隊伍中！請投票成功或失敗 (You are on the quest — vote success or fail)",
+    "ladyTurn": "🔮 你持有湖中女神！選擇一位玩家查看陣營 (You hold the Lady — inspect a player)",
+    "assassinTurn": "🗡️ 你是刺客！選擇目標刺殺梅林 (You are the Assassin — choose your target)"
+  },
+  "teamSelect": {
+    "waitingTitle": "等待隊長選擇",
+    "waitingDesc": "隊長 <leader>{{name}}</leader> 正在選擇任務隊員...",
+    "needMembers": "本輪需要 {{count}} 名隊員",
+    "unknownCount": "?",
+    "unlimitedTimer": "⏱ 不計時",
+    "timer": "⏱ {{seconds}}s"
+  },
+  "scoresheet": {
+    "title": "牌譜",
+    "stats": "{{quests}} 輪任務・{{votes}} 次投票"
+  },
+  "lady": {
+    "title": "🔮 湖中女神 (Lady of the Lake)",
+    "targetTeamLabel": "<target>{{name}}</target> 的陣營是：",
+    "resultGood": "⚔️ 好人 (Good)",
+    "resultEvil": "👹 邪惡 (Evil)",
+    "pass": "湖中女神將傳遞給此玩家... (The Lady passes to this player...)",
+    "pickTitle": "選擇一位玩家查看其陣營 (Choose a player to inspect their team alignment)",
+    "waitingDesc": "<holder>{{name}}</holder> 正在使用湖中女神查看一位玩家的陣營...",
+    "waitingNote": "(The Lady holder is inspecting a player's team alignment...)"
+  },
+  "assassin": {
+    "questHistoryHeader": "任務隊伍歷史 (Quest Team History)",
+    "roundPrefix": "R{{round}}:",
+    "failBadge": "({{count}}票失敗)",
+    "title": "🗡️ 刺殺梅林 (Assassinate Merlin)",
+    "prompt": "你認為誰是梅林？選擇你的目標 (Who do you think is Merlin? Choose your target)",
+    "selectedHint": "已選擇目標，等待結果...",
+    "discussionTitle": "💬 刺殺階段 (Assassination Phase)",
+    "goodWonIntro": "好人贏得了 3 次任務！(Good team won 3 quests!)",
+    "pickingTarget": "刺客正在選擇目標，試圖找出梅林... (The Assassin is choosing a target, trying to find Merlin...)",
+    "warning": "若刺客成功刺殺梅林，邪惡方獲勝！(If the Assassin kills Merlin, Evil wins!)"
+  },
+  "ended": {
+    "evilWins": "👹 邪惡方獲勝!",
+    "goodWins": "⚔️ 正義方獲勝!",
+    "reasonFailedQuests": "💀 邪惡方破壞了 3 次任務",
+    "reasonVoteRejections": "🚫 5 次提案全數否決,邪惡方自動獲勝",
+    "reasonMerlinKilledPrefix": "🗡️ 刺客成功刺殺梅林!",
+    "reasonMerlinKilledSuffix": "是梅林",
+    "reasonWrongKillPrefix": "🛡️ 刺客誤殺",
+    "reasonWrongKillSuffix": ",正義方獲勝!",
+    "reasonAssassinationTimeout": "⏱️ 刺殺超時,正義方獲勝!",
+    "roundFailLabel": "{{count}}張失敗",
+    "rolesReveal": "最終角色揭曉:",
+    "youLabel": "(你)",
+    "rematch": "再來一局 (Rematch)",
+    "backHome": "返回首頁"
   }
 }
