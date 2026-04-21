@@ -1,13 +1,9 @@
 name: Deploy Frontend to GitHub Pages
 
+# DISABLED 2026-04-21: 固定用 avalon-game-platform.web.app 當玩家唯一入口
+# 玩家已遷到 Firebase Hosting（deploy-firebase.yml），此 workflow 僅保留手動觸發
+# GitHub Pages 部署已停用，如要恢復需把下方 VITE_SERVER_URL 改用 secrets
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'packages/web/**'
-      - 'packages/shared/**'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
