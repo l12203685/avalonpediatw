@@ -234,5 +234,14 @@
   "missionTrack": {
     "rejectLabel": "Reject:",
     "evilWinsReject": "Evil Wins!"
+  },
+  "bot": {
+    "label": "AI Bot",
+    "labelShort": "AI",
+    "newbie": "Newbie",
+    "core": "Core",
+    "expert": "Expert",
+    "fillTitle": "Add AI Bot",
+    "quickFill": "Fill to 5 with Core bots"
   }
 }

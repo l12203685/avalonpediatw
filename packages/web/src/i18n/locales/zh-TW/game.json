@@ -234,5 +234,14 @@
   "missionTrack": {
     "rejectLabel": "否決 (Reject):",
     "evilWinsReject": "邪惡方獲勝！"
+  },
+  "bot": {
+    "label": "AI 機器人",
+    "labelShort": "AI",
+    "newbie": "新手",
+    "core": "中堅",
+    "expert": "高手",
+    "fillTitle": "加入 AI 機器人",
+    "quickFill": "快速填滿至 5 人"
   }
 }
