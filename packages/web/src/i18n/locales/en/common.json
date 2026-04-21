@@ -121,6 +121,9 @@
   },
   "guest": {
     "rename": "Rename Guest",
-    "renameLimit": "Up to 3 renames per 24 hours"
+    "renameLimit": "Up to 3 renames per 24 hours",
+    "renameLengthError": "Name must be 2–20 characters",
+    "renameReservedPrefix": "Name cannot start with \"Guest_\" (reserved for system defaults)",
+    "renameEmptyError": "Name cannot be blank"
   }
 }

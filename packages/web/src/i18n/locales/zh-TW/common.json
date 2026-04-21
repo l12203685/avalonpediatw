@@ -121,6 +121,9 @@
   },
   "guest": {
     "rename": "更改訪客名稱",
-    "renameLimit": "24 小時內最多可更改 3 次"
+    "renameLimit": "24 小時內最多可更改 3 次",
+    "renameLengthError": "名稱長度需介於 2–20 字",
+    "renameReservedPrefix": "名稱不能以 Guest_ 開頭（保留給系統預設）",
+    "renameEmptyError": "名稱不能為空白"
   }
 }

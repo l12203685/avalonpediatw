@@ -2,7 +2,7 @@ import { Router, Request, Response, IRouter } from 'express';
 import { sign } from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { upsertUser, createOAuthSession, verifyAndDeleteOAuthSession } from '../services/supabase';
-import { mintGuestToken, verifyGuestToken } from '../middleware/guestAuth';
+import { mintGuestToken, verifyGuestToken, generateGuestName } from '../middleware/guestAuth';
 
 const router: IRouter = Router();
 
@@ -274,19 +274,30 @@ router.get('/line/callback', async (req: Request, res: Response) => {
 
 /**
  * POST /auth/guest
- * body: { displayName: string }
+ * body: { displayName?: string }
  * → { token: string, user: { uid, displayName, provider: 'guest' } }
+ *
+ * 若 body 沒帶 displayName（或空字串），server 端生成 `Guest_NNN`（Ticket #81）。
+ * 有帶的話驗證 1-40 字（保留舊行為，client 端通常會先帶 Guest_NNN 或使用者輸入）。
  */
 router.post('/guest', (req: Request, res: Response) => {
   const body = (req.body ?? {}) as { displayName?: unknown };
-  if (typeof body.displayName !== 'string') {
-    return res.status(400).json({ error: 'displayName is required' });
+  let candidate: string;
+  if (body.displayName === undefined || body.displayName === null) {
+    candidate = generateGuestName();
+  } else if (typeof body.displayName !== 'string') {
+    return res.status(400).json({ error: 'displayName must be a string' });
+  } else {
+    const trimmed = body.displayName.trim();
+    if (trimmed.length === 0) {
+      candidate = generateGuestName();
+    } else if (trimmed.length > 40) {
+      return res.status(400).json({ error: 'displayName must be 1-40 chars' });
+    } else {
+      candidate = trimmed;
+    }
   }
-  const trimmed = body.displayName.trim();
-  if (trimmed.length < 1 || trimmed.length > 40) {
-    return res.status(400).json({ error: 'displayName must be 1-40 chars' });
-  }
-  const { token, uid, displayName } = mintGuestToken(trimmed);
+  const { token, uid, displayName } = mintGuestToken(candidate);
   // 種一份 HttpOnly cookie 讓冷啟動可以從 /auth/guest/resume 續簽，
   // 不需要讓 client JS 自己暫存 token。
   setGuestSessionCookie(res, token);
@@ -337,7 +348,13 @@ router.get('/guest/resume', (req: Request, res: Response) => {
  * POST /auth/guest/rename
  * body: { newName: string }
  *
- * Phase 1 stub：輸入驗證 + 200 OK。24hr × 3 rate limit 與 persistence
+ * Ticket #81 驗證：
+ *   - 非空白
+ *   - 長度 2-20 字
+ *   - 不以 `Guest_`（case-insensitive）開頭 — 避免使用者自行命名偽裝成
+ *     server 分配的預設訪客名造成身份混淆
+ *
+ * Phase 1：輸入驗證 + 200 OK。24hr × 3 rate limit 與 persistence
  * Phase 2 搭配 guest registry table 再補上。
  */
 router.post('/guest/rename', (req: Request, res: Response) => {
@@ -346,8 +363,14 @@ router.post('/guest/rename', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'newName is required' });
   }
   const trimmed = body.newName.trim();
-  if (trimmed.length < 1 || trimmed.length > 40) {
-    return res.status(400).json({ error: 'newName must be 1-40 chars' });
+  if (trimmed.length < 2 || trimmed.length > 20) {
+    return res.status(400).json({ error: 'newName must be 2-20 chars' });
+  }
+  if (/^guest_/i.test(trimmed)) {
+    return res.status(400).json({
+      error: 'newName cannot start with "Guest_" (reserved for default guest names)',
+      code: 'RESERVED_PREFIX',
+    });
   }
   // TODO(phase2): 讀 guest_session cookie → 驗證 rate-limit 3/24h → 寫 DB
   return res.json({ ok: true, newName: trimmed });

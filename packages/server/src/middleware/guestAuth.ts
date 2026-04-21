@@ -52,10 +52,25 @@ const LEGACY_CUTOFF_MS: number = (() => {
 /** Maximum length for a guest display name to prevent XSS / log flooding. */
 const MAX_DISPLAY_NAME = 40;
 
+/**
+ * Ticket #81：訪客預設暱稱 `Guest_NNN`（3 碼 000-999 random）。
+ *
+ * Server 端分配取代 client 自己 random（之前 LoginPage 前端做）。這樣讓訪客
+ * 不帶名字就 POST /auth/guest 時也能拿到符合規範的預設名字，日後若要做
+ * username/name registry dedupe 只需改這支函式一個點。
+ *
+ * 碰撞處理：純 random，碰撞率 < 0.1% 不處理（訪客不進 users 表，
+ * 兩人同時叫 `Guest_123` 對系統沒有副作用，反正 uid 不同）。
+ */
+export function generateGuestName(): string {
+  const n = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `Guest_${n}`;
+}
+
 function sanitizeDisplayName(raw: unknown): string {
-  if (typeof raw !== 'string') return 'Guest';
+  if (typeof raw !== 'string') return generateGuestName();
   const trimmed = raw.trim();
-  if (trimmed.length === 0) return 'Guest';
+  if (trimmed.length === 0) return generateGuestName();
   if (trimmed.length > MAX_DISPLAY_NAME) return trimmed.slice(0, MAX_DISPLAY_NAME);
   return trimmed;
 }

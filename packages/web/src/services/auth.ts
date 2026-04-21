@@ -115,9 +115,11 @@ export async function resumeGuestFromCookie(): Promise<
 }
 
 /**
- * 訪客改名（Phase 1 stub — server 目前回 200 OK，24hr × 3 限制 Phase 2 再加）。
+ * 訪客改名。Server 驗證 2-20 字 + 不以 `Guest_` 開頭（Ticket #81）。
+ * 400 會帶 `{error, code?}`，UI 可據 code 顯示對應 i18n 訊息。
+ * Phase 2 再補 24hr × 3 rate limit。
  */
-export async function renameGuest(newName: string): Promise<{ ok: boolean; error?: string }> {
+export async function renameGuest(newName: string): Promise<{ ok: boolean; error?: string; code?: string }> {
   try {
     const res = await fetch(`${SERVER_URL}/auth/guest/rename`, {
       method: 'POST',
@@ -126,8 +128,18 @@ export async function renameGuest(newName: string): Promise<{ ok: boolean; error
       credentials: 'include',
     });
     if (!res.ok) {
+      let parsed: { error?: string; code?: string } = {};
+      try {
+        parsed = await res.json() as { error?: string; code?: string };
+      } catch {
+        // non-JSON body (e.g. 502 from proxy)
+      }
       // TODO(phase2): surface rate-limit (429) details to caller
-      return { ok: false, error: `rename failed: ${res.status}` };
+      return {
+        ok: false,
+        error: parsed.error || `rename failed: ${res.status}`,
+        code: parsed.code,
+      };
     }
     return { ok: true };
   } catch (err) {
