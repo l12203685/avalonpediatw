@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { submitQuestVote } from '../services/socket';
 import audioService from '../services/audio';
+import { seatPrefix } from '../utils/seatDisplay';
 
 // Base seconds for the quest-vote phase. Matches server QUEST_TIMEOUT_MS at 1x.
 const QUEST_BASE_SECONDS = 30;
@@ -155,7 +156,7 @@ export default function QuestPanel({
         </div>
       )}
 
-      {/* 隊伍成員列表 */}
+      {/* 隊伍成員列表 — seat# prefix so "#3 Guest_444" format (#93) */}
       <div className="space-y-2">
         <p className="text-gray-300 text-sm font-semibold">{t('game:questPanel.teamLabel')}</p>
         <div className="grid grid-cols-2 gap-2">
@@ -168,7 +169,7 @@ export default function QuestPanel({
                   : 'bg-blue-500/20 border border-blue-400 text-blue-300'
               }`}
             >
-              {room.players[memberId].name}
+              {seatPrefix(memberId, room.players)} {room.players[memberId].name}
               {memberId === currentPlayer.id && t('game:questPanel.youSuffix')}
             </div>
           ))}

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { VoteRecord, Room } from '@avalon/shared';
 import audioService from '../services/audio';
+import { seatPrefix } from '../utils/seatDisplay';
 
 interface VoteRevealOverlayProps {
   record: VoteRecord;
@@ -90,14 +91,14 @@ export default function VoteRevealOverlay({
           </div>
         </motion.div>
 
-        {/* Proposed team */}
+        {/* Proposed team — seat# prefix so "#3 Guest_444" format (#93) */}
         {record.team.length > 0 && (
           <div className="bg-gray-800/40 border border-gray-700 rounded-xl px-4 py-2">
             <p className="text-xs text-gray-500 mb-1.5 font-semibold uppercase tracking-wider">任務隊伍 (Quest Team)</p>
             <div className="flex flex-wrap gap-1.5">
               {record.team.map(id => (
                 <span key={id} className="text-xs bg-blue-900/40 border border-blue-700/50 text-blue-200 px-2 py-0.5 rounded-full">
-                  {room.players[id]?.name ?? id}
+                  {seatPrefix(id, room.players)} {room.players[id]?.name ?? id}
                 </span>
               ))}
             </div>
@@ -126,7 +127,7 @@ export default function VoteRevealOverlay({
                   ? <ThumbsUp size={14} className="flex-shrink-0 text-blue-400" />
                   : <ThumbsDown size={14} className="flex-shrink-0 text-red-400" />
                 }
-                <span className="truncate">{player.name}</span>
+                <span className="truncate">{seatPrefix(playerId, room.players)} {player.name}</span>
               </motion.div>
             );
           })}

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import audioService from '../services/audio';
+import { seatPrefix } from '../utils/seatDisplay';
 
 // Base seconds for the team-vote phase. Matches server VOTE_TIMEOUT_MS at 1x.
 const VOTE_BASE_SECONDS = 90;
@@ -81,7 +82,7 @@ export default function VotePanel({
         <p className="text-gray-300">{t('game:votePanel.subtitle')}</p>
       </div>
 
-      {/* 提案隊伍 */}
+      {/* 提案隊伍 — seat# prefix so "#3 Guest_444" format (#93) */}
       {questTeamPlayers.length > 0 && (
         <div className="bg-black/30 rounded-xl p-4">
           <p className="text-sm text-gray-400 mb-3 text-center">{t('game:votePanel.questTeamLabel')}</p>
@@ -98,7 +99,7 @@ export default function VotePanel({
                 <span className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-amber-400 flex items-center justify-center text-xs font-bold text-white">
                   {player.name.charAt(0).toUpperCase()}
                 </span>
-                {player.name}
+                {seatPrefix(player.id, room.players)} {player.name}
                 {player.id === currentPlayer.id && t('game:votePanel.youSuffix')}
               </div>
             ))}

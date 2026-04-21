@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2 } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
+import { seatPrefix } from '../utils/seatDisplay';
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
@@ -596,7 +597,7 @@ export default function GamePage(): JSX.Element {
                         {q.result === 'success' ? '✓' : '✗'}
                       </span>
                       <span className="text-gray-400">{t('game:assassin.roundPrefix', { round: q.round })}</span>
-                      <span className="text-gray-300">{q.team.map(id => room.players[id]?.name ?? id).join('、')}</span>
+                      <span className="text-gray-300">{q.team.map(id => `${seatPrefix(id, room.players)} ${room.players[id]?.name ?? id}`.trim()).join('、')}</span>
                       {q.result === 'fail' && q.failCount > 0 && <span className="text-red-400 ml-1">{t('game:assassin.failBadge', { count: q.failCount })}</span>}
                     </div>
                   ))}

@@ -1,6 +1,7 @@
 import { Player } from '@avalon/shared';
 import { motion } from 'framer-motion';
 import { Crown, Shield, WifiOff } from 'lucide-react';
+import { displaySeatNumber } from '../utils/seatDisplay';
 
 const ROLE_NAMES: Record<string, string> = {
   merlin:   '梅林 (Merlin)',
@@ -127,13 +128,14 @@ export default function PlayerCard({
           }
         </motion.div>
 
-        {/* Seat number badge — top-left gold circle with white number */}
+        {/* Seat number badge — top-left gold circle with white number.
+            Seat 10 renders as "0" per paper scoresheet convention (#93). */}
         {seatNumber !== undefined && (
           <div
             className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 border border-yellow-700 flex items-center justify-center shadow-md pointer-events-none"
             aria-label={`座位 ${seatNumber}`}
           >
-            <span className="text-[10px] font-black text-white leading-none">{seatNumber}</span>
+            <span className="text-[10px] font-black text-white leading-none">{displaySeatNumber(seatNumber)}</span>
           </div>
         )}
 

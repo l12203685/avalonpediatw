@@ -29,12 +29,22 @@ const STATE_LABELS: Record<string, string> = {
 };
 
 /**
- * 5v5 rails layout per Edward 2026-04-20 spec:
- *   ┌─────────┬──────────────────────┬─────────┐
- *   │ left    │   center (children)  │ right   │
- *   │ players │   quest + history    │ players │
- *   │ 1..N/2  │   + chat            │ N/2..N  │
- *   └─────────┴──────────────────────┴─────────┘
+ * 5v5 rails layout — clockwise seating (Edward 2026-04-21 revision, #93).
+ *   ┌──────────────┬──────────────────────┬──────────────┐
+ *   │ left rail    │   center (children)  │ right rail   │
+ *   │ seats N..N/2 │   quest + history    │ seats 1..N/2 │
+ *   │ (top=N)      │   + chat            │ (top=1)      │
+ *   └──────────────┴──────────────────────┴──────────────┘
+ * Right column runs 1→splitIndex top-to-bottom. Left column runs N→splitIndex+1
+ * top-to-bottom (i.e. slice(splitIndex).reverse()). The visual rotation is
+ * clockwise so a 10-player room reads: 1 top-right, down to 5 bottom-right,
+ * wraps to 6 bottom-left, up to 10 top-left — matching physical table convention.
+ *
+ * Seat numbers stay locked to the original `playerIds` order (the server's
+ * canonical seating). `seatIndex` passed to `renderPlayerCard` is the original
+ * 0-based index, so `seat 10` always renders as `seatNumber={10}` regardless of
+ * which rail it lives in after the reverse.
+ *
  * Desktop: three columns (~210px | flex-1 | ~210px).
  * Mobile (<768px): two vertical rails side-by-side (1fr | 1fr), center column wraps
  *   below spanning both columns. No horizontal scroll — every seat visible at once.
@@ -51,11 +61,22 @@ export default function GameBoard({
   const playerIds = Object.keys(room.players);
   const leaderId = playerIds[room.leaderIndex % playerIds.length];
 
-  // Split players into left/right halves. Ceil puts the extra player on the left for odd counts.
-  // 5→3+2, 6→3+3, 7→4+3, 8→4+4, 9→5+4, 10→5+5.
+  // Split players into right (seats 1..splitIndex, top-to-bottom) and left
+  // (seats splitIndex+1..N, reversed so highest seat sits on top). Ceil puts the
+  // extra player on the RIGHT for odd counts so 5v5 lines up: 5→3+2, 6→3+3,
+  // 7→4+3, 8→4+4, 9→5+4, 10→5+5.
+  //
+  // Each rail item carries the ORIGINAL seatIndex (0-based position in
+  // `playerIds`). That keeps `seatNumber` stable through the reverse, so seat
+  // 10 renders as 10 even though it sits at the top of the left rail visually.
   const splitIndex = Math.ceil(players.length / 2);
-  const leftPlayers = players.slice(0, splitIndex);
-  const rightPlayers = players.slice(splitIndex);
+  const rightRail = players
+    .slice(0, splitIndex)
+    .map((player, i) => ({ player, seatIndex: i }));
+  const leftRail = players
+    .slice(splitIndex)
+    .map((player, i) => ({ player, seatIndex: splitIndex + i }))
+    .reverse();
 
   // Play sound on state change
   useEffect(() => {
@@ -141,9 +162,9 @@ export default function GameBoard({
     <div className="w-full">
       {/* Desktop / tablet: three-column grid */}
       <div className="hidden md:grid gap-3 lg:gap-4" style={{ gridTemplateColumns: '210px minmax(0, 1fr) 210px' }}>
-        {/* Left player rail */}
+        {/* Left player rail — seats N..splitIndex+1 top-to-bottom (clockwise wrap) */}
         <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
-          {leftPlayers.map((p, i) => renderPlayerCard(p, i, 'left'))}
+          {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
         </aside>
 
         {/* Center — state banner + children (quest/vote/history) */}
@@ -175,9 +196,9 @@ export default function GameBoard({
           {children}
         </section>
 
-        {/* Right player rail */}
+        {/* Right player rail — seats 1..splitIndex top-to-bottom (clockwise start) */}
         <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
-          {rightPlayers.map((p, i) => renderPlayerCard(p, splitIndex + i, 'right'))}
+          {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
         </aside>
       </div>
 
@@ -189,11 +210,11 @@ export default function GameBoard({
       */}
       <div className="md:hidden grid gap-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
         <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5">
-          {leftPlayers.map((p, i) => renderPlayerCard(p, i, 'left'))}
+          {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
         </aside>
 
         <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5">
-          {rightPlayers.map((p, i) => renderPlayerCard(p, splitIndex + i, 'right'))}
+          {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
         </aside>
 
         {/* Full-width center spans both columns below the rails on mobile */}

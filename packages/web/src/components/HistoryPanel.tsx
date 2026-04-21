@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player, VoteRecord } from '@avalon/shared';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { seatPrefix } from '../utils/seatDisplay';
 
 interface HistoryPanelProps {
   room: Room;
@@ -24,6 +25,8 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
   }, {});
 
   const getName = (id: string) => room.players[id]?.name ?? id;
+  // "#3 Guest_444" style team-member label — seat 10 renders as "0" (#93)
+  const getSeatName = (id: string): string => `${seatPrefix(id, room.players)} ${getName(id)}`.trim();
 
   return (
     <div className="bg-avalon-card/50 border border-gray-700 rounded-lg overflow-hidden">
@@ -76,7 +79,7 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
                         )}
                         {questResult && (
                           <span className="text-xs text-gray-600">
-                            隊伍：{questResult.team.map(getName).join('、')}
+                            隊伍：{questResult.team.map(getSeatName).join('、')}
                           </span>
                         )}
                       </div>
@@ -99,11 +102,11 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
                             >
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-gray-400">
-                                  隊長：<span className="text-yellow-400 font-bold">{getName(vote.leader)}</span>
+                                  隊長：<span className="text-yellow-400 font-bold">{getSeatName(vote.leader)}</span>
                                 </span>
                                 <span className="text-gray-500">→</span>
                                 <span className="text-gray-300">
-                                  {vote.team.map(getName).join('、')}
+                                  {vote.team.map(getSeatName).join('、')}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0 ml-2">
@@ -139,7 +142,7 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
                                           } ${approved ? 'text-blue-300' : 'text-red-400'}`}
                                         >
                                           <span>{approved ? '👍' : '👎'}</span>
-                                          <span className="truncate">{getName(pid)}</span>
+                                          <span className="truncate">{getSeatName(pid)}</span>
                                           {pid === currentPlayer.id && <span className="text-yellow-500 text-xs">(你)</span>}
                                         </div>
                                       ))}

@@ -7,6 +7,7 @@ import {
   QuestSuccessMark,
   QuestFailMark,
 } from './ScoresheetIcons';
+import { displaySeatNumber } from '../utils/seatDisplay';
 
 interface LiveScoresheetProps {
   room: Room;
@@ -27,10 +28,15 @@ type ScoresheetRow =
 /**
  * Shorthand memo for a nomination row.
  * e.g. "169" = leader 1, team members 6 and 9 (1-based display).
- * Uses 1-based seat numbers to match the paper scoresheet convention.
+ * Uses 1-based seat numbers to match the paper scoresheet convention,
+ * and renders seat 10 as "0" (so leader 1 + team [3, 10] → "130").
  */
 function nominationShorthand(leaderSeat: number, teamSeats: number[]): string {
-  return `${leaderSeat}${[...teamSeats].sort((a, b) => a - b).join('')}`;
+  const sortedDigits = [...teamSeats]
+    .sort((a, b) => a - b)
+    .map(displaySeatNumber)
+    .join('');
+  return `${displaySeatNumber(leaderSeat)}${sortedDigits}`;
 }
 
 export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetProps): JSX.Element {
@@ -82,8 +88,8 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
     return result;
   }, [room.voteHistory, room.questHistory, room.ladyOfTheLakeHistory]);
 
-  // 1-based seat display numbers (paper scoresheet convention)
-  const seatDisplay = (i: number): number => i + 1;
+  // 1-based seat display numbers, with seat 10 rendered as "0" (paper convention)
+  const seatDisplay = (i: number): string => displaySeatNumber(i + 1);
 
   return (
     <div className="w-full">
@@ -275,9 +281,9 @@ function NominationRow({
 
   return (
     <tr className={`border-b border-gray-800/50 ${record.approved ? '' : 'opacity-80'}`}>
-      {/* Leader seat label */}
+      {/* Leader seat label — seat 10 renders as "0" (paper scoresheet convention) */}
       <td className="px-0 py-1 text-center text-yellow-400 font-bold bg-avalon-dark">
-        {leaderSeat + 1}
+        {displaySeatNumber(leaderSeat + 1)}
       </td>
 
       {/* Seat cells — each cell = shield (if on team) + overlay (approve white / reject black) */}
@@ -422,7 +428,7 @@ function LadyRow({
       : 'x'
     : '?';
 
-  const memo = `${holderSeat}>${targetSeat}${isHolder ? resultChar : '?'}`;
+  const memo = `${displaySeatNumber(holderSeat)}>${displaySeatNumber(targetSeat)}${isHolder ? resultChar : '?'}`;
 
   return (
     <tr className="border-b border-cyan-900/50 bg-cyan-800/25">
@@ -436,7 +442,7 @@ function LadyRow({
         <div className="flex items-center justify-center gap-1 sm:gap-2 text-cyan-100">
           <span className="text-[9px] sm:text-[11px] font-bold tracking-wider">湖中</span>
           <span className="font-mono text-[10px] sm:text-xs">
-            {holderSeat}&gt;{targetSeat}
+            {displaySeatNumber(holderSeat)}&gt;{displaySeatNumber(targetSeat)}
           </span>
           {isHolder && resultKnown ? (
             <span

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { QuestRecord, Room } from '@avalon/shared';
 import audioService from '../services/audio';
+import { seatPrefix } from '../utils/seatDisplay';
 
 interface QuestResultOverlayProps {
   record: QuestRecord;
@@ -93,7 +94,7 @@ export default function QuestResultOverlay({
           )}
         </motion.div>
 
-        {/* Team members */}
+        {/* Team members — seat# prefix so "#3 Guest_444" format (#93) */}
         {teamPlayers.length > 0 && (
           <div className="space-y-1">
             <p className="text-xs text-gray-500">本次任務隊伍：</p>
@@ -106,7 +107,7 @@ export default function QuestResultOverlay({
                   transition={{ delay: 0.35 + i * 0.06 }}
                   className="bg-gray-800 border border-gray-600 text-gray-200 text-sm px-3 py-1 rounded-full"
                 >
-                  {player.name}
+                  {seatPrefix(player.id, room.players)} {player.name}
                 </motion.span>
               ))}
             </div>
