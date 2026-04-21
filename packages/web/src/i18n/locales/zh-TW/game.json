@@ -123,7 +123,12 @@
     "pass": "湖中女神將傳遞給此玩家... (The Lady passes to this player...)",
     "pickTitle": "選擇一位玩家查看其陣營 (Choose a player to inspect their team alignment)",
     "waitingDesc": "<holder>{{name}}</holder> 正在使用湖中女神查看一位玩家的陣營...",
-    "waitingNote": "(The Lady holder is inspecting a player's team alignment...)"
+    "waitingNote": "(The Lady holder is inspecting a player's team alignment...)",
+    "declareTitle": "公開宣告 (Public declaration)",
+    "declareGood": "宣告為好人 (Declare Good)",
+    "declareEvil": "宣告為壞人 (Declare Evil)",
+    "declareKeepPrivate": "不宣告=保持私密 (No declaration = keep it private)",
+    "declared": "你已公開宣告：{{claim}}"
   },
   "assassin": {
     "questHistoryHeader": "任務隊伍歷史 (Quest Team History)",

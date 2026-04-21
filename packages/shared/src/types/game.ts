@@ -140,7 +140,27 @@ export interface RoleOptions {
   morgana: boolean;   // Include Morgana (paired with Percival)
   oberon: boolean;    // Include Oberon (evil unknown to other evil)
   mordred: boolean;   // Include Mordred (hidden from Merlin)
-  ladyOfTheLake?: boolean; // Post-MVP feature; canonical-7 scope lock keeps this OFF. Ignored unless explicitly === true.
+  /**
+   * Post-MVP feature; canonical-7 scope lock still in force. Engine reads the
+   * value as-is (pure read, no implicit default-on). UI derives the default
+   * suggestion (7+ & Mordred on → pre-check true) and sends it explicitly.
+   */
+  ladyOfTheLake?: boolean;
+  /**
+   * 9-player variant selector. `'standard'` (default) = canonical 6 good /
+   * 3 evil with quest sizes [3,4,4,5,5]. `'oberonMandatory'` = 5 good /
+   * 4 evil with Oberon forced into the evil pool and quest sizes overridden
+   * to [4,3,4,5,5].
+   */
+  variant9Player?: 'standard' | 'oberonMandatory';
+  /** Swap the team sizes for quests 1 and 2 when true. */
+  swapR1R2?: boolean;
+  /**
+   * Initial Lady-of-the-Lake holder. 'random' randomises; 'seat0' (default)
+   * maps to seat 10 (= playerIds[playerIds.length - 1], the canonical
+   * "leader's right neighbour"); 'seat1'..'seat9' map to playerIds[0]..[8].
+   */
+  ladyStart?: 'random' | 'seat0' | 'seat1' | 'seat2' | 'seat3' | 'seat4' | 'seat5' | 'seat6' | 'seat7' | 'seat8' | 'seat9';
 }
 
 export interface GameConfig {
@@ -212,6 +232,14 @@ export interface LadyOfTheLakeRecord {
   holderId: string;   // player who held the Lady
   targetId: string;   // player who was inspected
   result:   'good' | 'evil'; // what the holder saw
+  /**
+   * True once the holder has publicly declared what they "saw". The claim
+   * itself is not trusted — holders may lie — so this field only gates the
+   * UI (declare button is hidden after first declaration).
+   */
+  declared?:      boolean;
+  /** The public claim the holder made ('good' or 'evil'). */
+  declaredClaim?: 'good' | 'evil';
 }
 
 export interface ChatMessage {

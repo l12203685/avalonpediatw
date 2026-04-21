@@ -167,6 +167,10 @@ export class GameServer {
         this.handleLadyOfTheLake(socket, roomId, holderId, targetId);
       });
 
+      socket.on('game:declare-lake-result', (roomId: string, claim: 'good' | 'evil') => {
+        this.handleDeclareLakeResult(socket, roomId, claim);
+      });
+
       socket.on('chat:send-message', (roomId: string, message: string) => {
         this.handleChatMessage(socket, roomId, message);
       });
@@ -195,7 +199,7 @@ export class GameServer {
         this.handleSetMaxPlayers(socket, roomId, count);
       });
 
-      socket.on('game:set-role-options', (roomId: string, options: Record<string, boolean>) => {
+      socket.on('game:set-role-options', (roomId: string, options: Record<string, unknown>) => {
         this.handleSetRoleOptions(socket, roomId, options);
       });
 
@@ -782,6 +786,50 @@ export class GameServer {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error processing Lady of the Lake:', errorMsg);
       socket.emit('error', `Failed to submit Lady of the Lake: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Part 4 of #90 — public Lady of the Lake declaration. Holder who just
+   * inspected a target can publicly claim 'good' or 'evil' (can also
+   * remain silent by simply not calling this handler). The engine records
+   * the declaration; we then emit a system-chat message so the whole
+   * table sees the claim in-context.
+   */
+  private handleDeclareLakeResult(socket: Socket, roomId: string, claim: 'good' | 'evil'): void {
+    try {
+      const playerId = socket.data.playerId as string | undefined;
+      if (!playerId) { socket.emit('error', 'Not authenticated in room'); return; }
+
+      if (claim !== 'good' && claim !== 'evil') {
+        socket.emit('error', `Invalid claim "${claim}"`);
+        return;
+      }
+
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+
+      const gameEngine = this.gameEngines.get(roomId);
+      if (!gameEngine) { socket.emit('error', 'Game engine not found'); return; }
+
+      const record = gameEngine.declareLakeResult(playerId, claim);
+      if (!record) return; // already declared — silent no-op
+
+      const declarer = room.players[playerId];
+      const target = room.players[record.targetId];
+      const declarerName = declarer?.name ?? playerId;
+      const targetName = target?.name ?? record.targetId;
+      const claimLabel = claim === 'good' ? '好人' : '壞人';
+      this.emitSystemChat(
+        roomId,
+        `🔮 ${declarerName} 宣告 ${targetName} 是「${claimLabel}」`
+      );
+
+      this.broadcastRoomState(roomId, room);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error processing declare-lake-result:', errorMsg);
+      socket.emit('error', `Failed to declare Lady of the Lake result: ${errorMsg}`);
     }
   }
 
@@ -1383,19 +1431,38 @@ export class GameServer {
     }
   }
 
-  private handleSetRoleOptions(socket: Socket, roomId: string, options: Record<string, boolean>): void {
+  private handleSetRoleOptions(socket: Socket, roomId: string, options: Record<string, unknown>): void {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) { socket.emit('error', 'Room not found'); return; }
       if (room.host !== (socket.data.playerId as string)) { socket.emit('error', 'Only the host can change role options'); return; }
       if (room.state !== 'lobby') { socket.emit('error', 'Cannot change roles after game starts'); return; }
 
-      const allowed = ['percival', 'morgana', 'oberon', 'mordred'];
-      for (const key of allowed) {
+      // Boolean toggles (canonical evil roles + Lady enable + R1/R2 swap).
+      const boolKeys = ['percival', 'morgana', 'oberon', 'mordred', 'ladyOfTheLake', 'swapR1R2'] as const;
+      for (const key of boolKeys) {
         if (key in options) {
           ((room.roleOptions as unknown) as Record<string, boolean>)[key] = Boolean(options[key]);
         }
       }
+
+      // `variant9Player` — enum 'standard' | 'oberonMandatory' (Part 6).
+      if ('variant9Player' in options) {
+        const v = options.variant9Player;
+        if (v === 'standard' || v === 'oberonMandatory') {
+          ((room.roleOptions as unknown) as Record<string, string>).variant9Player = v;
+        }
+      }
+
+      // `ladyStart` — enum 'random' | 'seat0'..'seat9' (Part 3).
+      if ('ladyStart' in options) {
+        const v = options.ladyStart;
+        const validLadyStart = typeof v === 'string' && /^(random|seat[0-9])$/.test(v);
+        if (validLadyStart) {
+          ((room.roleOptions as unknown) as Record<string, string>).ladyStart = v;
+        }
+      }
+
       room.updatedAt = Date.now();
       this.broadcastRoomState(roomId, room);
     } catch (error) {

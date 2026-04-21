@@ -216,29 +216,51 @@ describe('Canonical 7-role scope lock', () => {
       engine.cleanup();
     });
 
-    it('startGame enables Lady of the Lake by default when roleOptions is missing entirely (7+ players)', () => {
-      // "Missing roleOptions" represents a host who has not touched the
-      // toggle. Default policy (2026-04-21) is ON for 7+ players.
+    it('startGame keeps Lady of the Lake OFF when roleOptions is missing entirely (pure-read #90)', () => {
+      // After #90 the engine performs a pure read of ladyOfTheLake; the
+      // UI is now responsible for computing the canonical default
+      // (7+ players & Mordred on → pre-check true) and sending the
+      // resolved boolean. "Missing roleOptions" = host sent nothing → off.
       const room = makeRoom(7);
       delete (room as Partial<Room>).roleOptions;
       const engine = new GameEngine(room);
       engine.startGame();
-      expect(room.ladyOfTheLakeEnabled).toBe(true);
+      expect(room.ladyOfTheLakeEnabled).toBe(false);
       engine.cleanup();
     });
 
-    it('startGame auto-enables Lady of the Lake for 7+ players when not explicitly disabled', () => {
+    it('startGame keeps Lady of the Lake OFF for 7+ players when not explicitly enabled (pure-read #90)', () => {
+      // Same pure-read semantics: without ladyOfTheLake: true in
+      // roleOptions, engine leaves it off regardless of player count.
       for (const count of [7, 8, 9, 10]) {
         const room = makeRoom(count, {
           percival: true,
           morgana: true,
           oberon: true,
           mordred: true,
-          // ladyOfTheLake intentionally omitted — default policy applies
+          // ladyOfTheLake intentionally omitted — pure-read → off.
+        });
+        const engine = new GameEngine(room);
+        engine.startGame();
+        expect(room.ladyOfTheLakeEnabled).toBe(false);
+        engine.cleanup();
+      }
+    });
+
+    it('startGame enables Lady of the Lake for 7+ players when explicitly opted in (#90 pure-read)', () => {
+      // The UI's job is to tick the checkbox; the engine obeys.
+      for (const count of [7, 8, 9, 10]) {
+        const room = makeRoom(count, {
+          percival: true,
+          morgana: true,
+          oberon: true,
+          mordred: true,
+          ladyOfTheLake: true,
         });
         const engine = new GameEngine(room);
         engine.startGame();
         expect(room.ladyOfTheLakeEnabled).toBe(true);
+        expect(room.ladyOfTheLakeHolder).toBeDefined();
         engine.cleanup();
       }
     });

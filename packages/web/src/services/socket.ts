@@ -312,6 +312,15 @@ export function submitLadyOfTheLake(roomId: string, holderId: string, targetId: 
   socket.emit('game:lady-of-the-lake', roomId, holderId, targetId);
 }
 
+/**
+ * Part 4 of #90 — Lady of the Lake holder publicly declares the inspected
+ * player as 'good' or 'evil'. No-op on the server if already declared.
+ */
+export function declareLakeResult(roomId: string, claim: 'good' | 'evil'): void {
+  const socket = getSocket();
+  socket.emit('game:declare-lake-result', roomId, claim);
+}
+
 export function sendChatMessage(roomId: string, message: string): void {
   const socket = getSocket();
   socket.emit('chat:send-message', roomId, message);
@@ -362,7 +371,15 @@ export function setMaxPlayers(roomId: string, count: number): void {
   socket.emit('game:set-max-players', roomId, count);
 }
 
-export function setRoleOptions(roomId: string, options: Record<string, boolean>): void {
+/**
+ * Advanced-rule-aware setRoleOptions (#90). Host UI sends a mixed payload
+ * that may contain any combination of:
+ *   - booleans: percival/morgana/oberon/mordred/ladyOfTheLake/swapR1R2
+ *   - enum strings: variant9Player ('standard' | 'oberonMandatory'),
+ *     ladyStart ('random' | 'seat0'..'seat9')
+ * Server validates per-key before applying.
+ */
+export function setRoleOptions(roomId: string, options: Record<string, unknown>): void {
   const socket = getSocket();
   socket.emit('game:set-role-options', roomId, options);
 }

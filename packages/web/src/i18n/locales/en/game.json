@@ -123,7 +123,12 @@
     "pass": "The Lady passes to this player...",
     "pickTitle": "Choose a player to inspect their team alignment",
     "waitingDesc": "<holder>{{name}}</holder> is using the Lady of the Lake to inspect a player...",
-    "waitingNote": "(The Lady holder is inspecting a player's team alignment...)"
+    "waitingNote": "(The Lady holder is inspecting a player's team alignment...)",
+    "declareTitle": "Public declaration",
+    "declareGood": "Declare Good",
+    "declareEvil": "Declare Evil",
+    "declareKeepPrivate": "No declaration = keep it private",
+    "declared": "You publicly declared: {{claim}}"
   },
   "assassin": {
     "questHistoryHeader": "Quest Team History",

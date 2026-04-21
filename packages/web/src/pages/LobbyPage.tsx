@@ -109,16 +109,36 @@ export default function LobbyPage(): JSX.Element {
 
   // Role preview based on current player count
   const previewConfig = AVALON_CONFIG[playerList.length];
-  // Apply roleOptions to get effective role list for preview
-  const effectiveRoles = previewConfig?.roles.map(r => {
+  const is9Variant = playerList.length === 9
+    && (room.roleOptions as unknown as Record<string, string>)?.variant9Player === 'oberonMandatory';
+  // Apply roleOptions to get effective role list for preview. The
+  // 9-player variant replaces the standard 6G/3E split with 5G/4E +
+  // mandatory Oberon, matching GameEngine.assignRoles semantics.
+  const previewRoles: string[] = is9Variant
+    ? ['merlin', 'percival', 'loyal', 'loyal', 'loyal',
+       'assassin', 'morgana', 'mordred', 'oberon']
+    : (previewConfig?.roles as unknown as string[] ?? []);
+  const effectiveRoles = previewRoles.map(r => {
     if (r === 'percival' && !room.roleOptions?.percival) return 'loyal';
     if (r === 'morgana'  && !room.roleOptions?.morgana)  return 'minion';
-    if (r === 'oberon'   && !room.roleOptions?.oberon)   return 'minion';
+    // 9-variant forces Oberon regardless of the toggle
+    if (r === 'oberon'   && !room.roleOptions?.oberon && !is9Variant) return 'minion';
     if (r === 'mordred'  && !room.roleOptions?.mordred)  return 'minion';
     return r;
-  }) ?? [];
+  });
   const goodRoles  = effectiveRoles.filter(r => GOOD_ROLES.has(r));
   const evilRoles  = effectiveRoles.filter(r => !GOOD_ROLES.has(r));
+
+  // Effective quest sizes preview for the scoresheet ribbon (honours
+  // swapR1R2 + 9-variant, matching GameEngine.computeEffectiveQuestSizes).
+  const previewQuestSizes: number[] = (() => {
+    if (!previewConfig) return [];
+    let sizes = is9Variant ? [4, 3, 4, 5, 5] : [...previewConfig.questTeams];
+    if (room.roleOptions?.swapR1R2 && sizes.length >= 2) {
+      const t = sizes[0]; sizes[0] = sizes[1]; sizes[1] = t;
+    }
+    return sizes;
+  })();
 
   const handleToggleRole = (key: string) => {
     if (!room.roleOptions) return;
@@ -130,6 +150,31 @@ export default function LobbyPage(): JSX.Element {
     if (info.paired) updates[info.paired] = newVal;
     setRoleOptions(room.id, updates);
   };
+
+  // Advanced toggles (#90) — generic single-key boolean flip with no pairing.
+  const handleToggleAdvanced = (key: string) => {
+    if (!room.roleOptions) return;
+    const opts = (room.roleOptions as unknown) as Record<string, unknown>;
+    const newVal = !Boolean(opts[key]);
+    setRoleOptions(room.id, { [key]: newVal });
+  };
+
+  // Advanced enum controls (variant9Player / ladyStart).
+  const handleSelectAdvanced = (key: string, value: string) => {
+    setRoleOptions(room.id, { [key]: value });
+  };
+
+  // #90 Part 2 — UI-side "canonical default" for Lady of the Lake: when
+  // the host has NOT explicitly set ladyOfTheLake (undefined), and the
+  // table is 7+ players AND Mordred is enabled, the pre-check should be
+  // ON. Explicit false wins — we only auto-derive when the field is
+  // untouched. Checking `typeof ... === 'undefined'` keeps the
+  // "intentional off" signal working.
+  const ladyFieldUndefined = typeof ((room.roleOptions as unknown) as Record<string, unknown>)?.ladyOfTheLake === 'undefined';
+  const ladyDefaultOn = ladyFieldUndefined && playerList.length >= 7 && Boolean(room.roleOptions?.mordred);
+  const ladyChecked = ladyFieldUndefined
+    ? ladyDefaultOn
+    : Boolean(room.roleOptions?.ladyOfTheLake);
 
   const handleCopyRoomId = () => {
     navigator.clipboard.writeText(shortCode).then(() => {
@@ -225,6 +270,94 @@ export default function LobbyPage(): JSX.Element {
               </div>
             )}
 
+            {/* #90 Advanced rule options (host only) */}
+            {isHost && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
+                  進階規則 (Advanced Rules)
+                </p>
+                <div className="space-y-2">
+                  {/* Lady of the Lake enable + starting seat */}
+                  <div className="bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div className="flex-1 pr-3">
+                        <div className="text-sm font-bold text-white">湖中女神 (Lady of the Lake)</div>
+                        <p className="text-xs text-gray-500 leading-tight mt-0.5">
+                          任務 2 起輪流互查陣營；可公開宣告或保持沉默
+                          {ladyFieldUndefined && ladyDefaultOn && (
+                            <span className="text-amber-400 ml-1">(預設開啟：7+ 人且啟用莫德雷德)</span>
+                          )}
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={ladyChecked}
+                        onChange={() => {
+                          // First interaction solidifies the field — send
+                          // the current resolved value flipped.
+                          setRoleOptions(room.id, { ladyOfTheLake: !ladyChecked });
+                        }}
+                        className="w-5 h-5 accent-amber-500 flex-shrink-0"
+                      />
+                    </label>
+
+                    {ladyChecked && playerList.length >= 7 && (
+                      <div className="mt-2 pt-2 border-t border-gray-700/60">
+                        <p className="text-xs text-gray-500 mb-1.5">起始湖女持有者 (Starting holder)</p>
+                        <select
+                          value={(room.roleOptions as unknown as Record<string, string>)?.ladyStart ?? 'random'}
+                          onChange={e => handleSelectAdvanced('ladyStart', e.target.value)}
+                          className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="random">隨機 (Random)</option>
+                          <option value="seat0">隊長右手邊 (Seat 0 · Leader's right)</option>
+                          {Array.from({ length: playerList.length }, (_, i) => (
+                            <option key={i + 1} value={`seat${i + 1}`}>
+                              座位 {i + 1} ({playerList[i]?.name ?? '—'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* R1/R2 quest size swap */}
+                  <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer">
+                    <div className="flex-1 pr-3">
+                      <div className="text-sm font-bold text-white">第 1/2 輪人數對調 (Swap R1/R2)</div>
+                      <p className="text-xs text-gray-500 leading-tight mt-0.5">
+                        交換第一、二輪任務所需人數（例如 2/3 → 3/2）
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(room.roleOptions?.swapR1R2)}
+                      onChange={() => handleToggleAdvanced('swapR1R2')}
+                      className="w-5 h-5 accent-amber-500 flex-shrink-0"
+                    />
+                  </label>
+
+                  {/* 9-player variant (only shown for 9-player tables) */}
+                  {playerList.length === 9 && (
+                    <div className="bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2">
+                      <p className="text-sm font-bold text-white mb-1">9 人局變體 (9-Player Variant)</p>
+                      <p className="text-xs text-gray-500 leading-tight mb-2">
+                        奧伯倫強制版：5 好 4 壞、強制加入奧伯倫、任務人數改為 4/3/4/5/5
+                      </p>
+                      <select
+                        value={(room.roleOptions as unknown as Record<string, string>)?.variant9Player ?? 'standard'}
+                        onChange={e => handleSelectAdvanced('variant9Player', e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="standard">標準 (Standard · 6 好 3 壞)</option>
+                        <option value="oberonMandatory">奧伯倫強制 (Oberon mandatory · 5 好 4 壞)</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Password lock (host only) */}
             {isHost && (
               <div>
@@ -290,6 +423,31 @@ export default function LobbyPage(): JSX.Element {
                 <span className="text-sm text-gray-200 font-semibold">{timerLabel(room.timerConfig?.multiplier)}</span>
               </div>
             </div>
+
+            {/* Quest size preview — honours swapR1R2 + 9-variant */}
+            {previewQuestSizes.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
+                  任務人數 (Quest Sizes)
+                  {room.roleOptions?.swapR1R2 && (
+                    <span className="text-amber-400 ml-2 normal-case tracking-normal">· R1/R2 已對調</span>
+                  )}
+                  {is9Variant && (
+                    <span className="text-amber-400 ml-2 normal-case tracking-normal">· 奧伯倫強制版</span>
+                  )}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {previewQuestSizes.map((sz, i) => (
+                    <span
+                      key={i}
+                      className="text-xs px-2 py-0.5 rounded-full font-semibold border bg-gray-800/40 border-gray-700 text-gray-300"
+                    >
+                      R{i + 1}: {sz} 人
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Role preview */}
             <div>

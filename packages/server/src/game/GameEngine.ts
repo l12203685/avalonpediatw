@@ -1,4 +1,4 @@
-import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord, CANONICAL_ROLES, isCanonicalRole, TimerMultiplier } from '@avalon/shared';
+import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord, LadyOfTheLakeRecord, CANONICAL_ROLES, isCanonicalRole, TimerMultiplier } from '@avalon/shared';
 
 /**
  * Error thrown when a role outside the canonical 7-role Avalon scope is
@@ -53,6 +53,13 @@ export interface GameEngineState {
   voteAttemptInRound: number;
   eventBuffer: GameEventRecord[];
   eventSeq: number;
+  /**
+   * Per-game quest-size snapshot (see `effectiveQuestSizes` field).
+   * Optional for backward-compat with pre-#90 snapshots; when absent,
+   * restore leaves the engine field as null and getEffectiveQuestSizes
+   * falls back to AVALON_CONFIG.
+   */
+  effectiveQuestSizes?: number[];
 }
 
 export class GameEngine {
@@ -69,6 +76,15 @@ export class GameEngine {
   private questVotes: QuestVote[] = [];
   private currentLeaderIndex: number = 0;
   private voteAttemptInRound: number = 0; // tracks attempt number within a round
+
+  /**
+   * Per-room quest-size snapshot, computed at startGame() so host toggles
+   * like `swapR1R2` and the 9-player `oberonMandatory` variant can override
+   * the shared AVALON_CONFIG without mutating the global object. All
+   * downstream quest logic reads `getEffectiveQuestSizes()` instead of
+   * AVALON_CONFIG directly.
+   */
+  private effectiveQuestSizes: number[] | null = null;
 
   // In-memory event buffer (flushed to Supabase on game end)
   private eventBuffer: GameEventRecord[] = [];
@@ -114,6 +130,11 @@ export class GameEngine {
       throw new Error(`Invalid player count: ${playerCount}. Must be between 5-10`);
     }
 
+    // Compute effective quest sizes once per game so downstream logic never
+    // mutates the shared AVALON_CONFIG object. Honours `swapR1R2` and the
+    // 9-player `oberonMandatory` variant.
+    this.effectiveQuestSizes = this.computeEffectiveQuestSizes(playerCount);
+
     // Assign roles
     this.assignRoles(playerCount);
 
@@ -133,18 +154,19 @@ export class GameEngine {
     this.currentLeaderIndex = 0;
     this.voteAttemptInRound = 0;
 
-    // Lady of the Lake default policy (Edward 2026-04-21):
-    // 7+ player games enable Lady by default to match the official Avalon
-    // rules, which bundle Lady with larger games. The host can still opt
-    // out via the lobby toggle (roleOptions.ladyOfTheLake === false).
-    // Player counts below 7 never enable Lady regardless of flag state.
-    const ladyExplicitlyDisabled = this.room.roleOptions?.ladyOfTheLake === false;
-    const ladyEnabled = playerCount >= 7 && !ladyExplicitlyDisabled;
+    // Lady of the Lake: pure read of the host-configured flag (Edward
+    // 2026-04-21 "進階規則完整實作"). The UI is responsible for computing
+    // the canonical default (7+ players & Mordred on → pre-check true) and
+    // sending the resolved boolean. Engine no longer implicitly flips it —
+    // but the <7-player hard lockout (official Avalon rule: Lady only
+    // exists in 7+ player games) remains engine-enforced so an errant UI
+    // or socket cannot activate Lady in a 5/6-player game.
+    const ladyRequested = this.room.roleOptions?.ladyOfTheLake === true;
+    const ladyEnabled = ladyRequested && playerCount >= 7;
     this.room.ladyOfTheLakeEnabled = ladyEnabled;
     if (ladyEnabled) {
-      // Lady starts with the player to the right of the first leader (index 1 in player list, wrapping)
       const playerIds = Object.keys(this.room.players);
-      const ladyStartIndex = (0 + playerIds.length - 1) % playerIds.length; // player to the "right" of leader
+      const ladyStartIndex = this.resolveLadyStartIndex(playerIds.length);
       this.room.ladyOfTheLakeHolder = playerIds[ladyStartIndex];
       this.room.ladyOfTheLakeUsed = [playerIds[ladyStartIndex]]; // holder cannot be targeted
     } else {
@@ -185,10 +207,11 @@ export class GameEngine {
     }
     this.teamSelectTimeout = setTimeout(() => {
       if (this.room.state === 'voting' && this.room.questTeam.length === 0) {
-        // Auto-select: leader + random other players to fill required size
-        const playerCount = Object.keys(this.room.players).length;
-        const config = AVALON_CONFIG[playerCount];
-        const requiredSize = config?.questTeams[this.room.currentRound - 1] ?? 2;
+        // Auto-select: leader + random other players to fill required size.
+        // Read via getEffectiveQuestSizes so host overrides (swapR1R2 +
+        // 9-variant) are honoured.
+        const sizes = this.getEffectiveQuestSizes();
+        const requiredSize = sizes[this.room.currentRound - 1] ?? 2;
         const leaderId = this.getLeaderId();
         const others = Object.keys(this.room.players).filter(id => id !== leaderId);
         const shuffled = this.shuffleArray(others);
@@ -287,6 +310,86 @@ export class GameEngine {
     this.onStateChange?.(this.room);
   }
 
+  /**
+   * Compute the effective quest-team sizes for this game, honoring:
+   *   1. 9-player `oberonMandatory` variant → override to [4,3,4,5,5]
+   *      (reflects the 5 good / 4 evil split with forced Oberon).
+   *   2. `swapR1R2` host toggle → swap rounds 1 and 2 sizes.
+   *
+   * Always returns a FRESH array — never mutates AVALON_CONFIG (shared
+   * global, read by other rooms).
+   */
+  private computeEffectiveQuestSizes(playerCount: number): number[] {
+    const config = AVALON_CONFIG[playerCount];
+    if (!config) {
+      throw new Error(`No config for ${playerCount} players`);
+    }
+    // Shallow copy — we will potentially overwrite slots below.
+    let sizes: number[] = [...config.questTeams];
+
+    // Part 6 · 9-player variant override: 5 good / 4 evil with Oberon
+    // forced on uses a non-standard quest-size sequence. Safe to apply
+    // unconditionally for that specific variant only.
+    if (playerCount === 9 && this.room.roleOptions?.variant9Player === 'oberonMandatory') {
+      sizes = [4, 3, 4, 5, 5];
+    }
+
+    // Part 5 · Host-selected R1/R2 swap. Applied AFTER the 9-variant
+    // override so the swap operates on the final size-sequence the host
+    // actually sees (symmetric either way for [a,b,...] → [b,a,...]).
+    if (this.room.roleOptions?.swapR1R2 === true && sizes.length >= 2) {
+      const tmp = sizes[0];
+      sizes[0] = sizes[1];
+      sizes[1] = tmp;
+    }
+
+    return sizes;
+  }
+
+  /**
+   * Public accessor used throughout the engine + tests to read quest
+   * sizes without touching AVALON_CONFIG directly. Falls back to the
+   * shared config if the engine hasn't computed a snapshot yet (i.e.
+   * before startGame — shouldn't happen in practice).
+   */
+  public getEffectiveQuestSizes(): number[] {
+    if (this.effectiveQuestSizes) {
+      return this.effectiveQuestSizes;
+    }
+    const playerCount = Object.keys(this.room.players).length;
+    const config = AVALON_CONFIG[playerCount];
+    return config ? [...config.questTeams] : [];
+  }
+
+  /**
+   * Resolve the starting Lady of the Lake holder index into
+   * `Object.keys(this.room.players)` based on the `ladyStart` roleOption.
+   *
+   *   - `seat0` → canonical "leader's right" = last entry in playerIds
+   *     (matches the existing Avalon convention where seat 0 sits to the
+   *     right of the first leader).
+   *   - `seatN` (1..9) → playerIds[N-1], clamped to valid range.
+   *   - `random` or unset → random index in [0, playerCount).
+   */
+  private resolveLadyStartIndex(playerCount: number): number {
+    const ladyStart = this.room.roleOptions?.ladyStart;
+    if (!ladyStart || ladyStart === 'random') {
+      return Math.floor(Math.random() * playerCount);
+    }
+    if (ladyStart === 'seat0') {
+      // Canonical leader's right = last player in the list.
+      return playerCount - 1;
+    }
+    const match = /^seat([1-9])$/.exec(ladyStart);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      // seat1..seat9 → index 0..8, but clamp to [0, playerCount-1].
+      return Math.min(n - 1, playerCount - 1);
+    }
+    // Defensive: unknown value → random fallback.
+    return Math.floor(Math.random() * playerCount);
+  }
+
   private assignRoles(playerCount: number): void {
     const config = AVALON_CONFIG[playerCount];
     if (!config) {
@@ -299,11 +402,35 @@ export class GameEngine {
     const opts = this.room.roleOptions ?? {
       percival: true, morgana: true, oberon: true, mordred: true, ladyOfTheLake: false
     };
-    // Build role list from config, substituting disabled optional roles
-    const roles = config.roles.map(role => {
+
+    // Part 6 · 9-player `oberonMandatory` variant:
+    //   - Swap team sizes to 5 good / 4 evil (default is 6 good / 3 evil).
+    //   - Oberon is FORCED into the evil pool (even if host left the
+    //     `oberon` toggle off).
+    //   - Quest sizes already shifted to [4,3,4,5,5] in
+    //     computeEffectiveQuestSizes, independent of this block.
+    const is9Variant = playerCount === 9 && opts.variant9Player === 'oberonMandatory';
+    let baseRoles: Role[];
+    if (is9Variant) {
+      // Build a 5-good / 4-evil layout with Oberon forced in. Good pool:
+      //   merlin, percival, loyal, loyal, loyal (3 loyal to hit 5 good).
+      // Evil pool:
+      //   assassin, morgana, mordred, oberon (all four canonical evil +
+      //   honouring percival/morgana/mordred toggles below the usual way).
+      baseRoles = [
+        'merlin', 'percival', 'loyal', 'loyal', 'loyal',
+        'assassin', 'morgana', 'mordred', 'oberon',
+      ];
+    } else {
+      baseRoles = [...config.roles];
+    }
+
+    // Build role list from config, substituting disabled optional roles.
+    // Skip the oberon disable when the 9-variant forces it in.
+    const roles = baseRoles.map(role => {
       if (role === 'percival'  && !opts.percival)  return 'loyal' as Role;
       if (role === 'morgana'   && !opts.morgana)   return 'minion' as Role;
-      if (role === 'oberon'    && !opts.oberon)    return 'minion' as Role;
+      if (role === 'oberon'    && !opts.oberon && !is9Variant) return 'minion' as Role;
       if (role === 'mordred'   && !opts.mordred)   return 'minion' as Role;
       return role;
     });
@@ -449,8 +576,10 @@ export class GameEngine {
       throw new Error('Not in voting phase - cannot select team yet');
     }
 
-    const config = AVALON_CONFIG[Object.keys(this.room.players).length];
-    const expectedTeamSize = config.questTeams[this.room.currentRound - 1];
+    // Read via getEffectiveQuestSizes so host overrides (swapR1R2 +
+    // 9-variant) are honoured.
+    const effectiveSizes = this.getEffectiveQuestSizes();
+    const expectedTeamSize = effectiveSizes[this.room.currentRound - 1];
 
     if (teamMemberIds.length !== expectedTeamSize) {
       throw new Error(`Team size must be ${expectedTeamSize}, got ${teamMemberIds.length}`);
@@ -715,6 +844,62 @@ export class GameEngine {
   }
 
   /**
+   * Public declaration by the current Lady of the Lake holder (Part 4 of
+   * #90). After inspecting a target, the holder can publicly claim that
+   * the inspected player was 'good' or 'evil' (or keep it private by not
+   * calling this at all). The claim need not match reality — that is the
+   * social-deduction point. The engine records the declaration on the
+   * most-recent history entry and logs an event so replays and the system
+   * chat can surface it.
+   *
+   * Returns the mutated `LadyOfTheLakeRecord` (so the socket layer can
+   * emit a system-chat message) or `null` if nothing to update (caller
+   * should treat this as a no-op).
+   */
+  public declareLakeResult(playerId: string, claim: 'good' | 'evil'): LadyOfTheLakeRecord | null {
+    if (!this.room.ladyOfTheLakeHistory || this.room.ladyOfTheLakeHistory.length === 0) {
+      throw new Error('No Lady of the Lake inspection to declare');
+    }
+    // The declarer must be the player who *performed* the most-recent
+    // inspection (stored in history[last].holderId). After the inspection
+    // the token transfers to the target, so room.ladyOfTheLakeHolder is
+    // no longer reliable for this check.
+    const lastIdx = this.room.ladyOfTheLakeHistory.length - 1;
+    const last = this.room.ladyOfTheLakeHistory[lastIdx];
+    if (last.holderId !== playerId) {
+      throw new Error(`Player ${playerId} is not the declarer of the last Lady of the Lake inspection`);
+    }
+    if (last.declared === true) {
+      // Already declared — treat as no-op to keep the UI idempotent.
+      return null;
+    }
+    if (claim !== 'good' && claim !== 'evil') {
+      throw new Error(`Invalid claim "${claim}"; expected 'good' or 'evil'`);
+    }
+    const updated: LadyOfTheLakeRecord = {
+      ...last,
+      declared: true,
+      declaredClaim: claim,
+    };
+    // Immutable replace of the last history entry.
+    this.room.ladyOfTheLakeHistory = [
+      ...this.room.ladyOfTheLakeHistory.slice(0, lastIdx),
+      updated,
+    ];
+
+    this.logEvent('lady_of_the_lake_declared', {
+      declarerId: playerId,
+      targetId: last.targetId,
+      claim,
+      actualResult: last.result,
+      round: last.round,
+    }, playerId);
+
+    this.onStateChange?.(this.room);
+    return updated;
+  }
+
+  /**
    * 開始討論階段（好人贏得3次任務後）
    */
   private startDiscussionPhase(): void {
@@ -893,6 +1078,9 @@ export class GameEngine {
       voteAttemptInRound: this.voteAttemptInRound,
       eventBuffer: [...this.eventBuffer],
       eventSeq: this.eventSeq,
+      effectiveQuestSizes: this.effectiveQuestSizes
+        ? [...this.effectiveQuestSizes]
+        : undefined,
     };
   }
 
@@ -914,6 +1102,9 @@ export class GameEngine {
     engine.voteAttemptInRound = snapshot.voteAttemptInRound;
     engine.eventBuffer = [...snapshot.eventBuffer];
     engine.eventSeq = snapshot.eventSeq;
+    engine.effectiveQuestSizes = snapshot.effectiveQuestSizes
+      ? [...snapshot.effectiveQuestSizes]
+      : null;
     return engine;
   }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
-import { submitVote, submitAssassination, submitLadyOfTheLake, requestRematch, leaveSpectate } from '../services/socket';
+import { submitVote, submitAssassination, submitLadyOfTheLake, declareLakeResult, requestRematch, leaveSpectate } from '../services/socket';
 import GameBoard from '../components/GameBoard';
 import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
@@ -210,6 +210,17 @@ export default function GamePage(): JSX.Element {
   const isOnQuestTeam = room.questTeam.includes(currentPlayer.id);
   const isAssassin = currentPlayer.role === 'assassin';
   const isLadyHolder = room.ladyOfTheLakeHolder === currentPlayer.id;
+  // #90 Part 4 — the player who just performed an inspection is the
+  // DECLARER, regardless of token transfer. Engine updates
+  // ladyOfTheLakeHolder → target synchronously with the result broadcast,
+  // so we must read history[last].holderId to identify the declarer.
+  const lastLadyRecord = (room.ladyOfTheLakeHistory ?? [])[
+    (room.ladyOfTheLakeHistory?.length ?? 0) - 1
+  ];
+  const isRecentLadyDeclarer =
+    !!lastLadyRecord
+    && lastLadyRecord.round === room.currentRound
+    && lastLadyRecord.holderId === currentPlayer.id;
   type ActionBanner = { msg: string; color: string } | null;
   const actionBanner: ActionBanner =
     room.state === 'voting' && !teamSelected && isCurrentPlayerLeader
@@ -512,49 +523,84 @@ export default function GamePage(): JSX.Element {
             animate={{ opacity: 1, y: 0 }}
             className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 space-y-6"
           >
-            {isLadyHolder ? (
-              room.ladyOfTheLakeResult ? (
-                // Result revealed to holder
-                <div className="text-center space-y-4">
-                  <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
-                  <p className="text-gray-300">
-                    <Trans
-                      i18nKey="game:lady.targetTeamLabel"
-                      values={{ name: room.players[room.ladyOfTheLakeTarget ?? '']?.name ?? '' }}
-                      components={{ target: <span className="font-bold text-white" /> }}
-                    />
-                  </p>
-                  <div className={`inline-block px-6 py-3 rounded-xl text-2xl font-bold border-2 ${
-                    room.ladyOfTheLakeResult === 'good'
-                      ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                      : 'bg-red-900/40 border-red-500 text-red-300'
-                  }`}>
-                    {room.ladyOfTheLakeResult === 'good' ? t('game:lady.resultGood') : t('game:lady.resultEvil')}
-                  </div>
-                  <p className="text-gray-500 text-sm">{t('game:lady.pass')}</p>
+            {isRecentLadyDeclarer && room.ladyOfTheLakeResult ? (
+              // #90 Part 4 — result view with public-declare buttons
+              // (good / evil / keep private). Shown to the DECLARER, i.e.
+              // the player who just performed the inspection.
+              <div className="text-center space-y-4">
+                <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
+                <p className="text-gray-300">
+                  <Trans
+                    i18nKey="game:lady.targetTeamLabel"
+                    values={{ name: room.players[room.ladyOfTheLakeTarget ?? '']?.name ?? '' }}
+                    components={{ target: <span className="font-bold text-white" /> }}
+                  />
+                </p>
+                <div className={`inline-block px-6 py-3 rounded-xl text-2xl font-bold border-2 ${
+                  room.ladyOfTheLakeResult === 'good'
+                    ? 'bg-blue-900/40 border-blue-500 text-blue-300'
+                    : 'bg-red-900/40 border-red-500 text-red-300'
+                }`}>
+                  {room.ladyOfTheLakeResult === 'good' ? t('game:lady.resultGood') : t('game:lady.resultEvil')}
                 </div>
-              ) : (
-                // Holder selects target
-                <>
-                  <div className="text-center">
-                    <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
-                    <p className="text-gray-300 mt-2">{t('game:lady.pickTitle')}</p>
+
+                {/* Declare block */}
+                {lastLadyRecord?.declared ? (
+                  <div className="pt-2">
+                    <p className="text-amber-300 text-sm font-semibold">
+                      {t('game:lady.declared', {
+                        claim: lastLadyRecord.declaredClaim === 'good'
+                          ? t('game:lady.declareGood')
+                          : t('game:lady.declareEvil'),
+                      })}
+                    </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                    {Object.values(room.players)
-                      .filter(p => p.id !== currentPlayer.id && !(room.ladyOfTheLakeUsed ?? []).includes(p.id))
-                      .map((player) => (
-                        <button
-                          key={player.id}
-                          onClick={() => submitLadyOfTheLake(room.id, currentPlayer.id, player.id)}
-                          className="p-4 rounded-lg border-2 transition-all font-semibold bg-blue-900/30 border-blue-600 text-white hover:bg-blue-800/60"
-                        >
-                          {player.name}
-                        </button>
-                      ))}
+                ) : (
+                  <div className="space-y-2 pt-2">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">
+                      {t('game:lady.declareTitle')}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => declareLakeResult(room.id, 'good')}
+                        className="py-3 px-4 rounded-lg border-2 bg-blue-900/30 border-blue-600 text-blue-200 hover:bg-blue-800/60 font-semibold transition-all"
+                      >
+                        {t('game:lady.declareGood')}
+                      </button>
+                      <button
+                        onClick={() => declareLakeResult(room.id, 'evil')}
+                        className="py-3 px-4 rounded-lg border-2 bg-red-900/30 border-red-600 text-red-200 hover:bg-red-800/60 font-semibold transition-all"
+                      >
+                        {t('game:lady.declareEvil')}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 pt-1">{t('game:lady.declareKeepPrivate')}</p>
                   </div>
-                </>
-              )
+                )}
+
+                <p className="text-gray-500 text-sm pt-2">{t('game:lady.pass')}</p>
+              </div>
+            ) : isLadyHolder && !room.ladyOfTheLakeResult ? (
+              // Current holder (pre-inspection) selects target
+              <>
+                <div className="text-center">
+                  <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
+                  <p className="text-gray-300 mt-2">{t('game:lady.pickTitle')}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+                  {Object.values(room.players)
+                    .filter(p => p.id !== currentPlayer.id && !(room.ladyOfTheLakeUsed ?? []).includes(p.id))
+                    .map((player) => (
+                      <button
+                        key={player.id}
+                        onClick={() => submitLadyOfTheLake(room.id, currentPlayer.id, player.id)}
+                        className="p-4 rounded-lg border-2 transition-all font-semibold bg-blue-900/30 border-blue-600 text-white hover:bg-blue-800/60"
+                      >
+                        {player.name}
+                      </button>
+                    ))}
+                </div>
+              </>
             ) : (
               // Other players wait
               <div className="text-center space-y-4">
