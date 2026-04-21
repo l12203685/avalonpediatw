@@ -1,9 +1,14 @@
 name: Deploy Wiki to Cloudflare Pages
 
-# DISABLED 2026-04-21: 固定用 avalon-game-platform.web.app 當玩家唯一入口
-# 玩家已遷到 Firebase Hosting（deploy-firebase.yml），此 workflow 僅保留手動觸發
-# 後端搬 Back4App 後如要重新啟用，需把下方 VITE_SERVER_URL 改用 secrets
+# 2026-04-21: 後端改用本機 WSL2 + ngrok tunnel；此 workflow 改用 secrets.VITE_SERVER_URL
+# 玩家主入口仍為 avalon-game-platform.web.app（Firebase Hosting），CF Pages 為備援
+# 觸發：手動 dispatch 或 main 分支 push（限 packages/** + workflow 本身）
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - '.github/workflows/deploy-cloudflare-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -38,7 +43,7 @@ jobs:
       - name: Build frontend (root base)
         run: pnpm --filter @avalon/web build
         env:
-          VITE_SERVER_URL: https://avalonpediatw.onrender.com
+          VITE_SERVER_URL: ${{ secrets.VITE_SERVER_URL }}
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
