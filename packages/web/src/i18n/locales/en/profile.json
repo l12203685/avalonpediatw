@@ -1,0 +1,18 @@
+{
+  "title": "Profile",
+  "matchRecords": "Match Records",
+  "recentGames": "Recent Games",
+  "winRate": "Win Rate",
+  "wins": "W",
+  "losses": "L",
+  "totalGames": "Total Games",
+  "eloRating": "ELO Rating",
+  "rank": "Rank",
+  "viewReplay": "View Replay",
+  "follow": "Follow",
+  "unfollow": "Unfollow",
+  "editProfile": "Edit Profile",
+  "displayName": "Display Name",
+  "noGamesYet": "No game records yet",
+  "loading": "Loading…"
+}

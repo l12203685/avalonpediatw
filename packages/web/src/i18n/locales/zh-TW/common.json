@@ -1,0 +1,92 @@
+{
+  "app": {
+    "name": "阿瓦隆百科",
+    "tagline": "抵抗組織",
+    "loading": "載入中…",
+    "playersRange": "5-10 人 / 即時連線對戰",
+    "footer": "🎭 欺騙與邏輯的推理遊戲",
+    "teamBattle": "陣營對戰",
+    "realtime": "即時連線"
+  },
+  "language": {
+    "label": "語言",
+    "zh-TW": "中",
+    "en": "EN"
+  },
+  "nav": {
+    "back": "返回",
+    "home": "首頁",
+    "leaderboard": "排行榜",
+    "friends": "追蹤列表",
+    "profile": "個人資訊",
+    "wiki": "百科 & 攻略",
+    "aiStats": "AI 自對弈統計",
+    "analysis": "數據分析",
+    "admin": "管理"
+  },
+  "auth": {
+    "login": "登入",
+    "logout": "登出",
+    "guest": "訪客",
+    "logoutFailed": "登出失敗，請稍後再試"
+  },
+  "action": {
+    "confirm": "確認",
+    "cancel": "取消",
+    "submit": "送出",
+    "save": "儲存",
+    "refresh": "重新整理",
+    "close": "關閉",
+    "copy": "複製",
+    "edit": "編輯",
+    "delete": "刪除",
+    "approve": "通過",
+    "reject": "否決",
+    "join": "加入",
+    "create": "建立",
+    "quickPractice": "快速練習",
+    "spectate": "觀戰"
+  },
+  "home": {
+    "createRoom": "建立房間",
+    "joinRoom": "加入房間",
+    "wikiAndGuide": "百科 & 攻略",
+    "leaderboard": "排行榜",
+    "profileShort": "個人資訊維護",
+    "friendsShort": "追蹤列表",
+    "quickSolo": "快速練習",
+    "aiStats": "AI 自對弈統計",
+    "analysis": "數據分析",
+    "openRooms": "開放房間",
+    "inProgress": "進行中",
+    "spectate": "觀戰",
+    "privateRoom": "私人房間",
+    "enterPassword": "請輸入 {{name}} 的房間密碼",
+    "roomPassword": "房間密碼",
+    "roomPasswordOptional": "房間密碼（選填，留空為公開房間）",
+    "yourName": "你的名字",
+    "roomCodePlaceholder": "房間代碼（6 碼）",
+    "enterYourName": "請輸入你的名字",
+    "enterRoomCode": "請輸入房間代碼",
+    "enterNameFirst": "請輸入你的名字再開始",
+    "createRoomFailed": "無法建立房間 — 伺服器連線失敗，請重新整理頁面",
+    "joinRoomFailed": "無法加入房間 — 伺服器連線失敗，請重新整理頁面",
+    "thinkingTimeLabel": "思考時間倍率",
+    "thinkingTimeHint": "基準：派票 90s / 黑白球 30s / 湖中女神 90s / 刺殺 180s。倍率將按比例套用至每個階段。"
+  },
+  "connection": {
+    "reconnecting": "重新連線中…",
+    "disconnected": "連線中斷 — 正在嘗試重連"
+  },
+  "controls": {
+    "audio": "音效",
+    "theme": "主題",
+    "feedbackReport": "回報問題 / 功能建議",
+    "bug": "問題",
+    "suggestion": "建議",
+    "bugPlaceholder": "描述遇到的問題…",
+    "suggestionPlaceholder": "有什麼功能建議？",
+    "feedbackThanks": "感謝回報！我們會盡快處理",
+    "feedbackFailed": "送出失敗，請稍後再試"
+  }
+}

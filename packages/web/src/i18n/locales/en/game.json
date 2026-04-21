@@ -1,0 +1,55 @@
+{
+  "role": {
+    "merlin": "Merlin",
+    "percival": "Percival",
+    "loyal": "Loyal Servant",
+    "assassin": "Assassin",
+    "morgana": "Morgana",
+    "mordred": "Mordred",
+    "oberon": "Oberon",
+    "minion": "Minion of Mordred",
+    "unknown": "Unknown"
+  },
+  "phase": {
+    "selectTeam": "Select Team",
+    "vote": "Vote",
+    "questing": "Quest in Progress",
+    "discussion": "Discussion",
+    "assassination": "Assassination",
+    "ended": "Game Ended"
+  },
+  "vote": {
+    "approve": "Approve",
+    "reject": "Reject",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "success": "Success",
+    "fail": "Fail",
+    "approveCount": "{{count}} approve",
+    "rejectCount": "{{count}} reject"
+  },
+  "result": {
+    "won": "You Won",
+    "lost": "You Lost",
+    "loyalWins": "Loyal Wins",
+    "evilWins": "Evil Wins",
+    "good": "Good",
+    "evil": "Evil",
+    "win": "W",
+    "lose": "L"
+  },
+  "quest": {
+    "title": "Quest",
+    "leader": "Leader",
+    "team": "Team",
+    "round": "Round {{round}}",
+    "proposal": "Proposal #{{n}}"
+  },
+  "room": {
+    "lobby": "Lobby",
+    "playerCount": "{{count}}-player game",
+    "waiting": "Waiting for players…",
+    "start": "Start Game",
+    "leave": "Leave Room"
+  }
+}

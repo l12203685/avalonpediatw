@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { Volume2, VolumeX, Moon, Sun, Settings, Bug, Lightbulb, Send, Loader } from 'lucide-react';
 import audioService from '../services/audio';
 import themeService from '../services/theme';
@@ -10,6 +11,7 @@ import { getStoredToken } from '../services/socket';
 type FeedbackType = 'bug' | 'suggestion';
 
 export default function FloatingControls(): JSX.Element {
+  const { t } = useTranslation();
   const { addToast, gameState } = useGameStore();
   const [isOpen, setIsOpen]         = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(audioService.isEnabled());
@@ -54,12 +56,12 @@ export default function FloatingControls(): JSX.Element {
         { type: feedbackType, message: feedbackMsg.trim(), gameState },
         getStoredToken() ?? undefined
       );
-      addToast('感謝回報！我們會盡快處理', 'success');
+      addToast(t('controls.feedbackThanks'), 'success');
       setFeedbackMsg('');
       setFeedbackOpen(false);
       setIsOpen(false);
     } catch {
-      addToast('送出失敗，請稍後再試', 'error');
+      addToast(t('controls.feedbackFailed'), 'error');
     } finally {
       setFeedbackSending(false);
     }
@@ -79,7 +81,7 @@ export default function FloatingControls(): JSX.Element {
             {/* Audio Controls */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-white">音效</label>
+                <label className="text-sm font-semibold text-white">{t('controls.audio')}</label>
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
@@ -124,7 +126,7 @@ export default function FloatingControls(): JSX.Element {
 
             {/* Theme Controls */}
             <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold text-white">主題</label>
+              <label className="text-sm font-semibold text-white">{t('controls.theme')}</label>
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
@@ -149,7 +151,7 @@ export default function FloatingControls(): JSX.Element {
                 className="w-full flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors py-0.5"
               >
                 <Bug size={14} />
-                回報問題 / 功能建議
+                {t('controls.feedbackReport')}
               </button>
             ) : (
               <div className="space-y-2">
@@ -162,7 +164,7 @@ export default function FloatingControls(): JSX.Element {
                         : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-white'
                     }`}
                   >
-                    <Bug size={11} /> Bug
+                    <Bug size={11} /> {t('controls.bug')}
                   </button>
                   <button
                     onClick={() => setFeedbackType('suggestion')}
@@ -172,13 +174,13 @@ export default function FloatingControls(): JSX.Element {
                         : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-white'
                     }`}
                   >
-                    <Lightbulb size={11} /> 建議
+                    <Lightbulb size={11} /> {t('controls.suggestion')}
                   </button>
                 </div>
                 <textarea
                   value={feedbackMsg}
                   onChange={e => setFeedbackMsg(e.target.value)}
-                  placeholder={feedbackType === 'bug' ? '描述遇到的問題…' : '有什麼功能建議？'}
+                  placeholder={feedbackType === 'bug' ? t('controls.bugPlaceholder') : t('controls.suggestionPlaceholder')}
                   rows={3}
                   maxLength={500}
                   className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-white placeholder-gray-500 resize-none focus:outline-none focus:border-blue-500"
@@ -188,7 +190,7 @@ export default function FloatingControls(): JSX.Element {
                     onClick={() => { setFeedbackOpen(false); setFeedbackMsg(''); }}
                     className="flex-1 text-xs text-gray-500 hover:text-white py-1 transition-colors"
                   >
-                    取消
+                    {t('action.cancel')}
                   </button>
                   <button
                     onClick={handleFeedbackSubmit}
@@ -196,7 +198,7 @@ export default function FloatingControls(): JSX.Element {
                     className="flex-1 flex items-center justify-center gap-1 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-semibold rounded transition-all"
                   >
                     {feedbackSending ? <Loader size={11} className="animate-spin" /> : <Send size={11} />}
-                    送出
+                    {t('action.submit')}
                   </button>
                 </div>
               </div>

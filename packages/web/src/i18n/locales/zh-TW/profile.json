@@ -1,0 +1,18 @@
+{
+  "title": "個人資訊",
+  "matchRecords": "戰績",
+  "recentGames": "近期遊戲",
+  "winRate": "勝率",
+  "wins": "勝",
+  "losses": "敗",
+  "totalGames": "總場數",
+  "eloRating": "ELO 分數",
+  "rank": "段位",
+  "viewReplay": "查看遊戲紀錄",
+  "follow": "追蹤",
+  "unfollow": "取消追蹤",
+  "editProfile": "編輯個人資訊",
+  "displayName": "顯示名稱",
+  "noGamesYet": "還沒有遊戲紀錄",
+  "loading": "載入中…"
+}

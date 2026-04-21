@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Trophy, ArrowLeft, Crown, TrendingUp, Users, Loader, Search, AlertTriangle } from 'lucide-react';
 import { ALL_TIERS, ROOKIE_TIER, rankLeaderboard, type EloRank } from '../utils/eloRank';
 import { useGameStore } from '../store/gameStore';
@@ -19,6 +20,7 @@ const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600'];
 const ALL_RANK_LABELS = ['全部', ...ALL_TIERS.map(r => r.label)];
 
 export default function LeaderboardPage(): JSX.Element {
+  const { t } = useTranslation(['leaderboard', 'common']);
   const { setGameState, navigateToProfile } = useGameStore();
   const [entries, setEntries]   = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -35,8 +37,9 @@ export default function LeaderboardPage(): JSX.Element {
         if (data.message === 'Database not configured') setDbOffline(true);
         setEntries(data.leaderboard ?? []);
       })
-      .catch(() => setError('無法載入排行榜，請確認伺服器連線'))
+      .catch(() => setError(t('leaderboard:loadFailed')))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Compute tier per entry using the percentile-based distribution.
@@ -75,7 +78,7 @@ export default function LeaderboardPage(): JSX.Element {
           </button>
           <div className="flex items-center gap-2">
             <Trophy size={24} className="text-yellow-400" />
-            <h1 className="text-2xl font-black text-white">排行榜 (Leaderboard)</h1>
+            <h1 className="text-2xl font-black text-white">{t('leaderboard:title')}</h1>
           </div>
         </div>
 
@@ -84,8 +87,8 @@ export default function LeaderboardPage(): JSX.Element {
           <div className="flex items-start gap-3 bg-yellow-900/30 border border-yellow-700/50 rounded-xl px-4 py-3 text-sm text-yellow-300">
             <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold">資料庫未連線 (Database offline)</p>
-              <p className="text-xs text-yellow-400/70 mt-0.5">ELO 排名暫時不可用。遊戲功能正常運作，數據將在資料庫恢復後顯示。</p>
+              <p className="font-semibold">{t('leaderboard:dbOffline')}</p>
+              <p className="text-xs text-yellow-400/70 mt-0.5">{t('leaderboard:dbOfflineHint')}</p>
             </div>
           </div>
         )}
@@ -100,7 +103,7 @@ export default function LeaderboardPage(): JSX.Element {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="搜尋玩家名稱..."
+                placeholder={t('leaderboard:searchPlaceholder')}
                 className="w-full bg-avalon-card/60 border border-gray-700 focus:border-blue-500/70 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors"
               />
             </div>
@@ -121,7 +124,7 @@ export default function LeaderboardPage(): JSX.Element {
                           : 'bg-gray-800/60 border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200'
                       }`}
                     >
-                      全部
+                      {t('leaderboard:all')}
                     </button>
                   );
                 }
@@ -145,7 +148,7 @@ export default function LeaderboardPage(): JSX.Element {
             {/* Result count when filtered */}
             {isFiltered && (
               <p className="text-xs text-gray-500">
-                顯示 <span className="text-gray-300 font-semibold">{filtered.length}</span> / 總計 <span className="text-gray-300 font-semibold">{entries.length}</span> 人
+                {t('leaderboard:showingCount', { filtered: filtered.length, total: entries.length })}
               </p>
             )}
           </div>
@@ -166,8 +169,8 @@ export default function LeaderboardPage(): JSX.Element {
         {!loading && !error && !dbOffline && entries.length === 0 && (
           <div className="text-center py-16 text-gray-500">
             <Users size={48} className="mx-auto mb-3 opacity-40" />
-            <p>還沒有排行榜資料 (No leaderboard data yet)</p>
-            <p className="text-sm mt-1">完成遊戲後將自動更新 (Auto-updates after completing games)</p>
+            <p>{t('leaderboard:noData')}</p>
+            <p className="text-sm mt-1">{t('leaderboard:noDataHint')}</p>
           </div>
         )}
 
@@ -175,8 +178,8 @@ export default function LeaderboardPage(): JSX.Element {
         {!loading && !error && entries.length > 0 && filtered.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <Search size={40} className="mx-auto mb-3 opacity-30" />
-            <p className="text-sm">找不到符合條件的玩家</p>
-            <p className="text-xs mt-1 text-gray-600">請嘗試其他搜尋條件</p>
+            <p className="text-sm">{t('leaderboard:noResults')}</p>
+            <p className="text-xs mt-1 text-gray-600">{t('leaderboard:noResultsHint')}</p>
           </div>
         )}
 
@@ -212,7 +215,7 @@ export default function LeaderboardPage(): JSX.Element {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-                    <span>{entry.games_won}勝 {entry.games_lost}敗</span>
+                    <span>{t('leaderboard:winsLosses', { wins: entry.games_won, losses: entry.games_lost })}</span>
                     <span className="text-blue-400">{entry.win_rate}%</span>
                   </div>
                   {entry.badges.length > 0 && (

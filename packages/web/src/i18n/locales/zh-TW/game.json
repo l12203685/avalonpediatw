@@ -1,0 +1,55 @@
+{
+  "role": {
+    "merlin": "梅林",
+    "percival": "派西維爾",
+    "loyal": "忠臣",
+    "assassin": "刺客",
+    "morgana": "莫甘娜",
+    "mordred": "莫德雷德",
+    "oberon": "奧伯倫",
+    "minion": "爪牙",
+    "unknown": "未知"
+  },
+  "phase": {
+    "selectTeam": "選擇隊伍",
+    "vote": "投票",
+    "questing": "任務進行中",
+    "discussion": "討論階段",
+    "assassination": "刺殺階段",
+    "ended": "遊戲結束"
+  },
+  "vote": {
+    "approve": "通過",
+    "reject": "否決",
+    "approved": "通過",
+    "rejected": "否決",
+    "success": "成功",
+    "fail": "失敗",
+    "approveCount": "{{count}} 贊成",
+    "rejectCount": "{{count}} 反對"
+  },
+  "result": {
+    "won": "你贏了",
+    "lost": "你輸了",
+    "loyalWins": "平民勝",
+    "evilWins": "邪派勝",
+    "good": "好人方",
+    "evil": "邪惡方",
+    "win": "勝",
+    "lose": "敗"
+  },
+  "quest": {
+    "title": "任務",
+    "leader": "隊長",
+    "team": "隊伍",
+    "round": "第 {{round}} 輪",
+    "proposal": "第 {{n}} 次提案"
+  },
+  "room": {
+    "lobby": "大廳",
+    "playerCount": "{{count}} 人局",
+    "waiting": "等待玩家加入…",
+    "start": "開始遊戲",
+    "leave": "離開房間"
+  }
+}

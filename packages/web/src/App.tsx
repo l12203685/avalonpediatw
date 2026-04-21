@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { useGameStore } from './store/gameStore';
 import { initializeAuth, onAuthStateChange, extractOAuthTokenFromUrl } from './services/auth';
 import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
@@ -22,6 +23,7 @@ import FloatingControls from './components/FloatingControls';
 import { submitError } from './services/api';
 
 function App(): JSX.Element {
+  const { t } = useTranslation();
   const { gameState, currentPlayer, socketStatus } = useGameStore();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,7 +94,7 @@ function App(): JSX.Element {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-avalon-dark to-avalon-card">
         <div className="text-white text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-400 mb-4"></div>
-          <p>載入中…</p>
+          <p>{t('app.loading')}</p>
         </div>
       </div>
     );
@@ -119,8 +121,8 @@ function App(): JSX.Element {
           >
             <span className={`inline-block w-2 h-2 rounded-full ${socketStatus === 'reconnecting' ? 'bg-yellow-400 animate-pulse' : 'bg-red-400'}`} />
             {socketStatus === 'reconnecting'
-              ? '重新連線中… (Reconnecting…)'
-              : '連線中斷 (Disconnected) — 正在嘗試重連'}
+              ? t('connection.reconnecting')
+              : t('connection.disconnected')}
           </motion.div>
         )}
       </AnimatePresence>

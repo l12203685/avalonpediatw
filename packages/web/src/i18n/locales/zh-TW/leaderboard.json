@@ -1,0 +1,14 @@
+{
+  "title": "排行榜",
+  "all": "全部",
+  "searchPlaceholder": "搜尋玩家名稱...",
+  "dbOffline": "資料庫未連線",
+  "dbOfflineHint": "ELO 排名暫時不可用。遊戲功能正常運作，數據將在資料庫恢復後顯示。",
+  "loadFailed": "無法載入排行榜，請確認伺服器連線",
+  "showingCount": "顯示 {{filtered}} / 總計 {{total}} 人",
+  "noData": "還沒有排行榜資料",
+  "noDataHint": "完成遊戲後將自動更新",
+  "noResults": "找不到符合條件的玩家",
+  "noResultsHint": "請嘗試其他搜尋條件",
+  "winsLosses": "{{wins}}勝 {{losses}}敗"
+}

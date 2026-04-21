@@ -1,0 +1,92 @@
+{
+  "app": {
+    "name": "Avalon Pedia",
+    "tagline": "The Resistance",
+    "loading": "Loading…",
+    "playersRange": "5-10 players / Real-time Online",
+    "footer": "🎭 A game of deception and logical deduction",
+    "teamBattle": "Team Battle",
+    "realtime": "Real-time"
+  },
+  "language": {
+    "label": "Language",
+    "zh-TW": "中",
+    "en": "EN"
+  },
+  "nav": {
+    "back": "Back",
+    "home": "Home",
+    "leaderboard": "Leaderboard",
+    "friends": "Friends",
+    "profile": "Profile",
+    "wiki": "Wiki & Guide",
+    "aiStats": "AI Stats",
+    "analysis": "Analysis",
+    "admin": "Admin"
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "guest": "Guest",
+    "logoutFailed": "Logout failed, please try again later"
+  },
+  "action": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "save": "Save",
+    "refresh": "Refresh",
+    "close": "Close",
+    "copy": "Copy",
+    "edit": "Edit",
+    "delete": "Delete",
+    "approve": "Approve",
+    "reject": "Reject",
+    "join": "Join",
+    "create": "Create",
+    "quickPractice": "Quick Practice",
+    "spectate": "Spectate"
+  },
+  "home": {
+    "createRoom": "Create Room",
+    "joinRoom": "Join Room",
+    "wikiAndGuide": "Wiki & Guide",
+    "leaderboard": "Leaderboard",
+    "profileShort": "Profile",
+    "friendsShort": "Friends",
+    "quickSolo": "Quick Practice",
+    "aiStats": "AI Stats",
+    "analysis": "Game Analysis",
+    "openRooms": "Open Rooms",
+    "inProgress": "In Progress",
+    "spectate": "Spectate",
+    "privateRoom": "Private Room",
+    "enterPassword": "Enter password for {{name}}",
+    "roomPassword": "Room Password",
+    "roomPasswordOptional": "Room password (optional, leave blank for public)",
+    "yourName": "Your name",
+    "roomCodePlaceholder": "Room code (6 chars)",
+    "enterYourName": "Please enter your name",
+    "enterRoomCode": "Please enter the room code",
+    "enterNameFirst": "Please enter your name first",
+    "createRoomFailed": "Failed to create room — server connection failed, please refresh",
+    "joinRoomFailed": "Failed to join room — server connection failed, please refresh",
+    "thinkingTimeLabel": "Thinking Time Multiplier",
+    "thinkingTimeHint": "Base: Team vote 90s / Quest vote 30s / Lady of the Lake 90s / Assassination 180s. The multiplier scales each phase proportionally."
+  },
+  "connection": {
+    "reconnecting": "Reconnecting…",
+    "disconnected": "Disconnected — attempting to reconnect"
+  },
+  "controls": {
+    "audio": "Audio",
+    "theme": "Theme",
+    "feedbackReport": "Report Issue / Suggest Feature",
+    "bug": "Bug",
+    "suggestion": "Suggestion",
+    "bugPlaceholder": "Describe the issue you encountered…",
+    "suggestionPlaceholder": "What feature would you like to suggest?",
+    "feedbackThanks": "Thanks for the report! We'll handle it ASAP",
+    "feedbackFailed": "Submission failed, please try again later"
+  }
+}

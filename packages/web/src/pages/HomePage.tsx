@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { createRoom, joinRoom, listRooms, spectateRoom, getSocket, getStoredToken } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { logout } from '../services/auth';
 import { fetchAdminMe } from '../services/api';
 import { Play, LogIn, LogOut, BookOpen, Users, Zap, Trophy, UserCircle, RefreshCw, Eye, Lock, Bot, BarChart3, ShieldCheck, Clock, HelpCircle } from 'lucide-react';
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
 interface OpenRoom {
   id: string;
@@ -19,6 +21,7 @@ interface OpenRoom {
 }
 
 export default function HomePage(): JSX.Element {
+  const { t } = useTranslation();
   const { setGameState, setCurrentPlayer, currentPlayer, navigateToProfile, addToast, setQuickSoloMode } = useGameStore();
   const [playerName, setPlayerName] = useState(
     currentPlayer?.name ?? localStorage.getItem('avalon_player_name') ?? ''
@@ -89,13 +92,13 @@ export default function HomePage(): JSX.Element {
       setCurrentPlayer(null);
       setGameState('home');
     } catch {
-      addToast('登出失敗，請稍後再試', 'error');
+      addToast(t('auth.logoutFailed'), 'error');
     }
   };
 
   const handleCreateRoom = (): void => {
     if (!playerName.trim()) {
-      addToast('請輸入你的名字', 'info');
+      addToast(t('home.enterYourName'), 'info');
       return;
     }
 
@@ -109,14 +112,14 @@ export default function HomePage(): JSX.Element {
       createRoom(playerName, roomPassword.trim() || undefined, timerMultiplier);
       setGameState('lobby');
     } catch {
-      addToast('無法建立房間 — 伺服器連線失敗，請重新整理頁面', 'error');
+      addToast(t('home.createRoomFailed'), 'error');
     }
   };
 
   const handleQuickSolo = (): void => {
     const name = currentPlayer?.name || playerName.trim();
     if (!name) {
-      addToast('請輸入你的名字再開始', 'info');
+      addToast(t('home.enterNameFirst'), 'info');
       setMode('create');
       return;
     }
@@ -127,18 +130,18 @@ export default function HomePage(): JSX.Element {
       setGameState('lobby');
     } catch {
       setQuickSoloMode(false);
-      addToast('無法建立房間 — 伺服器連線失敗，請重新整理頁面', 'error');
+      addToast(t('home.createRoomFailed'), 'error');
     }
   };
 
   const handleJoinRoom = (): void => {
     if (!playerName.trim()) {
-      addToast('請輸入你的名字', 'info');
+      addToast(t('home.enterYourName'), 'info');
       return;
     }
 
     if (!roomId.trim()) {
-      addToast('請輸入房間代碼', 'info');
+      addToast(t('home.enterRoomCode'), 'info');
       return;
     }
 
@@ -152,7 +155,7 @@ export default function HomePage(): JSX.Element {
       joinRoom(roomId, joinPassword.trim() || undefined);
       setGameState('lobby');
     } catch {
-      addToast('無法加入房間 — 伺服器連線失敗，請重新整理頁面', 'error');
+      addToast(t('home.joinRoomFailed'), 'error');
     }
   };
 
@@ -181,6 +184,13 @@ export default function HomePage(): JSX.Element {
       </div>
 
       <div className="flex items-center justify-center min-h-screen relative z-10">
+        {/* Language switcher — always visible even when not logged in */}
+        {!currentPlayer && (
+          <div className="absolute top-6 right-6 z-20">
+            <LanguageSwitcher />
+          </div>
+        )}
+
         {/* User Profile / Logout Button */}
         {currentPlayer && (
           <motion.div
@@ -188,6 +198,7 @@ export default function HomePage(): JSX.Element {
             animate={{ opacity: 1, y: 0 }}
             className="absolute top-6 right-6 flex items-center gap-2"
           >
+            <LanguageSwitcher />
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -203,7 +214,7 @@ export default function HomePage(): JSX.Element {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setGameState('adminClaims')}
                 className="p-2 bg-zinc-900/70 backdrop-blur-sm rounded-lg border border-zinc-600 hover:border-white text-zinc-200 hover:text-white transition-colors"
-                title="管理 (Admin)"
+                title={t('nav.admin')}
               >
                 <ShieldCheck size={18} />
               </motion.button>
@@ -213,7 +224,7 @@ export default function HomePage(): JSX.Element {
               whileTap={{ scale: 0.95 }}
               onClick={handleLogout}
               className="p-2 bg-zinc-900/70 backdrop-blur-sm rounded-lg border border-zinc-700 hover:border-red-400 text-red-400 hover:text-red-300 transition-colors"
-              title="登出"
+              title={t('auth.logout')}
             >
               <LogOut size={18} />
             </motion.button>
@@ -236,14 +247,14 @@ export default function HomePage(): JSX.Element {
             >
               <img
                 src="/logo.png"
-                alt="阿瓦隆百科"
+                alt={t('app.name')}
                 className="w-24 h-24 mx-auto rounded-2xl shadow-lg shadow-white/10"
               />
               <h1 className="text-6xl font-black text-white drop-shadow-2xl">
                 AVALON
               </h1>
-              <p className="text-2xl text-zinc-300 font-semibold">抵抗組織 (The Resistance)</p>
-              <p className="text-zinc-500 text-sm">5-10 人 (players) / 即時連線對戰 (Real-time Online)</p>
+              <p className="text-2xl text-zinc-300 font-semibold">{t('app.tagline')}</p>
+              <p className="text-zinc-500 text-sm">{t('app.playersRange')}</p>
             </motion.div>
 
             {/* Stats Cards */}
@@ -255,11 +266,11 @@ export default function HomePage(): JSX.Element {
             >
               <div className="bg-zinc-900/60 border border-zinc-700 rounded-lg p-3">
                 <Users size={20} className="text-white mx-auto mb-1" />
-                <p className="text-xs text-zinc-300">陣營對戰 (Team Battle)</p>
+                <p className="text-xs text-zinc-300">{t('app.teamBattle')}</p>
               </div>
               <div className="bg-zinc-900/60 border border-zinc-700 rounded-lg p-3">
                 <Zap size={20} className="text-white mx-auto mb-1" />
-                <p className="text-xs text-zinc-300">即時連線 (Real-time)</p>
+                <p className="text-xs text-zinc-300">{t('app.realtime')}</p>
               </div>
             </motion.div>
 
@@ -277,7 +288,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-white/20"
               >
                 <Play size={20} />
-                建立房間 (Create Room)
+                {t('home.createRoom')}
               </motion.button>
 
               <motion.button
@@ -287,7 +298,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
               >
                 <LogIn size={20} />
-                加入房間 (Join Room)
+                {t('home.joinRoom')}
               </motion.button>
 
               <motion.button
@@ -297,7 +308,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
               >
                 <BookOpen size={20} />
-                百科 & 攻略 (Wiki & Guide)
+                {t('home.wikiAndGuide')}
               </motion.button>
 
               <motion.button
@@ -307,7 +318,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
               >
                 <Trophy size={20} />
-                排行榜 (Leaderboard)
+                {t('home.leaderboard')}
               </motion.button>
 
               <div className="grid grid-cols-2 gap-3">
@@ -318,7 +329,7 @@ export default function HomePage(): JSX.Element {
                   className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
                 >
                   <Users size={18} />
-                  追蹤列表
+                  {t('home.friendsShort')}
                 </motion.button>
 
                 <motion.button
@@ -328,7 +339,7 @@ export default function HomePage(): JSX.Element {
                   className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
                 >
                   <Zap size={18} />
-                  快速練習
+                  {t('home.quickSolo')}
                 </motion.button>
               </div>
 
@@ -340,7 +351,7 @@ export default function HomePage(): JSX.Element {
                   className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
                 >
                   <UserCircle size={20} />
-                  個人資訊維護 (Profile)
+                  {t('home.profileShort')}
                 </motion.button>
               )}
 
@@ -351,7 +362,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
               >
                 <Bot size={20} />
-                AI 自對弈統計 (AI Stats)
+                {t('home.aiStats')}
               </motion.button>
 
               <motion.button
@@ -361,7 +372,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
               >
                 <BarChart3 size={20} />
-                數據分析 (Game Analysis)
+                {t('home.analysis')}
               </motion.button>
 
               <motion.button
@@ -371,7 +382,7 @@ export default function HomePage(): JSX.Element {
                 className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg border border-zinc-700 hover:border-zinc-500"
               >
                 <HelpCircle size={20} />
-                常見問題 & 隱私 (Help & Privacy)
+                {t('nav.home')} FAQ
               </motion.button>
             </motion.div>
 
@@ -385,12 +396,12 @@ export default function HomePage(): JSX.Element {
               >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                    開放房間 (Open Rooms)
+                    {t('home.openRooms')}
                   </h3>
                   <button
                     onClick={listRooms}
                     className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors"
-                    title="重新整理 (Refresh)"
+                    title={t('action.refresh')}
                   >
                     <RefreshCw size={12} />
                   </button>
@@ -403,7 +414,7 @@ export default function HomePage(): JSX.Element {
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         {r.inProgress && (
-                          <span className="text-xs px-1.5 py-0.5 bg-red-900/50 border border-red-700 text-red-400 rounded font-semibold flex-shrink-0">進行中</span>
+                          <span className="text-xs px-1.5 py-0.5 bg-red-900/50 border border-red-700 text-red-400 rounded font-semibold flex-shrink-0">{t('home.inProgress')}</span>
                         )}
                         {r.isPrivate && (
                           <Lock size={11} className="text-zinc-300 flex-shrink-0" />
@@ -421,10 +432,10 @@ export default function HomePage(): JSX.Element {
                           <button
                             onClick={() => spectateRoom(r.fullId)}
                             className="flex items-center gap-1 text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded transition-colors"
-                            title="觀戰 (Spectate)"
+                            title={t('action.spectate')}
                           >
                             <Eye size={11} />
-                            觀戰
+                            {t('action.spectate')}
                           </button>
                         ) : r.isPrivate ? (
                           <button
@@ -432,7 +443,7 @@ export default function HomePage(): JSX.Element {
                             className="flex items-center gap-1 text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded transition-colors"
                           >
                             <Lock size={11} />
-                            加入
+                            {t('action.join')}
                           </button>
                         ) : (
                           <button
@@ -440,7 +451,7 @@ export default function HomePage(): JSX.Element {
                             className="flex items-center gap-1 text-xs px-2 py-1 bg-white hover:bg-zinc-200 border border-white text-black rounded transition-colors"
                           >
                             <LogIn size={11} />
-                            加入
+                            {t('action.join')}
                           </button>
                         )}
                       </div>
@@ -457,18 +468,18 @@ export default function HomePage(): JSX.Element {
               transition={{ delay: 0.4 }}
               className="text-xs text-zinc-500 pt-4 border-t border-zinc-800"
             >
-              <p>🎭 欺騙與邏輯的推理遊戲 (A game of deception and logical deduction)</p>
+              <p>{t('app.footer')}</p>
             </motion.div>
           </motion.div>
         )}
 
         {mode === 'create' && (
           <div className="space-y-6 bg-zinc-900/70 p-8 rounded-lg border border-zinc-700">
-            <h2 className="text-2xl font-bold text-center text-white">建立房間</h2>
+            <h2 className="text-2xl font-bold text-center text-white">{t('home.createRoom')}</h2>
 
             <input
               type="text"
-              placeholder="你的名字"
+              placeholder={t('home.yourName')}
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleCreateRoom()}
@@ -480,7 +491,7 @@ export default function HomePage(): JSX.Element {
               <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
                 type="password"
-                placeholder="房間密碼（選填，留空為公開房間）"
+                placeholder={t('home.roomPasswordOptional')}
                 value={roomPassword}
                 onChange={(e) => setRoomPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleCreateRoom()}
@@ -491,7 +502,7 @@ export default function HomePage(): JSX.Element {
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-xs text-zinc-400 font-semibold">
                 <Clock size={14} className="text-white" />
-                思考時間倍率 (Thinking Time Multiplier)
+                {t('home.thinkingTimeLabel')}
               </label>
               <select
                 value={timerMultiplier === null ? 'null' : String(timerMultiplier)}
@@ -508,7 +519,7 @@ export default function HomePage(): JSX.Element {
                 ))}
               </select>
               <p className="text-[10px] text-zinc-500 leading-relaxed">
-                基準：派票 90s / 黑白球 30s / 湖中女神 90s / 刺殺 180s。倍率將按比例套用至每個階段。
+                {t('home.thinkingTimeHint')}
               </p>
             </div>
 
@@ -517,7 +528,7 @@ export default function HomePage(): JSX.Element {
                 onClick={handleCreateRoom}
                 className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-2 px-4 rounded-lg transition-all"
               >
-                建立
+                {t('action.create')}
               </button>
 
               <button
@@ -528,7 +539,7 @@ export default function HomePage(): JSX.Element {
                 }}
                 className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 px-4 rounded-lg transition-all border border-zinc-700"
               >
-                返回
+                {t('nav.back')}
               </button>
             </div>
           </div>
@@ -536,11 +547,11 @@ export default function HomePage(): JSX.Element {
 
         {mode === 'join' && (
           <div className="space-y-6 bg-zinc-900/70 p-8 rounded-lg border border-zinc-700">
-            <h2 className="text-2xl font-bold text-center text-white">加入房間</h2>
+            <h2 className="text-2xl font-bold text-center text-white">{t('home.joinRoom')}</h2>
 
             <input
               type="text"
-              placeholder="你的名字"
+              placeholder={t('home.yourName')}
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
               autoFocus
@@ -549,7 +560,7 @@ export default function HomePage(): JSX.Element {
 
             <input
               type="text"
-              placeholder="房間代碼（6 碼）"
+              placeholder={t('home.roomCodePlaceholder')}
               value={roomId}
               onChange={(e) => setRoomId(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && handleJoinRoom()}
@@ -562,7 +573,7 @@ export default function HomePage(): JSX.Element {
                 onClick={handleJoinRoom}
                 className="w-full bg-white hover:bg-zinc-200 text-black font-bold py-2 px-4 rounded-lg transition-all"
               >
-                加入
+                {t('action.join')}
               </button>
 
               <button
@@ -573,7 +584,7 @@ export default function HomePage(): JSX.Element {
                 }}
                 className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 px-4 rounded-lg transition-all border border-zinc-700"
               >
-                返回
+                {t('nav.back')}
               </button>
             </div>
           </div>
@@ -589,12 +600,12 @@ export default function HomePage(): JSX.Element {
           onClick={e => e.stopPropagation()}>
           <div className="flex items-center gap-2">
             <Lock size={18} className="text-white" />
-            <h3 className="font-bold text-white text-lg">私人房間</h3>
+            <h3 className="font-bold text-white text-lg">{t('home.privateRoom')}</h3>
           </div>
-          <p className="text-sm text-zinc-400">請輸入 <span className="text-white font-semibold">{pendingJoinRoom.name}</span> 的房間密碼</p>
+          <p className="text-sm text-zinc-400">{t('home.enterPassword', { name: pendingJoinRoom.name })}</p>
           <input
             type="password"
-            placeholder="房間密碼"
+            placeholder={t('home.roomPassword')}
             value={joinPassword}
             onChange={e => setJoinPassword(e.target.value)}
             onKeyDown={e => {
@@ -616,13 +627,13 @@ export default function HomePage(): JSX.Element {
               }}
               className="flex-1 bg-white hover:bg-zinc-200 text-black font-bold py-2 px-4 rounded-lg transition-all"
             >
-              加入
+              {t('action.join')}
             </button>
             <button
               onClick={() => setPendingJoinRoom(null)}
               className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 px-4 rounded-lg transition-all border border-zinc-700"
             >
-              取消
+              {t('action.cancel')}
             </button>
           </div>
         </div>

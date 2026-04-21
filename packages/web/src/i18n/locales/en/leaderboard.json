@@ -1,0 +1,14 @@
+{
+  "title": "Leaderboard",
+  "all": "All",
+  "searchPlaceholder": "Search player name...",
+  "dbOffline": "Database offline",
+  "dbOfflineHint": "ELO rankings are temporarily unavailable. Gameplay is unaffected; data will appear once the database is back.",
+  "loadFailed": "Failed to load leaderboard, please check server connection",
+  "showingCount": "Showing {{filtered}} of {{total}} players",
+  "noData": "No leaderboard data yet",
+  "noDataHint": "Auto-updates after completing games",
+  "noResults": "No players match your filter",
+  "noResultsHint": "Try different search criteria",
+  "winsLosses": "{{wins}}W {{losses}}L"
+}
