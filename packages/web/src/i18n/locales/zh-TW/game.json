@@ -231,11 +231,23 @@
   "chat": {
     "title": "遊戲聊天",
     "noMessages": "還沒有訊息",
-    "inputPlaceholder": "輸入訊息…"
+    "inputPlaceholder": "輸入訊息…",
+    "inlineTitle": "對話紀錄",
+    "inlinePlaceholder": "在此發言..."
   },
   "missionTrack": {
     "rejectLabel": "否決 (Reject):",
     "evilWinsReject": "邪惡方獲勝！"
+  },
+  "roleAvatar": {
+    "merlinShort": "梅",
+    "percivalShort": "派",
+    "loyalShort": "忠",
+    "assassinShort": "刺",
+    "morganaShort": "娜",
+    "mordredShort": "德",
+    "oberonShort": "奧",
+    "minionShort": "爪"
   },
   "bot": {
     "label": "AI 機器人",

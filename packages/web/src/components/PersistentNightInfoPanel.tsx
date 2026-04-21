@@ -18,7 +18,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player, Role } from '@avalon/shared';
 import { ChevronDown, ChevronUp, Eye, EyeOff, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { ROLE_INFO, getKnowledgeList, getKnowledgeLabel } from '../utils/roleKnowledge';
+import { ROLE_INFO, getKnowledgeList, getKnowledgeEntries, getKnowledgeLabel } from '../utils/roleKnowledge';
+import RoleAvatar from './RoleAvatar';
 
 interface PersistentNightInfoPanelProps {
   room: Room;
@@ -37,6 +38,10 @@ export default function PersistentNightInfoPanel({
 
   const info = ROLE_INFO[role] ?? ROLE_INFO.loyal;
   const knowledgeList = getKnowledgeList(role, room, currentPlayer);
+  // Plan #83 Phase 4: use structured entries to render a per-player role
+  // avatar next to each night-info line. Falls back to the string list for
+  // roles with no night info (loyal/oberon) where `entries` is empty.
+  const knowledgeEntries = getKnowledgeEntries(role, room, currentPlayer);
   const knowledgeLabel = getKnowledgeLabel(role);
   const isEvil = info.team === 'evil';
   const hasNightInfo = role !== 'loyal' && role !== 'oberon';
@@ -97,23 +102,53 @@ export default function PersistentNightInfoPanel({
                   </p>
                 </div>
 
-                {/* Knowledge list (per-viewer only, never leaks other roles) */}
+                {/* Knowledge list (per-viewer only, never leaks other roles).
+                    Plan #83 Phase 4: prefer structured entries so each line
+                    shows a small RoleAvatar next to the player name; fall
+                    back to the plain string list when entries are empty
+                    (e.g. Merlin sees no evil players due to custom config). */}
                 {hasNightInfo ? (
-                  <ul className="space-y-1">
-                    {knowledgeList.map((item, i) => (
-                      <li
-                        key={i}
-                        className={`flex items-center gap-1.5 text-[11px] font-semibold rounded px-2 py-1 ${
-                          isEvil
-                            ? 'bg-red-900/40 text-red-200'
-                            : 'bg-blue-900/40 text-blue-200'
-                        }`}
-                      >
-                        <span>{isEvil ? '👹' : '✨'}</span>
-                        <span className="truncate">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  knowledgeEntries.length > 0 ? (
+                    <ul className="space-y-1">
+                      {knowledgeEntries.map((entry, i) => (
+                        <li
+                          key={entry.player.id ?? i}
+                          className={`flex items-center gap-1.5 text-[11px] font-semibold rounded px-2 py-1 ${
+                            isEvil
+                              ? 'bg-red-900/40 text-red-200'
+                              : 'bg-blue-900/40 text-blue-200'
+                          }`}
+                        >
+                          {entry.knownRole ? (
+                            <RoleAvatar role={entry.knownRole} size="sm" />
+                          ) : (
+                            <span className="w-6 h-6 rounded-full bg-slate-700 border border-slate-500 flex items-center justify-center text-[10px] font-bold text-white">
+                              ?
+                            </span>
+                          )}
+                          <span className="truncate">
+                            {entry.player.name} — {entry.hint}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <ul className="space-y-1">
+                      {knowledgeList.map((item, i) => (
+                        <li
+                          key={i}
+                          className={`flex items-center gap-1.5 text-[11px] font-semibold rounded px-2 py-1 ${
+                            isEvil
+                              ? 'bg-red-900/40 text-red-200'
+                              : 'bg-blue-900/40 text-blue-200'
+                          }`}
+                        >
+                          <span>{isEvil ? '👹' : '✨'}</span>
+                          <span className="truncate">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )
                 ) : (
                   <p className="text-[11px] text-gray-400 italic">{knowledgeList[0]}</p>
                 )}

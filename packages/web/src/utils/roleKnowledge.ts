@@ -153,6 +153,76 @@ export function getKnowledgeList(role: Role, room: Room, currentPlayer: Player):
   }
 }
 
+/**
+ * Structured night-info entry — parallel to `getKnowledgeList` but returns
+ * the underlying player + known role so the UI can render a per-role avatar
+ * next to each line. Never leaks roles outside the viewer's canonical scope.
+ *
+ * Percival case note: he cannot tell Merlin apart from Morgana, so the
+ * entry's `knownRole` is intentionally left `undefined` — the UI should
+ * render an ambiguous "梅/娜" badge or skip the avatar for those entries.
+ */
+export interface KnowledgeEntry {
+  /** The player the viewer has info about. */
+  player: Player;
+  /** Role to show as an avatar. undefined when viewer cannot disambiguate. */
+  knownRole?: Role;
+  /** Short hint label (e.g. "邪惡方", "邪惡隊友", "可能是梅林"). */
+  hint: string;
+}
+
+/**
+ * Same logic as `getKnowledgeList`, but returns structured entries for UI
+ * composition. Prefer this when you want to render role avatars; fall back
+ * to `getKnowledgeList` for plain-text rendering.
+ */
+export function getKnowledgeEntries(
+  role: Role,
+  room: Room,
+  currentPlayer: Player,
+): KnowledgeEntry[] {
+  const players = Object.values(room.players);
+  const evilRoles: Role[] = ['assassin', 'morgana', 'oberon', 'mordred', 'minion'];
+
+  switch (role) {
+    case 'merlin': {
+      const evilPlayers = players.filter(
+        p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal')
+          && p.role !== 'oberon' && p.role !== 'mordred',
+      );
+      return evilPlayers.map(p => ({
+        player: p,
+        knownRole: p.role ?? undefined,
+        hint: '邪惡方',
+      }));
+    }
+    case 'percival': {
+      const merlinLike = players.filter(
+        p => p.id !== currentPlayer.id && (p.role === 'merlin' || p.role === 'morgana'),
+      );
+      // Percival cannot disambiguate — knownRole intentionally undefined.
+      return merlinLike.map(p => ({ player: p, hint: '可能是梅林' }));
+    }
+    case 'assassin':
+    case 'morgana':
+    case 'mordred':
+    case 'minion': {
+      const evilTeam = players.filter(
+        p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal') && p.role !== 'oberon',
+      );
+      return evilTeam.map(p => ({
+        player: p,
+        knownRole: p.role ?? undefined,
+        hint: '邪惡隊友',
+      }));
+    }
+    case 'loyal':
+    case 'oberon':
+    default:
+      return [];
+  }
+}
+
 /** Short, one-line label for what knowledge the current role grants. */
 export function getKnowledgeLabel(role: Role): string {
   switch (role) {

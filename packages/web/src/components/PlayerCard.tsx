@@ -1,7 +1,8 @@
-import { Player } from '@avalon/shared';
+import { Player, Role } from '@avalon/shared';
 import { motion } from 'framer-motion';
 import { Crown, Shield, WifiOff } from 'lucide-react';
 import { displaySeatNumber } from '../utils/seatDisplay';
+import RoleAvatar from './RoleAvatar';
 
 const ROLE_NAMES: Record<string, string> = {
   merlin:   '梅林 (Merlin)',
@@ -238,9 +239,13 @@ export default function PlayerCard({
           {player.name}
         </p>
 
-        {/* Show own role + team inline — replaces the old absolutely-positioned hint */}
+        {/* Show own role + team inline — replaces the old absolutely-positioned hint.
+            Plan #83 Phase 4: prepend a small RoleAvatar so the player can scan
+            their own role visually. Only render when the viewer is entitled
+            to know this role (`isCurrentPlayer && player.role`). */}
         {isCurrentPlayer && player.role && (
-          <div className={`flex flex-wrap gap-1 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
+          <div className={`flex flex-wrap items-center gap-1 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
+            <RoleAvatar role={player.role as Role} size="sm" />
             <span className="text-[9px] sm:text-[10px] font-semibold bg-yellow-600/90 text-white px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
               {ROLE_NAMES[player.role] ?? player.role}
             </span>

@@ -3,6 +3,7 @@ import { Room, Player, Role } from '@avalon/shared';
 import { X, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ROLE_INFO, getKnowledgeList } from '../utils/roleKnowledge';
+import RoleAvatar from './RoleAvatar';
 
 interface RoleRevealModalProps {
   room: Room;
@@ -42,7 +43,9 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
             <X size={20} />
           </button>
 
-          {/* Role icon + name */}
+          {/* Role icon + name. Plan #83 Phase 4: add a large RoleAvatar badge
+              under the emoji icon so the short-code (梅/派/刺/...) is
+              prominent on reveal and matches the rail/night-panel avatars. */}
           <div className="text-center mb-6">
             <motion.div
               initial={{ scale: 0 }}
@@ -51,6 +54,14 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
               className="text-7xl mb-3"
             >
               {info.icon}
+            </motion.div>
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.15, type: 'spring', stiffness: 400 }}
+              className="flex justify-center mb-3"
+            >
+              <RoleAvatar role={role} size="lg" />
             </motion.div>
             <motion.h2
               initial={{ opacity: 0, y: 10 }}

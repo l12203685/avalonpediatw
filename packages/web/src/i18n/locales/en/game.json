@@ -231,11 +231,23 @@
   "chat": {
     "title": "Game Chat",
     "noMessages": "No messages yet",
-    "inputPlaceholder": "Type a message…"
+    "inputPlaceholder": "Type a message…",
+    "inlineTitle": "Chat log",
+    "inlinePlaceholder": "Say something..."
   },
   "missionTrack": {
     "rejectLabel": "Reject:",
     "evilWinsReject": "Evil Wins!"
+  },
+  "roleAvatar": {
+    "merlinShort": "梅",
+    "percivalShort": "派",
+    "loyalShort": "忠",
+    "assassinShort": "刺",
+    "morganaShort": "娜",
+    "mordredShort": "德",
+    "oberonShort": "奧",
+    "minionShort": "爪"
   },
   "bot": {
     "label": "AI Bot",
