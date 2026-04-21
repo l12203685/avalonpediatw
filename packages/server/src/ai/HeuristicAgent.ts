@@ -16,6 +16,44 @@ import {
 } from './types';
 import { AVALON_CONFIG } from '@avalon/shared';
 
+// ── Strategy thresholds ────────────────────────────────────────
+/**
+ * Average-team-suspicion rejection threshold for the **on-team** path.
+ * Higher = more tolerant. Hard mode is stricter than normal.
+ */
+const SUSPICION_REJECT_THRESHOLD: Record<'hard' | 'normal', number> = {
+  hard:   2.0,
+  normal: 3.0,
+};
+
+/**
+ * Stricter threshold for the **off-team** path — good players are more
+ * cautious when not seated, since they can't protect the quest themselves.
+ */
+const STRICT_THRESHOLD: Record<'hard' | 'normal', number> = {
+  hard:   1.5,
+  normal: 2.5,
+};
+
+/**
+ * Baseline **reject** probability when a good player is NOT on the proposed
+ * team and no harder signal (knownEvil / failed-member / suspicion) has
+ * already forced a decision. Forces the leader to prove the team is clean.
+ */
+const OFF_TEAM_REJECT_BASELINE: Record<'hard' | 'normal', number> = {
+  hard:   0.7,
+  normal: 0.55,
+};
+
+/** Decision-flip noise rate — higher = more "human error". */
+const NOISE_RATE: Record<'hard' | 'normal', number> = {
+  hard:   0.05,
+  normal: 0.15,
+};
+
+/** Above this failCount, good always approves to avoid auto-loss on 5th reject. */
+const FORCE_APPROVE_FAIL_COUNT = 4;
+
 // ── Agent Memory ───────────────────────────────────────────────
 /**
  * Per-agent, per-game memory. Populated via idempotent ingest methods
@@ -276,35 +314,66 @@ export class HeuristicAgent implements AvalonAgent {
   // ── Team Vote ────────────────────────────────────────────────
 
   private voteOnTeam(obs: PlayerObservation): AgentAction {
-    const { proposedTeam, myTeam, knownEvils, knownWizards, failCount } = obs;
+    const { proposedTeam, myTeam, myPlayerId, knownEvils, knownWizards, failCount } = obs;
 
     if (myTeam === 'good') {
-      // Approve if no known evils on team
+      // Force approve on 5th attempt — rejecting auto-hands round to evil.
+      if (failCount >= FORCE_APPROVE_FAIL_COUNT) {
+        return { type: 'team_vote', vote: true };
+      }
+
+      // Hard veto: any known evil on team → always reject (critical, no noise).
       const hasKnownEvil = proposedTeam.some(id => knownEvils.includes(id));
       if (hasKnownEvil) {
         return { type: 'team_vote', vote: false };
       }
 
-      // Percival: be skeptical of large teams with no wizard candidate (Merlin/Morgana)
-      // A team without either potential Merlin is suspicious — they may be hiding evil.
+      // Percival: skeptical of teams without any wizard candidate (Merlin/Morgana).
       if (knownWizards && knownWizards.length > 0 && proposedTeam.length >= 3) {
         const hasWizard = proposedTeam.some(id => knownWizards.includes(id));
         if (!hasWizard) {
-          // Reject with high probability — teams without Merlin candidates are risky
-          return { type: 'team_vote', vote: this.difficulty === 'hard' ? false : Math.random() > 0.65 };
+          return {
+            type: 'team_vote',
+            vote: this.difficulty === 'hard' ? false : Math.random() > 0.65,
+          };
         }
       }
 
-      // Calculate average suspicion of proposed team
+      // Suspicion + failed-team-member scan used by both on/off-team branches.
       const avgSuspicion = proposedTeam.reduce((s, id) => s + this.getSuspicion(id), 0) / proposedTeam.length;
-      // Hard mode: stricter suspicion threshold, also considers current round (later rounds = more info)
-      const threshold = failCount >= 4
-        ? 5
-        : this.difficulty === 'hard'
-          ? 2.5  // harder: reject more suspicious teams
-          : 3;
+      const hasFailedMember = proposedTeam.some(
+        id => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
+      );
+      const onTeam = proposedTeam.includes(myPlayerId);
+      const noise  = NOISE_RATE[this.difficulty];
 
-      return { type: 'team_vote', vote: avgSuspicion < threshold };
+      if (!onTeam) {
+        // Off-team path: default to cautious reject. Leader must prove the
+        // team is clean — otherwise the good player holds out their approval.
+        const strictThreshold = STRICT_THRESHOLD[this.difficulty];
+        if (hasFailedMember || avgSuspicion > strictThreshold) {
+          return { type: 'team_vote', vote: this.applyNoise(false, noise) };
+        }
+        // No hard signal → baseline reject probability. Round 1 has no
+        // history yet, so relax the baseline to avoid auto-racing to
+        // failCount=5 (which auto-hands the round to evil).
+        const hasHistory = this.memory.failedTeamHistory.length > 0
+          || this.memory.processedVoteAttempts.size > 0;
+        const baseline = hasHistory
+          ? OFF_TEAM_REJECT_BASELINE[this.difficulty]
+          : OFF_TEAM_REJECT_BASELINE[this.difficulty] * 0.6;
+        const baselineVote = Math.random() < baseline ? false : true;
+        return { type: 'team_vote', vote: this.applyNoise(baselineVote, noise) };
+      }
+
+      // On-team path: keep legacy avg-suspicion check, but also veto teams
+      // that contain any previously-failed member.
+      if (hasFailedMember) {
+        return { type: 'team_vote', vote: this.applyNoise(false, noise) };
+      }
+      const threshold = SUSPICION_REJECT_THRESHOLD[this.difficulty];
+      const decision  = avgSuspicion < threshold;
+      return { type: 'team_vote', vote: this.applyNoise(decision, noise) };
     } else {
       // Evil: approve if own ally or self is on team, reject otherwise
       const hasSelf  = proposedTeam.includes(obs.myPlayerId);
