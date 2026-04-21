@@ -111,7 +111,9 @@
   },
   "scoresheet": {
     "title": "牌譜",
-    "stats": "{{quests}} 輪任務・{{votes}} 次投票"
+    "stats": "{{quests}} 輪任務・{{votes}} 次投票",
+    "collapsedSummary": "{{quests}} 輪任務・{{votes}} 次投票・點擊展開",
+    "expanded": "收合牌譜"
   },
   "lady": {
     "title": "🔮 湖中女神 (Lady of the Lake)",

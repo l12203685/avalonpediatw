@@ -111,7 +111,9 @@
   },
   "scoresheet": {
     "title": "Scoresheet",
-    "stats": "{{quests}} quests · {{votes}} votes"
+    "stats": "{{quests}} quests · {{votes}} votes",
+    "collapsedSummary": "{{quests}} quests · {{votes}} votes · tap to expand",
+    "expanded": "Collapse"
   },
   "lady": {
     "title": "🔮 Lady of the Lake",

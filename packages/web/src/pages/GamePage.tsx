@@ -15,10 +15,10 @@ import ChatPanel from '../components/ChatPanel';
 import MissionTrack from '../components/MissionTrack';
 import SuspicionBoard from '../components/SuspicionBoard';
 import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
-import LiveScoresheet from '../components/LiveScoresheet';
+import CompactScoresheet from '../components/CompactScoresheet';
 import audioService from '../services/audio';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2, ClipboardList } from 'lucide-react';
+import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2 } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 
@@ -433,23 +433,11 @@ export default function GamePage(): JSX.Element {
           {room.state === 'quest' && !isSpectator && <QuestPanel room={room} currentPlayer={currentPlayer} />}
 
           {/*
-            Live Scoresheet — traditional Avalon paper scoresheet, 固定展開放在中間區下方。
-            空牌譜顯示 "--"，手機直立 10 人 13 欄可完整顯示不橫捲。
+            Live Scoresheet — collapsible wrapper (#83 Phase 2). Defaults collapsed mid-game;
+            auto-expands on `room.state === 'ended'`. Owns its own chrome so the outer div
+            wrapper from the pre-collapse era is gone.
           */}
-          <div className="bg-avalon-card/50 border border-gray-700 rounded-lg overflow-hidden">
-            <div className="px-3 py-2 border-b border-gray-700/50 flex items-center justify-between">
-              <span className="text-sm font-bold text-gray-300 flex items-center gap-1.5">
-                <ClipboardList size={14} className="-mt-0.5" />
-                {t('game:scoresheet.title')}
-              </span>
-              <span className="text-[10px] text-gray-500">
-                {t('game:scoresheet.stats', { quests: room.questHistory.length, votes: room.voteHistory.length })}
-              </span>
-            </div>
-            <div className="px-2 sm:px-3 py-2">
-              <LiveScoresheet room={room} currentPlayer={currentPlayer} />
-            </div>
-          </div>
+          <CompactScoresheet room={room} currentPlayer={currentPlayer} />
         </GameBoard>
 
         {/* Suspicion Notes — personal private notepad, only shown during active game */}

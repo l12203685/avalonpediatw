@@ -202,16 +202,16 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
         </table>
       </div>
 
-      {/* Legend — 中文 */}
+      {/* Legend — 中文 (2026-04-21 recolor: 黃盾/白勾/黑方/藍圓/紅圓) */}
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] sm:text-xs text-gray-400">
         <LegendItem>
-          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded bg-blue-600/70 text-blue-100">
-            <ShieldIcon className="w-2.5 h-2.5" />
+          <span className="inline-flex items-center justify-center w-3.5 h-3.5 text-yellow-400">
+            <ShieldIcon className="w-3.5 h-3.5" />
           </span>
           組隊
         </LegendItem>
         <LegendItem>
-          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded bg-blue-600/30 text-white">
+          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded bg-yellow-500/40 text-white">
             <ApproveMark className="w-3 h-3" />
           </span>
           同意
@@ -223,8 +223,16 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
           否決
         </LegendItem>
         <LegendItem>
-          <span className="inline-block w-3.5 h-3.5 rounded bg-yellow-600/50" />
-          任務
+          <span className="inline-flex items-center justify-center w-3.5 h-3.5 text-blue-500">
+            <QuestSuccessMark className="w-3 h-3" />
+          </span>
+          任務成功
+        </LegendItem>
+        <LegendItem>
+          <span className="inline-flex items-center justify-center w-3.5 h-3.5 text-red-500">
+            <QuestFailMark className="w-3 h-3" />
+          </span>
+          任務失敗
         </LegendItem>
         <LegendItem>
           <span className="inline-block w-3.5 h-3.5 rounded bg-cyan-600/50" />
@@ -292,7 +300,7 @@ function NominationRow({
             */}
             <div className="relative w-full aspect-square flex items-center justify-center">
               {isOnTeam && (
-                <ShieldIcon className="absolute inset-0 w-full h-full text-blue-500" />
+                <ShieldIcon className="absolute inset-0 w-full h-full text-yellow-400" />
               )}
               {hasVoted && vote && (
                 // Approve: white checkmark overlay
@@ -360,12 +368,12 @@ function QuestRow({
               sym === 'o' ? (
                 <QuestSuccessMark
                   key={i}
-                  className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white"
+                  className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-blue-500"
                 />
               ) : (
                 <QuestFailMark
                   key={i}
-                  className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-black"
+                  className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-red-500"
                 />
               ),
             )}

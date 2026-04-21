@@ -1,11 +1,16 @@
 /**
- * Scoresheet icon primitives — matches Edward's spec for the traditional Avalon scoresheet.
+ * Scoresheet icon primitives — matches Edward's 2026-04-21 spec for the traditional
+ * Avalon scoresheet (Phase 2 recolor).
  *
- * - ShieldIcon: 藍色盾牌，表示此座位被選進任務隊伍（empty cell = 未被選中）
- * - ApproveMark: 白/藍勾，覆蓋在盾牌上表示投同意
- * - RejectMark: 黑色方塊，覆蓋在盾牌上表示投否決（無論是否被選進隊伍）
+ * - ShieldIcon: 黃色盾牌，表示此座位被選進任務隊伍（parent sets `text-yellow-400`）
+ * - ApproveMark: 白勾（parent sets `text-white`）
+ * - RejectMark: 純黑方塊（parent sets `text-black`）
+ * - QuestSuccessMark: 藍圓（parent sets `text-blue-500`）
+ * - QuestFailMark: 紅圓（parent sets `text-red-500`）
  *
- * 所有 icon 尺寸由父元件 className 控制（手機 12-14px、桌面 16-18px）。
+ * All icons are color-agnostic — they use `currentColor` so the parent component
+ * controls the fill via Tailwind `text-*` classes. Sizes are also controlled by
+ * parent `className` (手機 12-14px、桌面 16-18px).
  */
 
 interface IconProps {
@@ -26,8 +31,8 @@ export function ShieldIcon({ className = '' }: IconProps): JSX.Element {
 }
 
 /**
- * Approve mark — white/blue checkmark overlay.
- * Rendered on top of a blue shield cell to indicate "approve" vote.
+ * Approve mark — white checkmark overlay (parent: `text-white`).
+ * Rendered on top of a yellow shield cell to indicate "approve" vote.
  * If no shield (not on team), still shown centered with no background.
  */
 export function ApproveMark({ className = '' }: IconProps): JSX.Element {
@@ -48,8 +53,8 @@ export function ApproveMark({ className = '' }: IconProps): JSX.Element {
 }
 
 /**
- * Reject mark — solid black square overlay.
- * Rendered on top of (potentially) blue shield cell to indicate "reject" vote.
+ * Reject mark — solid black square overlay (parent: `text-black`).
+ * Rendered on top of (potentially) yellow shield cell to indicate "reject" vote.
  */
 export function RejectMark({ className = '' }: IconProps): JSX.Element {
   return (
@@ -65,7 +70,7 @@ export function RejectMark({ className = '' }: IconProps): JSX.Element {
 }
 
 /**
- * Success dot for quest row — white circle.
+ * Success dot for quest row — blue circle (parent: `text-blue-500`).
  */
 export function QuestSuccessMark({ className = '' }: IconProps): JSX.Element {
   return (
@@ -76,7 +81,7 @@ export function QuestSuccessMark({ className = '' }: IconProps): JSX.Element {
 }
 
 /**
- * Fail dot for quest row — black circle with red ring.
+ * Fail dot for quest row — red circle (parent: `text-red-500`).
  */
 export function QuestFailMark({ className = '' }: IconProps): JSX.Element {
   return (
