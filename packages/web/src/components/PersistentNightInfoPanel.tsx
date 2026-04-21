@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player, Role } from '@avalon/shared';
 import { ChevronDown, ChevronUp, Eye, EyeOff, BookOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ROLE_INFO, getKnowledgeList, getKnowledgeLabel } from '../utils/roleKnowledge';
 
 interface PersistentNightInfoPanelProps {
@@ -28,6 +29,7 @@ export default function PersistentNightInfoPanel({
   room,
   currentPlayer,
 }: PersistentNightInfoPanelProps): JSX.Element | null {
+  const { t } = useTranslation(['game']);
   const [expanded, setExpanded] = useState(false);
 
   const role = currentPlayer.role as Role | null;
@@ -59,9 +61,9 @@ export default function PersistentNightInfoPanel({
           <div className="flex-1 min-w-0">
             <p className={`text-xs font-black truncate ${info.color}`}>{info.name}</p>
             <p className="text-[10px] text-gray-300 truncate">
-              {isEvil ? '🔴 邪惡方' : '🔵 正義方'}
+              {isEvil ? t('game:nightInfo.evil') : t('game:nightInfo.good')}
               {hasNightInfo && (
-                <span className="ml-1.5 opacity-70">· 點擊查看資訊</span>
+                <span className="ml-1.5 opacity-70">{t('game:nightInfo.clickToView')}</span>
               )}
             </p>
           </div>
@@ -120,7 +122,7 @@ export default function PersistentNightInfoPanel({
                 <div className="pt-1 border-t border-white/10">
                   <div className="flex items-center gap-1.5 mb-1">
                     <BookOpen size={10} className="text-gray-400" />
-                    <p className="text-[9px] text-gray-400 uppercase tracking-wider">提示</p>
+                    <p className="text-[9px] text-gray-400 uppercase tracking-wider">{t('game:nightInfo.hintLabel')}</p>
                   </div>
                   <p className="text-[10px] text-gray-300 leading-snug">{info.knowledge}</p>
                 </div>

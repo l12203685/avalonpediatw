@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player, Role } from '@avalon/shared';
 import { X, Eye, EyeOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ROLE_INFO, getKnowledgeList } from '../utils/roleKnowledge';
 
 interface RoleRevealModalProps {
@@ -10,6 +11,7 @@ interface RoleRevealModalProps {
 }
 
 export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRevealModalProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   const role = currentPlayer.role as Role;
   const info = ROLE_INFO[role] ?? ROLE_INFO.loyal;
   const knowledgeList = getKnowledgeList(role, room, currentPlayer);
@@ -68,7 +70,7 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
                   : 'bg-blue-900/60 text-blue-300 border border-blue-700'
               }`}
             >
-              {isEvil ? '🔴 邪惡方 (Evil)' : '🔵 正義方 (Good)'}
+              {isEvil ? t('game:roleReveal.evilBadge') : t('game:roleReveal.goodBadge')}
             </motion.div>
           </div>
 
@@ -93,7 +95,7 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
           >
             <div className="flex items-center gap-2 mb-3">
               <Eye size={16} className={info.color} />
-              <p className={`text-sm font-bold ${info.color}`}>你知道的資訊</p>
+              <p className={`text-sm font-bold ${info.color}`}>{t('game:roleReveal.knowledgeTitle')}</p>
             </div>
             {role === 'loyal' || role === 'oberon' ? (
               <div className="flex items-center gap-2 text-gray-400 text-sm">
@@ -146,7 +148,7 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
                 : 'bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white'
             }`}
           >
-            了解!開始遊戲
+            {t('game:roleReveal.startBtn')}
           </motion.button>
         </motion.div>
       </motion.div>

@@ -102,14 +102,6 @@
     "ladyTurn": "🔮 You hold the Lady — inspect a player",
     "assassinTurn": "🗡️ You are the Assassin — choose your target"
   },
-  "teamSelect": {
-    "waitingTitle": "Waiting for leader to pick a team",
-    "waitingDesc": "Leader <leader>{{name}}</leader> is choosing the quest team...",
-    "needMembers": "This round requires {{count}} members",
-    "unknownCount": "?",
-    "unlimitedTimer": "⏱ Untimed",
-    "timer": "⏱ {{seconds}}s"
-  },
   "scoresheet": {
     "title": "Scoresheet",
     "stats": "{{quests}} quests · {{votes}} votes"
@@ -151,5 +143,80 @@
     "youLabel": "(You)",
     "rematch": "Rematch",
     "backHome": "Back to Home"
+  },
+  "votePanel": {
+    "title": "Team Vote",
+    "subtitle": "Approve or Reject the proposed quest team",
+    "questTeamLabel": "Proposed Team:",
+    "youSuffix": " (You)",
+    "votedCount": "Voted: {{voted}}/{{total}}",
+    "unlimitedTimer": "Untimed",
+    "allVoted": "All votes in! Counting results…",
+    "waitingCount_one": "{{count}} player hasn't voted yet",
+    "waitingCount_other": "{{count}} players haven't voted yet",
+    "approveBtn": "Approve",
+    "rejectBtn": "Reject",
+    "submitting": "Voting…",
+    "yourVoteApprove": "Your vote: 👍 Approved",
+    "yourVoteReject": "Your vote: 👎 Rejected",
+    "waitingOthers": "Waiting for other players to vote…",
+    "shortcuts": "Shortcuts: <approve>Y</approve> Approve · <reject>N</reject> Reject"
+  },
+  "questPanel": {
+    "title": "⚔️ Quest Vote",
+    "subtitle": "Choose to succeed or fail this quest",
+    "notInTeamTitle": "⚔️ Quest in Progress",
+    "notInTeamVoted": "Submitted: <count>{{voted}}/{{total}}</count>",
+    "notInTeamWaiting": "Results revealed when all votes are in…",
+    "teamLabel": "Quest Team:",
+    "youSuffix": " (You)",
+    "unlimitedTimer": "Untimed",
+    "successBtn": "Quest Success",
+    "failBtn": "Quest Fail",
+    "submitting": "Voting…",
+    "submitted": "✓ Submitted — waiting for teammates…",
+    "votingCount_one": "Only you are voting…",
+    "votingCount_other": "{{count}} team members voting…",
+    "goodSideHint": "Good side can only vote success · Shortcut <key>S</key>",
+    "evilSideHint": "Shortcuts: <success>S</success> Success · <fail>F</fail> Fail"
+  },
+  "teamSelect": {
+    "waitingTitle": "Waiting for leader to pick a team",
+    "waitingDesc": "Leader <leader>{{name}}</leader> is choosing the quest team...",
+    "needMembers": "This round requires {{count}} members",
+    "unknownCount": "?",
+    "unlimitedTimer": "⏱ Untimed",
+    "timer": "⏱ {{seconds}}s",
+    "title": "👑 Select Quest Team",
+    "subtitle": "You are the Leader — select {{count}} team members for the quest.",
+    "selectedCount": "Selected: <sel>{{selected}}</sel>/<total>{{total}}</total>",
+    "pickMembersLabel": "Pick members:",
+    "youSuffix": " (You)",
+    "confirmBtn": "Confirm Team",
+    "submitting": "Submitting…",
+    "teamComplete": "Team complete! Click confirm to proceed to vote.",
+    "moreNeeded_one": "{{count}} more member needed",
+    "moreNeeded_other": "{{count}} more members needed"
+  },
+  "roleReveal": {
+    "evilBadge": "🔴 Evil",
+    "goodBadge": "🔵 Good",
+    "knowledgeTitle": "Your Night Information",
+    "startBtn": "Got it! Start Game"
+  },
+  "nightInfo": {
+    "evil": "🔴 Evil",
+    "good": "🔵 Good",
+    "clickToView": "· Tap to view info",
+    "hintLabel": "Hint"
+  },
+  "chat": {
+    "title": "Game Chat",
+    "noMessages": "No messages yet",
+    "inputPlaceholder": "Type a message…"
+  },
+  "missionTrack": {
+    "rejectLabel": "Reject:",
+    "evilWinsReject": "Evil Wins!"
   }
 }

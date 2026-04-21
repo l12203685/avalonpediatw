@@ -2,6 +2,7 @@ import { Room, Player } from '@avalon/shared';
 import { CheckCircle, XCircle, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import { submitQuestVote } from '../services/socket';
 import audioService from '../services/audio';
 
@@ -19,6 +20,7 @@ export default function QuestPanel({
   currentPlayer,
   isLoading = false,
 }: QuestPanelProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   // Derive per-room effective timer: base * multiplier. `null` = unlimited.
   const multiplier = room.timerConfig?.multiplier ?? 1;
   const isUnlimited = multiplier === null;
@@ -78,9 +80,13 @@ export default function QuestPanel({
         animate={{ opacity: 1, y: 0 }}
         className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 text-center space-y-4"
       >
-        <h2 className="text-2xl font-bold text-white">⚔️ 任務進行中 (Quest in Progress)</h2>
+        <h2 className="text-2xl font-bold text-white">{t('game:questPanel.notInTeamTitle')}</h2>
         <p className="text-gray-300">
-          隊員已提交：<span className="text-blue-400 font-bold">{votedCount}/{teamSize}</span>
+          <Trans
+            i18nKey="game:questPanel.notInTeamVoted"
+            values={{ voted: votedCount, total: teamSize }}
+            components={{ count: <span className="text-blue-400 font-bold" /> }}
+          />
         </p>
         <div className="w-full max-w-xs mx-auto h-2 bg-gray-700 rounded-full overflow-hidden">
           <motion.div
@@ -89,7 +95,7 @@ export default function QuestPanel({
           />
         </div>
         <p className="text-sm text-gray-500">
-          投票結果將在所有人提交後揭曉… (Results revealed when all votes are in…)
+          {t('game:questPanel.notInTeamWaiting')}
         </p>
       </motion.div>
     );
@@ -103,8 +109,8 @@ export default function QuestPanel({
     >
       {/* 標題 */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">⚔️ 任務投票 (Quest Vote)</h2>
-        <p className="text-gray-300">選擇讓此次任務成功或失敗 (Choose to succeed or fail this quest)</p>
+        <h2 className="text-3xl font-bold text-white mb-2">{t('game:questPanel.title')}</h2>
+        <p className="text-gray-300">{t('game:questPanel.subtitle')}</p>
       </div>
 
       {/* 計時器 */}
@@ -112,7 +118,7 @@ export default function QuestPanel({
         {isUnlimited ? (
           <div className="flex items-center gap-2 px-4 py-2 rounded-full font-bold bg-blue-500/30 text-blue-200 border border-blue-500/40">
             <Clock size={18} />
-            不計時
+            {t('game:questPanel.unlimitedTimer')}
           </div>
         ) : (
           <motion.div
@@ -130,7 +136,7 @@ export default function QuestPanel({
 
       {/* 隊伍成員列表 */}
       <div className="space-y-2">
-        <p className="text-gray-300 text-sm font-semibold">任務隊伍：</p>
+        <p className="text-gray-300 text-sm font-semibold">{t('game:questPanel.teamLabel')}</p>
         <div className="grid grid-cols-2 gap-2">
           {room.questTeam.map((memberId) => (
             <div
@@ -142,7 +148,7 @@ export default function QuestPanel({
               }`}
             >
               {room.players[memberId].name}
-              {memberId === currentPlayer.id && '（你）'}
+              {memberId === currentPlayer.id && t('game:questPanel.youSuffix')}
             </div>
           ))}
         </div>
@@ -155,7 +161,7 @@ export default function QuestPanel({
           animate={{ opacity: 1 }}
           className="text-center py-4 text-blue-400 font-semibold"
         >
-          ✓ 已提交，等待其他隊員投票…
+          {t('game:questPanel.submitted')}
         </motion.div>
       ) : (
         <div className="flex justify-center gap-6">
@@ -167,7 +173,7 @@ export default function QuestPanel({
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
           >
             <CheckCircle size={20} />
-            {isSubmitting ? '投票中…' : '任務成功 (Quest Success)'}
+            {isSubmitting ? t('game:questPanel.submitting') : t('game:questPanel.successBtn')}
           </motion.button>
 
           {!isGoodSide && (
@@ -179,7 +185,7 @@ export default function QuestPanel({
               className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
             >
               <XCircle size={20} />
-              {isSubmitting ? '投票中…' : '任務失敗 (Quest Fail)'}
+              {isSubmitting ? t('game:questPanel.submitting') : t('game:questPanel.failBtn')}
             </motion.button>
           )}
         </div>
@@ -190,13 +196,17 @@ export default function QuestPanel({
         <div className="text-center text-sm text-gray-400 space-y-1">
           <p>
             {room.questTeam.length === 1
-              ? '只有你在投票…'
-              : `${room.questTeam.length} 位隊員投票中…`}
+              ? t('game:questPanel.votingCount_one')
+              : t('game:questPanel.votingCount_other', { count: room.questTeam.length })}
           </p>
           {isGoodSide ? (
-            <p className="text-xs text-gray-600">好人陣營：只能投成功 (Good side can only vote success)・快捷鍵 <kbd className="bg-gray-800 px-1 rounded">S</kbd></p>
+            <p className="text-xs text-gray-600">
+              <Trans i18nKey="game:questPanel.goodSideHint" components={{ key: <kbd className="bg-gray-800 px-1 rounded" /> }} />
+            </p>
           ) : (
-            <p className="text-xs text-gray-600">快捷鍵 (Shortcuts)：<kbd className="bg-gray-800 px-1 rounded">S</kbd> 成功・<kbd className="bg-gray-800 px-1 rounded">F</kbd> 失敗</p>
+            <p className="text-xs text-gray-600">
+              <Trans i18nKey="game:questPanel.evilSideHint" components={{ success: <kbd className="bg-gray-800 px-1 rounded" />, fail: <kbd className="bg-gray-800 px-1 rounded" /> }} />
+            </p>
           )}
         </div>
       )}

@@ -2,12 +2,14 @@ import { Room } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import { motion } from 'framer-motion';
 import { Users } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface MissionTrackProps {
   room: Room;
 }
 
 export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   const playerCount = Object.keys(room.players).length;
   const config = AVALON_CONFIG[playerCount];
   if (!config) return <></>;
@@ -102,7 +104,7 @@ export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
       {/* Rejection track — 5 diamond slots showing consecutive vote rejects */}
       {(room.failCount > 0 || room.state === 'voting') && (
         <div className="flex items-center justify-center gap-1.5">
-          <span className="text-xs text-gray-500 mr-1">否決 (Reject):</span>
+          <span className="text-xs text-gray-500 mr-1">{t('game:missionTrack.rejectLabel')}</span>
           {Array.from({ length: 5 }, (_, i) => (
             <motion.div
               key={i}
@@ -118,7 +120,7 @@ export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
             />
           ))}
           {room.failCount >= 5 && (
-            <span className="text-xs text-red-400 font-bold ml-1">邪惡方獲勝！</span>
+            <span className="text-xs text-red-400 font-bold ml-1">{t('game:missionTrack.evilWinsReject')}</span>
           )}
         </div>
       )}

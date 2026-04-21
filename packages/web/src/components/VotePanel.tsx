@@ -2,6 +2,7 @@ import { Room, Player } from '@avalon/shared';
 import { ThumbsUp, ThumbsDown, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import audioService from '../services/audio';
 
 // Base seconds for the team-vote phase. Matches server VOTE_TIMEOUT_MS at 1x.
@@ -20,6 +21,7 @@ export default function VotePanel({
   onVote,
   isLoading = false,
 }: VotePanelProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   // Derive per-room effective timer: base * multiplier. `null` = unlimited.
   const multiplier = room.timerConfig?.multiplier ?? 1;
   const isUnlimited = multiplier === null;
@@ -75,14 +77,14 @@ export default function VotePanel({
     >
       {/* 標題 */}
       <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">隊伍提案投票 (Team Vote)</h2>
-        <p className="text-gray-300">同意或拒絕此次任務隊伍 (Approve or Reject the proposed team)</p>
+        <h2 className="text-3xl font-bold text-white mb-2">{t('game:votePanel.title')}</h2>
+        <p className="text-gray-300">{t('game:votePanel.subtitle')}</p>
       </div>
 
       {/* 提案隊伍 */}
       {questTeamPlayers.length > 0 && (
         <div className="bg-black/30 rounded-xl p-4">
-          <p className="text-sm text-gray-400 mb-3 text-center">本次任務隊伍：</p>
+          <p className="text-sm text-gray-400 mb-3 text-center">{t('game:votePanel.questTeamLabel')}</p>
           <div className="flex flex-wrap justify-center gap-2">
             {questTeamPlayers.map(player => (
               <div
@@ -97,7 +99,7 @@ export default function VotePanel({
                   {player.name.charAt(0).toUpperCase()}
                 </span>
                 {player.name}
-                {player.id === currentPlayer.id && ' (你)'}
+                {player.id === currentPlayer.id && t('game:votePanel.youSuffix')}
               </div>
             ))}
           </div>
@@ -107,12 +109,12 @@ export default function VotePanel({
       {/* 投票進度 */}
       <div className="flex justify-between items-center text-sm">
         <span className="text-gray-300">
-          已投票：{votedCount}/{playerCount}
+          {t('game:votePanel.votedCount', { voted: votedCount, total: playerCount })}
         </span>
         {isUnlimited ? (
           <div className="flex items-center gap-2 px-3 py-1 rounded-full font-bold bg-blue-500/30 text-blue-200 border border-blue-500/40">
             <Clock size={16} />
-            不計時
+            {t('game:votePanel.unlimitedTimer')}
           </div>
         ) : (
           <motion.div
@@ -149,7 +151,7 @@ export default function VotePanel({
               className="flex items-center gap-2 bg-avalon-good hover:bg-avalon-good/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
             >
               <ThumbsUp size={20} />
-              {isLoading ? '投票中…' : '贊成 (Approve)'}
+              {isLoading ? t('game:votePanel.submitting') : t('game:votePanel.approveBtn')}
             </motion.button>
 
             <motion.button
@@ -160,10 +162,12 @@ export default function VotePanel({
               className="flex items-center gap-2 bg-avalon-evil hover:bg-avalon-evil/90 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
             >
               <ThumbsDown size={20} />
-              {isLoading ? '投票中…' : '拒絕 (Reject)'}
+              {isLoading ? t('game:votePanel.submitting') : t('game:votePanel.rejectBtn')}
             </motion.button>
           </div>
-          <p className="text-center text-xs text-gray-600">快捷鍵 (Shortcuts)：<kbd className="bg-gray-800 px-1 rounded">Y</kbd> 贊成・<kbd className="bg-gray-800 px-1 rounded">N</kbd> 拒絕</p>
+          <p className="text-center text-xs text-gray-600">
+            <Trans i18nKey="game:votePanel.shortcuts" components={{ approve: <kbd className="bg-gray-800 px-1 rounded" />, reject: <kbd className="bg-gray-800 px-1 rounded" /> }} />
+          </p>
         </div>
       )}
       {hasVoted && (
@@ -173,9 +177,9 @@ export default function VotePanel({
           className="text-center py-3"
         >
           <p className="text-gray-300">
-            你的票 (Your vote)：{room.votes[currentPlayer.id] ? '👍 贊成 (Approve)' : '👎 拒絕 (Reject)'}
+            {room.votes[currentPlayer.id] ? t('game:votePanel.yourVoteApprove') : t('game:votePanel.yourVoteReject')}
           </p>
-          <p className="text-sm text-gray-500 mt-1">等待其他玩家投票…</p>
+          <p className="text-sm text-gray-500 mt-1">{t('game:votePanel.waitingOthers')}</p>
         </motion.div>
       )}
 
@@ -203,9 +207,9 @@ export default function VotePanel({
       {/* Status */}
       <div className="text-center text-sm text-gray-400">
         {votedCount === playerCount ? (
-          <p className="text-yellow-400 font-bold">所有人已投票！計算結果中…</p>
+          <p className="text-yellow-400 font-bold">{t('game:votePanel.allVoted')}</p>
         ) : votedCount > 0 ? (
-          <p>還有 {playerCount - votedCount} 人尚未投票</p>
+          <p>{t('game:votePanel.waitingCount_other', { count: playerCount - votedCount })}</p>
         ) : null}
       </div>
     </motion.div>

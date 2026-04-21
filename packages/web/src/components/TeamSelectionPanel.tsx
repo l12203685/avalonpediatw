@@ -2,6 +2,7 @@ import { Room, Player, AVALON_CONFIG } from '@avalon/shared';
 import { CheckCircle, Circle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import { selectQuestTeam } from '../services/socket';
 
 interface TeamSelectionPanelProps {
@@ -21,6 +22,7 @@ export default function TeamSelectionPanel({
   const config = AVALON_CONFIG[playerCount];
   const expectedTeamSize = config.questTeams[room.currentRound - 1];
 
+  const { t } = useTranslation(['game']);
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -56,22 +58,22 @@ export default function TeamSelectionPanel({
       {/* 標題和信息 */}
       <div className="text-center">
         <div className="flex items-center justify-center gap-3 mb-2">
-          <h2 className="text-3xl font-bold text-white">👑 選擇任務隊伍 (Select Quest Team)</h2>
-          {/* When room is in unlimited-timer mode, show "不計時" instead of countdown. */}
+          <h2 className="text-3xl font-bold text-white">{t('game:teamSelect.title')}</h2>
+          {/* When room is in unlimited-timer mode, show untimed label instead of countdown. */}
           {room.timerConfig?.multiplier === null ? (
             <span className="text-sm font-bold px-3 py-1 rounded-full bg-blue-900/70 text-blue-200">
-              ⏱ 不計時
+              {t('game:teamSelect.unlimitedTimer')}
             </span>
           ) : (
             timer !== undefined && (
               <span className={`text-sm font-bold px-3 py-1 rounded-full ${timer < 20 ? 'bg-red-900/70 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
-                ⏱ {timer}s
+                {t('game:teamSelect.timer', { seconds: timer })}
               </span>
             )
           )}
         </div>
         <p className="text-gray-300">
-          你是隊長，請選擇 {expectedTeamSize} 名隊員執行任務。(You are the Leader — select {expectedTeamSize} team members for the quest.)
+          {t('game:teamSelect.subtitle', { count: expectedTeamSize })}
         </p>
       </div>
 
@@ -79,15 +81,18 @@ export default function TeamSelectionPanel({
       <div className="flex justify-center">
         <div className="bg-avalon-card/70 rounded-full px-6 py-2">
           <p className="text-white font-bold">
-            已選 (Selected)：<span className="text-amber-400">{selectedPlayers.size}</span>/
-            <span className="text-gray-400">{expectedTeamSize}</span>
+            <Trans
+              i18nKey="game:teamSelect.selectedCount"
+              values={{ selected: selectedPlayers.size, total: expectedTeamSize }}
+              components={{ sel: <span className="text-amber-400" />, total: <span className="text-gray-400" /> }}
+            />
           </p>
         </div>
       </div>
 
       {/* 玩家選擇列表 */}
       <div className="space-y-2">
-        <p className="text-gray-300 text-sm font-semibold">選擇隊員：</p>
+        <p className="text-gray-300 text-sm font-semibold">{t('game:teamSelect.pickMembersLabel')}</p>
         <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto">
           {Object.entries(room.players).map(([playerId, player]) => {
             const isSelected = selectedPlayers.has(playerId);
@@ -119,7 +124,7 @@ export default function TeamSelectionPanel({
                 </div>
                 <span className="font-semibold flex-1 text-left">
                   {player.name}
-                  {isYou && '（你）'}
+                  {isYou && t('game:teamSelect.youSuffix')}
                 </span>
               </motion.button>
             );
@@ -139,15 +144,20 @@ export default function TeamSelectionPanel({
             : 'bg-gray-600 text-gray-300 cursor-not-allowed opacity-50'
         }`}
       >
-        {isSubmitting ? '提交中…' : '確認任務隊伍 (Confirm Team)'}
+        {isSubmitting ? t('game:teamSelect.submitting') : t('game:teamSelect.confirmBtn')}
       </motion.button>
 
       {/* 幫助文本 */}
       <div className="text-center text-sm text-gray-400">
         <p>
           {isFull
-            ? '隊伍已選完！點擊確認進行投票。(Team complete! Click confirm to vote.)'
-            : `還需選擇 ${expectedTeamSize - selectedPlayers.size} 名隊員 (more member${expectedTeamSize - selectedPlayers.size > 1 ? 's' : ''} needed)`}
+            ? t('game:teamSelect.teamComplete')
+            : t(
+                expectedTeamSize - selectedPlayers.size === 1
+                  ? 'game:teamSelect.moreNeeded_one'
+                  : 'game:teamSelect.moreNeeded_other',
+                { count: expectedTeamSize - selectedPlayers.size },
+              )}
         </p>
       </div>
     </motion.div>

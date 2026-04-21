@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, MessageSquare, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { sendChatMessage, getSocket } from '../services/socket';
 
 interface ChatMessage {
@@ -19,6 +20,7 @@ interface ChatPanelProps {
 }
 
 export default function ChatPanel({ roomId, currentPlayerId }: ChatPanelProps): JSX.Element {
+  const { t } = useTranslation(['game']);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -70,7 +72,7 @@ export default function ChatPanel({ roomId, currentPlayerId }: ChatPanelProps): 
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700 bg-black/30">
-              <span className="text-sm font-bold text-white">遊戲聊天</span>
+              <span className="text-sm font-bold text-white">{t('game:chat.title')}</span>
               <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white">
                 <ChevronDown size={16} />
               </button>
@@ -79,7 +81,7 @@ export default function ChatPanel({ roomId, currentPlayerId }: ChatPanelProps): 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0" style={{ maxHeight: '280px' }}>
               {messages.length === 0 && (
-                <p className="text-center text-gray-600 text-xs py-4">還沒有訊息</p>
+                <p className="text-center text-gray-600 text-xs py-4">{t('game:chat.noMessages')}</p>
               )}
               {messages.map(msg => {
                 if (msg.isSystem) {
@@ -132,7 +134,7 @@ export default function ChatPanel({ roomId, currentPlayerId }: ChatPanelProps): 
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSend()}
                 maxLength={200}
-                placeholder="輸入訊息…"
+                placeholder={t('game:chat.inputPlaceholder')}
                 className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
               <button
