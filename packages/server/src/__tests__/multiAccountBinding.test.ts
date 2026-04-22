@@ -129,7 +129,82 @@ function makeClient() {
       },
     };
   }
-  return { from };
+
+  /**
+   * RPC stub: simulates the merge_user_accounts plpgsql function in JavaScript.
+   * This mirrors the logic in supabase/migrations/20260422150000_merge_user_accounts_rpc.sql.
+   */
+  function rpc(fn: string, params: Record<string, unknown>) {
+    if (fn === 'merge_user_accounts') {
+      const primaryId   = params.p_primary_id   as string;
+      const secondaryId = params.p_secondary_id as string;
+      if (primaryId === secondaryId) {
+        return Promise.resolve({ data: false, error: null });
+      }
+      const usersState = tables['users'] ?? { rows: [] };
+      const primary   = usersState.rows.find((r) => r.id === primaryId) as Row | undefined;
+      const secondary = usersState.rows.find((r) => r.id === secondaryId) as Row | undefined;
+      if (!primary || !secondary) {
+        return Promise.resolve({ data: false, error: null });
+      }
+      // Merge stats
+      primary.elo_rating  = Math.max((primary.elo_rating as number) ?? 1000, (secondary.elo_rating as number) ?? 1000);
+      primary.total_games = ((primary.total_games as number) ?? 0) + ((secondary.total_games as number) ?? 0);
+      primary.games_won   = ((primary.games_won   as number) ?? 0) + ((secondary.games_won   as number) ?? 0);
+      primary.games_lost  = ((primary.games_lost  as number) ?? 0) + ((secondary.games_lost  as number) ?? 0);
+      primary.badges      = Array.from(new Set([
+        ...((primary.badges as string[]) ?? []),
+        ...((secondary.badges as string[]) ?? []),
+      ]));
+      // Absorb provider fields
+      for (const col of ['discord_id', 'line_id', 'firebase_uid', 'email'] as const) {
+        const pv = primary[col];
+        const sv = secondary[col];
+        if ((pv === null || pv === undefined || pv === '') && typeof sv === 'string' && sv.length > 0) {
+          primary[col] = sv;
+        }
+      }
+      // Clear secondary unique fields
+      secondary.discord_id = null;
+      secondary.line_id    = null;
+      secondary.firebase_uid = null;
+      // Migrate game_records
+      const gr = tables['game_records'] ?? { rows: [] };
+      for (const r of gr.rows) {
+        if (r.player_user_id === secondaryId) r.player_user_id = primaryId;
+      }
+      // Migrate friendships
+      const fs = tables['friendships'] ?? { rows: [] };
+      for (const r of fs.rows) {
+        if (r.follower_id  === secondaryId) r.follower_id  = primaryId;
+        if (r.following_id === secondaryId) r.following_id = primaryId;
+      }
+      // Remove self-following
+      fs.rows = fs.rows.filter((r) => !(r.follower_id === primaryId && r.following_id === primaryId));
+      tables['friendships'] = fs;
+      // Remove duplicate pairs (keep first)
+      const seen = new Set<string>();
+      fs.rows = fs.rows.filter((r) => {
+        const key = `${r.follower_id}|${r.following_id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      tables['friendships'] = fs;
+      // Delete secondary user
+      usersState.rows = usersState.rows.filter((r) => r.id !== secondaryId);
+      return Promise.resolve({ data: true, error: null });
+    }
+
+    if (fn === 'consume_oauth_session') {
+      // Not exercised by mergeUserAccounts tests — return empty
+      return Promise.resolve({ data: [], error: null });
+    }
+
+    return Promise.resolve({ data: null, error: { message: `unknown rpc: ${fn}` } });
+  }
+
+  return { from, rpc };
 }
 
 // Mock the createClient so real supabase.ts's getSupabaseClient returns our stub
