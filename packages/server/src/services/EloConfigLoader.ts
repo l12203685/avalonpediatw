@@ -35,6 +35,7 @@ import {
   setEloConfig,
   getEloConfig,
 } from './EloConfig';
+import { setShadowWriterOptions } from './EloShadowWriter';
 import { getSupabaseClient, isSupabaseReady } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -309,5 +310,23 @@ function applyPartialConfig(partial: Partial<EloConfig>): void {
   if (partial.outcomeWeights) safe.outcomeWeights = partial.outcomeWeights;
   if (partial.roleKWeights) safe.roleKWeights = partial.roleKWeights;
 
+  // #54 Phase 3: shadow-mode flags. Validate types before merging so a
+  // malformed row cannot flip shadow on/off accidentally.
+  if (typeof partial.shadowEnabled === 'boolean') {
+    safe.shadowEnabled = partial.shadowEnabled;
+  }
+  if (partial.shadowStartedAt === null || typeof partial.shadowStartedAt === 'number') {
+    safe.shadowStartedAt = partial.shadowStartedAt;
+  }
+  if (typeof partial.shadowReviewPeriodDays === 'number') {
+    safe.shadowReviewPeriodDays = partial.shadowReviewPeriodDays;
+  }
+
   setEloConfig(safe);
+
+  // Sync the shadow writer kill-switch with whatever the active config says
+  // AFTER the merge. This lets both boot-load and hot-reload flip the writer
+  // in one place; callers never touch setShadowWriterOptions directly.
+  const merged = getEloConfig();
+  setShadowWriterOptions({ enabled: merged.shadowEnabled });
 }

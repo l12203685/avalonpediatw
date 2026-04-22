@@ -15,6 +15,17 @@
 --
 -- Firebase RTDB path `rankings_shadow/{uid}` holds the shadow entries.
 -- RTDB has no schema migration — the path is created on first write.
+--
+-- Rollback:
+--   UPDATE elo_config
+--      SET config = config
+--                 - 'shadowEnabled'
+--                 - 'shadowStartedAt'
+--                 - 'shadowReviewPeriodDays'
+--    WHERE key = 'active';
+--   -- (JSONB `-` operator drops the keys; live/shadow rankings are NOT
+--   --  touched. Firebase RTDB `rankings_shadow/` stays as audit log
+--   --  unless manually cleared.)
 -- ============================================================
 
 UPDATE elo_config
