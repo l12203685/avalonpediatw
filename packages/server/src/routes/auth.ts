@@ -202,8 +202,9 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
   const linkUserId = session.linkUserId;
 
   try {
-    // 1. code → access_token
+    // 1. code → access_token（10 秒逾時：防止 Discord 無回應時 Node.js 執行緒被永久佔用）
     const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+      signal: AbortSignal.timeout(10_000),
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -217,8 +218,9 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
     if (!tokenData.access_token) throw new Error('Discord token exchange failed');
 
-    // 2. access_token → user info
+    // 2. access_token → user info（10 秒逾時）
     const userRes = await fetch('https://discord.com/api/users/@me', {
+      signal: AbortSignal.timeout(10_000),
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
     const discordUser = await userRes.json() as {
@@ -302,8 +304,9 @@ router.get('/line/callback', async (req: Request, res: Response) => {
   const linkUserId = session.linkUserId;
 
   try {
-    // 1. code → access_token
+    // 1. code → access_token（10 秒逾時：防止 LINE 無回應時 Node.js 執行緒被永久佔用）
     const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
+      signal: AbortSignal.timeout(10_000),
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -317,8 +320,9 @@ router.get('/line/callback', async (req: Request, res: Response) => {
     const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
     if (!tokenData.access_token) throw new Error('Line token exchange failed');
 
-    // 2. access_token → profile
+    // 2. access_token → profile（10 秒逾時）
     const profileRes = await fetch('https://api.line.me/v2/profile', {
+      signal: AbortSignal.timeout(10_000),
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
     const lineUser = await profileRes.json() as {
