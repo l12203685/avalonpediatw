@@ -346,16 +346,17 @@ export async function consumeOAuthSession(
   // 舊行為回 { linkUserId: null } 等同跳過 CSRF 驗證，讓任意 state 被接受。
   if (!db) return null;
   try {
-    const { data, error } = await db
-      .from('oauth_sessions')
-      .select('id, expires_at, link_user_id')
-      .eq('state_token', stateToken)
-      .eq('provider', provider)
-      .single();
-    if (error || !data) return null;
-    if (new Date(data.expires_at as string) < new Date()) return null;
-    await db.from('oauth_sessions').delete().eq('id', data.id);
-    return { linkUserId: (data.link_user_id as string | null) ?? null };
+    // 呼叫 DB-side RPC: 在單一 transaction 中 SELECT FOR UPDATE + DELETE，
+    // 防止 TOCTOU 競爭條件（攻擊者無法在查詢和刪除之間重放同一 state token）。
+    const { data, error } = await db.rpc('consume_oauth_session', {
+      p_state_token: stateToken,
+      p_provider:    provider,
+    });
+    if (error) return null;
+    // RPC 回傳 rows 陣列：state 有效時恰好一筆，不存在/過期時空陣列
+    if (!data || (data as unknown[]).length === 0) return null;
+    const row = (data as Array<{ link_user_id: string | null }>)[0];
+    return { linkUserId: row.link_user_id ?? null };
   } catch {
     return null;
   }
