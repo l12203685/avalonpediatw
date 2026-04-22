@@ -8,6 +8,13 @@
 // );
 // CREATE INDEX ON friendships(follower_id);
 // CREATE INDEX ON friendships(following_id);
+//
+// -- 玩家可見短碼（加好友用，Task #48）：
+// ALTER TABLE users ADD COLUMN IF NOT EXISTS short_code TEXT;
+// CREATE UNIQUE INDEX IF NOT EXISTS idx_users_short_code
+//   ON users(short_code) WHERE short_code IS NOT NULL;
+// -- 舊用戶可由 server 在呼叫 ensureUserShortCode(user_id) 時 lazy-fill，
+// -- 或離線跑 backfill 腳本（見 packages/server/src/services/shortCode.ts）。
 
 import { Router, Request, Response, IRouter } from 'express';
 import { verify, JwtPayload } from 'jsonwebtoken';
@@ -21,7 +28,9 @@ import {
   isFollowing,
   getSupabaseClient,
   searchUsers,
+  getUserIdByShortCode,
 } from '../services/supabase';
+import { normalizeShortCode, isValidShortCode } from '../services/shortCode';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 
 const router: IRouter = Router();
@@ -110,6 +119,40 @@ router.get('/check/:targetUserId', publicLimiter, async (req: Request, res: Resp
   const { targetUserId } = req.params;
   const following = await isFollowing(supabaseId, targetUserId);
   return res.json({ following });
+});
+
+// ── POST /api/friends/add-by-code ────────────────────────────
+// Follow a user by their visible short code（玩家加好友入口）。
+// Body: { code: string }
+// 錯誤碼：400 格式不對 / 401 未登入 / 404 短碼無人 / 400 不能加自己
+router.post('/add-by-code', publicLimiter, async (req: Request, res: Response) => {
+  if (!isSupabaseReady()) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  const supabaseId = await resolveSupabaseId(req.headers.authorization);
+  if (!supabaseId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const raw = (req.body ?? {}) as { code?: unknown };
+  if (typeof raw.code !== 'string') {
+    return res.status(400).json({ error: 'code must be a string' });
+  }
+  const normalized = normalizeShortCode(raw.code);
+  if (!isValidShortCode(normalized)) {
+    return res.status(400).json({ error: 'Invalid short code format' });
+  }
+
+  const targetUserId = await getUserIdByShortCode(normalized);
+  if (!targetUserId) {
+    return res.status(404).json({ error: 'User not found for given short code' });
+  }
+  if (targetUserId === supabaseId) {
+    return res.status(400).json({ error: 'Cannot follow yourself' });
+  }
+
+  await followUser(supabaseId, targetUserId);
+  return res.json({ ok: true, targetUserId });
 });
 
 // ── POST /api/friends/:targetUserId ──────────────────────────

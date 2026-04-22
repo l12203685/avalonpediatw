@@ -314,6 +314,17 @@ export default function ProfilePage(): JSX.Element {
     }
   };
 
+  const handleCopyShortCode = (): void => {
+    if (!profile?.short_code) return;
+    const code = profile.short_code;
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(code).then(
+        () => addToast('已複製玩家短碼', 'success'),
+        () => addToast('複製失敗', 'error'),
+      );
+    }
+  };
+
   const handleReplay = (roomId: string, game: RecentGame | null = null): void => {
     setReplayLoading(true);
     fetchGameReplay(roomId)
@@ -563,6 +574,21 @@ export default function ProfilePage(): JSX.Element {
               {/* Identity block — user ID + email (own profile only) */}
               {isMe && !editing && (
                 <div className="mt-4 pt-4 border-t border-gray-700/60 space-y-2">
+                  {profile.short_code && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-500 min-w-[72px]">玩家短碼</span>
+                      <code className="flex-1 text-amber-300 font-mono text-sm font-bold tracking-widest">
+                        {profile.short_code}
+                      </code>
+                      <button
+                        onClick={handleCopyShortCode}
+                        className="flex items-center gap-1 px-2 py-1 rounded border border-amber-600/50 bg-amber-900/20 hover:bg-amber-900/40 text-amber-300 hover:text-amber-200 transition-all"
+                        title="複製短碼 — 分享給朋友加好友"
+                      >
+                        <Copy size={10} />
+                      </button>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-gray-500 min-w-[72px]">{t('profile:identity.userId')}</span>
                     <code className="flex-1 text-gray-300 font-mono text-[10px] break-all">{profile.id}</code>
