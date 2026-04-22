@@ -5,7 +5,24 @@
 >
 > **作者意圖**：給出三條可實作的方法論路徑、每條的數學形式、對 2146 場牌譜的應用方式、以及推薦演進路徑。本文件**不**規定 α 常數、**不**包含 TypeScript 實作，那些屬於 `packages/server/src/services/Elo*.ts`。
 >
-> **版本**：v1.0 · 2026-04-20 · 對齊 Edward「這段蠻重要的 蠻有價值的 好好研究 把方法論留下來」指示。
+> **版本**：v1.1 · 2026-04-22 · 加入 §0.0 Naming Alignment 對齊 issue #54 Phase 定義（DG D）。v1.0 2026-04-20。
+
+---
+
+## 0.0 Naming Alignment（DG D, 2026-04-22）
+
+本 doc 歷史版本用「方法學 Phase」命名三種歸因路徑（啟發式 / logistic / Shapley），**與** issue **#54** 的「實作路線 Phase」**編號正交、不可混用**。統一如下：
+
+| 層次 | Phase 1 | Phase 2 | Phase 2.5 | Phase 3 |
+|---|---|---|---|---|
+| **#54 實作路線**（專案里程碑） | data-driven config（outcome × role 乘法） | per-event attribution factor（Proposal + OWIB，本文 §2.3 啟發式） | Information + Misdirection factor（本文 §2.3 延伸） | backtest + feature-flag 切換（可選 §2.2 logistic 當 weight tuner） |
+| **本 doc 方法學**（數學路徑） | — | §2.3 **啟發式規則版** | §2.3 延伸 | §2.2 **Logistic Regression**（tuner）+ §2.1 **Shapley**（研究基準，可選）|
+
+**重點**：
+- #54 **Phase 2** 所做的「per-event attribution factor」**是本 doc §2.3 啟發式方法的實作**（`ProposalFactor.ts` + `OuterWhiteInnerBlackFactor.ts`）。
+- #54 **Phase 3** 的 historical backtest 可用本文 §2.2 logistic regression 做 factor weight tuning。
+- §2.1 Shapley Value 留作**研究基準**，非交付路徑。
+- 下方 §2 各方法的「推薦時機 Phase N」欄位（table line 29-31、line 175/290/344）保留當歷史參考；以本段 naming 表為準。
 
 ---
 
