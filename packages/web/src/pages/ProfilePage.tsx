@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
-import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy } from 'lucide-react';
+import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, BarChart3 } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
 import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile } from '../services/api';
 import { useGameStore } from '../store/gameStore';
@@ -368,7 +368,7 @@ export default function ProfilePage(): JSX.Element {
     <div className="min-h-screen p-4">
       <div className="max-w-lg mx-auto space-y-6">
 
-        {/* Header */}
+        {/* Header — #86 IA 整合：右側加「數據分析」入口，戰績頁不再拆成獨立按鈕 */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setGameState('home')}
@@ -376,7 +376,16 @@ export default function ProfilePage(): JSX.Element {
           >
             <ArrowLeft size={20} />
           </button>
-          <h1 className="text-2xl font-black text-white">{t('profile:headerTitle')}</h1>
+          <h1 className="text-2xl font-black text-white flex-1">{t('profile:headerTitle')}</h1>
+          <button
+            onClick={() => setGameState('analysis')}
+            data-testid="profile-btn-analysis"
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
+            title={t('nav.analysis')}
+          >
+            <BarChart3 size={14} />
+            {t('nav.analysis')}
+          </button>
         </div>
 
         {loading && (

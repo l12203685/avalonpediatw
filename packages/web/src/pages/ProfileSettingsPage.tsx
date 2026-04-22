@@ -12,6 +12,7 @@ import {
   Chrome,
   Pencil,
   Loader,
+  HelpCircle,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import {
@@ -170,7 +171,7 @@ export default function ProfileSettingsPage(): JSX.Element {
   return (
     <div className="min-h-screen bg-black p-4 pb-24">
       <div className="max-w-3xl mx-auto">
-        {/* Header */}
+        {/* Header — #86 IA 整合：右側加 FAQ 入口，大廳 FAQ 按鈕併入設定 */}
         <div className="flex items-center gap-3 mb-6">
           <motion.button
             whileHover={{ scale: 1.1 }}
@@ -181,7 +182,18 @@ export default function ProfileSettingsPage(): JSX.Element {
           >
             <ArrowLeft size={20} />
           </motion.button>
-          <h1 className="text-2xl font-black text-white">{t('nav.profileSettings')}</h1>
+          <h1 className="text-2xl font-black text-white flex-1">{t('nav.profileSettings')}</h1>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setGameState('help')}
+            data-testid="settings-btn-faq"
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
+            title={t('home.faq')}
+          >
+            <HelpCircle size={14} />
+            {t('home.faq')}
+          </motion.button>
         </div>
 
         {/* Sections */}

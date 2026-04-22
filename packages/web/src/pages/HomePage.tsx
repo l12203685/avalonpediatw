@@ -13,7 +13,7 @@ import {
   Lock,
   BarChart3,
   Clock,
-  HelpCircle,
+  User,
   Settings,
 } from 'lucide-react';
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
@@ -209,21 +209,23 @@ export default function HomePage(): JSX.Element {
                 {/* Buttons area — 2×3 on mobile, 3×2 on desktop */}
                 <div className="md:col-span-3 space-y-3">
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {/* Row 1 — Join / Create / Analytics */}
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setMode('join')}
-                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
-                    >
-                      <LogIn size={18} />
-                      {t('home.joinRoom')}
-                    </motion.button>
+                    {/*
+                      #86 IA restructure — 6 main buttons
+                        Row 1: 開房 / 加入 / 戰績
+                        Row 2: 個人資訊 / 百科 / 設定
 
+                      整合決策：
+                      - 「戰績」 route → `profile` (戰績頁 — 下一輪整合 analytics tabs 入內)
+                      - 「個人資訊」 route → `profileSettings` (資料頁 basic/binding 區塊)
+                      - 「設定」 route → `profileSettings` (系統設定 history/watchlist/logout 區塊)
+                      - FAQ 獨立按鈕拿掉；設定頁內可加 FAQ link (未來)
+                    */}
+                    {/* Row 1 — Create / Join / Stats */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setMode('create')}
+                      data-testid="home-btn-create"
                       className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
                     >
                       <Play size={18} />
@@ -233,18 +235,47 @@ export default function HomePage(): JSX.Element {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setGameState('analytics')}
+                      onClick={() => setMode('join')}
+                      data-testid="home-btn-join"
+                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                    >
+                      <LogIn size={18} />
+                      {t('home.joinRoom')}
+                    </motion.button>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setGameState('profile')}
+                      data-testid="home-btn-stats"
                       className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
                     >
                       <BarChart3 size={18} />
-                      {t('home.analytics')}
+                      {t('home.stats')}
                     </motion.button>
 
-                    {/* Row 2 — Wiki / Settings / FAQ */}
+                    {/* Row 2 — Profile / Wiki / Settings */}
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setGameState('profileSettings')}
+                      data-testid="home-btn-profile"
+                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-md"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <User size={18} />
+                        {t('home.profileShort')}
+                      </span>
+                      <span className="text-[10px] text-zinc-400 truncate max-w-full">
+                        {t('home.currentAs', { name: currentName })}
+                      </span>
+                    </motion.button>
+
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setGameState('wiki')}
+                      data-testid="home-btn-wiki"
                       className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
                     >
                       <BookOpen size={18} />
@@ -255,25 +286,11 @@ export default function HomePage(): JSX.Element {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setGameState('profileSettings')}
-                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-md"
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <Settings size={18} />
-                        {t('home.profileSettings')}
-                      </span>
-                      <span className="text-[10px] text-zinc-400 truncate max-w-full">
-                        {t('home.currentAs', { name: currentName })}
-                      </span>
-                    </motion.button>
-
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setGameState('help')}
+                      data-testid="home-btn-settings"
                       className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
                     >
-                      <HelpCircle size={18} />
-                      {t('home.faq')}
+                      <Settings size={18} />
+                      {t('home.settings')}
                     </motion.button>
                   </div>
 
