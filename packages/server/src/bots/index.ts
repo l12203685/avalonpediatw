@@ -4,8 +4,15 @@
  */
 
 import { Express, Request, Response } from 'express';
+import { TextChannel } from 'discord.js';
 import { initializeDiscordBot, getDiscordBot } from './discord/client';
 import { initializeLineBot, getLineBot } from './line/client';
+import {
+  initializeChatMirror,
+  LineAdapter,
+  DiscordAdapter,
+  DiscordChannelAdapter,
+} from './ChatMirror';
 
 export async function initializeBots(): Promise<void> {
   console.log('🤖 Initializing bots...');
@@ -38,6 +45,78 @@ export async function initializeBots(): Promise<void> {
     }
   } else {
     console.warn('⚠️ LINE_CHANNEL_ACCESS_TOKEN not set, skipping Line Bot');
+  }
+
+  // Initialize ChatMirror (#82) — wires lobby chat to LINE + Discord push.
+  // Safe even when bots / env vars missing: mirror no-ops if adapters absent.
+  initializeLobbyChatMirror();
+}
+
+// ─── ChatMirror wiring (#82) ──────────────────────────────────────────────
+
+/**
+ * Wrap the real LINE bot client into the ChatMirror.LineAdapter shape.
+ * Returns null if the bot isn't initialized (env missing or init failed).
+ */
+function buildLineAdapter(): LineAdapter | null {
+  const bot = getLineBot();
+  if (!bot) return null;
+  const client = bot.getClient();
+  return {
+    pushMessage: async (to, messages) =>
+      // @line/bot-sdk accepts a single Message or an array; we always hand it
+      // a single text object built in ChatMirror, so this signature is safe.
+      (client as unknown as {
+        pushMessage: (to: string, m: unknown) => Promise<unknown>;
+      }).pushMessage(to, messages),
+  };
+}
+
+/**
+ * Wrap the discord.js client into a minimal channel-fetching adapter.
+ * Returns null if the bot isn't ready yet (login not completed).
+ */
+function buildDiscordAdapter(): DiscordAdapter | null {
+  const bot = getDiscordBot();
+  if (!bot || !bot.isClientReady()) return null;
+  return {
+    fetchChannel: async (channelId): Promise<DiscordChannelAdapter | null> => {
+      try {
+        const ch = await bot.getClient().channels.fetch(channelId);
+        if (!ch || !(ch instanceof TextChannel)) return null;
+        return {
+          send: async (content: string) => ch.send(content),
+        };
+      } catch (err) {
+        console.warn(`[ChatMirror] Discord fetchChannel(${channelId}) failed:`, err);
+        return null;
+      }
+    },
+  };
+}
+
+function initializeLobbyChatMirror(): void {
+  const lineGroupId = process.env.LOBBY_MIRROR_LINE_GROUP_ID || '';
+  const discordChannelId = process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID || '';
+
+  if (!lineGroupId && !discordChannelId) {
+    console.log(
+      'ℹ️  LOBBY_MIRROR_* env vars unset — lobby mirror outbound disabled',
+    );
+  }
+
+  initializeChatMirror({
+    lineGroupId,
+    discordChannelId,
+    line: buildLineAdapter() ?? undefined,
+    discord: buildDiscordAdapter() ?? undefined,
+  });
+
+  const enabledPlatforms: string[] = [];
+  if (lineGroupId) enabledPlatforms.push('LINE');
+  if (discordChannelId) enabledPlatforms.push('Discord');
+  if (enabledPlatforms.length > 0) {
+    console.log(`✅ ChatMirror enabled for: ${enabledPlatforms.join(', ')}`);
   }
 }
 

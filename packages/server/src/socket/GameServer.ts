@@ -85,6 +85,61 @@ function roomHasDiscordPlayer(room: Room): boolean {
   return false;
 }
 
+// ─── ChatMirror (#82) lazy loader ─────────────────────────────────────────
+//
+// Same dynamic-require pattern as roleReveal above — `src/bots/**/*` is
+// excluded from the TypeScript build, so a static import would break `dist/`.
+// ChatMirror is optional for the socket hot path: if the env vars or bot
+// clients aren't ready, fanout() is a no-op and the lobby emit is unaffected.
+//
+// We capture the module exports rather than a single function so we can
+// both build + retrieve the singleton here.
+type ChatMirrorModule = {
+  initializeChatMirror: (cfg: unknown) => { fanout: (msg: LobbyChatMessage) => Promise<void> };
+  getChatMirror: () => { fanout: (msg: LobbyChatMessage) => Promise<void> } | null;
+};
+let cachedChatMirrorMod: ChatMirrorModule | null = null;
+let chatMirrorLoadAttempted = false;
+let chatMirrorLoadFailed = false;
+
+function getChatMirrorModule(): ChatMirrorModule | null {
+  if (chatMirrorLoadAttempted) {
+    return chatMirrorLoadFailed ? null : cachedChatMirrorMod;
+  }
+  chatMirrorLoadAttempted = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('../bots/ChatMirror');
+    if (typeof mod?.initializeChatMirror !== 'function') {
+      chatMirrorLoadFailed = true;
+      console.warn('[ChatMirror] module loaded but initializeChatMirror missing — mirror disabled');
+      return null;
+    }
+    cachedChatMirrorMod = mod as ChatMirrorModule;
+    return cachedChatMirrorMod;
+  } catch (loadErr) {
+    chatMirrorLoadFailed = true;
+    const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+    console.warn(`[ChatMirror] not available — lobby mirror disabled (${msg})`);
+    return null;
+  }
+}
+
+/**
+ * Best-effort fanout of a lobby message to LINE/Discord mirrors. Never throws.
+ * Called after the socket emit so UI never waits on external network.
+ */
+function tryMirrorFanout(msg: LobbyChatMessage): void {
+  const mod = getChatMirrorModule();
+  if (!mod) return;
+  const mirror = mod.getChatMirror();
+  if (!mirror) return;
+  // Fire-and-forget; errors are logged inside ChatMirror itself.
+  mirror.fanout(msg).catch((err) => {
+    console.warn('[ChatMirror] fanout promise rejected:', err);
+  });
+}
+
 export class GameServer {
   private io: SocketIOServer;
   private roomManager: RoomManager;
@@ -1113,10 +1168,15 @@ export class GameServer {
         playerName: user.displayName,
         message: trimmed,
         timestamp: Date.now(),
+        source: 'lobby',
       };
 
       this.lobbyChat.append(msg);
       this.io.to(GameServer.LOBBY_ROOM).emit('lobby:message-received', msg);
+
+      // #82 — mirror lobby-origin messages to external LINE group + Discord
+      // channel (fire-and-forget; no-op if env vars or bot clients missing).
+      tryMirrorFanout(msg);
     } catch (error) {
       console.error('[lobby] send-message error:', error);
     }
