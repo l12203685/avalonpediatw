@@ -594,7 +594,13 @@ export async function updateDbUserProfile(
     update.photo_url = null;
   } else if (typeof patch.photo_url === 'string') {
     const trimmed = patch.photo_url.trim().slice(0, 500);
-    update.photo_url = trimmed.length === 0 ? null : trimmed;
+    if (trimmed.length === 0) {
+      update.photo_url = null;
+    } else if (/^https?:\/\//i.test(trimmed)) {
+      // 安全: 只接受 http/https URL，拒絕 javascript: / data: 等可觸發 XSS 的 scheme
+      update.photo_url = trimmed;
+    }
+    // 其他 scheme 靜默拒絕（不更新欄位）
   }
 
   if (Object.keys(update).length === 0) return null;
