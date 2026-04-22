@@ -316,3 +316,144 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
     }
   });
 });
+
+// ── Phase B: §0 Listening Rule (quest-action override) ───────────
+//
+// Edward 2026-04-22 12:38 +08 verbatim:
+//   「不管是紅藍哪一方, 只要有一方聽牌(藍方已拿兩局藍 or 紅方已拿兩局紅),
+//    那紅方都該只考慮"先讓任務失敗"」
+//
+// Implementation: `HeuristicAgent.voteOnQuest` runs a highest-priority
+// branch before any role- or TOP10-based heuristic fires. When either
+// side has won 2 quests, every evil player (except Oberon) returns
+// `quest_vote: fail`. Oberon keeps its legacy randomised behaviour.
+//
+// These tests pin the spec so any future "放水" optimisation or role-
+// differentiation patch cannot silently re-introduce the Fix #3 direction
+// error (evil 2-0 deep-cover success) that was reversed on 2026-04-22.
+
+describe('HeuristicAgent · §0 Listening Rule (quest action)', () => {
+  /** Build an evil-quest-vote observation with the two listening dials. */
+  function evilQuestObs(
+    goodWins: number,
+    evilWins: number,
+    overrides: Partial<PlayerObservation> = {},
+  ): PlayerObservation {
+    const questResults: Array<'success' | 'fail'> = [];
+    for (let i = 0; i < goodWins; i++) questResults.push('success');
+    for (let i = 0; i < evilWins; i++) questResults.push('fail');
+
+    return baseObs({
+      myPlayerId:   'P1',
+      myRole:       'assassin',
+      myTeam:       'evil',
+      knownEvils:   ['P1', 'P3'],
+      currentRound: goodWins + evilWins + 1,
+      gamePhase:    'quest_vote',
+      proposedTeam: ['P1', 'P2'],
+      questResults,
+      ...overrides,
+    });
+  }
+
+  /** Run the evil quest vote N times and return the fail ratio. */
+  function failRate(obs: PlayerObservation, samples: number): number {
+    let fails = 0;
+    for (let i = 0; i < samples; i++) {
+      const agent = new HeuristicAgent('P1', 'hard');
+      agent.onGameStart(obs);
+      const action = agent.act(obs);
+      if (action.type === 'quest_vote' && action.vote === 'fail') fails++;
+    }
+    return fails / samples;
+  }
+
+  it('Case 1: good listening (goodWins=2, evilWins=0) → evil MUST fail (no 放水)', () => {
+    const obs = evilQuestObs(2, 0, { myRole: 'mordred', knownEvils: ['P1'] });
+    // Listening rule is deterministic for non-Oberon evils → 100% fail.
+    expect(failRate(obs, 500)).toBe(1.0);
+  });
+
+  it('Case 1b: good listening with assassin/morgana roles → all MUST fail', () => {
+    for (const role of ['assassin', 'morgana'] as const) {
+      const obs = evilQuestObs(2, 0, { myRole: role });
+      expect(failRate(obs, 200)).toBe(1.0);
+    }
+  });
+
+  it('Case 2: evil listening (evilWins=2, goodWins=0) → evil MUST fail (再拿一局直接贏)', () => {
+    const obs = evilQuestObs(0, 2, { myRole: 'assassin' });
+    expect(failRate(obs, 500)).toBe(1.0);
+  });
+
+  it('Case 2b: evil listening (evilWins=2, goodWins=1) → evil MUST fail (仍是聽牌)', () => {
+    const obs = evilQuestObs(1, 2, { myRole: 'mordred' });
+    expect(failRate(obs, 500)).toBe(1.0);
+  });
+
+  it('Case 3: no listening (1-1) → evil follows legacy early-game mix, not forced fail', () => {
+    const obs = evilQuestObs(1, 1, { myRole: 'assassin' });
+    // Legacy early-game branch: Math.random() > 0.4 → fail 60%, success 40%.
+    // With 1000 samples, ratio should be well inside [0.4, 0.8].
+    const ratio = failRate(obs, 1000);
+    expect(ratio).toBeGreaterThan(0.40);
+    expect(ratio).toBeLessThan(0.80);
+  });
+
+  it('Case 3b: no listening (0-0) → evil early-game mix (not 100% fail)', () => {
+    const obs = evilQuestObs(0, 0, { myRole: 'morgana' });
+    const ratio = failRate(obs, 1000);
+    // Legacy: ~60% fail. Sanity: strictly between 0.4 and 0.8.
+    expect(ratio).toBeGreaterThan(0.40);
+    expect(ratio).toBeLessThan(0.80);
+  });
+
+  it('Case 4: Oberon listening exception (goodWins=2) → still randomised (legacy kept)', () => {
+    const obs = evilQuestObs(2, 0, { myRole: 'oberon', knownEvils: ['P1'] });
+    // Legacy Oberon branch at goodWins>=2: Math.random() > 0.3 → fail ~70%.
+    // NOT 100% like other evil roles.
+    const ratio = failRate(obs, 1000);
+    expect(ratio).toBeGreaterThan(0.55);
+    expect(ratio).toBeLessThan(0.85);
+    // Must NOT be 1.0 — that would mean listening rule was applied to Oberon.
+    expect(ratio).toBeLessThan(1.0);
+  });
+
+  it('Case 4b: Oberon listening exception (evilWins=2) → still randomised', () => {
+    const obs = evilQuestObs(0, 2, { myRole: 'oberon', knownEvils: ['P1'] });
+    // Same legacy branch applies when evilWins>=2 for Oberon
+    // (pre-refactor `if (evilQuestWins >= 2) return fail` already handled
+    // this, but after the listening-rule refactor, Oberon goes through
+    // the Math.random > 0.3 legacy path).
+    const ratio = failRate(obs, 1000);
+    expect(ratio).toBeGreaterThan(0.55);
+    expect(ratio).toBeLessThan(0.85);
+  });
+
+  it('Case 5: failsRequired=2 (7p round 4) with listening → STILL forced fail', () => {
+    // 7-player variant, round 4 requires 2 fails. Legacy code used
+    // Math.random > 0.7 → ~30% fail. Listening rule must override.
+    const obs = evilQuestObs(2, 0, {
+      myRole:       'mordred',
+      playerCount:  7,
+      currentRound: 4,
+      allPlayerIds: ['P1','P2','P3','P4','P5','P6','P7'],
+    });
+    expect(failRate(obs, 500)).toBe(1.0);
+  });
+
+  it('good player on listening state → still MUST succeed (no accidental fail)', () => {
+    const obs = evilQuestObs(2, 0, {
+      myTeam:    'good',
+      myRole:    'merlin',
+      knownEvils: ['P3'],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const action = agent.act(obs);
+    expect(action.type).toBe('quest_vote');
+    if (action.type === 'quest_vote') {
+      expect(action.vote).toBe('success');
+    }
+  });
+});
