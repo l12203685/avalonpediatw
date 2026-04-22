@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { generateUniqueShortCode, normalizeShortCode, isValidShortCode } from './shortCode';
+import * as fsAccounts from './firestoreAccounts';
 
 // ── 初始化 ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
@@ -291,6 +292,11 @@ export async function createOAuthSession(
   provider: 'discord' | 'line',
   linkUserId?: string,
 ): Promise<void> {
+  // Primary: Firestore (Ticket #42 route B). Fallback: legacy Supabase table.
+  if (fsAccounts.isFirestoreReady()) {
+    await fsAccounts.createOAuthSession(stateToken, provider, linkUserId);
+    return;
+  }
   const db = getSupabaseClient();
   if (!db) return;
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 分鐘
@@ -313,8 +319,12 @@ export async function consumeOAuthSession(
   stateToken: string,
   provider: 'discord' | 'line',
 ): Promise<{ linkUserId: string | null } | null> {
+  // Primary: Firestore transactional consume. Fallback: legacy Supabase table.
+  if (fsAccounts.isFirestoreReady()) {
+    return fsAccounts.consumeOAuthSession(stateToken, provider);
+  }
   const db = getSupabaseClient();
-  if (!db) return { linkUserId: null }; // 未設定 Supabase 時視為 CSRF 跳過、且不是綁定流程
+  if (!db) return { linkUserId: null }; // 未設定任何資料庫時視為 CSRF 跳過、且不是綁定流程
   try {
     const { data, error } = await db
       .from('oauth_sessions')
@@ -607,8 +617,11 @@ export async function verifyAndDeleteOAuthSession(
   stateToken: string,
   provider: 'discord' | 'line'
 ): Promise<boolean> {
+  if (fsAccounts.isFirestoreReady()) {
+    return fsAccounts.verifyAndDeleteOAuthSession(stateToken, provider);
+  }
   const db = getSupabaseClient();
-  if (!db) return true; // Supabase 未設定時跳過 CSRF 檢查
+  if (!db) return true; // 無任何後端時跳過 CSRF 檢查（保留原行為）
 
   const { data, error } = await db
     .from('oauth_sessions')
@@ -661,6 +674,10 @@ function providerToColumn(provider: LinkProvider): 'discord_id' | 'line_id' | 'f
  * Guest 傳入 null 時回空陣列。
  */
 export async function getLinkedAccounts(userId: string): Promise<LinkedAccountSummary[]> {
+  // Primary: Firestore (Ticket #42 route B). Fallback: legacy Supabase row.
+  if (fsAccounts.isFirestoreReady()) {
+    return fsAccounts.getLinkedAccounts(userId) as unknown as Promise<LinkedAccountSummary[]>;
+  }
   const db = getSupabaseClient();
   if (!db) return [];
   try {
@@ -697,6 +714,9 @@ export async function findUserIdByProviderIdentity(
   provider: LinkProvider,
   externalId: string,
 ): Promise<string | null> {
+  if (fsAccounts.isFirestoreReady()) {
+    return fsAccounts.findUserIdByProviderIdentity(provider, externalId);
+  }
   const db = getSupabaseClient();
   if (!db) return null;
   const col = providerToColumn(provider);
@@ -732,6 +752,9 @@ export async function mergeUserAccounts(
   primaryId: string,
   secondaryId: string,
 ): Promise<boolean> {
+  if (fsAccounts.isFirestoreReady()) {
+    return fsAccounts.mergeUserAccounts(primaryId, secondaryId);
+  }
   const db = getSupabaseClient();
   if (!db) return false;
   if (primaryId === secondaryId) return false;
@@ -819,6 +842,9 @@ export async function linkProviderIdentity(
   provider: LinkProvider,
   externalId: string,
 ): Promise<boolean> {
+  if (fsAccounts.isFirestoreReady()) {
+    return fsAccounts.linkProviderIdentity(userId, provider, externalId);
+  }
   const db = getSupabaseClient();
   if (!db) return false;
   const col = providerToColumn(provider);
@@ -845,6 +871,9 @@ export async function unlinkProviderIdentity(
   userId: string,
   provider: LinkProvider,
 ): Promise<boolean> {
+  if (fsAccounts.isFirestoreReady()) {
+    return fsAccounts.unlinkProviderIdentity(userId, provider);
+  }
   const db = getSupabaseClient();
   if (!db) return false;
   const col = providerToColumn(provider);

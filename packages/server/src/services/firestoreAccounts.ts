@@ -1,0 +1,447 @@
+/**
+ * Firestore-backed multi-account binding + OAuth session store.
+ *
+ * Ticket #42 rewrite (2026-04-23) — route B: Firestore over Supabase.
+ *
+ * Why this file exists:
+ *   The legacy `supabase.ts` helpers (getLinkedAccounts / linkProviderIdentity /
+ *   unlinkProviderIdentity / mergeUserAccounts / createOAuthSession /
+ *   consumeOAuthSession / findUserIdByProviderIdentity) expected a Supabase
+ *   project that was never actually provisioned — `SUPABASE_URL` /
+ *   `SUPABASE_SERVICE_KEY` are not set in production, so every helper returned a
+ *   silent no-op. This module re-implements the same contract against Firebase
+ *   Firestore, which is the database the server is already talking to for
+ *   GameHistoryRepository / FirestoreLeaderboard.
+ *
+ * Firestore schema:
+ *
+ *   auth_users/{userId}                -- primary user record for binding
+ *     .provider         string         -- originating provider ('discord' | 'line' | 'google')
+ *     .discord_id       string | null
+ *     .line_id          string | null
+ *     .firebase_uid     string | null
+ *     .email            string | null
+ *     .display_name     string
+ *     .photo_url        string | null
+ *     .short_code       string | null
+ *     .elo_rating       number
+ *     .total_games      number
+ *     .games_won        number
+ *     .games_lost       number
+ *     .badges           string[]
+ *     .createdAt        number (ms epoch)
+ *     .updatedAt        number (ms epoch)
+ *
+ *   oauth_sessions/{stateToken}        -- short-lived OAuth CSRF sessions
+ *     .provider         'discord' | 'line'
+ *     .expiresAt        number (ms epoch)
+ *     .linkUserId       string | null  -- set when user is binding an extra provider
+ *     .createdAt        number (ms epoch)
+ *
+ *   friendships/{followerId}_{followingId}  -- for merge flow
+ *     .follower_id, .following_id, .createdAt
+ *
+ *   game_records                       -- existing Firestore `games` collection is
+ *     read-only from this module; we update player identity inside merge via
+ *     scanning the collection and rewriting playerId in-place.
+ *
+ * Design choices:
+ *   - `auth_users` is *separate* from the Realtime DB `users/{uid}` node used
+ *     by firebase.ts. The RTDB path stores Firebase-authenticated profiles;
+ *     this collection stores server-minted user rows that can wear multiple
+ *     provider hats. Keeping them separate avoids schema collisions and
+ *     guarantees that existing Firebase Auth users flow untouched.
+ *   - Merge uses a Firestore batched write to stay atomic for the `auth_users`
+ *     mutation, then best-effort scans for game_records / friendships (same
+ *     semantics as the legacy Supabase code: partial failure does not rollback
+ *     the primary write).
+ *   - OAuth session lookup uses the state token as the document id (natural
+ *     primary key), which makes `consumeOAuthSession` a single get+delete.
+ */
+
+import type { Firestore } from 'firebase-admin/firestore';
+import { getAdminFirestore, isFirebaseAdminReady } from './firebase';
+
+// ── Types (mirror supabase.ts exports for API drop-in) ──────────────
+
+export type LinkProvider = 'discord' | 'line' | 'google';
+
+export interface LinkedAccountSummary {
+  provider:     LinkProvider;
+  linked:       boolean;
+  external_id:  string | null;
+  primary:      boolean;
+}
+
+export interface OAuthSession {
+  linkUserId: string | null;
+}
+
+type ProviderColumn = 'discord_id' | 'line_id' | 'firebase_uid';
+
+interface AuthUserDoc {
+  provider?:     string;
+  discord_id?:   string | null;
+  line_id?:      string | null;
+  firebase_uid?: string | null;
+  email?:        string | null;
+  display_name?: string;
+  photo_url?:    string | null;
+  short_code?:   string | null;
+  elo_rating?:   number;
+  total_games?:  number;
+  games_won?:    number;
+  games_lost?:   number;
+  badges?:       string[];
+  createdAt?:    number;
+  updatedAt?:    number;
+}
+
+// ── Module-scoped collections ───────────────────────────────────────
+
+const AUTH_USERS     = 'auth_users';
+const OAUTH_SESSIONS = 'oauth_sessions';
+const FRIENDSHIPS    = 'friendships';
+const GAME_RECORDS   = 'games';
+
+const OAUTH_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function providerToColumn(provider: LinkProvider): ProviderColumn {
+  switch (provider) {
+    case 'discord': return 'discord_id';
+    case 'line':    return 'line_id';
+    case 'google':  return 'firebase_uid';
+  }
+}
+
+function getFirestoreSafe(): Firestore | null {
+  if (!isFirebaseAdminReady()) return null;
+  try {
+    return getAdminFirestore();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when Firebase admin SDK is initialised — required for any Firestore op.
+ * Mirrors `isSupabaseReady` semantics so route guards stay ergonomic.
+ */
+export function isFirestoreReady(): boolean {
+  return getFirestoreSafe() !== null;
+}
+
+// ── Multi-account binding ────────────────────────────────────────────
+
+/**
+ * Get the three-provider binding summary for a user document.
+ * Returns an empty array when the user row or Firestore is unavailable.
+ */
+export async function getLinkedAccounts(userId: string): Promise<LinkedAccountSummary[]> {
+  const db = getFirestoreSafe();
+  if (!db) return [];
+  try {
+    const snap = await db.collection(AUTH_USERS).doc(userId).get();
+    if (!snap.exists) return [];
+    const data = (snap.data() ?? {}) as AuthUserDoc;
+    const primary = data.provider ?? '';
+    const providers: LinkProvider[] = ['discord', 'line', 'google'];
+    return providers.map((p) => {
+      const col = providerToColumn(p);
+      const raw = data[col];
+      const externalId = typeof raw === 'string' && raw.length > 0 ? raw : null;
+      return {
+        provider:    p,
+        linked:      externalId !== null,
+        external_id: externalId,
+        primary:     primary === p,
+      };
+    });
+  } catch (err) {
+    console.error('[firestoreAccounts] getLinkedAccounts error:', err);
+    return [];
+  }
+}
+
+/**
+ * Find which user doc currently owns this (provider, externalId) identity.
+ * Returns null when unbound.
+ */
+export async function findUserIdByProviderIdentity(
+  provider: LinkProvider,
+  externalId: string,
+): Promise<string | null> {
+  const db = getFirestoreSafe();
+  if (!db) return null;
+  const col = providerToColumn(provider);
+  try {
+    const snapshot = await db
+      .collection(AUTH_USERS)
+      .where(col, '==', externalId)
+      .limit(1)
+      .get();
+    if (snapshot.empty) return null;
+    return snapshot.docs[0].id;
+  } catch (err) {
+    console.error('[firestoreAccounts] findUserIdByProviderIdentity error:', err);
+    return null;
+  }
+}
+
+/**
+ * Bind a provider identity to an existing user doc.
+ * Returns false when the user doc is missing or the update fails.
+ */
+export async function linkProviderIdentity(
+  userId:     string,
+  provider:   LinkProvider,
+  externalId: string,
+): Promise<boolean> {
+  const db = getFirestoreSafe();
+  if (!db) return false;
+  const col = providerToColumn(provider);
+  try {
+    const ref  = db.collection(AUTH_USERS).doc(userId);
+    const snap = await ref.get();
+    if (!snap.exists) return false;
+    await ref.update({ [col]: externalId, updatedAt: Date.now() });
+    return true;
+  } catch (err) {
+    console.error('[firestoreAccounts] linkProviderIdentity error:', err);
+    return false;
+  }
+}
+
+/**
+ * Clear a provider binding. Caller is responsible for enforcing
+ * "must have at least one provider left" semantics (matches route guard).
+ */
+export async function unlinkProviderIdentity(
+  userId:   string,
+  provider: LinkProvider,
+): Promise<boolean> {
+  const db = getFirestoreSafe();
+  if (!db) return false;
+  const col = providerToColumn(provider);
+  try {
+    const ref  = db.collection(AUTH_USERS).doc(userId);
+    const snap = await ref.get();
+    if (!snap.exists) return false;
+    await ref.update({ [col]: null, updatedAt: Date.now() });
+    return true;
+  } catch (err) {
+    console.error('[firestoreAccounts] unlinkProviderIdentity error:', err);
+    return false;
+  }
+}
+
+/**
+ * Merge secondary into primary.
+ *   - stats summed, ELO max, badges union
+ *   - provider columns absorbed into primary when primary column is empty
+ *   - game_records.playerId rewritten from secondary to primary (best-effort)
+ *   - friendships follower/following rewritten + self-follow cleaned (best-effort)
+ *   - secondary auth_user doc deleted
+ *
+ * The primary auth_user mutation runs in a Firestore batched write so it
+ * remains atomic even if the later collection scans fail. Returns true on
+ * success, false when the primary batch failed or inputs were invalid.
+ */
+export async function mergeUserAccounts(
+  primaryId:   string,
+  secondaryId: string,
+): Promise<boolean> {
+  if (primaryId === secondaryId) return false;
+  const db = getFirestoreSafe();
+  if (!db) return false;
+
+  try {
+    const primaryRef   = db.collection(AUTH_USERS).doc(primaryId);
+    const secondaryRef = db.collection(AUTH_USERS).doc(secondaryId);
+
+    const [primarySnap, secondarySnap] = await Promise.all([primaryRef.get(), secondaryRef.get()]);
+    if (!primarySnap.exists || !secondarySnap.exists) return false;
+
+    const primary   = (primarySnap.data()   ?? {}) as AuthUserDoc;
+    const secondary = (secondarySnap.data() ?? {}) as AuthUserDoc;
+
+    // 1. Absorb provider columns + email that primary lacks.
+    const providerPatch: Record<string, unknown> = {};
+    for (const col of ['discord_id', 'line_id', 'firebase_uid', 'email'] as const) {
+      const pVal = primary[col];
+      const sVal = secondary[col];
+      const primaryEmpty = pVal === null || pVal === undefined || pVal === '';
+      if (primaryEmpty && typeof sVal === 'string' && sVal.length > 0) {
+        providerPatch[col] = sVal;
+      }
+    }
+
+    // 2. Summed stats + merged badges + ELO max (conservative; avoids farming).
+    const totalGames  = (primary.total_games ?? 0) + (secondary.total_games ?? 0);
+    const gamesWon    = (primary.games_won   ?? 0) + (secondary.games_won   ?? 0);
+    const gamesLost   = (primary.games_lost  ?? 0) + (secondary.games_lost  ?? 0);
+    const eloRating   = Math.max(primary.elo_rating ?? 1000, secondary.elo_rating ?? 1000);
+    const badgesUnion = Array.from(new Set([
+      ...(primary.badges   ?? []),
+      ...(secondary.badges ?? []),
+    ]));
+
+    // 3. Batched atomic write: clear secondary provider cols (avoid unique
+    //    constraint-like double-bind), update primary, then delete secondary.
+    const batch = db.batch();
+    batch.update(secondaryRef, {
+      discord_id:   null,
+      line_id:      null,
+      firebase_uid: null,
+      updatedAt:    Date.now(),
+    });
+    batch.update(primaryRef, {
+      ...providerPatch,
+      elo_rating:  eloRating,
+      total_games: totalGames,
+      games_won:   gamesWon,
+      games_lost:  gamesLost,
+      badges:      badgesUnion,
+      updatedAt:   Date.now(),
+    });
+    batch.delete(secondaryRef);
+    await batch.commit();
+
+    // 4. Best-effort cleanup: rewrite game_records + friendships; self-follow prune.
+    //    Partial failure here is logged but not rolled back — the binding itself
+    //    is already merged above.
+    try {
+      const recordsSnap = await db
+        .collection(GAME_RECORDS)
+        .where('playerId', '==', secondaryId)
+        .get();
+      if (!recordsSnap.empty) {
+        const recBatch = db.batch();
+        recordsSnap.docs.forEach((doc) => {
+          recBatch.update(doc.ref, { playerId: primaryId });
+        });
+        await recBatch.commit();
+      }
+    } catch (err) {
+      console.error('[firestoreAccounts] merge game_records rewrite failed (non-fatal):', err);
+    }
+
+    try {
+      const followerSnap  = await db.collection(FRIENDSHIPS).where('follower_id',  '==', secondaryId).get();
+      const followingSnap = await db.collection(FRIENDSHIPS).where('following_id', '==', secondaryId).get();
+      const frBatch = db.batch();
+      followerSnap.docs.forEach((doc) => {
+        frBatch.update(doc.ref, { follower_id: primaryId });
+      });
+      followingSnap.docs.forEach((doc) => {
+        frBatch.update(doc.ref, { following_id: primaryId });
+      });
+      if (!followerSnap.empty || !followingSnap.empty) {
+        await frBatch.commit();
+      }
+
+      // Prune self-follow rows that the rewrite may have produced.
+      const selfFollow = await db
+        .collection(FRIENDSHIPS)
+        .where('follower_id',  '==', primaryId)
+        .where('following_id', '==', primaryId)
+        .get();
+      if (!selfFollow.empty) {
+        const pruneBatch = db.batch();
+        selfFollow.docs.forEach((doc) => pruneBatch.delete(doc.ref));
+        await pruneBatch.commit();
+      }
+    } catch (err) {
+      console.error('[firestoreAccounts] merge friendships rewrite failed (non-fatal):', err);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('[firestoreAccounts] mergeUserAccounts error:', err);
+    return false;
+  }
+}
+
+// ── OAuth CSRF sessions ──────────────────────────────────────────────
+
+/**
+ * Persist a short-lived OAuth state token. 10-minute TTL enforced at consume
+ * time by comparing expiresAt; a scheduled cleanup is out of scope (expired
+ * rows are cheap to leave around since state tokens are single-use).
+ *
+ * `linkUserId` is populated when the OAuth redirect originated from a logged-in
+ * user binding a new provider — the callback uses it to route to
+ * handleLinkCallback instead of minting a brand-new JWT.
+ */
+export async function createOAuthSession(
+  stateToken: string,
+  provider:   'discord' | 'line',
+  linkUserId?: string,
+): Promise<void> {
+  const db = getFirestoreSafe();
+  if (!db) return;
+  try {
+    await db.collection(OAUTH_SESSIONS).doc(stateToken).set({
+      provider,
+      expiresAt:  Date.now() + OAUTH_TTL_MS,
+      linkUserId: linkUserId ?? null,
+      createdAt:  Date.now(),
+    });
+  } catch (err) {
+    console.error('[firestoreAccounts] createOAuthSession error:', err);
+  }
+}
+
+/**
+ * Validate + consume (single-use) an OAuth state token using a Firestore
+ * transaction so concurrent callbacks can't both succeed.
+ *
+ * Returns:
+ *   - `{ linkUserId }`    on success (linkUserId may be null when not linking)
+ *   - `null`              when state missing / expired / provider mismatch
+ *   - `{ linkUserId: null }` when Firestore unavailable (matches legacy
+ *     "skip CSRF when DB not configured" behaviour so dev without firebase
+ *     admin still sees login working).
+ */
+export async function consumeOAuthSession(
+  stateToken: string,
+  provider:   'discord' | 'line',
+): Promise<OAuthSession | null> {
+  const db = getFirestoreSafe();
+  if (!db) return { linkUserId: null };
+  try {
+    const ref = db.collection(OAUTH_SESSIONS).doc(stateToken);
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const data = snap.data() as {
+        provider?: 'discord' | 'line';
+        expiresAt?: number;
+        linkUserId?: string | null;
+      };
+      if (data.provider !== provider) return null;
+      if ((data.expiresAt ?? 0) < Date.now()) {
+        tx.delete(ref);
+        return null;
+      }
+      tx.delete(ref);
+      return { linkUserId: data.linkUserId ?? null } as OAuthSession;
+    });
+    return result;
+  } catch (err) {
+    console.error('[firestoreAccounts] consumeOAuthSession error:', err);
+    return null;
+  }
+}
+
+/**
+ * Legacy boolean verification signature retained for call sites that don't
+ * care about linkUserId. Returns true when consume succeeded.
+ */
+export async function verifyAndDeleteOAuthSession(
+  stateToken: string,
+  provider:   'discord' | 'line',
+): Promise<boolean> {
+  const session = await consumeOAuthSession(stateToken, provider);
+  return session !== null;
+}

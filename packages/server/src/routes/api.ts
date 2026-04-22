@@ -22,6 +22,10 @@ import {
   getFirestoreUserProfile,
   type UserProfile as FirestoreUserProfile,
 } from '../services/FirestoreLeaderboard';
+import {
+  isFirestoreReady,
+  // Used by resolveSupabaseUserId's Firestore path.
+} from '../services/firestoreAccounts';
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
 import { createHttpRateLimit } from '../middleware/rateLimit';
@@ -146,28 +150,53 @@ function emptyProfile(auth: ResolvedAuth): {
 }
 
 /**
- * 將 auth 轉成 Supabase users.id（UUID）：
- * - Firebase → 查/建 users row 回 UUID
- * - Discord/Line：JWT sub 若本身是 UUID 直接用；否則 null
+ * 將 auth 轉成用戶 row id：
+ * - Firebase (google)：查/建 Supabase row 回 UUID；Firestore 模式用 firebaseUid
+ *   當作 auth_users doc id（本檔 MVP — 完整 user doc 建立交給 #46 帳號遷移）
+ * - Discord/Line：JWT sub 即為 user id（Supabase 模式要 UUID；Firestore 模式
+ *   任意 string 皆可）
  * - Guest → null（不能編輯）
+ *
+ * Firestore 路徑在 Ticket #42 rewrite 新增：Supabase 未配置但 Firebase admin
+ * ready 時（= 目前生產環境）直接用 auth.playerId 作 auth_users doc id；
+ * Discord/Line callback 建 row 那條走 firestoreAccounts upsert flow（後續
+ * 票補齊，本次先支援已登入狀態的綁定查詢）。
  */
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 async function resolveSupabaseUserId(auth: ResolvedAuth): Promise<string | null> {
   if (auth.provider === 'google' && auth.firebaseUid) {
-    return ensureSupabaseUserForFirebase(
+    const supa = await ensureSupabaseUserForFirebase(
       auth.firebaseUid,
       auth.displayName || auth.firebaseUid,
       auth.email,
       auth.photoUrl,
     );
+    if (supa) return supa;
+    // Firestore fallback: use the firebase uid directly as auth_users doc id.
+    if (isFirestoreReady()) return auth.firebaseUid;
+    return null;
   }
   if (auth.provider === 'google') {
-    return getSupabaseIdByFirebaseUid(auth.playerId);
+    const supa = await getSupabaseIdByFirebaseUid(auth.playerId);
+    if (supa) return supa;
+    if (isFirestoreReady()) return auth.playerId;
+    return null;
   }
-  if ((auth.provider === 'discord' || auth.provider === 'line') && UUID_RE.test(auth.playerId)) {
-    return auth.playerId;
+  if (auth.provider === 'discord' || auth.provider === 'line') {
+    if (UUID_RE.test(auth.playerId)) return auth.playerId;
+    if (isFirestoreReady()) return auth.playerId;
   }
   return null;
+}
+
+/**
+ * Route guard: any multi-account binding endpoint requires either Supabase or
+ * Firestore to be live. With Ticket #42 route B this becomes true in production
+ * (Firebase admin ready), which the legacy `isSupabaseReady()` gate wrongly
+ * denied.
+ */
+function isAccountStoreReady(): boolean {
+  return isSupabaseReady() || isFirestoreReady();
 }
 
 /** 把 Supabase override 欄位合併到 Firestore profile 上面 */
@@ -398,7 +427,7 @@ router.get('/user/linked', publicLimiter, async (req: Request, res: Response) =>
   if (auth.provider === 'guest') {
     return res.status(403).json({ error: 'Guest accounts cannot bind providers' });
   }
-  if (!isSupabaseReady()) {
+  if (!isAccountStoreReady()) {
     return res.status(503).json({ error: 'Database not configured' });
   }
   const supabaseId = await resolveSupabaseUserId(auth);
@@ -414,7 +443,7 @@ router.post('/user/unlink', publicLimiter, async (req: Request, res: Response) =
   if (auth.provider === 'guest') {
     return res.status(403).json({ error: 'Guest accounts cannot bind providers' });
   }
-  if (!isSupabaseReady()) return res.status(503).json({ error: 'Database not configured' });
+  if (!isAccountStoreReady()) return res.status(503).json({ error: 'Database not configured' });
 
   const { provider } = (req.body ?? {}) as { provider?: unknown };
   if (!isLinkProvider(provider)) {
@@ -451,7 +480,7 @@ router.post('/user/link/google', publicLimiter, async (req: Request, res: Respon
   if (auth.provider === 'guest') {
     return res.status(403).json({ error: 'Guest accounts cannot bind providers' });
   }
-  if (!isSupabaseReady()) return res.status(503).json({ error: 'Database not configured' });
+  if (!isAccountStoreReady()) return res.status(503).json({ error: 'Database not configured' });
 
   const { idToken } = (req.body ?? {}) as { idToken?: unknown };
   if (typeof idToken !== 'string' || idToken.length === 0) {
