@@ -60,6 +60,8 @@
     "analysis": "Analytics",
     "analytics": "Analytics",
     "profileSettings": "Settings",
+    "stats": "Stats",
+    "settings": "Settings",
     "currentAs": "Current: {{name}}",
     "faq": "FAQ",
     "lobbyChat": "Lobby Chat",
