@@ -11,7 +11,17 @@
  *
  * Schema matches `ChatMessage` on the client but lives in its own event
  * channel (`lobby:*`) so room chat (`chat:*`) is undisturbed.
+ *
+ * #82: `source` tag threads through every message so `ChatMirror` can fan a
+ * lobby message out to LINE/Discord while suppressing re-entries from those
+ * platforms (prevents lobby → LINE → lobby loops).
  */
+
+/**
+ * Where a message originated. `lobby` is the default for web-client sends;
+ * `line` / `discord` are inbound from the corresponding platform (#82 Phase B).
+ */
+export type LobbyChatSource = 'lobby' | 'line' | 'discord';
 
 export interface LobbyChatMessage {
   id: string;
@@ -21,6 +31,11 @@ export interface LobbyChatMessage {
   timestamp: number;
   /** true for broadcast system notices (joined/left). */
   isSystem?: boolean;
+  /**
+   * Platform that originated this message. Optional for backward compatibility
+   * with #63 snapshots that pre-date #82 — treat `undefined` as `'lobby'`.
+   */
+  source?: LobbyChatSource;
 }
 
 export const LOBBY_CHAT_MAX = 50;
