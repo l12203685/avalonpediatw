@@ -161,20 +161,22 @@ export class SelfPlayEngine {
         const holder    = agents.find(a => a.agentId === holderId);
         const validTargets = Object.keys(room.players).filter(id => id !== holderId && !used.has(id));
         if (holder && validTargets.length > 0) {
-          // Simple heuristic: good holders pick their most suspicious player, evil picks randomly
+          const obs = this.buildObservation(holderId, room, roleMap, teamMap, voteHistory, questHistory);
           const holderTeam = teamMap.get(holderId);
-          let targetId: string;
-          if (holderTeam === 'good') {
-            // Use HeuristicAgent suspicion by checking knownEvils fallback to random
-            const obs = this.buildObservation(holderId, room, roleMap, teamMap, voteHistory, questHistory);
-            // Prefer known evils not yet used; otherwise random from valid
-            const knownEvilTarget = obs.knownEvils.find(id => validTargets.includes(id));
-            targetId = knownEvilTarget ?? validTargets[Math.floor(Math.random() * validTargets.length)];
-          } else {
-            // Evil: pick random to avoid revealing strategy
-            targetId = validTargets[Math.floor(Math.random() * validTargets.length)];
-          }
+          const targetId = this.pickLadyTarget(holderTeam, obs, validTargets);
           engine.submitLadyOfTheLakeTarget(holderId, targetId);
+          // Optional public declaration (Edward 2026-04-22 12:39 +08 — evil may
+          // announce "good" for a just-laked ally to wash pressure).
+          const actualTargetTeam = teamMap.get(targetId);
+          const claim = this.decideLakeAnnouncement(holderTeam, targetId, obs, actualTargetTeam);
+          if (claim !== null) {
+            try {
+              engine.declareLakeResult(holderId, claim);
+            } catch {
+              // Declaration is best-effort in self-play; never block the phase
+              // transition if the engine guard rejects the call.
+            }
+          }
           // Skip the 3-second display delay used in real-time games
           engine.completeLadyPhase();
         } else {
@@ -262,6 +264,267 @@ export class SelfPlayEngine {
   }
 
   // ── Helpers ─────────────────────────────────────────────────
+
+  /**
+   * Feature flag: smart lake targeting (default on).
+   *
+   * - `true`  → good filters out knownEvils + knownGoods (self-included) and picks
+   *             highest suspicion among unknown-camp candidates; evil filters out
+   *             knownEvils (allies) + self and picks highest "likely Merlin" candidate.
+   * - `false` → legacy behavior (good picks knownEvils[0]; evil picks random).
+   *
+   * Read per-call from `process.env.AVALON_USE_SMART_LAKE` so tests can toggle it
+   * without re-loading the module.
+   */
+  private isSmartLakeEnabled(): boolean {
+    return process.env.AVALON_USE_SMART_LAKE !== '0';
+  }
+
+  /**
+   * Feature flag: evil holder may strategically lake (and publicly clear) an
+   * already-suspected ally. Default on per Edward 2026-04-22 12:39 +08:
+   *
+   *   「紅方湖中女神當然可以湖隊友並宣告隊友是好人 / 不用刻意避開」
+   *
+   * When off, the evil branch falls back to the Fix #2 commit `9bdff755`
+   * behaviour of filtering out `knownEvils` before scoring (old heuristic
+   * that Edward flagged as too timid).
+   */
+  private isEvilLakeBringFriendEnabled(): boolean {
+    return process.env.AVALON_EVIL_LAKE_BRING_FRIEND !== '0';
+  }
+
+  /**
+   * Pick a lady-of-the-lake target for the holder.
+   *
+   * Good holder  — target MUST NOT be in `knownEvils` (wastes the lake;
+   * SSoT §4.3 / §6.9 / §8.3). Prefer the highest-suspicion unknown-camp player;
+   * fallback to any unlaked player.
+   *
+   * Evil holder  — with `AVALON_EVIL_LAKE_BRING_FRIEND=1` (default) the holder
+   * does NOT filter out allies (Edward 2026-04-22 12:39 +08: "不用刻意避開").
+   * A strategic choice is made:
+   *   1. If any known-evil ally is currently the *most-suspected* non-ally
+   *      in public history (`estimateSuspicionFromHistory` exceeds the most
+   *      Merlin-like opponent), lake the ally and plan to declare "good" —
+   *      this is a proactive wash of pressure. (See `decideLakeAnnouncement`.)
+   *   2. Otherwise lake the most Merlin-like opponent (original Fix #2 heuristic).
+   *   3. When the flag is off, restore Fix #2 behaviour of filtering knownEvils
+   *      before scoring (preserved for regression comparison).
+   *
+   * Legacy (pre-smart) path is kept behind `USE_SMART_LAKE === false` for
+   * comparison runs.
+   *
+   * @internal Exposed as `public` for unit testing only; not part of the stable API.
+   */
+  public pickLadyTarget(
+    holderTeam: 'good' | 'evil' | undefined,
+    obs:        PlayerObservation,
+    validTargets: string[],
+  ): string {
+    if (!this.isSmartLakeEnabled()) {
+      // Legacy: good picks knownEvils[0] (useless), evil picks random.
+      if (holderTeam === 'good') {
+        const knownEvilTarget = obs.knownEvils.find(id => validTargets.includes(id));
+        return knownEvilTarget ?? validTargets[Math.floor(Math.random() * validTargets.length)];
+      }
+      return validTargets[Math.floor(Math.random() * validTargets.length)];
+    }
+
+    const knownEvilSet = new Set(obs.knownEvils);
+
+    if (holderTeam === 'good') {
+      // Good: filter known evils (no info), rank unknown candidates by suspicion.
+      const unknownCandidates = validTargets.filter(id => !knownEvilSet.has(id));
+      if (unknownCandidates.length === 0) {
+        return validTargets[0];
+      }
+      return this.rankByDescendingScore(
+        unknownCandidates,
+        id => this.estimateSuspicionFromHistory(id, obs),
+        obs.allPlayerIds,
+      )[0];
+    }
+
+    // Evil branch — Edward 2026-04-22 12:39 +08 correction.
+    if (this.isEvilLakeBringFriendEnabled()) {
+      // Consider every valid target (including allies) — do not filter knownEvils.
+      const opponents = validTargets.filter(id => !knownEvilSet.has(id));
+      const allies    = validTargets.filter(id =>  knownEvilSet.has(id));
+
+      // Rank opponents by Merlin-likeness, allies by how suspected they currently look
+      // (allies publicly look risky → washing them with "good" declaration has high payoff).
+      const bestOpponent = opponents.length === 0 ? null : this.rankByDescendingScore(
+        opponents,
+        id => this.estimateMerlinLikenessFromHistory(id, obs),
+        obs.allPlayerIds,
+      )[0];
+      const mostPressuredAlly = allies.length === 0 ? null : this.rankByDescendingScore(
+        allies,
+        id => this.estimateSuspicionFromHistory(id, obs),
+        obs.allPlayerIds,
+      )[0];
+
+      const opponentScore = bestOpponent === null
+        ? Number.NEGATIVE_INFINITY
+        : this.estimateMerlinLikenessFromHistory(bestOpponent, obs);
+      const allyPressure = mostPressuredAlly === null
+        ? Number.NEGATIVE_INFINITY
+        : this.estimateSuspicionFromHistory(mostPressuredAlly, obs);
+
+      // Heuristic: if an ally is visibly under suspicion (positive pressure)
+      // and the best opponent does not read strongly as Merlin
+      // (≤ ally pressure), wash the ally. Otherwise pin the Merlin-like opponent.
+      if (
+        mostPressuredAlly !== null &&
+        allyPressure > 0 &&
+        allyPressure >= opponentScore
+      ) {
+        return mostPressuredAlly;
+      }
+      if (bestOpponent !== null) {
+        return bestOpponent;
+      }
+      // Only allies remain (no opponents valid) → wash the most pressured one.
+      if (mostPressuredAlly !== null) {
+        return mostPressuredAlly;
+      }
+      // Extremely degenerate: no valid targets after partitioning (shouldn't happen).
+      return validTargets[0];
+    }
+
+    // Flag off → Fix #2 (`9bdff755`) regression behaviour: filter allies then rank.
+    const unknownCandidates = validTargets.filter(id => !knownEvilSet.has(id));
+    if (unknownCandidates.length === 0) {
+      return validTargets[0];
+    }
+    return this.rankByDescendingScore(
+      unknownCandidates,
+      id => this.estimateMerlinLikenessFromHistory(id, obs),
+      obs.allPlayerIds,
+    )[0];
+  }
+
+  /**
+   * Decide what (if anything) the holder will publicly claim about the
+   * target right after the lake — Edward 2026-04-22 12:39 +08:
+   *
+   *   「紅方湖中女神當然可以湖隊友並宣告隊友是好人」
+   *
+   * Good holder  — announce the truth (can also keep private, but honest claim
+   * is the textbook default; return the real team).
+   *
+   * Evil holder  — always announce "good" for an ally (wash) and for an
+   * opponent announce the role that best furthers the evil narrative:
+   *   - If the opponent reads strongly as Merlin (positive score), publicly
+   *     call them "good" — confirms them as safe and disguises the assassin
+   *     intel.
+   *   - Otherwise call them "evil" to seed confusion on a clean opponent.
+   *
+   * Returns `null` when no declaration should be made (holderTeam unknown
+   * or target not present). Actual `GameEngine.declareLakeResult` call sits
+   * at the socket / orchestrator layer; this method just decides intent.
+   */
+  public decideLakeAnnouncement(
+    holderTeam: 'good' | 'evil' | undefined,
+    targetId:   string,
+    obs:        PlayerObservation,
+    actualTargetTeam: 'good' | 'evil' | undefined,
+  ): 'good' | 'evil' | null {
+    if (holderTeam !== 'good' && holderTeam !== 'evil') return null;
+
+    if (holderTeam === 'good') {
+      // Good holder tells the truth when a team is known.
+      if (actualTargetTeam === 'good' || actualTargetTeam === 'evil') {
+        return actualTargetTeam;
+      }
+      return null;
+    }
+
+    // Evil holder.
+    const knownEvilSet = new Set(obs.knownEvils);
+    if (knownEvilSet.has(targetId)) {
+      // Ally → always publicly wash as good.
+      return 'good';
+    }
+    // Opponent branch: score Merlin-likeness; if Merlin-like, call them good to
+    // disguise the intel. Otherwise call them evil to muddy the water.
+    const merlinScore = this.estimateMerlinLikenessFromHistory(targetId, obs);
+    return merlinScore > 0 ? 'good' : 'evil';
+  }
+
+  /**
+   * Deterministic descending rank: primary by score desc, tiebreak by
+   * `tiebreakOrder` ascending index (stable under identical input).
+   */
+  private rankByDescendingScore(
+    ids:            string[],
+    score:          (id: string) => number,
+    tiebreakOrder:  string[],
+  ): string[] {
+    const orderIdx = new Map(tiebreakOrder.map((id, i) => [id, i]));
+    return [...ids].sort((a, b) => {
+      const diff = score(b) - score(a);
+      if (diff !== 0) return diff;
+      return (orderIdx.get(a) ?? 0) - (orderIdx.get(b) ?? 0);
+    });
+  }
+
+  /**
+   * Cheap suspicion proxy built only from public history (no HeuristicAgent dep):
+   *   +2 per fail-quest appearance
+   *   +1 per approve of a later-failed team
+   *   -0.5 per appearance on a successful quest
+   *   -0.3 per reject of a later-failed team
+   * Good holders use this to find unknown-camp players most likely to be evil.
+   */
+  private estimateSuspicionFromHistory(playerId: string, obs: PlayerObservation): number {
+    let score = 0;
+    const failedRounds = new Set<number>();
+    for (const q of obs.questHistory) {
+      if (q.result === 'fail') {
+        failedRounds.add(q.round);
+        if (q.team.includes(playerId)) score += 2;
+      } else if (q.result === 'success' && q.team.includes(playerId)) {
+        score -= 0.5;
+      }
+    }
+    for (const v of obs.voteHistory) {
+      if (!failedRounds.has(v.round)) continue;
+      const approved = v.votes[playerId];
+      if (approved === true)  score += 1;
+      if (approved === false) score -= 0.3;
+    }
+    return score;
+  }
+
+  /**
+   * "Looks like Merlin" proxy from evil holder's view: players who rejected teams
+   * containing knownEvils, and never appeared on fail quests. Higher = stronger
+   * Merlin suspicion. Evil holders use this to lake the most likely Merlin and
+   * confirm their target for assassination.
+   */
+  private estimateMerlinLikenessFromHistory(playerId: string, obs: PlayerObservation): number {
+    let score = 0;
+    const knownEvilSet = new Set(obs.knownEvils);
+
+    // Rejected teams containing knownEvils → Merlin signal
+    for (const v of obs.voteHistory) {
+      const teamHasKnownEvil = v.team.some(id => knownEvilSet.has(id));
+      if (!teamHasKnownEvil) continue;
+      const approved = v.votes[playerId];
+      if (approved === false) score += 1.5;
+      if (approved === true)  score -= 0.5;
+    }
+
+    // Appeared on fail quests → NOT Merlin (loyal players including Merlin never fail on purpose,
+    // but Merlin tends to avoid being proposed to suspicious teams)
+    for (const q of obs.questHistory) {
+      if (q.result === 'fail' && q.team.includes(playerId)) score -= 2;
+    }
+
+    return score;
+  }
 
   private buildObservation(
     playerId:     string,
