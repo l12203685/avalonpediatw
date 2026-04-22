@@ -184,7 +184,12 @@ export default function ProfileSettingsPage(): JSX.Element {
           <h1 className="text-2xl font-black text-white">{t('nav.profileSettings')}</h1>
         </div>
 
-        {/* Sections */}
+        {/* Sections
+            #84 polish (2026-04-22): logout section is the LAST entry in SECTIONS so
+            it reliably renders at the bottom of the page. The `mt-8 + border-t-2`
+            red divider on the logout card visually separates the destructive action
+            from the settings stack — matches the "砍掉右上登出符號 → 挪到個人
+            資訊頁最下方" spec (Edward 2026-04-22). */}
         <div className="space-y-4">
           {SECTIONS.map(section => {
             const Icon = section.icon;
@@ -194,7 +199,9 @@ export default function ProfileSettingsPage(): JSX.Element {
                 key={section.id}
                 id={`settings-${section.id}`}
                 className={`bg-zinc-900/60 border rounded-xl p-6 ${
-                  isLogout ? 'border-red-900/60' : 'border-zinc-700'
+                  isLogout
+                    ? 'border-red-900/60 mt-8 border-t-2 border-t-red-900/50'
+                    : 'border-zinc-700'
                 }`}
               >
                 <div className="flex items-center gap-3 mb-3">

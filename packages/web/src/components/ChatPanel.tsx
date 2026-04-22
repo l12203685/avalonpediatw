@@ -155,10 +155,13 @@ export default function ChatPanel({
   // height and uses a translucent background so it blends with the board chrome.
   if (isInline) {
     return (
-      <div className="h-full min-h-0 flex flex-col bg-slate-800/50 border border-gray-700/60 rounded-xl overflow-hidden">
-        {/* Header — shorter than floating, no close button */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-700/60 bg-black/20">
-          <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+      <div className="h-full min-h-0 flex flex-col bg-avalon-card/50 border border-gray-700 rounded-lg overflow-hidden">
+        {/* Header — aligned with CompactScoresheet header chrome (#83 polish): same
+            px-3 py-2 padding, same border-b tone, same text-sm font-bold so the two
+            slots read as a matched pair in the center column 2-col block. */}
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700/50 bg-black/20">
+          <span className="text-sm font-bold text-gray-300 flex items-center gap-1.5">
+            <MessageSquare size={14} className="-mt-0.5" />
             {t('game:chat.inlineTitle')}
           </span>
           <span className="text-[10px] text-gray-500">{messages.length}</span>

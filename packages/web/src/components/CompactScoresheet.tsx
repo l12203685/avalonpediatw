@@ -39,10 +39,15 @@ export default function CompactScoresheet({ room, currentPlayer }: CompactScores
 
   return (
     <div className="bg-avalon-card/50 border border-gray-700 rounded-lg overflow-hidden">
+      {/*
+        #83 polish — toggle chrome mirrors ChatPanel inline header (same px-3 py-2
+        bg-black/20 border-b tone) so the scoresheet + chat form a visually matched
+        2-col pair inside GameBoard's center column.
+      */}
       <button
         type="button"
         onClick={() => setExpanded(prev => !prev)}
-        className="w-full px-3 py-2 border-b border-gray-700/50 flex items-center justify-between text-left hover:bg-avalon-card/70 transition-colors"
+        className="w-full px-3 py-2 border-b border-gray-700/50 bg-black/20 flex items-center justify-between text-left hover:bg-avalon-card/70 transition-colors"
         aria-expanded={expanded}
         aria-controls="compact-scoresheet-body"
       >

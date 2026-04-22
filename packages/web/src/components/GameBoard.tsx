@@ -176,8 +176,12 @@ export default function GameBoard({
   // Desktop ≥lg: side-by-side (chat flex-1, scoresheet 320px).
   // <lg (tablet/mobile): stacked vertically — chat first with min-height so it
   // stays usable, scoresheet flows naturally below.
+  //
+  // #83 polish (2026-04-22): tightened gap on mobile (gap-2 → lg:gap-3) so the
+  // two panels feel like a matched pair rather than two separate widgets. The
+  // chat header now mirrors CompactScoresheet's chrome for visual symmetry.
   const centerExtras = (chatSlot || scoresheetSlot) ? (
-    <div className="flex flex-col lg:flex-row gap-3 min-h-0">
+    <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 min-h-0">
       {chatSlot && (
         <div className="flex-1 min-h-[240px] lg:min-h-[320px]">
           {chatSlot}
