@@ -5,7 +5,7 @@
  *   POST /api/admin/elo/config    — upsert partial override (admin only)
  *
  * Admin auth reuses `requireAdminAuth` (same whitelist as claims admin).
- * Writes go through `persistEloConfigOverride` which upserts to Supabase
+ * Writes go through `persistEloConfigOverride` which upserts to Firestore
  * and applies in-memory immediately.
  */
 
@@ -18,7 +18,7 @@ import {
   getEloConfig,
 } from '../services/EloConfig';
 import { persistEloConfigOverride } from '../services/EloConfigLoader';
-import { isSupabaseReady } from '../services/supabase';
+import { isFirebaseAdminReady } from '../services/firebase';
 
 const router: IRouter = Router();
 const adminLimiter = createHttpRateLimit(60 * 1000, 60);
@@ -52,7 +52,7 @@ router.get(
       const config = getEloConfig();
       return ok(res, {
         config,
-        supabaseReady: isSupabaseReady(),
+        firestoreReady: isFirebaseAdminReady(),
       });
     } catch (err) {
       console.error('[admin/elo/config GET]', err);
@@ -134,12 +134,12 @@ router.post(
       // so the admin knows the change will not survive a restart.
       return res.status(207).json({
         success: true,
-        data: { config, supabaseReady: isSupabaseReady() },
+        data: { config, firestoreReady: isFirebaseAdminReady() },
         warning: result.error,
       });
     }
 
-    return ok(res, { config, supabaseReady: isSupabaseReady() });
+    return ok(res, { config, firestoreReady: isFirebaseAdminReady() });
   }
 );
 

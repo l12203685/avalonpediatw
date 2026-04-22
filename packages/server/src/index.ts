@@ -17,7 +17,7 @@ import { healthDeepRouter } from './routes/healthDeep';
 import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
 import { ensureAdminsSeed } from './services/AdminService';
 import {
-  loadEloConfigFromSupabase,
+  loadEloConfigFromFirestore,
   subscribeEloConfigChanges,
 } from './services/EloConfigLoader';
 
@@ -97,9 +97,10 @@ async function main() {
     // Seed admin whitelist (idempotent — no-op if already seeded)
     await ensureAdminsSeed();
 
-    // #54 Phase 2 Day 3: load persisted ELO config + subscribe for hot reload.
-    // Safe if Supabase is unconfigured — logs warning and uses DEFAULT_ELO_CONFIG.
-    await loadEloConfigFromSupabase();
+    // #54 Phase 3: load persisted ELO config from Firestore + subscribe for hot
+    // reload. Safe if Firebase admin is not ready — logs warning and uses
+    // DEFAULT_ELO_CONFIG.
+    await loadEloConfigFromFirestore();
     subscribeEloConfigChanges();
   } catch (err) {
     console.error('Firebase initialization failed:', err);
