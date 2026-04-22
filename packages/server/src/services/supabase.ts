@@ -314,7 +314,9 @@ export async function consumeOAuthSession(
   provider: 'discord' | 'line',
 ): Promise<{ linkUserId: string | null } | null> {
   const db = getSupabaseClient();
-  if (!db) return { linkUserId: null }; // 未設定 Supabase 時視為 CSRF 跳過、且不是綁定流程
+  // 安全: Supabase 不可用時必須回 null（驗證失敗），讓 callback 走 auth_error 路徑。
+  // 舊行為回 { linkUserId: null } 等同跳過 CSRF 驗證，讓任意 state 被接受。
+  if (!db) return null;
   try {
     const { data, error } = await db
       .from('oauth_sessions')
@@ -608,7 +610,9 @@ export async function verifyAndDeleteOAuthSession(
   provider: 'discord' | 'line'
 ): Promise<boolean> {
   const db = getSupabaseClient();
-  if (!db) return true; // Supabase 未設定時跳過 CSRF 檢查
+  // 安全: Supabase 不可用時必須回 false（驗證失敗），不得跳過 CSRF 檢查。
+  // 攻擊者可偽造任意 state 繞過 CSRF 防護，不能靜默放行。
+  if (!db) return false;
 
   const { data, error } = await db
     .from('oauth_sessions')
