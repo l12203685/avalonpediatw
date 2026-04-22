@@ -114,6 +114,23 @@ export interface EloConfig {
    * the first batch — tune via backtest before flipping attributionMode.
    */
   attributionWeights: EloAttributionWeights;
+
+  /**
+   * #54 Phase 3: shadow-mode controls. When `shadowEnabled` is true, the
+   * EloRankingService double-writes a per_event shadow ranking to the
+   * Firebase RTDB `rankings_shadow/` path while the live rankings stay on
+   * legacy. `shadowStartedAt` stamps the observation-window start in ms
+   * epoch; `shadowReviewPeriodDays` is the recommended review cadence (UI
+   * hint, default 14).
+   *
+   * Kill-switch contract: flipping `shadowEnabled` back to false at any
+   * time stops new shadow writes on the next game; existing entries stay
+   * for audit. Shadow reads (e.g. `/admin/elo-shadow-diff`) are independent
+   * of this flag.
+   */
+  shadowEnabled: boolean;
+  shadowStartedAt: number | null;
+  shadowReviewPeriodDays: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +174,12 @@ export const DEFAULT_ELO_CONFIG: EloConfig = {
     // (NOT the legacy delta). Default on so per_event uses the full stack.
     seatOrderEnabled: true,
   },
+  // #54 Phase 3 defaults — shadow is OFF until Edward flips it on via the
+  // admin UI. See docs/elo_phase3_shadow_checklist.md for the observation
+  // protocol.
+  shadowEnabled: false,
+  shadowStartedAt: null,
+  shadowReviewPeriodDays: 14,
 };
 
 // ---------------------------------------------------------------------------

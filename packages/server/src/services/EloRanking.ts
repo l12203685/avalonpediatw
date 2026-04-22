@@ -10,6 +10,11 @@ import {
   computeAttributionDeltas,
   AttributionBreakdown,
 } from './EloAttributionService';
+import {
+  EloShadowWriter,
+  computeShadowUpdates,
+  getShadowWriterOptions,
+} from './EloShadowWriter';
 
 // ---------------------------------------------------------------------------
 // Constants (data-driven via EloConfig — see EloConfig.ts for seed values)
@@ -237,7 +242,76 @@ export class EloRankingService {
       attributionApplied: attribution.applied,
     }));
 
+    // ---------------------------------------------------------------------
+    // #54 Phase 3: shadow double-write (fire-and-forget, kill-switch guarded)
+    // ---------------------------------------------------------------------
+    // Runs AFTER the live rankings commit so a shadow failure can never
+    // impact production. The writer is a no-op when
+    // `elo_config.shadowEnabled=false`; when on, it computes what per_event
+    // ELO would be and writes to RTDB `rankings_shadow/{uid}` — completely
+    // independent from live `rankings/`.
+    //
+    // We intentionally do NOT await — shadow writes must not add latency to
+    // the game-over response. All errors are swallowed inside the writer.
+    if (getShadowWriterOptions().enabled) {
+      this.runShadowDoubleWrite(record, updates).catch(() => {
+        // writer already logs + swallows — this .catch is defence-in-depth
+        // so an unexpected throw can never leak to the game flow.
+      });
+    }
+
     return updates;
+  }
+
+  /**
+   * #54 Phase 3 — shadow path. Reads the current shadow ELOs for the
+   * participants (fallbacks to startingElo for first-timers), computes the
+   * per_event shadow updates, and persists them via `EloShadowWriter` to
+   * the `rankings_shadow/{uid}` RTDB path.
+   *
+   * This helper is ONLY called when `shadowEnabled=true`; the enablement
+   * check lives at the call site so we don't even construct the writer on
+   * the legacy-only path.
+   */
+  private async runShadowDoubleWrite(
+    record: GameRecord,
+    liveUpdates: EloUpdate[]
+  ): Promise<void> {
+    const writer = new EloShadowWriter();
+    const config = getEloConfig();
+
+    // Current shadow ELOs (fall back to startingElo) and current legacy ELOs
+    // from the in-flight update list (cheaper than a second RTDB round-trip).
+    const [currentShadow, legacyNewByUid] = await Promise.all([
+      Promise.all(
+        record.players.map(async (p) => ({
+          uid: p.playerId,
+          elo: await writer.getShadowElo(p.playerId, config.startingElo),
+        }))
+      ),
+      Promise.resolve(
+        Object.fromEntries(liveUpdates.map((u) => [u.uid, u.newElo]))
+      ),
+    ]);
+
+    const shadowEloMap: Record<string, number> = {};
+    for (const s of currentShadow) shadowEloMap[s.uid] = s.elo;
+
+    const legacyEloMap: Record<string, number> = {};
+    for (const u of liveUpdates) legacyEloMap[u.uid] = u.previousElo;
+
+    const shadowUpdates = computeShadowUpdates(
+      record,
+      shadowEloMap,
+      legacyEloMap
+    ).map((su) => ({
+      ...su,
+      // Wire the live-new-legacy ELO into the shadow entry so the observer
+      // UI can compare directly without re-reading the live rankings table.
+      legacyNewElo: legacyNewByUid[su.uid] ?? su.legacyNewElo,
+    }));
+
+    await writer.writeUpdates(record, shadowUpdates);
   }
 
   /**

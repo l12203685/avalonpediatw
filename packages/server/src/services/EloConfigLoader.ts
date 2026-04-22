@@ -1,69 +1,72 @@
 /**
- * EloConfigLoader — Supabase-backed config loader for ELO tuning (#54 Phase 2 Day 3)
+ * EloConfigLoader — Firestore-backed config loader for ELO tuning (#54 Phase 3)
+ *
+ * Rewrite history: originally Supabase-backed (Phase 2 Day 3). Edward chose
+ * path B on 2026-04-22 — drop Supabase, push the entire config plane onto
+ * Firebase so the server only talks to one backend. Shadow writes still land
+ * on RTDB `rankings_shadow/`; only the *config* doc moved to Firestore.
  *
  * Responsibilities:
- *   1. On server boot, load the persisted config row (if any) and feed it to
- *      `setEloConfig()` so the Phase 1 pipeline picks up Edward's last choice.
- *   2. Subscribe to Supabase Realtime `postgres_changes` on the `elo_config`
- *      table so live admin edits hot-reload without a server restart.
+ *   1. On server boot, fetch the persisted config doc (if any) and feed it
+ *      to `setEloConfig()` so the Phase 1 pipeline picks up Edward's last
+ *      choice.
+ *   2. Subscribe via Firestore `onSnapshot` so live admin edits hot-reload
+ *      without a server restart.
  *   3. Expose a narrow write helper for the admin API route so all persistence
  *      goes through a single validated path.
  *
- * Supabase schema expected (create once via SQL editor or migration):
- *   create table if not exists public.elo_config (
- *     key text primary key,
- *     value jsonb not null,
- *     updated_at timestamptz not null default now(),
- *     updated_by text
- *   );
- *   -- Realtime must be enabled on the table for the subscription to fire:
- *   -- alter publication supabase_realtime add table public.elo_config;
+ * Firestore layout:
+ *   collection: `config`
+ *   document:   `eloShadow`
+ *   fields:     Partial<EloConfig> (exactly the shape stored in Supabase before)
  *
- * Only one row is used: key = 'active'. The `value` column stores a
- * `Partial<EloConfig>` that gets merged onto `DEFAULT_ELO_CONFIG` via
- * `setEloConfig()`; unset fields keep their defaults.
+ * To flip the shadow kill-switch manually via Firebase Console:
+ *   Firestore → config → eloShadow → set `shadowEnabled = true`.
  *
- * Degradation contract: if Supabase is not configured (no URL/service key),
- * we log a single warning and keep running on `DEFAULT_ELO_CONFIG`. The
- * admin write endpoint surfaces a 503 instead of silently dropping writes.
+ * Degradation contract: if Firebase admin is not initialised (no service
+ * account / project ID), we log a single warning and keep running on
+ * `DEFAULT_ELO_CONFIG`. The admin write endpoint surfaces a 503 instead of
+ * silently dropping writes.
  */
 
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { Firestore, DocumentReference } from 'firebase-admin/firestore';
 import {
   EloConfig,
   DEFAULT_ELO_CONFIG,
   setEloConfig,
   getEloConfig,
 } from './EloConfig';
-import { getSupabaseClient, isSupabaseReady } from './supabase';
+import { setShadowWriterOptions } from './EloShadowWriter';
+import { getAdminFirestore, isFirebaseAdminReady } from './firebase';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Single-row primary key — all active config merges into this one row. */
-const CONFIG_ROW_KEY = 'active';
-const CONFIG_TABLE = 'elo_config';
+/** Firestore collection holding infra-level runtime config. */
+const CONFIG_COLLECTION = 'config';
+/** Single-doc primary ID — all active ELO config merges into this one doc. */
+const CONFIG_DOC_ID = 'eloShadow';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 /**
- * Row shape matches `supabase/migrations/20260422000000_add_elo_config.sql`:
- *   - Phase 1 baseline column is `config JSONB` (not `value`).
- *   - `updated_by` references users(id) as UUID; we pass the admin's
- *     Supabase UUID when available, otherwise null.
+ * Firestore document shape:
+ *   - `config`: the merged `Partial<EloConfig>` (same key as the old Supabase
+ *     column so migration from Supabase JSON dumps is a direct copy).
+ *   - `updatedAt`: server timestamp written on every upsert (diagnostic only).
+ *   - `updatedBy`: admin email or uid that wrote the change.
  */
-interface EloConfigRow {
-  key: string;
+interface EloConfigDoc {
   config: Partial<EloConfig> | null;
-  updated_at?: string;
-  updated_by?: string | null;
+  updatedAt?: number;
+  updatedBy?: string | null;
 }
 
 export interface EloConfigLoadResult {
-  source: 'supabase' | 'default' | 'error';
+  source: 'firestore' | 'default' | 'error';
   appliedPartial: Partial<EloConfig> | null;
   error?: string;
 }
@@ -72,58 +75,66 @@ export interface EloConfigLoadResult {
 // State
 // ---------------------------------------------------------------------------
 
-let activeChannel: RealtimeChannel | null = null;
+/** Unsubscribe callback returned by Firestore `onSnapshot`. */
+let activeUnsubscribe: (() => void) | null = null;
+
+/**
+ * Return the canonical config doc ref, or null if Firestore is not ready.
+ * Centralised so tests can mock a single spot.
+ */
+function getConfigDocRef(): DocumentReference | null {
+  if (!isFirebaseAdminReady()) return null;
+  let db: Firestore;
+  try {
+    db = getAdminFirestore();
+  } catch {
+    return null;
+  }
+  return db.collection(CONFIG_COLLECTION).doc(CONFIG_DOC_ID);
+}
 
 // ---------------------------------------------------------------------------
 // Load (boot path)
 // ---------------------------------------------------------------------------
 
 /**
- * Load the persisted ELO config from Supabase and apply it to the in-memory
+ * Load the persisted ELO config from Firestore and apply it to the in-memory
  * singleton via `setEloConfig()`. Called once on server boot.
  *
- * Safe to call without Supabase configured — logs and returns {source:'default'}.
+ * Safe to call without Firebase admin configured — logs and returns
+ * {source:'default'}.
  */
-export async function loadEloConfigFromSupabase(): Promise<EloConfigLoadResult> {
-  if (!isSupabaseReady()) {
+export async function loadEloConfigFromFirestore(): Promise<EloConfigLoadResult> {
+  const ref = getConfigDocRef();
+  if (!ref) {
     console.log(
-      '[EloConfigLoader] Supabase not configured — using DEFAULT_ELO_CONFIG (attributionMode=legacy).'
+      '[EloConfigLoader] Firebase admin not ready — using DEFAULT_ELO_CONFIG (attributionMode=legacy).'
     );
     return { source: 'default', appliedPartial: null };
   }
 
-  const db = getSupabaseClient();
-  if (!db) {
-    return { source: 'default', appliedPartial: null };
-  }
-
   try {
-    const { data, error } = await db
-      .from(CONFIG_TABLE)
-      .select('key, config, updated_at, updated_by')
-      .eq('key', CONFIG_ROW_KEY)
-      .maybeSingle<EloConfigRow>();
-
-    if (error) {
-      // Table missing or permissions issue — fall back to defaults so server
-      // boot isn't blocked by an optional config table.
-      console.warn(
-        `[EloConfigLoader] Could not read elo_config row (${error.code ?? '?'}): ${error.message}. ` +
-          `Using DEFAULT_ELO_CONFIG. If this is a fresh install, run the migrations in supabase/migrations/.`
+    const snap = await ref.get();
+    if (!snap.exists) {
+      console.log(
+        '[EloConfigLoader] No elo_shadow config doc yet — using DEFAULT_ELO_CONFIG.'
       );
-      return { source: 'error', appliedPartial: null, error: error.message };
+      return { source: 'default', appliedPartial: null };
     }
 
+    const data = snap.data() as EloConfigDoc | undefined;
     if (!data || !data.config) {
-      console.log('[EloConfigLoader] No elo_config row persisted yet — using DEFAULT_ELO_CONFIG.');
+      console.log(
+        '[EloConfigLoader] elo_shadow config doc empty — using DEFAULT_ELO_CONFIG.'
+      );
       return { source: 'default', appliedPartial: null };
     }
 
     applyPartialConfig(data.config);
     console.log(
-      `[EloConfigLoader] Applied persisted config from Supabase (attributionMode=${getEloConfig().attributionMode}).`
+      `[EloConfigLoader] Applied persisted config from Firestore (attributionMode=${getEloConfig().attributionMode}).`
     );
-    return { source: 'supabase', appliedPartial: data.config };
+    return { source: 'firestore', appliedPartial: data.config };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[EloConfigLoader] Boot load failed: ${msg}. Using DEFAULT_ELO_CONFIG.`);
@@ -136,64 +147,64 @@ export async function loadEloConfigFromSupabase(): Promise<EloConfigLoadResult> 
 // ---------------------------------------------------------------------------
 
 /**
- * Subscribe to Supabase Realtime `postgres_changes` events on the
- * `elo_config` table. Any INSERT/UPDATE on the 'active' row will re-apply
- * the merged partial to `setEloConfig()` without a restart.
+ * Subscribe to Firestore `onSnapshot` updates on the `config/eloShadow` doc.
+ * Any write (including manual edits in Firebase Console) re-applies the
+ * merged partial to `setEloConfig()` without a restart.
  *
- * Returns the channel so callers can unsubscribe in tests; returns null if
- * Supabase is not configured.
+ * Returns an unsubscribe callback so tests and graceful shutdown can detach
+ * the listener; returns null if Firebase admin is not ready.
  */
-export function subscribeEloConfigChanges(): RealtimeChannel | null {
-  if (!isSupabaseReady()) return null;
-  if (activeChannel) return activeChannel;
+export function subscribeEloConfigChanges(): (() => void) | null {
+  if (activeUnsubscribe) return activeUnsubscribe;
 
-  const db = getSupabaseClient();
-  if (!db) return null;
+  const ref = getConfigDocRef();
+  if (!ref) return null;
 
-  const channel = db
-    .channel('elo_config_changes')
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: CONFIG_TABLE,
-        filter: `key=eq.${CONFIG_ROW_KEY}`,
-      },
-      (payload) => {
-        try {
-          const next = (payload.new as EloConfigRow | null)?.config ?? null;
-          if (!next) {
-            // Row deleted — reset to defaults so stale overrides don't linger.
-            setEloConfig();
-            console.log('[EloConfigLoader] elo_config row cleared — reset to DEFAULT_ELO_CONFIG.');
-            return;
-          }
-          applyPartialConfig(next);
-          console.log(
-            `[EloConfigLoader] Hot-reloaded config (attributionMode=${getEloConfig().attributionMode}).`
-          );
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.warn(`[EloConfigLoader] Hot-reload handler failed: ${msg}`);
+  const unsubscribe = ref.onSnapshot(
+    (snap) => {
+      try {
+        if (!snap.exists) {
+          setEloConfig();
+          setShadowWriterOptions({ enabled: getEloConfig().shadowEnabled });
+          console.log('[EloConfigLoader] elo_shadow doc deleted — reset to DEFAULT_ELO_CONFIG.');
+          return;
         }
+        const data = snap.data() as EloConfigDoc | undefined;
+        const next = data?.config ?? null;
+        if (!next) {
+          setEloConfig();
+          setShadowWriterOptions({ enabled: getEloConfig().shadowEnabled });
+          console.log('[EloConfigLoader] elo_shadow config cleared — reset to DEFAULT_ELO_CONFIG.');
+          return;
+        }
+        applyPartialConfig(next);
+        console.log(
+          `[EloConfigLoader] Hot-reloaded config (attributionMode=${getEloConfig().attributionMode}).`
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[EloConfigLoader] Hot-reload handler failed: ${msg}`);
       }
-    )
-    .subscribe();
+    },
+    (err) => {
+      console.warn(`[EloConfigLoader] Firestore snapshot error: ${err.message}`);
+    }
+  );
 
-  activeChannel = channel;
-  return channel;
+  activeUnsubscribe = unsubscribe;
+  return unsubscribe;
 }
 
 /**
- * Stop listening for realtime updates. Used by tests and graceful shutdown.
+ * Stop listening for Firestore snapshot updates. Used by tests and graceful
+ * shutdown.
  */
 export async function unsubscribeEloConfigChanges(): Promise<void> {
-  if (!activeChannel) return;
+  if (!activeUnsubscribe) return;
   try {
-    await activeChannel.unsubscribe();
+    activeUnsubscribe();
   } finally {
-    activeChannel = null;
+    activeUnsubscribe = null;
   }
 }
 
@@ -202,11 +213,11 @@ export async function unsubscribeEloConfigChanges(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Persist a partial ELO config override to Supabase. The admin UI calls this
+ * Persist a partial ELO config override to Firestore. The admin UI calls this
  * via the `/api/admin/elo/config` route.
  *
  * Applies the same partial to the in-memory singleton immediately so the
- * caller sees its own write reflected — the realtime subscription will
+ * caller sees its own write reflected — the Firestore snapshot listener will
  * receive the same change moments later (idempotent re-apply).
  */
 export async function persistEloConfigOverride(
@@ -214,50 +225,47 @@ export async function persistEloConfigOverride(
   updatedBy: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   // Local apply first so the hot path reflects the admin change even if
-  // Supabase write is briefly delayed (or test environment has no DB).
+  // Firestore write is briefly delayed (or test environment has no DB).
   applyPartialConfig(partial);
 
-  if (!isSupabaseReady()) {
-    return { ok: false, error: 'Supabase not configured — config change applied in-memory only.' };
+  const ref = getConfigDocRef();
+  if (!ref) {
+    return {
+      ok: false,
+      error: 'Firebase admin not ready — config change applied in-memory only.',
+    };
   }
-
-  const db = getSupabaseClient();
-  if (!db) return { ok: false, error: 'Supabase client unavailable' };
 
   try {
     // Read-modify-write to preserve existing Phase 1 fields (team baselines,
     // role K weights, etc.) — the admin UI currently only edits attribution
-    // fields, but the persisted row holds the full config.
-    const { data: existing } = await db
-      .from(CONFIG_TABLE)
-      .select('config')
-      .eq('key', CONFIG_ROW_KEY)
-      .maybeSingle<{ config: Partial<EloConfig> | null }>();
+    // fields, but the persisted doc holds the full config.
+    const existingSnap = await ref.get();
+    const existing = existingSnap.exists
+      ? ((existingSnap.data() as EloConfigDoc | undefined)?.config ?? null)
+      : null;
 
     const merged: Partial<EloConfig> = {
-      ...(existing?.config ?? {}),
+      ...(existing ?? {}),
       ...partial,
       // Deep-merge attributionWeights so admins can tweak proposal without
       // wiping outerWhiteInnerBlack.
       ...(partial.attributionWeights
         ? {
             attributionWeights: {
-              ...((existing?.config ?? {}).attributionWeights ?? DEFAULT_ELO_CONFIG.attributionWeights),
+              ...((existing ?? {}).attributionWeights ?? DEFAULT_ELO_CONFIG.attributionWeights),
               ...partial.attributionWeights,
             },
           }
         : {}),
     };
 
-    const row: Pick<EloConfigRow, 'key' | 'config' | 'updated_by'> = {
-      key: CONFIG_ROW_KEY,
+    const doc: EloConfigDoc = {
       config: merged,
-      updated_by: updatedBy,
+      updatedAt: Date.now(),
+      updatedBy,
     };
-    const { error } = await db.from(CONFIG_TABLE).upsert(row, { onConflict: 'key' });
-    if (error) {
-      return { ok: false, error: `Supabase upsert failed: ${error.message}` };
-    }
+    await ref.set(doc);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -270,7 +278,7 @@ export async function persistEloConfigOverride(
 
 /**
  * Validate and apply a `Partial<EloConfig>` to the singleton. Only whitelisted
- * fields are merged to prevent a malicious row from injecting arbitrary keys.
+ * fields are merged to prevent a malicious doc from injecting arbitrary keys.
  */
 function applyPartialConfig(partial: Partial<EloConfig>): void {
   const safe: Partial<EloConfig> = {};
@@ -309,5 +317,35 @@ function applyPartialConfig(partial: Partial<EloConfig>): void {
   if (partial.outcomeWeights) safe.outcomeWeights = partial.outcomeWeights;
   if (partial.roleKWeights) safe.roleKWeights = partial.roleKWeights;
 
+  // #54 Phase 3: shadow-mode flags. Validate types before merging so a
+  // malformed doc cannot flip shadow on/off accidentally.
+  if (typeof partial.shadowEnabled === 'boolean') {
+    safe.shadowEnabled = partial.shadowEnabled;
+  }
+  if (partial.shadowStartedAt === null || typeof partial.shadowStartedAt === 'number') {
+    safe.shadowStartedAt = partial.shadowStartedAt;
+  }
+  if (typeof partial.shadowReviewPeriodDays === 'number') {
+    safe.shadowReviewPeriodDays = partial.shadowReviewPeriodDays;
+  }
+
   setEloConfig(safe);
+
+  // Sync the shadow writer kill-switch with whatever the active config says
+  // AFTER the merge. This lets both boot-load and hot-reload flip the writer
+  // in one place; callers never touch setShadowWriterOptions directly.
+  const merged = getEloConfig();
+  setShadowWriterOptions({ enabled: merged.shadowEnabled });
 }
+
+// ---------------------------------------------------------------------------
+// Back-compat aliases (preserve call sites during the Supabase → Firebase
+// rewrite landing commit)
+// ---------------------------------------------------------------------------
+
+/**
+ * @deprecated Use `loadEloConfigFromFirestore`. Retained so existing call
+ * sites in `index.ts` and tests do not break during the rewrite; will be
+ * removed once all callers are renamed.
+ */
+export const loadEloConfigFromSupabase = loadEloConfigFromFirestore;
