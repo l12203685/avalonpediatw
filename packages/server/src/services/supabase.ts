@@ -279,15 +279,56 @@ export async function getGameEvents(roomId: string): Promise<DbGameEvent[]> {
 
 // ── OAuth session（CSRF state）────────────────────────────────
 
-export async function createOAuthSession(stateToken: string, provider: 'discord' | 'line'): Promise<void> {
+/**
+ * 建立 OAuth state session 做 CSRF 防護。
+ *
+ * #42: 新增 `linkUserId` 參數 — 若非空，表示這次 OAuth 流程是「已登入用戶綁定
+ * 新 provider」而非登入，callback 會用這個欄位決定要合併/綁定到哪個 user row。
+ * 透過 state token 附帶 userId 而非 URL query 避免被竄改。
+ */
+export async function createOAuthSession(
+  stateToken: string,
+  provider: 'discord' | 'line',
+  linkUserId?: string,
+): Promise<void> {
   const db = getSupabaseClient();
   if (!db) return;
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 分鐘
   await db.from('oauth_sessions').insert({
-    state_token: stateToken,
+    state_token:   stateToken,
     provider,
-    expires_at: expiresAt.toISOString(),
+    expires_at:    expiresAt.toISOString(),
+    link_user_id:  linkUserId ?? null,
   });
+}
+
+/**
+ * 驗證 state 並取出 link_user_id（#42 綁定流程用）。
+ * 用完刪 row。state 不存在/過期回 null。
+ *
+ * 跟 verifyAndDeleteOAuthSession 區別：後者回 boolean；這個版本要把 link_user_id
+ * 取回給 callback 決定要綁哪個 user。
+ */
+export async function consumeOAuthSession(
+  stateToken: string,
+  provider: 'discord' | 'line',
+): Promise<{ linkUserId: string | null } | null> {
+  const db = getSupabaseClient();
+  if (!db) return { linkUserId: null }; // 未設定 Supabase 時視為 CSRF 跳過、且不是綁定流程
+  try {
+    const { data, error } = await db
+      .from('oauth_sessions')
+      .select('id, expires_at, link_user_id')
+      .eq('state_token', stateToken)
+      .eq('provider', provider)
+      .single();
+    if (error || !data) return null;
+    if (new Date(data.expires_at as string) < new Date()) return null;
+    await db.from('oauth_sessions').delete().eq('id', data.id);
+    return { linkUserId: (data.link_user_id as string | null) ?? null };
+  } catch {
+    return null;
+  }
 }
 
 // ── 排行榜 & 用戶資料 ─────────────────────────────────────────
@@ -582,6 +623,245 @@ export async function verifyAndDeleteOAuthSession(
   // 用完即刪
   await db.from('oauth_sessions').delete().eq('id', data.id);
   return true;
+}
+
+// ── 多帳號綁定 / 合併（#42）──────────────────────────────────
+//
+// 支援 Discord / Line / Google (Firebase) 三 provider 綁到同一個 users row。
+// 設計：既有 users table 已有 discord_id / line_id / firebase_uid 欄位，
+// 綁定 = 在當前登入 user row 上寫對應 provider 欄位；
+// 合併 = 若目標 provider identity 已有獨立 user row，把那個 row 的戰績/好友
+// 搬到主帳號，再刪 secondary row。
+//
+// provider: 'discord' | 'line' | 'google'
+// providerField 對應 column:
+//   discord -> discord_id
+//   line    -> line_id
+//   google  -> firebase_uid
+
+export type LinkProvider = 'discord' | 'line' | 'google';
+
+export interface LinkedAccountSummary {
+  provider: LinkProvider;
+  linked: boolean;
+  external_id: string | null;    // 顯示用（Discord/Line 的 raw id / Firebase uid）
+  primary: boolean;               // 是否為此 user row 原生 provider
+}
+
+function providerToColumn(provider: LinkProvider): 'discord_id' | 'line_id' | 'firebase_uid' {
+  switch (provider) {
+    case 'discord': return 'discord_id';
+    case 'line':    return 'line_id';
+    case 'google':  return 'firebase_uid';
+  }
+}
+
+/**
+ * 取得 user row 所有已綁定的 provider 狀態。
+ * Guest 傳入 null 時回空陣列。
+ */
+export async function getLinkedAccounts(userId: string): Promise<LinkedAccountSummary[]> {
+  const db = getSupabaseClient();
+  if (!db) return [];
+  try {
+    const { data, error } = await db
+      .from('users')
+      .select('provider, discord_id, line_id, firebase_uid')
+      .eq('id', userId)
+      .single();
+    if (error || !data) return [];
+
+    const primary = (data.provider as string) ?? '';
+    const providers: LinkProvider[] = ['discord', 'line', 'google'];
+    return providers.map((p) => {
+      const col = providerToColumn(p);
+      const raw = (data as Record<string, unknown>)[col];
+      const externalId = typeof raw === 'string' && raw.length > 0 ? raw : null;
+      return {
+        provider: p,
+        linked: externalId !== null,
+        external_id: externalId,
+        primary: primary === p,
+      };
+    });
+  } catch (err) {
+    console.error('[supabase] getLinkedAccounts exception:', err);
+    return [];
+  }
+}
+
+/**
+ * 查目標 OAuth identity 目前屬於哪個 user row（沒綁回 null）。
+ */
+export async function findUserIdByProviderIdentity(
+  provider: LinkProvider,
+  externalId: string,
+): Promise<string | null> {
+  const db = getSupabaseClient();
+  if (!db) return null;
+  const col = providerToColumn(provider);
+  try {
+    const { data, error } = await db
+      .from('users')
+      .select('id')
+      .eq(col, externalId)
+      .single();
+    if (error || !data) return null;
+    return (data.id as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 把 secondary user row 的戰績/好友/徽章搬到 primary user row，並刪 secondary。
+ *
+ * 合併規則：
+ *   - game_records.player_user_id → primary（保留所有戰績）
+ *   - users.total_games/games_won/games_lost → 兩邊相加
+ *   - users.elo_rating → 取兩邊較高者（避免合併後 ELO 灌水問題，保守做法）
+ *   - users.badges → 去重聯集
+ *   - friendships (follower_id/following_id 中指向 secondary 的全改成 primary)
+ *   - 清空兩邊互相追蹤造成的自追蹤，去重複 follower-following pair
+ *   - 最後 delete secondary user row
+ *
+ * 回傳 true 表示合併完成（即使部分 sub-step 失敗也會繼續；caller 視為 best-effort）。
+ * 回傳 false 表示 primaryId === secondaryId 或 db 不可用。
+ */
+export async function mergeUserAccounts(
+  primaryId: string,
+  secondaryId: string,
+): Promise<boolean> {
+  const db = getSupabaseClient();
+  if (!db) return false;
+  if (primaryId === secondaryId) return false;
+
+  try {
+    // 1. 取兩邊 users row 合計統計
+    const { data: rows } = await db
+      .from('users')
+      .select('id, elo_rating, total_games, games_won, games_lost, badges, discord_id, line_id, firebase_uid, email')
+      .in('id', [primaryId, secondaryId]);
+
+    if (!rows || rows.length === 0) return false;
+
+    const primary = rows.find((r) => r.id === primaryId) as Record<string, unknown> | undefined;
+    const secondary = rows.find((r) => r.id === secondaryId) as Record<string, unknown> | undefined;
+    if (!primary || !secondary) return false;
+
+    // 2. 把 secondary 唯一的 provider 欄位搬到 primary（若 primary 同 column 為空）
+    const providerPatch: Record<string, unknown> = {};
+    for (const col of ['discord_id', 'line_id', 'firebase_uid', 'email'] as const) {
+      const pVal = primary[col];
+      const sVal = secondary[col];
+      if ((pVal === null || pVal === undefined || pVal === '') && typeof sVal === 'string' && sVal.length > 0) {
+        providerPatch[col] = sVal;
+      }
+    }
+
+    // 3. 合併統計
+    const totalGames = (primary.total_games as number ?? 0) + (secondary.total_games as number ?? 0);
+    const gamesWon  = (primary.games_won  as number ?? 0) + (secondary.games_won  as number ?? 0);
+    const gamesLost = (primary.games_lost as number ?? 0) + (secondary.games_lost as number ?? 0);
+    const elo = Math.max(
+      (primary.elo_rating as number ?? 1000),
+      (secondary.elo_rating as number ?? 1000),
+    );
+    const badgesUnion = Array.from(new Set([
+      ...((primary.badges as string[] | null) ?? []),
+      ...((secondary.badges as string[] | null) ?? []),
+    ]));
+
+    // 4. 先把 secondary row 的 provider 欄位清空避免 unique constraint 衝突
+    await db
+      .from('users')
+      .update({ discord_id: null, line_id: null, firebase_uid: null })
+      .eq('id', secondaryId);
+
+    // 5. 更新 primary（統計 + provider 補齊 + badges）
+    await db
+      .from('users')
+      .update({
+        ...providerPatch,
+        elo_rating:  elo,
+        total_games: totalGames,
+        games_won:   gamesWon,
+        games_lost:  gamesLost,
+        badges:      badgesUnion,
+      })
+      .eq('id', primaryId);
+
+    // 6. 搬 game_records
+    await db.from('game_records').update({ player_user_id: primaryId }).eq('player_user_id', secondaryId);
+
+    // 7. 搬 friendships（follower / following 兩邊）+ 去自追蹤
+    await db.from('friendships').update({ follower_id:  primaryId }).eq('follower_id',  secondaryId);
+    await db.from('friendships').update({ following_id: primaryId }).eq('following_id', secondaryId);
+    // 刪自追蹤（primary 追自己）以及重複 pair（best-effort SQL）
+    await db.from('friendships').delete().eq('follower_id', primaryId).eq('following_id', primaryId);
+
+    // 8. 刪 secondary user row
+    await db.from('users').delete().eq('id', secondaryId);
+
+    return true;
+  } catch (err) {
+    console.error('[supabase] mergeUserAccounts exception:', err);
+    return false;
+  }
+}
+
+/**
+ * 綁定 OAuth identity 到指定 user row。
+ * 若目標 identity 已被綁給別人 → caller 應先呼叫 mergeUserAccounts。
+ */
+export async function linkProviderIdentity(
+  userId: string,
+  provider: LinkProvider,
+  externalId: string,
+): Promise<boolean> {
+  const db = getSupabaseClient();
+  if (!db) return false;
+  const col = providerToColumn(provider);
+  try {
+    const { error } = await db
+      .from('users')
+      .update({ [col]: externalId })
+      .eq('id', userId);
+    if (error) {
+      console.error('[supabase] linkProviderIdentity error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[supabase] linkProviderIdentity exception:', err);
+    return false;
+  }
+}
+
+/**
+ * 解除綁定（不可解除唯一剩餘的 provider — caller 應檢查至少還有 1 條可登入）。
+ */
+export async function unlinkProviderIdentity(
+  userId: string,
+  provider: LinkProvider,
+): Promise<boolean> {
+  const db = getSupabaseClient();
+  if (!db) return false;
+  const col = providerToColumn(provider);
+  try {
+    const { error } = await db
+      .from('users')
+      .update({ [col]: null })
+      .eq('id', userId);
+    if (error) {
+      console.error('[supabase] unlinkProviderIdentity error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[supabase] unlinkProviderIdentity exception:', err);
+    return false;
+  }
 }
 
 // ── 好友 / 追蹤系統 ───────────────────────────────────────────

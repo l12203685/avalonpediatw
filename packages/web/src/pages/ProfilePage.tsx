@@ -5,6 +5,7 @@ import { getEloRank } from '../utils/eloRank';
 import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
+import { fetchLinkedAccounts, unlinkAccount, buildLinkProviderUrl, type LinkedAccount, type LinkProvider } from '../services/api';
 import { getStoredToken } from '../services/socket';
 
 const ROLE_COLORS: Record<string, string> = {
@@ -173,6 +174,11 @@ export default function ProfilePage(): JSX.Element {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
 
+  // #42 Linked accounts — own profile only
+  const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[] | null>(null);
+  const [linkBusy, setLinkBusy] = useState<LinkProvider | null>(null);
+  const [linkNotice, setLinkNotice] = useState<{ kind: 'ok' | 'merged' | 'error'; msg: string } | null>(null);
+
   const isMe = !profileUserId || profileUserId === 'me';
 
   useEffect(() => {
@@ -207,6 +213,37 @@ export default function ProfilePage(): JSX.Element {
       .then(setIsFollowingUser)
       .catch(() => {});
   }, [profileUserId, isMe]);
+
+  // #42 — own profile: fetch linked accounts + parse redirect flags on mount
+  useEffect(() => {
+    if (!isMe) return;
+    const token = getStoredToken();
+    if (!token) return;
+
+    fetchLinkedAccounts(token)
+      .then(setLinkedAccounts)
+      .catch(() => setLinkedAccounts([]));
+
+    // 讀 URL 是否從綁定 callback 回來
+    const params = new URLSearchParams(window.location.search);
+    const mergedProvider = params.get('link_merged');
+    const okProvider     = params.get('link_ok');
+    const errProvider    = params.get('link_error');
+    const provider       = params.get('provider') || '';
+    if (mergedProvider) {
+      setLinkNotice({ kind: 'merged', msg: t('profile:linked.noticeMerged', { provider }) });
+    } else if (okProvider) {
+      setLinkNotice({ kind: 'ok', msg: t('profile:linked.noticeOk', { provider }) });
+    } else if (errProvider) {
+      setLinkNotice({ kind: 'error', msg: t('profile:linked.noticeError', { provider, reason: errProvider }) });
+    }
+    if (mergedProvider || okProvider || errProvider) {
+      // 清掉 URL query 避免重整時重複跳提示
+      ['link_merged', 'link_ok', 'link_error', 'provider'].forEach((k) => params.delete(k));
+      const qs = params.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+    }
+  }, [isMe]);
 
   // On own profile, probe unclaimed records + outstanding claim applications
   useEffect(() => {
@@ -322,6 +359,40 @@ export default function ProfilePage(): JSX.Element {
         () => addToast('已複製玩家短碼', 'success'),
         () => addToast('複製失敗', 'error'),
       );
+    }
+  };
+
+  // #42 Bind / unbind handlers
+  const handleLinkProvider = (provider: LinkProvider): void => {
+    const token = getStoredToken();
+    if (!token) return;
+    if (provider === 'google') {
+      // Google 需要前端先拿 Firebase ID token；目前系統尚未掛 Firebase web SDK 在此頁，
+      // 導回登入頁讓使用者用 Google 重新登入（系統會偵測同一信箱後觸發合併）。
+      addToast(t('profile:linked.googleHint'), 'info');
+      return;
+    }
+    // Discord / Line — 整頁跳轉到 /auth/link/<provider>，流程完畢 callback 會回到 /profile
+    window.location.href = buildLinkProviderUrl(token, provider);
+  };
+
+  const handleUnlinkProvider = async (provider: LinkProvider): Promise<void> => {
+    const token = getStoredToken();
+    if (!token) return;
+    setLinkBusy(provider);
+    try {
+      const updated = await unlinkAccount(token, provider);
+      setLinkedAccounts(updated);
+      addToast(t('profile:linked.unlinked', { provider }), 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('LAST_PROVIDER')) {
+        addToast(t('profile:linked.cannotUnlinkLast'), 'error');
+      } else {
+        addToast(t('profile:linked.unlinkFailed'), 'error');
+      }
+    } finally {
+      setLinkBusy(null);
     }
   };
 
@@ -606,6 +677,60 @@ export default function ProfilePage(): JSX.Element {
                       <span className="flex-1 text-gray-300 break-all">{profile.email}</span>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* #42 Linked accounts — own profile only */}
+              {isMe && !editing && linkedAccounts && (
+                <div className="mt-4 pt-4 border-t border-gray-700/60">
+                  <div className="flex items-center gap-2 mb-2 text-xs uppercase tracking-wider text-gray-500">
+                    <Link2 size={11} /> {t('profile:linked.title')}
+                  </div>
+                  {linkNotice && (
+                    <div className={`mb-2 px-3 py-1.5 rounded text-xs ${
+                      linkNotice.kind === 'error'
+                        ? 'bg-red-900/40 border border-red-700 text-red-300'
+                        : linkNotice.kind === 'merged'
+                          ? 'bg-amber-900/40 border border-amber-700 text-amber-300'
+                          : 'bg-blue-900/40 border border-blue-700 text-blue-300'
+                    }`}>
+                      {linkNotice.msg}
+                    </div>
+                  )}
+                  <ul className="space-y-1.5">
+                    {linkedAccounts.map((acc) => (
+                      <li key={acc.provider} className="flex items-center gap-2 text-xs">
+                        <span className="min-w-[72px] capitalize text-gray-300">{t(`profile:linked.provider.${acc.provider}`)}</span>
+                        <span className={`flex-1 truncate ${acc.linked ? 'text-gray-300' : 'text-gray-600'}`}>
+                          {acc.linked
+                            ? (acc.external_id ? acc.external_id : t('profile:linked.connected'))
+                            : t('profile:linked.notConnected')}
+                          {acc.primary && <span className="ml-1 text-[10px] text-amber-400">({t('profile:linked.primary')})</span>}
+                        </span>
+                        {acc.linked ? (
+                          <button
+                            onClick={() => handleUnlinkProvider(acc.provider)}
+                            disabled={linkBusy === acc.provider || linkedAccounts.filter((l) => l.linked).length <= 1}
+                            className="px-2 py-1 text-[11px] rounded border border-gray-600 text-gray-400 hover:border-red-700 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            title={linkedAccounts.filter((l) => l.linked).length <= 1 ? t('profile:linked.cannotUnlinkLast') : t('profile:linked.unlinkBtn')}
+                          >
+                            {linkBusy === acc.provider ? '…' : t('profile:linked.unlinkBtn')}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleLinkProvider(acc.provider)}
+                            disabled={linkBusy !== null}
+                            className="px-2 py-1 text-[11px] rounded border border-blue-700 bg-blue-900/40 text-blue-300 hover:bg-blue-800/60 disabled:opacity-40 transition-colors"
+                          >
+                            {t('profile:linked.linkBtn')}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[10px] text-gray-600 leading-relaxed">
+                    {t('profile:linked.helpText')}
+                  </p>
                 </div>
               )}
             </div>
