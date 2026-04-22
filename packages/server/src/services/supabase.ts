@@ -720,6 +720,10 @@ export async function findUserIdByProviderIdentity(
 /**
  * 把 secondary user row 的戰績/好友/徽章搬到 primary user row，並刪 secondary。
  *
+ * 實作: 呼叫 PostgreSQL RPC `merge_user_accounts`，整個合併在單一 DB transaction
+ * 中原子執行。任一步失敗自動 ROLLBACK，不會有半合併的資料損毀狀態。
+ * Migration: supabase/migrations/20260422150000_merge_user_accounts_rpc.sql
+ *
  * 合併規則：
  *   - game_records.player_user_id → primary（保留所有戰績）
  *   - users.total_games/games_won/games_lost → 兩邊相加
@@ -741,75 +745,19 @@ export async function mergeUserAccounts(
   if (primaryId === secondaryId) return false;
 
   try {
-    // 1. 取兩邊 users row 合計統計
-    const { data: rows } = await db
-      .from('users')
-      .select('id, elo_rating, total_games, games_won, games_lost, badges, discord_id, line_id, firebase_uid, email')
-      .in('id', [primaryId, secondaryId]);
-
-    if (!rows || rows.length === 0) return false;
-
-    const primary = rows.find((r) => r.id === primaryId) as Record<string, unknown> | undefined;
-    const secondary = rows.find((r) => r.id === secondaryId) as Record<string, unknown> | undefined;
-    if (!primary || !secondary) return false;
-
-    // 2. 把 secondary 唯一的 provider 欄位搬到 primary（若 primary 同 column 為空）
-    const providerPatch: Record<string, unknown> = {};
-    for (const col of ['discord_id', 'line_id', 'firebase_uid', 'email'] as const) {
-      const pVal = primary[col];
-      const sVal = secondary[col];
-      if ((pVal === null || pVal === undefined || pVal === '') && typeof sVal === 'string' && sVal.length > 0) {
-        providerPatch[col] = sVal;
-      }
+    // 呼叫 DB-side RPC，整個合併在單一 transaction 中原子執行。
+    // 任一步驟失敗 PostgreSQL 自動 ROLLBACK，不會留下半合併狀態。
+    const { data, error } = await db.rpc('merge_user_accounts', {
+      p_primary_id:   primaryId,
+      p_secondary_id: secondaryId,
+    });
+    if (error) {
+      console.error('[supabase] mergeUserAccounts rpc error:', error instanceof Error ? error.message : String(error));
+      return false;
     }
-
-    // 3. 合併統計
-    const totalGames = (primary.total_games as number ?? 0) + (secondary.total_games as number ?? 0);
-    const gamesWon  = (primary.games_won  as number ?? 0) + (secondary.games_won  as number ?? 0);
-    const gamesLost = (primary.games_lost as number ?? 0) + (secondary.games_lost as number ?? 0);
-    const elo = Math.max(
-      (primary.elo_rating as number ?? 1000),
-      (secondary.elo_rating as number ?? 1000),
-    );
-    const badgesUnion = Array.from(new Set([
-      ...((primary.badges as string[] | null) ?? []),
-      ...((secondary.badges as string[] | null) ?? []),
-    ]));
-
-    // 4. 先把 secondary row 的 provider 欄位清空避免 unique constraint 衝突
-    await db
-      .from('users')
-      .update({ discord_id: null, line_id: null, firebase_uid: null })
-      .eq('id', secondaryId);
-
-    // 5. 更新 primary（統計 + provider 補齊 + badges）
-    await db
-      .from('users')
-      .update({
-        ...providerPatch,
-        elo_rating:  elo,
-        total_games: totalGames,
-        games_won:   gamesWon,
-        games_lost:  gamesLost,
-        badges:      badgesUnion,
-      })
-      .eq('id', primaryId);
-
-    // 6. 搬 game_records
-    await db.from('game_records').update({ player_user_id: primaryId }).eq('player_user_id', secondaryId);
-
-    // 7. 搬 friendships（follower / following 兩邊）+ 去自追蹤
-    await db.from('friendships').update({ follower_id:  primaryId }).eq('follower_id',  secondaryId);
-    await db.from('friendships').update({ following_id: primaryId }).eq('following_id', secondaryId);
-    // 刪自追蹤（primary 追自己）以及重複 pair（best-effort SQL）
-    await db.from('friendships').delete().eq('follower_id', primaryId).eq('following_id', primaryId);
-
-    // 8. 刪 secondary user row
-    await db.from('users').delete().eq('id', secondaryId);
-
-    return true;
+    return data === true;
   } catch (err) {
-    console.error('[supabase] mergeUserAccounts exception:', err);
+    console.error('[supabase] mergeUserAccounts exception:', err instanceof Error ? err.message : String(err));
     return false;
   }
 }
