@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import PublicChatPanel from '../components/PublicChatPanel';
 
 interface OpenRoom {
   id: string;
@@ -289,15 +290,8 @@ export default function HomePage(): JSX.Element {
                   )}
                 </div>
 
-                {/* Lobby chat placeholder */}
-                <div className="md:col-span-2 bg-zinc-900/60 border border-zinc-700 rounded-lg p-4 flex flex-col min-h-[280px]">
-                  <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-wider mb-3 text-left">
-                    {t('home.lobbyChat')}
-                  </h3>
-                  <div className="flex-1 flex items-center justify-center">
-                    <p className="text-zinc-500 text-sm">{t('home.lobbyChatPlaceholder')}</p>
-                  </div>
-                </div>
+                {/* #63 — Main-page public chat (guests read-only) */}
+                <PublicChatPanel />
               </motion.div>
 
               {/* Open rooms */}

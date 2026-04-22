@@ -64,6 +64,18 @@
     "faq": "FAQ",
     "lobbyChat": "大廳聊天",
     "lobbyChatPlaceholder": "尚未開放 — 即將上線",
+    "lobbyChatEmpty": "還沒有訊息 — 來打個招呼吧",
+    "lobbyChatInputPlaceholder": "輸入訊息…",
+    "lobbyChatGuestPlaceholder": "註冊後即可發言",
+    "lobbyChatGuestNotice": "訪客唯讀 — 註冊或登入才能發言",
+    "lobbyChatSend": "送出",
+    "lobbyChatErr": {
+      "notAuth": "請先登入再發言",
+      "guest": "訪客僅可閱讀 — 註冊後即可發言",
+      "rate": "訊息發太快，請稍候再試",
+      "invalid": "訊息需在 1-200 字之間",
+      "offline": "伺服器未連線，請稍候"
+    },
     "openRooms": "開放房間",
     "inProgress": "進行中",
     "spectate": "觀戰",

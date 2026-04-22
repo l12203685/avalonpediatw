@@ -8,6 +8,7 @@ import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { RandomAgent } from '../ai/RandomAgent';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
 import { SocketRateLimiter } from '../middleware/rateLimit';
+import { LobbyChatBuffer, LobbyChatMessage } from './LobbyChatBuffer';
 import {
   saveRoom,
   updateRoomState,
@@ -27,6 +28,13 @@ const voteLimiter = new SocketRateLimiter({
 const chatLimiter = new SocketRateLimiter({
   windowMs: 1000, // 1 second
   maxRequests: 2, // Max 2 messages per second
+});
+
+// #63 — lobby (main page) public chat rate limiter. Slightly stricter than the
+// in-room chat because a single noisy client is visible to every lobby visitor.
+const lobbyChatLimiter = new SocketRateLimiter({
+  windowMs: 2000,
+  maxRequests: 2,
 });
 
 // ELO constants
@@ -91,6 +99,9 @@ export class GameServer {
   private playerToSocket: Map<string, string> = new Map();
   // roomId → Set of spectator socketIds
   private spectators: Map<string, Set<string>> = new Map();
+  // #63 — ring buffer for the main-page public chat. Memory-only by design
+  // (MVP scope); persistent sync is tracked under #82.
+  private lobbyChat: LobbyChatBuffer = new LobbyChatBuffer();
 
   constructor(io: SocketIOServer) {
     this.io = io;
@@ -173,6 +184,16 @@ export class GameServer {
 
       socket.on('chat:send-message', (roomId: string, message: string) => {
         this.handleChatMessage(socket, roomId, message);
+      });
+
+      // #63 — Public lobby chat (main page). Anyone (including guests) can
+      // read; only non-guest (authenticated) users can send messages.
+      socket.on('lobby:join', () => {
+        this.handleLobbyJoin(socket);
+      });
+
+      socket.on('lobby:send-message', (message: string) => {
+        this.handleLobbySendMessage(socket, message);
       });
 
       socket.on('game:kick-player', (roomId: string, targetPlayerId: string) => {
@@ -1034,6 +1055,70 @@ export class GameServer {
       });
     } catch (error) {
       console.error('Error sending chat message:', error);
+    }
+  }
+
+  // ─── #63 Public lobby chat ──────────────────────────────────────────────
+  //
+  // Rooms use Socket.IO rooms keyed by roomId. For the lobby we reuse that
+  // primitive with a single well-known room name so every connected socket
+  // that joined it receives broadcasts. Snapshot-on-join means late arrivals
+  // see the last 50 messages instead of an empty panel.
+  //
+  // Auth policy: reads open to everyone (guests included); writes restricted
+  // to non-guest users. Guest clients still get `lobby:snapshot` on join so
+  // they can read along, but their `lobby:send-message` is rejected with a
+  // friendly i18n-friendly error code the client translates on the UI side.
+
+  private static readonly LOBBY_ROOM = 'lobby:public';
+
+  private handleLobbyJoin(socket: Socket): void {
+    try {
+      socket.join(GameServer.LOBBY_ROOM);
+      socket.emit('lobby:snapshot', this.lobbyChat.snapshot());
+    } catch (error) {
+      console.error('[lobby] join error:', error);
+    }
+  }
+
+  private handleLobbySendMessage(socket: Socket, message: unknown): void {
+    try {
+      const user = socket.data.user as User | undefined;
+      if (!user) {
+        socket.emit('lobby:error', 'not-authenticated');
+        return;
+      }
+
+      // Guests can read the lobby chat but cannot send. Upsell to registration.
+      if (user.provider === 'guest') {
+        socket.emit('lobby:error', 'guest-read-only');
+        return;
+      }
+
+      const chatIdentifier = `${socket.id}:lobby-chat`;
+      if (!lobbyChatLimiter.isAllowed(chatIdentifier)) {
+        socket.emit('lobby:error', 'rate-limited');
+        return;
+      }
+
+      const trimmed = LobbyChatBuffer.validateBody(message);
+      if (!trimmed) {
+        socket.emit('lobby:error', 'invalid-message');
+        return;
+      }
+
+      const msg: LobbyChatMessage = {
+        id: uuidv4(),
+        playerId: user.uid,
+        playerName: user.displayName,
+        message: trimmed,
+        timestamp: Date.now(),
+      };
+
+      this.lobbyChat.append(msg);
+      this.io.to(GameServer.LOBBY_ROOM).emit('lobby:message-received', msg);
+    } catch (error) {
+      console.error('[lobby] send-message error:', error);
     }
   }
 
