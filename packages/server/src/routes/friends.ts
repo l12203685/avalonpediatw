@@ -10,11 +10,10 @@
 // CREATE INDEX ON friendships(following_id);
 //
 // -- 玩家可見短碼（加好友用，Task #48）：
-// ALTER TABLE users ADD COLUMN IF NOT EXISTS short_code TEXT;
-// CREATE UNIQUE INDEX IF NOT EXISTS idx_users_short_code
-//   ON users(short_code) WHERE short_code IS NOT NULL;
-// -- 舊用戶可由 server 在呼叫 ensureUserShortCode(user_id) 時 lazy-fill，
-// -- 或離線跑 backfill 腳本（見 packages/server/src/services/shortCode.ts）。
+// 路 B（2026-04-22）：放棄 Supabase users.short_code，改 Firestore：
+//   users/{uid}.shortCode            — 玩家持有的短碼
+//   shortCodeIndex/{code}.uid        — 反向索引；doc 存在 = 佔用，用交易保唯一
+// Supabase users.short_code 欄位不再讀取，留著不清，之後資料遷移時再清。
 
 import { Router, Request, Response, IRouter } from 'express';
 import { verify, JwtPayload } from 'jsonwebtoken';
@@ -28,8 +27,8 @@ import {
   isFollowing,
   getSupabaseClient,
   searchUsers,
-  getUserIdByShortCode,
 } from '../services/supabase';
+import { getUserIdByShortCode } from '../services/shortCodeFirestore';
 import { normalizeShortCode, isValidShortCode } from '../services/shortCode';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 
