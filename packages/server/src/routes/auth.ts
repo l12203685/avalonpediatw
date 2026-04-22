@@ -108,7 +108,8 @@ function parseBearerUserId(authHeader: string | undefined, queryToken?: string):
   }
   if (!token || token.split('.').length !== 3) return null;
   try {
-    const payload = verify(token, JWT_SECRET) as JwtPayload & { sub?: string; provider?: string };
+    // JWT_SECRET is guaranteed non-empty by the startup guard above
+    const payload = verify(token, JWT_SECRET as string) as JwtPayload & { sub?: string; provider?: string };
     if (!payload.sub) return null;
     if (payload.provider === 'guest') return null;
     return payload.sub;
