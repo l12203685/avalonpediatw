@@ -64,6 +64,18 @@
     "faq": "FAQ",
     "lobbyChat": "Lobby Chat",
     "lobbyChatPlaceholder": "Not available yet — coming soon",
+    "lobbyChatEmpty": "No messages yet — say hi",
+    "lobbyChatInputPlaceholder": "Type a message…",
+    "lobbyChatGuestPlaceholder": "Register to join the chat",
+    "lobbyChatGuestNotice": "Guests can read only — register or sign in to chat",
+    "lobbyChatSend": "Send",
+    "lobbyChatErr": {
+      "notAuth": "Sign in to chat",
+      "guest": "Guests can read only — register to chat",
+      "rate": "Slow down — wait a moment before sending again",
+      "invalid": "Messages must be 1–200 characters",
+      "offline": "Server offline — please wait"
+    },
     "openRooms": "Open Rooms",
     "inProgress": "In Progress",
     "spectate": "Spectate",
