@@ -74,24 +74,36 @@ avalon-game/
 └── turbo.json
 ```
 
-## 🎮 Game Features (Phase 1)
+## 🎮 Game Features (Phase 1-2)
 
 ✅ **Core Mechanics**
-- Role assignment (Merlin, Percival, Loyal, Assassin, Morgana)
+- Role assignment (Merlin, Percival, Loyal, Assassin, Morgana, Oberon)
 - Voting phase with approval/rejection
 - Quest phase with success/fail tracking
 - Assassination phase (Merlin elimination)
+- Lady of the Lake (holder can check target alignment)
+- 9-player variant support with all special roles selectable
 
 ✅ **UI Components**
-- Home page (Create/Join game)
-- Lobby (Player management)
+- Home page (Create/Join/Stats/Settings/Wiki in 6-button grid)
+- Lobby (Player management with role preview)
 - Game board (Real-time state sync)
 - Voting & quest panels
+- Public lobby chat (for registered users)
+- Player profile with linked accounts (Discord/LINE/Google)
+
+✅ **Player Features**
+- Multi-account binding (Discord + LINE + Google merge into single profile)
+- Player short code (8-character identifier, e.g., `7K3M9P2Q`)
+- Cross-platform chat mirroring (lobby messages to LINE group & Discord channel)
+- Game statistics & rankings (ELO system with phase-based attribution)
+- Game history & analytics
 
 ✅ **Real-time Sync**
 - WebSocket communication (Socket.IO)
 - Optimistic updates (zero lag)
 - Live player status updates
+- Instant chat propagation across platforms
 
 ## 🔧 Technology Stack
 
@@ -107,28 +119,35 @@ avalon-game/
 
 ## 📋 Development Roadmap
 
-### Phase 1: MVP ✅
+### Phase 1: Core MVP ✅
 - [x] Monorepo setup
 - [x] Shared types
 - [x] Backend infrastructure
 - [x] Socket.IO setup
 - [x] Game logic engine
-- [x] Frontend UI
-- [ ] Firebase integration
-- [ ] Testing & optimization
+- [x] Frontend UI core
+- [x] Real-time state sync
+- [x] Role assignment & voting
+- [x] Supabase integration
 
-### Phase 2: Social Bots
-- [ ] Discord bot
-- [ ] Line bot
-- [ ] Deep linking
-- [ ] Notifications
+### Phase 2: Social & Variants (2026-04-22) ✅
+- [x] Multi-account binding (Discord/LINE/Google)
+- [x] Player short code system
+- [x] Public lobby chat with guest read-only
+- [x] Cross-platform chat mirroring (LINE/Discord outbound)
+- [x] 9-player variant with all special roles
+- [x] Lobby IA restructure (6-button home)
+- [x] ELO system with phase-based attribution
+- [x] Historical data learning for AI decisions
+- [x] Game statistics & player profiles
 
-### Phase 3: Advanced Features
-- [ ] Rankings (ELO system)
-- [ ] Game statistics
-- [ ] Avalon encyclopedia
-- [ ] Game variants
-- [ ] Replay system
+### Phase 3: Advanced Features (Planned)
+- [ ] Replay system & match playback
+- [ ] Per-player learning personas
+- [ ] Avalon encyclopedia with strategy guides
+- [ ] Tournament mode
+- [ ] In-game voice integration
+- [ ] Spectator mode
 
 ## 🎯 Current Implementation Status
 
