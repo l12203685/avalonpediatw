@@ -147,5 +147,21 @@ describe('computeProposalFactor', () => {
     expect(result.proposalCounts.p1).toBe(2);
   });
 
-  it.skip('feeds EloAttributionService via weighted sum (Day 2)', () => {});
+  it('feeds EloAttributionService via weighted sum (Day 2)', () => {
+    // Smoke test: ensure the exported function is reachable and returns
+    // a shape compatible with EloAttributionService.computeAttributionDeltas.
+    // Full math coverage lives in EloAttributionService.test.ts.
+    const record = makeGameRecord({
+      players: [
+        makePlayer({ playerId: 'p1', team: 'good' }),
+        makePlayer({ playerId: 'p2', team: 'evil' }),
+      ],
+      voteHistoryPersisted: [
+        makeVote({ leader: 'p1', team: ['p1'], approved: true }),
+      ],
+    });
+    const { scores } = computeProposalFactor(record);
+    expect(typeof scores).toBe('object');
+    expect(scores.p1).toBe(1); // clean pick (1 good, 0 evil)
+  });
 });

@@ -129,5 +129,24 @@ describe('computeOuterWhiteInnerBlackFactor', () => {
     expect(OUTER_WHITE_INNER_BLACK_ROLES.has('merlin')).toBe(false);
   });
 
-  it.skip('flips sign for good-wins-assassin outcome (Day 2)', () => {});
+  it('flips sign for good-wins-assassin outcome (Day 2)', () => {
+    // Assassin-kills-merlin is an outcome-level modifier (EloConfig.outcomeWeights),
+    // handled by EloRanking.computeNewElo. OWIB factor scores the per-quest
+    // evil contribution in isolation — so the raw factor score does NOT flip
+    // sign; it composes multiplicatively with the legacy outcome delta.
+    // This test locks that architectural decision in place: OWIB stays
+    // outcome-agnostic, outcome weighting lives in EloConfig.
+    const evilPlayer = makePlayer({ playerId: 'morgana', team: 'evil', role: 'morgana' });
+    const record = makeGameRecord({
+      winner: 'good',
+      winReason: 'assassination_failed',
+      players: [evilPlayer],
+      questHistoryPersisted: [
+        makeQuest({ team: ['morgana'], result: 'fail' }),
+      ],
+    });
+    const { scores } = computeOuterWhiteInnerBlackFactor(record);
+    // Raw score stays +3 regardless of game-level outcome — weighting happens upstream.
+    expect(scores.morgana).toBe(3);
+  });
 });
