@@ -15,41 +15,14 @@ import {
   AgentAction,
 } from './types';
 import { AVALON_CONFIG } from '@avalon/shared';
+import { PriorLookup, type Difficulty } from './priors/PriorLookup';
 
 // ── Strategy thresholds ────────────────────────────────────────
-/**
- * Average-team-suspicion rejection threshold for the **on-team** path.
- * Higher = more tolerant. Hard mode is stricter than normal.
- */
-const SUSPICION_REJECT_THRESHOLD: Record<'hard' | 'normal', number> = {
-  hard:   2.0,
-  normal: 3.0,
-};
-
-/**
- * Stricter threshold for the **off-team** path — good players are more
- * cautious when not seated, since they can't protect the quest themselves.
- */
-const STRICT_THRESHOLD: Record<'hard' | 'normal', number> = {
-  hard:   1.5,
-  normal: 2.5,
-};
-
-/**
- * Baseline **reject** probability when a good player is NOT on the proposed
- * team and no harder signal (knownEvil / failed-member / suspicion) has
- * already forced a decision. Forces the leader to prove the team is clean.
- */
-const OFF_TEAM_REJECT_BASELINE: Record<'hard' | 'normal', number> = {
-  hard:   0.7,
-  normal: 0.55,
-};
-
-/** Decision-flip noise rate — higher = more "human error". */
-const NOISE_RATE: Record<'hard' | 'normal', number> = {
-  hard:   0.05,
-  normal: 0.15,
-};
+// #97 Phase 1 (2026-04-22): SUSPICION_REJECT_THRESHOLD / STRICT_THRESHOLD /
+// OFF_TEAM_REJECT_BASELINE / NOISE_RATE now live inside PriorLookup's
+// HARDCODE tier (see priors/PriorLookup.ts). Historical data path
+// supersedes these when three-tier JSON is loaded. Pre-#97 constants
+// preserved byte-identically in Tier-3 hardcode for emergency rollback.
 
 /** Above this failCount, good always approves to avoid auto-loss on 5th reject. */
 const FORCE_APPROVE_FAIL_COUNT = 4;
@@ -184,9 +157,10 @@ interface EvilRoleStrategy {
  * | morgana   |        +0.15  |        0.6  |         -0.05  | Mimic Merlin → approve clean, clean teams    |
  * | assassin  |        +0.10  |        0.5  |         -0.10  | Save cover for the kill → cleanest profile   |
  *
- * TODO(phase1): swap these constants for `PriorLookup.get(...)` once
- * per-role TOP10 behaviour data is harvested (per `feedback_avalon_top10
- * _behavior_lookup.md` §#5).
+ * Phase 1 (#97 2026-04-22): voteOnTeam thresholds (NOISE_RATE /
+ * STRICT_THRESHOLD / OFF_TEAM_REJECT_BASELINE / SUSPICION_REJECT_THRESHOLD)
+ * now resolve via PriorLookup. These per-role EVIL strategy deltas remain
+ * hardcoded until per-role L1 samples are harvested (Phase 2).
  */
 const EVIL_ROLE_STRATEGY_TABLE: Record<string, EvilRoleStrategy> = {
   mordred: {
@@ -248,16 +222,34 @@ interface AgentMemory {
   processedQuestRounds: Set<number>;
 }
 
+/** Lazy singleton — load once, share across agents for the life of the
+ *  process. Constructing a fresh `PriorLookup` per agent would re-read
+ *  three 70KB JSON files unnecessarily (each self-play spawns N agents).
+ *  Tests can bypass this by passing `priors` to the constructor. */
+let DEFAULT_PRIORS: PriorLookup | null = null;
+function getDefaultPriors(): PriorLookup {
+  if (DEFAULT_PRIORS === null) DEFAULT_PRIORS = PriorLookup.load();
+  return DEFAULT_PRIORS;
+}
+
 export class HeuristicAgent implements AvalonAgent {
   readonly agentId: string;
   readonly agentType = 'heuristic' as const;
   private readonly difficulty: 'normal' | 'hard';
+  /** PriorLookup — data-driven thresholds (Phase 1 #97). Injected for DI
+   *  in tests; auto-loaded from bundled JSON in production. */
+  private readonly priors: PriorLookup;
 
   private memory: AgentMemory = this.createEmptyMemory();
 
-  constructor(agentId: string, difficulty: 'normal' | 'hard' = 'normal') {
+  constructor(
+    agentId: string,
+    difficulty: 'normal' | 'hard' = 'normal',
+    priors?: PriorLookup,
+  ) {
     this.agentId = agentId;
     this.difficulty = difficulty;
+    this.priors = priors ?? getDefaultPriors();
   }
 
   onGameStart(obs: PlayerObservation): void {
@@ -527,23 +519,36 @@ export class HeuristicAgent implements AvalonAgent {
         id => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
       );
       const onTeam = proposedTeam.includes(myPlayerId);
-      const noise  = NOISE_RATE[this.difficulty];
+      // #97 Phase 1: all four thresholds now resolve via PriorLookup.
+      // Historical data path: expert/mid/novice JSON (Edward vote rule).
+      // Tier-3 fallback preserves pre-#97 behaviour byte-identically.
+      const diff: Difficulty = this.difficulty;
+      const noise = this.priors.getNoiseRate(diff);
 
       if (!onTeam) {
         // Off-team path: default to cautious reject. Leader must prove the
         // team is clean — otherwise the good player holds out their approval.
-        const strictThreshold = STRICT_THRESHOLD[this.difficulty];
+        const strictThreshold = this.priors.getStrictThreshold(diff);
         if (hasFailedMember || avgSuspicion > strictThreshold) {
           return { type: 'team_vote', vote: this.applyNoise(false, noise) };
         }
-        // No hard signal → baseline reject probability. Round 1 has no
-        // history yet, so relax the baseline to avoid auto-racing to
-        // failCount=5 (which auto-hands the round to evil).
+        // No hard signal → baseline reject probability from historical
+        // off-team rejects (L1/L2/L3 rollup, Edward vote rule). Round 1
+        // and round 2+ differ sharply (r1 ~0.99, r2+ ~0.87 for expert).
         const hasHistory = this.memory.failedTeamHistory.length > 0
           || this.memory.processedVoteAttempts.size > 0;
-        const baseline = hasHistory
-          ? OFF_TEAM_REJECT_BASELINE[this.difficulty]
-          : OFF_TEAM_REJECT_BASELINE[this.difficulty] * 0.6;
+        const roundForPrior = hasHistory ? (obs.currentRound ?? 1) : 1;
+        let baseline = this.priors.getOffTeamRejectRate(diff, {
+          team: 'good',
+          round: roundForPrior,
+          isLeader: false,
+        });
+        // Legacy parity: when no history yet (true r1 with no prior
+        // attempts), relax baseline by 0.6 so the agent doesn't race
+        // to failCount=5 in the total dark. Historical data path
+        // already captures r1 separately, so this dampener only fires
+        // on the very first attempt of the very first round.
+        if (!hasHistory) baseline *= 0.6;
         const baselineVote = Math.random() < baseline ? false : true;
         return { type: 'team_vote', vote: this.applyNoise(baselineVote, noise) };
       }
@@ -553,7 +558,7 @@ export class HeuristicAgent implements AvalonAgent {
       if (hasFailedMember) {
         return { type: 'team_vote', vote: this.applyNoise(false, noise) };
       }
-      const threshold = SUSPICION_REJECT_THRESHOLD[this.difficulty];
+      const threshold = this.priors.getSuspicionRejectThreshold(diff);
       const decision  = avgSuspicion < threshold;
       return { type: 'team_vote', vote: this.applyNoise(decision, noise) };
     } else {

@@ -1,0 +1,2556 @@
+{
+  "version": 3,
+  "rule_version": "edward_2026-04-22",
+  "tier": "novice",
+  "generated_at": "2026-04-22T14:48:02.798211+08:00",
+  "source": "牌譜.yaml via internal_nickname_ranking_threetier + Edward vote rule",
+  "pool_avg_win_rate": 0.4394,
+  "top10_player_nicknames": [
+    "Emma",
+    "亞可",
+    "夆",
+    "大星",
+    "布冬",
+    "很乖",
+    "毛爸",
+    "爾勵",
+    "豬豬",
+    "黃某人"
+  ],
+  "games_processed": 1262,
+  "attempts_scanned": 19027,
+  "votes_counted": 32752,
+  "votes_counted_explicit": 2536,
+  "votes_counted_accepted": 8378,
+  "confidence_summary": {
+    "total_keys": 76,
+    "high_conf_keys": 53,
+    "medium_conf_keys": 6,
+    "low_conf_keys": 17
+  },
+  "anomaly_stats": {
+    "anomaly_approve_count": 9409,
+    "anomaly_reject_count": 6593,
+    "total_anomaly_tokens": 16002,
+    "attempts_with_any_anomaly": 7220,
+    "total_attempts": 19027,
+    "anomaly_approve_ratio_of_all_votes": 0.28728,
+    "anomaly_reject_ratio_of_all_votes": 0.2013,
+    "attempts_with_anomaly_ratio": 0.3795
+  },
+  "situations": {
+    "good.r1.off_leader.in_team.f0.ts3": {
+      "sample_size": 377,
+      "approve_count": 366,
+      "reject_count": 11,
+      "approve_rate": 0.9708,
+      "reject_rate": 0.0292,
+      "confidence": "high"
+    },
+    "good.r1.off_leader.off_team.f0.ts3": {
+      "sample_size": 1761,
+      "approve_count": 5,
+      "reject_count": 1756,
+      "approve_rate": 0.0028,
+      "reject_rate": 0.9972,
+      "confidence": "high"
+    },
+    "good.r1.leader.in_team.f0.ts3": {
+      "sample_size": 363,
+      "approve_count": 363,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.off_team.f1.ts4": {
+      "sample_size": 1208,
+      "approve_count": 29,
+      "reject_count": 1179,
+      "approve_rate": 0.024,
+      "reject_rate": 0.976,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f2_plus.ts4": {
+      "sample_size": 252,
+      "approve_count": 180,
+      "reject_count": 72,
+      "approve_rate": 0.7143,
+      "reject_rate": 0.2857,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.off_team.f2_plus.ts4": {
+      "sample_size": 507,
+      "approve_count": 47,
+      "reject_count": 460,
+      "approve_rate": 0.0927,
+      "reject_rate": 0.9073,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.in_team.f2_plus.ts4": {
+      "sample_size": 117,
+      "approve_count": 117,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 420,
+      "approve_count": 285,
+      "reject_count": 135,
+      "approve_rate": 0.6786,
+      "reject_rate": 0.3214,
+      "confidence": "high"
+    },
+    "unknown.r1.off_leader.off_team.f0.ts3": {
+      "sample_size": 4687,
+      "approve_count": 49,
+      "reject_count": 4638,
+      "approve_rate": 0.0105,
+      "reject_rate": 0.9895,
+      "confidence": "high"
+    },
+    "unknown.r1.off_leader.in_team.f0.ts3": {
+      "sample_size": 1580,
+      "approve_count": 1566,
+      "reject_count": 14,
+      "approve_rate": 0.9911,
+      "reject_rate": 0.0089,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.in_team.f1.ts4": {
+      "sample_size": 642,
+      "approve_count": 641,
+      "reject_count": 1,
+      "approve_rate": 0.9984,
+      "reject_rate": 0.0016,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f1.ts4": {
+      "sample_size": 3677,
+      "approve_count": 203,
+      "reject_count": 3474,
+      "approve_rate": 0.0552,
+      "reject_rate": 0.9448,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f2_plus.ts4": {
+      "sample_size": 788,
+      "approve_count": 655,
+      "reject_count": 133,
+      "approve_rate": 0.8312,
+      "reject_rate": 0.1688,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f2_plus.ts4": {
+      "sample_size": 1471,
+      "approve_count": 189,
+      "reject_count": 1282,
+      "approve_rate": 0.1285,
+      "reject_rate": 0.8715,
+      "confidence": "high"
+    },
+    "good.r1.leader.off_team.f0.ts3": {
+      "sample_size": 9,
+      "approve_count": 9,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.off_leader.in_team.f1.ts4": {
+      "sample_size": 1635,
+      "approve_count": 1519,
+      "reject_count": 116,
+      "approve_rate": 0.9291,
+      "reject_rate": 0.0709,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f0.ts4": {
+      "sample_size": 557,
+      "approve_count": 526,
+      "reject_count": 31,
+      "approve_rate": 0.9443,
+      "reject_rate": 0.0557,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f0.ts4": {
+      "sample_size": 1710,
+      "approve_count": 140,
+      "reject_count": 1570,
+      "approve_rate": 0.0819,
+      "reject_rate": 0.9181,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.in_team.f0.ts4": {
+      "sample_size": 336,
+      "approve_count": 336,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 983,
+      "approve_count": 258,
+      "reject_count": 725,
+      "approve_rate": 0.2625,
+      "reject_rate": 0.7375,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 232,
+      "approve_count": 228,
+      "reject_count": 4,
+      "approve_rate": 0.9828,
+      "reject_rate": 0.0172,
+      "confidence": "high"
+    },
+    "unknown.r1.leader.in_team.f0.ts3": {
+      "sample_size": 404,
+      "approve_count": 404,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 832,
+      "approve_count": 613,
+      "reject_count": 219,
+      "approve_rate": 0.7368,
+      "reject_rate": 0.2632,
+      "confidence": "high"
+    },
+    "evil.r1.off_leader.off_team.f0.ts3": {
+      "sample_size": 1133,
+      "approve_count": 7,
+      "reject_count": 1126,
+      "approve_rate": 0.0062,
+      "reject_rate": 0.9938,
+      "confidence": "high"
+    },
+    "evil.r1.off_leader.in_team.f0.ts3": {
+      "sample_size": 226,
+      "approve_count": 222,
+      "reject_count": 4,
+      "approve_rate": 0.9823,
+      "reject_rate": 0.0177,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.off_team.f1.ts4": {
+      "sample_size": 21,
+      "approve_count": 18,
+      "reject_count": 3,
+      "approve_rate": 0.8571,
+      "reject_rate": 0.1429,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.off_leader.off_team.f1.ts4": {
+      "sample_size": 1078,
+      "approve_count": 42,
+      "reject_count": 1036,
+      "approve_rate": 0.039,
+      "reject_rate": 0.961,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f2_plus.ts4": {
+      "sample_size": 461,
+      "approve_count": 63,
+      "reject_count": 398,
+      "approve_rate": 0.1367,
+      "reject_rate": 0.8633,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 331,
+      "approve_count": 111,
+      "reject_count": 220,
+      "approve_rate": 0.3353,
+      "reject_rate": 0.6647,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f1.ts5_plus": {
+      "sample_size": 170,
+      "approve_count": 149,
+      "reject_count": 21,
+      "approve_rate": 0.8765,
+      "reject_rate": 0.1235,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f1.ts5_plus": {
+      "sample_size": 252,
+      "approve_count": 127,
+      "reject_count": 125,
+      "approve_rate": 0.504,
+      "reject_rate": 0.496,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.in_team.f1.ts5_plus": {
+      "sample_size": 52,
+      "approve_count": 52,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r1.leader.in_team.f0.ts3": {
+      "sample_size": 239,
+      "approve_count": 239,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.in_team.f1.ts4": {
+      "sample_size": 340,
+      "approve_count": 328,
+      "reject_count": 12,
+      "approve_rate": 0.9647,
+      "reject_rate": 0.0353,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f1.ts5_plus": {
+      "sample_size": 112,
+      "approve_count": 44,
+      "reject_count": 68,
+      "approve_rate": 0.3929,
+      "reject_rate": 0.6071,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f0.ts4": {
+      "sample_size": 482,
+      "approve_count": 450,
+      "reject_count": 32,
+      "approve_rate": 0.9336,
+      "reject_rate": 0.0664,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.off_team.f0.ts4": {
+      "sample_size": 507,
+      "approve_count": 24,
+      "reject_count": 483,
+      "approve_rate": 0.0473,
+      "reject_rate": 0.9527,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.off_team.f0.ts4": {
+      "sample_size": 6,
+      "approve_count": 5,
+      "reject_count": 1,
+      "approve_rate": 0.8333,
+      "reject_rate": 0.1667,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 349,
+      "approve_count": 58,
+      "reject_count": 291,
+      "approve_rate": 0.1662,
+      "reject_rate": 0.8338,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 50,
+      "approve_count": 49,
+      "reject_count": 1,
+      "approve_rate": 0.98,
+      "reject_rate": 0.02,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.off_team.f0.ts4": {
+      "sample_size": 25,
+      "approve_count": 23,
+      "reject_count": 2,
+      "approve_rate": 0.92,
+      "reject_rate": 0.08,
+      "confidence": "medium"
+    },
+    "good.r2_plus.off_leader.off_team.f1.ts5_plus": {
+      "sample_size": 58,
+      "approve_count": 22,
+      "reject_count": 36,
+      "approve_rate": 0.3793,
+      "reject_rate": 0.6207,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.in_team.f1.ts5_plus": {
+      "sample_size": 8,
+      "approve_count": 7,
+      "reject_count": 1,
+      "approve_rate": 0.875,
+      "reject_rate": 0.125,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.in_team.f1.ts4": {
+      "sample_size": 781,
+      "approve_count": 713,
+      "reject_count": 68,
+      "approve_rate": 0.9129,
+      "reject_rate": 0.0871,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.in_team.f2_plus.ts4": {
+      "sample_size": 120,
+      "approve_count": 108,
+      "reject_count": 12,
+      "approve_rate": 0.9,
+      "reject_rate": 0.1,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 37,
+      "approve_count": 34,
+      "reject_count": 3,
+      "approve_rate": 0.9189,
+      "reject_rate": 0.0811,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.in_team.f1.ts4": {
+      "sample_size": 172,
+      "approve_count": 172,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.in_team.f2_plus.ts4": {
+      "sample_size": 69,
+      "approve_count": 69,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f0.ts4": {
+      "sample_size": 343,
+      "approve_count": 19,
+      "reject_count": 324,
+      "approve_rate": 0.0554,
+      "reject_rate": 0.9446,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.in_team.f2_plus.ts4": {
+      "sample_size": 172,
+      "approve_count": 172,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 34,
+      "approve_count": 32,
+      "reject_count": 2,
+      "approve_rate": 0.9412,
+      "reject_rate": 0.0588,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.off_team.f1.ts4": {
+      "sample_size": 32,
+      "approve_count": 28,
+      "reject_count": 4,
+      "approve_rate": 0.875,
+      "reject_rate": 0.125,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.off_team.f1.ts4": {
+      "sample_size": 13,
+      "approve_count": 13,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.off_leader.in_team.f0.ts4": {
+      "sample_size": 110,
+      "approve_count": 108,
+      "reject_count": 2,
+      "approve_rate": 0.9818,
+      "reject_rate": 0.0182,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 75,
+      "approve_count": 68,
+      "reject_count": 7,
+      "approve_rate": 0.9067,
+      "reject_rate": 0.0933,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.in_team.f1.ts4": {
+      "sample_size": 68,
+      "approve_count": 68,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f1.ts5_plus": {
+      "sample_size": 102,
+      "approve_count": 95,
+      "reject_count": 7,
+      "approve_rate": 0.9314,
+      "reject_rate": 0.0686,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.off_team.f2_plus.ts4": {
+      "sample_size": 4,
+      "approve_count": 4,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.leader.in_team.f0.ts4": {
+      "sample_size": 30,
+      "approve_count": 30,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.off_team.f2_plus.ts4": {
+      "sample_size": 8,
+      "approve_count": 7,
+      "reject_count": 1,
+      "approve_rate": 0.875,
+      "reject_rate": 0.125,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.in_team.f0.ts3": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.off_team.f0.ts3": {
+      "sample_size": 2,
+      "approve_count": 0,
+      "reject_count": 2,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.leader.in_team.f0.ts4": {
+      "sample_size": 58,
+      "approve_count": 58,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r1.leader.off_team.f0.ts3": {
+      "sample_size": 10,
+      "approve_count": 9,
+      "reject_count": 1,
+      "approve_rate": 0.9,
+      "reject_rate": 0.1,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.leader.off_team.f0.ts4": {
+      "sample_size": 8,
+      "approve_count": 7,
+      "reject_count": 1,
+      "approve_rate": 0.875,
+      "reject_rate": 0.125,
+      "confidence": "low"
+    },
+    "evil.r2_plus.off_leader.in_team.f1.ts5_plus": {
+      "sample_size": 16,
+      "approve_count": 16,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.leader.in_team.f1.ts5_plus": {
+      "sample_size": 8,
+      "approve_count": 8,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 11,
+      "approve_count": 8,
+      "reject_count": 3,
+      "approve_rate": 0.7273,
+      "reject_rate": 0.2727,
+      "confidence": "medium"
+    },
+    "unknown.r2_plus.leader.off_team.f1.ts5_plus": {
+      "sample_size": 5,
+      "approve_count": 4,
+      "reject_count": 1,
+      "approve_rate": 0.8,
+      "reject_rate": 0.2,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.leader.off_team.f2_plus.ts4": {
+      "sample_size": 7,
+      "approve_count": 7,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.off_leader.off_team.f1.ts3": {
+      "sample_size": 2,
+      "approve_count": 0,
+      "reject_count": 2,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.off_team.f1.ts3": {
+      "sample_size": 1,
+      "approve_count": 0,
+      "reject_count": 1,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "evil.r1.leader.off_team.f0.ts3": {
+      "sample_size": 2,
+      "approve_count": 2,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.leader.off_team.f1.ts5_plus": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r1.leader.in_team.f0.ts2": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    }
+  },
+  "rollups": {
+    "L1.good.r1.off_leader.in_team": {
+      "sample_size": 377,
+      "approve_count": 366,
+      "reject_count": 11,
+      "approve_rate": 0.9708,
+      "reject_rate": 0.0292,
+      "confidence": "high"
+    },
+    "L2.r1.off_leader.in_team": {
+      "sample_size": 2183,
+      "approve_count": 2154,
+      "reject_count": 29,
+      "approve_rate": 0.9867,
+      "reject_rate": 0.0133,
+      "confidence": "high"
+    },
+    "L3.r1.in_team": {
+      "sample_size": 3190,
+      "approve_count": 3161,
+      "reject_count": 29,
+      "approve_rate": 0.9909,
+      "reject_rate": 0.0091,
+      "confidence": "high"
+    },
+    "L4.ts3": {
+      "sample_size": 10797,
+      "approve_count": 3242,
+      "reject_count": 7555,
+      "approve_rate": 0.3003,
+      "reject_rate": 0.6997,
+      "confidence": "high"
+    },
+    "L1.good.r1.off_leader.off_team": {
+      "sample_size": 1761,
+      "approve_count": 5,
+      "reject_count": 1756,
+      "approve_rate": 0.0028,
+      "reject_rate": 0.9972,
+      "confidence": "high"
+    },
+    "L2.r1.off_leader.off_team": {
+      "sample_size": 7581,
+      "approve_count": 61,
+      "reject_count": 7520,
+      "approve_rate": 0.008,
+      "reject_rate": 0.992,
+      "confidence": "high"
+    },
+    "L3.r1.off_team": {
+      "sample_size": 7602,
+      "approve_count": 81,
+      "reject_count": 7521,
+      "approve_rate": 0.0107,
+      "reject_rate": 0.9893,
+      "confidence": "high"
+    },
+    "L1.good.r1.leader.in_team": {
+      "sample_size": 364,
+      "approve_count": 364,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L2.r1.leader.in_team": {
+      "sample_size": 1007,
+      "approve_count": 1007,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.good.r2_plus.off_leader.off_team": {
+      "sample_size": 2632,
+      "approve_count": 180,
+      "reject_count": 2452,
+      "approve_rate": 0.0684,
+      "reject_rate": 0.9316,
+      "confidence": "high"
+    },
+    "L2.r2_plus.off_leader.off_team": {
+      "sample_size": 13052,
+      "approve_count": 1376,
+      "reject_count": 11676,
+      "approve_rate": 0.1054,
+      "reject_rate": 0.8946,
+      "confidence": "high"
+    },
+    "L3.r2_plus.off_team": {
+      "sample_size": 13228,
+      "approve_count": 1534,
+      "reject_count": 11694,
+      "approve_rate": 0.116,
+      "reject_rate": 0.884,
+      "confidence": "high"
+    },
+    "L4.ts4": {
+      "sample_size": 17815,
+      "approve_count": 7118,
+      "reject_count": 10697,
+      "approve_rate": 0.3996,
+      "reject_rate": 0.6004,
+      "confidence": "high"
+    },
+    "L1.good.r2_plus.off_leader.in_team": {
+      "sample_size": 2038,
+      "approve_count": 1724,
+      "reject_count": 314,
+      "approve_rate": 0.8459,
+      "reject_rate": 0.1541,
+      "confidence": "high"
+    },
+    "L2.r2_plus.off_leader.in_team": {
+      "sample_size": 6681,
+      "approve_count": 5814,
+      "reject_count": 867,
+      "approve_rate": 0.8702,
+      "reject_rate": 0.1298,
+      "confidence": "high"
+    },
+    "L3.r2_plus.in_team": {
+      "sample_size": 8732,
+      "approve_count": 7855,
+      "reject_count": 877,
+      "approve_rate": 0.8996,
+      "reject_rate": 0.1004,
+      "confidence": "high"
+    },
+    "L1.good.r2_plus.leader.in_team": {
+      "sample_size": 405,
+      "approve_count": 403,
+      "reject_count": 2,
+      "approve_rate": 0.9951,
+      "reject_rate": 0.0049,
+      "confidence": "high"
+    },
+    "L2.r2_plus.leader.in_team": {
+      "sample_size": 2051,
+      "approve_count": 2041,
+      "reject_count": 10,
+      "approve_rate": 0.9951,
+      "reject_rate": 0.0049,
+      "confidence": "high"
+    },
+    "L4.ts5_plus": {
+      "sample_size": 4139,
+      "approve_count": 2270,
+      "reject_count": 1869,
+      "approve_rate": 0.5484,
+      "reject_rate": 0.4516,
+      "confidence": "high"
+    },
+    "L1.unknown.r1.off_leader.off_team": {
+      "sample_size": 4687,
+      "approve_count": 49,
+      "reject_count": 4638,
+      "approve_rate": 0.0105,
+      "reject_rate": 0.9895,
+      "confidence": "high"
+    },
+    "L1.unknown.r1.off_leader.in_team": {
+      "sample_size": 1580,
+      "approve_count": 1566,
+      "reject_count": 14,
+      "approve_rate": 0.9911,
+      "reject_rate": 0.0089,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.leader.in_team": {
+      "sample_size": 1434,
+      "approve_count": 1429,
+      "reject_count": 5,
+      "approve_rate": 0.9965,
+      "reject_rate": 0.0035,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.off_leader.off_team": {
+      "sample_size": 8095,
+      "approve_count": 917,
+      "reject_count": 7178,
+      "approve_rate": 0.1133,
+      "reject_rate": 0.8867,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.off_leader.in_team": {
+      "sample_size": 3982,
+      "approve_count": 3462,
+      "reject_count": 520,
+      "approve_rate": 0.8694,
+      "reject_rate": 0.1306,
+      "confidence": "high"
+    },
+    "L1.good.r1.leader.off_team": {
+      "sample_size": 9,
+      "approve_count": 9,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "L2.r1.leader.off_team": {
+      "sample_size": 21,
+      "approve_count": 20,
+      "reject_count": 1,
+      "approve_rate": 0.9524,
+      "reject_rate": 0.0476,
+      "confidence": "medium"
+    },
+    "L1.unknown.r1.leader.in_team": {
+      "sample_size": 404,
+      "approve_count": 404,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.evil.r1.off_leader.off_team": {
+      "sample_size": 1133,
+      "approve_count": 7,
+      "reject_count": 1126,
+      "approve_rate": 0.0062,
+      "reject_rate": 0.9938,
+      "confidence": "high"
+    },
+    "L1.evil.r1.off_leader.in_team": {
+      "sample_size": 226,
+      "approve_count": 222,
+      "reject_count": 4,
+      "approve_rate": 0.9823,
+      "reject_rate": 0.0177,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.leader.off_team": {
+      "sample_size": 45,
+      "approve_count": 38,
+      "reject_count": 7,
+      "approve_rate": 0.8444,
+      "reject_rate": 0.1556,
+      "confidence": "high"
+    },
+    "L2.r2_plus.leader.off_team": {
+      "sample_size": 176,
+      "approve_count": 158,
+      "reject_count": 18,
+      "approve_rate": 0.8977,
+      "reject_rate": 0.1023,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.off_leader.off_team": {
+      "sample_size": 2325,
+      "approve_count": 279,
+      "reject_count": 2046,
+      "approve_rate": 0.12,
+      "reject_rate": 0.88,
+      "confidence": "high"
+    },
+    "L1.evil.r1.leader.in_team": {
+      "sample_size": 239,
+      "approve_count": 239,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.off_leader.in_team": {
+      "sample_size": 661,
+      "approve_count": 628,
+      "reject_count": 33,
+      "approve_rate": 0.9501,
+      "reject_rate": 0.0499,
+      "confidence": "high"
+    },
+    "L1.good.r2_plus.leader.off_team": {
+      "sample_size": 28,
+      "approve_count": 26,
+      "reject_count": 2,
+      "approve_rate": 0.9286,
+      "reject_rate": 0.0714,
+      "confidence": "medium"
+    },
+    "L1.unknown.r2_plus.leader.off_team": {
+      "sample_size": 103,
+      "approve_count": 94,
+      "reject_count": 9,
+      "approve_rate": 0.9126,
+      "reject_rate": 0.0874,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.leader.in_team": {
+      "sample_size": 212,
+      "approve_count": 209,
+      "reject_count": 3,
+      "approve_rate": 0.9858,
+      "reject_rate": 0.0142,
+      "confidence": "high"
+    },
+    "L1.unknown.r1.leader.off_team": {
+      "sample_size": 10,
+      "approve_count": 9,
+      "reject_count": 1,
+      "approve_rate": 0.9,
+      "reject_rate": 0.1,
+      "confidence": "medium"
+    },
+    "L1.evil.r1.leader.off_team": {
+      "sample_size": 2,
+      "approve_count": 2,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "L4.ts2": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    }
+  },
+  "situations_explicit": {
+    "good.r2_plus.off_leader.in_team.f2_plus.ts4": {
+      "sample_size": 72,
+      "approve_count": 0,
+      "reject_count": 72,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 136,
+      "approve_count": 1,
+      "reject_count": 135,
+      "approve_rate": 0.0074,
+      "reject_rate": 0.9926,
+      "confidence": "high"
+    },
+    "good.r1.leader.off_team.f0.ts3": {
+      "sample_size": 9,
+      "approve_count": 9,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.off_leader.off_team.f2_plus.ts4": {
+      "sample_size": 191,
+      "approve_count": 189,
+      "reject_count": 2,
+      "approve_rate": 0.9895,
+      "reject_rate": 0.0105,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f0.ts4": {
+      "sample_size": 32,
+      "approve_count": 1,
+      "reject_count": 31,
+      "approve_rate": 0.0312,
+      "reject_rate": 0.9688,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f1.ts4": {
+      "sample_size": 116,
+      "approve_count": 0,
+      "reject_count": 116,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f1.ts4": {
+      "sample_size": 205,
+      "approve_count": 203,
+      "reject_count": 2,
+      "approve_rate": 0.9902,
+      "reject_rate": 0.0098,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 259,
+      "approve_count": 258,
+      "reject_count": 1,
+      "approve_rate": 0.9961,
+      "reject_rate": 0.0039,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 219,
+      "approve_count": 0,
+      "reject_count": 219,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 111,
+      "approve_count": 111,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f0.ts4": {
+      "sample_size": 142,
+      "approve_count": 140,
+      "reject_count": 2,
+      "approve_rate": 0.9859,
+      "reject_rate": 0.0141,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f1.ts4": {
+      "sample_size": 42,
+      "approve_count": 42,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f2_plus.ts4": {
+      "sample_size": 63,
+      "approve_count": 63,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r1.off_leader.off_team.f0.ts3": {
+      "sample_size": 49,
+      "approve_count": 49,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.off_team.f1.ts4": {
+      "sample_size": 28,
+      "approve_count": 28,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "good.r2_plus.leader.off_team.f1.ts4": {
+      "sample_size": 13,
+      "approve_count": 13,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "good.r2_plus.off_leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 58,
+      "approve_count": 58,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.off_team.f0.ts4": {
+      "sample_size": 24,
+      "approve_count": 24,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "good.r2_plus.off_leader.off_team.f1.ts4": {
+      "sample_size": 29,
+      "approve_count": 29,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "unknown.r2_plus.off_leader.off_team.f1.ts5_plus": {
+      "sample_size": 128,
+      "approve_count": 127,
+      "reject_count": 1,
+      "approve_rate": 0.9922,
+      "reject_rate": 0.0078,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 7,
+      "approve_count": 0,
+      "reject_count": 7,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.off_leader.in_team.f2_plus.ts4": {
+      "sample_size": 134,
+      "approve_count": 1,
+      "reject_count": 133,
+      "approve_rate": 0.0075,
+      "reject_rate": 0.9925,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f1.ts5_plus": {
+      "sample_size": 44,
+      "approve_count": 44,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.off_team.f1.ts4": {
+      "sample_size": 18,
+      "approve_count": 18,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.leader.off_team.f2_plus.ts4": {
+      "sample_size": 4,
+      "approve_count": 4,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.in_team.f1.ts4": {
+      "sample_size": 68,
+      "approve_count": 0,
+      "reject_count": 68,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f0.ts4": {
+      "sample_size": 32,
+      "approve_count": 0,
+      "reject_count": 32,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.off_team.f2_plus.ts4": {
+      "sample_size": 7,
+      "approve_count": 7,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 32,
+      "approve_count": 32,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.off_team.f1.ts5_plus": {
+      "sample_size": 22,
+      "approve_count": 22,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "unknown.r2_plus.leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 4,
+      "approve_count": 0,
+      "reject_count": 4,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "evil.r1.off_leader.off_team.f0.ts3": {
+      "sample_size": 7,
+      "approve_count": 7,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 4,
+      "approve_count": 1,
+      "reject_count": 3,
+      "approve_rate": 0.25,
+      "reject_rate": 0.75,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.off_team.f2_plus.ts4": {
+      "sample_size": 47,
+      "approve_count": 47,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r1.leader.off_team.f0.ts3": {
+      "sample_size": 9,
+      "approve_count": 9,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.leader.off_team.f0.ts4": {
+      "sample_size": 7,
+      "approve_count": 7,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.off_leader.in_team.f1.ts5_plus": {
+      "sample_size": 21,
+      "approve_count": 0,
+      "reject_count": 21,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.off_leader.in_team.f1.ts5_plus": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.off_leader.off_team.f0.ts4": {
+      "sample_size": 19,
+      "approve_count": 19,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "unknown.r2_plus.leader.off_team.f0.ts4": {
+      "sample_size": 23,
+      "approve_count": 23,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "unknown.r1.off_leader.in_team.f0.ts3": {
+      "sample_size": 14,
+      "approve_count": 0,
+      "reject_count": 14,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "medium"
+    },
+    "good.r2_plus.leader.off_team.f0.ts4": {
+      "sample_size": 5,
+      "approve_count": 5,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r1.off_leader.off_team.f0.ts3": {
+      "sample_size": 5,
+      "approve_count": 5,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.off_leader.in_team.f2_plus.ts4": {
+      "sample_size": 12,
+      "approve_count": 0,
+      "reject_count": 12,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 8,
+      "approve_count": 8,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.leader.off_team.f1.ts5_plus": {
+      "sample_size": 4,
+      "approve_count": 4,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.leader.off_team.f2_plus.ts4": {
+      "sample_size": 7,
+      "approve_count": 7,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.off_leader.in_team.f1.ts4": {
+      "sample_size": 12,
+      "approve_count": 0,
+      "reject_count": 12,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "medium"
+    },
+    "good.r2_plus.off_leader.in_team.f1.ts5_plus": {
+      "sample_size": 7,
+      "approve_count": 0,
+      "reject_count": 7,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.leader.in_team.f1.ts5_plus": {
+      "sample_size": 2,
+      "approve_count": 2,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r1.off_leader.in_team.f0.ts3": {
+      "sample_size": 11,
+      "approve_count": 0,
+      "reject_count": 11,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.off_leader.in_team.f0.ts4": {
+      "sample_size": 2,
+      "approve_count": 0,
+      "reject_count": 2,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "evil.r1.leader.off_team.f0.ts3": {
+      "sample_size": 2,
+      "approve_count": 2,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r1.off_leader.in_team.f0.ts3": {
+      "sample_size": 4,
+      "approve_count": 0,
+      "reject_count": 4,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.leader.in_team.f1.ts5_plus": {
+      "sample_size": 1,
+      "approve_count": 0,
+      "reject_count": 1,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.leader.in_team.f1.ts4": {
+      "sample_size": 1,
+      "approve_count": 0,
+      "reject_count": 1,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.leader.off_team.f1.ts5_plus": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 1,
+      "approve_count": 0,
+      "reject_count": 1,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    }
+  },
+  "rollups_explicit": {
+    "L1.good.r2_plus.off_leader.in_team": {
+      "sample_size": 315,
+      "approve_count": 1,
+      "reject_count": 314,
+      "approve_rate": 0.0032,
+      "reject_rate": 0.9968,
+      "confidence": "high"
+    },
+    "L2.r2_plus.off_leader.in_team": {
+      "sample_size": 871,
+      "approve_count": 4,
+      "reject_count": 867,
+      "approve_rate": 0.0046,
+      "reject_rate": 0.9954,
+      "confidence": "high"
+    },
+    "L3.r2_plus.in_team": {
+      "sample_size": 884,
+      "approve_count": 7,
+      "reject_count": 877,
+      "approve_rate": 0.0079,
+      "reject_rate": 0.9921,
+      "confidence": "high"
+    },
+    "L4.ts4": {
+      "sample_size": 1355,
+      "approve_count": 870,
+      "reject_count": 485,
+      "approve_rate": 0.6421,
+      "reject_rate": 0.3579,
+      "confidence": "high"
+    },
+    "L4.ts5_plus": {
+      "sample_size": 1071,
+      "approve_count": 671,
+      "reject_count": 400,
+      "approve_rate": 0.6265,
+      "reject_rate": 0.3735,
+      "confidence": "high"
+    },
+    "L1.good.r1.leader.off_team": {
+      "sample_size": 9,
+      "approve_count": 9,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "L2.r1.leader.off_team": {
+      "sample_size": 20,
+      "approve_count": 20,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "L3.r1.off_team": {
+      "sample_size": 81,
+      "approve_count": 81,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L4.ts3": {
+      "sample_size": 110,
+      "approve_count": 81,
+      "reject_count": 29,
+      "approve_rate": 0.7364,
+      "reject_rate": 0.2636,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.off_leader.off_team": {
+      "sample_size": 925,
+      "approve_count": 917,
+      "reject_count": 8,
+      "approve_rate": 0.9914,
+      "reject_rate": 0.0086,
+      "confidence": "high"
+    },
+    "L2.r2_plus.off_leader.off_team": {
+      "sample_size": 1384,
+      "approve_count": 1376,
+      "reject_count": 8,
+      "approve_rate": 0.9942,
+      "reject_rate": 0.0058,
+      "confidence": "high"
+    },
+    "L3.r2_plus.off_team": {
+      "sample_size": 1542,
+      "approve_count": 1534,
+      "reject_count": 8,
+      "approve_rate": 0.9948,
+      "reject_rate": 0.0052,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.off_leader.in_team": {
+      "sample_size": 522,
+      "approve_count": 2,
+      "reject_count": 520,
+      "approve_rate": 0.0038,
+      "reject_rate": 0.9962,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.off_leader.off_team": {
+      "sample_size": 279,
+      "approve_count": 279,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.unknown.r1.off_leader.off_team": {
+      "sample_size": 49,
+      "approve_count": 49,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L2.r1.off_leader.off_team": {
+      "sample_size": 61,
+      "approve_count": 61,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.leader.off_team": {
+      "sample_size": 94,
+      "approve_count": 94,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L2.r2_plus.leader.off_team": {
+      "sample_size": 158,
+      "approve_count": 158,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.good.r2_plus.leader.off_team": {
+      "sample_size": 26,
+      "approve_count": 26,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "L1.good.r2_plus.off_leader.off_team": {
+      "sample_size": 180,
+      "approve_count": 180,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.off_leader.in_team": {
+      "sample_size": 34,
+      "approve_count": 1,
+      "reject_count": 33,
+      "approve_rate": 0.0294,
+      "reject_rate": 0.9706,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.leader.off_team": {
+      "sample_size": 38,
+      "approve_count": 38,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.leader.in_team": {
+      "sample_size": 7,
+      "approve_count": 2,
+      "reject_count": 5,
+      "approve_rate": 0.2857,
+      "reject_rate": 0.7143,
+      "confidence": "low"
+    },
+    "L2.r2_plus.leader.in_team": {
+      "sample_size": 13,
+      "approve_count": 3,
+      "reject_count": 10,
+      "approve_rate": 0.2308,
+      "reject_rate": 0.7692,
+      "confidence": "medium"
+    },
+    "L1.evil.r1.off_leader.off_team": {
+      "sample_size": 7,
+      "approve_count": 7,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "L1.evil.r2_plus.leader.in_team": {
+      "sample_size": 4,
+      "approve_count": 1,
+      "reject_count": 3,
+      "approve_rate": 0.25,
+      "reject_rate": 0.75,
+      "confidence": "low"
+    },
+    "L1.unknown.r1.leader.off_team": {
+      "sample_size": 9,
+      "approve_count": 9,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "L1.unknown.r1.off_leader.in_team": {
+      "sample_size": 14,
+      "approve_count": 0,
+      "reject_count": 14,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "medium"
+    },
+    "L2.r1.off_leader.in_team": {
+      "sample_size": 29,
+      "approve_count": 0,
+      "reject_count": 29,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "medium"
+    },
+    "L3.r1.in_team": {
+      "sample_size": 29,
+      "approve_count": 0,
+      "reject_count": 29,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "medium"
+    },
+    "L1.good.r1.off_leader.off_team": {
+      "sample_size": 5,
+      "approve_count": 5,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "L1.good.r1.off_leader.in_team": {
+      "sample_size": 11,
+      "approve_count": 0,
+      "reject_count": 11,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "medium"
+    },
+    "L1.evil.r1.leader.off_team": {
+      "sample_size": 2,
+      "approve_count": 2,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "L1.evil.r1.off_leader.in_team": {
+      "sample_size": 4,
+      "approve_count": 0,
+      "reject_count": 4,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    },
+    "L1.good.r2_plus.leader.in_team": {
+      "sample_size": 2,
+      "approve_count": 0,
+      "reject_count": 2,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "low"
+    }
+  },
+  "situations_accepted": {
+    "good.r1.leader.in_team.f0.ts3": {
+      "sample_size": 120,
+      "approve_count": 120,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.off_team.f1.ts4": {
+      "sample_size": 227,
+      "approve_count": 18,
+      "reject_count": 209,
+      "approve_rate": 0.0793,
+      "reject_rate": 0.9207,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.in_team.f2_plus.ts4": {
+      "sample_size": 46,
+      "approve_count": 46,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 203,
+      "approve_count": 180,
+      "reject_count": 23,
+      "approve_rate": 0.8867,
+      "reject_rate": 0.1133,
+      "confidence": "high"
+    },
+    "unknown.r1.off_leader.off_team.f0.ts3": {
+      "sample_size": 1038,
+      "approve_count": 2,
+      "reject_count": 1036,
+      "approve_rate": 0.0019,
+      "reject_rate": 0.9981,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f1.ts4": {
+      "sample_size": 967,
+      "approve_count": 144,
+      "reject_count": 823,
+      "approve_rate": 0.1489,
+      "reject_rate": 0.8511,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f2_plus.ts4": {
+      "sample_size": 368,
+      "approve_count": 118,
+      "reject_count": 250,
+      "approve_rate": 0.3207,
+      "reject_rate": 0.6793,
+      "confidence": "high"
+    },
+    "good.r1.off_leader.off_team.f0.ts3": {
+      "sample_size": 308,
+      "approve_count": 0,
+      "reject_count": 308,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f0.ts4": {
+      "sample_size": 514,
+      "approve_count": 97,
+      "reject_count": 417,
+      "approve_rate": 0.1887,
+      "reject_rate": 0.8113,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 409,
+      "approve_count": 181,
+      "reject_count": 228,
+      "approve_rate": 0.4425,
+      "reject_rate": 0.5575,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 335,
+      "approve_count": 322,
+      "reject_count": 13,
+      "approve_rate": 0.9612,
+      "reject_rate": 0.0388,
+      "confidence": "high"
+    },
+    "evil.r1.off_leader.in_team.f0.ts3": {
+      "sample_size": 35,
+      "approve_count": 35,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f1.ts4": {
+      "sample_size": 245,
+      "approve_count": 26,
+      "reject_count": 219,
+      "approve_rate": 0.1061,
+      "reject_rate": 0.8939,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f2_plus.ts4": {
+      "sample_size": 104,
+      "approve_count": 26,
+      "reject_count": 78,
+      "approve_rate": 0.25,
+      "reject_rate": 0.75,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 148,
+      "approve_count": 69,
+      "reject_count": 79,
+      "approve_rate": 0.4662,
+      "reject_rate": 0.5338,
+      "confidence": "high"
+    },
+    "unknown.r1.off_leader.in_team.f0.ts3": {
+      "sample_size": 302,
+      "approve_count": 302,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f0.ts4": {
+      "sample_size": 143,
+      "approve_count": 143,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f1.ts4": {
+      "sample_size": 428,
+      "approve_count": 427,
+      "reject_count": 1,
+      "approve_rate": 0.9977,
+      "reject_rate": 0.0023,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f1.ts5_plus": {
+      "sample_size": 119,
+      "approve_count": 115,
+      "reject_count": 4,
+      "approve_rate": 0.9664,
+      "reject_rate": 0.0336,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.in_team.f1.ts5_plus": {
+      "sample_size": 36,
+      "approve_count": 36,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.in_team.f2_plus.ts4": {
+      "sample_size": 208,
+      "approve_count": 203,
+      "reject_count": 5,
+      "approve_rate": 0.976,
+      "reject_rate": 0.024,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.off_leader.off_team.f1.ts5_plus": {
+      "sample_size": 178,
+      "approve_count": 121,
+      "reject_count": 57,
+      "approve_rate": 0.6798,
+      "reject_rate": 0.3202,
+      "confidence": "high"
+    },
+    "evil.r1.off_leader.off_team.f0.ts3": {
+      "sample_size": 207,
+      "approve_count": 0,
+      "reject_count": 207,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f1.ts5_plus": {
+      "sample_size": 72,
+      "approve_count": 39,
+      "reject_count": 33,
+      "approve_rate": 0.5417,
+      "reject_rate": 0.4583,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f0.ts4": {
+      "sample_size": 126,
+      "approve_count": 126,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 74,
+      "approve_count": 72,
+      "reject_count": 2,
+      "approve_rate": 0.973,
+      "reject_rate": 0.027,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.off_team.f0.ts4": {
+      "sample_size": 5,
+      "approve_count": 4,
+      "reject_count": 1,
+      "approve_rate": 0.8,
+      "reject_rate": 0.2,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 103,
+      "approve_count": 45,
+      "reject_count": 58,
+      "approve_rate": 0.4369,
+      "reject_rate": 0.5631,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.off_team.f0.ts4": {
+      "sample_size": 9,
+      "approve_count": 8,
+      "reject_count": 1,
+      "approve_rate": 0.8889,
+      "reject_rate": 0.1111,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.off_team.f0.ts4": {
+      "sample_size": 96,
+      "approve_count": 20,
+      "reject_count": 76,
+      "approve_rate": 0.2083,
+      "reject_rate": 0.7917,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.off_team.f1.ts5_plus": {
+      "sample_size": 33,
+      "approve_count": 21,
+      "reject_count": 12,
+      "approve_rate": 0.6364,
+      "reject_rate": 0.3636,
+      "confidence": "high"
+    },
+    "good.r1.off_leader.in_team.f0.ts3": {
+      "sample_size": 74,
+      "approve_count": 74,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.off_team.f2_plus.ts4": {
+      "sample_size": 119,
+      "approve_count": 22,
+      "reject_count": 97,
+      "approve_rate": 0.1849,
+      "reject_rate": 0.8151,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.in_team.f1.ts4": {
+      "sample_size": 53,
+      "approve_count": 53,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 4,
+      "approve_count": 4,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.off_leader.in_team.f1.ts4": {
+      "sample_size": 162,
+      "approve_count": 160,
+      "reject_count": 2,
+      "approve_rate": 0.9877,
+      "reject_rate": 0.0123,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f2_plus.ts4": {
+      "sample_size": 48,
+      "approve_count": 45,
+      "reject_count": 3,
+      "approve_rate": 0.9375,
+      "reject_rate": 0.0625,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 13,
+      "approve_count": 13,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "evil.r1.leader.in_team.f0.ts3": {
+      "sample_size": 80,
+      "approve_count": 80,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.off_team.f0.ts4": {
+      "sample_size": 66,
+      "approve_count": 13,
+      "reject_count": 53,
+      "approve_rate": 0.197,
+      "reject_rate": 0.803,
+      "confidence": "high"
+    },
+    "unknown.r2_plus.leader.in_team.f2_plus.ts4": {
+      "sample_size": 19,
+      "approve_count": 19,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "unknown.r2_plus.leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 19,
+      "approve_count": 17,
+      "reject_count": 2,
+      "approve_rate": 0.8947,
+      "reject_rate": 0.1053,
+      "confidence": "medium"
+    },
+    "unknown.r2_plus.leader.in_team.f1.ts4": {
+      "sample_size": 6,
+      "approve_count": 6,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.leader.off_team.f1.ts4": {
+      "sample_size": 7,
+      "approve_count": 7,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.leader.off_team.f1.ts4": {
+      "sample_size": 12,
+      "approve_count": 12,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "good.r2_plus.leader.in_team.f1.ts4": {
+      "sample_size": 109,
+      "approve_count": 109,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.in_team.f2_plus.ts4": {
+      "sample_size": 17,
+      "approve_count": 17,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "unknown.r2_plus.leader.in_team.f0.ts4": {
+      "sample_size": 10,
+      "approve_count": 10,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.off_leader.in_team.f0.ts4": {
+      "sample_size": 21,
+      "approve_count": 21,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.off_leader.in_team.f2_plus.ts5_plus": {
+      "sample_size": 28,
+      "approve_count": 28,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.leader.in_team.f1.ts4": {
+      "sample_size": 40,
+      "approve_count": 40,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.off_leader.in_team.f1.ts5_plus": {
+      "sample_size": 80,
+      "approve_count": 78,
+      "reject_count": 2,
+      "approve_rate": 0.975,
+      "reject_rate": 0.025,
+      "confidence": "high"
+    },
+    "evil.r2_plus.off_leader.in_team.f2_plus.ts4": {
+      "sample_size": 44,
+      "approve_count": 43,
+      "reject_count": 1,
+      "approve_rate": 0.9773,
+      "reject_rate": 0.0227,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.off_team.f1.ts4": {
+      "sample_size": 17,
+      "approve_count": 15,
+      "reject_count": 2,
+      "approve_rate": 0.8824,
+      "reject_rate": 0.1176,
+      "confidence": "medium"
+    },
+    "evil.r2_plus.leader.in_team.f0.ts4": {
+      "sample_size": 30,
+      "approve_count": 30,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "good.r2_plus.leader.off_team.f2_plus.ts4": {
+      "sample_size": 3,
+      "approve_count": 3,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.leader.in_team.f0.ts4": {
+      "sample_size": 53,
+      "approve_count": 53,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "evil.r2_plus.leader.off_team.f0.ts4": {
+      "sample_size": 7,
+      "approve_count": 6,
+      "reject_count": 1,
+      "approve_rate": 0.8571,
+      "reject_rate": 0.1429,
+      "confidence": "low"
+    },
+    "evil.r2_plus.leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 8,
+      "approve_count": 5,
+      "reject_count": 3,
+      "approve_rate": 0.625,
+      "reject_rate": 0.375,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.leader.off_team.f1.ts5_plus": {
+      "sample_size": 4,
+      "approve_count": 4,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "unknown.r2_plus.leader.off_team.f2_plus.ts4": {
+      "sample_size": 2,
+      "approve_count": 2,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.off_leader.in_team.f1.ts5_plus": {
+      "sample_size": 8,
+      "approve_count": 8,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "evil.r2_plus.leader.in_team.f1.ts5_plus": {
+      "sample_size": 3,
+      "approve_count": 3,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.leader.in_team.f1.ts5_plus": {
+      "sample_size": 4,
+      "approve_count": 4,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r2_plus.leader.off_team.f2_plus.ts5_plus": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    },
+    "good.r1.leader.in_team.f0.ts2": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    }
+  },
+  "rollups_accepted": {
+    "L1.good.r1.leader.in_team": {
+      "sample_size": 121,
+      "approve_count": 121,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L2.r1.leader.in_team": {
+      "sample_size": 201,
+      "approve_count": 201,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L3.r1.in_team": {
+      "sample_size": 612,
+      "approve_count": 612,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L4.ts3": {
+      "sample_size": 2164,
+      "approve_count": 613,
+      "reject_count": 1551,
+      "approve_rate": 0.2833,
+      "reject_rate": 0.7167,
+      "confidence": "high"
+    },
+    "L1.good.r2_plus.off_leader.off_team": {
+      "sample_size": 578,
+      "approve_count": 126,
+      "reject_count": 452,
+      "approve_rate": 0.218,
+      "reject_rate": 0.782,
+      "confidence": "high"
+    },
+    "L2.r2_plus.off_leader.off_team": {
+      "sample_size": 3649,
+      "approve_count": 960,
+      "reject_count": 2689,
+      "approve_rate": 0.2631,
+      "reject_rate": 0.7369,
+      "confidence": "high"
+    },
+    "L3.r2_plus.off_team": {
+      "sample_size": 3743,
+      "approve_count": 1044,
+      "reject_count": 2699,
+      "approve_rate": 0.2789,
+      "reject_rate": 0.7211,
+      "confidence": "high"
+    },
+    "L4.ts4": {
+      "sample_size": 4331,
+      "approve_count": 2092,
+      "reject_count": 2239,
+      "approve_rate": 0.483,
+      "reject_rate": 0.517,
+      "confidence": "high"
+    },
+    "L1.good.r2_plus.leader.in_team": {
+      "sample_size": 225,
+      "approve_count": 225,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L2.r2_plus.leader.in_team": {
+      "sample_size": 464,
+      "approve_count": 462,
+      "reject_count": 2,
+      "approve_rate": 0.9957,
+      "reject_rate": 0.0043,
+      "confidence": "high"
+    },
+    "L3.r2_plus.in_team": {
+      "sample_size": 2470,
+      "approve_count": 2414,
+      "reject_count": 56,
+      "approve_rate": 0.9773,
+      "reject_rate": 0.0227,
+      "confidence": "high"
+    },
+    "L1.good.r2_plus.off_leader.in_team": {
+      "sample_size": 619,
+      "approve_count": 589,
+      "reject_count": 30,
+      "approve_rate": 0.9515,
+      "reject_rate": 0.0485,
+      "confidence": "high"
+    },
+    "L2.r2_plus.off_leader.in_team": {
+      "sample_size": 2006,
+      "approve_count": 1952,
+      "reject_count": 54,
+      "approve_rate": 0.9731,
+      "reject_rate": 0.0269,
+      "confidence": "high"
+    },
+    "L4.ts5_plus": {
+      "sample_size": 1882,
+      "approve_count": 1366,
+      "reject_count": 516,
+      "approve_rate": 0.7258,
+      "reject_rate": 0.2742,
+      "confidence": "high"
+    },
+    "L1.unknown.r1.off_leader.off_team": {
+      "sample_size": 1038,
+      "approve_count": 2,
+      "reject_count": 1036,
+      "approve_rate": 0.0019,
+      "reject_rate": 0.9981,
+      "confidence": "high"
+    },
+    "L2.r1.off_leader.off_team": {
+      "sample_size": 1553,
+      "approve_count": 2,
+      "reject_count": 1551,
+      "approve_rate": 0.0013,
+      "reject_rate": 0.9987,
+      "confidence": "high"
+    },
+    "L3.r1.off_team": {
+      "sample_size": 1553,
+      "approve_count": 2,
+      "reject_count": 1551,
+      "approve_rate": 0.0013,
+      "reject_rate": 0.9987,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.off_leader.off_team": {
+      "sample_size": 2436,
+      "approve_count": 661,
+      "reject_count": 1775,
+      "approve_rate": 0.2713,
+      "reject_rate": 0.7287,
+      "confidence": "high"
+    },
+    "L1.good.r1.off_leader.off_team": {
+      "sample_size": 308,
+      "approve_count": 0,
+      "reject_count": 308,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.off_leader.in_team": {
+      "sample_size": 1233,
+      "approve_count": 1210,
+      "reject_count": 23,
+      "approve_rate": 0.9813,
+      "reject_rate": 0.0187,
+      "confidence": "high"
+    },
+    "L1.evil.r1.off_leader.in_team": {
+      "sample_size": 35,
+      "approve_count": 35,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L2.r1.off_leader.in_team": {
+      "sample_size": 411,
+      "approve_count": 411,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.off_leader.off_team": {
+      "sample_size": 635,
+      "approve_count": 173,
+      "reject_count": 462,
+      "approve_rate": 0.2724,
+      "reject_rate": 0.7276,
+      "confidence": "high"
+    },
+    "L1.unknown.r1.off_leader.in_team": {
+      "sample_size": 302,
+      "approve_count": 302,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.leader.in_team": {
+      "sample_size": 145,
+      "approve_count": 143,
+      "reject_count": 2,
+      "approve_rate": 0.9862,
+      "reject_rate": 0.0138,
+      "confidence": "high"
+    },
+    "L1.evil.r1.off_leader.off_team": {
+      "sample_size": 207,
+      "approve_count": 0,
+      "reject_count": 207,
+      "approve_rate": 0.0,
+      "reject_rate": 1.0,
+      "confidence": "high"
+    },
+    "L1.good.r2_plus.leader.off_team": {
+      "sample_size": 21,
+      "approve_count": 20,
+      "reject_count": 1,
+      "approve_rate": 0.9524,
+      "reject_rate": 0.0476,
+      "confidence": "medium"
+    },
+    "L2.r2_plus.leader.off_team": {
+      "sample_size": 94,
+      "approve_count": 84,
+      "reject_count": 10,
+      "approve_rate": 0.8936,
+      "reject_rate": 0.1064,
+      "confidence": "high"
+    },
+    "L1.unknown.r2_plus.leader.off_team": {
+      "sample_size": 41,
+      "approve_count": 38,
+      "reject_count": 3,
+      "approve_rate": 0.9268,
+      "reject_rate": 0.0732,
+      "confidence": "high"
+    },
+    "L1.good.r1.off_leader.in_team": {
+      "sample_size": 74,
+      "approve_count": 74,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.off_leader.in_team": {
+      "sample_size": 154,
+      "approve_count": 153,
+      "reject_count": 1,
+      "approve_rate": 0.9935,
+      "reject_rate": 0.0065,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.leader.in_team": {
+      "sample_size": 94,
+      "approve_count": 94,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.evil.r1.leader.in_team": {
+      "sample_size": 80,
+      "approve_count": 80,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "high"
+    },
+    "L1.evil.r2_plus.leader.off_team": {
+      "sample_size": 32,
+      "approve_count": 26,
+      "reject_count": 6,
+      "approve_rate": 0.8125,
+      "reject_rate": 0.1875,
+      "confidence": "high"
+    },
+    "L4.ts2": {
+      "sample_size": 1,
+      "approve_count": 1,
+      "reject_count": 0,
+      "approve_rate": 1.0,
+      "reject_rate": 0.0,
+      "confidence": "low"
+    }
+  },
+  "data_quality": {
+    "vote_rule_version": "edward_2026-04-22",
+    "vote_rule_description": "無標 = 正常票（被選入隊→approve；沒被選→reject）；+ = 異常白票（沒被選卻投白）；- = 異常黑票（被選卻投黑）。Edward 2026-04-22 14:18 verbatim 明定。",
+    "leader_rotation": "10 人局順時針輪替，leader = ((global_attempt - 1) % 10) + 1。",
+    "prior_rule_version_rejected": "v2: token=dissenters + is_last_in_round majority inference (2026-04-22 作廢)"
+  },
+  "fallback_chain": [
+    "situations[full_key]  (6 維 role.stage.leader.team.failed.team_size)",
+    "rollups[L1.role.stage.leader.team]  (4 維 rollup)",
+    "rollups[L2.stage.leader.team]  (3 維，無 role)",
+    "rollups[L3.stage.team]  (2 維，最穩定)",
+    "rollups[L4.team_size]  (1 維，僅 team_size)",
+    "PriorLookup.getHardcode()  (Tier-3 安全值)"
+  ],
+  "schema_note": "situations key = {role_bucket}.{stage}.{leader}.{team_pos}.{failed}.{team_size}；rollups key = L{1|2|3|4}.{...}。三視圖：situations/rollups = 全員票（Edward 規則下全員可推）；situations_explicit/rollups_explicit = 僅 +/- 座位（= 異常票）；situations_accepted/rollups_accepted = 僅最終通過的 attempt。"
+}

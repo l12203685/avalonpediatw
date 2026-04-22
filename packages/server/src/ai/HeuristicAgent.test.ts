@@ -182,7 +182,7 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
     return rejects / samples;
   }
 
-  it('場外白球: off-team good rejects mid-suspicion teams > 65% on hard (plan L187-189)', () => {
+  it('場外白球: off-team good rejects mid-suspicion teams at historical rate (#97 Phase 1)', () => {
     // Construct an off-team observation with some prior history (so the
     // relaxed round-1 baseline does NOT apply). Suspicion stays mid-range
     // (no forced signals) so the baseline reject probability is active.
@@ -202,10 +202,12 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
     });
 
     const ratio = rejectRate(obs, 'hard', 1000);
-    // Plan specifies > 0.65. Hard baseline is 0.70 with 5% noise flip, so
-    // theoretical reject rate = 0.70 * 0.95 + 0.30 * 0.05 = 0.68.
-    expect(ratio).toBeGreaterThan(0.60);
-    expect(ratio).toBeLessThan(0.80); // sanity upper bound
+    // #97 Phase 1 (Edward vote rule): off-team r2+ historical reject rate
+    // is 0.87 (expert L3). With 5% noise: 0.87*0.95 + 0.13*0.05 = 0.83.
+    // Window 0.75-0.95 keeps the test stable across 5% jitter while still
+    // catching a regression to the pre-#97 ~0.68.
+    expect(ratio).toBeGreaterThan(0.75);
+    expect(ratio).toBeLessThan(0.95);
   });
 
   it('場外 hasFailedMember veto: off-team reject is near-deterministic when a member previously failed', () => {
@@ -231,7 +233,11 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
 
   it('場外 round 1 (no history): baseline relaxed to avoid racing to failCount=5', () => {
     // With no voteHistory/questHistory, `hasHistory` is false so the
-    // baseline drops to 0.7 * 0.6 = 0.42 on hard mode.
+    // baseline drops by 0.6x the historical off-team rate.
+    // #97 Phase 1 (Edward vote rule): expert r1 off-team historical
+    // reject is 0.9893, * 0.6 dampener = 0.594 baseline.
+    // With 5% noise: 0.594*0.95 + 0.406*0.05 = 0.585.
+    // Window 0.50-0.70 keeps test stable under 5% noise + sampling jitter.
     const obs = baseObs({
       myPlayerId:    'P1',
       gamePhase:     'team_vote',
@@ -243,10 +249,8 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
     });
 
     const ratio = rejectRate(obs, 'hard', 1000);
-    // Theoretical: 0.42 * 0.95 + 0.58 * 0.05 = 0.43. Window 0.30-0.55 keeps
-    // the test stable under 5% noise + sampling jitter (±3%).
-    expect(ratio).toBeGreaterThan(0.30);
-    expect(ratio).toBeLessThan(0.55);
+    expect(ratio).toBeGreaterThan(0.50);
+    expect(ratio).toBeLessThan(0.70);
   });
 
   it('場外 knownEvil veto: off-team good rejects every time a knownEvil sits on team', () => {
