@@ -103,6 +103,19 @@ router.post(
       ) {
         return fail(res, 400, 'attributionWeights.outerWhiteInnerBlack must be a number');
       }
+      // Phase 2.5 fields
+      if (w.information !== undefined && typeof w.information !== 'number') {
+        return fail(res, 400, 'attributionWeights.information must be a number');
+      }
+      if (w.misdirection !== undefined && typeof w.misdirection !== 'number') {
+        return fail(res, 400, 'attributionWeights.misdirection must be a number');
+      }
+      if (
+        w.seatOrderEnabled !== undefined &&
+        typeof w.seatOrderEnabled !== 'boolean'
+      ) {
+        return fail(res, 400, 'attributionWeights.seatOrderEnabled must be a boolean');
+      }
       partial.attributionWeights = {
         ...getEloConfig().attributionWeights,
         ...w,

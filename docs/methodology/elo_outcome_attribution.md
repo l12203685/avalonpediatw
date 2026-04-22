@@ -5,7 +5,7 @@
 >
 > **作者意圖**：給出三條可實作的方法論路徑、每條的數學形式、對 2146 場牌譜的應用方式、以及推薦演進路徑。本文件**不**規定 α 常數、**不**包含 TypeScript 實作，那些屬於 `packages/server/src/services/Elo*.ts`。
 >
-> **版本**：v1.1 · 2026-04-22 · 加入 §0.0 Naming Alignment 對齊 issue #54 Phase 定義（DG D）。v1.0 2026-04-20。
+> **版本**：v1.2 · 2026-04-22 · 加入 §2.3.5 Phase 2.5 完整 4 因子規格（Information / Misdirection / Seat order）。v1.1 2026-04-22 Naming Alignment。v1.0 2026-04-20。
 
 ---
 
@@ -359,6 +359,110 @@ K_calibrated(outcome, role) = K_heuristic(outcome, role) × calibration_factor(o
 | 可解釋性 | 極高（每個值都可以講故事） |
 | 風險 | 作者偏見、社群共識可能偏離 empirical 真相 |
 | 適用時機 | MVP / Phase 1，累積資料期 |
+
+---
+
+### 2.3.5 Phase 2.5 完整 4 因子規格（2026-04-22）
+
+Edward 2026-04-20 原話列的 4 個因果因子 + 順位加成在 #54 Phase 2.5 實作完成。Phase 2 只上 §2.3.2 提到的 Proposal + OWIB，Phase 2.5 補上 Information + Misdirection + Seat。
+
+**四因子對應 Edward 原話**：
+
+| 順位 | Edward 原話 | 實作 | 陣營 | 檔案 |
+|------|------------|------|------|------|
+| 1 | 梅林/派西 資訊釋放品質 | InformationFactor | 好人限定 | `InformationFactor.ts` |
+| 2 | 忠臣提案的合理性 | ProposalFactor（Phase 2） | 雙向 | `ProposalFactor.ts` |
+| 3 | 紅方誤導效果 | MisdirectionFactor | 壞人限定 | `MisdirectionFactor.ts` |
+| 4 | 外白內黑時機 | OuterWhiteInnerBlackFactor（Phase 2） | 壞人限定 | `OuterWhiteInnerBlackFactor.ts` |
+| +α | 順位 × 角色 | SeatOrderAdjustment | 乘法 modifier（非加法） | `SeatOrderAdjustment.ts` |
+
+**公式（Phase 2.5 完整）**：
+
+```
+rawFactorSum(player) =
+    weights.proposal              × proposalScore(player)
+  + weights.outerWhiteInnerBlack  × owibScore(player)
+  + weights.information           × infoScore(player)
+  + weights.misdirection          × misdirectionScore(player)
+
+seatMultiplier(player) =
+  weights.seatOrderEnabled
+    ? depthToMultiplier(該玩家當過的每一次 leader 的 depth 平均)
+    : 1.0
+
+finalDelta(player) = legacyDelta(player) + rawFactorSum × seatMultiplier
+```
+
+其中 `depth = (slot_index / (total_slots - 1))`，從 0（第一個提案人，資訊最少）到 1（最後一個提案人，資訊最多）；`depthToMultiplier(d) ∈ [0.8, 1.2]` 線性映射。
+
+**Information factor 規則**：
+
+```
+好人每投一票 × role multiplier:
+  approves infected team (≥1 evil)       → -0.5
+  rejects infected team                  → +0.5
+  approves clean team (0 evil)           → +0.25
+  rejects clean team                     → -0.25
+
+role multiplier: merlin 2.0, percival 1.5, loyal 1.0
+
+遊戲級一次性 bonus（梅林）:
+  assassination_failed / timeout         → Merlin +2   (藏好身份)
+  assassination_success / 刺殺梅林        → Merlin -2   (暴露)
+```
+
+**Misdirection factor 規則**：
+
+```
+(a) 每票，壞人 evil player:
+  approves infected team                 → +0.5   (smuggle)
+  approves clean team                    → +0.25  (camouflage)
+  rejects infected team                  →  0     (self-protect 合理)
+  rejects clean team                     → -0.5   (明目張膽反對)
+
+(b) 每失敗任務，on-team 的壞人:
+  evilCountOnTeam == 1                   → +2   (單紅難追查)
+  evilCountOnTeam >= 2                   → +0.5 (多紅顯眼)
+
+(c) 後段協調 bonus:
+  evil 投同意 + infected + 該輪任務失敗  → 額外 +1
+```
+
+**Seat order 規則**：
+
+- 只對「當過 leader」的玩家計算 multiplier；非 leader 拿 1.0（中性）。
+- 玩家若在一場裡當多次 leader，取所有 depth 平均。
+- 單一提案的 edge case → depth 0.5 → 1.0（避免除零）。
+- Seat order 只乘 Phase 2/2.5 layer，**不碰 legacy delta**（不雙扣）。
+
+**Default weights（可熱 reload）**：
+
+```json
+{
+  "proposal": 2.0,
+  "outerWhiteInnerBlack": 3.0,
+  "information": 1.5,
+  "misdirection": 1.5,
+  "seatOrderEnabled": true
+}
+```
+
+**Fallback matrix**（關 seat + 關某 factor 的路徑）：
+
+| 情境 | 行為 |
+|------|------|
+| `attributionMode='legacy'` | 全回傳 applied:false，走 Phase 1 |
+| `voteHistoryPersisted` 空 + `questHistoryPersisted` 空 | applied:false |
+| 只有 `voteHistory` | OWIB 歸零；seat 正常 |
+| 只有 `questHistory` | Proposal / Information / seat 歸零；Misdirection (b)/(c) 可能還在 |
+| `weights.information = 0` | info 分量歸零；其他照算 |
+| `weights.seatOrderEnabled = false` | seat multiplier 全 1.0（breakdown 仍回傳 1.0） |
+
+**Phase 2.5 不做**（交 Phase 3）：
+- Historical backtest（2146 場重跑算 Brier）
+- Logistic regression 調 4 因子 weight
+- 2-week shadow mode（per_event 算但不寫 DB）
+- Admin UI weight slider（現在 per_event toggle 是 read-only weight）
 
 ---
 

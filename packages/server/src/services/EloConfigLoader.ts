@@ -288,12 +288,18 @@ function applyPartialConfig(partial: Partial<EloConfig>): void {
         typeof partial.attributionWeights.outerWhiteInnerBlack === 'number'
           ? partial.attributionWeights.outerWhiteInnerBlack
           : DEFAULT_ELO_CONFIG.attributionWeights.outerWhiteInnerBlack,
-      ...(typeof partial.attributionWeights.information === 'number'
-        ? { information: partial.attributionWeights.information }
-        : {}),
-      ...(typeof partial.attributionWeights.misdirection === 'number'
-        ? { misdirection: partial.attributionWeights.misdirection }
-        : {}),
+      information:
+        typeof partial.attributionWeights.information === 'number'
+          ? partial.attributionWeights.information
+          : DEFAULT_ELO_CONFIG.attributionWeights.information,
+      misdirection:
+        typeof partial.attributionWeights.misdirection === 'number'
+          ? partial.attributionWeights.misdirection
+          : DEFAULT_ELO_CONFIG.attributionWeights.misdirection,
+      seatOrderEnabled:
+        typeof partial.attributionWeights.seatOrderEnabled === 'boolean'
+          ? partial.attributionWeights.seatOrderEnabled
+          : DEFAULT_ELO_CONFIG.attributionWeights.seatOrderEnabled,
     };
   }
   if (typeof partial.baseKFactor === 'number') safe.baseKFactor = partial.baseKFactor;

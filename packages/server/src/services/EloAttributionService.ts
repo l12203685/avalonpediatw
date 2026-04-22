@@ -5,27 +5,48 @@ import {
 } from './EloConfig';
 import { computeProposalFactor } from './ProposalFactor';
 import { computeOuterWhiteInnerBlackFactor } from './OuterWhiteInnerBlackFactor';
+import { computeInformationFactor } from './InformationFactor';
+import { computeMisdirectionFactor } from './MisdirectionFactor';
+import {
+  computeSeatOrderAdjustment,
+  lookupSeatMultiplier,
+} from './SeatOrderAdjustment';
 
 /**
- * EloAttributionService — #54 Phase 2 per-event delta router
+ * EloAttributionService — #54 Phase 2 / 2.5 per-event delta router
  *
  * Takes a completed GameRecord and returns an additive per-player ELO
  * delta that `EloRanking.processGameResult` layers on top of the legacy
  * (team-average × outcome × role) computation when
  * `EloConfig.attributionMode === 'per_event'`.
  *
- * Contract (intentional, DG B — start with the two strongest signals):
+ * Phase 2 contract (2026-04-22):
  *   finalDelta(player) =
- *     legacyDelta(player)                                 // Phase 1
- *   + weights.proposal           * proposalScore(player)  // Phase 2
- *   + weights.outerWhiteInnerBlack * owibScore(player)    // Phase 2
- *   + weights.information?       * 0                      // reserved (Phase 2.5)
- *   + weights.misdirection?      * 0                      // reserved (Phase 2.5)
+ *     legacyDelta(player)                                      // Phase 1
+ *   + weights.proposal              * proposalScore(player)    // Phase 2
+ *   + weights.outerWhiteInnerBlack  * owibScore(player)        // Phase 2
  *
- * Fallback rules (legacy-preserving; all three keep Phase 1 behaviour):
+ * Phase 2.5 contract (2026-04-22):
+ *   rawFactorSum(player) =
+ *       weights.proposal             * proposalScore(player)
+ *     + weights.outerWhiteInnerBlack * owibScore(player)
+ *     + weights.information          * infoScore(player)
+ *     + weights.misdirection         * misdirectionScore(player)
+ *
+ *   seatMultiplier(player) =
+ *     weights.seatOrderEnabled
+ *       ? depthToMultiplier(avg proposal depth for that player)
+ *       : 1.0
+ *
+ *   finalDelta(player) = legacyDelta(player) + rawFactorSum * seatMultiplier
+ *
+ * Fallback rules (legacy-preserving; all keep Phase 1 behaviour):
  *   - attributionMode === 'legacy'                     → returns {}
- *   - voteHistoryPersisted missing or empty            → Proposal contributes 0
- *   - questHistoryPersisted missing or empty           → OWIB contributes 0
+ *   - voteHistoryPersisted missing or empty            → Proposal / Information / part
+ *                                                        of Misdirection contribute 0
+ *   - questHistoryPersisted missing or empty           → OWIB and part of
+ *                                                        Misdirection contribute 0
+ *   - BOTH missing                                     → returns applied=false (same as legacy)
  *   - Any player absent from a factor's result         → 0 for that factor
  *
  * The service is **pure** w.r.t. the passed record and current config:
@@ -35,7 +56,11 @@ import { computeOuterWhiteInnerBlackFactor } from './OuterWhiteInnerBlackFactor'
 export interface AttributionBreakdown {
   proposal: number;
   outerWhiteInnerBlack: number;
-  /** Sum of all factor contributions (already weighted). */
+  information: number;
+  misdirection: number;
+  /** Multiplier applied to (proposal + OWIB + info + misdirection). */
+  seatMultiplier: number;
+  /** Sum of all weighted factor contributions after seat multiplier. */
   total: number;
 }
 
@@ -97,6 +122,14 @@ export function computeAttributionDeltas(
   const owibResult = hasQuests
     ? computeOuterWhiteInnerBlackFactor(record)
     : { scores: {}, questAppearances: {} };
+  const infoResult =
+    hasVotes || !hasQuests  // info uses votes primarily + winReason
+      ? computeInformationFactor(record)
+      : { scores: {}, voteCounts: {} };
+  const misdirectionResult = computeMisdirectionFactor(record);
+  const seatResult = hasVotes
+    ? computeSeatOrderAdjustment(record)
+    : { multipliers: {}, averageDepth: {} };
 
   const deltas: Record<string, number> = {};
   const breakdown: Record<string, AttributionBreakdown> = {};
@@ -105,14 +138,28 @@ export function computeAttributionDeltas(
     const pid = player.playerId;
     const proposalRaw = proposalResult.scores[pid] ?? 0;
     const owibRaw = owibResult.scores[pid] ?? 0;
+    const infoRaw = infoResult.scores[pid] ?? 0;
+    const misdirectionRaw = misdirectionResult.scores[pid] ?? 0;
 
     const proposalDelta = proposalRaw * weights.proposal;
     const owibDelta = owibRaw * weights.outerWhiteInnerBlack;
-    const total = proposalDelta + owibDelta;
+    const infoDelta = infoRaw * weights.information;
+    const misdirectionDelta = misdirectionRaw * weights.misdirection;
+
+    const sum = proposalDelta + owibDelta + infoDelta + misdirectionDelta;
+
+    const seatMultiplier = weights.seatOrderEnabled
+      ? lookupSeatMultiplier(seatResult.multipliers, pid)
+      : 1.0;
+
+    const total = sum * seatMultiplier;
 
     breakdown[pid] = {
       proposal: proposalDelta,
       outerWhiteInnerBlack: owibDelta,
+      information: infoDelta,
+      misdirection: misdirectionDelta,
+      seatMultiplier,
       total,
     };
 

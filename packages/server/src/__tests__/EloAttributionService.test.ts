@@ -206,9 +206,21 @@ describe('computeAttributionDeltas — feature flag gating', () => {
   });
 });
 
-describe('computeAttributionDeltas — weighted sum math', () => {
+describe('computeAttributionDeltas — weighted sum math (Phase 2 only)', () => {
+  // These tests isolate Phase 2 factors by zeroing Phase 2.5 weights +
+  // disabling seat multiplier. Phase 2.5 integration assertions live in
+  // a dedicated block below.
   beforeEach(() => {
-    setEloConfig({ attributionMode: 'per_event' });
+    setEloConfig({
+      attributionMode: 'per_event',
+      attributionWeights: {
+        proposal: 2.0,
+        outerWhiteInnerBlack: 3.0,
+        information: 0,
+        misdirection: 0,
+        seatOrderEnabled: false,
+      },
+    });
   });
   afterEach(() => {
     setEloConfig();
@@ -242,7 +254,13 @@ describe('computeAttributionDeltas — weighted sum math', () => {
   it('respects custom weights via setEloConfig', () => {
     setEloConfig({
       attributionMode: 'per_event',
-      attributionWeights: { proposal: 1.0, outerWhiteInnerBlack: 1.0 },
+      attributionWeights: {
+        proposal: 1.0,
+        outerWhiteInnerBlack: 1.0,
+        information: 0,
+        misdirection: 0,
+        seatOrderEnabled: false,
+      },
     });
 
     const record = makeAttributionFixture();
@@ -265,7 +283,17 @@ describe('computeAttributionDeltas — weighted sum math', () => {
 
 describe('computeAttributionDeltas — partial history fallback', () => {
   beforeEach(() => {
-    setEloConfig({ attributionMode: 'per_event' });
+    // Phase 2 only — isolates Proposal / OWIB behavior for these edge cases.
+    setEloConfig({
+      attributionMode: 'per_event',
+      attributionWeights: {
+        proposal: 2.0,
+        outerWhiteInnerBlack: 3.0,
+        information: 0,
+        misdirection: 0,
+        seatOrderEnabled: false,
+      },
+    });
   });
   afterEach(() => {
     setEloConfig();
@@ -347,8 +375,18 @@ describe('EloRankingService.processGameResult — Phase 2 routing', () => {
     expect(byUid.p4.delta).toBe(-19); // morgana 1.2x
   });
 
-  it('per_event mode: populates attribution + layers deltas on top of legacy', async () => {
-    setEloConfig({ attributionMode: 'per_event' });
+  it('per_event mode (Phase 2 only): populates attribution + layers deltas on top of legacy', async () => {
+    // Isolate Phase 2 math so the existing regression values stay valid.
+    setEloConfig({
+      attributionMode: 'per_event',
+      attributionWeights: {
+        proposal: 2.0,
+        outerWhiteInnerBlack: 3.0,
+        information: 0,
+        misdirection: 0,
+        seatOrderEnabled: false,
+      },
+    });
     const record = makeAttributionFixture();
     const updates = await service.processGameResult(record);
 
@@ -399,7 +437,13 @@ describe('EloRankingService.processGameResult — Phase 2 routing', () => {
     setEloConfig({
       attributionMode: 'per_event',
       // Extreme weight to push past floor.
-      attributionWeights: { proposal: 1, outerWhiteInnerBlack: 10000 },
+      attributionWeights: {
+        proposal: 1,
+        outerWhiteInnerBlack: 10000,
+        information: 0,
+        misdirection: 0,
+        seatOrderEnabled: false,
+      },
     });
     // Evil player with history that gives negative OWIB → would blow past floor.
     mockRef.once.mockResolvedValue({
@@ -412,5 +456,143 @@ describe('EloRankingService.processGameResult — Phase 2 routing', () => {
     updates.forEach((u) => {
       expect(u.newElo).toBeGreaterThanOrEqual(DEFAULT_ELO_CONFIG.minElo);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2.5 — Information + Misdirection + Seat order (new factors)
+// ---------------------------------------------------------------------------
+
+describe('computeAttributionDeltas — Phase 2.5 full 4-factor stack', () => {
+  beforeEach(() => {
+    setEloConfig({ attributionMode: 'per_event' });
+  });
+  afterEach(() => {
+    setEloConfig();
+  });
+
+  it('populates all four factor fields + seat multiplier on breakdown', () => {
+    const record = makeAttributionFixture();
+    const result = computeAttributionDeltas(record);
+
+    expect(result.applied).toBe(true);
+    for (const player of record.players) {
+      const pid = player.playerId;
+      const b = result.breakdown[pid];
+      expect(b).toBeDefined();
+      expect(typeof b.proposal).toBe('number');
+      expect(typeof b.outerWhiteInnerBlack).toBe('number');
+      expect(typeof b.information).toBe('number');
+      expect(typeof b.misdirection).toBe('number');
+      expect(typeof b.seatMultiplier).toBe('number');
+      expect(typeof b.total).toBe('number');
+    }
+  });
+
+  it('assigns non-zero information to good-side voters', () => {
+    const record = makeAttributionFixture();
+    const result = computeAttributionDeltas(record);
+
+    // p1 (Merlin) is good and exists in vote rows → must get non-zero info.
+    // (In the fixture, votes[] is empty per vote so information only fires on
+    // assassination outcome survival bonus for Merlin.)
+    const gameWithVotes: GameRecord = {
+      ...record,
+      voteHistoryPersisted: record.voteHistoryPersisted?.map((v) => ({
+        ...v,
+        votes: {
+          p1: v.approved,
+          p3: v.approved,
+          p5: v.approved,
+          p2: v.approved,
+          p4: v.approved,
+        },
+      })),
+    };
+    const r2 = computeAttributionDeltas(gameWithVotes);
+    // Merlin gets info delta from both per-vote signals AND the survival bonus
+    // (winReason=assassination_failed). Must be non-zero.
+    expect(r2.breakdown.p1.information).not.toBe(0);
+  });
+
+  it('assigns non-zero misdirection to evil voters who smuggled an approved fail', () => {
+    const record = makeAttributionFixture();
+    // Add evil votes on the approved R2 (which infected team failed quest R2).
+    const withEvilApprove: GameRecord = {
+      ...record,
+      voteHistoryPersisted: record.voteHistoryPersisted?.map((v) => ({
+        ...v,
+        votes: {
+          p2: true, // evil assassin always approves
+          p4: true, // evil morgana always approves
+          p1: v.approved,
+          p3: v.approved,
+          p5: v.approved,
+        },
+      })),
+    };
+
+    const r = computeAttributionDeltas(withEvilApprove);
+    // p4 on the failed quest is the "clean-looking fail" bonus recipient.
+    expect(r.breakdown.p4.misdirection).toBeGreaterThan(0);
+  });
+
+  it('seat multiplier pulled from [0.8, 1.2] for players who led proposals', () => {
+    const record = makeAttributionFixture();
+    const result = computeAttributionDeltas(record);
+
+    // p1 led 2 of 3 votes (indices 0 and 1 → depths 0.0 and 0.5, avg = 0.25).
+    // p3 led 1 of 3 (index 2 → depth 1.0).
+    // depthToMultiplier(0.25) = 0.8 + 0.4 * 0.25 = 0.9
+    // depthToMultiplier(1.0)  = 1.2
+    expect(result.breakdown.p1.seatMultiplier).toBeCloseTo(0.9);
+    expect(result.breakdown.p3.seatMultiplier).toBeCloseTo(1.2);
+    // Non-leaders default to 1.0.
+    expect(result.breakdown.p5.seatMultiplier).toBe(1.0);
+  });
+
+  it('seat multiplier disabled ⇒ all multipliers are 1.0', () => {
+    setEloConfig({
+      attributionMode: 'per_event',
+      attributionWeights: { seatOrderEnabled: false },
+    });
+    const record = makeAttributionFixture();
+    const result = computeAttributionDeltas(record);
+
+    for (const player of record.players) {
+      expect(result.breakdown[player.playerId].seatMultiplier).toBe(1.0);
+    }
+  });
+
+  it('zeroing a factor weight nullifies only that factor', () => {
+    setEloConfig({
+      attributionMode: 'per_event',
+      attributionWeights: {
+        proposal: 2.0,
+        outerWhiteInnerBlack: 3.0,
+        information: 0,
+        misdirection: 1.5,
+        seatOrderEnabled: false,
+      },
+    });
+    const record = makeAttributionFixture();
+    const result = computeAttributionDeltas(record);
+
+    for (const player of record.players) {
+      const b = result.breakdown[player.playerId];
+      expect(b.information).toBe(0);
+    }
+  });
+
+  it('total respects seatMultiplier × factor sum', () => {
+    const record = makeAttributionFixture();
+    const result = computeAttributionDeltas(record);
+
+    for (const player of record.players) {
+      const b = result.breakdown[player.playerId];
+      const expectedSum =
+        b.proposal + b.outerWhiteInnerBlack + b.information + b.misdirection;
+      expect(b.total).toBeCloseTo(expectedSum * b.seatMultiplier);
+    }
   });
 });
