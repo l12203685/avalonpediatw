@@ -54,6 +54,45 @@ const NOISE_RATE: Record<'hard' | 'normal', number> = {
 /** Above this failCount, good always approves to avoid auto-loss on 5th reject. */
 const FORCE_APPROVE_FAIL_COUNT = 4;
 
+// ── §0 Listening Rule (Edward 2026-04-22 12:38 verbatim) ───────
+/**
+ * §0 Listening rule — evil quest-action override.
+ *
+ *   Listening (聽牌) = either side has already won 2 quests
+ *     (goodWins === 2 || evilWins === 2).
+ *
+ *   When listening is triggered AND evil player is on the team →
+ *     quest_vote MUST be 'fail' (regardless of role, TOP10 baseline,
+ *     or "deep cover" heuristics). Oberon is the only exception and
+ *     keeps its legacy randomised behaviour.
+ *
+ *   Rationale (Edward verbatim):
+ *     - Evil listening (evilWins === 2) → one more fail wins the entire
+ *       mission track outright. No need to gamble on the assassination
+ *       phase (three-good ends in assassination, which may miss).
+ *     - Good listening (goodWins === 2) → letting this quest succeed
+ *       pushes us straight into the assassination phase, where missing
+ *       Merlin loses the game. Failing this quest keeps the score at
+ *       2-1 and preserves evil's options.
+ *
+ *   See `docs/ai/avalon_ai_strategy_baseline.md` §0 for the full spec.
+ *
+ *   Flag off → legacy branches re-engage (kept for emergency rollback
+ *   and regression scaffolding only).
+ */
+const USE_LISTENING_RULE = true;
+
+/**
+ * Check whether the mission track is at the listening threshold, i.e.
+ * either side has already won 2 quests out of 5.
+ *
+ * Exported helper so callers (including tests) can share the exact
+ * definition.
+ */
+function isListeningState(goodWins: number, evilWins: number): boolean {
+  return goodWins === 2 || evilWins === 2;
+}
+
 // ── Agent Memory ───────────────────────────────────────────────
 /**
  * Per-agent, per-game memory. Populated via idempotent ingest methods
@@ -400,36 +439,39 @@ export class HeuristicAgent implements AvalonAgent {
     const goodQuestWins = questResults.filter(r => r === 'success').length;
     const evilQuestWins = questResults.filter(r => r === 'fail').length;
 
-    // Check if this round requires 2 fail votes (7+ players, round 4)
-    const config = AVALON_CONFIG[playerCount];
-    const failsRequired = config?.questFailsRequired[currentRound - 1] ?? 1;
-
-    // If 2 fails required this round, a single fail is wasted — be strategic
-    if (failsRequired >= 2) {
-      // Only fail if we're desperate (evil about to lose or already winning)
-      if (evilQuestWins >= 2 || goodQuestWins >= 2) {
-        return { type: 'quest_vote', vote: 'fail' };
-      }
-      // Otherwise appear cooperative to stay hidden (failing alone won't help)
-      return { type: 'quest_vote', vote: Math.random() > 0.7 ? 'fail' : 'success' };
-    }
-
-    // Standard 1-fail round logic
-    // If evil already has 2 failed quests, always fail to win
-    if (evilQuestWins >= 2) {
-      return { type: 'quest_vote', vote: 'fail' };
-    }
-
-    // If good is winning (2 successes), urgently fail
-    if (goodQuestWins >= 2) {
+    // ── §0 Listening rule (highest-priority evil quest-action override) ──
+    //
+    // When either side has won 2 quests, every evil player on the team
+    // MUST fail. Rationale (Edward 2026-04-22 12:38):
+    //   • evilWins === 2 → one more fail wins the mission track outright.
+    //   • goodWins === 2 → failing keeps it at 2-1 and avoids the
+    //     assassination-phase gamble.
+    // Oberon is the only exception (no teammate coordination, legacy
+    // randomised behaviour kept).
+    //
+    // This branch overrides role differentiation, TOP10 lookup, and the
+    // `failsRequired >= 2` cautious path. See `docs/ai/avalon_ai_strategy_baseline.md` §0.
+    if (USE_LISTENING_RULE && isListeningState(goodQuestWins, evilQuestWins)) {
       if (myRole === 'oberon') {
-        // Oberon acts more randomly since they don't know the game state as well
+        // Oberon acts more randomly since they don't know the game state as well.
         return { type: 'quest_vote', vote: Math.random() > 0.3 ? 'fail' : 'success' };
       }
       return { type: 'quest_vote', vote: 'fail' };
     }
 
-    // Early game: sometimes succeed to stay hidden (60% fail, 40% succeed)
+    // Check if this round requires 2 fail votes (7+ players, round 4)
+    const config = AVALON_CONFIG[playerCount];
+    const failsRequired = config?.questFailsRequired[currentRound - 1] ?? 1;
+
+    // If 2 fails required this round, a single fail is wasted — be strategic.
+    // (Listening handled above; this path only fires at 0-0, 1-0, 0-1, 1-1.)
+    if (failsRequired >= 2) {
+      return { type: 'quest_vote', vote: Math.random() > 0.7 ? 'fail' : 'success' };
+    }
+
+    // Early game (both sides < 2 wins): sometimes succeed to stay hidden
+    // (60% fail, 40% succeed). Role-differentiated baselines (Fix #5) will
+    // plug in here once landed.
     return { type: 'quest_vote', vote: Math.random() > 0.4 ? 'fail' : 'success' };
   }
 
