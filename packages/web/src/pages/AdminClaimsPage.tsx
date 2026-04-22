@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Loader, ShieldCheck, XCircle, CheckCircle2, ChevronDown, ChevronUp, Inbox, Users } from 'lucide-react';
+import { ArrowLeft, Loader, ShieldCheck, XCircle, CheckCircle2, ChevronDown, ChevronUp, Inbox, Users, Activity } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import {
   fetchPendingClaims,
@@ -352,6 +352,14 @@ export default function AdminClaimsPage(): JSX.Element {
             </h1>
             <p className="text-xs text-gray-500 mt-0.5">審核玩家綁定舊戰績的申請</p>
           </div>
+          <button
+            onClick={() => setGameState('adminElo')}
+            className="flex items-center gap-1 text-xs px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-700"
+            title="ELO 設定"
+          >
+            <Activity size={14} />
+            ELO
+          </button>
           <button
             onClick={() => setGameState('adminAdmins')}
             className="flex items-center gap-1 text-xs px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-700"

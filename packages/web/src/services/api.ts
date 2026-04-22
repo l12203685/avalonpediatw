@@ -691,3 +691,75 @@ export async function fetchAuditLog(token: string): Promise<AuditLogEntryApi[]> 
   const data = await claimApi<{ entries: AuditLogEntryApi[] }>('/api/admin/audit', { token });
   return data.entries;
 }
+
+// ── #54 Phase 2 Day 3: ELO admin ──────────────────────────────────────────────
+
+export type EloAttributionMode = 'legacy' | 'per_event';
+
+export interface EloConfigView {
+  startingElo: number;
+  minElo: number;
+  baseKFactor: number;
+  teamBaselines: { good: number; evil: number };
+  outcomeWeights: {
+    good_wins_quests: number;
+    evil_wins_quests: number;
+    assassin_kills_merlin: number;
+  };
+  roleKWeights: Record<string, number>;
+  attributionMode: EloAttributionMode;
+  attributionWeights: {
+    proposal: number;
+    outerWhiteInnerBlack: number;
+    information?: number;
+    misdirection?: number;
+  };
+}
+
+export interface EloConfigResult {
+  config: EloConfigView;
+  supabaseReady: boolean;
+  warning?: string;
+}
+
+export async function fetchEloConfig(token: string): Promise<EloConfigResult> {
+  const data = await claimApi<{ config: EloConfigView; supabaseReady: boolean }>(
+    '/api/admin/elo/config',
+    { token },
+  );
+  return { config: data.config, supabaseReady: data.supabaseReady };
+}
+
+export async function updateEloConfig(
+  token: string,
+  patch: {
+    attributionMode?: EloAttributionMode;
+    attributionWeights?: Partial<EloConfigView['attributionWeights']>;
+  },
+): Promise<EloConfigResult> {
+  // Direct fetch so we can surface the Supabase "in-memory only" warning that
+  // the server returns as HTTP 207 with a `warning` field outside the envelope.
+  const res = await fetch(`${SERVER_URL}/api/admin/elo/config`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...NGROK_SKIP_HEADER,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(patch),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    data?: { config: EloConfigView; supabaseReady: boolean };
+    error?: string;
+    warning?: string;
+  };
+  if (!res.ok || body.success === false || !body.data) {
+    throw new Error(body.error || `API ${res.status}: /api/admin/elo/config`);
+  }
+  return {
+    config: body.data.config,
+    supabaseReady: body.data.supabaseReady,
+    warning: body.warning,
+  };
+}

@@ -12,9 +12,14 @@ import { friendsRouter } from './routes/friends';
 import { feedbackRouter } from './routes/feedback';
 import { analysisRouter } from './routes/analysis';
 import { claimsRouter } from './routes/claims';
+import { adminEloRouter } from './routes/adminElo';
 import { healthDeepRouter } from './routes/healthDeep';
 import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
 import { ensureAdminsSeed } from './services/AdminService';
+import {
+  loadEloConfigFromSupabase,
+  subscribeEloConfigChanges,
+} from './services/EloConfigLoader';
 
 const app: Express = express();
 
@@ -42,6 +47,8 @@ app.use('/api/feedback', feedbackRouter);
 app.use('/api/analysis', analysisRouter);
 // Claim system: /api/claims/* (player) + /api/admin/* (admin whitelist)
 app.use('/api', claimsRouter);
+// #54 Phase 2 Day 3: admin-only ELO config (/api/admin/elo/config)
+app.use('/api', adminEloRouter);
 // Deep health: /api/health/deep — dependency probe (Plan v2 R0-C)
 app.use('/api', healthDeepRouter);
 
@@ -89,6 +96,11 @@ async function main() {
     console.log('✓ Firebase initialized');
     // Seed admin whitelist (idempotent — no-op if already seeded)
     await ensureAdminsSeed();
+
+    // #54 Phase 2 Day 3: load persisted ELO config + subscribe for hot reload.
+    // Safe if Supabase is unconfigured — logs warning and uses DEFAULT_ELO_CONFIG.
+    await loadEloConfigFromSupabase();
+    subscribeEloConfigChanges();
   } catch (err) {
     console.error('Firebase initialization failed:', err);
     // Continue anyway — individual auth will fail but health checks + guest-only
