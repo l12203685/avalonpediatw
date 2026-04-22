@@ -15,7 +15,7 @@ import {
   saveGameRecords,
   saveGameEvents,
   awardBadges,
-  getUserElo,
+  getUserEloBulk,
   DbGameRecord,
 } from '../services/supabase';
 
@@ -949,16 +949,20 @@ export class GameServer {
     await updateRoomState(roomId, 'ended', evilWins);
 
     // Build game records for Supabase users (skip guests with no supabase ID)
+    // 效能: 先批次取回所有玩家 ELO（單次 DB 請求），避免 N+1 序列查詢
+    const supabaseEntries = Object.entries(room.players)
+      .map(([uid, player]) => ({ uid, player, supabaseId: this.supabaseIds.get(uid) }))
+      .filter((e): e is { uid: string; player: typeof e.player; supabaseId: string } =>
+        !!e.supabaseId && !!e.player.team);
+
+    const allSupabaseIds = supabaseEntries.map((e) => e.supabaseId);
+    const eloMap = await getUserEloBulk(allSupabaseIds);
+
     const records: DbGameRecord[] = [];
-    for (const [uid, player] of Object.entries(room.players)) {
-      const supabaseId = this.supabaseIds.get(uid);
-      if (!supabaseId) continue; // guest or unregistered — skip
-
-      const team = player.team as 'good' | 'evil' | null;
-      if (!team) continue;
-
+    for (const { supabaseId, player } of supabaseEntries) {
+      const team = player.team as 'good' | 'evil';
       const playerWon = evilWins ? team === 'evil' : team === 'good';
-      const eloBefore = await getUserElo(supabaseId);
+      const eloBefore = eloMap.get(supabaseId) ?? 1000;
       const eloDelta  = playerWon ? ELO_WIN : ELO_LOSE;
       const eloAfter  = Math.max(0, eloBefore + eloDelta);
 

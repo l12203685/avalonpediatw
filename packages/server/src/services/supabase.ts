@@ -152,6 +152,34 @@ export async function getUserElo(userId: string): Promise<number> {
   return data?.elo_rating ?? 1000;
 }
 
+/**
+ * 批次取得多位用戶的 ELO — 單次 DB 請求取回所有玩家，避免 N+1。
+ * 回傳 Map<userId, eloRating>。若某 userId 不存在則預設 1000。
+ */
+export async function getUserEloBulk(userIds: string[]): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (userIds.length === 0) return result;
+  const db = getSupabaseClient();
+  if (!db) {
+    userIds.forEach((id) => result.set(id, 1000));
+    return result;
+  }
+  const { data, error } = await db
+    .from('users')
+    .select('id, elo_rating')
+    .in('id', userIds);
+  if (!error && data) {
+    for (const row of data) {
+      result.set(row.id as string, (row.elo_rating as number) ?? 1000);
+    }
+  }
+  // 補上查不到的 userId（預設 1000）
+  for (const id of userIds) {
+    if (!result.has(id)) result.set(id, 1000);
+  }
+  return result;
+}
+
 // ── 房間 ─────────────────────────────────────────────────────
 
 export async function saveRoom(roomId: string, hostUserId: string | null, playerCount: number): Promise<void> {
