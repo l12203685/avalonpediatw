@@ -294,14 +294,20 @@ export async function saveGameEvents(events: DbGameEvent[]): Promise<boolean> {
 /**
  * 取得一局的完整事件序列（供回放用）
  */
-export async function getGameEvents(roomId: string): Promise<DbGameEvent[]> {
+export async function getGameEvents(
+  roomId: string,
+  limitRows = 2000,
+): Promise<DbGameEvent[]> {
   const db = getSupabaseClient();
   if (!db) return [];
+  // 安全: 加上 limit 防止 AI 自動對戰產生大量事件時單次拉回數千筆，
+  // 造成記憶體壓力與回應逾時。正常對局事件數遠低於 2000。
   const { data } = await db
     .from('game_events')
     .select('room_id, seq, event_type, actor_id, event_data')
     .eq('room_id', roomId)
-    .order('seq', { ascending: true });
+    .order('seq', { ascending: true })
+    .limit(limitRows);
   return (data ?? []) as DbGameEvent[];
 }
 
