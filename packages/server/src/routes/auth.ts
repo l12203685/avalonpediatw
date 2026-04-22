@@ -14,7 +14,10 @@ import { mintGuestToken, verifyGuestToken, generateGuestName } from '../middlewa
 
 const router: IRouter = Router();
 
-const JWT_SECRET   = process.env.JWT_SECRET as string;
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('[auth] JWT_SECRET 環境變數未設定，拒絕啟動。請在 .env 中設定 JWT_SECRET。');
+}
 const JWT_EXPIRES  = process.env.JWT_EXPIRES_IN || '7d';
 const FRONTEND_URL = process.env.FRONTEND_URL  || 'http://localhost:5173';
 
@@ -78,7 +81,8 @@ function setGuestSessionCookie(res: Response, token: string): void {
 // ── 工具函式 ─────────────────────────────────────────────────
 
 function issueJwt(payload: { sub: string; displayName: string; provider: string }): string {
-  return sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES } as object);
+  // JWT_SECRET is guaranteed non-empty by the startup guard above
+  return sign(payload, JWT_SECRET as string, { expiresIn: JWT_EXPIRES } as object);
 }
 
 function randomState(): string {

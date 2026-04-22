@@ -29,7 +29,10 @@ import { verifyGuestToken } from '../middleware/guestAuth';
 
 const router: IRouter = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET as string;
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('[api] JWT_SECRET 環境變數未設定，拒絕啟動。請在 .env 中設定 JWT_SECRET。');
+}
 
 // Rate limiting: 60 requests/min per IP for public routes, 10/min for admin
 const publicLimiter = createHttpRateLimit(60 * 1000, 60);
@@ -57,7 +60,8 @@ async function resolvePlayerAuth(authHeader: string | undefined): Promise<Resolv
   const looksLikeJwt = typeof token === 'string' && token.split('.').length === 3;
   if (looksLikeJwt) {
     try {
-      const payload = verify(token, JWT_SECRET) as JwtPayload & {
+      // JWT_SECRET is guaranteed non-empty by the startup guard above
+      const payload = verify(token, JWT_SECRET as string) as JwtPayload & {
         sub?: string;
         displayName?: string;
         provider?: string;
