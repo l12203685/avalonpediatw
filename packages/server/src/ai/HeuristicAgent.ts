@@ -93,6 +93,27 @@ function isListeningState(goodWins: number, evilWins: number): boolean {
   return goodWins === 2 || evilWins === 2;
 }
 
+// ── Smart Percival thumb identification (Fix #4, SSoT §6.4) ────
+/**
+ * Percival thumb-identification feature flag.
+ *
+ * When `true`, Percival uses a signal-based scoring function to decide which
+ * of the two wizard candidates is more likely to be Merlin (vs. Morgana), and
+ * prefers that candidate when selecting a quest team. When `false`, the legacy
+ * behaviour is used — Percival picks `knownWizards[0]` blindly (coin flip).
+ *
+ * Default `true`. Tests may override this via `_setSmartPercivalForTesting`.
+ * Fix #4 for SSoT §6.4 (Edward 2026-04-22 12:35 +08 "盲賭拇指").
+ */
+let USE_SMART_PERCIVAL = true;
+
+/**
+ * Minimum number of voteHistory entries before we trust the smart-percival
+ * heuristic. Below this, behaviour is indistinguishable from the legacy path
+ * (still scores, but scores are all zero → first candidate wins by default).
+ */
+const SMART_PERCIVAL_MIN_VOTE_SAMPLES = 1;
+
 // ── Evil role differentiation (SSoT §3.2 + §6.14, fix #5) ─────
 /**
  * Feature flag for the full-scenario evil role differentiation layer
@@ -420,8 +441,11 @@ export class HeuristicAgent implements AvalonAgent {
       // so quests can be protected. If a quest fails with a wizard on it, they're more likely Morgana.
       if (knownWizards && knownWizards.length > 0) {
         const team: string[] = [myPlayerId];
-        // Always include at least one wizard candidate when there's room
-        const preferredWizard = knownWizards[0];
+        // Smart Percival (Fix #4, SSoT §6.4): infer which wizard is more
+        // likely to be Merlin from vote & proposal signals and prefer that
+        // candidate. Falls back to `knownWizards[0]` when the flag is off
+        // or when there is not enough signal yet (round 1 first attempt).
+        const preferredWizard = this.pickPreferredWizard(knownWizards, obs);
         if (team.length < teamSize) team.push(preferredWizard);
         for (const id of candidates) {
           if (team.length >= teamSize) break;
@@ -750,6 +774,138 @@ export class HeuristicAgent implements AvalonAgent {
     return score;
   }
 
+  // ── Percival thumb identification (Fix #4, SSoT §6.4) ───────
+
+  /**
+   * Score how "Merlin-like" a wizard candidate has behaved so far.
+   *
+   * Merlin sees all evil players. Morgana does not. Their observable
+   * behaviour therefore differs in three ways that a Percival can read:
+   *   1. **Vote pattern** — Merlin rejects teams containing known evils
+   *      or previously-failed members; Morgana's votes are uncorrelated
+   *      with evil presence (she cannot see them).
+   *   2. **Proposal quality** — when this wizard is leader, Merlin's
+   *      proposed teams are clean (never contain knownEvils from a
+   *      third-party perspective, which Percival can approximate by
+   *      checking whether the team later failed); Morgana's are dirtier.
+   *   3. **Failed-quest participation** — Morgana, being evil, can be
+   *      the player who actively failed a quest, so her presence in
+   *      failed teams is weakly self-implicating.
+   *
+   * Higher score → more Merlin-like. Ties resolve to list order so the
+   * function is deterministic when signals are equal.
+   */
+  private scoreWizardAsMerlin(wizardId: string, obs: PlayerObservation): number {
+    let score = 0;
+
+    // Signal 1: vote pattern.
+    for (const record of obs.voteHistory) {
+      const theirVote = record.votes[wizardId];
+      if (theirVote === undefined) continue;
+
+      const teamHadFailedMember = record.team.some(
+        (id) => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
+      );
+
+      // Rejecting a team that later proved tainted = Merlin-like.
+      if (theirVote === false && teamHadFailedMember) score += 2.0;
+      // Rejecting a team that was ultimately rejected (consensus) = mild.
+      else if (theirVote === false && !record.approved) score += 0.3;
+      // Approving a tainted team = not Merlin (Merlin would veto).
+      if (theirVote === true && teamHadFailedMember) score -= 1.5;
+    }
+
+    // Signal 2: proposal quality when this wizard led.
+    for (const record of obs.voteHistory) {
+      if (record.leader !== wizardId) continue;
+      // Did this leader's team later fail (as a proxy for "contained evil")?
+      const failed = obs.questHistory.find(
+        (q) => q.round === record.round && q.result === 'fail',
+      );
+      if (failed && failed.team.every((id) => record.team.includes(id))) {
+        score -= 1.0;  // Morgana-ish: led a tainted team.
+      } else if (record.approved) {
+        score += 0.5;  // Clean approved team: Merlin-ish.
+      }
+    }
+
+    // Signal 3: participation in failed quests.
+    for (const quest of obs.questHistory) {
+      if (quest.result !== 'fail') continue;
+      if (quest.team.includes(wizardId)) {
+        // Morgana herself could have dropped the fail token.
+        score -= 0.5;
+      }
+    }
+
+    return score;
+  }
+
+  /**
+   * Decide which of the two wizard candidates Percival should treat as Merlin.
+   *
+   * Returns the wizard with the highest Merlin-like score. When the feature
+   * flag is off, or when signal is insufficient (no vote history yet), falls
+   * back to the legacy behaviour of picking `knownWizards[0]`.
+   *
+   * Exposed so tests can verify the classification independently of the
+   * surrounding `selectTeam` flow.
+   */
+  identifyMerlinFromThumbs(
+    wizards: readonly string[],
+    obs: PlayerObservation,
+  ): { merlin: string; confidence: number; scores: Record<string, number> } {
+    if (wizards.length === 0) {
+      return { merlin: '', confidence: 0, scores: {} };
+    }
+    if (wizards.length === 1) {
+      return { merlin: wizards[0], confidence: 1, scores: { [wizards[0]]: 0 } };
+    }
+
+    // Insufficient-signal guard: keep legacy behaviour until enough votes
+    // are on the board. Deterministic so unit tests can assert on it.
+    if (obs.voteHistory.length < SMART_PERCIVAL_MIN_VOTE_SAMPLES) {
+      const scores: Record<string, number> = {};
+      for (const id of wizards) scores[id] = 0;
+      return { merlin: wizards[0], confidence: 0, scores };
+    }
+
+    const scores: Record<string, number> = {};
+    for (const id of wizards) {
+      scores[id] = this.scoreWizardAsMerlin(id, obs);
+    }
+
+    // Pick highest-scoring wizard; ties break in wizards[] order (stable).
+    let merlin = wizards[0];
+    let best = scores[wizards[0]];
+    for (let i = 1; i < wizards.length; i++) {
+      if (scores[wizards[i]] > best) {
+        best = scores[wizards[i]];
+        merlin = wizards[i];
+      }
+    }
+
+    // Confidence = relative gap between top score and runner-up, clipped [0,1].
+    const sorted = [...wizards].sort((a, b) => scores[b] - scores[a]);
+    const gap = scores[sorted[0]] - scores[sorted[1]];
+    const confidence = Math.min(1, Math.max(0, gap / 3));
+
+    return { merlin, confidence, scores };
+  }
+
+  /**
+   * Choose which wizard candidate to include on Percival's proposed team.
+   * Honours the `USE_SMART_PERCIVAL` feature flag.
+   */
+  private pickPreferredWizard(
+    wizards: readonly string[],
+    obs: PlayerObservation,
+  ): string {
+    if (!USE_SMART_PERCIVAL) return wizards[0];
+    const { merlin } = this.identifyMerlinFromThumbs(wizards, obs);
+    return merlin || wizards[0];
+  }
+
   // ── Suspicion accessors ─────────────────────────────────────
 
   private getSuspicion(playerId: string): number {
@@ -794,6 +950,16 @@ export class HeuristicAgent implements AvalonAgent {
   /** Percival likeness penalty for assassin targeting (tests only). */
   _getPercivalLikenessPenaltyForTesting(playerId: string, obs: PlayerObservation): number {
     return this.getPercivalLikenessPenalty(playerId, obs);
+  }
+
+  /**
+   * Toggle the smart-Percival feature flag from tests. Returns the previous
+   * value so a test can restore it in `afterEach`.
+   */
+  static _setSmartPercivalForTesting(value: boolean): boolean {
+    const previous = USE_SMART_PERCIVAL;
+    USE_SMART_PERCIVAL = value;
+    return previous;
   }
 
   // ── Helpers ──────────────────────────────────────────────────

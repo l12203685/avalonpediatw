@@ -663,6 +663,204 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
       expect(action.type).toBe('quest_vote');
       if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
     });
+  });
+});
 
+// ──────────────────────────────────────────────────────────────
+// Fix #4 (SSoT §6.4): Percival thumb-identification.
+// Percival sees two wizards (Merlin + Morgana) but cannot tell them apart.
+// Previously the agent blindly picked `knownWizards[0]` (coin flip). We now
+// score each candidate on vote, proposal, and quest participation signals
+// to infer which is more likely to be Merlin and prefer that candidate on
+// the proposed team.
+// ──────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · Percival thumb identification (Fix #4)', () => {
+  // Use the hard difficulty so suspicion-driven ordering is deterministic.
+  let agent: HeuristicAgent;
+  let previousFlag: boolean;
+
+  beforeEach(() => {
+    // Force the flag on for this suite; reset in afterEach.
+    previousFlag = HeuristicAgent._setSmartPercivalForTesting(true);
+    agent = new HeuristicAgent('P1', 'hard');
+  });
+
+  // Restore the flag so other suites are not affected.
+  // (vitest runs describe blocks in declaration order — this keeps global
+  // state pristine for downstream files / suites.)
+  const restoreFlag = () => { HeuristicAgent._setSmartPercivalForTesting(previousFlag); };
+
+  // Fixture: I am Percival (P1). P2 and P3 are the two wizards.
+  //   • P2 consistently rejects teams containing evil (failed later) → Merlin-like.
+  //   • P3 approves those same teams → Morgana-like (she can't see evil).
+  // Expectation: identifyMerlinFromThumbs picks P2.
+  it('case 1 · picks the wizard whose votes avoid tainted teams (vote pattern)', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'percival',
+      myTeam:        'good',
+      playerCount:   5,
+      allPlayerIds:  ['P1', 'P2', 'P3', 'P4', 'P5'],
+      knownWizards:  ['P2', 'P3'],
+      currentRound:  3,
+      gamePhase:     'team_select',
+      questResults:  ['success', 'fail'],
+      // Round 2 team was later failed — P2 rejected (Merlin), P3 approved (Morgana).
+      voteHistory: [
+        vote(1, 1, 'P4', ['P1', 'P4'], true, { P1: true, P2: true, P3: true, P4: true, P5: true }),
+        vote(2, 1, 'P5', ['P4', 'P5'], true, { P1: false, P2: false, P3: true,  P4: true, P5: true }),
+      ],
+      questHistory: [
+        quest(1, ['P1', 'P4'], 'success'),
+        quest(2, ['P4', 'P5'], 'fail', 1),
+      ],
+    });
+    agent.onGameStart(obs);
+    // Let the agent ingest history so failedTeamMembers is populated.
+    agent._ingestForTesting(obs);
+    const { merlin, confidence, scores } = agent.identifyMerlinFromThumbs(['P2', 'P3'], obs);
+
+    expect(merlin).toBe('P2');
+    expect(scores.P2).toBeGreaterThan(scores.P3);
+    expect(confidence).toBeGreaterThan(0);
+
+    restoreFlag();
+  });
+
+  // Fixture: P2 led a clean team (success); P3 led a team that later failed.
+  // Expectation: identifyMerlinFromThumbs picks P2 (Merlin-like clean proposal).
+  it('case 2 · picks the wizard whose proposals stay clean (proposal quality)', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'percival',
+      myTeam:        'good',
+      playerCount:   5,
+      allPlayerIds:  ['P1', 'P2', 'P3', 'P4', 'P5'],
+      knownWizards:  ['P2', 'P3'],
+      currentRound:  3,
+      gamePhase:     'team_select',
+      questResults:  ['success', 'fail'],
+      voteHistory: [
+        // P2 leads a clean team that succeeds.
+        vote(1, 1, 'P2', ['P1', 'P2'], true, { P1: true, P2: true, P3: true, P4: true, P5: true }),
+        // P3 leads a team that later fails.
+        vote(2, 1, 'P3', ['P3', 'P4'], true, { P1: true, P2: true, P3: true, P4: true, P5: true }),
+      ],
+      questHistory: [
+        quest(1, ['P1', 'P2'], 'success'),
+        quest(2, ['P3', 'P4'], 'fail', 1),
+      ],
+    });
+    agent.onGameStart(obs);
+    agent._ingestForTesting(obs);
+    const { merlin, scores } = agent.identifyMerlinFromThumbs(['P2', 'P3'], obs);
+
+    expect(merlin).toBe('P2');
+    expect(scores.P2).toBeGreaterThan(scores.P3);
+
+    restoreFlag();
+  });
+
+  // Fixture: no vote history (round 1, no attempts yet) → signals are zero.
+  // Expectation: identifyMerlinFromThumbs falls back to wizards[0] with 0
+  // confidence — this is the explicit "insufficient signal" guard.
+  it('case 3 · low confidence when signals are ambiguous (insufficient history)', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'percival',
+      myTeam:        'good',
+      playerCount:   5,
+      allPlayerIds:  ['P1', 'P2', 'P3', 'P4', 'P5'],
+      knownWizards:  ['P2', 'P3'],
+      currentRound:  1,
+      gamePhase:     'team_select',
+      questResults:  [],
+      voteHistory:   [],
+      questHistory:  [],
+    });
+    agent.onGameStart(obs);
+    const { merlin, confidence, scores } = agent.identifyMerlinFromThumbs(['P2', 'P3'], obs);
+
+    expect(merlin).toBe('P2');          // deterministic fallback to wizards[0]
+    expect(confidence).toBe(0);
+    expect(scores.P2).toBe(0);
+    expect(scores.P3).toBe(0);
+
+    restoreFlag();
+  });
+
+  // Integration: verify selectTeam actually puts the identified Merlin on
+  // the proposed team (not just the raw identifier output).
+  it('integration · selectTeam includes the identified Merlin (smart flag on)', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'percival',
+      myTeam:        'good',
+      playerCount:   5,
+      allPlayerIds:  ['P1', 'P2', 'P3', 'P4', 'P5'],
+      knownWizards:  ['P2', 'P3'],
+      currentRound:  3,
+      currentLeader: 'P1',
+      gamePhase:     'team_select',
+      questResults:  ['success', 'fail'],
+      voteHistory: [
+        vote(1, 1, 'P4', ['P1', 'P4'], true, { P1: true, P2: true, P3: true, P4: true, P5: true }),
+        vote(2, 1, 'P5', ['P4', 'P5'], true, { P1: false, P2: false, P3: true,  P4: true, P5: true }),
+      ],
+      questHistory: [
+        quest(1, ['P1', 'P4'], 'success'),
+        quest(2, ['P4', 'P5'], 'fail', 1),
+      ],
+    });
+    agent.onGameStart(obs);
+
+    const action = agent.act(obs);
+    expect(action.type).toBe('team_select');
+    if (action.type === 'team_select') {
+      expect(action.teamIds).toContain('P1');
+      // Round 3 team size for 5 players = 2, so preferred wizard (P2) must be included.
+      expect(action.teamIds).toContain('P2');
+    }
+
+    restoreFlag();
+  });
+
+  // Regression: flag off → falls back to legacy behaviour (wizards[0])
+  // regardless of signals. Proves the escape hatch works.
+  it('regression · legacy path picks wizards[0] when flag is off', () => {
+    HeuristicAgent._setSmartPercivalForTesting(false);
+
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'percival',
+      myTeam:        'good',
+      playerCount:   5,
+      allPlayerIds:  ['P1', 'P2', 'P3', 'P4', 'P5'],
+      knownWizards:  ['P3', 'P2'],  // Note: order reversed — legacy picks P3.
+      currentRound:  3,
+      currentLeader: 'P1',
+      gamePhase:     'team_select',
+      questResults:  ['success', 'fail'],
+      // P2 would have the higher Merlin-score if the smart path were on.
+      voteHistory: [
+        vote(1, 1, 'P4', ['P1', 'P4'], true, { P1: true, P2: true, P3: true, P4: true, P5: true }),
+        vote(2, 1, 'P5', ['P4', 'P5'], true, { P1: false, P2: false, P3: true,  P4: true, P5: true }),
+      ],
+      questHistory: [
+        quest(1, ['P1', 'P4'], 'success'),
+        quest(2, ['P4', 'P5'], 'fail', 1),
+      ],
+    });
+    agent.onGameStart(obs);
+
+    const action = agent.act(obs);
+    expect(action.type).toBe('team_select');
+    if (action.type === 'team_select') {
+      // Legacy: wizards[0] = P3 is picked even though P2 is more Merlin-like.
+      expect(action.teamIds).toContain('P3');
+    }
+
+    restoreFlag();
   });
 });
