@@ -54,6 +54,8 @@ export interface UserProfile {
   games_lost: number;
   badges: string[];
   recent_games: RecentGame[];
+  /** 玩家可見短碼；新用戶註冊生成，舊用戶可能為 null */
+  short_code?: string | null;
 }
 
 // ---------------------------------------------------------------------------

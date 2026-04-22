@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { generateUniqueShortCode, normalizeShortCode, isValidShortCode } from './shortCode';
 
 // ── 初始化 ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
@@ -34,6 +35,8 @@ export interface DbUser {
   total_games?: number;
   games_won?: number;
   games_lost?: number;
+  /** 玩家可見短碼；新用戶註冊時自動生成 */
+  short_code?: string | null;
 }
 
 export interface DbGameRecord {
@@ -94,6 +97,23 @@ export async function upsertUser(data: DbUser): Promise<string | null> {
       return existing.id;
     }
 
+    // 為新用戶生成唯一短碼（加好友/精準配對用）
+    // 衝突用 DB unique index 保證；這裡 5 次重試足以覆蓋 32^8 空間
+    let shortCode: string | null = null;
+    try {
+      shortCode = await generateUniqueShortCode(async (candidate) => {
+        const { data: row } = await db
+          .from('users')
+          .select('id')
+          .eq('short_code', candidate)
+          .maybeSingle();
+        return !!row;
+      });
+    } catch (err) {
+      // 生成失敗不阻擋註冊（向下相容既有搜尋用 UUID 末 6 碼）
+      console.error('[supabase] upsertUser shortCode generation failed:', err);
+    }
+
     // 建立新用戶
     const { data: newUser, error } = await db
       .from('users')
@@ -105,6 +125,7 @@ export async function upsertUser(data: DbUser): Promise<string | null> {
         display_name: data.display_name,
         photo_url:   data.photo_url   ?? null,
         provider:    data.provider,
+        short_code:  shortCode,
       })
       .select('id')
       .single();
@@ -402,6 +423,7 @@ export interface DbUserOverrides {
   photo_url: string | null;
   email: string | null;
   provider: string;
+  short_code: string | null;
 }
 
 export async function getDbUserOverrides(userId: string): Promise<DbUserOverrides | null> {
@@ -410,7 +432,7 @@ export async function getDbUserOverrides(userId: string): Promise<DbUserOverride
   try {
     const { data, error } = await db
       .from('users')
-      .select('display_name, photo_url, email, provider')
+      .select('display_name, photo_url, email, provider, short_code')
       .eq('id', userId)
       .single();
     if (error || !data) return null;
@@ -419,8 +441,67 @@ export async function getDbUserOverrides(userId: string): Promise<DbUserOverride
       photo_url:    (data.photo_url as string | null) ?? null,
       email:        (data.email as string | null) ?? null,
       provider:     (data.provider as string) ?? 'unknown',
+      short_code:   (data.short_code as string | null) ?? null,
     };
   } catch {
+    return null;
+  }
+}
+
+// ── 玩家短碼（加好友用）──────────────────────────────────────
+
+/**
+ * 依短碼查用戶 UUID。
+ * 短碼非法格式 → 直接 null（不查 DB）。
+ */
+export async function getUserIdByShortCode(code: string): Promise<string | null> {
+  const normalized = normalizeShortCode(code);
+  if (!isValidShortCode(normalized)) return null;
+
+  const db = getSupabaseClient();
+  if (!db) return null;
+  try {
+    const { data } = await db
+      .from('users')
+      .select('id')
+      .eq('short_code', normalized)
+      .maybeSingle();
+    return (data?.id as string) ?? null;
+  } catch (err) {
+    console.error('[supabase] getUserIdByShortCode error:', err);
+    return null;
+  }
+}
+
+/**
+ * 為缺少短碼的舊用戶 backfill 一個。若已有短碼則直接回傳現值。
+ * 失敗（DB 沒設定、網路錯）回 null，呼叫端退化回 UUID 末 6 碼顯示。
+ */
+export async function ensureUserShortCode(userId: string): Promise<string | null> {
+  const db = getSupabaseClient();
+  if (!db) return null;
+  try {
+    const { data: existing } = await db
+      .from('users')
+      .select('short_code')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!existing) return null;
+    if (existing.short_code) return existing.short_code as string;
+
+    const code = await generateUniqueShortCode(async (candidate) => {
+      const { data: row } = await db
+        .from('users')
+        .select('id')
+        .eq('short_code', candidate)
+        .maybeSingle();
+      return !!row;
+    });
+
+    await db.from('users').update({ short_code: code }).eq('id', userId);
+    return code;
+  } catch (err) {
+    console.error('[supabase] ensureUserShortCode error:', err);
     return null;
   }
 }
@@ -606,7 +687,7 @@ export interface UserSearchEntry {
   elo_rating: number;
   badges: string[];
   following: boolean;   // 搜尋者是否已追蹤此人
-  short_code: string;   // UUID 末 6 碼（暫代正式玩家代碼，方便精準配對）
+  short_code: string;   // 玩家可見短碼（8 字元 A-Z0-9）；舊帳號未 backfill 時退回 UUID 末 6 碼
 }
 
 /**
@@ -631,14 +712,19 @@ export async function searchUsers(
   try {
     let builder = db
       .from('users')
-      .select('id, display_name, photo_url, provider, elo_rating, badges')
+      .select('id, display_name, photo_url, provider, elo_rating, badges, short_code')
       .order('elo_rating', { ascending: false })
       .limit(limit);
 
     if (safeQuery.length > 0) {
-      // 暱稱模糊 OR UUID 字串包含（支援貼上完整/末 6 碼的 ID）
+      // 支援三種輸入：暱稱模糊、UUID 字串包含（舊相容）、玩家短碼精準
+      // 短碼正規化後（去空白+大寫）若為合法格式 → 加精準匹配
+      const normalizedCode = normalizeShortCode(safeQuery);
+      const codeFilter = isValidShortCode(normalizedCode)
+        ? `,short_code.eq.${normalizedCode}`
+        : '';
       builder = builder.or(
-        `display_name.ilike.%${likePattern}%,id.ilike.%${likePattern}%`,
+        `display_name.ilike.%${likePattern}%,id.ilike.%${likePattern}%${codeFilter}`,
       );
     }
 
@@ -670,6 +756,7 @@ export async function searchUsers(
 
     return data.map((u) => {
       const id = u.id as string;
+      const persistedCode = (u.short_code as string | null) ?? null;
       return {
         id,
         display_name: (u.display_name as string) || '',
@@ -678,7 +765,8 @@ export async function searchUsers(
         elo_rating:   (u.elo_rating as number) ?? 1000,
         badges:       (u.badges as string[] | null) ?? [],
         following:    followingSet.has(id),
-        short_code:   id.replace(/-/g, '').slice(-6).toUpperCase(),
+        // 優先用 DB 持久短碼；舊用戶未 backfill 時退回 UUID 末 6 碼（向下相容）
+        short_code:   persistedCode ?? id.replace(/-/g, '').slice(-6).toUpperCase(),
       };
     });
   } catch (err) {

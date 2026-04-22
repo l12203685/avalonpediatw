@@ -50,6 +50,8 @@ export interface UserProfile {
   games_lost: number;
   badges: string[];
   recent_games: RecentGame[];
+  /** 玩家可見短碼；新用戶註冊生成，舊用戶尚未 backfill 可能為 null */
+  short_code?: string | null;
 }
 
 async function apiFetch<T>(path: string, token?: string): Promise<T> {
@@ -161,6 +163,28 @@ export async function searchUsers(token: string, query: string): Promise<UserSea
     token,
   );
   return data.results;
+}
+
+// 依短碼加好友；回傳新加好友的 UUID。
+export async function addFriendByShortCode(
+  token: string,
+  code: string,
+): Promise<{ targetUserId: string }> {
+  const res = await fetch(`${SERVER_URL}/api/friends/add-by-code`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...NGROK_SKIP_HEADER,
+    },
+    body: JSON.stringify({ code }),
+  });
+  const body = await res.json().catch(() => ({} as { targetUserId?: string; error?: string }));
+  if (!res.ok || !body || typeof (body as { targetUserId?: unknown }).targetUserId !== 'string') {
+    const err = (body as { error?: string }).error || `API ${res.status}: add-by-code`;
+    throw new Error(err);
+  }
+  return { targetUserId: (body as { targetUserId: string }).targetUserId };
 }
 
 // ── Feedback / Error Reporting ────────────────────────────────

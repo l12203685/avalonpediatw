@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import {
-  fetchFriends, unfollowUser, followUser, searchUsers,
+  fetchFriends, unfollowUser, followUser, searchUsers, addFriendByShortCode,
+  fetchUserProfile,
   FriendEntry, UserSearchEntry,
 } from '../services/api';
 import { getStoredToken } from '../services/socket';
@@ -33,6 +34,11 @@ export default function FriendsPage(): JSX.Element {
   const [searchError, setSearchError] = useState('');
   const [followingId, setFollowingId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Short-code quick-add state
+  const [codeInput, setCodeInput] = useState('');
+  const [codeAdding, setCodeAdding] = useState(false);
+  const [codeError, setCodeError] = useState('');
 
   // ── Initial guest check ────────────────────────────────────────
   useEffect(() => {
@@ -128,6 +134,46 @@ export default function FriendsPage(): JSX.Element {
       addToast('取消追蹤失敗', 'error');
     } finally {
       setUnfollowing(null);
+    }
+  };
+
+  const handleAddByCode = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token) return;
+    const code = codeInput.trim().toUpperCase();
+    if (code.length === 0) return;
+    setCodeAdding(true);
+    setCodeError('');
+    try {
+      const { targetUserId } = await addFriendByShortCode(token, code);
+      // 抓新朋友 profile 加到 following 清單（若已在清單就跳過）
+      try {
+        const prof = await fetchUserProfile(targetUserId);
+        setFriends((prev) => {
+          if (prev.some((f) => f.id === targetUserId)) return prev;
+          return [
+            ...prev,
+            {
+              id:           prof.id,
+              display_name: prof.display_name,
+              photo_url:    prof.photo_url,
+              elo_rating:   prof.elo_rating,
+              badges:       prof.badges,
+            },
+          ];
+        });
+        addToast(`已追蹤 ${prof.display_name}`, 'success');
+      } catch {
+        addToast('已加好友', 'success');
+      }
+      setCodeInput('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '加好友失敗';
+      setCodeError(msg.includes('404') ? '找不到此短碼對應的玩家' :
+                   msg.includes('400') ? '短碼格式不對（需 8 字元英數）' :
+                   '加好友失敗，請稍後再試');
+    } finally {
+      setCodeAdding(false);
     }
   };
 
@@ -257,6 +303,39 @@ export default function FriendsPage(): JSX.Element {
             {/* Search tab */}
             {tab === 'search' && (
               <div className="space-y-3">
+                {/* 短碼加好友區塊 */}
+                <div className="bg-amber-900/10 border border-amber-700/40 rounded-xl p-3 space-y-2">
+                  <div className="text-xs text-amber-300/80">
+                    有朋友分享短碼？直接輸入精準加好友
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={codeInput}
+                      onChange={(e) => {
+                        setCodeInput(e.target.value.toUpperCase());
+                        setCodeError('');
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !codeAdding) handleAddByCode();
+                      }}
+                      placeholder="例：7K3M9P2Q"
+                      maxLength={12}
+                      className="flex-1 px-3 py-2 rounded-lg bg-avalon-card/80 border border-amber-700/50 focus:border-amber-500 text-amber-100 placeholder-amber-700/60 font-mono tracking-widest outline-none transition-colors"
+                    />
+                    <button
+                      onClick={handleAddByCode}
+                      disabled={codeAdding || codeInput.trim().length === 0}
+                      className="px-3 py-2 rounded-lg bg-amber-700/80 hover:bg-amber-600 border border-amber-600 text-white text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {codeAdding ? '…' : '加好友'}
+                    </button>
+                  </div>
+                  {codeError && (
+                    <div className="text-xs text-red-300">{codeError}</div>
+                  )}
+                </div>
+
                 <div className="relative">
                   <Search
                     size={16}
@@ -266,7 +345,7 @@ export default function FriendsPage(): JSX.Element {
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="輸入暱稱或玩家編號（末 6 碼）"
+                    placeholder="輸入暱稱或玩家短碼"
                     maxLength={60}
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-avalon-card/60 border border-gray-700 focus:border-blue-500 text-white placeholder-gray-500 outline-none transition-colors"
                   />

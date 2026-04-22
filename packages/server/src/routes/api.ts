@@ -121,6 +121,7 @@ function emptyProfile(auth: ResolvedAuth): {
   games_lost: number;
   badges: string[];
   recent_games: [];
+  short_code: string | null;
 } {
   return {
     id:           auth.playerId,
@@ -134,6 +135,7 @@ function emptyProfile(auth: ResolvedAuth): {
     games_lost:   0,
     badges:       [],
     recent_games: [],
+    short_code:   null,
   };
 }
 
@@ -166,9 +168,11 @@ async function resolveSupabaseUserId(auth: ResolvedAuth): Promise<string | null>
 function mergeOverrides<T extends FirestoreUserProfile>(
   profile: T,
   overrides: DbUserOverrides | null,
-): T & { email: string | null } {
+): T & { email: string | null; short_code: string | null } {
   if (!overrides) {
-    return { ...profile, email: null } as T & { email: string | null };
+    return { ...profile, email: null, short_code: profile.short_code ?? null } as T & {
+      email: string | null; short_code: string | null;
+    };
   }
   return {
     ...profile,
@@ -176,7 +180,8 @@ function mergeOverrides<T extends FirestoreUserProfile>(
     photo_url:    overrides.photo_url ?? profile.photo_url,
     provider:     overrides.provider ?? profile.provider,
     email:        overrides.email,
-  } as T & { email: string | null };
+    short_code:   overrides.short_code ?? profile.short_code ?? null,
+  } as T & { email: string | null; short_code: string | null };
 }
 
 // ── GET /api/leaderboard ──────────────────────────────────────
@@ -223,6 +228,7 @@ router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => 
             photo_url:    overrides.photo_url,
             email:        overrides.email,
             provider:     overrides.provider,
+            short_code:   overrides.short_code ?? empty.short_code,
           },
         });
       }
