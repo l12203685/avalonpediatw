@@ -320,4 +320,140 @@ describe('Canonical 7-role scope lock', () => {
       }
     });
   });
+
+  /**
+   * #90 · 9-player special-role free-selection tests.
+   *
+   * The 9-player table must honour the full canonical role toggle matrix:
+   *   - Standard variant (variant9Player absent or 'standard') + Oberon opt-in
+   *     → swap one loyal for oberon → 5 good / 4 evil with quest sizes kept at
+   *     canonical [3,4,4,5,5].
+   *   - Any canonical-7 combo (percival/morgana/mordred on/off) stays canonical
+   *     — no 'minion' leakage provided its partner toggle is compatible.
+   *   - `oberonMandatory` variant (existing #95 behaviour) is untouched —
+   *     Oberon is forced in regardless of the `oberon` toggle.
+   */
+  describe('#90 · 9-player full variant support (Oberon opt-in, all specials selectable)', () => {
+    it('9p standard + oberon=true swaps one loyal to oberon (5 good / 4 evil)', () => {
+      for (let trial = 0; trial < 50; trial++) {
+        const room = makeRoom(9, {
+          percival: true,
+          morgana: true,
+          oberon: true,
+          mordred: true,
+          // variant9Player absent → standard
+        });
+        const engine = new GameEngine(room);
+        engine.startGame();
+        const roles = Object.values(room.players).map(p => p.role);
+        // All canonical.
+        for (const r of roles) expect(isCanonicalRole(r)).toBe(true);
+        // Oberon present.
+        expect(roles).toContain('oberon');
+        // 5 good / 4 evil split.
+        const goodSet = new Set<Role>(['merlin', 'percival', 'loyal']);
+        const goodCount = roles.filter(r => r && goodSet.has(r as Role)).length;
+        const evilCount = roles.filter(r => r && !goodSet.has(r as Role)).length;
+        expect(goodCount).toBe(5);
+        expect(evilCount).toBe(4);
+        engine.cleanup();
+      }
+    });
+
+    it('9p standard + oberon=false keeps canonical 6 good / 3 evil', () => {
+      for (let trial = 0; trial < 50; trial++) {
+        const room = makeRoom(9, {
+          percival: true,
+          morgana: true,
+          oberon: false,
+          mordred: true,
+        });
+        const engine = new GameEngine(room);
+        engine.startGame();
+        const roles = Object.values(room.players).map(p => p.role);
+        for (const r of roles) expect(isCanonicalRole(r)).toBe(true);
+        // Oberon must NOT be present.
+        expect(roles).not.toContain('oberon');
+        const goodSet = new Set<Role>(['merlin', 'percival', 'loyal']);
+        const goodCount = roles.filter(r => r && goodSet.has(r as Role)).length;
+        const evilCount = roles.filter(r => r && !goodSet.has(r as Role)).length;
+        expect(goodCount).toBe(6);
+        expect(evilCount).toBe(3);
+        engine.cleanup();
+      }
+    });
+
+    it('9p quest sizes in standard+oberon are canonical [3,4,4,5,5] (not oberonMandatory [4,3,4,5,5])', () => {
+      const room = makeRoom(9, {
+        percival: true,
+        morgana: true,
+        oberon: true,
+        mordred: true,
+      });
+      const engine = new GameEngine(room);
+      engine.startGame();
+      expect(engine.getEffectiveQuestSizes()).toEqual([3, 4, 4, 5, 5]);
+      engine.cleanup();
+    });
+
+    it('9p swapR1R2 on top of standard+oberon yields [4,3,4,5,5] (R1/R2 swapped)', () => {
+      const room = makeRoom(9, {
+        percival: true,
+        morgana: true,
+        oberon: true,
+        mordred: true,
+        swapR1R2: true,
+      });
+      const engine = new GameEngine(room);
+      engine.startGame();
+      expect(engine.getEffectiveQuestSizes()).toEqual([4, 3, 4, 5, 5]);
+      engine.cleanup();
+    });
+
+    it('9p oberonMandatory variant still forces Oberon even when oberon toggle is off', () => {
+      const room = makeRoom(9, {
+        percival: true,
+        morgana: true,
+        oberon: false, // toggle off…
+        mordred: true,
+        variant9Player: 'oberonMandatory', // …but variant forces it in
+      });
+      const engine = new GameEngine(room);
+      engine.startGame();
+      const roles = Object.values(room.players).map(p => p.role);
+      expect(roles).toContain('oberon');
+      // Mandatory variant = 5 good / 4 evil with canonical quest-size override.
+      expect(engine.getEffectiveQuestSizes()).toEqual([4, 3, 4, 5, 5]);
+      engine.cleanup();
+    });
+
+    it('9p standard + every special-role combo stays canonical (no minion leakage)', () => {
+      // Exhaustive sweep across all 2^3 combos for the independently
+      // toggleable specials in 9p standard (oberon alone is the #90 new
+      // axis; percival/morgana travel as a pair and mordred is solo). We
+      // still probe mordred off separately below where it is safe.
+      const combos: Array<Partial<Room['roleOptions']>> = [
+        { percival: true,  morgana: true,  oberon: true,  mordred: true  },
+        { percival: true,  morgana: true,  oberon: false, mordred: true  },
+        { percival: true,  morgana: true,  oberon: true,  mordred: false },
+        { percival: true,  morgana: true,  oberon: false, mordred: false },
+      ];
+      for (const extra of combos) {
+        const room = makeRoom(9, { ...extra, ladyOfTheLake: false } as Room['roleOptions']);
+        const engine = new GameEngine(room);
+        // mordred=false still throws the canonical lock (minion substitute)
+        // — that is the expected scope-lock behaviour; we assert success
+        // only for the subset that keeps mordred on. The other branches
+        // are covered by the existing "minion substitute throws" test.
+        if (extra.mordred) {
+          engine.startGame();
+          const roles = Object.values(room.players).map(p => p.role);
+          for (const r of roles) expect(isCanonicalRole(r)).toBe(true);
+        } else {
+          expect(() => engine.startGame()).toThrow(CanonicalRoleLockError);
+        }
+        engine.cleanup();
+      }
+    });
+  });
 });

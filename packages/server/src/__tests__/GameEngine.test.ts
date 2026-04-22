@@ -84,12 +84,28 @@ describe('GameEngine — role assignment', () => {
     });
   });
 
-  it.each([5, 6, 7, 8, 9, 10])('uses correct roles for %i players', (count) => {
+  it.each([5, 6, 7, 8, 10])('uses correct roles for %i players', (count) => {
     const { room, engine } = startedEngine(count);
     engine.cleanup();
     const config = AVALON_CONFIG[count];
     const assignedRoles = Object.values(room.players).map((p) => p.role!).sort();
     expect(assignedRoles).toEqual([...config.roles].sort());
+  });
+
+  // #90 · 9-player standard + oberon opt-in: default makeRoom sets
+  // oberon: true so the engine now swaps one loyal for oberon, yielding
+  // a 5-good / 4-evil layout. This is the spec for #90 — all four
+  // specials (percival/morgana/mordred/oberon) are freely selectable.
+  it('9-player game with default oberon=true swaps in Oberon (5G/4E)', () => {
+    const { room, engine } = startedEngine(9);
+    engine.cleanup();
+    const assignedRoles = Object.values(room.players).map((p) => p.role!).sort();
+    const expected = ['assassin', 'loyal', 'loyal', 'loyal', 'merlin', 'mordred', 'morgana', 'oberon', 'percival'].sort();
+    expect(assignedRoles).toEqual(expected);
+    // 5 good / 4 evil split.
+    const good = ['merlin', 'percival', 'loyal'];
+    const goodCount = Object.values(room.players).filter(p => good.includes(p.role as string)).length;
+    expect(goodCount).toBe(5);
   });
 
   it('evil count matches config for 5-player game', () => {
