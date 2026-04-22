@@ -1,8 +1,9 @@
 {
-  "version": 3,
+  "version": 4,
   "rule_version": "edward_2026-04-22",
+  "anomaly_breakdown_version": "edward_2026-04-22_15:12_round_cross_product",
   "tier": "novice",
-  "generated_at": "2026-04-22T14:48:02.798211+08:00",
+  "generated_at": "2026-04-22T15:32:57.545753+08:00",
   "source": "牌譜.yaml via internal_nickname_ranking_threetier + Edward vote rule",
   "pool_avg_win_rate": 0.4394,
   "top10_player_nicknames": [
@@ -36,7 +37,75 @@
     "total_attempts": 19027,
     "anomaly_approve_ratio_of_all_votes": 0.28728,
     "anomaly_reject_ratio_of_all_votes": 0.2013,
-    "attempts_with_anomaly_ratio": 0.3795
+    "attempts_with_anomaly_ratio": 0.3795,
+    "by_round": {
+      "1": {
+        "outer_white_rate": 0.02304,
+        "inner_black_rate": 0.00933,
+        "outer_white_count": 1014,
+        "inner_black_count": 176,
+        "off_team_seat_opportunities": 44010,
+        "in_team_seat_opportunities": 18860,
+        "attempts_in_round": 6287,
+        "games_with_round": 1262
+      },
+      "2": {
+        "outer_white_rate": 0.0342,
+        "inner_black_rate": 0.03299,
+        "outer_white_count": 1230,
+        "inner_black_count": 791,
+        "off_team_seat_opportunities": 35965,
+        "in_team_seat_opportunities": 23975,
+        "attempts_in_round": 5994,
+        "games_with_round": 1262
+      },
+      "3": {
+        "outer_white_rate": 0.14365,
+        "inner_black_rate": 0.14518,
+        "outer_white_count": 3745,
+        "inner_black_count": 2523,
+        "off_team_seat_opportunities": 26071,
+        "in_team_seat_opportunities": 17379,
+        "attempts_in_round": 4345,
+        "games_with_round": 1262
+      },
+      "4": {
+        "outer_white_rate": 0.26819,
+        "inner_black_rate": 0.20235,
+        "outer_white_count": 2053,
+        "inner_black_count": 1549,
+        "off_team_seat_opportunities": 7655,
+        "in_team_seat_opportunities": 7655,
+        "attempts_in_round": 1531,
+        "games_with_round": 728
+      },
+      "5": {
+        "outer_white_rate": 0.30706,
+        "inner_black_rate": 0.34606,
+        "outer_white_count": 1336,
+        "inner_black_count": 1505,
+        "off_team_seat_opportunities": 4351,
+        "in_team_seat_opportunities": 4349,
+        "attempts_in_round": 870,
+        "games_with_round": 363
+      }
+    },
+    "round_weight_suggestion": {
+      "1": 0.5,
+      "2": 0.7,
+      "3": 1.0,
+      "4": 1.3,
+      "5": 1.8
+    },
+    "pooled_rates_for_reference": {
+      "outer_white_rate": 0.07944,
+      "inner_black_rate": 0.09061,
+      "outer_white_count": 9378,
+      "inner_black_count": 6544,
+      "total_off_team_opportunities": 118052,
+      "total_in_team_opportunities": 72218
+    },
+    "note": "by_round[N].outer_white_rate = 該 round 外白票 / off_team 座位機會數；inner_black_rate = 內黑票 / in_team 座位機會數。分母為每個 attempt 的 off/in-team 人數累加（不以玩家為單位），反映『該 round 任一 off/in-team 座位出現異常的機率』。runtime 建議以 by_round 為主，pooled_rates_for_reference 只作整體回退參考。"
   },
   "situations": {
     "good.r1.off_leader.in_team.f0.ts3": {

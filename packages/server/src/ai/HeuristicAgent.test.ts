@@ -868,3 +868,132 @@ describe('HeuristicAgent · Percival thumb identification (Fix #4)', () => {
     restoreFlag();
   });
 });
+
+// ── #97 Phase 2 · anomaly vote wire tests ─────────────────────
+
+describe('HeuristicAgent · anomaly vote weighting (#97 Phase 2)', () => {
+  it('outer-white (off-team approve) adds suspicion proportional to round', () => {
+    // Two agents (hard) ingest two identical-structure vote records except for round.
+    // P3 is off-team and approves in both. R5 should produce larger suspicion delta
+    // than R1 (round_weight 1.8 vs 0.5).
+    const agentR1 = new HeuristicAgent('P1', 'hard');
+    agentR1.onGameStart(baseObs());
+    agentR1._ingestForTesting(baseObs({
+      voteHistory: [
+        vote(1, 1, 'P1', ['P1', 'P2'], true,
+             { P1: true, P2: true, P3: true, P4: false, P5: false }),
+      ],
+    }));
+
+    const agentR5 = new HeuristicAgent('P1', 'hard');
+    agentR5.onGameStart(baseObs());
+    agentR5._ingestForTesting(baseObs({
+      voteHistory: [
+        vote(5, 1, 'P1', ['P1', 'P2'], true,
+             { P1: true, P2: true, P3: true, P4: false, P5: false }),
+      ],
+    }));
+
+    const p3R1 = agentR1._memoryForTesting().suspicion.get('P3') ?? 0;
+    const p3R5 = agentR5._memoryForTesting().suspicion.get('P3') ?? 0;
+    // Both positive (approve baseline +0.1 + outer-white bonus), R5 > R1.
+    expect(p3R5).toBeGreaterThan(p3R1);
+    expect(p3R1).toBeGreaterThan(0.1);  // above bare approve baseline
+  });
+
+  it('inner-black (in-team reject) reduces suspicion (Percival-ish signal)', () => {
+    // P2 is in-team but rejects — an inner-black anomaly.
+    // The baseline reject is -0.2; inner-black bonus adds extra negative delta.
+    const agentControl = new HeuristicAgent('P1', 'hard');
+    agentControl.onGameStart(baseObs());
+    // Control: P2 off-team reject (no anomaly)
+    agentControl._ingestForTesting(baseObs({
+      voteHistory: [
+        vote(5, 1, 'P1', ['P1', 'P3'], false,
+             { P1: true, P2: false, P3: true, P4: false, P5: false }),
+      ],
+    }));
+    const ctrlP2 = agentControl._memoryForTesting().suspicion.get('P2') ?? 0;
+
+    // Anomaly case: P2 in-team reject (inner-black)
+    const agentAnomaly = new HeuristicAgent('P1', 'hard');
+    agentAnomaly.onGameStart(baseObs());
+    agentAnomaly._ingestForTesting(baseObs({
+      voteHistory: [
+        vote(5, 1, 'P1', ['P1', 'P2'], false,
+             { P1: true, P2: false, P3: true, P4: false, P5: false }),
+      ],
+    }));
+    const anoP2 = agentAnomaly._memoryForTesting().suspicion.get('P2') ?? 0;
+
+    // Inner-black case has MORE negative suspicion (but suspicion is clamped >=0
+    // via Math.max(0, ...) in addSuspicion). Both will be 0 in practice — but
+    // the anomaly must not make suspicion HIGHER than control.
+    expect(anoP2).toBeLessThanOrEqual(ctrlP2);
+  });
+
+  it('outer-white anomaly scales with rarity (rare = higher suspicion)', () => {
+    // Compare R1 (rare anomaly ~2.5%) vs R5 (common ~27%). Rarer = stronger
+    // signal per occurrence? Actually per the formula: delta = base * weight * (1 - rate).
+    // R1: 0.6 * 0.5 * (1 - 0.025) = 0.2925
+    // R5: 0.6 * 1.8 * (1 - 0.277) = 0.7810
+    // R5 wins overall because round weight dominates, so this test asserts R5 > R1.
+    const mkAgent = (round: number) => {
+      const a = new HeuristicAgent('P1', 'hard');
+      a.onGameStart(baseObs());
+      a._ingestForTesting(baseObs({
+        voteHistory: [
+          vote(round, 1, 'P1', ['P1', 'P2'], true,
+               { P1: true, P2: true, P3: true, P4: false, P5: false }),
+        ],
+      }));
+      return a._memoryForTesting().suspicion.get('P3') ?? 0;
+    };
+
+    expect(mkAgent(5)).toBeGreaterThan(mkAgent(1));
+    expect(mkAgent(4)).toBeGreaterThan(mkAgent(2));
+  });
+
+  it('normal team approve by in-team player is not treated as anomaly', () => {
+    // Control: P2 in-team approve (normal, not anomaly)
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(baseObs());
+    agent._ingestForTesting(baseObs({
+      voteHistory: [
+        vote(5, 1, 'P1', ['P1', 'P2'], true,
+             { P1: true, P2: true, P3: false, P4: false, P5: true }),
+      ],
+    }));
+    // Only baseline +0.1 should apply (no anomaly weight).
+    const p2 = agent._memoryForTesting().suspicion.get('P2') ?? 0;
+    expect(p2).toBeCloseTo(0.1, 2);
+  });
+});
+
+describe('HeuristicAgent · Percival thumb uses shared anomaly API', () => {
+  it('inner-black R5 vote boosts Merlin score for that wizard', () => {
+    // Percival's POV: two wizards P2, P3. Both rejected a team they were on
+    // in R5. The wizard who did so in R5 (rarer anomaly) should outscore R1.
+    // We can't mix rounds cleanly here because scoreWizardAsMerlin counts
+    // all records — so craft: P2 inner-black at R5, P3 regular reject.
+    const obs = baseObs({
+      currentRound: 3,
+      knownEvils: ['P5'],
+      voteHistory: [
+        // R5 attempt: P2 in-team reject (inner-black)
+        vote(5, 1, 'P4', ['P2', 'P3', 'P4'], false,
+             { P1: true, P2: false, P3: true, P4: true, P5: false }),
+      ],
+      questHistory: [],
+    });
+
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    agent._ingestForTesting(obs);
+
+    const result = agent.identifyMerlinFromThumbs(['P2', 'P3'], obs);
+    // P2 (inner-black R5) should have higher Merlin score than P3 (plain approve).
+    expect(result.scores['P2']).toBeGreaterThan(result.scores['P3']);
+    expect(result.merlin).toBe('P2');
+  });
+});

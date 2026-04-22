@@ -27,6 +27,41 @@ import { PriorLookup, type Difficulty } from './priors/PriorLookup';
 /** Above this failCount, good always approves to avoid auto-loss on 5th reject. */
 const FORCE_APPROVE_FAIL_COUNT = 4;
 
+// ── #97 Phase 2 · Anomaly-vote weighting (v4, 2026-04-22) ───────
+/**
+ * Base magnitude for outer-white (off-team approve) anomaly suspicion delta.
+ *
+ * Effective delta per anomaly = `ANOMALY_OUTER_WHITE_BASE × round_weight × (1 − anomaly_rate)`.
+ * Worst-case R5 rare (rate ≈ 0.27, weight 1.8) → 0.6 × 1.8 × 0.73 ≈ +0.79.
+ * R1 (rate ≈ 0.025, weight 0.5) → 0.6 × 0.5 × 0.975 ≈ +0.29 (nearly noise).
+ * Kept small so a single anomaly never dominates the legacy +2 fail-team penalty.
+ */
+const ANOMALY_OUTER_WHITE_BASE = 0.6;
+
+/**
+ * Base magnitude for inner-black (in-team reject) anomaly trust delta.
+ *
+ * Effective delta = `ANOMALY_INNER_BLACK_BASE × round_weight × (1 − anomaly_rate)`.
+ * R5 rare (rate ≈ 0.33, weight 1.8) → 0.5 × 1.8 × 0.67 ≈ −0.60.
+ * R1 (rate ≈ 0.009, weight 0.5) → 0.5 × 0.5 × 0.991 ≈ −0.25.
+ * Slightly smaller than outer-white base because inner-black can also be
+ * a contrarian reject (not always "principled good").
+ */
+const ANOMALY_INNER_BLACK_BASE = 0.5;
+
+/**
+ * Bayesian Merlin-signal bonus from inner-black anomalies in `scoreWizardAsMerlin`.
+ * Rarer and later = stronger Merlin signal (Merlin refuses tainted teams
+ * even when picked). Effective bonus = `MERLIN_INNER_BLACK_BASE × round_weight × (1 − rate)`.
+ */
+const MERLIN_INNER_BLACK_BASE = 0.8;
+
+/** Clamp arbitrary round integer to 1-5 range used by anomaly tables. */
+function clampRound(round: number): 1 | 2 | 3 | 4 | 5 {
+  const r = Math.max(1, Math.min(5, Math.trunc(round)));
+  return r as 1 | 2 | 3 | 4 | 5;
+}
+
 // ── §0 Listening Rule (Edward 2026-04-22 12:38 verbatim) ───────
 /**
  * §0 Listening rule — evil quest-action override.
@@ -308,6 +343,26 @@ export class HeuristicAgent implements AvalonAgent {
    *   - Rejecters get -0.2 (less suspicious)
    * When a fail quest has already been ingested for this round, approvers of that
    * record's team get accumulated to `approvedSuspiciousVoters`.
+   *
+   * **#97 Phase 2 — Anomaly vote weighting (v4)**:
+   * Additionally, per vote we check for two anomaly classes defined by
+   * Edward's vote rule (2026-04-22):
+   *   - **Outer-white**: voter is NOT on the proposed team but still approves.
+   *     Often an evil-side cover move ("let this team through so fails are
+   *     easy later"). Adds `weighted_delta` to suspicion, where
+   *     `weighted_delta = round_weight * (1 − anomaly_rate) * base`.
+   *     Rarer anomalies (lower rate) weigh more because they are stronger
+   *     signals. Late rounds (R4/R5) weigh more via `round_weight` curve.
+   *   - **Inner-black**: voter IS on the proposed team but rejects. This is
+   *     a strong "I don't trust this team even though I'm in it" signal —
+   *     often Percival-ish (refuses to carry a contaminated team). Subtracts
+   *     `weighted_delta` from suspicion (treats them as more trustworthy).
+   *
+   * The baseline +0.1/-0.2 remains untouched; anomaly weighting is
+   * additive on top so noise reduction never exceeds the legacy baseline.
+   * Magnitudes (`OUTER_WHITE_BASE` / `INNER_BLACK_BASE`) are small
+   * (≤0.6 × weight × rarity) so even R5 rare anomalies contribute only
+   * ~1.3 points, comparable to the existing +1.5 failed-approval penalty.
    */
   private ingestVoteHistory(obs: PlayerObservation): void {
     for (const record of obs.voteHistory) {
@@ -320,6 +375,27 @@ export class HeuristicAgent implements AvalonAgent {
           this.addSuspicion(pid, 0.1);
         } else {
           this.addSuspicion(pid, -0.2);
+        }
+
+        // Anomaly weighting (#97 Phase 2, v4).
+        const round = clampRound(record.round);
+        const onTeam = record.team.includes(pid);
+        if (approved && !onTeam) {
+          // Outer-white → likely evil cover. Weight by rarity × round weight.
+          const rate = this.priors.getAnomalyRate(
+            'outer_white', round, this.difficulty,
+          );
+          const weight = this.priors.getRoundWeight(round, this.difficulty);
+          const delta = ANOMALY_OUTER_WHITE_BASE * weight * (1 - rate);
+          this.addSuspicion(pid, delta);
+        } else if (!approved && onTeam) {
+          // Inner-black → likely Percival-ish or principled good. Reduce suspicion.
+          const rate = this.priors.getAnomalyRate(
+            'inner_black', round, this.difficulty,
+          );
+          const weight = this.priors.getRoundWeight(round, this.difficulty);
+          const delta = ANOMALY_INNER_BLACK_BASE * weight * (1 - rate);
+          this.addSuspicion(pid, -delta);
         }
       }
     }
@@ -818,6 +894,19 @@ export class HeuristicAgent implements AvalonAgent {
       else if (theirVote === false && !record.approved) score += 0.3;
       // Approving a tainted team = not Merlin (Merlin would veto).
       if (theirVote === true && teamHadFailedMember) score -= 1.5;
+
+      // #97 Phase 2 (v4): inner-black anomaly = strong Merlin/Percival-ish
+      // signal, weighted by round rarity. Shares the same PriorLookup
+      // anomaly API as ingestVoteHistory so signals stay calibrated.
+      const onTeam = record.team.includes(wizardId);
+      if (theirVote === false && onTeam) {
+        const round = clampRound(record.round);
+        const rate = this.priors.getAnomalyRate(
+          'inner_black', round, this.difficulty,
+        );
+        const weight = this.priors.getRoundWeight(round, this.difficulty);
+        score += MERLIN_INNER_BLACK_BASE * weight * (1 - rate);
+      }
     }
 
     // Signal 2: proposal quality when this wizard led.

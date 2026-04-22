@@ -368,3 +368,149 @@ describe('PriorLookup · real JSON load', () => {
       .toBe(0.7);
   });
 });
+
+// ── #97 Phase 2 · v4 anomaly rate + round weight ────────────────
+
+function synthTop10WithAnomaly(
+  tier: Top10Tier,
+  overrides: Partial<Top10BehaviorJson> = {},
+): Top10BehaviorJson {
+  return synthTop10(tier, {
+    version: 4,
+    anomaly_breakdown_version: 'edward_2026-04-22_15:12_round_cross_product',
+    anomaly_stats: {
+      by_round: {
+        '1': { outer_white_rate: 0.02598, inner_black_rate: 0.00902 },
+        '2': { outer_white_rate: 0.03508, inner_black_rate: 0.03311 },
+        '3': { outer_white_rate: 0.12979, inner_black_rate: 0.13867 },
+        '4': { outer_white_rate: 0.23618, inner_black_rate: 0.20038 },
+        '5': { outer_white_rate: 0.26747, inner_black_rate: 0.32889 },
+      },
+      round_weight_suggestion: {
+        '1': 0.5, '2': 0.7, '3': 1.0, '4': 1.3, '5': 1.8,
+      },
+    },
+    ...overrides,
+  });
+}
+
+describe('PriorLookup · getAnomalyRate (v4)', () => {
+  it('returns outer_white_rate from JSON by_round', () => {
+    const lookup = PriorLookup.fromData({
+      expert: synthTop10WithAnomaly('expert'),
+    });
+    expect(lookup.getAnomalyRate('outer_white', 5, 'hard')).toBeCloseTo(0.26747, 4);
+    expect(lookup.getAnomalyRate('outer_white', 1, 'hard')).toBeCloseTo(0.02598, 4);
+  });
+
+  it('returns inner_black_rate from JSON by_round', () => {
+    const lookup = PriorLookup.fromData({
+      expert: synthTop10WithAnomaly('expert'),
+    });
+    expect(lookup.getAnomalyRate('inner_black', 5, 'hard')).toBeCloseTo(0.32889, 4);
+    expect(lookup.getAnomalyRate('inner_black', 1, 'hard')).toBeCloseTo(0.00902, 4);
+  });
+
+  it('falls back to Tier-3 hardcode when JSON missing anomaly_stats', () => {
+    const lookup = PriorLookup.fromData({
+      expert: synthTop10('expert'),  // no anomaly_stats
+    });
+    // HARDCODE.anomaly_rate.outer_white[1] = 0.025
+    expect(lookup.getAnomalyRate('outer_white', 1, 'hard')).toBeCloseTo(0.025, 3);
+    expect(lookup.getAnomalyRate('inner_black', 5, 'hard')).toBeCloseTo(0.335, 3);
+  });
+
+  it('cross-tier promotion — normal falls to expert when mid missing', () => {
+    const lookup = PriorLookup.fromData({
+      expert: synthTop10WithAnomaly('expert'),
+      mid: null,
+      novice: null,
+    });
+    expect(lookup.getAnomalyRate('outer_white', 5, 'normal'))
+      .toBeCloseTo(0.26747, 4);
+  });
+
+  it('flag off -> always returns hardcode', () => {
+    const lookup = PriorLookup.fromData(
+      { expert: synthTop10WithAnomaly('expert') },
+      false,
+    );
+    expect(lookup.getAnomalyRate('outer_white', 5, 'hard')).toBeCloseTo(0.277, 3);
+  });
+
+  it('wrong rule_version -> tier marked unsafe, falls to hardcode', () => {
+    const lookup = PriorLookup.fromData({
+      expert: synthTop10WithAnomaly('expert', {
+        rule_version: 'some_other_rule',
+        data_quality: { vote_rule_version: 'some_other_rule' },
+      }),
+    });
+    expect(lookup.getAnomalyRate('outer_white', 5, 'hard')).toBeCloseTo(0.277, 3);
+  });
+});
+
+describe('PriorLookup · getRoundWeight (v4)', () => {
+  it('returns round_weight_suggestion from JSON', () => {
+    const lookup = PriorLookup.fromData({
+      expert: synthTop10WithAnomaly('expert'),
+    });
+    expect(lookup.getRoundWeight(1)).toBeCloseTo(0.5, 2);
+    expect(lookup.getRoundWeight(5)).toBeCloseTo(1.8, 2);
+    expect(lookup.getRoundWeight(3)).toBeCloseTo(1.0, 2);
+  });
+
+  it('falls back to Tier-3 hardcode when JSON lacks suggestion', () => {
+    const lookup = PriorLookup.fromData({
+      expert: synthTop10('expert'),
+    });
+    expect(lookup.getRoundWeight(1)).toBeCloseTo(0.5, 2);
+    expect(lookup.getRoundWeight(5)).toBeCloseTo(1.8, 2);
+  });
+
+  it('late rounds weigh more (Edward Bayesian curve)', () => {
+    const lookup = PriorLookup.fromData({
+      expert: synthTop10WithAnomaly('expert'),
+    });
+    expect(lookup.getRoundWeight(5)).toBeGreaterThan(lookup.getRoundWeight(1));
+    expect(lookup.getRoundWeight(4)).toBeGreaterThan(lookup.getRoundWeight(2));
+  });
+
+  it('flag off -> always returns hardcode', () => {
+    const lookup = PriorLookup.fromData(
+      { expert: synthTop10WithAnomaly('expert') },
+      false,
+    );
+    expect(lookup.getRoundWeight(5)).toBeCloseTo(1.8, 2);
+  });
+
+  it('picks difficulty-specific tier first', () => {
+    const lookup = PriorLookup.fromData({
+      expert: synthTop10WithAnomaly('expert', {
+        anomaly_stats: {
+          round_weight_suggestion: { '1': 0.1, '5': 9.9 },
+        },
+      }),
+      mid: synthTop10WithAnomaly('mid'),
+    });
+    // hard -> expert's distinctive 9.9 (not mid's 1.8)
+    expect(lookup.getRoundWeight(5, 'hard')).toBeCloseTo(9.9, 2);
+    // normal -> mid's 1.8
+    expect(lookup.getRoundWeight(5, 'normal')).toBeCloseTo(1.8, 2);
+  });
+});
+
+describe('PriorLookup · real JSON anomaly load', () => {
+  it('loads v4 anomaly_stats from real JSON files', () => {
+    const lookup = PriorLookup.load();
+    // Expert tier real numbers (from 2026-04-22 breakdown)
+    expect(lookup.getAnomalyRate('outer_white', 5, 'hard')).toBeGreaterThan(0.2);
+    expect(lookup.getAnomalyRate('inner_black', 5, 'hard')).toBeGreaterThan(0.2);
+    // R1 << R5 confirms the Edward "late rounds = real signal" shape
+    const r1 = lookup.getAnomalyRate('outer_white', 1, 'hard');
+    const r5 = lookup.getAnomalyRate('outer_white', 5, 'hard');
+    expect(r5).toBeGreaterThan(r1 * 5);  // R5 is at least 5× R1
+    // Weight curve loaded from JSON
+    expect(lookup.getRoundWeight(1)).toBeCloseTo(0.5, 2);
+    expect(lookup.getRoundWeight(5)).toBeCloseTo(1.8, 2);
+  });
+});
