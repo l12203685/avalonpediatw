@@ -215,14 +215,21 @@ export default function ProfilePage(): JSX.Element {
   }, [profileUserId, isMe]);
 
   // #42 — own profile: fetch linked accounts + parse redirect flags on mount
+  // 2026-04-22 hotfix：訪客 session 跳過 linked-accounts fetch（server 回 403），
+  // 避免 Promise rejection 被全域 error listener 捕獲誤報為應用崩潰。
   useEffect(() => {
     if (!isMe) return;
     const token = getStoredToken();
     if (!token) return;
 
-    fetchLinkedAccounts(token)
-      .then(setLinkedAccounts)
-      .catch(() => setLinkedAccounts([]));
+    const guestNow = useGameStore.getState().currentPlayer?.provider === 'guest';
+    if (guestNow) {
+      setLinkedAccounts([]);
+    } else {
+      fetchLinkedAccounts(token)
+        .then(setLinkedAccounts)
+        .catch(() => setLinkedAccounts([]));
+    }
 
     // 讀 URL 是否從綁定 callback 回來
     const params = new URLSearchParams(window.location.search);
@@ -245,11 +252,18 @@ export default function ProfilePage(): JSX.Element {
     }
   }, [isMe]);
 
-  // On own profile, probe unclaimed records + outstanding claim applications
+  // On own profile, probe unclaimed records + outstanding claim applications.
+  // 訪客無任何 claim 權利（claim 需綁正式帳號），直接跳過避免 API 噪音。
   useEffect(() => {
     if (!isMe) return;
     const token = getStoredToken();
     if (!token) return;
+    const guestNow = useGameStore.getState().currentPlayer?.provider === 'guest';
+    if (guestNow) {
+      setAutoMatchCount(0);
+      setHasPendingClaim(false);
+      return;
+    }
     fetchAutoMatchCandidates(token)
       .then(records => setAutoMatchCount(records.length))
       .catch(() => setAutoMatchCount(null));

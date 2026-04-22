@@ -145,7 +145,7 @@ export default function HomePage(): JSX.Element {
   const currentName = currentPlayer?.name ?? t('auth.guest');
 
   return (
-    <div className="min-h-screen bg-black p-4">
+    <div className="min-h-screen bg-black px-3 py-4 sm:p-4 overflow-x-hidden">
       {/* Background decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <motion.div
@@ -168,9 +168,10 @@ export default function HomePage(): JSX.Element {
         />
       </div>
 
-      <div className="flex items-center justify-center min-h-screen relative z-10">
-        {/* Top-right controls — language only. Logout / Profile / Admin 全部搬到資料設定頁。 */}
-        <div className="absolute top-6 right-6 z-20">
+      <div className="flex items-start sm:items-center justify-center min-h-screen relative z-10 pt-16 sm:pt-0">
+        {/* Top-right controls — language only. Logout / Profile / Admin 全部搬到資料設定頁。
+            改 fixed 避免手機上 absolute 佔據 container 寬度把右側按鈕擠出螢幕。 */}
+        <div className="fixed top-3 right-3 sm:top-6 sm:right-6 z-30">
           <LanguageSwitcher />
         </div>
 
@@ -208,16 +209,18 @@ export default function HomePage(): JSX.Element {
               >
                 {/* Buttons area — 2×3 on mobile, 3×2 on desktop */}
                 <div className="md:col-span-3 space-y-3">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                     {/*
-                      #86 IA restructure — 6 main buttons
-                        Row 1: 開房 / 加入 / 戰績
-                        Row 2: 個人資訊 / 百科 / 設定
+                      #86 IA v2 — 6 main buttons（2026-04-22 緊急 UI/命名 修補）
+                        Row 1: 建立房間 / 加入房間 / 數據排行（原「戰績」）
+                        Row 2: 個人資訊 / 百科攻略 / 系統設定
 
                       整合決策：
-                      - 「戰績」 route → `profile` (戰績頁 — 下一輪整合 analytics tabs 入內)
-                      - 「個人資訊」 route → `profileSettings` (資料頁 basic/binding 區塊)
-                      - 「設定」 route → `profileSettings` (系統設定 history/watchlist/logout 區塊)
+                      - 「數據排行」 route → `analytics` (含排行榜 + 雷達圖 + AI 自對弈 + 深度分析
+                        四個 tab，原「戰績」按鈕單獨 route `profile` 的邏輯，現在統一入口到數據頁；
+                        個人戰績仍可從數據排行頁 header 的「個人頁」入口返回)
+                      - 「個人資訊」 route → `profileSettings` (資料 + 綁定 + 登出)
+                      - 「系統設定」 route → `profileSettings` (同頁不同區塊 — 命名做區分)
                       - FAQ 獨立按鈕拿掉；設定頁內可加 FAQ link (未來)
                     */}
                     {/* Row 1 — Create / Join / Stats */}
@@ -226,10 +229,10 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setMode('create')}
                       data-testid="home-btn-create"
-                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
-                      <Play size={18} />
-                      {t('home.createRoom')}
+                      <Play size={18} className="flex-shrink-0" />
+                      <span className="truncate">{t('home.createRoom')}</span>
                     </motion.button>
 
                     <motion.button
@@ -237,21 +240,21 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setMode('join')}
                       data-testid="home-btn-join"
-                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
-                      <LogIn size={18} />
-                      {t('home.joinRoom')}
+                      <LogIn size={18} className="flex-shrink-0" />
+                      <span className="truncate">{t('home.joinRoom')}</span>
                     </motion.button>
 
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setGameState('profile')}
+                      onClick={() => setGameState('analytics')}
                       data-testid="home-btn-stats"
-                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
-                      <BarChart3 size={18} />
-                      {t('home.stats')}
+                      <BarChart3 size={18} className="flex-shrink-0" />
+                      <span className="truncate">{t('home.stats')}</span>
                     </motion.button>
 
                     {/* Row 2 — Profile / Wiki / Settings */}
@@ -260,11 +263,11 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setGameState('profileSettings')}
                       data-testid="home-btn-profile"
-                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-md"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-md text-sm sm:text-base"
                     >
-                      <span className="inline-flex items-center gap-2">
-                        <User size={18} />
-                        {t('home.profileShort')}
+                      <span className="inline-flex items-center gap-1.5 sm:gap-2 min-w-0">
+                        <User size={18} className="flex-shrink-0" />
+                        <span className="truncate">{t('home.profileShort')}</span>
                       </span>
                       <span className="text-[10px] text-zinc-400 truncate max-w-full">
                         {t('home.currentAs', { name: currentName })}
@@ -276,10 +279,10 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setGameState('wiki')}
                       data-testid="home-btn-wiki"
-                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
-                      <BookOpen size={18} />
-                      {t('home.wikiAndGuide')}
+                      <BookOpen size={18} className="flex-shrink-0" />
+                      <span className="truncate">{t('home.wikiAndGuide')}</span>
                     </motion.button>
 
                     <motion.button
@@ -287,10 +290,10 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setGameState('profileSettings')}
                       data-testid="home-btn-settings"
-                      className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
-                      <Settings size={18} />
-                      {t('home.settings')}
+                      <Settings size={18} className="flex-shrink-0" />
+                      <span className="truncate">{t('home.settings')}</span>
                     </motion.button>
                   </div>
 
