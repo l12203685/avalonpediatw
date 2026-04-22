@@ -1,11 +1,17 @@
 /**
  * SelfPlayEngine — Lady of the Lake targeting logic tests.
  *
- * Covers SSoT §4.3 / §6.9 / §8.3 / §8.4:
+ * Covers SSoT §4.3 / §6.9 / §8.3 + Edward 2026-04-22 12:39 +08 correction
+ * ("紅方湖中女神當然可以湖隊友並宣告隊友是好人 / 不用刻意避開"):
  *   - Good holder MUST NOT lake known evils (no new info).
- *   - Evil holder MUST NOT lake known evil teammates (wastes the lake).
- *   - Smart path uses history-derived suspicion / Merlin-likeness to pick targets.
+ *   - Evil holder MAY lake allies — a pressured ally is a valid wash target.
+ *   - Evil holder picks the most Merlin-like opponent only when ally pressure
+ *     isn't higher than the opponent's Merlin signal.
+ *   - Evil holder's announcement hook washes allies as "good" and calls
+ *     suspected Merlin opponents "good" to disguise assassination intel.
  *   - Legacy behaviour preserved behind `AVALON_USE_SMART_LAKE=0` feature flag.
+ *   - Fix #2 regression behaviour preserved behind
+ *     `AVALON_EVIL_LAKE_BRING_FRIEND=0`.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SelfPlayEngine } from './SelfPlayEngine';
@@ -99,32 +105,37 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     expect(validTargets).toContain(target);
   });
 
-  // ── Evil holder ──────────────────────────────────────────────
+  // ── Evil holder (Edward 2026-04-22 12:39 +08 — allies allowed) ─────────
 
-  it('evil holder never picks a known evil teammate (§8.4)', () => {
+  it('evil holder lakes a visibly pressured ally to wash them with a "good" claim', () => {
+    // Edward: 「紅方湖中女神當然可以湖隊友並宣告隊友是好人」
     const ids = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
-    // P1 = assassin, knownEvils = {P3=Mordred, P5=Morgana}
+    // P1 assassin, knownEvils = [P3, P5].
+    // P3 appeared on a failed quest (publicly suspected) → wash candidate.
+    // Opponents (P2/P4/P6/P7) show no strong Merlin signal.
+    const questHistory: QuestRecord[] = [
+      { round: 1, team: ['P3', 'P4', 'P7'], result: 'fail',    failCount: 1 },
+      { round: 2, team: ['P2', 'P6', 'P7'], result: 'success', failCount: 0 },
+    ];
     const obs = makeObs({
       myPlayerId:   'P1',
       myRole:       'assassin',
       myTeam:       'evil',
       allPlayerIds: ids,
       knownEvils:   ['P3', 'P5'],
+      questHistory,
     });
     const validTargets = ids.filter(id => id !== 'P1');
-    for (let i = 0; i < 20; i++) {
-      const target = engine.pickLadyTarget('evil', obs, validTargets);
-      expect(['P3', 'P5']).not.toContain(target);
-      expect(target).not.toBe('P1');
-      expect(validTargets).toContain(target);
-    }
+    const target = engine.pickLadyTarget('evil', obs, validTargets);
+    expect(target).toBe('P3'); // pressured ally washed, not filtered out
+    // Declaration hook → publicly claim ally is "good".
+    expect(engine.decideLakeAnnouncement('evil', 'P3', obs, 'evil')).toBe('good');
   });
 
-  it('evil holder prefers the most Merlin-like opponent (rejected teams containing knownEvils)', () => {
+  it('evil holder lakes the most Merlin-like opponent when no ally is under pressure', () => {
     const ids = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
-    // P1 assassin, knownEvils = [P3 Mordred, P5 Morgana].
-    // Build vote history: a team containing P3 was proposed — P4 rejected (Merlin signal), P6 approved.
-    // P2 never acted distinctively.
+    // P1 assassin, knownEvils = [P3 Mordred, P5 Morgana]. Allies clean → no wash needed.
+    // P4 rejected both teams containing knownEvils → strongest Merlin signal.
     const voteHistory: VoteRecord[] = [
       {
         round: 1, attempt: 1, leader: 'P2', team: ['P2', 'P3', 'P7'], approved: false,
@@ -149,36 +160,76 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     });
     const validTargets = ids.filter(id => id !== 'P1');
     const target = engine.pickLadyTarget('evil', obs, validTargets);
-    // P4 rejected both teams containing knownEvils → strongest Merlin signal.
     expect(target).toBe('P4');
+    // Declare "good" on the Merlin-like opponent to disguise assassination intel.
+    expect(engine.decideLakeAnnouncement('evil', 'P4', obs, 'good')).toBe('good');
   });
 
-  it('evil holder penalises players seen on failed quests (likely fellow evil, not Merlin)', () => {
-    const ids = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
-    // P1 evil, knownEvils = [P3].
-    // P2 and P6 both rejected a team with P3 (equal Merlin signal).
-    // But P2 also appeared on a failed quest → penalty → P6 preferred.
-    const voteHistory: VoteRecord[] = [
-      {
-        round: 2, attempt: 1, leader: 'P4', team: ['P3', 'P4', 'P7'], approved: false,
-        votes: { P1: true, P2: false, P3: true, P4: true, P5: true, P6: false, P7: false },
-      },
-    ];
-    const questHistory: QuestRecord[] = [
-      { round: 1, team: ['P1', 'P2', 'P5'], result: 'fail', failCount: 1 },
-    ];
+  it('evil holder declares "evil" on a clean non-Merlin-like opponent to muddy narrative', () => {
+    const ids = ['P1', 'P2', 'P3', 'P4', 'P5'];
+    // P1 assassin, knownEvils = [P3]. Allies clean, opponents clean.
+    // P2 has zero Merlin signal → declaring "evil" (a lie) injects confusion.
     const obs = makeObs({
       myPlayerId:   'P1',
       myRole:       'assassin',
       myTeam:       'evil',
       allPlayerIds: ids,
       knownEvils:   ['P3'],
-      voteHistory,
+    });
+    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good')).toBe('evil');
+  });
+
+  it('evil holder with no pressured ally and no distinct opponent picks deterministically', () => {
+    const ids = ['P1', 'P2', 'P3', 'P4', 'P5'];
+    // P1 assassin, knownEvils = [P3]. No vote / quest history → every opponent tied at 0.
+    // Ally pressure = 0 ≤ opponent score 0, but ally pressure must be > 0 to trigger wash,
+    // so holder falls through to opponent branch, picking the first by allPlayerIds tiebreak.
+    const obs = makeObs({
+      myPlayerId:   'P1',
+      myRole:       'assassin',
+      myTeam:       'evil',
+      allPlayerIds: ids,
+      knownEvils:   ['P3'],
+    });
+    const validTargets = ['P2', 'P3', 'P4', 'P5'];
+    const target = engine.pickLadyTarget('evil', obs, validTargets);
+    expect(['P2', 'P4', 'P5']).toContain(target);
+    expect(target).not.toBe('P3'); // no pressure on ally → no wash
+  });
+});
+
+describe('SelfPlayEngine — evil lake (Fix #2 filter-out-allies regression flag)', () => {
+  let engine: SelfPlayEngine;
+
+  beforeEach(() => {
+    delete process.env.AVALON_USE_SMART_LAKE;
+    process.env.AVALON_EVIL_LAKE_BRING_FRIEND = '0';
+    engine = new SelfPlayEngine();
+  });
+
+  afterEach(() => {
+    delete process.env.AVALON_EVIL_LAKE_BRING_FRIEND;
+  });
+
+  it('with bring-friend flag off, evil holder restores Fix #2 filter-out-allies behaviour', () => {
+    const ids = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
+    // Same setup as the "pressured ally" case above — but flag forces old behaviour.
+    const questHistory: QuestRecord[] = [
+      { round: 1, team: ['P3', 'P4', 'P7'], result: 'fail', failCount: 1 },
+    ];
+    const obs = makeObs({
+      myPlayerId:   'P1',
+      myRole:       'assassin',
+      myTeam:       'evil',
+      allPlayerIds: ids,
+      knownEvils:   ['P3', 'P5'],
       questHistory,
     });
     const validTargets = ids.filter(id => id !== 'P1');
     const target = engine.pickLadyTarget('evil', obs, validTargets);
-    expect(target).toBe('P6');
+    expect(target).not.toBe('P3');
+    expect(target).not.toBe('P5');
+    expect(['P2', 'P4', 'P6', 'P7']).toContain(target);
   });
 });
 

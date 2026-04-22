@@ -165,6 +165,18 @@ export class SelfPlayEngine {
           const holderTeam = teamMap.get(holderId);
           const targetId = this.pickLadyTarget(holderTeam, obs, validTargets);
           engine.submitLadyOfTheLakeTarget(holderId, targetId);
+          // Optional public declaration (Edward 2026-04-22 12:39 +08 — evil may
+          // announce "good" for a just-laked ally to wash pressure).
+          const actualTargetTeam = teamMap.get(targetId);
+          const claim = this.decideLakeAnnouncement(holderTeam, targetId, obs, actualTargetTeam);
+          if (claim !== null) {
+            try {
+              engine.declareLakeResult(holderId, claim);
+            } catch {
+              // Declaration is best-effort in self-play; never block the phase
+              // transition if the engine guard rejects the call.
+            }
+          }
           // Skip the 3-second display delay used in real-time games
           engine.completeLadyPhase();
         } else {
@@ -269,18 +281,39 @@ export class SelfPlayEngine {
   }
 
   /**
+   * Feature flag: evil holder may strategically lake (and publicly clear) an
+   * already-suspected ally. Default on per Edward 2026-04-22 12:39 +08:
+   *
+   *   「紅方湖中女神當然可以湖隊友並宣告隊友是好人 / 不用刻意避開」
+   *
+   * When off, the evil branch falls back to the Fix #2 commit `9bdff755`
+   * behaviour of filtering out `knownEvils` before scoring (old heuristic
+   * that Edward flagged as too timid).
+   */
+  private isEvilLakeBringFriendEnabled(): boolean {
+    return process.env.AVALON_EVIL_LAKE_BRING_FRIEND !== '0';
+  }
+
+  /**
    * Pick a lady-of-the-lake target for the holder.
    *
    * Good holder  — target MUST NOT be in `knownEvils` (wastes the lake;
    * SSoT §4.3 / §6.9 / §8.3). Prefer the highest-suspicion unknown-camp player;
    * fallback to any unlaked player.
    *
-   * Evil holder  — target MUST NOT be in `knownEvils` (teammates, also wastes;
-   * SSoT §4.3 / §8.4). Prefer the highest "looks like Merlin" candidate among
-   * unknown players (opponents who rejected teams that contained knownEvils ≈
-   * Merlin signal); fallback to any unlaked non-ally.
+   * Evil holder  — with `AVALON_EVIL_LAKE_BRING_FRIEND=1` (default) the holder
+   * does NOT filter out allies (Edward 2026-04-22 12:39 +08: "不用刻意避開").
+   * A strategic choice is made:
+   *   1. If any known-evil ally is currently the *most-suspected* non-ally
+   *      in public history (`estimateSuspicionFromHistory` exceeds the most
+   *      Merlin-like opponent), lake the ally and plan to declare "good" —
+   *      this is a proactive wash of pressure. (See `decideLakeAnnouncement`.)
+   *   2. Otherwise lake the most Merlin-like opponent (original Fix #2 heuristic).
+   *   3. When the flag is off, restore Fix #2 behaviour of filtering knownEvils
+   *      before scoring (preserved for regression comparison).
    *
-   * Legacy path is kept behind `USE_SMART_LAKE === false` for comparison runs.
+   * Legacy (pre-smart) path is kept behind `USE_SMART_LAKE === false` for
+   * comparison runs.
    *
    * @internal Exposed as `public` for unit testing only; not part of the stable API.
    */
@@ -299,19 +332,13 @@ export class SelfPlayEngine {
     }
 
     const knownEvilSet = new Set(obs.knownEvils);
-    // Candidates = valid targets not already known to holder
-    // (excluding knownEvils for both sides; self is already excluded by validTargets)
-    const unknownCandidates = validTargets.filter(id => !knownEvilSet.has(id));
-
-    // Fallback: everyone known → pick any valid (should be rare; keep first for determinism
-    // in tests, not random, to avoid flaky coverage).
-    if (unknownCandidates.length === 0) {
-      return validTargets[0];
-    }
 
     if (holderTeam === 'good') {
-      // Good: rank unknown candidates by suspicion (higher first),
-      // stable by allPlayerIds order for ties → deterministic under fixed seed/input.
+      // Good: filter known evils (no info), rank unknown candidates by suspicion.
+      const unknownCandidates = validTargets.filter(id => !knownEvilSet.has(id));
+      if (unknownCandidates.length === 0) {
+        return validTargets[0];
+      }
       return this.rankByDescendingScore(
         unknownCandidates,
         id => this.estimateSuspicionFromHistory(id, obs),
@@ -319,13 +346,111 @@ export class SelfPlayEngine {
       )[0];
     }
 
-    // Evil: score "looks like Merlin" — players who consistently reject teams containing
-    // knownEvils are probably reading the evil team (Merlin signal). Higher = more Merlin-like.
+    // Evil branch — Edward 2026-04-22 12:39 +08 correction.
+    if (this.isEvilLakeBringFriendEnabled()) {
+      // Consider every valid target (including allies) — do not filter knownEvils.
+      const opponents = validTargets.filter(id => !knownEvilSet.has(id));
+      const allies    = validTargets.filter(id =>  knownEvilSet.has(id));
+
+      // Rank opponents by Merlin-likeness, allies by how suspected they currently look
+      // (allies publicly look risky → washing them with "good" declaration has high payoff).
+      const bestOpponent = opponents.length === 0 ? null : this.rankByDescendingScore(
+        opponents,
+        id => this.estimateMerlinLikenessFromHistory(id, obs),
+        obs.allPlayerIds,
+      )[0];
+      const mostPressuredAlly = allies.length === 0 ? null : this.rankByDescendingScore(
+        allies,
+        id => this.estimateSuspicionFromHistory(id, obs),
+        obs.allPlayerIds,
+      )[0];
+
+      const opponentScore = bestOpponent === null
+        ? Number.NEGATIVE_INFINITY
+        : this.estimateMerlinLikenessFromHistory(bestOpponent, obs);
+      const allyPressure = mostPressuredAlly === null
+        ? Number.NEGATIVE_INFINITY
+        : this.estimateSuspicionFromHistory(mostPressuredAlly, obs);
+
+      // Heuristic: if an ally is visibly under suspicion (positive pressure)
+      // and the best opponent does not read strongly as Merlin
+      // (≤ ally pressure), wash the ally. Otherwise pin the Merlin-like opponent.
+      if (
+        mostPressuredAlly !== null &&
+        allyPressure > 0 &&
+        allyPressure >= opponentScore
+      ) {
+        return mostPressuredAlly;
+      }
+      if (bestOpponent !== null) {
+        return bestOpponent;
+      }
+      // Only allies remain (no opponents valid) → wash the most pressured one.
+      if (mostPressuredAlly !== null) {
+        return mostPressuredAlly;
+      }
+      // Extremely degenerate: no valid targets after partitioning (shouldn't happen).
+      return validTargets[0];
+    }
+
+    // Flag off → Fix #2 (`9bdff755`) regression behaviour: filter allies then rank.
+    const unknownCandidates = validTargets.filter(id => !knownEvilSet.has(id));
+    if (unknownCandidates.length === 0) {
+      return validTargets[0];
+    }
     return this.rankByDescendingScore(
       unknownCandidates,
       id => this.estimateMerlinLikenessFromHistory(id, obs),
       obs.allPlayerIds,
     )[0];
+  }
+
+  /**
+   * Decide what (if anything) the holder will publicly claim about the
+   * target right after the lake — Edward 2026-04-22 12:39 +08:
+   *
+   *   「紅方湖中女神當然可以湖隊友並宣告隊友是好人」
+   *
+   * Good holder  — announce the truth (can also keep private, but honest claim
+   * is the textbook default; return the real team).
+   *
+   * Evil holder  — always announce "good" for an ally (wash) and for an
+   * opponent announce the role that best furthers the evil narrative:
+   *   - If the opponent reads strongly as Merlin (positive score), publicly
+   *     call them "good" — confirms them as safe and disguises the assassin
+   *     intel.
+   *   - Otherwise call them "evil" to seed confusion on a clean opponent.
+   *
+   * Returns `null` when no declaration should be made (holderTeam unknown
+   * or target not present). Actual `GameEngine.declareLakeResult` call sits
+   * at the socket / orchestrator layer; this method just decides intent.
+   */
+  public decideLakeAnnouncement(
+    holderTeam: 'good' | 'evil' | undefined,
+    targetId:   string,
+    obs:        PlayerObservation,
+    actualTargetTeam: 'good' | 'evil' | undefined,
+  ): 'good' | 'evil' | null {
+    if (holderTeam !== 'good' && holderTeam !== 'evil') return null;
+
+    if (holderTeam === 'good') {
+      // Good holder tells the truth when a team is known.
+      if (actualTargetTeam === 'good' || actualTargetTeam === 'evil') {
+        return actualTargetTeam;
+      }
+      return null;
+    }
+
+    // Evil holder.
+    const knownEvilSet = new Set(obs.knownEvils);
+    if (knownEvilSet.has(targetId)) {
+      // Ally → always publicly wash as good.
+      return 'good';
+    }
+    // Opponent branch: score Merlin-likeness; if Merlin-like, call them good to
+    // disguise the intel. Otherwise call them evil to muddy the water.
+    const merlinScore = this.estimateMerlinLikenessFromHistory(targetId, obs);
+    return merlinScore > 0 ? 'good' : 'evil';
   }
 
   /**
