@@ -35,10 +35,12 @@
 import fs from 'fs';
 import path from 'path';
 
-// ── Schema (mirrors top10_behavior_priors_<tier>.json v3) ─────────
+// ── Schema (mirrors top10_behavior_priors_<tier>.json v3 + v4) ────
 export interface Top10BehaviorJson {
   version: number;
   rule_version?: string;
+  /** v4: additive anomaly breakdown version tag (round-cross-product). */
+  anomaly_breakdown_version?: string;
   tier: Top10Tier;
   generated_at: string;
   pool_avg_win_rate: number;
@@ -62,7 +64,61 @@ export interface Top10BehaviorJson {
   };
   fallback_chain?: string[];
   schema_note?: string;
+  /** v4: anomaly-vote breakdown by round + pooled reference + round weights. */
+  anomaly_stats?: AnomalyStatsV4;
 }
+
+/**
+ * v4 anomaly-vote breakdown (additive, does not touch v3 fields).
+ * See `scripts/compute_top10_behavior_threetier_v4_anomaly_rounds.py` for
+ * the aggregator and `analysis/output/top10_priors_schema.md` for the spec.
+ *
+ * - `outer_white_rate` — probability a player NOT on the proposed team
+ *   still voted approve (often a red covering). Denominator is off-team
+ *   seat-opportunities in that round.
+ * - `inner_black_rate` — probability a player ON the proposed team voted
+ *   reject (refuse to carry the team even though they were picked).
+ *   Denominator is in-team seat-opportunities in that round.
+ * - `round_weight_suggestion` — Edward's "late rounds count more" curve
+ *   `{1:0.5, 2:0.7, 3:1.0, 4:1.3, 5:1.8}`. Wire runtime may pull from
+ *   JSON or fall back to Tier-3 constant.
+ */
+export interface AnomalyStatsV4 {
+  anomaly_approve_count?: number;
+  anomaly_reject_count?: number;
+  anomaly_approve_ratio_of_all_votes?: number;
+  anomaly_reject_ratio_of_all_votes?: number;
+  attempts_with_any_anomaly?: number;
+  attempts_with_anomaly_ratio?: number;
+  total_anomaly_tokens?: number;
+  total_attempts?: number;
+  note?: string;
+  by_round?: Record<string, AnomalyByRoundBucket>;
+  round_weight_suggestion?: Record<string, number>;
+  pooled_rates_for_reference?: {
+    outer_white_rate?: number;
+    outer_white_count?: number;
+    inner_black_rate?: number;
+    inner_black_count?: number;
+  };
+}
+
+export interface AnomalyByRoundBucket {
+  outer_white_rate: number;
+  inner_black_rate: number;
+  outer_white_count?: number;
+  inner_black_count?: number;
+  off_team_seat_opportunities?: number;
+  in_team_seat_opportunities?: number;
+  attempts_in_round?: number;
+  games_with_round?: number;
+}
+
+/** Anomaly kind — outer-white (approved off-team) or inner-black (rejected in-team). */
+export type AnomalyKind = 'outer_white' | 'inner_black';
+
+/** Round index 1-5 used by round-cross-product breakdown. */
+export type RoundIndex = 1 | 2 | 3 | 4 | 5;
 
 export interface SituationBucket {
   sample_size: number;
@@ -135,6 +191,25 @@ const HARDCODE = {
     hard: 0.9,
     normal: 0.85,
     easy: 0.8,
+  },
+  // v4 anomaly-vote fallback rates (used when JSON lacks anomaly_stats).
+  // Values are a conservative midpoint across expert/mid/novice tiers
+  // from the 2026-04-22 breakdown. Callers should still weight by
+  // round_weight so R1/R2 stays low-impact.
+  anomaly_rate: {
+    outer_white: {
+      1: 0.025, 2: 0.035, 3: 0.133, 4: 0.245, 5: 0.277,
+    },
+    inner_black: {
+      1: 0.009, 2: 0.034, 3: 0.141, 4: 0.201, 5: 0.335,
+    },
+  },
+  // Edward's "late rounds count more" Bayesian weight curve (2026-04-22).
+  // Linear ramp chosen over exponential (`0.4/0.6/1.0/1.5/2.5`) so the
+  // end-to-end suspicion delta stays bounded. Override by providing the
+  // JSON field `anomaly_stats.round_weight_suggestion`.
+  round_weight: {
+    1: 0.5, 2: 0.7, 3: 1.0, 4: 1.3, 5: 1.8,
   },
 } as const;
 
@@ -238,6 +313,80 @@ export class PriorLookup {
     });
     if (historical !== null) return historical;
     return HARDCODE.in_team_approve_rate[difficulty];
+  }
+
+  /**
+   * v4 anomaly-vote base rate for a given `kind` + `round` + `difficulty`.
+   *
+   * Three-tier fallback:
+   *   1. Target tier `anomaly_stats.by_round[round].<kind>_rate` (JSON, v4).
+   *   2. Cross-tier promotion — if target tier missing, try the other two
+   *      (preserves prediction when any tier has data).
+   *   3. Tier-3 hardcode (`HARDCODE.anomaly_rate[kind][round]`).
+   *
+   * Flag off → always returns Tier-3 hardcode.
+   *
+   * Used by:
+   *   - `HeuristicAgent.ingestVoteHistory` to weight suspicion deltas by
+   *     how rare the observed anomaly is.
+   *   - `HeuristicAgent.scoreWizardAsMerlin` (Percival thumb) for the same
+   *     weighting on wizard candidates.
+   */
+  getAnomalyRate(
+    kind: AnomalyKind,
+    round: RoundIndex,
+    difficulty: Difficulty,
+  ): number {
+    if (!this.flagEnabled) return HARDCODE.anomaly_rate[kind][round];
+
+    const targetTier = difficultyToTier(difficulty);
+    const searchOrder: Top10Tier[] = [targetTier];
+    for (const t of ['expert', 'mid', 'novice'] as Top10Tier[]) {
+      if (t !== targetTier) searchOrder.push(t);
+    }
+
+    for (const tier of searchOrder) {
+      if (!this.isTierSafe(tier)) continue;
+      const data = this.tierData[tier];
+      const bucket = data?.anomaly_stats?.by_round?.[String(round)];
+      if (!bucket) continue;
+      const rate = kind === 'outer_white' ? bucket.outer_white_rate : bucket.inner_black_rate;
+      if (typeof rate === 'number' && Number.isFinite(rate)) return rate;
+    }
+
+    return HARDCODE.anomaly_rate[kind][round];
+  }
+
+  /**
+   * v4 round weight — Edward's "late rounds count more" Bayesian curve.
+   *
+   * Fallback:
+   *   1. Target tier `anomaly_stats.round_weight_suggestion[round]` (JSON).
+   *   2. Cross-tier promotion.
+   *   3. Tier-3 hardcode `HARDCODE.round_weight[round]` (linear ramp).
+   *
+   * Flag off → always returns Tier-3 hardcode.
+   */
+  getRoundWeight(round: RoundIndex, difficulty?: Difficulty): number {
+    if (!this.flagEnabled) return HARDCODE.round_weight[round];
+
+    const searchOrder: Top10Tier[] = difficulty
+      ? [difficultyToTier(difficulty)]
+      : ['expert'];
+    for (const t of ['expert', 'mid', 'novice'] as Top10Tier[]) {
+      if (!searchOrder.includes(t)) searchOrder.push(t);
+    }
+
+    for (const tier of searchOrder) {
+      if (!this.isTierSafe(tier)) continue;
+      const data = this.tierData[tier];
+      const suggestion = data?.anomaly_stats?.round_weight_suggestion;
+      if (!suggestion) continue;
+      const w = suggestion[String(round)];
+      if (typeof w === 'number' && Number.isFinite(w)) return w;
+    }
+
+    return HARDCODE.round_weight[round];
   }
 
   /**
