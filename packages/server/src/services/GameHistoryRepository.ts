@@ -1,4 +1,12 @@
-import { Room, Player, Role, QuestResult } from '@avalon/shared';
+import {
+  Room,
+  Player,
+  Role,
+  QuestResult,
+  VoteRecord,
+  QuestRecord,
+  LadyOfTheLakeRecord,
+} from '@avalon/shared';
 import { getAdminFirestore } from './firebase';
 import { invalidateLeaderboardCache } from './FirestoreLeaderboard';
 
@@ -7,6 +15,11 @@ import { invalidateLeaderboardCache } from './FirestoreLeaderboard';
  *
  * Collection: games/{gameId}
  * Sub-collection: games/{gameId}/rounds/{roundIndex}
+ *
+ * #54 Phase 2 (2026-04-22): Added optional per-event history fields so
+ * the new EloAttributionService can compute per-player factor deltas.
+ * All fields are optional — legacy records (pre-Phase 2) omit them and
+ * the service falls back to Phase 1 team-average ELO automatically.
  */
 export interface GameRecord {
   gameId: string;
@@ -19,6 +32,19 @@ export interface GameRecord {
   players: GamePlayerRecord[];
   createdAt: number;
   endedAt: number;
+
+  // ---- #54 Phase 2 additive fields (all optional) ----
+
+  /** Every team-proposal vote. Required by Proposal factor. */
+  voteHistoryPersisted?: VoteRecord[];
+  /** Completed quest records. Required by Outer-white-inner-black factor. */
+  questHistoryPersisted?: QuestRecord[];
+  /** Lady-of-the-Lake inspections. Reserved for Phase 2.5. */
+  ladyOfTheLakeHistoryPersisted?: LadyOfTheLakeRecord[];
+  /** Player ID the assassin targeted. Reserved for Phase 2.5 Information factor. */
+  assassinTargetId?: string;
+  /** Seat index of the first leader at game start (rotation reconstruction). */
+  leaderStartIndex?: number;
 }
 
 export interface GamePlayerRecord {
@@ -79,6 +105,13 @@ export class GameHistoryRepository {
         players,
         createdAt: room.createdAt,
         endedAt,
+        // #54 Phase 2 — copy event history so attribution service has data.
+        voteHistoryPersisted: room.voteHistory ?? [],
+        questHistoryPersisted: room.questHistory ?? [],
+        ladyOfTheLakeHistoryPersisted: room.ladyOfTheLakeHistory,
+        assassinTargetId: room.assassinTargetId,
+        leaderStartIndex:
+          typeof room.leaderIndex === 'number' ? room.leaderIndex : undefined,
       };
 
       const docRef = firestore.collection(this.collection).doc(room.id);

@@ -37,6 +37,31 @@ export type EloOutcome =
   | 'evil_wins_quests'
   | 'assassin_kills_merlin';
 
+/**
+ * #54 Phase 2: attribution mode controls whether per-event factor deltas
+ * are computed on top of the legacy per-team-average ELO.
+ *
+ *   'legacy'    — Phase 1 behaviour only (outcome × role multiplier).
+ *   'per_event' — also apply Proposal + Outer-white-inner-black factors
+ *                 from `EloAttributionService`. Requires
+ *                 `voteHistoryPersisted` and `questHistoryPersisted` on
+ *                 the record; automatically falls back to 'legacy' when
+ *                 either is missing.
+ */
+export type EloAttributionMode = 'legacy' | 'per_event';
+
+/**
+ * #54 Phase 2: per-event factor weights. Only Proposal + OWIB implemented
+ * in the first batch (DG B: do the two strongest signals first).
+ * Information + Misdirection reserved for Phase 2.5.
+ */
+export interface EloAttributionWeights {
+  proposal: number;
+  outerWhiteInnerBlack: number;
+  information?: number;   // reserved
+  misdirection?: number;  // reserved
+}
+
 export interface EloConfig {
   /** Starting ELO for a brand new player (first-time fetch fallback). */
   startingElo: number;
@@ -68,6 +93,18 @@ export interface EloConfig {
    * because their individual performance has outsized game impact.
    */
   roleKWeights: Record<Role, number>;
+
+  /**
+   * #54 Phase 2: attribution mode. Default 'legacy' = Phase 1 exact behaviour.
+   * Flip to 'per_event' after Phase 3 backtest validates factor weights.
+   */
+  attributionMode: EloAttributionMode;
+
+  /**
+   * #54 Phase 2: per-event factor weights. Placeholder values shipped with
+   * the first batch — tune via backtest before flipping attributionMode.
+   */
+  attributionWeights: EloAttributionWeights;
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +133,14 @@ export const DEFAULT_ELO_CONFIG: EloConfig = {
     mordred: 1.3,
     minion: 1.0,
     loyal: 1.0,
+  },
+  // #54 Phase 2 defaults — 'legacy' mode preserves Phase 1 behaviour.
+  // Flip to 'per_event' after Phase 3 backtest tunes the weights.
+  attributionMode: 'legacy',
+  attributionWeights: {
+    proposal: 2.0,
+    outerWhiteInnerBlack: 3.0,
+    // information / misdirection left undefined for Phase 2.5.
   },
 };
 
@@ -138,6 +183,11 @@ export function setEloConfig(partial?: Partial<EloConfig>): EloConfig {
     roleKWeights: {
       ...activeConfig.roleKWeights,
       ...(partial.roleKWeights ?? {}),
+    },
+    // #54 Phase 2 — same nested-merge pattern for attribution weights.
+    attributionWeights: {
+      ...activeConfig.attributionWeights,
+      ...(partial.attributionWeights ?? {}),
     },
   };
   return activeConfig;
