@@ -37,6 +37,40 @@ export type EloOutcome =
   | 'evil_wins_quests'
   | 'assassin_kills_merlin';
 
+/**
+ * #54 Phase 2: attribution mode controls whether per-event factor deltas
+ * are computed on top of the legacy per-team-average ELO.
+ *
+ *   'legacy'    — Phase 1 behaviour only (outcome × role multiplier).
+ *   'per_event' — also apply Proposal + Outer-white-inner-black factors
+ *                 from `EloAttributionService`. Requires
+ *                 `voteHistoryPersisted` and `questHistoryPersisted` on
+ *                 the record; automatically falls back to 'legacy' when
+ *                 either is missing.
+ */
+export type EloAttributionMode = 'legacy' | 'per_event';
+
+/**
+ * #54 Phase 2 / 2.5: per-event factor weights.
+ *
+ * Phase 2 (shipped 2026-04-22): proposal + outerWhiteInnerBlack.
+ * Phase 2.5 (shipped 2026-04-22): information + misdirection complete the
+ *   four causal factors from Edward's 2026-04-20 list. seatOrderEnabled
+ *   toggles the seat-position multiplier on top of the sum.
+ *
+ * All four factor weights default to a non-zero value so `per_event` mode
+ * uses the full attribution stack out of the box. To disable an individual
+ * factor set its weight to 0 (or flip seatOrderEnabled to false).
+ */
+export interface EloAttributionWeights {
+  proposal: number;
+  outerWhiteInnerBlack: number;
+  information: number;
+  misdirection: number;
+  /** When true, seat-position multiplier is applied to the factor sum. */
+  seatOrderEnabled: boolean;
+}
+
 export interface EloConfig {
   /** Starting ELO for a brand new player (first-time fetch fallback). */
   startingElo: number;
@@ -68,6 +102,18 @@ export interface EloConfig {
    * because their individual performance has outsized game impact.
    */
   roleKWeights: Record<Role, number>;
+
+  /**
+   * #54 Phase 2: attribution mode. Default 'legacy' = Phase 1 exact behaviour.
+   * Flip to 'per_event' after Phase 3 backtest validates factor weights.
+   */
+  attributionMode: EloAttributionMode;
+
+  /**
+   * #54 Phase 2: per-event factor weights. Placeholder values shipped with
+   * the first batch — tune via backtest before flipping attributionMode.
+   */
+  attributionWeights: EloAttributionWeights;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,6 +143,20 @@ export const DEFAULT_ELO_CONFIG: EloConfig = {
     minion: 1.0,
     loyal: 1.0,
   },
+  // #54 Phase 2 defaults — 'legacy' mode preserves Phase 1 behaviour.
+  // Flip to 'per_event' after Phase 3 backtest tunes the weights.
+  attributionMode: 'legacy',
+  attributionWeights: {
+    // Phase 2 factors (Edward 2026-04-20 priority #2, #4).
+    proposal: 2.0,
+    outerWhiteInnerBlack: 3.0,
+    // Phase 2.5 factors (Edward 2026-04-20 priority #1, #3).
+    information: 1.5,
+    misdirection: 1.5,
+    // Seat-order multiplier applied to the SUM of the four factors
+    // (NOT the legacy delta). Default on so per_event uses the full stack.
+    seatOrderEnabled: true,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -115,11 +175,26 @@ export function getEloConfig(): EloConfig {
 }
 
 /**
+ * Partial shape for `setEloConfig` — allows nested partial overrides so
+ * tests and admin UI can flip a single key without having to re-specify
+ * every required field in the nested records.
+ */
+export type PartialEloConfig = Omit<
+  Partial<EloConfig>,
+  'teamBaselines' | 'outcomeWeights' | 'roleKWeights' | 'attributionWeights'
+> & {
+  teamBaselines?: Partial<EloConfig['teamBaselines']>;
+  outcomeWeights?: Partial<EloConfig['outcomeWeights']>;
+  roleKWeights?: Partial<EloConfig['roleKWeights']>;
+  attributionWeights?: Partial<EloAttributionWeights>;
+};
+
+/**
  * Override the active config. Used by tests and (Phase 2) the admin UI.
  * Pass a partial config to merge with the current one; pass undefined to
  * reset to DEFAULT_ELO_CONFIG.
  */
-export function setEloConfig(partial?: Partial<EloConfig>): EloConfig {
+export function setEloConfig(partial?: PartialEloConfig): EloConfig {
   if (!partial) {
     activeConfig = DEFAULT_ELO_CONFIG;
     return activeConfig;
@@ -138,6 +213,11 @@ export function setEloConfig(partial?: Partial<EloConfig>): EloConfig {
     roleKWeights: {
       ...activeConfig.roleKWeights,
       ...(partial.roleKWeights ?? {}),
+    },
+    // #54 Phase 2 — same nested-merge pattern for attribution weights.
+    attributionWeights: {
+      ...activeConfig.attributionWeights,
+      ...(partial.attributionWeights ?? {}),
     },
   };
   return activeConfig;

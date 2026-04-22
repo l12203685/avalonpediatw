@@ -19,6 +19,7 @@ import ProfileSettingsPage from './pages/ProfileSettingsPage';
 import ClaimsNewPage from './pages/ClaimsNewPage';
 import AdminClaimsPage from './pages/AdminClaimsPage';
 import AdminAdminsPage from './pages/AdminAdminsPage';
+import AdminEloPage from './pages/AdminEloPage';
 import HelpPage from './pages/HelpPage';
 import ToastContainer from './components/ToastContainer';
 import FloatingControls from './components/FloatingControls';
@@ -169,6 +170,7 @@ function App(): JSX.Element {
           {gameState === 'claimsNew' && <ClaimsNewPage />}
           {gameState === 'adminClaims' && <AdminClaimsPage />}
           {gameState === 'adminAdmins' && <AdminAdminsPage />}
+          {gameState === 'adminElo' && <AdminEloPage />}
           {gameState === 'help' && <HelpPage />}
         </>
       )}

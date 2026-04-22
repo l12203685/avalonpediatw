@@ -6,6 +6,10 @@ import {
   deriveEloOutcome,
   getEloConfig,
 } from './EloConfig';
+import {
+  computeAttributionDeltas,
+  AttributionBreakdown,
+} from './EloAttributionService';
 
 // ---------------------------------------------------------------------------
 // Constants (data-driven via EloConfig — see EloConfig.ts for seed values)
@@ -42,6 +46,14 @@ export interface EloUpdate {
   won: boolean;
   /** Which of the three Avalon outcomes drove this ELO update. */
   outcome?: EloOutcome;
+  /**
+   * #54 Phase 2: per-event attribution breakdown applied on top of the
+   * legacy (team-average × outcome × role) delta. Populated only when
+   * `EloConfig.attributionMode === 'per_event'` AND the record carries
+   * usable `voteHistoryPersisted` or `questHistoryPersisted`. Omitted on
+   * the legacy path so Phase 1 consumers see no schema change.
+   */
+  attribution?: AttributionBreakdown;
 }
 
 export interface LeaderboardEntry extends EloEntry {
@@ -140,10 +152,16 @@ export class EloRankingService {
     kFactor?: number
   ): Promise<EloUpdate[]> {
     const db = getAdminDB();
+    const config = getEloConfig();
 
     // Derive once per game — the outcome multiplier is identical for every
     // player in the match. No DB round-trip needed (config is in-memory).
     const outcome = deriveEloOutcome(record.winner, record.winReason);
+
+    // #54 Phase 2 routing: compute per-event attribution once, reuse for all
+    // players. Returns `applied: false` for legacy records / legacy mode —
+    // layer is a no-op on the Phase 1 branch.
+    const attribution = computeAttributionDeltas(record);
 
     // Fetch current ELOs for all participants (single batch; N-of-N)
     const elos = await Promise.all(
@@ -168,7 +186,8 @@ export class EloRankingService {
 
     for (const { player, elo } of elos) {
       const opponentAvg = player.team === 'good' ? evilAvg : goodAvg;
-      const newElo = computeNewElo(
+      // Legacy ELO based on team-average × outcome × role K.
+      const legacyNewElo = computeNewElo(
         elo,
         player.won,
         opponentAvg,
@@ -177,7 +196,21 @@ export class EloRankingService {
         outcome
       );
 
-      updates.push({
+      // Phase 2 per-event layer. `applied: false` → attributionDelta = 0.
+      const attributionDelta = attribution.applied
+        ? (attribution.deltas[player.playerId] ?? 0)
+        : 0;
+
+      // Round after layering so the final ELO stays integer and the
+      // min-ELO floor is still honoured.
+      const combined = Math.round(legacyNewElo + attributionDelta);
+      const newElo = Math.max(config.minElo, combined);
+
+      const breakdown = attribution.applied
+        ? attribution.breakdown[player.playerId]
+        : undefined;
+
+      const update: EloUpdate = {
         uid: player.playerId,
         previousElo: elo,
         newElo,
@@ -185,7 +218,11 @@ export class EloRankingService {
         role: player.role,
         won: player.won,
         outcome,
-      });
+      };
+      if (breakdown) {
+        update.attribution = breakdown;
+      }
+      updates.push(update);
 
       await this.upsertEntry(db, player, elo, newElo, now);
     }
@@ -196,6 +233,8 @@ export class EloRankingService {
       gameId: record.gameId,
       playerCount: record.players.length,
       outcome,
+      attributionMode: config.attributionMode,
+      attributionApplied: attribution.applied,
     }));
 
     return updates;
