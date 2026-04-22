@@ -1,7 +1,15 @@
 import { Router, Request, Response, IRouter } from 'express';
-import { sign } from 'jsonwebtoken';
+import { sign, verify, JwtPayload } from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
-import { upsertUser, createOAuthSession, verifyAndDeleteOAuthSession } from '../services/supabase';
+import {
+  upsertUser,
+  createOAuthSession,
+  consumeOAuthSession,
+  findUserIdByProviderIdentity,
+  linkProviderIdentity,
+  mergeUserAccounts,
+  type LinkProvider,
+} from '../services/supabase';
 import { mintGuestToken, verifyGuestToken, generateGuestName } from '../middleware/guestAuth';
 
 const router: IRouter = Router();
@@ -77,6 +85,77 @@ function randomState(): string {
   return randomBytes(16).toString('hex');
 }
 
+// ── #42 link mode helpers ─────────────────────────────────────
+
+/**
+ * 從 Bearer header 或 `?token=` query 解析自訂 JWT，回 sub（= users.id）給綁定流程用。
+ * 拿不到合法 JWT 回 null。Guest token 不允許綁定（guest 要先註冊）。
+ *
+ * Query string 支援是為了 redirect-based OAuth 起跳：瀏覽器 window.location 整頁
+ * 跳轉送不出 custom header，所以 /auth/link/* 接受 ?token= 傳 JWT。只在 link
+ * 起跳點用，OAuth provider callback 不需要再送 token。
+ */
+function parseBearerUserId(authHeader: string | undefined, queryToken?: string): string | null {
+  let token: string | null = null;
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7);
+  } else if (typeof queryToken === 'string' && queryToken.length > 0) {
+    token = queryToken;
+  }
+  if (!token || token.split('.').length !== 3) return null;
+  try {
+    const payload = verify(token, JWT_SECRET) as JwtPayload & { sub?: string; provider?: string };
+    if (!payload.sub) return null;
+    if (payload.provider === 'guest') return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 綁定 callback 核心：
+ *   - 若目標 identity 從未綁 → 直接 link 到 currentUserId
+ *   - 若已綁給別人（otherId != currentUserId）→ mergeUserAccounts(current, other)
+ *   - 若已綁給自己 → no-op
+ * 完成後 redirect 到個人頁並帶 success/error flag。
+ */
+async function handleLinkCallback(
+  res: Response,
+  currentUserId: string,
+  provider: LinkProvider,
+  externalId: string,
+): Promise<void> {
+  try {
+    const existing = await findUserIdByProviderIdentity(provider, externalId);
+
+    if (existing && existing !== currentUserId) {
+      // 已有獨立帳號 → 合併到當前帳號（當前視為 primary，保留玩家現在登入的這個）
+      const merged = await mergeUserAccounts(currentUserId, existing);
+      if (!merged) {
+        res.redirect(`${FRONTEND_URL}/profile?link_error=merge_failed&provider=${provider}`);
+        return;
+      }
+      res.redirect(`${FRONTEND_URL}/profile?link_merged=1&provider=${provider}`);
+      return;
+    }
+
+    if (!existing) {
+      // 從未綁 → 直接 link
+      const ok = await linkProviderIdentity(currentUserId, provider, externalId);
+      if (!ok) {
+        res.redirect(`${FRONTEND_URL}/profile?link_error=link_failed&provider=${provider}`);
+        return;
+      }
+    }
+    // existing === currentUserId → already linked, no-op
+    res.redirect(`${FRONTEND_URL}/profile?link_ok=1&provider=${provider}`);
+  } catch (err) {
+    console.error('[auth/link-callback]', err);
+    res.redirect(`${FRONTEND_URL}/profile?link_error=exception&provider=${provider}`);
+  }
+}
+
 // ── Discord OAuth ─────────────────────────────────────────────
 
 /**
@@ -111,11 +190,12 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     return res.redirect(`${FRONTEND_URL}?auth_error=discord_denied`);
   }
 
-  // CSRF 驗證
-  const valid = await verifyAndDeleteOAuthSession(state, 'discord');
-  if (!valid) {
+  // CSRF + 讀出 link_user_id（若是綁定流程）
+  const session = await consumeOAuthSession(state, 'discord');
+  if (!session) {
     return res.redirect(`${FRONTEND_URL}?auth_error=invalid_state`);
   }
+  const linkUserId = session.linkUserId;
 
   try {
     // 1. code → access_token
@@ -146,6 +226,12 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     const avatarUrl = discordUser.avatar
       ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
       : undefined;
+
+    // #42: 綁定流程 — 不發新 token，合併/綁定到當前 user 後導回個人頁
+    if (linkUserId) {
+      await handleLinkCallback(res, linkUserId, 'discord', discordUser.id);
+      return;
+    }
 
     // 3. 查/建 Supabase 用戶
     const dbUserId = await upsertUser({
@@ -205,10 +291,11 @@ router.get('/line/callback', async (req: Request, res: Response) => {
     return res.redirect(`${FRONTEND_URL}?auth_error=line_denied`);
   }
 
-  const valid = await verifyAndDeleteOAuthSession(state, 'line');
-  if (!valid) {
+  const session = await consumeOAuthSession(state, 'line');
+  if (!session) {
     return res.redirect(`${FRONTEND_URL}?auth_error=invalid_state`);
   }
+  const linkUserId = session.linkUserId;
 
   try {
     // 1. code → access_token
@@ -233,6 +320,12 @@ router.get('/line/callback', async (req: Request, res: Response) => {
     const lineUser = await profileRes.json() as {
       userId: string; displayName: string; pictureUrl?: string;
     };
+
+    // #42: 綁定流程 — 不發新 token，合併/綁定到當前 user 後導回個人頁
+    if (linkUserId) {
+      await handleLinkCallback(res, linkUserId, 'line', lineUser.userId);
+      return;
+    }
 
     // 3. 查/建 Supabase 用戶
     const dbUserId = await upsertUser({
@@ -391,4 +484,68 @@ router.post('/guest/upgrade', (_req: Request, res: Response) => {
   });
 });
 
+// ── #42 Link additional providers ────────────────────────────
+//
+// 流程：玩家在個人頁按「綁 Discord/Line」→ 前端帶 Bearer JWT 打
+// GET /auth/link/discord → 驗證當前身份 → 發起 Discord OAuth
+// （state 夾帶 linkUserId）→ Discord callback 進 handleLinkCallback。
+//
+// Google 綁定：前端用 Firebase SDK 拿 ID token 後打 POST /auth/link/google
+//（不用跳第二層 OAuth），後端驗 token 後直接合併/綁。
+
+/**
+ * GET /auth/link/discord
+ * Header: Authorization: Bearer <current JWT>
+ * → redirect 到 Discord OAuth，state 內夾帶 linkUserId
+ */
+router.get('/link/discord', async (req: Request, res: Response) => {
+  if (!DISCORD_CLIENT_ID) {
+    return res.status(503).json({ error: 'Discord OAuth 未設定' });
+  }
+  const queryToken = (req.query.token as string | undefined) ?? undefined;
+  const currentUserId = parseBearerUserId(req.headers.authorization, queryToken);
+  if (!currentUserId) {
+    return res.status(401).json({ error: 'Unauthorized — login first' });
+  }
+  const state = randomState();
+  await createOAuthSession(state, 'discord', currentUserId);
+
+  const params = new URLSearchParams({
+    client_id:     DISCORD_CLIENT_ID,
+    redirect_uri:  DISCORD_REDIRECT_URI,
+    response_type: 'code',
+    scope:         'identify email',
+    state,
+  });
+  return res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
+});
+
+/**
+ * GET /auth/link/line
+ * Header: Authorization: Bearer <current JWT>
+ * → redirect 到 Line Login，state 內夾帶 linkUserId
+ */
+router.get('/link/line', async (req: Request, res: Response) => {
+  if (!LINE_CHANNEL_ID) {
+    return res.status(503).json({ error: 'Line Login 未設定' });
+  }
+  const queryToken = (req.query.token as string | undefined) ?? undefined;
+  const currentUserId = parseBearerUserId(req.headers.authorization, queryToken);
+  if (!currentUserId) {
+    return res.status(401).json({ error: 'Unauthorized — login first' });
+  }
+  const state = randomState();
+  await createOAuthSession(state, 'line', currentUserId);
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id:     LINE_CHANNEL_ID,
+    redirect_uri:  LINE_REDIRECT_URI,
+    state,
+    scope:         'profile openid email',
+  });
+  return res.redirect(`https://access.line.me/oauth2/v2.1/authorize?${params}`);
+});
+
 export { router as authRouter };
+export { handleLinkCallback as _handleLinkCallbackForTest };

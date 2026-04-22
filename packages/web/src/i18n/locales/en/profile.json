@@ -36,6 +36,27 @@
     "email": "Email",
     "copyId": "Copy User ID"
   },
+  "linked": {
+    "title": "Linked accounts",
+    "provider": {
+      "discord": "Discord",
+      "line": "LINE",
+      "google": "Google Email"
+    },
+    "primary": "primary",
+    "connected": "linked",
+    "notConnected": "not linked",
+    "linkBtn": "Link",
+    "unlinkBtn": "Unlink",
+    "cannotUnlinkLast": "Cannot unlink the last remaining login — link another one first",
+    "unlinked": "{{provider}} unlinked",
+    "unlinkFailed": "Unlink failed, please try again",
+    "noticeOk": "{{provider}} linked",
+    "noticeMerged": "{{provider}} linked — old account history merged into this one",
+    "noticeError": "{{provider}} link failed ({{reason}})",
+    "googleHint": "To link a Google email, log in again with Google — the system will merge into this account",
+    "helpText": "Link multiple login methods to the same account. After linking, any method signs into the same stats, ELO, and badges. If the target account already has records, they are merged into the currently logged-in account."
+  },
   "edit": {
     "errLogin": "Please log in first",
     "errNameLength": "Display name must be 1-40 characters",

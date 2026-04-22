@@ -113,6 +113,67 @@ export async function fetchGameReplay(roomId: string): Promise<GameEvent[]> {
   return data.events;
 }
 
+// ── #42 Multi-account binding ─────────────────────────────────
+
+export type LinkProvider = 'discord' | 'line' | 'google';
+
+export interface LinkedAccount {
+  provider: LinkProvider;
+  linked: boolean;
+  external_id: string | null;
+  primary: boolean;
+}
+
+export async function fetchLinkedAccounts(token: string): Promise<LinkedAccount[]> {
+  const data = await apiFetch<{ linked: LinkedAccount[] }>('/api/user/linked', token);
+  return data.linked;
+}
+
+export async function unlinkAccount(token: string, provider: LinkProvider): Promise<LinkedAccount[]> {
+  const res = await fetch(`${SERVER_URL}/api/user/unlink`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...NGROK_SKIP_HEADER,
+    },
+    body: JSON.stringify({ provider }),
+  });
+  const body = await res.json().catch(() => ({} as { linked?: LinkedAccount[]; error?: string }));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || `API ${res.status}: /api/user/unlink`);
+  }
+  return (body as { linked: LinkedAccount[] }).linked;
+}
+
+/** 綁 Google：前端拿 Firebase ID token 後打後端 */
+export async function linkGoogleAccount(token: string, idToken: string): Promise<LinkedAccount[]> {
+  const res = await fetch(`${SERVER_URL}/api/user/link/google`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...NGROK_SKIP_HEADER,
+    },
+    body: JSON.stringify({ idToken }),
+  });
+  const body = await res.json().catch(() => ({} as { linked?: LinkedAccount[]; error?: string }));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || `API ${res.status}: /api/user/link/google`);
+  }
+  return (body as { linked: LinkedAccount[] }).linked;
+}
+
+/** 拿綁 Discord/Line OAuth 起跳 URL — 直接跳轉整頁做 redirect OAuth */
+export function buildLinkProviderUrl(token: string, provider: 'discord' | 'line'): string {
+  const url = new URL(`${SERVER_URL}/auth/link/${provider}`);
+  // server 端從 Authorization header 讀 JWT；但瀏覽器 window.location 直接跳整頁時
+  // 送不出 custom header 到 redirect。解法：server 端接這個 GET 後 303 到 provider OAuth 頁。
+  // 為了把 token 傳過去、又不走 header，改成放到 query string（server 端容忍 ?token= 或 Bearer）。
+  url.searchParams.set('token', token);
+  return url.toString();
+}
+
 // ── Friend / Follow API ───────────────────────────────────────
 
 export interface FriendEntry {

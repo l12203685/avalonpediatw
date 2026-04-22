@@ -36,6 +36,27 @@
     "email": "信箱",
     "copyId": "複製用戶編號"
   },
+  "linked": {
+    "title": "已綁定帳號",
+    "provider": {
+      "discord": "Discord",
+      "line": "LINE",
+      "google": "Google 信箱"
+    },
+    "primary": "主要",
+    "connected": "已綁",
+    "notConnected": "未綁",
+    "linkBtn": "綁定",
+    "unlinkBtn": "解除",
+    "cannotUnlinkLast": "不能解除唯一的登入方式 — 請先綁定另一個再解除這個",
+    "unlinked": "已解除 {{provider}} 綁定",
+    "unlinkFailed": "解除失敗，請稍後再試",
+    "noticeOk": "{{provider}} 綁定成功",
+    "noticeMerged": "{{provider}} 已綁定並合併舊帳號戰績",
+    "noticeError": "{{provider}} 綁定失敗（{{reason}}）",
+    "googleHint": "綁定 Google 信箱請用 Google 重新登入 — 系統會自動合併到此帳號",
+    "helpText": "綁多種登入方式到同一個帳號：綁定後從任一方式登入，戰績、ELO、徽章都看到同一份。目標帳號若已經有紀錄，會合併到目前登入的這個帳號。"
+  },
   "edit": {
     "errLogin": "請先登入",
     "errNameLength": "暱稱需為 1-40 個字",

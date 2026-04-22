@@ -8,8 +8,14 @@ import {
   updateDbUserProfile,
   ensureSupabaseUserForFirebase,
   getSupabaseIdByFirebaseUid,
+  getLinkedAccounts,
+  findUserIdByProviderIdentity,
+  linkProviderIdentity,
+  mergeUserAccounts,
+  unlinkProviderIdentity,
   type ProfileEditableFields,
   type DbUserOverrides,
+  type LinkProvider,
 } from '../services/supabase';
 import {
   getFirestoreLeaderboard,
@@ -363,6 +369,117 @@ router.get('/profile/:id', publicLimiter, async (req: Request, res: Response) =>
     console.error('[api/profile] Firestore error:', err);
     return res.status(503).json({ error: 'Database not configured' });
   }
+});
+
+// ── #42 Multi-account binding ─────────────────────────────────
+//
+// 前端流程：
+//   GET /api/user/linked       → 列當前 user 三個 provider 綁定狀態
+//   POST /api/user/link/google → body { idToken }，後端驗 Firebase token 綁 Google
+//   POST /api/user/unlink      → body { provider: 'discord'|'line'|'google' } 解綁
+// Discord / Line 綁定走 /auth/link/<provider> redirect-based OAuth 流程。
+
+const LINK_PROVIDERS: readonly LinkProvider[] = ['discord', 'line', 'google'] as const;
+
+function isLinkProvider(x: unknown): x is LinkProvider {
+  return typeof x === 'string' && (LINK_PROVIDERS as readonly string[]).includes(x);
+}
+
+// GET /api/user/linked
+router.get('/user/linked', publicLimiter, async (req: Request, res: Response) => {
+  const auth = await resolvePlayerAuth(req.headers.authorization);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (auth.provider === 'guest') {
+    return res.status(403).json({ error: 'Guest accounts cannot bind providers' });
+  }
+  if (!isSupabaseReady()) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  const supabaseId = await resolveSupabaseUserId(auth);
+  if (!supabaseId) return res.status(404).json({ error: 'User row not found' });
+  const linked = await getLinkedAccounts(supabaseId);
+  return res.json({ linked });
+});
+
+// POST /api/user/unlink { provider }
+router.post('/user/unlink', publicLimiter, async (req: Request, res: Response) => {
+  const auth = await resolvePlayerAuth(req.headers.authorization);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (auth.provider === 'guest') {
+    return res.status(403).json({ error: 'Guest accounts cannot bind providers' });
+  }
+  if (!isSupabaseReady()) return res.status(503).json({ error: 'Database not configured' });
+
+  const { provider } = (req.body ?? {}) as { provider?: unknown };
+  if (!isLinkProvider(provider)) {
+    return res.status(400).json({ error: 'provider must be one of discord/line/google' });
+  }
+  const supabaseId = await resolveSupabaseUserId(auth);
+  if (!supabaseId) return res.status(404).json({ error: 'User row not found' });
+
+  // 至少留 1 個 provider 才能 unlink（否則會變成無法登入的孤兒）
+  const linked = await getLinkedAccounts(supabaseId);
+  const linkedCount = linked.filter((l) => l.linked).length;
+  const targetIsLinked = linked.find((l) => l.provider === provider && l.linked);
+  if (!targetIsLinked) {
+    return res.status(400).json({ error: 'Provider is not currently linked' });
+  }
+  if (linkedCount <= 1) {
+    return res.status(400).json({
+      error: 'Cannot unlink the last remaining provider — account would become unreachable',
+      code:  'LAST_PROVIDER',
+    });
+  }
+
+  const ok = await unlinkProviderIdentity(supabaseId, provider);
+  if (!ok) return res.status(500).json({ error: 'Unlink failed' });
+  const after = await getLinkedAccounts(supabaseId);
+  return res.json({ ok: true, linked: after });
+});
+
+// POST /api/user/link/google { idToken }
+// Firebase Auth 的 ID token 比跳 OAuth 好用很多 — 前端拿完直接送過來綁就行。
+router.post('/user/link/google', publicLimiter, async (req: Request, res: Response) => {
+  const auth = await resolvePlayerAuth(req.headers.authorization);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (auth.provider === 'guest') {
+    return res.status(403).json({ error: 'Guest accounts cannot bind providers' });
+  }
+  if (!isSupabaseReady()) return res.status(503).json({ error: 'Database not configured' });
+
+  const { idToken } = (req.body ?? {}) as { idToken?: unknown };
+  if (typeof idToken !== 'string' || idToken.length === 0) {
+    return res.status(400).json({ error: 'idToken required' });
+  }
+  if (!isFirebaseAdminReady()) {
+    return res.status(503).json({ error: 'Firebase admin not configured' });
+  }
+
+  let firebaseUid: string;
+  try {
+    const decoded = await verifyIdToken(idToken);
+    firebaseUid = decoded.uid;
+  } catch {
+    return res.status(400).json({ error: 'Invalid Firebase ID token' });
+  }
+
+  const supabaseId = await resolveSupabaseUserId(auth);
+  if (!supabaseId) return res.status(404).json({ error: 'User row not found' });
+
+  // 若 firebase_uid 已屬另一 user row → 合併
+  const existing = await findUserIdByProviderIdentity('google', firebaseUid);
+  if (existing && existing !== supabaseId) {
+    const merged = await mergeUserAccounts(supabaseId, existing);
+    if (!merged) return res.status(500).json({ error: 'Merge failed' });
+    const linked = await getLinkedAccounts(supabaseId);
+    return res.json({ ok: true, merged: true, linked });
+  }
+  if (!existing) {
+    const linked = await linkProviderIdentity(supabaseId, 'google', firebaseUid);
+    if (!linked) return res.status(500).json({ error: 'Link failed' });
+  }
+  const linked = await getLinkedAccounts(supabaseId);
+  return res.json({ ok: true, merged: false, linked });
 });
 
 // ── GET /api/replay/:roomId ───────────────────────────────────
