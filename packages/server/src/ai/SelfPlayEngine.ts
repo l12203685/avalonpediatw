@@ -161,19 +161,9 @@ export class SelfPlayEngine {
         const holder    = agents.find(a => a.agentId === holderId);
         const validTargets = Object.keys(room.players).filter(id => id !== holderId && !used.has(id));
         if (holder && validTargets.length > 0) {
-          // Simple heuristic: good holders pick their most suspicious player, evil picks randomly
+          const obs = this.buildObservation(holderId, room, roleMap, teamMap, voteHistory, questHistory);
           const holderTeam = teamMap.get(holderId);
-          let targetId: string;
-          if (holderTeam === 'good') {
-            // Use HeuristicAgent suspicion by checking knownEvils fallback to random
-            const obs = this.buildObservation(holderId, room, roleMap, teamMap, voteHistory, questHistory);
-            // Prefer known evils not yet used; otherwise random from valid
-            const knownEvilTarget = obs.knownEvils.find(id => validTargets.includes(id));
-            targetId = knownEvilTarget ?? validTargets[Math.floor(Math.random() * validTargets.length)];
-          } else {
-            // Evil: pick random to avoid revealing strategy
-            targetId = validTargets[Math.floor(Math.random() * validTargets.length)];
-          }
+          const targetId = this.pickLadyTarget(holderTeam, obs, validTargets);
           engine.submitLadyOfTheLakeTarget(holderId, targetId);
           // Skip the 3-second display delay used in real-time games
           engine.completeLadyPhase();
@@ -262,6 +252,154 @@ export class SelfPlayEngine {
   }
 
   // ── Helpers ─────────────────────────────────────────────────
+
+  /**
+   * Feature flag: smart lake targeting (default on).
+   *
+   * - `true`  → good filters out knownEvils + knownGoods (self-included) and picks
+   *             highest suspicion among unknown-camp candidates; evil filters out
+   *             knownEvils (allies) + self and picks highest "likely Merlin" candidate.
+   * - `false` → legacy behavior (good picks knownEvils[0]; evil picks random).
+   *
+   * Read per-call from `process.env.AVALON_USE_SMART_LAKE` so tests can toggle it
+   * without re-loading the module.
+   */
+  private isSmartLakeEnabled(): boolean {
+    return process.env.AVALON_USE_SMART_LAKE !== '0';
+  }
+
+  /**
+   * Pick a lady-of-the-lake target for the holder.
+   *
+   * Good holder  — target MUST NOT be in `knownEvils` (wastes the lake;
+   * SSoT §4.3 / §6.9 / §8.3). Prefer the highest-suspicion unknown-camp player;
+   * fallback to any unlaked player.
+   *
+   * Evil holder  — target MUST NOT be in `knownEvils` (teammates, also wastes;
+   * SSoT §4.3 / §8.4). Prefer the highest "looks like Merlin" candidate among
+   * unknown players (opponents who rejected teams that contained knownEvils ≈
+   * Merlin signal); fallback to any unlaked non-ally.
+   *
+   * Legacy path is kept behind `USE_SMART_LAKE === false` for comparison runs.
+   *
+   * @internal Exposed as `public` for unit testing only; not part of the stable API.
+   */
+  public pickLadyTarget(
+    holderTeam: 'good' | 'evil' | undefined,
+    obs:        PlayerObservation,
+    validTargets: string[],
+  ): string {
+    if (!this.isSmartLakeEnabled()) {
+      // Legacy: good picks knownEvils[0] (useless), evil picks random.
+      if (holderTeam === 'good') {
+        const knownEvilTarget = obs.knownEvils.find(id => validTargets.includes(id));
+        return knownEvilTarget ?? validTargets[Math.floor(Math.random() * validTargets.length)];
+      }
+      return validTargets[Math.floor(Math.random() * validTargets.length)];
+    }
+
+    const knownEvilSet = new Set(obs.knownEvils);
+    // Candidates = valid targets not already known to holder
+    // (excluding knownEvils for both sides; self is already excluded by validTargets)
+    const unknownCandidates = validTargets.filter(id => !knownEvilSet.has(id));
+
+    // Fallback: everyone known → pick any valid (should be rare; keep first for determinism
+    // in tests, not random, to avoid flaky coverage).
+    if (unknownCandidates.length === 0) {
+      return validTargets[0];
+    }
+
+    if (holderTeam === 'good') {
+      // Good: rank unknown candidates by suspicion (higher first),
+      // stable by allPlayerIds order for ties → deterministic under fixed seed/input.
+      return this.rankByDescendingScore(
+        unknownCandidates,
+        id => this.estimateSuspicionFromHistory(id, obs),
+        obs.allPlayerIds,
+      )[0];
+    }
+
+    // Evil: score "looks like Merlin" — players who consistently reject teams containing
+    // knownEvils are probably reading the evil team (Merlin signal). Higher = more Merlin-like.
+    return this.rankByDescendingScore(
+      unknownCandidates,
+      id => this.estimateMerlinLikenessFromHistory(id, obs),
+      obs.allPlayerIds,
+    )[0];
+  }
+
+  /**
+   * Deterministic descending rank: primary by score desc, tiebreak by
+   * `tiebreakOrder` ascending index (stable under identical input).
+   */
+  private rankByDescendingScore(
+    ids:            string[],
+    score:          (id: string) => number,
+    tiebreakOrder:  string[],
+  ): string[] {
+    const orderIdx = new Map(tiebreakOrder.map((id, i) => [id, i]));
+    return [...ids].sort((a, b) => {
+      const diff = score(b) - score(a);
+      if (diff !== 0) return diff;
+      return (orderIdx.get(a) ?? 0) - (orderIdx.get(b) ?? 0);
+    });
+  }
+
+  /**
+   * Cheap suspicion proxy built only from public history (no HeuristicAgent dep):
+   *   +2 per fail-quest appearance
+   *   +1 per approve of a later-failed team
+   *   -0.5 per appearance on a successful quest
+   *   -0.3 per reject of a later-failed team
+   * Good holders use this to find unknown-camp players most likely to be evil.
+   */
+  private estimateSuspicionFromHistory(playerId: string, obs: PlayerObservation): number {
+    let score = 0;
+    const failedRounds = new Set<number>();
+    for (const q of obs.questHistory) {
+      if (q.result === 'fail') {
+        failedRounds.add(q.round);
+        if (q.team.includes(playerId)) score += 2;
+      } else if (q.result === 'success' && q.team.includes(playerId)) {
+        score -= 0.5;
+      }
+    }
+    for (const v of obs.voteHistory) {
+      if (!failedRounds.has(v.round)) continue;
+      const approved = v.votes[playerId];
+      if (approved === true)  score += 1;
+      if (approved === false) score -= 0.3;
+    }
+    return score;
+  }
+
+  /**
+   * "Looks like Merlin" proxy from evil holder's view: players who rejected teams
+   * containing knownEvils, and never appeared on fail quests. Higher = stronger
+   * Merlin suspicion. Evil holders use this to lake the most likely Merlin and
+   * confirm their target for assassination.
+   */
+  private estimateMerlinLikenessFromHistory(playerId: string, obs: PlayerObservation): number {
+    let score = 0;
+    const knownEvilSet = new Set(obs.knownEvils);
+
+    // Rejected teams containing knownEvils → Merlin signal
+    for (const v of obs.voteHistory) {
+      const teamHasKnownEvil = v.team.some(id => knownEvilSet.has(id));
+      if (!teamHasKnownEvil) continue;
+      const approved = v.votes[playerId];
+      if (approved === false) score += 1.5;
+      if (approved === true)  score -= 0.5;
+    }
+
+    // Appeared on fail quests → NOT Merlin (loyal players including Merlin never fail on purpose,
+    // but Merlin tends to avoid being proposed to suspicious teams)
+    for (const q of obs.questHistory) {
+      if (q.result === 'fail' && q.team.includes(playerId)) score -= 2;
+    }
+
+    return score;
+  }
 
   private buildObservation(
     playerId:     string,
