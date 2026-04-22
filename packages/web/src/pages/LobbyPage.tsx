@@ -98,17 +98,31 @@ export default function LobbyPage(): JSX.Element {
   const previewConfig = AVALON_CONFIG[playerList.length];
   const is9Variant = playerList.length === 9
     && (room.roleOptions as unknown as Record<string, string>)?.variant9Player === 'oberonMandatory';
+  // #90 Part 1 — 9-player standard + Oberon opt-in: mirror the server's
+  // loyal → oberon swap so the preview matches assignRoles semantics.
+  const is9StandardWithOberon = playerList.length === 9
+    && !is9Variant
+    && Boolean(room.roleOptions?.oberon);
   // Apply roleOptions to get effective role list for preview. The
   // 9-player variant replaces the standard 6G/3E split with 5G/4E +
   // mandatory Oberon, matching GameEngine.assignRoles semantics.
-  const previewRoles: string[] = is9Variant
-    ? ['merlin', 'percival', 'loyal', 'loyal', 'loyal',
-       'assassin', 'morgana', 'mordred', 'oberon']
-    : (previewConfig?.roles as unknown as string[] ?? []);
+  let previewRoles: string[];
+  if (is9Variant) {
+    previewRoles = ['merlin', 'percival', 'loyal', 'loyal', 'loyal',
+                    'assassin', 'morgana', 'mordred', 'oberon'];
+  } else {
+    previewRoles = (previewConfig?.roles as unknown as string[] ?? []).slice();
+    if (is9StandardWithOberon) {
+      const loyalIdx = previewRoles.indexOf('loyal');
+      if (loyalIdx !== -1) previewRoles[loyalIdx] = 'oberon';
+    }
+  }
   const effectiveRoles = previewRoles.map(r => {
     if (r === 'percival' && !room.roleOptions?.percival) return 'loyal';
     if (r === 'morgana'  && !room.roleOptions?.morgana)  return 'minion';
-    // 9-variant forces Oberon regardless of the toggle
+    // 9-variant forces Oberon regardless of the toggle. 9p standard with
+    // Oberon opt-in keeps the swap in place — the toggle check below is
+    // only meaningful where Oberon sits in the canonical config (7p/10p).
     if (r === 'oberon'   && !room.roleOptions?.oberon && !is9Variant) return 'minion';
     if (r === 'mordred'  && !room.roleOptions?.mordred)  return 'minion';
     return r;

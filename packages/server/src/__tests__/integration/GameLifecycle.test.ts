@@ -184,7 +184,7 @@ describe('Integration: Full 5-player game lifecycle', () => {
 describe('Integration: Role assignments work for all player counts', () => {
   afterEach(() => vi.clearAllTimers());
 
-  it.each([5, 6, 7, 8, 9, 10])('%i-player game assigns correct roles', (count) => {
+  it.each([5, 6, 7, 8, 10])('%i-player game assigns correct roles', (count) => {
     const room = makeRoom(count);
     const engine = new GameEngine(room);
     engine.startGame();
@@ -203,6 +203,23 @@ describe('Integration: Role assignments work for all player counts', () => {
       expect(['good', 'evil']).toContain(p.team);
     });
 
+    engine.cleanup();
+  });
+
+  // #90 · 9p standard + default oberon=true opts Oberon in via the
+  // loyal→oberon swap; asserting the explicit new layout rather than
+  // AVALON_CONFIG[9].roles (which is the 6G/3E baseline without Oberon).
+  it('9-player standard+oberon: canonical 7-role layout with 5G/4E split', () => {
+    const room = makeRoom(9);
+    const engine = new GameEngine(room);
+    engine.startGame();
+    const assignedRoles = Object.values(room.players).map(p => p.role!);
+    expect(assignedRoles).toContain('oberon');
+    expect(assignedRoles).toContain('merlin');
+    expect(assignedRoles).toContain('assassin');
+    const good = ['merlin', 'percival', 'loyal'];
+    const goodCount = assignedRoles.filter(r => good.includes(r as string)).length;
+    expect(goodCount).toBe(5);
     engine.cleanup();
   });
 });

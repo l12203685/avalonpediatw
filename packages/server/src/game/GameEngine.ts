@@ -423,6 +423,25 @@ export class GameEngine {
       ];
     } else {
       baseRoles = [...config.roles];
+      // #90 Part 1 — 9-player "standard" variant: let host opt-in Oberon
+      //   even without the oberonMandatory balance shift. Conversion:
+      //   swap one loyal slot for oberon → 5 good / 4 evil while keeping
+      //   the canonical [3,4,4,5,5] quest sizes. Only fires for 9p when
+      //   the host ticked `oberon` AND is NOT on the mandatory variant.
+      //   5/6/7/8/10p are untouched (their AVALON_CONFIG already includes
+      //   oberon where canonical or disables it where not in the pool).
+      //   Why swap instead of append: preserves 9-player total seat count
+      //   (config has 9 roles; we never add/remove entries).
+      if (
+        playerCount === 9 &&
+        opts.variant9Player !== 'oberonMandatory' &&
+        opts.oberon === true
+      ) {
+        const loyalIdx = baseRoles.indexOf('loyal');
+        if (loyalIdx !== -1) {
+          baseRoles[loyalIdx] = 'oberon';
+        }
+      }
     }
 
     // Build role list from config, substituting disabled optional roles.
