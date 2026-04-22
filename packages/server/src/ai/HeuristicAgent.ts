@@ -93,6 +93,112 @@ function isListeningState(goodWins: number, evilWins: number): boolean {
   return goodWins === 2 || evilWins === 2;
 }
 
+// ── Evil role differentiation (SSoT §3.2 + §6.14, fix #5) ─────
+/**
+ * Feature flag for the full-scenario evil role differentiation layer
+ * (fix #5). Default **on** — extends #3's 2-0 deep-cover into the
+ * ordinary team-vote / team-select / early-quest / assassination
+ * paths. Flip to `false` to restore the pre-#5 behaviour where all
+ * evil roles (except Oberon) share one code path.
+ *
+ * Main evil logic stays shared (camp goal is identical — 3 fails or
+ * successful assassination). This flag only gates *delta adjustments*
+ * applied on top of the shared branch.
+ */
+const USE_EVIL_ROLE_DIFFERENTIATION_FULL = true;
+
+/**
+ * Per-role strategic deltas layered on top of the shared evil logic.
+ *
+ * Design invariants:
+ * - **Main decisions stay shared.** Every role still goes through the
+ *   same `voteOnTeam` / `selectTeam` / `voteOnQuest` / `assassinate`
+ *   branches. Deltas only nudge the baseline, never replace it.
+ * - **Oberon is intentionally excluded** — he is declared independent
+ *   (no knownEvils coordination) and stays on whatever legacy path
+ *   each method already provides. This matches SSoT §3.2 oberon
+ *   description: "can't be counted on to coordinate, treat as a
+ *   random variable from other evils' POV."
+ *
+ * Per-role rationale (SSoT §3.2 & §6.14):
+ * - **mordred**: invisible to Merlin → can be bold on team comp
+ *   (include allies more often), fail rate highest (Merlin can't
+ *   scream if I'm on a team), no camouflage penalty when voting.
+ * - **morgana**: visible to Percival (one of his two thumbs) →
+ *   must mimic Merlin's voting pattern (approve clean teams to
+ *   signal "I'm cautious like Merlin"); propose cleaner teams.
+ * - **assassin**: holds the kill token → top priority is staying
+ *   clean until assassination; approve clean teams aggressively,
+ *   propose clean teams, lowest fail rate when on quest.
+ * - **oberon**: `null` row — deltas do not apply.
+ */
+interface EvilRoleStrategy {
+  /** Additive to evil's approve probability when voting on a team
+   * that contains neither self nor ally. Range roughly ±0.2. */
+  voteApproveBonus: number;
+
+  /** Multiplier on the 50% ally-inclusion probability when leading
+   * a team of size >= 3. 1.0 = unchanged; < 1 = prefer cleaner
+   * teams (fewer allies); > 1 = prefer more ally inclusion. */
+  allyInclusionMultiplier: number;
+
+  /** Additive to evil quest fail rate in the **early/normal** 60/40
+   * split (not 2-0, not evilWins >= 2, not failsRequired >= 2).
+   * Negative = feign cooperation more. Range ±0.15. */
+  earlyQuestFailBonus: number;
+
+  /** Human-readable tag for logging / tests. */
+  label: string;
+}
+
+/**
+ * Strategy deltas for differentiated evil roles.
+ *
+ * These numbers are **strategic priors** (not sampled from data). They
+ * encode Avalon's canonical per-role asymmetries:
+ *
+ * | role      | voteApprBonus | allyInclMul | earlyFailBonus | reason                                |
+ * |-----------|--------------:|------------:|---------------:|---------------------------------------|
+ * | mordred   |        -0.05  |        1.3  |         +0.10  | Merlin-blind → bold ally inclusion, fail more |
+ * | morgana   |        +0.15  |        0.6  |         -0.05  | Mimic Merlin → approve clean, clean teams    |
+ * | assassin  |        +0.10  |        0.5  |         -0.10  | Save cover for the kill → cleanest profile   |
+ *
+ * TODO(phase1): swap these constants for `PriorLookup.get(...)` once
+ * per-role TOP10 behaviour data is harvested (per `feedback_avalon_top10
+ * _behavior_lookup.md` §#5).
+ */
+const EVIL_ROLE_STRATEGY_TABLE: Record<string, EvilRoleStrategy> = {
+  mordred: {
+    voteApproveBonus:        -0.05,
+    allyInclusionMultiplier:  1.3,
+    earlyQuestFailBonus:     +0.10,
+    label:                   'mordred (merlin-blind — bold)',
+  },
+  morgana: {
+    voteApproveBonus:        +0.15,
+    allyInclusionMultiplier:  0.6,
+    earlyQuestFailBonus:     -0.05,
+    label:                   'morgana (mimic-merlin — clean)',
+  },
+  assassin: {
+    voteApproveBonus:        +0.10,
+    allyInclusionMultiplier:  0.5,
+    earlyQuestFailBonus:     -0.10,
+    label:                   'assassin (hold-kill — cleanest)',
+  },
+};
+
+/** Roles that participate in the role-differentiation layer. Oberon
+ *  is intentionally absent — see §3.2 + §6.14 of the strategy doc. */
+const EVIL_DIFFERENTIATION_ROLES = new Set(Object.keys(EVIL_ROLE_STRATEGY_TABLE));
+
+/**
+ * Clamp helper kept inline to avoid a util import.
+ */
+function clampUnit(x: number, lo = 0.05, hi = 0.95): number {
+  return Math.max(lo, Math.min(hi, x));
+}
+
 // ── Agent Memory ───────────────────────────────────────────────
 /**
  * Per-agent, per-game memory. Populated via idempotent ingest methods
@@ -328,6 +434,8 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'team_select', teamIds: team };
     } else {
       // Evil: include self, prefer to include one evil ally on larger teams
+      // Main logic stays shared — per-role strategy only nudges the
+      // ally-inclusion probability (SSoT §3.2 + §6.14).
       const evilAllies = knownEvils.filter(id => id !== myPlayerId);
       const goodCandidates = allIds
         .filter(id => id !== myPlayerId && !knownEvils.includes(id))
@@ -335,9 +443,20 @@ export class HeuristicAgent implements AvalonAgent {
 
       const team: string[] = [myPlayerId];
 
-      // On bigger teams (size >= 3), sneak in one evil ally 50% of the time
-      if (teamSize >= 3 && evilAllies.length > 0 && Math.random() > 0.5) {
-        team.push(evilAllies[Math.floor(Math.random() * evilAllies.length)]);
+      // On bigger teams (size >= 3), sneak in one evil ally with base
+      // 50% probability, modulated by per-role strategy. Mordred +30%
+      // (bold), Morgana -40% (mimic Merlin's clean teams), Assassin
+      // -50% (preserve cover for the kill). Oberon skips the layer.
+      if (teamSize >= 3 && evilAllies.length > 0) {
+        const strategy = this.getEvilRoleStrategy(obs.myRole as string);
+        const allyInclusionThreshold = clampUnit(
+          0.5 * (strategy?.allyInclusionMultiplier ?? 1),
+          0.05,
+          0.95,
+        );
+        if (Math.random() < allyInclusionThreshold) {
+          team.push(evilAllies[Math.floor(Math.random() * evilAllies.length)]);
+        }
       }
 
       // Fill remaining with good-looking players
@@ -415,13 +534,22 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'team_vote', vote: this.applyNoise(decision, noise) };
     } else {
       // Evil: approve if own ally or self is on team, reject otherwise
+      // Main logic stays shared — per-role strategy only nudges the
+      // off-team approve probability (Morgana mimics Merlin → approves
+      // clean teams more; Mordred is bolder → rejects more).
       const hasSelf  = proposedTeam.includes(obs.myPlayerId);
       const hasAlly  = proposedTeam.some(id => knownEvils.includes(id));
 
       if (hasSelf || hasAlly) return { type: 'team_vote', vote: true };
 
       // Hard mode: more strategically sometimes approves to appear cooperative
-      const approveChance = this.difficulty === 'hard' ? 0.35 : 0.3;
+      const baseApproveChance = this.difficulty === 'hard' ? 0.35 : 0.3;
+      const strategy = this.getEvilRoleStrategy(obs.myRole as string);
+      const approveChance = clampUnit(
+        baseApproveChance + (strategy?.voteApproveBonus ?? 0),
+        0.05,
+        0.95,
+      );
       return { type: 'team_vote', vote: Math.random() < approveChance };
     }
   }
@@ -449,8 +577,8 @@ export class HeuristicAgent implements AvalonAgent {
     // Oberon is the only exception (no teammate coordination, legacy
     // randomised behaviour kept).
     //
-    // This branch overrides role differentiation, TOP10 lookup, and the
-    // `failsRequired >= 2` cautious path. See `docs/ai/avalon_ai_strategy_baseline.md` §0.
+    // This branch overrides role differentiation and the `failsRequired >= 2`
+    // cautious path. See `docs/ai/avalon_ai_strategy_baseline.md` §0.
     if (USE_LISTENING_RULE && isListeningState(goodQuestWins, evilQuestWins)) {
       if (myRole === 'oberon') {
         // Oberon acts more randomly since they don't know the game state as well.
@@ -466,13 +594,45 @@ export class HeuristicAgent implements AvalonAgent {
     // If 2 fails required this round, a single fail is wasted — be strategic.
     // (Listening handled above; this path only fires at 0-0, 1-0, 0-1, 1-1.)
     if (failsRequired >= 2) {
-      return { type: 'quest_vote', vote: Math.random() > 0.7 ? 'fail' : 'success' };
+      // Baseline 30% fail, modulated by per-role earlyQuestFailBonus
+      // (Mordred +0.10, Morgana -0.05, Assassin -0.10). Oberon skips.
+      const fr2Base = 0.30;
+      const fr2FailRate = this.applyEvilEarlyFailBonus(myRole as string, fr2Base);
+      return { type: 'quest_vote', vote: Math.random() < fr2FailRate ? 'fail' : 'success' };
     }
 
     // Early game (both sides < 2 wins): sometimes succeed to stay hidden
-    // (60% fail, 40% succeed). Role-differentiated baselines (Fix #5) will
-    // plug in here once landed.
-    return { type: 'quest_vote', vote: Math.random() > 0.4 ? 'fail' : 'success' };
+    // (60% fail, 40% succeed) baseline, modulated by per-role
+    // earlyQuestFailBonus. Oberon skips (legacy 60% fail preserved).
+    const earlyBase = 0.60;
+    const earlyFailRate = this.applyEvilEarlyFailBonus(myRole as string, earlyBase);
+    return { type: 'quest_vote', vote: Math.random() < earlyFailRate ? 'fail' : 'success' };
+  }
+
+  /**
+   * Look up per-role evil strategy delta. Returns `null` for roles not in
+   * the differentiation table (Oberon, or any good role) so callers can
+   * short-circuit cleanly — Oberon retains his legacy independent path.
+   *
+   * Gated by `USE_EVIL_ROLE_DIFFERENTIATION_FULL`; flip to `false` to
+   * restore pre-#5 "one evil branch for all non-Oberon roles".
+   */
+  private getEvilRoleStrategy(role: string | undefined | null): EvilRoleStrategy | null {
+    if (!USE_EVIL_ROLE_DIFFERENTIATION_FULL) return null;
+    if (!role) return null;
+    if (!EVIL_DIFFERENTIATION_ROLES.has(role)) return null;
+    return EVIL_ROLE_STRATEGY_TABLE[role] ?? null;
+  }
+
+  /**
+   * Modulate an early-game evil quest fail rate by the role's
+   * `earlyQuestFailBonus`. Clamp to `[0.05, 0.95]`. Oberon (or
+   * unknown) returns the base unchanged.
+   */
+  private applyEvilEarlyFailBonus(role: string, base: number): number {
+    const strategy = this.getEvilRoleStrategy(role);
+    if (!strategy) return base;
+    return clampUnit(base + strategy.earlyQuestFailBonus, 0.05, 0.95);
   }
 
   // ── Assassination ────────────────────────────────────────────
@@ -489,9 +649,22 @@ export class HeuristicAgent implements AvalonAgent {
     // - Voted against teams with evil players
     // - Was never on a failed quest
     // - Was not easily voted through
+    //
+    // Assassin-specific adjustment (SSoT §6.13 + fix #5): when the
+    // role-differentiation layer is on, penalise candidates who show
+    // Percival-like "thumb-following" patterns — Percival has two
+    // wizard thumbs and often leads with one of them, which is NOT
+    // Merlin behaviour. Wiki: "刺客刺殺不挑一直派拇指的玩家".
     const merlinScore = new Map<string, number>();
     for (const id of goodPlayers) {
       merlinScore.set(id, this.getMerlinScore(id, obs));
+    }
+
+    if (USE_EVIL_ROLE_DIFFERENTIATION_FULL && (obs.myRole as string) === 'assassin') {
+      for (const id of goodPlayers) {
+        const percivalPenalty = this.getPercivalLikenessPenalty(id, obs);
+        merlinScore.set(id, (merlinScore.get(id) ?? 0) - percivalPenalty);
+      }
     }
 
     const target = goodPlayers.reduce((best, id) =>
@@ -499,6 +672,39 @@ export class HeuristicAgent implements AvalonAgent {
     , goodPlayers[0]);
 
     return { type: 'assassinate', targetId: target };
+  }
+
+  /**
+   * Score how "Percival-like" a player's leadership pattern is. Percival
+   * typically includes a wizard candidate (Merlin or Morgana) on every
+   * team he proposes — Merlin, by contrast, avoids any *known* evil but
+   * does NOT consistently lead with wizards. A consistent wizard-leading
+   * pattern is therefore a Percival signal, not a Merlin signal.
+   *
+   * Signal used here: whenever this player was the leader of a vote
+   * record, did they include a known evil (Morgana is in `knownEvils`
+   * from the assassin's POV)? If the leader always put Morgana on
+   * their proposed team, that's a strong Percival thumb-lead signal.
+   *
+   * Penalty is additive to `merlinScore`, so higher = less likely
+   * Merlin = less likely to be assassinated.
+   */
+  private getPercivalLikenessPenalty(playerId: string, obs: PlayerObservation): number {
+    let morganaIncludedAsLeader = 0;
+    let ledCount = 0;
+    for (const vote of obs.voteHistory) {
+      if (vote.leader !== playerId) continue;
+      ledCount++;
+      // Morgana is visible to the assassin — check if this leader
+      // consistently includes her on proposed teams (Percival thumb).
+      if (vote.team.some((id) => obs.knownEvils.includes(id))) {
+        morganaIncludedAsLeader++;
+      }
+    }
+    if (ledCount === 0) return 0;
+    // Two-thumb leaders → 1.5 penalty (similar magnitude to the "+1.5
+    // merlin behaviour" signals in getMerlinScore so the two balance).
+    return morganaIncludedAsLeader >= 1 ? 1.5 * (morganaIncludedAsLeader / ledCount) : 0;
   }
 
   /**
@@ -573,6 +779,21 @@ export class HeuristicAgent implements AvalonAgent {
 
   _applyNoiseForTesting<T>(decision: T, rate: number, critical = false): T {
     return this.applyNoise(decision, rate, critical);
+  }
+
+  /** Evil role strategy lookup (tests only). */
+  _getEvilRoleStrategyForTesting(role: string): EvilRoleStrategy | null {
+    return this.getEvilRoleStrategy(role);
+  }
+
+  /** Early-quest fail rate with per-role bonus (tests only). */
+  _applyEvilEarlyFailBonusForTesting(role: string, base: number): number {
+    return this.applyEvilEarlyFailBonus(role, base);
+  }
+
+  /** Percival likeness penalty for assassin targeting (tests only). */
+  _getPercivalLikenessPenaltyForTesting(playerId: string, obs: PlayerObservation): number {
+    return this.getPercivalLikenessPenalty(playerId, obs);
   }
 
   // ── Helpers ──────────────────────────────────────────────────

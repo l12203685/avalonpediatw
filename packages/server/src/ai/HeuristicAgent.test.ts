@@ -317,143 +317,352 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
   });
 });
 
-// ── Phase B: §0 Listening Rule (quest-action override) ───────────
-//
-// Edward 2026-04-22 12:38 +08 verbatim:
-//   「不管是紅藍哪一方, 只要有一方聽牌(藍方已拿兩局藍 or 紅方已拿兩局紅),
-//    那紅方都該只考慮"先讓任務失敗"」
-//
-// Implementation: `HeuristicAgent.voteOnQuest` runs a highest-priority
-// branch before any role- or TOP10-based heuristic fires. When either
-// side has won 2 quests, every evil player (except Oberon) returns
-// `quest_vote: fail`. Oberon keeps its legacy randomised behaviour.
-//
-// These tests pin the spec so any future "放水" optimisation or role-
-// differentiation patch cannot silently re-introduce the Fix #3 direction
-// error (evil 2-0 deep-cover success) that was reversed on 2026-04-22.
+// ─────────────────────────────────────────────────────────────
+// Deep-cover branch (SSoT §2 + §6.1, Fix #3 original): REMOVED —
+// superseded by §0 Listening Rule (Edward 2026-04-22 12:38 verbatim).
+// Evil at good-winning 2-0 must fail (except Oberon, which keeps
+// legacy 70% randomised behaviour). See the listening-rule describe
+// block higher in this file for the new coverage.
+// ─────────────────────────────────────────────────────────────
 
-describe('HeuristicAgent · §0 Listening Rule (quest action)', () => {
-  /** Build an evil-quest-vote observation with the two listening dials. */
-  function evilQuestObs(
-    goodWins: number,
-    evilWins: number,
-    overrides: Partial<PlayerObservation> = {},
-  ): PlayerObservation {
-    const questResults: Array<'success' | 'fail'> = [];
-    for (let i = 0; i < goodWins; i++) questResults.push('success');
-    for (let i = 0; i < evilWins; i++) questResults.push('fail');
+// ─────────────────────────────────────────────────────────────
+// Fix #5 — Full-scenario evil role differentiation
+//
+// Main evil logic stays shared; per-role strategy delta applies in
+// four places:
+// 1. selectTeam: ally inclusion probability (allyInclusionMultiplier)
+// 2. voteOnTeam (off-team): approve chance (voteApproveBonus)
+// 3. voteOnQuest (early 60/40 + failsRequired>=2): fail rate (earlyQuestFailBonus)
+// 4. assassinate: Percival-like leaders penalised (assassin only)
+//
+// Oberon is intentionally excluded from 1-3 (legacy paths preserved)
+// and 4 is assassin-specific.
+// ─────────────────────────────────────────────────────────────
 
-    return baseObs({
-      myPlayerId:   'P1',
-      myRole:       'assassin',
-      myTeam:       'evil',
-      knownEvils:   ['P1', 'P3'],
-      currentRound: goodWins + evilWins + 1,
-      gamePhase:    'quest_vote',
-      proposedTeam: ['P1', 'P2'],
-      questResults,
-      ...overrides,
+describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
+  describe('strategy table lookup', () => {
+    const agent = new HeuristicAgent('P1', 'hard');
+
+    it('returns strategy for mordred / morgana / assassin', () => {
+      expect(agent._getEvilRoleStrategyForTesting('mordred')?.label).toContain('mordred');
+      expect(agent._getEvilRoleStrategyForTesting('morgana')?.label).toContain('morgana');
+      expect(agent._getEvilRoleStrategyForTesting('assassin')?.label).toContain('assassin');
     });
-  }
 
-  /** Run the evil quest vote N times and return the fail ratio. */
-  function failRate(obs: PlayerObservation, samples: number): number {
-    let fails = 0;
-    for (let i = 0; i < samples; i++) {
+    it('returns null for oberon (excluded from differentiation)', () => {
+      expect(agent._getEvilRoleStrategyForTesting('oberon')).toBeNull();
+    });
+
+    it('returns null for good roles', () => {
+      expect(agent._getEvilRoleStrategyForTesting('merlin')).toBeNull();
+      expect(agent._getEvilRoleStrategyForTesting('percival')).toBeNull();
+      expect(agent._getEvilRoleStrategyForTesting('loyal_servant')).toBeNull();
+    });
+
+    it('relative ordering: assassin voteApprove > morgana > mordred', () => {
+      const m = agent._getEvilRoleStrategyForTesting('mordred')!;
+      const mg = agent._getEvilRoleStrategyForTesting('morgana')!;
+      const a = agent._getEvilRoleStrategyForTesting('assassin')!;
+      // Morgana mimics Merlin most → highest approve bonus
+      expect(mg.voteApproveBonus).toBeGreaterThan(a.voteApproveBonus);
+      expect(a.voteApproveBonus).toBeGreaterThan(m.voteApproveBonus);
+      // Mordred boldest ally inclusion
+      expect(m.allyInclusionMultiplier).toBeGreaterThan(mg.allyInclusionMultiplier);
+      expect(mg.allyInclusionMultiplier).toBeGreaterThan(a.allyInclusionMultiplier);
+      // Mordred failest, Assassin cleanest
+      expect(m.earlyQuestFailBonus).toBeGreaterThan(mg.earlyQuestFailBonus);
+      expect(mg.earlyQuestFailBonus).toBeGreaterThan(a.earlyQuestFailBonus);
+    });
+  });
+
+  // ── Phase: voteOnTeam (off-team approve chance) ─────────────
+  describe('phase 1 — voteOnTeam off-team approve chance by role', () => {
+    /** Build an off-team observation with no self/ally on team so the
+     *  role-specific approve chance branch is exercised. */
+    function offTeamObs(role: 'mordred' | 'morgana' | 'assassin' | 'oberon'): PlayerObservation {
+      return baseObs({
+        myPlayerId:    'P1',
+        myRole:        role,
+        myTeam:        'evil',
+        knownEvils:    role === 'oberon' ? [] : ['P1', 'P5'],
+        gamePhase:     'team_vote',
+        currentRound:  2,
+        currentLeader: 'P2',
+        proposedTeam:  ['P2', 'P3', 'P4'],   // no self, no ally
+      });
+    }
+
+    function approveRate(role: 'mordred' | 'morgana' | 'assassin' | 'oberon', samples = 800): number {
+      let approves = 0;
+      for (let i = 0; i < samples; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        const obs = offTeamObs(role);
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        if (action.type === 'team_vote' && action.vote === true) approves++;
+      }
+      return approves / samples;
+    }
+
+    it('Morgana off-team approve rate ≈ 0.50 (base 0.35 + 0.15 mimic-merlin bonus)', () => {
+      const rate = approveRate('morgana');
+      expect(rate).toBeGreaterThan(0.40);
+      expect(rate).toBeLessThan(0.60);
+    });
+
+    it('Assassin off-team approve rate ≈ 0.45 (base 0.35 + 0.10)', () => {
+      const rate = approveRate('assassin');
+      expect(rate).toBeGreaterThan(0.35);
+      expect(rate).toBeLessThan(0.55);
+    });
+
+    it('Mordred off-team approve rate ≈ 0.30 (base 0.35 - 0.05 bolder)', () => {
+      const rate = approveRate('mordred');
+      expect(rate).toBeGreaterThan(0.20);
+      expect(rate).toBeLessThan(0.40);
+    });
+
+    it('Oberon off-team approve rate ≈ 0.35 (legacy base, no role bonus)', () => {
+      const rate = approveRate('oberon');
+      expect(rate).toBeGreaterThan(0.25);
+      expect(rate).toBeLessThan(0.45);
+    });
+  });
+
+  // ── Phase: selectTeam (ally inclusion probability) ──────────
+  describe('phase 2 — selectTeam ally inclusion by role', () => {
+    /** Build a team-select observation where the role is leader of a
+     *  size-3 team with one known ally available. */
+    function leaderObs(role: 'mordred' | 'morgana' | 'assassin' | 'oberon'): PlayerObservation {
+      return baseObs({
+        myPlayerId:    'P1',
+        myRole:        role,
+        myTeam:        'evil',
+        knownEvils:    role === 'oberon' ? [] : ['P1', 'P4'],
+        gamePhase:     'team_select',
+        currentRound:  2,
+        playerCount:   6,
+        currentLeader: 'P1',
+        proposedTeam:  [],
+      });
+    }
+
+    function allyInclusionRate(role: 'mordred' | 'morgana' | 'assassin' | 'oberon', samples = 800): number {
+      let includes = 0;
+      for (let i = 0; i < samples; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        const obs = leaderObs(role);
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        if (action.type === 'team_select' && action.teamIds.includes('P4')) includes++;
+      }
+      return includes / samples;
+    }
+
+    it('Mordred leader includes ally ~65% (base 0.5 × 1.3)', () => {
+      const rate = allyInclusionRate('mordred');
+      expect(rate).toBeGreaterThan(0.55);
+      expect(rate).toBeLessThan(0.75);
+    });
+
+    it('Morgana leader includes ally ~30% (base 0.5 × 0.6)', () => {
+      const rate = allyInclusionRate('morgana');
+      expect(rate).toBeGreaterThan(0.20);
+      expect(rate).toBeLessThan(0.40);
+    });
+
+    it('Assassin leader includes ally ~25% (base 0.5 × 0.5 — cleanest)', () => {
+      const rate = allyInclusionRate('assassin');
+      expect(rate).toBeGreaterThan(0.15);
+      expect(rate).toBeLessThan(0.35);
+    });
+
+    it('Oberon leader keeps legacy 50% ally inclusion path (no crash, no differentiation)', () => {
+      // Oberon has empty knownEvils so `evilAllies.length === 0` → ally
+      // branch entirely skipped. Team fills from random goodCandidates,
+      // so P4 ends up on team with base ~probability equal to filling
+      // any of the 4 remaining slots. This is the legacy path (pre-#5).
+      // The assertion is weak-but-real: no crash, and P4 lands ~35-65%
+      // of the time from random fill (not role-diff-driven).
+      const rate = allyInclusionRate('oberon');
+      expect(rate).toBeGreaterThan(0.25);
+      expect(rate).toBeLessThan(0.75);
+    });
+  });
+
+  // ── Phase: voteOnQuest (early fail rate) ────────────────────
+  describe('phase 3 — voteOnQuest early fail rate by role (0-0 scenario)', () => {
+    function earlyQuestObs(role: 'mordred' | 'morgana' | 'assassin' | 'oberon'): PlayerObservation {
+      return baseObs({
+        myPlayerId:   'P1',
+        myRole:       role,
+        myTeam:       'evil',
+        knownEvils:   role === 'oberon' ? [] : ['P1', 'P4'],
+        gamePhase:    'quest_vote',
+        questResults: [],
+        currentRound: 1,
+        proposedTeam: ['P1', 'P2'],
+      });
+    }
+
+    function failRate(role: 'mordred' | 'morgana' | 'assassin' | 'oberon', samples = 600): number {
+      let fails = 0;
+      for (let i = 0; i < samples; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        const obs = earlyQuestObs(role);
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        if (action.type === 'quest_vote' && action.vote === 'fail') fails++;
+      }
+      return fails / samples;
+    }
+
+    it('Mordred early fail rate ≈ 0.70 (base 0.60 + 0.10)', () => {
+      const rate = failRate('mordred');
+      expect(rate).toBeGreaterThan(0.60);
+      expect(rate).toBeLessThan(0.80);
+    });
+
+    it('Morgana early fail rate ≈ 0.55 (base 0.60 - 0.05)', () => {
+      const rate = failRate('morgana');
+      expect(rate).toBeGreaterThan(0.45);
+      expect(rate).toBeLessThan(0.65);
+    });
+
+    it('Assassin early fail rate ≈ 0.50 (base 0.60 - 0.10 cleanest)', () => {
+      const rate = failRate('assassin');
+      expect(rate).toBeGreaterThan(0.40);
+      expect(rate).toBeLessThan(0.60);
+    });
+
+    it('Oberon early fail rate ≈ 0.60 (legacy base, no role bonus)', () => {
+      const rate = failRate('oberon');
+      expect(rate).toBeGreaterThan(0.50);
+      expect(rate).toBeLessThan(0.70);
+    });
+
+    it('applyEvilEarlyFailBonus computes deterministically with role bonuses', () => {
+      const agent = new HeuristicAgent('P1', 'hard');
+      expect(agent._applyEvilEarlyFailBonusForTesting('mordred',  0.6)).toBeCloseTo(0.7, 2);
+      expect(agent._applyEvilEarlyFailBonusForTesting('morgana',  0.6)).toBeCloseTo(0.55, 2);
+      expect(agent._applyEvilEarlyFailBonusForTesting('assassin', 0.6)).toBeCloseTo(0.5, 2);
+      // Oberon / unknown returns base unchanged
+      expect(agent._applyEvilEarlyFailBonusForTesting('oberon',   0.6)).toBe(0.6);
+      expect(agent._applyEvilEarlyFailBonusForTesting('merlin',   0.6)).toBe(0.6);
+    });
+  });
+
+  // ── Phase 4: assassinate (Percival-like penalty) ────────────
+  describe('phase 4 — assassin targets Merlin, not Percival lookalikes', () => {
+    it('penalises a good leader who consistently put knownEvil (Morgana) on their team', () => {
+      // Setup: P1 = Assassin, knownEvils = [P1, P2 (Morgana)].
+      // P3 was leader twice, included Morgana (P2) both times → Percival signal.
+      // P4 was leader twice, never included Morgana → Merlin signal.
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       'assassin',
+        myTeam:       'evil',
+        knownEvils:   ['P1', 'P2'],
+        gamePhase:    'assassination',
+        allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+        questResults: ['success', 'success', 'success'],
+        voteHistory: [
+          vote(1, 1, 'P3', ['P2', 'P3'],       true,  { P1: false, P2: true,  P3: true,  P4: true,  P5: true  }),
+          vote(2, 1, 'P4', ['P4', 'P5'],       true,  { P1: false, P2: true,  P3: true,  P4: true,  P5: true  }),
+          vote(3, 1, 'P3', ['P2', 'P3', 'P4'], true,  { P1: true,  P2: true,  P3: true,  P4: true,  P5: true  }),
+          vote(4, 1, 'P4', ['P4', 'P5', 'P3'], true,  { P1: true,  P2: true,  P3: true,  P4: true,  P5: true  }),
+        ],
+        questHistory: [
+          quest(1, ['P2', 'P3'],       'success', 0),
+          quest(2, ['P4', 'P5'],       'success', 0),
+          quest(3, ['P2', 'P3', 'P4'], 'success', 0),
+        ],
+      });
+
+      const agent = new HeuristicAgent('P1', 'hard');
+      agent.onGameStart(obs);
+
+      // Percival penalty for P3 (always led with Morgana) should be positive.
+      const p3Penalty = agent._getPercivalLikenessPenaltyForTesting('P3', obs);
+      const p4Penalty = agent._getPercivalLikenessPenaltyForTesting('P4', obs);
+      expect(p3Penalty).toBeGreaterThan(0);
+      expect(p4Penalty).toBe(0);
+
+      // Assassin should target P4 (the cleaner leader), not P3 (Percival-like).
+      const action = agent.act(obs);
+      expect(action.type).toBe('assassinate');
+      if (action.type === 'assassinate') {
+        expect(action.targetId).not.toBe('P3');
+      }
+    });
+
+    it('no vote history → no Percival penalty for any player', () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       'assassin',
+        myTeam:       'evil',
+        knownEvils:   ['P1', 'P2'],
+        gamePhase:    'assassination',
+        allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      const agent = new HeuristicAgent('P1', 'hard');
+      agent.onGameStart(obs);
+      expect(agent._getPercivalLikenessPenaltyForTesting('P3', obs)).toBe(0);
+      expect(agent._getPercivalLikenessPenaltyForTesting('P4', obs)).toBe(0);
+    });
+  });
+
+  // ── Regression: main logic shared across roles ──────────────
+  describe('regression — main evil logic still shared across roles', () => {
+    it('self-on-team always approves regardless of role (mordred)', () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       'mordred',
+        myTeam:       'evil',
+        knownEvils:   ['P1', 'P4'],
+        gamePhase:    'team_vote',
+        proposedTeam: ['P1', 'P2', 'P3'],  // self on team
+      });
       const agent = new HeuristicAgent('P1', 'hard');
       agent.onGameStart(obs);
       const action = agent.act(obs);
-      if (action.type === 'quest_vote' && action.vote === 'fail') fails++;
-    }
-    return fails / samples;
-  }
-
-  it('Case 1: good listening (goodWins=2, evilWins=0) → evil MUST fail (no 放水)', () => {
-    const obs = evilQuestObs(2, 0, { myRole: 'mordred', knownEvils: ['P1'] });
-    // Listening rule is deterministic for non-Oberon evils → 100% fail.
-    expect(failRate(obs, 500)).toBe(1.0);
-  });
-
-  it('Case 1b: good listening with assassin/morgana roles → all MUST fail', () => {
-    for (const role of ['assassin', 'morgana'] as const) {
-      const obs = evilQuestObs(2, 0, { myRole: role });
-      expect(failRate(obs, 200)).toBe(1.0);
-    }
-  });
-
-  it('Case 2: evil listening (evilWins=2, goodWins=0) → evil MUST fail (再拿一局直接贏)', () => {
-    const obs = evilQuestObs(0, 2, { myRole: 'assassin' });
-    expect(failRate(obs, 500)).toBe(1.0);
-  });
-
-  it('Case 2b: evil listening (evilWins=2, goodWins=1) → evil MUST fail (仍是聽牌)', () => {
-    const obs = evilQuestObs(1, 2, { myRole: 'mordred' });
-    expect(failRate(obs, 500)).toBe(1.0);
-  });
-
-  it('Case 3: no listening (1-1) → evil follows legacy early-game mix, not forced fail', () => {
-    const obs = evilQuestObs(1, 1, { myRole: 'assassin' });
-    // Legacy early-game branch: Math.random() > 0.4 → fail 60%, success 40%.
-    // With 1000 samples, ratio should be well inside [0.4, 0.8].
-    const ratio = failRate(obs, 1000);
-    expect(ratio).toBeGreaterThan(0.40);
-    expect(ratio).toBeLessThan(0.80);
-  });
-
-  it('Case 3b: no listening (0-0) → evil early-game mix (not 100% fail)', () => {
-    const obs = evilQuestObs(0, 0, { myRole: 'morgana' });
-    const ratio = failRate(obs, 1000);
-    // Legacy: ~60% fail. Sanity: strictly between 0.4 and 0.8.
-    expect(ratio).toBeGreaterThan(0.40);
-    expect(ratio).toBeLessThan(0.80);
-  });
-
-  it('Case 4: Oberon listening exception (goodWins=2) → still randomised (legacy kept)', () => {
-    const obs = evilQuestObs(2, 0, { myRole: 'oberon', knownEvils: ['P1'] });
-    // Legacy Oberon branch at goodWins>=2: Math.random() > 0.3 → fail ~70%.
-    // NOT 100% like other evil roles.
-    const ratio = failRate(obs, 1000);
-    expect(ratio).toBeGreaterThan(0.55);
-    expect(ratio).toBeLessThan(0.85);
-    // Must NOT be 1.0 — that would mean listening rule was applied to Oberon.
-    expect(ratio).toBeLessThan(1.0);
-  });
-
-  it('Case 4b: Oberon listening exception (evilWins=2) → still randomised', () => {
-    const obs = evilQuestObs(0, 2, { myRole: 'oberon', knownEvils: ['P1'] });
-    // Same legacy branch applies when evilWins>=2 for Oberon
-    // (pre-refactor `if (evilQuestWins >= 2) return fail` already handled
-    // this, but after the listening-rule refactor, Oberon goes through
-    // the Math.random > 0.3 legacy path).
-    const ratio = failRate(obs, 1000);
-    expect(ratio).toBeGreaterThan(0.55);
-    expect(ratio).toBeLessThan(0.85);
-  });
-
-  it('Case 5: failsRequired=2 (7p round 4) with listening → STILL forced fail', () => {
-    // 7-player variant, round 4 requires 2 fails. Legacy code used
-    // Math.random > 0.7 → ~30% fail. Listening rule must override.
-    const obs = evilQuestObs(2, 0, {
-      myRole:       'mordred',
-      playerCount:  7,
-      currentRound: 4,
-      allPlayerIds: ['P1','P2','P3','P4','P5','P6','P7'],
+      expect(action.type).toBe('team_vote');
+      if (action.type === 'team_vote') expect(action.vote).toBe(true);
     });
-    expect(failRate(obs, 500)).toBe(1.0);
-  });
 
-  it('good player on listening state → still MUST succeed (no accidental fail)', () => {
-    const obs = evilQuestObs(2, 0, {
-      myTeam:    'good',
-      myRole:    'merlin',
-      knownEvils: ['P3'],
+    it('ally-on-team always approves regardless of role (morgana)', () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       'morgana',
+        myTeam:       'evil',
+        knownEvils:   ['P1', 'P4'],
+        gamePhase:    'team_vote',
+        proposedTeam: ['P2', 'P3', 'P4'],  // ally P4 on team
+      });
+      const agent = new HeuristicAgent('P1', 'hard');
+      agent.onGameStart(obs);
+      const action = agent.act(obs);
+      expect(action.type).toBe('team_vote');
+      if (action.type === 'team_vote') expect(action.vote).toBe(true);
     });
-    const agent = new HeuristicAgent('P1', 'hard');
-    agent.onGameStart(obs);
-    const action = agent.act(obs);
-    expect(action.type).toBe('quest_vote');
-    if (action.type === 'quest_vote') {
-      expect(action.vote).toBe('success');
-    }
+
+    it('evilWins >= 2 always fails regardless of role (assassin)', () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       'assassin',
+        myTeam:       'evil',
+        knownEvils:   ['P1', 'P4'],
+        gamePhase:    'quest_vote',
+        questResults: ['fail', 'fail'],
+        currentRound: 3,
+        proposedTeam: ['P1', 'P2'],
+      });
+      const agent = new HeuristicAgent('P1', 'hard');
+      agent.onGameStart(obs);
+      const action = agent.act(obs);
+      expect(action.type).toBe('quest_vote');
+      if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+    });
+
   });
 });
