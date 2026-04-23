@@ -1,4 +1,4 @@
-import { Client, WebhookEvent, MessageEvent } from '@line/bot-sdk';
+import { Client, WebhookEvent, MessageEvent, Message } from '@line/bot-sdk';
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
@@ -145,7 +145,10 @@ export class LineBotClient {
     }
 
     try {
-      await this.client.replyMessage(replyToken, [response]);
+      // LINE's Message union uses narrow literal types (`type: "flex"` etc),
+      // but `response` is built from object literals with `type: string`.
+      // Cast via Message[] so the SDK receives a correctly-shaped payload.
+      await this.client.replyMessage(replyToken, [response as Message]);
     } catch (error) {
       console.error('Failed to reply to LINE message:', error);
       await this.client.replyMessage(replyToken, [

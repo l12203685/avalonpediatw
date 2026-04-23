@@ -5,6 +5,7 @@ import {
   REST,
   Routes,
   CommandInteraction,
+  ChatInputCommandInteraction,
   ActivityType,
 } from 'discord.js';
 import { DISCORD_CONFIG, COMMANDS } from './config';
@@ -54,8 +55,8 @@ export class DiscordBotClient {
 
     // Command interaction
     this.client.on('interactionCreate', (interaction) => {
-      if (!interaction.isCommand()) return;
-      this.handleCommand(interaction as CommandInteraction);
+      if (!interaction.isChatInputCommand()) return;
+      this.handleCommand(interaction);
     });
 
     // Error handling
@@ -68,7 +69,7 @@ export class DiscordBotClient {
     });
   }
 
-  private async handleCommand(interaction: CommandInteraction): Promise<void> {
+  private async handleCommand(interaction: ChatInputCommandInteraction): Promise<void> {
     const commandName = interaction.commandName;
 
     try {
@@ -156,8 +157,16 @@ export class DiscordBotClient {
     const statuses = DISCORD_CONFIG.statuses;
     const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
 
+    // discord.js v14 uses a numeric enum for ActivityType; config stores the
+    // string form. Map name → enum at rotation time, defaulting to Playing.
+    const typeMap: Record<string, ActivityType> = {
+      PLAYING: ActivityType.Playing,
+      WATCHING: ActivityType.Watching,
+      LISTENING: ActivityType.Listening,
+      COMPETING: ActivityType.Competing,
+    };
     this.client.user?.setActivity(randomStatus.name, {
-      type: randomStatus.type as ActivityType,
+      type: typeMap[randomStatus.type] ?? ActivityType.Playing,
     });
   }
 

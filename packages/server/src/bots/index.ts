@@ -32,8 +32,12 @@ export async function initializeBots(): Promise<void> {
     console.warn('⚠️ DISCORD_BOT_TOKEN not set, skipping Discord Bot');
   }
 
-  // Initialize Line Bot
-  if (process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+  // Initialize Line Bot — accept both BOT_-prefixed (preferred) and legacy env names
+  // to stay in sync with bots/line/config.ts which already supports both.
+  const lineAccessToken =
+    process.env.LINE_BOT_CHANNEL_ACCESS_TOKEN ||
+    process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (lineAccessToken) {
     try {
       initializeLineBot();
       console.log('✅ Line Bot initialized');
@@ -44,7 +48,9 @@ export async function initializeBots(): Promise<void> {
       }
     }
   } else {
-    console.warn('⚠️ LINE_CHANNEL_ACCESS_TOKEN not set, skipping Line Bot');
+    console.warn(
+      '⚠️ LINE_BOT_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_ACCESS_TOKEN not set, skipping Line Bot'
+    );
   }
 
   // Initialize ChatMirror (#82) — wires lobby chat to LINE + Discord push.

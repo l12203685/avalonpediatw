@@ -20,6 +20,7 @@ import {
   loadEloConfigFromFirestore,
   subscribeEloConfigChanges,
 } from './services/EloConfigLoader';
+import { initializeBots, registerBotRoutes } from './bots/index';
 
 const app: Express = express();
 
@@ -123,7 +124,19 @@ async function main() {
   // 4. Start self-play scheduler after game server is ready
   startSelfPlayScheduler();
 
-  // 5. Finally bind the HTTP port — now any connection has a complete handler chain
+  // 5. Initialize Line/Discord bots and register their webhook + status routes.
+  //    Safe even when bot env vars are missing — init no-ops and routes skip
+  //    the adapter whose bot didn't come up. Keep this before listen() so that
+  //    /webhook/line is reachable the moment the HTTP port binds.
+  try {
+    await initializeBots();
+    registerBotRoutes(app);
+  } catch (err) {
+    console.error('Bot initialization failed:', err);
+    // Non-fatal in development; production rethrows inside initializeBots.
+  }
+
+  // 6. Finally bind the HTTP port — now any connection has a complete handler chain
   httpServer.listen(PORT, () => {
     console.log(`\nAvalon server running on port ${PORT}`);
     console.log(`CORS Origin: ${CORS_ORIGIN}`);
