@@ -11,6 +11,7 @@ import {
   createQuickReplyButtons,
 } from './messages';
 import { getSharedRoomManager } from '../../game/roomManagerSingleton';
+import { getChatMirror } from '../ChatMirror';
 
 /**
  * Map LINE user IDs to the room they're currently in.
@@ -67,11 +68,25 @@ export class LineBotClient {
         }
 
         const messageEvent = event as MessageEvent;
-        const userMessage = (messageEvent.message as { text: string }).text.toLowerCase().trim();
+        const textMessage = messageEvent.message as { id: string; text: string };
+        const rawText = textMessage.text;
 
+        // #82 three-way sync: group messages from the configured lobby-mirror
+        // group are bridged into the lobby ring buffer (→ web clients) and
+        // cross-pushed to Discord. Process bridge first so even `/command`
+        // looking text still lands in the mirror. We then fall through to the
+        // command handler only for 1:1 DMs (messageEvent.source.type==='user'),
+        // which is where commands actually make sense.
+        const source = messageEvent.source;
+        if (source.type === 'group') {
+          await this.handleGroupMessage(source.groupId, source.userId, rawText, textMessage.id);
+          continue;
+        }
+
+        const userMessage = rawText.toLowerCase().trim();
         await this.handleMessage(
           messageEvent.replyToken,
-          messageEvent.source.userId,
+          source.userId,
           userMessage
         );
       }
@@ -80,6 +95,68 @@ export class LineBotClient {
     } catch (error) {
       console.error('Line Bot Webhook Error:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * #82 — Forward a LINE group message into ChatMirror so it lands in the
+   * Avalon lobby chat and gets cross-posted to the Discord channel.
+   *
+   * Skipped silently when:
+   *   - The group id doesn't match `LOBBY_MIRROR_LINE_GROUP_ID` (another
+   *     group the bot happens to live in).
+   *   - The mirror singleton hasn't been initialised yet (startup race).
+   *   - ChatMirror returns null (rate limited / invalid body).
+   *
+   * Failures are logged but never propagated — LINE webhook must always
+   * ack 200 so the LINE platform does not disable our endpoint.
+   */
+  private async handleGroupMessage(
+    groupId: string,
+    userId: string | undefined,
+    text: string,
+    messageId: string
+  ): Promise<void> {
+    const targetGroup = process.env.LOBBY_MIRROR_LINE_GROUP_ID?.trim();
+    if (!targetGroup || targetGroup !== groupId) {
+      return;
+    }
+
+    const mirror = getChatMirror();
+    if (!mirror) {
+      console.warn('[LINE→lobby] ChatMirror not initialised yet, dropping message');
+      return;
+    }
+
+    // Fetch the speaker's LINE display name so the lobby shows a real name.
+    // Falls back to a generic label on failure — do not let profile fetch
+    // errors drop the message on the floor.
+    let displayName = '';
+    if (userId) {
+      try {
+        const profile = await this.client.getGroupMemberProfile(groupId, userId);
+        displayName = profile?.displayName ?? '';
+      } catch (err) {
+        console.warn(
+          `[LINE→lobby] getGroupMemberProfile failed for ${userId?.slice(-6)}:`,
+          err
+        );
+      }
+    }
+
+    const ingested = mirror.ingestInbound({
+      source: 'line',
+      platformUserId: userId ?? 'unknown',
+      displayName,
+      text,
+      messageId: `line:${messageId}`,
+    });
+
+    if (ingested) {
+      // Cross-push to Discord (lobby-ingest callback handles web clients).
+      mirror.crossFanout(ingested).catch((err) => {
+        console.warn('[LINE→Discord] crossFanout rejected:', err);
+      });
     }
   }
 

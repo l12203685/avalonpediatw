@@ -94,9 +94,13 @@ function roomHasDiscordPlayer(room: Room): boolean {
 //
 // We capture the module exports rather than a single function so we can
 // both build + retrieve the singleton here.
+type MirrorInstance = {
+  fanout: (msg: LobbyChatMessage) => Promise<void>;
+  setLobbyIngest?: (fn: (msg: LobbyChatMessage) => void) => void;
+};
 type ChatMirrorModule = {
-  initializeChatMirror: (cfg: unknown) => { fanout: (msg: LobbyChatMessage) => Promise<void> };
-  getChatMirror: () => { fanout: (msg: LobbyChatMessage) => Promise<void> } | null;
+  initializeChatMirror: (cfg: unknown) => MirrorInstance;
+  getChatMirror: () => MirrorInstance | null;
 };
 let cachedChatMirrorMod: ChatMirrorModule | null = null;
 let chatMirrorLoadAttempted = false;
@@ -166,6 +170,42 @@ export class GameServer {
     // joined, and ended from either the web or Discord. Without this wiring
     // the bot throws "RoomManager not initialised" on its first command.
     setSharedRoomManager(this.roomManager);
+  }
+
+  /**
+   * #82 Phase B — inbound bridge. ChatMirror calls this back with messages
+   * sourced from LINE / Discord; we append to the ring buffer + emit to every
+   * connected web client so the lobby UI stays in sync with the external
+   * platforms.
+   *
+   * MUST be called AFTER `initializeBots()` — the ChatMirror singleton is
+   * only constructed inside that call, so trying to wire up the ingest
+   * callback earlier is a silent no-op.
+   *
+   * Safe to call when the mirror is disabled (env vars missing) — we log a
+   * single note and move on.
+   */
+  public wireChatMirrorIngest(): void {
+    const mod = getChatMirrorModule();
+    if (!mod) return;
+    const mirror = mod.getChatMirror();
+    if (!mirror) {
+      console.log('ℹ️  ChatMirror not initialised — inbound bridge disabled');
+      return;
+    }
+    if (typeof mirror.setLobbyIngest !== 'function') {
+      console.warn('[ChatMirror] setLobbyIngest missing — inbound bridge disabled');
+      return;
+    }
+    mirror.setLobbyIngest((msg) => {
+      try {
+        this.lobbyChat.append(msg);
+        this.io.to(GameServer.LOBBY_ROOM).emit('lobby:message-received', msg);
+      } catch (err) {
+        console.warn('[ChatMirror] lobbyIngest emit failed:', err);
+      }
+    });
+    console.log('✅ ChatMirror inbound bridge wired (LINE/Discord → lobby)');
   }
 
   public start(): void {

@@ -7,6 +7,7 @@ import {
   CommandInteraction,
   ChatInputCommandInteraction,
   ActivityType,
+  Message,
 } from 'discord.js';
 import { DISCORD_CONFIG, COMMANDS } from './config';
 import {
@@ -22,6 +23,7 @@ import {
   handleAssassinateCommand,
   handleEndCommand,
 } from './commands';
+import { getChatMirror } from '../ChatMirror';
 
 /**
  * Discord Bot Client Setup
@@ -59,6 +61,18 @@ export class DiscordBotClient {
       this.handleCommand(interaction);
     });
 
+    // #82 three-way sync: channel messages in the configured mirror channel
+    // are bridged into the Avalon lobby (→ web clients) and cross-posted to
+    // LINE. Loops are prevented by skipping our own bot messages, any other
+    // bot, and the text prefix that identifies messages we just sent out.
+    this.client.on('messageCreate', async (message) => {
+      try {
+        await this.handleIncomingMirrorMessage(message);
+      } catch (err) {
+        console.warn('[Discord→lobby] messageCreate handler threw:', err);
+      }
+    });
+
     // Error handling
     this.client.on('error', (error) => {
       console.error('❌ Discord Bot Error:', error);
@@ -67,6 +81,58 @@ export class DiscordBotClient {
     this.client.on('warn', (warn) => {
       console.warn('⚠️ Discord Bot Warning:', warn);
     });
+  }
+
+  /**
+   * #82 — Forward a Discord channel message into ChatMirror so it lands in
+   * the Avalon lobby chat and gets cross-posted to the LINE group.
+   *
+   * Early returns (silent):
+   *   - `LOBBY_MIRROR_DISCORD_CHANNEL_ID` unset or mismatched.
+   *   - Author is a bot (ourselves, the role-reveal DM, another bot).
+   *   - Message content is empty (attachment-only / embed-only — future work).
+   *   - Message text starts with the outbound `[Avalon]` tag — guards against
+   *     Discord re-delivering our own fanout payload in pathological cases
+   *     (edits / pinned messages) even though bot-author check should cover it.
+   */
+  private async handleIncomingMirrorMessage(message: Message): Promise<void> {
+    const targetChannel = process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID?.trim();
+    if (!targetChannel || message.channelId !== targetChannel) {
+      return;
+    }
+
+    if (message.author.bot) return;
+    const content = message.content?.trim();
+    if (!content) return;
+    if (content.startsWith('[Avalon]')) return;
+
+    const mirror = getChatMirror();
+    if (!mirror) {
+      console.warn('[Discord→lobby] ChatMirror not initialised yet, dropping message');
+      return;
+    }
+
+    // Prefer guild nickname for recognisability; fall back to global username.
+    const displayName =
+      (message.member?.displayName ?? '').trim() ||
+      message.author.globalName ||
+      message.author.username ||
+      '';
+
+    const ingested = mirror.ingestInbound({
+      source: 'discord',
+      platformUserId: message.author.id,
+      displayName,
+      text: content,
+      messageId: `discord:${message.id}`,
+    });
+
+    if (ingested) {
+      // Cross-push to LINE (lobby-ingest callback handles web clients).
+      mirror.crossFanout(ingested).catch((err) => {
+        console.warn('[Discord→LINE] crossFanout rejected:', err);
+      });
+    }
   }
 
   private async handleCommand(interaction: ChatInputCommandInteraction): Promise<void> {

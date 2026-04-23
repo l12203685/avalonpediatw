@@ -1,32 +1,57 @@
 /**
- * ChatMirror — #82 大廳聊天跨平台雙向同步核心模組
+ * ChatMirror — #82 大廳聊天 ↔ LINE 群 ↔ Discord 頻道 三向全同步核心模組
  *
  * Responsibility:
- *   Take lobby-origin chat messages (#63 `LobbyChatBuffer`) and fan them out
- *   to a designated LINE group and Discord channel. Inbound webhooks from
- *   LINE/Discord (Phase B, not in this pass) feed back into the lobby buffer
- *   via `ingestInbound()` — those messages carry `source: 'line' | 'discord'`
- *   so `fanout()` can suppress them and avoid the lobby → LINE → lobby loop.
+ *   The single source of truth for lobby ↔ LINE ↔ Discord message fan-out.
+ *
+ *   - `fanout(msg)`   — lobby-origin → LINE + Discord (outbound).
+ *   - `crossFanout(msg)` — external-origin → the other external platform
+ *     (so LINE ↔ Discord stays in sync even though the lobby is the "hub").
+ *   - `ingestInbound({source, ...})` — external webhook / bot event →
+ *     validate + rate-limit + push into the lobby ring buffer via the
+ *     `setLobbyIngest()` callback wired up by GameServer.
+ *
+ * Three-way topology (updated 2026-04-23):
+ *
+ *       lobby ──[fanout]──▶ LINE
+ *         ▲                   │
+ *         │                   │
+ *     [ingestInbound]    [crossFanout]
+ *         │                   │
+ *         │                   ▼
+ *       lobby ◀─[ingestInbound]─ Discord ◀──[fanout]── lobby
+ *         │                   ▲
+ *         │                   │
+ *     [ingestInbound]    [crossFanout]
+ *         ▲                   │
+ *         │                   │
+ *       LINE ────────────[crossFanout]────────▶ Discord
+ *
+ *   Loop prevention relies on the `source` tag:
+ *   - `fanout` only mirrors `source==='lobby'` messages — messages already
+ *     tagged `line`/`discord` short-circuit, preventing lobby → LINE → lobby.
+ *   - `crossFanout` pushes to every platform *except* the one the message
+ *     originated from, so a LINE message reaches Discord but never bounces
+ *     back to LINE.
  *
  * Design decisions:
  *   - Env-gated: if `LOBBY_MIRROR_LINE_GROUP_ID` / `LOBBY_MIRROR_DISCORD_CHANNEL_ID`
  *     are unset, the corresponding outbound is a no-op. Boot never fails.
- *   - Fire-and-forget: `fanout()` swallows per-platform errors (logged) and
- *     never throws into the socket hot path. A failed push to LINE cannot
- *     break the lobby emit for other clients.
- *   - Loop safety: only `source === 'lobby'` (or undefined, treated as lobby)
- *     is mirrored outward. Messages with source `'line'` / `'discord'`
- *     short-circuit at the top of `fanout()`.
+ *   - Fire-and-forget: every push swallows per-platform errors (logged) and
+ *     never throws into the socket hot path or a webhook response. A failed
+ *     push to LINE cannot break the lobby emit for other clients.
  *   - Rate limit: per-platform userId, reuses the existing `SocketRateLimiter`
  *     so behaviour matches the rest of the server.
  *   - Adapter-based: `LineAdapter` and `DiscordAdapter` interfaces let unit
- *     tests inject mocks, and let Phase B swap in real clients without
- *     touching this module's contract.
+ *     tests inject mocks, and let real clients be swapped in without touching
+ *     this module's contract.
  *
- * Out of scope in this pass (Phase B, separate task batch):
- *   - LINE webhook parsing for group messages
- *   - Discord `messageCreate` listener
- *   - Identity mapping with #42 account linking
+ * Identity mapping (guest-friendly):
+ *   - LINE / Discord display names are preserved as `playerName` so lobby
+ *     users recognise the speaker.
+ *   - `playerId` is namespaced (`line:<userId>`, `discord:<userId>`) so
+ *     #42 multi-account binding can join these identities to a single
+ *     Avalon account later without data-migration pain.
  */
 
 import {
@@ -181,6 +206,32 @@ export class ChatMirror {
       this.pushLine(line),
       this.pushDiscord(line),
     ]);
+  }
+
+  /**
+   * Cross-platform fanout for a message that originated on LINE or Discord.
+   *
+   * Pushes the formatted one-liner to every *configured* external platform
+   * **except** the one the message came from, so LINE ↔ Discord stays in sync
+   * without having to round-trip through the lobby websocket layer.
+   *
+   *   source='line'    → pushes to Discord only
+   *   source='discord' → pushes to LINE only
+   *   source='lobby'   → pushes to both (equivalent to fanout — accepted for
+   *                      symmetry; lobby-origin callers should still use
+   *                      fanout() for clarity).
+   *
+   * Fire-and-forget: per-platform errors are logged and swallowed so a
+   * webhook handler or Discord messageCreate listener never throws back
+   * into the platform SDK.
+   */
+  public async crossFanout(msg: LobbyChatMessage): Promise<void> {
+    const src: LobbyChatSource = msg.source ?? 'lobby';
+    const line = formatOutgoing(msg);
+    const pushes: Promise<void>[] = [];
+    if (src !== 'line') pushes.push(this.pushLine(line));
+    if (src !== 'discord') pushes.push(this.pushDiscord(line));
+    await Promise.all(pushes);
   }
 
   /**
