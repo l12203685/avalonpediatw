@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
@@ -8,6 +8,9 @@ import {
   Chrome,
   Loader,
   HelpCircle,
+  Copy,
+  Check,
+  Unlink,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import {
@@ -20,6 +23,12 @@ import {
   getIdToken,
 } from '../services/auth';
 import { initializeSocket, getStoredToken } from '../services/socket';
+import {
+  fetchLinkedAccounts,
+  unlinkAccount,
+  LinkedAccount,
+  LinkProvider,
+} from '../services/api';
 
 type SectionId = 'basic' | 'binding';
 
@@ -74,6 +83,62 @@ export default function SettingsPage(): JSX.Element {
   const [upgrading, setUpgrading] = useState(false);
 
   const isGuest = isGuestPlayer(currentPlayer);
+
+  // 2026-04-23 Edward：已綁狀態顯示 + 解綁按鈕 + uuid 複製
+  const [linked, setLinked] = useState<LinkedAccount[]>([]);
+  const [linkedLoading, setLinkedLoading] = useState(false);
+  const [linkedErr, setLinkedErr] = useState<string | null>(null);
+  const [unlinking, setUnlinking] = useState<LinkProvider | null>(null);
+  const [copiedUuid, setCopiedUuid] = useState(false);
+
+  // 載入綁定狀態（只對非訪客）
+  useEffect(() => {
+    if (isGuest) return;
+    const token = getStoredToken();
+    if (!token) return;
+    setLinkedLoading(true);
+    fetchLinkedAccounts(token)
+      .then(setLinked)
+      .catch(e => setLinkedErr(String((e as Error).message ?? e)))
+      .finally(() => setLinkedLoading(false));
+  }, [isGuest]);
+
+  const handleUnlink = async (provider: LinkProvider): Promise<void> => {
+    const token = getStoredToken();
+    if (!token) return;
+    // 防呆：再次確認
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(t('settings.unlinkConfirm', { provider }))) return;
+    setUnlinking(provider);
+    try {
+      const after = await unlinkAccount(token, provider);
+      setLinked(after);
+      addToast(t('settings.unlinkSuccess'), 'success');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : t('settings.unlinkFailed'), 'error');
+    } finally {
+      setUnlinking(null);
+    }
+  };
+
+  const handleCopyUuid = async (): Promise<void> => {
+    if (!currentPlayer?.id) return;
+    try {
+      await navigator.clipboard.writeText(currentPlayer.id);
+      setCopiedUuid(true);
+      setTimeout(() => setCopiedUuid(false), 1500);
+    } catch {
+      // Clipboard API 在 http (非 localhost) 會失敗；fallback
+      const ta = document.createElement('textarea');
+      ta.value = currentPlayer.id;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* noop */ }
+      document.body.removeChild(ta);
+      setCopiedUuid(true);
+      setTimeout(() => setCopiedUuid(false), 1500);
+    }
+  };
 
   const handleRenameSubmit = async (): Promise<void> => {
     const trimmed = newName.trim();
@@ -229,6 +294,31 @@ export default function SettingsPage(): JSX.Element {
                         {currentPlayer?.name ?? t('auth.guest')}
                       </span>
                     </p>
+
+                    {/* 2026-04-23 Edward：基本資料區加 uuid 顯示 + 複製按鈕 */}
+                    {currentPlayer?.id && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-zinc-500">UUID: </span>
+                        <code
+                          className="text-[11px] bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-zinc-300 font-mono break-all"
+                          data-testid="settings-uuid-value"
+                        >
+                          {currentPlayer.id}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={handleCopyUuid}
+                          data-testid="settings-btn-copy-uuid"
+                          className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                          title={t('settings.copyUuid', { defaultValue: '複製 UUID' })}
+                        >
+                          {copiedUuid ? <Check size={12} /> : <Copy size={12} />}
+                          {copiedUuid
+                            ? t('settings.copied', { defaultValue: '已複製' })
+                            : t('settings.copy', { defaultValue: '複製' })}
+                        </button>
+                      </div>
+                    )}
                     {isGuest ? (
                       renaming ? (
                         <div className="space-y-2">
@@ -304,11 +394,14 @@ export default function SettingsPage(): JSX.Element {
                 {section.id === 'binding' && (
                   <div className="text-sm space-y-3">
                     <p className="text-zinc-500">{t('settings.upgradeGuest')}</p>
-                    {isGuest ? (
+
+                    {/* 訪客模式 — 三顆綁定按鈕（原本行為） */}
+                    {isGuest && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <button
                           onClick={() => handleUpgrade('google')}
                           disabled={upgrading || !hasFirebaseAuthConfigured()}
+                          data-testid="settings-btn-bind-google"
                           className="inline-flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white font-semibold py-2 px-3 rounded-lg border border-zinc-700 transition-colors"
                           title={hasFirebaseAuthConfigured() ? '' : t('settings.upgradeGoogleUnavailable')}
                         >
@@ -318,6 +411,7 @@ export default function SettingsPage(): JSX.Element {
                         <button
                           onClick={() => handleUpgrade('discord')}
                           disabled={upgrading}
+                          data-testid="settings-btn-bind-discord"
                           className="inline-flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white font-semibold py-2 px-3 rounded-lg transition-colors"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -328,6 +422,7 @@ export default function SettingsPage(): JSX.Element {
                         <button
                           onClick={() => handleUpgrade('line')}
                           disabled={upgrading}
+                          data-testid="settings-btn-bind-line"
                           className="inline-flex items-center justify-center gap-2 bg-[#00B900] hover:bg-[#009900] disabled:opacity-50 text-white font-semibold py-2 px-3 rounded-lg transition-colors"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -336,9 +431,32 @@ export default function SettingsPage(): JSX.Element {
                           {t('settings.upgradeWithLine')}
                         </button>
                       </div>
-                    ) : (
-                      <p className="text-zinc-500 text-xs">{t('settings.alreadyRegistered')}</p>
                     )}
+
+                    {/* 2026-04-23 Edward：已綁定時 per-provider 顯「已綁定 @xxx」+ 解綁按鈕 */}
+                    {!isGuest && (
+                      <div className="space-y-2">
+                        {linkedLoading && (
+                          <p className="text-xs text-zinc-500 flex items-center gap-1.5">
+                            <Loader size={12} className="animate-spin" />
+                            {t('settings.loadingBindings', { defaultValue: '載入綁定狀態...' })}
+                          </p>
+                        )}
+                        {linkedErr && !linkedLoading && (
+                          <p className="text-xs text-amber-400">{linkedErr}</p>
+                        )}
+                        {!linkedLoading && !linkedErr && linked.map(acc => (
+                          <LinkedProviderRow
+                            key={acc.provider}
+                            account={acc}
+                            busy={unlinking === acc.provider || upgrading}
+                            onBind={() => handleUpgrade(acc.provider)}
+                            onUnbind={() => handleUnlink(acc.provider)}
+                          />
+                        ))}
+                      </div>
+                    )}
+
                     <p className="text-xs text-zinc-600">{t('settings.upgradeHint')}</p>
                   </div>
                 )}
@@ -348,6 +466,79 @@ export default function SettingsPage(): JSX.Element {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// Per-provider binding row — 已綁：顯「已綁定 @xxx」+ 解綁；未綁：綁定
+// ──────────────────────────────────────────────────────────────
+
+interface LinkedProviderRowProps {
+  account:  LinkedAccount;
+  busy:     boolean;
+  onBind:   () => void;
+  onUnbind: () => void;
+}
+
+function LinkedProviderRow({ account, busy, onBind, onUnbind }: LinkedProviderRowProps): JSX.Element {
+  const { t } = useTranslation();
+  const providerLabel = {
+    google:  t('settings.upgradeWithGoogle'),
+    discord: t('settings.upgradeWithDiscord'),
+    line:    t('settings.upgradeWithLine'),
+  }[account.provider];
+
+  // 解綁後 primary provider 不能被抽掉（後端 ≤1 檔住），但這邊照樣顯示按鈕，
+  // 被後端拒絕時 addToast 顯示錯誤訊息即可。
+  return (
+    <div
+      data-testid={`settings-row-bind-${account.provider}`}
+      className={`flex items-center gap-3 bg-zinc-950/40 border rounded-lg px-3 py-2 ${
+        account.linked ? 'border-emerald-700/40' : 'border-zinc-800'
+      }`}
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-white font-semibold truncate">{providerLabel}</p>
+        {account.linked ? (
+          <p className="text-[11px] text-emerald-400 truncate">
+            {t('settings.linkedAs', { defaultValue: '已綁定' })} @{account.display_label ?? account.external_id ?? '—'}
+            {account.primary && (
+              <span className="ml-1 text-amber-400">
+                ({t('settings.primaryProvider', { defaultValue: '主帳號' })})
+              </span>
+            )}
+          </p>
+        ) : (
+          <p className="text-[11px] text-zinc-500">
+            {t('settings.notLinked', { defaultValue: '尚未綁定' })}
+          </p>
+        )}
+      </div>
+      {account.linked ? (
+        <button
+          type="button"
+          onClick={onUnbind}
+          disabled={busy || account.primary}
+          data-testid={`settings-btn-unbind-${account.provider}`}
+          title={account.primary ? t('settings.cannotUnlinkPrimary', { defaultValue: '主帳號不可解綁' }) : ''}
+          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-red-800/60 disabled:opacity-40 border border-zinc-700 hover:border-red-500 text-zinc-300 hover:text-white transition-colors"
+        >
+          {busy ? <Loader size={12} className="animate-spin" /> : <Unlink size={12} />}
+          {t('settings.unlink', { defaultValue: '解綁' })}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onBind}
+          disabled={busy}
+          data-testid={`settings-btn-bind-${account.provider}`}
+          className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-semibold transition-colors"
+        >
+          {busy ? <Loader size={12} className="animate-spin" /> : <Link2 size={12} />}
+          {t('settings.bind', { defaultValue: '綁定' })}
+        </button>
+      )}
     </div>
   );
 }

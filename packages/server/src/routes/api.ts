@@ -472,6 +472,45 @@ router.post('/user/unlink', publicLimiter, async (req: Request, res: Response) =
   return res.json({ ok: true, linked: after });
 });
 
+// POST /api/user/merge-by-uuid { uuid }
+// 2026-04-23 Edward：個人戰績頁提供「以 uuid 綁定歷史戰績」按鈕 — 玩家
+// 輸入另一個 uuid 把該帳號的戰績/徽章/好友關係併到當前帳號，然後刪 secondary。
+// 規則：
+//   - 拒絕 guest
+//   - uuid 必須是合法 UUID 格式（或至少看起來像 auth_users doc id — 非空字串）
+//   - primary === secondary 直接回 409
+//   - primary/secondary 任一不存在回 404
+router.post('/user/merge-by-uuid', publicLimiter, async (req: Request, res: Response) => {
+  const auth = await resolvePlayerAuth(req.headers.authorization);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (auth.provider === 'guest') {
+    return res.status(403).json({ error: 'Guest accounts cannot merge' });
+  }
+  if (!isAccountStoreReady()) return res.status(503).json({ error: 'Database not configured' });
+
+  const { uuid } = (req.body ?? {}) as { uuid?: unknown };
+  if (typeof uuid !== 'string' || uuid.trim().length === 0) {
+    return res.status(400).json({ error: 'uuid required' });
+  }
+  const secondaryId = uuid.trim();
+  if (secondaryId.length > 128) {
+    return res.status(400).json({ error: 'uuid too long' });
+  }
+
+  const primaryId = await resolveSupabaseUserId(auth);
+  if (!primaryId) return res.status(404).json({ error: 'Current user row not found' });
+  if (primaryId === secondaryId) {
+    return res.status(409).json({ error: 'Cannot merge account into itself' });
+  }
+
+  const merged = await mergeUserAccounts(primaryId, secondaryId);
+  if (!merged) {
+    return res.status(404).json({ error: 'Merge failed — target uuid may not exist or is already merged' });
+  }
+  const linked = await getLinkedAccounts(primaryId);
+  return res.json({ ok: true, merged: true, primaryId, secondaryId, linked });
+});
+
 // POST /api/user/link/google { idToken }
 // Firebase Auth 的 ID token 比跳 OAuth 好用很多 — 前端拿完直接送過來綁就行。
 router.post('/user/link/google', publicLimiter, async (req: Request, res: Response) => {

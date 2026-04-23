@@ -71,6 +71,14 @@ export interface LinkedAccountSummary {
   linked:       boolean;
   external_id:  string | null;
   primary:      boolean;
+  /**
+   * 2026-04-23 Edward 指令：UI 顯「已綁定 @xxx」時需要一個可讀 label。
+   *   - google  → email（如 'alice@gmail.com'）
+   *   - discord → display_name + '#' 末四碼 id（如 'Alice#1234'），fallback display_name
+   *   - line    → display_name（如 'Alice LINE'）
+   * 沒綁時為 null；firestore/supabase 實作回同一格式。
+   */
+  display_label: string | null;
 }
 
 export interface OAuthSession {
@@ -153,20 +161,49 @@ export async function getLinkedAccounts(userId: string): Promise<LinkedAccountSu
     const data = (snap.data() ?? {}) as AuthUserDoc;
     const primary = data.provider ?? '';
     const providers: LinkProvider[] = ['discord', 'line', 'google'];
+    const displayName = typeof data.display_name === 'string' ? data.display_name : null;
+    const email       = typeof data.email === 'string' ? data.email : null;
     return providers.map((p) => {
       const col = providerToColumn(p);
       const raw = data[col];
       const externalId = typeof raw === 'string' && raw.length > 0 ? raw : null;
       return {
-        provider:    p,
-        linked:      externalId !== null,
-        external_id: externalId,
-        primary:     primary === p,
+        provider:      p,
+        linked:        externalId !== null,
+        external_id:   externalId,
+        primary:       primary === p,
+        display_label: buildProviderDisplayLabel(p, externalId, { displayName, email }),
       };
     });
   } catch (err) {
     console.error('[firestoreAccounts] getLinkedAccounts error:', err);
     return [];
+  }
+}
+
+/**
+ * 把一個 provider 的綁定資訊算成顯示字串。auth_users 目前只存一組共用的
+ * display_name / email（source-of-truth 為最後一次登入/綁定時的 provider 資訊），
+ * 所以三個 provider 在沒拆 per-provider profile 之前，共用同一組文字。
+ *
+ * 未綁定的 provider 一律回 null。
+ */
+function buildProviderDisplayLabel(
+  provider:   LinkProvider,
+  externalId: string | null,
+  ctx: { displayName: string | null; email: string | null },
+): string | null {
+  if (!externalId) return null;
+  switch (provider) {
+    case 'google':
+      return ctx.email || ctx.displayName || externalId;
+    case 'discord': {
+      const base = ctx.displayName || externalId;
+      const tail = externalId.slice(-4);
+      return ctx.displayName ? `${base}#${tail}` : base;
+    }
+    case 'line':
+      return ctx.displayName || externalId;
   }
 }
 
