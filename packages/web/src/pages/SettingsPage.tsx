@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   User,
   Link2,
-  LogOut,
   Chrome,
   Pencil,
   Loader,
@@ -13,7 +12,6 @@ import {
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import {
-  logout,
   renameGuest,
   signInWithGoogle,
   signInWithDiscord,
@@ -21,7 +19,7 @@ import {
   hasFirebaseAuthConfigured,
 } from '../services/auth';
 
-type SectionId = 'basic' | 'binding' | 'logout';
+type SectionId = 'basic' | 'binding';
 
 interface SectionConfig {
   id: SectionId;
@@ -30,13 +28,15 @@ interface SectionConfig {
 }
 
 /**
- * #86 IA v3 — 2026-04-23 拆頁：系統設定只保留 [基本資料 + 帳號綁定 + 登出]，
+ * #86 IA v3 — 2026-04-23 拆頁：系統設定只保留 [基本資料 + 帳號綁定]，
  * 歷史戰績 / 追蹤列表 / 追蹤對戰成績 搬到新的 PersonalStatsPage（個人戰績頁）。
+ *
+ * 2026-04-23 Edward 指令：系統設定頁移除登出按鈕，預設不給登出。後端
+ * /auth/logout endpoint 保留，未來 admin 用。
  */
 const SECTIONS: SectionConfig[] = [
   { id: 'basic',   labelKey: 'settings.basic',   icon: User },
   { id: 'binding', labelKey: 'settings.binding', icon: Link2 },
-  { id: 'logout',  labelKey: 'settings.logout',  icon: LogOut },
 ];
 
 /**
@@ -61,8 +61,6 @@ function isGuestPlayer(player: { name?: string; provider?: string } | null | und
 export default function SettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const { setGameState, setCurrentPlayer, currentPlayer, addToast } = useGameStore();
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   // 訪客改名 state
   const [renaming, setRenaming] = useState(false);
@@ -74,27 +72,6 @@ export default function SettingsPage(): JSX.Element {
   const [upgrading, setUpgrading] = useState(false);
 
   const isGuest = isGuestPlayer(currentPlayer);
-
-  const handleLogoutConfirmed = async (): Promise<void> => {
-    setLoggingOut(true);
-    try {
-      await logout();
-      // Clear local storage guest markers + player name so cold start shows login
-      try {
-        localStorage.removeItem('avalon_player_name');
-        localStorage.removeItem('avalon_room');
-      } catch {
-        // localStorage unavailable (SSR / private mode) — non-fatal
-      }
-      setCurrentPlayer(null);
-      setGameState('home');
-    } catch {
-      addToast(t('auth.logoutFailed'), 'error');
-    } finally {
-      setLoggingOut(false);
-      setShowLogoutConfirm(false);
-    }
-  };
 
   const handleRenameSubmit = async (): Promise<void> => {
     const trimmed = newName.trim();
@@ -198,18 +175,15 @@ export default function SettingsPage(): JSX.Element {
         <div className="space-y-4">
           {SECTIONS.map(section => {
             const Icon = section.icon;
-            const isLogout = section.id === 'logout';
             return (
               <section
                 key={section.id}
                 id={`settings-${section.id}`}
-                className={`bg-zinc-900/60 border rounded-xl p-6 ${
-                  isLogout ? 'border-red-900/60' : 'border-zinc-700'
-                }`}
+                className="bg-zinc-900/60 border border-zinc-700 rounded-xl p-6"
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <Icon size={18} className={isLogout ? 'text-red-400' : 'text-white'} />
-                  <h2 className={`text-lg font-bold ${isLogout ? 'text-red-300' : 'text-white'}`}>
+                  <Icon size={18} className="text-white" />
+                  <h2 className="text-lg font-bold text-white">
                     {t(section.labelKey)}
                   </h2>
                 </div>
@@ -322,66 +296,11 @@ export default function SettingsPage(): JSX.Element {
                   </div>
                 )}
 
-                {isLogout && (
-                  <div className="space-y-3">
-                    <p className="text-sm text-zinc-400">{t('settings.logoutHint')}</p>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setShowLogoutConfirm(true)}
-                      className="inline-flex items-center gap-2 bg-red-900/70 hover:bg-red-800 border border-red-700 text-red-100 font-semibold py-2 px-4 rounded-lg transition-colors"
-                    >
-                      <LogOut size={16} />
-                      {t('auth.logout')}
-                    </motion.button>
-                  </div>
-                )}
               </section>
             );
           })}
         </div>
       </div>
-
-      {/* Logout confirm modal */}
-      <AnimatePresence>
-        {showLogoutConfirm && (
-          <motion.div
-            key="logout-confirm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-            onClick={() => !loggingOut && setShowLogoutConfirm(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 12 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 12 }}
-              className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full max-w-sm space-y-4"
-              onClick={e => e.stopPropagation()}
-            >
-              <h3 className="text-lg font-bold text-white">{t('settings.logoutConfirm')}</h3>
-              <p className="text-sm text-zinc-400">{t('settings.logoutConfirmBody')}</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleLogoutConfirmed}
-                  disabled={loggingOut}
-                  className="flex-1 bg-red-900/70 hover:bg-red-800 border border-red-700 text-red-100 font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {t('auth.logout')}
-                </button>
-                <button
-                  onClick={() => setShowLogoutConfirm(false)}
-                  disabled={loggingOut}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 px-4 rounded-lg transition-colors border border-zinc-700 disabled:opacity-50"
-                >
-                  {t('action.cancel')}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
