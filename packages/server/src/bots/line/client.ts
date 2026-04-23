@@ -86,16 +86,26 @@ export class LineBotClient {
 
   /**
    * Process and respond to messages
+   *
+   * Only messages starting with the command prefix `/` are handled; all other
+   * chatter (normal group conversation) is silently ignored so the bot does
+   * not interrupt the group with "Unknown command" replies.
    */
   private async handleMessage(
     replyToken: string,
     userId: string | undefined,
     message: string
   ): Promise<void> {
+    // Silent for non-command chatter. Log for debugging but do not reply.
+    if (!message.startsWith('/')) {
+      console.log('[LINE DEBUG] ignored non-command message:', message);
+      return;
+    }
+
     let response;
 
-    // Parse command
-    const [command, ...args] = message.split(/\s+/);
+    // Strip leading '/' then parse command
+    const [command, ...args] = message.slice(1).split(/\s+/);
 
     switch (command) {
       case 'help':
@@ -129,7 +139,7 @@ export class LineBotClient {
       default:
         response = {
           type: 'text',
-          text: `Unknown command: "${command}". Type "help" to see available commands.`,
+          text: `Unknown command: "/${command}". Type "/help" to see available commands.`,
           quickReply: {
             items: [
               {
@@ -137,7 +147,7 @@ export class LineBotClient {
                 action: {
                   type: 'message',
                   label: 'Help',
-                  text: 'help',
+                  text: '/help',
                 },
               },
             ],
