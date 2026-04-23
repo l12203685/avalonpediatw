@@ -89,6 +89,12 @@ export class LineBotClient {
    * Only messages starting with the command prefix `/` are handled; all other
    * chatter (normal group conversation) is silently ignored so the bot does
    * not interrupt the group with "Unknown command" replies.
+   *
+   * When LINE_CONFIG.commandsEnabled is false (the default as of 2026-04-23),
+   * /command messages are logged but NOT replied to. The webhook continues to
+   * ack 200 so the LINE console still marks the endpoint as active, and the
+   * command-handling code below is intentionally left intact behind the flag
+   * so it can be flipped back on once the features are production-ready.
    */
   private async handleMessage(
     replyToken: string,
@@ -98,6 +104,13 @@ export class LineBotClient {
     // Silent for non-command chatter. Log for debugging but do not reply.
     if (!message.startsWith('/')) {
       console.log('[LINE DEBUG] ignored non-command message:', message);
+      return;
+    }
+
+    // Feature-flag gate: /command handling disabled by default. Log and exit
+    // without replying so LINE users do not see half-finished responses.
+    if (!LINE_CONFIG.commandsEnabled) {
+      console.log('[LINE] command received but disabled:', message);
       return;
     }
 
