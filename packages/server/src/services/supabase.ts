@@ -292,10 +292,11 @@ export async function createOAuthSession(
   provider: 'discord' | 'line',
   linkUserId?: string,
   isGuest?: boolean,
+  mode?: 'quickLogin',
 ): Promise<void> {
   // Primary: Firestore (Ticket #42 route B). Fallback: legacy Supabase table.
   if (fsAccounts.isFirestoreReady()) {
-    await fsAccounts.createOAuthSession(stateToken, provider, linkUserId, isGuest);
+    await fsAccounts.createOAuthSession(stateToken, provider, linkUserId, isGuest, mode);
     return;
   }
   const db = getSupabaseClient();
@@ -307,6 +308,7 @@ export async function createOAuthSession(
     expires_at:    expiresAt.toISOString(),
     link_user_id:  linkUserId ?? null,
     is_guest:      isGuest === true,
+    mode:          mode ?? null,
   });
 }
 
@@ -323,7 +325,7 @@ export async function createOAuthSession(
 export async function consumeOAuthSession(
   stateToken: string,
   provider: 'discord' | 'line',
-): Promise<{ linkUserId: string | null; isGuest?: boolean } | null> {
+): Promise<{ linkUserId: string | null; isGuest?: boolean; mode?: 'quickLogin' } | null> {
   // Primary: Firestore transactional consume. Fallback: legacy Supabase table.
   if (fsAccounts.isFirestoreReady()) {
     return fsAccounts.consumeOAuthSession(stateToken, provider);
@@ -333,7 +335,7 @@ export async function consumeOAuthSession(
   try {
     const { data, error } = await db
       .from('oauth_sessions')
-      .select('id, expires_at, link_user_id, is_guest')
+      .select('id, expires_at, link_user_id, is_guest, mode')
       .eq('state_token', stateToken)
       .eq('provider', provider)
       .single();
@@ -343,6 +345,7 @@ export async function consumeOAuthSession(
     return {
       linkUserId: (data.link_user_id as string | null) ?? null,
       isGuest:    (data.is_guest as boolean | undefined) === true,
+      mode:       (data.mode as string | null) === 'quickLogin' ? 'quickLogin' : undefined,
     };
   } catch {
     return null;

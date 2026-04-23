@@ -37,6 +37,7 @@ import {
   consumePasswordResetAndSet,
   PASSWORD_RESET_TTL_MS,
 } from '../services/firestoreAuthAccounts';
+import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import {
   validatePasswordStrength,
   validateEmail,
@@ -103,6 +104,69 @@ const forgotLimiter = createKeyedRateLimit({
   message:     '重設密碼次數過多，請 1 小時後再試',
   code:        'forgot_rate_limited',
 });
+
+// ── OAuth quick-login helper (2026-04-23) ─────────────────────
+//
+// Edward 原話：「能不能登入頁面綁 google/line/dc => 有的話就直接登入」。
+//
+// 實作：Discord/LINE callback 或 Google ID token 驗完後，拿 email 去
+// `findAccountByEmail`。已綁 → 發 JWT 直登；沒綁 → 回前端提示「請先以 email
+// 登入後再綁定」。注意 quick-login 不幫使用者建新帳號 — 那是 Edward 明確劃定
+// 的禁區（避免 OAuth 建了一顆新 row 卻跟 email-only row 兩套）。
+
+/** 回傳 '?auth_error=provider_not_linked&provider=<p>' redirect 給前端處理提示。 */
+function respondQuickLoginNotLinked(
+  res:      Response,
+  provider: 'discord' | 'line' | 'google',
+): void {
+  const qs = new URLSearchParams({
+    auth_error: 'provider_not_linked',
+    provider,
+  });
+  res.redirect(`${FRONTEND_URL}?${qs}`);
+}
+
+/**
+ * 從 LINE OpenID id_token 取 email。id_token 是 JWS (JWT)，格式
+ * header.payload.signature。我們只要 payload，且只在 quick-login 模式下用（嚴格
+ * 講應該驗簽但 CSRF state + access_token exchange 已保護，payload 作為
+ * Firestore 查詢 key 而非身份授權，先解不驗足夠）。
+ */
+function parseEmailFromLineIdToken(idToken: string | undefined): string | undefined {
+  if (!idToken || typeof idToken !== 'string') return undefined;
+  const parts = idToken.split('.');
+  if (parts.length < 2) return undefined;
+  try {
+    const payload = JSON.parse(
+      Buffer.from(parts[1], 'base64').toString('utf8'),
+    ) as { email?: unknown };
+    return typeof payload.email === 'string' ? payload.email : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 拿 email 查 auth_users；命中 → 200 + JWT；miss → null（caller 決定如何回應）。 */
+async function quickLoginByEmail(
+  email:        string | undefined,
+  provider:     'discord' | 'line' | 'google',
+): Promise<{ token: string; userId: string; accountName: string; displayName: string; primaryEmail: string } | null> {
+  if (!email) return null;
+  const account = await findAccountByEmail(email);
+  if (!account) return null;
+  const token = issueJwt({
+    sub:         account.userId,
+    displayName: account.displayName,
+    provider,
+  });
+  return {
+    token,
+    userId:       account.userId,
+    accountName:  account.accountName,
+    displayName:  account.displayName,
+    primaryEmail: account.primaryEmail,
+  };
+}
 
 // ── Bind identity helper (kept for OAuth /auth/link/* routes) ─
 
@@ -349,6 +413,7 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
   }
   const linkUserId = session.linkUserId;
   const isGuestBind = session.isGuest === true;
+  const quickLoginMode = session.mode === 'quickLogin';
 
   try {
     const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
@@ -376,6 +441,20 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     const avatarUrl = discordUser.avatar
       ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
       : undefined;
+
+    // OAuth quick-login (2026-04-23 Edward)：以 provider email 查 auth_users。
+    // 已綁 → 直發 JWT；沒綁 → 提示「請先用 email 登入後再綁定」。
+    // 不建新帳號、不呼叫 upsertUser（那條路只走原生登入）。
+    if (quickLoginMode) {
+      const quick = await quickLoginByEmail(discordUser.email, 'discord');
+      if (!quick) {
+        respondQuickLoginNotLinked(res, 'discord');
+        return;
+      }
+      return res.redirect(
+        `${FRONTEND_URL}?oauth_token=${encodeURIComponent(quick.token)}&provider=discord&quick_login=1`,
+      );
+    }
 
     if (linkUserId) {
       await handleLinkCallback(res, linkUserId, 'discord', discordUser.id, {
@@ -440,6 +519,7 @@ router.get('/line/callback', async (req: Request, res: Response) => {
   }
   const linkUserId = session.linkUserId;
   const isGuestBind = session.isGuest === true;
+  const quickLoginMode = session.mode === 'quickLogin';
 
   try {
     const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
@@ -453,7 +533,7 @@ router.get('/line/callback', async (req: Request, res: Response) => {
         client_secret: LINE_CHANNEL_SECRET,
       }),
     });
-    const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
+    const tokenData = await tokenRes.json() as { access_token?: string; id_token?: string; error?: string };
     if (!tokenData.access_token) throw new Error('Line token exchange failed');
 
     const profileRes = await fetch('https://api.line.me/v2/profile', {
@@ -462,6 +542,23 @@ router.get('/line/callback', async (req: Request, res: Response) => {
     const lineUser = await profileRes.json() as {
       userId: string; displayName: string; pictureUrl?: string;
     };
+
+    // LINE email 在 id_token 裡（OpenID Connect payload），不在 /v2/profile。
+    // quickLogin 模式才解 id_token，避免原登入流程多打一次網路。
+    const lineEmail: string | undefined = quickLoginMode
+      ? parseEmailFromLineIdToken(tokenData.id_token)
+      : undefined;
+
+    if (quickLoginMode) {
+      const quick = await quickLoginByEmail(lineEmail, 'line');
+      if (!quick) {
+        respondQuickLoginNotLinked(res, 'line');
+        return;
+      }
+      return res.redirect(
+        `${FRONTEND_URL}?oauth_token=${encodeURIComponent(quick.token)}&provider=line&quick_login=1`,
+      );
+    }
 
     if (linkUserId) {
       await handleLinkCallback(res, linkUserId, 'line', lineUser.userId, {
@@ -536,6 +633,104 @@ router.get('/link/line', async (req: Request, res: Response) => {
     scope:         'profile openid email',
   });
   return res.redirect(`https://access.line.me/oauth2/v2.1/authorize?${params}`);
+});
+
+// ── OAuth quick-login entry points (2026-04-23 Edward) ───────
+//
+//   GET  /auth/oauth/login/discord — 302 到 Discord OAuth（state.mode=quickLogin）
+//   GET  /auth/oauth/login/line    — 302 到 LINE   OAuth（同）
+//   POST /auth/oauth/login/google  { idToken } — Firebase idToken 驗完查 email
+//
+// 語意：provider 的 email 已存在於 auth_users（= email-only 帳號那邊的 emailsLower），
+// callback / handler 直接發 JWT 登入；找不到回 auth_error=provider_not_linked。
+//
+// 為什麼不合併 `/auth/discord` 跟 `/auth/oauth/login/discord`：原 `/auth/discord`
+// callback 找不到 email 會 upsertUser 建新 row（= 傳統 OAuth 登入），是刻意保留
+// 給「從來沒用 email 註冊、就是 Discord 用戶」的情境。quickLogin 是嚴格禁止建
+// 新帳號的模式，所以要 split state。
+
+router.get('/oauth/login/discord', async (_req: Request, res: Response) => {
+  if (!DISCORD_CLIENT_ID) {
+    return res.status(503).json({ error: 'Discord OAuth 未設定' });
+  }
+  const state = randomState();
+  await createOAuthSession(state, 'discord', undefined, false, 'quickLogin');
+
+  const params = new URLSearchParams({
+    client_id:     DISCORD_CLIENT_ID,
+    redirect_uri:  DISCORD_REDIRECT_URI,
+    response_type: 'code',
+    scope:         'identify email',
+    state,
+  });
+  return res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
+});
+
+router.get('/oauth/login/line', async (_req: Request, res: Response) => {
+  if (!LINE_CHANNEL_ID) {
+    return res.status(503).json({ error: 'Line Login 未設定' });
+  }
+  const state = randomState();
+  await createOAuthSession(state, 'line', undefined, false, 'quickLogin');
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id:     LINE_CHANNEL_ID,
+    redirect_uri:  LINE_REDIRECT_URI,
+    state,
+    scope:         'profile openid email',
+  });
+  return res.redirect(`https://access.line.me/oauth2/v2.1/authorize?${params}`);
+});
+
+/**
+ * POST /auth/oauth/login/google { idToken }
+ *
+ *   idToken: Firebase Auth popup 拿到的 Google user.getIdToken()（前端用
+ *   GoogleAuthProvider + signInWithPopup 取得）。
+ *
+ *   200 + { token, user } — email 已綁 auth_users，直發 JWT。
+ *   401 + { error, code: 'provider_not_linked' } — 沒綁，請先用 email 登入後再綁。
+ *   400 bad_id_token / missing_fields — idToken 格式錯誤或驗簽失敗。
+ *   503 — Firebase admin 未設定。
+ */
+router.post('/oauth/login/google', emailFloodLimiter, async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { idToken?: unknown };
+  if (typeof body.idToken !== 'string' || body.idToken.length === 0) {
+    return res.status(400).json({ error: 'idToken required', code: 'missing_fields' });
+  }
+  if (!isFirebaseAdminReady()) {
+    return res.status(503).json({ error: 'Firebase admin 未設定' });
+  }
+
+  let email: string | undefined;
+  try {
+    const decoded = await verifyIdToken(body.idToken);
+    email = decoded.email ?? undefined;
+  } catch {
+    return res.status(400).json({ error: 'Invalid Firebase ID token', code: 'bad_id_token' });
+  }
+
+  const quick = await quickLoginByEmail(email, 'google');
+  if (!quick) {
+    return res.status(401).json({
+      error: '這組 Google 帳號的信箱還沒在站上註冊過，請先用 email 登入後再到「系統設定」綁定 Google',
+      code:  'provider_not_linked',
+    });
+  }
+
+  return res.json({
+    token: quick.token,
+    user: {
+      uid:            quick.userId,
+      accountName:    quick.accountName,
+      displayName:    quick.displayName,
+      primaryEmail:   quick.primaryEmail,
+      provider:       'google',
+      emailsVerified: [],
+      isNew:          false,
+    },
+  });
 });
 
 export { router as authRouter };
