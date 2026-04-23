@@ -48,6 +48,7 @@
     "typescript": "^5.3.3"
   },
   "optionalDependencies": {
-    "@firebase/rules-unit-testing": "^3.0.4"
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "nodemailer": "^6.9.0"
   }
 }

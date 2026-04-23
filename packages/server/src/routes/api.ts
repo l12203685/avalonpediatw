@@ -511,6 +511,93 @@ router.post('/user/merge-by-uuid', publicLimiter, async (req: Request, res: Resp
   return res.json({ ok: true, merged: true, primaryId, secondaryId, linked });
 });
 
+// ── Phase A: 密碼管理 + 舊戰績 claim ────────────────────────
+//
+// PATCH /api/user/password { oldPassword, newPassword }
+// 僅 provider='password' 帳號可改自己的密碼；需附上 Bearer JWT + 原密碼。
+// 403 對 guest / OAuth-only 帳號；401 對 bad token；400 對 bad password。
+router.patch('/user/password', publicLimiter, async (req: Request, res: Response) => {
+  const auth = await resolvePlayerAuth(req.headers.authorization);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (auth.provider !== 'password') {
+    return res.status(403).json({ error: '此帳號未設定密碼', code: 'no_password' });
+  }
+  if (!isFirestoreReady()) return res.status(503).json({ error: 'Database not configured' });
+
+  const { oldPassword, newPassword } = (req.body ?? {}) as {
+    oldPassword?: unknown;
+    newPassword?: unknown;
+  };
+  if (typeof oldPassword !== 'string' || oldPassword.length === 0) {
+    return res.status(400).json({ error: '請輸入原密碼', code: 'missing_old' });
+  }
+  const { validatePasswordStrength: vpw } = await import('../services/passwordHash');
+  const { changePassword } = await import('../services/firestoreAuthAccounts');
+  const strength = vpw(newPassword);
+  if (!strength.ok) {
+    return res.status(400).json({ error: strength.reason, code: strength.code });
+  }
+  const result = await changePassword({
+    userId:      auth.playerId,
+    oldPassword,
+    newPassword: newPassword as string,
+  });
+  if (!result.ok) {
+    const status = result.code === 'bad_credentials' ? 401
+      : result.code === 'not_found'       ? 404
+      : 500;
+    return res.status(status).json({ error: result.reason, code: result.code });
+  }
+  return res.json({ ok: true });
+});
+
+// POST /api/user/claim-history { uuid, email, password }
+// 玩家註冊新帳號後要把舊的 uuid 帳號戰績搬過來：輸入舊 uuid + 該帳號的信箱 +
+// 該帳號的密碼。三項都對才允許 merge，避免惡意 claim 別人的戰績。
+//
+// 成功後：(舊 uuid, 當前登入 uuid) 走 mergeUserAccounts — 戰績、好友、
+// ELO、徽章都併到當前帳號，舊 auth_users row 刪除。
+router.post('/user/claim-history', publicLimiter, async (req: Request, res: Response) => {
+  const auth = await resolvePlayerAuth(req.headers.authorization);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (auth.provider === 'guest') {
+    return res.status(403).json({ error: '訪客帳號不能 claim 戰績', code: 'guest_forbidden' });
+  }
+  if (!isFirestoreReady()) return res.status(503).json({ error: 'Database not configured' });
+
+  const { uuid, email, password } = (req.body ?? {}) as {
+    uuid?: unknown; email?: unknown; password?: unknown;
+  };
+  if (typeof uuid !== 'string' || uuid.trim().length === 0) {
+    return res.status(400).json({ error: '請輸入舊帳號 uuid', code: 'missing_uuid' });
+  }
+  if (typeof email !== 'string' || email.length === 0) {
+    return res.status(400).json({ error: '請輸入舊帳號信箱', code: 'missing_email' });
+  }
+  if (typeof password !== 'string' || password.length === 0) {
+    return res.status(400).json({ error: '請輸入舊帳號密碼', code: 'missing_password' });
+  }
+
+  const legacyUuid = uuid.trim();
+  if (legacyUuid === auth.playerId) {
+    return res.status(409).json({ error: '不能 claim 自己', code: 'same_account' });
+  }
+
+  const { findAccountByUuidEmailPassword } = await import('../services/firestoreAuthAccounts');
+  const matched = await findAccountByUuidEmailPassword(legacyUuid, email, password);
+  if (!matched.ok || !matched.data) {
+    // 401 keeps response opaque — we don't tell the caller which of the 3
+    // inputs was wrong to avoid enumeration.
+    return res.status(401).json({ error: '找不到符合的舊帳號', code: 'no_match' });
+  }
+
+  const merged = await mergeUserAccounts(auth.playerId, matched.data.legacyUserId);
+  if (!merged) {
+    return res.status(500).json({ error: '戰績合併失敗', code: 'merge_failed' });
+  }
+  return res.json({ ok: true, claimedUuid: legacyUuid });
+});
+
 // POST /api/user/link/google { idToken }
 // Firebase Auth 的 ID token 比跳 OAuth 好用很多 — 前端拿完直接送過來綁就行。
 router.post('/user/link/google', publicLimiter, async (req: Request, res: Response) => {

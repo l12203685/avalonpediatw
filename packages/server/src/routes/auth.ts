@@ -1,3 +1,19 @@
+/**
+ * HTTP `/auth` routes.
+ *
+ * Phase A new-login rewrite (2026-04-23, Edward arch decision):
+ *   - Drop guest mode. All players register with (accountName + password +
+ *     primaryEmail) before seeing the lobby.
+ *   - Add register / login / forgot-password / reset-password endpoints.
+ *   - Keep Discord / Line / Google OAuth paths (including /auth/link/*) so
+ *     players who already have a password account can still link social
+ *     providers for SSO.
+ *   - The old guest endpoints (/auth/guest, /auth/guest/resume,
+ *     /auth/guest/rename, /auth/guest/upgrade) are removed. Existing guest
+ *     JWTs still validate at the socket layer (middleware/auth.ts) so anyone
+ *     mid-game keeps their session; they simply can't mint new guest tokens.
+ */
+
 import { Router, Request, Response, IRouter } from 'express';
 import { sign, verify, JwtPayload } from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
@@ -12,13 +28,21 @@ import {
   ensureUserForProviderIdentity,
   type LinkProvider,
 } from '../services/supabase';
-import { mintGuestToken, verifyGuestToken, generateGuestName } from '../middleware/guestAuth';
-import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import {
-  ensureSupabaseUserForFirebase,
-  isSupabaseReady,
-} from '../services/supabase';
-import { isFirestoreReady } from '../services/firestoreAccounts';
+  registerAccount,
+  verifyCredentials,
+  findAccountByNameAndEmail,
+  createPasswordResetSession,
+  consumePasswordResetAndSet,
+  PASSWORD_RESET_TTL_MS,
+} from '../services/firestoreAuthAccounts';
+import {
+  validateAccountName,
+  validatePasswordStrength,
+  validateEmail,
+} from '../services/passwordHash';
+import { sendPasswordResetEmail } from '../services/mailer';
+import { createKeyedRateLimit, createHttpRateLimit } from '../middleware/rateLimit';
 
 const router: IRouter = Router();
 
@@ -38,51 +62,6 @@ const LINE_CHANNEL_SECRET   = process.env.LINE_CHANNEL_SECRET   || '';
 const LINE_REDIRECT_URI     = process.env.LINE_REDIRECT_URI     ||
   'http://localhost:3001/auth/line/callback';
 
-// ── Guest cookie helpers (no cookie-parser dependency) ──────────────────────
-
-const GUEST_COOKIE_NAME = 'guest_session';
-const GUEST_COOKIE_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
-const IS_PROD = (process.env.NODE_ENV || 'development') === 'production';
-
-/**
- * 從 raw `Cookie` header 取出指定名稱的 cookie 值，不引入 cookie-parser 相依。
- * 沒找到回 null。
- */
-function readCookie(req: Request, name: string): string | null {
-  const header = req.headers.cookie;
-  if (typeof header !== 'string' || header.length === 0) return null;
-  const parts = header.split(';');
-  for (const p of parts) {
-    const eq = p.indexOf('=');
-    if (eq < 0) continue;
-    const k = p.slice(0, eq).trim();
-    if (k !== name) continue;
-    const v = p.slice(eq + 1).trim();
-    try {
-      return decodeURIComponent(v);
-    } catch {
-      return v;
-    }
-  }
-  return null;
-}
-
-/**
- * 設 `guest_session` 長效 cookie。HttpOnly + SameSite=Lax，讓 JS 讀不到但瀏覽器
- * 同站導覽時仍會帶；正式環境加 Secure 強制 HTTPS。
- */
-function setGuestSessionCookie(res: Response, token: string): void {
-  const parts = [
-    `${GUEST_COOKIE_NAME}=${encodeURIComponent(token)}`,
-    'Path=/',
-    `Max-Age=${GUEST_COOKIE_MAX_AGE_SEC}`,
-    'HttpOnly',
-    'SameSite=Lax',
-  ];
-  if (IS_PROD) parts.push('Secure');
-  res.setHeader('Set-Cookie', parts.join('; '));
-}
-
 // ── 工具函式 ─────────────────────────────────────────────────
 
 function issueJwt(payload: { sub: string; displayName: string; provider: string }): string {
@@ -93,30 +72,53 @@ function randomState(): string {
   return randomBytes(16).toString('hex');
 }
 
-// ── #42 link mode helpers ─────────────────────────────────────
+// ── Phase A new-login rate limiters ──────────────────────────
+//
+// `register` keyed by IP (global flood defence); login keyed by accountName
+// (5 attempts per 15 min per account — blocks credential stuffing against one
+// target without locking out everyone behind a shared NAT); forgot-password
+// keyed by email (3/hr per email — blocks mail bombing).
 
-/**
- * 綁定流程身份解析結果。`isGuest=true` 代表 caller 是訪客 JWT，callback
- * 會改走 `absorbGuestIntoUser` 合併路徑而不是普通的 link/merge（#42 bind-path
- * fix：訪客綁 Discord/Line 也要保留戰績）。
- */
+const registerLimiter = createHttpRateLimit(60 * 1000, 10);
+
+const loginLimiter = createKeyedRateLimit({
+  windowMs:    15 * 60 * 1000,
+  maxRequests: 5,
+  keyFrom:     (req) => {
+    const body = (req.body ?? {}) as { accountName?: unknown };
+    return typeof body.accountName === 'string' ? `login:${body.accountName}` : undefined;
+  },
+  message:     '登入次數過多，請 15 分鐘後再試',
+  code:        'login_rate_limited',
+});
+
+const forgotLimiter = createKeyedRateLimit({
+  windowMs:    60 * 60 * 1000,
+  maxRequests: 3,
+  keyFrom:     (req) => {
+    const body = (req.body ?? {}) as { primaryEmail?: unknown };
+    return typeof body.primaryEmail === 'string' ? `forgot:${body.primaryEmail}` : undefined;
+  },
+  message:     '重設密碼次數過多，請 1 小時後再試',
+  code:        'forgot_rate_limited',
+});
+
+// ── Bind identity helper (kept for OAuth /auth/link/* routes) ─
+
 interface BindIdentity {
   userId:  string;
   isGuest: boolean;
 }
 
 /**
- * 從 Bearer header 或 `?token=` query 解析 JWT，回傳 `{ userId, isGuest }`。
- * 接受兩種 token：
- *   - 正式帳號 JWT（provider !== 'guest'）：userId = payload.sub，isGuest=false
- *   - 訪客 JWT（provider === 'guest'）：userId = payload.sub（guest uid），
- *     isGuest=true — callback 會把 guest 戰績搬到綁定的真帳號
+ * Extract the current user from a Bearer header (or ?token= query). Returns
+ * null for invalid / missing tokens. `isGuest` is true when the JWT's
+ * provider is 'guest' — the /auth/link/* callbacks use this to fire the
+ * guest → real-account merge path.
  *
- * Query string 支援是為了 redirect-based OAuth 起跳：瀏覽器 window.location 整頁
- * 跳轉送不出 custom header，所以 /auth/link/* 接受 ?token= 傳 JWT。只在 link
- * 起跳點用，OAuth provider callback 不需要再送 token。
- *
- * 拿不到合法 JWT 回 null。
+ * Legacy guest JWTs still validate here so anyone mid-game can link Discord
+ * / Line to keep their stats; new guest tokens are no longer minted (Phase A
+ * dropped /auth/guest).
  */
 function parseBearerUserId(authHeader: string | undefined, queryToken?: string): BindIdentity | null {
   let token: string | null = null;
@@ -138,24 +140,6 @@ function parseBearerUserId(authHeader: string | undefined, queryToken?: string):
   }
 }
 
-/**
- * 綁定 callback 核心。兩種呼叫模式：
- *
- * 1. **正式帳號綁新 provider**（`isGuest=false`，既有行為）：
- *    - 目標 identity 從未綁 → 直接 link 到 currentUserId
- *    - 已綁給別人（otherId != currentUserId）→ mergeUserAccounts(current, other)
- *    - 已綁給自己 → no-op
- *    完成後 redirect 到個人頁並帶 success flag。前端 socket 仍用舊 JWT 有效。
- *
- * 2. **訪客綁 provider**（`isGuest=true`，#42 bind-path fix）：
- *    - 目標 identity 已對應真帳號 `existing` → 把訪客戰績 absorb 進 `existing`
- *      → redirect 時附 `?oauth_token=<新 JWT>` 讓前端以真帳號身份 re-handshake
- *    - 目標 identity 從未綁 → upsertUser 建新真帳號 + link provider
- *      + absorbGuestIntoUser 搬戰績 → 同樣發新 JWT
- *
- *  `currentUserId` 在 guest 模式下是 guest uid（`mintGuestToken` 發的 v4 UUID），
- *  非 auth_users row id — 這是為什麼 guest 路徑不能走 `mergeUserAccounts`。
- */
 async function handleLinkCallback(
   res: Response,
   currentUserId: string,
@@ -172,10 +156,8 @@ async function handleLinkCallback(
     const existing = await findUserIdByProviderIdentity(provider, externalId);
 
     if (options.isGuest) {
-      // ── 訪客綁定路徑 (#42 bind-path fix) ────────────────────
       let realUserId: string | null = existing;
       if (!realUserId) {
-        // 目標 identity 從未綁 → 建新真帳號（Firestore / Supabase 兩邊通用）
         realUserId = await ensureUserForProviderIdentity(
           provider,
           externalId,
@@ -188,11 +170,7 @@ async function handleLinkCallback(
           return;
         }
       }
-
-      // 戰績 / 好友從 guest uid 搬到真帳號（best-effort，失敗只 log）
       await absorbGuestIntoUser(currentUserId, realUserId);
-
-      // 簽新 JWT 讓前端 re-handshake，socket 改帶 provider=<discord/line> 連回來
       const jwt = issueJwt({
         sub:         realUserId,
         displayName: options.displayName,
@@ -204,9 +182,7 @@ async function handleLinkCallback(
       return;
     }
 
-    // ── 正式帳號綁新 provider 路徑（原行為） ────────────────
     if (existing && existing !== currentUserId) {
-      // 已有獨立帳號 → 合併到當前帳號（當前視為 primary，保留玩家現在登入的這個）
       const merged = await mergeUserAccounts(currentUserId, existing);
       if (!merged) {
         res.redirect(`${FRONTEND_URL}/profile?link_error=merge_failed&provider=${provider}`);
@@ -217,14 +193,12 @@ async function handleLinkCallback(
     }
 
     if (!existing) {
-      // 從未綁 → 直接 link
       const ok = await linkProviderIdentity(currentUserId, provider, externalId);
       if (!ok) {
         res.redirect(`${FRONTEND_URL}/profile?link_error=link_failed&provider=${provider}`);
         return;
       }
     }
-    // existing === currentUserId → already linked, no-op
     res.redirect(`${FRONTEND_URL}/profile?link_ok=1&provider=${provider}`);
   } catch (err) {
     console.error('[auth/link-callback]', err);
@@ -232,12 +206,171 @@ async function handleLinkCallback(
   }
 }
 
-// ── Discord OAuth ─────────────────────────────────────────────
+// ── Phase A: Account + Password endpoints ────────────────────
 
 /**
- * GET /auth/discord
- * 重導向到 Discord OAuth 授權頁面
+ * POST /auth/register
+ * body: { accountName, password, primaryEmail }
+ * → 201 { token, user }
+ *
+ * Validates input, enforces uniqueness on (accountNameLower, primaryEmail),
+ * hashes the password, issues a JWT with provider='password'. Caller lands
+ * in the lobby immediately; first-login profile setup (Phase B) prompts for
+ * email verification.
  */
+router.post('/register', registerLimiter, async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as {
+    accountName?:  unknown;
+    password?:     unknown;
+    primaryEmail?: unknown;
+  };
+
+  const nameCheck = validateAccountName(body.accountName);
+  if (!nameCheck.ok) {
+    return res.status(400).json({ error: nameCheck.reason, code: nameCheck.code });
+  }
+  const pwCheck = validatePasswordStrength(body.password);
+  if (!pwCheck.ok) {
+    return res.status(400).json({ error: pwCheck.reason, code: pwCheck.code });
+  }
+  const emailCheck = validateEmail(body.primaryEmail);
+  if (!emailCheck.ok) {
+    return res.status(400).json({ error: emailCheck.reason, code: emailCheck.code });
+  }
+
+  const accountName  = (body.accountName as string).trim();
+  const password     = body.password as string;
+  const primaryEmail = (body.primaryEmail as string).trim();
+
+  const result = await registerAccount({ accountName, password, primaryEmail });
+  if (!result.ok || !result.data) {
+    return res.status(result.code === 'account_taken' || result.code === 'email_taken' ? 409 : 500)
+      .json({ error: result.reason ?? '註冊失敗', code: result.code });
+  }
+
+  const token = issueJwt({
+    sub:         result.data.userId,
+    displayName: accountName,
+    provider:    'password',
+  });
+  return res.status(201).json({
+    token,
+    user: {
+      uid:            result.data.userId,
+      accountName,
+      displayName:    accountName,
+      provider:       'password',
+      primaryEmail,
+      emailsVerified: [],
+    },
+  });
+});
+
+/**
+ * POST /auth/login
+ * body: { accountName, password }
+ * → 200 { token, user }
+ *
+ * Timing-uniform: invalid-account path also runs a dummy scrypt compare so
+ * response times don't leak whether the account exists.
+ */
+router.post('/login', loginLimiter, async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { accountName?: unknown; password?: unknown };
+  if (typeof body.accountName !== 'string' || typeof body.password !== 'string') {
+    return res.status(400).json({ error: '帳號與密碼必填', code: 'missing_fields' });
+  }
+
+  const result = await verifyCredentials(body.accountName, body.password);
+  if (!result.ok || !result.data) {
+    const status = result.code === 'no_store' ? 503 : 401;
+    return res.status(status).json({ error: result.reason ?? '登入失敗', code: result.code });
+  }
+
+  const token = issueJwt({
+    sub:         result.data.userId,
+    displayName: result.data.displayName,
+    provider:    'password',
+  });
+  return res.json({
+    token,
+    user: {
+      uid:          result.data.userId,
+      accountName:  result.data.accountName,
+      displayName:  result.data.displayName,
+      provider:     'password',
+      primaryEmail: result.data.primaryEmail,
+    },
+  });
+});
+
+/**
+ * POST /auth/forgot-password
+ * body: { accountName, primaryEmail }
+ * → 202 { ok: true }  (always 202 even on no-match to avoid user enumeration)
+ *
+ * If (accountName + email) matches a real row, mints a 30-min reset token
+ * and emails a reset URL. If not, silently no-ops so attackers can't tell
+ * whether an account exists from this endpoint.
+ */
+router.post('/forgot-password', forgotLimiter, async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { accountName?: unknown; primaryEmail?: unknown };
+  if (typeof body.accountName !== 'string' || typeof body.primaryEmail !== 'string') {
+    return res.status(400).json({ error: '帳號與信箱必填', code: 'missing_fields' });
+  }
+
+  const respondOk = () => res.status(202).json({ ok: true, ttl_ms: PASSWORD_RESET_TTL_MS });
+
+  const account = await findAccountByNameAndEmail(body.accountName, body.primaryEmail);
+  if (!account) return respondOk();
+
+  const session = await createPasswordResetSession({
+    userId:      account.userId,
+    accountName: account.accountName,
+    email:       body.primaryEmail,
+  });
+  if (!session.ok || !session.data) {
+    return respondOk();
+  }
+
+  const resetUrl = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(session.data.token)}`;
+  sendPasswordResetEmail(body.primaryEmail, account.accountName, resetUrl).catch((err) => {
+    console.error('[auth/forgot-password] mailer error', err);
+  });
+  return respondOk();
+});
+
+/**
+ * POST /auth/reset-password
+ * body: { token, newPassword }
+ * → 200 { ok: true, userId }
+ *
+ * Consumes the one-time reset token from /auth/forgot-password and writes
+ * the new password hash. Token is single-use and expires after 30 min.
+ */
+router.post('/reset-password', async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { token?: unknown; newPassword?: unknown };
+  if (typeof body.token !== 'string' || body.token.length === 0) {
+    return res.status(400).json({ error: '缺少重設 token', code: 'missing_token' });
+  }
+  const pwCheck = validatePasswordStrength(body.newPassword);
+  if (!pwCheck.ok) {
+    return res.status(400).json({ error: pwCheck.reason, code: pwCheck.code });
+  }
+
+  const result = await consumePasswordResetAndSet({
+    token:       body.token,
+    newPassword: body.newPassword as string,
+  });
+  if (!result.ok || !result.data) {
+    const status = result.code === 'token_invalid' || result.code === 'token_expired' || result.code === 'token_used'
+      ? 400 : 500;
+    return res.status(status).json({ error: result.reason, code: result.code });
+  }
+  return res.json({ ok: true, userId: result.data.userId });
+});
+
+// ── Discord OAuth ─────────────────────────────────────────────
+
 router.get('/discord', async (_req: Request, res: Response) => {
   if (!DISCORD_CLIENT_ID) {
     return res.status(503).json({ error: 'Discord OAuth 未設定' });
@@ -255,10 +388,6 @@ router.get('/discord', async (_req: Request, res: Response) => {
   return res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
 });
 
-/**
- * GET /auth/discord/callback
- * Discord 授權後的回調
- */
 router.get('/discord/callback', async (req: Request, res: Response) => {
   const { code, state, error } = req.query as Record<string, string>;
 
@@ -266,7 +395,6 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     return res.redirect(`${FRONTEND_URL}?auth_error=discord_denied`);
   }
 
-  // CSRF + 讀出 link_user_id（若是綁定流程）
   const session = await consumeOAuthSession(state, 'discord');
   if (!session) {
     return res.redirect(`${FRONTEND_URL}?auth_error=invalid_state`);
@@ -275,7 +403,6 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
   const isGuestBind = session.isGuest === true;
 
   try {
-    // 1. code → access_token
     const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -290,7 +417,6 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
     if (!tokenData.access_token) throw new Error('Discord token exchange failed');
 
-    // 2. access_token → user info
     const userRes = await fetch('https://discord.com/api/users/@me', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
@@ -298,14 +424,11 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
       id: string; username: string; global_name?: string; avatar?: string; email?: string;
     };
 
-    // Discord 新 API：global_name 是顯示名稱，username 是 unique handle
     const displayName = discordUser.global_name || discordUser.username;
     const avatarUrl = discordUser.avatar
       ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
       : undefined;
 
-    // #42: 綁定流程 — 正式帳號不發新 token（前端舊 JWT 有效）；訪客則發新 JWT
-    // 讓 socket 以真帳號 re-handshake + 訪客戰績合併到真帳號（bind-path fix）
     if (linkUserId) {
       await handleLinkCallback(res, linkUserId, 'discord', discordUser.id, {
         isGuest:     isGuestBind,
@@ -316,7 +439,6 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    // 3. 查/建 Supabase 用戶
     const dbUserId = await upsertUser({
       discord_id:   discordUser.id,
       display_name: displayName,
@@ -325,14 +447,12 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
       provider:     'discord',
     });
 
-    // 4. 發行自訂 JWT（sub = discord_id 或 dbUserId）
     const jwt = issueJwt({
       sub:         dbUserId || discordUser.id,
       displayName: displayName,
       provider:    'discord',
     });
 
-    // 5. 重導向前端並帶 token
     return res.redirect(`${FRONTEND_URL}?oauth_token=${encodeURIComponent(jwt)}&provider=discord`);
   } catch (err) {
     console.error('[discord-oauth]', err);
@@ -342,10 +462,6 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
 
 // ── Line Login ────────────────────────────────────────────────
 
-/**
- * GET /auth/line
- * 重導向到 Line Login 授權頁面
- */
 router.get('/line', async (_req: Request, res: Response) => {
   if (!LINE_CHANNEL_ID) {
     return res.status(503).json({ error: 'Line Login 未設定' });
@@ -363,10 +479,6 @@ router.get('/line', async (_req: Request, res: Response) => {
   return res.redirect(`https://access.line.me/oauth2/v2.1/authorize?${params}`);
 });
 
-/**
- * GET /auth/line/callback
- * Line 授權後的回調
- */
 router.get('/line/callback', async (req: Request, res: Response) => {
   const { code, state, error } = req.query as Record<string, string>;
 
@@ -382,7 +494,6 @@ router.get('/line/callback', async (req: Request, res: Response) => {
   const isGuestBind = session.isGuest === true;
 
   try {
-    // 1. code → access_token
     const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -397,7 +508,6 @@ router.get('/line/callback', async (req: Request, res: Response) => {
     const tokenData = await tokenRes.json() as { access_token?: string; error?: string };
     if (!tokenData.access_token) throw new Error('Line token exchange failed');
 
-    // 2. access_token → profile
     const profileRes = await fetch('https://api.line.me/v2/profile', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
@@ -405,7 +515,6 @@ router.get('/line/callback', async (req: Request, res: Response) => {
       userId: string; displayName: string; pictureUrl?: string;
     };
 
-    // #42: 綁定流程 — 正式帳號不發新 token；訪客則發新 JWT + 搬戰績（bind-path fix）
     if (linkUserId) {
       await handleLinkCallback(res, linkUserId, 'line', lineUser.userId, {
         isGuest:     isGuestBind,
@@ -415,7 +524,6 @@ router.get('/line/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    // 3. 查/建 Supabase 用戶
     const dbUserId = await upsertUser({
       line_id:      lineUser.userId,
       display_name: lineUser.displayName,
@@ -423,7 +531,6 @@ router.get('/line/callback', async (req: Request, res: Response) => {
       provider:     'line',
     });
 
-    // 4. 發行自訂 JWT
     const jwt = issueJwt({
       sub:         dbUserId || lineUser.userId,
       displayName: lineUser.displayName,
@@ -437,211 +544,13 @@ router.get('/line/callback', async (req: Request, res: Response) => {
   }
 });
 
-// ── Guest Mint ────────────────────────────────────────────────
-//
-// S10 fix (Plan v2 R1.0): guest uid is now server-minted. Clients used to
-// build `JSON.stringify({uid: uuidv4(), displayName})` locally and send it as
-// socket handshake, which let attackers impersonate other users by supplying
-// their uid. Clients now POST here and receive a JWT whose `sub` is
-// server-generated; the attacker can no longer choose their own uid.
-//
-// A 3-day grace window in middleware/guestAuth.ts keeps existing legacy JSON
-// tokens working so already-connected players aren't kicked out the moment
-// this ships (see GUEST_LEGACY_CUTOFF in .env.example).
-//
-// Phase 1 IA 重構：POST /auth/guest 同時種 guest_session HttpOnly cookie；
-// 新增 GET /auth/guest/resume、POST /auth/guest/rename、POST /auth/guest/upgrade
-// 作為大廳 IA 的 foundation endpoint。
+// ── Link additional providers (#42 kept path) ────────────────
 
-/**
- * POST /auth/guest
- * body: { displayName?: string }
- * → { token: string, user: { uid, displayName, provider: 'guest' } }
- *
- * 若 body 沒帶 displayName（或空字串），server 端生成 `Guest_NNN`（Ticket #81）。
- * 有帶的話驗證 1-40 字（保留舊行為，client 端通常會先帶 Guest_NNN 或使用者輸入）。
- */
-router.post('/guest', (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { displayName?: unknown };
-  let candidate: string;
-  if (body.displayName === undefined || body.displayName === null) {
-    candidate = generateGuestName();
-  } else if (typeof body.displayName !== 'string') {
-    return res.status(400).json({ error: 'displayName must be a string' });
-  } else {
-    const trimmed = body.displayName.trim();
-    if (trimmed.length === 0) {
-      candidate = generateGuestName();
-    } else if (trimmed.length > 40) {
-      return res.status(400).json({ error: 'displayName must be 1-40 chars' });
-    } else {
-      candidate = trimmed;
-    }
-  }
-  const { token, uid, displayName } = mintGuestToken(candidate);
-  // 種一份 HttpOnly cookie 讓冷啟動可以從 /auth/guest/resume 續簽，
-  // 不需要讓 client JS 自己暫存 token。
-  setGuestSessionCookie(res, token);
-  return res.json({
-    token,
-    user: {
-      uid,
-      displayName,
-      provider: 'guest',
-    },
-  });
-});
-
-/**
- * GET /auth/guest/resume
- * 讀 guest_session cookie → 若有效，發一個新的 JWT 給該 guest 使用。
- * 缺 cookie 或 cookie 過期 → 401，前端會落回訪客登入流程。
- *
- * Phase 1 stub：直接用 cookie 內的 JWT 再 mint 一個新 token（uid 會換）。
- * Phase 2 會改成 sessionId → uid 的 Supabase lookup，保留原 uid + ELO 與戰績。
- */
-router.get('/guest/resume', (req: Request, res: Response) => {
-  const cookieToken = readCookie(req, GUEST_COOKIE_NAME);
-  if (!cookieToken) {
-    return res.status(401).json({ error: 'no guest session cookie' });
-  }
-  const identity = verifyGuestToken(cookieToken);
-  if (!identity) {
-    return res.status(401).json({ error: 'guest session expired or invalid' });
-  }
-  // 保留原 displayName，但發新 JWT 讓 client 的過期時鐘重置。
-  const { token, uid, displayName } = mintGuestToken(identity.displayName);
-  // 刷新 max-age，保持原 cookie token 不動，讓下次 resume 還能找到同一 signed uid。
-  setGuestSessionCookie(res, cookieToken);
-  return res.json({
-    token,
-    user: {
-      uid,
-      displayName,
-      provider: 'guest',
-      // Phase 2 migration 會用 cookieUid 對齊兩邊
-      cookieUid: identity.uid,
-    },
-  });
-});
-
-/**
- * POST /auth/guest/rename
- * body: { newName: string }
- *
- * Ticket #81 驗證：
- *   - 非空白
- *   - 長度 2-20 字
- *   - 不以 `Guest_`（case-insensitive）開頭 — 避免使用者自行命名偽裝成
- *     server 分配的預設訪客名造成身份混淆
- *
- * Phase 1：輸入驗證 + 200 OK。24hr × 3 rate limit 與 persistence
- * Phase 2 搭配 guest registry table 再補上。
- */
-router.post('/guest/rename', (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { newName?: unknown };
-  if (typeof body.newName !== 'string') {
-    return res.status(400).json({ error: 'newName is required' });
-  }
-  const trimmed = body.newName.trim();
-  if (trimmed.length < 2 || trimmed.length > 20) {
-    return res.status(400).json({ error: 'newName must be 2-20 chars' });
-  }
-  if (/^guest_/i.test(trimmed)) {
-    return res.status(400).json({
-      error: 'newName cannot start with "Guest_" (reserved for default guest names)',
-      code: 'RESERVED_PREFIX',
-    });
-  }
-  // TODO(phase2): 讀 guest_session cookie → 驗證 rate-limit 3/24h → 寫 DB
-  return res.json({ ok: true, newName: trimmed });
-});
-
-/**
- * POST /auth/guest/upgrade
- * body: { provider: 'google', providerToken: string }
- *
- * 2026-04-23 Edward 回報：綁 Google 後仍無法改名，被當訪客。Root cause：原本
- * stub 回 501 → 前端以為有綁成功但 server 沒做任何合併 → socket 仍以 guest
- * token 連線 → /api/profile/me PATCH 繼續被 `provider === 'guest'` 擋。
- *
- * 新行為（Google-only，Discord / Line 仍走 /auth/link/<provider> redirect）：
- *   1. 驗 Firebase ID token → 取得 uid / email / name / photo
- *   2. 確保 Supabase（或 Firestore fallback）已有對應 google user row
- *   3. 簽一個 provider='google' 的自訂 JWT 讓 socket 能以 google 身份重連
- *      （前端會拿 Firebase ID token 走 route 2 直接 verify，這裡回的 JWT
- *      主要給前端暫存和驗證用）
- *
- * 舊訪客 ELO / 戰績遷移走 ticket #46（已完成）— 這顆 endpoint 不動戰績，
- * 只負責把「身份從 guest 翻成 google」這一步打通。
- */
-router.post('/guest/upgrade', async (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { provider?: unknown; providerToken?: unknown };
-  const provider = typeof body.provider === 'string' ? body.provider : '';
-  const providerToken = typeof body.providerToken === 'string' ? body.providerToken : '';
-
-  if (provider !== 'google') {
-    return res.status(400).json({
-      error: 'Only provider="google" is supported here; use /auth/link/discord or /auth/link/line for others',
-    });
-  }
-  if (providerToken.length === 0) {
-    return res.status(400).json({ error: 'providerToken (Firebase ID token) required' });
-  }
-  if (!isFirebaseAdminReady()) {
-    return res.status(503).json({ error: 'Firebase admin not configured' });
-  }
-
-  try {
-    const decoded = await verifyIdToken(providerToken);
-    const firebaseUid = decoded.uid;
-    const email = decoded.email ?? '';
-    const name = decoded.name ?? email.split('@')[0] ?? 'Player';
-    const photo = (decoded as typeof decoded & { picture?: string }).picture;
-
-    // 確保 users row 存在（Supabase 主路徑；Firestore fallback）
-    if (isSupabaseReady()) {
-      await ensureSupabaseUserForFirebase(firebaseUid, name, email, photo);
-    } else if (!isFirestoreReady()) {
-      return res.status(503).json({ error: 'No account store configured' });
-    }
-
-    // 簽回一顆 provider='google' 的自訂 JWT。socket 端會優先走 Firebase ID
-    // token 驗證（route 2），不過前端同時也會重建 socket — 此 JWT 當 fallback。
-    const token = issueJwt({ sub: firebaseUid, displayName: name, provider: 'google' });
-
-    return res.json({
-      ok: true,
-      token,
-      user: { uid: firebaseUid, displayName: name, provider: 'google', email, photoURL: photo ?? null },
-    });
-  } catch (err) {
-    console.error('[auth/guest/upgrade]', err);
-    return res.status(400).json({ error: 'Invalid Firebase ID token or upgrade failed' });
-  }
-});
-
-// ── #42 Link additional providers ────────────────────────────
-//
-// 流程：玩家在個人頁按「綁 Discord/Line」→ 前端帶 Bearer JWT 打
-// GET /auth/link/discord → 驗證當前身份 → 發起 Discord OAuth
-// （state 夾帶 linkUserId）→ Discord callback 進 handleLinkCallback。
-//
-// Google 綁定：前端用 Firebase SDK 拿 ID token 後打 POST /auth/link/google
-//（不用跳第二層 OAuth），後端驗 token 後直接合併/綁。
-
-/**
- * GET /auth/link/discord
- * Header: Authorization: Bearer <current JWT>
- * → redirect 到 Discord OAuth，state 內夾帶 linkUserId
- */
 router.get('/link/discord', async (req: Request, res: Response) => {
   if (!DISCORD_CLIENT_ID) {
     return res.status(503).json({ error: 'Discord OAuth 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
-  // #42 bind-path fix：接受訪客 JWT（`isGuest=true`），callback 會把戰績合併到
-  // 真帳號 — 如果仍擋訪客 JWT 會導致 Edward 在設定頁點「綁 Discord」收到 401。
   const identity = parseBearerUserId(req.headers.authorization, queryToken);
   if (!identity) {
     return res.status(401).json({ error: 'Unauthorized — login first' });
@@ -659,17 +568,11 @@ router.get('/link/discord', async (req: Request, res: Response) => {
   return res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
 });
 
-/**
- * GET /auth/link/line
- * Header: Authorization: Bearer <current JWT>
- * → redirect 到 Line Login，state 內夾帶 linkUserId
- */
 router.get('/link/line', async (req: Request, res: Response) => {
   if (!LINE_CHANNEL_ID) {
     return res.status(503).json({ error: 'Line Login 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
-  // #42 bind-path fix：接受訪客 JWT（同 /link/discord）
   const identity = parseBearerUserId(req.headers.authorization, queryToken);
   if (!identity) {
     return res.status(401).json({ error: 'Unauthorized — login first' });

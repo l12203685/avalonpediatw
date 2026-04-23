@@ -131,3 +131,42 @@ export function createHttpRateLimit(
     next();
   };
 }
+
+/**
+ * Key-based rate limiter for Phase A new-login: login throttled by account
+ * name (5/15min), forgot-password throttled by email (3/hr). Key is derived
+ * per-request from req.body so these limiters kick in BEFORE the expensive
+ * password-hash verify / email send, raising the cost of credential stuffing
+ * and mail-bombing.
+ *
+ * Falls back to IP when the expected body field is missing (still protects
+ * against unauth'd flood).
+ */
+export function createKeyedRateLimit(params: {
+  windowMs:    number;
+  maxRequests: number;
+  /** Extract the key from the request body (or fall back to IP). */
+  keyFrom:     (req: Request) => string | undefined;
+  /** Error message surfaced to the client on 429. */
+  message?:    string;
+  /** Machine code surfaced to the client on 429. */
+  code?:       string;
+}): (req: Request, res: Response, next: NextFunction) => void {
+  const limiter = new SocketRateLimiter({ windowMs: params.windowMs, maxRequests: params.maxRequests });
+  const message = params.message ?? 'Too many requests, please try again later.';
+  const code    = params.code    ?? 'rate_limited';
+  return (req: Request, res: Response, next: NextFunction) => {
+    const extracted = params.keyFrom(req);
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+      || req.socket.remoteAddress
+      || 'unknown';
+    const key = (typeof extracted === 'string' && extracted.length > 0)
+      ? extracted.toLowerCase()
+      : ip;
+    if (!limiter.isAllowed(key)) {
+      res.status(429).json({ error: message, code });
+      return;
+    }
+    next();
+  };
+}
