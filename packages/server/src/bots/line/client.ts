@@ -138,14 +138,14 @@ export class LineBotClient {
       default:
         response = {
           type: 'text',
-          text: `Unknown command: "/${command}". Type "/help" to see available commands.`,
+          text: `未知指令:「/${command}」。輸入「/help」查看可用指令。`,
           quickReply: {
             items: [
               {
                 type: 'action',
                 action: {
                   type: 'message',
-                  label: 'Help',
+                  label: '說明',
                   text: '/help',
                 },
               },
@@ -164,7 +164,7 @@ export class LineBotClient {
       await this.client.replyMessage(replyToken, [
         {
           type: 'text',
-          text: 'An error occurred. Please try again later.',
+          text: '發生錯誤,請稍後再試。',
         },
       ]);
     }
@@ -191,7 +191,7 @@ export class LineBotClient {
 
     return {
       type: 'flex',
-      altText: 'Game Created',
+      altText: '遊戲已建立',
       contents: {
         type: 'bubble',
         body: {
@@ -200,13 +200,13 @@ export class LineBotClient {
           contents: [
             {
               type: 'text',
-              text: 'Game Created!',
+              text: '遊戲已建立!',
               weight: 'bold',
               size: 'lg',
             },
             {
               type: 'text',
-              text: `Room ID: ${roomId}`,
+              text: `房間代碼:${roomId}`,
               size: 'sm',
               color: '#999999',
               margin: 'md',
@@ -214,7 +214,7 @@ export class LineBotClient {
             },
             {
               type: 'text',
-              text: 'Share the Room ID with friends, or use the link below to join via web.',
+              text: '把房間代碼分享給朋友,或用下方連結從網頁加入。',
               size: 'sm',
               wrap: true,
               margin: 'md',
@@ -232,7 +232,7 @@ export class LineBotClient {
               height: 'sm',
               action: {
                 type: 'uri',
-                label: 'Open Game',
+                label: '開啟遊戲',
                 uri: joinUrl,
               },
             },
@@ -242,7 +242,7 @@ export class LineBotClient {
               height: 'sm',
               action: {
                 type: 'message',
-                label: 'Status',
+                label: '狀態',
                 text: 'status',
               },
             },
@@ -260,7 +260,7 @@ export class LineBotClient {
     if (!roomId) {
       return {
         type: 'text',
-        text: 'Please provide a room ID. Usage: join <room-id>',
+        text: '請提供房間代碼。用法:join <房間代碼>',
       };
     }
 
@@ -270,14 +270,14 @@ export class LineBotClient {
     if (!room) {
       return {
         type: 'text',
-        text: `Room "${roomId}" not found. Check the ID and try again.`,
+        text: `找不到房間「${roomId}」。請確認代碼後再試。`,
       };
     }
 
     if (room.state !== 'lobby') {
       return {
         type: 'text',
-        text: 'This game is already in progress. You can only join rooms in the lobby.',
+        text: '這場遊戲已經開始。只能加入仍在大廳的房間。',
       };
     }
 
@@ -286,14 +286,14 @@ export class LineBotClient {
     if (room.players[playerId]) {
       return {
         type: 'text',
-        text: 'You are already in this room.',
+        text: '你已經在這個房間裡了。',
       };
     }
 
     if (Object.keys(room.players).length >= room.maxPlayers) {
       return {
         type: 'text',
-        text: 'This room is full.',
+        text: '這個房間已滿。',
       };
     }
 
@@ -316,7 +316,7 @@ export class LineBotClient {
 
     return {
       type: 'flex',
-      altText: 'Game Joined',
+      altText: '已加入遊戲',
       contents: {
         type: 'bubble',
         body: {
@@ -325,14 +325,14 @@ export class LineBotClient {
           contents: [
             {
               type: 'text',
-              text: 'Joined!',
+              text: '已加入!',
               weight: 'bold',
               size: 'lg',
               color: '#00b300',
             },
             {
               type: 'text',
-              text: `Room ID: ${roomId}`,
+              text: `房間代碼:${roomId}`,
               size: 'sm',
               color: '#999999',
               margin: 'md',
@@ -340,13 +340,13 @@ export class LineBotClient {
             },
             {
               type: 'text',
-              text: `Players: ${playerCount} / ${room.maxPlayers}`,
+              text: `玩家:${playerCount} / ${room.maxPlayers}`,
               size: 'sm',
               margin: 'md',
             },
             {
               type: 'text',
-              text: 'Waiting for the host to start the game...',
+              text: '等待房主開始遊戲...',
               size: 'sm',
               wrap: true,
               margin: 'md',
@@ -366,7 +366,7 @@ export class LineBotClient {
     if (!roomId) {
       return {
         type: 'text',
-        text: 'You are not in any game. Use "create" or "join <room-id>" first.',
+        text: '你還沒加入任何遊戲。請先使用「create」或「join <房間代碼>」。',
       };
     }
 
@@ -377,7 +377,7 @@ export class LineBotClient {
       if (userId) userRoomMap.delete(userId);
       return {
         type: 'text',
-        text: 'Your game room no longer exists.',
+        text: '你的遊戲房間已不存在。',
       };
     }
 
@@ -402,14 +402,14 @@ export class LineBotClient {
     if (!vote || !['approve', 'reject', 'yes', 'no'].includes(vote.toLowerCase())) {
       return {
         type: 'text',
-        text: 'Invalid vote. Use: vote approve OR vote reject',
+        text: '投票無效。請用:vote approve 或 vote reject',
         quickReply: {
           items: [
             {
               type: 'action',
               action: {
                 type: 'message',
-                label: 'Approve',
+                label: '贊成',
                 text: 'vote approve',
               },
             },
@@ -417,7 +417,7 @@ export class LineBotClient {
               type: 'action',
               action: {
                 type: 'message',
-                label: 'Reject',
+                label: '反對',
                 text: 'vote reject',
               },
             },
@@ -431,7 +431,7 @@ export class LineBotClient {
     if (!roomId) {
       return {
         type: 'text',
-        text: 'You are not in any game. Use "join <room-id>" first.',
+        text: '你還沒加入任何遊戲。請先使用「join <房間代碼>」。',
       };
     }
 
@@ -442,14 +442,14 @@ export class LineBotClient {
       if (userId) userRoomMap.delete(userId);
       return {
         type: 'text',
-        text: 'Your game room no longer exists.',
+        text: '你的遊戲房間已不存在。',
       };
     }
 
     if (room.state !== 'voting') {
       return {
         type: 'text',
-        text: `Cannot vote right now. Current game state: ${room.state}`,
+        text: `現在無法投票。目前遊戲階段:${room.state}`,
       };
     }
 
@@ -458,7 +458,7 @@ export class LineBotClient {
     if (!room.players[playerId]) {
       return {
         type: 'text',
-        text: 'You are not a player in this game.',
+        text: '你不是這場遊戲的玩家。',
       };
     }
 
@@ -471,7 +471,7 @@ export class LineBotClient {
 
     return {
       type: 'flex',
-      altText: 'Vote Recorded',
+      altText: '投票已送出',
       contents: {
         type: 'bubble',
         body: {
@@ -480,21 +480,21 @@ export class LineBotClient {
           contents: [
             {
               type: 'text',
-              text: `${isApprove ? 'Approved' : 'Rejected'} - Vote Recorded`,
+              text: `${isApprove ? '已贊成' : '已反對'} - 投票已送出`,
               weight: 'bold',
               size: 'lg',
               color: isApprove ? '#00b300' : '#ff0000',
             },
             {
               type: 'text',
-              text: `You voted to ${isApprove ? 'APPROVE' : 'REJECT'} the team.`,
+              text: `你投了${isApprove ? '贊成' : '反對'}票。`,
               size: 'sm',
               wrap: true,
               margin: 'md',
             },
             {
               type: 'text',
-              text: `Votes: ${votedCount} / ${totalPlayers}`,
+              text: `投票進度:${votedCount} / ${totalPlayers}`,
               size: 'xs',
               color: '#999999',
               margin: 'md',
