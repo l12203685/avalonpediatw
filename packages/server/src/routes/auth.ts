@@ -146,14 +146,55 @@ function parseEmailFromLineIdToken(idToken: string | undefined): string | undefi
   }
 }
 
-/** 拿 email 查 auth_users；命中 → 200 + JWT；miss → null（caller 決定如何回應）。 */
+/**
+ * 拿 email 查 auth_users；命中 → 200 + JWT；miss → null（caller 決定如何回應）。
+ *
+ * 2026-04-24 修正：之前只發 JWT 沒寫 provider external_id，所以系統設定頁的
+ * 「綁定 Google/Discord/LINE」永遠顯示未綁定。quick-login 成功代表「這個 provider
+ * identity 對應的 email 已經是站上帳號」，我們應該把 provider external_id 寫回
+ * auth_users row 上，讓 `getLinkedAccounts()` 可以正確回報綁定狀態 + UI 顯「已
+ * 綁定 @xxx」。
+ *
+ * 寫入策略（安全）：
+ *   - 先 `findUserIdByProviderIdentity(provider, externalId)` 查 externalId 是否
+ *     已被綁到其他 row；若 already owner === account.userId（idempotent）或者
+ *     unbound → 直接 `linkProviderIdentity` 寫入。
+ *   - 若 externalId 已綁到「另一顆」row，絕對不覆寫（會造成雙重綁定 / 偷換帳號）。
+ *     這種情況下仍發 JWT 直登（email 對上了就是本人），但 linkedProviders UI
+ *     會維持舊狀態；Edward 之後可用 /api/user/link/* 走手動 merge 流程處理。
+ *   - 同時鏡射 email 到 auth_users.email 欄位（`getLinkedAccounts` 算 display_label
+ *     用這個欄位 — 沒鏡射會顯示 externalId 而不是 @gmail.com）。
+ */
 async function quickLoginByEmail(
   email:        string | undefined,
   provider:     'discord' | 'line' | 'google',
+  externalId?:  string,
 ): Promise<{ token: string; userId: string; accountName: string; displayName: string; primaryEmail: string } | null> {
   if (!email) return null;
   const account = await findAccountByEmail(email);
   if (!account) return null;
+
+  // Best-effort backfill：寫 provider external_id + email 到 auth_users row，讓
+  // /api/user/linked 後續能正確回報。失敗不擋 quick-login（JWT 仍發）。
+  if (externalId && externalId.length > 0) {
+    try {
+      const owner = await findUserIdByProviderIdentity(provider, externalId);
+      if (owner === null || owner === account.userId) {
+        await linkProviderIdentity(account.userId, provider, externalId);
+        await mirrorEmailToAuthUser(account.userId, account.primaryEmail);
+      } else {
+        // externalId 被另一顆 row 佔住；不覆寫，僅 log。Edward 若要合併會走
+        // /api/user/link 流程明確處理。
+        console.warn(
+          `[auth/quick-login] provider ${provider} externalId already bound to different userId`,
+          { targetUserId: account.userId, existingOwner: owner },
+        );
+      }
+    } catch (err) {
+      console.error('[auth/quick-login] backfill linkProviderIdentity failed (non-fatal):', err);
+    }
+  }
+
   const token = issueJwt({
     sub:         account.userId,
     displayName: account.displayName,
@@ -166,6 +207,31 @@ async function quickLoginByEmail(
     displayName:  account.displayName,
     primaryEmail: account.primaryEmail,
   };
+}
+
+/**
+ * 把 primaryEmail 鏡射到 auth_users.email，給 `getLinkedAccounts` 的 display_label
+ * 使用。如果 row 已經有 email（legacy OAuth row）就保留原值 — 只補空欄位，避免
+ * 把 Discord email 覆蓋到 Google row 上之類的亂象。
+ *
+ * 注意：auth_users 同時存在兩套 schema — email-only 流程寫 `primaryEmail` + `emails[]`，
+ * 傳統 OAuth 流程寫 `email`。這個 helper 把 primaryEmail 搬到 `email` 欄位，
+ * 讓 `getLinkedAccounts` 單一讀取即可。
+ */
+async function mirrorEmailToAuthUser(userId: string, email: string): Promise<void> {
+  if (!email) return;
+  try {
+    const { getAdminFirestore } = await import('../services/firebase');
+    const db = getAdminFirestore();
+    const ref = db.collection('auth_users').doc(userId);
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const data = (snap.data() ?? {}) as { email?: string | null };
+    if (typeof data.email === 'string' && data.email.length > 0) return; // 已有值不覆寫
+    await ref.update({ email, updatedAt: Date.now() });
+  } catch (err) {
+    console.error('[auth/quick-login] mirrorEmailToAuthUser failed (non-fatal):', err);
+  }
 }
 
 // ── Bind identity helper (kept for OAuth /auth/link/* routes) ─
@@ -446,7 +512,7 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     // 已綁 → 直發 JWT；沒綁 → 提示「請先用 email 登入後再綁定」。
     // 不建新帳號、不呼叫 upsertUser（那條路只走原生登入）。
     if (quickLoginMode) {
-      const quick = await quickLoginByEmail(discordUser.email, 'discord');
+      const quick = await quickLoginByEmail(discordUser.email, 'discord', discordUser.id);
       if (!quick) {
         respondQuickLoginNotLinked(res, 'discord');
         return;
@@ -550,7 +616,7 @@ router.get('/line/callback', async (req: Request, res: Response) => {
       : undefined;
 
     if (quickLoginMode) {
-      const quick = await quickLoginByEmail(lineEmail, 'line');
+      const quick = await quickLoginByEmail(lineEmail, 'line', lineUser.userId);
       if (!quick) {
         respondQuickLoginNotLinked(res, 'line');
         return;
@@ -704,14 +770,16 @@ router.post('/oauth/login/google', emailFloodLimiter, async (req: Request, res: 
   }
 
   let email: string | undefined;
+  let firebaseUid: string | undefined;
   try {
     const decoded = await verifyIdToken(body.idToken);
     email = decoded.email ?? undefined;
+    firebaseUid = decoded.uid;
   } catch {
     return res.status(400).json({ error: 'Invalid Firebase ID token', code: 'bad_id_token' });
   }
 
-  const quick = await quickLoginByEmail(email, 'google');
+  const quick = await quickLoginByEmail(email, 'google', firebaseUid);
   if (!quick) {
     return res.status(401).json({
       error: '這組 Google 帳號的信箱還沒在站上註冊過，請先用 email 登入後再到「系統設定」綁定 Google',

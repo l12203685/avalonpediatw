@@ -266,6 +266,50 @@ describe('POST /auth/oauth/login/google — quick-login', () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('missing_fields');
   });
+
+  // 2026-04-24 regression：quick-login 成功必須把 firebase_uid 綁到 auth_users row
+  // 上，否則系統設定頁「綁定 Google」會永遠顯示未綁定（Edward bug report）。
+  it('backfills firebase_uid onto auth_users row so linked providers reflect the bind', async () => {
+    await loginOrRegister({ email: 'mapped@example.com', password: 'Abc12345' });
+    verifyIdTokenMock.mockResolvedValueOnce({ uid: 'firebase-uid-xyz', email: 'mapped@example.com' });
+
+    const supaModule = await import('../services/supabase');
+    const linkSpy = supaModule.linkProviderIdentity as unknown as { mock?: { calls: unknown[][] } };
+    const findSpy = supaModule.findUserIdByProviderIdentity as unknown as { mockResolvedValueOnce?: (v: string | null) => void };
+    findSpy.mockResolvedValueOnce?.(null); // externalId not yet bound
+
+    const res = await request(app)
+      .post('/auth/oauth/login/google')
+      .send({ idToken: 'fake-firebase-id-token' });
+
+    expect(res.status).toBe(200);
+    // linkProviderIdentity 必須帶 provider='google' + firebaseUid 被呼叫
+    const calls = linkSpy.mock?.calls ?? [];
+    const googleCall = calls.find((c) => c[1] === 'google' && c[2] === 'firebase-uid-xyz');
+    expect(googleCall).toBeDefined();
+  });
+
+  it('does not overwrite provider binding when firebase_uid is already owned by a different user', async () => {
+    await loginOrRegister({ email: 'mapped@example.com', password: 'Abc12345' });
+    verifyIdTokenMock.mockResolvedValueOnce({ uid: 'firebase-uid-already-bound', email: 'mapped@example.com' });
+
+    const supaModule = await import('../services/supabase');
+    const linkSpy = supaModule.linkProviderIdentity as unknown as { mock?: { calls: unknown[][] } };
+    const findSpy = supaModule.findUserIdByProviderIdentity as unknown as { mockResolvedValueOnce?: (v: string | null) => void };
+    // firebase-uid-already-bound 已屬於另一顆 row
+    findSpy.mockResolvedValueOnce?.('some-other-user-id');
+
+    const initialCallsCount = linkSpy.mock?.calls.filter((c) => c[1] === 'google' && c[2] === 'firebase-uid-already-bound').length ?? 0;
+
+    const res = await request(app)
+      .post('/auth/oauth/login/google')
+      .send({ idToken: 'fake-firebase-id-token' });
+
+    // quick-login 仍成功（email 對上就是本人），但 linkProviderIdentity 不被叫來覆寫別人
+    expect(res.status).toBe(200);
+    const afterCallsCount = linkSpy.mock?.calls.filter((c) => c[1] === 'google' && c[2] === 'firebase-uid-already-bound').length ?? 0;
+    expect(afterCallsCount).toBe(initialCallsCount);
+  });
 });
 
 describe('GET /auth/oauth/login/discord — quick-login redirect', () => {
