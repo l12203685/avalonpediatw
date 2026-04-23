@@ -24,6 +24,8 @@
     "analysis": "Analysis",
     "analytics": "Analytics",
     "profileSettings": "Settings",
+    "settings": "System Settings",
+    "personalStats": "Personal Stats",
     "admin": "Admin"
   },
   "auth": {
@@ -55,6 +57,7 @@
     "wikiAndGuide": "Wiki & Guide",
     "leaderboard": "Win Rate",
     "profileShort": "Profile",
+    "personalStats": "Personal Stats",
     "friendsShort": "Follow List",
     "aiStats": "AI Self-play",
     "analysis": "Analytics",
@@ -130,6 +133,9 @@
     "alreadyRegistered": "Already a registered account — no upgrade needed.",
     "currentName": "Current name",
     "comingSoon": "Coming soon"
+  },
+  "personalStats": {
+    "footerHint": "Watchlist and matchup stats will be populated in Phase 2"
   },
   "analytics": {
     "tab": {

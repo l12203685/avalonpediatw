@@ -5,9 +5,6 @@ import {
   ArrowLeft,
   User,
   Link2,
-  History,
-  Users,
-  Swords,
   LogOut,
   Chrome,
   Pencil,
@@ -24,7 +21,7 @@ import {
   hasFirebaseAuthConfigured,
 } from '../services/auth';
 
-type SectionId = 'basic' | 'binding' | 'history' | 'watchlist' | 'pairStats' | 'logout';
+type SectionId = 'basic' | 'binding' | 'logout';
 
 interface SectionConfig {
   id: SectionId;
@@ -32,13 +29,14 @@ interface SectionConfig {
   icon: typeof User;
 }
 
+/**
+ * #86 IA v3 — 2026-04-23 拆頁：系統設定只保留 [基本資料 + 帳號綁定 + 登出]，
+ * 歷史戰績 / 追蹤列表 / 追蹤對戰成績 搬到新的 PersonalStatsPage（個人戰績頁）。
+ */
 const SECTIONS: SectionConfig[] = [
-  { id: 'basic',      labelKey: 'settings.basic',      icon: User },
-  { id: 'binding',    labelKey: 'settings.binding',    icon: Link2 },
-  { id: 'history',    labelKey: 'settings.history',    icon: History },
-  { id: 'watchlist',  labelKey: 'settings.watchlist',  icon: Users },
-  { id: 'pairStats',  labelKey: 'settings.pairStats',  icon: Swords },
-  { id: 'logout',     labelKey: 'settings.logout',     icon: LogOut },
+  { id: 'basic',   labelKey: 'settings.basic',   icon: User },
+  { id: 'binding', labelKey: 'settings.binding', icon: Link2 },
+  { id: 'logout',  labelKey: 'settings.logout',  icon: LogOut },
 ];
 
 /**
@@ -60,7 +58,7 @@ function isGuestPlayer(player: { name?: string; provider?: string } | null | und
   return /^Guest_\d{3,}$/i.test(player.name ?? '');
 }
 
-export default function ProfileSettingsPage(): JSX.Element {
+export default function SettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const { setGameState, setCurrentPlayer, currentPlayer, addToast } = useGameStore();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -182,7 +180,7 @@ export default function ProfileSettingsPage(): JSX.Element {
           >
             <ArrowLeft size={20} />
           </motion.button>
-          <h1 className="text-2xl font-black text-white flex-1">{t('nav.profileSettings')}</h1>
+          <h1 className="text-2xl font-black text-white flex-1">{t('nav.settings')}</h1>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -322,10 +320,6 @@ export default function ProfileSettingsPage(): JSX.Element {
                     )}
                     <p className="text-xs text-zinc-600">{t('settings.upgradeHint')}</p>
                   </div>
-                )}
-
-                {(section.id === 'history' || section.id === 'watchlist' || section.id === 'pairStats') && (
-                  <p className="text-sm text-zinc-500">{t('settings.comingSoon')}</p>
                 )}
 
                 {isLogout && (

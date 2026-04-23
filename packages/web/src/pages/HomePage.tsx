@@ -211,16 +211,15 @@ export default function HomePage(): JSX.Element {
                 <div className="md:col-span-3 space-y-3">
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                     {/*
-                      #86 IA v2 — 6 main buttons（2026-04-22 緊急 UI/命名 修補）
-                        Row 1: 建立房間 / 加入房間 / 數據排行（原「戰績」）
-                        Row 2: 個人資訊 / 百科攻略 / 系統設定
+                      #86 IA v3 — 6 main buttons（2026-04-23 拆兩頁）
+                        Row 1: 建立房間 / 加入房間 / 數據排行
+                        Row 2: 個人戰績 / 百科攻略 / 系統設定
 
                       整合決策：
-                      - 「數據排行」 route → `analytics` (含排行榜 + 雷達圖 + AI 自對弈 + 深度分析
-                        四個 tab，原「戰績」按鈕單獨 route `profile` 的邏輯，現在統一入口到數據頁；
-                        個人戰績仍可從數據排行頁 header 的「個人頁」入口返回)
-                      - 「個人資訊」 route → `profileSettings` (資料 + 綁定 + 登出)
-                      - 「系統設定」 route → `profileSettings` (同頁不同區塊 — 命名做區分)
+                      - 「數據排行」 route → `analytics` (含排行榜 + 雷達圖 + AI 自對弈 + 深度分析四 tab)
+                      - 「個人戰績」 route → `personalStats` (= ProfilePage 歷史戰績 + 追蹤 / 對戰
+                        成績 placeholder)
+                      - 「系統設定」 route → `settings` (基本資料 + 帳號綁定 + 登出)
                       - FAQ 獨立按鈕拿掉；設定頁內可加 FAQ link (未來)
                     */}
                     {/* Row 1 — Create / Join / Stats */}
@@ -261,13 +260,13 @@ export default function HomePage(): JSX.Element {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setGameState('profileSettings')}
-                      data-testid="home-btn-profile"
+                      onClick={() => setGameState('personalStats')}
+                      data-testid="home-btn-personal-stats"
                       className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-md text-sm sm:text-base"
                     >
                       <span className="inline-flex items-center gap-1.5 sm:gap-2 min-w-0">
                         <User size={18} className="flex-shrink-0" />
-                        <span className="truncate">{t('home.profileShort')}</span>
+                        <span className="truncate">{t('home.personalStats')}</span>
                       </span>
                       <span className="text-[10px] text-zinc-400 truncate max-w-full">
                         {t('home.currentAs', { name: currentName })}
@@ -288,7 +287,7 @@ export default function HomePage(): JSX.Element {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setGameState('profileSettings')}
+                      onClick={() => setGameState('settings')}
                       data-testid="home-btn-settings"
                       className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >

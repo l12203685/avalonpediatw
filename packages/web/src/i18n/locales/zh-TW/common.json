@@ -24,6 +24,8 @@
     "analysis": "數據分析",
     "analytics": "數據分析",
     "profileSettings": "資料設定",
+    "settings": "系統設定",
+    "personalStats": "個人戰績",
     "admin": "管理"
   },
   "auth": {
@@ -55,6 +57,7 @@
     "wikiAndGuide": "百科攻略",
     "leaderboard": "勝率排行",
     "profileShort": "個人資訊",
+    "personalStats": "個人戰績",
     "friendsShort": "追蹤列表",
     "aiStats": "AI自對弈",
     "analysis": "數據分析",
@@ -130,6 +133,9 @@
     "alreadyRegistered": "目前為正式帳號，不需要再升級。",
     "currentName": "目前名稱",
     "comingSoon": "即將上線"
+  },
+  "personalStats": {
+    "footerHint": "追蹤列表 / 對戰成績 Phase 2 會補實內容"
   },
   "analytics": {
     "tab": {
