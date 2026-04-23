@@ -14,7 +14,6 @@ import { mintGuestToken, verifyGuestToken, generateGuestName } from '../middlewa
 import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import {
   ensureSupabaseUserForFirebase,
-  findUserIdByProviderIdentity,
   isSupabaseReady,
 } from '../services/supabase';
 import { isFirestoreReady } from '../services/firestoreAccounts';
