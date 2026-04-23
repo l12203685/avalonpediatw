@@ -293,13 +293,21 @@ export function extractOAuthErrorFromUrl(): string | null {
   if (!error) return null;
   const cleanUrl = window.location.pathname + window.location.hash;
   window.history.replaceState({}, '', cleanUrl);
-  // 2026-04-23 OAuth 快速登入：provider 未綁到任何 email 帳號 → 明示提示「先用 email 登入」。
+  const providerLabel = provider === 'discord' ? 'Discord'
+                      : provider === 'line'    ? 'LINE'
+                      : provider === 'google'  ? 'Google'
+                      : '第三方';
+  // 2026-04-23 OAuth-primary：provider_not_linked 已由後端 auto-register 取代；
+  // 下面兩個是新增的 defensive 錯誤（provider 沒授權 email / Firestore 寫入失敗）。
+  if (error === 'provider_no_email') {
+    return `${providerLabel} 沒提供 email，無法自動建立帳號。請改用 email 註冊，或回到 ${providerLabel} 授權 email 存取後再試`;
+  }
+  if (error === 'oauth_autoregister_failed') {
+    return `${providerLabel} 自動建立帳號失敗，請稍後再試，或改用 email 註冊`;
+  }
+  // 舊 provider_not_linked 理論上已不會出現（後端 auto-register）；留字串避免 regression。
   if (error === 'provider_not_linked') {
-    const label = provider === 'discord' ? 'Discord'
-                : provider === 'line'    ? 'LINE'
-                : provider === 'google'  ? 'Google'
-                : '這個第三方帳號';
-    return `${label} 尚未綁定過站上帳號，請先以 email 登入後再到「系統設定」綁定`;
+    return `${providerLabel} 尚未綁定過站上帳號，請改用 email 註冊`;
   }
   const messages: Record<string, string> = {
     discord_denied:  'Discord 登入已取消',
