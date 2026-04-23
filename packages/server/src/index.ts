@@ -14,6 +14,7 @@ import { analysisRouter } from './routes/analysis';
 import { claimsRouter } from './routes/claims';
 import { adminEloRouter } from './routes/adminElo';
 import { healthDeepRouter } from './routes/healthDeep';
+import { versionRouter } from './routes/version';
 import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
 import { ensureAdminsSeed } from './services/AdminService';
 import {
@@ -52,6 +53,9 @@ app.use('/api', claimsRouter);
 app.use('/api', adminEloRouter);
 // Deep health: /api/health/deep — dependency probe (Plan v2 R0-C)
 app.use('/api', healthDeepRouter);
+// Build version: /api/version — used by web client to detect deploys and
+// prompt refresh on stale browser/PWA cache (P0 2026-04-23 guest stabilize)
+app.use('/api', versionRouter);
 
 // HTTP server (needed for Socket.IO)
 const httpServer = createServer(app);

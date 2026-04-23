@@ -83,14 +83,29 @@ export async function initializeSocket(token: string): Promise<void> {
     }
   });
 
-  // Wait for auth:success or connect_error before resolving
+  // Wait for auth:success or connect_error before resolving.
+  //
+  // 2026-04-23 guest stabilize (P0, drift_35): transient `xhr poll error`
+  // / `websocket error` spikes — usually from a 1–2s ngrok hiccup or a
+  // wifi flap on iPhone Safari — were being turned into an immediate
+  // "無法連線伺服器" rejection, which the UI then surfaces as a hard failure
+  // even though Socket.IO's own reconnection loop would have recovered in
+  // <5s. We now tolerate up to CONNECT_ERROR_TOLERANCE transient errors
+  // before rejecting; during that window, the UI stays in the
+  // "reconnecting" state (yellow banner "重新連線中…") instead of flipping
+  // to red "連線中斷".
+  const CONNECT_ERROR_TOLERANCE = 3;
+  const INITIAL_CONNECT_TIMEOUT_MS = 10_000;
   await new Promise<void>((resolve, reject) => {
+    let transientErrors = 0;
     const timeout = setTimeout(() => {
+      socket?.off('connect_error', onConnectError);
       reject(new Error('連線逾時，請確認伺服器是否運行'));
-    }, 10000);
+    }, INITIAL_CONNECT_TIMEOUT_MS);
 
-    socket!.once('auth:success', (session: AuthSession) => {
+    const onAuthSuccess = (session: AuthSession): void => {
       clearTimeout(timeout);
+      socket?.off('connect_error', onConnectError);
       store.setSocketStatus('connected');
       store.setCurrentPlayer({
         id: session.user.uid,
@@ -112,13 +127,27 @@ export async function initializeSocket(token: string): Promise<void> {
         socket!.emit('game:join-room', savedRoom);
       }
       resolve();
-    });
+    };
 
-    socket!.once('connect_error', (err) => {
-      clearTimeout(timeout);
-      socket = null;
-      reject(new Error(`無法連線伺服器：${err.message}`));
-    });
+    const onConnectError = (err: Error): void => {
+      transientErrors += 1;
+      // Show reconnecting state so the user sees "重新連線中…" instead of
+      // a scary error — Socket.IO's own reconnection handles the retry.
+      store.setSocketStatus('reconnecting');
+      console.warn(
+        `[socket] connect_error #${transientErrors}/${CONNECT_ERROR_TOLERANCE}: ${err.message}`,
+      );
+      if (transientErrors >= CONNECT_ERROR_TOLERANCE) {
+        clearTimeout(timeout);
+        socket?.off('auth:success', onAuthSuccess);
+        socket = null;
+        reject(new Error(`無法連線伺服器：${err.message}`));
+      }
+      // else: let Socket.IO keep retrying inside the 10s window.
+    };
+
+    socket!.once('auth:success', onAuthSuccess);
+    socket!.on('connect_error', onConnectError);
   });
 
   socket.on('connect', () => {

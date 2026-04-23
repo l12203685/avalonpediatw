@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useGameStore } from './store/gameStore';
 import { initializeAuth, onAuthStateChange, extractOAuthTokenFromUrl, resumeGuestFromCookie } from './services/auth';
 import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
+import { startVersionCheck } from './services/versionCheck';
 import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
 import LobbyPage from './pages/LobbyPage';
@@ -31,6 +32,19 @@ function App(): JSX.Element {
   const { gameState, currentPlayer, socketStatus } = useGameStore();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Version check poller — detects a fresh server deploy and prompts the
+  // user to refresh so they don't keep running against a stale JS bundle
+  // (root cause of the intermittent xhr/ws errors Edward reported 2026-04-23).
+  // Safe to start before login: the endpoint is unauthenticated.
+  useEffect(() => {
+    startVersionCheck((_current, _latest) => {
+      const { addToast } = useGameStore.getState();
+      addToast(t('connection.newVersionAvailable'), 'info');
+    });
+    // No teardown — this is a singleton and polls once a minute; a hot
+    // reload replaces the module rather than leaking timers.
+  }, [t]);
 
   // Global error capture — auto-report JS errors to server
   useEffect(() => {
@@ -149,6 +163,19 @@ function App(): JSX.Element {
             {socketStatus === 'reconnecting'
               ? t('connection.reconnecting')
               : t('connection.disconnected')}
+            {/* P0 2026-04-23: when disconnected (not mid-reconnect), offer an
+                explicit refresh button so guests whose browser/PWA cache got
+                out of sync with a fresh deploy can recover without knowing
+                about Ctrl+Shift+R. */}
+            {socketStatus === 'disconnected' && (
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="ml-2 px-2 py-0.5 rounded bg-red-800 hover:bg-red-700 text-red-100 text-xs font-semibold transition-colors"
+              >
+                {t('connection.refresh')}
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
