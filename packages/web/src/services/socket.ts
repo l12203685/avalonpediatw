@@ -27,9 +27,14 @@ export function getSocket(): Socket {
 }
 
 export async function initializeSocket(token: string): Promise<void> {
-  if (socket?.connected) return;
-  // Tear down a stale disconnected socket before re-creating
-  if (socket && !socket.connected) {
+  // 2026-04-23 guest→google upgrade fix: when Edward binds Google after entering
+  // as guest, `onAuthStateChange` re-calls this with the new Firebase ID token,
+  // but previously we early-returned on `socket?.connected` → socket stayed on
+  // the old guest token → server kept reporting provider='guest' → settings page
+  // still showed guest UI → Edward couldn't rename. Now: if the token changed,
+  // tear down the existing socket so we re-handshake with the new identity.
+  if (socket?.connected && _storedToken === token) return;
+  if (socket) {
     socket.disconnect();
     socket = null;
   }

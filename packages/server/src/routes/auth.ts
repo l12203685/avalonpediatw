@@ -11,6 +11,13 @@ import {
   type LinkProvider,
 } from '../services/supabase';
 import { mintGuestToken, verifyGuestToken, generateGuestName } from '../middleware/guestAuth';
+import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
+import {
+  ensureSupabaseUserForFirebase,
+  findUserIdByProviderIdentity,
+  isSupabaseReady,
+} from '../services/supabase';
+import { isFirestoreReady } from '../services/firestoreAccounts';
 
 const router: IRouter = Router();
 
@@ -471,17 +478,66 @@ router.post('/guest/rename', (req: Request, res: Response) => {
 
 /**
  * POST /auth/guest/upgrade
- * body: { provider: string, providerToken: string }
+ * body: { provider: 'google', providerToken: string }
  *
- * Phase 1 stub：直接回 501。Phase 2 會做完整合併：驗證 providerToken、
- * 檢查 email 衝突（409 duplicate）、把 guest uid 的 ELO/戰績/badge 搬到
- * provider 帳號。
+ * 2026-04-23 Edward 回報：綁 Google 後仍無法改名，被當訪客。Root cause：原本
+ * stub 回 501 → 前端以為有綁成功但 server 沒做任何合併 → socket 仍以 guest
+ * token 連線 → /api/profile/me PATCH 繼續被 `provider === 'guest'` 擋。
+ *
+ * 新行為（Google-only，Discord / Line 仍走 /auth/link/<provider> redirect）：
+ *   1. 驗 Firebase ID token → 取得 uid / email / name / photo
+ *   2. 確保 Supabase（或 Firestore fallback）已有對應 google user row
+ *   3. 簽一個 provider='google' 的自訂 JWT 讓 socket 能以 google 身份重連
+ *      （前端會拿 Firebase ID token 走 route 2 直接 verify，這裡回的 JWT
+ *      主要給前端暫存和驗證用）
+ *
+ * 舊訪客 ELO / 戰績遷移走 ticket #46（已完成）— 這顆 endpoint 不動戰績，
+ * 只負責把「身份從 guest 翻成 google」這一步打通。
  */
-router.post('/guest/upgrade', (_req: Request, res: Response) => {
-  return res.status(501).json({
-    error: 'guest upgrade not implemented',
-    phase: 'Phase 2 will merge guest records into registered account',
-  });
+router.post('/guest/upgrade', async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { provider?: unknown; providerToken?: unknown };
+  const provider = typeof body.provider === 'string' ? body.provider : '';
+  const providerToken = typeof body.providerToken === 'string' ? body.providerToken : '';
+
+  if (provider !== 'google') {
+    return res.status(400).json({
+      error: 'Only provider="google" is supported here; use /auth/link/discord or /auth/link/line for others',
+    });
+  }
+  if (providerToken.length === 0) {
+    return res.status(400).json({ error: 'providerToken (Firebase ID token) required' });
+  }
+  if (!isFirebaseAdminReady()) {
+    return res.status(503).json({ error: 'Firebase admin not configured' });
+  }
+
+  try {
+    const decoded = await verifyIdToken(providerToken);
+    const firebaseUid = decoded.uid;
+    const email = decoded.email ?? '';
+    const name = decoded.name ?? email.split('@')[0] ?? 'Player';
+    const photo = (decoded as typeof decoded & { picture?: string }).picture;
+
+    // 確保 users row 存在（Supabase 主路徑；Firestore fallback）
+    if (isSupabaseReady()) {
+      await ensureSupabaseUserForFirebase(firebaseUid, name, email, photo);
+    } else if (!isFirestoreReady()) {
+      return res.status(503).json({ error: 'No account store configured' });
+    }
+
+    // 簽回一顆 provider='google' 的自訂 JWT。socket 端會優先走 Firebase ID
+    // token 驗證（route 2），不過前端同時也會重建 socket — 此 JWT 當 fallback。
+    const token = issueJwt({ sub: firebaseUid, displayName: name, provider: 'google' });
+
+    return res.json({
+      ok: true,
+      token,
+      user: { uid: firebaseUid, displayName: name, provider: 'google', email, photoURL: photo ?? null },
+    });
+  } catch (err) {
+    console.error('[auth/guest/upgrade]', err);
+    return res.status(400).json({ error: 'Invalid Firebase ID token or upgrade failed' });
+  }
 });
 
 // ── #42 Link additional providers ────────────────────────────

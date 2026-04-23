@@ -16,7 +16,10 @@ import {
   signInWithDiscord,
   signInWithLine,
   hasFirebaseAuthConfigured,
+  upgradeGuestToRegistered,
+  getIdToken,
 } from '../services/auth';
+import { initializeSocket } from '../services/socket';
 
 type SectionId = 'basic' | 'binding';
 
@@ -116,8 +119,17 @@ export default function SettingsPage(): JSX.Element {
     }
   };
 
-  // 訪客轉正式帳號 — 觸發社群登入 flow，server 端 callback 時會把 guest_session
-  // cookie 的 uid 合併到新帳號（Phase 2 會在 /auth/guest/upgrade 做完整 merge）。
+  // 訪客轉正式帳號 — Google 走 Firebase popup → 後端 /auth/guest/upgrade 建 user
+  // row + 簽 google JWT → 前端用 Firebase ID token 重建 socket（provider='google'
+  // 於 auth:success 回來）。Discord / Line 仍走 redirect-based OAuth。
+  //
+  // 2026-04-23 Edward 回報：原本只呼叫 signInWithGoogle() 就結束，socket 因為
+  // `socket?.connected` early-return 沒重建 → 身份仍是 guest → 無法改名。修法：
+  //   1) popup 登入 Firebase
+  //   2) 呼叫 /auth/guest/upgrade 把 user row 建好、拿到 google JWT
+  //   3) 用 Firebase ID token 重新 initializeSocket（token 變 → socket.ts 會 tear down
+  //      + 重建 → server 以 google 身份簽回 auth:success → setCurrentPlayer
+  //      provider='google' → isGuest=false → 改名 / PATCH /api/profile/me 放行）
   const handleUpgrade = async (
     provider: 'google' | 'discord' | 'line',
   ): Promise<void> => {
@@ -129,7 +141,16 @@ export default function SettingsPage(): JSX.Element {
           return;
         }
         await signInWithGoogle();
-        // onAuthStateChange in App.tsx will finish wiring socket + merging
+        // Firebase 已登入 → 拿 ID token 傳給 server 做 upgrade merge
+        const idToken = await getIdToken();
+        const result = await upgradeGuestToRegistered('google', idToken);
+        if (!result.ok) {
+          addToast(result.error || t('settings.upgradeFailed'), 'error');
+          return;
+        }
+        // 用 Firebase ID token 重建 socket — 新身份會帶 provider='google' 回來
+        await initializeSocket(idToken);
+        addToast(t('guest.renameSuccess'), 'success');
       } else if (provider === 'discord') {
         signInWithDiscord();
       } else if (provider === 'line') {
