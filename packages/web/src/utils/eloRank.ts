@@ -1,25 +1,33 @@
 /**
- * Player tier system.
+ * Player tier system (hard-threshold by total games).
  *
- * Two-layer design (per Edward 2026-04-20 spec):
- *   1. Pre-tier: 菜雞 (< 30 games) — shown independently, excluded from ranked distribution.
- *   2. Five ranked tiers (low→high): 初學 / 新手 / 中堅 / 高手 / 大師.
+ * Edward 2026-04-23 spec override — replace percentile-based distribution with
+ * deterministic hard thresholds on `total_games`:
  *
- * Tier assignment rule (spec-aligned, no game-count floor beyond the 菜雞 gate):
- *   • Exclude 菜雞 (< 30 games) first.
- *   • Sort the remainder by ELO ascending.
- *   • Slice into a 15% / 25% / 30% / 25% / 15% percentile band
- *     (bottom → top = 初學 → 大師).
+ *   • 菜雞   total_games < 50
+ *   • 初學   total_games ≥ 50
+ *   • 新手   total_games ≥ 100
+ *   • 中堅   total_games ≥ 150
+ *   • 高手   total_games ≥ 200
+ *   • 大師   total_games ≥ 250
  *
- * `getEloRank(elo, totalGames?)` returns a threshold-based tier used as a
- *   fallback when the full population isn't available (e.g. Profile / Friends
- *   page show a single entry). The ELO thresholds are tuned so a player
- *   sitting at the percentile centroid on a typical roster lands in the
- *   matching tier.
+ * Ranking-visibility rule:
+ *   A player with N total games is only eligible for tiers whose game-count
+ *   threshold they have met. Specifically:
+ *     • N <  50 → 菜雞 only
+ *     • N <  100 → 菜雞 / 初學
+ *     • N <  150 → 菜雞 / 初學 / 新手
+ *     • N <  200 → 菜雞 / 初學 / 新手 / 中堅
+ *     • N <  250 → 菜雞 / 初學 / 新手 / 中堅 / 高手
+ *     • N ≥ 250 → all six tiers including 大師
  *
- * `rankLeaderboard(entries)` returns per-entry tiers using the full 15/25/30/25/15
- *   percentile distribution, strictly by ELO order. Used by the LeaderboardPage
- *   to guarantee the spec's ELO spread with no cross-tier inversion.
+ * Within a tier, entries remain sorted by ELO (higher first in UI).
+ *
+ * `getEloRank(elo, totalGames?)` — single-player lookup. Tier is determined
+ *   purely by `totalGames` now (ELO no longer governs tier assignment); ELO
+ *   is preserved in the data model and still drives list ordering.
+ *
+ * `rankLeaderboard(entries)` — batch lookup, same rule.
  */
 
 export interface EloRank {
@@ -27,11 +35,13 @@ export interface EloRank {
   color: string;       // Tailwind text color class
   bgColor: string;     // Tailwind bg color class
   borderColor: string; // Tailwind border color class
-  min: number;         // ELO floor (threshold fallback)
-  minGames: number;    // games required to reach this tier
+  /** ELO floor — preserved for back-compat / badge use, NOT used for tier assignment any more. */
+  min: number;
+  /** Minimum total games required to qualify for this tier (canonical rule). */
+  minGames: number;
 }
 
-/** Pre-tier for players with < 30 games. Displayed independently. */
+/** Pre-tier for players with < 50 games. Displayed independently. */
 export const ROOKIE_TIER: EloRank = {
   label: '菜雞',
   color: 'text-gray-400',
@@ -41,57 +51,56 @@ export const ROOKIE_TIER: EloRank = {
   minGames: 0,
 };
 
-/** Threshold to escape the 菜雞 pre-tier. */
-export const ROOKIE_MAX_GAMES = 30;
+/** Hard ceiling for 菜雞; player needs ≥ this many games to escape 菜雞. */
+export const ROOKIE_MAX_GAMES = 50;
 
 /**
- * Five ranked tiers, low → high.
- * ELO `min` values are tuned to the existing score distribution so a
- * single-entry lookup (Profile / Friends) gives a reasonable tier even
- * without population context.
+ * Five ranked tiers (low → high) with hard `minGames` thresholds.
+ *
+ * `min` (ELO) is retained for back-compat with other call sites (badges etc.)
+ * but is no longer consulted for tier assignment.
  */
 export const ELO_RANKS: EloRank[] = [
-  { label: '初學', color: 'text-green-400',  bgColor: 'bg-green-900/40',  borderColor: 'border-green-700',  min: 0,    minGames: ROOKIE_MAX_GAMES },
-  { label: '新手', color: 'text-blue-400',   bgColor: 'bg-blue-900/40',   borderColor: 'border-blue-700',   min: 950,  minGames: ROOKIE_MAX_GAMES },
-  { label: '中堅', color: 'text-purple-400', bgColor: 'bg-purple-900/40', borderColor: 'border-purple-700', min: 1050, minGames: ROOKIE_MAX_GAMES },
-  { label: '高手', color: 'text-yellow-400', bgColor: 'bg-yellow-900/40', borderColor: 'border-yellow-700', min: 1150, minGames: ROOKIE_MAX_GAMES },
-  { label: '大師', color: 'text-orange-400', bgColor: 'bg-orange-900/40', borderColor: 'border-orange-700', min: 1300, minGames: ROOKIE_MAX_GAMES },
+  { label: '初學', color: 'text-green-400',  bgColor: 'bg-green-900/40',  borderColor: 'border-green-700',  min: 0,    minGames: 50  },
+  { label: '新手', color: 'text-blue-400',   bgColor: 'bg-blue-900/40',   borderColor: 'border-blue-700',   min: 950,  minGames: 100 },
+  { label: '中堅', color: 'text-purple-400', bgColor: 'bg-purple-900/40', borderColor: 'border-purple-700', min: 1050, minGames: 150 },
+  { label: '高手', color: 'text-yellow-400', bgColor: 'bg-yellow-900/40', borderColor: 'border-yellow-700', min: 1150, minGames: 200 },
+  { label: '大師', color: 'text-orange-400', bgColor: 'bg-orange-900/40', borderColor: 'border-orange-700', min: 1300, minGames: 250 },
 ];
 
 /** All tiers including pre-tier, low → high. Useful for filter UI. */
 export const ALL_TIERS: EloRank[] = [ROOKIE_TIER, ...ELO_RANKS];
 
 /**
- * Threshold-based tier lookup. Used when full population ranking is not
- * available (single player views). Falls back to 菜雞 if the player hasn't
- * reached the 菜雞 game-count gate (< 30 games).
+ * Single-player tier lookup by total games.
  *
- * Once past the 菜雞 gate, tier is determined purely by ELO thresholds so
- * single-player displays stay consistent with the leaderboard's ELO-ordered
- * distribution.
+ * The `elo` parameter is kept for backward signature compatibility and may be
+ * used by callers that want a rating label fallback, but tier assignment is
+ * now driven exclusively by `totalGames`.
+ *
+ * When `totalGames` is undefined (legacy call sites with only ELO), we return
+ * the lowest ranked tier (初學) to avoid a misleading 菜雞 label for players
+ * whose game-count isn't wired through. Pass `totalGames` for correct result.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function getEloRank(elo: number, totalGames?: number): EloRank {
-  // Unknown game count → assume qualified (back-compat for places that only
-  // have ELO). Callers that want the 菜雞 gate must supply `totalGames`.
-  if (typeof totalGames === 'number' && totalGames < ROOKIE_MAX_GAMES) {
-    return ROOKIE_TIER;
+  if (typeof totalGames !== 'number') {
+    // Legacy caller — no game-count context, default to bottom ranked tier.
+    return ELO_RANKS[0];
   }
 
-  let rank: EloRank = ELO_RANKS[0];
-  for (const r of ELO_RANKS) {
-    if (elo >= r.min) {
-      rank = r;
+  // Walk tiers high → low, return the first whose minGames the player satisfies.
+  for (let i = ELO_RANKS.length - 1; i >= 0; i--) {
+    if (totalGames >= ELO_RANKS[i].minGames) {
+      return ELO_RANKS[i];
     }
   }
-  return rank;
+  return ROOKIE_TIER;
 }
 
 // ---------------------------------------------------------------------------
-// Percentile-based leaderboard ranking
+// Batch ranking by hard threshold
 // ---------------------------------------------------------------------------
-
-/** Spec-required distribution across the 5 ranked tiers (low → high). */
-const TIER_DISTRIBUTION: readonly number[] = [0.15, 0.25, 0.30, 0.25, 0.15];
 
 /** Minimal shape needed by `rankLeaderboard` — matches LeaderboardEntry. */
 export interface RankInput {
@@ -101,59 +110,26 @@ export interface RankInput {
 }
 
 /**
- * Compute each entry's tier using the spec's percentile distribution.
+ * Compute each entry's tier from `total_games` using hard thresholds.
  *
- * Algorithm:
- *   1. Split entries into 菜雞 (< 30 games) and qualified.
- *   2. Sort qualified entries by ELO ascending.
- *   3. Slice into 5 bands (bottom → top): 15% / 25% / 30% / 25% / 15%.
- *      This yields bottom = 初學, top = 大師.
- *
- * Tier assignment is strictly ELO-ordered: within qualified players, no
- * lower tier may contain an ELO higher than any player in a higher tier.
+ * A player with N total games lands in the highest tier whose `minGames`
+ * they satisfy; anyone with N < 50 is 菜雞. Ordering within a tier is the
+ * caller's responsibility (LeaderboardPage sorts by ELO).
  */
 export function rankLeaderboard(entries: readonly RankInput[]): Map<string, EloRank> {
   const result = new Map<string, EloRank>();
-
-  const qualified: RankInput[] = [];
   for (const e of entries) {
-    if (e.total_games < ROOKIE_MAX_GAMES) {
-      result.set(e.id, ROOKIE_TIER);
-    } else {
-      qualified.push(e);
-    }
+    result.set(e.id, getTierByGames(e.total_games));
   }
-
-  if (qualified.length === 0) return result;
-
-  // Sort ascending so the bottom percentile band maps to 初學 (index 0).
-  const sorted = [...qualified].sort((a, b) => a.elo_rating - b.elo_rating);
-  const total = sorted.length;
-
-  // Compute cumulative upper-bound indices (exclusive) for each band.
-  // e.g. for distribution [0.15, 0.25, 0.30, 0.25, 0.15] → cumulative
-  // thresholds [0.15, 0.40, 0.70, 0.95, 1.00].
-  const cumulative: number[] = [];
-  let acc = 0;
-  for (const pct of TIER_DISTRIBUTION) {
-    acc += pct;
-    cumulative.push(Math.round(acc * total));
-  }
-  // Ensure the last threshold covers the full array.
-  cumulative[cumulative.length - 1] = total;
-
-  sorted.forEach((entry, idx) => {
-    // Find the first band whose cumulative index strictly exceeds idx.
-    let tierIdx = 0;
-    for (let i = 0; i < cumulative.length; i++) {
-      if (idx < cumulative[i]) {
-        tierIdx = i;
-        break;
-      }
-    }
-
-    result.set(entry.id, ELO_RANKS[tierIdx]);
-  });
-
   return result;
+}
+
+/** Internal: resolve tier from total-games alone. */
+function getTierByGames(totalGames: number): EloRank {
+  for (let i = ELO_RANKS.length - 1; i >= 0; i--) {
+    if (totalGames >= ELO_RANKS[i].minGames) {
+      return ELO_RANKS[i];
+    }
+  }
+  return ROOKIE_TIER;
 }
