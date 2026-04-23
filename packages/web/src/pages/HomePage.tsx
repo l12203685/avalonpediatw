@@ -19,6 +19,7 @@ import {
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import PublicChatPanel from '../components/PublicChatPanel';
+import BrandHeader from '../components/BrandHeader';
 
 interface OpenRoom {
   id: string;
@@ -182,23 +183,8 @@ export default function HomePage(): JSX.Element {
               animate={{ opacity: 1, y: 0 }}
               className="text-center space-y-6 w-full"
             >
-              {/* Title */}
-              <motion.div
-                initial={{ scale: 0.8 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 200 }}
-                className="space-y-3"
-              >
-                <img
-                  src="/logo.png"
-                  alt={t('app.name')}
-                  className="w-20 h-20 mx-auto rounded-2xl shadow-lg shadow-white/10"
-                />
-                <h1 className="text-5xl md:text-6xl font-black text-white drop-shadow-2xl">
-                  AVALON
-                </h1>
-                <p className="text-xl md:text-2xl text-zinc-300 font-semibold">{t('app.tagline')}</p>
-              </motion.div>
+              {/* Title — shared BrandHeader (matches LoginPage) */}
+              <BrandHeader size="lg" />
 
               {/* Main content: 6-button grid + lobby chat */}
               <motion.div
