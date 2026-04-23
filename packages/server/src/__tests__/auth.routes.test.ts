@@ -85,7 +85,12 @@ function makeFirestoreStub() {
 
 // ── Module mocks ────────────────────────────────────────────────
 
-process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-for-phase-c';
+process.env.JWT_SECRET           = process.env.JWT_SECRET           || 'test-secret-for-phase-c';
+// Bind-auth fix tests need OAuth client envs set before router import.
+process.env.DISCORD_CLIENT_ID    = process.env.DISCORD_CLIENT_ID    || 'test-discord-id';
+process.env.DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || 'http://localhost/auth/discord/callback';
+process.env.LINE_CHANNEL_ID      = process.env.LINE_CHANNEL_ID      || 'test-line-id';
+process.env.LINE_REDIRECT_URI    = process.env.LINE_REDIRECT_URI    || 'http://localhost/auth/line/callback';
 
 vi.mock('../services/firebase', () => ({
   isFirebaseAdminReady: () => true,
@@ -267,5 +272,97 @@ describe('POST /auth/forgot-password + POST /auth/reset-password', () => {
       token: 'anything', newPassword: 'short',
     });
     expect(res.status).toBe(400);
+  });
+});
+
+// ── 2026-04-24 bind-auth fix regression ─────────────────────────
+// Previously /auth/link/discord and /auth/link/line only accepted custom backend
+// JWT — Firebase ID tokens (from Google login) failed verify(token, JWT_SECRET)
+// → 401 "Unauthorized — login first". Edward 原話 2026-04-24 07:25:
+// 「discord 綁定後反而變成訪客 / line 綁定依然為 Unauthorized」。
+//
+// 修復後：parseBearerUserId 試自訂 JWT，失敗 fallback 到 Firebase Admin
+// verifyIdToken，然後 ensureAccountByOAuthEmail(google, email) 拿 userId。
+
+describe('GET /auth/link/{discord,line} — Firebase ID token acceptance (bind-auth fix)', () => {
+  beforeEach(async () => {
+    store = { auth_users: new Map(), password_reset_sessions: new Map(), email_verifications: new Map() };
+    const { verifyIdToken } = await import('../services/firebase');
+    const { createOAuthSession } = await import('../services/supabase');
+    (verifyIdToken as ReturnType<typeof vi.fn>).mockReset();
+    (createOAuthSession as ReturnType<typeof vi.fn>).mockReset().mockResolvedValue(undefined);
+  });
+
+  it('rejects when no token (401)', async () => {
+    const res = await request(app).get('/auth/link/discord');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/Unauthorized/);
+  });
+
+  it('accepts Firebase ID token and resolves to Supabase userId via email (Discord)', async () => {
+    const { verifyIdToken } = await import('../services/firebase');
+    (verifyIdToken as ReturnType<typeof vi.fn>).mockResolvedValue({
+      uid:   'firebase-uid-edward',
+      email: 'edward@example.com',
+      name:  'Edward',
+    });
+
+    // Looks like a JWT (3 dot-separated segments) so parseBearerUserId tries verify first → fails → falls to Firebase path.
+    const fakeFirebaseToken = 'eyJhbGc.eyJzdWI.signature';
+    const res = await request(app).get(`/auth/link/discord?token=${fakeFirebaseToken}`);
+
+    // 302 redirect to Discord OAuth — meaning bind path succeeded
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('discord.com/api/oauth2/authorize');
+
+    // Ensured an auth_users row exists for edward@example.com
+    expect(store.auth_users.size).toBe(1);
+    const row = Array.from(store.auth_users.values())[0] as Record<string, unknown>;
+    expect(row.primaryEmailLower).toBe('edward@example.com');
+    expect(row.firebase_uid).toBe('firebase-uid-edward');
+  });
+
+  it('accepts Firebase ID token (LINE bind)', async () => {
+    const { verifyIdToken } = await import('../services/firebase');
+    (verifyIdToken as ReturnType<typeof vi.fn>).mockResolvedValue({
+      uid:   'firebase-uid-edward',
+      email: 'edward@example.com',
+      name:  'Edward',
+    });
+    const fakeFirebaseToken = 'eyJhbGc.eyJzdWI.signature';
+    const res = await request(app).get(`/auth/link/line?token=${fakeFirebaseToken}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('access.line.me/oauth2');
+  });
+
+  it('rejects malformed Firebase token (401)', async () => {
+    const { verifyIdToken } = await import('../services/firebase');
+    (verifyIdToken as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('invalid signature'));
+    const res = await request(app).get('/auth/link/line?token=bad.token.here');
+    expect(res.status).toBe(401);
+  });
+
+  it('still accepts custom backend JWT (regression — guest)', async () => {
+    const { sign } = await import('jsonwebtoken');
+    const guestJwt = sign(
+      { sub: 'guest-uuid-123', displayName: 'Guest_001', provider: 'guest' },
+      process.env.JWT_SECRET!,
+      { expiresIn: '1h' },
+    );
+    const res = await request(app).get(`/auth/link/discord?token=${guestJwt}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('discord.com/api/oauth2/authorize');
+  });
+
+  it('still accepts custom backend JWT (regression — discord login)', async () => {
+    const { sign } = await import('jsonwebtoken');
+    const discordJwt = sign(
+      { sub: 'real-uuid-456', displayName: 'Edward', provider: 'discord' },
+      process.env.JWT_SECRET!,
+      { expiresIn: '1h' },
+    );
+    const res = await request(app).get(`/auth/link/line?token=${discordJwt}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('access.line.me/oauth2');
   });
 });

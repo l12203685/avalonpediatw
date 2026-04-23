@@ -225,7 +225,21 @@ interface BindIdentity {
   isGuest: boolean;
 }
 
-function parseBearerUserId(authHeader: string | undefined, queryToken?: string): BindIdentity | null {
+/**
+ * 解析綁定路徑（`/auth/link/*`）上的「目前使用者身份」。
+ *
+ * 兩條路徑都接受（2026-04-24 bind-auth fix）：
+ *   1. 自訂後端 JWT（Discord / LINE OAuth 或 `/auth/login` 發行）
+ *      — 直接驗 JWT_SECRET，`provider === 'guest'` → `isGuest: true`
+ *   2. Firebase ID Token（Google / Email 登入 Firebase popup 後拿到的）
+ *      — 經 Firebase Admin `verifyIdToken` 驗證，再用 decoded email 查 /
+ *        建站上 auth_users row，回傳真 userId，`isGuest: false`
+ *
+ * 之前只接自訂 JWT → Edward Google 登入後 `_storedToken` 是 Firebase ID
+ * token → `verify(token, JWT_SECRET)` 失敗 → 401 "Unauthorized — login
+ * first"。這支了的 path 一併修掉 LINE 與 Discord 的綁定 401。
+ */
+async function parseBearerUserId(authHeader: string | undefined, queryToken?: string): Promise<BindIdentity | null> {
   let token: string | null = null;
   if (authHeader?.startsWith('Bearer ')) {
     token = authHeader.slice(7);
@@ -233,12 +247,38 @@ function parseBearerUserId(authHeader: string | undefined, queryToken?: string):
     token = queryToken;
   }
   if (!token || token.split('.').length !== 3) return null;
+
+  // Path 1: 自訂後端 JWT
   try {
     const payload = verify(token, JWT_SECRET) as JwtPayload & { sub?: string; provider?: string };
-    if (!payload.sub) return null;
+    if (payload.sub) {
+      return {
+        userId:  payload.sub,
+        isGuest: payload.provider === 'guest',
+      };
+    }
+  } catch {
+    // 落到 Path 2 嘗試 Firebase
+  }
+
+  // Path 2: Firebase ID Token (Google / Email)
+  if (!isFirebaseAdminReady()) return null;
+  try {
+    const decoded = await verifyIdToken(token);
+    const email = decoded.email;
+    if (!email) return null;
+    const displayName = (decoded.name as string | undefined) ?? email.split('@')[0] ?? 'User';
+    const firebaseUid = decoded.uid || '';
+    const ensured = await ensureAccountByOAuthEmail({
+      provider:           'google',
+      providerExternalId: firebaseUid,
+      email,
+      displayName,
+    });
+    if (!ensured.ok || !ensured.data) return null;
     return {
-      userId:  payload.sub,
-      isGuest: payload.provider === 'guest',
+      userId:  ensured.data.account.userId,
+      isGuest: false,
     };
   } catch {
     return null;
@@ -666,7 +706,7 @@ router.get('/link/discord', async (req: Request, res: Response) => {
     return res.status(503).json({ error: 'Discord OAuth 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
-  const identity = parseBearerUserId(req.headers.authorization, queryToken);
+  const identity = await parseBearerUserId(req.headers.authorization, queryToken);
   if (!identity) {
     return res.status(401).json({ error: 'Unauthorized — login first' });
   }
@@ -688,7 +728,7 @@ router.get('/link/line', async (req: Request, res: Response) => {
     return res.status(503).json({ error: 'Line Login 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
-  const identity = parseBearerUserId(req.headers.authorization, queryToken);
+  const identity = await parseBearerUserId(req.headers.authorization, queryToken);
   if (!identity) {
     return res.status(401).json({ error: 'Unauthorized — login first' });
   }
