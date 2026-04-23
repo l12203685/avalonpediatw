@@ -15,6 +15,16 @@ export const LINE_CONFIG = {
     process.env.LINE_CHANNEL_SECRET ||
     '',
 
+  // Feature flag: gate the /command handling.
+  // Default is DISABLED (2026-04-23) — webhook keeps receiving events so the
+  // LINE console still sees the endpoint as active, but the bot stops replying
+  // to /help /create /join /status /vote /rules /roles until these features
+  // are production-ready. Set LINE_BOT_COMMANDS_ENABLED=true / 1 / yes / on
+  // to re-enable.
+  commandsEnabled: ['true', '1', 'yes', 'on'].includes(
+    (process.env.LINE_BOT_COMMANDS_ENABLED || '').trim().toLowerCase()
+  ),
+
   // LINE Notify OAuth credentials (for push notifications via LINE Notify API)
   notifyClientId:     process.env.LINE_NOTIFY_CLIENT_ID     || '',
   notifyClientSecret: process.env.LINE_NOTIFY_CLIENT_SECRET || '',
