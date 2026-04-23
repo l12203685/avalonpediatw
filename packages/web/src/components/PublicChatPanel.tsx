@@ -16,6 +16,24 @@ import { useTranslation } from 'react-i18next';
 import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 
+// 2026-04-23 Edward 指令：鎖頭提示從靜態文字改成可點 CTA，
+// 訪客點擊直接跳「系統設定 → 帳號綁定」區塊。模式與 SettingsPage
+// 的 settings-btn-rename-or-bind 一致。不同點：從 Home 切到 Settings
+// 是跨頁跳轉，SettingsPage 尚未 mount，單次 rAF 找不到 #settings-binding。
+// 這裡用輕量重試（最多 500ms），等 Settings 掛上再 scroll。
+function scrollToSettingsBinding(): void {
+  const deadline = Date.now() + 500;
+  const tick = (): void => {
+    const el = document.getElementById('settings-binding');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+    if (Date.now() < deadline) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
 interface LobbyChatMessage {
   id: string;
   playerId: string;
@@ -35,7 +53,7 @@ const MAX_LEN = 200;
 
 export default function PublicChatPanel(): JSX.Element {
   const { t } = useTranslation();
-  const { currentPlayer, addToast } = useGameStore();
+  const { currentPlayer, addToast, setGameState } = useGameStore();
   const [messages, setMessages] = useState<LobbyChatMessage[]>([]);
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -160,12 +178,25 @@ export default function PublicChatPanel(): JSX.Element {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input — guest shows a locked explainer instead of the input row */}
+      {/* Input — guest shows a clickable CTA that jumps to the binding section
+          in SettingsPage. Previously static text + Lock icon looked like a bug
+          because the explainer hinted at a resolution (register/sign-in) but
+          had no affordance. Now the whole row acts like a link. */}
       {isGuest ? (
-        <div className="flex items-center gap-2 px-3 py-2 border-t border-zinc-700 bg-black/30 text-xs text-zinc-400">
+        <button
+          type="button"
+          onClick={() => {
+            setGameState('settings');
+            scrollToSettingsBinding();
+          }}
+          title={t('home.lobbyChatGuestNoticeHover')}
+          aria-label={t('home.lobbyChatGuestNoticeHover')}
+          data-testid="public-chat-guest-cta"
+          className="flex items-center gap-2 px-3 py-2 border-t border-zinc-700 bg-black/30 text-xs text-zinc-400 hover:bg-blue-900/30 hover:text-blue-200 transition-colors text-left w-full cursor-pointer underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+        >
           <Lock size={12} />
           <span>{t('home.lobbyChatGuestNotice')}</span>
-        </div>
+        </button>
       ) : (
         <div className="flex gap-2 p-2 border-t border-zinc-700">
           <input

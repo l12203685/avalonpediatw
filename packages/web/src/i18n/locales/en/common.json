@@ -72,7 +72,8 @@
     "lobbyChatEmpty": "No messages yet — say hi",
     "lobbyChatInputPlaceholder": "Type a message…",
     "lobbyChatGuestPlaceholder": "Register to join the chat",
-    "lobbyChatGuestNotice": "Guests can read only — register or sign in to chat",
+    "lobbyChatGuestNotice": "Guests can read only — click to link an account",
+    "lobbyChatGuestNoticeHover": "Go to System Settings to link Google / Line / Discord",
     "lobbyChatSend": "Send",
     "lobbyChatErr": {
       "notAuth": "Sign in to chat",

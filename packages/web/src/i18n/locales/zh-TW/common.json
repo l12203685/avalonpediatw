@@ -72,7 +72,8 @@
     "lobbyChatEmpty": "還沒有訊息 — 來打個招呼吧",
     "lobbyChatInputPlaceholder": "輸入訊息…",
     "lobbyChatGuestPlaceholder": "註冊後即可發言",
-    "lobbyChatGuestNotice": "訪客唯讀 — 註冊或登入才能發言",
+    "lobbyChatGuestNotice": "訪客唯讀 — 點此綁帳號發言",
+    "lobbyChatGuestNoticeHover": "點此前往系統設定綁定 Google / Line / Discord 帳號",
     "lobbyChatSend": "送出",
     "lobbyChatErr": {
       "notAuth": "請先登入再發言",
