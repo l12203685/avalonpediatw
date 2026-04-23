@@ -90,6 +90,16 @@ export interface OAuthSession {
    * fix).
    */
   isGuest?: boolean;
+  /**
+   * OAuth flow mode. Default `undefined` = original login flow (callback mints
+   * a new user doc or reuses an existing one by provider externalId).
+   *
+   * `'quickLogin'` = 2026-04-23 Edward 要求的 OAuth 快速登入：callback 僅接受
+   * 「當前 provider email 已綁到某既有 auth_users row」的 case，找得到直接發
+   * JWT 直登；找不到 → 導回前端提示「請先以 email 登入後再綁定」，**禁止**建新
+   * 帳號（避免使用者誤以為 Google 登入會自動建立帳號後卻沒綁到 email-only 那邊）。
+   */
+  mode?: 'quickLogin';
 }
 
 type ProviderColumn = 'discord_id' | 'line_id' | 'firebase_uid';
@@ -553,6 +563,7 @@ export async function createOAuthSession(
   provider:   'discord' | 'line',
   linkUserId?: string,
   isGuest?:   boolean,
+  mode?:      'quickLogin',
 ): Promise<void> {
   const db = getFirestoreSafe();
   if (!db) return;
@@ -562,6 +573,7 @@ export async function createOAuthSession(
       expiresAt:  Date.now() + OAUTH_TTL_MS,
       linkUserId: linkUserId ?? null,
       isGuest:    isGuest === true,
+      mode:       mode ?? null,
       createdAt:  Date.now(),
     });
   } catch (err) {
@@ -596,6 +608,7 @@ export async function consumeOAuthSession(
         expiresAt?: number;
         linkUserId?: string | null;
         isGuest?: boolean;
+        mode?: 'quickLogin' | null;
       };
       if (data.provider !== provider) return null;
       if ((data.expiresAt ?? 0) < Date.now()) {
@@ -606,6 +619,7 @@ export async function consumeOAuthSession(
       return {
         linkUserId: data.linkUserId ?? null,
         isGuest:    data.isGuest === true,
+        mode:       data.mode === 'quickLogin' ? 'quickLogin' : undefined,
       } as OAuthSession;
     });
     return result;

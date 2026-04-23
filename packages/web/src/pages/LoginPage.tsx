@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { Loader, Eye, EyeOff, Mail, Lock } from 'lucide-react';
-import { loginOrRegister, extractOAuthErrorFromUrl } from '../services/auth';
+import {
+  loginOrRegister,
+  extractOAuthErrorFromUrl,
+  quickLoginWithDiscord,
+  quickLoginWithLine,
+  quickLoginWithGoogle,
+  hasFirebaseAuthConfigured,
+} from '../services/auth';
 import { useGameStore } from '../store/gameStore';
 import { initializeSocket } from '../services/socket';
 import BrandHeader from '../components/BrandHeader';
@@ -44,6 +51,23 @@ export default function LoginPage(): JSX.Element {
 
   const handleForgot = (): void => {
     setGameState('forgotPassword');
+  };
+
+  // OAuth 快速登入（2026-04-23 Edward）：登入頁綁 google/line/dc 直登入口。
+  const handleQuickDiscord = (): void => { quickLoginWithDiscord(); };
+  const handleQuickLine    = (): void => { quickLoginWithLine(); };
+  const handleQuickGoogle  = async (): Promise<void> => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await quickLoginWithGoogle();
+      await initializeSocket(result.token);
+      setGameState('home');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google 快速登入失敗');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -141,8 +165,63 @@ export default function LoginPage(): JSX.Element {
           </div>
         </div>
 
+        {/*
+          OAuth 快速登入區塊（2026-04-23 Edward）：帳號已綁過 Google/LINE/DC 的使用者
+          免打密碼，直接點對應按鈕即可登入；若該第三方對應的 email 尚未在站上綁定，
+          server 會回 provider_not_linked，錯誤區塊提示「先以 email 登入後再綁定」。
+        */}
+        <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-px bg-zinc-800" />
+            <span className="text-[11px] text-zinc-500 uppercase tracking-wider">
+              或使用第三方快速登入
+            </span>
+            <div className="flex-1 h-px bg-zinc-800" />
+          </div>
+          <p className="text-[11px] text-zinc-500 leading-relaxed">
+            這組 Google / LINE / Discord 的 email 必須先在站上以 email 註冊過並完成綁定，
+            否則會提示請先用 email 登入。
+          </p>
+          <div className="grid grid-cols-1 gap-2">
+            {/* Google */}
+            <button
+              type="button"
+              onClick={handleQuickGoogle}
+              disabled={loading || !hasFirebaseAuthConfigured()}
+              data-testid="login-btn-quick-google"
+              className="w-full bg-white hover:bg-zinc-100 disabled:opacity-40 text-black font-semibold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 border border-zinc-300"
+              title={hasFirebaseAuthConfigured() ? '' : '未設定 Firebase，Google 快登不可用'}
+            >
+              <span className="text-base">G</span>
+              <span>使用 Google 快速登入</span>
+            </button>
+            {/* LINE */}
+            <button
+              type="button"
+              onClick={handleQuickLine}
+              disabled={loading}
+              data-testid="login-btn-quick-line"
+              className="w-full bg-[#06C755] hover:bg-[#05b04b] disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              <span className="text-base">L</span>
+              <span>使用 LINE 快速登入</span>
+            </button>
+            {/* Discord */}
+            <button
+              type="button"
+              onClick={handleQuickDiscord}
+              disabled={loading}
+              data-testid="login-btn-quick-discord"
+              className="w-full bg-[#5865F2] hover:bg-[#4853e0] disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              <span className="text-base">D</span>
+              <span>使用 Discord 快速登入</span>
+            </button>
+          </div>
+        </div>
+
         <p className="text-center text-[11px] text-zinc-600 leading-relaxed">
-          綁定 Google / Discord / LINE 可在登入後到「系統設定」頁進行
+          若第三方快速登入失敗，請先以 email 登入後到「系統設定」頁綁定
         </p>
       </div>
     </div>

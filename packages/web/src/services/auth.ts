@@ -289,9 +289,18 @@ export function consumeLinkedProviderToken(): string | null {
 export function extractOAuthErrorFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search);
   const error  = params.get('auth_error');
+  const provider = params.get('provider');
   if (!error) return null;
   const cleanUrl = window.location.pathname + window.location.hash;
   window.history.replaceState({}, '', cleanUrl);
+  // 2026-04-23 OAuth 快速登入：provider 未綁到任何 email 帳號 → 明示提示「先用 email 登入」。
+  if (error === 'provider_not_linked') {
+    const label = provider === 'discord' ? 'Discord'
+                : provider === 'line'    ? 'LINE'
+                : provider === 'google'  ? 'Google'
+                : '這個第三方帳號';
+    return `${label} 尚未綁定過站上帳號，請先以 email 登入後再到「系統設定」綁定`;
+  }
   const messages: Record<string, string> = {
     discord_denied:  'Discord 登入已取消',
     discord_failed:  'Discord 登入失敗，請再試一次',
@@ -300,6 +309,51 @@ export function extractOAuthErrorFromUrl(): string | null {
     invalid_state:   '登入驗證失敗（CSRF），請重新嘗試',
   };
   return messages[error] || '登入失敗，請再試一次';
+}
+
+// ── OAuth Quick Login (2026-04-23 Edward) ────────────────────
+//
+// Edward 原話：「能不能登入頁面綁 google/line/dc => 有的話就直接登入」。
+//
+// Discord / LINE：直接把整頁導到 /auth/oauth/login/<provider>，server 的
+// callback 會處理「email 已綁 → JWT」/「email 沒綁 → auth_error」分支，
+// 回到前端時 `extractOAuthTokenFromUrl` / `extractOAuthErrorFromUrl` 會接。
+//
+// Google：Firebase popup 拿 idToken → POST /auth/oauth/login/google → 200 時
+// 拿到站上 JWT；401 時顯示 `provider_not_linked` 訊息。
+
+export function quickLoginWithDiscord(): void {
+  window.location.href = `${SERVER_URL}/auth/oauth/login/discord`;
+}
+
+export function quickLoginWithLine(): void {
+  window.location.href = `${SERVER_URL}/auth/oauth/login/line`;
+}
+
+/**
+ * Google 快速登入：Firebase popup → ID token → server 查 email → 200 直登。
+ *
+ * 沒綁（後端 401） → 丟 AuthApiException（code='provider_not_linked'），
+ * caller 轉成使用者看得懂的訊息。
+ */
+export async function quickLoginWithGoogle(): Promise<AuthResult> {
+  // Step 1: Firebase popup 拿 Google ID token
+  const { signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
+  const auth = await getFirebaseAuth();
+  const popupResult = await signInWithPopup(auth, new GoogleAuthProvider());
+  const idToken = await popupResult.user.getIdToken();
+
+  // Step 2: server 驗 idToken + 查 email 是否已綁站上 auth_users
+  const res = await fetch(`${SERVER_URL}/auth/oauth/login/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    body: JSON.stringify({ idToken }),
+  });
+  if (!res.ok) {
+    throw await parseAuthError(res, 'Google 快速登入失敗');
+  }
+  const data = await res.json() as AuthResult;
+  return data;
 }
 
 export async function logout(): Promise<void> {
