@@ -1,6 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Eye, Calendar } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { WikiArticle, WIKI_ARTICLES, WIKI_CATEGORIES } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
 import type { WikiArticleApi } from '../services/api';
@@ -27,21 +30,98 @@ interface WikiContentProps {
   selectedCategory?: string;
 }
 
-function renderArticleBody(content: string): string {
-  return content
-    .split('\n')
-    .map((line) => {
-      if (line.startsWith('# ')) return `<h1 class="text-lg font-bold text-white mt-4 mb-2">${line.substring(2)}</h1>`;
-      if (line.startsWith('## ')) return `<h2 class="text-base font-bold text-yellow-400 mt-3 mb-2">${line.substring(3)}</h2>`;
-      if (line.startsWith('### ')) return `<h3 class="text-sm font-semibold text-gray-300 mt-2 mb-1">${line.substring(4)}</h3>`;
-      if (line.startsWith('- ')) return `<li class="ml-4">${line.substring(2)}</li>`;
-      if (line.startsWith('❌') || line.startsWith('✅')) return `<div class="flex items-start gap-2">${line}</div>`;
-      if (line.startsWith('**') && line.endsWith('**')) return `<strong class="text-white">${line.substring(2, line.length - 2)}</strong>`;
-      if (line.trim()) return `<p>${line}</p>`;
-      return '';
-    })
-    .join('');
-}
+// Markdown renderer — uses react-markdown + remark-gfm for GitHub-Flavored Markdown
+// (tables, strikethrough, task lists, autolinks). Styled via Tailwind utility classes
+// directly on each node to avoid dependency on @tailwindcss/typography plugin.
+const markdownComponents = {
+  h1: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <h1 className="text-xl font-bold text-white mt-6 mb-3">{children}</h1>
+  ),
+  h2: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <h2 className="text-lg font-bold text-yellow-400 mt-5 mb-2">{children}</h2>
+  ),
+  h3: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <h3 className="text-base font-semibold text-gray-200 mt-4 mb-2">{children}</h3>
+  ),
+  h4: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <h4 className="text-sm font-semibold text-gray-300 mt-3 mb-1">{children}</h4>
+  ),
+  p: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <p className="text-gray-200 leading-relaxed mb-3">{children}</p>
+  ),
+  ul: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <ul className="list-disc list-outside ml-6 space-y-1 mb-3 text-gray-200">{children}</ul>
+  ),
+  ol: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <ol className="list-decimal list-outside ml-6 space-y-1 mb-3 text-gray-200">{children}</ol>
+  ),
+  li: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <li className="leading-relaxed">{children}</li>
+  ),
+  strong: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <strong className="font-bold text-white">{children}</strong>
+  ),
+  em: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <em className="italic text-gray-100">{children}</em>
+  ),
+  a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-yellow-400 underline hover:text-yellow-300"
+    >
+      {children}
+    </a>
+  ),
+  blockquote: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <blockquote className="border-l-4 border-yellow-500 bg-yellow-500/5 pl-4 py-2 my-3 text-gray-300 italic">
+      {children}
+    </blockquote>
+  ),
+  code: ({ inline, children }: { inline?: boolean; children?: ReactNode }): JSX.Element =>
+    inline ? (
+      <code className="bg-gray-800 text-yellow-300 px-1.5 py-0.5 rounded text-xs font-mono">
+        {children}
+      </code>
+    ) : (
+      <code className="font-mono">{children}</code>
+    ),
+  pre: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <pre className="bg-gray-900 border border-gray-700 rounded-md p-3 overflow-x-auto my-3 text-xs text-gray-200">
+      {children}
+    </pre>
+  ),
+  hr: (): JSX.Element => <hr className="border-gray-700 my-6" />,
+  // Table renderers — the main fix. Wraps in overflow container for narrow modals.
+  table: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <div className="overflow-x-auto my-4">
+      <table className="w-full border-collapse border border-gray-700 text-sm">
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <thead className="bg-avalon-dark/60">{children}</thead>
+  ),
+  tbody: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <tbody className="divide-y divide-gray-700">{children}</tbody>
+  ),
+  tr: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <tr className="hover:bg-avalon-card/40 transition-colors">{children}</tr>
+  ),
+  th: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <th className="border border-gray-700 px-3 py-2 text-left font-semibold text-yellow-400 bg-avalon-dark/40">
+      {children}
+    </th>
+  ),
+  td: ({ children }: { children?: ReactNode }): JSX.Element => (
+    <td className="border border-gray-700 px-3 py-2 text-gray-200 align-top">{children}</td>
+  ),
+  img: ({ src, alt }: { src?: string; alt?: string }): JSX.Element => (
+    <img src={src} alt={alt ?? ''} className="max-w-full rounded-md my-3 border border-gray-700" />
+  ),
+};
 
 export default function WikiContent({ selectedCategory }: WikiContentProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
@@ -282,11 +362,13 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                   <span>{selectedArticle.author}</span>
                 </div>
 
-                <div className="prose prose-invert max-w-none text-gray-200">
-                  <div
-                    className="space-y-4 text-sm leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: renderArticleBody(selectedArticle.content) }}
-                  />
+                <div className="max-w-none text-sm leading-relaxed">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownComponents}
+                  >
+                    {selectedArticle.content}
+                  </ReactMarkdown>
                 </div>
 
                 {/* Role stats card for character articles */}
