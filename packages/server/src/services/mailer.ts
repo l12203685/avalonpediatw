@@ -52,11 +52,27 @@ let cachedTransport: Transport | null = null;
 let cachedEnvSig:    string            = '';
 let testOverride:    Transport | null  = null;
 
+/**
+ * Read the SMTP login user. Accept both `GMAIL_SMTP_USER` (canonical in docs)
+ * and `GMAIL_USER` (shorter alias already present in `.env.production`).
+ */
+function smtpUserEnv(): string {
+  return process.env.GMAIL_SMTP_USER || process.env.GMAIL_USER || '';
+}
+
+/**
+ * Read the visible From address. Accept both `MAIL_FROM` (canonical in docs)
+ * and `GMAIL_FROM` (shorter alias already present in `.env.production`).
+ */
+function mailFromEnv(): string {
+  return process.env.MAIL_FROM || process.env.GMAIL_FROM || '';
+}
+
 function currentEnvSignature(): string {
   return [
-    process.env.GMAIL_SMTP_USER || '',
+    smtpUserEnv(),
     process.env.GMAIL_APP_PASSWORD ? 'set' : '',
-    process.env.MAIL_FROM || '',
+    mailFromEnv(),
   ].join('|');
 }
 
@@ -74,7 +90,7 @@ async function resolveTransport(): Promise<Transport | null> {
   const sig = currentEnvSignature();
   if (cachedTransport && cachedEnvSig === sig) return cachedTransport;
 
-  const smtpUser = process.env.GMAIL_SMTP_USER || FROM_ADDRESS_DEFAULT;
+  const smtpUser = smtpUserEnv() || FROM_ADDRESS_DEFAULT;
   const smtpPass = process.env.GMAIL_APP_PASSWORD;
   if (!smtpPass) {
     cachedTransport = null;
@@ -82,20 +98,18 @@ async function resolveTransport(): Promise<Transport | null> {
     return null;
   }
 
-  // Dynamic import so the server can boot without `nodemailer` in the
-  // dependency tree. When the package is missing we degrade to "mail disabled".
+  // Dynamic import keeps the boot path lazy — if something goes wrong loading
+  // the package (e.g. broken install), we degrade to "mail disabled" instead
+  // of crashing the whole server. In normal production nodemailer is a first-
+  // class dependency and this import resolves immediately.
   let nodemailer: any;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    // @ts-expect-error — nodemailer is an optional dependency; dynamic import
-    //   + try/catch gracefully degrades when the package is not installed
-    //   (e.g. dev sandboxes without mail credentials).
     nodemailer = await import('nodemailer');
   } catch {
     cachedTransport = null;
     cachedEnvSig    = sig;
     // eslint-disable-next-line no-console
-    console.warn('[mailer] nodemailer not installed — mail sending disabled. `pnpm add nodemailer` on server to enable.');
+    console.warn('[mailer] nodemailer import failed — mail sending disabled. Run `pnpm install` in packages/server to restore.');
     return null;
   }
 
@@ -122,7 +136,7 @@ async function resolveTransport(): Promise<Transport | null> {
 }
 
 function fromHeader(): string {
-  const addr = process.env.MAIL_FROM || FROM_ADDRESS_DEFAULT;
+  const addr = mailFromEnv() || FROM_ADDRESS_DEFAULT;
   return `${FROM_NAME_DEFAULT} <${addr}>`;
 }
 
