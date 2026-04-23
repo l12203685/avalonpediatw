@@ -353,3 +353,254 @@ export async function getIdToken(): Promise<string> {
   if (!user) throw new Error('No user signed in');
   return await user.getIdToken(true);
 }
+
+// ── Phase B (2026-04-23) 新登入架構：帳號 + 密碼 + 信箱 ───────────
+//
+// Phase A 後端已就緒：/auth/register /auth/login /auth/forgot-password
+// /auth/reset-password，以及 authed 的 PATCH /api/user/password 跟
+// POST /api/user/claim-history。此段是對應的前端 helper：把 fetch 包成
+// type-safe 函式、把 server error code 原封不動 surface 上去讓 UI i18n
+// 對應訊息、JWT 交給呼叫端決定怎麼存（通常 → initializeSocket → socket.ts
+// 的 _storedToken 就會持有）。
+
+export interface AuthenticatedUser {
+  uid:            string;
+  accountName:    string;
+  displayName:    string;
+  provider:       'password' | 'discord' | 'line' | 'google';
+  primaryEmail?:  string;
+  emailsVerified?: string[];
+  /**
+   * Server 回傳 201（註冊）時 UI 要跳到 RegisterCompletePage 強制補 profile；
+   * 200（登入）時直接進 home。這個欄位由 client 依 HTTP status 填，不是 server
+   * 欄位。
+   */
+  isFirstLogin?:  boolean;
+}
+
+export interface AuthApiError {
+  error: string;
+  code?: string;
+}
+
+export class AuthApiException extends Error {
+  public code?: string;
+  public status: number;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'AuthApiException';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function parseAuthError(res: Response, fallback: string): Promise<AuthApiException> {
+  let body: AuthApiError = { error: fallback };
+  try {
+    body = await res.json() as AuthApiError;
+  } catch {
+    // non-JSON body (e.g. 502 proxy error) — stick with fallback
+  }
+  return new AuthApiException(body.error || fallback, res.status, body.code);
+}
+
+export interface RegisterPasswordInput {
+  accountName:  string;
+  password:     string;
+  primaryEmail: string;
+}
+
+export interface AuthResult {
+  token: string;
+  user:  AuthenticatedUser;
+}
+
+/**
+ * 帳號 + 密碼註冊（首次即註冊，帳號 = server mint 的 uuid）。
+ * 成功回 201；isFirstLogin=true 讓 UI 跳到 RegisterCompletePage 補資料 / 綁社群。
+ */
+export async function registerPassword(input: RegisterPasswordInput): Promise<AuthResult> {
+  const res = await fetch(`${SERVER_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await parseAuthError(res, '註冊失敗，請稍後再試');
+  }
+  const data = await res.json() as AuthResult;
+  return {
+    token: data.token,
+    user:  { ...data.user, isFirstLogin: true },
+  };
+}
+
+/**
+ * 帳號 + 密碼登入。失敗統一回「帳號或密碼錯誤」（opaque，避免 account enumeration）。
+ */
+export async function loginPassword(
+  accountName: string,
+  password:    string,
+): Promise<AuthResult> {
+  const res = await fetch(`${SERVER_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    body: JSON.stringify({ accountName, password }),
+  });
+  if (!res.ok) {
+    throw await parseAuthError(res, '帳號或密碼錯誤');
+  }
+  const data = await res.json() as AuthResult;
+  return {
+    token: data.token,
+    user:  { ...data.user, isFirstLogin: false },
+  };
+}
+
+/**
+ * 忘記密碼：帳號 + 主要信箱。server 永遠回 202（不論命中與否），成功才會寄信。
+ * 回傳 `ttlMs` 讓 UI 可以顯示「重設連結 30 分鐘內有效」。
+ */
+export async function forgotPassword(
+  accountName:  string,
+  primaryEmail: string,
+): Promise<{ ok: true; ttlMs?: number }> {
+  const res = await fetch(`${SERVER_URL}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    body: JSON.stringify({ accountName, primaryEmail }),
+  });
+  if (!res.ok && res.status !== 202) {
+    throw await parseAuthError(res, '送出失敗，請稍後再試');
+  }
+  const data = await res.json().catch(() => ({}));
+  return { ok: true, ttlMs: (data as { ttl_ms?: number }).ttl_ms };
+}
+
+/**
+ * 用 email 連結裡的 token 重設密碼。成功後不自動登入 — 讓使用者在 LoginPage
+ * 重新輸入新密碼，確認記得。
+ */
+export async function resetPassword(
+  token:       string,
+  newPassword: string,
+): Promise<{ ok: true; userId: string }> {
+  const res = await fetch(`${SERVER_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    body: JSON.stringify({ token, newPassword }),
+  });
+  if (!res.ok) {
+    throw await parseAuthError(res, '重設失敗，連結可能已過期');
+  }
+  const data = await res.json() as { ok: boolean; userId: string };
+  return { ok: true, userId: data.userId };
+}
+
+/**
+ * 已登入情況下改密碼。token 是當前 session JWT。
+ */
+export async function changePassword(
+  sessionToken: string,
+  oldPassword:  string,
+  newPassword:  string,
+): Promise<{ ok: true }> {
+  const res = await fetch(`${SERVER_URL}/api/user/password`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization:  `Bearer ${sessionToken}`,
+      ...NGROK_SKIP_HEADER,
+    },
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
+  if (!res.ok) {
+    throw await parseAuthError(res, '改密碼失敗，請稍後再試');
+  }
+  return { ok: true };
+}
+
+/**
+ * 新帳號 claim 舊 uuid 的戰績。三件式驗證：舊 uuid + 舊 email + 舊密碼
+ * （Edward 原話「uuid + email + 密碼 3 件」）。成功後 server 把兩個 user row
+ * 合併，舊 uuid 刪除。
+ */
+export async function claimHistory(
+  sessionToken: string,
+  uuid:         string,
+  email:        string,
+  password:     string,
+): Promise<{ ok: true; claimedUuid: string }> {
+  const res = await fetch(`${SERVER_URL}/api/user/claim-history`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization:  `Bearer ${sessionToken}`,
+      ...NGROK_SKIP_HEADER,
+    },
+    body: JSON.stringify({ uuid, email, password }),
+  });
+  if (!res.ok) {
+    throw await parseAuthError(res, '找不到符合的舊帳號');
+  }
+  const data = await res.json() as { ok: boolean; claimedUuid: string };
+  return { ok: true, claimedUuid: data.claimedUuid };
+}
+
+// ── Client-side password strength（不拉 zxcvbn，輕量 heuristic）───
+//
+// Phase A server 端已強制最小規則：8-256 字元、≥1 英文字母、≥1 數字。
+// UI 額外給 0-4 的強度分 + 提示，方便使用者決定要不要再加長 / 加符號。
+// 算法刻意保持單檔 <50 行 + zero dep：長度、字元多樣性（小寫/大寫/數字/符號）
+// 各計 1 分，超過 12 字再加 1 分。夠直白，也跟 Edward「zxcvbn 強度提示」文
+// 意對齊 — 不是要 100% 相容 zxcvbn，是要讓使用者看得懂現在強度。
+
+export interface PasswordStrength {
+  /** 0 (最弱) ~ 4 (最強) — 直接對應 UI 顏色條 5 格 */
+  score:  0 | 1 | 2 | 3 | 4;
+  /** i18n key 後綴，UI 端 `auth.pwStrength.${label}` 查對應字串 */
+  label:  'empty' | 'weak' | 'fair' | 'good' | 'strong' | 'excellent';
+  /** 提示玩家怎麼加強（e.g.「再加幾個字」、「加個大寫」）— 直接顯示給使用者 */
+  hint?:  string;
+}
+
+export function estimatePasswordStrength(password: string): PasswordStrength {
+  if (!password) return { score: 0, label: 'empty', hint: '' };
+
+  let score = 0;
+  const hints: string[] = [];
+
+  // 長度是最大一塊。12 字以上幾乎一定夠 — 大多數線上資料庫洩漏密碼 <10 字。
+  if (password.length >= 8)  score += 1; else hints.push('至少 8 字元');
+  if (password.length >= 12) score += 1; else if (password.length >= 8) hints.push('建議 12 字以上更安全');
+
+  // 字元多樣性
+  const hasLower  = /[a-z]/.test(password);
+  const hasUpper  = /[A-Z]/.test(password);
+  const hasDigit  = /\d/.test(password);
+  const hasSymbol = /[^A-Za-z0-9]/.test(password);
+
+  if (hasLower && hasUpper) score += 1;
+  else if (!hasLower && !hasUpper) hints.push('需要至少一個英文字母');
+
+  if (hasDigit) score += 1;
+  else hints.push('加個數字');
+
+  if (hasSymbol) score += 1;
+  else if (score >= 2) hints.push('加個符號會更強');
+
+  // clamp 到 0-4
+  const finalScore = Math.min(4, Math.max(0, score)) as 0 | 1 | 2 | 3 | 4;
+  const labels: PasswordStrength['label'][] = ['weak', 'weak', 'fair', 'good', 'strong'];
+  // 超滿分 (全有 + >=12) 給 excellent
+  const label: PasswordStrength['label'] =
+    password.length >= 12 && hasLower && hasUpper && hasDigit && hasSymbol
+      ? 'excellent'
+      : labels[finalScore];
+
+  return {
+    score: finalScore,
+    label,
+    hint:  hints[0],
+  };
+}

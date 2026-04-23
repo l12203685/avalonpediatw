@@ -16,6 +16,9 @@ import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
 import LobbyPage from './pages/LobbyPage';
 import LoginPage from './pages/LoginPage';
+import RegisterCompletePage from './pages/RegisterCompletePage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import WikiPage from './pages/WikiPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
@@ -74,6 +77,19 @@ function App(): JSX.Element {
   }, []);
 
   useEffect(() => {
+    // Phase B 新登入架構 (2026-04-23)：email 寄出的重設密碼連結格式為
+    // `${FRONTEND_URL}/reset-password?token=xxxx`。SPA 本身沒 router，我們靠
+    // window.location.pathname 判斷是否從該連結進入，是就把 gameState 切到
+    // resetPassword；ResetPasswordPage 會從 search params 讀 token。Landing
+    // 完成後把 pathname 清成 `/` 避免 reload 把 user 又打回同頁。
+    if (window.location.pathname === '/reset-password') {
+      const { setGameState } = useGameStore.getState();
+      setGameState('resetPassword');
+      // 保留 search（token）讓 ResetPasswordPage 讀，但把 path 清掉
+      // ResetPasswordPage mount 後會自己 replaceState 清 query。
+      window.history.replaceState({}, '', '/' + window.location.search + window.location.hash);
+    }
+
     // 處理 Discord / Line OAuth callback（URL 帶有 ?oauth_token=...）
     //
     // 2026-04-23 bind-name-sync (重建 orphan 01785fa8)：若 URL 帶 `?link_merged=1`
@@ -212,7 +228,12 @@ function App(): JSX.Element {
       </AnimatePresence>
 
       {!isAuthenticated && !currentPlayer ? (
-        <LoginPage />
+        // Phase B 新登入架構 (2026-04-23)：登入前也要能到註冊 / 忘密 / 重設密碼三頁
+        // 這三頁都不 require 已登入狀態，reset-password 甚至走 email 深連結進入
+        gameState === 'registerComplete' ? <RegisterCompletePage />
+        : gameState === 'forgotPassword' ? <ForgotPasswordPage />
+        : gameState === 'resetPassword'  ? <ResetPasswordPage />
+        : <LoginPage />
       ) : (
         <>
           {gameState === 'home' && <HomePage />}
@@ -234,6 +255,11 @@ function App(): JSX.Element {
           {gameState === 'adminAdmins' && <AdminAdminsPage />}
           {gameState === 'adminElo' && <AdminEloPage />}
           {gameState === 'help' && <HelpPage />}
+          {/* Phase B 新登入架構：已登入也要能回到這三頁（e.g. 註冊完後仍在 registerComplete、
+              或已登入狀態下使用者想從 settings 跳到 resetPassword 改密碼 — 目前走 settings 不走這條） */}
+          {gameState === 'registerComplete' && <RegisterCompletePage />}
+          {gameState === 'forgotPassword'   && <ForgotPasswordPage />}
+          {gameState === 'resetPassword'    && <ResetPasswordPage />}
         </>
       )}
       <ToastContainer />

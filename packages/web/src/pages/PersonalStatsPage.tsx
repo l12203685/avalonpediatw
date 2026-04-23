@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Users, Swords, History, Loader, AlertCircle, Copy, Check, Link2 } from 'lucide-react';
+import { ArrowLeft, Users, Swords, History, Loader, AlertCircle, Copy, Check, Link2, UserCircle, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { getStoredToken } from '../services/socket';
 import {
   fetchFriends, fetchPairStatsBatch, fetchMyTimeline, mergeAccountByUuid,
   FriendEntry, PairStats, TimelineEntry,
 } from '../services/api';
+import { claimHistory } from '../services/auth';
 
 /**
  * #98 IA 瘦身版 (2026-04-23)
@@ -45,6 +46,17 @@ export default function PersonalStatsPage(): JSX.Element {
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
 
+  // Phase B (2026-04-23 新登入架構)：歷史戰績認領 — uuid + email + 密碼 3 件
+  // 不同於上面 mergeAccountByUuid（admin 級 1 件合併），claimHistory 要 3 件全
+  // 正確才放行，玩家自己就能安全認領 Phase A 時期的舊帳號。
+  const [claimExpanded, setClaimExpanded] = useState(false);
+  const [claimUuid,     setClaimUuid]     = useState('');
+  const [claimEmail,    setClaimEmail]    = useState('');
+  const [claimPassword, setClaimPassword] = useState('');
+  const [claimShowPw,   setClaimShowPw]   = useState(false);
+  const [claimBusy,     setClaimBusy]     = useState(false);
+  const [claimError,    setClaimError]    = useState<string | null>(null);
+
   const handleCopyUuid = async (): Promise<void> => {
     if (!currentPlayer?.id) return;
     try {
@@ -60,6 +72,41 @@ export default function PersonalStatsPage(): JSX.Element {
       document.body.removeChild(ta);
       setCopiedUuid(true);
       setTimeout(() => setCopiedUuid(false), 1500);
+    }
+  };
+
+  const handleClaimHistory = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token) return;
+    const uuid = claimUuid.trim();
+    const email = claimEmail.trim();
+    if (!uuid || !email || !claimPassword) {
+      setClaimError(t('stats.claimAllRequired', { defaultValue: 'UUID、信箱、密碼三項必填' }));
+      return;
+    }
+    if (uuid === currentPlayer?.id) {
+      setClaimError(t('stats.mergeUuidSelf', { defaultValue: '不能把自己合併到自己' }));
+      return;
+    }
+    setClaimBusy(true);
+    setClaimError(null);
+    try {
+      await claimHistory(token, uuid, email, claimPassword);
+      addToast(t('stats.claimSuccess', { defaultValue: '歷史戰績認領完成' }), 'success');
+      setClaimExpanded(false);
+      setClaimUuid(''); setClaimEmail(''); setClaimPassword('');
+      // 重新載入 timeline
+      setTimelineLoading(true);
+      try {
+        const fresh = await fetchMyTimeline(token, 50);
+        setTimeline(fresh);
+      } finally {
+        setTimelineLoading(false);
+      }
+    } catch (err) {
+      setClaimError(err instanceof Error ? err.message : t('stats.claimFailed', { defaultValue: '認領失敗' }));
+    } finally {
+      setClaimBusy(false);
     }
   };
 
@@ -196,6 +243,97 @@ export default function PersonalStatsPage(): JSX.Element {
                       : t('settings.copy', { defaultValue: '複製' })}
                   </button>
                 </div>
+
+                {/* Phase B (2026-04-23)：歷史戰績認領 — uuid + email + 密碼 3 件 */}
+                {!claimExpanded ? (
+                  <button
+                    type="button"
+                    onClick={() => setClaimExpanded(true)}
+                    data-testid="personal-stats-btn-claim-history"
+                    className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-800/50 border border-amber-700/60 text-amber-200 hover:text-white transition-colors"
+                  >
+                    <Link2 size={12} />
+                    {t('stats.claimHistoryBtn', { defaultValue: '歷史戰績認領' })}
+                  </button>
+                ) : (
+                  <div className="space-y-2 bg-zinc-950/40 border border-amber-700/40 rounded-lg p-3">
+                    <p className="text-[11px] text-zinc-400">
+                      {t('stats.claimHistoryHint', {
+                        defaultValue: '輸入舊帳號的 UUID + 主要信箱 + 密碼，三項全對才能併入戰績/徽章/好友',
+                      })}
+                    </p>
+                    <div className="relative">
+                      <UserCircle size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                      <input
+                        type="text"
+                        value={claimUuid}
+                        onChange={e => { setClaimUuid(e.target.value); if (claimError) setClaimError(null); }}
+                        placeholder={t('stats.mergeUuidPlaceholder', { defaultValue: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' })}
+                        data-testid="personal-stats-input-claim-uuid"
+                        maxLength={128}
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-7 pr-3 py-2 text-white placeholder-zinc-600 font-mono text-xs focus:outline-none focus:border-white"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Mail size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                      <input
+                        type="email"
+                        value={claimEmail}
+                        onChange={e => { setClaimEmail(e.target.value); if (claimError) setClaimError(null); }}
+                        placeholder={t('stats.claimEmailPlaceholder', { defaultValue: '舊帳號的主要信箱' })}
+                        data-testid="personal-stats-input-claim-email"
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-7 pr-3 py-2 text-white placeholder-zinc-600 text-xs focus:outline-none focus:border-white"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Lock size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                      <input
+                        type={claimShowPw ? 'text' : 'password'}
+                        value={claimPassword}
+                        onChange={e => { setClaimPassword(e.target.value); if (claimError) setClaimError(null); }}
+                        placeholder={t('stats.claimPasswordPlaceholder', { defaultValue: '舊帳號的密碼' })}
+                        data-testid="personal-stats-input-claim-password"
+                        autoComplete="current-password"
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-7 pr-8 py-2 text-white placeholder-zinc-600 text-xs focus:outline-none focus:border-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setClaimShowPw(v => !v)}
+                        aria-label={claimShowPw ? '隱藏' : '顯示'}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                      >
+                        {claimShowPw ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                    </div>
+                    {claimError && (
+                      <p className="text-xs text-red-400" data-testid="personal-stats-claim-error">{claimError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleClaimHistory}
+                        disabled={claimBusy}
+                        data-testid="personal-stats-btn-confirm-claim"
+                        className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold py-1.5 px-3 rounded-lg text-sm transition-colors"
+                      >
+                        {claimBusy && <Loader size={14} className="animate-spin" />}
+                        {t('stats.claimConfirm', { defaultValue: '認領' })}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClaimExpanded(false);
+                          setClaimUuid(''); setClaimEmail(''); setClaimPassword('');
+                          setClaimError(null);
+                        }}
+                        disabled={claimBusy}
+                        className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-1.5 px-3 rounded-lg text-sm border border-zinc-700 disabled:opacity-50 transition-colors"
+                      >
+                        {t('action.cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* 以 uuid 綁定歷史戰績 — collapsed 時只顯按鈕，expanded 時顯輸入表單 */}
                 {!mergeExpanded ? (

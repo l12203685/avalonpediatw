@@ -1,16 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   User,
   Link2,
+  Lock,
   Chrome,
   Loader,
   HelpCircle,
   Copy,
   Check,
   Unlink,
+  Mail,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import {
@@ -22,6 +26,8 @@ import {
   upgradeGuestToRegistered,
   getIdToken,
   stashLinkedProviderToken,
+  changePassword,
+  estimatePasswordStrength,
 } from '../services/auth';
 import { getStoredToken } from '../services/socket';
 import {
@@ -31,7 +37,7 @@ import {
   LinkProvider,
 } from '../services/api';
 
-type SectionId = 'basic' | 'binding';
+type SectionId = 'basic' | 'password' | 'email' | 'binding';
 
 interface SectionConfig {
   id: SectionId;
@@ -45,10 +51,16 @@ interface SectionConfig {
  *
  * 2026-04-23 Edward 指令：系統設定頁移除登出按鈕，預設不給登出。後端
  * /auth/logout endpoint 保留，未來 admin 用。
+ *
+ * Phase B (2026-04-23 新登入架構)：為 provider='password' 帳號加密碼修改 +
+ * 信箱管理兩個新區塊。社群登入 (discord/line/google) 帳號不會顯示密碼區塊
+ * — 他們沒 passwordHash 欄。
  */
 const SECTIONS: SectionConfig[] = [
-  { id: 'basic',   labelKey: 'settings.basic',   icon: User },
-  { id: 'binding', labelKey: 'settings.binding', icon: Link2 },
+  { id: 'basic',    labelKey: 'settings.basic',    icon: User },
+  { id: 'password', labelKey: 'settings.password', icon: Lock },
+  { id: 'email',    labelKey: 'settings.email',    icon: Mail },
+  { id: 'binding',  labelKey: 'settings.binding',  icon: Link2 },
 ];
 
 /**
@@ -84,6 +96,15 @@ export default function SettingsPage(): JSX.Element {
   const [upgrading, setUpgrading] = useState(false);
 
   const isGuest = isGuestPlayer(currentPlayer);
+  const isPasswordAccount = (currentPlayer as { provider?: string } | null)?.provider === 'password';
+
+  // Phase B: 改密碼 state（provider='password' only）
+  const [pwForm, setPwForm] = useState({ old: '', new: '', confirm: '' });
+  const [pwShow, setPwShow] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const pwStrength = useMemo(() => estimatePasswordStrength(pwForm.new), [pwForm.new]);
+  const pwConfirmMismatch = pwForm.confirm.length > 0 && pwForm.new !== pwForm.confirm;
 
   // 2026-04-23 Edward：已綁狀態顯示 + 解綁按鈕 + uuid 複製
   const [linked, setLinked] = useState<LinkedAccount[]>([]);
@@ -103,6 +124,28 @@ export default function SettingsPage(): JSX.Element {
       .catch(e => setLinkedErr(String((e as Error).message ?? e)))
       .finally(() => setLinkedLoading(false));
   }, [isGuest]);
+
+  const handleChangePassword = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token) { setPwError('未登入'); return; }
+    if (!pwForm.old) { setPwError('請輸入原密碼'); return; }
+    if (pwForm.new.length < 8) { setPwError('新密碼至少 8 字元'); return; }
+    if (!/[A-Za-z]/.test(pwForm.new)) { setPwError('新密碼需要至少一個英文字母'); return; }
+    if (!/\d/.test(pwForm.new)) { setPwError('新密碼需要至少一個數字'); return; }
+    if (pwForm.new !== pwForm.confirm) { setPwError('兩次輸入不一致'); return; }
+    if (pwForm.old === pwForm.new) { setPwError('新密碼不能跟原密碼相同'); return; }
+    setPwBusy(true);
+    setPwError('');
+    try {
+      await changePassword(token, pwForm.old, pwForm.new);
+      addToast(t('settings.pwChanged', { defaultValue: '密碼已更新' }), 'success');
+      setPwForm({ old: '', new: '', confirm: '' });
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : '改密碼失敗');
+    } finally {
+      setPwBusy(false);
+    }
+  };
 
   const handleUnlink = async (provider: LinkProvider): Promise<void> => {
     const token = getStoredToken();
@@ -391,6 +434,130 @@ export default function SettingsPage(): JSX.Element {
                     ) : (
                       <p className="text-zinc-500 text-xs">{t('settings.comingSoon')}</p>
                     )}
+                  </div>
+                )}
+
+                {section.id === 'password' && (
+                  <div className="text-sm space-y-3">
+                    {!isPasswordAccount ? (
+                      <p className="text-zinc-500 text-xs" data-testid="settings-password-unavailable">
+                        {t('settings.pwOnlyForPasswordAccount', {
+                          defaultValue: '僅密碼帳號可修改密碼。社群登入帳號請到對應平台更改。',
+                        })}
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-zinc-500 text-xs">
+                          {t('settings.pwHint', { defaultValue: '至少 8 字，含英文字母 + 數字' })}
+                        </p>
+                        {pwError && (
+                          <div className="bg-red-900/50 border border-red-600 rounded-lg p-2 text-red-200 text-xs" data-testid="settings-password-error">
+                            {pwError}
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <input
+                              type={pwShow ? 'text' : 'password'}
+                              autoComplete="current-password"
+                              placeholder={t('settings.pwOldPlaceholder', { defaultValue: '原密碼' })}
+                              value={pwForm.old}
+                              onChange={e => setPwForm(f => ({ ...f, old: e.target.value }))}
+                              data-testid="settings-input-pw-old"
+                              className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 pr-10 text-white placeholder-zinc-500 focus:outline-none focus:border-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setPwShow(v => !v)}
+                              aria-label={pwShow ? '隱藏密碼' : '顯示密碼'}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                            >
+                              {pwShow ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          </div>
+                          <input
+                            type={pwShow ? 'text' : 'password'}
+                            autoComplete="new-password"
+                            placeholder={t('settings.pwNewPlaceholder', { defaultValue: '新密碼' })}
+                            value={pwForm.new}
+                            onChange={e => setPwForm(f => ({ ...f, new: e.target.value }))}
+                            data-testid="settings-input-pw-new"
+                            className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-white"
+                          />
+                          {pwForm.new.length > 0 && (
+                            <div className="flex gap-1" data-testid="settings-pw-strength">
+                              {[0, 1, 2, 3, 4].map(i => (
+                                <div
+                                  key={i}
+                                  className={`h-1 flex-1 rounded ${
+                                    i < pwStrength.score
+                                      ? (['bg-red-500', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-emerald-500'])[pwStrength.score]
+                                      : 'bg-zinc-800'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          <input
+                            type={pwShow ? 'text' : 'password'}
+                            autoComplete="new-password"
+                            placeholder={t('settings.pwConfirmPlaceholder', { defaultValue: '再次輸入新密碼' })}
+                            value={pwForm.confirm}
+                            onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
+                            data-testid="settings-input-pw-confirm"
+                            className={`w-full bg-zinc-950 border rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:outline-none ${
+                              pwConfirmMismatch ? 'border-red-500' : 'border-zinc-700 focus:border-white'
+                            }`}
+                          />
+                          {pwConfirmMismatch && (
+                            <p className="text-[11px] text-red-400">兩次輸入不一致</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={handleChangePassword}
+                          disabled={pwBusy}
+                          data-testid="settings-btn-change-pw"
+                          className="inline-flex items-center gap-2 bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-semibold py-1.5 px-4 rounded-lg text-sm transition-colors"
+                        >
+                          {pwBusy && <Loader size={14} className="animate-spin" />}
+                          {t('settings.pwSubmit', { defaultValue: '更新密碼' })}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {section.id === 'email' && (
+                  <div className="text-sm space-y-3">
+                    <p className="text-zinc-500 text-xs">
+                      {t('settings.emailHint', { defaultValue: '主要信箱用於忘密重設與帳號通知' })}
+                    </p>
+                    {(() => {
+                      const primary = (currentPlayer as { primaryEmail?: string; email?: string } | null)?.primaryEmail
+                        ?? (currentPlayer as { primaryEmail?: string; email?: string } | null)?.email
+                        ?? null;
+                      return primary ? (
+                        <div className="flex items-center gap-2 bg-zinc-950/40 border border-zinc-800 rounded-lg px-3 py-2">
+                          <Mail size={14} className="text-zinc-400" />
+                          <code
+                            className="text-[11px] text-zinc-200 font-mono break-all"
+                            data-testid="settings-email-primary"
+                          >{primary}</code>
+                          <span className="ml-auto text-[10px] text-amber-400">
+                            {t('settings.primaryEmailLabel', { defaultValue: '主要' })}
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="text-zinc-500 text-xs" data-testid="settings-email-empty">
+                          {t('settings.noPrimaryEmail', { defaultValue: '尚未設定主要信箱' })}
+                        </p>
+                      );
+                    })()}
+                    <p className="text-[11px] text-zinc-600">
+                      {t('settings.emailManageSoon', {
+                        defaultValue: '新增 / 刪除 / 切換主要信箱功能即將開放',
+                      })}
+                    </p>
                   </div>
                 )}
 
