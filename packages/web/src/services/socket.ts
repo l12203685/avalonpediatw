@@ -43,7 +43,13 @@ export async function initializeSocket(token: string): Promise<void> {
   // polling; we also set it on `transportOptions.polling` for belt-and-braces.
   socket = io(SERVER_URL, {
     auth: { token },
-    transports: ['websocket', 'polling'],
+    // polling → websocket upgrade order. WS-first fails intermittently on
+    // ngrok free tier + iPhone Safari (Edward 2026-04-23 P0: 訪客 websocket
+    // error). Polling-first handshakes cleanly then upgrades when stable;
+    // if WS upgrade later fails, Socket.IO keeps the polling transport alive
+    // instead of emitting connect_error. Ref: socket.io-client v4 docs.
+    transports: ['polling', 'websocket'],
+    upgrade: true,
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
