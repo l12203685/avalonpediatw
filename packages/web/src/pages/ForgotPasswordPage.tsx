@@ -1,35 +1,34 @@
 import { useState } from 'react';
-import { Loader, Mail, UserCircle, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Loader, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { forgotPassword } from '../services/auth';
 import { useGameStore } from '../store/gameStore';
 import BrandHeader from '../components/BrandHeader';
 
 /**
- * 忘密頁（Phase B 新登入架構）：
+ * 忘密頁（Phase C email-only 架構）：
  *
- *   - 輸入「帳號 + 綁定的 email」（Edward 原話「忘密：帳號 + 綁定 email」）
+ *   - 單欄：信箱（email 就是帳號）
  *   - 送 /auth/forgot-password（server 永遠回 202；命中才寄信，避免 enumeration）
- *   - UI 永遠顯示「如果帳號存在，重設連結已寄到信箱」— 同樣不洩漏帳號是否存在
+ *   - UI 永遠顯示「若信箱有對應帳號，重設連結已寄出」
  */
 export default function ForgotPasswordPage(): JSX.Element {
   const { setGameState } = useGameStore();
 
-  const [accountName, setAccountName] = useState('');
-  const [email,       setEmail]       = useState('');
-  const [loading,     setLoading]     = useState(false);
-  const [error,       setError]       = useState('');
-  const [submitted,   setSubmitted]   = useState(false);
-  const [ttlMs,       setTtlMs]       = useState<number | undefined>(undefined);
+  const [email,     setEmail]     = useState('');
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [ttlMs,     setTtlMs]     = useState<number | undefined>(undefined);
 
   const handleSubmit = async (): Promise<void> => {
-    if (!accountName.trim() || !email.trim()) {
-      setError('帳號與信箱都必填');
+    if (!email.trim()) {
+      setError('請輸入信箱');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const result = await forgotPassword(accountName.trim(), email.trim());
+      const result = await forgotPassword(email.trim());
       setTtlMs(result.ttlMs);
       setSubmitted(true);
     } catch (err) {
@@ -40,7 +39,7 @@ export default function ForgotPasswordPage(): JSX.Element {
   };
 
   const handleBackToLogin = (): void => {
-    setGameState('home');  // App 判斷未登入 → LoginPage
+    setGameState('home');
   };
 
   return (
@@ -63,7 +62,7 @@ export default function ForgotPasswordPage(): JSX.Element {
           {!submitted ? (
             <>
               <p className="text-xs text-zinc-400">
-                輸入帳號與當初綁定的主要信箱，系統會寄重設連結到該信箱
+                輸入註冊時的信箱，系統會寄重設連結到該信箱
               </p>
 
               {error && (
@@ -73,25 +72,7 @@ export default function ForgotPasswordPage(): JSX.Element {
               )}
 
               <div className="space-y-1.5">
-                <label htmlFor="forgot-account" className="text-xs text-zinc-400 font-semibold">帳號</label>
-                <div className="relative">
-                  <UserCircle size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                  <input
-                    id="forgot-account"
-                    data-testid="forgot-input-account"
-                    type="text"
-                    autoComplete="username"
-                    placeholder="你的帳號"
-                    value={accountName}
-                    onChange={e => setAccountName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                    className="w-full bg-black border border-zinc-700 rounded-lg pl-9 pr-3 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:border-white"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label htmlFor="forgot-email" className="text-xs text-zinc-400 font-semibold">綁定的信箱</label>
+                <label htmlFor="forgot-email" className="text-xs text-zinc-400 font-semibold">信箱</label>
                 <div className="relative">
                   <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
                   <input
@@ -122,7 +103,7 @@ export default function ForgotPasswordPage(): JSX.Element {
             <div className="text-center space-y-4 py-3" data-testid="forgot-submitted">
               <CheckCircle2 size={48} className="mx-auto text-emerald-400" />
               <div className="space-y-1">
-                <p className="text-white font-semibold">若資料正確，重設連結已寄出</p>
+                <p className="text-white font-semibold">若信箱有對應帳號，重設連結已寄出</p>
                 <p className="text-xs text-zinc-400">
                   請到信箱收信。連結{ttlMs ? ` ${Math.round(ttlMs / 60000)} 分鐘` : ' 30 分鐘'}內有效
                 </p>

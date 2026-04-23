@@ -1,41 +1,26 @@
 /**
- * Phase A new-login account store — account + password + email columns on
- * top of `auth_users` (which the Ticket #42 rewrite already uses for OAuth
- * binding).
+ * Phase C simplified auth store (2026-04-23 Edward 原話「帳號 = email，註冊的時候設定
+ * 新密碼，不用再特別有個建立新帳號的頁面；直接在帳號登入那邊就備註 登入 or 註冊；
+ * 不存在的 email 就等同註冊，存在的 email 就是登入」)。
  *
- * Why a separate file:
- *   `firestoreAccounts.ts` is the multi-account-binding surface (OAuth,
- *   merge/absorb). This module owns the account-name/password/email columns
- *   added in Phase A. Keeping them apart lets `auth.ts` import only what it
- *   needs and keeps file sizes <800 lines (see CLAUDE.md coding-style).
+ * 本檔責任：所有 auth_users 列的 email / password / session 讀寫，以 email 作為
+ * 單一帳號識別。accountName 欄位仍保留在 row 上當 display 預設值（email local-part），
+ * 但不再用於登入、查詢或唯一性檢查 — 全部走 emailsLower。
  *
- * Firestore additions to `auth_users/{userId}`:
- *   .accountName            string   canonical display (e.g. "Edward_Lin")
- *   .accountNameLower       string   lowercased for uniqueness query
- *   .passwordHash           string   scrypt$... (see services/passwordHash.ts)
- *   .emails                 string[] all emails the user has added
- *   .emailsLower            string[] lowercased mirror for uniqueness query
- *   .primaryEmail           string   the main email (for reset flow)
- *   .primaryEmailLower      string   lowercased mirror
- *   .emailsVerified         string[] subset of emails that passed verify
- *   .createdAtPw            number   timestamp of password-set (audit)
- *   .passwordUpdatedAt      number   timestamp of last password change (audit)
+ * Firestore schema on `auth_users/{userId}`（精簡後）：
+ *   .provider               'password'
+ *   .passwordHash           string   scrypt$...
+ *   .emails                 string[] 所有關聯 email（小寫正規化後就是 key）
+ *   .emailsLower            string[] lower-case mirror for array-contains
+ *   .primaryEmail           string   主要 email
+ *   .primaryEmailLower      string
+ *   .emailsVerified         string[] 已通過驗證的 email（驗證流程 Phase B 已實作）
+ *   .accountName            string   display 預設（email local-part，可之後改）
+ *   .accountNameLower       string   僅 display 用，不再唯一
+ *   .display_name           string   ELO 頁/大廳使用
+ *   .createdAtPw / .passwordUpdatedAt   timestamps
  *
- * New collections:
- *   password_reset_sessions/{token}
- *     .userId         string
- *     .accountName    string   snapshotted (audit)
- *     .email          string   snapshotted (audit)
- *     .expiresAt      number
- *     .createdAt      number
- *     .consumedAt?    number   set on successful reset; row kept for audit
- *
- *   email_verifications/{token}
- *     .userId         string
- *     .email          string   (normalised lowercase)
- *     .expiresAt      number
- *     .createdAt      number
- *     .consumedAt?    number
+ * Collections 不變：password_reset_sessions, email_verifications。
  */
 
 import type { Firestore } from 'firebase-admin/firestore';
@@ -44,7 +29,6 @@ import { isFirebaseAdminReady, getAdminFirestore } from './firebase';
 import {
   hashPassword,
   verifyPassword,
-  normalizeAccountName,
   normalizeEmail,
 } from './passwordHash';
 
@@ -66,9 +50,7 @@ export interface AccountRecord {
 }
 
 /**
- * Common result envelope for account ops. `ok=false` carries `code` +
- * human-readable reason so routes can surface Chinese error messages
- * verbatim.
+ * Common result envelope. `ok=false` carries `code` + human-readable reason.
  */
 export interface AccountOpResult<T = void> {
   ok:     boolean;
@@ -86,79 +68,89 @@ function randomToken(): string {
   return randomBytes(32).toString('hex');
 }
 
-/**
- * Check uniqueness: accountName + primaryEmail must not collide with any
- * existing auth_users row. Lowercased columns make this an O(1) lookup.
- */
-async function isAccountNameTaken(db: Firestore, accountNameLower: string): Promise<boolean> {
-  const snap = await db.collection(AUTH_USERS)
-    .where('accountNameLower', '==', accountNameLower)
-    .limit(1)
-    .get();
-  return !snap.empty;
+function emailLocalPart(email: string): string {
+  const at = email.indexOf('@');
+  return at > 0 ? email.slice(0, at) : email;
 }
 
-async function isEmailTaken(db: Firestore, emailLower: string): Promise<boolean> {
+async function findUserByEmail(db: Firestore, emailLower: string):
+  Promise<{ id: string; data: Record<string, unknown> } | null>
+{
   const snap = await db.collection(AUTH_USERS)
     .where('emailsLower', 'array-contains', emailLower)
     .limit(1)
     .get();
-  return !snap.empty;
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, data: doc.data() as Record<string, unknown> };
 }
 
 /**
- * Register a new account. Creates an auth_users row with accountName +
- * passwordHash + primaryEmail (unverified). Returns the new userId.
+ * Login-or-register in one call (Edward 架構簡化).
  *
- * Caller is responsible for input validation (see validateAccountName /
- * validatePasswordStrength / validateEmail). This function only checks
- * uniqueness.
+ *   - email 不存在 → 建新帳號 + 回 { userId, created: true }
+ *   - email 存在 + 密碼正確 → 回 { userId, created: false }
+ *   - email 存在 + 密碼錯 → { ok: false, code: 'bad_credentials' }
  *
- * Concurrency: uses a Firestore transaction so two simultaneous registrations
- * with the same account name can't both succeed.
+ * Caller 要先驗 email 格式 + 密碼強度 — 本函式只負責 store 層。
  */
-export async function registerAccount(params: {
-  accountName: string;
-  password:    string;
+export async function loginOrRegister(params: {
+  email:    string;
+  password: string;
+}): Promise<AccountOpResult<{
+  userId:       string;
+  accountName:  string;
   primaryEmail: string;
-}): Promise<AccountOpResult<{ userId: string }>> {
+  displayName:  string;
+  created:      boolean;
+}>> {
   const db = getFs();
   if (!db) return { ok: false, code: 'no_store', reason: '帳戶資料庫未配置' };
 
-  const accountNameLower = normalizeAccountName(params.accountName);
-  const emailLower       = normalizeEmail(params.primaryEmail);
+  const emailLower = normalizeEmail(params.email);
+  const emailTrim  = params.email.trim();
 
-  // Uniqueness pre-check (cheap read, catches most races) then transaction.
-  if (await isAccountNameTaken(db, accountNameLower)) {
-    return { ok: false, code: 'account_taken', reason: '帳號已被使用' };
-  }
-  if (await isEmailTaken(db, emailLower)) {
-    return { ok: false, code: 'email_taken', reason: '信箱已被使用' };
-  }
-
-  let passwordHash: string;
   try {
-    passwordHash = await hashPassword(params.password);
-  } catch (err) {
-    return { ok: false, code: 'hash_failed', reason: '密碼處理失敗' };
-  }
+    const existing = await findUserByEmail(db, emailLower);
 
-  const now = Date.now();
-  // auth_users docId uses a random 16-byte hex so the user-visible uuid is
-  // distinct from accountName (Edward's "帳號=uuid" architecture means the
-  // display login is accountName; the real row key is this uuid).
-  const userId = randomBytes(16).toString('hex');
+    // Path A — 登入既有帳號
+    if (existing) {
+      const data = existing.data as {
+        passwordHash?: string;
+        accountName?:  string;
+        primaryEmail?: string;
+        display_name?: string;
+      };
+      const ok = await verifyPassword(params.password, data.passwordHash ?? '');
+      if (!ok) return { ok: false, code: 'bad_credentials', reason: '密碼錯誤' };
+      return {
+        ok: true,
+        data: {
+          userId:       existing.id,
+          accountName:  data.accountName ?? emailLocalPart(emailTrim),
+          primaryEmail: data.primaryEmail ?? emailTrim,
+          displayName:  data.display_name ?? data.accountName ?? emailLocalPart(emailTrim),
+          created:      false,
+        },
+      };
+    }
 
-  const userRef = db.collection(AUTH_USERS).doc(userId);
-  try {
+    // Path B — 新帳號（email 沒被用過即註冊）
+    let passwordHash: string;
+    try {
+      passwordHash = await hashPassword(params.password);
+    } catch {
+      // 密碼強度不合格 — caller 之前應驗過，這裡當 defensive 再擋一次
+      return { ok: false, code: 'hash_failed', reason: '密碼處理失敗' };
+    }
+
+    const userId  = randomBytes(16).toString('hex');
+    const display = emailLocalPart(emailTrim);
+    const now     = Date.now();
+
+    const userRef = db.collection(AUTH_USERS).doc(userId);
     await db.runTransaction(async (tx) => {
-      // Final uniqueness check inside the transaction.
-      const nameSnap = await tx.get(
-        db.collection(AUTH_USERS).where('accountNameLower', '==', accountNameLower).limit(1),
-      );
-      if (!nameSnap.empty) {
-        throw new Error('ACCOUNT_NAME_TAKEN');
-      }
+      // 最後一道 race check — 進 transaction 再看一次有沒有人搶先註冊。
       const emailSnap = await tx.get(
         db.collection(AUTH_USERS).where('emailsLower', 'array-contains', emailLower).limit(1),
       );
@@ -167,15 +159,15 @@ export async function registerAccount(params: {
       }
       tx.set(userRef, {
         provider:           'password',
-        accountName:        params.accountName.trim(),
-        accountNameLower,
+        accountName:        display,
+        accountNameLower:   display.toLowerCase(),
         passwordHash,
-        primaryEmail:       params.primaryEmail.trim(),
+        primaryEmail:       emailTrim,
         primaryEmailLower:  emailLower,
-        emails:             [params.primaryEmail.trim()],
+        emails:             [emailTrim],
         emailsLower:        [emailLower],
         emailsVerified:     [],
-        display_name:       params.accountName.trim(),
+        display_name:       display,
         elo_rating:         1000,
         total_games:        0,
         games_won:          0,
@@ -187,113 +179,79 @@ export async function registerAccount(params: {
         passwordUpdatedAt:  now,
       });
     });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg === 'ACCOUNT_NAME_TAKEN') return { ok: false, code: 'account_taken', reason: '帳號已被使用' };
-    if (msg === 'EMAIL_TAKEN')        return { ok: false, code: 'email_taken',   reason: '信箱已被使用' };
-    // eslint-disable-next-line no-console
-    console.error('[firestoreAuthAccounts] registerAccount error:', err);
-    return { ok: false, code: 'error', reason: '註冊失敗' };
-  }
 
-  return { ok: true, data: { userId } };
-}
-
-/**
- * Verify credentials. Returns the row's userId when password matches, else
- * null. Always performs a hash comparison (even when the account doesn't
- * exist) to keep timing uniform — prevents user enumeration.
- */
-export async function verifyCredentials(
-  accountName: string,
-  password:    string,
-): Promise<AccountOpResult<{ userId: string; accountName: string; primaryEmail: string; displayName: string }>> {
-  const db = getFs();
-  if (!db) return { ok: false, code: 'no_store', reason: '帳戶資料庫未配置' };
-
-  const nameLower = normalizeAccountName(accountName);
-  try {
-    const snap = await db.collection(AUTH_USERS)
-      .where('accountNameLower', '==', nameLower)
-      .limit(1)
-      .get();
-    if (snap.empty) {
-      // Still run a dummy hash-compare to equalise timing (S5 uniform-time).
-      await verifyPassword(password, 'scrypt$16384$8$1$64$AAAA$AAAA');
-      return { ok: false, code: 'bad_credentials', reason: '帳號或密碼錯誤' };
-    }
-    const doc = snap.docs[0];
-    const data = doc.data() as {
-      passwordHash?: string;
-      accountName?: string;
-      primaryEmail?: string;
-      display_name?: string;
-    };
-    const pwHash = typeof data.passwordHash === 'string' ? data.passwordHash : '';
-    const ok = await verifyPassword(password, pwHash);
-    if (!ok) return { ok: false, code: 'bad_credentials', reason: '帳號或密碼錯誤' };
     return {
       ok: true,
       data: {
-        userId:       doc.id,
-        accountName:  data.accountName ?? accountName,
-        primaryEmail: data.primaryEmail ?? '',
-        displayName:  data.display_name ?? data.accountName ?? accountName,
+        userId,
+        accountName:  display,
+        primaryEmail: emailTrim,
+        displayName:  display,
+        created:      true,
       },
     };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === 'EMAIL_TAKEN') {
+      // Race: another concurrent request just created this email. Treat as login.
+      // 再查一次拿密碼驗。
+      try {
+        const existing = await findUserByEmail(db, emailLower);
+        if (existing) {
+          const data = existing.data as { passwordHash?: string };
+          const ok = await verifyPassword(params.password, data.passwordHash ?? '');
+          if (!ok) return { ok: false, code: 'bad_credentials', reason: '密碼錯誤' };
+          return {
+            ok: true,
+            data: {
+              userId:       existing.id,
+              accountName:  (existing.data as { accountName?: string }).accountName ?? emailLocalPart(emailTrim),
+              primaryEmail: (existing.data as { primaryEmail?: string }).primaryEmail ?? emailTrim,
+              displayName:  (existing.data as { display_name?: string }).display_name ?? emailLocalPart(emailTrim),
+              created:      false,
+            },
+          };
+        }
+      } catch {
+        // fallthrough
+      }
+    }
     // eslint-disable-next-line no-console
-    console.error('[firestoreAuthAccounts] verifyCredentials error:', err);
-    return { ok: false, code: 'error', reason: '登入失敗' };
+    console.error('[firestoreAuthAccounts] loginOrRegister error:', err);
+    return { ok: false, code: 'error', reason: '登入/註冊失敗' };
   }
 }
 
 /**
- * Find an account by accountName + primary email. Returns the userId when the
- * pair matches a single row. Used by forgot-password: we only start the reset
- * flow when the pair matches so someone who knows just the account OR just
- * the email can't trigger unlimited reset emails.
+ * Find an account by email — for forgot-password flow. Returns null if email
+ * not bound to any account.
  */
-export async function findAccountByNameAndEmail(
-  accountName: string,
-  email:       string,
-): Promise<AccountRecord | null> {
+export async function findAccountByEmail(email: string): Promise<AccountRecord | null> {
   const db = getFs();
   if (!db) return null;
 
-  const nameLower  = normalizeAccountName(accountName);
   const emailLower = normalizeEmail(email);
   try {
-    const snap = await db.collection(AUTH_USERS)
-      .where('accountNameLower', '==', nameLower)
-      .limit(1)
-      .get();
-    if (snap.empty) return null;
-    const doc = snap.docs[0];
-    const data = doc.data() as {
+    const existing = await findUserByEmail(db, emailLower);
+    if (!existing) return null;
+    const data = existing.data as {
       accountName?: string;
       primaryEmail?: string;
       emails?: string[];
-      emailsLower?: string[];
       emailsVerified?: string[];
       display_name?: string;
     };
-    const emails      = Array.isArray(data.emails) ? data.emails : [];
-    const emailsLower = Array.isArray(data.emailsLower) ? data.emailsLower : [];
-    // Match any of the user's emails, not just primary — user may have added
-    // a secondary email and wants to reset via it.
-    if (!emailsLower.includes(emailLower)) return null;
     return {
-      userId:         doc.id,
-      accountName:    data.accountName ?? accountName,
-      primaryEmail:   data.primaryEmail ?? '',
-      emails,
+      userId:         existing.id,
+      accountName:    data.accountName ?? emailLocalPart(email),
+      primaryEmail:   data.primaryEmail ?? email,
+      emails:         Array.isArray(data.emails) ? data.emails : [],
       emailsVerified: Array.isArray(data.emailsVerified) ? data.emailsVerified : [],
-      displayName:    data.display_name ?? data.accountName ?? accountName,
+      displayName:    data.display_name ?? data.accountName ?? emailLocalPart(email),
     };
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('[firestoreAuthAccounts] findAccountByNameAndEmail error:', err);
+    console.error('[firestoreAuthAccounts] findAccountByEmail error:', err);
     return null;
   }
 }
@@ -331,9 +289,7 @@ export async function createPasswordResetSession(params: {
 
 /**
  * Consume a password-reset token + set the new password. Atomic via a
- * Firestore transaction: the token is marked consumed and the user's
- * passwordHash is updated together, so a retry with the same token is
- * rejected.
+ * Firestore transaction.
  */
 export async function consumePasswordResetAndSet(params: {
   token:       string;
@@ -382,8 +338,7 @@ export async function consumePasswordResetAndSet(params: {
 }
 
 /**
- * Change password for an already-logged-in user. Requires current password
- * unless `bypassOldCheck=true` (used by admin / reset flow internally).
+ * Change password for an already-logged-in user.
  */
 export async function changePassword(params: {
   userId:        string;
@@ -424,13 +379,9 @@ export async function changePassword(params: {
 }
 
 /**
- * Claim a historical uuid account's stats by proving knowledge of (uuid +
- * email + password). The legacy `uuid` here is the previous guest uid or
- * OAuth-auth_users doc id; merging uses the same `mergeUserAccounts` /
- * `absorbGuestIntoUser` logic from firestoreAccounts.ts.
- *
- * This thin wrapper just validates the three-way match + delegates to the
- * merge helpers to keep the single point of data-rewrite logic.
+ * Claim a historical uuid account by proving knowledge of (uuid + email + password).
+ * Kept for backward compat with /api/user/claim-history — uses email as
+ * secondary key on the legacy row.
  */
 export async function findAccountByUuidEmailPassword(
   legacyUuid: string,
@@ -444,7 +395,6 @@ export async function findAccountByUuidEmailPassword(
     const ref = db.collection(AUTH_USERS).doc(legacyUuid);
     const snap = await ref.get();
     if (!snap.exists) {
-      // Dummy hash to equalise timing.
       await verifyPassword(password, 'scrypt$16384$8$1$64$AAAA$AAAA');
       return { ok: false, code: 'no_match', reason: '找不到符合的舊帳號' };
     }
@@ -466,9 +416,7 @@ export async function findAccountByUuidEmailPassword(
 }
 
 /**
- * Create an email-verification token. Issued when the user adds a new email
- * during first-login profile setup (Phase B wires the UI). Returns the
- * token the route uses to build the verify URL.
+ * Create an email-verification token.
  */
 export async function createEmailVerificationSession(params: {
   userId: string;
@@ -550,7 +498,8 @@ export async function addEmailToUser(userId: string, email: string): Promise<Acc
 
   const emailLower = normalizeEmail(email);
   try {
-    if (await isEmailTaken(db, emailLower)) {
+    const existing = await findUserByEmail(db, emailLower);
+    if (existing && existing.id !== userId) {
       return { ok: false, code: 'email_taken', reason: '信箱已被使用' };
     }
     const ref = db.collection(AUTH_USERS).doc(userId);

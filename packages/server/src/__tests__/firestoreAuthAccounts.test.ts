@@ -1,9 +1,7 @@
 /**
- * Phase A — firestoreAuthAccounts unit tests.
+ * Phase C — firestoreAuthAccounts unit tests (email-only architecture).
  *
- * Uses the same in-memory Firestore stub pattern as firestoreAccounts.test.ts
- * so we cover register / verify / reset / email-verify / claim-history paths
- * without a live Firestore project.
+ * Uses the same in-memory Firestore stub pattern as firestoreAccounts.test.ts.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -119,7 +117,7 @@ vi.mock('../services/firebase', () => ({
 type Module = typeof import('../services/firestoreAuthAccounts');
 let mod: Module;
 
-describe('firestoreAuthAccounts — Phase A new-login', () => {
+describe('firestoreAuthAccounts — Phase C email-only', () => {
   beforeEach(async () => {
     store = {
       auth_users:                new Map(),
@@ -129,100 +127,76 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
     mod = await import('../services/firestoreAuthAccounts');
   });
 
-  describe('registerAccount', () => {
-    it('creates a user + writes account/password/email columns', async () => {
-      const r = await mod.registerAccount({
-        accountName:  'Edward',
-        password:     'Passw0rdAvalon',
-        primaryEmail: 'ed@example.com',
+  describe('loginOrRegister', () => {
+    it('creates a user when email is new', async () => {
+      const r = await mod.loginOrRegister({
+        email:    'ed@example.com',
+        password: 'Passw0rdAvalon',
       });
       expect(r.ok).toBe(true);
+      expect(r.data?.created).toBe(true);
       expect(r.data?.userId).toBeTruthy();
 
       const row = store.auth_users.get(r.data!.userId)!;
-      expect(row.accountName).toBe('Edward');
-      expect(row.accountNameLower).toBe('edward');
       expect(row.primaryEmail).toBe('ed@example.com');
       expect(row.primaryEmailLower).toBe('ed@example.com');
       expect(Array.isArray(row.emailsLower)).toBe(true);
       expect((row.emailsLower as string[]).includes('ed@example.com')).toBe(true);
       expect(String(row.passwordHash).startsWith('scrypt$')).toBe(true);
-      expect(row.emailsVerified).toEqual([]);
       expect(row.provider).toBe('password');
+      expect(row.accountName).toBe('ed');  // local-part as default display
     });
 
-    it('rejects duplicate account names (case-insensitive)', async () => {
-      await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'a@ex.com' });
-      const r = await mod.registerAccount({ accountName: 'EDWARD', password: 'Passw0rdAvalon', primaryEmail: 'b@ex.com' });
+    it('logs in with correct password when email exists', async () => {
+      const reg = await mod.loginOrRegister({ email: 'alice@ex.com', password: 'AvalonPw01' });
+      const login = await mod.loginOrRegister({ email: 'alice@ex.com', password: 'AvalonPw01' });
+      expect(login.ok).toBe(true);
+      expect(login.data?.created).toBe(false);
+      expect(login.data?.userId).toBe(reg.data!.userId);
+    });
+
+    it('case-insensitive on email', async () => {
+      await mod.loginOrRegister({ email: 'Alice@ex.com', password: 'AvalonPw01' });
+      const login = await mod.loginOrRegister({ email: 'ALICE@EX.COM', password: 'AvalonPw01' });
+      expect(login.ok).toBe(true);
+      expect(login.data?.created).toBe(false);
+    });
+
+    it('returns bad_credentials on wrong password for existing email', async () => {
+      await mod.loginOrRegister({ email: 'alice@ex.com', password: 'AvalonPw01' });
+      const r = await mod.loginOrRegister({ email: 'alice@ex.com', password: 'WrongPw01x' });
       expect(r.ok).toBe(false);
-      expect(r.code).toBe('account_taken');
+      expect(r.code).toBe('bad_credentials');
     });
 
-    it('rejects duplicate emails', async () => {
-      await mod.registerAccount({ accountName: 'a1', password: 'Passw0rdAvalon', primaryEmail: 'dup@ex.com' });
-      const r = await mod.registerAccount({ accountName: 'a2', password: 'Passw0rdAvalon', primaryEmail: 'DUP@ex.com' });
-      expect(r.ok).toBe(false);
-      expect(r.code).toBe('email_taken');
-    });
-
-    it('rejects weak password (bubble up hash_failed)', async () => {
-      const r = await mod.registerAccount({ accountName: 'abc', password: 'short', primaryEmail: 'x@ex.com' });
+    it('rejects weak password with hash_failed on new account', async () => {
+      const r = await mod.loginOrRegister({ email: 'x@ex.com', password: 'short' });
       expect(r.ok).toBe(false);
       expect(r.code).toBe('hash_failed');
     });
   });
 
-  describe('verifyCredentials', () => {
-    it('returns userId when password matches', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Alice', password: 'AvalonPw01', primaryEmail: 'a@ex.com' });
-      const r   = await mod.verifyCredentials('Alice', 'AvalonPw01');
-      expect(r.ok).toBe(true);
-      expect(r.data?.userId).toBe(reg.data!.userId);
-      expect(r.data?.accountName).toBe('Alice');
-      expect(r.data?.primaryEmail).toBe('a@ex.com');
-    });
-
-    it('returns bad_credentials on wrong password', async () => {
-      await mod.registerAccount({ accountName: 'Alice', password: 'AvalonPw01', primaryEmail: 'a@ex.com' });
-      const r = await mod.verifyCredentials('Alice', 'wrong01xx');
-      expect(r.ok).toBe(false);
-      expect(r.code).toBe('bad_credentials');
-    });
-
-    it('returns bad_credentials on unknown account (no enumeration)', async () => {
-      const r = await mod.verifyCredentials('Nobody', 'anyPass01');
-      expect(r.ok).toBe(false);
-      expect(r.code).toBe('bad_credentials');
-    });
-
-    it('is case-insensitive on account name', async () => {
-      await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'a@ex.com' });
-      const r = await mod.verifyCredentials('EDWARD', 'Passw0rdAvalon');
-      expect(r.ok).toBe(true);
-    });
-  });
-
-  describe('findAccountByNameAndEmail', () => {
-    it('matches when account + email pair align', async () => {
-      await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
-      const r = await mod.findAccountByNameAndEmail('edward', 'ED@ex.com');
+  describe('findAccountByEmail', () => {
+    it('returns account when email exists', async () => {
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
+      const r = await mod.findAccountByEmail('ED@EX.COM');
       expect(r).not.toBeNull();
-      expect(r?.accountName).toBe('Edward');
+      expect(r?.userId).toBe(reg.data!.userId);
+      expect(r?.primaryEmail).toBe('ed@ex.com');
     });
 
-    it('returns null when email does not belong to the account', async () => {
-      await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
-      const r = await mod.findAccountByNameAndEmail('Edward', 'different@ex.com');
+    it('returns null when email not found', async () => {
+      const r = await mod.findAccountByEmail('nobody@ex.com');
       expect(r).toBeNull();
     });
   });
 
   describe('password reset flow', () => {
     it('createPasswordResetSession + consumePasswordResetAndSet round-trip', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const sess = await mod.createPasswordResetSession({
         userId:      reg.data!.userId,
-        accountName: 'Edward',
+        accountName: 'ed',
         email:       'ed@ex.com',
       });
       expect(sess.ok).toBe(true);
@@ -233,16 +207,17 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
       expect(result.ok).toBe(true);
 
       // Old password no longer works; new one does.
-      const oldVerify = await mod.verifyCredentials('Edward', 'Passw0rdAvalon');
-      expect(oldVerify.ok).toBe(false);
-      const newVerify = await mod.verifyCredentials('Edward', 'NewPassw0rd');
-      expect(newVerify.ok).toBe(true);
+      const oldLogin = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
+      expect(oldLogin.ok).toBe(false);
+      const newLogin = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'NewPassw0rd' });
+      expect(newLogin.ok).toBe(true);
+      expect(newLogin.data?.created).toBe(false);
     });
 
     it('rejects a reused reset token', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const sess = await mod.createPasswordResetSession({
-        userId: reg.data!.userId, accountName: 'Edward', email: 'ed@ex.com',
+        userId: reg.data!.userId, accountName: 'ed', email: 'ed@ex.com',
       });
       const token = sess.data!.token;
       await mod.consumePasswordResetAndSet({ token, newPassword: 'NewPassw0rd' });
@@ -252,12 +227,11 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
     });
 
     it('rejects an expired token', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const sess = await mod.createPasswordResetSession({
-        userId: reg.data!.userId, accountName: 'Edward', email: 'ed@ex.com',
+        userId: reg.data!.userId, accountName: 'ed', email: 'ed@ex.com',
       });
       const token = sess.data!.token;
-      // Fake expiry by mutating store directly.
       const row = store.password_reset_sessions.get(token)!;
       store.password_reset_sessions.set(token, { ...row, expiresAt: Date.now() - 1000 });
       const r = await mod.consumePasswordResetAndSet({ token, newPassword: 'NewPassw0rd' });
@@ -274,7 +248,7 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
 
   describe('changePassword', () => {
     it('requires old password match', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const bad = await mod.changePassword({
         userId:      reg.data!.userId,
         oldPassword: 'wrong-pass-ab',
@@ -285,21 +259,22 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
     });
 
     it('succeeds when old password matches', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const ok = await mod.changePassword({
         userId:      reg.data!.userId,
         oldPassword: 'Passw0rdAvalon',
         newPassword: 'BrandNewPw1',
       });
       expect(ok.ok).toBe(true);
-      expect((await mod.verifyCredentials('Edward', 'BrandNewPw1')).ok).toBe(true);
-      expect((await mod.verifyCredentials('Edward', 'Passw0rdAvalon')).ok).toBe(false);
+      const login = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'BrandNewPw1' });
+      expect(login.ok).toBe(true);
+      expect(login.data?.created).toBe(false);
     });
   });
 
   describe('email verification flow', () => {
     it('createEmailVerificationSession + consumeEmailVerification round-trip', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const sess = await mod.createEmailVerificationSession({
         userId: reg.data!.userId, email: 'ed@ex.com',
       });
@@ -315,7 +290,7 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
     });
 
     it('rejects reused verification token', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const sess = await mod.createEmailVerificationSession({ userId: reg.data!.userId, email: 'ed@ex.com' });
       await mod.consumeEmailVerification(sess.data!.token);
       const again = await mod.consumeEmailVerification(sess.data!.token);
@@ -326,7 +301,7 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
 
   describe('findAccountByUuidEmailPassword (claim-history)', () => {
     it('returns matched when 3 inputs align', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const r = await mod.findAccountByUuidEmailPassword(reg.data!.userId, 'ed@ex.com', 'Passw0rdAvalon');
       expect(r.ok).toBe(true);
       expect(r.data?.matched).toBe(true);
@@ -334,14 +309,14 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
     });
 
     it('returns no_match when password wrong', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const r = await mod.findAccountByUuidEmailPassword(reg.data!.userId, 'ed@ex.com', 'wrong-pass-01');
       expect(r.ok).toBe(false);
       expect(r.code).toBe('no_match');
     });
 
     it('returns no_match when email wrong', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const r = await mod.findAccountByUuidEmailPassword(reg.data!.userId, 'diff@ex.com', 'Passw0rdAvalon');
       expect(r.ok).toBe(false);
       expect(r.code).toBe('no_match');
@@ -356,7 +331,7 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
 
   describe('addEmailToUser', () => {
     it('appends an email to the user row', async () => {
-      const reg = await mod.registerAccount({ accountName: 'Edward', password: 'Passw0rdAvalon', primaryEmail: 'ed@ex.com' });
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });
       const r = await mod.addEmailToUser(reg.data!.userId, 'alt@ex.com');
       expect(r.ok).toBe(true);
       const row = store.auth_users.get(reg.data!.userId)!;
@@ -364,9 +339,9 @@ describe('firestoreAuthAccounts — Phase A new-login', () => {
       expect((row.emailsLower as string[])).toContain('alt@ex.com');
     });
 
-    it('refuses when email already taken', async () => {
-      const reg1 = await mod.registerAccount({ accountName: 'A', password: 'Passw0rdAvalon', primaryEmail: 'a@ex.com' });
-      await mod.registerAccount({ accountName: 'B', password: 'Passw0rdAvalon', primaryEmail: 'b@ex.com' });
+    it('refuses when email already taken by another user', async () => {
+      const reg1 = await mod.loginOrRegister({ email: 'a@ex.com', password: 'Passw0rdAvalon' });
+      await mod.loginOrRegister({ email: 'b@ex.com', password: 'Passw0rdAvalon' });
       const r = await mod.addEmailToUser(reg1.data!.userId, 'b@ex.com');
       expect(r.ok).toBe(false);
       expect(r.code).toBe('email_taken');

@@ -1,38 +1,38 @@
 import { useState } from 'react';
-import { Loader, Eye, EyeOff, UserCircle, Lock } from 'lucide-react';
-import { loginPassword, extractOAuthErrorFromUrl } from '../services/auth';
+import { Loader, Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { loginOrRegister, extractOAuthErrorFromUrl } from '../services/auth';
 import { useGameStore } from '../store/gameStore';
 import { initializeSocket } from '../services/socket';
 import BrandHeader from '../components/BrandHeader';
 
 /**
- * Phase B 新登入架構（2026-04-23 Edward 指令）：
+ * Phase C 單頁登入／註冊（2026-04-23 Edward 原話）：
  *
- *   - 帳號 + 密碼 登入，首次即註冊（帳號 = server mint 的 uuid）
- *   - 砍掉訪客 / Google / Discord / LINE 入口（既有 Discord/LINE OAuth 仍在 server 側保留
- *     給「綁定」用，見 SettingsPage；登入流程只走帳號+密碼）
- *   - 忘記密碼連結在表單下方
+ *   「帳號 = email，註冊的時候設定新密碼，不用再特別有個建立新帳號的頁面；
+ *   直接在帳號登入那邊就備註 登入 or 註冊；不存在的 email 就等同註冊，
+ *   存在的 email 就是登入。」
  *
- * 註冊頁是獨立頁面（RegisterCompletePage），在按「建立帳號」或首次登入後才進入。
- * 這裡只處理既有使用者登入 + 前往註冊 / 忘密。
+ * 規格：email + password 兩欄 + 「登入 / 註冊」按鈕；備註「不存在的 email 會自動
+ * 建立帳號」；忘記密碼連結保留。社群登入 / 綁定仍放在 SettingsPage。
  */
 export default function LoginPage(): JSX.Element {
   const { setGameState } = useGameStore();
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(() => extractOAuthErrorFromUrl() ?? '');
-  const [accountName, setAccountName] = useState('');
-  const [password,    setPassword]    = useState('');
-  const [showPw,      setShowPw]      = useState(false);
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw,   setShowPw]   = useState(false);
 
-  const handleLogin = async (): Promise<void> => {
-    if (!accountName.trim() || !password) {
-      setError('請輸入帳號與密碼');
+  const handleSubmit = async (): Promise<void> => {
+    const trimmed = email.trim();
+    if (!trimmed || !password) {
+      setError('信箱與密碼必填');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const result = await loginPassword(accountName.trim(), password);
+      const result = await loginOrRegister(trimmed, password);
       await initializeSocket(result.token);
       setGameState('home');
     } catch (err) {
@@ -46,17 +46,11 @@ export default function LoginPage(): JSX.Element {
     setGameState('forgotPassword');
   };
 
-  const handleSignup = (): void => {
-    setGameState('registerComplete');
-  };
-
   return (
     <div className="flex items-center justify-center min-h-screen p-4 bg-black">
       <div className="w-full max-w-md space-y-6">
-        {/* Header — 跟大廳一致 */}
         <BrandHeader size="lg" />
 
-        {/* Error */}
         {error && (
           <div
             data-testid="login-error"
@@ -69,35 +63,37 @@ export default function LoginPage(): JSX.Element {
         <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-5 space-y-4">
           <h1 className="text-white text-lg font-bold flex items-center gap-2">
             <Lock size={18} className="text-amber-400" />
-            帳號登入
+            登入 / 註冊
           </h1>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            不存在的信箱會自動建立帳號；已註冊的信箱輸入密碼即登入。
+          </p>
 
-          {/* 帳號 */}
+          {/* Email */}
           <div className="space-y-1.5">
-            <label htmlFor="login-account" className="text-xs text-zinc-400 font-semibold">
-              帳號
+            <label htmlFor="login-email" className="text-xs text-zinc-400 font-semibold">
+              信箱
             </label>
             <div className="relative">
-              <UserCircle size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
-                id="login-account"
-                data-testid="login-input-account"
-                type="text"
-                autoComplete="username"
-                placeholder="輸入帳號"
-                value={accountName}
-                maxLength={20}
-                onChange={e => setAccountName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                id="login-email"
+                data-testid="login-input-email"
+                type="email"
+                autoComplete="email"
+                placeholder="email@example.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                 className="w-full bg-black border border-zinc-700 rounded-lg pl-9 pr-3 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:border-white"
               />
             </div>
           </div>
 
-          {/* 密碼 */}
+          {/* Password */}
           <div className="space-y-1.5">
             <label htmlFor="login-password" className="text-xs text-zinc-400 font-semibold">
-              密碼
+              密碼（8 字以上，含英文字母與數字）
             </label>
             <div className="relative">
               <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
@@ -109,7 +105,7 @@ export default function LoginPage(): JSX.Element {
                 placeholder="輸入密碼"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                 className="w-full bg-black border border-zinc-700 rounded-lg pl-9 pr-10 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:border-white"
               />
               <button
@@ -123,19 +119,17 @@ export default function LoginPage(): JSX.Element {
             </div>
           </div>
 
-          {/* 登入鍵 */}
           <button
-            onClick={handleLogin}
+            onClick={handleSubmit}
             disabled={loading}
             data-testid="login-btn-submit"
             className="w-full bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
           >
             {loading && <Loader size={18} className="animate-spin" />}
-            登入
+            登入 / 註冊
           </button>
 
-          {/* 忘密 + 註冊 連結 */}
-          <div className="flex items-center justify-between text-xs pt-1">
+          <div className="flex items-center justify-center text-xs pt-1">
             <button
               type="button"
               onClick={handleForgot}
@@ -144,21 +138,11 @@ export default function LoginPage(): JSX.Element {
             >
               忘記密碼？
             </button>
-            <button
-              type="button"
-              onClick={handleSignup}
-              data-testid="login-link-signup"
-              className="text-amber-400 hover:text-amber-300 font-semibold"
-            >
-              建立新帳號
-            </button>
           </div>
         </div>
 
         <p className="text-center text-[11px] text-zinc-600 leading-relaxed">
-          新玩家按「建立新帳號」後會進入個人設定頁
-          <br />
-          可以強制綁定主要信箱，另外選綁 Google / Discord / LINE
+          綁定 Google / Discord / LINE 可在登入後到「系統設定」頁進行
         </p>
       </div>
     </div>

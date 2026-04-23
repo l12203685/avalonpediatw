@@ -371,9 +371,8 @@ export interface AuthenticatedUser {
   primaryEmail?:  string;
   emailsVerified?: string[];
   /**
-   * Server 回傳 201（註冊）時 UI 要跳到 RegisterCompletePage 強制補 profile；
-   * 200（登入）時直接進 home。這個欄位由 client 依 HTTP status 填，不是 server
-   * 欄位。
+   * Phase C 簡化：201 = 剛註冊 / 200 = 登入既有；UI 兩種情況都跳首頁，僅保留
+   * flag 供 future 可做 onboarding toast 用。
    */
   isFirstLogin?:  boolean;
 }
@@ -404,71 +403,47 @@ async function parseAuthError(res: Response, fallback: string): Promise<AuthApiE
   return new AuthApiException(body.error || fallback, res.status, body.code);
 }
 
-export interface RegisterPasswordInput {
-  accountName:  string;
-  password:     string;
-  primaryEmail: string;
-}
-
 export interface AuthResult {
   token: string;
   user:  AuthenticatedUser;
 }
 
 /**
- * 帳號 + 密碼註冊（首次即註冊，帳號 = server mint 的 uuid）。
- * 成功回 201；isFirstLogin=true 讓 UI 跳到 RegisterCompletePage 補資料 / 綁社群。
+ * Phase C (2026-04-23) 單一入口 — email 不存在 → 自動註冊；存在 → 登入。
+ *
+ *   server: POST /auth/login { email, password }
+ *   201 = 剛剛註冊 / 200 = 登入既有帳號。UI 兩種情況都一樣跳首頁。
  */
-export async function registerPassword(input: RegisterPasswordInput): Promise<AuthResult> {
-  const res = await fetch(`${SERVER_URL}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) {
-    throw await parseAuthError(res, '註冊失敗，請稍後再試');
-  }
-  const data = await res.json() as AuthResult;
-  return {
-    token: data.token,
-    user:  { ...data.user, isFirstLogin: true },
-  };
-}
-
-/**
- * 帳號 + 密碼登入。失敗統一回「帳號或密碼錯誤」（opaque，避免 account enumeration）。
- */
-export async function loginPassword(
-  accountName: string,
-  password:    string,
+export async function loginOrRegister(
+  email:    string,
+  password: string,
 ): Promise<AuthResult> {
   const res = await fetch(`${SERVER_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
-    body: JSON.stringify({ accountName, password }),
+    body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    throw await parseAuthError(res, '帳號或密碼錯誤');
+    throw await parseAuthError(res, '登入失敗，請稍後再試');
   }
   const data = await res.json() as AuthResult;
   return {
     token: data.token,
-    user:  { ...data.user, isFirstLogin: false },
+    user:  { ...data.user, isFirstLogin: res.status === 201 },
   };
 }
 
 /**
- * 忘記密碼：帳號 + 主要信箱。server 永遠回 202（不論命中與否），成功才會寄信。
- * 回傳 `ttlMs` 讓 UI 可以顯示「重設連結 30 分鐘內有效」。
+ * 忘記密碼：email 一欄（Phase C 簡化後 email 就是帳號）。
+ * server 永遠回 202（不論命中與否）。
  */
 export async function forgotPassword(
-  accountName:  string,
-  primaryEmail: string,
+  email: string,
 ): Promise<{ ok: true; ttlMs?: number }> {
   const res = await fetch(`${SERVER_URL}/auth/forgot-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
-    body: JSON.stringify({ accountName, primaryEmail }),
+    body: JSON.stringify({ email }),
   });
   if (!res.ok && res.status !== 202) {
     throw await parseAuthError(res, '送出失敗，請稍後再試');

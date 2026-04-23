@@ -16,7 +16,6 @@ import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
 import LobbyPage from './pages/LobbyPage';
 import LoginPage from './pages/LoginPage';
-import RegisterCompletePage from './pages/RegisterCompletePage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import WikiPage from './pages/WikiPage';
@@ -228,10 +227,9 @@ function App(): JSX.Element {
       </AnimatePresence>
 
       {!isAuthenticated && !currentPlayer ? (
-        // Phase B 新登入架構 (2026-04-23)：登入前也要能到註冊 / 忘密 / 重設密碼三頁
-        // 這三頁都不 require 已登入狀態，reset-password 甚至走 email 深連結進入
-        gameState === 'registerComplete' ? <RegisterCompletePage />
-        : gameState === 'forgotPassword' ? <ForgotPasswordPage />
+        // Phase C 簡化登入架構 (2026-04-23)：LoginPage 單頁登入/註冊；
+        // forgot-password / reset-password 兩頁保留給忘密流程。
+        gameState === 'forgotPassword' ? <ForgotPasswordPage />
         : gameState === 'resetPassword'  ? <ResetPasswordPage />
         : <LoginPage />
       ) : (
@@ -255,9 +253,7 @@ function App(): JSX.Element {
           {gameState === 'adminAdmins' && <AdminAdminsPage />}
           {gameState === 'adminElo' && <AdminEloPage />}
           {gameState === 'help' && <HelpPage />}
-          {/* Phase B 新登入架構：已登入也要能回到這三頁（e.g. 註冊完後仍在 registerComplete、
-              或已登入狀態下使用者想從 settings 跳到 resetPassword 改密碼 — 目前走 settings 不走這條） */}
-          {gameState === 'registerComplete' && <RegisterCompletePage />}
+          {/* Phase C 簡化：保留 forgot/reset 兩頁給密碼重設流程；註冊頁已併入 LoginPage */}
           {gameState === 'forgotPassword'   && <ForgotPasswordPage />}
           {gameState === 'resetPassword'    && <ResetPasswordPage />}
         </>

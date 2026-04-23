@@ -1,17 +1,19 @@
 /**
- * HTTP `/auth` routes.
+ * HTTP `/auth` routes — Phase C email-only architecture (2026-04-23).
  *
- * Phase A new-login rewrite (2026-04-23, Edward arch decision):
- *   - Drop guest mode. All players register with (accountName + password +
- *     primaryEmail) before seeing the lobby.
- *   - Add register / login / forgot-password / reset-password endpoints.
- *   - Keep Discord / Line / Google OAuth paths (including /auth/link/*) so
- *     players who already have a password account can still link social
- *     providers for SSO.
- *   - The old guest endpoints (/auth/guest, /auth/guest/resume,
- *     /auth/guest/rename, /auth/guest/upgrade) are removed. Existing guest
- *     JWTs still validate at the socket layer (middleware/auth.ts) so anyone
- *     mid-game keeps their session; they simply can't mint new guest tokens.
+ * Edward 原話：
+ *   「帳號 = email，註冊的時候設定新密碼，不用再特別有個建立新帳號的頁面；
+ *   直接在帳號登入那邊就備註 登入 or 註冊；不存在的 email 就等同註冊，
+ *   存在的 email 就是登入。」
+ *
+ * 變化：
+ *   - `/auth/login`   body {email, password}。email 不存在 → 註冊 + JWT；
+ *                     存在且密碼對 → 登入 + JWT；存在但密碼錯 → 401。
+ *   - `/auth/register` 保留為 alias，呼叫同一 handler，讓舊 client 不壞。
+ *   - `/auth/forgot-password` body {email} — 不再要求 accountName。
+ *   - `/auth/reset-password`  body {token, newPassword} 不變。
+ *
+ * OAuth (Discord / Line / Google) 維持原樣，那是次要入口；帳密走極簡路徑。
  */
 
 import { Router, Request, Response, IRouter } from 'express';
@@ -29,15 +31,13 @@ import {
   type LinkProvider,
 } from '../services/supabase';
 import {
-  registerAccount,
-  verifyCredentials,
-  findAccountByNameAndEmail,
+  loginOrRegister,
+  findAccountByEmail,
   createPasswordResetSession,
   consumePasswordResetAndSet,
   PASSWORD_RESET_TTL_MS,
 } from '../services/firestoreAuthAccounts';
 import {
-  validateAccountName,
   validatePasswordStrength,
   validateEmail,
 } from '../services/passwordHash';
@@ -50,19 +50,19 @@ const JWT_SECRET   = process.env.JWT_SECRET as string;
 const JWT_EXPIRES  = process.env.JWT_EXPIRES_IN || '7d';
 const FRONTEND_URL = process.env.FRONTEND_URL  || 'http://localhost:5173';
 
-// Discord OAuth 設定
+// Discord OAuth
 const DISCORD_CLIENT_ID     = process.env.DISCORD_CLIENT_ID     || '';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 const DISCORD_REDIRECT_URI  = process.env.DISCORD_REDIRECT_URI  ||
   'http://localhost:3001/auth/discord/callback';
 
-// Line OAuth 設定
+// Line OAuth
 const LINE_CHANNEL_ID       = process.env.LINE_CHANNEL_ID       || '';
 const LINE_CHANNEL_SECRET   = process.env.LINE_CHANNEL_SECRET   || '';
 const LINE_REDIRECT_URI     = process.env.LINE_REDIRECT_URI     ||
   'http://localhost:3001/auth/line/callback';
 
-// ── 工具函式 ─────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────
 
 function issueJwt(payload: { sub: string; displayName: string; provider: string }): string {
   return sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES } as object);
@@ -72,21 +72,20 @@ function randomState(): string {
   return randomBytes(16).toString('hex');
 }
 
-// ── Phase A new-login rate limiters ──────────────────────────
+// ── Rate limiters ──────────────────────────────────────────
 //
-// `register` keyed by IP (global flood defence); login keyed by accountName
-// (5 attempts per 15 min per account — blocks credential stuffing against one
-// target without locking out everyone behind a shared NAT); forgot-password
-// keyed by email (3/hr per email — blocks mail bombing).
+// login/register 同一 endpoint，按 email 做 keyed rate-limit（5/15min per email）
+// 才不會讓攻擊者撞單一 email 無限嘗試；register 額外擋 IP flood（10/min）給
+// 註冊新 email 用。
 
-const registerLimiter = createHttpRateLimit(60 * 1000, 10);
+const emailFloodLimiter = createHttpRateLimit(60 * 1000, 20);
 
 const loginLimiter = createKeyedRateLimit({
   windowMs:    15 * 60 * 1000,
-  maxRequests: 5,
+  maxRequests: 10,
   keyFrom:     (req) => {
-    const body = (req.body ?? {}) as { accountName?: unknown };
-    return typeof body.accountName === 'string' ? `login:${body.accountName}` : undefined;
+    const body = (req.body ?? {}) as { email?: unknown };
+    return typeof body.email === 'string' ? `login:${body.email.trim().toLowerCase()}` : undefined;
   },
   message:     '登入次數過多，請 15 分鐘後再試',
   code:        'login_rate_limited',
@@ -96,8 +95,10 @@ const forgotLimiter = createKeyedRateLimit({
   windowMs:    60 * 60 * 1000,
   maxRequests: 3,
   keyFrom:     (req) => {
-    const body = (req.body ?? {}) as { primaryEmail?: unknown };
-    return typeof body.primaryEmail === 'string' ? `forgot:${body.primaryEmail}` : undefined;
+    const body = (req.body ?? {}) as { email?: unknown; primaryEmail?: unknown };
+    const e = typeof body.email === 'string' ? body.email
+           : typeof body.primaryEmail === 'string' ? body.primaryEmail : '';
+    return e ? `forgot:${e.trim().toLowerCase()}` : undefined;
   },
   message:     '重設密碼次數過多，請 1 小時後再試',
   code:        'forgot_rate_limited',
@@ -110,16 +111,6 @@ interface BindIdentity {
   isGuest: boolean;
 }
 
-/**
- * Extract the current user from a Bearer header (or ?token= query). Returns
- * null for invalid / missing tokens. `isGuest` is true when the JWT's
- * provider is 'guest' — the /auth/link/* callbacks use this to fire the
- * guest → real-account merge path.
- *
- * Legacy guest JWTs still validate here so anyone mid-game can link Discord
- * / Line to keep their stats; new guest tokens are no longer minted (Phase A
- * dropped /auth/guest).
- */
 function parseBearerUserId(authHeader: string | undefined, queryToken?: string): BindIdentity | null {
   let token: string | null = null;
   if (authHeader?.startsWith('Bearer ')) {
@@ -206,83 +197,40 @@ async function handleLinkCallback(
   }
 }
 
-// ── Phase A: Account + Password endpoints ────────────────────
+// ── Phase C: email-only login/register ────────────────────────
 
 /**
- * POST /auth/register
- * body: { accountName, password, primaryEmail }
- * → 201 { token, user }
+ * 核心 handler — /auth/login + /auth/register 都走這個函式。
  *
- * Validates input, enforces uniqueness on (accountNameLower, primaryEmail),
- * hashes the password, issues a JWT with provider='password'. Caller lands
- * in the lobby immediately; first-login profile setup (Phase B) prompts for
- * email verification.
+ *   body: { email, password }
+ *   email 不存在 → 201 + JWT + user.isNew=true
+ *   email 存在 + 密碼對 → 200 + JWT
+ *   email 存在 + 密碼錯 → 401 bad_credentials
+ *   格式 / 強度不對 → 400
  */
-router.post('/register', registerLimiter, async (req: Request, res: Response) => {
+async function handleLoginOrRegister(req: Request, res: Response): Promise<Response> {
   const body = (req.body ?? {}) as {
-    accountName?:  unknown;
-    password?:     unknown;
-    primaryEmail?: unknown;
+    email?:    unknown;
+    password?: unknown;
   };
 
-  const nameCheck = validateAccountName(body.accountName);
-  if (!nameCheck.ok) {
-    return res.status(400).json({ error: nameCheck.reason, code: nameCheck.code });
+  const emailCheck = validateEmail(body.email);
+  if (!emailCheck.ok) {
+    return res.status(400).json({ error: emailCheck.reason, code: emailCheck.code });
   }
   const pwCheck = validatePasswordStrength(body.password);
   if (!pwCheck.ok) {
     return res.status(400).json({ error: pwCheck.reason, code: pwCheck.code });
   }
-  const emailCheck = validateEmail(body.primaryEmail);
-  if (!emailCheck.ok) {
-    return res.status(400).json({ error: emailCheck.reason, code: emailCheck.code });
-  }
 
-  const accountName  = (body.accountName as string).trim();
-  const password     = body.password as string;
-  const primaryEmail = (body.primaryEmail as string).trim();
+  const email    = (body.email as string).trim();
+  const password = body.password as string;
 
-  const result = await registerAccount({ accountName, password, primaryEmail });
+  const result = await loginOrRegister({ email, password });
   if (!result.ok || !result.data) {
-    return res.status(result.code === 'account_taken' || result.code === 'email_taken' ? 409 : 500)
-      .json({ error: result.reason ?? '註冊失敗', code: result.code });
-  }
-
-  const token = issueJwt({
-    sub:         result.data.userId,
-    displayName: accountName,
-    provider:    'password',
-  });
-  return res.status(201).json({
-    token,
-    user: {
-      uid:            result.data.userId,
-      accountName,
-      displayName:    accountName,
-      provider:       'password',
-      primaryEmail,
-      emailsVerified: [],
-    },
-  });
-});
-
-/**
- * POST /auth/login
- * body: { accountName, password }
- * → 200 { token, user }
- *
- * Timing-uniform: invalid-account path also runs a dummy scrypt compare so
- * response times don't leak whether the account exists.
- */
-router.post('/login', loginLimiter, async (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { accountName?: unknown; password?: unknown };
-  if (typeof body.accountName !== 'string' || typeof body.password !== 'string') {
-    return res.status(400).json({ error: '帳號與密碼必填', code: 'missing_fields' });
-  }
-
-  const result = await verifyCredentials(body.accountName, body.password);
-  if (!result.ok || !result.data) {
-    const status = result.code === 'no_store' ? 503 : 401;
+    const status = result.code === 'no_store' ? 503
+                 : result.code === 'bad_credentials' ? 401
+                 : 500;
     return res.status(status).json({ error: result.reason ?? '登入失敗', code: result.code });
   }
 
@@ -291,49 +239,53 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
     displayName: result.data.displayName,
     provider:    'password',
   });
-  return res.json({
+  return res.status(result.data.created ? 201 : 200).json({
     token,
     user: {
-      uid:          result.data.userId,
-      accountName:  result.data.accountName,
-      displayName:  result.data.displayName,
-      provider:     'password',
-      primaryEmail: result.data.primaryEmail,
+      uid:            result.data.userId,
+      accountName:    result.data.accountName,
+      displayName:    result.data.displayName,
+      provider:       'password',
+      primaryEmail:   result.data.primaryEmail,
+      emailsVerified: [],
+      isNew:          result.data.created,
     },
   });
-});
+}
+
+router.post('/login',    emailFloodLimiter, loginLimiter, handleLoginOrRegister);
+// `/auth/register` 保留成 alias，讓舊 client 不壞 — 行為跟 /auth/login 一模一樣。
+router.post('/register', emailFloodLimiter, loginLimiter, handleLoginOrRegister);
 
 /**
  * POST /auth/forgot-password
- * body: { accountName, primaryEmail }
- * → 202 { ok: true }  (always 202 even on no-match to avoid user enumeration)
- *
- * If (accountName + email) matches a real row, mints a 30-min reset token
- * and emails a reset URL. If not, silently no-ops so attackers can't tell
- * whether an account exists from this endpoint.
+ * body: { email }（舊 client 傳 primaryEmail 也接）
+ * → 202 { ok: true }  — 不論命中與否都回 202，避免 enumeration
  */
 router.post('/forgot-password', forgotLimiter, async (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { accountName?: unknown; primaryEmail?: unknown };
-  if (typeof body.accountName !== 'string' || typeof body.primaryEmail !== 'string') {
-    return res.status(400).json({ error: '帳號與信箱必填', code: 'missing_fields' });
+  const body = (req.body ?? {}) as { email?: unknown; primaryEmail?: unknown };
+  const rawEmail = typeof body.email === 'string' ? body.email
+                 : typeof body.primaryEmail === 'string' ? body.primaryEmail : '';
+  if (!rawEmail) {
+    return res.status(400).json({ error: '信箱必填', code: 'missing_fields' });
   }
 
-  const respondOk = () => res.status(202).json({ ok: true, ttl_ms: PASSWORD_RESET_TTL_MS });
+  const respondOk = (): Response => res.status(202).json({ ok: true, ttl_ms: PASSWORD_RESET_TTL_MS });
 
-  const account = await findAccountByNameAndEmail(body.accountName, body.primaryEmail);
+  const account = await findAccountByEmail(rawEmail);
   if (!account) return respondOk();
 
   const session = await createPasswordResetSession({
     userId:      account.userId,
     accountName: account.accountName,
-    email:       body.primaryEmail,
+    email:       rawEmail,
   });
   if (!session.ok || !session.data) {
     return respondOk();
   }
 
   const resetUrl = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(session.data.token)}`;
-  sendPasswordResetEmail(body.primaryEmail, account.accountName, resetUrl).catch((err) => {
+  sendPasswordResetEmail(rawEmail, account.accountName, resetUrl).catch((err) => {
     console.error('[auth/forgot-password] mailer error', err);
   });
   return respondOk();
@@ -341,11 +293,7 @@ router.post('/forgot-password', forgotLimiter, async (req: Request, res: Respons
 
 /**
  * POST /auth/reset-password
- * body: { token, newPassword }
- * → 200 { ok: true, userId }
- *
- * Consumes the one-time reset token from /auth/forgot-password and writes
- * the new password hash. Token is single-use and expires after 30 min.
+ * body: { token, newPassword } — 不變
  */
 router.post('/reset-password', async (req: Request, res: Response) => {
   const body = (req.body ?? {}) as { token?: unknown; newPassword?: unknown };
