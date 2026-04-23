@@ -97,7 +97,7 @@ export default function PersonalStatsPage(): JSX.Element {
             <AlertCircle size={18} className="flex-shrink-0 mt-0.5 text-amber-400" />
             <div>
               <p className="font-semibold text-white mb-1">訪客模式</p>
-              <p className="text-zinc-400">戰績 / 追蹤列表需要登入帳號。升級訪客帳號後即可保留個人數據。</p>
+              <p className="text-zinc-400">戰績 / 追蹤列表需要登入帳號。綁定訪客帳號後即可保留個人數據。</p>
             </div>
           </div>
         )}
