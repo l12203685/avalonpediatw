@@ -145,7 +145,8 @@
       "radar": "玩家雷達",
       "aiSelfplay": "AI 自對弈",
       "deepAnalysis": "深度分析"
-    }
+    },
+    "radarHint": "點玩家可展開能力雷達"
   },
   "guest": {
     "rename": "更改訪客名稱",

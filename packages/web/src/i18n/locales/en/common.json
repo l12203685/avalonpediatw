@@ -145,7 +145,8 @@
       "radar": "Player Radar",
       "aiSelfplay": "AI Self-play",
       "deepAnalysis": "Deep Analysis"
-    }
+    },
+    "radarHint": "Tap a player to see the radar"
   },
   "guest": {
     "rename": "Rename Guest",

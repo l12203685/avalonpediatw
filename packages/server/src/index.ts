@@ -11,6 +11,7 @@ import { apiRouter } from './routes/api';
 import { friendsRouter } from './routes/friends';
 import { feedbackRouter } from './routes/feedback';
 import { analysisRouter } from './routes/analysis';
+import { statsRouter } from './routes/stats';
 import { claimsRouter } from './routes/claims';
 import { adminEloRouter } from './routes/adminElo';
 import { healthDeepRouter } from './routes/healthDeep';
@@ -47,6 +48,8 @@ app.use('/api', apiRouter);
 app.use('/api/friends', friendsRouter);
 app.use('/api/feedback', feedbackRouter);
 app.use('/api/analysis', analysisRouter);
+// #98 追蹤對戰統計：同贏率 / 同敗率 / 獨立勝率 + 50 場時間序列
+app.use('/api/stats', statsRouter);
 // Claim system: /api/claims/* (player) + /api/admin/* (admin whitelist)
 app.use('/api', claimsRouter);
 // #54 Phase 2 Day 3: admin-only ELO config (/api/admin/elo/config)

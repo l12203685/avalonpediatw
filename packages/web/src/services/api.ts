@@ -537,6 +537,55 @@ export async function fetchWikiArticles(): Promise<{ articles: WikiArticleApi[];
   return analysisApiFetch<{ articles: WikiArticleApi[]; total: number }>('/wiki');
 }
 
+// ── Pair Stats & Timeline (#98 個人戰績瘦身) ─────────────────────────────────
+
+export interface PairStats {
+  opponentId: string;
+  totalGames: number;
+  sharedGames: number;
+  myWins: number;
+  /** 我贏的場次中，對方同場的比例 (0-100) */
+  sameWinRate: number;
+  /** 我輸的場次中，對方同場的比例 (0-100) */
+  sameLossRate: number;
+  /** 排除同場後的我方勝率；獨立場次為 0 時回 null */
+  independentWinRate: number | null;
+}
+
+export async function fetchPairStatsBatch(
+  token: string,
+  opponentIds: string[],
+): Promise<PairStats[]> {
+  if (opponentIds.length === 0) return [];
+  const ids = opponentIds.join(',');
+  const data = await apiFetch<{ pairs: PairStats[] }>(
+    `/api/stats/pair-batch?ids=${encodeURIComponent(ids)}`,
+    token,
+  );
+  return data.pairs;
+}
+
+export interface TimelineEntry {
+  gameId: string;
+  endedAt: number;
+  won: boolean;
+  playerCount: number;
+  winner: 'good' | 'evil';
+  role: string | null;
+  team: 'good' | 'evil' | null;
+}
+
+export async function fetchMyTimeline(
+  token: string,
+  limit = 50,
+): Promise<TimelineEntry[]> {
+  const data = await apiFetch<{ timeline: TimelineEntry[] }>(
+    `/api/stats/timeline?limit=${limit}`,
+    token,
+  );
+  return data.timeline;
+}
+
 // ── AI Stats API ──────────────────────────────────────────────────────────────
 
 export interface AiStatsDataApi {
