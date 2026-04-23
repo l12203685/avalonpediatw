@@ -150,6 +150,8 @@
   },
   "guest": {
     "rename": "Rename Guest",
+    "renameOrBind": "Bind Account & Rename",
+    "renameOrBindHint": "Bind an account first (Google / Discord / Line) so your data survives a rename",
     "renamePlaceholder": "New name (2–20 chars)",
     "renameLimit": "Up to 3 renames per 24 hours",
     "renameLengthError": "Name must be 2–20 characters",

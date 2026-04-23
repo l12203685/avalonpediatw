@@ -6,7 +6,6 @@ import {
   User,
   Link2,
   Chrome,
-  Pencil,
   Loader,
   HelpCircle,
 } from 'lucide-react';
@@ -237,16 +236,30 @@ export default function SettingsPage(): JSX.Element {
                           </div>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => {
-                            setRenaming(true);
-                            setNewName(currentPlayer?.name ?? '');
-                          }}
-                          className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-1.5 px-3 rounded-lg text-sm transition-colors border border-zinc-700"
-                        >
-                          <Pencil size={14} />
-                          {t('guest.rename')}
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            data-testid="settings-btn-rename-or-bind"
+                            onClick={() => {
+                              // 2026-04-23 Edward 指令：訪客改名按鈕改成「帳號綁訂與改名」，
+                              // 點擊同頁展開改名輸入 + 自動滾動到帳號綁定區，提醒先綁帳號
+                              // 再改名，避免改完名字又清 cookie 導致資料遺失。
+                              setRenaming(true);
+                              setNewName(currentPlayer?.name ?? '');
+                              // 下一個 tick 滾動到 binding 區塊，讓綁定按鈕進入視野
+                              requestAnimationFrame(() => {
+                                const bindingEl = document.getElementById('settings-binding');
+                                if (bindingEl) {
+                                  bindingEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                }
+                              });
+                            }}
+                            className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-1.5 px-3 rounded-lg text-sm transition-colors border border-zinc-700"
+                          >
+                            <Link2 size={14} />
+                            {t('guest.renameOrBind')}
+                          </button>
+                          <p className="text-[11px] text-zinc-500">{t('guest.renameOrBindHint')}</p>
+                        </div>
                       )
                     ) : (
                       <p className="text-zinc-500 text-xs">{t('settings.comingSoon')}</p>
