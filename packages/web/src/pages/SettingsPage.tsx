@@ -18,8 +18,9 @@ import {
   hasFirebaseAuthConfigured,
   upgradeGuestToRegistered,
   getIdToken,
+  stashLinkedProviderToken,
 } from '../services/auth';
-import { initializeSocket, getStoredToken } from '../services/socket';
+import { getStoredToken } from '../services/socket';
 
 type SectionId = 'basic' | 'binding';
 
@@ -148,9 +149,14 @@ export default function SettingsPage(): JSX.Element {
           addToast(result.error || t('settings.upgradeFailed'), 'error');
           return;
         }
-        // 用 Firebase ID token 重建 socket — 新身份會帶 provider='google' 回來
-        await initializeSocket(idToken);
+        // 2026-04-23 bind-state-refresh：直接 initializeSocket 有時 auth:success race
+        // 後仍殘留訪客 provider 在 store（Edward 2026-04-23 18:14 drift）。改走硬
+        // reload：把 Firebase ID token stash 到 localStorage → 重新 mount → App.tsx
+        // 從 stash 拿 token 重開 socket，確保 provider='google' 乾淨寫入 store。
+        stashLinkedProviderToken(idToken);
         addToast(t('guest.renameSuccess'), 'success');
+        // 留 600ms 讓 toast 可見
+        setTimeout(() => { window.location.reload(); }, 600);
       } else if (provider === 'discord') {
         // #42 bind-path fix：綁定按鈕必須走 /auth/link/discord，不是登入路徑。
         // 拿 socket 當前 token（訪客 JWT 或 Firebase ID token）一併帶上，

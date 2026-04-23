@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from './store/gameStore';
-import { initializeAuth, onAuthStateChange, extractOAuthTokenFromUrl, resumeGuestFromCookie } from './services/auth';
+import {
+  initializeAuth,
+  onAuthStateChange,
+  extractOAuthTokenFromUrl,
+  resumeGuestFromCookie,
+  stashLinkedProviderToken,
+  consumeLinkedProviderToken,
+} from './services/auth';
 import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
 import { startVersionCheck } from './services/versionCheck';
 import HomePage from './pages/HomePage';
@@ -70,8 +77,36 @@ function App(): JSX.Element {
     // 處理 Discord / Line OAuth callback（URL 帶有 ?oauth_token=...）
     const oauthResult = extractOAuthTokenFromUrl();
     if (oauthResult) {
+      // 2026-04-23 bind-state-refresh：訪客綁 Discord / Line 回來時，server 會
+      // 帶 `?link_merged=1` 表示「訪客 → 真帳號」已合併完成。此時光是 setGameState
+      // + socket 重連並不足以把所有殘留訪客 state 洗乾淨（socket 搶先 auth:success
+      // 有時仍把訪客 provider 塞回 store，或 isAuthenticated flag 不會被同步），
+      // Edward 2026-04-23 18:14 回報「我綁了啊 但改名後我的名字還是顯示當前: 訪客」
+      // 就是這個殘留。解法：把新 JWT 暫存 localStorage 後硬 reload，讓 App 以
+      // 乾淨 state 重新 mount，下面的 `consumeLinkedProviderToken()` 分支會接手
+      // 用新 token 開 socket，socket handshake 帶真帳號 provider 回來 → settings
+      // 頁自動跳脫訪客 UI。
+      if (oauthResult.linkMerged) {
+        stashLinkedProviderToken(oauthResult.token);
+        window.location.reload();
+        return;
+      }
       const { setGameState } = useGameStore.getState();
+      setIsAuthenticated(true);
       initializeSocket(oauthResult.token)
+        .then(() => { setGameState('home'); setIsLoading(false); })
+        .catch(() => { setIsLoading(false); });
+      return;
+    }
+
+    // 2026-04-23 bind-state-refresh：若上一輪 App 在 OAuth 綁定完成時把新 JWT
+    // stash 到 localStorage，接下來 reload 後的這一輪就該直接拿那顆 token 起 socket
+    // —— 搶在 Firebase 的 guest cookie 續簽前面，避免又被打回訪客。
+    const stashedLinkToken = consumeLinkedProviderToken();
+    if (stashedLinkToken) {
+      const { setGameState } = useGameStore.getState();
+      setIsAuthenticated(true);
+      initializeSocket(stashedLinkToken)
         .then(() => { setGameState('home'); setIsLoading(false); })
         .catch(() => { setIsLoading(false); });
       return;
