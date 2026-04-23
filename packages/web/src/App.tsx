@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from './store/gameStore';
-import { initializeAuth, onAuthStateChange, extractOAuthTokenFromUrl, resumeGuestFromCookie } from './services/auth';
+import {
+  initializeAuth,
+  onAuthStateChange,
+  extractOAuthTokenFromUrl,
+  resumeGuestFromCookie,
+  stashLinkedProviderToken,
+  consumeLinkedProviderToken,
+} from './services/auth';
 import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
 import { startVersionCheck } from './services/versionCheck';
 import HomePage from './pages/HomePage';
@@ -68,10 +75,34 @@ function App(): JSX.Element {
 
   useEffect(() => {
     // 處理 Discord / Line OAuth callback（URL 帶有 ?oauth_token=...）
+    //
+    // 2026-04-23 bind-name-sync (重建 orphan 01785fa8)：若 URL 帶 `?link_merged=1`
+    // 代表訪客剛剛完成 Discord / Line 綁定，server 已經幫我們合併戰績並發了新的
+    // 真帳號 JWT。直接接上 socket 有時會被 Firebase `onAuthStateChange` 或
+    // guest_session cookie 搶先 race — 所以改走 stash → reload → 下一輪 mount
+    // consume 的硬 reload 流程，確保所有 React state / zustand store / 舊 socket
+    // 都重置，不會殘留 provider='guest'。
     const oauthResult = extractOAuthTokenFromUrl();
     if (oauthResult) {
+      if (oauthResult.linkMerged) {
+        // 訪客綁定 flow：stash 新 JWT → hard reload → 下一輪 mount consume 起 socket
+        stashLinkedProviderToken(oauthResult.token);
+        window.location.reload();
+        return;
+      }
       const { setGameState } = useGameStore.getState();
       initializeSocket(oauthResult.token)
+        .then(() => { setGameState('home'); setIsLoading(false); })
+        .catch(() => { setIsLoading(false); });
+      return;
+    }
+
+    // Bind-name-sync reload 後，localStorage 裡會有 stash 的真帳號 JWT — 優先用它
+    // 起 socket，繞過 guest cookie 續簽，provider='discord' / 'line' 乾淨寫入。
+    const stashed = consumeLinkedProviderToken();
+    if (stashed) {
+      const { setGameState } = useGameStore.getState();
+      initializeSocket(stashed)
         .then(() => { setGameState('home'); setIsLoading(false); })
         .catch(() => { setIsLoading(false); });
       return;

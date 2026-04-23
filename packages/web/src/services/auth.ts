@@ -230,17 +230,59 @@ export function signInWithLine(mode: 'login' | 'bind' = 'login', jwt?: string): 
 
 /**
  * 處理 OAuth callback：從 URL 讀取 ?oauth_token=...
- * 回傳 token 字串，或 null（代表沒有 OAuth callback）
+ *
+ * 回傳 token + provider + `linkMerged`（`?link_merged=1` 代表是訪客綁定完成 flow），
+ * 或 null（代表沒有 OAuth callback）。
+ *
+ * 2026-04-23 bind-name-sync：`linkMerged=true` 時 App.tsx 會走硬 reload 路徑，
+ * 保證 React state / socket / store 全部從乾淨狀態起，不會有訪客 provider 殘留。
+ * 對應 orphan commit 01785fa8 的修復（未進 main，本次重建）。
  */
-export function extractOAuthTokenFromUrl(): { token: string; provider: string } | null {
+export function extractOAuthTokenFromUrl():
+  | { token: string; provider: string; linkMerged: boolean }
+  | null
+{
   const params = new URLSearchParams(window.location.search);
-  const token    = params.get('oauth_token');
-  const provider = params.get('provider') || 'oauth';
+  const token      = params.get('oauth_token');
+  const provider   = params.get('provider') || 'oauth';
+  const linkMerged = params.get('link_merged') === '1';
   if (!token) return null;
   // 清除 URL 參數，避免 token 留在瀏覽器記錄
   const cleanUrl = window.location.pathname + window.location.hash;
   window.history.replaceState({}, '', cleanUrl);
-  return { token: decodeURIComponent(token), provider };
+  return { token: decodeURIComponent(token), provider, linkMerged };
+}
+
+/**
+ * Bind-name-sync (2026-04-23)：訪客綁 Discord / Line 回來後，我們把新發的
+ * 真帳號 JWT 塞到 localStorage，讓接下來 `window.location.reload()` 之後
+ * `App.tsx` 能直接用這顆 token 重開 socket，不會被 `guest_session` cookie 拉回
+ * 訪客身份。reload 後 socket handshake 跑新 JWT → `provider='discord' / 'line'`
+ * → SettingsPage.isGuestPlayer 回 false → 顯示正式帳號 UI。
+ *
+ * 一次性：App.tsx mount 讀完立刻刪掉，避免舊 token 常駐 localStorage 被別的
+ * tab 或 Firebase 流程讀到造成混亂。
+ *
+ * 重建 orphan commit 01785fa8 的邏輯（該 commit 從未進 main，被 1f628c2d force-push 丟失）。
+ */
+const BIND_REFRESH_TOKEN_KEY = 'avalon_bind_refresh_token';
+
+export function stashLinkedProviderToken(token: string): void {
+  try {
+    localStorage.setItem(BIND_REFRESH_TOKEN_KEY, token);
+  } catch {
+    // Private mode / quota — 無暫存不致命，reload 後會落回 guest cookie。
+  }
+}
+
+export function consumeLinkedProviderToken(): string | null {
+  try {
+    const token = localStorage.getItem(BIND_REFRESH_TOKEN_KEY);
+    if (token) localStorage.removeItem(BIND_REFRESH_TOKEN_KEY);
+    return token;
+  } catch {
+    return null;
+  }
 }
 
 /** 從 URL 讀取 OAuth 錯誤參數（?auth_error=...），清除後回傳錯誤訊息，無則回傳 null */

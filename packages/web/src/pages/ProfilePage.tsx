@@ -156,7 +156,7 @@ export default function ProfilePage(): JSX.Element {
     minion:   t('game:roleLabel.minion'),
     unknown:  t('game:roleLabel.unknown'),
   };
-  const { setGameState, profileUserId, navigateToProfile, addToast } = useGameStore();
+  const { setGameState, profileUserId, navigateToProfile, addToast, currentPlayer, setCurrentPlayer } = useGameStore();
   const [profile, setProfile]       = useState<UserProfile | null>(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
@@ -343,6 +343,16 @@ export default function ProfilePage(): JSX.Element {
       }
       const updated = await updateMyProfile(token, patch);
       setProfile(updated);
+      // 2026-04-23 bind-name-sync：把新 display_name / photo_url 同步到 gameStore
+      // 的 currentPlayer，讓 SettingsPage / Header / FloatingControls 等地方
+      // 立刻顯示新名稱，不用等 socket 重連（上次 Edward 回報改名後 UI 沒同步）。
+      if (currentPlayer && (patch.display_name !== undefined || patch.photo_url !== undefined)) {
+        setCurrentPlayer({
+          ...currentPlayer,
+          ...(patch.display_name !== undefined ? { name: updated.display_name } : {}),
+          ...(patch.photo_url !== undefined ? { avatar: updated.photo_url ?? undefined } : {}),
+        });
+      }
       setEditing(false);
       addToast(t('profile:edit.updateSuccess'), 'success');
     } catch (err: unknown) {
