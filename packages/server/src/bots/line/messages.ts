@@ -5,7 +5,7 @@
 export function createHelpMessage() {
   return {
     type: 'flex',
-    altText: 'Avalon Bot Help',
+    altText: 'Avalon 機器人說明',
     contents: {
       type: 'bubble',
       body: {
@@ -14,7 +14,7 @@ export function createHelpMessage() {
         contents: [
           {
             type: 'text',
-            text: '🎭 Avalon Bot Help',
+            text: '🎭 Avalon 機器人說明',
             weight: 'bold',
             size: 'xl',
             margin: 'md',
@@ -25,7 +25,7 @@ export function createHelpMessage() {
           },
           {
             type: 'text',
-            text: 'Available Commands:',
+            text: '可用指令:',
             weight: 'bold',
             size: 'sm',
             margin: 'md',
@@ -39,37 +39,37 @@ export function createHelpMessage() {
             contents: [
               {
                 type: 'text',
-                text: '📌 create - Create a new game',
+                text: '📌 create - 建立新遊戲',
                 size: 'sm',
                 wrap: true,
               },
               {
                 type: 'text',
-                text: '📌 join <room-id> - Join a game',
+                text: '📌 join <房間代碼> - 加入遊戲',
                 size: 'sm',
                 wrap: true,
               },
               {
                 type: 'text',
-                text: '📌 status - Check game status',
+                text: '📌 status - 查詢遊戲狀態',
                 size: 'sm',
                 wrap: true,
               },
               {
                 type: 'text',
-                text: '📌 vote <approve|reject> - Cast your vote',
+                text: '📌 vote <approve|reject> - 投票',
                 size: 'sm',
                 wrap: true,
               },
               {
                 type: 'text',
-                text: '📌 rules - View game rules',
+                text: '📌 rules - 查看遊戲規則',
                 size: 'sm',
                 wrap: true,
               },
               {
                 type: 'text',
-                text: '📌 roles - View role descriptions',
+                text: '📌 roles - 查看角色介紹',
                 size: 'sm',
                 wrap: true,
               },
@@ -88,7 +88,7 @@ export function createHelpMessage() {
             height: 'sm',
             action: {
               type: 'message',
-              label: 'Rules',
+              label: '規則',
               text: 'rules',
             },
           },
@@ -98,7 +98,7 @@ export function createHelpMessage() {
             height: 'sm',
             action: {
               type: 'message',
-              label: 'Create Game',
+              label: '建立遊戲',
               text: 'create',
             },
           },
@@ -112,7 +112,7 @@ export function createHelpMessage() {
 export function createRulesMessage() {
   return {
     type: 'flex',
-    altText: 'Avalon Rules',
+    altText: 'Avalon 遊戲規則',
     contents: {
       type: 'bubble',
       body: {
@@ -121,7 +121,7 @@ export function createRulesMessage() {
         contents: [
           {
             type: 'text',
-            text: '📋 Avalon Rules',
+            text: '📋 Avalon 遊戲規則',
             weight: 'bold',
             size: 'xl',
             margin: 'md',
@@ -132,7 +132,7 @@ export function createRulesMessage() {
           },
           {
             type: 'text',
-            text: 'Game Objective',
+            text: '遊戲目標',
             weight: 'bold',
             size: 'sm',
             margin: 'md',
@@ -140,7 +140,7 @@ export function createRulesMessage() {
           },
           {
             type: 'text',
-            text: '🔵 Good: Complete 3 successful quests\n🔴 Evil: Complete 3 failed quests OR assassinate Merlin',
+            text: '🔵 好人陣營:完成 3 場成功任務\n🔴 壞人陣營:完成 3 場失敗任務,或刺殺梅林',
             size: 'sm',
             wrap: true,
             margin: 'sm',
@@ -151,7 +151,7 @@ export function createRulesMessage() {
           },
           {
             type: 'text',
-            text: 'Game Phases',
+            text: '遊戲階段',
             weight: 'bold',
             size: 'sm',
             margin: 'md',
@@ -165,19 +165,19 @@ export function createRulesMessage() {
             contents: [
               {
                 type: 'text',
-                text: '1️⃣ Voting: Vote to approve/reject team proposal',
+                text: '1️⃣ 投票階段:表決是否通過隊伍提案',
                 size: 'sm',
                 wrap: true,
               },
               {
                 type: 'text',
-                text: '2️⃣ Quest: Selected players choose success/fail',
+                text: '2️⃣ 任務階段:被選中的玩家決定成功或失敗',
                 size: 'sm',
                 wrap: true,
               },
               {
                 type: 'text',
-                text: '3️⃣ Discussion: If good wins, assassin tries to kill Merlin',
+                text: '3️⃣ 刺殺階段:若好人獲勝,刺客嘗試刺殺梅林',
                 size: 'sm',
                 wrap: true,
               },
@@ -196,7 +196,7 @@ export function createRulesMessage() {
             height: 'sm',
             action: {
               type: 'message',
-              label: 'View Roles',
+              label: '查看角色',
               text: 'roles',
             },
           },
@@ -210,7 +210,7 @@ export function createRulesMessage() {
 export function createRolesMessage() {
   return {
     type: 'flex',
-    altText: 'Avalon Roles',
+    altText: 'Avalon 角色介紹',
     contents: {
       type: 'carousel',
       contents: [
@@ -223,21 +223,21 @@ export function createRolesMessage() {
             contents: [
               {
                 type: 'text',
-                text: '🟦 Merlin',
+                text: '🟦 梅林',
                 weight: 'bold',
                 size: 'lg',
                 color: '#0066ff',
               },
               {
                 type: 'text',
-                text: 'Good Team',
+                text: '好人陣營',
                 size: 'xs',
                 color: '#999999',
                 margin: 'md',
               },
               {
                 type: 'text',
-                text: 'Knows all evil players (except Morgana). Must hide your identity from the assassin.',
+                text: '知道所有壞人(莫甘娜除外)。必須向刺客隱藏身份。',
                 size: 'sm',
                 wrap: true,
                 margin: 'md',
@@ -254,21 +254,21 @@ export function createRolesMessage() {
             contents: [
               {
                 type: 'text',
-                text: '🟥 Assassin',
+                text: '🟥 刺客',
                 weight: 'bold',
                 size: 'lg',
                 color: '#ff0000',
               },
               {
                 type: 'text',
-                text: 'Evil Team',
+                text: '壞人陣營',
                 size: 'xs',
                 color: '#999999',
                 margin: 'md',
               },
               {
                 type: 'text',
-                text: 'Kill Merlin in the assassination phase to win, even if good is winning quests.',
+                text: '刺殺階段殺掉梅林即可獲勝,即使好人贏得任務也一樣。',
                 size: 'sm',
                 wrap: true,
                 margin: 'md',
@@ -285,21 +285,21 @@ export function createRolesMessage() {
             contents: [
               {
                 type: 'text',
-                text: '🟦 Percival',
+                text: '🟦 派西維爾',
                 weight: 'bold',
                 size: 'lg',
                 color: '#0066ff',
               },
               {
                 type: 'text',
-                text: 'Good Team',
+                text: '好人陣營',
                 size: 'xs',
                 color: '#999999',
                 margin: 'md',
               },
               {
                 type: 'text',
-                text: 'Knows who Merlin and Morgana are, but not which is which. Protect the real Merlin!',
+                text: '知道梅林和莫甘娜是誰,但分不出誰是誰。請保護真正的梅林!',
                 size: 'sm',
                 wrap: true,
                 margin: 'md',
@@ -316,21 +316,21 @@ export function createRolesMessage() {
             contents: [
               {
                 type: 'text',
-                text: '🟥 Morgana',
+                text: '🟥 莫甘娜',
                 weight: 'bold',
                 size: 'lg',
                 color: '#ff0000',
               },
               {
                 type: 'text',
-                text: 'Evil Team',
+                text: '壞人陣營',
                 size: 'xs',
                 color: '#999999',
                 margin: 'md',
               },
               {
                 type: 'text',
-                text: 'Appears to Percival as a possible Merlin. Merlin can still see you as evil.',
+                text: '在派西維爾眼中偽裝成梅林。梅林仍能看出你是壞人。',
                 size: 'sm',
                 wrap: true,
                 margin: 'md',
@@ -353,7 +353,7 @@ export function createGameStatusMessage(status: {
 }) {
   return {
     type: 'flex',
-    altText: 'Game Status',
+    altText: '遊戲狀態',
     contents: {
       type: 'bubble',
       body: {
@@ -362,7 +362,7 @@ export function createGameStatusMessage(status: {
         contents: [
           {
             type: 'text',
-            text: '📊 Game Status',
+            text: '📊 遊戲狀態',
             weight: 'bold',
             size: 'xl',
             margin: 'md',
@@ -374,7 +374,7 @@ export function createGameStatusMessage(status: {
             contents: [
               {
                 type: 'text',
-                text: 'Round',
+                text: '回合',
                 color: '#aaaaaa',
                 size: 'sm',
                 flex: 1,
@@ -396,7 +396,7 @@ export function createGameStatusMessage(status: {
             contents: [
               {
                 type: 'text',
-                text: 'State',
+                text: '階段',
                 color: '#aaaaaa',
                 size: 'sm',
                 flex: 1,
@@ -418,7 +418,7 @@ export function createGameStatusMessage(status: {
             contents: [
               {
                 type: 'text',
-                text: 'Players',
+                text: '玩家人數',
                 color: '#aaaaaa',
                 size: 'sm',
                 flex: 1,
@@ -440,7 +440,7 @@ export function createGameStatusMessage(status: {
             contents: [
               {
                 type: 'text',
-                text: '✅ Good Wins',
+                text: '✅ 好人勝場',
                 color: '#00b300',
                 size: 'sm',
                 flex: 2,
@@ -463,7 +463,7 @@ export function createGameStatusMessage(status: {
             contents: [
               {
                 type: 'text',
-                text: '❌ Evil Wins',
+                text: '❌ 壞人勝場',
                 color: '#ff0000',
                 size: 'sm',
                 flex: 2,
@@ -488,14 +488,14 @@ export function createGameStatusMessage(status: {
 export function createQuickReplyButtons() {
   return {
     type: 'text',
-    text: 'Welcome to Avalon! What would you like to do?',
+    text: '歡迎來到 Avalon!請選擇你想做的事:',
     quickReply: {
       items: [
         {
           type: 'action',
           action: {
             type: 'message',
-            label: 'Help',
+            label: '說明',
             text: 'help',
           },
         },
@@ -503,7 +503,7 @@ export function createQuickReplyButtons() {
           type: 'action',
           action: {
             type: 'message',
-            label: 'Create Game',
+            label: '建立遊戲',
             text: 'create',
           },
         },
@@ -511,7 +511,7 @@ export function createQuickReplyButtons() {
           type: 'action',
           action: {
             type: 'message',
-            label: 'Rules',
+            label: '規則',
             text: 'rules',
           },
         },
@@ -519,7 +519,7 @@ export function createQuickReplyButtons() {
           type: 'action',
           action: {
             type: 'message',
-            label: 'Roles',
+            label: '角色',
             text: 'roles',
           },
         },
