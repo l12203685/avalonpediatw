@@ -8,6 +8,8 @@ import {
   findUserIdByProviderIdentity,
   linkProviderIdentity,
   mergeUserAccounts,
+  absorbGuestIntoUser,
+  ensureUserForProviderIdentity,
   type LinkProvider,
 } from '../services/supabase';
 import { mintGuestToken, verifyGuestToken, generateGuestName } from '../middleware/guestAuth';
@@ -94,14 +96,29 @@ function randomState(): string {
 // ── #42 link mode helpers ─────────────────────────────────────
 
 /**
- * 從 Bearer header 或 `?token=` query 解析自訂 JWT，回 sub（= users.id）給綁定流程用。
- * 拿不到合法 JWT 回 null。Guest token 不允許綁定（guest 要先註冊）。
+ * 綁定流程身份解析結果。`isGuest=true` 代表 caller 是訪客 JWT，callback
+ * 會改走 `absorbGuestIntoUser` 合併路徑而不是普通的 link/merge（#42 bind-path
+ * fix：訪客綁 Discord/Line 也要保留戰績）。
+ */
+interface BindIdentity {
+  userId:  string;
+  isGuest: boolean;
+}
+
+/**
+ * 從 Bearer header 或 `?token=` query 解析 JWT，回傳 `{ userId, isGuest }`。
+ * 接受兩種 token：
+ *   - 正式帳號 JWT（provider !== 'guest'）：userId = payload.sub，isGuest=false
+ *   - 訪客 JWT（provider === 'guest'）：userId = payload.sub（guest uid），
+ *     isGuest=true — callback 會把 guest 戰績搬到綁定的真帳號
  *
  * Query string 支援是為了 redirect-based OAuth 起跳：瀏覽器 window.location 整頁
  * 跳轉送不出 custom header，所以 /auth/link/* 接受 ?token= 傳 JWT。只在 link
  * 起跳點用，OAuth provider callback 不需要再送 token。
+ *
+ * 拿不到合法 JWT 回 null。
  */
-function parseBearerUserId(authHeader: string | undefined, queryToken?: string): string | null {
+function parseBearerUserId(authHeader: string | undefined, queryToken?: string): BindIdentity | null {
   let token: string | null = null;
   if (authHeader?.startsWith('Bearer ')) {
     token = authHeader.slice(7);
@@ -112,29 +129,82 @@ function parseBearerUserId(authHeader: string | undefined, queryToken?: string):
   try {
     const payload = verify(token, JWT_SECRET) as JwtPayload & { sub?: string; provider?: string };
     if (!payload.sub) return null;
-    if (payload.provider === 'guest') return null;
-    return payload.sub;
+    return {
+      userId:  payload.sub,
+      isGuest: payload.provider === 'guest',
+    };
   } catch {
     return null;
   }
 }
 
 /**
- * 綁定 callback 核心：
- *   - 若目標 identity 從未綁 → 直接 link 到 currentUserId
- *   - 若已綁給別人（otherId != currentUserId）→ mergeUserAccounts(current, other)
- *   - 若已綁給自己 → no-op
- * 完成後 redirect 到個人頁並帶 success/error flag。
+ * 綁定 callback 核心。兩種呼叫模式：
+ *
+ * 1. **正式帳號綁新 provider**（`isGuest=false`，既有行為）：
+ *    - 目標 identity 從未綁 → 直接 link 到 currentUserId
+ *    - 已綁給別人（otherId != currentUserId）→ mergeUserAccounts(current, other)
+ *    - 已綁給自己 → no-op
+ *    完成後 redirect 到個人頁並帶 success flag。前端 socket 仍用舊 JWT 有效。
+ *
+ * 2. **訪客綁 provider**（`isGuest=true`，#42 bind-path fix）：
+ *    - 目標 identity 已對應真帳號 `existing` → 把訪客戰績 absorb 進 `existing`
+ *      → redirect 時附 `?oauth_token=<新 JWT>` 讓前端以真帳號身份 re-handshake
+ *    - 目標 identity 從未綁 → upsertUser 建新真帳號 + link provider
+ *      + absorbGuestIntoUser 搬戰績 → 同樣發新 JWT
+ *
+ *  `currentUserId` 在 guest 模式下是 guest uid（`mintGuestToken` 發的 v4 UUID），
+ *  非 auth_users row id — 這是為什麼 guest 路徑不能走 `mergeUserAccounts`。
  */
 async function handleLinkCallback(
   res: Response,
   currentUserId: string,
   provider: LinkProvider,
   externalId: string,
+  options: {
+    isGuest:     boolean;
+    displayName: string;
+    avatarUrl?:  string;
+    email?:      string;
+  },
 ): Promise<void> {
   try {
     const existing = await findUserIdByProviderIdentity(provider, externalId);
 
+    if (options.isGuest) {
+      // ── 訪客綁定路徑 (#42 bind-path fix) ────────────────────
+      let realUserId: string | null = existing;
+      if (!realUserId) {
+        // 目標 identity 從未綁 → 建新真帳號（Firestore / Supabase 兩邊通用）
+        realUserId = await ensureUserForProviderIdentity(
+          provider,
+          externalId,
+          options.displayName,
+          options.avatarUrl,
+          options.email,
+        );
+        if (!realUserId) {
+          res.redirect(`${FRONTEND_URL}/profile?link_error=create_failed&provider=${provider}`);
+          return;
+        }
+      }
+
+      // 戰績 / 好友從 guest uid 搬到真帳號（best-effort，失敗只 log）
+      await absorbGuestIntoUser(currentUserId, realUserId);
+
+      // 簽新 JWT 讓前端 re-handshake，socket 改帶 provider=<discord/line> 連回來
+      const jwt = issueJwt({
+        sub:         realUserId,
+        displayName: options.displayName,
+        provider,
+      });
+      res.redirect(
+        `${FRONTEND_URL}?oauth_token=${encodeURIComponent(jwt)}&provider=${provider}&link_merged=1`,
+      );
+      return;
+    }
+
+    // ── 正式帳號綁新 provider 路徑（原行為） ────────────────
     if (existing && existing !== currentUserId) {
       // 已有獨立帳號 → 合併到當前帳號（當前視為 primary，保留玩家現在登入的這個）
       const merged = await mergeUserAccounts(currentUserId, existing);
@@ -202,6 +272,7 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
     return res.redirect(`${FRONTEND_URL}?auth_error=invalid_state`);
   }
   const linkUserId = session.linkUserId;
+  const isGuestBind = session.isGuest === true;
 
   try {
     // 1. code → access_token
@@ -233,9 +304,15 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
       ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
       : undefined;
 
-    // #42: 綁定流程 — 不發新 token，合併/綁定到當前 user 後導回個人頁
+    // #42: 綁定流程 — 正式帳號不發新 token（前端舊 JWT 有效）；訪客則發新 JWT
+    // 讓 socket 以真帳號 re-handshake + 訪客戰績合併到真帳號（bind-path fix）
     if (linkUserId) {
-      await handleLinkCallback(res, linkUserId, 'discord', discordUser.id);
+      await handleLinkCallback(res, linkUserId, 'discord', discordUser.id, {
+        isGuest:     isGuestBind,
+        displayName,
+        avatarUrl,
+        email:       discordUser.email,
+      });
       return;
     }
 
@@ -302,6 +379,7 @@ router.get('/line/callback', async (req: Request, res: Response) => {
     return res.redirect(`${FRONTEND_URL}?auth_error=invalid_state`);
   }
   const linkUserId = session.linkUserId;
+  const isGuestBind = session.isGuest === true;
 
   try {
     // 1. code → access_token
@@ -327,9 +405,13 @@ router.get('/line/callback', async (req: Request, res: Response) => {
       userId: string; displayName: string; pictureUrl?: string;
     };
 
-    // #42: 綁定流程 — 不發新 token，合併/綁定到當前 user 後導回個人頁
+    // #42: 綁定流程 — 正式帳號不發新 token；訪客則發新 JWT + 搬戰績（bind-path fix）
     if (linkUserId) {
-      await handleLinkCallback(res, linkUserId, 'line', lineUser.userId);
+      await handleLinkCallback(res, linkUserId, 'line', lineUser.userId, {
+        isGuest:     isGuestBind,
+        displayName: lineUser.displayName,
+        avatarUrl:   lineUser.pictureUrl,
+      });
       return;
     }
 
@@ -558,12 +640,14 @@ router.get('/link/discord', async (req: Request, res: Response) => {
     return res.status(503).json({ error: 'Discord OAuth 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
-  const currentUserId = parseBearerUserId(req.headers.authorization, queryToken);
-  if (!currentUserId) {
+  // #42 bind-path fix：接受訪客 JWT（`isGuest=true`），callback 會把戰績合併到
+  // 真帳號 — 如果仍擋訪客 JWT 會導致 Edward 在設定頁點「綁 Discord」收到 401。
+  const identity = parseBearerUserId(req.headers.authorization, queryToken);
+  if (!identity) {
     return res.status(401).json({ error: 'Unauthorized — login first' });
   }
   const state = randomState();
-  await createOAuthSession(state, 'discord', currentUserId);
+  await createOAuthSession(state, 'discord', identity.userId, identity.isGuest);
 
   const params = new URLSearchParams({
     client_id:     DISCORD_CLIENT_ID,
@@ -585,12 +669,13 @@ router.get('/link/line', async (req: Request, res: Response) => {
     return res.status(503).json({ error: 'Line Login 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
-  const currentUserId = parseBearerUserId(req.headers.authorization, queryToken);
-  if (!currentUserId) {
+  // #42 bind-path fix：接受訪客 JWT（同 /link/discord）
+  const identity = parseBearerUserId(req.headers.authorization, queryToken);
+  if (!identity) {
     return res.status(401).json({ error: 'Unauthorized — login first' });
   }
   const state = randomState();
-  await createOAuthSession(state, 'line', currentUserId);
+  await createOAuthSession(state, 'line', identity.userId, identity.isGuest);
 
   const params = new URLSearchParams({
     response_type: 'code',

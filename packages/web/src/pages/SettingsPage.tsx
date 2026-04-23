@@ -19,7 +19,7 @@ import {
   upgradeGuestToRegistered,
   getIdToken,
 } from '../services/auth';
-import { initializeSocket } from '../services/socket';
+import { initializeSocket, getStoredToken } from '../services/socket';
 
 type SectionId = 'basic' | 'binding';
 
@@ -152,9 +152,22 @@ export default function SettingsPage(): JSX.Element {
         await initializeSocket(idToken);
         addToast(t('guest.renameSuccess'), 'success');
       } else if (provider === 'discord') {
-        signInWithDiscord();
+        // #42 bind-path fix：綁定按鈕必須走 /auth/link/discord，不是登入路徑。
+        // 拿 socket 當前 token（訪客 JWT 或 Firebase ID token）一併帶上，
+        // 後端 `parseBearerUserId` 會據此判斷當前身份並在 callback 合併戰績。
+        const jwt = getStoredToken();
+        if (!jwt) {
+          addToast(t('settings.upgradeFailed'), 'error');
+          return;
+        }
+        signInWithDiscord('bind', jwt);
       } else if (provider === 'line') {
-        signInWithLine();
+        const jwt = getStoredToken();
+        if (!jwt) {
+          addToast(t('settings.upgradeFailed'), 'error');
+          return;
+        }
+        signInWithLine('bind', jwt);
       }
     } catch (err) {
       addToast(err instanceof Error ? err.message : t('settings.upgradeFailed'), 'error');

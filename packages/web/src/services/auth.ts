@@ -194,13 +194,37 @@ export async function upgradeGuestToRegistered(
   }
 }
 
-/** Discord OAuth：重導向到後端 → Discord → 後端 callback → 前端 */
-export function signInWithDiscord(): void {
+/**
+ * Discord OAuth 進入點。`mode` 決定走登入還是綁定路徑（#42 bind-path fix）：
+ *
+ *   - `'login'`（預設、無 token 時）→ `/auth/discord`：OAuth 走完 server 會發
+ *     新 JWT、把 token 帶回 URL，前端當成登入處理。
+ *   - `'bind'` + `jwt` → `/auth/link/discord?token=<jwt>`：server 驗證當前身份
+ *     後把 discord_id 綁到既有 user row；訪客 JWT 也接受（後端會在 callback
+ *     把訪客戰績合併到 discord 真帳號）。
+ *
+ * 舊 call site（無參數）= 原登入行為，向後相容。
+ */
+export function signInWithDiscord(mode: 'login' | 'bind' = 'login', jwt?: string): void {
+  if (mode === 'bind' && jwt) {
+    const q = new URLSearchParams({ token: jwt }).toString();
+    window.location.href = `${SERVER_URL}/auth/link/discord?${q}`;
+    return;
+  }
   window.location.href = `${SERVER_URL}/auth/discord`;
 }
 
-/** Line Login：重導向到後端 → Line → 後端 callback → 前端 */
-export function signInWithLine(): void {
+/**
+ * Line Login 進入點。同 `signInWithDiscord`：
+ *   - `'login'` → `/auth/line`
+ *   - `'bind'` + `jwt` → `/auth/link/line?token=<jwt>`
+ */
+export function signInWithLine(mode: 'login' | 'bind' = 'login', jwt?: string): void {
+  if (mode === 'bind' && jwt) {
+    const q = new URLSearchParams({ token: jwt }).toString();
+    window.location.href = `${SERVER_URL}/auth/link/line?${q}`;
+    return;
+  }
   window.location.href = `${SERVER_URL}/auth/line`;
 }
 

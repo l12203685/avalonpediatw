@@ -75,6 +75,13 @@ export interface LinkedAccountSummary {
 
 export interface OAuthSession {
   linkUserId: string | null;
+  /**
+   * True when the OAuth redirect was initiated by a guest (訪客 JWT). The
+   * callback uses this to trigger `absorbGuestIntoUser` + a fresh JWT so the
+   * client can re-handshake with the real account's identity (#42 bind-path
+   * fix).
+   */
+  isGuest?: boolean;
 }
 
 type ProviderColumn = 'discord_id' | 'line_id' | 'firebase_uid';
@@ -184,6 +191,61 @@ export async function findUserIdByProviderIdentity(
     return snapshot.docs[0].id;
   } catch (err) {
     console.error('[firestoreAccounts] findUserIdByProviderIdentity error:', err);
+    return null;
+  }
+}
+
+/**
+ * #42 bind-path fix：建/更新 auth_users doc 並綁定 provider identity。
+ *
+ * 跟 `linkProviderIdentity` 的差別：當 doc 不存在時會直接建（不會回 false）。
+ * 用於訪客綁 Discord/Line 且該 identity 從未被註冊過的情境 — 這時還沒有
+ * 真帳號 row，必須先建一個才能綁。回傳 auth_users docId（= externalId，
+ * 沿用 Discord/Line OAuth 登入時 JWT sub = externalId 的慣例）。
+ *
+ * 失敗回 null（Firestore 不可用 / 寫入 error）。
+ */
+export async function ensureAuthUserWithProvider(
+  provider:    LinkProvider,
+  externalId:  string,
+  displayName: string,
+  photoUrl?:   string,
+  email?:      string,
+): Promise<string | null> {
+  const db = getFirestoreSafe();
+  if (!db) return null;
+  const col = providerToColumn(provider);
+  const docId = externalId; // 沿用 OAuth 登入時 JWT sub = externalId 的慣例
+  try {
+    const ref  = db.collection(AUTH_USERS).doc(docId);
+    const snap = await ref.get();
+    const now = Date.now();
+    if (snap.exists) {
+      await ref.update({
+        [col]:        externalId,
+        display_name: displayName,
+        photo_url:    photoUrl ?? null,
+        updatedAt:    now,
+      });
+    } else {
+      await ref.set({
+        provider,
+        [col]:        externalId,
+        email:        email ?? null,
+        display_name: displayName,
+        photo_url:    photoUrl ?? null,
+        elo_rating:   1000,
+        total_games:  0,
+        games_won:    0,
+        games_lost:   0,
+        badges:       [],
+        createdAt:    now,
+        updatedAt:    now,
+      });
+    }
+    return docId;
+  } catch (err) {
+    console.error('[firestoreAccounts] ensureAuthUserWithProvider error:', err);
     return null;
   }
 }
@@ -362,6 +424,82 @@ export async function mergeUserAccounts(
   }
 }
 
+/**
+ * #42 bind-path fix：把訪客的戰績 / 好友關係搬到已 OAuth 綁定的真帳號。
+ *
+ * 訪客沒有 `auth_users` row（只有 games.playerId = guestUid 形式的戰績），
+ * 因此無法直接走 `mergeUserAccounts`（那條路徑要求 primary + secondary 兩邊
+ * 都有 user 文件）。這個 helper 專門處理「訪客 → 真帳號」流程：
+ *
+ *   - `games.playerId` 從 guestUid 改寫到 realUserId
+ *   - `friendships.follower_id / following_id` 從 guestUid 改寫到 realUserId
+ *   - self-follow 清理（同 mergeUserAccounts）
+ *
+ * 回傳是否成功（或 Firestore 不可用時回 false）。所有 sub-step 都是 best-effort：
+ * 單一 step 失敗只會 log，不會中止整個流程 — 綁定本身已在 caller 完成。
+ */
+export async function absorbGuestIntoUser(
+  guestUid:   string,
+  realUserId: string,
+): Promise<boolean> {
+  if (guestUid === realUserId) return false;
+  const db = getFirestoreSafe();
+  if (!db) return false;
+
+  try {
+    // 1. games.playerId rewrite
+    try {
+      const recordsSnap = await db
+        .collection(GAME_RECORDS)
+        .where('playerId', '==', guestUid)
+        .get();
+      if (!recordsSnap.empty) {
+        const recBatch = db.batch();
+        recordsSnap.docs.forEach((doc) => {
+          recBatch.update(doc.ref, { playerId: realUserId });
+        });
+        await recBatch.commit();
+      }
+    } catch (err) {
+      console.error('[firestoreAccounts] absorbGuestIntoUser games rewrite failed (non-fatal):', err);
+    }
+
+    // 2. friendships rewrite + self-follow prune
+    try {
+      const followerSnap  = await db.collection(FRIENDSHIPS).where('follower_id',  '==', guestUid).get();
+      const followingSnap = await db.collection(FRIENDSHIPS).where('following_id', '==', guestUid).get();
+      const frBatch = db.batch();
+      followerSnap.docs.forEach((doc) => {
+        frBatch.update(doc.ref, { follower_id: realUserId });
+      });
+      followingSnap.docs.forEach((doc) => {
+        frBatch.update(doc.ref, { following_id: realUserId });
+      });
+      if (!followerSnap.empty || !followingSnap.empty) {
+        await frBatch.commit();
+      }
+
+      const selfFollow = await db
+        .collection(FRIENDSHIPS)
+        .where('follower_id',  '==', realUserId)
+        .where('following_id', '==', realUserId)
+        .get();
+      if (!selfFollow.empty) {
+        const pruneBatch = db.batch();
+        selfFollow.docs.forEach((doc) => pruneBatch.delete(doc.ref));
+        await pruneBatch.commit();
+      }
+    } catch (err) {
+      console.error('[firestoreAccounts] absorbGuestIntoUser friendships rewrite failed (non-fatal):', err);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('[firestoreAccounts] absorbGuestIntoUser error:', err);
+    return false;
+  }
+}
+
 // ── OAuth CSRF sessions ──────────────────────────────────────────────
 
 /**
@@ -377,6 +515,7 @@ export async function createOAuthSession(
   stateToken: string,
   provider:   'discord' | 'line',
   linkUserId?: string,
+  isGuest?:   boolean,
 ): Promise<void> {
   const db = getFirestoreSafe();
   if (!db) return;
@@ -385,6 +524,7 @@ export async function createOAuthSession(
       provider,
       expiresAt:  Date.now() + OAUTH_TTL_MS,
       linkUserId: linkUserId ?? null,
+      isGuest:    isGuest === true,
       createdAt:  Date.now(),
     });
   } catch (err) {
@@ -418,6 +558,7 @@ export async function consumeOAuthSession(
         provider?: 'discord' | 'line';
         expiresAt?: number;
         linkUserId?: string | null;
+        isGuest?: boolean;
       };
       if (data.provider !== provider) return null;
       if ((data.expiresAt ?? 0) < Date.now()) {
@@ -425,7 +566,10 @@ export async function consumeOAuthSession(
         return null;
       }
       tx.delete(ref);
-      return { linkUserId: data.linkUserId ?? null } as OAuthSession;
+      return {
+        linkUserId: data.linkUserId ?? null,
+        isGuest:    data.isGuest === true,
+      } as OAuthSession;
     });
     return result;
   } catch (err) {

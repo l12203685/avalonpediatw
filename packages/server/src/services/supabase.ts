@@ -291,10 +291,11 @@ export async function createOAuthSession(
   stateToken: string,
   provider: 'discord' | 'line',
   linkUserId?: string,
+  isGuest?: boolean,
 ): Promise<void> {
   // Primary: Firestore (Ticket #42 route B). Fallback: legacy Supabase table.
   if (fsAccounts.isFirestoreReady()) {
-    await fsAccounts.createOAuthSession(stateToken, provider, linkUserId);
+    await fsAccounts.createOAuthSession(stateToken, provider, linkUserId, isGuest);
     return;
   }
   const db = getSupabaseClient();
@@ -305,6 +306,7 @@ export async function createOAuthSession(
     provider,
     expires_at:    expiresAt.toISOString(),
     link_user_id:  linkUserId ?? null,
+    is_guest:      isGuest === true,
   });
 }
 
@@ -314,11 +316,14 @@ export async function createOAuthSession(
  *
  * 跟 verifyAndDeleteOAuthSession 區別：後者回 boolean；這個版本要把 link_user_id
  * 取回給 callback 決定要綁哪個 user。
+ *
+ * `isGuest` 表示 OAuth 發起者是訪客（未登入正式帳號），callback 會據此觸發
+ * `absorbGuestIntoUser` 把訪客戰績搬到真帳號（#42 bind-path fix）。
  */
 export async function consumeOAuthSession(
   stateToken: string,
   provider: 'discord' | 'line',
-): Promise<{ linkUserId: string | null } | null> {
+): Promise<{ linkUserId: string | null; isGuest?: boolean } | null> {
   // Primary: Firestore transactional consume. Fallback: legacy Supabase table.
   if (fsAccounts.isFirestoreReady()) {
     return fsAccounts.consumeOAuthSession(stateToken, provider);
@@ -328,14 +333,17 @@ export async function consumeOAuthSession(
   try {
     const { data, error } = await db
       .from('oauth_sessions')
-      .select('id, expires_at, link_user_id')
+      .select('id, expires_at, link_user_id, is_guest')
       .eq('state_token', stateToken)
       .eq('provider', provider)
       .single();
     if (error || !data) return null;
     if (new Date(data.expires_at as string) < new Date()) return null;
     await db.from('oauth_sessions').delete().eq('id', data.id);
-    return { linkUserId: (data.link_user_id as string | null) ?? null };
+    return {
+      linkUserId: (data.link_user_id as string | null) ?? null,
+      isGuest:    (data.is_guest as boolean | undefined) === true,
+    };
   } catch {
     return null;
   }
@@ -829,6 +837,75 @@ export async function mergeUserAccounts(
     return true;
   } catch (err) {
     console.error('[supabase] mergeUserAccounts exception:', err);
+    return false;
+  }
+}
+
+/**
+ * #42 bind-path fix：確保 provider identity 對應的 user row 存在。
+ *
+ * Firestore 路徑（主）委派給 `firestoreAccounts.ensureAuthUserWithProvider`
+ * — 若 auth_users doc 不存在會直接建，回傳 docId。
+ *
+ * Supabase 路徑（fallback）委派給既有 `upsertUser` —
+ * 內建「查 existing → 不存在就 insert」邏輯。
+ *
+ * 回傳 user row id（Firestore 路徑 = externalId；Supabase 路徑 = UUID）。
+ * 失敗回 null。
+ */
+export async function ensureUserForProviderIdentity(
+  provider:    LinkProvider,
+  externalId:  string,
+  displayName: string,
+  photoUrl?:   string,
+  email?:      string,
+): Promise<string | null> {
+  if (fsAccounts.isFirestoreReady()) {
+    return fsAccounts.ensureAuthUserWithProvider(provider, externalId, displayName, photoUrl, email);
+  }
+  const providerCol =
+    provider === 'discord' ? 'discord_id'
+    : provider === 'line'  ? 'line_id'
+    : 'firebase_uid';
+  return upsertUser({
+    [providerCol]: externalId,
+    display_name: displayName,
+    email:        email ?? '',
+    photo_url:    photoUrl ?? null,
+    provider,
+  });
+}
+
+/**
+ * #42 bind-path fix：訪客 → 真帳號戰績搬家。
+ *
+ * 訪客沒有 users row，所以無法走 `mergeUserAccounts`（那條要求 primary+secondary
+ * 兩邊都存在）。這個 helper 只做 game_records / friendships 的 playerId 改寫，
+ * 把 guestUid 相關資料導向 realUserId，讓訪客綁定後戰績不會遺失。
+ *
+ * Firestore 路徑（主）委派給 `firestoreAccounts.absorbGuestIntoUser`；
+ * Supabase 回退路徑走原生 SQL update。
+ */
+export async function absorbGuestIntoUser(
+  guestUid:   string,
+  realUserId: string,
+): Promise<boolean> {
+  if (guestUid === realUserId) return false;
+  if (fsAccounts.isFirestoreReady()) {
+    return fsAccounts.absorbGuestIntoUser(guestUid, realUserId);
+  }
+  const db = getSupabaseClient();
+  if (!db) return false;
+  try {
+    // game_records.player_user_id 從 guestUid 改寫到 realUserId
+    await db.from('game_records').update({ player_user_id: realUserId }).eq('player_user_id', guestUid);
+    // friendships 兩邊同樣改寫，並清 self-follow
+    await db.from('friendships').update({ follower_id:  realUserId }).eq('follower_id',  guestUid);
+    await db.from('friendships').update({ following_id: realUserId }).eq('following_id', guestUid);
+    await db.from('friendships').delete().eq('follower_id', realUserId).eq('following_id', realUserId);
+    return true;
+  } catch (err) {
+    console.error('[supabase] absorbGuestIntoUser exception:', err);
     return false;
   }
 }

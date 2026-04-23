@@ -250,13 +250,90 @@ describe('#42 route B — firestoreAccounts (Firestore-backed)', () => {
     });
   });
 
+  describe('#42 bind-path fix — absorbGuestIntoUser', () => {
+    it('rewrites games.playerId + friendships from guestUid → realUserId', async () => {
+      // Seed a guest-owned game record + friendship row pointing to a third party
+      // (user-c) so the rewrite doesn't collapse into a self-follow and trigger
+      // the prune branch (that case is covered separately below).
+      store.games.set('gGuest', { playerId: 'guest-uuid-1', role: 'merlin', won: true });
+      store.friendships.set('frGuest', { follower_id: 'guest-uuid-1', following_id: 'user-c' });
+
+      const ok = await mod.absorbGuestIntoUser('guest-uuid-1', 'user-a');
+      expect(ok).toBe(true);
+
+      // game_records rewritten
+      const rec = store.games.get('gGuest')!;
+      expect(rec.playerId).toBe('user-a');
+
+      // friendships rewritten — now user-a → user-c (not self-follow, preserved)
+      const fr = store.friendships.get('frGuest')!;
+      expect(fr.follower_id).toBe('user-a');
+      expect(fr.following_id).toBe('user-c');
+
+      // user row NOT deleted (訪客沒有 row，absorb 只搬資料)
+      expect(store.auth_users.get('user-a')).toBeDefined();
+    });
+
+    it('prunes self-follow rows created by rewrite', async () => {
+      // guest follows user-a; after absorb, would create user-a → user-a self-follow
+      store.friendships.set('frSelf', { follower_id: 'guest-x', following_id: 'user-a' });
+
+      await mod.absorbGuestIntoUser('guest-x', 'user-a');
+
+      const rows = Array.from(store.friendships.values());
+      expect(rows.some((r) => r.follower_id === 'user-a' && r.following_id === 'user-a')).toBe(false);
+    });
+
+    it('refuses no-op (guestUid === realUserId)', async () => {
+      const ok = await mod.absorbGuestIntoUser('same', 'same');
+      expect(ok).toBe(false);
+    });
+  });
+
+  describe('#42 bind-path fix — ensureAuthUserWithProvider', () => {
+    it('creates a new auth_users doc when identity is fresh', async () => {
+      const id = await mod.ensureAuthUserWithProvider(
+        'discord', 'dc-new', 'Newbie', 'https://cdn.example/avatar.png', 'new@ex.com',
+      );
+      expect(id).toBe('dc-new');
+      const row = store.auth_users.get('dc-new')!;
+      expect(row.provider).toBe('discord');
+      expect(row.discord_id).toBe('dc-new');
+      expect(row.display_name).toBe('Newbie');
+      expect(row.photo_url).toBe('https://cdn.example/avatar.png');
+      expect(row.elo_rating).toBe(1000);
+      expect(row.total_games).toBe(0);
+    });
+
+    it('updates existing doc if externalId matches its docId', async () => {
+      store.auth_users.set('dc-aaa', {
+        provider: 'discord', discord_id: 'dc-aaa', display_name: 'OldName',
+        elo_rating: 1500, total_games: 20,
+      });
+      const id = await mod.ensureAuthUserWithProvider('discord', 'dc-aaa', 'NewName');
+      expect(id).toBe('dc-aaa');
+      const row = store.auth_users.get('dc-aaa')!;
+      expect(row.display_name).toBe('NewName');
+      // 既有戰績不被覆寫
+      expect(row.elo_rating).toBe(1500);
+      expect(row.total_games).toBe(20);
+    });
+  });
+
   describe('OAuth sessions', () => {
     it('create + consume round-trip returns the linkUserId', async () => {
       await mod.createOAuthSession('state-1', 'discord', 'user-a');
       const s = await mod.consumeOAuthSession('state-1', 'discord');
-      expect(s).toEqual({ linkUserId: 'user-a' });
+      // #42 bind-path fix：新增 isGuest 欄位，預設 false
+      expect(s).toEqual({ linkUserId: 'user-a', isGuest: false });
       // single-use: second consume returns null
       expect(await mod.consumeOAuthSession('state-1', 'discord')).toBeNull();
+    });
+
+    it('propagates isGuest=true when createOAuthSession flags guest bind', async () => {
+      await mod.createOAuthSession('state-guest', 'discord', 'guest-uuid', true);
+      const s = await mod.consumeOAuthSession('state-guest', 'discord');
+      expect(s).toEqual({ linkUserId: 'guest-uuid', isGuest: true });
     });
 
     it('rejects wrong provider', async () => {
