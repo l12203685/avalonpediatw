@@ -100,7 +100,9 @@
   },
   "connection": {
     "reconnecting": "重新連線中…",
-    "disconnected": "連線中斷 — 正在嘗試重連"
+    "disconnected": "連線中斷 — 正在嘗試重連",
+    "refresh": "重新整理",
+    "newVersionAvailable": "有新版本，請重新整理頁面以取得最新功能"
   },
   "controls": {
     "audio": "音效",

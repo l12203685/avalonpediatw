@@ -100,7 +100,9 @@
   },
   "connection": {
     "reconnecting": "Reconnecting…",
-    "disconnected": "Disconnected — attempting to reconnect"
+    "disconnected": "Disconnected — attempting to reconnect",
+    "refresh": "Refresh",
+    "newVersionAvailable": "A new version is available — please refresh for the latest features"
   },
   "controls": {
     "audio": "Audio",
