@@ -150,6 +150,8 @@
   },
   "guest": {
     "rename": "更改訪客名稱",
+    "renameOrBind": "帳號綁定與改名",
+    "renameOrBindHint": "改名前請先綁定帳號（Google / Discord / Line），避免資料遺失",
     "renamePlaceholder": "新名稱（2–20 字）",
     "renameLimit": "24 小時內最多可更改 3 次",
     "renameLengthError": "名稱長度需介於 2–20 字",
