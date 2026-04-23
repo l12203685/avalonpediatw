@@ -32,6 +32,15 @@ import {
   normalizeEmail,
 } from './passwordHash';
 
+type OAuthProvider = 'discord' | 'line' | 'google';
+
+/** OAuth provider 對應 auth_users row 上的 id 欄位。 */
+function oauthProviderColumn(provider: OAuthProvider): 'discord_id' | 'line_id' | 'firebase_uid' {
+  if (provider === 'discord') return 'discord_id';
+  if (provider === 'line')    return 'line_id';
+  return 'firebase_uid';
+}
+
 const AUTH_USERS                = 'auth_users';
 const PASSWORD_RESET_SESSIONS   = 'password_reset_sessions';
 const EMAIL_VERIFICATIONS       = 'email_verifications';
@@ -488,6 +497,156 @@ export async function consumeEmailVerification(token: string): Promise<AccountOp
     // eslint-disable-next-line no-console
     console.error('[firestoreAuthAccounts] consumeEmailVerification error:', err);
     return { ok: false, code: 'error', reason: '驗證失敗' };
+  }
+}
+
+/**
+ * OAuth-primary auto-register (2026-04-23 Edward)。
+ *
+ * Edward 原話：「如果綁google => email 直接填入 gmail 信箱；簡單說 email 綁定是
+ * for 同時沒有 google/line/dc 的」。
+ *
+ * 新語意：OAuth 成為主登入路徑。點 Google/LINE/Discord → 拿該 provider 的 email。
+ *   - email 已存在 auth_users → 登入（並把 provider externalId 補綁到該 row）
+ *   - email 不存在 → 自動建新帳號：provider、email、display_name 都塞進去，
+ *     密碼存成「隨機 scrypt hash」（使用者之後若要走 email 備援路徑 → 忘記密碼流程
+ *     重設即可）。
+ *
+ * 回傳 AccountRecord 方便 caller 直接發 JWT（displayName / primaryEmail 全備）。
+ */
+export async function ensureAccountByOAuthEmail(params: {
+  provider:          OAuthProvider;
+  providerExternalId: string;
+  email:             string;
+  displayName:       string;
+}): Promise<AccountOpResult<{
+  account: AccountRecord;
+  created: boolean;
+}>> {
+  const db = getFs();
+  if (!db) return { ok: false, code: 'no_store', reason: '帳戶資料庫未配置' };
+
+  const emailLower = normalizeEmail(params.email);
+  const emailTrim  = params.email.trim();
+  const col        = oauthProviderColumn(params.provider);
+
+  try {
+    // Path A — 既有 email 帳號 → 登入 + 補綁 provider externalId（idempotent）。
+    const existing = await findUserByEmail(db, emailLower);
+    if (existing) {
+      const data = existing.data as {
+        accountName?:   string;
+        primaryEmail?:  string;
+        emails?:        string[];
+        emailsVerified?: string[];
+        display_name?:  string;
+      };
+      // 只有當 row 上尚未綁這個 provider 才更新（避免覆蓋 cross-user id）。
+      const existingExtId = (existing.data as Record<string, unknown>)[col];
+      if (typeof existingExtId !== 'string' || existingExtId.length === 0) {
+        await db.collection(AUTH_USERS).doc(existing.id).update({
+          [col]:      params.providerExternalId,
+          updatedAt:  Date.now(),
+        });
+      }
+      const account: AccountRecord = {
+        userId:         existing.id,
+        accountName:    data.accountName ?? emailLocalPart(emailTrim),
+        primaryEmail:   data.primaryEmail ?? emailTrim,
+        emails:         Array.isArray(data.emails) ? data.emails : [emailTrim],
+        emailsVerified: Array.isArray(data.emailsVerified) ? data.emailsVerified : [],
+        displayName:    data.display_name ?? data.accountName ?? emailLocalPart(emailTrim),
+      };
+      return { ok: true, data: { account, created: false } };
+    }
+
+    // Path B — 新帳號：OAuth email 當主識別，密碼存隨機 hash（備援路徑才會用）。
+    const randomPassword = randomBytes(32).toString('hex');
+    let passwordHash: string;
+    try {
+      passwordHash = await hashPassword(randomPassword);
+    } catch {
+      return { ok: false, code: 'hash_failed', reason: '密碼處理失敗' };
+    }
+
+    const userId  = randomBytes(16).toString('hex');
+    const display = params.displayName || emailLocalPart(emailTrim);
+    const now     = Date.now();
+
+    const userRef = db.collection(AUTH_USERS).doc(userId);
+    await db.runTransaction(async (tx) => {
+      // 最後 race check — 進 transaction 再驗一次 email 沒被搶註。
+      const emailSnap = await tx.get(
+        db.collection(AUTH_USERS).where('emailsLower', 'array-contains', emailLower).limit(1),
+      );
+      if (!emailSnap.empty) {
+        throw new Error('EMAIL_TAKEN');
+      }
+      tx.set(userRef, {
+        provider:           params.provider, // 'discord' | 'line' | 'google'
+        [col]:              params.providerExternalId,
+        accountName:        display,
+        accountNameLower:   display.toLowerCase(),
+        passwordHash,
+        primaryEmail:       emailTrim,
+        primaryEmailLower:  emailLower,
+        emails:             [emailTrim],
+        emailsLower:        [emailLower],
+        emailsVerified:     [emailTrim], // OAuth 提供的 email 視為已驗證
+        display_name:       display,
+        elo_rating:         1000,
+        total_games:        0,
+        games_won:          0,
+        games_lost:         0,
+        badges:             [],
+        createdAt:          now,
+        updatedAt:          now,
+        createdAtPw:        now,
+        passwordUpdatedAt:  now,
+        oauthOnly:          true, // 標記：此帳號由 OAuth 自動建立，無實際使用者密碼
+      });
+    });
+
+    const account: AccountRecord = {
+      userId,
+      accountName:    display,
+      primaryEmail:   emailTrim,
+      emails:         [emailTrim],
+      emailsVerified: [emailTrim],
+      displayName:    display,
+    };
+    return { ok: true, data: { account, created: true } };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === 'EMAIL_TAKEN') {
+      // Race: concurrent request 搶註同 email。重新 findUserByEmail 當登入處理。
+      try {
+        const raced = await findUserByEmail(db, emailLower);
+        if (raced) {
+          const data = raced.data as {
+            accountName?:   string;
+            primaryEmail?:  string;
+            emails?:        string[];
+            emailsVerified?: string[];
+            display_name?:  string;
+          };
+          const account: AccountRecord = {
+            userId:         raced.id,
+            accountName:    data.accountName ?? emailLocalPart(emailTrim),
+            primaryEmail:   data.primaryEmail ?? emailTrim,
+            emails:         Array.isArray(data.emails) ? data.emails : [emailTrim],
+            emailsVerified: Array.isArray(data.emailsVerified) ? data.emailsVerified : [],
+            displayName:    data.display_name ?? data.accountName ?? emailLocalPart(emailTrim),
+          };
+          return { ok: true, data: { account, created: false } };
+        }
+      } catch {
+        // fallthrough
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.error('[firestoreAuthAccounts] ensureAccountByOAuthEmail error:', err);
+    return { ok: false, code: 'error', reason: 'OAuth 自動建帳失敗' };
   }
 }
 

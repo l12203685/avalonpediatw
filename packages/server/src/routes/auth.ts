@@ -33,6 +33,7 @@ import {
 import {
   loginOrRegister,
   findAccountByEmail,
+  ensureAccountByOAuthEmail,
   createPasswordResetSession,
   consumePasswordResetAndSet,
   PASSWORD_RESET_TTL_MS,
@@ -105,22 +106,41 @@ const forgotLimiter = createKeyedRateLimit({
   code:        'forgot_rate_limited',
 });
 
-// ── OAuth quick-login helper (2026-04-23) ─────────────────────
+// ── OAuth primary login + auto-register (2026-04-23) ─────────────
 //
-// Edward 原話：「能不能登入頁面綁 google/line/dc => 有的話就直接登入」。
+// Edward 原話（2026-04-23 23:00）：
+//   「如果綁 google => email 直接填入 gmail 信箱。
+//    簡單說 email 綁定是 for 同時沒有 google/line/dc 的」。
 //
-// 實作：Discord/LINE callback 或 Google ID token 驗完後，拿 email 去
-// `findAccountByEmail`。已綁 → 發 JWT 直登；沒綁 → 回前端提示「請先以 email
-// 登入後再綁定」。注意 quick-login 不幫使用者建新帳號 — 那是 Edward 明確劃定
-// 的禁區（避免 OAuth 建了一顆新 row 卻跟 email-only row 兩套）。
+// 新語意：OAuth 成為主登入路徑。Discord/LINE callback 或 Google ID token 驗完拿
+// email → `ensureAccountByOAuthEmail`。已在庫 → 登入 + 補綁 provider id；不在庫
+// → **自動建新帳號**（email = OAuth email、display_name = OAuth displayName、
+// 密碼存隨機 hash，使用者之後要走 email 備援可用「忘記密碼」重設）。
+//
+// email + 密碼流程仍保留，給沒有任何 OAuth 帳號的使用者。
+//
+// 舊 `provider_not_linked` 分支已改成 auto-register，前端不再會收到該錯誤；保留
+// 錯誤字串定義在前端為 defensive 訊息（例如 OAuth email 缺失、後端 no_store 等）。
 
-/** 回傳 '?auth_error=provider_not_linked&provider=<p>' redirect 給前端處理提示。 */
-function respondQuickLoginNotLinked(
+/** provider email 缺失（使用者在 Discord/LINE 未授權 email scope）→ 回錯誤 redirect。 */
+function respondAutoRegisterMissingEmail(
   res:      Response,
   provider: 'discord' | 'line' | 'google',
 ): void {
   const qs = new URLSearchParams({
-    auth_error: 'provider_not_linked',
+    auth_error: 'provider_no_email',
+    provider,
+  });
+  res.redirect(`${FRONTEND_URL}?${qs}`);
+}
+
+/** provider 自動建帳失敗（Firestore 未配置 / 寫入錯）→ 回錯誤 redirect。 */
+function respondAutoRegisterFailed(
+  res:      Response,
+  provider: 'discord' | 'line' | 'google',
+): void {
+  const qs = new URLSearchParams({
+    auth_error: 'oauth_autoregister_failed',
     provider,
   });
   res.redirect(`${FRONTEND_URL}?${qs}`);
@@ -146,18 +166,47 @@ function parseEmailFromLineIdToken(idToken: string | undefined): string | undefi
   }
 }
 
-/** 拿 email 查 auth_users；命中 → 200 + JWT；miss → null（caller 決定如何回應）。 */
-async function quickLoginByEmail(
-  email:        string | undefined,
-  provider:     'discord' | 'line' | 'google',
-): Promise<{ token: string; userId: string; accountName: string; displayName: string; primaryEmail: string } | null> {
-  if (!email) return null;
-  const account = await findAccountByEmail(email);
-  if (!account) return null;
+/**
+ * OAuth login-or-autoregister — 核心進入點，三個 provider callback 共用。
+ *
+ * 行為：
+ *   - email 不存在 → 建新帳號 + 回 JWT + created=true
+ *   - email 已存在 → 登入，並把 provider externalId 補綁到該 row（idempotent）
+ *   - email 缺失 / store 不通 → 回 error object（caller 決定錯誤路徑）
+ */
+async function oauthLoginOrAutoRegister(params: {
+  provider:           'discord' | 'line' | 'google';
+  providerExternalId: string;
+  email:              string | undefined;
+  displayName:        string;
+}): Promise<
+  | {
+      token:        string;
+      userId:       string;
+      accountName:  string;
+      displayName:  string;
+      primaryEmail: string;
+      created:      boolean;
+    }
+  | { error: 'missing_email' | 'autoregister_failed' }
+> {
+  if (!params.email || params.email.trim().length === 0) {
+    return { error: 'missing_email' };
+  }
+  const ensured = await ensureAccountByOAuthEmail({
+    provider:           params.provider,
+    providerExternalId: params.providerExternalId,
+    email:              params.email,
+    displayName:        params.displayName,
+  });
+  if (!ensured.ok || !ensured.data) {
+    return { error: 'autoregister_failed' };
+  }
+  const { account, created } = ensured.data;
   const token = issueJwt({
     sub:         account.userId,
     displayName: account.displayName,
-    provider,
+    provider:    params.provider,
   });
   return {
     token,
@@ -165,6 +214,7 @@ async function quickLoginByEmail(
     accountName:  account.accountName,
     displayName:  account.displayName,
     primaryEmail: account.primaryEmail,
+    created,
   };
 }
 
@@ -442,18 +492,28 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
       ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
       : undefined;
 
-    // OAuth quick-login (2026-04-23 Edward)：以 provider email 查 auth_users。
-    // 已綁 → 直發 JWT；沒綁 → 提示「請先用 email 登入後再綁定」。
-    // 不建新帳號、不呼叫 upsertUser（那條路只走原生登入）。
+    // OAuth primary login (2026-04-23 Edward)：以 provider email 為主識別。
+    // 已在庫 → 登入（補綁 discord_id）；不在庫 → 自動建新帳號；email 缺失/建帳
+    // 失敗 → 分別導回 auth_error。
     if (quickLoginMode) {
-      const quick = await quickLoginByEmail(discordUser.email, 'discord');
-      if (!quick) {
-        respondQuickLoginNotLinked(res, 'discord');
+      const outcome = await oauthLoginOrAutoRegister({
+        provider:           'discord',
+        providerExternalId: discordUser.id,
+        email:              discordUser.email,
+        displayName,
+      });
+      if ('error' in outcome) {
+        if (outcome.error === 'missing_email') respondAutoRegisterMissingEmail(res, 'discord');
+        else                                   respondAutoRegisterFailed(res, 'discord');
         return;
       }
-      return res.redirect(
-        `${FRONTEND_URL}?oauth_token=${encodeURIComponent(quick.token)}&provider=discord&quick_login=1`,
-      );
+      const qs = new URLSearchParams({
+        oauth_token: outcome.token,
+        provider:    'discord',
+        quick_login: '1',
+        ...(outcome.created ? { oauth_created: '1' } : {}),
+      });
+      return res.redirect(`${FRONTEND_URL}?${qs}`);
     }
 
     if (linkUserId) {
@@ -550,14 +610,24 @@ router.get('/line/callback', async (req: Request, res: Response) => {
       : undefined;
 
     if (quickLoginMode) {
-      const quick = await quickLoginByEmail(lineEmail, 'line');
-      if (!quick) {
-        respondQuickLoginNotLinked(res, 'line');
+      const outcome = await oauthLoginOrAutoRegister({
+        provider:           'line',
+        providerExternalId: lineUser.userId,
+        email:              lineEmail,
+        displayName:        lineUser.displayName,
+      });
+      if ('error' in outcome) {
+        if (outcome.error === 'missing_email') respondAutoRegisterMissingEmail(res, 'line');
+        else                                   respondAutoRegisterFailed(res, 'line');
         return;
       }
-      return res.redirect(
-        `${FRONTEND_URL}?oauth_token=${encodeURIComponent(quick.token)}&provider=line&quick_login=1`,
-      );
+      const qs = new URLSearchParams({
+        oauth_token: outcome.token,
+        provider:    'line',
+        quick_login: '1',
+        ...(outcome.created ? { oauth_created: '1' } : {}),
+      });
+      return res.redirect(`${FRONTEND_URL}?${qs}`);
     }
 
     if (linkUserId) {
@@ -689,10 +759,11 @@ router.get('/oauth/login/line', async (_req: Request, res: Response) => {
  *   idToken: Firebase Auth popup 拿到的 Google user.getIdToken()（前端用
  *   GoogleAuthProvider + signInWithPopup 取得）。
  *
- *   200 + { token, user } — email 已綁 auth_users，直發 JWT。
- *   401 + { error, code: 'provider_not_linked' } — 沒綁，請先用 email 登入後再綁。
- *   400 bad_id_token / missing_fields — idToken 格式錯誤或驗簽失敗。
- *   503 — Firebase admin 未設定。
+ *   200 + { token, user, user.isNew=false } — email 已在庫，登入（補綁 firebase_uid）
+ *   201 + { token, user, user.isNew=true }  — email 不在庫，**自動建帳**
+ *   400 bad_id_token / missing_fields / provider_no_email — idToken 問題 / 無 email
+ *   500 oauth_autoregister_failed — Firestore 寫入失敗
+ *   503 — Firebase admin 未設定
  */
 router.post('/oauth/login/google', emailFloodLimiter, async (req: Request, res: Response) => {
   const body = (req.body ?? {}) as { idToken?: unknown };
@@ -703,32 +774,47 @@ router.post('/oauth/login/google', emailFloodLimiter, async (req: Request, res: 
     return res.status(503).json({ error: 'Firebase admin 未設定' });
   }
 
-  let email: string | undefined;
+  let email:       string | undefined;
+  let googleUid:   string = '';
+  let displayName: string = '';
   try {
     const decoded = await verifyIdToken(body.idToken);
-    email = decoded.email ?? undefined;
+    email       = decoded.email ?? undefined;
+    googleUid   = decoded.uid || '';
+    displayName = (decoded.name as string | undefined) ?? (email ? email.split('@')[0] : 'Google User');
   } catch {
     return res.status(400).json({ error: 'Invalid Firebase ID token', code: 'bad_id_token' });
   }
 
-  const quick = await quickLoginByEmail(email, 'google');
-  if (!quick) {
-    return res.status(401).json({
-      error: '這組 Google 帳號的信箱還沒在站上註冊過，請先用 email 登入後再到「系統設定」綁定 Google',
-      code:  'provider_not_linked',
+  const outcome = await oauthLoginOrAutoRegister({
+    provider:           'google',
+    providerExternalId: googleUid,
+    email,
+    displayName,
+  });
+  if ('error' in outcome) {
+    if (outcome.error === 'missing_email') {
+      return res.status(400).json({
+        error: 'Google 帳號沒有授權 email scope，無法自動建帳',
+        code:  'provider_no_email',
+      });
+    }
+    return res.status(500).json({
+      error: 'Google 自動建帳失敗，請稍後再試',
+      code:  'oauth_autoregister_failed',
     });
   }
 
-  return res.json({
-    token: quick.token,
+  return res.status(outcome.created ? 201 : 200).json({
+    token: outcome.token,
     user: {
-      uid:            quick.userId,
-      accountName:    quick.accountName,
-      displayName:    quick.displayName,
-      primaryEmail:   quick.primaryEmail,
+      uid:            outcome.userId,
+      accountName:    outcome.accountName,
+      displayName:    outcome.displayName,
+      primaryEmail:   outcome.primaryEmail,
       provider:       'google',
-      emailsVerified: [],
-      isNew:          false,
+      emailsVerified: outcome.created ? [outcome.primaryEmail] : [],
+      isNew:          outcome.created,
     },
   });
 });
