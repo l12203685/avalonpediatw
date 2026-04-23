@@ -62,6 +62,7 @@ export class LineBotClient {
       const events: WebhookEvent[] = req.body.events;
 
       for (const event of events) {
+        console.log('[LINE DEBUG] event.source:', JSON.stringify(event.source));
         if (event.type !== 'message' || event.message.type !== 'text') {
           continue;
         }
