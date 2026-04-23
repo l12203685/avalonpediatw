@@ -124,6 +124,12 @@ export interface LinkedAccount {
   linked: boolean;
   external_id: string | null;
   primary: boolean;
+  /**
+   * 2026-04-23 Edward：已綁定時 UI 顯「已綁定 @xxx」的 @xxx 取此欄。
+   * google → email / display_name；discord → display_name#末四碼；line → display_name。
+   * 未綁為 null。
+   */
+  display_label: string | null;
 }
 
 export async function fetchLinkedAccounts(token: string): Promise<LinkedAccount[]> {
@@ -162,6 +168,27 @@ export async function linkGoogleAccount(token: string, idToken: string): Promise
   const body = await res.json().catch(() => ({} as { linked?: LinkedAccount[]; error?: string }));
   if (!res.ok) {
     throw new Error((body as { error?: string }).error || `API ${res.status}: /api/user/link/google`);
+  }
+  return (body as { linked: LinkedAccount[] }).linked;
+}
+
+/**
+ * 以另一個 uuid 合併戰績 — #98 個人戰績頁「以 uuid 綁定歷史戰績」按鈕。
+ * 把 targetUuid (secondary) 的戰績/徽章/好友併到當前帳號 (primary)，secondary 刪掉。
+ */
+export async function mergeAccountByUuid(token: string, targetUuid: string): Promise<LinkedAccount[]> {
+  const res = await fetch(`${SERVER_URL}/api/user/merge-by-uuid`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...NGROK_SKIP_HEADER,
+    },
+    body: JSON.stringify({ uuid: targetUuid }),
+  });
+  const body = await res.json().catch(() => ({} as { linked?: LinkedAccount[]; error?: string }));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error || `API ${res.status}: /api/user/merge-by-uuid`);
   }
   return (body as { linked: LinkedAccount[] }).linked;
 }

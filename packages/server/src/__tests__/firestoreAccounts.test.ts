@@ -185,6 +185,44 @@ describe('#42 route B — firestoreAccounts (Firestore-backed)', () => {
       const links = await mod.getLinkedAccounts('ghost-user');
       expect(links).toEqual([]);
     });
+
+    // 2026-04-23 Edward 指令：已綁狀態 UI 需要 display_label — email / 顯示名
+    it('attaches display_label per provider (discord#tail / email / display_name)', async () => {
+      const links = await mod.getLinkedAccounts('user-a');
+      const dc     = links.find((l) => l.provider === 'discord')!;
+      const line   = links.find((l) => l.provider === 'line')!;
+      const google = links.find((l) => l.provider === 'google')!;
+      // user-a 只綁 discord → discord 有 label，其餘為 null（未綁）
+      expect(dc.display_label).toBe('Alice#-aaa'); // slice(-4) of 'dc-aaa'
+      expect(line.display_label).toBeNull();
+      expect(google.display_label).toBeNull();
+    });
+
+    it('google provider prefers email over display_name in label', async () => {
+      // 把 user-a 綁 google 試試
+      store.auth_users.set('user-a', {
+        ...(store.auth_users.get('user-a') as Row),
+        firebase_uid: 'fb-aaa',
+      });
+      const links = await mod.getLinkedAccounts('user-a');
+      const g = links.find((l) => l.provider === 'google')!;
+      expect(g.linked).toBe(true);
+      expect(g.display_label).toBe('a@ex.com');
+    });
+
+    it('falls back to externalId when display_name + email both missing', async () => {
+      store.auth_users.set('user-x', {
+        provider: 'line',
+        line_id: 'ln-xxx',
+        discord_id: null,
+        firebase_uid: null,
+        email: null,
+        display_name: null,
+      });
+      const links = await mod.getLinkedAccounts('user-x');
+      const line = links.find((l) => l.provider === 'line')!;
+      expect(line.display_label).toBe('ln-xxx');
+    });
   });
 
   describe('findUserIdByProviderIdentity', () => {

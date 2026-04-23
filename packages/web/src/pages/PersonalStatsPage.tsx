@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Users, Swords, History, Loader, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Users, Swords, History, Loader, AlertCircle, Copy, Check, Link2 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { getStoredToken } from '../services/socket';
 import {
-  fetchFriends, fetchPairStatsBatch, fetchMyTimeline,
+  fetchFriends, fetchPairStatsBatch, fetchMyTimeline, mergeAccountByUuid,
   FriendEntry, PairStats, TimelineEntry,
 } from '../services/api';
 
@@ -24,7 +24,7 @@ import {
  */
 export default function PersonalStatsPage(): JSX.Element {
   const { t } = useTranslation();
-  const { setGameState, navigateToProfile, navigateToReplay } = useGameStore();
+  const { setGameState, navigateToProfile, navigateToReplay, currentPlayer, addToast } = useGameStore();
 
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(true);
@@ -37,6 +37,70 @@ export default function PersonalStatsPage(): JSX.Element {
   const [pairs, setPairs] = useState<Map<string, PairStats>>(new Map());
   const [pairsLoading, setPairsLoading] = useState(false);
   const [guestBlocked, setGuestBlocked] = useState(false);
+
+  // 2026-04-23 Edward：uuid 複製 + 以 uuid 合併戰績 state
+  const [copiedUuid, setCopiedUuid] = useState(false);
+  const [mergeExpanded, setMergeExpanded] = useState(false);
+  const [mergeUuid, setMergeUuid] = useState('');
+  const [mergeBusy, setMergeBusy] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+
+  const handleCopyUuid = async (): Promise<void> => {
+    if (!currentPlayer?.id) return;
+    try {
+      await navigator.clipboard.writeText(currentPlayer.id);
+      setCopiedUuid(true);
+      setTimeout(() => setCopiedUuid(false), 1500);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = currentPlayer.id;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* noop */ }
+      document.body.removeChild(ta);
+      setCopiedUuid(true);
+      setTimeout(() => setCopiedUuid(false), 1500);
+    }
+  };
+
+  const handleMergeByUuid = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token) return;
+    const trimmed = mergeUuid.trim();
+    if (trimmed.length === 0) {
+      setMergeError(t('stats.mergeUuidRequired', { defaultValue: '請輸入要合併的 UUID' }));
+      return;
+    }
+    if (trimmed === currentPlayer?.id) {
+      setMergeError(t('stats.mergeUuidSelf', { defaultValue: '不能把自己合併到自己' }));
+      return;
+    }
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(t('stats.mergeUuidConfirm', {
+      defaultValue: '合併後該 UUID 的戰績/徽章/好友會併入當前帳號，原帳號會刪除。確定繼續？',
+    }))) return;
+
+    setMergeBusy(true);
+    setMergeError(null);
+    try {
+      await mergeAccountByUuid(token, trimmed);
+      addToast(t('stats.mergeUuidSuccess', { defaultValue: '戰績合併完成' }), 'success');
+      setMergeExpanded(false);
+      setMergeUuid('');
+      // 重新載入 timeline（戰績併過來了）
+      setTimelineLoading(true);
+      try {
+        const fresh = await fetchMyTimeline(token, 50);
+        setTimeline(fresh);
+      } finally {
+        setTimelineLoading(false);
+      }
+    } catch (err) {
+      setMergeError(err instanceof Error ? err.message : t('stats.mergeUuidFailed', { defaultValue: '合併失敗' }));
+    } finally {
+      setMergeBusy(false);
+    }
+  };
 
   // 1. 拉 timeline (近 50 場)
   useEffect(() => {
@@ -104,6 +168,90 @@ export default function PersonalStatsPage(): JSX.Element {
 
         {!guestBlocked && (
           <>
+            {/* 2026-04-23 Edward：個人戰績頁加 uuid 顯示 + 以 uuid 綁定歷史戰績按鈕 */}
+            {currentPlayer?.id && (
+              <motion.section
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-zinc-900/60 border border-zinc-700 rounded-xl p-4 space-y-3"
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-zinc-500">UUID:</span>
+                  <code
+                    className="text-[11px] bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-zinc-300 font-mono break-all"
+                    data-testid="personal-stats-uuid-value"
+                  >
+                    {currentPlayer.id}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={handleCopyUuid}
+                    data-testid="personal-stats-btn-copy-uuid"
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                    title={t('settings.copyUuid', { defaultValue: '複製 UUID' })}
+                  >
+                    {copiedUuid ? <Check size={12} /> : <Copy size={12} />}
+                    {copiedUuid
+                      ? t('settings.copied', { defaultValue: '已複製' })
+                      : t('settings.copy', { defaultValue: '複製' })}
+                  </button>
+                </div>
+
+                {/* 以 uuid 綁定歷史戰績 — collapsed 時只顯按鈕，expanded 時顯輸入表單 */}
+                {!mergeExpanded ? (
+                  <button
+                    type="button"
+                    onClick={() => setMergeExpanded(true)}
+                    data-testid="personal-stats-btn-merge-uuid"
+                    className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                  >
+                    <Link2 size={12} />
+                    {t('stats.mergeByUuid', { defaultValue: '以 UUID 綁定歷史戰績' })}
+                  </button>
+                ) : (
+                  <div className="space-y-2 bg-zinc-950/40 border border-zinc-800 rounded-lg p-3">
+                    <p className="text-[11px] text-zinc-500">
+                      {t('stats.mergeUuidHint', {
+                        defaultValue: '輸入另一個帳號的 UUID，戰績/徽章/好友會併入當前帳號，原帳號將刪除。',
+                      })}
+                    </p>
+                    <input
+                      type="text"
+                      value={mergeUuid}
+                      onChange={e => { setMergeUuid(e.target.value); if (mergeError) setMergeError(null); }}
+                      placeholder={t('stats.mergeUuidPlaceholder', { defaultValue: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' })}
+                      data-testid="personal-stats-input-merge-uuid"
+                      maxLength={128}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-600 font-mono text-xs focus:outline-none focus:border-white"
+                    />
+                    {mergeError && (
+                      <p className="text-xs text-red-400">{mergeError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleMergeByUuid}
+                        disabled={mergeBusy}
+                        data-testid="personal-stats-btn-confirm-merge"
+                        className="inline-flex items-center gap-2 bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-semibold py-1.5 px-3 rounded-lg text-sm transition-colors"
+                      >
+                        {mergeBusy && <Loader size={14} className="animate-spin" />}
+                        {t('stats.mergeConfirm', { defaultValue: '合併' })}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setMergeExpanded(false); setMergeUuid(''); setMergeError(null); }}
+                        disabled={mergeBusy}
+                        className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-1.5 px-3 rounded-lg text-sm border border-zinc-700 disabled:opacity-50 transition-colors"
+                      >
+                        {t('action.cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </motion.section>
+            )}
+
             {/* (1) 近 50 場勝敗時間序列 */}
             <motion.section
               initial={{ opacity: 0, y: 8 }}

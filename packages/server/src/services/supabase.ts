@@ -667,6 +667,12 @@ export interface LinkedAccountSummary {
   linked: boolean;
   external_id: string | null;    // 顯示用（Discord/Line 的 raw id / Firebase uid）
   primary: boolean;               // 是否為此 user row 原生 provider
+  /**
+   * 2026-04-23 Edward 指令：UI 顯「已綁定 @xxx」需要可讀字串。
+   *   google → email / display_name；discord → display_name#末四碼；
+   *   line → display_name。未綁為 null。
+   */
+  display_label: string | null;
 }
 
 function providerToColumn(provider: LinkProvider): 'discord_id' | 'line_id' | 'firebase_uid' {
@@ -691,12 +697,18 @@ export async function getLinkedAccounts(userId: string): Promise<LinkedAccountSu
   try {
     const { data, error } = await db
       .from('users')
-      .select('provider, discord_id, line_id, firebase_uid')
+      .select('provider, discord_id, line_id, firebase_uid, display_name, email')
       .eq('id', userId)
       .single();
     if (error || !data) return [];
 
     const primary = (data.provider as string) ?? '';
+    const displayName = typeof (data as Record<string, unknown>).display_name === 'string'
+      ? (data as Record<string, string>).display_name
+      : null;
+    const email = typeof (data as Record<string, unknown>).email === 'string'
+      ? (data as Record<string, string>).email
+      : null;
     const providers: LinkProvider[] = ['discord', 'line', 'google'];
     return providers.map((p) => {
       const col = providerToColumn(p);
@@ -707,11 +719,36 @@ export async function getLinkedAccounts(userId: string): Promise<LinkedAccountSu
         linked: externalId !== null,
         external_id: externalId,
         primary: primary === p,
+        display_label: buildProviderDisplayLabel(p, externalId, { displayName, email }),
       };
     });
   } catch (err) {
     console.error('[supabase] getLinkedAccounts exception:', err);
     return [];
+  }
+}
+
+/**
+ * 共用 label builder（與 firestoreAccounts 版一致）。
+ *   google  → email ?? display_name ?? externalId
+ *   discord → display_name ? display_name#末四碼 : externalId
+ *   line    → display_name ?? externalId
+ */
+function buildProviderDisplayLabel(
+  provider:   LinkProvider,
+  externalId: string | null,
+  ctx: { displayName: string | null; email: string | null },
+): string | null {
+  if (!externalId) return null;
+  switch (provider) {
+    case 'google':
+      return ctx.email || ctx.displayName || externalId;
+    case 'discord': {
+      const tail = externalId.slice(-4);
+      return ctx.displayName ? `${ctx.displayName}#${tail}` : externalId;
+    }
+    case 'line':
+      return ctx.displayName || externalId;
   }
 }
 
