@@ -158,8 +158,14 @@ export async function renameGuest(newName: string): Promise<{ ok: boolean; error
 }
 
 /**
- * 訪客轉正式註冊（Phase 1 stub — server 目前回 501）。
- * Phase 2 會驗證 providerToken、檢查 email 衝突、合併戰績與 ELO。
+ * 訪客轉正式註冊。
+ *
+ * 2026-04-23 fix：原 Phase 1 stub 讓 server 回 501，前端沒重建 socket，導致
+ * Edward 綁完 Google 仍被當訪客無法改名。現在：
+ *   1. 呼叫 /auth/guest/upgrade 驗 providerToken、在 user store 建 google row
+ *   2. 回傳成功時附帶 Firebase ID token，讓 caller 以新 token 重新 initializeSocket
+ *      （見 SettingsPage.handleUpgrade）—socket 重連後 `auth:success` 會帶
+ *      provider='google'，settings 頁就不再顯示訪客 UI。
  */
 export async function upgradeGuestToRegistered(
   provider: string,
@@ -173,8 +179,14 @@ export async function upgradeGuestToRegistered(
       credentials: 'include',
     });
     if (!res.ok) {
-      // TODO(phase2): handle 409 duplicate-email + 501 not-implemented UI
-      return { ok: false, error: `upgrade failed: ${res.status}` };
+      let errMsg = `upgrade failed: ${res.status}`;
+      try {
+        const body = await res.json() as { error?: string };
+        if (body?.error) errMsg = body.error;
+      } catch {
+        // non-JSON response
+      }
+      return { ok: false, error: errMsg };
     }
     return { ok: true };
   } catch (err) {
