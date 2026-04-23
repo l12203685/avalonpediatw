@@ -138,6 +138,11 @@ async function main() {
   try {
     await initializeBots();
     registerBotRoutes(app);
+    // #82 three-way sync: now that the ChatMirror singleton exists, wire the
+    // lobby ingest callback so inbound LINE / Discord messages appear in the
+    // lobby UI. Must run AFTER initializeBots, before the HTTP port binds so
+    // the very first webhook delivery lands in a fully-wired pipeline.
+    gameServer.wireChatMirrorIngest();
   } catch (err) {
     console.error('Bot initialization failed:', err);
     // Non-fatal in development; production rethrows inside initializeBots.

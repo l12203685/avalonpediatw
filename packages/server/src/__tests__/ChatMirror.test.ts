@@ -279,6 +279,106 @@ describe('ChatMirror.fanout', () => {
   });
 });
 
+// ─── crossFanout — LINE ↔ Discord cross-platform ─────────────────────────
+
+describe('ChatMirror.crossFanout', () => {
+  it('pushes LINE-origin message only to Discord (not back to LINE)', async () => {
+    const line = mockLineAdapter();
+    const discord = mockDiscordAdapter();
+    const mirror = new ChatMirror({
+      lineGroupId: 'G1',
+      discordChannelId: 'C1',
+      line: line.adapter,
+      discord: discord.adapter,
+      logger: silentLogger(),
+    });
+    await mirror.crossFanout(
+      makeLobbyMsg({ source: 'line', playerName: 'Alice', message: 'hi' }),
+    );
+    expect(line.calls).toEqual([]);
+    expect(discord.calls).toEqual([
+      { channelId: 'C1', content: '[Avalon] Alice: hi' },
+    ]);
+  });
+
+  it('pushes Discord-origin message only to LINE (not back to Discord)', async () => {
+    const line = mockLineAdapter();
+    const discord = mockDiscordAdapter();
+    const mirror = new ChatMirror({
+      lineGroupId: 'G1',
+      discordChannelId: 'C1',
+      line: line.adapter,
+      discord: discord.adapter,
+      logger: silentLogger(),
+    });
+    await mirror.crossFanout(
+      makeLobbyMsg({ source: 'discord', playerName: 'Bob', message: 'yo' }),
+    );
+    expect(discord.calls).toEqual([]);
+    expect(line.calls).toHaveLength(1);
+    expect(line.calls[0].to).toBe('G1');
+    expect(line.calls[0].payload).toMatchObject({
+      type: 'text',
+      text: '[Avalon] Bob: yo',
+    });
+  });
+
+  it('pushes lobby-origin message to both (same as fanout)', async () => {
+    const line = mockLineAdapter();
+    const discord = mockDiscordAdapter();
+    const mirror = new ChatMirror({
+      lineGroupId: 'G1',
+      discordChannelId: 'C1',
+      line: line.adapter,
+      discord: discord.adapter,
+      logger: silentLogger(),
+    });
+    await mirror.crossFanout(makeLobbyMsg({ source: 'lobby' }));
+    expect(line.calls).toHaveLength(1);
+    expect(discord.calls).toHaveLength(1);
+  });
+
+  it('is a no-op when the receiving platform is unconfigured', async () => {
+    const line = mockLineAdapter();
+    // Mirror configured for LINE only; Discord-origin → LINE push
+    const mirror = new ChatMirror({
+      lineGroupId: 'G1',
+      line: line.adapter,
+      logger: silentLogger(),
+    });
+    await mirror.crossFanout(makeLobbyMsg({ source: 'discord' }));
+    expect(line.calls).toHaveLength(1);
+
+    const discord = mockDiscordAdapter();
+    // Mirror configured for Discord only; LINE-origin → Discord push
+    const mirror2 = new ChatMirror({
+      discordChannelId: 'C1',
+      discord: discord.adapter,
+      logger: silentLogger(),
+    });
+    await mirror2.crossFanout(makeLobbyMsg({ source: 'line' }));
+    expect(discord.calls).toHaveLength(1);
+  });
+
+  it('swallows platform errors (loop-safe + never throws into webhook)', async () => {
+    const line: LineAdapter = {
+      pushMessage: async () => {
+        throw new Error('line is down');
+      },
+    };
+    const logger = silentLogger();
+    const mirror = new ChatMirror({
+      lineGroupId: 'G1',
+      line,
+      logger,
+    });
+    await expect(
+      mirror.crossFanout(makeLobbyMsg({ source: 'discord' })),
+    ).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ─── ingestInbound (Phase B groundwork) ──────────────────────────────────
 
 describe('ChatMirror.ingestInbound', () => {
