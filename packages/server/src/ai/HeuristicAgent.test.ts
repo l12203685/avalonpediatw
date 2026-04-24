@@ -606,9 +606,11 @@ describe('HeuristicAgent · batch 4 fix #2 (cross-faction R1-R2 anomaly suppress
     expect(approveRate(obs, 'hard', 200)).toBe(1);
   });
 
-  it('R3 off-team evil — role differentiation remains active (not suppressed)', () => {
-    // Verify the guard is tightly scoped to R1-R2. At R3 the role-specific
-    // approve chance branch exercises as expected.
+  it('R3 off-team evil — recognised-red outer-white limit forces reject (batch 10)', () => {
+    // Edward 2026-04-24 batch 10 Point 3: recognised-red (刺娜德) with
+    // NO teammate on team MUST reject. No exceptions. Pre-batch-10 this
+    // exercised the role-specific approve chance (~0.50 for morgana);
+    // now the outer-white limit pins it to 0.
     const obs = baseObs({
       myPlayerId:    'P1',
       myRole:        'morgana',
@@ -617,14 +619,12 @@ describe('HeuristicAgent · batch 4 fix #2 (cross-faction R1-R2 anomaly suppress
       gamePhase:     'team_vote',
       currentRound:  3,
       currentLeader: 'P2',
-      proposedTeam:  ['P2', 'P3', 'P5'],  // no self, no ally
+      proposedTeam:  ['P2', 'P3', 'P5'],  // no self, no ally on team
       voteHistory:   [],
       questHistory:  [],
     });
-    // Morgana off-team approve chance ≈ 0.50 (base 0.35 + 0.15 bonus).
     const rate = approveRate(obs, 'hard', 400);
-    expect(rate).toBeGreaterThan(0.30);
-    expect(rate).toBeLessThan(0.70);
+    expect(rate).toBe(0);
   });
 });
 
@@ -722,22 +722,24 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
       return approves / samples;
     }
 
-    it('Morgana off-team approve rate ≈ 0.50 (base 0.35 + 0.15 mimic-merlin bonus)', () => {
+    // Edward 2026-04-24 batch 10 — recognised-red (刺/娜/梅) off-team with
+    // NO teammate on team MUST reject (never open outer-white). The per-
+    // role `voteApproveBonus` is retained as a computed strategy delta
+    // (kept in EVIL_ROLE_STRATEGY_TABLE) but the off-team branch is now
+    // gated by the outer-white limit: recognised-red → force reject.
+    it('Morgana off-team, no teammate on team → approve rate = 0 (batch 10 outer-white limit)', () => {
       const rate = approveRate('morgana');
-      expect(rate).toBeGreaterThan(0.40);
-      expect(rate).toBeLessThan(0.60);
+      expect(rate).toBe(0);
     });
 
-    it('Assassin off-team approve rate ≈ 0.45 (base 0.35 + 0.10)', () => {
+    it('Assassin off-team, no teammate on team → approve rate = 0 (batch 10 outer-white limit)', () => {
       const rate = approveRate('assassin');
-      expect(rate).toBeGreaterThan(0.35);
-      expect(rate).toBeLessThan(0.55);
+      expect(rate).toBe(0);
     });
 
-    it('Mordred off-team approve rate ≈ 0.30 (base 0.35 - 0.05 bolder)', () => {
+    it('Mordred off-team, no teammate on team → approve rate = 0 (batch 10 outer-white limit)', () => {
       const rate = approveRate('mordred');
-      expect(rate).toBeGreaterThan(0.20);
-      expect(rate).toBeLessThan(0.40);
+      expect(rate).toBe(0);
     });
 
     it('Oberon off-team: Rule 1 (no prior participation) overrides legacy base → approve rate = 0', () => {
@@ -880,10 +882,11 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
 
   // ── Phase 4: assassinate (Percival-like penalty) ────────────
   describe('phase 4 — assassin targets Merlin, not Percival lookalikes', () => {
-    it('penalises a good leader who consistently put knownEvil (Morgana) on their team', () => {
-      // Setup: P1 = Assassin, knownEvils = [P1, P2 (Morgana)].
-      // P3 was leader twice, included Morgana (P2) both times → Percival signal.
-      // P4 was leader twice, never included Morgana → Merlin signal.
+    it('Percival penalty fires when a leader consistently included known evils (batch 10)', () => {
+      // Batch 10 refactored `getMistakeCount` to Edward's two-pattern
+      // specification (inner-black on thumbless team / outer-white on thumb
+      // team). The leader-tainted-team signal moved to getPercivalLikenessPenalty
+      // only — batch 10 tests verify the penalty function in isolation.
       const obs = baseObs({
         myPlayerId:   'P1',
         myRole:       'assassin',
@@ -913,13 +916,6 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
       const p4Penalty = agent._getPercivalLikenessPenaltyForTesting('P4', obs);
       expect(p3Penalty).toBeGreaterThan(0);
       expect(p4Penalty).toBe(0);
-
-      // Assassin should target P4 (the cleaner leader), not P3 (Percival-like).
-      const action = agent.act(obs);
-      expect(action.type).toBe('assassinate');
-      if (action.type === 'assassinate') {
-        expect(action.targetId).not.toBe('P3');
-      }
     });
 
     it('no vote history → no Percival penalty for any player', () => {
@@ -1794,12 +1790,12 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
       }
     });
 
-    it('R4 on-team, NO overlap with prior failed mission → fail (batch 9 invariant overrides Rule 4 success branch)', () => {
-      // Pre-batch-9: Oberon Rule 4 else-branch voted `success` when no
-      // teammate-suspicion overlap existed. Post batch 9 the red-always-
-      // fail invariant supersedes: any red on a mission → fail. The
-      // Rule 4 success branch is now dead code for red, preserved for
-      // auditability. See EVIL_MISSION_ALWAYS_FAIL in HeuristicAgent.ts.
+    it('R4 on-team, NO overlap with prior failed mission → success (Rule 4 else branch, batch 10 restored)', () => {
+      // Batch 9 added a red-always-fail guard that turned this into a fail.
+      // Batch 10 replaces that guard with the recognised-red hierarchy
+      // (which excludes Oberon) and moves the Oberon branch BEFORE the
+      // forced-mission shortcut, so Rule 4's else-branch (no teammate
+      // suspicion → success) is live again for Oberon.
       const obs = oberonQuestVoteObs({
         round: 4,
         proposedTeam: ['P1', 'P8', 'P9'],  // Team members not in R2 failure
@@ -1813,7 +1809,7 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
         agent.onGameStart(obs);
         const action = agent.act(obs);
         expect(action.type).toBe('quest_vote');
-        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
       }
     });
   });
@@ -1889,12 +1885,13 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
       }
     });
 
-    it('R5 on-team + NO prior fail → quest fail (batch 9 invariant overrides Rule 5c else branch)', () => {
-      // Pre-batch-9: Oberon Rule 5c else-branch voted `success` when
-      // totalMissionFails === 0. Post batch 9 the red-always-fail
-      // invariant supersedes — see EVIL_MISSION_ALWAYS_FAIL. Rule 5c
-      // success branch is now dead code for red, preserved for
-      // auditability.
+    it('R5 on-team + NO prior fail → quest success (Rule 5c else branch, batch 10 restored)', () => {
+      // Batch 9 forced R5 oberon fail unconditionally; batch 10 replaced
+      // that blanket guard with the recognised-red hierarchy. Oberon is
+      // NOT in the hierarchy (lone-wolf), so his Rule 5c semantics are
+      // restored verbatim: R5 + totalMissionFails === 0 → success.
+      // This is a pathological test input (1-0 at R5 means game would have
+      // ended already in real play), kept to isolate the Rule 5c else branch.
       const obs = oberonQuestVoteObs({
         round: 5,
         proposedTeam: ['P1', 'P2', 'P3', 'P4'],
@@ -1908,7 +1905,7 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
         agent.onGameStart(obs);
         const action = agent.act(obs);
         expect(action.type).toBe('quest_vote');
-        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
       }
     });
   });
@@ -2108,23 +2105,24 @@ describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)',
 });
 
 // ─────────────────────────────────────────────────────────────
-// Edward 2026-04-24 batch 9 — red-always-fail-on-mission invariant
+// Edward 2026-04-24 batch 10 — recognised-red hierarchy (位階法)
 //
 // Edward verbatim:
-//   「157 7沒出失敗 / 2390 0是奧 也沒出失敗
-//    不是說能出任務就要盡可能破壞任務嗎」
+//   「相認紅方不是上場 hard fail / 相認紅方有位階法
+//    單獨出 R1-R3 任務 → 必失敗
+//    一位相認隊友 R1-R3 → 刺失敗 / 德成功 / 娜先觀察一次（第一次 success）
+//    兩位相認隊友 R1-R3 → 刺失敗 / 其餘 success
+//    一位相認隊友 R4 → 必失敗（2 人都 fail，保證 R4 需要 2 fail）
+//    兩位相認隊友 R4 → 德 success / 其餘 fail（刺+娜 fail，湊齊 2）
+//    R5 → 任何紅方 on team 必失敗（聽牌）」
 //
-// Batch 8 self-play exposed two cases where red players on a mission
-// still voted `success` (娜 on R1 mission 157; 刺+奧+梅 on R2 forced
-// mission 2390). Batch 9 overrides every cover/hide heuristic:
-//   任何紅方任何時刻 on-mission → 必投 fail.
-//
-// Covered roles: assassin / morgana / mordred / oberon
-// Covered paths: forced-mission, 60/40 baseline, failsRequired>=2,
-//                Oberon Rule 4/5c success branches, match-point
+// Batch 10 REPLACES batch 9's blanket hard-fail for recognised-red roles
+// (assassin / morgana / mordred). Oberon retains his batch-7/8 Rule 2/4/5c
+// logic (not the hierarchy) — but we now ensure Oberon rules fire BEFORE
+// batch-3 forced-mission cover-success so Rule 2 (R1-R3 fail) survives.
 // ─────────────────────────────────────────────────────────────
 
-describe('HeuristicAgent · batch 9 red-always-fail-on-mission invariant', () => {
+describe('HeuristicAgent · batch 10 recognised-red hierarchy (位階法)', () => {
   const EVIL_ROLES: ReadonlyArray<'assassin' | 'morgana' | 'mordred' | 'oberon'> =
     ['assassin', 'morgana', 'mordred', 'oberon'];
 
@@ -2158,50 +2156,300 @@ describe('HeuristicAgent · batch 9 red-always-fail-on-mission invariant', () =>
     });
   }
 
-  describe('direct invariant — every code path routes red to fail', () => {
+  describe('solo recognised-red (no ally on team) → fail across R1-R5', () => {
+    // Solo = no teammate on proposed team. Hierarchy rule: solo R1-R3 fail,
+    // R4 solo fail, R5 fail. Applies to all 4 red roles (oberon via batch
+    // 7/8 Rule 2/4/5c which all yield fail in these scenarios).
     for (const role of EVIL_ROLES) {
-      it(`${role} R1 on-team, 0-0 (baseline path) → fail`, () => {
-        const obs = redQuestObs(role, { round: 1 });
+      it(`${role} solo R1 on-team, 0-0 → fail`, () => {
+        // Self = P1 alone; knownEvils empty (oberon) or P3/P4 not on team.
+        const obs = redQuestObs(role, {
+          round: 1,
+          proposedTeam: ['P1', 'P5'],  // solo: ally P2 NOT on team
+        });
+        // Override knownEvils so P2 is NOT the on-team ally.
+        const soloObs = { ...obs, knownEvils: role === 'oberon' ? [] : ['P1', 'P3'] };
         for (let i = 0; i < 50; i++) {
           const agent = new HeuristicAgent('P1', 'hard');
-          agent.onGameStart(obs);
-          const action = agent.act(obs);
+          agent.onGameStart(soloObs);
+          const action = agent.act(soloObs);
           expect(action.type).toBe('quest_vote');
           if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
         }
       });
 
-      it(`${role} R4 on-team, 1-1 (failsRequired≥2 path, 10p) → fail`, () => {
-        // 10p R4 needs 2 fails; pre-batch-9 this ran the 30% fr2 path.
+      it(`${role} solo R4 on-team, 1-1 (failsRequired≥2 path, 10p) → ${role === 'oberon' ? 'success (Rule 4 else branch)' : 'fail (hierarchy)'}`, () => {
+        // 10p R4 needs 2 fails. Recognised-red hierarchy solo R4 → fail.
+        // Oberon Rule 4 else branch: no teammate-suspicion overlap (empty
+        // questHistory in this fixture) → success. Test branches by role.
         const obs = redQuestObs(role, {
           round: 4,
           playerCount: 10,
-          proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+          proposedTeam: ['P1', 'P3', 'P4', 'P5', 'P6'],  // solo: no ally on team
           questResults: ['success', 'fail'],
         });
+        const soloObs = { ...obs, knownEvils: role === 'oberon' ? [] : ['P1', 'P7'] };
+        const expected: 'fail' | 'success' = role === 'oberon' ? 'success' : 'fail';
         for (let i = 0; i < 50; i++) {
           const agent = new HeuristicAgent('P1', 'hard');
-          agent.onGameStart(obs);
-          const action = agent.act(obs);
+          agent.onGameStart(soloObs);
+          const action = agent.act(soloObs);
+          expect(action.type).toBe('quest_vote');
+          if (action.type === 'quest_vote') expect(action.vote).toBe(expected);
+        }
+      });
+
+      it(`${role} solo forced-mission (R2 attempt=5, 0-0) → fail (batch 10 preserves batch 9 regression vector)`, () => {
+        // Pre-batch-10: batch 9 hard-fail at the top prevented any red
+        // cover-success on forced missions. Batch 10 replaces that with
+        // the hierarchy (recognised-red) + Oberon-rules-before-forced-
+        // mission (oberon). Solo scenario → all four roles still vote fail.
+        const obs = redQuestObs(role, {
+          round: 2,
+          proposedTeam: ['P1', 'P3', 'P4', 'P5'],  // solo
+          voteHistory: [
+            vote(2, 5, 'P3', ['P1', 'P3', 'P4', 'P5'], true,
+                 { P1: true, P2: true, P3: true, P4: true, P5: true }),
+          ],
+        });
+        const soloObs = { ...obs, knownEvils: role === 'oberon' ? [] : ['P1', 'P6'] };
+        for (let i = 0; i < 50; i++) {
+          const agent = new HeuristicAgent('P1', 'hard');
+          agent.onGameStart(soloObs);
+          const action = agent.act(soloObs);
           expect(action.type).toBe('quest_vote');
           if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
         }
       });
+    }
+  });
 
-      it(`${role} forced-mission (attempt=5, 0-0) → fail (batch 9 overrides batch 3 cover-success)`, () => {
-        // Pre-batch-9: forced-mission returned success for every player.
-        // Batch 9 invariant routes red → fail before the forced-mission
-        // shortcut fires. Critical regression vector (batch 8 R2 mission
-        // 2390 bug).
+  describe('hierarchy — 1 teammate on R1-R3 → assassin fail / mordred success / morgana observe', () => {
+    it('assassin + 1 teammate on R1 → fail', () => {
+      const obs = redQuestObs('assassin', {
+        round: 1,
+        proposedTeam: ['P1', 'P2'],  // P2 = known teammate
+      });
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('mordred + 1 teammate on R1 → success (cover)', () => {
+      const obs = redQuestObs('mordred', {
+        round: 1,
+        proposedTeam: ['P1', 'P2'],
+      });
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+
+    it('morgana + 1 teammate on R1, no prior joint mission → success (first observe)', () => {
+      const obs = redQuestObs('morgana', {
+        round: 1,
+        proposedTeam: ['P1', 'P2'],
+      });
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+
+    it('morgana + 1 teammate on R2 after prior joint R1 FAIL → fail (teammate = assassin)', () => {
+      // Prior joint mission failed → morgana infers teammate was assassin
+      // → morgana now mirrors assassin's fail.
+      const obs = redQuestObs('morgana', {
+        round: 2,
+        proposedTeam: ['P1', 'P2'],
+        questHistory: [
+          quest(1, ['P1', 'P2'], 'fail', 1),  // joint R1 failed
+        ],
+        questResults: ['fail'],
+      });
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('morgana + 1 teammate on R2 after prior joint R1 SUCCESS → success (teammate = mordred)', () => {
+      // Prior joint mission succeeded → morgana infers teammate was mordred
+      // → both continue the hide pattern (success).
+      const obs = redQuestObs('morgana', {
+        round: 2,
+        proposedTeam: ['P1', 'P2'],
+        questHistory: [
+          quest(1, ['P1', 'P2'], 'success', 0),  // joint R1 succeeded
+        ],
+        questResults: ['success'],
+      });
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+  });
+
+  describe('hierarchy — 2 teammates on R1-R3 → assassin fail, others success', () => {
+    it('assassin + 2 teammates on R2 → fail (1 fail suffices)', () => {
+      // 3 reds on team; only assassin fails.
+      const obs = redQuestObs('assassin', {
+        round: 2,
+        playerCount: 10,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4'],
+      });
+      // knownEvils P1/P2/P3 → P2+P3 teammates on team.
+      const doubleObs = { ...obs, knownEvils: ['P1', 'P2', 'P3'] };
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(doubleObs);
+        const action = agent.act(doubleObs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('mordred + 2 teammates on R2 → success', () => {
+      const obs = redQuestObs('mordred', {
+        round: 2,
+        playerCount: 10,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4'],
+      });
+      const doubleObs = { ...obs, knownEvils: ['P1', 'P2', 'P3'] };
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(doubleObs);
+        const action = agent.act(doubleObs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+
+    it('morgana + 2 teammates on R2 → success', () => {
+      const obs = redQuestObs('morgana', {
+        round: 2,
+        playerCount: 10,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4'],
+      });
+      const doubleObs = { ...obs, knownEvils: ['P1', 'P2', 'P3'] };
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(doubleObs);
+        const action = agent.act(doubleObs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+  });
+
+  describe('hierarchy — R4 branches on teammate count', () => {
+    it('assassin + 1 teammate on R4 (10p needs 2 fails) → fail', () => {
+      const obs = redQuestObs('assassin', {
+        round: 4,
+        playerCount: 10,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('morgana + 1 teammate on R4 → fail (both reds on team must fail)', () => {
+      const obs = redQuestObs('morgana', {
+        round: 4,
+        playerCount: 10,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('mordred + 2 teammates on R4 → success (assassin+morgana carry the 2 fails)', () => {
+      const obs = redQuestObs('mordred', {
+        round: 4,
+        playerCount: 10,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      const doubleObs = { ...obs, knownEvils: ['P1', 'P2', 'P3'] };
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(doubleObs);
+        const action = agent.act(doubleObs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+
+    it('assassin + 2 teammates on R4 → fail', () => {
+      const obs = redQuestObs('assassin', {
+        round: 4,
+        playerCount: 10,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      const doubleObs = { ...obs, knownEvils: ['P1', 'P2', 'P3'] };
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(doubleObs);
+        const action = agent.act(doubleObs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('morgana + 2 teammates on R4 → fail', () => {
+      const obs = redQuestObs('morgana', {
+        round: 4,
+        playerCount: 10,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      const doubleObs = { ...obs, knownEvils: ['P1', 'P2', 'P3'] };
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(doubleObs);
+        const action = agent.act(doubleObs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+  });
+
+  describe('hierarchy — R5 any red on team → fail (listening)', () => {
+    for (const role of EVIL_ROLES) {
+      it(`${role} R5 on-team → fail`, () => {
         const obs = redQuestObs(role, {
-          round: 2,
-          proposedTeam: ['P1', 'P2', 'P3', 'P4'],
-          voteHistory: [
-            vote(2, 5, 'P3', ['P1', 'P2', 'P3', 'P4'], true,
-                 { P1: true, P2: true, P3: true, P4: true, P5: true }),
-          ],
+          round: 5,
+          playerCount: 10,
+          proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+          questResults: ['success', 'fail', 'success', 'fail'],
         });
-        for (let i = 0; i < 50; i++) {
+        for (let i = 0; i < 30; i++) {
           const agent = new HeuristicAgent('P1', 'hard');
           agent.onGameStart(obs);
           const action = agent.act(obs);
@@ -2303,21 +2551,25 @@ describe('HeuristicAgent · batch 9 red-always-fail-on-mission invariant', () =>
       return { redVotes };
     }
 
-    it('10 self-play games — every red-on-mission vote is fail (zero exceptions)', () => {
+    it('10 self-play games — assassin + oberon always fail when on team (batch 10 hierarchy)', () => {
+      // Batch 10 hierarchy: assassin unconditionally fails in all branches
+      // except R4-with-2-teammates-but-he-is-mordred (N/A for assassin).
+      // Oberon's batch 7/8 Rule 2 forces R1-R3 on-team fail; Rule 4 success-
+      // branch can fire when no teammate overlap; Rule 5c depends on prior
+      // fails. Mordred/Morgana have hierarchy success branches that trigger
+      // when joint with another red on R1-R3. So the strict "all-fail"
+      // invariant only holds for assassin and oberon solo/match-point.
       const allRedVotes: Array<{ role: string; vote: 'success' | 'fail' }> = [];
       for (let g = 0; g < 10; g++) {
         const { redVotes } = runSelfPlayInvariant(g);
         allRedVotes.push(...redVotes);
       }
-      // Must have at least 30 red votes across 10 games × 5 rounds × 3 reds/team.
       expect(allRedVotes.length).toBeGreaterThanOrEqual(30);
-      // INVARIANT: zero red-on-mission success votes allowed.
-      const successVotes = allRedVotes.filter(v => v.vote === 'success');
-      expect(successVotes).toEqual([]);
-      // Sanity: every vote is a fail.
-      for (const v of allRedVotes) {
-        expect(v.vote).toBe('fail');
-      }
+      // Assassin must fail every single time across all 10 games.
+      const assassinSuccess = allRedVotes.filter(
+        (v) => v.role === 'assassin' && v.vote === 'success',
+      );
+      expect(assassinSuccess).toEqual([]);
     });
 
     it('per-role breakdown — all 4 red roles contribute fail votes', () => {
@@ -2330,11 +2582,318 @@ describe('HeuristicAgent · batch 9 red-always-fail-on-mission invariant', () =>
       for (const v of allRedVotes) {
         if (v.vote === 'fail') byRole.set(v.role, (byRole.get(v.role) ?? 0) + 1);
       }
-      // All four red roles must appear (assassin S7, morgana S8, mordred S9, oberon S10).
+      // Every red role must emit at least one fail across the 10-game sweep.
       expect(byRole.get('assassin')).toBeGreaterThanOrEqual(1);
-      expect(byRole.get('morgana')).toBeGreaterThanOrEqual(1);  // seed%2===0 + r===4 branch
-      expect(byRole.get('mordred')).toBeGreaterThanOrEqual(1);  // same branch
+      expect(byRole.get('morgana')).toBeGreaterThanOrEqual(1);
+      expect(byRole.get('mordred')).toBeGreaterThanOrEqual(1);
       expect(byRole.get('oberon')).toBeGreaterThanOrEqual(1);
     });
   });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Edward 2026-04-24 batch 10 Point 2 — mistake action (refined)
+//
+// 拇指 = 刺/娜/奧. From the assassin's POV `knownEvils` = {assassin,
+// morgana}; oberon is hidden (approximation accepted, matches Merlin's
+// own blind spot for oberon).
+//   1. 全沒拇指組合開異常內黑 (on-team + thumbless team + reject)
+//   2. 有拇指組合開異常外白 (off-team + thumb team + approve)
+// ─────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · batch 10 Point 2 (mistake action refined)', () => {
+  it('pattern 1: on-team + thumbless team + reject → mistake', () => {
+    // P1 = assassin, P2 = morgana (thumb). P3 rejected a thumbless team
+    // that she was on → inner-black on clean team = Merlin-impossible.
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'assassin',
+      myTeam:       'evil',
+      knownEvils:   ['P1', 'P2'],
+      gamePhase:    'assassination',
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        // Team [P3, P4] contains no thumb. P3 on team + reject = Pattern 1.
+        vote(1, 1, 'P5', ['P3', 'P4'], false,
+          { P1: true, P2: true, P3: false, P4: true, P5: true }),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    // P3: Pattern 1 fires (on-team thumbless reject).
+    const p3Obs = obs;  // same observation; P3 is our anti-hero.
+    const agent2 = new HeuristicAgent('P1', 'hard');
+    agent2.onGameStart(p3Obs);
+    // Using internal count via assassinate path — we assert via the
+    // unmistaken split. P3 should be classified as mistaken.
+    const action = agent.act(p3Obs);
+    expect(action.type).toBe('assassinate');
+    // In a pool where P3 is the only mistaken (P4 and P5 didn't
+    // reject-thumbless-on-team), the target must not be P3.
+    if (action.type === 'assassinate') {
+      expect(action.targetId).not.toBe('P3');
+    }
+  });
+
+  it('pattern 2: off-team + thumb team + approve → mistake', () => {
+    // P2 = morgana (thumb). Team [P2, P4] has thumb. P3 off-team approved
+    // → outer-white on tainted team = Merlin-impossible.
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'assassin',
+      myTeam:       'evil',
+      knownEvils:   ['P1', 'P2'],
+      gamePhase:    'assassination',
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        vote(1, 1, 'P4', ['P2', 'P4'], true,
+          { P1: true, P2: true, P3: true, P4: true, P5: false }),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const action = agent.act(obs);
+    expect(action.type).toBe('assassinate');
+    // P3 is the outer-white approver → not a Merlin candidate → assassin
+    // prefers any other good (P4, P5) as Merlin.
+    if (action.type === 'assassinate') {
+      expect(action.targetId).not.toBe('P3');
+    }
+  });
+
+  it('no mistakes on clean history → candidate pool is all good players', () => {
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'assassin',
+      myTeam:       'evil',
+      knownEvils:   ['P1', 'P2'],
+      gamePhase:    'assassination',
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory:  [],  // no history → no mistakes
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const action = agent.act(obs);
+    expect(action.type).toBe('assassinate');
+    // One of P3/P4/P5 (all unmistaken) is the target.
+    if (action.type === 'assassinate') {
+      expect(['P3', 'P4', 'P5']).toContain(action.targetId);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Edward 2026-04-24 batch 10 Point 4 — loyal suspect expansion
+//
+// Verbatim: 「對於忠臣, 看到異常外白優先視為偏紅方 (放在任務隊伍選擇外)」
+// ─────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · batch 10 Point 4 (loyal suspect expansion)', () => {
+  it('outer-white approvers appear in loyal suspect set', () => {
+    // Loyal P1 observes P3 (off-team) approved a team they were not on.
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'loyal',
+      myTeam:       'good',
+      knownEvils:   [],
+      gamePhase:    'team_select',
+      currentRound: 3,
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        vote(1, 1, 'P2', ['P2', 'P4'], true,
+          { P1: false, P2: true, P3: true, P4: true, P5: false }),  // P3 off-team approves
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const suspects = agent._getLoyalSuspectSetForTesting(obs);
+    expect(suspects.has('P3')).toBe(true);
+    // Self never self-suspects.
+    expect(suspects.has('P1')).toBe(false);
+  });
+
+  it('failed-mission members are also in suspect set (union preserved)', () => {
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'loyal',
+      myTeam:       'good',
+      knownEvils:   [],
+      gamePhase:    'team_select',
+      currentRound: 3,
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory:  [],
+      questHistory: [
+        quest(1, ['P2', 'P3'], 'fail', 1),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const suspects = agent._getLoyalSuspectSetForTesting(obs);
+    expect(suspects.has('P2')).toBe(true);
+    expect(suspects.has('P3')).toBe(true);
+  });
+
+  it('loyal team proposal demotes outer-white suspect out of the team', () => {
+    // 5p, round 2, team size 3. P3 outer-white approved R1 (off-team).
+    // Loyal leader P1 must NOT pick P3 when cleaner options exist.
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'loyal',
+      myTeam:       'good',
+      knownEvils:   [],
+      gamePhase:    'team_select',
+      currentRound: 2,
+      playerCount:  5,
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        vote(1, 1, 'P2', ['P2', 'P4'], true,
+          { P1: true, P2: true, P3: true, P4: true, P5: false }),  // P3 outer-white
+      ],
+      questHistory: [
+        quest(1, ['P2', 'P4'], 'success', 0),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const action = agent.act(obs);
+    expect(action.type).toBe('team_select');
+    if (action.type === 'team_select') {
+      // Team is size 3; P3 should be LAST choice (suspect tier).
+      // If any non-suspect remains, P3 should not be on team.
+      expect(action.teamIds).not.toContain('P3');
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Edward 2026-04-24 batch 10 Point 5 — Percival dual-thumb intel
+//
+// Verbatim: 「對於派西維爾, 除了根據異常投票去抓紅藍方, 也要透過
+//          雙拇指(梅林/莫甘娜)釋放的隊伍資訊去交集找共同好壞人」
+// ─────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · batch 10 Point 5 (Percival dual-thumb intel)', () => {
+  it('team members of Merlin-reject × Morgana-approve intersection are suspects', () => {
+    // P2 = Merlin (inferred), P3 = Morgana (inferred). P2 rejected R1
+    // team [P4, P5] and P3 approved it. Intersection → P4, P5 evil.
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'percival',
+      myTeam:       'good',
+      knownWizards: ['P2', 'P3'],
+      gamePhase:    'team_select',
+      currentRound: 2,
+      playerCount:  5,
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        vote(1, 1, 'P4', ['P4', 'P5'], true,
+          { P1: true, P2: false, P3: true, P4: true, P5: true }),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const suspects = agent._buildPercivalDualThumbSuspectsForTesting(
+      ['P2', 'P3'], 'P2', obs,
+    );
+    expect(suspects.has('P4')).toBe(true);
+    expect(suspects.has('P5')).toBe(true);
+    // Self never in suspects.
+    expect(suspects.has('P1')).toBe(false);
+  });
+
+  it('agreement (Merlin+Morgana both approve) → no intersection suspect', () => {
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'percival',
+      myTeam:       'good',
+      knownWizards: ['P2', 'P3'],
+      gamePhase:    'team_select',
+      currentRound: 2,
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        vote(1, 1, 'P4', ['P4', 'P5'], true,
+          { P1: true, P2: true, P3: true, P4: true, P5: true }),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const suspects = agent._buildPercivalDualThumbSuspectsForTesting(
+      ['P2', 'P3'], 'P2', obs,
+    );
+    expect(suspects.size).toBe(0);
+  });
+
+  it('single wizard knowledge → empty suspect set (safety)', () => {
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'percival',
+      myTeam:       'good',
+      knownWizards: ['P2'],  // only 1 wizard
+      gamePhase:    'team_select',
+      currentRound: 2,
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        vote(1, 1, 'P4', ['P4', 'P5'], true,
+          { P1: true, P2: false, P3: true, P4: true, P5: true }),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const suspects = agent._buildPercivalDualThumbSuspectsForTesting(
+      ['P2'], 'P2', obs,
+    );
+    expect(suspects.size).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Edward 2026-04-24 batch 10 Point 3 — red outer-white limit
+// (recognised-red no teammate on team → never outer-white approve)
+// ─────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · batch 10 Point 3 (red outer-white limit)', () => {
+  for (const role of ['assassin', 'morgana', 'mordred'] as const) {
+    it(`${role} off-team with NO teammate on team → always reject`, () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       role,
+        myTeam:       'evil',
+        knownEvils:   ['P1', 'P5'],  // teammate = P5 NOT on team
+        gamePhase:    'team_vote',
+        currentRound: 3,
+        proposedTeam: ['P2', 'P3', 'P4'],
+        allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      let approves = 0;
+      for (let i = 0; i < 200; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        if (action.type === 'team_vote' && action.vote === true) approves++;
+      }
+      expect(approves).toBe(0);
+    });
+
+    it(`${role} off-team WITH teammate on team → may approve (supports ally)`, () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       role,
+        myTeam:       'evil',
+        knownEvils:   ['P1', 'P2'],  // teammate = P2 ON team
+        gamePhase:    'team_vote',
+        currentRound: 3,
+        proposedTeam: ['P2', 'P3', 'P4'],
+        allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      // Voting for a team with ally on it: short-circuit `hasAlly` branch
+      // returns true unconditionally. Always approve.
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(true);
+      }
+    });
+  }
 });

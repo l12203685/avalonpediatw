@@ -153,47 +153,74 @@ function isListeningState(goodWins: number, evilWins: number): boolean {
   return goodWins === 2 || evilWins === 2;
 }
 
-// ── Edward 2026-04-24 batch 9 — red-always-fail-on-mission invariant ──
+// ── Edward 2026-04-24 batch 10 — recognised-red hierarchy (位階法) ──
 /**
- * Edward 2026-04-24 batch 9 verbatim:
- *   「157 7沒出失敗 / 2390 0是奧 也沒出失敗
- *    不是說能出任務就要盡可能破壞任務嗎」
+ * Edward 2026-04-24 batch 10 verbatim:
+ *   「相認紅方不是上場 hard fail / 相認紅方有位階法
+ *    如果單獨出R1~R3任務, 必出失敗
+ *    如果跟一位相認隊友一起出R1~R3任務, 刺客出失敗, 莫德雷德出成功
+ *    莫甘娜則是先觀察一次任務結果, 如果隊友出了失敗 = 刺客, 如果隊友出了
+ *    成功 = 莫德雷德 => 這時出任務的隊友就互相知道身分
+ *    如果跟兩位相認隊友一起出R1~R3任務, 刺客出失敗
+ *    如果跟一位相認隊友一起出R4任務, 必出失敗
+ *    如果跟兩位相認隊友一起出R4任務, 刺客跟莫甘娜出失敗
+ *    R5 只要能出任務就是出失敗(因為紅方聽牌)」
  *
- * Batch 8 self-play exposed that red players still voted `success` on
- * missions under three code paths:
- *   1. `voteOnQuest`'s forced-mission shortcut (attempt===5 → success)
- *   2. 60/40 early-game baseline (probabilistic `success` 40%)
- *   3. `failsRequired >= 2` 30% fail branch (probabilistic `success` 70%)
- *   4. Oberon Rule 4 / 5c success branches
+ * Batch 10 REPLACES batch 9's blanket hard-fail for recognised-red
+ * roles (assassin / morgana / mordred — the trio that share a
+ * `knownEvils` view). Oberon is a lone-wolf red and CONTINUES to
+ * route through his dedicated batch-7/8 rule set (not the hierarchy).
  *
- * Edward's new invariant overrides every "cover / hide" strategy:
- *   「**任何紅方任何時刻 on-mission → 必投 fail**」
+ * Hierarchy decision table (R1-R3 + R4 + R5 + match-point):
+ *   teammatesOnMission | R | role      | vote
+ *   ------------------- | - | --------- | ----
+ *   0                   | R1-R3 | any   | fail (solo: must crack the mission)
+ *   0                   | R4    | any   | fail (solo R4: still must fail)
+ *   0                   | R5    | any   | fail (listening)
+ *   1                   | R1-R3 | assassin | fail
+ *   1                   | R1-R3 | mordred  | success
+ *   1                   | R1-R3 | morgana  | first-time → success (observe);
+ *                                           subsequent joint-mission with
+ *                                           a known failer teammate → she
+ *                                           knows the teammate was assassin
+ *                                           → she can now play as assassin
+ *                                           does (return `null` to fall
+ *                                           through to role-differentiated
+ *                                           logic; simplified in batch 10
+ *                                           to return success on her
+ *                                           FIRST joint appearance)
+ *   1                   | R4    | any       | fail (2-member R4 evil
+ *                                           pact — both fail to guarantee
+ *                                           2 fails needed in 10p R4)
+ *   1                   | R5    | any       | fail (listening)
+ *   2                   | R1-R3 | assassin | fail (1 fail suffices)
+ *   2                   | R1-R3 | mordred  | success
+ *   2                   | R1-R3 | morgana  | success
+ *   2                   | R4    | assassin | fail
+ *   2                   | R4    | morgana  | fail (need 2 fails in 10p R4)
+ *   2                   | R4    | mordred  | success
+ *   2                   | R5    | any       | fail (listening)
  *
- * Implementation: early-return at the top of `voteOnQuest` (immediately
- * after the `myTeam === 'good'` short-circuit) whenever `myRole` ∈
- * {assassin, morgana, mordred, oberon}. This subsumes the §0 listening
- * rule, Oberon's batch-7 rule set, forced-mission cover-success, and the
- * probabilistic baselines. Those branches are kept for auditability
- * but are now dead code for red players.
+ * Oberon: SKIPS the hierarchy (his knownEvils is empty). Routes to
+ * existing batch 7/8 voteOnQuestAsOberon branch downstream.
  *
- * NOTE: this set intentionally includes `oberon` (unlike
- * `EVIL_DIFFERENTIATION_ROLES` which carves him out for role-strategy
- * differentiation). Match-point and Oberon's Rule 2 already required
- * fail; this invariant extends the same discipline to every round.
+ * The hierarchy returns a concrete vote OR `null` (signalling "fall
+ * through to existing logic", currently only for the Morgana-observe
+ * case which always ends up returning a vote; null is reserved for
+ * future extensions).
  */
-const EVIL_MISSION_ALWAYS_FAIL: ReadonlySet<string> = new Set([
+const EVIL_HIERARCHY_ROLES: ReadonlySet<string> = new Set([
   'assassin',
   'morgana',
   'mordred',
-  'oberon',
 ]);
 
 /**
  * Feature flag. Default `true`. Flip to `false` only for regression
- * study — doing so re-enables the pre-batch-9 "red may cover-success"
- * behaviour documented in §0 / §6 of the strategy baseline.
+ * study — doing so re-enables the pre-batch-10 batch-9 hard-fail
+ * behaviour for every recognised-red role.
  */
-const USE_EVIL_MISSION_ALWAYS_FAIL = true;
+const USE_EVIL_HIERARCHY = true;
 
 // ── Smart Percival thumb identification (Fix #4, SSoT §6.4) ────
 /**
@@ -723,7 +750,7 @@ export class HeuristicAgent implements AvalonAgent {
   // ── Team Selection ───────────────────────────────────────────
 
   private selectTeam(obs: PlayerObservation): AgentAction {
-    const { playerCount, currentRound, myPlayerId, myTeam, knownEvils, knownWizards } = obs;
+    const { playerCount, currentRound, myPlayerId, myTeam, myRole, knownEvils, knownWizards } = obs;
     const teamSize = this.getTeamSize(playerCount, currentRound);
     const allIds   = this.getPlayerIds(obs);
 
@@ -761,7 +788,18 @@ export class HeuristicAgent implements AvalonAgent {
       //   4. Known evil (only as degenerate last resort; should never
       //      happen at canonical team sizes 3-5 in a 10p game)
       const knownEvilSet = new Set(knownEvils);
-      const suspectSet = this.getFailedMissionSuspects(obs);
+      // Edward 2026-04-24 batch 10 — loyal suspect expansion.
+      // Verbatim: 「對於忠臣, 看到異常外白優先視為偏紅方 (放在任務隊伍選擇外)」
+      // For a loyal (no `knownEvils`, no `knownWizards`) the suspect set
+      // is the union of: (a) members of publicly-failed missions, plus
+      // (b) players who cast an off-team approve (outer-white) at any
+      // point — these are the tell-tale Oberon-like signatures. Merlin
+      // and Percival already have privileged knowledge and skip (b).
+      const loyalLike = myRole === 'loyal' &&
+        (!knownWizards || knownWizards.length === 0);
+      const suspectSet = loyalLike
+        ? this.getLoyalSuspectSet(obs)
+        : this.getFailedMissionSuspects(obs);
 
       // Rank non-self candidates: (a) not-suspect-not-evil comes first,
       // then (b) suspect, then (c) known evil (should be empty slice for
@@ -789,7 +827,26 @@ export class HeuristicAgent implements AvalonAgent {
         // or when there is not enough signal yet (round 1 first attempt).
         const preferredWizard = this.pickPreferredWizard(knownWizards, obs);
         if (team.length < teamSize) team.push(preferredWizard);
-        for (const id of candidates) {
+        // Edward 2026-04-24 batch 10 — Percival dual-thumb intersection.
+        // Verbatim: 「對於派西維爾, 除了根據異常投票去抓紅藍方, 也要透過
+        //           雙拇指(梅林/莫甘娜)釋放的隊伍資訊去交集找共同好壞人」
+        // Boost suspicion for players who appear on the
+        // "Merlin-rejected AND Morgana-approved" team-set (cross-inferred
+        // evil) or reduce it for players appearing on the
+        // "Merlin-approved AND Morgana-rejected" team-set (cross-inferred
+        // good). The resulting Set<string> is a HIGH-CONFIDENCE suspect
+        // overlay; we prefer non-overlay members when sorting `candidates`.
+        const dualSuspects = this.buildPercivalDualThumbSuspects(
+          knownWizards, preferredWizard, obs,
+        );
+        // Resort candidates: dualSuspects get demoted within their tier.
+        const reranked = [...candidates].sort((a, b) => {
+          const ta = dualSuspects.has(a) ? 1 : 0;
+          const tb = dualSuspects.has(b) ? 1 : 0;
+          if (ta !== tb) return ta - tb;
+          return 0;  // stable otherwise
+        });
+        for (const id of reranked) {
           if (team.length >= teamSize) break;
           if (!team.includes(id)) team.push(id);
         }
@@ -905,6 +962,40 @@ export class HeuristicAgent implements AvalonAgent {
     for (const quest of obs.questHistory) {
       if (quest.result !== 'fail') continue;
       for (const pid of quest.team) suspects.add(pid);
+    }
+    return suspects;
+  }
+
+  /**
+   * Edward 2026-04-24 batch 10 — loyal-specific suspect expansion.
+   *
+   * Verbatim: 「對於忠臣, 看到異常外白優先視為偏紅方 (放在任務隊伍選擇外)」
+   *
+   * A loyal good player has NO privileged information (no knownEvils,
+   * no knownWizards). To compensate, she leans on EVERY public anomaly
+   * signal she can observe. Union of:
+   *   (a) members of publicly-failed missions (same as
+   *       getFailedMissionSuspects)
+   *   (b) players who cast an off-team approve (outer-white) in any
+   *       voteHistory record — textbook Oberon-like signature, and a
+   *       legitimate red-cover move for any recognised-red when a
+   *       teammate is on the team (see batch 10 Point 3). Either way,
+   *       the loyal treats them as "偏紅方" and deprioritises them on
+   *       the proposed team.
+   *
+   * Self is explicitly excluded (a loyal never self-suspects).
+   */
+  private getLoyalSuspectSet(obs: PlayerObservation): Set<string> {
+    const suspects = this.getFailedMissionSuspects(obs);
+    // Add outer-white approvers.
+    for (const record of obs.voteHistory) {
+      for (const [pid, approved] of Object.entries(record.votes)) {
+        if (pid === obs.myPlayerId) continue;
+        const onTeam = record.team.includes(pid);
+        if (!onTeam && approved === true) {
+          suspects.add(pid);
+        }
+      }
     }
     return suspects;
   }
@@ -1089,7 +1180,30 @@ export class HeuristicAgent implements AvalonAgent {
 
       if (hasSelf || hasAlly) return { type: 'team_vote', vote: true };
 
-      // Hard mode: more strategically sometimes approves to appear cooperative
+      // Edward 2026-04-24 batch 10 — recognised-red outer-white limit.
+      // Verbatim: 「相認紅方(刺娜德) 不會在隊伍組合沒有相認隊友時開異常外白」
+      //
+      // Recognised-red roles (assassin / morgana / mordred) can see each
+      // other via `knownEvils`. When the proposed team contains no
+      // teammate they can see, opening an off-team approve (outer-white)
+      // is a cover-burn with no strategic upside — it signals their
+      // faction to readers without helping any ally through. Force
+      // reject in this scenario.
+      //
+      // Scope: applies ONLY to recognised-red. Oberon keeps his
+      // dedicated batch 7/8 branch (handled earlier in voteOnTeam).
+      // Mordred is included (he is a recognised-red for the trio).
+      if (EVIL_HIERARCHY_ROLES.has(obs.myRole as string)) {
+        // hasSelf / hasAlly already false here (short-circuited above),
+        // so this is the "no teammate on team" branch. Force reject.
+        return { type: 'team_vote', vote: false };
+      }
+
+      // Hard mode: more strategically sometimes approves to appear cooperative.
+      // Reachable only for Oberon (his dedicated branch would have returned
+      // earlier unless Rule 1/5b resolved to "normal vote"; he legitimately
+      // reaches here at R1-R2 before any participation, where the cross-
+      // faction R1-R2 guard has already handled him).
       const baseApproveChance = this.difficulty === 'hard' ? 0.35 : 0.3;
       const strategy = this.getEvilRoleStrategy(obs.myRole as string);
       const approveChance = clampUnit(
@@ -1239,6 +1353,105 @@ export class HeuristicAgent implements AvalonAgent {
     return null;
   }
 
+  // ── Recognised-red hierarchy (Edward 2026-04-24 batch 10) ──────────
+  /**
+   * Resolve the hierarchy vote for a recognised-red role (assassin /
+   * morgana / mordred). Returns the concrete `'fail' | 'success'`
+   * vote if the hierarchy applies; returns `null` if the caller should
+   * fall through to downstream legacy logic (should not normally
+   * happen — all recognised-red on-team cases resolve here).
+   *
+   * Applies ONLY when `myRole ∈ EVIL_HIERARCHY_ROLES`. Oberon is
+   * routed elsewhere.
+   *
+   * Teammate count is derived from `knownEvils ∩ proposedTeam` minus
+   * self — i.e. players the current recognised-red agent can see as
+   * teammates AND who are on this mission. Oberon hides from
+   * knownEvils, so he is invisible for the teammate-count axis (as he
+   * should be — Oberon does not coordinate).
+   *
+   * Morgana-observe (batch 10 verbatim): on her FIRST joint mission
+   * with exactly one teammate in R1-R3 she votes `success` to let the
+   * result reveal whether the teammate is assassin (fail on that
+   * quest) or mordred (success). Implementation detail: we detect
+   * "first joint mission" by checking that NO prior quest (from
+   * `questHistory`) had Morgana on team together with a known evil
+   * teammate. Once a prior joint mission exists, she can infer the
+   * teammate's role from its outcome and act accordingly:
+   *   - If the prior joint mission FAILED → teammate was assassin →
+   *     Morgana now plays as assassin does (fail).
+   *   - If the prior joint mission SUCCEEDED → teammate was mordred →
+   *     Morgana continues the mordred-joint pattern (success, since
+   *     she knows 1 fail is insufficient to break cover).
+   *
+   * Edward's rule as written focuses on the observe step. Downstream
+   * inference is implemented here as the natural continuation.
+   */
+  private chooseRedHierarchyVote(
+    obs: PlayerObservation,
+  ): 'fail' | 'success' | null {
+    const { myRole, myPlayerId, proposedTeam, knownEvils, currentRound, questHistory } = obs;
+    const round = currentRound ?? 1;
+
+    // R5: listening — any red on mission MUST fail. This is the single
+    // strongest rule and supersedes every teammate-count axis.
+    if (round === 5) return 'fail';
+
+    const teammatesOnMission = proposedTeam.filter(
+      (id) => id !== myPlayerId && knownEvils.includes(id),
+    );
+    const teammateCount = teammatesOnMission.length;
+
+    // R1-R3 branch.
+    if (round >= 1 && round <= 3) {
+      if (teammateCount === 0) return 'fail';  // solo recognised-red
+      if (teammateCount === 1) {
+        if (myRole === 'assassin') return 'fail';
+        if (myRole === 'mordred') return 'success';
+        if (myRole === 'morgana') {
+          // Observe-first on her FIRST joint R1-R3 mission. On subsequent
+          // joint missions, infer the teammate's role from the previous
+          // joint mission's outcome and mirror the appropriate behaviour.
+          const priorJoint = questHistory.find((q) =>
+            q.round <= 3 &&
+            q.team.includes(myPlayerId) &&
+            q.team.some((id) => id !== myPlayerId && knownEvils.includes(id)),
+          );
+          if (!priorJoint) {
+            // First joint mission — observe (let it succeed so the
+            // teammate-role reveal happens on this quest).
+            return 'success';
+          }
+          // Prior joint mission exists → Morgana knows teammate's role:
+          //   joint-mission failed → teammate = assassin → fail now too
+          //     (assassin would have failed then; morgana now plays as
+          //     assassin does in this regime).
+          //   joint-mission succeeded → teammate = mordred → mirror
+          //     mordred's success (both hiding).
+          return priorJoint.result === 'fail' ? 'fail' : 'success';
+        }
+      }
+      if (teammateCount >= 2) {
+        if (myRole === 'assassin') return 'fail';
+        return 'success';
+      }
+    }
+
+    // R4 branch (5-person team in 10p needs 2 fails — hierarchy enforces
+    // that 2-member-or-more evil presence can guarantee the 2 fails).
+    if (round === 4) {
+      if (teammateCount === 0) return 'fail';  // solo R4: fail anyway
+      if (teammateCount === 1) return 'fail';  // both evils on 2-member R4 must fail
+      if (teammateCount >= 2) {
+        if (myRole === 'mordred') return 'success';  // assassin+morgana carry the 2 fails
+        return 'fail';  // assassin / morgana fail
+      }
+    }
+
+    // Unreachable in canonical 5-round games (round clamped 1-5 upstream).
+    return null;
+  }
+
   // ── Quest Vote ───────────────────────────────────────────────
 
   private voteOnQuest(obs: PlayerObservation): AgentAction {
@@ -1248,20 +1461,41 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'quest_vote', vote: 'success' };
     }
 
-    // Edward 2026-04-24 batch 9 — red-always-fail-on-mission invariant.
-    // 「能出任務就要盡可能破壞任務」: any red player (assassin / morgana
-    // / mordred / oberon) on a mission MUST invariably vote fail. This
-    // overrides every cover/hide heuristic that follows (forced-mission
-    // cover-success, 60/40 probabilistic baseline, failsRequired>=2
-    // cautious path, Oberon Rule 4/5 success branches, match-point —
-    // redundant but superseded). See EVIL_MISSION_ALWAYS_FAIL / batch 8
-    // self-play bugs (R1 mission 157 娜7 / R2 mission 2390 刺+奧+梅 all
-    // voted success).
+    // Edward 2026-04-24 batch 10 — recognised-red hierarchy (位階法).
+    // Replaces batch 9's blanket hard-fail for {assassin, morgana,
+    // mordred}. Oberon SKIPS the hierarchy and uses his dedicated batch
+    // 7/8 ruleset below (oberon branch runs before forced-mission so
+    // Rule 2 on R1-R3 can still force fail even on forced missions).
+    //
+    // Hierarchy logic (Edward 2026-04-24 batch 10 verbatim — see the
+    // long doc-comment at EVIL_HIERARCHY_ROLES for the full matrix).
     if (
-      USE_EVIL_MISSION_ALWAYS_FAIL &&
-      EVIL_MISSION_ALWAYS_FAIL.has(myRole as string)
+      USE_EVIL_HIERARCHY &&
+      EVIL_HIERARCHY_ROLES.has(myRole as string)
     ) {
-      return { type: 'quest_vote', vote: 'fail' };
+      const hierarchyVote = this.chooseRedHierarchyVote(obs);
+      if (hierarchyVote !== null) {
+        return { type: 'quest_vote', vote: hierarchyVote };
+      }
+    }
+
+    // Edward 2026-04-24 batch 10 — oberon rules fire BEFORE the
+    // forced-mission branch so Rule 2 (R1-R3 on team → fail) still
+    // produces fails on forced missions (else batch 3 forced-mission
+    // cover-success would allow oberon to ride the forced quest as
+    // success — the same bug batch 9 closed).
+    if (USE_OBERON_STRATEGY && (myRole as string) === 'oberon') {
+      // Oberon listening override runs inside voteOnQuestAsOberon
+      // implicitly (Rule 5c handles R5 + prior fail). Edward batch 6
+      // raised match-point to apply to Oberon, so mirror the isListening
+      // override here too (matching pre-batch-9 semantics).
+      const goodWinsHere = questResults.filter(r => r === 'success').length;
+      const evilWinsHere = questResults.filter(r => r === 'fail').length;
+      if (USE_LISTENING_RULE && isListeningState(goodWinsHere, evilWinsHere)) {
+        return { type: 'quest_vote', vote: 'fail' };
+      }
+      const oberonDecision = this.voteOnQuestAsOberon(obs);
+      if (oberonDecision !== null) return oberonDecision;
     }
 
     // Edward 2026-04-24 batch 3 fix #2 — forced-mission quest vote:
@@ -1275,8 +1509,10 @@ export class HeuristicAgent implements AvalonAgent {
     // (blue already couldn't reject, so no anomaly vote branch fires).
     // Short-circuit before any role-specific fail heuristic.
     //
-    // Batch 9: for red roles this branch is UNREACHABLE (caught by the
-    // EVIL_MISSION_ALWAYS_FAIL guard above). Kept for auditability only.
+    // Batch 10: recognised-red hierarchy + oberon branches above have
+    // already resolved before this point. Forced-mission cover-success
+    // now only applies to any residual evil path (should be empty for
+    // canonical roles; kept for auditability).
     const approvedVoteThisRound = obs.voteHistory.find(
       v => v.round === currentRound && v.approved,
     );
@@ -1462,35 +1698,53 @@ export class HeuristicAgent implements AvalonAgent {
 
   /**
    * Count observable "mistakes" a good player made from the assassin's
-   * point of view (Edward 2026-04-24 batch 2 fix #6).
+   * point of view. Edward 2026-04-24 batch 10 refinement:
    *
-   * A mistake reveals the player is NOT Merlin — Merlin sees all
-   * knownEvils (assassin+morgana from the assassin's POV) and would
-   * never sponsor or outer-white approve a team containing them.
+   *   拇指 = 刺/娜/奧 (thumb = assassin / morgana / oberon)
+   *   錯誤動作:
+   *     1. 全沒拇指組合開異常內黑 — player is on-team, no thumb on team,
+   *        yet they voted reject → inner-black anomaly on a clean team
+   *        (Merlin would NEVER reject a clean team she is on: Merlin
+   *        sees every thumb, and "no thumb" = "guaranteed clean from
+   *        her perspective").
+   *     2. 有拇指組合開異常外白 — player is off-team, a thumb is on the
+   *        team, yet they approved → outer-white anomaly on a tainted
+   *        team (Merlin would NEVER approve a team she knows contains
+   *        a thumb; off-team rejecting is her only legal move).
    *
-   * Two anti-Merlin patterns are counted:
-   *   1. **排水 (as leader)** — player led a vote whose team contained
-   *      any known evil.
-   *   2. **場外白球 (off-team approval)** — player was not on the team,
-   *      but approved a team that contained any known evil.
+   * Thumb visibility caveat: from the assassin's POV, `knownEvils`
+   * reveals {assassin, morgana} only — Oberon is hidden. So "thumb
+   * on team" is approximated as `any member ∈ knownEvils`. Oberon-on-
+   * team cases produce a false "no-thumb" signal, but this is the
+   * same information the Merlin actually has (Merlin sees assassin +
+   * morgana + mordred; Merlin is blind to Oberon). Close enough for
+   * the mistake heuristic.
    *
-   * Returns the raw count (each vote record can contribute to both
-   * buckets at most once). Used as a binary filter (unmistaken vs.
-   * mistaken); absolute magnitude is secondary.
+   * Pre-batch-10 semantics (dropped, see git blame for history):
+   *   - 排水 (leader led tainted team) was counted. Replaced by
+   *     Edward's clean specification above.
+   *   - 場外白球 existed as pattern 2 already; preserved verbatim.
+   *
+   * Returns the raw count (each vote record can contribute to at most
+   * one bucket per record for the on-team case; 0 or 1 for the off-
+   * team case). Used as a binary filter (unmistaken vs. mistaken); the
+   * absolute magnitude is secondary.
    */
   private getMistakeCount(playerId: string, obs: PlayerObservation): number {
     let mistakes = 0;
     for (const record of obs.voteHistory) {
-      const teamHasKnownEvil = record.team.some(id => obs.knownEvils.includes(id));
-      if (!teamHasKnownEvil) continue;
-
-      if (record.leader === playerId) {
-        mistakes += 1; // 排水: led a tainted team
-      }
+      const teamHasThumb = record.team.some(id => obs.knownEvils.includes(id));
       const onTeam = record.team.includes(playerId);
-      const approved = record.votes[playerId];
-      if (!onTeam && approved === true) {
-        mistakes += 1; // 場外白球: approved a tainted team from outside
+      const vote = record.votes[playerId];
+      if (vote === undefined) continue;
+
+      // Pattern 1: 全沒拇指組合開異常內黑 (on-team + thumbless team + reject).
+      if (!teamHasThumb && onTeam && vote === false) {
+        mistakes += 1;
+      }
+      // Pattern 2: 有拇指組合開異常外白 (off-team + thumb team + approve).
+      if (teamHasThumb && !onTeam && vote === true) {
+        mistakes += 1;
       }
     }
     return mistakes;
@@ -1717,6 +1971,62 @@ export class HeuristicAgent implements AvalonAgent {
     return merlin || wizards[0];
   }
 
+  /**
+   * Edward 2026-04-24 batch 10 — Percival dual-thumb cross-inference.
+   *
+   * Verbatim: 「對於派西維爾, 除了根據異常投票去抓紅藍方, 也要透過雙拇指
+   *          (梅林/莫甘娜)釋放的隊伍資訊去交集找共同好壞人」
+   *
+   * Once Percival has inferred which wizard is Merlin and which is
+   * Morgana, their votes encode complementary signals:
+   *   - Wizard-as-Merlin rejects teams containing knownEvils (she sees
+   *     them). Her reject list is a conservative evil-presence pointer.
+   *   - Wizard-as-Morgana's approve list, when off-team, is an evil-
+   *     cover signature (she approves to support allies she can see).
+   *     Her in-team approve is less informative; her out-team reject
+   *     is also less informative.
+   *
+   * Intersection criterion (high-confidence suspect):
+   *   Any player who appeared on a team that
+   *     (a) wizard-as-Merlin rejected AND
+   *     (b) wizard-as-Morgana approved
+   *   is cross-inferred evil. The (a) ∧ (b) combination requires BOTH
+   *   wizards to disagree in a role-legal way (Merlin against, Morgana
+   *   for), which Merlin+Merlin or Morgana+Morgana can never produce.
+   *
+   * Returns the union of all such team members across voteHistory.
+   * Empty set when wizards do not resolve (only 1 knownWizard), when
+   * no voteHistory exists yet, or when Percival has too little signal
+   * to confidently pick a Merlin (identifyMerlinFromThumbs confidence
+   * 0). Always excludes self (Percival knows he is good).
+   *
+   * Exposed via a `_forTesting` hook so tests can assert the
+   * intersection without reconstructing the selectTeam path.
+   */
+  private buildPercivalDualThumbSuspects(
+    wizards: readonly string[],
+    merlinWizard: string,
+    obs: PlayerObservation,
+  ): Set<string> {
+    const suspects = new Set<string>();
+    if (wizards.length < 2) return suspects;
+    const morganaWizard = wizards.find((w) => w !== merlinWizard);
+    if (!morganaWizard) return suspects;
+
+    for (const record of obs.voteHistory) {
+      const merlinVote = record.votes[merlinWizard];
+      const morganaVote = record.votes[morganaWizard];
+      if (merlinVote === undefined || morganaVote === undefined) continue;
+      // Disagreement pattern: Merlin rejects, Morgana approves.
+      if (merlinVote === false && morganaVote === true) {
+        for (const pid of record.team) {
+          if (pid !== obs.myPlayerId) suspects.add(pid);
+        }
+      }
+    }
+    return suspects;
+  }
+
   // ── Suspicion accessors ─────────────────────────────────────
 
   private getSuspicion(playerId: string): number {
@@ -1776,6 +2086,25 @@ export class HeuristicAgent implements AvalonAgent {
   /** Oberon quest-vote decision (tests only, batch 7 fix #3). */
   _voteOnQuestAsOberonForTesting(obs: PlayerObservation): AgentAction | null {
     return this.voteOnQuestAsOberon(obs);
+  }
+
+  /** Red hierarchy vote (tests only, batch 10). */
+  _chooseRedHierarchyVoteForTesting(obs: PlayerObservation): 'fail' | 'success' | null {
+    return this.chooseRedHierarchyVote(obs);
+  }
+
+  /** Loyal suspect set (tests only, batch 10). */
+  _getLoyalSuspectSetForTesting(obs: PlayerObservation): Set<string> {
+    return this.getLoyalSuspectSet(obs);
+  }
+
+  /** Percival dual-thumb cross-inference (tests only, batch 10). */
+  _buildPercivalDualThumbSuspectsForTesting(
+    wizards: readonly string[],
+    merlinWizard: string,
+    obs: PlayerObservation,
+  ): Set<string> {
+    return this.buildPercivalDualThumbSuspects(wizards, merlinWizard, obs);
   }
 
   /**
