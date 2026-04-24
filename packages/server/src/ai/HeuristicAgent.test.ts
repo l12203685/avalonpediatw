@@ -182,10 +182,11 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
     return rejects / samples;
   }
 
-  it('場外白球: off-team good rejects mid-suspicion teams at historical rate (#97 Phase 1)', () => {
-    // Construct an off-team observation with some prior history (so the
-    // relaxed round-1 baseline does NOT apply). Suspicion stays mid-range
-    // (no forced signals) so the baseline reject probability is active.
+  it('場外白球: Edward 2026-04-24 selfplay fix #1 — R1-R3 good off-team forces reject (no outer-white)', () => {
+    // Construct an off-team observation at round 2 (within R1-R3 window).
+    // Edward selfplay review fix #1: good players should never outer-white
+    // (off-team approve) in rounds 1-3; previous 0.87 historical reject
+    // rate (#97 Phase 1) is overridden in these early rounds.
     const obs = baseObs({
       myPlayerId:    'P1',                // self off team
       gamePhase:     'team_vote',
@@ -201,13 +202,10 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
       questHistory: [quest(1, ['P2', 'P3'], 'success', 0)],
     });
 
-    const ratio = rejectRate(obs, 'hard', 1000);
-    // #97 Phase 1 (Edward vote rule): off-team r2+ historical reject rate
-    // is 0.87 (expert L3). With 5% noise: 0.87*0.95 + 0.13*0.05 = 0.83.
-    // Window 0.75-0.95 keeps the test stable across 5% jitter while still
-    // catching a regression to the pre-#97 ~0.68.
-    expect(ratio).toBeGreaterThan(0.75);
-    expect(ratio).toBeLessThan(0.95);
+    const ratio = rejectRate(obs, 'hard', 500);
+    // Post-fix: R1-R3 early-round rule short-circuits before noise, so
+    // every sample must reject.
+    expect(ratio).toBe(1);
   });
 
   it('場外 hasFailedMember veto: off-team reject is near-deterministic when a member previously failed', () => {
@@ -231,13 +229,10 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
     expect(ratio).toBeGreaterThan(0.90);
   });
 
-  it('場外 round 1 (no history): baseline relaxed to avoid racing to failCount=5', () => {
-    // With no voteHistory/questHistory, `hasHistory` is false so the
-    // baseline drops by 0.6x the historical off-team rate.
-    // #97 Phase 1 (Edward vote rule): expert r1 off-team historical
-    // reject is 0.9893, * 0.6 dampener = 0.594 baseline.
-    // With 5% noise: 0.594*0.95 + 0.406*0.05 = 0.585.
-    // Window 0.50-0.70 keeps test stable under 5% noise + sampling jitter.
+  it('場外 round 1: Edward 2026-04-24 selfplay fix #1 — R1 off-team good forces reject (no outer-white)', () => {
+    // Edward selfplay review fix #1 supersedes the pre-#97 r1 relaxed
+    // dampener (0.6x): in R1-R3 good off-team players always reject so
+    // outer-white noise disappears from the early-game record.
     const obs = baseObs({
       myPlayerId:    'P1',
       gamePhase:     'team_vote',
@@ -248,9 +243,8 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
       questHistory:  [],
     });
 
-    const ratio = rejectRate(obs, 'hard', 1000);
-    expect(ratio).toBeGreaterThan(0.50);
-    expect(ratio).toBeLessThan(0.70);
+    const ratio = rejectRate(obs, 'hard', 500);
+    expect(ratio).toBe(1);
   });
 
   it('場外 knownEvil veto: off-team good rejects every time a knownEvil sits on team', () => {

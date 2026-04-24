@@ -377,8 +377,10 @@ export class GameEngine {
    *
    *   - `seat0` → canonical "leader's right" = last entry in playerIds
    *     (matches the existing Avalon convention where seat 0 sits to the
-   *     right of the first leader).
+   *     right of the first leader). UI label: "隊長右手邊".
    *   - `seatN` (1..9) → playerIds[N-1], clamped to valid range.
+   *     Self-play scripts pin to `seat1` for deterministic first-holder
+   *     start (Edward 2026-04-24 fix #2 "湖中女神先固定從 0 家開始").
    *   - `random` or unset → random index in [0, playerCount).
    */
   private resolveLadyStartIndex(playerCount: number): number {

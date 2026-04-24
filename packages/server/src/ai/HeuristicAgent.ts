@@ -602,6 +602,15 @@ export class HeuristicAgent implements AvalonAgent {
       const noise = this.priors.getNoiseRate(diff);
 
       if (!onTeam) {
+        // Edward 2026-04-24 fix #1 (selfplay review): early-round
+        // off-team approves by good players are too noisy ("異常票 場外白球
+        // 太多"). Suppress outer-white approves for good in R1-R3 (first
+        // three missions) — force reject, bypass noise. Rounds 4-5 keep
+        // the prior-based logic (late-game reject signal stays useful).
+        if ((obs.currentRound ?? 1) <= 3) {
+          return { type: 'team_vote', vote: false };
+        }
+
         // Off-team path: default to cautious reject. Leader must prove the
         // team is clean — otherwise the good player holds out their approval.
         const strictThreshold = this.priors.getStrictThreshold(diff);
