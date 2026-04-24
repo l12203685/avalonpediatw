@@ -340,7 +340,14 @@ async function handleLinkCallback(
           options.email,
         );
         if (!realUserId) {
-          res.redirect(`${FRONTEND_URL}/profile?link_error=create_failed&provider=${provider}`);
+          // 2026-04-24 (LINE bind landing fix): redirect to root (`/`) + query
+          // flag instead of `/profile?...`. SPA has no client-side router and
+          // was serving index.html cold at `/profile`, dropping the user back
+          // onto HomePage with no notice ("跳到舊訪客頁面"). App.tsx now reads
+          // `link_ok` / `link_merged` / `link_error` off the root URL, toasts
+          // the result, and routes back into SettingsPage so the user lands
+          // where they started the bind from.
+          res.redirect(`${FRONTEND_URL}?link_error=create_failed&provider=${provider}`);
           return;
         }
       }
@@ -359,10 +366,10 @@ async function handleLinkCallback(
     if (existing && existing !== currentUserId) {
       const merged = await mergeUserAccounts(currentUserId, existing);
       if (!merged) {
-        res.redirect(`${FRONTEND_URL}/profile?link_error=merge_failed&provider=${provider}`);
+        res.redirect(`${FRONTEND_URL}?link_error=merge_failed&provider=${provider}`);
         return;
       }
-      res.redirect(`${FRONTEND_URL}/profile?link_merged=1&provider=${provider}`);
+      res.redirect(`${FRONTEND_URL}?link_merged=1&provider=${provider}`);
       return;
     }
 
@@ -371,14 +378,14 @@ async function handleLinkCallback(
       // email 欄位並重算 primaryEmail（google > discord > emailOnly）。
       const ok = await linkProviderIdentity(currentUserId, provider, externalId, options.email);
       if (!ok) {
-        res.redirect(`${FRONTEND_URL}/profile?link_error=link_failed&provider=${provider}`);
+        res.redirect(`${FRONTEND_URL}?link_error=link_failed&provider=${provider}`);
         return;
       }
     }
-    res.redirect(`${FRONTEND_URL}/profile?link_ok=1&provider=${provider}`);
+    res.redirect(`${FRONTEND_URL}?link_ok=1&provider=${provider}`);
   } catch (err) {
     console.error('[auth/link-callback]', err);
-    res.redirect(`${FRONTEND_URL}/profile?link_error=exception&provider=${provider}`);
+    res.redirect(`${FRONTEND_URL}?link_error=exception&provider=${provider}`);
   }
 }
 

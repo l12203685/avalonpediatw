@@ -103,6 +103,35 @@ function App(): JSX.Element {
       window.history.replaceState({}, '', '/' + window.location.search + window.location.hash);
     }
 
+    // 2026-04-24 LINE-bind landing fix：authed 用戶走 /auth/link/<provider> 成功後，
+    // 後端會 302 到 `${FRONTEND_URL}?link_ok=1&provider=line`（以前是 /profile?...，
+    // 但 SPA 無 client-side router → 落在 Home 看起來像「舊訪客頁面」）。這段在
+    // mount 的最前面讀 query，flag 一筆 pendingLinkNotice 到 localStorage，等
+    // socket init / Firebase auth 回來之後再由下一個 useEffect 撈出來 toast +
+    // setGameState('settings')，把使用者帶回他原本按「綁定」那頁。
+    {
+      const params = new URLSearchParams(window.location.search);
+      const linkOk     = params.get('link_ok');
+      const linkMerged = params.get('link_merged');
+      const linkError  = params.get('link_error');
+      const linkProv   = params.get('provider') || '';
+      // 訪客綁定 (oauth_token + link_merged) 由下面原本的 flow 接走；這裡只處理
+      // 不帶 oauth_token 的 authed-bind callback（url 只有 link_* + provider）。
+      const hasOauthToken = params.get('oauth_token') !== null;
+      if (!hasOauthToken && (linkOk || linkMerged || linkError)) {
+        const kind = linkError ? 'error' : linkMerged ? 'merged' : 'ok';
+        const reason = linkError || '';
+        try {
+          localStorage.setItem('pendingLinkNotice', JSON.stringify({ kind, provider: linkProv, reason }));
+        } catch {
+          // private mode / quota — no stash, user just won't see toast
+        }
+        ['link_ok', 'link_merged', 'link_error', 'provider'].forEach(k => params.delete(k));
+        const qs = params.toString();
+        window.history.replaceState({}, '', `/${qs ? `?${qs}` : ''}${window.location.hash}`);
+      }
+    }
+
     // 處理 Discord / Line OAuth callback（URL 帶有 ?oauth_token=...）
     //
     // 2026-04-23 bind-name-sync (重建 orphan 01785fa8)：若 URL 帶 `?link_merged=1`
@@ -166,6 +195,57 @@ function App(): JSX.Element {
       unsubscribe();
     };
   }, []);
+
+  // 2026-04-24 LINE-bind landing fix (part 2): 等 authed 完成後把暫存的
+  // pendingLinkNotice 撈出來 → toast + setGameState('settings')。這樣使用者
+  // 綁定回來不會卡在 HomePage（看起來像「舊訪客頁面」），而是回到 Settings
+  // 頁繼續看「已綁定 LINE」的狀態。currentPlayer 變化時才檢查，避免還沒
+  // 登入就亂跳。
+  useEffect(() => {
+    if (!currentPlayer) return;
+    let raw: string | null = null;
+    try { raw = localStorage.getItem('pendingLinkNotice'); } catch { return; }
+    if (!raw) return;
+    try { localStorage.removeItem('pendingLinkNotice'); } catch { /* noop */ }
+
+    let parsed: { kind?: string; provider?: string; reason?: string };
+    try {
+      parsed = JSON.parse(raw) as { kind?: string; provider?: string; reason?: string };
+    } catch {
+      return;
+    }
+    const { addToast, setGameState } = useGameStore.getState();
+    const providerLabel =
+      parsed.provider === 'line'    ? 'LINE'    :
+      parsed.provider === 'discord' ? 'Discord' :
+      parsed.provider === 'google'  ? 'Google'  :
+      '';
+    if (parsed.kind === 'ok') {
+      addToast(
+        providerLabel
+          ? t('settings.bindSuccess', { defaultValue: '{{provider}} 綁定成功', provider: providerLabel })
+          : t('settings.bindSuccess', { defaultValue: '綁定成功' }),
+        'success',
+      );
+      setGameState('settings');
+    } else if (parsed.kind === 'merged') {
+      addToast(
+        providerLabel
+          ? t('settings.bindMerged', { defaultValue: '{{provider}} 綁定成功（戰績已合併）', provider: providerLabel })
+          : t('settings.bindMerged', { defaultValue: '綁定成功（戰績已合併）' }),
+        'success',
+      );
+      setGameState('settings');
+    } else if (parsed.kind === 'error') {
+      addToast(
+        providerLabel
+          ? t('settings.bindError', { defaultValue: '{{provider}} 綁定失敗（{{reason}}）', provider: providerLabel, reason: parsed.reason })
+          : t('settings.bindError', { defaultValue: '綁定失敗' }),
+        'error',
+      );
+      setGameState('settings');
+    }
+  }, [currentPlayer, t]);
 
   if (isLoading) {
     return (
