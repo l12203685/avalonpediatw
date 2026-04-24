@@ -6,7 +6,6 @@ import {
   initializeAuth,
   onAuthStateChange,
   extractOAuthTokenFromUrl,
-  resumeGuestFromCookie,
   stashLinkedProviderToken,
   consumeLinkedProviderToken,
 } from './services/auth';
@@ -126,29 +125,13 @@ function App(): JSX.Element {
     // Initialize Firebase Auth
     initializeAuth();
 
-    // #84 訪客 cookie 綁定：冷啟動若發現還沒有活 socket，且 Firebase 也沒 signed-in
-    // user（下面的 onAuthStateChange 會先觸發 null），就先試 `guest_session` cookie
-    // 續簽；成功就直接起 socket，省掉 LoginPage 再走一次「訪客進入」。失敗就 fall
-    // through 到 LoginPage，使用者自己選登入方式。
-    let guestResumeCancelled = false;
-    const tryGuestResume = async (): Promise<boolean> => {
-      if (getStoredToken()) return true; // 已經有 token（另一條路接上了）
-      try {
-        const resumed = await resumeGuestFromCookie();
-        if (!resumed || guestResumeCancelled) return false;
-        await initializeSocket(resumed.token);
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    // Listen to auth state changes — re-init socket on page refresh.
-    // Firebase's listener fires `null` for every unauthenticated session,
-    // including guest sessions that have already established a socket via
-    // LoginPage.handleGuest. Do NOT disconnect in that case, or the guest
-    // loses their live socket (+ stored token) and every subsequent action
-    // (create-room / fetch friends) fails with "Socket not initialized".
+    // 2026-04-24: guest-resume 路徑已廢除。後端 /auth/guest/resume 在 Phase A
+    // 重構 (3018a9c4) 時被砍，冷啟動打這個 endpoint 一律 404。架構對齊「OAuth
+    // 為主要登入路徑」：沒 Firebase session + 沒 stashed bind token → 直接顯示
+    // LoginPage，讓使用者走 Google/LINE/Discord/email 任一登入方式。
+    //
+    // Firebase's listener fires `null` for every unauthenticated session.
+    // 僅在「沒 Firebase user + 沒 stored token」時才設登出狀態顯示 LoginPage。
     const unsubscribe = onAuthStateChange(async (userWithToken) => {
       if (userWithToken) {
         setIsAuthenticated(true);
@@ -158,19 +141,13 @@ function App(): JSX.Element {
           // Socket init failed — user will see connection banner
         }
       } else if (!getStoredToken()) {
-        // 沒 Firebase user + 沒 stored token → 先嘗試 guest cookie 續簽；不成再
-        // 進入登出狀態讓 LoginPage 出現。
-        const resumed = await tryGuestResume();
-        if (!resumed) {
-          setIsAuthenticated(false);
-          disconnectSocket();
-        }
+        setIsAuthenticated(false);
+        disconnectSocket();
       }
       setIsLoading(false);
     });
 
     return () => {
-      guestResumeCancelled = true;
       unsubscribe();
     };
   }, []);

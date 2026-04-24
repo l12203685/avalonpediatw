@@ -19,17 +19,15 @@ import {
 import { useGameStore } from '../store/gameStore';
 import {
   renameGuest,
-  signInWithGoogle,
   signInWithDiscord,
   signInWithLine,
   hasFirebaseAuthConfigured,
-  upgradeGuestToRegistered,
-  getIdToken,
+  quickLoginWithGoogle,
   stashLinkedProviderToken,
   changePassword,
   estimatePasswordStrength,
 } from '../services/auth';
-import { getStoredToken } from '../services/socket';
+import { getStoredToken, initializeSocket } from '../services/socket';
 import {
   fetchLinkedAccounts,
   unlinkAccount,
@@ -228,17 +226,19 @@ export default function SettingsPage(): JSX.Element {
     }
   };
 
-  // 訪客轉正式帳號 — Google 走 Firebase popup → 後端 /auth/guest/upgrade 建 user
-  // row + 簽 google JWT → 前端用 Firebase ID token 重建 socket（provider='google'
-  // 於 auth:success 回來）。Discord / Line 仍走 redirect-based OAuth。
+  // 訪客轉正式帳號 — Google 走 OAuth primary login（/auth/oauth/login/google）
   //
-  // 2026-04-23 Edward 回報：原本只呼叫 signInWithGoogle() 就結束，socket 因為
-  // `socket?.connected` early-return 沒重建 → 身份仍是 guest → 無法改名。修法：
-  //   1) popup 登入 Firebase
-  //   2) 呼叫 /auth/guest/upgrade 把 user row 建好、拿到 google JWT
-  //   3) 用 Firebase ID token 重新 initializeSocket（token 變 → socket.ts 會 tear down
-  //      + 重建 → server 以 google 身份簽回 auth:success → setCurrentPlayer
-  //      provider='google' → isGuest=false → 改名 / PATCH /api/profile/me 放行）
+  // 2026-04-24 fix：原先打 /auth/guest/upgrade，但該 endpoint 在 Phase A
+  // (3018a9c4) 重構時一併被砍掉，訪客點綁 Google 一律 404。現對齊新架構
+  // 「OAuth 為主要登入路徑」：popup 拿 Google idToken → POST
+  // /auth/oauth/login/google → server 以 gmail 為識別碼自動建帳 / 登入 → 回
+  // 新 JWT → 用新 JWT stash+reload 重建 socket（provider='google'）。
+  //
+  // trade-off：訪客當前戰績因後端沒有 merge 路徑而不會搬到 Google 帳號；對齊
+  // Edward 2026-04-23「email 綁定 = for 同時沒有 google/line/dc 的」之架構意圖
+  // （OAuth 才是主路徑，訪客戰績遷移不是本輪 scope）。
+  //
+  // Discord / Line 維持 redirect-based `/auth/link/*` bind-path（endpoint 還在）。
   const handleUpgrade = async (
     provider: 'google' | 'discord' | 'line',
   ): Promise<void> => {
@@ -249,18 +249,15 @@ export default function SettingsPage(): JSX.Element {
           addToast(t('settings.upgradeGoogleUnavailable'), 'error');
           return;
         }
-        await signInWithGoogle();
-        // Firebase 已登入 → 拿 ID token 傳給 server 做 upgrade merge
-        const idToken = await getIdToken();
-        const result = await upgradeGuestToRegistered('google', idToken);
-        if (!result.ok) {
-          addToast(result.error || t('settings.upgradeFailed'), 'error');
-          return;
-        }
-        // 2026-04-23 bind-name-sync (重建 orphan 01785fa8)：popup flow 完成後改走
-        // stash+reload，確保 React state / zustand store / 舊 socket 都重置，
-        // 避免 popup 完成後 initializeSocket race 殘留 provider='guest'。
-        stashLinkedProviderToken(idToken);
+        // 走 quickLogin — Firebase popup → /auth/oauth/login/google → 站上 JWT
+        const result = await quickLoginWithGoogle();
+        // stash 新 JWT + reload — 與 bind-name-sync 相同的硬 reload 路徑，保證
+        // React state / zustand store / 舊 socket 全重置，provider='google' 乾淨寫入。
+        stashLinkedProviderToken(result.token);
+        // 先起一次 socket 讓 server 可認 token；實務上 reload 會重跑 App.tsx
+        // 的 consumeLinkedProviderToken 分支再建一次 — 這裡 preload 避免 reload
+        // 前的閃爍。失敗不致命（reload 後還會再試一次）。
+        try { await initializeSocket(result.token); } catch { /* ignore */ }
         window.location.reload();
       } else if (provider === 'discord') {
         // #42 bind-path fix：綁定按鈕必須走 /auth/link/discord，不是登入路徑。
