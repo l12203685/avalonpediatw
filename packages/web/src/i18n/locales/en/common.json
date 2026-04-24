@@ -103,7 +103,9 @@
     "reconnecting": "Reconnecting…",
     "disconnected": "Disconnected — attempting to reconnect",
     "refresh": "Refresh",
-    "newVersionAvailable": "A new version is available — please refresh for the latest features"
+    "newVersionAvailable": "A new version is available — please refresh for the latest features",
+    "newVersionBanner": "New version available",
+    "updateNow": "Update now"
   },
   "controls": {
     "audio": "Audio",

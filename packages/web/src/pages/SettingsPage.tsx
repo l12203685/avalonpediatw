@@ -36,6 +36,7 @@ import {
   LinkedAccount,
   LinkProvider,
 } from '../services/api';
+import { forceRefresh } from '../utils/forceRefresh';
 
 type SectionId = 'basic' | 'password' | 'email' | 'binding';
 
@@ -634,6 +635,31 @@ export default function SettingsPage(): JSX.Element {
               </section>
             );
           })}
+
+          {/* 2026-04-24 #cache-upgrade (hineko_20260424_1030): force-refresh
+              escape hatch — clears localStorage / sessionStorage / CacheStorage
+              and hard reloads so users running a stale JS bundle can recover
+              without knowing about Ctrl+Shift+R. */}
+          <section className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800 rounded-xl p-4 sm:p-6">
+            <h2 className="text-lg font-bold text-white mb-3">
+              {t('settings.advanced.title', { defaultValue: '進階' })}
+            </h2>
+            <p className="text-sm text-zinc-500 mb-3">
+              {t('settings.advanced.clearWarning', {
+                defaultValue: '此動作會清除本機儲存的登入狀態與快取，完成後需重新登入',
+              })}
+            </p>
+            <button
+              type="button"
+              data-testid="settings-btn-force-refresh"
+              onClick={() => { void forceRefresh(); }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-50 text-sm font-semibold transition-colors"
+            >
+              {t('settings.advanced.clearLocalAndReload', {
+                defaultValue: '清除本機資料並重新載入',
+              })}
+            </button>
+          </section>
         </div>
       </div>
     </div>

@@ -12,6 +12,7 @@ import {
 } from './services/auth';
 import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
 import { startVersionCheck } from './services/versionCheck';
+import { forceRefresh } from './utils/forceRefresh';
 import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
 import LobbyPage from './pages/LobbyPage';
@@ -41,19 +42,32 @@ function App(): JSX.Element {
   const { gameState, currentPlayer, socketStatus } = useGameStore();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [newVersionAvailable, setNewVersionAvailable] = useState(false);
 
   // Version check poller — detects a fresh server deploy and prompts the
   // user to refresh so they don't keep running against a stale JS bundle
   // (root cause of the intermittent xhr/ws errors Edward reported 2026-04-23).
   // Safe to start before login: the endpoint is unauthenticated.
+  //
+  // 2026-04-24 #cache-upgrade (hineko_20260424_1030): escalate toast to a
+  // sticky banner so Edward doesn't miss it behind other toasts. Keep the
+  // toast as a secondary signal for when the banner is hidden mid-game.
   useEffect(() => {
     startVersionCheck((_current, _latest) => {
+      setNewVersionAvailable(true);
       const { addToast } = useGameStore.getState();
       addToast(t('connection.newVersionAvailable'), 'info');
     });
     // No teardown — this is a singleton and polls once a minute; a hot
     // reload replaces the module rather than leaking timers.
   }, [t]);
+
+  // Hide the version banner mid-match so a fresh deploy doesn't yank focus
+  // during voting / quest resolution. It re-appears once Edward returns to
+  // the lobby.
+  const bannerHiddenInGame =
+    gameState === 'playing' || gameState === 'voting';
+  const showNewVersionBanner = newVersionAvailable && !bannerHiddenInGame;
 
   // Global error capture — auto-report JS errors to server
   useEffect(() => {
@@ -222,6 +236,30 @@ function App(): JSX.Element {
                 {t('connection.refresh')}
               </button>
             )}
+          </motion.div>
+        )}
+
+        {/* 2026-04-24 #cache-upgrade: sticky banner when /api/version flips.
+            Hidden mid-match (playing/voting) so Edward isn't pulled out of a
+            live round; re-appears on lobby return. */}
+        {showNewVersionBanner && (
+          <motion.div
+            key="new-version-banner"
+            initial={{ y: -48, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -48, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-3 px-4 py-2 text-sm font-semibold bg-amber-900/90 border-b border-amber-700 text-amber-100"
+          >
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            {t('connection.newVersionBanner', { defaultValue: '有新版本可用' })}
+            <button
+              type="button"
+              onClick={() => { void forceRefresh(); }}
+              className="ml-2 px-3 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-amber-50 text-xs font-semibold transition-colors"
+            >
+              {t('connection.updateNow', { defaultValue: '立即更新' })}
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
