@@ -31,6 +31,8 @@ import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 import { verifyGuestToken } from '../middleware/guestAuth';
+import { ComputedStatsRepositoryV2 } from '../services/ComputedStatsRepositoryV2';
+import { resolveDisplayNameFallback } from '@avalon/shared';
 
 const router: IRouter = Router();
 
@@ -235,6 +237,31 @@ router.get('/leaderboard', publicLimiter, async (_req: Request, res: Response) =
   } catch (err) {
     console.error('[api/leaderboard] Firestore error:', err);
     return res.json({ leaderboard: [], message: 'Database not configured' });
+  }
+});
+
+// ── GET /api/leaderboard/v2 ────────────────────────────────────
+// Edward 2026-04-24 雙維度分類排行榜（TierGroup × EloTag）。
+// 讀 `computed_stats/` collection → computeLeaderboardByTier 分組 → enrich displayName。
+// 回傳 `{ version: 2, groups: { rookie, regular, veteran, expert, master } }`，前端 LeaderboardPage 依此渲染。
+router.get('/leaderboard/v2', publicLimiter, async (_req: Request, res: Response) => {
+  try {
+    const repo = new ComputedStatsRepositoryV2();
+    const rawGroups = await repo.getLeaderboard();
+    const groups = Object.fromEntries(
+      Object.entries(rawGroups).map(([tierGroup, entries]) => [
+        tierGroup,
+        entries.map((e) => ({
+          ...e,
+          displayName: resolveDisplayNameFallback(e.playerId),
+          photoUrl: null,
+        })),
+      ]),
+    );
+    return res.json({ version: 2, groups });
+  } catch (err) {
+    console.error('[api/leaderboard/v2] error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
