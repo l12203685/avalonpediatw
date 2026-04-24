@@ -65,7 +65,7 @@ export class GameHistoryRepositoryV2 {
    * 列某玩家最近的 V2 戰績。
    *
    * 實作策略與 V1 同 — Firestore `array-contains` 對巢狀 tuple 不穩，
-   * 先抓最近 N × 3 筆再 in-memory filter `playerIds` 命中者。
+   * 先抓最近 N × 3 筆再 in-memory filter `playerSeats` 命中者。
    * Phase 2 做 per-player 索引子集合以提升查詢效能。
    */
   async listV2ByPlayer(playerId: string, limit = 20): Promise<GameRecordV2[]> {
@@ -80,7 +80,7 @@ export class GameHistoryRepositoryV2 {
       const results: GameRecordV2[] = [];
       for (const doc of snapshot.docs) {
         const record = doc.data() as GameRecordV2;
-        if (record.playerIds.some((id) => id === playerId)) {
+        if (record.playerSeats.some((id) => id === playerId)) {
           results.push(record);
           if (results.length >= limit) break;
         }

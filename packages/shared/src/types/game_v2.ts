@@ -1,13 +1,16 @@
 /**
- * Avalon 戰績 V2 — 極簡原子資料 schema (Phase 1 skeleton).
+ * Avalon 戰績 V2 — 極簡原子資料 schema.
  *
  * 設計原則（見 `staging/subagent_results/game_record_v2_design_2026-04-24.md`）：
  *   1. 只存原子資料，派生指標（勝率 / ELO / 任務成功率 …）皆即時計算。
  *   2. 座號制 1..10 作局內穩定鍵；座 10 == Edward 口中的「0 號玩家」。
  *   3. 投票用 `{R}-{#}` 編碼（round × proposalIndex）。
  *   4. Sheets metadata（pageRef/session/note…）不進主結構。
+ *   5. 玩家資訊只存 **UUID**（字元最少、唯一性）。displayName 由呼叫端透過 userId → user profile
+ *      查表即時補；歷史 Sheets 資料找不到用戶則用 `sheets:<原名字>` 偽 UUID 落地以保留局內穩定鍵。
+ *      — Edward 2026-04-24 12:18：「當然是只存 uuid, 字元最少, 唯一性的」
  *
- * Phase 1 範圍：只定義 interface + 相容舊分析 adapter；不動舊 collection。
+ * Phase 2a 範圍：UUID-only schema + Sheets parser。
  */
 
 export type WinReasonV2 =
@@ -127,16 +130,18 @@ export interface GameRecordV2 {
   totalDurationMs?: number;
 
   /**
-   * 玩家 ID 按座號 1..10 排列（index 0 = 座 1）。
-   * 註冊用戶為 playerId；歷史 Sheets 資料無 ID 則為空字串 `''`，名字落 `displayNames`。
+   * 玩家 UUID 按座號 1..10 排列（index 0 = 座 1，index 9 = 座 10 = Edward 的「0 號」）。
+   *
+   * 寫入規則：
+   *   - 註冊用戶：存 Firebase Auth / Supabase 的 user UID（字元最少、唯一）
+   *   - 歷史 Sheets 無帳號的玩家：存 `sheets:<原名字>` 偽 UUID 作局內穩定鍵
+   *   - 空座（5/7 人局後段）：空字串 `''`
+   *
+   * 不冗存 displayName — 上游讀取時透過用戶資料表查名字；Sheets 偽 UUID
+   * 帶 `sheets:` 前綴，callback 解析出 `<原名字>` 後顯示。
+   *   — Edward 2026-04-24 12:18 原話：「當然是只存 uuid, 字元最少, 唯一性的」
    */
-  playerIds: FixedTenStrings;
-
-  /**
-   * 顯示名稱按座號 1..10 排列，永遠有值（live 遊戲抄自 player.name；Sheets 抄自欄位）。
-   * 與 `playerIds` 分開儲存：Sheets 歷史無 ID，playerIds 為空但 displayNames 必填。
-   */
-  displayNames: FixedTenStrings;
+  playerSeats: FixedTenStrings;
 
   finalResult: FinalResultV2;
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GameRecordV2,
   hydrateV2ToV1View,
+  resolveDisplayNameFallback,
   computePlayerCount,
   computeQuestResults,
   computeWinner,
@@ -56,8 +57,17 @@ function makeFixtureV2(): GameRecordV2 {
     playedAt: 1_745_000_000_000,
     totalDurationMs: 2_400_000,
 
-    playerIds: padTen(['u-a', 'u-b', 'u-c', 'u-d', 'u-e', 'u-f', 'u-g', 'u-h']),
-    displayNames: padTen(['Alice', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Henry']),
+    // 8 人：前 5 個是真 UUID；第 6 個 sheets: 前綴歷史資料；7/8 真 UUID；9/10 空。
+    playerSeats: padTen([
+      'uid-aaaaaa-alice',
+      'uid-bbbbbb-bob',
+      'uid-cccccc-carol',
+      'uid-dddddd-dave',
+      'uid-eeeeee-eve',
+      'sheets:Frank',
+      'uid-gggggg-grace',
+      'uid-hhhhhh-henry',
+    ]),
 
     finalResult: {
       winnerCamp: 'good',
@@ -144,6 +154,8 @@ describe('GameHistoryRepositoryV2', () => {
     vi.clearAllMocks();
     mockCollection.doc.mockReturnValue(mockDocRef);
     mockCollection.orderBy.mockReturnValue(mockQuery);
+    mockQuery.orderBy.mockReturnValue(mockQuery);
+    mockQuery.limit.mockReturnValue(mockQuery);
     repo = new GameHistoryRepositoryV2();
   });
 
@@ -178,17 +190,17 @@ describe('GameHistoryRepositoryV2', () => {
     expect(loaded).toBeNull();
   });
 
-  it('lists games by player using playerIds membership', async () => {
+  it('lists games by player using playerSeats membership', async () => {
     const record = makeFixtureV2();
     mockQuery.get.mockResolvedValue({
       docs: [{ data: () => record }],
     });
-    const games = await repo.listV2ByPlayer('u-c');
+    const games = await repo.listV2ByPlayer('uid-cccccc-carol');
     expect(games).toHaveLength(1);
     expect(games[0].gameId).toBe(record.gameId);
   });
 
-  it('skips games where the player is not in playerIds', async () => {
+  it('skips games where the player is not in playerSeats', async () => {
     const record = makeFixtureV2();
     mockQuery.get.mockResolvedValue({
       docs: [{ data: () => record }],
@@ -203,7 +215,7 @@ describe('GameHistoryRepositoryV2', () => {
 // ---------------------------------------------------------------------------
 
 describe('hydrateV2ToV1View', () => {
-  it('produces a valid V1 view from V2 record', () => {
+  it('produces a valid V1 view from V2 record (no callback, fallback resolution)', () => {
     const v2 = makeFixtureV2();
     const v1 = hydrateV2ToV1View(v2);
 
@@ -221,21 +233,45 @@ describe('hydrateV2ToV1View', () => {
     // players array: 8 人，空座不納入
     expect(v1.players).toHaveLength(8);
 
-    const alice = v1.players.find((p) => p.displayName === 'Alice');
-    expect(alice).toBeDefined();
-    expect(alice?.role).toBe('merlin');
-    expect(alice?.team).toBe('good');
-    expect(alice?.won).toBe(true);
+    // seat 1 = Alice = merlin (UUID 末 6 碼 = "-alice")
+    const alice = v1.players[0];
+    expect(alice.playerId).toBe('uid-aaaaaa-alice');
+    expect(alice.displayName).toBe('-alice'); // UUID 末 6 碼
+    expect(alice.role).toBe('merlin');
+    expect(alice.team).toBe('good');
+    expect(alice.won).toBe(true);
 
-    const frank = v1.players.find((p) => p.displayName === 'Frank');
-    expect(frank?.role).toBe('assassin');
-    expect(frank?.team).toBe('evil');
-    expect(frank?.won).toBe(false);
+    // seat 6 = Frank = assassin (sheets: 前綴)
+    const frank = v1.players[5];
+    expect(frank.playerId).toBe('sheets:Frank');
+    expect(frank.displayName).toBe('Frank');
+    expect(frank.role).toBe('assassin');
+    expect(frank.team).toBe('evil');
+    expect(frank.won).toBe(false);
 
     // assassinTargetId 從 seat 3 (Carol) 反查
-    expect(v1.assassinTargetId).toBe('u-c');
+    expect(v1.assassinTargetId).toBe('uid-cccccc-carol');
     // leaderStartIndex = first mission leaderSeat - 1 = 0
     expect(v1.leaderStartIndex).toBe(0);
+  });
+
+  it('uses getDisplayName callback when provided', () => {
+    const v2 = makeFixtureV2();
+    const directory: Record<string, string> = {
+      'uid-aaaaaa-alice': 'Alice',
+      'uid-bbbbbb-bob': 'Bob',
+      'uid-cccccc-carol': 'Carol',
+    };
+    const v1 = hydrateV2ToV1View(v2, {
+      getDisplayName: (uid) => directory[uid],
+    });
+
+    expect(v1.players[0].displayName).toBe('Alice');
+    expect(v1.players[1].displayName).toBe('Bob');
+    expect(v1.players[2].displayName).toBe('Carol');
+    // 查不到的仍走 fallback（"uid-dddddd-dave" 末 6 碼 = "d-dave"）
+    expect(v1.players[3].displayName).toBe('d-dave');
+    expect(v1.players[5].displayName).toBe('Frank'); // sheets: 前綴
   });
 
   it('computePlayerCount counts only non-empty seats', () => {
@@ -254,14 +290,41 @@ describe('hydrateV2ToV1View', () => {
     expect(results).toEqual(['success', 'fail', 'success', 'success']);
   });
 
-  it('handles Sheets historical record with empty playerIds but populated displayNames', () => {
+  it('handles Sheets historical record with only sheets: prefix UUIDs', () => {
     const sheetsFixture: GameRecordV2 = {
       ...makeFixtureV2(),
-      playerIds: padTen([]), // 歷史資料無 ID
+      playerSeats: padTen([
+        'sheets:Alice',
+        'sheets:Bob',
+        'sheets:Carol',
+        'sheets:Dave',
+        'sheets:Eve',
+        'sheets:Frank',
+        'sheets:Grace',
+        'sheets:Henry',
+      ]),
     };
     const v1 = hydrateV2ToV1View(sheetsFixture);
-    expect(v1.playerCount).toBe(8); // 仍依 displayNames 算出 8 人
-    // playerId 退回名字
-    expect(v1.players[0].playerId).toBe('Alice');
+    expect(v1.playerCount).toBe(8);
+    expect(v1.players[0].playerId).toBe('sheets:Alice');
+    expect(v1.players[0].displayName).toBe('Alice');
+  });
+});
+
+describe('resolveDisplayNameFallback', () => {
+  it('returns empty string for empty UID', () => {
+    expect(resolveDisplayNameFallback('')).toBe('');
+    expect(resolveDisplayNameFallback('   ')).toBe('');
+  });
+
+  it('strips sheets: prefix for historical records', () => {
+    expect(resolveDisplayNameFallback('sheets:雪怪')).toBe('雪怪');
+    expect(resolveDisplayNameFallback('sheets:Ray')).toBe('Ray');
+  });
+
+  it('uses last 6 chars for regular UUIDs', () => {
+    expect(resolveDisplayNameFallback('abc12345678')).toBe('345678');
+    expect(resolveDisplayNameFallback('abcdef')).toBe('abcdef');
+    expect(resolveDisplayNameFallback('ab')).toBe('ab');
   });
 });

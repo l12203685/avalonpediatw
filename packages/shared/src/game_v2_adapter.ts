@@ -3,7 +3,7 @@
  *
  * V2 schema 是極簡原子資料，舊分析程式（`GameAnalytics`, `EloAttributionService`,
  * `sheetsAnalysis`, `ReplayService`…）依賴 V1 的 `GamePlayerRecord[]` / `questResults[]`
- * 等派生欄位。為讓舊碼在 Phase 1 就能讀 V2 資料，提供一層 hydrate adapter。
+ * 等派生欄位。為讓舊碼在 Phase 1/2a 就能讀 V2 資料，提供一層 hydrate adapter。
  *
  * Phase 2 會把舊分析改為吃純函式（`packages/shared/src/derived/`），屆時此 adapter
  * 即可退場。在那之前維持為純函式，no side effects。
@@ -55,12 +55,49 @@ export interface GameRecordV1View {
 }
 
 /**
- * 取得 V2 record 中真正有玩家的人數（非空字串的 playerIds OR displayNames）。
+ * V2 → V1 hydrate 的選項。
+ *
+ * `getDisplayName`：UUID → 顯示名稱的對照 callback（由呼叫端提供 user profile 查詢）。
+ * 若未提供或找不到，fallback 規則：
+ *   1. `sheets:<名字>` 前綴 → 取名字
+ *   2. 其他 → UUID 末 6 碼（如 `abc12345…` → `c12345`）
+ */
+export interface HydrateV2Options {
+  getDisplayName?: (uid: string) => string | undefined;
+}
+
+/**
+ * UUID → 顯示名稱 fallback 解析（不依賴外部資料）。
+ */
+export function resolveDisplayNameFallback(uid: string): string {
+  const trimmed = uid.trim();
+  if (!trimmed) return '';
+  // Sheets 歷史資料：`sheets:<名字>` 偽 UUID
+  if (trimmed.startsWith('sheets:')) {
+    return trimmed.slice(7) || trimmed;
+  }
+  // 註冊用戶 UUID：取末 6 碼作為最小識別
+  if (trimmed.length <= 6) return trimmed;
+  return trimmed.slice(-6);
+}
+
+/**
+ * 統一解析流程：先呼叫端 callback，失敗 fallback。
+ */
+function resolveDisplayName(uid: string, opts?: HydrateV2Options): string {
+  if (!uid.trim()) return '';
+  const custom = opts?.getDisplayName?.(uid);
+  if (custom && custom.trim()) return custom;
+  return resolveDisplayNameFallback(uid);
+}
+
+/**
+ * 取得 V2 record 中真正有玩家的人數（非空字串的 playerSeats）。
  */
 export function computePlayerCount(v2: GameRecordV2): number {
   let count = 0;
   for (let i = 0; i < 10; i += 1) {
-    if (v2.displayNames[i]?.trim() || v2.playerIds[i]?.trim()) {
+    if (v2.playerSeats[i]?.trim()) {
       count += 1;
     }
   }
@@ -168,9 +205,14 @@ function teamForRole(role: Role | null): Team | null {
  *   - 不改寫 V2 原始資料；純讀取派生新物件。
  *   - `winReason` 為 enum（V2）→ 字串（V1）直接塞 enum 字串；舊 UI 會看成 "threeBlue_merlinAlive"
  *     等 token，Phase 2 再提供中文映射函式。
- *   - `assassinTargetId` 從 `finalResult.assassinTargetSeat` 反查 `playerIds` / `displayNames`。
+ *   - `assassinTargetId` 從 `finalResult.assassinTargetSeat` 反查 `playerSeats`。
+ *   - `displayName` 透過 `opts.getDisplayName` callback 查；沒 callback 或查不到
+ *     fallback 到 `sheets:<名字>` 解析或 UUID 末 6 碼。
  */
-export function hydrateV2ToV1View(v2: GameRecordV2): GameRecordV1View {
+export function hydrateV2ToV1View(
+  v2: GameRecordV2,
+  opts?: HydrateV2Options,
+): GameRecordV1View {
   const playerCount = computePlayerCount(v2);
   const winner = computeWinner(v2);
   const questResults = computeQuestResults(v2);
@@ -178,19 +220,19 @@ export function hydrateV2ToV1View(v2: GameRecordV2): GameRecordV1View {
   const players: GamePlayerV1View[] = [];
   for (let i = 0; i < 10; i += 1) {
     const seat = i + 1;
-    const displayName = v2.displayNames[i];
-    const playerId = v2.playerIds[i];
+    const playerId = v2.playerSeats[i];
 
     // 只有真正存在的玩家才納入 view（空座跳過）。
-    if (!displayName?.trim() && !playerId?.trim()) continue;
+    if (!playerId?.trim()) continue;
 
+    const displayName = resolveDisplayName(playerId, opts);
     const role = deriveRoleForSeat(seat, v2.finalResult.roles, playerCount);
     const team = teamForRole(role);
     const won = team !== null && team === winner;
 
     players.push({
-      playerId: playerId || displayName, // Sheets 歷史資料無 ID 時退回名字
-      displayName: displayName || playerId,
+      playerId,
+      displayName,
       role,
       team,
       won,
@@ -204,8 +246,7 @@ export function hydrateV2ToV1View(v2: GameRecordV2): GameRecordV1View {
   if (typeof v2.finalResult.assassinTargetSeat === 'number') {
     const idx = v2.finalResult.assassinTargetSeat - 1;
     if (idx >= 0 && idx < 10) {
-      assassinTargetId =
-        v2.playerIds[idx]?.trim() || v2.displayNames[idx]?.trim() || undefined;
+      assassinTargetId = v2.playerSeats[idx]?.trim() || undefined;
     }
   }
 
