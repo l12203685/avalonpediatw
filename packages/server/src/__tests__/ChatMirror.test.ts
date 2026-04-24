@@ -1,7 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   ChatMirror,
   formatOutgoing,
+  formatOutgoingLegacy,
+  formatOutgoingUnified,
+  formatTaipeiStamp,
+  mapSourceTag,
   validateInboundBody,
   LineAdapter,
   DiscordAdapter,
@@ -11,6 +15,16 @@ import {
   getChatMirror,
 } from '../bots/ChatMirror';
 import { LobbyChatMessage, LOBBY_CHAT_MAX_LEN } from '../socket/LobbyChatBuffer';
+
+// 2026-04-24 — preserve legacy `[Avalon] name: text` assertions across the
+// existing fanout/crossFanout suites by forcing the env flag; individual
+// unified-format tests below clear the flag to exercise the new path.
+beforeEach(() => {
+  process.env.CHAT_MIRROR_USE_LEGACY_FORMAT = 'true';
+});
+afterEach(() => {
+  delete process.env.CHAT_MIRROR_USE_LEGACY_FORMAT;
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -577,5 +591,210 @@ describe('ChatMirror singleton', () => {
 
   it('returns null before initialize', () => {
     expect(getChatMirror()).toBeNull();
+  });
+});
+
+// ─── 2026-04-24 Unified format (Edward mandate) ───────────────────────────
+
+describe('formatOutgoingUnified (2026-04-24 Edward mandate)', () => {
+  beforeEach(() => {
+    delete process.env.CHAT_MIRROR_USE_LEGACY_FORMAT;
+  });
+
+  // Fixed reference: 2026-04-24 11:58 +08 -> 2026-04-24 03:58 UTC ms epoch.
+  // Choosing a Taipei-lunch timestamp keeps the expected string obvious to
+  // humans reviewing test output without needing to decode UTC math.
+  const FIXED_TS_MS = Date.UTC(2026, 3, 24, 3, 58, 0); // month is 0-indexed
+
+  it('emits [MMDD hh:mm][AP][name] content for lobby-origin', () => {
+    const out = formatOutgoingUnified({
+      id: 'm',
+      playerId: 'u',
+      playerName: 'Alice',
+      message: 'hello',
+      timestamp: FIXED_TS_MS,
+      source: 'lobby',
+    });
+    expect(out).toBe('[0424 11:58][AP][Alice] hello');
+  });
+
+  it('maps source=discord to [DC]', () => {
+    const out = formatOutgoingUnified({
+      id: 'm',
+      playerId: 'u',
+      playerName: 'Bob',
+      message: 'yo',
+      timestamp: FIXED_TS_MS,
+      source: 'discord',
+    });
+    expect(out).toBe('[0424 11:58][DC][Bob] yo');
+  });
+
+  it('maps source=line to [LINE]', () => {
+    const out = formatOutgoingUnified({
+      id: 'm',
+      playerId: 'u',
+      playerName: 'Carol',
+      message: 'hi',
+      timestamp: FIXED_TS_MS,
+      source: 'line',
+    });
+    expect(out).toBe('[0424 11:58][LINE][Carol] hi');
+  });
+
+  it('renders system notices with speaker slot = system', () => {
+    const out = formatOutgoingUnified({
+      id: 'm',
+      playerId: 'u',
+      playerName: 'System',
+      message: 'Alice 加入大廳',
+      timestamp: FIXED_TS_MS,
+      isSystem: true,
+      source: 'lobby',
+    });
+    expect(out).toBe('[0424 11:58][AP][system] Alice 加入大廳');
+  });
+
+  it('keeps a single space between ] and the message body', () => {
+    const out = formatOutgoingUnified({
+      id: 'm',
+      playerId: 'u',
+      playerName: 'N',
+      message: 'x',
+      timestamp: FIXED_TS_MS,
+      source: 'lobby',
+    });
+    // Exactly one space after the last closing bracket
+    expect(out).toMatch(/\]\sx$/);
+    expect(out).not.toMatch(/\]  x$/);
+    expect(out).not.toMatch(/\]x$/);
+  });
+
+  it('formatOutgoing dispatches to unified by default', () => {
+    const out = formatOutgoing({
+      id: 'm',
+      playerId: 'u',
+      playerName: 'A',
+      message: 'm',
+      timestamp: FIXED_TS_MS,
+      source: 'lobby',
+    });
+    expect(out).toBe('[0424 11:58][AP][A] m');
+  });
+
+  it('formatOutgoing falls back to legacy when env var set', () => {
+    process.env.CHAT_MIRROR_USE_LEGACY_FORMAT = 'true';
+    const out = formatOutgoing({
+      id: 'm',
+      playerId: 'u',
+      playerName: 'A',
+      message: 'm',
+      timestamp: FIXED_TS_MS,
+      source: 'lobby',
+    });
+    expect(out).toBe('[Avalon] A: m');
+  });
+
+  it('legacy helper still available for backward compat', () => {
+    const out = formatOutgoingLegacy({
+      id: 'm',
+      playerId: 'u',
+      playerName: 'A',
+      message: 'm',
+      timestamp: FIXED_TS_MS,
+      source: 'lobby',
+    });
+    expect(out).toBe('[Avalon] A: m');
+  });
+});
+
+describe('mapSourceTag', () => {
+  it('maps lobby -> AP (default)', () => {
+    expect(mapSourceTag('lobby')).toBe('AP');
+  });
+  it('maps discord -> DC', () => {
+    expect(mapSourceTag('discord')).toBe('DC');
+  });
+  it('maps line -> LINE', () => {
+    expect(mapSourceTag('line')).toBe('LINE');
+  });
+  it('maps undefined -> AP', () => {
+    expect(mapSourceTag(undefined)).toBe('AP');
+  });
+});
+
+describe('formatTaipeiStamp', () => {
+  it('formats a known epoch in +08 regardless of host TZ', () => {
+    // 2026-04-24 11:58 +08 -> "0424 11:58"
+    const ms = Date.UTC(2026, 3, 24, 3, 58, 0);
+    expect(formatTaipeiStamp(ms)).toBe('0424 11:58');
+  });
+
+  it('pads single-digit month/day/hour/minute', () => {
+    // 2026-01-05 09:07 +08 -> 2026-01-05 01:07 UTC
+    const ms = Date.UTC(2026, 0, 5, 1, 7, 0);
+    expect(formatTaipeiStamp(ms)).toBe('0105 09:07');
+  });
+});
+
+describe('ChatMirror.pushLine — listen-bot enqueue path', () => {
+  beforeEach(() => {
+    delete process.env.CHAT_MIRROR_USE_LEGACY_FORMAT;
+  });
+
+  it('POSTs to listen-bot and skips LINE adapter on 200', async () => {
+    const line = mockLineAdapter();
+    const fetchCalls: Array<{ url: string; body: unknown }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+      fetchCalls.push({
+        url: String(url),
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      return new Response('{"ok":true}', { status: 200 });
+    }) as unknown as typeof globalThis.fetch;
+
+    try {
+      const mirror = new ChatMirror({
+        lineGroupId: 'G1',
+        line: line.adapter,
+        listenBot: { url: 'http://listen/enqueue/line', botKey: 'avalon' },
+        logger: silentLogger(),
+      });
+      await mirror.fanout(makeLobbyMsg({ playerName: 'Z', message: 'via-listen' }));
+
+      expect(fetchCalls).toHaveLength(1);
+      expect(fetchCalls[0].url).toBe('http://listen/enqueue/line');
+      const body = fetchCalls[0].body as Record<string, unknown>;
+      expect(body.source).toBe('AP');
+      expect(body.username).toBe('Z');
+      expect(body.content).toBe('via-listen');
+      expect(body.line_group_id).toBe('G1');
+      expect(body.bot_key).toBe('avalon');
+      // LINE push should NOT be called when enqueue succeeds
+      expect(line.calls).toHaveLength(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('falls back to direct LINE push on enqueue failure', async () => {
+    const line = mockLineAdapter();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response('{"ok":false}', { status: 500 })) as unknown as typeof globalThis.fetch;
+
+    try {
+      const mirror = new ChatMirror({
+        lineGroupId: 'G1',
+        line: line.adapter,
+        listenBot: { url: 'http://listen/enqueue/line' },
+        logger: silentLogger(),
+      });
+      await mirror.fanout(makeLobbyMsg({ playerName: 'Z', message: 'fallback' }));
+      expect(line.calls).toHaveLength(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

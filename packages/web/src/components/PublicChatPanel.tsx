@@ -58,6 +58,37 @@ function sourceBadgeLabel(source: LobbyChatMessage['source']): string | null {
   return null;
 }
 
+/**
+ * 2026-04-24 Edward 指令 — 統一訊息格式
+ *   `[MMDD hh:mm][{來源}][{username}] {message_content}`
+ *
+ * Short source tag (DC/AP/LINE) matches the server-side contract in
+ * `ChatMirror.formatOutgoingUnified()` so the three surfaces (lobby / LINE /
+ * Discord) stay visually identical. Timestamp is rendered in the user's
+ * local time; server sends ms epoch, which is fine since Edward + most users
+ * live in +08.
+ */
+function sourceTagShort(source: LobbyChatMessage['source']): 'AP' | 'DC' | 'LINE' {
+  if (source === 'discord') return 'DC';
+  if (source === 'line') return 'LINE';
+  return 'AP';
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+function formatLobbyStamp(epochMs: number): string {
+  // Render in Taipei (+08) — keep in sync with ChatMirror.formatTaipeiStamp.
+  const TPE_OFFSET_MS = 8 * 60 * 60 * 1000;
+  const d = new Date(epochMs + TPE_OFFSET_MS);
+  const mm = pad2(d.getUTCMonth() + 1);
+  const dd = pad2(d.getUTCDate());
+  const hh = pad2(d.getUTCHours());
+  const mi = pad2(d.getUTCMinutes());
+  return `${mm}${dd} ${hh}:${mi}`;
+}
+
 type LobbyErrorCode =
   | 'not-authenticated'
   | 'guest-read-only'
@@ -169,25 +200,41 @@ export default function PublicChatPanel(): JSX.Element {
             );
           }
           const isMe = currentPlayer && msg.playerId === currentPlayer.id;
-          const badge = sourceBadgeLabel(msg.source);
+          // 2026-04-24 — show unified prefix above each message bubble:
+          //   [MMDD hh:mm][DC/AP/LINE][username]
+          // Body still lives in the bubble so colors + alignment stay.
+          const stamp = formatLobbyStamp(msg.timestamp || Date.now());
+          const tag = sourceTagShort(msg.source);
+          const name = (msg.playerName ?? '').trim() || 'Unknown';
+          const badgeRaw = sourceBadgeLabel(msg.source);
           return (
             <div
               key={msg.id}
               className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
             >
-              {!isMe && (
-                <span className="text-xs text-zinc-500 mb-0.5 ml-1 flex items-center gap-1">
-                  {badge && (
-                    <span
-                      className="text-[10px] font-semibold text-amber-400 tracking-wide"
-                      data-testid={`lobby-chat-source-badge-${msg.source}`}
-                    >
-                      {badge}
-                    </span>
-                  )}
-                  <span>{msg.playerName}</span>
+              <span
+                className={`text-[10px] text-zinc-500 mb-0.5 ${
+                  isMe ? 'mr-1 text-right' : 'ml-1 text-left'
+                } flex items-center gap-1 font-mono`}
+                data-testid={`lobby-chat-header-${msg.source ?? 'lobby'}`}
+              >
+                <span>[{stamp}]</span>
+                <span
+                  className={
+                    msg.source && msg.source !== 'lobby'
+                      ? 'text-amber-400 font-semibold'
+                      : ''
+                  }
+                  data-testid={
+                    badgeRaw
+                      ? `lobby-chat-source-badge-${msg.source}`
+                      : undefined
+                  }
+                >
+                  [{tag}]
                 </span>
-              )}
+                <span>[{name}]</span>
+              </span>
               <div
                 className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-sm break-words ${
                   isMe

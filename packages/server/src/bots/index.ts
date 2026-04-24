@@ -117,18 +117,37 @@ function initializeLobbyChatMirror(): void {
     );
   }
 
+  // 2026-04-24 — route LINE outbound through edward-listen-bot so we stop
+  // burning monthly push quota. When the env var is unset we keep the
+  // legacy direct-push path untouched.
+  const listenBotUrl =
+    (process.env.LISTEN_BOT_ENQUEUE_URL || '').trim() ||
+    (process.env.LOBBY_MIRROR_LISTEN_BOT_URL || '').trim();
+  const listenBot = listenBotUrl
+    ? {
+        url: listenBotUrl,
+        apiKey: (process.env.LISTEN_BOT_PUSH_API_KEY || '').trim() || undefined,
+        botKey:
+          (process.env.LISTEN_BOT_KEY || '').trim() || 'avalon',
+      }
+    : undefined;
+
   initializeChatMirror({
     lineGroupId,
     discordChannelId,
     line: buildLineAdapter() ?? undefined,
     discord: buildDiscordAdapter(),
+    listenBot,
   });
 
   const enabledPlatforms: string[] = [];
   if (lineGroupId) enabledPlatforms.push('LINE');
   if (discordChannelId) enabledPlatforms.push('Discord');
   if (enabledPlatforms.length > 0) {
-    console.log(`✅ ChatMirror enabled for: ${enabledPlatforms.join(', ')}`);
+    const lineMode = listenBot ? 'listen-bot enqueue' : 'direct LINE push';
+    console.log(
+      `✅ ChatMirror enabled for: ${enabledPlatforms.join(', ')} (LINE via ${lineMode})`,
+    );
   }
 }
 
