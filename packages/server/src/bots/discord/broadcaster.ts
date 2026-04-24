@@ -18,6 +18,11 @@ const ROLE_LABELS: Record<Role, string> = {
   assassin: '刺客 (Assassin)',
   morgana: '莫甘娜 (Morgana)',
   oberon: '奧伯倫 (Oberon)',
+  mordred: '莫德雷德 (Mordred)',
+  // `minion` is a legacy / non-canonical role (see shared/src/types/game.ts).
+  // Keep a label so `Record<Role, string>` stays total and tsc passes even if
+  // a stored game still references it — production games never emit it.
+  minion: '壞人爪牙 (Minion)',
 };
 
 const ROLE_TEAM_EMOJI: Record<Role, string> = {
@@ -27,6 +32,8 @@ const ROLE_TEAM_EMOJI: Record<Role, string> = {
   assassin: '🔴',
   morgana: '🔴',
   oberon: '🔴',
+  mordred: '🔴',
+  minion: '🔴',
 };
 
 const WIN_REASON_LABELS: Record<string, string> = {

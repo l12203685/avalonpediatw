@@ -41,6 +41,20 @@ interface LobbyChatMessage {
   message: string;
   timestamp: number;
   isSystem?: boolean;
+  /**
+   * #82: Platform that originated the message. When a message is mirrored from
+   * LINE / Discord into the lobby we surface a small `[LINE]` / `[DC]` chip so
+   * users can tell cross-platform traffic from native lobby chat. Absent /
+   * `'lobby'` renders without a badge (self-origin, no noise).
+   */
+  source?: 'lobby' | 'line' | 'discord';
+}
+
+/** Chip label for a remote-origin message; null for lobby / unknown. */
+function sourceBadgeLabel(source: LobbyChatMessage['source']): string | null {
+  if (source === 'line') return '[LINE]';
+  if (source === 'discord') return '[DC]';
+  return null;
 }
 
 type LobbyErrorCode =
@@ -153,14 +167,23 @@ export default function PublicChatPanel(): JSX.Element {
             );
           }
           const isMe = currentPlayer && msg.playerId === currentPlayer.id;
+          const badge = sourceBadgeLabel(msg.source);
           return (
             <div
               key={msg.id}
               className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
             >
               {!isMe && (
-                <span className="text-xs text-zinc-500 mb-0.5 ml-1">
-                  {msg.playerName}
+                <span className="text-xs text-zinc-500 mb-0.5 ml-1 flex items-center gap-1">
+                  {badge && (
+                    <span
+                      className="text-[10px] font-semibold text-amber-400 tracking-wide"
+                      data-testid={`lobby-chat-source-badge-${msg.source}`}
+                    >
+                      {badge}
+                    </span>
+                  )}
+                  <span>{msg.playerName}</span>
                 </span>
               )}
               <div
