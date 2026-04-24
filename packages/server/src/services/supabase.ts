@@ -1,6 +1,30 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { normalizeShortCode, isValidShortCode } from './shortCode';
 import * as fsAccounts from './firestoreAccounts';
+import { isFirebaseAdminReady, getAdminFirestore } from './firebase';
+
+// 2026-04-24 #supabase-retire Batch 2.1 (hineko_20260424_1240):
+// Dual-write rooms audit-log to Firestore alongside Supabase. The full
+// room/engine state lives in Firebase RTD via GameStatePersistence —
+// this `rooms` table is a thin lifecycle audit (id / host / count /
+// state / evil_wins / ended_at) with no server-side read path. Phase 4
+// (table drop) ETA 2 weeks; Supabase remains the legacy fallback until
+// then. Each Firestore write is best-effort try/catch.
+async function dualWriteRoomAudit(
+  doc: Record<string, unknown>,
+): Promise<void> {
+  if (!isFirebaseAdminReady()) return;
+  try {
+    const fs = getAdminFirestore();
+    await fs.collection('rooms_audit').add({
+      ...doc,
+      created_at_ms: Date.now(),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[rooms_audit] firestore dual-write error:', msg);
+  }
+}
 
 // ── 初始化 ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
@@ -147,13 +171,22 @@ export async function getUserElo(userId: string): Promise<number> {
 
 export async function saveRoom(roomId: string, hostUserId: string | null, playerCount: number): Promise<void> {
   const db = getSupabaseClient();
-  if (!db) return;
-  await db.from('rooms').upsert({
-    id: roomId,
-    host_user_id: hostUserId,
-    player_count: playerCount,
-    state: 'lobby',
-  }, { onConflict: 'id' });
+  if (db) {
+    await db.from('rooms').upsert({
+      id: roomId,
+      host_user_id: hostUserId,
+      player_count: playerCount,
+      state: 'lobby',
+    }, { onConflict: 'id' });
+  }
+  // 2026-04-24 #supabase-retire dual-write to Firestore (Batch 2.1)
+  await dualWriteRoomAudit({
+    event:         'create',
+    id:            roomId,
+    host_user_id:  hostUserId,
+    player_count:  playerCount,
+    state:         'lobby',
+  });
 }
 
 export async function updateRoomState(
@@ -162,13 +195,20 @@ export async function updateRoomState(
   evilWins?: boolean | null
 ): Promise<void> {
   const db = getSupabaseClient();
-  if (!db) return;
   const update: Record<string, unknown> = { state };
   if (evilWins !== undefined) {
     update.evil_wins = evilWins;
     update.ended_at = new Date().toISOString();
   }
-  await db.from('rooms').update(update).eq('id', roomId);
+  if (db) {
+    await db.from('rooms').update(update).eq('id', roomId);
+  }
+  // 2026-04-24 #supabase-retire dual-write to Firestore (Batch 2.1)
+  await dualWriteRoomAudit({
+    event: 'update',
+    id:    roomId,
+    ...update,
+  });
 }
 
 // ── 遊戲記錄 ─────────────────────────────────────────────────
