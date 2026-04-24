@@ -12,9 +12,13 @@
  *   .passwordHash           string   scrypt$...
  *   .emails                 string[] 所有關聯 email（小寫正規化後就是 key）
  *   .emailsLower            string[] lower-case mirror for array-contains
- *   .primaryEmail           string   主要 email
+ *   .primaryEmail           string   主要 email（由 getPrimaryEmail 計算，優先序 google > discord > emailOnly）
  *   .primaryEmailLower      string
  *   .emailsVerified         string[] 已通過驗證的 email（驗證流程 Phase B 已實作）
+ *   .googleEmail            string | null  2026-04-24 UX Phase 1：Google provider 提供的 email（primary 優先 1）
+ *   .discordEmail           string | null  Discord provider 提供的 email（primary 優先 2）
+ *   .lineEmail              string | null  LINE provider 提供的 email（通常 null，非 primary fallback）
+ *   .emailOnly              string | null  純 email 綁定的退路 email（primary 優先 3；OAuth 都沒綁才用）
  *   .accountName            string   display 預設（email local-part，可之後改）
  *   .accountNameLower       string   僅 display 用，不再唯一
  *   .display_name           string   ELO 頁/大廳使用
@@ -63,6 +67,25 @@ function oauthProviderColumn(provider: OAuthProvider): 'discord_id' | 'line_id' 
   return 'firebase_uid';
 }
 
+/**
+ * OAuth provider 對應 auth_users row 上的 per-provider email 欄位（2026-04-24
+ * UX Phase 1 新增）。
+ *
+ *   google  → `googleEmail`
+ *   discord → `discordEmail`
+ *   line    → `lineEmail`
+ *
+ * 綁定時這些欄位記錄該 provider 當下提供的 email。`getPrimaryEmail` 依
+ * Google > Discord > emailOnly 的優先序挑出 `primaryEmail`（LINE 不作 fallback）。
+ */
+export type ProviderEmailField = 'googleEmail' | 'discordEmail' | 'lineEmail';
+
+export function providerEmailColumn(provider: OAuthProvider): ProviderEmailField {
+  if (provider === 'discord') return 'discordEmail';
+  if (provider === 'line')    return 'lineEmail';
+  return 'googleEmail';
+}
+
 const AUTH_USERS                = 'auth_users';
 const PASSWORD_RESET_SESSIONS   = 'password_reset_sessions';
 const EMAIL_VERIFICATIONS       = 'email_verifications';
@@ -78,6 +101,43 @@ export interface AccountRecord {
   emails:             string[];
   emailsVerified:     string[];
   displayName:        string;
+}
+
+/**
+ * Primary-email 計算的輸入形狀。接收 `auth_users` row data（可能缺欄位），
+ * 回傳單一 `primaryEmail` 字串，優先序：
+ *
+ *   1. googleEmail（Google OAuth 拿到的 gmail）
+ *   2. discordEmail（Discord OAuth 提供的 email）
+ *   3. emailOnly（純 email 綁定的退路）
+ *
+ * 不使用 lineEmail 作 fallback — LINE 的 OpenID email 在多數情況為 null，
+ * 除非使用者主動開啟 email scope；實務上不可靠，設計文件明列不作 primary 候選。
+ *
+ * 若三者皆空 → 回 null（理論不應發生，前端已硬鎖至少綁一個）。
+ */
+export interface PrimaryEmailInput {
+  googleEmail?:  string | null;
+  discordEmail?: string | null;
+  lineEmail?:    string | null;
+  emailOnly?:    string | null;
+}
+
+/**
+ * 計算 primary email — UX Phase 1 最終規則（2026-04-24 Edward 10:09）。
+ *
+ * 優先順序：Google > Discord > Email 退路（emailOnly）。LINE 刻意不作 fallback。
+ *
+ * 本函式是 pure — 只讀輸入回字串；寫回 `auth_users.primaryEmail` 的責任在
+ * OAuth callback / bind 路徑，由 `recomputePrimaryEmail` 處理。
+ */
+export function getPrimaryEmail(user: PrimaryEmailInput): string | null {
+  const pick = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+  return pick(user.googleEmail)
+      ?? pick(user.discordEmail)
+      ?? pick(user.emailOnly)
+      ?? null;
 }
 
 /**
@@ -198,6 +258,12 @@ export async function loginOrRegister(params: {
         emails:             [emailTrim],
         emailsLower:        [emailLower],
         emailsVerified:     [],
+        // 2026-04-24 UX Phase 1：password signup = Email 退路路徑。
+        // primaryEmail = emailOnly（Google/DC 都沒綁 → 自填 Email 為主）。
+        googleEmail:        null,
+        discordEmail:       null,
+        lineEmail:          null,
+        emailOnly:          emailTrim,
         display_name:       display,
         elo_rating:         1000,
         total_games:        0,
@@ -576,6 +642,11 @@ export async function ensureAccountByOAuthEmail(params: {
       //   (a) col (firebase_uid / discord_id / line_id) 與新 externalId 不符即覆蓋
       //   (b) email 欄位缺或不等於目前 OAuth email 即補寫
       //   (c) 加 log 方便觀察。
+      //
+      // 2026-04-24 UX Phase 1：同步寫入 per-provider email 欄位（googleEmail /
+      // discordEmail / lineEmail），然後呼叫 getPrimaryEmail 重算 primaryEmail。
+      // 這樣前端 IdentityBadge 和 linked provider rows 都可以直接讀 row 欄位，
+      // 不用每次重算。
       const existingExtId   = (existing.data as Record<string, unknown>)[col];
       const needsExtIdWrite =
         typeof existingExtId !== 'string' ||
@@ -583,11 +654,32 @@ export async function ensureAccountByOAuthEmail(params: {
         existingExtId !== params.providerExternalId;
       const existingEmail   = typeof data.email === 'string' ? data.email : '';
       const needsEmailWrite = existingEmail !== emailTrim;
+      const providerEmailField = providerEmailColumn(params.provider);
+      const existingProviderEmail = typeof (existing.data as Record<string, unknown>)[providerEmailField] === 'string'
+        ? ((existing.data as Record<string, unknown>)[providerEmailField] as string)
+        : '';
+      const needsProviderEmailWrite = existingProviderEmail !== emailTrim;
 
-      if (needsExtIdWrite || needsEmailWrite) {
+      if (needsExtIdWrite || needsEmailWrite || needsProviderEmailWrite) {
         const patch: Record<string, unknown> = { updatedAt: Date.now() };
-        if (needsExtIdWrite) patch[col] = params.providerExternalId;
-        if (needsEmailWrite) patch.email = emailTrim;
+        if (needsExtIdWrite)        patch[col] = params.providerExternalId;
+        if (needsEmailWrite)        patch.email = emailTrim;
+        if (needsProviderEmailWrite) patch[providerEmailField] = emailTrim;
+
+        // 重算 primaryEmail：合併 row 現有值 + patch 的新值再丟 getPrimaryEmail。
+        const rowData = existing.data as Record<string, unknown>;
+        const merged: PrimaryEmailInput = {
+          googleEmail:  rowData.googleEmail as string | null | undefined,
+          discordEmail: rowData.discordEmail as string | null | undefined,
+          lineEmail:    rowData.lineEmail as string | null | undefined,
+          emailOnly:    rowData.emailOnly as string | null | undefined,
+          [providerEmailField]: emailTrim,
+        };
+        const nextPrimary = getPrimaryEmail(merged);
+        if (nextPrimary && nextPrimary !== data.primaryEmail) {
+          patch.primaryEmail      = nextPrimary;
+          patch.primaryEmailLower = normalizeEmail(nextPrimary);
+        }
         await db.collection(AUTH_USERS).doc(existing.id).update(patch);
         // eslint-disable-next-line no-console
         console.log('[ensureAccountByOAuthEmail] linked provider to existing row', {
@@ -645,6 +737,13 @@ export async function ensureAccountByOAuthEmail(params: {
         // legacy `email` 欄位 — firestoreAccounts.getLinkedAccounts 讀它算
         // Google 綁定的 display_label（「已綁定 @xxx@gmail.com」）。
         email:              emailTrim,
+        // 2026-04-24 UX Phase 1：per-provider email 欄位 + emailOnly 初始化。
+        // 此 row 由 OAuth 建，對應 provider 寫入當下 email；其他 provider 欄位
+        // 設 null（之後綁再寫）；emailOnly 設 null（OAuth 已有 email，不需退路）。
+        googleEmail:        params.provider === 'google'  ? emailTrim : null,
+        discordEmail:       params.provider === 'discord' ? emailTrim : null,
+        lineEmail:          params.provider === 'line'    ? emailTrim : null,
+        emailOnly:          null,
         display_name:       display,
         elo_rating:         1000,
         total_games:        0,
@@ -702,6 +801,60 @@ export async function ensureAccountByOAuthEmail(params: {
     // eslint-disable-next-line no-console
     console.error('[firestoreAuthAccounts] ensureAccountByOAuthEmail error:', err);
     return { ok: false, code: 'error', reason: 'OAuth 自動建帳失敗' };
+  }
+}
+
+/**
+ * 重新計算某個 user row 的 primary email 並寫回 Firestore。呼叫時機：
+ *   - OAuth bind 成功後（寫入 `<provider>Email` 後）
+ *   - Email 退路綁定成功後（寫入 `emailOnly` 後）
+ *
+ * 內部讀當前 row 的 googleEmail / discordEmail / lineEmail / emailOnly →
+ * `getPrimaryEmail` → 更新 `primaryEmail` + `primaryEmailLower` + `updatedAt`。
+ *
+ * 若 row 不存在 → 回 { ok: false, code: 'not_found' }；
+ * 若 primary 不變 → 仍回 ok=true 但 data.updated=false 讓 caller 知道省寫。
+ */
+export async function recomputePrimaryEmail(userId: string): Promise<AccountOpResult<{
+  updated:       boolean;
+  primaryEmail:  string | null;
+}>> {
+  const db = getFs();
+  if (!db) return { ok: false, code: 'no_store', reason: '帳戶資料庫未配置' };
+
+  try {
+    const ref = db.collection(AUTH_USERS).doc(userId);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, code: 'not_found', reason: '找不到帳號' };
+    const data = snap.data() as {
+      googleEmail?:        string | null;
+      discordEmail?:       string | null;
+      lineEmail?:          string | null;
+      emailOnly?:          string | null;
+      primaryEmail?:       string;
+      primaryEmailLower?:  string;
+    };
+    const next = getPrimaryEmail({
+      googleEmail:  data.googleEmail,
+      discordEmail: data.discordEmail,
+      lineEmail:    data.lineEmail,
+      emailOnly:    data.emailOnly,
+    });
+    const current = typeof data.primaryEmail === 'string' ? data.primaryEmail : null;
+    if (next === current) {
+      return { ok: true, data: { updated: false, primaryEmail: next } };
+    }
+    const patch: Record<string, unknown> = { updatedAt: Date.now() };
+    if (next !== null) {
+      patch.primaryEmail      = next;
+      patch.primaryEmailLower = normalizeEmail(next);
+    }
+    await ref.update(patch);
+    return { ok: true, data: { updated: true, primaryEmail: next } };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[firestoreAuthAccounts] recomputePrimaryEmail error:', err);
+    return { ok: false, code: 'error', reason: '重算主要信箱失敗' };
   }
 }
 

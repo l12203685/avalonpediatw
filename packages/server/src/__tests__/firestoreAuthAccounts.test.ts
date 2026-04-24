@@ -329,6 +329,171 @@ describe('firestoreAuthAccounts — Phase C email-only', () => {
     });
   });
 
+  // 2026-04-24 UX Phase 1 — primary email computation + per-provider slots.
+  describe('getPrimaryEmail', () => {
+    it('prefers Google over Discord over emailOnly', () => {
+      expect(mod.getPrimaryEmail({
+        googleEmail:  'g@x.com',
+        discordEmail: 'd@x.com',
+        emailOnly:    'e@x.com',
+      })).toBe('g@x.com');
+      expect(mod.getPrimaryEmail({
+        discordEmail: 'd@x.com',
+        emailOnly:    'e@x.com',
+      })).toBe('d@x.com');
+      expect(mod.getPrimaryEmail({ emailOnly: 'e@x.com' })).toBe('e@x.com');
+    });
+
+    it('ignores LINE email even when Google and Discord are absent', () => {
+      // LINE 規格上常為 null，設計文件明列不作 fallback。
+      expect(mod.getPrimaryEmail({
+        lineEmail: 'line@x.com',
+      })).toBeNull();
+      expect(mod.getPrimaryEmail({
+        lineEmail: 'line@x.com',
+        emailOnly: 'e@x.com',
+      })).toBe('e@x.com');
+    });
+
+    it('returns null when no provider supplies email', () => {
+      expect(mod.getPrimaryEmail({})).toBeNull();
+      expect(mod.getPrimaryEmail({
+        googleEmail:  null,
+        discordEmail: null,
+        lineEmail:    null,
+        emailOnly:    null,
+      })).toBeNull();
+    });
+
+    it('treats empty / whitespace string as null', () => {
+      expect(mod.getPrimaryEmail({ googleEmail: '', emailOnly: 'e@x.com' })).toBe('e@x.com');
+      expect(mod.getPrimaryEmail({ googleEmail: '   ', emailOnly: 'e@x.com' })).toBe('e@x.com');
+    });
+
+    it('trims whitespace on returned value', () => {
+      expect(mod.getPrimaryEmail({ googleEmail: '  g@x.com  ' })).toBe('g@x.com');
+    });
+  });
+
+  describe('password signup writes emailOnly + primaryEmail', () => {
+    it('password signup sets emailOnly to the signup email and primaryEmail matches', async () => {
+      const r = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'AvalonPw01' });
+      expect(r.ok).toBe(true);
+      const row = store.auth_users.get(r.data!.userId)! as Record<string, unknown>;
+      expect(row.emailOnly).toBe('ed@ex.com');
+      expect(row.googleEmail).toBeNull();
+      expect(row.discordEmail).toBeNull();
+      expect(row.lineEmail).toBeNull();
+      expect(row.primaryEmail).toBe('ed@ex.com');
+    });
+  });
+
+  describe('ensureAccountByOAuthEmail writes per-provider email + recomputes primaryEmail', () => {
+    it('Google signup writes googleEmail and sets primaryEmail to it', async () => {
+      const r = await mod.ensureAccountByOAuthEmail({
+        provider:           'google',
+        providerExternalId: 'g-uid-abc',
+        email:              'alice@gmail.com',
+        displayName:        'Alice',
+      });
+      expect(r.ok).toBe(true);
+      const row = store.auth_users.get(r.data!.account.userId)! as Record<string, unknown>;
+      expect(row.googleEmail).toBe('alice@gmail.com');
+      // discord / line 欄位在 OAuth new-row path 沒寫 → undefined。getPrimaryEmail
+      // 容忍 undefined（按 null 處理），實務上前端讀 row 會 ??= null。
+      expect(row.discordEmail).toBeFalsy();
+      expect(row.lineEmail).toBeFalsy();
+      expect(row.emailOnly).toBeNull();
+      expect(row.primaryEmail).toBe('alice@gmail.com');
+    });
+
+    it('Discord binding on existing password account writes discordEmail but does NOT override primary until Google absent', async () => {
+      // 1) password signup → emailOnly + primaryEmail 都是 ed@ex.com
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'AvalonPw01' });
+      expect(reg.ok).toBe(true);
+
+      // 2) 同 email 走 Discord OAuth → ensureAccountByOAuthEmail Path A
+      const oauth = await mod.ensureAccountByOAuthEmail({
+        provider:           'discord',
+        providerExternalId: 'dc-123',
+        email:              'ed@ex.com',
+        displayName:        'Ed',
+      });
+      expect(oauth.ok).toBe(true);
+      expect(oauth.data?.created).toBe(false);
+      const row = store.auth_users.get(reg.data!.userId)! as Record<string, unknown>;
+      expect(row.discordEmail).toBe('ed@ex.com');
+      expect(row.emailOnly).toBe('ed@ex.com'); // 仍保留
+      // primary = discord > emailOnly → discord 值（剛好相等）
+      expect(row.primaryEmail).toBe('ed@ex.com');
+    });
+
+    it('Google binding after Discord overrides primaryEmail to Google', async () => {
+      // 1) Discord signup
+      const dc = await mod.ensureAccountByOAuthEmail({
+        provider:           'discord',
+        providerExternalId: 'dc-777',
+        email:              'bob@discord.example',
+        displayName:        'Bob',
+      });
+      expect(dc.ok).toBe(true);
+      const userId = dc.data!.account.userId;
+
+      // 2) 同 emailsLower → 不會找到既有 row，因為 google email 不同。
+      // 模擬：把 Google email 寫到同一個 row — 需借 addEmailToUser 先把 google email
+      // 掛上去。這裡直接操作 store 來模擬 linked provider scenario。
+      const dRow = store.auth_users.get(userId)! as Record<string, unknown>;
+      dRow.emails = [...(dRow.emails as string[]), 'bob@gmail.com'];
+      dRow.emailsLower = [...(dRow.emailsLower as string[]), 'bob@gmail.com'];
+
+      const gg = await mod.ensureAccountByOAuthEmail({
+        provider:           'google',
+        providerExternalId: 'g-uid-777',
+        email:              'bob@gmail.com',
+        displayName:        'Bob',
+      });
+      expect(gg.ok).toBe(true);
+      expect(gg.data?.created).toBe(false);
+
+      const row = store.auth_users.get(userId)! as Record<string, unknown>;
+      expect(row.googleEmail).toBe('bob@gmail.com');
+      expect(row.discordEmail).toBe('bob@discord.example');
+      expect(row.primaryEmail).toBe('bob@gmail.com'); // google 優先
+    });
+  });
+
+  describe('recomputePrimaryEmail', () => {
+    it('updates primaryEmail when per-provider email changes', async () => {
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'AvalonPw01' });
+      // 直接動 row 模擬 Google 綁定後
+      const row = store.auth_users.get(reg.data!.userId)! as Record<string, unknown>;
+      row.googleEmail = 'ed@gmail.com';
+
+      const r = await mod.recomputePrimaryEmail(reg.data!.userId);
+      expect(r.ok).toBe(true);
+      expect(r.data?.updated).toBe(true);
+      expect(r.data?.primaryEmail).toBe('ed@gmail.com');
+
+      const after = store.auth_users.get(reg.data!.userId)! as Record<string, unknown>;
+      expect(after.primaryEmail).toBe('ed@gmail.com');
+    });
+
+    it('returns not_found for missing user', async () => {
+      const r = await mod.recomputePrimaryEmail('ghost-uid');
+      expect(r.ok).toBe(false);
+      expect(r.code).toBe('not_found');
+    });
+
+    it('is idempotent when primary does not change', async () => {
+      const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'AvalonPw01' });
+      // primary = emailOnly = ed@ex.com（已寫）。再跑一次應回 updated=false。
+      const r = await mod.recomputePrimaryEmail(reg.data!.userId);
+      expect(r.ok).toBe(true);
+      expect(r.data?.updated).toBe(false);
+      expect(r.data?.primaryEmail).toBe('ed@ex.com');
+    });
+  });
+
   describe('addEmailToUser', () => {
     it('appends an email to the user row', async () => {
       const reg = await mod.loginOrRegister({ email: 'ed@ex.com', password: 'Passw0rdAvalon' });

@@ -898,14 +898,19 @@ export async function absorbGuestIntoUser(
 /**
  * 綁定 OAuth identity 到指定 user row。
  * 若目標 identity 已被綁給別人 → caller 應先呼叫 mergeUserAccounts。
+ *
+ * 2026-04-24 UX Phase 1：新增 optional `email` 讓 Firestore path 寫入對應
+ * per-provider email 欄位並重算 primaryEmail。Supabase path 忽略（舊 schema
+ * 不追此欄位）。
  */
 export async function linkProviderIdentity(
   userId: string,
   provider: LinkProvider,
   externalId: string,
+  email?: string,
 ): Promise<boolean> {
   if (fsAccounts.isFirestoreReady()) {
-    return fsAccounts.linkProviderIdentity(userId, provider, externalId);
+    return fsAccounts.linkProviderIdentity(userId, provider, externalId, email);
   }
   const db = getSupabaseClient();
   if (!db) return false;

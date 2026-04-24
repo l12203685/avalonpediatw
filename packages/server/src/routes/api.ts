@@ -442,6 +442,96 @@ function isLinkProvider(x: unknown): x is LinkProvider {
   return typeof x === 'string' && (LINK_PROVIDERS as readonly string[]).includes(x);
 }
 
+// GET /api/user/me
+// 2026-04-24 UX Phase 1：前端 IdentityBadge + LoginBindingPage 讀的權威資料源。
+// 回 { userId, primaryEmail, emailOnly, linkedProviders: [{provider, linked, email, displayLabel}] }。
+// - primaryEmail 由後端根據 Google > Discord > emailOnly 優先序計算並存在 auth_users row
+// - emailOnly 為純 email 退路（OAuth 都沒綁才會有值）
+// - linkedProviders 直接回 getLinkedAccounts 結果 + 補 email 欄位給前端顯示
+router.get('/user/me', publicLimiter, async (req: Request, res: Response) => {
+  const auth = await resolvePlayerAuth(req.headers.authorization);
+  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (!isAccountStoreReady()) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  // 訪客 — 回最小身份資料，primaryEmail 為 null，linkedProviders 全 linked=false。
+  if (auth.provider === 'guest') {
+    return res.json({
+      userId:         auth.playerId,
+      displayName:    auth.displayName ?? null,
+      primaryEmail:   null,
+      emailOnly:      null,
+      provider:       'guest',
+      linkedProviders: [
+        { provider: 'google',  linked: false, email: null, displayLabel: null, primary: false },
+        { provider: 'discord', linked: false, email: null, displayLabel: null, primary: false },
+        { provider: 'line',    linked: false, email: null, displayLabel: null, primary: false },
+      ],
+    });
+  }
+
+  const supabaseId = await resolveSupabaseUserId(auth);
+  if (!supabaseId) return res.status(404).json({ error: 'User row not found' });
+
+  // 並行讀 auth_users row（取 primaryEmail / emailOnly / per-provider email）+ linkedProviders。
+  const [authUserRow, linked] = await Promise.all([
+    (async (): Promise<{
+      primaryEmail: string | null;
+      emailOnly:    string | null;
+      googleEmail:  string | null;
+      discordEmail: string | null;
+      lineEmail:    string | null;
+      displayName:  string | null;
+    } | null> => {
+      if (!isFirestoreReady()) return null;
+      try {
+        const { getAdminFirestore } = await import('../services/firebase');
+        const db = getAdminFirestore();
+        const snap = await db.collection('auth_users').doc(supabaseId).get();
+        if (!snap.exists) return null;
+        const data = (snap.data() ?? {}) as {
+          primaryEmail?: string; emailOnly?: string | null;
+          googleEmail?: string | null; discordEmail?: string | null; lineEmail?: string | null;
+          display_name?: string;
+        };
+        return {
+          primaryEmail: typeof data.primaryEmail === 'string' ? data.primaryEmail : null,
+          emailOnly:    typeof data.emailOnly === 'string' ? data.emailOnly : null,
+          googleEmail:  typeof data.googleEmail === 'string' ? data.googleEmail : null,
+          discordEmail: typeof data.discordEmail === 'string' ? data.discordEmail : null,
+          lineEmail:    typeof data.lineEmail === 'string' ? data.lineEmail : null,
+          displayName:  typeof data.display_name === 'string' ? data.display_name : null,
+        };
+      } catch {
+        return null;
+      }
+    })(),
+    getLinkedAccounts(supabaseId),
+  ]);
+
+  const providerEmailMap = {
+    google:  authUserRow?.googleEmail  ?? null,
+    discord: authUserRow?.discordEmail ?? null,
+    line:    authUserRow?.lineEmail    ?? null,
+  };
+  const linkedProviders = linked.map((l) => ({
+    provider:     l.provider,
+    linked:       l.linked,
+    email:        providerEmailMap[l.provider],
+    displayLabel: l.display_label,
+    primary:      l.primary,
+  }));
+
+  return res.json({
+    userId:         supabaseId,
+    displayName:    authUserRow?.displayName ?? auth.displayName ?? null,
+    primaryEmail:   authUserRow?.primaryEmail ?? null,
+    emailOnly:      authUserRow?.emailOnly ?? null,
+    provider:       auth.provider ?? null,
+    linkedProviders,
+  });
+});
+
 // GET /api/user/linked
 router.get('/user/linked', publicLimiter, async (req: Request, res: Response) => {
   const auth = await resolvePlayerAuth(req.headers.authorization);
@@ -639,9 +729,11 @@ router.post('/user/link/google', publicLimiter, async (req: Request, res: Respon
   }
 
   let firebaseUid: string;
+  let firebaseEmail: string | undefined;
   try {
     const decoded = await verifyIdToken(idToken);
-    firebaseUid = decoded.uid;
+    firebaseUid   = decoded.uid;
+    firebaseEmail = decoded.email ?? undefined;
   } catch {
     return res.status(400).json({ error: 'Invalid Firebase ID token' });
   }
@@ -658,7 +750,9 @@ router.post('/user/link/google', publicLimiter, async (req: Request, res: Respon
     return res.json({ ok: true, merged: true, linked });
   }
   if (!existing) {
-    const linked = await linkProviderIdentity(supabaseId, 'google', firebaseUid);
+    // 2026-04-24 UX Phase 1：傳 firebaseEmail 讓 linkProviderIdentity 寫 googleEmail
+    // 並重算 primaryEmail（優先序 google > discord > emailOnly）。
+    const linked = await linkProviderIdentity(supabaseId, 'google', firebaseUid, firebaseEmail);
     if (!linked) return res.status(500).json({ error: 'Link failed' });
   }
   const linked = await getLinkedAccounts(supabaseId);

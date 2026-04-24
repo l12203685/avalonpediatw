@@ -367,7 +367,9 @@ async function handleLinkCallback(
     }
 
     if (!existing) {
-      const ok = await linkProviderIdentity(currentUserId, provider, externalId);
+      // 2026-04-24 UX Phase 1：帶 email 進去讓 linkProviderIdentity 寫 per-provider
+      // email 欄位並重算 primaryEmail（google > discord > emailOnly）。
+      const ok = await linkProviderIdentity(currentUserId, provider, externalId, options.email);
       if (!ok) {
         res.redirect(`${FRONTEND_URL}/profile?link_error=link_failed&provider=${provider}`);
         return;
@@ -673,10 +675,9 @@ router.get('/line/callback', async (req: Request, res: Response) => {
     };
 
     // LINE email 在 id_token 裡（OpenID Connect payload），不在 /v2/profile。
-    // quickLogin 模式才解 id_token，避免原登入流程多打一次網路。
-    const lineEmail: string | undefined = quickLoginMode
-      ? parseEmailFromLineIdToken(tokenData.id_token)
-      : undefined;
+    // 2026-04-24 UX Phase 1：quickLogin + link 兩路徑都嘗試拿 email（LINE 通常沒，
+    // 但有就存 lineEmail 到 row 供前端顯示；primary 優先序仍不選 LINE）。
+    const lineEmail: string | undefined = parseEmailFromLineIdToken(tokenData.id_token);
 
     if (quickLoginMode) {
       const outcome = await oauthLoginOrAutoRegister({
@@ -704,6 +705,7 @@ router.get('/line/callback', async (req: Request, res: Response) => {
         isGuest:     isGuestBind,
         displayName: lineUser.displayName,
         avatarUrl:   lineUser.pictureUrl,
+        email:       lineEmail,
       });
       return;
     }

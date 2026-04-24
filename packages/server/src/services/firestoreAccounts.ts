@@ -264,22 +264,51 @@ export async function ensureAuthUserWithProvider(
   if (!db) return null;
   const col = providerToColumn(provider);
   const docId = externalId; // 沿用 OAuth 登入時 JWT sub = externalId 的慣例
+  // 2026-04-24 UX Phase 1：per-provider email 欄位 + 重算 primaryEmail。
+  const providerEmailField: 'googleEmail' | 'discordEmail' | 'lineEmail' =
+    provider === 'google' ? 'googleEmail'
+    : provider === 'discord' ? 'discordEmail'
+    : 'lineEmail';
+  const emailTrim = typeof email === 'string' && email.trim().length > 0 ? email.trim() : null;
   try {
     const ref  = db.collection(AUTH_USERS).doc(docId);
     const snap = await ref.get();
     const now = Date.now();
     if (snap.exists) {
-      await ref.update({
+      const patch: Record<string, unknown> = {
         [col]:        externalId,
         display_name: displayName,
         photo_url:    photoUrl ?? null,
         updatedAt:    now,
-      });
+      };
+      if (emailTrim) {
+        patch[providerEmailField] = emailTrim;
+        patch.email = emailTrim;
+        const data = (snap.data() ?? {}) as {
+          googleEmail?: string | null; discordEmail?: string | null;
+          lineEmail?: string | null;   emailOnly?: string | null;
+          primaryEmail?: string;
+        };
+        const merged = {
+          googleEmail:  provider === 'google'  ? emailTrim : data.googleEmail,
+          discordEmail: provider === 'discord' ? emailTrim : data.discordEmail,
+          lineEmail:    provider === 'line'    ? emailTrim : data.lineEmail,
+          emailOnly:    data.emailOnly,
+        };
+        const next = recomputePrimaryEmailPure(merged);
+        if (next && next !== data.primaryEmail) {
+          patch.primaryEmail      = next;
+          patch.primaryEmailLower = next.toLowerCase();
+        }
+      }
+      await ref.update(patch);
     } else {
+      // 新建 row — OAuth 第一次綁，此 provider 有 email 就設 primaryEmail 為它；
+      // 其他 provider email 欄位 null，emailOnly null。
       await ref.set({
         provider,
         [col]:        externalId,
-        email:        email ?? null,
+        email:        emailTrim,
         display_name: displayName,
         photo_url:    photoUrl ?? null,
         elo_rating:   1000,
@@ -287,6 +316,13 @@ export async function ensureAuthUserWithProvider(
         games_won:    0,
         games_lost:   0,
         badges:       [],
+        // UX Phase 1：per-provider email slot。
+        googleEmail:  provider === 'google'  ? emailTrim : null,
+        discordEmail: provider === 'discord' ? emailTrim : null,
+        lineEmail:    provider === 'line'    ? emailTrim : null,
+        emailOnly:    null,
+        primaryEmail:       emailTrim ?? null,
+        primaryEmailLower:  emailTrim ? emailTrim.toLowerCase() : null,
         createdAt:    now,
         updatedAt:    now,
       });
@@ -308,11 +344,17 @@ export async function ensureAuthUserWithProvider(
 /**
  * Bind a provider identity to an existing user doc.
  * Returns false when the user doc is missing or the update fails.
+ *
+ * 2026-04-24 UX Phase 1：新增 optional `email` 參數；傳入時會同步寫對應
+ * per-provider email 欄位（googleEmail / discordEmail / lineEmail），並重算
+ * `primaryEmail`（google > discord > emailOnly 優先序）。舊 caller 不傳 email
+ * 仍可呼叫（只寫 externalId，primaryEmail 不動）。
  */
 export async function linkProviderIdentity(
   userId:     string,
   provider:   LinkProvider,
   externalId: string,
+  email?:     string,
 ): Promise<boolean> {
   const db = getFirestoreSafe();
   if (!db) return false;
@@ -321,12 +363,62 @@ export async function linkProviderIdentity(
     const ref  = db.collection(AUTH_USERS).doc(userId);
     const snap = await ref.get();
     if (!snap.exists) return false;
-    await ref.update({ [col]: externalId, updatedAt: Date.now() });
+    const patch: Record<string, unknown> = { [col]: externalId, updatedAt: Date.now() };
+
+    // 2026-04-24 UX Phase 1：若 caller 帶 email，寫 per-provider email 欄位並重算 primaryEmail。
+    if (typeof email === 'string' && email.trim().length > 0) {
+      const providerEmailField: 'googleEmail' | 'discordEmail' | 'lineEmail' =
+        provider === 'google' ? 'googleEmail'
+        : provider === 'discord' ? 'discordEmail'
+        : 'lineEmail';
+      patch[providerEmailField] = email.trim();
+
+      const data = (snap.data() ?? {}) as {
+        googleEmail?:  string | null;
+        discordEmail?: string | null;
+        lineEmail?:    string | null;
+        emailOnly?:    string | null;
+        primaryEmail?: string;
+      };
+      const merged = {
+        googleEmail:  provider === 'google'  ? email.trim() : data.googleEmail,
+        discordEmail: provider === 'discord' ? email.trim() : data.discordEmail,
+        lineEmail:    provider === 'line'    ? email.trim() : data.lineEmail,
+        emailOnly:    data.emailOnly,
+      };
+      const next = recomputePrimaryEmailPure(merged);
+      if (next && next !== data.primaryEmail) {
+        patch.primaryEmail      = next;
+        patch.primaryEmailLower = next.toLowerCase();
+        // 同步更新 legacy `email` 欄位，保持舊 getLinkedAccounts display_label 正確。
+        patch.email             = next;
+      }
+    }
+
+    await ref.update(patch);
     return true;
   } catch (err) {
     console.error('[firestoreAccounts] linkProviderIdentity error:', err);
     return false;
   }
+}
+
+/**
+ * Pure primary email 計算（內部副本，避免 firestoreAccounts → firestoreAuthAccounts
+ * 的 import 循環風險）。優先序 google > discord > emailOnly（LINE 不作 fallback）。
+ */
+function recomputePrimaryEmailPure(user: {
+  googleEmail?:  string | null;
+  discordEmail?: string | null;
+  lineEmail?:    string | null;
+  emailOnly?:    string | null;
+}): string | null {
+  const pick = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+  return pick(user.googleEmail)
+      ?? pick(user.discordEmail)
+      ?? pick(user.emailOnly)
+      ?? null;
 }
 
 /**
