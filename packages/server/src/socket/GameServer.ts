@@ -1391,12 +1391,53 @@ export class GameServer {
           const leaderId = engine.getCurrentLeaderId();
           const leader = r.players[leaderId];
           if (leader?.isBot) {
-            const agent = this.botAgents.get(leaderId);
-            if (!agent) return;
-            const obs = this.buildBotObservation(r, leaderId, engine, 'team_select');
-            const action = agent.act(obs);
-            if (action.type !== 'team_select') return;
-            engine.selectQuestTeam(action.teamIds);
+            // Fallback: if anything in the AI agent path blows up (agent missing,
+            // wrong action type, illegal teamIds, etc.) we MUST still advance the
+            // game. The previous code silently `return`ed and left the room
+            // hanging on the bot leader's turn — #bug "AI 選人卡住" (2026-04-24).
+            const pickFallbackTeam = (): string[] => {
+              const pcount = Object.keys(r.players).length;
+              const cfg = AVALON_CONFIG[pcount];
+              const size = cfg?.questTeams[r.currentRound - 1] ?? 2;
+              const ids = Object.keys(r.players);
+              // Leader goes first so the team is at least plausible.
+              const ordered = [leaderId, ...ids.filter(id => id !== leaderId)];
+              return ordered.slice(0, size);
+            };
+
+            let chosenTeam: string[] | null = null;
+            try {
+              const agent = this.botAgents.get(leaderId);
+              if (agent) {
+                const obs = this.buildBotObservation(r, leaderId, engine, 'team_select');
+                const action = agent.act(obs);
+                if (action.type === 'team_select' && Array.isArray(action.teamIds) && action.teamIds.length > 0) {
+                  chosenTeam = action.teamIds;
+                }
+              }
+            } catch (agentErr) {
+              console.error(`[bot] Agent threw in selectTeam for ${leaderId} in room ${roomId}:`, agentErr);
+            }
+
+            if (!chosenTeam) {
+              chosenTeam = pickFallbackTeam();
+              console.warn(`[bot] Using fallback team for bot leader ${leaderId} in room ${roomId}: ${chosenTeam.join(',')}`);
+            }
+
+            try {
+              engine.selectQuestTeam(chosenTeam);
+            } catch (selectErr) {
+              // selectQuestTeam can throw on wrong size / unknown id. Retry with fallback.
+              console.error(`[bot] selectQuestTeam rejected AI pick for ${leaderId} in room ${roomId}:`, selectErr);
+              const safe = pickFallbackTeam();
+              try {
+                engine.selectQuestTeam(safe);
+              } catch (safeErr) {
+                console.error(`[bot] Fallback selectQuestTeam also failed in room ${roomId}:`, safeErr);
+                return; // truly unrecoverable; leave for operator intervention
+              }
+            }
+
             const updated = this.roomManager.getRoom(roomId)!;
             this.broadcastRoomState(roomId, updated);
             this.scheduleBotActions(roomId); // schedule voting bots

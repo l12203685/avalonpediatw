@@ -275,7 +275,11 @@
     "autoSelectHint": "逾時未選 → 系統自動代選隊員進入投票",
     "countdownLabel": "組隊倒數 (Team-select countdown)",
     "leaderChangedBanner": "🔁 新隊長：{{name}}",
-    "leaderChangedHint": "上次組隊被否決，換人組隊。"
+    "leaderChangedHint": "上次組隊被否決,換人組隊。",
+    "toolbarSelected": "已選 {{selected}}/{{total}} 名隊員",
+    "toolbarClear": "清空",
+    "toolbarConfirm": "✅ 確認隊伍送出",
+    "shieldHint": "點擊玩家頭像加入/移除隊伍"
   },
   "roleReveal": {
     "evilBadge": "🔴 邪惡方 (Evil)",

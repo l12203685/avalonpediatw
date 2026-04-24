@@ -275,7 +275,11 @@
     "autoSelectHint": "If time runs out, the system auto-selects a team and moves to vote",
     "countdownLabel": "Team-select countdown",
     "leaderChangedBanner": "🔁 New leader: {{name}}",
-    "leaderChangedHint": "Previous team was rejected — a new leader is picking."
+    "leaderChangedHint": "Previous team was rejected — a new leader is picking.",
+    "toolbarSelected": "Selected {{selected}}/{{total}} members",
+    "toolbarClear": "Clear",
+    "toolbarConfirm": "✅ Confirm & Submit Team",
+    "shieldHint": "Tap a player card to add/remove from team"
   },
   "roleReveal": {
     "evilBadge": "🔴 Evil",
