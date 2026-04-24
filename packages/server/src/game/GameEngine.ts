@@ -130,6 +130,14 @@ export class GameEngine {
       throw new Error(`Invalid player count: ${playerCount}. Must be between 5-10`);
     }
 
+    // Randomize seat order (Edward 2026-04-24): host should NOT always be
+    // seat 1. Rebuild `room.players` with a Fisher-Yates shuffled key order
+    // so every downstream reader of `Object.keys(room.players)` (seat index,
+    // first leader, Lady of the Lake start seat, scoresheet display) sees a
+    // random arrangement. The Player objects themselves are not mutated —
+    // only the insertion order of the record is re-keyed.
+    this.shufflePlayerSeats();
+
     // Compute effective quest sizes once per game so downstream logic never
     // mutates the shared AVALON_CONFIG object. Honours `swapR1R2` and the
     // 9-player `oberonMandatory` variant.
@@ -154,14 +162,16 @@ export class GameEngine {
     this.currentLeaderIndex = 0;
     this.voteAttemptInRound = 0;
 
-    // Lady of the Lake: pure read of the host-configured flag (Edward
-    // 2026-04-21 "進階規則完整實作"). The UI is responsible for computing
-    // the canonical default (7+ players & Mordred on → pre-check true) and
-    // sending the resolved boolean. Engine no longer implicitly flips it —
-    // but the <7-player hard lockout (official Avalon rule: Lady only
-    // exists in 7+ player games) remains engine-enforced so an errant UI
-    // or socket cannot activate Lady in a 5/6-player game.
-    const ladyRequested = this.room.roleOptions?.ladyOfTheLake === true;
+    // Lady of the Lake (Edward 2026-04-24 "8 人以上預設勾選"):
+    //   - explicit true  → on (host opted in)
+    //   - explicit false → off (host opted out — always honoured)
+    //   - undefined      → auto-on when playerCount ≥ 8, off otherwise
+    // The <7-player hard lockout stays engine-enforced (official Avalon
+    // rule: Lady only exists in 7+ player games) so an errant UI or
+    // socket cannot activate Lady in a 5/6-player game.
+    const ladyFlag = this.room.roleOptions?.ladyOfTheLake;
+    const ladyRequested = ladyFlag === true
+      || (ladyFlag === undefined && playerCount >= 8);
     const ladyEnabled = ladyRequested && playerCount >= 7;
     this.room.ladyOfTheLakeEnabled = ladyEnabled;
     if (ladyEnabled) {
@@ -1108,6 +1118,32 @@ export class GameEngine {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
+  }
+
+  /**
+   * Randomize the seat order by rebuilding `room.players` with a Fisher-Yates
+   * shuffled key order. Seat number in this codebase is derived from
+   * `Object.keys(room.players)` insertion order + 1, so re-keying the record
+   * is sufficient to randomize every downstream consumer (first leader, Lady
+   * of the Lake start seat, scoresheet badges, nomination shorthand).
+   *
+   * Player objects themselves are NOT cloned or mutated — only the container
+   * `room.players` is replaced with a fresh Record whose keys are inserted in
+   * shuffled order. This preserves any external references to individual
+   * Player objects (sockets, bot adapters) that hold them by id.
+   *
+   * Called once per game at the top of `startGame()`. See Edward 2026-04-24
+   * "起始位置應該要隨機 而不是房主永遠1家 所有人都要隨機".
+   */
+  private shufflePlayerSeats(): void {
+    const ids = Object.keys(this.room.players);
+    if (ids.length <= 1) return;
+    const shuffledIds = this.shuffleArray(ids);
+    const reordered: Record<string, typeof this.room.players[string]> = {};
+    for (const id of shuffledIds) {
+      reordered[id] = this.room.players[id];
+    }
+    this.room.players = reordered;
   }
 
   public getRoom(): Room {

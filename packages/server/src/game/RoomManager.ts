@@ -67,14 +67,19 @@ export class RoomManager {
       questVotedCount: 0,
       // Canonical 7-role defaults. All four evil-role toggles on so the
       // role pool for 7+ player games is drawn from the canonical 7 and
-      // never falls back to the legacy 'minion' substitute. Lady of the
-      // Lake is explicitly disabled (scope lock — see CANONICAL_ROLES).
+      // never falls back to the legacy 'minion' substitute.
+      //
+      // Lady of the Lake: field intentionally omitted so it stays
+      // `undefined` at room creation. This is the "host has not touched
+      // the toggle yet" signal used by the lobby UI + the engine's
+      // auto-default: ≥ 8 players → Lady ON unless host explicitly
+      // opts out by unchecking the toggle (which persists `false`).
+      // (Edward 2026-04-24: "8 人以上預設勾選".)
       roleOptions: {
         percival: true,
         morgana: true,
         oberon: true,
         mordred: true,
-        ladyOfTheLake: false,
         // Oberon-must-fail house rule — default off so the canonical
         // Avalon ruleset is unchanged unless the host explicitly enables
         // the variant in the lobby.

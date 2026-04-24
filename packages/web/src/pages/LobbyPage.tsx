@@ -165,14 +165,15 @@ export default function LobbyPage(): JSX.Element {
     setRoleOptions(room.id, { [key]: value });
   };
 
-  // #90 Part 2 — UI-side "canonical default" for Lady of the Lake: when
-  // the host has NOT explicitly set ladyOfTheLake (undefined), and the
-  // table is 7+ players AND Mordred is enabled, the pre-check should be
-  // ON. Explicit false wins — we only auto-derive when the field is
-  // untouched. Checking `typeof ... === 'undefined'` keeps the
-  // "intentional off" signal working.
+  // Lady of the Lake default (Edward 2026-04-24 "8 人以上預設勾選"):
+  //   - host has NOT touched the toggle (field undefined) → auto-on at
+  //     playerCount ≥ 8, off otherwise
+  //   - explicit false → off (host opted out)
+  //   - explicit true  → on (host opted in)
+  // Mirrors GameEngine.startGame so the lobby preview matches the
+  // value the engine will resolve when the game actually starts.
   const ladyFieldUndefined = typeof ((room.roleOptions as unknown) as Record<string, unknown>)?.ladyOfTheLake === 'undefined';
-  const ladyDefaultOn = ladyFieldUndefined && playerList.length >= 7 && Boolean(room.roleOptions?.mordred);
+  const ladyDefaultOn = ladyFieldUndefined && playerList.length >= 8;
   const ladyChecked = ladyFieldUndefined
     ? ladyDefaultOn
     : Boolean(room.roleOptions?.ladyOfTheLake);
@@ -286,7 +287,7 @@ export default function LobbyPage(): JSX.Element {
                         <p className="text-xs text-gray-500 leading-tight mt-0.5">
                           任務 2 起輪流互查陣營；可公開宣告或保持沉默
                           {ladyFieldUndefined && ladyDefaultOn && (
-                            <span className="text-amber-400 ml-1">(預設開啟：7+ 人且啟用莫德雷德)</span>
+                            <span className="text-amber-400 ml-1">(預設開啟：8 人以上)</span>
                           )}
                         </p>
                       </div>

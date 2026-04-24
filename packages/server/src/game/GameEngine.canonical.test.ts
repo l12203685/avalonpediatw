@@ -184,14 +184,14 @@ describe('Canonical 7-role scope lock', () => {
     });
   });
 
-  describe('Lady of the Lake — 7+ ON by default, explicit opt-out honoured', () => {
-    it('RoomManager.createRoom leaves ladyOfTheLake flag set to false (UI explicit opt-out baseline)', () => {
-      // RoomManager still seeds the flag as false so the lobby UI can render
-      // a de-selected toggle by default. The engine's 7+ default-ON policy
-      // is independent of this seed value — see startGame() lady logic.
+  describe('Lady of the Lake — 8+ ON by default, explicit opt-out honoured (Edward 2026-04-24)', () => {
+    it('RoomManager.createRoom leaves ladyOfTheLake flag undefined (host-has-not-touched signal)', () => {
+      // RoomManager omits the flag at creation so the engine + lobby UI
+      // can distinguish "host never touched the toggle" (undefined →
+      // auto-on for 8+) from "host explicitly opted out" (false → off).
       const rm = new RoomManager();
       const room = rm.createRoom('r1', 'Alice', 'p1');
-      expect(room.roleOptions?.ladyOfTheLake).toBe(false);
+      expect(room.roleOptions?.ladyOfTheLake).toBeUndefined();
       rm.destroy();
     });
 
@@ -205,22 +205,56 @@ describe('Canonical 7-role scope lock', () => {
       rm.destroy();
     });
 
-    it('startGame honours explicit ladyOfTheLake=false opt-out for 7+ player games', () => {
-      // When the host explicitly disables Lady via the lobby toggle, Lady
-      // stays off even at 7+ players.
-      const room = makeRoom(7); // uses default ladyOfTheLake: false
+    it('startGame honours explicit ladyOfTheLake=false opt-out even for 8+ player games', () => {
+      // When the host explicitly unchecks the toggle (false), Lady stays
+      // off regardless of player count.
+      for (const count of [7, 8, 9, 10]) {
+        const room = makeRoom(count); // uses helper default ladyOfTheLake: false
+        const engine = new GameEngine(room);
+        engine.startGame();
+        expect(room.ladyOfTheLakeEnabled).toBe(false);
+        expect(room.ladyOfTheLakeHolder).toBeUndefined();
+        engine.cleanup();
+      }
+    });
+
+    it('startGame auto-enables Lady of the Lake for 8+ players when the flag is undefined', () => {
+      // Edward 2026-04-24 "8 人以上預設勾選": missing ladyOfTheLake flag
+      // + playerCount ≥ 8 → auto-on (no explicit host opt-in needed).
+      for (const count of [8, 9, 10]) {
+        const room = makeRoom(count, {
+          percival: true,
+          morgana: true,
+          oberon: true,
+          mordred: true,
+          // ladyOfTheLake intentionally omitted → auto-on at 8+
+        });
+        const engine = new GameEngine(room);
+        engine.startGame();
+        expect(room.ladyOfTheLakeEnabled).toBe(true);
+        expect(room.ladyOfTheLakeHolder).toBeDefined();
+        engine.cleanup();
+      }
+    });
+
+    it('startGame keeps Lady of the Lake OFF for 7-player games when flag is undefined', () => {
+      // Auto-default is 8+; a 7-player game needs explicit opt-in.
+      const room = makeRoom(7, {
+        percival: true,
+        morgana: true,
+        oberon: true,
+        mordred: true,
+        // ladyOfTheLake intentionally omitted
+      });
       const engine = new GameEngine(room);
       engine.startGame();
       expect(room.ladyOfTheLakeEnabled).toBe(false);
-      expect(room.ladyOfTheLakeHolder).toBeUndefined();
       engine.cleanup();
     });
 
-    it('startGame keeps Lady of the Lake OFF when roleOptions is missing entirely (pure-read #90)', () => {
-      // After #90 the engine performs a pure read of ladyOfTheLake; the
-      // UI is now responsible for computing the canonical default
-      // (7+ players & Mordred on → pre-check true) and sending the
-      // resolved boolean. "Missing roleOptions" = host sent nothing → off.
+    it('startGame keeps Lady of the Lake OFF when roleOptions is missing entirely for 7-player games', () => {
+      // With no roleOptions at all, engine falls back to the "host sent
+      // nothing" path. 7 players → stays off (below 8+ auto-default).
       const room = makeRoom(7);
       delete (room as Partial<Room>).roleOptions;
       const engine = new GameEngine(room);
@@ -229,20 +263,15 @@ describe('Canonical 7-role scope lock', () => {
       engine.cleanup();
     });
 
-    it('startGame keeps Lady of the Lake OFF for 7+ players when not explicitly enabled (pure-read #90)', () => {
-      // Same pure-read semantics: without ladyOfTheLake: true in
-      // roleOptions, engine leaves it off regardless of player count.
-      for (const count of [7, 8, 9, 10]) {
-        const room = makeRoom(count, {
-          percival: true,
-          morgana: true,
-          oberon: true,
-          mordred: true,
-          // ladyOfTheLake intentionally omitted — pure-read → off.
-        });
+    it('startGame auto-enables Lady of the Lake when roleOptions is missing entirely for 8+ player games', () => {
+      // Mirror of the undefined-flag rule — absent roleOptions also
+      // leaves ladyOfTheLake undefined, which triggers 8+ auto-on.
+      for (const count of [8, 9, 10]) {
+        const room = makeRoom(count);
+        delete (room as Partial<Room>).roleOptions;
         const engine = new GameEngine(room);
         engine.startGame();
-        expect(room.ladyOfTheLakeEnabled).toBe(false);
+        expect(room.ladyOfTheLakeEnabled).toBe(true);
         engine.cleanup();
       }
     });
