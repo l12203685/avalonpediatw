@@ -34,7 +34,6 @@ import AdminImportPage from './pages/AdminImportPage';
 import AdminEloPage from './pages/AdminEloPage';
 import HelpPage from './pages/HelpPage';
 import ToastContainer from './components/ToastContainer';
-import FloatingControls from './components/FloatingControls';
 import { submitError } from './services/api';
 
 function App(): JSX.Element {
@@ -356,8 +355,6 @@ function App(): JSX.Element {
         </>
       )}
       <ToastContainer />
-      {/* Global floating controls — audio, theme & feedback, always accessible */}
-      {currentPlayer && <FloatingControls />}
     </div>
   );
 }

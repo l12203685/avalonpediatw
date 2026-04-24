@@ -344,8 +344,8 @@ export default function ProfilePage(): JSX.Element {
       const updated = await updateMyProfile(token, patch);
       setProfile(updated);
       // 2026-04-23 bind-name-sync：把新 display_name / photo_url 同步到 gameStore
-      // 的 currentPlayer，讓 SettingsPage / Header / FloatingControls 等地方
-      // 立刻顯示新名稱，不用等 socket 重連（上次 Edward 回報改名後 UI 沒同步）。
+      // 的 currentPlayer，讓 SettingsPage / Header 等地方立刻顯示新名稱，不用
+      // 等 socket 重連（上次 Edward 回報改名後 UI 沒同步）。
       if (currentPlayer && (patch.display_name !== undefined || patch.photo_url !== undefined)) {
         setCurrentPlayer({
           ...currentPlayer,

@@ -46,9 +46,8 @@ export default function PersistentNightInfoPanel({
   const isEvil = info.team === 'evil';
   const hasNightInfo = role !== 'loyal' && role !== 'oberon';
 
-  // Positioned at bottom-left but lifted above the FloatingControls FAB (which
-  // sits at bottom-6 left-6 with a ~56px button). Stacking the night-info
-  // panel above it keeps both accessible without tap-target collisions.
+  // Positioned at bottom-left with some lift off the viewport edge so the
+  // panel stays clear of mobile home indicators / safe-area insets.
   return (
     <div className="fixed bottom-20 left-4 z-40 max-w-[calc(100vw-2rem)] sm:max-w-xs">
       <motion.div
