@@ -22,6 +22,14 @@ import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import PublicChatPanel from '../components/PublicChatPanel';
 import BrandHeader from '../components/BrandHeader';
+import IdentityBadge from '../components/IdentityBadge';
+import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
+
+function isGuestPlayer(player: { name?: string; provider?: string } | null | undefined): boolean {
+  if (!player) return true;
+  if (player.provider) return player.provider === 'guest';
+  return /^Guest_\d{3,}$/i.test(player.name ?? '');
+}
 
 interface OpenRoom {
   id: string;
@@ -47,6 +55,28 @@ export default function HomePage(): JSX.Element {
   const [joinPassword, setJoinPassword] = useState('');
   const [pendingJoinRoom, setPendingJoinRoom] = useState<OpenRoom | null>(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
+  // 2026-04-24 #ux-phase-2 (hineko_20260424_1040): auth gate for Row 2
+  // buttons that need an identity (個人戰績 / 登入綁定).
+  const [authGateTarget, setAuthGateTarget] = useState<AuthGateTarget | null>(null);
+
+  // After an OAuth reload, check where the user was heading and route them there.
+  useEffect(() => {
+    const target = localStorage.getItem('pendingGateTarget') as AuthGateTarget | null;
+    if (!target) return;
+    if (isGuestPlayer(currentPlayer)) return; // still guest → keep waiting
+    localStorage.removeItem('pendingGateTarget');
+    if (target === 'stats') setGameState('personalStats');
+    else if (target === 'settings') setGameState('settings');
+    // 'chat' handled by Phase 3 (lobby chat gate) — ignored here.
+  }, [currentPlayer, setGameState]);
+
+  const tryGatedNavigate = (target: AuthGateTarget, proceed: () => void): void => {
+    if (isGuestPlayer(currentPlayer)) {
+      setAuthGateTarget(target);
+      return;
+    }
+    proceed();
+  };
   // Per-room phase-timer multiplier (1x default). null = unlimited.
   const [timerMultiplier, setTimerMultiplier] = useState<TimerMultiplier>(1);
 
@@ -174,7 +204,8 @@ export default function HomePage(): JSX.Element {
       <div className="flex items-start sm:items-center justify-center min-h-screen relative z-10 pt-16 sm:pt-0">
         {/* Top-right controls — language only. Logout / Profile / Admin 全部搬到資料設定頁。
             改 fixed 避免手機上 absolute 佔據 container 寬度把右側按鈕擠出螢幕。 */}
-        <div className="fixed top-3 right-3 sm:top-6 sm:right-6 z-30">
+        <div className="fixed top-3 right-3 sm:top-6 sm:right-6 z-30 flex items-center gap-2">
+          <IdentityBadge />
           <LanguageSwitcher />
         </div>
 
@@ -248,7 +279,7 @@ export default function HomePage(): JSX.Element {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setGameState('personalStats')}
+                      onClick={() => tryGatedNavigate('stats', () => setGameState('personalStats'))}
                       data-testid="home-btn-personal-stats"
                       className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-md text-sm sm:text-base"
                     >
@@ -275,12 +306,12 @@ export default function HomePage(): JSX.Element {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setGameState('settings')}
+                      onClick={() => tryGatedNavigate('settings', () => setGameState('settings'))}
                       data-testid="home-btn-settings"
                       className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
                       <Settings size={18} className="flex-shrink-0" />
-                      <span className="truncate">{t('home.settings')}</span>
+                      <span className="truncate">{t('home.binding', { defaultValue: '登入綁定' })}</span>
                     </motion.button>
                   </div>
 
@@ -505,6 +536,15 @@ export default function HomePage(): JSX.Element {
             </div>
           )}
         </div>
+
+        {/* 2026-04-24 #ux-phase-2 auth gate modal (shared by 個人戰績 +
+            登入綁定 buttons). Lives at HomePage root so only one instance
+            mounts regardless of which Row 2 button triggered it. */}
+        <AuthGateModal
+          isOpen={authGateTarget !== null}
+          onClose={() => setAuthGateTarget(null)}
+          gateTarget={authGateTarget ?? 'stats'}
+        />
 
         {/* 2026-04-24 #cache-upgrade: low-weight escape hatch for users
             who are stuck on a stale bundle but haven't triggered the

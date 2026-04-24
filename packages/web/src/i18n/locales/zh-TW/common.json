@@ -25,8 +25,22 @@
     "analytics": "數據分析",
     "profileSettings": "資料設定",
     "settings": "系統設定",
+    "binding": "登入綁定",
     "personalStats": "個人戰績",
     "admin": "管理"
+  },
+  "gate": {
+    "modalTitle": "登入以繼續",
+    "modalHint": "這個功能需要登入帳號，綁定後戰績自動保存",
+    "backToLobby": "回大廳",
+    "emailOption": "Email（即將開放）",
+    "emailComingSoon": "Email 綁定即將開放，請先用 Google / Discord / LINE",
+    "or": "或"
+  },
+  "badge": {
+    "guest": "訪客",
+    "guestHint": "訪客模式 · 點大廳按鈕綁定保留戰績",
+    "primaryProvider": "以 {{provider}} 為主"
   },
   "auth": {
     "login": "登入",
@@ -65,6 +79,7 @@
     "profileSettings": "資料設定",
     "stats": "數據排行",
     "settings": "系統設定",
+    "binding": "登入綁定",
     "currentAs": "當前：{{name}}",
     "faq": "FAQ",
     "lobbyChat": "大廳聊天",

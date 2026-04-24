@@ -25,8 +25,22 @@
     "analytics": "Analytics",
     "profileSettings": "Settings",
     "settings": "System Settings",
+    "binding": "Account Binding",
     "personalStats": "Personal Stats",
     "admin": "Admin"
+  },
+  "gate": {
+    "modalTitle": "Sign in to continue",
+    "modalHint": "This feature needs a signed-in account — bind now so your stats carry over",
+    "backToLobby": "Back to lobby",
+    "emailOption": "Email (coming soon)",
+    "emailComingSoon": "Email binding is coming soon — use Google / Discord / LINE for now",
+    "or": "or"
+  },
+  "badge": {
+    "guest": "Guest",
+    "guestHint": "Guest mode · tap a lobby button to bind and keep your stats",
+    "primaryProvider": "Primary: {{provider}}"
   },
   "auth": {
     "login": "Login",
@@ -65,6 +79,7 @@
     "profileSettings": "Settings",
     "stats": "Leaderboard",
     "settings": "System Settings",
+    "binding": "Account Binding",
     "currentAs": "Current: {{name}}",
     "faq": "FAQ",
     "lobbyChat": "Lobby Chat",

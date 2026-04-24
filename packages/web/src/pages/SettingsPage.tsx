@@ -300,7 +300,7 @@ export default function SettingsPage(): JSX.Element {
           >
             <ArrowLeft size={20} />
           </motion.button>
-          <h1 className="text-2xl font-black text-white flex-1">{t('nav.settings')}</h1>
+          <h1 className="text-2xl font-black text-white flex-1">{t('nav.binding', { defaultValue: '登入綁定' })}</h1>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
