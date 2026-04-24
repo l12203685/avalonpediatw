@@ -1,6 +1,7 @@
 import { createServer } from 'http';
 import express, { Express } from 'express';
 import cors from 'cors';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 import { Server as SocketIOServer } from 'socket.io';
 import { initializeFirebase } from './services/firebase';
 import { isSupabaseReady } from './services/supabase';
@@ -38,6 +39,25 @@ const CORS_ORIGIN: string | string[] | true = process.env.CORS_ORIGIN
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
+
+// ── Reverse proxy: /line/* → edward-listen-bot on localhost:5678 ──────────────
+// Shares the avalon ngrok tunnel so edward-listen-bot can receive LINE webhooks
+// without needing its own tunnel (free ngrok only allows 1 channel).
+// MUST be mounted BEFORE express.json() so the raw request body reaches the
+// LINE bot unchanged — LINE signature verification depends on exact byte match.
+// Using v3 pathFilter (instead of app.use('/line', ...)) so the full original
+// URL (/line/webhook/<bot>) is forwarded — with app.use mount, req.url is
+// stripped of the mount prefix and Flask returns 404.
+const LISTEN_BOT_TARGET =
+  process.env.LISTEN_BOT_TARGET || 'http://localhost:5678';
+app.use(
+  createProxyMiddleware({
+    target: LISTEN_BOT_TARGET,
+    changeOrigin: false,
+    pathFilter: '/line/**',
+  })
+);
+
 app.use(express.json());
 
 // OAuth routes（不需要 Socket 認證，掛在 Socket 之前）
