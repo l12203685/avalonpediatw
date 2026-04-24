@@ -11,8 +11,15 @@
  *   - 一天更新一次（非 realtime），存 `computed_stats/{playerId}` 配 `lastComputedGameId`
  *   - 增量重算：新戰績進 → 對該玩家重算（backend 的 repo 處理）
  *   - 全玩家入排行榜，按分類顯示
- *   - 分類門檻：菜雞 <800 / 初學 800-999 / 新手 1000-1199 / 中堅 1200-1399 / 高手 1400-1599 / 大師 ≥1600
- *     另需 `totalGames >= minGames` 門檻（預設 10 場）；未達門檻 → 'unranked'
+ *
+ * Edward 2026-04-24 13:37：分類門檻改用 **場次** 不是 ELO：
+ *   - 菜雞：totalGames < 50
+ *   - 初學：50 ≤ totalGames < 100
+ *   - 新手：100 ≤ totalGames < 150
+ *   - 中堅：150 ≤ totalGames < 200
+ *   - 高手：200 ≤ totalGames < 250
+ *   - 大師：totalGames ≥ 250
+ *   每個 tier 內部按 ELO 排序。全玩家都進排行榜（大部分在菜雞/初學）。
  */
 
 import { AVALON_CONFIG, type Role, type Team } from '../types/game';
@@ -29,9 +36,8 @@ import type {
 export type PlayerId = string;
 export type Seat = number;
 
-/** 玩家分類門檻。Tier key 用繁中直接對應 Edward 用語。 */
+/** 玩家分類（低→高）。門檻以 **總場次** 判定，Edward 2026-04-24 13:37 拍板。 */
 export type PlayerTier =
-  | 'unranked'   // 場次不足
   | '菜雞'
   | '初學'
   | '新手'
@@ -602,31 +608,53 @@ export function computeELO(
 
 export interface TierThreshold {
   tier: PlayerTier;
-  minElo: number;
+  /** 該 tier 的 **總場次** 下限（包含）。 */
+  minGames: number;
 }
 
-/** Tier 門檻（低 → 高）。Edward 指示：菜雞/初學/新手/中堅/高手/大師。 */
+/**
+ * Tier 門檻（低 → 高）。Edward 2026-04-24 13:37：用 **場次** 不是 ELO。
+ *
+ *   菜雞: games < 50
+ *   初學: 50 ≤ games < 100
+ *   新手: 100 ≤ games < 150
+ *   中堅: 150 ≤ games < 200
+ *   高手: 200 ≤ games < 250
+ *   大師: games ≥ 250
+ */
 export const TIER_THRESHOLDS: TierThreshold[] = [
-  { tier: '菜雞', minElo: 0 },
-  { tier: '初學', minElo: 800 },
-  { tier: '新手', minElo: 1000 },
-  { tier: '中堅', minElo: 1200 },
-  { tier: '高手', minElo: 1400 },
-  { tier: '大師', minElo: 1600 },
+  { tier: '菜雞', minGames: 0 },
+  { tier: '初學', minGames: 50 },
+  { tier: '新手', minGames: 100 },
+  { tier: '中堅', minGames: 150 },
+  { tier: '高手', minGames: 200 },
+  { tier: '大師', minGames: 250 },
 ];
 
-/** 場次門檻：低於此門檻即視為 'unranked'。 */
-export const TIER_MIN_GAMES = 10;
+/**
+ * 保留常數以維持相容（已不用於 tier 判定，但 server 端有 re-export）。
+ * Edward 2026-04-24 明確刪掉 `< 10 場 unranked` 規則 → 常數僅作歷史佔位，值設 0
+ * 代表「無場次下限門檻」— 全玩家都入排行榜，最低進菜雞。
+ */
+export const TIER_MIN_GAMES = 0;
 
+/**
+ * 依 **總場次** 決定玩家 tier。
+ *
+ * @param elo            保留在 signature 中以相容舊呼叫端；tier 判定已不使用 ELO。
+ * @param totalGames     玩家總場次
+ * @param _minGames      legacy override（目前無效，保留以不破壞呼叫端）
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function computeTier(
   elo: number,
   totalGames: number,
-  minGames = TIER_MIN_GAMES,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _minGames: number = TIER_MIN_GAMES,
 ): PlayerTier {
-  if (totalGames < minGames) return 'unranked';
   let tier: PlayerTier = '菜雞';
   for (const t of TIER_THRESHOLDS) {
-    if (elo >= t.minElo) tier = t.tier;
+    if (totalGames >= t.minGames) tier = t.tier;
   }
   return tier;
 }
@@ -635,11 +663,14 @@ export function computeTier(
 // 9. 按分類排行榜
 // ---------------------------------------------------------------------------
 
+/**
+ * 按分類排行榜：先依 `tier` 分組，每組內按 ELO 由高到低排序（同 ELO 時維持
+ * 原順序）。tier-local rank 從 1 開始。全玩家進榜（Edward 2026-04-24）。
+ */
 export function computeLeaderboardByTier(
   stats: ComputedPlayerStatsV2[],
 ): Record<PlayerTier, LeaderboardEntryV2[]> {
   const out: Record<PlayerTier, LeaderboardEntryV2[]> = {
-    unranked: [],
     '菜雞': [],
     '初學': [],
     '新手': [],
@@ -648,25 +679,22 @@ export function computeLeaderboardByTier(
     '大師': [],
   };
 
-  // 全表按 elo 降序
-  const sorted = [...stats].sort((a, b) => b.elo - a.elo);
-
-  let rank = 0;
-  for (const s of sorted) {
-    rank += 1;
+  // 先把每人塞進對應 tier bucket
+  for (const s of stats) {
     const entry: LeaderboardEntryV2 = {
       playerId: s.playerId,
       elo: s.elo,
       tier: s.tier,
       totalGames: s.totalGames,
       winRate: s.winRate.overall,
-      rank,
+      rank: 0, // 稍後填 tier-local rank
     };
     out[s.tier].push(entry);
   }
 
-  // 各 tier 內再給 rank（tier-local rank）
+  // 各 tier 內按 ELO 降序 + 填 tier-local rank（1-based）
   for (const tier of Object.keys(out) as PlayerTier[]) {
+    out[tier].sort((a, b) => b.elo - a.elo);
     out[tier].forEach((e, idx) => {
       e.rank = idx + 1;
     });

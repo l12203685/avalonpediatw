@@ -357,32 +357,56 @@ describe('recomputeEloFromV2', () => {
 // ---------------------------------------------------------------------------
 
 describe('computeTier', () => {
-  it('returns unranked when totalGames < TIER_MIN_GAMES', () => {
-    expect(computeTier(2000, 5)).toBe('unranked');
+  // Edward 2026-04-24 13:37：tier 用 **場次**，不是 ELO。
+  //   菜雞 < 50 / 初學 50-99 / 新手 100-149 / 中堅 150-199 / 高手 200-249 / 大師 ≥ 250
+  // ELO 參數保留僅為 signature 相容。
+
+  it('uses totalGames (not ELO) for tier assignment', () => {
+    // 高 ELO + 低場次 → 仍是菜雞
+    expect(computeTier(9999, 10)).toBe('菜雞');
+    // 低 ELO + 高場次 → 仍是大師
+    expect(computeTier(100, 300)).toBe('大師');
   });
 
-  it('classifies by ELO thresholds', () => {
-    const n = TIER_MIN_GAMES;
-    expect(computeTier(500, n)).toBe('菜雞');
-    expect(computeTier(900, n)).toBe('初學');
-    expect(computeTier(1100, n)).toBe('新手');
-    expect(computeTier(1300, n)).toBe('中堅');
-    expect(computeTier(1500, n)).toBe('高手');
-    expect(computeTier(1700, n)).toBe('大師');
+  it('classifies every band by totalGames thresholds', () => {
+    expect(computeTier(1000, 0)).toBe('菜雞');
+    expect(computeTier(1000, 49)).toBe('菜雞');
+    expect(computeTier(1000, 50)).toBe('初學');
+    expect(computeTier(1000, 99)).toBe('初學');
+    expect(computeTier(1000, 100)).toBe('新手');
+    expect(computeTier(1000, 149)).toBe('新手');
+    expect(computeTier(1000, 150)).toBe('中堅');
+    expect(computeTier(1000, 199)).toBe('中堅');
+    expect(computeTier(1000, 200)).toBe('高手');
+    expect(computeTier(1000, 249)).toBe('高手');
+    expect(computeTier(1000, 250)).toBe('大師');
+    expect(computeTier(1000, 999)).toBe('大師');
   });
 
-  it('respects explicit minGames override', () => {
-    expect(computeTier(1200, 5, 3)).toBe('中堅');
+  it('handles exact threshold edge cases', () => {
+    // 每個 boundary 上下各一
+    expect(computeTier(1000, 49)).toBe('菜雞');
+    expect(computeTier(1000, 50)).toBe('初學');
+    expect(computeTier(1000, 249)).toBe('高手');
+    expect(computeTier(1000, 250)).toBe('大師');
+  });
+
+  it('ignores legacy minGames override parameter', () => {
+    // 場次閾值已寫死；legacy override 不影響結果
+    expect(computeTier(1200, 5, 3)).toBe('菜雞');
+    // TIER_MIN_GAMES 常數應為 0（Edward 刪 unranked 規則）
+    expect(TIER_MIN_GAMES).toBe(0);
   });
 });
 
 describe('computeLeaderboardByTier', () => {
-  it('groups stats by tier and orders by ELO desc', () => {
+  it('groups stats by tier and orders by ELO desc within each tier', () => {
+    // tier 由 totalGames 決定；每 tier 內再按 ELO 降序。
     const stats = [
-      { playerId: 'a', elo: 1700, tier: '大師' as const, totalGames: 20, winRate: { overall: 0.6 } },
-      { playerId: 'b', elo: 1500, tier: '高手' as const, totalGames: 15, winRate: { overall: 0.55 } },
-      { playerId: 'c', elo: 500, tier: '菜雞' as const, totalGames: 12, winRate: { overall: 0.2 } },
-      { playerId: 'd', elo: 1800, tier: '大師' as const, totalGames: 30, winRate: { overall: 0.7 } },
+      { playerId: 'a', elo: 1700, tier: '大師' as const, totalGames: 260, winRate: { overall: 0.6 } },
+      { playerId: 'b', elo: 1500, tier: '高手' as const, totalGames: 210, winRate: { overall: 0.55 } },
+      { playerId: 'c', elo: 500,  tier: '菜雞' as const, totalGames: 12,  winRate: { overall: 0.2  } },
+      { playerId: 'd', elo: 1800, tier: '大師' as const, totalGames: 300, winRate: { overall: 0.7  } },
     ].map((s) => ({
       ...s,
       computedAt: 0,
@@ -404,11 +428,23 @@ describe('computeLeaderboardByTier', () => {
 
     const lb = computeLeaderboardByTier(stats);
     expect(lb['大師']).toHaveLength(2);
-    expect(lb['大師'][0].playerId).toBe('d');   // elo 1800 first
+    expect(lb['大師'][0].playerId).toBe('d');   // elo 1800 first within 大師
     expect(lb['大師'][0].rank).toBe(1);
     expect(lb['大師'][1].playerId).toBe('a');
+    expect(lb['大師'][1].rank).toBe(2);
     expect(lb['高手']).toHaveLength(1);
+    expect(lb['高手'][0].playerId).toBe('b');
     expect(lb['菜雞']).toHaveLength(1);
+    expect(lb['菜雞'][0].playerId).toBe('c');
+  });
+
+  it('covers all six tiers without unranked bucket', () => {
+    const lb = computeLeaderboardByTier([]);
+    expect(Object.keys(lb).sort()).toEqual(
+      ['中堅', '初學', '大師', '新手', '菜雞', '高手'].sort(),
+    );
+    // @ts-expect-error unranked 已刪，存取應為 compile-error；runtime 下為 undefined。
+    expect(lb['unranked']).toBeUndefined();
   });
 });
 
@@ -429,13 +465,14 @@ describe('computePlayerStatsV2', () => {
     expect(stats.tier).toBeDefined();
   });
 
-  it('handles custom initialElo + minGamesForTier', () => {
+  it('assigns 菜雞 tier for low-game players regardless of initialElo', () => {
     const games = [fixtureGoodWins()];
     const stats = computePlayerStatsV2(games, 'uid-alice', {
       initialElo: 1500,
       minGamesForTier: 1,
     });
-    expect(stats.tier).not.toBe('unranked');  // 1 局 + minGamesForTier=1 → 有排名
+    // Edward 2026-04-24：tier 由場次決定；1 局 < 50 → 菜雞
+    expect(stats.tier).toBe('菜雞');
   });
 });
 
