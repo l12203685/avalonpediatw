@@ -115,8 +115,7 @@ function clampRound(round: number): 1 | 2 | 3 | 4 | 5 {
  *
  *   When listening is triggered AND evil player is on the team →
  *     quest_vote MUST be 'fail' (regardless of role, TOP10 baseline,
- *     or "deep cover" heuristics). Oberon is the only exception and
- *     keeps its legacy randomised behaviour.
+ *     or "deep cover" heuristics).
  *
  *   Rationale (Edward verbatim):
  *     - Evil listening (evilWins === 2) → one more fail wins the entire
@@ -126,6 +125,15 @@ function clampRound(round: number): 1 | 2 | 3 | 4 | 5 {
  *       pushes us straight into the assassination phase, where missing
  *       Merlin loses the game. Failing this quest keeps the score at
  *       2-1 and preserves evil's options.
+ *
+ *   Edward 2026-04-24 batch 6 verbatim:
+ *     「紅方或藍方已經聽牌 紅方就不可能躲藏 一定會出任務失敗」
+ *     → Oberon is NO LONGER an exception. Match-point detection reads
+ *       only the public mission score (visible to every player equally).
+ *       Oberon's information asymmetry concerns teammate identity, not
+ *       public game state. At match-point the tactical value of hiding
+ *       collapses to zero for every red player on team. All evil roles
+ *       (Oberon included) force fail.
  *
  *   See `docs/ai/avalon_ai_strategy_baseline.md` §0 for the full spec.
  *
@@ -187,11 +195,16 @@ const USE_EVIL_ROLE_DIFFERENTIATION_FULL = true;
  * - **Main decisions stay shared.** Every role still goes through the
  *   same `voteOnTeam` / `selectTeam` / `voteOnQuest` / `assassinate`
  *   branches. Deltas only nudge the baseline, never replace it.
- * - **Oberon is intentionally excluded** — he is declared independent
- *   (no knownEvils coordination) and stays on whatever legacy path
- *   each method already provides. This matches SSoT §3.2 oberon
- *   description: "can't be counted on to coordinate, treat as a
- *   random variable from other evils' POV."
+ * - **Oberon is intentionally excluded from role-diff deltas** — he is
+ *   declared independent (no knownEvils coordination) and stays on
+ *   whatever legacy path each method already provides for role-specific
+ *   nudges. This matches SSoT §3.2 oberon description: "can't be counted
+ *   on to coordinate, treat as a random variable from other evils' POV."
+ *   NOTE (2026-04-24 batch 6): this exclusion applies only to role-diff
+ *   deltas (ally-inclusion, off-team approve chance, earlyQuestFailBonus).
+ *   The §0 Listening Rule (match-point → force fail) applies to ALL evil
+ *   roles including Oberon — match-point depends only on public mission
+ *   score, which Oberon sees exactly like every other player.
  *
  * Per-role rationale (SSoT §3.2 & §6.14):
  * - **mordred**: invisible to Merlin → can be bold on team comp
@@ -265,6 +278,114 @@ const EVIL_ROLE_STRATEGY_TABLE: Record<string, EvilRoleStrategy> = {
 /** Roles that participate in the role-differentiation layer. Oberon
  *  is intentionally absent — see §3.2 + §6.14 of the strategy doc. */
 const EVIL_DIFFERENTIATION_ROLES = new Set(Object.keys(EVIL_ROLE_STRATEGY_TABLE));
+
+// ── Edward 2026-04-24 batch 7 fix #3 — Oberon 5-point strategy ────
+/**
+ * Edward 2026-04-24 batch 7 verbatim:
+ *   「奧伯倫基本策略
+ *   1. 還沒出過任務前只會投正常票
+ *   2. 前三局有機會出任務必出失敗
+ *   3. 前三局出過任務+讓任務失敗後開始無條件開白球
+ *   4. 第四局有機會出任務且確認有隊友才可出失敗否則出成功
+ *   5. 第五局: 前四局出過任務失敗, 則第五局無條件開白
+ *   ; 前四局沒出過任務失敗則只會投正常黑白球」
+ *
+ * Feature flag. Default `true`. Set `false` to restore pre-batch-7
+ * legacy Oberon path (voted like generic evil, no participation-
+ * conditional rules).
+ */
+const USE_OBERON_STRATEGY = true;
+
+/**
+ * Oberon's public-info context. Oberon has NO knownEvils — he cannot
+ * coordinate with other red players, cannot see them, and other reds
+ * cannot see him. His only information channels are:
+ *   - The public mission record (who was on which team, success/fail)
+ *   - His own participation history (did HE go on a mission, and did
+ *     it fail?)
+ *
+ * `buildOberonContext` derives the three switches Edward's 5 rules
+ * depend on purely from `obs.questHistory` — no private role info
+ * leaks. This keeps the strategy legal (Avalon rules), not cheating.
+ */
+interface OberonContext {
+  /** Did Oberon (self) appear on any prior quest (R1..currentRound-1)? */
+  missionParticipatedBefore: boolean;
+  /** Did any quest Oberon participated on previously result in fail? */
+  failedInMission: boolean;
+  /** Total number of missions that failed publicly so far. */
+  totalMissionFails: number;
+  /** Set of playerIds who appeared on any publicly-failed R1-R3 mission,
+   *  minus self. Used by Rule 4 (R4 "有隊友嫌疑" inference) — these are
+   *  the public-info suspects for teammate presence. */
+  suspectedTeammates: Set<string>;
+}
+
+/**
+ * Build Oberon's public-info context from the observation.
+ *
+ * Strictly uses `obs.questHistory` (and `obs.myPlayerId`) — never
+ * touches `knownEvils` (empty for Oberon anyway) or any private hint.
+ */
+function buildOberonContext(obs: PlayerObservation): OberonContext {
+  const myId = obs.myPlayerId;
+  let missionParticipatedBefore = false;
+  let failedInMission = false;
+  let totalMissionFails = 0;
+  const suspectedTeammates = new Set<string>();
+
+  for (const quest of obs.questHistory) {
+    const onTeam = quest.team.includes(myId);
+    if (onTeam) {
+      missionParticipatedBefore = true;
+      if (quest.result === 'fail') failedInMission = true;
+    }
+    if (quest.result === 'fail') {
+      totalMissionFails++;
+      // R1-R3 failed missions contribute members to the teammate-suspect
+      // pool (Rule 4). R4 quest_history entries wouldn't hurt semantically
+      // (R5 is downstream) but we stick to R1-R3 per Edward's spec
+      // wording "第四局有機會出任務且確認有隊友".
+      if (quest.round <= 3) {
+        for (const pid of quest.team) {
+          if (pid !== myId) suspectedTeammates.add(pid);
+        }
+      }
+    }
+  }
+
+  return {
+    missionParticipatedBefore,
+    failedInMission,
+    totalMissionFails,
+    suspectedTeammates,
+  };
+}
+
+// ── Edward 2026-04-24 batch 7 fix #4 — Blue conservative outer-white ────
+/**
+ * Edward 2026-04-24 batch 7 verbatim:
+ *   「因此藍方不可能隨便開異常外白(會被誤認為奧伯倫)
+ *   相認紅方頂多利用奧伯倫的白球去衝刺隊友 但同時這顆白球也會被抓到是紅方」
+ *
+ * Rationale: in Avalon, Oberon's exclusive strategic move is to
+ * throw outer-white balls (off-team approvals) to protect red teammates.
+ * Any blue player who does the same thing gets read as Oberon by the
+ * table. So blue players should never outer-white casually.
+ *
+ * Batch 4 already hard-zeros blue outer-white in R1-R2. This batch 7
+ * fix #4 extends the suppression into R3+ by pinning the off-team
+ * approve probability to a tiny floor (`BLUE_R3_PLUS_APPROVE_FLOOR`).
+ * Legitimate clean-team approves still happen at `BLUE_R3_PLUS_APPROVE_FLOOR`
+ * rate to avoid degenerate `reject-always → 5-reject auto-loss` in
+ * edge cases, but the rate is small enough that outer-white anomalies
+ * in R3+ essentially disappear from training data.
+ *
+ * Pre-batch-7 R3+ approve rate: data-driven via `getOffTeamRejectRate`,
+ * roughly ~13% approve baseline (1 − 0.87 reject). Post-batch-7: 3%.
+ */
+const BLUE_R3_PLUS_APPROVE_FLOOR = 0.03;
+const USE_BLUE_CONSERVATIVE_OUTER_WHITE_R3 = true;
 
 /**
  * Clamp helper kept inline to avoid a util import.
@@ -728,7 +849,7 @@ export class HeuristicAgent implements AvalonAgent {
   // ── Team Vote ────────────────────────────────────────────────
 
   private voteOnTeam(obs: PlayerObservation): AgentAction {
-    const { proposedTeam, myTeam, myPlayerId, knownEvils, knownWizards, failCount } = obs;
+    const { proposedTeam, myTeam, myPlayerId, myRole, knownEvils, knownWizards, failCount } = obs;
 
     // Edward 2026-04-24 batch 3 fix #2 — forced-mission team vote:
     // on the 5th attempt (failCount === 4), a reject hands the round
@@ -743,6 +864,29 @@ export class HeuristicAgent implements AvalonAgent {
     // Cross-faction gate: applies regardless of team.
     if (failCount >= FORCE_APPROVE_FAIL_COUNT) {
       return { type: 'team_vote', vote: true };
+    }
+
+    // Edward 2026-04-24 batch 7 fix #3 — Oberon 5-point strategy.
+    // Oberon has his OWN voting logic that supersedes the generic
+    // evil branch below. Place this check BEFORE the cross-faction
+    // R1-R2 guard so Oberon's participation-conditional behaviour
+    // (Rule 3 / Rule 5) can produce intentional outer-whites in R4/R5
+    // once the pre-conditions are met. Rules 1/2/5b still yield normal
+    // (non-anomaly) votes so the R1-R2 guard is never actually contradicted.
+    //
+    // Contract (verbatim):
+    //   1. 還沒出過任務前只會投正常票 → on-team approve / off-team reject
+    //   2. 前三局有機會出任務必出失敗 → quest-side (voteOnQuest), not here
+    //   3. 前三局出過任務+讓任務失敗後 → R4/R5 off-team unconditional approve
+    //   5a. R5 + totalMissionFails >= 1 → off-team unconditional approve
+    //   5b. R5 + totalMissionFails === 0 → normal votes only
+    if (
+      USE_OBERON_STRATEGY &&
+      myTeam === 'evil' &&
+      (myRole as string) === 'oberon'
+    ) {
+      const oberonDecision = this.voteOnTeamAsOberon(obs);
+      if (oberonDecision !== null) return oberonDecision;
     }
 
     // Edward 2026-04-24 batch 4 fix #2 — cross-faction R1-R2 anomaly
@@ -825,6 +969,22 @@ export class HeuristicAgent implements AvalonAgent {
         if (hasFailedMember || avgSuspicion > strictThreshold) {
           return { type: 'team_vote', vote: this.applyNoise(false, noise) };
         }
+
+        // Edward 2026-04-24 batch 7 fix #4 — Blue conservative outer-white
+        // in R3+. Edward verbatim「藍方不可能隨便開異常外白(會被誤認為
+        // 奧伯倫)」. Any blue outer-white in R3+ risks being misread as
+        // Oberon's signature play. Pin approve probability to the
+        // conservative floor so outer-white anomalies are essentially
+        // eliminated in R3+ training data while still keeping a tiny
+        // non-zero rate to avoid degenerate 5-reject auto-loss.
+        if (
+          USE_BLUE_CONSERVATIVE_OUTER_WHITE_R3 &&
+          (obs.currentRound ?? 1) >= 3
+        ) {
+          const baselineVote = Math.random() < BLUE_R3_PLUS_APPROVE_FLOOR ? true : false;
+          return { type: 'team_vote', vote: this.applyNoise(baselineVote, noise) };
+        }
+
         // No hard signal → baseline reject probability from historical
         // off-team rejects (L1/L2/L3 rollup, Edward vote rule). Round 1
         // and round 2+ differ sharply (r1 ~0.99, r2+ ~0.87 for expert).
@@ -878,6 +1038,126 @@ export class HeuristicAgent implements AvalonAgent {
     }
   }
 
+  // ── Oberon strategy (Edward 2026-04-24 batch 7 fix #3) ──────────
+
+  /**
+   * Oberon-specific team-vote. Returns `null` if the generic branch
+   * should handle the vote (e.g. when Rules 1 / 5b decay to "normal
+   * votes only" — the caller's standard path already produces those).
+   *
+   * Rules implemented here (Edward 2026-04-24 batch 7 verbatim):
+   *   - Rule 1: missionParticipatedBefore === false →
+   *             on-team approve, off-team reject (normal vote).
+   *   - Rule 3: (currentRound >= 4) AND missionParticipatedBefore=true
+   *             AND failedInMission=true AND off-team →
+   *             approve unconditionally (外白 signal to red team).
+   *   - Rule 5a: currentRound === 5 AND totalMissionFails >= 1
+   *             AND off-team → approve unconditionally.
+   *   - Rule 5b: currentRound === 5 AND totalMissionFails === 0 →
+   *             normal vote (returns the computed normal decision).
+   *
+   * Evil R1-R2 anomaly-suppression rule (batch 4) would have forced
+   * reject for Oberon off-team. Oberon's Rule 1 is ALSO "normal vote =
+   * off-team reject" in R1-R2 so the two agree — no conflict. Rules
+   * 3 / 5a only fire at R4 / R5 which are well past the R1-R2 guard.
+   */
+  private voteOnTeamAsOberon(obs: PlayerObservation): AgentAction | null {
+    const { proposedTeam, myPlayerId, currentRound } = obs;
+    const onTeam = proposedTeam.includes(myPlayerId);
+    const ctx = buildOberonContext(obs);
+    const round = currentRound ?? 1;
+
+    // Rule 1: never participated → normal vote.
+    if (!ctx.missionParticipatedBefore) {
+      return { type: 'team_vote', vote: onTeam };
+    }
+
+    // Rule 3: participated in an R1-R3 failed mission → R4+ off-team
+    // unconditional approve. On-team is still "approve" (normal vote)
+    // so this collapses to "approve unless legitimately off-team with
+    // no prior fail record" — but we already gated on failedInMission,
+    // so R4+ Oberon with a fail on record approves every vote he sees.
+    if (round >= 4 && ctx.failedInMission) {
+      return { type: 'team_vote', vote: true };
+    }
+
+    // Rule 5a: R5 + any prior mission fail → off-team unconditional approve.
+    // (Distinct from Rule 3 because Oberon himself may not have been on
+    // the failed mission, yet the rule still fires at R5.)
+    if (round === 5 && ctx.totalMissionFails >= 1) {
+      return { type: 'team_vote', vote: true };
+    }
+
+    // Rule 5b: R5 + no mission fail yet → normal vote.
+    if (round === 5 && ctx.totalMissionFails === 0) {
+      return { type: 'team_vote', vote: onTeam };
+    }
+
+    // R2-R3 after Oberon participated (but conditions for Rule 3 not yet met):
+    // this is "between Rule 1 and Rule 3" — Rule 1 says normal votes only.
+    // We interpret "前三局 有機會出任務必出失敗" as quest-side logic (Rule 2
+    // lives in voteOnQuest); on the team-vote side, if Oberon has already
+    // been on a mission, fall back to normal (on-team approve / off-team
+    // reject) to avoid emitting anomaly signals out-of-sequence.
+    return { type: 'team_vote', vote: onTeam };
+  }
+
+  /**
+   * Oberon-specific quest-vote. Returns `null` when the generic branch
+   * should handle (e.g. Rules 1 / 5b normal → but voteOnQuest's match-
+   * point / legacy paths may still fire; we short-circuit for the
+   * deterministic rules and hand back control otherwise).
+   *
+   * Rules implemented here (Edward 2026-04-24 batch 7 verbatim):
+   *   - Rule 2: R1-R3 on team → fail unconditionally.
+   *   - Rule 4: R4 on team → fail iff teammate-suspicion overlap,
+   *             otherwise success.
+   *   - Rule 5c: R5 on team → fail iff totalMissionFails >= 1,
+   *             otherwise success.
+   *
+   * Precedence note: caller invokes match-point (isListeningState)
+   * first, which is a HARDER override than any Oberon rule — so by
+   * the time we land here we know match-point is false. Oberon rules
+   * below coexist with the baseline 60/40 probabilistic path; we
+   * only return a decision when a deterministic rule applies.
+   */
+  private voteOnQuestAsOberon(obs: PlayerObservation): AgentAction | null {
+    const { proposedTeam, myPlayerId, currentRound } = obs;
+    const onTeam = proposedTeam.includes(myPlayerId);
+    if (!onTeam) return null;  // Oberon rules fire only on-team
+    const round = currentRound ?? 1;
+    const ctx = buildOberonContext(obs);
+
+    // Rule 2: R1-R3 on team → fail.
+    if (round >= 1 && round <= 3) {
+      return { type: 'quest_vote', vote: 'fail' };
+    }
+
+    // Rule 4: R4 on team → fail iff teammate suspicion overlap.
+    // "有隊友嫌疑" inferred from R1-R3 failed-mission member overlap with
+    // current proposedTeam (minus Oberon himself). This is public info —
+    // legal inference, not role-information cheating.
+    if (round === 4) {
+      const hasTeammateSuspicion = proposedTeam.some(
+        (id) => id !== myPlayerId && ctx.suspectedTeammates.has(id),
+      );
+      return {
+        type: 'quest_vote',
+        vote: hasTeammateSuspicion ? 'fail' : 'success',
+      };
+    }
+
+    // Rule 5c: R5 on team → fail iff totalMissionFails >= 1.
+    if (round === 5) {
+      return {
+        type: 'quest_vote',
+        vote: ctx.totalMissionFails >= 1 ? 'fail' : 'success',
+      };
+    }
+
+    return null;
+  }
+
   // ── Quest Vote ───────────────────────────────────────────────
 
   private voteOnQuest(obs: PlayerObservation): AgentAction {
@@ -913,21 +1193,46 @@ export class HeuristicAgent implements AvalonAgent {
     // ── §0 Listening rule (highest-priority evil quest-action override) ──
     //
     // When either side has won 2 quests, every evil player on the team
-    // MUST fail. Rationale (Edward 2026-04-22 12:38):
+    // MUST fail. Rationale (Edward 2026-04-22 12:38, reaffirmed
+    // 2026-04-24 batch 6):
     //   • evilWins === 2 → one more fail wins the mission track outright.
     //   • goodWins === 2 → failing keeps it at 2-1 and avoids the
     //     assassination-phase gamble.
-    // Oberon is the only exception (no teammate coordination, legacy
-    // randomised behaviour kept).
+    //
+    // Edward 2026-04-24 batch 6 verbatim:
+    //   「紅方或藍方已經聽牌 紅方就不可能躲藏 一定會出任務失敗」
+    //
+    // Batch 6 change — Oberon is NO LONGER an exception. Previous baseline
+    // (strategy doc §0.4) carved Oberon out because he lacks teammate
+    // coordination. But match-point detection only reads the PUBLIC
+    // mission score (which Oberon sees exactly like every other player).
+    // Oberon's ignorance concerns teammate identity, not game state.
+    // At match-point, the tactical value of "hiding" (cover-success)
+    // collapses to zero for any red player on team:
+    //   • Red listening (evilWins === 2) → failing wins the game; hiding
+    //     throws away the decisive moment.
+    //   • Blue listening (goodWins === 2) → not failing hands the game
+    //     to assassination phase, which is a gamble. Red still prefers
+    //     fail to extend the mission track.
+    // → Every evil player on team (Oberon included) MUST fail.
     //
     // This branch overrides role differentiation and the `failsRequired >= 2`
     // cautious path. See `docs/ai/avalon_ai_strategy_baseline.md` §0.
     if (USE_LISTENING_RULE && isListeningState(goodQuestWins, evilQuestWins)) {
-      if (myRole === 'oberon') {
-        // Oberon acts more randomly since they don't know the game state as well.
-        return { type: 'quest_vote', vote: Math.random() > 0.3 ? 'fail' : 'success' };
-      }
       return { type: 'quest_vote', vote: 'fail' };
+    }
+
+    // Edward 2026-04-24 batch 7 fix #3 — Oberon quest rules.
+    // Applies ONLY when match-point listening has NOT triggered (match-
+    // point is a harder override, already handled above). Oberon Rule 2
+    // (R1-R3 on team → fail) is STRICTLY stronger than the 60/40 default,
+    // Rule 4 (R4 on team + teammate suspicion → fail, else success) is
+    // a different axis than failsRequired>=2, and Rule 5c depends on
+    // the prior fail record. When any Oberon rule applies we return it;
+    // otherwise fall through to the shared generic evil logic.
+    if (USE_OBERON_STRATEGY && (myRole as string) === 'oberon') {
+      const oberonDecision = this.voteOnQuestAsOberon(obs);
+      if (oberonDecision !== null) return oberonDecision;
     }
 
     // Check if this round requires 2 fail votes (7+ players, round 4)
@@ -1356,6 +1661,21 @@ export class HeuristicAgent implements AvalonAgent {
   /** Percival likeness penalty for assassin targeting (tests only). */
   _getPercivalLikenessPenaltyForTesting(playerId: string, obs: PlayerObservation): number {
     return this.getPercivalLikenessPenalty(playerId, obs);
+  }
+
+  /** Oberon context (tests only, batch 7 fix #3). */
+  _buildOberonContextForTesting(obs: PlayerObservation): OberonContext {
+    return buildOberonContext(obs);
+  }
+
+  /** Oberon team-vote decision (tests only, batch 7 fix #3). */
+  _voteOnTeamAsOberonForTesting(obs: PlayerObservation): AgentAction | null {
+    return this.voteOnTeamAsOberon(obs);
+  }
+
+  /** Oberon quest-vote decision (tests only, batch 7 fix #3). */
+  _voteOnQuestAsOberonForTesting(obs: PlayerObservation): AgentAction | null {
+    return this.voteOnQuestAsOberon(obs);
   }
 
   /**

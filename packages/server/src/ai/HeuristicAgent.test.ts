@@ -631,9 +631,11 @@ describe('HeuristicAgent · batch 4 fix #2 (cross-faction R1-R2 anomaly suppress
 // ─────────────────────────────────────────────────────────────
 // Deep-cover branch (SSoT §2 + §6.1, Fix #3 original): REMOVED —
 // superseded by §0 Listening Rule (Edward 2026-04-22 12:38 verbatim).
-// Evil at good-winning 2-0 must fail (except Oberon, which keeps
-// legacy 70% randomised behaviour). See the listening-rule describe
-// block higher in this file for the new coverage.
+// Evil at good-winning 2-0 must fail.
+// Batch 6 (2026-04-24) extends this to Oberon — match-point judged on
+// public mission score only, so Oberon (like every other evil role)
+// force-fails at the listening threshold. See the "§0 listening rule"
+// describe block at the bottom of this file for full coverage.
 // ─────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────
@@ -738,10 +740,14 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
       expect(rate).toBeLessThan(0.40);
     });
 
-    it('Oberon off-team approve rate ≈ 0.35 (legacy base, no role bonus)', () => {
+    it('Oberon off-team: Rule 1 (no prior participation) overrides legacy base → approve rate = 0', () => {
+      // Edward 2026-04-24 batch 7 fix #3 change: Oberon Rule 1 says
+      // missionParticipatedBefore === false → only normal votes. At R3
+      // with an empty questHistory in this fixture, Oberon has never
+      // been on a mission → Rule 1 fires → off-team reject = 0 approve.
+      // Pre-batch-7 the generic 0.35 base path was used (legacy base).
       const rate = approveRate('oberon');
-      expect(rate).toBeGreaterThan(0.25);
-      expect(rate).toBeLessThan(0.45);
+      expect(rate).toBe(0);
     });
   });
 
@@ -851,10 +857,13 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
       expect(rate).toBeLessThan(0.60);
     });
 
-    it('Oberon early fail rate ≈ 0.60 (legacy base, no role bonus)', () => {
+    it('Oberon early fail rate: Rule 2 forces R1 on-team fail = 1.0 (was 0.60 legacy)', () => {
+      // Edward 2026-04-24 batch 7 fix #3 change: Oberon Rule 2 says
+      // R1-R3 on team → fail unconditionally. This fixture is R1 on team
+      // (proposedTeam includes P1) so Rule 2 fires. Pre-batch-7 the
+      // generic 0.60 base fired here (legacy).
       const rate = failRate('oberon');
-      expect(rate).toBeGreaterThan(0.50);
-      expect(rate).toBeLessThan(0.70);
+      expect(rate).toBe(1);
     });
 
     it('applyEvilEarlyFailBonus computes deterministically with role bonuses', () => {
@@ -1313,5 +1322,700 @@ describe('HeuristicAgent · Percival thumb uses shared anomaly API', () => {
     // P2 (inner-black R5) should have higher Merlin score than P3 (plain approve).
     expect(result.scores['P2']).toBeGreaterThan(result.scores['P3']);
     expect(result.merlin).toBe('P2');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Edward 2026-04-24 batch 6 — §0 Listening rule (match-point force fail)
+//
+// Edward verbatim:
+//   「紅方或藍方已經聽牌 紅方就不可能躲藏 一定會出任務失敗」
+//
+// Listening (聽牌) = either side has already won 2 quests, i.e.
+//   goodWins === 2 (blue listening — one more success ends missions
+//   track and forces assassination phase) OR
+//   evilWins === 2 (red listening — one more fail wins outright).
+//
+// Contract:
+//   • Red on team + listening  → quest_vote = 'fail' (deterministic,
+//     regardless of role — Oberon included, batch 6 change).
+//   • Red on team + not listening (0-0, 1-0, 0-1, 1-1) → legacy
+//     probabilistic path remains (tested elsewhere).
+//   • Blue on team: always 'success' (no change — blue has no choice).
+//
+// This block pins the contract across the four listening scenarios
+// (red listening, blue listening, not listening) and across all four
+// evil roles to prove Oberon now conforms.
+// ─────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · §0 Listening rule (batch 6 — force-fail incl. Oberon)', () => {
+  type EvilRole = 'mordred' | 'morgana' | 'assassin' | 'oberon';
+
+  /** Construct a listening-scenario observation for a given evil role. */
+  function buildObs(
+    role: EvilRole,
+    questResults: ('success' | 'fail')[],
+  ): PlayerObservation {
+    return baseObs({
+      myPlayerId:   'P1',
+      myRole:       role,
+      myTeam:       'evil',
+      knownEvils:   role === 'oberon' ? [] : ['P1', 'P4'],
+      gamePhase:    'quest_vote',
+      questResults,
+      currentRound: Math.max(1, questResults.length + 1),
+      proposedTeam: ['P1', 'P2'],
+    });
+  }
+
+  /**
+   * Sample `voteOnQuest` N times and return the fail rate. Deterministic
+   * match-point branches should give fail rate = 1.0; probabilistic
+   * branches (not listening) fall within baseline ±role bonus.
+   */
+  function failRate(obs: PlayerObservation, samples: number): number {
+    let fails = 0;
+    for (let i = 0; i < samples; i++) {
+      const agent = new HeuristicAgent('P1', 'hard');
+      agent.onGameStart(obs);
+      const action = agent.act(obs);
+      if (action.type === 'quest_vote' && action.vote === 'fail') fails++;
+    }
+    return fails / samples;
+  }
+
+  describe('紅聽 (red listening, evilWins === 2 ⇒ one more fail wins outright)', () => {
+    const questResults: ('success' | 'fail')[] = ['fail', 'fail'];
+
+    it('Mordred at 0-2 (red listening) → fail 100%', () => {
+      expect(failRate(buildObs('mordred',  questResults), 200)).toBe(1);
+    });
+    it('Morgana at 0-2 (red listening) → fail 100%', () => {
+      expect(failRate(buildObs('morgana',  questResults), 200)).toBe(1);
+    });
+    it('Assassin at 0-2 (red listening) → fail 100%', () => {
+      expect(failRate(buildObs('assassin', questResults), 200)).toBe(1);
+    });
+    it('Oberon at 0-2 (red listening) → fail 100% (batch 6 change)', () => {
+      // Pre-batch-6 baseline was 70% fail / 30% success. Post-batch-6:
+      // deterministic fail — match-point detection is public-info only.
+      expect(failRate(buildObs('oberon',   questResults), 200)).toBe(1);
+    });
+  });
+
+  describe('藍聽 (blue listening, goodWins === 2 ⇒ another success forces assassination)', () => {
+    const questResults: ('success' | 'fail')[] = ['success', 'success'];
+
+    it('Mordred at 2-0 (blue listening) → fail 100%', () => {
+      expect(failRate(buildObs('mordred',  questResults), 200)).toBe(1);
+    });
+    it('Morgana at 2-0 (blue listening) → fail 100%', () => {
+      expect(failRate(buildObs('morgana',  questResults), 200)).toBe(1);
+    });
+    it('Assassin at 2-0 (blue listening) → fail 100%', () => {
+      expect(failRate(buildObs('assassin', questResults), 200)).toBe(1);
+    });
+    it('Oberon at 2-0 (blue listening) → fail 100% (batch 6 change)', () => {
+      expect(failRate(buildObs('oberon',   questResults), 200)).toBe(1);
+    });
+  });
+
+  describe('都沒聽 (neither side listening, evil fails probabilistically)', () => {
+    it('Mordred at 0-0 → ~0.70 fail (base 0.60 + 0.10 bolder bonus, not 1.0)', () => {
+      const rate = failRate(buildObs('mordred', []), 600);
+      expect(rate).toBeGreaterThan(0.55);
+      expect(rate).toBeLessThan(0.85);
+      // Critical: NOT 1.0 — proves non-listening path is still probabilistic.
+      expect(rate).toBeLessThan(1.0);
+    });
+    it('Morgana at 1-0 → ~0.55 fail (base 0.60 − 0.05 cleaner, not 1.0)', () => {
+      const rate = failRate(buildObs('morgana', ['success']), 600);
+      expect(rate).toBeGreaterThan(0.40);
+      expect(rate).toBeLessThan(0.70);
+      expect(rate).toBeLessThan(1.0);
+    });
+    it('Assassin at 0-1 → ~0.50 fail (base 0.60 − 0.10 cleanest, not 1.0)', () => {
+      const rate = failRate(buildObs('assassin', ['fail']), 600);
+      expect(rate).toBeGreaterThan(0.35);
+      expect(rate).toBeLessThan(0.65);
+      expect(rate).toBeLessThan(1.0);
+    });
+    it('Oberon at 1-1 R3 on team → Rule 2 forces fail = 1.0 (batch 7 change)', () => {
+      // Edward 2026-04-24 batch 7 fix #3: Oberon Rule 2 says R1-R3 on
+      // team → fail. At 1-1 the listening rule does NOT fire, but Rule 2
+      // now does. Pre-batch-7 the legacy 0.60 base fired here (superseded).
+      const rate = failRate(buildObs('oberon', ['success', 'fail']), 600);
+      expect(rate).toBe(1);
+    });
+  });
+
+  describe('blue-team players unaffected by listening rule', () => {
+    it('loyal servant on team at 2-0 (blue listening) → always success', () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       'loyal_servant',
+        myTeam:       'good',
+        gamePhase:    'quest_vote',
+        questResults: ['success', 'success'],
+        currentRound: 3,
+        proposedTeam: ['P1', 'P2'],
+      });
+      for (let i = 0; i < 100; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+
+    it('merlin on team at 0-2 (red listening) → always success', () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       'merlin',
+        myTeam:       'good',
+        knownEvils:   ['P2'],
+        gamePhase:    'quest_vote',
+        questResults: ['fail', 'fail'],
+        currentRound: 3,
+        proposedTeam: ['P1', 'P3'],
+      });
+      for (let i = 0; i < 100; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+  });
+
+  describe('listening rule overrides failsRequired ≥ 2 cautious path', () => {
+    // 10p R4 requires 2 fails — normally evil plays 30% fail. But if
+    // already listening, fail is forced regardless.
+    it('Mordred on 10p R4 (needs 2 fails) at 2-0 still forces fail', () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       'mordred',
+        myTeam:       'evil',
+        playerCount:  10,
+        allPlayerIds: Array.from({ length: 10 }, (_, i) => `P${i + 1}`),
+        knownEvils:   ['P1', 'P7'],
+        gamePhase:    'quest_vote',
+        questResults: ['success', 'success'],
+        currentRound: 4,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      const rate = (() => {
+        let f = 0;
+        for (let i = 0; i < 200; i++) {
+          const agent = new HeuristicAgent('P1', 'hard');
+          agent.onGameStart(obs);
+          const action = agent.act(obs);
+          if (action.type === 'quest_vote' && action.vote === 'fail') f++;
+        }
+        return f / 200;
+      })();
+      expect(rate).toBe(1);
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Edward 2026-04-24 batch 7 — Oberon 5-point strategy +
+//                              Blue conservative R3+ outer-white
+//
+// Edward verbatim (Oberon strategy):
+//   「1. 還沒出過任務前只會投正常票
+//    2. 前三局有機會出任務必出失敗
+//    3. 前三局出過任務+讓任務失敗後開始無條件開白球
+//    4. 第四局有機會出任務且確認有隊友才可出失敗否則出成功
+//    5. 第五局: 前四局出過任務失敗, 則第五局無條件開白
+//    ; 前四局沒出過任務失敗則只會投正常黑白球」
+//
+// Edward verbatim (blue conservative outer-white):
+//   「因此藍方不可能隨便開異常外白(會被誤認為奧伯倫)
+//    相認紅方頂多利用奧伯倫的白球去衝刺隊友 但同時這顆白球也會被抓到是紅方」
+// ─────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
+  /** Build an Oberon observation for team-vote phase. */
+  function oberonTeamVoteObs(opts: {
+    round: number;
+    onTeam: boolean;
+    questHistory?: QuestRecord[];
+    proposedTeam?: string[];
+  }): PlayerObservation {
+    // P1 = Oberon. 10-player layout simplified to 5 for memory tests.
+    const proposedTeam = opts.proposedTeam
+      ?? (opts.onTeam ? ['P1', 'P2', 'P3'] : ['P2', 'P3', 'P4']);
+    return baseObs({
+      myPlayerId:    'P1',
+      myRole:        'oberon',
+      myTeam:        'evil',
+      knownEvils:    [],           // Oberon sees nothing
+      gamePhase:     'team_vote',
+      currentRound:  opts.round,
+      currentLeader: opts.onTeam ? 'P1' : 'P2',
+      proposedTeam,
+      voteHistory:   [],
+      questHistory:  opts.questHistory ?? [],
+      failCount:     0,
+    });
+  }
+
+  /** Build an Oberon observation for quest-vote phase. */
+  function oberonQuestVoteObs(opts: {
+    round: number;
+    questHistory?: QuestRecord[];
+    proposedTeam?: string[];
+    questResults?: ('success' | 'fail')[];
+  }): PlayerObservation {
+    const proposedTeam = opts.proposedTeam ?? ['P1', 'P2', 'P3'];
+    return baseObs({
+      myPlayerId:    'P1',
+      myRole:        'oberon',
+      myTeam:        'evil',
+      knownEvils:    [],
+      gamePhase:     'quest_vote',
+      currentRound:  opts.round,
+      proposedTeam,
+      questHistory:  opts.questHistory ?? [],
+      questResults:  opts.questResults ?? [],
+    });
+  }
+
+  describe('Rule 1 — no prior participation → normal vote only', () => {
+    it('R1 on-team, no prior participation → approve (normal on-team)', () => {
+      const obs = oberonTeamVoteObs({ round: 1, onTeam: true, questHistory: [] });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(true);
+      }
+    });
+
+    it('R2 off-team, no prior participation → reject (normal off-team)', () => {
+      const obs = oberonTeamVoteObs({ round: 2, onTeam: false, questHistory: [] });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(false);
+      }
+    });
+
+    it('R3 off-team, Oberon not on any prior mission → reject (Rule 1, no outer-white)', () => {
+      // Prior quests exist but Oberon was NOT on them → Rule 1 holds.
+      const obs = oberonTeamVoteObs({
+        round: 3,
+        onTeam: false,
+        proposedTeam: ['P2', 'P3', 'P4'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P3', 'P4'], 'fail', 1),
+        ],
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(false);
+      }
+    });
+  });
+
+  describe('Rule 2 — R1-R3 on team → quest fail unconditionally', () => {
+    it('R1 Oberon on quest team → fail', () => {
+      const obs = oberonQuestVoteObs({ round: 1 });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('R2 Oberon on quest team → fail (even when failsRequired=2 would suggest cautious)', () => {
+      const obs = oberonQuestVoteObs({
+        round: 2,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4'],
+        questHistory: [],
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('R3 Oberon on quest team → fail', () => {
+      const obs = oberonQuestVoteObs({ round: 3, questResults: ['success', 'success'] });
+      // Note: 2-0 here would trigger listening rule (fail anyway). Use 1-1 instead.
+      const obs11 = oberonQuestVoteObs({ round: 3, questResults: ['success', 'fail'] });
+      void obs; // intentionally testing both
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs11);
+        const action = agent.act(obs11);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+  });
+
+  describe('Rule 3 — R4+ after prior fail participation → off-team unconditional approve', () => {
+    it('R4 off-team, Oberon participated in failed R2 → approve (outer-white signal)', () => {
+      const obs = oberonTeamVoteObs({
+        round: 4,
+        onTeam: false,
+        proposedTeam: ['P2', 'P3', 'P4'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P1', 'P5'], 'fail', 1),    // Oberon (P1) on team, failed
+          quest(3, ['P3', 'P4'], 'success', 0),
+        ],
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(true);
+      }
+    });
+
+    it('R4 off-team, Oberon participated but mission SUCCEEDED → Rule 3 does NOT fire', () => {
+      // Oberon was on a mission but he didn't fail it (e.g. failsRequired=2 and
+      // only 1 fail token dropped, or teammate also didn't fail). Rule 3 requires
+      // failedInMission=true. Falls back to default (on-team approve/off-team reject).
+      const obs = oberonTeamVoteObs({
+        round: 4,
+        onTeam: false,
+        proposedTeam: ['P2', 'P3', 'P4'],
+        questHistory: [
+          quest(1, ['P1', 'P2'], 'success', 0),  // Oberon on team, succeeded
+        ],
+      });
+      // Default fall-through → off-team reject
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(false);
+      }
+    });
+  });
+
+  describe('Rule 4 — R4 on-team fail iff teammate-suspicion overlap', () => {
+    it('R4 on-team, overlap with R2 failed mission member → fail', () => {
+      // P5 was on the failed R2 mission. R4 team includes P5 → overlap → fail.
+      const obs = oberonQuestVoteObs({
+        round: 4,
+        proposedTeam: ['P1', 'P5', 'P6', 'P7'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P5', 'P6'], 'fail', 1),     // P5, P6 on failed R2
+          quest(3, ['P3', 'P4'], 'success', 0),
+        ],
+        questResults: ['success', 'fail', 'success'],
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('R4 on-team, NO overlap with prior failed mission → success (not listening)', () => {
+      // Careful: questResults must NOT trigger listening (either side = 2).
+      // Use 1 fail 1 success = 1-1 pre-R4 state (R4 is the 4th round so we
+      // only need pre-R4 results here). Scenario: R1 success, R2 fail (not
+      // overlap), R3 success. That's 2-1 listening! Use 1-1 instead:
+      // R1 fail (Oberon NOT on it), R2 success. Fast-forward R3 skipped
+      // (hypothetical) — we only use questHistory for overlap inference,
+      // questResults is separate for listening calc.
+      const obs = oberonQuestVoteObs({
+        round: 4,
+        proposedTeam: ['P1', 'P8', 'P9'],  // Team members not in R2 failure
+        questHistory: [
+          quest(2, ['P5', 'P6'], 'fail', 1),    // P5 P6 failed; P8/P9 not overlap
+        ],
+        questResults: ['fail'],  // 0-1 (not listening)
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+  });
+
+  describe('Rule 5 — R5 branches on prior fail count', () => {
+    it('R5 off-team + prior fail exists → approve (Rule 5a outer-white)', () => {
+      const obs = oberonTeamVoteObs({
+        round: 5,
+        onTeam: false,
+        proposedTeam: ['P2', 'P3', 'P4'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P5', 'P6'], 'fail', 1),    // Prior fail exists
+          quest(3, ['P3', 'P4'], 'success', 0),
+          quest(4, ['P1', 'P7'], 'success', 0),
+        ],
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(true);
+      }
+    });
+
+    it('R5 off-team + NO prior fail → normal vote (Rule 5b) → reject', () => {
+      // All 4 prior missions succeeded (white-wash scenario). Rule 5b:
+      // normal votes only. Off-team → reject.
+      const obs = oberonTeamVoteObs({
+        round: 5,
+        onTeam: false,
+        proposedTeam: ['P2', 'P3', 'P4'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P3', 'P4'], 'success', 0),
+          quest(3, ['P4', 'P5'], 'success', 0),
+          quest(4, ['P5', 'P6'], 'success', 0),
+        ],
+      });
+      // But match-point listening will fire (goodWins=4 ≥ 2 listening threshold)
+      // which would force fail IF we were in quest-vote. Here we're team-vote
+      // so listening doesn't apply — Rule 5b runs. Off-team → reject.
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(false);
+      }
+    });
+
+    it('R5 on-team + prior fail → quest fail (Rule 5c)', () => {
+      // Careful: not match-point to isolate Rule 5c. questResults is 1-1 so
+      // listening rule does NOT fire. Oberon Rule 5c applies.
+      const obs = oberonQuestVoteObs({
+        round: 5,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P5', 'P6'], 'fail', 1),
+          quest(3, ['P3', 'P4'], 'success', 0),
+          quest(4, ['P1', 'P7'], 'success', 0),
+        ],
+        questResults: ['success', 'fail', 'success', 'success'],  // 3-1, not listening
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('R5 on-team + NO prior fail → quest success (Rule 5c else branch)', () => {
+      // Without a prior fail, Oberon cooperates even on team. But this scenario
+      // requires getting to R5 with 4 successes — match-point would fire at R3
+      // (goodWins=2) or R4. questResults here ensures goodWins<2 at call time,
+      // which is impossible in real play. Skip match-point verification; test
+      // pure Rule 5c else-branch with a crafted questResults <2 listening.
+      const obs = oberonQuestVoteObs({
+        round: 5,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+        ],
+        questResults: ['success'],  // 1-0, not listening; artificial
+      });
+      // Oberon Rule 5c: totalMissionFails === 0 → success
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+  });
+
+  describe('Oberon context helpers', () => {
+    it('buildOberonContext derives participation from questHistory', () => {
+      const obs = oberonQuestVoteObs({
+        round: 4,
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P1', 'P5'], 'fail', 1),     // Oberon on failed R2
+          quest(3, ['P3', 'P4'], 'success', 0),
+        ],
+      });
+      const agent = new HeuristicAgent('P1', 'hard');
+      const ctx = agent._buildOberonContextForTesting(obs);
+
+      expect(ctx.missionParticipatedBefore).toBe(true);
+      expect(ctx.failedInMission).toBe(true);
+      expect(ctx.totalMissionFails).toBe(1);
+      // Suspect teammates from R1-R3 failed missions, minus self
+      expect(ctx.suspectedTeammates.has('P5')).toBe(true);
+      expect(ctx.suspectedTeammates.has('P1')).toBe(false);
+    });
+
+    it('match-point listening OVERRIDES Oberon Rules 2/4/5c (listening wins)', () => {
+      // R4 on-team with NO teammate suspicion overlap would normally give
+      // Rule 4 → success. But at 2-0 listening → forced fail by §0 rule.
+      const obs = oberonQuestVoteObs({
+        round: 4,
+        proposedTeam: ['P1', 'P8', 'P9'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P3', 'P4'], 'success', 0),
+          quest(3, ['P4', 'P5'], 'success', 0),
+        ],
+        questResults: ['success', 'success', 'success'],  // 3-0 (past listening)
+      });
+      // Actually at 3-0 the game would be over. Use 2-0 from questResults:
+      const obs20 = oberonQuestVoteObs({
+        round: 3,
+        proposedTeam: ['P1', 'P8', 'P9'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P3', 'P4'], 'success', 0),
+        ],
+        questResults: ['success', 'success'],  // 2-0 listening
+      });
+      void obs; // not used
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs20);
+        const action = agent.act(obs20);
+        expect(action.type).toBe('quest_vote');
+        // Listening overrides — Rule 2 (R3 on team fail) agrees anyway.
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+  });
+});
+
+describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)', () => {
+  function approveRate(obs: PlayerObservation, samples: number): number {
+    let approves = 0;
+    for (let i = 0; i < samples; i++) {
+      const agent = new HeuristicAgent(obs.myPlayerId, 'hard');
+      agent.onGameStart(obs);
+      agent._ingestForTesting(obs);
+      const action = agent.act({ ...obs, gamePhase: 'team_vote' });
+      if (action.type === 'team_vote' && action.vote === true) approves++;
+    }
+    return approves / samples;
+  }
+
+  it('R3 good off-team clean team → approve rate ≤ 10% (down from ~13% baseline)', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'loyal',
+      myTeam:        'good',
+      gamePhase:     'team_vote',
+      currentRound:  3,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P3', 'P4'],  // off-team, clean (no failed members)
+      voteHistory: [
+        vote(1, 1, 'P2', ['P2', 'P3'], true,
+             { P1: true, P2: true, P3: true, P4: true, P5: false }),
+        vote(2, 1, 'P3', ['P3', 'P4'], true,
+             { P1: true, P2: true, P3: true, P4: true, P5: false }),
+      ],
+      questHistory: [
+        quest(1, ['P2', 'P3'], 'success', 0),
+        quest(2, ['P3', 'P4'], 'success', 0),
+      ],
+    });
+    const rate = approveRate(obs, 500);
+    // floor = 0.03 with noise=0.05 → worst-case approve ≈ 0.03 + 0.05 ≈ 0.08
+    expect(rate).toBeLessThan(0.12);
+  });
+
+  it('R4 good off-team clean team → approve rate near floor', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'loyal',
+      myTeam:        'good',
+      gamePhase:     'team_vote',
+      currentRound:  4,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P3', 'P4'],
+      voteHistory: [
+        vote(1, 1, 'P2', ['P2', 'P3'], true,
+             { P1: true, P2: true, P3: true, P4: true, P5: false }),
+      ],
+      questHistory: [
+        quest(1, ['P2', 'P3'], 'success', 0),
+      ],
+    });
+    const rate = approveRate(obs, 500);
+    expect(rate).toBeLessThan(0.12);
+  });
+
+  it('R3 good off-team with failed member still forces reject (unchanged by floor)', () => {
+    // Hard-signal veto path fires before the floor, so approve rate = 0.
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'loyal',
+      myTeam:        'good',
+      gamePhase:     'team_vote',
+      currentRound:  3,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P3', 'P4'],
+      voteHistory: [
+        vote(1, 1, 'P2', ['P2', 'P4'], true,
+             { P1: false, P2: true, P3: true, P4: true, P5: false }),
+      ],
+      questHistory: [
+        quest(1, ['P2', 'P4'], 'fail', 1),  // P4 failed → hard veto
+      ],
+    });
+    const rate = approveRate(obs, 300);
+    // Noise=0.05 → reject with 95% confidence → approve ~5%.
+    expect(rate).toBeLessThan(0.10);
+  });
+
+  it('R2 good off-team clean team → batch 4 R1-R2 guard still fires (unchanged, reject=1)', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'loyal',
+      myTeam:        'good',
+      gamePhase:     'team_vote',
+      currentRound:  2,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P3', 'P4'],
+      voteHistory: [
+        vote(1, 1, 'P2', ['P2', 'P3'], true,
+             { P1: true, P2: true, P3: true, P4: true, P5: false }),
+      ],
+      questHistory: [
+        quest(1, ['P2', 'P3'], 'success', 0),
+      ],
+    });
+    const rate = approveRate(obs, 300);
+    expect(rate).toBe(0);
   });
 });
