@@ -15,6 +15,7 @@ import { analysisRouter } from './routes/analysis';
 import { statsRouter } from './routes/stats';
 import { claimsRouter } from './routes/claims';
 import { adminEloRouter } from './routes/adminElo';
+import { adminImportRouter } from './routes/adminImport';
 import { healthDeepRouter } from './routes/healthDeep';
 import { versionRouter } from './routes/version';
 import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
@@ -74,6 +75,10 @@ app.use('/api/stats', statsRouter);
 app.use('/api', claimsRouter);
 // #54 Phase 2 Day 3: admin-only ELO config (/api/admin/elo/config)
 app.use('/api', adminEloRouter);
+// #49 history import (hineko_20260424_1035): admin-only bulk game import
+//   POST /api/admin/games/import/json — upload ProAvalon JSON array
+//   POST /api/admin/games/import/sheets — 501 stub (CLI only for now)
+app.use('/api', adminImportRouter);
 // Deep health: /api/health/deep — dependency probe (Plan v2 R0-C)
 app.use('/api', healthDeepRouter);
 // Build version: /api/version — used by web client to detect deploys and

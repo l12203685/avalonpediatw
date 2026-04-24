@@ -31,6 +31,7 @@ import PersonalStatsPage from './pages/PersonalStatsPage';
 import ClaimsNewPage from './pages/ClaimsNewPage';
 import AdminClaimsPage from './pages/AdminClaimsPage';
 import AdminAdminsPage from './pages/AdminAdminsPage';
+import AdminImportPage from './pages/AdminImportPage';
 import AdminEloPage from './pages/AdminEloPage';
 import HelpPage from './pages/HelpPage';
 import ToastContainer from './components/ToastContainer';
@@ -290,6 +291,7 @@ function App(): JSX.Element {
           {gameState === 'adminClaims' && <AdminClaimsPage />}
           {gameState === 'adminAdmins' && <AdminAdminsPage />}
           {gameState === 'adminElo' && <AdminEloPage />}
+          {gameState === 'adminImport' && <AdminImportPage />}
           {gameState === 'help' && <HelpPage />}
           {/* Phase C 簡化：保留 forgot/reset 兩頁給密碼重設流程；註冊頁已併入 LoginPage */}
           {gameState === 'forgotPassword'   && <ForgotPasswordPage />}

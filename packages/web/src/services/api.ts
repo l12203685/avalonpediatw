@@ -826,6 +826,50 @@ export async function rejectClaimApi(
   return data.claim;
 }
 
+// ── Admin: game import (hineko_20260424_1035) ─────────────────────────────
+// Thin wrappers over /api/admin/games/import/{json,sheets}. See
+// packages/server/src/services/GameImportService.ts for the backing logic.
+
+export interface ImportedGamePreview {
+  gameId: string;
+  roomName: string;
+  playerCount: number;
+  winner: 'good' | 'evil';
+  winReason: string;
+  createdAt: number;
+}
+
+export interface GameImportResult {
+  sourceTag: 'sheets' | 'json';
+  preview: ImportedGamePreview[];
+  totalCount: number;
+  writtenCount: number;
+  skippedExisting: number;
+  errors: { row: number; reason: string }[];
+}
+
+export async function importGamesFromJson(
+  token: string,
+  body: { dryRun: boolean; limit?: number; jsonData: unknown[] },
+): Promise<GameImportResult> {
+  return claimApi<GameImportResult>('/api/admin/games/import/json', {
+    token,
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function importGamesFromSheets(
+  token: string,
+  body: { dryRun: boolean; limit?: number; sheetId?: string },
+): Promise<GameImportResult> {
+  return claimApi<GameImportResult>('/api/admin/games/import/sheets', {
+    token,
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export async function fetchAdminList(token: string): Promise<string[]> {
   const data = await claimApi<{ emails: string[] }>('/api/admin/admins', { token });
   return data.emails;
