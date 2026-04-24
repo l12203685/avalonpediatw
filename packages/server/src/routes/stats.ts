@@ -12,6 +12,7 @@ import { Router, Request, Response, IRouter } from 'express';
 import { verify, JwtPayload } from 'jsonwebtoken';
 import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import { verifyGuestToken } from '../middleware/guestAuth';
+import { getSupabaseIdByFirebaseUid } from '../services/supabase';
 import { GameHistoryRepository } from '../services/GameHistoryRepository';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 
@@ -20,22 +21,35 @@ const JWT_SECRET = process.env.JWT_SECRET as string;
 
 const limiter = createHttpRateLimit(60 * 1000, 60);
 
+// ── Resolve self identity from Authorization header ───────────────────────────
+// Downstream callers (GameHistoryRepository.listPlayerGames / pair / pair-batch
+// / timeline) key on the Supabase `users.id` UUID. Google-login users' Bearer
+// token becomes a Firebase ID token on socket reconnect (see
+// `packages/web/src/services/socket.ts` reconnect_attempt handler), so the raw
+// Firebase uid MUST be mapped back to a Supabase UUID or their stats pages
+// render blank. Mirrors the pattern used in `routes/friends.ts:60-61`.
 async function resolveSelfId(authHeader: string | undefined): Promise<string | null> {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
 
   const looksLikeJwt = typeof token === 'string' && token.split('.').length === 3;
   if (looksLikeJwt) {
+    // Path 1: custom JWT (password / Discord / LINE) — `sub` is already the
+    // Supabase UUID. Guest JWTs verify too but carry a non-users.id sub, so
+    // we skip them here and let the guest fallback below handle them.
     try {
       const payload = verify(token, JWT_SECRET) as JwtPayload & { sub?: string; provider?: string };
       if (payload.sub && payload.provider !== 'guest') return payload.sub;
     } catch {
       /* not a custom JWT */
     }
+    // Path 2: Firebase ID token (Google / Email) — map firebase_uid → Supabase
+    // UUID via the `users.firebase_uid` column. Returns null when no mapping
+    // exists (e.g. Firebase user that was never upserted into Supabase).
     if (isFirebaseAdminReady()) {
       try {
         const decoded = await verifyIdToken(token);
-        return decoded.uid;
+        return await getSupabaseIdByFirebaseUid(decoded.uid);
       } catch {
         /* invalid */
       }
