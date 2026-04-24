@@ -321,7 +321,6 @@
     "newbie": "弱AI",
     "core": "中AI",
     "expert": "強AI",
-    "fillTitle": "加入 AI 機器人",
-    "quickFill": "快速填滿至 5 人"
+    "fillTitle": "加入 AI 機器人"
   }
 }

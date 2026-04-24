@@ -321,7 +321,6 @@
     "newbie": "Weak AI",
     "core": "Mid AI",
     "expert": "Strong AI",
-    "fillTitle": "Add AI Bot",
-    "quickFill": "Fill to 5 with Core bots"
+    "fillTitle": "Add AI Bot"
   }
 }

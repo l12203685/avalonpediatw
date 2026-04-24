@@ -706,19 +706,6 @@ export default function LobbyPage(): JSX.Element {
                     </button>
                   ))}
                 </div>
-                {/* Quick fill — fills remaining slots to minimum 5 with normal bots */}
-                {playerList.length < 5 && (
-                  <button
-                    onClick={() => {
-                      const needed = 5 - playerList.length;
-                      for (let i = 0; i < needed; i++) addBot(room.id, 'normal');
-                    }}
-                    className="w-full text-[11px] sm:text-xs py-1.5 bg-gray-800/40 hover:bg-gray-700/50 border border-gray-700 text-gray-400 hover:text-gray-200 rounded-lg transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <Bot size={12} />
-                    快速填滿至 5 人 (Fill to 5)
-                  </button>
-                )}
               </div>
             )}
             <button
