@@ -38,6 +38,7 @@ import {
   consumePasswordResetAndSet,
   PASSWORD_RESET_TTL_MS,
 } from '../services/firestoreAuthAccounts';
+import { isFirestoreReady } from '../services/firestoreAccounts';
 import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import {
   validatePasswordStrength,
@@ -225,7 +226,26 @@ interface BindIdentity {
   isGuest: boolean;
 }
 
-function parseBearerUserId(authHeader: string | undefined, queryToken?: string): BindIdentity | null {
+/**
+ * Resolve the caller's bind identity from either a custom JWT (password /
+ * Discord / LINE / guest) or a Firebase ID token (Google users whose stored
+ * token flips to a Firebase ID token on socket reconnect — see
+ * `packages/web/src/services/socket.ts:76-89`).
+ *
+ * Returns the **auth_users doc id** (not the Firebase uid), so downstream
+ * `handleLinkCallback` can treat the return value as the authoritative
+ * user row id without additional lookups. Falls back to `ensureAccountByOAuthEmail`
+ * to create/find the row when the Firebase-verified email is new on this
+ * site (matches the existing Google quick-login behaviour).
+ *
+ * Parallels `resolvePlayerAuth` in `routes/api.ts`; kept as a separate helper
+ * because the `/auth/link/*` endpoints must tolerate `queryToken` (query-string
+ * token passed via redirect flow) and classify guests explicitly.
+ */
+async function parseBearerUserId(
+  authHeader: string | undefined,
+  queryToken?: string,
+): Promise<BindIdentity | null> {
   let token: string | null = null;
   if (authHeader?.startsWith('Bearer ')) {
     token = authHeader.slice(7);
@@ -233,16 +253,65 @@ function parseBearerUserId(authHeader: string | undefined, queryToken?: string):
     token = queryToken;
   }
   if (!token || token.split('.').length !== 3) return null;
+
+  // Path 1 — custom JWT issued by this server (password / discord / line / guest).
   try {
     const payload = verify(token, JWT_SECRET) as JwtPayload & { sub?: string; provider?: string };
-    if (!payload.sub) return null;
-    return {
-      userId:  payload.sub,
-      isGuest: payload.provider === 'guest',
-    };
+    if (payload.sub) {
+      return {
+        userId:  payload.sub,
+        isGuest: payload.provider === 'guest',
+      };
+    }
+  } catch {
+    // Fall through — maybe a Firebase ID token.
+  }
+
+  // Path 2 — Firebase ID token (Google quick-login + socket reconnect path).
+  // Resolve the Firebase uid to the auth_users doc id so downstream callers
+  // can treat the returned userId as authoritative.
+  if (!isFirebaseAdminReady()) return null;
+  let decodedUid:   string | undefined;
+  let decodedEmail: string | undefined;
+  let decodedName:  string | undefined;
+  try {
+    const decoded = await verifyIdToken(token);
+    decodedUid   = decoded.uid;
+    decodedEmail = decoded.email ?? undefined;
+    decodedName  = (decoded.name as string | undefined) ?? undefined;
   } catch {
     return null;
   }
+  if (!decodedUid) return null;
+
+  // Prefer an existing auth_users row already linked to this Firebase uid.
+  try {
+    const existing = await findUserIdByProviderIdentity('google', decodedUid);
+    if (existing) {
+      return { userId: existing, isGuest: false };
+    }
+  } catch {
+    // fall through
+  }
+
+  // No linked row yet — fall back to `ensureAccountByOAuthEmail` (idempotent)
+  // so the link callback writes against the correct auth_users doc id.
+  if (isFirestoreReady() && decodedEmail) {
+    const ensured = await ensureAccountByOAuthEmail({
+      provider:           'google',
+      providerExternalId: decodedUid,
+      email:              decodedEmail,
+      displayName:        decodedName ?? decodedEmail.split('@')[0],
+    });
+    if (ensured.ok && ensured.data) {
+      return { userId: ensured.data.account.userId, isGuest: false };
+    }
+  }
+
+  // Last resort — no email claim and no pre-linked row. Return the Firebase
+  // uid so the callback still functions for legacy rows keyed by uid; the
+  // link will fail cleanly rather than 401ing silently.
+  return { userId: decodedUid, isGuest: false };
 }
 
 async function handleLinkCallback(
@@ -666,7 +735,7 @@ router.get('/link/discord', async (req: Request, res: Response) => {
     return res.status(503).json({ error: 'Discord OAuth 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
-  const identity = parseBearerUserId(req.headers.authorization, queryToken);
+  const identity = await parseBearerUserId(req.headers.authorization, queryToken);
   if (!identity) {
     return res.status(401).json({ error: 'Unauthorized — login first' });
   }
@@ -688,7 +757,7 @@ router.get('/link/line', async (req: Request, res: Response) => {
     return res.status(503).json({ error: 'Line Login 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
-  const identity = parseBearerUserId(req.headers.authorization, queryToken);
+  const identity = await parseBearerUserId(req.headers.authorization, queryToken);
   if (!identity) {
     return res.status(401).json({ error: 'Unauthorized — login first' });
   }
