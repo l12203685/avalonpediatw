@@ -111,23 +111,53 @@ function parseAnomalyToken(token: string): Anomaly[] {
   if (lastCh !== '+' && lastCh !== '-') {
     throw new Error(`Anomaly token must end with + or -: ${token}`);
   }
-  const kind: 'plus' | 'minus' = lastCh === '+' ? 'plus' : 'minus';
-  const seatChars = token.slice(0, -1);
-  return parseSeatToken(seatChars).map((seat) => ({ seat, kind }));
+  // Split the token into one or more seat-group + kind runs so that mixed
+  // tokens like "249+3-", "1+8-", "2+58-", "5-0+" are all supported.
+  // Each run = a run of seat digits followed by a single +/- marker.
+  // Example "249+3-" → [{seats:"249",kind:"+"}, {seats:"3",kind:"-"}].
+  const runs: Array<{ seats: string; kind: 'plus' | 'minus' }> = [];
+  let buf = '';
+  for (const ch of token) {
+    if (ch === '+' || ch === '-') {
+      const kind: 'plus' | 'minus' = ch === '+' ? 'plus' : 'minus';
+      if (buf.length === 0) {
+        // A stray +/- with no preceding digits is not valid.
+        throw new Error(`Anomaly token missing seats before ${ch}: ${token}`);
+      }
+      runs.push({ seats: buf, kind });
+      buf = '';
+    } else {
+      buf += ch;
+    }
+  }
+  if (buf.length > 0) {
+    // trailing seats without a marker – treat the overall last marker as its kind
+    // (mirrors the simple case). Fallback: throw.
+    throw new Error(`Anomaly token has trailing seats without marker: ${token}`);
+  }
+  const anomalies: Anomaly[] = [];
+  for (const run of runs) {
+    for (const seat of parseSeatToken(run.seats)) {
+      anomalies.push({ seat, kind: run.kind });
+    }
+  }
+  return anomalies;
 }
 
 /**
- * 判斷一行是不是任務結果行（只含 `o` 和 `x`，至少 2 字元）。
+ * 判斷一行是不是任務結果行（只含 `o` 和 `x`，至少 2 字元；大小寫皆可）。
  */
 function isQuestLine(line: string): boolean {
-  return /^[ox]{2,5}$/.test(line);
+  return /^[oxOX]{2,5}$/.test(line);
 }
 
 /**
- * 判斷一行是不是湖行（`X>Y o` / `X>Y x`）。
+ * 判斷一行是不是湖行（`X>Y o` / `X>Y x` 或 `X>Yo` / `X>Yx` 或 `X>Y`）。
+ * 允許 tab/space/無分隔，宣告字母可省略（有些舊列只寫 `"0>7"`）。
  */
 function isLadyLine(line: string): boolean {
-  return /^[0-9]>[0-9]\s+[ox]$/.test(line);
+  // Accept optional declaration [oxOX?]; ? = illegible (舊列 `9>8 ?`)。
+  return /^[0-9]>[0-9](?:[\s\t]*[oxOX?])?$/.test(line);
 }
 
 /**
@@ -162,11 +192,14 @@ function parseLadyLine(
   line: string,
   round: number,
 ): Omit<LadyLinkV2, 'actual' | 'truthful'> {
-  const m = /^([0-9])>([0-9])\s+([ox])$/.exec(line.trim());
+  // 支援 "0>1 o" / "0>1o" / "0>1\to" / "0>1"（無宣告的舊列，預設 'good'）；
+  // 以及 "9>8 ?"（宣告不明，舊列用問號標示），預設 'good'。
+  const m = /^([0-9])>([0-9])(?:[\s\t]*([oxOX?]))?$/.exec(line.trim());
   if (!m) throw new Error(`Invalid lady line: ${line}`);
   const holderSeat = charToSeat(m[1]);
   const targetSeat = charToSeat(m[2]);
-  const declaration: CampV2 = m[3] === 'o' ? 'good' : 'evil';
+  const rawDecl = (m[3] ?? 'o').toLowerCase();
+  const declaration: CampV2 = rawDecl === 'x' ? 'evil' : 'good';
   return { round, holderSeat, targetSeat, declaration };
 }
 
@@ -240,7 +273,7 @@ function parseQuestLine(
 } {
   let successCount = 0;
   let failCount = 0;
-  for (const ch of line.trim()) {
+  for (const ch of line.trim().toLowerCase()) {
     if (ch === 'o') successCount += 1;
     else if (ch === 'x') failCount += 1;
   }
@@ -371,10 +404,35 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
     gameId,
   } = input;
 
-  const lines = gameText
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+  // ---- Line normalization ----
+  // 1) Lowercase O/X → o/x (some rows use capitals for quest/lady outcomes).
+  // 2) Strip curly quotes (e.g. `136”` typo from Sheets auto-format).
+  // 3) Replace period-as-separator with space (e.g. `"190.4+"` → `"190 4+"`)
+  //    when the period sits between a seat digit and a +/- anomaly digit.
+  // 4) Collapse lingering tabs/double-spaces.
+  // 5) Truncate at assassination footer (lines starting with `刺客刺殺`,
+  //    `1.` / `2.` / …  numbered player listings, or isolated 6-digit cfg
+  //    that matches the roleCode value). These are metadata, not gameplay.
+  const rawLines = gameText.split(/\r?\n/);
+  const lines: string[] = [];
+  const footerStart = /^(?:刺客刺殺|刺殺|結果[:：])/;
+  const numberedPlayerLine = /^[0-9]\s*[.．、]\s*\S/;
+  const assassinCfgMatch = roleCode.trim();
+  for (const raw of rawLines) {
+    let line = raw.trim();
+    if (line.length === 0) continue;
+    if (footerStart.test(line)) break;
+    if (numberedPlayerLine.test(line)) break;
+    if (assassinCfgMatch.length === 6 && line === assassinCfgMatch) break;
+    // strip curly quotes
+    line = line.replace(/[“”‘’”“’‘]/g, '');
+    // replace period separator between digit and digit-with-sign
+    line = line.replace(/([0-9])\.([0-9])/g, '$1 $2');
+    // collapse whitespace
+    line = line.replace(/\s+/g, ' ').trim();
+    if (line.length === 0) continue;
+    lines.push(line);
+  }
 
   const playerCount = playerNames.filter((n) => (n ?? '').trim().length > 0).length;
   if (playerCount < 5 || playerCount > 10) {
@@ -398,9 +456,9 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
       // 任務結果 → 覆寫最後一次提議的 questResult + 記錄 round outcome + 進入下一回合
       const last = missions[missions.length - 1];
       if (!last || last.round !== currentRound) {
-        throw new Error(
-          `Quest result without matching proposal at round ${currentRound}: ${line}`,
-        );
+        // 舊資料偶見重複 quest 行或收尾多餘字元，安全做法是忽略，不炸整場。
+        // 這發生在 5 局已結束後的尾端裝飾行（例：row 419 的多餘 "ooooo"）。
+        continue;
       }
       const q = parseQuestLine(line, currentRound, playerCount);
       last.questResult = q;
@@ -416,24 +474,37 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
     if (isLadyLine(line)) {
       // 湖行通常出現在回合任務結果之後；round = 剛結束的回合 = currentRound - 1
       const ladyRound = Math.max(1, currentRound - 1);
-      const core = parseLadyLine(line, ladyRound);
-      const actual = deriveActualCamp(core.targetSeat, roles);
-      ladyChain.push({
-        ...core,
-        actual,
-        truthful: core.declaration === actual,
-      });
+      try {
+        const core = parseLadyLine(line, ladyRound);
+        const actual = deriveActualCamp(core.targetSeat, roles);
+        ladyChain.push({
+          ...core,
+          actual,
+          truthful: core.declaration === actual,
+        });
+      } catch {
+        // 舊列偶有錯字；湖不可解析時跳過不炸整場。
+      }
       continue;
     }
 
-    // 不是任務結果也不是湖 → 提議行
-    proposalInRound += 1;
-    const { teamSeats, anomalies } = parseProposalLine(line);
+    // 不是任務結果也不是湖 → 提議行；舊列偶有錯字（多餘 token / 缺 +/-），
+    // 不應整場 abort，改跳過該行。
+    let parsed: ProposalLine | null = null;
+    try {
+      parsed = parseProposalLine(line);
+    } catch {
+      continue;
+    }
+    const { teamSeats, anomalies } = parsed;
+    if (teamSeats.length === 0) continue;
     const { votes, approveCount, rejectCount } = buildVotes(
       teamSeats,
       anomalies,
       playerCount,
     );
+
+    proposalInRound += 1;
 
     // 最後一個提議才 passed；之前的都是 rejected — 下方 quest line 處理時會覆寫 last.passed = true
     const passed = approveCount > rejectCount;

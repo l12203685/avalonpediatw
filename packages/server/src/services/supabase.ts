@@ -449,56 +449,16 @@ export interface RecentGame {
   created_at: string;
 }
 
-/**
- * 取得排行榜（依 ELO 降序，最多 50 人）
- */
-export async function getLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
-  const db = getSupabaseClient();
-  if (!db) return [];
+// [removed 2026-04-24 loop 4 P1] export async function getLeaderboard(limit = 50): Promise<LeaderboardEntry[]>
+//   — 0 production caller (api.ts uses ComputedStatsRepositoryV2.getLeaderboard;
+//   firebase.ts has its own getLeaderboard for tests).
+//   Replacement: ComputedStatsRepositoryV2.getLeaderboard() at services/ComputedStatsRepositoryV2.ts:198
+//   History: see git log packages/server/src/services/supabase.ts
 
-  const { data, error } = await db
-    .from('users')
-    .select('id, display_name, photo_url, provider, elo_rating, total_games, games_won, games_lost, badges')
-    .gte('total_games', 1)
-    .order('elo_rating', { ascending: false })
-    .limit(limit);
-
-  if (error || !data) return [];
-
-  return data.map(row => ({
-    ...row,
-    badges: row.badges ?? [],
-    win_rate: row.total_games > 0 ? Math.round((row.games_won / row.total_games) * 100) : 0,
-  }));
-}
-
-/**
- * 取得單一用戶資料（含最近 20 局遊戲）
- */
-export async function getDbUserProfile(userId: string): Promise<UserProfile | null> {
-  const db = getSupabaseClient();
-  if (!db) return null;
-
-  const { data: user, error } = await db
-    .from('users')
-    .select('id, display_name, photo_url, provider, elo_rating, total_games, games_won, games_lost, badges')
-    .eq('id', userId)
-    .single();
-
-  if (error || !user) return null;
-
-  const { data: games } = await db
-    .from('game_records')
-    .select('id, room_id, role, team, won, elo_delta, player_count, created_at')
-    .eq('player_user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(20);
-
-  return {
-    ...user,
-    recent_games: (games || []) as RecentGame[],
-  };
-}
+// [removed 2026-04-24 loop 4 P1] export async function getDbUserProfile(userId: string): Promise<UserProfile | null>
+//   — 0 caller, removed.
+//   Replacement: profile route uses getSupabaseIdByFirebaseUid + direct queries
+//   History: see git log packages/server/src/services/supabase.ts
 
 /**
  * 依 firebase_uid 查 Supabase UUID（用於 profile 路由）

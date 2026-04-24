@@ -240,8 +240,16 @@ export class GameServer {
           playerName: string,
           password?: string,
           timerMultiplier?: TimerMultiplier,
+          casual?: boolean,
         ) => {
-          this.handleCreateRoom(socket, playerName, user, password, timerMultiplier);
+          this.handleCreateRoom(
+            socket,
+            playerName,
+            user,
+            password,
+            timerMultiplier,
+            casual,
+          );
         },
       );
 
@@ -279,6 +287,10 @@ export class GameServer {
 
       socket.on('game:declare-lake-result', (roomId: string, claim: 'good' | 'evil') => {
         this.handleDeclareLakeResult(socket, roomId, claim);
+      });
+
+      socket.on('game:skip-lake-declaration', (roomId: string) => {
+        this.handleSkipLakeDeclaration(socket, roomId);
       });
 
       socket.on('chat:send-message', (roomId: string, message: string) => {
@@ -484,6 +496,7 @@ export class GameServer {
     user: User,
     password?: string,
     timerMultiplier?: TimerMultiplier,
+    casual?: boolean,
   ): void {
     try {
       const roomId = this.generateRoomCode();
@@ -500,6 +513,7 @@ export class GameServer {
         playerName || user.displayName,
         playerId,
         timerConfig,
+        Boolean(casual),
       );
       if (password?.trim()) {
         this.roomManager.setRoomPassword(roomId, password.trim());
@@ -977,6 +991,31 @@ export class GameServer {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error processing declare-lake-result:', errorMsg);
       socket.emit('error', `Failed to declare Lady of the Lake result: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Companion to `handleDeclareLakeResult` — the declarer may choose to
+   * keep the inspection result private. This advances the Lady phase
+   * without recording a declaration so the game can progress.
+   */
+  private handleSkipLakeDeclaration(socket: Socket, roomId: string): void {
+    try {
+      const playerId = socket.data.playerId as string | undefined;
+      if (!playerId) { socket.emit('error', 'Not authenticated in room'); return; }
+
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+
+      const gameEngine = this.gameEngines.get(roomId);
+      if (!gameEngine) { socket.emit('error', 'Game engine not found'); return; }
+
+      gameEngine.skipLakeDeclaration(playerId);
+      // Engine broadcasts via onStateChange; nothing else to emit.
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error processing skip-lake-declaration:', errorMsg);
+      socket.emit('error', `Failed to skip Lady of the Lake declaration: ${errorMsg}`);
     }
   }
 

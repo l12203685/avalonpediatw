@@ -183,7 +183,8 @@
     "declareGood": "宣告為好人 (Declare Good)",
     "declareEvil": "宣告為壞人 (Declare Evil)",
     "declareKeepPrivate": "不宣告=保持私密 (No declaration = keep it private)",
-    "declared": "你已公開宣告：{{claim}}"
+    "declared": "你已公開宣告：{{claim}}",
+    "skipDeclaration": "不宣告、進入下一輪 (Keep private & continue)"
   },
   "assassin": {
     "questHistoryHeader": "任務隊伍歷史 (Quest Team History)",

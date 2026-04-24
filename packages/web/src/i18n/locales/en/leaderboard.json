@@ -10,5 +10,10 @@
   "noDataHint": "Auto-updates after completing games",
   "noResults": "No players match your filter",
   "noResultsHint": "Try different search criteria",
-  "winsLosses": "{{wins}}W {{losses}}L"
+  "winsLosses": "{{wins}}W {{losses}}L",
+  "games": "games",
+  "winRate": "Win rate",
+  "theoreticalWinRate": "Theoretical WR",
+  "elo": "ELO",
+  "groupEmpty": "No players in this group yet"
 }

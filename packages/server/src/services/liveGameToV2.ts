@@ -122,5 +122,18 @@ export function buildV2RecordFromRoom(
       typeof room.leaderIndex === 'number' ? room.leaderIndex : undefined,
   };
 
-  return convertV1ToV2(v1);
+  const record = convertV1ToV2(v1);
+
+  // Edward 2026-04-24 14:43: ELO-exclusion flags. Snapshot AI-participation
+  // at game-end and carry the host-selected casual-match flag into the V2
+  // record so downstream stats repo / leaderboard compute can skip them.
+  //
+  // `hasAI` derives from Room.players — any seat with `isBot === true` at
+  // game-end counts. Defensive: legacy rows without `isBot` read as falsy so
+  // historical pure-human games are unaffected.
+  const hasAI = playerEntries.some(([, p]) => Boolean(p.isBot));
+  if (hasAI) record.hasAI = true;
+  if (room.casual) record.casual = true;
+
+  return record;
 }

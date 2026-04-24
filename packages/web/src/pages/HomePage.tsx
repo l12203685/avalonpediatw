@@ -109,6 +109,9 @@ export default function HomePage(): JSX.Element {
   };
   // Per-room phase-timer multiplier (1x default). null = unlimited.
   const [timerMultiplier, setTimerMultiplier] = useState<TimerMultiplier>(1);
+  // 娛樂局 (Edward 2026-04-24 14:43): 勾選後此局戰績不計入 ELO。
+  // 預設 false 以保留原本排位行為。
+  const [casualMatch, setCasualMatch] = useState<boolean>(false);
 
   // Check admin status for UI conditional (shown after logged-in player loads)
   useEffect(() => {
@@ -173,7 +176,12 @@ export default function HomePage(): JSX.Element {
 
     localStorage.setItem('avalon_player_name', playerName.trim());
     try {
-      createRoom(playerName, roomPassword.trim() || undefined, timerMultiplier);
+      createRoom(
+        playerName,
+        roomPassword.trim() || undefined,
+        timerMultiplier,
+        casualMatch,
+      );
       setGameState('lobby');
     } catch {
       addToast(t('home.createRoomFailed'), 'error');
@@ -498,6 +506,33 @@ export default function HomePage(): JSX.Element {
                 </p>
               </div>
 
+              {/* 娛樂局 — Edward 2026-04-24 14:43：
+                    「遊戲開房多勾選一個"娛樂局" 的選項 在計算ELO時排除
+                     有AI 與 有 勾選"娛樂局" 的場次」
+                  勾選後此局戰績不計入 ELO / 排行榜。 */}
+              <div className="space-y-1">
+                <label
+                  className="flex items-start gap-3 bg-zinc-800/40 border border-zinc-700 rounded-lg px-4 py-3 cursor-pointer hover:border-zinc-500 transition-colors"
+                  title="勾選後此局戰績不計入 ELO (Casual match — not counted toward ELO)"
+                >
+                  <input
+                    type="checkbox"
+                    checked={casualMatch}
+                    onChange={(e) => setCasualMatch(e.target.checked)}
+                    data-testid="create-room-casual-checkbox"
+                    className="w-5 h-5 mt-0.5 accent-amber-500 flex-shrink-0"
+                  />
+                  <div className="flex-1 text-left">
+                    <div className="text-sm font-semibold text-white">
+                      娛樂局 (Casual Match)
+                    </div>
+                    <p className="text-[10px] text-zinc-400 leading-relaxed mt-0.5">
+                      勾選後此局戰績不計入 ELO 與排行榜。有 AI 參與的對局也會自動排除。
+                    </p>
+                  </div>
+                </label>
+              </div>
+
               <div className="space-y-3">
                 <button
                   onClick={handleCreateRoom}
@@ -511,6 +546,7 @@ export default function HomePage(): JSX.Element {
                     setMode('home');
                     setPlayerName('');
                     setRoomPassword('');
+                    setCasualMatch(false);
                   }}
                   className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 px-4 rounded-lg transition-all border border-zinc-700"
                 >

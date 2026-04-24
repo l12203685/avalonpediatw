@@ -62,6 +62,24 @@ describe('RoomManager — createRoom', () => {
     rm.createRoom('r1', 'Alice', 'p1');
     expect(rm.getRoomCount()).toBe(1);
   });
+
+  // Edward 2026-04-24 14:43: 娛樂局 — 勾選後此局戰績不計入 ELO。
+  it('defaults casual to false when the flag is omitted', () => {
+    const room = rm.createRoom('r1', 'Alice', 'p1');
+    expect(room.casual).toBe(false);
+  });
+
+  it('persists casual=true when requested on creation', () => {
+    const room = rm.createRoom('r1', 'Alice', 'p1', undefined, true);
+    expect(room.casual).toBe(true);
+  });
+
+  it('coerces truthy casual values to boolean true', () => {
+    // `casual` parameter is typed boolean but defensive Boolean() wrap in
+    // createRoom means any callsite accidentally passing e.g. string stays safe.
+    const room = rm.createRoom('r1', 'Alice', 'p1', undefined, Boolean(1));
+    expect(room.casual).toBe(true);
+  });
 });
 
 describe('RoomManager — getRoom / getAllRooms', () => {

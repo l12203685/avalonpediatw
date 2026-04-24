@@ -201,6 +201,32 @@ export default function LobbyPage(): JSX.Element {
         <div className="text-center">
           <h1 className="text-2xl sm:text-4xl font-bold text-white mb-3">{room.name}</h1>
 
+          {/* Casual / AI-inclusive indicator — Edward 2026-04-24 14:43:
+              勾選"娛樂局"或有 AI 參與時，此局不計入 ELO。顯示 tag 讓
+              玩家清楚當前房間的排位狀態。 */}
+          {(room.casual || playerList.some(p => p.isBot)) && (
+            <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
+              {room.casual && (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-900/40 border border-amber-600 text-amber-200"
+                  title="此局為娛樂局，戰績不計入 ELO"
+                  data-testid="lobby-casual-tag"
+                >
+                  娛樂局 · 不計 ELO
+                </span>
+              )}
+              {!room.casual && playerList.some(p => p.isBot) && (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-900/40 border border-blue-600 text-blue-200"
+                  title="房間內有 AI 玩家，此局不計入 ELO"
+                  data-testid="lobby-ai-tag"
+                >
+                  含 AI · 不計 ELO
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Room ID with copy buttons */}
           <div className="inline-flex items-center gap-2 sm:gap-3 bg-avalon-card/50 border border-gray-600 rounded-xl px-3 sm:px-5 py-2 sm:py-3">
             <div className="text-left">

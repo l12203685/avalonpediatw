@@ -664,3 +664,155 @@ describe('GameEngine · oberonAlwaysFail (Oberon must fail house rule)', () => {
     engine.cleanup();
   });
 });
+
+/**
+ * Lady of the Lake declaration flow (Edward 2026-04-24 "還有為什麼湖中完全沒宣告").
+ *
+ * Before the fix, `submitLadyOfTheLakeTarget` hard-coded a 3-second
+ * auto-advance back to voting. That drained `ladyOfTheLakeResult` and
+ * flipped `room.state` before the declarer could click, so declarations
+ * effectively never happened. The engine now stays in `lady_of_the_lake`
+ * until the declarer calls `declareLakeResult` or `skipLakeDeclaration`,
+ * with a 90s AFK timeout as the safety net.
+ */
+describe('GameEngine · Lady of the Lake declaration flow (Edward 2026-04-24)', () => {
+  // Build a 7-player room (Lady is spec-gated to >=7 players) and fast-
+  // forward directly into the Lady phase via the engine's public API.
+  function makeLadyRoom(): {
+    engine: GameEngine;
+    room: Room;
+    declarerId: string;
+    targetId: string;
+  } {
+    const players: { [key: string]: Player } = {};
+    for (let i = 1; i <= 7; i += 1) {
+      players[`p${i}`] = {
+        id: `p${i}`,
+        name: `P${i}`,
+        role: null,
+        team: null,
+        status: 'active',
+        createdAt: Date.now(),
+      };
+    }
+    const room: Room = {
+      id: 'lady-room',
+      name: 'lady test',
+      host: 'p1',
+      state: 'lobby',
+      players,
+      maxPlayers: 10,
+      currentRound: 0,
+      maxRounds: 5,
+      votes: {},
+      questTeam: [],
+      questResults: [],
+      failCount: 0,
+      evilWins: null,
+      leaderIndex: 0,
+      voteHistory: [],
+      questHistory: [],
+      questVotedCount: 0,
+      roleOptions: {
+        percival: true,
+        morgana: true,
+        oberon: true,
+        mordred: true,
+        ladyOfTheLake: true,
+        ladyStart: 'seat0',
+      },
+      readyPlayerIds: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const engine = new GameEngine(room);
+    engine.startGame();
+    // Force the room into the lady phase deterministically — we rely on
+    // startGame() to have set `ladyOfTheLakeHolder` to seat0 (p1).
+    const declarerId = room.ladyOfTheLakeHolder!;
+    room.state = 'lady_of_the_lake';
+    room.currentRound = 2;
+    // Pick the first non-holder as target
+    const targetId = Object.keys(players).find((pid) => pid !== declarerId)!;
+    return { engine, room, declarerId, targetId };
+  }
+
+  afterEach(() => {
+    vi.clearAllTimers();
+  });
+
+  it('inspection stays in lady_of_the_lake phase until declarer declares or skips', () => {
+    const { engine, room, declarerId, targetId } = makeLadyRoom();
+    engine.submitLadyOfTheLakeTarget(declarerId, targetId);
+    // Engine must NOT auto-advance: the declarer needs a chance to
+    // publicly claim good/evil (or skip).
+    expect(room.state).toBe('lady_of_the_lake');
+    expect(room.ladyOfTheLakeTarget).toBe(targetId);
+    expect(room.ladyOfTheLakeResult).toBeDefined();
+    expect(room.ladyOfTheLakeHistory).toHaveLength(1);
+    expect(room.ladyOfTheLakeHistory![0].declared).toBeUndefined();
+    engine.cleanup();
+  });
+
+  it('declareLakeResult records the claim and advances to the next voting round', () => {
+    const { engine, room, declarerId, targetId } = makeLadyRoom();
+    engine.submitLadyOfTheLakeTarget(declarerId, targetId);
+    const prevRound = room.currentRound;
+    const rec = engine.declareLakeResult(declarerId, 'good');
+    expect(rec).not.toBeNull();
+    expect(rec!.declared).toBe(true);
+    expect(rec!.declaredClaim).toBe('good');
+    // Phase advances to the next voting round, result is cleared so it
+    // does not leak to other players on broadcast.
+    expect(room.state).toBe('voting');
+    expect(room.currentRound).toBe(prevRound + 1);
+    expect(room.ladyOfTheLakeResult).toBeUndefined();
+    expect(room.ladyOfTheLakeTarget).toBeUndefined();
+    engine.cleanup();
+  });
+
+  it('skipLakeDeclaration advances without recording a declaration', () => {
+    const { engine, room, declarerId, targetId } = makeLadyRoom();
+    engine.submitLadyOfTheLakeTarget(declarerId, targetId);
+    const prevRound = room.currentRound;
+    engine.skipLakeDeclaration(declarerId);
+    expect(room.state).toBe('voting');
+    expect(room.currentRound).toBe(prevRound + 1);
+    // History kept but `declared` must remain falsy so analytics can
+    // separate declared vs silent inspections.
+    expect(room.ladyOfTheLakeHistory).toHaveLength(1);
+    expect(room.ladyOfTheLakeHistory![0].declared).toBeFalsy();
+    engine.cleanup();
+  });
+
+  it('skipLakeDeclaration by a non-declarer throws', () => {
+    const { engine, declarerId, targetId } = makeLadyRoom();
+    engine.submitLadyOfTheLakeTarget(declarerId, targetId);
+    // targetId just received the Lady token but is NOT the player who
+    // performed the inspection, so they cannot short-circuit the
+    // declaration step.
+    expect(() => engine.skipLakeDeclaration(targetId)).toThrow(/not the declarer/);
+    engine.cleanup();
+  });
+
+  it('declareLakeResult by a non-declarer throws', () => {
+    const { engine, declarerId, targetId } = makeLadyRoom();
+    engine.submitLadyOfTheLakeTarget(declarerId, targetId);
+    expect(() => engine.declareLakeResult(targetId, 'evil')).toThrow(
+      /not the declarer/,
+    );
+    engine.cleanup();
+  });
+
+  it('second declareLakeResult is a no-op (idempotent)', () => {
+    const { engine, declarerId, targetId } = makeLadyRoom();
+    engine.submitLadyOfTheLakeTarget(declarerId, targetId);
+    const first = engine.declareLakeResult(declarerId, 'good');
+    expect(first).not.toBeNull();
+    // After the first declare the phase has already advanced — second
+    // call sits in the `declared === true` short-circuit branch.
+    const second = engine.declareLakeResult(declarerId, 'evil');
+    expect(second).toBeNull();
+    engine.cleanup();
+  });
+});

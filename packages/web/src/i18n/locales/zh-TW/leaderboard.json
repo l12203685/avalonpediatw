@@ -10,5 +10,10 @@
   "noDataHint": "完成遊戲後將自動更新",
   "noResults": "找不到符合條件的玩家",
   "noResultsHint": "請嘗試其他搜尋條件",
-  "winsLosses": "{{wins}}勝 {{losses}}敗"
+  "winsLosses": "{{wins}}勝 {{losses}}敗",
+  "games": "場",
+  "winRate": "勝率",
+  "theoreticalWinRate": "理論勝率",
+  "elo": "ELO",
+  "groupEmpty": "此組目前沒有玩家"
 }

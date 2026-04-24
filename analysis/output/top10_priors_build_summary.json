@@ -1,355 +1,115 @@
 {
   "expert": {
-    "rule_version": "edward_2026-04-22",
-    "anomaly_breakdown_version": "edward_2026-04-22_15:12_round_cross_product",
     "votes_counted": 64510,
     "total_keys": 92,
     "high_conf_keys": 62,
     "low_conf_keys": 17,
-    "anomaly_stats": {
-      "anomaly_approve_count": 11885,
-      "anomaly_reject_count": 8668,
-      "total_anomaly_tokens": 20553,
-      "attempts_with_any_anomaly": 9561,
-      "total_attempts": 25526,
-      "anomaly_approve_ratio_of_all_votes": 0.18424,
-      "anomaly_reject_ratio_of_all_votes": 0.13437,
-      "attempts_with_anomaly_ratio": 0.3746,
-      "by_round": {
-        "1": {
-          "outer_white_rate": 0.02598,
-          "inner_black_rate": 0.00902,
-          "outer_white_count": 1533,
-          "inner_black_count": 229,
-          "off_team_seat_opportunities": 59005,
-          "in_team_seat_opportunities": 25375,
-          "attempts_in_round": 8438,
-          "games_with_round": 1685
-        },
-        "2": {
-          "outer_white_rate": 0.03508,
-          "inner_black_rate": 0.03311,
-          "outer_white_count": 1675,
-          "inner_black_count": 1054,
-          "off_team_seat_opportunities": 47748,
-          "in_team_seat_opportunities": 31832,
-          "attempts_in_round": 7958,
-          "games_with_round": 1680
-        },
-        "3": {
-          "outer_white_rate": 0.12979,
-          "inner_black_rate": 0.13867,
-          "outer_white_count": 4515,
-          "inner_black_count": 3219,
-          "off_team_seat_opportunities": 34787,
-          "in_team_seat_opportunities": 23213,
-          "attempts_in_round": 5800,
-          "games_with_round": 1676
-        },
-        "4": {
-          "outer_white_rate": 0.23618,
-          "inner_black_rate": 0.20038,
-          "outer_white_count": 2513,
-          "inner_black_count": 2132,
-          "off_team_seat_opportunities": 10640,
-          "in_team_seat_opportunities": 10640,
-          "attempts_in_round": 2128,
-          "games_with_round": 988
-        },
-        "5": {
-          "outer_white_rate": 0.26747,
-          "inner_black_rate": 0.32889,
-          "outer_white_count": 1608,
-          "inner_black_count": 1976,
-          "off_team_seat_opportunities": 6012,
-          "in_team_seat_opportunities": 6008,
-          "attempts_in_round": 1202,
-          "games_with_round": 499
-        }
-      },
-      "round_weight_suggestion": {
-        "1": 0.5,
-        "2": 0.7,
-        "3": 1.0,
-        "4": 1.3,
-        "5": 1.8
-      },
-      "pooled_rates_for_reference": {
-        "outer_white_rate": 0.07487,
-        "inner_black_rate": 0.0887,
-        "outer_white_count": 11844,
-        "inner_black_count": 8610,
-        "total_off_team_opportunities": 158192,
-        "total_in_team_opportunities": 97068
-      },
-      "note": "by_round[N].outer_white_rate = 該 round 外白票 / off_team 座位機會數；inner_black_rate = 內黑票 / in_team 座位機會數。分母為每個 attempt 的 off/in-team 人數累加（不以玩家為單位），反映『該 round 任一 off/in-team 座位出現異常的機率』。runtime 建議以 by_round 為主，pooled_rates_for_reference 只作整體回退參考。"
-    },
     "L3.r1.off_team": {
       "sample_size": 14917,
-      "approve_count": 548,
-      "reject_count": 14369,
-      "approve_rate": 0.0367,
-      "reject_rate": 0.9633,
+      "approve_count": 3454,
+      "reject_count": 11463,
+      "approve_rate": 0.2315,
+      "reject_rate": 0.7685,
       "confidence": "high"
     },
     "L3.r1.in_team": {
       "sample_size": 6578,
-      "approve_count": 6490,
-      "reject_count": 88,
-      "approve_rate": 0.9866,
-      "reject_rate": 0.0134,
+      "approve_count": 1356,
+      "reject_count": 5222,
+      "approve_rate": 0.2061,
+      "reject_rate": 0.7939,
       "confidence": "high"
     },
     "L3.r2_plus.off_team": {
       "sample_size": 24205,
-      "approve_count": 3104,
-      "reject_count": 21101,
-      "approve_rate": 0.1282,
-      "reject_rate": 0.8718,
+      "approve_count": 7816,
+      "reject_count": 16389,
+      "approve_rate": 0.3229,
+      "reject_rate": 0.6771,
       "confidence": "high"
     },
     "L3.r2_plus.in_team": {
       "sample_size": 18810,
-      "approve_count": 16362,
-      "reject_count": 2448,
-      "approve_rate": 0.8699,
-      "reject_rate": 0.1301,
+      "approve_count": 5478,
+      "reject_count": 13332,
+      "approve_rate": 0.2912,
+      "reject_rate": 0.7088,
       "confidence": "high"
     }
   },
   "mid": {
-    "rule_version": "edward_2026-04-22",
-    "anomaly_breakdown_version": "edward_2026-04-22_15:12_round_cross_product",
     "votes_counted": 42655,
     "total_keys": 86,
     "high_conf_keys": 59,
     "low_conf_keys": 14,
-    "anomaly_stats": {
-      "anomaly_approve_count": 10466,
-      "anomaly_reject_count": 7761,
-      "total_anomaly_tokens": 18227,
-      "attempts_with_any_anomaly": 8532,
-      "total_attempts": 22730,
-      "anomaly_approve_ratio_of_all_votes": 0.24536,
-      "anomaly_reject_ratio_of_all_votes": 0.18195,
-      "attempts_with_anomaly_ratio": 0.3754,
-      "by_round": {
-        "1": {
-          "outer_white_rate": 0.02635,
-          "inner_black_rate": 0.00963,
-          "outer_white_count": 1387,
-          "inner_black_count": 218,
-          "off_team_seat_opportunities": 52642,
-          "in_team_seat_opportunities": 22648,
-          "attempts_in_round": 7529,
-          "games_with_round": 1503
-        },
-        "2": {
-          "outer_white_rate": 0.03547,
-          "inner_black_rate": 0.03458,
-          "outer_white_count": 1511,
-          "inner_black_count": 982,
-          "off_team_seat_opportunities": 42594,
-          "in_team_seat_opportunities": 28396,
-          "attempts_in_round": 7099,
-          "games_with_round": 1498
-        },
-        "3": {
-          "outer_white_rate": 0.12945,
-          "inner_black_rate": 0.13928,
-          "outer_white_count": 4009,
-          "inner_black_count": 2879,
-          "off_team_seat_opportunities": 30970,
-          "in_team_seat_opportunities": 20670,
-          "attempts_in_round": 5164,
-          "games_with_round": 1494
-        },
-        "4": {
-          "outer_white_rate": 0.23084,
-          "inner_black_rate": 0.19989,
-          "outer_white_count": 2163,
-          "inner_black_count": 1873,
-          "off_team_seat_opportunities": 9370,
-          "in_team_seat_opportunities": 9370,
-          "attempts_in_round": 1874,
-          "games_with_round": 874
-        },
-        "5": {
-          "outer_white_rate": 0.25592,
-          "inner_black_rate": 0.32982,
-          "outer_white_count": 1362,
-          "inner_black_count": 1754,
-          "off_team_seat_opportunities": 5322,
-          "in_team_seat_opportunities": 5318,
-          "attempts_in_round": 1064,
-          "games_with_round": 433
-        }
-      },
-      "round_weight_suggestion": {
-        "1": 0.5,
-        "2": 0.7,
-        "3": 1.0,
-        "4": 1.3,
-        "5": 1.8
-      },
-      "pooled_rates_for_reference": {
-        "outer_white_rate": 0.07404,
-        "inner_black_rate": 0.08919,
-        "outer_white_count": 10432,
-        "inner_black_count": 7706,
-        "total_off_team_opportunities": 140898,
-        "total_in_team_opportunities": 86402
-      },
-      "note": "by_round[N].outer_white_rate = 該 round 外白票 / off_team 座位機會數；inner_black_rate = 內黑票 / in_team 座位機會數。分母為每個 attempt 的 off/in-team 人數累加（不以玩家為單位），反映『該 round 任一 off/in-team 座位出現異常的機率』。runtime 建議以 by_round 為主，pooled_rates_for_reference 只作整體回退參考。"
-    },
     "L3.r1.off_team": {
       "sample_size": 9830,
-      "approve_count": 275,
-      "reject_count": 9555,
-      "approve_rate": 0.028,
-      "reject_rate": 0.972,
+      "approve_count": 2220,
+      "reject_count": 7610,
+      "approve_rate": 0.2258,
+      "reject_rate": 0.7742,
       "confidence": "high"
     },
     "L3.r1.in_team": {
       "sample_size": 4345,
-      "approve_count": 4294,
-      "reject_count": 51,
-      "approve_rate": 0.9883,
-      "reject_rate": 0.0117,
+      "approve_count": 866,
+      "reject_count": 3479,
+      "approve_rate": 0.1993,
+      "reject_rate": 0.8007,
       "confidence": "high"
     },
     "L3.r2_plus.off_team": {
       "sample_size": 16241,
-      "approve_count": 1532,
-      "reject_count": 14709,
-      "approve_rate": 0.0943,
-      "reject_rate": 0.9057,
+      "approve_count": 4977,
+      "reject_count": 11264,
+      "approve_rate": 0.3064,
+      "reject_rate": 0.6936,
       "confidence": "high"
     },
     "L3.r2_plus.in_team": {
       "sample_size": 12239,
-      "approve_count": 10516,
-      "reject_count": 1723,
-      "approve_rate": 0.8592,
-      "reject_rate": 0.1408,
+      "approve_count": 3515,
+      "reject_count": 8724,
+      "approve_rate": 0.2872,
+      "reject_rate": 0.7128,
       "confidence": "high"
     }
   },
   "novice": {
-    "rule_version": "edward_2026-04-22",
-    "anomaly_breakdown_version": "edward_2026-04-22_15:12_round_cross_product",
     "votes_counted": 32752,
     "total_keys": 76,
     "high_conf_keys": 53,
     "low_conf_keys": 17,
-    "anomaly_stats": {
-      "anomaly_approve_count": 9409,
-      "anomaly_reject_count": 6593,
-      "total_anomaly_tokens": 16002,
-      "attempts_with_any_anomaly": 7220,
-      "total_attempts": 19027,
-      "anomaly_approve_ratio_of_all_votes": 0.28728,
-      "anomaly_reject_ratio_of_all_votes": 0.2013,
-      "attempts_with_anomaly_ratio": 0.3795,
-      "by_round": {
-        "1": {
-          "outer_white_rate": 0.02304,
-          "inner_black_rate": 0.00933,
-          "outer_white_count": 1014,
-          "inner_black_count": 176,
-          "off_team_seat_opportunities": 44010,
-          "in_team_seat_opportunities": 18860,
-          "attempts_in_round": 6287,
-          "games_with_round": 1262
-        },
-        "2": {
-          "outer_white_rate": 0.0342,
-          "inner_black_rate": 0.03299,
-          "outer_white_count": 1230,
-          "inner_black_count": 791,
-          "off_team_seat_opportunities": 35965,
-          "in_team_seat_opportunities": 23975,
-          "attempts_in_round": 5994,
-          "games_with_round": 1262
-        },
-        "3": {
-          "outer_white_rate": 0.14365,
-          "inner_black_rate": 0.14518,
-          "outer_white_count": 3745,
-          "inner_black_count": 2523,
-          "off_team_seat_opportunities": 26071,
-          "in_team_seat_opportunities": 17379,
-          "attempts_in_round": 4345,
-          "games_with_round": 1262
-        },
-        "4": {
-          "outer_white_rate": 0.26819,
-          "inner_black_rate": 0.20235,
-          "outer_white_count": 2053,
-          "inner_black_count": 1549,
-          "off_team_seat_opportunities": 7655,
-          "in_team_seat_opportunities": 7655,
-          "attempts_in_round": 1531,
-          "games_with_round": 728
-        },
-        "5": {
-          "outer_white_rate": 0.30706,
-          "inner_black_rate": 0.34606,
-          "outer_white_count": 1336,
-          "inner_black_count": 1505,
-          "off_team_seat_opportunities": 4351,
-          "in_team_seat_opportunities": 4349,
-          "attempts_in_round": 870,
-          "games_with_round": 363
-        }
-      },
-      "round_weight_suggestion": {
-        "1": 0.5,
-        "2": 0.7,
-        "3": 1.0,
-        "4": 1.3,
-        "5": 1.8
-      },
-      "pooled_rates_for_reference": {
-        "outer_white_rate": 0.07944,
-        "inner_black_rate": 0.09061,
-        "outer_white_count": 9378,
-        "inner_black_count": 6544,
-        "total_off_team_opportunities": 118052,
-        "total_in_team_opportunities": 72218
-      },
-      "note": "by_round[N].outer_white_rate = 該 round 外白票 / off_team 座位機會數；inner_black_rate = 內黑票 / in_team 座位機會數。分母為每個 attempt 的 off/in-team 人數累加（不以玩家為單位），反映『該 round 任一 off/in-team 座位出現異常的機率』。runtime 建議以 by_round 為主，pooled_rates_for_reference 只作整體回退參考。"
-    },
     "L3.r1.off_team": {
       "sample_size": 7602,
-      "approve_count": 81,
-      "reject_count": 7521,
-      "approve_rate": 0.0107,
-      "reject_rate": 0.9893,
+      "approve_count": 1632,
+      "reject_count": 5970,
+      "approve_rate": 0.2147,
+      "reject_rate": 0.7853,
       "confidence": "high"
     },
     "L3.r1.in_team": {
       "sample_size": 3190,
-      "approve_count": 3161,
-      "reject_count": 29,
-      "approve_rate": 0.9909,
-      "reject_rate": 0.0091,
+      "approve_count": 612,
+      "reject_count": 2578,
+      "approve_rate": 0.1918,
+      "reject_rate": 0.8082,
       "confidence": "high"
     },
     "L3.r2_plus.off_team": {
       "sample_size": 13228,
-      "approve_count": 1534,
-      "reject_count": 11694,
-      "approve_rate": 0.116,
-      "reject_rate": 0.884,
+      "approve_count": 4226,
+      "reject_count": 9002,
+      "approve_rate": 0.3195,
+      "reject_rate": 0.6805,
       "confidence": "high"
     },
     "L3.r2_plus.in_team": {
       "sample_size": 8732,
-      "approve_count": 7855,
-      "reject_count": 877,
-      "approve_rate": 0.8996,
-      "reject_rate": 0.1004,
+      "approve_count": 2418,
+      "reject_count": 6314,
+      "approve_rate": 0.2769,
+      "reject_rate": 0.7231,
       "confidence": "high"
     }
   }

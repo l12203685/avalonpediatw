@@ -33,6 +33,11 @@ export class RoomManager {
     hostName: string,
     hostId: string,
     timerConfig?: TimerConfig,
+    /**
+     * Edward 2026-04-24: 娛樂局 — 勾選後此局戰績不計入 ELO. Defaults to `false`
+     * so omitted / legacy clients keep the normal (ranked) behaviour.
+     */
+    casual: boolean = false,
   ): Room {
     const safeTimerConfig: TimerConfig = isTimerMultiplier(timerConfig?.multiplier)
       ? { multiplier: timerConfig!.multiplier }
@@ -87,6 +92,7 @@ export class RoomManager {
       },
       readyPlayerIds: [],
       timerConfig: safeTimerConfig,
+      casual: Boolean(casual),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

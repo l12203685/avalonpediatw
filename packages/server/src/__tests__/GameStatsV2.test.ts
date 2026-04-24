@@ -731,6 +731,28 @@ describe('computePlayerStatsV2', () => {
     });
     expect(stats.eloTag === 'novice_tag' || stats.eloTag === 'mid_tag' || stats.eloTag === 'top_tag').toBe(true);
   });
+
+  // Edward 2026-04-24 14:43：「在計算ELO時排除有AI 與 有 勾選"娛樂局" 的場次」
+  it('excludes casual games from the ranked stats pipeline', () => {
+    const ranked = fixtureGoodWins();
+    const casual = { ...fixtureMerlinKilled(), casual: true };
+    const stats = computePlayerStatsV2([ranked, casual], 'uid-alice');
+    // Alice 在兩局都有坐；casual 局（merlin killed）被剔除 → totalGames 維持 1。
+    expect(stats.totalGames).toBe(1);
+    // winRate 只算 ranked 局（Alice 在 ranked 局贏 → 1/1）
+    expect(stats.winRate.wins).toBe(1);
+    // lastComputedGameId 必須用全 games 集合的最新 playedAt，避免 skip
+    // recompute 的情況下 repo 以為還沒處理過新寫入的 casual 局而反覆 scan。
+    expect(stats.lastComputedGameId).toBe(casual.gameId);
+  });
+
+  it('excludes games with hasAI flag from the ranked stats pipeline', () => {
+    const ranked = fixtureGoodWins();
+    const aiGame = { ...fixtureMerlinKilled(), hasAI: true };
+    const stats = computePlayerStatsV2([ranked, aiGame], 'uid-alice');
+    expect(stats.totalGames).toBe(1);
+    expect(stats.winRate.wins).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

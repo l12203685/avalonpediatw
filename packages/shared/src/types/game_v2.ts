@@ -152,4 +152,20 @@ export interface GameRecordV2 {
 
   /** 對話逐字稿（加分項，Phase 1 保留未實作）。 */
   transcript?: TranscriptLineV2[];
+
+  /**
+   * ELO-exclusion flags (Edward 2026-04-24 14:43：「在計算ELO時排除有AI 與 有
+   * 勾選"娛樂局" 的場次」).
+   *
+   * - `hasAI`: snapshot of whether any seat was a bot at game-end (derived from
+   *   `Room.players[*].isBot`). `true` = at least one AI / bot participant.
+   * - `casual`: host opted into the "casual match" checkbox in the lobby so
+   *   the match is explicitly excluded from competitive stats.
+   *
+   * Both default to `undefined` (treat as `false`) so historical V2 records
+   * with no migration remain valid. `ComputedStatsRepositoryV2` + leaderboard
+   * compute flow skip games where either flag is true.
+   */
+  hasAI?: boolean;
+  casual?: boolean;
 }

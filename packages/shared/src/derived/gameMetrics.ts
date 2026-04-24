@@ -938,20 +938,24 @@ export function computePlayerStatsV2(
     eloDistribution?: number[] | null;
   },
 ): ComputedPlayerStatsV2 {
-  const winRate = computePlayerWinRate(games, playerId);
-  const roleWinRate = computePlayerRoleWinRate(games, playerId);
-  const missionSuccess = computePlayerMissionSuccess(games, playerId);
-  const voteAccuracy = computePlayerVoteAccuracy(games, playerId);
-  const ladyAccuracy = computePlayerLadyAccuracy(games, playerId);
-  const merlinStats = computeMerlinAssassinationRate(games, playerId);
-  const elo = computeELO(games, playerId, opts?.initialElo ?? 1000);
+  // Edward 2026-04-24 14:43：「在計算ELO時排除有AI 與 有 勾選"娛樂局" 的場次」
+  // 集中在此處預過濾 → 所有下游 compute* 都走乾淨資料集，避免遺漏。
+  const rankedGames = filterRankedGames(games);
+
+  const winRate = computePlayerWinRate(rankedGames, playerId);
+  const roleWinRate = computePlayerRoleWinRate(rankedGames, playerId);
+  const missionSuccess = computePlayerMissionSuccess(rankedGames, playerId);
+  const voteAccuracy = computePlayerVoteAccuracy(rankedGames, playerId);
+  const ladyAccuracy = computePlayerLadyAccuracy(rankedGames, playerId);
+  const merlinStats = computeMerlinAssassinationRate(rankedGames, playerId);
+  const elo = computeELO(rankedGames, playerId, opts?.initialElo ?? 1000);
 
   // 新雙維度分類（Edward 2026-04-24 13:43）
   const tierGroup = computeTierGroup(winRate.totalGames);
   const eloTag = computeEloTag(elo, opts?.eloDistribution ?? null);
 
   // 理論勝率（Edward 2026-04-24 14:05 公式）
-  const gamesByPlayerCount = computeGamesByPlayerCount(games, playerId);
+  const gamesByPlayerCount = computeGamesByPlayerCount(rankedGames, playerId);
   const theoreticalWinRate = computeTheoreticalWinRate(winRate, {
     roleWinRate,
     gamesByPlayerCount,
@@ -964,7 +968,9 @@ export function computePlayerStatsV2(
     opts?.minGamesForTier ?? TIER_MIN_GAMES,
   );
 
-  // lastComputedGameId：以 playedAt 最新的局為主
+  // lastComputedGameId：以 playedAt 最新的局為主 — 注意仍用原 `games`（含
+  // casual/AI 局），避免 skip 增量重算時 repo 的 lastComputedGameId 落後於
+  // Firestore 實際最新寫入的局而導致 idempotent 保護失效、反覆重算。
   let latest: GameRecordV2 | null = null;
   for (const g of games) {
     if (findSeatForPlayer(g, playerId) === null) continue;
@@ -1002,6 +1008,24 @@ export function filterGamesForPlayer(
   playerId: PlayerId,
 ): GameRecordV2[] {
   return games.filter((g) => findSeatForPlayer(g, playerId) !== null);
+}
+
+/**
+ * ELO / 排行榜可計入的局（Edward 2026-04-24 14:43：「在計算ELO時排除有AI
+ * 與 有 勾選"娛樂局" 的場次」）。
+ *
+ * Ranked game 定義：
+ *   - `game.casual !== true` (host 未勾選娛樂局)
+ *   - `game.hasAI !== true`  (沒有 AI 玩家參與)
+ *
+ * 舊資料 schema 無這兩個欄位 → undefined，嚴格 `!== true` 比較下會被視為
+ * ranked，保留歷史戰績進排行榜，不需額外 migration。
+ *
+ * 單一入口；所有派生指標的計算都應透過 `computePlayerStatsV2`（已呼叫本函式）
+ * 或在自訂路徑上先套用此 filter，避免 casual / AI 局污染統計。
+ */
+export function filterRankedGames(games: GameRecordV2[]): GameRecordV2[] {
+  return games.filter((g) => g.casual !== true && g.hasAI !== true);
 }
 
 /**

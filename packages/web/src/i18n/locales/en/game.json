@@ -183,7 +183,8 @@
     "declareGood": "Declare Good",
     "declareEvil": "Declare Evil",
     "declareKeepPrivate": "No declaration = keep it private",
-    "declared": "You publicly declared: {{claim}}"
+    "declared": "You publicly declared: {{claim}}",
+    "skipDeclaration": "Keep private & continue"
   },
   "assassin": {
     "questHistoryHeader": "Quest Team History",

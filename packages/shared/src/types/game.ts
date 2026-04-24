@@ -140,6 +140,16 @@ export interface Room {
   ladyOfTheLakeEnabled?: boolean;   // Whether Lady of the Lake is active in this game
   ladyOfTheLakeHistory?: LadyOfTheLakeRecord[]; // Completed Lady inspections (public info: holder->target, result visible only to holder)
   timerConfig?: TimerConfig;        // Per-room phase-timer multiplier; undefined = { multiplier: 1 } (backward compat)
+  /**
+   * Casual match toggle (Edward 2026-04-24 14:43 verbatim: 「遊戲開房多勾選一個
+   * "娛樂局" 的選項 在計算ELO時排除有AI 與 有 勾選"娛樂局" 的場次」).
+   *
+   * `true` = this match does NOT count toward ELO / leaderboard stats.
+   * Defaults to `false` (undefined) so existing rooms behave normally.
+   * UI surfaces this on room creation; the backend forwards it into the V2
+   * record and the stats repo skips recompute for casual / AI-inclusive games.
+   */
+  casual?: boolean;
   createdAt: number;
   updatedAt: number;
 }

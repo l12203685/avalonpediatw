@@ -878,26 +878,52 @@ export class GameEngine {
     this.room.ladyOfTheLakeUsed = [...(this.room.ladyOfTheLakeUsed ?? []), targetId];
     this.room.ladyOfTheLakeHolder = targetId;
 
-    // Broadcast the result so the holder can see it, then advance after a short delay
+    // Broadcast the result so the holder can see it. The phase stays in
+    // `lady_of_the_lake` until the declarer either publicly declares (via
+    // `declareLakeResult`) or skips (via `skipLakeDeclaration`) — the
+    // declaration step is a spec-required part of the Lady flow
+    // (Edward 2026-04-24 "還有為什麼湖中完全沒宣告"). A 90s declaration
+    // timeout auto-advances the phase if the holder AFKs.
+    this.startLakeDeclarationTimeout(holderId);
     this.onStateChange?.(this.room);
-
-    // Auto-advance to next round after 3 seconds (let the holder see the result)
-    setTimeout(() => {
-      if (this.room.state === 'lady_of_the_lake') {
-        this.room.ladyOfTheLakeTarget = undefined;
-        this.room.ladyOfTheLakeResult = undefined;
-        this.advanceToNextRound();
-        this.onStateChange?.(this.room);
-      }
-    }, 3000);
   }
 
   /**
-   * Force-advance the Lady of the Lake phase immediately (skips the 3-second display delay).
-   * Used by SelfPlayEngine to avoid waiting for the timeout in automated games.
+   * Start the declaration-phase AFK timeout. After the holder inspects a
+   * target, they have LADY_OF_THE_LAKE_TIMEOUT_MS (90s, subject to timer
+   * multiplier) to publicly declare or explicitly skip. Timeout silently
+   * skips the declaration and advances the game so AFK players cannot
+   * hang the table.
    */
-  public completeLadyPhase(): void {
-    if (this.room.state !== 'lady_of_the_lake') return;
+  private startLakeDeclarationTimeout(declarerId: string): void {
+    if (this.ladyOfTheLakeTimeout) {
+      clearTimeout(this.ladyOfTheLakeTimeout);
+      this.ladyOfTheLakeTimeout = null;
+    }
+    const timeoutMs = this.getTimeoutMs(LADY_OF_THE_LAKE_TIMEOUT_MS);
+    if (timeoutMs === null) {
+      return; // Unlimited thinking time — declarer waits as long as they want.
+    }
+    this.ladyOfTheLakeTimeout = setTimeout(() => {
+      if (this.room.state !== 'lady_of_the_lake') return;
+      // Still waiting on a declaration — silently advance as a skip.
+      this.logEvent('lady_of_the_lake_declaration_timeout', {
+        declarerId,
+        round: this.room.currentRound,
+      });
+      this.finalizeLakePhase();
+      this.onStateChange?.(this.room);
+    }, timeoutMs);
+  }
+
+  /**
+   * Final advance out of the Lady of the Lake phase — shared by
+   * declaration, explicit skip, and AFK timeout paths. Clears the
+   * private inspection result before moving the room forward so that
+   * the next state broadcast does not leak `ladyOfTheLakeResult` to
+   * other players' clients.
+   */
+  private finalizeLakePhase(): void {
     if (this.ladyOfTheLakeTimeout) {
       clearTimeout(this.ladyOfTheLakeTimeout);
       this.ladyOfTheLakeTimeout = null;
@@ -905,6 +931,42 @@ export class GameEngine {
     this.room.ladyOfTheLakeTarget = undefined;
     this.room.ladyOfTheLakeResult = undefined;
     this.advanceToNextRound();
+  }
+
+  /**
+   * Force-advance the Lady of the Lake phase immediately (skips the
+   * declaration AFK timeout). Used by SelfPlayEngine after bots have
+   * finished both inspection and optional declaration in the same tick.
+   */
+  public completeLadyPhase(): void {
+    if (this.room.state !== 'lady_of_the_lake') return;
+    this.finalizeLakePhase();
+  }
+
+  /**
+   * Public "skip declaration" path for live games. The holder who just
+   * inspected a target may prefer to keep the result private; this
+   * cleanly advances the phase without recording a declaration.
+   *
+   * Accepts the declarer's playerId so other players cannot force-skip
+   * on the holder's behalf. No-op (does not throw) when the state is
+   * already past the Lady phase so a late click after the AFK timeout
+   * races cleanly.
+   */
+  public skipLakeDeclaration(playerId: string): void {
+    if (this.room.state !== 'lady_of_the_lake') return;
+    if (!this.room.ladyOfTheLakeHistory || this.room.ladyOfTheLakeHistory.length === 0) return;
+    const last = this.room.ladyOfTheLakeHistory[this.room.ladyOfTheLakeHistory.length - 1];
+    if (last.holderId !== playerId) {
+      throw new Error(`Player ${playerId} is not the declarer of the last Lady of the Lake inspection`);
+    }
+    this.logEvent('lady_of_the_lake_declaration_skipped', {
+      declarerId: playerId,
+      targetId: last.targetId,
+      round: last.round,
+    }, playerId);
+    this.finalizeLakePhase();
+    this.onStateChange?.(this.room);
   }
 
   /**
@@ -959,7 +1021,16 @@ export class GameEngine {
       round: last.round,
     }, playerId);
 
+    // Broadcast the declaration first so every client sees it on the
+    // Lady overlay, then advance the phase. Declaration is the terminal
+    // action of the Lady step in live games; SelfPlay calls this before
+    // `completeLadyPhase` and the second call becomes a noop because
+    // state is already back to `voting`.
     this.onStateChange?.(this.room);
+    if (this.room.state === 'lady_of_the_lake') {
+      this.finalizeLakePhase();
+      this.onStateChange?.(this.room);
+    }
     return updated;
   }
 

@@ -159,11 +159,28 @@ export class ComputedStatsRepositoryV2 {
   /**
    * 對單一新戰績增量重算：只處理該局的 playerSeats 非空玩家。
    * Caller 保證已把該局寫入 `games_v2/`。
+   *
+   * Edward 2026-04-24 14:43：「在計算ELO時排除有AI 與 有 勾選"娛樂局" 的場次」
+   *   - `newGame.hasAI === true`  → 此局含 AI 玩家 → skip incremental recompute
+   *   - `newGame.casual === true` → 娛樂局 → skip incremental recompute
+   *
+   * 注意：computePlayerStatsV2 內透過 `filterRankedGames` 預過濾，所以即使
+   * 這裡沒 early-return，存量統計也不會被污染；但 skip 可避免一次 Firestore
+   * 全表 scan + per-player upsert 的開銷。
    */
   async recomputeForGame(
     newGame: GameRecordV2,
     opts?: { initialElo?: number; minGamesForTier?: number; pageSize?: number },
   ): Promise<{ updated: number; skipped: number }> {
+    if (newGame.hasAI || newGame.casual) {
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        event: 'computed_stats_v2_recompute_skipped',
+        gameId: newGame.gameId,
+        reason: newGame.hasAI ? 'hasAI' : 'casual',
+      }));
+      return { updated: 0, skipped: 1 };
+    }
     const games = await this.loadAllGames(opts?.pageSize ?? 500);
     const playerIds = new Set<PlayerId>();
     for (let i = 0; i < 10; i += 1) {
