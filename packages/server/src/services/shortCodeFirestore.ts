@@ -257,3 +257,57 @@ export async function firestoreUserExists(
     return false;
   }
 }
+
+/**
+ * 依 uid 取得玩家短碼（正向查詢）。
+ *
+ * 讀路徑：先查 `auth_users/{uid}.shortCode`（signup path 主 SSoT），找不到
+ * 再 fallback `users/{uid}.shortCode`（legacy mirror）。都沒就回 null。
+ *
+ * 取代 2026-04-24 前 `supabase.ts::getDbUserOverrides` 從 Supabase
+ * `users.short_code` 欄位讀的舊路徑（讀寫分離 bug — 寫已遷 Firestore 但
+ * 讀還查 Supabase，導致新帳號個人頁短碼永遠 null）。
+ *
+ * @param uid auth_users / users 的 doc id
+ * @param db  可注入 Firestore（測試用）；預設走 getAdminFirestore()
+ */
+export async function getShortCodeByUid(
+  uid: string,
+  db?: Firestore,
+): Promise<string | null> {
+  if (!uid || typeof uid !== 'string') return null;
+
+  let firestore: Firestore;
+  try {
+    firestore = db ?? getAdminFirestore();
+  } catch {
+    return null;
+  }
+
+  try {
+    // 1) 主路徑：auth_users/{uid}.shortCode（signup / OAuth-register 寫入點）
+    const authSnap = await firestore
+      .collection(AUTH_USERS_COLLECTION)
+      .doc(uid)
+      .get();
+    if (authSnap.exists) {
+      const raw = (authSnap.data() as { shortCode?: string } | undefined)?.shortCode;
+      if (typeof raw === 'string' && isValidShortCode(raw)) return raw;
+    }
+
+    // 2) Fallback：users/{uid}.shortCode（ensureUserShortCode 寫入點 / legacy mirror）
+    const userSnap = await firestore
+      .collection(USERS_COLLECTION)
+      .doc(uid)
+      .get();
+    if (userSnap.exists) {
+      const raw = (userSnap.data() as { shortCode?: string } | undefined)?.shortCode;
+      if (typeof raw === 'string' && isValidShortCode(raw)) return raw;
+    }
+
+    return null;
+  } catch (err) {
+    console.error('[firestore] getShortCodeByUid error:', err);
+    return null;
+  }
+}

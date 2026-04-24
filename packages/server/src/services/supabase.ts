@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { generateUniqueShortCode, normalizeShortCode, isValidShortCode } from './shortCode';
+import { normalizeShortCode, isValidShortCode } from './shortCode';
 import * as fsAccounts from './firestoreAccounts';
 
 // ── 初始化 ──────────────────────────────────────────────────
@@ -98,13 +98,13 @@ export async function upsertUser(data: DbUser): Promise<string | null> {
       return existing.id;
     }
 
-    // 2026-04-24 #48 修復：短碼 SSoT 從 Supabase 遷移到 Firestore（路 B）。
-    // 原本這裡會生成唯一短碼寫入 `users.short_code`，但
-    // `/api/friends/add-by-code` 是走 Firestore `shortCodeIndex`（shortCodeFirestore.ts），
-    // 兩邊資料源不一致導致加好友一律 404。現在 signup 路徑全改由
-    // `firestoreAuthAccounts.ts` / `firestoreAccounts.ts` 呼叫
-    // `ensureUserShortCode` 寫 Firestore；Supabase `users.short_code` 欄位保留
-    // schema 但 server 不再寫入（歷史資料若要遷移走獨立 migration script）。
+    // 2026-04-24 #48：短碼 SSoT 完全遷到 Firestore（路 B）。
+    // 寫路徑由 `firestoreAuthAccounts.ts` / `firestoreAccounts.ts` 呼叫
+    // `assignShortCodeToAuthUser` 寫 `auth_users/{uid}.shortCode` +
+    // `shortCodeIndex/{code}` 反向索引；讀路徑由 `shortCodeFirestore.ts` 的
+    // `getUserIdByShortCode` / `getShortCodeByUid` 提供。Supabase
+    // `users.short_code` 欄位保留 schema 但 server 不再讀寫（歷史資料若要
+    // 遷移走獨立 migration script）。
 
     // 建立新用戶
     const { data: newUser, error } = await db
@@ -475,16 +475,22 @@ export interface DbUserOverrides {
   photo_url: string | null;
   email: string | null;
   provider: string;
-  short_code: string | null;
+  /**
+   * 2026-04-24 #48 讀路徑遷徙：保留欄位讓 caller 型別不變，但**永遠回 null**。
+   * 玩家可見短碼現在由 `shortCodeFirestore.getShortCodeByUid` 從 Firestore
+   * `auth_users/{uid}.shortCode` 讀。此欄位只是向下相容留著，不再 SELECT。
+   */
+  short_code: null;
 }
 
 export async function getDbUserOverrides(userId: string): Promise<DbUserOverrides | null> {
   const db = getSupabaseClient();
   if (!db) return null;
   try {
+    // 2026-04-24 #48：不再 SELECT short_code — 讀路徑已遷 Firestore。
     const { data, error } = await db
       .from('users')
-      .select('display_name, photo_url, email, provider, short_code')
+      .select('display_name, photo_url, email, provider')
       .eq('id', userId)
       .single();
     if (error || !data) return null;
@@ -493,7 +499,7 @@ export async function getDbUserOverrides(userId: string): Promise<DbUserOverride
       photo_url:    (data.photo_url as string | null) ?? null,
       email:        (data.email as string | null) ?? null,
       provider:     (data.provider as string) ?? 'unknown',
-      short_code:   (data.short_code as string | null) ?? null,
+      short_code:   null,
     };
   } catch {
     return null;
@@ -501,62 +507,11 @@ export async function getDbUserOverrides(userId: string): Promise<DbUserOverride
 }
 
 // ── 玩家短碼（加好友用）──────────────────────────────────────
-
-/**
- * 依短碼查用戶 UUID。
- * 短碼非法格式 → 直接 null（不查 DB）。
- */
-export async function getUserIdByShortCode(code: string): Promise<string | null> {
-  const normalized = normalizeShortCode(code);
-  if (!isValidShortCode(normalized)) return null;
-
-  const db = getSupabaseClient();
-  if (!db) return null;
-  try {
-    const { data } = await db
-      .from('users')
-      .select('id')
-      .eq('short_code', normalized)
-      .maybeSingle();
-    return (data?.id as string) ?? null;
-  } catch (err) {
-    console.error('[supabase] getUserIdByShortCode error:', err);
-    return null;
-  }
-}
-
-/**
- * 為缺少短碼的舊用戶 backfill 一個。若已有短碼則直接回傳現值。
- * 失敗（DB 沒設定、網路錯）回 null，呼叫端退化回 UUID 末 6 碼顯示。
- */
-export async function ensureUserShortCode(userId: string): Promise<string | null> {
-  const db = getSupabaseClient();
-  if (!db) return null;
-  try {
-    const { data: existing } = await db
-      .from('users')
-      .select('short_code')
-      .eq('id', userId)
-      .maybeSingle();
-    if (!existing) return null;
-    if (existing.short_code) return existing.short_code as string;
-
-    const code = await generateUniqueShortCode(async (candidate) => {
-      const { data: row } = await db
-        .from('users')
-        .select('id')
-        .eq('short_code', candidate)
-        .maybeSingle();
-      return !!row;
-    });
-
-    await db.from('users').update({ short_code: code }).eq('id', userId);
-    return code;
-  } catch (err) {
-    console.error('[supabase] ensureUserShortCode error:', err);
-    return null;
-  }
-}
+//
+// 2026-04-24 #48：`getUserIdByShortCode` / `ensureUserShortCode` 的 Supabase
+// 版本已刪除，讀寫路徑統一遷移到 `./shortCodeFirestore.ts`。
+// Supabase `users.short_code` 欄位保留 schema 但 server 不再讀寫。
+// 外部 import 一律從 `./services/shortCodeFirestore` 取。
 
 export async function updateDbUserProfile(
   userId: string,
@@ -1112,6 +1067,12 @@ export interface UserSearchEntry {
  * - 自動排除搜尋者自己
  * - 最多回 20 筆
  * - 同時 join 檢查 searcher 是否已追蹤結果玩家
+ *
+ * TODO(#48 後續)：此函式仍讀 Supabase `users.short_code`，對 2026-04-24
+ * 之後在 Firestore 建的新帳號會 fallback 到 UUID 末 6 碼（顯示不到真正的
+ * Firestore 短碼）。加好友主流程（POST /api/friends/add-by-code）已改用
+ * `shortCodeFirestore.getUserIdByShortCode`，所以不影響核心 404 bug；但
+ * 搜尋頁顯示短碼不正確，之後要把整條 `searchUsers` 改讀 Firestore。
  */
 export async function searchUsers(
   query: string,

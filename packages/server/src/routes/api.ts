@@ -26,6 +26,7 @@ import {
   isFirestoreReady,
   // Used by resolveSupabaseUserId's Firestore path.
 } from '../services/firestoreAccounts';
+import { getShortCodeByUid } from '../services/shortCodeFirestore';
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
 import { createHttpRateLimit } from '../middleware/rateLimit';
@@ -203,9 +204,14 @@ function isAccountStoreReady(): boolean {
 function mergeOverrides<T extends FirestoreUserProfile>(
   profile: T,
   overrides: DbUserOverrides | null,
+  firestoreShortCode: string | null = null,
 ): T & { email: string | null; short_code: string | null } {
+  // 短碼讀路徑 2026-04-24 已遷 Firestore（shortCodeIndex + auth_users.shortCode），
+  // 不再從 overrides.short_code 讀（那條路已刪）。caller 傳 firestoreShortCode
+  // 進來；profile.short_code 只是 FirestoreLeaderboard 保留的型別欄位、目前不會
+  // 實際帶值。
   if (!overrides) {
-    return { ...profile, email: null, short_code: profile.short_code ?? null } as T & {
+    return { ...profile, email: null, short_code: firestoreShortCode ?? profile.short_code ?? null } as T & {
       email: string | null; short_code: string | null;
     };
   }
@@ -215,7 +221,7 @@ function mergeOverrides<T extends FirestoreUserProfile>(
     photo_url:    overrides.photo_url ?? profile.photo_url,
     provider:     overrides.provider ?? profile.provider,
     email:        overrides.email,
-    short_code:   overrides.short_code ?? profile.short_code ?? null,
+    short_code:   firestoreShortCode ?? profile.short_code ?? null,
   } as T & { email: string | null; short_code: string | null };
 }
 
@@ -250,6 +256,10 @@ router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => 
     // 拉 Supabase users table 的權威 override（display_name / photo_url / email / provider）
     const supabaseId = await resolveSupabaseUserId(auth);
     const overrides = supabaseId ? await getDbUserOverrides(supabaseId) : null;
+    // 短碼走 Firestore（2026-04-24 #48 讀路徑遷徙）— supabaseId 同時是 Firestore
+    // auth_users doc id（Firestore fallback path）或 Supabase UUID；兩者 uid
+    // 都是 shortCodeIndex 的 key。
+    const firestoreShortCode = supabaseId ? await getShortCodeByUid(supabaseId) : null;
 
     // 仍找不到 Firestore profile → 回空 profile + overrides
     if (!profile) {
@@ -263,14 +273,17 @@ router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => 
             photo_url:    overrides.photo_url,
             email:        overrides.email,
             provider:     overrides.provider,
-            short_code:   overrides.short_code ?? empty.short_code,
+            short_code:   firestoreShortCode ?? empty.short_code,
           },
         });
+      }
+      if (firestoreShortCode) {
+        return res.json({ profile: { ...empty, short_code: firestoreShortCode } });
       }
       return res.json({ profile: empty });
     }
 
-    const merged = mergeOverrides(profile, overrides);
+    const merged = mergeOverrides(profile, overrides, firestoreShortCode);
     // 若有 Supabase id 就以 UUID 為 id，供 PATCH/friend 關聯
     if (supabaseId) {
       (merged as { id: string }).id = supabaseId;
@@ -351,6 +364,7 @@ router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) =
       profile = await getFirestoreUserProfile(auth.displayName);
     }
     const overrides = await getDbUserOverrides(supabaseId);
+    const firestoreShortCode = await getShortCodeByUid(supabaseId);
     if (!profile) {
       const empty = emptyProfile(auth);
       return res.json({
@@ -361,10 +375,11 @@ router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) =
           photo_url:    updated.photo_url,
           email:        overrides?.email ?? auth.email ?? null,
           provider:     overrides?.provider ?? auth.provider ?? 'unknown',
+          short_code:   firestoreShortCode ?? empty.short_code,
         },
       });
     }
-    const merged = mergeOverrides(profile, overrides);
+    const merged = mergeOverrides(profile, overrides, firestoreShortCode);
     (merged as { id: string }).id = supabaseId;
     return res.json({ profile: merged });
   } catch {
@@ -395,9 +410,16 @@ router.get('/profile/:id', publicLimiter, async (req: Request, res: Response) =>
       return res.status(404).json({ error: 'Profile not found' });
     }
     // 若 :id 長得像 UUID，順便合併 Supabase override（display_name/photo_url）
+    // 短碼走 Firestore（2026-04-24 #48 讀路徑遷徙）
     if (UUID_RE.test(req.params.id)) {
       const overrides = await getDbUserOverrides(req.params.id);
-      return res.json({ profile: mergeOverrides(profile, overrides) });
+      const firestoreShortCode = await getShortCodeByUid(req.params.id);
+      return res.json({ profile: mergeOverrides(profile, overrides, firestoreShortCode) });
+    }
+    // 非 UUID id（Firestore auth_users docId 例如 Discord externalId）— 仍補短碼
+    const firestoreShortCode = await getShortCodeByUid(req.params.id);
+    if (firestoreShortCode) {
+      return res.json({ profile: mergeOverrides(profile, null, firestoreShortCode) });
     }
     return res.json({ profile });
   } catch (err) {

@@ -10,10 +10,15 @@
 // CREATE INDEX ON friendships(following_id);
 //
 // -- 玩家可見短碼（加好友用，Task #48）：
-// 路 B（2026-04-22）：放棄 Supabase users.short_code，改 Firestore：
-//   users/{uid}.shortCode            — 玩家持有的短碼
+// 路 B（2026-04-22 寫路徑遷 / 2026-04-24 讀路徑遷）：放棄 Supabase
+// users.short_code，改 Firestore：
+//   auth_users/{uid}.shortCode       — signup 路徑寫入的玩家短碼
+//   users/{uid}.shortCode            — legacy mirror（舊 backfill 用）
 //   shortCodeIndex/{code}.uid        — 反向索引；doc 存在 = 佔用，用交易保唯一
-// Supabase users.short_code 欄位不再讀取，留著不清，之後資料遷移時再清。
+// Supabase users.short_code 欄位：server 已不在加好友 / profile 讀路徑讀取，
+// 留著 schema 不清，之後資料遷移時再清。（例外：searchUsers 尚未遷，詳見
+// supabase.ts searchUsers 上 TODO — 搜尋頁顯示短碼可能 fallback，但不影響
+// POST /friends/add-by-code 的核心查詢。）
 
 import { Router, Request, Response, IRouter } from 'express';
 import { verify, JwtPayload } from 'jsonwebtoken';

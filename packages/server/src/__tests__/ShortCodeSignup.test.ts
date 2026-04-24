@@ -181,6 +181,40 @@ describe('signup → Firestore shortCodeIndex integration (#48)', () => {
     expect(resolved).toBe(userId);
   });
 
+  it('signup → getShortCodeByUid 正向讀 auth_users.shortCode 取回同一個 code（#48 讀路徑遷徙）', async () => {
+    const r = await authMod.loginOrRegister({
+      email:    'readback@example.com',
+      password: 'StrongPw01',
+    });
+    expect(r.ok).toBe(true);
+    expect(r.data?.created).toBe(true);
+    const userId = r.data!.userId;
+
+    const storedCode = (store.auth_users.get(userId)!.shortCode) as string;
+    expect(storedCode).toBeTruthy();
+
+    // 正向讀：profile 顯示頁 / override merge 會走這條
+    const stubDb = makeFirestoreStub() as unknown as Parameters<typeof shortMod.getShortCodeByUid>[1];
+    const resolved = await shortMod.getShortCodeByUid(userId, stubDb);
+    expect(resolved).toBe(storedCode);
+
+    // 反向也能查回來（加好友流程）
+    const reverseDb = makeFirestoreStub() as unknown as Parameters<typeof shortMod.getUserIdByShortCode>[1];
+    const reversed = await shortMod.getUserIdByShortCode(storedCode, reverseDb);
+    expect(reversed).toBe(userId);
+  });
+
+  it('getShortCodeByUid 無此 uid → null', async () => {
+    const stubDb = makeFirestoreStub() as unknown as Parameters<typeof shortMod.getShortCodeByUid>[1];
+    const resolved = await shortMod.getShortCodeByUid('nonexistent-uid', stubDb);
+    expect(resolved).toBeNull();
+  });
+
+  it('getShortCodeByUid 空字串 → null', async () => {
+    const stubDb = makeFirestoreStub() as unknown as Parameters<typeof shortMod.getShortCodeByUid>[1];
+    expect(await shortMod.getShortCodeByUid('', stubDb)).toBeNull();
+  });
+
   it('OAuth auto-register writes shortCodeIndex', async () => {
     const r = await authMod.ensureAccountByOAuthEmail({
       provider:           'google',

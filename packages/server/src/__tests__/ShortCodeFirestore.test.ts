@@ -4,7 +4,9 @@ import {
   ensureUserShortCode,
   getUserIdByShortCode,
   firestoreUserExists,
+  getShortCodeByUid,
   USERS_COLLECTION,
+  AUTH_USERS_COLLECTION,
   SHORT_CODE_INDEX_COLLECTION,
 } from '../services/shortCodeFirestore';
 import { isValidShortCode } from '../services/shortCode';
@@ -230,5 +232,55 @@ describe('shortCodeFirestore.firestoreUserExists', () => {
 
   it('空 uid → false', async () => {
     expect(await firestoreUserExists('', db)).toBe(false);
+  });
+});
+
+describe('shortCodeFirestore.getShortCodeByUid（#48 讀路徑遷徙）', () => {
+  let db: Firestore;
+  let store: Store;
+
+  function seedAuthUser(uid: string, data: Record<string, unknown> = {}) {
+    const col = store.get(AUTH_USERS_COLLECTION) ?? new Map();
+    col.set(uid, data);
+    store.set(AUTH_USERS_COLLECTION, col);
+  }
+
+  function seedLegacyUser(uid: string, data: Record<string, unknown> = {}) {
+    const col = store.get(USERS_COLLECTION) ?? new Map();
+    col.set(uid, data);
+    store.set(USERS_COLLECTION, col);
+  }
+
+  beforeEach(() => {
+    ({ db, store } = makeMockFirestore());
+  });
+
+  it('auth_users/{uid}.shortCode 有合法碼 → 回該碼（主路徑）', async () => {
+    seedAuthUser('user-abc', { shortCode: '7K3M9P2Q' });
+    expect(await getShortCodeByUid('user-abc', db)).toBe('7K3M9P2Q');
+  });
+
+  it('auth_users 無碼 → fallback users/{uid}.shortCode', async () => {
+    seedAuthUser('user-abc', { displayName: 'X' });
+    // 字元必須在 ALPHABET='ABCDEFGHJKMNPQRSTUVWXYZ23456789'，避開 0/1/I/L/O
+    seedLegacyUser('user-abc', { shortCode: 'ABCD2345' });
+    expect(await getShortCodeByUid('user-abc', db)).toBe('ABCD2345');
+  });
+
+  it('auth_users / users 皆無 → null', async () => {
+    expect(await getShortCodeByUid('missing-uid', db)).toBeNull();
+  });
+
+  it('auth_users 的 shortCode 格式不合法 → 嘗試 legacy fallback', async () => {
+    // 防止 Firestore 裡偶發的髒資料回到玩家面前
+    // ALPHABET 排除 0/1/I/L/O，下列字元必須全部在合法字元集內
+    seedAuthUser('user-abc', { shortCode: 'bad!' });
+    seedLegacyUser('user-abc', { shortCode: 'VAN2DCDE' });
+    expect(await getShortCodeByUid('user-abc', db)).toBe('VAN2DCDE');
+  });
+
+  it('空/null uid → null', async () => {
+    expect(await getShortCodeByUid('', db)).toBeNull();
+    expect(await getShortCodeByUid(null as unknown as string, db)).toBeNull();
   });
 });
