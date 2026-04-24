@@ -548,25 +548,52 @@ export class GameServer {
       }
 
       // Handle rejoin scenario (player was disconnected and reconnecting)
+      //
+      // 2026-04-24 P0 fix (Edward: "跳出後 重新整理 回不到遊戲"):
+      // Previously only entered the rejoin branch when status === 'disconnected'.
+      // But page reload / crash recovery hits a race: the new socket finishes
+      // Socket.IO handshake + emits `game:join-room` *before* the old socket's
+      // `disconnect` event reaches our handler, so status is still 'active' →
+      // server rejects with "Already in this room" → client never gets room
+      // state → player stuck on HomePage. Now: if the player is already
+      // registered but their previous socket is gone from `io.sockets.sockets`
+      // (or it's a different socket.id from what we mapped), treat as rejoin
+      // rather than reject.
       if (playerExists) {
-        if (playerExists.status === 'disconnected') {
-          // Restore player status
-          playerExists.status = 'active';
-          socket.join(roomId);
-          socket.data.roomId = roomId;
-          socket.data.playerId = playerId;
-          this.playerToSocket.set(playerId, socket.id);
+        const prevSocketId = this.playerToSocket.get(playerId);
+        const prevSocketStillConnected =
+          prevSocketId !== undefined &&
+          prevSocketId !== socket.id &&
+          this.io.sockets.sockets.get(prevSocketId)?.connected === true;
 
-          this.io.to(roomId).emit('game:player-reconnected', playerId);
-          this.broadcastRoomState(roomId, room);
-
-          console.log(`✓ Player ${user.displayName} reconnected to room ${roomId}`);
-          return;
-        } else {
-          // Player already active in room
+        if (prevSocketStillConnected) {
+          // Same player genuinely holds a live second socket (e.g. two tabs
+          // open). Keep the legacy guard — Avalon is a single-session game
+          // and dual clients would see duplicate state events.
           socket.emit('error', 'Already in this room');
           return;
         }
+
+        // Either marked disconnected, or the previous socket is stale /
+        // identical — either way this is a reconnect.
+        playerExists.status = 'active';
+        socket.join(roomId);
+        socket.data.roomId = roomId;
+        socket.data.playerId = playerId;
+        this.playerToSocket.set(playerId, socket.id);
+        if (socket.data.supabaseId) {
+          this.supabaseIds.set(playerId, socket.data.supabaseId as string);
+        }
+
+        this.io.to(roomId).emit('game:player-reconnected', playerId);
+        // Use broadcastRoomState so every client (including the rejoining
+        // socket) receives a fresh, sanitised snapshot — the rejoining
+        // client specifically needs this to re-derive role/team/current
+        // phase from an empty store after a page refresh.
+        this.broadcastRoomState(roomId, room);
+
+        console.log(`✓ Player ${user.displayName} reconnected to room ${roomId}`);
+        return;
       }
 
       // Check room capacity
