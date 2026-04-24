@@ -91,6 +91,7 @@
     "roomPasswordOptional": "Room password (optional, leave blank for public)",
     "yourName": "Your name",
     "roomCodePlaceholder": "Room code (6 chars)",
+    "forceRefreshButton": "Having trouble? Force refresh",
     "enterYourName": "Please enter your name",
     "enterRoomCode": "Please enter the room code",
     "enterNameFirst": "Please enter your name first",
@@ -150,7 +151,12 @@
     "emailHint": "Primary email is used for password reset and account notifications",
     "primaryEmailLabel": "primary",
     "noPrimaryEmail": "No primary email set",
-    "emailManageSoon": "Adding / removing / switching primary email coming soon"
+    "emailManageSoon": "Adding / removing / switching primary email coming soon",
+    "advanced": {
+      "title": "Advanced",
+      "clearLocalAndReload": "Clear local data and reload",
+      "clearWarning": "This clears local login state and caches — you'll need to sign in again"
+    }
   },
   "auth2": {
     "accountLabel": "Account",

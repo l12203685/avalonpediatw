@@ -4,11 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { createRoom, joinRoom, listRooms, spectateRoom, getSocket, getStoredToken } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { fetchAdminMe } from '../services/api';
+import { forceRefresh } from '../utils/forceRefresh';
 import {
   Play,
   LogIn,
   BookOpen,
   RefreshCw,
+  RefreshCcw,
   Eye,
   Lock,
   BarChart3,
@@ -503,6 +505,21 @@ export default function HomePage(): JSX.Element {
             </div>
           )}
         </div>
+
+        {/* 2026-04-24 #cache-upgrade: low-weight escape hatch for users
+            who are stuck on a stale bundle but haven't triggered the
+            version banner. Mirrors the Settings → 進階 button so there's
+            a self-service path from anywhere in the lobby. */}
+        <button
+          type="button"
+          data-testid="home-btn-force-refresh"
+          onClick={() => { void forceRefresh(); }}
+          className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-amber-500/50 text-zinc-400 hover:text-amber-200 text-xs transition-colors backdrop-blur-sm"
+          title={t('home.forceRefreshButton', { defaultValue: '遇到問題？強制更新' })}
+        >
+          <RefreshCcw size={12} />
+          <span className="hidden sm:inline">{t('home.forceRefreshButton', { defaultValue: '遇到問題？強制更新' })}</span>
+        </button>
 
         {/* Password modal for private rooms */}
         {pendingJoinRoom && (

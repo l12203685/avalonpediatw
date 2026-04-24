@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, HelpCircle, Shield, ChevronDown, User, Users, Gamepad2 } from 'lucide-react';
+import { ArrowLeft, HelpCircle, Shield, ChevronDown, User, Users, Gamepad2, RefreshCcw } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
+import { forceRefresh } from '../utils/forceRefresh';
 
 interface FaqItem {
   q: string;
@@ -263,6 +264,37 @@ export default function HelpPage(): JSX.Element {
             </div>
           </motion.section>
         ))}
+
+        {/* Troubleshooting section — 2026-04-24 #cache-upgrade */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22 }}
+          className="space-y-3"
+        >
+          <div className="flex items-center gap-2 px-1">
+            <RefreshCcw size={18} className="text-white" />
+            <h2 className="text-lg md:text-xl font-bold text-white">
+              遇到問題怎麼辦
+            </h2>
+          </div>
+          <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 md:p-6 space-y-4">
+            <p className="text-zinc-300 text-sm md:text-[15px] leading-relaxed">
+              如果你看到
+              <span className="text-white font-semibold"> 顯示異常、按鈕無效、資料錯誤 </span>
+              的情況，有可能是瀏覽器還在用舊版前端，伺服器已經推新版了。按下面這顆按鈕會清掉本機快取與登入狀態，然後重新下載最新前端。清完以後需要重新登入。
+            </p>
+            <button
+              type="button"
+              data-testid="help-btn-force-refresh"
+              onClick={() => { void forceRefresh(); }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-50 text-sm font-semibold transition-colors"
+            >
+              <RefreshCcw size={14} />
+              強制更新（清本機快取並重新載入）
+            </button>
+          </div>
+        </motion.section>
 
         {/* Privacy section */}
         <motion.section

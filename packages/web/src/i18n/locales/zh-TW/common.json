@@ -91,6 +91,7 @@
     "roomPasswordOptional": "房間密碼（選填，留空為公開房間）",
     "yourName": "你的名字",
     "roomCodePlaceholder": "房間代碼（6 碼）",
+    "forceRefreshButton": "遇到問題？強制更新",
     "enterYourName": "請輸入你的名字",
     "enterRoomCode": "請輸入房間代碼",
     "enterNameFirst": "請輸入你的名字再開始",
@@ -150,7 +151,12 @@
     "emailHint": "主要信箱用於忘密重設與帳號通知",
     "primaryEmailLabel": "主要",
     "noPrimaryEmail": "尚未設定主要信箱",
-    "emailManageSoon": "新增 / 刪除 / 切換主要信箱功能即將開放"
+    "emailManageSoon": "新增 / 刪除 / 切換主要信箱功能即將開放",
+    "advanced": {
+      "title": "進階",
+      "clearLocalAndReload": "清除本機資料並重新載入",
+      "clearWarning": "此動作會清除本機儲存的登入狀態與快取，完成後需重新登入"
+    }
   },
   "auth2": {
     "accountLabel": "帳號",
