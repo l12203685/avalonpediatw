@@ -24,6 +24,18 @@ import {
 } from '@avalon/shared';
 import { getAdminFirestore } from './firebase';
 import { GameHistoryRepositoryV2 } from './GameHistoryRepositoryV2';
+import { SHEETS_UNKNOWN_PLAYER_ID } from './sheetsGameRecordParser';
+
+/**
+ * Edward 2026-04-24 17:36：`sheets:unknown` 是 Sheets 匯入時「空玩家名」的
+ * aggregate fallback 偽 UUID（見 sheetsGameRecordParser.ts:341）。
+ * 後端統計模組**完全跳過**此 ID：
+ *   - 不算 ELO / 勝率 / 戰績（無意義累計）
+ *   - 不寫 computed_stats/sheets:unknown Firestore doc（占空間）
+ *   - 不影響排行榜 tier group 計算
+ * 前端 /api/leaderboard/v2 保留 filter 當防線（see routes/api.ts:257）。
+ */
+const SHEETS_UNKNOWN_ID: PlayerId = SHEETS_UNKNOWN_PLAYER_ID;
 
 export class ComputedStatsRepositoryV2 {
   private readonly collection = 'computed_stats';
@@ -83,12 +95,18 @@ export class ComputedStatsRepositoryV2 {
 
   /**
    * 列出所有玩家 computed stats。
+   *
+   * Edward 2026-04-24：存量中若有舊的 `sheets:unknown` doc（寫在新 skip 規則
+   * 之前），此處過濾掉 — 避免污染排行榜分組計算。`recomputeAll` 也會在開頭
+   * 呼叫 `deleteUnknownDoc` 清掉孤兒 doc。
    */
   async listAll(): Promise<ComputedPlayerStatsV2[]> {
     try {
       const firestore = getAdminFirestore();
       const snap = await firestore.collection(this.collection).get();
-      return snap.docs.map((d) => d.data() as ComputedPlayerStatsV2);
+      return snap.docs
+        .map((d) => d.data() as ComputedPlayerStatsV2)
+        .filter((s) => s.playerId !== SHEETS_UNKNOWN_ID);
     } catch (error) {
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(),
@@ -111,6 +129,11 @@ export class ComputedStatsRepositoryV2 {
     let updated = 0;
     let skipped = 0;
     for (const pid of playerIds) {
+      // Edward 2026-04-24：`sheets:unknown` aggregate fallback 玩家不算統計
+      if (pid === SHEETS_UNKNOWN_ID) {
+        skipped += 1;
+        continue;
+      }
       const stats = computePlayerStatsV2(games, pid, opts);
       if (stats.totalGames === 0) {
         skipped += 1;
@@ -144,7 +167,12 @@ export class ComputedStatsRepositoryV2 {
     pageSize?: number;
   }): Promise<{ players: number; games: number; updated: number }> {
     const games = await this.loadAllGames(opts?.pageSize ?? 500);
-    const playerIds = collectAllPlayerIds(games);
+    // Edward 2026-04-24：跳過 `sheets:unknown` aggregate 玩家
+    const playerIds = collectAllPlayerIds(games).filter(
+      (pid) => pid !== SHEETS_UNKNOWN_ID,
+    );
+    // Housekeeping：清掉舊規則寫入過的 computed_stats/sheets:unknown doc
+    await this.deleteUnknownDoc();
     const { updated } = await this.recomputeForPlayers(games, playerIds, opts);
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),
@@ -185,7 +213,8 @@ export class ComputedStatsRepositoryV2 {
     const playerIds = new Set<PlayerId>();
     for (let i = 0; i < 10; i += 1) {
       const uid = newGame.playerSeats[i];
-      if (uid && uid.trim()) playerIds.add(uid);
+      // Edward 2026-04-24：`sheets:unknown` aggregate 玩家不列入增量重算對象
+      if (uid && uid.trim() && uid !== SHEETS_UNKNOWN_ID) playerIds.add(uid);
     }
     return this.recomputeForPlayers(games, Array.from(playerIds), opts);
   }
@@ -198,6 +227,38 @@ export class ComputedStatsRepositoryV2 {
   async getLeaderboard(): Promise<Record<TierGroup, LeaderboardEntryV2[]>> {
     const all = await this.listAll();
     return computeLeaderboardByTier(all);
+  }
+
+  /**
+   * 清掉舊規則留下的 `computed_stats/sheets:unknown` 孤兒 doc（若存在）。
+   * 冪等：不存在時靜默回傳。`recomputeAll` 開頭會呼叫；亦可 ops 手動執行。
+   *
+   * Edward 2026-04-24：修 skip 規則之前，可能已有 doc 被寫入 Firestore；
+   * 此方法確保重算後 collection 乾淨，不留孤兒影響排行榜分組計算。
+   */
+  async deleteUnknownDoc(): Promise<{ deleted: boolean }> {
+    try {
+      const firestore = getAdminFirestore();
+      const docRef = firestore
+        .collection(this.collection)
+        .doc(this.encodeId(SHEETS_UNKNOWN_ID));
+      const snap = await docRef.get();
+      if (!snap.exists) return { deleted: false };
+      await docRef.delete();
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        event: 'computed_stats_v2_unknown_doc_deleted',
+        playerId: SHEETS_UNKNOWN_ID,
+      }));
+      return { deleted: true };
+    } catch (error) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        event: 'computed_stats_v2_unknown_doc_delete_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }));
+      return { deleted: false };
+    }
   }
 
   // ---------------------------------------------------------------------------
