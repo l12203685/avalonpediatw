@@ -1,25 +1,22 @@
 /**
- * Player tier system (hard-threshold by total games).
+ * Player tier system (hard-threshold by total games) — LEGACY 6-tier UI utility.
  *
- * Edward 2026-04-23 spec override — replace percentile-based distribution with
- * deterministic hard thresholds on `total_games`:
+ * Edward 2026-04-24 13:43 — spec moved to **dual-dimension** scheme
+ * (`TierGroup` × `EloTag`) in `@avalon/shared/derived/gameMetrics`.
  *
+ * TODO (next wave): migrate Leaderboard / Analytics pages to consume the
+ * server's `computed_stats/{playerId}` documents which already carry
+ * `tierGroup` / `eloTag` / `theoreticalWinRate`. Once the `/api/leaderboard`
+ * response exposes those three fields per entry, replace this file with a
+ * thin adapter to the shared types.
+ *
+ * Current behavior (unchanged until migration) — hard thresholds on `total_games`:
  *   • 菜雞   total_games < 50
  *   • 初學   total_games ≥ 50
  *   • 新手   total_games ≥ 100
  *   • 中堅   total_games ≥ 150
  *   • 高手   total_games ≥ 200
  *   • 大師   total_games ≥ 250
- *
- * Ranking-visibility rule:
- *   A player with N total games is only eligible for tiers whose game-count
- *   threshold they have met. Specifically:
- *     • N <  50 → 菜雞 only
- *     • N <  100 → 菜雞 / 初學
- *     • N <  150 → 菜雞 / 初學 / 新手
- *     • N <  200 → 菜雞 / 初學 / 新手 / 中堅
- *     • N <  250 → 菜雞 / 初學 / 新手 / 中堅 / 高手
- *     • N ≥ 250 → all six tiers including 大師
  *
  * Within a tier, entries remain sorted by ELO (higher first in UI).
  *

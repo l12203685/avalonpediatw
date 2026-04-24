@@ -15,7 +15,7 @@ import type {
   GameRecordV2,
   LeaderboardEntryV2,
   PlayerId,
-  PlayerTier,
+  TierGroup,
 } from '@avalon/shared';
 import {
   collectAllPlayerIds,
@@ -175,8 +175,10 @@ export class ComputedStatsRepositoryV2 {
 
   /**
    * 算出分類排行榜並回傳（不存）。讀端即時算。
+   * Edward 2026-04-24 13:43：回傳 TierGroup（rookie/regular/veteran/expert/master），
+   * 取代舊的中文 6-tier。
    */
-  async getLeaderboard(): Promise<Record<PlayerTier, LeaderboardEntryV2[]>> {
+  async getLeaderboard(): Promise<Record<TierGroup, LeaderboardEntryV2[]>> {
     const all = await this.listAll();
     return computeLeaderboardByTier(all);
   }

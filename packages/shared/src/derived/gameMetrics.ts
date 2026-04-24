@@ -12,14 +12,22 @@
  *   - 增量重算：新戰績進 → 對該玩家重算（backend 的 repo 處理）
  *   - 全玩家入排行榜，按分類顯示
  *
- * Edward 2026-04-24 13:37：分類門檻改用 **場次** 不是 ELO：
- *   - 菜雞：totalGames < 50
- *   - 初學：50 ≤ totalGames < 100
- *   - 新手：100 ≤ totalGames < 150
- *   - 中堅：150 ≤ totalGames < 200
- *   - 高手：200 ≤ totalGames < 250
- *   - 大師：totalGames ≥ 250
- *   每個 tier 內部按 ELO 排序。全玩家都進排行榜（大部分在菜雞/初學）。
+ * Edward 2026-04-24 13:43：雙維度分類（取代原本單軸 6-tier）：
+ *
+ *   維度 1（主排序）— 場次組 TierGroup（5 組）：
+ *     - rookie   : totalGames < 100
+ *     - regular  : 100 ≤ totalGames < 150
+ *     - veteran  : 150 ≤ totalGames < 200
+ *     - expert   : 200 ≤ totalGames < 250
+ *     - master   : totalGames ≥ 250
+ *
+ *   維度 2（卡片標籤）— ELO 標籤 EloTag（3 塊）：
+ *     - novice_tag  : ELO 低段（「入門新手」）
+ *     - mid_tag     : ELO 中段（「中堅玩家」）
+ *     - top_tag     : ELO 高段（「頂尖高玩」）
+ *
+ *   每組 (TierGroup) 內按 **理論勝率 (theoreticalWinRate)** 降冪排序。
+ *   全玩家都入排行榜（大部分在 rookie/regular）。
  */
 
 import { AVALON_CONFIG, type Role, type Team } from '../types/game';
@@ -36,7 +44,32 @@ import type {
 export type PlayerId = string;
 export type Seat = number;
 
-/** 玩家分類（低→高）。門檻以 **總場次** 判定，Edward 2026-04-24 13:37 拍板。 */
+/**
+ * 維度 1：場次組（主排序軸）。Edward 2026-04-24 13:43 拍板。
+ * 低 → 高：rookie < regular < veteran < expert < master
+ */
+export type TierGroup =
+  | 'rookie'    // < 100 場
+  | 'regular'   // 100-149
+  | 'veteran'   // 150-199
+  | 'expert'    // 200-249
+  | 'master';   // ≥ 250
+
+/**
+ * 維度 2：ELO 標籤（3 塊，卡片顯示用）。
+ * 依整體 ELO 分佈（有 eloDistribution 時）或硬閾值（fallback）判定。
+ */
+export type EloTag =
+  | 'novice_tag'  // 入門新手（ELO 低段）
+  | 'mid_tag'     // 中堅玩家（ELO 中段）
+  | 'top_tag';    // 頂尖高玩（ELO 高段）
+
+/**
+ * 舊 API 的 PlayerTier（中文 6-tier）— 已被雙維度取代。
+ * 保留 type alias 以不破壞舊呼叫端；新代碼請使用 TierGroup + EloTag。
+ *
+ * @deprecated 2026-04-24 13:43 Edward 改雙維度分類，用 TierGroup + EloTag 取代。
+ */
 export type PlayerTier =
   | '菜雞'
   | '初學'
@@ -88,16 +121,34 @@ export interface ComputedPlayerStatsV2 {
   };
 
   elo: number;
+
+  /** Edward 2026-04-24 13:43 雙維度分類 — 主排序軸。 */
+  tierGroup: TierGroup;
+  /** Edward 2026-04-24 13:43 雙維度分類 — ELO 標籤。 */
+  eloTag: EloTag;
+  /** 理論勝率（考慮陣營 baseline），用於組內排序。 */
+  theoreticalWinRate: number;
+
+  /** @deprecated 舊單軸分類；保留以避免破壞存量 repo doc。 */
   tier: PlayerTier;
 }
 
 export interface LeaderboardEntryV2 {
   playerId: PlayerId;
   elo: number;
-  tier: PlayerTier;
   totalGames: number;
   winRate: number;
   rank: number;
+
+  /** Edward 2026-04-24 13:43 雙維度分類 — 主排序軸。 */
+  tierGroup: TierGroup;
+  /** Edward 2026-04-24 13:43 雙維度分類 — ELO 標籤。 */
+  eloTag: EloTag;
+  /** 理論勝率（考慮陣營 baseline），組內排序依據。 */
+  theoreticalWinRate: number;
+
+  /** @deprecated 舊單軸分類；保留以維持 API 相容。 */
+  tier: PlayerTier;
 }
 
 // ---------------------------------------------------------------------------
@@ -603,9 +654,128 @@ export function computeELO(
 }
 
 // ---------------------------------------------------------------------------
-// 8. 分類（Tier）
+// 8. 分類（雙維度 · Edward 2026-04-24 13:43）
 // ---------------------------------------------------------------------------
 
+// ─── 維度 1：場次組 TierGroup ──────────────────────────────────────────
+
+export interface TierGroupThreshold {
+  group: TierGroup;
+  /** 該組的 **總場次** 下限（包含）。 */
+  minGames: number;
+}
+
+/**
+ * TierGroup 門檻（低 → 高）。Edward 2026-04-24 13:43 拍板。
+ *
+ *   rookie   : games < 100
+ *   regular  : 100 ≤ games < 150
+ *   veteran  : 150 ≤ games < 200
+ *   expert   : 200 ≤ games < 250
+ *   master   : games ≥ 250
+ */
+export const TIER_GROUP_THRESHOLDS: TierGroupThreshold[] = [
+  { group: 'rookie',  minGames: 0 },
+  { group: 'regular', minGames: 100 },
+  { group: 'veteran', minGames: 150 },
+  { group: 'expert',  minGames: 200 },
+  { group: 'master',  minGames: 250 },
+];
+
+/** 全部 TierGroup 依低→高順序。 */
+export const ALL_TIER_GROUPS: TierGroup[] = [
+  'rookie',
+  'regular',
+  'veteran',
+  'expert',
+  'master',
+];
+
+/** 依總場次決定玩家的 TierGroup。 */
+export function computeTierGroup(totalGames: number): TierGroup {
+  let group: TierGroup = 'rookie';
+  for (const t of TIER_GROUP_THRESHOLDS) {
+    if (totalGames >= t.minGames) group = t.group;
+  }
+  return group;
+}
+
+// ─── 維度 2：ELO 標籤 EloTag ───────────────────────────────────────────
+
+/**
+ * 硬閾值 fallback（沒有 eloDistribution 時用）。Edward 2026-04-24：
+ *   - < 1100         → novice_tag（入門新手）
+ *   - 1100 ≤ x < 1400 → mid_tag（中堅玩家）
+ *   - ≥ 1400          → top_tag（頂尖高玩）
+ * 之後可依實戰分佈調整。
+ */
+export const ELO_TAG_HARD_THRESHOLDS = {
+  novice_max: 1100,
+  mid_max: 1400,
+} as const;
+
+/**
+ * 依整體 ELO 分佈百分位切 3 塊：
+ *   - < 33rd 百分位 → novice_tag
+ *   - 33–66th        → mid_tag
+ *   - ≥ 66th         → top_tag
+ */
+export const ELO_TAG_PERCENTILES = {
+  novice_pct: 0.33,
+  mid_pct: 0.66,
+} as const;
+
+/**
+ * 依 ELO 決定玩家標籤。
+ *
+ * @param elo             玩家 ELO
+ * @param eloDistribution 可選。傳入**所有**玩家的 ELO 陣列 → 用 33/66 百分位切；
+ *                        不傳或空陣列 → fallback 硬閾值（1100 / 1400）。
+ */
+export function computeEloTag(
+  elo: number,
+  eloDistribution?: number[] | null,
+): EloTag {
+  if (eloDistribution && eloDistribution.length >= 3) {
+    const sorted = [...eloDistribution].sort((a, b) => a - b);
+    const n = sorted.length;
+    const idxNovice = Math.floor(n * ELO_TAG_PERCENTILES.novice_pct);
+    const idxMid = Math.floor(n * ELO_TAG_PERCENTILES.mid_pct);
+    const noviceCut = sorted[Math.max(0, idxNovice - 1)] ?? sorted[0];
+    const midCut = sorted[Math.max(0, idxMid - 1)] ?? sorted[0];
+    if (elo <= noviceCut) return 'novice_tag';
+    if (elo <= midCut) return 'mid_tag';
+    return 'top_tag';
+  }
+  // Hard threshold fallback
+  if (elo < ELO_TAG_HARD_THRESHOLDS.novice_max) return 'novice_tag';
+  if (elo < ELO_TAG_HARD_THRESHOLDS.mid_max) return 'mid_tag';
+  return 'top_tag';
+}
+
+// ─── 理論勝率 ────────────────────────────────────────────────────────
+
+/**
+ * 考慮陣營 baseline 的理論勝率。
+ *
+ * 現階段使用中性 baseline（好壞 50/50）：
+ *   theoreticalWinRate = 0.5 * asGood + 0.5 * asEvil
+ * 這把「camp mix 偏斜」normalize 掉；若玩家兩邊各半則 ≈ overall。
+ * 完全無資料 → 0。
+ *
+ * 註：未來若要用全站 good/evil base 算 edge-over-baseline，可擴充此函式。
+ */
+export function computeTheoreticalWinRate(
+  winRate: PlayerWinRateV2,
+): number {
+  const { asGood, asEvil, totalGames } = winRate;
+  if (totalGames === 0) return 0;
+  return 0.5 * asGood + 0.5 * asEvil;
+}
+
+// ─── 舊 API backcompat: computeTier / TIER_THRESHOLDS / TIER_MIN_GAMES ──
+
+/** @deprecated 舊單軸 6-tier。保留以不破壞 server 端 re-export。 */
 export interface TierThreshold {
   tier: PlayerTier;
   /** 該 tier 的 **總場次** 下限（包含）。 */
@@ -613,14 +783,8 @@ export interface TierThreshold {
 }
 
 /**
- * Tier 門檻（低 → 高）。Edward 2026-04-24 13:37：用 **場次** 不是 ELO。
- *
- *   菜雞: games < 50
- *   初學: 50 ≤ games < 100
- *   新手: 100 ≤ games < 150
- *   中堅: 150 ≤ games < 200
- *   高手: 200 ≤ games < 250
- *   大師: games ≥ 250
+ * @deprecated 舊 6-tier 門檻（中文名）。保留以避免破壞存量檔案 / repo docs。
+ * 新代碼請用 `TIER_GROUP_THRESHOLDS`。
  */
 export const TIER_THRESHOLDS: TierThreshold[] = [
   { tier: '菜雞', minGames: 0 },
@@ -631,19 +795,13 @@ export const TIER_THRESHOLDS: TierThreshold[] = [
   { tier: '大師', minGames: 250 },
 ];
 
-/**
- * 保留常數以維持相容（已不用於 tier 判定，但 server 端有 re-export）。
- * Edward 2026-04-24 明確刪掉 `< 10 場 unranked` 規則 → 常數僅作歷史佔位，值設 0
- * 代表「無場次下限門檻」— 全玩家都入排行榜，最低進菜雞。
- */
+/** @deprecated 歷史常數；新代碼用 TierGroup 系統。 */
 export const TIER_MIN_GAMES = 0;
 
 /**
- * 依 **總場次** 決定玩家 tier。
+ * @deprecated 舊 6-tier 判定；新代碼請用 `computeTierGroup`。
  *
- * @param elo            保留在 signature 中以相容舊呼叫端；tier 判定已不使用 ELO。
- * @param totalGames     玩家總場次
- * @param _minGames      legacy override（目前無效，保留以不破壞呼叫端）
+ * 保留以避免破壞舊呼叫端；判定仍依 totalGames。
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function computeTier(
@@ -660,42 +818,53 @@ export function computeTier(
 }
 
 // ---------------------------------------------------------------------------
-// 9. 按分類排行榜
+// 9. 按分類排行榜（雙維度 · Edward 2026-04-24 13:43）
 // ---------------------------------------------------------------------------
 
 /**
- * 按分類排行榜：先依 `tier` 分組，每組內按 ELO 由高到低排序（同 ELO 時維持
- * 原順序）。tier-local rank 從 1 開始。全玩家進榜（Edward 2026-04-24）。
+ * 按 **場次組 TierGroup** 分組排行榜：每組內按 `theoreticalWinRate` 降冪排序。
+ * 全玩家進榜；大部分落在 rookie / regular。
+ *
+ * 回傳結構：`{ rookie, regular, veteran, expert, master }`，每組是 entry 陣列。
  */
 export function computeLeaderboardByTier(
   stats: ComputedPlayerStatsV2[],
-): Record<PlayerTier, LeaderboardEntryV2[]> {
-  const out: Record<PlayerTier, LeaderboardEntryV2[]> = {
-    '菜雞': [],
-    '初學': [],
-    '新手': [],
-    '中堅': [],
-    '高手': [],
-    '大師': [],
+): Record<TierGroup, LeaderboardEntryV2[]> {
+  const out: Record<TierGroup, LeaderboardEntryV2[]> = {
+    rookie: [],
+    regular: [],
+    veteran: [],
+    expert: [],
+    master: [],
   };
 
-  // 先把每人塞進對應 tier bucket
   for (const s of stats) {
+    // Fallback — 若存量 doc 無 tierGroup / eloTag / theoreticalWinRate 也要可用
+    const tierGroup: TierGroup = s.tierGroup ?? computeTierGroup(s.totalGames);
+    const eloTag: EloTag = s.eloTag ?? computeEloTag(s.elo);
+    const theo =
+      typeof s.theoreticalWinRate === 'number'
+        ? s.theoreticalWinRate
+        : computeTheoreticalWinRate(s.winRate);
+
     const entry: LeaderboardEntryV2 = {
       playerId: s.playerId,
       elo: s.elo,
-      tier: s.tier,
       totalGames: s.totalGames,
       winRate: s.winRate.overall,
-      rank: 0, // 稍後填 tier-local rank
+      rank: 0, // 稍後填 group-local rank
+      tierGroup,
+      eloTag,
+      theoreticalWinRate: theo,
+      tier: s.tier,
     };
-    out[s.tier].push(entry);
+    out[tierGroup].push(entry);
   }
 
-  // 各 tier 內按 ELO 降序 + 填 tier-local rank（1-based）
-  for (const tier of Object.keys(out) as PlayerTier[]) {
-    out[tier].sort((a, b) => b.elo - a.elo);
-    out[tier].forEach((e, idx) => {
+  // 各組內按 theoreticalWinRate 降序 + 填 group-local rank（1-based）
+  for (const group of ALL_TIER_GROUPS) {
+    out[group].sort((a, b) => b.theoreticalWinRate - a.theoreticalWinRate);
+    out[group].forEach((e, idx) => {
       e.rank = idx + 1;
     });
   }
@@ -709,7 +878,12 @@ export function computeLeaderboardByTier(
 export function computePlayerStatsV2(
   games: GameRecordV2[],
   playerId: PlayerId,
-  opts?: { initialElo?: number; minGamesForTier?: number },
+  opts?: {
+    initialElo?: number;
+    minGamesForTier?: number;
+    /** 可選：整體 ELO 分佈。傳入 → eloTag 按百分位切；否則走硬閾值。 */
+    eloDistribution?: number[] | null;
+  },
 ): ComputedPlayerStatsV2 {
   const winRate = computePlayerWinRate(games, playerId);
   const roleWinRate = computePlayerRoleWinRate(games, playerId);
@@ -718,6 +892,13 @@ export function computePlayerStatsV2(
   const ladyAccuracy = computePlayerLadyAccuracy(games, playerId);
   const merlinStats = computeMerlinAssassinationRate(games, playerId);
   const elo = computeELO(games, playerId, opts?.initialElo ?? 1000);
+
+  // 新雙維度分類（Edward 2026-04-24 13:43）
+  const tierGroup = computeTierGroup(winRate.totalGames);
+  const eloTag = computeEloTag(elo, opts?.eloDistribution ?? null);
+  const theoreticalWinRate = computeTheoreticalWinRate(winRate);
+
+  // 舊 PlayerTier（backcompat，保留以不破壞存量 repo doc 的 tier 欄位）
   const tier = computeTier(
     elo,
     winRate.totalGames,
@@ -747,6 +928,9 @@ export function computePlayerStatsV2(
       survivalRate: merlinStats.survivalRate,
     },
     elo,
+    tierGroup,
+    eloTag,
+    theoreticalWinRate,
     tier,
   };
 }

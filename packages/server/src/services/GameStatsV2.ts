@@ -16,6 +16,7 @@
 import type {
   AlignmentStatsV2,
   ComputedPlayerStatsV2,
+  EloTag,
   GameRecordV2,
   LeaderboardEntryV2,
   MerlinAssassinationStats,
@@ -26,12 +27,18 @@ import type {
   Role,
   RolesV2,
   Seat,
+  TierGroup,
 } from '@avalon/shared';
 import {
+  ALL_TIER_GROUPS,
+  ELO_TAG_HARD_THRESHOLDS,
+  ELO_TAG_PERCENTILES,
+  TIER_GROUP_THRESHOLDS,
   TIER_MIN_GAMES,
   TIER_THRESHOLDS,
   collectAllPlayerIds,
   computeELO as computeELOShared,
+  computeEloTag as computeEloTagShared,
   computeLeaderboardByTier as computeLeaderboardByTierShared,
   computeMerlinAssassinationRate as computeMerlinAssassinationRateShared,
   computePlayerLadyAccuracy as computePlayerLadyAccuracyShared,
@@ -40,7 +47,9 @@ import {
   computePlayerStatsV2 as computePlayerStatsV2Shared,
   computePlayerVoteAccuracy as computePlayerVoteAccuracyShared,
   computePlayerWinRate as computePlayerWinRateShared,
+  computeTheoreticalWinRate as computeTheoreticalWinRateShared,
   computeTier as computeTierShared,
+  computeTierGroup as computeTierGroupShared,
   expandRolesForAllSeats as expandRolesForAllSeatsShared,
   filterGamesForPlayer as filterGamesForPlayerShared,
   findSeatForPlayer as findSeatForPlayerShared,
@@ -50,11 +59,13 @@ export type { PlayerId, Seat };
 export type {
   AlignmentStatsV2,
   ComputedPlayerStatsV2,
+  EloTag,
   LeaderboardEntryV2,
   MerlinAssassinationStats,
   PlayerRoleStatsV2,
   PlayerTier,
   PlayerWinRateV2,
+  TierGroup,
 };
 
 // ---------------------------------------------------------------------------
@@ -118,7 +129,9 @@ export function computeELO(
   return computeELOShared(games, playerId, initialElo);
 }
 
-/** 分類（菜雞/初學/新手/中堅/高手/大師/unranked）。 */
+/**
+ * @deprecated 舊 6-tier（中文）；新代碼請用 `computeTierGroup`。
+ */
 export function computeTier(
   elo: number,
   totalGames: number,
@@ -127,10 +140,33 @@ export function computeTier(
   return computeTierShared(elo, totalGames, minGames);
 }
 
-/** 按分類排行榜。 */
+/** 維度 1：場次組（rookie/regular/veteran/expert/master）。 */
+export function computeTierGroup(totalGames: number): TierGroup {
+  return computeTierGroupShared(totalGames);
+}
+
+/** 維度 2：ELO 標籤（novice/mid/top）。傳 distribution 走百分位，否則硬閾值。 */
+export function computeEloTag(
+  elo: number,
+  eloDistribution?: number[] | null,
+): EloTag {
+  return computeEloTagShared(elo, eloDistribution ?? null);
+}
+
+/** 理論勝率（考慮陣營 baseline）— 用於組內排序。 */
+export function computeTheoreticalWinRate(
+  winRate: PlayerWinRateV2,
+): number {
+  return computeTheoreticalWinRateShared(winRate);
+}
+
+/**
+ * 按 **場次組** 排行榜，組內按理論勝率降冪。
+ * 回傳 keyed by TierGroup（rookie/regular/veteran/expert/master）。
+ */
 export function computeLeaderboardByTier(
   stats: ComputedPlayerStatsV2[],
-): Record<PlayerTier, LeaderboardEntryV2[]> {
+): Record<TierGroup, LeaderboardEntryV2[]> {
   return computeLeaderboardByTierShared(stats);
 }
 
@@ -138,7 +174,11 @@ export function computeLeaderboardByTier(
 export function computePlayerStatsV2(
   games: GameRecordV2[],
   playerId: PlayerId,
-  opts?: { initialElo?: number; minGamesForTier?: number },
+  opts?: {
+    initialElo?: number;
+    minGamesForTier?: number;
+    eloDistribution?: number[] | null;
+  },
 ): ComputedPlayerStatsV2 {
   return computePlayerStatsV2Shared(games, playerId, opts);
 }
@@ -250,4 +290,8 @@ export {
   findSeatForPlayerShared as findSeatForPlayer,
   TIER_THRESHOLDS,
   TIER_MIN_GAMES,
+  TIER_GROUP_THRESHOLDS,
+  ALL_TIER_GROUPS,
+  ELO_TAG_HARD_THRESHOLDS,
+  ELO_TAG_PERCENTILES,
 };
