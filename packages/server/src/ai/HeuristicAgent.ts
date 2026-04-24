@@ -1698,7 +1698,8 @@ export class HeuristicAgent implements AvalonAgent {
 
   /**
    * Count observable "mistakes" a good player made from the assassin's
-   * point of view. Edward 2026-04-24 batch 10 refinement:
+   * point of view. Edward 2026-04-24 batch 10 refinement + batch 11
+   * pattern 3:
    *
    *   拇指 = 刺/娜/奧 (thumb = assassin / morgana / oberon)
    *   錯誤動作:
@@ -1711,6 +1712,10 @@ export class HeuristicAgent implements AvalonAgent {
    *        team, yet they approved → outer-white anomaly on a tainted
    *        team (Merlin would NEVER approve a team she knows contains
    *        a thumb; off-team rejecting is her only legal move).
+   *     3. 任務派票派到拇指 (Edward 2026-04-24 batch 11) — player is
+   *        leader of a proposal whose team contains any thumb. Merlin
+   *        would NEVER propose a tainted team (she sees every thumb
+   *        except Mordred; visible thumbs to Merlin = 刺/娜/奧).
    *
    * Thumb visibility caveat: from the assassin's POV, `knownEvils`
    * reveals {assassin, morgana} only — Oberon is hidden. So "thumb
@@ -1722,13 +1727,13 @@ export class HeuristicAgent implements AvalonAgent {
    *
    * Pre-batch-10 semantics (dropped, see git blame for history):
    *   - 排水 (leader led tainted team) was counted. Replaced by
-   *     Edward's clean specification above.
+   *     Edward's clean specification above. Batch 11 reintroduces it
+   *     as Pattern 3 per Edward 23:46 verbatim spec.
    *   - 場外白球 existed as pattern 2 already; preserved verbatim.
    *
    * Returns the raw count (each vote record can contribute to at most
-   * one bucket per record for the on-team case; 0 or 1 for the off-
-   * team case). Used as a binary filter (unmistaken vs. mistaken); the
-   * absolute magnitude is secondary.
+   * one bucket per record per pattern). Used as a binary filter
+   * (unmistaken vs. mistaken); the absolute magnitude is secondary.
    */
   private getMistakeCount(playerId: string, obs: PlayerObservation): number {
     let mistakes = 0;
@@ -1736,6 +1741,17 @@ export class HeuristicAgent implements AvalonAgent {
       const teamHasThumb = record.team.some(id => obs.knownEvils.includes(id));
       const onTeam = record.team.includes(playerId);
       const vote = record.votes[playerId];
+
+      // Pattern 3: 任務派票派到拇指 (leader + proposed team has thumb).
+      // Independent of vote — merely proposing a thumb-tainted team is
+      // a Merlin-impossible action. Applies even to forced-approve
+      // round 5 proposals and to records where the leader declined to
+      // vote on themselves (vote undefined for leader is rare but
+      // possible in malformed records).
+      if (record.leader === playerId && teamHasThumb) {
+        mistakes += 1;
+      }
+
       if (vote === undefined) continue;
 
       // Pattern 1: 全沒拇指組合開異常內黑 (on-team + thumbless team + reject).

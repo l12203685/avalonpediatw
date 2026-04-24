@@ -21,6 +21,15 @@
  *   - §0 listening rule 擴展到奧伯倫 — match-point 純看公開任務分數，
  *     不再豁免任何紅方角色。
  *
+ * Edward 2026-04-24 batch 11:
+ *   - Label fix: role-code `德 = Mordred`, `梅 = Merlin` (batches 2-10
+ *     had these two swapped; batch 11 restores Edward Google Sheets
+ *     canonical convention — `刺娜德奧派梅` positional).
+ *   - getMistakeCount adds Pattern 3 (錯誤動作 3):
+ *       player is leader of a proposal that contains any thumb
+ *       (刺/娜/奧 visible-to-Merlin evils). Merlin would never lead
+ *       a thumb-tainted team.
+ *
  * Edward 2026-04-24 batch 7 (this run verifies):
  *   - 點 1 湖中起始位（batch 5 carry-over）
  *   - 點 2 match-point 強制失敗（batch 6 carry-over，Oberon 也受約束）
@@ -366,16 +375,26 @@ function getKnownEvils(
 
 // ── TSV (Google Sheet-style) report ─────────────────────────────
 
-/** Role → single-char code (6-role schema). */
+/** Role → single-char code (6-role schema).
+ *
+ * Edward 2026-04-24 batch 11 fix: canonical abbreviation per Edward's
+ * Google Sheets (2147 games). 6-char positional code `刺娜德奧派梅` maps
+ * one-to-one to assassin/morgana/mordred/oberon/percival/merlin — so
+ *   `德` = Mordred（莫**德**雷德）
+ *   `梅` = Merlin（**梅**林）
+ *
+ * Batches 2-10 had these two swapped (wrong: `merlin → '德'`,
+ * `mordred → '梅'`). Batch 11 restores Edward's SSoT convention.
+ */
 function roleCode(role: Role): string {
   const map: Record<string, string> = {
-    merlin:   '德',
-    loyal:    '忠',
-    percival: '派',
-    morgana:  '娜',
     assassin: '刺',
-    mordred:  '梅',  // Edward batch 2: 梅=Mordred (not Merlin) per 6-code scheme
+    morgana:  '娜',
+    mordred:  '德',  // Edward batch 11: 德 = Mordred (莫德雷德)
     oberon:   '奧',
+    percival: '派',
+    merlin:   '梅',  // Edward batch 11: 梅 = Merlin (梅林)
+    loyal:    '忠',
   };
   return map[role] ?? role;
 }
@@ -425,7 +444,7 @@ function renderTSV(game: CapturedGame, completionTs: string): string {
   const lines: string[] = [];
 
   // Header block
-  lines.push(`強 AI 10 人自對弈 (批 10 驗證) — 完成於 ${completionTs}`);
+  lines.push(`強 AI 10 人自對弈 (批 11 驗證) — 完成於 ${completionTs}`);
   lines.push(`房號\t${game.roomId}\t勝方\t${game.winner === 'good' ? '藍方' : '紅方'}\t勝因\t${translateEndReason(game.endReason)}`);
   lines.push('');
 
@@ -574,8 +593,8 @@ async function main() {
     `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} +08`;
 
   const date = ts.slice(0, 10);
-  const jsonPath = path.join(outDir, `selfplay_10p_1game_post_batch10_${date}.json`);
-  const mdPath   = path.join(outDir, `selfplay_10p_1game_post_batch10_${date}.md`);
+  const jsonPath = path.join(outDir, `selfplay_10p_1game_post_batch11_${date}.json`);
+  const mdPath   = path.join(outDir, `selfplay_10p_1game_post_batch11_${date}.md`);
 
   const tsvReport = renderTSV(g, ts);
   fs.writeFileSync(jsonPath, JSON.stringify(g, null, 2), 'utf8');

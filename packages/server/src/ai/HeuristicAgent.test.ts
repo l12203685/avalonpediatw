@@ -2683,6 +2683,106 @@ describe('HeuristicAgent · batch 10 Point 2 (mistake action refined)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// Edward 2026-04-24 batch 11 Point 3 — mistake action #3 (leader
+// proposed thumb-tainted team).
+//
+// Edward verbatim 23:46: 「錯誤動作3: 任務派票派到三根紅方拇指刺娜奧」
+//
+// Merlin would never lead a team that contains any thumb she can see
+// (visible thumbs to Merlin = 刺/娜/奧; Mordred is invisible to Merlin).
+// From the assassin's POV, thumb-on-team is approximated as
+// `any member ∈ knownEvils` (same Oberon blind spot Merlin has herself).
+// ─────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · batch 11 Point 3 (mistake #3 leader thumb-team)', () => {
+  it('pattern 3: leader proposed team containing thumb → mistake', () => {
+    // P1 = assassin, P2 = morgana (thumb). P3 as leader proposed [P2, P4]
+    // (thumb team) → Merlin-impossible propose → P3 flagged as mistaken.
+    // P4 also led once with a clean team [P4, P5] → no mistake for P4.
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'assassin',
+      myTeam:       'evil',
+      knownEvils:   ['P1', 'P2'],
+      gamePhase:    'assassination',
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        // P3 leads a thumb team → Pattern 3 fires for P3.
+        vote(1, 1, 'P3', ['P2', 'P4'], true,
+          { P1: true, P2: true, P3: true, P4: true, P5: true }),
+        // P4 leads a clean team → no mistake for P4.
+        vote(2, 1, 'P4', ['P4', 'P5'], true,
+          { P1: true, P2: true, P3: true, P4: true, P5: true }),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const action = agent.act(obs);
+    expect(action.type).toBe('assassinate');
+    // P3 is the only mistaken good → assassin targets P4 or P5 (both
+    // unmistaken), never P3.
+    if (action.type === 'assassinate') {
+      expect(action.targetId).not.toBe('P3');
+      expect(['P4', 'P5']).toContain(action.targetId);
+    }
+  });
+
+  it('pattern 3: leader proposed clean team → no mistake', () => {
+    // P3 as leader proposed [P3, P5] (thumbless team) → Pattern 3 does
+    // NOT fire. P4 led a clean team too. Both P3 and P4 remain
+    // unmistaken (voteHistory has no inner-black or outer-white either).
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'assassin',
+      myTeam:       'evil',
+      knownEvils:   ['P1', 'P2'],
+      gamePhase:    'assassination',
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        vote(1, 1, 'P3', ['P3', 'P5'], true,
+          { P1: true, P2: true, P3: true, P4: true, P5: true }),
+        vote(2, 1, 'P4', ['P4', 'P5'], true,
+          { P1: true, P2: true, P3: true, P4: true, P5: true }),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const action = agent.act(obs);
+    expect(action.type).toBe('assassinate');
+    // P3 led a clean team → not flagged → stays in candidate pool.
+    if (action.type === 'assassinate') {
+      expect(['P3', 'P4', 'P5']).toContain(action.targetId);
+    }
+  });
+
+  it('pattern 3: leader + thumb team fires even when player is on team', () => {
+    // P3 leads AND is on team [P2, P3] with thumb P2. Pattern 3 fires
+    // (leader + thumb team) — independent of onTeam or vote. Verifies
+    // Pattern 3 is separate from Pattern 1/2 bookkeeping.
+    const obs = baseObs({
+      myPlayerId:   'P1',
+      myRole:       'assassin',
+      myTeam:       'evil',
+      knownEvils:   ['P1', 'P2'],
+      gamePhase:    'assassination',
+      allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      voteHistory: [
+        vote(1, 1, 'P3', ['P2', 'P3'], true,
+          { P1: true, P2: true, P3: true, P4: true, P5: true }),
+      ],
+    });
+    const agent = new HeuristicAgent('P1', 'hard');
+    agent.onGameStart(obs);
+    const action = agent.act(obs);
+    expect(action.type).toBe('assassinate');
+    // P3 flagged → assassin avoids P3.
+    if (action.type === 'assassinate') {
+      expect(action.targetId).not.toBe('P3');
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
 // Edward 2026-04-24 batch 10 Point 4 — loyal suspect expansion
 //
 // Verbatim: 「對於忠臣, 看到異常外白優先視為偏紅方 (放在任務隊伍選擇外)」
