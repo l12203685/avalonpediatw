@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Room, Player } from '@avalon/shared';
+import { ChatMessage, Room, Player } from '@avalon/shared';
 import { ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
-import LiveScoresheet from './LiveScoresheet';
+import { getSocket } from '../services/socket';
+import FullScoresheetLayout from './FullScoresheetLayout';
 
 interface CompactScoresheetProps {
   room: Room;
@@ -10,11 +11,17 @@ interface CompactScoresheetProps {
 }
 
 /**
- * CompactScoresheet — collapsible wrapper around {@link LiveScoresheet} (#83 Phase 2).
+ * CompactScoresheet — collapsible wrapper around {@link FullScoresheetLayout} (#83 Phase 2).
  *
  * Default: collapsed. Shows a 1-line summary ("{{quests}} 輪任務・{{votes}} 次投票・點擊展開")
- * that expands to the full live scoresheet when tapped. Auto-expands when
+ * that expands to the full scoresheet when tapped. Auto-expands when
  * `room.state === 'ended'` so the post-game review is instantly visible.
+ *
+ * 2026-04-24 Edward spec update: always use {@link FullScoresheetLayout} — even
+ * during live play — so the mobile + desktop viewer sees the 4-block banner,
+ * player ring and chat column the entire game, not just after `ended`. The
+ * chat column pulls live socket messages into `liveMessages` so the right
+ * panel stays in sync during play.
  *
  * Owns its own chrome (border + title strip + toggle button) so callers can drop
  * this in one line without an outer wrapper.
@@ -22,6 +29,7 @@ interface CompactScoresheetProps {
 export default function CompactScoresheet({ room, currentPlayer }: CompactScoresheetProps): JSX.Element {
   const { t } = useTranslation(['game']);
   const [expanded, setExpanded] = useState<boolean>(false);
+  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
 
   // Auto-expand once the game ends so the final scoresheet is immediately visible.
   // Uses a ref-free useEffect because we only need one flip per ended-state
@@ -31,6 +39,26 @@ export default function CompactScoresheet({ room, currentPlayer }: CompactScores
       setExpanded(true);
     }
   }, [room.state]);
+
+  // Live chat listener so the full layout's right-column chat reflects
+  // in-game messages as they arrive. Mirrors ChatPanel's subscription
+  // pattern; a second listener on the same event is harmless since socket.io
+  // fans out to every .on() callback.
+  useEffect(() => {
+    let socket: ReturnType<typeof getSocket> | null = null;
+    try {
+      socket = getSocket();
+    } catch {
+      return;
+    }
+
+    const handler = (msg: ChatMessage) => {
+      setLiveMessages(prev => [...prev, msg]);
+    };
+
+    socket.on('chat:message-received', handler);
+    return () => { socket!.off('chat:message-received', handler); };
+  }, []);
 
   const questCount = room.questHistory.length;
   const voteCount = room.voteHistory.length;
@@ -67,7 +95,18 @@ export default function CompactScoresheet({ room, currentPlayer }: CompactScores
 
       {expanded && (
         <div id="compact-scoresheet-body" className="px-2 sm:px-3 py-2">
-          <LiveScoresheet room={room} currentPlayer={currentPlayer} />
+          {/*
+            2026-04-24 Edward spec: live + ended both use the full replay-style
+            layout (banner + player ring + chat log) so the mobile view matches
+            the reference image the whole game. During live play `liveMessages`
+            feeds the chat column; after `ended` the same component keeps
+            rendering (messages stay cached).
+          */}
+          <FullScoresheetLayout
+            room={room}
+            currentPlayer={currentPlayer}
+            messages={liveMessages}
+          />
         </div>
       )}
     </div>
