@@ -285,13 +285,41 @@ export interface DbGameEvent {
  */
 export async function saveGameEvents(events: DbGameEvent[]): Promise<boolean> {
   const db = getSupabaseClient();
-  if (!db || events.length === 0) return false;
-  const { error } = await db.from('game_events').insert(events);
-  if (error) {
-    console.error('[supabase] saveGameEvents error:', error.message);
-    return false;
+  let supabaseOk = false;
+  if (db && events.length > 0) {
+    const { error } = await db.from('game_events').insert(events);
+    if (error) {
+      console.error('[supabase] saveGameEvents error:', error.message);
+    } else {
+      supabaseOk = true;
+    }
   }
-  return true;
+  // 2026-04-24 #supabase-retire dual-write to Firestore (Batch 2.2)
+  // Sub-collection: games/{roomId}/events/{autoId}. Best-effort try/catch
+  // — Firestore failure must not break the legacy Supabase write path.
+  // Phase 2 (read switch in api.ts:859) deferred pending Edward verify.
+  await dualWriteGameEvents(events);
+  return supabaseOk;
+}
+
+async function dualWriteGameEvents(events: DbGameEvent[]): Promise<void> {
+  if (!isFirebaseAdminReady() || events.length === 0) return;
+  try {
+    const fs = getAdminFirestore();
+    const batch = fs.batch();
+    for (const ev of events) {
+      const eventRef = fs.collection('games').doc(ev.room_id)
+                         .collection('events').doc();  // auto id
+      batch.set(eventRef, {
+        ...ev,
+        created_at_ms: Date.now(),
+      });
+    }
+    await batch.commit();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[game_events] firestore dual-write error:', msg);
+  }
 }
 
 /**
