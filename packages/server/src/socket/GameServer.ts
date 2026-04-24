@@ -18,6 +18,10 @@ import {
   getUserElo,
   DbGameRecord,
 } from '../services/supabase';
+import { GameHistoryRepository } from '../services/GameHistoryRepository';
+import { GameHistoryRepositoryV2 } from '../services/GameHistoryRepositoryV2';
+import { buildV2RecordFromRoom } from '../services/liveGameToV2';
+import { ComputedStatsRepositoryV2 } from '../services/ComputedStatsRepositoryV2';
 
 // Rate limiters for different events
 const voteLimiter = new SocketRateLimiter({
@@ -998,6 +1002,13 @@ export class GameServer {
       console.error('[supabase] persistGameResult error:', err)
     );
 
+    // V2 戰績雙寫（Phase 2c 2026-04-24）：Firestore games/ + games_v2/.
+    // 平行於 supabase 寫入，獨立 try/catch 不讓任一路徑失敗影響另一條。
+    // 同時觸發該局玩家的 computed_stats 增量重算（冪等，只重算這些 UUID）。
+    this.persistGameToFirestore(roomId, room).catch((err) =>
+      console.error('[firestore] persistGameToFirestore error:', err),
+    );
+
     // Cleanup engine reference after a short delay (allow late stragglers to reconnect)
     setTimeout(() => {
       this.gameEngines.delete(roomId);
@@ -1091,6 +1102,87 @@ export class GameServer {
       const eventsSaved = await saveGameEvents(events);
       if (eventsSaved) {
         console.log(`[supabase] Saved ${events.length} game events for room ${roomId}`);
+      }
+    }
+  }
+
+  /**
+   * Firestore dual-write on game end (Phase 2c 2026-04-24).
+   *
+   * 1. V1 write: `games/{gameId}` via `GameHistoryRepository.saveGameRecord`
+   *    （保留舊欄位以支援 leaderboard cache invalidation + 歷史遷移鏡像）
+   * 2. V2 write: `games_v2/{gameId}` via `GameHistoryRepositoryV2.saveV2`
+   *    （組 V2 原子結構，含 missions / ladyChain / finalResult）
+   * 3. V2 computed_stats 增量重算：只針對該局玩家 UUID
+   *
+   * 每條路徑獨立 try/catch — 任一失敗不影響其他；engine 不阻塞。
+   */
+  private async persistGameToFirestore(
+    roomId: string,
+    room: Room,
+  ): Promise<void> {
+    // 未 end 的房間不落 Firestore（防禦性）
+    if (room.state !== 'ended') return;
+
+    const startedAt = this.roomStartTimes.get(roomId) ?? room.createdAt;
+    const endedAt = Date.now();
+
+    // V1 write —— winReason 字串對齊 endReason（GameEngine 寫 room.endReason 的語意）
+    const winReasonStr =
+      room.endReason ??
+      (room.evilWins ? 'failed_quests_limit' : 'assassination_failed');
+
+    try {
+      const v1Repo = new GameHistoryRepository();
+      await v1Repo.saveGameRecord(room, winReasonStr);
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          event: 'firestore_v1_save_error',
+          roomId,
+          error: err instanceof Error ? err.message : 'unknown',
+        }),
+      );
+    }
+
+    // V2 write —— 從 Room + engine state 組 V2 record，寫 games_v2/
+    let v2Record;
+    try {
+      const engine = this.gameEngines.get(roomId);
+      if (!engine) {
+        console.warn(`[firestore] engine missing for room ${roomId}; skip V2 write`);
+        return;
+      }
+      v2Record = buildV2RecordFromRoom(room, engine, {
+        startedAtMs: startedAt,
+        endedAtMs: endedAt,
+      });
+      const v2Repo = new GameHistoryRepositoryV2();
+      await v2Repo.saveV2(v2Record);
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          event: 'firestore_v2_save_error',
+          roomId,
+          error: err instanceof Error ? err.message : 'unknown',
+        }),
+      );
+      return;
+    }
+
+    // V2 computed_stats 增量重算 — 只針對該局玩家 UUID（冪等；不阻塞 game flow）
+    if (v2Record) {
+      try {
+        const statsRepo = new ComputedStatsRepositoryV2();
+        await statsRepo.recomputeForGame(v2Record);
+      } catch (err) {
+        console.warn(
+          JSON.stringify({
+            event: 'firestore_computed_stats_incremental_warn',
+            roomId,
+            error: err instanceof Error ? err.message : 'unknown',
+          }),
+        );
       }
     }
   }

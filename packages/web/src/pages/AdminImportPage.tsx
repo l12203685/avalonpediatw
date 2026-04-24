@@ -398,9 +398,15 @@ export default function AdminImportPage(): JSX.Element {
 
         {/* Help footer */}
         <section className="text-[11px] text-gray-500 space-y-1 pt-4 border-t border-zinc-800">
-          <p>寫入目標：Firestore <code className="bg-black/40 px-1 rounded">games/{'{gameId}'}</code></p>
+          <p>寫入目標：Firestore <code className="bg-black/40 px-1 rounded">games/{'{gameId}'}</code>（V1 legacy schema）</p>
           <p>重複 gameId 會被跳過（不覆寫已有記錄）。</p>
           <p>Admin 權限透過 <code className="bg-black/40 px-1 rounded">requireAdminAuth</code> 檢查，白名單 email 才能呼叫此 endpoint。</p>
+          <p className="pt-2">
+            <span className="text-amber-300 font-semibold">V2 戰績（games_v2）：</span>
+            現場對局已於 Phase 2c 起自動雙寫；歷史 Sheets 匯入走 CLI
+            <code className="bg-black/40 px-1 rounded mx-1">scripts/import-games-v2.ts</code>；
+            V1→V2 遷移走 CLI <code className="bg-black/40 px-1 rounded mx-1">scripts/migrate-v1-to-v2.ts</code>。
+          </p>
         </section>
       </div>
     </div>
