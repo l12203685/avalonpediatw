@@ -287,7 +287,7 @@ function NominationRow({
   );
 
   return (
-    <tr className={`border-b border-gray-800/50 ${record.approved ? '' : 'opacity-80'}`}>
+    <tr className="border-b border-gray-800/50">
       {/* Leader seat label — seat 10 renders as "0" (paper scoresheet convention) */}
       <td className="px-0 py-1 text-center text-yellow-400 font-bold bg-avalon-dark">
         {displaySeatNumber(leaderSeat + 1)}
@@ -309,19 +309,21 @@ function NominationRow({
           >
             {/*
               Cell layout: square aspect — shield fills cell when on team,
-              overlay (approve white / reject black) stacks on top of shield.
+              overlay (approve white square / reject black square) renders as a
+              small centered tile so adjacent cells read as a row of discrete
+              squares rather than a continuous bar of color.
             */}
             <div className="relative w-full aspect-square flex items-center justify-center">
               {isOnTeam && (
                 <ShieldIcon className="absolute inset-0 w-full h-full text-yellow-400" />
               )}
               {hasVoted && vote && (
-                // Approve: white checkmark overlay
-                <ApproveMark className="relative w-[75%] h-[75%] text-white drop-shadow-[0_0_1px_rgba(0,0,0,0.6)]" />
+                // Approve: white square + black check, sized as a clean tile
+                <ApproveMark className="relative w-[70%] h-[70%] text-white drop-shadow-[0_0_1px_rgba(0,0,0,0.7)]" />
               )}
               {hasVoted && !vote && (
-                // Reject: black square overlay (covers shield entirely)
-                <RejectMark className="absolute inset-[10%] w-[80%] h-[80%] text-black" />
+                // Reject: black square, same size as approve for consistent "tile" feel
+                <RejectMark className="relative w-[70%] h-[70%] text-black drop-shadow-[0_0_1px_rgba(255,255,255,0.7)]" />
               )}
             </div>
           </td>
