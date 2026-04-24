@@ -80,13 +80,19 @@ function buildLineAdapter(): LineAdapter | null {
 
 /**
  * Wrap the discord.js client into a minimal channel-fetching adapter.
- * Returns null if the bot isn't ready yet (login not completed).
+ *
+ * IMPORTANT: adapter is built LAZILY — readiness + bot singleton are re-read on
+ * every `fetchChannel()` call. This avoids a boot-time race where
+ * `initializeLobbyChatMirror()` runs right after `initializeDiscordBot()`
+ * awaits `login()` (gateway handshake) but BEFORE the Discord `ready` event
+ * fires. Previously the adapter returned `null` at init time and the mirror
+ * permanently dropped lobby→Discord traffic for the life of the process.
  */
-function buildDiscordAdapter(): DiscordAdapter | null {
-  const bot = getDiscordBot();
-  if (!bot || !bot.isClientReady()) return null;
+function buildDiscordAdapter(): DiscordAdapter {
   return {
     fetchChannel: async (channelId): Promise<DiscordChannelAdapter | null> => {
+      const bot = getDiscordBot();
+      if (!bot || !bot.isClientReady()) return null;
       try {
         const ch = await bot.getClient().channels.fetch(channelId);
         if (!ch || !(ch instanceof TextChannel)) return null;
@@ -115,7 +121,7 @@ function initializeLobbyChatMirror(): void {
     lineGroupId,
     discordChannelId,
     line: buildLineAdapter() ?? undefined,
-    discord: buildDiscordAdapter() ?? undefined,
+    discord: buildDiscordAdapter(),
   });
 
   const enabledPlatforms: string[] = [];
