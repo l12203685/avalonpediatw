@@ -564,6 +564,17 @@ export class SelfPlayEngine {
           .map(([id]) => id)
       : undefined;
 
+    // Edward 2026-04-24 batch 3 fix — assassin hard-filter: at
+    // assassination phase only, inject the full evil roster so the
+    // assassin cannot pick Oberon/Mordred (hidden from `knownEvils`
+    // mid-game). Narrow-scope field — `undefined` in all other phases
+    // and roles.
+    const allEvilIds = myRole === 'assassin' && this.getPhase(room) === 'assassination'
+      ? Array.from(teamMap.entries())
+          .filter(([, t]) => t === 'evil')
+          .map(([id]) => id)
+      : undefined;
+
     return {
       myPlayerId:    playerId,
       myRole,
@@ -572,6 +583,7 @@ export class SelfPlayEngine {
       allPlayerIds:  Object.keys(room.players),
       knownEvils,
       knownWizards,
+      allEvilIds,
       currentRound:  room.currentRound,
       currentLeader: this.getCurrentLeader(room),
       failCount:     room.failCount,

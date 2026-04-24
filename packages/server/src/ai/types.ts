@@ -20,6 +20,15 @@ export interface PlayerObservation {
   allPlayerIds:  string[];    // All player IDs in the game (always complete)
   knownEvils:    string[];    // IDs of players I know are evil (my role's knowledge)
   knownWizards?: string[];   // IDs that look like Merlin/Morgana to Percival (can't tell which)
+  /**
+   * Edward 2026-04-24 batch 3 fix — assassin POV only: the full evil
+   * roster (including Oberon/Mordred that `knownEvils` hides mid-game).
+   * Populated by the harness when `gamePhase === 'assassination'` so the
+   * assassin can hard-filter the candidate pool to loyal good only (no
+   * targeting Oberon/Mordred as "good"). `undefined` in all other phases
+   * and for all other roles.
+   */
+  allEvilIds?:   string[];
 
   // Dynamic game state
   currentRound:  number;

@@ -631,11 +631,22 @@ export class HeuristicAgent implements AvalonAgent {
   private voteOnTeam(obs: PlayerObservation): AgentAction {
     const { proposedTeam, myTeam, myPlayerId, knownEvils, knownWizards, failCount } = obs;
 
+    // Edward 2026-04-24 batch 3 fix #2 — forced-mission team vote:
+    // on the 5th attempt (failCount === 4), a reject hands the round
+    // directly to evil via the 5-rejections rule. Therefore:
+    //   • good MUST approve (already handled below, preserved)
+    //   • evil MUST ALSO approve — a reject wins them the whole round,
+    //     so blue players physically cannot cast an anomaly reject;
+    //     and a red reject would be self-sabotage at this specific point
+    //     only if blue rejects (blue can't) — but per Edward's rule
+    //     「強制局不會有異常票」→ everyone approves, the tail leader's
+    //     team just runs the quest.
+    // Cross-faction gate: applies regardless of team.
+    if (failCount >= FORCE_APPROVE_FAIL_COUNT) {
+      return { type: 'team_vote', vote: true };
+    }
+
     if (myTeam === 'good') {
-      // Force approve on 5th attempt — rejecting auto-hands round to evil.
-      if (failCount >= FORCE_APPROVE_FAIL_COUNT) {
-        return { type: 'team_vote', vote: true };
-      }
 
       // Hard veto: any known evil on team → always reject (critical, no noise).
       const hasKnownEvil = proposedTeam.some(id => knownEvils.includes(id));
@@ -753,11 +764,30 @@ export class HeuristicAgent implements AvalonAgent {
   // ── Quest Vote ───────────────────────────────────────────────
 
   private voteOnQuest(obs: PlayerObservation): AgentAction {
-    const { myTeam, myRole, questResults, playerCount, currentRound } = obs;
+    const { myTeam, myRole, questResults, playerCount, currentRound, failCount } = obs;
 
     if (myTeam === 'good') {
       return { type: 'quest_vote', vote: 'success' };
     }
+
+    // Edward 2026-04-24 batch 3 fix #2 — forced-mission quest vote:
+    // detect whether this quest arose from the 5th proposal (forced
+    // mission). `failCount` resets to 0 on approval, so we check the
+    // approved vote record for this round — if its `attempt === 5`,
+    // the quest team was auto-approved under forced-mission pressure.
+    //
+    // Per Edward「強制局不會有異常票」: evil MUST also vote success
+    // at this point — a fail reveals cover for zero strategic gain
+    // (blue already couldn't reject, so no anomaly vote branch fires).
+    // Short-circuit before any role-specific fail heuristic.
+    const approvedVoteThisRound = obs.voteHistory.find(
+      v => v.round === currentRound && v.approved,
+    );
+    if (approvedVoteThisRound && approvedVoteThisRound.attempt >= 5) {
+      return { type: 'quest_vote', vote: 'success' };
+    }
+    // Suppress unused-variable lint when the guard above doesn't fire.
+    void failCount;
 
     // Evil: decide whether to fail based on game state
     const goodQuestWins = questResults.filter(r => r === 'success').length;
@@ -835,7 +865,18 @@ export class HeuristicAgent implements AvalonAgent {
 
   private assassinate(obs: PlayerObservation): AgentAction {
     const allIds = this.getPlayerIds(obs);
-    const goodPlayers = allIds.filter(id => !obs.knownEvils.includes(id) && id !== obs.myPlayerId);
+
+    // Edward 2026-04-24 batch 3 fix #1 — assassin hard-filter: candidate
+    // pool MUST be faction=good only. `knownEvils` from the assassin's POV
+    // only reveals assassin+morgana — it hides Oberon and Mordred, so a
+    // naive "not in knownEvils" filter leaks Oberon/Mordred into the
+    // candidate pool ("紅方不可能是被刺殺對象").
+    //
+    // `allEvilIds` is populated by the harness only at assassination phase
+    // (see types.ts). Prefer it when available; fall back to `knownEvils`
+    // for backwards compatibility with tests / non-harness callers.
+    const evilSet = new Set<string>(obs.allEvilIds ?? obs.knownEvils);
+    const goodPlayers = allIds.filter(id => !evilSet.has(id) && id !== obs.myPlayerId);
 
     if (goodPlayers.length === 0) {
       return { type: 'assassinate', targetId: allIds.find(id => id !== obs.myPlayerId) ?? allIds[0] };

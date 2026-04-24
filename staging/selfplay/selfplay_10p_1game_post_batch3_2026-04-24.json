@@ -1,0 +1,478 @@
+{
+  "gameIndex": 1,
+  "roomId": "AI-BB79FFCF",
+  "seats": [
+    {
+      "seat": 1,
+      "id": "H-01",
+      "role": "loyal",
+      "team": "good"
+    },
+    {
+      "seat": 2,
+      "id": "H-03",
+      "role": "loyal",
+      "team": "good"
+    },
+    {
+      "seat": 3,
+      "id": "H-10",
+      "role": "morgana",
+      "team": "evil"
+    },
+    {
+      "seat": 4,
+      "id": "H-06",
+      "role": "loyal",
+      "team": "good"
+    },
+    {
+      "seat": 5,
+      "id": "H-05",
+      "role": "loyal",
+      "team": "good"
+    },
+    {
+      "seat": 6,
+      "id": "H-09",
+      "role": "assassin",
+      "team": "evil"
+    },
+    {
+      "seat": 7,
+      "id": "H-02",
+      "role": "oberon",
+      "team": "evil"
+    },
+    {
+      "seat": 8,
+      "id": "H-04",
+      "role": "percival",
+      "team": "good"
+    },
+    {
+      "seat": 9,
+      "id": "H-07",
+      "role": "merlin",
+      "team": "good"
+    },
+    {
+      "seat": 10,
+      "id": "H-08",
+      "role": "mordred",
+      "team": "evil"
+    }
+  ],
+  "voteHistory": [
+    {
+      "round": 1,
+      "attempt": 1,
+      "leader": "H-01",
+      "team": [
+        "H-01",
+        "H-03",
+        "H-10"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": true,
+        "H-02": false,
+        "H-03": true,
+        "H-04": false,
+        "H-05": false,
+        "H-06": false,
+        "H-07": false,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 1,
+      "attempt": 2,
+      "leader": "H-03",
+      "team": [
+        "H-03",
+        "H-06",
+        "H-05"
+      ],
+      "approved": true,
+      "votes": {
+        "H-01": false,
+        "H-02": false,
+        "H-03": true,
+        "H-04": false,
+        "H-05": true,
+        "H-06": true,
+        "H-07": false,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 2,
+      "attempt": 1,
+      "leader": "H-10",
+      "team": [
+        "H-10",
+        "H-09",
+        "H-01",
+        "H-04"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": true,
+        "H-02": false,
+        "H-03": false,
+        "H-04": false,
+        "H-05": false,
+        "H-06": false,
+        "H-07": false,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 2,
+      "attempt": 2,
+      "leader": "H-06",
+      "team": [
+        "H-06",
+        "H-03",
+        "H-05",
+        "H-02"
+      ],
+      "approved": true,
+      "votes": {
+        "H-01": false,
+        "H-02": true,
+        "H-03": true,
+        "H-04": false,
+        "H-05": true,
+        "H-06": true,
+        "H-07": false,
+        "H-08": true,
+        "H-09": false,
+        "H-10": true
+      }
+    },
+    {
+      "round": 3,
+      "attempt": 1,
+      "leader": "H-05",
+      "team": [
+        "H-05",
+        "H-01",
+        "H-04",
+        "H-07"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": true,
+        "H-02": false,
+        "H-03": false,
+        "H-04": false,
+        "H-05": false,
+        "H-06": false,
+        "H-07": false,
+        "H-08": false,
+        "H-09": false,
+        "H-10": true
+      }
+    },
+    {
+      "round": 3,
+      "attempt": 2,
+      "leader": "H-09",
+      "team": [
+        "H-09",
+        "H-03",
+        "H-05",
+        "H-06"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": false,
+        "H-02": false,
+        "H-03": false,
+        "H-04": false,
+        "H-05": false,
+        "H-06": false,
+        "H-07": false,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 3,
+      "attempt": 3,
+      "leader": "H-02",
+      "team": [
+        "H-02",
+        "H-06",
+        "H-03",
+        "H-01"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": false,
+        "H-02": true,
+        "H-03": false,
+        "H-04": false,
+        "H-05": false,
+        "H-06": false,
+        "H-07": false,
+        "H-08": false,
+        "H-09": false,
+        "H-10": false
+      }
+    },
+    {
+      "round": 3,
+      "attempt": 4,
+      "leader": "H-04",
+      "team": [
+        "H-04",
+        "H-07",
+        "H-01",
+        "H-09"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": true,
+        "H-02": false,
+        "H-03": false,
+        "H-04": false,
+        "H-05": true,
+        "H-06": false,
+        "H-07": false,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 3,
+      "attempt": 5,
+      "leader": "H-07",
+      "team": [
+        "H-07",
+        "H-04",
+        "H-01",
+        "H-08"
+      ],
+      "approved": true,
+      "votes": {
+        "H-01": true,
+        "H-02": true,
+        "H-03": true,
+        "H-04": true,
+        "H-05": true,
+        "H-06": true,
+        "H-07": true,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 4,
+      "attempt": 1,
+      "leader": "H-08",
+      "team": [
+        "H-08",
+        "H-10",
+        "H-07",
+        "H-01",
+        "H-03"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": false,
+        "H-02": true,
+        "H-03": false,
+        "H-04": false,
+        "H-05": false,
+        "H-06": false,
+        "H-07": false,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 4,
+      "attempt": 2,
+      "leader": "H-01",
+      "team": [
+        "H-01",
+        "H-04",
+        "H-07",
+        "H-09",
+        "H-08"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": true,
+        "H-02": false,
+        "H-03": false,
+        "H-04": false,
+        "H-05": false,
+        "H-06": false,
+        "H-07": false,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 4,
+      "attempt": 3,
+      "leader": "H-03",
+      "team": [
+        "H-03",
+        "H-04",
+        "H-07",
+        "H-01",
+        "H-09"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": false,
+        "H-02": true,
+        "H-03": false,
+        "H-04": false,
+        "H-05": false,
+        "H-06": true,
+        "H-07": false,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 4,
+      "attempt": 4,
+      "leader": "H-10",
+      "team": [
+        "H-10",
+        "H-07",
+        "H-05",
+        "H-02",
+        "H-04"
+      ],
+      "approved": false,
+      "votes": {
+        "H-01": false,
+        "H-02": true,
+        "H-03": false,
+        "H-04": false,
+        "H-05": false,
+        "H-06": false,
+        "H-07": false,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    },
+    {
+      "round": 4,
+      "attempt": 5,
+      "leader": "H-06",
+      "team": [
+        "H-06",
+        "H-01",
+        "H-04",
+        "H-07",
+        "H-09"
+      ],
+      "approved": true,
+      "votes": {
+        "H-01": true,
+        "H-02": true,
+        "H-03": true,
+        "H-04": true,
+        "H-05": true,
+        "H-06": true,
+        "H-07": true,
+        "H-08": true,
+        "H-09": true,
+        "H-10": true
+      }
+    }
+  ],
+  "questHistory": [
+    {
+      "round": 1,
+      "team": [
+        "H-03",
+        "H-06",
+        "H-05"
+      ],
+      "result": "success",
+      "failCount": 0
+    },
+    {
+      "round": 2,
+      "team": [
+        "H-06",
+        "H-03",
+        "H-05",
+        "H-02"
+      ],
+      "result": "fail",
+      "failCount": 1
+    },
+    {
+      "round": 3,
+      "team": [
+        "H-07",
+        "H-04",
+        "H-01",
+        "H-08"
+      ],
+      "result": "success",
+      "failCount": 0
+    },
+    {
+      "round": 4,
+      "team": [
+        "H-06",
+        "H-01",
+        "H-04",
+        "H-07",
+        "H-09"
+      ],
+      "result": "success",
+      "failCount": 0
+    }
+  ],
+  "ladyOfTheLakeHistory": [
+    {
+      "round": 2,
+      "holderId": "H-01",
+      "targetId": "H-02",
+      "result": "evil",
+      "declared": true,
+      "declaredClaim": "evil"
+    },
+    {
+      "round": 3,
+      "holderId": "H-02",
+      "targetId": "H-10",
+      "result": "evil",
+      "declared": true,
+      "declaredClaim": "evil"
+    }
+  ],
+  "assassinTargetId": "H-04",
+  "assassinTargetRole": "percival",
+  "winner": "good",
+  "endReason": "assassination_failed",
+  "rounds": 4,
+  "totalVoteAttempts": 14,
+  "eventCount": 80
+}
