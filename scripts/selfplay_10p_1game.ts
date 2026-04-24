@@ -425,7 +425,7 @@ function renderTSV(game: CapturedGame, completionTs: string): string {
   const lines: string[] = [];
 
   // Header block
-  lines.push(`強 AI 10 人自對弈 (批 8 驗證) — 完成於 ${completionTs}`);
+  lines.push(`強 AI 10 人自對弈 (批 9 驗證) — 完成於 ${completionTs}`);
   lines.push(`房號\t${game.roomId}\t勝方\t${game.winner === 'good' ? '藍方' : '紅方'}\t勝因\t${translateEndReason(game.endReason)}`);
   lines.push('');
 
@@ -574,8 +574,8 @@ async function main() {
     `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} +08`;
 
   const date = ts.slice(0, 10);
-  const jsonPath = path.join(outDir, `selfplay_10p_1game_post_batch8_${date}.json`);
-  const mdPath   = path.join(outDir, `selfplay_10p_1game_post_batch8_${date}.md`);
+  const jsonPath = path.join(outDir, `selfplay_10p_1game_post_batch9_${date}.json`);
+  const mdPath   = path.join(outDir, `selfplay_10p_1game_post_batch9_${date}.md`);
 
   const tsvReport = renderTSV(g, ts);
   fs.writeFileSync(jsonPath, JSON.stringify(g, null, 2), 'utf8');

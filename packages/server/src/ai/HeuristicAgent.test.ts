@@ -839,29 +839,30 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
       return fails / samples;
     }
 
-    it('Mordred early fail rate ≈ 0.70 (base 0.60 + 0.10)', () => {
+    // Edward 2026-04-24 batch 9: red-always-fail-on-mission invariant
+    // overrides all probabilistic bases (0.70 / 0.55 / 0.50 legacy).
+    // Every red player on a mission must invariably vote fail — the
+    // per-role early fail bonuses remain a computed property of the
+    // agent (see `applyEvilEarlyFailBonus` test below) but no longer
+    // determine the emitted quest_vote.
+    it('Mordred early fail rate = 1.0 (batch 9 invariant overrides 0.70 base)', () => {
       const rate = failRate('mordred');
-      expect(rate).toBeGreaterThan(0.60);
-      expect(rate).toBeLessThan(0.80);
+      expect(rate).toBe(1);
     });
 
-    it('Morgana early fail rate ≈ 0.55 (base 0.60 - 0.05)', () => {
+    it('Morgana early fail rate = 1.0 (batch 9 invariant overrides 0.55 base)', () => {
       const rate = failRate('morgana');
-      expect(rate).toBeGreaterThan(0.45);
-      expect(rate).toBeLessThan(0.65);
+      expect(rate).toBe(1);
     });
 
-    it('Assassin early fail rate ≈ 0.50 (base 0.60 - 0.10 cleanest)', () => {
+    it('Assassin early fail rate = 1.0 (batch 9 invariant overrides 0.50 base)', () => {
       const rate = failRate('assassin');
-      expect(rate).toBeGreaterThan(0.40);
-      expect(rate).toBeLessThan(0.60);
+      expect(rate).toBe(1);
     });
 
-    it('Oberon early fail rate: Rule 2 forces R1 on-team fail = 1.0 (was 0.60 legacy)', () => {
-      // Edward 2026-04-24 batch 7 fix #3 change: Oberon Rule 2 says
-      // R1-R3 on team → fail unconditionally. This fixture is R1 on team
-      // (proposedTeam includes P1) so Rule 2 fires. Pre-batch-7 the
-      // generic 0.60 base fired here (legacy).
+    it('Oberon early fail rate = 1.0 (batch 7 Rule 2 + batch 9 invariant)', () => {
+      // Pre-batch-9: batch 7 Rule 2 already forced R1 on-team fail = 1.
+      // Batch 9 generalises to all rounds for every red role.
       const rate = failRate('oberon');
       expect(rate).toBe(1);
     });
@@ -1420,32 +1421,25 @@ describe('HeuristicAgent · §0 Listening rule (batch 6 — force-fail incl. Obe
     });
   });
 
-  describe('都沒聽 (neither side listening, evil fails probabilistically)', () => {
-    it('Mordred at 0-0 → ~0.70 fail (base 0.60 + 0.10 bolder bonus, not 1.0)', () => {
-      const rate = failRate(buildObs('mordred', []), 600);
-      expect(rate).toBeGreaterThan(0.55);
-      expect(rate).toBeLessThan(0.85);
-      // Critical: NOT 1.0 — proves non-listening path is still probabilistic.
-      expect(rate).toBeLessThan(1.0);
+  describe('都沒聽 (neither side listening — batch 9 invariant: red always fail)', () => {
+    // Edward 2026-04-24 batch 9 — red-always-fail-on-mission invariant
+    // overrides the pre-batch-9 probabilistic non-listening bases
+    // (mordred 0.70 / morgana 0.55 / assassin 0.50). Every red role on
+    // a mission now invariably votes fail, regardless of mission score.
+    // The role-specific early-fail bonuses remain a computed property
+    // of the agent (see applyEvilEarlyFailBonus unit test) but no
+    // longer determine the emitted quest_vote.
+    it('Mordred at 0-0 → fail 100% (batch 9 invariant, was 0.70 base)', () => {
+      expect(failRate(buildObs('mordred', []), 200)).toBe(1);
     });
-    it('Morgana at 1-0 → ~0.55 fail (base 0.60 − 0.05 cleaner, not 1.0)', () => {
-      const rate = failRate(buildObs('morgana', ['success']), 600);
-      expect(rate).toBeGreaterThan(0.40);
-      expect(rate).toBeLessThan(0.70);
-      expect(rate).toBeLessThan(1.0);
+    it('Morgana at 1-0 → fail 100% (batch 9 invariant, was 0.55 base)', () => {
+      expect(failRate(buildObs('morgana', ['success']), 200)).toBe(1);
     });
-    it('Assassin at 0-1 → ~0.50 fail (base 0.60 − 0.10 cleanest, not 1.0)', () => {
-      const rate = failRate(buildObs('assassin', ['fail']), 600);
-      expect(rate).toBeGreaterThan(0.35);
-      expect(rate).toBeLessThan(0.65);
-      expect(rate).toBeLessThan(1.0);
+    it('Assassin at 0-1 → fail 100% (batch 9 invariant, was 0.50 base)', () => {
+      expect(failRate(buildObs('assassin', ['fail']), 200)).toBe(1);
     });
-    it('Oberon at 1-1 R3 on team → Rule 2 forces fail = 1.0 (batch 7 change)', () => {
-      // Edward 2026-04-24 batch 7 fix #3: Oberon Rule 2 says R1-R3 on
-      // team → fail. At 1-1 the listening rule does NOT fire, but Rule 2
-      // now does. Pre-batch-7 the legacy 0.60 base fired here (superseded).
-      const rate = failRate(buildObs('oberon', ['success', 'fail']), 600);
-      expect(rate).toBe(1);
+    it('Oberon at 1-1 R3 on team → fail 100% (batch 7 Rule 2 + batch 9 invariant)', () => {
+      expect(failRate(buildObs('oberon', ['success', 'fail']), 200)).toBe(1);
     });
   });
 
@@ -1800,14 +1794,12 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
       }
     });
 
-    it('R4 on-team, NO overlap with prior failed mission → success (not listening)', () => {
-      // Careful: questResults must NOT trigger listening (either side = 2).
-      // Use 1 fail 1 success = 1-1 pre-R4 state (R4 is the 4th round so we
-      // only need pre-R4 results here). Scenario: R1 success, R2 fail (not
-      // overlap), R3 success. That's 2-1 listening! Use 1-1 instead:
-      // R1 fail (Oberon NOT on it), R2 success. Fast-forward R3 skipped
-      // (hypothetical) — we only use questHistory for overlap inference,
-      // questResults is separate for listening calc.
+    it('R4 on-team, NO overlap with prior failed mission → fail (batch 9 invariant overrides Rule 4 success branch)', () => {
+      // Pre-batch-9: Oberon Rule 4 else-branch voted `success` when no
+      // teammate-suspicion overlap existed. Post batch 9 the red-always-
+      // fail invariant supersedes: any red on a mission → fail. The
+      // Rule 4 success branch is now dead code for red, preserved for
+      // auditability. See EVIL_MISSION_ALWAYS_FAIL in HeuristicAgent.ts.
       const obs = oberonQuestVoteObs({
         round: 4,
         proposedTeam: ['P1', 'P8', 'P9'],  // Team members not in R2 failure
@@ -1821,7 +1813,7 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
         agent.onGameStart(obs);
         const action = agent.act(obs);
         expect(action.type).toBe('quest_vote');
-        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
       }
     });
   });
@@ -1897,12 +1889,12 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
       }
     });
 
-    it('R5 on-team + NO prior fail → quest success (Rule 5c else branch)', () => {
-      // Without a prior fail, Oberon cooperates even on team. But this scenario
-      // requires getting to R5 with 4 successes — match-point would fire at R3
-      // (goodWins=2) or R4. questResults here ensures goodWins<2 at call time,
-      // which is impossible in real play. Skip match-point verification; test
-      // pure Rule 5c else-branch with a crafted questResults <2 listening.
+    it('R5 on-team + NO prior fail → quest fail (batch 9 invariant overrides Rule 5c else branch)', () => {
+      // Pre-batch-9: Oberon Rule 5c else-branch voted `success` when
+      // totalMissionFails === 0. Post batch 9 the red-always-fail
+      // invariant supersedes — see EVIL_MISSION_ALWAYS_FAIL. Rule 5c
+      // success branch is now dead code for red, preserved for
+      // auditability.
       const obs = oberonQuestVoteObs({
         round: 5,
         proposedTeam: ['P1', 'P2', 'P3', 'P4'],
@@ -1911,13 +1903,12 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
         ],
         questResults: ['success'],  // 1-0, not listening; artificial
       });
-      // Oberon Rule 5c: totalMissionFails === 0 → success
       for (let i = 0; i < 50; i++) {
         const agent = new HeuristicAgent('P1', 'hard');
         agent.onGameStart(obs);
         const action = agent.act(obs);
         expect(action.type).toBe('quest_vote');
-        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
       }
     });
   });
@@ -2113,5 +2104,237 @@ describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)',
     });
     const rate = approveRate(obs, 300);
     expect(rate).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Edward 2026-04-24 batch 9 — red-always-fail-on-mission invariant
+//
+// Edward verbatim:
+//   「157 7沒出失敗 / 2390 0是奧 也沒出失敗
+//    不是說能出任務就要盡可能破壞任務嗎」
+//
+// Batch 8 self-play exposed two cases where red players on a mission
+// still voted `success` (娜 on R1 mission 157; 刺+奧+梅 on R2 forced
+// mission 2390). Batch 9 overrides every cover/hide heuristic:
+//   任何紅方任何時刻 on-mission → 必投 fail.
+//
+// Covered roles: assassin / morgana / mordred / oberon
+// Covered paths: forced-mission, 60/40 baseline, failsRequired>=2,
+//                Oberon Rule 4/5c success branches, match-point
+// ─────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · batch 9 red-always-fail-on-mission invariant', () => {
+  const EVIL_ROLES: ReadonlyArray<'assassin' | 'morgana' | 'mordred' | 'oberon'> =
+    ['assassin', 'morgana', 'mordred', 'oberon'];
+
+  /** Build a minimal quest-vote observation for a red role. */
+  function redQuestObs(
+    role: 'assassin' | 'morgana' | 'mordred' | 'oberon',
+    opts: {
+      round: number;
+      questResults?: ('success' | 'fail')[];
+      voteHistory?: VoteRecord[];
+      questHistory?: QuestRecord[];
+      playerCount?: number;
+      proposedTeam?: string[];
+    },
+  ): PlayerObservation {
+    const playerCount = opts.playerCount ?? 5;
+    const allPlayerIds = Array.from({ length: playerCount }, (_, i) => `P${i + 1}`);
+    return baseObs({
+      myPlayerId:   'P1',
+      myRole:       role,
+      myTeam:       'evil',
+      knownEvils:   role === 'oberon' ? [] : ['P1', 'P2'],
+      playerCount,
+      allPlayerIds,
+      gamePhase:    'quest_vote',
+      currentRound: opts.round,
+      proposedTeam: opts.proposedTeam ?? ['P1', 'P2'],
+      questResults: opts.questResults ?? [],
+      voteHistory:  opts.voteHistory ?? [],
+      questHistory: opts.questHistory ?? [],
+    });
+  }
+
+  describe('direct invariant — every code path routes red to fail', () => {
+    for (const role of EVIL_ROLES) {
+      it(`${role} R1 on-team, 0-0 (baseline path) → fail`, () => {
+        const obs = redQuestObs(role, { round: 1 });
+        for (let i = 0; i < 50; i++) {
+          const agent = new HeuristicAgent('P1', 'hard');
+          agent.onGameStart(obs);
+          const action = agent.act(obs);
+          expect(action.type).toBe('quest_vote');
+          if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+        }
+      });
+
+      it(`${role} R4 on-team, 1-1 (failsRequired≥2 path, 10p) → fail`, () => {
+        // 10p R4 needs 2 fails; pre-batch-9 this ran the 30% fr2 path.
+        const obs = redQuestObs(role, {
+          round: 4,
+          playerCount: 10,
+          proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+          questResults: ['success', 'fail'],
+        });
+        for (let i = 0; i < 50; i++) {
+          const agent = new HeuristicAgent('P1', 'hard');
+          agent.onGameStart(obs);
+          const action = agent.act(obs);
+          expect(action.type).toBe('quest_vote');
+          if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+        }
+      });
+
+      it(`${role} forced-mission (attempt=5, 0-0) → fail (batch 9 overrides batch 3 cover-success)`, () => {
+        // Pre-batch-9: forced-mission returned success for every player.
+        // Batch 9 invariant routes red → fail before the forced-mission
+        // shortcut fires. Critical regression vector (batch 8 R2 mission
+        // 2390 bug).
+        const obs = redQuestObs(role, {
+          round: 2,
+          proposedTeam: ['P1', 'P2', 'P3', 'P4'],
+          voteHistory: [
+            vote(2, 5, 'P3', ['P1', 'P2', 'P3', 'P4'], true,
+                 { P1: true, P2: true, P3: true, P4: true, P5: true }),
+          ],
+        });
+        for (let i = 0; i < 50; i++) {
+          const agent = new HeuristicAgent('P1', 'hard');
+          agent.onGameStart(obs);
+          const action = agent.act(obs);
+          expect(action.type).toBe('quest_vote');
+          if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+        }
+      });
+    }
+  });
+
+  describe('10-game self-play invariant — red on mission ⇒ fail (no exceptions)', () => {
+    /** Role alphabet deterministically assigned to seats 1..10. Mix of
+     *  blue (merlin/percival/loyal) and red (assassin/morgana/mordred/oberon). */
+    function buildRoleMap(
+      agents: HeuristicAgent[],
+      roles: Array<'merlin' | 'percival' | 'loyal' | 'assassin' | 'morgana' | 'mordred' | 'oberon'>,
+    ): Map<string, string> {
+      const m = new Map<string, string>();
+      agents.forEach((a, i) => m.set(a.agentId, roles[i]));
+      return m;
+    }
+
+    /** Simulate a single quest-vote scenario for every mission round,
+     *  running red players through voteOnQuest and asserting fail. */
+    function runSelfPlayInvariant(seed: number): {
+      redVotes: Array<{ role: string; vote: 'success' | 'fail' }>;
+    } {
+      // Deterministic role layout (10-player composition: 6 blue + 4 red).
+      // Varying starting round per seed to exercise different code paths.
+      const roles: Array<'merlin' | 'percival' | 'loyal' | 'assassin' | 'morgana' | 'mordred' | 'oberon'> = [
+        'merlin', 'percival', 'loyal', 'loyal', 'loyal', 'loyal',
+        'assassin', 'morgana', 'mordred', 'oberon',
+      ];
+      const agents = Array.from({ length: 10 }, (_, i) => new HeuristicAgent(`S${i + 1}`, 'hard'));
+      const roleMap = buildRoleMap(agents, roles);
+      const redVotes: Array<{ role: string; vote: 'success' | 'fail' }> = [];
+
+      // 5 rounds × varying quest score permutations per seed.
+      for (let r = 1; r <= 5; r++) {
+        // Rotate questResults based on seed to exercise 0-0 / 1-0 / 0-1 /
+        // 1-1 / 2-0 / 0-2 / 2-1 / 1-2 listening + non-listening states.
+        const goodWins = Math.min(r - 1, (seed + r) % 3);
+        const evilWins = Math.min(r - 1 - goodWins, (seed * 2) % 3);
+        const questResults: ('success' | 'fail')[] = [
+          ...Array(goodWins).fill('success'),
+          ...Array(evilWins).fill('fail'),
+        ];
+        // Team always includes seats 1 (merlin), 7 (assassin), 10 (oberon)
+        // so red agents are on every mission — maximises invariant pressure.
+        const proposedTeam = ['S1', 'S7', 'S10'];
+        // Occasionally vary to a 4/5-person team to cover failsRequired>=2.
+        if (r === 4 && seed % 2 === 0) {
+          proposedTeam.push('S2', 'S8');  // 5-person, includes morgana too
+        }
+        // Ensure mordred (S9) appears on team at least some rounds.
+        if (r === 2 || (r === 5 && seed % 3 === 0)) {
+          proposedTeam.push('S9');
+        }
+
+        // Forced-mission test: odd seeds mark round 3 as attempt=5.
+        const voteHistory: VoteRecord[] =
+          r === 3 && seed % 2 === 1
+            ? [
+                {
+                  round: 3, attempt: 5, leader: 'S3',
+                  team: proposedTeam, approved: true,
+                  votes: Object.fromEntries(agents.map(a => [a.agentId, true])),
+                },
+              ]
+            : [];
+
+        for (const agent of agents) {
+          const role = roleMap.get(agent.agentId)!;
+          const isEvil = ['assassin', 'morgana', 'mordred', 'oberon'].includes(role);
+          if (!isEvil) continue;
+          if (!proposedTeam.includes(agent.agentId)) continue;
+
+          const obs: PlayerObservation = baseObs({
+            myPlayerId:   agent.agentId,
+            myRole:       role as PlayerObservation['myRole'],
+            myTeam:       'evil',
+            knownEvils:   role === 'oberon' ? [] : ['S7', 'S8', 'S9'],
+            playerCount:  10,
+            allPlayerIds: agents.map(a => a.agentId),
+            gamePhase:    'quest_vote',
+            currentRound: r,
+            proposedTeam,
+            questResults,
+            voteHistory,
+            questHistory: [],
+          });
+          agent.onGameStart(obs);
+          const action = agent.act(obs);
+          if (action.type === 'quest_vote') {
+            redVotes.push({ role, vote: action.vote });
+          }
+        }
+      }
+      return { redVotes };
+    }
+
+    it('10 self-play games — every red-on-mission vote is fail (zero exceptions)', () => {
+      const allRedVotes: Array<{ role: string; vote: 'success' | 'fail' }> = [];
+      for (let g = 0; g < 10; g++) {
+        const { redVotes } = runSelfPlayInvariant(g);
+        allRedVotes.push(...redVotes);
+      }
+      // Must have at least 30 red votes across 10 games × 5 rounds × 3 reds/team.
+      expect(allRedVotes.length).toBeGreaterThanOrEqual(30);
+      // INVARIANT: zero red-on-mission success votes allowed.
+      const successVotes = allRedVotes.filter(v => v.vote === 'success');
+      expect(successVotes).toEqual([]);
+      // Sanity: every vote is a fail.
+      for (const v of allRedVotes) {
+        expect(v.vote).toBe('fail');
+      }
+    });
+
+    it('per-role breakdown — all 4 red roles contribute fail votes', () => {
+      const allRedVotes: Array<{ role: string; vote: 'success' | 'fail' }> = [];
+      for (let g = 0; g < 10; g++) {
+        const { redVotes } = runSelfPlayInvariant(g);
+        allRedVotes.push(...redVotes);
+      }
+      const byRole = new Map<string, number>();
+      for (const v of allRedVotes) {
+        if (v.vote === 'fail') byRole.set(v.role, (byRole.get(v.role) ?? 0) + 1);
+      }
+      // All four red roles must appear (assassin S7, morgana S8, mordred S9, oberon S10).
+      expect(byRole.get('assassin')).toBeGreaterThanOrEqual(1);
+      expect(byRole.get('morgana')).toBeGreaterThanOrEqual(1);  // seed%2===0 + r===4 branch
+      expect(byRole.get('mordred')).toBeGreaterThanOrEqual(1);  // same branch
+      expect(byRole.get('oberon')).toBeGreaterThanOrEqual(1);
+    });
   });
 });

@@ -153,6 +153,48 @@ function isListeningState(goodWins: number, evilWins: number): boolean {
   return goodWins === 2 || evilWins === 2;
 }
 
+// ── Edward 2026-04-24 batch 9 — red-always-fail-on-mission invariant ──
+/**
+ * Edward 2026-04-24 batch 9 verbatim:
+ *   「157 7沒出失敗 / 2390 0是奧 也沒出失敗
+ *    不是說能出任務就要盡可能破壞任務嗎」
+ *
+ * Batch 8 self-play exposed that red players still voted `success` on
+ * missions under three code paths:
+ *   1. `voteOnQuest`'s forced-mission shortcut (attempt===5 → success)
+ *   2. 60/40 early-game baseline (probabilistic `success` 40%)
+ *   3. `failsRequired >= 2` 30% fail branch (probabilistic `success` 70%)
+ *   4. Oberon Rule 4 / 5c success branches
+ *
+ * Edward's new invariant overrides every "cover / hide" strategy:
+ *   「**任何紅方任何時刻 on-mission → 必投 fail**」
+ *
+ * Implementation: early-return at the top of `voteOnQuest` (immediately
+ * after the `myTeam === 'good'` short-circuit) whenever `myRole` ∈
+ * {assassin, morgana, mordred, oberon}. This subsumes the §0 listening
+ * rule, Oberon's batch-7 rule set, forced-mission cover-success, and the
+ * probabilistic baselines. Those branches are kept for auditability
+ * but are now dead code for red players.
+ *
+ * NOTE: this set intentionally includes `oberon` (unlike
+ * `EVIL_DIFFERENTIATION_ROLES` which carves him out for role-strategy
+ * differentiation). Match-point and Oberon's Rule 2 already required
+ * fail; this invariant extends the same discipline to every round.
+ */
+const EVIL_MISSION_ALWAYS_FAIL: ReadonlySet<string> = new Set([
+  'assassin',
+  'morgana',
+  'mordred',
+  'oberon',
+]);
+
+/**
+ * Feature flag. Default `true`. Flip to `false` only for regression
+ * study — doing so re-enables the pre-batch-9 "red may cover-success"
+ * behaviour documented in §0 / §6 of the strategy baseline.
+ */
+const USE_EVIL_MISSION_ALWAYS_FAIL = true;
+
 // ── Smart Percival thumb identification (Fix #4, SSoT §6.4) ────
 /**
  * Percival thumb-identification feature flag.
@@ -1206,6 +1248,22 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'quest_vote', vote: 'success' };
     }
 
+    // Edward 2026-04-24 batch 9 — red-always-fail-on-mission invariant.
+    // 「能出任務就要盡可能破壞任務」: any red player (assassin / morgana
+    // / mordred / oberon) on a mission MUST invariably vote fail. This
+    // overrides every cover/hide heuristic that follows (forced-mission
+    // cover-success, 60/40 probabilistic baseline, failsRequired>=2
+    // cautious path, Oberon Rule 4/5 success branches, match-point —
+    // redundant but superseded). See EVIL_MISSION_ALWAYS_FAIL / batch 8
+    // self-play bugs (R1 mission 157 娜7 / R2 mission 2390 刺+奧+梅 all
+    // voted success).
+    if (
+      USE_EVIL_MISSION_ALWAYS_FAIL &&
+      EVIL_MISSION_ALWAYS_FAIL.has(myRole as string)
+    ) {
+      return { type: 'quest_vote', vote: 'fail' };
+    }
+
     // Edward 2026-04-24 batch 3 fix #2 — forced-mission quest vote:
     // detect whether this quest arose from the 5th proposal (forced
     // mission). `failCount` resets to 0 on approval, so we check the
@@ -1216,6 +1274,9 @@ export class HeuristicAgent implements AvalonAgent {
     // at this point — a fail reveals cover for zero strategic gain
     // (blue already couldn't reject, so no anomaly vote branch fires).
     // Short-circuit before any role-specific fail heuristic.
+    //
+    // Batch 9: for red roles this branch is UNREACHABLE (caught by the
+    // EVIL_MISSION_ALWAYS_FAIL guard above). Kept for auditability only.
     const approvedVoteThisRound = obs.voteHistory.find(
       v => v.round === currentRound && v.approved,
     );
