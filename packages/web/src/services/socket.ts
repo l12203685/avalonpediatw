@@ -1,6 +1,13 @@
 import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/gameStore';
-import { Room, Player, User, AuthSession, TimerMultiplier } from '@avalon/shared';
+import {
+  Room,
+  Player,
+  User,
+  AuthSession,
+  TimerMultiplier,
+  classifyToken,
+} from '@avalon/shared';
 import { getIdToken } from './auth';
 import { sendTurnNotification } from './notifications';
 import audioService from './audio';
@@ -70,10 +77,36 @@ export async function initializeSocket(token: string): Promise<void> {
   });
 
   // Refresh Firebase ID token before each reconnect attempt so expired tokens
-  // (Firebase tokens last 1h) don't cause `connect_error: Token expired`. Guest
-  // users have no Firebase currentUser — getIdToken() throws, and we fall back
-  // to the originally-stored token so guest flows keep working.
+  // (Firebase tokens last 1h) don't cause `connect_error: Token expired`.
+  //
+  // 2026-04-24 root-cause fix (drift_storedtoken_overwrite): previously this
+  // handler called `getIdToken()` unconditionally. Firebase persists the Google
+  // session to localStorage by default, so any browser that ever signed in
+  // with Google kept a warm `currentUser` — even after the user switched to a
+  // Discord / LINE / email / guest session. The refresh then silently replaced
+  // the site-issued custom JWT in `_storedToken` with a Firebase ID token,
+  // breaking downstream REST handlers that branched on the `provider` claim.
+  //
+  // New behaviour: classify the stored token first. Only Firebase ID tokens
+  // (iss = `https://securetoken.google.com/...`) get refreshed. Custom JWTs
+  // (provider = password/discord/line/google/etc.) and guest JWTs are left
+  // intact — they're long-lived site-issued tokens without a refresh endpoint,
+  // and forcing a Firebase swap would change the user's perceived identity.
+  // Unknown / missing tokens fall through to the legacy refresh-or-keep flow.
   socket.io.on('reconnect_attempt', async () => {
+    const current = _storedToken;
+    const kind = classifyToken(current);
+
+    if (kind === 'custom-jwt' || kind === 'guest') {
+      // Site-issued token — do NOT refresh via Firebase. Keep `_storedToken`
+      // untouched and re-seat `socket.auth.token` so any mutation elsewhere
+      // doesn't drift.
+      if (socket && current) {
+        socket.auth = { ...(socket.auth as Record<string, unknown>), token: current };
+      }
+      return;
+    }
+
     try {
       const freshToken = await getIdToken();
       _storedToken = freshToken;
@@ -81,9 +114,9 @@ export async function initializeSocket(token: string): Promise<void> {
         socket.auth = { ...(socket.auth as Record<string, unknown>), token: freshToken };
       }
     } catch {
-      // Guest mode or Firebase not configured — keep the stored token as-is.
-      if (socket && _storedToken) {
-        socket.auth = { ...(socket.auth as Record<string, unknown>), token: _storedToken };
+      // Firebase not configured or no currentUser — keep the stored token.
+      if (socket && current) {
+        socket.auth = { ...(socket.auth as Record<string, unknown>), token: current };
       }
     }
   });
