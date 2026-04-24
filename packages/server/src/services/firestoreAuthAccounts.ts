@@ -540,13 +540,35 @@ export async function ensureAccountByOAuthEmail(params: {
         emails?:        string[];
         emailsVerified?: string[];
         display_name?:  string;
+        email?:         string; // legacy field (firestoreAccounts 讀它算 Google 顯示 label)
       };
-      // 只有當 row 上尚未綁這個 provider 才更新（避免覆蓋 cross-user id）。
-      const existingExtId = (existing.data as Record<string, unknown>)[col];
-      if (typeof existingExtId !== 'string' || existingExtId.length === 0) {
-        await db.collection(AUTH_USERS).doc(existing.id).update({
-          [col]:      params.providerExternalId,
-          updatedAt:  Date.now(),
+      // 2026-04-24 bug fix：Edward 回報 Google 登入後 Settings 仍顯「未綁定」。
+      // 原條件 `existingExtId 為空才寫` 在某些路徑下沒把 firebase_uid 寫到 row，
+      // 且 legacy `email` 欄位從未補上 → `getLinkedAccounts` 回 linked=false 或
+      // display_label 缺 gmail 字串。改為：
+      //   (a) col (firebase_uid / discord_id / line_id) 與新 externalId 不符即覆蓋
+      //   (b) email 欄位缺或不等於目前 OAuth email 即補寫
+      //   (c) 加 log 方便觀察。
+      const existingExtId   = (existing.data as Record<string, unknown>)[col];
+      const needsExtIdWrite =
+        typeof existingExtId !== 'string' ||
+        existingExtId.length === 0 ||
+        existingExtId !== params.providerExternalId;
+      const existingEmail   = typeof data.email === 'string' ? data.email : '';
+      const needsEmailWrite = existingEmail !== emailTrim;
+
+      if (needsExtIdWrite || needsEmailWrite) {
+        const patch: Record<string, unknown> = { updatedAt: Date.now() };
+        if (needsExtIdWrite) patch[col] = params.providerExternalId;
+        if (needsEmailWrite) patch.email = emailTrim;
+        await db.collection(AUTH_USERS).doc(existing.id).update(patch);
+        // eslint-disable-next-line no-console
+        console.log('[ensureAccountByOAuthEmail] linked provider to existing row', {
+          userId:      existing.id,
+          provider:    params.provider,
+          col,
+          externalId:  params.providerExternalId,
+          updatedKeys: Object.keys(patch),
         });
       }
       const account: AccountRecord = {
@@ -593,6 +615,9 @@ export async function ensureAccountByOAuthEmail(params: {
         emails:             [emailTrim],
         emailsLower:        [emailLower],
         emailsVerified:     [emailTrim], // OAuth 提供的 email 視為已驗證
+        // legacy `email` 欄位 — firestoreAccounts.getLinkedAccounts 讀它算
+        // Google 綁定的 display_label（「已綁定 @xxx@gmail.com」）。
+        email:              emailTrim,
         display_name:       display,
         elo_rating:         1000,
         total_games:        0,
