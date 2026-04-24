@@ -18,9 +18,32 @@
 
 import { Router, Request, Response, IRouter } from 'express';
 import { verify, JwtPayload } from 'jsonwebtoken';
-import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
+import { verifyIdToken, isFirebaseAdminReady, getAdminFirestore } from '../services/firebase';
 import { getSupabaseClient, isSupabaseReady, getSupabaseIdByFirebaseUid } from '../services/supabase';
 import { createHttpRateLimit } from '../middleware/rateLimit';
+
+// 2026-04-24 #supabase-retire Batch 1.1+1.2 (hineko_20260424_1240):
+// Dual-write feedback / error_reports to Firestore alongside Supabase.
+// Phase 4 (table drop) ETA 2 weeks; Supabase remains the read source for
+// admin until then. Each Firestore write is best-effort try/catch — a
+// Firestore outage must not break the legacy Supabase path during
+// dual-write window.
+async function dualWriteFirestore(
+  collection: 'feedback' | 'error_reports',
+  doc: Record<string, unknown>,
+): Promise<void> {
+  if (!isFirebaseAdminReady()) return;
+  try {
+    const fs = getAdminFirestore();
+    await fs.collection(collection).add({
+      ...doc,
+      created_at_ms: Date.now(),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[${collection}] firestore dual-write error:`, msg);
+  }
+}
 
 const router: IRouter = Router();
 const JWT_SECRET = process.env.JWT_SECRET as string;
@@ -107,6 +130,15 @@ router.post('/', feedbackLimit, async (req: Request, res: Response) => {
     }).then(({ error }) => { if (error) console.error('[feedback] db error:', error.message); });
   }
 
+  // 2026-04-24 #supabase-retire dual-write to Firestore (Batch 1.1)
+  await dualWriteFirestore('feedback', {
+    type,
+    message: trimmedMsg,
+    user_id:      user?.supabaseId || null,
+    display_name: displayName,
+    game_state:   gameState || null,
+  });
+
   const emoji    = type === 'bug' ? '🐛' : '💡';
   const label    = type === 'bug' ? 'Bug 回報' : '功能建議';
   const pageInfo = gameState ? ` (頁面: \`${gameState}\`)` : '';
@@ -141,6 +173,13 @@ router.post('/errors', errorLimit, async (req: Request, res: Response) => {
       game_state: gameState || null,
     }).then(({ error }) => { if (error) console.error('[error_reports] db error:', error.message); });
   }
+
+  // 2026-04-24 #supabase-retire dual-write to Firestore (Batch 1.2)
+  await dualWriteFirestore('error_reports', {
+    message:    trimmedMsg,
+    stack:      trimmedStack || null,
+    game_state: gameState || null,
+  });
 
   // Discord notify with dedup
   const sig         = trimmedMsg.slice(0, 100);
