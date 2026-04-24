@@ -31,6 +31,28 @@ import {
   verifyPassword,
   normalizeEmail,
 } from './passwordHash';
+import { assignShortCodeToAuthUser } from './shortCodeFirestore';
+
+/**
+ * Best-effort 為剛註冊的 auth_users row backfill 短碼到 Firestore `shortCodeIndex`。
+ *
+ * 設計原則：
+ *   - 僅在 signup 路徑（建 row）完成後呼叫
+ *   - 失敗**不阻擋**註冊（短碼只是「加好友精準配對」用，空值不是致命）
+ *   - 同步 log error，方便日後追蹤
+ *
+ * 為何用 `assignShortCodeToAuthUser` 而非 `ensureUserShortCode`：
+ *   - 前者針對 `auth_users/{uid}` collection（password / OAuth signup 實際寫入）
+ *   - 後者寫入 `users/{uid}`（legacy Supabase mirror），新帳號那邊沒 doc
+ */
+async function backfillShortCodeBestEffort(userId: string, db: Firestore): Promise<void> {
+  try {
+    await assignShortCodeToAuthUser(userId, db);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[firestoreAuthAccounts] backfill shortCode failed (non-fatal):', err);
+  }
+}
 
 type OAuthProvider = 'discord' | 'line' | 'google';
 
@@ -188,6 +210,11 @@ export async function loginOrRegister(params: {
         passwordUpdatedAt:  now,
       });
     });
+
+    // 2026-04-24 #48 修復：新帳號建好後 backfill 玩家短碼到 Firestore `shortCodeIndex`，
+    // 這樣朋友輸入短碼加好友才查得到（原僅寫 Supabase，導致 `/add-by-code` 一律 404）。
+    // Best-effort：寫入失敗不阻擋註冊。
+    await backfillShortCodeBestEffort(userId, db);
 
     return {
       ok: true,
@@ -631,6 +658,9 @@ export async function ensureAccountByOAuthEmail(params: {
         oauthOnly:          true, // 標記：此帳號由 OAuth 自動建立，無實際使用者密碼
       });
     });
+
+    // 2026-04-24 #48 修復：OAuth 自動建帳也要 backfill Firestore 短碼（best-effort）。
+    await backfillShortCodeBestEffort(userId, db);
 
     const account: AccountRecord = {
       userId,

@@ -98,22 +98,13 @@ export async function upsertUser(data: DbUser): Promise<string | null> {
       return existing.id;
     }
 
-    // 為新用戶生成唯一短碼（加好友/精準配對用）
-    // 衝突用 DB unique index 保證；這裡 5 次重試足以覆蓋 32^8 空間
-    let shortCode: string | null = null;
-    try {
-      shortCode = await generateUniqueShortCode(async (candidate) => {
-        const { data: row } = await db
-          .from('users')
-          .select('id')
-          .eq('short_code', candidate)
-          .maybeSingle();
-        return !!row;
-      });
-    } catch (err) {
-      // 生成失敗不阻擋註冊（向下相容既有搜尋用 UUID 末 6 碼）
-      console.error('[supabase] upsertUser shortCode generation failed:', err);
-    }
+    // 2026-04-24 #48 修復：短碼 SSoT 從 Supabase 遷移到 Firestore（路 B）。
+    // 原本這裡會生成唯一短碼寫入 `users.short_code`，但
+    // `/api/friends/add-by-code` 是走 Firestore `shortCodeIndex`（shortCodeFirestore.ts），
+    // 兩邊資料源不一致導致加好友一律 404。現在 signup 路徑全改由
+    // `firestoreAuthAccounts.ts` / `firestoreAccounts.ts` 呼叫
+    // `ensureUserShortCode` 寫 Firestore；Supabase `users.short_code` 欄位保留
+    // schema 但 server 不再寫入（歷史資料若要遷移走獨立 migration script）。
 
     // 建立新用戶
     const { data: newUser, error } = await db
@@ -126,7 +117,6 @@ export async function upsertUser(data: DbUser): Promise<string | null> {
         display_name: data.display_name,
         photo_url:   data.photo_url   ?? null,
         provider:    data.provider,
-        short_code:  shortCode,
       })
       .select('id')
       .single();

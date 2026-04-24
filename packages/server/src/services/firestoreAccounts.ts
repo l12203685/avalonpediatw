@@ -61,6 +61,7 @@
 
 import type { Firestore } from 'firebase-admin/firestore';
 import { getAdminFirestore, isFirebaseAdminReady } from './firebase';
+import { assignShortCodeToAuthUser } from './shortCodeFirestore';
 
 // ── Types (mirror supabase.ts exports for API drop-in) ──────────────
 
@@ -289,6 +290,13 @@ export async function ensureAuthUserWithProvider(
         createdAt:    now,
         updatedAt:    now,
       });
+      // 2026-04-24 #48 修復：訪客 → 真帳號升級路徑（Discord/LINE link-callback）
+      // 建新 row 時同步 backfill 短碼到 Firestore shortCodeIndex，best-effort。
+      try {
+        await assignShortCodeToAuthUser(docId, db);
+      } catch (err) {
+        console.error('[firestoreAccounts] backfill shortCode failed (non-fatal):', err);
+      }
     }
     return docId;
   } catch (err) {
