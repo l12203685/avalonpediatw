@@ -244,6 +244,15 @@ function buildObs(
   const myRole = roleMap.get(playerId) ?? 'loyal';
   const myTeam = teamMap.get(playerId) ?? 'good';
   const knownEvils = getKnownEvils(playerId, myRole, roleMap, teamMap);
+  // Edward 2026-04-24 batch 2 fix #7: wire knownWizards for Percival so
+  // the lake-avoid good filter (#7) and Percival's smart-thumb (existing)
+  // both work under this self-play harness. For non-Percival roles this
+  // stays `undefined` (schema-compatible).
+  const knownWizards = myRole === 'percival'
+    ? Array.from(roleMap.entries())
+        .filter(([id, r]) => (r === 'merlin' || r === 'morgana') && id !== playerId)
+        .map(([id]) => id)
+    : undefined;
   const playerIds = Object.keys(room.players);
   const currentLeader = playerIds[room.leaderIndex % playerIds.length];
   let gamePhase: PlayerObservation['gamePhase'] = 'team_select';
@@ -258,6 +267,7 @@ function buildObs(
     playerCount: playerIds.length,
     allPlayerIds: playerIds,
     knownEvils,
+    knownWizards,
     currentRound: room.currentRound,
     currentLeader,
     failCount: room.failCount,

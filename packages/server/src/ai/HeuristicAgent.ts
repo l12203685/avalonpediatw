@@ -500,10 +500,49 @@ export class HeuristicAgent implements AvalonAgent {
     const allIds   = this.getPlayerIds(obs);
 
     if (myTeam === 'good') {
-      // Good: include self + lowest-suspicion players
-      const candidates = allIds
-        .filter(id => id !== myPlayerId)
-        .sort((a, b) => this.getSuspicion(a) - this.getSuspicion(b));
+      // Edward 2026-04-24 batch 2 fix #8 (Merlin hard-exclude) +
+      // fix #9 (suspicion from failed-mission history).
+      //
+      // Fix #8 — Merlin never proposes a team containing a knownEvil
+      // (Merlin sees assassin+morgana). This is a *hard* filter, not a
+      // sort-order preference, so the invariant holds even in degenerate
+      // team sizes. (Morgana/Mordred visible to Merlin via Avalon rules
+      // — see getKnownEvils wiring.)
+      //
+      // Fix #9 — Every loyal good player (including Merlin / Percival)
+      // leverages the public failed-mission history to infer suspects:
+      //   For each failed mission M with failCount k, the team S(M)
+      //   contains ≥ k evil players. Accumulate S(M) across all failed
+      //   missions — every player in this union is a suspect.
+      // Edward verbatim:
+      //   「藍方會基於前面的任務結果去決定自己的隊伍組合 / 舉例 358 oox
+      //     8家忠臣輪到自己時就不會把3/5家放在隊伍組合的優先考慮範圍內」
+      //
+      // Priority order when composing the team:
+      //   1. Self (always on)
+      //   2. Known-safe (explicitly excluded from both knownEvils AND
+      //      failed-mission suspect set)
+      //   3. Suspect but not known evil (fallback — better than evil)
+      //   4. Known evil (only as degenerate last resort; should never
+      //      happen at canonical team sizes 3-5 in a 10p game)
+      const knownEvilSet = new Set(knownEvils);
+      const suspectSet = this.getFailedMissionSuspects(obs);
+
+      // Rank non-self candidates: (a) not-suspect-not-evil comes first,
+      // then (b) suspect, then (c) known evil (should be empty slice for
+      // Merlin at normal team sizes). Within each tier, sort ascending
+      // by raw suspicion score.
+      const nonSelf = allIds.filter(id => id !== myPlayerId);
+      const byTier = (id: string): number => {
+        if (knownEvilSet.has(id)) return 2;
+        if (suspectSet.has(id))   return 1;
+        return 0;
+      };
+      const candidates = nonSelf.sort((a, b) => {
+        const tierDiff = byTier(a) - byTier(b);
+        if (tierDiff !== 0) return tierDiff;
+        return this.getSuspicion(a) - this.getSuspicion(b);
+      });
 
       // Percival: prioritise including at least one wizard candidate (Merlin or Morgana) on the team
       // so quests can be protected. If a quest fails with a wizard on it, they're more likely Morgana.
@@ -561,6 +600,32 @@ export class HeuristicAgent implements AvalonAgent {
     }
   }
 
+  /**
+   * Edward 2026-04-24 batch 2 fix #9 — failed-mission suspect set.
+   *
+   * Core deduction rule every good player can make from public history:
+   *   If mission M failed with fail-count k, the team S(M) contained
+   *   at least k evil players.
+   *
+   * Without role information, a loyal good player cannot pinpoint which
+   * member of S(M) is evil. The conservative (and strategically sound)
+   * response is to treat the ENTIRE S(M) as "suspect" — i.e. avoid
+   * putting anyone from S(M) on future teams when cleaner alternatives
+   * exist. Merlin and Percival can overlay their privileged knowledge
+   * (knownEvils, knownWizards) on top of this.
+   *
+   * Union across all failed missions is returned. An empty history →
+   * empty set (caller should then fall back to raw suspicion scores).
+   */
+  private getFailedMissionSuspects(obs: PlayerObservation): Set<string> {
+    const suspects = new Set<string>();
+    for (const quest of obs.questHistory) {
+      if (quest.result !== 'fail') continue;
+      for (const pid of quest.team) suspects.add(pid);
+    }
+    return suspects;
+  }
+
   // ── Team Vote ────────────────────────────────────────────────
 
   private voteOnTeam(obs: PlayerObservation): AgentAction {
@@ -576,6 +641,28 @@ export class HeuristicAgent implements AvalonAgent {
       const hasKnownEvil = proposedTeam.some(id => knownEvils.includes(id));
       if (hasKnownEvil) {
         return { type: 'team_vote', vote: false };
+      }
+
+      // Edward 2026-04-24 batch 2 fix #1 (precedence): rounds 1-2 suppress
+      // all anomaly-generating checks before role-specific heuristics
+      // (Percival wizard-skepticism below creates inner-black when no
+      // wizard is on the team). "不要開異常票" = no anomaly votes, period.
+      //
+      // Guard applies only when no legitimate *public* signal of taint
+      // exists on the team. A teammate who already appeared on a failed
+      // quest is public information — rejecting such a team is NOT an
+      // anomaly but a legitimate good-side signal, so that branch falls
+      // through to the suspicion checks below.
+      //
+      //   • on-team  (no known evil, no failed-member) → approve  (suppress inner-black)
+      //   • off-team (no known evil, no failed-member) → reject   (suppress outer-white)
+      //
+      // Rounds 3-5 restore all prior-based logic.
+      const hasFailedMemberEarly = proposedTeam.some(
+        id => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
+      );
+      if ((obs.currentRound ?? 1) <= 2 && !hasFailedMemberEarly) {
+        return { type: 'team_vote', vote: proposedTeam.includes(myPlayerId) };
       }
 
       // Percival: skeptical of teams without any wizard candidate (Merlin/Morgana).
@@ -602,15 +689,8 @@ export class HeuristicAgent implements AvalonAgent {
       const noise = this.priors.getNoiseRate(diff);
 
       if (!onTeam) {
-        // Edward 2026-04-24 fix #1 (selfplay review): early-round
-        // off-team approves by good players are too noisy ("異常票 場外白球
-        // 太多"). Suppress outer-white approves for good in R1-R3 (first
-        // three missions) — force reject, bypass noise. Rounds 4-5 keep
-        // the prior-based logic (late-game reject signal stays useful).
-        if ((obs.currentRound ?? 1) <= 3) {
-          return { type: 'team_vote', vote: false };
-        }
-
+        // Edward 2026-04-24 batch 2 fix #1 — rounds 1-2 pre-filter is
+        // already handled above (approve-if-on-team / reject-if-off).
         // Off-team path: default to cautious reject. Leader must prove the
         // team is clean — otherwise the good player holds out their approval.
         const strictThreshold = this.priors.getStrictThreshold(diff);
@@ -638,6 +718,8 @@ export class HeuristicAgent implements AvalonAgent {
         return { type: 'team_vote', vote: this.applyNoise(baselineVote, noise) };
       }
 
+      // Edward 2026-04-24 batch 2 fix #1 — rounds 1-2 pre-filter is
+      // already handled above; here we are round 3+ on-team.
       // On-team path: keep legacy avg-suspicion check, but also veto teams
       // that contain any previously-failed member.
       if (hasFailedMember) {
@@ -759,6 +841,33 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'assassinate', targetId: allIds.find(id => id !== obs.myPlayerId) ?? allIds[0] };
     }
 
+    // Edward 2026-04-24 batch 2 fix #6: assassin must first prefer
+    // candidates who have NOT "made a mistake" (i.e. behaved like an
+    // uninformed good — which Merlin never is).
+    //
+    // Edward verbatim:
+    //   「刺客刺殺應該要先以未犯錯對象優先 / 犯錯=排水=任務選擇選到
+    //     梅林可見紅方(刺娜奧) / 或是場外白球白到可見紅方」
+    //
+    // Definitions (from the assassin's perspective, who sees
+    // assassin+morgana in knownEvils — Merlin sees the same set):
+    //   - "排水" (mistake as leader): the player led a proposal that
+    //     contained a known evil (assassin/morgana). Merlin would never
+    //     propose a tainted team → strong anti-Merlin signal.
+    //   - "場外白球白到可見紅方" (mistake as off-team approver): the
+    //     player approved a team they were NOT on that contained a
+    //     known evil. Merlin would never outer-white a tainted team.
+    //
+    // Strategy: split good players into "unmistaken" and "mistaken".
+    // Prefer unmistaken (they retained the Merlin-safe profile). Only
+    // if the unmistaken pool is empty fall back to scoring over all.
+    const mistakeMap = new Map<string, number>();
+    for (const id of goodPlayers) {
+      mistakeMap.set(id, this.getMistakeCount(id, obs));
+    }
+    const unmistaken = goodPlayers.filter(id => (mistakeMap.get(id) ?? 0) === 0);
+    const candidatePool = unmistaken.length > 0 ? unmistaken : goodPlayers;
+
     // Target the good player who behaved most like Merlin:
     // - Voted against teams with evil players
     // - Was never on a failed quest
@@ -770,22 +879,58 @@ export class HeuristicAgent implements AvalonAgent {
     // wizard thumbs and often leads with one of them, which is NOT
     // Merlin behaviour. Wiki: "刺客刺殺不挑一直派拇指的玩家".
     const merlinScore = new Map<string, number>();
-    for (const id of goodPlayers) {
+    for (const id of candidatePool) {
       merlinScore.set(id, this.getMerlinScore(id, obs));
     }
 
     if (USE_EVIL_ROLE_DIFFERENTIATION_FULL && (obs.myRole as string) === 'assassin') {
-      for (const id of goodPlayers) {
+      for (const id of candidatePool) {
         const percivalPenalty = this.getPercivalLikenessPenalty(id, obs);
         merlinScore.set(id, (merlinScore.get(id) ?? 0) - percivalPenalty);
       }
     }
 
-    const target = goodPlayers.reduce((best, id) =>
+    const target = candidatePool.reduce((best, id) =>
       (merlinScore.get(id) ?? 0) > (merlinScore.get(best) ?? 0) ? id : best
-    , goodPlayers[0]);
+    , candidatePool[0]);
 
     return { type: 'assassinate', targetId: target };
+  }
+
+  /**
+   * Count observable "mistakes" a good player made from the assassin's
+   * point of view (Edward 2026-04-24 batch 2 fix #6).
+   *
+   * A mistake reveals the player is NOT Merlin — Merlin sees all
+   * knownEvils (assassin+morgana from the assassin's POV) and would
+   * never sponsor or outer-white approve a team containing them.
+   *
+   * Two anti-Merlin patterns are counted:
+   *   1. **排水 (as leader)** — player led a vote whose team contained
+   *      any known evil.
+   *   2. **場外白球 (off-team approval)** — player was not on the team,
+   *      but approved a team that contained any known evil.
+   *
+   * Returns the raw count (each vote record can contribute to both
+   * buckets at most once). Used as a binary filter (unmistaken vs.
+   * mistaken); absolute magnitude is secondary.
+   */
+  private getMistakeCount(playerId: string, obs: PlayerObservation): number {
+    let mistakes = 0;
+    for (const record of obs.voteHistory) {
+      const teamHasKnownEvil = record.team.some(id => obs.knownEvils.includes(id));
+      if (!teamHasKnownEvil) continue;
+
+      if (record.leader === playerId) {
+        mistakes += 1; // 排水: led a tainted team
+      }
+      const onTeam = record.team.includes(playerId);
+      const approved = record.votes[playerId];
+      if (!onTeam && approved === true) {
+        mistakes += 1; // 場外白球: approved a tainted team from outside
+      }
+    }
+    return mistakes;
   }
 
   /**

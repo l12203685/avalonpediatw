@@ -334,8 +334,22 @@ export class SelfPlayEngine {
     const knownEvilSet = new Set(obs.knownEvils);
 
     if (holderTeam === 'good') {
-      // Good: filter known evils (no info), rank unknown candidates by suspicion.
-      const unknownCandidates = validTargets.filter(id => !knownEvilSet.has(id));
+      // Edward 2026-04-24 batch 2 fix #7: all good players avoid lake-
+      // ing their viewpoint-known bad/ambiguous targets:
+      //   • merlin   — knownEvils = assassin+morgana (Oberon/Mordred
+      //                invisible → lake-probe allowed)
+      //   • percival — knownEvils = [] (engine wires this as empty for
+      //                percival); knownWizards = [merlin, morgana]
+      //                (ambiguous — can't distinguish); avoid both so
+      //                we never waste the lake on them.
+      //   • loyal    — knownEvils = [], knownWizards = undefined → no
+      //                filter (loyal must rely on suspicion ranking
+      //                alone).
+      // The filter set is knownEvils ∪ knownWizards so each role's view
+      // is honoured without branching on myRole.
+      const avoidSet = new Set<string>(obs.knownEvils);
+      for (const wizardId of obs.knownWizards ?? []) avoidSet.add(wizardId);
+      const unknownCandidates = validTargets.filter(id => !avoidSet.has(id));
       if (unknownCandidates.length === 0) {
         return validTargets[0];
       }
@@ -540,6 +554,16 @@ export class SelfPlayEngine {
     // Determine which other players this role can identify as evil
     const knownEvils = this.getKnownEvils(playerId, myRole, roleMap, teamMap);
 
+    // Edward 2026-04-24 batch 2 fix #7: wire knownWizards for Percival so
+    // the Percival-specific lake avoid and thumb-picking heuristics have
+    // the two wizard candidates in observation scope. Non-Percival roles
+    // stay `undefined` (schema-compatible).
+    const knownWizards = myRole === 'percival'
+      ? Array.from(roleMap.entries())
+          .filter(([id, r]) => (r === 'merlin' || r === 'morgana') && id !== playerId)
+          .map(([id]) => id)
+      : undefined;
+
     return {
       myPlayerId:    playerId,
       myRole,
@@ -547,6 +571,7 @@ export class SelfPlayEngine {
       playerCount:   Object.keys(room.players).length,
       allPlayerIds:  Object.keys(room.players),
       knownEvils,
+      knownWizards,
       currentRound:  room.currentRound,
       currentLeader: this.getCurrentLeader(room),
       failCount:     room.failCount,
