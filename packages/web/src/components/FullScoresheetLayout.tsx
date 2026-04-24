@@ -3,7 +3,6 @@ import { MessageSquare, X } from 'lucide-react';
 import { ChatMessage, Room, Player } from '@avalon/shared';
 import LiveScoresheet from './LiveScoresheet';
 import QuestResultBanner from './QuestResultBanner';
-import PlayerRing from './PlayerRing';
 import ScoresheetChatPanel, { SystemChatEntry } from './ScoresheetChatPanel';
 import { displaySeatNumber } from '../utils/seatDisplay';
 
@@ -27,26 +26,27 @@ interface FullScoresheetLayoutProps {
  *
  *   ┌──────────────────────────────────────────────────┐
  *   │  [OXX] [OOOX] [OOOO] [OOOOO] [_]                 │  ← QuestResultBanner
- *   ├──────────┬────────────────────────┬──────────────┤
- *   │          │                        │              │
- *   │ 0 seat   │                        │ 1 seat       │
- *   │ 9 seat   │   LiveScoresheet       │ 2 seat       │
- *   │ 8 seat   │   (existing matrix)    │ 3 seat       │
- *   │ 7 seat   │                        │ 4 seat       │
- *   │ 6 seat   │                        │ 5 seat       │
- *   │ (ring)   │                        │ (ring)       │
- *   ├──────────┴────────────────────────┴──────────────┤
- *   │                           ScoresheetChatPanel    │  ← lg+ only
- *   └──────────────────────────────────────────────────┘
+ *   ├──────────────────────────────────┬───────────────┤
+ *   │                                  │               │
+ *   │                                  │               │
+ *   │        LiveScoresheet            │  Chat panel   │
+ *   │        (existing matrix)         │  (lg+ only)   │
+ *   │                                  │               │
+ *   │                                  │               │
+ *   └──────────────────────────────────┴───────────────┘
  *
  * Responsive behaviour:
- *   - lg (>=1024px): 2-column grid — scoresheet+ring on the left,
+ *   - lg (>=1024px): 2-column grid — scoresheet on the left,
  *     ScoresheetChatPanel permanently mounted on the right.
  *   - <lg mobile/tablet: chat column collapses behind a floating toggle
  *     ("對話紀錄") so the matrix has full width. Tapping opens a drawer
  *     overlay with the same ScoresheetChatPanel.
  *   - Matrix container allows horizontal scroll if the 10-seat width ever
  *     exceeds the viewport.
+ *
+ * 2026-04-24 Edward: outer PlayerRing (seat labels + names) removed — shield
+ * cells inside the matrix already carry seat numbers, so the outer ring was
+ * redundant and crowded the layout on mobile.
  */
 export default function FullScoresheetLayout({
   room,
@@ -98,17 +98,12 @@ export default function FullScoresheetLayout({
         maxRounds={5}
       />
 
-      {/* Middle: ring (seats) + scoresheet (centre) + chat (right on lg+) */}
+      {/* Middle: scoresheet (centre) + chat (right on lg+). PlayerRing removed
+          2026-04-24 — shield cells already show seat numbers inside the matrix. */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-3 sm:gap-4 items-start">
-        <PlayerRing
-          playerIds={playerIds}
-          players={room.players}
-          currentPlayerId={currentPlayer.id}
-        >
-          <div className="bg-black/40 rounded border border-gray-700/50 p-1 sm:p-2 overflow-x-auto">
-            <LiveScoresheet room={room} currentPlayer={currentPlayer} />
-          </div>
-        </PlayerRing>
+        <div className="bg-black/40 rounded border border-gray-700/50 p-1 sm:p-2 overflow-x-auto">
+          <LiveScoresheet room={room} currentPlayer={currentPlayer} />
+        </div>
 
         {/* Chat panel — right column on lg+ desktop only. Drawer on mobile. */}
         <div className="hidden lg:block">

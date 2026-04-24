@@ -347,9 +347,15 @@ export function createRoom(
   playerName: string,
   password?: string,
   timerMultiplier?: TimerMultiplier,
+  /**
+   * Casual match (Edward 2026-04-24 14:43): when `true` the server tags the
+   * room as 娛樂局 and the ELO pipeline skips the resulting game. Defaults
+   * to `false` — omitting the arg keeps the legacy ranked behaviour.
+   */
+  casual?: boolean,
 ): void {
   const socket = getSocket();
-  socket.emit('game:create-room', playerName, password, timerMultiplier);
+  socket.emit('game:create-room', playerName, password, timerMultiplier, Boolean(casual));
 }
 
 export function joinRoom(roomId: string, password?: string): void {
@@ -399,6 +405,16 @@ export function submitLadyOfTheLake(roomId: string, holderId: string, targetId: 
 export function declareLakeResult(roomId: string, claim: 'good' | 'evil'): void {
   const socket = getSocket();
   socket.emit('game:declare-lake-result', roomId, claim);
+}
+
+/**
+ * Part 4 of #90 — the Lady of the Lake declarer explicitly skips the public
+ * declaration so the game advances without waiting on the 90s AFK timeout.
+ * Server handler: `game:skip-lake-declaration` → `GameEngine.skipLakeDeclaration`.
+ */
+export function skipLakeDeclaration(roomId: string): void {
+  const socket = getSocket();
+  socket.emit('game:skip-lake-declaration', roomId);
 }
 
 export function sendChatMessage(roomId: string, message: string): void {

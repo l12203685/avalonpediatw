@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
-import { submitVote, submitAssassination, submitLadyOfTheLake, declareLakeResult, requestRematch, leaveSpectate } from '../services/socket';
+import { submitVote, submitAssassination, submitLadyOfTheLake, declareLakeResult, skipLakeDeclaration, requestRematch, leaveSpectate } from '../services/socket';
 import GameBoard from '../components/GameBoard';
 import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
 import QuestTeamToolbar from '../components/QuestTeamToolbar';
 import RoleRevealModal from '../components/RoleRevealModal';
-// [TASK #41 night-info] persistent panel so per-player night info never disappears
-import PersistentNightInfoPanel from '../components/PersistentNightInfoPanel';
 import VoteRevealOverlay from '../components/VoteRevealOverlay';
 import QuestResultOverlay from '../components/QuestResultOverlay';
 import ChatPanel from '../components/ChatPanel';
@@ -575,10 +573,16 @@ export default function GamePage(): JSX.Element {
                       </button>
                     </div>
                     <p className="text-xs text-gray-500 pt-1">{t('game:lady.declareKeepPrivate')}</p>
+                    {/* Explicit skip/continue — otherwise the table waits on
+                        the 90s AFK timeout before the game can advance. */}
+                    <button
+                      onClick={() => skipLakeDeclaration(room.id)}
+                      className="mt-2 py-2 px-4 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700/40 text-sm font-medium transition-all"
+                    >
+                      {t('game:lady.skipDeclaration')}
+                    </button>
                   </div>
                 )}
-
-                <p className="text-gray-500 text-sm pt-2">{t('game:lady.pass')}</p>
               </div>
             ) : isLadyHolder && !room.ladyOfTheLakeResult ? (
               // Current holder (pre-inspection) selects target
@@ -864,12 +868,13 @@ export default function GamePage(): JSX.Element {
         )}
       </AnimatePresence>
 
-      {/* [TASK #41 night-info] Always-on role + night-info panel. Docked bottom-left so
-          players can re-check their night vision any time without hunting for a button.
-          Shows only the viewer's own role — never leaks other players' secrets. */}
-      {room.state !== 'lobby' && room.state !== 'ended' && !isSpectator && currentPlayer.role && (
-        <PersistentNightInfoPanel room={room} currentPlayer={currentPlayer} />
-      )}
+      {/*
+        2026-04-24 Edward: persistent night-info / role panel removed — the
+        "view role" header button (line ~349) already reopens RoleRevealModal
+        on demand, so the always-on corner panel was redundant and cluttered
+        the viewport. Keep the modal as the single source of truth for role
+        details + night info.
+      */}
     </div>
   );
 }
