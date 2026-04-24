@@ -316,6 +316,319 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// Edward 2026-04-24 batch 4 — R1-P1 banned combos + cross-faction
+// R1-R2 anomaly suppression regression.
+//
+// Background: batch 3 self-play still surfaced outer-white anomalies
+// in R1-R2 (evil players off-team randomly approving) and R1-P1
+// teams trending toward naive sort-order combos like `123`. These
+// tests pin the batch 4 contract:
+//
+//   1. R1-P1 banned combos {123,150,234,678} never emitted (any role)
+//   2. R1-R2 off-team → reject  (every faction, every role)
+//   3. R1-R2 on-team  → approve (every faction, every role)
+//   4. R3+ role-differentiation logic intact (regression-proofed
+//      by the phase-1/2 moves above to currentRound=3)
+// ─────────────────────────────────────────────────────────────
+
+describe('HeuristicAgent · batch 4 fix #1 (R1-P1 banned combos)', () => {
+  /** 10-player R1-P1 observation with seat-1 leader (team-size 3 in 10p R1). */
+  function r1p1Obs(
+    myRole: 'merlin' | 'percival' | 'loyal' | 'assassin' | 'morgana' | 'mordred' | 'oberon',
+    leaderSeatIdx: number,  // 0-based index into allPlayerIds
+  ): PlayerObservation {
+    const playerIds = Array.from({ length: 10 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
+    const myId = playerIds[leaderSeatIdx];
+    const evilIds = ['S06', 'S07', 'S09', 'S10'];
+    const myTeam: 'good' | 'evil' = evilIds.includes(myId) ? 'evil' : 'good';
+    const knownEvils = myTeam === 'evil'
+      ? evilIds.filter((id) => id !== myId && id !== 'S07' /* hide oberon */)
+      : myRole === 'merlin'
+          ? evilIds.filter((id) => id !== 'S07' && id !== 'S10' /* merlin can't see oberon+mordred */)
+          : [];
+    return baseObs({
+      myPlayerId:    myId,
+      myRole,
+      myTeam,
+      playerCount:   10,
+      allPlayerIds:  playerIds,
+      knownEvils,
+      gamePhase:     'team_select',
+      currentRound:  1,
+      currentLeader: myId,
+      failCount:     0,
+      voteHistory:   [],
+      questHistory:  [],
+      proposedTeam:  [],
+    });
+  }
+
+  /** Canonical sort used by the agent: seat 10 → '0' sorts last. */
+  function canonicalKey(ids: string[], all: string[]): string {
+    return ids
+      .map((id) => all.indexOf(id))
+      .filter((idx) => idx >= 0)
+      .sort((a, b) => a - b)
+      .map((idx) => (idx === 9 ? '0' : String(idx + 1)))
+      .join('');
+  }
+
+  const BANNED = new Set(['123', '150', '234', '678']);
+
+  it('seat 1 leader does NOT propose the banned combo 123 in R1-P1', () => {
+    // Seat 1 leader + team size 3 + naive self+low-suspicion fill → would
+    // normally emit {S01, S02, S03} (canonical '123'). Verify rewrite.
+    for (let trial = 0; trial < 50; trial++) {
+      const agent = new HeuristicAgent('S01', 'hard');
+      const obs = r1p1Obs('loyal', 0);
+      agent.onGameStart(obs);
+      const action = agent.act(obs);
+      expect(action.type).toBe('team_select');
+      if (action.type === 'team_select') {
+        const key = canonicalKey(action.teamIds, obs.allPlayerIds);
+        expect(BANNED.has(key)).toBe(false);
+      }
+    }
+  });
+
+  it('any faction leader in R1-P1 never emits any banned combo (sampled)', () => {
+    // Sample across every seat × both factions. With the hard post-filter
+    // no emitted team may match a banned combo.
+    const roles: Array<'merlin' | 'loyal' | 'assassin' | 'morgana' | 'mordred' | 'oberon'> = [
+      'loyal', 'merlin', 'loyal', 'loyal', 'loyal',
+      'assassin', 'oberon', 'loyal', 'mordred', 'loyal',
+    ];
+    for (let leaderIdx = 0; leaderIdx < 10; leaderIdx++) {
+      const role = roles[leaderIdx];
+      for (let trial = 0; trial < 20; trial++) {
+        const obs = r1p1Obs(role, leaderIdx);
+        const agent = new HeuristicAgent(obs.myPlayerId, 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_select');
+        if (action.type === 'team_select') {
+          const key = canonicalKey(action.teamIds, obs.allPlayerIds);
+          expect(BANNED.has(key)).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('R1-P2 (second proposal) is NOT subject to the ban (voteHistory non-empty)', () => {
+    const playerIds = Array.from({ length: 10 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
+    const obs = baseObs({
+      myPlayerId:    'S01',
+      myRole:        'loyal',
+      myTeam:        'good',
+      playerCount:   10,
+      allPlayerIds:  playerIds,
+      knownEvils:    [],
+      gamePhase:     'team_select',
+      currentRound:  1,
+      currentLeader: 'S01',
+      failCount:     1,
+      voteHistory:   [
+        vote(1, 1, 'S10', ['S10', 'S02', 'S03'], false,
+             { S01: false, S02: false, S03: false, S04: false, S05: false,
+               S06: true,  S07: true,  S08: false, S09: false, S10: true }),
+      ],
+      questHistory:  [],
+      proposedTeam:  [],
+    });
+    const agent = new HeuristicAgent('S01', 'hard');
+    agent.onGameStart(obs);
+    const action = agent.act(obs);
+    expect(action.type).toBe('team_select');
+    // R1-P2 can legally produce any combo including 123 (unconstrained).
+    // We only assert no crash and a valid team of size 3.
+    if (action.type === 'team_select') {
+      expect(action.teamIds.length).toBe(3);
+    }
+  });
+
+  it('R2-P1 (round 2, first proposal) is NOT subject to the ban', () => {
+    const playerIds = Array.from({ length: 10 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
+    const obs = baseObs({
+      myPlayerId:    'S01',
+      myRole:        'loyal',
+      myTeam:        'good',
+      playerCount:   10,
+      allPlayerIds:  playerIds,
+      knownEvils:    [],
+      gamePhase:     'team_select',
+      currentRound:  2,
+      currentLeader: 'S01',
+      failCount:     0,
+      voteHistory:   [
+        vote(1, 1, 'S10', ['S10', 'S02', 'S03'], true,
+             { S01: true, S02: true, S03: true, S04: true, S05: true,
+               S06: false, S07: false, S08: false, S09: false, S10: true }),
+      ],
+      questHistory:  [quest(1, ['S10', 'S02', 'S03'], 'success', 0)],
+      proposedTeam:  [],
+    });
+    const agent = new HeuristicAgent('S01', 'hard');
+    agent.onGameStart(obs);
+    const action = agent.act(obs);
+    expect(action.type).toBe('team_select');
+    if (action.type === 'team_select') {
+      expect(action.teamIds.length).toBe(4); // 10p R2 team size
+    }
+  });
+});
+
+describe('HeuristicAgent · batch 4 fix #2 (cross-faction R1-R2 anomaly suppression)', () => {
+  /** Run voteOnTeam N times and return approve ratio. */
+  function approveRate(obs: PlayerObservation, difficulty: 'hard' | 'normal', samples: number): number {
+    let approves = 0;
+    for (let i = 0; i < samples; i++) {
+      const agent = new HeuristicAgent(obs.myPlayerId, difficulty);
+      agent.onGameStart(obs);
+      agent._ingestForTesting(obs);
+      const action = agent.act({ ...obs, gamePhase: 'team_vote' });
+      if (action.type === 'team_vote' && action.vote === true) approves++;
+    }
+    return approves / samples;
+  }
+
+  it('R1 evil off-team (no ally on team) forces reject (no outer-white anomaly)', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'assassin',
+      myTeam:        'evil',
+      knownEvils:    ['P4'],
+      gamePhase:     'team_vote',
+      currentRound:  1,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P3', 'P5'],  // self + ally P4 both off team
+      voteHistory:   [],
+      questHistory:  [],
+    });
+    // Before batch 4: ~35% approve (base 0.35 + assassin +0.1 = ~45%) →
+    // outer-white anomaly in R1. After: 0% approve.
+    expect(approveRate(obs, 'hard', 400)).toBe(0);
+  });
+
+  it('R2 evil off-team + ally on team ALSO forces reject (was ~100% approve)', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'mordred',
+      myTeam:        'evil',
+      knownEvils:    ['P4'],
+      gamePhase:     'team_vote',
+      currentRound:  2,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P3', 'P4'],  // ally P4 on team, self off
+      voteHistory: [
+        vote(1, 1, 'P2', ['P2', 'P3'], true,
+             { P1: false, P2: true, P3: true, P4: true, P5: false }),
+      ],
+      questHistory: [quest(1, ['P2', 'P3'], 'success', 0)],
+    });
+    // Before batch 4: 100% approve (hasAlly branch). After: 0% (force reject
+    // because R1-R2 off-team forces reject regardless of ally-on-team).
+    expect(approveRate(obs, 'hard', 400)).toBe(0);
+  });
+
+  it('R1 evil on-team (self on team) forces approve (no inner-black anomaly)', () => {
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'morgana',
+      myTeam:        'evil',
+      knownEvils:    ['P4'],
+      gamePhase:     'team_vote',
+      currentRound:  1,
+      currentLeader: 'P1',
+      proposedTeam:  ['P1', 'P2', 'P3'],  // self on team
+      voteHistory:   [],
+      questHistory:  [],
+    });
+    expect(approveRate(obs, 'hard', 200)).toBe(1);
+  });
+
+  it('R1 good on-team with knownEvil STILL forces approve (anomaly-zero > veto)', () => {
+    // Edward trade-off (batch 4): R1-R2 forces zero anomalies even when
+    // the good Merlin sees a knownEvil on team. Historically (batch 2)
+    // hasKnownEvil fired before R1-R2 guard → inner-black anomaly.
+    // Batch 4 promotes R1-R2 guard above faction split, including above
+    // knownEvil veto for on-team case.
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'merlin',
+      myTeam:        'good',
+      knownEvils:    ['P3'],
+      gamePhase:     'team_vote',
+      currentRound:  1,
+      currentLeader: 'P2',
+      proposedTeam:  ['P1', 'P2', 'P3'],  // self + knownEvil on team
+      voteHistory:   [],
+      questHistory:  [],
+    });
+    expect(approveRate(obs, 'hard', 200)).toBe(1);
+  });
+
+  it('R1 good off-team with knownEvil on team → reject (natural, not anomaly)', () => {
+    // Off-team reject is the normal R1-R2 rule; knownEvil presence is
+    // incidental and not required for reject.
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'merlin',
+      myTeam:        'good',
+      knownEvils:    ['P4'],
+      gamePhase:     'team_vote',
+      currentRound:  1,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P3', 'P4'],  // self off, knownEvil on
+      voteHistory:   [],
+      questHistory:  [],
+    });
+    expect(approveRate(obs, 'hard', 200)).toBe(0);
+  });
+
+  it('R2 after R1 quest fail: guard stands down, falls through to role logic', () => {
+    // hasFailedMemberEarly = true → R1-R2 suppression does NOT apply.
+    // Normal role logic resumes: evil off-team + ally on team → approve.
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'morgana',
+      myTeam:        'evil',
+      knownEvils:    ['P4'],
+      gamePhase:     'team_vote',
+      currentRound:  2,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P4', 'P5'],  // ally P4 on team
+      voteHistory: [
+        vote(1, 1, 'P2', ['P2', 'P3'], true,
+             { P1: true, P2: true, P3: true, P4: false, P5: false }),
+      ],
+      questHistory: [quest(1, ['P2', 'P3'], 'fail', 1)],
+    });
+    expect(approveRate(obs, 'hard', 200)).toBe(1);
+  });
+
+  it('R3 off-team evil — role differentiation remains active (not suppressed)', () => {
+    // Verify the guard is tightly scoped to R1-R2. At R3 the role-specific
+    // approve chance branch exercises as expected.
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'morgana',
+      myTeam:        'evil',
+      knownEvils:    ['P4'],
+      gamePhase:     'team_vote',
+      currentRound:  3,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P3', 'P5'],  // no self, no ally
+      voteHistory:   [],
+      questHistory:  [],
+    });
+    // Morgana off-team approve chance ≈ 0.50 (base 0.35 + 0.15 bonus).
+    const rate = approveRate(obs, 'hard', 400);
+    expect(rate).toBeGreaterThan(0.30);
+    expect(rate).toBeLessThan(0.70);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
 // Deep-cover branch (SSoT §2 + §6.1, Fix #3 original): REMOVED —
 // superseded by §0 Listening Rule (Edward 2026-04-22 12:38 verbatim).
 // Evil at good-winning 2-0 must fail (except Oberon, which keeps
@@ -376,7 +689,12 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
   // ── Phase: voteOnTeam (off-team approve chance) ─────────────
   describe('phase 1 — voteOnTeam off-team approve chance by role', () => {
     /** Build an off-team observation with no self/ally on team so the
-     *  role-specific approve chance branch is exercised. */
+     *  role-specific approve chance branch is exercised.
+     *
+     *  Edward 2026-04-24 batch 4 fix #2 moved R1-R2 anomaly suppression
+     *  above the faction split, so evil role differentiation for off-team
+     *  votes only exercises from round 3 onwards. Tests run at round 3
+     *  to sidestep the guard and test the role-differentiation path. */
     function offTeamObs(role: 'mordred' | 'morgana' | 'assassin' | 'oberon'): PlayerObservation {
       return baseObs({
         myPlayerId:    'P1',
@@ -384,7 +702,7 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
         myTeam:        'evil',
         knownEvils:    role === 'oberon' ? [] : ['P1', 'P5'],
         gamePhase:     'team_vote',
-        currentRound:  2,
+        currentRound:  3,
         currentLeader: 'P2',
         proposedTeam:  ['P2', 'P3', 'P4'],   // no self, no ally
       });
@@ -629,12 +947,18 @@ describe('HeuristicAgent · evil role differentiation full (fix #5)', () => {
     });
 
     it('ally-on-team always approves regardless of role (morgana)', () => {
+      // Edward 2026-04-24 batch 4 fix #2 moved R1-R2 anomaly suppression
+      // above the faction split. Evil off-team + ally-on-team would
+      // otherwise generate an outer-white anomaly in R1-R2, which the new
+      // guard forces to reject. To exercise the "ally-on-team → approve"
+      // invariant of the shared evil branch, use round 3 (past the guard).
       const obs = baseObs({
         myPlayerId:   'P1',
         myRole:       'morgana',
         myTeam:       'evil',
         knownEvils:   ['P1', 'P4'],
         gamePhase:    'team_vote',
+        currentRound: 3,
         proposedTeam: ['P2', 'P3', 'P4'],  // ally P4 on team
       });
       const agent = new HeuristicAgent('P1', 'hard');

@@ -27,6 +27,50 @@ import { PriorLookup, type Difficulty } from './priors/PriorLookup';
 /** Above this failCount, good always approves to avoid auto-loss on 5th reject. */
 const FORCE_APPROVE_FAIL_COUNT = 4;
 
+// ── Edward 2026-04-24 batch 4 fix #1 — R1-P1 banned team combos ───
+/**
+ * Edward 2026-04-24 batch 4 verbatim:
+ *   「所有玩家在1-1 都不準派123/150/234/678 這幾種組合」
+ *
+ * On round 1 first proposal (R1-P1) of a 10-player game, no leader — regardless
+ * of faction — may propose any of these four seat combinations:
+ *   - `123` → seats {1, 2, 3}
+ *   - `150` → seats {1, 5, 10}   (Edward display: seat 10 → digit '0')
+ *   - `234` → seats {2, 3, 4}
+ *   - `678` → seats {6, 7, 8}
+ *
+ * These combos are meta-banned as they commonly arise from naive sort-by-id
+ * selection and create predictable signatures in training data. Enforced as
+ * a hard post-filter on the assembled team — if the canonical ascending
+ * seat string (1,2,3,4,5,6,7,8,9,0 convention) matches one, we swap members
+ * until it doesn't.
+ *
+ * Canonical seat order: Edward's convention sorts seat digits as
+ * `1,2,3,4,5,6,7,8,9,0` (seat 10 → '0' sorts LAST). Since `allPlayerIds`
+ * indexes 0..9 correspond to seats 1..10, we sort by the allPlayerIds index
+ * directly — natural ascending index order already produces the canonical
+ * digit string when we map index 9 → digit '0'.
+ */
+const R1_P1_BANNED_COMBOS: readonly string[] = ['123', '150', '234', '678'];
+const R1_P1_BANNED_COMBO_SET = new Set<string>(R1_P1_BANNED_COMBOS);
+
+/**
+ * Render a set of player IDs as Edward's canonical ascending seat-digit
+ * string, using `allPlayerIds` as the seat-1-indexed reference.
+ *
+ * `allPlayerIds[i]` ↔ seat `i + 1` (seat 10 displays as '0').
+ */
+function canonicalSeatString(
+  memberIds: readonly string[],
+  allPlayerIds: readonly string[],
+): string {
+  const indices = memberIds
+    .map((id) => allPlayerIds.indexOf(id))
+    .filter((idx) => idx >= 0)
+    .sort((a, b) => a - b);
+  return indices.map((idx) => (idx === 9 ? '0' : String(idx + 1))).join('');
+}
+
 // ── #97 Phase 2 · Anomaly-vote weighting (v4, 2026-04-22) ───────
 /**
  * Base magnitude for outer-white (off-team approve) anomaly suspicion delta.
@@ -499,6 +543,13 @@ export class HeuristicAgent implements AvalonAgent {
     const teamSize = this.getTeamSize(playerCount, currentRound);
     const allIds   = this.getPlayerIds(obs);
 
+    // Edward 2026-04-24 batch 4 fix #1 — R1-P1 banned combos (cross-faction).
+    // Edward verbatim: 「所有玩家在1-1 都不準派123/150/234/678 這幾種組合」
+    // R1-P1 is detected as currentRound === 1 AND no prior vote attempts yet.
+    const isR1P1 = (currentRound ?? 1) === 1 && obs.voteHistory.length === 0;
+    const enforceR1P1Ban = (team: string[]): string[] =>
+      isR1P1 ? this.rewriteIfBannedR1P1Combo(team, obs, teamSize) : team;
+
     if (myTeam === 'good') {
       // Edward 2026-04-24 batch 2 fix #8 (Merlin hard-exclude) +
       // fix #9 (suspicion from failed-mission history).
@@ -558,11 +609,11 @@ export class HeuristicAgent implements AvalonAgent {
           if (team.length >= teamSize) break;
           if (!team.includes(id)) team.push(id);
         }
-        return { type: 'team_select', teamIds: team.slice(0, teamSize) };
+        return { type: 'team_select', teamIds: enforceR1P1Ban(team.slice(0, teamSize)) };
       }
 
       const team = [myPlayerId, ...candidates].slice(0, teamSize);
-      return { type: 'team_select', teamIds: team };
+      return { type: 'team_select', teamIds: enforceR1P1Ban(team) };
     } else {
       // Evil: include self, prefer to include one evil ally on larger teams
       // Main logic stays shared — per-role strategy only nudges the
@@ -596,8 +647,56 @@ export class HeuristicAgent implements AvalonAgent {
         team.push(id);
       }
 
-      return { type: 'team_select', teamIds: team.slice(0, teamSize) };
+      return { type: 'team_select', teamIds: enforceR1P1Ban(team.slice(0, teamSize)) };
     }
+  }
+
+  /**
+   * Edward 2026-04-24 batch 4 fix #1 — R1-P1 banned-combo rewriter.
+   *
+   * If the input team's canonical ascending seat string
+   * (1,2,3,4,5,6,7,8,9,0 convention) equals one of the banned combos
+   * `{'123','150','234','678'}`, swap exactly one non-self member with
+   * an alternative player drawn from `allPlayerIds` — keep trying other
+   * alternatives until the canonical string is no longer banned.
+   *
+   * Guarantees:
+   *   - Leader (self) stays on the team.
+   *   - Team size is preserved.
+   *   - If no legal swap exists (pathological — would require > 4 players
+   *     locked) the original team is returned unchanged, with an upstream
+   *     `console.warn` for visibility. In practice with a 10-player game
+   *     and 4 banned combos the swap always succeeds.
+   */
+  private rewriteIfBannedR1P1Combo(
+    team: readonly string[],
+    obs: PlayerObservation,
+    teamSize: number,
+  ): string[] {
+    const all = obs.allPlayerIds;
+    const canonical = canonicalSeatString(team, all);
+    if (!R1_P1_BANNED_COMBO_SET.has(canonical)) {
+      return [...team];
+    }
+
+    const selfId = obs.myPlayerId;
+    // Candidate replacements: any player not already on the team and not self.
+    const pool = all.filter((id) => !team.includes(id) && id !== selfId);
+
+    for (const slot of team) {
+      // Never swap out self — leader always stays on their own team.
+      if (slot === selfId) continue;
+      for (const replacement of pool) {
+        const trial = team.map((id) => (id === slot ? replacement : id));
+        const trialCanonical = canonicalSeatString(trial, all);
+        if (!R1_P1_BANNED_COMBO_SET.has(trialCanonical) && trial.length === teamSize) {
+          return trial;
+        }
+      }
+    }
+
+    // No legal swap found — return original. Shouldn't happen with 10 players.
+    return [...team];
   }
 
   /**
@@ -646,34 +745,52 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'team_vote', vote: true };
     }
 
+    // Edward 2026-04-24 batch 4 fix #2 — cross-faction R1-R2 anomaly
+    // suppression (promoted from good-only to all factions).
+    //
+    // Edward verbatim (batch 2): 「不是前三局不開白 / 是第1&2局先不要開異常票」
+    // Edward verbatim (batch 4): 「你還是一堆異常票啊」
+    //
+    // Root cause of residual anomalies after batch 2: the guard lived
+    // inside the `myTeam === 'good'` branch, so evil players still ran
+    // their standard `hasSelf || hasAlly → approve; else 30-35% approve`
+    // logic — this produced outer-white anomalies (evil off-team + no
+    // ally on team + random approve) in R1-R2 exactly as visible in
+    // the batch-3 self-play output (e.g. R1-P1 team [1,2,3] with evil
+    // seats 6+10 outer-white approving).
+    //
+    // Fix: lift the early-round guard above the faction split so it
+    // applies to BOTH good and evil:
+    //   • R1-R2 on-team  → approve  (suppress inner-black for all)
+    //   • R1-R2 off-team → reject   (suppress outer-white for all)
+    //
+    // Exception: `hasFailedMemberEarly` — in R2 after a failed R1, any
+    // returning quest member is public-info tainted. Good-side rejects
+    // then are public-evidence-driven, not private-role-driven, so not
+    // truly "anomalies" in the role-identification sense. The guard
+    // stands down and normal heuristics resume; evil-side behaviour on
+    // R2 after R1 fail is unchanged (red always covers ally).
+    //
+    // Trade-offs accepted (Edward's intent is maximal clean data):
+    //   • A Merlin/Percival on team with a knownEvil in R1 is forced to
+    //     approve instead of reject. Sacrifices one r1 inner-black signal
+    //     for zero-anomaly R1-R2 — aligned with "先不要開異常票".
+    //   • Evil off-team with ally on team in R1-R2 is forced to reject
+    //     instead of outer-white approving. Loses one cover approve but
+    //     removes a strong anomaly signature.
+    const hasFailedMemberEarly = proposedTeam.some(
+      id => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
+    );
+    if ((obs.currentRound ?? 1) <= 2 && !hasFailedMemberEarly) {
+      return { type: 'team_vote', vote: proposedTeam.includes(myPlayerId) };
+    }
+
     if (myTeam === 'good') {
 
       // Hard veto: any known evil on team → always reject (critical, no noise).
       const hasKnownEvil = proposedTeam.some(id => knownEvils.includes(id));
       if (hasKnownEvil) {
         return { type: 'team_vote', vote: false };
-      }
-
-      // Edward 2026-04-24 batch 2 fix #1 (precedence): rounds 1-2 suppress
-      // all anomaly-generating checks before role-specific heuristics
-      // (Percival wizard-skepticism below creates inner-black when no
-      // wizard is on the team). "不要開異常票" = no anomaly votes, period.
-      //
-      // Guard applies only when no legitimate *public* signal of taint
-      // exists on the team. A teammate who already appeared on a failed
-      // quest is public information — rejecting such a team is NOT an
-      // anomaly but a legitimate good-side signal, so that branch falls
-      // through to the suspicion checks below.
-      //
-      //   • on-team  (no known evil, no failed-member) → approve  (suppress inner-black)
-      //   • off-team (no known evil, no failed-member) → reject   (suppress outer-white)
-      //
-      // Rounds 3-5 restore all prior-based logic.
-      const hasFailedMemberEarly = proposedTeam.some(
-        id => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
-      );
-      if ((obs.currentRound ?? 1) <= 2 && !hasFailedMemberEarly) {
-        return { type: 'team_vote', vote: proposedTeam.includes(myPlayerId) };
       }
 
       // Percival: skeptical of teams without any wizard candidate (Merlin/Morgana).

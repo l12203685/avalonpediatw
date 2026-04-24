@@ -1,9 +1,14 @@
 /**
- * selfplay_10p_1game.ts — batch 3 verification run
+ * selfplay_10p_1game.ts — batch 4 verification run
  *
  * Edward 2026-04-24 batch 3 origin:
  *   - 批 2 兩場自對弈找到 5 個 bug (logic + display)
  *   - 修完後重跑 1 場新自對弈驗證
+ *
+ * Edward 2026-04-24 batch 4 extends the same 1-game harness to verify
+ * two more fixes:
+ *   1. R1-P1 banned team combos {123, 150, 234, 678} never emitted
+ *   2. R1-R2 zero anomaly votes across all factions
  *
  * Differences vs selfplay_10p_5games.ts:
  *   - 1 場（非 5 場）
@@ -382,7 +387,7 @@ function renderTSV(game: CapturedGame, completionTs: string): string {
   const lines: string[] = [];
 
   // Header block
-  lines.push(`強 AI 10 人自對弈 (批 3 驗證) — 完成於 ${completionTs}`);
+  lines.push(`強 AI 10 人自對弈 (批 4 驗證) — 完成於 ${completionTs}`);
   lines.push(`房號\t${game.roomId}\t勝方\t${game.winner === 'good' ? '藍方' : '紅方'}\t勝因\t${translateEndReason(game.endReason)}`);
   lines.push('');
 
@@ -531,8 +536,8 @@ async function main() {
     `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} +08`;
 
   const date = ts.slice(0, 10);
-  const jsonPath = path.join(outDir, `selfplay_10p_1game_post_batch3_${date}.json`);
-  const mdPath   = path.join(outDir, `selfplay_10p_1game_post_batch3_${date}.md`);
+  const jsonPath = path.join(outDir, `selfplay_10p_1game_post_batch4_${date}.json`);
+  const mdPath   = path.join(outDir, `selfplay_10p_1game_post_batch4_${date}.md`);
 
   const tsvReport = renderTSV(g, ts);
   fs.writeFileSync(jsonPath, JSON.stringify(g, null, 2), 'utf8');
