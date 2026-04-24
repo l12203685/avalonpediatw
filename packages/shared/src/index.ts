@@ -10,5 +10,6 @@ export * from './game_v2_adapter';
 
 // V2 派生指標 + i18n（Phase 2b）
 export * from './derived/gameMetrics';
+export * from './derived/roleProbability';
 export * from './i18n/winReason.zh';
 export * from './i18n/eloTag.zh';

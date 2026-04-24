@@ -153,11 +153,21 @@ export function computeEloTag(
   return computeEloTagShared(elo, eloDistribution ?? null);
 }
 
-/** 理論勝率（考慮陣營 baseline）— 用於組內排序。 */
+/**
+ * 理論勝率（Edward 2026-04-24 14:05 公式）— 用於組內排序。
+ *
+ * SUM_role(roleWinRate[player][role] × rolePickProbability[role])
+ * 傳 `opts.roleWinRate` + `opts.gamesByPlayerCount` 啟動 v2；無 → v1 backward-compat
+ *（`0.5 * asGood + 0.5 * asEvil`）。
+ */
 export function computeTheoreticalWinRate(
   winRate: PlayerWinRateV2,
+  opts?: {
+    roleWinRate?: Record<Role, PlayerRoleStatsV2>;
+    gamesByPlayerCount?: Record<number, number>;
+  },
 ): number {
-  return computeTheoreticalWinRateShared(winRate);
+  return computeTheoreticalWinRateShared(winRate, opts);
 }
 
 /**

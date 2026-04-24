@@ -462,7 +462,8 @@ describe('computeTheoreticalWinRate', () => {
     expect(computeTheoreticalWinRate(wr)).toBe(0);
   });
 
-  it('averages asGood and asEvil with neutral baseline', () => {
+  // v1 backward-compat（不傳 opts）：中性陣營 baseline
+  it('v1 · averages asGood and asEvil with neutral baseline (backward-compat)', () => {
     const wr = {
       overall: 0.5,
       asGood: 0.6,
@@ -474,8 +475,7 @@ describe('computeTheoreticalWinRate', () => {
     expect(computeTheoreticalWinRate(wr)).toBeCloseTo(0.5);
   });
 
-  it('normalizes camp-skewed rates', () => {
-    // Player A only plays good and wins a lot; asEvil=0 never played
+  it('v1 · normalizes camp-skewed rates (backward-compat)', () => {
     const wr = {
       overall: 0.9,
       asGood: 0.9,
@@ -484,8 +484,96 @@ describe('computeTheoreticalWinRate', () => {
       totalGames: 10,
       wins: 9,
     };
-    // Theoretical = 0.5*0.9 + 0.5*0 = 0.45 (penalized for no evil games)
     expect(computeTheoreticalWinRate(wr)).toBeCloseTo(0.45);
+  });
+
+  // v2（Edward 2026-04-24 14:05 公式）：SUM(roleWinRate × rolePickProbability)
+  it('v2 · computes SUM(roleWinRate × rolePickProbability) for 5-player games', () => {
+    // 5 人配置：merlin/percival/loyal/assassin/morgana → 每角色 1/5 機率
+    // 玩家各角色勝率（假設）：
+    //   merlin 0.60, percival 0.50, loyal 0.40, assassin 0.80, morgana 0.70
+    // 預期 = 0.2*(0.6+0.5+0.4+0.8+0.7) = 0.2 * 3.0 = 0.60
+    const wr = {
+      overall: 0.6,
+      asGood: 0.5,
+      asEvil: 0.75,
+      byPlayerCount: { 5: 0.6 },
+      totalGames: 10,
+      wins: 6,
+    };
+    const roleWinRate = {
+      merlin:   { plays: 2, wins: 1, rate: 0.60 },
+      percival: { plays: 2, wins: 1, rate: 0.50 },
+      loyal:    { plays: 2, wins: 1, rate: 0.40 },
+      assassin: { plays: 2, wins: 2, rate: 0.80 },
+      morgana:  { plays: 2, wins: 1, rate: 0.70 },
+      oberon:   { plays: 0, wins: 0, rate: 0 },
+      mordred:  { plays: 0, wins: 0, rate: 0 },
+      minion:   { plays: 0, wins: 0, rate: 0 },
+    };
+    const result = computeTheoreticalWinRate(wr, {
+      roleWinRate,
+      gamesByPlayerCount: { 5: 10 },
+    });
+    expect(result).toBeCloseTo(0.60, 5);
+  });
+
+  it('v2 · weights loyal by 2/6 in 6-player config', () => {
+    // 6 人：merlin/percival/loyal/loyal/assassin/morgana → loyal 2/6, 其他 1/6
+    // loyal 勝率 0.50、其他全 0 → 預期 = (2/6) * 0.50 = 0.16667
+    const wr = {
+      overall: 0.1,
+      asGood: 0.1,
+      asEvil: 0.1,
+      byPlayerCount: { 6: 0.1 },
+      totalGames: 6,
+      wins: 1,
+    };
+    const roleWinRate = {
+      merlin:   { plays: 0, wins: 0, rate: 0 },
+      percival: { plays: 0, wins: 0, rate: 0 },
+      loyal:    { plays: 2, wins: 1, rate: 0.50 },
+      assassin: { plays: 0, wins: 0, rate: 0 },
+      morgana:  { plays: 0, wins: 0, rate: 0 },
+      oberon:   { plays: 0, wins: 0, rate: 0 },
+      mordred:  { plays: 0, wins: 0, rate: 0 },
+      minion:   { plays: 0, wins: 0, rate: 0 },
+    };
+    const result = computeTheoreticalWinRate(wr, {
+      roleWinRate,
+      gamesByPlayerCount: { 6: 6 },
+    });
+    expect(result).toBeCloseTo(2 / 6 * 0.5, 5);
+  });
+
+  it('v2 · averages across multiple player counts by games played', () => {
+    // 玩家 10 局：5 局 5 人（loyal prob 1/5） + 5 局 6 人（loyal prob 2/6）
+    // 加權平均 loyal 機率 = 0.5 * 1/5 + 0.5 * 2/6 = 0.1 + 0.16667 ≈ 0.26667
+    // loyal 勝率 0.60、其他 0 → theoretical ≈ 0.26667 * 0.60 = 0.16
+    const wr = {
+      overall: 0.5,
+      asGood: 0.6,
+      asEvil: 0,
+      byPlayerCount: { 5: 0.6, 6: 0.4 },
+      totalGames: 10,
+      wins: 5,
+    };
+    const roleWinRate = {
+      merlin:   { plays: 0, wins: 0, rate: 0 },
+      percival: { plays: 0, wins: 0, rate: 0 },
+      loyal:    { plays: 5, wins: 3, rate: 0.60 },
+      assassin: { plays: 0, wins: 0, rate: 0 },
+      morgana:  { plays: 0, wins: 0, rate: 0 },
+      oberon:   { plays: 0, wins: 0, rate: 0 },
+      mordred:  { plays: 0, wins: 0, rate: 0 },
+      minion:   { plays: 0, wins: 0, rate: 0 },
+    };
+    const result = computeTheoreticalWinRate(wr, {
+      roleWinRate,
+      gamesByPlayerCount: { 5: 5, 6: 5 },
+    });
+    const expected = (0.5 * (1 / 5) + 0.5 * (2 / 6)) * 0.60;
+    expect(result).toBeCloseTo(expected, 5);
   });
 });
 

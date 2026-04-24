@@ -36,6 +36,10 @@ import type {
   GameRecordV2,
   RolesV2,
 } from '../types/game_v2';
+import {
+  getAveragedRolePickProbability,
+  getRolePickProbability,
+} from './roleProbability';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -292,6 +296,25 @@ export function findSeatForPlayer(
     if (game.playerSeats[i] === playerId) return i + 1;
   }
   return null;
+}
+
+/**
+ * 該玩家在各人數局的**場次**（非 rate）。用於理論勝率加權。
+ * 回傳 `{5: 10, 7: 3}` 形式；僅計入 5..10 人且該玩家真的就座的局。
+ */
+export function computeGamesByPlayerCount(
+  games: GameRecordV2[],
+  playerId: PlayerId,
+): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (const game of games) {
+    const seat = findSeatForPlayer(game, playerId);
+    if (seat === null) continue;
+    const playerCount = nonEmptyPlayerCount(game);
+    if (playerCount < 5 || playerCount > 10) continue;
+    out[playerCount] = (out[playerCount] ?? 0) + 1;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -756,20 +779,50 @@ export function computeEloTag(
 // ─── 理論勝率 ────────────────────────────────────────────────────────
 
 /**
- * 考慮陣營 baseline 的理論勝率。
+ * 理論勝率 — Edward 2026-04-24 14:05 拍板公式：
  *
- * 現階段使用中性 baseline（好壞 50/50）：
- *   theoreticalWinRate = 0.5 * asGood + 0.5 * asEvil
- * 這把「camp mix 偏斜」normalize 掉；若玩家兩邊各半則 ≈ overall。
- * 完全無資料 → 0。
+ *   theoreticalWinRate(player) =
+ *     SUM_role ( roleWinRate[player][role] × rolePickProbability[role] )
  *
- * 註：未來若要用全站 good/evil base 算 edge-over-baseline，可擴充此函式。
+ * 其中 rolePickProbability 按該玩家實際遇到的各人數局加權平均（從 AVALON_CONFIG 推）。
+ *
+ * 呼叫方式：
+ *   v2（正確 · 推薦）：
+ *     computeTheoreticalWinRate(winRate, { roleWinRate, gamesByPlayerCount })
+ *     → 按 Edward 公式；無 role 機率資料 → 0。
+ *
+ *   v1（backward-compat · deprecated）：
+ *     computeTheoreticalWinRate(winRate)
+ *     → 退回中性 baseline `0.5 * asGood + 0.5 * asEvil`。
+ *     僅存量舊呼叫端使用；新代碼一律傳 `opts`。
+ *
+ * @param winRate  玩家的 PlayerWinRateV2
+ * @param opts.roleWinRate         該玩家的各角色勝率（來自 computePlayerRoleWinRate）
+ * @param opts.gamesByPlayerCount  該玩家在各人數局的**場次**（非 rate）；例 `{5: 10, 7: 3}`
+ * @returns 0..1
  */
 export function computeTheoreticalWinRate(
   winRate: PlayerWinRateV2,
+  opts?: {
+    roleWinRate?: Record<Role, PlayerRoleStatsV2>;
+    gamesByPlayerCount?: Record<number, number>;
+  },
 ): number {
-  const { asGood, asEvil, totalGames } = winRate;
-  if (totalGames === 0) return 0;
+  if (winRate.totalGames === 0) return 0;
+
+  // v2：Edward 公式 — 有 roleWinRate + gamesByPlayerCount 才啟動
+  if (opts?.roleWinRate && opts?.gamesByPlayerCount) {
+    const probs = getAveragedRolePickProbability(opts.gamesByPlayerCount);
+    let theo = 0;
+    for (const [role, p] of Object.entries(probs)) {
+      const rate = opts.roleWinRate[role as Role]?.rate ?? 0;
+      theo += rate * (p ?? 0);
+    }
+    return theo;
+  }
+
+  // v1 backward-compat：中性陣營 baseline
+  const { asGood, asEvil } = winRate;
   return 0.5 * asGood + 0.5 * asEvil;
 }
 
@@ -896,7 +949,13 @@ export function computePlayerStatsV2(
   // 新雙維度分類（Edward 2026-04-24 13:43）
   const tierGroup = computeTierGroup(winRate.totalGames);
   const eloTag = computeEloTag(elo, opts?.eloDistribution ?? null);
-  const theoreticalWinRate = computeTheoreticalWinRate(winRate);
+
+  // 理論勝率（Edward 2026-04-24 14:05 公式）
+  const gamesByPlayerCount = computeGamesByPlayerCount(games, playerId);
+  const theoreticalWinRate = computeTheoreticalWinRate(winRate, {
+    roleWinRate,
+    gamesByPlayerCount,
+  });
 
   // 舊 PlayerTier（backcompat，保留以不破壞存量 repo doc 的 tier 欄位）
   const tier = computeTier(
