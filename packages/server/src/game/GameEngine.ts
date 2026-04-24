@@ -378,9 +378,10 @@ export class GameEngine {
    *   - `seat0` → canonical "leader's right" = last entry in playerIds
    *     (matches the existing Avalon convention where seat 0 sits to the
    *     right of the first leader). UI label: "隊長右手邊".
+   *     Self-play scripts pin to `seat0` for deterministic first-holder
+   *     start (Edward 2026-04-24 "湖中女神先固定從 0 家開始" +
+   *     batch 5 「起始湖中不是隨機的」).
    *   - `seatN` (1..9) → playerIds[N-1], clamped to valid range.
-   *     Self-play scripts pin to `seat1` for deterministic first-holder
-   *     start (Edward 2026-04-24 fix #2 "湖中女神先固定從 0 家開始").
    *   - `random` or unset → random index in [0, playerCount).
    */
   private resolveLadyStartIndex(playerCount: number): number {
@@ -638,6 +639,75 @@ export class GameEngine {
       leaderId: this.getLeaderId(),
       team: teamNames,
     });
+
+    // Edward 2026-04-24 batch 8 — forced mission skip vote.
+    // Verbatim:「強制局也不用投票」「R1~R2 是不能有異常票的」.
+    // When the previous 4 proposals in this round were rejected (failCount
+    // === 4), the 5th proposal is a FORCED approval — Avalon rules mandate
+    // the quest runs regardless of votes (rejecting a 5th time would end
+    // the game in evil's favour, so there is literally nothing to vote
+    // on). Previously the engine still ran the vote phase and every AI
+    // coerced itself to approve; this wasted a round-trip and produced
+    // legitimately-zero but still-present vote records. Batch 8 skips
+    // the vote entirely and records a synthetic unanimous-approve in
+    // voteHistory so downstream readers (scoresheet, replays, tests)
+    // continue to see a 5th-attempt vote record with approved=true.
+    //
+    // Safeguards: we only trigger when failCount === 4 (exactly 5th
+    // attempt, matching the `failCount >= 5 → evil wins` rule in
+    // resolveVoting). Cleared votes + rotated leader + fresh questTeam
+    // are already guaranteed by advanceToNextRound / rotateLeader so
+    // the synthetic record does not collide with prior state.
+    if (this.room.failCount >= 4) {
+      // Clear any team-select / vote timeouts that may still be live.
+      if (this.teamSelectTimeout) {
+        clearTimeout(this.teamSelectTimeout);
+        this.teamSelectTimeout = null;
+      }
+      if (this.voteTimeout) {
+        clearTimeout(this.voteTimeout);
+        this.voteTimeout = null;
+      }
+
+      // Synthesize a unanimous-approve vote record so replays &
+      // scoresheet downstream reader logic still sees a "5th proposal
+      // approved" record in voteHistory.
+      const unanimousVotes: Record<string, boolean> = {};
+      for (const pid of Object.keys(this.room.players)) {
+        unanimousVotes[pid] = true;
+      }
+      this.room.votes = { ...unanimousVotes };
+
+      this.voteAttemptInRound++;
+      const forcedRecord: VoteRecord = {
+        round:    this.room.currentRound,
+        attempt:  this.voteAttemptInRound,
+        leader:   this.getLeaderId(),
+        team:     [...teamMemberIds],
+        approved: true,
+        votes:    { ...unanimousVotes },
+      };
+      this.room.voteHistory.push(forcedRecord);
+
+      this.logEvent('forced_mission_auto_approved', {
+        round:   this.room.currentRound,
+        attempt: this.voteAttemptInRound,
+        leader:  this.getLeaderId(),
+        team:    teamMemberIds,
+        reason:  '5th_proposal_forced_approve',
+      });
+
+      // Transition straight into quest phase, mirroring the approved
+      // branch of resolveVoting().
+      this.room.state = 'quest';
+      this.room.votes = {};
+      this.room.failCount = 0;
+      this.room.questVotedCount = 0;
+      this.questVotes = [];
+      this.startQuestPhase();
+      return;
+    }
+
     // Start the approval vote timer now that team is proposed
     this.startVotingPhase();
   }

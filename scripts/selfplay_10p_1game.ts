@@ -155,6 +155,18 @@ async function runOneGame(
       const action = leader.act({ ...obs, gamePhase: 'team_select' });
       if (action.type !== 'team_select') throw new Error('Expected team_select');
       engine.selectQuestTeam(action.teamIds);
+
+      // Edward 2026-04-24 batch 8 — forced mission skip-vote support.
+      // When GameEngine.selectQuestTeam encounters failCount>=4 it
+      // synthesises a unanimous-approve record and jumps straight to
+      // 'quest' state. Pull the synthesised record into the local
+      // voteHistory so downstream observations (quest_vote phase) see
+      // the full record.
+      if ((room.state as string) === 'quest') {
+        const latest = room.voteHistory[room.voteHistory.length - 1];
+        if (latest) voteHistory.push(latest);
+        voteAttempt = 0;
+      }
     }
 
     if (room.state === 'voting' && room.questTeam.length > 0) {
@@ -413,7 +425,7 @@ function renderTSV(game: CapturedGame, completionTs: string): string {
   const lines: string[] = [];
 
   // Header block
-  lines.push(`強 AI 10 人自對弈 (批 7 驗證) — 完成於 ${completionTs}`);
+  lines.push(`強 AI 10 人自對弈 (批 8 驗證) — 完成於 ${completionTs}`);
   lines.push(`房號\t${game.roomId}\t勝方\t${game.winner === 'good' ? '藍方' : '紅方'}\t勝因\t${translateEndReason(game.endReason)}`);
   lines.push('');
 
@@ -562,8 +574,8 @@ async function main() {
     `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} +08`;
 
   const date = ts.slice(0, 10);
-  const jsonPath = path.join(outDir, `selfplay_10p_1game_post_batch7_${date}.json`);
-  const mdPath   = path.join(outDir, `selfplay_10p_1game_post_batch7_${date}.md`);
+  const jsonPath = path.join(outDir, `selfplay_10p_1game_post_batch8_${date}.json`);
+  const mdPath   = path.join(outDir, `selfplay_10p_1game_post_batch8_${date}.md`);
 
   const tsvReport = renderTSV(g, ts);
   fs.writeFileSync(jsonPath, JSON.stringify(g, null, 2), 'utf8');

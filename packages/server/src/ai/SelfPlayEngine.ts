@@ -89,6 +89,17 @@ export class SelfPlayEngine {
 
         if (action.type !== 'team_select') throw new Error('Expected team_select action');
         engine.selectQuestTeam(action.teamIds);
+
+        // Edward 2026-04-24 batch 8 — forced mission skip-vote support.
+        // When failCount>=4 engine synthesises a unanimous-approve
+        // record and jumps straight to 'quest'; pull the synthesised
+        // vote record into the local voteHistory so subsequent
+        // observations see the full record.
+        if ((room.state as string) === 'quest') {
+          const latestVoteRecord = room.voteHistory[room.voteHistory.length - 1];
+          if (latestVoteRecord) voteHistory.push(latestVoteRecord);
+          voteAttempt = 0;
+        }
       }
 
       // ── Team vote phase ────────────────────────────────────

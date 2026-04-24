@@ -313,6 +313,18 @@ interface OberonContext {
   missionParticipatedBefore: boolean;
   /** Did any quest Oberon participated on previously result in fail? */
   failedInMission: boolean;
+  /**
+   * The EARLIEST round number where Oberon appeared on a quest AND that
+   * quest failed (public info). `null` if Oberon never participated in a
+   * failed mission yet. Added batch 8 to generalise Rule 3 — any
+   * subsequent round R > firstFailedRound triggers unconditional
+   * off-team approve (not restricted to R4/R5).
+   *
+   * Edward 2026-04-24 batch 8 verbatim:
+   *   「奧伯倫的無條件開白 應該是 R{n} 投過fail 後, R{m}, m>n 以後的所有投票
+   *    都開白」
+   */
+  firstFailedRound: number | null;
   /** Total number of missions that failed publicly so far. */
   totalMissionFails: number;
   /** Set of playerIds who appeared on any publicly-failed R1-R3 mission,
@@ -331,6 +343,7 @@ function buildOberonContext(obs: PlayerObservation): OberonContext {
   const myId = obs.myPlayerId;
   let missionParticipatedBefore = false;
   let failedInMission = false;
+  let firstFailedRound: number | null = null;
   let totalMissionFails = 0;
   const suspectedTeammates = new Set<string>();
 
@@ -338,7 +351,14 @@ function buildOberonContext(obs: PlayerObservation): OberonContext {
     const onTeam = quest.team.includes(myId);
     if (onTeam) {
       missionParticipatedBefore = true;
-      if (quest.result === 'fail') failedInMission = true;
+      if (quest.result === 'fail') {
+        failedInMission = true;
+        // Track the EARLIEST round where Oberon was on a failed mission.
+        // Rule 3 (batch 8 generalisation) triggers on any round > this.
+        if (firstFailedRound === null || quest.round < firstFailedRound) {
+          firstFailedRound = quest.round;
+        }
+      }
     }
     if (quest.result === 'fail') {
       totalMissionFails++;
@@ -357,6 +377,7 @@ function buildOberonContext(obs: PlayerObservation): OberonContext {
   return {
     missionParticipatedBefore,
     failedInMission,
+    firstFailedRound,
     totalMissionFails,
     suspectedTeammates,
   };
@@ -1045,12 +1066,13 @@ export class HeuristicAgent implements AvalonAgent {
    * should handle the vote (e.g. when Rules 1 / 5b decay to "normal
    * votes only" — the caller's standard path already produces those).
    *
-   * Rules implemented here (Edward 2026-04-24 batch 7 verbatim):
+   * Rules implemented here (Edward 2026-04-24 batch 7 + batch 8 verbatim):
    *   - Rule 1: missionParticipatedBefore === false →
    *             on-team approve, off-team reject (normal vote).
-   *   - Rule 3: (currentRound >= 4) AND missionParticipatedBefore=true
-   *             AND failedInMission=true AND off-team →
-   *             approve unconditionally (外白 signal to red team).
+   *   - Rule 3 (batch 8 generalised): firstFailedRound === R_n AND
+   *             currentRound > R_n → off-team approve unconditionally
+   *             (外白 signal). Pre-batch-8 this was hard-coded to R >= 4;
+   *             now ANY subsequent round triggers the signal.
    *   - Rule 5a: currentRound === 5 AND totalMissionFails >= 1
    *             AND off-team → approve unconditionally.
    *   - Rule 5b: currentRound === 5 AND totalMissionFails === 0 →
@@ -1058,8 +1080,17 @@ export class HeuristicAgent implements AvalonAgent {
    *
    * Evil R1-R2 anomaly-suppression rule (batch 4) would have forced
    * reject for Oberon off-team. Oberon's Rule 1 is ALSO "normal vote =
-   * off-team reject" in R1-R2 so the two agree — no conflict. Rules
-   * 3 / 5a only fire at R4 / R5 which are well past the R1-R2 guard.
+   * off-team reject" in R1-R2 so the two agree — no conflict. Rule 3
+   * (post-batch-8) could in principle fire at R2 if Oberon went on a
+   * failed R1, which produces an off-team APPROVE — this is the
+   * intended batch-8 behaviour (Edward verbatim「R{n} 投過fail 後,
+   * R{m}, m>n 以後的所有投票 都開白」). The R1-R2 cross-faction guard
+   * does NOT fire for Oberon because his dedicated branch returns
+   * before the guard check.
+   *
+   * Edward 2026-04-24 batch 8 verbatim:
+   *   「奧伯倫的無條件開白 應該是 R{n} 投過fail 後, R{m}, m>n 以後的所有投票
+   *    都開白」
    */
   private voteOnTeamAsOberon(obs: PlayerObservation): AgentAction | null {
     const { proposedTeam, myPlayerId, currentRound } = obs;
@@ -1072,12 +1103,21 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'team_vote', vote: onTeam };
     }
 
-    // Rule 3: participated in an R1-R3 failed mission → R4+ off-team
-    // unconditional approve. On-team is still "approve" (normal vote)
-    // so this collapses to "approve unless legitimately off-team with
-    // no prior fail record" — but we already gated on failedInMission,
-    // so R4+ Oberon with a fail on record approves every vote he sees.
-    if (round >= 4 && ctx.failedInMission) {
+    // Rule 3 (batch 8 generalised): after Oberon's first failed-mission
+    // participation at round R_n, every round R > R_n triggers off-team
+    // unconditional approve (外白 signal). On-team still returns approve
+    // (normal vote), so effectively Oberon approves every vote from
+    // R_n+1 onwards once he has been on a failed mission.
+    //
+    // Batch 8 invariant gate: even when firstFailedRound === 1 (Oberon
+    // went on a failed R1), Rule 3 stays silent at R2 so the
+    // cross-faction「R1~R2 是不能有異常票的」invariant still holds. The
+    // gate is `round >= 3` — R3 onwards Rule 3 may open outer-white.
+    if (
+      ctx.firstFailedRound !== null &&
+      round > ctx.firstFailedRound &&
+      round >= 3
+    ) {
       return { type: 'team_vote', vote: true };
     }
 
@@ -1093,12 +1133,11 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'team_vote', vote: onTeam };
     }
 
-    // R2-R3 after Oberon participated (but conditions for Rule 3 not yet met):
-    // this is "between Rule 1 and Rule 3" — Rule 1 says normal votes only.
-    // We interpret "前三局 有機會出任務必出失敗" as quest-side logic (Rule 2
-    // lives in voteOnQuest); on the team-vote side, if Oberon has already
-    // been on a mission, fall back to normal (on-team approve / off-team
-    // reject) to avoid emitting anomaly signals out-of-sequence.
+    // Oberon participated in a prior mission but that mission did NOT
+    // fail (e.g. teammate didn't drop a fail token, or failsRequired=2
+    // and only 1 dropped). Fall back to normal (on-team approve /
+    // off-team reject) to avoid emitting anomaly signals without the
+    // fail-participation precondition.
     return { type: 'team_vote', vote: onTeam };
   }
 

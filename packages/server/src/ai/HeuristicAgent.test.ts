@@ -1671,7 +1671,70 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
     });
   });
 
-  describe('Rule 3 — R4+ after prior fail participation → off-team unconditional approve', () => {
+  describe('Rule 3 (batch 8 generalised) — R>firstFailedRound triggers outer-white', () => {
+    it('R3 off-team, Oberon participated in failed R2 → approve (batch 8: R3 now triggers, pre-batch-8 would have been R4+ only)', () => {
+      const obs = oberonTeamVoteObs({
+        round: 3,
+        onTeam: false,
+        proposedTeam: ['P2', 'P3', 'P4'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P1', 'P5'], 'fail', 1),    // Oberon (P1) on failed R2 → firstFailedRound=2
+        ],
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        // R3 > firstFailedRound(2) AND R3 >= 3 → Rule 3 fires (batch 8 change)
+        if (action.type === 'team_vote') expect(action.vote).toBe(true);
+      }
+    });
+
+    it('R2 off-team, Oberon participated in failed R1 → reject (R1-R2 invariant overrides Rule 3)', () => {
+      // firstFailedRound=1, R2 > 1, but R2 < 3 → R1-R2 zero-anomaly invariant
+      // holds: Rule 3 stays silent, falls through to default off-team reject.
+      // Edward 2026-04-24 batch 8: 「R1~R2 是不能有異常票的」overrides
+      // Oberon's generalised outer-white signal.
+      const obs = oberonTeamVoteObs({
+        round: 2,
+        onTeam: false,
+        proposedTeam: ['P2', 'P3', 'P4'],
+        questHistory: [
+          quest(1, ['P1', 'P5'], 'fail', 1),    // Oberon on failed R1 → firstFailedRound=1
+        ],
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(false);
+      }
+    });
+
+    it('R5 off-team, Oberon participated in failed R3 → approve (R5 > firstFailedRound=3)', () => {
+      const obs = oberonTeamVoteObs({
+        round: 5,
+        onTeam: false,
+        proposedTeam: ['P2', 'P3', 'P4', 'P5'],
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P3', 'P4'], 'success', 0),
+          quest(3, ['P1', 'P6'], 'fail', 1),    // Oberon on failed R3 → firstFailedRound=3
+          quest(4, ['P4', 'P5'], 'success', 0),
+        ],
+      });
+      for (let i = 0; i < 50; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_vote');
+        if (action.type === 'team_vote') expect(action.vote).toBe(true);
+      }
+    });
+
     it('R4 off-team, Oberon participated in failed R2 → approve (outer-white signal)', () => {
       const obs = oberonTeamVoteObs({
         round: 4,
@@ -1874,10 +1937,43 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
 
       expect(ctx.missionParticipatedBefore).toBe(true);
       expect(ctx.failedInMission).toBe(true);
+      expect(ctx.firstFailedRound).toBe(2);  // batch 8 field
       expect(ctx.totalMissionFails).toBe(1);
       // Suspect teammates from R1-R3 failed missions, minus self
       expect(ctx.suspectedTeammates.has('P5')).toBe(true);
       expect(ctx.suspectedTeammates.has('P1')).toBe(false);
+    });
+
+    it('buildOberonContext tracks EARLIEST failed round across multiple participation events (batch 8)', () => {
+      const obs = oberonQuestVoteObs({
+        round: 5,
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'success', 0),
+          quest(2, ['P1', 'P5'], 'fail', 1),     // Oberon failed at R2
+          quest(3, ['P1', 'P6'], 'fail', 1),     // Oberon failed at R3 (later)
+          quest(4, ['P3', 'P4'], 'success', 0),
+        ],
+      });
+      const agent = new HeuristicAgent('P1', 'hard');
+      const ctx = agent._buildOberonContextForTesting(obs);
+
+      expect(ctx.firstFailedRound).toBe(2);      // earliest, not R3
+      expect(ctx.totalMissionFails).toBe(2);     // both failed rounds counted
+    });
+
+    it('buildOberonContext firstFailedRound is null when Oberon never on a failed mission', () => {
+      const obs = oberonQuestVoteObs({
+        round: 4,
+        questHistory: [
+          quest(1, ['P2', 'P3'], 'fail', 1),     // Oberon NOT on it
+          quest(2, ['P1', 'P5'], 'success', 0),  // Oberon on it but succeeded
+        ],
+      });
+      const agent = new HeuristicAgent('P1', 'hard');
+      const ctx = agent._buildOberonContextForTesting(obs);
+
+      expect(ctx.firstFailedRound).toBeNull();
+      expect(ctx.failedInMission).toBe(false);
     });
 
     it('match-point listening OVERRIDES Oberon Rules 2/4/5c (listening wins)', () => {
