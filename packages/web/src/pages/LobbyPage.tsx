@@ -165,15 +165,15 @@ export default function LobbyPage(): JSX.Element {
     setRoleOptions(room.id, { [key]: value });
   };
 
-  // Lady of the Lake default (Edward 2026-04-24 "8 人以上預設勾選"):
+  // Lady of the Lake default (Edward 2026-04-24 "7 人以上預設勾選"):
   //   - host has NOT touched the toggle (field undefined) → auto-on at
-  //     playerCount ≥ 8, off otherwise
+  //     playerCount ≥ 7, off otherwise
   //   - explicit false → off (host opted out)
   //   - explicit true  → on (host opted in)
   // Mirrors GameEngine.startGame so the lobby preview matches the
   // value the engine will resolve when the game actually starts.
   const ladyFieldUndefined = typeof ((room.roleOptions as unknown) as Record<string, unknown>)?.ladyOfTheLake === 'undefined';
-  const ladyDefaultOn = ladyFieldUndefined && playerList.length >= 8;
+  const ladyDefaultOn = ladyFieldUndefined && playerList.length >= 7;
   const ladyChecked = ladyFieldUndefined
     ? ladyDefaultOn
     : Boolean(room.roleOptions?.ladyOfTheLake);
@@ -287,7 +287,7 @@ export default function LobbyPage(): JSX.Element {
                         <p className="text-xs text-gray-500 leading-tight mt-0.5">
                           任務 2 起輪流互查陣營；可公開宣告或保持沉默
                           {ladyFieldUndefined && ladyDefaultOn && (
-                            <span className="text-amber-400 ml-1">(預設開啟：8 人以上)</span>
+                            <span className="text-amber-400 ml-1">(預設開啟：7 人以上)</span>
                           )}
                         </p>
                       </div>

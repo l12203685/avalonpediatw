@@ -162,16 +162,16 @@ export class GameEngine {
     this.currentLeaderIndex = 0;
     this.voteAttemptInRound = 0;
 
-    // Lady of the Lake (Edward 2026-04-24 "8 人以上預設勾選"):
+    // Lady of the Lake (Edward 2026-04-24 "7 人以上預設勾選"):
     //   - explicit true  → on (host opted in)
     //   - explicit false → off (host opted out — always honoured)
-    //   - undefined      → auto-on when playerCount ≥ 8, off otherwise
+    //   - undefined      → auto-on when playerCount ≥ 7, off otherwise
     // The <7-player hard lockout stays engine-enforced (official Avalon
     // rule: Lady only exists in 7+ player games) so an errant UI or
     // socket cannot activate Lady in a 5/6-player game.
     const ladyFlag = this.room.roleOptions?.ladyOfTheLake;
     const ladyRequested = ladyFlag === true
-      || (ladyFlag === undefined && playerCount >= 8);
+      || (ladyFlag === undefined && playerCount >= 7);
     const ladyEnabled = ladyRequested && playerCount >= 7;
     this.room.ladyOfTheLakeEnabled = ladyEnabled;
     if (ladyEnabled) {

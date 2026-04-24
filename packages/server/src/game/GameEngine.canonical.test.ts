@@ -184,11 +184,11 @@ describe('Canonical 7-role scope lock', () => {
     });
   });
 
-  describe('Lady of the Lake — 8+ ON by default, explicit opt-out honoured (Edward 2026-04-24)', () => {
+  describe('Lady of the Lake — 7+ ON by default, explicit opt-out honoured (Edward 2026-04-24)', () => {
     it('RoomManager.createRoom leaves ladyOfTheLake flag undefined (host-has-not-touched signal)', () => {
       // RoomManager omits the flag at creation so the engine + lobby UI
       // can distinguish "host never touched the toggle" (undefined →
-      // auto-on for 8+) from "host explicitly opted out" (false → off).
+      // auto-on for 7+) from "host explicitly opted out" (false → off).
       const rm = new RoomManager();
       const room = rm.createRoom('r1', 'Alice', 'p1');
       expect(room.roleOptions?.ladyOfTheLake).toBeUndefined();
@@ -205,7 +205,7 @@ describe('Canonical 7-role scope lock', () => {
       rm.destroy();
     });
 
-    it('startGame honours explicit ladyOfTheLake=false opt-out even for 8+ player games', () => {
+    it('startGame honours explicit ladyOfTheLake=false opt-out even for 7+ player games', () => {
       // When the host explicitly unchecks the toggle (false), Lady stays
       // off regardless of player count.
       for (const count of [7, 8, 9, 10]) {
@@ -218,16 +218,16 @@ describe('Canonical 7-role scope lock', () => {
       }
     });
 
-    it('startGame auto-enables Lady of the Lake for 8+ players when the flag is undefined', () => {
-      // Edward 2026-04-24 "8 人以上預設勾選": missing ladyOfTheLake flag
-      // + playerCount ≥ 8 → auto-on (no explicit host opt-in needed).
-      for (const count of [8, 9, 10]) {
+    it('startGame auto-enables Lady of the Lake for 7+ players when the flag is undefined', () => {
+      // Edward 2026-04-24 "7 人以上預設勾選": missing ladyOfTheLake flag
+      // + playerCount ≥ 7 → auto-on (no explicit host opt-in needed).
+      for (const count of [7, 8, 9, 10]) {
         const room = makeRoom(count, {
           percival: true,
           morgana: true,
           oberon: true,
           mordred: true,
-          // ladyOfTheLake intentionally omitted → auto-on at 8+
+          // ladyOfTheLake intentionally omitted → auto-on at 7+
         });
         const engine = new GameEngine(room);
         engine.startGame();
@@ -237,36 +237,10 @@ describe('Canonical 7-role scope lock', () => {
       }
     });
 
-    it('startGame keeps Lady of the Lake OFF for 7-player games when flag is undefined', () => {
-      // Auto-default is 8+; a 7-player game needs explicit opt-in.
-      const room = makeRoom(7, {
-        percival: true,
-        morgana: true,
-        oberon: true,
-        mordred: true,
-        // ladyOfTheLake intentionally omitted
-      });
-      const engine = new GameEngine(room);
-      engine.startGame();
-      expect(room.ladyOfTheLakeEnabled).toBe(false);
-      engine.cleanup();
-    });
-
-    it('startGame keeps Lady of the Lake OFF when roleOptions is missing entirely for 7-player games', () => {
-      // With no roleOptions at all, engine falls back to the "host sent
-      // nothing" path. 7 players → stays off (below 8+ auto-default).
-      const room = makeRoom(7);
-      delete (room as Partial<Room>).roleOptions;
-      const engine = new GameEngine(room);
-      engine.startGame();
-      expect(room.ladyOfTheLakeEnabled).toBe(false);
-      engine.cleanup();
-    });
-
-    it('startGame auto-enables Lady of the Lake when roleOptions is missing entirely for 8+ player games', () => {
+    it('startGame auto-enables Lady of the Lake when roleOptions is missing entirely for 7+ player games', () => {
       // Mirror of the undefined-flag rule — absent roleOptions also
-      // leaves ladyOfTheLake undefined, which triggers 8+ auto-on.
-      for (const count of [8, 9, 10]) {
+      // leaves ladyOfTheLake undefined, which triggers 7+ auto-on.
+      for (const count of [7, 8, 9, 10]) {
         const room = makeRoom(count);
         delete (room as Partial<Room>).roleOptions;
         const engine = new GameEngine(room);
