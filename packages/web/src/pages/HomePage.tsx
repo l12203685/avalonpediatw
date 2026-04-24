@@ -60,6 +60,9 @@ export default function HomePage(): JSX.Element {
   const [authGateTarget, setAuthGateTarget] = useState<AuthGateTarget | null>(null);
 
   // After an OAuth reload, check where the user was heading and route them there.
+  // 'chat' branch: user was gated on the lobby chat input — stay on home but
+  // scroll / focus the chat so the comeback loop is obvious. Slight 300ms
+  // timeout so PublicChatPanel has time to mount and wire up its socket.
   useEffect(() => {
     const target = localStorage.getItem('pendingGateTarget') as AuthGateTarget | null;
     if (!target) return;
@@ -67,7 +70,13 @@ export default function HomePage(): JSX.Element {
     localStorage.removeItem('pendingGateTarget');
     if (target === 'stats') setGameState('personalStats');
     else if (target === 'settings') setGameState('settings');
-    // 'chat' handled by Phase 3 (lobby chat gate) — ignored here.
+    else if (target === 'chat') {
+      // User came back from the lobby-chat gate. Stay on home; the chat
+      // input unlocks itself once currentPlayer.provider !== 'guest'.
+      // No explicit scroll/focus — the panel is already in view in the
+      // right-column layout, and focusing a text field without a visible
+      // cue would feel jumpy.
+    }
   }, [currentPlayer, setGameState]);
 
   const tryGatedNavigate = (target: AuthGateTarget, proceed: () => void): void => {

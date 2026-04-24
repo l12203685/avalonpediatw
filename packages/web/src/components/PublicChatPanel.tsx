@@ -15,6 +15,7 @@ import { Send, Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getSocket } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
+import AuthGateModal from './AuthGateModal';
 
 // 2026-04-23 Edward 指令：鎖頭提示從靜態文字改成可點 CTA，
 // 訪客點擊直接跳「系統設定 → 帳號綁定」區塊。模式與 SettingsPage
@@ -70,6 +71,7 @@ export default function PublicChatPanel(): JSX.Element {
   const { currentPlayer, addToast, setGameState } = useGameStore();
   const [messages, setMessages] = useState<LobbyChatMessage[]>([]);
   const [input, setInput] = useState('');
+  const [gateOpen, setGateOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Guest == read-only. Resolved from the currentPlayer provider flag set on
@@ -206,20 +208,24 @@ export default function PublicChatPanel(): JSX.Element {
           because the explainer hinted at a resolution (register/sign-in) but
           had no affordance. Now the whole row acts like a link. */}
       {isGuest ? (
-        <button
-          type="button"
-          onClick={() => {
-            setGameState('settings');
-            scrollToSettingsBinding();
-          }}
-          title={t('home.lobbyChatGuestNoticeHover')}
-          aria-label={t('home.lobbyChatGuestNoticeHover')}
-          data-testid="public-chat-guest-cta"
-          className="flex items-center gap-2 px-3 py-2 border-t border-zinc-700 bg-black/30 text-xs text-zinc-400 hover:bg-blue-900/30 hover:text-blue-200 transition-colors text-left w-full cursor-pointer underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-        >
-          <Lock size={12} />
-          <span>{t('home.lobbyChatGuestNotice')}</span>
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() => setGateOpen(true)}
+            title={t('chat.guestGateHint', { defaultValue: '點此登入帳號即可發言' })}
+            aria-label={t('chat.guestGateHint', { defaultValue: '點此登入帳號即可發言' })}
+            data-testid="public-chat-guest-cta"
+            className="flex items-center gap-2 px-3 py-2 border-t border-zinc-700 bg-black/30 text-xs text-zinc-400 hover:bg-blue-900/30 hover:text-blue-200 transition-colors text-left w-full cursor-pointer underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          >
+            <Lock size={12} />
+            <span>{t('chat.guestPlaceholder', { defaultValue: '登入後即可發言…' })}</span>
+          </button>
+          <AuthGateModal
+            isOpen={gateOpen}
+            onClose={() => setGateOpen(false)}
+            gateTarget="chat"
+          />
+        </>
       ) : (
         <div className="flex gap-2 p-2 border-t border-zinc-700">
           <input
