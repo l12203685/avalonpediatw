@@ -248,14 +248,18 @@ router.get('/leaderboard/v2', publicLimiter, async (_req: Request, res: Response
   try {
     const repo = new ComputedStatsRepositoryV2();
     const rawGroups = await repo.getLeaderboard();
+    // Edward 2026-04-24 15:27：`sheets:unknown` 是全站平均 aggregate 玩家，
+    // 不進排行榜（但其戰績已貢獻給其他玩家 stats）。
     const groups = Object.fromEntries(
       Object.entries(rawGroups).map(([tierGroup, entries]) => [
         tierGroup,
-        entries.map((e) => ({
-          ...e,
-          displayName: resolveDisplayNameFallback(e.playerId),
-          photoUrl: null,
-        })),
+        entries
+          .filter((e) => e.playerId !== 'sheets:unknown')
+          .map((e) => ({
+            ...e,
+            displayName: resolveDisplayNameFallback(e.playerId),
+            photoUrl: null,
+          })),
       ]),
     );
     return res.json({ version: 2, groups });

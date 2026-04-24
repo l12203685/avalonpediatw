@@ -332,21 +332,91 @@ function parseRoleCode(code: string): RolesV2 {
 // Player seats
 // ---------------------------------------------------------------------------
 
+/**
+ * 「未知玩家」偽 UUID：當 Sheets 牌譜有座位但沒提供玩家名字時使用。
+ * 同一個 ID 全局共用 — 代表「大部分玩家的總平均」aggregate 玩家
+ * （Edward 2026-04-24 15:27 決策）。排行榜前端 filter 掉，但該局仍納入
+ * 其他已知玩家的戰績統計。
+ */
+export const SHEETS_UNKNOWN_PLAYER_ID = 'sheets:unknown';
+
 function buildPlayerSeats(
   playerNames: string[],
+  activePlayerCount: number,
   playerNameToUid?: (name: string) => string | null,
 ): FixedTenStrings {
   const out: string[] = [];
   for (let i = 0; i < 10; i += 1) {
+    // 超過 activePlayerCount 的座位 → 空字串（不參與）
+    if (i >= activePlayerCount) {
+      out.push('');
+      continue;
+    }
     const name = (playerNames[i] ?? '').trim();
     if (!name) {
-      out.push('');
+      // 位內空名字：Edward 2026-04-24 15:27 決策 — 用全局單一 unknown 偽 UUID。
+      out.push(SHEETS_UNKNOWN_PLAYER_ID);
       continue;
     }
     const uid = playerNameToUid ? playerNameToUid(name) : null;
     out.push(uid && uid.trim() ? uid.trim() : `sheets:${name}`);
   }
   return out.slice(0, 10) as unknown as FixedTenStrings;
+}
+
+/**
+ * 從牌譜 gameText 推導實際參與座位數：掃所有提議行的座位 token，
+ * 取最大座號 = playerCount。這樣即使玩家名字欄全空，遊戲記錄仍可被解析。
+ * 例：`"2458 6+"` → seats [2,4,5,6,8]，max=8。
+ * 與 roleCode 的座位也取 max 以涵蓋未出現在提議中的能力角色。
+ */
+function derivePlayerCountFromGame(
+  lines: string[],
+  roles: RolesV2,
+): number {
+  let maxSeat = 0;
+  for (const line of lines) {
+    if (isQuestLine(line)) continue;
+    if (isLadyLine(line)) {
+      const m = /^([0-9])>([0-9])/.exec(line.trim());
+      if (m) {
+        try {
+          maxSeat = Math.max(maxSeat, charToSeat(m[1]), charToSeat(m[2]));
+        } catch {
+          /* ignore */
+        }
+      }
+      continue;
+    }
+    // 提議行：tokens[0] 是 teamSeats，其後是 anomalies
+    const tokens = line.trim().split(/\s+/);
+    if (tokens.length === 0) continue;
+    try {
+      for (const s of parseSeatToken(tokens[0])) {
+        maxSeat = Math.max(maxSeat, s);
+      }
+      for (let i = 1; i < tokens.length; i += 1) {
+        const anomalies = parseAnomalyToken(tokens[i]);
+        for (const a of anomalies) {
+          maxSeat = Math.max(maxSeat, a.seat);
+        }
+      }
+    } catch {
+      /* ignore malformed line */
+    }
+  }
+  // roleCode 6 座位也納入 max（刺娜德奧派梅）
+  for (const s of [
+    roles.assassin,
+    roles.morgana,
+    roles.mordred,
+    roles.oberon,
+    roles.percival,
+    roles.merlin,
+  ]) {
+    if (typeof s === 'number') maxSeat = Math.max(maxSeat, s);
+  }
+  return maxSeat;
 }
 
 // ---------------------------------------------------------------------------
@@ -434,15 +504,21 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
     lines.push(line);
   }
 
-  const playerCount = playerNames.filter((n) => (n ?? '').trim().length > 0).length;
+  const roles = parseRoleCode(roleCode);
+
+  // Edward 2026-04-24 15:27：playerNames 可能部分/全部空；playerCount 改從牌譜
+  // 資料（提議座位 + roleCode 座位）推導，而非從名字欄個數。名字空 → 走
+  // `sheets:unknown` fallback aggregate 玩家（參與統計但不進排行榜）。
+  const namedCount = playerNames.filter((n) => (n ?? '').trim().length > 0).length;
+  const derivedCount = derivePlayerCountFromGame(lines, roles);
+  const playerCount = Math.max(namedCount, derivedCount);
   if (playerCount < 5 || playerCount > 10) {
-    throw new Error(`Invalid playerCount: ${playerCount} (must be 5..10)`);
+    throw new Error(`Invalid playerCount: ${playerCount} (must be 5..10; named=${namedCount}, derived=${derivedCount})`);
   }
 
   const missions: MissionV2[] = [];
   const ladyChain: LadyLinkV2[] = [];
   const questOutcomes: Array<'blue' | 'red'> = [];
-  const roles = parseRoleCode(roleCode);
 
   let currentRound: 1 | 2 | 3 | 4 | 5 = 1;
   let proposalInRound = 0;
@@ -545,7 +621,7 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
 
   const { winnerCamp, winReason } = deriveWinner(questOutcomes);
 
-  const playerSeats = buildPlayerSeats(playerNames, playerNameToUid);
+  const playerSeats = buildPlayerSeats(playerNames, playerCount, playerNameToUid);
 
   const record: GameRecordV2 = {
     schemaVersion: 2,
@@ -581,6 +657,7 @@ export const __internal = {
   deriveWinner,
   deriveActualCamp,
   buildPlayerSeats,
+  derivePlayerCountFromGame,
   parsePlayedAt,
   isQuestLine,
   isLadyLine,

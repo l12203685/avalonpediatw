@@ -337,6 +337,10 @@ function initAdmin(): void {
         'Set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS.'
     );
   }
+  // Firestore rejects documents that contain explicit `undefined` fields
+  // (e.g. `ladyChain: undefined` when a game had no lake). Enable the global
+  // ignore flag so we can write partial records without manually stripping.
+  admin.firestore().settings({ ignoreUndefinedProperties: true });
 }
 
 async function writeBatch(
@@ -388,9 +392,16 @@ async function writeBatch(
         continue;
       }
       const ref = firestore.collection('games_v2').doc(rec.gameId);
-      batch.set(ref, rec);
-      inBatch += 1;
-      imported += 1;
+      try {
+        batch.set(ref, rec);
+        inBatch += 1;
+        imported += 1;
+      } catch (err) {
+        errors += 1;
+        console.error(
+          `  [set-error] gameId=${rec.gameId} ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
     if (!dryRun && inBatch > 0) {
       try {
@@ -475,13 +486,18 @@ async function main(): Promise<void> {
     : admin.firestore();
 
   if (dryRun) {
-    // Dry-run 只印（不用初始化 firebase）
-    const summary = await writeBatch(
-      { collection: () => ({ doc: () => ({ get: async () => ({ exists: false }) }) }) } as unknown as admin.firestore.Firestore,
-      records,
-      true,
-      pageSize,
-    );
+    // Dry-run 只印（不用初始化 firebase）。stub 需含 `batch()` 因為
+    // writeBatch 無條件呼叫 firestore.batch()；batch.set/commit 留空 noop。
+    const stubFirestore = {
+      collection: () => ({
+        doc: () => ({ get: async () => ({ exists: false }) }),
+      }),
+      batch: () => ({
+        set: () => {},
+        commit: async () => {},
+      }),
+    } as unknown as admin.firestore.Firestore;
+    const summary = await writeBatch(stubFirestore, records, true, pageSize);
     console.log(
       `[v2] DRY-RUN summary: ${summary.imported} would write, ${summary.skipped} skip, ${summary.errors} errors`
     );

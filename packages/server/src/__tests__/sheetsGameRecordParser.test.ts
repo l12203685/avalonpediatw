@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseSheetsGameCell,
+  SHEETS_UNKNOWN_PLAYER_ID,
   __internal,
 } from '../services/sheetsGameRecordParser';
 
@@ -435,5 +436,106 @@ describe('parseSheetsGameCell — Edward 第 2139 場 fixture', () => {
     expect(withUids.playerSeats[0]).toBe('uid-hao-12345');
     expect(withUids.playerSeats[1]).toBe('uid-snow-67890');
     expect(withUids.playerSeats[2]).toBe('sheets:尼克'); // fallback
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edward 2026-04-24 15:27：空玩家名 → sheets:unknown aggregate fallback
+// Google Sheets 2147 場遺留牌譜裡 429 場有空玩家格（位子不知道是誰，但局
+// 本身資料有效）。parser 必須把空名字轉成單一 `sheets:unknown` 偽 UUID，
+// 讓 import 不再 reject 這些局，同時該 aggregate 玩家被排行榜 filter 掉。
+// ---------------------------------------------------------------------------
+
+describe('parseSheetsGameCell — sheets:unknown fallback for empty player names', () => {
+  // 最小 8 人局 fixture：圓滿通過 5 任務（blue 勝）
+  const SIMPLE_8P_TEXT = `138
+ooo
+248
+oox
+358
+ooo
+168
+ooox
+258
+ooo`;
+
+  it('all player names empty → every seat within playerCount becomes sheets:unknown', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: SIMPLE_8P_TEXT,
+      roleCode: '123456', // 8 人局範圍內的 6 個能力角色座號
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 3,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+    });
+    // 牌譜推導 playerCount = 8（max seat 出現在提議中）
+    // 前 8 seat 都 sheets:unknown，後 2 seat 空字串
+    for (let i = 0; i < 8; i += 1) {
+      expect(parsed.playerSeats[i]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    }
+    expect(parsed.playerSeats[8]).toBe('');
+    expect(parsed.playerSeats[9]).toBe('');
+  });
+
+  it('partial empty names → only empty seats become sheets:unknown', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: SIMPLE_8P_TEXT,
+      roleCode: '123456',
+      locationCode: '線瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 4,
+      playerNames: ['阿明', '', '小華', '', 'Dean', '', '', '玲', '', ''],
+    });
+    // 8 人局 — 只前 8 seat 參與
+    expect(parsed.playerSeats[0]).toBe('sheets:阿明');
+    expect(parsed.playerSeats[1]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    expect(parsed.playerSeats[2]).toBe('sheets:小華');
+    expect(parsed.playerSeats[3]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    expect(parsed.playerSeats[4]).toBe('sheets:Dean');
+    expect(parsed.playerSeats[5]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    expect(parsed.playerSeats[6]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    expect(parsed.playerSeats[7]).toBe('sheets:玲');
+    // 超過 activePlayerCount → 空字串
+    expect(parsed.playerSeats[8]).toBe('');
+    expect(parsed.playerSeats[9]).toBe('');
+  });
+
+  it('playerCount derived from game text when names are all empty (no throw)', () => {
+    // 沒有名字就不能從 filter(非空) 取得 playerCount，必須從牌譜推
+    // 這是 429 場 pre-fix 會失敗的關鍵路徑
+    expect(() =>
+      parseSheetsGameCell({
+        gameText: SIMPLE_8P_TEXT,
+        roleCode: '123456',
+        locationCode: '面瓦',
+        playedAtStr: '2026/01/15',
+        gameNumInDay: 5,
+        playerNames: [], // 完全不提供
+      }),
+    ).not.toThrow();
+  });
+
+  it('10 人局 with all empty names → first 10 seats sheets:unknown', () => {
+    const TEN_PLAYER_TEXT = `12580
+ooooo
+13680
+oooxx
+24790
+ooxxx`;
+    const parsed = parseSheetsGameCell({
+      gameText: TEN_PLAYER_TEXT,
+      roleCode: '701498', // 10 人局座號（含 seat 10=0）
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/20',
+      gameNumInDay: 8,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+    });
+    for (let i = 0; i < 10; i += 1) {
+      expect(parsed.playerSeats[i]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    }
+  });
+
+  it('SHEETS_UNKNOWN_PLAYER_ID constant is the canonical string "sheets:unknown"', () => {
+    expect(SHEETS_UNKNOWN_PLAYER_ID).toBe('sheets:unknown');
   });
 });
