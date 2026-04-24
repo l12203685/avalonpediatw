@@ -24,6 +24,7 @@ import PublicChatPanel from '../components/PublicChatPanel';
 import BrandHeader from '../components/BrandHeader';
 import IdentityBadge from '../components/IdentityBadge';
 import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
+import BindingField from '../components/BindingField';
 
 function isGuestPlayer(player: { name?: string; provider?: string } | null | undefined): boolean {
   if (!player) return true;
@@ -58,6 +59,26 @@ export default function HomePage(): JSX.Element {
   // 2026-04-24 #ux-phase-2 (hineko_20260424_1040): auth gate for Row 2
   // buttons that need an identity (個人戰績 / 登入綁定).
   const [authGateTarget, setAuthGateTarget] = useState<AuthGateTarget | null>(null);
+
+  // Phase 3 pendingAction hop: user triggered OAuth from BindingField in
+  // create/join mode — after the reload, drop them back into that mode.
+  // Separate localStorage key space from Phase 2 `pendingGateTarget` so the
+  // two flows don't collide.
+  useEffect(() => {
+    if (isGuestPlayer(currentPlayer)) return; // wait for authed state
+    const action = localStorage.getItem('pendingAction');
+    if (action === 'create' || action === 'join') {
+      setMode(action);
+      localStorage.removeItem('pendingAction');
+      if (action === 'join') {
+        const code = localStorage.getItem('pendingRoomCode');
+        if (code) {
+          setRoomId(code);
+          localStorage.removeItem('pendingRoomCode');
+        }
+      }
+    }
+  }, [currentPlayer]);
 
   // After an OAuth reload, check where the user was heading and route them there.
   // 'chat' branch: user was gated on the lobby chat input — stay on home but
@@ -432,14 +453,13 @@ export default function HomePage(): JSX.Element {
             <div className="space-y-6 bg-zinc-900/70 p-8 rounded-lg border border-zinc-700">
               <h2 className="text-2xl font-bold text-center text-white">{t('home.createRoom')}</h2>
 
-              <input
-                type="text"
-                placeholder={t('home.yourName')}
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleCreateRoom()}
-                autoFocus
-                className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-white"
+              {/* 2026-04-24 #ux-phase-3: replaces the plain name input with an
+                  inline OAuth binding block. Guests can still continue without
+                  binding by expanding the "以訪客繼續" affordance. */}
+              <BindingField
+                mode="create"
+                playerName={playerName}
+                onPlayerNameChange={setPlayerName}
               />
 
               <div className="relative">
@@ -504,13 +524,13 @@ export default function HomePage(): JSX.Element {
             <div className="space-y-6 bg-zinc-900/70 p-8 rounded-lg border border-zinc-700">
               <h2 className="text-2xl font-bold text-center text-white">{t('home.joinRoom')}</h2>
 
-              <input
-                type="text"
-                placeholder={t('home.yourName')}
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                autoFocus
-                className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-white"
+              {/* 2026-04-24 #ux-phase-3: same binding block as create mode. The
+                  room code input stays below — that's the join-specific piece. */}
+              <BindingField
+                mode="join"
+                playerName={playerName}
+                onPlayerNameChange={setPlayerName}
+                roomCode={roomId}
               />
 
               <input
