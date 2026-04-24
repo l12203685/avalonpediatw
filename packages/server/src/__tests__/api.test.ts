@@ -28,10 +28,9 @@ vi.mock('../services/firebase', () => ({
   getAdminFirestore: vi.fn(),
 }));
 
-vi.mock('../middleware/httpAuth', () => ({
-  requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
-  optionalAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
-}));
+// 2026-04-24 #48 cleanup: httpAuth middleware removed (0 production import,
+// only this test mocked it). api.ts uses `resolvePlayerAuth` / `claimAuth`
+// directly — no middleware wrap needed for the /api routes under test here.
 
 // Use a stable mock object so vitest can detect constructor calls
 const mockListRecentGames = vi.fn();

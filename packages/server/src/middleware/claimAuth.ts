@@ -2,10 +2,17 @@
  * HTTP auth middleware for the claim system.
  *
  * Resolves the caller's identity from the `Authorization: Bearer <token>`
- * header supporting the same three token formats used elsewhere in the app:
- *   1. Custom JWT (Discord / Line OAuth) — `sub` is the Supabase UUID
- *   2. Firebase ID token (Google / Email) — `uid` is the Firebase UID
- *   3. Guest JSON `{ uid, displayName }` — anonymous session
+ * header. Since 2026-04-24 (#guest-jwt rollout) the supported formats are:
+ *   1. Server JWT (HS256, Discord / Line OAuth) — `sub` is the Supabase UUID
+ *   2. Firebase ID token (Google / Email) — `uid` is the Firebase UID;
+ *      server resolves the mapped Supabase UUID via
+ *      `getSupabaseIdByFirebaseUid` before stamping `ClaimAuth.uid`
+ *   3. Guest signed JWT (HS256, `provider: 'guest'`) — `sub` is a
+ *      server-minted UUID; `verifyGuestToken` accepts this path
+ *   3a. Legacy guest JSON `{ uid, displayName }` — 3-day grace window
+ *      during #guest-jwt rollout; accepted by `verifyGuestToken` for
+ *      tokens signed before the switchover. After the grace expires the
+ *      JSON path is removed and only signed JWTs succeed.
  *
  * Email resolution falls back to Supabase lookups when the token itself
  * doesn't carry one (Discord tokens do; Line tokens do not).
