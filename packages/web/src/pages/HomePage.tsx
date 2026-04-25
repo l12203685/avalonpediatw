@@ -123,6 +123,22 @@ export default function HomePage(): JSX.Element {
       .catch(() => setIsAdminUser(false));
   }, [currentPlayer]);
 
+  // Bug fix (Edward 2026-04-25): logged-in user clicked 建立房間 and saw
+  // 「請輸入你的名字」 toast even though @Edward was bound. Root cause: the
+  // playerName state seeds from currentPlayer at mount-time only, so if
+  // auth resolves AFTER mount (typical socket flow) playerName stays ''.
+  // BindingField hides the name input in the locked state, leaving no UI
+  // to populate it. Sync playerName whenever currentPlayer.name shows up
+  // and our local state is still empty / lagging the displayName.
+  useEffect(() => {
+    if (isGuestPlayer(currentPlayer)) return;
+    const authedName = currentPlayer?.name?.trim();
+    if (!authedName) return;
+    if (!playerName.trim()) {
+      setPlayerName(authedName);
+    }
+  }, [currentPlayer, playerName]);
+
   // Auto-populate (and auto-join) from ?room=XXXXXXXX invite link
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -163,21 +179,34 @@ export default function HomePage(): JSX.Element {
     };
   }, []);
 
+  // Effective name resolver: logged-in user → currentPlayer.name (displayName);
+  // guest → the form input. This lets us skip the「請輸入你的名字」toast for
+  // bound users whose BindingField renders the locked state with no input.
+  const resolveEffectiveName = (): string => {
+    const formName = playerName.trim();
+    if (formName) return formName;
+    if (!isGuestPlayer(currentPlayer)) {
+      return currentPlayer?.name?.trim() ?? '';
+    }
+    return '';
+  };
+
   const handleCreateRoom = (): void => {
-    if (!playerName.trim()) {
+    const effectiveName = resolveEffectiveName();
+    if (!effectiveName) {
       addToast(t('home.enterYourName'), 'info');
       return;
     }
 
     // Preserve Firebase UID — server uses uid as player ID
     if (currentPlayer) {
-      setCurrentPlayer({ ...currentPlayer, name: playerName });
+      setCurrentPlayer({ ...currentPlayer, name: effectiveName });
     }
 
-    localStorage.setItem('avalon_player_name', playerName.trim());
+    localStorage.setItem('avalon_player_name', effectiveName);
     try {
       createRoom(
-        playerName,
+        effectiveName,
         roomPassword.trim() || undefined,
         timerMultiplier,
         casualMatch,
@@ -189,7 +218,8 @@ export default function HomePage(): JSX.Element {
   };
 
   const handleJoinRoom = (): void => {
-    if (!playerName.trim()) {
+    const effectiveName = resolveEffectiveName();
+    if (!effectiveName) {
       addToast(t('home.enterYourName'), 'info');
       return;
     }
@@ -201,10 +231,10 @@ export default function HomePage(): JSX.Element {
 
     // Preserve Firebase UID — server uses uid as player ID
     if (currentPlayer) {
-      setCurrentPlayer({ ...currentPlayer, name: playerName });
+      setCurrentPlayer({ ...currentPlayer, name: effectiveName });
     }
 
-    localStorage.setItem('avalon_player_name', playerName.trim());
+    localStorage.setItem('avalon_player_name', effectiveName);
     try {
       joinRoom(roomId, joinPassword.trim() || undefined);
       setGameState('lobby');
