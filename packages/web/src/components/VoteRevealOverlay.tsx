@@ -128,7 +128,7 @@ export default function VoteRevealOverlay({
                   : <ThumbsDown size={10} className="text-red-400 flex-shrink-0" />
                 }
                 <span className="truncate max-w-[5rem]">
-                  {displaySeatNumber(seatOf(playerId, room.players))}家
+                  {displaySeatNumber(seatOf(playerId, room.players))}
                 </span>
               </span>
             );

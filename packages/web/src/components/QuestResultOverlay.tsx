@@ -104,7 +104,7 @@ export default function QuestResultOverlay({
                   key={player.id}
                   className="bg-gray-800/80 border border-gray-600 text-gray-200 text-[11px] px-2 py-0.5 rounded-full font-semibold"
                 >
-                  {displaySeatNumber(seat)}家
+                  {displaySeatNumber(seat)}
                 </span>
               );
             })}

@@ -36,16 +36,17 @@ export function seatOf(
 }
 
 /**
- * Convenience: renders the "<seat>家" suffix label for a team-member list entry.
+ * Convenience: renders the seat-number label for a team-member list entry.
  * Returns an empty string for unknown players so the caller can safely
  * concatenate without guards.
  *
- * Edward 2026-04-25 16:00: 全站座號改用 Sheets/牌桌慣用「N家」格式（東/南/西/北家延伸）。
+ * Edward 2026-04-25 21:59 撤回「N家」格式 — 改回純數字 (1, 2, ..., 9, 0)。
+ * 牌桌口語仍說「N家」, 但 UI 顯示走精簡風, 座位號就是一個 digit。
  */
 export function seatPrefix(
   playerId: string,
   players: Record<string, unknown>,
 ): string {
   const seat = seatOf(playerId, players);
-  return seat === 0 ? '' : `${displaySeatNumber(seat)}家`;
+  return seat === 0 ? '' : displaySeatNumber(seat);
 }
