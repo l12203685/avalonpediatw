@@ -27,6 +27,25 @@ const ROLE_OPTION_INFO: Record<string, { label: string; description: string; pai
   oberon:   { label: '奧伯倫',   description: '奧伯倫對邪惡陣營隱形（孤獨邪惡）' },
 };
 
+// (Edward 2026-04-25 mockup match) Always-show role chip ribbon — every
+// canonical role gets a chip, brightness encodes "appears in this game?"
+// based on player count + role-option toggles + 9-variant flag. Bright =
+// active; dim = disabled / not in this player count.
+const ROLE_LABEL: Record<string, string> = {
+  merlin: '梅林',
+  percival: '派西維爾',
+  loyal: '忠臣',
+  assassin: '刺客',
+  morgana: '莫甘娜',
+  mordred: '莫德雷德',
+  oberon: '奧伯倫',
+};
+const GOOD_ROLES = new Set(['merlin', 'percival', 'loyal']);
+const ALL_ROLES_FOR_CHIPS: string[] = [
+  'merlin', 'percival', 'loyal',
+  'assassin', 'morgana', 'mordred', 'oberon',
+];
+
 export default function LobbyPage(): JSX.Element {
   const { room, currentPlayer, setGameState, addToast } = useGameStore();
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
@@ -112,6 +131,37 @@ export default function LobbyPage(): JSX.Element {
       const t = sizes[0]; sizes[0] = sizes[1]; sizes[1] = t;
     }
     return sizes;
+  })();
+
+  // (Edward 2026-04-25) Compute which canonical roles are "active" in the
+  // current configuration so the role-chip ribbon can light/dim them. Active =
+  // role will appear in `effectiveRoles` once the game starts.
+  const activeRolesSet: Set<string> = (() => {
+    const set = new Set<string>();
+    if (!previewConfig) return set;
+    // Base roster (already includes merlin/assassin always; loyal* fills rest)
+    let baseRoster: string[];
+    if (is9Variant) {
+      baseRoster = ['merlin', 'percival', 'loyal', 'loyal', 'loyal',
+                    'assassin', 'morgana', 'mordred', 'oberon'];
+    } else {
+      baseRoster = (previewConfig.roles as unknown as string[]).slice();
+      const is9StandardWithOberon = playerList.length === 9
+        && Boolean(room.roleOptions?.oberon);
+      if (is9StandardWithOberon) {
+        const loyalIdx = baseRoster.indexOf('loyal');
+        if (loyalIdx !== -1) baseRoster[loyalIdx] = 'oberon';
+      }
+    }
+    // Apply opt-out logic — same rules as previous f611406a-removed snippet.
+    for (const r of baseRoster) {
+      if (r === 'percival' && !room.roleOptions?.percival) continue;
+      if (r === 'morgana'  && !room.roleOptions?.morgana)  continue;
+      if (r === 'oberon'   && !room.roleOptions?.oberon && !is9Variant) continue;
+      if (r === 'mordred'  && !room.roleOptions?.mordred)  continue;
+      set.add(r);
+    }
+    return set;
   })();
 
   const handleToggleRole = (key: string) => {
@@ -237,13 +287,13 @@ export default function LobbyPage(): JSX.Element {
       )}
       <div className="relative z-10 max-w-7xl mx-auto space-y-3">
         {/* ────────── Header band (Edward 2026-04-25 mockup match) ────────── */}
-        {/* Left: 房主 label · Right: AI/casual tag + room code (4-char block, copy/share inline) */}
+        {/* Left: 房主 label (room name dropped — 房主 + 4-碼房號 already represent the game) */}
+        {/* Right: AI/casual tag · 4-碼房號 · 加入 AI · 離房 · 密碼 */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-yellow-900/30 border border-yellow-700/60 text-yellow-200 text-xs sm:text-sm font-semibold">
               房主：{room.players[room.host]?.name ?? '—'}
             </span>
-            <h1 className="text-base sm:text-lg font-bold text-white truncate max-w-[40vw]" title={room.name}>{room.name}</h1>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -269,6 +319,31 @@ export default function LobbyPage(): JSX.Element {
                 {copied === 'link' ? <Check size={13} className="text-amber-400" /> : <Link size={13} />}
               </button>
             </div>
+
+            {/* 加入 AI — host only, lobby state, room not yet full */}
+            {isHost && room.state === 'lobby' && playerList.length < room.maxPlayers && (
+              <button
+                type="button"
+                onClick={() => addBot(room.id, 'hard')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold bg-emerald-900/40 border-emerald-600 text-emerald-200 hover:bg-emerald-900/60 hover:text-white transition-colors"
+                title="加入 AI"
+                data-testid="lobby-add-ai-button"
+              >
+                加入 AI
+              </button>
+            )}
+
+            {/* 離房 — everyone (host = 解散/移交; non-host = 離開) */}
+            <button
+              type="button"
+              onClick={() => leaveRoom(room.id)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold bg-gray-800/40 border-gray-700 text-gray-300 hover:bg-red-900/30 hover:border-red-700 hover:text-red-300 transition-colors"
+              title={isHost ? '解散房間 / 移交房主' : '離開房間'}
+              data-testid="lobby-leave-button"
+            >
+              <LogOut size={11} />
+              離房
+            </button>
 
             {/* Password / privacy toggle (host only) */}
             {isHost && (
@@ -328,7 +403,7 @@ export default function LobbyPage(): JSX.Element {
         {/* ────────── Compact Settings Block (host-driven) ────────── */}
         {previewConfig && (
           <div className="bg-avalon-card/30 border border-gray-700 rounded-xl px-3 py-3 space-y-3">
-            {/* Special roles — horizontal toggle row */}
+            {/* Special roles — always-show toggle row (亮 = 啟用 / 暗 = 停用) */}
             {isHost && (
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">特殊角色</p>
@@ -345,9 +420,11 @@ export default function LobbyPage(): JSX.Element {
                           onClick={() => handleToggleRole(key)}
                           className={`px-2.5 py-1 rounded-md border text-[11px] sm:text-xs font-semibold transition-all ${
                             enabled
-                              ? 'bg-amber-900/40 border-amber-600 text-amber-200'
-                              : 'bg-gray-800/40 border-gray-700 text-gray-500 hover:border-gray-500'
+                              ? 'bg-amber-900/40 border-amber-500 text-amber-200 shadow-sm shadow-amber-500/30'
+                              : 'bg-gray-800/30 border-transparent text-gray-500 opacity-50 hover:opacity-80 hover:border-gray-600'
                           }`}
+                          aria-pressed={enabled}
+                          title={info.description}
                         >
                           {label}
                         </button>
@@ -414,20 +491,7 @@ export default function LobbyPage(): JSX.Element {
                 )}
               </div>
 
-              {/* Bot adder (host only) — Edward 2026-04-25: collapsed to a single
-                  "加入 AI" button. Difficulty levels can return later if needed. */}
-              {isHost && playerList.length < room.maxPlayers && (
-                <div className="inline-flex items-center gap-1 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => addBot(room.id, 'hard')}
-                    className="px-2 py-0.5 rounded border font-semibold text-[11px] transition-all bg-black hover:bg-gray-900 border-gray-700 text-white"
-                    title="加入 AI"
-                  >
-                    加入 AI
-                  </button>
-                </div>
-              )}
+              {/* Bot adder moved to header band (right side) Edward 2026-04-25 */}
             </div>
 
             {/* Quest sizes preview — single-line ribbon (Edward 2026-04-25: nowrap so R1-R5 always inline) */}
@@ -451,10 +515,33 @@ export default function LobbyPage(): JSX.Element {
               </div>
             )}
 
-            {/* Role preview removed (Edward 2026-04-25 mockup match) — chips were noise;
-                player counts/quest sizes already convey the table size; specific role
-                breakdown surfaces during the reveal phase. Kept goodRoles/evilRoles
-                derivations live so future re-introduction (collapse) is a one-liner. */}
+            {/* (Edward 2026-04-25 二修) 角色配置 ribbon — always show every
+                canonical role; brightness encodes whether the role appears in
+                this game given current player count + role-option toggles +
+                9-variant flag. 亮 = 該局會出現 / 暗 = 不會出現。 */}
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1 flex-shrink-0">角色配置</span>
+              {ALL_ROLES_FOR_CHIPS.map(role => {
+                const isActive = activeRolesSet.has(role);
+                const isGood = GOOD_ROLES.has(role);
+                const baseColor = isGood
+                  ? 'bg-blue-900/40 border-blue-600 text-blue-200'
+                  : 'bg-red-900/40 border-red-600 text-red-200';
+                return (
+                  <span
+                    key={role}
+                    className={`px-2 py-0.5 rounded-full font-semibold border whitespace-nowrap transition-all ${
+                      isActive
+                        ? `${baseColor} shadow-sm`
+                        : 'bg-gray-800/30 border-transparent text-gray-500 opacity-50'
+                    }`}
+                    title={isActive ? `${ROLE_LABEL[role]} · 該局會出現` : `${ROLE_LABEL[role]} · 該局不會出現`}
+                  >
+                    {ROLE_LABEL[role] ?? role}
+                  </span>
+                );
+              })}
+            </div>
 
             {/* More rules collapse (host only) */}
             {isHost && (
