@@ -1644,8 +1644,26 @@ export class GameServer {
                 return;
               }
               this.broadcastRoomState(roomId, updated);
-              // After last bot votes, check if all humans have voted too
-              if (Object.keys(updated.votes).length === Object.keys(updated.players).length) {
+              // Edward 2026-04-25 P0「輪到我投任務成功 就斷線」 — bot-as-last-
+              // team-voter stuck-quest fix.
+              //
+              // Original guard: `votes.length === playerCount` → schedule
+              // next bots. But when this bot's submitVote completed the
+              // tally, `engine.resolveVoting()` synchronously fired and
+              // cleared `room.votes = {}` plus advanced state to 'quest'
+              // (or 'voting' next round / 'ended'). So `votes.length === 0`,
+              // the guard never matched, and `scheduleBotActions` was NOT
+              // queued for the new phase. Quest then sat idle until the 30s
+              // QUEST_TIMEOUT auto-success fired — UX-wise reads as "卡住 /
+              // 斷線" because a player on the quest team sees their UI hang
+              // for 30 s before the next phase appears.
+              //
+              // Fix: also trigger scheduleBotActions when the engine state
+              // moved away from 'voting' (resolveVoting fired this tick).
+              // Original "all players voted" guard preserved so non-resolve
+              // ticks still chain into late-arriving bot ballots correctly.
+              if (updated.state !== 'voting'
+                  || Object.keys(updated.votes).length === Object.keys(updated.players).length) {
                 this.scheduleBotActions(roomId);
               }
             }, stagger);
