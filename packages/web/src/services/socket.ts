@@ -271,7 +271,7 @@ export async function initializeSocket(token: string): Promise<void> {
   });
 
   socket.on('game:kicked', (_roomId: string) => {
-    store.addToast('你已被房主移出房間 (You were kicked from the room)', 'error');
+    store.addToast('你已被房主移出房間', 'error');
     store.setRoom(null);
     store.setGameState('home');
   });
@@ -483,4 +483,15 @@ export function setRoleOptions(roomId: string, options: Record<string, unknown>)
 export function toggleReady(roomId: string, playerId: string): void {
   const socket = getSocket();
   socket.emit('game:toggle-ready', roomId, playerId);
+}
+
+/**
+ * Host-only adjustment of the room's thinking-time multiplier while the
+ * room is still in the `lobby` state (Edward 2026-04-25:「思考時間在遊戲
+ * 開始前可以調整」). Server rejects the event once the game has started,
+ * so the engine's per-phase timer reads stay locked once running.
+ */
+export function setTimerMultiplier(roomId: string, multiplier: TimerMultiplier): void {
+  const socket = getSocket();
+  socket.emit('game:set-timer-multiplier', roomId, multiplier);
 }

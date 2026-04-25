@@ -66,7 +66,7 @@ export default function OverviewPanel(): JSX.Element {
   const outcomeData = [
     { name: '三紅 (3 Failed Missions)', value: overview.outcomeBreakdown.threeRedPct, fill: '#ef4444' },
     { name: '三藍梅活 (Blue Win, Merlin Alive)', value: overview.outcomeBreakdown.threeBlueAlivePct, fill: '#3b82f6' },
-    { name: '三藍梅死 (Merlin Killed)', value: overview.outcomeBreakdown.threeBlueDeadPct, fill: '#f59e0b' },
+    { name: '三藍梅死', value: overview.outcomeBreakdown.threeBlueDeadPct, fill: '#f59e0b' },
   ];
 
   // Seat position win rates.
@@ -90,13 +90,13 @@ export default function OverviewPanel(): JSX.Element {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={Swords}
-          label="總場次 (Total Games)"
+          label="總場次"
           value={overview.totalGames.toLocaleString()}
           color="border-blue-700/50 text-blue-300"
         />
         <StatCard
           icon={Users}
-          label="玩家數 (Players)"
+          label="玩家數"
           value={overview.totalPlayers.toString()}
           color="border-purple-700/50 text-purple-300"
         />
@@ -119,7 +119,7 @@ export default function OverviewPanel(): JSX.Element {
       {/* Fix #10: Three-way outcome pie + Fix #8: Theory ranking */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-gray-400 mb-3">勝負結構 (Game Outcome Breakdown)</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-3">勝負結構</h3>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie
@@ -177,7 +177,7 @@ export default function OverviewPanel(): JSX.Element {
 
       {/* Top players by games played */}
       <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-gray-400 mb-3">場次排行 (Most Games Played)</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">場次排行</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={overview.topPlayersByGames.slice(0, 10)}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
@@ -194,7 +194,7 @@ export default function OverviewPanel(): JSX.Element {
       {/* Seat position win rates by role */}
       {seatData.length > 0 && (
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-gray-400 mb-3">位置勝率 (Win Rate by Seat Position)</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-3">位置勝率</h3>
           <p className="text-[10px] text-gray-600 mb-2">各位置整體勝率及角色勝率分布</p>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={seatData}>

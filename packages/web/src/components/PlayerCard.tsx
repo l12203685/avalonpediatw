@@ -5,14 +5,14 @@ import { displaySeatNumber } from '../utils/seatDisplay';
 import RoleAvatar from './RoleAvatar';
 
 const ROLE_NAMES: Record<string, string> = {
-  merlin:   '梅林 (Merlin)',
-  percival: '派西維爾 (Percival)',
-  loyal:    '忠臣 (Loyal Servant)',
-  assassin: '刺客 (Assassin)',
-  morgana:  '莫甘娜 (Morgana)',
-  oberon:   '奧伯倫 (Oberon)',
-  mordred:  '莫德雷德 (Mordred)',
-  minion:   '爪牙 (Minion)',
+  merlin:   '梅林',
+  percival: '派西維爾',
+  loyal:    '忠臣',
+  assassin: '刺客',
+  morgana:  '莫甘娜',
+  oberon:   '奧伯倫',
+  mordred:  '莫德雷德',
+  minion:   '爪牙',
 };
 
 interface PlayerCardProps {

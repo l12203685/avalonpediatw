@@ -39,7 +39,7 @@ export default function WikiPage(): JSX.Element {
         <div className="max-w-6xl mx-auto text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
             <BookOpen size={32} className="text-yellow-400" />
-            <h1 className="text-4xl md:text-5xl font-bold text-white">Avalon 百科 (Wiki)</h1>
+            <h1 className="text-4xl md:text-5xl font-bold text-white">Avalon 百科</h1>
           </div>
           <p className="text-gray-300 text-lg mb-6">
             完整的遊戲規則、角色指南、策略分析、實戰直播與數據回放 (Game rules, role guides, strategy analysis, live streams and analysis replays)
@@ -52,21 +52,21 @@ export default function WikiPage(): JSX.Element {
               className="bg-avalon-card/50 border border-gray-600 rounded-lg p-4"
             >
               <div className="text-2xl font-bold text-yellow-400">6</div>
-              <div className="text-gray-400 text-sm">個文章分類 (categories)</div>
+              <div className="text-gray-400 text-sm">個文章分類</div>
             </motion.div>
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="bg-avalon-card/50 border border-gray-600 rounded-lg p-4"
             >
               <div className="text-2xl font-bold text-yellow-400">140+</div>
-              <div className="text-gray-400 text-sm">篇詳細文章 (articles)</div>
+              <div className="text-gray-400 text-sm">篇詳細文章</div>
             </motion.div>
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="bg-avalon-card/50 border border-gray-600 rounded-lg p-4"
             >
               <div className="text-2xl font-bold text-yellow-400">{TOTAL_UNIQUE_GAMES.toLocaleString()}</div>
-              <div className="text-gray-400 text-sm">局實戰數據 (Games Analyzed)</div>
+              <div className="text-gray-400 text-sm">局實戰數據</div>
             </motion.div>
           </div>
         </div>
@@ -84,7 +84,7 @@ export default function WikiPage(): JSX.Element {
             }`}
           >
             <BookOpen size={18} />
-            阿瓦隆百科文章 (Articles)
+            阿瓦隆百科文章
           </button>
           <button
             onClick={() => setActiveTab('streams')}
@@ -161,7 +161,7 @@ export default function WikiPage(): JSX.Element {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-xl font-bold text-white mb-1">
-                      完整數據分析 (Full Game Analysis) →
+                      完整數據分析 →
                     </h3>
                     <p className="text-sm text-gray-300">
                       {TOTAL_UNIQUE_GAMES.toLocaleString()} 局實戰：總覽 / 玩家雷達 / 座位 / 默契 / 任務 / 回合 / 湖中女神 / 隊長分析
@@ -186,7 +186,7 @@ export default function WikiPage(): JSX.Element {
             <div>
               <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
                 <Users size={24} />
-                社群貢獻 (Community Contribution)
+                社群貢獻
               </h2>
               <p className="text-gray-300 mb-4">
                 幫助改進這個百科！您可以提交新文章或改進現有內容。(Help improve this wiki! You can submit new articles or improve existing content.)
@@ -195,7 +195,7 @@ export default function WikiPage(): JSX.Element {
                 onClick={() => setShowContributeMsg(v => !v)}
                 className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2 px-6 rounded-lg transition-all"
               >
-                提交貢獻 (Submit)
+                提交貢獻
               </button>
               {showContributeMsg && (
                 <p className="text-sm text-yellow-300 mt-2">
@@ -208,10 +208,10 @@ export default function WikiPage(): JSX.Element {
             <div>
               <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
                 <Lightbulb size={24} />
-                遊戲提示 (Game Tips)
+                遊戲提示
               </h2>
               <p className="text-gray-300 mb-4">
-                新手玩家？從「遊戲規則 (Rules)」開始，然後探索「角色指南 (Roles)」以瞭解各個角色！(New player? Start with Rules, then explore the Role Guide!)
+                新手玩家？從「遊戲規則」開始，然後探索「角色指南」以瞭解各個角色！
               </p>
               <button
                 onClick={() => {
@@ -221,7 +221,7 @@ export default function WikiPage(): JSX.Element {
                 }}
                 className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-all"
               >
-                新手指南 (Beginner Guide)
+                新手指南
               </button>
             </div>
           </div>

@@ -220,7 +220,7 @@ export default function RoundsAnalysis(): JSX.Element {
           transition={{ delay: 0.25 }}
           className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
         >
-          <h3 className="text-sm font-bold text-gray-400 mb-1">常見局勢 (Common Game States)</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-1">常見局勢</h3>
           <p className="text-[10px] text-gray-600 mb-3">
             局勢 = 各任務結果序列 (紅=任務失敗, 藍=任務成功), 紅+藍=100%, 僅顯示20場以上且非全紅/全藍
           </p>

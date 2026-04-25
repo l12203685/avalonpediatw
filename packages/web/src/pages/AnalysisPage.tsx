@@ -45,7 +45,7 @@ export default function AnalysisPage(): JSX.Element {
           </motion.button>
           <div>
             <h1 className="text-2xl font-black text-white">
-              數據分析 (Game Analysis)
+              數據分析
             </h1>
             <p className="text-xs text-gray-500">2145+ 局實戰數據 from Google Sheets</p>
           </div>

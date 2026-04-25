@@ -30,7 +30,7 @@ export default function RoleStatsCard({ role }: RoleStatsCardProps): JSX.Element
   const factionColor = isGood ? 'text-blue-400' : 'text-red-400';
   const factionBg = isGood ? 'border-blue-500/40' : 'border-red-500/40';
   const barColor = isGood ? 'bg-blue-500' : 'bg-red-500';
-  const factionLabel = isGood ? '正義方 (Good)' : '邪惡方 (Evil)';
+  const factionLabel = isGood ? '正義方' : '邪惡方';
 
   const breakdown = stats.result_breakdown;
   const totalBreakdown = breakdown['\u4e09\u7d05'] + breakdown['\u4e09\u85cd\u6b7b'] + breakdown['\u4e09\u85cd\u6d3b'];

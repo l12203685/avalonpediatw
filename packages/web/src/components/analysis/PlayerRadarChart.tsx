@@ -102,7 +102,7 @@ export default function PlayerRadarChart(): JSX.Element {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             type="text"
-            placeholder="搜尋玩家 (Search player)..."
+            placeholder="搜尋玩家..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-avalon-card border border-gray-600 rounded-lg pl-8 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
@@ -194,7 +194,7 @@ export default function PlayerRadarChart(): JSX.Element {
 
             {/* Role win rates */}
             <div>
-              <p className="text-xs font-bold text-gray-500 mb-1.5">角色勝率 (Role Win Rates)</p>
+              <p className="text-xs font-bold text-gray-500 mb-1.5">角色勝率</p>
               <div className="space-y-1">
                 {Object.entries(radarData.player.roleWinRates)
                   .filter(([, v]) => v > 0)

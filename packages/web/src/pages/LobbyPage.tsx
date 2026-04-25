@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady, setRoomPassword, startGame } from '../services/socket';
+import { kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady, setRoomPassword, startGame, setTimerMultiplier } from '../services/socket';
 import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown, Lock, Unlock, ArrowLeft, Clock } from 'lucide-react';
-import { AVALON_CONFIG } from '@avalon/shared';
+import { AVALON_CONFIG, TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 
 // Friendly label for the room-level thinking-time multiplier.
 function timerLabel(multiplier: number | null | undefined): string {
@@ -59,7 +59,7 @@ export default function LobbyPage(): JSX.Element {
         {timedOut ? (
           <>
             <p className="text-red-400 font-semibold">
-              連線逾時 — 伺服器未回應房間資料 (Connection timed out)
+              連線逾時 — 伺服器未回應房間資料
             </p>
             <p className="text-sm text-gray-400">
               可能原因：伺服器冷啟動中、網路不穩、或 WebSocket 連線失敗
@@ -69,18 +69,18 @@ export default function LobbyPage(): JSX.Element {
               className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors"
             >
               <ArrowLeft size={16} />
-              返回首頁 (Back to Home)
+              返回首頁
             </button>
           </>
         ) : (
           <>
             <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-400" />
-            <p>連線中... (Connecting to room...)</p>
+            <p>連線中...</p>
             <button
               onClick={() => setGameState('home')}
               className="mt-2 text-sm text-gray-500 hover:text-gray-300 transition-colors underline"
             >
-              取消 (Cancel)
+              取消
             </button>
           </>
         )}
@@ -254,10 +254,10 @@ export default function LobbyPage(): JSX.Element {
                   ? 'bg-amber-700/60 text-amber-300 border border-amber-600'
                   : 'bg-blue-700/60 hover:bg-blue-600/60 text-blue-300 border border-blue-600'
               }`}
-              title="複製邀請連結 (Copy invite link)"
+              title="複製邀請連結"
             >
               {copied === 'link' ? <Check size={14} /> : <Link size={14} />}
-              {copied === 'link' ? '已複製！' : '邀請連結 (Invite Link)'}
+              {copied === 'link' ? '已複製！' : '邀請連結'}
             </button>
           </div>
         </div>
@@ -268,7 +268,7 @@ export default function LobbyPage(): JSX.Element {
             {/* Optional role toggles (host only) */}
             {isHost && (
               <div>
-                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">特殊角色設定 (Role Configuration)</p>
+                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">特殊角色設定</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(Object.keys(ROLE_OPTION_INFO) as (keyof typeof ROLE_OPTION_INFO)[]).map(key => {
                     const info = ROLE_OPTION_INFO[key];
@@ -306,14 +306,14 @@ export default function LobbyPage(): JSX.Element {
             {isHost && (
               <div>
                 <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
-                  進階規則 (Advanced Rules)
+                  進階規則
                 </p>
                 <div className="space-y-2">
                   {/* Lady of the Lake enable + starting seat */}
                   <div className="bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2">
                     <label className="flex items-center justify-between cursor-pointer">
                       <div className="flex-1 pr-3">
-                        <div className="text-sm font-bold text-white">湖中女神 (Lady of the Lake)</div>
+                        <div className="text-sm font-bold text-white">湖中女神</div>
                         <p className="text-xs text-gray-500 leading-tight mt-0.5">
                           任務 2 起輪流互查陣營；可公開宣告或保持沉默
                           {ladyFieldUndefined && ladyDefaultOn && (
@@ -335,13 +335,13 @@ export default function LobbyPage(): JSX.Element {
 
                     {ladyChecked && playerList.length >= 7 && (
                       <div className="mt-2 pt-2 border-t border-gray-700/60">
-                        <p className="text-xs text-gray-500 mb-1.5">起始湖女持有者 (Starting holder)</p>
+                        <p className="text-xs text-gray-500 mb-1.5">起始湖女持有者</p>
                         <select
                           value={(room.roleOptions as unknown as Record<string, string>)?.ladyStart ?? 'random'}
                           onChange={e => handleSelectAdvanced('ladyStart', e.target.value)}
                           className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500"
                         >
-                          <option value="random">隨機 (Random)</option>
+                          <option value="random">隨機</option>
                           <option value="seat0">隊長右手邊 (Seat 0 · Leader's right)</option>
                           {Array.from({ length: playerList.length }, (_, i) => (
                             <option key={i + 1} value={`seat${i + 1}`}>
@@ -367,7 +367,7 @@ export default function LobbyPage(): JSX.Element {
                     aria-expanded={showMoreRules}
                     aria-controls="lobby-more-rules"
                   >
-                    <span>更多規則 (More Rules)</span>
+                    <span>更多規則</span>
                     {showMoreRules ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </button>
 
@@ -394,7 +394,7 @@ export default function LobbyPage(): JSX.Element {
                           Default OFF so vanilla Avalon is unchanged. */}
                       <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer">
                         <div className="flex-1 pr-3">
-                          <div className="text-sm font-bold text-white">奧伯倫必出失敗 (Oberon Must Fail)</div>
+                          <div className="text-sm font-bold text-white">奧伯倫必出失敗</div>
                           <p className="text-xs text-gray-500 leading-tight mt-0.5">
                             開啟後任務階段奧伯倫強制投出失敗票，無論 AI 或真人（介面僅顯示失敗按鈕）
                           </p>
@@ -443,7 +443,7 @@ export default function LobbyPage(): JSX.Element {
                               >
                                 <div className="flex-1 pr-3">
                                   <div className="text-sm font-bold text-white">
-                                    保護局反轉模式 (Inverted Protection)
+                                    保護局反轉模式
                                   </div>
                                   <p className="text-xs text-gray-500 leading-tight mt-0.5">
                                     僅限奧伯倫強制版。第 1/2/3/5 局「恰好 1 張失敗 = 任務失敗」，2+ 張失敗反而成功；第 4 局（保護局）維持原規則
@@ -474,7 +474,7 @@ export default function LobbyPage(): JSX.Element {
             {isHost && (
               <div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">房間密碼 (Room Password)</p>
+                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">房間密碼</p>
                   <button
                     onClick={() => {
                       if (room.isPrivate) {
@@ -525,22 +525,49 @@ export default function LobbyPage(): JSX.Element {
               </div>
             )}
 
-            {/* Thinking-time multiplier (read-only info; host sets it on create) */}
+            {/* Thinking-time multiplier — Edward 2026-04-25:「思考時間在遊戲
+                開始前可以調整」。房主在 lobby 狀態可改；遊戲開始後鎖死
+                （後端 handleSetTimerMultiplier 會拒絕 state !== 'lobby'）。 */}
             <div>
               <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
-                思考時間倍率 (Thinking Time)
+                思考時間倍率
               </p>
-              <div className="inline-flex items-center gap-2 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-1.5">
-                <Clock size={13} className="text-blue-400" />
-                <span className="text-sm text-gray-200 font-semibold">{timerLabel(room.timerConfig?.multiplier)}</span>
-              </div>
+              {isHost && room.state === 'lobby' ? (
+                <div className="flex items-center gap-2">
+                  <Clock size={13} className="text-blue-400 flex-shrink-0" />
+                  <select
+                    value={room.timerConfig?.multiplier === null ? 'null' : String(room.timerConfig?.multiplier ?? 1)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const next: TimerMultiplier = v === 'null' ? null : (Number(v) as TimerMultiplier);
+                      setTimerMultiplier(room.id, next);
+                    }}
+                    className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500"
+                    data-testid="lobby-thinking-time-select"
+                  >
+                    {TIMER_MULTIPLIER_OPTIONS.map(opt => (
+                      <option
+                        key={opt.value === null ? 'null' : String(opt.value)}
+                        value={opt.value === null ? 'null' : String(opt.value)}
+                      >
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-1.5">
+                  <Clock size={13} className="text-blue-400" />
+                  <span className="text-sm text-gray-200 font-semibold">{timerLabel(room.timerConfig?.multiplier)}</span>
+                </div>
+              )}
             </div>
 
             {/* Quest size preview — honours swapR1R2 + 9-variant */}
             {previewQuestSizes.length > 0 && (
               <div>
                 <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
-                  任務人數 (Quest Sizes)
+                  任務人數
                   {room.roleOptions?.swapR1R2 && (
                     <span className="text-amber-400 ml-2 normal-case tracking-normal">· R1/R2 已對調</span>
                   )}
@@ -677,7 +704,7 @@ export default function LobbyPage(): JSX.Element {
                   <button
                     onClick={() => player.isBot ? removeBot(room.id, player.id) : kickPlayer(room.id, player.id)}
                     className="flex-shrink-0 p-1 sm:p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                    title={player.isBot ? `移除機器人 (Remove Bot)` : `踢出 ${player.name} (Kick)`}
+                    title={player.isBot ? `移除機器人` : `踢出 ${player.name}`}
                   >
                     <X size={14} />
                   </button>
@@ -746,7 +773,7 @@ export default function LobbyPage(): JSX.Element {
               }`}
             >
               <Play size={18} />
-              開始遊戲 (Start Game)
+              開始遊戲
             </button>
           </div>
         )}
@@ -762,7 +789,7 @@ export default function LobbyPage(): JSX.Element {
                   : 'bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-blue-900/30 hover:border-blue-600 hover:text-blue-300'
               }`}
             >
-              {isReady ? '✓ 已準備（點擊取消）' : '準備好了 (Ready)'}
+              {isReady ? '✓ 已準備（點擊取消）' : '準備好了'}
             </button>
             <div className="text-center text-gray-500 text-xs sm:text-sm py-1">
               等待房主開始遊戲... (Waiting for host...)
@@ -772,7 +799,7 @@ export default function LobbyPage(): JSX.Element {
               className="w-full flex items-center justify-center gap-2 bg-gray-800/60 hover:bg-red-900/30 border border-gray-600 hover:border-red-600 text-gray-400 hover:text-red-400 font-semibold py-1.5 sm:py-2 px-4 rounded-lg transition-all text-xs sm:text-sm"
             >
               <LogOut size={14} />
-              離開房間 (Leave Room)
+              離開房間
             </button>
           </div>
         )}

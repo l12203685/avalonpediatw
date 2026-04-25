@@ -50,7 +50,7 @@ export default function SeatHeatmap(): JSX.Element {
   if (error || players.length === 0) {
     return (
       <div className="flex items-center justify-center py-20 text-red-400 gap-3">
-        <AlertCircle size={20} /> {error || '無足夠數據 (insufficient data)'}
+        <AlertCircle size={20} /> {error || '無足夠數據'}
       </div>
     );
   }

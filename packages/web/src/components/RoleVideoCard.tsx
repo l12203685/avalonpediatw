@@ -71,7 +71,7 @@ export default function RoleVideoCard({ video }: RoleVideoCardProps): JSX.Elemen
           <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
             <Play size={22} className="text-gray-500 ml-0.5" />
           </div>
-          <p className="text-gray-400 text-sm">影片即將上線 (Video coming soon)</p>
+          <p className="text-gray-400 text-sm">影片即將上線</p>
           <p className="text-gray-600 text-xs max-w-[200px]">
             短影音將於 R2 儲存桶建立後啟用 (Available after R2 bucket setup)
           </p>

@@ -31,12 +31,12 @@ interface GameBoardProps {
 }
 
 const STATE_LABELS: Record<string, string> = {
-  lobby:            '等待中 (Lobby)',
-  voting:           '投票中 (Voting)',
-  quest:            '任務中 (Quest)',
-  lady_of_the_lake: '湖中女神 (Lady)',
-  discussion:       '刺殺 (Assassination)',
-  ended:            '結束 (Ended)',
+  lobby:            '等待中',
+  voting:           '投票中',
+  quest:            '任務中',
+  lady_of_the_lake: '湖中女神',
+  discussion:       '刺殺',
+  ended:            '結束',
 };
 
 /**

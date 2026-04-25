@@ -24,7 +24,7 @@ export interface RoleInfo {
 
 export const ROLE_INFO: Record<Role, RoleInfo> = {
   merlin: {
-    name: '梅林 (Merlin)',
+    name: '梅林',
     icon: '🧙',
     team: 'good',
     color: 'text-blue-300',
@@ -34,7 +34,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     knowledge: '你能看到所有邪惡方成員(除了奧伯倫)。小心刺客的注目!',
   },
   percival: {
-    name: '派西維爾 (Percival)',
+    name: '派西維爾',
     icon: '🛡️',
     team: 'good',
     color: 'text-cyan-300',
@@ -44,7 +44,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     knowledge: '你能看到梅林(及莫甘娜),但無法分辨誰是真正的梅林。',
   },
   loyal: {
-    name: '忠臣 (Loyal Servant)',
+    name: '忠臣',
     icon: '⚔️',
     team: 'good',
     color: 'text-indigo-300',
@@ -54,7 +54,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     knowledge: '你沒有額外資訊。觀察其他玩家的行為來找出邪惡方!',
   },
   assassin: {
-    name: '刺客 (Assassin)',
+    name: '刺客',
     icon: '🗡️',
     team: 'evil',
     color: 'text-red-300',
@@ -64,7 +64,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     knowledge: '你知道隊友的身分。遊戲結束時,猜出梅林並刺殺他!',
   },
   morgana: {
-    name: '莫甘娜 (Morgana)',
+    name: '莫甘娜',
     icon: '👑',
     team: 'evil',
     color: 'text-purple-300',
@@ -74,7 +74,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     knowledge: '你知道邪惡方隊友。派西維爾眼中,你看起來像梅林。',
   },
   oberon: {
-    name: '奧伯倫 (Oberon)',
+    name: '奧伯倫',
     icon: '👻',
     team: 'evil',
     color: 'text-gray-300',
@@ -84,7 +84,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     knowledge: '你不知道其他邪惡方的身分,他們也不知道你。獨自行動,製造混亂。',
   },
   mordred: {
-    name: '莫德雷德 (Mordred)',
+    name: '莫德雷德',
     icon: '🦹',
     team: 'evil',
     color: 'text-orange-300',
@@ -94,7 +94,7 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
     knowledge: '你知道邪惡方隊友的身分。梅林無法察覺你——善加利用這個優勢!',
   },
   minion: {
-    name: '爪牙 (Minion)',
+    name: '爪牙',
     icon: '😈',
     team: 'evil',
     color: 'text-red-300',

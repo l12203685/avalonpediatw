@@ -36,7 +36,7 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-700/30 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-gray-300">歷史紀錄 (Round History)</span>
+          <span className="text-sm font-bold text-gray-300">歷史紀錄</span>
           <span className="text-xs text-gray-500">
             {questHistory.length} 輪任務・{voteHistory.length} 次投票
           </span>

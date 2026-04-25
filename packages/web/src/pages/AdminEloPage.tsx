@@ -191,7 +191,7 @@ export default function AdminEloPage(): JSX.Element {
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-gray-700/50">
-                  <span className="text-gray-400">外白內黑 (OWIB)</span>
+                  <span className="text-gray-400">外白內黑</span>
                   <span className="text-gray-200 font-mono">
                     {config.attributionWeights.outerWhiteInnerBlack.toFixed(1)}
                   </span>

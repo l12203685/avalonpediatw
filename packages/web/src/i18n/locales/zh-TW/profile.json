@@ -1,6 +1,6 @@
 {
   "title": "個人資訊",
-  "headerTitle": "個人資料 (Profile)",
+  "headerTitle": "個人資料",
   "matchRecords": "戰績",
   "recentGames": "近期遊戲",
   "winRate": "勝率",
@@ -75,13 +75,13 @@
   "stats": {
     "winsLabel": "勝場",
     "lossesLabel": "敗場",
-    "teamWinRates": "陣營勝率 (Team Win Rates)",
+    "teamWinRates": "陣營勝率",
     "recentGamesSuffix": "— 近 {{count}} 局",
     "good": "⚔️ 正義方",
     "evil": "👹 邪惡方",
     "eloTrend": "ELO 趨勢 (近 {{count}} 局)",
-    "roleWinRates": "角色勝率 (Role Win Rates)",
-    "playerCountWinRates": "人數勝率 (Win Rate by Player Count)",
+    "roleWinRates": "角色勝率",
+    "playerCountWinRates": "人數勝率",
     "playersCount": "{{count}} 人局",
     "recentNGames": "最近 {{count}} 局"
   },
@@ -106,9 +106,9 @@
     "loss": "🔴 落敗",
     "legacyNote": "此局為牌譜記錄功能上線前的舊局，僅顯示基本戰績",
     "noData": "此局無紀錄資料",
-    "questResults": "任務結果 (Quest Results)",
-    "winnerEvil": "🔴 邪惡方獲勝 (Evil Wins)",
-    "winnerGood": "🔵 正義方獲勝 (Good Wins)",
+    "questResults": "任務結果",
+    "winnerEvil": "🔴 邪惡方獲勝",
+    "winnerGood": "🔵 正義方獲勝",
     "questSuccessChar": "藍",
     "questFailChar": "紅"
   },

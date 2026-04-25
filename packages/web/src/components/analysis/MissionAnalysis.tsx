@@ -91,7 +91,7 @@ export default function MissionAnalysis(): JSX.Element {
         animate={{ opacity: 1, y: 0 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">任務通過率 (Mission Pass Rate by Round)</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">任務通過率</h3>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={passRateData}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
@@ -115,7 +115,7 @@ export default function MissionAnalysis(): JSX.Element {
         transition={{ delay: 0.1 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">失敗球分布 (Fail Card Distribution %)</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">失敗球分布</h3>
         <p className="text-[10px] text-gray-600 mb-2">每次任務中出現的失敗球(黑球)數量分布</p>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={outcomeData}>
@@ -141,15 +141,15 @@ export default function MissionAnalysis(): JSX.Element {
         transition={{ delay: 0.2 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-1">任務結果與最終勝負關聯 (Mission Outcome vs Game Result)</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-1">任務結果與最終勝負關聯</h3>
         <p className="text-[10px] text-gray-600 mb-3">各任務通過/失敗後, 最終藍方勝 vs 紅方勝的次數與比例 (任務5省略, 必為100%)</p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-700">
                 <th rowSpan={2} className="text-left text-gray-500 py-2 px-2">任務</th>
-                <th colSpan={3} className="text-center text-green-400 py-1 px-2 border-b border-gray-700">任務通過 (Pass)</th>
-                <th colSpan={3} className="text-center text-red-400 py-1 px-2 border-b border-gray-700">任務失敗 (Fail)</th>
+                <th colSpan={3} className="text-center text-green-400 py-1 px-2 border-b border-gray-700">任務通過</th>
+                <th colSpan={3} className="text-center text-red-400 py-1 px-2 border-b border-gray-700">任務失敗</th>
               </tr>
               <tr className="border-b border-gray-700">
                 <th className="text-center text-blue-400 py-1 px-2">藍方勝</th>

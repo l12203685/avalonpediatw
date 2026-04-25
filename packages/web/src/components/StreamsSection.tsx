@@ -136,7 +136,7 @@ export default function StreamsSection(): JSX.Element {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-2">
           <Youtube size={26} className="text-red-500" />
-          <h2 className="text-2xl font-bold text-white">直播回顧 (Past Live Streams)</h2>
+          <h2 className="text-2xl font-bold text-white">直播回顧</h2>
           <span className="text-xs text-gray-400">· {STREAMS.count} 場</span>
         </div>
         <a
@@ -157,7 +157,7 @@ export default function StreamsSection(): JSX.Element {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜尋直播標題或描述 (Search streams)..."
+            placeholder="搜尋直播標題或描述..."
             className="w-full bg-avalon-card/50 border border-gray-600 rounded-lg pl-10 pr-10 py-2 text-white text-sm placeholder-gray-400 focus:border-yellow-400 focus:outline-none"
           />
           {search && (
@@ -204,14 +204,14 @@ export default function StreamsSection(): JSX.Element {
 
       {/* Grid / Timeline */}
       {filtered.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">沒有符合的直播 (No streams match)</div>
+        <div className="text-center py-12 text-gray-400">沒有符合的直播</div>
       ) : viewMode === 'timeline' ? (
         <div className="space-y-8">
           {bySeason.map(({ season, items }) => (
             <div key={season} className="relative">
               <div className="sticky top-0 z-10 bg-gradient-to-r from-yellow-500/20 to-transparent backdrop-blur-sm border-l-4 border-yellow-500 pl-3 py-2 mb-4">
                 <h3 className="text-lg font-bold text-yellow-300">
-                  {season === 'Other' ? '其他 (Other)' : `賽季 ${season} (Season ${season.slice(1)})`}
+                  {season === 'Other' ? '其他' : `賽季 ${season}`}
                   <span className="text-xs text-gray-400 ml-2 font-normal">· {items.length} 場</span>
                 </h3>
               </div>

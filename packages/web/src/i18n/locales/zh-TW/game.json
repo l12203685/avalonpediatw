@@ -11,15 +11,15 @@
     "unknown": "未知"
   },
   "roleLabel": {
-    "merlin": "梅林 (Merlin)",
-    "percival": "派西維爾 (Percival)",
-    "loyal": "忠臣 (Loyal Servant)",
-    "assassin": "刺客 (Assassin)",
-    "morgana": "莫甘娜 (Morgana)",
-    "mordred": "莫德雷德 (Mordred)",
-    "oberon": "奧伯倫 (Oberon)",
-    "minion": "爪牙 (Minion)",
-    "unknown": "未知 (Unknown)"
+    "merlin": "梅林",
+    "percival": "派西維爾",
+    "loyal": "忠臣",
+    "assassin": "刺客",
+    "morgana": "莫甘娜",
+    "mordred": "莫德雷德",
+    "oberon": "奧伯倫",
+    "minion": "爪牙",
+    "unknown": "未知"
   },
   "phase": {
     "selectTeam": "選擇隊伍",
@@ -30,13 +30,13 @@
     "ended": "遊戲結束"
   },
   "phaseLabel": {
-    "voting": "選隊中 (Team Select)",
-    "votingInProgress": "投票中 (Voting)",
-    "quest": "任務中 (Quest)",
-    "ladyOfTheLake": "湖中女神 (Lady of the Lake)",
-    "discussion": "刺殺階段 (Assassination)",
-    "ended": "遊戲結束 (Game Over)",
-    "lobby": "等待中 (Lobby)"
+    "voting": "選隊中",
+    "votingInProgress": "投票中",
+    "quest": "任務中",
+    "ladyOfTheLake": "湖中女神",
+    "discussion": "刺殺階段",
+    "ended": "遊戲結束",
+    "lobby": "等待中"
   },
   "vote": {
     "approve": "通過",
@@ -76,19 +76,19 @@
     "title": "Avalon",
     "state": "狀態：",
     "viewRole": "查看角色",
-    "mute": "靜音 (Mute)",
-    "unmute": "開啟音效 (Unmute)"
+    "mute": "靜音",
+    "unmute": "開啟音效"
   },
   "roster": {
     "goodCount": "🔵 正義方 {{count}} 人",
     "evilCount": "🔴 邪惡方 {{count}} 人"
   },
   "connection": {
-    "reconnecting": "正在重新連線… (Reconnecting…)",
-    "disconnected": "已斷線，請檢查網路連線 (Disconnected — check your connection)"
+    "reconnecting": "正在重新連線…",
+    "disconnected": "已斷線，請檢查網路連線"
   },
   "spectator": {
-    "bannerTitle": "👁 觀戰模式 — 角色已隱藏 (Spectating — roles hidden)",
+    "bannerTitle": "👁 觀戰模式 — 角色已隱藏",
     "leave": "離開觀戰",
     "hintVoting": "👁 觀戰中 — 等待玩家投票...",
     "hintQuest": "👁 觀戰中 — 任務隊伍正在行動...",
@@ -96,11 +96,11 @@
     "hintDiscussion": "👁 觀戰中 — 刺客正在選擇目標..."
   },
   "action": {
-    "leaderTurn": "👑 輪到你了！請選擇任務隊伍 (Your turn — select a quest team)",
-    "voteTurn": "🗳️ 輪到你投票！贊成或拒絕此隊伍 (Your turn to vote — approve or reject)",
-    "questTurn": "⚔️ 你在任務隊伍中！請投票成功或失敗 (You are on the quest — vote success or fail)",
-    "ladyTurn": "🔮 你持有湖中女神！選擇一位玩家查看陣營 (You hold the Lady — inspect a player)",
-    "assassinTurn": "🗡️ 你是刺客！選擇目標刺殺梅林 (You are the Assassin — choose your target)"
+    "leaderTurn": "👑 輪到你了！請選擇任務隊伍",
+    "voteTurn": "🗳️ 輪到你投票！贊成或拒絕此隊伍",
+    "questTurn": "⚔️ 你在任務隊伍中！請投票成功或失敗",
+    "ladyTurn": "🔮 你持有湖中女神！選擇一位玩家查看陣營",
+    "assassinTurn": "🗡️ 你是刺客！選擇目標刺殺梅林"
   },
   "currentActor": {
     "leaderLabel": "👑 本輪隊長：{{name}}",
@@ -114,9 +114,9 @@
     "stats": "{{quests}} 輪任務・{{votes}} 次投票",
     "collapsedSummary": "{{quests}} 輪任務・{{votes}} 次投票・點擊展開",
     "expanded": "收合牌譜",
-    "leaderSeat": "隊長座位 (Leader seat)",
-    "resultTooltip": "結果 (Result)",
-    "memoTooltip": "簡碼 (Memo)",
+    "leaderSeat": "隊長座位",
+    "resultTooltip": "結果",
+    "memoTooltip": "簡碼",
     "questLabel": "任務",
     "ladyLabel": "湖",
     "ladyRowLabel": "湖中",
@@ -130,15 +130,15 @@
     "legendLady": "湖中女神"
   },
   "suspicionBoard": {
-    "headerTitle": "嫌疑筆記 (Suspicion Notes)",
+    "headerTitle": "嫌疑筆記",
     "privateLabel": "— 私人記錄",
-    "hint": "點擊循環切換狀態 — 僅你自己可見 (Click to cycle status — visible to you only)",
+    "hint": "點擊循環切換狀態 — 僅你自己可見",
     "statusEvil": "疑似邪惡",
     "statusNeutral": "不確定",
     "statusTrusted": "信任"
   },
   "voteAnalysis": {
-    "title": "📊 投票行為分析 (Vote Analysis)",
+    "title": "📊 投票行為分析",
     "proposalCount": "{{count}} 次提案",
     "colPlayer": "玩家",
     "colRole": "角色",
@@ -154,49 +154,49 @@
   },
   "voteReveal": {
     "roundProposal": "第 {{round}} 關 — 第 {{attempt}} 次提案",
-    "title": "投票結果 (Vote Results)",
-    "approved": "通過 (Approved)",
-    "rejected": "否決 (Rejected)",
+    "title": "投票結果",
+    "approved": "通過",
+    "rejected": "否決",
     "approveRejectCount": "{{approvals}} 贊成 / {{rejections}} 拒絕",
-    "teamLabel": "任務隊伍 (Quest Team)"
+    "teamLabel": "任務隊伍"
   },
   "questResult": {
-    "roundLabel": "第 {{round}} 關任務 (Quest {{round}})",
+    "roundLabel": "第 {{round}} 關任務",
     "success": "任務成功！",
     "successEn": "Quest Succeeded",
     "fail": "任務失敗！",
     "failEn": "Quest Failed",
-    "failCount_one": "{{count}} 張失敗票 ({{count}} fail vote)",
-    "failCount_other": "{{count}} 張失敗票 ({{count}} fail votes)",
+    "failCount_one": "{{count}} 張失敗票",
+    "failCount_other": "{{count}} 張失敗票",
     "teamLabel": "本次任務隊伍："
   },
   "lady": {
-    "title": "🔮 湖中女神 (Lady of the Lake)",
+    "title": "🔮 湖中女神",
     "targetTeamLabel": "<target>{{name}}</target> 的陣營是：",
-    "resultGood": "⚔️ 好人 (Good)",
-    "resultEvil": "👹 邪惡 (Evil)",
-    "pass": "湖中女神將傳遞給此玩家... (The Lady passes to this player...)",
-    "pickTitle": "選擇一位玩家查看其陣營 (Choose a player to inspect their team alignment)",
+    "resultGood": "⚔️ 好人",
+    "resultEvil": "👹 邪惡",
+    "pass": "湖中女神將傳遞給此玩家...",
+    "pickTitle": "選擇一位玩家查看其陣營",
     "waitingDesc": "<holder>{{name}}</holder> 正在使用湖中女神查看一位玩家的陣營...",
-    "waitingNote": "(The Lady holder is inspecting a player's team alignment...)",
-    "declareTitle": "公開宣告 (Public declaration)",
-    "declareGood": "宣告為好人 (Declare Good)",
-    "declareEvil": "宣告為壞人 (Declare Evil)",
-    "declareKeepPrivate": "不宣告=保持私密 (No declaration = keep it private)",
+    "waitingNote": "湖中女神持有者正在查看玩家陣營...",
+    "declareTitle": "公開宣告",
+    "declareGood": "宣告為好人",
+    "declareEvil": "宣告為壞人",
+    "declareKeepPrivate": "不宣告=保持私密",
     "declared": "你已公開宣告：{{claim}}",
-    "skipDeclaration": "不宣告、進入下一輪 (Keep private & continue)"
+    "skipDeclaration": "不宣告、進入下一輪"
   },
   "assassin": {
-    "questHistoryHeader": "任務隊伍歷史 (Quest Team History)",
+    "questHistoryHeader": "任務隊伍歷史",
     "roundPrefix": "R{{round}}:",
     "failBadge": "({{count}}票失敗)",
-    "title": "🗡️ 刺殺梅林 (Assassinate Merlin)",
-    "prompt": "你認為誰是梅林？選擇你的目標 (Who do you think is Merlin? Choose your target)",
+    "title": "🗡️ 刺殺梅林",
+    "prompt": "你認為誰是梅林？選擇你的目標",
     "selectedHint": "已選擇目標，等待結果...",
-    "discussionTitle": "💬 刺殺階段 (Assassination Phase)",
-    "goodWonIntro": "好人贏得了 3 次任務！(Good team won 3 quests!)",
-    "pickingTarget": "刺客正在選擇目標，試圖找出梅林... (The Assassin is choosing a target, trying to find Merlin...)",
-    "warning": "若刺客成功刺殺梅林，邪惡方獲勝！(If the Assassin kills Merlin, Evil wins!)"
+    "discussionTitle": "💬 刺殺階段",
+    "goodWonIntro": "好人贏得了 3 次任務！",
+    "pickingTarget": "刺客正在選擇目標，試圖找出梅林...",
+    "warning": "若刺客成功刺殺梅林，邪惡方獲勝！"
   },
   "ended": {
     "evilWins": "👹 邪惡方獲勝!",
@@ -211,12 +211,12 @@
     "roundFailLabel": "{{count}}張失敗",
     "rolesReveal": "最終角色揭曉:",
     "youLabel": "(你)",
-    "rematch": "再來一局 (Rematch)",
+    "rematch": "再來一局",
     "backHome": "返回首頁"
   },
   "votePanel": {
-    "title": "隊伍提案投票 (Team Vote)",
-    "subtitle": "同意或拒絕此次任務隊伍 (Approve or Reject the proposed team)",
+    "title": "隊伍提案投票",
+    "subtitle": "同意或拒絕此次任務隊伍",
     "questTeamLabel": "本次任務隊伍：",
     "youSuffix": " (你)",
     "votedCount": "已投票：{{voted}}/{{total}}",
@@ -224,34 +224,34 @@
     "allVoted": "所有人已投票！計算結果中…",
     "waitingCount_one": "還有 {{count}} 人尚未投票",
     "waitingCount_other": "還有 {{count}} 人尚未投票",
-    "approveBtn": "贊成 (Approve)",
-    "rejectBtn": "拒絕 (Reject)",
+    "approveBtn": "贊成",
+    "rejectBtn": "拒絕",
     "submitting": "投票中…",
-    "yourVoteApprove": "你的票 (Your vote)：👍 贊成 (Approve)",
-    "yourVoteReject": "你的票 (Your vote)：👎 拒絕 (Reject)",
+    "yourVoteApprove": "你的票：👍 贊成",
+    "yourVoteReject": "你的票：👎 拒絕",
     "waitingOthers": "等待其他玩家投票…",
-    "shortcuts": "快捷鍵 (Shortcuts)：<approve>Y</approve> 贊成・<reject>N</reject> 拒絕",
-    "countdownLabel": "投票倒數 (Vote countdown)"
+    "shortcuts": "快捷鍵：<approve>Y</approve> 贊成・<reject>N</reject> 拒絕",
+    "countdownLabel": "投票倒數"
   },
   "questPanel": {
-    "title": "⚔️ 任務投票 (Quest Vote)",
-    "subtitle": "選擇讓此次任務成功或失敗 (Choose to succeed or fail this quest)",
-    "notInTeamTitle": "⚔️ 任務進行中 (Quest in Progress)",
+    "title": "⚔️ 任務投票",
+    "subtitle": "選擇讓此次任務成功或失敗",
+    "notInTeamTitle": "⚔️ 任務進行中",
     "notInTeamVoted": "隊員已提交：<count>{{voted}}/{{total}}</count>",
-    "notInTeamWaiting": "投票結果將在所有人提交後揭曉… (Results revealed when all votes are in…)",
+    "notInTeamWaiting": "投票結果將在所有人提交後揭曉…",
     "teamLabel": "任務隊伍：",
     "youSuffix": "（你）",
     "unlimitedTimer": "不計時",
-    "successBtn": "任務成功 (Quest Success)",
-    "failBtn": "任務失敗 (Quest Fail)",
+    "successBtn": "任務成功",
+    "failBtn": "任務失敗",
     "submitting": "投票中…",
     "submitted": "✓ 已提交，等待其他隊員投票…",
     "votingCount_one": "只有你在投票…",
     "votingCount_other": "{{count}} 位隊員投票中…",
-    "goodSideHint": "好人陣營：只能投成功 (Good side can only vote success)・快捷鍵 <key>S</key>",
-    "evilSideHint": "快捷鍵 (Shortcuts)：<success>S</success> 成功・<fail>F</fail> 失敗",
-    "oberonMustFailHint": "房規「奧伯倫必出失敗」已啟用 — 你只能投出失敗票 (House rule: Oberon must fail — success button hidden)",
-    "countdownLabel": "任務倒數 (Quest countdown)"
+    "goodSideHint": "好人陣營：只能投成功・快捷鍵 <key>S</key>",
+    "evilSideHint": "快捷鍵：<success>S</success> 成功・<fail>F</fail> 失敗",
+    "oberonMustFailHint": "房規「奧伯倫必出失敗」已啟用 — 你只能投出失敗票",
+    "countdownLabel": "任務倒數"
   },
   "teamSelect": {
     "waitingTitle": "等待隊長選擇",
@@ -260,21 +260,21 @@
     "unknownCount": "?",
     "unlimitedTimer": "⏱ 不計時",
     "timer": "⏱ {{seconds}}s",
-    "title": "👑 選擇任務隊伍 (Select Quest Team)",
-    "subtitle": "你是隊長，請選擇 {{count}} 名隊員執行任務。(You are the Leader — select {{count}} team members for the quest.)",
-    "selectedCount": "已選 (Selected)：<sel>{{selected}}</sel>/<total>{{total}}</total>",
+    "title": "👑 選擇任務隊伍",
+    "subtitle": "你是隊長，請選擇 {{count}} 名隊員執行任務。",
+    "selectedCount": "已選：<sel>{{selected}}</sel>/<total>{{total}}</total>",
     "pickMembersLabel": "選擇隊員：",
     "youSuffix": "（你）",
-    "confirmBtn": "確認任務隊伍 (Confirm Team)",
+    "confirmBtn": "確認任務隊伍",
     "submitting": "提交中…",
-    "teamComplete": "隊伍已選完！點擊確認進行投票。(Team complete! Click confirm to vote.)",
+    "teamComplete": "隊伍已選完！點擊確認進行投票。",
     "moreNeeded_one": "還需選擇 {{count}} 名隊員 ({{count}} more member needed)",
     "moreNeeded_other": "還需選擇 {{count}} 名隊員 ({{count}} more members needed)",
-    "youAreLeaderBanner": "👑 你是本輪隊長 (YOU ARE THE LEADER)",
+    "youAreLeaderBanner": "👑 你是本輪隊長",
     "youAreLeaderInstruction": "請在時間內挑出 {{count}} 名隊員執行任務，逾時系統會自動代選。",
     "timeoutWarning": "⚠ 剩下 {{seconds}} 秒，請盡快選隊！",
     "autoSelectHint": "逾時未選 → 系統自動代選隊員進入投票",
-    "countdownLabel": "組隊倒數 (Team-select countdown)",
+    "countdownLabel": "組隊倒數",
     "leaderChangedBanner": "🔁 新隊長：{{name}}",
     "leaderChangedHint": "上次組隊被否決,換人組隊。",
     "toolbarSelected": "已選 {{selected}}/{{total}} 名隊員",
@@ -283,8 +283,8 @@
     "shieldHint": "點擊玩家頭像加入/移除隊伍"
   },
   "roleReveal": {
-    "evilBadge": "🔴 邪惡方 (Evil)",
-    "goodBadge": "🔵 正義方 (Good)",
+    "evilBadge": "🔴 邪惡方",
+    "goodBadge": "🔵 正義方",
     "knowledgeTitle": "你知道的資訊",
     "startBtn": "了解!開始遊戲"
   },
@@ -302,7 +302,7 @@
     "inlinePlaceholder": "在此發言..."
   },
   "missionTrack": {
-    "rejectLabel": "否決 (Reject):",
+    "rejectLabel": "否決:",
     "evilWinsReject": "邪惡方獲勝！"
   },
   "roleAvatar": {
