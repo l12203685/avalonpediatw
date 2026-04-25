@@ -65,12 +65,14 @@ async function runOneGame(
   }
 
   // Edward 2026-04-24 selfplay review fix #2: pin the Lady of the Lake
-  // starting holder to the first player (deterministic). `seat1` maps to
-  // playerIds[0] in the engine's `resolveLadyStartIndex`.
+  // starting holder to the canonical "leader's right" position
+  // (deterministic). `seat0` maps to playerIds[playerCount-1] in the
+  // engine's `resolveLadyStartIndex` — Edward 2026-04-25 15:44 affirmed
+  // the default starting holder is the leader's right neighbour.
   room.roleOptions = {
     ...(room.roleOptions ?? { percival: true, morgana: true, oberon: true, mordred: true }),
     ladyOfTheLake: true,
-    ladyStart: 'seat1',
+    ladyStart: 'seat0',
   };
 
   const engine = new GameEngine(room);

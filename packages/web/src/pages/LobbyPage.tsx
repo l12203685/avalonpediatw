@@ -454,12 +454,12 @@ export default function LobbyPage(): JSX.Element {
             </label>
             {ladyChecked && playerList.length >= 7 && isHost && (
               <select
-                value={(room.roleOptions as unknown as Record<string, string>)?.ladyStart ?? 'random'}
+                value={(room.roleOptions as unknown as Record<string, string>)?.ladyStart ?? 'seat0'}
                 onChange={e => handleSelectAdvanced('ladyStart', e.target.value)}
                 className="bg-gray-900 border border-gray-600 rounded px-1 py-0.5 text-[clamp(0.55rem,1.7vw,0.7rem)] text-white focus:outline-none focus:border-cyan-500 shrink-0"
               >
-                <option value="random">隨機起始</option>
                 <option value="seat0">隊長右</option>
+                <option value="random">隨機起始</option>
                 {Array.from({ length: playerList.length }, (_, i) => (
                   <option key={i + 1} value={`seat${i + 1}`}>座位 {i + 1}</option>
                 ))}
