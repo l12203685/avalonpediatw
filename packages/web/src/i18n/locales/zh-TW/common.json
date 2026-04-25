@@ -105,7 +105,7 @@
     "roomPassword": "房間密碼",
     "roomPasswordOptional": "房間密碼（選填，留空為公開房間）",
     "yourName": "你的名字",
-    "roomCodePlaceholder": "房間代碼（6 碼）",
+    "roomCodePlaceholder": "房間代碼（4 碼數字）",
     "forceRefreshButton": "遇到問題？強制更新",
     "enterYourName": "請輸入你的名字",
     "enterRoomCode": "請輸入房間代碼",

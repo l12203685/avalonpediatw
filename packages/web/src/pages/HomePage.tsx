@@ -554,7 +554,7 @@ export default function HomePage(): JSX.Element {
                   />
                   <div className="flex-1 text-left">
                     <div className="text-sm font-semibold text-white">
-                      娛樂局 (Casual Match)
+                      娛樂局
                     </div>
                     <p className="text-[10px] text-zinc-400 leading-relaxed mt-0.5">
                       勾選後此局戰績不計入 ELO 與排行榜。有 AI 參與的對局也會自動排除。
@@ -599,14 +599,20 @@ export default function HomePage(): JSX.Element {
                 roomCode={roomId}
               />
 
+              {/* Edward 2026-04-25: 4-digit numeric room codes. inputMode
+                  triggers the numeric keypad on iOS/Android; the onChange
+                  filter strips non-digits so paste/desktop entry stays
+                  numeric-only. maxLength clamps to 4. */}
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder={t('home.roomCodePlaceholder')}
                 value={roomId}
-                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                onChange={(e) => setRoomId(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 onKeyDown={e => e.key === 'Enter' && handleJoinRoom()}
-                maxLength={6}
-                className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-white uppercase font-mono tracking-widest"
+                maxLength={4}
+                className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-white font-mono tracking-widest"
               />
 
               <div className="space-y-3">

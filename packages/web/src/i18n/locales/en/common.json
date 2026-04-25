@@ -105,7 +105,7 @@
     "roomPassword": "Room Password",
     "roomPasswordOptional": "Room password (optional, leave blank for public)",
     "yourName": "Your name",
-    "roomCodePlaceholder": "Room code (6 chars)",
+    "roomCodePlaceholder": "Room code (4 digits)",
     "forceRefreshButton": "Having trouble? Force refresh",
     "enterYourName": "Please enter your name",
     "enterRoomCode": "Please enter the room code",

@@ -61,7 +61,7 @@ export interface DbUser {
 
 /** Row type for the `rooms` table. */
 export interface DbRoom {
-  id: string;                  // 6-char code e.g. 'AB3XYZ'
+  id: string;                  // 4-digit numeric code e.g. '0042' (2026-04-25)
   host_user_id: string | null; // UUID → users.id
   state: 'lobby' | 'voting' | 'quest' | 'discussion' | 'ended';
   player_count: number;

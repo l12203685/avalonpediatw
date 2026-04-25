@@ -339,6 +339,12 @@ export class GameServer {
         this.handleToggleReady(socket, roomId, playerId);
       });
 
+      // Edward 2026-04-25:「思考時間在遊戲開始前可以調整」— host-only
+      // mid-lobby update of room.timerConfig. Locked once state !== 'lobby'.
+      socket.on('game:set-timer-multiplier', (roomId: string, multiplier: unknown) => {
+        this.handleSetTimerMultiplier(socket, roomId, multiplier);
+      });
+
       socket.on('game:spectate-room', (roomId: string) => {
         this.handleSpectateRoom(socket, roomId);
       });
@@ -371,12 +377,13 @@ export class GameServer {
   }
 
   private generateRoomCode(attempt = 0): string {
+    // Edward 2026-04-25: 4-digit numeric room codes (0000-9999) for simpler
+    // human entry on phones. 10000 unique slots cover current concurrency
+    // (typical active rooms < 100). Retry up to 50 times on collision; if
+    // we somehow exhaust retries, surface the error so the caller can decide
+    // whether to fall back (rather than silently looping forever).
     if (attempt > 50) throw new Error('Could not generate unique room code after 50 attempts');
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // avoid confusing chars (0/O, 1/I)
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars[Math.floor(Math.random() * chars.length)];
-    }
+    const code = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
     if (this.roomManager.getRoom(code)) return this.generateRoomCode(attempt + 1);
     return code;
   }
@@ -1970,6 +1977,51 @@ export class GameServer {
     } catch (error) {
       console.error('Error setting max players:', error);
       socket.emit('error', 'Failed to set max players');
+    }
+  }
+
+  /**
+   * Edward 2026-04-25:「思考時間在遊戲開始前可以調整」— host-only timer
+   * adjustment while the room is in the `lobby` state. Mirrors the guard
+   * shape of {@link handleSetMaxPlayers} / {@link handleSetRoleOptions}:
+   *   - room exists
+   *   - caller is the room host
+   *   - room.state === 'lobby' (game has not started)
+   *   - value passes {@link isTimerMultiplier} (0.5 | 1 | 1.5 | 2 | null)
+   *
+   * The GameEngine reads `room.timerConfig?.multiplier` lazily inside
+   * {@code getTimerMultiplier()} per phase, so updating the field
+   * pre-game just changes the value the engine resolves on first read.
+   * Once {@link handleStartGame} flips state to `voting`, this handler
+   * rejects further changes — the running game's timer values stay locked.
+   */
+  private handleSetTimerMultiplier(socket: Socket, roomId: string, multiplier: unknown): void {
+    try {
+      const room = this.roomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+
+      if (room.host !== (socket.data.playerId as string)) {
+        socket.emit('error', 'Only the host can change thinking time');
+        return;
+      }
+
+      if (room.state !== 'lobby') {
+        socket.emit('error', 'Cannot change thinking time after game starts');
+        return;
+      }
+
+      if (!isTimerMultiplier(multiplier)) {
+        socket.emit('error', 'Invalid thinking-time multiplier');
+        return;
+      }
+
+      const next: TimerConfig = { multiplier: multiplier as TimerMultiplier };
+      room.timerConfig = next;
+      room.updatedAt = Date.now();
+      this.broadcastRoomState(roomId, room);
+    } catch (error) {
+      console.error('Error setting timer multiplier:', error);
+      socket.emit('error', 'Failed to set thinking time');
     }
   }
 
