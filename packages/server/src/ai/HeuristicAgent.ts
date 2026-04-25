@@ -16,6 +16,14 @@ import {
 } from './types';
 import { AVALON_CONFIG } from '@avalon/shared';
 import { PriorLookup, type Difficulty } from './priors/PriorLookup';
+import {
+  assassinTargetPenalty,
+  voteInnerBlackBonus,
+  seatPriorByRole,
+  r1LeaderRolePrior,
+  seatOfPlayer,
+  type R1Outcome,
+} from './priors/EvActionPriors';
 
 // ── Strategy thresholds ────────────────────────────────────────
 // #97 Phase 1 (2026-04-22): SUSPICION_REJECT_THRESHOLD / STRICT_THRESHOLD /
@@ -811,10 +819,42 @@ export class HeuristicAgent implements AvalonAgent {
         if (suspectSet.has(id))   return 1;
         return 0;
       };
+
+      // ── EV-prior nudge (2026-04-25 ship · Hook 4 r1LeaderRolePrior) ──
+      // R1 leader who oversaw a clean R1-success looks faction-trusted;
+      // a loyal-like leader of R1-success is +EV to include (+16.21pp).
+      // For good selectTeam: invert the prior's blue-favourable Δ → low
+      // r1Adjust = "looks trustworthy" (subtract from sort key so they
+      // rank earlier). The prior is small (max ~0.16) so it only breaks
+      // ties between similarly-suspected candidates.
+      const r1FirstRecord = obs.voteHistory.find(
+        v => v.round === 1 && v.approved,
+      );
+      const r1QuestRecord = obs.questHistory.find(q => q.round === 1);
+      const r1LeaderId = r1FirstRecord?.leader;
+      const r1Result = r1QuestRecord?.result;
+      const r1Adjust = (id: string): number => {
+        if (id !== r1LeaderId || !r1Result) return 0;
+        // For good selecting team: a HIGH +EV prior for a candidate
+        // means they're more likely good-faction → reduce sort key.
+        // Use blue-favourable mapping: positive Δ for loyal/percival/
+        // merlin = good leader; for red roles a positive Δ means red
+        // benefits → bad for good-side, increase sort key.
+        // Simplification: treat all roles via the prior magnitude;
+        // sign comes from baseline-already-encoded direction.
+        // We don't know the leader's role here — apply a "loyal-like"
+        // assumption since most R1 leaders are loyal in 10p games.
+        // The prior already has loyal-success +0.162 → trustworthy.
+        const loyalPrior = r1LeaderRolePrior('loyal', r1Result as R1Outcome);
+        return -loyalPrior; // subtract to rank earlier
+      };
+
       const candidates = nonSelf.sort((a, b) => {
         const tierDiff = byTier(a) - byTier(b);
         if (tierDiff !== 0) return tierDiff;
-        return this.getSuspicion(a) - this.getSuspicion(b);
+        const susDiff = this.getSuspicion(a) - this.getSuspicion(b);
+        if (susDiff !== 0) return susDiff;
+        return r1Adjust(a) - r1Adjust(b);
       });
 
       // Percival: prioritise including at least one wizard candidate (Merlin or Morgana) on the team
@@ -1177,6 +1217,24 @@ export class HeuristicAgent implements AvalonAgent {
       // clean teams more; Mordred is bolder → rejects more).
       const hasSelf  = proposedTeam.includes(obs.myPlayerId);
       const hasAlly  = proposedTeam.some(id => knownEvils.includes(id));
+
+      // ── EV-prior nudge (2026-04-25 ship · Hook 2 voteInnerBlackPrior) ──
+      // When on-team at R3+ as a red role with a +EV inner-black signal,
+      // probabilistically flip the cover-approve into an inner-black
+      // reject (anomaly). Magnitude bounded by the EV table —
+      // e.g. mordred R3 = +0.205 ≈ 20% chance to inner-black instead of
+      // cover-approve. Below R3 (or when bonus = 0) the legacy approve
+      // branch keeps full priority.
+      //
+      // Listening (match-point) is handled upstream and short-circuits
+      // before reaching here, so this block never affects R5 listening.
+      const round = obs.currentRound ?? 1;
+      if (hasSelf && round >= 3) {
+        const innerBlackBonus = voteInnerBlackBonus(obs.myRole as string, round);
+        if (innerBlackBonus > 0 && Math.random() < innerBlackBonus) {
+          return { type: 'team_vote', vote: false };
+        }
+      }
 
       if (hasSelf || hasAlly) return { type: 'team_vote', vote: true };
 
@@ -1687,6 +1745,38 @@ export class HeuristicAgent implements AvalonAgent {
         const percivalPenalty = this.getPercivalLikenessPenalty(id, obs);
         merlinScore.set(id, (merlinScore.get(id) ?? 0) - percivalPenalty);
       }
+    }
+
+    // ── EV-prior nudge (2026-04-25 ship · 5 hooks) ───────────────
+    // Hook 1: assassinTargetPrior — penalise candidates that look
+    //         like loyal/percival (Δ -69.57pp · catastrophic miss).
+    //         The assassin's existing percivalLikenessPenalty above
+    //         already de-prioritises percival; this prior reinforces
+    //         that signal AND additionally penalises "loyal" inferred
+    //         from low merlin-score AND zero percival-like leads.
+    // Hook 3: scoreSeatPriorByRole — boost candidates whose seat has
+    //         high merlin occupancy (seat 10 · Δ +13.51pp), de-boost
+    //         seats with high mordred/morgana occupancy.
+    //
+    // Both hooks are *additive* on top of the legacy merlinScore — the
+    // candidate with the highest blended score still wins. Magnitude
+    // chosen to keep the legacy ±2.0 signals dominant when they have
+    // strong evidence, while the prior breaks ties.
+    for (const id of candidatePool) {
+      // Seat-prior: higher merlin occupancy at this seat → boost as
+      // probable Merlin target.
+      const seat = seatOfPlayer(id, obs.allPlayerIds);
+      const seatBoost = seatPriorByRole('merlin', seat);
+      // Loyal-likeness penalty: a player with very low getMerlinScore
+      // AND very low getPercivalLikenessPenalty looks neither — that
+      // is the loyal signature. Apply assassinTargetPenalty('loyal')
+      // scaled by how loyal-like they read.
+      const rawScore = merlinScore.get(id) ?? 0;
+      const looksLoyal = rawScore < 0.5; // weak Merlin signal threshold
+      const loyalPenalty = looksLoyal
+        ? assassinTargetPenalty('loyal') * 0.3 // partial — score is fuzzy
+        : 0;
+      merlinScore.set(id, rawScore + seatBoost + loyalPenalty);
     }
 
     const target = candidatePool.reduce((best, id) =>

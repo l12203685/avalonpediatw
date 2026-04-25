@@ -24,6 +24,7 @@ import {
   QuestRecord,
   SelfPlayResult,
 } from './types';
+import { lakeDeclareLiePrior } from './priors/EvActionPriors';
 
 export class SelfPlayEngine {
   private roomManager = new RoomManager();
@@ -475,7 +476,31 @@ export class SelfPlayEngine {
     // Opponent branch: score Merlin-likeness; if Merlin-like, call them good to
     // disguise the intel. Otherwise call them evil to muddy the water.
     const merlinScore = this.estimateMerlinLikenessFromHistory(targetId, obs);
-    return merlinScore > 0 ? 'good' : 'evil';
+    const baseDecision: 'good' | 'evil' = merlinScore > 0 ? 'good' : 'evil';
+
+    // ── EV-prior nudge (2026-04-25 ship · Hook 5 lakeDeclare_lie_Prior) ──
+    // When the holder's role has a +EV "lie" pattern (morgana 紅→藍 +16.48pp,
+    // oberon 紅→藍 +9.00pp, assassin 藍→紅 +4.57pp), bias the decision in
+    // close calls toward the historically winning lie pattern.
+    //
+    // A "lie" = declared camp ≠ actual camp. We compute the would-be lie
+    // and evaluate whether the prior says "your role wins more often
+    // when you lie" — if Yes AND |merlinScore| is small (close call), flip
+    // toward the lie. Strong merlinScore signals (|score| >= 1) keep the
+    // legacy decision (it's evidence-driven, not a coin flip).
+    const lieBonus = lakeDeclareLiePrior(obs.myRole as string, holderTeam);
+    if (lieBonus > 0 && Math.abs(merlinScore) < 1) {
+      // The prior says "for your role, lying is +EV" — pick the lie of
+      // actual target camp when known.
+      if (actualTargetTeam === 'good') {
+        // Lie = announce 'evil'
+        if (Math.random() < lieBonus) return 'evil';
+      } else if (actualTargetTeam === 'evil') {
+        // Lie = announce 'good'
+        if (Math.random() < lieBonus) return 'good';
+      }
+    }
+    return baseDecision;
   }
 
   /**
