@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, BarChart3, Camera } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
-import { CampDisc } from '../components/CampDisc';
 import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile, uploadAvatar } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
@@ -1099,13 +1098,11 @@ export default function ProfilePage(): JSX.Element {
                               </span>
                             </div>
                             <div className="flex items-center gap-3 pt-1">
-                              <div className={`text-sm font-bold px-3 py-1 rounded-lg flex items-center gap-1.5 ${
+                              <div className={`text-sm font-bold px-3 py-1 rounded-lg ${
                                 replay.game.won
                                   ? 'bg-blue-900/50 text-blue-300 border border-blue-600'
                                   : 'bg-red-900/50 text-red-300 border border-red-600'
                               }`}>
-                                {/* Edward 2026-04-25 emoji→disc: 中央圓盤陣營徽章取代 🔵/🔴。 */}
-                                <CampDisc team={replay.game.won ? 'good' : 'evil'} className="w-4 h-4" />
                                 {replay.game.won ? t('profile:replay.win') : t('profile:replay.loss')}
                               </div>
                               <div className={`text-sm font-bold ${replay.game.elo_delta >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
@@ -1164,13 +1161,11 @@ export default function ProfilePage(): JSX.Element {
                           )}
                           {/* Winner */}
                           {evilWins !== null && (
-                            <div className={`text-sm font-bold px-3 py-1 rounded-lg inline-flex items-center gap-1.5 ${
+                            <div className={`text-sm font-bold px-3 py-1 rounded-lg inline-block ${
                               evilWins
                                 ? 'bg-red-900/50 text-red-300 border border-red-600'
                                 : 'bg-blue-900/50 text-blue-300 border border-blue-600'
                             }`}>
-                              {/* Edward 2026-04-25 emoji→disc: 中央圓盤陣營徽章取代 🔵/🔴。 */}
-                              <CampDisc team={evilWins ? 'evil' : 'good'} className="w-4 h-4" />
                               {evilWins ? t('profile:replay.winnerEvil') : t('profile:replay.winnerGood')}
                             </div>
                           )}

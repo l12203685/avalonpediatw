@@ -27,7 +27,6 @@ import AnalysisPage from './pages/AnalysisPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import PersonalStatsPage from './pages/PersonalStatsPage';
-import ReplayPage from './pages/ReplayPage';
 import ClaimsNewPage from './pages/ClaimsNewPage';
 import AdminClaimsPage from './pages/AdminClaimsPage';
 import AdminAdminsPage from './pages/AdminAdminsPage';
@@ -260,22 +259,8 @@ function App(): JSX.Element {
 
   const showConnectionBanner = currentPlayer && socketStatus !== 'connected';
 
-  // Edward 2026-04-25 18:08 mobile root fix: routes that own a full-height
-  // single-viewport layout (LobbyPage / GamePage) need `h-[100dvh]` rather
-  // than `min-h-screen` so the inner overflow-hidden actually clips. We keep
-  // `min-h-screen` for the rest (HomePage / ProfilePage / WikiPage etc.) so
-  // long content pages still scroll naturally.
-  const fullViewportRoute =
-    gameState === 'lobby'
-    || gameState === 'playing'
-    || gameState === 'voting'
-    || gameState === 'ended';
-  const rootClass = fullViewportRoute
-    ? 'h-[100dvh] overflow-hidden bg-gradient-to-br from-avalon-dark to-avalon-card'
-    : 'min-h-screen bg-gradient-to-br from-avalon-dark to-avalon-card';
-
   return (
-    <div className={rootClass}>
+    <div className="min-h-screen bg-gradient-to-br from-avalon-dark to-avalon-card">
       {/* Connection status banner */}
       <AnimatePresence>
         {showConnectionBanner && (
@@ -356,12 +341,6 @@ function App(): JSX.Element {
           {gameState === 'analytics' && <AnalyticsPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
-          {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage
-              GameRow ↗ buttons both call navigateToReplay() which sets
-              gameState='replay'. Without this line the page renders blank
-              (Edward 16:08 "歷史戰績查詢點了最近一場打不開"). ReplayPage already
-              exists at /pages/ReplayPage.tsx and uses replayRoomId from store. */}
-          {gameState === 'replay' && <ReplayPage />}
           {/* #86 backward compat: 舊 profileSettings state 自動 redirect 到 settings */}
           {gameState === 'profileSettings' && <SettingsPage />}
           {gameState === 'claimsNew' && <ClaimsNewPage />}

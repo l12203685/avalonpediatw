@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player, VoteRecord } from '@avalon/shared';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
-import { getVoteTokenImage } from '../utils/avalonAssets';
 
 interface HistoryPanelProps {
   room: Room;
@@ -147,16 +146,7 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
                                               : ''
                                           } ${approved ? 'text-blue-300' : 'text-red-400'}`}
                                         >
-                                          {/* Edward 2026-04-25 emoji→image: 黑白球投票圖
-                                              取代 👍/👎 emoji，與 #154 VoteAnalysisPanel
-                                              黑白球視覺統一。 */}
-                                          <img
-                                            src={getVoteTokenImage(approved ? 'approve' : 'reject')}
-                                            alt=""
-                                            aria-hidden="true"
-                                            className="w-3.5 h-3.5 object-contain flex-shrink-0"
-                                            draggable={false}
-                                          />
+                                          <span>{approved ? '👍' : '👎'}</span>
                                           <span className="truncate">{getSeatName(pid)}</span>
                                           {pid === currentPlayer.id && <span className="text-yellow-500 text-xs">(你)</span>}
                                         </div>

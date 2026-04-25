@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
-import { submitVote, submitAssassination, submitLadyOfTheLake, declareLakeResult, skipLakeDeclaration, leaveSpectate } from '../services/socket';
+import { submitVote, submitAssassination, submitLadyOfTheLake, declareLakeResult, skipLakeDeclaration, requestRematch, leaveSpectate } from '../services/socket';
 import GameBoard from '../components/GameBoard';
 import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
@@ -11,19 +11,19 @@ import VoteRevealOverlay from '../components/VoteRevealOverlay';
 import QuestResultOverlay from '../components/QuestResultOverlay';
 import ChatPanel from '../components/ChatPanel';
 import MissionTrack from '../components/MissionTrack';
+import SuspicionBoard from '../components/SuspicionBoard';
 import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
 import CompactScoresheet from '../components/CompactScoresheet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DoorOpen, Bell, WifiOff, Loader2, Eye } from 'lucide-react';
+import { Home, Bell, RefreshCw, WifiOff, Loader2, Eye } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
-import { TEAM_INDICATORS, LAKE_IMAGE, getBoardImage } from '../utils/avalonAssets';
-import { CampDisc } from '../components/CampDisc';
+import { TEAM_INDICATORS, LAKE_IMAGE, getBoardImage, getCampImage } from '../utils/avalonAssets';
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
-  const { room, currentPlayer, setGameState, isSpectator, socketStatus } = useGameStore();
+  const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer, isSpectator, socketStatus } = useGameStore();
   const [isVoting, setIsVoting] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [isAssassinating, setIsAssassinating] = useState(false);
@@ -187,11 +187,10 @@ export default function GamePage(): JSX.Element {
     setTimeout(() => setIsAssassinating(false), 3000);
   };
 
-  // 2026-04-25 Edward「結束應該是 [返回房間] => 要返回首頁的再從房間內的右上角直接離開」
-  // 結束揭曉頁的按鈕只回 lobby（房間 waiting room），等下一局；要回首頁的玩家
-  // 從 LobbyPage 右上角既有 leaveRoom 按鈕走。不清 room／不清 role，保留房間連線。
-  const handleBackToRoom = () => {
-    setGameState('lobby');
+  const handlePlayAgain = () => {
+    setRoom(null);
+    setCurrentPlayer(currentPlayer ? { ...currentPlayer, role: null, team: null } : null);
+    setGameState('home');
   };
 
   // 2026-04-25: stateLabel 字典已砍（Edward「上方排版太佔空間」）— 狀態徽章從 header 移除，
@@ -248,24 +247,13 @@ export default function GamePage(): JSX.Element {
   // range (we ship art for 5..10 only); no fallback to keep file size honest.
   const boardImageUrl = getBoardImage(playerIds.length);
 
-  // Edward 2026-04-25 holistic redesign (matches LobbyPage commit df6b5726)
-  // + 2026-04-25 18:08 root fix (Edward「版面還是沒有一次顯示全部 一直上拉下拉」):
-  //
-  // Single-viewport guarantee — entire GamePage fits 375x667 (iPhone SE),
-  // 414x896 (iPhone 11), and 1920x1080 (desktop) without page scroll. Header
-  // rows are shrink-0; the GameBoard owns flex-1 min-h-0 so its inner layout
-  // (rails + chat + phase panel) self-scrolls. Sticky toolbars
-  // (QuestTeamToolbar/VotePanel/QuestPanel) stay fixed at the bottom and use
-  // safe-area-inset so the iOS home indicator never overlaps action buttons.
-  //
-  // Critical fix: phase-specific panels (Lady-of-the-Lake / Discussion-
-  // Assassinate / Ended reveal / Spectator hint) used to render as siblings of
-  // GameBoard inside <main>, which let their content push <main>'s scroll
-  // height past viewport. They now render inside `<GameBoard>` as part of
-  // `children`, sharing the existing center-column overflow-y-auto. The whole
-  // GamePage column flow is now: header (shrink-0) → GameBoard (flex-1 min-h-0)
-  // → fixed sticky toolbars. No `<main>` middle scroll layer. No phase panel
-  // siblings outside GameBoard.
+  // Edward 2026-04-25 holistic redesign (matches LobbyPage commit df6b5726):
+  // Single-viewport guarantee — entire GamePage fits 375x667 (iPhone SE) and
+  // 1920x1080 (desktop) without page scroll. Header rows are shrink-0; the
+  // GameBoard owns flex-1 min-h-0 so its 3-col grid (rails + chat) self-scrolls.
+  // Sticky toolbars (QuestTeamToolbar/VotePanel/QuestPanel) stay fixed at the
+  // bottom; we add a scroll-container bottom padding so users can scroll past
+  // them without content being permanently masked.
   return (
     <div className="relative h-[100dvh] flex flex-col overflow-hidden bg-gradient-to-b from-avalon-dark to-black">
       {/* Painted board art — fixed background watermark behind every phase so
@@ -351,38 +339,33 @@ export default function GamePage(): JSX.Element {
       )}
 
       {/*
-        Edward 2026-04-25 GamePage 4-revamp #1+#4 — 對齊 LobbyPage 排序：
-          row 1: 否決計數 chip + 忠臣視角眼睛 (header shrink-0)
-          row 2: MissionTrack 5 局結果一覽 (牌譜 shrink-0)
-          row 3+: actionBanner / main (rails+chat)
-        Old combined MissionTrack was a single block with mission circles +
-        rejection diamonds; we split via `variant` prop so rejection lives in
-        the header band and mission circles sit just below as their own row,
-        matching the Edward spec「牌譜放在『否決計數』下方 / 玩家列表上方」.
+        Slim header — 2026-04-25 (Edward「上方排版太佔空間 只要留我第二張圖的部分就可以」).
+        保留：R1-R5 任務 + 否決方塊（MissionTrack 已包含）。
+        2026-04-25 Edward icon revamp:
+          - 聲音按鈕砍掉（音效預設開啟，無需 UI toggle）。
+          - 眼睛按鈕從「開啟角色 modal」改成「忠臣視角 toggle」 — 角色資訊已常態
+            顯示在 PlayerCard 上，故 modal 不需要；改成切換視角隱藏自己/敵我隊友
+            資訊以模擬忠臣盲視角，再點一次還原。
       */}
-      {/* Header row — rejection chip (left) + loyal-view toggle (right) */}
-      <div className="relative z-10 shrink-0 flex items-center justify-between gap-2 px-3 pt-2">
-        <div className="flex-1 min-w-0">
-          <MissionTrack room={room} variant="rejection-only" />
+      <div className="relative z-10 shrink-0 px-3 pt-2">
+        <div className="relative">
+          <MissionTrack room={room} />
+          <div className="absolute top-0 right-0 flex gap-1.5">
+            <button
+              onClick={() => setLoyalView(v => !v)}
+              title={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+              aria-label={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+              aria-pressed={loyalView}
+              className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+                loyalView
+                  ? 'bg-yellow-500/30 hover:bg-yellow-500/50 border-yellow-400 text-yellow-200 shadow-md shadow-yellow-400/30'
+                  : 'bg-blue-900/40 hover:bg-blue-800/70 border-blue-700/60 text-blue-300'
+              }`}
+            >
+              <Eye size={14} />
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => setLoyalView(v => !v)}
-          title={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
-          aria-label={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
-          aria-pressed={loyalView}
-          className={`flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
-            loyalView
-              ? 'bg-yellow-500/30 hover:bg-yellow-500/50 border-yellow-400 text-yellow-200 shadow-md shadow-yellow-400/30'
-              : 'bg-blue-900/40 hover:bg-blue-800/70 border-blue-700/60 text-blue-300'
-          }`}
-        >
-          <Eye size={14} />
-        </button>
-      </div>
-
-      {/* 牌譜 — MissionTrack mission circles only (Edward「介於否決計數與玩家列之間」) */}
-      <div className="relative z-10 shrink-0 px-3 pt-1.5">
-        <MissionTrack room={room} variant="mission-only" />
       </div>
 
       {/* Your-turn action banner — kept (not part of header clutter; signals required action) */}
@@ -401,17 +384,21 @@ export default function GamePage(): JSX.Element {
         )}
       </AnimatePresence>
 
-      {/* ────────── MAIN (flex-1 min-h-0): GameBoard owns ALL phase panels ──────────
-          2026-04-25 18:08 root fix: removed the outer <main> scroll layer that
-          previously hosted Lady/Discussion/Ended panels as GameBoard siblings.
-          GameBoard's center column already self-scrolls via flex-1 min-h-0
-          overflow-y-auto, so wrapping it inside another scroll container only
-          duplicated padding + created a second scroll axis users could pull. */}
-      <div
-        className={`relative z-10 flex-1 min-h-0 flex flex-col px-2 sm:px-3 ${
-          stickyToolbarActive ? 'pb-[32dvh] sm:pb-[28dvh]' : 'pb-1'
+      {/* ────────── MAIN (flex-1 min-h-0): GameBoard + post-game / phase panels ────────── */}
+      <main
+        className={`relative z-10 flex-1 min-h-0 flex flex-col gap-3 px-3 py-2 overflow-y-auto ${
+          stickyToolbarActive ? 'pb-32 sm:pb-28' : ''
         }`}
       >
+
+        {/* Game Board — 5v5 rails with center panel (quest/vote/history) per Edward spec.
+            #83 Phase 5: chat + scoresheet dock in the center column via `chatSlot`
+            /`scoresheetSlot` (side-by-side on lg, stacked on mobile). The floating
+            ChatPanel below is gated on `room.state === 'lobby'` to avoid duplicate
+            chat surfaces mid-game.
+            Edward 2026-04-25 holistic — wrap with flex-1 min-h-0 so GameBoard
+            grabs the remaining viewport height (mirrors LobbyPage main grid). */}
+        <div className="flex-1 min-h-0 flex flex-col">
         <GameBoard
           room={room}
           currentPlayer={currentPlayer}
@@ -536,18 +523,31 @@ export default function GamePage(): JSX.Element {
           {/* Quest Phase — sticky-bottom toolbar (see render below GameBoard);
               center column intentionally empty so the screen stops sliding up/down. */}
 
-          {/* Lady of the Lake Phase — Edward 2026-04-25 18:08 mobile root fix:
-              moved INTO GameBoard children (was sibling of GameBoard before)
-              so it rides the existing flex-1 min-h-0 overflow-y-auto in the
-              center column instead of pushing a second-level scroll past
-              viewport. Padding p-8 → p-3 sm:p-4 so a 5-button picker grid +
-              lake icon + headline fits the iPhone SE 667px viewport. */}
+          {/*
+            Live Scoresheet moved to GameBoard `scoresheetSlot` (#83 Phase 5) so it
+            docks next to the inline chat on desktop. Collapsible wrapper owns its
+            own chrome (border + title + toggle) and auto-expands when game ends.
+          */}
+        </GameBoard>
+        </div>
+
+        {/* Suspicion Notes — personal private notepad, only shown during active game */}
+        {room.state !== 'ended' && room.state !== 'lobby' && !isSpectator && (
+          <SuspicionBoard room={room} currentPlayer={currentPlayer} />
+        )}
+
+        {/* Lady of the Lake Phase */}
         {room.state === 'lady_of_the_lake' && !isSpectator && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-3 sm:p-4 space-y-3"
+            className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 space-y-6"
           >
+            {/* Lady-of-the-Lake header art — Edward 2026-04-25 image batch.
+                Painted lake icon sits above every variant of the panel so the
+                phase reads at a glance regardless of which sub-state (picker /
+                result / waiting) is active. Sized 80-96px to anchor the panel
+                without dominating the action area below. */}
             <motion.img
               key="lake-header"
               src={LAKE_IMAGE}
@@ -556,13 +556,16 @@ export default function GamePage(): JSX.Element {
               initial={{ scale: 0.7, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 280, damping: 20 }}
-              className="mx-auto w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-full border-2 border-cyan-400/70 shadow-lg shadow-cyan-500/30 drop-shadow-xl"
+              className="mx-auto w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-full border-2 border-cyan-400/70 shadow-lg shadow-cyan-500/30 drop-shadow-xl"
               draggable={false}
             />
             {isRecentLadyDeclarer && room.ladyOfTheLakeResult ? (
-              <div className="text-center space-y-2">
-                <h2 className="text-lg sm:text-2xl font-bold text-blue-400">{t('game:lady.title')}</h2>
-                <p className="text-xs sm:text-sm text-gray-300">
+              // #90 Part 4 — result view with public-declare buttons
+              // (good / evil / keep private). Shown to the DECLARER, i.e.
+              // the player who just performed the inspection.
+              <div className="text-center space-y-4">
+                <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
+                <p className="text-gray-300">
                   <Trans
                     i18nKey="game:lady.targetTeamLabel"
                     values={{
@@ -573,7 +576,7 @@ export default function GamePage(): JSX.Element {
                     components={{ target: <span className="font-bold text-white" /> }}
                   />
                 </p>
-                <div className={`inline-block px-4 py-2 rounded-xl text-base sm:text-xl font-bold border-2 ${
+                <div className={`inline-block px-6 py-3 rounded-xl text-2xl font-bold border-2 ${
                   room.ladyOfTheLakeResult === 'good'
                     ? 'bg-blue-900/40 border-blue-500 text-blue-300'
                     : 'bg-red-900/40 border-red-500 text-red-300'
@@ -581,9 +584,10 @@ export default function GamePage(): JSX.Element {
                   {room.ladyOfTheLakeResult === 'good' ? t('game:lady.resultGood') : t('game:lady.resultEvil')}
                 </div>
 
+                {/* Declare block */}
                 {lastLadyRecord?.declared ? (
-                  <div className="pt-1">
-                    <p className="text-amber-300 text-xs sm:text-sm font-semibold">
+                  <div className="pt-2">
+                    <p className="text-amber-300 text-sm font-semibold">
                       {t('game:lady.declared', {
                         claim: lastLadyRecord.declaredClaim === 'good'
                           ? t('game:lady.declareGood')
@@ -592,28 +596,30 @@ export default function GamePage(): JSX.Element {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2 pt-1">
-                    <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wider font-semibold">
+                  <div className="space-y-2 pt-2">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">
                       {t('game:lady.declareTitle')}
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => declareLakeResult(room.id, 'good')}
-                        className="py-2 px-3 rounded-lg border-2 bg-blue-900/30 border-blue-600 text-blue-200 hover:bg-blue-800/60 font-semibold text-sm transition-all"
+                        className="py-3 px-4 rounded-lg border-2 bg-blue-900/30 border-blue-600 text-blue-200 hover:bg-blue-800/60 font-semibold transition-all"
                       >
                         {t('game:lady.declareGood')}
                       </button>
                       <button
                         onClick={() => declareLakeResult(room.id, 'evil')}
-                        className="py-2 px-3 rounded-lg border-2 bg-red-900/30 border-red-600 text-red-200 hover:bg-red-800/60 font-semibold text-sm transition-all"
+                        className="py-3 px-4 rounded-lg border-2 bg-red-900/30 border-red-600 text-red-200 hover:bg-red-800/60 font-semibold transition-all"
                       >
                         {t('game:lady.declareEvil')}
                       </button>
                     </div>
-                    <p className="text-[10px] sm:text-xs text-gray-500">{t('game:lady.declareKeepPrivate')}</p>
+                    <p className="text-xs text-gray-500 pt-1">{t('game:lady.declareKeepPrivate')}</p>
+                    {/* Explicit skip/continue — otherwise the table waits on
+                        the 90s AFK timeout before the game can advance. */}
                     <button
                       onClick={() => skipLakeDeclaration(room.id)}
-                      className="mt-1 py-1.5 px-3 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700/40 text-xs sm:text-sm font-medium transition-all"
+                      className="mt-2 py-2 px-4 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700/40 text-sm font-medium transition-all"
                     >
                       {t('game:lady.skipDeclaration')}
                     </button>
@@ -621,19 +627,20 @@ export default function GamePage(): JSX.Element {
                 )}
               </div>
             ) : isLadyHolder && !room.ladyOfTheLakeResult ? (
+              // Current holder (pre-inspection) selects target
               <>
                 <div className="text-center">
-                  <h2 className="text-lg sm:text-2xl font-bold text-blue-400">{t('game:lady.title')}</h2>
-                  <p className="text-xs sm:text-sm text-gray-300 mt-1">{t('game:lady.pickTitle')}</p>
+                  <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
+                  <p className="text-gray-300 mt-2">{t('game:lady.pickTitle')}</p>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
                   {Object.values(room.players)
                     .filter(p => p.id !== currentPlayer.id && !(room.ladyOfTheLakeUsed ?? []).includes(p.id))
                     .map((player) => (
                       <button
                         key={player.id}
                         onClick={() => submitLadyOfTheLake(room.id, currentPlayer.id, player.id)}
-                        className="py-2 px-3 rounded-lg border-2 transition-all font-semibold text-sm bg-blue-900/30 border-blue-600 text-white hover:bg-blue-800/60"
+                        className="p-4 rounded-lg border-2 transition-all font-semibold bg-blue-900/30 border-blue-600 text-white hover:bg-blue-800/60"
                       >
                         {displaySeatNumber(seatOf(player.id, room.players))}家
                       </button>
@@ -641,9 +648,10 @@ export default function GamePage(): JSX.Element {
                 </div>
               </>
             ) : (
-              <div className="text-center space-y-2">
-                <h2 className="text-lg sm:text-2xl font-bold text-blue-400">{t('game:lady.title')}</h2>
-                <p className="text-xs sm:text-sm text-gray-300">
+              // Other players wait
+              <div className="text-center space-y-4">
+                <h2 className="text-3xl font-bold text-blue-400">{t('game:lady.title')}</h2>
+                <p className="text-gray-300">
                   <Trans
                     i18nKey="game:lady.waitingDesc"
                     values={{
@@ -654,20 +662,20 @@ export default function GamePage(): JSX.Element {
                     components={{ holder: <span className="text-blue-400 font-bold" /> }}
                   />
                 </p>
-                <p className="text-gray-500 text-[10px] sm:text-xs">{t('game:lady.waitingNote')}</p>
+                <p className="text-gray-500 text-sm">{t('game:lady.waitingNote')}</p>
               </div>
             )}
           </motion.div>
         )}
 
-        {/* Spectator phase hint — moved INTO GameBoard children (root fix). */}
+        {/* Spectator phase hint */}
         {isSpectator && (room.state === 'voting' || room.state === 'quest' || room.state === 'lady_of_the_lake' || room.state === 'discussion') && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-avalon-card/30 border border-slate-700/50 rounded-xl p-3 text-center"
+            className="bg-avalon-card/30 border border-slate-700/50 rounded-xl p-4 text-center"
           >
-            <p className="text-slate-400 text-xs sm:text-sm">
+            <p className="text-slate-400 text-sm">
               {room.state === 'voting' && t('game:spectator.hintVoting')}
               {room.state === 'quest' && t('game:spectator.hintQuest')}
               {room.state === 'lady_of_the_lake' && t('game:spectator.hintLady')}
@@ -676,27 +684,25 @@ export default function GamePage(): JSX.Element {
           </motion.div>
         )}
 
-        {/* Discussion Phase — Assassination — moved INTO GameBoard children
-            (root fix). Padding tightened p-8 → p-3 sm:p-4; assassin target
-            picker uses 2-col on mobile / 3-col on sm+ so a 9-target table
-            fits the 667px viewport without an inner overflow-y-auto. */}
+        {/* Discussion Phase - Assassination */}
         {room.state === 'discussion' && !isSpectator && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-avalon-card/50 border-2 border-red-700 rounded-lg p-3 sm:p-4 space-y-3"
+            className="bg-avalon-card/50 border-2 border-red-700 rounded-lg p-8 space-y-6"
           >
+            {/* Quest history aide for assassin */}
             {room.questHistory.length > 0 && (
-              <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-2">
-                <p className="text-[10px] sm:text-xs text-gray-500 mb-1 font-semibold uppercase tracking-wider">{t('game:assassin.questHistoryHeader')}</p>
-                <div className="space-y-1">
+              <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-3">
+                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">{t('game:assassin.questHistoryHeader')}</p>
+                <div className="space-y-1.5">
                   {room.questHistory.map(q => (
-                    <div key={q.round} className="flex items-center gap-2 text-[11px] sm:text-xs">
-                      <span className={`w-3.5 h-3.5 flex-shrink-0 flex items-center justify-center rounded-full font-bold ${q.result === 'success' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>
+                    <div key={q.round} className="flex items-center gap-2 text-xs">
+                      <span className={`w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full font-bold ${q.result === 'success' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'}`}>
                         {q.result === 'success' ? '✓' : '✗'}
                       </span>
                       <span className="text-gray-400">{t('game:assassin.roundPrefix', { round: q.round })}</span>
-                      <span className="text-gray-300 truncate">{q.team.map(id => `${displaySeatNumber(seatOf(id, room.players))}家`).join('、')}</span>
+                      <span className="text-gray-300">{q.team.map(id => `${displaySeatNumber(seatOf(id, room.players))}家`).join('、')}</span>
                       {q.result === 'fail' && q.failCount > 0 && <span className="text-red-400 ml-1">{t('game:assassin.failBadge', { count: q.failCount })}</span>}
                     </div>
                   ))}
@@ -707,19 +713,19 @@ export default function GamePage(): JSX.Element {
             {currentPlayer.role === 'assassin' ? (
               <>
                 <div className="text-center">
-                  <h2 className="text-lg sm:text-2xl font-bold text-red-400 mb-1">{t('game:assassin.title')}</h2>
-                  <p className="text-xs sm:text-sm text-gray-300">{t('game:assassin.prompt')}</p>
+                  <h2 className="text-3xl font-bold text-red-400 mb-2">{t('game:assassin.title')}</h2>
+                  <p className="text-gray-300">{t('game:assassin.prompt')}</p>
                   {isUnlimitedTimer ? (
-                    <div className="inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-full font-bold text-xs bg-blue-700 text-blue-100">
+                    <div className="inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full font-bold text-sm bg-blue-700 text-blue-100">
                       {t('game:teamSelect.unlimitedTimer')}
                     </div>
                   ) : (
-                    <div className={`inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-full font-bold text-xs ${assassinTimer < 30 ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                    <div className={`inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full font-bold text-sm ${assassinTimer < 30 ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
                       {t('game:teamSelect.timer', { seconds: assassinTimer })}
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
                   {Object.values(room.players)
                     .filter(p => p.id !== currentPlayer.id)
                     .map((player) => (
@@ -727,7 +733,7 @@ export default function GamePage(): JSX.Element {
                       key={player.id}
                       onClick={() => handleAssassinate(player.id)}
                       disabled={isAssassinating || selectedTarget !== null}
-                      className={`py-2 px-2 rounded-lg border-2 transition-all font-semibold text-sm ${
+                      className={`p-4 rounded-lg border-2 transition-all font-semibold ${
                         selectedTarget === player.id
                           ? 'bg-red-600/40 border-red-400 text-white'
                           : 'bg-avalon-evil/30 border-red-600 text-white hover:bg-avalon-evil/60 disabled:opacity-50'
@@ -739,15 +745,15 @@ export default function GamePage(): JSX.Element {
                   ))}
                 </div>
                 {selectedTarget && (
-                  <p className="text-center text-gray-400 text-[10px] sm:text-xs">{t('game:assassin.selectedHint')}</p>
+                  <p className="text-center text-gray-400 text-sm">{t('game:assassin.selectedHint')}</p>
                 )}
               </>
             ) : (
-              <div className="text-center space-y-2">
-                <h2 className="text-lg sm:text-2xl font-bold text-red-400">{t('game:assassin.discussionTitle')}</h2>
-                <p className="text-xs sm:text-sm text-gray-300">{t('game:assassin.goodWonIntro')}</p>
-                <p className="text-xs sm:text-sm text-gray-400">{t('game:assassin.pickingTarget')}</p>
-                <div className="text-[10px] sm:text-xs text-yellow-500 bg-yellow-900/20 border border-yellow-700 rounded-lg p-2">
+              <div className="text-center space-y-4">
+                <h2 className="text-3xl font-bold text-red-400">{t('game:assassin.discussionTitle')}</h2>
+                <p className="text-gray-300">{t('game:assassin.goodWonIntro')}</p>
+                <p className="text-gray-400">{t('game:assassin.pickingTarget')}</p>
+                <div className="text-sm text-yellow-500 bg-yellow-900/20 border border-yellow-700 rounded-lg p-3">
                   {t('game:assassin.warning')}
                 </div>
               </div>
@@ -766,7 +772,7 @@ export default function GamePage(): JSX.Element {
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`rounded-lg p-3 border space-y-2 ${
+            className={`rounded-lg p-3 sm:p-4 border space-y-3 ${
               room.evilWins
                 ? 'bg-avalon-evil/10 border-avalon-evil/60'
                 : 'bg-avalon-good/10 border-avalon-good/60'
@@ -779,14 +785,14 @@ export default function GamePage(): JSX.Element {
               <img
                 src={room.evilWins ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good}
                 alt={room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
-                className="w-6 h-6 object-contain flex-shrink-0 drop-shadow"
+                className="w-7 h-7 object-contain flex-shrink-0 drop-shadow"
                 draggable={false}
               />
-              <h2 className={`text-base sm:text-lg font-bold ${room.evilWins ? 'text-red-300' : 'text-blue-300'}`}>
+              <h2 className={`text-lg sm:text-xl font-bold ${room.evilWins ? 'text-red-300' : 'text-blue-300'}`}>
                 {room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
               </h2>
               {room.endReason && (
-                <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-semibold ${
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
                   room.evilWins ? 'bg-red-900/50 border border-red-600 text-red-200' : 'bg-blue-900/50 border border-blue-600 text-blue-200'
                 }`}>
                   {room.endReason === 'failed_quests' && t('game:ended.reasonFailedQuests')}
@@ -802,10 +808,11 @@ export default function GamePage(): JSX.Element {
               )}
             </div>
 
+            {/* Quest result summary — compact strip */}
             {room.questHistory.length > 0 && (
               <div className="flex justify-center gap-1.5 flex-wrap">
                 {room.questHistory.map((q) => (
-                  <div key={q.round} className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] ${
+                  <div key={q.round} className={`flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] ${
                     q.result === 'success' ? 'bg-blue-900/30 border-blue-600 text-blue-200' : 'bg-red-900/30 border-red-600 text-red-200'
                   }`}>
                     <span className="font-bold">R{q.round}</span>
@@ -816,11 +823,16 @@ export default function GamePage(): JSX.Element {
               </div>
             )}
 
-            <p className="text-center text-xs font-semibold text-gray-300 pt-0.5">
+            {/* Section title for the role grid — Edward image reference. */}
+            <p className="text-center text-sm font-semibold text-gray-300 pt-1">
               {t('game:ended.rolesReveal')}
             </p>
 
-            <div className="grid grid-cols-2 gap-1.5">
+            {/* Strict 2-col reveal grid — matches Edward 2026-04-25 spec image
+                (seat 1 / seat 2 / seat 3 / ... pairs descending). Cards stay
+                short (no hero art) so the whole grid + buttons + analysis
+                still fit in a single mobile viewport scroll. */}
+            <div className="grid grid-cols-2 gap-2">
               {Object.values(room.players).map((player) => {
                 const roleLabel: Record<string, string> = {
                   merlin:   t('game:roleLabel.merlin'),
@@ -839,7 +851,7 @@ export default function GamePage(): JSX.Element {
                 return (
                   <div
                     key={player.id}
-                    className={`text-[11px] p-1.5 rounded-md border-2 ${
+                    className={`text-xs p-2 rounded-md border-2 ${
                       wasAssassinated
                         ? isGood
                           ? 'bg-blue-900/30 border-blue-400 ring-2 ring-red-500/70'
@@ -851,11 +863,16 @@ export default function GamePage(): JSX.Element {
                   >
                     <div className="flex items-center justify-between gap-1">
                       <p className="font-bold text-white truncate flex items-center gap-1">
-                        <CampDisc team={isGood ? 'good' : 'evil'} className="w-3 h-3" alt={isGood ? '正義方' : '邪惡方'} />
+                        <img
+                          src={getCampImage(isGood ? 'good' : 'evil')}
+                          alt={isGood ? '正義方' : '邪惡方'}
+                          className="w-3.5 h-3.5 object-contain flex-shrink-0"
+                          draggable={false}
+                        />
                         {displaySeatNumber(seatOf(player.id, room.players))}家{wasAssassinated && ' 🗡️'}
                       </p>
                       {room.eloDeltas?.[player.id] !== undefined && (
-                        <span className={`text-[9px] font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                        <span className={`text-[10px] font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                           {room.eloDeltas[player.id] >= 0 ? '+' : ''}{room.eloDeltas[player.id]}
                         </span>
                       )}
@@ -872,24 +889,31 @@ export default function GamePage(): JSX.Element {
             {/* Vote analysis — collapsible, only shown when there's history */}
             <VoteAnalysisPanel room={room} currentPlayer={currentPlayer} />
 
-            {/* 2026-04-25 Edward 揭曉頁底部按鈕簡化：刪「再來一局」+「返回首頁」，
-                只留「返回房間」回 lobby waiting room；要回首頁的玩家從 LobbyPage
-                右上角既有 leaveRoom 走。 */}
             <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
+              {room.host === currentPlayer.id && (
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => requestRematch(room.id)}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white text-sm font-bold py-2 px-5 rounded-md transition-all"
+                >
+                  <RefreshCw size={16} />
+                  {t('game:ended.rematch')}
+                </motion.button>
+              )}
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
-                onClick={handleBackToRoom}
+                onClick={handlePlayAgain}
                 className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-bold py-2 px-5 rounded-md transition-all"
               >
-                <DoorOpen size={16} />
-                {t('game:ended.backToRoom')}
+                <Home size={16} />
+                {t('game:ended.backHome')}
               </motion.button>
             </div>
           </motion.div>
         )}
-        </GameBoard>
-      </div>
+      </main>
 
       {/* #83 Phase 5 — chat docks inline inside GameBoard center column via
           `chatSlot`, so no floating ChatPanel here during active game. If you

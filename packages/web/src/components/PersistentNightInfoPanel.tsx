@@ -21,7 +21,6 @@ import { useTranslation } from 'react-i18next';
 import { ROLE_INFO, getKnowledgeList, getKnowledgeEntries, getKnowledgeLabel, seatLabel } from '../utils/roleKnowledge';
 import RoleAvatar from './RoleAvatar';
 import { UNKNOWN_AVATAR_URL } from '../utils/avalonAssets';
-import { CampDisc } from './CampDisc';
 
 interface PersistentNightInfoPanelProps {
   room: Room;
@@ -66,12 +65,10 @@ export default function PersistentNightInfoPanel({
           <span className="text-2xl flex-shrink-0">{info.icon}</span>
           <div className="flex-1 min-w-0">
             <p className={`text-xs font-black truncate ${info.color}`}>{info.name}</p>
-            <p className="text-[10px] text-gray-300 truncate flex items-center gap-1">
-              {/* Edward 2026-04-25 emoji→disc: 中央圓盤陣營徽章取代 🔵/🔴 emoji。 */}
-              <CampDisc team={isEvil ? 'evil' : 'good'} className="w-3 h-3" />
-              <span>{isEvil ? t('game:nightInfo.evil') : t('game:nightInfo.good')}</span>
+            <p className="text-[10px] text-gray-300 truncate">
+              {isEvil ? t('game:nightInfo.evil') : t('game:nightInfo.good')}
               {hasNightInfo && (
-                <span className="ml-0.5 opacity-70">{t('game:nightInfo.clickToView')}</span>
+                <span className="ml-1.5 opacity-70">{t('game:nightInfo.clickToView')}</span>
               )}
             </p>
           </div>

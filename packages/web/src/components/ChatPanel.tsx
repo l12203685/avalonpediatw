@@ -93,11 +93,7 @@ export default function ChatPanel({
   // body unconditionally so unread tracking is unnecessary.
   const [isOpen, setIsOpen] = useState(false);
   const [unread, setUnread] = useState(0);
-  // Edward 2026-04-25 GamePage 4-revamp:「對話紀錄最新顯示在最上面」.
-  // Newest messages render at the TOP of the list. We sort the merged feed
-  // descending and use `topRef` to anchor scroll-to-top whenever a new entry
-  // arrives (mirrors the pre-revamp scroll-to-bottom UX, but flipped).
-  const topRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const isInline = variant === 'inline';
 
   useEffect(() => {
@@ -213,20 +209,15 @@ export default function ChatPanel({
       playerName: m.isSystem ? undefined : m.playerName,
       isMe: m.isSystem ? false : m.playerId === currentPlayerId,
     }));
-    // Newest first — Edward 2026-04-25 4-revamp #3「對話紀錄最新顯示在最上面」.
-    // Sort descending so merged[0] is the most recent entry; render order in
-    // the messageList JSX walks merged top-down, so newest sits at the top
-    // of the column.
-    return [...systemEntries, ...playerEntries].sort((a, b) => b.timestamp - a.timestamp);
+    return [...systemEntries, ...playerEntries].sort((a, b) => a.timestamp - b.timestamp);
   }, [systemEntries, messages, currentPlayerId]);
 
-  // Scroll-to-top whenever the merged feed changes (newest is at the top now).
-  // For floating variant, only when the panel is open; inline is always open
-  // so it always scrolls.
+  // Scroll-to-bottom whenever the merged feed changes. For floating variant,
+  // only when the panel is open; inline is always open so it always scrolls.
   useEffect(() => {
     if (isInline || isOpen) {
       if (!isInline) setUnread(0);
-      topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [isOpen, merged, isInline]);
 
@@ -241,11 +232,8 @@ export default function ChatPanel({
   //   • 自己發言：靠右 (blue bubble)
   //   • 其他玩家：靠左 (gray bubble)
   //   • 系統訊息：靠左 (compact lime chip, no bubble) — Sheets-style row
-  // 2026-04-25 4-revamp #3: newest renders at TOP — `topRef` anchor sits
-  // before the merged map so auto-scroll lands on the newest entry.
   const messageList = (
     <>
-      <div ref={topRef} />
       {merged.length === 0 && (
         <p className="text-center text-gray-600 text-xs py-4">{t('game:chat.noMessages')}</p>
       )}
@@ -275,6 +263,7 @@ export default function ChatPanel({
           </div>
         );
       })}
+      <div ref={bottomRef} />
     </>
   );
 

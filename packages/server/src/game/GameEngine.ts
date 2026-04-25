@@ -401,35 +401,32 @@ export class GameEngine {
    * Resolve the starting Lady of the Lake holder index into
    * `Object.keys(this.room.players)` based on the `ladyStart` roleOption.
    *
-   *   - `seat0` (DEFAULT) → canonical "leader's right" = last entry in
-   *     playerIds (matches the existing Avalon convention where seat 0
-   *     sits to the right of the first leader). UI label: "隊長右手邊".
+   *   - `seat0` → canonical "leader's right" = last entry in playerIds
+   *     (matches the existing Avalon convention where seat 0 sits to the
+   *     right of the first leader). UI label: "隊長右手邊".
    *     Self-play scripts pin to `seat0` for deterministic first-holder
    *     start (Edward 2026-04-24 "湖中女神先固定從 0 家開始" +
    *     batch 5 「起始湖中不是隨機的」).
    *   - `seatN` (1..9) → playerIds[N-1], clamped to valid range.
-   *   - `random` → random index in [0, playerCount). Only triggers when
-   *     host explicitly selects "隨機" in the lobby dropdown.
-   *   - unset / unknown → falls back to `seat0` (Edward 2026-04-25
-   *     「預設起始湖是 0 家但是開始遊戲後還是隨機」root fix: server
-   *     default must match the lobby UI's visual default `?? 'seat0'`,
-   *     so a host who never opens the dropdown gets canonical 0家 start
-   *     instead of silent random).
+   *   - `random` or unset → random index in [0, playerCount).
    */
   private resolveLadyStartIndex(playerCount: number): number {
     const ladyStart = this.room.roleOptions?.ladyStart;
-    if (ladyStart === 'random') {
+    if (!ladyStart || ladyStart === 'random') {
       return Math.floor(Math.random() * playerCount);
     }
-    const match = ladyStart ? /^seat([1-9])$/.exec(ladyStart) : null;
+    if (ladyStart === 'seat0') {
+      // Canonical leader's right = last player in the list.
+      return playerCount - 1;
+    }
+    const match = /^seat([1-9])$/.exec(ladyStart);
     if (match) {
       const n = parseInt(match[1], 10);
       // seat1..seat9 → index 0..8, but clamp to [0, playerCount-1].
       return Math.min(n - 1, playerCount - 1);
     }
-    // `seat0`, unset, or unknown value → canonical leader's right
-    // = last player in the list (= playerCount - 1).
-    return playerCount - 1;
+    // Defensive: unknown value → random fallback.
+    return Math.floor(Math.random() * playerCount);
   }
 
   private assignRoles(playerCount: number): void {

@@ -21,7 +21,6 @@ import {
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import PublicChatPanel from '../components/PublicChatPanel';
-import BrandHeader from '../components/BrandHeader';
 import IdentityBadge from '../components/IdentityBadge';
 import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
 import BindingField from '../components/BindingField';
@@ -249,6 +248,15 @@ export default function HomePage(): JSX.Element {
     <div className="min-h-screen bg-black px-3 py-4 sm:p-4 overflow-x-hidden">
       {/* Background decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {/* Edward 2026-04-25 18:28: ambient blurred logo as page background.
+            Replaces the top BrandHeader 大 logo — content (buttons / chat /
+            個資角落) now drives focus, while the logo lives as low-contrast
+            wallpaper. opacity 10% + blur-2xl 不搶焦點。 */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-no-repeat bg-center bg-contain opacity-10 blur-2xl"
+          style={{ backgroundImage: 'url(/logo.png)' }}
+        />
         <motion.div
           animate={{
             x: [0, 50, 0],
@@ -284,8 +292,10 @@ export default function HomePage(): JSX.Element {
               animate={{ opacity: 1, y: 0 }}
               className="text-center space-y-6 w-full"
             >
-              {/* Title — shared BrandHeader (matches LoginPage) */}
-              <BrandHeader size="lg" />
+              {/* Edward 2026-04-25 18:29: top BrandHeader removed — logo now
+                  appears as ambient blurred background (see fixed inset-0 div
+                  above). Content (buttons / chat) drives focus. BrandHeader
+                  component still used by LoginPage / Forgot / Reset pages. */}
 
               {/* Main content: 6-button grid + lobby chat */}
               <motion.div

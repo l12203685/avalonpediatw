@@ -217,58 +217,104 @@ export default function GameBoard({
     </div>
   ) : null;
 
-  // Edward 2026-04-25 18:28 — Direct port of LobbyPage main grid (commit
-  // df6b5726 verified single-viewport). Replaces the previous `md:grid` /
-  // `md:hidden` dual layout (which stacked rails on top of center on mobile
-  // and pushed content past 100dvh) with the SAME 3-col grid LobbyPage uses
-  // at every breakpoint:
-  //   gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2.5fr) minmax(0, 1fr)'
-  // Each rail owns its own overflow-y-auto + min-h-0 so player columns never
-  // grow the page; center section also owns its own scroll for phase panels.
   return (
-    <main
-      className="grid gap-1 sm:gap-3 lg:gap-4 flex-1 min-h-0 px-1"
-      style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2.5fr) minmax(0, 1fr)' }}
-    >
-      {/* Left player rail — seats N..splitIndex+1 top-to-bottom (clockwise wrap) */}
-      <aside className="flex flex-col gap-1 sm:gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-lg sm:rounded-xl p-1 sm:p-2 overflow-y-auto min-h-0 min-w-0">
-        {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
-      </aside>
+    <div className="w-full h-full min-h-0 flex flex-col">
+      {/*
+        Desktop / tablet: three-column grid filling parent height.
+        Edward 2026-04-25 holistic — outer flex-1 min-h-0 lets each column own
+        its own overflow-y-auto so the page itself never scrolls.
+      */}
+      <div
+        className="hidden md:grid gap-3 lg:gap-4 flex-1 min-h-0"
+        style={{ gridTemplateColumns: '210px minmax(0, 1fr) 210px' }}
+      >
+        {/* Left player rail — seats N..splitIndex+1 top-to-bottom (clockwise wrap) */}
+        <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2 overflow-y-auto min-h-0 min-w-0">
+          {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
+        </aside>
 
-      {/* Center — state banner + children (quest/vote/history) + chat/scoresheet slots */}
-      <section className="flex flex-col gap-2 sm:gap-3 min-w-0 min-h-0 overflow-y-auto">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="shrink-0 text-center bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-lg sm:rounded-xl py-2 px-3 sm:py-3 sm:px-4"
-        >
-          <motion.p
-            key={room.state}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-base sm:text-xl font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent"
+        {/* Center — state banner + children (quest/vote/history) */}
+        <section className="flex flex-col gap-3 min-w-0 min-h-0 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="shrink-0 text-center bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-3 px-4"
           >
-            {STATE_LABELS[room.state] ?? room.state}
-          </motion.p>
-          {room.state === 'voting' && (
             <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-0.5 sm:mt-1 text-[11px] sm:text-xs text-gray-400"
+              key={room.state}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-lg sm:text-xl font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent"
             >
-              {Object.keys(room.votes).length}/{players.length} 人已投票
+              {STATE_LABELS[room.state] ?? room.state}
             </motion.p>
-          )}
-        </motion.div>
+            {room.state === 'voting' && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-1 text-xs text-gray-400"
+              >
+                {Object.keys(room.votes).length}/{players.length} 人已投票
+              </motion.p>
+            )}
+          </motion.div>
 
-        {children}
-        {centerExtras}
-      </section>
+          {children}
+          {centerExtras}
+        </section>
 
-      {/* Right player rail — seats 1..splitIndex top-to-bottom (clockwise start) */}
-      <aside className="flex flex-col gap-1 sm:gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-lg sm:rounded-xl p-1 sm:p-2 overflow-y-auto min-h-0 min-w-0">
-        {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
-      </aside>
-    </main>
+        {/* Right player rail — seats 1..splitIndex top-to-bottom (clockwise start) */}
+        <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2 overflow-y-auto min-h-0 min-w-0">
+          {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
+        </aside>
+      </div>
+
+      {/*
+        Mobile (<md): rails on top (compact horizontal grid, capped height) +
+        center column flex-1 min-h-0 below. Edward 2026-04-25 holistic — the
+        whole GamePage fits 100dvh; rails own their internal scroll so the
+        viewport never grows past one screen.
+      */}
+      <div className="md:hidden flex flex-col gap-2 flex-1 min-h-0">
+        <div
+          className="grid gap-2 shrink-0"
+          style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', maxHeight: '38dvh' }}
+        >
+          <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5 overflow-y-auto min-h-0">
+            {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
+          </aside>
+
+          <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5 overflow-y-auto min-h-0">
+            {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
+          </aside>
+        </div>
+
+        {/* Center column below the rails — owns its own scroll */}
+        <section className="flex flex-col gap-3 min-w-0 min-h-0 flex-1 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="shrink-0 text-center bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-2 px-3"
+          >
+            <motion.p
+              key={room.state}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-base font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent"
+            >
+              {STATE_LABELS[room.state] ?? room.state}
+            </motion.p>
+            {room.state === 'voting' && (
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                {Object.keys(room.votes).length}/{players.length} 人已投票
+              </p>
+            )}
+          </motion.div>
+
+          {children}
+          {centerExtras}
+        </section>
+      </div>
+    </div>
   );
 }

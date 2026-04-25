@@ -82,8 +82,8 @@
     "loyalViewOff": "還原原本視角"
   },
   "roster": {
-    "goodCount": "正義方 {{count}} 人",
-    "evilCount": "邪惡方 {{count}} 人"
+    "goodCount": "🔵 正義方 {{count}} 人",
+    "evilCount": "🔴 邪惡方 {{count}} 人"
   },
   "connection": {
     "reconnecting": "正在重新連線…",
@@ -217,7 +217,8 @@
     "roundFailLabel": "{{count}}張失敗",
     "rolesReveal": "最終角色揭曉:",
     "youLabel": "(你)",
-    "backToRoom": "返回房間"
+    "rematch": "再來一局",
+    "backHome": "返回首頁"
   },
   "votePanel": {
     "title": "隊伍提案投票",
@@ -232,8 +233,8 @@
     "approveBtn": "贊成",
     "rejectBtn": "拒絕",
     "submitting": "投票中…",
-    "yourVoteApprove": "你的票：贊成",
-    "yourVoteReject": "你的票：拒絕",
+    "yourVoteApprove": "你的票：👍 贊成",
+    "yourVoteReject": "你的票：👎 拒絕",
     "waitingOthers": "等待其他玩家投票…",
     "shortcuts": "快捷鍵：<approve>Y</approve> 贊成・<reject>N</reject> 拒絕",
     "countdownLabel": "投票倒數"
@@ -288,14 +289,14 @@
     "shieldHint": "點擊玩家頭像加入/移除隊伍"
   },
   "roleReveal": {
-    "evilBadge": "邪惡方",
-    "goodBadge": "正義方",
+    "evilBadge": "🔴 邪惡方",
+    "goodBadge": "🔵 正義方",
     "knowledgeTitle": "你知道的資訊",
     "startBtn": "了解!開始遊戲"
   },
   "nightInfo": {
-    "evil": "邪惡方",
-    "good": "正義方",
+    "evil": "🔴 邪惡方",
+    "good": "🔵 正義方",
     "clickToView": "· 點擊查看資訊",
     "hintLabel": "提示"
   },
@@ -323,9 +324,9 @@
   "bot": {
     "label": "AI 機器人",
     "labelShort": "AI",
-    "newbie": "AI",
-    "core": "AI",
-    "expert": "AI",
+    "newbie": "弱AI",
+    "core": "中AI",
+    "expert": "強AI",
     "fillTitle": "加入 AI 機器人"
   }
 }

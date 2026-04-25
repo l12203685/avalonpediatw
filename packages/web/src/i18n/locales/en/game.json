@@ -82,8 +82,8 @@
     "loyalViewOff": "Restore original view"
   },
   "roster": {
-    "goodCount": "Good team — {{count}}",
-    "evilCount": "Evil team — {{count}}"
+    "goodCount": "🔵 Good team — {{count}}",
+    "evilCount": "🔴 Evil team — {{count}}"
   },
   "connection": {
     "reconnecting": "Reconnecting…",
@@ -217,7 +217,8 @@
     "roundFailLabel": "{{count}} fail",
     "rolesReveal": "Final Role Reveal:",
     "youLabel": "(You)",
-    "backToRoom": "Back to Room"
+    "rematch": "Rematch",
+    "backHome": "Back to Home"
   },
   "votePanel": {
     "title": "Team Vote",
@@ -232,8 +233,8 @@
     "approveBtn": "Approve",
     "rejectBtn": "Reject",
     "submitting": "Voting…",
-    "yourVoteApprove": "Your vote: Approved",
-    "yourVoteReject": "Your vote: Rejected",
+    "yourVoteApprove": "Your vote: 👍 Approved",
+    "yourVoteReject": "Your vote: 👎 Rejected",
     "waitingOthers": "Waiting for other players to vote…",
     "shortcuts": "Shortcuts: <approve>Y</approve> Approve · <reject>N</reject> Reject",
     "countdownLabel": "Vote countdown"
@@ -288,14 +289,14 @@
     "shieldHint": "Tap a player card to add/remove from team"
   },
   "roleReveal": {
-    "evilBadge": "Evil",
-    "goodBadge": "Good",
+    "evilBadge": "🔴 Evil",
+    "goodBadge": "🔵 Good",
     "knowledgeTitle": "Your Night Information",
     "startBtn": "Got it! Start Game"
   },
   "nightInfo": {
-    "evil": "Evil",
-    "good": "Good",
+    "evil": "🔴 Evil",
+    "good": "🔵 Good",
     "clickToView": "· Tap to view info",
     "hintLabel": "Hint"
   },
@@ -323,9 +324,9 @@
   "bot": {
     "label": "AI Bot",
     "labelShort": "AI",
-    "newbie": "AI",
-    "core": "AI",
-    "expert": "AI",
+    "newbie": "Weak AI",
+    "core": "Mid AI",
+    "expert": "Strong AI",
     "fillTitle": "Add AI Bot"
   }
 }
