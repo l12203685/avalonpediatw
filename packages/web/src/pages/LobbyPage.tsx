@@ -341,14 +341,14 @@ export default function LobbyPage(): JSX.Element {
               if (isHost) {
                 const otherHumans = playerList.filter(p => !p.isBot && p.id !== currentPlayer.id).length;
                 const msg = otherHumans > 0
-                  ? '確定離開？房主將移交給下一位玩家。'
-                  : '確定解散房間？所有玩家會被踢出。';
+                  ? '確定離開房間？'
+                  : '確定離開？房間將解散。';
                 if (!window.confirm(msg)) return;
               }
               leaveRoom(room.id);
             }}
             className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[clamp(0.55rem,1.7vw,0.7rem)] font-semibold bg-gray-800/40 border-gray-700 text-gray-300 hover:bg-red-900/30 hover:border-red-700 hover:text-red-300 transition-colors whitespace-nowrap"
-            title={isHost ? '解散 / 移交房主後離開' : '離開房間'}
+            title="離開房間"
             data-testid="lobby-leave-button"
           >
             <LogOut size={9} />
