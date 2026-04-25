@@ -36,6 +36,26 @@ interface GameBoardProps {
    * loyal-only blind. UI-only filter; server still emits the canonical room.
    */
   loyalView?: boolean;
+  /**
+   * Edward 2026-04-25 23:39 unified Lobby+Game layout. When true, the rails
+   * render in lobby/waiting mode:
+   *   - PlayerCard `variant='lobby'` (taller portrait tile)
+   *   - No leader / vote / quest indicators (those props zeroed out internally)
+   *   - Per-player overlay slot enabled (host's kick-X + ready badge)
+   * Defaults to false so in-game rails behave exactly as before.
+   */
+  lobbyMode?: boolean;
+  /**
+   * Optional per-player overlay renderer used in `lobbyMode`. Receives the player
+   * + seat metadata and returns absolute-positioned corner UI (kick-X, ready
+   * badge). Wrapped around each PlayerCard so the rail layout itself stays
+   * identical between lobby and game phases.
+   */
+  renderPlayerOverlay?: (
+    player: Player,
+    seatIndex: number,
+    side: 'left' | 'right'
+  ) => ReactNode;
 }
 
 /**
@@ -69,6 +89,8 @@ export default function GameBoard({
   selectedTeamIds,
   onSeatClick,
   loyalView = false,
+  lobbyMode = false,
+  renderPlayerOverlay,
 }: GameBoardProps): JSX.Element {
   const { t } = useTranslation('game');
   const players = Object.values(room.players);
@@ -174,21 +196,29 @@ export default function GameBoard({
     // All seats are valid picks (including leader's own seat — canonical Avalon allows
     // the leader to include themselves). We hand the click handler down only when in
     // picking mode so normal gameplay ignores the shield layer.
-    const isShieldCandidate = isPicking;
+    const isShieldCandidate = isPicking && !lobbyMode;
+    // Edward 2026-04-25 23:39 lobby unified layout — when rendering for the
+    // waiting room, zero out every game-phase indicator so the same rails can
+    // host both `lobby` (settings) and `playing/ended` (mission state) rooms
+    // without leaking stale data through the prop boundary.
+    const overlay = renderPlayerOverlay?.(player, seatIndex, side);
     return (
       <motion.div
         key={player.id}
         initial={{ opacity: 0, x: side === 'left' ? -20 : 20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: seatIndex * 0.05 }}
+        className={overlay ? 'relative' : undefined}
       >
         <PlayerCard
           player={player}
           isCurrentPlayer={player.id === currentPlayer.id}
-          hasVoted={room.votes[player.id] !== undefined}
+          hasVoted={lobbyMode ? false : room.votes[player.id] !== undefined}
           // During voting, only reveal own vote direction; others show as undefined (just "has voted")
           voted={
-            room.state === 'voting' && player.id !== currentPlayer.id
+            lobbyMode
+              ? undefined
+              : room.state === 'voting' && player.id !== currentPlayer.id
               ? undefined
               : room.votes[player.id]
           }
@@ -197,23 +227,27 @@ export default function GameBoard({
           // non-voting phases. Only meaningful when NOT in voting state and
           // when the player has a historical vote on record.
           lastVoteApproved={
-            room.state === 'voting'
+            lobbyMode
+              ? undefined
+              : room.state === 'voting'
               ? undefined
               : Object.prototype.hasOwnProperty.call(lastVotePerPlayer, player.id)
               ? lastVotePerPlayer[player.id]
               : undefined
           }
-          isLeader={player.id === leaderId}
-          isOnQuestTeam={room.questTeam.includes(player.id)}
+          isLeader={!lobbyMode && player.id === leaderId}
+          isOnQuestTeam={!lobbyMode && room.questTeam.includes(player.id)}
           seatNumber={seatIndex + 1}
           side={side}
-          isActiveTurn={isActiveTurn(player.id)}
+          isActiveTurn={!lobbyMode && isActiveTurn(player.id)}
           isShieldCandidate={isShieldCandidate}
           shieldSelected={shieldSelected}
-          onShieldClick={isPicking ? onSeatClick : undefined}
-          isLadyHolder={room.ladyOfTheLakeHolder === player.id}
+          onShieldClick={isPicking && !lobbyMode ? onSeatClick : undefined}
+          isLadyHolder={!lobbyMode && room.ladyOfTheLakeHolder === player.id}
           lastQuestParticipation={
-            lastQuestRecord === undefined
+            lobbyMode
+              ? undefined
+              : lastQuestRecord === undefined
               ? undefined
               : lastQuestParticipants.has(player.id)
               ? lastQuestResult ?? null
@@ -222,14 +256,16 @@ export default function GameBoard({
           loyalView={loyalView}
           // Edward 2026-04-25 22:04 — game-end 角色名 chip + 刺殺標記;
           // gameplay 中傳 undefined / false 維持 portrait 乾淨。
-          endGameRoleLabel={isGameEnded ? resolveRoleLabel(player.role) : undefined}
-          assassinated={isGameEnded && room.assassinTargetId === player.id}
+          endGameRoleLabel={!lobbyMode && isGameEnded ? resolveRoleLabel(player.role) : undefined}
+          assassinated={!lobbyMode && isGameEnded && room.assassinTargetId === player.id}
           // Edward 2026-04-25 22:38 GamePage 3-fix #3「你的投票/任務盾/湖中女神
           // 都只有最後開牌才顯示, 遊戲過程中只有未知身分牌背」: hide tracker
           // chips on the viewer's OWN tile until the game ends. Other players'
           // tiles stay untouched (their tracker info is public Avalon state).
-          selfTrackerHidden={player.id === currentPlayer.id && !isGameEnded}
+          selfTrackerHidden={!lobbyMode && player.id === currentPlayer.id && !isGameEnded}
+          variant={lobbyMode ? 'lobby' : 'game'}
         />
+        {overlay}
       </motion.div>
     );
   };
