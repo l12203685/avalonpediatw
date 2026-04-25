@@ -18,7 +18,8 @@ import { DoorOpen, Bell, WifiOff, Loader2, Eye } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
-import { TEAM_INDICATORS, LAKE_IMAGE, getBoardImage, getCampImage } from '../utils/avalonAssets';
+import { TEAM_INDICATORS, LAKE_IMAGE, getBoardImage } from '../utils/avalonAssets';
+import { CampDisc } from '../components/CampDisc';
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
@@ -863,12 +864,7 @@ export default function GamePage(): JSX.Element {
                   >
                     <div className="flex items-center justify-between gap-1">
                       <p className="font-bold text-white truncate flex items-center gap-1">
-                        <img
-                          src={getCampImage(isGood ? 'good' : 'evil')}
-                          alt={isGood ? '正義方' : '邪惡方'}
-                          className="w-3.5 h-3.5 object-contain flex-shrink-0"
-                          draggable={false}
-                        />
+                        <CampDisc team={isGood ? 'good' : 'evil'} className="w-3.5 h-3.5" alt={isGood ? '正義方' : '邪惡方'} />
                         {displaySeatNumber(seatOf(player.id, room.players))}家{wasAssassinated && ' 🗡️'}
                       </p>
                       {room.eloDeltas?.[player.id] !== undefined && (

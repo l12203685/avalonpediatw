@@ -241,7 +241,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     content: `# 梅林（Merlin）
 
 ## 陣營
-🔵 **正義方（藍方）**
+**正義方（藍方）**
 
 ## 角色能力
 - **知道誰是邪惡方**（莫德雷德 除外）
@@ -307,7 +307,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     content: `# 派西維爾（Percival）
 
 ## 陣營
-🔵 **正義方（藍方）**
+**正義方（藍方）**
 
 ## 角色能力
 - 夜晚能看到兩根拇指（梅林 + 莫甘娜）
@@ -372,7 +372,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     content: `# 亞瑟的忠臣（忠臣/雜魚/平民）
 
 ## 陣營
-🔵 **正義方（藍方）**
+**正義方（藍方）**
 
 ## 角色特性
 - 沒有特殊能力
@@ -432,7 +432,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     content: `# 刺客（Assassin）
 
 ## 陣營
-🔴 **邪惡方（紅方）**
+**邪惡方（紅方）**
 
 ## 角色能力
 - 知道其他相認的邪惡玩家（奧伯倫 除外）
@@ -481,7 +481,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     content: `# 莫甘娜（Morgana）
 
 ## 陣營
-🔴 **邪惡方（紅方）**
+**邪惡方（紅方）**
 
 ## 角色能力
 - 知道其他相認的邪惡玩家
@@ -534,7 +534,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     content: `# 莫德雷德（Mordred）
 
 ## 陣營
-🔴 **邪惡方（紅方）**
+**邪惡方（紅方）**
 
 ## 角色能力
 - **梅林 不知道他是壞人**（唯一不會被梅林看到的壞人）
@@ -583,7 +583,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     content: `# 奧伯倫（Oberon）
 
 ## 陣營
-🔴 **邪惡方（紅方）**
+**邪惡方（紅方）**
 
 ## 角色特性
 - **夜晚邪惡方相認時不能睜眼**

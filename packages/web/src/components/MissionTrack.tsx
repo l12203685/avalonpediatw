@@ -3,7 +3,7 @@ import { AVALON_CONFIG } from '@avalon/shared';
 import { motion } from 'framer-motion';
 import { Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { getCampImage } from '../utils/avalonAssets';
+import { CampDisc } from './CampDisc';
 
 interface MissionTrackProps {
   room: Room;
@@ -109,30 +109,18 @@ export default function MissionTrack({ room, variant = 'combined' }: MissionTrac
               >
                 {result === 'success' && (
                   <div className="flex flex-col items-center">
-                    {/* Edward 2026-04-25 camp emblem unification: small painted
-                        good shield sits above the ✓ so each completed quest
-                        round shows which camp won using the same visual
-                        language as the role-reveal banner. Shield is 18px;
-                        ✓ stays as the primary readable indicator at small
-                        sizes since the shield detail blurs below ~20px. */}
-                    <img
-                      src={getCampImage('good')}
-                      alt="正義方勝利"
-                      className="w-[18px] h-[18px] object-contain"
-                      draggable={false}
-                    />
+                    {/* Edward 2026-04-25 camp emblem unification: 央圓盤 disc
+                        sits above ✓ so each completed quest round shows the
+                        winning camp at glyph weight. Star-frame intentionally
+                        clipped — disc reads cleaner at 18px than full emblem. */}
+                    <CampDisc team="good" className="w-[18px] h-[18px]" alt="正義方勝利" />
                     <span className="text-xs leading-none mt-0.5">✓</span>
                     {failsRequired[i] >= 2 && <span className="text-amber-300 text-[10px] font-black leading-none">×2</span>}
                   </div>
                 )}
                 {result === 'fail' && (
                   <div className="flex flex-col items-center">
-                    <img
-                      src={getCampImage('evil')}
-                      alt="邪惡方勝利"
-                      className="w-[18px] h-[18px] object-contain"
-                      draggable={false}
-                    />
+                    <CampDisc team="evil" className="w-[18px] h-[18px]" alt="邪惡方勝利" />
                     <span className="text-xs leading-none mt-0.5">✗</span>
                     {failsRequired[i] >= 2 && <span className="text-amber-300 text-[10px] font-black leading-none">×2</span>}
                   </div>

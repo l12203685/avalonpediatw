@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { Crown, Shield, WifiOff } from 'lucide-react';
 import { displaySeatNumber } from '../utils/seatDisplay';
 import RoleAvatar from './RoleAvatar';
-import { pickAvatarUrl, LAKE_IMAGE, getCampImage } from '../utils/avalonAssets';
+import { pickAvatarUrl, LAKE_IMAGE } from '../utils/avalonAssets';
+import { CampDisc } from './CampDisc';
 
 const ROLE_NAMES: Record<string, string> = {
   merlin:   '梅林',
@@ -404,18 +405,12 @@ export default function PlayerCard({
                 }`}
               >
                 {/* Edward 2026-04-25 camp emblem unification: swap colored dot
-                    chip for the painted shield art (team-good / team-evil) so
-                    the rail uses the same visual language as the role-reveal
-                    banner and end-screen. Image is 14px to fit the chip; alt
-                    text keeps the textual fallback for screen readers and
-                    when the image fails to load. */}
-                <img
-                  src={getCampImage(player.team)}
-                  alt={player.team === 'good' ? '正義方' : '邪惡方'}
-                  className="w-3.5 h-3.5 object-contain flex-shrink-0"
-                  loading="lazy"
-                  draggable={false}
-                />
+                    chip for the painted disc (團隊圓盤) so the rail uses
+                    the same visual language as role-reveal / end-screen.
+                    CampDisc crops to the central blue/red disc only; the
+                    outer star frame is intentionally clipped out so the
+                    glyph reads at emoji weight inside the chip. */}
+                <CampDisc team={player.team} className="w-3.5 h-3.5" alt={player.team === 'good' ? '正義方' : '邪惡方'} />
                 {player.team === 'good' ? '正義' : '邪惡'}
               </span>
             )}
