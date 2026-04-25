@@ -324,9 +324,9 @@
   "bot": {
     "label": "AI Bot",
     "labelShort": "AI",
-    "newbie": "Weak AI",
-    "core": "Mid AI",
-    "expert": "Strong AI",
+    "newbie": "AI",
+    "core": "AI",
+    "expert": "AI",
     "fillTitle": "Add AI Bot"
   }
 }

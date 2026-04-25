@@ -324,9 +324,9 @@
   "bot": {
     "label": "AI 機器人",
     "labelShort": "AI",
-    "newbie": "弱AI",
-    "core": "中AI",
-    "expert": "強AI",
+    "newbie": "AI",
+    "core": "AI",
+    "expert": "AI",
     "fillTitle": "加入 AI 機器人"
   }
 }

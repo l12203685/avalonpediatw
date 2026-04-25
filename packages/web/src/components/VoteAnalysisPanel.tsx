@@ -28,12 +28,11 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
 
   const players = Object.values(room.players);
 
-  // Sort: good team first, then evil — interesting to see alignment vs. behaviour
-  const sorted = [...players].sort((a, b) => {
-    const aGood = GOOD_ROLES.has(a.role ?? '') ? 0 : 1;
-    const bGood = GOOD_ROLES.has(b.role ?? '') ? 0 : 1;
-    return aGood - bGood;
-  });
+  // Sort: ascending by seat → 1家, 2家, ..., 9家, 0家 (seat 10 renders as 「0家」 via displaySeatNumber, so it lands last naturally).
+  // Edward 2026-04-25 16:04: 排序從上到下 1家, 2家, ..., 0家.
+  const sorted = [...players].sort(
+    (a, b) => seatOf(a.id, room.players) - seatOf(b.id, room.players),
+  );
 
   return (
     <div className="bg-gray-900/50 border border-gray-700 rounded-xl overflow-hidden">
