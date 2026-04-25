@@ -36,14 +36,16 @@ export function seatOf(
 }
 
 /**
- * Convenience: renders the `#<seat>` prefix for a team-member list entry.
+ * Convenience: renders the "<seat>家" suffix label for a team-member list entry.
  * Returns an empty string for unknown players so the caller can safely
  * concatenate without guards.
+ *
+ * Edward 2026-04-25 16:00: 全站座號改用 Sheets/牌桌慣用「N家」格式（東/南/西/北家延伸）。
  */
 export function seatPrefix(
   playerId: string,
   players: Record<string, unknown>,
 ): string {
   const seat = seatOf(playerId, players);
-  return seat === 0 ? '' : `#${displaySeatNumber(seat)}`;
+  return seat === 0 ? '' : `${displaySeatNumber(seat)}家`;
 }

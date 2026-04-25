@@ -113,7 +113,7 @@ export default function SuspicionBoard({ room, currentPlayer }: SuspicionBoardPr
                     >
                       <span className="text-base">{cfg.emoji}</span>
                       <div className="text-left min-w-0">
-                        <div className="font-bold truncate">座 {displaySeatNumber(seatOf(player.id, room.players))}</div>
+                        <div className="font-bold truncate">{displaySeatNumber(seatOf(player.id, room.players))}家</div>
                         <div className="opacity-70">{statusLabel[status]}</div>
                       </div>
                     </motion.button>

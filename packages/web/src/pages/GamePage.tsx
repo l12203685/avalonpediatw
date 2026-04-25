@@ -18,8 +18,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Bell, RefreshCw, WifiOff, Loader2, Eye } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
-import { seatPrefix, displaySeatNumber, seatOf } from '../utils/seatDisplay';
-import { WINNER_CUPS, TEAM_INDICATORS, LAKE_IMAGE, getBoardImage, getCampImage } from '../utils/avalonAssets';
+import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import { TEAM_INDICATORS, LAKE_IMAGE, getBoardImage, getCampImage } from '../utils/avalonAssets';
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
@@ -450,7 +450,7 @@ export default function GamePage(): JSX.Element {
                       i18nKey="game:teamSelect.waitingDesc"
                       values={{
                         name: leaderId
-                          ? `座 ${displaySeatNumber(seatOf(leaderId, room.players))}`
+                          ? `${displaySeatNumber(seatOf(leaderId, room.players))}家`
                           : '',
                       }}
                       components={{ leader: <span className="text-yellow-400 font-bold" /> }}
@@ -511,7 +511,7 @@ export default function GamePage(): JSX.Element {
                             : 'bg-avalon-card/60 border-gray-600 text-gray-200'
                         }`}
                       >
-                        座 {displaySeatNumber(seatOf(id, room.players))}
+                        {displaySeatNumber(seatOf(id, room.players))}家
                       </span>
                     );
                   })}
@@ -570,7 +570,7 @@ export default function GamePage(): JSX.Element {
                     i18nKey="game:lady.targetTeamLabel"
                     values={{
                       name: room.ladyOfTheLakeTarget
-                        ? `座 ${displaySeatNumber(seatOf(room.ladyOfTheLakeTarget, room.players))}`
+                        ? `${displaySeatNumber(seatOf(room.ladyOfTheLakeTarget, room.players))}家`
                         : '',
                     }}
                     components={{ target: <span className="font-bold text-white" /> }}
@@ -642,7 +642,7 @@ export default function GamePage(): JSX.Element {
                         onClick={() => submitLadyOfTheLake(room.id, currentPlayer.id, player.id)}
                         className="p-4 rounded-lg border-2 transition-all font-semibold bg-blue-900/30 border-blue-600 text-white hover:bg-blue-800/60"
                       >
-                        座 {displaySeatNumber(seatOf(player.id, room.players))}
+                        {displaySeatNumber(seatOf(player.id, room.players))}家
                       </button>
                     ))}
                 </div>
@@ -656,7 +656,7 @@ export default function GamePage(): JSX.Element {
                     i18nKey="game:lady.waitingDesc"
                     values={{
                       name: room.ladyOfTheLakeHolder
-                        ? `座 ${displaySeatNumber(seatOf(room.ladyOfTheLakeHolder, room.players))}`
+                        ? `${displaySeatNumber(seatOf(room.ladyOfTheLakeHolder, room.players))}家`
                         : '',
                     }}
                     components={{ holder: <span className="text-blue-400 font-bold" /> }}
@@ -702,7 +702,7 @@ export default function GamePage(): JSX.Element {
                         {q.result === 'success' ? '✓' : '✗'}
                       </span>
                       <span className="text-gray-400">{t('game:assassin.roundPrefix', { round: q.round })}</span>
-                      <span className="text-gray-300">{q.team.map(id => `座 ${displaySeatNumber(seatOf(id, room.players))}`).join('、')}</span>
+                      <span className="text-gray-300">{q.team.map(id => `${displaySeatNumber(seatOf(id, room.players))}家`).join('、')}</span>
                       {q.result === 'fail' && q.failCount > 0 && <span className="text-red-400 ml-1">{t('game:assassin.failBadge', { count: q.failCount })}</span>}
                     </div>
                   ))}
@@ -739,7 +739,7 @@ export default function GamePage(): JSX.Element {
                           : 'bg-avalon-evil/30 border-red-600 text-white hover:bg-avalon-evil/60 disabled:opacity-50'
                       }`}
                     >
-                      座 {displaySeatNumber(seatOf(player.id, room.players))}
+                      {displaySeatNumber(seatOf(player.id, room.players))}家
                       {selectedTarget === player.id && ' ✓'}
                     </button>
                   ))}
@@ -761,85 +761,78 @@ export default function GamePage(): JSX.Element {
           </motion.div>
         )}
 
-        {/* Game Ended */}
+        {/* Game Ended — Edward 2026-04-25「這個要展示角色卡 而且直接展示在
+            遊戲畫面上就好 不要跳視窗出來」. Compact inline reveal panel that
+            sits below the GameBoard rails (seat ring still visible) instead of
+            the old modal-style cup celebration. Strict 2-col grid for role
+            cards mirrors Edward's reference screenshot; container is a slim
+            card so background UI stays readable and total content height fits
+            inside the existing main `overflow-y-auto`. */}
         {room.state === 'ended' && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={`rounded-lg p-8 text-center border-4 space-y-6 ${
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`rounded-lg p-3 sm:p-4 border space-y-3 ${
               room.evilWins
-                ? 'bg-avalon-evil/20 border-avalon-evil'
-                : 'bg-avalon-good/20 border-avalon-good'
+                ? 'bg-avalon-evil/10 border-avalon-evil/60'
+                : 'bg-avalon-good/10 border-avalon-good/60'
             }`}
           >
-            {/* Edward 2026-04-25 image batch: painted team banner +
-                winner-cup combo. Banner sits above the cup so the headline
-                reads as TEAM → trophy → text, mirroring the role-reveal
-                modal's team-first hierarchy. Banner is smaller than the cup
-                so the cup still owns the visual centre of the screen. */}
-            <motion.img
-              key={`team-${room.evilWins ? 'evil' : 'good'}`}
-              initial={{ scale: 0.5, opacity: 0, y: -12 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 20 }}
-              src={room.evilWins ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good}
-              alt={room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
-              className="mx-auto w-16 h-16 sm:w-20 sm:h-20 object-contain mb-1 drop-shadow-xl"
-              draggable={false}
-            />
-            <motion.img
-              key={`cup-${room.evilWins ? 'evil' : 'good'}`}
-              initial={{ scale: 0.4, rotate: -8, opacity: 0 }}
-              animate={{ scale: 1, rotate: 0, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 18, delay: 0.1 }}
-              src={room.evilWins ? WINNER_CUPS.evil : WINNER_CUPS.good}
-              alt={room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
-              className="mx-auto w-24 h-24 sm:w-32 sm:h-32 object-contain drop-shadow-2xl"
-              draggable={false}
-            />
+            {/* Slim winner header — small camp emblem + outcome chip. Replaces
+                the giant cup + 5xl headline so the post-game UI no longer eats
+                the viewport like a modal. */}
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <img
+                src={room.evilWins ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good}
+                alt={room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
+                className="w-7 h-7 object-contain flex-shrink-0 drop-shadow"
+                draggable={false}
+              />
+              <h2 className={`text-lg sm:text-xl font-bold ${room.evilWins ? 'text-red-300' : 'text-blue-300'}`}>
+                {room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
+              </h2>
+              {room.endReason && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                  room.evilWins ? 'bg-red-900/50 border border-red-600 text-red-200' : 'bg-blue-900/50 border border-blue-600 text-blue-200'
+                }`}>
+                  {room.endReason === 'failed_quests' && t('game:ended.reasonFailedQuests')}
+                  {room.endReason === 'vote_rejections' && t('game:ended.reasonVoteRejections')}
+                  {room.endReason === 'merlin_assassinated' && (
+                    <>{t('game:ended.reasonMerlinKilledPrefix')}<span className="text-red-200 font-bold"> {room.assassinTargetId ? `${displaySeatNumber(seatOf(room.assassinTargetId, room.players))}家` : '?'} </span>{t('game:ended.reasonMerlinKilledSuffix')}</>
+                  )}
+                  {room.endReason === 'assassination_failed' && (
+                    <>{t('game:ended.reasonWrongKillPrefix')} <span className="text-blue-200 font-bold">{room.assassinTargetId ? `${displaySeatNumber(seatOf(room.assassinTargetId, room.players))}家` : '?'}</span>{t('game:ended.reasonWrongKillSuffix')}</>
+                  )}
+                  {room.endReason === 'assassination_timeout' && t('game:ended.reasonAssassinationTimeout')}
+                </span>
+              )}
+            </div>
 
-            <motion.h2
-              initial={{ y: -20 }}
-              animate={{ y: 0 }}
-              className="text-5xl font-bold"
-            >
-              {room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
-            </motion.h2>
-
-            {/* End reason banner */}
-            {room.endReason && (
-              <div className={`inline-block px-5 py-2 rounded-full text-sm font-semibold ${
-                room.evilWins ? 'bg-red-900/50 border border-red-600 text-red-200' : 'bg-blue-900/50 border border-blue-600 text-blue-200'
-              }`}>
-                {room.endReason === 'failed_quests' && t('game:ended.reasonFailedQuests')}
-                {room.endReason === 'vote_rejections' && t('game:ended.reasonVoteRejections')}
-                {room.endReason === 'merlin_assassinated' && (
-                  <>{t('game:ended.reasonMerlinKilledPrefix')}<span className="text-red-300 font-bold"> {room.assassinTargetId ? `座 ${displaySeatNumber(seatOf(room.assassinTargetId, room.players))}` : '?'} </span>{t('game:ended.reasonMerlinKilledSuffix')}</>
-                )}
-                {room.endReason === 'assassination_failed' && (
-                  <>{t('game:ended.reasonWrongKillPrefix')} <span className="text-blue-300 font-bold">{room.assassinTargetId ? `座 ${displaySeatNumber(seatOf(room.assassinTargetId, room.players))}` : '?'}</span>{t('game:ended.reasonWrongKillSuffix')}</>
-                )}
-                {room.endReason === 'assassination_timeout' && t('game:ended.reasonAssassinationTimeout')}
-              </div>
-            )}
-
-            {/* Quest result summary */}
+            {/* Quest result summary — compact strip */}
             {room.questHistory.length > 0 && (
-              <div className="flex justify-center gap-2 flex-wrap">
+              <div className="flex justify-center gap-1.5 flex-wrap">
                 {room.questHistory.map((q) => (
-                  <div key={q.round} className={`flex flex-col items-center px-3 py-2 rounded-lg border text-xs ${
-                    q.result === 'success' ? 'bg-blue-900/30 border-blue-600' : 'bg-red-900/30 border-red-600'
+                  <div key={q.round} className={`flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] ${
+                    q.result === 'success' ? 'bg-blue-900/30 border-blue-600 text-blue-200' : 'bg-red-900/30 border-red-600 text-red-200'
                   }`}>
-                    <span className="text-lg">{q.result === 'success' ? '✓' : '✗'}</span>
-                    <span className="text-gray-400">R{q.round}</span>
-                    {q.failCount > 0 && <span className="text-red-400">{t('game:ended.roundFailLabel', { count: q.failCount })}</span>}
+                    <span className="font-bold">R{q.round}</span>
+                    <span>{q.result === 'success' ? '✓' : '✗'}</span>
+                    {q.failCount > 0 && <span className="text-red-300">{t('game:ended.roundFailLabel', { count: q.failCount })}</span>}
                   </div>
                 ))}
               </div>
             )}
 
-            <p className="text-gray-300 text-lg">{t('game:ended.rolesReveal')}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {/* Section title for the role grid — Edward image reference. */}
+            <p className="text-center text-sm font-semibold text-gray-300 pt-1">
+              {t('game:ended.rolesReveal')}
+            </p>
+
+            {/* Strict 2-col reveal grid — matches Edward 2026-04-25 spec image
+                (seat 1 / seat 2 / seat 3 / ... pairs descending). Cards stay
+                short (no hero art) so the whole grid + buttons + analysis
+                still fit in a single mobile viewport scroll. */}
+            <div className="grid grid-cols-2 gap-2">
               {Object.values(room.players).map((player) => {
                 const roleLabel: Record<string, string> = {
                   merlin:   t('game:roleLabel.merlin'),
@@ -853,45 +846,41 @@ export default function GamePage(): JSX.Element {
                 };
                 const isGood = ['merlin', 'percival', 'loyal'].includes(player.role ?? '');
                 const wasAssassinated = room.assassinTargetId === player.id;
+                const isYou = player.id === currentPlayer.id;
 
                 return (
                   <div
                     key={player.id}
-                    className={`text-sm p-3 rounded-lg border ${
+                    className={`text-xs p-2 rounded-md border-2 ${
                       wasAssassinated
-                        ? 'bg-red-900/50 border-red-400 ring-2 ring-red-500'
+                        ? isGood
+                          ? 'bg-blue-900/30 border-blue-400 ring-2 ring-red-500/70'
+                          : 'bg-red-900/40 border-red-400 ring-2 ring-red-500/70'
                         : isGood
-                        ? 'bg-blue-900/30 border-blue-600'
-                        : 'bg-red-900/30 border-red-600'
+                        ? 'bg-blue-900/25 border-blue-400'
+                        : 'bg-red-900/25 border-red-400'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      {/* Edward 2026-04-25 camp emblem unification: small
-                          painted shield sits next to the seat number so each
-                          end-screen reveal card shows camp via the same art
-                          used in the role-reveal banner + winner-cup. Image
-                          is 16px so it sits inline with the seat text. */}
-                      <p className="font-bold text-white truncate flex items-center gap-1.5">
+                      <p className="font-bold text-white truncate flex items-center gap-1">
                         <img
                           src={getCampImage(isGood ? 'good' : 'evil')}
                           alt={isGood ? '正義方' : '邪惡方'}
-                          className="w-4 h-4 object-contain flex-shrink-0"
+                          className="w-3.5 h-3.5 object-contain flex-shrink-0"
                           draggable={false}
                         />
-                        座 {displaySeatNumber(seatOf(player.id, room.players))}{wasAssassinated && ' 🗡️'}
+                        {displaySeatNumber(seatOf(player.id, room.players))}家{wasAssassinated && ' 🗡️'}
                       </p>
                       {room.eloDeltas?.[player.id] !== undefined && (
-                        <span className={`text-xs font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                        <span className={`text-[10px] font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                           {room.eloDeltas[player.id] >= 0 ? '+' : ''}{room.eloDeltas[player.id]}
                         </span>
                       )}
                     </div>
-                    <p className={isGood ? 'text-blue-400' : 'text-red-400'}>
+                    <p className={`mt-0.5 font-semibold ${isGood ? 'text-blue-300' : 'text-red-300'}`}>
                       {roleLabel[player.role ?? ''] ?? player.role}
+                      {isYou && <span className="text-gray-400 font-normal"> {t('game:ended.youLabel')}</span>}
                     </p>
-                    {player.id === currentPlayer.id && (
-                      <p className="text-xs text-gray-500 mt-1">{t('game:ended.youLabel')}</p>
-                    )}
                   </div>
                 );
               })}
@@ -900,25 +889,25 @@ export default function GamePage(): JSX.Element {
             {/* Vote analysis — collapsible, only shown when there's history */}
             <VoteAnalysisPanel room={room} currentPlayer={currentPlayer} />
 
-            <div className="flex items-center justify-center gap-3 flex-wrap">
+            <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
               {room.host === currentPlayer.id && (
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
                   onClick={() => requestRematch(room.id)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-bold py-3 px-8 rounded-lg transition-all"
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white text-sm font-bold py-2 px-5 rounded-md transition-all"
                 >
-                  <RefreshCw size={20} />
+                  <RefreshCw size={16} />
                   {t('game:ended.rematch')}
                 </motion.button>
               )}
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
                 onClick={handlePlayAgain}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 px-8 rounded-lg transition-all"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-bold py-2 px-5 rounded-md transition-all"
               >
-                <Home size={20} />
+                <Home size={16} />
                 {t('game:ended.backHome')}
               </motion.button>
             </div>

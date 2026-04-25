@@ -461,7 +461,7 @@ export default function LobbyPage(): JSX.Element {
                 <option value="seat0">隊長右</option>
                 <option value="random">隨機起始</option>
                 {Array.from({ length: playerList.length }, (_, i) => (
-                  <option key={i + 1} value={`seat${i + 1}`}>座位 {i + 1}</option>
+                  <option key={i + 1} value={`seat${i + 1}`}>{i + 1}家</option>
                 ))}
               </select>
             )}

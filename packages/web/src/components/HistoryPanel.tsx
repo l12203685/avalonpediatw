@@ -25,11 +25,12 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
   }, {});
 
   // Edward 2026-04-25: 「資訊視窗一律改成座位號碼」 — history panel now
-  // shows seat-only ("座 X"), no player display name. Seat 10 renders as
+  // shows seat-only ("X家"), no player display name. Seat 10 renders as
   // "0" via displaySeatNumber (#93 paper-scoresheet convention).
+  // Edward 2026-04-25 16:00: 全站座號改用「N家」格式（牌桌慣用）。
   const getSeatName = (id: string): string => {
     const seat = seatOf(id, room.players);
-    return seat === 0 ? '?' : `座 ${displaySeatNumber(seat)}`;
+    return seat === 0 ? '?' : `${displaySeatNumber(seat)}家`;
   };
 
   return (

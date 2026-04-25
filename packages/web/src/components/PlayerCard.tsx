@@ -223,7 +223,7 @@ export default function PlayerCard({
         {seatNumber !== undefined && (
           <div
             className="absolute -top-1.5 -left-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-2 border-yellow-700 flex items-center justify-center shadow-lg pointer-events-none z-10"
-            aria-label={`座位 ${seatNumber}`}
+            aria-label={`${seatNumber}家`}
           >
             <span className="text-[12px] sm:text-[14px] font-black text-black leading-none">
               {displaySeatNumber(seatNumber)}
