@@ -1,9 +1,9 @@
 import { Player, Role } from '@avalon/shared';
 import { motion } from 'framer-motion';
-import { Crown, Shield, WifiOff, Droplet } from 'lucide-react';
+import { Crown, Shield, WifiOff } from 'lucide-react';
 import { displaySeatNumber } from '../utils/seatDisplay';
 import RoleAvatar from './RoleAvatar';
-import { pickAvatarUrl } from '../utils/avalonAssets';
+import { pickAvatarUrl, LAKE_IMAGE } from '../utils/avalonAssets';
 
 const ROLE_NAMES: Record<string, string> = {
   merlin:   '梅林',
@@ -303,18 +303,27 @@ export default function PlayerCard({
         )}
 
         {/*
-          Lady of the Lake holder — Droplet 💧 overlay center-left of the
-          avatar. Cyan tint matches the scoresheet legend. Edward 2026-04-25
-          「湖中女神」.
+          Lady of the Lake holder — painted lake icon center-left of the avatar
+          (replaces the previous cyan Droplet so the indicator shares visual
+          language with the lake-of-the-lake overlay header art). Cyan ring
+          frames the icon to keep the scoresheet legend recognisable.
+          Edward 2026-04-25「湖中女神」 image batch.
         */}
         {isLadyHolder && (
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
-            className="absolute top-1/2 -left-2 -translate-y-1/2 bg-cyan-500 border-2 border-cyan-200 rounded-full p-0.5 pointer-events-none shadow-md z-10"
+            className="absolute top-1/2 -left-2 -translate-y-1/2 bg-cyan-500 border-2 border-cyan-200 rounded-full overflow-hidden pointer-events-none shadow-md z-10 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center"
             aria-label="持有湖中女神"
           >
-            <Droplet size={12} className="text-white" fill="currentColor" />
+            <img
+              src={LAKE_IMAGE}
+              alt=""
+              aria-hidden="true"
+              className="w-full h-full object-cover"
+              draggable={false}
+              loading="lazy"
+            />
           </motion.div>
         )}
 

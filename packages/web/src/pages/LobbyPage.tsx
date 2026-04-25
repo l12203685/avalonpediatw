@@ -6,6 +6,7 @@ import { AVALON_CONFIG, TIMER_MULTIPLIER_OPTIONS, TimerMultiplier, Player } from
 import PlayerCard from '../components/PlayerCard';
 import ChatPanel from '../components/ChatPanel';
 import { motion } from 'framer-motion';
+import { getBoardImage } from '../utils/avalonAssets';
 
 // Friendly label for the room-level thinking-time multiplier.
 function timerLabel(multiplier: number | null | undefined): string {
@@ -242,9 +243,24 @@ export default function LobbyPage(): JSX.Element {
     );
   };
 
+  // Per-table-size board watermark — Edward 2026-04-25 image batch. Lobby
+  // adopts the same painted board background as GamePage so the table size
+  // is recognisable while host configures the room. Falls back to the maxPlayers
+  // setting when fewer than 5 players are present (we still want b5..b10
+  // accuracy reflecting the *target* table size, not the current count).
+  const lobbyBoardCount = Math.max(playerList.length, room.maxPlayers, 5);
+  const lobbyBoardImageUrl = getBoardImage(lobbyBoardCount);
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-3 sm:p-4">
-      <div className="max-w-7xl mx-auto space-y-4">
+    <div className="relative min-h-screen bg-gradient-to-b from-avalon-dark to-black p-3 sm:p-4">
+      {lobbyBoardImageUrl && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 bg-no-repeat bg-center bg-cover opacity-[0.08] sm:opacity-10 mix-blend-luminosity"
+          style={{ backgroundImage: `url('${lobbyBoardImageUrl}')` }}
+        />
+      )}
+      <div className="relative z-10 max-w-7xl mx-auto space-y-4">
         {/* ────────── Header ────────── */}
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -422,59 +438,59 @@ export default function LobbyPage(): JSX.Element {
                 )}
               </div>
 
-              {/* Max players (host only) */}
-              {isHost && (
-                <div className="inline-flex items-center gap-0.5 ml-auto">
-                  <span className="text-gray-500 mr-1">人數上限</span>
-                  <button
-                    onClick={() => setMaxPlayers(room.id, room.maxPlayers - 1)}
-                    disabled={room.maxPlayers <= Math.max(5, playerList.length)}
-                    className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronDown size={12} />
-                  </button>
-                  <span className="text-gray-300 w-6 text-center font-semibold">{room.maxPlayers}</span>
-                  <button
-                    onClick={() => setMaxPlayers(room.id, room.maxPlayers + 1)}
-                    disabled={room.maxPlayers >= 10}
-                    className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronUp size={12} />
-                  </button>
+              {/* Bot adders (host only) — Edward 2026-04-25: moved from footer to top
+                  config strip so AI seats are visible alongside thinking time. */}
+              {isHost && playerList.length < room.maxPlayers && (
+                <div className="inline-flex items-center gap-1 ml-auto">
+                  <span className="text-gray-500 mr-1 text-[10px]">加入 AI</span>
+                  {([
+                    { diff: 'easy',   label: '弱',   bg: 'bg-white hover:bg-gray-200 border-gray-300 text-black' },
+                    { diff: 'normal', label: '中',   bg: 'bg-slate-500 hover:bg-slate-400 border-slate-400 text-white' },
+                    { diff: 'hard',   label: '強',   bg: 'bg-black hover:bg-gray-900 border-gray-700 text-white' },
+                  ] as const).map(({ diff, label, bg }) => (
+                    <button
+                      key={diff}
+                      onClick={() => addBot(room.id, diff)}
+                      className={`px-2 py-0.5 rounded border font-semibold text-[11px] transition-all ${bg}`}
+                      title={`加入${label}AI`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Quest sizes preview — single-line ribbon */}
+            {/* Quest sizes preview — single-line ribbon (Edward 2026-04-25: nowrap so R1-R5 always inline) */}
             {previewQuestSizes.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1">任務人數</span>
+              <div className="flex flex-nowrap items-center gap-1 text-[11px] overflow-x-auto">
+                <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1 flex-shrink-0">任務人數</span>
                 {previewQuestSizes.map((sz, i) => (
                   <span
                     key={i}
-                    className="px-2 py-0.5 rounded-full font-semibold border bg-gray-800/40 border-gray-700 text-gray-300"
+                    className="px-1.5 py-0.5 rounded-full font-semibold border bg-gray-800/40 border-gray-700 text-gray-300 whitespace-nowrap flex-shrink-0"
                   >
-                    R{i + 1}: {sz} 人
+                    R{i + 1}: {sz}
                   </span>
                 ))}
                 {room.roleOptions?.swapR1R2 && (
-                  <span className="text-amber-400 ml-1">· R1/R2 對調</span>
+                  <span className="text-amber-400 ml-1 whitespace-nowrap flex-shrink-0">· R1/R2 對調</span>
                 )}
                 {is9Variant && (
-                  <span className="text-amber-400 ml-1">· 奧伯倫強制版</span>
+                  <span className="text-amber-400 ml-1 whitespace-nowrap flex-shrink-0">· 奧伯倫強制版</span>
                 )}
               </div>
             )}
 
-            {/* Role preview — single-line ribbon */}
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1">
+            {/* Role preview — single-line ribbon (Edward 2026-04-25: nowrap so all roles inline) */}
+            <div className="flex flex-nowrap items-center gap-1 text-[11px] overflow-x-auto">
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1 flex-shrink-0 whitespace-nowrap">
                 {playerList.length} 人局
               </span>
               {[...goodRoles, ...evilRoles].map((role, i) => (
                 <span
                   key={i}
-                  className={`px-2 py-0.5 rounded-full font-semibold border ${
+                  className={`px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap flex-shrink-0 ${
                     GOOD_ROLES.has(role)
                       ? 'bg-blue-900/40 border-blue-700/60 text-blue-300'
                       : 'bg-red-900/40 border-red-700/60 text-red-300'
@@ -688,27 +704,9 @@ export default function LobbyPage(): JSX.Element {
           </section>
         </div>
 
-        {/* ────────── Footer: bot adders + start / ready ────────── */}
+        {/* ────────── Footer: start / ready (bot adders moved to top settings strip 2026-04-25) ────────── */}
         {isHost ? (
           <div className="space-y-2">
-            {playerList.length < room.maxPlayers && (
-              <div className="grid grid-cols-3 gap-2">
-                {([
-                  { diff: 'easy',   label: '加入弱AI', bg: 'bg-white hover:bg-gray-200 border-gray-300 text-black' },
-                  { diff: 'normal', label: '加入中AI', bg: 'bg-slate-500 hover:bg-slate-400 border-slate-400 text-white' },
-                  { diff: 'hard',   label: '加入強AI', bg: 'bg-black hover:bg-gray-900 border-gray-700 text-white' },
-                ] as const).map(({ diff, label, bg }) => (
-                  <button
-                    key={diff}
-                    onClick={() => addBot(room.id, diff)}
-                    className={`py-1.5 px-2 rounded-lg border font-semibold text-xs sm:text-sm transition-all ${bg}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-
             {humanPlayers.length > 0 && (
               <div className={`text-xs text-center py-1.5 rounded-lg border ${
                 readyCount === humanPlayers.length

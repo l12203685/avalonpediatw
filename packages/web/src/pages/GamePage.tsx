@@ -20,7 +20,7 @@ import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2, Eye } from '
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 import { seatPrefix, displaySeatNumber, seatOf } from '../utils/seatDisplay';
-import { WINNER_CUPS } from '../utils/avalonAssets';
+import { WINNER_CUPS, TEAM_INDICATORS, LAKE_IMAGE, getBoardImage } from '../utils/avalonAssets';
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
@@ -243,10 +243,30 @@ export default function GamePage(): JSX.Element {
   const questPhaseSticky = room.state === 'quest' && !isSpectator;
   const stickyToolbarActive = isLeaderPicking || teamVotePhaseSticky || questPhaseSticky;
 
+  // Per-table-size board watermark — Edward 2026-04-25 image batch: render the
+  // painted scoresheet board as a low-opacity background layer matching the
+  // current table size (5..10). null when the count falls outside the supplied
+  // range (we ship art for 5..10 only); no fallback to keep file size honest.
+  const boardImageUrl = getBoardImage(playerIds.length);
+
   return (
-    <div className={`min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4 ${
-      stickyToolbarActive ? 'pb-32 sm:pb-28' : ''
-    }`}>
+    <div
+      className={`relative min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4 ${
+        stickyToolbarActive ? 'pb-32 sm:pb-28' : ''
+      }`}
+    >
+      {/* Painted board art — fixed background watermark behind every phase so
+          the table size reads visually without consuming column space. Sized
+          to cover the viewport while preserving aspect ratio (no distortion
+          regardless of board art ratio); blur + low alpha keep typography
+          readable on top. `pointer-events-none` so it never blocks touches. */}
+      {boardImageUrl && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 bg-no-repeat bg-center bg-cover opacity-[0.08] sm:opacity-10 mix-blend-luminosity"
+          style={{ backgroundImage: `url('${boardImageUrl}')` }}
+        />
+      )}
       {/* Vote Reveal Overlay */}
       <AnimatePresence>
         {pendingVoteReveal && (
@@ -280,7 +300,7 @@ export default function GamePage(): JSX.Element {
         />
       )}
 
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="relative z-10 max-w-7xl mx-auto space-y-6">
         {/* Reconnection status banner */}
         <AnimatePresence>
           {(socketStatus === 'reconnecting' || socketStatus === 'disconnected') && (
@@ -512,6 +532,22 @@ export default function GamePage(): JSX.Element {
             animate={{ opacity: 1, y: 0 }}
             className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 space-y-6"
           >
+            {/* Lady-of-the-Lake header art — Edward 2026-04-25 image batch.
+                Painted lake icon sits above every variant of the panel so the
+                phase reads at a glance regardless of which sub-state (picker /
+                result / waiting) is active. Sized 80-96px to anchor the panel
+                without dominating the action area below. */}
+            <motion.img
+              key="lake-header"
+              src={LAKE_IMAGE}
+              alt=""
+              aria-hidden="true"
+              initial={{ scale: 0.7, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 20 }}
+              className="mx-auto w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-full border-2 border-cyan-400/70 shadow-lg shadow-cyan-500/30 drop-shadow-xl"
+              draggable={false}
+            />
             {isRecentLadyDeclarer && room.ladyOfTheLakeResult ? (
               // #90 Part 4 — result view with public-declare buttons
               // (good / evil / keep private). Shown to the DECLARER, i.e.
@@ -725,14 +761,26 @@ export default function GamePage(): JSX.Element {
                 : 'bg-avalon-good/20 border-avalon-good'
             }`}
           >
-            {/* Edward 2026-04-25 image batch: painted winner cup over the
-                ended-screen headline. Sized 96-128px so it dominates the
-                "勝利" message without pushing the role grid below the fold. */}
+            {/* Edward 2026-04-25 image batch: painted team banner +
+                winner-cup combo. Banner sits above the cup so the headline
+                reads as TEAM → trophy → text, mirroring the role-reveal
+                modal's team-first hierarchy. Banner is smaller than the cup
+                so the cup still owns the visual centre of the screen. */}
+            <motion.img
+              key={`team-${room.evilWins ? 'evil' : 'good'}`}
+              initial={{ scale: 0.5, opacity: 0, y: -12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 20 }}
+              src={room.evilWins ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good}
+              alt={room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
+              className="mx-auto w-16 h-16 sm:w-20 sm:h-20 object-contain mb-1 drop-shadow-xl"
+              draggable={false}
+            />
             <motion.img
               key={`cup-${room.evilWins ? 'evil' : 'good'}`}
               initial={{ scale: 0.4, rotate: -8, opacity: 0 }}
               animate={{ scale: 1, rotate: 0, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 18, delay: 0.1 }}
               src={room.evilWins ? WINNER_CUPS.evil : WINNER_CUPS.good}
               alt={room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
               className="mx-auto w-24 h-24 sm:w-32 sm:h-32 object-contain drop-shadow-2xl"

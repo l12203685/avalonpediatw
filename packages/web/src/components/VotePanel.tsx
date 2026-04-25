@@ -93,8 +93,20 @@ export default function VotePanel({
       aria-label={t('game:votePanel.title')}
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-2">
-        {/* Top strip — voted progress + countdown side-by-side */}
+        {/* Top strip — vote-token icon + voted progress + countdown side-by-side.
+            Edward 2026-04-25 image batch: painted vote-token.png anchors the
+            label so players associate "投票時間" with the same ballot icon used
+            in the VoteRevealOverlay. Hidden on very narrow viewports to keep
+            the progress bar dominant. */}
         <div className="flex items-center gap-2">
+          <img
+            src={VOTE_IMAGES.token}
+            alt=""
+            aria-hidden="true"
+            className="hidden sm:inline-block w-5 h-5 object-contain flex-shrink-0 drop-shadow"
+            draggable={false}
+            loading="lazy"
+          />
           <span className="text-[11px] font-semibold text-gray-300 whitespace-nowrap">
             {t('game:votePanel.votedCount', { voted: votedCount, total: playerCount })}
           </span>

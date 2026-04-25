@@ -4,6 +4,7 @@ import { X, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ROLE_INFO, getKnowledgeList } from '../utils/roleKnowledge';
 import RoleAvatar from './RoleAvatar';
+import { TEAM_INDICATORS } from '../utils/avalonAssets';
 
 interface RoleRevealModalProps {
   room: Room;
@@ -45,8 +46,21 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
 
           {/* Role icon + name. Plan #83 Phase 4: add a large RoleAvatar badge
               under the emoji icon so the short-code (梅/派/刺/...) is
-              prominent on reveal and matches the rail/night-panel avatars. */}
+              prominent on reveal and matches the rail/night-panel avatars.
+              Edward 2026-04-25 image batch: painted team-good/evil banner
+              sits above the emoji as the alignment headline so players see
+              "you are GOOD/EVIL" before the role itself lands. */}
           <div className="text-center mb-6">
+            <motion.img
+              key={`team-${isEvil ? 'evil' : 'good'}`}
+              src={isEvil ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good}
+              alt={isEvil ? t('game:roleReveal.evilBadge') : t('game:roleReveal.goodBadge')}
+              initial={{ scale: 0.6, opacity: 0, y: -10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ delay: 0.05, type: 'spring', stiffness: 320, damping: 18 }}
+              className="mx-auto w-16 h-16 sm:w-20 sm:h-20 object-contain mb-2 drop-shadow-xl"
+              draggable={false}
+            />
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}

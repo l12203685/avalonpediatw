@@ -20,6 +20,7 @@ import { ChevronDown, ChevronUp, Eye, EyeOff, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ROLE_INFO, getKnowledgeList, getKnowledgeEntries, getKnowledgeLabel, seatLabel } from '../utils/roleKnowledge';
 import RoleAvatar from './RoleAvatar';
+import { UNKNOWN_AVATAR_URL } from '../utils/avalonAssets';
 
 interface PersistentNightInfoPanelProps {
   room: Room;
@@ -121,9 +122,19 @@ export default function PersistentNightInfoPanel({
                           {entry.knownRole ? (
                             <RoleAvatar role={entry.knownRole} size="sm" />
                           ) : (
-                            <span className="w-6 h-6 rounded-full bg-slate-700 border border-slate-500 flex items-center justify-center text-[10px] font-bold text-white">
-                              ?
-                            </span>
+                            // Percival sees Merlin AND Morgana but cannot tell
+                            // them apart — render the painted unknown.jpg art
+                            // (Edward 2026-04-25 image batch) instead of a
+                            // plain "?" so the placeholder reads as a hooded
+                            // figure that matches the rail/role-reveal style.
+                            <img
+                              src={UNKNOWN_AVATAR_URL}
+                              alt=""
+                              aria-hidden="true"
+                              className="w-6 h-6 rounded-full object-cover border border-slate-500 flex-shrink-0"
+                              draggable={false}
+                              loading="lazy"
+                            />
                           )}
                           <span className="truncate">
                             {seatLabel(entry.player.id, room.players)} — {entry.hint}

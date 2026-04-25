@@ -83,6 +83,18 @@ export default function VoteRevealOverlay({
             loading="lazy"
             draggable={false}
           />
+          {/* Vote-token accent — Edward 2026-04-25 image batch: painted ballot
+              token sits beside the yes/no banner so the toast reads as
+              "投票結果" not just a generic check/cross. Hidden on tiny
+              viewports to keep the count strip dominant. */}
+          <img
+            src={VOTE_IMAGES.token}
+            alt=""
+            aria-hidden="true"
+            className="hidden sm:inline-block w-6 h-6 object-contain flex-shrink-0 opacity-90"
+            loading="lazy"
+            draggable={false}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase tracking-wider opacity-70">
               {t('game:voteReveal.roundProposal', { round: record.round, attempt: record.attempt })}
