@@ -15,6 +15,11 @@ body {
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Edward 2026-04-25 mobile viewport-fit root fix: prevent any rogue body
+     scroll on iOS Safari. Pages that need scroll opt in via inner panels with
+     overflow-y-auto. Combined with `h-[100dvh] overflow-hidden` on page roots,
+     this guarantees `body.scrollHeight === window.innerHeight` mid-game. */
+  overscroll-behavior-y: none;
 }
 
 html,
@@ -22,6 +27,22 @@ body,
 #root {
   height: 100%;
   width: 100%;
+  /* iOS Safari: dynamic viewport unit so the address bar showing/hiding does
+     not chop the bottom of the layout. Falls back to 100% (which inherits the
+     above 100% chain) on browsers without `dvh` support. */
+  height: 100dvh;
+}
+
+/* iOS safe-area helpers — used by sticky toolbars and bottom panels so the
+   home indicator doesn't overlap action buttons.
+
+   `pb-safe`: padding-bottom = max(default, env(safe-area-inset-bottom)).
+   `bottom-safe`: bottom = env(safe-area-inset-bottom) for fixed elements. */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.bottom-safe {
+  bottom: env(safe-area-inset-bottom);
 }
 
 /* Game-specific styles */

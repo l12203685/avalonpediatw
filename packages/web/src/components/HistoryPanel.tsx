@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player, VoteRecord } from '@avalon/shared';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import { getVoteTokenImage } from '../utils/avalonAssets';
 
 interface HistoryPanelProps {
   room: Room;
@@ -25,12 +26,13 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
   }, {});
 
   // Edward 2026-04-25: 「資訊視窗一律改成座位號碼」 — history panel now
-  // shows seat-only ("X家"), no player display name. Seat 10 renders as
-  // "0" via displaySeatNumber (#93 paper-scoresheet convention).
-  // Edward 2026-04-25 16:00: 全站座號改用「N家」格式（牌桌慣用）。
+  // shows seat-only (a bare digit 1..9, "0" for seat 10), no player display
+  // name. Seat 10 renders as "0" via displaySeatNumber (#93 paper-scoresheet
+  // convention).
+  // Edward 2026-04-25 21:59 撤回「家」suffix — 純數字。
   const getSeatName = (id: string): string => {
     const seat = seatOf(id, room.players);
-    return seat === 0 ? '?' : `${displaySeatNumber(seat)}家`;
+    return seat === 0 ? '?' : displaySeatNumber(seat);
   };
 
   return (
@@ -146,7 +148,16 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
                                               : ''
                                           } ${approved ? 'text-blue-300' : 'text-red-400'}`}
                                         >
-                                          <span>{approved ? '👍' : '👎'}</span>
+                                          {/* Edward 2026-04-25 emoji→image: 黑白球投票圖
+                                              取代 👍/👎 emoji，與 #154 VoteAnalysisPanel
+                                              黑白球視覺統一。 */}
+                                          <img
+                                            src={getVoteTokenImage(approved ? 'approve' : 'reject')}
+                                            alt=""
+                                            aria-hidden="true"
+                                            className="w-3.5 h-3.5 object-contain flex-shrink-0"
+                                            draggable={false}
+                                          />
                                           <span className="truncate">{getSeatName(pid)}</span>
                                           {pid === currentPlayer.id && <span className="text-yellow-500 text-xs">(你)</span>}
                                         </div>

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Info, Shield, Zap } from 'lucide-react';
 import { useState } from 'react';
+import { CampDisc } from './CampDisc';
 
 interface RoleCardProps {
   role: string;
@@ -77,8 +78,11 @@ export default function RoleCard({
           <motion.div className="text-5xl">{icon}</motion.div>
           <div className="flex-1">
             <h3 className={`text-2xl font-bold capitalize ${colors.text}`}>{role}</h3>
-            <p className="text-gray-300 text-sm">
-              {team === 'good' ? '🔵 好人陣營' : '🔴 邪惡陣營'}
+            <p className="text-gray-300 text-sm flex items-center gap-1.5">
+              {/* Edward 2026-04-25 emoji→disc: 中央圓盤陣營徽章取代 🔵/🔴
+                  emoji；與 PlayerCard / 各 panel 統一用乾淨圓盤而非完整星形浮雕。 */}
+              <CampDisc team={team} className="w-4 h-4" />
+              {team === 'good' ? '好人陣營' : '邪惡陣營'}
             </p>
           </div>
         </div>

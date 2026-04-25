@@ -4,7 +4,8 @@ import { X, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ROLE_INFO, getKnowledgeList } from '../utils/roleKnowledge';
 import RoleAvatar from './RoleAvatar';
-import { TEAM_INDICATORS } from '../utils/avalonAssets';
+import { CampDisc } from './CampDisc';
+import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
 
 interface RoleRevealModalProps {
   room: Room;
@@ -18,6 +19,11 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
   const info = ROLE_INFO[role] ?? ROLE_INFO.loyal;
   const knowledgeList = getKnowledgeList(role, room, currentPlayer);
   const isEvil = info.team === 'evil';
+  // Edward 2026-04-25 19:40: 角色揭曉頁多顯一行「你是 N家」 — seat 由
+  // currentPlayer 在 room.players 的順序計算（與 seatOf util 對齊），
+  // 用 displaySeatNumber 把 seat 10 渲為 "0" 維持牌譜慣例。
+  const seat = seatOf(currentPlayer.id, room.players);
+  const seatLabel = seat > 0 ? displaySeatNumber(seat) : '';
 
   return (
     <AnimatePresence>
@@ -44,35 +50,17 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
             <X size={20} />
           </button>
 
-          {/* Role icon + name. Plan #83 Phase 4: add a large RoleAvatar badge
-              under the emoji icon so the short-code (梅/派/刺/...) is
-              prominent on reveal and matches the rail/night-panel avatars.
-              Edward 2026-04-25 image batch: painted team-good/evil banner
-              sits above the emoji as the alignment headline so players see
-              "you are GOOD/EVIL" before the role itself lands. */}
+          {/* Role avatar + name. Edward 2026-04-25: simplified reveal — keep
+              only avatar + name + camp chip + description. The top banner
+              shield and the large emoji icon were redundant (avatar already
+              represents the role; chip already represents the camp). The
+              small painted shield in the camp chip is preserved (#152
+              emblem unification). */}
           <div className="text-center mb-6">
-            <motion.img
-              key={`team-${isEvil ? 'evil' : 'good'}`}
-              src={isEvil ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good}
-              alt={isEvil ? t('game:roleReveal.evilBadge') : t('game:roleReveal.goodBadge')}
-              initial={{ scale: 0.6, opacity: 0, y: -10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              transition={{ delay: 0.05, type: 'spring', stiffness: 320, damping: 18 }}
-              className="mx-auto w-16 h-16 sm:w-20 sm:h-20 object-contain mb-2 drop-shadow-xl"
-              draggable={false}
-            />
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.1, type: 'spring', stiffness: 400 }}
-              className="text-7xl mb-3"
-            >
-              {info.icon}
-            </motion.div>
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.15, type: 'spring', stiffness: 400 }}
+              transition={{ delay: 0.1, type: 'spring', stiffness: 400 }}
               className="flex justify-center mb-3"
             >
               <RoleAvatar role={role} size="lg" />
@@ -85,6 +73,17 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
             >
               {info.name}
             </motion.h2>
+            {seatLabel !== '' && (
+              <motion.p
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+                className="mt-1 text-sm font-bold text-yellow-300"
+                data-testid="role-reveal-seat"
+              >
+                {t('game:roleReveal.youAreSeat', { seat: seatLabel })}
+              </motion.p>
+            )}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -95,17 +94,10 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
                   : 'bg-blue-900/60 text-blue-300 border border-blue-700'
               }`}
             >
-              {/* Edward 2026-04-25 camp emblem unification: small painted
-                  shield in the chip restates the team alignment using the
-                  same art as the headline banner — keeps the chip readable
-                  at a glance even if the banner above scrolls off-screen. */}
-              <img
-                src={isEvil ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good}
-                alt=""
-                aria-hidden="true"
-                className="w-4 h-4 object-contain flex-shrink-0"
-                draggable={false}
-              />
+              {/* Edward 2026-04-25 19:40 emoji→lake-disc swap: 陣營 chip 圓盤
+                  從 dragon/phoenix shield 換為 lake-yes/lake-no 圓圈, 與全站
+                  陣營 vocabulary 統一。 */}
+              <CampDisc team={isEvil ? 'evil' : 'good'} className="w-4 h-4" />
               {isEvil ? t('game:roleReveal.evilBadge') : t('game:roleReveal.goodBadge')}
             </motion.div>
           </div>
@@ -152,7 +144,9 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
                         : 'bg-blue-900/40 text-blue-200'
                     }`}
                   >
-                    <span className="text-base">{isEvil ? '👹' : '✨'}</span>
+                    {/* Edward 2026-04-25 19:40 emoji→lake-disc swap: per-line camp glyph
+                        uses the lake-yes/lake-no painted disc instead of 👹/✨ emoji. */}
+                    <CampDisc team={isEvil ? 'evil' : 'good'} className="w-4 h-4" />
                     {item}
                   </motion.li>
                 ))}

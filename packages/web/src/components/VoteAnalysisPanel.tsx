@@ -28,12 +28,11 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
 
   const players = Object.values(room.players);
 
-  // Sort: good team first, then evil — interesting to see alignment vs. behaviour
-  const sorted = [...players].sort((a, b) => {
-    const aGood = GOOD_ROLES.has(a.role ?? '') ? 0 : 1;
-    const bGood = GOOD_ROLES.has(b.role ?? '') ? 0 : 1;
-    return aGood - bGood;
-  });
+  // Sort: ascending by seat → 1家, 2家, ..., 9家, 0家 (seat 10 renders as 「0家」 via displaySeatNumber, so it lands last naturally).
+  // Edward 2026-04-25 16:04: 排序從上到下 1家, 2家, ..., 0家.
+  const sorted = [...players].sort(
+    (a, b) => seatOf(a.id, room.players) - seatOf(b.id, room.players),
+  );
 
   return (
     <div className="bg-gray-900/50 border border-gray-700 rounded-xl overflow-hidden">
@@ -87,7 +86,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                           className={`border-b border-gray-800/40 ${isMe ? 'bg-yellow-900/10' : ''}`}
                         >
                           <td className="py-1.5 pr-2 font-semibold text-white whitespace-nowrap">
-                            {displaySeatNumber(seatOf(player.id, room.players))}家
+                            {displaySeatNumber(seatOf(player.id, room.players))}
                             {isMe && <span className="text-yellow-500 text-xs ml-1">{t('game:voteAnalysis.youSuffix')}</span>}
                           </td>
                           <td className={`py-1.5 pr-2 whitespace-nowrap ${isGood ? 'text-blue-400' : 'text-red-400'}`}>
@@ -149,7 +148,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                         return (
                           <tr key={player.id} className={isMe ? 'bg-yellow-900/10 rounded' : ''}>
                             <td className={`pr-3 py-0.5 font-semibold whitespace-nowrap ${isGood ? 'text-blue-300' : 'text-red-300'}`}>
-                              {displaySeatNumber(seatOf(player.id, room.players))}家
+                              {displaySeatNumber(seatOf(player.id, room.players))}
                             </td>
                             {room.voteHistory.map((v, i) => {
                               const vote = v.votes[player.id];
@@ -157,7 +156,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                               return (
                                 <td
                                   key={i}
-                                  title={isLeader ? t('game:voteAnalysis.matrixTeamTooltip', { team: v.team.map(id => `${displaySeatNumber(seatOf(id, room.players))}家`).join('、') }) : undefined}
+                                  title={isLeader ? t('game:voteAnalysis.matrixTeamTooltip', { team: v.team.map(id => displaySeatNumber(seatOf(id, room.players))).join('、') }) : undefined}
                                   className={`text-center px-1 py-0.5 ${isLeader ? 'ring-1 ring-yellow-500/40 rounded bg-yellow-900/10' : ''}`}
                                 >
                                   {vote === undefined ? (

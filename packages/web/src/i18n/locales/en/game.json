@@ -82,8 +82,8 @@
     "loyalViewOff": "Restore original view"
   },
   "roster": {
-    "goodCount": "🔵 Good team — {{count}}",
-    "evilCount": "🔴 Evil team — {{count}}"
+    "goodCount": "Good team — {{count}}",
+    "evilCount": "Evil team — {{count}}"
   },
   "connection": {
     "reconnecting": "Reconnecting…",
@@ -179,8 +179,8 @@
   "lady": {
     "title": "🔮 Lady of the Lake",
     "targetTeamLabel": "<target>{{name}}</target>'s alignment is:",
-    "resultGood": "⚔️ Good",
-    "resultEvil": "👹 Evil",
+    "resultGood": "Good",
+    "resultEvil": "Evil",
     "pass": "The Lady passes to this player...",
     "pickTitle": "Choose a player to inspect their team alignment",
     "waitingDesc": "<holder>{{name}}</holder> is using the Lady of the Lake to inspect a player...",
@@ -205,8 +205,8 @@
     "warning": "If the Assassin kills Merlin, Evil wins!"
   },
   "ended": {
-    "evilWins": "👹 Evil Wins!",
-    "goodWins": "⚔️ Good Wins!",
+    "evilWins": "Evil Wins!",
+    "goodWins": "Good Wins!",
     "reasonFailedQuests": "💀 Evil failed 3 quests",
     "reasonVoteRejections": "🚫 5 proposals all rejected — Evil wins by default",
     "reasonMerlinKilledPrefix": "🗡️ The Assassin killed Merlin!",
@@ -217,8 +217,7 @@
     "roundFailLabel": "{{count}} fail",
     "rolesReveal": "Final Role Reveal:",
     "youLabel": "(You)",
-    "rematch": "Rematch",
-    "backHome": "Back to Home"
+    "backToRoom": "Back to Room"
   },
   "votePanel": {
     "title": "Team Vote",
@@ -233,8 +232,8 @@
     "approveBtn": "Approve",
     "rejectBtn": "Reject",
     "submitting": "Voting…",
-    "yourVoteApprove": "Your vote: 👍 Approved",
-    "yourVoteReject": "Your vote: 👎 Rejected",
+    "yourVoteApprove": "Your vote: Approved",
+    "yourVoteReject": "Your vote: Rejected",
     "waitingOthers": "Waiting for other players to vote…",
     "shortcuts": "Shortcuts: <approve>Y</approve> Approve · <reject>N</reject> Reject",
     "countdownLabel": "Vote countdown"
@@ -289,14 +288,15 @@
     "shieldHint": "Tap a player card to add/remove from team"
   },
   "roleReveal": {
-    "evilBadge": "🔴 Evil",
-    "goodBadge": "🔵 Good",
+    "evilBadge": "Evil",
+    "goodBadge": "Good",
     "knowledgeTitle": "Your Night Information",
-    "startBtn": "Got it! Start Game"
+    "startBtn": "Got it! Start Game",
+    "youAreSeat": "You are seat {{seat}}"
   },
   "nightInfo": {
-    "evil": "🔴 Evil",
-    "good": "🔵 Good",
+    "evil": "Evil",
+    "good": "Good",
     "clickToView": "· Tap to view info",
     "hintLabel": "Hint"
   },
@@ -324,9 +324,9 @@
   "bot": {
     "label": "AI Bot",
     "labelShort": "AI",
-    "newbie": "Weak AI",
-    "core": "Mid AI",
-    "expert": "Strong AI",
+    "newbie": "AI",
+    "core": "AI",
+    "expert": "AI",
     "fillTitle": "Add AI Bot"
   }
 }

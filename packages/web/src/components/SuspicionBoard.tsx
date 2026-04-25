@@ -10,13 +10,24 @@ import { Room, Player } from '@avalon/shared';
 import { ChevronDown, ChevronUp, ClipboardList } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import { CampDisc } from './CampDisc';
 
 type Suspicion = 'evil' | 'neutral' | 'trusted';
 
-const SUSPICION_STYLE: Record<Suspicion, { emoji: string; bg: string; text: string }> = {
-  evil:    { emoji: '👹', bg: 'bg-red-900/50 border-red-600',   text: 'text-red-300' },
-  neutral: { emoji: '❓', bg: 'bg-gray-800/50 border-gray-600', text: 'text-gray-400' },
-  trusted: { emoji: '✅', bg: 'bg-blue-900/50 border-blue-600',  text: 'text-blue-300' },
+/**
+ * Edward 2026-04-25 19:40 emoji→lake-disc swap: 'evil' suspicion uses the
+ * lake-no red circle (`<CampDisc team="evil">`) so the emoji column reads
+ * the same camp vocabulary as the rest of the app. 'trusted' keeps the
+ * lake-yes blue circle via CampDisc; 'neutral' stays as a ❓ glyph since
+ * "unknown" isn't a camp and has no lake equivalent.
+ *
+ * The shape is `glyph: ReactNode` instead of `emoji: string` so callers
+ * can render either an emoji char or a CampDisc element interchangeably.
+ */
+const SUSPICION_STYLE: Record<Suspicion, { bg: string; text: string }> = {
+  evil:    { bg: 'bg-red-900/50 border-red-600',   text: 'text-red-300' },
+  neutral: { bg: 'bg-gray-800/50 border-gray-600', text: 'text-gray-400' },
+  trusted: { bg: 'bg-blue-900/50 border-blue-600',  text: 'text-blue-300' },
 };
 
 const CYCLE_ORDER: Suspicion[] = ['neutral', 'trusted', 'evil'];
@@ -79,10 +90,20 @@ export default function SuspicionBoard({ room, currentPlayer }: SuspicionBoardPr
           <span className="text-sm font-bold text-gray-300">{t('game:suspicionBoard.headerTitle')}</span>
           <span className="text-xs text-gray-600">{t('game:suspicionBoard.privateLabel')}</span>
           {(evilCount > 0 || trustCount > 0) && (
-            <span className="text-xs bg-gray-700 rounded-full px-2 py-0.5 text-gray-400">
-              {evilCount > 0 && <span className="text-red-400">{evilCount}👹</span>}
-              {evilCount > 0 && trustCount > 0 && ' '}
-              {trustCount > 0 && <span className="text-blue-400">{trustCount}✅</span>}
+            <span className="text-xs bg-gray-700 rounded-full px-2 py-0.5 text-gray-400 inline-flex items-center gap-1">
+              {/* Edward 2026-04-25 19:40 emoji→lake-disc swap: evil count badge uses
+                  lake-no red circle, trust count uses lake-yes blue circle, matching
+                  the platform-wide 陣營 vocabulary. */}
+              {evilCount > 0 && (
+                <span className="text-red-400 inline-flex items-center gap-0.5">
+                  {evilCount}<CampDisc team="evil" className="w-3 h-3" />
+                </span>
+              )}
+              {trustCount > 0 && (
+                <span className="text-blue-400 inline-flex items-center gap-0.5">
+                  {trustCount}<CampDisc team="good" className="w-3 h-3" />
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -111,9 +132,20 @@ export default function SuspicionBoard({ room, currentPlayer }: SuspicionBoardPr
                       onClick={() => cycleSuspicion(player.id)}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold transition-all hover:brightness-110 ${cfg.bg} ${cfg.text}`}
                     >
-                      <span className="text-base">{cfg.emoji}</span>
+                      {/* Edward 2026-04-25 19:40 emoji→lake-disc swap: evil/trusted glyphs
+                          render the lake-no/lake-yes painted disc, neutral keeps a ❓ glyph
+                          (no camp = no lake equivalent). */}
+                      <span className="text-base flex items-center justify-center w-4 h-4">
+                        {status === 'evil' ? (
+                          <CampDisc team="evil" className="w-4 h-4" />
+                        ) : status === 'trusted' ? (
+                          <CampDisc team="good" className="w-4 h-4" />
+                        ) : (
+                          '❓'
+                        )}
+                      </span>
                       <div className="text-left min-w-0">
-                        <div className="font-bold truncate">{displaySeatNumber(seatOf(player.id, room.players))}家</div>
+                        <div className="font-bold truncate">{displaySeatNumber(seatOf(player.id, room.players))}</div>
                         <div className="opacity-70">{statusLabel[status]}</div>
                       </div>
                     </motion.button>

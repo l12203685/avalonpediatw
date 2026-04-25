@@ -82,8 +82,8 @@
     "loyalViewOff": "還原原本視角"
   },
   "roster": {
-    "goodCount": "🔵 正義方 {{count}} 人",
-    "evilCount": "🔴 邪惡方 {{count}} 人"
+    "goodCount": "正義方 {{count}} 人",
+    "evilCount": "邪惡方 {{count}} 人"
   },
   "connection": {
     "reconnecting": "正在重新連線…",
@@ -179,8 +179,8 @@
   "lady": {
     "title": "🔮 湖中女神",
     "targetTeamLabel": "<target>{{name}}</target> 的陣營是：",
-    "resultGood": "⚔️ 好人",
-    "resultEvil": "👹 邪惡",
+    "resultGood": "好人",
+    "resultEvil": "邪惡",
     "pass": "湖中女神將傳遞給此玩家...",
     "pickTitle": "選擇一位玩家查看其陣營",
     "waitingDesc": "<holder>{{name}}</holder> 正在使用湖中女神查看一位玩家的陣營...",
@@ -205,8 +205,8 @@
     "warning": "若刺客成功刺殺梅林，邪惡方獲勝！"
   },
   "ended": {
-    "evilWins": "👹 邪惡方獲勝!",
-    "goodWins": "⚔️ 正義方獲勝!",
+    "evilWins": "邪惡方獲勝!",
+    "goodWins": "正義方獲勝!",
     "reasonFailedQuests": "💀 邪惡方破壞了 3 次任務",
     "reasonVoteRejections": "🚫 5 次提案全數否決,邪惡方自動獲勝",
     "reasonMerlinKilledPrefix": "🗡️ 刺客成功刺殺梅林!",
@@ -217,8 +217,7 @@
     "roundFailLabel": "{{count}}張失敗",
     "rolesReveal": "最終角色揭曉:",
     "youLabel": "(你)",
-    "rematch": "再來一局",
-    "backHome": "返回首頁"
+    "backToRoom": "返回房間"
   },
   "votePanel": {
     "title": "隊伍提案投票",
@@ -233,8 +232,8 @@
     "approveBtn": "贊成",
     "rejectBtn": "拒絕",
     "submitting": "投票中…",
-    "yourVoteApprove": "你的票：👍 贊成",
-    "yourVoteReject": "你的票：👎 拒絕",
+    "yourVoteApprove": "你的票：贊成",
+    "yourVoteReject": "你的票：拒絕",
     "waitingOthers": "等待其他玩家投票…",
     "shortcuts": "快捷鍵：<approve>Y</approve> 贊成・<reject>N</reject> 拒絕",
     "countdownLabel": "投票倒數"
@@ -289,14 +288,15 @@
     "shieldHint": "點擊玩家頭像加入/移除隊伍"
   },
   "roleReveal": {
-    "evilBadge": "🔴 邪惡方",
-    "goodBadge": "🔵 正義方",
+    "evilBadge": "邪惡方",
+    "goodBadge": "正義方",
     "knowledgeTitle": "你知道的資訊",
-    "startBtn": "了解!開始遊戲"
+    "startBtn": "了解!開始遊戲",
+    "youAreSeat": "你是 {{seat}}"
   },
   "nightInfo": {
-    "evil": "🔴 邪惡方",
-    "good": "🔵 正義方",
+    "evil": "邪惡方",
+    "good": "正義方",
     "clickToView": "· 點擊查看資訊",
     "hintLabel": "提示"
   },
@@ -324,9 +324,9 @@
   "bot": {
     "label": "AI 機器人",
     "labelShort": "AI",
-    "newbie": "弱AI",
-    "core": "中AI",
-    "expert": "強AI",
+    "newbie": "AI",
+    "core": "AI",
+    "expert": "AI",
     "fillTitle": "加入 AI 機器人"
   }
 }

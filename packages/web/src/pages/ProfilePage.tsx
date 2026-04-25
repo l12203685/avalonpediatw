@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
-import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, BarChart3, Camera } from 'lucide-react';
+import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, BarChart3, Camera, Lock, Eye, EyeOff, RefreshCcw } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
+import { CampDisc } from '../components/CampDisc';
 import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile, uploadAvatar } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
 import { fetchLinkedAccounts, unlinkAccount, buildLinkProviderUrl, type LinkedAccount, type LinkProvider } from '../services/api';
 import { getStoredToken } from '../services/socket';
+import { changePassword, estimatePasswordStrength } from '../services/auth';
+import { forceRefresh } from '../utils/forceRefresh';
 
 const ROLE_COLORS: Record<string, string> = {
   merlin: 'text-blue-300', percival: 'text-blue-200', loyal: 'text-blue-400',
@@ -182,6 +185,17 @@ export default function ProfilePage(): JSX.Element {
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[] | null>(null);
   const [linkBusy, setLinkBusy] = useState<LinkProvider | null>(null);
   const [linkNotice, setLinkNotice] = useState<{ kind: 'ok' | 'merged' | 'error'; msg: string } | null>(null);
+
+  // Edward 2026-04-25 19:44: 把 SettingsPage 獨有功能 (密碼/信箱/清除本機資料)
+  // 搬到 ProfilePage，HomePage 不再放「登入綁定」入口。Provider='password' 帳號
+  // 才看得到密碼修改區；其他 OAuth 帳號顯示提示訊息。
+  const isPasswordAccount = (currentPlayer as { provider?: string } | null)?.provider === 'password';
+  const [pwForm, setPwForm] = useState({ old: '', new: '', confirm: '' });
+  const [pwShow, setPwShow] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const pwStrength = useMemo(() => estimatePasswordStrength(pwForm.new), [pwForm.new]);
+  const pwConfirmMismatch = pwForm.confirm.length > 0 && pwForm.new !== pwForm.confirm;
 
   const isMe = !profileUserId || profileUserId === 'me';
 
@@ -462,6 +476,30 @@ export default function ProfilePage(): JSX.Element {
     }
   };
 
+  // Edward 2026-04-25 19:44: 改密碼 (provider='password' 帳號)。從 SettingsPage
+  // 搬過來；驗證邏輯與後端 contract 一致 (≥8 字 + 英文字母 + 數字)。
+  const handleChangePassword = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token) { setPwError(t('common:settings.pwOldPlaceholder', { defaultValue: '未登入' })); return; }
+    if (!pwForm.old) { setPwError('請輸入原密碼'); return; }
+    if (pwForm.new.length < 8) { setPwError('新密碼至少 8 字元'); return; }
+    if (!/[A-Za-z]/.test(pwForm.new)) { setPwError('新密碼需要至少一個英文字母'); return; }
+    if (!/\d/.test(pwForm.new)) { setPwError('新密碼需要至少一個數字'); return; }
+    if (pwForm.new !== pwForm.confirm) { setPwError('兩次輸入不一致'); return; }
+    if (pwForm.old === pwForm.new) { setPwError('新密碼不能跟原密碼相同'); return; }
+    setPwBusy(true);
+    setPwError('');
+    try {
+      await changePassword(token, pwForm.old, pwForm.new);
+      addToast(t('common:settings.pwChanged', { defaultValue: '密碼已更新' }), 'success');
+      setPwForm({ old: '', new: '', confirm: '' });
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : '改密碼失敗');
+    } finally {
+      setPwBusy(false);
+    }
+  };
+
   const handleReplay = (roomId: string, game: RecentGame | null = null): void => {
     setReplayLoading(true);
     fetchGameReplay(roomId)
@@ -525,14 +563,18 @@ export default function ProfilePage(): JSX.Element {
             <ArrowLeft size={20} />
           </button>
           <h1 className="text-2xl font-black text-white flex-1">{t('profile:headerTitle')}</h1>
+          {/* Edward 2026-04-25 19:44: 修「nav.analysis」未翻譯 bug。
+              useTranslation(['profile', 'common', 'game']) 讓 profile 成為
+              default namespace，t('nav.analysis') 會去查 profile:nav.analysis
+              (不存在) → fallback 到字面 key。改用明確 common: 前綴。 */}
           <button
             onClick={() => setGameState('analysis')}
             data-testid="profile-btn-analysis"
             className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
-            title={t('nav.analysis')}
+            title={t('common:nav.analysis')}
           >
             <BarChart3 size={14} />
-            {t('nav.analysis')}
+            {t('common:nav.analysis')}
           </button>
         </div>
 
@@ -918,7 +960,10 @@ export default function ProfilePage(): JSX.Element {
                         <div className={`text-2xl font-black ${pct >= 50 ? (isGood ? 'text-blue-300' : 'text-red-300') : 'text-gray-400'}`}>
                           {total > 0 ? `${pct}%` : '—'}
                         </div>
-                        <div className={`text-xs mt-1 ${isGood ? 'text-blue-400' : 'text-red-400'}`}>
+                        {/* Edward 2026-04-25 19:40 emoji→lake-disc swap: 陣營勝率
+                            label 前綴用 lake-yes/lake-no 圓圈取代 ⚔️/👹 emoji。 */}
+                        <div className={`text-xs mt-1 inline-flex items-center justify-center gap-1 ${isGood ? 'text-blue-400' : 'text-red-400'}`}>
+                          <CampDisc team={isGood ? 'good' : 'evil'} className="w-3 h-3" />
                           {isGood ? t('profile:stats.good') : t('profile:stats.evil')}
                         </div>
                         {total > 0 && <div className="text-xs text-gray-600 mt-0.5">{wins}/{total}</div>}
@@ -1098,11 +1143,13 @@ export default function ProfilePage(): JSX.Element {
                               </span>
                             </div>
                             <div className="flex items-center gap-3 pt-1">
-                              <div className={`text-sm font-bold px-3 py-1 rounded-lg ${
+                              <div className={`text-sm font-bold px-3 py-1 rounded-lg flex items-center gap-1.5 ${
                                 replay.game.won
                                   ? 'bg-blue-900/50 text-blue-300 border border-blue-600'
                                   : 'bg-red-900/50 text-red-300 border border-red-600'
                               }`}>
+                                {/* Edward 2026-04-25 emoji→disc: 中央圓盤陣營徽章取代 🔵/🔴。 */}
+                                <CampDisc team={replay.game.won ? 'good' : 'evil'} className="w-4 h-4" />
                                 {replay.game.won ? t('profile:replay.win') : t('profile:replay.loss')}
                               </div>
                               <div className={`text-sm font-bold ${replay.game.elo_delta >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
@@ -1161,11 +1208,13 @@ export default function ProfilePage(): JSX.Element {
                           )}
                           {/* Winner */}
                           {evilWins !== null && (
-                            <div className={`text-sm font-bold px-3 py-1 rounded-lg inline-block ${
+                            <div className={`text-sm font-bold px-3 py-1 rounded-lg inline-flex items-center gap-1.5 ${
                               evilWins
                                 ? 'bg-red-900/50 text-red-300 border border-red-600'
                                 : 'bg-blue-900/50 text-blue-300 border border-blue-600'
                             }`}>
+                              {/* Edward 2026-04-25 emoji→disc: 中央圓盤陣營徽章取代 🔵/🔴。 */}
+                              <CampDisc team={evilWins ? 'evil' : 'good'} className="w-4 h-4" />
                               {evilWins ? t('profile:replay.winnerEvil') : t('profile:replay.winnerGood')}
                             </div>
                           )}
@@ -1187,6 +1236,176 @@ export default function ProfilePage(): JSX.Element {
                   })()}
                 </div>
               </div>
+            )}
+
+            {/* Edward 2026-04-25 19:44 整合：HomePage 的「登入綁定」按鈕已砍，
+                以下三段 (密碼修改 / 主要信箱 / 清除本機資料) 從 SettingsPage 搬過
+                來放這裡。只在 own profile + 非編輯模式顯示。SettingsPage 元件保
+                留 (BindingField / OAuth callback 仍 route 到 settings)，但
+                HomePage 不再放入口，避免兩頁功能重疊。 */}
+            {isMe && !editing && (
+              <>
+                {/* 密碼修改 — 僅 provider='password' 帳號可見 */}
+                <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Lock size={16} className="text-white" />
+                    <h3 className="text-sm font-bold text-gray-300">
+                      {t('common:settings.password', { defaultValue: '密碼' })}
+                    </h3>
+                  </div>
+                  {!isPasswordAccount ? (
+                    <p className="text-xs text-gray-500" data-testid="profile-password-unavailable">
+                      {t('common:settings.pwOnlyForPasswordAccount', {
+                        defaultValue: '僅密碼帳號可修改密碼。社群登入帳號請到對應平台更改。',
+                      })}
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-500">
+                        {t('common:settings.pwHint', { defaultValue: '至少 8 字，含英文字母 + 數字' })}
+                      </p>
+                      {pwError && (
+                        <div className="bg-red-900/50 border border-red-600 rounded-lg p-2 text-red-200 text-xs" data-testid="profile-password-error">
+                          {pwError}
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <input
+                            type={pwShow ? 'text' : 'password'}
+                            autoComplete="current-password"
+                            placeholder={t('common:settings.pwOldPlaceholder', { defaultValue: '原密碼' })}
+                            value={pwForm.old}
+                            onChange={e => setPwForm(f => ({ ...f, old: e.target.value }))}
+                            data-testid="profile-input-pw-old"
+                            className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 pr-10 text-white placeholder-zinc-500 focus:outline-none focus:border-white text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPwShow(v => !v)}
+                            aria-label={pwShow ? '隱藏密碼' : '顯示密碼'}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                          >
+                            {pwShow ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                        <input
+                          type={pwShow ? 'text' : 'password'}
+                          autoComplete="new-password"
+                          placeholder={t('common:settings.pwNewPlaceholder', { defaultValue: '新密碼' })}
+                          value={pwForm.new}
+                          onChange={e => setPwForm(f => ({ ...f, new: e.target.value }))}
+                          data-testid="profile-input-pw-new"
+                          className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-white text-sm"
+                        />
+                        {pwForm.new.length > 0 && (
+                          <div className="flex gap-1" data-testid="profile-pw-strength">
+                            {[0, 1, 2, 3, 4].map(i => (
+                              <div
+                                key={i}
+                                className={`h-1 flex-1 rounded ${
+                                  i < pwStrength.score
+                                    ? (['bg-red-500', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-emerald-500'])[pwStrength.score]
+                                    : 'bg-zinc-800'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <input
+                          type={pwShow ? 'text' : 'password'}
+                          autoComplete="new-password"
+                          placeholder={t('common:settings.pwConfirmPlaceholder', { defaultValue: '再次輸入新密碼' })}
+                          value={pwForm.confirm}
+                          onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
+                          data-testid="profile-input-pw-confirm"
+                          className={`w-full bg-zinc-950 border rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:outline-none text-sm ${
+                            pwConfirmMismatch ? 'border-red-500' : 'border-zinc-700 focus:border-white'
+                          }`}
+                        />
+                        {pwConfirmMismatch && (
+                          <p className="text-[11px] text-red-400">兩次輸入不一致</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleChangePassword}
+                        disabled={pwBusy}
+                        data-testid="profile-btn-change-pw"
+                        className="inline-flex items-center gap-2 bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-semibold py-1.5 px-4 rounded-lg text-sm transition-colors"
+                      >
+                        {pwBusy && <Loader size={14} className="animate-spin" />}
+                        {t('common:settings.pwSubmit', { defaultValue: '更新密碼' })}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 主要信箱管理 */}
+                <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Mail size={16} className="text-white" />
+                    <h3 className="text-sm font-bold text-gray-300">
+                      {t('common:settings.email', { defaultValue: '信箱管理' })}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">
+                    {t('common:settings.emailHint', { defaultValue: '主要信箱用於忘密重設與帳號通知' })}
+                  </p>
+                  {(() => {
+                    const primary = (currentPlayer as { primaryEmail?: string; email?: string } | null)?.primaryEmail
+                      ?? (currentPlayer as { primaryEmail?: string; email?: string } | null)?.email
+                      ?? profile.email
+                      ?? null;
+                    return primary ? (
+                      <div className="flex items-center gap-2 bg-zinc-950/40 border border-zinc-800 rounded-lg px-3 py-2">
+                        <Mail size={14} className="text-zinc-400" />
+                        <code
+                          className="text-[11px] text-zinc-200 font-mono break-all flex-1"
+                          data-testid="profile-email-primary"
+                        >{primary}</code>
+                        <span className="text-[10px] text-amber-400">
+                          {t('common:settings.primaryEmailLabel', { defaultValue: '主要' })}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500" data-testid="profile-email-empty">
+                        {t('common:settings.noPrimaryEmail', { defaultValue: '尚未設定主要信箱' })}
+                      </p>
+                    );
+                  })()}
+                  <p className="mt-2 text-[11px] text-gray-600">
+                    {t('common:settings.emailManageSoon', {
+                      defaultValue: '新增 / 刪除 / 切換主要信箱功能即將開放',
+                    })}
+                  </p>
+                </div>
+
+                {/* 清除本機資料並重新載入 */}
+                <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <RefreshCcw size={16} className="text-white" />
+                    <h3 className="text-sm font-bold text-gray-300">
+                      {t('common:settings.advanced.title', { defaultValue: '進階' })}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">
+                    {t('common:settings.advanced.clearWarning', {
+                      defaultValue: '此動作會清除本機儲存的登入狀態與快取，完成後需重新登入',
+                    })}
+                  </p>
+                  <button
+                    type="button"
+                    data-testid="profile-btn-force-refresh"
+                    onClick={() => { void forceRefresh(); }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-50 text-sm font-semibold transition-colors"
+                  >
+                    <RefreshCcw size={14} />
+                    {t('common:settings.advanced.clearLocalAndReload', {
+                      defaultValue: '清除本機資料並重新載入',
+                    })}
+                  </button>
+                </div>
+              </>
             )}
 
             {/* View on leaderboard */}

@@ -88,7 +88,7 @@ export default function VotePanel({
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 40 }}
-      className="fixed bottom-0 inset-x-0 z-40 bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-yellow-600 shadow-[0_-6px_20px_rgba(0,0,0,0.55)]"
+      className="fixed bottom-0 inset-x-0 z-40 max-h-[30dvh] overflow-y-auto bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-yellow-600 shadow-[0_-6px_20px_rgba(0,0,0,0.55)] pb-safe"
       role="region"
       aria-label={t('game:votePanel.title')}
     >
@@ -141,11 +141,10 @@ export default function VotePanel({
           </div>
         )}
 
-        {/* Action row — buttons OR voted-status. Edward 2026-04-25 image batch:
-            replace lucide ThumbsUp/Down icons with the painted yes/no banner art
-            so the Approve / Reject buttons share visual language with the
-            VoteRevealOverlay. Image size matches the previous icon footprint
-            (~22px) so button height doesn't shift. */}
+        {/* Action row — buttons OR voted-status. Edward 2026-04-25 21:52 #9
+            「PlayerCard 黑白球砍, 球只在投票按鈕 UI 顯示 (按鈕 icon 變大 + 黑
+            白球嵌入)」: 把 yes/no 球放大 (w-6 → w-9 sm:w-10), 讓贊成/反對
+            按鈕內的黑白球變成主視覺, 取代 PlayerCard 上拿掉的左下球 indicator。 */}
         {!hasVoted ? (
           <div className="flex items-center gap-2 sm:gap-3">
             <motion.button
@@ -159,7 +158,7 @@ export default function VotePanel({
                 src={VOTE_IMAGES.yes}
                 alt=""
                 aria-hidden="true"
-                className="w-6 h-6 object-contain drop-shadow-md"
+                className="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-md"
                 draggable={false}
               />
               {isLoading ? t('game:votePanel.submitting') : t('game:votePanel.approveBtn')}
@@ -176,7 +175,7 @@ export default function VotePanel({
                 src={VOTE_IMAGES.no}
                 alt=""
                 aria-hidden="true"
-                className="w-6 h-6 object-contain drop-shadow-md"
+                className="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-md"
                 draggable={false}
               />
               {isLoading ? t('game:votePanel.submitting') : t('game:votePanel.rejectBtn')}
@@ -184,6 +183,15 @@ export default function VotePanel({
           </div>
         ) : (
           <div className="flex items-center justify-center gap-2 py-1.5">
+            {/* Edward 2026-04-25 21:52 #9: voted-status row 跟 PlayerCard 拿掉的
+                球視覺呼應，這裡也放大一級到 w-7。 */}
+            <img
+              src={room.votes[currentPlayer.id] ? VOTE_IMAGES.yes : VOTE_IMAGES.no}
+              alt=""
+              aria-hidden="true"
+              className="w-7 h-7 object-contain flex-shrink-0"
+              draggable={false}
+            />
             <span className="text-sm text-gray-200 font-semibold">
               {room.votes[currentPlayer.id] ? t('game:votePanel.yourVoteApprove') : t('game:votePanel.yourVoteReject')}
             </span>
