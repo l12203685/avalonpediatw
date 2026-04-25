@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
-import { submitVote, submitAssassination, submitLadyOfTheLake, declareLakeResult, skipLakeDeclaration, requestRematch, leaveSpectate } from '../services/socket';
+import { submitVote, submitAssassination, submitLadyOfTheLake, declareLakeResult, skipLakeDeclaration, leaveSpectate } from '../services/socket';
 import GameBoard from '../components/GameBoard';
 import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
@@ -15,7 +15,7 @@ import SuspicionBoard from '../components/SuspicionBoard';
 import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
 import CompactScoresheet from '../components/CompactScoresheet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Bell, RefreshCw, WifiOff, Loader2, Eye } from 'lucide-react';
+import { DoorOpen, Bell, WifiOff, Loader2, Eye } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
@@ -23,7 +23,7 @@ import { TEAM_INDICATORS, LAKE_IMAGE, getBoardImage, getCampImage } from '../uti
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
-  const { room, currentPlayer, setGameState, setRoom, setCurrentPlayer, isSpectator, socketStatus } = useGameStore();
+  const { room, currentPlayer, setGameState, isSpectator, socketStatus } = useGameStore();
   const [isVoting, setIsVoting] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [isAssassinating, setIsAssassinating] = useState(false);
@@ -187,10 +187,11 @@ export default function GamePage(): JSX.Element {
     setTimeout(() => setIsAssassinating(false), 3000);
   };
 
-  const handlePlayAgain = () => {
-    setRoom(null);
-    setCurrentPlayer(currentPlayer ? { ...currentPlayer, role: null, team: null } : null);
-    setGameState('home');
+  // 2026-04-25 Edward「結束應該是 [返回房間] => 要返回首頁的再從房間內的右上角直接離開」
+  // 結束揭曉頁的按鈕只回 lobby（房間 waiting room），等下一局；要回首頁的玩家
+  // 從 LobbyPage 右上角既有 leaveRoom 按鈕走。不清 room／不清 role，保留房間連線。
+  const handleBackToRoom = () => {
+    setGameState('lobby');
   };
 
   // 2026-04-25: stateLabel 字典已砍（Edward「上方排版太佔空間」）— 狀態徽章從 header 移除，
@@ -889,26 +890,18 @@ export default function GamePage(): JSX.Element {
             {/* Vote analysis — collapsible, only shown when there's history */}
             <VoteAnalysisPanel room={room} currentPlayer={currentPlayer} />
 
+            {/* 2026-04-25 Edward 揭曉頁底部按鈕簡化：刪「再來一局」+「返回首頁」，
+                只留「返回房間」回 lobby waiting room；要回首頁的玩家從 LobbyPage
+                右上角既有 leaveRoom 走。 */}
             <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
-              {room.host === currentPlayer.id && (
-                <motion.button
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => requestRematch(room.id)}
-                  className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white text-sm font-bold py-2 px-5 rounded-md transition-all"
-                >
-                  <RefreshCw size={16} />
-                  {t('game:ended.rematch')}
-                </motion.button>
-              )}
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
-                onClick={handlePlayAgain}
+                onClick={handleBackToRoom}
                 className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-bold py-2 px-5 rounded-md transition-all"
               >
-                <Home size={16} />
-                {t('game:ended.backHome')}
+                <DoorOpen size={16} />
+                {t('game:ended.backToRoom')}
               </motion.button>
             </div>
           </motion.div>

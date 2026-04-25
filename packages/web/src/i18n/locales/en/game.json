@@ -217,8 +217,7 @@
     "roundFailLabel": "{{count}} fail",
     "rolesReveal": "Final Role Reveal:",
     "youLabel": "(You)",
-    "rematch": "Rematch",
-    "backHome": "Back to Home"
+    "backToRoom": "Back to Room"
   },
   "votePanel": {
     "title": "Team Vote",

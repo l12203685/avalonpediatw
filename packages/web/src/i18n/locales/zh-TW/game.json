@@ -217,8 +217,7 @@
     "roundFailLabel": "{{count}}張失敗",
     "rolesReveal": "最終角色揭曉:",
     "youLabel": "(你)",
-    "rematch": "再來一局",
-    "backHome": "返回首頁"
+    "backToRoom": "返回房間"
   },
   "votePanel": {
     "title": "隊伍提案投票",
