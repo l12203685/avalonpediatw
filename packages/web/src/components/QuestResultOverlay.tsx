@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { QuestRecord, Room } from '@avalon/shared';
 import audioService from '../services/audio';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import { QUEST_RESULT_IMAGES } from '../utils/avalonAssets';
 
 interface QuestResultOverlayProps {
   record: QuestRecord;
@@ -64,11 +65,20 @@ export default function QuestResultOverlay({
         className="bg-avalon-card/95 border-2 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden"
         style={{ borderColor: success ? '#22c55e' : '#ef4444' }}
       >
-        {/* Header strip — icon + result */}
+        {/* Header strip — Edward 2026-04-25 image batch: replace the
+            ⚔️/💀 emoji with the painted success/fail banner art. Image
+            sits at 36px (matches old emoji visual weight) and never
+            blocks the seat-list below. */}
         <div className={`px-4 py-2.5 flex items-center gap-3 ${
           success ? 'bg-green-900/40 text-green-200' : 'bg-red-900/40 text-red-200'
         }`}>
-          <span className="text-3xl">{success ? '⚔️' : '💀'}</span>
+          <img
+            src={success ? QUEST_RESULT_IMAGES.success : QUEST_RESULT_IMAGES.fail}
+            alt={success ? t('game:questResult.success') : t('game:questResult.fail')}
+            className="w-9 h-9 object-contain flex-shrink-0"
+            loading="lazy"
+            draggable={false}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase tracking-wider opacity-70">
               {t('game:questResult.roundLabel', { round: record.round })}

@@ -20,6 +20,7 @@ import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2, Eye } from '
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 import { seatPrefix, displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import { WINNER_CUPS } from '../utils/avalonAssets';
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
@@ -724,6 +725,20 @@ export default function GamePage(): JSX.Element {
                 : 'bg-avalon-good/20 border-avalon-good'
             }`}
           >
+            {/* Edward 2026-04-25 image batch: painted winner cup over the
+                ended-screen headline. Sized 96-128px so it dominates the
+                "勝利" message without pushing the role grid below the fold. */}
+            <motion.img
+              key={`cup-${room.evilWins ? 'evil' : 'good'}`}
+              initial={{ scale: 0.4, rotate: -8, opacity: 0 }}
+              animate={{ scale: 1, rotate: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+              src={room.evilWins ? WINNER_CUPS.evil : WINNER_CUPS.good}
+              alt={room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
+              className="mx-auto w-24 h-24 sm:w-32 sm:h-32 object-contain drop-shadow-2xl"
+              draggable={false}
+            />
+
             <motion.h2
               initial={{ y: -20 }}
               animate={{ y: 0 }}

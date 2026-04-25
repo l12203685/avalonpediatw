@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { VoteRecord, Room } from '@avalon/shared';
 import audioService from '../services/audio';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import { VOTE_IMAGES } from '../utils/avalonAssets';
 
 interface VoteRevealOverlayProps {
   record: VoteRecord;
@@ -67,13 +68,21 @@ export default function VoteRevealOverlay({
         className="bg-avalon-card/95 border-2 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden"
         style={{ borderColor: record.approved ? '#3b82f6' : '#ef4444' }}
       >
-        {/* Header strip */}
+        {/* Header strip — Edward 2026-04-25 image batch: swap the ✅/❌
+            emoji for the painted vote-yes / vote-no banner art so the toast
+            mirrors the button art shown during the active vote. */}
         <div className={`px-4 py-2 flex items-center gap-3 ${
           record.approved
             ? 'bg-blue-900/40 text-blue-200'
             : 'bg-red-900/40 text-red-200'
         }`}>
-          <span className="text-2xl">{record.approved ? '✅' : '❌'}</span>
+          <img
+            src={record.approved ? VOTE_IMAGES.yes : VOTE_IMAGES.no}
+            alt={record.approved ? t('game:voteReveal.approved') : t('game:voteReveal.rejected')}
+            className="w-7 h-7 object-contain flex-shrink-0"
+            loading="lazy"
+            draggable={false}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase tracking-wider opacity-70">
               {t('game:voteReveal.roundProposal', { round: record.round, attempt: record.attempt })}

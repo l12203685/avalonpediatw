@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Crown, Shield, WifiOff, Droplet } from 'lucide-react';
 import { displaySeatNumber } from '../utils/seatDisplay';
 import RoleAvatar from './RoleAvatar';
+import { pickAvatarUrl } from '../utils/avalonAssets';
 
 const ROLE_NAMES: Record<string, string> = {
   merlin:   '梅林',
@@ -155,8 +156,12 @@ export default function PlayerCard({
               : 'border-gray-500 bg-gradient-to-br from-slate-500 to-slate-700'
           }`}
         >
-          {/* Avatar background — image or emoji fallback. Sized smaller and shifted up so
-              the name strip on the bottom 35% has room. */}
+          {/* Avatar background — Edward 2026-04-25 image batch: pick a painted
+              role portrait (own role) or a stable 雜魚 variant (unknown).
+              Bots keep their emoji and explicit player.avatar override still
+              wins over the painted art so user-uploaded images aren't lost.
+              Sized smaller and shifted up so the name strip on the bottom 35%
+              has room. */}
           <div className="absolute inset-0 flex items-start justify-center pt-1">
             {player.isBot ? (
               <span className="text-2xl sm:text-3xl leading-none">🤖</span>
@@ -167,9 +172,13 @@ export default function PlayerCard({
                 className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover"
               />
             ) : (
-              <span className="text-base sm:text-lg leading-none mt-1.5 text-white drop-shadow">
-                {player.name.charAt(0).toUpperCase()}
-              </span>
+              <img
+                src={pickAvatarUrl(player.role as Role | null | undefined, player.id)}
+                alt={player.name}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover"
+                loading="lazy"
+                draggable={false}
+              />
             )}
           </div>
 

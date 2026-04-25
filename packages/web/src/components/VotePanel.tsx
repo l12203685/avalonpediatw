@@ -1,9 +1,10 @@
 import { Room, Player } from '@avalon/shared';
-import { ThumbsUp, ThumbsDown, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import audioService from '../services/audio';
+import { VOTE_IMAGES } from '../utils/avalonAssets';
 
 // Base seconds for the team-vote phase. Matches server VOTE_TIMEOUT_MS at 1x.
 const VOTE_BASE_SECONDS = 90;
@@ -128,7 +129,11 @@ export default function VotePanel({
           </div>
         )}
 
-        {/* Action row — buttons OR voted-status */}
+        {/* Action row — buttons OR voted-status. Edward 2026-04-25 image batch:
+            replace lucide ThumbsUp/Down icons with the painted yes/no banner art
+            so the Approve / Reject buttons share visual language with the
+            VoteRevealOverlay. Image size matches the previous icon footprint
+            (~22px) so button height doesn't shift. */}
         {!hasVoted ? (
           <div className="flex items-center gap-2 sm:gap-3">
             <motion.button
@@ -138,7 +143,13 @@ export default function VotePanel({
               disabled={isLoading}
               className="flex-1 flex items-center justify-center gap-2 bg-avalon-good hover:bg-avalon-good/90 disabled:opacity-50 text-white font-bold py-2.5 px-3 sm:px-6 rounded-lg transition-all text-sm sm:text-base"
             >
-              <ThumbsUp size={18} />
+              <img
+                src={VOTE_IMAGES.yes}
+                alt=""
+                aria-hidden="true"
+                className="w-6 h-6 object-contain drop-shadow-md"
+                draggable={false}
+              />
               {isLoading ? t('game:votePanel.submitting') : t('game:votePanel.approveBtn')}
             </motion.button>
 
@@ -149,7 +160,13 @@ export default function VotePanel({
               disabled={isLoading}
               className="flex-1 flex items-center justify-center gap-2 bg-avalon-evil hover:bg-avalon-evil/90 disabled:opacity-50 text-white font-bold py-2.5 px-3 sm:px-6 rounded-lg transition-all text-sm sm:text-base"
             >
-              <ThumbsDown size={18} />
+              <img
+                src={VOTE_IMAGES.no}
+                alt=""
+                aria-hidden="true"
+                className="w-6 h-6 object-contain drop-shadow-md"
+                draggable={false}
+              />
               {isLoading ? t('game:votePanel.submitting') : t('game:votePanel.rejectBtn')}
             </motion.button>
           </div>

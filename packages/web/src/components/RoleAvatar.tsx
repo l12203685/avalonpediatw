@@ -1,17 +1,25 @@
 /**
- * RoleAvatar — circular character badge for each canonical Avalon role.
+ * RoleAvatar — circular role badge for each canonical Avalon role.
  *
- * Plan #83 Phase 4: replace plain text role names (梅林/派西維爾/...) with a
- * colored circle + single-character short code so players can scan rails,
- * reveal modals, and night-info panels at a glance.
+ * Plan #83 Phase 4 originally used a colored circle + single-character short
+ * code (梅/派/刺/...) so players could scan rails, reveal modals, and
+ * night-info panels at a glance.
  *
- * Good-team roles render on a blue fill, evil-team roles on a red fill, so
- * team alignment is encoded in both color and character. The component is
- * self-contained (pure Tailwind, no external SVG) and safe to nest anywhere
+ * Edward 2026-04-25 image batch: when a hand-painted role portrait exists in
+ * `web/public/avalon-assets/`, we now render the image inside the same
+ * circular silhouette, falling back to the short-code character if the image
+ * is unavailable (broken request, lazy-load miss, etc.). The team-colored
+ * border survives both modes so players still see good=blue / evil=red at a
+ * glance.
+ *
+ * Good-team roles render on a blue border, evil-team roles on a red border,
+ * so team alignment is encoded in both color and character. The component is
+ * self-contained (Tailwind + a single img tag) and safe to nest anywhere
  * a role is known — callers should NOT pass another player's role when the
  * viewer is not entitled to know it (this would leak night-info).
  */
 import type { Role } from '@avalon/shared';
+import { ROLE_AVATAR_IMAGES } from '../utils/avalonAssets';
 
 interface RoleConfig {
   /** Single-character short code rendered inside the circle. */
@@ -53,6 +61,14 @@ export interface RoleAvatarProps {
    * code is visible inside the circle only.
    */
   showLabel?: boolean;
+  /**
+   * When true (default), use the painted role portrait from
+   * `web/public/avalon-assets/` instead of the short-code character.
+   * Pass `false` to force the original char-circle rendering — used by the
+   * RoleRevealModal where a separate large emoji icon already represents
+   * the role and the avatar circle should stay text-based for compactness.
+   */
+  useImage?: boolean;
 }
 
 /**
@@ -64,6 +80,7 @@ export default function RoleAvatar({
   size = 'md',
   className,
   showLabel = false,
+  useImage = true,
 }: RoleAvatarProps): JSX.Element | null {
   const config = ROLE_CONFIG[role];
   if (!config) return null;
@@ -85,7 +102,25 @@ export default function RoleAvatar({
     : size === 'lg' ? 'text-lg'
     : 'text-sm';
 
-  const circle = (
+  const imageUrl = useImage ? ROLE_AVATAR_IMAGES[role] : null;
+
+  // Painted-portrait mode (Edward 2026-04-25 image batch).
+  // Border still encodes team alignment; image fills the inside of the circle
+  // via object-cover so any aspect ratio fits cleanly.
+  const circle = imageUrl ? (
+    <div
+      className={`${sizeClass} ${borderColor} rounded-full overflow-hidden shadow-sm ${className ?? ''}`}
+      aria-label={`角色 ${config.short}`}
+    >
+      <img
+        src={imageUrl}
+        alt={config.short}
+        className="w-full h-full object-cover"
+        loading="lazy"
+        draggable={false}
+      />
+    </div>
+  ) : (
     <div
       className={`${sizeClass} ${bgColor} ${borderColor} rounded-full flex items-center justify-center font-bold text-white shadow-sm ${className ?? ''}`}
       aria-label={`角色 ${config.short}`}
