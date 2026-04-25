@@ -333,12 +333,21 @@ export default function LobbyPage(): JSX.Element {
               </button>
             )}
 
-            {/* 離房 — everyone (host = 解散/移交; non-host = 離開) */}
+            {/* 離房 — everyone (host = confirm 解散/移交; non-host = 直接離開) */}
             <button
               type="button"
-              onClick={() => leaveRoom(room.id)}
+              onClick={() => {
+                if (isHost) {
+                  const otherHumans = playerList.filter(p => !p.isBot && p.id !== currentPlayer.id).length;
+                  const msg = otherHumans > 0
+                    ? '確定離開？房主將移交給下一位玩家。'
+                    : '確定解散房間？所有玩家會被踢出。';
+                  if (!window.confirm(msg)) return;
+                }
+                leaveRoom(room.id);
+              }}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold bg-gray-800/40 border-gray-700 text-gray-300 hover:bg-red-900/30 hover:border-red-700 hover:text-red-300 transition-colors"
-              title={isHost ? '解散房間 / 移交房主' : '離開房間'}
+              title={isHost ? '解散 / 移交房主後離開' : '離開房間'}
               data-testid="lobby-leave-button"
             >
               <LogOut size={11} />
@@ -742,7 +751,8 @@ export default function LobbyPage(): JSX.Element {
           </section>
         </div>
 
-        {/* ────────── Footer: start / ready (bot adders moved to top settings strip 2026-04-25) ────────── */}
+        {/* ────────── Footer: start / ready (Edward 2026-04-25 三修: footer
+            redundant 解散/移交/離房 buttons cut — 離房 covered by header band) ────────── */}
         {isHost ? (
           <div className="space-y-2">
             {humanPlayers.length > 0 && (
@@ -769,14 +779,6 @@ export default function LobbyPage(): JSX.Element {
               <Play size={18} />
               開始遊戲
             </button>
-
-            <button
-              onClick={() => leaveRoom(room.id)}
-              className="w-full flex items-center justify-center gap-2 bg-gray-800/40 hover:bg-red-900/20 border border-gray-700 hover:border-red-700 text-gray-500 hover:text-red-400 font-medium py-1 px-4 rounded-lg transition-all text-[11px]"
-            >
-              <LogOut size={11} />
-              解散房間 / 移交房主
-            </button>
           </div>
         ) : (
           <div className="space-y-2">
@@ -791,13 +793,6 @@ export default function LobbyPage(): JSX.Element {
               {isReady ? '✓ 已準備（點擊取消）' : '準備好了'}
             </button>
             <div className="text-center text-gray-500 text-xs py-1">等待房主開始遊戲...</div>
-            <button
-              onClick={() => leaveRoom(room.id)}
-              className="w-full flex items-center justify-center gap-2 bg-gray-800/60 hover:bg-red-900/30 border border-gray-600 hover:border-red-600 text-gray-400 hover:text-red-400 font-semibold py-1.5 px-4 rounded-lg transition-all text-xs"
-            >
-              <LogOut size={13} />
-              離開房間
-            </button>
           </div>
         )}
       </div>
