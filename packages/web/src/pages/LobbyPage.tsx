@@ -414,25 +414,18 @@ export default function LobbyPage(): JSX.Element {
                 )}
               </div>
 
-              {/* Bot adders (host only) — Edward 2026-04-25: moved from footer to top
-                  config strip so AI seats are visible alongside thinking time. */}
+              {/* Bot adder (host only) — Edward 2026-04-25: collapsed to a single
+                  "加入 AI" button. Difficulty levels can return later if needed. */}
               {isHost && playerList.length < room.maxPlayers && (
                 <div className="inline-flex items-center gap-1 ml-auto">
-                  <span className="text-gray-500 mr-1 text-[10px]">加入 AI</span>
-                  {([
-                    { diff: 'easy',   label: '弱',   bg: 'bg-white hover:bg-gray-200 border-gray-300 text-black' },
-                    { diff: 'normal', label: '中',   bg: 'bg-slate-500 hover:bg-slate-400 border-slate-400 text-white' },
-                    { diff: 'hard',   label: '強',   bg: 'bg-black hover:bg-gray-900 border-gray-700 text-white' },
-                  ] as const).map(({ diff, label, bg }) => (
-                    <button
-                      key={diff}
-                      onClick={() => addBot(room.id, diff)}
-                      className={`px-2 py-0.5 rounded border font-semibold text-[11px] transition-all ${bg}`}
-                      title={`加入${label}AI`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => addBot(room.id, 'hard')}
+                    className="px-2 py-0.5 rounded border font-semibold text-[11px] transition-all bg-black hover:bg-gray-900 border-gray-700 text-white"
+                    title="加入 AI"
+                  >
+                    加入 AI
+                  </button>
                 </div>
               )}
             </div>
