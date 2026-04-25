@@ -1,6 +1,6 @@
 import { Player, Role } from '@avalon/shared';
 import { motion } from 'framer-motion';
-import { Crown, Shield, WifiOff } from 'lucide-react';
+import { Crown, Shield, WifiOff, Droplet } from 'lucide-react';
 import { displaySeatNumber } from '../utils/seatDisplay';
 import RoleAvatar from './RoleAvatar';
 
@@ -37,6 +37,18 @@ interface PlayerCardProps {
   isShieldCandidate?: boolean;
   shieldSelected?: boolean;
   onShieldClick?: (playerId: string) => void;
+  /**
+   * Lady of the Lake holder — render a 💧 (Droplet) icon on the avatar so every
+   * player can spot the holder at a glance during the lady_of_the_lake phase
+   * (Edward 2026-04-25 redesign: 重點是玩家座位號碼&任務牌&湖中女神&黑白球).
+   */
+  isLadyHolder?: boolean;
+  /**
+   * Last completed quest result for this player — shows a small mission card
+   * badge (success = 藍 O, fail = 紅 X) when the player participated in the
+   * most recent quest. `undefined` = player did not participate (no badge).
+   */
+  lastQuestResult?: 'success' | 'fail';
 }
 
 export default function PlayerCard({
@@ -52,6 +64,8 @@ export default function PlayerCard({
   isShieldCandidate = false,
   shieldSelected = false,
   onShieldClick,
+  isLadyHolder = false,
+  lastQuestResult,
 }: PlayerCardProps): JSX.Element {
   // Horizontal row layout: left side → avatar on right edge (info-left), right side → avatar on left edge (info-right)
   const rowDirection = side === 'left' ? 'flex-row' : 'flex-row-reverse';
@@ -104,10 +118,30 @@ export default function PlayerCard({
           className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-amber-300"
         />
       )}
-      {/* Avatar with all status markers */}
+      {/*
+        Avatar — Edward 2026-04-25 redesign: name + seat number + game-state
+        indicators (mission card / 湖中女神 / 黑白球) live inside the avatar so
+        the rail surfaces every status at a glance, not as outer labels.
+
+        Layout (top → bottom inside the circle):
+          ┌────────────────────────┐
+          │ [N] (seat — top-left)  │  ← seat badge dominates
+          │   (avatar bg)          │
+          │   ╭────────╮           │
+          │   │ name   │ (overlay) │  ← player name strip on bottom 35%
+          │   ╰────────╯           │
+          └────────────────────────┘
+        Outer overlays (corners):
+          - top-center:    Crown (leader)
+          - top-right:     Shield (on quest team)
+          - bottom-left:   WifiOff (disconnected)
+          - bottom-right:  Vote ball (黑/白 + / - 標記)
+          - center-overlay: Droplet (lady holder) when active
+          - top-left big:  last-quest result badge (O / X)
+      */}
       <div className="relative flex-shrink-0">
         <motion.div
-          className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-bold text-sm sm:text-base border-[3px] transition-all relative overflow-hidden ${
+          className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm sm:text-base border-[3px] transition-all relative overflow-hidden ${
             player.status === 'disconnected'
               ? 'border-gray-600 bg-gradient-to-br from-gray-600 to-gray-700 opacity-50'
               : isCurrentPlayer
@@ -121,45 +155,103 @@ export default function PlayerCard({
               : 'border-gray-500 bg-gradient-to-br from-slate-500 to-slate-700'
           }`}
         >
-          {player.isBot
-            ? '🤖'
-            : player.avatar
-              ? <img src={player.avatar} alt={player.name} className="w-full h-full rounded-full object-cover" />
-              : player.name.charAt(0).toUpperCase()
-          }
+          {/* Avatar background — image or emoji fallback. Sized smaller and shifted up so
+              the name strip on the bottom 35% has room. */}
+          <div className="absolute inset-0 flex items-start justify-center pt-1">
+            {player.isBot ? (
+              <span className="text-2xl sm:text-3xl leading-none">🤖</span>
+            ) : player.avatar ? (
+              <img
+                src={player.avatar}
+                alt={player.name}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover"
+              />
+            ) : (
+              <span className="text-base sm:text-lg leading-none mt-1.5 text-white drop-shadow">
+                {player.name.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+
+          {/* Player name strip — bottom 35% of the circle, semi-transparent dark
+              backing so the white text reads regardless of avatar color. Edward
+              2026-04-25: 「玩家名字直接顯示在圓圈裡面」. */}
+          <div className="absolute bottom-0 inset-x-0 bg-black/65 backdrop-blur-[1px] px-0.5 py-0.5">
+            <p
+              className={`text-center font-bold leading-tight truncate text-[9px] sm:text-[10px] ${
+                player.status === 'disconnected' ? 'text-gray-400' : 'text-white'
+              }`}
+            >
+              {player.name}
+            </p>
+          </div>
         </motion.div>
 
-        {/* Seat number badge — top-left gold circle with white number.
-            Seat 10 renders as "0" per paper scoresheet convention (#93). */}
+        {/*
+          Seat number badge — top-left corner. Edward 2026-04-25 spec calls
+          out "玩家座位號碼" as a key indicator, so the badge is enlarged
+          (6→7 mobile / 8 desktop) and uses gold-on-black to dominate the
+          card silhouette. Seat 10 renders as "0" per paper-scoresheet
+          convention (#93).
+        */}
         {seatNumber !== undefined && (
           <div
-            className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 border border-yellow-700 flex items-center justify-center shadow-md pointer-events-none"
+            className="absolute -top-1.5 -left-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-2 border-yellow-700 flex items-center justify-center shadow-lg pointer-events-none z-10"
             aria-label={`座位 ${seatNumber}`}
           >
-            <span className="text-[10px] font-black text-white leading-none">{displaySeatNumber(seatNumber)}</span>
+            <span className="text-[12px] sm:text-[14px] font-black text-black leading-none">
+              {displaySeatNumber(seatNumber)}
+            </span>
           </div>
         )}
 
-        {/* Leader crown — top center above avatar */}
+        {/*
+          Last-quest result badge — top-right corner (replaces the small
+          "on-quest" shield when a quest result exists). Blue O = success,
+          red X = fail. Only shown when this player participated in the
+          most recent completed quest (Edward 2026-04-25 「任務牌」).
+        */}
+        {lastQuestResult !== undefined && (
+          <motion.div
+            initial={{ scale: 0, rotate: -10 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+            className={`absolute -top-1.5 -right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center pointer-events-none shadow-md z-10 border-2 ${
+              lastQuestResult === 'success'
+                ? 'bg-blue-500 border-blue-200 text-white'
+                : 'bg-red-600 border-red-200 text-white'
+            }`}
+            aria-label={lastQuestResult === 'success' ? '最近任務成功' : '最近任務失敗'}
+          >
+            <span className="text-[14px] sm:text-[16px] font-black leading-none">
+              {lastQuestResult === 'success' ? 'O' : 'X'}
+            </span>
+          </motion.div>
+        )}
+
+        {/* Leader crown — top center above avatar (only when no quest result badge
+            in the same corner so they don't collide; crown sits center-top and
+            won't fight the top-right quest badge). */}
         {isLeader && (
           <motion.div
             initial={{ scale: 0, y: -5 }}
             animate={{ scale: 1, y: 0 }}
-            className="absolute -top-3 left-1/2 -translate-x-1/2 pointer-events-none"
+            className="absolute -top-3 left-1/2 -translate-x-1/2 pointer-events-none z-20"
           >
-            <Crown size={14} className="text-yellow-400 drop-shadow-md" />
+            <Crown size={16} className="text-yellow-400 drop-shadow-md" />
           </motion.div>
         )}
 
-        {/* Quest team shield — top-right gold shield */}
-        {isOnQuestTeam && !shieldSelected && (
+        {/* Quest team shield — only render the small gold shield when there's no
+            last-quest badge competing for the top-right corner. */}
+        {isOnQuestTeam && !shieldSelected && lastQuestResult === undefined && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -top-1 -right-1 bg-yellow-400 border border-yellow-600 rounded-full p-0.5 pointer-events-none shadow-md"
+            className="absolute -top-1 -right-1 bg-yellow-400 border border-yellow-600 rounded-full p-0.5 pointer-events-none shadow-md z-10"
             aria-label="任務隊員"
           >
-            <Shield size={10} className="text-yellow-900" fill="currentColor" />
+            <Shield size={12} className="text-yellow-900" fill="currentColor" />
           </motion.div>
         )}
 
@@ -175,11 +267,11 @@ export default function PlayerCard({
             initial={{ scale: 0, rotate: -12 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            className="absolute -top-1.5 -right-1.5 pointer-events-none drop-shadow-[0_2px_4px_rgba(250,204,21,0.55)]"
+            className="absolute -top-1.5 -right-1.5 pointer-events-none drop-shadow-[0_2px_4px_rgba(250,204,21,0.55)] z-20"
             aria-label="已選入任務隊伍"
           >
             <Shield
-              size={28}
+              size={30}
               className="text-yellow-400"
               fill="#facc15"
               strokeWidth={2}
@@ -190,14 +282,30 @@ export default function PlayerCard({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.55 }}
-            className="absolute -top-1.5 -right-1.5 pointer-events-none"
+            className="absolute -top-1.5 -right-1.5 pointer-events-none z-10"
             aria-hidden="true"
           >
             <Shield
-              size={24}
+              size={26}
               className="text-yellow-300/70"
               strokeWidth={2}
             />
+          </motion.div>
+        )}
+
+        {/*
+          Lady of the Lake holder — Droplet 💧 overlay center-left of the
+          avatar. Cyan tint matches the scoresheet legend. Edward 2026-04-25
+          「湖中女神」.
+        */}
+        {isLadyHolder && (
+          <motion.div
+            initial={{ scale: 0, rotate: -8 }}
+            animate={{ scale: 1, rotate: 0 }}
+            className="absolute top-1/2 -left-2 -translate-y-1/2 bg-cyan-500 border-2 border-cyan-200 rounded-full p-0.5 pointer-events-none shadow-md z-10"
+            aria-label="持有湖中女神"
+          >
+            <Droplet size={12} className="text-white" fill="currentColor" />
           </motion.div>
         )}
 
@@ -206,43 +314,47 @@ export default function PlayerCard({
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -bottom-1 -left-1 bg-red-700 rounded-full p-0.5 pointer-events-none"
+            className="absolute -bottom-1 -left-1 bg-red-700 rounded-full p-0.5 pointer-events-none z-10"
           >
-            <WifiOff size={9} className="text-white" />
+            <WifiOff size={10} className="text-white" />
           </motion.div>
         )}
 
-        {/* Vote ball — bottom-right. White = approve, Black = reject, Gray = hidden */}
+        {/*
+          Vote ball — bottom-right. Edward 2026-04-25「黑白球」+ visible
+          + / − symbols so the marker is unambiguous even at small sizes:
+            白球 + 黑 "+"  → 贊成
+            黑球 + 白 "−"  → 反對
+            灰球 + "?"    → 已投但對外隱藏
+        */}
         {hasVoted && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full pointer-events-none shadow-md ${
+            className={`absolute -bottom-1.5 -right-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-full pointer-events-none shadow-md flex items-center justify-center font-black leading-none text-[12px] sm:text-[14px] z-10 border-2 ${
               voted === undefined
-                ? 'bg-gray-500 border-2 border-gray-300'
+                ? 'bg-gray-500 border-gray-300 text-gray-200'
                 : voted
-                ? 'bg-white border-2 border-gray-300'
-                : 'bg-gray-900 border-2 border-gray-700'
+                ? 'bg-white border-gray-300 text-black'
+                : 'bg-gray-900 border-gray-700 text-white'
             }`}
             aria-label={voted === undefined ? '已投票' : voted ? '贊成' : '反對'}
-          />
+          >
+            {voted === undefined ? '?' : voted ? '+' : '−'}
+          </motion.div>
         )}
       </div>
 
-      {/* Name + role/team info */}
+      {/*
+        Side info — name moved INTO the avatar (Edward 2026-04-25), so the
+        outer column shrinks to "own role only". Other players show no
+        outer text; the avatar alone carries identity + state. Keeps the
+        rail width tight on mobile.
+      */}
       <div className={`flex-1 min-w-0 flex flex-col gap-0.5 ${textAlign}`}>
-        <p
-          className={`font-bold text-xs sm:text-sm truncate max-w-full ${
-            player.status === 'disconnected' ? 'text-gray-500' : 'text-white'
-          }`}
-        >
-          {player.name}
-        </p>
-
-        {/* Show own role + team inline — replaces the old absolutely-positioned hint.
-            Plan #83 Phase 4: prepend a small RoleAvatar so the player can scan
-            their own role visually. Only render when the viewer is entitled
-            to know this role (`isCurrentPlayer && player.role`). */}
+        {/* Show own role + team inline — only the viewer sees their own role badge
+            so they can scan it at a glance. Other players' names already appear
+            inside their avatar circle, so no outer label is needed. */}
         {isCurrentPlayer && player.role && (
           <div className={`flex flex-wrap items-center gap-1 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
             <RoleAvatar role={player.role as Role} size="sm" />

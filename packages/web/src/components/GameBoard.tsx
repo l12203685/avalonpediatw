@@ -135,6 +135,16 @@ export default function GameBoard({
     return false;
   };
 
+  // Edward 2026-04-25 redesign: compute "last quest result" lookup so each
+  // PlayerCard can flash a 任務牌 (success O / fail X) badge when this player
+  // participated in the most recent completed quest. Only the latest quest
+  // counts — past rounds are visible in the scoresheet / mission track.
+  const lastQuestRecord = room.questHistory.length > 0
+    ? room.questHistory[room.questHistory.length - 1]
+    : undefined;
+  const lastQuestParticipants = new Set<string>(lastQuestRecord?.team ?? []);
+  const lastQuestResult: 'success' | 'fail' | undefined = lastQuestRecord?.result;
+
   const renderPlayerCard = (player: Player, seatIndex: number, side: 'left' | 'right'): JSX.Element => {
     const shieldSelected = Boolean(selectedTeamIds?.has(player.id));
     // All seats are valid picks (including leader's own seat — canonical Avalon allows
@@ -166,6 +176,10 @@ export default function GameBoard({
           isShieldCandidate={isShieldCandidate}
           shieldSelected={shieldSelected}
           onShieldClick={isPicking ? onSeatClick : undefined}
+          isLadyHolder={room.ladyOfTheLakeHolder === player.id}
+          lastQuestResult={
+            lastQuestParticipants.has(player.id) ? lastQuestResult : undefined
+          }
         />
       </motion.div>
     );
