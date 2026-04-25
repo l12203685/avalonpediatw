@@ -1026,6 +1026,51 @@ export class GameServer {
     }
   }
 
+  /**
+   * Lightweight bot lake-announcement heuristic (live games).
+   *
+   * SelfPlayEngine has the full `decideLakeAnnouncement` (suspicion-scored
+   * Merlin guess); the live path doesn't need that depth and we want to
+   * avoid pulling SelfPlayEngine's observation builder into the socket
+   * layer. Simplified rule:
+   *   - Good holder  → declare the actual team (loyal players are honest).
+   *   - Evil holder  → declare 'good' for an evil ally (washes pressure);
+   *                    declare 'evil' for a good target (seeds doubt).
+   *   - Unknown team → null (caller falls back to skip).
+   *
+   * The actual target team is read from `room.ladyOfTheLakeResult` (the
+   * private result the engine just exposed to the holder).
+   */
+  private decideBotLakeClaim(
+    room: Room,
+    holderId: string,
+    targetId: string,
+  ): 'good' | 'evil' | null {
+    const holder = room.players[holderId];
+    const target = room.players[targetId];
+    const holderTeam = holder?.team;
+    if (holderTeam !== 'good' && holderTeam !== 'evil') return null;
+
+    // Prefer the engine-exposed inspection result (authoritative); fall
+    // back to target.team if the live snapshot already cleared the
+    // private result.
+    const actualTargetTeam: 'good' | 'evil' | undefined =
+      (room.ladyOfTheLakeResult === 'good' || room.ladyOfTheLakeResult === 'evil')
+        ? room.ladyOfTheLakeResult
+        : (target?.team === 'good' || target?.team === 'evil')
+          ? target.team
+          : undefined;
+    if (actualTargetTeam === undefined) return null;
+
+    if (holderTeam === 'good') {
+      // Loyal — declare what was seen.
+      return actualTargetTeam;
+    }
+
+    // Evil holder — invert truth to muddy the water (ally→good, opponent→evil).
+    return actualTargetTeam === 'good' ? 'evil' : 'good';
+  }
+
   /** Called whenever a room transitions to 'ended' state */
   private onGameEnded(roomId: string, room: Room): void {
     const evilWins = room.evilWins === true;
@@ -1734,19 +1779,44 @@ export class GameServer {
                 if (!eng) return;
                 try {
                   eng.submitLadyOfTheLakeTarget(holderId, targetId);
-                  // Skip the declaration immediately so the phase advances
-                  // and the round/lady token transfer cleanly resolves.
-                  // Use a short delay so the inspection result is visible
-                  // to spectators / the post-game replay before phase ends.
+                  // Edward 2026-04-25 22:38 +08「湖中女神宣告怪怪的 0>1 ?
+                  // 但 0 跟 1 都是忠臣」— bot 之前 100% skip → chat 永遠 `?`，
+                  // 即便忠臣 bot 看到忠臣 target 也沒誠實宣告。改成讓 bot 開口：
+                  //   - 好人 holder: 誠實宣告 actual target team
+                  //   - 壞人 holder: 同夥洗 'good'，對手反向宣告 (簡化版 SelfPlay 啟發)
+                  // 失敗 fallback 仍走 skip 維持原 phase advance 保險。
                   setTimeout(() => {
                     const s2 = this.roomManager.getRoom(roomId);
                     if (!s2 || s2.state !== 'lady_of_the_lake') return;
                     const eng2 = this.gameEngines.get(roomId);
                     if (!eng2) return;
                     try {
-                      eng2.skipLakeDeclaration(holderId);
+                      const claim = this.decideBotLakeClaim(s2, holderId, targetId);
+                      if (claim !== null) {
+                        const record = eng2.declareLakeResult(holderId, claim);
+                        if (record) {
+                          const declarer = s2.players[holderId];
+                          const target = s2.players[record.targetId];
+                          const declarerName = declarer?.name ?? holderId;
+                          const targetName = target?.name ?? record.targetId;
+                          const claimLabel = claim === 'good' ? '好人' : '壞人';
+                          this.emitSystemChat(
+                            roomId,
+                            `🔮 ${declarerName} 宣告 ${targetName} 是「${claimLabel}」`
+                          );
+                          this.broadcastRoomState(roomId, s2);
+                        }
+                      } else {
+                        eng2.skipLakeDeclaration(holderId);
+                      }
                     } catch (err) {
-                      console.error(`[bot] skipLakeDeclaration error in room ${roomId}:`, err);
+                      console.error(`[bot] declareLakeResult error in room ${roomId}:`, err);
+                      // Best-effort fallback — keep phase moving even if declare failed.
+                      try {
+                        eng2.skipLakeDeclaration(holderId);
+                      } catch (skipErr) {
+                        console.error(`[bot] skipLakeDeclaration fallback error in room ${roomId}:`, skipErr);
+                      }
                     }
                   }, 1500);
                 } catch (err) {
