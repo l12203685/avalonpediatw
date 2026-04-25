@@ -1,0 +1,68 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+/* Game-specific styles */
+.game-board {
+  @apply flex items-center justify-center min-h-screen;
+}
+
+.player-card {
+  @apply rounded-lg p-4 transition-all duration-300 hover:scale-105;
+}
+
+.player-card.good {
+  @apply bg-avalon-good/20 border-2 border-avalon-good;
+}
+
+.player-card.evil {
+  @apply bg-avalon-evil/20 border-2 border-avalon-evil;
+}
+
+.vote-button {
+  @apply px-6 py-3 rounded-lg font-bold transition-all duration-200 hover:scale-105;
+}
+
+.vote-button.approve {
+  @apply bg-avalon-good text-white hover:bg-avalon-good/90;
+}
+
+.vote-button.reject {
+  @apply bg-avalon-evil text-white hover:bg-avalon-evil/90;
+}
+
+.animation-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

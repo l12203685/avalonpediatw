@@ -1,0 +1,571 @@
+import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
+import { ArrowLeft, Users, Swords, History, Loader, AlertCircle, Copy, Check, Link2, UserCircle, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { useGameStore } from '../store/gameStore';
+import { getStoredToken } from '../services/socket';
+import {
+  fetchFriends, fetchPairStatsBatch, fetchMyTimeline, mergeAccountByUuid,
+  FriendEntry, PairStats, TimelineEntry,
+} from '../services/api';
+import { claimHistory } from '../services/auth';
+
+/**
+ * #98 IA 瘦身版 (2026-04-23)
+ *
+ * Edward 原話：
+ *   個人戰績只需要保留
+ *     (1) 近 50 場遊戲勝敗時間序列（點了可以看紀錄）
+ *     (2) 玩家追蹤列表 & 對戰歷史（同贏率、同敗率、獨立勝率）
+ *
+ * 所有「深度分析 / nav.analysis / ProfilePage 的能力雷達」內容已移走到「數據排行」頁。
+ *
+ * 獨立勝率 = 排除同場後我方理論勝率
+ *   = (我不與對方同場的場次中，我贏的次數) / (我不與對方同場的場次)
+ */
+export default function PersonalStatsPage(): JSX.Element {
+  const { t } = useTranslation();
+  const { setGameState, navigateToProfile, navigateToReplay, currentPlayer, addToast } = useGameStore();
+
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(true);
+  const [timelineErr, setTimelineErr] = useState<string | null>(null);
+
+  const [watchlist, setWatchlist] = useState<FriendEntry[]>([]);
+  const [watchlistLoading, setWatchlistLoading] = useState(true);
+  const [watchlistErr, setWatchlistErr] = useState<string | null>(null);
+
+  const [pairs, setPairs] = useState<Map<string, PairStats>>(new Map());
+  const [pairsLoading, setPairsLoading] = useState(false);
+  const [guestBlocked, setGuestBlocked] = useState(false);
+
+  // 2026-04-23 Edward：uuid 複製 + 以 uuid 合併戰績 state
+  const [copiedUuid, setCopiedUuid] = useState(false);
+  const [mergeExpanded, setMergeExpanded] = useState(false);
+  const [mergeUuid, setMergeUuid] = useState('');
+  const [mergeBusy, setMergeBusy] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+
+  // Phase B (2026-04-23 新登入架構)：歷史戰績認領 — uuid + email + 密碼 3 件
+  // 不同於上面 mergeAccountByUuid（admin 級 1 件合併），claimHistory 要 3 件全
+  // 正確才放行，玩家自己就能安全認領 Phase A 時期的舊帳號。
+  const [claimExpanded, setClaimExpanded] = useState(false);
+  const [claimUuid,     setClaimUuid]     = useState('');
+  const [claimEmail,    setClaimEmail]    = useState('');
+  const [claimPassword, setClaimPassword] = useState('');
+  const [claimShowPw,   setClaimShowPw]   = useState(false);
+  const [claimBusy,     setClaimBusy]     = useState(false);
+  const [claimError,    setClaimError]    = useState<string | null>(null);
+
+  const handleCopyUuid = async (): Promise<void> => {
+    if (!currentPlayer?.id) return;
+    try {
+      await navigator.clipboard.writeText(currentPlayer.id);
+      setCopiedUuid(true);
+      setTimeout(() => setCopiedUuid(false), 1500);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = currentPlayer.id;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* noop */ }
+      document.body.removeChild(ta);
+      setCopiedUuid(true);
+      setTimeout(() => setCopiedUuid(false), 1500);
+    }
+  };
+
+  const handleClaimHistory = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token) return;
+    const uuid = claimUuid.trim();
+    const email = claimEmail.trim();
+    if (!uuid || !email || !claimPassword) {
+      setClaimError(t('stats.claimAllRequired', { defaultValue: 'UUID、信箱、密碼三項必填' }));
+      return;
+    }
+    if (uuid === currentPlayer?.id) {
+      setClaimError(t('stats.mergeUuidSelf', { defaultValue: '不能把自己合併到自己' }));
+      return;
+    }
+    setClaimBusy(true);
+    setClaimError(null);
+    try {
+      await claimHistory(token, uuid, email, claimPassword);
+      addToast(t('stats.claimSuccess', { defaultValue: '歷史戰績認領完成' }), 'success');
+      setClaimExpanded(false);
+      setClaimUuid(''); setClaimEmail(''); setClaimPassword('');
+      // 重新載入 timeline
+      setTimelineLoading(true);
+      try {
+        const fresh = await fetchMyTimeline(token, 50);
+        setTimeline(fresh);
+      } finally {
+        setTimelineLoading(false);
+      }
+    } catch (err) {
+      setClaimError(err instanceof Error ? err.message : t('stats.claimFailed', { defaultValue: '認領失敗' }));
+    } finally {
+      setClaimBusy(false);
+    }
+  };
+
+  const handleMergeByUuid = async (): Promise<void> => {
+    const token = getStoredToken();
+    if (!token) return;
+    const trimmed = mergeUuid.trim();
+    if (trimmed.length === 0) {
+      setMergeError(t('stats.mergeUuidRequired', { defaultValue: '請輸入要合併的 UUID' }));
+      return;
+    }
+    if (trimmed === currentPlayer?.id) {
+      setMergeError(t('stats.mergeUuidSelf', { defaultValue: '不能把自己合併到自己' }));
+      return;
+    }
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(t('stats.mergeUuidConfirm', {
+      defaultValue: '合併後該 UUID 的戰績/徽章/好友會併入當前帳號，原帳號會刪除。確定繼續？',
+    }))) return;
+
+    setMergeBusy(true);
+    setMergeError(null);
+    try {
+      await mergeAccountByUuid(token, trimmed);
+      addToast(t('stats.mergeUuidSuccess', { defaultValue: '戰績合併完成' }), 'success');
+      setMergeExpanded(false);
+      setMergeUuid('');
+      // 重新載入 timeline（戰績併過來了）
+      setTimelineLoading(true);
+      try {
+        const fresh = await fetchMyTimeline(token, 50);
+        setTimeline(fresh);
+      } finally {
+        setTimelineLoading(false);
+      }
+    } catch (err) {
+      setMergeError(err instanceof Error ? err.message : t('stats.mergeUuidFailed', { defaultValue: '合併失敗' }));
+    } finally {
+      setMergeBusy(false);
+    }
+  };
+
+  // 1. 拉 timeline (近 50 場)
+  useEffect(() => {
+    const token = getStoredToken();
+    if (!token) {
+      setGuestBlocked(true);
+      setTimelineLoading(false);
+      setWatchlistLoading(false);
+      return;
+    }
+    fetchMyTimeline(token, 50)
+      .then(setTimeline)
+      .catch(e => setTimelineErr(String((e as Error).message ?? e)))
+      .finally(() => setTimelineLoading(false));
+
+    fetchFriends(token)
+      .then(setWatchlist)
+      .catch(e => setWatchlistErr(String((e as Error).message ?? e)))
+      .finally(() => setWatchlistLoading(false));
+  }, []);
+
+  // 2. 追蹤列表載入後，批次拉 pair stats
+  useEffect(() => {
+    const token = getStoredToken();
+    if (!token || watchlist.length === 0) return;
+    setPairsLoading(true);
+    fetchPairStatsBatch(token, watchlist.map(f => f.id))
+      .then(pairsArr => {
+        const m = new Map<string, PairStats>();
+        pairsArr.forEach(p => m.set(p.opponentId, p));
+        setPairs(m);
+      })
+      .catch(() => {/* 靜默失敗，顯示 dash */})
+      .finally(() => setPairsLoading(false));
+  }, [watchlist]);
+
+  const wins   = useMemo(() => timeline.filter(g => g.won).length, [timeline]);
+  const losses = timeline.length - wins;
+
+  return (
+    <div className="min-h-screen bg-black">
+      <div className="max-w-lg mx-auto px-4 pt-4 space-y-4 pb-16">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setGameState('home')}
+            data-testid="personal-stats-btn-back"
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-avalon-card/50 transition-all"
+            aria-label={t('nav.back')}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="text-2xl font-black text-white flex-1">{t('nav.personalStats')}</h1>
+        </div>
+
+        {guestBlocked && (
+          <div className="bg-zinc-900/60 border border-zinc-700 rounded-xl p-6 text-sm text-zinc-300 flex items-start gap-3">
+            <AlertCircle size={18} className="flex-shrink-0 mt-0.5 text-amber-400" />
+            <div>
+              <p className="font-semibold text-white mb-1">訪客模式</p>
+              <p className="text-zinc-400">戰績 / 追蹤列表需要登入帳號。綁定訪客帳號後即可保留個人數據。</p>
+            </div>
+          </div>
+        )}
+
+        {!guestBlocked && (
+          <>
+            {/* 2026-04-23 Edward：個人戰績頁加 uuid 顯示 + 以 uuid 綁定歷史戰績按鈕 */}
+            {currentPlayer?.id && (
+              <motion.section
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-zinc-900/60 border border-zinc-700 rounded-xl p-4 space-y-3"
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-zinc-500">UUID:</span>
+                  <code
+                    className="text-[11px] bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-zinc-300 font-mono break-all"
+                    data-testid="personal-stats-uuid-value"
+                  >
+                    {currentPlayer.id}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={handleCopyUuid}
+                    data-testid="personal-stats-btn-copy-uuid"
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                    title={t('settings.copyUuid', { defaultValue: '複製 UUID' })}
+                  >
+                    {copiedUuid ? <Check size={12} /> : <Copy size={12} />}
+                    {copiedUuid
+                      ? t('settings.copied', { defaultValue: '已複製' })
+                      : t('settings.copy', { defaultValue: '複製' })}
+                  </button>
+                </div>
+
+                {/* Phase B (2026-04-23)：歷史戰績認領 — uuid + email + 密碼 3 件 */}
+                {!claimExpanded ? (
+                  <button
+                    type="button"
+                    onClick={() => setClaimExpanded(true)}
+                    data-testid="personal-stats-btn-claim-history"
+                    className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-800/50 border border-amber-700/60 text-amber-200 hover:text-white transition-colors"
+                  >
+                    <Link2 size={12} />
+                    {t('stats.claimHistoryBtn', { defaultValue: '歷史戰績認領' })}
+                  </button>
+                ) : (
+                  <div className="space-y-2 bg-zinc-950/40 border border-amber-700/40 rounded-lg p-3">
+                    <p className="text-[11px] text-zinc-400">
+                      {t('stats.claimHistoryHint', {
+                        defaultValue: '輸入舊帳號的 UUID + 主要信箱 + 密碼，三項全對才能併入戰績/徽章/好友',
+                      })}
+                    </p>
+                    <div className="relative">
+                      <UserCircle size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                      <input
+                        type="text"
+                        value={claimUuid}
+                        onChange={e => { setClaimUuid(e.target.value); if (claimError) setClaimError(null); }}
+                        placeholder={t('stats.mergeUuidPlaceholder', { defaultValue: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' })}
+                        data-testid="personal-stats-input-claim-uuid"
+                        maxLength={128}
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-7 pr-3 py-2 text-white placeholder-zinc-600 font-mono text-xs focus:outline-none focus:border-white"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Mail size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                      <input
+                        type="email"
+                        value={claimEmail}
+                        onChange={e => { setClaimEmail(e.target.value); if (claimError) setClaimError(null); }}
+                        placeholder={t('stats.claimEmailPlaceholder', { defaultValue: '舊帳號的主要信箱' })}
+                        data-testid="personal-stats-input-claim-email"
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-7 pr-3 py-2 text-white placeholder-zinc-600 text-xs focus:outline-none focus:border-white"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Lock size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                      <input
+                        type={claimShowPw ? 'text' : 'password'}
+                        value={claimPassword}
+                        onChange={e => { setClaimPassword(e.target.value); if (claimError) setClaimError(null); }}
+                        placeholder={t('stats.claimPasswordPlaceholder', { defaultValue: '舊帳號的密碼' })}
+                        data-testid="personal-stats-input-claim-password"
+                        autoComplete="current-password"
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-7 pr-8 py-2 text-white placeholder-zinc-600 text-xs focus:outline-none focus:border-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setClaimShowPw(v => !v)}
+                        aria-label={claimShowPw ? '隱藏' : '顯示'}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                      >
+                        {claimShowPw ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                    </div>
+                    {claimError && (
+                      <p className="text-xs text-red-400" data-testid="personal-stats-claim-error">{claimError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleClaimHistory}
+                        disabled={claimBusy}
+                        data-testid="personal-stats-btn-confirm-claim"
+                        className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold py-1.5 px-3 rounded-lg text-sm transition-colors"
+                      >
+                        {claimBusy && <Loader size={14} className="animate-spin" />}
+                        {t('stats.claimConfirm', { defaultValue: '認領' })}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClaimExpanded(false);
+                          setClaimUuid(''); setClaimEmail(''); setClaimPassword('');
+                          setClaimError(null);
+                        }}
+                        disabled={claimBusy}
+                        className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-1.5 px-3 rounded-lg text-sm border border-zinc-700 disabled:opacity-50 transition-colors"
+                      >
+                        {t('action.cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 以 uuid 綁定歷史戰績 — collapsed 時只顯按鈕，expanded 時顯輸入表單 */}
+                {!mergeExpanded ? (
+                  <button
+                    type="button"
+                    onClick={() => setMergeExpanded(true)}
+                    data-testid="personal-stats-btn-merge-uuid"
+                    className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                  >
+                    <Link2 size={12} />
+                    {t('stats.mergeByUuid', { defaultValue: '以 UUID 綁定歷史戰績' })}
+                  </button>
+                ) : (
+                  <div className="space-y-2 bg-zinc-950/40 border border-zinc-800 rounded-lg p-3">
+                    <p className="text-[11px] text-zinc-500">
+                      {t('stats.mergeUuidHint', {
+                        defaultValue: '輸入另一個帳號的 UUID，戰績/徽章/好友會併入當前帳號，原帳號將刪除。',
+                      })}
+                    </p>
+                    <input
+                      type="text"
+                      value={mergeUuid}
+                      onChange={e => { setMergeUuid(e.target.value); if (mergeError) setMergeError(null); }}
+                      placeholder={t('stats.mergeUuidPlaceholder', { defaultValue: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' })}
+                      data-testid="personal-stats-input-merge-uuid"
+                      maxLength={128}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-600 font-mono text-xs focus:outline-none focus:border-white"
+                    />
+                    {mergeError && (
+                      <p className="text-xs text-red-400">{mergeError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleMergeByUuid}
+                        disabled={mergeBusy}
+                        data-testid="personal-stats-btn-confirm-merge"
+                        className="inline-flex items-center gap-2 bg-white hover:bg-zinc-200 disabled:opacity-50 text-black font-semibold py-1.5 px-3 rounded-lg text-sm transition-colors"
+                      >
+                        {mergeBusy && <Loader size={14} className="animate-spin" />}
+                        {t('stats.mergeConfirm', { defaultValue: '合併' })}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setMergeExpanded(false); setMergeUuid(''); setMergeError(null); }}
+                        disabled={mergeBusy}
+                        className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-1.5 px-3 rounded-lg text-sm border border-zinc-700 disabled:opacity-50 transition-colors"
+                      >
+                        {t('action.cancel')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </motion.section>
+            )}
+
+            {/* (1) 近 50 場勝敗時間序列 */}
+            <motion.section
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-zinc-900/60 border border-zinc-700 rounded-xl p-4"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <History size={18} className="text-white" />
+                <h2 className="text-lg font-bold text-white flex-1">近 50 場</h2>
+                {!timelineLoading && timeline.length > 0 && (
+                  <span className="text-xs text-zinc-400">
+                    {wins}W / {losses}L · 勝率 {(wins / timeline.length * 100).toFixed(1)}%
+                  </span>
+                )}
+              </div>
+
+              {timelineLoading && (
+                <div className="flex items-center justify-center py-8 text-zinc-400 gap-2">
+                  <Loader size={16} className="animate-spin" /> 載入戰績...
+                </div>
+              )}
+              {timelineErr && !timelineLoading && (
+                <p className="text-sm text-amber-400 py-4">無法載入時間序列：{timelineErr}</p>
+              )}
+              {!timelineLoading && !timelineErr && timeline.length === 0 && (
+                <p className="text-sm text-zinc-500 py-4 text-center">還沒有戰績紀錄</p>
+              )}
+              {!timelineLoading && !timelineErr && timeline.length > 0 && (
+                <TimelineGrid timeline={timeline} onClick={gameId => navigateToReplay(gameId)} />
+              )}
+            </motion.section>
+
+            {/* (2) 追蹤列表 & 對戰歷史 */}
+            <motion.section
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 }}
+              className="bg-zinc-900/60 border border-zinc-700 rounded-xl p-4"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <Users size={18} className="text-white" />
+                <h2 className="text-lg font-bold text-white flex-1">{t('settings.watchlist')}</h2>
+                {!watchlistLoading && watchlist.length > 0 && (
+                  <span className="text-xs text-zinc-400">{watchlist.length} 位</span>
+                )}
+              </div>
+
+              {watchlistLoading && (
+                <div className="flex items-center justify-center py-6 text-zinc-400 gap-2">
+                  <Loader size={16} className="animate-spin" /> 載入追蹤列表...
+                </div>
+              )}
+              {watchlistErr && !watchlistLoading && (
+                <p className="text-sm text-amber-400 py-4">{watchlistErr}</p>
+              )}
+              {!watchlistLoading && !watchlistErr && watchlist.length === 0 && (
+                <div className="py-6 text-center">
+                  <p className="text-sm text-zinc-500 mb-2">還沒有追蹤玩家</p>
+                  <button
+                    onClick={() => setGameState('friends')}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
+                  >
+                    去追蹤玩家
+                  </button>
+                </div>
+              )}
+
+              {!watchlistLoading && watchlist.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-500 px-1">
+                    <Swords size={12} />
+                    <span className="flex-1">對戰歷史（同贏率 / 同敗率 / 獨立勝率）</span>
+                    {pairsLoading && <Loader size={12} className="animate-spin" />}
+                  </div>
+                  {watchlist.map(friend => {
+                    const pair = pairs.get(friend.id);
+                    return (
+                      <PairRow
+                        key={friend.id}
+                        friend={friend}
+                        pair={pair}
+                        onClick={() => navigateToProfile(friend.id)}
+                      />
+                    );
+                  })}
+                  <p className="text-[11px] text-zinc-500 pt-2">
+                    獨立勝率 = 排除與對方同場後，我自己那批場次的勝率
+                  </p>
+                </div>
+              )}
+            </motion.section>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// Timeline dot grid (50 cells, row-wrapped). Green=win, red=loss.
+// ──────────────────────────────────────────────────────────────
+
+function TimelineGrid({
+  timeline, onClick,
+}: { timeline: TimelineEntry[]; onClick: (gameId: string) => void }): JSX.Element {
+  // newest-first from API; display oldest → newest left-to-right for
+  // a readable trend. Reverse copy to avoid mutating state.
+  const ordered = [...timeline].reverse();
+  return (
+    <div className="space-y-1">
+      <div className="grid grid-cols-10 gap-1">
+        {ordered.map(g => {
+          const date = new Date(g.endedAt);
+          const title = `${g.won ? '勝' : '敗'} · ${g.role ?? '—'} · ${date.toLocaleDateString('zh-TW')} ${date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
+          return (
+            <button
+              key={g.gameId}
+              onClick={() => onClick(g.gameId)}
+              title={title}
+              className={`aspect-square rounded-md border transition-transform hover:scale-110 ${
+                g.won
+                  ? 'bg-emerald-500/80 border-emerald-400 hover:bg-emerald-400'
+                  : 'bg-red-500/80 border-red-400 hover:bg-red-400'
+              }`}
+              aria-label={title}
+            />
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-zinc-500 pt-1">點方塊可查看牌譜</p>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// Pair row: tracked player + 3 rates
+// ──────────────────────────────────────────────────────────────
+
+function PairRow({
+  friend, pair, onClick,
+}: { friend: FriendEntry; pair: PairStats | undefined; onClick: () => void }): JSX.Element {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full bg-zinc-950/40 hover:bg-zinc-900/80 border border-zinc-800 hover:border-blue-500/40 rounded-lg p-3 flex items-center gap-3 text-left transition-colors"
+    >
+      {friend.photo_url ? (
+        <img src={friend.photo_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+      ) : (
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-bold text-xs">
+          {friend.display_name[0]?.toUpperCase()}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-white text-sm truncate">{friend.display_name}</p>
+        <p className="text-[11px] text-zinc-500">
+          {pair ? `同場 ${pair.sharedGames}/${pair.totalGames}` : 'ELO ' + friend.elo_rating}
+        </p>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <RateCell label="同贏率" value={pair?.sameWinRate} color="text-emerald-400" />
+        <RateCell label="同敗率" value={pair?.sameLossRate} color="text-red-400" />
+        <RateCell label="獨立勝率" value={pair?.independentWinRate} color="text-blue-400" />
+      </div>
+    </button>
+  );
+}
+
+function RateCell({
+  label, value, color,
+}: { label: string; value: number | null | undefined; color: string }): JSX.Element {
+  const display = value === undefined ? '—' : value === null ? 'N/A' : `${value.toFixed(1)}%`;
+  return (
+    <div className="min-w-[44px]">
+      <p className="text-[9px] text-zinc-500 leading-none mb-0.5">{label}</p>
+      <p className={`text-xs font-bold ${color}`}>{display}</p>
+    </div>
+  );
+}

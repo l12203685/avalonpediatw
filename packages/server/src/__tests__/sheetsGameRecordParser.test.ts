@@ -1,0 +1,703 @@
+import { describe, expect, it } from 'vitest';
+import {
+  parseSheetsGameCell,
+  SHEETS_UNKNOWN_PLAYER_ID,
+  __internal,
+} from '../services/sheetsGameRecordParser';
+
+const {
+  charToSeat,
+  parseSeatToken,
+  parseAnomalyToken,
+  parseProposalLine,
+  parseLadyLine,
+  parseQuestLine,
+  parseRoleCode,
+  buildVotes,
+  deriveWinner,
+  isQuestLine,
+  isLadyLine,
+  parseAssassinTargetRaw,
+} = __internal;
+
+// ---------------------------------------------------------------------------
+// 低階解析單元測
+// ---------------------------------------------------------------------------
+
+describe('sheetsGameRecordParser — low-level helpers', () => {
+  it('charToSeat maps digits 1-9 + 0 correctly', () => {
+    expect(charToSeat('1')).toBe(1);
+    expect(charToSeat('9')).toBe(9);
+    expect(charToSeat('0')).toBe(10);
+  });
+
+  it('parseSeatToken splits each char as a seat', () => {
+    expect(parseSeatToken('138')).toEqual([1, 3, 8]);
+    expect(parseSeatToken('2458')).toEqual([2, 4, 5, 8]);
+    expect(parseSeatToken('0')).toEqual([10]);
+    expect(parseSeatToken('12568')).toEqual([1, 2, 5, 6, 8]);
+  });
+
+  it('parseAnomalyToken handles single and multi-seat plus/minus', () => {
+    expect(parseAnomalyToken('6+')).toEqual([{ seat: 6, kind: 'plus' }]);
+    expect(parseAnomalyToken('0-')).toEqual([{ seat: 10, kind: 'minus' }]);
+    expect(parseAnomalyToken('70+')).toEqual([
+      { seat: 7, kind: 'plus' },
+      { seat: 10, kind: 'plus' },
+    ]);
+    expect(parseAnomalyToken('17-')).toEqual([
+      { seat: 1, kind: 'minus' },
+      { seat: 7, kind: 'minus' },
+    ]);
+    expect(parseAnomalyToken('390+')).toEqual([
+      { seat: 3, kind: 'plus' },
+      { seat: 9, kind: 'plus' },
+      { seat: 10, kind: 'plus' },
+    ]);
+  });
+
+  it('parseProposalLine extracts team + anomalies', () => {
+    expect(parseProposalLine('138')).toEqual({
+      teamSeats: [1, 3, 8],
+      anomalies: [],
+    });
+    expect(parseProposalLine('2458 6+')).toEqual({
+      teamSeats: [2, 4, 5, 8],
+      anomalies: [{ seat: 6, kind: 'plus' }],
+    });
+    expect(parseProposalLine('2580 0- 7+')).toEqual({
+      teamSeats: [2, 5, 8, 10],
+      anomalies: [
+        { seat: 10, kind: 'minus' },
+        { seat: 7, kind: 'plus' },
+      ],
+    });
+    expect(parseProposalLine('14678 17- 0+')).toEqual({
+      teamSeats: [1, 4, 6, 7, 8],
+      anomalies: [
+        { seat: 1, kind: 'minus' },
+        { seat: 7, kind: 'minus' },
+        { seat: 10, kind: 'plus' },
+      ],
+    });
+  });
+
+  it('parseLadyLine extracts holder/target/declaration', () => {
+    expect(parseLadyLine('0>1 o', 2)).toEqual({
+      round: 2,
+      holderSeat: 10,
+      targetSeat: 1,
+      declaration: 'good',
+    });
+    expect(parseLadyLine('8>6 o', 4)).toEqual({
+      round: 4,
+      holderSeat: 8,
+      targetSeat: 6,
+      declaration: 'good',
+    });
+  });
+
+  it('parseQuestLine counts o/x', () => {
+    expect(parseQuestLine('ooo', 1, 8)).toEqual({
+      successCount: 3,
+      failCount: 0,
+      success: true,
+    });
+    expect(parseQuestLine('ooxx', 2, 8)).toEqual({
+      successCount: 2,
+      failCount: 2,
+      success: false,
+    });
+    expect(parseQuestLine('ooox', 3, 8)).toEqual({
+      successCount: 3,
+      failCount: 1,
+      success: false,
+    });
+    expect(parseQuestLine('ooooo', 4, 8)).toEqual({
+      successCount: 5,
+      failCount: 0,
+      success: true,
+    });
+    expect(parseQuestLine('oooox', 5, 8)).toEqual({
+      successCount: 4,
+      failCount: 1,
+      success: false,
+    });
+  });
+
+  it('parseQuestLine: 7+ player round 4 needs 2 fails to fail', () => {
+    // 8 人第 4 回合 1 fail 仍算成功
+    expect(parseQuestLine('ooox', 4, 8).success).toBe(true);
+    expect(parseQuestLine('ooxx', 4, 8).success).toBe(false);
+    // 8 人第 3 回合 1 fail 就失敗
+    expect(parseQuestLine('ooox', 3, 8).success).toBe(false);
+  });
+
+  it('parseRoleCode extracts roles in 刺娜德奧派梅 order', () => {
+    // Edward 2139 場：701498
+    // 刺 7 / 娜 0(10) / 德 1 / 奧 4 / 派 9 / 梅 8
+    expect(parseRoleCode('701498')).toEqual({
+      assassin: 7,
+      morgana: 10,
+      mordred: 1,
+      oberon: 4,
+      percival: 9,
+      merlin: 8,
+    });
+  });
+
+  it('buildVotes normal case — no anomalies', () => {
+    // 8 人局，隊伍 [1,3,8]，無異常票
+    const { votes, approveCount, rejectCount } = buildVotes([1, 3, 8], [], 8);
+    expect(votes).toEqual([
+      'approve', // seat 1 in team
+      'reject',  // seat 2 not in team
+      'approve', // seat 3 in team
+      'reject',  // seat 4
+      'reject',  // seat 5
+      'reject',  // seat 6
+      'reject',  // seat 7
+      'approve', // seat 8 in team
+    ]);
+    expect(approveCount).toBe(3);
+    expect(rejectCount).toBe(5);
+  });
+
+  it('buildVotes with场外白 (+)', () => {
+    // 隊 [2,4,5,8]，座 6 場外白（未在隊伍但 approve）
+    const { votes, approveCount, rejectCount } = buildVotes(
+      [2, 4, 5, 8],
+      [{ seat: 6, kind: 'plus' }],
+      8,
+    );
+    expect(votes[5]).toBe('approve'); // seat 6 overriden
+    expect(approveCount).toBe(5); // 2,4,5,8 + 6
+    expect(rejectCount).toBe(3);  // 1,3,7
+  });
+
+  it('buildVotes with 場內黑 (-) — 10 人局', () => {
+    // 隊 [2,5,8,10]，座 10 場內黑，座 7 場外白
+    const { votes, approveCount, rejectCount } = buildVotes(
+      [2, 5, 8, 10],
+      [
+        { seat: 10, kind: 'minus' },
+        { seat: 7, kind: 'plus' },
+      ],
+      10,
+    );
+    expect(votes[1]).toBe('approve'); // seat 2 in team
+    expect(votes[4]).toBe('approve'); // seat 5 in team
+    expect(votes[7]).toBe('approve'); // seat 8 in team
+    expect(votes[6]).toBe('approve'); // seat 7 場外白
+    expect(votes[9]).toBe('reject');  // seat 10 場內黑（覆寫 approve → reject）
+    expect(votes).toHaveLength(10);
+    expect(approveCount).toBe(4); // 2,5,7,8
+    expect(rejectCount).toBe(6);  // 1,3,4,6,9,10
+  });
+
+  it('deriveWinner: 3 red = evil threeRed', () => {
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['blue', 'red', 'red', 'blue', 'red'], undefined, roles)).toEqual({
+      winnerCamp: 'evil',
+      winReason: 'threeRed',
+    });
+  });
+
+  it('deriveWinner: 3 blue without assassin info → defaults to merlinAlive', () => {
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['blue', 'blue', 'red', 'blue'], undefined, roles)).toEqual({
+      winnerCamp: 'good',
+      winReason: 'threeBlue_merlinAlive',
+    });
+  });
+
+  it('deriveWinner: 3 blue + assassin hits merlin → threeBlue_merlinKilled (evil wins)', () => {
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['blue', 'blue', 'red', 'blue'], 8, roles)).toEqual({
+      winnerCamp: 'evil',
+      winReason: 'threeBlue_merlinKilled',
+      assassinTargetSeat: 8,
+      assassinCorrect: true,
+    });
+  });
+
+  it('deriveWinner: 3 blue + assassin misses merlin → threeBlue_merlinAlive (good wins)', () => {
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['blue', 'blue', 'red', 'blue'], 5, roles)).toEqual({
+      winnerCamp: 'good',
+      winReason: 'threeBlue_merlinAlive',
+      assassinTargetSeat: 5,
+      assassinCorrect: false,
+    });
+  });
+
+  it('deriveWinner: 3 red + assassin field present (ignored) → threeRed', () => {
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['red', 'red', 'red'], 8, roles)).toEqual({
+      winnerCamp: 'evil',
+      winReason: 'threeRed',
+    });
+  });
+
+  it('isQuestLine matches only o/x sequences', () => {
+    expect(isQuestLine('ooo')).toBe(true);
+    expect(isQuestLine('ooxx')).toBe(true);
+    expect(isQuestLine('oooox')).toBe(true);
+    expect(isQuestLine('138')).toBe(false);
+    expect(isQuestLine('0>1 o')).toBe(false);
+  });
+
+  it('isLadyLine matches X>Y o/x', () => {
+    expect(isLadyLine('0>1 o')).toBe(true);
+    expect(isLadyLine('8>6 o')).toBe(true);
+    expect(isLadyLine('1>8 x')).toBe(true);
+    expect(isLadyLine('138')).toBe(false);
+    expect(isLadyLine('ooo')).toBe(false);
+  });
+
+  it('parseAssassinTargetRaw maps 1..9 to 1..9 and 0 to 10', () => {
+    expect(parseAssassinTargetRaw('1')).toBe(1);
+    expect(parseAssassinTargetRaw('5')).toBe(5);
+    expect(parseAssassinTargetRaw('9')).toBe(9);
+    expect(parseAssassinTargetRaw('0')).toBe(10);
+  });
+
+  it('parseAssassinTargetRaw returns undefined for empty / non-digit', () => {
+    expect(parseAssassinTargetRaw('')).toBeUndefined();
+    expect(parseAssassinTargetRaw(undefined)).toBeUndefined();
+    expect(parseAssassinTargetRaw('   ')).toBeUndefined();
+    expect(parseAssassinTargetRaw('abc')).toBeUndefined();
+  });
+
+  it('parseAssassinTargetRaw tolerates extra annotation chars after digit', () => {
+    // Sheets 偶有 "2 (梅)" 之類；我們只取首字
+    expect(parseAssassinTargetRaw('2 (梅)')).toBe(2);
+    expect(parseAssassinTargetRaw('8梅')).toBe(8);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edward 第 2139 場 fixture
+// ---------------------------------------------------------------------------
+
+const FIXTURE_2139_TEXT = `138
+267
+370
+248
+258
+ooo
+2458 6+
+2580 0- 7+
+1258
+2589
+3490
+ooxx
+0>1 o
+1458 0+
+2458 70+
+ooox
+1>8 o
+12358 1- 0+
+14678 17- 0+
+12568 390+
+ooooo
+8>6 o
+1256 1- 370+
+oooox`;
+
+describe('parseSheetsGameCell — Edward 第 2139 場 fixture', () => {
+  const parsed = parseSheetsGameCell({
+    gameText: FIXTURE_2139_TEXT,
+    roleCode: '701498',
+    locationCode: '面瓦',
+    playedAtStr: '2026/02/27',
+    gameNumInDay: 16,
+    playerNames: ['HAO', '雪怪', '尼克', 'Dean', '池', 'JOY', 'Ray', '海月', 'Lori', 'C5'],
+  });
+
+  it('schemaVersion = 2 and gameId contains date + num', () => {
+    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.gameId).toBe('sheets-2026-02-27-16');
+  });
+
+  it('playedAt is 2026-02-27 00:00 +08', () => {
+    // +08 時區 = UTC 2026-02-26 16:00
+    const d = new Date(parsed.playedAt);
+    expect(d.getUTCFullYear()).toBe(2026);
+    expect(d.getUTCMonth()).toBe(1); // Feb
+    expect(d.getUTCDate()).toBe(26);
+    expect(d.getUTCHours()).toBe(16);
+  });
+
+  it('playerSeats use sheets: prefix when no UID callback', () => {
+    expect(parsed.playerSeats[0]).toBe('sheets:HAO');
+    expect(parsed.playerSeats[1]).toBe('sheets:雪怪');
+    expect(parsed.playerSeats[4]).toBe('sheets:池');
+    expect(parsed.playerSeats[9]).toBe('sheets:C5');
+  });
+
+  it('roles decoded from 701498 (刺娜德奧派梅)', () => {
+    expect(parsed.finalResult.roles).toEqual({
+      assassin: 7,
+      morgana: 10, // 0
+      mordred: 1,
+      oberon: 4,
+      percival: 9,
+      merlin: 8,
+    });
+  });
+
+  it('5 回合任務結果：blue / red / red / blue / red', () => {
+    // 用 missions[].questResult.success 重算
+    const quests = parsed.missions.filter((m) => m.questResult);
+    expect(quests).toHaveLength(5);
+    const outcomes = quests.map((m) => (m.questResult!.success ? 'blue' : 'red'));
+    expect(outcomes).toEqual(['blue', 'red', 'red', 'blue', 'red']);
+  });
+
+  it('winner = evil + threeRed', () => {
+    expect(parsed.finalResult.winnerCamp).toBe('evil');
+    expect(parsed.finalResult.winReason).toBe('threeRed');
+  });
+
+  it('round 1 has 5 proposals (first 4 rejected, 5th forced = passed)', () => {
+    const r1 = parsed.missions.filter((m) => m.round === 1);
+    expect(r1).toHaveLength(5);
+    expect(r1[0].teamSeats).toEqual([1, 3, 8]);
+    expect(r1[1].teamSeats).toEqual([2, 6, 7]);
+    expect(r1[2].teamSeats).toEqual([3, 7, 10]); // "370"
+    expect(r1[3].teamSeats).toEqual([2, 4, 8]);
+    expect(r1[4].teamSeats).toEqual([2, 5, 8]);
+    // 前 4 被否 / 第 5 通過並開牌
+    expect(r1[0].passed).toBe(false);
+    expect(r1[4].passed).toBe(true);
+    expect(r1[4].questResult).toEqual({
+      successCount: 3,
+      failCount: 0,
+      success: true,
+    });
+  });
+
+  it('round 2 has 5 proposals — 1st has 場外白 (6+), 2nd has 場內黑 + 場外白', () => {
+    const r2 = parsed.missions.filter((m) => m.round === 2);
+    expect(r2).toHaveLength(5);
+    // 第 1 提議：[2,4,5,8] + 6+（10 人局）
+    expect(r2[0].teamSeats).toEqual([2, 4, 5, 8]);
+    expect(r2[0].approveCount).toBe(5); // 2,4,5,8,6
+    expect(r2[0].rejectCount).toBe(5);  // 1,3,7,9,10
+
+    // 第 2 提議：[2,5,8,10] + 0- + 7+
+    expect(r2[1].teamSeats).toEqual([2, 5, 8, 10]);
+    // 座 10 場內黑覆寫 reject；座 7 場外白 approve
+    // approve: 2,5,7,8 = 4；reject: 1,3,4,6,9,10 = 6
+    expect(r2[1].approveCount).toBe(4);
+    expect(r2[1].rejectCount).toBe(6);
+
+    // 任務結果
+    expect(r2[4].questResult).toEqual({
+      successCount: 2,
+      failCount: 2,
+      success: false,
+    });
+  });
+
+  it('round 4 has 3 proposals ending ooooo (5 成功，8 人第 4 回合)', () => {
+    const r4 = parsed.missions.filter((m) => m.round === 4);
+    expect(r4).toHaveLength(3);
+    expect(r4[0].teamSeats).toEqual([1, 2, 3, 5, 8]);
+    expect(r4[1].teamSeats).toEqual([1, 4, 6, 7, 8]);
+    expect(r4[2].teamSeats).toEqual([1, 2, 5, 6, 8]);
+    expect(r4[2].questResult).toEqual({
+      successCount: 5,
+      failCount: 0,
+      success: true,
+    });
+  });
+
+  it('round 5 has 1 proposal ending oooox (4/5 成功，1 fail → 失敗)', () => {
+    const r5 = parsed.missions.filter((m) => m.round === 5);
+    expect(r5).toHaveLength(1);
+    expect(r5[0].teamSeats).toEqual([1, 2, 5, 6]);
+    expect(r5[0].questResult).toEqual({
+      successCount: 4,
+      failCount: 1,
+      success: false,
+    });
+  });
+
+  it('ladyChain has 3 entries', () => {
+    expect(parsed.ladyChain).toBeDefined();
+    expect(parsed.ladyChain).toHaveLength(3);
+    // 0>1 o → 第 2 回合結束後，座 10 查座 1
+    expect(parsed.ladyChain![0]).toMatchObject({
+      round: 2,
+      holderSeat: 10,
+      targetSeat: 1,
+      declaration: 'good',
+    });
+    // 1>8 o → 第 3 回合結束後
+    expect(parsed.ladyChain![1]).toMatchObject({
+      round: 3,
+      holderSeat: 1,
+      targetSeat: 8,
+      declaration: 'good',
+    });
+    // 8>6 o → 第 4 回合結束後 (座 8 = 梅林 查座 6 = 平民)
+    expect(parsed.ladyChain![2]).toMatchObject({
+      round: 4,
+      holderSeat: 8,
+      targetSeat: 6,
+      declaration: 'good',
+    });
+  });
+
+  it('lady actual camp derived from roles — 1>8 declares good, seat 8 = merlin = good (truthful)', () => {
+    const link = parsed.ladyChain![1];
+    expect(link.actual).toBe('good'); // seat 8 = merlin
+    expect(link.truthful).toBe(true);
+  });
+
+  it('lady actual camp — 8>6 declares good, seat 6 is loyal (not assassin/morgana/mordred/oberon) → good (truthful)', () => {
+    const link = parsed.ladyChain![2];
+    expect(link.actual).toBe('good');
+    expect(link.truthful).toBe(true);
+  });
+
+  it('all 5 quests recorded in outcomes (missions count ≥ 5)', () => {
+    // 總提議數 = 5(R1) + 5(R2) + 2(R3) + 3(R4) + 1(R5) = 16
+    expect(parsed.missions).toHaveLength(16);
+    const passedMissions = parsed.missions.filter((m) => m.passed);
+    expect(passedMissions).toHaveLength(5); // 每回合最後一個通過
+  });
+
+  it('playerNameToUid callback maps registered players to UUID', () => {
+    const registry: Record<string, string> = {
+      HAO: 'uid-hao-12345',
+      雪怪: 'uid-snow-67890',
+    };
+    const withUids = parseSheetsGameCell({
+      gameText: FIXTURE_2139_TEXT,
+      roleCode: '701498',
+      locationCode: '面瓦',
+      playedAtStr: '2026/02/27',
+      gameNumInDay: 16,
+      playerNames: ['HAO', '雪怪', '尼克', 'Dean', '池', 'JOY', 'Ray', '海月', 'Lori', 'C5'],
+      playerNameToUid: (name) => registry[name] ?? null,
+    });
+    expect(withUids.playerSeats[0]).toBe('uid-hao-12345');
+    expect(withUids.playerSeats[1]).toBe('uid-snow-67890');
+    expect(withUids.playerSeats[2]).toBe('sheets:尼克'); // fallback
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edward 2026-04-24 15:27：空玩家名 → sheets:unknown aggregate fallback
+// Google Sheets 2147 場遺留牌譜裡 429 場有空玩家格（位子不知道是誰，但局
+// 本身資料有效）。parser 必須把空名字轉成單一 `sheets:unknown` 偽 UUID，
+// 讓 import 不再 reject 這些局，同時該 aggregate 玩家被排行榜 filter 掉。
+// ---------------------------------------------------------------------------
+
+describe('parseSheetsGameCell — sheets:unknown fallback for empty player names', () => {
+  // 最小 8 人局 fixture：圓滿通過 5 任務（blue 勝）
+  const SIMPLE_8P_TEXT = `138
+ooo
+248
+oox
+358
+ooo
+168
+ooox
+258
+ooo`;
+
+  it('all player names empty → every seat within playerCount becomes sheets:unknown', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: SIMPLE_8P_TEXT,
+      roleCode: '123456', // 8 人局範圍內的 6 個能力角色座號
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 3,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+    });
+    // 牌譜推導 playerCount = 8（max seat 出現在提議中）
+    // 前 8 seat 都 sheets:unknown，後 2 seat 空字串
+    for (let i = 0; i < 8; i += 1) {
+      expect(parsed.playerSeats[i]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    }
+    expect(parsed.playerSeats[8]).toBe('');
+    expect(parsed.playerSeats[9]).toBe('');
+  });
+
+  it('partial empty names → only empty seats become sheets:unknown', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: SIMPLE_8P_TEXT,
+      roleCode: '123456',
+      locationCode: '線瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 4,
+      playerNames: ['阿明', '', '小華', '', 'Dean', '', '', '玲', '', ''],
+    });
+    // 8 人局 — 只前 8 seat 參與
+    expect(parsed.playerSeats[0]).toBe('sheets:阿明');
+    expect(parsed.playerSeats[1]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    expect(parsed.playerSeats[2]).toBe('sheets:小華');
+    expect(parsed.playerSeats[3]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    expect(parsed.playerSeats[4]).toBe('sheets:Dean');
+    expect(parsed.playerSeats[5]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    expect(parsed.playerSeats[6]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    expect(parsed.playerSeats[7]).toBe('sheets:玲');
+    // 超過 activePlayerCount → 空字串
+    expect(parsed.playerSeats[8]).toBe('');
+    expect(parsed.playerSeats[9]).toBe('');
+  });
+
+  it('playerCount derived from game text when names are all empty (no throw)', () => {
+    // 沒有名字就不能從 filter(非空) 取得 playerCount，必須從牌譜推
+    // 這是 429 場 pre-fix 會失敗的關鍵路徑
+    expect(() =>
+      parseSheetsGameCell({
+        gameText: SIMPLE_8P_TEXT,
+        roleCode: '123456',
+        locationCode: '面瓦',
+        playedAtStr: '2026/01/15',
+        gameNumInDay: 5,
+        playerNames: [], // 完全不提供
+      }),
+    ).not.toThrow();
+  });
+
+  it('10 人局 with all empty names → first 10 seats sheets:unknown', () => {
+    const TEN_PLAYER_TEXT = `12580
+ooooo
+13680
+oooxx
+24790
+ooxxx`;
+    const parsed = parseSheetsGameCell({
+      gameText: TEN_PLAYER_TEXT,
+      roleCode: '701498', // 10 人局座號（含 seat 10=0）
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/20',
+      gameNumInDay: 8,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+    });
+    for (let i = 0; i < 10; i += 1) {
+      expect(parsed.playerSeats[i]).toBe(SHEETS_UNKNOWN_PLAYER_ID);
+    }
+  });
+
+  it('SHEETS_UNKNOWN_PLAYER_ID constant is the canonical string "sheets:unknown"', () => {
+    expect(SHEETS_UNKNOWN_PLAYER_ID).toBe('sheets:unknown');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 刺殺欄 → winReason 驗證（Edward 2026-04-25：原本全 2146 場 winReason 都被
+// 標 threeBlue_merlinAlive，三藍死 = 0；修正後刺殺欄會被讀取並覆寫）。
+// Sheets 「刺殺」欄是單字元數字（1..9 = 對應座、0 = 座 10），無/空 = 未到刺殺。
+// ---------------------------------------------------------------------------
+
+describe('parseSheetsGameCell — assassin column (Sheets 「刺殺」欄)', () => {
+  // 5 任務全成功 → blue 5 → 進刺殺；roleCode 中梅林為座 8。
+  const FIVE_BLUE_TEXT = `138
+ooo
+248
+ooo
+358
+ooo
+168
+ooo
+258
+ooo`;
+
+  const ROLE_CODE_MERLIN_8 = '701498'; // 刺7 娜0 德1 奧4 派9 梅8
+
+  it('刺殺命中梅林 (target seat = merlin) → threeBlue_merlinKilled + winnerCamp evil', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: FIVE_BLUE_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 1,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      assassinTargetRaw: '8', // 刺座 8 = 梅林
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('evil');
+    expect(parsed.finalResult.winReason).toBe('threeBlue_merlinKilled');
+    expect(parsed.finalResult.assassinTargetSeat).toBe(8);
+    expect(parsed.finalResult.assassinCorrect).toBe(true);
+  });
+
+  it('刺殺未命中梅林 (target seat ≠ merlin) → threeBlue_merlinAlive + winnerCamp good', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: FIVE_BLUE_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 2,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      assassinTargetRaw: '5', // 刺座 5 ≠ 梅林座 8
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('good');
+    expect(parsed.finalResult.winReason).toBe('threeBlue_merlinAlive');
+    expect(parsed.finalResult.assassinTargetSeat).toBe(5);
+    expect(parsed.finalResult.assassinCorrect).toBe(false);
+  });
+
+  it('刺殺欄為 "0" → target seat 10 → 若梅林座 ≠ 10 為 missAlive', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: FIVE_BLUE_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 3,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      assassinTargetRaw: '0', // 0 = 座 10，但梅林是座 8
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('good');
+    expect(parsed.finalResult.winReason).toBe('threeBlue_merlinAlive');
+    expect(parsed.finalResult.assassinTargetSeat).toBe(10);
+    expect(parsed.finalResult.assassinCorrect).toBe(false);
+  });
+
+  it('刺殺欄空 / undefined → 預設 threeBlue_merlinAlive (向後相容)', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: FIVE_BLUE_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 4,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      // assassinTargetRaw 不提供
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('good');
+    expect(parsed.finalResult.winReason).toBe('threeBlue_merlinAlive');
+    // 沒給就不寫這兩個欄位
+    expect(parsed.finalResult.assassinTargetSeat).toBeUndefined();
+    expect(parsed.finalResult.assassinCorrect).toBeUndefined();
+  });
+
+  it('三紅 + 刺殺欄填了 (異常) → 仍為 threeRed (刺殺欄忽略)', () => {
+    // 3 紅任務即收 → 直接結束，根本沒到刺殺階段。
+    // Sheets 偶有錯填，但 winReason 仍應 = threeRed。
+    const THREE_RED_TEXT = `138
+oox
+248
+oox
+358
+oox`;
+    const parsed = parseSheetsGameCell({
+      gameText: THREE_RED_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 5,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      assassinTargetRaw: '8', // 異常填了梅林座
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('evil');
+    expect(parsed.finalResult.winReason).toBe('threeRed');
+    expect(parsed.finalResult.assassinTargetSeat).toBeUndefined();
+    expect(parsed.finalResult.assassinCorrect).toBeUndefined();
+  });
+});

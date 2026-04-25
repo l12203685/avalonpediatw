@@ -1,0 +1,332 @@
+{
+  "role": {
+    "merlin": "Merlin",
+    "percival": "Percival",
+    "loyal": "Loyal Servant",
+    "assassin": "Assassin",
+    "morgana": "Morgana",
+    "mordred": "Mordred",
+    "oberon": "Oberon",
+    "minion": "Minion of Mordred",
+    "unknown": "Unknown"
+  },
+  "roleLabel": {
+    "merlin": "Merlin",
+    "percival": "Percival",
+    "loyal": "Loyal Servant",
+    "assassin": "Assassin",
+    "morgana": "Morgana",
+    "mordred": "Mordred",
+    "oberon": "Oberon",
+    "minion": "Minion of Mordred",
+    "unknown": "Unknown"
+  },
+  "phase": {
+    "selectTeam": "Select Team",
+    "vote": "Vote",
+    "questing": "Quest in Progress",
+    "discussion": "Discussion",
+    "assassination": "Assassination",
+    "ended": "Game Ended"
+  },
+  "phaseLabel": {
+    "voting": "Team Select",
+    "votingInProgress": "Voting",
+    "quest": "Quest",
+    "ladyOfTheLake": "Lady of the Lake",
+    "discussion": "Assassination",
+    "ended": "Game Over",
+    "lobby": "Lobby"
+  },
+  "vote": {
+    "approve": "Approve",
+    "reject": "Reject",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "success": "Success",
+    "fail": "Fail",
+    "approveCount": "{{count}} approve",
+    "rejectCount": "{{count}} reject"
+  },
+  "result": {
+    "won": "You Won",
+    "lost": "You Lost",
+    "loyalWins": "Loyal Wins",
+    "evilWins": "Evil Wins",
+    "good": "Good",
+    "evil": "Evil",
+    "win": "W",
+    "lose": "L"
+  },
+  "quest": {
+    "title": "Quest",
+    "leader": "Leader",
+    "team": "Team",
+    "round": "Round {{round}}",
+    "proposal": "Proposal #{{n}}"
+  },
+  "room": {
+    "lobby": "Lobby",
+    "playerCount": "{{count}}-player game",
+    "waiting": "Waiting for players…",
+    "start": "Start Game",
+    "leave": "Leave Room"
+  },
+  "header": {
+    "title": "Avalon",
+    "state": "State: ",
+    "viewRole": "View Role",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "loyalViewOn": "Switch to loyal view (hide role hints)",
+    "loyalViewOff": "Restore original view"
+  },
+  "roster": {
+    "goodCount": "🔵 Good team — {{count}}",
+    "evilCount": "🔴 Evil team — {{count}}"
+  },
+  "connection": {
+    "reconnecting": "Reconnecting…",
+    "disconnected": "Disconnected — check your connection"
+  },
+  "spectator": {
+    "bannerTitle": "👁 Spectating — roles hidden",
+    "leave": "Leave Spectate",
+    "hintVoting": "👁 Spectating — waiting for players to vote...",
+    "hintQuest": "👁 Spectating — the quest team is acting...",
+    "hintLady": "👁 Spectating — Lady of the Lake is inspecting...",
+    "hintDiscussion": "👁 Spectating — the Assassin is choosing a target..."
+  },
+  "action": {
+    "leaderTurn": "👑 Your turn — select a quest team",
+    "voteTurn": "🗳️ Your turn to vote — approve or reject the team",
+    "questTurn": "⚔️ You are on the quest — vote success or fail",
+    "ladyTurn": "🔮 You hold the Lady — inspect a player",
+    "assassinTurn": "🗡️ You are the Assassin — choose your target"
+  },
+  "currentActor": {
+    "leaderLabel": "👑 Leader: {{name}}",
+    "voteWaitingLabel": "🗳️ Vote pending: {{count}} left",
+    "questWaitingLabel": "⚔️ Quest votes: {{voted}}/{{total}}",
+    "ladyLabel": "🔮 Lady of the Lake: {{name}}",
+    "assassinLabel": "🗡️ Assassin is choosing a target"
+  },
+  "scoresheet": {
+    "title": "Scoresheet",
+    "stats": "{{quests}} quests · {{votes}} votes",
+    "collapsedSummary": "{{quests}} quests · {{votes}} votes · tap to expand",
+    "expanded": "Collapse",
+    "leaderSeat": "Leader seat",
+    "resultTooltip": "Result",
+    "memoTooltip": "Memo",
+    "questLabel": "Quest",
+    "ladyLabel": "Lady",
+    "ladyRowLabel": "Lady",
+    "questSuccessChar": "S",
+    "questFailChar": "F",
+    "legendTeam": "Team",
+    "legendApprove": "Approve",
+    "legendReject": "Reject",
+    "legendQuestSuccess": "Quest Success",
+    "legendQuestFail": "Quest Fail",
+    "legendLady": "Lady of the Lake"
+  },
+  "suspicionBoard": {
+    "headerTitle": "Suspicion Notes",
+    "privateLabel": "— private notes",
+    "hint": "Click to cycle status — visible to you only",
+    "statusEvil": "Suspected Evil",
+    "statusNeutral": "Unsure",
+    "statusTrusted": "Trusted"
+  },
+  "voteAnalysis": {
+    "title": "📊 Vote Analysis",
+    "proposalCount": "{{count}} proposals",
+    "colPlayer": "Player",
+    "colRole": "Role",
+    "colApproveRate": "Approve rate",
+    "colLeaderCount": "Leader",
+    "colQuestCount": "On quest",
+    "youSuffix": "(You)",
+    "matrixTitle": "Vote matrix (rows = players, columns = proposals)",
+    "matrixHeader": "Player ↓ / Proposal →",
+    "matrixTeamTooltip": "Leader proposal: {{team}}",
+    "matrixLegend": "Gold disc = proposal passed · Red disc = rejected · Yellow frame = round leader · White stone = approve · Black stone = reject",
+    "proposalApprovedAlt": "Proposal passed",
+    "proposalRejectedAlt": "Proposal rejected",
+    "voteApproveAlt": "Approve (white stone)",
+    "voteRejectAlt": "Reject (black stone)",
+    "roundPrefix": "R{{round}}"
+  },
+  "voteReveal": {
+    "roundProposal": "Round {{round}} — Proposal #{{attempt}}",
+    "title": "Vote Results",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "approveRejectCount": "{{approvals}} approve / {{rejections}} reject",
+    "teamLabel": "Quest Team"
+  },
+  "questResult": {
+    "roundLabel": "Quest {{round}}",
+    "success": "Quest Succeeded!",
+    "successEn": "Quest Succeeded",
+    "fail": "Quest Failed!",
+    "failEn": "Quest Failed",
+    "failCount_one": "{{count}} fail vote",
+    "failCount_other": "{{count}} fail votes",
+    "teamLabel": "Quest team:"
+  },
+  "lady": {
+    "title": "🔮 Lady of the Lake",
+    "targetTeamLabel": "<target>{{name}}</target>'s alignment is:",
+    "resultGood": "⚔️ Good",
+    "resultEvil": "👹 Evil",
+    "pass": "The Lady passes to this player...",
+    "pickTitle": "Choose a player to inspect their team alignment",
+    "waitingDesc": "<holder>{{name}}</holder> is using the Lady of the Lake to inspect a player...",
+    "waitingNote": "(The Lady holder is inspecting a player's team alignment...)",
+    "declareTitle": "Public declaration",
+    "declareGood": "Declare Good",
+    "declareEvil": "Declare Evil",
+    "declareKeepPrivate": "No declaration = keep it private",
+    "declared": "You publicly declared: {{claim}}",
+    "skipDeclaration": "Keep private & continue"
+  },
+  "assassin": {
+    "questHistoryHeader": "Quest Team History",
+    "roundPrefix": "R{{round}}:",
+    "failBadge": "({{count}} fail)",
+    "title": "🗡️ Assassinate Merlin",
+    "prompt": "Who do you think is Merlin? Choose your target",
+    "selectedHint": "Target selected, awaiting result...",
+    "discussionTitle": "💬 Assassination Phase",
+    "goodWonIntro": "The Good team won 3 quests!",
+    "pickingTarget": "The Assassin is choosing a target, trying to find Merlin...",
+    "warning": "If the Assassin kills Merlin, Evil wins!"
+  },
+  "ended": {
+    "evilWins": "👹 Evil Wins!",
+    "goodWins": "⚔️ Good Wins!",
+    "reasonFailedQuests": "💀 Evil failed 3 quests",
+    "reasonVoteRejections": "🚫 5 proposals all rejected — Evil wins by default",
+    "reasonMerlinKilledPrefix": "🗡️ The Assassin killed Merlin!",
+    "reasonMerlinKilledSuffix": "was Merlin",
+    "reasonWrongKillPrefix": "🛡️ The Assassin mistakenly killed",
+    "reasonWrongKillSuffix": ", Good wins!",
+    "reasonAssassinationTimeout": "⏱️ Assassination timed out, Good wins!",
+    "roundFailLabel": "{{count}} fail",
+    "rolesReveal": "Final Role Reveal:",
+    "youLabel": "(You)",
+    "rematch": "Rematch",
+    "backHome": "Back to Home"
+  },
+  "votePanel": {
+    "title": "Team Vote",
+    "subtitle": "Approve or Reject the proposed quest team",
+    "questTeamLabel": "Proposed Team:",
+    "youSuffix": " (You)",
+    "votedCount": "Voted: {{voted}}/{{total}}",
+    "unlimitedTimer": "Untimed",
+    "allVoted": "All votes in! Counting results…",
+    "waitingCount_one": "{{count}} player hasn't voted yet",
+    "waitingCount_other": "{{count}} players haven't voted yet",
+    "approveBtn": "Approve",
+    "rejectBtn": "Reject",
+    "submitting": "Voting…",
+    "yourVoteApprove": "Your vote: 👍 Approved",
+    "yourVoteReject": "Your vote: 👎 Rejected",
+    "waitingOthers": "Waiting for other players to vote…",
+    "shortcuts": "Shortcuts: <approve>Y</approve> Approve · <reject>N</reject> Reject",
+    "countdownLabel": "Vote countdown"
+  },
+  "questPanel": {
+    "title": "⚔️ Quest Vote",
+    "subtitle": "Choose to succeed or fail this quest",
+    "notInTeamTitle": "⚔️ Quest in Progress",
+    "notInTeamVoted": "Submitted: <count>{{voted}}/{{total}}</count>",
+    "notInTeamWaiting": "Results revealed when all votes are in…",
+    "teamLabel": "Quest Team:",
+    "youSuffix": " (You)",
+    "unlimitedTimer": "Untimed",
+    "successBtn": "Quest Success",
+    "failBtn": "Quest Fail",
+    "submitting": "Voting…",
+    "submitted": "✓ Submitted — waiting for teammates…",
+    "votingCount_one": "Only you are voting…",
+    "votingCount_other": "{{count}} team members voting…",
+    "goodSideHint": "Good side can only vote success · Shortcut <key>S</key>",
+    "evilSideHint": "Shortcuts: <success>S</success> Success · <fail>F</fail> Fail",
+    "oberonMustFailHint": "House rule \"Oberon must fail\" is on — you can only vote fail (success button hidden)",
+    "countdownLabel": "Quest countdown"
+  },
+  "teamSelect": {
+    "waitingTitle": "Waiting for leader to pick a team",
+    "waitingDesc": "Leader <leader>{{name}}</leader> is choosing the quest team...",
+    "needMembers": "This round requires {{count}} members",
+    "unknownCount": "?",
+    "unlimitedTimer": "⏱ Untimed",
+    "timer": "⏱ {{seconds}}s",
+    "title": "👑 Select Quest Team",
+    "subtitle": "You are the Leader — select {{count}} team members for the quest.",
+    "selectedCount": "Selected: <sel>{{selected}}</sel>/<total>{{total}}</total>",
+    "pickMembersLabel": "Pick members:",
+    "youSuffix": " (You)",
+    "confirmBtn": "Confirm Team",
+    "submitting": "Submitting…",
+    "teamComplete": "Team complete! Click confirm to proceed to vote.",
+    "moreNeeded_one": "{{count}} more member needed",
+    "moreNeeded_other": "{{count}} more members needed",
+    "youAreLeaderBanner": "👑 YOU ARE THE LEADER",
+    "youAreLeaderInstruction": "Pick {{count}} team members before time runs out, or the system will auto-select for you.",
+    "timeoutWarning": "⚠ {{seconds}}s left — pick your team now!",
+    "autoSelectHint": "If time runs out, the system auto-selects a team and moves to vote",
+    "countdownLabel": "Team-select countdown",
+    "leaderChangedBanner": "🔁 New leader: {{name}}",
+    "leaderChangedHint": "Previous team was rejected — a new leader is picking.",
+    "toolbarSelected": "Selected {{selected}}/{{total}} members",
+    "toolbarClear": "Clear",
+    "toolbarConfirm": "✅ Confirm & Submit Team",
+    "shieldHint": "Tap a player card to add/remove from team"
+  },
+  "roleReveal": {
+    "evilBadge": "🔴 Evil",
+    "goodBadge": "🔵 Good",
+    "knowledgeTitle": "Your Night Information",
+    "startBtn": "Got it! Start Game"
+  },
+  "nightInfo": {
+    "evil": "🔴 Evil",
+    "good": "🔵 Good",
+    "clickToView": "· Tap to view info",
+    "hintLabel": "Hint"
+  },
+  "chat": {
+    "title": "Game Chat",
+    "noMessages": "No messages yet",
+    "inputPlaceholder": "Type a message…",
+    "inlineTitle": "Chat log",
+    "inlinePlaceholder": "Say something..."
+  },
+  "missionTrack": {
+    "rejectLabel": "Reject:",
+    "evilWinsReject": "Evil Wins!"
+  },
+  "roleAvatar": {
+    "merlinShort": "梅",
+    "percivalShort": "派",
+    "loyalShort": "忠",
+    "assassinShort": "刺",
+    "morganaShort": "娜",
+    "mordredShort": "德",
+    "oberonShort": "奧",
+    "minionShort": "爪"
+  },
+  "bot": {
+    "label": "AI Bot",
+    "labelShort": "AI",
+    "newbie": "Weak AI",
+    "core": "Mid AI",
+    "expert": "Strong AI",
+    "fillTitle": "Add AI Bot"
+  }
+}
