@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { createRoom, joinRoom, listRooms, spectateRoom, getSocket, getStoredToken } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
-import { fetchAdminMe } from '../services/api';
+import { fetchAdminMe, fetchLinkedAccounts, LinkedAccount, LinkProvider } from '../services/api';
 import { forceRefresh } from '../utils/forceRefresh';
 import {
   Play,
@@ -122,6 +122,34 @@ export default function HomePage(): JSX.Element {
       .then(me => setIsAdminUser(me.isAdmin))
       .catch(() => setIsAdminUser(false));
   }, [currentPlayer]);
+
+  // Edward 2026-04-25 22:10: 大廳左上「登入狀態 chip」(替代個人戰績按鈕底下
+  // 「當前: Edward」副字)。已登入時顯主名 + G/D/L 三平台綁定狀態；訪客顯
+  // clickable「登入/綁定」打開 AuthGateModal。資料源同 IdentityBadge：
+  // /api/user/linked → LinkedAccount[]。fetch 失敗時退回三項皆「未綁」。
+  const [linkedForChip, setLinkedForChip] = useState<LinkedAccount[]>([]);
+  const [linkedLoadedFor, setLinkedLoadedFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (isGuestPlayer(currentPlayer)) {
+      setLinkedForChip([]);
+      setLinkedLoadedFor(null);
+      return;
+    }
+    const playerId = currentPlayer?.id ?? null;
+    if (!playerId) return;
+    if (linkedLoadedFor === playerId) return;
+    const token = getStoredToken();
+    if (!token) return;
+    fetchLinkedAccounts(token)
+      .then(accounts => {
+        setLinkedForChip(accounts);
+        setLinkedLoadedFor(playerId);
+      })
+      .catch(() => { /* keep fallback (unlinked-everywhere) */ });
+  }, [currentPlayer, linkedLoadedFor]);
+
+  const isProviderLinked = (provider: LinkProvider): boolean =>
+    linkedForChip.some(a => a.provider === provider && a.linked);
 
   // Bug fix (Edward 2026-04-25): logged-in user clicked 建立房間 and saw
   // 「請輸入你的名字」 toast even though @Edward was bound. Root cause: the
@@ -243,7 +271,10 @@ export default function HomePage(): JSX.Element {
     }
   };
 
-  const currentName = currentPlayer?.name ?? t('auth.guest');
+  // Edward 2026-04-25 22:10: 「當前: Edward」副字砍掉後，currentName 不再用
+  // 於按鈕內。chip 直接讀 currentPlayer.name (登入時必有值)。
+  const chipName = currentPlayer?.name ?? '';
+  const isGuest = isGuestPlayer(currentPlayer);
 
   return (
     <div className="min-h-screen bg-black px-3 py-4 sm:p-4 overflow-x-hidden">
@@ -280,6 +311,52 @@ export default function HomePage(): JSX.Element {
       </div>
 
       <div className="flex items-start sm:items-center justify-center min-h-screen relative z-10 pt-16 sm:pt-0">
+        {/* Edward 2026-04-25 22:10: 大廳左上「登入狀態 chip」(替代個人戰績按鈕底下
+            「當前: Edward」副字)。
+              - 已登入: 「已登入: {name} | G: 綁定/未綁 | D: 綁定/未綁 | L: 綁定/未綁」
+              - 訪客: clickable「登入/綁定」→ AuthGateModal (target='stats' 表登入後
+                回大廳，不跳頁)
+            fixed 對齊右上 IdentityBadge 的同級，z-30 避開 modal (z-50)。 */}
+        <div className="fixed top-3 left-3 sm:top-6 sm:left-6 z-30">
+          {isGuest ? (
+            <button
+              type="button"
+              onClick={() => setAuthGateTarget('stats')}
+              data-testid="home-login-chip-guest"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-900/40 border border-amber-700/50 text-amber-200 hover:bg-amber-900/60 hover:text-amber-100 text-[11px] font-semibold transition-colors"
+            >
+              {t('home.loginOrBind', { defaultValue: '登入/綁定' })}
+            </button>
+          ) : (
+            <div
+              data-testid="home-login-chip-authed"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-zinc-800/80 border border-zinc-700 text-zinc-200 text-[11px] font-mono whitespace-nowrap"
+            >
+              <span className="font-semibold text-white">
+                {t('home.loggedInAs', { defaultValue: '已登入' })}: {chipName}
+              </span>
+              <span className="text-zinc-500">|</span>
+              <span className={isProviderLinked('google') ? 'text-emerald-300' : 'text-zinc-500'}>
+                G: {isProviderLinked('google')
+                  ? t('home.bindStateLinked', { defaultValue: '綁定' })
+                  : t('home.bindStateUnlinked', { defaultValue: '未綁' })}
+              </span>
+              <span className="text-zinc-500">|</span>
+              <span className={isProviderLinked('discord') ? 'text-emerald-300' : 'text-zinc-500'}>
+                D: {isProviderLinked('discord')
+                  ? t('home.bindStateLinked', { defaultValue: '綁定' })
+                  : t('home.bindStateUnlinked', { defaultValue: '未綁' })}
+              </span>
+              <span className="text-zinc-500">|</span>
+              <span className={isProviderLinked('line') ? 'text-emerald-300' : 'text-zinc-500'}>
+                L: {isProviderLinked('line')
+                  ? t('home.bindStateLinked', { defaultValue: '綁定' })
+                  : t('home.bindStateUnlinked', { defaultValue: '未綁' })}
+              </span>
+            </div>
+          )}
+        </div>
+
         {/* Top-right controls — language only. Logout / Profile / Admin 全部搬到資料設定頁。
             改 fixed 避免手機上 absolute 佔據 container 寬度把右側按鈕擠出螢幕。 */}
         <div className="fixed top-3 right-3 sm:top-6 sm:right-6 z-30 flex items-center gap-2">
@@ -366,21 +443,19 @@ export default function HomePage(): JSX.Element {
                       <span className="truncate">{t('home.stats')}</span>
                     </motion.button>
 
-                    {/* Row 2 — Personal Stats / Wiki / My Profile */}
+                    {/* Row 2 — Personal Stats / Wiki / My Profile
+                        Edward 2026-04-25 22:10: 砍按鈕底下「當前: Edward」副字，
+                        統一用單行 layout (與 Row 1/Row 2 其他按鈕一致)。登入狀態
+                        改顯示在大廳左上 chip。 */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => tryGatedNavigate('stats', () => setGameState('personalStats'))}
                       data-testid="home-btn-personal-stats"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-md text-sm sm:text-base"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
-                      <span className="inline-flex items-center gap-1.5 sm:gap-2 min-w-0">
-                        <User size={18} className="flex-shrink-0" />
-                        <span className="truncate">{t('home.personalStats')}</span>
-                      </span>
-                      <span className="text-[10px] text-zinc-400 truncate max-w-full">
-                        {t('home.currentAs', { name: currentName })}
-                      </span>
+                      <User size={18} className="flex-shrink-0" />
+                      <span className="truncate">{t('home.personalStats')}</span>
                     </motion.button>
 
                     <motion.button
