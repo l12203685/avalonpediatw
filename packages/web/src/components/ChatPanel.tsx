@@ -114,18 +114,15 @@ export default function ChatPanel({
     return () => { socket!.off('chat:message-received', handler); };
   }, [isOpen, isInline]);
 
-  // Synthesise system entries from room state. Each vote attempt produces a
-  // line like "系統：1-1, 隊長 1 派 134, 贊成 5/10（無異常）, 否決" so the
-  // player sees game progress + chat in one timeline. Keeps the same wording
-  // ScoresheetChatPanel previously used so Edward's expectations don't shift.
+  // Synthesise system entries from room state. Compact Sheets-style format
+  // (Edward 2026-04-25 14:57「系統: 3-2, 2: 2580, 5-, 9+」). Drops verbose
+  // wording (隊長/派/贊成 K/N/通過-否決/異常)。Pure left-aligned row in render.
   const systemEntries = useMemo<UnifiedEntry[]>(() => {
     if (!room) return [];
     const out: UnifiedEntry[] = [];
 
-    // Vote attempts → "系統：R-A, 隊長 X 派 SEATS, 贊成 K/N（異常）, 結果"
+    // Vote attempts → "系統: R-A, L: TEAM, IB-, OW+"
     room.voteHistory.forEach((v, idx) => {
-      const approveCount = Object.values(v.votes).filter(Boolean).length;
-      const totalVotes = Object.values(v.votes).length;
       const teamSeats = v.team
         .map((pid) => seatOf(pid, room.players))
         .filter((s) => s > 0);
@@ -145,44 +142,53 @@ export default function ChatPanel({
 
       const leaderSeat = seatOf(v.leader, room.players);
       const leaderLabel = leaderSeat > 0 ? displaySeatNumber(leaderSeat) : '?';
-      const result = v.approved ? '通過' : '否決';
+
+      const parts: string[] = [
+        `${v.round}-${v.attempt}`,
+        `${leaderLabel}: ${teamDigits}`,
+      ];
+      if (anomaly) parts.push(anomaly);
 
       out.push({
         id: `sys-vote-${v.round}-${v.attempt}-${idx}`,
         timestamp: room.createdAt + idx * 1000,
         kind: 'system',
-        text: `系統：${v.round}-${v.attempt}，隊長 ${leaderLabel} 派 ${teamDigits}，贊成 ${approveCount}/${totalVotes}（${anomaly || '無異常'}），${result}`,
+        text: `系統: ${parts.join(', ')}`,
       });
     });
 
-    // Quest outcomes → "系統：第 R 輪任務 ✓ 成功 / ✗ 失敗 (X 失敗票)"
+    // Quest outcomes → "系統: R1 任務 245 ooo" or "系統: R1 任務 245 oox" (per-card)
     room.questHistory.forEach((q, idx) => {
-      const tag = q.result === 'success' ? '✓ 成功' : '✗ 失敗';
-      const failNote = q.result === 'fail' && q.failCount > 0 ? `（${q.failCount} 張失敗票）` : '';
+      const teamSeats = q.team
+        .map((pid) => seatOf(pid, room.players))
+        .filter((s) => s > 0);
+      const teamDigits = formatSeatsDigitString(teamSeats);
+      const successCount = Math.max(0, q.team.length - q.failCount);
+      const cards = 'o'.repeat(successCount) + 'x'.repeat(q.failCount);
       out.push({
         id: `sys-quest-${q.round}-${idx}`,
         // Slot quest result just after that round's last vote attempt.
         timestamp: room.createdAt + (room.voteHistory.length + idx) * 1000 + 500,
         kind: 'system',
-        text: `系統：第 ${q.round} 輪任務 ${tag}${failNote}`,
+        text: `系統: R${q.round} 任務 ${teamDigits} ${cards}`,
       });
     });
 
-    // Lady-of-the-Lake inspections → "系統：湖中女神 X 查 Y → 宣告：好/壞 / 不宣告"
+    // Lady-of-the-Lake inspections → "系統: 湖 H>T o" (good) / "x" (evil) / "?" (undeclared)
     (room.ladyOfTheLakeHistory ?? []).forEach((l, idx) => {
       const holderSeat = seatOf(l.holderId, room.players);
       const targetSeat = seatOf(l.targetId, room.players);
       const holderLabel = holderSeat > 0 ? displaySeatNumber(holderSeat) : '?';
       const targetLabel = targetSeat > 0 ? displaySeatNumber(targetSeat) : '?';
-      const declaration = l.declared
-        ? `宣告：${l.declaredClaim === 'good' ? '好' : '壞'}`
-        : '不公開宣告';
+      const claim = l.declared
+        ? (l.declaredClaim === 'good' ? 'o' : 'x')
+        : '?';
       out.push({
         id: `sys-lake-${l.round}-${idx}`,
         // Lake events happen between rounds — slot after quest results.
         timestamp: room.createdAt + (room.voteHistory.length + room.questHistory.length + idx) * 1000 + 800,
         kind: 'system',
-        text: `系統：湖中女神 ${holderLabel} 查 ${targetLabel}，${declaration}`,
+        text: `系統: 湖 ${holderLabel}>${targetLabel} ${claim}`,
       });
     });
 
@@ -222,8 +228,10 @@ export default function ChatPanel({
     setInput('');
   };
 
-  // Unified message list — system entries (gray italic chip, centred) + player
-  // bubbles (blue when self, gray when other) sorted by timestamp.
+  // Unified message list — Edward 2026-04-25 14:57 chat layout spec:
+  //   • 自己發言：靠右 (blue bubble)
+  //   • 其他玩家：靠左 (gray bubble)
+  //   • 系統訊息：靠左 (compact lime chip, no bubble) — Sheets-style row
   const messageList = (
     <>
       {merged.length === 0 && (
@@ -232,8 +240,8 @@ export default function ChatPanel({
       {merged.map(entry => {
         if (entry.kind === 'system') {
           return (
-            <div key={entry.id} className="flex justify-center">
-              <span className="text-[11px] text-lime-300/80 bg-gray-800/60 px-2 py-0.5 rounded-full italic max-w-full break-words text-center">
+            <div key={entry.id} className="flex justify-start">
+              <span className="text-[11px] text-lime-300/80 italic max-w-full break-words pl-1">
                 {entry.text}
               </span>
             </div>
