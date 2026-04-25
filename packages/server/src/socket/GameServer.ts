@@ -1402,14 +1402,12 @@ export class GameServer {
       }
 
       const botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
-      // Bot names encode difficulty tier directly (弱AI / 中AI / 強AI).
+      // Display name is uniformly "AI" regardless of difficulty tier.
       // Per-player seat numbers (the PlayerCard chip) disambiguate
-      // multiple bots sharing the same strength label.
-      const botName = difficulty === 'easy'
-        ? '弱AI'
-        : difficulty === 'hard'
-          ? '強AI'
-          : '中AI';
+      // multiple bots in the same room. Difficulty is preserved in
+      // `botDifficulty` and drives agent behaviour, but is hidden from
+      // the player-visible name (Edward 2026-04-25).
+      const botName = 'AI';
 
       room.players[botId] = {
         id: botId,
@@ -1847,36 +1845,52 @@ export class GameServer {
       if (!room) { socket.emit('error', 'Room not found'); return; }
 
       const playerId = socket.data.playerId as string;
+      const inLobby  = room.state === 'lobby';
+      const inActive = room.state !== 'lobby' && room.state !== 'ended';
+      const wasHost  = room.host === playerId;
+      const previousHost = room.host;
 
-      // Cannot leave during active game
-      if (room.state !== 'lobby' && room.state !== 'ended') {
-        socket.emit('error', '遊戲進行中無法離開房間');
-        return;
-      }
+      // Edward 2026-04-25: 房主離開 → 自動交接給下一位座位順位的真人玩家.
+      // 座位順序 = Object.keys(room.players) 插入順序（GameEngine seat 索引同源）.
+      // Active game 中也要交接而不中斷遊戲；唯一真人離開 = 房間解散.
+      const seatOrder = Object.keys(room.players);
+      const nextHumanHostId = seatOrder.find(
+        id => id !== playerId && !room.players[id]?.isBot,
+      );
 
-      // Host leaving dissolves the room (in lobby) — transfer host or remove
-      if (room.host === playerId && room.state === 'lobby') {
-        const otherIds = Object.keys(room.players).filter(id => id !== playerId && !room.players[id].isBot);
-        if (otherIds.length > 0) {
-          // Transfer host to the next human player
-          room.host = otherIds[0];
-          delete room.players[playerId];
-          this.playerToSocket.delete(playerId);
-          socket.leave(roomId);
-          socket.data.roomId = undefined;
-          socket.data.playerId = undefined;
-          this.broadcastRoomState(roomId, room);
-          this.io.to(roomId).emit('game:player-left', playerId);
-        } else {
-          // No other humans — delete room
-          this.roomManager.deleteRoom(roomId);
-          this.gameEngines.delete(roomId);
-        }
+      if (wasHost && !nextHumanHostId) {
+        // No other humans — delete room across all states (host was the only human).
+        this.playerToSocket.delete(playerId);
+        socket.leave(roomId);
+        socket.data.roomId = undefined;
+        socket.data.playerId = undefined;
+        this.roomManager.deleteRoom(roomId);
+        this.gameEngines.delete(roomId);
+        this.roomStartTimes.delete(roomId);
         socket.emit('game:left-room');
+        console.log(`✓ Host ${playerId} left room ${roomId} — no other humans, room dissolved`);
         return;
       }
 
-      delete room.players[playerId];
+      if (wasHost && nextHumanHostId) {
+        room.host = nextHumanHostId;
+        console.log(
+          `✓ Host transfer in room ${roomId}: ${previousHost} → ${nextHumanHostId} (state=${room.state})`,
+        );
+      }
+
+      // Player removal vs disconnection:
+      //  - lobby/ended: hard-remove (no GameEngine state to break).
+      //  - active game: mark disconnected to keep engine references intact
+      //    (votes, questTeam, leaderIndex). Auto-act fallbacks already handle
+      //    disconnected players (handleDisconnect logic).
+      if (inLobby || room.state === 'ended') {
+        delete room.players[playerId];
+      } else if (inActive) {
+        const player = room.players[playerId];
+        if (player) player.status = 'disconnected';
+      }
+
       this.playerToSocket.delete(playerId);
       socket.leave(roomId);
       socket.data.roomId = undefined;
@@ -1886,7 +1900,7 @@ export class GameServer {
       this.io.to(roomId).emit('game:player-left', playerId);
       socket.emit('game:left-room');
 
-      console.log(`✓ Player ${playerId} left room ${roomId}`);
+      console.log(`✓ Player ${playerId} left room ${roomId} (state=${room.state}, hostTransferred=${wasHost})`);
     } catch (error) {
       console.error('Error leaving room:', error);
       socket.emit('error', 'Failed to leave room');
