@@ -27,17 +27,20 @@ type ScoresheetRow =
   | { type: 'lady'; round: number; record: LadyOfTheLakeRecord };
 
 /**
- * Shorthand memo for a nomination row.
- * e.g. "169" = leader 1, team members 6 and 9 (1-based display).
- * Uses 1-based seat numbers to match the paper scoresheet convention,
- * and renders seat 10 as "0" (so leader 1 + team [3, 10] → "130").
+ * Shorthand memo for a nomination row — Google Sheet convention.
+ *
+ * Renders ONLY the team seats in canonical ascending order; the leader is
+ * already shown in the L column on the same row, so prefixing it here is
+ * redundant (Edward 2026-04-25).
+ *
+ * e.g. team [1, 3, 4] → "134"; team [4, 5, 6, 10] → "4560"
+ * Uses 1-based seat numbers and renders seat 10 as "0" (paper convention).
  */
-function nominationShorthand(leaderSeat: number, teamSeats: number[]): string {
-  const sortedDigits = [...teamSeats]
+function nominationShorthand(teamSeats: number[]): string {
+  return [...teamSeats]
     .sort((a, b) => a - b)
     .map(displaySeatNumber)
     .join('');
-  return `${displaySeatNumber(leaderSeat)}${sortedDigits}`;
 }
 
 export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetProps): JSX.Element {
@@ -280,11 +283,8 @@ function NominationRow({
   const approveCount = Object.values(record.votes).filter(Boolean).length;
   const totalVotes = Object.values(record.votes).length;
 
-  // 1-based display for shorthand (matches paper scoresheet "169" convention)
-  const shorthand = nominationShorthand(
-    leaderSeat + 1,
-    teamSeats.map(s => s + 1),
-  );
+  // 1-based display for shorthand (Google Sheet convention — team only, no leader prefix)
+  const shorthand = nominationShorthand(teamSeats.map(s => s + 1));
 
   return (
     <tr className="border-b border-gray-800/50">
