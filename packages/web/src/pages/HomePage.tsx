@@ -20,7 +20,6 @@ import {
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import PublicChatPanel from '../components/PublicChatPanel';
-import IdentityBadge from '../components/IdentityBadge';
 import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
 import BindingField from '../components/BindingField';
 
@@ -358,9 +357,10 @@ export default function HomePage(): JSX.Element {
         </div>
 
         {/* Top-right controls — language only. Logout / Profile / Admin 全部搬到資料設定頁。
-            改 fixed 避免手機上 absolute 佔據 container 寬度把右側按鈕擠出螢幕。 */}
+            改 fixed 避免手機上 absolute 佔據 container 寬度把右側按鈕擠出螢幕。
+            Edward 2026-04-25 22:25: 砍 IdentityBadge (盾牌 Edward chip) — 與大廳左上
+            「已登入」chip 重複。IdentityBadge component 仍保留供其他頁使用。 */}
         <div className="fixed top-3 right-3 sm:top-6 sm:right-6 z-30 flex items-center gap-2">
-          <IdentityBadge />
           <LanguageSwitcher />
         </div>
 
