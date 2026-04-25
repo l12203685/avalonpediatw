@@ -44,35 +44,17 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
             <X size={20} />
           </button>
 
-          {/* Role icon + name. Plan #83 Phase 4: add a large RoleAvatar badge
-              under the emoji icon so the short-code (梅/派/刺/...) is
-              prominent on reveal and matches the rail/night-panel avatars.
-              Edward 2026-04-25 image batch: painted team-good/evil banner
-              sits above the emoji as the alignment headline so players see
-              "you are GOOD/EVIL" before the role itself lands. */}
+          {/* Role avatar + name. Edward 2026-04-25: simplified reveal — keep
+              only avatar + name + camp chip + description. The top banner
+              shield and the large emoji icon were redundant (avatar already
+              represents the role; chip already represents the camp). The
+              small painted shield in the camp chip is preserved (#152
+              emblem unification). */}
           <div className="text-center mb-6">
-            <motion.img
-              key={`team-${isEvil ? 'evil' : 'good'}`}
-              src={isEvil ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good}
-              alt={isEvil ? t('game:roleReveal.evilBadge') : t('game:roleReveal.goodBadge')}
-              initial={{ scale: 0.6, opacity: 0, y: -10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              transition={{ delay: 0.05, type: 'spring', stiffness: 320, damping: 18 }}
-              className="mx-auto w-16 h-16 sm:w-20 sm:h-20 object-contain mb-2 drop-shadow-xl"
-              draggable={false}
-            />
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.1, type: 'spring', stiffness: 400 }}
-              className="text-7xl mb-3"
-            >
-              {info.icon}
-            </motion.div>
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.15, type: 'spring', stiffness: 400 }}
+              transition={{ delay: 0.1, type: 'spring', stiffness: 400 }}
               className="flex justify-center mb-3"
             >
               <RoleAvatar role={role} size="lg" />
