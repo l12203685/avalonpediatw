@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Send, MessageSquare, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
+import { Room } from '@avalon/shared';
 import { sendChatMessage, getSocket } from '../services/socket';
+import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
 
 interface ChatMessage {
   id: string;
@@ -12,6 +14,26 @@ interface ChatMessage {
   message: string;
   timestamp: number;
   isSystem?: boolean;
+}
+
+/**
+ * Unified merged-feed entry. Combines system events (synthesised from
+ * `room.voteHistory` + `room.questHistory` + `room.ladyOfTheLakeHistory`) and
+ * live player chat messages into a single chronological timeline so the
+ * player no longer needs two side-by-side panels (#107 follow-up — Edward
+ * 2026-04-25「兩個對話紀錄窗還是分開的」).
+ */
+interface UnifiedEntry {
+  id: string;
+  timestamp: number;
+  kind: 'system' | 'player';
+  text: string;
+  /** Player-only — sender id (for self vs other styling). */
+  playerId?: string;
+  /** Player-only — display name shown above the bubble. */
+  playerName?: string;
+  /** Player-only — true when the sender is the local player. */
+  isMe?: boolean;
 }
 
 interface ChatPanelProps {
@@ -26,12 +48,43 @@ interface ChatPanelProps {
    *   Phase 5 so chat docks alongside the scoresheet.
    */
   variant?: 'floating' | 'inline';
+  /**
+   * Optional room snapshot. When provided, ChatPanel synthesises system
+   * entries (vote summaries, quest results, lake events) from history fields
+   * and merges them into the same timeline as live chat messages, producing
+   * a single unified panel. When omitted (e.g. lobby launcher), only live
+   * chat messages render — preserving backward compatibility.
+   */
+  room?: Room;
+}
+
+/**
+ * Sort seats in canonical Avalon order — 1..9 ascending, with seat 10 last
+ * (rendered as "0"). Returns the concatenated digit string. Mirrors the
+ * helper that previously lived in FullScoresheetLayout.
+ */
+function formatSeatsDigitString(seats: number[]): string {
+  const sorted = [...seats].sort((a, b) => a - b);
+  return sorted.map(displaySeatNumber).join('');
+}
+
+/**
+ * Format anomaly votes for the chat log. "Inner black" = team members who
+ * voted reject; "outer white" = non-team members who voted approve. Both lists
+ * render as a digit string + sign, separated by a space.
+ */
+function formatAnomalyVotes(innerBlack: number[], outerWhite: number[]): string {
+  const parts: string[] = [];
+  if (innerBlack.length > 0) parts.push(`${formatSeatsDigitString(innerBlack)}-`);
+  if (outerWhite.length > 0) parts.push(`${formatSeatsDigitString(outerWhite)}+`);
+  return parts.join(' ');
 }
 
 export default function ChatPanel({
   roomId,
   currentPlayerId,
   variant = 'floating',
+  room,
 }: ChatPanelProps): JSX.Element {
   const { t } = useTranslation(['game']);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -61,14 +114,106 @@ export default function ChatPanel({
     return () => { socket!.off('chat:message-received', handler); };
   }, [isOpen, isInline]);
 
-  // Scroll-to-bottom whenever new messages arrive. For floating variant, only
-  // when the panel is open; inline is always open so it always scrolls.
+  // Synthesise system entries from room state. Each vote attempt produces a
+  // line like "系統：1-1, 隊長 1 派 134, 贊成 5/10（無異常）, 否決" so the
+  // player sees game progress + chat in one timeline. Keeps the same wording
+  // ScoresheetChatPanel previously used so Edward's expectations don't shift.
+  const systemEntries = useMemo<UnifiedEntry[]>(() => {
+    if (!room) return [];
+    const out: UnifiedEntry[] = [];
+
+    // Vote attempts → "系統：R-A, 隊長 X 派 SEATS, 贊成 K/N（異常）, 結果"
+    room.voteHistory.forEach((v, idx) => {
+      const approveCount = Object.values(v.votes).filter(Boolean).length;
+      const totalVotes = Object.values(v.votes).length;
+      const teamSeats = v.team
+        .map((pid) => seatOf(pid, room.players))
+        .filter((s) => s > 0);
+      const teamDigits = formatSeatsDigitString(teamSeats);
+
+      const teamSet = new Set(v.team);
+      const innerBlackSeats: number[] = [];
+      const outerWhiteSeats: number[] = [];
+      Object.entries(v.votes).forEach(([pid, approve]) => {
+        const seat = seatOf(pid, room.players);
+        if (seat <= 0) return;
+        const onTeam = teamSet.has(pid);
+        if (onTeam && !approve) innerBlackSeats.push(seat);
+        else if (!onTeam && approve) outerWhiteSeats.push(seat);
+      });
+      const anomaly = formatAnomalyVotes(innerBlackSeats, outerWhiteSeats);
+
+      const leaderSeat = seatOf(v.leader, room.players);
+      const leaderLabel = leaderSeat > 0 ? displaySeatNumber(leaderSeat) : '?';
+      const result = v.approved ? '通過' : '否決';
+
+      out.push({
+        id: `sys-vote-${v.round}-${v.attempt}-${idx}`,
+        timestamp: room.createdAt + idx * 1000,
+        kind: 'system',
+        text: `系統：${v.round}-${v.attempt}，隊長 ${leaderLabel} 派 ${teamDigits}，贊成 ${approveCount}/${totalVotes}（${anomaly || '無異常'}），${result}`,
+      });
+    });
+
+    // Quest outcomes → "系統：第 R 輪任務 ✓ 成功 / ✗ 失敗 (X 失敗票)"
+    room.questHistory.forEach((q, idx) => {
+      const tag = q.result === 'success' ? '✓ 成功' : '✗ 失敗';
+      const failNote = q.result === 'fail' && q.failCount > 0 ? `（${q.failCount} 張失敗票）` : '';
+      out.push({
+        id: `sys-quest-${q.round}-${idx}`,
+        // Slot quest result just after that round's last vote attempt.
+        timestamp: room.createdAt + (room.voteHistory.length + idx) * 1000 + 500,
+        kind: 'system',
+        text: `系統：第 ${q.round} 輪任務 ${tag}${failNote}`,
+      });
+    });
+
+    // Lady-of-the-Lake inspections → "系統：湖中女神 X 查 Y → 宣告：好/壞 / 不宣告"
+    (room.ladyOfTheLakeHistory ?? []).forEach((l, idx) => {
+      const holderSeat = seatOf(l.holderId, room.players);
+      const targetSeat = seatOf(l.targetId, room.players);
+      const holderLabel = holderSeat > 0 ? displaySeatNumber(holderSeat) : '?';
+      const targetLabel = targetSeat > 0 ? displaySeatNumber(targetSeat) : '?';
+      const declaration = l.declared
+        ? `宣告：${l.declaredClaim === 'good' ? '好' : '壞'}`
+        : '不公開宣告';
+      out.push({
+        id: `sys-lake-${l.round}-${idx}`,
+        // Lake events happen between rounds — slot after quest results.
+        timestamp: room.createdAt + (room.voteHistory.length + room.questHistory.length + idx) * 1000 + 800,
+        kind: 'system',
+        text: `系統：湖中女神 ${holderLabel} 查 ${targetLabel}，${declaration}`,
+      });
+    });
+
+    return out;
+  }, [room]);
+
+  // Merge system entries + live player messages into a single chronological
+  // feed. Sort is stable for system entries (synthetic timestamps already
+  // monotonic) and respects real timestamps for player messages.
+  const merged = useMemo<UnifiedEntry[]>(() => {
+    const playerEntries: UnifiedEntry[] = messages.map((m) => ({
+      id: m.id,
+      timestamp: m.timestamp,
+      // Server-tagged system messages keep their classification too.
+      kind: m.isSystem ? 'system' : 'player',
+      text: m.message,
+      playerId: m.isSystem ? undefined : m.playerId,
+      playerName: m.isSystem ? undefined : m.playerName,
+      isMe: m.isSystem ? false : m.playerId === currentPlayerId,
+    }));
+    return [...systemEntries, ...playerEntries].sort((a, b) => a.timestamp - b.timestamp);
+  }, [systemEntries, messages, currentPlayerId]);
+
+  // Scroll-to-bottom whenever the merged feed changes. For floating variant,
+  // only when the panel is open; inline is always open so it always scrolls.
   useEffect(() => {
     if (isInline || isOpen) {
       if (!isInline) setUnread(0);
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [isOpen, messages, isInline]);
+  }, [isOpen, merged, isInline]);
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -77,35 +222,35 @@ export default function ChatPanel({
     setInput('');
   };
 
-  // Message list + quick reactions + input form — shared between both variants so
-  // the two render paths below only differ in their outer chrome.
+  // Unified message list — system entries (gray italic chip, centred) + player
+  // bubbles (blue when self, gray when other) sorted by timestamp.
   const messageList = (
     <>
-      {messages.length === 0 && (
+      {merged.length === 0 && (
         <p className="text-center text-gray-600 text-xs py-4">{t('game:chat.noMessages')}</p>
       )}
-      {messages.map(msg => {
-        if (msg.isSystem) {
+      {merged.map(entry => {
+        if (entry.kind === 'system') {
           return (
-            <div key={msg.id} className="flex justify-center">
-              <span className="text-xs text-gray-500 bg-gray-800/60 px-2 py-0.5 rounded-full italic">
-                {msg.message}
+            <div key={entry.id} className="flex justify-center">
+              <span className="text-[11px] text-lime-300/80 bg-gray-800/60 px-2 py-0.5 rounded-full italic max-w-full break-words text-center">
+                {entry.text}
               </span>
             </div>
           );
         }
-        const isMe = msg.playerId === currentPlayerId;
+        const isMe = entry.isMe === true;
         return (
-          <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-            {!isMe && (
-              <span className="text-xs text-gray-500 mb-0.5 ml-1">{msg.playerName}</span>
+          <div key={entry.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+            {!isMe && entry.playerName && (
+              <span className="text-xs text-gray-500 mb-0.5 ml-1">{entry.playerName}</span>
             )}
             <div className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-sm break-words ${
               isMe
                 ? 'bg-blue-600 text-white rounded-tr-sm'
                 : 'bg-gray-700 text-gray-100 rounded-tl-sm'
             }`}>
-              {msg.message}
+              {entry.text}
             </div>
           </div>
         );
@@ -161,7 +306,7 @@ export default function ChatPanel({
           <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
             {t('game:chat.inlineTitle')}
           </span>
-          <span className="text-[10px] text-gray-500">{messages.length}</span>
+          <span className="text-[10px] text-gray-500">{merged.length}</span>
         </div>
 
         {/* Messages — flex-1 so the input sticks to the bottom */}

@@ -398,7 +398,7 @@ export default function GamePage(): JSX.Element {
           onSeatClick={handleSeatClick}
           chatSlot={
             room.state !== 'lobby'
-              ? <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} variant="inline" />
+              ? <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} variant="inline" room={room} />
               : undefined
           }
           scoresheetSlot={<CompactScoresheet room={room} currentPlayer={currentPlayer} />}
