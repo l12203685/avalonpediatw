@@ -16,7 +16,6 @@ import RoleRevealModal from '../components/RoleRevealModal';
 // import QuestResultOverlay from '../components/QuestResultOverlay';
 import ChatPanel from '../components/ChatPanel';
 import MissionTrack from '../components/MissionTrack';
-import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
 import CompactScoresheet from '../components/CompactScoresheet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DoorOpen, Bell, WifiOff, Loader2, Eye } from 'lucide-react';
@@ -735,13 +734,15 @@ export default function GamePage(): JSX.Element {
         )}
 
         {/*
-          Game Ended — Edward 2026-04-25 22:04「最終角色揭曉的內容不需要」.
+          Game Ended — Edward 2026-04-25 22:04「最終角色揭曉的內容不需要」+
+          22:39「遊戲結果的投票行為分析先拿掉 (跟牌譜資訊重複了)」.
           砍整塊 inline reveal panel (winner header / end-reason chip / quest
-          history strip / 2-col 角色 grid). 玩家從 PlayerCard 4-corner +
-          portrait + 角色名 chip 已能讀到所有 seat 的 role/camp/刺殺狀態
-          (server 結束時 unmask 全部 player.role, GameBoard 把 i18n role label
-          + assassinated flag 餵給 PlayerCard, gameplay 中 chip 不渲染).
-          這裡只留: 牌譜 (VoteAnalysisPanel) + 返回房間 (#157 已 ship).
+          history strip / 2-col 角色 grid) 與 VoteAnalysisPanel. 玩家從
+          PlayerCard 4-corner + portrait + 角色名 chip 已能讀到所有 seat 的
+          role/camp/刺殺狀態 (server 結束時 unmask 全部 player.role, GameBoard
+          把 i18n role label + assassinated flag 餵給 PlayerCard, gameplay 中
+          chip 不渲染); 牌譜資訊由中央 MissionTrack + CompactScoresheet 提供.
+          這裡只留: 返回房間 (#157 已 ship).
         */}
         {room.state === 'ended' && (
           <motion.div
@@ -749,9 +750,6 @@ export default function GamePage(): JSX.Element {
             animate={{ opacity: 1, y: 0 }}
             className="rounded-lg p-2 border border-gray-700/40 bg-avalon-card/30 space-y-2"
           >
-            {/* Vote analysis — collapsible, only shown when there's history */}
-            <VoteAnalysisPanel room={room} currentPlayer={currentPlayer} />
-
             {/* 2026-04-25 Edward 揭曉頁底部按鈕簡化：刪「再來一局」+「返回首頁」，
                 只留「返回房間」回 lobby waiting room；要回首頁的玩家從 LobbyPage
                 右上角既有 leaveRoom 走。 */}
