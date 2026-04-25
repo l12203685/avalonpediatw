@@ -88,7 +88,7 @@ export default function VotePanel({
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 40 }}
-      className="fixed bottom-0 inset-x-0 z-40 bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-yellow-600 shadow-[0_-6px_20px_rgba(0,0,0,0.55)]"
+      className="fixed bottom-0 inset-x-0 z-40 max-h-[30dvh] overflow-y-auto bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-yellow-600 shadow-[0_-6px_20px_rgba(0,0,0,0.55)] pb-safe"
       role="region"
       aria-label={t('game:votePanel.title')}
     >
