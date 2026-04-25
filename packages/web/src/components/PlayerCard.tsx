@@ -1,20 +1,17 @@
+import { useEffect, useState } from 'react';
 import { Player, Role } from '@avalon/shared';
-import { motion } from 'framer-motion';
-import { Crown, Shield, WifiOff } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { WifiOff } from 'lucide-react';
 import { displaySeatNumber } from '../utils/seatDisplay';
-import RoleAvatar from './RoleAvatar';
-import { pickAvatarUrl, LAKE_IMAGE, getCampImage } from '../utils/avalonAssets';
-
-const ROLE_NAMES: Record<string, string> = {
-  merlin:   '梅林',
-  percival: '派西維爾',
-  loyal:    '忠臣',
-  assassin: '刺客',
-  morgana:  '莫甘娜',
-  oberon:   '奧伯倫',
-  mordred:  '莫德雷德',
-  minion:   '爪牙',
-};
+import {
+  pickAvatarUrl,
+  LAKE_IMAGE,
+  getLeaderCrownUrl,
+  getMissionShieldUrl,
+  getVoteBackUrl,
+  VOTE_IMAGES,
+} from '../utils/avalonAssets';
+import { useChatStore } from '../store/chatStore';
 
 interface PlayerCardProps {
   player: Player;
@@ -62,6 +59,34 @@ interface PlayerCardProps {
   loyalView?: boolean;
 }
 
+/**
+ * PlayerCard — Edward 2026-04-25 20:05 「對齊參考網站 layout」 full rewrite.
+ *
+ * Visual model is now a square tile (`aspect-square`) where the portrait fills
+ * the ENTIRE card as a `background-image` and four corners surface game state
+ * via painted asset icons. No role / camp text overlay — the avatar carries
+ * identity by itself.
+ *
+ *   ┌─────────────────────────┐
+ *   │ [N家]          [👑 王冠] │  ← left: seat number, center-top: leader crown
+ *   │   (full-square portrait │
+ *   │    bg-cover, no overlay │
+ *   │    role/camp text)      │
+ *   │                  [盾]   │  ← right-top: mission shield (when participated)
+ *   │                         │
+ *   │                  [球]   │  ← right-bottom: vote token (back / + / −)
+ *   └─────────────────────────┘
+ *
+ * Replaced overlays:
+ *   - 中央 「否決 / 通過」 popup (VoteRevealOverlay) → vote ball (right-bottom)
+ *   - 右上角任務 banner (QuestResultOverlay) → mission shield (right-top)
+ *
+ * Both popups are removed from GamePage so the board stays uninterrupted.
+ *
+ * Asset registry: see `utils/avalonAssets.ts` — `getLeaderCrownUrl`,
+ * `getMissionShieldUrl`, `getVoteBackUrl` were added in the same batch.
+ */
+
 export default function PlayerCard({
   player,
   isCurrentPlayer,
@@ -79,18 +104,35 @@ export default function PlayerCard({
   lastQuestResult,
   loyalView = false,
 }: PlayerCardProps): JSX.Element {
-  // 忠臣視角 — derive the displayed role/team. We never mutate the player
-  // prop; we just compute view-only fields. `effectiveRole === null` forces
-  // pickAvatarUrl to return the unknown silhouette; `effectiveTeam === null`
-  // pushes the avatar border into the neutral grey branch below.
+  // 忠臣視角 — derive the displayed role for the bg portrait. We never mutate
+  // the player prop; we just compute the view-only role used to pick avatar
+  // art. `effectiveRole === null` forces pickAvatarUrl to return the generic
+  // 雜魚 silhouette so loyal-view collapses to the same UI as unknown roles.
   const effectiveRole = loyalView ? null : (player.role ?? null);
   const effectiveTeam = loyalView ? null : (player.team ?? null);
-  // Horizontal row layout: left side → avatar on right edge (info-left), right side → avatar on left edge (info-right)
-  const rowDirection = side === 'left' ? 'flex-row' : 'flex-row-reverse';
-  const textAlign = side === 'left' ? 'text-right items-end' : 'text-left items-start';
 
-  // Shield click wiring: leader picking a quest team. Only clickable when this card is a
-  // candidate (plan #83 Phase 1 swap from center modal → rail-click + bottom toolbar).
+  // Edward 2026-04-25 19:40 — chat bubble overlay below the PlayerCard.
+  // Subscribes only to this player's latest entry so updates for other
+  // players don't re-render this card. Bubble fades out after 5s using a
+  // local boolean toggled by setTimeout; the timer resets whenever a fresh
+  // message arrives (timestamp change).
+  const latestEntry = useChatStore((s) => s.latestByPlayer[player.id]);
+  const [showBubble, setShowBubble] = useState(false);
+  useEffect(() => {
+    if (!latestEntry) return;
+    setShowBubble(true);
+    const ageMs = Date.now() - latestEntry.timestamp;
+    const remaining = Math.max(0, 5000 - ageMs);
+    if (remaining === 0) {
+      setShowBubble(false);
+      return;
+    }
+    const id = window.setTimeout(() => setShowBubble(false), remaining);
+    return () => window.clearTimeout(id);
+  }, [latestEntry?.timestamp]);
+
+  // Shield click wiring: leader picking a quest team. Only clickable when this
+  // card is a candidate (plan #83 Phase 1 swap from center modal → rail-click).
   const isShieldInteractive = isShieldCandidate && typeof onShieldClick === 'function';
   const handleShieldClick = (): void => {
     if (isShieldInteractive) {
@@ -98,239 +140,272 @@ export default function PlayerCard({
     }
   };
 
+  // Bubble alignment mirrors the avatar side so the bubble looks like it
+  // hangs from the card (left rail → bubble pinned right; right rail →
+  // bubble pinned left).
+  const bubbleAlign = side === 'left' ? 'items-end pr-1' : 'items-start pl-1';
+
+  // Portrait URL for the bg-cover layer. `player.avatar` (user-uploaded image)
+  // wins so a custom photo isn't replaced by the painted role art; bots fall
+  // back to a deterministic 雜魚 variant via pickAvatarUrl(null,...). The
+  // resulting URL is stamped onto the tile via inline style so we don't leak
+  // a per-player class into Tailwind's JIT manifest.
+  const portraitUrl = player.avatar ?? pickAvatarUrl(effectiveRole as Role | null | undefined, player.id);
+
+  // Border colour — encodes the mission/team state at a glance. Disconnected
+  // wins so a dropped player is unmistakable; current-player gold beats team
+  // gradients so the viewer can always find their own seat. loyalView force-
+  // suppresses team colours so the rail looks 「忠臣視角」 uniform.
+  const borderClass = (() => {
+    if (player.status === 'disconnected') return 'border-gray-600 opacity-60';
+    if (isCurrentPlayer && !loyalView) return 'border-yellow-400 shadow-lg shadow-yellow-400/40';
+    if (effectiveTeam === 'evil') return 'border-red-500';
+    if (effectiveTeam === 'good') return 'border-blue-500';
+    if (player.isBot) return 'border-slate-500';
+    return 'border-gray-500';
+  })();
+
+  // Mission-shield border: success = blue, fail = red. We tint the shield's
+  // ring instead of recolouring the painted asset so the shield art stays
+  // recognisable while the outcome reads at a glance.
+  const missionShieldRing = lastQuestResult === 'success'
+    ? 'ring-blue-400'
+    : lastQuestResult === 'fail'
+    ? 'ring-red-500'
+    : 'ring-yellow-400';
+
+  // Quest-team selection overlay state — leader picking phase only. Mutually
+  // exclusive: shieldSelected (big solid yellow shield) > isShieldCandidate
+  // (dim outline hint) > nothing.
+  const showSelectOverlay = shieldSelected;
+  const showCandidateHint = isShieldCandidate && !shieldSelected;
+
   return (
-    <motion.div
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.97 }}
-      onClick={isShieldInteractive ? handleShieldClick : undefined}
-      role={isShieldInteractive ? 'button' : undefined}
-      aria-pressed={isShieldInteractive ? shieldSelected : undefined}
-      tabIndex={isShieldInteractive ? 0 : undefined}
-      onKeyDown={
-        isShieldInteractive
-          ? (event): void => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                handleShieldClick();
+    <div className={`flex flex-col w-full gap-1 ${bubbleAlign}`}>
+      <motion.div
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.97 }}
+        onClick={isShieldInteractive ? handleShieldClick : undefined}
+        role={isShieldInteractive ? 'button' : undefined}
+        aria-pressed={isShieldInteractive ? shieldSelected : undefined}
+        tabIndex={isShieldInteractive ? 0 : undefined}
+        onKeyDown={
+          isShieldInteractive
+            ? (event): void => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  handleShieldClick();
+                }
               }
-            }
-          : undefined
-      }
-      className={`relative flex ${rowDirection} items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors ${
-        shieldSelected
-          ? 'bg-yellow-500/25 ring-2 ring-yellow-400 shadow-md shadow-yellow-400/30'
-          : isActiveTurn
-          ? 'bg-amber-500/20 ring-2 ring-amber-400 shadow-md shadow-amber-400/30'
-          : isCurrentPlayer
-          ? 'bg-yellow-500/10 ring-1 ring-yellow-400/60'
-          : 'hover:bg-white/5'
-      } ${isShieldInteractive ? 'cursor-pointer' : ''}`}
-    >
-      {/* Pulsing halo around the active-turn player so everyone can see whose move it is */}
-      {isActiveTurn && (
-        <motion.span
-          aria-hidden="true"
-          initial={{ opacity: 0.5, scale: 1 }}
-          animate={{ opacity: [0.5, 0, 0.5], scale: [1, 1.04, 1] }}
-          transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-          className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-amber-300"
-        />
-      )}
-      {/*
-        Avatar — Edward 2026-04-25 redesign: name + seat number + game-state
-        indicators (mission card / 湖中女神 / 黑白球) live inside the avatar so
-        the rail surfaces every status at a glance, not as outer labels.
-
-        Layout (top → bottom inside the circle):
-          ┌────────────────────────┐
-          │ [N] (seat — top-left)  │  ← seat badge dominates
-          │   (avatar bg)          │
-          │   ╭────────╮           │
-          │   │ name   │ (overlay) │  ← player name strip on bottom 35%
-          │   ╰────────╯           │
-          └────────────────────────┘
-        Outer overlays (corners):
-          - top-center:    Crown (leader)
-          - top-right:     Shield (on quest team)
-          - bottom-left:   WifiOff (disconnected)
-          - bottom-right:  Vote ball (黑/白 + / - 標記)
-          - center-overlay: Droplet (lady holder) when active
-          - top-left big:  last-quest result badge (O / X)
-      */}
-      <div className="relative flex-shrink-0">
-        <motion.div
-          className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm sm:text-base border-[3px] transition-all relative overflow-hidden ${
-            player.status === 'disconnected'
-              ? 'border-gray-600 bg-gradient-to-br from-gray-600 to-gray-700 opacity-50'
-              : isCurrentPlayer && !loyalView
-              ? 'border-yellow-400 bg-gradient-to-br from-yellow-400 to-yellow-500 shadow-lg shadow-yellow-400/50'
-              : effectiveTeam === 'evil'
-              ? 'border-red-500 bg-gradient-to-br from-red-500 to-red-700'
-              : effectiveTeam === 'good'
-              ? 'border-blue-500 bg-gradient-to-br from-blue-500 to-blue-700'
-              : player.isBot
-              ? 'border-slate-500 bg-gradient-to-br from-slate-600 to-slate-800'
-              : 'border-gray-500 bg-gradient-to-br from-slate-500 to-slate-700'
-          }`}
-        >
-          {/* Avatar background — Edward 2026-04-25 image batch: pick a painted
-              role portrait (own role) or a stable 雜魚 variant (unknown).
-              Bots keep their emoji and explicit player.avatar override still
-              wins over the painted art so user-uploaded images aren't lost.
-              Sized smaller and shifted up so the name strip on the bottom 35%
-              has room. */}
-          <div className="absolute inset-0 flex items-start justify-center pt-1">
-            {player.isBot ? (
-              <span className="text-2xl sm:text-3xl leading-none">🤖</span>
-            ) : player.avatar ? (
-              <img
-                src={player.avatar}
-                alt={player.name}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover"
-              />
-            ) : (
-              <img
-                src={pickAvatarUrl(effectiveRole as Role | null | undefined, player.id)}
-                alt={player.name}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover"
-                loading="lazy"
-                draggable={false}
-              />
-            )}
-          </div>
-
-          {/* Player name strip — bottom 35% of the circle, semi-transparent dark
-              backing so the white text reads regardless of avatar color. Edward
-              2026-04-25: 「玩家名字直接顯示在圓圈裡面」. */}
-          <div className="absolute bottom-0 inset-x-0 bg-black/65 backdrop-blur-[1px] px-0.5 py-0.5">
-            <p
-              className={`text-center font-bold leading-tight truncate text-[9px] sm:text-[10px] ${
-                player.status === 'disconnected' ? 'text-gray-400' : 'text-white'
-              }`}
-            >
-              {player.name}
-            </p>
-          </div>
-        </motion.div>
+            : undefined
+        }
+        className={`relative aspect-square w-full rounded-xl overflow-hidden border-[3px] bg-cover bg-center transition-all ${borderClass} ${
+          shieldSelected
+            ? 'ring-2 ring-yellow-400 shadow-md shadow-yellow-400/40'
+            : isActiveTurn
+            ? 'ring-2 ring-amber-400 shadow-md shadow-amber-400/40'
+            : ''
+        } ${isShieldInteractive ? 'cursor-pointer' : ''}`}
+        style={{ backgroundImage: `url('${portraitUrl}')` }}
+        aria-label={`${seatNumber !== undefined ? `${displaySeatNumber(seatNumber)}家 ` : ''}${player.name}`}
+      >
+        {/* Pulsing halo around the active-turn player so everyone can see whose move it is */}
+        {isActiveTurn && (
+          <motion.span
+            aria-hidden="true"
+            initial={{ opacity: 0.5, scale: 1 }}
+            animate={{ opacity: [0.5, 0, 0.5], scale: [1, 1.04, 1] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+            className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-amber-300"
+          />
+        )}
 
         {/*
-          Seat number badge — top-left corner. Edward 2026-04-25 spec calls
-          out "玩家座位號碼" as a key indicator, so the badge is enlarged
-          (6→7 mobile / 8 desktop) and uses gold-on-black to dominate the
-          card silhouette. Seat 10 renders as "0" per paper-scoresheet
-          convention (#93).
+          Player name strip — bottom edge of the tile. Semi-transparent black
+          backing so white text reads regardless of portrait luminance. Seat
+          number sits TOP-LEFT (separate corner) so the bottom strip carries
+          name only.
+        */}
+        <div className="absolute bottom-0 inset-x-0 bg-black/65 backdrop-blur-[1px] px-1 py-0.5">
+          <p
+            className={`text-center font-bold leading-tight truncate text-[10px] sm:text-xs ${
+              player.status === 'disconnected' ? 'text-gray-400' : 'text-white'
+            }`}
+            title={player.name}
+          >
+            {player.name}
+          </p>
+        </div>
+
+        {/*
+          Top-left — seat number badge. Edward 2026-04-25 spec calls out
+          「玩家號碼 (1家, 2家, ..., 9家, 0家)」 as the dominant top-left marker.
+          Gold-on-black so it stays legible against any portrait.
         */}
         {seatNumber !== undefined && (
           <div
-            className="absolute -top-1.5 -left-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-2 border-yellow-700 flex items-center justify-center shadow-lg pointer-events-none z-10"
-            aria-label={`${seatNumber}家`}
+            className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-black/70 border border-yellow-500/70 pointer-events-none z-10 shadow-sm"
+            aria-label={`${displaySeatNumber(seatNumber)}家`}
           >
-            <span className="text-[12px] sm:text-[14px] font-black text-black leading-none">
-              {displaySeatNumber(seatNumber)}
+            <span className="text-[10px] sm:text-xs font-black text-yellow-300 leading-none whitespace-nowrap">
+              {displaySeatNumber(seatNumber)}家
             </span>
           </div>
         )}
 
         {/*
-          Last-quest result badge — top-right corner (replaces the small
-          "on-quest" shield when a quest result exists). Blue O = success,
-          red X = fail. Only shown when this player participated in the
-          most recent completed quest (Edward 2026-04-25 「任務牌」).
+          Top-center — leader crown. Edward 2026-04-25「正上方: 隊長王冠
+          (僅輪到隊長時顯示)」. Painted asset, only renders when isLeader.
         */}
-        {lastQuestResult !== undefined && (
+        {isLeader && (
+          <motion.div
+            initial={{ scale: 0, y: -4 }}
+            animate={{ scale: 1, y: 0 }}
+            className="absolute top-0.5 left-1/2 -translate-x-1/2 pointer-events-none z-10"
+            aria-label="隊長"
+          >
+            <img
+              src={getLeaderCrownUrl()}
+              alt=""
+              aria-hidden="true"
+              className="w-6 h-6 sm:w-7 sm:h-7 object-contain drop-shadow-lg"
+              loading="lazy"
+              draggable={false}
+            />
+          </motion.div>
+        )}
+
+        {/*
+          Top-right — mission shield. Edward 2026-04-25「右上方: 任務盾牌
+          (mission shield)」. Two phases:
+            1. Leader picking team + shield candidate / selected → quest-team
+               selection overlay (yellow outline / solid yellow shield).
+            2. Otherwise, when this player participated in the most recent
+               completed quest → painted mission-shield art with a coloured
+               ring (blue = success, red = fail).
+          Both states use the painted shield art; only the ring tint differs.
+        */}
+        {showSelectOverlay && (
           <motion.div
             initial={{ scale: 0, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            className={`absolute -top-1.5 -right-1.5 w-6 h-6 sm:w-7 sm:h-7 rounded-md flex items-center justify-center pointer-events-none shadow-md z-10 border-2 ${
-              lastQuestResult === 'success'
-                ? 'bg-blue-500 border-blue-200 text-white'
-                : 'bg-red-600 border-red-200 text-white'
-            }`}
-            aria-label={lastQuestResult === 'success' ? '最近任務成功' : '最近任務失敗'}
-          >
-            <span className="text-[14px] sm:text-[16px] font-black leading-none">
-              {lastQuestResult === 'success' ? 'O' : 'X'}
-            </span>
-          </motion.div>
-        )}
-
-        {/* Leader crown — top center above avatar (only when no quest result badge
-            in the same corner so they don't collide; crown sits center-top and
-            won't fight the top-right quest badge). */}
-        {isLeader && (
-          <motion.div
-            initial={{ scale: 0, y: -5 }}
-            animate={{ scale: 1, y: 0 }}
-            className="absolute -top-3 left-1/2 -translate-x-1/2 pointer-events-none z-20"
-          >
-            <Crown size={16} className="text-yellow-400 drop-shadow-md" />
-          </motion.div>
-        )}
-
-        {/* Quest team shield — only render the small gold shield when there's no
-            last-quest badge competing for the top-right corner. */}
-        {isOnQuestTeam && !shieldSelected && lastQuestResult === undefined && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="absolute -top-1 -right-1 bg-yellow-400 border border-yellow-600 rounded-full p-0.5 pointer-events-none shadow-md z-10"
-            aria-label="任務隊員"
-          >
-            <Shield size={12} className="text-yellow-900" fill="currentColor" />
-          </motion.div>
-        )}
-
-        {/*
-          Team-select shield overlay — plan #83 Phase 1.
-          - `shieldSelected` → big solid 黃盾 (28px) sitting on the top-right quadrant so the
-            leader spots selected players instantly across the rail.
-          - `isShieldCandidate && !shieldSelected` → dim outline shield hinting "tap to add".
-          The two are mutually exclusive; once picked, the solid overlay takes over.
-        */}
-        {shieldSelected && (
-          <motion.div
-            initial={{ scale: 0, rotate: -12 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            className="absolute -top-1.5 -right-1.5 pointer-events-none drop-shadow-[0_2px_4px_rgba(250,204,21,0.55)] z-20"
+            className="absolute top-1 right-1 pointer-events-none z-20 rounded-full ring-2 ring-yellow-300 shadow-lg shadow-yellow-400/40"
             aria-label="已選入任務隊伍"
           >
-            <Shield
-              size={30}
-              className="text-yellow-400"
-              fill="#facc15"
-              strokeWidth={2}
+            <img
+              src={getMissionShieldUrl()}
+              alt=""
+              aria-hidden="true"
+              className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
+              loading="lazy"
+              draggable={false}
             />
           </motion.div>
         )}
-        {isShieldCandidate && !shieldSelected && (
+        {showCandidateHint && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.55 }}
-            className="absolute -top-1.5 -right-1.5 pointer-events-none z-10"
+            className="absolute top-1 right-1 pointer-events-none z-10 rounded-full ring-2 ring-yellow-300/60"
             aria-hidden="true"
           >
-            <Shield
-              size={26}
-              className="text-yellow-300/70"
-              strokeWidth={2}
+            <img
+              src={getMissionShieldUrl()}
+              alt=""
+              aria-hidden="true"
+              className="w-6 h-6 sm:w-7 sm:h-7 object-contain opacity-70"
+              loading="lazy"
+              draggable={false}
+            />
+          </motion.div>
+        )}
+        {!showSelectOverlay && !showCandidateHint && lastQuestResult !== undefined && (
+          <motion.div
+            initial={{ scale: 0, rotate: -8 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+            className={`absolute top-1 right-1 pointer-events-none z-10 rounded-full ring-2 ${missionShieldRing} shadow-md`}
+            aria-label={lastQuestResult === 'success' ? '最近任務成功' : '最近任務失敗'}
+          >
+            <img
+              src={getMissionShieldUrl()}
+              alt=""
+              aria-hidden="true"
+              className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
+              loading="lazy"
+              draggable={false}
+            />
+          </motion.div>
+        )}
+        {/* Active-quest-member shield (no result yet) — soft yellow ring without a
+            success/fail tint so the rail still flags who is on the current quest. */}
+        {!showSelectOverlay && !showCandidateHint && lastQuestResult === undefined && isOnQuestTeam && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute top-1 right-1 pointer-events-none z-10 rounded-full ring-2 ring-yellow-400 shadow-md"
+            aria-label="任務隊員"
+          >
+            <img
+              src={getMissionShieldUrl()}
+              alt=""
+              aria-hidden="true"
+              className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
+              loading="lazy"
+              draggable={false}
             />
           </motion.div>
         )}
 
         {/*
-          Lady of the Lake holder — painted lake icon center-left of the avatar
-          (replaces the previous cyan Droplet so the indicator shares visual
-          language with the lake-of-the-lake overlay header art). Cyan ring
-          frames the icon to keep the scoresheet legend recognisable.
-          Edward 2026-04-25「湖中女神」 image batch.
+          Bottom-right — vote token. Edward 2026-04-25「右下方: 黑白球
+          vote token — vote-back.jpg (背面=投票中) / 露白球=贊成 / 露黑球=
+          反對 (用 vote-yes.jpg / vote-no.jpg)」.
+          - hasVoted=false → no token (player hasn't voted yet)
+          - hasVoted=true, voted=undefined → 紫色背面 (private vote, hidden)
+          - hasVoted=true, voted=true → 白球 / vote-yes.jpg (贊成)
+          - hasVoted=true, voted=false → 黑球 / vote-no.jpg (反對)
+          Vote stays visible until the next vote round so the rail keeps the
+          previous outcome on display (Edward「投票結果一直保留到下輪投票結束」).
+        */}
+        {hasVoted && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+            className="absolute bottom-1 right-1 pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/80 shadow-md w-7 h-7 sm:w-8 sm:h-8 bg-black/40"
+            aria-label={voted === undefined ? '已投票' : voted ? '贊成' : '反對'}
+          >
+            <img
+              src={
+                voted === undefined
+                  ? getVoteBackUrl()
+                  : voted
+                  ? VOTE_IMAGES.yes
+                  : VOTE_IMAGES.no
+              }
+              alt=""
+              aria-hidden="true"
+              className="w-full h-full object-cover"
+              loading="lazy"
+              draggable={false}
+            />
+          </motion.div>
+        )}
+
+        {/*
+          Lady-of-the-Lake holder — center-left lake disc. Kept as a small
+          floating indicator (not in the 4-corner spec) because Edward's
+          earlier directive 「重點是玩家座位號碼&任務牌&湖中女神&黑白球」
+          places lake on the must-show list. Sits center-left so it doesn't
+          collide with the 4 corner indicators.
         */}
         {isLadyHolder && (
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
-            className="absolute top-1/2 -left-2 -translate-y-1/2 bg-cyan-500 border-2 border-cyan-200 rounded-full overflow-hidden pointer-events-none shadow-md z-10 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center"
+            className="absolute top-1/2 left-1 -translate-y-1/2 bg-cyan-500 border-2 border-cyan-200 rounded-full overflow-hidden pointer-events-none shadow-md z-10 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center"
             aria-label="持有湖中女神"
           >
             <img
@@ -344,84 +419,55 @@ export default function PlayerCard({
           </motion.div>
         )}
 
-        {/* Disconnected marker — bottom-left */}
+        {/* Bot icon — bottom-left so it doesn't collide with the vote ball. */}
+        {player.isBot && (
+          <div
+            className="absolute bottom-1 left-1 bg-slate-900/80 border border-slate-500 rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center pointer-events-none z-10 shadow-sm"
+            aria-label="AI 玩家"
+          >
+            <span className="text-[10px] sm:text-xs leading-none">🤖</span>
+          </div>
+        )}
+
+        {/* Disconnected marker — overlays the bot slot when both apply.
+            Edward's spec lists 4 corners; disconnected uses bottom-left and
+            wins over the bot badge so a dropped bot still flags as offline. */}
         {player.status === 'disconnected' && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -bottom-1 -left-1 bg-red-700 rounded-full p-0.5 pointer-events-none z-10"
+            className="absolute bottom-1 left-1 bg-red-700 rounded-full p-0.5 pointer-events-none z-20"
+            aria-label="斷線"
           >
-            <WifiOff size={10} className="text-white" />
+            <WifiOff size={12} className="text-white" />
           </motion.div>
         )}
-
-        {/*
-          Vote ball — bottom-right. Edward 2026-04-25「黑白球」+ visible
-          + / − symbols so the marker is unambiguous even at small sizes:
-            白球 + 黑 "+"  → 贊成
-            黑球 + 白 "−"  → 反對
-            灰球 + "?"    → 已投但對外隱藏
-        */}
-        {hasVoted && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className={`absolute -bottom-1.5 -right-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-full pointer-events-none shadow-md flex items-center justify-center font-black leading-none text-[12px] sm:text-[14px] z-10 border-2 ${
-              voted === undefined
-                ? 'bg-gray-500 border-gray-300 text-gray-200'
-                : voted
-                ? 'bg-white border-gray-300 text-black'
-                : 'bg-gray-900 border-gray-700 text-white'
-            }`}
-            aria-label={voted === undefined ? '已投票' : voted ? '贊成' : '反對'}
-          >
-            {voted === undefined ? '?' : voted ? '+' : '−'}
-          </motion.div>
-        )}
-      </div>
+      </motion.div>
 
       {/*
-        Side info — name moved INTO the avatar (Edward 2026-04-25), so the
-        outer column shrinks to "own role only". Other players show no
-        outer text; the avatar alone carries identity + state. Keeps the
-        rail width tight on mobile.
+        Edward 2026-04-25 19:40 — chat bubble overlay below the PlayerCard.
+        Renders the player's most recent chat line for ~5s then fades out.
+        Truncated to one line at small max-width so it doesn't push neighbour
+        cards down the rail; the full conversation still lives in ChatPanel.
       */}
-      <div className={`flex-1 min-w-0 flex flex-col gap-0.5 ${textAlign}`}>
-        {/* Show own role + team inline — only the viewer sees their own role badge
-            so they can scan it at a glance. Other players' names already appear
-            inside their avatar circle, so no outer label is needed.
-            忠臣視角 (loyalView) → 整段隱藏，自己也看不到 role / team 資訊。 */}
-        {isCurrentPlayer && player.role && !loyalView && (
-          <div className={`flex flex-wrap items-center gap-1 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
-            <RoleAvatar role={player.role as Role} size="sm" />
-            <span className="text-[9px] sm:text-[10px] font-semibold bg-yellow-600/90 text-white px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
-              {ROLE_NAMES[player.role] ?? player.role}
-            </span>
-            {player.team && (
-              <span
-                className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold px-1 py-0.5 rounded-full whitespace-nowrap bg-black/50 border ${
-                  player.team === 'good' ? 'border-blue-400/50 text-blue-100' : 'border-red-400/50 text-red-100'
-                }`}
-              >
-                {/* Edward 2026-04-25 camp emblem unification: swap colored dot
-                    chip for the painted shield art (team-good / team-evil) so
-                    the rail uses the same visual language as the role-reveal
-                    banner and end-screen. Image is 14px to fit the chip; alt
-                    text keeps the textual fallback for screen readers and
-                    when the image fails to load. */}
-                <img
-                  src={getCampImage(player.team)}
-                  alt={player.team === 'good' ? '正義方' : '邪惡方'}
-                  className="w-3.5 h-3.5 object-contain flex-shrink-0"
-                  loading="lazy"
-                  draggable={false}
-                />
-                {player.team === 'good' ? '正義' : '邪惡'}
-              </span>
-            )}
-          </div>
+      <AnimatePresence>
+        {showBubble && latestEntry && (
+          <motion.div
+            key={`bubble-${latestEntry.timestamp}`}
+            initial={{ opacity: 0, y: -4, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.18 }}
+            className={`pointer-events-none max-w-[140px] truncate rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 px-2 py-1 text-[10px] leading-tight text-white shadow-md ${
+              side === 'left' ? 'rounded-tr-none' : 'rounded-tl-none'
+            }`}
+            data-testid={`player-chat-bubble-${player.id}`}
+            title={latestEntry.text}
+          >
+            {latestEntry.text}
+          </motion.div>
         )}
-      </div>
-    </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }

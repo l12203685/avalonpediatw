@@ -74,6 +74,28 @@ export function getCampImage(camp: 'good' | 'evil'): string {
   return camp === 'evil' ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good;
 }
 
+/**
+ * Camp lake-circle icon helper — Edward 2026-04-25 19:40 evening swap.
+ *
+ * Returns the **lake-of-the-Lady declaration card** disc art for a camp:
+ *   - 'good' → `vote-yes.jpg` (湖中藍色正義卡裡面的藍色圓圈)
+ *   - 'evil' → `vote-no.jpg`  (湖中紅色卡裡面的紅色圓圈)
+ *
+ * Why a separate helper from `getCampImage`: Edward's evening directive was to
+ * unify ALL camp indicators platform-wide on the lake yes/no circles instead
+ * of the dragon/phoenix shield art. Keeping `getCampImage` reachable preserves
+ * an escape hatch in case any niche caller still wants the ornate shield, but
+ * the new default for "陣營圓圈" is this helper. `CampDisc` is wired here so
+ * every existing call site flips automatically without per-component edits.
+ *
+ * Asset rationale: the lake voting cards are themselves blue (yes/good) and
+ * red (no/evil) painted discs that match Edward's spec verbatim — same
+ * vocabulary as the湖中女神 declarations players see at the table.
+ */
+export function getCampLakeIcon(camp: 'good' | 'evil'): string {
+  return camp === 'evil' ? VOTE_IMAGES.no : VOTE_IMAGES.yes;
+}
+
 /** End-screen winner cup. */
 export const WINNER_CUPS = {
   good: `${ASSET_BASE}/cup-good.jpg`,
@@ -124,6 +146,41 @@ export function getProposalResultImage(approved: boolean): string {
 
 /** Lady-of-the-Lake icon. */
 export const LAKE_IMAGE = `${ASSET_BASE}/lake.jpg`;
+
+/**
+ * PlayerCard 4-corner indicator art — Edward 2026-04-25 20:05 redesign.
+ *
+ * The PlayerCard was changed from a circular avatar with floating mini-icons
+ * to a full-square tile (`aspect-square`) where the portrait fills the entire
+ * background and four corners surface state via painted icons:
+ *   - top-left:    seat number (inline text, not an asset)
+ *   - top-center:  leader crown    → `leader-crown.jpg`
+ *   - top-right:   mission shield  → `mission-shield.jpg` (recoloured by border)
+ *   - bottom-right: vote token     → `vote-back.jpg` (back) / vote-yes.jpg (approve) / vote-no.jpg (reject)
+ *
+ * The three new assets ship as ASCII-named JPGs under public/avalon-assets/
+ * so the PlayerCard rewrite can reach them via the same registry as the role
+ * portraits. Helpers below are tiny one-liners but exist for symmetry with
+ * `getCampImage` / `getVoteTokenImage` so callers stay declarative.
+ */
+export const LEADER_CROWN_IMAGE = `${ASSET_BASE}/leader-crown.jpg`;
+export const MISSION_SHIELD_IMAGE = `${ASSET_BASE}/mission-shield.jpg`;
+export const VOTE_BACK_IMAGE = `${ASSET_BASE}/vote-back.jpg`;
+
+/** PlayerCard 隊長王冠 URL. */
+export function getLeaderCrownUrl(): string {
+  return LEADER_CROWN_IMAGE;
+}
+
+/** PlayerCard 任務盾牌 URL. */
+export function getMissionShieldUrl(): string {
+  return MISSION_SHIELD_IMAGE;
+}
+
+/** PlayerCard 投票球背面 (尚未揭曉時用). */
+export function getVoteBackUrl(): string {
+  return VOTE_BACK_IMAGE;
+}
 
 /** Per-table-size scoresheet board art (only 5..10 supplied). */
 export function getBoardImage(playerCount: number): string | null {

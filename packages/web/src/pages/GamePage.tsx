@@ -7,19 +7,29 @@ import VotePanel from '../components/VotePanel';
 import QuestPanel from '../components/QuestPanel';
 import QuestTeamToolbar from '../components/QuestTeamToolbar';
 import RoleRevealModal from '../components/RoleRevealModal';
-import VoteRevealOverlay from '../components/VoteRevealOverlay';
-import QuestResultOverlay from '../components/QuestResultOverlay';
+// 2026-04-25 20:05 Edward「『否決』/『通過』中央 popup 視窗 — 不用顯示」+
+// 「任務結果右上角持續顯示 — 砍」: VoteRevealOverlay (中央派票揭曉彈窗) 與
+// QuestResultOverlay (右上角任務結果橫條) 兩個 popup 都砍掉。投票結果改由
+// PlayerCard 右下黑白球反映；任務結果改由 PlayerCard 右上盾牌反映。Audio
+// cues 移到 socket layer / GameBoard 的 state-change effect 裡。
+// import VoteRevealOverlay from '../components/VoteRevealOverlay';
+// import QuestResultOverlay from '../components/QuestResultOverlay';
 import ChatPanel from '../components/ChatPanel';
 import MissionTrack from '../components/MissionTrack';
 import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
 import CompactScoresheet from '../components/CompactScoresheet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DoorOpen, Bell, WifiOff, Loader2, Eye } from 'lucide-react';
-import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
+import { AVALON_CONFIG } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
 import { LAKE_IMAGE, getBoardImage, getCampLakeIcon } from '../utils/avalonAssets';
 import { CampDisc } from '../components/CampDisc';
+// Vote/quest popup overlays are killed (Edward 2026-04-25 20:05) but the
+// audio cues they used to play (approval / rejection / quest-success / quest-fail)
+// still belong to the round transition — re-fire them straight from the
+// history-length effects below so the rail-only UI keeps the soundtrack.
+import audioService from '../services/audio';
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
@@ -37,8 +47,10 @@ export default function GamePage(): JSX.Element {
   const teamSelectBase = isUnlimitedTimer ? 0 : Math.round(TEAM_SELECT_BASE * (timerMultiplier as number));
   const assassinBase = isUnlimitedTimer ? 0 : Math.round(ASSASSIN_BASE * (timerMultiplier as number));
   const [assassinTimer, setAssassinTimer] = useState(assassinBase);
-  const [pendingVoteReveal, setPendingVoteReveal] = useState<VoteRecord | null>(null);
-  const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
+  // 2026-04-25 20:05 Edward「『否決』/『通過』中央 popup 視窗 — 不用顯示」+
+  // 「任務結果右上角持續顯示 — 砍」: pendingVoteReveal / pendingQuestReveal
+  // 兩個 popup state 砍掉（投票結果改由 PlayerCard 黑白球反映；任務結果改由
+  // PlayerCard 盾牌反映）。Audio cues 仍由下方 history-length effects 觸發。
   const [teamSelectTimer, setTeamSelectTimer] = useState(teamSelectBase);
   // 忠臣視角 toggle (#107 Edward 2026-04-25 right-top eye icon revamp).
   // 開啟時暫時隱藏所有非忠臣資訊（自己角色 / 敵我隊友 / 紅藍隊配色），
@@ -119,22 +131,25 @@ export default function GamePage(): JSX.Element {
     }
   }, [room?.state, room?.questTeam?.length, room?.leaderIndex, room?.currentRound]);
 
-  // Show vote reveal overlay when a new vote record is added
+  // 2026-04-25 20:05 Edward「『否決』/『通過』中央 popup 視窗 — 不用顯示」:
+  // 改為僅播 audio cue（不再 setPendingVoteReveal / setPendingQuestReveal）；
+  // 投票/任務結果視覺由 PlayerCard 黑白球 / 任務盾牌承擔。
   useEffect(() => {
     if (!room) return;
     const len = room.voteHistory.length;
-    if (len > prevVoteHistoryLen.current) {
-      setPendingVoteReveal(room.voteHistory[len - 1]);
+    if (len > prevVoteHistoryLen.current && len > 0) {
+      const latest = room.voteHistory[len - 1];
+      audioService.playSound(latest.approved ? 'approval' : 'rejection');
     }
     prevVoteHistoryLen.current = len;
   }, [room?.voteHistory?.length]);
 
-  // Show quest result overlay when a new quest completes
   useEffect(() => {
     if (!room) return;
     const len = room.questHistory.length;
-    if (len > prevQuestHistoryLen.current) {
-      setPendingQuestReveal(room.questHistory[len - 1]);
+    if (len > prevQuestHistoryLen.current && len > 0) {
+      const latest = room.questHistory[len - 1];
+      audioService.playSound(latest.result === 'success' ? 'quest-success' : 'quest-fail');
     }
     prevQuestHistoryLen.current = len;
   }, [room?.questHistory?.length]);
@@ -280,29 +295,11 @@ export default function GamePage(): JSX.Element {
           style={{ backgroundImage: `url('${boardImageUrl}')` }}
         />
       )}
-      {/* Vote Reveal Overlay */}
-      <AnimatePresence>
-        {pendingVoteReveal && (
-          <VoteRevealOverlay
-            key={`vote-${pendingVoteReveal.round}-${pendingVoteReveal.attempt}`}
-            record={pendingVoteReveal}
-            room={room}
-            onDismiss={() => setPendingVoteReveal(null)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Quest Result Overlay */}
-      <AnimatePresence>
-        {pendingQuestReveal && !pendingVoteReveal && (
-          <QuestResultOverlay
-            key={`quest-${pendingQuestReveal.round}`}
-            record={pendingQuestReveal}
-            room={room}
-            onDismiss={() => setPendingQuestReveal(null)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Vote / Quest reveal popups removed (Edward 2026-04-25 20:05).
+          Vote outcome → PlayerCard 右下黑白球 (vote-back / vote-yes / vote-no).
+          Quest outcome → PlayerCard 右上 mission-shield (ring-blue / ring-red).
+          See PlayerCard.tsx 4-corner redesign + VoteRevealOverlay/QuestResultOverlay
+          components left in tree but no longer mounted. */}
 
       {/* Role Reveal Modal */}
       {showRoleReveal && room.state !== 'ended' && !isSpectator && (
