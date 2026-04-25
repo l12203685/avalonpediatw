@@ -404,8 +404,12 @@ export class GameServer {
       if (pid === playerId || !p.role) continue;
 
       if (myRole === 'merlin') {
-        // Merlin sees all evil except Oberon and Mordred
-        if (p.team === 'evil' && p.role !== 'oberon' && p.role !== 'mordred') visible.add(pid);
+        // Edward 2026-04-26 00:22 spec correction:「梅林知道三個紅方位置 (刺客
+        // + 莫甘娜 + 奧伯倫), 但無法分辨角色」— 梅林**看得到奧伯倫**, 只看不到
+        // 莫德雷德. 之前的 oberon 排除是錯的 (混進了「紅方互看排除奧伯」規則);
+        // 該規則只適用紅方互認, 不適用梅林視野.
+        // Source: staging/notes/avalon_visibility_full_spec_2026-04-26.md
+        if (p.team === 'evil' && p.role !== 'mordred') visible.add(pid);
       } else if (myRole === 'percival') {
         // Percival sees Merlin and Morgana (can't distinguish)
         if (p.role === 'merlin' || p.role === 'morgana') visible.add(pid);
@@ -421,14 +425,64 @@ export class GameServer {
    * Returns a copy of room with other players' role/team hidden.
    * Applies Avalon knowledge rules so Merlin/Percival/Evil see correct players.
    * Pass revealAll=true at game end when all roles are disclosed.
+   *
+   * Edward 2026-04-25 21:52 角色資訊揭露 logic 修正:
+   *   - 梅林 / 紅方互看: 只見「陣營」(team='evil') 不見具體角色 (role=null).
+   *   - 派西維爾: 見兩位 candidate, 但**不知誰是梅林誰是莫甘娜** —
+   *     team/role 皆 null + `revealedCandidates=['merlin','morgana']` 讓 UI 渲染
+   *     半梅林半莫甘娜的 split tile.
+   *   - 自己: 永遠看到完整 role + team.
+   *   - 完全不可見: role=null, team=null (牌背).
+   * 修正前 sanitize 把 visible peer 的 full role 直接傳給 client, 違反經典
+   * Avalon「只知陣營不知具體角色」規則; 這次改 server-side 切到陣營層, client 端
+   * 自然降級為紅方陣營卡, 不靠前端自律.
    */
   private sanitizeRoomForPlayer(room: Room, playerId: string, revealAll = false): Room {
     const visibleIds = revealAll ? null : this.getVisiblePlayerIds(playerId, room);
     const players: Record<string, Player> = {};
+    const myPlayer = room.players[playerId];
+    const myRole = myPlayer?.role ?? null;
+    const myTeam = myPlayer?.team ?? null;
+
     for (const [pid, player] of Object.entries(room.players)) {
-      if (pid === playerId || revealAll || visibleIds?.has(pid)) {
+      if (pid === playerId || revealAll) {
+        // Self always sees full role; revealAll = game-end full disclosure.
         players[pid] = player;
+      } else if (visibleIds?.has(pid)) {
+        // Visible peer — apply per-viewer reveal rules. We surface enough info
+        // to satisfy each role's canonical knowledge scope without leaking the
+        // specific evil role identity.
+        if (myRole === 'percival') {
+          // Percival sees Merlin AND Morgana but cannot tell them apart.
+          // Mask both role + team so the seat reads as "ambiguous"; expose
+          // `revealedCandidates` so the client can render a half/half split
+          // tile (梅林|莫甘娜) per Edward's spec.
+          players[pid] = {
+            ...player,
+            role: null,
+            team: null,
+            vote: undefined,
+            revealedCandidates: ['merlin', 'morgana'],
+          };
+        } else if (myRole === 'merlin') {
+          // Edward 2026-04-26 00:22 spec: Merlin sees the three thumbs-up
+          // evils (assassin + morgana + oberon, excluding only Mordred) but
+          // NOT specific evil role identities — keep team='evil' so PlayerCard
+          // paints the red-camp card; mask role to null so UI shows ❓ inside.
+          // Source: staging/notes/avalon_visibility_full_spec_2026-04-26.md
+          players[pid] = { ...player, role: null, team: 'evil', vote: undefined };
+        } else if (myTeam === 'evil' && myRole !== 'oberon') {
+          // Evil teammate visibility — sees other evil seats (excluding Oberon)
+          // as "red-camp teammate" but NOT their specific role (assassin /
+          // morgana / mordred / minion stay anonymous from each other).
+          players[pid] = { ...player, role: null, team: 'evil', vote: undefined };
+        } else {
+          // Defensive fallback (shouldn't hit if getVisiblePlayerIds is correct):
+          // hide both role and team to be safe.
+          players[pid] = { ...player, role: null, team: null, vote: undefined };
+        }
       } else {
+        // Not visible at all — fully hidden card back.
         players[pid] = { ...player, role: null, team: null, vote: undefined };
       }
     }
@@ -1783,7 +1837,7 @@ export class GameServer {
                   // 但 0 跟 1 都是忠臣」— bot 之前 100% skip → chat 永遠 `?`，
                   // 即便忠臣 bot 看到忠臣 target 也沒誠實宣告。改成讓 bot 開口：
                   //   - 好人 holder: 誠實宣告 actual target team
-                  //   - 壞人 holder: 同夥洗 'good'，對手反向宣告 (簡化版 SelfPlay 啟發)
+                  //   - 壞人 holder: 同夥洗 'good'，對手隨機（簡化版 SelfPlay 啟發）
                   // 失敗 fallback 仍走 skip 維持原 phase advance 保險。
                   setTimeout(() => {
                     const s2 = this.roomManager.getRoom(roomId);
