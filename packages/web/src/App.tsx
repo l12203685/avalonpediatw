@@ -27,6 +27,7 @@ import AnalysisPage from './pages/AnalysisPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import PersonalStatsPage from './pages/PersonalStatsPage';
+import ReplayPage from './pages/ReplayPage';
 import ClaimsNewPage from './pages/ClaimsNewPage';
 import AdminClaimsPage from './pages/AdminClaimsPage';
 import AdminAdminsPage from './pages/AdminAdminsPage';
@@ -341,6 +342,12 @@ function App(): JSX.Element {
           {gameState === 'analytics' && <AnalyticsPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
+          {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage
+              GameRow ↗ buttons both call navigateToReplay() which sets
+              gameState='replay'. Without this line the page renders blank
+              (Edward 16:08 "歷史戰績查詢點了最近一場打不開"). ReplayPage already
+              exists at /pages/ReplayPage.tsx and uses replayRoomId from store. */}
+          {gameState === 'replay' && <ReplayPage />}
           {/* #86 backward compat: 舊 profileSettings state 自動 redirect 到 settings */}
           {gameState === 'profileSettings' && <SettingsPage />}
           {gameState === 'claimsNew' && <ClaimsNewPage />}
