@@ -586,7 +586,7 @@ export default function GamePage(): JSX.Element {
                         onClick={() => submitLadyOfTheLake(room.id, currentPlayer.id, player.id)}
                         className="p-4 rounded-lg border-2 transition-all font-semibold bg-blue-900/30 border-blue-600 text-white hover:bg-blue-800/60"
                       >
-                        {player.name}
+                        {`${seatPrefix(player.id, room.players)} ${player.name}`.trim()}
                       </button>
                     ))}
                 </div>
