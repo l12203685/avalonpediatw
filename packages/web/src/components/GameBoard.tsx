@@ -224,6 +224,11 @@ export default function GameBoard({
           // gameplay 中傳 undefined / false 維持 portrait 乾淨。
           endGameRoleLabel={isGameEnded ? resolveRoleLabel(player.role) : undefined}
           assassinated={isGameEnded && room.assassinTargetId === player.id}
+          // Edward 2026-04-25 22:38 GamePage 3-fix #3「你的投票/任務盾/湖中女神
+          // 都只有最後開牌才顯示, 遊戲過程中只有未知身分牌背」: hide tracker
+          // chips on the viewer's OWN tile until the game ends. Other players'
+          // tiles stay untouched (their tracker info is public Avalon state).
+          selfTrackerHidden={player.id === currentPlayer.id && !isGameEnded}
         />
       </motion.div>
     );

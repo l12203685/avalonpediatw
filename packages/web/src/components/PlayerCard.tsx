@@ -113,6 +113,33 @@ interface PlayerCardProps {
    * 加一個小紅圈 + 🗡️ glyph; 純 game-end 用, gameplay 中忽略.
    */
   assassinated?: boolean;
+  /**
+   * Edward 2026-04-25 22:38 lobby tweak — taller tile in waiting room so each
+   * player block has more breathing room. Defaults to `'game'` (square aspect,
+   * no behaviour change for in-game rails). `'lobby'` swaps the aspect to a
+   * vertical 3:4 portrait tile for the lobby waiting-room rails only.
+   */
+  variant?: 'game' | 'lobby';
+  /**
+   * Edward 2026-04-25 22:38 GamePage 3-fix #3「你的投票/任務盾/湖中女神 都
+   * 只有最後開牌才顯示, 遊戲過程中只有未知身分牌背」.
+   *
+   * When true, the viewer's OWN PlayerCard hides the three "tracker" indicators
+   * (BL vote ball, BR mission shield, TR lake disc) behind a generic 牌背
+   * placeholder so other people glancing at this device can't read the local
+   * player's vote / mission shield / lake holder state mid-game. GameBoard
+   * sets this to `(player.id === currentPlayer.id) && room.state !== 'ended'`
+   * — i.e. only the local seat in non-ended rooms gets the blindfold; once the
+   * game ends, the real indicators come back so the recap reads correctly.
+   *
+   * Other players' tiles are never affected — their tracker chips already use
+   * the proper public-state semantics (face-down purple during voting, painted
+   * outcomes after). Only the *self* tile previously leaked the local player's
+   * own vote / mission participation / lake holding to anyone watching the
+   * device. With this flag, the self tile now shows neutral 牌背 placeholders
+   * during gameplay; real values come back at game-end (room.state==='ended').
+   */
+  selfTrackerHidden?: boolean;
 }
 
 /**
@@ -196,6 +223,8 @@ export default function PlayerCard({
   loyalView = false,
   endGameRoleLabel,
   assassinated = false,
+  variant = 'game',
+  selfTrackerHidden = false,
 }: PlayerCardProps): JSX.Element {
   // `isOnQuestTeam` retained for API compat (GamePage still passes it) but the
   // 21:52 #7 redesign drives the shield purely off `lastQuestParticipation`.
@@ -336,7 +365,7 @@ export default function PlayerCard({
               }
             : undefined
         }
-        className={`relative aspect-square w-full rounded-xl overflow-hidden border-[3px] bg-cover bg-center transition-all ${borderClass} ${
+        className={`relative ${variant === 'lobby' ? 'aspect-[3/4]' : 'aspect-square'} w-full rounded-xl overflow-hidden border-[3px] bg-cover bg-center transition-all ${borderClass} ${
           shieldSelected
             ? 'ring-2 ring-yellow-400 shadow-md shadow-yellow-400/40'
             : isActiveTurn
@@ -490,11 +519,24 @@ export default function PlayerCard({
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
-            className="absolute -top-1 -right-1 bg-cyan-500 border-2 border-cyan-200 rounded-full overflow-hidden pointer-events-none shadow-md z-10 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center"
-            aria-label="持有湖中女神"
+            className={`absolute -top-1 -right-1 ${
+              selfTrackerHidden
+                ? 'bg-purple-700 border-2 border-purple-300'
+                : 'bg-cyan-500 border-2 border-cyan-200'
+            } rounded-full overflow-hidden pointer-events-none shadow-md z-10 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center`}
+            aria-label={selfTrackerHidden ? '你持有湖中女神（遊戲結束才揭曉）' : '持有湖中女神'}
           >
+            {/* Edward 2026-04-25 22:38 GamePage 3-fix #3: when this is the
+                local player's own tile mid-game, swap the painted lake disc
+                for a generic role-back placeholder so onlookers can't see the
+                viewer is the lake holder. The frame itself stays (purple ring
+                instead of cyan) so the corner slot remains visually anchored —
+                we just hide the *contents*. The local player still knows
+                they're the holder via the lady-of-the-lake phase panel +
+                action banner. At game-end (selfTrackerHidden=false) the cyan
+                lake disc returns. */}
             <img
-              src={getLakeImage()}
+              src={selfTrackerHidden ? getRoleBackUrl() : getLakeImage()}
               alt=""
               aria-hidden="true"
               className="w-full h-full object-cover"
@@ -560,11 +602,25 @@ export default function PlayerCard({
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            className={`absolute -bottom-1 -right-1 pointer-events-none z-10 rounded-full ring-2 ${missionShieldRing} shadow-md`}
-            aria-label={lastQuestParticipation === 'success' ? '最近任務成功' : '最近任務失敗'}
+            // Edward 2026-04-25 22:38 GamePage 3-fix #3: when this is the
+            // local player's own tile mid-game, the shield ring colour stops
+            // encoding pass/fail (would leak whether the viewer's last quest
+            // succeeded). We render a neutral gray ring + role-back graphic
+            // so the slot is visually anchored but the outcome stays hidden
+            // until the game ends (selfTrackerHidden=false → ring returns).
+            className={`absolute -bottom-1 -right-1 pointer-events-none z-10 rounded-full ring-2 ${
+              selfTrackerHidden ? 'ring-gray-500' : missionShieldRing
+            } shadow-md`}
+            aria-label={
+              selfTrackerHidden
+                ? '你最近任務（遊戲結束才揭曉）'
+                : lastQuestParticipation === 'success'
+                ? '最近任務成功'
+                : '最近任務失敗'
+            }
           >
             <img
-              src={getMissionShieldUrl()}
+              src={selfTrackerHidden ? getRoleBackUrl() : getMissionShieldUrl()}
               alt=""
               aria-hidden="true"
               className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
@@ -592,6 +648,36 @@ export default function PlayerCard({
           Suppressed on role-hidden tiles per 20:12 rule.
         */}
         {!isRoleHidden && (() => {
+          // Edward 2026-04-25 22:38 GamePage 3-fix #3「你的投票/任務盾/湖中女神 都
+          // 只有最後開牌才顯示, 遊戲過程中只有未知身分牌背」: when this is the
+          // viewer's own tile and the game is mid-flight, swap the real
+          // outcome (yes / no / undetermined) for a generic vote-back token
+          // so a shoulder-surfer can't read off the local vote. The local
+          // player still sees their own vote in the VotePanel button + chat
+          // system feed — this just stops it leaking off the PlayerCard.
+          // We render the back even when the player hasn't voted yet so the
+          // self-tile keeps a stable visual placeholder (other rules still
+          // apply: role-hidden tiles short-circuit before we get here).
+          if (selfTrackerHidden) {
+            return (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+                className="absolute -bottom-1 -left-1 pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/70 shadow-md w-7 h-7 sm:w-8 sm:h-8 bg-black/40"
+                aria-label="你的投票（遊戲結束才揭曉）"
+              >
+                <img
+                  src={getVoteBackUrl()}
+                  alt=""
+                  aria-hidden="true"
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  draggable={false}
+                />
+              </motion.div>
+            );
+          }
           // In-flight branch: voting phase + this player has voted in *this*
           // round. Picks the painted token by `voted` (ternary: face-down for
           // others, own actual outcome for self).

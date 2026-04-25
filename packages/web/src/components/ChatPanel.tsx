@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Room } from '@avalon/shared';
 import { sendChatMessage, getSocket } from '../services/socket';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import { useChatStore } from '../store/chatStore';
 
 interface ChatMessage {
   id: string;
@@ -93,7 +94,11 @@ export default function ChatPanel({
   // body unconditionally so unread tracking is unnecessary.
   const [isOpen, setIsOpen] = useState(false);
   const [unread, setUnread] = useState(0);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // Edward 2026-04-25 GamePage 4-revamp:「對話紀錄最新顯示在最上面」.
+  // Newest messages render at the TOP of the list. We sort the merged feed
+  // descending and use `topRef` to anchor scroll-to-top whenever a new entry
+  // arrives (mirrors the pre-revamp scroll-to-bottom UX, but flipped).
+  const topRef = useRef<HTMLDivElement>(null);
   const isInline = variant === 'inline';
 
   useEffect(() => {
@@ -106,6 +111,13 @@ export default function ChatPanel({
 
     const handler = (msg: ChatMessage) => {
       setMessages(prev => [...prev, msg]);
+      // Edward 2026-04-25 19:40: mirror non-system messages into chatStore so
+      // PlayerCard can render a transient chat-bubble overlay below the
+      // avatar. System messages skipped so synthesised vote/quest/lake
+      // narration doesn't pop up on individual seats.
+      if (!msg.isSystem && msg.playerId) {
+        useChatStore.getState().setLatestMessage(msg.playerId, msg.message, msg.timestamp);
+      }
       // Inline panel is always visible → don't accumulate unread badges.
       if (!isInline && !isOpen) setUnread(n => n + 1);
     };
@@ -209,15 +221,20 @@ export default function ChatPanel({
       playerName: m.isSystem ? undefined : m.playerName,
       isMe: m.isSystem ? false : m.playerId === currentPlayerId,
     }));
-    return [...systemEntries, ...playerEntries].sort((a, b) => a.timestamp - b.timestamp);
+    // Newest first — Edward 2026-04-25 4-revamp #3「對話紀錄最新顯示在最上面」.
+    // Sort descending so merged[0] is the most recent entry; render order in
+    // the messageList JSX walks merged top-down, so newest sits at the top
+    // of the column.
+    return [...systemEntries, ...playerEntries].sort((a, b) => b.timestamp - a.timestamp);
   }, [systemEntries, messages, currentPlayerId]);
 
-  // Scroll-to-bottom whenever the merged feed changes. For floating variant,
-  // only when the panel is open; inline is always open so it always scrolls.
+  // Scroll-to-top whenever the merged feed changes (newest is at the top now).
+  // For floating variant, only when the panel is open; inline is always open
+  // so it always scrolls.
   useEffect(() => {
     if (isInline || isOpen) {
       if (!isInline) setUnread(0);
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [isOpen, merged, isInline]);
 
@@ -232,16 +249,19 @@ export default function ChatPanel({
   //   • 自己發言：靠右 (blue bubble)
   //   • 其他玩家：靠左 (gray bubble)
   //   • 系統訊息：靠左 (compact lime chip, no bubble) — Sheets-style row
+  // 2026-04-25 4-revamp #3: newest renders at TOP — `topRef` anchor sits
+  // before the merged map so auto-scroll lands on the newest entry.
   const messageList = (
     <>
+      <div ref={topRef} />
       {merged.length === 0 && (
-        <p className="text-center text-gray-600 text-xs py-4">{t('game:chat.noMessages')}</p>
+        <p className="text-center text-gray-600 text-[11px] py-4">{t('game:chat.noMessages')}</p>
       )}
       {merged.map(entry => {
         if (entry.kind === 'system') {
           return (
             <div key={entry.id} className="flex justify-start">
-              <span className="text-[11px] text-lime-300/80 italic max-w-full break-words pl-1">
+              <span className="text-[10px] text-lime-300/80 italic max-w-full break-words pl-1">
                 {entry.text}
               </span>
             </div>
@@ -251,9 +271,9 @@ export default function ChatPanel({
         return (
           <div key={entry.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
             {!isMe && entry.playerName && (
-              <span className="text-xs text-gray-500 mb-0.5 ml-1">{entry.playerName}</span>
+              <span className="text-[10px] text-gray-500 mb-0.5 ml-1">{entry.playerName}</span>
             )}
-            <div className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-sm break-words ${
+            <div className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-xs break-words ${
               isMe
                 ? 'bg-blue-600 text-white rounded-tr-sm'
                 : 'bg-gray-700 text-gray-100 rounded-tl-sm'
@@ -263,12 +283,21 @@ export default function ChatPanel({
           </div>
         );
       })}
-      <div ref={bottomRef} />
     </>
   );
 
+  // Edward 2026-04-25 22:38 GamePage 3-fix #1「發言送出按鈕被擋住」: chat input
+  // form was visually colliding with the sticky-bottom action toolbars
+  // (QuestTeamToolbar/VotePanel/QuestPanel, all z-40 fixed bottom-0). The
+  // GameBoard wrapper reserves `pb-[32dvh]` for those toolbars, but on tall
+  // QuestPanel renders or after iOS safe-area inset the chat input could end
+  // up behind the toolbar. Defensive fix: anchor the input to the bottom of
+  // its own scroll container (sticky bottom-0) and give it a positioned
+  // z-stacking context (z-10) so it stays clickable inside the chat box even
+  // when the surrounding feed scrolls. The opaque bg ensures messages
+  // scrolling behind don't bleed through.
   const inputForm = (placeholder: string) => (
-    <div className="flex gap-2 p-2 border-t border-gray-700">
+    <div className="sticky bottom-0 z-10 flex gap-2 p-2 border-t border-gray-700 bg-slate-900/95 backdrop-blur-sm">
       <input
         type="text"
         value={input}
@@ -276,7 +305,7 @@ export default function ChatPanel({
         onKeyDown={e => e.key === 'Enter' && handleSend()}
         maxLength={200}
         placeholder={placeholder}
-        className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+        className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
       />
       <button
         onClick={handleSend}
@@ -296,7 +325,7 @@ export default function ChatPanel({
       <div className="h-full min-h-0 flex flex-col bg-slate-800/50 border border-gray-700/60 rounded-xl overflow-hidden">
         {/* Header — shorter than floating, no close button */}
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-700/60 bg-black/20">
-          <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+          <span className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">
             {t('game:chat.inlineTitle')}
           </span>
           <span className="text-[10px] text-gray-500">{merged.length}</span>

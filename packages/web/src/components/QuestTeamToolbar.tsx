@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Shield, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { selectQuestTeam } from '../services/socket';
+import { seatOf } from '../utils/seatDisplay';
 
 interface QuestTeamToolbarProps {
   room: Room;
@@ -51,7 +52,18 @@ export default function QuestTeamToolbar({
 
   const handleConfirm = (): void => {
     if (!isFull || isSubmitting) return;
-    selectQuestTeam(room.id, Array.from(selectedTeamIds));
+    // Edward 2026-04-25 22:38 GamePage 3-fix #2「遊戲內隊伍照數字大小順序」:
+    // submit the team in canonical seat-ascending order (1, 2, ..., 9, 0 where
+    // seat 10 displays as "0"), not the order the leader clicked. Server
+    // stores `room.questTeam` in submission order, so sorting here propagates
+    // to every downstream consumer (ChatPanel system feed, scoresheet,
+    // proposed-team chips, replay) without further changes. Plain numeric
+    // ascending sort already matches Edward's "1<2<...<9<0" because seat 10
+    // is the largest numeric seat — only the *display* renders 10 as "0".
+    const ordered = Array.from(selectedTeamIds).sort(
+      (a, b) => seatOf(a, room.players) - seatOf(b, room.players),
+    );
+    selectQuestTeam(room.id, ordered);
   };
 
   return (
@@ -59,7 +71,7 @@ export default function QuestTeamToolbar({
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 40 }}
-      className="fixed bottom-0 inset-x-0 z-40 bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-amber-500 shadow-[0_-6px_20px_rgba(0,0,0,0.55)]"
+      className="fixed bottom-0 inset-x-0 z-40 max-h-[30dvh] overflow-y-auto bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-amber-500 shadow-[0_-6px_20px_rgba(0,0,0,0.55)] pb-safe"
       role="region"
       aria-label={t('game:teamSelect.toolbarSelected', {
         selected,

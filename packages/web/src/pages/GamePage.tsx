@@ -410,9 +410,16 @@ export default function GamePage(): JSX.Element {
           時整個版面位移 = Edward「投票時畫面會跑掉」。改為：room.state 一進入
           遊戲流程就鎖定 pb-[32dvh]，不再依 stickyToolbarActive 開關，避免 phase
           切換之間的 layout shift。lobby 狀態 (start screen) 維持 pb-1。 */}
+      {/* Edward 2026-04-25 22:38 GamePage 3-fix #1「發言送出按鈕被擋住」: bump
+          padding-bottom slightly to guarantee the inline chat input sits above
+          the sticky action toolbars (QuestTeamToolbar/VotePanel/QuestPanel,
+          each capped at max-h-[30dvh]). Previous 32dvh / 28dvh values left
+          almost zero gap, so iOS safe-area + dynamic toolbar heights would
+          occasionally cover the chat send button. New 36dvh / 32dvh adds 4dvh
+          breathing room without meaningfully shrinking the playable area. */}
       <div
         className={`relative z-10 flex-1 min-h-0 flex flex-col px-2 sm:px-3 ${
-          room.state !== 'lobby' ? 'pb-[32dvh] sm:pb-[28dvh]' : 'pb-1'
+          room.state !== 'lobby' ? 'pb-[36dvh] sm:pb-[32dvh]' : 'pb-1'
         }`}
       >
         <GameBoard
@@ -486,8 +493,15 @@ export default function GamePage(): JSX.Element {
                 <span className="text-[11px] sm:text-xs font-semibold text-yellow-300 whitespace-nowrap">
                   {t('game:votePanel.questTeamLabel')}
                 </span>
+                {/* Edward 2026-04-25 22:38 GamePage 3-fix #2「遊戲內隊伍照數字
+                    大小順序」: render the proposed team chips in seat-ascending
+                    order (1, 2, ..., 9, 0). QuestTeamToolbar already sorts on
+                    submission, but we sort defensively here too in case an old
+                    server build / replay payload arrives in pick order. */}
                 <div className="flex flex-wrap gap-1.5">
-                  {room.questTeam.map(id => {
+                  {[...room.questTeam]
+                    .sort((a, b) => seatOf(a, room.players) - seatOf(b, room.players))
+                    .map(id => {
                     const p = room.players[id];
                     if (!p) return null;
                     return (
