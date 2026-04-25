@@ -353,10 +353,13 @@ export default function LobbyPage(): JSX.Element {
                     )}
                   </div>
 
-                  {/* Edward 2026-04-25: collapse R1/R2 swap + Oberon-always-fail
-                      behind a "更多規則" toggle. Default closed; both toggles
-                      default-false at server level so collapsed state matches
-                      vanilla Avalon. Lady of the Lake stays above (always visible). */}
+                  {/* Edward 2026-04-25: collapse all 4 advanced rules
+                      (R1/R2 swap, Oberon-always-fail, 9-player variant,
+                      inverted protection) behind a "更多規則" toggle.
+                      Default closed; all toggles default-false / variant
+                      defaults to standard so collapsed state matches
+                      vanilla Avalon. Lady of the Lake stays above
+                      (always visible). */}
                   <button
                     type="button"
                     onClick={() => setShowMoreRules(v => !v)}
@@ -403,62 +406,64 @@ export default function LobbyPage(): JSX.Element {
                           className="w-5 h-5 accent-amber-500 flex-shrink-0"
                         />
                       </label>
-                    </div>
-                  )}
 
-                  {/* 9-player variant (only shown for 9-player tables) */}
-                  {playerList.length === 9 && (
-                    <div className="bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 space-y-2">
-                      <div>
-                        <p className="text-sm font-bold text-white mb-1">9 人局變體 (9-Player Variant)</p>
-                        <p className="text-xs text-gray-500 leading-tight mb-2">
-                          奧伯倫強制版：5 好 4 壞、強制加入奧伯倫、任務人數改為 4/3/4/5/5
-                        </p>
-                        <select
-                          value={(room.roleOptions as unknown as Record<string, string>)?.variant9Player ?? 'standard'}
-                          onChange={e => handleSelectAdvanced('variant9Player', e.target.value)}
-                          className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500"
-                        >
-                          <option value="standard">標準 (Standard · 6 好 3 壞)</option>
-                          <option value="oberonMandatory">奧伯倫強制 (Oberon mandatory · 5 好 4 壞)</option>
-                        </select>
-                      </div>
+                      {/* 9-player variant (only shown for 9-player tables).
+                          Edward 2026-04-25: moved inside "更多規則" collapse so
+                          base lobby stays minimal (Lady + role config only). */}
+                      {playerList.length === 9 && (
+                        <div className="bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 space-y-2">
+                          <div>
+                            <p className="text-sm font-bold text-white mb-1">9 人局變體 (9-Player Variant)</p>
+                            <p className="text-xs text-gray-500 leading-tight mb-2">
+                              奧伯倫強制版：5 好 4 壞、強制加入奧伯倫、任務人數改為 4/3/4/5/5
+                            </p>
+                            <select
+                              value={(room.roleOptions as unknown as Record<string, string>)?.variant9Player ?? 'standard'}
+                              onChange={e => handleSelectAdvanced('variant9Player', e.target.value)}
+                              className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500"
+                            >
+                              <option value="standard">標準 (Standard · 6 好 3 壞)</option>
+                              <option value="oberonMandatory">奧伯倫強制 (Oberon mandatory · 5 好 4 壞)</option>
+                            </select>
+                          </div>
 
-                      {/* Option 2 — inverted protection. Only enabled when
-                          variant9Player === 'oberonMandatory'. Server also
-                          auto-clears the flag when reverting to 'standard'
-                          so the stale-state risk is belt + braces. */}
-                      {(() => {
-                        const v9 = (room.roleOptions as unknown as Record<string, string>)?.variant9Player;
-                        const v9Enabled = v9 === 'oberonMandatory';
-                        const v9Opt2 = Boolean((room.roleOptions as unknown as Record<string, boolean>)?.variant9Option2);
-                        return (
-                          <label
-                            className={`flex items-center justify-between bg-gray-900/60 border rounded px-3 py-2 ${
-                              v9Enabled ? 'cursor-pointer border-gray-600' : 'cursor-not-allowed border-gray-800 opacity-50'
-                            }`}
-                          >
-                            <div className="flex-1 pr-3">
-                              <div className="text-sm font-bold text-white">
-                                保護局反轉模式 (Inverted Protection)
-                              </div>
-                              <p className="text-xs text-gray-500 leading-tight mt-0.5">
-                                僅限奧伯倫強制版。第 1/2/3/5 局「恰好 1 張失敗 = 任務失敗」，2+ 張失敗反而成功；第 4 局（保護局）維持原規則
-                              </p>
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={v9Enabled && v9Opt2}
-                              disabled={!v9Enabled}
-                              onChange={() => {
-                                if (!v9Enabled) return;
-                                handleToggleAdvanced('variant9Option2');
-                              }}
-                              className="w-5 h-5 accent-amber-500 flex-shrink-0"
-                            />
-                          </label>
-                        );
-                      })()}
+                          {/* Option 2 — inverted protection. Only enabled when
+                              variant9Player === 'oberonMandatory'. Server also
+                              auto-clears the flag when reverting to 'standard'
+                              so the stale-state risk is belt + braces. */}
+                          {(() => {
+                            const v9 = (room.roleOptions as unknown as Record<string, string>)?.variant9Player;
+                            const v9Enabled = v9 === 'oberonMandatory';
+                            const v9Opt2 = Boolean((room.roleOptions as unknown as Record<string, boolean>)?.variant9Option2);
+                            return (
+                              <label
+                                className={`flex items-center justify-between bg-gray-900/60 border rounded px-3 py-2 ${
+                                  v9Enabled ? 'cursor-pointer border-gray-600' : 'cursor-not-allowed border-gray-800 opacity-50'
+                                }`}
+                              >
+                                <div className="flex-1 pr-3">
+                                  <div className="text-sm font-bold text-white">
+                                    保護局反轉模式 (Inverted Protection)
+                                  </div>
+                                  <p className="text-xs text-gray-500 leading-tight mt-0.5">
+                                    僅限奧伯倫強制版。第 1/2/3/5 局「恰好 1 張失敗 = 任務失敗」，2+ 張失敗反而成功；第 4 局（保護局）維持原規則
+                                  </p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={v9Enabled && v9Opt2}
+                                  disabled={!v9Enabled}
+                                  onChange={() => {
+                                    if (!v9Enabled) return;
+                                    handleToggleAdvanced('variant9Option2');
+                                  }}
+                                  className="w-5 h-5 accent-amber-500 flex-shrink-0"
+                                />
+                              </label>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
