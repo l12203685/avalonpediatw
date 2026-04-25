@@ -46,87 +46,69 @@ export default function QuestResultOverlay({
   const teamPlayers = record.team.map(id => room.players[id]).filter(Boolean);
 
   return (
+    // #107 Edward 2026-04-25 「派票跟黑白球不要一直跳視窗出來」 — was a
+    // fullscreen `fixed inset-0 bg-black/80 backdrop-blur-sm` modal that
+    // popped between every quest. Now a compact toast docked at the top so
+    // the player ring stays visible and the screen doesn't slide.
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+      className="fixed top-3 left-1/2 -translate-x-1/2 z-50 w-[min(92vw,26rem)] cursor-pointer"
       onClick={stableDismiss}
+      role="status"
+      aria-live="polite"
     >
-      <motion.div
-        initial={{ scale: 0.6, y: 60 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.7, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 280, damping: 22 }}
-        className="bg-avalon-card border-2 rounded-2xl p-8 max-w-sm w-full mx-4 space-y-6 shadow-2xl text-center"
+      <div
+        className="bg-avalon-card/95 border-2 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden"
         style={{ borderColor: success ? '#22c55e' : '#ef4444' }}
-        onClick={e => e.stopPropagation()}
       >
-        <p className="text-sm text-gray-400">{t('game:questResult.roundLabel', { round: record.round })}</p>
-
-        {/* Dramatic icon */}
-        <motion.div
-          initial={{ scale: 0, rotate: -180 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 18 }}
-          className="text-8xl"
-        >
-          {success ? '⚔️' : '💀'}
-        </motion.div>
-
-        {/* Result label */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-        >
-          <h2
-            className="text-4xl font-extrabold"
-            style={{ color: success ? '#4ade80' : '#f87171' }}
-          >
-            {success ? t('game:questResult.success') : t('game:questResult.fail')}
-          </h2>
-          <p className="text-gray-400 text-sm mt-1">
-            {success ? t('game:questResult.successEn') : t('game:questResult.failEn')}
-          </p>
-          {record.failCount > 0 && (
-            <p className="text-red-400 text-sm mt-2">
-              {t('game:questResult.failCount', { count: record.failCount })}
+        {/* Header strip — icon + result */}
+        <div className={`px-4 py-2.5 flex items-center gap-3 ${
+          success ? 'bg-green-900/40 text-green-200' : 'bg-red-900/40 text-red-200'
+        }`}>
+          <span className="text-3xl">{success ? '⚔️' : '💀'}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider opacity-70">
+              {t('game:questResult.roundLabel', { round: record.round })}
             </p>
-          )}
-        </motion.div>
+            <p className="text-lg font-extrabold truncate" style={{ color: success ? '#4ade80' : '#f87171' }}>
+              {success ? t('game:questResult.success') : t('game:questResult.fail')}
+              {record.failCount > 0 && (
+                <span className="ml-2 text-xs font-semibold text-red-400">
+                  {t('game:questResult.failCount', { count: record.failCount })}
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
 
-        {/* Team members — seat# prefix so "#3 Guest_444" format (#93) */}
+        {/* Team members — compact horizontal chips */}
         {teamPlayers.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs text-gray-500">{t('game:questResult.teamLabel')}</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {teamPlayers.map((player, i) => (
-                <motion.span
-                  key={player.id}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.35 + i * 0.06 }}
-                  className="bg-gray-800 border border-gray-600 text-gray-200 text-sm px-3 py-1 rounded-full"
-                >
-                  {seatPrefix(player.id, room.players)} {player.name}
-                </motion.span>
-              ))}
-            </div>
+          <div className="px-3 py-2 flex flex-wrap gap-1.5">
+            {teamPlayers.map((player) => (
+              <span
+                key={player.id}
+                className="bg-gray-800/80 border border-gray-600 text-gray-200 text-[11px] px-2 py-0.5 rounded-full font-semibold"
+              >
+                {seatPrefix(player.id, room.players)} {player.name}
+              </span>
+            ))}
           </div>
         )}
 
-        {/* Progress bar */}
-        <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+        {/* Auto-dismiss progress bar */}
+        <div className="h-0.5 bg-gray-800">
           <motion.div
-            className="h-full rounded-full"
+            className="h-full"
             style={{
               width: `${progress}%`,
               backgroundColor: success ? '#22c55e' : '#ef4444',
             }}
           />
         </div>
-      </motion.div>
+      </div>
     </motion.div>
   );
 }

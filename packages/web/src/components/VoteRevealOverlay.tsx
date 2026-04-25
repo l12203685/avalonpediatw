@@ -49,103 +49,82 @@ export default function VoteRevealOverlay({
   const playerOrder = Object.keys(room.players);
 
   return (
+    // #107 Edward 2026-04-25 「派票跟黑白球不要一直跳視窗出來」 — was a
+    // fullscreen `fixed inset-0 bg-black/75 backdrop-blur-sm` modal that
+    // popped between every phase and forced players to wait + dismiss.
+    // Now a compact toast docked at the top so the board stays visible.
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm"
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      className="fixed top-3 left-1/2 -translate-x-1/2 z-50 w-[min(92vw,28rem)] cursor-pointer"
       onClick={stableDismiss}
+      role="status"
+      aria-live="polite"
     >
-      <motion.div
-        initial={{ scale: 0.7, y: 40 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.8, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        className="bg-avalon-card border-2 rounded-2xl p-8 max-w-md w-full mx-4 space-y-6 shadow-2xl"
+      <div
+        className="bg-avalon-card/95 border-2 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden"
         style={{ borderColor: record.approved ? '#3b82f6' : '#ef4444' }}
-        onClick={e => e.stopPropagation()}
       >
-        {/* Title */}
-        <div className="text-center">
-          <p className="text-sm text-gray-400 mb-1">
-            {t('game:voteReveal.roundProposal', { round: record.round, attempt: record.attempt })}
-          </p>
-          <h2 className="text-2xl font-bold text-white">{t('game:voteReveal.title')}</h2>
+        {/* Header strip */}
+        <div className={`px-4 py-2 flex items-center gap-3 ${
+          record.approved
+            ? 'bg-blue-900/40 text-blue-200'
+            : 'bg-red-900/40 text-red-200'
+        }`}>
+          <span className="text-2xl">{record.approved ? '✅' : '❌'}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider opacity-70">
+              {t('game:voteReveal.roundProposal', { round: record.round, attempt: record.attempt })}
+            </p>
+            <p className="text-base font-bold truncate">
+              {record.approved ? t('game:voteReveal.approved') : t('game:voteReveal.rejected')}
+              <span className="ml-2 text-xs font-semibold opacity-80">
+                {t('game:voteReveal.approveRejectCount', { approvals, rejections })}
+              </span>
+            </p>
+          </div>
         </div>
 
-        {/* Result */}
-        <motion.div
-          initial={{ scale: 0.5 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.15, type: 'spring', stiffness: 400, damping: 20 }}
-          className={`text-center py-5 rounded-xl border-2 ${
-            record.approved
-              ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-              : 'bg-red-900/40 border-red-500 text-red-300'
-          }`}
-        >
-          <div className="text-5xl mb-2">{record.approved ? '✅' : '❌'}</div>
-          <div className="text-3xl font-bold">
-            {record.approved ? t('game:voteReveal.approved') : t('game:voteReveal.rejected')}
-          </div>
-          <div className="text-sm mt-1 opacity-80">
-            {t('game:voteReveal.approveRejectCount', { approvals, rejections })}
-          </div>
-        </motion.div>
-
-        {/* Proposed team — seat# prefix so "#3 Guest_444" format (#93) */}
-        {record.team.length > 0 && (
-          <div className="bg-gray-800/40 border border-gray-700 rounded-xl px-4 py-2">
-            <p className="text-xs text-gray-500 mb-1.5 font-semibold uppercase tracking-wider">{t('game:voteReveal.teamLabel')}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {record.team.map(id => (
-                <span key={id} className="text-xs bg-blue-900/40 border border-blue-700/50 text-blue-200 px-2 py-0.5 rounded-full">
-                  {seatPrefix(id, room.players)} {room.players[id]?.name ?? id}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Per-player votes */}
-        <div className="grid grid-cols-2 gap-2">
-          {playerOrder.map((playerId, i) => {
+        {/* Per-player vote chips — compact horizontal strip */}
+        <div className="px-3 py-2 flex flex-wrap gap-1.5 max-h-[6.5rem] overflow-hidden">
+          {playerOrder.map((playerId) => {
             const player = room.players[playerId];
             const vote = record.votes[playerId];
             if (!player) return null;
             return (
-              <motion.div
+              <span
                 key={playerId}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 + i * 0.07 }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold ${
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-semibold border ${
                   vote
-                    ? 'bg-blue-900/30 border-blue-700 text-blue-200'
-                    : 'bg-red-900/30 border-red-700 text-red-200'
+                    ? 'bg-blue-900/30 border-blue-700/60 text-blue-200'
+                    : 'bg-red-900/30 border-red-700/60 text-red-200'
                 }`}
               >
                 {vote
-                  ? <ThumbsUp size={14} className="flex-shrink-0 text-blue-400" />
-                  : <ThumbsDown size={14} className="flex-shrink-0 text-red-400" />
+                  ? <ThumbsUp size={10} className="text-blue-400 flex-shrink-0" />
+                  : <ThumbsDown size={10} className="text-red-400 flex-shrink-0" />
                 }
-                <span className="truncate">{seatPrefix(playerId, room.players)} {player.name}</span>
-              </motion.div>
+                <span className="truncate max-w-[5rem]">
+                  {seatPrefix(playerId, room.players)} {player.name}
+                </span>
+              </span>
             );
           })}
         </div>
 
         {/* Auto-dismiss progress bar */}
-        <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+        <div className="h-0.5 bg-gray-800">
           <motion.div
-            className="h-full rounded-full"
+            className="h-full"
             style={{
               width: `${progress}%`,
               backgroundColor: record.approved ? '#3b82f6' : '#ef4444',
             }}
           />
         </div>
-      </motion.div>
+      </div>
     </motion.div>
   );
 }

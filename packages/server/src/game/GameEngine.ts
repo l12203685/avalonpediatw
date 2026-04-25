@@ -217,21 +217,32 @@ export class GameEngine {
     }
     this.teamSelectTimeout = setTimeout(() => {
       if (this.room.state === 'voting' && this.room.questTeam.length === 0) {
-        // Auto-select: leader + random other players to fill required size.
-        // Read via getEffectiveQuestSizes so host overrides (swapR1R2 +
-        // 9-variant) are honoured.
+        // #107 Edward 2026-04-25 「任務派票思考時間如果到了 => 直接從自己順時針派四位玩家」
+        // — clockwise from leader+1, NOT including the leader, NOT random.
+        // Picks seats (leaderIdx + 1), (leaderIdx + 2), … wrap-around as needed.
+        // Reads team size via getEffectiveQuestSizes so host overrides
+        // (swapR1R2 + 9-variant) are still honoured.
         const sizes = this.getEffectiveQuestSizes();
         const requiredSize = sizes[this.room.currentRound - 1] ?? 2;
-        const leaderId = this.getLeaderId();
-        const others = Object.keys(this.room.players).filter(id => id !== leaderId);
-        const shuffled = this.shuffleArray(others);
-        const autoTeam = [leaderId, ...shuffled].slice(0, requiredSize);
+        const playerIds = Object.keys(this.room.players);
+        const playerCount = playerIds.length;
+        const leaderIdx = this.currentLeaderIndex % playerCount;
+        const leaderId = playerIds[leaderIdx];
+        const autoTeam: string[] = [];
+        // Step clockwise +1, +2, ... taking up to requiredSize unique seats.
+        // Caps at playerCount - 1 so a misconfigured requiredSize never loops
+        // back onto the leader (Edward's spec excludes the leader).
+        const cap = Math.min(requiredSize, playerCount - 1);
+        for (let i = 1; i <= cap; i++) {
+          autoTeam.push(playerIds[(leaderIdx + i) % playerCount]);
+        }
         this.room.questTeam = autoTeam;
         this.logEvent('team_auto_selected', {
           round: this.room.currentRound,
           leaderId,
           team: autoTeam,
           reason: 'leader_afk_timeout',
+          mode: 'clockwise_from_leader_plus_one',
         });
         this.startVotingPhase();
         this.onStateChange?.(this.room);
@@ -300,7 +311,9 @@ export class GameEngine {
   }
 
   private handleVoteTimeout(): void {
-    // Auto-vote for players who didn't vote. Edward 2026-04-20 spec:
+    // Auto-vote for players who didn't vote. Edward 2026-04-20 spec
+    // (re-confirmed in #107 2026-04-25 「黑白球投票思考時間如果到了 =>
+    // 直接投正常票 (被選贊成, 沒被選反對)」):
     //   Players IN the proposed quest team default to APPROVE (they are
     //   already signed onto going, so silence ~= "fine by me").
     //   Players OUT of the team default to REJECT (silent non-team member
@@ -314,6 +327,19 @@ export class GameEngine {
     unvotedPlayers.forEach((playerId) => {
       this.room.votes[playerId] = teamSet.has(playerId);
     });
+
+    // Emit explicit auto-voted event so replay / analytics know which
+    // votes came from AFK fallback rather than human submissions.
+    if (unvotedPlayers.length > 0) {
+      this.logEvent('vote_auto_filled', {
+        round: this.room.currentRound,
+        attempt: this.room.failCount,
+        team: this.room.questTeam,
+        autoVotedPlayers: unvotedPlayers,
+        reason: 'vote_afk_timeout',
+        rule: 'team_in_approve_team_out_reject',
+      });
+    }
 
     // Resolve voting and broadcast
     this.resolveVoting();

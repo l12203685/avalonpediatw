@@ -230,9 +230,21 @@ export default function GamePage(): JSX.Element {
   // 2026-04-25: currentActorLabel 字串組合 + 顯示已砍（Edward「上方排版太佔空間」）—
   // 玩家圈的 crown / pulsing ring / 各 phase 主面板標題已足以指示當前 actor。
 
+  // #107 Edward 2026-04-25 「派票跟黑白球不要一直跳視窗出來」 —
+  // sticky inline action toolbars replace the old center-column big-card panels.
+  // Three sources keep their docked footer presence:
+  //   1. Leader picking team → QuestTeamToolbar (existing)
+  //   2. Voting on a proposed team → new sticky VotePanel
+  //   3. Quest mission vote → new sticky QuestPanel (always sticky now —
+  //      both team-members and bystanders see the bottom strip)
+  const teamVotePhaseSticky =
+    room.state === 'voting' && teamSelected && !isSpectator;
+  const questPhaseSticky = room.state === 'quest' && !isSpectator;
+  const stickyToolbarActive = isLeaderPicking || teamVotePhaseSticky || questPhaseSticky;
+
   return (
     <div className={`min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4 ${
-      isLeaderPicking ? 'pb-32 sm:pb-28' : ''
+      stickyToolbarActive ? 'pb-32 sm:pb-28' : ''
     }`}>
       {/* Vote Reveal Overlay */}
       <AnimatePresence>
@@ -439,17 +451,42 @@ export default function GamePage(): JSX.Element {
                 </motion.div>
               )
             ) : (
-              <VotePanel
-                room={room}
-                currentPlayer={currentPlayer}
-                onVote={handleVote}
-                isLoading={isVoting}
-              />
+              // #107 Edward 2026-04-25: VotePanel moved to sticky-bottom toolbar
+              // outside <GameBoard> so the screen no longer scrolls up/down on
+              // every phase. Center column shows a slim recap so the player
+              // can still see WHO was proposed at a glance while voting.
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-avalon-card/40 border border-yellow-700/60 rounded-lg px-4 py-2.5 flex items-center gap-2 flex-wrap"
+              >
+                <span className="text-xs font-semibold text-yellow-300 whitespace-nowrap">
+                  {t('game:votePanel.questTeamLabel')}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {room.questTeam.map(id => {
+                    const p = room.players[id];
+                    if (!p) return null;
+                    return (
+                      <span
+                        key={id}
+                        className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${
+                          id === currentPlayer.id
+                            ? 'bg-yellow-900/40 border-yellow-600 text-yellow-200'
+                            : 'bg-avalon-card/60 border-gray-600 text-gray-200'
+                        }`}
+                      >
+                        {seatPrefix(id, room.players)} {p.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              </motion.div>
             )
           )}
 
-          {/* Quest Phase */}
-          {room.state === 'quest' && !isSpectator && <QuestPanel room={room} currentPlayer={currentPlayer} />}
+          {/* Quest Phase — sticky-bottom toolbar (see render below GameBoard);
+              center column intentionally empty so the screen stops sliding up/down. */}
 
           {/*
             Live Scoresheet moved to GameBoard `scoresheetSlot` (#83 Phase 5) so it
@@ -813,6 +850,40 @@ export default function GamePage(): JSX.Element {
             isSubmitting={isVoting}
             timer={teamSelectTimer}
             timerTotal={teamSelectBase}
+          />
+        )}
+      </AnimatePresence>
+
+      {/*
+        #107 Edward 2026-04-25 — sticky-bottom inline VotePanel for the team
+        proposal vote ("黑白球"). Replaces the old center-column modal-style
+        VotePanel so the screen stops scrolling up/down on every phase.
+      */}
+      <AnimatePresence>
+        {teamVotePhaseSticky && (
+          <VotePanel
+            key="vote-panel-sticky"
+            room={room}
+            currentPlayer={currentPlayer}
+            onVote={handleVote}
+            isLoading={isVoting}
+          />
+        )}
+      </AnimatePresence>
+
+      {/*
+        #107 Edward 2026-04-25 — sticky-bottom inline QuestPanel for the
+        mission vote. Renders for every player in the quest phase: team
+        members get the Success/Fail buttons; bystanders get a thin progress
+        strip ("X/N voted"). Both modes are docked at the bottom so the
+        viewport doesn't shift.
+      */}
+      <AnimatePresence>
+        {questPhaseSticky && (
+          <QuestPanel
+            key="quest-panel-sticky"
+            room={room}
+            currentPlayer={currentPlayer}
           />
         )}
       </AnimatePresence>

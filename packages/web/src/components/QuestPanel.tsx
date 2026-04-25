@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { submitQuestVote } from '../services/socket';
 import audioService from '../services/audio';
-import { seatPrefix } from '../utils/seatDisplay';
 
 // Base seconds for the quest-vote phase. Matches server QUEST_TIMEOUT_MS at 1x.
 const QUEST_BASE_SECONDS = 30;
@@ -16,6 +15,15 @@ interface QuestPanelProps {
   isLoading?: boolean;
 }
 
+/**
+ * Sticky-bottom inline action toolbar for the quest (mission) vote (#107
+ * Edward 2026-04-25 「派票跟黑白球不要一直跳視窗出來」). Same shape as the
+ * #107 VotePanel — anchors to the viewport bottom so the player ring +
+ * scoresheet stay in view; thumb-reach Success/Fail buttons stay docked.
+ *
+ * For non-team viewers we render a thin inline waiting strip (still sticky)
+ * so they get a tiny progress hint without a full overlay.
+ */
 export default function QuestPanel({
   room,
   currentPlayer,
@@ -52,6 +60,9 @@ export default function QuestPanel({
 
   // 時間警告
   const isUrgent = !isUnlimited && timeLeft < 10;
+  const progressPct = effectiveSeconds > 0
+    ? Math.max(0, Math.min(100, (timeLeft / effectiveSeconds) * 100))
+    : 0;
 
   const handleVote = async (vote: 'success' | 'fail') => {
     if (!isInTeam || isSubmitting || hasVoted) return;
@@ -85,175 +96,132 @@ export default function QuestPanel({
     return () => window.removeEventListener('keydown', handler);
   }, [isInTeam, hasVoted, isSubmitting, isGoodSide, oberonMustFail]);
 
+  // Non-team viewers: thin sticky waiting strip (no buttons).
   if (!isInTeam) {
     const votedCount = room.questVotedCount ?? 0;
     const teamSize = room.questTeam.length;
+    const teamPct = teamSize > 0 ? (votedCount / teamSize) * 100 : 0;
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 text-center space-y-4"
+        exit={{ opacity: 0, y: 40 }}
+        className="fixed bottom-0 inset-x-0 z-40 bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-blue-600 shadow-[0_-6px_20px_rgba(0,0,0,0.55)]"
       >
-        <h2 className="text-2xl font-bold text-white">{t('game:questPanel.notInTeamTitle')}</h2>
-        <p className="text-gray-300">
-          <Trans
-            i18nKey="game:questPanel.notInTeamVoted"
-            values={{ voted: votedCount, total: teamSize }}
-            components={{ count: <span className="text-blue-400 font-bold" /> }}
-          />
-        </p>
-        <div className="w-full max-w-xs mx-auto h-2 bg-gray-700 rounded-full overflow-hidden">
-          <motion.div
-            animate={{ width: `${teamSize > 0 ? (votedCount / teamSize) * 100 : 0}%` }}
-            className="h-full bg-gradient-to-r from-blue-500 to-blue-400"
-          />
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-3">
+          <span className="text-sm font-semibold text-blue-200 whitespace-nowrap">
+            {t('game:questPanel.notInTeamTitle')}
+          </span>
+          <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+            <motion.div
+              animate={{ width: `${teamPct}%` }}
+              className="h-full bg-gradient-to-r from-blue-500 to-blue-400"
+            />
+          </div>
+          <span className="text-[11px] font-semibold text-blue-300 whitespace-nowrap">
+            <Trans
+              i18nKey="game:questPanel.notInTeamVoted"
+              values={{ voted: votedCount, total: teamSize }}
+              components={{ count: <span className="text-blue-400 font-bold" /> }}
+            />
+          </span>
         </div>
-        <p className="text-sm text-gray-500">
-          {t('game:questPanel.notInTeamWaiting')}
-        </p>
       </motion.div>
     );
   }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-avalon-card/50 border-2 border-blue-600 rounded-lg p-8 space-y-6"
+      exit={{ opacity: 0, y: 40 }}
+      className="fixed bottom-0 inset-x-0 z-40 bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-blue-600 shadow-[0_-6px_20px_rgba(0,0,0,0.55)]"
+      role="region"
+      aria-label={t('game:questPanel.title')}
     >
-      {/* 標題 */}
-      <div className="text-center">
-        <h2 className="text-3xl font-bold text-white mb-2">{t('game:questPanel.title')}</h2>
-        <p className="text-gray-300">{t('game:questPanel.subtitle')}</p>
-      </div>
-
-      {/* 計時器 */}
-      <div className="flex justify-center">
-        {isUnlimited ? (
-          <div className="flex items-center gap-2 px-4 py-2 rounded-full font-bold bg-blue-500/30 text-blue-200 border border-blue-500/40">
-            <Clock size={18} />
-            {t('game:questPanel.unlimitedTimer')}
-          </div>
-        ) : (
-          <motion.div
-            animate={{
-              backgroundColor: isUrgent ? '#ef4444' : '#3b82f6',
-              color: '#fff',
-            }}
-            className="flex items-center gap-2 px-4 py-2 rounded-full font-bold"
-          >
-            <Clock size={18} />
-            {timeLeft}s
-          </motion.div>
-        )}
-      </div>
-
-      {/* ⏱ Quest countdown bar — matches server QUEST_TIMEOUT, auto-success fallback after 0 */}
-      {!isUnlimited && effectiveSeconds > 0 && (
-        <div className="space-y-1">
-          <div className="flex justify-between text-[11px] font-semibold">
-            <span className={isUrgent ? 'text-red-300' : 'text-gray-500'}>
-              {t('game:questPanel.countdownLabel')}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-2">
+        {/* Top strip — title + countdown */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-blue-200 whitespace-nowrap">
+            {t('game:questPanel.title')}
+          </span>
+          <span className="hidden sm:inline text-[11px] text-blue-100/80 truncate flex-1">
+            {t('game:questPanel.subtitle')}
+          </span>
+          {isUnlimited ? (
+            <span className="text-[11px] font-semibold text-blue-300 whitespace-nowrap flex items-center gap-1">
+              <Clock size={12} />
+              {t('game:questPanel.unlimitedTimer')}
             </span>
-            <span className={isUrgent ? 'text-red-300 font-bold' : 'text-gray-500'}>
+          ) : (
+            <span className={`text-[11px] font-semibold whitespace-nowrap flex items-center gap-1 ${isUrgent ? 'text-red-300' : 'text-blue-300'}`}>
+              <Clock size={12} />
               {timeLeft}s / {effectiveSeconds}s
             </span>
-          </div>
-          <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+          )}
+        </div>
+
+        {/* Countdown bar — only when timed */}
+        {!isUnlimited && effectiveSeconds > 0 && (
+          <div className="w-full h-1 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
             <motion.div
-              animate={{ width: `${Math.max(0, Math.min(100, (timeLeft / effectiveSeconds) * 100))}%` }}
+              animate={{ width: `${progressPct}%` }}
               transition={{ duration: 0.6, ease: 'linear' }}
               className={`h-full rounded-full ${isUrgent ? 'bg-gradient-to-r from-red-500 to-red-400' : 'bg-gradient-to-r from-blue-500 to-blue-400'}`}
             />
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 隊伍成員列表 — seat# prefix so "#3 Guest_444" format (#93) */}
-      <div className="space-y-2">
-        <p className="text-gray-300 text-sm font-semibold">{t('game:questPanel.teamLabel')}</p>
-        <div className="grid grid-cols-2 gap-2">
-          {room.questTeam.map((memberId) => (
-            <div
-              key={memberId}
-              className={`p-2 rounded-lg text-sm font-semibold ${
-                memberId === currentPlayer.id
-                  ? 'bg-yellow-500/30 border border-yellow-400 text-yellow-300'
-                  : 'bg-blue-500/20 border border-blue-400 text-blue-300'
-              }`}
-            >
-              {seatPrefix(memberId, room.players)} {room.players[memberId].name}
-              {memberId === currentPlayer.id && t('game:questPanel.youSuffix')}
-            </div>
-          ))}
-        </div>
-      </div>
+        {/* Action row — vote buttons OR submitted status */}
+        {hasVoted ? (
+          <div className="flex items-center justify-center py-1.5">
+            <span className="text-sm text-blue-300 font-semibold">
+              {t('game:questPanel.submitted')}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 sm:gap-3">
+            {!oberonMustFail && (
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => handleVote('success')}
+                disabled={isSubmitting || isLoading}
+                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-2.5 px-3 sm:px-6 rounded-lg transition-all text-sm sm:text-base"
+              >
+                <CheckCircle size={18} />
+                {isSubmitting ? t('game:questPanel.submitting') : t('game:questPanel.successBtn')}
+              </motion.button>
+            )}
 
-      {/* 投票按鈕 */}
-      {hasVoted ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-4 text-blue-400 font-semibold"
-        >
-          {t('game:questPanel.submitted')}
-        </motion.div>
-      ) : (
-        <div className="flex justify-center gap-6">
-          {/* Success is rendered for every player EXCEPT Oberon-must-fail,
-              where the rule forces a single-button UI matching server
-              coercion. */}
-          {!oberonMustFail && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => handleVote('success')}
-              disabled={isSubmitting || isLoading}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
-            >
-              <CheckCircle size={20} />
-              {isSubmitting ? t('game:questPanel.submitting') : t('game:questPanel.successBtn')}
-            </motion.button>
-          )}
+            {!isGoodSide && (
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => handleVote('fail')}
+                disabled={isSubmitting || isLoading}
+                className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2.5 px-3 sm:px-6 rounded-lg transition-all text-sm sm:text-base"
+              >
+                <XCircle size={18} />
+                {isSubmitting ? t('game:questPanel.submitting') : t('game:questPanel.failBtn')}
+              </motion.button>
+            )}
+          </div>
+        )}
 
-          {!isGoodSide && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => handleVote('fail')}
-              disabled={isSubmitting || isLoading}
-              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 px-8 rounded-lg transition-all"
-            >
-              <XCircle size={20} />
-              {isSubmitting ? t('game:questPanel.submitting') : t('game:questPanel.failBtn')}
-            </motion.button>
-          )}
-        </div>
-      )}
-
-      {/* 提示信息 */}
-      {!hasVoted && (
-        <div className="text-center text-sm text-gray-400 space-y-1">
-          <p>
-            {room.questTeam.length === 1
-              ? t('game:questPanel.votingCount_one')
-              : t('game:questPanel.votingCount_other', { count: room.questTeam.length })}
-          </p>
-          {oberonMustFail ? (
-            <p className="text-xs text-amber-400">
-              {t('game:questPanel.oberonMustFailHint')}
-            </p>
-          ) : isGoodSide ? (
-            <p className="text-xs text-gray-600">
+        {/* Hint — desktop only */}
+        {!hasVoted && (
+          <div className="hidden sm:block text-center text-[10px] text-gray-500">
+            {oberonMustFail ? (
+              <span className="text-amber-400">{t('game:questPanel.oberonMustFailHint')}</span>
+            ) : isGoodSide ? (
               <Trans i18nKey="game:questPanel.goodSideHint" components={{ key: <kbd className="bg-gray-800 px-1 rounded" /> }} />
-            </p>
-          ) : (
-            <p className="text-xs text-gray-600">
+            ) : (
               <Trans i18nKey="game:questPanel.evilSideHint" components={{ success: <kbd className="bg-gray-800 px-1 rounded" />, fail: <kbd className="bg-gray-800 px-1 rounded" /> }} />
-            </p>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 }
