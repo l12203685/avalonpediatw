@@ -229,11 +229,13 @@ export default function GamePage(): JSX.Element {
     && lastLadyRecord.round === room.currentRound
     && lastLadyRecord.holderId === currentPlayer.id;
   type ActionBanner = { msg: string; color: string } | null;
+  // Edward 2026-04-25 21:52 — 砍 voting+teamSelected actionBanner
+  // (「輪到你投票!贊成或拒絕此隊伍」)。底部 sticky VotePanel 已有贊成/拒絕按鈕,
+  // PlayerCard 4-corner 黑白球已指示投票狀態, banner 重複 → 砍。leaderTurn /
+  // questTurn / ladyTurn / assassinTurn 留著（這些 phase 真有「輪到你」獨佔操作）。
   const actionBanner: ActionBanner =
     room.state === 'voting' && !teamSelected && isCurrentPlayerLeader
       ? { msg: t('game:action.leaderTurn'), color: 'border-amber-500 bg-amber-900/30 text-amber-200' }
-      : room.state === 'voting' && teamSelected && !alreadyVoted
-      ? { msg: t('game:action.voteTurn'), color: 'border-yellow-500 bg-yellow-900/30 text-yellow-200' }
       : room.state === 'quest' && isOnQuestTeam
       ? { msg: t('game:action.questTurn'), color: 'border-blue-500 bg-blue-900/30 text-blue-200' }
       : room.state === 'lady_of_the_lake' && isLadyHolder
@@ -453,52 +455,24 @@ export default function GamePage(): JSX.Element {
                   </p>
                 </motion.div>
               ) : (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-avalon-card/50 border-2 border-yellow-700 rounded-lg p-6 text-center space-y-3"
-                >
-                  <div className="text-3xl">⏳</div>
-                  <h2 className="text-base sm:text-lg font-bold text-white">{t('game:teamSelect.waitingTitle')}</h2>
-                  <p className="text-gray-300 text-xs sm:text-[13px]">
-                    <Trans
-                      i18nKey="game:teamSelect.waitingDesc"
-                      values={{
-                        name: leaderId
-                          ? `${displaySeatNumber(seatOf(leaderId, room.players))}家`
-                          : '',
-                      }}
-                      components={{ leader: <span className="text-yellow-400 font-bold" /> }}
-                    />
-                  </p>
-                  <div className="flex items-center justify-center gap-3 text-[11px] sm:text-xs text-gray-500 flex-wrap">
-                    <span>{t('game:teamSelect.needMembers', { count: AVALON_CONFIG[playerIds.length]?.questTeams[room.currentRound - 1] ?? 0 })}</span>
-                    {isUnlimitedTimer ? (
-                      <span className="px-3 py-1 rounded-full font-bold bg-blue-900/60 text-blue-300">
-                        {t('game:teamSelect.unlimitedTimer')}
-                      </span>
-                    ) : (
-                      <span className={`px-3 py-1 rounded-full font-bold ${teamSelectTimer < 20 ? 'bg-red-900/60 text-red-300' : 'bg-gray-800 text-gray-400'}`}>
-                        {t('game:teamSelect.timer', { seconds: teamSelectTimer })}
-                      </span>
-                    )}
+                // Edward 2026-04-25 21:52 — 砍「等待隊長選擇」大字 panel
+                // (含 hourglass + waitingTitle + waitingDesc + needMembers panel)。
+                // PlayerCard 王冠已指示隊長, 中央區域留乾淨 viewport 給 chat + 牌譜。
+                // 倒數秒數縮成超小 inline chip 放右上角（Edward「倒數可保留 small inline」）;
+                // 隊長 timeout 自動選人需要可見倒數,但不再佔中央。unlimitedTimer 直接不渲染。
+                !isUnlimitedTimer ? (
+                  <div className="flex justify-end">
+                    <span
+                      className={`text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+                        teamSelectTimer < 20
+                          ? 'bg-red-900/60 text-red-300 border border-red-800'
+                          : 'bg-gray-800/60 text-gray-400 border border-gray-700'
+                      }`}
+                    >
+                      {t('game:teamSelect.timer', { seconds: teamSelectTimer })}
+                    </span>
                   </div>
-                  {/* Countdown bar so everyone (not just the leader) can see how long until auto-select kicks in */}
-                  {!isUnlimitedTimer && teamSelectBase > 0 && (
-                    <div className="mt-1 w-full max-w-sm mx-auto">
-                      <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
-                        <motion.div
-                          animate={{ width: `${Math.max(0, Math.min(100, (teamSelectTimer / teamSelectBase) * 100))}%` }}
-                          transition={{ duration: 0.6, ease: 'linear' }}
-                          className={`h-full rounded-full ${teamSelectTimer < 20 ? 'bg-gradient-to-r from-red-500 to-red-400' : 'bg-gradient-to-r from-amber-500 to-yellow-400'}`}
-                        />
-                      </div>
-                      <p className="mt-1 text-[11px] text-gray-500">
-                        {t('game:teamSelect.autoSelectHint')}
-                      </p>
-                    </div>
-                  )}
-                </motion.div>
+                ) : null
               )
             ) : (
               // #107 Edward 2026-04-25: VotePanel moved to sticky-bottom toolbar
