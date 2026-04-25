@@ -16,7 +16,7 @@ import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
 import CompactScoresheet from '../components/CompactScoresheet';
 import audioService from '../services/audio';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2 } from 'lucide-react';
+import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2, Eye } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 import { seatPrefix } from '../utils/seatDisplay';
@@ -144,9 +144,9 @@ export default function GamePage(): JSX.Element {
   const isCurrentPlayerLeader = currentPlayer.id === leaderId;
   const teamSelected = room.questTeam.length > 0;
   // Role composition from config — hoisted up because team-select handlers below also need it.
+  // 2026-04-25: Header 排版精簡 — goodCount/evilCount strip 已砍（Edward「上方排版太佔空間」），
+  // 只保留 config 解構供 expectedTeamSize 使用。陣營人數計分盤已隱含 N/Y col 對應，無需重複顯示。
   const config = AVALON_CONFIG[playerIds.length];
-  const goodCount = config?.roles.filter(r => ['merlin','percival','loyal'].includes(r)).length ?? 0;
-  const evilCount = config?.roles.filter(r => !['merlin','percival','loyal'].includes(r)).length ?? 0;
 
   const handleVote = (approve: boolean): void => {
     if (isVoting) return;
@@ -194,14 +194,8 @@ export default function GamePage(): JSX.Element {
     setGameState('home');
   };
 
-  const stateLabel: Record<string, string> = {
-    voting: teamSelected ? t('game:phaseLabel.votingInProgress') : t('game:phaseLabel.voting'),
-    quest: t('game:phaseLabel.quest'),
-    lady_of_the_lake: t('game:phaseLabel.ladyOfTheLake'),
-    discussion: t('game:phaseLabel.discussion'),
-    ended: t('game:phaseLabel.ended'),
-    lobby: t('game:phaseLabel.lobby'),
-  };
+  // 2026-04-25: stateLabel 字典已砍（Edward「上方排版太佔空間」）— 狀態徽章從 header 移除，
+  // 由主面板各 phase 標題（湖中女神 / 暗殺梅林 / 任務派遣等）承擔狀態指示。
 
   // Determine if this player needs to act right now
   const alreadyVoted = room.votes[currentPlayer.id] !== undefined;
@@ -233,31 +227,8 @@ export default function GamePage(): JSX.Element {
       ? { msg: t('game:action.assassinTurn'), color: 'border-red-500 bg-red-900/30 text-red-200' }
       : null;
 
-  // Current-actor summary — small strip shown to EVERYONE (including the current actor) so
-  // spectators / non-leaders always know whose turn it is. Pairs with the pulsing ring on
-  // PlayerCard for the visual cue.
-  const currentActorLabel: string | null = (() => {
-    if (room.state === 'voting' && !teamSelected) {
-      const name = room.players[leaderId]?.name ?? '';
-      return t('game:currentActor.leaderLabel', { name });
-    }
-    if (room.state === 'voting' && teamSelected) {
-      const pending = playerIds.length - Object.keys(room.votes).length;
-      return pending > 0 ? t('game:currentActor.voteWaitingLabel', { count: pending }) : null;
-    }
-    if (room.state === 'quest') {
-      const voted = room.questVotedCount ?? 0;
-      return t('game:currentActor.questWaitingLabel', { voted, total: room.questTeam.length });
-    }
-    if (room.state === 'lady_of_the_lake') {
-      const name = room.players[room.ladyOfTheLakeHolder ?? '']?.name ?? '';
-      return t('game:currentActor.ladyLabel', { name });
-    }
-    if (room.state === 'discussion') {
-      return t('game:currentActor.assassinLabel');
-    }
-    return null;
-  })();
+  // 2026-04-25: currentActorLabel 字串組合 + 顯示已砍（Edward「上方排版太佔空間」）—
+  // 玩家圈的 crown / pulsing ring / 各 phase 主面板標題已足以指示當前 actor。
 
   return (
     <div className={`min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4 ${
@@ -333,29 +304,31 @@ export default function GamePage(): JSX.Element {
           </div>
         )}
 
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-5xl font-bold text-white mb-2">🎭 {t('game:header.title')}</h1>
-          <div className="mt-2">
-            <MissionTrack room={room} />
-          </div>
-          <div className="flex justify-center gap-3 mt-3 text-sm flex-wrap">
-            <div className="bg-avalon-card/50 px-4 py-2 rounded-lg">
-              <p className="text-gray-300">{t('game:header.state')}<span className="text-yellow-400 font-bold">{stateLabel[room.state] ?? room.state}</span></p>
-            </div>
+        {/*
+          Slim header — 2026-04-25 (Edward「上方排版太佔空間 只要留我第二張圖的部分就可以」).
+          砍掉：Avalon 標題 / 狀態徽章 / 查看角色按鈕 / 喇叭按鈕 / 陣營人數 / 當前 actor 標籤。
+          保留：R1-R5 任務 + 否決方塊（MissionTrack 已包含）。
+          查看角色 / 靜音 入口 → 移到右上角浮動小圖示（隱藏式 menu，需要時才看見）。
+        */}
+        <div className="relative">
+          <MissionTrack room={room} />
+          <div className="absolute top-0 right-0 flex gap-1.5">
             <button
               onClick={() => setShowRoleReveal(true)}
-              className="bg-blue-900/50 hover:bg-blue-800/70 border border-blue-600 px-4 py-2 rounded-lg text-blue-300 text-sm transition-colors"
+              title={t('game:header.viewRole')}
+              aria-label={t('game:header.viewRole')}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-blue-900/40 hover:bg-blue-800/70 border border-blue-700/60 text-blue-300 transition-colors"
             >
-              {t('game:header.viewRole')}
+              <Eye size={16} />
             </button>
             <button
               onClick={handleToggleAudio}
               title={audioEnabled ? t('game:header.mute') : t('game:header.unmute')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors border ${
+              aria-label={audioEnabled ? t('game:header.mute') : t('game:header.unmute')}
+              className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors border ${
                 audioEnabled
-                  ? 'bg-gray-800/50 hover:bg-gray-700/70 border-gray-600 text-gray-300'
-                  : 'bg-gray-900/50 hover:bg-gray-800/70 border-gray-700 text-gray-500'
+                  ? 'bg-gray-800/40 hover:bg-gray-700/70 border-gray-600 text-gray-300'
+                  : 'bg-gray-900/40 hover:bg-gray-800/70 border-gray-700 text-gray-500'
               }`}
             >
               {audioEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
@@ -363,45 +336,21 @@ export default function GamePage(): JSX.Element {
           </div>
         </div>
 
-        {/* Role composition + action banner row */}
-        <div className="flex flex-col gap-2">
-          {/* Role composition strip */}
-          {room.state !== 'ended' && config && (
-            <div className="flex justify-center gap-3 text-xs text-gray-400 flex-wrap">
-              <span className="bg-blue-900/30 border border-blue-700/50 px-3 py-1 rounded-full">
-                {t('game:roster.goodCount', { count: goodCount })}
-              </span>
-              <span className="bg-red-900/30 border border-red-700/50 px-3 py-1 rounded-full">
-                {t('game:roster.evilCount', { count: evilCount })}
-              </span>
-            </div>
+        {/* Your-turn action banner — kept (not part of header clutter; signals required action) */}
+        <AnimatePresence>
+          {actionBanner && (
+            <motion.div
+              key={actionBanner.msg}
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className={`flex items-center gap-2 border rounded-lg px-4 py-3 text-sm font-semibold ${actionBanner.color}`}
+            >
+              <Bell size={16} className="flex-shrink-0" />
+              {actionBanner.msg}
+            </motion.div>
           )}
-
-          {/* Current-actor strip — tells every player whose move it is right now */}
-          {currentActorLabel && room.state !== 'ended' && room.state !== 'lobby' && (
-            <div className="flex justify-center">
-              <span className="bg-amber-950/50 border border-amber-700/60 text-amber-200 px-3 py-1 rounded-full text-xs font-semibold">
-                {currentActorLabel}
-              </span>
-            </div>
-          )}
-
-          {/* Your-turn action banner */}
-          <AnimatePresence>
-            {actionBanner && (
-              <motion.div
-                key={actionBanner.msg}
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className={`flex items-center gap-2 border rounded-lg px-4 py-3 text-sm font-semibold ${actionBanner.color}`}
-              >
-                <Bell size={16} className="flex-shrink-0" />
-                {actionBanner.msg}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        </AnimatePresence>
 
         {/* Game Board — 5v5 rails with center panel (quest/vote/history) per Edward spec.
             #83 Phase 5: chat + scoresheet dock in the center column via `chatSlot`

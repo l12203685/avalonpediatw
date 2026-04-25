@@ -4,7 +4,36 @@ import { ChatMessage, Room, Player } from '@avalon/shared';
 import LiveScoresheet from './LiveScoresheet';
 import QuestResultBanner from './QuestResultBanner';
 import ScoresheetChatPanel, { SystemChatEntry } from './ScoresheetChatPanel';
-import { displaySeatNumber } from '../utils/seatDisplay';
+import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+
+/**
+ * Sort seats in canonical Avalon order — 1..9 ascending, with seat 10 last
+ * (rendered as "0"). Mirrors the convention used in PlayerRing / shield cells:
+ * `[10, 1, 5, 3] -> [1, 3, 5, 10]` -> displayed as "1350".
+ *
+ * Returns the concatenated digit string (no separator) so it matches the
+ * scoresheet shorthand Edward uses verbally ("派 134" / "派 2680").
+ */
+function formatSeatsDigitString(seats: number[]): string {
+  const sorted = [...seats].sort((a, b) => a - b);
+  return sorted.map(displaySeatNumber).join('');
+}
+
+/**
+ * Format anomaly votes for the chat log. "Inner black" = team members who
+ * voted reject; "outer white" = non-team members who voted approve. Both lists
+ * render as a digit string + sign, separated by a space:
+ *
+ *   formatAnomalyVotes([5], [7])     -> "5- 7+"
+ *   formatAnomalyVotes([], [3,6,8])  -> "368+"
+ *   formatAnomalyVotes([], [])       -> ""  (caller substitutes "無異常")
+ */
+function formatAnomalyVotes(innerBlack: number[], outerWhite: number[]): string {
+  const parts: string[] = [];
+  if (innerBlack.length > 0) parts.push(`${formatSeatsDigitString(innerBlack)}-`);
+  if (outerWhite.length > 0) parts.push(`${formatSeatsDigitString(outerWhite)}+`);
+  return parts.join(' ');
+}
 
 interface FullScoresheetLayoutProps {
   room: Room;
@@ -66,20 +95,47 @@ export default function FullScoresheetLayout({
   }, [playerIds]);
 
   // Default: synthesise minimal system entries from voteHistory if none
-  // were provided by the caller. Each entry summarises the round/attempt
-  // approval count so the replay viewer has something to read.
+  // were provided by the caller. Each entry summarises the round/attempt with
+  //   - 隊伍組合 (team digit string in canonical order, e.g. "134" for seats 1,3,4)
+  //   - 異常票 (inner-black "<seats>-" / outer-white "<seats>+", or "無異常")
+  // so the replay viewer can read team composition + cross-faction signals
+  // without flipping back to the matrix (Edward 2026-04-25 spec).
   const defaultSystemEntries = useMemo<SystemChatEntry[]>(() => {
     if (systemEntries) return systemEntries;
     return room.voteHistory.map((v, idx) => {
       const approveCount = Object.values(v.votes).filter(Boolean).length;
       const totalVotes = Object.values(v.votes).length;
+
+      // Team composition — display in canonical seat order ("134" / "2680").
+      const teamSeats = v.team
+        .map((pid) => seatOf(pid, room.players))
+        .filter((s) => s > 0);
+      const teamDigits = formatSeatsDigitString(teamSeats);
+
+      // Anomaly votes: split voters into team/non-team and approve/reject.
+      const teamSet = new Set(v.team);
+      const innerBlackSeats: number[] = [];
+      const outerWhiteSeats: number[] = [];
+      Object.entries(v.votes).forEach(([pid, approve]) => {
+        const seat = seatOf(pid, room.players);
+        if (seat <= 0) return;
+        const onTeam = teamSet.has(pid);
+        if (onTeam && !approve) innerBlackSeats.push(seat);
+        else if (!onTeam && approve) outerWhiteSeats.push(seat);
+      });
+      const anomaly = formatAnomalyVotes(innerBlackSeats, outerWhiteSeats);
+
+      const leaderSeat = seatOf(v.leader, room.players);
+      const leaderLabel = leaderSeat > 0 ? displaySeatNumber(leaderSeat) : '?';
+      const result = v.approved ? '通過' : '否決';
+
       return {
         id: `sys-vote-${v.round}-${v.attempt}-${idx}`,
         timestamp: room.createdAt + idx * 1000,
-        text: `系統：${v.round}-${v.attempt}, 贊成 ${approveCount}/${totalVotes}, ${v.approved ? '通過' : '否決'}`,
+        text: `系統：${v.round}-${v.attempt}，隊長 ${leaderLabel} 派 ${teamDigits}，贊成 ${approveCount}/${totalVotes}（${anomaly || '無異常'}），${result}`,
       };
     });
-  }, [room.voteHistory, room.createdAt, systemEntries]);
+  }, [room.voteHistory, room.players, room.createdAt, systemEntries]);
 
   const chatPanel = (
     <ScoresheetChatPanel
