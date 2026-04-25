@@ -33,7 +33,7 @@ export const WIKI_CATEGORIES: WikiCategory[] = [
     id: 'roles',
     name: '角色指南',
     icon: '👥',
-    description: '探索每個角色的能力和策略 (Explore each role\'s abilities and strategies)',
+    description: '探索每個角色的能力和策略',
   },
   {
     id: 'strategies',
@@ -66,7 +66,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   // ==================== 遊戲規則 ====================
   {
     id: 'rules-overview',
-    title: '遊戲說明與目標 (Game Overview & Objectives)',
+    title: '遊戲說明與目標',
     category: 'rules',
     excerpt: '阿瓦隆是一個藍方與紅方對抗的陣營遊戲，藍方具有人數優勢，紅方具有資訊優勢。',
     content: `# 遊戲說明
@@ -78,14 +78,14 @@ export const WIKI_ARTICLES: WikiArticle[] = [
 
 ## 遊戲目標
 
-### 藍方陣營目標 (Good Team — complete ALL conditions)
+### 藍方陣營目標
 - 在每一局，避免任務組合被反對超過四次（稱為「尾派強制」）
-- 任務結果**成功三局**（簡稱：三藍 / 3 Good wins）
+- 任務結果**成功三局**（簡稱：三藍）
 - **避免梅林 被刺客 刺殺**（簡稱：躲刺、躲刀）
 
-### 紅方陣營目標 (Evil Team — complete ANY ONE condition)
+### 紅方陣營目標
 - 讓任何一局任務組合被反對超過四次（幾乎無法達成）
-- 任務結果**失敗三局**（簡稱：三紅 / 3 Evil wins）
+- 任務結果**失敗三局**（簡稱：三紅）
 - **引導刺客 正確指認梅林 並刺殺成功**
 
 ## 角色陣營
@@ -176,7 +176,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   },
   {
     id: 'rules-voting',
-    title: '投票機制：黑白球詳解 (Voting Mechanics: Approve/Reject System)',
+    title: '投票機制：黑白球詳解',
     category: 'rules',
     excerpt: '深入瞭解黑白球投票系統，包含正常票、異常票的定義與意義。',
     content: `# 黑白球投票機制
@@ -238,10 +238,10 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     title: '梅林',
     category: 'roles',
     excerpt: '最難、最重要的角色。梅林知道壞人位置，但必須偽裝成雜魚，不能讓刺客找到。',
-    content: `# 梅林（Merlin）
+    content: `# 梅林
 
 ## 陣營
-🔵 **正義方（藍方）**
+**正義方（藍方）**
 
 ## 角色能力
 - **知道誰是邪惡方**（莫德雷德 除外）
@@ -249,7 +249,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
 - 梅林**看不到**莫德雷德
 
 ## 勝利條件
-1. 藍方三藍成功 (Good Team wins 3 quests)
+1. 藍方三藍成功
 2. **刺殺階段沒被刺客 正確指認**
 
 ## 基本觀念
@@ -304,10 +304,10 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     title: '派西維爾',
     category: 'roles',
     excerpt: '知道梅林位置但無法區分莫甘娜。任務是辨認真梅林、保護梅林、幫忙找莫德雷德。',
-    content: `# 派西維爾（Percival）
+    content: `# 派西維爾
 
 ## 陣營
-🔵 **正義方（藍方）**
+**正義方（藍方）**
 
 ## 角色能力
 - 夜晚能看到兩根拇指（梅林 + 莫甘娜）
@@ -372,7 +372,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     content: `# 亞瑟的忠臣（忠臣/雜魚/平民）
 
 ## 陣營
-🔵 **正義方（藍方）**
+**正義方（藍方）**
 
 ## 角色特性
 - 沒有特殊能力
@@ -429,17 +429,17 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     title: '刺客',
     category: 'roles',
     excerpt: '邪惡陣營的最終武器。負責在刺殺階段正確指認梅林，即使任務三藍也能讓紅方獲勝。',
-    content: `# 刺客（Assassin）
+    content: `# 刺客
 
 ## 陣營
-🔴 **邪惡方（紅方）**
+**邪惡方（紅方）**
 
 ## 角色能力
 - 知道其他相認的邪惡玩家（奧伯倫 除外）
 - **在刺殺階段 可以指認梅林**
 
 ## 勝利條件
-1. 邪惡陣營贏得 3 個任務（三紅 / 3 Evil wins），或
+1. 邪惡陣營贏得 3 個任務（三紅），或
 2. **成功刺殺梅林**（即使藍方三藍）
 
 ## 刺殺梅林策略
@@ -478,10 +478,10 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     title: '莫甘娜',
     category: 'roles',
     excerpt: '扮演梅林形象迷惑派西維爾。是紅方最強的干擾能力，能讓派西維爾搞不清誰是真梅林。',
-    content: `# 莫甘娜（Morgana）
+    content: `# 莫甘娜
 
 ## 陣營
-🔴 **邪惡方（紅方）**
+**邪惡方（紅方）**
 
 ## 角色能力
 - 知道其他相認的邪惡玩家
@@ -531,10 +531,10 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     title: '莫德雷德',
     category: 'roles',
     excerpt: '梅林看不到的壞人。是紅方最隱蔽的成員，能在梅林的盲點下自由活動。',
-    content: `# 莫德雷德（Mordred）
+    content: `# 莫德雷德
 
 ## 陣營
-🔴 **邪惡方（紅方）**
+**邪惡方（紅方）**
 
 ## 角色能力
 - **梅林 不知道他是壞人**（唯一不會被梅林看到的壞人）
@@ -580,10 +580,10 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     title: '奧伯倫',
     category: 'roles',
     excerpt: '不與其他壞人相認的特殊壞人。增加遊戲變化性，拉低紅方下限、提高紅方上限。',
-    content: `# 奧伯倫（Oberon）
+    content: `# 奧伯倫
 
 ## 陣營
-🔴 **邪惡方（紅方）**
+**邪惡方（紅方）**
 
 ## 角色特性
 - **夜晚邪惡方相認時不能睜眼**
@@ -656,9 +656,9 @@ export const WIKI_ARTICLES: WikiArticle[] = [
 - 大部分的遊戲，搶先拿下任務失敗會有優勢
 - 給予梅林 壓力的同時，也可完成三紅遊戲目標
 
-### 先搶三紅，然後刺殺 (Win 3 quests first, then Assassinate)
+### 先搶三紅，然後刺殺
 - 刺殺梅林 可能指認錯誤
-- 三紅 (3 Evil wins) 是直接獲勝
+- 三紅 是直接獲勝
 - 通常通往三紅的過程會逼迫能力者釋放資訊，成為刺殺梅林的線索
 
 ## 位階法
@@ -708,7 +708,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   },
   {
     id: 'strategies-zone-voting',
-    title: '視角與區間派票法 (Perspective & Range Nomination)',
+    title: '視角與區間派票法',
     category: 'strategies',
     excerpt: '阿瓦隆最核心的派票理論：透過區間切分找出壞人的位置。',
     content: `# 視角與區間派票法
@@ -847,7 +847,7 @@ oox
 - 此時邪惡方（包含奧伯倫）可以一起翻牌討論
 - 最終選擇權在刺客 手中
 
-## 核心策略：排除法 (Core Strategy: Elimination)
+## 核心策略：排除法
 
 **把派拇指的玩家排除**
 
@@ -893,7 +893,7 @@ oox
     views: 2234,
   },
 
-  // ==================== 角色數據策略 (Data-Driven Role Strategy) ====================
+  // ==================== 角色數據策略 ====================
   {
     id: 'strategy-merlin-data',
     title: '梅林數據解析 — 2146 局實戰分析',
@@ -1277,7 +1277,7 @@ oox
 
 ### 梅林 vs 派西的數據差異
 
-| 特徵 | 梅林（Merlin）| 派西維爾（Percival）|
+| 特徵 | 梅林 | 派西維爾 |
 |------|------|------|
 | 知道的壞人數量 | 3 個（莫德除外）| 0 個（只知梅娜位置）|
 | 派票精準度 | 非常高 | 中等 |
@@ -1383,12 +1383,12 @@ oox
   // ==================== 新手入門 ====================
   {
     id: 'beginner-guide',
-    title: '新手入門指南 (Beginner\'s Guide)',
+    title: '新手入門指南',
     category: 'beginner',
     excerpt: '阿瓦隆快速入門：各陣營的基本行動方針，讓你第一局就能做出正確判斷。',
-    content: `# 新手入門指南 (Beginner's Guide)
+    content: `# 新手入門指南
 
-## 藍方基本行動方針 (Good Team — Basic Principles)
+## 藍方基本行動方針
 
 ### 亞瑟的忠臣（雜魚）
 - **任務派票就是選你覺得的「好人」**
@@ -1407,9 +1407,9 @@ oox
 - 用區間派票法給出壞人分布的線索
 - 不要修正幅度太大，容易被識別
 
-## 紅方基本行動方針 (Evil Team — Basic Principles)
+## 紅方基本行動方針
 
-- **進任務一律出失敗**：先搶三紅 (3 Evil wins)，後刺殺梅林
+- **進任務一律出失敗**：先搶三紅，後刺殺梅林
 - **多位相認壞同時進任務**：位階法 + 藏者恆藏、出者恆出 + 後進者出
 - **刺殺階段**：把派拇指的玩家排除
 
@@ -1520,7 +1520,7 @@ oox
   // ==================== 名詞解釋 ====================
   {
     id: 'glossary-basic',
-    title: '基本名詞說明 (Quest & Nomination Terms)',
+    title: '基本名詞說明',
     category: 'glossary',
     excerpt: '阿瓦隆常用術語：x家、派票、順/逆派、外灑、回派、照派、疊票、尾派等。',
     content: `# 基本名詞說明
@@ -1663,7 +1663,7 @@ oox
   },
   {
     id: 'glossary-combat',
-    title: '名詞說明：攻擊/支持 (Attack & Support Terms)',
+    title: '名詞說明：攻擊/支持',
     category: 'glossary',
     excerpt: '咬、踩、搥、保、鐵咬、表好/壞、拇指等阿瓦隆常用的攻防術語。',
     content: `# 攻擊/支持相關名詞
@@ -1695,7 +1695,7 @@ oox
 
 ## 其他
 
-### 拇指 (Thumb — Known Evil)
+### 拇指
 會被看到的玩家，一般指壞人：
 - 被梅林 看到的紅方玩家：刺客/莫甘娜/奧伯倫 都是梅林的**拇指**
 - 派西維爾 看到的兩根拇指：梅林/莫甘娜 是派西維爾的**拇指**
@@ -1705,7 +1705,7 @@ oox
 - 不建議跳身分，無法完全確定辨別陣營身分
 - 嚴格來說會提高紅方 勝率
 
-### 雜魚 / 能力者 (Regular Player / Power Role)
+### 雜魚 / 能力者
 - **雜魚**：亞瑟的忠臣（沒有特殊能力）
 - **能力者**：未經過派票就有已知的內建絕對資訊
   - 好人能力者：派西（已知一好一壞）、梅林（已知三個壞人）
@@ -1724,38 +1724,38 @@ oox
     excerpt: '為遊戲新手解答基本問題：人數、說謊、暗殺、湖中女神等。',
     content: `# 新手常見問題
 
-## Q: 遊戲需要多少人才能進行？(How many players?)
-A: 最少 **5 人**，最多 **10 人**。建議 6-8 人體驗最佳平衡。(Min 5, max 10 — 6-8 is optimal)
+## Q: 遊戲需要多少人才能進行？
+A: 最少 **5 人**，最多 **10 人**。建議 6-8 人體驗最佳平衡。
 
-## Q: 我可以說謊嗎？(Can I lie?)
+## Q: 我可以說謊嗎？
 A: **是的！** 說謊和誤導是遊戲的核心。道德謊言是策略的一部分。（除了被湖中女神 問到陣營時，必須說真話）
 
-## Q: 什麼是「跳身分」？(What is "claiming a role"?)
+## Q: 什麼是「跳身分」？
 A: 主動宣稱自己是某個特定角色（如宣稱「我是派西」）。一般來說**不建議**這樣做，會提高被識別的風險。
 
-## Q: 我被選中參加任務但不想去，可以投反對嗎？(Can I vote against my own team?)
+## Q: 我被選中參加任務但不想去，可以投反對嗎？
 A: 可以，這叫做「內黑」（異常票）。但這會傳達特殊資訊，請謹慎使用。
 
-## Q: 暗殺階段好人可以說話嗎？(Can Good players speak during Assassination?)
+## Q: 暗殺階段好人可以說話嗎？
 A: **不可以**。藍方 在刺殺階段不可發言，只有紅方 可以討論刺殺對象。
 
-## Q: 湖中女神的使用者可以說謊嗎？(Can the Lady of the Lake holder lie?)
+## Q: 湖中女神的使用者可以說謊嗎？
 A: **可以**。使用者看到陣營後可選擇是否誠實公告結果。但被湖的玩家必須回傳真實陣營卡。
 
-## Q: 7人局以上的第四局為什麼特殊？(Why is Quest 4 special in 7+ player games?)
+## Q: 7人局以上的第四局為什麼特殊？
 A: 第四局（保護局）需要 **≥2 張失敗**才開紅。意味著壞人需要兩個人都出失敗，否則任務成功。這保護了藍方在第四局幾乎能開藍，大幅縮小壞人範圍。
 
-## Q: 奧伯倫和其他壞人不相認，他怎麼玩？(How does Oberon play?)
-A: 奧伯倫 的玩法類似雜魚（忠臣 / Loyal Servant）：
+## Q: 奧伯倫和其他壞人不相認，他怎麼玩？
+A: 奧伯倫 的玩法類似雜魚（忠臣）：
 - 用雜魚的視角思考誰好誰壞
 - 進任務就出失敗
 - 觀察場上風向，對你沒敵意的能力者大概率是隊友
 
-## Q: 連續 5 次反對是怎麼算的？(How does 5 consecutive rejections work?)
+## Q: 連續 5 次反對是怎麼算的？
 A: 每一**局**的投票失敗累積（不是跨局累積）。如果同一局的任務組合被連續反對了 5 次，紅方 直接獲勝。
 
-## Q: 遊戲需要多長時間？(How long does a game take?)
-A: 通常 20-30 分鐘，熟練玩家可以更快，新手可能需要 45 分鐘以上。(Usually 20-30 min; beginners may need 45+ min)`,
+## Q: 遊戲需要多長時間？
+A: 通常 20-30 分鐘，熟練玩家可以更快，新手可能需要 45 分鐘以上。`,
     tags: ['FAQ', '新手', '基礎'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),

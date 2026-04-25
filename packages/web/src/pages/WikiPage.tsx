@@ -42,7 +42,7 @@ export default function WikiPage(): JSX.Element {
             <h1 className="text-4xl md:text-5xl font-bold text-white">Avalon 百科</h1>
           </div>
           <p className="text-gray-300 text-lg mb-6">
-            完整的遊戲規則、角色指南、策略分析、實戰直播與數據回放 (Game rules, role guides, strategy analysis, live streams and analysis replays)
+            完整的遊戲規則、角色指南、策略分析、實戰直播與數據回放
           </p>
 
           {/* 快速統計 */}
@@ -95,7 +95,7 @@ export default function WikiPage(): JSX.Element {
             }`}
           >
             <Youtube size={18} />
-            線上實戰直播 & 數據分析回放 (Streams & Replays)
+            線上實戰直播 & 數據分析回放
           </button>
         </div>
       </div>
@@ -189,7 +189,7 @@ export default function WikiPage(): JSX.Element {
                 社群貢獻
               </h2>
               <p className="text-gray-300 mb-4">
-                幫助改進這個百科！您可以提交新文章或改進現有內容。(Help improve this wiki! You can submit new articles or improve existing content.)
+                幫助改進這個百科！您可以提交新文章或改進現有內容。
               </p>
               <button
                 onClick={() => setShowContributeMsg(v => !v)}
