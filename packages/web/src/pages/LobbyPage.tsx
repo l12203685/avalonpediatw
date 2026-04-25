@@ -36,6 +36,9 @@ export default function LobbyPage(): JSX.Element {
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [timedOut, setTimedOut] = useState(false);
+  // Edward 2026-04-25: collapse R1/R2 swap + Oberon always-fail under "更多規則".
+  // Default closed so vanilla rules stay quiet; lake stays always-visible.
+  const [showMoreRules, setShowMoreRules] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Timeout: if room state never arrives, let the user go back
@@ -282,7 +285,9 @@ export default function LobbyPage(): JSX.Element {
                             : 'bg-gray-800/40 border-gray-700 text-gray-500 hover:border-gray-500'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-0.5">
+                        {/* Edward 2026-04-25: special-role cards show title + toggle only,
+                            description text removed for cleaner lobby UI. */}
+                        <div className="flex items-center justify-between">
                           <span className="font-bold">
                             {key === 'percival' ? '派西維爾 + 莫甘娜' : info.label}
                           </span>
@@ -290,7 +295,6 @@ export default function LobbyPage(): JSX.Element {
                             {enabled ? '開' : '關'}
                           </span>
                         </div>
-                        <p className="text-gray-500 text-xs leading-tight">{info.description}</p>
                       </button>
                     );
                   })}
@@ -349,39 +353,58 @@ export default function LobbyPage(): JSX.Element {
                     )}
                   </div>
 
-                  {/* R1/R2 quest size swap */}
-                  <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer">
-                    <div className="flex-1 pr-3">
-                      <div className="text-sm font-bold text-white">第 1/2 輪人數對調 (Swap R1/R2)</div>
-                      <p className="text-xs text-gray-500 leading-tight mt-0.5">
-                        交換第一、二輪任務所需人數（例如 2/3 → 3/2）
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(room.roleOptions?.swapR1R2)}
-                      onChange={() => handleToggleAdvanced('swapR1R2')}
-                      className="w-5 h-5 accent-amber-500 flex-shrink-0"
-                    />
-                  </label>
+                  {/* Edward 2026-04-25: collapse R1/R2 swap + Oberon-always-fail
+                      behind a "更多規則" toggle. Default closed; both toggles
+                      default-false at server level so collapsed state matches
+                      vanilla Avalon. Lady of the Lake stays above (always visible). */}
+                  <button
+                    type="button"
+                    onClick={() => setShowMoreRules(v => !v)}
+                    className="w-full flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 text-sm font-bold text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
+                    aria-expanded={showMoreRules}
+                    aria-controls="lobby-more-rules"
+                  >
+                    <span>更多規則 (More Rules)</span>
+                    {showMoreRules ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
 
-                  {/* Oberon must always fail — applies whenever Oberon is in
-                      play (canonical evil toggle or 9-variant forces him in).
-                      Default OFF so vanilla Avalon is unchanged. */}
-                  <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer">
-                    <div className="flex-1 pr-3">
-                      <div className="text-sm font-bold text-white">奧伯倫必出失敗 (Oberon Must Fail)</div>
-                      <p className="text-xs text-gray-500 leading-tight mt-0.5">
-                        開啟後任務階段奧伯倫強制投出失敗票，無論 AI 或真人（介面僅顯示失敗按鈕）
-                      </p>
+                  {showMoreRules && (
+                    <div id="lobby-more-rules" className="space-y-2">
+                      {/* R1/R2 quest size swap */}
+                      <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer">
+                        <div className="flex-1 pr-3">
+                          <div className="text-sm font-bold text-white">第 1/2 輪人數對調 (Swap R1/R2)</div>
+                          <p className="text-xs text-gray-500 leading-tight mt-0.5">
+                            交換第一、二輪任務所需人數（例如 2/3 → 3/2）
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(room.roleOptions?.swapR1R2)}
+                          onChange={() => handleToggleAdvanced('swapR1R2')}
+                          className="w-5 h-5 accent-amber-500 flex-shrink-0"
+                        />
+                      </label>
+
+                      {/* Oberon must always fail — applies whenever Oberon is in
+                          play (canonical evil toggle or 9-variant forces him in).
+                          Default OFF so vanilla Avalon is unchanged. */}
+                      <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer">
+                        <div className="flex-1 pr-3">
+                          <div className="text-sm font-bold text-white">奧伯倫必出失敗 (Oberon Must Fail)</div>
+                          <p className="text-xs text-gray-500 leading-tight mt-0.5">
+                            開啟後任務階段奧伯倫強制投出失敗票，無論 AI 或真人（介面僅顯示失敗按鈕）
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((room.roleOptions as unknown as Record<string, boolean>)?.oberonAlwaysFail)}
+                          onChange={() => handleToggleAdvanced('oberonAlwaysFail')}
+                          className="w-5 h-5 accent-amber-500 flex-shrink-0"
+                        />
+                      </label>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={Boolean((room.roleOptions as unknown as Record<string, boolean>)?.oberonAlwaysFail)}
-                      onChange={() => handleToggleAdvanced('oberonAlwaysFail')}
-                      className="w-5 h-5 accent-amber-500 flex-shrink-0"
-                    />
-                  </label>
+                  )}
 
                   {/* 9-player variant (only shown for 9-player tables) */}
                   {playerList.length === 9 && (
