@@ -3,6 +3,7 @@ import PlayerCard from './PlayerCard';
 import { motion } from 'framer-motion';
 import audioService from '../services/audio';
 import { useEffect, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface GameBoardProps {
   room: Room;
@@ -69,6 +70,7 @@ export default function GameBoard({
   onSeatClick,
   loyalView = false,
 }: GameBoardProps): JSX.Element {
+  const { t } = useTranslation('game');
   const players = Object.values(room.players);
   const playerIds = Object.keys(room.players);
   const leaderId = playerIds[room.leaderIndex % playerIds.length];
@@ -138,11 +140,34 @@ export default function GameBoard({
   // PlayerCard can flash a 任務牌 (success O / fail X) badge when this player
   // participated in the most recent completed quest. Only the latest quest
   // counts — past rounds are visible in the scoresheet / mission track.
+  // Edward 21:52 #7 corrected: PlayerCard 收的 prop 改成
+  // `lastQuestParticipation: 'success' | 'fail' | null`，這裡 null 明示「該玩家
+  // 沒參與最後任務 → 不顯示盾」（之前 undefined 也行得通，但 null 更明確）。
   const lastQuestRecord = room.questHistory.length > 0
     ? room.questHistory[room.questHistory.length - 1]
     : undefined;
   const lastQuestParticipants = new Set<string>(lastQuestRecord?.team ?? []);
   const lastQuestResult: 'success' | 'fail' | undefined = lastQuestRecord?.result;
+
+  // Edward 2026-04-25 21:59「PlayerCard 黑白球常態保留」— last completed
+  // team-vote outcomes per player. Server clears `room.votes = {}` on phase
+  // transitions, so we read the persistent record from `room.voteHistory`.
+  // PlayerCard renders the persistent token only when NOT currently in a
+  // voting round (the in-flight `hasVoted`/`voted` props take precedence).
+  const lastCompletedVote = room.voteHistory.length > 0
+    ? room.voteHistory[room.voteHistory.length - 1]
+    : undefined;
+  const lastVotePerPlayer: Record<string, boolean> = lastCompletedVote?.votes ?? {};
+
+  // Edward 2026-04-25 22:04 game-end role-label — 砍 GamePage inline reveal
+  // panel 後 PlayerCard 自帶角色名 chip. 只在 room.state === 'ended' 派發,
+  // gameplay 中不傳 (chip 不渲染). i18n 字典已在 game.json roleLabel.* 預先
+  // 寫好 8 個角色 + unknown 兜底.
+  const isGameEnded = room.state === 'ended';
+  const resolveRoleLabel = (role: string | null | undefined): string | undefined => {
+    if (!role) return undefined;
+    return t(`roleLabel.${role}`, { defaultValue: t('roleLabel.unknown', { defaultValue: '未知' }) });
+  };
 
   const renderPlayerCard = (player: Player, seatIndex: number, side: 'left' | 'right'): JSX.Element => {
     const shieldSelected = Boolean(selectedTeamIds?.has(player.id));
@@ -167,6 +192,17 @@ export default function GameBoard({
               ? undefined
               : room.votes[player.id]
           }
+          // Edward 2026-04-25 21:59「黑白球常態保留」— pass the player's last
+          // completed vote so PlayerCard renders the persistent token in
+          // non-voting phases. Only meaningful when NOT in voting state and
+          // when the player has a historical vote on record.
+          lastVoteApproved={
+            room.state === 'voting'
+              ? undefined
+              : Object.prototype.hasOwnProperty.call(lastVotePerPlayer, player.id)
+              ? lastVotePerPlayer[player.id]
+              : undefined
+          }
           isLeader={player.id === leaderId}
           isOnQuestTeam={room.questTeam.includes(player.id)}
           seatNumber={seatIndex + 1}
@@ -176,10 +212,18 @@ export default function GameBoard({
           shieldSelected={shieldSelected}
           onShieldClick={isPicking ? onSeatClick : undefined}
           isLadyHolder={room.ladyOfTheLakeHolder === player.id}
-          lastQuestResult={
-            lastQuestParticipants.has(player.id) ? lastQuestResult : undefined
+          lastQuestParticipation={
+            lastQuestRecord === undefined
+              ? undefined
+              : lastQuestParticipants.has(player.id)
+              ? lastQuestResult ?? null
+              : null
           }
           loyalView={loyalView}
+          // Edward 2026-04-25 22:04 — game-end 角色名 chip + 刺殺標記;
+          // gameplay 中傳 undefined / false 維持 portrait 乾淨。
+          endGameRoleLabel={isGameEnded ? resolveRoleLabel(player.role) : undefined}
+          assassinated={isGameEnded && room.assassinTargetId === player.id}
         />
       </motion.div>
     );
