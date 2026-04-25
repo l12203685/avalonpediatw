@@ -260,8 +260,22 @@ function App(): JSX.Element {
 
   const showConnectionBanner = currentPlayer && socketStatus !== 'connected';
 
+  // Edward 2026-04-25 18:08 mobile root fix: routes that own a full-height
+  // single-viewport layout (LobbyPage / GamePage) need `h-[100dvh]` rather
+  // than `min-h-screen` so the inner overflow-hidden actually clips. We keep
+  // `min-h-screen` for the rest (HomePage / ProfilePage / WikiPage etc.) so
+  // long content pages still scroll naturally.
+  const fullViewportRoute =
+    gameState === 'lobby'
+    || gameState === 'playing'
+    || gameState === 'voting'
+    || gameState === 'ended';
+  const rootClass = fullViewportRoute
+    ? 'h-[100dvh] overflow-hidden bg-gradient-to-br from-avalon-dark to-avalon-card'
+    : 'min-h-screen bg-gradient-to-br from-avalon-dark to-avalon-card';
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-avalon-dark to-avalon-card">
+    <div className={rootClass}>
       {/* Connection status banner */}
       <AnimatePresence>
         {showConnectionBanner && (
