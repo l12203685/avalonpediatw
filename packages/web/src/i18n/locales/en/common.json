@@ -4,7 +4,6 @@
     "tagline": "The Resistance",
     "loading": "Loading…",
     "playersRange": "5-10 players / Real-time Online",
-    "footer": "🎭 A game of deception and logical deduction",
     "teamBattle": "Team Battle",
     "realtime": "Real-time"
   },
@@ -66,6 +65,8 @@
     "spectate": "Spectate"
   },
   "home": {
+    "title": "Avalon - Resistance",
+    "subtitle": "Hidden Identity · Logical Deduction · Mutual Deception",
     "createRoom": "Create Room",
     "joinRoom": "Join Room",
     "wikiAndGuide": "Wiki & Guide",

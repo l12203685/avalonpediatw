@@ -4,7 +4,6 @@
     "tagline": "抵抗組織",
     "loading": "載入中…",
     "playersRange": "5-10 人 / 即時連線對戰",
-    "footer": "🎭 欺騙與邏輯的推理遊戲",
     "teamBattle": "陣營對戰",
     "realtime": "即時連線"
   },
@@ -66,6 +65,8 @@
     "spectate": "觀戰"
   },
   "home": {
+    "title": "Avalon - Resistance",
+    "subtitle": "隱藏身分‧邏輯推理‧相互欺瞞",
     "createRoom": "建立房間",
     "joinRoom": "加入房間",
     "wikiAndGuide": "百科攻略",

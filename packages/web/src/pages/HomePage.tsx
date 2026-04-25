@@ -248,14 +248,14 @@ export default function HomePage(): JSX.Element {
     <div className="min-h-screen bg-black px-3 py-4 sm:p-4 overflow-x-hidden">
       {/* Background decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        {/* Edward 2026-04-25 18:28: ambient blurred logo as page background.
-            Replaces the top BrandHeader 大 logo — content (buttons / chat /
-            個資角落) now drives focus, while the logo lives as low-contrast
-            wallpaper. opacity 10% + blur-2xl 不搶焦點。 */}
+        {/* Edward 2026-04-25 19:18: ambient blurred logo as page background.
+            Switched back to /logo.png (含白字版) per final spec — title block
+            now lives as ambient backdrop while the new h1 + subtitle drive
+            focus above. opacity 10% + blur-2xl 不搶焦點。 */}
         <div
           aria-hidden="true"
           className="absolute inset-0 bg-no-repeat bg-center bg-contain opacity-10 blur-2xl"
-          style={{ backgroundImage: 'url(/logo-bg.png)' }}
+          style={{ backgroundImage: 'url(/logo.png)' }}
         />
         <motion.div
           animate={{
@@ -292,10 +292,18 @@ export default function HomePage(): JSX.Element {
               animate={{ opacity: 1, y: 0 }}
               className="text-center space-y-6 w-full"
             >
-              {/* Edward 2026-04-25 18:29: top BrandHeader removed — logo now
-                  appears as ambient blurred background (see fixed inset-0 div
-                  above). Content (buttons / chat) drives focus. BrandHeader
-                  component still used by LoginPage / Forgot / Reset pages. */}
+              {/* Edward 2026-04-25 19:18 final spec — title block sits above
+                  the 6-button grid. h1 「Avalon - Resistance」 大字, small
+                  subtitle 「隱藏身分‧邏輯推理‧相互欺瞞」. BrandHeader component
+                  still used by LoginPage / Forgot / Reset pages. */}
+              <div className="text-center pt-2">
+                <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white">
+                  {t('home.title', { defaultValue: 'Avalon - Resistance' })}
+                </h1>
+                <p className="mt-2 text-xs sm:text-sm text-zinc-400 tracking-wider">
+                  {t('home.subtitle', { defaultValue: '隱藏身分‧邏輯推理‧相互欺瞞' })}
+                </p>
+              </div>
 
               {/* Main content: 6-button grid + lobby chat */}
               <motion.div
@@ -485,15 +493,9 @@ export default function HomePage(): JSX.Element {
                 </motion.div>
               )}
 
-              {/* Footer */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="text-xs text-zinc-500 pt-4 border-t border-zinc-800"
-              >
-                <p>{t('app.footer')}</p>
-              </motion.div>
+              {/* Edward 2026-04-25 19:18: footer 「欺騙與邏輯的推理遊戲」
+                  removed per final spec — subtitle 「隱藏身分‧邏輯推理‧相互
+                  欺瞞」 已在頂端 h1 下方呈現，下方 footer 不再需要。 */}
             </motion.div>
           )}
 
