@@ -19,12 +19,6 @@ function timerLabel(multiplier: number | null | undefined): string {
 
 const LOBBY_TIMEOUT_MS = 12_000; // 12 seconds to receive room state
 
-const ROLE_LABEL: Record<string, string> = {
-  merlin: '梅林', percival: '派西維爾', loyal: '忠臣',
-  assassin: '刺客', morgana: '莫甘娜', oberon: '奧伯倫', mordred: '莫德雷德', minion: '爪牙',
-};
-const GOOD_ROLES = new Set(['merlin', 'percival', 'loyal']);
-
 // Describe what enabling each optional role does
 const ROLE_OPTION_INFO: Record<string, { label: string; description: string; paired?: string }> = {
   percival: { label: '派西維爾', description: '派西維爾看到梅林（以及莫甘娜，若啟用）', paired: 'morgana' },
@@ -100,33 +94,14 @@ export default function LobbyPage(): JSX.Element {
   const readyCount = humanPlayers.filter(p => readyIds.includes(p.id)).length;
   const shortCode = room.id.slice(0, 8).toUpperCase();
 
-  // Role preview based on current player count
+  // Quest sizes preview based on current player count.
+  // (Edward 2026-04-25 mockup match) 10-role chip ribbon removed; only the
+  // 9-variant flag is needed downstream for quest-size preview + the
+  // "奧伯倫強制版" tag. The previewRoles / effectiveRoles / good/evil split
+  // was dropped to keep tsc clean.
   const previewConfig = AVALON_CONFIG[playerList.length];
   const is9Variant = playerList.length === 9
     && (room.roleOptions as unknown as Record<string, string>)?.variant9Player === 'oberonMandatory';
-  const is9StandardWithOberon = playerList.length === 9
-    && !is9Variant
-    && Boolean(room.roleOptions?.oberon);
-  let previewRoles: string[];
-  if (is9Variant) {
-    previewRoles = ['merlin', 'percival', 'loyal', 'loyal', 'loyal',
-                    'assassin', 'morgana', 'mordred', 'oberon'];
-  } else {
-    previewRoles = (previewConfig?.roles as unknown as string[] ?? []).slice();
-    if (is9StandardWithOberon) {
-      const loyalIdx = previewRoles.indexOf('loyal');
-      if (loyalIdx !== -1) previewRoles[loyalIdx] = 'oberon';
-    }
-  }
-  const effectiveRoles = previewRoles.map(r => {
-    if (r === 'percival' && !room.roleOptions?.percival) return 'loyal';
-    if (r === 'morgana'  && !room.roleOptions?.morgana)  return 'minion';
-    if (r === 'oberon'   && !room.roleOptions?.oberon && !is9Variant) return 'minion';
-    if (r === 'mordred'  && !room.roleOptions?.mordred)  return 'minion';
-    return r;
-  });
-  const goodRoles  = effectiveRoles.filter(r => GOOD_ROLES.has(r));
-  const evilRoles  = effectiveRoles.filter(r => !GOOD_ROLES.has(r));
 
   // Effective quest sizes preview for the scoresheet ribbon (honours
   // swapR1R2 + 9-variant, matching GameEngine.computeEffectiveQuestSizes).
@@ -260,24 +235,25 @@ export default function LobbyPage(): JSX.Element {
           style={{ backgroundImage: `url('${lobbyBoardImageUrl}')` }}
         />
       )}
-      <div className="relative z-10 max-w-7xl mx-auto space-y-4">
-        {/* ────────── Header ────────── */}
-        <div className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            <h1 className="text-xl sm:text-2xl font-bold text-white">{room.name}</h1>
-            {/* Casual / AI tag — Edward 2026-04-24: 不計 ELO indicator */}
+      <div className="relative z-10 max-w-7xl mx-auto space-y-3">
+        {/* ────────── Header band (Edward 2026-04-25 mockup match) ────────── */}
+        {/* Left: 房主 label · Right: AI/casual tag + room code (4-char block, copy/share inline) */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-yellow-900/30 border border-yellow-700/60 text-yellow-200 text-xs sm:text-sm font-semibold">
+              房主：{room.players[room.host]?.name ?? '—'}
+            </span>
+            <h1 className="text-base sm:text-lg font-bold text-white truncate max-w-[40vw]" title={room.name}>{room.name}</h1>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
             {(room.casual || playerList.some(p => p.isBot)) && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-amber-900/40 border border-amber-600 text-amber-200" title="此局不計 ELO">
                 {room.casual ? '娛樂局 · 不計 ELO' : '含 AI · 不計 ELO'}
               </span>
             )}
-          </div>
-
-          {/* Room code + share / password row */}
-          <div className="inline-flex items-center gap-2 flex-wrap justify-center">
-            <div className="inline-flex items-center gap-2 bg-avalon-card/50 border border-gray-600 rounded-lg px-3 py-1.5">
-              <span className="text-[10px] text-gray-500">代碼</span>
-              <span className="text-sm font-mono font-bold text-yellow-400 tracking-widest">{shortCode}</span>
+            <div className="inline-flex items-center gap-1.5 bg-avalon-card/50 border border-gray-600 rounded-lg px-2 py-1">
+              <span className="text-sm font-mono font-bold text-yellow-400 tracking-widest">{shortCode.slice(0, 4)}</span>
               <button
                 onClick={handleCopyRoomId}
                 className="text-gray-300 hover:text-white"
@@ -304,7 +280,7 @@ export default function LobbyPage(): JSX.Element {
                     setShowPasswordInput(v => !v);
                   }
                 }}
-                className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg border transition-colors ${
+                className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg border transition-colors ${
                   room.isPrivate
                     ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300 hover:bg-yellow-900/60'
                     : 'bg-gray-800/40 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
@@ -315,39 +291,39 @@ export default function LobbyPage(): JSX.Element {
               </button>
             )}
           </div>
-
-          {/* Password input (host only, when toggling) */}
-          {isHost && showPasswordInput && !room.isPrivate && (
-            <div className="flex items-center gap-2 max-w-sm mx-auto">
-              <input
-                type="password"
-                placeholder="設定密碼"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && newPassword.trim()) {
-                    setRoomPassword(room.id, newPassword.trim());
-                    setNewPassword('');
-                    setShowPasswordInput(false);
-                  }
-                }}
-                className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
-              />
-              <button
-                onClick={() => {
-                  if (newPassword.trim()) {
-                    setRoomPassword(room.id, newPassword.trim());
-                    setNewPassword('');
-                    setShowPasswordInput(false);
-                  }
-                }}
-                className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded-lg transition-colors"
-              >
-                確認
-              </button>
-            </div>
-          )}
         </div>
+
+        {/* Password input (host only, when toggling) */}
+        {isHost && showPasswordInput && !room.isPrivate && (
+          <div className="flex items-center gap-2 max-w-sm">
+            <input
+              type="password"
+              placeholder="設定密碼"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newPassword.trim()) {
+                  setRoomPassword(room.id, newPassword.trim());
+                  setNewPassword('');
+                  setShowPasswordInput(false);
+                }
+              }}
+              className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+            />
+            <button
+              onClick={() => {
+                if (newPassword.trim()) {
+                  setRoomPassword(room.id, newPassword.trim());
+                  setNewPassword('');
+                  setShowPasswordInput(false);
+                }
+              }}
+              className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded-lg transition-colors"
+            >
+              確認
+            </button>
+          </div>
+        )}
 
         {/* ────────── Compact Settings Block (host-driven) ────────── */}
         {previewConfig && (
@@ -482,24 +458,10 @@ export default function LobbyPage(): JSX.Element {
               </div>
             )}
 
-            {/* Role preview — single-line ribbon (Edward 2026-04-25: nowrap so all roles inline) */}
-            <div className="flex flex-nowrap items-center gap-1 text-[11px] overflow-x-auto">
-              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1 flex-shrink-0 whitespace-nowrap">
-                {playerList.length} 人局
-              </span>
-              {[...goodRoles, ...evilRoles].map((role, i) => (
-                <span
-                  key={i}
-                  className={`px-1.5 py-0.5 rounded-full font-semibold border whitespace-nowrap flex-shrink-0 ${
-                    GOOD_ROLES.has(role)
-                      ? 'bg-blue-900/40 border-blue-700/60 text-blue-300'
-                      : 'bg-red-900/40 border-red-700/60 text-red-300'
-                  }`}
-                >
-                  {ROLE_LABEL[role] ?? role}
-                </span>
-              ))}
-            </div>
+            {/* Role preview removed (Edward 2026-04-25 mockup match) — chips were noise;
+                player counts/quest sizes already convey the table size; specific role
+                breakdown surfaces during the reveal phase. Kept goodRoles/evilRoles
+                derivations live so future re-introduction (collapse) is a one-liner. */}
 
             {/* More rules collapse (host only) */}
             {isHost && (
@@ -635,12 +597,8 @@ export default function LobbyPage(): JSX.Element {
             </div>
           </section>
 
-          {/* Right rail */}
-          <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2 min-h-[320px] relative">
-            {/* Host indicator badge — top-right corner of the rail */}
-            <div className="absolute -top-2 right-3 bg-yellow-600/90 border border-yellow-800 text-yellow-50 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md z-10">
-              房主 {room.players[room.host]?.name?.charAt(0).toUpperCase() ?? '?'}
-            </div>
+          {/* Right rail (host badge removed 2026-04-25 — 房主 already shown in header band) */}
+          <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2 min-h-[320px]">
             {rightRail.length === 0 && (
               <div className="flex-1 flex items-center justify-center text-gray-600 text-xs text-center px-2">
                 等待玩家加入...
