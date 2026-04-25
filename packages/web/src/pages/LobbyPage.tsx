@@ -1,18 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { kickPlayer, addBot, removeBot, leaveRoom, setMaxPlayers, setRoleOptions, toggleReady, setRoomPassword, startGame, setTimerMultiplier } from '../services/socket';
-import { Users, Play, Copy, Check, Link, X, Bot, LogOut, ChevronUp, ChevronDown, Lock, Unlock, ArrowLeft, Clock } from 'lucide-react';
-import { AVALON_CONFIG, TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
+import { Users, Play, Copy, Check, Link, X, LogOut, ChevronUp, ChevronDown, Lock, Unlock, ArrowLeft, Clock } from 'lucide-react';
+import { AVALON_CONFIG, TIMER_MULTIPLIER_OPTIONS, TimerMultiplier, Player } from '@avalon/shared';
+import PlayerCard from '../components/PlayerCard';
+import ChatPanel from '../components/ChatPanel';
+import { motion } from 'framer-motion';
 
 // Friendly label for the room-level thinking-time multiplier.
 function timerLabel(multiplier: number | null | undefined): string {
-  if (multiplier === null) return '無限 (不計時)';
-  if (multiplier === 0.5) return '0.5x (加速)';
+  if (multiplier === null) return '無限';
+  if (multiplier === 0.5) return '0.5x';
   if (multiplier === 1.5) return '1.5x';
-  if (multiplier === 2) return '2x (慢節奏)';
-  return '1x (標準)';
+  if (multiplier === 2) return '2x';
+  return '1x';
 }
-import ChatPanel from '../components/ChatPanel';
 
 const LOBBY_TIMEOUT_MS = 12_000; // 12 seconds to receive room state
 
@@ -101,14 +103,9 @@ export default function LobbyPage(): JSX.Element {
   const previewConfig = AVALON_CONFIG[playerList.length];
   const is9Variant = playerList.length === 9
     && (room.roleOptions as unknown as Record<string, string>)?.variant9Player === 'oberonMandatory';
-  // #90 Part 1 — 9-player standard + Oberon opt-in: mirror the server's
-  // loyal → oberon swap so the preview matches assignRoles semantics.
   const is9StandardWithOberon = playerList.length === 9
     && !is9Variant
     && Boolean(room.roleOptions?.oberon);
-  // Apply roleOptions to get effective role list for preview. The
-  // 9-player variant replaces the standard 6G/3E split with 5G/4E +
-  // mandatory Oberon, matching GameEngine.assignRoles semantics.
   let previewRoles: string[];
   if (is9Variant) {
     previewRoles = ['merlin', 'percival', 'loyal', 'loyal', 'loyal',
@@ -123,9 +120,6 @@ export default function LobbyPage(): JSX.Element {
   const effectiveRoles = previewRoles.map(r => {
     if (r === 'percival' && !room.roleOptions?.percival) return 'loyal';
     if (r === 'morgana'  && !room.roleOptions?.morgana)  return 'minion';
-    // 9-variant forces Oberon regardless of the toggle. 9p standard with
-    // Oberon opt-in keeps the swap in place — the toggle check below is
-    // only meaningful where Oberon sits in the canonical config (7p/10p).
     if (r === 'oberon'   && !room.roleOptions?.oberon && !is9Variant) return 'minion';
     if (r === 'mordred'  && !room.roleOptions?.mordred)  return 'minion';
     return r;
@@ -148,7 +142,6 @@ export default function LobbyPage(): JSX.Element {
     if (!room.roleOptions) return;
     const opts = (room.roleOptions as unknown) as Record<string, boolean>;
     const newVal = !opts[key];
-    // Percival and Morgana are paired — toggle together
     const info = ROLE_OPTION_INFO[key];
     const updates: Record<string, boolean> = { [key]: newVal };
     if (info.paired) updates[info.paired] = newVal;
@@ -168,13 +161,7 @@ export default function LobbyPage(): JSX.Element {
     setRoleOptions(room.id, { [key]: value });
   };
 
-  // Lady of the Lake default (Edward 2026-04-24 "7 人以上預設勾選"):
-  //   - host has NOT touched the toggle (field undefined) → auto-on at
-  //     playerCount ≥ 7, off otherwise
-  //   - explicit false → off (host opted out)
-  //   - explicit true  → on (host opted in)
-  // Mirrors GameEngine.startGame so the lobby preview matches the
-  // value the engine will resolve when the game actually starts.
+  // Lady of the Lake default (Edward 2026-04-24 "7 人以上預設勾選").
   const ladyFieldUndefined = typeof ((room.roleOptions as unknown) as Record<string, unknown>)?.ladyOfTheLake === 'undefined';
   const ladyDefaultOn = ladyFieldUndefined && playerList.length >= 7;
   const ladyChecked = ladyFieldUndefined
@@ -196,345 +183,221 @@ export default function LobbyPage(): JSX.Element {
     });
   };
 
-  return (
-    <>
-    <div className="flex items-center justify-center min-h-screen p-4">
-      <div className="w-full max-w-2xl space-y-6">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-2xl sm:text-4xl font-bold text-white mb-3">{room.name}</h1>
+  // Edward 2026-04-25 layout redesign: lobby + game share the same 3-col grid
+  // (left rail | center chat | right rail). In lobby the rails show
+  // PlayerCards (no roles/votes — `room.state === 'lobby'`); the center
+  // column hosts the inline ChatPanel. Settings live in a compressed top
+  // panel above the rails so the host can configure without scrolling far.
+  const splitIndex = Math.ceil(playerList.length / 2);
+  const rightRail = playerList
+    .slice(0, splitIndex)
+    .map((player, i) => ({ player, seatIndex: i }));
+  const leftRail = playerList
+    .slice(splitIndex)
+    .map((player, i) => ({ player, seatIndex: splitIndex + i }))
+    .reverse();
 
-          {/* Casual / AI-inclusive indicator — Edward 2026-04-24 14:43:
-              勾選"娛樂局"或有 AI 參與時，此局不計入 ELO。顯示 tag 讓
-              玩家清楚當前房間的排位狀態。 */}
-          {(room.casual || playerList.some(p => p.isBot)) && (
-            <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
-              {room.casual && (
-                <span
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-900/40 border border-amber-600 text-amber-200"
-                  title="此局為娛樂局，戰績不計入 ELO"
-                  data-testid="lobby-casual-tag"
-                >
-                  娛樂局 · 不計 ELO
-                </span>
-              )}
-              {!room.casual && playerList.some(p => p.isBot) && (
-                <span
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-900/40 border border-blue-600 text-blue-200"
-                  title="房間內有 AI 玩家，此局不計入 ELO"
-                  data-testid="lobby-ai-tag"
-                >
-                  含 AI · 不計 ELO
-                </span>
-              )}
+  // Lobby-only kick overlay so the host can remove someone without losing the
+  // unified rail layout. PlayerCard stays untouched — we wrap it with an
+  // absolute-positioned X button that only renders for the host.
+  const renderLobbyPlayer = (player: Player, seatIndex: number, side: 'left' | 'right'): JSX.Element => {
+    return (
+      <div key={player.id} className="relative">
+        <PlayerCard
+          player={player}
+          isCurrentPlayer={player.id === currentPlayer.id}
+          hasVoted={false}
+          isLeader={false}
+          isOnQuestTeam={false}
+          seatNumber={seatIndex + 1}
+          side={side}
+          isActiveTurn={false}
+        />
+        {/* Ready badge (non-host humans only) — top-right of the card row */}
+        {!player.isBot && player.id !== room.host && (
+          <span className={`absolute top-1 ${side === 'left' ? 'left-1' : 'right-1'} text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full font-bold border z-30 ${
+            readyIds.includes(player.id)
+              ? 'bg-blue-900/70 border-blue-500 text-blue-200'
+              : 'bg-gray-800/70 border-gray-600 text-gray-500'
+          }`}>
+            {readyIds.includes(player.id) ? '✓ 就緒' : '…'}
+          </span>
+        )}
+        {/* Kick X — host only, never on self. Bottom corner so it doesn't
+            collide with seat badge / vote ball. */}
+        {isHost && player.id !== currentPlayer.id && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (player.isBot) removeBot(room.id, player.id);
+              else kickPlayer(room.id, player.id);
+            }}
+            className={`absolute bottom-1 ${side === 'left' ? 'left-1' : 'right-1'} p-1 bg-red-900/70 hover:bg-red-800 border border-red-700 text-red-200 hover:text-white rounded-full transition-colors z-30`}
+            title={player.isBot ? `移除機器人` : `踢出 ${player.name}`}
+          >
+            <X size={11} />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black p-3 sm:p-4">
+      <div className="max-w-7xl mx-auto space-y-4">
+        {/* ────────── Header ────────── */}
+        <div className="text-center space-y-2">
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-bold text-white">{room.name}</h1>
+            {/* Casual / AI tag — Edward 2026-04-24: 不計 ELO indicator */}
+            {(room.casual || playerList.some(p => p.isBot)) && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-amber-900/40 border border-amber-600 text-amber-200" title="此局不計 ELO">
+                {room.casual ? '娛樂局 · 不計 ELO' : '含 AI · 不計 ELO'}
+              </span>
+            )}
+          </div>
+
+          {/* Room code + share / password row */}
+          <div className="inline-flex items-center gap-2 flex-wrap justify-center">
+            <div className="inline-flex items-center gap-2 bg-avalon-card/50 border border-gray-600 rounded-lg px-3 py-1.5">
+              <span className="text-[10px] text-gray-500">代碼</span>
+              <span className="text-sm font-mono font-bold text-yellow-400 tracking-widest">{shortCode}</span>
+              <button
+                onClick={handleCopyRoomId}
+                className="text-gray-300 hover:text-white"
+                title="複製代碼"
+              >
+                {copied === 'code' ? <Check size={13} className="text-blue-400" /> : <Copy size={13} />}
+              </button>
+              <button
+                onClick={handleCopyLink}
+                className="text-blue-300 hover:text-blue-100 ml-1 border-l border-gray-700 pl-2"
+                title="複製邀請連結"
+              >
+                {copied === 'link' ? <Check size={13} className="text-amber-400" /> : <Link size={13} />}
+              </button>
+            </div>
+
+            {/* Password / privacy toggle (host only) */}
+            {isHost && (
+              <button
+                onClick={() => {
+                  if (room.isPrivate) {
+                    setRoomPassword(room.id, null);
+                  } else {
+                    setShowPasswordInput(v => !v);
+                  }
+                }}
+                className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg border transition-colors ${
+                  room.isPrivate
+                    ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300 hover:bg-yellow-900/60'
+                    : 'bg-gray-800/40 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                }`}
+                data-testid="lobby-password-toggle"
+              >
+                {room.isPrivate ? <><Lock size={11} /> 已加密</> : <><Unlock size={11} /> 公開</>}
+              </button>
+            )}
+          </div>
+
+          {/* Password input (host only, when toggling) */}
+          {isHost && showPasswordInput && !room.isPrivate && (
+            <div className="flex items-center gap-2 max-w-sm mx-auto">
+              <input
+                type="password"
+                placeholder="設定密碼"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newPassword.trim()) {
+                    setRoomPassword(room.id, newPassword.trim());
+                    setNewPassword('');
+                    setShowPasswordInput(false);
+                  }
+                }}
+                className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+              />
+              <button
+                onClick={() => {
+                  if (newPassword.trim()) {
+                    setRoomPassword(room.id, newPassword.trim());
+                    setNewPassword('');
+                    setShowPasswordInput(false);
+                  }
+                }}
+                className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded-lg transition-colors"
+              >
+                確認
+              </button>
             </div>
           )}
-
-          {/* Room ID with copy buttons */}
-          <div className="inline-flex items-center gap-2 sm:gap-3 bg-avalon-card/50 border border-gray-600 rounded-xl px-3 sm:px-5 py-2 sm:py-3">
-            <div className="text-left">
-              <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 sm:mb-1">房間代碼 (Room Code — share with friends)</p>
-              <p className="text-base sm:text-lg font-mono font-bold text-yellow-400 tracking-widest">{shortCode}</p>
-            </div>
-            <button
-              onClick={handleCopyRoomId}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                copied === 'code'
-                  ? 'bg-blue-700/60 text-blue-300 border border-blue-600'
-                  : 'bg-gray-700/60 hover:bg-gray-600/60 text-gray-300 border border-gray-600'
-              }`}
-            >
-              {copied === 'code' ? <Check size={14} /> : <Copy size={14} />}
-              {copied === 'code' ? '已複製！' : '複製'}
-            </button>
-            <button
-              onClick={handleCopyLink}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                copied === 'link'
-                  ? 'bg-amber-700/60 text-amber-300 border border-amber-600'
-                  : 'bg-blue-700/60 hover:bg-blue-600/60 text-blue-300 border border-blue-600'
-              }`}
-              title="複製邀請連結"
-            >
-              {copied === 'link' ? <Check size={14} /> : <Link size={14} />}
-              {copied === 'link' ? '已複製！' : '邀請連結'}
-            </button>
-          </div>
         </div>
 
-        {/* Role configuration + preview */}
+        {/* ────────── Compact Settings Block (host-driven) ────────── */}
         {previewConfig && (
-          <div className="bg-avalon-card/30 border border-gray-700 rounded-xl px-4 py-3 space-y-3">
-            {/* Optional role toggles (host only) */}
+          <div className="bg-avalon-card/30 border border-gray-700 rounded-xl px-3 py-3 space-y-3">
+            {/* Special roles — horizontal toggle row */}
             {isHost && (
               <div>
-                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">特殊角色設定</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(Object.keys(ROLE_OPTION_INFO) as (keyof typeof ROLE_OPTION_INFO)[]).map(key => {
-                    const info = ROLE_OPTION_INFO[key];
-                    const enabled = Boolean(((room.roleOptions as unknown) as Record<string, boolean>)?.[key]);
-                    // Skip paired role (morgana is controlled by percival toggle)
-                    if (key === 'morgana') return null;
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => handleToggleRole(key)}
-                        className={`text-left px-3 py-2 rounded-lg border text-xs transition-all ${
-                          enabled
-                            ? 'bg-amber-900/40 border-amber-600 text-amber-200'
-                            : 'bg-gray-800/40 border-gray-700 text-gray-500 hover:border-gray-500'
-                        }`}
-                      >
-                        {/* Edward 2026-04-25: special-role cards show title + toggle only,
-                            description text removed for cleaner lobby UI. */}
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold">
-                            {key === 'percival' ? '派西維爾 + 莫甘娜' : info.label}
-                          </span>
-                          <span className={`text-xs font-bold ${enabled ? 'text-amber-400' : 'text-gray-600'}`}>
-                            {enabled ? '開' : '關'}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* #90 Advanced rule options (host only) */}
-            {isHost && (
-              <div>
-                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
-                  進階規則
-                </p>
-                <div className="space-y-2">
-                  {/* Lady of the Lake enable + starting seat */}
-                  <div className="bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2">
-                    <label className="flex items-center justify-between cursor-pointer">
-                      <div className="flex-1 pr-3">
-                        <div className="text-sm font-bold text-white">湖中女神</div>
-                        <p className="text-xs text-gray-500 leading-tight mt-0.5">
-                          任務 2 起輪流互查陣營；可公開宣告或保持沉默
-                          {ladyFieldUndefined && ladyDefaultOn && (
-                            <span className="text-amber-400 ml-1">(預設開啟：7 人以上)</span>
-                          )}
-                        </p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={ladyChecked}
-                        onChange={() => {
-                          // First interaction solidifies the field — send
-                          // the current resolved value flipped.
-                          setRoleOptions(room.id, { ladyOfTheLake: !ladyChecked });
-                        }}
-                        className="w-5 h-5 accent-amber-500 flex-shrink-0"
-                      />
-                    </label>
-
-                    {ladyChecked && playerList.length >= 7 && (
-                      <div className="mt-2 pt-2 border-t border-gray-700/60">
-                        <p className="text-xs text-gray-500 mb-1.5">起始湖女持有者</p>
-                        <select
-                          value={(room.roleOptions as unknown as Record<string, string>)?.ladyStart ?? 'random'}
-                          onChange={e => handleSelectAdvanced('ladyStart', e.target.value)}
-                          className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500"
+                <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">特殊角色</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.keys(ROLE_OPTION_INFO) as (keyof typeof ROLE_OPTION_INFO)[])
+                    .filter(k => k !== 'morgana')
+                    .map(key => {
+                      const info = ROLE_OPTION_INFO[key];
+                      const enabled = Boolean(((room.roleOptions as unknown) as Record<string, boolean>)?.[key]);
+                      const label = key === 'percival' ? '派西維爾 + 莫甘娜' : info.label;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => handleToggleRole(key)}
+                          className={`px-2.5 py-1 rounded-md border text-[11px] sm:text-xs font-semibold transition-all ${
+                            enabled
+                              ? 'bg-amber-900/40 border-amber-600 text-amber-200'
+                              : 'bg-gray-800/40 border-gray-700 text-gray-500 hover:border-gray-500'
+                          }`}
                         >
-                          <option value="random">隨機</option>
-                          <option value="seat0">隊長右手邊 (Seat 0 · Leader's right)</option>
-                          {Array.from({ length: playerList.length }, (_, i) => (
-                            <option key={i + 1} value={`seat${i + 1}`}>
-                              座位 {i + 1} ({playerList[i]?.name ?? '—'})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Edward 2026-04-25: collapse all 4 advanced rules
-                      (R1/R2 swap, Oberon-always-fail, 9-player variant,
-                      inverted protection) behind a "更多規則" toggle.
-                      Default closed; all toggles default-false / variant
-                      defaults to standard so collapsed state matches
-                      vanilla Avalon. Lady of the Lake stays above
-                      (always visible). */}
-                  <button
-                    type="button"
-                    onClick={() => setShowMoreRules(v => !v)}
-                    className="w-full flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 text-sm font-bold text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
-                    aria-expanded={showMoreRules}
-                    aria-controls="lobby-more-rules"
-                  >
-                    <span>更多規則</span>
-                    {showMoreRules ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-
-                  {showMoreRules && (
-                    <div id="lobby-more-rules" className="space-y-2">
-                      {/* R1/R2 quest size swap */}
-                      <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer">
-                        <div className="flex-1 pr-3">
-                          <div className="text-sm font-bold text-white">第 1/2 輪人數對調 (Swap R1/R2)</div>
-                          <p className="text-xs text-gray-500 leading-tight mt-0.5">
-                            交換第一、二輪任務所需人數（例如 2/3 → 3/2）
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(room.roleOptions?.swapR1R2)}
-                          onChange={() => handleToggleAdvanced('swapR1R2')}
-                          className="w-5 h-5 accent-amber-500 flex-shrink-0"
-                        />
-                      </label>
-
-                      {/* Oberon must always fail — applies whenever Oberon is in
-                          play (canonical evil toggle or 9-variant forces him in).
-                          Default OFF so vanilla Avalon is unchanged. */}
-                      <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer">
-                        <div className="flex-1 pr-3">
-                          <div className="text-sm font-bold text-white">奧伯倫必出失敗</div>
-                          <p className="text-xs text-gray-500 leading-tight mt-0.5">
-                            開啟後任務階段奧伯倫強制投出失敗票，無論 AI 或真人（介面僅顯示失敗按鈕）
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={Boolean((room.roleOptions as unknown as Record<string, boolean>)?.oberonAlwaysFail)}
-                          onChange={() => handleToggleAdvanced('oberonAlwaysFail')}
-                          className="w-5 h-5 accent-amber-500 flex-shrink-0"
-                        />
-                      </label>
-
-                      {/* 9-player variant (only shown for 9-player tables).
-                          Edward 2026-04-25: moved inside "更多規則" collapse so
-                          base lobby stays minimal (Lady + role config only). */}
-                      {playerList.length === 9 && (
-                        <div className="bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 space-y-2">
-                          <div>
-                            <p className="text-sm font-bold text-white mb-1">9 人局變體 (9-Player Variant)</p>
-                            <p className="text-xs text-gray-500 leading-tight mb-2">
-                              奧伯倫強制版：5 好 4 壞、強制加入奧伯倫、任務人數改為 4/3/4/5/5
-                            </p>
-                            <select
-                              value={(room.roleOptions as unknown as Record<string, string>)?.variant9Player ?? 'standard'}
-                              onChange={e => handleSelectAdvanced('variant9Player', e.target.value)}
-                              className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500"
-                            >
-                              <option value="standard">標準 (Standard · 6 好 3 壞)</option>
-                              <option value="oberonMandatory">奧伯倫強制 (Oberon mandatory · 5 好 4 壞)</option>
-                            </select>
-                          </div>
-
-                          {/* Option 2 — inverted protection. Only enabled when
-                              variant9Player === 'oberonMandatory'. Server also
-                              auto-clears the flag when reverting to 'standard'
-                              so the stale-state risk is belt + braces. */}
-                          {(() => {
-                            const v9 = (room.roleOptions as unknown as Record<string, string>)?.variant9Player;
-                            const v9Enabled = v9 === 'oberonMandatory';
-                            const v9Opt2 = Boolean((room.roleOptions as unknown as Record<string, boolean>)?.variant9Option2);
-                            return (
-                              <label
-                                className={`flex items-center justify-between bg-gray-900/60 border rounded px-3 py-2 ${
-                                  v9Enabled ? 'cursor-pointer border-gray-600' : 'cursor-not-allowed border-gray-800 opacity-50'
-                                }`}
-                              >
-                                <div className="flex-1 pr-3">
-                                  <div className="text-sm font-bold text-white">
-                                    保護局反轉模式
-                                  </div>
-                                  <p className="text-xs text-gray-500 leading-tight mt-0.5">
-                                    僅限奧伯倫強制版。第 1/2/3/5 局「恰好 1 張失敗 = 任務失敗」，2+ 張失敗反而成功；第 4 局（保護局）維持原規則
-                                  </p>
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  checked={v9Enabled && v9Opt2}
-                                  disabled={!v9Enabled}
-                                  onChange={() => {
-                                    if (!v9Enabled) return;
-                                    handleToggleAdvanced('variant9Option2');
-                                  }}
-                                  className="w-5 h-5 accent-amber-500 flex-shrink-0"
-                                />
-                              </label>
-                            );
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                          {label}
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
             )}
 
-            {/* Password lock (host only) */}
-            {isHost && (
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">房間密碼</p>
-                  <button
-                    onClick={() => {
-                      if (room.isPrivate) {
-                        setRoomPassword(room.id, null);
-                      } else {
-                        setShowPasswordInput(v => !v);
-                      }
-                    }}
-                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors ${
-                      room.isPrivate
-                        ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300 hover:bg-yellow-900/60'
-                        : 'bg-gray-800/40 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
-                    }`}
+            {/* Lady + thinking time + max players — single-row meta strip */}
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              {/* Lady of the Lake */}
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ladyChecked}
+                  onChange={() => setRoleOptions(room.id, { ladyOfTheLake: !ladyChecked })}
+                  disabled={!isHost}
+                  className="w-4 h-4 accent-cyan-500"
+                />
+                <span className="text-gray-300 font-semibold">湖中女神</span>
+                {ladyChecked && playerList.length >= 7 && isHost && (
+                  <select
+                    value={(room.roleOptions as unknown as Record<string, string>)?.ladyStart ?? 'random'}
+                    onChange={e => handleSelectAdvanced('ladyStart', e.target.value)}
+                    className="bg-gray-900 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-white focus:outline-none focus:border-cyan-500"
                   >
-                    {room.isPrivate ? <><Lock size={11} /> 已加密 — 點擊解鎖</> : <><Unlock size={11} /> 公開 — 點擊設定密碼</>}
-                  </button>
-                </div>
-                {showPasswordInput && !room.isPrivate && (
-                  <div className="flex gap-2 mt-2">
-                    <input
-                      type="password"
-                      placeholder="設定密碼"
-                      value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && newPassword.trim()) {
-                          setRoomPassword(room.id, newPassword.trim());
-                          setNewPassword('');
-                          setShowPasswordInput(false);
-                        }
-                      }}
-                      className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
-                    />
-                    <button
-                      onClick={() => {
-                        if (newPassword.trim()) {
-                          setRoomPassword(room.id, newPassword.trim());
-                          setNewPassword('');
-                          setShowPasswordInput(false);
-                        }
-                      }}
-                      className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded-lg transition-colors"
-                    >
-                      確認
-                    </button>
-                  </div>
+                    <option value="random">隨機</option>
+                    <option value="seat0">隊長右手邊</option>
+                    {Array.from({ length: playerList.length }, (_, i) => (
+                      <option key={i + 1} value={`seat${i + 1}`}>
+                        座位 {i + 1}
+                      </option>
+                    ))}
+                  </select>
                 )}
-              </div>
-            )}
+              </label>
 
-            {/* Thinking-time multiplier — Edward 2026-04-25:「思考時間在遊戲
-                開始前可以調整」。房主在 lobby 狀態可改；遊戲開始後鎖死
-                （後端 handleSetTimerMultiplier 會拒絕 state !== 'lobby'）。 */}
-            <div>
-              <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
-                思考時間倍率
-              </p>
-              {isHost && room.state === 'lobby' ? (
-                <div className="flex items-center gap-2">
-                  <Clock size={13} className="text-blue-400 flex-shrink-0" />
+              {/* Thinking time */}
+              <div className="inline-flex items-center gap-1.5">
+                <Clock size={12} className="text-blue-400" />
+                {isHost && room.state === 'lobby' ? (
                   <select
                     value={room.timerConfig?.multiplier === null ? 'null' : String(room.timerConfig?.multiplier ?? 1)}
                     onChange={(e) => {
@@ -542,7 +405,7 @@ export default function LobbyPage(): JSX.Element {
                       const next: TimerMultiplier = v === 'null' ? null : (Number(v) as TimerMultiplier);
                       setTimerMultiplier(room.id, next);
                     }}
-                    className="flex-1 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-amber-500"
+                    className="bg-gray-900 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-white focus:outline-none focus:border-amber-500"
                     data-testid="lobby-thinking-time-select"
                   >
                     {TIMER_MULTIPLIER_OPTIONS.map(opt => (
@@ -554,219 +417,314 @@ export default function LobbyPage(): JSX.Element {
                       </option>
                     ))}
                   </select>
-                </div>
-              ) : (
-                <div className="inline-flex items-center gap-2 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-1.5">
-                  <Clock size={13} className="text-blue-400" />
-                  <span className="text-sm text-gray-200 font-semibold">{timerLabel(room.timerConfig?.multiplier)}</span>
+                ) : (
+                  <span className="text-gray-300 font-semibold">{timerLabel(room.timerConfig?.multiplier)}</span>
+                )}
+              </div>
+
+              {/* Max players (host only) */}
+              {isHost && (
+                <div className="inline-flex items-center gap-0.5 ml-auto">
+                  <span className="text-gray-500 mr-1">人數上限</span>
+                  <button
+                    onClick={() => setMaxPlayers(room.id, room.maxPlayers - 1)}
+                    disabled={room.maxPlayers <= Math.max(5, playerList.length)}
+                    className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronDown size={12} />
+                  </button>
+                  <span className="text-gray-300 w-6 text-center font-semibold">{room.maxPlayers}</span>
+                  <button
+                    onClick={() => setMaxPlayers(room.id, room.maxPlayers + 1)}
+                    disabled={room.maxPlayers >= 10}
+                    className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronUp size={12} />
+                  </button>
                 </div>
               )}
             </div>
 
-            {/* Quest size preview — honours swapR1R2 + 9-variant */}
+            {/* Quest sizes preview — single-line ribbon */}
             {previewQuestSizes.length > 0 && (
-              <div>
-                <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
-                  任務人數
-                  {room.roleOptions?.swapR1R2 && (
-                    <span className="text-amber-400 ml-2 normal-case tracking-normal">· R1/R2 已對調</span>
-                  )}
-                  {is9Variant && (
-                    <span className="text-amber-400 ml-2 normal-case tracking-normal">· 奧伯倫強制版</span>
-                  )}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {previewQuestSizes.map((sz, i) => (
-                    <span
-                      key={i}
-                      className="text-xs px-2 py-0.5 rounded-full font-semibold border bg-gray-800/40 border-gray-700 text-gray-300"
-                    >
-                      R{i + 1}: {sz} 人
-                    </span>
-                  ))}
-                </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1">任務人數</span>
+                {previewQuestSizes.map((sz, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-0.5 rounded-full font-semibold border bg-gray-800/40 border-gray-700 text-gray-300"
+                  >
+                    R{i + 1}: {sz} 人
+                  </span>
+                ))}
+                {room.roleOptions?.swapR1R2 && (
+                  <span className="text-amber-400 ml-1">· R1/R2 對調</span>
+                )}
+                {is9Variant && (
+                  <span className="text-amber-400 ml-1">· 奧伯倫強制版</span>
+                )}
               </div>
             )}
 
-            {/* Role preview */}
-            <div>
-              <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wider">
-                {playerList.length} 人局角色預覽
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {[...goodRoles, ...evilRoles].map((role, i) => (
-                  <span
-                    key={i}
-                    className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${
-                      GOOD_ROLES.has(role)
-                        ? 'bg-blue-900/40 border-blue-700/60 text-blue-300'
-                        : 'bg-red-900/40 border-red-700/60 text-red-300'
-                    }`}
-                  >
-                    {ROLE_LABEL[role] ?? role}
-                  </span>
-                ))}
-              </div>
+            {/* Role preview — single-line ribbon */}
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1">
+                {playerList.length} 人局
+              </span>
+              {[...goodRoles, ...evilRoles].map((role, i) => (
+                <span
+                  key={i}
+                  className={`px-2 py-0.5 rounded-full font-semibold border ${
+                    GOOD_ROLES.has(role)
+                      ? 'bg-blue-900/40 border-blue-700/60 text-blue-300'
+                      : 'bg-red-900/40 border-red-700/60 text-red-300'
+                  }`}
+                >
+                  {ROLE_LABEL[role] ?? role}
+                </span>
+              ))}
             </div>
+
+            {/* More rules collapse (host only) */}
+            {isHost && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowMoreRules(v => !v)}
+                  className="w-full flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
+                  aria-expanded={showMoreRules}
+                  aria-controls="lobby-more-rules"
+                >
+                  <span>更多規則</span>
+                  {showMoreRules ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+
+                {showMoreRules && (
+                  <div id="lobby-more-rules" className="space-y-2 mt-2">
+                    {/* R1/R2 quest size swap */}
+                    <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-1.5 cursor-pointer">
+                      <div className="flex-1 pr-3">
+                        <div className="text-xs font-bold text-white">第 1/2 輪人數對調</div>
+                        <p className="text-[10px] text-gray-500 leading-tight">交換第一、二輪任務所需人數</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(room.roleOptions?.swapR1R2)}
+                        onChange={() => handleToggleAdvanced('swapR1R2')}
+                        className="w-4 h-4 accent-amber-500 flex-shrink-0"
+                      />
+                    </label>
+
+                    {/* Oberon must always fail */}
+                    <label className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-1.5 cursor-pointer">
+                      <div className="flex-1 pr-3">
+                        <div className="text-xs font-bold text-white">奧伯倫必出失敗</div>
+                        <p className="text-[10px] text-gray-500 leading-tight">奧伯倫強制投出失敗票</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={Boolean((room.roleOptions as unknown as Record<string, boolean>)?.oberonAlwaysFail)}
+                        onChange={() => handleToggleAdvanced('oberonAlwaysFail')}
+                        className="w-4 h-4 accent-amber-500 flex-shrink-0"
+                      />
+                    </label>
+
+                    {/* 9-player variant */}
+                    {playerList.length === 9 && (
+                      <div className="bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2 space-y-2">
+                        <div>
+                          <p className="text-xs font-bold text-white mb-1">9 人局變體</p>
+                          <select
+                            value={(room.roleOptions as unknown as Record<string, string>)?.variant9Player ?? 'standard'}
+                            onChange={e => handleSelectAdvanced('variant9Player', e.target.value)}
+                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+                          >
+                            <option value="standard">標準 (6 好 3 壞)</option>
+                            <option value="oberonMandatory">奧伯倫強制 (5 好 4 壞)</option>
+                          </select>
+                        </div>
+
+                        {(() => {
+                          const v9 = (room.roleOptions as unknown as Record<string, string>)?.variant9Player;
+                          const v9Enabled = v9 === 'oberonMandatory';
+                          const v9Opt2 = Boolean((room.roleOptions as unknown as Record<string, boolean>)?.variant9Option2);
+                          return (
+                            <label
+                              className={`flex items-center justify-between bg-gray-900/60 border rounded px-3 py-1.5 ${
+                                v9Enabled ? 'cursor-pointer border-gray-600' : 'cursor-not-allowed border-gray-800 opacity-50'
+                              }`}
+                            >
+                              <div className="flex-1 pr-3">
+                                <div className="text-xs font-bold text-white">保護局反轉模式</div>
+                                <p className="text-[10px] text-gray-500 leading-tight">第 1/2/3/5 局恰好 1 張失敗 = 任務失敗</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={v9Enabled && v9Opt2}
+                                disabled={!v9Enabled}
+                                onChange={() => {
+                                  if (!v9Enabled) return;
+                                  handleToggleAdvanced('variant9Option2');
+                                }}
+                                className="w-4 h-4 accent-amber-500 flex-shrink-0"
+                              />
+                            </label>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Players */}
-        <div className="bg-avalon-card/50 border border-gray-600 rounded-lg p-3 sm:p-6">
-          <div className="flex items-center gap-2 mb-3 sm:mb-5">
-            <Users size={20} />
-            <h2 className="text-base sm:text-xl font-bold">
-              玩家列表 ({playerList.length}/{room.maxPlayers})
-            </h2>
-            {/* Host: adjust max players */}
-            {isHost && (
-              <div className="ml-auto flex items-center gap-1">
-                <button
-                  onClick={() => setMaxPlayers(room.id, room.maxPlayers - 1)}
-                  disabled={room.maxPlayers <= Math.max(5, playerList.length)}
-                  className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  title="減少人數上限"
-                >
-                  <ChevronDown size={14} />
-                </button>
-                <span className="text-xs text-gray-400 w-8 text-center">{room.maxPlayers}人</span>
-                <button
-                  onClick={() => setMaxPlayers(room.id, room.maxPlayers + 1)}
-                  disabled={room.maxPlayers >= 10}
-                  className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  title="增加人數上限"
-                >
-                  <ChevronUp size={14} />
-                </button>
+        {/* ────────── 3-col Layout: rails + chat ────────── */}
+        <div className="hidden md:grid gap-3 lg:gap-4" style={{ gridTemplateColumns: '210px minmax(0, 1fr) 210px' }}>
+          {/* Left rail */}
+          <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2 min-h-[320px]">
+            {leftRail.length === 0 && (
+              <div className="flex-1 flex items-center justify-center text-gray-600 text-xs text-center px-2">
+                等待玩家加入...
               </div>
             )}
-            {!isHost && !canStart && (
-              <span className="ml-auto text-[10px] sm:text-xs text-yellow-400 bg-yellow-900/30 border border-yellow-700 px-2 py-0.5 sm:py-1 rounded-full">
-                還需要 {5 - playerList.length} 人
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:gap-3">
-            {playerList.map((player) => {
-              const botDifficultyLabel = player.isBot
-                ? player.botDifficulty === 'easy'
-                  ? '弱AI'
-                  : player.botDifficulty === 'hard'
-                  ? '強AI'
-                  : '中AI'
-                : null;
-              return (
-              <div
+            {leftRail.map(({ player, seatIndex }) => (
+              <motion.div
                 key={player.id}
-                className={`bg-avalon-dark rounded-lg p-2 sm:p-3 border flex items-center gap-2 sm:gap-3 min-w-0 ${
-                  player.id === currentPlayer.id
-                    ? 'border-blue-500/60 bg-blue-900/20'
-                    : player.isBot
-                    ? 'border-slate-600/50 bg-slate-900/10'
-                    : 'border-gray-600'
-                }`}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: seatIndex * 0.04 }}
               >
-                {player.isBot ? (
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 bg-gradient-to-br from-slate-500 to-slate-700">
-                    <Bot size={16} />
-                  </div>
-                ) : player.avatar ? (
-                  <img src={player.avatar} alt={player.name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover flex-shrink-0 border border-gray-600" />
-                ) : (
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0 bg-gradient-to-br from-blue-500 to-amber-500">
-                    {player.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className={`text-sm sm:text-base font-bold truncate ${player.status === 'disconnected' ? 'text-gray-500' : 'text-white'}`}>
-                    {player.name}
-                  </p>
-                  <p className="text-[10px] sm:text-xs text-gray-400 truncate whitespace-nowrap overflow-hidden text-ellipsis">
-                    {player.id === room.host ? '👑 房主' : player.isBot ? (
-                      <span>AI・{botDifficultyLabel}</span>
-                    ) : '玩家'}
-                    {player.id === currentPlayer.id && ' · 你'}
-                    {player.status === 'disconnected' && !player.isBot && <span className="text-red-400"> · 斷線</span>}
-                  </p>
-                </div>
-                {/* Ready badge */}
-                {!player.isBot && player.id !== room.host && (
-                  <span className={`flex-shrink-0 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full font-bold border ${
-                    readyIds.includes(player.id)
-                      ? 'bg-blue-900/50 border-blue-600 text-blue-300'
-                      : 'bg-gray-800/50 border-gray-700 text-gray-600'
-                  }`}>
-                    {readyIds.includes(player.id) ? '✓' : '…'}
-                  </span>
-                )}
-                {isHost && player.id !== currentPlayer.id && (
-                  <button
-                    onClick={() => player.isBot ? removeBot(room.id, player.id) : kickPlayer(room.id, player.id)}
-                    className="flex-shrink-0 p-1 sm:p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                    title={player.isBot ? `移除機器人` : `踢出 ${player.name}`}
-                  >
-                    <X size={14} />
-                  </button>
-                )}
+                {renderLobbyPlayer(player, seatIndex, 'left')}
+              </motion.div>
+            ))}
+          </aside>
+
+          {/* Center column — header band + chat */}
+          <section className="flex flex-col gap-3 min-w-0">
+            <div className="bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-2 px-3 text-center flex items-center justify-center gap-2">
+              <Users size={14} className="text-gray-400" />
+              <span className="text-sm font-bold text-gray-200">
+                玩家列表 ({playerList.length}/{room.maxPlayers})
+              </span>
+              {!canStart && (
+                <span className="text-[11px] text-yellow-300 bg-yellow-900/30 border border-yellow-700/60 px-2 py-0.5 rounded-full">
+                  還需 {5 - playerList.length} 人
+                </span>
+              )}
+            </div>
+            <div className="min-h-[320px] flex">
+              <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} variant="inline" />
+            </div>
+          </section>
+
+          {/* Right rail */}
+          <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2 min-h-[320px] relative">
+            {/* Host indicator badge — top-right corner of the rail */}
+            <div className="absolute -top-2 right-3 bg-yellow-600/90 border border-yellow-800 text-yellow-50 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md z-10">
+              房主 {room.players[room.host]?.name?.charAt(0).toUpperCase() ?? '?'}
+            </div>
+            {rightRail.length === 0 && (
+              <div className="flex-1 flex items-center justify-center text-gray-600 text-xs text-center px-2">
+                等待玩家加入...
               </div>
-              );
-            })}
-          </div>
+            )}
+            {rightRail.map(({ player, seatIndex }) => (
+              <motion.div
+                key={player.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: seatIndex * 0.04 }}
+              >
+                {renderLobbyPlayer(player, seatIndex, 'right')}
+              </motion.div>
+            ))}
+          </aside>
         </div>
 
-        {/* Start Button */}
-        {isHost && (
-          <div className="space-y-3">
-            <button
-              onClick={() => leaveRoom(room.id)}
-              className="w-full flex items-center justify-center gap-2 bg-gray-800/40 hover:bg-red-900/20 border border-gray-700 hover:border-red-700 text-gray-500 hover:text-red-400 font-medium py-1.5 px-4 rounded-lg transition-all text-xs"
-            >
-              <LogOut size={13} />
-              解散房間 / 移交房主 (Leave / Transfer host)
-            </button>
-            {!canStart && (
-              <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-2.5 sm:p-3 text-yellow-200 text-xs sm:text-sm text-center">
-                至少需要 5 名玩家才能開始（目前 {playerList.length} 人）
+        {/* Mobile (<md): two narrow vertical rails + center column wraps below */}
+        <div className="md:hidden grid gap-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
+          <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5 min-h-[200px]">
+            {leftRail.map(({ player, seatIndex }) => (
+              <motion.div
+                key={player.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: seatIndex * 0.04 }}
+              >
+                {renderLobbyPlayer(player, seatIndex, 'left')}
+              </motion.div>
+            ))}
+          </aside>
+          <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5 min-h-[200px]">
+            {rightRail.map(({ player, seatIndex }) => (
+              <motion.div
+                key={player.id}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: seatIndex * 0.04 }}
+              >
+                {renderLobbyPlayer(player, seatIndex, 'right')}
+              </motion.div>
+            ))}
+          </aside>
+
+          <section className="col-span-2 flex flex-col gap-2 mt-2">
+            <div className="bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-1.5 px-3 text-center flex items-center justify-center gap-2">
+              <Users size={13} className="text-gray-400" />
+              <span className="text-xs font-bold text-gray-200">
+                玩家列表 ({playerList.length}/{room.maxPlayers})
+              </span>
+              {!canStart && (
+                <span className="text-[10px] text-yellow-300 bg-yellow-900/30 border border-yellow-700/60 px-1.5 py-0.5 rounded-full">
+                  還需 {5 - playerList.length}
+                </span>
+              )}
+            </div>
+            <div className="min-h-[280px] flex">
+              <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} variant="inline" />
+            </div>
+          </section>
+        </div>
+
+        {/* ────────── Footer: bot adders + start / ready ────────── */}
+        {isHost ? (
+          <div className="space-y-2">
+            {playerList.length < room.maxPlayers && (
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { diff: 'easy',   label: '加入弱AI', bg: 'bg-white hover:bg-gray-200 border-gray-300 text-black' },
+                  { diff: 'normal', label: '加入中AI', bg: 'bg-slate-500 hover:bg-slate-400 border-slate-400 text-white' },
+                  { diff: 'hard',   label: '加入強AI', bg: 'bg-black hover:bg-gray-900 border-gray-700 text-white' },
+                ] as const).map(({ diff, label, bg }) => (
+                  <button
+                    key={diff}
+                    onClick={() => addBot(room.id, diff)}
+                    className={`py-1.5 px-2 rounded-lg border font-semibold text-xs sm:text-sm transition-all ${bg}`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             )}
-            {/* Ready status summary */}
+
             {humanPlayers.length > 0 && (
-              <div className={`text-xs sm:text-sm text-center py-2 rounded-lg border ${
+              <div className={`text-xs text-center py-1.5 rounded-lg border ${
                 readyCount === humanPlayers.length
                   ? 'bg-blue-900/30 border-blue-700 text-blue-300'
                   : 'bg-gray-800/30 border-gray-700 text-gray-400'
               }`}>
                 {readyCount === humanPlayers.length
-                  ? `✓ 所有玩家已準備好！(${readyCount} ready)`
+                  ? `✓ 全部已準備（${readyCount}/${humanPlayers.length}）`
                   : `${readyCount}/${humanPlayers.length} 位玩家已準備`}
               </div>
             )}
-            {/* Add Bot buttons with difficulty selection */}
-            {playerList.length < room.maxPlayers && (
-              <div className="space-y-1.5">
-                <p className="text-[11px] sm:text-xs text-gray-500 text-center font-semibold">加入 AI 機器人</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {([
-                    { diff: 'easy',   label: '弱AI', bg: 'bg-white hover:bg-gray-200 border-gray-300 text-black' },
-                    { diff: 'normal', label: '中AI', bg: 'bg-slate-500 hover:bg-slate-400 border-slate-400 text-white' },
-                    { diff: 'hard',   label: '強AI', bg: 'bg-black hover:bg-gray-900 border-gray-700 text-white' },
-                  ] as const).map(({ diff, label, bg }) => (
-                    <button
-                      key={diff}
-                      onClick={() => addBot(room.id, diff)}
-                      className={`flex items-center justify-center py-2 px-2 rounded-lg border font-semibold text-sm sm:text-base transition-all ${bg}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+
             <button
               onClick={() => startGame(room.id)}
               disabled={!canStart}
-              className={`w-full font-bold py-2.5 sm:py-3 px-6 rounded-lg text-sm sm:text-base transition-all flex items-center justify-center gap-2 ${
+              className={`w-full font-bold py-3 px-6 rounded-lg text-sm sm:text-base transition-all flex items-center justify-center gap-2 ${
                 canStart
                   ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg hover:shadow-amber-500/30'
                   : 'bg-gray-700 text-gray-500 cursor-not-allowed'
@@ -775,15 +733,20 @@ export default function LobbyPage(): JSX.Element {
               <Play size={18} />
               開始遊戲
             </button>
-          </div>
-        )}
 
-        {!isHost && (
-          <div className="space-y-3">
-            {/* Ready button for non-host players */}
+            <button
+              onClick={() => leaveRoom(room.id)}
+              className="w-full flex items-center justify-center gap-2 bg-gray-800/40 hover:bg-red-900/20 border border-gray-700 hover:border-red-700 text-gray-500 hover:text-red-400 font-medium py-1 px-4 rounded-lg transition-all text-[11px]"
+            >
+              <LogOut size={11} />
+              解散房間 / 移交房主
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
             <button
               onClick={() => toggleReady(room.id, currentPlayer.id)}
-              className={`w-full font-bold py-2.5 sm:py-3 px-6 rounded-lg text-sm sm:text-base transition-all flex items-center justify-center gap-2 border-2 ${
+              className={`w-full font-bold py-3 px-6 rounded-lg text-sm sm:text-base transition-all flex items-center justify-center gap-2 border-2 ${
                 isReady
                   ? 'bg-blue-900/50 border-blue-500 text-blue-300 hover:bg-red-900/30 hover:border-red-600 hover:text-red-300'
                   : 'bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-blue-900/30 hover:border-blue-600 hover:text-blue-300'
@@ -791,23 +754,17 @@ export default function LobbyPage(): JSX.Element {
             >
               {isReady ? '✓ 已準備（點擊取消）' : '準備好了'}
             </button>
-            <div className="text-center text-gray-500 text-xs sm:text-sm py-1">
-              等待房主開始遊戲... (Waiting for host...)
-            </div>
+            <div className="text-center text-gray-500 text-xs py-1">等待房主開始遊戲...</div>
             <button
               onClick={() => leaveRoom(room.id)}
-              className="w-full flex items-center justify-center gap-2 bg-gray-800/60 hover:bg-red-900/30 border border-gray-600 hover:border-red-600 text-gray-400 hover:text-red-400 font-semibold py-1.5 sm:py-2 px-4 rounded-lg transition-all text-xs sm:text-sm"
+              className="w-full flex items-center justify-center gap-2 bg-gray-800/60 hover:bg-red-900/30 border border-gray-600 hover:border-red-600 text-gray-400 hover:text-red-400 font-semibold py-1.5 px-4 rounded-lg transition-all text-xs"
             >
-              <LogOut size={14} />
+              <LogOut size={13} />
               離開房間
             </button>
           </div>
         )}
       </div>
     </div>
-
-    {/* Floating chat — available in lobby */}
-    <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} />
-    </>
   );
 }
