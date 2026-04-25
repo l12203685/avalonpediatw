@@ -1673,9 +1673,22 @@ export class GameServer {
             setTimeout(() => { this.scheduleBotActions(roomId); }, offset);
           }
         } else if (r.state === 'lady_of_the_lake') {
-          // Lady of the Lake — if bot holds the Lady, pick a random eligible target
+          // Lady of the Lake — if bot holds the Lady, pick a random eligible
+          // target. After inspection, the bot must skip its declaration so
+          // the phase finalizes and the round advances; otherwise the next
+          // scheduleBotActions tick (triggered by submitLadyOfTheLakeTarget's
+          // onStateChange) sees the new bot holder and chains another inspect,
+          // burning the entire lady_of_the_lake round in a single tick and
+          // leaving any human eventually on the chain unable to act (Edward
+          // 2026-04-25 10:20 +08 — "湖中女神使用卡住了").
           const holderId = r.ladyOfTheLakeHolder;
-          if (holderId && r.players[holderId]?.isBot) {
+          // CASE 1 — pre-inspection: bot is the current holder and has yet
+          // to pick a target. After inspect we synchronously skip declaration.
+          if (
+            holderId
+            && r.players[holderId]?.isBot
+            && !r.ladyOfTheLakeResult
+          ) {
             const usedIds = r.ladyOfTheLakeUsed ?? [];
             const eligible = Object.keys(r.players).filter(id => id !== holderId && !usedIds.includes(id));
             const targetId = eligible[Math.floor(Math.random() * eligible.length)];
@@ -1685,8 +1698,55 @@ export class GameServer {
                 if (!snapshot || snapshot.state !== 'lady_of_the_lake') return;
                 const eng = this.gameEngines.get(roomId);
                 if (!eng) return;
-                eng.submitLadyOfTheLakeTarget(holderId, targetId);
+                try {
+                  eng.submitLadyOfTheLakeTarget(holderId, targetId);
+                  // Skip the declaration immediately so the phase advances
+                  // and the round/lady token transfer cleanly resolves.
+                  // Use a short delay so the inspection result is visible
+                  // to spectators / the post-game replay before phase ends.
+                  setTimeout(() => {
+                    const s2 = this.roomManager.getRoom(roomId);
+                    if (!s2 || s2.state !== 'lady_of_the_lake') return;
+                    const eng2 = this.gameEngines.get(roomId);
+                    if (!eng2) return;
+                    try {
+                      eng2.skipLakeDeclaration(holderId);
+                    } catch (err) {
+                      console.error(`[bot] skipLakeDeclaration error in room ${roomId}:`, err);
+                    }
+                  }, 1500);
+                } catch (err) {
+                  console.error(`[bot] submitLadyOfTheLakeTarget error in room ${roomId}:`, err);
+                }
               }, 1000 + Math.random() * 1000);
+            }
+          } else if (
+            // CASE 2 — post-inspection by a human: a human just inspected a
+            // bot, the bot is now waiting on a declaration that will never
+            // come from the engine. The human declarer (history[last].holderId)
+            // owns declare/skip — bots should NOT declare on their behalf.
+            // Nothing to schedule here; the human's declare/skip click or the
+            // 90s AFK timeout drives the phase forward.
+            r.ladyOfTheLakeResult
+            && r.ladyOfTheLakeHistory
+            && r.ladyOfTheLakeHistory.length > 0
+          ) {
+            const last = r.ladyOfTheLakeHistory[r.ladyOfTheLakeHistory.length - 1];
+            // If the last declarer is a bot (e.g. bot inspected a human and
+            // human is now holder), skip on the bot's behalf so the phase
+            // advances and the human can play their lady on the next round.
+            if (last && r.players[last.holderId]?.isBot) {
+              setTimeout(() => {
+                const snapshot = this.roomManager.getRoom(roomId);
+                if (!snapshot || snapshot.state !== 'lady_of_the_lake') return;
+                const eng = this.gameEngines.get(roomId);
+                if (!eng) return;
+                try {
+                  eng.skipLakeDeclaration(last.holderId);
+                } catch (err) {
+                  console.error(`[bot] skipLakeDeclaration (post-human) error in room ${roomId}:`, err);
+                }
+              }, 1500);
             }
           }
         } else if (r.state === 'discussion') {
