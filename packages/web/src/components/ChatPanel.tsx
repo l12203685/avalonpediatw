@@ -129,6 +129,19 @@ export default function ChatPanel({
   // Synthesise system entries from room state. Compact Sheets-style format
   // (Edward 2026-04-25 14:57「系統: 3-2, 2: 2580, 5-, 9+」). Drops verbose
   // wording (隊長/派/贊成 K/N/通過-否決/異常)。Pure left-aligned row in render.
+  //
+  // Edward 2026-04-26 00:40 fix (Bug 6): all system events must render in
+  // chronological round order — `R1 votes → R1 quest → R1 lake → R2 votes …`
+  // — instead of grouping all votes first, then all quests, then all lake
+  // events. Synthetic timestamps are derived from each record's `round` /
+  // `attempt` so the merge sort lays them out as the round actually played
+  // (not by their array index in `voteHistory` / `questHistory` /
+  // `ladyOfTheLakeHistory`). The resulting key order per-round is:
+  //   round*BASE + 0..50  → vote attempts (1..5)
+  //   round*BASE + 60     → quest result (after the final vote attempt)
+  //   round*BASE + 80     → lake declaration (between rounds)
+  // BASE = 100 keeps a wide margin for future per-round events.
+  const ROUND_BASE_MS = 100;
   const systemEntries = useMemo<UnifiedEntry[]>(() => {
     if (!room) return [];
     const out: UnifiedEntry[] = [];
@@ -161,9 +174,10 @@ export default function ChatPanel({
       ];
       if (anomaly) parts.push(anomaly);
 
+      // Slot vote attempts within their round (1..5 → +10..+50).
       out.push({
         id: `sys-vote-${v.round}-${v.attempt}-${idx}`,
-        timestamp: room.createdAt + idx * 1000,
+        timestamp: room.createdAt + v.round * ROUND_BASE_MS + v.attempt * 10,
         kind: 'system',
         text: `系統: ${parts.join(', ')}`,
       });
@@ -177,16 +191,23 @@ export default function ChatPanel({
       const teamDigits = formatSeatsDigitString(teamSeats);
       const successCount = Math.max(0, q.team.length - q.failCount);
       const cards = 'o'.repeat(successCount) + 'x'.repeat(q.failCount);
+      // Quest sits after the final vote attempt for this round (+60).
       out.push({
         id: `sys-quest-${q.round}-${idx}`,
-        // Slot quest result just after that round's last vote attempt.
-        timestamp: room.createdAt + (room.voteHistory.length + idx) * 1000 + 500,
+        timestamp: room.createdAt + q.round * ROUND_BASE_MS + 60,
         kind: 'system',
         text: `系統: R${q.round} 任務 ${teamDigits} ${cards}`,
       });
     });
 
     // Lady-of-the-Lake inspections → "系統: 湖 H>T o" (good) / "x" (evil) / "?" (undeclared)
+    // Edward 2026-04-26 00:40 fix (Bug 5): show declared claim ('o'/'x') when
+    // the holder has publicly declared. Backend `LadyOfTheLakeRecord.declared`
+    // / `declaredClaim` are populated by `GameEngine.declareLakeResult`; the
+    // server-side sanitise step preserves both fields for non-holders too
+    // (only `result` is masked). When `declared` is false (e.g. holder
+    // skipped or AFK timeout fired) we render '?' so the absence of an
+    // explicit claim is still legible.
     (room.ladyOfTheLakeHistory ?? []).forEach((l, idx) => {
       const holderSeat = seatOf(l.holderId, room.players);
       const targetSeat = seatOf(l.targetId, room.players);
@@ -195,10 +216,10 @@ export default function ChatPanel({
       const claim = l.declared
         ? (l.declaredClaim === 'good' ? 'o' : 'x')
         : '?';
+      // Lake events happen between rounds — slot after the round's quest (+80).
       out.push({
         id: `sys-lake-${l.round}-${idx}`,
-        // Lake events happen between rounds — slot after quest results.
-        timestamp: room.createdAt + (room.voteHistory.length + room.questHistory.length + idx) * 1000 + 800,
+        timestamp: room.createdAt + l.round * ROUND_BASE_MS + 80,
         kind: 'system',
         text: `系統: 湖 ${holderLabel}>${targetLabel} ${claim}`,
       });
