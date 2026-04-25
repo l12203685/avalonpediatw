@@ -60,40 +60,21 @@ export const TEAM_INDICATORS = {
 } as const;
 
 /**
- * Camp/team emblem helper — Edward 2026-04-25 visual unification.
+ * Camp/team emblem helper — Edward 2026-04-25 visual unification (21:52 revert
+ * to canonical after a brief 19:40 lake-swap detour).
  *
  * Returns the painted shield art URL for a camp ('good' = blue dragon-gold-star
  * shield, 'evil' = red phoenix-silver-star shield). Use this anywhere a camp
  * indicator is shown (PlayerCard chip, MissionTrack circle, end-screen, etc.)
- * so callers don't have to reach into TEAM_INDICATORS directly.
+ * so callers don't have to reach into TEAM_INDICATORS directly. `CampDisc`
+ * wraps this helper to clip just the central disc when the ornate star frame
+ * would overpower a small inline glyph.
  *
  * Why a function: callers occasionally have `'good' | 'evil' | undefined` and a
  * helper is easier to type-check than ternary indexing into the const object.
  */
 export function getCampImage(camp: 'good' | 'evil'): string {
   return camp === 'evil' ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good;
-}
-
-/**
- * Camp lake-circle icon helper — Edward 2026-04-25 19:40 evening swap.
- *
- * Returns the **lake-of-the-Lady declaration card** disc art for a camp:
- *   - 'good' → `vote-yes.jpg` (湖中藍色正義卡裡面的藍色圓圈)
- *   - 'evil' → `vote-no.jpg`  (湖中紅色卡裡面的紅色圓圈)
- *
- * Why a separate helper from `getCampImage`: Edward's evening directive was to
- * unify ALL camp indicators platform-wide on the lake yes/no circles instead
- * of the dragon/phoenix shield art. Keeping `getCampImage` reachable preserves
- * an escape hatch in case any niche caller still wants the ornate shield, but
- * the new default for "陣營圓圈" is this helper. `CampDisc` is wired here so
- * every existing call site flips automatically without per-component edits.
- *
- * Asset rationale: the lake voting cards are themselves blue (yes/good) and
- * red (no/evil) painted discs that match Edward's spec verbatim — same
- * vocabulary as the湖中女神 declarations players see at the table.
- */
-export function getCampLakeIcon(camp: 'good' | 'evil'): string {
-  return camp === 'evil' ? VOTE_IMAGES.no : VOTE_IMAGES.yes;
 }
 
 /** End-screen winner cup. */

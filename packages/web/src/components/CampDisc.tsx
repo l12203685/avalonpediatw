@@ -1,15 +1,26 @@
 /**
- * CampDisc — Edward 2026-04-25 disc-only camp indicator.
+ * CampDisc — Edward 2026-04-25 disc-only camp indicator (21:52 revert).
  *
- * Renders the central blue/red disc from `team-good.jpg` / `team-evil.jpg`
- * WITHOUT the surrounding 8-point gold/silver star frame. Used wherever the
- * camp is shown inline next to text (PlayerCard chip, RoleCard header,
- * MissionTrack glyph, RoleStatsCard chip, GamePage end-screen, etc.) so the
- * camp icon reads at glyph weight rather than ornate-frame weight.
+ * Renders the **central blue/red disc** clipped from `team-good.jpg` /
+ * `team-evil.jpg` (the 紅藍方陣營卡, blue dragon for good, red phoenix for
+ * evil) — Edward's 21:52 directive: "其他正義邪惡方的代表圖像 應該是紅藍方
+ * 陣營卡中心的紅藍圓圈". This reverts the earlier 19:40 swap that briefly
+ * routed CampDisc through the lake declaration card art (vote-yes/no.jpg).
+ *
+ * The lake-yes/lake-no painted discs remain in use ONLY for the actual lake
+ * declaration tokens in the 湖宣告 phase (where players lie or tell the
+ * truth about the lake's reading) — those are declaration tokens, not camp
+ * emojis, and live outside CampDisc.
+ *
+ * Used wherever the camp is shown inline next to text (PlayerCard chip,
+ * RoleCard header, MissionTrack glyph, RoleStatsCard chip, GamePage
+ * end-screen, ProfilePage replay row, etc.) so every camp indicator
+ * platform-wide reads with the same dragon/phoenix vocabulary.
  *
  * Why a wrapper component (not a CSS-only tweak): the source JPGs are
- * 254×410 portrait (dragon disc + star frame). To display only the central
- * disc inside a small square box we need three things together:
+ * 254×410 portrait (dragon disc + 8-point gold/silver star frame). To
+ * display only the central disc inside a small square box we need three
+ * things together:
  *   1. `overflow-hidden` + `rounded-full` on a wrapper to crop a clean circle
  *   2. `object-cover` + `object-position` to center the disc in the box
  *   3. `transform: scale(...)` to zoom past the star points so the disc
@@ -29,7 +40,7 @@
 import { getCampImage } from '../utils/avalonAssets';
 
 interface CampDiscProps {
-  /** Which camp to display ('good' = blue dragon, 'evil' = red phoenix). */
+  /** Which camp to display ('good' = blue dragon disc, 'evil' = red phoenix disc). */
   team: 'good' | 'evil';
   /**
    * Tailwind size + spacing classes applied to the wrapper (e.g.

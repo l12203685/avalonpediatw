@@ -23,7 +23,7 @@ import { DoorOpen, Bell, WifiOff, Loader2, Eye } from 'lucide-react';
 import { AVALON_CONFIG } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
-import { LAKE_IMAGE, getBoardImage, getCampLakeIcon } from '../utils/avalonAssets';
+import { LAKE_IMAGE, getBoardImage } from '../utils/avalonAssets';
 import { CampDisc } from '../components/CampDisc';
 // Vote/quest popup overlays are killed (Edward 2026-04-25 20:05) but the
 // audio cues they used to play (approval / rejection / quest-success / quest-fail)
@@ -755,16 +755,14 @@ export default function GamePage(): JSX.Element {
                 the giant cup + 5xl headline so the post-game UI no longer eats
                 the viewport like a modal. */}
             <div className="flex items-center justify-center gap-2 flex-wrap">
-              {/* Edward 2026-04-25 19:40 emoji→lake-disc swap: end-screen winner
-                  emblem now uses the lake-yes/lake-no painted disc (blue circle
-                  for good, red circle for evil) instead of the dragon/phoenix
-                  shield art, matching the unified camp-icon vocabulary. */}
-              <img
-                src={getCampLakeIcon(room.evilWins ? 'evil' : 'good')}
+              {/* Edward 2026-04-25 21:52 revert: end-screen winner emblem uses
+                  the team-good/evil central disc via <CampDisc> (blue dragon for
+                  good, red phoenix for evil), same dragon/phoenix vocabulary as
+                  every other camp indicator in the app. */}
+              <CampDisc
+                team={room.evilWins ? 'evil' : 'good'}
+                className="w-6 h-6 flex-shrink-0 drop-shadow"
                 alt={room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
-                className="w-6 h-6 object-cover rounded-full flex-shrink-0 drop-shadow"
-                style={{ objectPosition: '50% 48%' }}
-                draggable={false}
               />
               <h2 className={`text-sm sm:text-base font-bold ${room.evilWins ? 'text-red-300' : 'text-blue-300'}`}>
                 {room.evilWins ? t('game:ended.evilWins') : t('game:ended.goodWins')}
