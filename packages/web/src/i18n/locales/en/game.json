@@ -151,7 +151,11 @@
     "matrixTitle": "Vote matrix (rows = players, columns = proposals)",
     "matrixHeader": "Player ↓ / Proposal →",
     "matrixTeamTooltip": "Leader proposal: {{team}}",
-    "matrixLegend": "✓ = proposal passed · ✗ = rejected · Yellow frame = round leader · 👍 = approve · 👎 = reject",
+    "matrixLegend": "Gold disc = proposal passed · Red disc = rejected · Yellow frame = round leader · White stone = approve · Black stone = reject",
+    "proposalApprovedAlt": "Proposal passed",
+    "proposalRejectedAlt": "Proposal rejected",
+    "voteApproveAlt": "Approve (white stone)",
+    "voteRejectAlt": "Reject (black stone)",
     "roundPrefix": "R{{round}}"
   },
   "voteReveal": {

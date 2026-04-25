@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Room, Player } from '@avalon/shared';
 import { useTranslation } from 'react-i18next';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import { getVoteTokenImage, getProposalResultImage } from '../utils/avalonAssets';
 
 interface VoteAnalysisPanelProps {
   room: Room;
@@ -86,7 +87,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                           className={`border-b border-gray-800/40 ${isMe ? 'bg-yellow-900/10' : ''}`}
                         >
                           <td className="py-1.5 pr-2 font-semibold text-white whitespace-nowrap">
-                            座 {displaySeatNumber(seatOf(player.id, room.players))}
+                            {displaySeatNumber(seatOf(player.id, room.players))}家
                             {isMe && <span className="text-yellow-500 text-xs ml-1">{t('game:voteAnalysis.youSuffix')}</span>}
                           </td>
                           <td className={`py-1.5 pr-2 whitespace-nowrap ${isGood ? 'text-blue-400' : 'text-red-400'}`}>
@@ -128,8 +129,14 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                         {room.voteHistory.map((v, i) => (
                           <th key={i} className="text-center px-1 pb-1.5" style={{ minWidth: 34 }}>
                             <div className="text-gray-600 leading-none">{t('game:voteAnalysis.roundPrefix', { round: v.round })}</div>
-                            <div className={`font-bold leading-none mt-0.5 ${v.approved ? 'text-blue-400' : 'text-red-400'}`}>
-                              {v.approved ? '✓' : '✗'}
+                            <div className="flex justify-center mt-0.5">
+                              <img
+                                src={getProposalResultImage(v.approved)}
+                                alt={v.approved ? t('game:voteAnalysis.proposalApprovedAlt') : t('game:voteAnalysis.proposalRejectedAlt')}
+                                title={v.approved ? t('game:voteAnalysis.proposalApprovedAlt') : t('game:voteAnalysis.proposalRejectedAlt')}
+                                className="w-5 h-5 object-contain drop-shadow-sm"
+                                draggable={false}
+                              />
                             </div>
                           </th>
                         ))}
@@ -142,7 +149,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                         return (
                           <tr key={player.id} className={isMe ? 'bg-yellow-900/10 rounded' : ''}>
                             <td className={`pr-3 py-0.5 font-semibold whitespace-nowrap ${isGood ? 'text-blue-300' : 'text-red-300'}`}>
-                              座 {displaySeatNumber(seatOf(player.id, room.players))}
+                              {displaySeatNumber(seatOf(player.id, room.players))}家
                             </td>
                             {room.voteHistory.map((v, i) => {
                               const vote = v.votes[player.id];
@@ -150,14 +157,20 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                               return (
                                 <td
                                   key={i}
-                                  title={isLeader ? t('game:voteAnalysis.matrixTeamTooltip', { team: v.team.map(id => `座 ${displaySeatNumber(seatOf(id, room.players))}`).join('、') }) : undefined}
+                                  title={isLeader ? t('game:voteAnalysis.matrixTeamTooltip', { team: v.team.map(id => `${displaySeatNumber(seatOf(id, room.players))}家`).join('、') }) : undefined}
                                   className={`text-center px-1 py-0.5 ${isLeader ? 'ring-1 ring-yellow-500/40 rounded bg-yellow-900/10' : ''}`}
                                 >
                                   {vote === undefined ? (
                                     <span className="text-gray-700">·</span>
                                   ) : (
-                                    <span className={vote ? 'text-blue-400' : 'text-red-400'}>
-                                      {vote ? '👍' : '👎'}
+                                    <span className="inline-flex justify-center">
+                                      <img
+                                        src={getVoteTokenImage(vote ? 'approve' : 'reject')}
+                                        alt={vote ? t('game:voteAnalysis.voteApproveAlt') : t('game:voteAnalysis.voteRejectAlt')}
+                                        title={vote ? t('game:voteAnalysis.voteApproveAlt') : t('game:voteAnalysis.voteRejectAlt')}
+                                        className="w-4 h-4 object-contain drop-shadow-sm"
+                                        draggable={false}
+                                      />
                                     </span>
                                   )}
                                 </td>

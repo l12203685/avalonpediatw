@@ -93,6 +93,35 @@ export const VOTE_IMAGES = {
   token: `${ASSET_BASE}/vote-token.png`,
 } as const;
 
+/**
+ * Vote-token helper — Edward 2026-04-25 vote-matrix swap.
+ *
+ * Returns the painted ballot art for an individual vote: 'approve' resolves to
+ * the white-stone vote-yes image, 'reject' to the black-stone vote-no image.
+ * Mirrors the physical Avalon table tokens (white = yes, black = no) so the
+ * inline matrix glyphs match what players hand-place at the table.
+ *
+ * Why a function: callers in the matrix have a `boolean | undefined` (cast vote
+ * vs no-vote), and the helper gives them a clean translation step instead of
+ * inlining a ternary that reads VOTE_IMAGES directly.
+ */
+export function getVoteTokenImage(vote: 'approve' | 'reject'): string {
+  return vote === 'approve' ? VOTE_IMAGES.yes : VOTE_IMAGES.no;
+}
+
+/**
+ * Proposal-result helper — Edward 2026-04-25 vote-matrix swap.
+ *
+ * Returns the painted circular medallion for the proposal-pass / proposal-fail
+ * column header in the vote matrix. Reuses the QUEST_RESULT_IMAGES art (success
+ * = gold sun-burst circle, fail = red rune circle) because Edward's spec wants
+ * the same "成功圓圈 / 失敗圓圈" visual vocabulary on every approve/reject toggle
+ * across the app — proposals and missions share the same pass/fail glyph.
+ */
+export function getProposalResultImage(approved: boolean): string {
+  return approved ? QUEST_RESULT_IMAGES.success : QUEST_RESULT_IMAGES.fail;
+}
+
 /** Lady-of-the-Lake icon. */
 export const LAKE_IMAGE = `${ASSET_BASE}/lake.jpg`;
 

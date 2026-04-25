@@ -151,7 +151,11 @@
     "matrixTitle": "投票矩陣 (每列 = 玩家，每欄 = 一次提案)",
     "matrixHeader": "玩家 ↓ / 提案 →",
     "matrixTeamTooltip": "隊長提案：{{team}}",
-    "matrixLegend": "✓ = 提案通過 · ✗ = 提案否決 · 黃框 = 該輪隊長 · 👍 = 贊成 · 👎 = 反對",
+    "matrixLegend": "金圓盤 = 提案通過 · 紅圓盤 = 提案否決 · 黃框 = 該輪隊長 · 白球 = 贊成 · 黑球 = 反對",
+    "proposalApprovedAlt": "提案通過",
+    "proposalRejectedAlt": "提案否決",
+    "voteApproveAlt": "贊成 (白球)",
+    "voteRejectAlt": "反對 (黑球)",
     "roundPrefix": "R{{round}}"
   },
   "voteReveal": {
