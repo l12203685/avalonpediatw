@@ -249,12 +249,15 @@ export default function GamePage(): JSX.Element {
   // range (we ship art for 5..10 only); no fallback to keep file size honest.
   const boardImageUrl = getBoardImage(playerIds.length);
 
+  // Edward 2026-04-25 holistic redesign (matches LobbyPage commit df6b5726):
+  // Single-viewport guarantee — entire GamePage fits 375x667 (iPhone SE) and
+  // 1920x1080 (desktop) without page scroll. Header rows are shrink-0; the
+  // GameBoard owns flex-1 min-h-0 so its 3-col grid (rails + chat) self-scrolls.
+  // Sticky toolbars (QuestTeamToolbar/VotePanel/QuestPanel) stay fixed at the
+  // bottom; we add a scroll-container bottom padding so users can scroll past
+  // them without content being permanently masked.
   return (
-    <div
-      className={`relative min-h-screen bg-gradient-to-b from-avalon-dark to-black p-4 ${
-        stickyToolbarActive ? 'pb-32 sm:pb-28' : ''
-      }`}
-    >
+    <div className="relative h-[100dvh] flex flex-col overflow-hidden bg-gradient-to-b from-avalon-dark to-black">
       {/* Painted board art — fixed background watermark behind every phase so
           the table size reads visually without consuming column space. Sized
           to cover the viewport while preserving aspect ratio (no distortion
@@ -300,49 +303,50 @@ export default function GamePage(): JSX.Element {
         />
       )}
 
-      <div className="relative z-10 max-w-7xl mx-auto space-y-6">
-        {/* Reconnection status banner */}
-        <AnimatePresence>
-          {(socketStatus === 'reconnecting' || socketStatus === 'disconnected') && (
-            <motion.div
-              key="reconnect-banner"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ${
-                socketStatus === 'reconnecting'
-                  ? 'bg-yellow-900/60 border border-yellow-600 text-yellow-200'
-                  : 'bg-red-900/60 border border-red-600 text-red-200'
-              }`}
-            >
-              {socketStatus === 'reconnecting' ? (
-                <><Loader2 size={16} className="animate-spin flex-shrink-0" />{t('game:connection.reconnecting')}</>
-              ) : (
-                <><WifiOff size={16} className="flex-shrink-0" />{t('game:connection.disconnected')}</>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Spectator banner */}
-        {isSpectator && (
-          <div className="flex items-center justify-between bg-slate-800/40 border border-slate-600 rounded-xl px-4 py-2">
-            <span className="text-slate-300 text-sm font-semibold">{t('game:spectator.bannerTitle')}</span>
-            <button
-              onClick={() => room && leaveSpectate(room.id)}
-              className="text-xs text-slate-400 hover:text-white border border-slate-600 hover:border-white px-3 py-1 rounded-lg transition-colors"
-            >
-              {t('game:spectator.leave')}
-            </button>
-          </div>
+      {/* ────────── HEADER (shrink-0 rows: banners + MissionTrack + actionBanner) ────────── */}
+      {/* Reconnection status banner */}
+      <AnimatePresence>
+        {(socketStatus === 'reconnecting' || socketStatus === 'disconnected') && (
+          <motion.div
+            key="reconnect-banner"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className={`relative z-10 shrink-0 flex items-center gap-2 mx-3 mt-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-semibold ${
+              socketStatus === 'reconnecting'
+                ? 'bg-yellow-900/60 border border-yellow-600 text-yellow-200'
+                : 'bg-red-900/60 border border-red-600 text-red-200'
+            }`}
+          >
+            {socketStatus === 'reconnecting' ? (
+              <><Loader2 size={16} className="animate-spin flex-shrink-0" />{t('game:connection.reconnecting')}</>
+            ) : (
+              <><WifiOff size={16} className="flex-shrink-0" />{t('game:connection.disconnected')}</>
+            )}
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        {/*
-          Slim header — 2026-04-25 (Edward「上方排版太佔空間 只要留我第二張圖的部分就可以」).
-          砍掉：Avalon 標題 / 狀態徽章 / 查看角色按鈕 / 喇叭按鈕 / 陣營人數 / 當前 actor 標籤。
-          保留：R1-R5 任務 + 否決方塊（MissionTrack 已包含）。
-          查看角色 / 靜音 入口 → 移到右上角浮動小圖示（隱藏式 menu，需要時才看見）。
-        */}
+      {/* Spectator banner */}
+      {isSpectator && (
+        <div className="relative z-10 shrink-0 flex items-center justify-between mx-3 mt-2 bg-slate-800/40 border border-slate-600 rounded-xl px-4 py-1.5">
+          <span className="text-slate-300 text-xs sm:text-sm font-semibold">{t('game:spectator.bannerTitle')}</span>
+          <button
+            onClick={() => room && leaveSpectate(room.id)}
+            className="text-xs text-slate-400 hover:text-white border border-slate-600 hover:border-white px-3 py-0.5 rounded-lg transition-colors"
+          >
+            {t('game:spectator.leave')}
+          </button>
+        </div>
+      )}
+
+      {/*
+        Slim header — 2026-04-25 (Edward「上方排版太佔空間 只要留我第二張圖的部分就可以」).
+        砍掉：Avalon 標題 / 狀態徽章 / 查看角色按鈕 / 喇叭按鈕 / 陣營人數 / 當前 actor 標籤。
+        保留：R1-R5 任務 + 否決方塊（MissionTrack 已包含）。
+        查看角色 / 靜音 入口 → 移到右上角浮動小圖示（隱藏式 menu，需要時才看見）。
+      */}
+      <div className="relative z-10 shrink-0 px-3 pt-2">
         <div className="relative">
           <MissionTrack room={room} />
           <div className="absolute top-0 right-0 flex gap-1.5">
@@ -350,46 +354,57 @@ export default function GamePage(): JSX.Element {
               onClick={() => setShowRoleReveal(true)}
               title={t('game:header.viewRole')}
               aria-label={t('game:header.viewRole')}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-blue-900/40 hover:bg-blue-800/70 border border-blue-700/60 text-blue-300 transition-colors"
+              className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-900/40 hover:bg-blue-800/70 border border-blue-700/60 text-blue-300 transition-colors"
             >
-              <Eye size={16} />
+              <Eye size={14} />
             </button>
             <button
               onClick={handleToggleAudio}
               title={audioEnabled ? t('game:header.mute') : t('game:header.unmute')}
               aria-label={audioEnabled ? t('game:header.mute') : t('game:header.unmute')}
-              className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors border ${
+              className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
                 audioEnabled
                   ? 'bg-gray-800/40 hover:bg-gray-700/70 border-gray-600 text-gray-300'
                   : 'bg-gray-900/40 hover:bg-gray-800/70 border-gray-700 text-gray-500'
               }`}
             >
-              {audioEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              {audioEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Your-turn action banner — kept (not part of header clutter; signals required action) */}
-        <AnimatePresence>
-          {actionBanner && (
-            <motion.div
-              key={actionBanner.msg}
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className={`flex items-center gap-2 border rounded-lg px-4 py-3 text-sm font-semibold ${actionBanner.color}`}
-            >
-              <Bell size={16} className="flex-shrink-0" />
-              {actionBanner.msg}
-            </motion.div>
-          )}
-        </AnimatePresence>
+      {/* Your-turn action banner — kept (not part of header clutter; signals required action) */}
+      <AnimatePresence>
+        {actionBanner && (
+          <motion.div
+            key={actionBanner.msg}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className={`relative z-10 shrink-0 mx-3 mt-1 flex items-center gap-2 border rounded-lg px-3 py-1.5 text-xs sm:text-sm font-semibold ${actionBanner.color}`}
+          >
+            <Bell size={14} className="flex-shrink-0" />
+            {actionBanner.msg}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ────────── MAIN (flex-1 min-h-0): GameBoard + post-game / phase panels ────────── */}
+      <main
+        className={`relative z-10 flex-1 min-h-0 flex flex-col gap-3 px-3 py-2 overflow-y-auto ${
+          stickyToolbarActive ? 'pb-32 sm:pb-28' : ''
+        }`}
+      >
 
         {/* Game Board — 5v5 rails with center panel (quest/vote/history) per Edward spec.
             #83 Phase 5: chat + scoresheet dock in the center column via `chatSlot`
             /`scoresheetSlot` (side-by-side on lg, stacked on mobile). The floating
             ChatPanel below is gated on `room.state === 'lobby'` to avoid duplicate
-            chat surfaces mid-game. */}
+            chat surfaces mid-game.
+            Edward 2026-04-25 holistic — wrap with flex-1 min-h-0 so GameBoard
+            grabs the remaining viewport height (mirrors LobbyPage main grid). */}
+        <div className="flex-1 min-h-0 flex flex-col">
         <GameBoard
           room={room}
           currentPlayer={currentPlayer}
@@ -519,6 +534,7 @@ export default function GamePage(): JSX.Element {
             own chrome (border + title + toggle) and auto-expands when game ends.
           */}
         </GameBoard>
+        </div>
 
         {/* Suspicion Notes — personal private notepad, only shown during active game */}
         {room.state !== 'ended' && room.state !== 'lobby' && !isSpectator && (
@@ -900,7 +916,7 @@ export default function GamePage(): JSX.Element {
             </div>
           </motion.div>
         )}
-      </div>
+      </main>
 
       {/* #83 Phase 5 — chat docks inline inside GameBoard center column via
           `chatSlot`, so no floating ChatPanel here during active game. If you

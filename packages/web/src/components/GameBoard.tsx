@@ -187,18 +187,21 @@ export default function GameBoard({
 
   // #83 Phase 5 — chat + scoresheet 2-col block. Rendered below `children` in
   // both desktop and mobile center columns when both slots are provided.
-  // Desktop ≥lg: side-by-side (chat flex-1, scoresheet 320px).
-  // <lg (tablet/mobile): stacked vertically — chat first with min-height so it
-  // stays usable, scoresheet flows naturally below.
+  //
+  // Edward 2026-04-25 holistic redesign (matching LobbyPage commit df6b5726):
+  // GameBoard now lives inside a `flex-1 min-h-0` parent so the center column
+  // owns its own viewport-bound scroll. The chat slot needs `flex-1 min-h-0`
+  // so it fills remaining vertical space without pushing the page; scoresheet
+  // stays `auto` height because it's a compact recap.
   const centerExtras = (chatSlot || scoresheetSlot) ? (
-    <div className="flex flex-col lg:flex-row gap-3 min-h-0">
+    <div className="flex flex-col lg:flex-row gap-3 flex-1 min-h-0">
       {chatSlot && (
-        <div className="flex-1 min-h-[240px] lg:min-h-[320px]">
+        <div className="flex-1 min-h-[200px] lg:min-h-0 flex flex-col">
           {chatSlot}
         </div>
       )}
       {scoresheetSlot && (
-        <div className="lg:w-[320px] lg:flex-shrink-0">
+        <div className="lg:w-[320px] lg:flex-shrink-0 lg:min-h-0 lg:overflow-y-auto">
           {scoresheetSlot}
         </div>
       )}
@@ -206,20 +209,27 @@ export default function GameBoard({
   ) : null;
 
   return (
-    <div className="w-full">
-      {/* Desktop / tablet: three-column grid */}
-      <div className="hidden md:grid gap-3 lg:gap-4" style={{ gridTemplateColumns: '210px minmax(0, 1fr) 210px' }}>
+    <div className="w-full h-full min-h-0 flex flex-col">
+      {/*
+        Desktop / tablet: three-column grid filling parent height.
+        Edward 2026-04-25 holistic — outer flex-1 min-h-0 lets each column own
+        its own overflow-y-auto so the page itself never scrolls.
+      */}
+      <div
+        className="hidden md:grid gap-3 lg:gap-4 flex-1 min-h-0"
+        style={{ gridTemplateColumns: '210px minmax(0, 1fr) 210px' }}
+      >
         {/* Left player rail — seats N..splitIndex+1 top-to-bottom (clockwise wrap) */}
-        <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
+        <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2 overflow-y-auto min-h-0 min-w-0">
           {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
         </aside>
 
         {/* Center — state banner + children (quest/vote/history) */}
-        <section className="flex flex-col gap-3 min-w-0">
+        <section className="flex flex-col gap-3 min-w-0 min-h-0 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="text-center bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-3 px-4"
+            className="shrink-0 text-center bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-3 px-4"
           >
             <motion.p
               key={room.state}
@@ -245,32 +255,37 @@ export default function GameBoard({
         </section>
 
         {/* Right player rail — seats 1..splitIndex top-to-bottom (clockwise start) */}
-        <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2">
+        <aside className="flex flex-col gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-xl p-2 overflow-y-auto min-h-0 min-w-0">
           {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
         </aside>
       </div>
 
       {/*
-        Mobile (<md): two narrow vertical rails flanking a center column (2-col grid).
-        #83 Phase 1 killed horizontal rail scroll — 10-player rooms need to show every seat
-        without a swipe, so we shrink cards to fit iPhone SE (375px).
-        Column widths sum ~335px at 375 viewport → leaves ~20px grid gap + safe-area inset.
+        Mobile (<md): rails on top (compact horizontal grid, capped height) +
+        center column flex-1 min-h-0 below. Edward 2026-04-25 holistic — the
+        whole GamePage fits 100dvh; rails own their internal scroll so the
+        viewport never grows past one screen.
       */}
-      <div className="md:hidden grid gap-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
-        <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5">
-          {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
-        </aside>
+      <div className="md:hidden flex flex-col gap-2 flex-1 min-h-0">
+        <div
+          className="grid gap-2 shrink-0"
+          style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', maxHeight: '38dvh' }}
+        >
+          <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5 overflow-y-auto min-h-0">
+            {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
+          </aside>
 
-        <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5">
-          {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
-        </aside>
+          <aside className="bg-avalon-card/30 border border-gray-700/60 rounded-xl p-1.5 flex flex-col gap-1.5 overflow-y-auto min-h-0">
+            {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
+          </aside>
+        </div>
 
-        {/* Full-width center spans both columns below the rails on mobile */}
-        <section className="col-span-2 flex flex-col gap-3 min-w-0 mt-2">
+        {/* Center column below the rails — owns its own scroll */}
+        <section className="flex flex-col gap-3 min-w-0 min-h-0 flex-1 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="text-center bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-2 px-3"
+            className="shrink-0 text-center bg-gradient-to-b from-avalon-card/60 to-avalon-card/30 border border-gray-700/60 rounded-xl py-2 px-3"
           >
             <motion.p
               key={room.state}
