@@ -39,6 +39,45 @@ function sanitizeVersion(raw: string | undefined): string | null {
   return cleaned.length > 0 ? cleaned : null;
 }
 
+/**
+ * Best-effort parse of BUILD_TIMESTAMP env var into ISO-8601.
+ *
+ * Accepts:
+ *   - ISO-8601 strings (e.g. "2026-04-25T10:35:53Z")
+ *   - Unix epoch seconds or milliseconds (numeric string)
+ *
+ * Falls back to BOOT_AT when value is absent or unparseable, so a malformed
+ * BUILD_TIMESTAMP env var never crashes the server at startup.
+ *
+ * NOTE: Do NOT pre-sanitize via sanitizeVersion() — that strips ISO-8601
+ * separators (`:`, `Z`) and turns valid timestamps into garbage that
+ * `new Date()` returns as Invalid Date, which then throws RangeError on
+ * .toISOString(). Caused 14 failed Cloud Run deploys (revisions 00018-00027,
+ * 2026-04-25). Validate the parse result instead of mangling input.
+ */
+function parseBuiltAt(raw: string | undefined): string {
+  if (!raw) return BOOT_AT;
+
+  // Reject obviously injection-y or oversized input before passing to Date()
+  // to keep the same security posture sanitizeVersion gave us.
+  if (raw.length > 64 || /[\r\n\t]/.test(raw)) return BOOT_AT;
+
+  // Try epoch (seconds or ms) first when value is purely numeric.
+  if (/^\d+$/.test(raw)) {
+    const n = Number(raw);
+    // Heuristic: < 10^12 → seconds; >= 10^12 → ms.
+    const ms = n < 1e12 ? n * 1000 : n;
+    const d = new Date(ms);
+    if (!isNaN(d.getTime())) return d.toISOString();
+    return BOOT_AT;
+  }
+
+  // Try string parse (ISO-8601, RFC 2822, etc).
+  const d = new Date(raw);
+  if (!isNaN(d.getTime())) return d.toISOString();
+  return BOOT_AT;
+}
+
 function resolveVersion(): { version: string; builtAt: string } {
   const envHash =
     sanitizeVersion(process.env.BUILD_HASH) ||
@@ -46,10 +85,9 @@ function resolveVersion(): { version: string; builtAt: string } {
     sanitizeVersion(process.env.SOURCE_COMMIT);
 
   if (envHash) {
-    const envBuiltAt = sanitizeVersion(process.env.BUILD_TIMESTAMP);
     return {
       version: envHash.slice(0, 12),
-      builtAt: envBuiltAt ? new Date(Number(envBuiltAt) || envBuiltAt).toISOString() : BOOT_AT,
+      builtAt: parseBuiltAt(process.env.BUILD_TIMESTAMP),
     };
   }
 
