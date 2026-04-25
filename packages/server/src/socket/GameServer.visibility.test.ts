@@ -25,13 +25,6 @@ import { Room, Player, Role } from '@avalon/shared';
 
 import { GameServer } from './GameServer';
 
-interface VisibilityTestCase {
-  observer: Role;
-  expectVisibleAsEvilCard: Role[];
-  expectVisibleAsCandidatePair?: Role[];
-  expectHiddenRoleBack: Role[];
-}
-
 function makeServer(): GameServer {
   const httpServer = createServer();
   const io = new SocketIOServer(httpServer);
