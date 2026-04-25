@@ -106,6 +106,23 @@ export interface Player {
    * as guests).
    */
   provider?: 'google' | 'github' | 'discord' | 'line' | 'email' | 'guest';
+  /**
+   * Per-viewer disclosed-candidate set used for Percival.
+   *
+   * Avalon canonical rule: Percival 在開局時看見「兩位玩家」, 一位是梅林, 一位是
+   * 莫甘娜, 但**無法分辨誰是誰**. 為了在不洩漏具體角色的前提下讓 UI 仍能呈現
+   * 「半梅林半莫甘娜」的 split tile, server 在 sanitize 階段針對 Percival 視角的
+   * 兩位 candidate seat 設置此欄位 = `['merlin', 'morgana']`. 其餘視角 (含本人 /
+   * 紅方互看 / 梅林看紅方 / 忠臣) 一律不設或 `undefined`.
+   *
+   * Important: 此欄位 **不揭露具體角色** — 它只說「這個座位是 candidates 集合中
+   * 的某一位」. Percival 自己也分不出哪個是真梅林, UI 因此渲染半半的 split tile.
+   *
+   * Server fills this *only* for the Percival viewer when sanitising the room
+   * payload (see `GameServer.sanitizeRoomForPlayer`). It is null/undefined for
+   * the Percival players themselves (their own card shows their actual role).
+   */
+  revealedCandidates?: Role[];
 }
 
 export interface Room {

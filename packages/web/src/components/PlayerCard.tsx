@@ -169,9 +169,10 @@ interface PlayerCardProps {
  * Edward 20:12 add-ons:
  *   - PlayerCard = square aspect (already enforced via `aspect-square w-full`).
  *   - 未揭角色 (`effectiveRole === null`) → 整 tile bg 用 `role-back.jpg` 取代
- *     大頭，且**隱藏 corner indicators (除了 seat 號碼)**。所以 role-back tile
- *     上看不到王冠 / 湖 / 球 / 盾，只有座位號碼 + 名字 + 斷線旗 (狀態旗為避免
- *     遊戲性遺失，仍保留 disconnected 半透明 dim — 與 corner indicator 不同類)。
+ *     大頭，且**隱藏 role-derived corner indicators**。所以 role-back tile 上
+ *     看不到王冠 / 球 / 盾，只有座位號碼 + 名字 + 斷線旗 + 湖中 (湖中是公開資訊,
+ *     Edward 2026-04-26 00:17 修正後不再被 isRoleHidden 抑制)。狀態旗為避免遊戲
+ *     性遺失，仍保留 disconnected 半透明 dim — 與 corner indicator 不同類。
  *
  * Edward 21:52 / 21:59 corrections (#7-#9 + 撤回 #9):
  *   - #7「盾牌每玩家依參與最後任務顯示，不能 hardcode 一樣」→ 用

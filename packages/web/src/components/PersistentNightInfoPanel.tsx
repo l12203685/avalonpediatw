@@ -20,7 +20,8 @@ import { ChevronDown, ChevronUp, Eye, EyeOff, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ROLE_INFO, getKnowledgeList, getKnowledgeEntries, getKnowledgeLabel, seatLabel } from '../utils/roleKnowledge';
 import RoleAvatar from './RoleAvatar';
-import { UNKNOWN_AVATAR_URL } from '../utils/avalonAssets';
+import { ROLE_AVATAR_IMAGES, TEAM_INDICATORS } from '../utils/avalonAssets';
+import { CampDisc } from './CampDisc';
 
 interface PersistentNightInfoPanelProps {
   room: Room;
@@ -65,10 +66,12 @@ export default function PersistentNightInfoPanel({
           <span className="text-2xl flex-shrink-0">{info.icon}</span>
           <div className="flex-1 min-w-0">
             <p className={`text-xs font-black truncate ${info.color}`}>{info.name}</p>
-            <p className="text-[10px] text-gray-300 truncate">
-              {isEvil ? t('game:nightInfo.evil') : t('game:nightInfo.good')}
+            <p className="text-[10px] text-gray-300 truncate flex items-center gap-1">
+              {/* Edward 2026-04-25 emoji→disc: 中央圓盤陣營徽章取代 🔵/🔴 emoji。 */}
+              <CampDisc team={isEvil ? 'evil' : 'good'} className="w-3 h-3" />
+              <span>{isEvil ? t('game:nightInfo.evil') : t('game:nightInfo.good')}</span>
               {hasNightInfo && (
-                <span className="ml-1.5 opacity-70">{t('game:nightInfo.clickToView')}</span>
+                <span className="ml-0.5 opacity-70">{t('game:nightInfo.clickToView')}</span>
               )}
             </p>
           </div>
@@ -121,17 +124,33 @@ export default function PersistentNightInfoPanel({
                         >
                           {entry.knownRole ? (
                             <RoleAvatar role={entry.knownRole} size="sm" />
+                          ) : entry.player.revealedCandidates && entry.player.revealedCandidates.length >= 2 ? (
+                            // Percival 的兩位 candidates (梅林|莫甘娜) — 渲染半半
+                            // split tile, 與 PlayerCard 大頭一致 (Edward 2026-04-25
+                            // 21:52 揭露規則: 派西分不出哪個是真梅林).
+                            <div
+                              className="relative w-6 h-6 rounded-full overflow-hidden border border-slate-500 flex-shrink-0 flex"
+                              aria-label="可能是梅林或莫甘娜"
+                            >
+                              <div
+                                className="w-1/2 h-full bg-cover bg-center"
+                                style={{ backgroundImage: `url('${ROLE_AVATAR_IMAGES[entry.player.revealedCandidates[0]]}')` }}
+                                aria-hidden="true"
+                              />
+                              <div
+                                className="w-1/2 h-full bg-cover bg-center"
+                                style={{ backgroundImage: `url('${ROLE_AVATAR_IMAGES[entry.player.revealedCandidates[1]]}')` }}
+                                aria-hidden="true"
+                              />
+                            </div>
                           ) : (
-                            // Percival sees Merlin AND Morgana but cannot tell
-                            // them apart — render the painted unknown.jpg art
-                            // (Edward 2026-04-25 image batch) instead of a
-                            // plain "?" so the placeholder reads as a hooded
-                            // figure that matches the rail/role-reveal style.
+                            // 梅林看紅方 / 紅方互看 — 只知陣營, 不知具體角色.
+                            // 用紅方陣營 indicator art 取代具體 role avatar.
                             <img
-                              src={UNKNOWN_AVATAR_URL}
+                              src={TEAM_INDICATORS.evil}
                               alt=""
                               aria-hidden="true"
-                              className="w-6 h-6 rounded-full object-cover border border-slate-500 flex-shrink-0"
+                              className="w-6 h-6 rounded-full object-cover border border-red-500 flex-shrink-0"
                               draggable={false}
                               loading="lazy"
                             />
@@ -153,7 +172,9 @@ export default function PersistentNightInfoPanel({
                               : 'bg-blue-900/40 text-blue-200'
                           }`}
                         >
-                          <span>{isEvil ? '👹' : '✨'}</span>
+                          {/* Edward 2026-04-25 19:40 emoji→lake-disc swap: per-line camp glyph
+                              uses the lake-yes/lake-no painted disc instead of 👹/✨ emoji. */}
+                          <CampDisc team={isEvil ? 'evil' : 'good'} className="w-3 h-3" />
                           <span className="truncate">{item}</span>
                         </li>
                       ))}

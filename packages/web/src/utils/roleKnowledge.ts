@@ -13,19 +13,21 @@ import type { Room, Player, Role } from '@avalon/shared';
 import { displaySeatNumber, seatOf } from './seatDisplay';
 
 /**
- * Format a player as "{N}家" for info windows / role-reveal modals.
+ * Format a player as the bare seat number ("1", "2", ..., "0") for info
+ * windows / role-reveal modals.
  *
  * Edward 2026-04-25: 「這種資訊視窗 都一律改成座位號碼 而不是玩家名字」 — every
  * piece of role-reveal / night-info / overlay text shows the seat number
  * instead of the player's display name so the canonical reference stays
- * "X家" across role reveal, persistent night-info panel, vote/quest
+ * the seat# across role reveal, persistent night-info panel, vote/quest
  * overlays, lady-of-the-lake, and assassin pickers.
  *
- * Edward 2026-04-25 16:00: 全站座號改用 Sheets/牌桌慣用「N家」格式（東/南/西/北家延伸）。
+ * Edward 2026-04-25 21:59 撤回「N家」 — UI 顯示改純數字 (1, 2, ..., 9, 0)。
+ * 牌桌口語仍說「N家」, 但寫到畫面上的字就是一個 digit, 不掛 suffix。
  */
 export function seatLabel(playerId: string, players: Record<string, unknown>): string {
   const seat = seatOf(playerId, players);
-  return seat === 0 ? '?' : `${displaySeatNumber(seat)}家`;
+  return seat === 0 ? '?' : displaySeatNumber(seat);
 }
 
 export interface RoleInfo {
@@ -132,36 +134,36 @@ export const ROLE_INFO: Record<Role, RoleInfo> = {
  */
 export function getKnowledgeList(role: Role, room: Room, currentPlayer: Player): string[] {
   const players = Object.values(room.players);
-  const evilRoles: Role[] = ['assassin', 'morgana', 'oberon', 'mordred', 'minion'];
 
+  // Edward 2026-04-25 21:52 角色資訊揭露 logic 修正:
+  // 經典 Avalon 規則 — 紅方互看 / 梅林看紅方 都只知陣營, **不知具體角色**.
+  // Server-side `sanitizeRoomForPlayer` 已把這些 visible peer 的具體 role mask
+  // 成 null 但 keep team='evil'. 此處改用 team 比對而不是 role 比對.
+  // Percival 的兩位 candidate (梅林|莫甘娜) 由 server 設 revealedCandidates 欄位.
   switch (role) {
     case 'merlin': {
-      // Merlin sees evil except Oberon and Mordred
-      const evilPlayers = players.filter(
-        p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal')
-          && p.role !== 'oberon' && p.role !== 'mordred',
-      );
-      if (evilPlayers.length === 0) return ['(無邪惡方玩家)'];
-      return evilPlayers.map(p => `${seatLabel(p.id, room.players)} — 邪惡方`);
+      // Merlin 看到紅方 (server 已 strip Mordred/Oberon, 並把 role mask 成 null)
+      const evilPeers = players.filter(p => p.id !== currentPlayer.id && p.team === 'evil');
+      if (evilPeers.length === 0) return ['(無邪惡方玩家)'];
+      return evilPeers.map(p => `${seatLabel(p.id, room.players)} — 邪惡方`);
     }
     case 'percival': {
-      // Percival sees Merlin and Morgana (but can't tell apart)
-      const merlinLike = players.filter(
-        p => p.id !== currentPlayer.id && (p.role === 'merlin' || p.role === 'morgana'),
+      // Server 用 revealedCandidates=['merlin','morgana'] 標記兩位 candidates.
+      const candidates = players.filter(
+        p => p.id !== currentPlayer.id
+          && Array.isArray(p.revealedCandidates) && p.revealedCandidates.length >= 2,
       );
-      if (merlinLike.length === 0) return ['(無法感知梅林)'];
-      return merlinLike.map(p => `${seatLabel(p.id, room.players)} — 可能是梅林`);
+      if (candidates.length === 0) return ['(無法感知梅林)'];
+      return candidates.map(p => `${seatLabel(p.id, room.players)} — 可能是梅林或莫甘娜`);
     }
     case 'assassin':
     case 'morgana':
     case 'mordred':
     case 'minion': {
-      // Evil players see each other (except Oberon)
-      const evilTeam = players.filter(
-        p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal') && p.role !== 'oberon',
-      );
-      if (evilTeam.length === 0) return ['(無隊友)'];
-      return evilTeam.map(p => `${seatLabel(p.id, room.players)} — 邪惡隊友`);
+      // 紅方互看 — server 已 strip Oberon 並把具體 role mask 成 null, 留 team='evil'.
+      const evilPeers = players.filter(p => p.id !== currentPlayer.id && p.team === 'evil');
+      if (evilPeers.length === 0) return ['(無隊友)'];
+      return evilPeers.map(p => `${seatLabel(p.id, room.players)} — 邪惡隊友`);
     }
     case 'loyal':
     case 'oberon':
@@ -192,6 +194,11 @@ export interface KnowledgeEntry {
  * Same logic as `getKnowledgeList`, but returns structured entries for UI
  * composition. Prefer this when you want to render role avatars; fall back
  * to `getKnowledgeList` for plain-text rendering.
+ *
+ * Edward 2026-04-25 21:52 角色資訊揭露 logic 修正:
+ * 經典 Avalon — 梅林看紅方 / 紅方互看 只知陣營, 不知具體角色 → `knownRole`
+ * 一律 `undefined`, 由 UI 渲染紅方陣營卡 (camp-only) 取代具體角色 avatar.
+ * Percival 的兩位 candidate 仍 `knownRole=undefined`, UI 用 split tile 渲染.
  */
 export function getKnowledgeEntries(
   role: Role,
@@ -199,39 +206,29 @@ export function getKnowledgeEntries(
   currentPlayer: Player,
 ): KnowledgeEntry[] {
   const players = Object.values(room.players);
-  const evilRoles: Role[] = ['assassin', 'morgana', 'oberon', 'mordred', 'minion'];
 
   switch (role) {
     case 'merlin': {
-      const evilPlayers = players.filter(
-        p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal')
-          && p.role !== 'oberon' && p.role !== 'mordred',
-      );
-      return evilPlayers.map(p => ({
-        player: p,
-        knownRole: p.role ?? undefined,
-        hint: '邪惡方',
-      }));
+      // Server 已 mask 具體 role, keep team='evil'. UI 渲染紅方陣營 (no role avatar).
+      const evilPeers = players.filter(p => p.id !== currentPlayer.id && p.team === 'evil');
+      return evilPeers.map(p => ({ player: p, hint: '邪惡方' }));
     }
     case 'percival': {
-      const merlinLike = players.filter(
-        p => p.id !== currentPlayer.id && (p.role === 'merlin' || p.role === 'morgana'),
+      // Server 用 revealedCandidates 欄位標記兩位 candidate (梅林/莫甘娜).
+      // knownRole 維持 undefined — Percival 無法 disambiguate.
+      const candidates = players.filter(
+        p => p.id !== currentPlayer.id
+          && Array.isArray(p.revealedCandidates) && p.revealedCandidates.length >= 2,
       );
-      // Percival cannot disambiguate — knownRole intentionally undefined.
-      return merlinLike.map(p => ({ player: p, hint: '可能是梅林' }));
+      return candidates.map(p => ({ player: p, hint: '可能是梅林或莫甘娜' }));
     }
     case 'assassin':
     case 'morgana':
     case 'mordred':
     case 'minion': {
-      const evilTeam = players.filter(
-        p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal') && p.role !== 'oberon',
-      );
-      return evilTeam.map(p => ({
-        player: p,
-        knownRole: p.role ?? undefined,
-        hint: '邪惡隊友',
-      }));
+      // 紅方互看 — 同梅林 case, 只知陣營不知具體角色.
+      const evilPeers = players.filter(p => p.id !== currentPlayer.id && p.team === 'evil');
+      return evilPeers.map(p => ({ player: p, hint: '邪惡隊友' }));
     }
     case 'loyal':
     case 'oberon':
