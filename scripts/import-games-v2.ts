@@ -59,6 +59,7 @@ const DATE_COL_CANDIDATES = ['日期時間', '日期'];
 const GAME_ID_COL_CANDIDATES = ['流水號', 'gameId', 'id'];
 const SESSION_COL_CANDIDATES = ['場次', 'session'];
 const LOCATION_COL_CANDIDATES = ['分類', 'location', '地點'];
+const ASSASSIN_TARGET_COL_CANDIDATES = ['刺殺', '刺殺目標', 'assassin'];
 
 const FIRESTORE_BATCH_LIMIT = 500;
 
@@ -120,6 +121,8 @@ interface RowBundle {
   locationCode: string;
   gameNumInDay: number;
   playerNames: string[];
+  /** Sheets 「刺殺」欄原文（單字元數字 1..9 或 0；空 = 沒到刺殺階段）。 */
+  assassinTargetRaw: string;
 }
 
 function extractRowBundle(
@@ -133,6 +136,7 @@ function extractRowBundle(
   const roleIdx = pickCol(headerIndex, ROLE_CODE_COL_CANDIDATES);
   const locationIdx = pickCol(headerIndex, LOCATION_COL_CANDIDATES);
   const sessionIdx = pickCol(headerIndex, SESSION_COL_CANDIDATES);
+  const assassinIdx = pickCol(headerIndex, ASSASSIN_TARGET_COL_CANDIDATES);
 
   const gameIdRaw = readCell(row, gameIdIdx);
   const playedAtStr = readCell(row, dateIdx);
@@ -140,6 +144,7 @@ function extractRowBundle(
   const roleCode = readCell(row, roleIdx);
   const locationCode = readCell(row, locationIdx);
   const sessionRaw = readCell(row, sessionIdx);
+  const assassinTargetRaw = readCell(row, assassinIdx);
 
   if (!gameIdRaw || !playedAtStr || !gameText || !roleCode) {
     return null;
@@ -168,6 +173,7 @@ function extractRowBundle(
     locationCode,
     gameNumInDay,
     playerNames,
+    assassinTargetRaw,
   };
 }
 
@@ -292,6 +298,8 @@ async function loadGamesV2FromSheet(
         gameNumInDay: bundle.gameNumInDay,
         playerNames: bundle.playerNames,
         gameId: `sheets-${bundle.gameIdRaw}`,
+        // 2026-04-25：把刺殺欄帶進 parser 才能正確區分 threeBlue_*。
+        assassinTargetRaw: bundle.assassinTargetRaw,
         // Phase 2b 無 UUID 查表：全部走 sheets:<名字> fallback
         // 未來可接 AccountService 查表
       });

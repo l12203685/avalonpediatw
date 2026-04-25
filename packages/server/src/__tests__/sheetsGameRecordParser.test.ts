@@ -17,6 +17,7 @@ const {
   deriveWinner,
   isQuestLine,
   isLadyLine,
+  parseAssassinTargetRaw,
 } = __internal;
 
 // ---------------------------------------------------------------------------
@@ -195,16 +196,46 @@ describe('sheetsGameRecordParser — low-level helpers', () => {
   });
 
   it('deriveWinner: 3 red = evil threeRed', () => {
-    expect(deriveWinner(['blue', 'red', 'red', 'blue', 'red'])).toEqual({
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['blue', 'red', 'red', 'blue', 'red'], undefined, roles)).toEqual({
       winnerCamp: 'evil',
       winReason: 'threeRed',
     });
   });
 
-  it('deriveWinner: 3 blue = good threeBlue (刺殺細節 Phase 2c 才補)', () => {
-    expect(deriveWinner(['blue', 'blue', 'red', 'blue'])).toEqual({
+  it('deriveWinner: 3 blue without assassin info → defaults to merlinAlive', () => {
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['blue', 'blue', 'red', 'blue'], undefined, roles)).toEqual({
       winnerCamp: 'good',
       winReason: 'threeBlue_merlinAlive',
+    });
+  });
+
+  it('deriveWinner: 3 blue + assassin hits merlin → threeBlue_merlinKilled (evil wins)', () => {
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['blue', 'blue', 'red', 'blue'], 8, roles)).toEqual({
+      winnerCamp: 'evil',
+      winReason: 'threeBlue_merlinKilled',
+      assassinTargetSeat: 8,
+      assassinCorrect: true,
+    });
+  });
+
+  it('deriveWinner: 3 blue + assassin misses merlin → threeBlue_merlinAlive (good wins)', () => {
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['blue', 'blue', 'red', 'blue'], 5, roles)).toEqual({
+      winnerCamp: 'good',
+      winReason: 'threeBlue_merlinAlive',
+      assassinTargetSeat: 5,
+      assassinCorrect: false,
+    });
+  });
+
+  it('deriveWinner: 3 red + assassin field present (ignored) → threeRed', () => {
+    const roles = { merlin: 8 };
+    expect(deriveWinner(['red', 'red', 'red'], 8, roles)).toEqual({
+      winnerCamp: 'evil',
+      winReason: 'threeRed',
     });
   });
 
@@ -222,6 +253,26 @@ describe('sheetsGameRecordParser — low-level helpers', () => {
     expect(isLadyLine('1>8 x')).toBe(true);
     expect(isLadyLine('138')).toBe(false);
     expect(isLadyLine('ooo')).toBe(false);
+  });
+
+  it('parseAssassinTargetRaw maps 1..9 to 1..9 and 0 to 10', () => {
+    expect(parseAssassinTargetRaw('1')).toBe(1);
+    expect(parseAssassinTargetRaw('5')).toBe(5);
+    expect(parseAssassinTargetRaw('9')).toBe(9);
+    expect(parseAssassinTargetRaw('0')).toBe(10);
+  });
+
+  it('parseAssassinTargetRaw returns undefined for empty / non-digit', () => {
+    expect(parseAssassinTargetRaw('')).toBeUndefined();
+    expect(parseAssassinTargetRaw(undefined)).toBeUndefined();
+    expect(parseAssassinTargetRaw('   ')).toBeUndefined();
+    expect(parseAssassinTargetRaw('abc')).toBeUndefined();
+  });
+
+  it('parseAssassinTargetRaw tolerates extra annotation chars after digit', () => {
+    // Sheets 偶有 "2 (梅)" 之類；我們只取首字
+    expect(parseAssassinTargetRaw('2 (梅)')).toBe(2);
+    expect(parseAssassinTargetRaw('8梅')).toBe(8);
   });
 });
 
@@ -537,5 +588,116 @@ ooxxx`;
 
   it('SHEETS_UNKNOWN_PLAYER_ID constant is the canonical string "sheets:unknown"', () => {
     expect(SHEETS_UNKNOWN_PLAYER_ID).toBe('sheets:unknown');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 刺殺欄 → winReason 驗證（Edward 2026-04-25：原本全 2146 場 winReason 都被
+// 標 threeBlue_merlinAlive，三藍死 = 0；修正後刺殺欄會被讀取並覆寫）。
+// Sheets 「刺殺」欄是單字元數字（1..9 = 對應座、0 = 座 10），無/空 = 未到刺殺。
+// ---------------------------------------------------------------------------
+
+describe('parseSheetsGameCell — assassin column (Sheets 「刺殺」欄)', () => {
+  // 5 任務全成功 → blue 5 → 進刺殺；roleCode 中梅林為座 8。
+  const FIVE_BLUE_TEXT = `138
+ooo
+248
+ooo
+358
+ooo
+168
+ooo
+258
+ooo`;
+
+  const ROLE_CODE_MERLIN_8 = '701498'; // 刺7 娜0 德1 奧4 派9 梅8
+
+  it('刺殺命中梅林 (target seat = merlin) → threeBlue_merlinKilled + winnerCamp evil', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: FIVE_BLUE_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 1,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      assassinTargetRaw: '8', // 刺座 8 = 梅林
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('evil');
+    expect(parsed.finalResult.winReason).toBe('threeBlue_merlinKilled');
+    expect(parsed.finalResult.assassinTargetSeat).toBe(8);
+    expect(parsed.finalResult.assassinCorrect).toBe(true);
+  });
+
+  it('刺殺未命中梅林 (target seat ≠ merlin) → threeBlue_merlinAlive + winnerCamp good', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: FIVE_BLUE_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 2,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      assassinTargetRaw: '5', // 刺座 5 ≠ 梅林座 8
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('good');
+    expect(parsed.finalResult.winReason).toBe('threeBlue_merlinAlive');
+    expect(parsed.finalResult.assassinTargetSeat).toBe(5);
+    expect(parsed.finalResult.assassinCorrect).toBe(false);
+  });
+
+  it('刺殺欄為 "0" → target seat 10 → 若梅林座 ≠ 10 為 missAlive', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: FIVE_BLUE_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 3,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      assassinTargetRaw: '0', // 0 = 座 10，但梅林是座 8
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('good');
+    expect(parsed.finalResult.winReason).toBe('threeBlue_merlinAlive');
+    expect(parsed.finalResult.assassinTargetSeat).toBe(10);
+    expect(parsed.finalResult.assassinCorrect).toBe(false);
+  });
+
+  it('刺殺欄空 / undefined → 預設 threeBlue_merlinAlive (向後相容)', () => {
+    const parsed = parseSheetsGameCell({
+      gameText: FIVE_BLUE_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 4,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      // assassinTargetRaw 不提供
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('good');
+    expect(parsed.finalResult.winReason).toBe('threeBlue_merlinAlive');
+    // 沒給就不寫這兩個欄位
+    expect(parsed.finalResult.assassinTargetSeat).toBeUndefined();
+    expect(parsed.finalResult.assassinCorrect).toBeUndefined();
+  });
+
+  it('三紅 + 刺殺欄填了 (異常) → 仍為 threeRed (刺殺欄忽略)', () => {
+    // 3 紅任務即收 → 直接結束，根本沒到刺殺階段。
+    // Sheets 偶有錯填，但 winReason 仍應 = threeRed。
+    const THREE_RED_TEXT = `138
+oox
+248
+oox
+358
+oox`;
+    const parsed = parseSheetsGameCell({
+      gameText: THREE_RED_TEXT,
+      roleCode: ROLE_CODE_MERLIN_8,
+      locationCode: '面瓦',
+      playedAtStr: '2026/01/15',
+      gameNumInDay: 5,
+      playerNames: ['', '', '', '', '', '', '', '', '', ''],
+      assassinTargetRaw: '8', // 異常填了梅林座
+    });
+    expect(parsed.finalResult.winnerCamp).toBe('evil');
+    expect(parsed.finalResult.winReason).toBe('threeRed');
+    expect(parsed.finalResult.assassinTargetSeat).toBeUndefined();
+    expect(parsed.finalResult.assassinCorrect).toBeUndefined();
   });
 });

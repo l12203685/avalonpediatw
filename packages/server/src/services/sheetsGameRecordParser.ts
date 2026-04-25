@@ -65,6 +65,17 @@ export interface SheetsParseInput {
   playerNameToUid?: (name: string) => string | null;
   /** 選用的 gameId；未提供則用 date + gameNum 組出。 */
   gameId?: string;
+  /**
+   * 刺殺目標座號（從 Sheets 「刺殺」欄）。
+   *
+   * - 數字 1..9 = 對應座號；'0' = 座 10。
+   * - 空字串 / `undefined` = 沒進到刺殺階段（多為三紅或舊資料未填）。
+   *
+   * 三藍時 parser 會用此值決定 `winReason`：
+   *   - target === merlin → `threeBlue_merlinKilled` (winnerCamp 翻為 evil)
+   *   - 其他 → `threeBlue_merlinAlive`（含未提供）
+   */
+  assassinTargetRaw?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -287,18 +298,75 @@ function parseQuestLine(
 // Win condition
 // ---------------------------------------------------------------------------
 
+/**
+ * 解析刺殺欄原始字串為座號（1..10）。空字串 / 非數字 → `undefined`。
+ *
+ * Sheets 「刺殺」欄格式：
+ *   - 1..9 = 對應座號
+ *   - '0'  = 座 10
+ *   - 空 / undefined = 沒到刺殺階段
+ */
+function parseAssassinTargetRaw(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  // 只取第一個 digit char（Sheets 偶有 "2 (梅)" 之類附註）
+  const ch = trimmed[0];
+  if (!/^[0-9]$/.test(ch)) return undefined;
+  try {
+    return charToSeat(ch);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 由任務結果 + 刺殺欄 + 角色座號推 `winnerCamp` + `winReason` + 刺殺欄位。
+ *
+ * 規則：
+ *   1. red ≥ 3 → 紅勝 (`threeRed`)，刺殺欄不適用（即便填了也忽略）。
+ *   2. blue ≥ 3 + 刺殺命中梅林 → 紅勝 (`threeBlue_merlinKilled`, winnerCamp = `evil`)。
+ *   3. blue ≥ 3 + 刺殺未中梅林（含未提供） → 藍勝 (`threeBlue_merlinAlive`)。
+ *   4. fallback (理論不會到) → `threeRed` 保險。
+ */
 function deriveWinner(
   questOutcomes: Array<'blue' | 'red'>,
-): { winnerCamp: CampV2; winReason: WinReasonV2 } {
+  assassinTargetSeat: number | undefined,
+  roles: RolesV2,
+): {
+  winnerCamp: CampV2;
+  winReason: WinReasonV2;
+  assassinTargetSeat?: number;
+  assassinCorrect?: boolean;
+} {
   let blue = 0;
   let red = 0;
   for (const o of questOutcomes) {
     if (o === 'blue') blue += 1;
     else red += 1;
   }
-  if (red >= 3) return { winnerCamp: 'evil', winReason: 'threeRed' };
+  if (red >= 3) {
+    return { winnerCamp: 'evil', winReason: 'threeRed' };
+  }
   if (blue >= 3) {
-    // Phase 2a 只標「好人三藍成立」；刺殺細節 Phase 2c 補（需 transcript）。
+    if (assassinTargetSeat !== undefined && roles.merlin !== undefined) {
+      const correct = assassinTargetSeat === roles.merlin;
+      if (correct) {
+        return {
+          winnerCamp: 'evil',
+          winReason: 'threeBlue_merlinKilled',
+          assassinTargetSeat,
+          assassinCorrect: true,
+        };
+      }
+      return {
+        winnerCamp: 'good',
+        winReason: 'threeBlue_merlinAlive',
+        assassinTargetSeat,
+        assassinCorrect: false,
+      };
+    }
+    // 沒提供刺殺欄（舊資料 / 沒到刺殺階段紀錄遺漏） → 預設藍活
     return { winnerCamp: 'good', winReason: 'threeBlue_merlinAlive' };
   }
   // fallback：不足 3 勝任何一方（理論上 5 回合一定有一方 ≥3），保險用 evil。
@@ -472,6 +540,7 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
     playerNames,
     playerNameToUid,
     gameId,
+    assassinTargetRaw,
   } = input;
 
   // ---- Line normalization ----
@@ -619,7 +688,8 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
     }
   }
 
-  const { winnerCamp, winReason } = deriveWinner(questOutcomes);
+  const assassinTargetSeat = parseAssassinTargetRaw(assassinTargetRaw);
+  const winnerInfo = deriveWinner(questOutcomes, assassinTargetSeat, roles);
 
   const playerSeats = buildPlayerSeats(playerNames, playerCount, playerNameToUid);
 
@@ -629,10 +699,15 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
     playedAt: parsePlayedAt(playedAtStr),
     playerSeats,
     finalResult: {
-      winnerCamp,
-      winReason,
+      winnerCamp: winnerInfo.winnerCamp,
+      winReason: winnerInfo.winReason,
       roles,
-      // Sheets 牌譜不含刺殺細節，留空；Phase 2c 會從 transcript 補。
+      ...(winnerInfo.assassinTargetSeat !== undefined && {
+        assassinTargetSeat: winnerInfo.assassinTargetSeat,
+      }),
+      ...(winnerInfo.assassinCorrect !== undefined && {
+        assassinCorrect: winnerInfo.assassinCorrect,
+      }),
     },
     missions,
     ladyChain: ladyChain.length > 0 ? ladyChain : undefined,
@@ -661,4 +736,5 @@ export const __internal = {
   parsePlayedAt,
   isQuestLine,
   isLadyLine,
+  parseAssassinTargetRaw,
 };
