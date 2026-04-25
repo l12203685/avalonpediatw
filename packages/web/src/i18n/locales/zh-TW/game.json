@@ -77,7 +77,9 @@
     "state": "狀態：",
     "viewRole": "查看角色",
     "mute": "靜音",
-    "unmute": "開啟音效"
+    "unmute": "開啟音效",
+    "loyalViewOn": "切換成忠臣視角（隱藏角色資訊）",
+    "loyalViewOff": "還原原本視角"
   },
   "roster": {
     "goodCount": "🔵 正義方 {{count}} 人",

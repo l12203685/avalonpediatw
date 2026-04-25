@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Crown, Shield, WifiOff } from 'lucide-react';
 import { displaySeatNumber } from '../utils/seatDisplay';
 import RoleAvatar from './RoleAvatar';
-import { pickAvatarUrl, LAKE_IMAGE } from '../utils/avalonAssets';
+import { pickAvatarUrl, LAKE_IMAGE, getCampImage } from '../utils/avalonAssets';
 
 const ROLE_NAMES: Record<string, string> = {
   merlin:   '梅林',
@@ -50,6 +50,16 @@ interface PlayerCardProps {
    * most recent quest. `undefined` = player did not participate (no badge).
    */
   lastQuestResult?: 'success' | 'fail';
+  /**
+   * 忠臣視角 (#107 Edward 2026-04-25 right-top eye toggle). When true:
+   *   - Self & others render as a generic loyal silhouette: avatar uses the
+   *     unknown / 雜魚 portrait, border drops the team-coloured gradient.
+   *   - Own inline role badge (RoleAvatar + 角色名 + 陣營 chip) is hidden.
+   * Server data isn't mutated — it's a UI-only blindfold so the viewer is
+   * forced to read public behaviour like a vanilla 忠臣. Toggling off restores
+   * the original reveals immediately.
+   */
+  loyalView?: boolean;
 }
 
 export default function PlayerCard({
@@ -67,7 +77,14 @@ export default function PlayerCard({
   onShieldClick,
   isLadyHolder = false,
   lastQuestResult,
+  loyalView = false,
 }: PlayerCardProps): JSX.Element {
+  // 忠臣視角 — derive the displayed role/team. We never mutate the player
+  // prop; we just compute view-only fields. `effectiveRole === null` forces
+  // pickAvatarUrl to return the unknown silhouette; `effectiveTeam === null`
+  // pushes the avatar border into the neutral grey branch below.
+  const effectiveRole = loyalView ? null : (player.role ?? null);
+  const effectiveTeam = loyalView ? null : (player.team ?? null);
   // Horizontal row layout: left side → avatar on right edge (info-left), right side → avatar on left edge (info-right)
   const rowDirection = side === 'left' ? 'flex-row' : 'flex-row-reverse';
   const textAlign = side === 'left' ? 'text-right items-end' : 'text-left items-start';
@@ -145,11 +162,11 @@ export default function PlayerCard({
           className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center font-bold text-sm sm:text-base border-[3px] transition-all relative overflow-hidden ${
             player.status === 'disconnected'
               ? 'border-gray-600 bg-gradient-to-br from-gray-600 to-gray-700 opacity-50'
-              : isCurrentPlayer
+              : isCurrentPlayer && !loyalView
               ? 'border-yellow-400 bg-gradient-to-br from-yellow-400 to-yellow-500 shadow-lg shadow-yellow-400/50'
-              : player.team === 'evil'
+              : effectiveTeam === 'evil'
               ? 'border-red-500 bg-gradient-to-br from-red-500 to-red-700'
-              : player.team === 'good'
+              : effectiveTeam === 'good'
               ? 'border-blue-500 bg-gradient-to-br from-blue-500 to-blue-700'
               : player.isBot
               ? 'border-slate-500 bg-gradient-to-br from-slate-600 to-slate-800'
@@ -173,7 +190,7 @@ export default function PlayerCard({
               />
             ) : (
               <img
-                src={pickAvatarUrl(player.role as Role | null | undefined, player.id)}
+                src={pickAvatarUrl(effectiveRole as Role | null | undefined, player.id)}
                 alt={player.name}
                 className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover"
                 loading="lazy"
@@ -372,8 +389,9 @@ export default function PlayerCard({
       <div className={`flex-1 min-w-0 flex flex-col gap-0.5 ${textAlign}`}>
         {/* Show own role + team inline — only the viewer sees their own role badge
             so they can scan it at a glance. Other players' names already appear
-            inside their avatar circle, so no outer label is needed. */}
-        {isCurrentPlayer && player.role && (
+            inside their avatar circle, so no outer label is needed.
+            忠臣視角 (loyalView) → 整段隱藏，自己也看不到 role / team 資訊。 */}
+        {isCurrentPlayer && player.role && !loyalView && (
           <div className={`flex flex-wrap items-center gap-1 ${side === 'left' ? 'justify-end' : 'justify-start'}`}>
             <RoleAvatar role={player.role as Role} size="sm" />
             <span className="text-[9px] sm:text-[10px] font-semibold bg-yellow-600/90 text-white px-1.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
@@ -381,13 +399,24 @@ export default function PlayerCard({
             </span>
             {player.team && (
               <span
-                className={`text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${
-                  player.team === 'good'
-                    ? 'bg-blue-600/80 text-white'
-                    : 'bg-red-600/80 text-white'
+                className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold px-1 py-0.5 rounded-full whitespace-nowrap bg-black/50 border ${
+                  player.team === 'good' ? 'border-blue-400/50 text-blue-100' : 'border-red-400/50 text-red-100'
                 }`}
               >
-                {player.team === 'good' ? '⚔️ 好人' : '👹 邪惡'}
+                {/* Edward 2026-04-25 camp emblem unification: swap colored dot
+                    chip for the painted shield art (team-good / team-evil) so
+                    the rail uses the same visual language as the role-reveal
+                    banner and end-screen. Image is 14px to fit the chip; alt
+                    text keeps the textual fallback for screen readers and
+                    when the image fails to load. */}
+                <img
+                  src={getCampImage(player.team)}
+                  alt={player.team === 'good' ? '正義方' : '邪惡方'}
+                  className="w-3.5 h-3.5 object-contain flex-shrink-0"
+                  loading="lazy"
+                  draggable={false}
+                />
+                {player.team === 'good' ? '正義' : '邪惡'}
               </span>
             )}
           </div>

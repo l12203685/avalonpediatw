@@ -76,19 +76,49 @@ export async function authenticateSocket(socket: Socket, next: (err?: Error) => 
         const uid      = decodedToken.uid;
         const email    = decodedToken.email || '';
         const name     = decodedToken.name  || email.split('@')[0];
-        const photoURL = decodedToken.picture;
+        const idTokenPhoto = decodedToken.picture;
         const rawProvider = decodedToken.firebase?.sign_in_provider || 'google.com';
         const provider: User['provider'] = rawProvider.includes('google') ? 'google' : 'email';
 
         let userProfile = await getUserProfile(uid);
         if (!userProfile) {
-          const newUser: User = { uid, email, displayName: name, photoURL, provider, createdAt: Date.now(), updatedAt: Date.now() };
+          const newUser: User = { uid, email, displayName: name, photoURL: idTokenPhoto, provider, createdAt: Date.now(), updatedAt: Date.now() };
           await createUserProfile(newUser);
           userProfile = newUser;
         }
 
         // 每次登入都 upsert Supabase（保持 display_name/photo_url 最新）
-        const supabaseUserId = await upsertUser({ firebase_uid: uid, display_name: name, email, photo_url: photoURL, provider });
+        // upsert 不覆蓋已存在的自訂 photo_url（upsertUser 內 update 會 overwrite，
+        // 但對既有用戶不傳 photo_url=null 才安全）— 先傳 idTokenPhoto 維持
+        // 既有行為（Google 重新登入會把自訂 photo 蓋掉），稍後 override 由
+        // auth_users.photo_url 接管。
+        const supabaseUserId = await upsertUser({ firebase_uid: uid, display_name: name, email, photo_url: idTokenPhoto, provider });
+
+        // Edward 2026-04-25 hineko avatar upload：自訂頭像優先序高於 Firebase
+        // ID token 帶來的 picture（Google 大頭照）。讀 auth_users.photo_url，
+        // 有值就用它覆蓋，讓玩家上傳的頭像在大廳/遊戲圈立刻生效。
+        let effectivePhotoURL = idTokenPhoto;
+        if (supabaseUserId && isFirebaseAdminReady()) {
+          try {
+            const { getAdminFirestore } = await import('../services/firebase');
+            const fsDb = getAdminFirestore();
+            const snap = await fsDb.collection('auth_users').doc(supabaseUserId).get();
+            if (snap.exists) {
+              const data = (snap.data() ?? {}) as { photo_url?: string | null };
+              if (typeof data.photo_url === 'string' && data.photo_url.length > 0) {
+                effectivePhotoURL = data.photo_url;
+              }
+            }
+          } catch (err) {
+            // Firestore 不可達 → 用 idTokenPhoto fallback，不影響登入
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn('[firebase auth] auth_users photo_url override read failed:', msg);
+          }
+        }
+
+        // 把 effectivePhotoURL 灌回 userProfile，讓 GameServer.handleJoinRoom
+        // 用的 user.photoURL 拿到自訂頭像（不只是 Google 的）。
+        userProfile = { ...userProfile, photoURL: effectivePhotoURL };
 
         socket.data.user       = userProfile;
         socket.data.uid        = uid;

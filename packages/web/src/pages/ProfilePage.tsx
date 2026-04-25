@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
-import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, BarChart3, Camera } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
-import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile } from '../services/api';
+import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile, uploadAvatar } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
 import { fetchLinkedAccounts, unlinkAccount, buildLinkProviderUrl, type LinkedAccount, type LinkProvider } from '../services/api';
@@ -173,6 +173,10 @@ export default function ProfilePage(): JSX.Element {
   const [editPhotoUrl, setEditPhotoUrl] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
+
+  // Avatar upload — Edward 2026-04-25
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError]         = useState('');
 
   // #42 Linked accounts — own profile only
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[] | null>(null);
@@ -361,6 +365,44 @@ export default function ProfilePage(): JSX.Element {
       addToast(t('profile:edit.updateFail'), 'error');
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  // Avatar upload — submit a File to the server, Firebase Storage stores it,
+  // server writes photo_url back to auth_users + Supabase, returns the public URL.
+  // We then merge into local profile so the avatar updates immediately.
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    // Reset input so the same file can be reselected after a failure.
+    e.target.value = '';
+    if (!file) return;
+
+    const token = getStoredToken();
+    if (!token) {
+      setAvatarError(t('profile:edit.errLogin'));
+      return;
+    }
+
+    setAvatarError('');
+    setAvatarUploading(true);
+    try {
+      const { avatarUrl } = await uploadAvatar(token, file);
+      // Reflect new URL into local profile + gameStore so PlayerCard rerenders.
+      if (profile) {
+        setProfile({ ...profile, photo_url: avatarUrl });
+      }
+      if (currentPlayer) {
+        setCurrentPlayer({ ...currentPlayer, avatar: avatarUrl });
+      }
+      // If user is mid-edit, sync the URL field too.
+      setEditPhotoUrl(avatarUrl);
+      addToast(t('profile:edit.updateSuccess'), 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('profile:edit.updateFail');
+      setAvatarError(msg);
+      addToast(msg, 'error');
+    } finally {
+      setAvatarUploading(false);
     }
   };
 
@@ -555,18 +597,42 @@ export default function ProfilePage(): JSX.Element {
               {editing && isMe ? (
                 <div className="space-y-4">
                   <div className="flex items-center gap-5">
-                    {editPhotoUrl.trim() ? (
-                      <img
-                        src={editPhotoUrl.trim()}
-                        alt=""
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
-                        className="w-20 h-20 rounded-full object-cover border-2 border-blue-500/50 bg-gray-800"
-                      />
-                    ) : (
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-black text-3xl border-2 border-blue-500/50">
-                        {(editName || profile.display_name)[0]?.toUpperCase()}
-                      </div>
-                    )}
+                    <div className="relative flex-shrink-0">
+                      {editPhotoUrl.trim() ? (
+                        <img
+                          src={editPhotoUrl.trim()}
+                          alt=""
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+                          className="w-20 h-20 rounded-full object-cover border-2 border-blue-500/50 bg-gray-800"
+                        />
+                      ) : (
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-black text-3xl border-2 border-blue-500/50">
+                          {(editName || profile.display_name)[0]?.toUpperCase()}
+                        </div>
+                      )}
+                      <label
+                        className={`absolute -bottom-1 -right-1 flex items-center justify-center w-7 h-7 rounded-full border-2 border-blue-500/70 shadow-md transition-all cursor-pointer ${
+                          avatarUploading
+                            ? 'bg-gray-700 cursor-wait'
+                            : 'bg-blue-600 hover:bg-blue-500 hover:scale-110'
+                        }`}
+                        title={avatarUploading ? t('profile:saving') : t('profile:avatarUpload.button')}
+                        aria-label={t('profile:avatarUpload.button')}
+                      >
+                        {avatarUploading ? (
+                          <Loader size={14} className="animate-spin text-white" />
+                        ) : (
+                          <Camera size={14} className="text-white" />
+                        )}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          disabled={avatarUploading}
+                          onChange={handleAvatarFile}
+                        />
+                      </label>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <label className="block text-xs font-bold text-gray-400 mb-1">{t('profile:displayNameLabel')}</label>
                       <input
@@ -589,7 +655,13 @@ export default function ProfilePage(): JSX.Element {
                       placeholder="https://..."
                       className="w-full bg-avalon-card/80 border border-gray-600 focus:border-blue-500 rounded-lg px-3 py-2 text-white text-sm outline-none"
                     />
+                    <p className="text-[10px] text-gray-500 mt-1">{t('profile:avatarUpload.hint')}</p>
                   </div>
+                  {avatarError && (
+                    <div className="text-xs text-red-400 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2">
+                      {avatarError}
+                    </div>
+                  )}
                   {editError && (
                     <div className="text-xs text-red-400 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2">
                       {editError}
@@ -615,13 +687,42 @@ export default function ProfilePage(): JSX.Element {
                 </div>
               ) : (
                 <div className="flex items-center gap-5">
-                  {profile.photo_url ? (
-                    <img src={profile.photo_url} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-blue-500/50" />
-                  ) : (
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-black text-3xl border-2 border-blue-500/50">
-                      {profile.display_name[0]?.toUpperCase()}
-                    </div>
-                  )}
+                  {/* Avatar circle + upload button overlay (own profile only).
+                      Edward 2026-04-25「讓玩家顯圖可以自行上傳」— 點頭像直接觸發
+                      file picker，不必先進入 Edit 模式，門檻最低。 */}
+                  <div className="relative flex-shrink-0">
+                    {profile.photo_url ? (
+                      <img src={profile.photo_url} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-blue-500/50" />
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-black text-3xl border-2 border-blue-500/50">
+                        {profile.display_name[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    {isMe && (
+                      <label
+                        className={`absolute -bottom-1 -right-1 flex items-center justify-center w-7 h-7 rounded-full border-2 border-blue-500/70 shadow-md transition-all cursor-pointer ${
+                          avatarUploading
+                            ? 'bg-gray-700 cursor-wait'
+                            : 'bg-blue-600 hover:bg-blue-500 hover:scale-110'
+                        }`}
+                        title={avatarUploading ? t('profile:saving') : t('profile:avatarUpload.button')}
+                        aria-label={t('profile:avatarUpload.button')}
+                      >
+                        {avatarUploading ? (
+                          <Loader size={14} className="animate-spin text-white" />
+                        ) : (
+                          <Camera size={14} className="text-white" />
+                        )}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          disabled={avatarUploading}
+                          onChange={handleAvatarFile}
+                        />
+                      </label>
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-2xl font-black text-white">{profile.display_name}</h2>
@@ -672,6 +773,13 @@ export default function ProfilePage(): JSX.Element {
                       </button>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Avatar upload error in view mode */}
+              {!editing && avatarError && isMe && (
+                <div className="mt-3 text-xs text-red-400 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2">
+                  {avatarError}
                 </div>
               )}
 

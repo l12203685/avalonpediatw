@@ -65,6 +65,10 @@
     "updateSuccess": "個人資料已更新",
     "updateFail": "更新失敗"
   },
+  "avatarUpload": {
+    "button": "上傳頭像",
+    "hint": "或上傳檔案 (JPG/PNG/WebP，上限 1MB)"
+  },
   "error": {
     "noRecords": "尚無遊戲記錄 — 完成一場遊戲後就能看到你的個人資料",
     "notLoggedIn": "請先登入才能查看個人資料",

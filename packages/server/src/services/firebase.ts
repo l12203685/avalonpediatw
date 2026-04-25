@@ -103,6 +103,28 @@ export function getAdminFirestore(): Firestore {
 }
 
 /**
+ * Cloud Storage bucket handle (default bucket = `${FIREBASE_STORAGE_BUCKET}`).
+ *
+ * Edward 2026-04-25 hineko avatar upload：玩家自訂頭像 file → 此 bucket。
+ * Service account 已具 Storage Admin 權限（同 Firebase Admin SDK key）。
+ *
+ * 注意：Cloud Storage default bucket 的命名規則因專案建立年份不同而分兩種：
+ *   舊專案: `<project>.appspot.com`
+ *   新專案: `<project>.firebasestorage.app`
+ * 兩者都直接傳給 `bucket()` 不要拼。env `FIREBASE_STORAGE_BUCKET` 是權威來源。
+ */
+export function getAdminStorageBucket(): ReturnType<admin.storage.Storage['bucket']> {
+  if (!adminApp) {
+    throw new Error('Firebase admin not initialized');
+  }
+  const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
+  if (!bucketName) {
+    throw new Error('FIREBASE_STORAGE_BUCKET env not set');
+  }
+  return admin.storage(adminApp).bucket(bucketName);
+}
+
+/**
  * Verify Firebase ID Token
  */
 export async function verifyIdToken(idToken: string): Promise<admin.auth.DecodedIdToken> {

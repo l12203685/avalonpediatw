@@ -28,6 +28,13 @@ interface GameBoardProps {
   isPicking?: boolean;
   selectedTeamIds?: Set<string>;
   onSeatClick?: (playerId: string) => void;
+  /**
+   * 忠臣視角 toggle (#107 Edward 2026-04-25 right-top eye icon revamp). When true,
+   * every PlayerCard suppresses role / team reveals — own role badge, evil/good
+   * team gradient borders, painted role avatars — so the viewer is forced into a
+   * loyal-only blind. UI-only filter; server still emits the canonical room.
+   */
+  loyalView?: boolean;
 }
 
 const STATE_LABELS: Record<string, string> = {
@@ -69,6 +76,7 @@ export default function GameBoard({
   isPicking = false,
   selectedTeamIds,
   onSeatClick,
+  loyalView = false,
 }: GameBoardProps): JSX.Element {
   const players = Object.values(room.players);
   const playerIds = Object.keys(room.players);
@@ -180,6 +188,7 @@ export default function GameBoard({
           lastQuestResult={
             lastQuestParticipants.has(player.id) ? lastQuestResult : undefined
           }
+          loyalView={loyalView}
         />
       </motion.div>
     );

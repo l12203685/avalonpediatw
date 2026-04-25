@@ -14,13 +14,12 @@ import MissionTrack from '../components/MissionTrack';
 import SuspicionBoard from '../components/SuspicionBoard';
 import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
 import CompactScoresheet from '../components/CompactScoresheet';
-import audioService from '../services/audio';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2, Eye } from 'lucide-react';
+import { Home, Bell, RefreshCw, WifiOff, Loader2, Eye } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
 import { seatPrefix, displaySeatNumber, seatOf } from '../utils/seatDisplay';
-import { WINNER_CUPS, TEAM_INDICATORS, LAKE_IMAGE, getBoardImage } from '../utils/avalonAssets';
+import { WINNER_CUPS, TEAM_INDICATORS, LAKE_IMAGE, getBoardImage, getCampImage } from '../utils/avalonAssets';
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
@@ -40,8 +39,12 @@ export default function GamePage(): JSX.Element {
   const [assassinTimer, setAssassinTimer] = useState(assassinBase);
   const [pendingVoteReveal, setPendingVoteReveal] = useState<VoteRecord | null>(null);
   const [pendingQuestReveal, setPendingQuestReveal] = useState<QuestRecord | null>(null);
-  const [audioEnabled, setAudioEnabled] = useState(() => audioService.isEnabled());
   const [teamSelectTimer, setTeamSelectTimer] = useState(teamSelectBase);
+  // 忠臣視角 toggle (#107 Edward 2026-04-25 right-top eye icon revamp).
+  // 開啟時暫時隱藏所有非忠臣資訊（自己角色 / 敵我隊友 / 紅藍隊配色），
+  // 玩家被迫像忠臣一樣只看公開行為線索 — 用於教學 / 直播 / 挑戰自我。
+  // 不影響伺服器端資料；純 UI 過濾，再次點擊即還原原本視角。
+  const [loyalView, setLoyalView] = useState(false);
   // Leader team-selection state lifted from the old TeamSelectionPanel so rail clicks
   // (#83 Phase 1) can toggle membership directly on PlayerCards.
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
@@ -182,11 +185,6 @@ export default function GamePage(): JSX.Element {
     setIsAssassinating(true);
     submitAssassination(room.id, currentPlayer.id, targetId);
     setTimeout(() => setIsAssassinating(false), 3000);
-  };
-
-  const handleToggleAudio = () => {
-    audioService.toggleAudio();
-    setAudioEnabled(audioService.isEnabled());
   };
 
   const handlePlayAgain = () => {
@@ -342,33 +340,29 @@ export default function GamePage(): JSX.Element {
 
       {/*
         Slim header — 2026-04-25 (Edward「上方排版太佔空間 只要留我第二張圖的部分就可以」).
-        砍掉：Avalon 標題 / 狀態徽章 / 查看角色按鈕 / 喇叭按鈕 / 陣營人數 / 當前 actor 標籤。
         保留：R1-R5 任務 + 否決方塊（MissionTrack 已包含）。
-        查看角色 / 靜音 入口 → 移到右上角浮動小圖示（隱藏式 menu，需要時才看見）。
+        2026-04-25 Edward icon revamp:
+          - 聲音按鈕砍掉（音效預設開啟，無需 UI toggle）。
+          - 眼睛按鈕從「開啟角色 modal」改成「忠臣視角 toggle」 — 角色資訊已常態
+            顯示在 PlayerCard 上，故 modal 不需要；改成切換視角隱藏自己/敵我隊友
+            資訊以模擬忠臣盲視角，再點一次還原。
       */}
       <div className="relative z-10 shrink-0 px-3 pt-2">
         <div className="relative">
           <MissionTrack room={room} />
           <div className="absolute top-0 right-0 flex gap-1.5">
             <button
-              onClick={() => setShowRoleReveal(true)}
-              title={t('game:header.viewRole')}
-              aria-label={t('game:header.viewRole')}
-              className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-900/40 hover:bg-blue-800/70 border border-blue-700/60 text-blue-300 transition-colors"
-            >
-              <Eye size={14} />
-            </button>
-            <button
-              onClick={handleToggleAudio}
-              title={audioEnabled ? t('game:header.mute') : t('game:header.unmute')}
-              aria-label={audioEnabled ? t('game:header.mute') : t('game:header.unmute')}
+              onClick={() => setLoyalView(v => !v)}
+              title={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+              aria-label={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+              aria-pressed={loyalView}
               className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
-                audioEnabled
-                  ? 'bg-gray-800/40 hover:bg-gray-700/70 border-gray-600 text-gray-300'
-                  : 'bg-gray-900/40 hover:bg-gray-800/70 border-gray-700 text-gray-500'
+                loyalView
+                  ? 'bg-yellow-500/30 hover:bg-yellow-500/50 border-yellow-400 text-yellow-200 shadow-md shadow-yellow-400/30'
+                  : 'bg-blue-900/40 hover:bg-blue-800/70 border-blue-700/60 text-blue-300'
               }`}
             >
-              {audioEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+              <Eye size={14} />
             </button>
           </div>
         </div>
@@ -411,6 +405,7 @@ export default function GamePage(): JSX.Element {
           isPicking={isLeaderPicking}
           selectedTeamIds={selectedTeamIds}
           onSeatClick={handleSeatClick}
+          loyalView={loyalView}
           chatSlot={
             room.state !== 'lobby'
               ? <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} variant="inline" room={room} />
@@ -871,7 +866,20 @@ export default function GamePage(): JSX.Element {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <p className="font-bold text-white truncate">座 {displaySeatNumber(seatOf(player.id, room.players))}{wasAssassinated && ' 🗡️'}</p>
+                      {/* Edward 2026-04-25 camp emblem unification: small
+                          painted shield sits next to the seat number so each
+                          end-screen reveal card shows camp via the same art
+                          used in the role-reveal banner + winner-cup. Image
+                          is 16px so it sits inline with the seat text. */}
+                      <p className="font-bold text-white truncate flex items-center gap-1.5">
+                        <img
+                          src={getCampImage(isGood ? 'good' : 'evil')}
+                          alt={isGood ? '正義方' : '邪惡方'}
+                          className="w-4 h-4 object-contain flex-shrink-0"
+                          draggable={false}
+                        />
+                        座 {displaySeatNumber(seatOf(player.id, room.players))}{wasAssassinated && ' 🗡️'}
+                      </p>
                       {room.eloDeltas?.[player.id] !== undefined && (
                         <span className={`text-xs font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                           {room.eloDeltas[player.id] >= 0 ? '+' : ''}{room.eloDeltas[player.id]}

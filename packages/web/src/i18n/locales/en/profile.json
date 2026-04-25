@@ -65,6 +65,10 @@
     "updateSuccess": "Profile updated",
     "updateFail": "Update failed"
   },
+  "avatarUpload": {
+    "button": "Upload avatar",
+    "hint": "Or upload a file (JPG/PNG/WebP, max 1MB)"
+  },
   "error": {
     "noRecords": "No game records yet — complete a game to see your profile",
     "notLoggedIn": "Please log in to view your profile",

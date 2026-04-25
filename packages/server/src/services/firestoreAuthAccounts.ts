@@ -858,6 +858,58 @@ export async function recomputePrimaryEmail(userId: string): Promise<AccountOpRe
   }
 }
 
+/**
+ * 更新 auth_users row 的 display_name / photo_url（2026-04-25 hineko avatar upload）。
+ *
+ * 動機：Production 部署改走 Firestore SSoT（Supabase 已退場 Phase 4 進行中），
+ * 但 PATCH `/api/profile/me` 與 POST `/api/user/avatar` 兩條寫路徑早期只有
+ * Supabase 分支。此函式提供 Firestore 等價寫入，讓 Firebase-only 部署也能編輯。
+ *
+ * 行為：
+ *   - userId = `auth_users` doc id（與 PATCH 路徑的 supabaseId 同義）
+ *   - patch.display_name 為非空 string → 寫入；空字串視為未提供
+ *   - patch.photo_url === null → 清空 photo_url
+ *   - patch.photo_url 為 string → 寫入（caller 保證已驗證 http(s) URL + 長度）
+ *   - 兩欄都未變動 → 直接回成功（仍寫 updatedAt）
+ *   - doc 不存在 → 回 not_found（avatar upload 端會先確認 row 存在再上傳）
+ */
+export async function updateAuthUserProfileFields(
+  userId: string,
+  patch: { display_name?: string; photo_url?: string | null },
+): Promise<AccountOpResult<{ display_name: string | null; photo_url: string | null }>> {
+  const db = getFs();
+  if (!db) return { ok: false, code: 'no_store', reason: '帳戶資料庫未配置' };
+
+  try {
+    const ref = db.collection(AUTH_USERS).doc(userId);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, code: 'not_found', reason: '找不到帳號' };
+
+    const update: Record<string, unknown> = { updatedAt: Date.now() };
+    if (typeof patch.display_name === 'string' && patch.display_name.length > 0) {
+      update.display_name = patch.display_name;
+    }
+    if (patch.photo_url === null) {
+      update.photo_url = null;
+    } else if (typeof patch.photo_url === 'string') {
+      update.photo_url = patch.photo_url;
+    }
+    await ref.update(update);
+    const after = (await ref.get()).data() as { display_name?: string; photo_url?: string | null };
+    return {
+      ok: true,
+      data: {
+        display_name: typeof after.display_name === 'string' ? after.display_name : null,
+        photo_url:    typeof after.photo_url === 'string' ? after.photo_url : null,
+      },
+    };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[firestoreAuthAccounts] updateAuthUserProfileFields error:', err);
+    return { ok: false, code: 'error', reason: '更新個人檔案失敗' };
+  }
+}
+
 /** Add an email to a user's emails[] (unverified by default). */
 export async function addEmailToUser(userId: string, email: string): Promise<AccountOpResult> {
   const db = getFs();

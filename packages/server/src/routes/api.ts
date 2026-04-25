@@ -1,6 +1,6 @@
-import { Router, Request, Response, IRouter } from 'express';
+import { Router, Request, Response, IRouter, raw as expressRaw } from 'express';
 import { verify, JwtPayload } from 'jsonwebtoken';
-import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
+import { verifyIdToken, isFirebaseAdminReady, getAdminStorageBucket } from '../services/firebase';
 import {
   getGameEvents,
   isSupabaseReady,
@@ -202,6 +202,30 @@ function isAccountStoreReady(): boolean {
   return isSupabaseReady() || isFirestoreReady();
 }
 
+/**
+ * 讀 Firestore `auth_users/{uid}` 的 display_name / photo_url override（2026-04-25
+ * hineko avatar upload 引入）。production 走 Firestore SSoT；Supabase override
+ * 在 Firebase-only 部署回 null，這條補足空缺。
+ */
+async function getFirestoreAuthOverrides(
+  uid: string,
+): Promise<{ display_name: string | null; photo_url: string | null } | null> {
+  if (!isFirestoreReady()) return null;
+  try {
+    const { getAdminFirestore } = await import('../services/firebase');
+    const db = getAdminFirestore();
+    const snap = await db.collection('auth_users').doc(uid).get();
+    if (!snap.exists) return null;
+    const data = (snap.data() ?? {}) as { display_name?: string; photo_url?: string | null };
+    return {
+      display_name: typeof data.display_name === 'string' ? data.display_name : null,
+      photo_url:    typeof data.photo_url === 'string' ? data.photo_url : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** 把 Supabase override 欄位合併到 Firestore profile 上面 */
 function mergeOverrides<T extends FirestoreUserProfile>(
   profile: T,
@@ -291,19 +315,22 @@ router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => 
     // auth_users doc id（Firestore fallback path）或 Supabase UUID；兩者 uid
     // 都是 shortCodeIndex 的 key。
     const firestoreShortCode = supabaseId ? await getShortCodeByUid(supabaseId) : null;
+    // 2026-04-25 hineko avatar upload：若 Supabase 不在但 Firestore 在，
+    // auth_users override 的 display_name / photo_url 是權威來源。
+    const authOverrides = supabaseId ? await getFirestoreAuthOverrides(supabaseId) : null;
 
     // 仍找不到 Firestore profile → 回空 profile + overrides
     if (!profile) {
       const empty = emptyProfile(auth);
-      if (overrides) {
+      if (overrides || authOverrides) {
         return res.json({
           profile: {
             ...empty,
             id:           supabaseId ?? empty.id,
-            display_name: overrides.display_name,
-            photo_url:    overrides.photo_url,
-            email:        overrides.email,
-            provider:     overrides.provider,
+            display_name: authOverrides?.display_name ?? overrides?.display_name ?? empty.display_name,
+            photo_url:    authOverrides?.photo_url    ?? overrides?.photo_url    ?? empty.photo_url,
+            email:        overrides?.email ?? auth.email ?? empty.email,
+            provider:     overrides?.provider ?? auth.provider ?? empty.provider,
             short_code:   firestoreShortCode ?? empty.short_code,
           },
         });
@@ -319,6 +346,17 @@ router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => 
     if (supabaseId) {
       (merged as { id: string }).id = supabaseId;
     }
+    // auth_users override 蓋過 Firestore profile（Firestore profile 不帶
+    // display_name / photo_url，但 mergeOverrides 走 Supabase override 路徑時
+    // 不會看 authOverrides）。確保兩條都被 union 到。
+    if (authOverrides) {
+      if (authOverrides.display_name) (merged as { display_name: string }).display_name = authOverrides.display_name;
+      if (authOverrides.photo_url !== null) {
+        (merged as { photo_url: string | null }).photo_url = authOverrides.photo_url;
+      } else if (overrides?.photo_url == null) {
+        (merged as { photo_url: string | null }).photo_url = null;
+      }
+    }
     return res.json({ profile: merged });
   } catch (err) {
     console.error('[api/profile/me] Firestore error:', err);
@@ -328,14 +366,19 @@ router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => 
 });
 
 // ── PATCH /api/profile/me ─────────────────────────────────────
-// 僅允許編輯自己的 display_name 與 photo_url；guest 禁止。
+// 允許編輯 display_name 與 photo_url；guest 禁止。
+// 2026-04-25 hineko avatar upload：production 已遷 Firestore SSoT，PATCH 不再
+// 強制要求 Supabase。改成兩條寫路徑：
+//   1) Supabase ready → updateDbUserProfile（保留既有寫路徑）
+//   2) Firebase admin ready → updateAuthUserProfileFields（Firestore `auth_users.{display_name,photo_url}`）
+// 其中至少一條成功就回 200；皆失敗回 503。
 router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) => {
   const auth = await resolvePlayerAuth(req.headers.authorization);
   if (!auth) return res.status(401).json({ error: 'Unauthorized' });
   if (auth.provider === 'guest') {
     return res.status(403).json({ error: 'Guest accounts cannot edit profile' });
   }
-  if (!isSupabaseReady()) {
+  if (!isAccountStoreReady()) {
     return res.status(503).json({ error: 'Database not configured' });
   }
 
@@ -383,12 +426,36 @@ router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) =
     return res.status(503).json({ error: 'User row not found in database' });
   }
 
-  const updated = await updateDbUserProfile(supabaseId, patch);
-  if (!updated) {
+  // 雙寫：Supabase + Firestore。任一條成功即回 200；皆失敗才回 500。
+  let updatedDisplayName: string | null = null;
+  let updatedPhotoUrl:    string | null = null;
+  let anyOk = false;
+
+  if (isSupabaseReady()) {
+    const supaUpd = await updateDbUserProfile(supabaseId, patch);
+    if (supaUpd) {
+      anyOk = true;
+      updatedDisplayName = supaUpd.display_name;
+      updatedPhotoUrl    = supaUpd.photo_url;
+    }
+  }
+
+  if (isFirestoreReady()) {
+    const { updateAuthUserProfileFields } = await import('../services/firestoreAuthAccounts');
+    const fsUpd = await updateAuthUserProfileFields(supabaseId, patch);
+    if (fsUpd.ok && fsUpd.data) {
+      anyOk = true;
+      // Firestore 視為權威來源；若兩邊都成功，前端拿 Firestore 結果
+      updatedDisplayName = fsUpd.data.display_name ?? updatedDisplayName;
+      updatedPhotoUrl    = fsUpd.data.photo_url    ?? (patch.photo_url === null ? null : updatedPhotoUrl);
+    }
+  }
+
+  if (!anyOk) {
     return res.status(500).json({ error: 'Update failed' });
   }
 
-  // 回傳更新後的 profile（合併 Firestore + Supabase 最新 override）
+  // 回傳更新後的 profile（合併 Firestore + Supabase + auth_users override）
   try {
     let profile = await getFirestoreUserProfile(supabaseId);
     if (!profile && auth.displayName) {
@@ -396,14 +463,17 @@ router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) =
     }
     const overrides = await getDbUserOverrides(supabaseId);
     const firestoreShortCode = await getShortCodeByUid(supabaseId);
+    const authOverrides = await getFirestoreAuthOverrides(supabaseId);
+    const finalDisplayName = updatedDisplayName ?? authOverrides?.display_name ?? overrides?.display_name ?? null;
+    const finalPhotoUrl    = updatedPhotoUrl    ?? authOverrides?.photo_url    ?? overrides?.photo_url    ?? null;
     if (!profile) {
       const empty = emptyProfile(auth);
       return res.json({
         profile: {
           ...empty,
           id:           supabaseId,
-          display_name: updated.display_name,
-          photo_url:    updated.photo_url,
+          display_name: finalDisplayName ?? empty.display_name,
+          photo_url:    finalPhotoUrl,
           email:        overrides?.email ?? auth.email ?? null,
           provider:     overrides?.provider ?? auth.provider ?? 'unknown',
           short_code:   firestoreShortCode ?? empty.short_code,
@@ -412,14 +482,15 @@ router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) =
     }
     const merged = mergeOverrides(profile, overrides, firestoreShortCode);
     (merged as { id: string }).id = supabaseId;
+    if (finalDisplayName !== null) (merged as { display_name: string }).display_name = finalDisplayName;
+    (merged as { photo_url: string | null }).photo_url = finalPhotoUrl;
     return res.json({ profile: merged });
   } catch {
-    // 讀不到 Firestore 也回成功—改以 updated+overrides 合成
     return res.json({
       profile: {
         id:           supabaseId,
-        display_name: updated.display_name,
-        photo_url:    updated.photo_url,
+        display_name: updatedDisplayName ?? auth.displayName ?? supabaseId,
+        photo_url:    updatedPhotoUrl,
         email:        auth.email ?? null,
         provider:     auth.provider ?? 'unknown',
         elo_rating:   1000,
@@ -431,6 +502,120 @@ router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) =
       },
     });
   }
+});
+
+// ── POST /api/user/avatar ─────────────────────────────────────
+// 玩家上傳自訂頭像 → Firebase Storage → 寫回 photo_url。
+//
+// Edward 2026-04-25 「讓玩家顯圖可以自行上傳」。設計：
+//   - Body: 二進位 image bytes（Content-Type 是真實 MIME，由 client fetch 傳）
+//   - Limit: 1 MB，jpg / png / webp 三格式
+//   - Storage path: `avatars/{uid}/{timestamp}.{ext}`
+//   - 寫 Firestore `auth_users/{uid}.photo_url`（雙寫 Supabase 若 ready）
+//   - 回 { avatarUrl }
+//
+// 為何 raw body 不走 multer：(a) 不引新依賴；(b) 純單檔 binary 上傳，無需
+// multipart 解析；(c) 前端用 fetch 直接送 File body，最直觀。
+const AVATAR_MAX_BYTES = 1 * 1024 * 1024; // 1 MB
+const AVATAR_ALLOWED_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png':  'png',
+  'image/webp': 'webp',
+};
+
+router.post(
+  '/user/avatar',
+  publicLimiter,
+  // 限制 raw body 大小 + 接受三種 MIME
+  expressRaw({
+    type:  Object.keys(AVATAR_ALLOWED_MIME),
+    limit: AVATAR_MAX_BYTES,
+  }),
+  async (req: Request, res: Response) => {
+    const auth = await resolvePlayerAuth(req.headers.authorization);
+    if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+    if (auth.provider === 'guest') {
+      return res.status(403).json({ error: 'Guest accounts cannot upload avatar' });
+    }
+    if (!isFirebaseAdminReady()) {
+      return res.status(503).json({ error: 'Firebase admin not configured' });
+    }
+
+    const contentType = (req.headers['content-type'] ?? '').toString().split(';')[0].trim().toLowerCase();
+    const ext = AVATAR_ALLOWED_MIME[contentType];
+    if (!ext) {
+      return res.status(400).json({ error: 'Invalid content type — only image/jpeg, image/png, image/webp accepted' });
+    }
+
+    const buf = req.body as Buffer | undefined;
+    if (!buf || !Buffer.isBuffer(buf) || buf.length === 0) {
+      return res.status(400).json({ error: 'Empty body' });
+    }
+    if (buf.length > AVATAR_MAX_BYTES) {
+      return res.status(413).json({ error: 'File too large (max 1 MB)' });
+    }
+
+    const supabaseId = await resolveSupabaseUserId(auth);
+    if (!supabaseId) {
+      return res.status(503).json({ error: 'User row not found in database' });
+    }
+
+    let publicUrl: string;
+    try {
+      const bucket = getAdminStorageBucket();
+      const objectPath = `avatars/${supabaseId}/${Date.now()}.${ext}`;
+      const file = bucket.file(objectPath);
+      await file.save(buf, {
+        metadata: { contentType },
+        resumable: false,
+      });
+      // 讓物件公開可讀（讀取走 Cloud Storage CDN，不必每次拿 signed URL）。
+      // bucket-level Uniform Access 模式下 makePublic 會 throw，這時改用
+      // long-lived signed URL（10 年）作為 fallback。
+      try {
+        await file.makePublic();
+        publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURI(objectPath)}`;
+      } catch (publicErr) {
+        const msg = publicErr instanceof Error ? publicErr.message : String(publicErr);
+        console.warn('[api/user/avatar] makePublic failed, fallback to signed URL:', msg);
+        const [signed] = await file.getSignedUrl({
+          action: 'read',
+          // 10 年內視同永久；前端任何時候 GET 都能取
+          expires: Date.now() + 10 * 365 * 24 * 60 * 60 * 1000,
+        });
+        publicUrl = signed;
+      }
+    } catch (err) {
+      console.error('[api/user/avatar] upload error:', err);
+      return res.status(500).json({ error: 'Upload failed' });
+    }
+
+    // 寫回 photo_url（Firestore 主，Supabase 同步）
+    let writeOk = false;
+    if (isFirestoreReady()) {
+      const { updateAuthUserProfileFields } = await import('../services/firestoreAuthAccounts');
+      const fsUpd = await updateAuthUserProfileFields(supabaseId, { photo_url: publicUrl });
+      if (fsUpd.ok) writeOk = true;
+    }
+    if (isSupabaseReady()) {
+      const supaUpd = await updateDbUserProfile(supabaseId, { photo_url: publicUrl });
+      if (supaUpd) writeOk = true;
+    }
+    if (!writeOk) {
+      return res.status(500).json({ error: 'Avatar uploaded but DB update failed', avatarUrl: publicUrl });
+    }
+
+    return res.json({ avatarUrl: publicUrl });
+  },
+);
+
+// 自定義錯誤 handler 為 expressRaw 超出 limit 時轉成 413（預設會 throw 500）。
+// 掛在 router 末端、其他 routes 之前的位置不影響其他 path。
+router.use((err: unknown, _req: Request, res: Response, next: (e?: unknown) => void) => {
+  if (err && typeof err === 'object' && 'type' in err && (err as { type?: string }).type === 'entity.too.large') {
+    return res.status(413).json({ error: 'File too large (max 1 MB)' });
+  }
+  return next(err);
 });
 
 // ── GET /api/profile/:id ──────────────────────────────────────

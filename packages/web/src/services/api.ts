@@ -103,6 +103,40 @@ export async function updateMyProfile(
   return (body as { profile: UserProfile }).profile;
 }
 
+/**
+ * Edward 2026-04-25：上傳自訂頭像 (jpg/png/webp，<=1MB)。
+ *
+ * 後端 `POST /api/user/avatar` 走 raw body — 直接把 File 當 fetch body 傳即可，
+ * Content-Type 設為 file.type（image/jpeg / image/png / image/webp 之一）。
+ *
+ * 成功回 { avatarUrl }；server 已寫入 Firestore `auth_users.{uid}.photo_url`。
+ * 前端拿到 URL 後再 PATCH `/profile/me` 不必重複（server 已連 photo_url 一併更新）。
+ */
+export async function uploadAvatar(token: string, file: File): Promise<{ avatarUrl: string }> {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!allowed.includes(file.type)) {
+    throw new Error('只接受 JPG / PNG / WebP 圖片');
+  }
+  if (file.size > 1 * 1024 * 1024) {
+    throw new Error('圖片超過 1MB 上限');
+  }
+  const res = await fetch(`${SERVER_URL}/api/user/avatar`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  file.type,
+      'Authorization': `Bearer ${token}`,
+      ...NGROK_SKIP_HEADER,
+    },
+    body: file,
+  });
+  const body = await res.json().catch(() => ({} as { avatarUrl?: string; error?: string }));
+  if (!res.ok || !body.avatarUrl) {
+    const err = body.error || `API ${res.status}: POST /api/user/avatar`;
+    throw new Error(err);
+  }
+  return { avatarUrl: body.avatarUrl };
+}
+
 export interface GameEvent {
   seq:        number;
   event_type: string;

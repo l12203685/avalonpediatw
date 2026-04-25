@@ -77,7 +77,9 @@
     "state": "State: ",
     "viewRole": "View Role",
     "mute": "Mute",
-    "unmute": "Unmute"
+    "unmute": "Unmute",
+    "loyalViewOn": "Switch to loyal view (hide role hints)",
+    "loyalViewOff": "Restore original view"
   },
   "roster": {
     "goodCount": "🔵 Good team — {{count}}",
