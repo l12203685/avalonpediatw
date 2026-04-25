@@ -3,6 +3,7 @@ import { AVALON_CONFIG } from '@avalon/shared';
 import { motion } from 'framer-motion';
 import { Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { getCampImage } from '../utils/avalonAssets';
 
 interface MissionTrackProps {
   room: Room;
@@ -69,14 +70,32 @@ export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
               >
                 {result === 'success' && (
                   <div className="flex flex-col items-center">
-                    <span className="text-lg leading-none">✓</span>
-                    {failsRequired[i] >= 2 && <span className="text-amber-300 text-xs font-black leading-none">×2</span>}
+                    {/* Edward 2026-04-25 camp emblem unification: small painted
+                        good shield sits above the ✓ so each completed quest
+                        round shows which camp won using the same visual
+                        language as the role-reveal banner. Shield is 18px;
+                        ✓ stays as the primary readable indicator at small
+                        sizes since the shield detail blurs below ~20px. */}
+                    <img
+                      src={getCampImage('good')}
+                      alt="正義方勝利"
+                      className="w-[18px] h-[18px] object-contain"
+                      draggable={false}
+                    />
+                    <span className="text-xs leading-none mt-0.5">✓</span>
+                    {failsRequired[i] >= 2 && <span className="text-amber-300 text-[10px] font-black leading-none">×2</span>}
                   </div>
                 )}
                 {result === 'fail' && (
                   <div className="flex flex-col items-center">
-                    <span className="text-lg leading-none">✗</span>
-                    {failsRequired[i] >= 2 && <span className="text-amber-300 text-xs font-black leading-none">×2</span>}
+                    <img
+                      src={getCampImage('evil')}
+                      alt="邪惡方勝利"
+                      className="w-[18px] h-[18px] object-contain"
+                      draggable={false}
+                    />
+                    <span className="text-xs leading-none mt-0.5">✗</span>
+                    {failsRequired[i] >= 2 && <span className="text-amber-300 text-[10px] font-black leading-none">×2</span>}
                   </div>
                 )}
                 {!result && (

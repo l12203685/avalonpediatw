@@ -89,12 +89,23 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
-              className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-bold ${
+              className={`inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-sm font-bold ${
                 isEvil
                   ? 'bg-red-900/60 text-red-300 border border-red-700'
                   : 'bg-blue-900/60 text-blue-300 border border-blue-700'
               }`}
             >
+              {/* Edward 2026-04-25 camp emblem unification: small painted
+                  shield in the chip restates the team alignment using the
+                  same art as the headline banner — keeps the chip readable
+                  at a glance even if the banner above scrolls off-screen. */}
+              <img
+                src={isEvil ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good}
+                alt=""
+                aria-hidden="true"
+                className="w-4 h-4 object-contain flex-shrink-0"
+                draggable={false}
+              />
               {isEvil ? t('game:roleReveal.evilBadge') : t('game:roleReveal.goodBadge')}
             </motion.div>
           </div>

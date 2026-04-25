@@ -59,6 +59,21 @@ export const TEAM_INDICATORS = {
   unknown: `${ASSET_BASE}/unknown.jpg`,
 } as const;
 
+/**
+ * Camp/team emblem helper — Edward 2026-04-25 visual unification.
+ *
+ * Returns the painted shield art URL for a camp ('good' = blue dragon-gold-star
+ * shield, 'evil' = red phoenix-silver-star shield). Use this anywhere a camp
+ * indicator is shown (PlayerCard chip, MissionTrack circle, end-screen, etc.)
+ * so callers don't have to reach into TEAM_INDICATORS directly.
+ *
+ * Why a function: callers occasionally have `'good' | 'evil' | undefined` and a
+ * helper is easier to type-check than ternary indexing into the const object.
+ */
+export function getCampImage(camp: 'good' | 'evil'): string {
+  return camp === 'evil' ? TEAM_INDICATORS.evil : TEAM_INDICATORS.good;
+}
+
 /** End-screen winner cup. */
 export const WINNER_CUPS = {
   good: `${ASSET_BASE}/cup-good.jpg`,

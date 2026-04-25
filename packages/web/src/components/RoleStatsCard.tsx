@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { BarChart3, Target, Users, TrendingUp } from 'lucide-react';
 import { type RoleData, formatWinRate, TOTAL_UNIQUE_GAMES } from '../data/roleStats';
+import { getCampImage } from '../utils/avalonAssets';
 
 interface RoleStatsCardProps {
   role: RoleData;
@@ -60,7 +61,18 @@ export default function RoleStatsCard({ role }: RoleStatsCardProps): JSX.Element
             {name_zh} ({name_en}) 實戰數據
           </h3>
         </div>
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${isGood ? 'bg-blue-900/60 text-blue-300' : 'bg-red-900/60 text-red-300'}`}>
+        {/* Edward 2026-04-25 camp emblem unification: faction chip now leads
+            with the painted shield art (team-good / team-evil) so the
+            analytics surface uses the same visual language as the live
+            game's role-reveal and end-screen. Background tint kept for
+            colour-coded scanning at glance distance. */}
+        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded ${isGood ? 'bg-blue-900/60 text-blue-300' : 'bg-red-900/60 text-red-300'}`}>
+          <img
+            src={getCampImage(isGood ? 'good' : 'evil')}
+            alt={factionLabel}
+            className="w-3.5 h-3.5 object-contain flex-shrink-0"
+            draggable={false}
+          />
           {factionLabel}
         </span>
       </div>
