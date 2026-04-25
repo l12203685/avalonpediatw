@@ -256,10 +256,14 @@ export default function HomePage(): JSX.Element {
       {/* Background — ambient blurred logo + idle motion blobs.
           Sits behind everything (-z-0 + main content uses z-10). */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden -z-0">
+        {/* Edward 2026-04-25 18:57:「白色字體拿掉, 剩下的淡化一點點當成背景」
+            → 切到 logo-bg.png(PIL 預處理 — 白字像素 alpha→0, 紅藍 shield 留),
+            opacity 從 10% 降到 8% 讓 shield 更淡。原 /logo.png 仍給 LoginPage
+            等其他元件用。 */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-no-repeat bg-center bg-contain opacity-10 blur-2xl"
-          style={{ backgroundImage: 'url(/logo.png)' }}
+          className="absolute inset-0 bg-no-repeat bg-center bg-contain opacity-[0.08] blur-2xl"
+          style={{ backgroundImage: 'url(/logo-bg.png)' }}
         />
         <motion.div
           animate={{
