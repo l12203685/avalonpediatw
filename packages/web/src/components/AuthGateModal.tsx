@@ -30,7 +30,7 @@ import {
 } from '../services/auth';
 import { getStoredToken } from '../services/socket';
 
-export type AuthGateTarget = 'stats' | 'settings' | 'chat';
+export type AuthGateTarget = 'stats' | 'settings' | 'chat' | 'createRoom' | 'joinRoom';
 
 interface AuthGateModalProps {
   isOpen: boolean;

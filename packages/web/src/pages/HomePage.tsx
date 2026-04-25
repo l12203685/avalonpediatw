@@ -90,6 +90,8 @@ export default function HomePage(): JSX.Element {
     localStorage.removeItem('pendingGateTarget');
     if (target === 'stats') setGameState('personalStats');
     else if (target === 'settings') setGameState('settings');
+    else if (target === 'createRoom') setMode('create');
+    else if (target === 'joinRoom') setMode('join');
     else if (target === 'chat') {
       // User came back from the lobby-chat gate. Stay on home; the chat
       // input unlocks itself once currentPlayer.provider !== 'guest'.
@@ -248,13 +250,12 @@ export default function HomePage(): JSX.Element {
     <div className="min-h-screen bg-black px-3 py-4 sm:p-4 overflow-x-hidden">
       {/* Background decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        {/* Edward 2026-04-25 19:18: ambient blurred logo as page background.
-            Switched back to /logo.png (含白字版) per final spec — title block
-            now lives as ambient backdrop while the new h1 + subtitle drive
-            focus above. opacity 10% + blur-2xl 不搶焦點。 */}
+        {/* Edward 2026-04-25 19:40: ambient logo bg 太淡看不到 — 改 cover
+            填滿整頁 + opacity 25% + 緩 blur-md 讓 logo 明顯但不搶焦。
+            含白字 /logo.png 仍是大廳視覺主軸 (Edward 19:18 spec)。 */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-no-repeat bg-center bg-contain opacity-10 blur-2xl"
+          className="absolute inset-0 bg-no-repeat bg-center bg-cover opacity-25 blur-md"
           style={{ backgroundImage: 'url(/logo.png)' }}
         />
         <motion.div
@@ -327,11 +328,14 @@ export default function HomePage(): JSX.Element {
                       - 「系統設定」 route → `settings` (基本資料 + 帳號綁定 + 登出)
                       - FAQ 獨立按鈕拿掉；設定頁內可加 FAQ link (未來)
                     */}
-                    {/* Row 1 — Create / Join / Stats */}
+                    {/* Row 1 — Create / Join / Stats
+                        Edward 2026-04-25 19:40: 訪客點建立/加入 → AuthGateModal
+                        要求登入 (Google/LINE/Discord)；綁定後 reload 由
+                        pendingGateTarget effect 帶回 create/join 模式。 */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setMode('create')}
+                      onClick={() => tryGatedNavigate('createRoom', () => setMode('create'))}
                       data-testid="home-btn-create"
                       className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
@@ -342,7 +346,7 @@ export default function HomePage(): JSX.Element {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setMode('join')}
+                      onClick={() => tryGatedNavigate('joinRoom', () => setMode('join'))}
                       data-testid="home-btn-join"
                       className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
@@ -471,7 +475,9 @@ export default function HomePage(): JSX.Element {
                             </button>
                           ) : r.isPrivate ? (
                             <button
-                              onClick={() => { setPendingJoinRoom(r); setRoomId(r.id); setJoinPassword(''); }}
+                              onClick={() => tryGatedNavigate('joinRoom', () => {
+                                setPendingJoinRoom(r); setRoomId(r.id); setJoinPassword('');
+                              })}
                               className="flex items-center gap-1 text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded transition-colors"
                             >
                               <Lock size={11} />
@@ -479,7 +485,9 @@ export default function HomePage(): JSX.Element {
                             </button>
                           ) : (
                             <button
-                              onClick={() => { setRoomId(r.id); setMode('join'); }}
+                              onClick={() => tryGatedNavigate('joinRoom', () => {
+                                setRoomId(r.id); setMode('join');
+                              })}
                               className="flex items-center gap-1 text-xs px-2 py-1 bg-white hover:bg-zinc-200 border border-white text-black rounded transition-colors"
                             >
                               <LogIn size={11} />
