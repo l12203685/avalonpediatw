@@ -113,13 +113,17 @@ export default function LobbyPage(): JSX.Element {
   const readyCount = humanPlayers.filter(p => readyIds.includes(p.id)).length;
   const shortCode = room.id.slice(0, 8).toUpperCase();
 
-  // Quest sizes preview based on current player count.
+  // (Edward 2026-04-25 四修) Lobby 一進來就要看到「特殊角色 / 角色配置 / 任務
+  // 人數」三項，不該等 5 人才顯示。1-4 人時用 5 人 default 配置預覽，5+ 人時
+  // 按實際人數對應 AVALON_CONFIG。canStart 仍走真實 playerList.length >= 5。
+  const previewPlayerCount = Math.min(Math.max(playerList.length, 5), 10);
+  // Quest sizes preview based on previewPlayerCount.
   // (Edward 2026-04-25 mockup match) 10-role chip ribbon removed; only the
   // 9-variant flag is needed downstream for quest-size preview + the
   // "奧伯倫強制版" tag. The previewRoles / effectiveRoles / good/evil split
   // was dropped to keep tsc clean.
-  const previewConfig = AVALON_CONFIG[playerList.length];
-  const is9Variant = playerList.length === 9
+  const previewConfig = AVALON_CONFIG[previewPlayerCount];
+  const is9Variant = previewPlayerCount === 9
     && (room.roleOptions as unknown as Record<string, string>)?.variant9Player === 'oberonMandatory';
 
   // Effective quest sizes preview for the scoresheet ribbon (honours
@@ -146,7 +150,7 @@ export default function LobbyPage(): JSX.Element {
                     'assassin', 'morgana', 'mordred', 'oberon'];
     } else {
       baseRoster = (previewConfig.roles as unknown as string[]).slice();
-      const is9StandardWithOberon = playerList.length === 9
+      const is9StandardWithOberon = previewPlayerCount === 9
         && Boolean(room.roleOptions?.oberon);
       if (is9StandardWithOberon) {
         const loyalIdx = baseRoster.indexOf('loyal');
