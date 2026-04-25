@@ -1534,8 +1534,14 @@ export class GameServer {
 
   /**
    * After each state broadcast, schedule bot actions for any pending bot turns.
-   * Uses a small random delay (0.6–1.5s) to simulate thinking.
-   * Uses HeuristicAgent for role-aware decisions.
+   * Uses a small random delay to simulate thinking without making humans wait.
+   *
+   * Edward 2026-04-25 「AI 選人會卡住 3/4/9 都卡特別久」— previous delays
+   * (0.6–1.5s leader pick + 0.6–1.4s × N bots vote stagger) compounded to
+   * 7–17s per voting attempt × up to 5 attempts per round = 30-80s of dead
+   * air, which UX-wise reads as "stuck" even though the agent never actually
+   * blocked. We tightened all three delays to keep the human-feel cue but
+   * cap per-attempt latency well under 5 s.
    */
   private scheduleBotActions(roomId: string): void {
     const room = this.roomManager.getRoom(roomId);
@@ -1544,7 +1550,7 @@ export class GameServer {
     const engine = this.gameEngines.get(roomId);
     if (!engine) return;
 
-    const delay = 600 + Math.random() * 900; // 0.6–1.5s
+    const delay = 250 + Math.random() * 350; // 0.25–0.6s (was 0.6–1.5s)
 
     setTimeout(() => {
       const r = this.roomManager.getRoom(roomId);
@@ -1608,14 +1614,17 @@ export class GameServer {
             this.scheduleBotActions(roomId); // schedule voting bots
           }
         } else if (r.state === 'voting' && r.questTeam.length > 0) {
-          // Team vote — stagger each bot vote by 600–1400 ms so they feel human
+          // Team vote — stagger each bot vote by 150–350 ms so they feel
+          // human-ish but the whole batch finishes in ≤3 s even with 9 bots.
+          // Edward 2026-04-25 「AI 選人會卡住 3/4/9 都卡特別久」 — old
+          // 0.6–1.4 s × 9 = up to 12.6 s/attempt × 5 attempts = 60+ s.
           const botVoters = Object.entries(r.players).filter(
             ([pid, player]) => player.isBot && !(pid in r.votes)
           );
           let offset = 0;
           for (const [pid] of botVoters) {
             const stagger = offset;
-            offset += 600 + Math.random() * 800;
+            offset += 150 + Math.random() * 200;
             setTimeout(() => {
               const snapshot = this.roomManager.getRoom(roomId);
               if (!snapshot || snapshot.state !== 'voting' || pid in snapshot.votes) return;
@@ -1644,12 +1653,14 @@ export class GameServer {
             }, stagger);
           }
         } else if (r.state === 'quest') {
-          // Quest vote — stagger each bot member vote by 700–1500 ms
+          // Quest vote — stagger each bot member vote by 200–450 ms (was
+          // 0.7–1.5 s). Edward 2026-04-25 stuck-feel root cause: cumulative
+          // stagger reads as "AI 選人會卡住" even though no real block.
           const botMembers = r.questTeam.filter(id => r.players[id]?.isBot);
           let offset = 0;
           for (const memberId of botMembers) {
             const stagger = offset;
-            offset += 700 + Math.random() * 800;
+            offset += 200 + Math.random() * 250;
             setTimeout(() => {
               const snapshot = this.roomManager.getRoom(roomId);
               if (!snapshot || snapshot.state !== 'quest') return;
