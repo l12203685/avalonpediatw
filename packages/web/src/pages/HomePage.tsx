@@ -16,7 +16,6 @@ import {
   BarChart3,
   Clock,
   User,
-  Settings,
 } from 'lucide-react';
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
@@ -252,10 +251,12 @@ export default function HomePage(): JSX.Element {
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         {/* Edward 2026-04-25 19:40: ambient logo bg 太淡看不到 — 改 cover
             填滿整頁 + opacity 25% + 緩 blur-md 讓 logo 明顯但不搶焦。
-            含白字 /logo.png 仍是大廳視覺主軸 (Edward 19:18 spec)。 */}
+            含白字 /logo.png 仍是大廳視覺主軸 (Edward 19:18 spec)。
+            Edward 2026-04-25 19:56: opacity 25% 仍太淡 → 提到 40% +
+            blur-md 改 blur-sm，讓 logo 更明顯但不搶焦。 */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-no-repeat bg-center bg-cover opacity-25 blur-md"
+          className="absolute inset-0 bg-no-repeat bg-center bg-cover opacity-40 blur-sm"
           style={{ backgroundImage: 'url(/logo.png)' }}
         />
         <motion.div
@@ -365,7 +366,7 @@ export default function HomePage(): JSX.Element {
                       <span className="truncate">{t('home.stats')}</span>
                     </motion.button>
 
-                    {/* Row 2 — Profile / Wiki / Settings */}
+                    {/* Row 2 — Personal Stats / Wiki / My Profile */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
@@ -393,15 +394,25 @@ export default function HomePage(): JSX.Element {
                       <span className="truncate">{t('home.wikiAndGuide')}</span>
                     </motion.button>
 
+                    {/* Edward 2026-04-25 19:44: 砍「登入綁定」入口，改為直達
+                        ProfilePage 的「個人資料」按鈕。SettingsPage 的密碼/信箱
+                        管理 + 清除本機資料三段都已搬到 ProfilePage，避免兩頁
+                        重疊。SettingsPage 元件保留 (BindingField + OAuth callback
+                        仍 route 到 settings)，只是 HomePage 不再放入口。 */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => tryGatedNavigate('settings', () => setGameState('settings'))}
-                      data-testid="home-btn-settings"
+                      onClick={() => tryGatedNavigate('stats', () => {
+                        // navigateToProfile('me') 同步設定 profileUserId='me'
+                        // 讓 ProfilePage 走自身分支 (fetchMyProfile + 顯示
+                        // 編輯/綁定/密碼等 own-only sections)。
+                        useGameStore.getState().navigateToProfile('me');
+                      })}
+                      data-testid="home-btn-profile"
                       className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
-                      <Settings size={18} className="flex-shrink-0" />
-                      <span className="truncate">{t('home.binding', { defaultValue: '登入綁定' })}</span>
+                      <User size={18} className="flex-shrink-0" />
+                      <span className="truncate">{t('home.profile', { defaultValue: '個人資料' })}</span>
                     </motion.button>
                   </div>
 
@@ -681,6 +692,26 @@ export default function HomePage(): JSX.Element {
           <RefreshCcw size={12} />
           <span className="hidden sm:inline">{t('home.forceRefreshButton', { defaultValue: '遇到問題？強制更新' })}</span>
         </button>
+
+        {/* Edward 2026-04-25 19:56: 大廳最下方加 by avalonpediatw + linktree 連結。
+            fixed bottom-center, text-xs, white/40 — 不搶焦但可見。z-30 比 logo bg
+            高，比 modal/AuthGate (z-50) 低，避免遮蔽 modal。只在 home mode 顯示，
+            create/join 表單模式時隱藏避免推擠。 */}
+        {mode === 'home' && (
+          <div className="fixed bottom-3 inset-x-0 z-30 flex justify-center pointer-events-none">
+            <p className="text-[10px] sm:text-xs text-white/40 pointer-events-auto">
+              by{' '}
+              <a
+                href="https://linktr.ee/avalonpediatw"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-white/70 transition-colors"
+              >
+                avalonpediatw
+              </a>
+            </p>
+          </div>
+        )}
 
         {/* Password modal for private rooms */}
         {pendingJoinRoom && (
