@@ -472,6 +472,14 @@ export default function RoomPage(): JSX.Element {
     room.state === 'voting' && teamSelected && !isSpectator;
   const questPhaseSticky = room.state === 'quest' && !isSpectator;
 
+  // Edward 2026-04-26 00:17 fix「投票階段正上方有黑色大空白」: GameBoard 區
+  // 原本 hardcode `pb-[36dvh]` 給所有 isGameplayPhase / isEndedPhase 階段, 但
+  // 黏在底部的 sticky toolbars (QuestTeamToolbar / VotePanel / QuestPanel) 只
+  // 在特定子階段才 render. 非 sticky 階段 (例: voting + 非隊長 + 隊伍未選定 /
+  // lady_of_the_lake / discussion / ended) 還是預留 36dvh, 形成大塊黑色空白.
+  // 改成只在實際會 render sticky toolbar 時才 reserve 空間.
+  const hasStickyToolbar = isLeaderPicking || teamVotePhaseSticky || questPhaseSticky;
+
   // Per-table-size board watermark — 5..10 only; null falls back to lobby preview size.
   const tableCountForBoard = isLobbyPhase
     ? Math.max(playerList.length, room.maxPlayers, 5)
@@ -1300,10 +1308,13 @@ export default function RoomPage(): JSX.Element {
       {isGameplayPhase && gameTopSection}
       {isEndedPhase && endedTopSection}
 
-      {/* ────────── MAIN: GameBoard with rails + chat (phase-agnostic) ────────── */}
+      {/* ────────── MAIN: GameBoard with rails + chat (phase-agnostic) ──────────
+          Edward 2026-04-26 00:17 fix: 改成只在 sticky toolbar 真正 render 的子階段
+          才 reserve 36dvh, 避免 lady / discussion / ended / 非隊長 team-pick 等
+          無 sticky toolbar 階段顯出大塊黑色空白. */}
       <div
         className={`relative z-10 flex-1 min-h-0 flex flex-col px-2 sm:px-3 ${
-          (isGameplayPhase || isEndedPhase) ? 'pb-[36dvh] sm:pb-[32dvh]' : 'pb-1'
+          hasStickyToolbar ? 'pb-[36dvh] sm:pb-[32dvh]' : 'pb-1'
         }`}
       >
         <GameBoard
