@@ -7,9 +7,19 @@ import { getCampImage } from '../utils/avalonAssets';
 
 interface MissionTrackProps {
   room: Room;
+  /**
+   * Edward 2026-04-25 GamePage 4-revamp:
+   *   - 'combined' (default, backward-compatible): mission circles + rejection
+   *      diamonds rendered as a single block.
+   *   - 'mission-only': render just the 5 mission round circles (no rejection).
+   *      GamePage uses this so rejection chip lives in the header instead.
+   *   - 'rejection-only': render just the rejection diamond row (compact chip).
+   *      GamePage header places this above MissionTrack mission circles.
+   */
+  variant?: 'combined' | 'mission-only' | 'rejection-only';
 }
 
-export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
+export default function MissionTrack({ room, variant = 'combined' }: MissionTrackProps): JSX.Element {
   const { t } = useTranslation(['game']);
   const playerCount = Object.keys(room.players).length;
   const config = AVALON_CONFIG[playerCount];
@@ -22,6 +32,35 @@ export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
   const rejectTrack = Array.from({ length: 5 }, (_, i) => {
     return room.failCount > i;
   });
+
+  // Rejection-only render — compact chip used by GamePage header above the
+  // mission circles. Mirrors the diamond row from the combined variant but
+  // wraps it in its own root so callers can place it independently.
+  if (variant === 'rejection-only') {
+    if (room.failCount === 0 && room.state !== 'voting') return <></>;
+    return (
+      <div className="flex items-center justify-center gap-1.5">
+        <span className="text-xs text-gray-500 mr-1">{t('game:missionTrack.rejectLabel')}</span>
+        {Array.from({ length: 5 }, (_, i) => (
+          <motion.div
+            key={i}
+            initial={room.failCount > i ? { scale: 0.5 } : false}
+            animate={{ scale: 1 }}
+            className={`w-3 h-3 rotate-45 rounded-sm ${
+              room.failCount > i
+                ? i >= 4
+                  ? 'bg-red-500'
+                  : 'bg-amber-500'
+                : 'bg-gray-700 border border-gray-600'
+            }`}
+          />
+        ))}
+        {room.failCount >= 5 && (
+          <span className="text-xs text-red-400 font-bold ml-1">{t('game:missionTrack.evilWinsReject')}</span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -120,8 +159,10 @@ export default function MissionTrack({ room }: MissionTrackProps): JSX.Element {
         })}
       </div>
 
-      {/* Rejection track — 5 diamond slots showing consecutive vote rejects */}
-      {(room.failCount > 0 || room.state === 'voting') && (
+      {/* Rejection track — 5 diamond slots showing consecutive vote rejects.
+          Hidden when caller passes `variant="mission-only"` (GamePage moves
+          the rejection chip into its header per Edward 2026-04-25 spec). */}
+      {variant === 'combined' && (room.failCount > 0 || room.state === 'voting') && (
         <div className="flex items-center justify-center gap-1.5">
           <span className="text-xs text-gray-500 mr-1">{t('game:missionTrack.rejectLabel')}</span>
           {Array.from({ length: 5 }, (_, i) => (

@@ -11,7 +11,6 @@ import VoteRevealOverlay from '../components/VoteRevealOverlay';
 import QuestResultOverlay from '../components/QuestResultOverlay';
 import ChatPanel from '../components/ChatPanel';
 import MissionTrack from '../components/MissionTrack';
-import SuspicionBoard from '../components/SuspicionBoard';
 import VoteAnalysisPanel from '../components/VoteAnalysisPanel';
 import CompactScoresheet from '../components/CompactScoresheet';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -340,33 +339,38 @@ export default function GamePage(): JSX.Element {
       )}
 
       {/*
-        Slim header — 2026-04-25 (Edward「上方排版太佔空間 只要留我第二張圖的部分就可以」).
-        保留：R1-R5 任務 + 否決方塊（MissionTrack 已包含）。
-        2026-04-25 Edward icon revamp:
-          - 聲音按鈕砍掉（音效預設開啟，無需 UI toggle）。
-          - 眼睛按鈕從「開啟角色 modal」改成「忠臣視角 toggle」 — 角色資訊已常態
-            顯示在 PlayerCard 上，故 modal 不需要；改成切換視角隱藏自己/敵我隊友
-            資訊以模擬忠臣盲視角，再點一次還原。
+        Edward 2026-04-25 GamePage 4-revamp #1+#4 — 對齊 LobbyPage 排序：
+          row 1: 否決計數 chip + 忠臣視角眼睛 (header shrink-0)
+          row 2: MissionTrack 5 局結果一覽 (牌譜 shrink-0)
+          row 3+: actionBanner / main (rails+chat)
+        Old combined MissionTrack was a single block with mission circles +
+        rejection diamonds; we split via `variant` prop so rejection lives in
+        the header band and mission circles sit just below as their own row,
+        matching the Edward spec「牌譜放在『否決計數』下方 / 玩家列表上方」.
       */}
-      <div className="relative z-10 shrink-0 px-3 pt-2">
-        <div className="relative">
-          <MissionTrack room={room} />
-          <div className="absolute top-0 right-0 flex gap-1.5">
-            <button
-              onClick={() => setLoyalView(v => !v)}
-              title={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
-              aria-label={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
-              aria-pressed={loyalView}
-              className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
-                loyalView
-                  ? 'bg-yellow-500/30 hover:bg-yellow-500/50 border-yellow-400 text-yellow-200 shadow-md shadow-yellow-400/30'
-                  : 'bg-blue-900/40 hover:bg-blue-800/70 border-blue-700/60 text-blue-300'
-              }`}
-            >
-              <Eye size={14} />
-            </button>
-          </div>
+      {/* Header row — rejection chip (left) + loyal-view toggle (right) */}
+      <div className="relative z-10 shrink-0 flex items-center justify-between gap-2 px-3 pt-2">
+        <div className="flex-1 min-w-0">
+          <MissionTrack room={room} variant="rejection-only" />
         </div>
+        <button
+          onClick={() => setLoyalView(v => !v)}
+          title={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+          aria-label={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+          aria-pressed={loyalView}
+          className={`flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+            loyalView
+              ? 'bg-yellow-500/30 hover:bg-yellow-500/50 border-yellow-400 text-yellow-200 shadow-md shadow-yellow-400/30'
+              : 'bg-blue-900/40 hover:bg-blue-800/70 border-blue-700/60 text-blue-300'
+          }`}
+        >
+          <Eye size={14} />
+        </button>
+      </div>
+
+      {/* 牌譜 — MissionTrack mission circles only (Edward「介於否決計數與玩家列之間」) */}
+      <div className="relative z-10 shrink-0 px-3 pt-1.5">
+        <MissionTrack room={room} variant="mission-only" />
       </div>
 
       {/* Your-turn action banner — kept (not part of header clutter; signals required action) */}
@@ -531,11 +535,6 @@ export default function GamePage(): JSX.Element {
           */}
         </GameBoard>
         </div>
-
-        {/* Suspicion Notes — personal private notepad, only shown during active game */}
-        {room.state !== 'ended' && room.state !== 'lobby' && !isSpectator && (
-          <SuspicionBoard room={room} currentPlayer={currentPlayer} />
-        )}
 
         {/* Lady of the Lake Phase */}
         {room.state === 'lady_of_the_lake' && !isSpectator && (
