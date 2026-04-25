@@ -166,6 +166,17 @@ export const LAKE_IMAGE = `${ASSET_BASE}/lake.jpg`;
 export const LEADER_CROWN_IMAGE = `${ASSET_BASE}/leader-crown.jpg`;
 export const MISSION_SHIELD_IMAGE = `${ASSET_BASE}/mission-shield.jpg`;
 export const VOTE_BACK_IMAGE = `${ASSET_BASE}/vote-back.jpg`;
+/**
+ * Role-back card art — Edward 2026-04-25 20:12 spec.
+ *
+ * Used as the PlayerCard background for any seat whose role hasn't been
+ * revealed to the viewer yet (`player.role === null` from the viewer's
+ * perspective, including the 忠臣視角 blindfold). Replaces the painted
+ * portrait so the rail reads like physical face-down cards on the table.
+ *
+ * Asset: 紫色 3 王冠旗幟卡背 (cp 自 `Q_unknown.jpg`).
+ */
+export const ROLE_BACK_IMAGE = `${ASSET_BASE}/role-back.jpg`;
 
 /** PlayerCard 隊長王冠 URL. */
 export function getLeaderCrownUrl(): string {
@@ -180,6 +191,23 @@ export function getMissionShieldUrl(): string {
 /** PlayerCard 投票球背面 (尚未揭曉時用). */
 export function getVoteBackUrl(): string {
   return VOTE_BACK_IMAGE;
+}
+
+/**
+ * PlayerCard 牌背 URL — 未揭角色 (`player.role === null` / 忠臣視角) 時整張
+ * tile 用此圖取代大頭，配合「隱藏 corner indicators (除了 seat 號碼)」的隱身規則。
+ */
+export function getRoleBackUrl(): string {
+  return ROLE_BACK_IMAGE;
+}
+
+/**
+ * Lake-of-the-Lady icon URL — symmetry helper for the PlayerCard right-top
+ * corner. Same asset as `LAKE_IMAGE`; named accessor exists so call sites
+ * read declaratively (`getLakeImage()`) alongside the other corner helpers.
+ */
+export function getLakeImage(): string {
+  return LAKE_IMAGE;
 }
 
 /** Per-table-size scoresheet board art (only 5..10 supplied). */

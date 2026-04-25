@@ -5,9 +5,10 @@ import { WifiOff } from 'lucide-react';
 import { displaySeatNumber } from '../utils/seatDisplay';
 import {
   pickAvatarUrl,
-  LAKE_IMAGE,
+  getLakeImage,
   getLeaderCrownUrl,
   getMissionShieldUrl,
+  getRoleBackUrl,
   getVoteBackUrl,
   VOTE_IMAGES,
 } from '../utils/avalonAssets';
@@ -60,31 +61,42 @@ interface PlayerCardProps {
 }
 
 /**
- * PlayerCard — Edward 2026-04-25 20:05 「對齊參考網站 layout」 full rewrite.
+ * PlayerCard — Edward 2026-04-25 20:09 + 20:12 corrected 4-corner spec.
  *
- * Visual model is now a square tile (`aspect-square`) where the portrait fills
- * the ENTIRE card as a `background-image` and four corners surface game state
- * via painted asset icons. No role / camp text overlay — the avatar carries
- * identity by itself.
+ * Square tile (`aspect-square`) where the portrait fills the whole tile as a
+ * `background-image` and four corners surface game state via painted icons.
+ * No role / camp text overlay — the avatar carries identity by itself.
  *
- *   ┌─────────────────────────┐
- *   │ [N家]          [👑 王冠] │  ← left: seat number, center-top: leader crown
- *   │   (full-square portrait │
- *   │    bg-cover, no overlay │
- *   │    role/camp text)      │
- *   │                  [盾]   │  ← right-top: mission shield (when participated)
- *   │                         │
- *   │                  [球]   │  ← right-bottom: vote token (back / + / −)
- *   └─────────────────────────┘
+ *   ┌────────────────────────────┐
+ *   │ [N家]      [👑王冠]   [湖]  │  ← TL: seat#, TC: leader crown, TR: lake holder
+ *   │   (full-square portrait    │
+ *   │    bg-cover, no overlay    │
+ *   │    role/camp text)         │
+ *   │                            │
+ *   │ [球]                  [盾] │  ← BL: vote token, BR: mission shield
+ *   └────────────────────────────┘
  *
- * Replaced overlays:
- *   - 中央 「否決 / 通過」 popup (VoteRevealOverlay) → vote ball (right-bottom)
- *   - 右上角任務 banner (QuestResultOverlay) → mission shield (right-top)
+ * Edward 20:09 corner config (verbatim):
+ *   - 左上: 玩家號碼 (1家, 2家, ...)
+ *   - 正上: 隊長王冠 (`leader-crown.jpg`)
+ *   - 右上: 湖中 (`lake.jpg` — 只有湖中女神持有者才顯示)
+ *   - 左下: 黑白球 (`vote-back.jpg` / `vote-yes.jpg` / `vote-no.jpg`)
+ *   - 右下: 任務盾牌 (`mission-shield.jpg`)
+ *   - 中: 大頭照 portrait (full square)
  *
- * Both popups are removed from GamePage so the board stays uninterrupted.
+ * Edward 20:12 add-ons:
+ *   - PlayerCard = square aspect (already enforced via `aspect-square w-full`).
+ *   - 未揭角色 (`effectiveRole === null`) → 整 tile bg 用 `role-back.jpg` 取代
+ *     大頭，且**隱藏 corner indicators (除了 seat 號碼)**。所以 role-back tile
+ *     上看不到王冠 / 湖 / 球 / 盾，只有座位號碼 + 名字 + 斷線旗 (狀態旗為避免
+ *     遊戲性遺失，仍保留 disconnected 半透明 dim — 與 corner indicator 不同類)。
+ *
+ * Replaced overlays (carry-over from 20:05 rewrite, still applies):
+ *   - 中央「否決 / 通過」popup (VoteRevealOverlay) → vote ball (左下)
+ *   - 右上角任務 banner (QuestResultOverlay) → mission shield (右下)
  *
  * Asset registry: see `utils/avalonAssets.ts` — `getLeaderCrownUrl`,
- * `getMissionShieldUrl`, `getVoteBackUrl` were added in the same batch.
+ * `getMissionShieldUrl`, `getVoteBackUrl`, `getRoleBackUrl`, `getLakeImage`.
  */
 
 export default function PlayerCard({
@@ -145,12 +157,25 @@ export default function PlayerCard({
   // bubble pinned left).
   const bubbleAlign = side === 'left' ? 'items-end pr-1' : 'items-start pl-1';
 
-  // Portrait URL for the bg-cover layer. `player.avatar` (user-uploaded image)
-  // wins so a custom photo isn't replaced by the painted role art; bots fall
-  // back to a deterministic 雜魚 variant via pickAvatarUrl(null,...). The
-  // resulting URL is stamped onto the tile via inline style so we don't leak
-  // a per-player class into Tailwind's JIT manifest.
-  const portraitUrl = player.avatar ?? pickAvatarUrl(effectiveRole as Role | null | undefined, player.id);
+  // 未揭角色 — Edward 2026-04-25 20:12「未知角色用牌背顯示」. When the viewer
+  // hasn't been told this seat's role (or 忠臣視角 blindfold is on), the whole
+  // tile background flips to `role-back.jpg` (紫色 3 王冠旗幟卡背) and ALL
+  // corner indicators are suppressed except the seat number — matches Edward's
+  // verbatim「整個 tile bg 用 role-back.jpg 取代大頭」+「隱藏 corner indicators
+  // (除了 seat 號碼)」directive.
+  const isRoleHidden = effectiveRole === null;
+
+  // Portrait URL for the bg-cover layer. Decision tree:
+  //   1. role hidden → painted role-back card (overrides everything else; the
+  //      viewer is not allowed to see who this seat is)
+  //   2. role known + custom user-uploaded `player.avatar` → user photo
+  //   3. role known + bot/no-avatar → deterministic painted variant via
+  //      pickAvatarUrl(role, id) (canonical role art or 雜魚 variant)
+  // The resulting URL is stamped onto the tile via inline style so we don't
+  // leak a per-player class into Tailwind's JIT manifest.
+  const portraitUrl = isRoleHidden
+    ? getRoleBackUrl()
+    : (player.avatar ?? pickAvatarUrl(effectiveRole as Role | null | undefined, player.id));
 
   // Border colour — encodes the mission/team state at a glance. Disconnected
   // wins so a dropped player is unmistakable; current-player gold beats team
@@ -256,8 +281,10 @@ export default function PlayerCard({
         {/*
           Top-center — leader crown. Edward 2026-04-25「正上方: 隊長王冠
           (僅輪到隊長時顯示)」. Painted asset, only renders when isLeader.
+          Suppressed on role-back tiles per 20:12「隱藏 corner indicators
+          (除了 seat 號碼)」.
         */}
-        {isLeader && (
+        {!isRoleHidden && isLeader && (
           <motion.div
             initial={{ scale: 0, y: -4 }}
             animate={{ scale: 1, y: 0 }}
@@ -276,105 +303,49 @@ export default function PlayerCard({
         )}
 
         {/*
-          Top-right — mission shield. Edward 2026-04-25「右上方: 任務盾牌
-          (mission shield)」. Two phases:
-            1. Leader picking team + shield candidate / selected → quest-team
-               selection overlay (yellow outline / solid yellow shield).
-            2. Otherwise, when this player participated in the most recent
-               completed quest → painted mission-shield art with a coloured
-               ring (blue = success, red = fail).
-          Both states use the painted shield art; only the ring tint differs.
+          Top-right — Lady-of-the-Lake holder lake disc. Edward 2026-04-25 20:09
+          corrected spec「右上: 湖中」relocates the lake-holder indicator from
+          the previous center-left floating slot up to the right-top corner.
+          Only renders when this seat currently holds the lady-of-the-lake.
+          Suppressed on role-back tiles.
         */}
-        {showSelectOverlay && (
-          <motion.div
-            initial={{ scale: 0, rotate: -10 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            className="absolute top-1 right-1 pointer-events-none z-20 rounded-full ring-2 ring-yellow-300 shadow-lg shadow-yellow-400/40"
-            aria-label="已選入任務隊伍"
-          >
-            <img
-              src={getMissionShieldUrl()}
-              alt=""
-              aria-hidden="true"
-              className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
-              loading="lazy"
-              draggable={false}
-            />
-          </motion.div>
-        )}
-        {showCandidateHint && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.55 }}
-            className="absolute top-1 right-1 pointer-events-none z-10 rounded-full ring-2 ring-yellow-300/60"
-            aria-hidden="true"
-          >
-            <img
-              src={getMissionShieldUrl()}
-              alt=""
-              aria-hidden="true"
-              className="w-6 h-6 sm:w-7 sm:h-7 object-contain opacity-70"
-              loading="lazy"
-              draggable={false}
-            />
-          </motion.div>
-        )}
-        {!showSelectOverlay && !showCandidateHint && lastQuestResult !== undefined && (
+        {!isRoleHidden && isLadyHolder && (
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            className={`absolute top-1 right-1 pointer-events-none z-10 rounded-full ring-2 ${missionShieldRing} shadow-md`}
-            aria-label={lastQuestResult === 'success' ? '最近任務成功' : '最近任務失敗'}
+            className="absolute top-1 right-1 bg-cyan-500 border-2 border-cyan-200 rounded-full overflow-hidden pointer-events-none shadow-md z-10 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center"
+            aria-label="持有湖中女神"
           >
             <img
-              src={getMissionShieldUrl()}
+              src={getLakeImage()}
               alt=""
               aria-hidden="true"
-              className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
-              loading="lazy"
+              className="w-full h-full object-cover"
               draggable={false}
-            />
-          </motion.div>
-        )}
-        {/* Active-quest-member shield (no result yet) — soft yellow ring without a
-            success/fail tint so the rail still flags who is on the current quest. */}
-        {!showSelectOverlay && !showCandidateHint && lastQuestResult === undefined && isOnQuestTeam && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="absolute top-1 right-1 pointer-events-none z-10 rounded-full ring-2 ring-yellow-400 shadow-md"
-            aria-label="任務隊員"
-          >
-            <img
-              src={getMissionShieldUrl()}
-              alt=""
-              aria-hidden="true"
-              className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
               loading="lazy"
-              draggable={false}
             />
           </motion.div>
         )}
 
         {/*
-          Bottom-right — vote token. Edward 2026-04-25「右下方: 黑白球
-          vote token — vote-back.jpg (背面=投票中) / 露白球=贊成 / 露黑球=
-          反對 (用 vote-yes.jpg / vote-no.jpg)」.
-          - hasVoted=false → no token (player hasn't voted yet)
-          - hasVoted=true, voted=undefined → 紫色背面 (private vote, hidden)
-          - hasVoted=true, voted=true → 白球 / vote-yes.jpg (贊成)
-          - hasVoted=true, voted=false → 黑球 / vote-no.jpg (反對)
+          Bottom-left — vote token (黑白球). Edward 2026-04-25 20:09 corrected
+          spec「左下: 黑白球」moves the vote ball from the previous bottom-right
+          slot to the bottom-left so the bottom-right is freed for the mission
+          shield (per the new corner config).
+            - hasVoted=false → no token (player hasn't voted yet)
+            - hasVoted=true, voted=undefined → 紫色背面 (private vote, hidden)
+            - hasVoted=true, voted=true → 白球 / vote-yes.jpg (贊成)
+            - hasVoted=true, voted=false → 黑球 / vote-no.jpg (反對)
           Vote stays visible until the next vote round so the rail keeps the
           previous outcome on display (Edward「投票結果一直保留到下輪投票結束」).
+          Suppressed on role-back tiles.
         */}
-        {hasVoted && (
+        {!isRoleHidden && hasVoted && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            className="absolute bottom-1 right-1 pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/80 shadow-md w-7 h-7 sm:w-8 sm:h-8 bg-black/40"
+            className="absolute bottom-1 left-1 pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/80 shadow-md w-7 h-7 sm:w-8 sm:h-8 bg-black/40"
             aria-label={voted === undefined ? '已投票' : voted ? '贊成' : '反對'}
           >
             <img
@@ -395,48 +366,115 @@ export default function PlayerCard({
         )}
 
         {/*
-          Lady-of-the-Lake holder — center-left lake disc. Kept as a small
-          floating indicator (not in the 4-corner spec) because Edward's
-          earlier directive 「重點是玩家座位號碼&任務牌&湖中女神&黑白球」
-          places lake on the must-show list. Sits center-left so it doesn't
-          collide with the 4 corner indicators.
+          Bottom-right — mission shield. Edward 2026-04-25 20:09 corrected spec
+         「右下: 任務盾牌」moves the shield from the previous top-right slot to
+          the bottom-right (top-right now belongs to the lake-holder icon).
+          Three phases (mutually exclusive, priority top-down):
+            1. Leader picking team + shield candidate / selected → quest-team
+               selection overlay (yellow outline hint / solid yellow shield).
+            2. Otherwise, when this player participated in the most recent
+               completed quest → painted shield + coloured ring (blue=success,
+               red=fail).
+            3. Otherwise, active quest member with no result yet → soft yellow
+               ring shield so the rail flags the current quest team.
+          Suppressed on role-back tiles.
         */}
-        {isLadyHolder && (
+        {!isRoleHidden && showSelectOverlay && (
+          <motion.div
+            initial={{ scale: 0, rotate: -10 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+            className="absolute bottom-1 right-1 pointer-events-none z-20 rounded-full ring-2 ring-yellow-300 shadow-lg shadow-yellow-400/40"
+            aria-label="已選入任務隊伍"
+          >
+            <img
+              src={getMissionShieldUrl()}
+              alt=""
+              aria-hidden="true"
+              className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
+              loading="lazy"
+              draggable={false}
+            />
+          </motion.div>
+        )}
+        {!isRoleHidden && showCandidateHint && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.55 }}
+            className="absolute bottom-1 right-1 pointer-events-none z-10 rounded-full ring-2 ring-yellow-300/60"
+            aria-hidden="true"
+          >
+            <img
+              src={getMissionShieldUrl()}
+              alt=""
+              aria-hidden="true"
+              className="w-6 h-6 sm:w-7 sm:h-7 object-contain opacity-70"
+              loading="lazy"
+              draggable={false}
+            />
+          </motion.div>
+        )}
+        {!isRoleHidden && !showSelectOverlay && !showCandidateHint && lastQuestResult !== undefined && (
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
-            className="absolute top-1/2 left-1 -translate-y-1/2 bg-cyan-500 border-2 border-cyan-200 rounded-full overflow-hidden pointer-events-none shadow-md z-10 w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center"
-            aria-label="持有湖中女神"
+            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+            className={`absolute bottom-1 right-1 pointer-events-none z-10 rounded-full ring-2 ${missionShieldRing} shadow-md`}
+            aria-label={lastQuestResult === 'success' ? '最近任務成功' : '最近任務失敗'}
           >
             <img
-              src={LAKE_IMAGE}
+              src={getMissionShieldUrl()}
               alt=""
               aria-hidden="true"
-              className="w-full h-full object-cover"
-              draggable={false}
+              className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
               loading="lazy"
+              draggable={false}
+            />
+          </motion.div>
+        )}
+        {!isRoleHidden && !showSelectOverlay && !showCandidateHint && lastQuestResult === undefined && isOnQuestTeam && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute bottom-1 right-1 pointer-events-none z-10 rounded-full ring-2 ring-yellow-400 shadow-md"
+            aria-label="任務隊員"
+          >
+            <img
+              src={getMissionShieldUrl()}
+              alt=""
+              aria-hidden="true"
+              className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
+              loading="lazy"
+              draggable={false}
             />
           </motion.div>
         )}
 
-        {/* Bot icon — bottom-left so it doesn't collide with the vote ball. */}
-        {player.isBot && (
+        {/*
+          Bot icon — Edward's 4-corner spec doesn't reserve a slot, so we tuck
+          the 🤖 chip just to the right of the seat-number badge in the
+          top-left cluster. Suppressed on role-back tiles (the unknown card
+          intentionally hides identity hints; the operator can still spot bots
+          via the lobby roster).
+        */}
+        {!isRoleHidden && player.isBot && (
           <div
-            className="absolute bottom-1 left-1 bg-slate-900/80 border border-slate-500 rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center pointer-events-none z-10 shadow-sm"
+            className="absolute top-1 left-10 sm:left-12 bg-slate-900/80 border border-slate-500 rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center pointer-events-none z-10 shadow-sm"
             aria-label="AI 玩家"
           >
             <span className="text-[10px] sm:text-xs leading-none">🤖</span>
           </div>
         )}
 
-        {/* Disconnected marker — overlays the bot slot when both apply.
-            Edward's spec lists 4 corners; disconnected uses bottom-left and
-            wins over the bot badge so a dropped bot still flags as offline. */}
+        {/* Disconnected marker — overlays the seat row top-left so a dropped
+            player flags as offline regardless of role-back state. Disconnected
+            is a system status (not a corner indicator), so we deliberately
+            keep it visible even when corner indicators are suppressed. */}
         {player.status === 'disconnected' && (
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute bottom-1 left-1 bg-red-700 rounded-full p-0.5 pointer-events-none z-20"
+            className="absolute top-1 right-1 bg-red-700 rounded-full p-0.5 pointer-events-none z-30"
             aria-label="斷線"
           >
             <WifiOff size={12} className="text-white" />
