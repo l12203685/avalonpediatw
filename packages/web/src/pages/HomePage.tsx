@@ -21,7 +21,6 @@ import {
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import PublicChatPanel from '../components/PublicChatPanel';
-import IdentityBadge from '../components/IdentityBadge';
 import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
 import BindingField from '../components/BindingField';
 
@@ -282,10 +281,13 @@ export default function HomePage(): JSX.Element {
         />
       </div>
 
-      {/* Top-right controls — language + identity badge. fixed so they
-          ride the viewport edge regardless of which mode is active. */}
+      {/* Top-right controls — language switcher only. fixed so it rides
+          the viewport edge regardless of which mode is active. Edward
+          2026-04-25 18:55: removed IdentityBadge (orange username pill)
+          to stop it overlapping the "Avalon - Resistance" title. The
+          current player name is still shown inside the right-column
+          "個人戰績" button. */}
       <div className="fixed top-3 right-3 sm:top-6 sm:right-6 z-30 flex items-center gap-2">
-        <IdentityBadge />
         <LanguageSwitcher />
       </div>
 
