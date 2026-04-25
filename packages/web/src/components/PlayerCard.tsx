@@ -513,9 +513,15 @@ export default function PlayerCard({
           corrected spec「右上: 湖中」relocates the lake-holder indicator from
           the previous center-left floating slot up to the right-top corner.
           Only renders when this seat currently holds the lady-of-the-lake.
-          Suppressed on role-back tiles.
+
+          Edward 2026-04-26 00:17: 湖中持有者是 **公開資訊** (誰持湖每個玩家都知道),
+          所以這個 indicator 跟 seat# / disconnected 一樣是 system-level 資訊,
+          不該因為 role-back / camp-only / candidate-split 等 role-hidden state
+          被隱藏. 原本 `!isRoleHidden && isLadyHolder` 導致梅林看到的紅方陣營卡
+          / 派西看到的 split tile 上失去湖中 indicator (即使該紅方就是現役持湖者),
+          畫面上找不到湖中誰持. 改成 always render, 只在 role 揭曉前不依賴 role.
         */}
-        {!isRoleHidden && isLadyHolder && (
+        {isLadyHolder && (
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
