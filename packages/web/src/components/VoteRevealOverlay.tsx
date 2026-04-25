@@ -4,7 +4,7 @@ import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { VoteRecord, Room } from '@avalon/shared';
 import audioService from '../services/audio';
-import { seatPrefix } from '../utils/seatDisplay';
+import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
 
 interface VoteRevealOverlayProps {
   record: VoteRecord;
@@ -107,7 +107,7 @@ export default function VoteRevealOverlay({
                   : <ThumbsDown size={10} className="text-red-400 flex-shrink-0" />
                 }
                 <span className="truncate max-w-[5rem]">
-                  {seatPrefix(playerId, room.players)} {player.name}
+                  座 {displaySeatNumber(seatOf(playerId, room.players))}
                 </span>
               </span>
             );

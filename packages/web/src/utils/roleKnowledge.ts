@@ -10,6 +10,21 @@
  * leak secrets. Callers must supply `currentPlayer` as the viewer.
  */
 import type { Room, Player, Role } from '@avalon/shared';
+import { displaySeatNumber, seatOf } from './seatDisplay';
+
+/**
+ * Format a player as "座 {N}" for info windows / role-reveal modals.
+ *
+ * Edward 2026-04-25: 「這種資訊視窗 都一律改成座位號碼 而不是玩家名字」 — every
+ * piece of role-reveal / night-info / overlay text shows the seat number
+ * instead of the player's display name so the canonical reference stays
+ * "座 X" across role reveal, persistent night-info panel, vote/quest
+ * overlays, lady-of-the-lake, and assassin pickers.
+ */
+export function seatLabel(playerId: string, players: Record<string, unknown>): string {
+  const seat = seatOf(playerId, players);
+  return seat === 0 ? '?' : `座 ${displaySeatNumber(seat)}`;
+}
 
 export interface RoleInfo {
   name: string;
@@ -125,7 +140,7 @@ export function getKnowledgeList(role: Role, room: Room, currentPlayer: Player):
           && p.role !== 'oberon' && p.role !== 'mordred',
       );
       if (evilPlayers.length === 0) return ['(無邪惡方玩家)'];
-      return evilPlayers.map(p => `${p.name} — 邪惡方`);
+      return evilPlayers.map(p => `${seatLabel(p.id, room.players)} — 邪惡方`);
     }
     case 'percival': {
       // Percival sees Merlin and Morgana (but can't tell apart)
@@ -133,7 +148,7 @@ export function getKnowledgeList(role: Role, room: Room, currentPlayer: Player):
         p => p.id !== currentPlayer.id && (p.role === 'merlin' || p.role === 'morgana'),
       );
       if (merlinLike.length === 0) return ['(無法感知梅林)'];
-      return merlinLike.map(p => `${p.name} — 可能是梅林`);
+      return merlinLike.map(p => `${seatLabel(p.id, room.players)} — 可能是梅林`);
     }
     case 'assassin':
     case 'morgana':
@@ -144,7 +159,7 @@ export function getKnowledgeList(role: Role, room: Room, currentPlayer: Player):
         p => p.id !== currentPlayer.id && evilRoles.includes(p.role ?? 'loyal') && p.role !== 'oberon',
       );
       if (evilTeam.length === 0) return ['(無隊友)'];
-      return evilTeam.map(p => `${p.name} — 邪惡隊友`);
+      return evilTeam.map(p => `${seatLabel(p.id, room.players)} — 邪惡隊友`);
     }
     case 'loyal':
     case 'oberon':

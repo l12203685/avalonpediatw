@@ -19,7 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Bell, RefreshCw, Volume2, VolumeX, WifiOff, Loader2, Eye } from 'lucide-react';
 import { AVALON_CONFIG, VoteRecord, QuestRecord } from '@avalon/shared';
 import { requestNotificationPermission } from '../services/notifications';
-import { seatPrefix } from '../utils/seatDisplay';
+import { seatPrefix, displaySeatNumber, seatOf } from '../utils/seatDisplay';
 
 export default function GamePage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
@@ -417,7 +417,11 @@ export default function GamePage(): JSX.Element {
                   <p className="text-gray-300 text-sm">
                     <Trans
                       i18nKey="game:teamSelect.waitingDesc"
-                      values={{ name: room.players[leaderId]?.name ?? '' }}
+                      values={{
+                        name: leaderId
+                          ? `座 ${displaySeatNumber(seatOf(leaderId, room.players))}`
+                          : '',
+                      }}
                       components={{ leader: <span className="text-yellow-400 font-bold" /> }}
                     />
                   </p>
@@ -476,7 +480,7 @@ export default function GamePage(): JSX.Element {
                             : 'bg-avalon-card/60 border-gray-600 text-gray-200'
                         }`}
                       >
-                        {seatPrefix(id, room.players)} {p.name}
+                        座 {displaySeatNumber(seatOf(id, room.players))}
                       </span>
                     );
                   })}
@@ -516,7 +520,11 @@ export default function GamePage(): JSX.Element {
                 <p className="text-gray-300">
                   <Trans
                     i18nKey="game:lady.targetTeamLabel"
-                    values={{ name: room.players[room.ladyOfTheLakeTarget ?? '']?.name ?? '' }}
+                    values={{
+                      name: room.ladyOfTheLakeTarget
+                        ? `座 ${displaySeatNumber(seatOf(room.ladyOfTheLakeTarget, room.players))}`
+                        : '',
+                    }}
                     components={{ target: <span className="font-bold text-white" /> }}
                   />
                 </p>
@@ -586,7 +594,7 @@ export default function GamePage(): JSX.Element {
                         onClick={() => submitLadyOfTheLake(room.id, currentPlayer.id, player.id)}
                         className="p-4 rounded-lg border-2 transition-all font-semibold bg-blue-900/30 border-blue-600 text-white hover:bg-blue-800/60"
                       >
-                        {`${seatPrefix(player.id, room.players)} ${player.name}`.trim()}
+                        座 {displaySeatNumber(seatOf(player.id, room.players))}
                       </button>
                     ))}
                 </div>
@@ -598,7 +606,11 @@ export default function GamePage(): JSX.Element {
                 <p className="text-gray-300">
                   <Trans
                     i18nKey="game:lady.waitingDesc"
-                    values={{ name: room.players[room.ladyOfTheLakeHolder ?? '']?.name ?? '' }}
+                    values={{
+                      name: room.ladyOfTheLakeHolder
+                        ? `座 ${displaySeatNumber(seatOf(room.ladyOfTheLakeHolder, room.players))}`
+                        : '',
+                    }}
                     components={{ holder: <span className="text-blue-400 font-bold" /> }}
                   />
                 </p>
@@ -642,7 +654,7 @@ export default function GamePage(): JSX.Element {
                         {q.result === 'success' ? '✓' : '✗'}
                       </span>
                       <span className="text-gray-400">{t('game:assassin.roundPrefix', { round: q.round })}</span>
-                      <span className="text-gray-300">{q.team.map(id => `${seatPrefix(id, room.players)} ${room.players[id]?.name ?? id}`.trim()).join('、')}</span>
+                      <span className="text-gray-300">{q.team.map(id => `座 ${displaySeatNumber(seatOf(id, room.players))}`).join('、')}</span>
                       {q.result === 'fail' && q.failCount > 0 && <span className="text-red-400 ml-1">{t('game:assassin.failBadge', { count: q.failCount })}</span>}
                     </div>
                   ))}
@@ -679,7 +691,7 @@ export default function GamePage(): JSX.Element {
                           : 'bg-avalon-evil/30 border-red-600 text-white hover:bg-avalon-evil/60 disabled:opacity-50'
                       }`}
                     >
-                      {player.name}
+                      座 {displaySeatNumber(seatOf(player.id, room.players))}
                       {selectedTarget === player.id && ' ✓'}
                     </button>
                   ))}
@@ -728,10 +740,10 @@ export default function GamePage(): JSX.Element {
                 {room.endReason === 'failed_quests' && t('game:ended.reasonFailedQuests')}
                 {room.endReason === 'vote_rejections' && t('game:ended.reasonVoteRejections')}
                 {room.endReason === 'merlin_assassinated' && (
-                  <>{t('game:ended.reasonMerlinKilledPrefix')}<span className="text-red-300 font-bold"> {room.players[room.assassinTargetId ?? '']?.name ?? '?'} </span>{t('game:ended.reasonMerlinKilledSuffix')}</>
+                  <>{t('game:ended.reasonMerlinKilledPrefix')}<span className="text-red-300 font-bold"> {room.assassinTargetId ? `座 ${displaySeatNumber(seatOf(room.assassinTargetId, room.players))}` : '?'} </span>{t('game:ended.reasonMerlinKilledSuffix')}</>
                 )}
                 {room.endReason === 'assassination_failed' && (
-                  <>{t('game:ended.reasonWrongKillPrefix')} <span className="text-blue-300 font-bold">{room.players[room.assassinTargetId ?? '']?.name ?? '?'}</span>{t('game:ended.reasonWrongKillSuffix')}</>
+                  <>{t('game:ended.reasonWrongKillPrefix')} <span className="text-blue-300 font-bold">{room.assassinTargetId ? `座 ${displaySeatNumber(seatOf(room.assassinTargetId, room.players))}` : '?'}</span>{t('game:ended.reasonWrongKillSuffix')}</>
                 )}
                 {room.endReason === 'assassination_timeout' && t('game:ended.reasonAssassinationTimeout')}
               </div>
@@ -780,7 +792,7 @@ export default function GamePage(): JSX.Element {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <p className="font-bold text-white truncate">{player.name}{wasAssassinated && ' 🗡️'}</p>
+                      <p className="font-bold text-white truncate">座 {displaySeatNumber(seatOf(player.id, room.players))}{wasAssassinated && ' 🗡️'}</p>
                       {room.eloDeltas?.[player.id] !== undefined && (
                         <span className={`text-xs font-bold flex-shrink-0 ${room.eloDeltas[player.id] >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                           {room.eloDeltas[player.id] >= 0 ? '+' : ''}{room.eloDeltas[player.id]}

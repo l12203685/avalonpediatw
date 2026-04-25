@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player, Role } from '@avalon/shared';
 import { ChevronDown, ChevronUp, Eye, EyeOff, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { ROLE_INFO, getKnowledgeList, getKnowledgeEntries, getKnowledgeLabel } from '../utils/roleKnowledge';
+import { ROLE_INFO, getKnowledgeList, getKnowledgeEntries, getKnowledgeLabel, seatLabel } from '../utils/roleKnowledge';
 import RoleAvatar from './RoleAvatar';
 
 interface PersistentNightInfoPanelProps {
@@ -126,7 +126,7 @@ export default function PersistentNightInfoPanel({
                             </span>
                           )}
                           <span className="truncate">
-                            {entry.player.name} — {entry.hint}
+                            {seatLabel(entry.player.id, room.players)} — {entry.hint}
                           </span>
                         </li>
                       ))}

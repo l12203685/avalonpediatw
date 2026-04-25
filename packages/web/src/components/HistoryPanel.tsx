@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player, VoteRecord } from '@avalon/shared';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { seatPrefix } from '../utils/seatDisplay';
+import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
 
 interface HistoryPanelProps {
   room: Room;
@@ -24,9 +24,13 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
     return acc;
   }, {});
 
-  const getName = (id: string) => room.players[id]?.name ?? id;
-  // "#3 Guest_444" style team-member label — seat 10 renders as "0" (#93)
-  const getSeatName = (id: string): string => `${seatPrefix(id, room.players)} ${getName(id)}`.trim();
+  // Edward 2026-04-25: 「資訊視窗一律改成座位號碼」 — history panel now
+  // shows seat-only ("座 X"), no player display name. Seat 10 renders as
+  // "0" via displaySeatNumber (#93 paper-scoresheet convention).
+  const getSeatName = (id: string): string => {
+    const seat = seatOf(id, room.players);
+    return seat === 0 ? '?' : `座 ${displaySeatNumber(seat)}`;
+  };
 
   return (
     <div className="bg-avalon-card/50 border border-gray-700 rounded-lg overflow-hidden">

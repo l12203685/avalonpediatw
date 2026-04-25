@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Room, Player } from '@avalon/shared';
 import { useTranslation } from 'react-i18next';
+import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
 
 interface VoteAnalysisPanelProps {
   room: Room;
@@ -85,7 +86,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                           className={`border-b border-gray-800/40 ${isMe ? 'bg-yellow-900/10' : ''}`}
                         >
                           <td className="py-1.5 pr-2 font-semibold text-white whitespace-nowrap">
-                            {player.name}
+                            座 {displaySeatNumber(seatOf(player.id, room.players))}
                             {isMe && <span className="text-yellow-500 text-xs ml-1">{t('game:voteAnalysis.youSuffix')}</span>}
                           </td>
                           <td className={`py-1.5 pr-2 whitespace-nowrap ${isGood ? 'text-blue-400' : 'text-red-400'}`}>
@@ -141,7 +142,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                         return (
                           <tr key={player.id} className={isMe ? 'bg-yellow-900/10 rounded' : ''}>
                             <td className={`pr-3 py-0.5 font-semibold whitespace-nowrap ${isGood ? 'text-blue-300' : 'text-red-300'}`}>
-                              {player.name.length > 7 ? player.name.slice(0, 7) + '…' : player.name}
+                              座 {displaySeatNumber(seatOf(player.id, room.players))}
                             </td>
                             {room.voteHistory.map((v, i) => {
                               const vote = v.votes[player.id];
@@ -149,7 +150,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                               return (
                                 <td
                                   key={i}
-                                  title={isLeader ? t('game:voteAnalysis.matrixTeamTooltip', { team: v.team.map(id => room.players[id]?.name ?? id).join('、') }) : undefined}
+                                  title={isLeader ? t('game:voteAnalysis.matrixTeamTooltip', { team: v.team.map(id => `座 ${displaySeatNumber(seatOf(id, room.players))}`).join('、') }) : undefined}
                                   className={`text-center px-1 py-0.5 ${isLeader ? 'ring-1 ring-yellow-500/40 rounded bg-yellow-900/10' : ''}`}
                                 >
                                   {vote === undefined ? (

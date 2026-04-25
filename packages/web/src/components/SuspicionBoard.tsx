@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player } from '@avalon/shared';
 import { ChevronDown, ChevronUp, ClipboardList } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
 
 type Suspicion = 'evil' | 'neutral' | 'trusted';
 
@@ -112,7 +113,7 @@ export default function SuspicionBoard({ room, currentPlayer }: SuspicionBoardPr
                     >
                       <span className="text-base">{cfg.emoji}</span>
                       <div className="text-left min-w-0">
-                        <div className="font-bold truncate">{player.name}</div>
+                        <div className="font-bold truncate">座 {displaySeatNumber(seatOf(player.id, room.players))}</div>
                         <div className="opacity-70">{statusLabel[status]}</div>
                       </div>
                     </motion.button>

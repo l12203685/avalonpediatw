@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { QuestRecord, Room } from '@avalon/shared';
 import audioService from '../services/audio';
-import { seatPrefix } from '../utils/seatDisplay';
+import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
 
 interface QuestResultOverlayProps {
   record: QuestRecord;
@@ -87,14 +87,17 @@ export default function QuestResultOverlay({
         {/* Team members — compact horizontal chips */}
         {teamPlayers.length > 0 && (
           <div className="px-3 py-2 flex flex-wrap gap-1.5">
-            {teamPlayers.map((player) => (
-              <span
-                key={player.id}
-                className="bg-gray-800/80 border border-gray-600 text-gray-200 text-[11px] px-2 py-0.5 rounded-full font-semibold"
-              >
-                {seatPrefix(player.id, room.players)} {player.name}
-              </span>
-            ))}
+            {teamPlayers.map((player) => {
+              const seat = seatOf(player.id, room.players);
+              return (
+                <span
+                  key={player.id}
+                  className="bg-gray-800/80 border border-gray-600 text-gray-200 text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                >
+                  座 {displaySeatNumber(seat)}
+                </span>
+              );
+            })}
           </div>
         )}
 
