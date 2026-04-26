@@ -22,6 +22,7 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import PublicChatPanel from '../components/PublicChatPanel';
 import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
 import BindingField from '../components/BindingField';
+import InstallButton from '../components/InstallButton';
 
 function isGuestPlayer(player: { name?: string; provider?: string } | null | undefined): boolean {
   if (!player) return true;
@@ -316,7 +317,12 @@ export default function HomePage(): JSX.Element {
               - 訪客: clickable「登入/綁定」→ AuthGateModal (target='stats' 表登入後
                 回大廳，不跳頁)
             fixed 對齊右上 IdentityBadge 的同級，z-30 避開 modal (z-50)。 */}
-        <div className="fixed top-3 left-3 sm:top-6 sm:left-6 z-30">
+        <div className="fixed top-3 left-3 sm:top-6 sm:left-6 z-30 flex flex-col gap-1.5 items-start">
+          {/* Edward 2026-04-26 16:42: PWA「加到桌面」按鈕。已裝過自動隱藏；
+              Chrome/Edge/Android 直接彈系統 install dialog；iOS Safari 開
+              IOSInstallGuide modal 教手動加。完全不支援的瀏覽器自動隱藏。 */}
+          <InstallButton />
+
           {isGuest ? (
             <button
               type="button"

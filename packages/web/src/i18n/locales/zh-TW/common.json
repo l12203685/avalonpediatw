@@ -115,7 +115,17 @@
     "createRoomFailed": "無法建立房間 — 伺服器連線失敗，請重新整理頁面",
     "joinRoomFailed": "無法加入房間 — 伺服器連線失敗，請重新整理頁面",
     "thinkingTimeLabel": "思考時間倍率",
-    "thinkingTimeHint": "基準：派票 90s / 黑白球 30s / 湖中女神 90s / 刺殺 180s。倍率將按比例套用至每個階段。"
+    "thinkingTimeHint": "基準：派票 90s / 黑白球 30s / 湖中女神 90s / 刺殺 180s。倍率將按比例套用至每個階段。",
+    "installApp": "安裝 App",
+    "installIosTitle": "加到主畫面",
+    "installIosSubtitle": "在 Safari 中依下列步驟加入主畫面，使用體驗等同原生 App",
+    "installIosStep1Pre": "點擊底部",
+    "installIosShare": "分享",
+    "installIosStep1Post": "按鈕",
+    "installIosStep2Pre": "選擇",
+    "installIosAddToHome": "加入主畫面",
+    "installIosStep3": "右上角按「加入」即完成",
+    "installIosTip": "提示：若沒看到「加入主畫面」選項，請確認你正使用 Safari 開啟（Chrome iOS 不支援）。"
   },
   "connection": {
     "reconnecting": "重新連線中…",

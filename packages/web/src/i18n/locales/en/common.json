@@ -115,7 +115,17 @@
     "createRoomFailed": "Failed to create room — server connection failed, please refresh",
     "joinRoomFailed": "Failed to join room — server connection failed, please refresh",
     "thinkingTimeLabel": "Thinking Time Multiplier",
-    "thinkingTimeHint": "Base: Team vote 90s / Quest vote 30s / Lady of the Lake 90s / Assassination 180s. The multiplier scales each phase proportionally."
+    "thinkingTimeHint": "Base: Team vote 90s / Quest vote 30s / Lady of the Lake 90s / Assassination 180s. The multiplier scales each phase proportionally.",
+    "installApp": "Install App",
+    "installIosTitle": "Add to Home Screen",
+    "installIosSubtitle": "Follow these steps in Safari to install the app on your home screen.",
+    "installIosStep1Pre": "Tap the",
+    "installIosShare": "Share",
+    "installIosStep1Post": "button at the bottom",
+    "installIosStep2Pre": "Choose",
+    "installIosAddToHome": "Add to Home Screen",
+    "installIosStep3": "Tap \"Add\" in the top right to finish",
+    "installIosTip": "Tip: if you don't see \"Add to Home Screen\", make sure you're using Safari (Chrome on iOS does not support PWA install)."
   },
   "connection": {
     "reconnecting": "Reconnecting…",
