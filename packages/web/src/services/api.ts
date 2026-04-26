@@ -339,20 +339,30 @@ export function getErrorMessage(error: unknown): string {
 
 // ── Analysis API (Google Sheets data) ────────────────────────────────────────
 
+/**
+ * Three-outcome breakdown — fixed display order matching the rank baseline:
+ *   三紅 (red wins by 3 fails) → 三藍死 (blue wins, Merlin assassinated) →
+ *   三藍活 (blue wins, Merlin survives).
+ *
+ * Pcts sum to ~100% (mutually exclusive). Edward 2026-04-26 spec: every
+ * percentage in 深度分析 must be expanded into these three values.
+ */
+export interface OutcomeBreakdown {
+  threeRed: number;
+  threeBlueDead: number;
+  threeBlueAlive: number;
+  threeRedPct: number;
+  threeBlueDeadPct: number;
+  threeBlueAlivePct: number;
+}
+
 export interface AnalysisOverview {
   totalGames: number;
   totalPlayers: number;
   redWinRate: number;
   blueWinRate: number;
   merlinKillRate: number;
-  outcomeBreakdown: {
-    threeRed: number;
-    threeBlueAlive: number;
-    threeBlueDead: number;
-    threeRedPct: number;
-    threeBlueAlivePct: number;
-    threeBlueDeadPct: number;
-  };
+  outcomeBreakdown: OutcomeBreakdown;
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
   seatPositionWinRates: Array<{
@@ -422,23 +432,33 @@ export interface MissionAnalysisData {
     passedGames: number;
     passedThenBlueWin: number;
     passedBlueWinRate: number;
+    passedOutcomes: OutcomeBreakdown;
     failedGames: number;
     failedThenRedWin: number;
     failedRedWinRate: number;
+    failedOutcomes: OutcomeBreakdown;
   }>;
+}
+
+interface VisionEntry {
+  games: number;
+  mission1PassRate: number;
+  redWinRate: number;
+  blueWinRate?: number;
+  outcomes: OutcomeBreakdown;
 }
 
 export interface RoundsAnalysisData {
   visionStats: {
-    merlinInTeam: { games: number; mission1PassRate: number; redWinRate: number; blueWinRate: number };
-    merlinNotInTeam: { games: number; mission1PassRate: number; redWinRate: number; blueWinRate: number };
-    percivalInTeam: { games: number; mission1PassRate: number; redWinRate: number };
-    percivalNotInTeam: { games: number; mission1PassRate: number; redWinRate: number };
+    merlinInTeam: VisionEntry;
+    merlinNotInTeam: VisionEntry;
+    percivalInTeam: VisionEntry;
+    percivalNotInTeam: VisionEntry;
   };
-  redInR11: Array<{ redCount: number; games: number; mission1PassRate: number; redWinRate: number }>;
-  mission1Branch: Array<{ passed: boolean; games: number; redWinRate: number; merlinKillRate: number }>;
+  redInR11: Array<{ redCount: number; games: number; mission1PassRate: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
+  mission1Branch: Array<{ passed: boolean; games: number; redWinRate: number; merlinKillRate: number; outcomes: OutcomeBreakdown }>;
   roundProgression: Record<string, { bluePct: number; redPct: number; total: number }>;
-  gameStates: Array<{ state: string; games: number; redWinRate: number }>;
+  gameStates: Array<{ state: string; games: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
 }
 
 interface ApiEnvelope<T> { success: boolean; data?: T; error?: string }
@@ -480,21 +500,22 @@ export interface LakeRoleStat {
   games: number;
   redWinRate: number;
   blueWinRate?: number;
+  outcomes: OutcomeBreakdown;
 }
 
 export interface LakePerLake {
   lake: string;
   totalGames: number;
-  holderStats: Array<{ faction: string; games: number; redWinRate: number }>;
-  comboStats: Array<{ holderFaction: string; targetFaction: string; games: number; redWinRate: number }>;
+  holderStats: Array<{ faction: string; games: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
+  comboStats: Array<{ holderFaction: string; targetFaction: string; games: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
 }
 
 export interface LakeDetailedStats {
   lake: string;
   holderRoleStats: LakeRoleStat[];
   targetRoleStats: LakeRoleStat[];
-  sameFaction: { games: number; redWinRate: number };
-  diffFaction: { games: number; redWinRate: number };
+  sameFaction: { games: number; redWinRate: number; outcomes: OutcomeBreakdown };
+  diffFaction: { games: number; redWinRate: number; outcomes: OutcomeBreakdown };
 }
 
 export interface LakeAnalysisData {
@@ -560,6 +581,7 @@ export interface CaptainMissionGameWinRate {
   totalMissions: number;
   redGameWinRate: number;
   blueGameWinRate: number;
+  outcomes: OutcomeBreakdown;
 }
 
 export interface CaptainAnalysisData {

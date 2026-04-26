@@ -63,14 +63,35 @@ export interface ChemistryData {
   coWinMinusLose: ChemistryMatrix;
 }
 
+/**
+ * Three-outcome breakdown — Edward 2026-04-26 spec:
+ * fixed display order: 三紅 → 三藍死 → 三藍活
+ * Pct values sum to ~100% (互斥). Used for any subset of games.
+ */
+export interface OutcomeBreakdown {
+  threeRed: number;
+  threeBlueDead: number;
+  threeBlueAlive: number;
+  threeRedPct: number;
+  threeBlueDeadPct: number;
+  threeBlueAlivePct: number;
+}
+
 export interface OverviewData {
   totalGames: number;
   totalPlayers: number;
   redWinRate: number;
   blueWinRate: number;
   merlinKillRate: number;
-  topPlayersByWinRate: Array<{ name: string; winRate: number; games: number }>;
+  outcomeBreakdown: OutcomeBreakdown;
+  topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
+  seatPositionWinRates: Array<{
+    seat: string;
+    overallWinRate: number;
+    totalGames: number;
+    roles: Array<{ role: string; winRate: number; games: number }>;
+  }>;
 }
 
 export interface SeatOrderPermutation {
@@ -134,11 +155,19 @@ interface AnalysisCache {
     perLake: Array<{
       lake: string;
       totalGames: number;
-      holderStats: Array<{ faction: string; games: number; redWinRate: number }>;
-      comboStats: Array<{ holderFaction: string; targetFaction: string; games: number; redWinRate: number }>;
+      holderStats: Array<{ faction: string; games: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
+      comboStats: Array<{ holderFaction: string; targetFaction: string; games: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
     }>;
-    holderRoleStats: Array<{ role: string; games: number; redWinRate: number; blueWinRate: number }>;
-    targetRoleStats: Array<{ role: string; games: number; redWinRate: number }>;
+    holderRoleStats: Array<{ role: string; games: number; redWinRate: number; blueWinRate: number; outcomes: OutcomeBreakdown }>;
+    targetRoleStats: Array<{ role: string; games: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
+    /** Per-lake detailed role stats (Fix #12) — present in current cache. */
+    allLakeRoleStats?: Array<{
+      lake: string;
+      holderRoleStats: Array<{ role: string; games: number; redWinRate: number; blueWinRate: number; outcomes: OutcomeBreakdown }>;
+      targetRoleStats: Array<{ role: string; games: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
+      sameFaction: { games: number; redWinRate: number; outcomes: OutcomeBreakdown };
+      diffFaction: { games: number; redWinRate: number; outcomes: OutcomeBreakdown };
+    }>;
   };
   rounds: {
     visionStats: {

@@ -1,14 +1,27 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Legend,
 } from 'recharts';
 import { Loader, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { fetchAnalysisSeatOrder, getErrorMessage } from '../../services/api';
 import type { SeatOrderData } from '../../services/api';
 
+const RED        = '#ef4444';
+const BLUE_DEAD  = '#f59e0b';
+const BLUE_ALIVE = '#3b82f6';
+
+/**
+ * 派/梅/娜順序分析 — Edward 2026-04-26 spec
+ *
+ * Already had the three outcomes baked into the cache, so the only
+ * structural change here is reordering the stacked bar segments to match
+ * the new fixed display order: 三紅 → 三藍死 → 三藍活, plus i18n.
+ */
 export default function SeatOrderAnalysis(): JSX.Element {
+  const { t } = useTranslation('common');
   const [data, setData] = useState<SeatOrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +44,7 @@ export default function SeatOrderAnalysis(): JSX.Element {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
-        <Loader size={20} className="animate-spin" /> 載入座位順序分析...
+        <Loader size={20} className="animate-spin" /> {t('analytics.deep.seatOrder.loading')}
       </div>
     );
   }
@@ -39,7 +52,7 @@ export default function SeatOrderAnalysis(): JSX.Element {
   if (error || !data) {
     return (
       <div className="flex items-center justify-center py-20 text-red-400 gap-3">
-        <AlertCircle size={20} /> {error || 'Failed to load'}
+        <AlertCircle size={20} /> {error || t('analytics.deep.loadFailed')}
       </div>
     );
   }
@@ -47,97 +60,75 @@ export default function SeatOrderAnalysis(): JSX.Element {
   if (data.permutations.length === 0) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400">
-        暫無座位順序資料
+        {t('analytics.deep.seatOrder.noData')}
       </div>
     );
   }
 
-  const chartData = data.permutations.map(p => ({
-    name: p.order,
-    total: p.total,
-    redWinRate: p.redWinRate,
-    blueWinRate: p.blueWinRate,
-    merlinKillRate: p.merlinKillRate,
-  }));
-
+  // Reorder columns to fixed display order 三紅 → 三藍死 → 三藍活.
   const outcomeData = data.permutations.map(p => ({
     name: p.order,
-    '\u4e09\u85cd\u6885\u6d3b': p['\u4e09\u85cd\u6885\u6d3bpct'],
-    '\u4e09\u85cd\u6885\u6b7b': p['\u4e09\u85cd\u6885\u6b7bpct'],
-    '\u4e09\u7d05': p['\u4e09\u7d05pct'],
+    threeRed:        p['三紅pct'],
+    threeBlueDead:   p['三藍梅死pct'],
+    threeBlueAlive:  p['三藍梅活pct'],
   }));
 
   return (
     <div className="space-y-6">
-      {/* Summary */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-1">
-          派/梅/娜 座位順序分析 (Percival/Merlin/Morgana Seat Order)
-        </h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.seatOrder.title')}</h3>
         <p className="text-[10px] text-gray-600 mb-3">
-          分析派西維爾(派)/梅林(梅)/莫甘娜(娜) 三位關鍵角色的 6 種座位排列順序對勝率的影響。共 {data.totalGames} 局有效資料, 整體紅方勝率 {data.overallRedWinRate}%
+          {t('analytics.deep.seatOrder.sub', { games: data.totalGames, rate: data.overallRedWinRate })}
         </p>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {data.permutations.map(p => (
-            <div key={p.order} className="bg-gray-800/40 rounded-lg p-3">
-              <p className="text-sm font-bold text-white mb-2">{p.order}</p>
-              <div className="grid grid-cols-2 gap-1 text-xs">
-                <span className="text-gray-500">場次</span>
-                <span className="text-white font-bold text-right">{p.total}</span>
-                <span className="text-gray-500">紅方勝率</span>
-                <span className={`font-bold text-right ${p.redWinRate >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
-                  {p.redWinRate}%
-                </span>
-                <span className="text-gray-500">梅林擊殺率</span>
-                <span className="text-yellow-400 font-bold text-right">{p.merlinKillRate}%</span>
-                <span className="text-gray-500">穿插任務率</span>
-                <span className="text-purple-400 font-bold text-right">{p['\u7a7f\u63d2\u7387']}%</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {data.permutations.map(p => {
+            const threeRedPct       = p['三紅pct'];
+            const threeBlueDeadPct  = p['三藍梅死pct'];
+            const threeBlueAlivePct = p['三藍梅活pct'];
+            return (
+              <div key={p.order} className="bg-gray-800/40 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm font-bold text-white">{p.order}</p>
+                  <p className="text-xs text-gray-500">{p.total} {t('analytics.deep.seatOrder.gamesLabel')}</p>
+                </div>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span style={{ color: RED }}>{t('analytics.deep.outcomes.threeRed')}</span>
+                    <span className="text-white font-bold">{threeRedPct}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span style={{ color: BLUE_DEAD }}>{t('analytics.deep.outcomes.threeBlueDead')}</span>
+                    <span className="text-white font-bold">{threeBlueDeadPct}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span style={{ color: BLUE_ALIVE }}>{t('analytics.deep.outcomes.threeBlueAlive')}</span>
+                    <span className="text-white font-bold">{threeBlueAlivePct}%</span>
+                  </div>
+                </div>
+                <div className="flex h-2 w-full overflow-hidden rounded bg-zinc-800">
+                  <div style={{ width: `${threeRedPct}%`,        backgroundColor: RED        }} />
+                  <div style={{ width: `${threeBlueDeadPct}%`,   backgroundColor: BLUE_DEAD  }} />
+                  <div style={{ width: `${threeBlueAlivePct}%`,  backgroundColor: BLUE_ALIVE }} />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </motion.div>
 
-      {/* Win rate chart */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-      >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">各排列紅方勝率比較</h3>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={chartData}>
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#d1d5db' }} />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <Tooltip
-              formatter={(val: unknown) => `${val}%`}
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-              itemStyle={{ color: '#d1d5db' }}
-            />
-            <Legend />
-            <Bar dataKey="redWinRate" name="紅方勝率" radius={[4, 4, 0, 0]}>
-              {chartData.map((d, i) => (
-                <Cell key={i} fill={d.redWinRate >= 50 ? '#ef4444' : '#3b82f6'} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </motion.div>
-
-      {/* Outcome breakdown stacked bar */}
+      {/* Per-permutation outcome distribution stacked bar */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">結果分布比例 (三藍梅活/三藍梅死/三紅)</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.seatOrder.outcomeTitle')}</h3>
         <ResponsiveContainer width="100%" height={250}>
           <BarChart data={outcomeData}>
             <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#d1d5db' }} />
@@ -148,9 +139,9 @@ export default function SeatOrderAnalysis(): JSX.Element {
               itemStyle={{ color: '#d1d5db' }}
             />
             <Legend />
-            <Bar dataKey={'\u4e09\u85cd\u6885\u6d3b'} name="三藍梅活" fill="#3b82f6" stackId="a" />
-            <Bar dataKey={'\u4e09\u85cd\u6885\u6b7b'} name="三藍梅死" fill="#f59e0b" stackId="a" />
-            <Bar dataKey={'\u4e09\u7d05'} name="三紅" fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="threeRed"        name={t('analytics.deep.outcomes.threeRed')}       fill={RED}        stackId="a" />
+            <Bar dataKey="threeBlueDead"   name={t('analytics.deep.outcomes.threeBlueDead')}  fill={BLUE_DEAD}  stackId="a" />
+            <Bar dataKey="threeBlueAlive"  name={t('analytics.deep.outcomes.threeBlueAlive')} fill={BLUE_ALIVE} stackId="a" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </motion.div>
@@ -162,21 +153,19 @@ export default function SeatOrderAnalysis(): JSX.Element {
         transition={{ delay: 0.2 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-1">穿插分析</h3>
-        <p className="text-[10px] text-gray-600 mb-3">
-          「穿插」= 派/梅/娜三人的座位之間有其他玩家（非相鄰）
-        </p>
+        <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.seatOrder.interleaveTitle')}</h3>
+        <p className="text-[10px] text-gray-600 mb-3">{t('analytics.deep.seatOrder.interleaveSub')}</p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-700">
-                <th className="text-left py-2 px-2 text-gray-400">排列</th>
-                <th className="text-right py-2 px-2 text-gray-400">場次</th>
-                <th className="text-right py-2 px-2 text-gray-400">穿插數</th>
-                <th className="text-right py-2 px-2 text-gray-400">穿插率</th>
-                <th className="text-right py-2 px-2 text-gray-400">穿插紅勝率</th>
-                <th className="text-right py-2 px-2 text-gray-400">無穿插紅勝率</th>
-                <th className="text-right py-2 px-2 text-gray-400">整體紅勝率</th>
+                <th className="text-left  py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.permCol')}</th>
+                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.gamesLabel')}</th>
+                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveCount')}</th>
+                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveRateCol')}</th>
+                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveRedRate')}</th>
+                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.noInterleaveRedRate')}</th>
+                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.overallRedRate')}</th>
               </tr>
             </thead>
             <tbody>
@@ -184,13 +173,13 @@ export default function SeatOrderAnalysis(): JSX.Element {
                 <tr key={p.order} className="border-b border-gray-800">
                   <td className="py-2 px-2 text-white font-bold">{p.order}</td>
                   <td className="py-2 px-2 text-right text-gray-300">{p.total}</td>
-                  <td className="py-2 px-2 text-right text-purple-400">{p['\u7a7f\u63d2\u4efb\u52d9']}</td>
-                  <td className="py-2 px-2 text-right text-purple-400">{p['\u7a7f\u63d2\u7387']}%</td>
-                  <td className={`py-2 px-2 text-right font-bold ${p['\u7a7f\u63d2\u7d05\u52dd\u7387'] >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
-                    {p['\u7a7f\u63d2\u7d05\u52dd\u7387']}%
+                  <td className="py-2 px-2 text-right text-purple-400">{p['穿插任務']}</td>
+                  <td className="py-2 px-2 text-right text-purple-400">{p['穿插率']}%</td>
+                  <td className={`py-2 px-2 text-right font-bold ${p['穿插紅勝率'] >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {p['穿插紅勝率']}%
                   </td>
-                  <td className={`py-2 px-2 text-right font-bold ${p['\u7121\u7a7f\u63d2\u7d05\u52dd\u7387'] >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
-                    {p['\u7121\u7a7f\u63d2\u7d05\u52dd\u7387']}%
+                  <td className={`py-2 px-2 text-right font-bold ${p['無穿插紅勝率'] >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {p['無穿插紅勝率']}%
                   </td>
                   <td className={`py-2 px-2 text-right font-bold ${p.redWinRate >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
                     {p.redWinRate}%
@@ -202,25 +191,17 @@ export default function SeatOrderAnalysis(): JSX.Element {
         </div>
       </motion.div>
 
-      {/* Interpretation */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-2">分析結論</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-2">{t('analytics.deep.seatOrder.conclusionTitle')}</h3>
         <ul className="text-xs text-gray-300 space-y-2 list-disc list-inside">
-          <li>
-            <span className="text-white font-bold">梅娜派</span> 紅勝率最低(~41%) -- 梅林和莫甘娜相鄰，派西維爾更容易辨別真假梅林
-          </li>
-          <li>
-            <span className="text-white font-bold">梅派娜</span> 紅勝率最高(~48%) -- 派西維爾夾在中間，對隊友的資訊傳遞效率降低
-          </li>
-          <li>
-            穿插場次中紅方勝率是否有差異 -- 比較上表「穿插紅勝率」vs「無穿插紅勝率」，
-            穿插代表三人之間有其他玩家，可能干擾資訊傳遞
-          </li>
+          <li>{t('analytics.deep.seatOrder.concl1')}</li>
+          <li>{t('analytics.deep.seatOrder.concl2')}</li>
+          <li>{t('analytics.deep.seatOrder.concl3')}</li>
         </ul>
       </motion.div>
     </div>

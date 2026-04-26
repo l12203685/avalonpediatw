@@ -50,15 +50,18 @@ type DeepTab =
   | 'overview' | 'seat' | 'seatOrder' | 'chemistry'
   | 'mission' | 'rounds' | 'lake' | 'captain';
 
-const DEEP_TABS: Array<{ id: DeepTab; label: string; icon: typeof BarChart3 }> = [
-  { id: 'overview',   label: '總覽',       icon: BarChart3 },
-  { id: 'seat',       label: '座位分析',   icon: Map },
-  { id: 'seatOrder',  label: '派梅娜順序', icon: Shuffle },
-  { id: 'chemistry',  label: '默契矩陣',   icon: Target },
-  { id: 'mission',    label: '任務分析',   icon: Swords },
-  { id: 'rounds',     label: '回合分析',   icon: Compass },
-  { id: 'lake',       label: '湖中女神',   icon: Droplets },
-  { id: 'captain',    label: '隊長分析',   icon: Crown },
+interface DeepTabDef { id: DeepTab; labelKey: string; icon: typeof BarChart3 }
+
+// Tab labels are sourced from i18n so the bilingual switch covers them.
+const DEEP_TABS: DeepTabDef[] = [
+  { id: 'overview',   labelKey: 'analytics.deep.tabs.overview',   icon: BarChart3 },
+  { id: 'seat',       labelKey: 'analytics.deep.tabs.seat',       icon: Map },
+  { id: 'seatOrder',  labelKey: 'analytics.deep.tabs.seatOrder',  icon: Shuffle },
+  { id: 'chemistry',  labelKey: 'analytics.deep.tabs.chemistry',  icon: Target },
+  { id: 'mission',    labelKey: 'analytics.deep.tabs.mission',    icon: Swords },
+  { id: 'rounds',     labelKey: 'analytics.deep.tabs.rounds',     icon: Compass },
+  { id: 'lake',       labelKey: 'analytics.deep.tabs.lake',       icon: Droplets },
+  { id: 'captain',    labelKey: 'analytics.deep.tabs.captain',    icon: Crown },
 ];
 
 export default function AnalyticsPage(): JSX.Element {
@@ -247,7 +250,7 @@ function EloLeaderboardWithRadar(): JSX.Element {
               {t('leaderboard:showingCount', { filtered: filtered.length, total: entries.length })}
             </p>
           )}
-          <p className="text-xs text-zinc-500">{t('analytics.radarHint')}</p>
+          <p className="text-xs text-zinc-500">{t('common:analytics.radarHint')}</p>
         </div>
       )}
 
@@ -486,12 +489,15 @@ function StatRow({ label, value }: { label: string; value: string }): JSX.Elemen
 // ──────────────────────────────────────────────────────────────
 
 function DeepAnalysisSection(): JSX.Element {
+  const { t } = useTranslation('common');
   const [deepTab, setDeepTab] = useState<DeepTab>('overview');
   return (
     <div>
-      <p className="text-xs text-zinc-500 mb-3">2145+ 局實戰數據 from Google Sheets</p>
+      <p className="text-xs text-zinc-500 mb-3">
+        {t('analytics.deep.subtitle', { count: 2145 })} · {t('analytics.deep.subtitleSource')}
+      </p>
       <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-hide">
-        {DEEP_TABS.map(({ id, label, icon: Icon }) => (
+        {DEEP_TABS.map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setDeepTab(id)}
@@ -502,7 +508,7 @@ function DeepAnalysisSection(): JSX.Element {
             }`}
           >
             <Icon size={14} />
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>

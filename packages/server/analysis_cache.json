@@ -11687,6 +11687,36 @@
         "呂安",
         "RAY"
       ],
+      "rowLabels": [
+        "SIN",
+        "HAO",
+        "尼克",
+        "軒",
+        "海月",
+        "池",
+        "黑羊",
+        "洋蔥",
+        "DEAN",
+        "JOY",
+        "LIANG",
+        "轆",
+        "KEVIN",
+        "豬豬",
+        "雪怪",
+        "發達",
+        "黃某人",
+        "菜",
+        "LORI",
+        "大星",
+        "ED",
+        "午夜",
+        "VASH",
+        "TEN",
+        "豬羊",
+        "很乖",
+        "呂安",
+        "RAY"
+      ],
       "values": [
         [
           452.0,
@@ -12528,8 +12558,10 @@
           0.0,
           60.0
         ]
-      ],
-      "rowLabels": [
+      ]
+    },
+    "coLose": {
+      "players": [
         "SIN",
         "HAO",
         "尼克",
@@ -12558,10 +12590,8 @@
         "很乖",
         "呂安",
         "RAY"
-      ]
-    },
-    "coLose": {
-      "players": [
+      ],
+      "rowLabels": [
         "SIN",
         "HAO",
         "尼克",
@@ -13432,8 +13462,10 @@
           1.0,
           68.0
         ]
-      ],
-      "rowLabels": [
+      ]
+    },
+    "winCorr": {
+      "players": [
         "SIN",
         "HAO",
         "尼克",
@@ -13462,10 +13494,8 @@
         "很乖",
         "呂安",
         "RAY"
-      ]
-    },
-    "winCorr": {
-      "players": [
+      ],
+      "rowLabels": [
         "SIN",
         "HAO",
         "尼克",
@@ -14336,8 +14366,10 @@
           0.0,
           100.0
         ]
-      ],
-      "rowLabels": [
+      ]
+    },
+    "coWinMinusLose": {
+      "players": [
         "SIN",
         "HAO",
         "尼克",
@@ -14366,10 +14398,8 @@
         "很乖",
         "呂安",
         "RAY"
-      ]
-    },
-    "coWinMinusLose": {
-      "players": [
+      ],
+      "rowLabels": [
         "SIN",
         "HAO",
         "尼克",
@@ -15240,36 +15270,6 @@
           -1.0,
           0.0
         ]
-      ],
-      "rowLabels": [
-        "SIN",
-        "HAO",
-        "尼克",
-        "軒",
-        "海月",
-        "池",
-        "黑羊",
-        "洋蔥",
-        "DEAN",
-        "JOY",
-        "LIANG",
-        "轆",
-        "KEVIN",
-        "豬豬",
-        "雪怪",
-        "發達",
-        "黃某人",
-        "菜",
-        "LORI",
-        "大星",
-        "ED",
-        "午夜",
-        "VASH",
-        "TEN",
-        "豬羊",
-        "很乖",
-        "呂安",
-        "RAY"
       ]
     }
   },
@@ -15344,45 +15344,125 @@
         "passedGames": 888,
         "passedThenBlueWin": 631,
         "passedBlueWinRate": 71.1,
+        "passedOutcomes": {
+          "threeRed": 257,
+          "threeBlueDead": 275,
+          "threeBlueAlive": 356,
+          "threeRedPct": 28.9,
+          "threeBlueDeadPct": 31.0,
+          "threeBlueAlivePct": 40.1
+        },
         "failedGames": 1258,
         "failedThenRedWin": 714,
-        "failedRedWinRate": 56.8
+        "failedRedWinRate": 56.8,
+        "failedOutcomes": {
+          "threeRed": 714,
+          "threeBlueDead": 241,
+          "threeBlueAlive": 303,
+          "threeRedPct": 56.8,
+          "threeBlueDeadPct": 19.2,
+          "threeBlueAlivePct": 24.1
+        }
       },
       {
         "round": 2,
         "passedGames": 607,
         "passedThenBlueWin": 545,
         "passedBlueWinRate": 89.8,
+        "passedOutcomes": {
+          "threeRed": 62,
+          "threeBlueDead": 197,
+          "threeBlueAlive": 348,
+          "threeRedPct": 10.2,
+          "threeBlueDeadPct": 32.5,
+          "threeBlueAlivePct": 57.3
+        },
         "failedGames": 1539,
         "failedThenRedWin": 909,
-        "failedRedWinRate": 59.1
+        "failedRedWinRate": 59.1,
+        "failedOutcomes": {
+          "threeRed": 909,
+          "threeBlueDead": 319,
+          "threeBlueAlive": 311,
+          "threeRedPct": 59.1,
+          "threeBlueDeadPct": 20.7,
+          "threeBlueAlivePct": 20.2
+        }
       },
       {
         "round": 3,
         "passedGames": 985,
         "passedThenBlueWin": 936,
         "passedBlueWinRate": 95.0,
+        "passedOutcomes": {
+          "threeRed": 49,
+          "threeBlueDead": 377,
+          "threeBlueAlive": 559,
+          "threeRedPct": 5.0,
+          "threeBlueDeadPct": 38.3,
+          "threeBlueAlivePct": 56.8
+        },
         "failedGames": 1158,
         "failedThenRedWin": 922,
-        "failedRedWinRate": 79.6
+        "failedRedWinRate": 79.6,
+        "failedOutcomes": {
+          "threeRed": 922,
+          "threeBlueDead": 137,
+          "threeBlueAlive": 99,
+          "threeRedPct": 79.6,
+          "threeBlueDeadPct": 11.8,
+          "threeBlueAlivePct": 8.5
+        }
       },
       {
         "round": 4,
         "passedGames": 853,
         "passedThenBlueWin": 689,
         "passedBlueWinRate": 80.8,
+        "passedOutcomes": {
+          "threeRed": 164,
+          "threeBlueDead": 340,
+          "threeBlueAlive": 349,
+          "threeRedPct": 19.2,
+          "threeBlueDeadPct": 39.9,
+          "threeBlueAlivePct": 40.9
+        },
         "failedGames": 438,
         "failedThenRedWin": 178,
-        "failedRedWinRate": 40.6
+        "failedRedWinRate": 40.6,
+        "failedOutcomes": {
+          "threeRed": 178,
+          "threeBlueDead": 106,
+          "threeBlueAlive": 154,
+          "threeRedPct": 40.6,
+          "threeBlueDeadPct": 24.2,
+          "threeBlueAlivePct": 35.2
+        }
       },
       {
         "round": 5,
         "passedGames": 481,
         "passedThenBlueWin": 480,
         "passedBlueWinRate": 99.8,
+        "passedOutcomes": {
+          "threeRed": 1,
+          "threeBlueDead": 263,
+          "threeBlueAlive": 217,
+          "threeRedPct": 0.2,
+          "threeBlueDeadPct": 54.7,
+          "threeBlueAlivePct": 45.1
+        },
         "failedGames": 207,
         "failedThenRedWin": 207,
-        "failedRedWinRate": 100.0
+        "failedRedWinRate": 100.0,
+        "failedOutcomes": {
+          "threeRed": 207,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       }
     ]
   },
@@ -15395,12 +15475,28 @@
           {
             "faction": "紅方",
             "games": 835,
-            "redWinRate": 52.1
+            "redWinRate": 52.1,
+            "outcomes": {
+              "threeRed": 435,
+              "threeBlueDead": 175,
+              "threeBlueAlive": 225,
+              "threeRedPct": 52.1,
+              "threeBlueDeadPct": 21.0,
+              "threeBlueAlivePct": 26.9
+            }
           },
           {
             "faction": "藍方",
             "games": 1311,
-            "redWinRate": 40.9
+            "redWinRate": 40.9,
+            "outcomes": {
+              "threeRed": 536,
+              "threeBlueDead": 341,
+              "threeBlueAlive": 434,
+              "threeRedPct": 40.9,
+              "threeBlueDeadPct": 26.0,
+              "threeBlueAlivePct": 33.1
+            }
           }
         ],
         "comboStats": [
@@ -15408,31 +15504,71 @@
             "holderFaction": "紅方",
             "targetFaction": "藍方",
             "games": 562,
-            "redWinRate": 48.2
+            "redWinRate": 48.2,
+            "outcomes": {
+              "threeRed": 271,
+              "threeBlueDead": 124,
+              "threeBlueAlive": 167,
+              "threeRedPct": 48.2,
+              "threeBlueDeadPct": 22.1,
+              "threeBlueAlivePct": 29.7
+            }
           },
           {
             "holderFaction": "藍方",
             "targetFaction": "藍方",
             "games": 985,
-            "redWinRate": 34.2
+            "redWinRate": 34.2,
+            "outcomes": {
+              "threeRed": 337,
+              "threeBlueDead": 282,
+              "threeBlueAlive": 366,
+              "threeRedPct": 34.2,
+              "threeBlueDeadPct": 28.6,
+              "threeBlueAlivePct": 37.2
+            }
           },
           {
             "holderFaction": "紅方",
             "targetFaction": "紅方",
             "games": 273,
-            "redWinRate": 60.1
+            "redWinRate": 60.1,
+            "outcomes": {
+              "threeRed": 164,
+              "threeBlueDead": 51,
+              "threeBlueAlive": 58,
+              "threeRedPct": 60.1,
+              "threeBlueDeadPct": 18.7,
+              "threeBlueAlivePct": 21.2
+            }
           },
           {
             "holderFaction": "藍方",
             "targetFaction": "紅方",
             "games": 325,
-            "redWinRate": 61.2
+            "redWinRate": 61.2,
+            "outcomes": {
+              "threeRed": 199,
+              "threeBlueDead": 59,
+              "threeBlueAlive": 67,
+              "threeRedPct": 61.2,
+              "threeBlueDeadPct": 18.2,
+              "threeBlueAlivePct": 20.6
+            }
           },
           {
             "holderFaction": "藍方",
             "targetFaction": "",
             "games": 1,
-            "redWinRate": 0.0
+            "redWinRate": 0.0,
+            "outcomes": {
+              "threeRed": 0,
+              "threeBlueDead": 0,
+              "threeBlueAlive": 1,
+              "threeRedPct": 0.0,
+              "threeBlueDeadPct": 0.0,
+              "threeBlueAlivePct": 100.0
+            }
           }
         ]
       },
@@ -15443,12 +15579,28 @@
           {
             "faction": "藍方",
             "games": 923,
-            "redWinRate": 22.1
+            "redWinRate": 22.1,
+            "outcomes": {
+              "threeRed": 204,
+              "threeBlueDead": 337,
+              "threeBlueAlive": 382,
+              "threeRedPct": 22.1,
+              "threeBlueDeadPct": 36.5,
+              "threeBlueAlivePct": 41.4
+            }
           },
           {
             "faction": "紅方",
             "games": 354,
-            "redWinRate": 38.1
+            "redWinRate": 38.1,
+            "outcomes": {
+              "threeRed": 135,
+              "threeBlueDead": 104,
+              "threeBlueAlive": 115,
+              "threeRedPct": 38.1,
+              "threeBlueDeadPct": 29.4,
+              "threeBlueAlivePct": 32.5
+            }
           }
         ],
         "comboStats": [
@@ -15456,31 +15608,71 @@
             "holderFaction": "藍方",
             "targetFaction": "紅方",
             "games": 210,
-            "redWinRate": 40.0
+            "redWinRate": 40.0,
+            "outcomes": {
+              "threeRed": 84,
+              "threeBlueDead": 65,
+              "threeBlueAlive": 61,
+              "threeRedPct": 40.0,
+              "threeBlueDeadPct": 31.0,
+              "threeBlueAlivePct": 29.0
+            }
           },
           {
             "holderFaction": "紅方",
             "targetFaction": "紅方",
             "games": 138,
-            "redWinRate": 42.0
+            "redWinRate": 42.0,
+            "outcomes": {
+              "threeRed": 58,
+              "threeBlueDead": 40,
+              "threeBlueAlive": 40,
+              "threeRedPct": 42.0,
+              "threeBlueDeadPct": 29.0,
+              "threeBlueAlivePct": 29.0
+            }
           },
           {
             "holderFaction": "紅方",
             "targetFaction": "藍方",
             "games": 216,
-            "redWinRate": 35.6
+            "redWinRate": 35.6,
+            "outcomes": {
+              "threeRed": 77,
+              "threeBlueDead": 64,
+              "threeBlueAlive": 75,
+              "threeRedPct": 35.6,
+              "threeBlueDeadPct": 29.6,
+              "threeBlueAlivePct": 34.7
+            }
           },
           {
             "holderFaction": "藍方",
             "targetFaction": "藍方",
             "games": 711,
-            "redWinRate": 16.9
+            "redWinRate": 16.9,
+            "outcomes": {
+              "threeRed": 120,
+              "threeBlueDead": 272,
+              "threeBlueAlive": 319,
+              "threeRedPct": 16.9,
+              "threeBlueDeadPct": 38.3,
+              "threeBlueAlivePct": 44.9
+            }
           },
           {
             "holderFaction": "藍方",
             "targetFaction": "",
             "games": 2,
-            "redWinRate": 0.0
+            "redWinRate": 0.0,
+            "outcomes": {
+              "threeRed": 0,
+              "threeBlueDead": 0,
+              "threeBlueAlive": 2,
+              "threeRedPct": 0.0,
+              "threeBlueDeadPct": 0.0,
+              "threeBlueAlivePct": 100.0
+            }
           }
         ]
       },
@@ -15491,12 +15683,28 @@
           {
             "faction": "紅方",
             "games": 217,
-            "redWinRate": 38.7
+            "redWinRate": 38.7,
+            "outcomes": {
+              "threeRed": 84,
+              "threeBlueDead": 74,
+              "threeBlueAlive": 59,
+              "threeRedPct": 38.7,
+              "threeBlueDeadPct": 34.1,
+              "threeBlueAlivePct": 27.2
+            }
           },
           {
             "faction": "藍方",
             "games": 433,
-            "redWinRate": 27.3
+            "redWinRate": 27.3,
+            "outcomes": {
+              "threeRed": 118,
+              "threeBlueDead": 177,
+              "threeBlueAlive": 138,
+              "threeRedPct": 27.3,
+              "threeBlueDeadPct": 40.9,
+              "threeBlueAlivePct": 31.9
+            }
           }
         ],
         "comboStats": [
@@ -15504,31 +15712,71 @@
             "holderFaction": "紅方",
             "targetFaction": "藍方",
             "games": 131,
-            "redWinRate": 43.5
+            "redWinRate": 43.5,
+            "outcomes": {
+              "threeRed": 57,
+              "threeBlueDead": 42,
+              "threeBlueAlive": 32,
+              "threeRedPct": 43.5,
+              "threeBlueDeadPct": 32.1,
+              "threeBlueAlivePct": 24.4
+            }
           },
           {
             "holderFaction": "藍方",
             "targetFaction": "藍方",
             "games": 271,
-            "redWinRate": 24.4
+            "redWinRate": 24.4,
+            "outcomes": {
+              "threeRed": 66,
+              "threeBlueDead": 106,
+              "threeBlueAlive": 99,
+              "threeRedPct": 24.4,
+              "threeBlueDeadPct": 39.1,
+              "threeBlueAlivePct": 36.5
+            }
           },
           {
             "holderFaction": "紅方",
             "targetFaction": "紅方",
             "games": 86,
-            "redWinRate": 31.4
+            "redWinRate": 31.4,
+            "outcomes": {
+              "threeRed": 27,
+              "threeBlueDead": 32,
+              "threeBlueAlive": 27,
+              "threeRedPct": 31.4,
+              "threeBlueDeadPct": 37.2,
+              "threeBlueAlivePct": 31.4
+            }
           },
           {
             "holderFaction": "藍方",
             "targetFaction": "紅方",
             "games": 158,
-            "redWinRate": 31.6
+            "redWinRate": 31.6,
+            "outcomes": {
+              "threeRed": 50,
+              "threeBlueDead": 69,
+              "threeBlueAlive": 39,
+              "threeRedPct": 31.6,
+              "threeBlueDeadPct": 43.7,
+              "threeBlueAlivePct": 24.7
+            }
           },
           {
             "holderFaction": "藍方",
             "targetFaction": "",
             "games": 4,
-            "redWinRate": 50.0
+            "redWinRate": 50.0,
+            "outcomes": {
+              "threeRed": 2,
+              "threeBlueDead": 2,
+              "threeBlueAlive": 0,
+              "threeRedPct": 50.0,
+              "threeBlueDeadPct": 50.0,
+              "threeBlueAlivePct": 0.0
+            }
           }
         ]
       }
@@ -15538,80 +15786,192 @@
         "role": "莫甘娜",
         "games": 227,
         "redWinRate": 49.8,
-        "blueWinRate": 50.2
+        "blueWinRate": 50.2,
+        "outcomes": {
+          "threeRed": 113,
+          "threeBlueDead": 49,
+          "threeBlueAlive": 65,
+          "threeRedPct": 49.8,
+          "threeBlueDeadPct": 21.6,
+          "threeBlueAlivePct": 28.6
+        }
       },
       {
         "role": "派西維爾",
         "games": 223,
         "redWinRate": 35.9,
-        "blueWinRate": 64.1
+        "blueWinRate": 64.1,
+        "outcomes": {
+          "threeRed": 80,
+          "threeBlueDead": 64,
+          "threeBlueAlive": 79,
+          "threeRedPct": 35.9,
+          "threeBlueDeadPct": 28.7,
+          "threeBlueAlivePct": 35.4
+        }
       },
       {
         "role": "刺客",
         "games": 192,
         "redWinRate": 56.8,
-        "blueWinRate": 43.2
+        "blueWinRate": 43.2,
+        "outcomes": {
+          "threeRed": 109,
+          "threeBlueDead": 34,
+          "threeBlueAlive": 49,
+          "threeRedPct": 56.8,
+          "threeBlueDeadPct": 17.7,
+          "threeBlueAlivePct": 25.5
+        }
       },
       {
         "role": "莫德雷德",
         "games": 214,
         "redWinRate": 49.5,
-        "blueWinRate": 50.5
+        "blueWinRate": 50.5,
+        "outcomes": {
+          "threeRed": 106,
+          "threeBlueDead": 50,
+          "threeBlueAlive": 58,
+          "threeRedPct": 49.5,
+          "threeBlueDeadPct": 23.4,
+          "threeBlueAlivePct": 27.1
+        }
       },
       {
         "role": "奧伯倫",
         "games": 202,
         "redWinRate": 53.0,
-        "blueWinRate": 47.0
+        "blueWinRate": 47.0,
+        "outcomes": {
+          "threeRed": 107,
+          "threeBlueDead": 42,
+          "threeBlueAlive": 53,
+          "threeRedPct": 53.0,
+          "threeBlueDeadPct": 20.8,
+          "threeBlueAlivePct": 26.2
+        }
       },
       {
         "role": "忠臣",
         "games": 889,
         "redWinRate": 43.3,
-        "blueWinRate": 56.7
+        "blueWinRate": 56.7,
+        "outcomes": {
+          "threeRed": 385,
+          "threeBlueDead": 234,
+          "threeBlueAlive": 270,
+          "threeRedPct": 43.3,
+          "threeBlueDeadPct": 26.3,
+          "threeBlueAlivePct": 30.4
+        }
       },
       {
         "role": "梅林",
         "games": 199,
         "redWinRate": 35.7,
-        "blueWinRate": 64.3
+        "blueWinRate": 64.3,
+        "outcomes": {
+          "threeRed": 71,
+          "threeBlueDead": 43,
+          "threeBlueAlive": 85,
+          "threeRedPct": 35.7,
+          "threeBlueDeadPct": 21.6,
+          "threeBlueAlivePct": 42.7
+        }
       }
     ],
     "targetRoleStats": [
       {
         "role": "忠臣",
         "games": 1033,
-        "redWinRate": 41.2
+        "redWinRate": 41.2,
+        "outcomes": {
+          "threeRed": 426,
+          "threeBlueDead": 251,
+          "threeBlueAlive": 356,
+          "threeRedPct": 41.2,
+          "threeBlueDeadPct": 24.3,
+          "threeBlueAlivePct": 34.5
+        }
       },
       {
         "role": "奧伯倫",
         "games": 134,
-        "redWinRate": 64.9
+        "redWinRate": 64.9,
+        "outcomes": {
+          "threeRed": 87,
+          "threeBlueDead": 26,
+          "threeBlueAlive": 21,
+          "threeRedPct": 64.9,
+          "threeBlueDeadPct": 19.4,
+          "threeBlueAlivePct": 15.7
+        }
       },
       {
         "role": "刺客",
         "games": 131,
-        "redWinRate": 61.1
+        "redWinRate": 61.1,
+        "outcomes": {
+          "threeRed": 80,
+          "threeBlueDead": 20,
+          "threeBlueAlive": 31,
+          "threeRedPct": 61.1,
+          "threeBlueDeadPct": 15.3,
+          "threeBlueAlivePct": 23.7
+        }
       },
       {
         "role": "派西維爾",
         "games": 242,
-        "redWinRate": 41.3
+        "redWinRate": 41.3,
+        "outcomes": {
+          "threeRed": 100,
+          "threeBlueDead": 58,
+          "threeBlueAlive": 84,
+          "threeRedPct": 41.3,
+          "threeBlueDeadPct": 24.0,
+          "threeBlueAlivePct": 34.7
+        }
       },
       {
         "role": "梅林",
         "games": 272,
-        "redWinRate": 30.1
+        "redWinRate": 30.1,
+        "outcomes": {
+          "threeRed": 82,
+          "threeBlueDead": 97,
+          "threeBlueAlive": 93,
+          "threeRedPct": 30.1,
+          "threeBlueDeadPct": 35.7,
+          "threeBlueAlivePct": 34.2
+        }
       },
       {
         "role": "莫德雷德",
         "games": 214,
-        "redWinRate": 55.1
+        "redWinRate": 55.1,
+        "outcomes": {
+          "threeRed": 118,
+          "threeBlueDead": 44,
+          "threeBlueAlive": 52,
+          "threeRedPct": 55.1,
+          "threeBlueDeadPct": 20.6,
+          "threeBlueAlivePct": 24.3
+        }
       },
       {
         "role": "莫甘娜",
         "games": 119,
-        "redWinRate": 65.5
+        "redWinRate": 65.5,
+        "outcomes": {
+          "threeRed": 78,
+          "threeBlueDead": 20,
+          "threeBlueAlive": 21,
+          "threeRedPct": 65.5,
+          "threeBlueDeadPct": 16.8,
+          "threeBlueAlivePct": 17.6
+        }
       }
     ],
     "allLakeRoleStats": [
@@ -15622,89 +15982,217 @@
             "role": "莫甘娜",
             "games": 227,
             "redWinRate": 49.8,
-            "blueWinRate": 50.2
+            "blueWinRate": 50.2,
+            "outcomes": {
+              "threeRed": 113,
+              "threeBlueDead": 49,
+              "threeBlueAlive": 65,
+              "threeRedPct": 49.8,
+              "threeBlueDeadPct": 21.6,
+              "threeBlueAlivePct": 28.6
+            }
           },
           {
             "role": "派西維爾",
             "games": 223,
             "redWinRate": 35.9,
-            "blueWinRate": 64.1
+            "blueWinRate": 64.1,
+            "outcomes": {
+              "threeRed": 80,
+              "threeBlueDead": 64,
+              "threeBlueAlive": 79,
+              "threeRedPct": 35.9,
+              "threeBlueDeadPct": 28.7,
+              "threeBlueAlivePct": 35.4
+            }
           },
           {
             "role": "刺客",
             "games": 192,
             "redWinRate": 56.8,
-            "blueWinRate": 43.2
+            "blueWinRate": 43.2,
+            "outcomes": {
+              "threeRed": 109,
+              "threeBlueDead": 34,
+              "threeBlueAlive": 49,
+              "threeRedPct": 56.8,
+              "threeBlueDeadPct": 17.7,
+              "threeBlueAlivePct": 25.5
+            }
           },
           {
             "role": "莫德雷德",
             "games": 214,
             "redWinRate": 49.5,
-            "blueWinRate": 50.5
+            "blueWinRate": 50.5,
+            "outcomes": {
+              "threeRed": 106,
+              "threeBlueDead": 50,
+              "threeBlueAlive": 58,
+              "threeRedPct": 49.5,
+              "threeBlueDeadPct": 23.4,
+              "threeBlueAlivePct": 27.1
+            }
           },
           {
             "role": "奧伯倫",
             "games": 202,
             "redWinRate": 53.0,
-            "blueWinRate": 47.0
+            "blueWinRate": 47.0,
+            "outcomes": {
+              "threeRed": 107,
+              "threeBlueDead": 42,
+              "threeBlueAlive": 53,
+              "threeRedPct": 53.0,
+              "threeBlueDeadPct": 20.8,
+              "threeBlueAlivePct": 26.2
+            }
           },
           {
             "role": "忠臣",
             "games": 889,
             "redWinRate": 43.3,
-            "blueWinRate": 56.7
+            "blueWinRate": 56.7,
+            "outcomes": {
+              "threeRed": 385,
+              "threeBlueDead": 234,
+              "threeBlueAlive": 270,
+              "threeRedPct": 43.3,
+              "threeBlueDeadPct": 26.3,
+              "threeBlueAlivePct": 30.4
+            }
           },
           {
             "role": "梅林",
             "games": 199,
             "redWinRate": 35.7,
-            "blueWinRate": 64.3
+            "blueWinRate": 64.3,
+            "outcomes": {
+              "threeRed": 71,
+              "threeBlueDead": 43,
+              "threeBlueAlive": 85,
+              "threeRedPct": 35.7,
+              "threeBlueDeadPct": 21.6,
+              "threeBlueAlivePct": 42.7
+            }
           }
         ],
         "targetRoleStats": [
           {
             "role": "忠臣",
             "games": 1033,
-            "redWinRate": 41.2
+            "redWinRate": 41.2,
+            "outcomes": {
+              "threeRed": 426,
+              "threeBlueDead": 251,
+              "threeBlueAlive": 356,
+              "threeRedPct": 41.2,
+              "threeBlueDeadPct": 24.3,
+              "threeBlueAlivePct": 34.5
+            }
           },
           {
             "role": "奧伯倫",
             "games": 134,
-            "redWinRate": 64.9
+            "redWinRate": 64.9,
+            "outcomes": {
+              "threeRed": 87,
+              "threeBlueDead": 26,
+              "threeBlueAlive": 21,
+              "threeRedPct": 64.9,
+              "threeBlueDeadPct": 19.4,
+              "threeBlueAlivePct": 15.7
+            }
           },
           {
             "role": "刺客",
             "games": 131,
-            "redWinRate": 61.1
+            "redWinRate": 61.1,
+            "outcomes": {
+              "threeRed": 80,
+              "threeBlueDead": 20,
+              "threeBlueAlive": 31,
+              "threeRedPct": 61.1,
+              "threeBlueDeadPct": 15.3,
+              "threeBlueAlivePct": 23.7
+            }
           },
           {
             "role": "派西維爾",
             "games": 242,
-            "redWinRate": 41.3
+            "redWinRate": 41.3,
+            "outcomes": {
+              "threeRed": 100,
+              "threeBlueDead": 58,
+              "threeBlueAlive": 84,
+              "threeRedPct": 41.3,
+              "threeBlueDeadPct": 24.0,
+              "threeBlueAlivePct": 34.7
+            }
           },
           {
             "role": "梅林",
             "games": 272,
-            "redWinRate": 30.1
+            "redWinRate": 30.1,
+            "outcomes": {
+              "threeRed": 82,
+              "threeBlueDead": 97,
+              "threeBlueAlive": 93,
+              "threeRedPct": 30.1,
+              "threeBlueDeadPct": 35.7,
+              "threeBlueAlivePct": 34.2
+            }
           },
           {
             "role": "莫德雷德",
             "games": 214,
-            "redWinRate": 55.1
+            "redWinRate": 55.1,
+            "outcomes": {
+              "threeRed": 118,
+              "threeBlueDead": 44,
+              "threeBlueAlive": 52,
+              "threeRedPct": 55.1,
+              "threeBlueDeadPct": 20.6,
+              "threeBlueAlivePct": 24.3
+            }
           },
           {
             "role": "莫甘娜",
             "games": 119,
-            "redWinRate": 65.5
+            "redWinRate": 65.5,
+            "outcomes": {
+              "threeRed": 78,
+              "threeBlueDead": 20,
+              "threeBlueAlive": 21,
+              "threeRedPct": 65.5,
+              "threeBlueDeadPct": 16.8,
+              "threeBlueAlivePct": 17.6
+            }
           }
         ],
         "sameFaction": {
           "games": 1258,
-          "redWinRate": 39.8
+          "redWinRate": 39.8,
+          "outcomes": {
+            "threeRed": 501,
+            "threeBlueDead": 333,
+            "threeBlueAlive": 424,
+            "threeRedPct": 39.8,
+            "threeBlueDeadPct": 26.5,
+            "threeBlueAlivePct": 33.7
+          }
         },
         "diffFaction": {
           "games": 887,
-          "redWinRate": 53.0
+          "redWinRate": 53.0,
+          "outcomes": {
+            "threeRed": 470,
+            "threeBlueDead": 183,
+            "threeBlueAlive": 234,
+            "threeRedPct": 53.0,
+            "threeBlueDeadPct": 20.6,
+            "threeBlueAlivePct": 26.4
+          }
         }
       },
       {
@@ -15714,89 +16202,217 @@
             "role": "忠臣",
             "games": 592,
             "redWinRate": 22.1,
-            "blueWinRate": 77.9
+            "blueWinRate": 77.9,
+            "outcomes": {
+              "threeRed": 131,
+              "threeBlueDead": 211,
+              "threeBlueAlive": 250,
+              "threeRedPct": 22.1,
+              "threeBlueDeadPct": 35.6,
+              "threeBlueAlivePct": 42.2
+            }
           },
           {
             "role": "奧伯倫",
             "games": 82,
             "redWinRate": 48.8,
-            "blueWinRate": 51.2
+            "blueWinRate": 51.2,
+            "outcomes": {
+              "threeRed": 40,
+              "threeBlueDead": 23,
+              "threeBlueAlive": 19,
+              "threeRedPct": 48.8,
+              "threeBlueDeadPct": 28.0,
+              "threeBlueAlivePct": 23.2
+            }
           },
           {
             "role": "刺客",
             "games": 68,
             "redWinRate": 32.4,
-            "blueWinRate": 67.6
+            "blueWinRate": 67.6,
+            "outcomes": {
+              "threeRed": 22,
+              "threeBlueDead": 18,
+              "threeBlueAlive": 28,
+              "threeRedPct": 32.4,
+              "threeBlueDeadPct": 26.5,
+              "threeBlueAlivePct": 41.2
+            }
           },
           {
             "role": "派西維爾",
             "games": 151,
             "redWinRate": 27.8,
-            "blueWinRate": 72.2
+            "blueWinRate": 72.2,
+            "outcomes": {
+              "threeRed": 42,
+              "threeBlueDead": 49,
+              "threeBlueAlive": 60,
+              "threeRedPct": 27.8,
+              "threeBlueDeadPct": 32.5,
+              "threeBlueAlivePct": 39.7
+            }
           },
           {
             "role": "梅林",
             "games": 180,
             "redWinRate": 17.2,
-            "blueWinRate": 82.8
+            "blueWinRate": 82.8,
+            "outcomes": {
+              "threeRed": 31,
+              "threeBlueDead": 77,
+              "threeBlueAlive": 72,
+              "threeRedPct": 17.2,
+              "threeBlueDeadPct": 42.8,
+              "threeBlueAlivePct": 40.0
+            }
           },
           {
             "role": "莫德雷德",
             "games": 127,
             "redWinRate": 27.6,
-            "blueWinRate": 72.4
+            "blueWinRate": 72.4,
+            "outcomes": {
+              "threeRed": 35,
+              "threeBlueDead": 43,
+              "threeBlueAlive": 49,
+              "threeRedPct": 27.6,
+              "threeBlueDeadPct": 33.9,
+              "threeBlueAlivePct": 38.6
+            }
           },
           {
             "role": "莫甘娜",
             "games": 77,
             "redWinRate": 49.4,
-            "blueWinRate": 50.6
+            "blueWinRate": 50.6,
+            "outcomes": {
+              "threeRed": 38,
+              "threeBlueDead": 20,
+              "threeBlueAlive": 19,
+              "threeRedPct": 49.4,
+              "threeBlueDeadPct": 26.0,
+              "threeBlueAlivePct": 24.7
+            }
           }
         ],
         "targetRoleStats": [
           {
             "role": "奧伯倫",
             "games": 80,
-            "redWinRate": 40.0
+            "redWinRate": 40.0,
+            "outcomes": {
+              "threeRed": 32,
+              "threeBlueDead": 27,
+              "threeBlueAlive": 21,
+              "threeRedPct": 40.0,
+              "threeBlueDeadPct": 33.8,
+              "threeBlueAlivePct": 26.2
+            }
           },
           {
             "role": "刺客",
             "games": 88,
-            "redWinRate": 44.3
+            "redWinRate": 44.3,
+            "outcomes": {
+              "threeRed": 39,
+              "threeBlueDead": 25,
+              "threeBlueAlive": 24,
+              "threeRedPct": 44.3,
+              "threeBlueDeadPct": 28.4,
+              "threeBlueAlivePct": 27.3
+            }
           },
           {
             "role": "莫甘娜",
             "games": 80,
-            "redWinRate": 45.0
+            "redWinRate": 45.0,
+            "outcomes": {
+              "threeRed": 36,
+              "threeBlueDead": 22,
+              "threeBlueAlive": 22,
+              "threeRedPct": 45.0,
+              "threeBlueDeadPct": 27.5,
+              "threeBlueAlivePct": 27.5
+            }
           },
           {
             "role": "派西維爾",
             "games": 159,
-            "redWinRate": 17.6
+            "redWinRate": 17.6,
+            "outcomes": {
+              "threeRed": 28,
+              "threeBlueDead": 54,
+              "threeBlueAlive": 77,
+              "threeRedPct": 17.6,
+              "threeBlueDeadPct": 34.0,
+              "threeBlueAlivePct": 48.4
+            }
           },
           {
             "role": "忠臣",
             "games": 621,
-            "redWinRate": 21.9
+            "redWinRate": 21.9,
+            "outcomes": {
+              "threeRed": 136,
+              "threeBlueDead": 230,
+              "threeBlueAlive": 255,
+              "threeRedPct": 21.9,
+              "threeBlueDeadPct": 37.0,
+              "threeBlueAlivePct": 41.1
+            }
           },
           {
             "role": "莫德雷德",
             "games": 100,
-            "redWinRate": 35.0
+            "redWinRate": 35.0,
+            "outcomes": {
+              "threeRed": 35,
+              "threeBlueDead": 31,
+              "threeBlueAlive": 34,
+              "threeRedPct": 35.0,
+              "threeBlueDeadPct": 31.0,
+              "threeBlueAlivePct": 34.0
+            }
           },
           {
             "role": "梅林",
             "games": 147,
-            "redWinRate": 22.4
+            "redWinRate": 22.4,
+            "outcomes": {
+              "threeRed": 33,
+              "threeBlueDead": 52,
+              "threeBlueAlive": 62,
+              "threeRedPct": 22.4,
+              "threeBlueDeadPct": 35.4,
+              "threeBlueAlivePct": 42.2
+            }
           }
         ],
         "sameFaction": {
           "games": 849,
-          "redWinRate": 21.0
+          "redWinRate": 21.0,
+          "outcomes": {
+            "threeRed": 178,
+            "threeBlueDead": 312,
+            "threeBlueAlive": 359,
+            "threeRedPct": 21.0,
+            "threeBlueDeadPct": 36.7,
+            "threeBlueAlivePct": 42.3
+          }
         },
         "diffFaction": {
           "games": 426,
-          "redWinRate": 37.8
+          "redWinRate": 37.8,
+          "outcomes": {
+            "threeRed": 161,
+            "threeBlueDead": 129,
+            "threeBlueAlive": 136,
+            "threeRedPct": 37.8,
+            "threeBlueDeadPct": 30.3,
+            "threeBlueAlivePct": 31.9
+          }
         }
       },
       {
@@ -15806,89 +16422,217 @@
             "role": "刺客",
             "games": 59,
             "redWinRate": 44.1,
-            "blueWinRate": 55.9
+            "blueWinRate": 55.9,
+            "outcomes": {
+              "threeRed": 26,
+              "threeBlueDead": 16,
+              "threeBlueAlive": 17,
+              "threeRedPct": 44.1,
+              "threeBlueDeadPct": 27.1,
+              "threeBlueAlivePct": 28.8
+            }
           },
           {
             "role": "莫甘娜",
             "games": 51,
             "redWinRate": 45.1,
-            "blueWinRate": 54.9
+            "blueWinRate": 54.9,
+            "outcomes": {
+              "threeRed": 23,
+              "threeBlueDead": 17,
+              "threeBlueAlive": 11,
+              "threeRedPct": 45.1,
+              "threeBlueDeadPct": 33.3,
+              "threeBlueAlivePct": 21.6
+            }
           },
           {
             "role": "派西維爾",
             "games": 68,
             "redWinRate": 20.6,
-            "blueWinRate": 79.4
+            "blueWinRate": 79.4,
+            "outcomes": {
+              "threeRed": 14,
+              "threeBlueDead": 29,
+              "threeBlueAlive": 25,
+              "threeRedPct": 20.6,
+              "threeBlueDeadPct": 42.6,
+              "threeBlueAlivePct": 36.8
+            }
           },
           {
             "role": "忠臣",
             "games": 289,
             "redWinRate": 27.3,
-            "blueWinRate": 72.7
+            "blueWinRate": 72.7,
+            "outcomes": {
+              "threeRed": 79,
+              "threeBlueDead": 122,
+              "threeBlueAlive": 88,
+              "threeRedPct": 27.3,
+              "threeBlueDeadPct": 42.2,
+              "threeBlueAlivePct": 30.4
+            }
           },
           {
             "role": "莫德雷德",
             "games": 65,
             "redWinRate": 30.8,
-            "blueWinRate": 69.2
+            "blueWinRate": 69.2,
+            "outcomes": {
+              "threeRed": 20,
+              "threeBlueDead": 26,
+              "threeBlueAlive": 19,
+              "threeRedPct": 30.8,
+              "threeBlueDeadPct": 40.0,
+              "threeBlueAlivePct": 29.2
+            }
           },
           {
             "role": "奧伯倫",
             "games": 42,
             "redWinRate": 35.7,
-            "blueWinRate": 64.3
+            "blueWinRate": 64.3,
+            "outcomes": {
+              "threeRed": 15,
+              "threeBlueDead": 15,
+              "threeBlueAlive": 12,
+              "threeRedPct": 35.7,
+              "threeBlueDeadPct": 35.7,
+              "threeBlueAlivePct": 28.6
+            }
           },
           {
             "role": "梅林",
             "games": 76,
             "redWinRate": 32.9,
-            "blueWinRate": 67.1
+            "blueWinRate": 67.1,
+            "outcomes": {
+              "threeRed": 25,
+              "threeBlueDead": 26,
+              "threeBlueAlive": 25,
+              "threeRedPct": 32.9,
+              "threeBlueDeadPct": 34.2,
+              "threeBlueAlivePct": 32.9
+            }
           }
         ],
         "targetRoleStats": [
           {
             "role": "忠臣",
             "games": 279,
-            "redWinRate": 31.9
+            "redWinRate": 31.9,
+            "outcomes": {
+              "threeRed": 89,
+              "threeBlueDead": 105,
+              "threeBlueAlive": 85,
+              "threeRedPct": 31.9,
+              "threeBlueDeadPct": 37.6,
+              "threeBlueAlivePct": 30.5
+            }
           },
           {
             "role": "梅林",
             "games": 61,
-            "redWinRate": 34.4
+            "redWinRate": 34.4,
+            "outcomes": {
+              "threeRed": 21,
+              "threeBlueDead": 17,
+              "threeBlueAlive": 23,
+              "threeRedPct": 34.4,
+              "threeBlueDeadPct": 27.9,
+              "threeBlueAlivePct": 37.7
+            }
           },
           {
             "role": "派西維爾",
             "games": 62,
-            "redWinRate": 21.0
+            "redWinRate": 21.0,
+            "outcomes": {
+              "threeRed": 13,
+              "threeBlueDead": 26,
+              "threeBlueAlive": 23,
+              "threeRedPct": 21.0,
+              "threeBlueDeadPct": 41.9,
+              "threeBlueAlivePct": 37.1
+            }
           },
           {
             "role": "刺客",
             "games": 55,
-            "redWinRate": 32.7
+            "redWinRate": 32.7,
+            "outcomes": {
+              "threeRed": 18,
+              "threeBlueDead": 22,
+              "threeBlueAlive": 15,
+              "threeRedPct": 32.7,
+              "threeBlueDeadPct": 40.0,
+              "threeBlueAlivePct": 27.3
+            }
           },
           {
             "role": "莫德雷德",
             "games": 56,
-            "redWinRate": 25.0
+            "redWinRate": 25.0,
+            "outcomes": {
+              "threeRed": 14,
+              "threeBlueDead": 26,
+              "threeBlueAlive": 16,
+              "threeRedPct": 25.0,
+              "threeBlueDeadPct": 46.4,
+              "threeBlueAlivePct": 28.6
+            }
           },
           {
             "role": "奧伯倫",
             "games": 86,
-            "redWinRate": 38.4
+            "redWinRate": 38.4,
+            "outcomes": {
+              "threeRed": 33,
+              "threeBlueDead": 29,
+              "threeBlueAlive": 24,
+              "threeRedPct": 38.4,
+              "threeBlueDeadPct": 33.7,
+              "threeBlueAlivePct": 27.9
+            }
           },
           {
             "role": "莫甘娜",
             "games": 47,
-            "redWinRate": 25.5
+            "redWinRate": 25.5,
+            "outcomes": {
+              "threeRed": 12,
+              "threeBlueDead": 24,
+              "threeBlueAlive": 11,
+              "threeRedPct": 25.5,
+              "threeBlueDeadPct": 51.1,
+              "threeBlueAlivePct": 23.4
+            }
           }
         ],
         "sameFaction": {
           "games": 357,
-          "redWinRate": 26.1
+          "redWinRate": 26.1,
+          "outcomes": {
+            "threeRed": 93,
+            "threeBlueDead": 138,
+            "threeBlueAlive": 126,
+            "threeRedPct": 26.1,
+            "threeBlueDeadPct": 38.7,
+            "threeBlueAlivePct": 35.3
+          }
         },
         "diffFaction": {
           "games": 289,
-          "redWinRate": 37.0
+          "redWinRate": 37.0,
+          "outcomes": {
+            "threeRed": 107,
+            "threeBlueDead": 111,
+            "threeBlueAlive": 71,
+            "threeRedPct": 37.0,
+            "threeBlueDeadPct": 38.4,
+            "threeBlueAlivePct": 24.6
+          }
         }
       }
     ]
@@ -15899,23 +16643,55 @@
         "games": 566,
         "mission1PassRate": 40.1,
         "redWinRate": 45.1,
-        "blueWinRate": 54.9
+        "blueWinRate": 54.9,
+        "outcomes": {
+          "threeRed": 255,
+          "threeBlueDead": 136,
+          "threeBlueAlive": 175,
+          "threeRedPct": 45.1,
+          "threeBlueDeadPct": 24.0,
+          "threeBlueAlivePct": 30.9
+        }
       },
       "merlinNotInTeam": {
         "games": 1580,
         "mission1PassRate": 41.8,
         "redWinRate": 45.3,
-        "blueWinRate": 54.7
+        "blueWinRate": 54.7,
+        "outcomes": {
+          "threeRed": 716,
+          "threeBlueDead": 380,
+          "threeBlueAlive": 484,
+          "threeRedPct": 45.3,
+          "threeBlueDeadPct": 24.1,
+          "threeBlueAlivePct": 30.6
+        }
       },
       "percivalInTeam": {
         "games": 692,
         "mission1PassRate": 40.6,
-        "redWinRate": 47.0
+        "redWinRate": 47.0,
+        "outcomes": {
+          "threeRed": 325,
+          "threeBlueDead": 163,
+          "threeBlueAlive": 204,
+          "threeRedPct": 47.0,
+          "threeBlueDeadPct": 23.6,
+          "threeBlueAlivePct": 29.5
+        }
       },
       "percivalNotInTeam": {
         "games": 1454,
         "mission1PassRate": 41.7,
-        "redWinRate": 44.4
+        "redWinRate": 44.4,
+        "outcomes": {
+          "threeRed": 646,
+          "threeBlueDead": 353,
+          "threeBlueAlive": 455,
+          "threeRedPct": 44.4,
+          "threeBlueDeadPct": 24.3,
+          "threeBlueAlivePct": 31.3
+        }
       }
     },
     "redInR11": [
@@ -15923,25 +16699,57 @@
         "redCount": 0,
         "games": 444,
         "mission1PassRate": 40.8,
-        "redWinRate": 43.5
+        "redWinRate": 43.5,
+        "outcomes": {
+          "threeRed": 193,
+          "threeBlueDead": 105,
+          "threeBlueAlive": 146,
+          "threeRedPct": 43.5,
+          "threeBlueDeadPct": 23.6,
+          "threeBlueAlivePct": 32.9
+        }
       },
       {
         "redCount": 1,
         "games": 1029,
         "mission1PassRate": 42.0,
-        "redWinRate": 46.6
+        "redWinRate": 46.6,
+        "outcomes": {
+          "threeRed": 479,
+          "threeBlueDead": 241,
+          "threeBlueAlive": 309,
+          "threeRedPct": 46.6,
+          "threeBlueDeadPct": 23.4,
+          "threeBlueAlivePct": 30.0
+        }
       },
       {
         "redCount": 2,
         "games": 606,
         "mission1PassRate": 40.9,
-        "redWinRate": 44.4
+        "redWinRate": 44.4,
+        "outcomes": {
+          "threeRed": 269,
+          "threeBlueDead": 152,
+          "threeBlueAlive": 185,
+          "threeRedPct": 44.4,
+          "threeBlueDeadPct": 25.1,
+          "threeBlueAlivePct": 30.5
+        }
       },
       {
         "redCount": 3,
         "games": 67,
         "mission1PassRate": 40.3,
-        "redWinRate": 44.8
+        "redWinRate": 44.8,
+        "outcomes": {
+          "threeRed": 30,
+          "threeBlueDead": 18,
+          "threeBlueAlive": 19,
+          "threeRedPct": 44.8,
+          "threeBlueDeadPct": 26.9,
+          "threeBlueAlivePct": 28.4
+        }
       }
     ],
     "mission1Branch": [
@@ -15949,13 +16757,29 @@
         "passed": true,
         "games": 888,
         "redWinRate": 28.9,
-        "merlinKillRate": 31.0
+        "merlinKillRate": 31.0,
+        "outcomes": {
+          "threeRed": 257,
+          "threeBlueDead": 275,
+          "threeBlueAlive": 356,
+          "threeRedPct": 28.9,
+          "threeBlueDeadPct": 31.0,
+          "threeBlueAlivePct": 40.1
+        }
       },
       {
         "passed": false,
         "games": 1258,
         "redWinRate": 56.8,
-        "merlinKillRate": 19.2
+        "merlinKillRate": 19.2,
+        "outcomes": {
+          "threeRed": 714,
+          "threeBlueDead": 241,
+          "threeBlueAlive": 303,
+          "threeRedPct": 56.8,
+          "threeBlueDeadPct": 19.2,
+          "threeBlueAlivePct": 24.1
+        }
       }
     ],
     "roundProgression": {
@@ -15989,102 +16813,262 @@
       {
         "state": "紅紅紅",
         "games": 629,
-        "redWinRate": 100.0
+        "redWinRate": 100.0,
+        "outcomes": {
+          "threeRed": 629,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       },
       {
         "state": "紅紅藍藍藍",
         "games": 243,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 124,
+          "threeBlueAlive": 119,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 51.0,
+          "threeBlueAlivePct": 49.0
+        }
       },
       {
         "state": "紅藍藍藍",
         "games": 233,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 83,
+          "threeBlueAlive": 150,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 35.6,
+          "threeBlueAlivePct": 64.4
+        }
       },
       {
         "state": "藍藍藍",
         "games": 214,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 66,
+          "threeBlueAlive": 148,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 30.8,
+          "threeBlueAlivePct": 69.2
+        }
       },
       {
         "state": "藍紅藍藍",
         "games": 208,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 85,
+          "threeBlueAlive": 123,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 40.9,
+          "threeBlueAlivePct": 59.1
+        }
       },
       {
         "state": "藍紅紅藍藍",
         "games": 151,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 95,
+          "threeBlueAlive": 56,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 62.9,
+          "threeBlueAlivePct": 37.1
+        }
       },
       {
         "state": "藍紅紅藍紅",
         "games": 122,
-        "redWinRate": 100.0
+        "redWinRate": 100.0,
+        "outcomes": {
+          "threeRed": 122,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       },
       {
         "state": "藍紅紅紅",
         "games": 110,
-        "redWinRate": 100.0
+        "redWinRate": 100.0,
+        "outcomes": {
+          "threeRed": 110,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       },
       {
         "state": "紅藍紅藍藍",
         "games": 49,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 25,
+          "threeBlueAlive": 24,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 51.0,
+          "threeBlueAlivePct": 49.0
+        }
       },
       {
         "state": "紅藍紅藍紅",
         "games": 28,
-        "redWinRate": 100.0
+        "redWinRate": 100.0,
+        "outcomes": {
+          "threeRed": 28,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       },
       {
         "state": "紅紅藍藍紅",
         "games": 28,
-        "redWinRate": 100.0
+        "redWinRate": 100.0,
+        "outcomes": {
+          "threeRed": 28,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       },
       {
         "state": "藍藍紅藍",
         "games": 25,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 12,
+          "threeBlueAlive": 13,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 48.0,
+          "threeBlueAlivePct": 52.0
+        }
       },
       {
         "state": "紅藍紅紅",
         "games": 21,
-        "redWinRate": 100.0
+        "redWinRate": 100.0,
+        "outcomes": {
+          "threeRed": 21,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       },
       {
         "state": "藍紅藍紅藍",
         "games": 20,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 10,
+          "threeBlueAlive": 10,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 50.0,
+          "threeBlueAlivePct": 50.0
+        }
       },
       {
         "state": "藍紅藍紅紅",
         "games": 16,
-        "redWinRate": 100.0
+        "redWinRate": 100.0,
+        "outcomes": {
+          "threeRed": 16,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       },
       {
         "state": "藍藍紅紅藍",
         "games": 10,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 5,
+          "threeBlueAlive": 5,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 50.0,
+          "threeBlueAlivePct": 50.0
+        }
       },
       {
         "state": "藍藍紅紅紅",
         "games": 9,
-        "redWinRate": 100.0
+        "redWinRate": 100.0,
+        "outcomes": {
+          "threeRed": 9,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       },
       {
         "state": "紅藍藍紅藍",
         "games": 7,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 4,
+          "threeBlueAlive": 3,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 57.1,
+          "threeBlueAlivePct": 42.9
+        }
       },
       {
         "state": "紅紅藍",
         "games": 5,
-        "redWinRate": 0.0
+        "redWinRate": 0.0,
+        "outcomes": {
+          "threeRed": 0,
+          "threeBlueDead": 2,
+          "threeBlueAlive": 3,
+          "threeRedPct": 0.0,
+          "threeBlueDeadPct": 40.0,
+          "threeBlueAlivePct": 60.0
+        }
       },
       {
         "state": "紅藍藍紅紅",
         "games": 4,
-        "redWinRate": 100.0
+        "redWinRate": 100.0,
+        "outcomes": {
+          "threeRed": 4,
+          "threeBlueDead": 0,
+          "threeBlueAlive": 0,
+          "threeRedPct": 100.0,
+          "threeBlueDeadPct": 0.0,
+          "threeBlueAlivePct": 0.0
+        }
       }
     ]
   },
@@ -16261,28 +17245,60 @@
         "missionResult": "fail",
         "totalMissions": 1860,
         "redGameWinRate": 66.0,
-        "blueGameWinRate": 34.0
+        "blueGameWinRate": 34.0,
+        "outcomes": {
+          "threeRed": 1227,
+          "threeBlueDead": 302,
+          "threeBlueAlive": 331,
+          "threeRedPct": 66.0,
+          "threeBlueDeadPct": 16.2,
+          "threeBlueAlivePct": 17.8
+        }
       },
       {
         "captainFaction": "紅方",
         "missionResult": "pass",
         "totalMissions": 353,
         "redGameWinRate": 45.0,
-        "blueGameWinRate": 55.0
+        "blueGameWinRate": 55.0,
+        "outcomes": {
+          "threeRed": 159,
+          "threeBlueDead": 91,
+          "threeBlueAlive": 103,
+          "threeRedPct": 45.0,
+          "threeBlueDeadPct": 25.8,
+          "threeBlueAlivePct": 29.2
+        }
       },
       {
         "captainFaction": "藍方",
         "missionResult": "fail",
         "totalMissions": 2740,
         "redGameWinRate": 62.2,
-        "blueGameWinRate": 37.8
+        "blueGameWinRate": 37.8,
+        "outcomes": {
+          "threeRed": 1703,
+          "threeBlueDead": 501,
+          "threeBlueAlive": 536,
+          "threeRedPct": 62.2,
+          "threeBlueDeadPct": 18.3,
+          "threeBlueAlivePct": 19.6
+        }
       },
       {
         "captainFaction": "藍方",
         "missionResult": "pass",
         "totalMissions": 3457,
         "redGameWinRate": 10.8,
-        "blueGameWinRate": 89.2
+        "blueGameWinRate": 89.2,
+        "outcomes": {
+          "threeRed": 374,
+          "threeBlueDead": 1357,
+          "threeBlueAlive": 1726,
+          "threeRedPct": 10.8,
+          "threeBlueDeadPct": 39.3,
+          "threeBlueAlivePct": 49.9
+        }
       }
     ]
   }

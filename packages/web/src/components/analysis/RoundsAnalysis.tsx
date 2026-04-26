@@ -1,39 +1,46 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Legend,
 } from 'recharts';
 import { Loader, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { fetchAnalysisRounds, getErrorMessage } from '../../services/api';
-import type { RoundsAnalysisData } from '../../services/api';
+import type { RoundsAnalysisData, OutcomeBreakdown } from '../../services/api';
+import OutcomeBar from './OutcomeBar';
 
-function VisionCard({ title, data }: {
+/**
+ * 回合分析 — Edward 2026-04-26 spec
+ *
+ * Vision cards now show pass rate + the three outcome breakdown instead of
+ * a single 紅勝率 number. The "first vote red count", "mission 1 branch"
+ * and "common game states" sections also surface the 3-outcome split so
+ * users can see whether a low red rate comes from blue-merlin-alive or
+ * blue-merlin-dead games.
+ */
+
+function VisionCard({ title, data, t }: {
   title: string;
-  data: { games: number; mission1PassRate: number; redWinRate: number; blueWinRate?: number };
+  data: { games: number; mission1PassRate: number; outcomes: OutcomeBreakdown };
+  t: (k: string, opts?: Record<string, unknown>) => string;
 }): JSX.Element {
   return (
-    <div className="bg-gray-800/40 rounded-lg p-3 space-y-1">
+    <div className="bg-gray-800/40 rounded-lg p-3 space-y-2">
       <p className="text-xs font-bold text-gray-400">{title}</p>
       <div className="grid grid-cols-2 gap-1 text-xs">
-        <span className="text-gray-500">場次</span>
+        <span className="text-gray-500">{t('analytics.deep.common.games')}</span>
         <span className="text-white font-bold text-right">{data.games}</span>
-        <span className="text-gray-500">任務1通過率</span>
+        <span className="text-gray-500">{t('analytics.deep.rounds.passRateLabel')}</span>
         <span className="text-green-400 font-bold text-right">{data.mission1PassRate}%</span>
-        <span className="text-gray-500">紅方勝率</span>
-        <span className="text-red-400 font-bold text-right">{data.redWinRate}%</span>
-        {data.blueWinRate !== undefined && (
-          <>
-            <span className="text-gray-500">藍方勝率</span>
-            <span className="text-blue-400 font-bold text-right">{data.blueWinRate}%</span>
-          </>
-        )}
       </div>
+      <OutcomeBar outcomes={data.outcomes} variant="stacked" />
     </div>
   );
 }
 
 export default function RoundsAnalysis(): JSX.Element {
+  const { t } = useTranslation('common');
   const [data, setData] = useState<RoundsAnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +63,7 @@ export default function RoundsAnalysis(): JSX.Element {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
-        <Loader size={20} className="animate-spin" /> 載入回合分析...
+        <Loader size={20} className="animate-spin" /> {t('analytics.deep.rounds.loading')}
       </div>
     );
   }
@@ -64,7 +71,7 @@ export default function RoundsAnalysis(): JSX.Element {
   if (error || !data) {
     return (
       <div className="flex items-center justify-center py-20 text-red-400 gap-3">
-        <AlertCircle size={20} /> {error || 'Failed to load'}
+        <AlertCircle size={20} /> {error || t('analytics.deep.loadFailed')}
       </div>
     );
   }
@@ -77,62 +84,32 @@ export default function RoundsAnalysis(): JSX.Element {
     total: v.total,
   }));
 
-  // Fix #1: "1-1" = 第一局第一次派票 (Mission 1, Vote 1)
-  const redInR11Data = data.redInR11.map(r => ({
-    name: `${r.redCount} 紅`,
-    games: r.games,
-    redWinRate: r.redWinRate,
-    passRate: r.mission1PassRate,
-  }));
-
-  // Mission 1 branch
-  const branchData = data.mission1Branch.map(b => ({
-    name: b.passed ? '任務1 通過' : '任務1 失敗',
-    games: b.games,
-    redWinRate: b.redWinRate,
-    merlinKillRate: b.merlinKillRate,
-  }));
-
-  // Game states: stacked bar (red + blue = 100%), filter trivial & low-count
-  const stateData = data.gameStates
-    .filter(s => s.state !== '紅紅紅' && s.state !== '藍藍藍' && s.games >= 20)
-    .map(s => ({
-      name: s.state,
-      games: s.games,
-      redWinRate: s.redWinRate,
-      blueWinRate: Math.round((100 - s.redWinRate) * 10) / 10,
-    }));
-
   return (
     <div className="space-y-6">
-      {/* Fix #1: Vision stats - clarify "1-1" means mission 1 vote 1 */}
+      {/* Vision stats */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-1">
-          第一局第一次派票分析 (Mission 1, Vote 1)
-        </h3>
-        <p className="text-[10px] text-gray-600 mb-3">
-          1-1 = 第一局(任務1)的第一次派票組合, 分析該隊伍組成對後續局勢的影響
-        </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <VisionCard title="梅林在隊" data={data.visionStats.merlinInTeam} />
-          <VisionCard title="梅林不在隊" data={data.visionStats.merlinNotInTeam} />
-          <VisionCard title="派西維爾在隊" data={data.visionStats.percivalInTeam} />
-          <VisionCard title="派西維爾不在隊" data={data.visionStats.percivalNotInTeam} />
+        <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.rounds.firstVoteTitle')}</h3>
+        <p className="text-[10px] text-gray-600 mb-3">{t('analytics.deep.rounds.firstVoteSub')}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <VisionCard title={t('analytics.deep.rounds.merlinIn')}    data={data.visionStats.merlinInTeam}    t={t} />
+          <VisionCard title={t('analytics.deep.rounds.merlinOut')}   data={data.visionStats.merlinNotInTeam} t={t} />
+          <VisionCard title={t('analytics.deep.rounds.percivalIn')}  data={data.visionStats.percivalInTeam}  t={t} />
+          <VisionCard title={t('analytics.deep.rounds.percivalOut')} data={data.visionStats.percivalNotInTeam} t={t} />
         </div>
       </motion.div>
 
-      {/* Round progression */}
+      {/* Round progression - blue/red split is mission-level so stays as-is */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">各任務藍紅勝負比例 (Round Progression %)</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.rounds.progressionTitle')}</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={progressionData}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
@@ -143,8 +120,8 @@ export default function RoundsAnalysis(): JSX.Element {
               itemStyle={{ color: '#d1d5db' }}
             />
             <Legend />
-            <Bar dataKey="bluePct" name="藍方(通過)" fill="#3b82f6" stackId="a" />
-            <Bar dataKey="redPct" name="紅方(失敗)" fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="bluePct" name={t('analytics.deep.rounds.progressionBlue')} fill="#3b82f6" stackId="a" />
+            <Bar dataKey="redPct"  name={t('analytics.deep.rounds.progressionRed')}  fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </motion.div>
@@ -155,97 +132,69 @@ export default function RoundsAnalysis(): JSX.Element {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
+          className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 space-y-3"
         >
-          <h3 className="text-sm font-bold text-gray-400 mb-1">第一次派票紅方人數 vs 紅方勝率</h3>
-          <p className="text-[10px] text-gray-600 mb-2">
-            任務1第一次派票隊伍中紅方角色的數量
-          </p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={redInR11Data}>
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
-              <Tooltip
-                formatter={(val: unknown) => `${val}%`}
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                itemStyle={{ color: '#d1d5db' }}
-              />
-              <Bar dataKey="redWinRate" name="紅方勝率" radius={[4, 4, 0, 0]}>
-                {redInR11Data.map((d, i) => (
-                  <Cell key={i} fill={d.redWinRate >= 50 ? '#ef4444' : '#3b82f6'} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div>
+            <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.rounds.redCountTitle')}</h3>
+            <p className="text-[10px] text-gray-600">{t('analytics.deep.rounds.redCountSub')}</p>
+          </div>
+          <div className="space-y-3">
+            {data.redInR11.map(r => (
+              <div key={r.redCount} className="bg-gray-800/40 rounded-lg p-2 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-white font-bold">{t('analytics.deep.rounds.redCountLabel', { count: r.redCount })}</span>
+                  <span className="text-gray-500">{r.games} {t('analytics.deep.common.games')}</span>
+                </div>
+                <OutcomeBar outcomes={r.outcomes} variant="stacked" />
+              </div>
+            ))}
+          </div>
         </motion.div>
 
-        {/* Mission 1 branch */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
         >
-          <h3 className="text-sm font-bold text-gray-400 mb-3">任務1分岐 (Mission 1 Branch)</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.rounds.mission1BranchTitle')}</h3>
           <div className="space-y-3">
-            {branchData.map(b => (
-              <div key={b.name} className="bg-gray-800/40 rounded-lg p-3">
-                <div className="flex justify-between items-center mb-2">
-                  <span className={`font-bold text-sm ${b.name.includes('通過') ? 'text-green-400' : 'text-red-400'}`}>
-                    {b.name}
+            {data.mission1Branch.map(b => (
+              <div key={String(b.passed)} className="bg-gray-800/40 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className={`font-bold text-sm ${b.passed ? 'text-green-400' : 'text-red-400'}`}>
+                    {b.passed ? t('analytics.deep.rounds.branchPassed') : t('analytics.deep.rounds.branchFailed')}
                   </span>
-                  <span className="text-xs text-gray-500">{b.games} 場</span>
+                  <span className="text-xs text-gray-500">{b.games} {t('analytics.deep.rounds.branchSamples')}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <p className="text-gray-500">紅方勝率</p>
-                    <p className="text-red-400 font-bold">{b.redWinRate}%</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">梅林擊殺率</p>
-                    <p className="text-yellow-400 font-bold">{b.merlinKillRate}%</p>
-                  </div>
-                </div>
+                <OutcomeBar outcomes={b.outcomes} variant="stacked" />
               </div>
             ))}
           </div>
         </motion.div>
       </div>
 
-      {/* Game states: stacked red/blue bar, filtered trivial & low-count */}
-      {stateData.length > 0 && (
+      {/* Game states - 3-outcome stacked */}
+      {data.gameStates.filter(s => s.state !== '紅紅紅' && s.state !== '藍藍藍' && s.games >= 20).length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
           className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
         >
-          <h3 className="text-sm font-bold text-gray-400 mb-1">常見局勢</h3>
-          <p className="text-[10px] text-gray-600 mb-3">
-            局勢 = 各任務結果序列 (紅=任務失敗, 藍=任務成功), 紅+藍=100%, 僅顯示20場以上且非全紅/全藍
-          </p>
-          <ResponsiveContainer width="100%" height={Math.max(280, stateData.length * 32)}>
-            <BarChart data={stateData} layout="vertical">
-              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: number) => `${v}%`} />
-              <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 10, fill: '#d1d5db' }} />
-              <Tooltip
-                formatter={(val: unknown, name: unknown) => [
-                  `${val}%`,
-                  name === 'redWinRate' ? '紅方勝率' : '藍方勝率',
-                ]}
-                labelFormatter={(label: unknown) => {
-                  const lbl = String(label);
-                  const item = stateData.find(s => s.name === lbl);
-                  return item ? `${lbl} (${item.games} 場)` : lbl;
-                }}
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                itemStyle={{ color: '#d1d5db' }}
-              />
-              <Legend />
-              <Bar dataKey="redWinRate" name="紅方勝率" fill="#ef4444" stackId="a" />
-              <Bar dataKey="blueWinRate" name="藍方勝率" fill="#3b82f6" stackId="a" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.rounds.stateTitle')}</h3>
+          <p className="text-[10px] text-gray-600 mb-3">{t('analytics.deep.rounds.stateSub')}</p>
+          <div className="space-y-2">
+            {data.gameStates
+              .filter(s => s.state !== '紅紅紅' && s.state !== '藍藍藍' && s.games >= 20)
+              .map(s => (
+                <div key={s.state} className="bg-gray-800/40 rounded-lg p-2 grid grid-cols-[80px_60px_1fr] items-center gap-2">
+                  <span className="text-white font-bold text-xs">{s.state}</span>
+                  <span className="text-gray-500 text-[10px] text-right">{s.games} {t('analytics.deep.common.games')}</span>
+                  <OutcomeBar outcomes={s.outcomes} variant="stacked" />
+                </div>
+              ))}
+          </div>
         </motion.div>
       )}
     </div>

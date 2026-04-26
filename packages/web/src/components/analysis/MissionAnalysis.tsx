@@ -1,14 +1,24 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { Loader, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { fetchAnalysisMissions, getErrorMessage } from '../../services/api';
 import type { MissionAnalysisData } from '../../services/api';
+import OutcomeBar from './OutcomeBar';
 
+/**
+ * 任務分析 — Edward 2026-04-26 spec
+ *
+ * The mission pass-rate chart stays as-is (it's about missions, not game
+ * outcomes). The "任務結果與最終勝負關聯" table now expands the final result
+ * into three outcomes (三紅 / 三藍死 / 三藍活) instead of collapsing the blue
+ * win into a single bar.
+ */
 export default function MissionAnalysis(): JSX.Element {
+  const { t } = useTranslation('common');
   const [data, setData] = useState<MissionAnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +41,7 @@ export default function MissionAnalysis(): JSX.Element {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
-        <Loader size={20} className="animate-spin" /> 載入任務分析...
+        <Loader size={20} className="animate-spin" /> {t('analytics.deep.mission.loading')}
       </div>
     );
   }
@@ -39,49 +49,26 @@ export default function MissionAnalysis(): JSX.Element {
   if (error || !data) {
     return (
       <div className="flex items-center justify-center py-20 text-red-400 gap-3">
-        <AlertCircle size={20} /> {error || 'Failed to load'}
+        <AlertCircle size={20} /> {error || t('analytics.deep.loadFailed')}
       </div>
     );
   }
 
-  // Transform pass rates for chart
   const passRateData = data.missionPassRates.map(m => ({
-    name: `任務 ${m.round}`,
+    name: t('analytics.deep.mission.missionLabel', { round: m.round }),
     passRate: m.passRate,
     failRate: Math.round((100 - m.passRate) * 10) / 10,
     totalGames: m.totalGames,
   }));
 
-  // Fix #3: Stacked outcome by round - labels are fail cards (黑球), NOT rejection votes
   const outcomeData = data.missionOutcomeByRound.map(m => ({
-    name: `任務 ${m.round}`,
+    name: t('analytics.deep.mission.missionLabel', { round: m.round }),
     allPass: Math.round((m.allPass / m.total) * 1000) / 10,
-    oneFail: Math.round((m.oneFail / m.total) * 1000) / 10,
-    twoFail: Math.round((m.twoFail / m.total) * 1000) / 10,
+    oneFail:  Math.round((m.oneFail  / m.total) * 1000) / 10,
+    twoFail:  Math.round((m.twoFail  / m.total) * 1000) / 10,
   }));
 
-  // Mission outcome correlation table data (missions 1-4 only, skip 5)
-  const corrRows = data.missionOutcomeCorrelation
-    .filter(c => c.round <= 4)
-    .map(c => {
-      const passedBlueWin = c.passedThenBlueWin;
-      const passedRedWin = c.passedGames - c.passedThenBlueWin;
-      const failedBlueWin = c.failedGames - c.failedThenRedWin;
-      const failedRedWin = c.failedThenRedWin;
-      return {
-        round: c.round,
-        passedGames: c.passedGames,
-        passedBlueWin,
-        passedRedWin,
-        passedBlueWinPct: c.passedGames > 0 ? Math.round((passedBlueWin / c.passedGames) * 1000) / 10 : 0,
-        passedRedWinPct: c.passedGames > 0 ? Math.round((passedRedWin / c.passedGames) * 1000) / 10 : 0,
-        failedGames: c.failedGames,
-        failedBlueWin,
-        failedRedWin,
-        failedBlueWinPct: c.failedGames > 0 ? Math.round((failedBlueWin / c.failedGames) * 1000) / 10 : 0,
-        failedRedWinPct: c.failedGames > 0 ? Math.round((failedRedWin / c.failedGames) * 1000) / 10 : 0,
-      };
-    });
+  const corrRows = data.missionOutcomeCorrelation.filter(c => c.round <= 4);
 
   return (
     <div className="space-y-6">
@@ -91,7 +78,7 @@ export default function MissionAnalysis(): JSX.Element {
         animate={{ opacity: 1, y: 0 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">任務通過率</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.mission.missionPassRate')}</h3>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={passRateData}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
@@ -102,21 +89,21 @@ export default function MissionAnalysis(): JSX.Element {
               itemStyle={{ color: '#d1d5db' }}
             />
             <Legend />
-            <Bar dataKey="passRate" name="通過" fill="#22c55e" stackId="a" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="failRate" name="失敗" fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="passRate" name={t('analytics.deep.mission.passLabel')} fill="#22c55e" stackId="a" radius={[0, 0, 0, 0]} />
+            <Bar dataKey="failRate" name={t('analytics.deep.mission.failLabel')} fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </motion.div>
 
-      {/* Fix #3: Stacked outcome breakdown - fail cards (黑球) */}
+      {/* Stacked outcome breakdown - fail cards */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">失敗球分布</h3>
-        <p className="text-[10px] text-gray-600 mb-2">每次任務中出現的失敗球(黑球)數量分布</p>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.mission.failBallTitle')}</h3>
+        <p className="text-[10px] text-gray-600 mb-2">{t('analytics.deep.mission.failBallSub')}</p>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={outcomeData}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
@@ -127,61 +114,46 @@ export default function MissionAnalysis(): JSX.Element {
               itemStyle={{ color: '#d1d5db' }}
             />
             <Legend />
-            <Bar dataKey="allPass" name="0張失敗" fill="#22c55e" stackId="a" />
-            <Bar dataKey="oneFail" name="1張失敗" fill="#f59e0b" stackId="a" />
-            <Bar dataKey="twoFail" name="2+張失敗" fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="allPass" name={t('analytics.deep.mission.fail0')} fill="#22c55e" stackId="a" />
+            <Bar dataKey="oneFail" name={t('analytics.deep.mission.fail1')} fill="#f59e0b" stackId="a" />
+            <Bar dataKey="twoFail" name={t('analytics.deep.mission.fail2')} fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </motion.div>
 
-      {/* Mission outcome correlation table (missions 1-4) */}
+      {/* Mission outcome correlation - now 3-outcome split per branch */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
+        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 space-y-4"
       >
-        <h3 className="text-sm font-bold text-gray-400 mb-1">任務結果與最終勝負關聯</h3>
-        <p className="text-[10px] text-gray-600 mb-3">各任務通過/失敗後, 最終藍方勝 vs 紅方勝的次數與比例 (任務5省略, 必為100%)</p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th rowSpan={2} className="text-left text-gray-500 py-2 px-2">任務</th>
-                <th colSpan={3} className="text-center text-green-400 py-1 px-2 border-b border-gray-700">任務通過</th>
-                <th colSpan={3} className="text-center text-red-400 py-1 px-2 border-b border-gray-700">任務失敗</th>
-              </tr>
-              <tr className="border-b border-gray-700">
-                <th className="text-center text-blue-400 py-1 px-2">藍方勝</th>
-                <th className="text-center text-red-400 py-1 px-2">紅方勝</th>
-                <th className="text-center text-gray-500 py-1 px-2">場次</th>
-                <th className="text-center text-blue-400 py-1 px-2">藍方勝</th>
-                <th className="text-center text-red-400 py-1 px-2">紅方勝</th>
-                <th className="text-center text-gray-500 py-1 px-2">場次</th>
-              </tr>
-            </thead>
-            <tbody>
-              {corrRows.map(r => (
-                <tr key={r.round} className="border-b border-gray-800 hover:bg-gray-800/30">
-                  <td className="text-gray-300 font-bold py-2 px-2">任務 {r.round}</td>
-                  <td className="text-center text-blue-400 py-2 px-2">
-                    {r.passedBlueWin} <span className="text-gray-600">({r.passedBlueWinPct}%)</span>
-                  </td>
-                  <td className="text-center text-red-400 py-2 px-2">
-                    {r.passedRedWin} <span className="text-gray-600">({r.passedRedWinPct}%)</span>
-                  </td>
-                  <td className="text-center text-gray-500 py-2 px-2">{r.passedGames}</td>
-                  <td className="text-center text-blue-400 py-2 px-2">
-                    {r.failedBlueWin} <span className="text-gray-600">({r.failedBlueWinPct}%)</span>
-                  </td>
-                  <td className="text-center text-red-400 py-2 px-2">
-                    {r.failedRedWin} <span className="text-gray-600">({r.failedRedWinPct}%)</span>
-                  </td>
-                  <td className="text-center text-gray-500 py-2 px-2">{r.failedGames}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div>
+          <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.mission.missionVsOutcomeTitle')}</h3>
+          <p className="text-[10px] text-gray-600">{t('analytics.deep.mission.missionVsOutcomeSub')}</p>
+        </div>
+        <div className="space-y-3">
+          {corrRows.map(r => (
+            <div key={r.round} className="bg-gray-800/40 rounded-lg p-3 space-y-3">
+              <p className="text-xs font-bold text-gray-300">{t('analytics.deep.mission.missionLabel', { round: r.round })}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-green-400 font-bold">{t('analytics.deep.mission.missionPass')}</span>
+                    <span className="text-gray-500">{r.passedGames} {t('analytics.deep.mission.samples')}</span>
+                  </div>
+                  <OutcomeBar outcomes={r.passedOutcomes} variant="stacked" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-red-400 font-bold">{t('analytics.deep.mission.missionFail')}</span>
+                    <span className="text-gray-500">{r.failedGames} {t('analytics.deep.mission.samples')}</span>
+                  </div>
+                  <OutcomeBar outcomes={r.failedOutcomes} variant="stacked" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </motion.div>
     </div>

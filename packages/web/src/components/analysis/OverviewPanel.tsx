@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Loader, AlertCircle, Trophy, Users, Swords, Skull } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { fetchAnalysisOverview, getErrorMessage } from '../../services/api';
 import type { AnalysisOverview } from '../../services/api';
+import OutcomeBar from './OutcomeBar';
 
 function StatCard({ icon: Icon, label, value, sub, color }: {
   icon: typeof Trophy;
@@ -27,6 +29,7 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
 }
 
 export default function OverviewPanel(): JSX.Element {
+  const { t } = useTranslation('common');
   const [overview, setOverview] = useState<AnalysisOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,7 +52,7 @@ export default function OverviewPanel(): JSX.Element {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
-        <Loader size={20} className="animate-spin" /> 載入分析資料...
+        <Loader size={20} className="animate-spin" /> {t('analytics.deep.loading')}
       </div>
     );
   }
@@ -57,19 +60,16 @@ export default function OverviewPanel(): JSX.Element {
   if (error || !overview) {
     return (
       <div className="flex items-center justify-center py-20 text-red-400 gap-3">
-        <AlertCircle size={20} /> {error || 'Failed to load'}
+        <AlertCircle size={20} /> {error || t('analytics.deep.loadFailed')}
       </div>
     );
   }
 
-  // Fix #10: Three-way outcome breakdown
-  const outcomeData = [
-    { name: '三紅 (3 Failed Missions)', value: overview.outcomeBreakdown.threeRedPct, fill: '#ef4444' },
-    { name: '三藍梅活 (Blue Win, Merlin Alive)', value: overview.outcomeBreakdown.threeBlueAlivePct, fill: '#3b82f6' },
-    { name: '三藍梅死', value: overview.outcomeBreakdown.threeBlueDeadPct, fill: '#f59e0b' },
-  ];
+  // Edward 2026-04-26: Outcome breakdown is THE primary chart now.
+  // Three mutually exclusive game results, fixed display order
+  // 三紅 → 三藍死 → 三藍活 (matches rank baseline).
+  const overallOutcomes = overview.outcomeBreakdown;
 
-  // Seat position win rates.
   // Canonical role names only. The old short forms (娜美/德魯/奧伯/派西)
   // have been purged from analysis_cache.json.
   const ROLE_COLORS: Record<string, string> = {
@@ -90,82 +90,54 @@ export default function OverviewPanel(): JSX.Element {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={Swords}
-          label="總場次"
+          label={t('analytics.deep.common.totalGames')}
           value={overview.totalGames.toLocaleString()}
           color="border-blue-700/50 text-blue-300"
         />
         <StatCard
           icon={Users}
-          label="玩家數"
+          label={t('analytics.deep.common.totalPlayers')}
           value={overview.totalPlayers.toString()}
           color="border-purple-700/50 text-purple-300"
         />
         <StatCard
           icon={Trophy}
-          label="紅方勝率 (Evil Win%)"
+          label={t('analytics.deep.common.redWinRate')}
           value={`${overview.redWinRate}%`}
-          sub={`藍方 ${overview.blueWinRate}%`}
+          sub={`${t('analytics.deep.common.blueWinRate')} ${overview.blueWinRate}%`}
           color="border-red-700/50 text-red-300"
         />
         <StatCard
           icon={Skull}
-          label="梅林擊殺率 (Merlin Kill%)"
+          label={t('analytics.deep.common.merlinKillRate')}
           value={`${overview.merlinKillRate}%`}
-          sub="三藍局中刺殺成功"
+          sub={t('analytics.deep.common.merlinKillSub')}
           color="border-yellow-700/50 text-yellow-300"
         />
       </div>
 
-      {/* Fix #10: Three-way outcome pie + Fix #8: Theory ranking */}
+      {/* Outcome breakdown + theoretical win-rate ranking */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-gray-400 mb-3">勝負結構</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={outcomeData}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                dataKey="value"
-                label={({ name, value }: { name?: string; value?: number }) => `${(name ?? '').split(' ')[0]} ${value}%`}
-                labelLine={false}
-              >
-                {outcomeData.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(val: unknown, _name: unknown, entry: unknown) => {
-                  const e = entry as { payload?: { name?: string } };
-                  return [`${val}%`, e?.payload?.name ?? ''];
-                }}
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                itemStyle={{ color: '#d1d5db' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex justify-center gap-4 mt-2 text-[10px]">
-            <span className="text-red-400">三紅: {overview.outcomeBreakdown.threeRed} 場</span>
-            <span className="text-blue-400">三藍梅活: {overview.outcomeBreakdown.threeBlueAlive} 場</span>
-            <span className="text-yellow-400">三藍梅死: {overview.outcomeBreakdown.threeBlueDead} 場</span>
+          <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.overview.outcomeBreakdown')}</h3>
+          <OutcomeBar outcomes={overallOutcomes} variant="rows" showRawCounts={true} />
+          <div className="mt-3">
+            <OutcomeBar outcomes={overallOutcomes} variant="stacked" />
           </div>
         </div>
 
-        {/* Fix #8: Top players by theoretical win rate */}
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-gray-400 mb-3">理論勝率排行 (Theoretical Win Rate, 50+ games)</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.overview.theoryRanking')}</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={overview.topPlayersByTheory.slice(0, 8)} layout="vertical">
               <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
               <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 11, fill: '#d1d5db' }} />
               <Tooltip
-                formatter={(val: unknown, name: unknown) => [`${val}%`, name === 'roleTheory' ? '理論勝率' : String(name)]}
+                formatter={(val: unknown) => [`${val}%`, t('analytics.deep.overview.theoryColumn')]}
                 contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
                 itemStyle={{ color: '#d1d5db' }}
               />
-              <Bar dataKey="roleTheory" name="理論勝率" radius={[0, 4, 4, 0]}>
+              <Bar dataKey="roleTheory" name={t('analytics.deep.overview.theoryColumn')} radius={[0, 4, 4, 0]}>
                 {overview.topPlayersByTheory.slice(0, 8).map((_, i) => (
                   <Cell key={i} fill={i === 0 ? '#f59e0b' : i < 3 ? '#3b82f6' : '#6b7280'} />
                 ))}
@@ -177,7 +149,7 @@ export default function OverviewPanel(): JSX.Element {
 
       {/* Top players by games played */}
       <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-gray-400 mb-3">場次排行</h3>
+        <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.overview.gamesRanking')}</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={overview.topPlayersByGames.slice(0, 10)}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
@@ -186,7 +158,7 @@ export default function OverviewPanel(): JSX.Element {
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
               itemStyle={{ color: '#d1d5db' }}
             />
-            <Bar dataKey="games" name="場次" fill="#6366f1" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="games" name={t('analytics.deep.overview.gamesColumn')} fill="#6366f1" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -194,8 +166,8 @@ export default function OverviewPanel(): JSX.Element {
       {/* Seat position win rates by role */}
       {seatData.length > 0 && (
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-gray-400 mb-3">位置勝率</h3>
-          <p className="text-[10px] text-gray-600 mb-2">各位置整體勝率及角色勝率分布</p>
+          <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.overview.seatPositionTitle')}</h3>
+          <p className="text-[10px] text-gray-600 mb-2">{t('analytics.deep.overview.seatPositionSub')}</p>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={seatData}>
               <XAxis dataKey="seat" tick={{ fontSize: 11, fill: '#d1d5db' }} />
@@ -206,18 +178,18 @@ export default function OverviewPanel(): JSX.Element {
                   const d = payload[0].payload as typeof seatData[number];
                   return (
                     <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 text-xs">
-                      <p className="font-bold text-gray-200 mb-1">位置 {d.seat} ({d.totalGames} 場)</p>
-                      <p className="text-gray-300 mb-2">整體勝率: {d.overallWinRate}%</p>
+                      <p className="font-bold text-gray-200 mb-1">{t('analytics.deep.overview.seatGames', { seat: d.seat, games: d.totalGames })}</p>
+                      <p className="text-gray-300 mb-2">{t('analytics.deep.overview.overallWinRate')}: {d.overallWinRate}%</p>
                       {d.roles.map(r => (
                         <p key={r.role} style={{ color: ROLE_COLORS[r.role] || '#9ca3af' }}>
-                          {r.role}: {r.winRate}% ({r.games} 場)
+                          {r.role}: {r.winRate}% ({r.games} {t('analytics.deep.common.games')})
                         </p>
                       ))}
                     </div>
                   );
                 }}
               />
-              <Bar dataKey="overallWinRate" name="整體勝率" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="overallWinRate" name={t('analytics.deep.overview.overallWinRate')} radius={[4, 4, 0, 0]}>
                 {seatData.map((_, i) => (
                   <Cell key={i} fill={i < 5 ? '#6366f1' : '#8b5cf6'} />
                 ))}

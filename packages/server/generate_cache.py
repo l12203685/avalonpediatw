@@ -568,9 +568,11 @@ def compute_missions(games: list[GameRow]) -> dict:
             "passedGames": len(passed_games),
             "passedThenBlueWin": pass_then_blue_win,
             "passedBlueWinRate": rnd1(pass_then_blue_win / len(passed_games) * 100) if passed_games else 0,
+            "passedOutcomes": _outcome_split(passed_games),
             "failedGames": len(failed_games),
             "failedThenRedWin": fail_then_red_win,
             "failedRedWinRate": rnd1(fail_then_red_win / len(failed_games) * 100) if failed_games else 0,
+            "failedOutcomes": _outcome_split(failed_games),
         })
 
     # Per-round outcome breakdown
@@ -607,6 +609,31 @@ def compute_missions(games: list[GameRow]) -> dict:
     }
 
 
+def _outcome_split(games_subset: list[GameRow]) -> dict:
+    """Compute three-outcome breakdown for a subset of games.
+
+    Display order (Edward 2026-04-26): 三紅 → 三藍死 → 三藍活
+    Returns counts + percentages. Empty subset returns zeros.
+    """
+    n = len(games_subset)
+    if n == 0:
+        return {
+            "threeRed": 0, "threeBlueDead": 0, "threeBlueAlive": 0,
+            "threeRedPct": 0, "threeBlueDeadPct": 0, "threeBlueAlivePct": 0,
+        }
+    three_red = sum(1 for g in games_subset if g.outcome == "三紅")
+    three_blue_dead = sum(1 for g in games_subset if g.outcome == "三藍死")
+    three_blue_alive = sum(1 for g in games_subset if g.outcome == "三藍活")
+    return {
+        "threeRed": three_red,
+        "threeBlueDead": three_blue_dead,
+        "threeBlueAlive": three_blue_alive,
+        "threeRedPct": rnd1(three_red / n * 100),
+        "threeBlueDeadPct": rnd1(three_blue_dead / n * 100),
+        "threeBlueAlivePct": rnd1(three_blue_alive / n * 100),
+    }
+
+
 def compute_lake(games: list[GameRow]) -> dict:
     lake_configs = [
         ("首湖", "lake1_holder_faction", "lake1_target_faction", "lake1_holder_role", "lake1_target_role"),
@@ -621,40 +648,36 @@ def compute_lake(games: list[GameRow]) -> dict:
             continue
 
         # Group by holder faction
-        holder_groups: dict[str, dict] = {}
+        holder_groups: dict[str, list[GameRow]] = {}
         for g in subset:
             faction = getattr(g, hf_key)
-            entry = holder_groups.setdefault(faction, {"count": 0, "red_wins": 0})
-            entry["count"] += 1
-            if g.red_win:
-                entry["red_wins"] += 1
+            holder_groups.setdefault(faction, []).append(g)
 
         holder_stats = [
             {
                 "faction": faction,
-                "games": d["count"],
-                "redWinRate": rnd1(d["red_wins"] / d["count"] * 100),
+                "games": len(gs),
+                "redWinRate": rnd1(sum(1 for g in gs if g.red_win) / len(gs) * 100),
+                "outcomes": _outcome_split(gs),
             }
-            for faction, d in holder_groups.items()
+            for faction, gs in holder_groups.items()
         ]
 
         # Group by holder x target faction combo
-        combo_groups: dict[str, dict] = {}
+        combo_groups: dict[str, list[GameRow]] = {}
         for g in subset:
             key = f"{getattr(g, hf_key)}|{getattr(g, tf_key)}"
-            entry = combo_groups.setdefault(key, {"count": 0, "red_wins": 0})
-            entry["count"] += 1
-            if g.red_win:
-                entry["red_wins"] += 1
+            combo_groups.setdefault(key, []).append(g)
 
         combo_stats = []
-        for key, d in combo_groups.items():
+        for key, gs in combo_groups.items():
             hf, tf = key.split("|")
             combo_stats.append({
                 "holderFaction": hf,
                 "targetFaction": tf,
-                "games": d["count"],
-                "redWinRate": rnd1(d["red_wins"] / d["count"] * 100),
+                "games": len(gs),
+                "redWinRate": rnd1(sum(1 for g in gs if g.red_win) / len(gs) * 100),
+                "outcomes": _outcome_split(gs),
             })
 
         per_lake.append({
@@ -666,46 +689,40 @@ def compute_lake(games: list[GameRow]) -> dict:
 
     # Holder role stats (首湖 only)
     lake1_games = [g for g in games if g.lake1_holder_faction != ""]
-    holder_role_groups: dict[str, dict] = {}
+    holder_role_groups: dict[str, list[GameRow]] = {}
     for g in lake1_games:
         role = g.lake1_holder_role
         if not role:
             continue
-        entry = holder_role_groups.setdefault(role, {"count": 0, "red_wins": 0, "blue_wins": 0})
-        entry["count"] += 1
-        if g.red_win:
-            entry["red_wins"] += 1
-        if g.blue_win:
-            entry["blue_wins"] += 1
+        holder_role_groups.setdefault(role, []).append(g)
 
     holder_role_stats = [
         {
             "role": role,
-            "games": d["count"],
-            "redWinRate": rnd1(d["red_wins"] / d["count"] * 100),
-            "blueWinRate": rnd1(d["blue_wins"] / d["count"] * 100),
+            "games": len(gs),
+            "redWinRate": rnd1(sum(1 for g in gs if g.red_win) / len(gs) * 100),
+            "blueWinRate": rnd1(sum(1 for g in gs if g.blue_win) / len(gs) * 100),
+            "outcomes": _outcome_split(gs),
         }
-        for role, d in holder_role_groups.items()
+        for role, gs in holder_role_groups.items()
     ]
 
     # Target role stats
-    target_role_groups: dict[str, dict] = {}
+    target_role_groups: dict[str, list[GameRow]] = {}
     for g in lake1_games:
         role = g.lake1_target_role
         if not role:
             continue
-        entry = target_role_groups.setdefault(role, {"count": 0, "red_wins": 0})
-        entry["count"] += 1
-        if g.red_win:
-            entry["red_wins"] += 1
+        target_role_groups.setdefault(role, []).append(g)
 
     target_role_stats = [
         {
             "role": role,
-            "games": d["count"],
-            "redWinRate": rnd1(d["red_wins"] / d["count"] * 100),
+            "games": len(gs),
+            "redWinRate": rnd1(sum(1 for g in gs if g.red_win) / len(gs) * 100),
+            "outcomes": _outcome_split(gs),
         }
-        for role, d in target_role_groups.items()
+        for role, gs in target_role_groups.items()
     ]
 
     # Fix #12: Enhanced lake analysis -- per-lake role stats and cross-lake patterns
@@ -717,46 +734,40 @@ def compute_lake(games: list[GameRow]) -> dict:
             continue
 
         # Holder role stats for this lake
-        h_role_groups: dict[str, dict] = {}
+        h_role_groups: dict[str, list[GameRow]] = {}
         for g in lake_games:
             role = getattr(g, hr_key)
             if not role:
                 continue
-            entry = h_role_groups.setdefault(role, {"count": 0, "red_wins": 0, "blue_wins": 0})
-            entry["count"] += 1
-            if g.red_win:
-                entry["red_wins"] += 1
-            if g.blue_win:
-                entry["blue_wins"] += 1
+            h_role_groups.setdefault(role, []).append(g)
 
         h_stats = [
             {
                 "role": role,
-                "games": d["count"],
-                "redWinRate": rnd1(d["red_wins"] / d["count"] * 100),
-                "blueWinRate": rnd1(d["blue_wins"] / d["count"] * 100),
+                "games": len(gs),
+                "redWinRate": rnd1(sum(1 for g in gs if g.red_win) / len(gs) * 100),
+                "blueWinRate": rnd1(sum(1 for g in gs if g.blue_win) / len(gs) * 100),
+                "outcomes": _outcome_split(gs),
             }
-            for role, d in h_role_groups.items()
+            for role, gs in h_role_groups.items()
         ]
 
         # Target role stats for this lake
-        t_role_groups: dict[str, dict] = {}
+        t_role_groups: dict[str, list[GameRow]] = {}
         for g in lake_games:
             role = getattr(g, tr_key)
             if not role:
                 continue
-            entry = t_role_groups.setdefault(role, {"count": 0, "red_wins": 0})
-            entry["count"] += 1
-            if g.red_win:
-                entry["red_wins"] += 1
+            t_role_groups.setdefault(role, []).append(g)
 
         t_stats = [
             {
                 "role": role,
-                "games": d["count"],
-                "redWinRate": rnd1(d["red_wins"] / d["count"] * 100),
+                "games": len(gs),
+                "redWinRate": rnd1(sum(1 for g in gs if g.red_win) / len(gs) * 100),
+                "outcomes": _outcome_split(gs),
             }
-            for role, d in t_role_groups.items()
+            for role, gs in t_role_groups.items()
         ]
 
         # Holder->Target same/different faction outcome
@@ -770,10 +781,12 @@ def compute_lake(games: list[GameRow]) -> dict:
             "sameFaction": {
                 "games": len(same_faction),
                 "redWinRate": rnd1(sum(1 for g in same_faction if g.red_win) / len(same_faction) * 100) if same_faction else 0,
+                "outcomes": _outcome_split(same_faction),
             },
             "diffFaction": {
                 "games": len(diff_faction),
                 "redWinRate": rnd1(sum(1 for g in diff_faction if g.red_win) / len(diff_faction) * 100) if diff_faction else 0,
+                "outcomes": _outcome_split(diff_faction),
             },
         })
 
@@ -972,22 +985,26 @@ def compute_rounds(games: list[GameRow]) -> dict:
             "mission1PassRate": mission1_pass_rate(merlin_in),
             "redWinRate": red_win_rate(merlin_in),
             "blueWinRate": blue_win_rate(merlin_in),
+            "outcomes": _outcome_split(merlin_in),
         },
         "merlinNotInTeam": {
             "games": len(merlin_out),
             "mission1PassRate": mission1_pass_rate(merlin_out),
             "redWinRate": red_win_rate(merlin_out),
             "blueWinRate": blue_win_rate(merlin_out),
+            "outcomes": _outcome_split(merlin_out),
         },
         "percivalInTeam": {
             "games": len(perc_in),
             "mission1PassRate": mission1_pass_rate(perc_in),
             "redWinRate": red_win_rate(perc_in),
+            "outcomes": _outcome_split(perc_in),
         },
         "percivalNotInTeam": {
             "games": len(perc_out),
             "mission1PassRate": mission1_pass_rate(perc_out),
             "redWinRate": red_win_rate(perc_out),
+            "outcomes": _outcome_split(perc_out),
         },
     }
 
@@ -1003,6 +1020,7 @@ def compute_rounds(games: list[GameRow]) -> dict:
                 "games": len(gs),
                 "mission1PassRate": mission1_pass_rate(gs),
                 "redWinRate": red_win_rate(gs),
+                "outcomes": _outcome_split(gs),
             }
             for rc, gs in red_count_groups.items()
         ],
@@ -1015,8 +1033,8 @@ def compute_rounds(games: list[GameRow]) -> dict:
     m1_failed = [g for g in with_m1 if count_mission_fails(g.round_results[0]) > 0]
 
     mission1_branch = [
-        {"passed": True, "games": len(m1_passed), "redWinRate": red_win_rate(m1_passed), "merlinKillRate": merlin_kill_rate(m1_passed)},
-        {"passed": False, "games": len(m1_failed), "redWinRate": red_win_rate(m1_failed), "merlinKillRate": merlin_kill_rate(m1_failed)},
+        {"passed": True, "games": len(m1_passed), "redWinRate": red_win_rate(m1_passed), "merlinKillRate": merlin_kill_rate(m1_passed), "outcomes": _outcome_split(m1_passed)},
+        {"passed": False, "games": len(m1_failed), "redWinRate": red_win_rate(m1_failed), "merlinKillRate": merlin_kill_rate(m1_failed), "outcomes": _outcome_split(m1_failed)},
     ]
 
     # Round progression
@@ -1035,23 +1053,21 @@ def compute_rounds(games: list[GameRow]) -> dict:
         }
 
     # Game states (top 20)
-    state_groups: dict[str, dict] = {}
+    state_groups: dict[str, list[GameRow]] = {}
     for g in games:
         if not g.game_state:
             continue
-        entry = state_groups.setdefault(g.game_state, {"count": 0, "red_wins": 0})
-        entry["count"] += 1
-        if g.red_win:
-            entry["red_wins"] += 1
+        state_groups.setdefault(g.game_state, []).append(g)
 
     game_states = sorted(
         [
             {
                 "state": s,
-                "games": d["count"],
-                "redWinRate": rnd1(d["red_wins"] / d["count"] * 100),
+                "games": len(gs),
+                "redWinRate": rnd1(sum(1 for g in gs if g.red_win) / len(gs) * 100),
+                "outcomes": _outcome_split(gs),
             }
-            for s, d in state_groups.items()
+            for s, gs in state_groups.items()
         ],
         key=lambda x: x["games"],
         reverse=True,
@@ -1218,10 +1234,9 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
 
     # Win-rate when red/blue captain leads a mission that passes vs fails
     # Extra cut: among games where red captain led, how often did blue win?
-    # Group by faction -> outcome -> game outcome
-    faction_mission_game: dict[tuple[str, bool], dict[str, int]] = defaultdict(
-        lambda: {"red_game_win": 0, "blue_game_win": 0, "total": 0}
-    )
+    # Now also captures three-outcome breakdown so the UI can avoid lumping
+    # blue wins together (Edward 2026-04-26: 三紅 / 三藍死 / 三藍活 split).
+    faction_mission_games: dict[tuple[str, bool], list[GameRow]] = defaultdict(list)
     for g in games:
         text_record = getattr(g, "text_record", "") or ""
         if not text_record:
@@ -1238,24 +1253,22 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
             if mission_data is None:
                 continue
             passed = mission_data["fails"] == 0
-            entry = faction_mission_game[(faction, passed)]
-            entry["total"] += 1
-            if g.red_win:
-                entry["red_game_win"] += 1
-            if g.blue_win:
-                entry["blue_game_win"] += 1
+            faction_mission_games[(faction, passed)].append(g)
 
     captain_mission_game_win_rates: list[dict] = []
-    for (faction, passed), entry in sorted(faction_mission_game.items()):
-        total = entry["total"]
+    for (faction, passed), gs in sorted(faction_mission_games.items()):
+        total = len(gs)
         if total == 0:
             continue
+        red_win = sum(1 for g in gs if g.red_win)
+        blue_win = sum(1 for g in gs if g.blue_win)
         captain_mission_game_win_rates.append({
             "captainFaction": faction,
             "missionResult": "pass" if passed else "fail",
             "totalMissions": total,
-            "redGameWinRate": rnd1(entry["red_game_win"] / total * 100),
-            "blueGameWinRate": rnd1(entry["blue_game_win"] / total * 100),
+            "redGameWinRate": rnd1(red_win / total * 100),
+            "blueGameWinRate": rnd1(blue_win / total * 100),
+            "outcomes": _outcome_split(gs),
         })
 
     return {
