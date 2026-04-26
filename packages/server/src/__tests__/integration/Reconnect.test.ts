@@ -285,10 +285,12 @@ describe('Integration: Reconnect — game continues after reconnect', () => {
     expect(room.state).toBe('discussion');
 
     // Assassination
+    // 2026-04-26 spec 32: target must be on good team (engine rejects evil
+    // teammates).
     const assassinId = findByRole(room, 'assassin');
     const merlinId = findByRole(room, 'merlin');
     const wrongTarget = Object.keys(room.players).find(
-      (id) => id !== assassinId && id !== merlinId
+      (id) => id !== assassinId && id !== merlinId && room.players[id].team === 'good',
     )!;
     engine.submitAssassination(assassinId, wrongTarget);
 

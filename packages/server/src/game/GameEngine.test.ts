@@ -169,12 +169,20 @@ describe('GameEngine', () => {
     beforeEach(() => {
       gameEngine.startGame();
       room.state = 'discussion';
-      // Override ALL player roles so the engine never falls back to random roleAssignments
+      // Override ALL player roles so the engine never falls back to random roleAssignments.
+      // 2026-04-26 spec 32: also pin `team` so submitAssassination's evil-target
+      // guard sees consistent role/team pairs (random assignRoles may have left
+      // team='evil' on player3-5 even though we re-tag role='loyal' here).
       room.players['player1'].role = 'merlin';
+      room.players['player1'].team = 'good';
       room.players['player2'].role = 'assassin';
+      room.players['player2'].team = 'evil';
       room.players['player3'].role = 'loyal';
+      room.players['player3'].team = 'good';
       room.players['player4'].role = 'loyal';
+      room.players['player4'].team = 'good';
       room.players['player5'].role = 'loyal';
+      room.players['player5'].team = 'good';
     });
 
     it('should end game with evil win when merlin is assassinated', () => {
