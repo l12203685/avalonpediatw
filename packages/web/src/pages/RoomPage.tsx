@@ -478,6 +478,12 @@ export default function RoomPage(): JSX.Element {
   // 在特定子階段才 render. 非 sticky 階段 (例: voting + 非隊長 + 隊伍未選定 /
   // lady_of_the_lake / discussion / ended) 還是預留 36dvh, 形成大塊黑色空白.
   // 改成只在實際會 render sticky toolbar 時才 reserve 空間.
+  //
+  // Edward 2026-04-26 16:53 root fix「投票下方贊成/拒絕 上方有大塊黑色無用區塊」:
+  // 之前 padding `pb-[36dvh]` 比 sticky panel 的 `max-h-[30dvh]` 多 6dvh,
+  // 即使有 toolbar 也預留多餘空間, 形成 toolbar 上方一條黑帶. 三個 sticky panel
+  // (VotePanel / QuestPanel / QuestTeamToolbar) 都用 `max-h-[30dvh]`, 所以 padding
+  // 對齊 30dvh 即可 — 不會超出 panel 高度也不會留多餘黑塊.
   const hasStickyToolbar = isLeaderPicking || teamVotePhaseSticky || questPhaseSticky;
 
   // Per-table-size board watermark — 5..10 only; null falls back to lobby preview size.
@@ -1310,11 +1316,13 @@ export default function RoomPage(): JSX.Element {
 
       {/* ────────── MAIN: GameBoard with rails + chat (phase-agnostic) ──────────
           Edward 2026-04-26 00:17 fix: 改成只在 sticky toolbar 真正 render 的子階段
-          才 reserve 36dvh, 避免 lady / discussion / ended / 非隊長 team-pick 等
-          無 sticky toolbar 階段顯出大塊黑色空白. */}
+          才 reserve 空間, 避免 lady / discussion / ended / 非隊長 team-pick 等
+          無 sticky toolbar 階段顯出大塊黑色空白.
+          Edward 2026-04-26 16:53 root fix: padding 對齊 sticky panel 的 max-h
+          (30dvh), 之前 36dvh 多 6dvh 形成 toolbar 上方黑帶. */}
       <div
         className={`relative z-10 flex-1 min-h-0 flex flex-col px-2 sm:px-3 ${
-          hasStickyToolbar ? 'pb-[36dvh] sm:pb-[32dvh]' : 'pb-1'
+          hasStickyToolbar ? 'pb-[30dvh]' : 'pb-1'
         }`}
       >
         <GameBoard

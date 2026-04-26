@@ -114,10 +114,12 @@ interface PlayerCardProps {
    */
   assassinated?: boolean;
   /**
-   * Edward 2026-04-25 22:38 lobby tweak — taller tile in waiting room so each
-   * player block has more breathing room. Defaults to `'game'` (square aspect,
-   * no behaviour change for in-game rails). `'lobby'` swaps the aspect to a
-   * vertical 3:4 portrait tile for the lobby waiting-room rails only.
+   * Edward 2026-04-26 16:54 unified spec —「人物方框 lobby 跟遊戲畫面要一樣」.
+   * Variant prop kept for API compatibility but no longer drives aspect ratio:
+   * lobby + game both render `aspect-square` so the rails look identical between
+   * waiting-room and in-game (#209 inconsistency fix). Previous `'lobby'` =
+   * `aspect-[3/4]` mode was removed because the taller tile made lobby feel
+   * different from game phase, breaking visual continuity Edward demanded.
    */
   variant?: 'game' | 'lobby';
   /**
@@ -166,13 +168,18 @@ interface PlayerCardProps {
  *   - 右下: 任務盾牌 (`mission-shield.jpg`)
  *   - 中: 大頭照 portrait (full square)
  *
- * Edward 20:12 add-ons:
- *   - PlayerCard = square aspect (already enforced via `aspect-square w-full`).
+ * Edward 20:12 add-ons (Edward 2026-04-26 16:53 corner-fix overrides 部分):
+ *   - PlayerCard = square aspect (已強制 `aspect-square w-full`, 2026-04-26 16:54
+ *     起 lobby/game 統一不再用 `aspect-[3/4]` lobby variant — Edward「lobby vs
+ *     game 完全一致」#209).
  *   - 未揭角色 (`effectiveRole === null`) → 整 tile bg 用 `role-back.jpg` 取代
- *     大頭，且**隱藏 role-derived corner indicators**。所以 role-back tile 上
- *     看不到王冠 / 球 / 盾，只有座位號碼 + 名字 + 斷線旗 + 湖中 (湖中是公開資訊,
- *     Edward 2026-04-26 00:17 修正後不再被 isRoleHidden 抑制)。狀態旗為避免遊戲
- *     性遺失，仍保留 disconnected 半透明 dim — 與 corner indicator 不同類。
+ *     大頭, 玩家名 chip 浮層. **2026-04-26 16:53 起所有 4-corner 公開狀態
+ *     indicator (隊長王冠 / 任務盾 / 黑白球 / 湖中) 全部 unconditional 渲染**,
+ *     不再被 `isRoleHidden` 抑制 — 因為 Avalon 規則桌面上隊長 / 任務參與 /
+ *     投票結果 / 湖中持有都是公開資訊, viewer 不知具體角色 ≠ viewer 不知公開資訊.
+ *     原本 20:12 的「隱藏 corner indicators」實作製造了 bug C/D「shield + 球
+ *     不顯」, 撤回. 狀態旗為避免遊戲性遺失，仍保留 disconnected 半透明 dim — 與
+ *     corner indicator 不同類。
  *
  * Edward 21:52 / 21:59 corrections (#7-#9 + 撤回 #9):
  *   - #7「盾牌每玩家依參與最後任務顯示，不能 hardcode 一樣」→ 用
@@ -366,7 +373,7 @@ export default function PlayerCard({
               }
             : undefined
         }
-        className={`relative ${variant === 'lobby' ? 'aspect-[3/4]' : 'aspect-square'} w-full rounded-xl overflow-hidden border-[3px] bg-cover bg-center transition-all ${borderClass} ${
+        className={`relative aspect-square w-full rounded-xl overflow-hidden border-[3px] bg-cover bg-center transition-all ${borderClass} ${
           shieldSelected
             ? 'ring-2 ring-yellow-400 shadow-md shadow-yellow-400/40'
             : isActiveTurn
@@ -488,10 +495,13 @@ export default function PlayerCard({
         {/*
           Top-center — leader crown. Edward 2026-04-25「正上方: 隊長王冠
           (僅輪到隊長時顯示)」. Painted asset, only renders when isLeader.
-          Suppressed on role-back tiles per 20:12「隱藏 corner indicators
-          (除了 seat 號碼)」.
+          Edward 2026-04-26 16:53 corner-fix:「任務盾牌+黑白球 corner 不顯」根因
+          就是 4-corner 公開資訊被 isRoleHidden 抑制了, 導致紅方 / 牌背 / split
+          tile 上看不到隊長王冠 / 任務盾 / 球. 隊長身份 / 任務參與 / 投票結果都是
+          公開資訊 (Avalon 規則桌面上人人看得到), 不該因為「viewer 不知該座位
+          具體角色」就藏起來. 從這條開始 4 corner indicators 全部 unconditional 渲染.
         */}
-        {!isRoleHidden && isLeader && (
+        {isLeader && (
           <motion.div
             initial={{ scale: 0, y: -4 }}
             animate={{ scale: 1, y: 0 }}
@@ -569,7 +579,7 @@ export default function PlayerCard({
                示，不能 hardcode 一樣」).
           Suppressed on role-hidden tiles.
         */}
-        {!isRoleHidden && showSelectOverlay && (
+        {showSelectOverlay && (
           <motion.div
             initial={{ scale: 0, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
@@ -587,7 +597,7 @@ export default function PlayerCard({
             />
           </motion.div>
         )}
-        {!isRoleHidden && showCandidateHint && (
+        {showCandidateHint && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.55 }}
@@ -604,7 +614,7 @@ export default function PlayerCard({
             />
           </motion.div>
         )}
-        {!isRoleHidden && showResultShield && (
+        {showResultShield && (
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
@@ -654,7 +664,7 @@ export default function PlayerCard({
           所以伺服器在 phase 切換時清掉 `room.votes` 不會影響持久顯示。
           Suppressed on role-hidden tiles per 20:12 rule.
         */}
-        {!isRoleHidden && (() => {
+        {(() => {
           // Edward 2026-04-25 22:38 GamePage 3-fix #3「你的投票/任務盾/湖中女神 都
           // 只有最後開牌才顯示, 遊戲過程中只有未知身分牌背」: when this is the
           // viewer's own tile and the game is mid-flight, swap the real
@@ -748,7 +758,7 @@ export default function PlayerCard({
           intentionally hides identity hints; the operator can still spot bots
           via the lobby roster).
         */}
-        {!isRoleHidden && player.isBot && (
+        {player.isBot && (
           <div
             className="absolute top-0 left-9 sm:left-11 bg-slate-900/80 border border-slate-500 rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center pointer-events-none z-10 shadow-sm"
             aria-label="AI 玩家"

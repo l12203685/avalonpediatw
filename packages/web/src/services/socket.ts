@@ -236,7 +236,7 @@ export async function initializeSocket(token: string): Promise<void> {
       if (room.state === 'voting' && room.questTeam.length === 0 && leaderId === cp.id) {
         sendTurnNotification('⚔️ Avalon — 輪到你了！', '你是隊長，請選擇任務隊伍');
       } else if (room.state === 'voting' && room.questTeam.length > 0 && !(cp.id in room.votes)) {
-        sendTurnNotification('🗳️ Avalon — 輪到你投票！', '贊成或拒絕此次任務隊伍');
+        sendTurnNotification('🗳️ Avalon — 輪到你投票！', '贊成或反對此次任務隊伍');
       } else if (room.state === 'quest' && room.questTeam.includes(cp.id)) {
         sendTurnNotification('⚔️ Avalon — 任務投票！', '你在任務隊伍中，請投票成功或失敗');
       } else if (room.state === 'discussion' && room.players[cp.id]?.role === 'assassin') {

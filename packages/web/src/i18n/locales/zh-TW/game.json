@@ -99,7 +99,7 @@
   },
   "action": {
     "leaderTurn": "👑 輪到你了！請選擇任務隊伍",
-    "voteTurn": "🗳️ 輪到你投票！贊成或拒絕此隊伍",
+    "voteTurn": "🗳️ 輪到你投票！贊成或反對此隊伍",
     "questTurn": "⚔️ 你在任務隊伍中！請投票成功或失敗",
     "ladyTurn": "🔮 你持有湖中女神！選擇一位玩家查看陣營",
     "assassinTurn": "🗡️ 你是刺客！選擇目標刺殺梅林"
@@ -163,7 +163,7 @@
     "title": "投票結果",
     "approved": "通過",
     "rejected": "否決",
-    "approveRejectCount": "{{approvals}} 贊成 / {{rejections}} 拒絕",
+    "approveRejectCount": "{{approvals}} 贊成 / {{rejections}} 反對",
     "teamLabel": "任務隊伍"
   },
   "questResult": {
@@ -221,7 +221,7 @@
   },
   "votePanel": {
     "title": "隊伍提案投票",
-    "subtitle": "同意或拒絕此次任務隊伍",
+    "subtitle": "同意或反對此次任務隊伍",
     "questTeamLabel": "本次任務隊伍：",
     "youSuffix": " (你)",
     "votedCount": "已投票：{{voted}}/{{total}}",
@@ -230,12 +230,12 @@
     "waitingCount_one": "還有 {{count}} 人尚未投票",
     "waitingCount_other": "還有 {{count}} 人尚未投票",
     "approveBtn": "贊成",
-    "rejectBtn": "拒絕",
+    "rejectBtn": "反對",
     "submitting": "投票中…",
     "yourVoteApprove": "你的票：贊成",
-    "yourVoteReject": "你的票：拒絕",
+    "yourVoteReject": "你的票：反對",
     "waitingOthers": "等待其他玩家投票…",
-    "shortcuts": "快捷鍵：<approve>Y</approve> 贊成・<reject>N</reject> 拒絕",
+    "shortcuts": "快捷鍵：<approve>Y</approve> 贊成・<reject>N</reject> 反對",
     "countdownLabel": "投票倒數"
   },
   "questPanel": {
