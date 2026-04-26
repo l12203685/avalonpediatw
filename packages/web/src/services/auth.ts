@@ -1,5 +1,4 @@
 import { User } from '@avalon/shared';
-import { NGROK_SKIP_HEADER } from './api';
 
 // Check if Firebase is configured
 const hasFirebaseConfig = !!(
@@ -80,7 +79,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 export async function getGuestToken(displayName: string): Promise<string> {
   const res = await fetch(`${SERVER_URL}/auth/guest`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ displayName }),
     credentials: 'include',
   });
@@ -105,7 +104,6 @@ export async function resumeGuestFromCookie(): Promise<
   try {
     const res = await fetch(`${SERVER_URL}/auth/guest/resume`, {
       method: 'GET',
-      headers: { ...NGROK_SKIP_HEADER },
       credentials: 'include',
     });
     if (!res.ok) return null;
@@ -133,7 +131,7 @@ export async function renameGuest(newName: string): Promise<{ ok: boolean; error
   try {
     const res = await fetch(`${SERVER_URL}/auth/guest/rename`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newName }),
       credentials: 'include',
     });
@@ -174,7 +172,7 @@ export async function upgradeGuestToRegistered(
   try {
     const res = await fetch(`${SERVER_URL}/auth/guest/upgrade`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ provider, providerToken }),
       credentials: 'include',
     });
@@ -354,7 +352,7 @@ export async function quickLoginWithGoogle(): Promise<AuthResult> {
   // Step 2: server 驗 idToken + 查 email 是否已綁站上 auth_users
   const res = await fetch(`${SERVER_URL}/auth/oauth/login/google`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken }),
   });
   if (!res.ok) {
@@ -482,7 +480,7 @@ export async function loginOrRegister(
 ): Promise<AuthResult> {
   const res = await fetch(`${SERVER_URL}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
@@ -504,7 +502,7 @@ export async function forgotPassword(
 ): Promise<{ ok: true; ttlMs?: number }> {
   const res = await fetch(`${SERVER_URL}/auth/forgot-password`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
   if (!res.ok && res.status !== 202) {
@@ -524,7 +522,7 @@ export async function resetPassword(
 ): Promise<{ ok: true; userId: string }> {
   const res = await fetch(`${SERVER_URL}/auth/reset-password`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, newPassword }),
   });
   if (!res.ok) {
@@ -547,7 +545,6 @@ export async function changePassword(
     headers: {
       'Content-Type': 'application/json',
       Authorization:  `Bearer ${sessionToken}`,
-      ...NGROK_SKIP_HEADER,
     },
     body: JSON.stringify({ oldPassword, newPassword }),
   });
@@ -573,7 +570,6 @@ export async function claimHistory(
     headers: {
       'Content-Type': 'application/json',
       Authorization:  `Bearer ${sessionToken}`,
-      ...NGROK_SKIP_HEADER,
     },
     body: JSON.stringify({ uuid, email, password }),
   });

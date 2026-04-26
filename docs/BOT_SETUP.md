@@ -257,11 +257,12 @@ pnpm dev
 ### Local Testing - Line
 
 ```bash
-# Use ngrok for local webhook testing
-ngrok http 3001
+# Expose local backend via cloudflared quick tunnel for LINE webhook testing
+# (我們已棄用 ngrok — 月 quota 撞上會 fail-to-fetch，改用 cloudflared)
+cloudflared tunnel --url http://localhost:3001
 
-# Set webhook URL to:
-https://[ngrok-url]/webhook/line
+# 拿到 https://<random>.trycloudflare.com 後，把 webhook URL 設成：
+https://<random>.trycloudflare.com/webhook/line
 ```
 
 ---

@@ -49,14 +49,14 @@ export async function initializeSocket(token: string): Promise<void> {
 
   const store = useGameStore.getState();
 
-  // `ngrok-skip-browser-warning` bypasses ngrok's free-plan interstitial for the
-  // initial polling handshake (Socket.IO always starts on polling before the
-  // websocket upgrade). The `extraHeaders` top-level key is picked up by
-  // polling; we also set it on `transportOptions.polling` for belt-and-braces.
+  // 2026-04-26: dropped the `ngrok-skip-browser-warning` extraHeaders that used
+  // to bypass ngrok's free-plan interstitial. Backend tunnel migrated off ngrok
+  // (cloudflared quick tunnel today; named tunnel planned), so the header is no
+  // longer needed. Re-add only if a tunnel that requires it comes back.
   socket = io(SERVER_URL, {
     auth: { token },
     // polling → websocket upgrade order. WS-first fails intermittently on
-    // ngrok free tier + iPhone Safari (Edward 2026-04-23 P0: 訪客 websocket
+    // some tunnels + iPhone Safari (Edward 2026-04-23 P0: 訪客 websocket
     // error). Polling-first handshakes cleanly then upgrades when stable;
     // if WS upgrade later fails, Socket.IO keeps the polling transport alive
     // instead of emitting connect_error. Ref: socket.io-client v4 docs.
@@ -65,15 +65,11 @@ export async function initializeSocket(token: string): Promise<void> {
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    // Keep retrying forever — backend restarts (ngrok hiccups / redeploys) can
+    // Keep retrying forever — backend restarts (tunnel hiccups / redeploys) can
     // take longer than 5 × 5s to come back. If we give up, getSocket() throws
     // "尚未連線" forever and the only fix is a full page refresh, which Edward
     // observed as "無法建立房間" (P0 diag 2026-04-21 19:26 +08).
     reconnectionAttempts: Infinity,
-    extraHeaders: { 'ngrok-skip-browser-warning': 'true' },
-    transportOptions: {
-      polling: { extraHeaders: { 'ngrok-skip-browser-warning': 'true' } },
-    },
   });
 
   // Refresh Firebase ID token before each reconnect attempt so expired tokens
@@ -124,7 +120,7 @@ export async function initializeSocket(token: string): Promise<void> {
   // Wait for auth:success or connect_error before resolving.
   //
   // 2026-04-23 guest stabilize (P0, drift_35): transient `xhr poll error`
-  // / `websocket error` spikes — usually from a 1–2s ngrok hiccup or a
+  // / `websocket error` spikes — usually from a 1–2s tunnel hiccup or a
   // wifi flap on iPhone Safari — were being turned into an immediate
   // "無法連線伺服器" rejection, which the UI then surfaces as a hard failure
   // even though Socket.IO's own reconnection loop would have recovered in

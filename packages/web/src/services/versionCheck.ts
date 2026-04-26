@@ -44,7 +44,6 @@ async function fetchVersionOnce(signal: AbortSignal): Promise<VersionResponse | 
       signal,
       // Bypass every layer of caching: the whole point is to detect deploys.
       cache: 'no-store',
-      headers: { 'ngrok-skip-browser-warning': 'true' },
     });
     if (!res.ok) return null;
     const data = (await res.json()) as VersionResponse;

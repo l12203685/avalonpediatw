@@ -30,7 +30,6 @@ import {
   type LeaderboardEntryV2,
 } from '@avalon/shared';
 import { useGameStore } from '../store/gameStore';
-import { NGROK_SKIP_HEADER } from '../services/api';
 
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || 'http://localhost:3001';
 
@@ -89,7 +88,7 @@ export default function LeaderboardPage(): JSX.Element {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    fetch(`${SERVER_URL}/api/leaderboard/v2`, { headers: NGROK_SKIP_HEADER })
+    fetch(`${SERVER_URL}/api/leaderboard/v2`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return (await r.json()) as LeaderboardV2Response | { message: string };

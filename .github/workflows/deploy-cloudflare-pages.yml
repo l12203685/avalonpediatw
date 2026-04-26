@@ -1,6 +1,6 @@
 name: Deploy Wiki to Cloudflare Pages
 
-# 2026-04-21: 後端改用本機 WSL2 + ngrok tunnel；此 workflow 改用 secrets.VITE_SERVER_URL
+# 2026-04-26: 後端走本機 WSL2 + cloudflared quick tunnel（已棄用 ngrok）；此 workflow 讀 secrets.VITE_SERVER_URL
 # 玩家主入口仍為 avalon-game-platform.web.app（Firebase Hosting），CF Pages 為備援
 # 觸發：手動 dispatch 或 main 分支 push（限 packages/** + workflow 本身）
 on:

@@ -30,10 +30,11 @@ import { test, expect, type Page } from '@playwright/test';
 // Constants
 // ---------------------------------------------------------------------------
 
-// Server URL as used by the frontend (ngrok in dev, localhost:3001 in CI).
+// Server URL as used by the frontend. Defaults to localhost:3001 (CI / local
+// pnpm dev). Override with VITE_SERVER_URL env when pointing tests at a remote
+// backend (cloudflared / deploy preview / etc.).
 const SERVER_URL =
-  process.env.VITE_SERVER_URL ||
-  'https://electric-crow-easily.ngrok-free.app';
+  process.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 const FRONTEND_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173';
 

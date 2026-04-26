@@ -10,7 +10,7 @@ import {
   ResponsiveContainer, Tooltip,
 } from 'recharts';
 import { useGameStore } from '../store/gameStore';
-import { NGROK_SKIP_HEADER, type LeaderboardEntry } from '../services/api';
+import { type LeaderboardEntry } from '../services/api';
 import {
   fetchAnalysisPlayerByName,
   getErrorMessage,
@@ -151,7 +151,7 @@ function EloLeaderboardWithRadar(): JSX.Element {
   const [radarOpenFor, setRadarOpenFor] = useState<LeaderboardEntry | null>(null);
 
   useEffect(() => {
-    fetch(`${SERVER_URL}/api/leaderboard`, { headers: NGROK_SKIP_HEADER })
+    fetch(`${SERVER_URL}/api/leaderboard`)
       .then(r => r.json() as Promise<{ leaderboard?: LeaderboardEntry[]; message?: string }>)
       .then(data => {
         if (data.message === 'Database not configured') setDbOffline(true);

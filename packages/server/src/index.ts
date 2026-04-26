@@ -42,8 +42,9 @@ const CORS_ORIGIN: string | string[] | true = process.env.CORS_ORIGIN
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 
 // ── Reverse proxy: /line/* → edward-listen-bot on localhost:5678 ──────────────
-// Shares the avalon ngrok tunnel so edward-listen-bot can receive LINE webhooks
-// without needing its own tunnel (free ngrok only allows 1 channel).
+// Shares the avalon backend tunnel (cloudflared quick tunnel as of 2026-04-26;
+// historically ngrok, since deprecated) so edward-listen-bot can receive LINE
+// webhooks without needing its own public hostname.
 // MUST be mounted BEFORE express.json() so the raw request body reaches the
 // LINE bot unchanged — LINE signature verification depends on exact byte match.
 // Using v3 pathFilter (instead of app.use('/line', ...)) so the full original

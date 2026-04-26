@@ -5,14 +5,10 @@
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
-/**
- * Header to bypass the ngrok free-plan browser warning interstitial. ngrok only
- * checks for the header's presence (value can be anything non-empty). Safe to
- * send to non-ngrok backends — unknown header is ignored server-side.
- *
- * Exported so other modules (auth.ts, socket.ts, inline fetches) can reuse it.
- */
-export const NGROK_SKIP_HEADER = { 'ngrok-skip-browser-warning': 'true' } as const;
+// 2026-04-26: removed `NGROK_SKIP_HEADER` — backend tunnel migrated off ngrok
+// (cloudflared quick tunnel today; named tunnel planned). The header was a
+// no-op against non-ngrok hosts but caused confusion that ngrok was still in
+// the picture. Re-introduce only if a tunnel that requires it comes back.
 
 export interface LeaderboardEntry {
   id: string;
@@ -55,7 +51,7 @@ export interface UserProfile {
 }
 
 async function apiFetch<T>(path: string, token?: string): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${SERVER_URL}${path}`, { headers });
   if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
@@ -91,7 +87,6 @@ export async function updateMyProfile(
     headers: {
       'Content-Type':  'application/json',
       'Authorization': `Bearer ${token}`,
-      ...NGROK_SKIP_HEADER,
     },
     body: JSON.stringify(patch),
   });
@@ -125,7 +120,6 @@ export async function uploadAvatar(token: string, file: File): Promise<{ avatarU
     headers: {
       'Content-Type':  file.type,
       'Authorization': `Bearer ${token}`,
-      ...NGROK_SKIP_HEADER,
     },
     body: file,
   });
@@ -177,7 +171,6 @@ export async function unlinkAccount(token: string, provider: LinkProvider): Prom
     headers: {
       'Content-Type':  'application/json',
       'Authorization': `Bearer ${token}`,
-      ...NGROK_SKIP_HEADER,
     },
     body: JSON.stringify({ provider }),
   });
@@ -195,7 +188,6 @@ export async function linkGoogleAccount(token: string, idToken: string): Promise
     headers: {
       'Content-Type':  'application/json',
       'Authorization': `Bearer ${token}`,
-      ...NGROK_SKIP_HEADER,
     },
     body: JSON.stringify({ idToken }),
   });
@@ -216,7 +208,6 @@ export async function mergeAccountByUuid(token: string, targetUuid: string): Pro
     headers: {
       'Content-Type':  'application/json',
       'Authorization': `Bearer ${token}`,
-      ...NGROK_SKIP_HEADER,
     },
     body: JSON.stringify({ uuid: targetUuid }),
   });
@@ -253,12 +244,12 @@ export async function fetchFriends(token: string): Promise<FriendEntry[]> {
 }
 
 export async function followUser(token: string, targetUserId: string): Promise<void> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...NGROK_SKIP_HEADER };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
   await fetch(`${SERVER_URL}/api/friends/${targetUserId}`, { method: 'POST', headers });
 }
 
 export async function unfollowUser(token: string, targetUserId: string): Promise<void> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...NGROK_SKIP_HEADER };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
   await fetch(`${SERVER_URL}/api/friends/${targetUserId}`, { method: 'DELETE', headers });
 }
 
@@ -297,7 +288,6 @@ export async function addFriendByShortCode(
     headers: {
       'Content-Type':  'application/json',
       'Authorization': `Bearer ${token}`,
-      ...NGROK_SKIP_HEADER,
     },
     body: JSON.stringify({ code }),
   });
@@ -315,7 +305,7 @@ export async function submitFeedback(
   data: { type: 'bug' | 'suggestion'; message: string; gameState?: string },
   token?: string
 ): Promise<void> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   await fetch(`${SERVER_URL}/api/feedback`, {
     method: 'POST',
@@ -332,7 +322,7 @@ export async function submitError(data: {
   try {
     await fetch(`${SERVER_URL}/api/feedback/errors`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
   } catch {
@@ -454,7 +444,7 @@ export interface RoundsAnalysisData {
 interface ApiEnvelope<T> { success: boolean; data?: T; error?: string }
 
 async function analysisApiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${SERVER_URL}/api/analysis${path}`, { headers: NGROK_SKIP_HEADER });
+  const res = await fetch(`${SERVER_URL}/api/analysis${path}`);
   if (!res.ok) throw new Error(`Analysis API ${res.status}: ${path}`);
   const body = (await res.json()) as ApiEnvelope<T>;
   if (!body.success || !body.data) throw new Error(body.error || 'Unknown error');
@@ -773,7 +763,7 @@ export interface AuditLogEntryApi {
 }
 
 async function claimApi<T>(path: string, init?: RequestInit & { token?: string }): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...NGROK_SKIP_HEADER };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (init?.token) headers['Authorization'] = `Bearer ${init.token}`;
   const res = await fetch(`${SERVER_URL}${path}`, {
     method: init?.method ?? 'GET',
@@ -982,7 +972,6 @@ export async function updateEloConfig(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...NGROK_SKIP_HEADER,
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(patch),
