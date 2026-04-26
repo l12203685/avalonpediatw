@@ -20,7 +20,7 @@ import { ChevronDown, ChevronUp, Eye, EyeOff, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ROLE_INFO, getKnowledgeList, getKnowledgeEntries, getKnowledgeLabel, seatLabel } from '../utils/roleKnowledge';
 import RoleAvatar from './RoleAvatar';
-import { ROLE_AVATAR_IMAGES, TEAM_INDICATORS } from '../utils/avalonAssets';
+import { ROLE_AVATAR_IMAGES } from '../utils/avalonAssets';
 import { CampDisc } from './CampDisc';
 
 interface PersistentNightInfoPanelProps {
@@ -144,15 +144,16 @@ export default function PersistentNightInfoPanel({
                               />
                             </div>
                           ) : (
-                            // 梅林看紅方 / 紅方互看 — 只知陣營, 不知具體角色.
-                            // 用紅方陣營 indicator art 取代具體 role avatar.
-                            <img
-                              src={TEAM_INDICATORS.evil}
-                              alt=""
-                              aria-hidden="true"
-                              className="w-6 h-6 rounded-full object-cover border border-red-500 flex-shrink-0"
-                              draggable={false}
-                              loading="lazy"
+                            // Edward 2026-04-26 19:21「梅林資訊的 邪惡方圖示
+                            // 應該為紅色圓圈」: 砍 team-evil.jpg 直 <img> (那是
+                            // 完整紅鳳凰盾牌畫, viewer 看不出是「邪惡方」). 改用
+                            // CampDisc team='evil' = 該畫的中央紅色 disc clip,
+                            // 跟 collapsed header 第二行的紅方 disc 視覺統一,
+                            // 一眼讀得出「紅方陣營」. 寬度從 w-6 給足 disc 顯示.
+                            <CampDisc
+                              team="evil"
+                              className="w-6 h-6 flex-shrink-0"
+                              alt="邪惡陣營"
                             />
                           )}
                           <span className="truncate">
