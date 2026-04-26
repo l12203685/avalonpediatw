@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Room, Player, VoteRecord, QuestRecord, LadyOfTheLakeRecord } from '@avalon/shared';
 import {
   ShieldIcon,
-  ApproveMark,
-  RejectMark,
   QuestSuccessMark,
   QuestFailMark,
 } from './ScoresheetIcons';
@@ -99,7 +97,8 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
   return (
     <div className="w-full">
       {/*
-        Mobile portrait must fit 10 players + 3 meta cols (L / R / memo) = 13 cols at ~320-340px wide.
+        Mobile portrait must fit 10 players + 2 meta cols (L / M) = 12 cols at ~320-340px wide
+        (R column dropped per Edward 2026-04-26 spec 14).
         We use tight cell widths + small font to achieve that without horizontal scroll.
         Desktop (sm+) relaxes cell sizes.
       */}
@@ -112,13 +111,21 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
             {playerIds.map((_id, i) => (
               <col key={`col-seat-${i}`} className="w-auto" />
             ))}
-            {/* Result col */}
-            <col className="w-[22px] sm:w-[34px]" />
-            {/* Memo col — slim on mobile, readable on desktop */}
+            {/* Memo col — slim on mobile, readable on desktop.
+                2026-04-26 Edward spec 14: R column dropped — Y/N + count was
+                redundant with M (memo) which already conveys round result via
+                shorthand (oxx / 'Y 4/5' was double-bookkeeping). */}
             <col className="w-[34px] sm:w-[56px]" />
           </colgroup>
 
-          <thead>
+          {/*
+            2026-04-26 Edward spec 15: sticky thead so column headers (seat
+            numbers, L, M) stay pinned when the matrix scrolls vertically —
+            the wrapper above sets `max-h-[65vh] overflow-y-auto` so long
+            replays no longer lose context. `bg-avalon-dark` on every <th> so
+            sticky headers don't appear transparent over scrolled rows.
+          */}
+          <thead className="sticky top-0 z-10 bg-avalon-dark">
             <tr className="border-b border-gray-700">
               {/* Leader column header */}
               <th
@@ -135,7 +142,7 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
                   <th
                     key={`head-${i}`}
                     scope="col"
-                    className={`px-0 py-1 text-center font-semibold ${
+                    className={`px-0 py-1 text-center font-semibold bg-avalon-dark ${
                       isMe ? 'text-yellow-400' : 'text-gray-500'
                     }`}
                     title={getName(pid)}
@@ -144,18 +151,10 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
                   </th>
                 );
               })}
-              {/* Result column */}
+              {/* Shorthand memo — left-aligned (Edward spec 16) */}
               <th
                 scope="col"
-                className="px-0.5 py-1 text-gray-500 font-semibold text-center"
-                title={t('game:scoresheet.resultTooltip')}
-              >
-                R
-              </th>
-              {/* Shorthand memo */}
-              <th
-                scope="col"
-                className="px-0.5 py-1 text-gray-500 font-semibold text-center"
+                className="px-0.5 py-1 text-gray-500 font-semibold text-left bg-avalon-dark"
                 title={t('game:scoresheet.memoTooltip')}
               >
                 M
@@ -167,7 +166,7 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={playerCount + 3}
+                  colSpan={playerCount + 2}
                   className="text-center text-gray-600 py-6"
                 >
                   --
@@ -218,7 +217,9 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
         </table>
       </div>
 
-      {/* Legend — i18n aware (2026-04-21 recolor: 黃盾/白勾/黑方/藍圓/紅圓) */}
+      {/* Legend — i18n aware. 2026-04-26 Edward spec 17 update: approve / reject
+          legend swatches now mirror the new "whole-cell background" treatment
+          (flat white / flat black square, no inline glyph). */}
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] sm:text-xs text-gray-400">
         <LegendItem>
           <span className="inline-flex items-center justify-center w-3.5 h-3.5 text-yellow-400">
@@ -227,15 +228,11 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
           {t('game:scoresheet.legendTeam')}
         </LegendItem>
         <LegendItem>
-          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded bg-yellow-500/40 text-white">
-            <ApproveMark className="w-3 h-3" />
-          </span>
+          <span className="inline-block w-3.5 h-3.5 bg-white border border-gray-500" />
           {t('game:scoresheet.legendApprove')}
         </LegendItem>
         <LegendItem>
-          <span className="inline-flex items-center justify-center w-3.5 h-3.5 text-black">
-            <RejectMark className="w-3.5 h-3.5" />
-          </span>
+          <span className="inline-block w-3.5 h-3.5 bg-black border border-gray-500" />
           {t('game:scoresheet.legendReject')}
         </LegendItem>
         <LegendItem>
@@ -283,8 +280,11 @@ function NominationRow({
   const approveCount = Object.values(record.votes).filter(Boolean).length;
   const totalVotes = Object.values(record.votes).length;
 
-  // 1-based display for shorthand (Google Sheet convention — team only, no leader prefix)
+  // 1-based display for shorthand (Google Sheet convention — team only, no leader prefix).
+  // 2026-04-26 Edward spec 14: R column dropped — append Y/N + count to memo so
+  // the round result is still glanceable in M (left-aligned per spec 16).
   const shorthand = nominationShorthand(teamSeats.map(s => s + 1));
+  const memoText = `${shorthand} ${record.approved ? 'Y' : 'N'} ${approveCount}/${totalVotes}`;
 
   return (
     <tr className="border-b border-gray-800/50">
@@ -293,58 +293,54 @@ function NominationRow({
         {displaySeatNumber(leaderSeat + 1)}
       </td>
 
-      {/* Seat cells — each cell = shield (if on team) + overlay (approve white / reject black) */}
+      {/*
+        2026-04-26 Edward spec 17: cell background carries the vote (white =
+        approve / black = reject) and fills the WHOLE cell. Shield (if on
+        team) overlays at the top-right corner with `z-10` so the chosen
+        marker is never obscured by the vote color. Previous design used a
+        small centered overlay tile which left awkward gaps between cells
+        and could obscure the shield. New layout reads cleanly as a row of
+        coloured cells with a small yellow shield badge in the corner of any
+        seat that was picked for the team.
+      */}
       {playerIds.map((pid, i) => {
         const isOnTeam = teamSeatSet.has(i);
         const vote = record.votes[pid];
         const hasVoted = vote !== undefined;
         const isMe = pid === currentPlayerId;
 
+        const bgClass = !hasVoted
+          ? ''
+          : vote
+            ? 'bg-white'
+            : 'bg-black';
+
         return (
           <td
             key={`nom-cell-${i}`}
-            className={`relative p-0 align-middle ${
+            className={`relative p-0 align-middle ${bgClass} ${
               isMe ? 'ring-1 ring-inset ring-yellow-500/30' : ''
             }`}
           >
-            {/*
-              Cell layout: square aspect — shield fills cell when on team,
-              overlay (approve white square / reject black square) renders as a
-              small centered tile so adjacent cells read as a row of discrete
-              squares rather than a continuous bar of color.
-            */}
-            <div className="relative w-full aspect-square flex items-center justify-center">
+            <div className="relative w-full aspect-square">
+              {/*
+                Per Edward spec 17 the cell BACKGROUND alone signals the vote
+                (white = approve, black = reject) — no inline glyph needed.
+                Shield badge for "picked for team" sits top-right with z-10 so
+                it is never obscured by the vote colour. Sized as a 45% badge
+                so it reads as a corner marker, not a fill.
+              */}
               {isOnTeam && (
-                <ShieldIcon className="absolute inset-0 w-full h-full text-yellow-400" />
-              )}
-              {hasVoted && vote && (
-                // Approve: white square + black check, sized as a clean tile
-                <ApproveMark className="relative w-[70%] h-[70%] text-white drop-shadow-[0_0_1px_rgba(0,0,0,0.7)]" />
-              )}
-              {hasVoted && !vote && (
-                // Reject: black square, same size as approve for consistent "tile" feel
-                <RejectMark className="relative w-[70%] h-[70%] text-black drop-shadow-[0_0_1px_rgba(255,255,255,0.7)]" />
+                <ShieldIcon className="absolute top-0 right-0 w-[45%] h-[45%] text-yellow-400 z-10 drop-shadow-[0_0_1px_rgba(0,0,0,0.8)]" />
               )}
             </div>
           </td>
         );
       })}
 
-      {/* Result cell — Y/N + vote count */}
-      <td
-        className={`px-0.5 py-1 text-center font-bold leading-tight ${
-          record.approved ? 'text-blue-300' : 'text-gray-300'
-        }`}
-      >
-        <div className="text-[10px] sm:text-xs">{record.approved ? 'Y' : 'N'}</div>
-        <div className="text-gray-500 text-[8px] sm:text-[10px]">
-          {approveCount}/{totalVotes}
-        </div>
-      </td>
-
-      {/* Memo (shorthand) */}
-      <td className="px-0.5 py-1 text-center text-gray-300 font-mono text-[9px] sm:text-[11px]">
-        {shorthand}
+      {/* Memo — left-aligned per Edward spec 16; embeds round result (spec 14). */}
+      <td className="px-0.5 py-1 text-left text-gray-300 font-mono text-[9px] sm:text-[11px] whitespace-nowrap">
+        {memoText}
       </td>
     </tr>
   );
@@ -370,8 +366,12 @@ function QuestRow({
     ...Array(record.failCount).fill('x' as const),
   ];
 
-  // Shorthand string: oxx / ooo etc
+  // Shorthand string: oxx / ooo etc.
+  // 2026-04-26 Edward spec 14: R column dropped — append success/fail letter
+  // to the memo so the quest verdict is still visible at a glance in M.
   const shorthandStr = symbols.map(s => s).join('');
+  const verdictChar = record.result === 'success' ? successChar : failChar;
+  const memoText = `${shorthandStr} ${verdictChar}`;
 
   return (
     <tr className="border-b border-yellow-900/50 bg-yellow-800/25">
@@ -402,18 +402,9 @@ function QuestRow({
         </div>
       </td>
 
-      {/* Result col — success/fail letter */}
-      <td
-        className={`px-0.5 py-1 text-center font-bold ${
-          record.result === 'success' ? 'text-blue-300' : 'text-red-300'
-        }`}
-      >
-        <div className="text-[10px] sm:text-xs">{record.result === 'success' ? successChar : failChar}</div>
-      </td>
-
-      {/* Memo col — oxx shorthand */}
-      <td className="px-0.5 py-1 text-center text-yellow-100/80 font-mono text-[9px] sm:text-[11px]">
-        {shorthandStr}
+      {/* Memo col — left-aligned per Edward spec 16; embeds verdict (spec 14). */}
+      <td className="px-0.5 py-1 text-left text-yellow-100/80 font-mono text-[9px] sm:text-[11px] whitespace-nowrap">
+        {memoText}
       </td>
     </tr>
   );
@@ -440,14 +431,31 @@ function LadyRow({
   const isHolder = record.holderId === currentPlayerId;
   const resultKnown = record.result !== undefined && record.result !== null;
 
-  // Holder-only can see good/evil; others see '?'
-  const resultChar: string = resultKnown
-    ? record.result === 'good'
-      ? 'o'
-      : 'x'
+  /*
+   * 2026-04-26 Edward spec 13 (regression fix): public Lake declarations
+   * (`declared` + `declaredClaim`) must surface in the scoresheet for ALL
+   * viewers, not just the holder — same convention as ChatPanel's "湖 H>T o"
+   * system entry. Previously the row only consulted `record.result`, which
+   * the server masks for non-holders, so a publicly-declared inspection
+   * (e.g. holder seat 0 inspected seat 4 and announced 'good') still showed
+   * up as "?" for everyone except the holder. Display priority:
+   *   1. holder → real `result` (always known)
+   *   2. anyone else, claim made → `declaredClaim` ('o' / 'x')
+   *   3. otherwise → '?'
+   */
+  const declaredChar: string | null = record.declared && record.declaredClaim
+    ? record.declaredClaim === 'good' ? 'o' : 'x'
+    : null;
+
+  const holderResultChar: string = resultKnown
+    ? record.result === 'good' ? 'o' : 'x'
     : '?';
 
-  const memo = `${displaySeatNumber(holderSeat)}>${displaySeatNumber(targetSeat)}${isHolder ? resultChar : '?'}`;
+  const visibleChar: string = isHolder
+    ? holderResultChar
+    : declaredChar ?? '?';
+
+  const memo = `${displaySeatNumber(holderSeat)}>${displaySeatNumber(targetSeat)}${visibleChar}`;
 
   return (
     <tr className="border-b border-cyan-900/50 bg-cyan-800/25">
@@ -456,20 +464,20 @@ function LadyRow({
         {ladyColLabel}
       </td>
 
-      {/* Center — holder>target arrow + result (if visible) */}
+      {/* Center — holder>target arrow + result (if visible to viewer) */}
       <td colSpan={playerCount} className="px-1 py-1">
         <div className="flex items-center justify-center gap-1 sm:gap-2 text-cyan-100">
           <span className="text-[9px] sm:text-[11px] font-bold tracking-wider">{ladyRowLabel}</span>
           <span className="font-mono text-[10px] sm:text-xs">
             {displaySeatNumber(holderSeat)}&gt;{displaySeatNumber(targetSeat)}
           </span>
-          {isHolder && resultKnown ? (
+          {visibleChar !== '?' ? (
             <span
               className={`font-bold text-[10px] sm:text-xs ${
-                record.result === 'good' ? 'text-blue-200' : 'text-red-300'
+                visibleChar === 'o' ? 'text-blue-200' : 'text-red-300'
               }`}
             >
-              {record.result === 'good' ? 'o' : 'x'}
+              {visibleChar}
             </span>
           ) : (
             <span className="text-gray-400 text-[10px] sm:text-xs">?</span>
@@ -477,13 +485,8 @@ function LadyRow({
         </div>
       </td>
 
-      {/* Result col */}
-      <td className="px-0.5 py-1 text-center text-cyan-200 font-bold text-[10px] sm:text-xs">
-        {isHolder ? resultChar : '?'}
-      </td>
-
-      {/* Memo col */}
-      <td className="px-0.5 py-1 text-center text-cyan-100/80 font-mono text-[9px] sm:text-[11px]">
+      {/* Memo col — left-aligned per Edward spec 16; carries declaration char (spec 13). */}
+      <td className="px-0.5 py-1 text-left text-cyan-100/80 font-mono text-[9px] sm:text-[11px] whitespace-nowrap">
         {memo}
       </td>
     </tr>
