@@ -404,10 +404,17 @@ describe('GameEngine — assassination', () => {
   function assassinSetup() {
     const { room, engine } = startedEngine(5);
     room.state = 'discussion';
-    // Override roles directly on room.players (engine checks room.players first)
+    // Override roles directly on room.players (engine checks room.players first).
+    // 2026-04-26 spec 32: also override `team` to keep role/team consistent —
+    // engine's submitAssassination now rejects evil targets, so the loyal
+    // override below MUST set team='good' (otherwise the random initial role
+    // assignment may have left p3 with team='evil').
     room.players['p1'].role = 'merlin';
+    room.players['p1'].team = 'good';
     room.players['p2'].role = 'assassin';
+    room.players['p2'].team = 'evil';
     room.players['p3'].role = 'loyal';
+    room.players['p3'].team = 'good';
     return { room, engine };
   }
 
@@ -583,8 +590,12 @@ describe('GameEngine — full happy-path game flow', () => {
     // Force assassin to miss (override roles on room.players)
     const assassinId = Object.keys(room.players).find((id) => room.players[id].role === 'assassin')!;
     const merlinId = Object.keys(room.players).find((id) => room.players[id].role === 'merlin')!;
-    // Assassin picks a non-Merlin target
-    const target = Object.keys(room.players).find((id) => id !== assassinId && id !== merlinId)!;
+    // Assassin picks a non-Merlin GOOD target (spec 32: assassin cannot
+    // target evil teammates — engine rejects). 5-player roster has 3 good
+    // (merlin + 2 loyal) so a non-Merlin good player always exists.
+    const target = Object.keys(room.players).find(
+      (id) => id !== assassinId && id !== merlinId && room.players[id].team === 'good',
+    )!;
 
     engine.submitAssassination(assassinId, target);
 

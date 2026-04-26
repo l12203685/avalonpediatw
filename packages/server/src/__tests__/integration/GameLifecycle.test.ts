@@ -121,10 +121,14 @@ describe('Integration: Full 5-player game lifecycle', () => {
     expect(room.questResults.filter((r) => r === 'success')).toHaveLength(3);
 
     // Assassin picks wrong target -> good wins
+    // 2026-04-26 spec 32: target must be on good team (engine rejects evil
+    // teammates). 5-player roster has 3 good (merlin + 2 loyal); pick the
+    // non-Merlin loyal so the assassination is "wrong" (not Merlin) but
+    // still a legal good-team target.
     const assassinId = findByRole(room, 'assassin');
     const merlinId = findByRole(room, 'merlin');
     const wrongTarget = Object.keys(room.players).find(
-      (id) => id !== assassinId && id !== merlinId
+      (id) => id !== assassinId && id !== merlinId && room.players[id].team === 'good',
     )!;
 
     engine.submitAssassination(assassinId, wrongTarget);
