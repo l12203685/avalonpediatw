@@ -4,13 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { createRoom, joinRoom, listRooms, spectateRoom, getSocket, getStoredToken } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { fetchAdminMe, fetchLinkedAccounts, LinkedAccount, LinkProvider } from '../services/api';
-import { forceRefresh } from '../utils/forceRefresh';
 import {
   Play,
   LogIn,
   BookOpen,
   RefreshCw,
-  RefreshCcw,
   Eye,
   Lock,
   BarChart3,
@@ -319,16 +317,9 @@ export default function HomePage(): JSX.Element {
                 回大廳，不跳頁)
             fixed 對齊右上 IdentityBadge 的同級，z-30 避開 modal (z-50)。 */}
         <div className="fixed top-3 left-3 sm:top-6 sm:left-6 z-30 flex flex-col gap-1.5 items-start">
-          {/* Edward 2026-04-26 16:42: PWA「加到桌面」按鈕。已裝過自動隱藏；
-              Chrome/Edge/Android 直接彈系統 install dialog；iOS Safari 開
-              IOSInstallGuide modal 教手動加。完全不支援的瀏覽器自動隱藏。
-              Edward 2026-04-26 16:46: 加「更新版本重新登入」按鈕並列。
-              清 SW + Cache + localStorage + cookies + reload，避免 PWA cache stuck。
-              文案明示「重新登入」防誤點。 */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <InstallButton />
-            <ForceUpdateButton />
-          </div>
+          {/* Edward 2026-04-26 17:07: PWA buttons (InstallButton +
+              ForceUpdateButton) 從左上 chip 區搬到右下角 stack (見 fixed
+              bottom-4 right-4 區塊). 左上 chip 區現在只剩登入狀態 chip. */}
 
           {isGuest ? (
             <button
@@ -766,20 +757,15 @@ export default function HomePage(): JSX.Element {
           gateTarget={authGateTarget ?? 'stats'}
         />
 
-        {/* 2026-04-24 #cache-upgrade: low-weight escape hatch for users
-            who are stuck on a stale bundle but haven't triggered the
-            version banner. Mirrors the Settings → 進階 button so there's
-            a self-service path from anywhere in the lobby. */}
-        <button
-          type="button"
-          data-testid="home-btn-force-refresh"
-          onClick={() => { void forceRefresh(); }}
-          className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-amber-500/50 text-zinc-400 hover:text-amber-200 text-xs transition-colors backdrop-blur-sm"
-          title={t('home.forceRefreshButton', { defaultValue: '遇到問題？強制更新' })}
-        >
-          <RefreshCcw size={12} />
-          <span className="hidden sm:inline">{t('home.forceRefreshButton', { defaultValue: '遇到問題？強制更新' })}</span>
-        </button>
+        {/* Edward 2026-04-26 17:07: PWA buttons stack 右下角.
+              - 加到手機桌面 (上) — InstallButton, 已裝/不支援自動隱藏
+              - 更新版本重新登入 (下) — ForceUpdateButton, 永遠顯示
+            砍舊「遇到問題？強制更新」(home-btn-force-refresh) — 與
+            ForceUpdateButton 功能重複, 由 ForceUpdateButton 替代. */}
+        <div className="fixed bottom-4 right-4 z-40 flex flex-col gap-2 items-end">
+          <InstallButton />
+          <ForceUpdateButton />
+        </div>
 
         {/* Edward 2026-04-25 19:56: 大廳最下方加 by avalonpediatw + linktree 連結。
             fixed bottom-center, text-xs, white/40 — 不搶焦但可見。z-30 比 logo bg

@@ -35,6 +35,7 @@ import {
   WifiOff,
   Loader2,
   Eye,
+  ClipboardList,
 } from 'lucide-react';
 import {
   AVALON_CONFIG,
@@ -50,6 +51,7 @@ import QuestTeamToolbar from '../components/QuestTeamToolbar';
 import RoleRevealModal from '../components/RoleRevealModal';
 import MissionTrack from '../components/MissionTrack';
 import CompactScoresheet from '../components/CompactScoresheet';
+import FullScoresheetLayout from '../components/FullScoresheetLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { requestNotificationPermission } from '../services/notifications';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
@@ -154,6 +156,10 @@ export default function RoomPage(): JSX.Element {
   const [teamSelectTimer, setTeamSelectTimer] = useState(teamSelectBase);
   const [loyalView, setLoyalView] = useState(false);
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
+  // Edward 2026-04-26 17:05: 牌譜全展 toggle. true => 主畫面 (rails+chat) 整個被
+  // FullScoresheetLayout 替換, 不顯 10 個 PlayerCard. 點頂端 ClipboardList icon
+  // 切換. Phase 變化時不自動重置 — 由玩家自主控制.
+  const [scoresheetExpanded, setScoresheetExpanded] = useState(false);
   const prevVoteHistoryLen = useRef(0);
   const prevQuestHistoryLen = useRef(0);
 
@@ -933,29 +939,65 @@ export default function RoomPage(): JSX.Element {
         </div>
       )}
 
-      {/* Header row — 否決 chip (left) + loyal-view toggle (right) */}
-      <div className="relative z-10 shrink-0 flex items-center justify-between gap-2 px-3 pt-2">
-        <div className="flex-1 min-w-0">
-          <MissionTrack room={room} variant="rejection-only" />
-        </div>
-        <button
-          onClick={() => setLoyalView(v => !v)}
-          title={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
-          aria-label={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
-          aria-pressed={loyalView}
-          className={`flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
-            loyalView
-              ? 'bg-yellow-500/30 hover:bg-yellow-500/50 border-yellow-400 text-yellow-200 shadow-md shadow-yellow-400/30'
-              : 'bg-blue-900/40 hover:bg-blue-800/70 border-blue-700/60 text-blue-300'
-          }`}
-        >
-          <Eye size={14} />
-        </button>
+      {/* Edward 2026-04-26 17:03 compact 2-row top header (mockup
+          screenshots/avalon_top_compact_2026-04-26_1703.png):
+            Row 1: R1-R5 任務軌 (mission circles only, 結果用藍紅圓圈整個蓋)
+            Row 2: 否決: 4 灰格 + ⏰ 倒數 + 眼睛 + 牌譜 (右側)
+          砍掉舊「Row1=否決+眼睛 / Row2=mission」分離 + 中間空白 — 對齊 Edward
+          「上方排版太佔空間」原則. */}
+      {/* Row 1 — mission circles */}
+      <div className="relative z-10 shrink-0 px-3 pt-2">
+        <MissionTrack room={room} variant="mission-only" />
       </div>
 
-      {/* 牌譜 — mission circles only (between rejection band and player rails) */}
-      <div className="relative z-10 shrink-0 px-3 pt-1.5">
-        <MissionTrack room={room} variant="mission-only" />
+      {/* Row 2 — 否決 + countdown + eye + 牌譜 */}
+      <div className="relative z-10 shrink-0 flex items-center justify-between gap-2 px-3 pt-1.5">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <MissionTrack room={room} variant="rejection-only" />
+          {room.state === 'voting' && room.questTeam.length === 0 && !isUnlimitedTimer && (
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] sm:text-[11px] px-1.5 py-0.5 rounded-full font-semibold border ${
+                teamSelectTimer < 20
+                  ? 'bg-red-900/60 text-red-300 border-red-800'
+                  : 'bg-gray-800/60 text-gray-400 border-gray-700'
+              }`}
+            >
+              <Clock size={10} />
+              {teamSelectTimer}s
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => setLoyalView(v => !v)}
+            title={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+            aria-label={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+            aria-pressed={loyalView}
+            className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+              loyalView
+                ? 'bg-yellow-500/30 hover:bg-yellow-500/50 border-yellow-400 text-yellow-200 shadow-md shadow-yellow-400/30'
+                : 'bg-blue-900/40 hover:bg-blue-800/70 border-blue-700/60 text-blue-300'
+            }`}
+          >
+            <Eye size={14} />
+          </button>
+          {/* Edward 2026-04-26 17:05 牌譜 toggle — 點開後主畫面整個替換為
+              FullScoresheetLayout (砍 PlayerCardGrid + ChatPanel), 再點收回. */}
+          <button
+            onClick={() => setScoresheetExpanded(v => !v)}
+            title={scoresheetExpanded ? t('game:scoresheet.collapse', { defaultValue: '收回牌譜' }) : t('game:scoresheet.expand', { defaultValue: '展開牌譜' })}
+            aria-label={scoresheetExpanded ? '收回牌譜' : '展開牌譜'}
+            aria-pressed={scoresheetExpanded}
+            data-testid="game-btn-scoresheet-toggle"
+            className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+              scoresheetExpanded
+                ? 'bg-emerald-500/30 hover:bg-emerald-500/50 border-emerald-400 text-emerald-200'
+                : 'bg-slate-800/60 hover:bg-slate-700 border-slate-600 text-slate-300'
+            }`}
+          >
+            <ClipboardList size={14} />
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -979,15 +1021,32 @@ export default function RoomPage(): JSX.Element {
   // gameplay top section (rejection chip + mission circles) so players can
   // review the full scoresheet before the auto-return countdown sweeps them
   // back to the lobby waiting room. No actionBanner (no live actor).
+  // Edward 2026-04-26 17:03+17:05: compact 2-row + 牌譜 toggle 對齊 gameTopSection.
   const endedTopSection = (
     <>
-      <div className="relative z-10 shrink-0 flex items-center justify-between gap-2 px-3 pt-2">
+      <div className="relative z-10 shrink-0 px-3 pt-2">
+        <MissionTrack room={room} variant="mission-only" />
+      </div>
+      <div className="relative z-10 shrink-0 flex items-center justify-between gap-2 px-3 pt-1.5">
         <div className="flex-1 min-w-0">
           <MissionTrack room={room} variant="rejection-only" />
         </div>
-      </div>
-      <div className="relative z-10 shrink-0 px-3 pt-1.5">
-        <MissionTrack room={room} variant="mission-only" />
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => setScoresheetExpanded(v => !v)}
+            title={scoresheetExpanded ? '收回牌譜' : '展開牌譜'}
+            aria-label={scoresheetExpanded ? '收回牌譜' : '展開牌譜'}
+            aria-pressed={scoresheetExpanded}
+            data-testid="game-btn-scoresheet-toggle-ended"
+            className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+              scoresheetExpanded
+                ? 'bg-emerald-500/30 hover:bg-emerald-500/50 border-emerald-400 text-emerald-200'
+                : 'bg-slate-800/60 hover:bg-slate-700 border-slate-600 text-slate-300'
+            }`}
+          >
+            <ClipboardList size={14} />
+          </button>
+        </div>
       </div>
     </>
   );
@@ -1322,34 +1381,46 @@ export default function RoomPage(): JSX.Element {
           (30dvh), 之前 36dvh 多 6dvh 形成 toolbar 上方黑帶. */}
       <div
         className={`relative z-10 flex-1 min-h-0 flex flex-col px-2 sm:px-3 ${
-          hasStickyToolbar ? 'pb-[30dvh]' : 'pb-1'
+          hasStickyToolbar && !scoresheetExpanded ? 'pb-[30dvh]' : 'pb-1'
         }`}
       >
-        <GameBoard
-          room={room}
-          currentPlayer={currentPlayer}
-          isPicking={isLeaderPicking}
-          selectedTeamIds={selectedTeamIds}
-          onSeatClick={handleSeatClick}
-          loyalView={loyalView}
-          lobbyMode={isLobbyPhase}
-          renderPlayerOverlay={isLobbyPhase ? renderLobbyOverlay : undefined}
-          chatSlot={
-            <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} variant="inline" room={room} />
-          }
-          scoresheetSlot={
-            isGameplayPhase || isEndedPhase
-              ? <CompactScoresheet room={room} currentPlayer={currentPlayer} />
-              : undefined
-          }
-        >
-          {(isGameplayPhase || isEndedPhase) && gameCenterPanel}
-        </GameBoard>
+        {/* Edward 2026-04-26 17:05: 牌譜全展模式 — 點頂端 ClipboardList icon 後
+            主畫面整個 (rails + chat + center panel) 替換為 FullScoresheetLayout.
+            不顯 10 個 PlayerCard, 不顯 ChatPanel, 也不 reserve sticky toolbar
+            空間. 只在 gameplay/ended phase 提供 (lobby phase 仍顯 GameBoard). */}
+        {scoresheetExpanded && (isGameplayPhase || isEndedPhase) ? (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <FullScoresheetLayout room={room} currentPlayer={currentPlayer} />
+          </div>
+        ) : (
+          <GameBoard
+            room={room}
+            currentPlayer={currentPlayer}
+            isPicking={isLeaderPicking}
+            selectedTeamIds={selectedTeamIds}
+            onSeatClick={handleSeatClick}
+            loyalView={loyalView}
+            lobbyMode={isLobbyPhase}
+            renderPlayerOverlay={isLobbyPhase ? renderLobbyOverlay : undefined}
+            chatSlot={
+              <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} variant="inline" room={room} />
+            }
+            scoresheetSlot={
+              isGameplayPhase || isEndedPhase
+                ? <CompactScoresheet room={room} currentPlayer={currentPlayer} />
+                : undefined
+            }
+          >
+            {(isGameplayPhase || isEndedPhase) && gameCenterPanel}
+          </GameBoard>
+        )}
       </div>
 
-      {/* ────────── BOTTOM TOOLBAR (phase-specific sticky panels) ────────── */}
+      {/* ────────── BOTTOM TOOLBAR (phase-specific sticky panels) ──────────
+          Edward 2026-04-26 17:05: 牌譜全展時也藏 sticky toolbar — 對齊「主畫面
+          整個替換」精神; 收回後 sticky 自然回來. */}
       <AnimatePresence>
-        {isLeaderPicking && (
+        {isLeaderPicking && !scoresheetExpanded && (
           <QuestTeamToolbar
             key="quest-team-toolbar"
             room={room}
@@ -1363,7 +1434,7 @@ export default function RoomPage(): JSX.Element {
       </AnimatePresence>
 
       <AnimatePresence>
-        {teamVotePhaseSticky && (
+        {teamVotePhaseSticky && !scoresheetExpanded && (
           <VotePanel
             key="vote-panel-sticky"
             room={room}
@@ -1375,7 +1446,7 @@ export default function RoomPage(): JSX.Element {
       </AnimatePresence>
 
       <AnimatePresence>
-        {questPhaseSticky && (
+        {questPhaseSticky && !scoresheetExpanded && (
           <QuestPanel
             key="quest-panel-sticky"
             room={room}

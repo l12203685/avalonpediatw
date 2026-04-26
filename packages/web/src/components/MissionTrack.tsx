@@ -63,9 +63,9 @@ export default function MissionTrack({ room, variant = 'combined' }: MissionTrac
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {/* Mission circles */}
-      <div className="flex items-center justify-center gap-2 sm:gap-3">
+      <div className={`flex items-center justify-center ${variant === 'mission-only' ? 'gap-1.5 sm:gap-2' : 'gap-2 sm:gap-3'}`}>
         {teamSizes.map((size, i) => {
           const roundNum = i + 1;
           const result = room.questResults[i]; // 'success' | 'fail' | undefined
@@ -105,25 +105,25 @@ export default function MissionTrack({ room, variant = 'combined' }: MissionTrac
               <motion.div
                 animate={isCurrent ? { boxShadow: ['0 0 0px rgba(234,179,8,0)', '0 0 12px rgba(234,179,8,0.6)', '0 0 0px rgba(234,179,8,0)'] } : {}}
                 transition={isCurrent ? { duration: 2, repeat: Infinity } : {}}
-                className={`w-12 h-12 rounded-full flex flex-col items-center justify-center ${bgClass} ${ringClass} transition-all`}
+                className={`relative ${variant === 'mission-only' ? 'w-10 h-10' : 'w-12 h-12'} rounded-full flex flex-col items-center justify-center ${result ? '' : `${bgClass} ${ringClass}`} transition-all`}
               >
                 {result === 'success' && (
-                  <div className="flex flex-col items-center">
-                    {/* Edward 2026-04-25 camp emblem unification: 央圓盤 disc
-                        sits above ✓ so each completed quest round shows the
-                        winning camp at glyph weight. Star-frame intentionally
-                        clipped — disc reads cleaner at 18px than full emblem. */}
-                    <CampDisc team="good" className="w-[18px] h-[18px]" alt="正義方勝利" />
-                    <span className="text-xs leading-none mt-0.5">✓</span>
-                    {failsRequired[i] >= 2 && <span className="text-amber-300 text-[10px] font-black leading-none">×2</span>}
-                  </div>
+                  <>
+                    {/* Edward 2026-04-26 16:58: 任務軌結果改藍紅圓圈整個蓋,
+                        砍 ✓ ✗ glyph. Disc 撐滿 w-full h-full 不留邊. */}
+                    <CampDisc team="good" className="w-full h-full" alt="正義方勝利" />
+                    {failsRequired[i] >= 2 && (
+                      <span className="absolute -bottom-1 -right-1 text-amber-300 text-[10px] font-black leading-none drop-shadow-[0_0_2px_rgba(0,0,0,0.9)] z-10">×2</span>
+                    )}
+                  </>
                 )}
                 {result === 'fail' && (
-                  <div className="flex flex-col items-center">
-                    <CampDisc team="evil" className="w-[18px] h-[18px]" alt="邪惡方勝利" />
-                    <span className="text-xs leading-none mt-0.5">✗</span>
-                    {failsRequired[i] >= 2 && <span className="text-amber-300 text-[10px] font-black leading-none">×2</span>}
-                  </div>
+                  <>
+                    <CampDisc team="evil" className="w-full h-full" alt="邪惡方勝利" />
+                    {failsRequired[i] >= 2 && (
+                      <span className="absolute -bottom-1 -right-1 text-amber-300 text-[10px] font-black leading-none drop-shadow-[0_0_2px_rgba(0,0,0,0.9)] z-10">×2</span>
+                    )}
+                  </>
                 )}
                 {!result && (
                   <div className={`flex flex-col items-center ${textClass}`}>
