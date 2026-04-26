@@ -47,7 +47,13 @@ export class RandomAgent implements AvalonAgent {
       }
 
       case 'assassination': {
-        const goodPlayers = allPlayerIds.filter(id => !obs.knownEvils.includes(id) && id !== obs.myPlayerId);
+        // 2026-04-26 spec 32: engine rejects evil targets. Prefer
+        // `allEvilIds` (full evil roster, populated by SelfPlayEngine for
+        // assassin at assassination phase) over `knownEvils` (which hides
+        // Oberon/Mordred from the assassin) so we never pick an evil
+        // teammate even with an unusual roster.
+        const evilSet = new Set<string>(obs.allEvilIds ?? obs.knownEvils);
+        const goodPlayers = allPlayerIds.filter(id => !evilSet.has(id) && id !== obs.myPlayerId);
         const pool   = goodPlayers.length > 0 ? goodPlayers : allPlayerIds.filter(id => id !== obs.myPlayerId);
         const target = pool[Math.floor(Math.random() * pool.length)] ?? allPlayerIds[0];
         return { type: 'assassinate', targetId: target };
