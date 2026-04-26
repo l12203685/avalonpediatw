@@ -1,0 +1,205 @@
+name: Promote Staging → Prod (Canary)
+
+# Manual promotion: copies the image currently serving 100% of staging traffic
+# onto a new revision of `avalon-server` (prod), pins it to 10% canary, runs a
+# smoke test, then ramps to 100%. A GitHub `production` environment with a
+# manual approval reviewer gates the entire run — Edward must click "Approve"
+# in the GitHub Actions UI before any prod traffic moves.
+#
+# Inputs:
+#   canary_percent  initial canary traffic % (default 10)
+#   skip_canary     if "true", go straight to 100% (emergency hotfix only)
+#
+# Required secrets:
+#   GCP_WIF_PROVIDER, GCP_SA_DEPLOY (same as deploy-staging)
+#
+# Rollback path: see `rollback.yml`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      canary_percent:
+        description: 'Initial canary traffic percent (1-50)'
+        required: false
+        default: '10'
+        type: string
+      skip_canary:
+        description: 'Skip canary, send 100% to new revision (emergency only)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      smoke_wait_seconds:
+        description: 'Seconds to wait between canary ramp and 100% promote'
+        required: false
+        default: '60'
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT: avalon-game-platform
+  GCP_REGION: asia-east1
+  STAGING_SERVICE: avalon-server-staging
+  PROD_SERVICE: avalon-server
+
+jobs:
+  promote:
+    name: Promote staging image to prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://avalon-server-169653523467.asia-east1.run.app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_DEPLOY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Resolve staging image (currently serving 100%)
+        id: img
+        run: |
+          set -e
+          STAGING_REV=$(gcloud run services describe ${{ env.STAGING_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --format='value(status.latestReadyRevisionName)')
+          IMAGE=$(gcloud run revisions describe "$STAGING_REV" \
+            --region=${{ env.GCP_REGION }} \
+            --format='value(spec.containers[0].image)')
+          echo "Promoting staging revision: $STAGING_REV"
+          echo "Image: $IMAGE"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "staging_rev=$STAGING_REV" >> "$GITHUB_OUTPUT"
+
+      - name: Compute build metadata
+        id: meta
+        run: |
+          BUILD_HASH=$(git rev-parse --short HEAD)
+          BUILD_COMMIT=$(git rev-parse HEAD | cut -c1-8)
+          BUILD_VERSION="prod-$(date -u +%Y%m%d%H%M)"
+          BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          {
+            echo "build_hash=$BUILD_HASH"
+            echo "build_commit=$BUILD_COMMIT"
+            echo "build_version=$BUILD_VERSION"
+            echo "build_timestamp=$BUILD_TIMESTAMP"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Deploy new prod revision (no traffic)
+        run: |
+          gcloud run deploy ${{ env.PROD_SERVICE }} \
+            --image=${{ steps.img.outputs.image }} \
+            --region=${{ env.GCP_REGION }} \
+            --min-instances=0 \
+            --max-instances=3 \
+            --memory=512Mi \
+            --cpu=1 \
+            --concurrency=80 \
+            --port=3001 \
+            --update-env-vars=NODE_ENV=production,BUILD_HASH=${{ steps.meta.outputs.build_hash }},BUILD_COMMIT=${{ steps.meta.outputs.build_commit }},BUILD_VERSION=${{ steps.meta.outputs.build_version }},BUILD_TIMESTAMP=${{ steps.meta.outputs.build_timestamp }} \
+            --no-traffic \
+            --tag=candidate \
+            --quiet
+
+      - name: Capture new revision name
+        id: rev
+        run: |
+          NEW_REV=$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --format='value(status.latestCreatedRevisionName)')
+          echo "new_revision=$NEW_REV" >> "$GITHUB_OUTPUT"
+          echo "Candidate revision: $NEW_REV"
+
+      - name: Smoke test candidate via tag URL
+        run: |
+          set -e
+          # Tagged URL routes only to this revision regardless of traffic split
+          URL="https://candidate---$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --format='value(status.url)' | sed 's|https://||')"
+          echo "Probing tagged URL: $URL"
+          for i in 1 2 3 4 5; do
+            if curl -fsS -m 15 "$URL/api/version"; then
+              echo
+              break
+            fi
+            echo "attempt $i failed, sleeping 10s"
+            sleep 10
+            if [ "$i" = "5" ]; then exit 1; fi
+          done
+          curl -fsS -m 15 "$URL/health" || exit 1
+
+      - name: Send canary traffic
+        if: ${{ inputs.skip_canary != 'true' }}
+        run: |
+          PCT=${{ inputs.canary_percent }}
+          # Bound between 1 and 50 to prevent footgun
+          if [ "$PCT" -lt 1 ] || [ "$PCT" -gt 50 ]; then
+            echo "canary_percent must be between 1 and 50 (got $PCT)"
+            exit 1
+          fi
+          STABLE_PCT=$((100 - PCT))
+          STABLE_REV=$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --format='value(status.traffic[0].revisionName)')
+          gcloud run services update-traffic ${{ env.PROD_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --to-revisions=${{ steps.rev.outputs.new_revision }}=$PCT,$STABLE_REV=$STABLE_PCT \
+            --quiet
+          echo "Canary $PCT% on ${{ steps.rev.outputs.new_revision }}, $STABLE_PCT% on $STABLE_REV"
+
+      - name: Wait for canary observation
+        if: ${{ inputs.skip_canary != 'true' }}
+        run: sleep ${{ inputs.smoke_wait_seconds }}
+
+      - name: Verify production health under canary
+        if: ${{ inputs.skip_canary != 'true' }}
+        run: |
+          set -e
+          URL="https://avalon-server-169653523467.asia-east1.run.app"
+          for i in 1 2 3 4 5; do
+            if curl -fsS -m 10 "$URL/health"; then
+              echo
+              break
+            fi
+            sleep 5
+            if [ "$i" = "5" ]; then exit 1; fi
+          done
+
+      - name: Promote to 100%
+        run: |
+          gcloud run services update-traffic ${{ env.PROD_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --to-revisions=${{ steps.rev.outputs.new_revision }}=100 \
+            --quiet
+          echo "Promoted ${{ steps.rev.outputs.new_revision }} to 100%"
+
+      - name: Final smoke test on prod
+        run: |
+          set -e
+          URL="https://avalon-server-169653523467.asia-east1.run.app"
+          curl -fsS -m 10 "$URL/api/version"
+          echo
+          curl -fsS -m 10 "$URL/health"
+
+      - name: Summary
+        run: |
+          echo "## Prod promotion" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Promoted revision: ${{ steps.rev.outputs.new_revision }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source image (from staging): ${{ steps.img.outputs.image }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source staging revision: ${{ steps.img.outputs.staging_rev }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Canary %: ${{ inputs.canary_percent }} (skipped: ${{ inputs.skip_canary }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Build version: ${{ steps.meta.outputs.build_version }}" >> "$GITHUB_STEP_SUMMARY"

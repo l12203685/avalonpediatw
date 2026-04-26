@@ -47,6 +47,23 @@ pnpm type-check
 pnpm lint
 ```
 
+#### Deployment branches (2026-04-26)
+
+| Branch | Target | Trigger | Workflow |
+|---|---|---|---|
+| `main` | Firebase Hosting (frontend) | push (paths under `packages/**`) | `.github/workflows/deploy-firebase.yml` |
+| `staging` | Cloud Run `avalon-server-staging` | push to `staging` | `.github/workflows/deploy-staging.yml` |
+| _(manual)_ | Cloud Run `avalon-server` (prod) | `workflow_dispatch` w/ `production` env approval | `.github/workflows/promote-prod.yml` |
+| _(manual)_ | Cloud Run prod traffic flip | `workflow_dispatch` | `.github/workflows/rollback.yml` |
+
+Backend ships staging-first: push the change to `staging`, the workflow builds + deploys to `avalon-server-staging` (min=0, max=2, no prod traffic). When happy, run **Promote Staging → Prod (Canary)** from the Actions tab — it pushes the same image to `avalon-server` (prod, min=0, max=3), pins it to a 10% canary, smoke-tests, then ramps to 100%. The `production` GitHub environment requires Edward to click "Approve" before any prod traffic moves.
+
+To roll back, run **Rollback (Cloud Run traffic switch)**. Leave `target_revision` blank to flip to the previously-serving revision.
+
+Required GitHub secrets (set under Settings → Secrets and variables → Actions):
+- `GCP_WIF_PROVIDER` — Workload Identity Federation provider resource name
+- `GCP_SA_DEPLOY` — deploy service account email (Cloud Run Admin + Artifact Registry Writer + IAM Service Account User)
+
 ## 📦 Project Structure
 
 ```

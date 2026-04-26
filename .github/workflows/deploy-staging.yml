@@ -1,0 +1,146 @@
+name: Deploy Staging (Cloud Run)
+
+# Pushes to the `staging` branch build a fresh container, push it to Artifact
+# Registry, and roll a new revision on `avalon-server-staging` (min=0, max=2,
+# 512Mi/1cpu, --no-traffic→100% inside the staging service so prod is not
+# affected). After deploy a smoke test hits `/api/version` and `/health`.
+#
+# Promotion to prod is a separate manual workflow (`promote-prod.yml`).
+#
+# Required secrets (configured at the repo / org level):
+#   GCP_WIF_PROVIDER          Workload Identity Federation provider resource
+#   GCP_SA_DEPLOY             Deploy service account email (Cloud Run Admin
+#                             + Artifact Registry Writer + IAM SA User)
+#
+# WIF setup notes live in `digital-immortal-tree-lyh/agent/tree_registry/architecture/`
+# (see Edward action checklist in the staging_workflow_ship report).
+
+on:
+  push:
+    branches: [staging]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write  # required for google-github-actions/auth WIF
+
+env:
+  GCP_PROJECT: avalon-game-platform
+  GCP_REGION: asia-east1
+  GCP_SERVICE: avalon-server-staging
+  AR_REPO: cloud-run-source-deploy
+  IMAGE_NAME: avalon-server  # shared image, separate Cloud Run service
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_DEPLOY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Configure Docker auth for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Compute build metadata
+        id: meta
+        run: |
+          BUILD_HASH=$(git rev-parse --short HEAD)
+          BUILD_COMMIT=$(git rev-parse HEAD | cut -c1-8)
+          BUILD_VERSION="staging-$(date -u +%Y%m%d%H%M)"
+          BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          {
+            echo "build_hash=$BUILD_HASH"
+            echo "build_commit=$BUILD_COMMIT"
+            echo "build_version=$BUILD_VERSION"
+            echo "build_timestamp=$BUILD_TIMESTAMP"
+            echo "image_tag=staging-$BUILD_HASH-$(date -u +%s)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        run: |
+          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_tag }}"
+          docker build -f Dockerfile.server -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy to Cloud Run (staging)
+        run: |
+          gcloud run deploy ${{ env.GCP_SERVICE }} \
+            --image="$IMAGE" \
+            --region=${{ env.GCP_REGION }} \
+            --min-instances=0 \
+            --max-instances=2 \
+            --memory=512Mi \
+            --cpu=1 \
+            --concurrency=80 \
+            --port=3001 \
+            --update-env-vars=NODE_ENV=staging,BUILD_HASH=${{ steps.meta.outputs.build_hash }},BUILD_COMMIT=${{ steps.meta.outputs.build_commit }},BUILD_VERSION=${{ steps.meta.outputs.build_version }},BUILD_TIMESTAMP=${{ steps.meta.outputs.build_timestamp }} \
+            --quiet
+
+      - name: Resolve service URL
+        id: url
+        run: |
+          URL=$(gcloud run services describe ${{ env.GCP_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --format='value(status.url)')
+          echo "service_url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test /api/version
+        run: |
+          set -e
+          URL="${{ steps.url.outputs.service_url }}"
+          echo "Probing $URL/api/version"
+          for i in 1 2 3 4 5; do
+            if curl -fsS -m 10 "$URL/api/version" | tee /tmp/version.json; then
+              break
+            fi
+            echo "attempt $i failed, sleeping 10s"
+            sleep 10
+            if [ "$i" = "5" ]; then exit 1; fi
+          done
+          ACTUAL=$(jq -r '.version' /tmp/version.json)
+          if [ "$ACTUAL" != "${{ steps.meta.outputs.build_hash }}" ]; then
+            echo "version mismatch: deployed=$ACTUAL expected=${{ steps.meta.outputs.build_hash }}"
+            # do not hard-fail — /api/version reports the build_hash baked into
+            # the running revision; mismatch is informational while we settle
+            # the multi-revision routing model.
+          fi
+
+      - name: Smoke test /health
+        run: |
+          set -e
+          URL="${{ steps.url.outputs.service_url }}"
+          curl -fsS -m 10 "$URL/health" | tee /tmp/health.json
+          STATUS=$(jq -r '.status' /tmp/health.json)
+          if [ "$STATUS" != "ok" ] && [ "$STATUS" != "initializing" ]; then
+            echo "health status=$STATUS"
+            exit 1
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Staging deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Service: ${{ env.GCP_SERVICE }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: ${{ steps.url.outputs.service_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Build version: ${{ steps.meta.outputs.build_version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Build hash: ${{ steps.meta.outputs.build_hash }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: $IMAGE" >> "$GITHUB_STEP_SUMMARY"

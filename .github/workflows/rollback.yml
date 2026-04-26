@@ -1,0 +1,128 @@
+name: Rollback (Cloud Run traffic switch)
+
+# Routes 100% of traffic on `avalon-server` (prod) to a previously-deployed
+# revision. No new build, no canary — instant traffic flip.
+#
+# Inputs:
+#   target_revision  e.g. `avalon-server-00047-t8w`. Must already exist.
+#                    Leave blank to rollback to the previous revision (the one
+#                    that was serving traffic before the most recent promote).
+#
+# Required secrets: GCP_WIF_PROVIDER, GCP_SA_DEPLOY (same as deploy-staging).
+#
+# Use the GitHub `production` environment for the same approval gate as
+# promote-prod — rollback is also a prod traffic change.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_revision:
+        description: 'Cloud Run revision name to roll back to (blank = previous serving revision)'
+        required: false
+        default: ''
+        type: string
+      reason:
+        description: 'Why are we rolling back? (logged in summary)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT: avalon-game-platform
+  GCP_REGION: asia-east1
+  PROD_SERVICE: avalon-server
+
+jobs:
+  rollback:
+    name: Switch prod traffic
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://avalon-server-169653523467.asia-east1.run.app
+
+    steps:
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_DEPLOY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Resolve target revision
+        id: target
+        run: |
+          set -e
+          TARGET="${{ inputs.target_revision }}"
+          if [ -z "$TARGET" ]; then
+            # Pick the most-recent revision that is NOT currently serving 100%.
+            CURRENT=$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+              --region=${{ env.GCP_REGION }} \
+              --format='value(status.traffic[0].revisionName)')
+            TARGET=$(gcloud run revisions list \
+              --service=${{ env.PROD_SERVICE }} \
+              --region=${{ env.GCP_REGION }} \
+              --sort-by=~metadata.creationTimestamp \
+              --format='value(metadata.name)' \
+              --limit=10 \
+              | grep -v "^$CURRENT$" \
+              | head -1)
+            echo "auto-selected previous revision: $TARGET"
+          fi
+          if [ -z "$TARGET" ]; then
+            echo "ERROR: could not resolve a target revision"
+            exit 1
+          fi
+          # Verify it exists
+          if ! gcloud run revisions describe "$TARGET" \
+            --region=${{ env.GCP_REGION }} \
+            --format='value(metadata.name)' >/dev/null 2>&1; then
+            echo "ERROR: revision $TARGET does not exist"
+            exit 1
+          fi
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+
+      - name: Capture pre-rollback state
+        id: pre
+        run: |
+          BEFORE=$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --format='value(status.traffic[0].revisionName)')
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+
+      - name: Switch traffic
+        run: |
+          gcloud run services update-traffic ${{ env.PROD_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --to-revisions=${{ steps.target.outputs.target }}=100 \
+            --quiet
+
+      - name: Verify
+        run: |
+          set -e
+          URL="https://avalon-server-169653523467.asia-east1.run.app"
+          for i in 1 2 3 4 5; do
+            if curl -fsS -m 10 "$URL/api/version"; then
+              echo
+              break
+            fi
+            sleep 5
+            if [ "$i" = "5" ]; then exit 1; fi
+          done
+          curl -fsS -m 10 "$URL/health"
+
+      - name: Summary
+        run: |
+          echo "## Rollback" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Reason: ${{ inputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- From: ${{ steps.pre.outputs.before }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- To: ${{ steps.target.outputs.target }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Triggered by: ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
