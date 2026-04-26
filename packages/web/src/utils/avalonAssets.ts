@@ -21,42 +21,80 @@
  */
 import type { Role } from '@avalon/shared';
 
+/**
+ * Build-time cache-bust suffix appended to every asset URL.
+ *
+ * Edward 2026-04-26 22:17 ROOT FIX「牌背圖反覆無法顯示」: prior to commit
+ * `fbf4ae25` (18:04) the 4 corner asset JPEGs (leader-crown / mission-shield /
+ * role-back / vote-back) were not committed, so Firebase Hosting answered any
+ * `/avalon-assets/<missing>.jpg` request with the SPA fallback `index.html`.
+ * Browsers that hit the page during that window cached **HTML bytes under a
+ * `.jpg` URL** with `Cache-Control: public, max-age=86400` — every later
+ * `<img src="/avalon-assets/role-back.jpg">` keeps re-using the broken disk
+ * cache entry until 24h elapse OR the user manually clears cache. Even after
+ * the fix shipped (commit `a4b4b5e0`/`fbf4ae25`/`8aa4683e`), Edward saw NO
+ * change because his browser never refetched.
+ *
+ * The asset URLs are not Vite-hashed (they live under `public/`, not the build
+ * pipeline), so `index-<hash>.js` busting alone doesn't reach them. Solution:
+ * append `?v=<build-stamp>` so each build emits new image URLs, forcing a
+ * fresh fetch and bypassing the poisoned cache entry. The stamp also lets
+ * future asset swaps invalidate clients without manual action.
+ *
+ * `__BUILD_TIME__` is injected by `vite.config.ts:define` at build time
+ * (`new Date().toISOString()` from the build host); falls back to `'dev'` in
+ * test/SSR contexts where the global isn't set so unit tests stay readable.
+ */
+declare const __BUILD_TIME__: string;
+const ASSET_VERSION = (() => {
+  try {
+    return typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev';
+  } catch {
+    return 'dev';
+  }
+})()
+  // Strip non-URL-safe chars (colons / dots from ISO timestamp) so the
+  // resulting query string is friendly to every CDN / origin we proxy through.
+  .replace(/[^a-zA-Z0-9-]/g, '');
+const VERSION_SUFFIX = ASSET_VERSION ? `?v=${ASSET_VERSION}` : '';
+
 const ASSET_BASE = '/avalon-assets';
+const withVersion = (path: string): string => `${path}${VERSION_SUFFIX}`;
 
 /** Canonical role → painted avatar image URL (full-color, ~120-200 KB each). */
 export const ROLE_AVATAR_IMAGES: Record<Role, string> = {
-  merlin:   `${ASSET_BASE}/role-merlin.jpg`,
-  percival: `${ASSET_BASE}/role-percival.jpg`,
-  assassin: `${ASSET_BASE}/role-assassin.jpg`,
-  morgana:  `${ASSET_BASE}/role-morgana.jpg`,
-  mordred:  `${ASSET_BASE}/role-mordred.jpg`,
-  oberon:   `${ASSET_BASE}/role-oberon.jpg`,
+  merlin:   withVersion(`${ASSET_BASE}/role-merlin.jpg`),
+  percival: withVersion(`${ASSET_BASE}/role-percival.jpg`),
+  assassin: withVersion(`${ASSET_BASE}/role-assassin.jpg`),
+  morgana:  withVersion(`${ASSET_BASE}/role-morgana.jpg`),
+  mordred:  withVersion(`${ASSET_BASE}/role-mordred.jpg`),
+  oberon:   withVersion(`${ASSET_BASE}/role-oberon.jpg`),
   // `loyal` uses one of 4 random variants — `getLoyalVariantUrl` is the
   // proper accessor; this entry exists for type-completeness and points to
   // variant 1 as a deterministic fallback when no playerId is available.
-  loyal:    `${ASSET_BASE}/role-loyal-1.jpg`,
+  loyal:    withVersion(`${ASSET_BASE}/role-loyal-1.jpg`),
   // `minion` is a legacy non-canonical role kept around for old replays;
   // aliased to assassin art so any straggler reference still renders
   // something meaningful instead of a broken image.
-  minion:   `${ASSET_BASE}/role-assassin.jpg`,
+  minion:   withVersion(`${ASSET_BASE}/role-assassin.jpg`),
 };
 
 /** 4 雜魚 variants used when role is unknown OR when displaying generic 忠臣. */
 export const LOYAL_VARIANT_URLS: readonly string[] = [
-  `${ASSET_BASE}/role-loyal-1.jpg`,
-  `${ASSET_BASE}/role-loyal-2.jpg`,
-  `${ASSET_BASE}/role-loyal-3.jpg`,
-  `${ASSET_BASE}/role-loyal-4.jpg`,
+  withVersion(`${ASSET_BASE}/role-loyal-1.jpg`),
+  withVersion(`${ASSET_BASE}/role-loyal-2.jpg`),
+  withVersion(`${ASSET_BASE}/role-loyal-3.jpg`),
+  withVersion(`${ASSET_BASE}/role-loyal-4.jpg`),
 ] as const;
 
 /** Avatar shown when the viewer has no info on this seat (cover for unknowns). */
-export const UNKNOWN_AVATAR_URL = `${ASSET_BASE}/unknown.jpg`;
+export const UNKNOWN_AVATAR_URL = withVersion(`${ASSET_BASE}/unknown.jpg`);
 
 /** Team indicator art (used by night-info / role reveal accents). */
 export const TEAM_INDICATORS = {
-  good:    `${ASSET_BASE}/team-good.jpg`,
-  evil:    `${ASSET_BASE}/team-evil.jpg`,
-  unknown: `${ASSET_BASE}/unknown.jpg`,
+  good:    withVersion(`${ASSET_BASE}/team-good.jpg`),
+  evil:    withVersion(`${ASSET_BASE}/team-evil.jpg`),
+  unknown: withVersion(`${ASSET_BASE}/unknown.jpg`),
 } as const;
 
 /**
@@ -79,21 +117,21 @@ export function getCampImage(camp: 'good' | 'evil'): string {
 
 /** End-screen winner cup. */
 export const WINNER_CUPS = {
-  good: `${ASSET_BASE}/cup-good.jpg`,
-  evil: `${ASSET_BASE}/cup-evil.jpg`,
+  good: withVersion(`${ASSET_BASE}/cup-good.jpg`),
+  evil: withVersion(`${ASSET_BASE}/cup-evil.jpg`),
 } as const;
 
 /** Mission round result banners. */
 export const QUEST_RESULT_IMAGES = {
-  success: `${ASSET_BASE}/quest-success.png`,
-  fail:    `${ASSET_BASE}/quest-fail.png`,
+  success: withVersion(`${ASSET_BASE}/quest-success.png`),
+  fail:    withVersion(`${ASSET_BASE}/quest-fail.png`),
 } as const;
 
 /** Approve / reject vote-result art + ballot token. */
 export const VOTE_IMAGES = {
-  yes:   `${ASSET_BASE}/vote-yes.jpg`,
-  no:    `${ASSET_BASE}/vote-no.jpg`,
-  token: `${ASSET_BASE}/vote-token.png`,
+  yes:   withVersion(`${ASSET_BASE}/vote-yes.jpg`),
+  no:    withVersion(`${ASSET_BASE}/vote-no.jpg`),
+  token: withVersion(`${ASSET_BASE}/vote-token.png`),
 } as const;
 
 /**
@@ -126,7 +164,7 @@ export function getProposalResultImage(approved: boolean): string {
 }
 
 /** Lady-of-the-Lake icon. */
-export const LAKE_IMAGE = `${ASSET_BASE}/lake.jpg`;
+export const LAKE_IMAGE = withVersion(`${ASSET_BASE}/lake.jpg`);
 
 /**
  * PlayerCard 4-corner indicator art — Edward 2026-04-25 20:05 redesign.
@@ -144,9 +182,9 @@ export const LAKE_IMAGE = `${ASSET_BASE}/lake.jpg`;
  * portraits. Helpers below are tiny one-liners but exist for symmetry with
  * `getCampImage` / `getVoteTokenImage` so callers stay declarative.
  */
-export const LEADER_CROWN_IMAGE = `${ASSET_BASE}/leader-crown.jpg`;
-export const MISSION_SHIELD_IMAGE = `${ASSET_BASE}/mission-shield.jpg`;
-export const VOTE_BACK_IMAGE = `${ASSET_BASE}/vote-back.jpg`;
+export const LEADER_CROWN_IMAGE = withVersion(`${ASSET_BASE}/leader-crown.jpg`);
+export const MISSION_SHIELD_IMAGE = withVersion(`${ASSET_BASE}/mission-shield.jpg`);
+export const VOTE_BACK_IMAGE = withVersion(`${ASSET_BASE}/vote-back.jpg`);
 /**
  * Role-back card art — Edward 2026-04-25 20:12 spec.
  *
@@ -157,7 +195,7 @@ export const VOTE_BACK_IMAGE = `${ASSET_BASE}/vote-back.jpg`;
  *
  * Asset: 紫色 3 王冠旗幟卡背 (cp 自 `Q_unknown.jpg`).
  */
-export const ROLE_BACK_IMAGE = `${ASSET_BASE}/role-back.jpg`;
+export const ROLE_BACK_IMAGE = withVersion(`${ASSET_BASE}/role-back.jpg`);
 
 /** PlayerCard 隊長王冠 URL. */
 export function getLeaderCrownUrl(): string {
@@ -194,7 +232,7 @@ export function getLakeImage(): string {
 /** Per-table-size scoresheet board art (only 5..10 supplied). */
 export function getBoardImage(playerCount: number): string | null {
   if (playerCount < 5 || playerCount > 10) return null;
-  return `${ASSET_BASE}/board-${playerCount}.jpg`;
+  return withVersion(`${ASSET_BASE}/board-${playerCount}.jpg`);
 }
 
 /**
