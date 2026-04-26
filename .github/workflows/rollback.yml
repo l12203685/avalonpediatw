@@ -8,7 +8,7 @@ name: Rollback (Cloud Run traffic switch)
 #                    Leave blank to rollback to the previous revision (the one
 #                    that was serving traffic before the most recent promote).
 #
-# Required secrets: GCP_WIF_PROVIDER, GCP_SA_DEPLOY (same as deploy-staging).
+# Required secrets: GCP_SA_KEY, GCP_PROJECT (same as deploy-staging).
 #
 # Use the GitHub `production` environment for the same approval gate as
 # promote-prod — rollback is also a prod traffic change.
@@ -28,7 +28,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   GCP_PROJECT: avalon-game-platform
@@ -45,11 +44,10 @@ jobs:
       url: https://avalon-server-169653523467.asia-east1.run.app
 
     steps:
-      - name: Authenticate to Google Cloud (WIF)
+      - name: Authenticate to Google Cloud (SA key)
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_SA_DEPLOY }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
