@@ -8,6 +8,8 @@ import {
   extractOAuthTokenFromUrl,
   stashLinkedProviderToken,
   consumeLinkedProviderToken,
+  getGuestToken,
+  resumeGuestFromCookie,
 } from './services/auth';
 import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
 import { startVersionCheck } from './services/versionCheck';
@@ -168,24 +170,74 @@ function App(): JSX.Element {
     // Initialize Firebase Auth
     initializeAuth();
 
-    // 2026-04-24: guest-resume 路徑已廢除。後端 /auth/guest/resume 在 Phase A
-    // 重構 (3018a9c4) 時被砍，冷啟動打這個 endpoint 一律 404。架構對齊「OAuth
-    // 為主要登入路徑」：沒 Firebase session + 沒 stashed bind token → 直接顯示
-    // LoginPage，讓使用者走 Google/LINE/Discord/email 任一登入方式。
+    // 2026-04-26 Edward landing-route fix：清快取後重新整理直接進大廳，不再
+    // 強制經 LoginPage。三層 fallback：
+    //   1) Firebase user 存在 → 走原本 OAuth 流程
+    //   2) 已 stored JWT → 用既有 token 起 socket（reload 後最常見路徑）
+    //   3) 都沒有 → 試 /auth/guest/resume cookie 續簽 → 失敗就 mint 新訪客
+    //      JWT (/auth/guest)，自動進大廳訪客模式（chip 顯「登入/綁定」）。
+    //   4) 訪客 mint 失敗（後端離線）→ 才退回 LoginPage 顯示給使用者選擇。
     //
-    // Firebase's listener fires `null` for every unauthenticated session.
-    // 僅在「沒 Firebase user + 沒 stored token」時才設登出狀態顯示 LoginPage。
+    // 大廳對訪客的限制（建立/加入房間 → AuthGateModal）已由 #177 / #196 wired，
+    // 此修改只動 routing：從「強制登入」變「lazy 登入」。
+    const ensureGuestSession = async (): Promise<void> => {
+      // resumeGuestFromCookie 會打 /auth/guest/resume —— 若 server 還沒實作
+      // (Phase A 砍掉) 會回 404 → null，自動往下 fallback 到 mint 新 token。
+      try {
+        const resumed = await resumeGuestFromCookie();
+        if (resumed) {
+          await initializeSocket(resumed.token);
+          setIsAuthenticated(true);
+          return;
+        }
+      } catch {
+        // network error — keep falling through to fresh mint
+      }
+      // 沒 cookie 或續簽失敗 → mint 新 guest JWT。displayName 沿用上次本機暫存
+      // 的名字（HomePage 在開房/加房時 setItem 'avalon_player_name'）；沒有就
+      // 隨機產生 Guest_<6 位>。
+      try {
+        const savedName = localStorage.getItem('avalon_player_name')?.trim();
+        const displayName = savedName && savedName.length > 0
+          ? savedName
+          : `Guest_${Math.floor(Math.random() * 900000 + 100000)}`;
+        const token = await getGuestToken(displayName);
+        await initializeSocket(token);
+        setIsAuthenticated(true);
+      } catch {
+        // Guest mint failed — server outage. Fall back to LoginPage so the
+        // user has an explicit recovery path; connection banner will surface.
+        setIsAuthenticated(false);
+        disconnectSocket();
+      }
+    };
+
     const unsubscribe = onAuthStateChange(async (userWithToken) => {
       if (userWithToken) {
+        // Firebase user present (Google / email login persisted) → OAuth path
         setIsAuthenticated(true);
         try {
           await initializeSocket(userWithToken.token);
         } catch {
           // Socket init failed — user will see connection banner
         }
-      } else if (!getStoredToken()) {
-        setIsAuthenticated(false);
-        disconnectSocket();
+      } else {
+        const stored = getStoredToken();
+        if (stored) {
+          // Page reload with stored JWT (most common warm-start path).
+          try {
+            await initializeSocket(stored);
+            setIsAuthenticated(true);
+          } catch {
+            // Stored token rejected (expired) → fresh guest mint
+            await ensureGuestSession();
+          }
+        } else {
+          // Cold start, cleared cache → auto-issue guest session so the user
+          // lands directly on the lobby (HomePage in 訪客 mode) instead of the
+          // OAuth wall.
+          await ensureGuestSession();
+        }
       }
       setIsLoading(false);
     });
