@@ -24,7 +24,12 @@ import {
   QuestRecord,
   SelfPlayResult,
 } from './types';
-import { lakeDeclareLiePrior } from './priors/EvActionPriors';
+import {
+  lakeDeclareLiePrior,
+  // v8 hooks (2026-04-27 ship)
+  lakeDeclareLieRoleRate,
+  declarerPostActionConsistencyPrior,
+} from './priors/EvActionPriors';
 
 export class SelfPlayEngine {
   private roomManager = new RoomManager();
@@ -489,18 +494,35 @@ export class SelfPlayEngine {
     // toward the lie. Strong merlinScore signals (|score| >= 1) keep the
     // legacy decision (it's evidence-driven, not a coin flip).
     const lieBonus = lakeDeclareLiePrior(obs.myRole as string, holderTeam);
-    if (lieBonus > 0 && Math.abs(merlinScore) < 1) {
+    // v8 H7: per-role lie rate floor for heavy liars (mordred etc.)
+    const roleLieRate = lakeDeclareLieRoleRate(obs.myRole as string);
+    const baselineLieFloor = roleLieRate >= 0.4 ? roleLieRate * 0.5 : 0;
+    const effectiveLieProb = Math.max(lieBonus, baselineLieFloor);
+    if (effectiveLieProb > 0 && Math.abs(merlinScore) < 1) {
       // The prior says "for your role, lying is +EV" — pick the lie of
       // actual target camp when known.
       if (actualTargetTeam === 'good') {
         // Lie = announce 'evil'
-        if (Math.random() < lieBonus) return 'evil';
+        if (Math.random() < effectiveLieProb) return 'evil';
       } else if (actualTargetTeam === 'evil') {
         // Lie = announce 'good'
-        if (Math.random() < lieBonus) return 'good';
+        if (Math.random() < effectiveLieProb) return 'good';
       }
     }
     return baseDecision;
+  }
+
+  /**
+   * v8 Hook 8 helper · declarer post-action consistency prior.
+   * Public so future follow-up move planner can ask "should the lake
+   * declarer back up their lie?" Returns 紅|宣藍|consistent +21.71pp bump.
+   */
+  public declarerPostActionConsistencyBump(
+    declarerTeam: 'good' | 'evil' | undefined,
+    declaredCamp: 'good' | 'evil' | undefined,
+    targetActualTeam: 'good' | 'evil' | undefined,
+  ): number {
+    return declarerPostActionConsistencyPrior(declarerTeam, declaredCamp, targetActualTeam);
   }
 
   /**

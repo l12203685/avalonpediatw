@@ -22,6 +22,14 @@ import {
   seatPriorByRole,
   r1LeaderRolePrior,
   seatOfPlayer,
+  // v8 hooks (2026-04-27 path-aware ship)
+  r3PlusForcedRejectPrior,
+  assassinTopTierSeatPrior,
+  sameTeamProposalReversePrior,
+  loyalVsPercivalReversePrior,
+  pathAwareEvMultiplier,
+  R3_PLUS_FORCED_REJECT_PATH,
+  ASSASSIN_TOP_TIER_SEAT_PATH,
   type R1Outcome,
 } from './priors/EvActionPriors';
 
@@ -518,6 +526,8 @@ interface AgentMemory {
   processedVoteAttempts: Set<string>;
   /** dedup key `round` for already-ingested quest records */
   processedQuestRounds: Set<number>;
+  /** v8 H10: leader → strongest same-team-repeat streak applied so far. */
+  h10AppliedFor: Map<string, number>;
 }
 
 /** Lazy singleton — load once, share across agents for the life of the
@@ -590,6 +600,7 @@ export class HeuristicAgent implements AvalonAgent {
       lastKnownPhase:           null,
       processedVoteAttempts:    new Set(),
       processedQuestRounds:     new Set(),
+      h10AppliedFor:            new Map(),
     };
   }
 
@@ -628,6 +639,40 @@ export class HeuristicAgent implements AvalonAgent {
    * ~1.3 points, comparable to the existing +1.5 failed-approval penalty.
    */
   private ingestVoteHistory(obs: PlayerObservation): void {
+    // ── v8 Hook 10 (sameTeamProposalReversePrior) ──
+    // Detect consecutive same-team proposals by same leader within a round.
+    // Loop 137: 藍 leader same% 6.19 > 紅 leader same% 3.57 (反向) →
+    // stubborn re-proposers are mildly blue, reduce their suspicion.
+    const leaderRepeatCount = new Map<string, number>();
+    {
+      const sorted = [...obs.voteHistory].sort(
+        (a, b) => a.round - b.round || a.attempt - b.attempt,
+      );
+      let prevRound = -1;
+      let prevTeamKey = '';
+      let prevLeader = '';
+      let runningRepeat = 0;
+      for (const record of sorted) {
+        const teamKey = [...record.team].sort().join('|');
+        if (record.round === prevRound &&
+            record.leader === prevLeader &&
+            teamKey === prevTeamKey) {
+          runningRepeat += 1;
+        } else {
+          runningRepeat = 1;
+        }
+        if (runningRepeat >= 2) {
+          const prior = leaderRepeatCount.get(record.leader) ?? 0;
+          if (runningRepeat > prior) {
+            leaderRepeatCount.set(record.leader, runningRepeat);
+          }
+        }
+        prevRound = record.round;
+        prevTeamKey = teamKey;
+        prevLeader = record.leader;
+      }
+    }
+
     for (const record of obs.voteHistory) {
       const key = `${record.round}-${record.attempt}`;
       if (this.memory.processedVoteAttempts.has(key)) continue;
@@ -661,6 +706,17 @@ export class HeuristicAgent implements AvalonAgent {
           this.addSuspicion(pid, -delta);
         }
       }
+    }
+
+    // Apply H10 reverse prior — incremental delta per leader streak,
+    // gated by h10AppliedFor map for idempotency.
+    for (const [leader, streak] of leaderRepeatCount) {
+      const prevApplied = this.memory.h10AppliedFor.get(leader) ?? 0;
+      if (streak <= prevApplied) continue;
+      const delta = sameTeamProposalReversePrior(streak)
+        - sameTeamProposalReversePrior(prevApplied);
+      if (delta !== 0) this.addSuspicion(leader, delta);
+      this.memory.h10AppliedFor.set(leader, streak);
     }
   }
 
@@ -879,8 +935,20 @@ export class HeuristicAgent implements AvalonAgent {
         const dualSuspects = this.buildPercivalDualThumbSuspects(
           knownWizards, preferredWizard, obs,
         );
-        // Resort candidates: dualSuspects get demoted within their tier.
+        // ── v8 Hook 11 (loyalVsPercivalReversePrior) ──
+        // Loop 144 §3.3: bottom-tier loyal alive% > percival alive% (反向).
+        // At low confidence (early game), treat percival like loyal — bypass
+        // dual-thumb intersection until 3+ vote rounds stabilise the
+        // thumb-merlin identification.
+        const distinctRoundsObserved = new Set(
+          obs.voteHistory.map((v) => v.round),
+        ).size;
+        const dualThumbTrust = loyalVsPercivalReversePrior(distinctRoundsObserved);
+        const useDualThumbs = Math.random() < dualThumbTrust;
+        // Resort candidates: dualSuspects get demoted within their tier
+        // ONLY if H11 trust crosses the threshold.
         const reranked = [...candidates].sort((a, b) => {
+          if (!useDualThumbs) return 0;  // bypass — preserve order
           const ta = dualSuspects.has(a) ? 1 : 0;
           const tb = dualSuspects.has(b) ? 1 : 0;
           if (ta !== tb) return ta - tb;
@@ -1232,6 +1300,25 @@ export class HeuristicAgent implements AvalonAgent {
       if (hasSelf && round >= 3) {
         const innerBlackBonus = voteInnerBlackBonus(obs.myRole as string, round);
         if (innerBlackBonus > 0 && Math.random() < innerBlackBonus) {
+          return { type: 'team_vote', vote: false };
+        }
+      }
+
+      // ── v8 Hook 6 (r3PlusForcedRejectPrior) ──
+      // Off-team red at R3-R4 with failCount in {2, 3} biases reject to
+      // push toward forced P5 (Δ +4.50pp R3 / +5.28pp R4 three_red).
+      // Path-aware: dominant axis → full weight. failCount >= 4 already
+      // returns approve cross-faction at top of method.
+      const forcedRejectBump = r3PlusForcedRejectPrior(myTeam, round, failCount);
+      const forcedRejectMultiplier = pathAwareEvMultiplier(
+        myTeam,
+        R3_PLUS_FORCED_REJECT_PATH,
+        'any',
+        obs.questResults.length,
+      );
+      if (!hasSelf && !hasAlly && forcedRejectBump > 0) {
+        const effectiveBump = forcedRejectBump * forcedRejectMultiplier;
+        if (Math.random() < effectiveBump) {
           return { type: 'team_vote', vote: false };
         }
       }
@@ -1762,11 +1849,22 @@ export class HeuristicAgent implements AvalonAgent {
     // candidate with the highest blended score still wins. Magnitude
     // chosen to keep the legacy ±2.0 signals dominant when they have
     // strong evidence, while the prior breaks ties.
+    // v8 Hook 9 (assassinTopTierSeatPrior) — empirical hit-rate boost
+    // attenuated by path-aware multiplier (assassination = 備援 axis).
+    const h9Multiplier = pathAwareEvMultiplier(
+      'evil',
+      ASSASSIN_TOP_TIER_SEAT_PATH,
+      'any',
+      obs.questResults.length,
+    );
     for (const id of candidatePool) {
       // Seat-prior: higher merlin occupancy at this seat → boost as
       // probable Merlin target.
       const seat = seatOfPlayer(id, obs.allPlayerIds);
       const seatBoost = seatPriorByRole('merlin', seat);
+      // Hook 9: empirical hit-rate boost by target seat (path-aware
+      // attenuated). Hot seats 3/4 +0.027, cold seats 7/9 -0.043.
+      const h9SeatBoost = assassinTopTierSeatPrior(seat) * h9Multiplier;
       // Loyal-likeness penalty: a player with very low getMerlinScore
       // AND very low getPercivalLikenessPenalty looks neither — that
       // is the loyal signature. Apply assassinTargetPenalty('loyal')
@@ -1776,7 +1874,7 @@ export class HeuristicAgent implements AvalonAgent {
       const loyalPenalty = looksLoyal
         ? assassinTargetPenalty('loyal') * 0.3 // partial — score is fuzzy
         : 0;
-      merlinScore.set(id, rawScore + seatBoost + loyalPenalty);
+      merlinScore.set(id, rawScore + seatBoost + h9SeatBoost + loyalPenalty);
     }
 
     const target = candidatePool.reduce((best, id) =>

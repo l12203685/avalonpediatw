@@ -355,6 +355,177 @@ export function seatOfPlayer(
   return idx < 0 ? 0 : idx + 1;
 }
 
+// ════════════════════════════════════════════════════════════════════
+// v8 hooks (2026-04-27 path-aware ship)
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * Path-aware category for an action (Edward v8 spec 2026-04-26 10:15).
+ * - dominant: primary winning axis (red 三紅 / blue 三藍活)
+ * - 備援: secondary axis only (red 三藍死 / blue Phase B)
+ * - mixed: contributes to both
+ */
+export type PathCategory = 'dominant' | '備援' | 'mixed';
+
+export type PrimaryOutcome = 'three_red' | 'three_blue_dead' | 'three_blue_alive';
+
+export interface HookPathMeta {
+  pathCategory: PathCategory;
+  primaryOutcome: PrimaryOutcome;
+}
+
+// ── Hook 6 · R3+ forced-reject prior ─────────────────────────────────
+const R3_PLUS_FORCED_REJECT_BUMP_BY_ROUND: Partial<Record<Round, number>> = {
+  3: 0.045,
+  4: 0.053,
+};
+
+export const R3_PLUS_FORCED_REJECT_PATH: HookPathMeta = {
+  pathCategory: 'dominant',
+  primaryOutcome: 'three_red',
+};
+
+export function r3PlusForcedRejectPrior(
+  team: 'good' | 'evil' | undefined,
+  currentRound: number,
+  failCount: number,
+): number {
+  if (!isEvActionPriorsEnabled()) return 0;
+  if (team !== 'evil') return 0;
+  if (failCount < 2 || failCount > 3) return 0;
+  const r = Math.trunc(currentRound);
+  if (r < 3 || r > 5) return 0;
+  return R3_PLUS_FORCED_REJECT_BUMP_BY_ROUND[r as Round] ?? 0;
+}
+
+// ── Hook 7 · Per-role lake lie rate ──────────────────────────────────
+const LAKE_LIE_RATE_BY_ROLE: Record<string, number> = {
+  assassin: 0.541,
+  morgana: 0.453,
+  oberon: 0.447,
+  mordred: 0.382,
+  loyal: 0.003,
+  percival: 0.009,
+  merlin: 0.013,
+};
+
+export const LAKE_DECLARE_LIE_ROLE_RATE_PATH: HookPathMeta = {
+  pathCategory: 'mixed',
+  primaryOutcome: 'three_red',
+};
+
+export function lakeDeclareLieRoleRate(role: string | undefined): number {
+  if (!isEvActionPriorsEnabled()) return 0;
+  if (!role) return 0;
+  return LAKE_LIE_RATE_BY_ROLE[role] ?? 0;
+}
+
+// ── Hook 8 · Declarer post-action consistency prior ──────────────────
+const DECLARER_POST_ACTION_CONSISTENCY_BUMP = 0.217;
+
+export const DECLARER_POST_ACTION_CONSISTENCY_PATH: HookPathMeta = {
+  pathCategory: 'dominant',
+  primaryOutcome: 'three_red',
+};
+
+export function declarerPostActionConsistencyPrior(
+  declarerTeam: 'good' | 'evil' | undefined,
+  declaredCamp: 'good' | 'evil' | undefined,
+  targetActualTeam: 'good' | 'evil' | undefined,
+): number {
+  if (!isEvActionPriorsEnabled()) return 0;
+  if (declarerTeam !== 'evil') return 0;
+  if (declaredCamp !== 'good') return 0;
+  if (targetActualTeam !== 'evil') return 0;
+  return DECLARER_POST_ACTION_CONSISTENCY_BUMP;
+}
+
+// ── Hook 9 · Assassin top-tier seat prior ────────────────────────────
+const ASSASSIN_TARGET_SEAT_HIT_RATE: Record<number, number> = {
+  1: 0.480,
+  2: 0.421,
+  3: 0.500,
+  4: 0.504,
+  5: 0.486,
+  6: 0.482,
+  7: 0.359,
+  8: 0.413,
+  9: 0.363,
+  10: 0.400,
+};
+
+export const ASSASSIN_TOP_TIER_SEAT_PATH: HookPathMeta = {
+  pathCategory: '備援',
+  primaryOutcome: 'three_blue_dead',
+};
+
+export function assassinTopTierSeatPrior(targetSeat: number): number {
+  if (!isEvActionPriorsEnabled()) return 0;
+  if (targetSeat < 1 || targetSeat > 10) return 0;
+  const baseline = 0.4459;
+  const seatRate = ASSASSIN_TARGET_SEAT_HIT_RATE[Math.trunc(targetSeat)];
+  if (seatRate === undefined) return 0;
+  return (seatRate - baseline) * 0.5;
+}
+
+// ── Hook 10 · Same-team proposal reverse prior ───────────────────────
+const SAME_TEAM_REVERSE_SUSPICION_DELTA = -0.0261;
+
+export const SAME_TEAM_PROPOSAL_REVERSE_PATH: HookPathMeta = {
+  pathCategory: 'mixed',
+  primaryOutcome: 'three_blue_alive',
+};
+
+export function sameTeamProposalReversePrior(repeatCount: number): number {
+  if (!isEvActionPriorsEnabled()) return 0;
+  if (repeatCount < 2) return 0;
+  const effective = Math.min(repeatCount, 3);
+  return SAME_TEAM_REVERSE_SUSPICION_DELTA * effective;
+}
+
+// ── Hook 11 · Loyal vs Percival reverse prior ────────────────────────
+export const LOYAL_VS_PERCIVAL_REVERSE_PATH: HookPathMeta = {
+  pathCategory: 'dominant',
+  primaryOutcome: 'three_blue_alive',
+};
+
+export function loyalVsPercivalReversePrior(voteRoundsObserved: number): number {
+  if (!isEvActionPriorsEnabled()) return 1;
+  const r = Math.max(0, Math.trunc(voteRoundsObserved));
+  return Math.min(1, r / 3);
+}
+
+// ── Path-aware EV multiplier ─────────────────────────────────────────
+export type GamePhase = 'mission_pending' | 'mission_done' | 'any';
+
+export function pathAwareEvMultiplier(
+  team: 'good' | 'evil' | undefined,
+  meta: HookPathMeta,
+  gamePhase: GamePhase,
+  questsCompleted: number,
+): number {
+  if (!isEvActionPriorsEnabled()) return 1;
+  if (team === 'evil') {
+    if (meta.pathCategory === 'dominant') return 1;
+    if (meta.pathCategory === '備援') return 0.5;
+    return 1;
+  }
+  if (team === 'good') {
+    if (gamePhase === 'mission_pending' || questsCompleted < 3) {
+      if (
+        meta.primaryOutcome === 'three_blue_alive' ||
+        meta.primaryOutcome === 'three_blue_dead'
+      ) {
+        return 1;
+      }
+      return 0.5;
+    }
+    if (meta.primaryOutcome === 'three_blue_alive') return 1;
+    return 0.7;
+  }
+  return 1;
+}
+
 // ── Test hooks ──────────────────────────────────────────────────────
 /** Read-only access to internal tables for unit tests. */
 export const _forTesting = {
@@ -363,4 +534,10 @@ export const _forTesting = {
   SEAT_PRIOR_BY_ROLE,
   R1_LEADER_PRIOR,
   LAKE_LIE_BONUS_BY_ROLE,
+  // v8 internals
+  R3_PLUS_FORCED_REJECT_BUMP_BY_ROUND,
+  LAKE_LIE_RATE_BY_ROLE,
+  DECLARER_POST_ACTION_CONSISTENCY_BUMP,
+  ASSASSIN_TARGET_SEAT_HIT_RATE,
+  SAME_TEAM_REVERSE_SUSPICION_DELTA,
 } as const;
