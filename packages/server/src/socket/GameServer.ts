@@ -998,6 +998,16 @@ export class GameServer {
       gameEngine.submitAssassination(assassinId, targetId);
       const updatedRoom = this.roomManager.getRoom(roomId)!;
 
+      // Edward 2026-04-26 19:31 spec 31「刺殺對象顯系統訊息」: announce who
+      // killed whom in compact 「系統: A 刺殺 T」format (對齊 lake declare
+      // 的「系統: N>M o」shorthand). Emitted BEFORE onGameEnded so the
+      // assassination line lands in chat ahead of the「正義/邪惡方獲勝」
+      // winner announcement (chronological event order).
+      this.emitSystemChat(
+        roomId,
+        `系統: ${seatOfInRoom(assassinId, updatedRoom)} 刺殺 ${seatOfInRoom(targetId, updatedRoom)}`
+      );
+
       this.broadcastRoomState(roomId, updatedRoom);
       this.onGameEnded(roomId, updatedRoom);
     } catch (error) {
@@ -1153,8 +1163,11 @@ export class GameServer {
 
     console.log(`✓ Game ended in room ${roomId}. Winner: ${evilWins ? 'Evil' : 'Good'}`);
 
-    // System chat: announce winner
-    const endMsg = evilWins ? '👹 邪惡方獲勝！遊戲結束。' : '⚔️ 正義方獲勝！遊戲結束。';
+    // Edward 2026-04-26 19:31 spec 30「正義方獲勝顯系統訊息」: keep terse
+    // 「系統: 正義方獲勝」/「系統: 邪惡方獲勝」format — drop emoji + 「！遊戲
+    // 結束。」postfix so the announcement matches the existing system-chat
+    // shorthand (對齊 lake declare 的「系統: N>M o」compact style).
+    const endMsg = evilWins ? '系統: 邪惡方獲勝' : '系統: 正義方獲勝';
     this.emitSystemChat(roomId, endMsg);
 
     // Emit game:ended — reveal all roles to all players
@@ -1946,6 +1959,13 @@ export class GameServer {
             if (targetId && r.players[targetId]) {
               engine.submitAssassination(assassinId, targetId);
               const updated = this.roomManager.getRoom(roomId)!;
+              // Edward 2026-04-26 19:31 spec 31 — same「系統: A 刺殺 T」
+              // announcement for bot-driven assassination (mirror handler
+              // path so chat is consistent regardless of human/bot).
+              this.emitSystemChat(
+                roomId,
+                `系統: ${seatOfInRoom(assassinId, updated)} 刺殺 ${seatOfInRoom(targetId, updated)}`
+              );
               this.broadcastRoomState(roomId, updated, true);
               this.onGameEnded(roomId, updated);
             }
@@ -2428,6 +2448,13 @@ export class GameServer {
                     const target = goodPlayers[Math.floor(Math.random() * goodPlayers.length)];
                     engine.submitAssassination(playerId, target);
                     const updated = this.roomManager.getRoom(roomId)!;
+                    // Edward 2026-04-26 19:31 spec 31 —「系統: A 刺殺 T」
+                    // for disconnect-auto path too (consistent across all
+                    // assassination entry points).
+                    this.emitSystemChat(
+                      roomId,
+                      `系統: ${seatOfInRoom(playerId, updated)} 刺殺 ${seatOfInRoom(target, updated)}`
+                    );
                     this.broadcastRoomState(roomId, updated, true);
                     this.onGameEnded(roomId, updated);
                     console.log(`[auto] Submitted assassination for disconnected assassin ${playerId} → ${target}`);

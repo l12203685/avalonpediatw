@@ -189,6 +189,10 @@ export default function RoomPage(): JSX.Element {
       setIsVoting(false);
       setIsAssassinating(false);
       setSelectedTarget(null);
+      // Edward 2026-04-26 19:31 spec 29: when a new round starts, collapse any
+      // lingering「看牌譜」full-screen overlay from the lobby so players land
+      // on the live board, not the previous game's replay.
+      setScoresheetExpanded(false);
     }
     if (prevRoomState.current === null && room.state !== 'lobby') {
       setShowRoleReveal(true);
@@ -261,11 +265,12 @@ export default function RoomPage(): JSX.Element {
     prevQuestHistoryLen.current = len;
   }, [room?.questHistory?.length]);
 
-  // Edward 2026-04-25 23:39「遊戲結束的『返回房間』其實有點多餘」—
-  // 結算後 8 秒自動把 GameState 拉回 lobby (server 也會在下一輪開始時把
-  // room.state 切回 'lobby', updateRoom 會跟著映射). 這樣玩家不需要按按鈕,
-  // 自然回到 waiting room layout. 主動 click 任何 ready/start 按鈕會立即生效,
-  // 不必等倒數結束。
+  // Edward 2026-04-26 19:31 spec 26-28「結束直接回 lobby (砍返回通知)」: drop
+  // the 8-second wait — Edward verbatim「結束就是回到 lobby 頁面 只是依然可以
+  // 看牌譜 & 看到系統訊息紀錄」. Switch happens in 1.2s (just enough to let the
+  //「正義/邪惡方獲勝」system-chat line + final scoresheet update visually
+  // settle before the layout transitions). Lobby retains the previous game's
+  // chat history + scoresheet via the「看牌譜」toggle (spec 29).
   useEffect(() => {
     if (!room || room.state !== 'ended') return;
     const id = window.setTimeout(() => {
@@ -273,7 +278,7 @@ export default function RoomPage(): JSX.Element {
       // GameState='lobby' lets the layout treat the room as the waiting page
       // (settings + start/ready) so the host can spin up the next round.
       setGameState('lobby');
-    }, 8000);
+    }, 1200);
     return () => window.clearTimeout(id);
   }, [room?.state, setGameState]);
 
@@ -858,6 +863,34 @@ export default function RoomPage(): JSX.Element {
         </div>
       )}
 
+      {/*
+        Edward 2026-04-26 19:31 spec 29「Lobby 加『看牌譜』按鈕」: only render
+        when the room retains history from a previous game (voteHistory or
+        questHistory non-empty). Click → flip `scoresheetExpanded` so the main
+        area swaps GameBoard for FullScoresheetLayout (same toggle game phase
+        uses). Re-click hides it. Disabled-look fallback when there's nothing
+        to review (fresh lobby) — we just don't render it at all so newcomers
+        aren't confused by a button that opens an empty replay.
+      */}
+      {(room.voteHistory.length > 0 || room.questHistory.length > 0) && (
+        <div className="relative z-10 shrink-0 px-2 pb-1">
+          <button
+            type="button"
+            onClick={() => setScoresheetExpanded(v => !v)}
+            data-testid="lobby-btn-scoresheet-toggle"
+            aria-pressed={scoresheetExpanded}
+            className={`w-full inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-lg border text-[clamp(0.6rem,1.8vw,0.75rem)] font-semibold transition-colors ${
+              scoresheetExpanded
+                ? 'bg-emerald-700/40 border-emerald-500 text-emerald-100 hover:bg-emerald-700/60'
+                : 'bg-slate-800/60 border-slate-600 text-slate-200 hover:bg-slate-700/60 hover:border-slate-500'
+            }`}
+          >
+            <ClipboardList size={12} />
+            {scoresheetExpanded ? '收回牌譜' : '看牌譜'}
+          </button>
+        </div>
+      )}
+
       {/* Start / Ready bar */}
       <div className="relative z-10 shrink-0 px-2 py-1">
         {isHost ? (
@@ -1253,8 +1286,21 @@ export default function RoomPage(): JSX.Element {
                 )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {/*
+                  Edward 2026-04-26 19:31 spec 32「紅方刺殺不能選紅方陣營」:
+                  filter out evil-team players so the assassin only sees the
+                  legitimate (good-team) targets — server-side GameEngine.
+                  submitAssassination also rejects evil targets as a defence
+                  layer, but filtering here matches the「砍掉不可選的選項」
+                  pattern used elsewhere (Lady picker hides used targets,
+                  team-pick toolbar hides full slots).
+                  The assassin sees their own team via the role-reveal modal
+                  so this UI never accidentally exposes hidden alignment
+                  (only the assassin reaches this branch — `currentPlayer.role
+                  === 'assassin'` is the parent guard).
+                */}
                 {Object.values(room.players)
-                  .filter(p => p.id !== currentPlayer.id)
+                  .filter(p => p.id !== currentPlayer.id && p.team !== 'evil')
                   .map((player) => (
                     <button
                       key={player.id}
@@ -1288,23 +1334,12 @@ export default function RoomPage(): JSX.Element {
         </motion.div>
       )}
 
-      {/* Edward 2026-04-25 23:39「遊戲結束的『返回房間』其實有點多餘」—
-          無 button. 8 秒倒數後 setGameState('lobby') 自動切回 lobby topSection.
-          中央區留小 hint chip 讓玩家知道狀況。 */}
-      {room.state === 'ended' && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-lg p-3 border border-gray-700/40 bg-avalon-card/30 text-center space-y-1"
-        >
-          <p className="text-[12px] sm:text-sm font-semibold text-gray-300">
-            {room.evilWins ? t('game:ended.evilWins', { defaultValue: '邪惡陣營勝利' }) : t('game:ended.goodWins', { defaultValue: '正義陣營勝利' })}
-          </p>
-          <p className="text-[10px] sm:text-[11px] text-gray-500">
-            8 秒後自動回到房間
-          </p>
-        </motion.div>
-      )}
+      {/* Edward 2026-04-26 19:31 spec 26-28「結束直接回 lobby (砍返回通知)」:
+          砍掉「8 秒後自動回到房間」hint — switch 已縮到 1.2s, 等同瞬切;
+          winner 結果由 chat 的「系統: 正義/邪惡方獲勝」line 顯示, 不需中央
+          冗餘公告. 留空 (這個 branch 整個變 null) 讓 ended phase 中央區乾淨,
+          牌譜可由頂端 ClipboardList toggle 全展. */}
+      {/* room.state === 'ended' — intentionally renders nothing here */}
     </>
   );
 
@@ -1346,8 +1381,12 @@ export default function RoomPage(): JSX.Element {
         {/* Edward 2026-04-26 17:05: 牌譜全展模式 — 點頂端 ClipboardList icon 後
             主畫面整個 (rails + chat + center panel) 替換為 FullScoresheetLayout.
             不顯 10 個 PlayerCard, 不顯 ChatPanel, 也不 reserve sticky toolbar
-            空間. 只在 gameplay/ended phase 提供 (lobby phase 仍顯 GameBoard). */}
-        {scoresheetExpanded && (isGameplayPhase || isEndedPhase) ? (
+            空間.
+            Edward 2026-04-26 19:31 spec 29: lobby phase 也支援 — 房間 state
+            從 ended 切回 lobby 時 voteHistory / questHistory 仍保留, 玩家可
+            review 上場牌譜後再準備下一局. lobby 會用上方專屬「看牌譜」按鈕
+            觸發 (gameplay/ended 用頂端 ClipboardList icon). */}
+        {scoresheetExpanded && (room.voteHistory.length > 0 || room.questHistory.length > 0) ? (
           <div className="flex-1 min-h-0 overflow-y-auto">
             <FullScoresheetLayout room={room} currentPlayer={currentPlayer} />
           </div>

@@ -101,6 +101,17 @@ export default function ChatPanel({
   const topRef = useRef<HTMLDivElement>(null);
   const isInline = variant === 'inline';
 
+  // Edward 2026-04-26 19:25 spec 25「有時候沒有即時跳出系統訊息」root cause:
+  // 之前 socket handler 用 `[isOpen, isInline]` deps, 每次 toggle 開關 chat
+  // 都重綁 handler — 兩次 socket.on 之間有一個 microtask gap, 任何剛好打到
+  // 那個 gap 的 server emit 直接掉. 改用 ref 接最新 isOpen / isInline
+  // (handler 自己是穩定的, 不重綁), 確保 mount 後 handler 永遠存在直到 unmount,
+  // 不會丟訊息.
+  const isOpenRef = useRef(isOpen);
+  const isInlineRef = useRef(isInline);
+  useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
+  useEffect(() => { isInlineRef.current = isInline; }, [isInline]);
+
   useEffect(() => {
     let socket: ReturnType<typeof getSocket> | null = null;
     try {
@@ -119,12 +130,12 @@ export default function ChatPanel({
         useChatStore.getState().setLatestMessage(msg.playerId, msg.message, msg.timestamp);
       }
       // Inline panel is always visible → don't accumulate unread badges.
-      if (!isInline && !isOpen) setUnread(n => n + 1);
+      if (!isInlineRef.current && !isOpenRef.current) setUnread(n => n + 1);
     };
 
     socket.on('chat:message-received', handler);
     return () => { socket!.off('chat:message-received', handler); };
-  }, [isOpen, isInline]);
+  }, []);
 
   // Synthesise system entries from room state. Compact Sheets-style format
   // (Edward 2026-04-25 14:57「系統: 3-2, 2: 2580, 5-, 9+」). Drops verbose
@@ -217,16 +228,35 @@ export default function ChatPanel({
         ? (l.declaredClaim === 'good' ? 'o' : 'x')
         : '?';
       // Lake events happen between rounds — slot after the round's quest (+80).
+      // Edward 2026-04-26 19:25 spec 24「系統 湖 0>9 x 資訊重複了 只要顯示
+      // 系統: 0>9 x 就可以」: drop「湖」prefix — N>M o/x format itself is the
+      // signature of a lake declaration and matches the server-side
+      // `emitSystemChat` format in handleDeclareLakeResult.
       out.push({
         id: `sys-lake-${l.round}-${idx}`,
         timestamp: room.createdAt + l.round * ROUND_BASE_MS + 80,
         kind: 'system',
-        text: `系統: 湖 ${holderLabel}>${targetLabel} ${claim}`,
+        text: `系統: ${holderLabel}>${targetLabel} ${claim}`,
       });
     });
 
     return out;
-  }, [room]);
+    // Edward 2026-04-26 19:25 spec 25「有時候沒有即時跳出系統訊息」: explicit
+    // sub-array deps so a server-side mutation that preserves the parent
+    // `room` reference but appends to `voteHistory` / `questHistory` /
+    // `ladyOfTheLakeHistory` still re-runs synthesis. Tracking the array
+    // length is enough — every push() bumps it, and `useMemo` shallow-compares
+    // primitives so length-only deps are cheap. Combined with the explicit
+    // `room` fallback (which IS reference-replaced by sanitizeRoomForPlayer
+    // on every broadcast), this gives belt-and-braces freshness — system
+    // messages are guaranteed to surface on the very next render after a
+    // server emit.
+  }, [
+    room,
+    room?.voteHistory?.length,
+    room?.questHistory?.length,
+    room?.ladyOfTheLakeHistory?.length,
+  ]);
 
   // Merge system entries + live player messages into a single chronological
   // feed. Sort is stable for system entries (synthetic timestamps already

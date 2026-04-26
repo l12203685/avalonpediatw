@@ -193,8 +193,6 @@ export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetPr
                     row={row}
                     playerCount={playerCount}
                     questLabel={t('game:scoresheet.questLabel')}
-                    successChar={t('game:scoresheet.questSuccessChar')}
-                    failChar={t('game:scoresheet.questFailChar')}
                   />
                 );
               }
@@ -277,14 +275,13 @@ function NominationRow({
   const leaderSeat = seatMap.get(record.leader) ?? -1;
   const teamSeatSet = new Set(record.team.map(id => seatMap.get(id) ?? -1));
   const teamSeats = record.team.map(id => seatMap.get(id) ?? -1);
-  const approveCount = Object.values(record.votes).filter(Boolean).length;
-  const totalVotes = Object.values(record.votes).length;
 
   // 1-based display for shorthand (Google Sheet convention — team only, no leader prefix).
-  // 2026-04-26 Edward spec 14: R column dropped — append Y/N + count to memo so
-  // the round result is still glanceable in M (left-aligned per spec 16).
-  const shorthand = nominationShorthand(teamSeats.map(s => s + 1));
-  const memoText = `${shorthand} ${record.approved ? 'Y' : 'N'} ${approveCount}/${totalVotes}`;
+  // 2026-04-26 Edward spec 23: drop「Y/N」+「approve count」from M — vote
+  // result is already obvious from the cell backgrounds (white = approve,
+  // black = reject), and approve count is just a re-encoding of those cells.
+  // M now carries only the team seat shorthand for nomination rows.
+  const memoText = nominationShorthand(teamSeats.map(s => s + 1));
 
   return (
     <tr className="border-b border-gray-800/50">
@@ -326,12 +323,18 @@ function NominationRow({
               {/*
                 Per Edward spec 17 the cell BACKGROUND alone signals the vote
                 (white = approve, black = reject) — no inline glyph needed.
-                Shield badge for "picked for team" sits top-right with z-10 so
-                it is never obscured by the vote colour. Sized as a 45% badge
-                so it reads as a corner marker, not a fill.
+                Edward spec 22 (2026-04-26 19:25 reversal of spec 17): shield
+                moves from top-right corner BACK to dead-centre overlay so the
+                "this seat was picked" marker reads as the dominant glyph in
+                the cell. Sized large (~70% of the square) and absolutely
+                centred via `inset-0 + flex` for tight packing on mobile.
+                z-10 keeps it above the vote-colour cell background so the
+                gold/silver shield stays legible on either white or black.
               */}
               {isOnTeam && (
-                <ShieldIcon className="absolute top-0 right-0 w-[45%] h-[45%] text-yellow-400 z-10 drop-shadow-[0_0_1px_rgba(0,0,0,0.8)]" />
+                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                  <ShieldIcon className="w-[70%] h-[70%] text-yellow-400 drop-shadow-[0_0_1px_rgba(0,0,0,0.85)]" />
+                </div>
               )}
             </div>
           </td>
@@ -350,14 +353,10 @@ function QuestRow({
   row,
   playerCount,
   questLabel,
-  successChar,
-  failChar,
 }: {
   row: Extract<ScoresheetRow, { type: 'quest' }>;
   playerCount: number;
   questLabel: string;
-  successChar: string;
-  failChar: string;
 }): JSX.Element {
   const { record, round } = row;
   const successCount = record.team.length - record.failCount;
@@ -367,11 +366,10 @@ function QuestRow({
   ];
 
   // Shorthand string: oxx / ooo etc.
-  // 2026-04-26 Edward spec 14: R column dropped — append success/fail letter
-  // to the memo so the quest verdict is still visible at a glance in M.
-  const shorthandStr = symbols.map(s => s).join('');
-  const verdictChar = record.result === 'success' ? successChar : failChar;
-  const memoText = `${shorthandStr} ${verdictChar}`;
+  // 2026-04-26 Edward spec 23: drop trailing「成」/「敗」verdict char from M —
+  // 任務人數 + ooo/xx 已表達結果 (3 個 o = success, 含 x = fail), 加字重複.
+  // 對齊「看投票結果就知道」精神 — M 只留 oxx 標記.
+  const memoText = symbols.map(s => s).join('');
 
   return (
     <tr className="border-b border-yellow-900/50 bg-yellow-800/25">

@@ -1190,6 +1190,18 @@ export class GameEngine {
       throw new Error(`Target player ${targetId} not found`);
     }
 
+    // Edward 2026-04-26 19:31 spec 32「紅方刺殺不能選紅方陣營」: assassination
+    // is the evil team's last-shot at killing Merlin (a GOOD player). Picking
+    // an evil teammate is a no-op that wastes the shot, so we hard-reject at
+    // the engine layer (UI also filters for UX, but this is the authoritative
+    // gate covering bots / disconnect-auto / replay-driven submits too).
+    const targetTeam = this.room.players[targetId]?.team;
+    if (targetTeam === 'evil') {
+      throw new Error(
+        `Assassin cannot target an evil teammate (target ${targetId} is on team 'evil')`
+      );
+    }
+
     this.logEvent('assassination_submitted', {
       assassinId,
       targetId
