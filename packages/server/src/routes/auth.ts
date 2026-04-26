@@ -46,6 +46,7 @@ import {
 } from '../services/passwordHash';
 import { sendPasswordResetEmail } from '../services/mailer';
 import { createKeyedRateLimit, createHttpRateLimit } from '../middleware/rateLimit';
+import { mintGuestToken, verifyGuestToken } from '../middleware/guestAuth';
 
 const router: IRouter = Router();
 
@@ -448,6 +449,63 @@ async function handleLoginOrRegister(req: Request, res: Response): Promise<Respo
 router.post('/login',    emailFloodLimiter, loginLimiter, handleLoginOrRegister);
 // `/auth/register` 保留成 alias，讓舊 client 不壞 — 行為跟 /auth/login 一模一樣。
 router.post('/register', emailFloodLimiter, loginLimiter, handleLoginOrRegister);
+
+// ── Guest session (2026-04-26 Edward landing-route fix) ─────────────
+//
+// Cold-start 進站直接進大廳 → 前端先試 /auth/guest/resume cookie 續簽，
+// 失敗就 mint 新 /auth/guest JWT。Phase A 砍過這兩個 endpoint，現在因
+// 「不要強制經 LoginPage」需求重新接回；mintGuestToken middleware 一直
+// 都還在，只是 router 沒掛 handler。Cookie httpOnly 30 天（同 JWT 期）
+// 讓玩家清快取後重 reload 仍可續簽訪客身份，不會每次拿新 uid。
+const GUEST_COOKIE_NAME = 'guest_session';
+const GUEST_COOKIE_MAX_AGE_SEC = 30 * 24 * 60 * 60;
+
+function setGuestCookie(res: Response, token: string): void {
+  // SameSite=None + Secure 是必要的：前端 (Firebase Hosting / CF Pages) 跟
+  // 後端 (cloudflared tunnel) 是不同 origin，Browser 只在 cross-site 接受
+  // SameSite=None 的 cookie；同時 None 必須搭 Secure（HTTPS）。
+  const cookieParts = [
+    `${GUEST_COOKIE_NAME}=${token}`,
+    'Path=/',
+    `Max-Age=${GUEST_COOKIE_MAX_AGE_SEC}`,
+    'HttpOnly',
+    'Secure',
+    'SameSite=None',
+  ];
+  res.setHeader('Set-Cookie', cookieParts.join('; '));
+}
+
+function readGuestCookie(req: Request): string | null {
+  const raw = req.headers.cookie;
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  const target = `${GUEST_COOKIE_NAME}=`;
+  for (const part of raw.split(';')) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(target)) {
+      return trimmed.slice(target.length);
+    }
+  }
+  return null;
+}
+
+router.post('/guest', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { displayName?: unknown };
+  const raw = typeof body.displayName === 'string' ? body.displayName : '';
+  const minted = mintGuestToken(raw);
+  setGuestCookie(res, minted.token);
+  return res.json({ token: minted.token, uid: minted.uid, displayName: minted.displayName });
+});
+
+router.get('/guest/resume', (req: Request, res: Response) => {
+  const existing = readGuestCookie(req);
+  if (!existing) return res.status(404).json({ error: 'no guest cookie' });
+  const verified = verifyGuestToken(existing);
+  if (!verified) return res.status(404).json({ error: 'invalid guest cookie' });
+  return res.json({
+    token: existing,
+    user: { uid: verified.uid, displayName: verified.displayName },
+  });
+});
 
 /**
  * POST /auth/forgot-password
