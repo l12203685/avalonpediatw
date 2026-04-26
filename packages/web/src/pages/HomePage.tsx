@@ -23,6 +23,7 @@ import PublicChatPanel from '../components/PublicChatPanel';
 import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
 import BindingField from '../components/BindingField';
 import InstallButton from '../components/InstallButton';
+import ForceUpdateButton from '../components/ForceUpdateButton';
 
 function isGuestPlayer(player: { name?: string; provider?: string } | null | undefined): boolean {
   if (!player) return true;
@@ -320,8 +321,14 @@ export default function HomePage(): JSX.Element {
         <div className="fixed top-3 left-3 sm:top-6 sm:left-6 z-30 flex flex-col gap-1.5 items-start">
           {/* Edward 2026-04-26 16:42: PWA「加到桌面」按鈕。已裝過自動隱藏；
               Chrome/Edge/Android 直接彈系統 install dialog；iOS Safari 開
-              IOSInstallGuide modal 教手動加。完全不支援的瀏覽器自動隱藏。 */}
-          <InstallButton />
+              IOSInstallGuide modal 教手動加。完全不支援的瀏覽器自動隱藏。
+              Edward 2026-04-26 16:46: 加「更新版本重新登入」按鈕並列。
+              清 SW + Cache + localStorage + cookies + reload，避免 PWA cache stuck。
+              文案明示「重新登入」防誤點。 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <InstallButton />
+            <ForceUpdateButton />
+          </div>
 
           {isGuest ? (
             <button
