@@ -1,37 +1,37 @@
 /**
- * Player tier system (hard-threshold by total games) — LEGACY 6-tier UI utility.
+ * Player tier system (hard-threshold by total games) — 3-tier UI utility.
  *
- * Edward 2026-04-24 13:43 — spec moved to **dual-dimension** scheme
- * (`TierGroup` × `EloTag`) in `@avalon/shared/derived/gameMetrics`.
+ * Edward 2026-04-26 12:32-12:35 — 砍 6-tier → 3-tier，chip 直接顯場數區間：
  *
- * TODO (next wave): migrate Leaderboard / Analytics pages to consume the
- * server's `computed_stats/{playerId}` documents which already carry
- * `tierGroup` / `eloTag` / `theoreticalWinRate`. Once the `/api/leaderboard`
- * response exposes those three fields per entry, replace this file with a
- * thin adapter to the shared types.
+ *   • `<100 場`     total_games  1-99    (under_100)
+ *   • `100-199 場`  total_games  100-199 (mid_range)
+ *   • `≥200 場`     total_games  ≥ 200   (over_200)
  *
- * Edward 2026-04-26 12:32 — tier 切點改為**絕對固定切點**（1/10/50/100/300/700）。
- *  反駁前一版 percentile：玩家總數會隨時間增長，percentile 隨之 shift，
- *  同一玩家可能因新人加入而「降級」。改用絕對場數對齊 Avalon commitment scale
- *  (30 min/局)：試玩 → 入門 → 固定 → 常客 → 老手 → 硬核。
- *  資料集擴大後分佈自然 expand，玩家定位穩定。
+ *  Edward 4 條反駁原話：
+ *    1. 「總玩家人數之後一定會越來越多 所以應該直接以絕對總場數分就好」
+ *       → 不用 percentile；切點以絕對 totalGames 計，玩家不會因新人加入「降級」。
+ *    2. 「如果不要切這麼多塊 乾脆 少於100場|100~200|大於200場」
+ *       → 6 tier 太多塊；改 3 tier。
+ *    3. 「不要再 新手 中堅 高手 大師 這些屬於標籤 不是早就講過了」
+ *       → 砍掉 abstract 命名；chip text 直接顯場數區間。
+ *    4. 「而且應該要以我傳給你的2146場全部出現過的玩家」
+ *       → leaderboard scope = Sheets 2146 場全部 distinct 玩家（Server side
+ *          已不過濾，本檔僅負責 UI tier 切點）。
  *
- *  當前 62 玩家預期分佈 (median=152 落「中堅」)：0/11/10/20/16/5 跨 6 tier。
+ *  當前 62 玩家預期分佈 (median=152 落「100-199 場」)：~21 / ~15 / ~26
+ *  跨 3 tier。
  *
- *   • 菜雞   total_games  1-9      (試玩，一晚 5-10 場)
- *   • 初學   total_games  10-49    (入門，週末打)
- *   • 新手   total_games  50-99    (固定打 ~月)
- *   • 中堅   total_games  100-299  (常客，數月)
- *   • 高手   total_games  300-699  (老手，半年+)
- *   • 大師   total_games  ≥ 700    (硬核，年+)
+ *  TODO (next wave): migrate Leaderboard / Analytics pages to consume the
+ *  server's `computed_stats/{playerId}` documents which already carry
+ *  `tierGroup` / `eloTag` / `theoreticalWinRate`. Once the `/api/leaderboard`
+ *  response exposes those three fields per entry, replace this file with a
+ *  thin adapter to the shared types.
  *
- * Within a tier, entries remain sorted by ELO (higher first in UI).
+ *  `getEloRank(elo, totalGames?)` — single-player lookup. Tier is determined
+ *    purely by `totalGames` (ELO no longer governs tier assignment); ELO is
+ *    preserved in the data model and still drives list ordering.
  *
- * `getEloRank(elo, totalGames?)` — single-player lookup. Tier is determined
- *   purely by `totalGames` now (ELO no longer governs tier assignment); ELO
- *   is preserved in the data model and still drives list ordering.
- *
- * `rankLeaderboard(entries)` — batch lookup, same rule.
+ *  `rankLeaderboard(entries)` — batch lookup, same rule.
  */
 
 export interface EloRank {
@@ -45,38 +45,26 @@ export interface EloRank {
   minGames: number;
 }
 
-/** Pre-tier for players with 1-5 games. Displayed independently. */
-export const ROOKIE_TIER: EloRank = {
-  label: '菜雞',
-  color: 'text-gray-400',
-  bgColor: 'bg-gray-700/50',
-  borderColor: 'border-gray-600',
-  min: 0,
-  minGames: 1,
-};
-
-/** Hard ceiling for 菜雞; player needs ≥ this many games to escape 菜雞. */
-export const ROOKIE_MAX_GAMES = 10;
-
 /**
- * Five ranked tiers (low → high) with hard `minGames` thresholds.
+ * Three tiers (low → high) with hard `minGames` thresholds.
  *
  * `min` (ELO) is retained for back-compat with other call sites (badges etc.)
  * but is no longer consulted for tier assignment.
  *
- * Edward 2026-04-26 12:32 thresholds — **絕對固定切點**（不受玩家總數影響）：
- *   初學 10-49 / 新手 50-99 / 中堅 100-299 / 高手 300-699 / 大師 ≥700
+ * Edward 2026-04-26 12:32-12:35 thresholds — **絕對固定切點 + 3 tier + 場數區間
+ * 字面 label**（不再用 菜雞/初學/新手/中堅/高手/大師 abstract 命名）：
+ *   `<100 場`    : 1-99
+ *   `100-199 場` : 100-199
+ *   `≥200 場`    : 200+
  */
 export const ELO_RANKS: EloRank[] = [
-  { label: '初學', color: 'text-green-400',  bgColor: 'bg-green-900/40',  borderColor: 'border-green-700',  min: 0,    minGames: 10  },
-  { label: '新手', color: 'text-blue-400',   bgColor: 'bg-blue-900/40',   borderColor: 'border-blue-700',   min: 950,  minGames: 50  },
-  { label: '中堅', color: 'text-purple-400', bgColor: 'bg-purple-900/40', borderColor: 'border-purple-700', min: 1050, minGames: 100 },
-  { label: '高手', color: 'text-yellow-400', bgColor: 'bg-yellow-900/40', borderColor: 'border-yellow-700', min: 1150, minGames: 300 },
-  { label: '大師', color: 'text-orange-400', bgColor: 'bg-orange-900/40', borderColor: 'border-orange-700', min: 1300, minGames: 700 },
+  { label: '<100 場',    color: 'text-blue-400',   bgColor: 'bg-blue-900/40',   borderColor: 'border-blue-700',   min: 0,    minGames: 1   },
+  { label: '100-199 場', color: 'text-purple-400', bgColor: 'bg-purple-900/40', borderColor: 'border-purple-700', min: 950,  minGames: 100 },
+  { label: '≥200 場',    color: 'text-orange-400', bgColor: 'bg-orange-900/40', borderColor: 'border-orange-700', min: 1150, minGames: 200 },
 ];
 
-/** All tiers including pre-tier, low → high. Useful for filter UI. */
-export const ALL_TIERS: EloRank[] = [ROOKIE_TIER, ...ELO_RANKS];
+/** All tiers low → high. Useful for filter UI. */
+export const ALL_TIERS: EloRank[] = [...ELO_RANKS];
 
 /**
  * Single-player tier lookup by total games.
@@ -86,8 +74,8 @@ export const ALL_TIERS: EloRank[] = [ROOKIE_TIER, ...ELO_RANKS];
  * now driven exclusively by `totalGames`.
  *
  * When `totalGames` is undefined (legacy call sites with only ELO), we return
- * the lowest ranked tier (初學) to avoid a misleading 菜雞 label for players
- * whose game-count isn't wired through. Pass `totalGames` for correct result.
+ * the lowest ranked tier (`<100 場`) so the UI remains stable for callers
+ * that have not yet been wired to pass totalGames through.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function getEloRank(elo: number, totalGames?: number): EloRank {
@@ -102,7 +90,8 @@ export function getEloRank(elo: number, totalGames?: number): EloRank {
       return ELO_RANKS[i];
     }
   }
-  return ROOKIE_TIER;
+  // totalGames === 0 — still show as bottom tier (chip never excludes 0-game players)
+  return ELO_RANKS[0];
 }
 
 // ---------------------------------------------------------------------------
@@ -120,8 +109,8 @@ export interface RankInput {
  * Compute each entry's tier from `total_games` using hard thresholds.
  *
  * A player with N total games lands in the highest tier whose `minGames`
- * they satisfy; anyone with N < 10 is 菜雞. Ordering within a tier is the
- * caller's responsibility (LeaderboardPage sorts by ELO).
+ * they satisfy. Ordering within a tier is the caller's responsibility
+ * (LeaderboardPage sorts by ELO).
  */
 export function rankLeaderboard(entries: readonly RankInput[]): Map<string, EloRank> {
   const result = new Map<string, EloRank>();
@@ -138,5 +127,5 @@ function getTierByGames(totalGames: number): EloRank {
       return ELO_RANKS[i];
     }
   }
-  return ROOKIE_TIER;
+  return ELO_RANKS[0];
 }

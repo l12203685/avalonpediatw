@@ -836,21 +836,32 @@ export interface TierThreshold {
 }
 
 /**
- * @deprecated 舊 6-tier 門檻（中文名）。保留以避免破壞存量檔案 / repo docs。
- * 新代碼請用 `TIER_GROUP_THRESHOLDS`。
+ * @deprecated 舊 6-tier 門檻（中文名）。保留 PlayerTier union 以避免破壞存量
+ * 檔案 / repo docs，但實際門檻已縮為 3 tier。新代碼請用 `TIER_GROUP_THRESHOLDS`。
  *
- * Edward 2026-04-26 12:32 — **絕對固定切點**（取代 percentile-based）。
- *   反駁理由：玩家總數會增長，percentile 切點會 shift；改絕對對齊 Avalon
- *   commitment scale (30 min/局)：試玩 → 入門 → 固定 → 常客 → 老手 → 硬核。
- *   對齊 web/utils/eloRank.ts SSoT。
+ * Edward 2026-04-26 12:32-12:35 — 砍 6-tier → **3-tier 絕對固定切點**：
+ *   `<100 場`    : totalGames 1-99     → tier='新手'   (backcompat 字串)
+ *   `100-199 場` : totalGames 100-199  → tier='中堅'   (backcompat 字串)
+ *   `≥200 場`    : totalGames ≥ 200    → tier='大師'   (backcompat 字串)
+ *
+ *   反駁理由（4 條）：
+ *     1. 「總玩家人數之後一定會越來越多 所以應該直接以絕對總場數分就好」
+ *        → 不用 percentile；用絕對門檻避免 shift。
+ *     2. 「如果不要切這麼多塊 乾脆 少於100場|100~200|大於200場」
+ *        → 6 tier 太多；改 3 tier。
+ *     3. 「不要再 新手 中堅 高手 大師 這些屬於標籤 不是早就講過了」
+ *        → 砍 abstract 命名；UI chip 直接顯場數區間（見 web/utils/eloRank.ts）。
+ *        Server 此處仍輸出 PlayerTier 中文字串以保 backcompat（存量 Firestore
+ *        doc 的 tier 欄位是 union 之一），但 UI 不再渲染這些字串。
+ *     4. 「而且應該要以我傳給你的2146場全部出現過的玩家」
+ *        → leaderboard scope 含 Sheets 2146 場全部 distinct 玩家。
+ *
+ * 對齊 web/utils/eloRank.ts SSoT。
  */
 export const TIER_THRESHOLDS: TierThreshold[] = [
-  { tier: '菜雞', minGames: 0 },
-  { tier: '初學', minGames: 10 },
-  { tier: '新手', minGames: 50 },
+  { tier: '新手', minGames: 0 },
   { tier: '中堅', minGames: 100 },
-  { tier: '高手', minGames: 300 },
-  { tier: '大師', minGames: 700 },
+  { tier: '大師', minGames: 200 },
 ];
 
 /** @deprecated 歷史常數；新代碼用 TierGroup 系統。 */

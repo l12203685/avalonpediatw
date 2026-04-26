@@ -16,7 +16,7 @@ import {
   getErrorMessage,
   type AnalysisPlayerRadar,
 } from '../services/api';
-import { ALL_TIERS, ROOKIE_TIER, rankLeaderboard, type EloRank } from '../utils/eloRank';
+import { ALL_TIERS, ELO_RANKS, rankLeaderboard, type EloRank } from '../utils/eloRank';
 import OverviewPanel from '../components/analysis/OverviewPanel';
 import SeatHeatmap from '../components/analysis/SeatHeatmap';
 import ChemistryMatrix from '../components/analysis/ChemistryMatrix';
@@ -167,7 +167,7 @@ function EloLeaderboardWithRadar(): JSX.Element {
 
   const tierMap = useMemo(() => rankLeaderboard(entries), [entries]);
   const getTier = useCallback(
-    (entry: LeaderboardEntry): EloRank => tierMap.get(entry.id) ?? ROOKIE_TIER,
+    (entry: LeaderboardEntry): EloRank => tierMap.get(entry.id) ?? ELO_RANKS[0],
     [tierMap],
   );
 

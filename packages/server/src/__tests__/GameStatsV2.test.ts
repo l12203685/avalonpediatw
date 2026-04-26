@@ -360,33 +360,33 @@ describe('recomputeEloFromV2', () => {
 // Tier + Leaderboard
 // ---------------------------------------------------------------------------
 
-describe('computeTier (legacy 6-tier backcompat)', () => {
+describe('computeTier (legacy 3-tier backcompat)', () => {
   // Edward 2026-04-24 13:43：雙維度取代；但 computeTier 仍保留以不破壞舊呼叫端。
-  // Edward 2026-04-26 12:32 absolute-cut recut（對齊 web/utils/eloRank.ts SSoT）：
-  //   菜雞 1-9 / 初學 10-49 / 新手 50-99 / 中堅 100-299 / 高手 300-699 / 大師 ≥ 700
+  // Edward 2026-04-26 12:32-12:35 — 砍 6-tier → **3-tier 絕對固定切點 + 場數區間
+  // chip label**（對齊 web/utils/eloRank.ts SSoT）：
+  //   `<100 場`    : 1-99    → tier='新手'   (backcompat 中文字串)
+  //   `100-199 場` : 100-199 → tier='中堅'   (backcompat 中文字串)
+  //   `≥200 場`    : 200+    → tier='大師'   (backcompat 中文字串)
+  // UI chip text 不再用 abstract 命名（菜雞/初學/新手/中堅/高手/大師），
+  // 但 server 此處仍輸出 PlayerTier 中文字串以保 backcompat 存量 Firestore doc。
 
   it('uses totalGames (not ELO) for tier assignment', () => {
-    expect(computeTier(9999, 5)).toBe('菜雞');
-    expect(computeTier(100, 700)).toBe('大師');
+    expect(computeTier(9999, 5)).toBe('新手');
+    expect(computeTier(100, 200)).toBe('大師');
   });
 
   it('classifies every legacy band by totalGames thresholds', () => {
-    expect(computeTier(1000, 0)).toBe('菜雞');
-    expect(computeTier(1000, 9)).toBe('菜雞');
-    expect(computeTier(1000, 10)).toBe('初學');
-    expect(computeTier(1000, 49)).toBe('初學');
-    expect(computeTier(1000, 50)).toBe('新手');
+    expect(computeTier(1000, 0)).toBe('新手');
+    expect(computeTier(1000, 1)).toBe('新手');
     expect(computeTier(1000, 99)).toBe('新手');
     expect(computeTier(1000, 100)).toBe('中堅');
-    expect(computeTier(1000, 299)).toBe('中堅');
-    expect(computeTier(1000, 300)).toBe('高手');
-    expect(computeTier(1000, 699)).toBe('高手');
-    expect(computeTier(1000, 700)).toBe('大師');
+    expect(computeTier(1000, 199)).toBe('中堅');
+    expect(computeTier(1000, 200)).toBe('大師');
     expect(computeTier(1000, 999)).toBe('大師');
   });
 
   it('ignores legacy minGames override parameter', () => {
-    expect(computeTier(1200, 5, 3)).toBe('菜雞');
+    expect(computeTier(1200, 5, 3)).toBe('新手');
     expect(TIER_MIN_GAMES).toBe(0);
   });
 });
@@ -718,8 +718,8 @@ describe('computePlayerStatsV2', () => {
     });
     // Edward 2026-04-24 13:43：tierGroup 由場次決定；1 局 < 100 → rookie
     expect(stats.tierGroup).toBe('rookie');
-    // 舊 tier：1 局 < 50 → 菜雞
-    expect(stats.tier).toBe('菜雞');
+    // 舊 tier (Edward 2026-04-26 12:32-12:35 砍 3-tier)：1 局 < 100 → 新手
+    expect(stats.tier).toBe('新手');
   });
 
   it('accepts eloDistribution to switch eloTag to percentile mode', () => {
