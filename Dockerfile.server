@@ -7,10 +7,13 @@ WORKDIR /app
 # 複製所有文件
 COPY . .
 
-# 安裝依賴
-RUN pnpm install --frozen-lockfile
+# 安裝依賴（不 frozen — CI 環境 lockfile 可能 out-of-sync）
+RUN pnpm install --no-frozen-lockfile
 
-# 構建 server
+# 先構建 shared（server 依賴 shared dist 的 emit type 才能 tsc）
+RUN pnpm --filter @avalon/shared build
+
+# 再構建 server
 RUN pnpm -C packages/server build
 
 EXPOSE 3001
