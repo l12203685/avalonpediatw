@@ -10,13 +10,15 @@
  * response exposes those three fields per entry, replace this file with a
  * thin adapter to the shared types.
  *
- * Current behavior (unchanged until migration) — hard thresholds on `total_games`:
- *   • 菜雞   total_games < 50
- *   • 初學   total_games ≥ 50
- *   • 新手   total_games ≥ 100
- *   • 中堅   total_games ≥ 150
- *   • 高手   total_games ≥ 200
- *   • 大師   total_games ≥ 250
+ * Edward 2026-04-26 — tier 切點改為 1/6/16/31/61/101 (by `total_games`)
+ *  以匹配「玩家入場場次」直覺；舊 50/100/150/200/250 切點對 2146 場 / 62 玩家
+ *  分佈太集中在低段（單一硬核小團體）。新切點：
+ *   • 菜雞   total_games  1-5
+ *   • 初學   total_games  6-15
+ *   • 新手   total_games  16-30
+ *   • 中堅   total_games  31-60
+ *   • 高手   total_games  61-100
+ *   • 大師   total_games  ≥ 101
  *
  * Within a tier, entries remain sorted by ELO (higher first in UI).
  *
@@ -38,31 +40,34 @@ export interface EloRank {
   minGames: number;
 }
 
-/** Pre-tier for players with < 50 games. Displayed independently. */
+/** Pre-tier for players with 1-5 games. Displayed independently. */
 export const ROOKIE_TIER: EloRank = {
   label: '菜雞',
   color: 'text-gray-400',
   bgColor: 'bg-gray-700/50',
   borderColor: 'border-gray-600',
   min: 0,
-  minGames: 0,
+  minGames: 1,
 };
 
 /** Hard ceiling for 菜雞; player needs ≥ this many games to escape 菜雞. */
-export const ROOKIE_MAX_GAMES = 50;
+export const ROOKIE_MAX_GAMES = 6;
 
 /**
  * Five ranked tiers (low → high) with hard `minGames` thresholds.
  *
  * `min` (ELO) is retained for back-compat with other call sites (badges etc.)
  * but is no longer consulted for tier assignment.
+ *
+ * Edward 2026-04-26 thresholds (by `total_games`):
+ *   初學 6-15 / 新手 16-30 / 中堅 31-60 / 高手 61-100 / 大師 ≥101
  */
 export const ELO_RANKS: EloRank[] = [
-  { label: '初學', color: 'text-green-400',  bgColor: 'bg-green-900/40',  borderColor: 'border-green-700',  min: 0,    minGames: 50  },
-  { label: '新手', color: 'text-blue-400',   bgColor: 'bg-blue-900/40',   borderColor: 'border-blue-700',   min: 950,  minGames: 100 },
-  { label: '中堅', color: 'text-purple-400', bgColor: 'bg-purple-900/40', borderColor: 'border-purple-700', min: 1050, minGames: 150 },
-  { label: '高手', color: 'text-yellow-400', bgColor: 'bg-yellow-900/40', borderColor: 'border-yellow-700', min: 1150, minGames: 200 },
-  { label: '大師', color: 'text-orange-400', bgColor: 'bg-orange-900/40', borderColor: 'border-orange-700', min: 1300, minGames: 250 },
+  { label: '初學', color: 'text-green-400',  bgColor: 'bg-green-900/40',  borderColor: 'border-green-700',  min: 0,    minGames: 6   },
+  { label: '新手', color: 'text-blue-400',   bgColor: 'bg-blue-900/40',   borderColor: 'border-blue-700',   min: 950,  minGames: 16  },
+  { label: '中堅', color: 'text-purple-400', bgColor: 'bg-purple-900/40', borderColor: 'border-purple-700', min: 1050, minGames: 31  },
+  { label: '高手', color: 'text-yellow-400', bgColor: 'bg-yellow-900/40', borderColor: 'border-yellow-700', min: 1150, minGames: 61  },
+  { label: '大師', color: 'text-orange-400', bgColor: 'bg-orange-900/40', borderColor: 'border-orange-700', min: 1300, minGames: 101 },
 ];
 
 /** All tiers including pre-tier, low → high. Useful for filter UI. */
