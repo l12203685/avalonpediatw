@@ -32,8 +32,11 @@
     "modalTitle": "Sign in to continue",
     "modalHint": "This feature needs a signed-in account — bind now so your stats carry over",
     "backToLobby": "Back to lobby",
-    "emailOption": "Email (coming soon)",
-    "emailComingSoon": "Email binding is coming soon — use Google / Discord / LINE for now",
+    "emailOption": "Email login / register",
+    "emailPanelHint": "New emails create an account automatically; existing ones log you in with your password.",
+    "emailPasswordPlaceholder": "Password (8+ chars, letters + digits)",
+    "emailSubmit": "Email login / register",
+    "emailMissingFields": "Email and password are required",
     "or": "or"
   },
   "badge": {
@@ -180,7 +183,7 @@
     "emailHint": "Primary email is used for password reset and account notifications",
     "primaryEmailLabel": "primary",
     "noPrimaryEmail": "No primary email set",
-    "emailManageSoon": "Adding / removing / switching primary email coming soon",
+    "emailManageHint": "Your primary email comes from the Google / Discord / Email account you used to sign in — to change it, re-bind that provider.",
     "advanced": {
       "title": "Advanced",
       "clearLocalAndReload": "Clear local data and reload",

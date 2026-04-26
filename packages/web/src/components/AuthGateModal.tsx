@@ -10,16 +10,19 @@
  * `HomePage` useEffect reads `localStorage.pendingGateTarget` on reload
  * and jumps the user there.
  *
- * Email flow is stubbed: Phase 1 shipped the `primaryEmail` column but
- * not the OTP / magic-link endpoint, so clicking Email surfaces a toast
- * rather than silently doing nothing. When the endpoint lands, wire the
- * `handleEmail` branch to the real call and drop the toast.
+ * Email flow (2026-04-26 Edward fix「為什麼要即將開放」):
+ *   `/auth/login` (handleLoginOrRegister) is fully shipped — sends to
+ *   loginOrRegister(email, password) which auto-creates the account on
+ *   first hit and otherwise logs in. Same pattern as handleGoogle:
+ *   stash the resulting JWT, set pendingGateTarget, reload. The guest's
+ *   ephemeral display name is dropped — the user picks up an isNew=true
+ *   account whose displayName is derived from the email local part.
  */
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Loader, Chrome, Mail, X } from 'lucide-react';
+import { Loader, Chrome, Mail, X, Lock, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import {
   signInWithDiscord,
@@ -27,6 +30,7 @@ import {
   hasFirebaseAuthConfigured,
   quickLoginWithGoogle,
   stashLinkedProviderToken,
+  loginOrRegister,
 } from '../services/auth';
 import { getStoredToken } from '../services/socket';
 
@@ -42,6 +46,11 @@ export default function AuthGateModal({ isOpen, onClose, gateTarget }: AuthGateM
   const { t } = useTranslation();
   const { addToast } = useGameStore();
   const [busy, setBusy] = useState<'google' | 'discord' | 'line' | 'email' | null>(null);
+  // Email panel state — collapsed by default, expand on first Email click.
+  const [emailPanelOpen, setEmailPanelOpen] = useState(false);
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw,   setShowPw]   = useState(false);
 
   async function handleGoogle(): Promise<void> {
     if (!hasFirebaseAuthConfigured()) {
@@ -90,10 +99,31 @@ export default function AuthGateModal({ isOpen, onClose, gateTarget }: AuthGateM
     signInWithLine('bind', jwt);
   }
 
-  function handleEmail(): void {
-    // Phase 1 backend has `primaryEmail` but the OTP/magic-link endpoint
-    // isn't wired yet — surface a toast so it's clear this is intentional.
-    addToast(t('gate.emailComingSoon', { defaultValue: 'Email 綁定即將開放，請先用 Google / Discord / LINE' }), 'info');
+  // Email button = expand inline panel; no toast.  The actual login/register
+  // call lives in handleEmailSubmit so the user has a chance to type creds
+  // before we hit the backend.
+  function handleEmailToggle(): void {
+    setEmailPanelOpen(v => !v);
+  }
+
+  async function handleEmailSubmit(): Promise<void> {
+    const trimmed = email.trim();
+    if (!trimmed || !password) {
+      addToast(t('gate.emailMissingFields', { defaultValue: '信箱與密碼必填' }), 'error');
+      return;
+    }
+    setBusy('email');
+    try {
+      const result = await loginOrRegister(trimmed, password);
+      stashLinkedProviderToken(result.token);
+      localStorage.setItem('pendingGateTarget', gateTarget);
+      window.location.reload();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('settings.upgradeFailed', { defaultValue: '綁定失敗，請稍後再試' });
+      addToast(msg, 'error');
+    } finally {
+      setBusy(null);
+    }
   }
 
   if (!isOpen) return null;
@@ -179,14 +209,76 @@ export default function AuthGateModal({ isOpen, onClose, gateTarget }: AuthGateM
 
             <button
               type="button"
-              onClick={handleEmail}
-              disabled={busy !== null}
+              onClick={handleEmailToggle}
+              disabled={busy !== null && busy !== 'email'}
               data-testid="gate-btn-email"
-              className="w-full inline-flex items-center justify-center gap-2 bg-zinc-800/70 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 font-semibold py-2 px-3 rounded-lg border border-zinc-700 transition-colors"
+              aria-expanded={emailPanelOpen}
+              className="w-full inline-flex items-center justify-between gap-2 bg-zinc-800/70 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 font-semibold py-2 px-3 rounded-lg border border-zinc-700 transition-colors"
             >
-              <Mail size={16} />
-              {t('gate.emailOption', { defaultValue: 'Email (即將開放)' })}
+              <span className="inline-flex items-center gap-2">
+                <Mail size={16} />
+                {t('gate.emailOption', { defaultValue: 'Email 登入 / 註冊' })}
+              </span>
+              {emailPanelOpen
+                ? <ChevronUp size={14} className="text-zinc-500 flex-shrink-0" />
+                : <ChevronDown size={14} className="text-zinc-500 flex-shrink-0" />}
             </button>
+
+            {emailPanelOpen && (
+              <div className="space-y-2 px-1 pt-1" data-testid="gate-email-panel">
+                <p className="text-[11px] text-zinc-500 leading-relaxed">
+                  {t('gate.emailPanelHint', {
+                    defaultValue: '不存在的信箱會自動建立帳號；已註冊的信箱輸入密碼即登入。',
+                  })}
+                </p>
+                <div className="relative">
+                  <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="email@example.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') void handleEmailSubmit(); }}
+                    data-testid="gate-input-email"
+                    disabled={busy === 'email'}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-white text-sm disabled:opacity-50"
+                  />
+                </div>
+                <div className="relative">
+                  <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder={t('gate.emailPasswordPlaceholder', { defaultValue: '密碼（8 字以上，含英文字母與數字）' })}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') void handleEmailSubmit(); }}
+                    data-testid="gate-input-password"
+                    disabled={busy === 'email'}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-9 pr-10 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-white text-sm disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(v => !v)}
+                    aria-label={showPw ? '隱藏密碼' : '顯示密碼'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  >
+                    {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { void handleEmailSubmit(); }}
+                  disabled={busy !== null}
+                  data-testid="gate-btn-email-submit"
+                  className="w-full inline-flex items-center justify-center gap-2 bg-zinc-200 hover:bg-white disabled:opacity-50 text-black font-bold py-2 px-3 rounded-lg text-sm transition-colors"
+                >
+                  {busy === 'email' && <Loader size={14} className="animate-spin" />}
+                  {t('gate.emailSubmit', { defaultValue: 'Email 登入 / 註冊' })}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

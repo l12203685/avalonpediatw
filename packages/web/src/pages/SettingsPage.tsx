@@ -553,8 +553,8 @@ export default function SettingsPage(): JSX.Element {
                       );
                     })()}
                     <p className="text-[11px] text-zinc-600">
-                      {t('settings.emailManageSoon', {
-                        defaultValue: '新增 / 刪除 / 切換主要信箱功能即將開放',
+                      {t('settings.emailManageHint', {
+                        defaultValue: '主要信箱來自登入時使用的 Google / Discord / Email 帳號；如需更換請重新綁定對應帳號。',
                       })}
                     </p>
                   </div>

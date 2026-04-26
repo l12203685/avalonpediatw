@@ -32,8 +32,11 @@
     "modalTitle": "登入以繼續",
     "modalHint": "這個功能需要登入帳號，綁定後戰績自動保存",
     "backToLobby": "回大廳",
-    "emailOption": "Email（即將開放）",
-    "emailComingSoon": "Email 綁定即將開放，請先用 Google / Discord / LINE",
+    "emailOption": "Email 登入 / 註冊",
+    "emailPanelHint": "不存在的信箱會自動建立帳號；已註冊的信箱輸入密碼即登入。",
+    "emailPasswordPlaceholder": "密碼（8 字以上，含英文字母與數字）",
+    "emailSubmit": "Email 登入 / 註冊",
+    "emailMissingFields": "信箱與密碼必填",
     "or": "或"
   },
   "badge": {
@@ -180,7 +183,7 @@
     "emailHint": "主要信箱用於忘密重設與帳號通知",
     "primaryEmailLabel": "主要",
     "noPrimaryEmail": "尚未設定主要信箱",
-    "emailManageSoon": "新增 / 刪除 / 切換主要信箱功能即將開放",
+    "emailManageHint": "主要信箱來自登入時使用的 Google / Discord / Email 帳號；如需更換請重新綁定對應帳號。",
     "advanced": {
       "title": "進階",
       "clearLocalAndReload": "清除本機資料並重新載入",
