@@ -52,6 +52,7 @@ import RoleRevealModal from '../components/RoleRevealModal';
 import MissionTrack from '../components/MissionTrack';
 import CompactScoresheet from '../components/CompactScoresheet';
 import FullScoresheetLayout from '../components/FullScoresheetLayout';
+import PhaseInfoBanner from '../components/PhaseInfoBanner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { requestNotificationPermission } from '../services/notifications';
 import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
@@ -1366,6 +1367,12 @@ export default function RoomPage(): JSX.Element {
       {isLobbyPhase && lobbyTopSection}
       {isGameplayPhase && gameTopSection}
       {isEndedPhase && endedTopSection}
+
+      {/* ────────── PHASE-INFO BANNER (Edward 2026-04-26 spec 33) ──────────
+          常駐 sticky 方塊顯當下動作; 不靠 chat 訊息驅動 (避 #25 lag), 直接從
+          room.state + questTeam + votes + leader/lady 派生. 只在 gameplay phases
+          render (lobby/ended 不顯). scoresheet 全展模式藏起 (專注 review). */}
+      {isGameplayPhase && !scoresheetExpanded && <PhaseInfoBanner room={room} />}
 
       {/* ────────── MAIN: GameBoard with rails + chat (phase-agnostic) ──────────
           Edward 2026-04-26 00:17 fix: 改成只在 sticky toolbar 真正 render 的子階段
