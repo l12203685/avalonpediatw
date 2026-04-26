@@ -838,14 +838,17 @@ export interface TierThreshold {
 /**
  * @deprecated 舊 6-tier 門檻（中文名）。保留以避免破壞存量檔案 / repo docs。
  * 新代碼請用 `TIER_GROUP_THRESHOLDS`。
+ *
+ * Edward 2026-04-26 — percentile-based recut，對齊 web/utils/eloRank.ts SSoT。
+ *   切點取自 62-玩家 totalGames 分佈 p16/p33/p50/p75/p90，rounded to clean numbers。
  */
 export const TIER_THRESHOLDS: TierThreshold[] = [
   { tier: '菜雞', minGames: 0 },
   { tier: '初學', minGames: 50 },
   { tier: '新手', minGames: 100 },
   { tier: '中堅', minGames: 150 },
-  { tier: '高手', minGames: 200 },
-  { tier: '大師', minGames: 250 },
+  { tier: '高手', minGames: 375 },
+  { tier: '大師', minGames: 650 },
 ];
 
 /** @deprecated 歷史常數；新代碼用 TierGroup 系統。 */

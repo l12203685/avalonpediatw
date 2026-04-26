@@ -362,11 +362,12 @@ describe('recomputeEloFromV2', () => {
 
 describe('computeTier (legacy 6-tier backcompat)', () => {
   // Edward 2026-04-24 13:43：雙維度取代；但 computeTier 仍保留以不破壞舊呼叫端。
-  // 舊規則：菜雞 < 50 / 初學 50-99 / 新手 100-149 / 中堅 150-199 / 高手 200-249 / 大師 ≥ 250
+  // Edward 2026-04-26 percentile-based recut（對齊 web/utils/eloRank.ts SSoT）：
+  //   菜雞 < 50 / 初學 50-99 / 新手 100-149 / 中堅 150-374 / 高手 375-649 / 大師 ≥ 650
 
   it('uses totalGames (not ELO) for tier assignment', () => {
     expect(computeTier(9999, 10)).toBe('菜雞');
-    expect(computeTier(100, 300)).toBe('大師');
+    expect(computeTier(100, 700)).toBe('大師');
   });
 
   it('classifies every legacy band by totalGames thresholds', () => {
@@ -377,10 +378,10 @@ describe('computeTier (legacy 6-tier backcompat)', () => {
     expect(computeTier(1000, 100)).toBe('新手');
     expect(computeTier(1000, 149)).toBe('新手');
     expect(computeTier(1000, 150)).toBe('中堅');
-    expect(computeTier(1000, 199)).toBe('中堅');
-    expect(computeTier(1000, 200)).toBe('高手');
-    expect(computeTier(1000, 249)).toBe('高手');
-    expect(computeTier(1000, 250)).toBe('大師');
+    expect(computeTier(1000, 374)).toBe('中堅');
+    expect(computeTier(1000, 375)).toBe('高手');
+    expect(computeTier(1000, 649)).toBe('高手');
+    expect(computeTier(1000, 650)).toBe('大師');
     expect(computeTier(1000, 999)).toBe('大師');
   });
 
