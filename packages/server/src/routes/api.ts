@@ -32,6 +32,7 @@ import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 import { verifyGuestToken } from '../middleware/guestAuth';
 import { ComputedStatsRepositoryV2 } from '../services/ComputedStatsRepositoryV2';
+import { getLeaderboardV3 } from '../services/LeaderboardV3';
 import { resolveDisplayNameFallback } from '@avalon/shared';
 
 const router: IRouter = Router();
@@ -261,6 +262,21 @@ router.get('/leaderboard', publicLimiter, async (_req: Request, res: Response) =
   } catch (err) {
     console.error('[api/leaderboard] Firestore error:', err);
     return res.json({ leaderboard: [], message: 'Database not configured' });
+  }
+});
+
+// ── GET /api/leaderboard/v3 ────────────────────────────────────
+// Edward 2026-04-26 22:41/22:45 — 8 metric leaderboard + Bayesian shrinkage + 角色×位置精準 metric.
+// 入場門檻：能力角 (刺/娜/德/奧/派/梅) ≥ 3 場 each, 忠臣 ≥ 15 場.
+// 讀 analysis_cache.json (rebuilt from 2146 raw 牌譜)，無 Firestore 依賴，回傳完整 entries.
+// 前端 LeaderboardPage 用 toggle (Raw/Shrinkage) 切換版本，sortable 8 欄 + 精準 metric.
+router.get('/leaderboard/v3', publicLimiter, async (_req: Request, res: Response) => {
+  try {
+    const data = await getLeaderboardV3();
+    return res.json({ version: 3, ...data });
+  } catch (err) {
+    console.error('[api/leaderboard/v3] error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

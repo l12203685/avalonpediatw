@@ -15,5 +15,45 @@
   "winRate": "勝率",
   "theoreticalWinRate": "理論勝率",
   "elo": "ELO",
-  "groupEmpty": "此組目前沒有玩家"
+  "groupEmpty": "此組目前沒有玩家",
+  "v3": {
+    "title": "8 指標排行榜",
+    "subtitle": "Edward 22:41 八指標 · 入場：能力角 ≥ 3 場 · 忠臣 ≥ 15 場",
+    "tabClassic": "傳統排行 (5 組 ELO 分層)",
+    "tabEight": "8 指標精算榜",
+    "rawMode": "原始 (Raw)",
+    "shrinkMode": "貝氏 (Shrinkage α=10)",
+    "rawHint": "依玩家樣本直接平均，小樣本可能偏高/偏低",
+    "shrinkHint": "對全玩家均值做貝氏縮減，小樣本偏向母體",
+    "headers": {
+      "player": "玩家",
+      "totalGames": "場",
+      "redGames": "紅",
+      "blueGames": "藍",
+      "threeRed": "三紅",
+      "threeBlueDead": "三藍死",
+      "threeBlueAlive": "三藍活",
+      "redWin": "紅勝",
+      "blueWin": "藍勝",
+      "threeBlue": "三藍",
+      "missionWin": "任務勝",
+      "expectedWin": "期望勝",
+      "precision": "精準勝率"
+    },
+    "tooltips": {
+      "threeRed": "三紅率（紅角立場）= 紅角中三紅 outcome 比例",
+      "threeBlueDead": "三藍死率（紅角立場）= 紅角中三藍死 outcome 比例",
+      "threeBlueAlive": "三藍活率（藍角立場）= 藍角中三藍活 outcome 比例",
+      "redWin": "紅勝 = 三紅 + 三藍死（紅角立場勝率，衍生欄）",
+      "blueWin": "藍勝 = 三藍活（藍角立場勝率，衍生欄）",
+      "threeBlue": "三藍 = 三藍死 + 三藍活（藍角任務防禦力）",
+      "missionWin": "任務勝 = Σ 紅角三紅率·P(紅) + Σ 藍角三藍率·P(藍)",
+      "expectedWin": "期望勝 = Σ 紅角紅勝率·P(紅) + Σ 藍角藍勝率·P(藍)",
+      "precision": "精準勝率 = Σ_角色 Σ_位置 P(角色)·P(位置)·勝率(角色,位置)，cell 級貝氏縮減 α=5"
+    },
+    "globalMeans": "母體均值（先驗）",
+    "eligibleCount": "上榜：{{eligible}} / {{total}} 玩家",
+    "loading": "計算中...",
+    "noPrecision": "—"
+  }
 }

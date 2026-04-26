@@ -15,5 +15,45 @@
   "winRate": "Win rate",
   "theoreticalWinRate": "Theoretical WR",
   "elo": "ELO",
-  "groupEmpty": "No players in this group yet"
+  "groupEmpty": "No players in this group yet",
+  "v3": {
+    "title": "8-Metric Leaderboard",
+    "subtitle": "Edward 8 metrics. Entry: each ability role ≥ 3 games, loyalist ≥ 15 games.",
+    "tabClassic": "Classic (5 ELO tiers)",
+    "tabEight": "8-Metric",
+    "rawMode": "Raw",
+    "shrinkMode": "Bayesian (α=10)",
+    "rawHint": "Direct sample mean. Low-game players may look high/low.",
+    "shrinkHint": "Posterior shrunk toward population mean for low-game players.",
+    "headers": {
+      "player": "Player",
+      "totalGames": "G",
+      "redGames": "R",
+      "blueGames": "B",
+      "threeRed": "3-Red",
+      "threeBlueDead": "3B-Dead",
+      "threeBlueAlive": "3B-Alive",
+      "redWin": "RedWin",
+      "blueWin": "BlueWin",
+      "threeBlue": "3-Blue",
+      "missionWin": "MissionWin",
+      "expectedWin": "ExpectedWin",
+      "precision": "PrecisionWR"
+    },
+    "tooltips": {
+      "threeRed": "3-Red rate (when on red role) = 3-Red outcome / red games",
+      "threeBlueDead": "3B-Dead rate (when on red role) = 3-Blue-Dead / red games",
+      "threeBlueAlive": "3B-Alive rate (when on blue role) = 3-Blue-Alive / blue games",
+      "redWin": "RedWin = 3-Red + 3B-Dead (red side win, derived)",
+      "blueWin": "BlueWin = 3B-Alive (blue side win, derived)",
+      "threeBlue": "3-Blue = 3B-Dead + 3B-Alive (blue mission defense)",
+      "missionWin": "MissionWin = Σ red 3-Red·P(red) + Σ blue 3-Blue·P(blue)",
+      "expectedWin": "ExpectedWin = Σ red RedWin·P(red) + Σ blue BlueWin·P(blue)",
+      "precision": "PrecisionWR = Σ_role Σ_seat P(role)·P(seat)·WR(role,seat) with cell α=5 shrinkage"
+    },
+    "globalMeans": "Population Means (Priors)",
+    "eligibleCount": "Eligible: {{eligible}} / {{total}}",
+    "loading": "Computing...",
+    "noPrecision": "—"
+  }
 }

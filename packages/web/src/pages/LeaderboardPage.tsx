@@ -30,6 +30,7 @@ import {
   type LeaderboardEntryV2,
 } from '@avalon/shared';
 import { useGameStore } from '../store/gameStore';
+import LeaderboardV3Table from '../components/LeaderboardV3Table';
 
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || 'http://localhost:3001';
 
@@ -74,10 +75,14 @@ const TIER_TAB_STYLE: Record<TierGroup, string> = {
 
 const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600'];
 
+/** Top-level tab — Edward 2026-04-26 22:41: 8-metric榜 vs 傳統 ELO 分層 */
+type TopTab = 'classic' | 'eight';
+
 export default function LeaderboardPage(): JSX.Element {
   const { t } = useTranslation(['leaderboard', 'common']);
   const { setGameState, navigateToProfile } = useGameStore();
 
+  const [topTab, setTopTab] = useState<TopTab>('eight');
   const [groups, setGroups] = useState<Record<TierGroup, LeaderboardEntryV2Enriched[]> | null>(
     null,
   );
@@ -143,7 +148,7 @@ export default function LeaderboardPage(): JSX.Element {
 
   return (
     <div className="min-h-screen p-4">
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className={topTab === 'eight' ? 'max-w-6xl mx-auto space-y-6' : 'max-w-2xl mx-auto space-y-6'}>
         {/* Header */}
         <div className="flex items-center gap-3">
           <button
@@ -158,6 +163,40 @@ export default function LeaderboardPage(): JSX.Element {
           </div>
         </div>
 
+        {/* Top-level tabs: 8-metric (Edward 22:41) vs Classic ELO tiers */}
+        <div className="flex gap-2" role="tablist" aria-label="leaderboard mode">
+          <button
+            role="tab"
+            aria-selected={topTab === 'eight'}
+            onClick={() => setTopTab('eight')}
+            className={`text-sm px-4 py-2 rounded-lg border font-semibold transition-all ${
+              topTab === 'eight'
+                ? 'bg-emerald-900/60 text-emerald-200 border-emerald-600'
+                : 'bg-gray-800/60 text-gray-400 border-gray-700 hover:border-gray-500 hover:text-gray-200'
+            }`}
+          >
+            {t('leaderboard:v3.tabEight')}
+          </button>
+          <button
+            role="tab"
+            aria-selected={topTab === 'classic'}
+            onClick={() => setTopTab('classic')}
+            className={`text-sm px-4 py-2 rounded-lg border font-semibold transition-all ${
+              topTab === 'classic'
+                ? 'bg-blue-900/60 text-blue-200 border-blue-600'
+                : 'bg-gray-800/60 text-gray-400 border-gray-700 hover:border-gray-500 hover:text-gray-200'
+            }`}
+          >
+            {t('leaderboard:v3.tabClassic')}
+          </button>
+        </div>
+
+        {/* 8-metric leaderboard (Edward 2026-04-26 22:41 + 22:45) */}
+        {topTab === 'eight' && <LeaderboardV3Table />}
+
+        {/* Classic ELO-tier leaderboard (existing v2) */}
+        {topTab === 'classic' && (
+          <>
         {/* DB offline banner */}
         {dbOffline && (
           <div className="flex items-start gap-3 bg-yellow-900/30 border border-yellow-700/50 rounded-xl px-4 py-3 text-sm text-yellow-300">
@@ -333,6 +372,8 @@ export default function LeaderboardPage(): JSX.Element {
               );
             })}
           </div>
+        )}
+          </>
         )}
       </div>
     </div>
