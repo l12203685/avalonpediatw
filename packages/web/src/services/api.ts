@@ -594,6 +594,70 @@ export async function fetchAnalysisCaptain(): Promise<CaptainAnalysisData> {
   return analysisApiFetch<CaptainAnalysisData>('/captain');
 }
 
+// ── Panel A: Player archetype (4-axis radar) ─────────────────────────────────
+
+export interface ArchetypeAxes {
+  honesty: number;
+  consistency: number;
+  stickiness: number;
+  flip: number;
+}
+
+export interface ArchetypePlayerResponse {
+  player: { name: string; totalGames: number };
+  data: {
+    axes: ArchetypeAxes;
+    /** percentile 0-100 vs N>=10 cohort (50 = median, 100 = top). */
+    percentiles: ArchetypeAxes;
+    sampleSize: number;
+    hasData: boolean;
+  };
+  cohort: {
+    n: number;
+    means: ArchetypeAxes;
+    stds: ArchetypeAxes;
+  };
+  axisLabels: ArchetypeAxes & Record<string, string>;
+  axisHelp: Record<string, string>;
+}
+
+export async function fetchPlayerArchetype(name: string): Promise<ArchetypePlayerResponse> {
+  return analysisApiFetch<ArchetypePlayerResponse>(
+    `/profile/${encodeURIComponent(name)}/archetype`,
+  );
+}
+
+// ── Panel B: Strength signature (per-role winrate × z-score) ─────────────────
+
+export interface StrengthRoleEntry {
+  role: string;
+  winRate: number | null;
+  sampleSize: number;
+  zScore: number | null;
+  color: 'high' | 'neutral' | 'low' | 'insufficient';
+}
+
+export interface StrengthPlayerResponse {
+  player: { name: string; totalGames: number };
+  data: {
+    roles: StrengthRoleEntry[];
+    topRoles: string[];
+    bottomRoles: string[];
+    hasData: boolean;
+  };
+  cohort: {
+    perRole: Record<string, { mean: number; std: number; n: number }>;
+    minRoleSample: number;
+    rolesOrder: string[];
+  };
+}
+
+export async function fetchPlayerStrength(name: string): Promise<StrengthPlayerResponse> {
+  return analysisApiFetch<StrengthPlayerResponse>(
+    `/profile/${encodeURIComponent(name)}/strength`,
+  );
+}
+
 // ── Wiki API ─────────────────────────────────────────────────────────────────
 
 export interface WikiArticleApi {

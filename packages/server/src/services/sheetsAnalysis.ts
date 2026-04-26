@@ -141,6 +141,73 @@ export interface CaptainAnalysisData {
   captainMissionGameWinRates: CaptainMissionGameWinRate[];
 }
 
+// ---------------------------------------------------------------------------
+// Panel A — 玩家 Archetype 雷達 (4 axes)
+// ---------------------------------------------------------------------------
+// Axes derived from per-player feature signature (loop 92 TSV):
+//   honesty     — L141 lake_truthful_pct          (raw 0-100)
+//   consistency — L142 proxy: 100 - anomaly_vote_rate * 5 (clipped)
+//   stickiness  — L137 proxy: top role winrate    (raw 0-100)
+//   flip        — L136 proxy: anomaly_vote_rate * 5 (clipped)
+// hasData=false when player has <10 games (TSV cohort filter).
+
+export interface ArchetypeAxes {
+  honesty: number;
+  consistency: number;
+  stickiness: number;
+  flip: number;
+}
+
+export interface ArchetypePlayerData {
+  axes: ArchetypeAxes;
+  /** percentile 0-100 vs same N>=10 cohort (50 = median). */
+  percentiles: ArchetypeAxes;
+  sampleSize: number;
+  hasData: boolean;
+}
+
+export interface ArchetypeData {
+  perPlayer: Record<string, ArchetypePlayerData>;
+  cohort: {
+    n: number;
+    means: ArchetypeAxes;
+    stds: ArchetypeAxes;
+  };
+  axisLabels: ArchetypeAxes & Record<string, string>;
+  axisHelp: Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// Panel B — Strength Signature (per-role winrate × z-score)
+// ---------------------------------------------------------------------------
+export interface StrengthRoleEntry {
+  role: string;
+  /** null = sample below MIN_ROLE_SAMPLE for this player. */
+  winRate: number | null;
+  sampleSize: number;
+  zScore: number | null;
+  /** UI hint: 'high' (z>=0.5) | 'neutral' (-0.5<z<0.5) | 'low' (z<=-0.5) | 'insufficient'. */
+  color: 'high' | 'neutral' | 'low' | 'insufficient';
+}
+
+export interface StrengthPlayerData {
+  roles: StrengthRoleEntry[];
+  /** Top 2 roles by zScore among scored cells. */
+  topRoles: string[];
+  /** Bottom 1 role by zScore among scored cells (only when >=3 scored). */
+  bottomRoles: string[];
+  hasData: boolean;
+}
+
+export interface StrengthData {
+  perPlayer: Record<string, StrengthPlayerData>;
+  cohort: {
+    perRole: Record<string, { mean: number; std: number; n: number }>;
+    minRoleSample: number;
+    rolesOrder: string[];
+  };
+}
+
 interface AnalysisCache {
   overview: OverviewData;
   players: { players: PlayerStats[]; total: number };
@@ -183,6 +250,8 @@ interface AnalysisCache {
   };
   seatOrder?: SeatOrderData;
   captainAnalysis?: CaptainAnalysisData;
+  archetype?: ArchetypeData;
+  strength?: StrengthData;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +329,65 @@ export async function getCaptainAnalysis(): Promise<CaptainAnalysisData> {
     return { perMission: [], captainFactionVsOutcome: [], captainMissionGameWinRates: [] };
   }
   return c.captainAnalysis;
+}
+
+// ---------------------------------------------------------------------------
+// Panel A / B accessors — used by /api/profile/:id/{archetype,strength}
+// ---------------------------------------------------------------------------
+
+/**
+ * Lookup archetype data for a single player by analysis-cache key (display name).
+ * Returns null when the player isn't tracked in the cache (e.g. brand-new
+ * accounts with zero games). Players with N<10 games appear in the cache but
+ * with `hasData: false` so the UI can render "資料不足".
+ */
+export async function getPlayerArchetype(name: string): Promise<{
+  player: { name: string; totalGames: number };
+  data: ArchetypePlayerData;
+  cohort: ArchetypeData['cohort'];
+  axisLabels: ArchetypeData['axisLabels'];
+  axisHelp: ArchetypeData['axisHelp'];
+} | null> {
+  const c = loadCache();
+  if (!c.archetype) return null;
+  const data = c.archetype.perPlayer[name];
+  if (!data) return null;
+  const detail = c.playerDetails[name];
+  return {
+    player: {
+      name,
+      totalGames: detail ? detail.player.totalGames : data.sampleSize,
+    },
+    data,
+    cohort:     c.archetype.cohort,
+    axisLabels: c.archetype.axisLabels,
+    axisHelp:   c.archetype.axisHelp,
+  };
+}
+
+/**
+ * Lookup strength signature data for a single player.
+ * Returns null when the player isn't tracked. Per-role entries with sample
+ * below `minRoleSample` (default 3) get `color: 'insufficient'`.
+ */
+export async function getPlayerStrength(name: string): Promise<{
+  player: { name: string; totalGames: number };
+  data: StrengthPlayerData;
+  cohort: StrengthData['cohort'];
+} | null> {
+  const c = loadCache();
+  if (!c.strength) return null;
+  const data = c.strength.perPlayer[name];
+  if (!data) return null;
+  const detail = c.playerDetails[name];
+  return {
+    player: {
+      name,
+      totalGames: detail ? detail.player.totalGames : 0,
+    },
+    data,
+    cohort: c.strength.cohort,
+  };
 }
 
 /** No-op: cache is static, no runtime invalidation needed. */

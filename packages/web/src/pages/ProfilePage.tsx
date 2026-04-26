@@ -3,6 +3,8 @@ import { useTranslation, Trans } from 'react-i18next';
 import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, BarChart3, Camera, Lock, Eye, EyeOff, RefreshCcw } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
 import { CampDisc } from '../components/CampDisc';
+import ArchetypeRadar from '../components/profile/ArchetypeRadar';
+import StrengthSignature from '../components/profile/StrengthSignature';
 import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile, uploadAvatar } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
@@ -1095,6 +1097,17 @@ export default function ProfilePage(): JSX.Element {
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* Player archetype + strength panels (Edward 2026-04-26) */}
+            {/* Backend keys analysis_cache by display name; only render when we
+                have a name to look up. Components self-handle "資料不足" on
+                missing data (<10 games for archetype, <3/role for strength). */}
+            {profile.display_name && (
+              <div className="grid md:grid-cols-2 gap-3">
+                <ArchetypeRadar playerName={profile.display_name} />
+                <StrengthSignature playerName={profile.display_name} />
               </div>
             )}
 

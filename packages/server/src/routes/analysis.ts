@@ -17,6 +17,8 @@ import {
   getRoundsAnalysis,
   getSeatOrderAnalysis,
   getCaptainAnalysis,
+  getPlayerArchetype,
+  getPlayerStrength,
   invalidateCache,
   isSheetsReady,
 } from '../services/sheetsAnalysis';
@@ -213,6 +215,48 @@ router.get('/captain', limiter, async (_req: Request, res: Response) => {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/captain]', msg);
     return fail(res, 500, 'Failed to load captain analysis');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/profile/:name/archetype
+// Panel A — 4-axis archetype radar (誠實 / 一致 / 專精 / 浮動) + percentile
+// `:name` = analysis-cache display name (e.g. "Sin", "HAO"). Resolve from the
+// auth profile's display_name on the frontend before calling.
+// ---------------------------------------------------------------------------
+router.get('/profile/:name/archetype', limiter, async (req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const data = await getPlayerArchetype(name);
+    if (!data) {
+      return fail(res, 404, 'Player not tracked in analysis cache');
+    }
+    return ok(res, data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/profile/archetype]', msg);
+    return fail(res, 500, 'Failed to load archetype');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/profile/:name/strength
+// Panel B — Strength signature (per-role winrate × cohort z-score)
+// ---------------------------------------------------------------------------
+router.get('/profile/:name/strength', limiter, async (req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const data = await getPlayerStrength(name);
+    if (!data) {
+      return fail(res, 404, 'Player not tracked in analysis cache');
+    }
+    return ok(res, data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/profile/strength]', msg);
+    return fail(res, 500, 'Failed to load strength signature');
   }
 });
 
