@@ -339,7 +339,7 @@ export default function RoomPage(): JSX.Element {
 
   const previewQuestSizes: number[] = (() => {
     if (!previewConfig) return [];
-    let sizes = is9Variant ? [4, 3, 4, 5, 5] : [...previewConfig.questTeams];
+    const sizes = is9Variant ? [4, 3, 4, 5, 5] : [...previewConfig.questTeams];
     if (room.roleOptions?.swapR1R2 && sizes.length >= 2) {
       const t = sizes[0]; sizes[0] = sizes[1]; sizes[1] = t;
     }
@@ -385,7 +385,7 @@ export default function RoomPage(): JSX.Element {
   const handleToggleAdvanced = (key: string) => {
     if (!room.roleOptions) return;
     const opts = (room.roleOptions as unknown) as Record<string, unknown>;
-    const newVal = !Boolean(opts[key]);
+    const newVal = !opts[key];
     setRoleOptions(room.id, { [key]: newVal });
   };
 
