@@ -35,11 +35,6 @@ jobs:
 
       - name: Run server tests
         run: pnpm --filter @avalon/server test
-        env:
-          # Quarantine the 6P full-game integration flake (since 2026-04-20 commit 8335841c).
-          # Mirrors test.yml — without this flag every push to main fails the
-          # Render deploy on a known timeout, blocking the deploy hook.
-          AVALON_QUARANTINE_6P: '1'
 
   verify-secrets:
     name: Verify Render & Bot Secrets

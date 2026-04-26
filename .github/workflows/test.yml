@@ -50,11 +50,6 @@ jobs:
 
       - name: Run tests
         run: pnpm --filter @avalon/server test
-        env:
-          # Quarantine the 6P full-game integration flake (since 2026-04-20 commit 8335841c).
-          # See packages/server/src/__tests__/integration/SixPlayerSocketSmoke.test.ts:378.
-          # Re-enable by removing this env var once root cause is fixed.
-          AVALON_QUARANTINE_6P: '1'
 
       - name: Build all packages
         run: pnpm build

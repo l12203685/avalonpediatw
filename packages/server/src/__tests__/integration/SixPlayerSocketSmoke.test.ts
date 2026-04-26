@@ -703,8 +703,17 @@ describe('M1 smoke: 6-player FULL Avalon game end-to-end', () => {
   );
 
   (QUARANTINE_6P_FULL ? it.skip : it)(
-    '5 consecutive vote rejections -> vote_rejections broadcast reaches all 6 players',
+    '4 consecutive vote rejections + 5th forced auto-approve (engine batch 8 contract)',
     async () => {
+      // ── Engine contract (Edward 2026-04-24 batch 8, commit 287e5373) ─────
+      // After 4 consecutive rejections in a round (failCount === 4), the
+      // engine FORCES the 5th proposal to auto-approve via
+      // `forced_mission_auto_approved`. This means `endReason='vote_rejections'`
+      // is unreachable via normal play after batch 8. This test asserts the
+      // new contract: 4 rejections rotate the leader, then the 5th
+      // `game:select-quest-team` auto-approves and the room transitions
+      // straight from `voting` to `quest` without going through the vote
+      // collection phase.
       for (let i = 0; i < NAMES.length; i++) {
         const uid = `rej6-uid-${i + 1}`;
         clients.push(await connectGuestClient(port, uid, NAMES[i]));
@@ -734,30 +743,24 @@ describe('M1 smoke: 6-player FULL Avalon game end-to-end', () => {
       );
 
       const orderedPlayerIds = Object.keys(host.latestState!.players);
+      const teamSize = AVALON_CONFIG[6].questTeams[0]; // R1 team size = 2
 
-      // 5 consecutive rejections all in R1. Engine enforces maxFailedVotes=5.
-      // After 5th rejection, endReason='vote_rejections' ends the game
-      // (standard Avalon rule — no team approved => evil win).
-      for (let rejection = 0; rejection < 5; rejection++) {
-        // Wait for voting-ready state (R1 team selection, empty team).
+      // 4 consecutive rejections in R1. After each, leader rotates and
+      // failCount increments. State stays `voting` and currentRound=1.
+      for (let rejection = 0; rejection < 4; rejection++) {
         await waitFor(
           () => {
             const r = host.latestState;
             if (!r) return null;
-            if (r.state === 'ended') return true;
             if (r.state !== 'voting') return null;
             if (r.currentRound !== 1) return null;
             if (r.questTeam.length !== 0) return null;
-            // failCount must equal rejections so far.
             return (r.failCount ?? 0) === rejection ? true : null;
           },
           { label: `ready for rejection attempt ${rejection + 1}`, timeoutMs: 5000 }
         );
 
-        if (host.latestState!.state === 'ended') break;
-
         const currentRoom = host.latestState!;
-        const teamSize = AVALON_CONFIG[6].questTeams[0]; // R1 team size = 2
         const leaderId = orderedPlayerIds[currentRoom.leaderIndex % orderedPlayerIds.length];
         const team = orderedPlayerIds.slice(0, teamSize);
 
@@ -769,41 +772,60 @@ describe('M1 smoke: 6-player FULL Avalon game end-to-end', () => {
           { label: `team selected for rejection ${rejection + 1}`, timeoutMs: 3000 }
         );
 
-        // Everyone votes REJECT (false). Pace against 1-vote/sec limiter.
+        // Pace each rejection round above the 1-vote/sec rate limiter.
         if (rejection > 0) await new Promise((r) => setTimeout(r, 1100));
         for (const c of clients) {
           c.socket.emit('game:vote', roomId, c.uid, false);
         }
 
-        // Wait for the rejection to be processed: either advances to next
-        // leader (failCount increments) or ends the game on the 5th.
-        if (rejection < 4) {
-          await waitFor(
-            () => {
-              const r = host.latestState;
-              if (!r) return null;
-              if (r.state !== 'voting') return null;
-              if ((r.failCount ?? 0) !== rejection + 1) return null;
-              if (r.questTeam.length !== 0) return null;
-              return true;
-            },
-            { label: `rejection ${rejection + 1} processed`, timeoutMs: 5000 }
-          );
-        }
+        // Wait for the rejection to be processed and state to settle on
+        // the next leader's empty-team voting window.
+        await waitFor(
+          () => {
+            const r = host.latestState;
+            if (!r) return null;
+            if (r.state !== 'voting') return null;
+            if ((r.failCount ?? 0) !== rejection + 1) return null;
+            if (r.questTeam.length !== 0) return null;
+            return true;
+          },
+          { label: `rejection ${rejection + 1} processed`, timeoutMs: 5000 }
+        );
       }
 
-      // After 5th rejection, game must end with endReason='vote_rejections'.
+      // After 4 rejections, failCount === 4. The 5th leader's
+      // `select-quest-team` triggers `forced_mission_auto_approved` and the
+      // room transitions to `quest` state without us emitting `game:vote`.
+      const stateBeforeForced = host.latestState!;
+      expect(stateBeforeForced.state).toBe('voting');
+      expect(stateBeforeForced.failCount ?? 0).toBe(4);
+      expect(stateBeforeForced.currentRound).toBe(1);
+
+      const fifthLeaderId = orderedPlayerIds[
+        stateBeforeForced.leaderIndex % orderedPlayerIds.length
+      ];
+      const fifthLeaderClient = clients.find((c) => c.uid === fifthLeaderId)!;
+      const fifthTeam = orderedPlayerIds.slice(0, teamSize);
+      fifthLeaderClient.socket.emit('game:select-quest-team', roomId, fifthTeam);
+
+      // Forced approve: state jumps straight to `quest` — no vote collection.
       await waitFor(
-        () => clients.every((c) => c.endedState !== null),
-        { label: 'all 6 players receive game:ended (5 rejections)', timeoutMs: 6000 }
+        () => host.latestState?.state === 'quest' ? true : null,
+        { label: '5th proposal forced auto-approved → quest phase', timeoutMs: 4000 }
       );
 
-      for (const c of clients) {
-        const ended = c.endedState!;
-        expect(ended.state).toBe('ended');
-        expect(ended.evilWins).toBe(true);
-        expect(ended.endReason).toBe('vote_rejections');
-      }
+      // voteHistory should now contain a 5th attempt with approved=true.
+      const roomAfterForced = host.latestState!;
+      expect(roomAfterForced.state).toBe('quest');
+      expect(roomAfterForced.questTeam).toHaveLength(teamSize);
+      const r1Attempts = roomAfterForced.voteHistory.filter(
+        (v) => v.round === 1
+      );
+      expect(r1Attempts).toHaveLength(5);
+      expect(r1Attempts[4].approved).toBe(true);
+      expect(r1Attempts[4].attempt).toBe(5);
+      // Game is decidedly NOT ended via vote_rejections.
+      expect(roomAfterForced.state).not.toBe('ended');
 
       for (const c of clients) {
         expect(c.errors).toEqual([]);
