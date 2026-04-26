@@ -1,5 +1,8 @@
 # CI/CD Migration Status Report
 
+> **DEPRECATED 2026-04-23** — Render.com 後端已刪除；後端遷回 Cloud Run。本檔僅為歷史。
+> 當前後端：`https://avalon-server-169653523467.asia-east1.run.app`。
+
 **Project**: avalonpediatw
 **Migration Target**: Google Cloud Run → Render.com
 **Status**: COMPLETE (Ready for Testing)

@@ -1,5 +1,11 @@
 # GitHub Actions & Deployment Setup
 
+> **2026-04-23 update**: Render.com 後端已刪除，後端現於 Google Cloud Run (asia-east1)
+> `https://avalon-server-169653523467.asia-east1.run.app`。本目錄內舊 Render 文件
+> （`DEPLOYMENT.md` / `IMPLEMENTATION_CHECKLIST.md` / `RENDER_SETUP.md` / `STATUS.md` /
+> `MIGRATION_NOTES.md`）已標 DEPRECATED，保留歷史不可執行。
+> URL aliasing 規則 SSoT：`digital-immortal-tree-lyh/agent/tree_registry/architecture/url_aliasing.md`。
+
 Welcome! This directory contains all CI/CD configurations for avalonpediatw.
 
 ## Quick Navigation

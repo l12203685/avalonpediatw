@@ -3,6 +3,11 @@ name: Deploy Frontend to GitHub Pages
 # DISABLED 2026-04-21: 固定用 avalon-game-platform.web.app 當玩家唯一入口
 # 玩家已遷到 Firebase Hosting（deploy-firebase.yml），此 workflow 僅保留手動觸發
 # GitHub Pages 部署已停用，如要恢復需把下方 VITE_SERVER_URL 改用 secrets
+#
+# 2026-04-26: hard-coded VITE_SERVER_URL replaced with Cloud Run URL
+# (previous onrender.com value was stale — Render service deleted 2026-04-23).
+# Long-term: switch to ${{ secrets.VITE_SERVER_URL }} like deploy-firebase.yml so
+# alias migrations don't require workflow edits (see tree_registry/architecture/url_aliasing.md).
 on:
   workflow_dispatch:
 
@@ -64,7 +69,7 @@ jobs:
       - name: Build frontend
         run: pnpm --filter @avalon/web build
         env:
-          VITE_SERVER_URL: https://avalonpediatw.onrender.com
+          VITE_SERVER_URL: https://avalon-server-169653523467.asia-east1.run.app
           VITE_BASE: /avalonpediatw/
 
       - name: Deploy to gh-pages branch

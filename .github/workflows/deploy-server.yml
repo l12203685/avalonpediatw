@@ -1,14 +1,12 @@
-name: Deploy Server to Render
+name: Deploy Server to Render (DEPRECATED 2026-04-23)
 
+# DEPRECATED 2026-04-23: Render service deleted (see
+# digital-immortal-tree-lyh/agent/tree_registry/architecture/render_deprecation.md).
+# Backend now lives on Google Cloud Run (asia-east1). Triggers stripped to
+# workflow_dispatch only so a stray push can't fire a 404 deploy hook.
+# Kept for git history; do NOT use. Cloud Run deploy lives in
+# the operator's gcloud workflow + future GH Action (TBD).
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'packages/server/**'
-      - 'packages/shared/**'
-      - 'render.yaml'
-      - 'Dockerfile'
-      - 'pnpm-lock.yaml'
   workflow_dispatch:
 
 jobs:

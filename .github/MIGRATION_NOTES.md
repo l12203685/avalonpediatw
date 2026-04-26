@@ -1,5 +1,9 @@
 # Cloud Run → Render Migration Notes
 
+> **DEPRECATED 2026-04-23** — Render.com service 已刪除，後端遷回 Cloud Run（asia-east1）。
+> 本檔僅為歷史；目前 production backend `https://avalon-server-169653523467.asia-east1.run.app`。
+> 見 `tree_registry/architecture/render_deprecation.md` + `tree_registry/architecture/url_aliasing.md`。
+
 ## Summary
 
 Successfully migrated avalonpediatw CI/CD pipeline from Google Cloud Run to Render.com deployment.

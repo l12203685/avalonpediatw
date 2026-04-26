@@ -184,7 +184,9 @@ export function formatOutgoing(msg: LobbyChatMessage): string {
  * unreachable.
  */
 export interface ListenBotEnqueueConfig {
-  /** Full URL, e.g. `https://edward-listen-bot.onrender.com/enqueue/line`. */
+  /** Full URL, e.g. `http://localhost:5678/enqueue/line` (local listen-bot)
+   *  or future Cloud Run / aliased endpoint. The historical
+   *  `edward-listen-bot.onrender.com` is dead (Render deleted 2026-04-23). */
   url: string;
   /** Optional shared-secret key matching listen-bot's `PUSH_API_KEY`. */
   apiKey?: string;

@@ -1,12 +1,17 @@
 # avalonpediatw Deployment Guide
 
+> **DEPRECATED 2026-04-23** — Render.com 後端已刪除（見 `digital-immortal-tree-lyh/agent/tree_registry/architecture/render_deprecation.md`）。
+> 後端現址：Google Cloud Run `https://avalon-server-169653523467.asia-east1.run.app`（asia-east1）。
+> URL aliasing 規則：`tree_registry/architecture/url_aliasing.md`。
+> 本檔僅保留 git 歷史，不可作為 deployment SOP — 內文所有 onrender.com URL 已過期。
+
 ## Overview
 
 The avalonpediatw project uses a multi-platform deployment strategy:
 
-- **Frontend**: GitHub Pages (via `deploy.yml`)
-- **Backend**: Render.com (via `deploy-server.yml`)
-- **Backup Frontend**: Firebase Hosting (via `deploy-firebase.yml`)
+- **Frontend**: Firebase Hosting (via `deploy-firebase.yml`) — 玩家唯一入口 `avalon-game-platform.web.app`
+- **Backend**: Google Cloud Run (asia-east1) — `avalon-server-169653523467.asia-east1.run.app`
+- **Backup Frontend (legacy)**: GitHub Pages (`deploy.yml`, dispatch-only) / Cloudflare Pages
 
 ## Deployment Workflows
 

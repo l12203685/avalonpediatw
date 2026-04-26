@@ -1,5 +1,10 @@
 # Implementation Checklist: Cloud Run → Render Migration
 
+> **DEPRECATED 2026-04-23** — Render.com 後端已全面刪除；後端遷回 Google Cloud Run（asia-east1）。
+> 本檔記錄歷史軌跡，不可執行。當前後端 URL：`https://avalon-server-169653523467.asia-east1.run.app`。
+> 見 `tree_registry/architecture/render_deprecation.md` + `tree_registry/architecture/url_aliasing.md`。
+
+
 ## Phase 1: Pre-Deployment Setup (REQUIRED)
 
 ### Render Service Configuration

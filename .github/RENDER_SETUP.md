@@ -1,5 +1,9 @@
 # Render.com Deployment Setup
 
+> **DEPRECATED 2026-04-23** — Render.com service 已刪除（`tree_registry/architecture/render_deprecation.md`）。
+> 後端遷至 Google Cloud Run。本檔保留歷史，不可執行。
+
+
 ## Quick Setup Checklist
 
 - [ ] Render service created and running

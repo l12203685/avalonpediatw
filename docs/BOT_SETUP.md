@@ -257,12 +257,17 @@ pnpm dev
 ### Local Testing - Line
 
 ```bash
-# Expose local backend via cloudflared quick tunnel for LINE webhook testing
-# (我們已棄用 ngrok — 月 quota 撞上會 fail-to-fetch，改用 cloudflared)
+# Production backend (Cloud Run, asia-east1) is the canonical webhook target —
+# do NOT register temporary tunnel URLs in LINE Console; they go stale on every
+# tunnel restart (root cause of 5+ recurring outages, 2026-04-19→26).
+#   Webhook URL: https://avalon-server-169653523467.asia-east1.run.app/webhook/line
+#
+# 只在「本機 dev 想單測 LINE webhook」時才開臨時 tunnel，並且不要寫進 Console：
 cloudflared tunnel --url http://localhost:3001
-
-# 拿到 https://<random>.trycloudflare.com 後，把 webhook URL 設成：
-https://<random>.trycloudflare.com/webhook/line
+# 用拿到的 https://<random>.trycloudflare.com URL 走 curl/postman 自送 LINE event
+# JSON 過去；測完 Ctrl+C，URL 失效不影響任何外部 console。
+#
+# 長期穩定別名：見 tree_registry/architecture/url_aliasing.md（Edward 買網域後啟用）
 ```
 
 ---
