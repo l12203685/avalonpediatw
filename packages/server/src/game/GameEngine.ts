@@ -22,15 +22,18 @@ export class CanonicalRoleLockError extends Error {
 
 // Base phase-timer limits (at 1x multiplier). Effective timeout = base * multiplier.
 // A `null` multiplier disables the timer entirely (unlimited thinking time).
-// Spec (Edward 2026-04-20):
-//   Team vote (派票) = 90s, Quest vote (黑白球) = 30s,
-//   Lady of the Lake (湖中女神) = 90s, Assassin (刺殺) = 180s.
-// TEAM_SELECT keeps the 90s AFK guard (same kind of operation as team vote).
+// Spec (Edward 2026-04-20, refined 2026-04-26):
+//   Team select (隊長選人) = 90s, Team vote (派票/黑白球) = 30s,
+//   Quest vote (任務成功/失敗) = 30s, Assassin (刺殺) = 180s.
+//   Lady of the Lake = 90s pick + 30s declare (split per Edward 2026-04-26).
+// TEAM_SELECT keeps the 90s AFK guard (deliberation kind of operation).
+// VOTE_TIMEOUT_MS dropped 90s → 30s (Edward 2026-04-26: 黑白球投票本來就快).
 const TEAM_SELECT_TIMEOUT_MS = 90000;
-const VOTE_TIMEOUT_MS = 90000;
+const VOTE_TIMEOUT_MS = 30000;
 const QUEST_TIMEOUT_MS = 30000;
 const ASSASSINATION_TIMEOUT_MS = 180000;
-const LADY_OF_THE_LAKE_TIMEOUT_MS = 90000;
+const LADY_OF_THE_LAKE_PICK_TIMEOUT_MS = 90000;
+const LADY_OF_THE_LAKE_DECLARE_TIMEOUT_MS = 30000;
 
 interface QuestVote {
   playerId: string;
@@ -916,7 +919,7 @@ export class GameEngine {
       clearTimeout(this.ladyOfTheLakeTimeout);
       this.ladyOfTheLakeTimeout = null;
     }
-    const timeoutMs = this.getTimeoutMs(LADY_OF_THE_LAKE_TIMEOUT_MS);
+    const timeoutMs = this.getTimeoutMs(LADY_OF_THE_LAKE_PICK_TIMEOUT_MS);
     if (timeoutMs === null) {
       return;
     }
@@ -991,17 +994,18 @@ export class GameEngine {
 
   /**
    * Start the declaration-phase AFK timeout. After the holder inspects a
-   * target, they have LADY_OF_THE_LAKE_TIMEOUT_MS (90s, subject to timer
-   * multiplier) to publicly declare or explicitly skip. Timeout silently
-   * skips the declaration and advances the game so AFK players cannot
-   * hang the table.
+   * target, they have LADY_OF_THE_LAKE_DECLARE_TIMEOUT_MS (30s, subject to
+   * timer multiplier) to publicly declare or explicitly skip. Timeout
+   * silently skips the declaration and advances the game so AFK players
+   * cannot hang the table. Edward 2026-04-26: declare 從 90s 降 30s — pick
+   * 才需要長時間思考, declare 通常已經想好了.
    */
   private startLakeDeclarationTimeout(declarerId: string): void {
     if (this.ladyOfTheLakeTimeout) {
       clearTimeout(this.ladyOfTheLakeTimeout);
       this.ladyOfTheLakeTimeout = null;
     }
-    const timeoutMs = this.getTimeoutMs(LADY_OF_THE_LAKE_TIMEOUT_MS);
+    const timeoutMs = this.getTimeoutMs(LADY_OF_THE_LAKE_DECLARE_TIMEOUT_MS);
     if (timeoutMs === null) {
       return; // Unlimited thinking time — declarer waits as long as they want.
     }

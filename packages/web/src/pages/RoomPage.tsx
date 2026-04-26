@@ -70,12 +70,14 @@ function timerLabel(multiplier: number | null | undefined): string {
 
 const LOBBY_TIMEOUT_MS = 12_000;
 
-// Describe what enabling each optional role does
+// Describe what enabling each optional role does.
+// Edward 2026-04-26: lobby chips 顯示全名 — 派西+莫甘娜為「+娜 套組」 (因 morgana
+// 從 chip 列被 filter 掉, percival 啟用即同時啟用莫甘娜).
 const ROLE_OPTION_INFO: Record<string, { label: string; short: string; description: string; paired?: string }> = {
-  percival: { label: '派西維爾', short: '派+娜', description: '派西維爾看到梅林（以及莫甘娜，若啟用）', paired: 'morgana' },
-  morgana:  { label: '莫甘娜',   short: '娜',     description: '莫甘娜偽裝成梅林，混淆派西維爾',        paired: 'percival' },
-  mordred:  { label: '莫德雷德', short: '德',     description: '莫德雷德對梅林隱形，危險的隱藏邪惡' },
-  oberon:   { label: '奧伯倫',   short: '奧',     description: '奧伯倫對邪惡陣營隱形（孤獨邪惡）' },
+  percival: { label: '派西維爾 + 莫甘娜', short: '派+娜', description: '派西維爾看到梅林（以及莫甘娜，若啟用）', paired: 'morgana' },
+  morgana:  { label: '莫甘娜',           short: '娜',     description: '莫甘娜偽裝成梅林，混淆派西維爾',        paired: 'percival' },
+  mordred:  { label: '莫德雷德',         short: '德',     description: '莫德雷德對梅林隱形，危險的隱藏邪惡' },
+  oberon:   { label: '奧伯倫',           short: '奧',     description: '奧伯倫對邪惡陣營隱形（孤獨邪惡）' },
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -535,7 +537,7 @@ export default function RoomPage(): JSX.Element {
   const lobbyTopSection = (
     <>
       {/* Header row — host name + tags + room code + add AI + leave + lock */}
-      <div className="relative z-10 shrink-0 flex items-center justify-between gap-1 px-2 py-1 text-[clamp(0.6rem,2vw,0.8rem)]">
+      <div className="relative z-10 shrink-0 flex items-center justify-between gap-1 px-2 py-1 text-[clamp(0.5rem,1.7vw,0.65rem)]">
         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-yellow-900/30 border border-yellow-700/60 text-yellow-200 font-semibold whitespace-nowrap min-w-0 truncate">
           <span className="hidden sm:inline">房主：</span>
           <span className="truncate">{room.players[room.host]?.name ?? '—'}</span>
@@ -544,7 +546,7 @@ export default function RoomPage(): JSX.Element {
         <div className="flex items-center gap-1 flex-nowrap shrink-0">
           {(room.casual || playerList.some(p => p.isBot)) && (
             <span
-              className="inline-flex items-center px-1 py-0.5 rounded-full text-[clamp(0.55rem,1.7vw,0.7rem)] font-semibold bg-amber-900/40 border border-amber-600 text-amber-200 whitespace-nowrap"
+              className="inline-flex items-center px-1 py-0.5 rounded-full text-[clamp(0.5rem,1.5vw,0.62rem)] font-semibold bg-amber-900/40 border border-amber-600 text-amber-200 whitespace-nowrap"
               title="此局不計 ELO"
             >
               {room.casual ? '娛樂' : '含 AI'}
@@ -566,7 +568,7 @@ export default function RoomPage(): JSX.Element {
             <button
               type="button"
               onClick={() => addBot(room.id, 'hard')}
-              className="inline-flex items-center px-1.5 py-0.5 rounded border text-[clamp(0.55rem,1.7vw,0.7rem)] font-semibold bg-emerald-900/40 border-emerald-600 text-emerald-200 hover:bg-emerald-900/60 hover:text-white transition-colors whitespace-nowrap"
+              className="inline-flex items-center px-1.5 py-0.5 rounded border text-[clamp(0.5rem,1.5vw,0.62rem)] font-semibold bg-emerald-900/40 border-emerald-600 text-emerald-200 hover:bg-emerald-900/60 hover:text-white transition-colors whitespace-nowrap"
               title="加入 AI"
               data-testid="lobby-add-ai-button"
             >
@@ -584,7 +586,7 @@ export default function RoomPage(): JSX.Element {
               }
               leaveRoom(room.id);
             }}
-            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[clamp(0.55rem,1.7vw,0.7rem)] font-semibold bg-gray-800/40 border-gray-700 text-gray-300 hover:bg-red-900/30 hover:border-red-700 hover:text-red-300 transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[clamp(0.5rem,1.5vw,0.62rem)] font-semibold bg-gray-800/40 border-gray-700 text-gray-300 hover:bg-red-900/30 hover:border-red-700 hover:text-red-300 transition-colors whitespace-nowrap"
             title="離開房間"
             data-testid="lobby-leave-button"
           >
@@ -598,7 +600,7 @@ export default function RoomPage(): JSX.Element {
                 if (room.isPrivate) setRoomPassword(room.id, null);
                 else setShowPasswordInput(v => !v);
               }}
-              className={`inline-flex items-center gap-0.5 text-[clamp(0.55rem,1.7vw,0.7rem)] px-1 py-0.5 rounded border transition-colors whitespace-nowrap ${
+              className={`inline-flex items-center gap-0.5 text-[clamp(0.5rem,1.5vw,0.62rem)] px-1 py-0.5 rounded border transition-colors whitespace-nowrap ${
                 room.isPrivate
                   ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300 hover:bg-yellow-900/60'
                   : 'bg-gray-800/40 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
@@ -644,10 +646,10 @@ export default function RoomPage(): JSX.Element {
 
       {/* Settings strip (special roles, lake, timer, quest sizes, role chips, more rules) */}
       {previewConfig && (
-        <div className="relative z-10 shrink-0 px-2 py-1 space-y-1 border-y border-gray-800/60 bg-black/20">
+        <div className="relative z-10 shrink-0 px-2 py-0.5 space-y-0.5 border-y border-gray-800/60 bg-black/20">
           {isHost && (
-            <div className="flex flex-nowrap items-center gap-1 overflow-x-auto">
-              <span className="text-[clamp(0.55rem,1.7vw,0.7rem)] uppercase tracking-wider text-gray-500 font-semibold mr-0.5 shrink-0">角色</span>
+            <div className="flex flex-nowrap items-center gap-0.5 overflow-x-auto">
+              <span className="text-[clamp(0.5rem,1.5vw,0.62rem)] uppercase tracking-wider text-gray-500 font-semibold mr-0.5 shrink-0">角色</span>
               {(Object.keys(ROLE_OPTION_INFO) as (keyof typeof ROLE_OPTION_INFO)[])
                 .filter(k => k !== 'morgana')
                 .map(key => {
@@ -657,7 +659,7 @@ export default function RoomPage(): JSX.Element {
                     <button
                       key={key}
                       onClick={() => handleToggleRole(key)}
-                      className={`px-1.5 py-0.5 rounded border text-[clamp(0.6rem,1.8vw,0.75rem)] font-semibold transition-all shrink-0 whitespace-nowrap ${
+                      className={`min-w-fit px-1.5 py-0.5 rounded border text-[clamp(0.6rem,1.8vw,0.75rem)] font-semibold transition-all shrink-0 whitespace-nowrap ${
                         enabled
                           ? 'bg-amber-900/40 border-amber-500 text-amber-200 shadow-sm shadow-amber-500/30'
                           : 'bg-gray-800/30 border-transparent text-gray-500 opacity-50 hover:opacity-80 hover:border-gray-600'
@@ -665,7 +667,7 @@ export default function RoomPage(): JSX.Element {
                       aria-pressed={enabled}
                       title={info.description}
                     >
-                      {info.short}
+                      {info.label}
                     </button>
                   );
                 })}
@@ -687,7 +689,7 @@ export default function RoomPage(): JSX.Element {
               <select
                 value={(room.roleOptions as unknown as Record<string, string>)?.ladyStart ?? 'seat0'}
                 onChange={e => handleSelectAdvanced('ladyStart', e.target.value)}
-                className="bg-gray-900 border border-gray-600 rounded px-1 py-0.5 text-[clamp(0.55rem,1.7vw,0.7rem)] text-white focus:outline-none focus:border-cyan-500 shrink-0"
+                className="bg-gray-900 border border-gray-600 rounded px-1 py-0.5 text-[clamp(0.5rem,1.5vw,0.62rem)] text-white focus:outline-none focus:border-cyan-500 shrink-0"
               >
                 <option value="seat0">隊長右</option>
                 <option value="random">隨機起始</option>
@@ -707,7 +709,7 @@ export default function RoomPage(): JSX.Element {
                     const next: TimerMultiplier = v === 'null' ? null : (Number(v) as TimerMultiplier);
                     setTimerMultiplier(room.id, next);
                   }}
-                  className="bg-gray-900 border border-gray-600 rounded px-1 py-0.5 text-[clamp(0.55rem,1.7vw,0.7rem)] text-white focus:outline-none focus:border-amber-500"
+                  className="bg-gray-900 border border-gray-600 rounded px-1 py-0.5 text-[clamp(0.5rem,1.5vw,0.62rem)] text-white focus:outline-none focus:border-amber-500"
                   data-testid="lobby-thinking-time-select"
                 >
                   {TIMER_MULTIPLIER_OPTIONS.map(opt => (
@@ -726,7 +728,7 @@ export default function RoomPage(): JSX.Element {
           </div>
 
           {previewQuestSizes.length > 0 && (
-            <div className="flex flex-nowrap items-center gap-1 text-[clamp(0.55rem,1.7vw,0.7rem)] overflow-x-auto">
+            <div className="flex flex-nowrap items-center gap-1 text-[clamp(0.5rem,1.5vw,0.62rem)] overflow-x-auto">
               <span className="uppercase tracking-wider text-gray-500 font-semibold mr-0.5 shrink-0">任務</span>
               {previewQuestSizes.map((sz, i) => (
                 <span
@@ -745,7 +747,7 @@ export default function RoomPage(): JSX.Element {
             </div>
           )}
 
-          <div className="flex flex-nowrap items-center gap-1 text-[clamp(0.55rem,1.7vw,0.7rem)] overflow-x-auto">
+          <div className="flex flex-nowrap items-center gap-1 text-[clamp(0.5rem,1.5vw,0.62rem)] overflow-x-auto">
             <span className="uppercase tracking-wider text-gray-500 font-semibold mr-0.5 shrink-0">配置</span>
             {ALL_ROLES_FOR_CHIPS.map(role => {
               const isActive = activeRolesSet.has(role);
@@ -771,7 +773,7 @@ export default function RoomPage(): JSX.Element {
             <button
               type="button"
               onClick={() => setShowMoreRules(v => !v)}
-              className="w-full flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded px-2 py-0.5 text-[clamp(0.55rem,1.7vw,0.7rem)] font-bold text-gray-400 hover:border-gray-500 hover:text-white transition-colors"
+              className="w-full flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded px-2 py-0.5 text-[clamp(0.5rem,1.5vw,0.62rem)] font-bold text-gray-400 hover:border-gray-500 hover:text-white transition-colors"
               aria-expanded={showMoreRules}
               aria-controls="lobby-more-rules"
             >
@@ -815,7 +817,7 @@ export default function RoomPage(): JSX.Element {
                     <select
                       value={(room.roleOptions as unknown as Record<string, string>)?.variant9Player ?? 'standard'}
                       onChange={e => handleSelectAdvanced('variant9Player', e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-600 rounded px-1.5 py-0.5 text-[clamp(0.55rem,1.7vw,0.7rem)] text-white focus:outline-none focus:border-amber-500"
+                      className="w-full bg-gray-900 border border-gray-600 rounded px-1.5 py-0.5 text-[clamp(0.5rem,1.5vw,0.62rem)] text-white focus:outline-none focus:border-amber-500"
                     >
                       <option value="standard">標準 (6 好 3 壞)</option>
                       <option value="oberonMandatory">奧伯倫強制 (5 好 4 壞)</option>
@@ -857,11 +859,11 @@ export default function RoomPage(): JSX.Element {
       )}
 
       {/* Start / Ready bar */}
-      <div className="relative z-10 shrink-0 px-2 py-1.5">
+      <div className="relative z-10 shrink-0 px-2 py-1">
         {isHost ? (
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {humanPlayers.length > 0 && (
-              <div className={`text-[clamp(0.55rem,1.7vw,0.7rem)] text-center py-0.5 rounded border ${
+              <div className={`text-[clamp(0.5rem,1.5vw,0.62rem)] text-center py-0.5 rounded border ${
                 readyCount === humanPlayers.length
                   ? 'bg-blue-900/30 border-blue-700 text-blue-300'
                   : 'bg-gray-800/30 border-gray-700 text-gray-400'
@@ -874,23 +876,23 @@ export default function RoomPage(): JSX.Element {
             <button
               onClick={() => startGame(room.id)}
               disabled={!canStart}
-              className={`w-full font-bold py-2 px-4 rounded-lg text-[clamp(0.85rem,2.5vw,1rem)] transition-all flex items-center justify-center gap-2 ${
+              className={`w-full font-bold py-1.5 px-3 rounded-lg text-[clamp(0.75rem,2.2vw,0.9rem)] transition-all flex items-center justify-center gap-2 ${
                 canStart
                   ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg hover:shadow-amber-500/30'
                   : 'bg-gray-700 text-gray-500 cursor-not-allowed'
               }`}
             >
-              <Play size={16} />
+              <Play size={14} />
               開始遊戲
               {!canStart && (
-                <span className="text-[clamp(0.55rem,1.7vw,0.7rem)] opacity-80">（還需 {5 - playerList.length} 人）</span>
+                <span className="text-[clamp(0.5rem,1.5vw,0.62rem)] opacity-80">（還需 {5 - playerList.length} 人）</span>
               )}
             </button>
           </div>
         ) : (
           <button
             onClick={() => toggleReady(room.id, currentPlayer.id)}
-            className={`w-full font-bold py-2 px-4 rounded-lg text-[clamp(0.85rem,2.5vw,1rem)] transition-all flex items-center justify-center gap-2 border-2 ${
+            className={`w-full font-bold py-1.5 px-3 rounded-lg text-[clamp(0.75rem,2.2vw,0.9rem)] transition-all flex items-center justify-center gap-2 border-2 ${
               isReady
                 ? 'bg-blue-900/50 border-blue-500 text-blue-300 hover:bg-red-900/30 hover:border-red-600 hover:text-red-300'
                 : 'bg-gray-800/50 border-gray-600 text-gray-300 hover:bg-blue-900/30 hover:border-blue-600 hover:text-blue-300'

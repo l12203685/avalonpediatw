@@ -380,9 +380,32 @@ export default function PlayerCard({
             ? 'ring-2 ring-amber-400 shadow-md shadow-amber-400/40'
             : ''
         } ${isShieldInteractive ? 'cursor-pointer' : ''}`}
-        style={portraitUrl !== '' ? { backgroundImage: `url('${portraitUrl}')` } : undefined}
+        // Edward 2026-04-26: 牌背 (role-back) 改走 explicit <img> 而非 bg-image,
+        // 讓我們可以掛 onError diagnostic 抓到 404 / encoding hazard. 其他角色
+        // 仍走 bg-image 維持原 layout. backgroundImage 設給非 role-back 的 portraitUrl.
+        style={portraitUrl !== '' && !isRoleBack ? { backgroundImage: `url('${portraitUrl}')` } : undefined}
         aria-label={`${seatNumber !== undefined ? `${displaySeatNumber(seatNumber)} ` : ''}${player.name}`}
       >
+        {/*
+          Edward 2026-04-26 「圖檔不見」診斷: 把 role-back 牌背從 bg-image 提到
+          explicit <img> 並掛 onError. 若 console.warn 噴 [role-back miss] 即知
+          asset URL 真的 404 / 編碼問題; 否則就是 CSS background-image 沒套到的
+          bug (例如 portraitUrl 拼錯或被 isRoleHidden chain 短路掉).
+        */}
+        {isRoleBack && (
+          <img
+            src={getRoleBackUrl()}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+            draggable={false}
+            onError={(e) => {
+              // eslint-disable-next-line no-console
+              console.warn('[asset miss] role-back', (e.target as HTMLImageElement).src);
+            }}
+          />
+        )}
         {/*
           Edward 2026-04-25 21:52「camp-only」red 陣營卡 — 梅林看紅方 / 紅方互看
           時, server 已把具體 role mask 成 null, 但 keep team='evil'. 此處渲染
@@ -515,6 +538,10 @@ export default function PlayerCard({
               className="w-6 h-6 sm:w-7 sm:h-7 object-contain drop-shadow-lg"
               loading="lazy"
               draggable={false}
+              onError={(e) => {
+                // eslint-disable-next-line no-console
+                console.warn('[asset miss] leader-crown', (e.target as HTMLImageElement).src);
+              }}
             />
           </motion.div>
         )}
@@ -559,6 +586,10 @@ export default function PlayerCard({
               className="w-full h-full object-cover"
               draggable={false}
               loading="lazy"
+              onError={(e) => {
+                // eslint-disable-next-line no-console
+                console.warn('[asset miss] lake-disc', (e.target as HTMLImageElement).src);
+              }}
             />
           </motion.div>
         )}
@@ -594,6 +625,10 @@ export default function PlayerCard({
               className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
               loading="lazy"
               draggable={false}
+              onError={(e) => {
+                // eslint-disable-next-line no-console
+                console.warn('[asset miss] mission-shield(select)', (e.target as HTMLImageElement).src);
+              }}
             />
           </motion.div>
         )}
@@ -611,6 +646,10 @@ export default function PlayerCard({
               className="w-6 h-6 sm:w-7 sm:h-7 object-contain opacity-70"
               loading="lazy"
               draggable={false}
+              onError={(e) => {
+                // eslint-disable-next-line no-console
+                console.warn('[asset miss] mission-shield(hint)', (e.target as HTMLImageElement).src);
+              }}
             />
           </motion.div>
         )}
@@ -643,6 +682,10 @@ export default function PlayerCard({
               className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
               loading="lazy"
               draggable={false}
+              onError={(e) => {
+                // eslint-disable-next-line no-console
+                console.warn('[asset miss] mission-shield(result)', (e.target as HTMLImageElement).src);
+              }}
             />
           </motion.div>
         )}
@@ -691,6 +734,10 @@ export default function PlayerCard({
                   className="w-full h-full object-cover"
                   loading="lazy"
                   draggable={false}
+                  onError={(e) => {
+                    // eslint-disable-next-line no-console
+                    console.warn('[asset miss] vote-back(self)', (e.target as HTMLImageElement).src);
+                  }}
                 />
               </motion.div>
             );
@@ -722,6 +769,10 @@ export default function PlayerCard({
                   className="w-full h-full object-cover"
                   loading="lazy"
                   draggable={false}
+                  onError={(e) => {
+                    // eslint-disable-next-line no-console
+                    console.warn('[asset miss] vote-inflight', (e.target as HTMLImageElement).src);
+                  }}
                 />
               </motion.div>
             );
@@ -744,6 +795,10 @@ export default function PlayerCard({
                   className="w-full h-full object-cover"
                   loading="lazy"
                   draggable={false}
+                  onError={(e) => {
+                    // eslint-disable-next-line no-console
+                    console.warn('[asset miss] vote-persistent', (e.target as HTMLImageElement).src);
+                  }}
                 />
               </motion.div>
             );
