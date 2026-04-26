@@ -89,6 +89,22 @@ function roomHasDiscordPlayer(room: Room): boolean {
   return false;
 }
 
+/**
+ * Resolve a player's 1-based seat number from `room.players` (insertion-order
+ * keyed). Returns the display string — '0' when seat is 10 (paper scoresheet
+ * convention; mirrors `web/src/utils/seatDisplay.ts`), otherwise the decimal.
+ *
+ * Used by lake-declare system chat (#10 spec — Edward 2026-04-26 18:35) to
+ * format「系統: N>M o/x」compactly. Returns '?' for unknown ids.
+ */
+function seatOfInRoom(playerId: string, room: Room): string {
+  const ids = Object.keys(room.players);
+  const idx = ids.indexOf(playerId);
+  if (idx < 0) return '?';
+  const seat = idx + 1;
+  return seat === 10 ? '0' : String(seat);
+}
+
 // ─── ChatMirror (#82) lazy loader ─────────────────────────────────────────
 //
 // Same dynamic-require pattern as roleReveal above — `src/bots/**/*` is
@@ -777,8 +793,9 @@ export class GameServer {
         }
       }
 
-      const firstLeader = updatedRoom.players[Object.keys(updatedRoom.players)[updatedRoom.leaderIndex % Object.keys(updatedRoom.players).length]];
-      this.emitSystemChat(roomId, `🎭 遊戲開始！第一輪隊長：${firstLeader?.name ?? '?'}`);
+      // Edward 2026-04-26 18:31「"遊戲開始! 第一輪隊長: AI" 這串不用顯示」—
+      // 砍 game-start chat noise, 玩家從 phase banner / leader crown 已知遊戲已開始
+      // 與當前隊長, 不需 chat 重複. Console log 保留供 server-side observability.
       console.log(`✓ Game started in room ${roomId}`);
 
       // Kick off bot actions if the first leader is a bot
@@ -1037,14 +1054,16 @@ export class GameServer {
       const record = gameEngine.declareLakeResult(playerId, claim);
       if (!record) return; // already declared — silent no-op
 
-      const declarer = room.players[playerId];
-      const target = room.players[record.targetId];
-      const declarerName = declarer?.name ?? playerId;
-      const targetName = target?.name ?? record.targetId;
-      const claimLabel = claim === 'good' ? '好人' : '壞人';
+      // Edward 2026-04-26 18:35「"AI 宣告 AI 是好人" 不需要, 等宣告後直接顯示
+      // "系統: 4 > 1 o" 就知道」— 砍 verbose, 對齊 #200 simple 格式 N>M o/x
+      // (o = 宣告好人, x = 宣告壞人). 對齊 ChatPanel 客戶端從 ladyOfTheLakeHistory
+      // 同步合成的「系統: 湖 H>T o/x/?」格式.
+      const declarerSeatNum = seatOfInRoom(playerId, room);
+      const targetSeatNum = seatOfInRoom(record.targetId, room);
+      const claimSymbol = claim === 'good' ? 'o' : 'x';
       this.emitSystemChat(
         roomId,
-        `🔮 ${declarerName} 宣告 ${targetName} 是「${claimLabel}」`
+        `系統: ${declarerSeatNum}>${targetSeatNum} ${claimSymbol}`
       );
 
       this.broadcastRoomState(roomId, room);
@@ -1849,14 +1868,14 @@ export class GameServer {
                       if (claim !== null) {
                         const record = eng2.declareLakeResult(holderId, claim);
                         if (record) {
-                          const declarer = s2.players[holderId];
-                          const target = s2.players[record.targetId];
-                          const declarerName = declarer?.name ?? holderId;
-                          const targetName = target?.name ?? record.targetId;
-                          const claimLabel = claim === 'good' ? '好人' : '壞人';
+                          // Edward 2026-04-26 18:35: bot lake-declare 也走 simple
+                          // 格式 (對齊 human declare path 上方修改).
+                          const declarerSeatNum = seatOfInRoom(holderId, s2);
+                          const targetSeatNum = seatOfInRoom(record.targetId, s2);
+                          const claimSymbol = claim === 'good' ? 'o' : 'x';
                           this.emitSystemChat(
                             roomId,
-                            `🔮 ${declarerName} 宣告 ${targetName} 是「${claimLabel}」`
+                            `系統: ${declarerSeatNum}>${targetSeatNum} ${claimSymbol}`
                           );
                           this.broadcastRoomState(roomId, s2);
                         }

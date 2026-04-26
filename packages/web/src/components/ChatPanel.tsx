@@ -345,16 +345,22 @@ export default function ChatPanel({
   // Inline variant — docks into a flex container (e.g. GameBoard center column).
   // No fixed positioning, no open/close toggle, no unread badge. Fills parent
   // height and uses a translucent background so it blends with the board chrome.
+  // Edward 2026-04-26 18:29 spec 5「砍對話紀錄 4 字」+ spec 4「對話框變長」: 當
+  // i18n inlineTitle 為空字串時整條 header 直接砍掉, 把 vertical space 全給
+  // message list (chat 顯更多訊息). 保留 count chip-only 在 messages 右上方
+  // hover 顯示就好 (這版直接砍 header, 不掛 count).
   if (isInline) {
+    const inlineTitle = t('game:chat.inlineTitle');
     return (
       <div className="h-full min-h-0 flex flex-col bg-slate-800/50 border border-gray-700/60 rounded-xl overflow-hidden">
-        {/* Header — shorter than floating, no close button */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-700/60 bg-black/20">
-          <span className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">
-            {t('game:chat.inlineTitle')}
-          </span>
-          <span className="text-[10px] text-gray-500">{merged.length}</span>
-        </div>
+        {inlineTitle && (
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-700/60 bg-black/20">
+            <span className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">
+              {inlineTitle}
+            </span>
+            <span className="text-[10px] text-gray-500">{merged.length}</span>
+          </div>
+        )}
 
         {/* Messages — flex-1 so the input sticks to the bottom */}
         <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">

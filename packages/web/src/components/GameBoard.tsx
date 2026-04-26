@@ -278,10 +278,13 @@ export default function GameBoard({
   // owns its own viewport-bound scroll. The chat slot needs `flex-1 min-h-0`
   // so it fills remaining vertical space without pushing the page; scoresheet
   // stays `auto` height because it's a compact recap.
+  // Edward 2026-04-26 18:29 spec 4「對話框變長」: 給 chat 更多 vertical 空間,
+  // mobile min-height 200px → 360px, 並加 grow priority 讓 chat 在 center column
+  // 吃 lebih remaining space. Scoresheet (若有) 仍保持 auto/fixed-width 不擠.
   const centerExtras = (chatSlot || scoresheetSlot) ? (
     <div className="flex flex-col lg:flex-row gap-3 flex-1 min-h-0">
       {chatSlot && (
-        <div className="flex-1 min-h-[200px] lg:min-h-0 flex flex-col">
+        <div className="flex-1 min-h-[360px] lg:min-h-0 flex flex-col">
           {chatSlot}
         </div>
       )}

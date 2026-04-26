@@ -1054,72 +1054,29 @@ export default function RoomPage(): JSX.Element {
   );
 
   // ─── Center column phase panel (gameplay only) ──────────────────────
+  // Edward 2026-04-26 18:30-18:31 spec 7「砍遊戲資訊方塊 (只用對話紀錄)」+
+  // spec 6「本次任務隊伍 chip」: 砍 teamSelected 後的 yellow「本次任務隊伍: ...」
+  // 方框 — 同樣資訊從 ChatPanel 合成的「系統: R-A, L: TEAM」直接讀更精簡 + chronological.
+  // 也砍 voting 階段非隊長路徑的 redundant timer chip (頂端 row2 已有 teamSelectTimer,
+  // 對齊 spec 9). 留 leader-only banner (有 instructional 動作提示).
   const gameCenterPanel = (
     <>
-      {room.state === 'voting' && !isSpectator && (
-        !teamSelected ? (
-          isCurrentPlayerLeader ? (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-avalon-card/50 border-2 border-amber-500 rounded-lg p-4 sm:p-5 text-center space-y-2"
-            >
-              <h2 className="text-base sm:text-lg font-bold text-amber-200">
-                {t('game:teamSelect.youAreLeaderBanner')}
-              </h2>
-              <p className="text-xs sm:text-[13px] text-amber-100">
-                {t('game:teamSelect.youAreLeaderInstruction', { count: expectedTeamSize })}
-              </p>
-              <p className="text-[11px] sm:text-xs text-gray-400">
-                {t('game:teamSelect.shieldHint')}
-              </p>
-            </motion.div>
-          ) : (
-            !isUnlimitedTimer ? (
-              <div className="flex justify-end">
-                <span
-                  className={`text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full font-semibold ${
-                    teamSelectTimer < 20
-                      ? 'bg-red-900/60 text-red-300 border border-red-800'
-                      : 'bg-gray-800/60 text-gray-400 border border-gray-700'
-                  }`}
-                >
-                  {t('game:teamSelect.timer', { seconds: teamSelectTimer })}
-                </span>
-              </div>
-            ) : null
-          )
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-avalon-card/40 border border-yellow-700/60 rounded-lg px-4 py-2.5 flex items-center gap-2 flex-wrap"
-          >
-            <span className="text-[11px] sm:text-xs font-semibold text-yellow-300 whitespace-nowrap">
-              {t('game:votePanel.questTeamLabel')}
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {[...room.questTeam]
-                .sort((a, b) => seatOf(a, room.players) - seatOf(b, room.players))
-                .map(id => {
-                  const p = room.players[id];
-                  if (!p) return null;
-                  return (
-                    <span
-                      key={id}
-                      className={`text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full border font-semibold ${
-                        id === currentPlayer.id
-                          ? 'bg-yellow-900/40 border-yellow-600 text-yellow-200'
-                          : 'bg-avalon-card/60 border-gray-600 text-gray-200'
-                      }`}
-                    >
-                      {displaySeatNumber(seatOf(id, room.players))}
-                    </span>
-                  );
-                })}
-            </div>
-          </motion.div>
-        )
+      {room.state === 'voting' && !isSpectator && !teamSelected && isCurrentPlayerLeader && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-avalon-card/50 border-2 border-amber-500 rounded-lg p-4 sm:p-5 text-center space-y-2"
+        >
+          <h2 className="text-base sm:text-lg font-bold text-amber-200">
+            {t('game:teamSelect.youAreLeaderBanner')}
+          </h2>
+          <p className="text-xs sm:text-[13px] text-amber-100">
+            {t('game:teamSelect.youAreLeaderInstruction', { count: expectedTeamSize })}
+          </p>
+          <p className="text-[11px] sm:text-xs text-gray-400">
+            {t('game:teamSelect.shieldHint')}
+          </p>
+        </motion.div>
       )}
 
       {room.state === 'lady_of_the_lake' && !isSpectator && (
@@ -1407,11 +1364,11 @@ export default function RoomPage(): JSX.Element {
             chatSlot={
               <ChatPanel roomId={room.id} currentPlayerId={currentPlayer.id} variant="inline" room={room} />
             }
-            scoresheetSlot={
-              isGameplayPhase || isEndedPhase
-                ? <CompactScoresheet room={room} currentPlayer={currentPlayer} />
-                : undefined
-            }
+            // Edward 2026-04-26 18:28 spec 3「game 下方牌譜砍 (#229 右上眼睛旁
+            // 已有重複)」: 砍 CompactScoresheet — 同等 toggle 已在 gameTopSection
+            // 的 ClipboardList icon (eye 旁) 提供, 點開後整個主畫面切到
+            // FullScoresheetLayout. 留 chat panel 獨佔 center column 下半.
+            scoresheetSlot={undefined}
           >
             {(isGameplayPhase || isEndedPhase) && gameCenterPanel}
           </GameBoard>

@@ -43,12 +43,13 @@ export default function QuestTeamToolbar({
   const selected = selectedTeamIds.size;
   const isFull = selected === expectedTeamSize;
 
-  const isUnlimited = room.timerConfig?.multiplier === null;
-  const showCountdown = !isUnlimited && timer !== undefined && (timerTotal ?? 0) > 0;
-  const progressPct = showCountdown
-    ? Math.max(0, Math.min(100, ((timer ?? 0) / (timerTotal ?? 1)) * 100))
-    : 0;
-  const isUrgent = showCountdown && (timer ?? 0) <= 20;
+  // Edward 2026-04-26 18:32 spec 9: timer/timerTotal kept on prop signature
+  // (RoomPage still passes them) for forward-compat, but the dedicated countdown
+  // bar removed below — header `row 2` chip (Clock + teamSelectTimer) is the
+  // single source of timer truth. void the locals so TS noUnusedLocals stays
+  // clean without breaking the public component contract.
+  void timer;
+  void timerTotal;
 
   const handleConfirm = (): void => {
     if (!isFull || isSubmitting) return;
@@ -79,28 +80,11 @@ export default function QuestTeamToolbar({
       })}
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-2">
-        {/* Countdown strip — only when timed */}
-        {showCountdown && (
-          <div className="flex items-center gap-2">
-            <span
-              className={`text-[11px] font-semibold ${isUrgent ? 'text-red-300' : 'text-gray-300'}`}
-            >
-              {timer}s
-            </span>
-            <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
-              <motion.div
-                animate={{ width: `${progressPct}%` }}
-                transition={{ duration: 0.6, ease: 'linear' }}
-                className={`h-full rounded-full ${
-                  isUrgent
-                    ? 'bg-gradient-to-r from-red-500 to-red-400'
-                    : 'bg-gradient-to-r from-amber-500 to-yellow-400'
-                }`}
-              />
-            </div>
-            <span className="text-[10px] text-gray-500">/ {timerTotal}s</span>
-          </div>
-        )}
+        {/* Edward 2026-04-26 18:32 spec 9「計時器重複顯示」: 砍底部 timer 進度條,
+            只留頂端 row 2 (否決+timer+eye) 那處. 頂端 chip 已含 teamSelectTimer
+            倒數; 底部本來這條進度條視覺上重複, 直接整段砍.
+            (timer / timerTotal props 仍保留 — 未來若改成 sticky-bar mini-indicator
+            可重啟而不必改 caller signature.) */}
 
         {/* Row: progress + clear + confirm */}
         <div className="flex items-center gap-2 sm:gap-3">

@@ -322,12 +322,16 @@ export default function PlayerCard({
     : (player.avatar ?? pickAvatarUrl(effectiveRole as Role | null | undefined, player.id));
 
   // Border colour — encodes the mission/team state at a glance. Disconnected
-  // wins so a dropped player is unmistakable; current-player gold beats team
-  // gradients so the viewer can always find their own seat. loyalView force-
-  // suppresses team colours so the rail looks 「忠臣視角」 uniform.
+  // wins so a dropped player is unmistakable; team gradients show camp colour
+  // when known (loyalView force-suppresses for 「忠臣視角」 uniform look).
+  //
+  // Edward 2026-04-26 18:38 spec 12「不要讓自己的方塊變黃色 不然容易跟任務選人時
+  // 疊在一起誤會」: 砍 isCurrentPlayer 的 yellow border + shadow — 跟
+  // shieldSelected (任務選人 yellow) 視覺撞色. 自己用 seat-number 的螢光黃
+  // (PlayerCard top-left badge, spec 11) 區隔即可, 方塊 border 走 effective
+  // team / role-back grey 即可.
   const borderClass = (() => {
     if (player.status === 'disconnected') return 'border-gray-600 opacity-60';
-    if (isCurrentPlayer && !loyalView) return 'border-yellow-400 shadow-lg shadow-yellow-400/40';
     if (effectiveTeam === 'evil') return 'border-red-500';
     if (effectiveTeam === 'good') return 'border-blue-500';
     if (player.isBot) return 'border-slate-500';
@@ -504,17 +508,25 @@ export default function PlayerCard({
         )}
 
         {/*
-          Top-left — seat number badge. Edward 2026-04-25 21:59 撤回「家」suffix:
-          「玩家號碼 (1, 2, ..., 9, 0)」純數字, 牌譜口語仍說「N家」但 UI 走精簡。
-          Edward 21:59 corner spill: 用 -top-1 / -left-1 微出格, 視覺更突顯。
-          Gold-on-black so it stays legible against any portrait.
+          Top-left — seat number. Edward 2026-04-26 18:38 spec 11「玩家號碼可以
+          不要有方框嗎 直接用螢光白顯示在左上角 (自己的號碼顯示黃色)」:
+          砍方框 (no border, no bg), 純螢光文字 overlay. 自己 = 螢光黃, 其他 = 螢光白.
+          drop-shadow 雙層黑色描邊維持任何 portrait 上的可讀性.
         */}
         {seatNumber !== undefined && (
           <div
-            className="absolute -top-1 -left-1 px-1.5 py-0.5 rounded-md bg-black/80 border border-yellow-500/80 pointer-events-none z-20 shadow-sm"
+            className="absolute top-0.5 left-1 pointer-events-none z-20"
             aria-label={`座位 ${displaySeatNumber(seatNumber)}`}
           >
-            <span className="text-[10px] sm:text-xs font-black text-yellow-300 leading-none whitespace-nowrap">
+            <span
+              className={`text-xs sm:text-sm font-black leading-none whitespace-nowrap ${
+                isCurrentPlayer ? 'text-yellow-300' : 'text-white'
+              }`}
+              style={{
+                textShadow:
+                  '0 0 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.95)',
+              }}
+            >
               {displaySeatNumber(seatNumber)}
             </span>
           </div>

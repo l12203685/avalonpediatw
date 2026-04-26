@@ -304,7 +304,7 @@
     "title": "遊戲聊天",
     "noMessages": "還沒有訊息",
     "inputPlaceholder": "輸入訊息…",
-    "inlineTitle": "對話紀錄",
+    "inlineTitle": "",
     "inlinePlaceholder": "在此發言..."
   },
   "missionTrack": {

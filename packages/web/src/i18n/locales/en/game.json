@@ -304,7 +304,7 @@
     "title": "Game Chat",
     "noMessages": "No messages yet",
     "inputPlaceholder": "Type a message…",
-    "inlineTitle": "Chat log",
+    "inlineTitle": "",
     "inlinePlaceholder": "Say something..."
   },
   "missionTrack": {
