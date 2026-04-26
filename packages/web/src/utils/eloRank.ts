@@ -10,17 +10,20 @@
  * response exposes those three fields per entry, replace this file with a
  * thin adapter to the shared types.
  *
- * Edward 2026-04-26 — tier 切點改為 percentile-based (1/50/100/150/375/650)
- *  by `total_games`，對齊 Sheets 2146 場 / 62 玩家實際分佈。
- *  舊 1/6/16/31/61/101 切點推 41/62 (66%) 進大師、菜雞 0 人 — 不平衡。
- *  新切點取自 p16/p33/p50/p75/p90 percentile，rounded to clean numbers，
- *  分佈 ~11/10/10/15/10/6 跨 6 tier (中位數 149，落在「中堅」中段)：
- *   • 菜雞   total_games  1-49     (p<16, 11 玩家)
- *   • 初學   total_games  50-99    (p16-33, 10 玩家)
- *   • 新手   total_games  100-149  (p33-50, 10 玩家)
- *   • 中堅   total_games  150-374  (p50-75, 15 玩家, 中位數附近)
- *   • 高手   total_games  375-649  (p75-90, 10 玩家)
- *   • 大師   total_games  ≥ 650    (p90+, 6 玩家)
+ * Edward 2026-04-26 12:32 — tier 切點改為**絕對固定切點**（1/10/50/100/300/700）。
+ *  反駁前一版 percentile：玩家總數會隨時間增長，percentile 隨之 shift，
+ *  同一玩家可能因新人加入而「降級」。改用絕對場數對齊 Avalon commitment scale
+ *  (30 min/局)：試玩 → 入門 → 固定 → 常客 → 老手 → 硬核。
+ *  資料集擴大後分佈自然 expand，玩家定位穩定。
+ *
+ *  當前 62 玩家預期分佈 (median=152 落「中堅」)：0/11/10/20/16/5 跨 6 tier。
+ *
+ *   • 菜雞   total_games  1-9      (試玩，一晚 5-10 場)
+ *   • 初學   total_games  10-49    (入門，週末打)
+ *   • 新手   total_games  50-99    (固定打 ~月)
+ *   • 中堅   total_games  100-299  (常客，數月)
+ *   • 高手   total_games  300-699  (老手，半年+)
+ *   • 大師   total_games  ≥ 700    (硬核，年+)
  *
  * Within a tier, entries remain sorted by ELO (higher first in UI).
  *
@@ -53,7 +56,7 @@ export const ROOKIE_TIER: EloRank = {
 };
 
 /** Hard ceiling for 菜雞; player needs ≥ this many games to escape 菜雞. */
-export const ROOKIE_MAX_GAMES = 50;
+export const ROOKIE_MAX_GAMES = 10;
 
 /**
  * Five ranked tiers (low → high) with hard `minGames` thresholds.
@@ -61,15 +64,15 @@ export const ROOKIE_MAX_GAMES = 50;
  * `min` (ELO) is retained for back-compat with other call sites (badges etc.)
  * but is no longer consulted for tier assignment.
  *
- * Edward 2026-04-26 thresholds (by `total_games`, percentile-based on 62-player Sheets dataset):
- *   初學 50-99 / 新手 100-149 / 中堅 150-374 / 高手 375-649 / 大師 ≥650
+ * Edward 2026-04-26 12:32 thresholds — **絕對固定切點**（不受玩家總數影響）：
+ *   初學 10-49 / 新手 50-99 / 中堅 100-299 / 高手 300-699 / 大師 ≥700
  */
 export const ELO_RANKS: EloRank[] = [
-  { label: '初學', color: 'text-green-400',  bgColor: 'bg-green-900/40',  borderColor: 'border-green-700',  min: 0,    minGames: 50  },
-  { label: '新手', color: 'text-blue-400',   bgColor: 'bg-blue-900/40',   borderColor: 'border-blue-700',   min: 950,  minGames: 100 },
-  { label: '中堅', color: 'text-purple-400', bgColor: 'bg-purple-900/40', borderColor: 'border-purple-700', min: 1050, minGames: 150 },
-  { label: '高手', color: 'text-yellow-400', bgColor: 'bg-yellow-900/40', borderColor: 'border-yellow-700', min: 1150, minGames: 375 },
-  { label: '大師', color: 'text-orange-400', bgColor: 'bg-orange-900/40', borderColor: 'border-orange-700', min: 1300, minGames: 650 },
+  { label: '初學', color: 'text-green-400',  bgColor: 'bg-green-900/40',  borderColor: 'border-green-700',  min: 0,    minGames: 10  },
+  { label: '新手', color: 'text-blue-400',   bgColor: 'bg-blue-900/40',   borderColor: 'border-blue-700',   min: 950,  minGames: 50  },
+  { label: '中堅', color: 'text-purple-400', bgColor: 'bg-purple-900/40', borderColor: 'border-purple-700', min: 1050, minGames: 100 },
+  { label: '高手', color: 'text-yellow-400', bgColor: 'bg-yellow-900/40', borderColor: 'border-yellow-700', min: 1150, minGames: 300 },
+  { label: '大師', color: 'text-orange-400', bgColor: 'bg-orange-900/40', borderColor: 'border-orange-700', min: 1300, minGames: 700 },
 ];
 
 /** All tiers including pre-tier, low → high. Useful for filter UI. */
@@ -117,7 +120,7 @@ export interface RankInput {
  * Compute each entry's tier from `total_games` using hard thresholds.
  *
  * A player with N total games lands in the highest tier whose `minGames`
- * they satisfy; anyone with N < 50 is 菜雞. Ordering within a tier is the
+ * they satisfy; anyone with N < 10 is 菜雞. Ordering within a tier is the
  * caller's responsibility (LeaderboardPage sorts by ELO).
  */
 export function rankLeaderboard(entries: readonly RankInput[]): Map<string, EloRank> {

@@ -839,16 +839,18 @@ export interface TierThreshold {
  * @deprecated 舊 6-tier 門檻（中文名）。保留以避免破壞存量檔案 / repo docs。
  * 新代碼請用 `TIER_GROUP_THRESHOLDS`。
  *
- * Edward 2026-04-26 — percentile-based recut，對齊 web/utils/eloRank.ts SSoT。
- *   切點取自 62-玩家 totalGames 分佈 p16/p33/p50/p75/p90，rounded to clean numbers。
+ * Edward 2026-04-26 12:32 — **絕對固定切點**（取代 percentile-based）。
+ *   反駁理由：玩家總數會增長，percentile 切點會 shift；改絕對對齊 Avalon
+ *   commitment scale (30 min/局)：試玩 → 入門 → 固定 → 常客 → 老手 → 硬核。
+ *   對齊 web/utils/eloRank.ts SSoT。
  */
 export const TIER_THRESHOLDS: TierThreshold[] = [
   { tier: '菜雞', minGames: 0 },
-  { tier: '初學', minGames: 50 },
-  { tier: '新手', minGames: 100 },
-  { tier: '中堅', minGames: 150 },
-  { tier: '高手', minGames: 375 },
-  { tier: '大師', minGames: 650 },
+  { tier: '初學', minGames: 10 },
+  { tier: '新手', minGames: 50 },
+  { tier: '中堅', minGames: 100 },
+  { tier: '高手', minGames: 300 },
+  { tier: '大師', minGames: 700 },
 ];
 
 /** @deprecated 歷史常數；新代碼用 TierGroup 系統。 */
