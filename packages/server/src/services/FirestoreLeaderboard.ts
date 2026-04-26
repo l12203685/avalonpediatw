@@ -84,6 +84,22 @@ interface PlayerAgg {
 
 const STARTING_ELO = 1000;
 
+/**
+ * Minimum games required to appear on the public leaderboard list.
+ *
+ * Edward 2026-04-26 16:05：raw 牌譜 rebuild 把實際 distinct 玩家從 62 拉到 198 後，
+ * top-N 被一群 1-3 場 100% 勝率玩家佔走 — ELO 算法對小樣本不抗噪。20 場是
+ * 統計意義 floor（與 deriveBadgesFromStats 內 `穩定發揮 / 勝率王` 的 10 場
+ * 觸發分開：badge 仍可早觸發，上榜門檻較嚴）。
+ *
+ * 影響範圍 — **僅限 leaderboard 上榜列表**：
+ *   - getSheetsLeaderboard / getFirestoreLeaderboard fallback 過濾
+ *   - 不影響 getFirestoreUserProfile（個別玩家可從 search/profile 看完整 stats）
+ *   - 不影響 analytics aggregate（baseline 需所有玩家貢獻）
+ *   - 不影響 findPlayerByName（搜尋仍可找到 <20 場玩家）
+ */
+const MIN_LEADERBOARD_GAMES = 20;
+
 // ---------------------------------------------------------------------------
 // Core: load all games and aggregate
 // ---------------------------------------------------------------------------
@@ -222,7 +238,7 @@ export async function getFirestoreLeaderboard(limit = 10000): Promise<Leaderboar
   const players = await getAggregated();
 
   const sorted = [...players.values()]
-    .filter(p => p.totalGames >= 1)
+    .filter(p => p.totalGames >= MIN_LEADERBOARD_GAMES)
     .sort((a, b) => b.elo - a.elo)
     .slice(0, limit);
 
@@ -304,10 +320,12 @@ function computeEloFromSheets(players: PlayerStats[]): Map<string, { elo: number
  * Get leaderboard from Google Sheets player stats.
  * This is the primary leaderboard source since it contains 2145+ games of history.
  *
- * Returns every player with >= 1 recorded game (capped by `limit`, default
- * effectively unlimited). The frontend's `rankLeaderboard` splits them into
- * tiers — crucially, players with < 30 games form the 菜雞 pre-tier and would
- * be silently dropped if we truncated to top-N by ELO here.
+ * Returns every player with >= `MIN_LEADERBOARD_GAMES` recorded games (capped by
+ * `limit`, default effectively unlimited).
+ *
+ * Edward 2026-04-26 16:05：上榜門檻設 20 場 — raw 牌譜 rebuild 後 198 玩家入池，
+ * top-N 被 1-3 場 100% 勝率小樣本玩家佔走，加 20 場 floor 才有統計意義。
+ * 個別玩家 stats 仍可從 search/profile 看（getFirestoreUserProfile 不過濾）。
  */
 async function getSheetsLeaderboard(limit: number): Promise<LeaderboardEntry[]> {
   if (!isSheetsReady()) return [];
@@ -320,6 +338,9 @@ async function getSheetsLeaderboard(limit: number): Promise<LeaderboardEntry[]> 
 
     const entries: LeaderboardEntry[] = [];
     for (const [name, { elo, stats }] of eloMap) {
+      // Edward 2026-04-26 16:05: 上榜門檻 — < 20 場不上榜（避免小樣本 100% 勝率玩家浮榜）
+      if (stats.totalGames < MIN_LEADERBOARD_GAMES) continue;
+
       const totalWins = Math.round(stats.totalGames * (stats.winRate / 100));
       const totalLosses = stats.totalGames - totalWins;
       entries.push({

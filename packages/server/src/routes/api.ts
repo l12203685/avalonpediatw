@@ -252,8 +252,8 @@ function mergeOverrides<T extends FirestoreUserProfile>(
 }
 
 // ── GET /api/leaderboard ──────────────────────────────────────
-// 回傳全部有遊戲紀錄的玩家（預估 300-500 位），含 <30 場的菜雞。
-// 前端依 tier 分組顯示；若只拿前 50 名會砍掉菜雞 tab 的所有玩家。
+// 回傳 ≥20 場玩家（Edward 2026-04-26 16:05 上榜門檻）。
+// 個別玩家 <20 場仍可從 search/profile 看完整 stats — 這裡只過濾「上榜列表」，不影響統計分析。
 router.get('/leaderboard', publicLimiter, async (_req: Request, res: Response) => {
   try {
     const leaderboard = await getFirestoreLeaderboard();
