@@ -208,6 +208,54 @@ export interface StrengthData {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Panel C — 對戰風格快照 (Playstyle Snapshot)
+// ---------------------------------------------------------------------------
+export interface PlaystyleSplit {
+  red: number | null;
+  blue: number | null;
+}
+
+export interface PlaystylePlayerData {
+  /** R3+ reject rate per game-role camp (0-100). null when sample below threshold. */
+  r3RejectRate: PlaystySplitOrNull;
+  /** Cohort percentile (0-100) within N>=10 R3+ vote sample per camp. */
+  r3RejectPercentile: PlaystySplitOrNull;
+  /** Top 3 assassin target seats (1..10) by count; null when attempts<3. */
+  assassinTopSeats: number[] | null;
+  assassinAttempts: number;
+  /** Captain stickiness % (same-team-next / total leader proposals); null when proposals<5. */
+  captainStickiness: number | null;
+  captainStickinessPercentile: number | null;
+  sampleSize: number;
+  hasData: boolean;
+}
+
+export type PlaystySplitOrNull = PlaystyleSplit;
+
+export interface PlaystyleCohort {
+  r3Red: { n: number; mean: number | null; std: number | null };
+  r3Blue: { n: number; mean: number | null; std: number | null };
+  captainStickiness: { n: number; mean: number | null; std: number | null };
+  assassinAttempts: { n: number };
+}
+
+export interface PlaystyleData {
+  perPlayer: Record<string, PlaystylePlayerData>;
+  cohort: PlaystyleCohort;
+  thresholds: {
+    r3MinVotes: number;
+    assassinMinAttempts: number;
+    captainMinProposals: number;
+  };
+  labels: {
+    r3RejectRedLabel: string;
+    r3RejectBlueLabel: string;
+    assassinTargetLabel: string;
+    captainStickinessLabel: string;
+  };
+}
+
 interface AnalysisCache {
   overview: OverviewData;
   players: { players: PlayerStats[]; total: number };
@@ -252,6 +300,7 @@ interface AnalysisCache {
   captainAnalysis?: CaptainAnalysisData;
   archetype?: ArchetypeData;
   strength?: StrengthData;
+  playstyle?: PlaystyleData;
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +436,35 @@ export async function getPlayerStrength(name: string): Promise<{
     },
     data,
     cohort: c.strength.cohort,
+  };
+}
+
+/**
+ * Lookup playstyle (Panel C) data for a single player.
+ * Returns null when the player isn't tracked. Per-metric null inside the data
+ * means insufficient sample for that specific signal (UI should hide that row).
+ */
+export async function getPlayerPlaystyle(name: string): Promise<{
+  player: { name: string; totalGames: number };
+  data: PlaystylePlayerData;
+  cohort: PlaystyleCohort;
+  thresholds: PlaystyleData['thresholds'];
+  labels: PlaystyleData['labels'];
+} | null> {
+  const c = loadCache();
+  if (!c.playstyle) return null;
+  const data = c.playstyle.perPlayer[name];
+  if (!data) return null;
+  const detail = c.playerDetails[name];
+  return {
+    player: {
+      name,
+      totalGames: detail ? detail.player.totalGames : data.sampleSize,
+    },
+    data,
+    cohort:     c.playstyle.cohort,
+    thresholds: c.playstyle.thresholds,
+    labels:     c.playstyle.labels,
   };
 }
 

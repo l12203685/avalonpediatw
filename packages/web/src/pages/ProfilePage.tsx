@@ -5,6 +5,7 @@ import { getEloRank } from '../utils/eloRank';
 import { CampDisc } from '../components/CampDisc';
 import ArchetypeRadar from '../components/profile/ArchetypeRadar';
 import StrengthSignature from '../components/profile/StrengthSignature';
+import PlaystyleSnapshot from '../components/profile/PlaystyleSnapshot';
 import { checkFollowing, followUser, unfollowUser, fetchAutoMatchCandidates, fetchMyClaims, updateMyProfile, uploadAvatar } from '../services/api';
 import { useGameStore } from '../store/gameStore';
 import { fetchMyProfile, fetchUserProfile, fetchGameReplay, UserProfile, RecentGame, GameEvent } from '../services/api';
@@ -1109,6 +1110,11 @@ export default function ProfilePage(): JSX.Element {
                 <ArchetypeRadar playerName={profile.display_name} />
                 <StrengthSignature playerName={profile.display_name} />
               </div>
+            )}
+
+            {/* Panel C — 對戰風格快照 (Edward 2026-04-26 夜間任務 3) */}
+            {profile.display_name && (
+              <PlaystyleSnapshot playerName={profile.display_name} />
             )}
 
             {/* Recent games */}

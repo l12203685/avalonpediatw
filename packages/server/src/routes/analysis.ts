@@ -19,6 +19,7 @@ import {
   getCaptainAnalysis,
   getPlayerArchetype,
   getPlayerStrength,
+  getPlayerPlaystyle,
   invalidateCache,
   isSheetsReady,
 } from '../services/sheetsAnalysis';
@@ -257,6 +258,26 @@ router.get('/profile/:name/strength', limiter, async (req: Request, res: Respons
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/profile/strength]', msg);
     return fail(res, 500, 'Failed to load strength signature');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/profile/:name/playstyle
+// Panel C — 對戰風格快照 (R3+ 強硬度 / 刺客目標座位 / 隊長 stickiness)
+// ---------------------------------------------------------------------------
+router.get('/profile/:name/playstyle', limiter, async (req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const name = decodeURIComponent(req.params.name);
+    const data = await getPlayerPlaystyle(name);
+    if (!data) {
+      return fail(res, 404, 'Player not tracked in analysis cache');
+    }
+    return ok(res, data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/profile/playstyle]', msg);
+    return fail(res, 500, 'Failed to load playstyle snapshot');
   }
 });
 

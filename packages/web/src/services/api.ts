@@ -658,6 +658,50 @@ export async function fetchPlayerStrength(name: string): Promise<StrengthPlayerR
   );
 }
 
+// ── Panel C: Playstyle snapshot (R3+ 強硬度 / 刺座 / 隊長 stickiness) ─────────
+
+export interface PlaystyleSplit {
+  red: number | null;
+  blue: number | null;
+}
+
+export interface PlaystylePlayerResponse {
+  player: { name: string; totalGames: number };
+  data: {
+    r3RejectRate: PlaystyleSplit;
+    r3RejectPercentile: PlaystyleSplit;
+    assassinTopSeats: number[] | null;
+    assassinAttempts: number;
+    captainStickiness: number | null;
+    captainStickinessPercentile: number | null;
+    sampleSize: number;
+    hasData: boolean;
+  };
+  cohort: {
+    r3Red: { n: number; mean: number | null; std: number | null };
+    r3Blue: { n: number; mean: number | null; std: number | null };
+    captainStickiness: { n: number; mean: number | null; std: number | null };
+    assassinAttempts: { n: number };
+  };
+  thresholds: {
+    r3MinVotes: number;
+    assassinMinAttempts: number;
+    captainMinProposals: number;
+  };
+  labels: {
+    r3RejectRedLabel: string;
+    r3RejectBlueLabel: string;
+    assassinTargetLabel: string;
+    captainStickinessLabel: string;
+  };
+}
+
+export async function fetchPlayerPlaystyle(name: string): Promise<PlaystylePlayerResponse> {
+  return analysisApiFetch<PlaystylePlayerResponse>(
+    `/profile/${encodeURIComponent(name)}/playstyle`,
+  );
+}
+
 // ── Wiki API ─────────────────────────────────────────────────────────────────
 
 export interface WikiArticleApi {

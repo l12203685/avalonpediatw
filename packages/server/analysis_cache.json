@@ -103986,5 +103986,3431 @@
         "忠臣"
       ]
     }
+  },
+  "playstyle": {
+    "perPlayer": {
+      "Sin": {
+        "r3RejectRate": {
+          "red": 61.9,
+          "blue": 47.2
+        },
+        "r3RejectPercentile": {
+          "red": 46.2,
+          "blue": 28.4
+        },
+        "assassinTopSeats": [
+          5,
+          1,
+          6
+        ],
+        "assassinAttempts": 52,
+        "captainStickiness": 5.4,
+        "captainStickinessPercentile": 65.2,
+        "sampleSize": 1081,
+        "hasData": true
+      },
+      "HAO": {
+        "r3RejectRate": {
+          "red": 58.3,
+          "blue": 45.2
+        },
+        "r3RejectPercentile": {
+          "red": 35.1,
+          "blue": 20.2
+        },
+        "assassinTopSeats": [
+          5,
+          2,
+          6
+        ],
+        "assassinAttempts": 41,
+        "captainStickiness": 7.6,
+        "captainStickinessPercentile": 82.0,
+        "sampleSize": 1014,
+        "hasData": true
+      },
+      "尼克": {
+        "r3RejectRate": {
+          "red": 64.9,
+          "blue": 55.2
+        },
+        "r3RejectPercentile": {
+          "red": 61.5,
+          "blue": 70.2
+        },
+        "assassinTopSeats": [
+          3,
+          4,
+          5
+        ],
+        "assassinAttempts": 52,
+        "captainStickiness": 5.2,
+        "captainStickinessPercentile": 60.0,
+        "sampleSize": 873,
+        "hasData": true
+      },
+      "軒": {
+        "r3RejectRate": {
+          "red": 55.9,
+          "blue": 54.7
+        },
+        "r3RejectPercentile": {
+          "red": 26.0,
+          "blue": 68.2
+        },
+        "assassinTopSeats": [
+          5,
+          4,
+          9
+        ],
+        "assassinAttempts": 51,
+        "captainStickiness": 4.9,
+        "captainStickinessPercentile": 53.6,
+        "sampleSize": 783,
+        "hasData": true
+      },
+      "海月": {
+        "r3RejectRate": {
+          "red": 69.6,
+          "blue": 50.9
+        },
+        "r3RejectPercentile": {
+          "red": 74.4,
+          "blue": 49.7
+        },
+        "assassinTopSeats": [
+          2,
+          1,
+          5
+        ],
+        "assassinAttempts": 52,
+        "captainStickiness": 5.9,
+        "captainStickinessPercentile": 69.6,
+        "sampleSize": 739,
+        "hasData": true
+      },
+      "池": {
+        "r3RejectRate": {
+          "red": 55.9,
+          "blue": 48.2
+        },
+        "r3RejectPercentile": {
+          "red": 26.0,
+          "blue": 34.2
+        },
+        "assassinTopSeats": [
+          7,
+          2,
+          6
+        ],
+        "assassinAttempts": 43,
+        "captainStickiness": 5.4,
+        "captainStickinessPercentile": 65.2,
+        "sampleSize": 728,
+        "hasData": true
+      },
+      "黑羊": {
+        "r3RejectRate": {
+          "red": 54.0,
+          "blue": 51.3
+        },
+        "r3RejectPercentile": {
+          "red": 17.2,
+          "blue": 51.7
+        },
+        "assassinTopSeats": [
+          5,
+          7,
+          10
+        ],
+        "assassinAttempts": 28,
+        "captainStickiness": 6.3,
+        "captainStickinessPercentile": 72.8,
+        "sampleSize": 661,
+        "hasData": true
+      },
+      "洋蔥": {
+        "r3RejectRate": {
+          "red": 57.9,
+          "blue": 50.2
+        },
+        "r3RejectPercentile": {
+          "red": 33.2,
+          "blue": 45.5
+        },
+        "assassinTopSeats": [
+          10,
+          3,
+          4
+        ],
+        "assassinAttempts": 31,
+        "captainStickiness": 5.2,
+        "captainStickinessPercentile": 60.0,
+        "sampleSize": 580,
+        "hasData": true
+      },
+      "JOY": {
+        "r3RejectRate": {
+          "red": 64.8,
+          "blue": 50.1
+        },
+        "r3RejectPercentile": {
+          "red": 60.7,
+          "blue": 44.2
+        },
+        "assassinTopSeats": [
+          3,
+          2,
+          6
+        ],
+        "assassinAttempts": 19,
+        "captainStickiness": 4.0,
+        "captainStickinessPercentile": 44.4,
+        "sampleSize": 489,
+        "hasData": true
+      },
+      "Liang": {
+        "r3RejectRate": {
+          "red": 63.1,
+          "blue": 50.1
+        },
+        "r3RejectPercentile": {
+          "red": 50.0,
+          "blue": 44.2
+        },
+        "assassinTopSeats": [
+          5,
+          8,
+          1
+        ],
+        "assassinAttempts": 25,
+        "captainStickiness": 5.0,
+        "captainStickinessPercentile": 56.4,
+        "sampleSize": 483,
+        "hasData": true
+      },
+      "轆": {
+        "r3RejectRate": {
+          "red": 62.1,
+          "blue": 50.6
+        },
+        "r3RejectPercentile": {
+          "red": 46.9,
+          "blue": 47.9
+        },
+        "assassinTopSeats": [
+          5,
+          1,
+          2
+        ],
+        "assassinAttempts": 24,
+        "captainStickiness": 5.0,
+        "captainStickinessPercentile": 56.4,
+        "sampleSize": 477,
+        "hasData": true
+      },
+      "Dean": {
+        "r3RejectRate": {
+          "red": 66.6,
+          "blue": 50.5
+        },
+        "r3RejectPercentile": {
+          "red": 66.8,
+          "blue": 46.6
+        },
+        "assassinTopSeats": [
+          2,
+          4,
+          1
+        ],
+        "assassinAttempts": 21,
+        "captainStickiness": 5.9,
+        "captainStickinessPercentile": 69.6,
+        "sampleSize": 475,
+        "hasData": true
+      },
+      "豬豬": {
+        "r3RejectRate": {
+          "red": 60.8,
+          "blue": 50.0
+        },
+        "r3RejectPercentile": {
+          "red": 43.1,
+          "blue": 41.8
+        },
+        "assassinTopSeats": [
+          4,
+          5,
+          2
+        ],
+        "assassinAttempts": 25,
+        "captainStickiness": 3.2,
+        "captainStickinessPercentile": 36.0,
+        "sampleSize": 425,
+        "hasData": true
+      },
+      "kevin": {
+        "r3RejectRate": {
+          "red": 65.8,
+          "blue": 54.7
+        },
+        "r3RejectPercentile": {
+          "red": 64.1,
+          "blue": 68.2
+        },
+        "assassinTopSeats": [
+          5,
+          4,
+          1
+        ],
+        "assassinAttempts": 15,
+        "captainStickiness": 5.3,
+        "captainStickinessPercentile": 62.0,
+        "sampleSize": 420,
+        "hasData": true
+      },
+      "雪怪": {
+        "r3RejectRate": {
+          "red": 66.4,
+          "blue": 48.2
+        },
+        "r3RejectPercentile": {
+          "red": 66.0,
+          "blue": 34.2
+        },
+        "assassinTopSeats": [
+          10,
+          1,
+          6
+        ],
+        "assassinAttempts": 16,
+        "captainStickiness": 5.4,
+        "captainStickinessPercentile": 65.2,
+        "sampleSize": 412,
+        "hasData": true
+      },
+      "發達": {
+        "r3RejectRate": {
+          "red": 58.2,
+          "blue": 52.7
+        },
+        "r3RejectPercentile": {
+          "red": 34.0,
+          "blue": 57.5
+        },
+        "assassinTopSeats": [
+          3,
+          5,
+          4
+        ],
+        "assassinAttempts": 16,
+        "captainStickiness": 2.5,
+        "captainStickinessPercentile": 30.8,
+        "sampleSize": 386,
+        "hasData": true
+      },
+      "黃某人": {
+        "r3RejectRate": {
+          "red": 56.5,
+          "blue": 47.8
+        },
+        "r3RejectPercentile": {
+          "red": 29.4,
+          "blue": 30.1
+        },
+        "assassinTopSeats": [
+          4,
+          5,
+          7
+        ],
+        "assassinAttempts": 29,
+        "captainStickiness": 5.9,
+        "captainStickinessPercentile": 69.6,
+        "sampleSize": 368,
+        "hasData": true
+      },
+      "菜": {
+        "r3RejectRate": {
+          "red": 55.5,
+          "blue": 47.8
+        },
+        "r3RejectPercentile": {
+          "red": 23.3,
+          "blue": 30.1
+        },
+        "assassinTopSeats": [
+          4,
+          7,
+          5
+        ],
+        "assassinAttempts": 23,
+        "captainStickiness": 6.3,
+        "captainStickinessPercentile": 72.8,
+        "sampleSize": 359,
+        "hasData": true
+      },
+      "Lori": {
+        "r3RejectRate": {
+          "red": 67.5,
+          "blue": 44.7
+        },
+        "r3RejectPercentile": {
+          "red": 70.2,
+          "blue": 18.2
+        },
+        "assassinTopSeats": [
+          4,
+          5,
+          7
+        ],
+        "assassinAttempts": 22,
+        "captainStickiness": 3.3,
+        "captainStickinessPercentile": 37.2,
+        "sampleSize": 356,
+        "hasData": true
+      },
+      "大星": {
+        "r3RejectRate": {
+          "red": 64.5,
+          "blue": 49.2
+        },
+        "r3RejectPercentile": {
+          "red": 58.8,
+          "blue": 37.7
+        },
+        "assassinTopSeats": [
+          5,
+          10,
+          1
+        ],
+        "assassinAttempts": 13,
+        "captainStickiness": 4.6,
+        "captainStickinessPercentile": 49.6,
+        "sampleSize": 337,
+        "hasData": true
+      },
+      "ED": {
+        "r3RejectRate": {
+          "red": 59.4,
+          "blue": 50.0
+        },
+        "r3RejectPercentile": {
+          "red": 38.5,
+          "blue": 41.8
+        },
+        "assassinTopSeats": [
+          1,
+          6,
+          9
+        ],
+        "assassinAttempts": 17,
+        "captainStickiness": 7.4,
+        "captainStickinessPercentile": 80.0,
+        "sampleSize": 294,
+        "hasData": true
+      },
+      "午夜": {
+        "r3RejectRate": {
+          "red": 57.2,
+          "blue": 50.1
+        },
+        "r3RejectPercentile": {
+          "red": 30.2,
+          "blue": 44.2
+        },
+        "assassinTopSeats": [
+          2,
+          4,
+          6
+        ],
+        "assassinAttempts": 8,
+        "captainStickiness": 3.5,
+        "captainStickinessPercentile": 38.8,
+        "sampleSize": 291,
+        "hasData": true
+      },
+      "Vash": {
+        "r3RejectRate": {
+          "red": 70.7,
+          "blue": 50.8
+        },
+        "r3RejectPercentile": {
+          "red": 78.2,
+          "blue": 49.0
+        },
+        "assassinTopSeats": [
+          2,
+          3,
+          6
+        ],
+        "assassinAttempts": 19,
+        "captainStickiness": 6.9,
+        "captainStickinessPercentile": 77.2,
+        "sampleSize": 266,
+        "hasData": true
+      },
+      "TEN": {
+        "r3RejectRate": {
+          "red": 59.7,
+          "blue": 53.2
+        },
+        "r3RejectPercentile": {
+          "red": 40.5,
+          "blue": 62.0
+        },
+        "assassinTopSeats": [
+          4,
+          5,
+          2
+        ],
+        "assassinAttempts": 11,
+        "captainStickiness": 3.2,
+        "captainStickinessPercentile": 36.0,
+        "sampleSize": 254,
+        "hasData": true
+      },
+      "豬羊": {
+        "r3RejectRate": {
+          "red": 57.5,
+          "blue": 50.5
+        },
+        "r3RejectPercentile": {
+          "red": 31.7,
+          "blue": 46.6
+        },
+        "assassinTopSeats": [
+          2,
+          3,
+          1
+        ],
+        "assassinAttempts": 13,
+        "captainStickiness": 2.6,
+        "captainStickinessPercentile": 31.6,
+        "sampleSize": 248,
+        "hasData": true
+      },
+      "很乖": {
+        "r3RejectRate": {
+          "red": 55.9,
+          "blue": 52.9
+        },
+        "r3RejectPercentile": {
+          "red": 26.0,
+          "blue": 58.9
+        },
+        "assassinTopSeats": [
+          9,
+          5,
+          6
+        ],
+        "assassinAttempts": 14,
+        "captainStickiness": 4.7,
+        "captainStickinessPercentile": 51.2,
+        "sampleSize": 243,
+        "hasData": true
+      },
+      "呂安": {
+        "r3RejectRate": {
+          "red": 65.8,
+          "blue": 54.1
+        },
+        "r3RejectPercentile": {
+          "red": 64.1,
+          "blue": 66.1
+        },
+        "assassinTopSeats": [
+          8,
+          1,
+          7
+        ],
+        "assassinAttempts": 12,
+        "captainStickiness": 3.7,
+        "captainStickinessPercentile": 40.8,
+        "sampleSize": 231,
+        "hasData": true
+      },
+      "Ray": {
+        "r3RejectRate": {
+          "red": 69.0,
+          "blue": 48.3
+        },
+        "r3RejectPercentile": {
+          "red": 73.3,
+          "blue": 35.3
+        },
+        "assassinTopSeats": [
+          5,
+          8,
+          2
+        ],
+        "assassinAttempts": 9,
+        "captainStickiness": 5.3,
+        "captainStickinessPercentile": 62.0,
+        "sampleSize": 211,
+        "hasData": true
+      },
+      "布冬": {
+        "r3RejectRate": {
+          "red": 51.9,
+          "blue": 52.5
+        },
+        "r3RejectPercentile": {
+          "red": 11.8,
+          "blue": 55.8
+        },
+        "assassinTopSeats": [
+          7,
+          2,
+          9
+        ],
+        "assassinAttempts": 12,
+        "captainStickiness": 7.7,
+        "captainStickinessPercentile": 82.8,
+        "sampleSize": 211,
+        "hasData": true
+      },
+      "開司": {
+        "r3RejectRate": {
+          "red": 53.6,
+          "blue": 53.6
+        },
+        "r3RejectPercentile": {
+          "red": 14.9,
+          "blue": 64.7
+        },
+        "assassinTopSeats": [
+          5,
+          7,
+          1
+        ],
+        "assassinAttempts": 9,
+        "captainStickiness": 4.6,
+        "captainStickinessPercentile": 49.6,
+        "sampleSize": 183,
+        "hasData": true
+      },
+      "Emma": {
+        "r3RejectRate": {
+          "red": 61.0,
+          "blue": 48.6
+        },
+        "r3RejectPercentile": {
+          "red": 43.9,
+          "blue": 36.0
+        },
+        "assassinTopSeats": [
+          2,
+          5,
+          7
+        ],
+        "assassinAttempts": 6,
+        "captainStickiness": 4.2,
+        "captainStickinessPercentile": 46.4,
+        "sampleSize": 158,
+        "hasData": true
+      },
+      "小向": {
+        "r3RejectRate": {
+          "red": 57.3,
+          "blue": 55.7
+        },
+        "r3RejectPercentile": {
+          "red": 30.9,
+          "blue": 72.3
+        },
+        "assassinTopSeats": [
+          7,
+          1,
+          2
+        ],
+        "assassinAttempts": 15,
+        "captainStickiness": 5.0,
+        "captainStickinessPercentile": 56.4,
+        "sampleSize": 157,
+        "hasData": true
+      },
+      "小背包": {
+        "r3RejectRate": {
+          "red": 63.8,
+          "blue": 54.7
+        },
+        "r3RejectPercentile": {
+          "red": 53.8,
+          "blue": 68.2
+        },
+        "assassinTopSeats": [
+          2,
+          3,
+          4
+        ],
+        "assassinAttempts": 8,
+        "captainStickiness": 4.7,
+        "captainStickinessPercentile": 51.2,
+        "sampleSize": 152,
+        "hasData": true
+      },
+      "夆": {
+        "r3RejectRate": {
+          "red": 55.2,
+          "blue": 52.7
+        },
+        "r3RejectPercentile": {
+          "red": 20.6,
+          "blue": 57.5
+        },
+        "assassinTopSeats": [
+          4,
+          10,
+          7
+        ],
+        "assassinAttempts": 6,
+        "captainStickiness": 7.1,
+        "captainStickinessPercentile": 78.8,
+        "sampleSize": 140,
+        "hasData": true
+      },
+      "sbear": {
+        "r3RejectRate": {
+          "red": 63.5,
+          "blue": 55.8
+        },
+        "r3RejectPercentile": {
+          "red": 51.5,
+          "blue": 72.9
+        },
+        "assassinTopSeats": [
+          2,
+          5,
+          7
+        ],
+        "assassinAttempts": 5,
+        "captainStickiness": 3.9,
+        "captainStickinessPercentile": 42.8,
+        "sampleSize": 134,
+        "hasData": true
+      },
+      "嚇吃手": {
+        "r3RejectRate": {
+          "red": 56.2,
+          "blue": 53.5
+        },
+        "r3RejectPercentile": {
+          "red": 28.6,
+          "blue": 64.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 6.8,
+        "captainStickinessPercentile": 75.6,
+        "sampleSize": 128,
+        "hasData": true
+      },
+      "fancy": {
+        "r3RejectRate": {
+          "red": 67.1,
+          "blue": 60.1
+        },
+        "r3RejectPercentile": {
+          "red": 69.1,
+          "blue": 81.8
+        },
+        "assassinTopSeats": [
+          6,
+          7,
+          4
+        ],
+        "assassinAttempts": 7,
+        "captainStickiness": 8.0,
+        "captainStickinessPercentile": 84.4,
+        "sampleSize": 127,
+        "hasData": true
+      },
+      "亞可": {
+        "r3RejectRate": {
+          "red": 53.8,
+          "blue": 48.0
+        },
+        "r3RejectPercentile": {
+          "red": 16.0,
+          "blue": 31.8
+        },
+        "assassinTopSeats": [
+          1,
+          2,
+          3
+        ],
+        "assassinAttempts": 6,
+        "captainStickiness": 4.5,
+        "captainStickinessPercentile": 48.0,
+        "sampleSize": 118,
+        "hasData": true
+      },
+      "K810": {
+        "r3RejectRate": {
+          "red": 50.7,
+          "blue": 49.4
+        },
+        "r3RejectPercentile": {
+          "red": 9.5,
+          "blue": 38.7
+        },
+        "assassinTopSeats": [
+          1,
+          6,
+          5
+        ],
+        "assassinAttempts": 9,
+        "captainStickiness": 5.9,
+        "captainStickinessPercentile": 69.6,
+        "sampleSize": 116,
+        "hasData": true
+      },
+      "FOX": {
+        "r3RejectRate": {
+          "red": 55.4,
+          "blue": 53.4
+        },
+        "r3RejectPercentile": {
+          "red": 22.5,
+          "blue": 63.0
+        },
+        "assassinTopSeats": [
+          1,
+          2,
+          4
+        ],
+        "assassinAttempts": 10,
+        "captainStickiness": 5.4,
+        "captainStickinessPercentile": 65.2,
+        "sampleSize": 109,
+        "hasData": true
+      },
+      "Yumi": {
+        "r3RejectRate": {
+          "red": 74.6,
+          "blue": 56.4
+        },
+        "r3RejectPercentile": {
+          "red": 85.5,
+          "blue": 75.0
+        },
+        "assassinTopSeats": [
+          2,
+          4,
+          5
+        ],
+        "assassinAttempts": 6,
+        "captainStickiness": 7.4,
+        "captainStickinessPercentile": 80.0,
+        "sampleSize": 96,
+        "hasData": true
+      },
+      "Alan": {
+        "r3RejectRate": {
+          "red": 65.1,
+          "blue": 53.4
+        },
+        "r3RejectPercentile": {
+          "red": 62.6,
+          "blue": 63.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 3.0,
+        "captainStickinessPercentile": 33.2,
+        "sampleSize": 95,
+        "hasData": true
+      },
+      "阿寶": {
+        "r3RejectRate": {
+          "red": 57.7,
+          "blue": 52.6
+        },
+        "r3RejectPercentile": {
+          "red": 32.4,
+          "blue": 56.5
+        },
+        "assassinTopSeats": [
+          6,
+          1,
+          10
+        ],
+        "assassinAttempts": 4,
+        "captainStickiness": 2.8,
+        "captainStickinessPercentile": 32.4,
+        "sampleSize": 95,
+        "hasData": true
+      },
+      "熊": {
+        "r3RejectRate": {
+          "red": 63.0,
+          "blue": 52.0
+        },
+        "r3RejectPercentile": {
+          "red": 49.2,
+          "blue": 53.8
+        },
+        "assassinTopSeats": [
+          3,
+          8,
+          4
+        ],
+        "assassinAttempts": 9,
+        "captainStickiness": 5.5,
+        "captainStickinessPercentile": 67.6,
+        "sampleSize": 84,
+        "hasData": true
+      },
+      "毛爸": {
+        "r3RejectRate": {
+          "red": 58.6,
+          "blue": 53.7
+        },
+        "r3RejectPercentile": {
+          "red": 36.3,
+          "blue": 65.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 83,
+        "hasData": true
+      },
+      "爾勵": {
+        "r3RejectRate": {
+          "red": 64.3,
+          "blue": 49.2
+        },
+        "r3RejectPercentile": {
+          "red": 56.5,
+          "blue": 37.7
+        },
+        "assassinTopSeats": [
+          1,
+          5,
+          9
+        ],
+        "assassinAttempts": 4,
+        "captainStickiness": 6.2,
+        "captainStickinessPercentile": 71.6,
+        "sampleSize": 82,
+        "hasData": true
+      },
+      "Dal": {
+        "r3RejectRate": {
+          "red": 67.5,
+          "blue": 48.1
+        },
+        "r3RejectPercentile": {
+          "red": 70.2,
+          "blue": 33.2
+        },
+        "assassinTopSeats": [
+          3,
+          4,
+          8
+        ],
+        "assassinAttempts": 4,
+        "captainStickiness": 2.1,
+        "captainStickinessPercentile": 29.2,
+        "sampleSize": 80,
+        "hasData": true
+      },
+      "Sirius": {
+        "r3RejectRate": {
+          "red": 59.5,
+          "blue": 47.1
+        },
+        "r3RejectPercentile": {
+          "red": 39.3,
+          "blue": 27.4
+        },
+        "assassinTopSeats": [
+          1,
+          3,
+          9
+        ],
+        "assassinAttempts": 4,
+        "captainStickiness": 5.1,
+        "captainStickinessPercentile": 58.8,
+        "sampleSize": 70,
+        "hasData": true
+      },
+      "冰雪塵": {
+        "r3RejectRate": {
+          "red": 66.1,
+          "blue": 50.6
+        },
+        "r3RejectPercentile": {
+          "red": 65.3,
+          "blue": 47.9
+        },
+        "assassinTopSeats": [
+          6,
+          8,
+          1
+        ],
+        "assassinAttempts": 7,
+        "captainStickiness": 3.4,
+        "captainStickinessPercentile": 38.0,
+        "sampleSize": 70,
+        "hasData": true
+      },
+      "奈奈": {
+        "r3RejectRate": {
+          "red": 75.7,
+          "blue": 45.0
+        },
+        "r3RejectPercentile": {
+          "red": 89.7,
+          "blue": 19.2
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 2.4,
+        "captainStickinessPercentile": 30.0,
+        "sampleSize": 60,
+        "hasData": true
+      },
+      "C5": {
+        "r3RejectRate": {
+          "red": 64.5,
+          "blue": 49.7
+        },
+        "r3RejectPercentile": {
+          "red": 58.8,
+          "blue": 40.1
+        },
+        "assassinTopSeats": [
+          5,
+          6,
+          9
+        ],
+        "assassinAttempts": 3,
+        "captainStickiness": 8.3,
+        "captainStickinessPercentile": 85.6,
+        "sampleSize": 55,
+        "hasData": true
+      },
+      "w": {
+        "r3RejectRate": {
+          "red": 59.7,
+          "blue": 49.6
+        },
+        "r3RejectPercentile": {
+          "red": 40.5,
+          "blue": 39.4
+        },
+        "assassinTopSeats": [
+          1,
+          2,
+          7
+        ],
+        "assassinAttempts": 5,
+        "captainStickiness": 1.6,
+        "captainStickinessPercentile": 26.8,
+        "sampleSize": 54,
+        "hasData": true
+      },
+      "婷婷": {
+        "r3RejectRate": {
+          "red": 82.1,
+          "blue": 55.3
+        },
+        "r3RejectPercentile": {
+          "red": 96.6,
+          "blue": 71.2
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 19.3,
+        "captainStickinessPercentile": 99.6,
+        "sampleSize": 48,
+        "hasData": true
+      },
+      "叉燒": {
+        "r3RejectRate": {
+          "red": 65.1,
+          "blue": 51.2
+        },
+        "r3RejectPercentile": {
+          "red": 62.6,
+          "blue": 51.0
+        },
+        "assassinTopSeats": [
+          4,
+          5,
+          6
+        ],
+        "assassinAttempts": 5,
+        "captainStickiness": 1.8,
+        "captainStickinessPercentile": 28.0,
+        "sampleSize": 45,
+        "hasData": true
+      },
+      "YJ": {
+        "r3RejectRate": {
+          "red": 62.2,
+          "blue": 60.2
+        },
+        "r3RejectPercentile": {
+          "red": 48.1,
+          "blue": 82.5
+        },
+        "assassinTopSeats": [
+          4,
+          6,
+          7
+        ],
+        "assassinAttempts": 3,
+        "captainStickiness": 6.9,
+        "captainStickinessPercentile": 77.2,
+        "sampleSize": 41,
+        "hasData": true
+      },
+      "皮皮": {
+        "r3RejectRate": {
+          "red": 74.4,
+          "blue": 45.3
+        },
+        "r3RejectPercentile": {
+          "red": 84.4,
+          "blue": 20.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 5.3,
+        "captainStickinessPercentile": 62.0,
+        "sampleSize": 40,
+        "hasData": true
+      },
+      "米奇": {
+        "r3RejectRate": {
+          "red": 69.0,
+          "blue": 60.0
+        },
+        "r3RejectPercentile": {
+          "red": 73.3,
+          "blue": 80.5
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 3.6,
+        "captainStickinessPercentile": 39.6,
+        "sampleSize": 39,
+        "hasData": true
+      },
+      "Eric": {
+        "r3RejectRate": {
+          "red": 64.1,
+          "blue": 48.8
+        },
+        "r3RejectPercentile": {
+          "red": 54.6,
+          "blue": 36.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 4.0,
+        "captainStickinessPercentile": 44.4,
+        "sampleSize": 36,
+        "hasData": true
+      },
+      "曹清": {
+        "r3RejectRate": {
+          "red": 74.2,
+          "blue": 51.1
+        },
+        "r3RejectPercentile": {
+          "red": 83.2,
+          "blue": 50.3
+        },
+        "assassinTopSeats": [
+          5,
+          8
+        ],
+        "assassinAttempts": 4,
+        "captainStickiness": 7.8,
+        "captainStickinessPercentile": 83.6,
+        "sampleSize": 34,
+        "hasData": true
+      },
+      "溫": {
+        "r3RejectRate": {
+          "red": 70.6,
+          "blue": 51.5
+        },
+        "r3RejectPercentile": {
+          "red": 77.5,
+          "blue": 52.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 31,
+        "hasData": true
+      },
+      "UD": {
+        "r3RejectRate": {
+          "red": 59.1,
+          "blue": 61.0
+        },
+        "r3RejectPercentile": {
+          "red": 37.4,
+          "blue": 83.2
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 5.4,
+        "captainStickinessPercentile": 65.2,
+        "sampleSize": 30,
+        "hasData": true
+      },
+      "梅粉": {
+        "r3RejectRate": {
+          "red": 50.9,
+          "blue": 48.0
+        },
+        "r3RejectPercentile": {
+          "red": 10.3,
+          "blue": 31.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 1.8,
+        "captainStickinessPercentile": 28.0,
+        "sampleSize": 30,
+        "hasData": true
+      },
+      "小亞": {
+        "r3RejectRate": {
+          "red": 72.9,
+          "blue": 53.1
+        },
+        "r3RejectPercentile": {
+          "red": 80.5,
+          "blue": 60.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 4.9,
+        "captainStickinessPercentile": 53.6,
+        "sampleSize": 29,
+        "hasData": true
+      },
+      "Cameron": {
+        "r3RejectRate": {
+          "red": 47.8,
+          "blue": 45.7
+        },
+        "r3RejectPercentile": {
+          "red": 3.4,
+          "blue": 22.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 3.7,
+        "captainStickinessPercentile": 40.8,
+        "sampleSize": 29,
+        "hasData": true
+      },
+      "痴痴": {
+        "r3RejectRate": {
+          "red": 80.0,
+          "blue": 62.0
+        },
+        "r3RejectPercentile": {
+          "red": 94.3,
+          "blue": 86.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 11.1,
+        "captainStickinessPercentile": 92.8,
+        "sampleSize": 28,
+        "hasData": true
+      },
+      "心地": {
+        "r3RejectRate": {
+          "red": 61.5,
+          "blue": 36.9
+        },
+        "r3RejectPercentile": {
+          "red": 45.4,
+          "blue": 8.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 14.8,
+        "captainStickinessPercentile": 96.4,
+        "sampleSize": 27,
+        "hasData": true
+      },
+      "快樂": {
+        "r3RejectRate": {
+          "red": 75.3,
+          "blue": 42.4
+        },
+        "r3RejectPercentile": {
+          "red": 88.9,
+          "blue": 14.7
+        },
+        "assassinTopSeats": [
+          1,
+          4,
+          9
+        ],
+        "assassinAttempts": 4,
+        "captainStickiness": 6.9,
+        "captainStickinessPercentile": 77.2,
+        "sampleSize": 26,
+        "hasData": true
+      },
+      "Arth": {
+        "r3RejectRate": {
+          "red": 73.0,
+          "blue": 65.9
+        },
+        "r3RejectPercentile": {
+          "red": 81.3,
+          "blue": 93.5
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 4.5,
+        "captainStickinessPercentile": 48.0,
+        "sampleSize": 26,
+        "hasData": true
+      },
+      "豪豪": {
+        "r3RejectRate": {
+          "red": 68.9,
+          "blue": 64.1
+        },
+        "r3RejectPercentile": {
+          "red": 72.1,
+          "blue": 90.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 6.7,
+        "captainStickinessPercentile": 74.4,
+        "sampleSize": 26,
+        "hasData": true
+      },
+      "聖昊": {
+        "r3RejectRate": {
+          "red": 70.3,
+          "blue": 45.0
+        },
+        "r3RejectPercentile": {
+          "red": 76.0,
+          "blue": 19.2
+        },
+        "assassinTopSeats": [
+          1,
+          5,
+          10
+        ],
+        "assassinAttempts": 3,
+        "captainStickiness": 4.8,
+        "captainStickinessPercentile": 52.4,
+        "sampleSize": 24,
+        "hasData": true
+      },
+      "言言": {
+        "r3RejectRate": {
+          "red": 68.4,
+          "blue": 35.2
+        },
+        "r3RejectPercentile": {
+          "red": 71.4,
+          "blue": 6.5
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 9.7,
+        "captainStickinessPercentile": 90.0,
+        "sampleSize": 23,
+        "hasData": true
+      },
+      "學姊": {
+        "r3RejectRate": {
+          "red": 50.0,
+          "blue": 52.2
+        },
+        "r3RejectPercentile": {
+          "red": 6.5,
+          "blue": 54.8
+        },
+        "assassinTopSeats": [
+          2,
+          6,
+          10
+        ],
+        "assassinAttempts": 3,
+        "captainStickiness": 5.0,
+        "captainStickinessPercentile": 56.4,
+        "sampleSize": 23,
+        "hasData": true
+      },
+      "憲": {
+        "r3RejectRate": {
+          "red": 70.3,
+          "blue": 54.8
+        },
+        "r3RejectPercentile": {
+          "red": 76.0,
+          "blue": 69.5
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 22,
+        "hasData": true
+      },
+      "南信子": {
+        "r3RejectRate": {
+          "red": 61.3,
+          "blue": 51.9
+        },
+        "r3RejectPercentile": {
+          "red": 44.7,
+          "blue": 53.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 7.5,
+        "captainStickinessPercentile": 81.2,
+        "sampleSize": 21,
+        "hasData": true
+      },
+      "真心": {
+        "r3RejectRate": {
+          "red": 60.0,
+          "blue": 46.8
+        },
+        "r3RejectPercentile": {
+          "red": 42.0,
+          "blue": 25.7
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 21,
+        "hasData": true
+      },
+      "Penny": {
+        "r3RejectRate": {
+          "red": 75.8,
+          "blue": 61.3
+        },
+        "r3RejectPercentile": {
+          "red": 90.5,
+          "blue": 84.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 3.8,
+        "captainStickinessPercentile": 42.0,
+        "sampleSize": 20,
+        "hasData": true
+      },
+      "昭杰": {
+        "r3RejectRate": {
+          "red": 74.6,
+          "blue": 46.9
+        },
+        "r3RejectPercentile": {
+          "red": 85.5,
+          "blue": 26.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 11.1,
+        "captainStickinessPercentile": 92.8,
+        "sampleSize": 19,
+        "hasData": true
+      },
+      "EnRs": {
+        "r3RejectRate": {
+          "red": 55.3,
+          "blue": 58.3
+        },
+        "r3RejectPercentile": {
+          "red": 21.8,
+          "blue": 77.7
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 4.0,
+        "captainStickinessPercentile": 44.4,
+        "sampleSize": 18,
+        "hasData": true
+      },
+      "Amy": {
+        "r3RejectRate": {
+          "red": 54.2,
+          "blue": 38.0
+        },
+        "r3RejectPercentile": {
+          "red": 18.3,
+          "blue": 9.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 9.5,
+        "captainStickinessPercentile": 89.2,
+        "sampleSize": 17,
+        "hasData": true
+      },
+      "Kay": {
+        "r3RejectRate": {
+          "red": 55.9,
+          "blue": 41.7
+        },
+        "r3RejectPercentile": {
+          "red": 26.0,
+          "blue": 13.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 3.1,
+        "captainStickinessPercentile": 34.4,
+        "sampleSize": 16,
+        "hasData": true
+      },
+      "DEAN": {
+        "r3RejectRate": {
+          "red": 51.5,
+          "blue": 53.1
+        },
+        "r3RejectPercentile": {
+          "red": 11.1,
+          "blue": 60.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 4.2,
+        "captainStickinessPercentile": 46.4,
+        "sampleSize": 16,
+        "hasData": true
+      },
+      "貝沙": {
+        "r3RejectRate": {
+          "red": 55.6,
+          "blue": 63.5
+        },
+        "r3RejectPercentile": {
+          "red": 24.0,
+          "blue": 88.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 9.1,
+        "captainStickinessPercentile": 87.6,
+        "sampleSize": 16,
+        "hasData": true
+      },
+      "小余": {
+        "r3RejectRate": {
+          "red": 63.3,
+          "blue": 52.2
+        },
+        "r3RejectPercentile": {
+          "red": 50.8,
+          "blue": 54.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 11.1,
+        "captainStickinessPercentile": 92.8,
+        "sampleSize": 16,
+        "hasData": true
+      },
+      "小程": {
+        "r3RejectRate": {
+          "red": 50.0,
+          "blue": 65.5
+        },
+        "r3RejectPercentile": {
+          "red": 6.5,
+          "blue": 92.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 3.1,
+        "captainStickinessPercentile": 34.4,
+        "sampleSize": 16,
+        "hasData": true
+      },
+      "Mike": {
+        "r3RejectRate": {
+          "red": 54.2,
+          "blue": 37.5
+        },
+        "r3RejectPercentile": {
+          "red": 18.3,
+          "blue": 9.2
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 16.0,
+        "captainStickinessPercentile": 97.2,
+        "sampleSize": 15,
+        "hasData": true
+      },
+      "愚勇": {
+        "r3RejectRate": {
+          "red": 56.1,
+          "blue": 55.3
+        },
+        "r3RejectPercentile": {
+          "red": 27.9,
+          "blue": 71.2
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 15,
+        "hasData": true
+      },
+      "滴酒不露": {
+        "r3RejectRate": {
+          "red": 50.0,
+          "blue": 56.5
+        },
+        "r3RejectPercentile": {
+          "red": 6.5,
+          "blue": 75.7
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 15,
+        "hasData": true
+      },
+      "Kudi": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 36.5
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 7.2
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 13.8,
+        "captainStickinessPercentile": 95.6,
+        "sampleSize": 14,
+        "hasData": true
+      },
+      "企鵝": {
+        "r3RejectRate": {
+          "red": 53.8,
+          "blue": 59.0
+        },
+        "r3RejectPercentile": {
+          "red": 16.0,
+          "blue": 79.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 13.0,
+        "captainStickinessPercentile": 94.8,
+        "sampleSize": 14,
+        "hasData": true
+      },
+      "Kitkat": {
+        "r3RejectRate": {
+          "red": 85.2,
+          "blue": 67.5
+        },
+        "r3RejectPercentile": {
+          "red": 97.3,
+          "blue": 94.2
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 13,
+        "hasData": true
+      },
+      "David": {
+        "r3RejectRate": {
+          "red": 75.0,
+          "blue": 70.0
+        },
+        "r3RejectPercentile": {
+          "red": 87.4,
+          "blue": 97.9
+        },
+        "assassinTopSeats": [
+          2,
+          3,
+          9
+        ],
+        "assassinAttempts": 3,
+        "captainStickiness": 16.7,
+        "captainStickinessPercentile": 98.4,
+        "sampleSize": 12,
+        "hasData": true
+      },
+      "yiting": {
+        "r3RejectRate": {
+          "red": 33.3,
+          "blue": 40.9
+        },
+        "r3RejectPercentile": {
+          "red": 0.4,
+          "blue": 12.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 12,
+        "hasData": true
+      },
+      "波波": {
+        "r3RejectRate": {
+          "red": 74.2,
+          "blue": 50.0
+        },
+        "r3RejectPercentile": {
+          "red": 83.2,
+          "blue": 41.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 12,
+        "hasData": true
+      },
+      "愛鯊客": {
+        "r3RejectRate": {
+          "red": 88.2,
+          "blue": 58.8
+        },
+        "r3RejectPercentile": {
+          "red": 98.1,
+          "blue": 78.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 9.1,
+        "captainStickinessPercentile": 87.6,
+        "sampleSize": 12,
+        "hasData": true
+      },
+      "台中Andy": {
+        "r3RejectRate": {
+          "red": 70.3,
+          "blue": 47.6
+        },
+        "r3RejectPercentile": {
+          "red": 76.0,
+          "blue": 29.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 11,
+        "hasData": true
+      },
+      "雷孟": {
+        "r3RejectRate": {
+          "red": 62.2,
+          "blue": 28.6
+        },
+        "r3RejectPercentile": {
+          "red": 48.1,
+          "blue": 4.5
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 10,
+        "hasData": true
+      },
+      "Ted": {
+        "r3RejectRate": {
+          "red": 59.1,
+          "blue": 57.5
+        },
+        "r3RejectPercentile": {
+          "red": 37.4,
+          "blue": 77.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 10,
+        "hasData": true
+      },
+      "芭樂": {
+        "r3RejectRate": {
+          "red": 46.4,
+          "blue": 63.2
+        },
+        "r3RejectPercentile": {
+          "red": 2.7,
+          "blue": 87.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 10,
+        "hasData": true
+      },
+      "湧傑": {
+        "r3RejectRate": {
+          "red": 76.5,
+          "blue": 69.2
+        },
+        "r3RejectPercentile": {
+          "red": 91.2,
+          "blue": 96.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 9,
+        "hasData": true
+      },
+      "NICK徐": {
+        "r3RejectRate": {
+          "red": 54.5,
+          "blue": 53.1
+        },
+        "r3RejectPercentile": {
+          "red": 19.5,
+          "blue": 60.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 9,
+        "hasData": true
+      },
+      "阿賢": {
+        "r3RejectRate": {
+          "red": 78.9,
+          "blue": 54.2
+        },
+        "r3RejectPercentile": {
+          "red": 93.5,
+          "blue": 66.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 9,
+        "hasData": true
+      },
+      "史萊姆": {
+        "r3RejectRate": {
+          "red": 63.6,
+          "blue": 34.4
+        },
+        "r3RejectPercentile": {
+          "red": 52.7,
+          "blue": 5.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 5.0,
+        "captainStickinessPercentile": 56.4,
+        "sampleSize": 9,
+        "hasData": true
+      },
+      "娜娜喵": {
+        "r3RejectRate": {
+          "red": 81.2,
+          "blue": 25.8
+        },
+        "r3RejectPercentile": {
+          "red": 95.0,
+          "blue": 3.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 10.0,
+        "captainStickinessPercentile": 90.8,
+        "sampleSize": 9,
+        "hasData": true
+      },
+      "GH": {
+        "r3RejectRate": {
+          "red": 64.7,
+          "blue": 57.1
+        },
+        "r3RejectPercentile": {
+          "red": 59.9,
+          "blue": 76.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 9,
+        "hasData": true
+      },
+      "健一": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 63.6
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 89.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 8,
+        "hasData": true
+      },
+      "QQ": {
+        "r3RejectRate": {
+          "red": 55.2,
+          "blue": 65.2
+        },
+        "r3RejectPercentile": {
+          "red": 20.6,
+          "blue": 92.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 8,
+        "hasData": true
+      },
+      "香菜": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 26.2
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 3.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 8,
+        "hasData": true
+      },
+      "布叮咚瓜茶": {
+        "r3RejectRate": {
+          "red": 36.4,
+          "blue": 41.7
+        },
+        "r3RejectPercentile": {
+          "red": 1.1,
+          "blue": 13.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 8,
+        "hasData": true
+      },
+      "昭傑": {
+        "r3RejectRate": {
+          "red": 64.3,
+          "blue": 67.9
+        },
+        "r3RejectPercentile": {
+          "red": 56.5,
+          "blue": 94.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 8,
+        "hasData": true
+      },
+      "Toby": {
+        "r3RejectRate": {
+          "red": 64.3,
+          "blue": 46.4
+        },
+        "r3RejectPercentile": {
+          "red": 56.5,
+          "blue": 24.7
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 7,
+        "hasData": true
+      },
+      "垣景": {
+        "r3RejectRate": {
+          "red": 78.6,
+          "blue": 48.0
+        },
+        "r3RejectPercentile": {
+          "red": 92.7,
+          "blue": 31.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 7,
+        "hasData": true
+      },
+      "yumi": {
+        "r3RejectRate": {
+          "red": 70.8,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 79.0,
+          "blue": null
+        },
+        "assassinTopSeats": [
+          2,
+          5,
+          9
+        ],
+        "assassinAttempts": 4,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 7,
+        "hasData": true
+      },
+      "RAY": {
+        "r3RejectRate": {
+          "red": 52.4,
+          "blue": 47.1
+        },
+        "r3RejectPercentile": {
+          "red": 12.6,
+          "blue": 27.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 7,
+        "hasData": true
+      },
+      "失意": {
+        "r3RejectRate": {
+          "red": 50.0,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 6.5,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 7,
+        "hasData": true
+      },
+      "Y": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 44.4
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 17.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 6.7,
+        "captainStickinessPercentile": 74.4,
+        "sampleSize": 7,
+        "hasData": true
+      },
+      "KAY": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 36.8
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 7.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 6,
+        "hasData": true
+      },
+      "Tang": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 46.4
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 24.7
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 8.3,
+        "captainStickinessPercentile": 85.6,
+        "sampleSize": 6,
+        "hasData": true
+      },
+      "mike": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 55.9
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 73.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 6,
+        "hasData": true
+      },
+      "SIRIUS": {
+        "r3RejectRate": {
+          "red": 72.0,
+          "blue": 38.9
+        },
+        "r3RejectPercentile": {
+          "red": 79.8,
+          "blue": 10.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 6,
+        "hasData": true
+      },
+      "小朱": {
+        "r3RejectRate": {
+          "red": 66.7,
+          "blue": 80.0
+        },
+        "r3RejectPercentile": {
+          "red": 67.9,
+          "blue": 99.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 6,
+        "hasData": true
+      },
+      "Fish": {
+        "r3RejectRate": {
+          "red": 75.0,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 87.4,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 2,
+        "captainStickiness": 9.1,
+        "captainStickinessPercentile": 87.6,
+        "sampleSize": 5,
+        "hasData": true
+      },
+      "ZEN": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 42.1
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 14.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 5,
+        "hasData": true
+      },
+      "chanmao": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 44.4
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 17.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 5,
+        "hasData": true
+      },
+      "bless": {
+        "r3RejectRate": {
+          "red": 52.9,
+          "blue": 17.6
+        },
+        "r3RejectPercentile": {
+          "red": 13.4,
+          "blue": 0.3
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "ZZ": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 56.2
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 74.3
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "Kevin": {
+        "r3RejectRate": {
+          "red": 81.8,
+          "blue": 45.5
+        },
+        "r3RejectPercentile": {
+          "red": 95.8,
+          "blue": 21.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "邱小神": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 61.1
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 83.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "beefy": {
+        "r3RejectRate": {
+          "red": 63.6,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 52.7,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "彥": {
+        "r3RejectRate": {
+          "red": 75.0,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 87.4,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "ten": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 43.8
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 15.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "A": {
+        "r3RejectRate": {
+          "red": 64.3,
+          "blue": 81.8
+        },
+        "r3RejectPercentile": {
+          "red": 56.5,
+          "blue": 99.7
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "rayn": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 64.7
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 91.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "2Z": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 63.6
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 89.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "yl": {
+        "r3RejectRate": {
+          "red": 53.3,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 14.1,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 11.1,
+        "captainStickinessPercentile": 92.8,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "大家都很乖": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 69.0
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 95.5
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 4,
+        "hasData": true
+      },
+      "百態": {
+        "r3RejectRate": {
+          "red": 50.0,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 6.5,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "小乖": {
+        "r3RejectRate": {
+          "red": 93.8,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 99.6,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "詠苡": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": false
+      },
+      "dal": {
+        "r3RejectRate": {
+          "red": 40.0,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 1.9,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "Vinnie": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": false
+      },
+      "Hao": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 45.5
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 21.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "R": {
+        "r3RejectRate": {
+          "red": 58.3,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 35.1,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "骯髒泡泡": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": false
+      },
+      "小鬼": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": false
+      },
+      "妞": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": false
+      },
+      "DD": {
+        "r3RejectRate": {
+          "red": 66.7,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 67.9,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "Wu": {
+        "r3RejectRate": {
+          "red": 74.1,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 82.1,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "Jim": {
+        "r3RejectRate": {
+          "red": 50.0,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 6.5,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "胖達": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 40.0
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 11.3
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": 16.7,
+        "captainStickinessPercentile": 98.4,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "大鳥": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 64.3
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 90.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "太陽騎士": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": false
+      },
+      "玉米": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 61.5
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 85.3
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 3,
+        "hasData": true
+      },
+      "銓": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 60.0
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 80.5
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "eric": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 43.8
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 15.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "炸彈狂": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 63.2
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 87.0
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "Nick徐": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 52.9
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 58.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "Q": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 70.0
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 97.9
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "Joy": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 33.3
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 5.1
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "liang": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": false
+      },
+      "SIN": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": false
+      },
+      "OBER": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "dean": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": false
+      },
+      "qq": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": false
+      },
+      "Ober": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": false
+      },
+      "balabala": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": false
+      },
+      "Scout": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "hi": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": false
+      },
+      "wu": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": false
+      },
+      "老黑": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 60.0
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 80.5
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "99": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 25.0
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 2.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 2,
+        "hasData": true
+      },
+      "Bless": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "何寶寶": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 50.0
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 41.8
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "Louis": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "Ying瑩": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "sin": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "hao": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "糖": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "SBear": {
+        "r3RejectRate": {
+          "red": 50.0,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 6.5,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "Nzo": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 20.0
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 1.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "Evan": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 20.0
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 1.4
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "兔兔": {
+        "r3RejectRate": {
+          "red": 60.0,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 42.0,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "KEVIN": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "1234": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "ober": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "路人余": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "2": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 46.2
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 23.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "路人甲": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": 69.2
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": 96.6
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "Andrew": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "k810": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "K": {
+        "r3RejectRate": {
+          "red": 76.9,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 92.0,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "小吳": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "owen": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "W": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "hana": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "祥子": {
+        "r3RejectRate": {
+          "red": 90.0,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": 98.9,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 1,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "test": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      },
+      "小菜": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": 0.0,
+        "captainStickinessPercentile": 13.2,
+        "sampleSize": 1,
+        "hasData": true
+      },
+      "Sam": {
+        "r3RejectRate": {
+          "red": null,
+          "blue": null
+        },
+        "r3RejectPercentile": {
+          "red": null,
+          "blue": null
+        },
+        "assassinTopSeats": null,
+        "assassinAttempts": 0,
+        "captainStickiness": null,
+        "captainStickinessPercentile": null,
+        "sampleSize": 1,
+        "hasData": false
+      }
+    },
+    "cohort": {
+      "r3Red": {
+        "n": 131,
+        "mean": 63.1,
+        "std": 10.3
+      },
+      "r3Blue": {
+        "n": 146,
+        "mean": 51.2,
+        "std": 10.5
+      },
+      "captainStickiness": {
+        "n": 125,
+        "mean": 4.7,
+        "std": 4.1
+      },
+      "assassinAttempts": {
+        "n": 56
+      }
+    },
+    "thresholds": {
+      "r3MinVotes": 10,
+      "assassinMinAttempts": 3,
+      "captainMinProposals": 5
+    },
+    "labels": {
+      "r3RejectRedLabel": "紅角 R3+ 強硬度",
+      "r3RejectBlueLabel": "藍角 R3+ 強硬度",
+      "assassinTargetLabel": "刺客目標座位偏好",
+      "captainStickinessLabel": "隊長 stickiness"
+    }
   }
 }
