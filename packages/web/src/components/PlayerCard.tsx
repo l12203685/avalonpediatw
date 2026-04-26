@@ -114,12 +114,14 @@ interface PlayerCardProps {
    */
   assassinated?: boolean;
   /**
-   * Edward 2026-04-26 16:54 unified spec —「人物方框 lobby 跟遊戲畫面要一樣」.
-   * Variant prop kept for API compatibility but no longer drives aspect ratio:
-   * lobby + game both render `aspect-square` so the rails look identical between
-   * waiting-room and in-game (#209 inconsistency fix). Previous `'lobby'` =
-   * `aspect-[3/4]` mode was removed because the taller tile made lobby feel
-   * different from game phase, breaking visual continuity Edward demanded.
+   * Edward 2026-04-26 18:23 反前 ship —「這是 lobby 嗎 為什麼還是跟 game 一樣 /
+   * 前一版 (方框拉長填滿) 而且牌背有正常顯示的 才是正確版本」. Reverts the
+   * 16:54 unified `aspect-square` attempt: lobby tiles must be tall portrait
+   * (`aspect-[3/4]`) so the role-back card art fills the tile like a real
+   * playing card; game tiles stay `aspect-square` because in-game corner
+   * indicators (王冠 / 球 / 盾 / 湖) need the wider square to breathe.
+   *   - `'lobby'` → `aspect-[3/4]` (taller portrait, role-back fills)
+   *   - `'game'`  → `aspect-square` (default; corner indicators visible)
    */
   variant?: 'game' | 'lobby';
   /**
@@ -168,10 +170,13 @@ interface PlayerCardProps {
  *   - 右下: 任務盾牌 (`mission-shield.jpg`)
  *   - 中: 大頭照 portrait (full square)
  *
- * Edward 20:12 add-ons (Edward 2026-04-26 16:53 corner-fix overrides 部分):
- *   - PlayerCard = square aspect (已強制 `aspect-square w-full`, 2026-04-26 16:54
- *     起 lobby/game 統一不再用 `aspect-[3/4]` lobby variant — Edward「lobby vs
- *     game 完全一致」#209).
+ * Edward 20:12 add-ons (Edward 2026-04-26 18:23 反前 ship — 撤回 16:54 統一):
+ *   - PlayerCard aspect 條件式: `variant === 'lobby' ? 'aspect-[3/4]' : 'aspect-square'`.
+ *     16:54 把 lobby 統一成 `aspect-square` 讓 lobby 看起來跟 game 一樣方框, 但
+ *     Edward 18:23 verbatim「這是lobby嗎 為什麼還是跟game一樣 / 前一版(方框拉長
+ *     填滿)而且牌背有正常顯示的才是正確版本」→ revert. Lobby `aspect-[3/4]` =
+ *     真實撲克牌比例, role-back 圖填滿; game `aspect-square` = 4 corner indicator
+ *     需要的寬方版面.
  *   - 未揭角色 (`effectiveRole === null`) → 整 tile bg 用 `role-back.jpg` 取代
  *     大頭, 玩家名 chip 浮層. **2026-04-26 16:53 起所有 4-corner 公開狀態
  *     indicator (隊長王冠 / 任務盾 / 黑白球 / 湖中) 全部 unconditional 渲染**,
@@ -373,7 +378,7 @@ export default function PlayerCard({
               }
             : undefined
         }
-        className={`relative aspect-square w-full rounded-xl overflow-hidden border-[3px] bg-cover bg-center transition-all ${borderClass} ${
+        className={`relative ${variant === 'lobby' ? 'aspect-[3/4]' : 'aspect-square'} w-full rounded-xl overflow-hidden border-[3px] bg-cover bg-center transition-all ${borderClass} ${
           shieldSelected
             ? 'ring-2 ring-yellow-400 shadow-md shadow-yellow-400/40'
             : isActiveTurn

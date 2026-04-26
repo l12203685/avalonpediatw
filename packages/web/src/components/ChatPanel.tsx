@@ -307,18 +307,20 @@ export default function ChatPanel({
     </>
   );
 
-  // Edward 2026-04-25 22:38 GamePage 3-fix #1「發言送出按鈕被擋住」: chat input
-  // form was visually colliding with the sticky-bottom action toolbars
-  // (QuestTeamToolbar/VotePanel/QuestPanel, all z-40 fixed bottom-0). The
-  // GameBoard wrapper reserves `pb-[32dvh]` for those toolbars, but on tall
-  // QuestPanel renders or after iOS safe-area inset the chat input could end
-  // up behind the toolbar. Defensive fix: anchor the input to the bottom of
-  // its own scroll container (sticky bottom-0) and give it a positioned
-  // z-stacking context (z-10) so it stays clickable inside the chat box even
-  // when the surrounding feed scrolls. The opaque bg ensures messages
-  // scrolling behind don't bleed through.
+  // Edward 2026-04-26 18:23 反前 ship —「對話紀錄下方的"送出" 被擋住了, 發言框
+  // 不用那麼長」. Earlier 22:38 fix used `p-2 + py-1.5` and an icon-only send
+  // button (`<Send size={14}/>`), which on lobby viewport rendered as a tall
+  // form whose icon-only blue chip was visually invisible against the
+  // surrounding dark slate. Two-part fix:
+  //   1) Tighten the form: outer `p-1` + `gap-1.5`, input `py-1` so the row is
+  //      ~32px tall instead of ~50px — Edward「發言框不用那麼長」.
+  //   2) Replace icon-only button with explicit「送出」label + icon and a
+  //      always-on-screen `flex-shrink-0` width so the button never gets clipped
+  //      under sticky toolbars or off-viewport — Edward「送出 被擋住」.
+  // Sticky-bottom + z-10 + opaque bg preserved from prior fix so input stays
+  // anchored inside the chat scroll container above any action toolbars.
   const inputForm = (placeholder: string) => (
-    <div className="sticky bottom-0 z-10 flex gap-2 p-2 border-t border-gray-700 bg-slate-900/95 backdrop-blur-sm">
+    <div className="sticky bottom-0 z-10 flex gap-1.5 p-1 border-t border-gray-700 bg-slate-900/95 backdrop-blur-sm">
       <input
         type="text"
         value={input}
@@ -326,14 +328,16 @@ export default function ChatPanel({
         onKeyDown={e => e.key === 'Enter' && handleSend()}
         maxLength={200}
         placeholder={placeholder}
-        className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+        className="flex-1 min-w-0 bg-gray-800 border border-gray-600 rounded-lg px-2.5 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
       />
       <button
         onClick={handleSend}
         disabled={!input.trim()}
-        className="p-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-lg text-white transition-colors"
+        className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-lg text-white text-xs font-bold transition-colors"
+        aria-label="送出"
       >
-        <Send size={14} />
+        <Send size={12} />
+        <span>送出</span>
       </button>
     </div>
   );
