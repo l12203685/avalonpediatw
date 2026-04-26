@@ -1,4 +1,4 @@
-import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord, LadyOfTheLakeRecord, CANONICAL_ROLES, isCanonicalRole, TimerMultiplier } from '@avalon/shared';
+import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord, LadyOfTheLakeRecord, CANONICAL_ROLES, isCanonicalRole, TimerMultiplier, PendingDecision, RoomMode } from '@avalon/shared';
 
 /**
  * Error thrown when a role outside the canonical 7-role Avalon scope is
@@ -47,6 +47,19 @@ export interface GameEventRecord {
   event_data: Record<string, unknown>;
 }
 
+/**
+ * Current GameEngineState schema version.
+ *
+ *   v1: pre-async (everything through 2026-04-26).
+ *   v2: 棋瓦 P1 — adds `pending` snapshot persisted alongside engine state
+ *       so async games can rehydrate the pause-gate after a server restart.
+ *
+ * The persistence layer accepts both v1 and v2 reads (v1 → v2 migration
+ * fills `pending = undefined`, which is correct: v1 games are realtime and
+ * never had a pause gate).
+ */
+export const GAME_ENGINE_STATE_VERSION = 2;
+
 export interface GameEngineState {
   version: number;
   roomId: string;
@@ -63,6 +76,12 @@ export interface GameEngineState {
    * falls back to AVALON_CONFIG.
    */
   effectiveQuestSizes?: number[];
+  /**
+   * Pause-gate snapshot for async (棋瓦) rooms. Always undefined in v1
+   * snapshots and in realtime-mode v2 snapshots. Populated only when
+   * `room.mode === 'async'` and the engine has computed a pending phase.
+   */
+  pending?: PendingDecision;
 }
 
 export class GameEngine {
@@ -119,11 +138,99 @@ export class GameEngine {
    * Compute the effective timeout in ms for a given base value, honoring the
    * room's multiplier. Returns `null` when the room selects "unlimited"
    * (callers MUST skip scheduling a setTimeout in that case).
+   *
+   * Async-mode (棋瓦 P1): if `room.mode === 'async'`, ALL phase timers are
+   * disabled (returns null). Async games are pause-and-wait — the phase
+   * advances only when every required actor submits. There is no AFK
+   * fallback; players may take days/weeks to act (Edward 永不棄局).
    */
   private getTimeoutMs(base: number): number | null {
+    if (this.room.mode === 'async') return null;
     const m = this.getTimerMultiplier();
     if (m === null) return null;
     return Math.round(base * m);
+  }
+
+  /**
+   * True when the room is operating in async ("棋瓦") mode. Centralised so
+   * downstream code never has to remember the `?? 'realtime'` default.
+   */
+  private isAsync(): boolean {
+    return this.room.mode === 'async';
+  }
+
+  /**
+   * Recompute the `pending` snapshot after a state transition. In realtime
+   * mode this is a no-op (timer-driven), but in async mode every phase
+   * advance / mutation must refresh `pendingActors` so clients can render
+   * "waiting on Bob" badges and so the phase-advance gate works.
+   *
+   * Phase mapping (matches §1 of the design doc):
+   *   - voting + empty questTeam   → TEAM_SELECT, pending = [leader]
+   *   - voting + filled questTeam  → VOTE, pending = all players minus already-voted
+   *   - quest                      → QUEST, pending = questTeam minus already-voted
+   *   - lady_of_the_lake           → LADY, pending = [holder]
+   *   - discussion                 → ASSASSINATE, pending = [assassinId]
+   *   - lobby / ended              → pending cleared (undefined)
+   */
+  private recomputePending(): void {
+    if (!this.isAsync()) return; // realtime: don't carry the field
+    const state = this.room.state;
+    if (state === 'lobby' || state === 'ended') {
+      this.room.pending = undefined;
+      return;
+    }
+    const phaseLabel: GameState = state;
+    let actors: string[] = [];
+    let submitted: string[] = [];
+
+    if (state === 'voting') {
+      if (this.room.questTeam.length === 0) {
+        actors = [this.getLeaderId()];
+      } else {
+        const allIds = Object.keys(this.room.players);
+        const voted = new Set(Object.keys(this.room.votes));
+        actors = allIds.filter(id => !voted.has(id));
+        submitted = allIds.filter(id => voted.has(id));
+      }
+    } else if (state === 'quest') {
+      const votedIds = new Set(this.questVotes.map(q => q.playerId));
+      actors = this.room.questTeam.filter(id => !votedIds.has(id));
+      submitted = this.room.questTeam.filter(id => votedIds.has(id));
+    } else if (state === 'lady_of_the_lake') {
+      const holder = this.room.ladyOfTheLakeHolder;
+      if (holder) actors = [holder];
+    } else if (state === 'discussion') {
+      const assassinEntry = Object.entries(this.room.players).find(
+        ([_, p]) => p.role === 'assassin'
+      ) ?? Array.from(this.roleAssignments.entries()).find(
+        ([_, role]) => role === 'assassin'
+      );
+      if (assassinEntry) actors = [assassinEntry[0]];
+    }
+
+    const prevAttempt = this.room.pending?.attempt ?? 0;
+    const prevRound = this.room.pending?.round ?? 0;
+    const prevPhase = this.room.pending?.phase;
+    const phaseChanged =
+      prevPhase !== phaseLabel ||
+      prevRound !== this.room.currentRound ||
+      prevAttempt !== this.voteAttemptInRound;
+
+    const decision: PendingDecision = {
+      phase: phaseLabel,
+      round: this.room.currentRound,
+      attempt: this.voteAttemptInRound,
+      pendingActors: actors,
+      submittedActors: submitted,
+      openedAt: phaseChanged ? Date.now() : (this.room.pending?.openedAt ?? Date.now()),
+    };
+    this.room.pending = decision;
+  }
+
+  /** Public accessor to read the pause-gate snapshot. */
+  public getPending(): PendingDecision | undefined {
+    return this.room.pending;
   }
 
   public startGame(): void {
@@ -206,6 +313,8 @@ export class GameEngine {
     // Don't start vote timer yet — it starts when leader confirms the quest team
     // Start team-selection timer to handle AFK leader
     this.startTeamSelectPhase();
+    // Async (棋瓦) pause-gate snapshot. Realtime games skip this.
+    this.recomputePending();
   }
 
   private startTeamSelectPhase(): void {
@@ -558,6 +667,9 @@ export class GameEngine {
         this.voteTimeout = null;
       }
       this.resolveVoting();
+    } else {
+      // Still waiting on more voters — refresh async pause-gate badges.
+      this.recomputePending();
     }
   }
 
@@ -630,6 +742,7 @@ export class GameEngine {
         this.startTeamSelectPhase();
       }
     }
+    this.recomputePending();
   }
 
   /**
@@ -737,11 +850,13 @@ export class GameEngine {
       this.room.questVotedCount = 0;
       this.questVotes = [];
       this.startQuestPhase();
+      this.recomputePending();
       return;
     }
 
     // Start the approval vote timer now that team is proposed
     this.startVotingPhase();
+    this.recomputePending();
   }
 
   /**
@@ -794,6 +909,8 @@ export class GameEngine {
     // Check if all team members have voted
     if (this.questVotes.length === this.room.questTeam.length) {
       this.resolveQuestPhase();
+    } else {
+      this.recomputePending();
     }
   }
 
@@ -874,6 +991,7 @@ export class GameEngine {
         this.advanceToNextRound();
       }
     }
+    this.recomputePending();
   }
 
   /**
@@ -898,6 +1016,7 @@ export class GameEngine {
       questResults: this.room.questResults,
       nextRound: this.room.currentRound,
     });
+    this.recomputePending();
   }
 
   /**
@@ -912,6 +1031,7 @@ export class GameEngine {
       round: this.room.currentRound,
       holderId: this.room.ladyOfTheLakeHolder,
     });
+    this.recomputePending();
 
     // Timeout: if holder doesn't choose, skip the phase.
     // Spec: Lady auto-pick is NOT allowed — unlimited mode simply waits.
@@ -989,6 +1109,7 @@ export class GameEngine {
     // (Edward 2026-04-24 "還有為什麼湖中完全沒宣告"). A 90s declaration
     // timeout auto-advances the phase if the holder AFKs.
     this.startLakeDeclarationTimeout(holderId);
+    this.recomputePending();
     this.onStateChange?.(this.room);
   }
 
@@ -1154,6 +1275,7 @@ export class GameEngine {
       assassinId,
       questResults: this.room.questResults
     });
+    this.recomputePending();
 
     // Set assassination timeout. Default on timeout = don't assassinate =>
     // good wins (handled by resolveAssassination(null)).
@@ -1260,6 +1382,7 @@ export class GameEngine {
 
     // Log final stats
     this.logFinalStats();
+    this.recomputePending();
   }
 
   /**
@@ -1348,7 +1471,7 @@ export class GameEngine {
       roleAssignments[id] = role;
     }
     return {
-      version: 1,
+      version: GAME_ENGINE_STATE_VERSION,
       roomId: this.room.id,
       roleAssignments,
       questVotes: [...this.questVotes],
@@ -1359,6 +1482,7 @@ export class GameEngine {
       effectiveQuestSizes: this.effectiveQuestSizes
         ? [...this.effectiveQuestSizes]
         : undefined,
+      pending: this.room.pending,
     };
   }
 
@@ -1383,6 +1507,12 @@ export class GameEngine {
     engine.effectiveQuestSizes = snapshot.effectiveQuestSizes
       ? [...snapshot.effectiveQuestSizes]
       : null;
+    // 棋瓦 P1: rehydrate the pause-gate snapshot on the room. v1 snapshots
+    // have no `pending` field — that is correct (they are realtime games),
+    // so the room.pending stays undefined.
+    if (snapshot.pending !== undefined) {
+      engine.room.pending = { ...snapshot.pending };
+    }
     return engine;
   }
 

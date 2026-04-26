@@ -146,13 +146,17 @@ describe('GameStatePersistence — loadRoom', () => {
 
   it('returns { room, engineState } when engine data is present', async () => {
     const room = makeRoom();
+    // 棋瓦 P1 (2026-04-27): v1 inputs are migrated to v2 in-memory by
+    // deserialiseEngineState. The on-disk record stays v1 until next save,
+    // but the loaded snapshot reports version=2 with pending=undefined.
     const engine = { version: 1, roomId: room.id, roleAssignments: {}, questVotes: [], currentLeaderIndex: 0 };
     mockOnce.mockResolvedValue({ val: () => ({ room, engine }) });
 
     const result = await persistence.loadRoom(room.id);
 
     expect(result!.engineState).not.toBeNull();
-    expect(result!.engineState!.version).toBe(1);
+    expect(result!.engineState!.version).toBe(2);
+    expect(result!.engineState!.pending).toBeUndefined();
   });
 
   it('handles legacy flat Room format transparently', async () => {
@@ -246,7 +250,8 @@ describe('GameStatePersistence — loadAllRooms', () => {
     const result = await persistence.loadAllRooms();
 
     expect(result[0].engineState).not.toBeNull();
-    expect(result[0].engineState!.version).toBe(1);
+    // 棋瓦 P1 (2026-04-27): v1 input migrated to v2 on load.
+    expect(result[0].engineState!.version).toBe(2);
   });
 });
 

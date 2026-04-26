@@ -1,4 +1,4 @@
-import { Room, Role } from '@avalon/shared';
+import { Room, Role, PendingDecision } from '@avalon/shared';
 import { getAdminDB } from './firebase';
 import { GameEngineState, GameEventRecord } from '../game/GameEngine';
 
@@ -194,6 +194,12 @@ export class GameStatePersistence {
         mordred: false,
       },
       readyPlayerIds: (data.readyPlayerIds as string[]) ?? [],
+      // 棋瓦 P1: carry async-mode flag + pause-gate snapshot through
+      // rehydration. `mode` is undefined for legacy v1 rooms (treated as
+      // realtime by the engine via `?? 'realtime'`); `pending` is only
+      // populated for in-flight async games.
+      mode: (data.mode as Room['mode']) ?? undefined,
+      pending: (data.pending as Room['pending']) ?? undefined,
       createdAt: (data.createdAt as number) ?? Date.now(),
       updatedAt: (data.updatedAt as number) ?? Date.now(),
     };
@@ -202,19 +208,23 @@ export class GameStatePersistence {
   /**
    * Deserialise raw RTD data back into a GameEngineState.
    * Returns null if the data is not a recognisable engine state snapshot.
+   *
+   * Accepts v1 (pre-async) and v2 (棋瓦 P1) snapshots. v1 → v2 migration
+   * fills `pending: undefined`, which is correct: v1 games are realtime
+   * and never had a pause gate.
    */
   private deserialiseEngineState(data: Record<string, unknown>): GameEngineState | null {
-    if (data.version !== 1) {
+    const version = data.version;
+    if (version !== 1 && version !== 2) {
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(),
         event: 'engine_state_version_mismatch',
-        version: data.version,
+        version,
       }));
       return null;
     }
 
-    return {
-      version: 1,
+    const base = {
       roomId: data.roomId as string,
       roleAssignments: (data.roleAssignments as Record<string, Role>) ?? {},
       questVotes: (data.questVotes as Array<{ playerId: string; vote: 'success' | 'fail' }>) ?? [],
@@ -222,6 +232,20 @@ export class GameStatePersistence {
       voteAttemptInRound: (data.voteAttemptInRound as number) ?? 0,
       eventBuffer: (data.eventBuffer as GameEventRecord[]) ?? [],
       eventSeq: (data.eventSeq as number) ?? 0,
+      effectiveQuestSizes: Array.isArray(data.effectiveQuestSizes)
+        ? (data.effectiveQuestSizes as number[])
+        : undefined,
     };
+
+    if (version === 1) {
+      // v1 → v2 in-memory upgrade.
+      return { version: 2, ...base, pending: undefined };
+    }
+
+    const pending =
+      data.pending !== undefined && typeof data.pending === 'object' && data.pending !== null
+        ? (data.pending as PendingDecision)
+        : undefined;
+    return { version: 2, ...base, pending };
   }
 }

@@ -6,6 +6,53 @@
 // Game States
 export type GameState = 'lobby' | 'voting' | 'quest' | 'lady_of_the_lake' | 'discussion' | 'ended';
 
+/**
+ * Room timing mode — chooses between live, timer-driven Avalon ("realtime")
+ * and the multi-day, phase-paused "async" mode (codename 棋瓦 / Avalon Chess).
+ *
+ * `realtime` (default for back-compat): the engine schedules setTimeout-based
+ * AFK timers exactly as before; phases advance on submit-or-timeout.
+ *
+ * `async`: the engine SKIPS every setTimeout. Each decision phase tracks
+ * the set of `pendingActors` and only advances when that set drains. Players
+ * may quit the browser between phases — server-side state is durable via
+ * GameStatePersistence and the `pending` field on Room.
+ *
+ * Edward 2026-04-26 verbatim: 永不棄局 — async games never auto-close;
+ * no hard deadline. Default-action policies are P2 scope and not present
+ * in this MVP.
+ */
+export type RoomMode = 'realtime' | 'async';
+
+/**
+ * Snapshot of "who the engine is waiting on" for the currently open
+ * decision phase. Recomputed after every state mutation that opens or
+ * closes a phase. The phase advances when `pendingActors` is empty
+ * (i.e. all required actors have submitted).
+ *
+ * - `pendingActors`: player IDs the engine still expects a submission from.
+ *   - TEAM_SELECT (state='voting' before team picked): [leaderId]
+ *   - VOTE        (state='voting' after team picked):  [all players]
+ *   - QUEST       (state='quest'):                     questTeam members
+ *   - LADY        (state='lady_of_the_lake'):          [ladyOfTheLakeHolder]
+ *   - ASSASSINATE (state='discussion'):                [assassinId]
+ *   - lobby/ended: []
+ * - `submittedActors`: player IDs already submitted in THIS phase. Cleared
+ *   on phase open. Used by UI to render "voted ✅ / waiting ⏳" badges.
+ * - `openedAt`: phase open timestamp. Used by future notification fan-out
+ *   (P3 scope) to throttle re-pings.
+ *
+ * Edward 永不棄局: NO `hardDeadline` — the field is intentionally omitted.
+ */
+export interface PendingDecision {
+  phase: GameState;
+  round: number;
+  attempt: number;
+  pendingActors: string[];
+  submittedActors: string[];
+  openedAt: number;
+}
+
 // Player Roles (Standard Avalon)
 export type Role =
   | 'merlin'      // Good - Knows all Evil players (except Mordred)
@@ -167,6 +214,22 @@ export interface Room {
    * record and the stats repo skips recompute for casual / AI-inclusive games.
    */
   casual?: boolean;
+  /**
+   * Timing mode (棋瓦 P1, 2026-04-27). `undefined` is treated as
+   * `'realtime'` to preserve backward compatibility with all rooms
+   * created before async mode shipped. Set at room creation; cannot be
+   * mutated mid-game.
+   */
+  mode?: RoomMode;
+  /**
+   * Async-mode pause gate (棋瓦 P1). Always undefined for `mode='realtime'`
+   * rooms. For `mode='async'` rooms, populated by the engine after every
+   * state mutation that opens/closes a decision phase. Phase advances when
+   * `pending.pendingActors` becomes empty.
+   *
+   * Edward 永不棄局: no hardDeadline. Players may take days/weeks to act.
+   */
+  pending?: PendingDecision;
   createdAt: number;
   updatedAt: number;
 }

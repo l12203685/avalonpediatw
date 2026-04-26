@@ -71,7 +71,8 @@ describe('Integration: Rehydration — serialize/restore round-trip', () => {
     const snapshot = engine.serialize();
 
     // Verify snapshot structure
-    expect(snapshot.version).toBe(1);
+    // 棋瓦 P1 (2026-04-27): GameEngineState bumped 1 → 2 to add `pending`.
+    expect(snapshot.version).toBe(2);
     expect(snapshot.roomId).toBe('room-rehydrate');
     expect(Object.keys(snapshot.roleAssignments)).toHaveLength(5);
     expect(snapshot.questVotes).toEqual([]);
@@ -326,7 +327,8 @@ describe('Integration: Rehydration — JSON serialization (Firebase simulation)'
     const jsonStr = JSON.stringify(snapshot);
     const parsed = JSON.parse(jsonStr) as GameEngineState;
 
-    expect(parsed.version).toBe(1);
+    // 棋瓦 P1 (2026-04-27): GameEngineState bumped 1 → 2 to add `pending`.
+    expect(parsed.version).toBe(2);
     expect(parsed.roomId).toBe(snapshot.roomId);
     expect(parsed.roleAssignments).toEqual(snapshot.roleAssignments);
     expect(parsed.questVotes).toEqual(snapshot.questVotes);
