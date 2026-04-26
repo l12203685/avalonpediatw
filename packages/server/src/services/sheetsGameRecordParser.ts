@@ -499,7 +499,7 @@ function buildGameId(playedAtStr: string, gameNumInDay: number): string {
 
 function parsePlayedAt(playedAtStr: string): number {
   // 2026/02/27 → Unix ms at 00:00 +08 (Taipei)
-  const m = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/.exec(playedAtStr.trim());
+  const m = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/.exec(playedAtStr.trim());
   if (!m) throw new Error(`Invalid playedAtStr: ${playedAtStr}`);
   const y = Number.parseInt(m[1], 10);
   const mo = Number.parseInt(m[2], 10);

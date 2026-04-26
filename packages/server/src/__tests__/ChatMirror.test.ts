@@ -666,7 +666,7 @@ describe('formatOutgoingUnified (2026-04-24 Edward mandate)', () => {
     });
     // Exactly one space after the last closing bracket
     expect(out).toMatch(/\]\sx$/);
-    expect(out).not.toMatch(/\]  x$/);
+    expect(out).not.toMatch(/\] {2}x$/);
     expect(out).not.toMatch(/\]x$/);
   });
 
