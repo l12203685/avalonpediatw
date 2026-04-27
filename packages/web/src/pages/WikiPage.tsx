@@ -45,28 +45,28 @@ export default function WikiPage(): JSX.Element {
             完整的遊戲規則、角色指南、策略分析、實戰直播與數據回放
           </p>
 
-          {/* 快速統計 */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* 快速統計 — 橫排單行 (Edward 2026-04-27 23:49 痛點: 1-2 行顯示) */}
+          <div className="grid grid-cols-3 gap-1.5">
             <motion.div
               whileHover={{ scale: 1.05 }}
-              className="bg-avalon-card/50 border border-gray-600 rounded-lg px-3 py-2"
+              className="bg-avalon-card/50 border border-gray-600 rounded-lg px-2 py-1 flex items-baseline justify-center gap-1"
             >
-              <div className="text-lg font-bold text-yellow-400 leading-tight">6</div>
-              <div className="text-gray-400 text-xs leading-tight">個文章分類</div>
+              <span className="text-base font-bold text-yellow-400 leading-none">6</span>
+              <span className="text-gray-400 text-[11px] leading-none">個文章分類</span>
             </motion.div>
             <motion.div
               whileHover={{ scale: 1.05 }}
-              className="bg-avalon-card/50 border border-gray-600 rounded-lg px-3 py-2"
+              className="bg-avalon-card/50 border border-gray-600 rounded-lg px-2 py-1 flex items-baseline justify-center gap-1"
             >
-              <div className="text-lg font-bold text-yellow-400 leading-tight">140+</div>
-              <div className="text-gray-400 text-xs leading-tight">篇詳細文章</div>
+              <span className="text-base font-bold text-yellow-400 leading-none">140+</span>
+              <span className="text-gray-400 text-[11px] leading-none">篇詳細文章</span>
             </motion.div>
             <motion.div
               whileHover={{ scale: 1.05 }}
-              className="bg-avalon-card/50 border border-gray-600 rounded-lg px-3 py-2"
+              className="bg-avalon-card/50 border border-gray-600 rounded-lg px-2 py-1 flex items-baseline justify-center gap-1"
             >
-              <div className="text-lg font-bold text-yellow-400 leading-tight">{TOTAL_UNIQUE_GAMES.toLocaleString()}</div>
-              <div className="text-gray-400 text-xs leading-tight">局實戰數據</div>
+              <span className="text-base font-bold text-yellow-400 leading-none">{TOTAL_UNIQUE_GAMES.toLocaleString()}</span>
+              <span className="text-gray-400 text-[11px] leading-none">局實戰數據</span>
             </motion.div>
           </div>
         </div>
