@@ -35,28 +35,28 @@ interface WikiContentProps {
 // directly on each node to avoid dependency on @tailwindcss/typography plugin.
 const markdownComponents = {
   h1: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <h1 className="text-xl font-bold text-white mt-6 mb-3">{children}</h1>
+    <h1 className="text-lg font-bold text-white mt-4 mb-2">{children}</h1>
   ),
   h2: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <h2 className="text-lg font-bold text-yellow-400 mt-5 mb-2">{children}</h2>
+    <h2 className="text-base font-bold text-yellow-400 mt-3 mb-1.5">{children}</h2>
   ),
   h3: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <h3 className="text-base font-semibold text-gray-200 mt-4 mb-2">{children}</h3>
+    <h3 className="text-sm font-semibold text-gray-200 mt-2.5 mb-1">{children}</h3>
   ),
   h4: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <h4 className="text-sm font-semibold text-gray-300 mt-3 mb-1">{children}</h4>
+    <h4 className="text-xs font-semibold text-gray-300 mt-2 mb-0.5">{children}</h4>
   ),
   p: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <p className="text-gray-200 leading-relaxed mb-3">{children}</p>
+    <p className="text-sm text-gray-200 leading-snug mb-2">{children}</p>
   ),
   ul: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <ul className="list-disc list-outside ml-6 space-y-1 mb-3 text-gray-200">{children}</ul>
+    <ul className="list-disc list-outside ml-5 mb-2 text-sm text-gray-200">{children}</ul>
   ),
   ol: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <ol className="list-decimal list-outside ml-6 space-y-1 mb-3 text-gray-200">{children}</ol>
+    <ol className="list-decimal list-outside ml-5 mb-2 text-sm text-gray-200">{children}</ol>
   ),
   li: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <li className="leading-relaxed">{children}</li>
+    <li className="leading-snug">{children}</li>
   ),
   strong: ({ children }: { children?: ReactNode }): JSX.Element => (
     <strong className="font-bold text-white">{children}</strong>
@@ -75,28 +75,28 @@ const markdownComponents = {
     </a>
   ),
   blockquote: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <blockquote className="border-l-4 border-yellow-500 bg-yellow-500/5 pl-4 py-2 my-3 text-gray-300 italic">
+    <blockquote className="border-l-4 border-yellow-500 bg-yellow-500/5 pl-3 py-1.5 my-2 text-sm text-gray-300 italic leading-snug">
       {children}
     </blockquote>
   ),
   code: ({ inline, children }: { inline?: boolean; children?: ReactNode }): JSX.Element =>
     inline ? (
-      <code className="bg-gray-800 text-yellow-300 px-1.5 py-0.5 rounded text-xs font-mono">
+      <code className="bg-gray-800 text-yellow-300 px-1 py-0.5 rounded text-xs font-mono">
         {children}
       </code>
     ) : (
       <code className="font-mono">{children}</code>
     ),
   pre: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <pre className="bg-gray-900 border border-gray-700 rounded-md p-3 overflow-x-auto my-3 text-xs text-gray-200">
+    <pre className="bg-gray-900 border border-gray-700 rounded-md p-2.5 overflow-x-auto my-2 text-xs text-gray-200">
       {children}
     </pre>
   ),
-  hr: (): JSX.Element => <hr className="border-gray-700 my-6" />,
+  hr: (): JSX.Element => <hr className="border-gray-700 my-3" />,
   // Table renderers — the main fix. Wraps in overflow container for narrow modals.
   table: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <div className="overflow-x-auto my-4">
-      <table className="w-full border-collapse border border-gray-700 text-sm">
+    <div className="overflow-x-auto my-2">
+      <table className="w-full border-collapse border border-gray-700 text-xs">
         {children}
       </table>
     </div>
@@ -111,15 +111,15 @@ const markdownComponents = {
     <tr className="hover:bg-avalon-card/40 transition-colors">{children}</tr>
   ),
   th: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <th className="border border-gray-700 px-3 py-2 text-left font-semibold text-yellow-400 bg-avalon-dark/40">
+    <th className="border border-gray-700 px-2 py-1 text-left font-semibold text-yellow-400 bg-avalon-dark/40">
       {children}
     </th>
   ),
   td: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <td className="border border-gray-700 px-3 py-2 text-gray-200 align-top">{children}</td>
+    <td className="border border-gray-700 px-2 py-1 text-gray-200 align-top">{children}</td>
   ),
   img: ({ src, alt }: { src?: string; alt?: string }): JSX.Element => (
-    <img src={src} alt={alt ?? ''} className="max-w-full rounded-md my-3 border border-gray-700" />
+    <img src={src} alt={alt ?? ''} className="max-w-full rounded-md my-2 border border-gray-700" />
   ),
 };
 
@@ -189,8 +189,8 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
   }, [activeCategory, searchQuery, allArticles]);
 
   return (
-    <div className="bg-gradient-to-b from-avalon-dark to-black p-4">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="bg-gradient-to-b from-avalon-dark to-black px-3 py-3">
+      <div className="max-w-6xl mx-auto space-y-3">
         {/* 搜索欄 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -198,20 +198,20 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
           className="relative"
         >
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               placeholder="搜尋百科內容..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-avalon-card/50 border border-gray-600 rounded-lg pl-12 pr-4 py-3 text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-all"
+              className="w-full bg-avalon-card/50 border border-gray-600 rounded-lg pl-9 pr-9 py-2 text-sm text-white placeholder-gray-400 focus:border-yellow-400 focus:outline-none transition-all"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
               >
-                <X size={20} />
+                <X size={16} />
               </button>
             )}
           </div>
@@ -222,11 +222,11 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1 }}
-          className="flex flex-wrap gap-3"
+          className="flex flex-wrap gap-2"
         >
           <button
             onClick={() => setActiveCategory('')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
               !activeCategory
                 ? 'bg-yellow-500 text-black shadow-lg'
                 : 'bg-avalon-card/50 text-gray-300 hover:bg-avalon-card border border-gray-600'
@@ -239,7 +239,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
             <button
               key={category.id}
               onClick={() => setActiveCategory(category.id)}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
                 activeCategory === category.id
                   ? 'bg-yellow-500 text-black shadow-lg'
                   : 'bg-avalon-card/50 text-gray-300 hover:bg-avalon-card border border-gray-600'
@@ -256,7 +256,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-gray-400"
+            className="text-sm text-gray-400"
           >
             找到 <span className="text-yellow-400 font-bold">{filteredArticles.length}</span> 篇文章
           </motion.div>
@@ -267,13 +267,13 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center py-12"
+            className="text-center py-8"
           >
-            <p className="text-gray-400 text-lg">未找到相關文章</p>
-            <p className="text-gray-500 text-sm mt-2">試試其他搜尋詞或選擇不同的分類</p>
+            <p className="text-gray-400 text-base">未找到相關文章</p>
+            <p className="text-gray-500 text-xs mt-1">試試其他搜尋詞或選擇不同的分類</p>
           </motion.div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredArticles.map((article, index) => (
               <motion.button
                 key={article.id}
@@ -283,17 +283,17 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setSelectedArticle(article)}
-                className="text-left p-4 rounded-lg border-2 transition-all bg-avalon-card/30 border-gray-600 hover:border-yellow-400 hover:bg-avalon-card/50"
+                className="text-left p-3 rounded-lg border-2 transition-all bg-avalon-card/30 border-gray-600 hover:border-yellow-400 hover:bg-avalon-card/50"
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-white mb-2">{article.title}</h3>
-                    <p className="text-gray-300 text-sm mb-3 line-clamp-3">{article.excerpt}</p>
-                    <div className="flex flex-wrap gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-bold text-white mb-1 leading-snug">{article.title}</h3>
+                    <p className="text-gray-300 text-xs mb-2 line-clamp-3 leading-snug">{article.excerpt}</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {article.tags.slice(0, 4).map((tag) => (
                         <span
                           key={tag}
-                          className="inline-block bg-gray-700/50 text-gray-200 text-xs px-2 py-1 rounded"
+                          className="inline-block bg-gray-700/50 text-gray-200 text-[10px] px-1.5 py-0.5 rounded"
                         >
                           {tag}
                         </span>
@@ -301,13 +301,13 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-700">
+                <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-700">
                   <div className="flex items-center gap-1">
-                    <Eye size={14} />
+                    <Eye size={12} />
                     {article.views.toLocaleString()} 次閱讀
                   </div>
                   <div className="flex items-center gap-1">
-                    <Calendar size={14} />
+                    <Calendar size={12} />
                     {article.updatedAt.toLocaleDateString('zh-TW')}
                   </div>
                 </div>
@@ -338,31 +338,31 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
               className="bg-avalon-card border border-yellow-500 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto my-auto"
             >
               {/* Header (sticky) */}
-              <div className="sticky top-0 z-10 flex items-start justify-between p-4 bg-avalon-card border-b border-gray-700">
-                <h2 className="text-xl md:text-2xl font-bold text-white flex-1 pr-4">{selectedArticle.title}</h2>
+              <div className="sticky top-0 z-10 flex items-start justify-between p-3 bg-avalon-card border-b border-gray-700">
+                <h2 className="text-base md:text-lg font-bold text-white flex-1 pr-3 leading-snug">{selectedArticle.title}</h2>
                 <button
                   onClick={() => setSelectedArticle(null)}
                   className="text-gray-400 hover:text-white shrink-0"
                   aria-label="Close article"
                 >
-                  <X size={24} />
+                  <X size={20} />
                 </button>
               </div>
 
-              <div className="p-4 md:p-6">
-                <div className="flex flex-wrap gap-4 text-xs text-gray-400 pb-4 border-b border-gray-700 mb-4">
+              <div className="px-3 py-3 md:px-4 md:py-4">
+                <div className="flex flex-wrap gap-3 text-[10px] text-gray-400 pb-2 border-b border-gray-700 mb-3">
                   <div className="flex items-center gap-1">
-                    <Eye size={14} />
+                    <Eye size={12} />
                     {selectedArticle.views.toLocaleString()}
                   </div>
                   <div className="flex items-center gap-1">
-                    <Calendar size={14} />
+                    <Calendar size={12} />
                     {selectedArticle.updatedAt.toLocaleDateString('zh-TW')}
                   </div>
                   <span>{selectedArticle.author}</span>
                 </div>
 
-                <div className="max-w-none text-sm leading-relaxed">
+                <div className="max-w-none">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={markdownComponents}
@@ -373,13 +373,13 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
 
                 {/* Role stats card for character articles */}
                 {ARTICLE_TO_ROLE[selectedArticle.id] && ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]] && (
-                  <div className="mt-6">
+                  <div className="mt-4">
                     <RoleStatsCard role={ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]]} />
                   </div>
                 )}
                 {/* Role short video */}
                 {ARTICLE_TO_ROLE[selectedArticle.id] && VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]] && (
-                  <div className="mt-6">
+                  <div className="mt-4">
                     <RoleVideoCard video={VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]]} />
                   </div>
                 )}
