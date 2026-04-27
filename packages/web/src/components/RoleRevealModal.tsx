@@ -39,7 +39,12 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
           animate={{ scale: 1, y: 0, opacity: 1 }}
           exit={{ scale: 0.8, y: 40, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className={`relative w-full max-w-md bg-gradient-to-br ${info.bg} border-2 ${info.border} rounded-2xl p-6 shadow-2xl`}
+          /* Edward 2026-04-27 mobile single-viewport: roles with long knowledge
+             lists (mordred sees evil×3, morgana sees evil×2 etc.) can push the
+             card past iPhone SE 667px. Cap to 90dvh + scroll the inner card so
+             the start button stays reachable without forcing the whole page to
+             scroll. */
+          className={`relative w-full max-w-md max-h-[90dvh] overflow-y-auto bg-gradient-to-br ${info.bg} border-2 ${info.border} rounded-2xl p-4 sm:p-6 shadow-2xl`}
           onClick={e => e.stopPropagation()}
         >
           {/* Close button */}
@@ -56,7 +61,7 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
               represents the role; chip already represents the camp). The
               small painted shield in the camp chip is preserved (#152
               emblem unification). */}
-          <div className="text-center mb-6">
+          <div className="text-center mb-3 sm:mb-6">
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -107,7 +112,7 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 }}
-            className="bg-black/30 rounded-xl p-4 mb-4"
+            className="bg-black/30 rounded-xl p-3 sm:p-4 mb-3 sm:mb-4"
           >
             <p className="text-gray-200 text-sm leading-relaxed">{info.description}</p>
           </motion.div>
@@ -117,7 +122,7 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className={`rounded-xl p-4 mb-6 border ${
+            className={`rounded-xl p-3 sm:p-4 mb-3 sm:mb-6 border ${
               isEvil ? 'bg-red-950/40 border-red-800/50' : 'bg-blue-950/40 border-blue-800/50'
             }`}
           >
@@ -159,7 +164,7 @@ export default function RoleRevealModal({ room, currentPlayer, onClose }: RoleRe
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
-            className="text-xs text-gray-500 text-center mb-4"
+            className="text-[11px] sm:text-xs text-gray-500 text-center mb-3 sm:mb-4"
           >
             {info.knowledge}
           </motion.p>

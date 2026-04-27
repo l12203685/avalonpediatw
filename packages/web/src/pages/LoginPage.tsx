@@ -77,8 +77,9 @@ export default function LoginPage(): JSX.Element {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4 bg-black">
-      <div className="w-full max-w-md space-y-6">
+    /* Edward 2026-04-27 mobile single-viewport: p-4 → p-3 sm:p-4. */
+    <div className="flex items-center justify-center min-h-screen p-3 sm:p-4 bg-black">
+      <div className="w-full max-w-md space-y-3 sm:space-y-6">
         <BrandHeader size="lg" />
 
         {error && (
@@ -91,9 +92,11 @@ export default function LoginPage(): JSX.Element {
         )}
 
         {/* ────────── 上半：OAuth 主登入路徑 ────────── */}
-        <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-5 space-y-3">
-          <h1 className="text-white text-lg font-bold">快速登入 / 註冊</h1>
-          <p className="text-xs text-zinc-400 leading-relaxed">
+        {/* Edward 2026-04-27 mobile single-viewport: 縮 p-5 → p-3, h1 縮一級, hint
+            縮成單行 truncate-able. */}
+        <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-3 sm:p-5 space-y-2 sm:space-y-3">
+          <h1 className="text-white text-base sm:text-lg font-bold">快速登入 / 註冊</h1>
+          <p className="text-[11px] sm:text-xs text-zinc-400 leading-relaxed">
             點擊任一選項即可登入。若該 email 尚未註冊，系統會自動以此 email 建立帳號；
             已註冊則直接登入。
           </p>
@@ -104,7 +107,7 @@ export default function LoginPage(): JSX.Element {
               onClick={handleQuickGoogle}
               disabled={loading || !hasFirebaseAuthConfigured()}
               data-testid="login-btn-quick-google"
-              className="w-full bg-white hover:bg-zinc-100 disabled:opacity-40 text-black font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 border border-zinc-300"
+              className="w-full bg-white hover:bg-zinc-100 disabled:opacity-40 text-black font-semibold py-2.5 sm:py-3 rounded-xl transition-all flex items-center justify-center gap-2 border border-zinc-300"
               title={hasFirebaseAuthConfigured() ? '' : '未設定 Firebase，Google 登入不可用'}
             >
               {loading && <Loader size={16} className="animate-spin" />}
@@ -117,7 +120,7 @@ export default function LoginPage(): JSX.Element {
               onClick={handleQuickLine}
               disabled={loading}
               data-testid="login-btn-quick-line"
-              className="w-full bg-[#06C755] hover:bg-[#05b04b] disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+              className="w-full bg-[#06C755] hover:bg-[#05b04b] disabled:opacity-40 text-white font-semibold py-2.5 sm:py-3 rounded-xl transition-all flex items-center justify-center gap-2"
             >
               <span className="text-base font-bold">L</span>
               <span>使用 LINE 登入</span>
@@ -128,7 +131,7 @@ export default function LoginPage(): JSX.Element {
               onClick={handleQuickDiscord}
               disabled={loading}
               data-testid="login-btn-quick-discord"
-              className="w-full bg-[#5865F2] hover:bg-[#4853e0] disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+              className="w-full bg-[#5865F2] hover:bg-[#4853e0] disabled:opacity-40 text-white font-semibold py-2.5 sm:py-3 rounded-xl transition-all flex items-center justify-center gap-2"
             >
               <span className="text-base font-bold">D</span>
               <span>使用 Discord 登入</span>
@@ -142,15 +145,17 @@ export default function LoginPage(): JSX.Element {
             type="button"
             onClick={() => setEmailPanelOpen(v => !v)}
             data-testid="login-toggle-email-panel"
-            className="w-full p-5 flex items-center justify-between text-left"
+            /* Edward 2026-04-27 mobile single-viewport: p-5 → p-3 sm:p-5;
+               備援路徑 hint 只在 sm+ 顯示, mobile 留 h2 + chevron 即可. */
+            className="w-full p-3 sm:p-5 flex items-center justify-between text-left"
             aria-expanded={emailPanelOpen}
           >
             <div>
-              <h2 className="text-white text-sm font-semibold flex items-center gap-2">
+              <h2 className="text-white text-[13px] sm:text-sm font-semibold flex items-center gap-2">
                 <Mail size={16} className="text-zinc-400" />
                 沒有 Google / LINE / Discord？用 email 註冊
               </h2>
-              <p className="text-[11px] text-zinc-500 mt-1">
+              <p className="hidden sm:block text-[11px] text-zinc-500 mt-1">
                 備援路徑 — 完全用不到 OAuth 的使用者適用
               </p>
             </div>
@@ -160,8 +165,11 @@ export default function LoginPage(): JSX.Element {
           </button>
 
           {emailPanelOpen && (
-            <div className="px-5 pb-5 space-y-4 border-t border-zinc-800 pt-4">
-              <p className="text-xs text-zinc-400 leading-relaxed">
+            /* Edward 2026-04-27 mobile single-viewport: 縮 px-5 pb-5 → px-3 pb-3
+               sm:px-5 sm:pb-5; space-y-4 → space-y-2 sm:space-y-4; 隱藏 hint
+               (mobile 直接 input fields, 解釋文字略). */
+            <div className="px-3 pb-3 sm:px-5 sm:pb-5 space-y-2 sm:space-y-4 border-t border-zinc-800 pt-3 sm:pt-4">
+              <p className="hidden sm:block text-xs text-zinc-400 leading-relaxed">
                 不存在的信箱會自動建立帳號；已註冊的信箱輸入密碼即登入。
               </p>
 

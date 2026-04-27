@@ -171,7 +171,11 @@ export default function PublicChatPanel(): JSX.Element {
 
   return (
     <div
-      className="md:col-span-2 bg-zinc-900/60 border border-zinc-700 rounded-lg flex flex-col min-h-[280px] overflow-hidden"
+      /* Edward 2026-04-27 mobile single-viewport: 280px hardcoded eats half the
+         iPhone SE viewport (375x667). Mobile: cap to 200px so the 6-button grid
+         + chat together fit above the fold. Desktop unchanged (md:min-h-[280px]
+         when shoulder-by-shoulder with the buttons). */
+      className="md:col-span-2 bg-zinc-900/60 border border-zinc-700 rounded-lg flex flex-col min-h-[200px] md:min-h-[280px] overflow-hidden"
       data-testid="public-chat-panel"
     >
       {/* Header */}

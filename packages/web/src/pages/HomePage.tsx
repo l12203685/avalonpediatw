@@ -309,7 +309,11 @@ export default function HomePage(): JSX.Element {
         />
       </div>
 
-      <div className="flex items-start sm:items-center justify-center min-h-screen relative z-10 pt-16 sm:pt-0">
+      {/* Edward 2026-04-27 mobile single-viewport: pt-16 ate 64px above the
+          fold so the 6-button grid + chat got pushed below 667px. pt-12 keeps
+          enough room for the fixed chip in the top-left corner without wasting
+          a third of the viewport. */}
+      <div className="flex items-start sm:items-center justify-center min-h-screen relative z-10 pt-12 sm:pt-0">
         {/* Edward 2026-04-25 22:10: 大廳左上「登入狀態 chip」(替代個人戰績按鈕底下
             「當前: Edward」副字)。
               - 已登入: 「已登入: {name} | G: 綁定/未綁 | D: 綁定/未綁 | L: 綁定/未綁」
@@ -373,17 +377,21 @@ export default function HomePage(): JSX.Element {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center space-y-6 w-full"
+              /* Edward 2026-04-27 mobile single-viewport: space-y-6 (24px) was
+                 burning vertical pixels on iPhone SE. Mobile: space-y-3 (12px)
+                 between title / buttons / chat. Desktop unchanged. */
+              className="text-center space-y-3 sm:space-y-6 w-full"
             >
               {/* Edward 2026-04-25 19:18 final spec — title block sits above
                   the 6-button grid. h1 「Avalon - Resistance」 大字, small
                   subtitle 「隱藏身分‧邏輯推理‧相互欺瞞」. BrandHeader component
-                  still used by LoginPage / Forgot / Reset pages. */}
-              <div className="text-center pt-2">
-                <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white">
+                  still used by LoginPage / Forgot / Reset pages.
+                  Edward 2026-04-27: mobile h1 縮 text-2xl + mt-1, 省 ~28px. */}
+              <div className="text-center pt-1 sm:pt-2">
+                <h1 className="text-2xl sm:text-5xl font-bold tracking-tight text-white">
                   {t('home.title', { defaultValue: 'Avalon - Resistance' })}
                 </h1>
-                <p className="mt-2 text-xs sm:text-sm text-zinc-400 tracking-wider">
+                <p className="mt-1 sm:mt-2 text-[11px] sm:text-sm text-zinc-400 tracking-wider">
                   {t('home.subtitle', { defaultValue: '隱藏身分‧邏輯推理‧相互欺瞞' })}
                 </p>
               </div>
@@ -393,7 +401,7 @@ export default function HomePage(): JSX.Element {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
-                className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-2"
+                className="grid grid-cols-1 md:grid-cols-5 gap-2 sm:gap-4 pt-1 sm:pt-2"
               >
                 {/* Buttons area — 2×3 on mobile, 3×2 on desktop */}
                 <div className="md:col-span-3 space-y-3">
@@ -419,7 +427,7 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => tryGatedNavigate('createRoom', () => setMode('create'))}
                       data-testid="home-btn-create"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
                       <Play size={18} className="flex-shrink-0" />
                       <span className="truncate">{t('home.createRoom')}</span>
@@ -430,7 +438,7 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => tryGatedNavigate('joinRoom', () => setMode('join'))}
                       data-testid="home-btn-join"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
                       <LogIn size={18} className="flex-shrink-0" />
                       <span className="truncate">{t('home.joinRoom')}</span>
@@ -441,7 +449,7 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setGameState('analytics')}
                       data-testid="home-btn-stats"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
                       <BarChart3 size={18} className="flex-shrink-0" />
                       <span className="truncate">{t('home.stats')}</span>
@@ -456,7 +464,7 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => tryGatedNavigate('stats', () => setGameState('personalStats'))}
                       data-testid="home-btn-personal-stats"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
                       <User size={18} className="flex-shrink-0" />
                       <span className="truncate">{t('home.personalStats')}</span>
@@ -467,7 +475,7 @@ export default function HomePage(): JSX.Element {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setGameState('wiki')}
                       data-testid="home-btn-wiki"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
                       <BookOpen size={18} className="flex-shrink-0" />
                       <span className="truncate">{t('home.wikiAndGuide')}</span>
@@ -488,7 +496,7 @@ export default function HomePage(): JSX.Element {
                         useGameStore.getState().navigateToProfile('me');
                       })}
                       data-testid="home-btn-profile"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
+                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
                       <User size={18} className="flex-shrink-0" />
                       <span className="truncate">{t('home.profile', { defaultValue: '個人資料' })}</span>
@@ -598,7 +606,7 @@ export default function HomePage(): JSX.Element {
           )}
 
           {mode === 'create' && (
-            <div className="space-y-6 bg-zinc-900/70 p-8 rounded-lg border border-zinc-700">
+            <div className="space-y-3 sm:space-y-6 bg-zinc-900/70 p-4 sm:p-8 rounded-lg border border-zinc-700">
               <h2 className="text-2xl font-bold text-center text-white">{t('home.createRoom')}</h2>
 
               {/* 2026-04-24 #ux-phase-3: replaces the plain name input with an
@@ -697,7 +705,7 @@ export default function HomePage(): JSX.Element {
           )}
 
           {mode === 'join' && (
-            <div className="space-y-6 bg-zinc-900/70 p-8 rounded-lg border border-zinc-700">
+            <div className="space-y-3 sm:space-y-6 bg-zinc-900/70 p-4 sm:p-8 rounded-lg border border-zinc-700">
               <h2 className="text-2xl font-bold text-center text-white">{t('home.joinRoom')}</h2>
 
               {/* 2026-04-24 #ux-phase-3: same binding block as create mode. The
