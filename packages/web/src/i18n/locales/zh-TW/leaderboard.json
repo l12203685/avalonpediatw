@@ -18,15 +18,13 @@
   "groupEmpty": "此組目前沒有玩家",
   "v3": {
     "title": "8 指標排行榜",
-    "subtitle": "Edward 22:41 八指標 · 入場：能力角 ≥ 3 場 · 忠臣 ≥ 15 場",
     "tabClassic": "傳統排行 (5 組 ELO 分層)",
     "tabEight": "8 指標精算榜",
-    "rawMode": "原始 (Raw)",
-    "shrinkMode": "貝氏 (Shrinkage α=10)",
-    "rawHint": "依玩家樣本直接平均，小樣本可能偏高/偏低",
-    "shrinkHint": "對全玩家均值做貝氏縮減，小樣本偏向母體",
+    "eligibilityRule": "上榜條件: 所有能力角 (刺/娜/德/奧/派/梅) ≥ 3 場 且 忠臣 ≥ 15 場",
+    "popAvgExplain": "母體均值 (PopAvg) = 全社群 2146 場該指標的整體平均, 用來比較個人是否高於平均",
     "headers": {
       "player": "玩家",
+      "elo": "ELO",
       "totalGames": "場",
       "redGames": "紅",
       "blueGames": "藍",
@@ -41,18 +39,19 @@
       "precision": "精準勝率"
     },
     "tooltips": {
-      "threeRed": "三紅率（紅角立場）= 紅角中三紅 outcome 比例",
-      "threeBlueDead": "三藍死率（紅角立場）= 紅角中三藍死 outcome 比例",
-      "threeBlueAlive": "三藍活率（藍角立場）= 藍角中三藍活 outcome 比例",
-      "redWin": "紅勝 = 三紅 + 三藍死（紅角立場勝率，衍生欄）",
-      "blueWin": "藍勝 = 三藍活（藍角立場勝率，衍生欄）",
-      "threeBlue": "三藍 = 三藍死 + 三藍活（藍角任務防禦力）",
-      "missionWin": "任務勝 = Σ 紅角三紅率·P(紅) + Σ 藍角三藍率·P(藍)",
-      "expectedWin": "期望勝 = Σ 紅角紅勝率·P(紅) + Σ 藍角藍勝率·P(藍)",
-      "precision": "精準勝率 = Σ_角色 Σ_位置 P(角色)·P(位置)·勝率(角色,位置)，cell 級貝氏縮減 α=5"
+      "elo": "ELO 分數: 依勝率 + 對手強度 + 場數信賴推導, 全社群統一尺",
+      "threeRed": "三紅: 玩紅角 (Resistance) 時, 連 3 任務成功的局比",
+      "threeBlueDead": "三藍死: 玩紅角時, 三藍但梅林被刺 (敗) 的局比",
+      "threeBlueAlive": "三藍活: 玩藍角時, 三藍且梅林存活 (勝) 的局比",
+      "redWin": "紅勝: 玩紅角時的整體勝場比 (= 三紅 + 三藍死)",
+      "blueWin": "藍勝: 玩藍角時的整體勝場比 (= 三藍活)",
+      "threeBlue": "三藍: 玩藍角時連 3 任務成功的局比 (= 三藍死 + 三藍活)",
+      "missionWin": "任務勝: 個人在投票通過任務中, 該局任務成功的加權比例 (Σ 紅角三紅率·P紅 + Σ 藍角三藍率·P藍)",
+      "expectedWin": "期望勝: 全角加權的整體勝場比 (Σ 紅角紅勝率·P紅 + Σ 藍角藍勝率·P藍)",
+      "precision": "精準勝率: 角色×位置加權後的勝率 (Σ_角色 Σ_位置 P角色·P位置·勝率), cell 級貝氏縮減 α=5"
     },
-    "globalMeans": "母體均值（先驗）",
-    "eligibleCount": "上榜：{{eligible}} / {{total}} 玩家",
+    "globalMeans": "母體均值 (先驗)",
+    "eligibleCount": "上榜: {{eligible}} / {{total}} 玩家",
     "loading": "計算中...",
     "noPrecision": "—",
     "outcomeMode": {
@@ -60,7 +59,7 @@
       "threeRed": "三紅模式",
       "threeBlueDead": "三藍死模式",
       "threeBlueAlive": "三藍活模式",
-      "allHint": "12 欄全顯，預設依期望勝排序",
+      "allHint": "12 欄全顯, 預設依期望勝排序",
       "threeRedHint": "紅角立場・三紅相關欄高亮",
       "threeBlueDeadHint": "紅角立場・三藍死相關欄高亮",
       "threeBlueAliveHint": "藍角立場・三藍活相關欄高亮",
@@ -76,12 +75,10 @@
       "clear": "清除篩選",
       "noMatch": "目前沒有符合條件的玩家",
       "games": {
-        "label": "場次區間",
-        "lt50": "<50 場",
-        "50to99": "50-99 場",
-        "100to199": "100-199 場",
-        "200to499": "200-499 場",
-        "gte500": "500+ 場"
+        "label": "場次",
+        "lt100": "<100 場",
+        "100to200": "100-200 場",
+        "gt200": ">200 場"
       },
       "tier": {
         "label": "ELO 分類",
@@ -89,12 +86,6 @@
         "mid": "中堅玩家",
         "top": "頂尖高玩",
         "loadFailed": "ELO 資料載入失敗"
-      },
-      "main": {
-        "label": "主玩角色",
-        "red": "三紅角玩家",
-        "blue": "三藍角玩家",
-        "balanced": "平衡"
       }
     }
   }

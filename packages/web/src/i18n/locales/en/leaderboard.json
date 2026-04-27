@@ -18,15 +18,13 @@
   "groupEmpty": "No players in this group yet",
   "v3": {
     "title": "8-Metric Leaderboard",
-    "subtitle": "Edward 8 metrics. Entry: each ability role ≥ 3 games, loyalist ≥ 15 games.",
     "tabClassic": "Classic (5 ELO tiers)",
     "tabEight": "8-Metric",
-    "rawMode": "Raw",
-    "shrinkMode": "Bayesian (α=10)",
-    "rawHint": "Direct sample mean. Low-game players may look high/low.",
-    "shrinkHint": "Posterior shrunk toward population mean for low-game players.",
+    "eligibilityRule": "Eligibility: each ability role (Assassin / Morgana / Mordred / Oberon / Percival / Merlin) >= 3 games AND Loyal Servant >= 15 games",
+    "popAvgExplain": "PopAvg (population mean) = community average across 2146 games per metric — used as the baseline to compare each player against.",
     "headers": {
       "player": "Player",
+      "elo": "ELO",
       "totalGames": "G",
       "redGames": "R",
       "blueGames": "B",
@@ -41,15 +39,16 @@
       "precision": "PrecisionWR"
     },
     "tooltips": {
-      "threeRed": "3-Red rate (when on red role) = 3-Red outcome / red games",
-      "threeBlueDead": "3B-Dead rate (when on red role) = 3-Blue-Dead / red games",
-      "threeBlueAlive": "3B-Alive rate (when on blue role) = 3-Blue-Alive / blue games",
-      "redWin": "RedWin = 3-Red + 3B-Dead (red side win, derived)",
-      "blueWin": "BlueWin = 3B-Alive (blue side win, derived)",
-      "threeBlue": "3-Blue = 3B-Dead + 3B-Alive (blue mission defense)",
-      "missionWin": "MissionWin = Σ red 3-Red·P(red) + Σ blue 3-Blue·P(blue)",
-      "expectedWin": "ExpectedWin = Σ red RedWin·P(red) + Σ blue BlueWin·P(blue)",
-      "precision": "PrecisionWR = Σ_role Σ_seat P(role)·P(seat)·WR(role,seat) with cell α=5 shrinkage"
+      "elo": "ELO score: derived from win-rate + opponent strength + game-count reliability, on a community-wide unified scale.",
+      "threeRed": "3-Red: when on the red side, share of games where Resistance won 3 missions in a row.",
+      "threeBlueDead": "3B-Dead: when on the red side, share of games where the blue side completed 3 missions but Merlin was killed (red wins).",
+      "threeBlueAlive": "3B-Alive: when on the blue side, share of games where blue completed 3 missions AND Merlin survived (blue wins).",
+      "redWin": "RedWin: overall win share when on the red side (= 3-Red + 3B-Dead).",
+      "blueWin": "BlueWin: overall win share when on the blue side (= 3-Blue-Alive).",
+      "threeBlue": "3-Blue: when on the blue side, share of games where blue completed 3 missions (= 3B-Dead + 3B-Alive).",
+      "missionWin": "MissionWin: weighted share of games where this player's faction completed/succeeded the mission (Σ red 3-Red·P_red + Σ blue 3-Blue·P_blue).",
+      "expectedWin": "ExpectedWin: overall weighted win share across all roles (Σ red RedWin·P_red + Σ blue BlueWin·P_blue).",
+      "precision": "PrecisionWR: role × seat weighted win rate (Σ_role Σ_seat P_role·P_seat·WR), with cell-level Bayesian shrinkage α=5."
     },
     "globalMeans": "Population Means (Priors)",
     "eligibleCount": "Eligible: {{eligible}} / {{total}}",
@@ -77,11 +76,9 @@
       "noMatch": "No players match these filters",
       "games": {
         "label": "Games",
-        "lt50": "<50",
-        "50to99": "50-99",
-        "100to199": "100-199",
-        "200to499": "200-499",
-        "gte500": "500+"
+        "lt100": "<100",
+        "100to200": "100-200",
+        "gt200": ">200"
       },
       "tier": {
         "label": "ELO Tier",
@@ -89,12 +86,6 @@
         "mid": "Mid",
         "top": "Top",
         "loadFailed": "ELO data unavailable"
-      },
-      "main": {
-        "label": "Main Side",
-        "red": "Red-heavy",
-        "blue": "Blue-heavy",
-        "balanced": "Balanced"
       }
     }
   }
