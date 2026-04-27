@@ -93,6 +93,23 @@ export class GameEngine {
   private assassinationTimeout: NodeJS.Timeout | null = null;
   private ladyOfTheLakeTimeout: NodeJS.Timeout | null = null;
   private onStateChange: ((room: Room) => void) | null = null;
+  /**
+   * Async-mode (棋瓦 P2) hook fired after `recomputePending()` opens a NEW
+   * decision phase (i.e. when phase / round / attempt changes, not on every
+   * intra-phase mutation). Receives the room and the just-computed pending
+   * decision. Used by `AsyncNotifier` to fan out "輪到你了" pings; engine
+   * stays decoupled from any platform SDK.
+   *
+   * Realtime-mode rooms never fire this — the call site is gated by
+   * `isAsync()` inside `recomputePending()`.
+   */
+  private onPendingChanged: ((room: Room, pending: PendingDecision) => void) | null = null;
+  /**
+   * Async-mode (棋瓦 P2) hook fired exactly once when the room transitions
+   * to `state === 'ended'`. Used by `AsyncNotifier` to broadcast the result
+   * to every player.
+   */
+  private onGameEnded: ((room: Room) => void) | null = null;
 
   // Quest phase tracking
   private questVotes: QuestVote[] = [];
@@ -112,9 +129,18 @@ export class GameEngine {
   private eventBuffer: GameEventRecord[] = [];
   private eventSeq: number = 0;
 
-  constructor(room: Room, onStateChange?: (room: Room) => void) {
+  constructor(
+    room: Room,
+    onStateChange?: (room: Room) => void,
+    asyncHooks?: {
+      onPendingChanged?: (room: Room, pending: PendingDecision) => void;
+      onGameEnded?: (room: Room) => void;
+    },
+  ) {
     this.room = room;
     this.onStateChange = onStateChange ?? null;
+    this.onPendingChanged = asyncHooks?.onPendingChanged ?? null;
+    this.onGameEnded = asyncHooks?.onGameEnded ?? null;
   }
 
   /** Returns the buffered event log for persistence */
@@ -177,7 +203,18 @@ export class GameEngine {
     if (!this.isAsync()) return; // realtime: don't carry the field
     const state = this.room.state;
     if (state === 'lobby' || state === 'ended') {
+      const wasNotEnded = this.room.pending !== undefined;
       this.room.pending = undefined;
+      // Fire the game-ended hook exactly once on the lobby→ended transition.
+      // (The call is idempotent at the AsyncNotifier layer too — per-room
+      // throttle key — but gating here keeps the engine logs clean.)
+      if (state === 'ended' && wasNotEnded && this.onGameEnded) {
+        try {
+          this.onGameEnded(this.room);
+        } catch (err) {
+          console.error('[GameEngine] onGameEnded hook threw:', err);
+        }
+      }
       return;
     }
     const phaseLabel: GameState = state;
@@ -226,6 +263,19 @@ export class GameEngine {
       openedAt: phaseChanged ? Date.now() : (this.room.pending?.openedAt ?? Date.now()),
     };
     this.room.pending = decision;
+
+    // Async-mode (棋瓦 P2) — fan out "輪到你了" pings to actors only on a real
+    // phase open. Intra-phase mutations (one player voting in a 5-vote VOTE
+    // phase) recompute pending but do NOT re-fire — that prevents a Discord
+    // DM storm every time a teammate submits.
+    if (phaseChanged && actors.length > 0 && this.onPendingChanged) {
+      try {
+        this.onPendingChanged(this.room, decision);
+      } catch (err) {
+        // Hook failures must never break the engine state machine.
+        console.error('[GameEngine] onPendingChanged hook threw:', err);
+      }
+    }
   }
 
   /** Public accessor to read the pause-gate snapshot. */

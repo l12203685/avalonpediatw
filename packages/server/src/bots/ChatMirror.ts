@@ -493,6 +493,30 @@ export class ChatMirror {
       this.logger.error('Discord push failed', err);
     }
   }
+
+  /**
+   * Direct (per-user) LINE push, used by `AsyncNotifier` to ping a specific
+   * 棋瓦 (Avalon Chess) player when their phase opens. Bypasses the group
+   * routing and the listen-bot enqueue path because the destination is a
+   * specific userId, not the configured `lineGroupId`. Falls back gracefully
+   * to a no-op when no LINE adapter is wired (so dev environments without
+   * LINE credentials never crash the engine).
+   *
+   * Errors are NOT swallowed here — callers (AsyncNotifier) need to know
+   * whether the push succeeded so its throttle / retry logic can decide
+   * what to do. Other ChatMirror surfaces remain fire-and-forget; this one
+   * is the explicit per-user-push contract.
+   */
+  public async pushDirect(lineUserId: string, text: string): Promise<void> {
+    if (!this.line) {
+      this.logger.warn('pushDirect called without a LINE adapter — no-op');
+      return;
+    }
+    await this.line.pushMessage(lineUserId, {
+      type: 'text',
+      text,
+    });
+  }
 }
 
 // ─── Inbound validation ──────────────────────────────────────────────────
