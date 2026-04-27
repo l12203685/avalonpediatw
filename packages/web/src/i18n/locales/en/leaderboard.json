@@ -54,6 +54,48 @@
     "globalMeans": "Population Means (Priors)",
     "eligibleCount": "Eligible: {{eligible}} / {{total}}",
     "loading": "Computing...",
-    "noPrecision": "—"
+    "noPrecision": "—",
+    "outcomeMode": {
+      "all": "All",
+      "threeRed": "3-Red mode",
+      "threeBlueDead": "3B-Dead mode",
+      "threeBlueAlive": "3B-Alive mode",
+      "allHint": "All 12 columns shown, sorted by ExpectedWin",
+      "threeRedHint": "Red side · 3-Red columns emphasized",
+      "threeBlueDeadHint": "Red side · 3B-Dead columns emphasized",
+      "threeBlueAliveHint": "Blue side · 3B-Alive columns emphasized",
+      "stats": "2146 games total · 3-Red 989 (46%) · 3B-Dead 504 (24%) · 3B-Alive 653 (30%)",
+      "statsAll": "2146 games total",
+      "statsThreeRed": "3-Red 989 (46%)",
+      "statsThreeBlueDead": "3B-Dead 504 (24%)",
+      "statsThreeBlueAlive": "3B-Alive 653 (30%)"
+    },
+    "filters": {
+      "label": "Filters",
+      "all": "All",
+      "clear": "Clear filters",
+      "noMatch": "No players match these filters",
+      "games": {
+        "label": "Games",
+        "lt50": "<50",
+        "50to99": "50-99",
+        "100to199": "100-199",
+        "200to499": "200-499",
+        "gte500": "500+"
+      },
+      "tier": {
+        "label": "ELO Tier",
+        "novice": "Novice",
+        "mid": "Mid",
+        "top": "Top",
+        "loadFailed": "ELO data unavailable"
+      },
+      "main": {
+        "label": "Main Side",
+        "red": "Red-heavy",
+        "blue": "Blue-heavy",
+        "balanced": "Balanced"
+      }
+    }
   }
 }

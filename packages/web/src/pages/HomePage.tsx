@@ -418,7 +418,7 @@ export default function HomePage(): JSX.Element {
                         Row 2: 個人戰績 / 百科攻略 / 系統設定
 
                       整合決策：
-                      - 「數據排行」 route → `analytics` (含排行榜 + 雷達圖 + AI 自對弈 + 深度分析四 tab)
+                      - 「數據排行」 route → `leaderboard` (V3 8-metric 精算榜 + 傳統 ELO 5 tier 雙頁籤)
                       - 「個人戰績」 route → `personalStats` (= ProfilePage 歷史戰績 + 追蹤 / 對戰
                         成績 placeholder)
                       - 「系統設定」 route → `settings` (基本資料 + 帳號綁定 + 登出)
@@ -453,7 +453,7 @@ export default function HomePage(): JSX.Element {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setGameState('analytics')}
+                      onClick={() => setGameState('leaderboard')}
                       data-testid="home-btn-stats"
                       className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >

@@ -54,6 +54,48 @@
     "globalMeans": "母體均值（先驗）",
     "eligibleCount": "上榜：{{eligible}} / {{total}} 玩家",
     "loading": "計算中...",
-    "noPrecision": "—"
+    "noPrecision": "—",
+    "outcomeMode": {
+      "all": "全覽",
+      "threeRed": "三紅模式",
+      "threeBlueDead": "三藍死模式",
+      "threeBlueAlive": "三藍活模式",
+      "allHint": "12 欄全顯，預設依期望勝排序",
+      "threeRedHint": "紅角立場・三紅相關欄高亮",
+      "threeBlueDeadHint": "紅角立場・三藍死相關欄高亮",
+      "threeBlueAliveHint": "藍角立場・三藍活相關欄高亮",
+      "stats": "2146 場全紀錄 · 三紅 989 (46%) · 三藍死 504 (24%) · 三藍活 653 (30%)",
+      "statsAll": "2146 場全紀錄",
+      "statsThreeRed": "三紅 989 (46%)",
+      "statsThreeBlueDead": "三藍死 504 (24%)",
+      "statsThreeBlueAlive": "三藍活 653 (30%)"
+    },
+    "filters": {
+      "label": "篩選",
+      "all": "全部",
+      "clear": "清除篩選",
+      "noMatch": "目前沒有符合條件的玩家",
+      "games": {
+        "label": "場次區間",
+        "lt50": "<50 場",
+        "50to99": "50-99 場",
+        "100to199": "100-199 場",
+        "200to499": "200-499 場",
+        "gte500": "500+ 場"
+      },
+      "tier": {
+        "label": "ELO 分類",
+        "novice": "入門新手",
+        "mid": "中堅玩家",
+        "top": "頂尖高玩",
+        "loadFailed": "ELO 資料載入失敗"
+      },
+      "main": {
+        "label": "主玩角色",
+        "red": "三紅角玩家",
+        "blue": "三藍角玩家",
+        "balanced": "平衡"
+      }
+    }
   }
 }
