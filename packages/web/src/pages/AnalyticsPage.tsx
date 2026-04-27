@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Trophy, BarChart3, Crown, TrendingUp, Loader, Search, AlertTriangle,
-  Users, X, Target, Swords, Map, Compass, Droplets, Shuffle,
+  Users, X, Target, Swords, Map, Compass, Droplets, Shuffle, Microscope,
 } from 'lucide-react';
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -25,6 +25,7 @@ import RoundsAnalysis from '../components/analysis/RoundsAnalysis';
 import LakeAnalysis from '../components/analysis/LakeAnalysis';
 import SeatOrderAnalysis from '../components/analysis/SeatOrderAnalysis';
 import CaptainAnalysis from '../components/analysis/CaptainAnalysis';
+import FeatureStudiesPanel from '../components/analytics/FeatureStudiesPanel';
 
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || 'http://localhost:3001';
 
@@ -44,8 +45,11 @@ const ALL_RANK_LABELS = ['全部', ...ALL_TIERS.map(r => r.label)];
  *  - 勝率排行 (ELO Leaderboard)：原本 LeaderboardPage 的排名清單；點玩家彈出雷達彈窗
  *  - 深度分析 (Deep Analysis)：把 AnalysisPage 的分頁內容直接搬進來
  * 「玩家雷達」不再獨立 tab，融進勝率排行的點擊體驗。
+ *
+ * (2026-04-27) 新增第三 tab「特徵研究」: 把 v7 features 研究 (loops 136/139/141/
+ * 142/143) 萃取成可瀏覽的玩家信號頁。前 2 張 card 預設展開, 後 3 張收合。
  */
-type TopTab = 'leaderboard' | 'deepAnalysis';
+type TopTab = 'leaderboard' | 'deepAnalysis' | 'featureStudies';
 type DeepTab =
   | 'overview' | 'seat' | 'seatOrder' | 'chemistry'
   | 'mission' | 'rounds' | 'lake' | 'captain';
@@ -86,7 +90,7 @@ export default function AnalyticsPage(): JSX.Element {
           <h1 className="text-2xl font-black text-white">{t('nav.analytics')}</h1>
         </div>
 
-        {/* Top-level tabs (2 tabs only) */}
+        {/* Top-level tabs (3 tabs) */}
         <div className="flex flex-wrap gap-2 mb-6 border-b border-zinc-800 pb-2">
           <TopTabButton
             active={activeTab === 'leaderboard'}
@@ -100,6 +104,12 @@ export default function AnalyticsPage(): JSX.Element {
             icon={BarChart3}
             label={t('analytics.tab.deepAnalysis')}
           />
+          <TopTabButton
+            active={activeTab === 'featureStudies'}
+            onClick={() => setActiveTab('featureStudies')}
+            icon={Microscope}
+            label={t('analytics.tab.featureStudies')}
+          />
         </div>
 
         <AnimatePresence mode="wait">
@@ -110,8 +120,9 @@ export default function AnalyticsPage(): JSX.Element {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'leaderboard' && <EloLeaderboardWithRadar />}
-            {activeTab === 'deepAnalysis' && <DeepAnalysisSection />}
+            {activeTab === 'leaderboard'    && <EloLeaderboardWithRadar />}
+            {activeTab === 'deepAnalysis'   && <DeepAnalysisSection />}
+            {activeTab === 'featureStudies' && <FeatureStudiesPanel />}
           </motion.div>
         </AnimatePresence>
       </div>

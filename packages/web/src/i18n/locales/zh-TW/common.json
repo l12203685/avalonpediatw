@@ -234,9 +234,46 @@
       "leaderboard": "勝率排行",
       "radar": "玩家雷達",
       "aiSelfplay": "AI 自對弈",
-      "deepAnalysis": "深度分析"
+      "deepAnalysis": "深度分析",
+      "featureStudies": "特徵研究"
     },
     "radarHint": "點玩家可展開能力雷達",
+    "featureStudies": {
+      "subtitle": "{{count}} 場社群實戰萃取的角色行為信號",
+      "loading": "載入特徵研究…",
+      "loadFailed": "特徵研究 cache 尚未生成",
+      "retry": "重試",
+      "chartError": "無法渲染圖表，已切換為表格檢視",
+      "sampleSize": "樣本 {{games}} 場",
+      "viewFullReport": "查看完整研究",
+      "role": "角色",
+      "consistency": "一致度",
+      "consistInconsist": "一致 / 不一致",
+      "highEvCells": "高 EV 條件格 (Top 5)",
+      "noteLabel": "註:",
+      "feature": {
+        "L141": {
+          "title": "湖中宣告真假率",
+          "hook": "藍方角色幾乎不說謊 (<1.5%), 紅方刺客最會 (54%)"
+        },
+        "L142": {
+          "title": "持湖宣告後言行一致度",
+          "hook": "刺客 100% 言行一致 (掩護精準), 娜 81% 最易露馬腳"
+        },
+        "L143": {
+          "title": "刺客目標座位偏好",
+          "hook": "隊長次數最多的玩家被刺中率 49%, 沉默玩家只有 39%"
+        },
+        "L136": {
+          "title": "改隊後投票翻轉率",
+          "hook": "梅林 +1.57pp 翻得最多 (藍信號), 莫甘娜 -2.18pp 最不翻"
+        },
+        "L139": {
+          "title": "R3+ 強制 P5 局勢偏移",
+          "hook": "R3 出現 forced P5 → 三紅率 +4.50pp, R4 +5.28pp"
+        }
+      }
+    },
     "deep": {
       "subtitle": "{{count}}+ 局實戰數據",
       "subtitleSource": "牌譜來源 Google 試算表",

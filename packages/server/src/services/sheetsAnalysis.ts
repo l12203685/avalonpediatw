@@ -256,6 +256,37 @@ export interface PlaystyleData {
   };
 }
 
+// ---------------------------------------------------------------------------
+// 特徵研究 (Feature Studies) — AnalyticsPage 第三 tab
+// ---------------------------------------------------------------------------
+// 5 個高訊號 v7 features 萃取自 staging/selfplay/*.md 報告。
+// build_feature_studies.py hardcode 這 5 個 features → cache.featureStudies。
+// 結構是「open envelope」: data 內部 schema 隨 visualType 變化，前端 panel
+// 會 dispatch 不同 renderer (bar / table / divergent / line)。
+
+export type FeatureVisualType = 'bar' | 'table' | 'divergent' | 'line';
+
+export interface FeatureStudyEntry {
+  loopId: string;
+  title: string;
+  titleEn: string;
+  oneLineHook: string;
+  oneLineHookEn: string;
+  sampleSize: { games: number; links?: number; attempts?: number; chances?: number; leaderEvents?: number };
+  visualType: FeatureVisualType;
+  /** Visual-type-specific payload; consumer dispatches by visualType. */
+  data: Record<string, unknown>;
+  takeaway: string;
+  takeawayEn: string;
+  sourceReport: string;
+}
+
+export interface FeatureStudiesData {
+  generatedAt: string;
+  sampleSize: { games: number; lakeLinks: number };
+  features: FeatureStudyEntry[];
+}
+
 interface AnalysisCache {
   overview: OverviewData;
   players: { players: PlayerStats[]; total: number };
@@ -301,6 +332,7 @@ interface AnalysisCache {
   archetype?: ArchetypeData;
   strength?: StrengthData;
   playstyle?: PlaystyleData;
+  featureStudies?: FeatureStudiesData;
 }
 
 // ---------------------------------------------------------------------------
@@ -378,6 +410,15 @@ export async function getCaptainAnalysis(): Promise<CaptainAnalysisData> {
     return { perMission: [], captainFactionVsOutcome: [], captainMissionGameWinRates: [] };
   }
   return c.captainAnalysis;
+}
+
+/**
+ * Feature Studies — 5 ranked v7 features for AnalyticsPage 3rd tab.
+ * Returns null when cache section missing (e.g. cache predates build script).
+ */
+export async function getFeatureStudies(): Promise<FeatureStudiesData | null> {
+  const c = loadCache();
+  return c.featureStudies ?? null;
 }
 
 // ---------------------------------------------------------------------------

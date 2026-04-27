@@ -234,9 +234,46 @@
       "leaderboard": "Win Rate",
       "radar": "Player Radar",
       "aiSelfplay": "AI Self-play",
-      "deepAnalysis": "Deep Analysis"
+      "deepAnalysis": "Deep Analysis",
+      "featureStudies": "Feature Studies"
     },
     "radarHint": "Tap a player to see the radar",
+    "featureStudies": {
+      "subtitle": "Behavioral signals derived from {{count}} community games",
+      "loading": "Loading feature studies…",
+      "loadFailed": "Feature studies cache not yet generated",
+      "retry": "Retry",
+      "chartError": "Chart render failed; falling back to table view",
+      "sampleSize": "{{games}} games",
+      "viewFullReport": "Read full study",
+      "role": "Role",
+      "consistency": "Consistency",
+      "consistInconsist": "Consist. / Inconsist.",
+      "highEvCells": "High-EV conditional cells (Top 5)",
+      "noteLabel": "Note:",
+      "feature": {
+        "L141": {
+          "title": "Lake Declaration Honesty by Role",
+          "hook": "Blue roles rarely lie (<1.5%); red Assassin lies most (54%)"
+        },
+        "L142": {
+          "title": "Lake Declarer Behavioral Consistency",
+          "hook": "Assassin is 100% consistent (best cover); Morgana slips most (81%)"
+        },
+        "L143": {
+          "title": "Assassin Target Seat Preference",
+          "hook": "Top-leader targets get hit 49%; quiet seats only 39%"
+        },
+        "L136": {
+          "title": "Vote Flip Rate After Team Change",
+          "hook": "Merlin flips most (+1.57pp blue signal); Morgana flips least (-2.18pp)"
+        },
+        "L139": {
+          "title": "Forced P5 Round Outcome Shift",
+          "hook": "R3 forced P5 boosts 3-red by +4.50pp; R4 by +5.28pp"
+        }
+      }
+    },
     "deep": {
       "subtitle": "{{count}}+ live games",
       "subtitleSource": "Source: Google Sheets game log",

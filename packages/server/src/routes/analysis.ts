@@ -20,6 +20,7 @@ import {
   getPlayerArchetype,
   getPlayerStrength,
   getPlayerPlaystyle,
+  getFeatureStudies,
   invalidateCache,
   isSheetsReady,
 } from '../services/sheetsAnalysis';
@@ -278,6 +279,26 @@ router.get('/profile/:name/playstyle', limiter, async (req: Request, res: Respon
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/profile/playstyle]', msg);
     return fail(res, 500, 'Failed to load playstyle snapshot');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/feature-studies
+// 特徵研究 — 5 個高訊號 v7 features (湖宣告真假率 / 言行一致 / 刺座偏好 / 翻轉率 / R3 forced)
+// 給 AnalyticsPage 第三 tab 「特徵研究」用。Cache 缺則回 503。
+// ---------------------------------------------------------------------------
+router.get('/feature-studies', limiter, async (_req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const data = await getFeatureStudies();
+    if (!data) {
+      return fail(res, 503, 'Feature studies cache not yet generated');
+    }
+    return ok(res, data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/feature-studies]', msg);
+    return fail(res, 500, 'Failed to load feature studies');
   }
 });
 

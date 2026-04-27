@@ -702,6 +702,41 @@ export async function fetchPlayerPlaystyle(name: string): Promise<PlaystylePlaye
   );
 }
 
+// ── Feature Studies API (3rd analytics tab) ──────────────────────────────────
+
+export type FeatureVisualType = 'bar' | 'table' | 'divergent' | 'line';
+
+export interface FeatureStudyEntry {
+  loopId: string;
+  title: string;
+  titleEn: string;
+  oneLineHook: string;
+  oneLineHookEn: string;
+  sampleSize: {
+    games: number;
+    links?: number;
+    attempts?: number;
+    chances?: number;
+    leaderEvents?: number;
+  };
+  visualType: FeatureVisualType;
+  /** Visual-type-specific payload (open envelope; renderer dispatches by visualType). */
+  data: Record<string, unknown>;
+  takeaway: string;
+  takeawayEn: string;
+  sourceReport: string;
+}
+
+export interface FeatureStudiesData {
+  generatedAt: string;
+  sampleSize: { games: number; lakeLinks: number };
+  features: FeatureStudyEntry[];
+}
+
+export async function fetchFeatureStudies(): Promise<FeatureStudiesData> {
+  return analysisApiFetch<FeatureStudiesData>('/feature-studies');
+}
+
 // ── Wiki API ─────────────────────────────────────────────────────────────────
 
 export interface WikiArticleApi {
