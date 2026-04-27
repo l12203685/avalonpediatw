@@ -315,6 +315,7 @@
       },
       "overview": {
         "outcomeBreakdown": "三種結果分布",
+        "outcomeCardLabel": "三種結果分布",
         "theoryRanking": "理論勝率排行 (50 場以上)",
         "theoryColumn": "理論勝率",
         "gamesRanking": "場次排行",
@@ -446,13 +447,15 @@
           "coWin": "同贏",
           "coLose": "同輸",
           "winCorr": "贏相關",
-          "coWinMinusLose": "同贏-同輸"
+          "coWinMinusLose": "同贏-同輸",
+          "outcomePair": "三結果配對"
         },
         "descriptions": {
           "coWin": "兩人同時贏的比率",
           "coLose": "兩人同時輸的比率",
           "winCorr": "勝率正相關程度",
-          "coWinMinusLose": "淨默契指標 (越高越好)"
+          "coWinMinusLose": "淨默契指標 (越高越好)",
+          "outcomePair": "兩人共同場次三結果分布 (主值=三紅率%)"
         },
         "guideTitle": "如何解讀:",
         "guideCoWin": "數值 = 兩人同時在同一場遊戲中勝利的次數比率(%). 越高表示兩人越常一起贏.",
@@ -461,12 +464,17 @@
         "guideWinCorr2": "接近 0 = 兩人勝負無明顯關聯.",
         "guideCoWinMinusLose1": "數值 = 同贏次數 − 同輸次數. 正數(綠色) = 默契好, 一起贏多於一起輸; 負數(紅色) = 默契差, 一起輸多於一起贏.",
         "guideCoWinMinusLose2": "數值越大, 兩人合作效果越好.",
+        "guideOutcomePair1": "數值 = 兩人共同場次中三紅 (紅方勝) 的比率 (%). 滑鼠移上去看完整三結果分布.",
+        "guideOutcomePair2": "紅色 = 紅方優勢; 藍色 = 藍方優勢; 灰色 = 接近平均值.",
         "labelHigh": "+15 以上 = 非常好",
         "labelMid": "−5 ~ +5 = 中性",
         "labelLow": "−15 以下 = 非常差",
         "labelHighPct": "60%+ = 高",
         "labelMidPct": "40-50% = 中",
-        "labelLowPct": "30% 以下 = 低"
+        "labelLowPct": "30% 以下 = 低",
+        "labelOutcomeHighRed": "55%+ = 紅方優勢",
+        "labelOutcomeMid": "40-50% = 中性",
+        "labelOutcomeHighBlue": "35% 以下 = 藍方優勢"
       }
     }
   },

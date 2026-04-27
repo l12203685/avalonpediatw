@@ -18,12 +18,13 @@ function colorForDeviation(deviation: number): string {
 }
 
 /**
- * 座位分析 — Edward 2026-04-26 spec
+ * 座位分析 — Edward 2026-04-26 + 2026-04-27
  *
- * The heatmap is intrinsically about per-seat, per-player win rates rather
- * than per-game outcomes, so the 3-outcome split doesn't apply here. The
- * existing 總勝率 / 紅方勝率 / 藍方勝率 toggle stays. All hard-coded English
- * has been replaced with i18n keys.
+ * The heatmap is intrinsically about per-seat, per-player win rates so the
+ * existing 總勝率 / 紅方勝率 / 藍方勝率 toggle stays. Edward 2026-04-27 spec:
+ * the tooltip now ALSO surfaces the per-seat three-outcome distribution
+ * (三紅 / 三藍死 / 三藍活) when the cache provides ``seatOutcomes`` for
+ * the player. Falls back gracefully when the field is missing.
  */
 export default function SeatHeatmap(): JSX.Element {
   const { t } = useTranslation('common');
@@ -136,6 +137,7 @@ export default function SeatHeatmap(): JSX.Element {
                 {SEATS.map(seat => {
                   const rate = getSeatRate(p, seat);
                   const deviation = rate > 0 ? rate - seatAverages[seat] : 0;
+                  const seatOutcome = p.seatOutcomes?.[seat];
                   return (
                     <td key={seat} className="px-1 py-1">
                       <div
@@ -145,8 +147,19 @@ export default function SeatHeatmap(): JSX.Element {
                       >
                         {rate > 0 ? `${rate}` : '-'}
                         {rate > 0 && (
-                          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-[10px] text-gray-200 whitespace-nowrap shadow-lg pointer-events-none">
-                            {p.name} · {t('analytics.deep.seat.seatCol', { n: seat === '0' ? '10' : seat })}: {rate}% (avg {seatAverages[seat].toFixed(1)}%, {deviation >= 0 ? '+' : ''}{deviation.toFixed(1)}%)
+                          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-[10px] text-gray-200 whitespace-nowrap shadow-lg pointer-events-none space-y-0.5">
+                            <div>
+                              {p.name} · {t('analytics.deep.seat.seatCol', { n: seat === '0' ? '10' : seat })}: {rate}% (avg {seatAverages[seat].toFixed(1)}%, {deviation >= 0 ? '+' : ''}{deviation.toFixed(1)}%)
+                            </div>
+                            {seatOutcome && seatOutcome.threeRedPct + seatOutcome.threeBlueDeadPct + seatOutcome.threeBlueAlivePct > 0 && (
+                              <div className="text-[9px] text-gray-400">
+                                <span className="text-red-300">{t('analytics.deep.outcomes.threeRed')} {seatOutcome.threeRedPct}%</span>
+                                <span className="mx-1 text-gray-600">·</span>
+                                <span className="text-amber-300">{t('analytics.deep.outcomes.threeBlueDead')} {seatOutcome.threeBlueDeadPct}%</span>
+                                <span className="mx-1 text-gray-600">·</span>
+                                <span className="text-blue-300">{t('analytics.deep.outcomes.threeBlueAlive')} {seatOutcome.threeBlueAlivePct}%</span>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

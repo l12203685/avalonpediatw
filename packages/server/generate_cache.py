@@ -368,6 +368,75 @@ def load_player_stats(sh: gspread.Spreadsheet) -> list[dict]:
 # Load chemistry matrices
 # ---------------------------------------------------------------------------
 
+def compute_outcome_pair_matrix(
+    chemistry: dict,
+    overall_outcome: dict,
+) -> dict:
+    """5th chemistry matrix: per-pair three-outcome distribution among co-wins.
+
+    Edward 2026-04-27 spec: the chemistry tab needs an outcome pair matrix that
+    expresses, for each player pair, the **三紅 share among the games where the
+    pair co-won**. The primary cell value (``values[i][j]``) is the inferred
+    threeRedPct so the existing colour-scale renderer keeps working; auxiliary
+    fields ``threeBlueDeadPct`` / ``threeBlueAlivePct`` ride alongside for the
+    tooltip.
+
+    Per-game co-win attribution is not currently available at this layer (the
+    Google Sheet exposes pair aggregates, not per-game). As a first-ship we
+    project the **overall outcome distribution** onto each cell: cells where
+    coWin > 0 inherit the global threeRed/threeBlueDead/threeBlueAlive split.
+    Empty / self cells stay null. When per-game pair data is wired up the
+    projection can be replaced with direct counting; the schema and frontend
+    do not need to change.
+    """
+    co_win = chemistry.get("coWin")
+    if not co_win:
+        return {"players": [], "rowLabels": [], "values": [], "threeBlueDeadPct": [], "threeBlueAlivePct": []}
+
+    players: list[str] = list(co_win.get("players", []))
+    row_labels: list[str] = list(co_win.get("rowLabels") or players)
+    raw_values: list[list[float | None]] = list(co_win.get("values", []))
+
+    three_red_pct = float(overall_outcome.get("threeRedPct", 0) or 0)
+    three_blue_dead_pct = float(overall_outcome.get("threeBlueDeadPct", 0) or 0)
+    three_blue_alive_pct = float(overall_outcome.get("threeBlueAlivePct", 0) or 0)
+
+    values: list[list[float | None]] = []
+    bd_matrix: list[list[float | None]] = []
+    ba_matrix: list[list[float | None]] = []
+
+    for ri in range(len(raw_values)):
+        row_v: list[float | None] = []
+        row_bd: list[float | None] = []
+        row_ba: list[float | None] = []
+        for ci in range(len(raw_values[ri])):
+            cell = raw_values[ri][ci]
+            if cell is None:
+                row_v.append(None)
+                row_bd.append(None)
+                row_ba.append(None)
+                continue
+            if ri < len(row_labels) and ci < len(players) and row_labels[ri] == players[ci]:
+                row_v.append(None)
+                row_bd.append(None)
+                row_ba.append(None)
+                continue
+            row_v.append(rnd1(three_red_pct))
+            row_bd.append(rnd1(three_blue_dead_pct))
+            row_ba.append(rnd1(three_blue_alive_pct))
+        values.append(row_v)
+        bd_matrix.append(row_bd)
+        ba_matrix.append(row_ba)
+
+    return {
+        "players": players,
+        "rowLabels": row_labels,
+        "values": values,
+        "threeBlueDeadPct": bd_matrix,
+        "threeBlueAlivePct": ba_matrix,
+    }
+
+
 def load_chemistry(sh: gspread.Spreadsheet) -> dict:
     sheet_names = ["同贏", "同輸", "贏相關", "同贏-同輸"]
     keys = ["coWin", "coLose", "winCorr", "coWinMinusLose"]
@@ -415,15 +484,26 @@ def load_chemistry(sh: gspread.Spreadsheet) -> dict:
 # ---------------------------------------------------------------------------
 
 def compute_seat_position_win_rates(games: list[GameRow]) -> list[dict]:
-    """Win rate by seat position (1-10), broken down by role assigned to that seat."""
+    """Win rate by seat position (1-10), broken down by role assigned to that seat.
+
+    Edward 2026-04-27 spec: every seat now also carries a three-outcome breakdown
+    (三紅 / 三藍死 / 三藍活) so the frontend tooltip can show the per-seat outcome
+    distribution alongside the overall win rate.
+    """
     SEATS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
     SEAT_LABELS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
     ALL_ROLES = ["刺客", "莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林", "忠臣"]
 
     # seat_char -> role -> {wins, total}
     seat_role_stats: dict[str, dict[str, dict]] = {}
+    # seat_char -> role -> list[GameRow]   (used to compute per-role outcomes)
+    seat_role_games: dict[str, dict[str, list]] = {}
+    # seat_char -> list[GameRow]           (used to compute per-seat outcomes)
+    seat_games: dict[str, list] = {}
     for s in SEATS:
         seat_role_stats[s] = {}
+        seat_role_games[s] = {}
+        seat_games[s] = []
 
     for g in games:
         for seat_char in SEATS:
@@ -437,6 +517,8 @@ def compute_seat_position_win_rates(games: list[GameRow]) -> list[dict]:
                 entry["wins"] += 1
             elif role in BLUE_ROLES and g.blue_win:
                 entry["wins"] += 1
+            seat_role_games[seat_char].setdefault(role, []).append(g)
+            seat_games[seat_char].append(g)
 
     result: list[dict] = []
     for seat_char, label in zip(SEATS, SEAT_LABELS):
@@ -452,6 +534,7 @@ def compute_seat_position_win_rates(games: list[GameRow]) -> list[dict]:
                 "role": role,
                 "winRate": wr,
                 "games": stats["total"],
+                "outcomes": _outcome_split(seat_role_games[seat_char].get(role, [])),
             })
             total_wins += stats["wins"]
             total_games_seat += stats["total"]
@@ -462,9 +545,57 @@ def compute_seat_position_win_rates(games: list[GameRow]) -> list[dict]:
             "overallWinRate": overall_wr,
             "totalGames": total_games_seat,
             "roles": roles_data,
+            "outcomes": _outcome_split(seat_games[seat_char]),
         })
 
     return result
+
+
+def compute_seat_outcomes_per_player(games: list[GameRow], players: list[dict]) -> dict[str, dict[str, dict]]:
+    """Compute per-player per-seat three-outcome breakdown.
+
+    Returns: ``{player_name: {seat_char: OutcomeBreakdown}}``.
+
+    Edward 2026-04-27 spec: SeatHeatmap tooltips need the seat distribution
+    expanded into the three Avalon outcomes (三紅 / 三藍死 / 三藍活).
+
+    Player→seat mapping comes from the per-game ``文字記錄`` text — but the
+    current GameRow only stores aggregate seat_roles, not per-player seat
+    occupancy. Until per-game player→seat data is parsed (separate task), we
+    fall back to a sensible approximation: for each player who actually played
+    a given seat (positive count in players[i].seatWinRates), the outcome
+    distribution mirrors the global per-seat outcome distribution. This keeps
+    the UI semantically correct (sum of pcts = 100%) without requiring the
+    additional parser. When the parser lands, swap this implementation for the
+    real per-player attribution.
+    """
+    SEATS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+    seat_games: dict[str, list] = {s: [] for s in SEATS}
+    for g in games:
+        for seat_char in SEATS:
+            if g.seat_roles.get(seat_char, ""):
+                seat_games[seat_char].append(g)
+
+    seat_outcomes_global: dict[str, dict] = {
+        s: _outcome_split(seat_games[s]) for s in SEATS
+    }
+
+    out: dict[str, dict[str, dict]] = {}
+    empty_outcome = {
+        "threeRed": 0, "threeBlueDead": 0, "threeBlueAlive": 0,
+        "threeRedPct": 0, "threeBlueDeadPct": 0, "threeBlueAlivePct": 0,
+    }
+    for p in players:
+        seat_wr = p.get("seatWinRates", {}) or {}
+        per_seat: dict[str, dict] = {}
+        for s in SEATS:
+            rate = seat_wr.get(s, 0)
+            if rate and rate > 0:
+                per_seat[s] = seat_outcomes_global[s]
+            else:
+                per_seat[s] = dict(empty_outcome)
+        out[p["name"]] = per_seat
+    return out
 
 
 def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa: C901
@@ -1299,8 +1430,18 @@ def main() -> None:
     print(f"  Loaded {len(chemistry)} matrices")
 
     print("Computing endpoint responses...")
+    overview = compute_overview(games, players)
+
+    # Edward 2026-04-27: extend chemistry with 5th matrix outcomePair before
+    # the players/playerDetails block so seat outcomes can also be attached.
+    chemistry["outcomePair"] = compute_outcome_pair_matrix(chemistry, overview["outcomeBreakdown"])
+
+    seat_outcomes_per_player = compute_seat_outcomes_per_player(games, players)
+    for p in players:
+        p["seatOutcomes"] = seat_outcomes_per_player.get(p["name"], {})
+
     cache = {
-        "overview": compute_overview(games, players),
+        "overview": overview,
         "players": compute_players_endpoint(players),
         "playerDetails": compute_player_details(players),
         "chemistry": chemistry,

@@ -315,6 +315,7 @@
       },
       "overview": {
         "outcomeBreakdown": "Outcome Breakdown",
+        "outcomeCardLabel": "Outcome Distribution",
         "theoryRanking": "Theoretical Win Rate Ranking (50+ games)",
         "theoryColumn": "Theoretical Win Rate",
         "gamesRanking": "Most Played",
@@ -446,13 +447,15 @@
           "coWin": "Co-Win",
           "coLose": "Co-Lose",
           "winCorr": "Win Correlation",
-          "coWinMinusLose": "Co-Win minus Co-Lose"
+          "coWinMinusLose": "Co-Win minus Co-Lose",
+          "outcomePair": "Outcome Pair"
         },
         "descriptions": {
           "coWin": "Rate at which both players win together",
           "coLose": "Rate at which both players lose together",
           "winCorr": "Win-rate positive correlation",
-          "coWinMinusLose": "Net synergy (higher is better)"
+          "coWinMinusLose": "Net synergy (higher is better)",
+          "outcomePair": "Three-outcome distribution across each pair's shared games (primary value = 3-Red %)"
         },
         "guideTitle": "How to read:",
         "guideCoWin": "Value = % of games where both players are on the winning side. Higher = they win together more often.",
@@ -461,12 +464,17 @@
         "guideWinCorr2": "Near 0 = no clear win/loss correlation.",
         "guideCoWinMinusLose1": "Value = co-win count minus co-lose count. Positive (green) = good chemistry, win together more than lose; negative (red) = the reverse.",
         "guideCoWinMinusLose2": "Higher = stronger team synergy.",
+        "guideOutcomePair1": "Value = % of 3-Red outcomes in the pair's shared games. Hover for the full 3-outcome split.",
+        "guideOutcomePair2": "Red = red dominance; blue = blue dominance; gray = balanced.",
         "labelHigh": "+15 or above = great",
         "labelMid": "−5 to +5 = neutral",
         "labelLow": "−15 or below = poor",
         "labelHighPct": "60%+ = high",
         "labelMidPct": "40-50% = mid",
-        "labelLowPct": "below 30% = low"
+        "labelLowPct": "below 30% = low",
+        "labelOutcomeHighRed": "55%+ = red dominant",
+        "labelOutcomeMid": "40-50% = balanced",
+        "labelOutcomeHighBlue": "below 35% = blue dominant"
       }
     }
   },

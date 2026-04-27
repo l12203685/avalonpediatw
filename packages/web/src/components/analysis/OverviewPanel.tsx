@@ -86,7 +86,7 @@ export default function OverviewPanel(): JSX.Element {
 
   return (
     <div className="space-y-6">
-      {/* Summary cards */}
+      {/* Summary cards — Edward 2026-04-27: card 3 swapped for 三結果 side-by-side */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={Swords}
@@ -100,13 +100,28 @@ export default function OverviewPanel(): JSX.Element {
           value={overview.totalPlayers.toString()}
           color="border-purple-700/50 text-purple-300"
         />
-        <StatCard
-          icon={Trophy}
-          label={t('analytics.deep.common.redWinRate')}
-          value={`${overview.redWinRate}%`}
-          sub={`${t('analytics.deep.common.blueWinRate')} ${overview.blueWinRate}%`}
-          color="border-red-700/50 text-red-300"
-        />
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-avalon-card/40 border rounded-xl p-4 border-amber-700/50"
+        >
+          <Trophy size={18} className="mb-2 opacity-70 text-amber-300" />
+          <p className="text-[10px] opacity-60 mb-1">{t('analytics.deep.overview.outcomeCardLabel')}</p>
+          <div className="flex items-baseline justify-between gap-1">
+            <div className="flex flex-col">
+              <span className="text-base font-black text-red-300">{overallOutcomes.threeRedPct}%</span>
+              <span className="text-[9px] opacity-60">{t('analytics.deep.outcomes.threeRed')}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-base font-black text-amber-300">{overallOutcomes.threeBlueDeadPct}%</span>
+              <span className="text-[9px] opacity-60">{t('analytics.deep.outcomes.threeBlueDead')}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-base font-black text-blue-300">{overallOutcomes.threeBlueAlivePct}%</span>
+              <span className="text-[9px] opacity-60">{t('analytics.deep.outcomes.threeBlueAlive')}</span>
+            </div>
+          </div>
+        </motion.div>
         <StatCard
           icon={Skull}
           label={t('analytics.deep.common.merlinKillRate')}
@@ -179,7 +194,16 @@ export default function OverviewPanel(): JSX.Element {
                   return (
                     <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 text-xs">
                       <p className="font-bold text-gray-200 mb-1">{t('analytics.deep.overview.seatGames', { seat: d.seat, games: d.totalGames })}</p>
-                      <p className="text-gray-300 mb-2">{t('analytics.deep.overview.overallWinRate')}: {d.overallWinRate}%</p>
+                      <p className="text-gray-300 mb-1">{t('analytics.deep.overview.overallWinRate')}: {d.overallWinRate}%</p>
+                      {d.outcomes && (
+                        <p className="mb-2 text-[10px]">
+                          <span className="text-red-300">{t('analytics.deep.outcomes.threeRed')} {d.outcomes.threeRedPct}%</span>
+                          <span className="mx-1 text-gray-600">·</span>
+                          <span className="text-amber-300">{t('analytics.deep.outcomes.threeBlueDead')} {d.outcomes.threeBlueDeadPct}%</span>
+                          <span className="mx-1 text-gray-600">·</span>
+                          <span className="text-blue-300">{t('analytics.deep.outcomes.threeBlueAlive')} {d.outcomes.threeBlueAlivePct}%</span>
+                        </p>
+                      )}
                       {d.roles.map(r => (
                         <p key={r.role} style={{ color: ROLE_COLORS[r.role] || '#9ca3af' }}>
                           {r.role}: {r.winRate}% ({r.games} {t('analytics.deep.common.games')})

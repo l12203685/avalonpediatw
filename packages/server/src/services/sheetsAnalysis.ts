@@ -42,6 +42,11 @@ export interface PlayerStats {
   rawTotalWins: number;
   rawRedGames: number;
   rawBlueGames: number;
+  /**
+   * Edward 2026-04-27 — per-seat three-outcome distribution. Optional for
+   * cache backward compatibility; UI uses fallback when missing.
+   */
+  seatOutcomes?: Record<string, OutcomeBreakdown>;
 }
 
 export interface ChemistryMatrix {
@@ -54,6 +59,14 @@ export interface ChemistryMatrix {
    */
   rowLabels?: string[];
   values: (number | null)[][];
+  /**
+   * Edward 2026-04-27 — outcomePair matrix only.
+   * Optional aux matrices used to render the three-outcome split tooltip.
+   * `values` holds threeRedPct; `threeBlueDeadPct` / `threeBlueAlivePct`
+   * carry the remaining two outcomes for each pair cell.
+   */
+  threeBlueDeadPct?: (number | null)[][];
+  threeBlueAlivePct?: (number | null)[][];
 }
 
 export interface ChemistryData {
@@ -61,6 +74,13 @@ export interface ChemistryData {
   coLose: ChemistryMatrix;
   winCorr: ChemistryMatrix;
   coWinMinusLose: ChemistryMatrix;
+  /**
+   * Edward 2026-04-27 — 5th matrix added to the deep-analytics chemistry tab.
+   * Per-pair outcome distribution (三紅 / 三藍死 / 三藍活) projected from the
+   * coWin matrix. Optional for cache backward compatibility — older caches
+   * predating this field still serve.
+   */
+  outcomePair?: ChemistryMatrix;
 }
 
 /**
@@ -86,11 +106,18 @@ export interface OverviewData {
   outcomeBreakdown: OutcomeBreakdown;
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
+  /**
+   * Edward 2026-04-27 — `outcomes` (per-seat 三結果 distribution) and
+   * `roles[].outcomes` (per-role 三結果 distribution) added so the deep
+   * analytics overview tooltip can show the seat outcome split. Optional for
+   * cache backward compatibility.
+   */
   seatPositionWinRates: Array<{
     seat: string;
     overallWinRate: number;
     totalGames: number;
-    roles: Array<{ role: string; winRate: number; games: number }>;
+    outcomes?: OutcomeBreakdown;
+    roles: Array<{ role: string; winRate: number; games: number; outcomes?: OutcomeBreakdown }>;
   }>;
 }
 

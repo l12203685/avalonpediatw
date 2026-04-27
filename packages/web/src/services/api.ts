@@ -365,11 +365,18 @@ export interface AnalysisOverview {
   outcomeBreakdown: OutcomeBreakdown;
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
+  /**
+   * Edward 2026-04-27 — `outcomes` (per-seat 三結果) and `roles[].outcomes`
+   * (per-role 三結果) added so deep-analytics seat tooltip can show the
+   * outcome split alongside overall win rate. Optional for cache backward
+   * compatibility.
+   */
   seatPositionWinRates: Array<{
     seat: string;
     overallWinRate: number;
     totalGames: number;
-    roles: Array<{ role: string; winRate: number; games: number }>;
+    outcomes?: OutcomeBreakdown;
+    roles: Array<{ role: string; winRate: number; games: number; outcomes?: OutcomeBreakdown }>;
   }>;
 }
 
@@ -395,6 +402,11 @@ export interface AnalysisPlayerStats {
   seatRedWinRates: Record<string, number>;
   seatBlueWinRates: Record<string, number>;
   rawRoleGames: Record<string, number>;
+  /**
+   * Edward 2026-04-27 — per-seat three-outcome distribution
+   * (三紅 / 三藍死 / 三藍活). Optional for cache backward compatibility.
+   */
+  seatOutcomes?: Record<string, OutcomeBreakdown>;
 }
 
 export interface AnalysisPlayerRadar {
@@ -414,7 +426,15 @@ export interface ChemistryMatrix {
   players: string[];
   /** Row labels (from sheet first column). Falls back to `players` if missing. */
   rowLabels?: string[];
-  values: number[][];
+  values: (number | null)[][];
+  /**
+   * Edward 2026-04-27 — `outcomePair` only.
+   * Optional aux matrices used by the three-outcome split tooltip:
+   * `values` carries threeRedPct, these carry threeBlueDeadPct and
+   * threeBlueAlivePct so the tooltip can show all three.
+   */
+  threeBlueDeadPct?: (number | null)[][];
+  threeBlueAlivePct?: (number | null)[][];
 }
 
 export interface ChemistryData {
@@ -422,6 +442,13 @@ export interface ChemistryData {
   coLose: ChemistryMatrix;
   winCorr: ChemistryMatrix;
   coWinMinusLose: ChemistryMatrix;
+  /**
+   * Edward 2026-04-27 — 5th matrix for the deep-analytics chemistry tab. Holds
+   * per-pair three-outcome distribution; cell value is threeRedPct so the
+   * existing colour-scale renderer keeps working. Optional for cache
+   * backward compatibility — UI hides this matrix when the field is missing.
+   */
+  outcomePair?: ChemistryMatrix;
 }
 
 export interface MissionAnalysisData {
