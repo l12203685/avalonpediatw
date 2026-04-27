@@ -217,18 +217,18 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
           </div>
         </motion.div>
 
-        {/* 分類過濾 */}
+        {/* 分類過濾 — 緊湊 1-2 列（全部 + 6 類） */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1 }}
-          className="flex flex-wrap gap-2"
+          className="flex flex-wrap gap-1.5"
         >
           <button
             onClick={() => setActiveCategory('')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
               !activeCategory
-                ? 'bg-yellow-500 text-black shadow-lg'
+                ? 'bg-yellow-500 text-black shadow'
                 : 'bg-avalon-card/50 text-gray-300 hover:bg-avalon-card border border-gray-600'
             }`}
           >
@@ -239,9 +239,9 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
             <button
               key={category.id}
               onClick={() => setActiveCategory(category.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all inline-flex items-center gap-1 ${
                 activeCategory === category.id
-                  ? 'bg-yellow-500 text-black shadow-lg'
+                  ? 'bg-yellow-500 text-black shadow'
                   : 'bg-avalon-card/50 text-gray-300 hover:bg-avalon-card border border-gray-600'
               }`}
             >

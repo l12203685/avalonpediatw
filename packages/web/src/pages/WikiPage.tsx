@@ -2,7 +2,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../store/gameStore';
 import WikiContent from '../components/WikiContent';
 import StreamsSection from '../components/StreamsSection';
-import { WIKI_CATEGORIES } from '../data/wiki';
 import { BookOpen, Users, Lightbulb, ArrowLeft, BarChart3, Youtube } from 'lucide-react';
 import { useState } from 'react';
 import { TOTAL_UNIQUE_GAMES } from '../data/roleStats';
@@ -110,28 +109,7 @@ export default function WikiPage(): JSX.Element {
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.2 }}
           >
-            {/* 分類快速導航（只在文章 tab 顯示） */}
-            <div className="max-w-6xl mx-auto px-4 pt-3">
-              <div className="flex flex-wrap justify-center gap-2">
-                {WIKI_CATEGORIES.map((category) => (
-                  <motion.button
-                    key={category.id}
-                    whileHover={{ scale: 1.05 }}
-                    onClick={() => setSelectedCategory(category.id)}
-                    className={`inline-flex items-center gap-1.5 border px-3 py-1.5 rounded-lg text-sm transition-all ${
-                      selectedCategory === category.id
-                        ? 'bg-yellow-500 text-black border-yellow-500'
-                        : 'bg-yellow-500/20 hover:bg-yellow-500/40 border-yellow-600/50 text-yellow-300'
-                    }`}
-                  >
-                    <span>{category.icon}</span>
-                    {category.name}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-
-            {/* Wiki 文章列表 + modal 呈現（不跳頁） */}
+            {/* Wiki 文章列表 + modal 呈現（不跳頁） — 分類 chip 在 WikiContent 內，避免重複 */}
             <div id="wiki-content">
               <WikiContent selectedCategory={selectedCategory} key={selectedCategory} />
             </div>
