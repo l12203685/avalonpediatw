@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
-import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, BarChart3, Camera, Lock, Eye, EyeOff, RefreshCcw } from 'lucide-react';
+import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, Camera, Lock, Eye, EyeOff, RefreshCcw } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
 import { CampDisc } from '../components/CampDisc';
 import ArchetypeRadar from '../components/profile/ArchetypeRadar';
@@ -557,7 +557,8 @@ export default function ProfilePage(): JSX.Element {
     <div className="min-h-screen p-4">
       <div className="max-w-lg mx-auto space-y-6">
 
-        {/* Header — #86 IA 整合：右側加「數據分析」入口，戰績頁不再拆成獨立按鈕 */}
+        {/* Header — 2026-04-27 IA 拆分：「數據分析」外連已搬到 PersonalStatsPage。
+            ProfilePage 只負責帳號管理，不再放戰績相關入口。 */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setGameState('home')}
@@ -566,19 +567,6 @@ export default function ProfilePage(): JSX.Element {
             <ArrowLeft size={20} />
           </button>
           <h1 className="text-2xl font-black text-white flex-1">{t('profile:headerTitle')}</h1>
-          {/* Edward 2026-04-25 19:44: 修「nav.analysis」未翻譯 bug。
-              useTranslation(['profile', 'common', 'game']) 讓 profile 成為
-              default namespace，t('nav.analysis') 會去查 profile:nav.analysis
-              (不存在) → fallback 到字面 key。改用明確 common: 前綴。 */}
-          <button
-            onClick={() => setGameState('analysis')}
-            data-testid="profile-btn-analysis"
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
-            title={t('common:nav.analysis')}
-          >
-            <BarChart3 size={14} />
-            {t('common:nav.analysis')}
-          </button>
         </div>
 
         {loading && (
@@ -921,33 +909,38 @@ export default function ProfilePage(): JSX.Element {
               )}
             </div>
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
-                <div className="text-3xl font-black text-white">{profile.total_games}</div>
-                <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
-                  <Clock size={12} /> {t('profile:totalGamesLabel')}
+            {/* 2026-04-27 IA 拆分：戰績區塊 (stats grid / 陣營勝率 / ELO 趨勢 /
+                角色勝率 / 人數勝率 / Panel A B C / 近 N 場 + Replay) 只在 !isMe
+                (查看其他玩家) 時顯示；自己看自己 → 走 PersonalStatsPage。 */}
+            {!isMe && (
+              <>
+                {/* Stats grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-black text-white">{profile.total_games}</div>
+                    <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
+                      <Clock size={12} /> {t('profile:totalGamesLabel')}
+                    </div>
+                  </div>
+                  <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-black text-blue-400">{winRate}%</div>
+                    <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
+                      <Trophy size={12} /> {t('profile:winRate')}
+                    </div>
+                  </div>
+                  <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-black text-blue-400">{profile.games_won}</div>
+                    <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
+                      <Shield size={12} /> {t('profile:stats.winsLabel')}
+                    </div>
+                  </div>
+                  <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
+                    <div className="text-3xl font-black text-red-400">{profile.games_lost}</div>
+                    <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
+                      <Swords size={12} /> {t('profile:stats.lossesLabel')}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
-                <div className="text-3xl font-black text-blue-400">{winRate}%</div>
-                <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
-                  <Trophy size={12} /> {t('profile:winRate')}
-                </div>
-              </div>
-              <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
-                <div className="text-3xl font-black text-blue-400">{profile.games_won}</div>
-                <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
-                  <Shield size={12} /> {t('profile:stats.winsLabel')}
-                </div>
-              </div>
-              <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 text-center">
-                <div className="text-3xl font-black text-red-400">{profile.games_lost}</div>
-                <div className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
-                  <Swords size={12} /> {t('profile:stats.lossesLabel')}
-                </div>
-              </div>
-            </div>
 
             {/* Good/Evil split */}
             {teamStats && (teamStats.good.total > 0 || teamStats.evil.total > 0) && (
@@ -1256,6 +1249,8 @@ export default function ProfilePage(): JSX.Element {
                 </div>
               </div>
             )}
+              </>
+            )}
 
             {/* Edward 2026-04-25 19:44 整合：HomePage 的「登入綁定」按鈕已砍，
                 以下三段 (密碼修改 / 主要信箱 / 清除本機資料) 從 SettingsPage 搬過
@@ -1427,13 +1422,17 @@ export default function ProfilePage(): JSX.Element {
               </>
             )}
 
-            {/* View on leaderboard */}
-            <button
-              onClick={() => setGameState('leaderboard')}
-              className="w-full text-sm text-gray-400 hover:text-white transition-colors py-2"
-            >
-              {t('profile:viewLeaderboard')}
-            </button>
+            {/* 2026-04-27 IA 拆分：「查看排行榜」外連已搬到 PersonalStatsPage。
+                ProfilePage (個人資料) 只負責帳號管理，不再放戰績/排行榜入口。
+                查看其他玩家 (!isMe) 仍保留 leaderboard 入口供導航。 */}
+            {!isMe && (
+              <button
+                onClick={() => setGameState('leaderboard')}
+                className="w-full text-sm text-gray-400 hover:text-white transition-colors py-2"
+              >
+                {t('profile:viewLeaderboard')}
+              </button>
+            )}
           </>
         )}
       </div>
