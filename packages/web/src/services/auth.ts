@@ -23,7 +23,7 @@ async function getFirebaseAuth() {
   if (!hasFirebaseConfig) throw new Error('Firebase not configured');
   if (_firebaseAuth) return _firebaseAuth;
   const { initializeApp } = await import('firebase/app');
-  const { getAuth } = await import('firebase/auth');
+  const { getAuth, setPersistence, browserLocalPersistence } = await import('firebase/auth');
   const app = initializeApp({
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -33,6 +33,16 @@ async function getFirebaseAuth() {
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
   });
   _firebaseAuth = getAuth(app);
+  // 2026-04-27 持久化登入 (Edward: 「登入後常駐」):
+  // Firebase Web SDK v10 預設就是 browserLocalPersistence（IndexedDB），但顯式
+  // 設定一次當作 audit 防呆，避免未來有人不小心把 inMemoryPersistence 開上去
+  // 把 currentUser 變成「重新整理就消失」。await 失敗不致命（私密模式可能擋
+  // IndexedDB），降回 in-memory 也不會影響本次 session 的登入流程。
+  try {
+    await setPersistence(_firebaseAuth, browserLocalPersistence);
+  } catch (err) {
+    console.warn('[auth] setPersistence(browserLocal) failed, falling back to default:', err);
+  }
   return _firebaseAuth;
 }
 

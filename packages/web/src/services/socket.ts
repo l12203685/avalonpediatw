@@ -14,12 +14,48 @@ import audioService from './audio';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
+// 2026-04-27 持久化登入 (Edward: 「登入後常駐 不用每次重開頁面就要重新登入」):
+// 之前 `_storedToken` 只存模組變數，重新整理頁面就清空 → `getStoredToken()` 回 null →
+// App.tsx mount 跑進 ensureGuestSession() → 拿到全新 guest_xxx，原本登入身份直接遺失。
+// 修正：把 site-issued JWT (custom + guest) 寫進 localStorage，cold start 時讀回來；
+// 跟 server 端 JWT TTL（site 7d / guest 30d）對齊，到期 server 會回 401，
+// initializeSocket 會 reject → App.tsx 自動退到 ensureGuestSession 重新發訪客 token。
+// 注意 Firebase Google 登入不走這條 — Firebase SDK 自己用 browserLocalPersistence
+// 把 currentUser 存 IndexedDB，`onAuthStateChange` 重啟頁面會自己餵 ID token 進來。
+const STORED_TOKEN_KEY = 'avalon_session_token';
+
+function readPersistedToken(): string | null {
+  try {
+    return localStorage.getItem(STORED_TOKEN_KEY);
+  } catch {
+    // private mode / SecurityError — module memory 是唯一 fallback
+    return null;
+  }
+}
+
+function writePersistedToken(token: string | null): void {
+  try {
+    if (token === null) localStorage.removeItem(STORED_TOKEN_KEY);
+    else                localStorage.setItem(STORED_TOKEN_KEY, token);
+  } catch {
+    // private mode / quota — 寫不進就算了，本 session 仍能正常運作
+  }
+}
+
 let socket: Socket | null = null;
-let _storedToken: string | null = null;
+// Lazy-init from localStorage so the first reload after a successful login can
+// re-handshake the socket without requiring `onAuthStateChange` (Firebase) to
+// fire — covers email/password / Discord / LINE / quickLoginWithGoogle paths
+// that mint site JWTs not Firebase tokens.
+let _storedToken: string | null = readPersistedToken();
 let _hasConnectedOnce = false;
 
 /** Returns the token used to initialise the current socket connection */
 export function getStoredToken(): string | null {
+  // 防呆：模組變數遺失（HMR / lazy chunk reload）時 fall back 到 localStorage
+  if (_storedToken) return _storedToken;
+  const persisted = readPersistedToken();
+  if (persisted) _storedToken = persisted;
   return _storedToken;
 }
 
@@ -46,6 +82,8 @@ export async function initializeSocket(token: string): Promise<void> {
     socket = null;
   }
   _storedToken = token;
+  // 持久化 site JWT，下次冷啟動 App.tsx 才能用 getStoredToken() 接回身份。
+  writePersistedToken(token);
 
   const store = useGameStore.getState();
 
@@ -106,6 +144,9 @@ export async function initializeSocket(token: string): Promise<void> {
     try {
       const freshToken = await getIdToken();
       _storedToken = freshToken;
+      // 同步更新持久化拷貝 — Firebase ID token 1h 過期，refresh 後不寫回
+      // localStorage 會讓下次 cold start 撈到舊 token 直接被 server 401 拒掉。
+      writePersistedToken(freshToken);
       if (socket) {
         socket.auth = { ...(socket.auth as Record<string, unknown>), token: freshToken };
       }
@@ -336,6 +377,9 @@ export function disconnectSocket(): void {
     socket = null;
     _storedToken = null;
     _hasConnectedOnce = false;
+    // logout 路徑必須順手清掉 localStorage，不然下次 cold start `getStoredToken()`
+    // 會撈到舊 token，把已登出的使用者又拉回去。
+    writePersistedToken(null);
   }
 }
 
