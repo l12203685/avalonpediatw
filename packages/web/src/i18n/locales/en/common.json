@@ -231,12 +231,14 @@
   },
   "analytics": {
     "tab": {
-      "leaderboard": "Win Rate",
+      "leaderboard": "Precision Board",
       "radar": "Player Radar",
       "aiSelfplay": "AI Self-play",
       "deepAnalysis": "Deep Analysis",
       "featureStudies": "Feature Studies"
     },
+    "expandTiers": "Tier view (5 ELO groups)",
+    "collapseTiers": "Hide tier view",
     "radarHint": "Tap a player to see the radar",
     "featureStudies": {
       "subtitle": "Behavioral signals derived from {{count}} community games",

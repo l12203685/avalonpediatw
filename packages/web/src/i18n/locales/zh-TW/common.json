@@ -231,12 +231,14 @@
   },
   "analytics": {
     "tab": {
-      "leaderboard": "勝率排行",
+      "leaderboard": "精算榜",
       "radar": "玩家雷達",
       "aiSelfplay": "AI 自對弈",
       "deepAnalysis": "深度分析",
       "featureStudies": "特徵研究"
     },
+    "expandTiers": "分層瀏覽 (5 組 ELO 分層)",
+    "collapseTiers": "收合分層瀏覽",
     "radarHint": "點玩家可展開能力雷達",
     "featureStudies": {
       "subtitle": "{{count}} 場社群實戰萃取的角色行為信號",

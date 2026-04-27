@@ -1,22 +1,19 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Trophy, BarChart3, Crown, TrendingUp, Loader, Search, AlertTriangle,
-  Users, X, Target, Swords, Map, Compass, Droplets, Shuffle, Microscope,
+  Users, Target, Swords, Map, Compass, Droplets, Shuffle, Microscope,
+  ChevronDown, ChevronUp,
 } from 'lucide-react';
 import {
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  ResponsiveContainer, Tooltip,
-} from 'recharts';
+  TIER_GROUP_LABEL_ZH,
+  ELO_TAG_ZH,
+  type TierGroup,
+  type EloTag,
+  type LeaderboardEntryV2,
+} from '@avalon/shared';
 import { useGameStore } from '../store/gameStore';
-import { type LeaderboardEntry } from '../services/api';
-import {
-  fetchAnalysisPlayerByName,
-  getErrorMessage,
-  type AnalysisPlayerRadar,
-} from '../services/api';
-import { ALL_TIERS, ELO_RANKS, rankLeaderboard, type EloRank } from '../utils/eloRank';
 import OverviewPanel from '../components/analysis/OverviewPanel';
 import SeatHeatmap from '../components/analysis/SeatHeatmap';
 import ChemistryMatrix from '../components/analysis/ChemistryMatrix';
@@ -26,19 +23,9 @@ import LakeAnalysis from '../components/analysis/LakeAnalysis';
 import SeatOrderAnalysis from '../components/analysis/SeatOrderAnalysis';
 import CaptainAnalysis from '../components/analysis/CaptainAnalysis';
 import FeatureStudiesPanel from '../components/analytics/FeatureStudiesPanel';
+import LeaderboardV3Table from '../components/LeaderboardV3Table';
 
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || 'http://localhost:3001';
-
-const PROVIDER_BADGE: Record<string, string> = {
-  google:  'G',
-  discord: 'D',
-  line:    'L',
-  email:   'E',
-  guest:   '?',
-};
-
-const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600'];
-const ALL_RANK_LABELS = ['全部', ...ALL_TIERS.map(r => r.label)];
 
 /**
  * #98 (2026-04-23) IA 重整：數據排行頁拆成兩大區 —
@@ -48,6 +35,17 @@ const ALL_RANK_LABELS = ['全部', ...ALL_TIERS.map(r => r.label)];
  *
  * (2026-04-27) 新增第三 tab「特徵研究」: 把 v7 features 研究 (loops 136/139/141/
  * 142/143) 萃取成可瀏覽的玩家信號頁。前 2 張 card 預設展開, 後 3 張收合。
+ *
+ * (2026-04-27 18:05 整合) Edward「features 跟原本的數據分析怎麼不見了」—
+ * T1 把大廳「數據排行」按鈕 hijack 到 LeaderboardPage 後，AnalyticsPage 入口
+ * 被切斷, 深度分析 + 特徵研究都看不到。本次調整：
+ *   - 大廳按鈕回 'analytics' (HomePage 改回)
+ *   - 第一 tab「精算榜」: V3 8-metric 表 + 下方「分層瀏覽」collapse 展開 V2
+ *     五分層 (rookie/regular/veteran/expert/master)；舊 V1 EloLeaderboardWithRadar
+ *     退役（V3 已含全部欄, RadarPopup 玩家點仍能 popup）。
+ *   - 第二 tab「深度分析」: 不動
+ *   - 第三 tab「特徵研究」: 不動
+ * LeaderboardPage 仍保留供 'leaderboard' route 用作備援/Alternative entry。
  */
 type TopTab = 'leaderboard' | 'deepAnalysis' | 'featureStudies';
 type DeepTab =
@@ -75,7 +73,7 @@ export default function AnalyticsPage(): JSX.Element {
 
   return (
     <div className="min-h-screen bg-black p-4 pb-24">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <motion.button
@@ -120,7 +118,7 @@ export default function AnalyticsPage(): JSX.Element {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'leaderboard'    && <EloLeaderboardWithRadar />}
+            {activeTab === 'leaderboard'    && <PrecisionBoardSection />}
             {activeTab === 'deepAnalysis'   && <DeepAnalysisSection />}
             {activeTab === 'featureStudies' && <FeatureStudiesPanel />}
           </motion.div>
@@ -151,50 +149,145 @@ function TopTabButton({
 }
 
 // ──────────────────────────────────────────────────────────────
-// 勝率排行 + 點玩家彈雷達
+// 精算榜 (V3 8-metric) + 分層瀏覽 (V2 5 TierGroup) collapse
 // ──────────────────────────────────────────────────────────────
 
-function EloLeaderboardWithRadar(): JSX.Element {
+function PrecisionBoardSection(): JSX.Element {
+  const { t } = useTranslation('common');
+  const [tiersOpen, setTiersOpen] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      <LeaderboardV3Table />
+
+      <div>
+        <button
+          onClick={() => setTiersOpen(v => !v)}
+          data-testid="analytics-expand-tiers"
+          className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-zinc-900/60 hover:bg-zinc-900/90 border border-zinc-700 hover:border-white rounded-xl transition-colors text-sm font-semibold text-zinc-200"
+        >
+          <span className="flex items-center gap-2">
+            <Users size={16} className="text-blue-400" />
+            {tiersOpen
+              ? t('analytics.collapseTiers', { defaultValue: '收合分層瀏覽' })
+              : t('analytics.expandTiers', { defaultValue: '分層瀏覽 (5 組 ELO 分層)' })}
+          </span>
+          {tiersOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        <AnimatePresence initial={false}>
+          {tiersOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="pt-4">
+                <TierGroupSection />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// V2 五分層瀏覽 — 從 LeaderboardPage classic mode 萃取
+// 來源：GET /api/leaderboard/v2 → { groups: { rookie, regular, veteran, expert, master } }
+// ──────────────────────────────────────────────────────────────
+
+const TIER_GROUPS: readonly TierGroup[] = [
+  'rookie', 'regular', 'veteran', 'expert', 'master',
+] as const;
+
+interface LeaderboardEntryV2Enriched extends LeaderboardEntryV2 {
+  displayName?: string | null;
+  photoUrl?: string | null;
+}
+
+interface LeaderboardV2Response {
+  version: 2;
+  groups: Record<TierGroup, LeaderboardEntryV2Enriched[]>;
+}
+
+const ELO_TAG_STYLE: Record<EloTag, { text: string; bg: string; border: string }> = {
+  novice_tag: { text: 'text-green-400', bg: 'bg-green-900/40', border: 'border-green-700' },
+  mid_tag: { text: 'text-blue-400', bg: 'bg-blue-900/40', border: 'border-blue-700' },
+  top_tag: { text: 'text-yellow-400', bg: 'bg-yellow-900/40', border: 'border-yellow-700' },
+};
+
+const TIER_TAB_STYLE: Record<TierGroup, string> = {
+  rookie: 'bg-gray-700/60 text-gray-200 border-gray-500',
+  regular: 'bg-blue-900/60 text-blue-200 border-blue-600',
+  veteran: 'bg-purple-900/60 text-purple-200 border-purple-600',
+  expert: 'bg-orange-900/60 text-orange-200 border-orange-600',
+  master: 'bg-yellow-900/60 text-yellow-200 border-yellow-500',
+};
+
+const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600'];
+
+function TierGroupSection(): JSX.Element {
   const { t } = useTranslation(['leaderboard', 'common']);
-  const [entries, setEntries]   = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
+  const { navigateToProfile } = useGameStore();
+
+  const [groups, setGroups] = useState<Record<TierGroup, LeaderboardEntryV2Enriched[]> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [dbOffline, setDbOffline] = useState(false);
-  const [search, setSearch]     = useState('');
-  const [rankFilter, setRankFilter] = useState('全部');
-  const [radarOpenFor, setRadarOpenFor] = useState<LeaderboardEntry | null>(null);
+  const [activeTier, setActiveTier] = useState<TierGroup>('rookie');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
-    fetch(`${SERVER_URL}/api/leaderboard`)
-      .then(r => r.json() as Promise<{ leaderboard?: LeaderboardEntry[]; message?: string }>)
-      .then(data => {
-        if (data.message === 'Database not configured') setDbOffline(true);
-        setEntries(data.leaderboard ?? []);
+    fetch(`${SERVER_URL}/api/leaderboard/v2`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return (await r.json()) as LeaderboardV2Response | { message: string };
+      })
+      .then((data) => {
+        if ('message' in data && data.message === 'Database not configured') {
+          setDbOffline(true);
+          return;
+        }
+        const payload = data as LeaderboardV2Response;
+        if (payload?.groups) {
+          setGroups(payload.groups);
+        } else {
+          setError(t('leaderboard:loadFailed'));
+        }
       })
       .catch(() => setError(t('leaderboard:loadFailed')))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const tierMap = useMemo(() => rankLeaderboard(entries), [entries]);
-  const getTier = useCallback(
-    (entry: LeaderboardEntry): EloRank => tierMap.get(entry.id) ?? ELO_RANKS[0],
-    [tierMap],
-  );
+  const filtered = useMemo<LeaderboardEntryV2Enriched[]>(() => {
+    if (!groups) return [];
+    const list = groups[activeTier] ?? [];
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((e) => {
+      const name = (e.displayName ?? e.playerId).toLowerCase();
+      return name.includes(q);
+    });
+  }, [groups, activeTier, search]);
 
-  const filtered = useMemo(() => {
-    let result = entries;
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      result = result.filter(e => e.display_name.toLowerCase().includes(q));
+  const tierCounts = useMemo<Record<TierGroup, number>>(() => {
+    const out: Record<TierGroup, number> = {
+      rookie: 0, regular: 0, veteran: 0, expert: 0, master: 0,
+    };
+    if (!groups) return out;
+    for (const g of TIER_GROUPS) {
+      out[g] = groups[g]?.length ?? 0;
     }
-    if (rankFilter !== '全部') {
-      result = result.filter(e => getTier(e).label === rankFilter);
-    }
-    return result;
-  }, [entries, search, rankFilter, getTier]);
+    return out;
+  }, [groups]);
 
-  const isFiltered = search.trim() !== '' || rankFilter !== '全部';
+  const totalInTier = tierCounts[activeTier];
+  const isFiltered = search.trim() !== '' && groups !== null;
 
   return (
     <div className="space-y-4">
@@ -208,60 +301,51 @@ function EloLeaderboardWithRadar(): JSX.Element {
         </div>
       )}
 
-      {/* Search + rank filter */}
-      {!loading && !error && entries.length > 0 && (
+      {!loading && !error && !dbOffline && groups && (
         <div className="space-y-3">
+          <div className="flex flex-wrap gap-1.5" role="tablist">
+            {TIER_GROUPS.map((tier) => {
+              const label = TIER_GROUP_LABEL_ZH[tier];
+              const count = tierCounts[tier];
+              const isActive = activeTier === tier;
+              return (
+                <button
+                  key={tier}
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => {
+                    setActiveTier(tier);
+                    setSearch('');
+                  }}
+                  className={`text-xs px-2.5 py-1.5 rounded-full border font-semibold transition-all ${
+                    isActive
+                      ? `${TIER_TAB_STYLE[tier]}`
+                      : 'bg-gray-800/60 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                  }`}
+                >
+                  <span>{label}</span>
+                  <span className="ml-1.5 text-[10px] opacity-70">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
             <input
               type="text"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder={t('leaderboard:searchPlaceholder')}
               className="w-full bg-avalon-card/60 border border-gray-700 focus:border-blue-500/70 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors"
             />
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {ALL_RANK_LABELS.map(label => {
-              const rankDef = ALL_TIERS.find(r => r.label === label);
-              const isActive = rankFilter === label;
-              if (label === '全部') {
-                return (
-                  <button
-                    key={label}
-                    onClick={() => setRankFilter('全部')}
-                    className={`text-xs px-2.5 py-1 rounded-full border font-semibold transition-all ${
-                      isActive
-                        ? 'bg-white/20 border-white/50 text-white'
-                        : 'bg-gray-800/60 border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    {t('leaderboard:all')}
-                  </button>
-                );
-              }
-              if (!rankDef) return null;
-              return (
-                <button
-                  key={label}
-                  onClick={() => setRankFilter(label)}
-                  className={`text-xs px-2.5 py-1 rounded-full border font-semibold transition-all ${
-                    isActive
-                      ? `${rankDef.color} ${rankDef.bgColor} ${rankDef.borderColor}`
-                      : 'bg-gray-800/60 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+
           {isFiltered && (
             <p className="text-xs text-gray-500">
-              {t('leaderboard:showingCount', { filtered: filtered.length, total: entries.length })}
+              {t('leaderboard:showingCount', { filtered: filtered.length, total: totalInTier })}
             </p>
           )}
-          <p className="text-xs text-zinc-500">{t('common:analytics.radarHint')}</p>
         </div>
       )}
 
@@ -270,19 +354,21 @@ function EloLeaderboardWithRadar(): JSX.Element {
           <Loader size={32} className="animate-spin text-blue-400" />
         </div>
       )}
+
       {error && (
         <div className="bg-red-900/50 border border-red-600 rounded-xl p-4 text-red-200 text-sm text-center">
           {error}
         </div>
       )}
-      {!loading && !error && !dbOffline && entries.length === 0 && (
-        <div className="text-center py-16 text-gray-500">
+
+      {!loading && !error && !dbOffline && groups && totalInTier === 0 && !isFiltered && (
+        <div className="text-center py-12 text-gray-500">
           <Users size={48} className="mx-auto mb-3 opacity-40" />
-          <p>{t('leaderboard:noData')}</p>
-          <p className="text-sm mt-1">{t('leaderboard:noDataHint')}</p>
+          <p className="text-sm">{t('leaderboard:groupEmpty')}</p>
         </div>
       )}
-      {!loading && !error && entries.length > 0 && filtered.length === 0 && (
+
+      {!loading && !error && groups && totalInTier > 0 && filtered.length === 0 && (
         <div className="text-center py-12 text-gray-500">
           <Search size={40} className="mx-auto mb-3 opacity-30" />
           <p className="text-sm">{t('leaderboard:noResults')}</p>
@@ -293,204 +379,56 @@ function EloLeaderboardWithRadar(): JSX.Element {
       {filtered.length > 0 && (
         <div className="space-y-2">
           {filtered.map((entry, idx) => {
-            const rank = getTier(entry);
+            const tagStyle = ELO_TAG_STYLE[entry.eloTag] ?? ELO_TAG_STYLE.mid_tag;
+            const name = entry.displayName ?? entry.playerId;
+            const winPct = Math.round((entry.winRate ?? 0) * 100);
+            const theoPct = Math.round((entry.theoreticalWinRate ?? 0) * 100);
             return (
               <button
-                key={entry.id}
-                onClick={() => setRadarOpenFor(entry)}
+                key={entry.playerId}
+                onClick={() => navigateToProfile(entry.playerId)}
                 className="w-full bg-avalon-card/60 hover:bg-avalon-card/90 border border-gray-700 hover:border-blue-500/50 rounded-xl p-4 flex items-center gap-4 transition-all text-left"
               >
                 <div className={`w-8 text-center font-black text-lg ${RANK_COLORS[idx] ?? 'text-gray-500'}`}>
                   {idx === 0 ? <Crown size={20} className="mx-auto text-yellow-400" /> : idx + 1}
                 </div>
-                {entry.photo_url ? (
-                  <img src={entry.photo_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+
+                {entry.photoUrl ? (
+                  <img src={entry.photoUrl} alt="" className="w-10 h-10 rounded-full object-cover" />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-bold text-sm">
-                    {entry.display_name[0]?.toUpperCase()}
+                    {name[0]?.toUpperCase()}
                   </div>
                 )}
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-white truncate">{entry.display_name}</span>
-                    <span className="text-xs px-1.5 py-0.5 bg-gray-700 rounded text-gray-400">
-                      {PROVIDER_BADGE[entry.provider] ?? '?'}
+                    <span className="font-semibold text-white truncate">{name}</span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${tagStyle.text} ${tagStyle.bg} ${tagStyle.border}`}
+                    >
+                      {ELO_TAG_ZH[entry.eloTag] ?? entry.eloTag}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-                    <span>{t('leaderboard:winsLosses', { wins: entry.games_won, losses: entry.games_lost })}</span>
-                    <span className="text-blue-400">{entry.win_rate}%</span>
+                  <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5 flex-wrap">
+                    <span>{entry.totalGames} {t('leaderboard:games')}</span>
+                    <span className="text-blue-400">{t('leaderboard:winRate')} {winPct}%</span>
+                    <span className="text-emerald-400">{t('leaderboard:theoreticalWinRate')} {theoPct}%</span>
                   </div>
-                  {entry.badges.length > 0 && (
-                    <div className="flex gap-1 mt-1.5 flex-wrap">
-                      {entry.badges.slice(0, 4).map(b => (
-                        <span key={b} className="text-xs px-1.5 py-0.5 bg-amber-900/50 border border-amber-700/50 text-amber-300 rounded-full">
-                          {b}
-                        </span>
-                      ))}
-                      {entry.badges.length > 4 && (
-                        <span className="text-xs text-gray-600">+{entry.badges.length - 4}</span>
-                      )}
-                    </div>
-                  )}
                 </div>
+
                 <div className="text-right">
                   <div className="flex items-center gap-1 justify-end">
                     <TrendingUp size={14} className="text-blue-400" />
-                    <span className="font-bold text-white text-lg">{entry.elo_rating}</span>
+                    <span className="font-bold text-white text-lg">{entry.elo}</span>
                   </div>
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
-                    {rank.label}
-                  </span>
+                  <div className="text-[10px] text-gray-500 mt-0.5">{t('leaderboard:elo')}</div>
                 </div>
               </button>
             );
           })}
         </div>
       )}
-
-      {/* Radar popup */}
-      <AnimatePresence>
-        {radarOpenFor && (
-          <RadarPopup
-            entry={radarOpenFor}
-            onClose={() => setRadarOpenFor(null)}
-          />
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────
-// Radar popup: fetches /api/analysis/players/:name on open
-// ──────────────────────────────────────────────────────────────
-
-function RadarPopup({
-  entry, onClose,
-}: { entry: LeaderboardEntry; onClose: () => void }): JSX.Element {
-  const [radar, setRadar] = useState<AnalysisPlayerRadar | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setErr(null);
-    fetchAnalysisPlayerByName(entry.display_name)
-      .then(data => { if (!cancelled) setRadar(data); })
-      .catch(e => { if (!cancelled) setErr(getErrorMessage(e)); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [entry.display_name]);
-
-  const chartData = useMemo(() => {
-    if (!radar) return [];
-    return [
-      { dimension: '勝率',     value: radar.radar.winRate },
-      { dimension: '紅方勝率', value: radar.radar.redWinRate },
-      { dimension: '藍方守梅', value: radar.radar.blueMerlinProtect },
-      { dimension: '理論勝率', value: radar.radar.roleTheory },
-      { dimension: '位置率',   value: radar.radar.positionTheory },
-      { dimension: '紅方刺梅', value: radar.radar.redMerlinKillRate },
-      { dimension: '經驗值',   value: radar.radar.experience },
-    ];
-  }, [radar]);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.92, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.92, opacity: 0 }}
-        className="bg-zinc-950 border border-zinc-700 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between p-4 border-b border-zinc-800 sticky top-0 bg-zinc-950 z-10">
-          <div className="flex items-center gap-3">
-            {entry.photo_url ? (
-              <img src={entry.photo_url} alt="" className="w-10 h-10 rounded-full object-cover" />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-amber-600 flex items-center justify-center text-white font-bold text-sm">
-                {entry.display_name[0]?.toUpperCase()}
-              </div>
-            )}
-            <div>
-              <h3 className="text-white font-bold text-lg">{entry.display_name}</h3>
-              <p className="text-xs text-zinc-400">ELO {entry.elo_rating} · {entry.games_won}W / {entry.games_lost}L</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
-            aria-label="close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="p-4">
-          {loading && (
-            <div className="flex items-center justify-center py-12 text-zinc-400 gap-3">
-              <Loader size={18} className="animate-spin" /> 載入雷達...
-            </div>
-          )}
-          {err && !loading && (
-            <div className="py-8 text-center text-amber-300 text-sm">
-              <p>無 Sheets 雷達資料：{err}</p>
-              <p className="text-xs text-zinc-500 mt-1">此玩家可能尚未累積足夠線下戰績</p>
-            </div>
-          )}
-          {radar && !loading && (
-            <div className="space-y-4">
-              <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
-                <ResponsiveContainer width="100%" height={280}>
-                  <RadarChart data={chartData}>
-                    <PolarGrid stroke="#374151" />
-                    <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 10, fill: '#d1d5db' }} />
-                    <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#6b7280' }} />
-                    <Radar
-                      name={radar.player.name}
-                      dataKey="value"
-                      stroke="#3b82f6"
-                      fill="#3b82f6"
-                      fillOpacity={0.3}
-                    />
-                    <Tooltip
-                      formatter={(val: unknown) => `${Number(val).toFixed(1)}%`}
-                      contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                      itemStyle={{ color: '#d1d5db' }}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <StatRow label="總場次" value={radar.player.totalGames.toString()} />
-                <StatRow label="勝率" value={`${radar.player.winRate}%`} />
-                <StatRow label="理論勝率" value={`${radar.player.roleTheory}%`} />
-                <StatRow label="位置率" value={`${radar.player.positionTheory}%`} />
-                <StatRow label="紅方勝率" value={`${radar.player.redWin}%`} />
-                <StatRow label="藍方勝率" value={`${radar.player.blueWin}%`} />
-              </div>
-            </div>
-          )}
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-function StatRow({ label, value }: { label: string; value: string }): JSX.Element {
-  return (
-    <div className="flex justify-between bg-zinc-900/60 rounded-lg px-3 py-2 border border-zinc-800">
-      <span className="text-zinc-500">{label}</span>
-      <span className="font-bold text-white">{value}</span>
     </div>
   );
 }
