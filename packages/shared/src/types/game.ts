@@ -53,6 +53,87 @@ export interface PendingDecision {
   openedAt: number;
 }
 
+/**
+ * Default-action policy scope (棋瓦 P3, 2026-04-27).
+ *
+ * Determines how long a player's "auto-vote when I'm absent" preference
+ * remains active. Picked at policy-set time; the engine consults this
+ * field every phase to decide whether the policy still applies or has
+ * expired and must be re-set.
+ *
+ *   - `until_quest_result`: applies until the current quest's result is
+ *     known (quest succeeds/fails); then auto-clears. Edward original
+ *     example use-case: "我不在的時候投正常票, 直到該回合任務結果出來".
+ *   - `until_round_end`: applies until the current round (quest 1..5)
+ *     ends, regardless of how many vote attempts.
+ *   - `until_game_end`: applies for the rest of the game.
+ *   - `one_shot`: consumed on the next single auto-application.
+ */
+export type DefaultActionScope =
+  | 'until_quest_result'
+  | 'until_round_end'
+  | 'until_game_end'
+  | 'one_shot';
+
+/**
+ * Per-player default-action policy (棋瓦 P3, 2026-04-27).
+ *
+ * Async (棋瓦) games can wait days/weeks between phases. To prevent a
+ * single absentee from freezing the table, players opt in to a default
+ * policy: "if I'm not back in T_DEFAULT_GRACE, apply this default
+ * automatically and advance the phase."
+ *
+ * Safety invariants (enforced in `DefaultActionPolicy.ts`, NOT in this
+ * type alone):
+ *   1. `questVote === 'fail'` is **forbidden for evil players**. The
+ *      resolver returns `null` (must prompt) for any evil quest vote
+ *      regardless of policy. Auto-failing as evil silently leaks
+ *      role information — see project_avalon_async_default_safety.md.
+ *   2. `voteOnTeam = 'normal'` means "approve when I'm on the team,
+ *      reject when I'm not" (matches the realtime AFK fallback rule
+ *      in GameEngine.handleVoteTimeout — `team_in_approve_team_out_reject`).
+ *   3. `questVote = 'role_aware'` means "loyal default to success,
+ *      evil players are still prompted (must submit manually)."
+ *      Picked by default in the UI to surface the safest option.
+ *   4. `expiresAt` is an absolute epoch ms timestamp; if set and elapsed,
+ *      the resolver returns `null` (policy stale).
+ *
+ * Edward 2026-04-26 verbatim:
+ *   "我不在的時候投正常票, 直到該回合任務結果出來"
+ *   = scope='until_quest_result', voteOnTeam='normal', questVote='role_aware'.
+ */
+export interface DefaultActionPolicy {
+  playerId: string;
+  /**
+   * Default for the team-vote (approve/reject) phase.
+   *   - 'normal': approve if on the proposed team, reject otherwise
+   *               (mirrors realtime AFK rule; safe loyal default).
+   *   - 'approve': always approve regardless of team membership.
+   *   - 'reject': always reject regardless of team membership.
+   * Omit (undefined) = prompt the player (no team-vote auto-apply).
+   */
+  voteOnTeam?: 'normal' | 'approve' | 'reject';
+  /**
+   * Default for the quest-vote (success/fail) phase.
+   *   - 'success': always vote success (safe — never breaks a loyal
+   *                quest; ALSO safe for evil to surface, since "evil
+   *                voting success" is a legitimate strategic choice).
+   *   - 'fail': **ENGINE STILL REJECTS THIS FOR EVIL**. Stored as-is,
+   *             but `resolveDefaultAction` returns `null` for evil
+   *             players. Loyal cannot vote fail (engine rejects), so
+   *             a 'fail' default for a loyal is effectively dead.
+   *   - 'role_aware': loyal → success, evil → null (must prompt).
+   *                   This is the default surfaced in UI.
+   * Omit (undefined) = prompt the player (no quest-vote auto-apply).
+   */
+  questVote?: 'success' | 'fail' | 'role_aware';
+  scope: DefaultActionScope;
+  /** Absolute epoch ms; if set and `Date.now() > expiresAt`, policy is stale. */
+  expiresAt?: number;
+  /** Timestamp the player set the policy. Used for grace-window math. */
+  setAt: number;
+}
+
 // Player Roles (Standard Avalon)
 export type Role =
   | 'merlin'      // Good - Knows all Evil players (except Mordred)
