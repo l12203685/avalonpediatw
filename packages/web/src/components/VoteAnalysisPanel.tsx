@@ -3,7 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Room, Player } from '@avalon/shared';
 import { useTranslation } from 'react-i18next';
-import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import {
+  displaySeatNumber,
+  seatOf,
+  formatTeamSeatsWithSeparator,
+} from '../utils/seatDisplay';
 import { getVoteTokenImage, getProposalResultImage } from '../utils/avalonAssets';
 
 interface VoteAnalysisPanelProps {
@@ -156,7 +160,7 @@ export default function VoteAnalysisPanel({ room, currentPlayer }: VoteAnalysisP
                               return (
                                 <td
                                   key={i}
-                                  title={isLeader ? t('game:voteAnalysis.matrixTeamTooltip', { team: v.team.map(id => displaySeatNumber(seatOf(id, room.players))).join('、') }) : undefined}
+                                  title={isLeader ? t('game:voteAnalysis.matrixTeamTooltip', { team: formatTeamSeatsWithSeparator(v.team, room.players, '、') }) : undefined}
                                   className={`text-center px-1 py-0.5 ${isLeader ? 'ring-1 ring-yellow-500/40 rounded bg-yellow-900/10' : ''}`}
                                 >
                                   {vote === undefined ? (

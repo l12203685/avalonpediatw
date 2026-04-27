@@ -44,7 +44,13 @@ export default function QuestResultOverlay({
     };
   }, [duration, stableDismiss, success]);
 
-  const teamPlayers = record.team.map(id => room.players[id]).filter(Boolean);
+  // Edward 2026-04-27 spec「不能按照選的順序 要以數字由小到大 (0是最大)」:
+  // Sort team chips by canonical seat order (1<2<...<9<0) before render so
+  // the overlay matches the banner / scoresheet / chat shorthand.
+  const teamPlayers = record.team
+    .map(id => room.players[id])
+    .filter(Boolean)
+    .sort((a, b) => seatOf(a.id, room.players) - seatOf(b.id, room.players));
 
   return (
     // #107 Edward 2026-04-25 「派票跟黑白球不要一直跳視窗出來」 — was a

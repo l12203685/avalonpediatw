@@ -4,7 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Room } from '@avalon/shared';
 import { sendChatMessage, getSocket } from '../services/socket';
-import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import {
+  displaySeatNumber,
+  seatOf,
+  sortSeatsForDisplay,
+} from '../utils/seatDisplay';
 import { useChatStore } from '../store/chatStore';
 
 interface ChatMessage {
@@ -63,10 +67,10 @@ interface ChatPanelProps {
  * Sort seats in canonical Avalon order — 1..9 ascending, with seat 10 last
  * (rendered as "0"). Returns the concatenated digit string. Mirrors the
  * helper that previously lived in FullScoresheetLayout.
+ * Edward 2026-04-27: sort logic centralised in `sortSeatsForDisplay`.
  */
 function formatSeatsDigitString(seats: number[]): string {
-  const sorted = [...seats].sort((a, b) => a - b);
-  return sorted.map(displaySeatNumber).join('');
+  return sortSeatsForDisplay(seats).map(displaySeatNumber).join('');
 }
 
 /**

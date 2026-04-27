@@ -50,3 +50,53 @@ export function seatPrefix(
   const seat = seatOf(playerId, players);
   return seat === 0 ? '' : displaySeatNumber(seat);
 }
+
+/**
+ * Canonical Avalon team-display sort: 1 < 2 < ... < 9 < 0 (10 = "0", largest).
+ *
+ * Edward 2026-04-27 spec「不能按照選的順序 要以數字由小到大 (0是最大)」.
+ * Numeric ascending already gives this order because seat 10 is the largest
+ * NUMERIC seat — only the *display* renders 10 as "0". Centralised so every
+ * banner / scoresheet / chat / history / tooltip stays consistent and a
+ * future rule change touches one place.
+ *
+ * @param seats 1-based seat numbers (10 represents seat 10 / display "0")
+ * @returns new array sorted ascending, original input untouched
+ */
+export function sortSeatsForDisplay(seats: readonly number[]): number[] {
+  return [...seats].sort((a, b) => a - b);
+}
+
+/**
+ * Join an array of player IDs as a sorted seat-digit string. Filters out
+ * unknown ids (seat 0). Result mirrors paper-scoresheet shorthand —
+ * "134" / "4790" — and respects the canonical sort (`sortSeatsForDisplay`).
+ *
+ * @param playerIds team-member ids (any order)
+ * @param players `room.players` map (insertion order = seat order)
+ */
+export function formatTeamSeatsDigitString(
+  playerIds: readonly string[],
+  players: Record<string, unknown>,
+): string {
+  const seats = playerIds
+    .map((id) => seatOf(id, players))
+    .filter((seat) => seat > 0);
+  return sortSeatsForDisplay(seats).map(displaySeatNumber).join('');
+}
+
+/**
+ * Same as `formatTeamSeatsDigitString` but renders with a custom separator
+ * (e.g. Chinese 「、」 for natural-language sentence rendering in history /
+ * tooltip / overlay panels). Sorts by canonical seat order before joining.
+ */
+export function formatTeamSeatsWithSeparator(
+  playerIds: readonly string[],
+  players: Record<string, unknown>,
+  separator: string,
+): string {
+  const seats = playerIds
+    .map((id) => seatOf(id, players))
+    .filter((seat) => seat > 0);
+  return sortSeatsForDisplay(seats).map(displaySeatNumber).join(separator);
+}

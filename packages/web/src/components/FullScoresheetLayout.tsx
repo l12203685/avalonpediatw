@@ -3,15 +3,19 @@ import { ChatMessage, Room, Player } from '@avalon/shared';
 import LiveScoresheet from './LiveScoresheet';
 import QuestResultBanner from './QuestResultBanner';
 import { SystemChatEntry } from './ScoresheetChatPanel';
-import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import {
+  displaySeatNumber,
+  seatOf,
+  sortSeatsForDisplay,
+} from '../utils/seatDisplay';
 
 /**
  * Sort seats in canonical Avalon order — 1..9 ascending, with seat 10 last
  * (rendered as "0"). Mirrors the convention used in PlayerRing / shield cells.
+ * Edward 2026-04-27: sort logic centralised in `sortSeatsForDisplay`.
  */
 function formatSeatsDigitString(seats: number[]): string {
-  const sorted = [...seats].sort((a, b) => a - b);
-  return sorted.map(displaySeatNumber).join('');
+  return sortSeatsForDisplay(seats).map(displaySeatNumber).join('');
 }
 
 /**

@@ -57,7 +57,11 @@ import FullScoresheetLayout from '../components/FullScoresheetLayout';
 import PhaseInfoBanner from '../components/PhaseInfoBanner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { requestNotificationPermission } from '../services/notifications';
-import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import {
+  displaySeatNumber,
+  seatOf,
+  formatTeamSeatsWithSeparator,
+} from '../utils/seatDisplay';
 import { LAKE_IMAGE, getBoardImage } from '../utils/avalonAssets';
 import { CampDisc } from '../components/CampDisc';
 import audioService from '../services/audio';
@@ -1334,7 +1338,7 @@ export default function RoomPage(): JSX.Element {
                       {q.result === 'success' ? '✓' : '✗'}
                     </span>
                     <span className="text-gray-400">{t('game:assassin.roundPrefix', { round: q.round })}</span>
-                    <span className="text-gray-300 truncate">{q.team.map(id => displaySeatNumber(seatOf(id, room.players))).join('、')}</span>
+                    <span className="text-gray-300 truncate">{formatTeamSeatsWithSeparator(q.team, room.players, '、')}</span>
                     {q.result === 'fail' && q.failCount > 0 && <span className="text-red-400 ml-1">{t('game:assassin.failBadge', { count: q.failCount })}</span>}
                   </div>
                 ))}

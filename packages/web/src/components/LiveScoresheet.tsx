@@ -6,7 +6,7 @@ import {
   QuestSuccessMark,
   QuestFailMark,
 } from './ScoresheetIcons';
-import { displaySeatNumber } from '../utils/seatDisplay';
+import { displaySeatNumber, sortSeatsForDisplay } from '../utils/seatDisplay';
 
 interface LiveScoresheetProps {
   room: Room;
@@ -33,12 +33,10 @@ type ScoresheetRow =
  *
  * e.g. team [1, 3, 4] → "134"; team [4, 5, 6, 10] → "4560"
  * Uses 1-based seat numbers and renders seat 10 as "0" (paper convention).
+ * Edward 2026-04-27: canonical seat sort centralised in `sortSeatsForDisplay`.
  */
 function nominationShorthand(teamSeats: number[]): string {
-  return [...teamSeats]
-    .sort((a, b) => a - b)
-    .map(displaySeatNumber)
-    .join('');
+  return sortSeatsForDisplay(teamSeats).map(displaySeatNumber).join('');
 }
 
 export default function LiveScoresheet({ room, currentPlayer }: LiveScoresheetProps): JSX.Element {

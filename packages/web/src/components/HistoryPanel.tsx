@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Room, Player, VoteRecord } from '@avalon/shared';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { displaySeatNumber, seatOf } from '../utils/seatDisplay';
+import {
+  displaySeatNumber,
+  seatOf,
+  formatTeamSeatsWithSeparator,
+} from '../utils/seatDisplay';
 import { getVoteTokenImage } from '../utils/avalonAssets';
 
 interface HistoryPanelProps {
@@ -86,7 +90,7 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
                         )}
                         {questResult && (
                           <span className="text-xs text-gray-600">
-                            隊伍：{questResult.team.map(getSeatName).join('、')}
+                            隊伍：{formatTeamSeatsWithSeparator(questResult.team, room.players, '、')}
                           </span>
                         )}
                       </div>
@@ -113,7 +117,7 @@ export default function HistoryPanel({ room, currentPlayer }: HistoryPanelProps)
                                 </span>
                                 <span className="text-gray-500">→</span>
                                 <span className="text-gray-300">
-                                  {vote.team.map(getSeatName).join('、')}
+                                  {formatTeamSeatsWithSeparator(vote.team, room.players, '、')}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0 ml-2">

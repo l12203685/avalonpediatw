@@ -1,6 +1,10 @@
 import { useMemo } from 'react';
 import type { Room } from '@avalon/shared';
-import { seatOf, displaySeatNumber } from '../utils/seatDisplay';
+import {
+  seatOf,
+  displaySeatNumber,
+  formatTeamSeatsDigitString,
+} from '../utils/seatDisplay';
 
 /**
  * PhaseInfoBanner — sticky 即時 phase state 顯示 (Edward 2026-04-26 spec 33).
@@ -27,12 +31,15 @@ interface PhaseInfoBannerProps {
   room: Room;
 }
 
+/**
+ * Edward 2026-04-27 spec「投票中 (隊伍 1947) => 不能按照選的順序 要以數字
+ * 由小到大 (0是最大)」: team digits must always render in canonical seat
+ * order (1<2<...<9<0) regardless of pick order, server submission order,
+ * or bot AI fill order. Defensive sort here ensures the sticky banner is
+ * the source of truth for "current proposed team" display.
+ */
 function joinSeats(playerIds: readonly string[], players: Record<string, unknown>): string {
-  return playerIds
-    .map((id) => seatOf(id, players))
-    .filter((seat) => seat > 0)
-    .map((seat) => displaySeatNumber(seat))
-    .join('');
+  return formatTeamSeatsDigitString(playerIds, players);
 }
 
 function seatLabel(playerId: string | undefined, players: Record<string, unknown>): string {
