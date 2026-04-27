@@ -319,7 +319,9 @@ export default function RoomPage(): JSX.Element {
 
   if (!room || !currentPlayer) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 text-white">
+      // Edward 2026-04-27 PWA status-bar fix: pt-safe so 連線中... 與離線
+      // toast 不被手機 status bar (notch + signal/clock/battery) 蓋住。
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 text-white pt-safe">
         {timedOut ? (
           <>
             <p className="text-red-400 font-semibold">
@@ -1420,7 +1422,14 @@ export default function RoomPage(): JSX.Element {
   );
 
   return (
-    <div className="relative h-[100dvh] flex flex-col overflow-hidden bg-gradient-to-b from-avalon-dark to-black">
+    // Edward 2026-04-27 PWA status-bar fix: pt-safe pushes the Lobby /
+    // Game / Ended top section below the iOS / Android status bar (notch +
+    // 電信/時間/電量) when the site is launched as a PWA via 加到桌面.
+    // viewport-fit=cover + apple-mobile-web-app-status-bar-style=
+    // black-translucent (index.html) make safe-area-inset-top non-zero on
+    // notch devices so this kicks in only where needed; on desktop /
+    // browser tabs the inset is 0 → no visual change.
+    <div className="relative h-[100dvh] flex flex-col overflow-hidden bg-gradient-to-b from-avalon-dark to-black pt-safe">
       {boardImageUrl && (
         <div
           aria-hidden="true"

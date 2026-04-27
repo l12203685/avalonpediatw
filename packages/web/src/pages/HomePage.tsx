@@ -276,7 +276,13 @@ export default function HomePage(): JSX.Element {
   const isGuest = isGuestPlayer(currentPlayer);
 
   return (
-    <div className="min-h-screen bg-black px-3 py-4 sm:p-4 overflow-x-hidden">
+    // Edward 2026-04-27 PWA status-bar fix: pt-safe gives the lobby content
+    // (chips + 標題 + 6-button grid + chat) a top inset = max(default,
+    // env(safe-area-inset-top)) so iOS/Android status bar (notch + 電信/
+    // 時間/電量) doesn't sit on top of the UI when launched as a PWA from
+    // 加到桌面. Inner fixed chips below add their own top-safe-3 / sm:top-
+    // safe-6 so they too clear the bar.
+    <div className="min-h-screen bg-black px-3 py-4 sm:p-4 overflow-x-hidden pt-safe">
       {/* Background decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         {/* Edward 2026-04-25 19:40: ambient logo bg 太淡看不到 — 改 cover
@@ -320,7 +326,7 @@ export default function HomePage(): JSX.Element {
               - 訪客: clickable「登入/綁定」→ AuthGateModal (target='stats' 表登入後
                 回大廳，不跳頁)
             fixed 對齊右上 IdentityBadge 的同級，z-30 避開 modal (z-50)。 */}
-        <div className="fixed top-3 left-3 sm:top-6 sm:left-6 z-30 flex flex-col gap-1.5 items-start">
+        <div className="fixed top-safe-3 sm:top-safe-6 left-3 sm:left-6 z-30 flex flex-col gap-1.5 items-start">
           {/* Edward 2026-04-26 17:07: PWA buttons (InstallButton +
               ForceUpdateButton) 從左上 chip 區搬到右下角 stack (見 fixed
               bottom-4 right-4 區塊). 左上 chip 區現在只剩登入狀態 chip. */}
@@ -368,7 +374,7 @@ export default function HomePage(): JSX.Element {
             改 fixed 避免手機上 absolute 佔據 container 寬度把右側按鈕擠出螢幕。
             Edward 2026-04-25 22:25: 砍 IdentityBadge (盾牌 Edward chip) — 與大廳左上
             「已登入」chip 重複。IdentityBadge component 仍保留供其他頁使用。 */}
-        <div className="fixed top-3 right-3 sm:top-6 sm:right-6 z-30 flex items-center gap-2">
+        <div className="fixed top-safe-3 sm:top-safe-6 right-3 sm:right-6 z-30 flex items-center gap-2">
           <LanguageSwitcher />
         </div>
 

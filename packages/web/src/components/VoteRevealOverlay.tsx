@@ -59,7 +59,10 @@ export default function VoteRevealOverlay({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-      className="fixed top-3 left-1/2 -translate-x-1/2 z-50 w-[min(92vw,28rem)] cursor-pointer"
+      // Edward 2026-04-27 PWA status-bar fix: top-safe-3 = top-3 + safe-area-
+      // inset-top so the vote-reveal toast doesn't sit under the notch /
+      // 電信/時間/電量 row when running as a PWA on mobile.
+      className="fixed top-safe-3 left-1/2 -translate-x-1/2 z-50 w-[min(92vw,28rem)] cursor-pointer"
       onClick={stableDismiss}
       role="status"
       aria-live="polite"

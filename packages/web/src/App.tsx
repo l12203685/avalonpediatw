@@ -336,7 +336,10 @@ function App(): JSX.Element {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -48, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className={`fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold ${
+            // Edward 2026-04-27 PWA status-bar fix: pt-safe so the connection
+            // banner sits below the iOS/Android status bar instead of being
+            // overlapped by the notch + 電信/時間/電量 row in standalone PWA.
+            className={`fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold pt-safe ${
               socketStatus === 'reconnecting'
                 ? 'bg-yellow-900/90 border-b border-yellow-700 text-yellow-200'
                 : 'bg-red-900/90 border-b border-red-700 text-red-200'
@@ -372,7 +375,9 @@ function App(): JSX.Element {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -48, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-3 px-4 py-2 text-sm font-semibold bg-amber-900/90 border-b border-amber-700 text-amber-100"
+            // Edward 2026-04-27 PWA status-bar fix: pt-safe so the new-version
+            // banner clears the iOS/Android status bar (PWA standalone mode).
+            className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-3 px-4 py-2 text-sm font-semibold bg-amber-900/90 border-b border-amber-700 text-amber-100 pt-safe"
           >
             <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             {t('connection.newVersionBanner', { defaultValue: '有新版本可用' })}

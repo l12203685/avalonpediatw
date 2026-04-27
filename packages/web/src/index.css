@@ -37,12 +37,42 @@ body,
    home indicator doesn't overlap action buttons.
 
    `pb-safe`: padding-bottom = max(default, env(safe-area-inset-bottom)).
-   `bottom-safe`: bottom = env(safe-area-inset-bottom) for fixed elements. */
+   `bottom-safe`: bottom = env(safe-area-inset-bottom) for fixed elements.
+
+   Edward 2026-04-27 PWA-on-mobile fix: the 大廳/RoomPage 頂端 was being
+   covered by the iOS / Android status bar (signal · clock · battery) when
+   the site was added to home screen and launched in standalone display
+   mode (manifest.webmanifest `display: standalone` + viewport-fit=cover).
+   These mirror the bottom helpers so any container or fixed top-anchored
+   element can opt in to the notch / status-bar inset cleanly.
+
+   `pt-safe`: padding-top = max(default, env(safe-area-inset-top)).
+   `top-safe`: top = env(safe-area-inset-top) for fixed elements at top:0.
+   `top-safe-3`: top = env(safe-area-inset-top) + 0.75rem (replacement for
+                  fixed top-3 chips so the chip itself drops below the bar). */
 .pb-safe {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 .bottom-safe {
   bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+.top-safe {
+  top: env(safe-area-inset-top);
+}
+.top-safe-3 {
+  top: calc(env(safe-area-inset-top) + 0.75rem);
+}
+.sm\:top-safe-6 {
+  /* sm: variant kept colocated so the responsive override survives without
+     a Tailwind-plugin rebuild. Activated via `sm:top-safe-6` className. */
+}
+@media (min-width: 640px) {
+  .sm\:top-safe-6 {
+    top: calc(env(safe-area-inset-top) + 1.5rem);
+  }
 }
 
 /* Game-specific styles */
