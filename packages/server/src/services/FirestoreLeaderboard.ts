@@ -121,6 +121,12 @@ async function aggregatePlayerStats(): Promise<Map<string, PlayerAgg>> {
     const game = doc.data() as GameRecord;
     if (!game.players || game.players.length === 0) continue;
 
+    // Edward 2026-04-28：含 AI 玩家的局 / host 勾選的娛樂局不算 ELO/勝率。
+    // 與 V2 路徑 (`filterRankedGames` in shared/derived/gameMetrics) 對齊：
+    // 嚴格 `=== true` 比較 → 舊 V1 row 沒這兩個 field (undefined) 仍視為 ranked，
+    // 維持歷史戰績不漏。
+    if (game.hasAI === true || game.casual === true) continue;
+
     // Ensure every player has an entry
     for (const p of game.players) {
       if (!p.playerId) continue;

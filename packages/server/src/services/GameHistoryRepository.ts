@@ -45,6 +45,18 @@ export interface GameRecord {
   assassinTargetId?: string;
   /** Seat index of the first leader at game start (rotation reconstruction). */
   leaderStartIndex?: number;
+
+  // ---- ELO/leaderboard exclusion flags (Edward 2026-04-28) ----
+  // Mirror the V2 record's exclusion flags onto the V1 record so the legacy
+  // V1 Firestore fallback path (`FirestoreLeaderboard.aggregatePlayerStats`)
+  // can skip AI-inclusive / casual games when computing rankings. Both fields
+  // are optional — historical V1 rows omit them and read as falsy, so the
+  // pure-human Sheets-era ladders are unaffected.
+
+  /** True iff any seat at game-end was a bot (`Room.players[*].isBot === true`). */
+  hasAI?: boolean;
+  /** True iff host opted into the casual-match checkbox (`Room.casual === true`). */
+  casual?: boolean;
 }
 
 export interface GamePlayerRecord {
@@ -94,6 +106,14 @@ export class GameHistoryRepository {
         })
       );
 
+      // ELO-exclusion flags (Edward 2026-04-28) — snapshot AI-participation
+      // and casual-match status so the V1 Firestore fallback leaderboard
+      // (`aggregatePlayerStats`) can skip these records. Same semantics as
+      // `liveGameToV2.buildV2RecordFromRoom`.
+      const hasAI = Object.values(room.players).some(
+        (p: Player) => Boolean(p.isBot),
+      );
+
       const record: GameRecord = {
         gameId: room.id,
         roomName: room.name,
@@ -113,6 +133,11 @@ export class GameHistoryRepository {
         leaderStartIndex:
           typeof room.leaderIndex === 'number' ? room.leaderIndex : undefined,
       };
+
+      // Only stamp the exclusion flags when truthy — undefined preserves
+      // the historical "ranked" default for legacy / pure-human paths.
+      if (hasAI) record.hasAI = true;
+      if (room.casual) record.casual = true;
 
       const docRef = firestore.collection(this.collection).doc(room.id);
       await docRef.set(record);
