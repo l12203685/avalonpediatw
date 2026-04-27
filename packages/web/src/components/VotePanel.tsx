@@ -88,7 +88,13 @@ export default function VotePanel({
       initial={{ opacity: 0, y: 40 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 40 }}
-      className="fixed bottom-0 inset-x-0 z-40 max-h-[30dvh] overflow-y-auto bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-yellow-600 shadow-[0_-6px_20px_rgba(0,0,0,0.55)] pb-safe"
+      // Edward 2026-04-27 08:01 root-fix「投票上方仍有大黑塊」: 砍 `position:
+      // fixed bottom-0` + 父層 `pb-[30dvh]` 預留. 三個 sticky panel 都是 fixed
+      // + max-h, 實際 content 高度 18dvh 但父層死預留 30dvh = 永遠 12dvh 黑帶.
+      // 改 panel 為 `flex-none` 進 normal flow, 父層 RoomPage 用 flex column
+      // 自然排版 — 沒有 magic number 不會 drift. `pb-safe` (iOS 底部安全區)
+      // 仍透過 padding 保留.
+      className="relative w-full flex-none max-h-[40dvh] overflow-y-auto bg-gradient-to-t from-black/95 via-black/90 to-black/75 backdrop-blur-md border-t-2 border-yellow-600 shadow-[0_-6px_20px_rgba(0,0,0,0.55)] pb-safe"
       role="region"
       aria-label={t('game:votePanel.title')}
     >
