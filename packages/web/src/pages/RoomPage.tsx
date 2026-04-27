@@ -36,6 +36,8 @@ import {
   Loader2,
   Eye,
   ClipboardList,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 import {
   AVALON_CONFIG,
@@ -162,7 +164,32 @@ export default function RoomPage(): JSX.Element {
   // Edward 2026-04-26 17:05: 牌譜全展 toggle. true => 主畫面 (rails+chat) 整個被
   // FullScoresheetLayout 替換, 不顯 10 個 PlayerCard. 點頂端 ClipboardList icon
   // 切換. Phase 變化時不自動重置 — 由玩家自主控制.
-  const [scoresheetExpanded, setScoresheetExpanded] = useState(false);
+  //
+  // Edward 2026-04-27 #192 試行 mode: 玩家可「釘住」牌譜全展為 GamePage 主 layout
+  // (預設 expanded + lobby→voting 不自動 collapse). localStorage 持久化, opt-in,
+  // 默認 OFF. 釘住按鈕在頂端 toolbar (ClipboardList 旁), 用 Pin/PinOff icon. 一鍵
+  // 進入試行模式後, 每場 game 開始時自動 expand; 解除釘住即回 #229 一次性 toggle
+  // 行為. Default 不破 — 沒釘住時與當前 ship 完全一致.
+  const TRIAL_KEY = 'avalon:scoresheetTrialPinned';
+  const [scoresheetTrialPinned, setScoresheetTrialPinnedState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(TRIAL_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const setScoresheetTrialPinned = (next: boolean): void => {
+    setScoresheetTrialPinnedState(next);
+    try {
+      if (next) localStorage.setItem(TRIAL_KEY, '1');
+      else localStorage.removeItem(TRIAL_KEY);
+    } catch {
+      // localStorage unavailable (privacy mode) — silently degrade to in-memory only
+    }
+  };
+  // 試行模式下, scoresheet 預設展開. 玩家仍可單擊 ClipboardList 暫時 collapse,
+  // 但下一場開始 (lobby→voting) 會再次 auto-expand (見 effect 下方).
+  const [scoresheetExpanded, setScoresheetExpanded] = useState(scoresheetTrialPinned);
   const prevVoteHistoryLen = useRef(0);
   const prevQuestHistoryLen = useRef(0);
 
@@ -193,7 +220,10 @@ export default function RoomPage(): JSX.Element {
       // Edward 2026-04-26 19:31 spec 29: when a new round starts, collapse any
       // lingering「看牌譜」full-screen overlay from the lobby so players land
       // on the live board, not the previous game's replay.
-      setScoresheetExpanded(false);
+      //
+      // Edward 2026-04-27 #192 試行 mode: 釘住模式下反過來 — 新場開始時 auto-expand
+      // 牌譜為主 layout (玩家明示 opt-in, 預期就是要這樣).
+      setScoresheetExpanded(scoresheetTrialPinned);
     }
     if (prevRoomState.current === null && room.state !== 'lobby') {
       setShowRoleReveal(true);
@@ -1033,6 +1063,27 @@ export default function RoomPage(): JSX.Element {
           >
             <ClipboardList size={14} />
           </button>
+          {/* Edward 2026-04-27 #192 試行 mode 釘住按鈕 — 一鍵讓牌譜全展變 GamePage
+              主 layout (持久化 localStorage). 釘住後新場開始 auto-expand. 解除即
+              回 #229 一次性 toggle 行為. 預設 OFF, 不破默認. */}
+          <button
+            onClick={() => {
+              const next = !scoresheetTrialPinned;
+              setScoresheetTrialPinned(next);
+              setScoresheetExpanded(next);
+            }}
+            title={scoresheetTrialPinned ? '取消釘住牌譜（試行模式）' : '釘住牌譜為主畫面（試行模式）'}
+            aria-label={scoresheetTrialPinned ? '取消釘住牌譜' : '釘住牌譜為主畫面'}
+            aria-pressed={scoresheetTrialPinned}
+            data-testid="game-btn-scoresheet-pin"
+            className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+              scoresheetTrialPinned
+                ? 'bg-amber-500/30 hover:bg-amber-500/50 border-amber-400 text-amber-200'
+                : 'bg-slate-800/60 hover:bg-slate-700 border-slate-600 text-slate-300'
+            }`}
+          >
+            {scoresheetTrialPinned ? <Pin size={14} /> : <PinOff size={14} />}
+          </button>
         </div>
       </div>
 
@@ -1081,6 +1132,26 @@ export default function RoomPage(): JSX.Element {
             }`}
           >
             <ClipboardList size={14} />
+          </button>
+          {/* Edward 2026-04-27 #192 試行 mode pin — ended phase 也提供, 對齊
+              gameTopSection. */}
+          <button
+            onClick={() => {
+              const next = !scoresheetTrialPinned;
+              setScoresheetTrialPinned(next);
+              setScoresheetExpanded(next);
+            }}
+            title={scoresheetTrialPinned ? '取消釘住牌譜（試行模式）' : '釘住牌譜為主畫面（試行模式）'}
+            aria-label={scoresheetTrialPinned ? '取消釘住牌譜' : '釘住牌譜為主畫面'}
+            aria-pressed={scoresheetTrialPinned}
+            data-testid="game-btn-scoresheet-pin-ended"
+            className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+              scoresheetTrialPinned
+                ? 'bg-amber-500/30 hover:bg-amber-500/50 border-amber-400 text-amber-200'
+                : 'bg-slate-800/60 hover:bg-slate-700 border-slate-600 text-slate-300'
+            }`}
+          >
+            {scoresheetTrialPinned ? <Pin size={14} /> : <PinOff size={14} />}
           </button>
         </div>
       </div>
