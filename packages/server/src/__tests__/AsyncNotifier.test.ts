@@ -400,13 +400,13 @@ describe('formatGameEndedMessage', () => {
       players: {},
     };
     expect(
-      formatGameEndedMessage(makeRoom({ ...base, evilWins: false } as any), 'http://x'),
+      formatGameEndedMessage(makeRoom({ ...base, evilWins: false } as unknown as Room), 'http://x'),
     ).toContain('好人獲勝');
     expect(
-      formatGameEndedMessage(makeRoom({ ...base, evilWins: true } as any), 'http://x'),
+      formatGameEndedMessage(makeRoom({ ...base, evilWins: true } as unknown as Room), 'http://x'),
     ).toContain('邪惡獲勝');
     expect(
-      formatGameEndedMessage(makeRoom({ ...base, evilWins: null } as any), 'http://x'),
+      formatGameEndedMessage(makeRoom({ ...base, evilWins: null } as unknown as Room), 'http://x'),
     ).toContain('局終');
   });
 });
