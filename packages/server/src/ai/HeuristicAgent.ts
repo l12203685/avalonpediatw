@@ -33,6 +33,14 @@ import {
   ASSASSIN_TOP_TIER_SEAT_PATH,
   type R1Outcome,
 } from './priors/EvActionPriors';
+// Wave B 2026-04-28 — baseline pyramid tools (5-layer composition,
+// 4 lake hard rules, time-weighted layer-4 inference). See
+// digital-immortal-tree-lyh/agent/tree_registry/architecture/avalon_thinking_pyramid.md
+import {
+  computePyramidScores,
+  findHardRuleViolations,
+  type PyramidScores,
+} from './baseline';
 
 // ── Strategy thresholds ────────────────────────────────────────
 // #97 Phase 1 (2026-04-22): SUSPICION_REJECT_THRESHOLD / STRICT_THRESHOLD /
@@ -43,6 +51,58 @@ import {
 
 /** Above this failCount, good always approves to avoid auto-loss on 5th reject. */
 const FORCE_APPROVE_FAIL_COUNT = 4;
+
+// ── Wave B 2026-04-28 — pyramid baseline + 4 lake hard rules ───
+/**
+ * Edward 2026-04-28 Wave B verbatim core:
+ *   思維金字塔 (5 層):
+ *     1. 內建資訊 (角色私有 ground truth) — 永遠贏推理 (Q9)
+ *     2. 任務結果 (公開 ground truth)
+ *     3. 湖中宣告 (公開但可詐欺, 受 4 條硬規則約束)
+ *     4. 派票 + 黑白球投票 (合成 weighted-sum, 時序 1.5x)
+ *     5. 發言 (LLM prompt 處理, 不在 code)
+ *
+ *   4 條湖中硬規則:
+ *     硬1 — A 湖 B 宣藍 → C 派票選 A, 必選 B (傳遞性)
+ *     硬2 — A 湖 B 宣紅 → C 派票選 A, 必不可選 B (互斥)
+ *     硬3 — A 湖 B 宣藍 → A 身分 ≤ B (替 B 背書, A 較低層)
+ *     硬4 — 湖中傳遞鏈最佳: 首湖藍 → 持續湖到藍 → 末局決定
+ *
+ *   紅方例外 (Q11): 「若當下有客觀事實讓自己必成為紅方
+ *     (e.g. 開白衝刺隊友) 則可違反硬規則」
+ *
+ * Feature flag default `true`. Flip to `false` for emergency rollback
+ * to pre-Wave-B behaviour (legacy `selectTeam` / `voteOnTeam` paths
+ * unchanged from Wave A).
+ *
+ * Architecture lock: see `tree_registry/architecture/avalon_thinking_pyramid.md`.
+ */
+const USE_PYRAMID_BASELINE = true;
+
+/**
+ * Red exception threshold (Q11). When a recognised-red role is
+ * listening (evilWins === 2) on the last decisive opportunity, the
+ * code path may break a hard rule to push for the kill ("開白衝刺隊友").
+ * Outside listening, hard rules apply unconditionally.
+ *
+ * Implementation surface: `mayBreakHardRules(obs)` returns true for
+ * recognised-red roles when:
+ *   - evilWins >= 2 (listening, decisive moment), OR
+ *   - currentRound === 5 with totalFails >= 1 (R5 cleanup window).
+ *
+ * Logged via console-debug for telemetry; production logs filtered.
+ */
+function mayBreakHardRules(obs: PlayerObservation): boolean {
+  if (obs.myTeam !== 'evil') return false;
+  // Oberon never coordinates → cannot strategically break rules.
+  if ((obs.myRole as string) === 'oberon') return false;
+  const evilWins = obs.questResults.filter((r) => r === 'fail').length;
+  if (evilWins >= 2) return true;
+  // R5 cleanup with prior fail.
+  const round = obs.currentRound ?? 1;
+  if (round === 5 && evilWins >= 1) return true;
+  return false;
+}
 
 // ── Edward 2026-04-24 batch 4 fix #1 — R1-P1 banned team combos ───
 /**
@@ -906,13 +966,51 @@ export class HeuristicAgent implements AvalonAgent {
         return -loyalPrior; // subtract to rank earlier
       };
 
+      // Wave B 2026-04-28 — pyramid baseline scores (Q9+Q10):
+      //   built-in > mission >= lake >= vote/pick > speech.
+      // Caller blends these on top of the existing tier+suspicion
+      // sort so role-private knowledge (knownEvils etc.) still wins;
+      // pyramid only breaks ties when tier+suspicion are identical.
+      const pyramid: PyramidScores | null = USE_PYRAMID_BASELINE
+        ? computePyramidScores(obs)
+        : null;
+      const pyramidScore = (id: string): number =>
+        pyramid?.scores.get(id) ?? 0.5;
+
       const candidates = nonSelf.sort((a, b) => {
         const tierDiff = byTier(a) - byTier(b);
         if (tierDiff !== 0) return tierDiff;
         const susDiff = this.getSuspicion(a) - this.getSuspicion(b);
         if (susDiff !== 0) return susDiff;
+        // Wave B: blend pyramid suspicion (lower = bluer = preferred).
+        const pyrDiff = pyramidScore(a) - pyramidScore(b);
+        if (pyrDiff !== 0) return pyrDiff;
         return r1Adjust(a) - r1Adjust(b);
       });
+
+      // Wave B — 4 lake hard rules applied to leader's own
+      // proposed team. If I'm the leader and I declared B blue
+      // earlier, my next team MUST include B (硬1). If I declared
+      // B red, my team MUST NOT include B (硬2). Implementation:
+      // post-filter the sorted candidate list so 硬1 forces an
+      // include and 硬2 forces an exclude.
+      const lakeChain = pyramid?.lakeChain;
+      const myDeclaredBlue =
+        lakeChain?.declaredBlueByHolder.get(myPlayerId) ?? new Set<string>();
+      const myDeclaredRed =
+        lakeChain?.declaredRedByHolder.get(myPlayerId) ?? new Set<string>();
+      const allowBreak = mayBreakHardRules(obs);
+      const filteredCandidates = USE_PYRAMID_BASELINE && !allowBreak
+        ? [
+            // 硬1 — declared-blue MUST be included (front-loaded).
+            ...candidates.filter((id) => myDeclaredBlue.has(id)),
+            // Then ordinary candidates (excluding declared-red and
+            // already-front-loaded blues).
+            ...candidates.filter(
+              (id) => !myDeclaredBlue.has(id) && !myDeclaredRed.has(id),
+            ),
+          ]
+        : candidates;
 
       // Percival: prioritise including at least one wizard candidate (Merlin or Morgana) on the team
       // so quests can be protected. If a quest fails with a wizard on it, they're more likely Morgana.
@@ -948,7 +1046,7 @@ export class HeuristicAgent implements AvalonAgent {
         const useDualThumbs = Math.random() < dualThumbTrust;
         // Resort candidates: dualSuspects get demoted within their tier
         // ONLY if H11 trust crosses the threshold.
-        const reranked = [...candidates].sort((a, b) => {
+        const reranked = [...filteredCandidates].sort((a, b) => {
           if (!useDualThumbs) return 0;  // bypass — preserve order
           const ta = dualSuspects.has(a) ? 1 : 0;
           const tb = dualSuspects.has(b) ? 1 : 0;
@@ -962,7 +1060,7 @@ export class HeuristicAgent implements AvalonAgent {
         return { type: 'team_select', teamIds: enforceR1P1Ban(team.slice(0, teamSize)) };
       }
 
-      const team = [myPlayerId, ...candidates].slice(0, teamSize);
+      const team = [myPlayerId, ...filteredCandidates].slice(0, teamSize);
       return { type: 'team_select', teamIds: enforceR1P1Ban(team) };
     } else {
       // Evil: include self, prefer to include one evil ally on larger teams
@@ -1129,6 +1227,35 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'team_vote', vote: true };
     }
 
+    // ── Wave B 2026-04-28 — 4 lake hard rules (vote side) ────────
+    // For every player in the proposed team, derive whether the
+    // team's leader has previously declared that player blue / red
+    // via the lake.
+    //
+    //   硬1 — leader L 湖 B 宣藍 → 派 L 必含 B
+    //         (Team excludes a declared-blue → reject.)
+    //   硬2 — leader L 湖 B 宣紅 → 派 L 不可含 B
+    //         (Team includes a declared-red → reject.)
+    //
+    // Red exception (Q11 verbatim): recognised-red roles in their
+    // decisive cleanup window may break the rule (e.g. listening +
+    // attacking). `mayBreakHardRules(obs)` encodes that gate.
+    if (USE_PYRAMID_BASELINE && !mayBreakHardRules(obs)) {
+      const pyramidPre = computePyramidScores(obs);
+      const violations = findHardRuleViolations(
+        pyramidPre.lakeChain,
+        obs.currentLeader,
+        proposedTeam,
+      );
+      if (violations.length > 0) {
+        // Always reject teams that violate 硬1 / 硬2 — regardless
+        // of faction. Good has nothing to gain from approving such
+        // an obviously inconsistent team; evil already gets the
+        // exception path above.
+        return { type: 'team_vote', vote: false };
+      }
+    }
+
     // Edward 2026-04-24 batch 7 fix #3 — Oberon 5-point strategy.
     // Oberon has his OWN voting logic that supersedes the generic
     // evil branch below. Place this check BEFORE the cross-faction
@@ -1212,7 +1339,19 @@ export class HeuristicAgent implements AvalonAgent {
       }
 
       // Suspicion + failed-team-member scan used by both on/off-team branches.
-      const avgSuspicion = proposedTeam.reduce((s, id) => s + this.getSuspicion(id), 0) / proposedTeam.length;
+      // Wave B: blend pyramid suspicion in. Pyramid scores are in
+      // [0,1] so we re-scale to a 0-10ish range comparable with
+      // legacy suspicion. Used additively (mean of legacy + pyramid).
+      const pyramidVote: PyramidScores | null = USE_PYRAMID_BASELINE
+        ? computePyramidScores(obs)
+        : null;
+      const teamSuspicion = (id: string): number => {
+        const legacy = this.getSuspicion(id);
+        const p = pyramidVote?.scores.get(id) ?? 0.5;
+        // Convert pyramid [0,1] into a 0-5 scale and blend with legacy.
+        return legacy + (p - 0.5) * 5;
+      };
+      const avgSuspicion = proposedTeam.reduce((s, id) => s + teamSuspicion(id), 0) / proposedTeam.length;
       const hasFailedMember = proposedTeam.some(
         id => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
       );
