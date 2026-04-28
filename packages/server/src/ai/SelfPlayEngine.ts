@@ -633,6 +633,19 @@ export class SelfPlayEngine {
           .map(([id]) => id)
       : undefined;
 
+    // Public-only Lake history. Only declared records are exposed to
+    // readers; pending lake (used but not yet declared) is filtered out
+    // to avoid leaking the holder's intermediate state. The private
+    // `result` field stays out — only `declaredClaim` is public.
+    const lakeHistory = (room.ladyOfTheLakeHistory ?? [])
+      .filter((rec) => rec.declared === true && rec.declaredClaim !== undefined)
+      .map((rec) => ({
+        round:         rec.round,
+        holderId:      rec.holderId,
+        targetId:      rec.targetId,
+        declaredClaim: rec.declaredClaim as 'good' | 'evil',
+      }));
+
     return {
       myPlayerId:    playerId,
       myRole,
@@ -650,6 +663,7 @@ export class SelfPlayEngine {
       voteHistory:   [...voteHistory],
       questHistory:  [...questHistory],
       proposedTeam:  [...room.questTeam],
+      lakeHistory,
     };
   }
 

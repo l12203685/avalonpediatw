@@ -14,20 +14,29 @@ import {
   seatOfPlayer,
   isEvActionPriorsEnabled,
   // v8 hooks
-  r3PlusForcedRejectPrior,
+  // H6 retracted 2026-04-28 — keep deprecated alias for traceability tests
+  r3PlusForcedRejectPrior_DEPRECATED,
   lakeDeclareLieRoleRate,
   declarerPostActionConsistencyPrior,
   assassinTopTierSeatPrior,
   sameTeamProposalReversePrior,
   loyalVsPercivalReversePrior,
   pathAwareEvMultiplier,
-  R3_PLUS_FORCED_REJECT_PATH,
   ASSASSIN_TOP_TIER_SEAT_PATH,
   SAME_TEAM_PROPOSAL_REVERSE_PATH,
   LOYAL_VS_PERCIVAL_REVERSE_PATH,
   DECLARER_POST_ACTION_CONSISTENCY_PATH,
   LAKE_DECLARE_LIE_ROLE_RATE_PATH,
+  type HookPathMeta,
 } from './EvActionPriors';
+
+// H6 path metadata — retracted from public surface 2026-04-28; inlined here
+// solely so the path-aware multiplier test below still has a concrete
+// `dominant + three_red` hook to plug in.
+const RETRACTED_H6_PATH: HookPathMeta = {
+  pathCategory: 'dominant',
+  primaryOutcome: 'three_red',
+};
 
 const ORIGINAL_ENV = process.env.USE_EV_ACTION_PRIORS;
 
@@ -175,28 +184,30 @@ describe('Helper · seatOfPlayer', () => {
 // v8 hooks (H6-H11) — 2026-04-27 path-aware ship
 // ════════════════════════════════════════════════════════════════════
 
-describe('Hook 6 · r3PlusForcedRejectPrior', () => {
-  it('R3 evil failCount=2 returns positive bump (Δ +4.50pp three_red)', () => {
-    expect(r3PlusForcedRejectPrior('evil', 3, 2)).toBeGreaterThan(0.04);
+describe('Hook 6 · r3PlusForcedRejectPrior — RETRACTED 2026-04-28', () => {
+  // H6 was retracted 2026-04-28 (Edward grill, false signal). The
+  // function is preserved as `r3PlusForcedRejectPrior_DEPRECATED` purely
+  // for historical traceability — these tests assert the deprecated
+  // function still returns the original numbers (so any future
+  // re-derivation can A/B against pinned values), but no caller wires
+  // the function any more.
+  it('DEPRECATED · R3 evil failCount=2 still returns +4.50pp legacy bump', () => {
+    expect(r3PlusForcedRejectPrior_DEPRECATED('evil', 3, 2)).toBeGreaterThan(0.04);
   });
-  it('R4 evil failCount=3 returns strongest bump (Δ +5.28pp)', () => {
-    expect(r3PlusForcedRejectPrior('evil', 4, 3)).toBeGreaterThan(0.05);
+  it('DEPRECATED · R4 evil failCount=3 still returns +5.28pp legacy bump', () => {
+    expect(r3PlusForcedRejectPrior_DEPRECATED('evil', 4, 3)).toBeGreaterThan(0.05);
   });
-  it('returns 0 for good team', () => {
-    expect(r3PlusForcedRejectPrior('good', 3, 2)).toBe(0);
+  it('DEPRECATED · returns 0 for good team', () => {
+    expect(r3PlusForcedRejectPrior_DEPRECATED('good', 3, 2)).toBe(0);
   });
-  it('returns 0 outside R3-R4', () => {
-    expect(r3PlusForcedRejectPrior('evil', 2, 2)).toBe(0);
-    expect(r3PlusForcedRejectPrior('evil', 5, 2)).toBe(0);
+  it('DEPRECATED · returns 0 outside R3-R4', () => {
+    expect(r3PlusForcedRejectPrior_DEPRECATED('evil', 2, 2)).toBe(0);
+    expect(r3PlusForcedRejectPrior_DEPRECATED('evil', 5, 2)).toBe(0);
   });
-  it('returns 0 outside failCount {2, 3}', () => {
-    expect(r3PlusForcedRejectPrior('evil', 3, 0)).toBe(0);
-    expect(r3PlusForcedRejectPrior('evil', 3, 1)).toBe(0);
-    expect(r3PlusForcedRejectPrior('evil', 3, 4)).toBe(0);
-  });
-  it('exposes path metadata = dominant / three_red', () => {
-    expect(R3_PLUS_FORCED_REJECT_PATH.pathCategory).toBe('dominant');
-    expect(R3_PLUS_FORCED_REJECT_PATH.primaryOutcome).toBe('three_red');
+  it('DEPRECATED · returns 0 outside failCount {2, 3}', () => {
+    expect(r3PlusForcedRejectPrior_DEPRECATED('evil', 3, 0)).toBe(0);
+    expect(r3PlusForcedRejectPrior_DEPRECATED('evil', 3, 1)).toBe(0);
+    expect(r3PlusForcedRejectPrior_DEPRECATED('evil', 3, 4)).toBe(0);
   });
 });
 
@@ -323,7 +334,7 @@ describe('Hook 11 · loyalVsPercivalReversePrior', () => {
 describe('pathAwareEvMultiplier (Edward v8 spec)', () => {
   it('red dominant returns 1.0', () => {
     expect(
-      pathAwareEvMultiplier('evil', R3_PLUS_FORCED_REJECT_PATH, 'any', 0),
+      pathAwareEvMultiplier('evil', RETRACTED_H6_PATH, 'any', 0),
     ).toBe(1);
   });
   it('red 備援 returns 0.5', () => {

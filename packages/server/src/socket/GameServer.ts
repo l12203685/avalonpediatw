@@ -1642,6 +1642,18 @@ export class GameServer {
           .map(([id]) => id)
       : undefined;
 
+    // Public-only Lake history. Only declared records — pending lake
+    // hidden so the holder's intermediate state stays private. `result`
+    // (private) stripped; only `declaredClaim` (public) carried.
+    const lakeHistory = (r.ladyOfTheLakeHistory ?? [])
+      .filter((rec) => rec.declared === true && rec.declaredClaim !== undefined)
+      .map((rec) => ({
+        round:         rec.round,
+        holderId:      rec.holderId,
+        targetId:      rec.targetId,
+        declaredClaim: rec.declaredClaim as 'good' | 'evil',
+      }));
+
     return {
       myPlayerId:    botId,
       myRole,
@@ -1658,6 +1670,7 @@ export class GameServer {
       voteHistory:   r.voteHistory,
       questHistory:  r.questHistory,
       proposedTeam:  r.questTeam,
+      lakeHistory,
     };
   }
 

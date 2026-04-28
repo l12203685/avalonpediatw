@@ -23,12 +23,13 @@ import {
   r1LeaderRolePrior,
   seatOfPlayer,
   // v8 hooks (2026-04-27 path-aware ship)
-  r3PlusForcedRejectPrior,
+  // H6 (r3PlusForcedRejectPrior + R3_PLUS_FORCED_REJECT_PATH) RETRACTED
+  // 2026-04-28 — false signal, see priors/EvActionPriors.ts deprecated
+  // section + staging/cycle_log/2026-04-28_h6_retraction.md
   assassinTopTierSeatPrior,
   sameTeamProposalReversePrior,
   loyalVsPercivalReversePrior,
   pathAwareEvMultiplier,
-  R3_PLUS_FORCED_REJECT_PATH,
   ASSASSIN_TOP_TIER_SEAT_PATH,
   type R1Outcome,
 } from './priors/EvActionPriors';
@@ -1304,24 +1305,13 @@ export class HeuristicAgent implements AvalonAgent {
         }
       }
 
-      // ── v8 Hook 6 (r3PlusForcedRejectPrior) ──
-      // Off-team red at R3-R4 with failCount in {2, 3} biases reject to
-      // push toward forced P5 (Δ +4.50pp R3 / +5.28pp R4 three_red).
-      // Path-aware: dominant axis → full weight. failCount >= 4 already
-      // returns approve cross-faction at top of method.
-      const forcedRejectBump = r3PlusForcedRejectPrior(myTeam, round, failCount);
-      const forcedRejectMultiplier = pathAwareEvMultiplier(
-        myTeam,
-        R3_PLUS_FORCED_REJECT_PATH,
-        'any',
-        obs.questResults.length,
-      );
-      if (!hasSelf && !hasAlly && forcedRejectBump > 0) {
-        const effectiveBump = forcedRejectBump * forcedRejectMultiplier;
-        if (Math.random() < effectiveBump) {
-          return { type: 'team_vote', vote: false };
-        }
-      }
+      // ── v8 Hook 6 (r3PlusForcedRejectPrior) — RETRACTED 2026-04-28 ──
+      // Edward grill verbatim:「全藍組合本來對紅方沒被選的玩家 正常票就是
+      // 反對黑球」— the surface Δ +4.50/+5.28pp is a structural artefact
+      // of red-off-team-on-blue-team scenarios, NOT a learned strategy.
+      // Wire deleted; function lives on as `r3PlusForcedRejectPrior_DEPRECATED`
+      // in priors/EvActionPriors.ts purely for traceability. No replacement
+      // hook here — fall through to the standard hasSelf/hasAlly check.
 
       if (hasSelf || hasAlly) return { type: 'team_vote', vote: true };
 

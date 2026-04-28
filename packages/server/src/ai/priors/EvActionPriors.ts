@@ -374,18 +374,40 @@ export interface HookPathMeta {
   primaryOutcome: PrimaryOutcome;
 }
 
-// ── Hook 6 · R3+ forced-reject prior ─────────────────────────────────
-const R3_PLUS_FORCED_REJECT_BUMP_BY_ROUND: Partial<Record<Round, number>> = {
+// ── Hook 6 · R3+ forced-reject prior · DEPRECATED 2026-04-28 ─────────
+//
+// RETRACTION (Edward 2026-04-28 grill verbatim):
+//   「全藍組合本來對紅方沒被選的玩家 正常票就是反對黑球」
+//
+// The original H6 hypothesis — "red faction R3-R4 reject more often = +EV
+// signal toward 三紅" — turns out to be a false signal. When the proposed
+// team is fully blue (no red on team), reds NOT on that team will reject
+// regardless of strategy because they are normal-rejecting the blue team
+// (黑球 = "reject the all-blue team"). The Δ +4.50 / +5.28pp surface effect
+// is therefore a STRUCTURAL artefact of the red-off-team-on-blue-team
+// scenario, NOT a learned strategy axis we should reward.
+//
+// What's preserved (do not delete):
+//   - The bump table and function definition stay below for traceability,
+//     so any future re-derivation can A/B against the exact numbers used
+//     during the v8 path-aware ship.
+//   - `R3_PLUS_FORCED_REJECT_PATH` removed from public surface — callers
+//     should not import it. The `_forTesting` table also removes it.
+//
+// What's been changed in callers:
+//   - `HeuristicAgent.ts`: H6 wire block @1307-1324 deleted, imports
+//     `r3PlusForcedRejectPrior` and `R3_PLUS_FORCED_REJECT_PATH` removed.
+//
+// Reference: staging/cycle_log/2026-04-28_h6_retraction.md
+//
+/** @deprecated 2026-04-28 — false signal (see top-of-section comment). */
+const DEPRECATED_R3_PLUS_FORCED_REJECT_BUMP_BY_ROUND: Partial<Record<Round, number>> = {
   3: 0.045,
   4: 0.053,
 };
 
-export const R3_PLUS_FORCED_REJECT_PATH: HookPathMeta = {
-  pathCategory: 'dominant',
-  primaryOutcome: 'three_red',
-};
-
-export function r3PlusForcedRejectPrior(
+/** @deprecated 2026-04-28 — false signal. Kept for historical traceability. */
+export function r3PlusForcedRejectPrior_DEPRECATED(
   team: 'good' | 'evil' | undefined,
   currentRound: number,
   failCount: number,
@@ -395,10 +417,20 @@ export function r3PlusForcedRejectPrior(
   if (failCount < 2 || failCount > 3) return 0;
   const r = Math.trunc(currentRound);
   if (r < 3 || r > 5) return 0;
-  return R3_PLUS_FORCED_REJECT_BUMP_BY_ROUND[r as Round] ?? 0;
+  return DEPRECATED_R3_PLUS_FORCED_REJECT_BUMP_BY_ROUND[r as Round] ?? 0;
 }
 
 // ── Hook 7 · Per-role lake lie rate ──────────────────────────────────
+//
+// 2026-04-28 description fix (Edward grill):
+//   原描述「藍方幾乎不說謊」(probability statement) → 修正為
+//   「藍方目標上不該說謊」(rule-based, structural — good roles have NO
+//   strategic incentive to lie, since lying about a confirmed
+//   good/evil identity actively hurts their faction). The numbers below
+//   are still empirical from 2146-game corpus, but the meaning of
+//   loyal/percival/merlin near-zero rates is "規則性, 非統計性" — i.e.
+//   they're 0.3/0.9/1.3% because of rule design + occasional bot misclick,
+//   not because "藍方 99% 誠實機率". Logic unchanged; semantic only.
 const LAKE_LIE_RATE_BY_ROLE: Record<string, number> = {
   assassin: 0.541,
   morgana: 0.453,
@@ -441,6 +473,16 @@ export function declarerPostActionConsistencyPrior(
 }
 
 // ── Hook 9 · Assassin top-tier seat prior ────────────────────────────
+//
+// 2026-04-28 description fix (Edward grill):
+//   原描述「刺客優先打熱區 (seats 3/4 hit-rate ~50%)」(strategic preference) →
+//   修正為「梅林進三藍時較常出現在 1-6 號座位」(survival-corrected — the
+//   bias is GAME-OUTCOME survival, not策略 preference). The hit-rates below
+//   reflect "梅林 was sitting at seat X among the 三藍-survival pool"; lower
+//   rates at seats 7/9 do NOT mean assassin "should avoid" them strategically,
+//   they reflect that 三藍-survival games happen to over-index Merlin in
+//   front-half seats. Numbers stay the same; semantic interpretation
+//   corrected to reflect survival bias rather than策略 axis.
 const ASSASSIN_TARGET_SEAT_HIT_RATE: Record<number, number> = {
   1: 0.480,
   2: 0.421,
@@ -484,6 +526,18 @@ export function sameTeamProposalReversePrior(repeatCount: number): number {
 }
 
 // ── Hook 11 · Loyal vs Percival reverse prior ────────────────────────
+//
+// 2026-04-28 description fix (Edward grill):
+//   原描述「派西 vs 一般好人後期才看出區別」(progressive learning) → 修正為
+//   「派西雙拇指做參考, 主軸是思維金字塔: 內建資訊 > 任務結果 >= 湖中
+//    >= 派票/投票 >= 發言」. The dual-thumb intersection signal is one
+//   of the LOWER tiers in the pyramid (派票/投票); it's a useful tiebreaker
+//   but should never override 內建資訊 (knownEvils for non-loyal) or
+//   任務結果 (failed-team membership). Logic of the trust-ramp is
+//   preserved: H11 stays a confidence gate that delays dual-thumb
+//   re-ranking until 3+ vote rounds — but its semantic role is "how much
+//   should we lean on the lower-tier 派票/投票 signal vs higher tiers?",
+//   NOT "派西 進入後期就可以 leverage dual-thumb cleanly".
 export const LOYAL_VS_PERCIVAL_REVERSE_PATH: HookPathMeta = {
   pathCategory: 'dominant',
   primaryOutcome: 'three_blue_alive',
@@ -535,7 +589,8 @@ export const _forTesting = {
   R1_LEADER_PRIOR,
   LAKE_LIE_BONUS_BY_ROLE,
   // v8 internals
-  R3_PLUS_FORCED_REJECT_BUMP_BY_ROUND,
+  /** @deprecated 2026-04-28 — H6 retracted as false signal. */
+  DEPRECATED_R3_PLUS_FORCED_REJECT_BUMP_BY_ROUND,
   LAKE_LIE_RATE_BY_ROLE,
   DECLARER_POST_ACTION_CONSISTENCY_BUMP,
   ASSASSIN_TARGET_SEAT_HIT_RATE,
