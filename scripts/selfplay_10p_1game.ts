@@ -353,9 +353,11 @@ function getKnownEvils(
 ): string[] {
   switch (role) {
     case 'merlin':
+      // Edward 2026-04-26 spec: Merlin sees ALL evil except Mordred.
+      // Oberon IS visible to Merlin (canonical Avalon thumbs-up).
       return Array.from(teamMap.entries())
         .filter(([id, t]) =>
-          t === 'evil' && id !== pid && roleMap.get(id) !== 'oberon' && roleMap.get(id) !== 'mordred',
+          t === 'evil' && id !== pid && roleMap.get(id) !== 'mordred',
         )
         .map(([id]) => id);
     case 'percival':
