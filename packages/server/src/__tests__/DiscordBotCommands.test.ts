@@ -440,11 +440,13 @@ describe('roleReveal: computeKnownEvils — 7-player with Oberon', () => {
     ['discord:ob', 'Oberon', 'oberon'],
   ]);
 
-  it('Merlin sees Morgana+Assassin but NOT Oberon', () => {
+  it('Merlin sees Morgana+Assassin AND Oberon (Edward 2026-04-26 spec)', () => {
+    // Edward 2026-04-26 00:22 spec: Merlin sees ALL evil except Mordred.
+    // Oberon IS visible to Merlin (canonical Avalon thumbs-up rule).
     const merlin = room.players['discord:m'];
     const known = computeKnownEvils(merlin, room);
-    expect(new Set(known)).toEqual(new Set(['discord:morg', 'discord:assn']));
-    expect(known).not.toContain('discord:ob');
+    expect(new Set(known)).toEqual(new Set(['discord:morg', 'discord:assn', 'discord:ob']));
+    expect(known).toContain('discord:ob');
   });
 
   it('Assassin sees Morgana but NOT Oberon', () => {
@@ -454,7 +456,7 @@ describe('roleReveal: computeKnownEvils — 7-player with Oberon', () => {
     expect(known).not.toContain('discord:ob');
   });
 
-  it('Oberon sees nothing (and nothing sees Oberon)', () => {
+  it('Oberon sees nothing (other evil cannot see him; he cannot see them)', () => {
     const ob = room.players['discord:ob'];
     expect(computeKnownEvils(ob, room)).toEqual([]);
   });
@@ -483,6 +485,53 @@ describe('roleReveal: computeKnownEvils — 7-player with Mordred', () => {
     const mord = room.players['discord:mord'];
     const known = computeKnownEvils(mord, room);
     expect(new Set(known)).toEqual(new Set(['discord:morg', 'discord:assn']));
+  });
+});
+
+describe('roleReveal: computeKnownEvils — canonical 10-player (all 4 evil roles)', () => {
+  // Edward 2026-04-28 regression test: 10p includes the full canonical
+  // evil quartet (assassin + morgana + mordred + oberon). Merlin must
+  // see assassin + morgana + oberon (3 thumbs-up) but NOT mordred.
+  // This is the bug Edward saw at 17:00 — Merlin showing only assassin.
+  const room = makeStartedRoom('10p', [
+    ['discord:m', 'Merlin', 'merlin'],
+    ['discord:p', 'Percival', 'percival'],
+    ['discord:l1', 'Loyal-1', 'loyal'],
+    ['discord:l2', 'Loyal-2', 'loyal'],
+    ['discord:l3', 'Loyal-3', 'loyal'],
+    ['discord:l4', 'Loyal-4', 'loyal'],
+    ['discord:assn', 'Assassin', 'assassin'],
+    ['discord:morg', 'Morgana', 'morgana'],
+    ['discord:mord', 'Mordred', 'mordred'],
+    ['discord:ob', 'Oberon', 'oberon'],
+  ]);
+
+  it('Merlin sees Assassin + Morgana + Oberon (3 thumbs-up), NOT Mordred', () => {
+    const merlin = room.players['discord:m'];
+    const known = computeKnownEvils(merlin, room);
+    expect(new Set(known)).toEqual(new Set(['discord:assn', 'discord:morg', 'discord:ob']));
+    expect(known).toContain('discord:ob');     // canonical fix
+    expect(known).not.toContain('discord:mord'); // canonical hide
+    expect(known).toHaveLength(3);              // exactly 3 visible evils
+  });
+
+  it('Assassin sees Morgana + Mordred but NOT Oberon (evil-evil rule)', () => {
+    const assn = room.players['discord:assn'];
+    const known = computeKnownEvils(assn, room);
+    expect(new Set(known)).toEqual(new Set(['discord:morg', 'discord:mord']));
+    expect(known).not.toContain('discord:ob');
+  });
+
+  it('Mordred sees Assassin + Morgana but NOT Oberon', () => {
+    const mord = room.players['discord:mord'];
+    const known = computeKnownEvils(mord, room);
+    expect(new Set(known)).toEqual(new Set(['discord:assn', 'discord:morg']));
+    expect(known).not.toContain('discord:ob');
+  });
+
+  it('Oberon sees nothing (lone wolf)', () => {
+    const ob = room.players['discord:ob'];
+    expect(computeKnownEvils(ob, room)).toEqual([]);
   });
 });
 

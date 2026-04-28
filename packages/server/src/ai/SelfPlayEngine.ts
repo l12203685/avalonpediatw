@@ -353,8 +353,9 @@ export class SelfPlayEngine {
     if (holderTeam === 'good') {
       // Edward 2026-04-24 batch 2 fix #7: all good players avoid lake-
       // ing their viewpoint-known bad/ambiguous targets:
-      //   • merlin   — knownEvils = assassin+morgana (Oberon/Mordred
-      //                invisible → lake-probe allowed)
+      //   • merlin   — knownEvils = assassin+morgana+oberon (only
+      //                Mordred invisible per Edward 2026-04-26 spec →
+      //                lake-probe still allowed for Mordred)
       //   • percival — knownEvils = [] (engine wires this as empty for
       //                percival); knownWizards = [merlin, morgana]
       //                (ambiguous — can't distinguish); avoid both so
@@ -675,10 +676,14 @@ export class SelfPlayEngine {
   ): string[] {
     switch (role) {
       case 'merlin': {
-        // Merlin sees all evil except Oberon and Mordred
+        // Edward 2026-04-26 00:22 spec: Merlin sees ALL evil EXCEPT
+        // Mordred. Oberon IS visible (canonical Avalon — 梅林知 3 紅:
+        // 刺 + 娜 + 奧). The "exclude Oberon" rule applies only to
+        // evil-evil recognition. Mirrors GameServer.getVisiblePlayerIds
+        // and buildBotObservation. See GameServer.visibility.test.ts.
         return Array.from(teamMap.entries())
           .filter(([id, team]) => team === 'evil' && id !== playerId
-            && roleMap.get(id) !== 'oberon' && roleMap.get(id) !== 'mordred')
+            && roleMap.get(id) !== 'mordred')
           .map(([id]) => id);
       }
       case 'percival': {

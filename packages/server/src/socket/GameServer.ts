@@ -1624,9 +1624,13 @@ export class GameServer {
     // Compute which other players this bot can identify as evil
     let knownEvils: string[] = [];
     if (myRole === 'merlin') {
-      // Merlin sees evil except Oberon and Mordred
+      // Edward 2026-04-26 00:22 spec: Merlin sees ALL evil EXCEPT
+      // Mordred. Oberon IS visible to Merlin (the three thumbs-up evils
+      // = 刺/娜/奧). The "exclude Oberon" rule applies only to evil-evil
+      // recognition, NOT to Merlin. Mirrors getVisiblePlayerIds and
+      // SelfPlayEngine.getKnownEvils. See GameServer.visibility.test.ts.
       knownEvils = Object.entries(r.players)
-        .filter(([id, p]) => id !== botId && p.team === 'evil' && p.role !== 'oberon' && p.role !== 'mordred')
+        .filter(([id, p]) => id !== botId && p.team === 'evil' && p.role !== 'mordred')
         .map(([id]) => id);
     } else if (myTeam === 'evil' && myRole !== 'oberon') {
       // Evil (except Oberon) sees other evil except Oberon

@@ -4,9 +4,9 @@
  * Sends a private direct-message to each Discord player when the game starts,
  * showing:
  *   - their own role and team
- *   - role-specific knowledge (Merlin sees evil-minus-Mordred-minus-Oberon;
- *     Percival sees Merlin+Morgana scrambled; evil — minus Oberon — sees
- *     other evil players)
+ *   - role-specific knowledge (Merlin sees evil-minus-Mordred — Oberon IS
+ *     visible to Merlin; Percival sees Merlin+Morgana scrambled; evil —
+ *     minus Oberon — sees other evil players)
  *
  * Canonical 7-role scope (memory project_avalon_scope_canonical_7.md):
  *   Good : merlin, percival, loyal
@@ -35,7 +35,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   merlin:
-    '你知道所有邪惡方的身分（莫德雷德與奧伯倫除外）。務必隱藏自己，若被刺客認出身分則壞人獲勝。',
+    '你知道所有邪惡方的身分（莫德雷德除外；奧伯倫你看得到）。務必隱藏自己，若被刺客認出身分則壞人獲勝。',
   percival:
     '你看得到兩位玩家是梅林或莫甘娜，但無法分辨誰是誰。你的任務是保護梅林。',
   loyal:
@@ -75,14 +75,17 @@ export function computeKnownEvils(viewer: Player, room: Room): string[] {
   if (!role) return [];
 
   if (role === 'merlin') {
-    // Merlin sees all evil EXCEPT Mordred and Oberon.
+    // Edward 2026-04-26 00:22 spec correction: Merlin sees ALL evil
+    // EXCEPT Mordred. Oberon IS visible to Merlin (canonical Avalon —
+    // 「梅林知道三個紅方位置 (刺客 + 莫甘娜 + 奧伯倫)」). The "exclude
+    // Oberon" rule applies only to evil-evil mutual recognition, NOT to
+    // Merlin's vision. Source: GameServer.visibility.test.ts (2026-04-26).
     return Object.entries(room.players)
       .filter(
         ([id, p]) =>
           id !== viewerId &&
           p.team === 'evil' &&
-          p.role !== 'mordred' &&
-          p.role !== 'oberon'
+          p.role !== 'mordred'
       )
       .map(([id]) => id);
   }
@@ -158,7 +161,7 @@ export function buildRoleRevealEmbed(viewer: Player, room: Room): EmbedBuilder {
       .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
     const label =
       role === 'merlin'
-        ? '你看得到的邪惡玩家（梅林視野，不含莫德雷德/奧伯倫）'
+        ? '你看得到的邪惡玩家（梅林視野，不含莫德雷德；奧伯倫可見）'
         : '你的邪惡隊友（不含奧伯倫）';
     embed.addFields({ name: label, value: names.join('\n'), inline: false });
   } else if (role === 'oberon') {

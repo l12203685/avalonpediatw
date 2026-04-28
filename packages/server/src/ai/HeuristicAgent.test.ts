@@ -344,7 +344,9 @@ describe('HeuristicAgent · batch 4 fix #1 (R1-P1 banned combos)', () => {
     const knownEvils = myTeam === 'evil'
       ? evilIds.filter((id) => id !== myId && id !== 'S07' /* hide oberon */)
       : myRole === 'merlin'
-          ? evilIds.filter((id) => id !== 'S07' && id !== 'S10' /* merlin can't see oberon+mordred */)
+          // Edward 2026-04-26 spec: Merlin sees ALL evil except Mordred.
+          // Oberon IS visible to Merlin. Only S10 (mordred) is hidden.
+          ? evilIds.filter((id) => id !== 'S10' /* merlin can't see mordred only */)
           : [];
     return baseObs({
       myPlayerId:    myId,
