@@ -1646,6 +1646,19 @@ export class GameServer {
           .map(([id]) => id)
       : undefined;
 
+    // Edward 2026-04-24 batch 3 — assassin hard-filter at assassination
+    // phase: inject the full evil roster so the assassin cannot pick
+    // Oberon/Mordred (hidden from `knownEvils` mid-game). Mirrors
+    // SelfPlayEngine.buildObservation. Narrow-scope field — undefined
+    // in all other phases and roles. Wave C 2026-04-29 prod fix
+    // (audit `staging/subagent_results/round4_audit_3items_2026-04-29.md`
+    // §其他 #7).
+    const allEvilIds = myRole === 'assassin' && gamePhase === 'assassination'
+      ? Object.entries(r.players)
+          .filter(([, p]) => p.team === 'evil')
+          .map(([id]) => id)
+      : undefined;
+
     // Public-only Lake history. Only declared records — pending lake
     // hidden so the holder's intermediate state stays private. `result`
     // (private) stripped; only `declaredClaim` (public) carried.
@@ -1666,6 +1679,7 @@ export class GameServer {
       allPlayerIds:  Object.keys(r.players),
       knownEvils,
       knownWizards,
+      allEvilIds,
       currentRound:  r.currentRound,
       currentLeader: engine.getCurrentLeaderId(),
       failCount:     r.failCount,
