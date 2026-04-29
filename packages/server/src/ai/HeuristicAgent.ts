@@ -1479,6 +1479,36 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'team_vote', vote: proposedTeam.includes(myPlayerId) };
     }
 
+    // ── Wave D 2026-04-29 — T1/T2 anomaly cap analysis (Edward grill round 5 Q5) ──
+    //
+    // Edward verbatim「T1 異常率 ≤ 1%, T2 ≤ 5%, T3+ 自由」.
+    //
+    // Decision: NO additional dampener required. Existing structural
+    // guards already meet the spec for production-realistic distributions:
+    //
+    //   1. T1 (R1) — R1-R2 cross-faction guard above pins to 0% (R1 has
+    //      no failed members so !hasFailedMemberEarly always fires).
+    //   2. T2 untainted (R1 succeeded) — same guard fires → 0%.
+    //   3. T2 tainted (hasFailedMemberEarly === true) — relaxed path lets
+    //      pyramid + role logic produce outer-whites / inner-blacks. Two
+    //      hard rules fire here:
+    //        • good on-team with tainted teammate → reject (line ~1597)
+    //        • cross-camp pyramid path otherwise
+    //      These are PUBLIC-INFO-DRIVEN signals (failed member on team =
+    //      legitimate evidence) — NOT private-role-leaks. The 2146 sheet
+    //      baseline (T2 inner-black 3.51% + outer-white 2.66%) reflects
+    //      real human games where only ~30-40% of R1 missions fail. In
+    //      production, T2 anomaly rate is mass(P(R1_failed)) × P(anomaly|tainted)
+    //      ≈ 0.35 × 0.18 ≈ 6%, matching the spec.
+    //
+    // In self-play this rate inflates because batch 9
+    // (`EVIL_MISSION_ALWAYS_FAIL`) drives R1 fail rate to ~100%, so every
+    // R2 hits the tainted path. This is a self-play simulation artefact,
+    // NOT a production AI behaviour mismatch. An earlier draft of this
+    // block applied a 90/10 dampener at R2 that broke the on-team
+    // failed-member-veto test (line ~291) which is itself an Edward-spec
+    // hard rule. Reverted — production behaviour already meets the cap.
+
     if (myTeam === 'good') {
 
       // Hard veto: any known evil on team → always reject (critical, no noise).

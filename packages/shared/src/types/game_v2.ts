@@ -169,3 +169,105 @@ export interface GameRecordV2 {
   hasAI?: boolean;
   casual?: boolean;
 }
+
+// ── Selfplay reasoning trace (Wave D 2026-04-29) ─────────────────────────
+//
+// Edward 2026-04-29 grill round 5: structured per-decision reasoning trace
+// that captures **only the rows worth reading** — anomaly votes, mission
+// fails (red side), every lake event, and assassin pick. The render layer
+// uses the 4-column template (解讀/邏輯/目的/動作) plus the 忠臣 baseline
+// + override pattern so any role's reasoning reads as
+//   "if I were a loyalist I would think X, but I additionally know Y".
+//
+// Storage: gzip(JSONL) → base64 → Firestore `selfplay_reasoning/{gameId}`
+// (Option F per `staging/subagent_results/selfplay_db_storage_eval_2026-04-29.md`).
+// V2 atoms stay in `games_v2/{gameId}` so leaderboard / stats queries don't
+// pull this blob unnecessarily.
+
+/** Decision moments captured in the reasoning trace. */
+export type ReasoningDecisionType =
+  | 'team_select'
+  | 'team_vote'
+  | 'quest_vote'
+  | 'lake_target'
+  | 'lake_declare'
+  | 'assassinate';
+
+/**
+ * Anomaly classification (Edward 2026-04-29 Q4 spec).
+ *
+ *   - `inner_black`     — on-team player voting reject.
+ *   - `outer_white`     — off-team player voting approve.
+ *   - `outer_white_self`— leader proposes a team that excludes themselves
+ *                        AND votes approve (外灑外白).
+ *   - `null`            — normal vote (in-team approve / out-team reject)
+ *                        or non-vote decision.
+ */
+export type ReasoningAnomalyType =
+  | 'inner_black'
+  | 'outer_white'
+  | 'outer_white_self'
+  | null;
+
+/**
+ * Mission-vote (quest_vote) classification — only red-side ships a mission
+ * thought (Edward Q7: 藍方 = 必出成功, 不列思維). The render layer drops
+ * blue-side quest_vote entries; this enum records the red intent.
+ */
+export type ReasoningMissionVoteType =
+  | 'red_success'  // red plays 成功票 (cover; Q7 視局勢出)
+  | 'red_fail'     // red plays 失敗票
+  | null;          // not a quest_vote OR blue side (always 成功)
+
+/**
+ * One captured reasoning entry. The thought is built from atomic fields
+ * so the renderer can print 4-column template OR the JSONL stays raw enough
+ * to feed an LLM training pipeline later.
+ */
+export interface ReasoningEntry {
+  decisionType: ReasoningDecisionType;
+  /** Round 1..5 (assassinate uses last round). */
+  round: number;
+  /** Proposal index within round (1..5); 0 for non-proposal decisions. */
+  attempt: number;
+  /** Actor seat (1..10; seat 10 displayed as "0"). */
+  actorSeat: number;
+  /** Actor role tag (`merlin`/`percival`/`loyal`/`assassin`/...). */
+  actorRole: string;
+  /** Leader seat at decision time. */
+  leaderSeat: number;
+
+  /** 4-column template fields (Edward 2026-04-29 Q1). */
+  interpretation: string;  // 解讀: 我看到上家 X 動作 Y, 我推 Z
+  logic: string;           // 邏輯: 一句推導鏈
+  purpose: string;         // 目的: 角色目的 (來自 camp purpose 清單)
+  action: string;          // 動作: 派 130 / 異常黑 / 出失敗票 等
+
+  /** 忠臣 baseline + override 母模板 (Edward 2026-04-29 Q2). */
+  loyalistBaseline: string;  // baseline: 如果我是忠臣會推 ...
+  myOverride: string;        // override: 但我內建知 X, 推導變 Y
+
+  /** Filter helpers (Edward 2026-04-29 Q4/Q5/Q7). */
+  anomalyType: ReasoningAnomalyType;
+  missionVoteType: ReasoningMissionVoteType;
+}
+
+/**
+ * Storage doc for `selfplay_reasoning/{gameId}` — Option F (per
+ * `staging/subagent_results/selfplay_db_storage_eval_2026-04-29.md`).
+ *
+ *   gzReasoningB64 = base64(gzip(JSONL_of_entries))
+ */
+export interface SelfplayReasoningRecord {
+  schemaVersion: 1;
+  gameId: string;
+  rowCount: number;
+  /** base64-encoded gzip of `ReasoningEntry[]` serialized as JSONL. */
+  gzReasoningB64: string;
+  meta: {
+    decisionTypes: Partial<Record<ReasoningDecisionType, number>>;
+    /** Filtered counts AFTER the renderer drops normal/blue rows — the
+     *  numbers Edward will see in the .md output. */
+    keptForRender: number;
+  };
+}
