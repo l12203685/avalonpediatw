@@ -977,14 +977,22 @@ export class HeuristicAgent implements AvalonAgent {
       const pyramidScore = (id: string): number =>
         pyramid?.scores.get(id) ?? 0.5;
 
+      // Wave C 2026-04-29 — pyramid 升主導 (Audit 1 conclusion):
+      // pre-Wave-C order was tier > legacy > pyramid > r1Adjust which made
+      // pyramid a third-tier tie-breaker (rarely fired). Wave C promotes
+      // pyramid to be the PRIMARY rank within the same tier — legacy
+      // suspicion now only breaks ties when pyramid is identical, and
+      // r1Adjust is the final fallback. Hard rules (硬1/硬2 lake) and
+      // tier filtering (knownEvils / suspect set) still gate first so
+      // role-private knowledge cannot be overridden by pyramid noise.
       const candidates = nonSelf.sort((a, b) => {
         const tierDiff = byTier(a) - byTier(b);
         if (tierDiff !== 0) return tierDiff;
-        const susDiff = this.getSuspicion(a) - this.getSuspicion(b);
-        if (susDiff !== 0) return susDiff;
-        // Wave B: blend pyramid suspicion (lower = bluer = preferred).
+        // Wave C: pyramid is now the PRIMARY rank inside a tier.
         const pyrDiff = pyramidScore(a) - pyramidScore(b);
         if (pyrDiff !== 0) return pyrDiff;
+        const susDiff = this.getSuspicion(a) - this.getSuspicion(b);
+        if (susDiff !== 0) return susDiff;
         return r1Adjust(a) - r1Adjust(b);
       });
 
@@ -1012,52 +1020,19 @@ export class HeuristicAgent implements AvalonAgent {
           ]
         : candidates;
 
-      // Percival: prioritise including at least one wizard candidate (Merlin or Morgana) on the team
-      // so quests can be protected. If a quest fails with a wizard on it, they're more likely Morgana.
+      // Percival: Wave C 2026-04-29 — full decision-tree implementation
+      // (Edward 04-28 11:24 verbatim, see `selectPercivalTeam` for the
+      // 5 missing nodes ship: B exclusion + R1P1 special-case + hiding
+      // / betrayal signals + joint 1 紅 1 藍 prior).
+      //
+      // Wave B legacy (dual-thumb intersection + smart Merlin pick) is
+      // preserved INSIDE selectPercivalTeam; flag-stable for emergency
+      // rollback by toggling USE_PYRAMID_BASELINE.
       if (knownWizards && knownWizards.length > 0) {
-        const team: string[] = [myPlayerId];
-        // Smart Percival (Fix #4, SSoT §6.4): infer which wizard is more
-        // likely to be Merlin from vote & proposal signals and prefer that
-        // candidate. Falls back to `knownWizards[0]` when the flag is off
-        // or when there is not enough signal yet (round 1 first attempt).
-        const preferredWizard = this.pickPreferredWizard(knownWizards, obs);
-        if (team.length < teamSize) team.push(preferredWizard);
-        // Edward 2026-04-24 batch 10 — Percival dual-thumb intersection.
-        // Verbatim: 「對於派西維爾, 除了根據異常投票去抓紅藍方, 也要透過
-        //           雙拇指(梅林/莫甘娜)釋放的隊伍資訊去交集找共同好壞人」
-        // Boost suspicion for players who appear on the
-        // "Merlin-rejected AND Morgana-approved" team-set (cross-inferred
-        // evil) or reduce it for players appearing on the
-        // "Merlin-approved AND Morgana-rejected" team-set (cross-inferred
-        // good). The resulting Set<string> is a HIGH-CONFIDENCE suspect
-        // overlay; we prefer non-overlay members when sorting `candidates`.
-        const dualSuspects = this.buildPercivalDualThumbSuspects(
-          knownWizards, preferredWizard, obs,
+        const percivalTeam = this.selectPercivalTeam(
+          obs, teamSize, filteredCandidates, pyramid,
         );
-        // ── v8 Hook 11 (loyalVsPercivalReversePrior) ──
-        // Loop 144 §3.3: bottom-tier loyal alive% > percival alive% (反向).
-        // At low confidence (early game), treat percival like loyal — bypass
-        // dual-thumb intersection until 3+ vote rounds stabilise the
-        // thumb-merlin identification.
-        const distinctRoundsObserved = new Set(
-          obs.voteHistory.map((v) => v.round),
-        ).size;
-        const dualThumbTrust = loyalVsPercivalReversePrior(distinctRoundsObserved);
-        const useDualThumbs = Math.random() < dualThumbTrust;
-        // Resort candidates: dualSuspects get demoted within their tier
-        // ONLY if H11 trust crosses the threshold.
-        const reranked = [...filteredCandidates].sort((a, b) => {
-          if (!useDualThumbs) return 0;  // bypass — preserve order
-          const ta = dualSuspects.has(a) ? 1 : 0;
-          const tb = dualSuspects.has(b) ? 1 : 0;
-          if (ta !== tb) return ta - tb;
-          return 0;  // stable otherwise
-        });
-        for (const id of reranked) {
-          if (team.length >= teamSize) break;
-          if (!team.includes(id)) team.push(id);
-        }
-        return { type: 'team_select', teamIds: enforceR1P1Ban(team.slice(0, teamSize)) };
+        return { type: 'team_select', teamIds: enforceR1P1Ban(percivalTeam) };
       }
 
       const team = [myPlayerId, ...filteredCandidates].slice(0, teamSize);
@@ -1066,10 +1041,28 @@ export class HeuristicAgent implements AvalonAgent {
       // Evil: include self, prefer to include one evil ally on larger teams
       // Main logic stays shared — per-role strategy only nudges the
       // ally-inclusion probability (SSoT §3.2 + §6.14).
+      //
+      // Wave C 2026-04-29 — pyramid wired into evil branch (Audit 1).
+      // When evil picks "good-looking" candidates we now sort them by
+      // pyramid suspicion ASCENDING (bluer = looks safer to other
+      // players) so the proposed team appears maximally clean. This
+      // is purely a presentation / cover optimisation, not a strategic
+      // shift (the camp goal is unchanged: 3 fails or assassinate).
       const evilAllies = knownEvils.filter(id => id !== myPlayerId);
+      const pyramidEvil: PyramidScores | null = USE_PYRAMID_BASELINE
+        ? computePyramidScores(obs)
+        : null;
+      const evilPyramidScore = (id: string): number =>
+        pyramidEvil?.scores.get(id) ?? 0.5;
       const goodCandidates = allIds
         .filter(id => id !== myPlayerId && !knownEvils.includes(id))
-        .sort(() => Math.random() - 0.5); // shuffle to appear random
+        // Wave C: pyramid ASC → bluer first (cover-friendly).
+        // Random tiebreak preserved via small noise to avoid deterministic seat-1 lead.
+        .sort((a, b) => {
+          const diff = evilPyramidScore(a) - evilPyramidScore(b);
+          if (Math.abs(diff) > 1e-6) return diff;
+          return Math.random() - 0.5;
+        });
 
       const team: string[] = [myPlayerId];
 
@@ -1338,18 +1331,21 @@ export class HeuristicAgent implements AvalonAgent {
         }
       }
 
-      // Suspicion + failed-team-member scan used by both on/off-team branches.
-      // Wave B: blend pyramid suspicion in. Pyramid scores are in
-      // [0,1] so we re-scale to a 0-10ish range comparable with
-      // legacy suspicion. Used additively (mean of legacy + pyramid).
+      // Wave C 2026-04-29 — pyramid 升主導 voteOnTeam side.
+      // Pre-Wave-C: legacy + (p-0.5)*5 was 50/50 blend; legacy = 0 for
+      // R1 → pyramid dominated R1, then 50/50 R2+. Wave C makes
+      // pyramid the dominant signal (80% weight) with legacy as a
+      // small correction (20%). This aligns with Audit 1 finding
+      // that pyramid is the most calibrated suspicion source.
       const pyramidVote: PyramidScores | null = USE_PYRAMID_BASELINE
         ? computePyramidScores(obs)
         : null;
       const teamSuspicion = (id: string): number => {
         const legacy = this.getSuspicion(id);
         const p = pyramidVote?.scores.get(id) ?? 0.5;
-        // Convert pyramid [0,1] into a 0-5 scale and blend with legacy.
-        return legacy + (p - 0.5) * 5;
+        // Pyramid [0,1] → 0-8 main signal; legacy retains a small
+        // 0-2 secondary contribution (Wave C 80/20 split).
+        return (p - 0.5) * 8 + legacy * 0.2;
       };
       const avgSuspicion = proposedTeam.reduce((s, id) => s + teamSuspicion(id), 0) / proposedTeam.length;
       const hasFailedMember = proposedTeam.some(
@@ -1423,6 +1419,16 @@ export class HeuristicAgent implements AvalonAgent {
       // Main logic stays shared — per-role strategy only nudges the
       // off-team approve probability (Morgana mimics Merlin → approves
       // clean teams more; Mordred is bolder → rejects more).
+      //
+      // Wave C 2026-04-29 — pyramid wired into evil branch (Audit 1).
+      // Pyramid scores let evil read the table's collective suspicion
+      // pattern. When the proposed team is dominated by pyramid-clean
+      // (low-suspicion) players AND has no ally on board, pushing
+      // through (approve) is a cover burn for marginal gain — better
+      // to reject. Captured below as `pyramidEvilCleanlinessShield`.
+      const pyramidVoteEvil: PyramidScores | null = USE_PYRAMID_BASELINE
+        ? computePyramidScores(obs)
+        : null;
       const hasSelf  = proposedTeam.includes(obs.myPlayerId);
       const hasAlly  = proposedTeam.some(id => knownEvils.includes(id));
 
@@ -1480,11 +1486,29 @@ export class HeuristicAgent implements AvalonAgent {
       // faction R1-R2 guard has already handled him).
       const baseApproveChance = this.difficulty === 'hard' ? 0.35 : 0.3;
       const strategy = this.getEvilRoleStrategy(obs.myRole as string);
-      const approveChance = clampUnit(
+      let approveChance = clampUnit(
         baseApproveChance + (strategy?.voteApproveBonus ?? 0),
         0.05,
         0.95,
       );
+      // Wave C — pyramid-aware cover preservation.
+      // If the proposed team is heavily clean (pyramid avg < 0.4 = bluer
+      // than neutral) AND no ally on team → reduce approve chance so
+      // we don't burn cover for zero EV. Conversely a pyramid-dirty team
+      // (avg > 0.6) with no ally is a free reject — already happens by
+      // default, just nudge harder.
+      if (pyramidVoteEvil) {
+        const teamAvg =
+          proposedTeam.reduce(
+            (s, id) => s + (pyramidVoteEvil.scores.get(id) ?? 0.5),
+            0,
+          ) / Math.max(1, proposedTeam.length);
+        if (teamAvg < 0.4) {
+          approveChance = clampUnit(approveChance - 0.15, 0.05, 0.95);
+        } else if (teamAvg > 0.6) {
+          approveChance = clampUnit(approveChance - 0.10, 0.05, 0.95);
+        }
+      }
       return { type: 'team_vote', vote: Math.random() < approveChance };
     }
   }
@@ -1849,13 +1873,36 @@ export class HeuristicAgent implements AvalonAgent {
     const config = AVALON_CONFIG[playerCount];
     const failsRequired = config?.questFailsRequired[currentRound - 1] ?? 1;
 
+    // Wave C 2026-04-29 — pyramid wired into voteOnQuest (Audit 1).
+    // For evil: when own pyramid score (POV: how blue do other tables
+    // see me?) is already high (red-leaning), a fail vote here is a
+    // confirmation, not new information. Conversely a low pyramid score
+    // (table sees me as blue) means a fail is more punishing — but
+    // strategically the camp still benefits from fails when not at
+    // listening + not under hierarchy. We use the score to break ties
+    // in baseline rates only; never override deterministic rules.
+    const pyramidQuest: PyramidScores | null = USE_PYRAMID_BASELINE
+      ? computePyramidScores(obs)
+      : null;
+    const ownPyramidScore = pyramidQuest?.scores.get(obs.myPlayerId) ?? 0.5;
+    // Cover-burn bonus: if our score is already blown (>= 0.7) the
+    // marginal cost of a fail is low → bias upward by +0.1; if very
+    // clean (<= 0.3) the cost is high → bias downward by -0.1.
+    let pyramidFailBias = 0;
+    if (ownPyramidScore >= 0.7) pyramidFailBias = 0.1;
+    else if (ownPyramidScore <= 0.3) pyramidFailBias = -0.1;
+
     // If 2 fails required this round, a single fail is wasted — be strategic.
     // (Listening handled above; this path only fires at 0-0, 1-0, 0-1, 1-1.)
     if (failsRequired >= 2) {
       // Baseline 30% fail, modulated by per-role earlyQuestFailBonus
       // (Mordred +0.10, Morgana -0.05, Assassin -0.10). Oberon skips.
       const fr2Base = 0.30;
-      const fr2FailRate = this.applyEvilEarlyFailBonus(myRole as string, fr2Base);
+      const fr2FailRate = clampUnit(
+        this.applyEvilEarlyFailBonus(myRole as string, fr2Base) + pyramidFailBias,
+        0.05,
+        0.95,
+      );
       return { type: 'quest_vote', vote: Math.random() < fr2FailRate ? 'fail' : 'success' };
     }
 
@@ -1863,7 +1910,11 @@ export class HeuristicAgent implements AvalonAgent {
     // (60% fail, 40% succeed) baseline, modulated by per-role
     // earlyQuestFailBonus. Oberon skips (legacy 60% fail preserved).
     const earlyBase = 0.60;
-    const earlyFailRate = this.applyEvilEarlyFailBonus(myRole as string, earlyBase);
+    const earlyFailRate = clampUnit(
+      this.applyEvilEarlyFailBonus(myRole as string, earlyBase) + pyramidFailBias,
+      0.05,
+      0.95,
+    );
     return { type: 'quest_vote', vote: Math.random() < earlyFailRate ? 'fail' : 'success' };
   }
 
@@ -1986,6 +2037,17 @@ export class HeuristicAgent implements AvalonAgent {
       'any',
       obs.questResults.length,
     );
+    // Wave C 2026-04-29 — pyramid wired into assassinate (Audit 1).
+    // Pyramid suspicion is a calibrated multi-source signal of
+    // red-likelihood (1.0 = sure red, 0.0 = sure blue). Since the
+    // assassin wants to find Merlin (a guaranteed BLUE), pyramid score
+    // = inverse of "looks like Merlin". We add a strong inverse term
+    // to merlinScore so candidates the table sees as bluest get
+    // ranked highest — exactly the Merlin profile.
+    const pyramidAssassinate: PyramidScores | null = USE_PYRAMID_BASELINE
+      ? computePyramidScores(obs)
+      : null;
+
     for (const id of candidatePool) {
       // Seat-prior: higher merlin occupancy at this seat → boost as
       // probable Merlin target.
@@ -2003,7 +2065,16 @@ export class HeuristicAgent implements AvalonAgent {
       const loyalPenalty = looksLoyal
         ? assassinTargetPenalty('loyal') * 0.3 // partial — score is fuzzy
         : 0;
-      merlinScore.set(id, rawScore + seatBoost + h9SeatBoost + loyalPenalty);
+      // Wave C: pyramid blueness boost. (0.5 - p) * 4 ranges in
+      // [-2, +2]; bluer (p ~ 0) gets +2, dirtier (p ~ 1) gets -2.
+      // Hard-red and hard-blue are already pinned at the candidate
+      // pool filter level (allEvilIds excludes hard-red).
+      const pyramidP = pyramidAssassinate?.scores.get(id) ?? 0.5;
+      const pyramidBoost = (0.5 - pyramidP) * 4;
+      merlinScore.set(
+        id,
+        rawScore + seatBoost + h9SeatBoost + loyalPenalty + pyramidBoost,
+      );
     }
 
     const target = candidatePool.reduce((best, id) =>
@@ -2157,6 +2228,282 @@ export class HeuristicAgent implements AvalonAgent {
     }
 
     return score;
+  }
+
+  // ── Percival decision tree (Wave C 2026-04-29 Edward 04-28 11:24) ──
+  //
+  // Edward verbatim decision tree for Percival when seeing wizards [A,B]:
+  //   A=梅 / B=娜:
+  //     → 不派 B (莫甘娜)
+  //     → 是否信 A (大部分信 — 除非梅林躲刺)
+  //     → 是否信 B (大部分不信 — 除非娜出賣隊友保忠臣)
+  //     → 派 A 或 不派 A → 找其他好人/忠臣補空缺
+  //   Joint 約束: 兩位必有 1 紅 1 藍.
+  //
+  // Wave B already wired `pickPreferredWizard` (= "識別 A=梅") and
+  // `buildPercivalDualThumbSuspects` (= 雙拇指交集). Wave C adds:
+  //   1. 不派 B — exclude the inferred-Morgana wizard from team build.
+  //   2. R1P1 fallback — when pickPreferredWizard has no signal
+  //      (voteHistory empty) the random fallback would 50% pick the
+  //      morgana wizard. Per Edward Q2=C: R1P1 派西派自己 + 兩位非
+  //      wizard, 兩個 wizard 都不帶 (lowest-risk default).
+  //   3. 信 A 除梅躲刺 — when A=Merlin shows "hiding" pattern
+  //      (refusing to reject visibly tainted teams in R3+) demote her.
+  //   4. 信 B 除娜出賣 — when B=Morgana publicly burns her own
+  //      teammates (fails a mission with ally on board, or rejects
+  //      self+ally team) promote her trust score.
+  //   5. Joint 約束 1 紅 1 藍 — a hard symmetry hint baked into the
+  //      pyramid layer-1 prior: since Edward guarantees 兩位互斥 1 紅
+  //      1 藍, treat the inferred-Morgana wizard as ~0.7 red prior
+  //      regardless of dual-thumb intersection availability.
+  //
+  // Together these realise Edward's full 7-node decision tree
+  // (Round 4 audit `staging/subagent_results/round4_audit_3items_2026-04-29.md`
+  // §Audit 2 + §決策樹).
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Detect the「梅林躲刺」pattern (signal weakening trust in inferred Merlin).
+   *
+   * Hypothesis: a real Merlin in mid-late game (R3+) has many opportunities
+   * to reject visibly-tainted teams (containing previously-failed-quest
+   * members). If the wizard inferred as Merlin systematically APPROVES
+   * those tainted teams instead of rejecting, she may be "hiding" to
+   * evade the assassin — but for Percival's purposes this also means
+   * her cleanliness signal is unreliable.
+   *
+   * Returns a number in [0, 1]: 0 = no hiding signal, 1 = strong hiding.
+   * Used to discount the merlin-wizard's trust when picking team members.
+   */
+  private percivalMerlinHidingSignal(
+    merlinWizard: string,
+    obs: PlayerObservation,
+  ): number {
+    let opportunities = 0;
+    let hidingActions = 0;
+    for (const record of obs.voteHistory) {
+      if (record.round < 3) continue;
+      const theirVote = record.votes[merlinWizard];
+      if (theirVote === undefined) continue;
+      const teamHadFailedMember = record.team.some(
+        (id) => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
+      );
+      if (!teamHadFailedMember) continue;
+      opportunities++;
+      // Approving a tainted team = "hiding" (Merlin would normally veto).
+      if (theirVote === true) hidingActions++;
+    }
+    if (opportunities === 0) return 0;
+    return hidingActions / opportunities;
+  }
+
+  /**
+   * Detect the「莫甘娜出賣隊友保忠臣」pattern (signal raising trust in
+   * inferred Morgana).
+   *
+   * Hypothesis: a Morgana playing the "betray to gain trust" gambit
+   * publicly burns her own ally — e.g. reject a team that contains
+   * another knownEvil from her POV (which Percival approximates by
+   * looking at past failed-mission overlap), or fail-vote a mission
+   * with a teammate on board (which manifests as `quest.failCount > 1`
+   * on a 2-evil mission, hard to pinpoint here).
+   *
+   * Conservative public-info approximation: count how often the
+   * Morgana wizard rejected a team containing a previously-failed-quest
+   * member. Higher = more "principled" rejector = more like a
+   * genuine helper.
+   *
+   * Returns a number in [0, 1]: 0 = never burned ally signal,
+   * 1 = consistently burned ally signal.
+   */
+  private percivalMorganaBetrayalSignal(
+    morganaWizard: string,
+    obs: PlayerObservation,
+  ): number {
+    let voteSamples = 0;
+    let betrayalSamples = 0;
+    for (const record of obs.voteHistory) {
+      const theirVote = record.votes[morganaWizard];
+      if (theirVote === undefined) continue;
+      voteSamples++;
+      const teamHadFailedMember = record.team.some(
+        (id) => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
+      );
+      // "Burn ally" = reject a tainted team. From Morgana's role POV
+      // this rejects her own faction's cover, hence "出賣".
+      if (theirVote === false && teamHadFailedMember) betrayalSamples++;
+    }
+    if (voteSamples === 0) return 0;
+    return betrayalSamples / voteSamples;
+  }
+
+  /**
+   * Edward 2026-04-28 Q15 joint-constraint verbatim:
+   *   「兩位 wizard 永遠互斥 (1 必紅 1 必藍)」
+   *
+   * Build a prior suspicion adjustment Map for every wizard. The
+   * inferred-Merlin wizard receives a small blue lean (-0.2);
+   * the inferred-Morgana wizard receives a strong red lean (+0.3),
+   * because the joint constraint guarantees one of them is evil.
+   *
+   * When confidence in the merlin pick is low (R1 cold-start), this
+   * still applies but its impact is limited because the merlin pick
+   * itself is uncertain — see selectPercivalTeam for the gating.
+   *
+   * Returns a Map<wizardId, delta> in approximately [-0.3, +0.3].
+   */
+  private percivalJointPrior(
+    wizards: readonly string[],
+    merlinWizard: string,
+  ): Map<string, number> {
+    const adjust = new Map<string, number>();
+    if (wizards.length < 2) return adjust;
+    for (const id of wizards) {
+      if (id === merlinWizard) {
+        adjust.set(id, -0.2);
+      } else {
+        adjust.set(id, +0.3);
+      }
+    }
+    return adjust;
+  }
+
+  /**
+   * Build Percival's team given Wave C decision-tree implementation.
+   *
+   * 5 missing nodes from Audit 2 落地:
+   *   • R1P1 special-case — voteHistory empty → no wizard picked
+   *     (派自己 + teamSize-1 個 non-wizard candidates).
+   *   • 不派 B — exclude inferred-Morgana wizard from final team.
+   *   • 信 A 除梅躲刺 — discount Merlin trust when hiding signal high.
+   *   • 信 B 除娜出賣 — credit Morgana trust when betrayal signal high.
+   *   • Joint 1 紅 1 藍 — apply percivalJointPrior to wizards.
+   *   • 派 A or 不派 A — Merlin trust = blend of dualThumbTrust +
+   *     hiding penalty; if blend < 0.3 we may not pick A at all
+   *     (派自己 + teamSize-1 non-wizard).
+   *
+   * Returns the final team list (already filtered through R1P1 ban).
+   * Caller (selectTeam) wraps in `enforceR1P1Ban` for the legacy
+   * post-filter hook.
+   */
+  private selectPercivalTeam(
+    obs: PlayerObservation,
+    teamSize: number,
+    candidatesIn: readonly string[],
+    pyramid: PyramidScores | null,
+  ): string[] {
+    const { knownWizards, myPlayerId, voteHistory, currentRound } = obs;
+    if (!knownWizards || knownWizards.length === 0) {
+      // Fallback to caller's candidate path.
+      return [myPlayerId, ...candidatesIn].slice(0, teamSize);
+    }
+
+    // ── Node 1: R1P1 special-case (per Edward Q2=C)
+    // Edward verbatim: R1P1 派西派 myself + 2 non-wizard.
+    const isR1P1 = (currentRound ?? 1) === 1 && voteHistory.length === 0;
+    if (isR1P1) {
+      const team: string[] = [myPlayerId];
+      const wizardSet = new Set(knownWizards);
+      const nonWizardCandidates = candidatesIn.filter(
+        (id) => id !== myPlayerId && !wizardSet.has(id),
+      );
+      for (const id of nonWizardCandidates) {
+        if (team.length >= teamSize) break;
+        if (!team.includes(id)) team.push(id);
+      }
+      // Degenerate: if non-wizard pool too small (rare in 10p), fall
+      // through to normal fill so we always meet teamSize.
+      if (team.length < teamSize) {
+        for (const id of candidatesIn) {
+          if (team.length >= teamSize) break;
+          if (!team.includes(id)) team.push(id);
+        }
+      }
+      return team.slice(0, teamSize);
+    }
+
+    // ── R2+ : full decision tree.
+    const merlinWizard = this.pickPreferredWizard(knownWizards, obs);
+    const morganaWizards = knownWizards.filter((w) => w !== merlinWizard);
+
+    // ── Node 3: 信 A 除梅躲刺.
+    const hidingSignal = this.percivalMerlinHidingSignal(merlinWizard, obs);
+    // ── Node 4: 信 B 除娜出賣 (only when 1 morgana candidate).
+    const betrayalSignal =
+      morganaWizards.length === 1
+        ? this.percivalMorganaBetrayalSignal(morganaWizards[0], obs)
+        : 0;
+
+    // dualThumbTrust uses prior calibration (loyalVsPercivalReversePrior)
+    // with how many distinct rounds have been observed.
+    const distinctRoundsObserved = new Set(
+      voteHistory.map((v) => v.round),
+    ).size;
+    const dualThumbTrust = loyalVsPercivalReversePrior(distinctRoundsObserved);
+
+    // Final Merlin trust score in [0, 1]: starts at dualThumbTrust,
+    // discounted by hidingSignal, partly recovered by betrayalSignal
+    // (because morgana betrayal makes "A != morgana" more credible).
+    const merlinTrust = clampUnit(
+      dualThumbTrust * (1 - 0.7 * hidingSignal) + 0.2 * betrayalSignal,
+      0,
+      1,
+    );
+
+    // ── Node 6: 派 A or 不派 A — gate by merlinTrust threshold.
+    const PERCIVAL_INCLUDE_MERLIN_TRUST = 0.3;
+    const includeMerlin = merlinTrust >= PERCIVAL_INCLUDE_MERLIN_TRUST;
+
+    const team: string[] = [myPlayerId];
+    if (includeMerlin) team.push(merlinWizard);
+
+    // ── Node 2: 不派 B (Morgana exclusion) — hard filter applied below.
+    const morganaSet = new Set(morganaWizards);
+    // Build dualSuspects (Wave B legacy).
+    const dualSuspects = this.buildPercivalDualThumbSuspects(
+      knownWizards,
+      merlinWizard,
+      obs,
+    );
+    const useDualThumbs = Math.random() < dualThumbTrust;
+
+    // ── Node 5: Joint constraint prior (apply to candidate ranking).
+    const jointPrior = this.percivalJointPrior(knownWizards, merlinWizard);
+
+    // Filter: never include morgana wizard (Node 2).
+    const filtered = candidatesIn.filter(
+      (id) => id !== myPlayerId && !morganaSet.has(id) && !team.includes(id),
+    );
+
+    // Resort candidates: dualSuspects demoted (when useDualThumbs),
+    // jointPrior applied (red lean to morgana — already excluded above
+    // so this is academic, but kept for parity), and pyramid score
+    // (Wave C: pyramid is now PRIMARY rank for non-tier ties — see
+    // `selectTeam` good branch ordering).
+    const reranked = [...filtered].sort((a, b) => {
+      if (!useDualThumbs) return 0;
+      const ta = dualSuspects.has(a) ? 1 : 0;
+      const tb = dualSuspects.has(b) ? 1 : 0;
+      if (ta !== tb) return ta - tb;
+      const pa = (pyramid?.scores.get(a) ?? 0.5) + (jointPrior.get(a) ?? 0);
+      const pb = (pyramid?.scores.get(b) ?? 0.5) + (jointPrior.get(b) ?? 0);
+      return pa - pb;
+    });
+
+    for (const id of reranked) {
+      if (team.length >= teamSize) break;
+      if (!team.includes(id)) team.push(id);
+    }
+
+    // Degenerate safety: if team still short (e.g. exclusion left too
+    // few candidates), allow morgana wizard back as a last resort.
+    if (team.length < teamSize) {
+      for (const id of candidatesIn) {
+        if (team.length >= teamSize) break;
+        if (!team.includes(id)) team.push(id);
+      }
+    }
+    return team.slice(0, teamSize);
   }
 
   // ── Percival thumb identification (Fix #4, SSoT §6.4) ───────
@@ -2438,6 +2785,40 @@ export class HeuristicAgent implements AvalonAgent {
     obs: PlayerObservation,
   ): Set<string> {
     return this.buildPercivalDualThumbSuspects(wizards, merlinWizard, obs);
+  }
+
+  /** Percival selectTeam (Wave C 2026-04-29 decision-tree, tests only). */
+  _selectPercivalTeamForTesting(
+    obs: PlayerObservation,
+    teamSize: number,
+    candidates: readonly string[],
+    pyramid: PyramidScores | null,
+  ): string[] {
+    return this.selectPercivalTeam(obs, teamSize, candidates, pyramid);
+  }
+
+  /** Percival "梅林躲刺" hiding signal (Wave C, tests only). */
+  _percivalMerlinHidingSignalForTesting(
+    merlinWizard: string,
+    obs: PlayerObservation,
+  ): number {
+    return this.percivalMerlinHidingSignal(merlinWizard, obs);
+  }
+
+  /** Percival "莫甘娜出賣" betrayal signal (Wave C, tests only). */
+  _percivalMorganaBetrayalSignalForTesting(
+    morganaWizard: string,
+    obs: PlayerObservation,
+  ): number {
+    return this.percivalMorganaBetrayalSignal(morganaWizard, obs);
+  }
+
+  /** Percival joint-constraint prior (Wave C, tests only). */
+  _percivalJointPriorForTesting(
+    wizards: readonly string[],
+    merlinWizard: string,
+  ): Map<string, number> {
+    return this.percivalJointPrior(wizards, merlinWizard);
   }
 
   /**
