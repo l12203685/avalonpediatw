@@ -210,6 +210,51 @@ export function findHardRuleViolations(
   return out;
 }
 
+// ── 硬1+硬2 universal team check (Edward 2026-04-29 post-fix) ───
+/**
+ * Universal hard-rule sweep: scan EVERY team member as a potential
+ * holder of past lake declarations. The hard rules apply transitively —
+ * if Player A on the team previously declared B blue, then any team
+ * containing A must also contain B (硬1), regardless of who is leading
+ * this round. Likewise A's declared-red targets must NOT be on the
+ * same team as A (硬2).
+ *
+ * Edward 2026-04-29 verbatim:
+ *   「[硬1] A 湖 B 宣藍 → C 派票選 A, 必選 B (傳遞性)」
+ *   「[硬2] A 湖 B 宣紅 → C 派票選 A, 必不可選 B」
+ *
+ * Pre-fix (Wave B) bug: `findHardRuleViolations` only scanned the
+ * current leader's own declarations — a team picking a third party
+ * who had previously taken the lake bypassed the rule entirely. The
+ * universal sweep is the correct enforcement.
+ *
+ * Returns one entry per (holder, target, rule) violation. Empty array
+ * means the team passes all 硬1+硬2 checks.
+ */
+export function findTeamHardRuleViolations(
+  state: LakeChainState,
+  proposedTeam: readonly string[],
+): Array<{ rule: 1 | 2; holderId: string; targetId: string }> {
+  const out: Array<{ rule: 1 | 2; holderId: string; targetId: string }> = [];
+  const teamSet = new Set(proposedTeam);
+
+  for (const holder of teamSet) {
+    const blueTargets = state.declaredBlueByHolder.get(holder);
+    if (blueTargets) {
+      for (const t of blueTargets) {
+        if (!teamSet.has(t)) out.push({ rule: 1, holderId: holder, targetId: t });
+      }
+    }
+    const redTargets = state.declaredRedByHolder.get(holder);
+    if (redTargets) {
+      for (const t of redTargets) {
+        if (teamSet.has(t)) out.push({ rule: 2, holderId: holder, targetId: t });
+      }
+    }
+  }
+  return out;
+}
+
 // ── 硬3 rank check ─────────────────────────────────────────────
 /**
  * 硬3 (替 B 背書 → A 較低層): if A declared B blue, A's tier ≤ B's

@@ -18,6 +18,7 @@ import {
 import {
   analyzeLakeChain,
   findHardRuleViolations,
+  findTeamHardRuleViolations,
   checkHardRulesForLeader,
   findRule3Violators,
 } from './lakeChainTracker';
@@ -169,6 +170,77 @@ describe('lakeChainTracker', () => {
     expect(checkHardRulesForLeader(state, 'P1', 'P2', false)).toBe('must_include');
     expect(checkHardRulesForLeader(state, 'P1', 'P3', true)).toBe('must_exclude');
     expect(checkHardRulesForLeader(state, 'P1', 'P4', true)).toBe('ok');
+  });
+
+  it('findTeamHardRuleViolations — 硬1 transitive: any team member binds 硬1', () => {
+    // Edward 2026-04-29 post-fix scenario:
+    //   湖中 0>2 o (P0 declared P2 blue)
+    //   Leader P3 picks team [P3, P0, P6, P9] — contains P0 but not P2
+    //   → 硬1 violation (transitive): including P0 forces P2.
+    const obs = makeObs({
+      lakeHistory: [
+        { round: 1, holderId: 'P0', targetId: 'P2', declaredClaim: 'good' },
+      ],
+    });
+    const state = analyzeLakeChain(obs);
+    const violations = findTeamHardRuleViolations(state, ['P3', 'P0', 'P6', 'P9']);
+    expect(
+      violations.find(
+        (v) => v.rule === 1 && v.holderId === 'P0' && v.targetId === 'P2',
+      ),
+    ).toBeDefined();
+  });
+
+  it('findTeamHardRuleViolations — 硬2 transitive: any team member binds 硬2', () => {
+    // Edward 2026-04-29 post-fix scenario:
+    //   湖中 2>4 x (P2 declared P4 red)
+    //   Leader picks team [P3, P2, P4, P9] — contains both P2 and P4
+    //   → 硬2 violation (transitive): including P2 with P4 contradicts.
+    const obs = makeObs({
+      lakeHistory: [
+        { round: 1, holderId: 'P2', targetId: 'P4', declaredClaim: 'evil' },
+      ],
+    });
+    const state = analyzeLakeChain(obs);
+    const violations = findTeamHardRuleViolations(state, ['P3', 'P2', 'P4', 'P9']);
+    expect(
+      violations.find(
+        (v) => v.rule === 2 && v.holderId === 'P2' && v.targetId === 'P4',
+      ),
+    ).toBeDefined();
+  });
+
+  it('findTeamHardRuleViolations — clean team yields empty', () => {
+    // Two declarations, but the proposed team avoids both 硬1 + 硬2.
+    const obs = makeObs({
+      lakeHistory: [
+        { round: 1, holderId: 'P0', targetId: 'P2', declaredClaim: 'good' },
+        { round: 2, holderId: 'P2', targetId: 'P4', declaredClaim: 'evil' },
+      ],
+    });
+    const state = analyzeLakeChain(obs);
+    // Team includes P0 + P2 (硬1 satisfied) and excludes P4 (硬2 OK).
+    const violations = findTeamHardRuleViolations(state, ['P0', 'P2', 'P3']);
+    expect(violations.length).toBe(0);
+  });
+
+  it('findTeamHardRuleViolations — multiple holders scanned independently', () => {
+    // Bug 2/4 root: leader-only check (`findHardRuleViolations`) would
+    // miss a non-leader's declarations. Universal sweep catches both.
+    const obs = makeObs({
+      lakeHistory: [
+        { round: 1, holderId: 'P0', targetId: 'P2', declaredClaim: 'good' },
+        { round: 2, holderId: 'P5', targetId: 'P7', declaredClaim: 'evil' },
+      ],
+    });
+    const state = analyzeLakeChain(obs);
+    // Leader P3, team contains P0 (no P2) AND P5+P7 → both rules fire.
+    const violations = findTeamHardRuleViolations(
+      state,
+      ['P3', 'P0', 'P5', 'P7'],
+    );
+    expect(violations.find((v) => v.rule === 1 && v.holderId === 'P0')).toBeDefined();
+    expect(violations.find((v) => v.rule === 2 && v.holderId === 'P5')).toBeDefined();
   });
 
   it('findRule3Violators boosts holders who later excluded their endorsement', () => {

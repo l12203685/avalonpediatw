@@ -14,6 +14,7 @@ export {
   analyzeLakeChain,
   checkHardRulesForLeader,
   findHardRuleViolations,
+  findTeamHardRuleViolations,
   findRule3Violators,
   type LakeChainState,
 } from './lakeChainTracker';

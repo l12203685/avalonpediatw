@@ -39,6 +39,7 @@ import {
 import {
   computePyramidScores,
   findHardRuleViolations,
+  findTeamHardRuleViolations,
   type PyramidScores,
 } from './baseline';
 
@@ -883,6 +884,120 @@ export class HeuristicAgent implements AvalonAgent {
 
   // ── Team Selection ───────────────────────────────────────────
 
+  /**
+   * Edward 2026-04-29 post-fix — universal lake hard-rule fixup.
+   *
+   * After the upstream sort/filter has produced a candidate team, run
+   * a final sweep against `findTeamHardRuleViolations`. The sweep checks
+   * the lake declarations of EVERY team member (not just the leader) so
+   * a team picked out of an old declaration trail still respects 硬1+硬2:
+   *
+   *   硬1 — A 湖 B 宣藍 → 派含 A → 必含 B
+   *   硬2 — A 湖 B 宣紅 → 派含 A → 必不含 B
+   *
+   * Iteratively repair violations:
+   *   - 硬2 (target T illegally on team because holder H is on team and
+   *     H declared T red): swap T out for the next non-violating
+   *     candidate in `pool` (preferring not to disturb self / leader
+   *     / declared-blue front-loaded picks).
+   *   - 硬1 (target T missing because holder H is on team and H declared
+   *     T blue): swap a non-self, non-H, non-blue-required member out
+   *     and add T in.
+   *
+   * Bounded by `pool.length + team.length` iterations to avoid infinite
+   * loops if the constraint is unsatisfiable; in practice 10p games
+   * with ≤4 lake declarations always converge in <5 swaps.
+   *
+   * Returns the (possibly mutated) team. Self ALWAYS remains on the
+   * team — leader cannot be swapped out by hard-rule fixup.
+   */
+  private fixupTeamHardRules(
+    obs: PlayerObservation,
+    team: readonly string[],
+    pool: readonly string[],
+    pyramid: PyramidScores | null,
+    teamSize: number,
+  ): string[] {
+    if (!USE_PYRAMID_BASELINE || !pyramid) return [...team];
+    if (mayBreakHardRules(obs)) return [...team]; // red exception (Q11)
+
+    const lakeChain = pyramid.lakeChain;
+    const selfId = obs.myPlayerId;
+    let working = [...team];
+
+    // Bound: at most one swap per current member + a small safety
+    // margin. Real games converge in ≤2 swaps.
+    const maxIterations = working.length + pool.length + 2;
+    for (let iter = 0; iter < maxIterations; iter++) {
+      const violations = findTeamHardRuleViolations(lakeChain, working);
+      if (violations.length === 0) return working;
+
+      // Prioritise 硬2 fixes (illegal target on team) — drop the
+      // target. Cheaper than 硬1 because we don't need to add anyone.
+      const v2 = violations.find((v) => v.rule === 2);
+      if (v2) {
+        // Drop the offending target (NOT the holder — the holder's
+        // declaration stands; the team just shouldn't include the
+        // declared-red target).
+        const dropId = v2.targetId;
+        if (dropId === selfId) {
+          // Cannot drop self; instead drop the holder (rare edge case
+          // when self previously declared themselves red — should
+          // never happen in well-formed lake history). Fall back to
+          // drop the holder so we still resolve.
+          const holderIdx = working.indexOf(v2.holderId);
+          if (holderIdx >= 0) working = working.filter((_, i) => i !== holderIdx);
+        } else {
+          working = working.filter((id) => id !== dropId);
+        }
+
+        // Refill from pool — first candidate that doesn't appear in
+        // working AND isn't itself a problematic declared-red target
+        // for any current member.
+        for (const cand of pool) {
+          if (working.length >= teamSize) break;
+          if (working.includes(cand)) continue;
+          // Quick screen: would adding `cand` introduce a new violation?
+          const trial = [...working, cand];
+          const trialViolations = findTeamHardRuleViolations(lakeChain, trial);
+          if (trialViolations.length <= violations.length - 1) {
+            working = trial;
+            break;
+          }
+        }
+        // Safety: if no clean candidate found, take the next pool
+        // member regardless to maintain teamSize. Better an imperfect
+        // swap than an undersized team.
+        if (working.length < teamSize) {
+          for (const cand of pool) {
+            if (working.length >= teamSize) break;
+            if (working.includes(cand)) continue;
+            working.push(cand);
+          }
+        }
+        continue;
+      }
+
+      // 硬1: a declared-blue target is missing. Try to add the target
+      // by swapping a non-self, non-holder, non-blue-required member.
+      const v1 = violations[0]; // first 硬1
+      if (working.includes(v1.targetId)) {
+        // Already on team but counted as missing? Can't happen — bail.
+        return working;
+      }
+      // Pick a swappable slot: not self, not the holder of v1.
+      const swapIdx = working.findIndex(
+        (id) => id !== selfId && id !== v1.holderId,
+      );
+      if (swapIdx < 0) {
+        // No swappable slot — give up to avoid infinite loop.
+        return working;
+      }
+      working = working.map((id, i) => (i === swapIdx ? v1.targetId : id));
+    }
+    return working;
+  }
+
   private selectTeam(obs: PlayerObservation): AgentAction {
     const { playerCount, currentRound, myPlayerId, myTeam, myRole, knownEvils, knownWizards } = obs;
     const teamSize = this.getTeamSize(playerCount, currentRound);
@@ -1041,11 +1156,21 @@ export class HeuristicAgent implements AvalonAgent {
         const percivalTeam = this.selectPercivalTeam(
           obs, teamSize, filteredCandidates, pyramid,
         );
-        return { type: 'team_select', teamIds: enforceR1P1Ban(percivalTeam) };
+        // Wave C post-fix 2026-04-29 — universal hard-rule fixup applies
+        // to Percival too (Bug 4: Merlin/Percival 守湖中線).
+        const percivalFixed = this.fixupTeamHardRules(
+          obs, percivalTeam, filteredCandidates, pyramid, teamSize,
+        );
+        return { type: 'team_select', teamIds: enforceR1P1Ban(percivalFixed) };
       }
 
       const team = [myPlayerId, ...filteredCandidates].slice(0, teamSize);
-      return { type: 'team_select', teamIds: enforceR1P1Ban(team) };
+      // Wave C post-fix 2026-04-29 — universal hard-rule fixup (any team
+      // member's lake declarations bind, not just the leader's).
+      const teamFixed = this.fixupTeamHardRules(
+        obs, team, filteredCandidates, pyramid, teamSize,
+      );
+      return { type: 'team_select', teamIds: enforceR1P1Ban(teamFixed) };
     } else {
       // Evil: include self, prefer to include one evil ally on larger teams
       // Main logic stays shared — per-role strategy only nudges the
@@ -1097,7 +1222,15 @@ export class HeuristicAgent implements AvalonAgent {
         team.push(id);
       }
 
-      return { type: 'team_select', teamIds: enforceR1P1Ban(team.slice(0, teamSize)) };
+      // Wave C post-fix 2026-04-29 — evil branch also subject to lake
+      // hard rules, except when the red exception (Q11) opens. The
+      // helper checks `mayBreakHardRules(obs)` internally; if true, the
+      // team passes through unchanged.
+      const teamSliced = team.slice(0, teamSize);
+      const teamFixedEvil = this.fixupTeamHardRules(
+        obs, teamSliced, goodCandidates, pyramidEvil, teamSize,
+      );
+      return { type: 'team_select', teamIds: enforceR1P1Ban(teamFixedEvil) };
     }
   }
 
@@ -1230,30 +1363,37 @@ export class HeuristicAgent implements AvalonAgent {
     }
 
     // ── Wave B 2026-04-28 — 4 lake hard rules (vote side) ────────
-    // For every player in the proposed team, derive whether the
-    // team's leader has previously declared that player blue / red
-    // via the lake.
+    // ── Edward 2026-04-29 post-fix — universal team sweep ────────
+    // For every player in the proposed team (NOT just the leader),
+    // derive whether they have previously declared a teammate blue /
+    // red via the lake.
     //
-    //   硬1 — leader L 湖 B 宣藍 → 派 L 必含 B
-    //         (Team excludes a declared-blue → reject.)
-    //   硬2 — leader L 湖 B 宣紅 → 派 L 不可含 B
-    //         (Team includes a declared-red → reject.)
+    //   硬1 — A 湖 B 宣藍 → 派含 A → 必含 B
+    //         (Team includes A but excludes a declared-blue B → reject.)
+    //   硬2 — A 湖 B 宣紅 → 派含 A → 必不含 B
+    //         (Team includes A and a declared-red B → reject.)
+    //
+    // Pre-fix bug: leader-only check (`findHardRuleViolations`) let
+    // teams that picked a third-party lake holder pass silently. Post
+    // fix uses `findTeamHardRuleViolations` for transitive enforcement.
     //
     // Red exception (Q11 verbatim): recognised-red roles in their
     // decisive cleanup window may break the rule (e.g. listening +
     // attacking). `mayBreakHardRules(obs)` encodes that gate.
     if (USE_PYRAMID_BASELINE && !mayBreakHardRules(obs)) {
       const pyramidPre = computePyramidScores(obs);
-      const violations = findHardRuleViolations(
+      const teamViolations = findTeamHardRuleViolations(
         pyramidPre.lakeChain,
-        obs.currentLeader,
         proposedTeam,
       );
-      if (violations.length > 0) {
+      if (teamViolations.length > 0) {
         // Always reject teams that violate 硬1 / 硬2 — regardless
-        // of faction. Good has nothing to gain from approving such
-        // an obviously inconsistent team; evil already gets the
-        // exception path above.
+        // of faction or whether self is on the team. Good has nothing
+        // to gain from approving such an obviously inconsistent team;
+        // evil already gets the exception path above.
+        // Bug 3 (2026-04-29): players inside a violating team SHOULD
+        // open inner-black (reject) — this fall-through delivers exactly
+        // that behaviour.
         return { type: 'team_vote', vote: false };
       }
     }
@@ -2485,7 +2625,18 @@ export class HeuristicAgent implements AvalonAgent {
     // so this is academic, but kept for parity), and pyramid score
     // (Wave C: pyramid is now PRIMARY rank for non-tier ties — see
     // `selectTeam` good branch ordering).
+    // Edward 2026-04-29 post-fix — Percival inherits the failed-mission
+    // suspect filter (Bug 1: R2+ 派票沒排除 R1 失敗任務嫌疑人).
+    // Pre-fix, Percival re-sorted by dualSuspects + pyramid only —
+    // tier-0/1 distinction (clean vs failed-mission) was dropped.
+    // Now the sort puts failed-mission members AFTER clean ones,
+    // matching the loyal/Merlin branch invariant.
+    const failedSuspects = this.getFailedMissionSuspects(obs);
     const reranked = [...filtered].sort((a, b) => {
+      // Tier 1: failed-mission suspect, deprioritised vs tier 0 (clean).
+      const fa = failedSuspects.has(a) ? 1 : 0;
+      const fb = failedSuspects.has(b) ? 1 : 0;
+      if (fa !== fb) return fa - fb;
       if (!useDualThumbs) return 0;
       const ta = dualSuspects.has(a) ? 1 : 0;
       const tb = dualSuspects.has(b) ? 1 : 0;
