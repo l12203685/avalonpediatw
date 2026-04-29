@@ -315,8 +315,11 @@ export class SelfPlayEngine {
    * Pick a lady-of-the-lake target for the holder.
    *
    * Good holder  — target MUST NOT be in `knownEvils` (wastes the lake;
-   * SSoT §4.3 / §6.9 / §8.3). Prefer the highest-suspicion unknown-camp player;
-   * fallback to any unlaked player.
+   * SSoT §4.3 / §6.9 / §8.3). Edward 2026-04-29 fundamental fix #2 —
+   * prefer LOW-suspicion (high-blue) unknown-camp player to build a
+   * trust chain (硬規則 4: 首湖藍 → 持續湖到藍). Pre-fix preferred high
+   * suspicion to confirm red; that wins one fact but never seeds a
+   * transitive blue chain. fallback to any unlaked player.
    *
    * Evil holder  — with `AVALON_EVIL_LAKE_BRING_FRIEND=1` (default) the holder
    * does NOT filter out allies (Edward 2026-04-22 12:39 +08: "不用刻意避開").
@@ -371,7 +374,21 @@ export class SelfPlayEngine {
       if (unknownCandidates.length === 0) {
         return validTargets[0];
       }
-      return this.rankByDescendingScore(
+      // ── Edward 2026-04-29 fundamental fix #2 — lake target prefers low red ──
+      // Edward 13:35 self-play evidence: R1 任務 130 oox (1 fail) → 1家
+      // 紅嫌 ≥ 0.7。R2 通過 2370 oooo → 0 家拿湖。0 家(忠臣) 卻湖了高紅嫌
+      // 的 1 家 — wrong direction.
+      //
+      // Pre-fix bug: rankByDescendingScore + estimateSuspicionFromHistory
+      // → 高紅嫌 (高 suspicion) 排第一 → lake 確認紅。但這只能單次驗證
+      // 1 個紅，不能建信任鏈 (硬規則 4: 首湖藍 → 持續湖到藍)。
+      //
+      // Fix: 反向 — 優先湖 LOW 紅嫌 (高藍嫌) 玩家。建信任鏈讓藍方累積
+      // 公共可信任資訊；low-red lake → declare blue → 接續 lake holder
+      // 後手延續 (硬規則 4 transitive blue chain)。如果 target 真的紅
+      // 偽裝藍，holder 會看到並改宣紅；藍方損失只是一個 lake 機會 ≈
+      // 等於原方案 (確認紅也只 1 個資訊)，但低紅嫌方向支援接續藍鏈。
+      return this.rankByAscendingScore(
         unknownCandidates,
         id => this.estimateSuspicionFromHistory(id, obs),
         obs.allPlayerIds,
@@ -538,6 +555,29 @@ export class SelfPlayEngine {
     const orderIdx = new Map(tiebreakOrder.map((id, i) => [id, i]));
     return [...ids].sort((a, b) => {
       const diff = score(b) - score(a);
+      if (diff !== 0) return diff;
+      return (orderIdx.get(a) ?? 0) - (orderIdx.get(b) ?? 0);
+    });
+  }
+
+  /**
+   * Edward 2026-04-29 fundamental fix #2 — ascending sort variant.
+   *
+   * Mirror of `rankByDescendingScore` but sorts smallest-first. Used by
+   * the good-holder lake-target branch which prefers LOW red suspicion
+   * (high blue) to build a trust chain (硬規則 4 transitive blue).
+   *
+   * Tiebreak still follows allPlayerIds order so two equally-clean
+   * candidates pick deterministically (lowest seat first).
+   */
+  private rankByAscendingScore(
+    ids:            string[],
+    score:          (id: string) => number,
+    tiebreakOrder:  string[],
+  ): string[] {
+    const orderIdx = new Map(tiebreakOrder.map((id, i) => [id, i]));
+    return [...ids].sort((a, b) => {
+      const diff = score(a) - score(b);
       if (diff !== 0) return diff;
       return (orderIdx.get(a) ?? 0) - (orderIdx.get(b) ?? 0);
     });

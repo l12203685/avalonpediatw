@@ -1398,6 +1398,24 @@ export class HeuristicAgent implements AvalonAgent {
       }
     }
 
+    // ── Edward 2026-04-29 fundamental fix #1 — leader self-approve ──
+    // Edward 13:35 self-play evidence: 7家(梅林) leader 派 2347 之後
+    // 自己卻投反對 — 隊長對自己派的隊伍 vote 反對 是一個 fundamental
+    // bug。leader 派 team T 的時候 T 是自己選的、含自己，自己投票時應
+    // 該預設贊成 (除非 hard rule violation 已在上面 reject 掉)。
+    //
+    // Pre-fix bug: voteOnTeam 沒檢查「我是不是 leader 派的這個 team」
+    // → 走純 baseline pyramid 推論，2/3 玩家都 0.47 中性 → 平均 0.47
+    // 過 strict threshold → reject 自己派的 team。
+    //
+    // Fix: leader === self 時，hard rule 通過後直接 return APPROVE。
+    // 此 short-circuit 放在 hard rule 後 / Oberon + R1-R2 guard 前 —
+    // hard rule 仍享最高優先 (selectTeam 理論上不該產生 violating team
+    // 但 mayBreakHardRules / Q11 紅方例外時會放行)。
+    if (obs.currentLeader === myPlayerId) {
+      return { type: 'team_vote', vote: true };
+    }
+
     // Edward 2026-04-24 batch 7 fix #3 — Oberon 5-point strategy.
     // Oberon has his OWN voting logic that supersedes the generic
     // evil branch below. Place this check BEFORE the cross-faction

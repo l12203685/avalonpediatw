@@ -269,11 +269,15 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
   });
 
   it('on-team failed-member veto: even when seated, reject if a teammate previously failed a quest', () => {
+    // Edward 2026-04-29 fundamental fix #1 update — leader-self short-
+    // circuit means a leader auto-approves their own team. This veto
+    // only applies to NON-leader on-team players, so the test scenario
+    // uses a different currentLeader.
     const obs = baseObs({
       myPlayerId:    'P1',
       gamePhase:     'team_vote',
       currentRound:  2,
-      currentLeader: 'P1',
+      currentLeader: 'P4',           // someone else picked the team
       proposedTeam:  ['P1', 'P3'],   // self on team, but P3 is tainted
       voteHistory: [
         vote(1, 1, 'P2', ['P2', 'P3'], true,
@@ -2956,6 +2960,10 @@ describe('HeuristicAgent · batch 10 Point 5 (Percival dual-thumb intel)', () =>
 describe('HeuristicAgent · batch 10 Point 3 (red outer-white limit)', () => {
   for (const role of ['assassin', 'morgana', 'mordred'] as const) {
     it(`${role} off-team with NO teammate on team → always reject`, () => {
+      // Edward 2026-04-29 fundamental fix #1 — leader self-approve added.
+      // The original test used baseObs default `currentLeader: 'P1'` but
+      // P1 is OFF-team here, which is impossible (leader must include
+      // self). Use a leader that's actually on the proposedTeam.
       const obs = baseObs({
         myPlayerId:   'P1',
         myRole:       role,
@@ -2963,6 +2971,7 @@ describe('HeuristicAgent · batch 10 Point 3 (red outer-white limit)', () => {
         knownEvils:   ['P1', 'P5'],  // teammate = P5 NOT on team
         gamePhase:    'team_vote',
         currentRound: 3,
+        currentLeader: 'P2',
         proposedTeam: ['P2', 'P3', 'P4'],
         allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
       });
@@ -2984,6 +2993,7 @@ describe('HeuristicAgent · batch 10 Point 3 (red outer-white limit)', () => {
         knownEvils:   ['P1', 'P2'],  // teammate = P2 ON team
         gamePhase:    'team_vote',
         currentRound: 3,
+        currentLeader: 'P2',
         proposedTeam: ['P2', 'P3', 'P4'],
         allPlayerIds: ['P1', 'P2', 'P3', 'P4', 'P5'],
       });

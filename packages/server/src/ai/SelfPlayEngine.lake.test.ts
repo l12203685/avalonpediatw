@@ -68,9 +68,12 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     }
   });
 
-  it('good holder prefers the highest-suspicion unknown-camp player', () => {
-    // P2 appeared on two failed quests → high suspicion.
-    // P4 / P6 / P7 clean. P3 is a known evil (excluded).
+  it('good holder prefers the LOWEST-suspicion (highest-blue) unknown-camp player — Edward 2026-04-29 fundamental fix #2', () => {
+    // Edward 2026-04-29 13:35: lake target should prioritise low red
+    // (high blue) to build a trust chain (硬規則 4: 首湖藍 → 持續湖到
+    // 藍). P2 / P5 / P6 appeared on failed quests → high red. P4 was
+    // on R1 fail but cleaned up by R3 success. P7 only on a success
+    // quest → lowest red (cleanest blue). New behaviour: pick P7.
     const ids = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
     const questHistory: QuestRecord[] = [
       { round: 1, team: ['P1', 'P2', 'P4'], result: 'fail',    failCount: 1 },
@@ -87,7 +90,7 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     });
     const validTargets = ids.filter(id => id !== 'P1');
     const target = engine.pickLadyTarget('good', obs, validTargets);
-    expect(target).toBe('P2'); // highest suspicion, unknown-camp
+    expect(target).toBe('P7'); // lowest suspicion (only-on-success), unknown-camp
   });
 
   it('good holder falls back to any valid target when all remaining are known evil', () => {
@@ -103,6 +106,57 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     const validTargets = ['P2', 'P3'];
     const target = engine.pickLadyTarget('good', obs, validTargets);
     expect(validTargets).toContain(target);
+  });
+
+  // ── Edward 2026-04-29 fundamental fix #2 — trust-chain regression cases ──
+
+  it('good loyal lakes the cleanest blue when no known-evil — Edward 2026-04-29 self-play case', () => {
+    // Mirrors Edward 13:35 self-play: R1 任務 130 oox (1 fail) →
+    // 1家 紅嫌 ≥ 0.7. R2 通過 2370 oooo → 0 家拿湖. 0 家(忠臣) 該湖
+    // LOW 紅嫌 (e.g. seat 2/3/7 — clean R2 success) 不該湖 high 紅嫌
+    // (seat 1 — appeared on R1 fail).
+    const ids = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'];
+    const questHistory: QuestRecord[] = [
+      // R1 failed: P1, P3, P0 on team → P1/P3 push red signal (P0 is holder).
+      { round: 1, team: ['P0', 'P1', 'P3'], result: 'fail',    failCount: 1 },
+      // R2 succeeded: P2, P3, P7, P0 on team — P3 also on R2 → mixed,
+      // but P2 / P7 only-on-success → clean blue.
+      { round: 2, team: ['P0', 'P2', 'P3', 'P7'], result: 'success', failCount: 0 },
+    ];
+    const obs = makeObs({
+      myPlayerId:   'P0',
+      myRole:       'loyal',
+      myTeam:       'good',
+      allPlayerIds: ids,
+      knownEvils:   [],
+      questHistory,
+    });
+    // P0 is the holder. validTargets exclude self.
+    const validTargets = ids.filter(id => id !== 'P0');
+    const target = engine.pickLadyTarget('good', obs, validTargets);
+    // Must NOT lake the highest-red (P1 — pure R1-fail with no recovery).
+    expect(target).not.toBe('P1');
+    // Should lake either P2 or P7 (only on success — cleanest blue).
+    // Tiebreak by allPlayerIds index → P2 first.
+    expect(['P2', 'P7']).toContain(target);
+  });
+
+  it('good holder ascending preference is deterministic by tiebreak when scores tie', () => {
+    // Empty history → all candidates score 0. Ascending sort →
+    // first by allPlayerIds order. validTargets = [P2..P5].
+    const ids = ['P1', 'P2', 'P3', 'P4', 'P5'];
+    const obs = makeObs({
+      myPlayerId:   'P1',
+      myRole:       'merlin',
+      myTeam:       'good',
+      allPlayerIds: ids,
+      knownEvils:   [],
+      questHistory: [],
+    });
+    const validTargets = ['P2', 'P3', 'P4', 'P5'];
+    const target = engine.pickLadyTarget('good', obs, validTargets);
+    // All scores tie at 0 → tiebreak by allPlayerIds index → P2.
+    expect(target).toBe('P2');
   });
 
   // ── Evil holder (Edward 2026-04-22 12:39 +08 — allies allowed) ─────────
