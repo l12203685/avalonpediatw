@@ -604,7 +604,15 @@ function getDefaultPriors(): PriorLookup {
 export class HeuristicAgent implements AvalonAgent {
   readonly agentId: string;
   readonly agentType = 'heuristic' as const;
-  private readonly difficulty: 'normal' | 'hard';
+  /**
+   * Difficulty is permanently fixed to 'hard' — Edward 2026-04-29:
+   * 「之後 AI 不要分 easy medium hard 就全部都統一」. The constructor
+   *  accepts the legacy parameter for back-compat with callers and
+   *  tests, but the value is ignored — every agent now plays the
+   *  unified strongest strategy (Wave A baseline + Wave B pyramid +
+   *  Wave C role-aware decision tree + 4 hard rules).
+   */
+  private readonly difficulty: 'hard' = 'hard';
   /** PriorLookup — data-driven thresholds (Phase 1 #97). Injected for DI
    *  in tests; auto-loaded from bundled JSON in production. */
   private readonly priors: PriorLookup;
@@ -613,11 +621,12 @@ export class HeuristicAgent implements AvalonAgent {
 
   constructor(
     agentId: string,
-    difficulty: 'normal' | 'hard' = 'normal',
+    _legacyDifficulty?: 'normal' | 'hard',
     priors?: PriorLookup,
   ) {
     this.agentId = agentId;
-    this.difficulty = difficulty;
+    // Difficulty parameter intentionally ignored — see field doc above.
+    void _legacyDifficulty;
     this.priors = priors ?? getDefaultPriors();
   }
 
@@ -1321,13 +1330,12 @@ export class HeuristicAgent implements AvalonAgent {
       }
 
       // Percival: skeptical of teams without any wizard candidate (Merlin/Morgana).
+      // Edward 2026-04-29 unified-hard rollout: no wizard on team → unconditional reject
+      // (was: 'hard' rejected outright, 'normal' rolled a 65% reject — now both gone).
       if (knownWizards && knownWizards.length > 0 && proposedTeam.length >= 3) {
         const hasWizard = proposedTeam.some(id => knownWizards.includes(id));
         if (!hasWizard) {
-          return {
-            type: 'team_vote',
-            vote: this.difficulty === 'hard' ? false : Math.random() > 0.65,
-          };
+          return { type: 'team_vote', vote: false };
         }
       }
 
@@ -1479,12 +1487,13 @@ export class HeuristicAgent implements AvalonAgent {
         return { type: 'team_vote', vote: false };
       }
 
-      // Hard mode: more strategically sometimes approves to appear cooperative.
-      // Reachable only for Oberon (his dedicated branch would have returned
-      // earlier unless Rule 1/5b resolved to "normal vote"; he legitimately
-      // reaches here at R1-R2 before any participation, where the cross-
-      // faction R1-R2 guard has already handled him).
-      const baseApproveChance = this.difficulty === 'hard' ? 0.35 : 0.3;
+      // Edward 2026-04-29 unified-hard rollout: AI now uniformly plays the
+      // strongest strategy. Base approve chance is the former hard-mode
+      // value (0.35) — slightly higher than the retired normal mode (0.30)
+      // so red appears cooperative without burning cover. Reachable only
+      // for Oberon at R1-R2 before any participation (cross-faction R1-R2
+      // guard handles him upstream).
+      const baseApproveChance = 0.35;
       const strategy = this.getEvilRoleStrategy(obs.myRole as string);
       let approveChance = clampUnit(
         baseApproveChance + (strategy?.voteApproveBonus ?? 0),
@@ -2194,34 +2203,30 @@ export class HeuristicAgent implements AvalonAgent {
   private getMerlinScore(playerId: string, obs: PlayerObservation): number {
     let score = 0;
 
+    // Edward 2026-04-29 unified-hard rollout: scoring uses the former
+    // hard-mode signal weights unconditionally (was: difficulty switch).
     for (const vote of obs.voteHistory) {
       const theirVote = vote.votes[playerId];
       if (theirVote === undefined) continue;
 
-      if (this.difficulty === 'hard') {
-        // Hard: weight by how "informative" the rejection was
-        // Rejecting a team that contained an evil player is very Merlin-like
-        const teamHadEvil = vote.team.some(id => obs.knownEvils.includes(id));
-        if (!theirVote && teamHadEvil) score += 2.0;   // Rejected a team with evil — Merlin behavior
-        else if (!theirVote && !vote.approved) score += 0.8; // Rejected a team that was ultimately rejected
-        else if (!theirVote) score += 0.4;              // Cautious rejection
-        // If they approved a team with evil, they're probably NOT Merlin
-        if (theirVote && teamHadEvil) score -= 1.5;
-      } else {
-        // Normal mode
-        if (!theirVote && !vote.approved) score += 0.5;
-        if (!theirVote) score += 0.3;
-      }
+      // Weight by how "informative" the rejection was.
+      // Rejecting a team that contained an evil player is very Merlin-like.
+      const teamHadEvil = vote.team.some(id => obs.knownEvils.includes(id));
+      if (!theirVote && teamHadEvil) score += 2.0;        // Rejected a team with evil — Merlin behavior
+      else if (!theirVote && !vote.approved) score += 0.8; // Rejected a team that was ultimately rejected
+      else if (!theirVote) score += 0.4;                   // Cautious rejection
+      // If they approved a team with evil, they're probably NOT Merlin.
+      if (theirVote && teamHadEvil) score -= 1.5;
     }
 
-    // Never on a failed quest → suspicious of being the protected Merlin
+    // Never on a failed quest → suspicious of being the protected Merlin.
     const onFailedQuest = obs.questHistory.some(q => q.result === 'fail' && q.team.includes(playerId));
     if (!onFailedQuest && obs.questHistory.length > 0) {
-      score += this.difficulty === 'hard' ? 1.5 : 1;
+      score += 1.5;
     }
 
-    // Hard: was always on successful quests = likely trusted good role (Merlin is always trusted)
-    if (this.difficulty === 'hard') {
+    // Always on successful quests = likely trusted good role (Merlin is always trusted).
+    {
       const questAppearances = obs.questHistory.filter(q => q.team.includes(playerId));
       const allSucceeded = questAppearances.every(q => q.result === 'success');
       if (allSucceeded && questAppearances.length >= 2) score += 1.0;

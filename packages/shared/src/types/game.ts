@@ -220,7 +220,14 @@ export interface Player {
   team: Team | null;
   status: PlayerStatus;
   isBot?: boolean;  // true = AI-controlled player
-  botDifficulty?: 'easy' | 'normal' | 'hard'; // AI difficulty level (only set when isBot=true)
+  /**
+   * @deprecated Edward 2026-04-29 — AI difficulty tiers removed.
+   * Field kept optional so legacy persisted Player records (Sheets imports,
+   * older Firestore docs, in-flight rooms) still parse cleanly. New bots
+   * never set this field; runtime uses the unified strongest strategy
+   * (HeuristicAgent hard) regardless of value.
+   */
+  botDifficulty?: 'easy' | 'normal' | 'hard';
   vote?: boolean | null; // true = approve, false = reject, null = not voted
   kills?: string[]; // IDs of players killed (for assassin)
   createdAt: number;

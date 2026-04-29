@@ -5,7 +5,6 @@ import { RoomManager } from '../game/RoomManager';
 import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
-import { RandomAgent } from '../ai/RandomAgent';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
 import { SocketRateLimiter } from '../middleware/rateLimit';
 import { LobbyChatBuffer, LobbyChatMessage } from './LobbyChatBuffer';
@@ -327,8 +326,12 @@ export class GameServer {
         this.handleKickPlayer(socket, roomId, targetPlayerId);
       });
 
-      socket.on('game:add-bot', (roomId: string, difficulty?: string) => {
-        this.handleAddBot(socket, roomId, difficulty as 'easy' | 'normal' | 'hard' | undefined);
+      socket.on('game:add-bot', (roomId: string, _legacyDifficulty?: string) => {
+        // Edward 2026-04-29 — AI no longer split into easy/normal/hard.
+        // Any difficulty value the client sends is ignored; every bot
+        // uses the unified strongest strategy (see HeuristicAgent docs).
+        void _legacyDifficulty;
+        this.handleAddBot(socket, roomId);
       });
 
       socket.on('game:remove-bot', (roomId: string, botId: string) => {
@@ -1518,7 +1521,7 @@ export class GameServer {
     }
   }
 
-  private handleAddBot(socket: Socket, roomId: string, difficulty: 'easy' | 'normal' | 'hard' = 'normal'): void {
+  private handleAddBot(socket: Socket, roomId: string): void {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) { socket.emit('error', 'Room not found'); return; }
@@ -1533,11 +1536,11 @@ export class GameServer {
       }
 
       const botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
-      // Display name is uniformly "AI" regardless of difficulty tier.
-      // Per-player seat numbers (the PlayerCard chip) disambiguate
-      // multiple bots in the same room. Difficulty is preserved in
-      // `botDifficulty` and drives agent behaviour, but is hidden from
-      // the player-visible name (Edward 2026-04-25).
+      // Edward 2026-04-29: AI no longer split into difficulty tiers.
+      // Every bot is named "AI" and runs the unified strongest strategy
+      // (Wave A baseline + Wave B pyramid + Wave C role-aware decision
+      //  tree + 4 hard rules). Per-player seat numbers (the PlayerCard
+      // chip) disambiguate multiple bots in the same room.
       const botName = 'AI';
 
       room.players[botId] = {
@@ -1547,18 +1550,14 @@ export class GameServer {
         team: null,
         status: 'active',
         isBot: true,
-        botDifficulty: difficulty,
         createdAt: Date.now(),
       };
 
-      // Choose agent based on difficulty
-      const agent = difficulty === 'easy'
-        ? new RandomAgent(botId)
-        : new HeuristicAgent(botId, difficulty === 'hard' ? 'hard' : 'normal');
+      const agent = new HeuristicAgent(botId);
 
       this.botAgents.set(botId, agent);
       this.broadcastRoomState(roomId, room);
-      console.log(`✓ Bot ${botName} (${difficulty}) added to room ${roomId}`);
+      console.log(`✓ Bot ${botName} added to room ${roomId}`);
     } catch (error) {
       console.error('Error adding bot:', error);
       socket.emit('error', 'Failed to add bot');
@@ -2295,10 +2294,10 @@ export class GameServer {
       }
       for (const [pid, player] of Object.entries(room.players)) {
         if (!player.isBot) continue;
-        const difficulty = player.botDifficulty ?? 'normal';
-        const agent = difficulty === 'easy'
-          ? new RandomAgent(pid)
-          : new HeuristicAgent(pid, difficulty === 'hard' ? 'hard' : 'normal');
+        // Edward 2026-04-29 — unified strongest strategy for every bot.
+        // Legacy `botDifficulty` on Player is ignored; all rematched
+        // bots are re-instantiated as HeuristicAgent (hard).
+        const agent = new HeuristicAgent(pid);
         this.botAgents.set(pid, agent);
       }
 

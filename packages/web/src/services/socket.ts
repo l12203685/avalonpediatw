@@ -472,9 +472,11 @@ export function kickPlayer(roomId: string, targetPlayerId: string): void {
   socket.emit('game:kick-player', roomId, targetPlayerId);
 }
 
-export function addBot(roomId: string, difficulty: 'easy' | 'normal' | 'hard' = 'normal'): void {
+export function addBot(roomId: string): void {
+  // Edward 2026-04-29 — AI difficulty tiers removed. Server ignores any
+  // legacy difficulty argument and runs the unified strongest strategy.
   const socket = getSocket();
-  socket.emit('game:add-bot', roomId, difficulty);
+  socket.emit('game:add-bot', roomId);
 }
 
 export function removeBot(roomId: string, botId: string): void {
