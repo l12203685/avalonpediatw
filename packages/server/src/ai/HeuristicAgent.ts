@@ -530,30 +530,45 @@ function buildOberonContext(obs: PlayerObservation): OberonContext {
   };
 }
 
-// ── Edward 2026-04-24 batch 7 fix #4 — Blue conservative outer-white ────
+// ── Edward 2026-04-30 — Team-aware vote thresholds (rewire) ─────────────
 /**
- * Edward 2026-04-24 batch 7 verbatim:
- *   「因此藍方不可能隨便開異常外白(會被誤認為奧伯倫)
- *   相認紅方頂多利用奧伯倫的白球去衝刺隊友 但同時這顆白球也會被抓到是紅方」
+ * Edward 2026-04-30 11:27 verbatim:
+ *   「黑白球投票本來就是針對這個組合的贊成或反對」
  *
- * Rationale: in Avalon, Oberon's exclusive strategic move is to
- * throw outer-white balls (off-team approvals) to protect red teammates.
- * Any blue player who does the same thing gets read as Oberon by the
- * table. So blue players should never outer-white casually.
+ * Fundamental rewire: vote decisions evaluate the PROPOSED TEAM itself,
+ * not global player ranking. The decision flow:
  *
- * Batch 4 already hard-zeros blue outer-white in R1-R2. This batch 7
- * fix #4 extends the suppression into R3+ by pinning the off-team
- * approve probability to a tiny floor (`BLUE_R3_PLUS_APPROVE_FLOOR`).
- * Legitimate clean-team approves still happen at `BLUE_R3_PLUS_APPROVE_FLOOR`
- * rate to avoid degenerate `reject-always → 5-reject auto-loss` in
- * edge cases, but the rate is small enough that outer-white anomalies
- * in R3+ essentially disappear from training data.
+ *   1. Compute team red-suspicion stats from pyramid:
+ *      • teamMaxRed   = max(pyramid.scores[id]) over proposedTeam
+ *      • teamAvgRed   = avg(pyramid.scores[id]) over proposedTeam
+ *   2. Apply hard-signal vetos first (knownEvil, hasFailedMember,
+ *      hard-rule violation — preserved upstream).
+ *   3. Team-aware decision:
+ *      • teamMaxRed >= TEAM_RED_HIGH_MAX OR teamAvgRed >= TEAM_RED_HIGH_AVG
+ *          → reject (bad team — at least one strong-red OR avg leans red)
+ *      • teamMaxRed <= TEAM_RED_LOW_MAX AND teamAvgRed <= TEAM_RED_LOW_AVG
+ *          → approve (clean team)
+ *      • otherwise (mid-zone):
+ *          → on-team approve (cooperative default when I'm part of it)
+ *          → off-team approve unless any member > TEAM_RED_MID_MAX
  *
- * Pre-batch-7 R3+ approve rate: data-driven via `getOffTeamRejectRate`,
- * roughly ~13% approve baseline (1 − 0.87 reject). Post-batch-7: 3%.
+ * The legacy `BLUE_R3_PLUS_APPROVE_FLOOR` floor is retired — it was
+ * a global-ranking artefact (cap approve probability to 3% for blue
+ * R3+) that overrode team-aware reasoning. Edward's complaint:
+ * "4家忠臣派 3467 隊外 P0=1.00 P8=0.72 紅嫌 → 隊內全藍應該贊成，
+ *  但 floor 讓忠臣 reject" — the rewire fixes exactly this case.
+ *
+ * Hard rules preserved: lake hard1/hard2, leader-self approve,
+ * R1-R2 cross-faction guard, knownEvil veto, hasFailedMember veto,
+ * hasFailedMemberEarly tainted-member rejects, force-approve at
+ * failCount=4, Oberon strategy, evil branch (recognised-red /
+ * hierarchy / approve-chance for ally cover).
  */
-const BLUE_R3_PLUS_APPROVE_FLOOR = 0.03;
-const USE_BLUE_CONSERVATIVE_OUTER_WHITE_R3 = true;
+const TEAM_RED_HIGH_MAX = 0.85;   // any single member >= 0.85 → bad team
+const TEAM_RED_HIGH_AVG = 0.6;    // team avg >= 0.6 → bad team
+const TEAM_RED_LOW_MAX  = 0.55;   // no member > 0.55 → clean signal
+const TEAM_RED_LOW_AVG  = 0.5;    // team avg <= 0.5 (neutral or below)
+const TEAM_RED_MID_MAX  = 0.7;    // mid-zone tipping point for off-team
 
 /**
  * Clamp helper kept inline to avoid a util import.
@@ -1527,89 +1542,64 @@ export class HeuristicAgent implements AvalonAgent {
         }
       }
 
-      // Wave C 2026-04-29 — pyramid 升主導 voteOnTeam side.
-      // Pre-Wave-C: legacy + (p-0.5)*5 was 50/50 blend; legacy = 0 for
-      // R1 → pyramid dominated R1, then 50/50 R2+. Wave C makes
-      // pyramid the dominant signal (80% weight) with legacy as a
-      // small correction (20%). This aligns with Audit 1 finding
-      // that pyramid is the most calibrated suspicion source.
+      // ── Edward 2026-04-30 — team-aware vote rewire ─────────────────
+      // Pyramid scores are the per-player red-suspicion in [0,1]. Compute
+      // team-internal stats (max + avg) and decide ON THE TEAM ITSELF,
+      // not on global player ranking. Off-team players who happen to be
+      // very red (e.g. P0=1.00) are IRRELEVANT to "is this team good".
+      //
+      // NOTE: `hasFailedMember` is NOT used as a separate veto here —
+      // pyramid layer 2 already boosts failed-mission members to ≤0.7,
+      // which the team-aware thresholds below correctly pick up. A binary
+      // failed-member veto is the GLOBAL-RANKING bug Edward's rewire
+      // explicitly removes — it ignored team composition (e.g. one
+      // 0.65-suspect on an otherwise blue 4-man team should NOT auto-reject).
       const pyramidVote: PyramidScores | null = USE_PYRAMID_BASELINE
         ? computePyramidScores(obs)
         : null;
-      const teamSuspicion = (id: string): number => {
-        const legacy = this.getSuspicion(id);
-        const p = pyramidVote?.scores.get(id) ?? 0.5;
-        // Pyramid [0,1] → 0-8 main signal; legacy retains a small
-        // 0-2 secondary contribution (Wave C 80/20 split).
-        return (p - 0.5) * 8 + legacy * 0.2;
-      };
-      const avgSuspicion = proposedTeam.reduce((s, id) => s + teamSuspicion(id), 0) / proposedTeam.length;
-      const hasFailedMember = proposedTeam.some(
-        id => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
+      const teamRedScore = (id: string): number =>
+        pyramidVote?.scores.get(id) ?? 0.5;
+      const teamMaxRed = proposedTeam.reduce(
+        (m, id) => Math.max(m, teamRedScore(id)),
+        0,
       );
+      const teamAvgRed = proposedTeam.reduce(
+        (s, id) => s + teamRedScore(id),
+        0,
+      ) / Math.max(1, proposedTeam.length);
       const onTeam = proposedTeam.includes(myPlayerId);
-      // #97 Phase 1: all four thresholds now resolve via PriorLookup.
-      // Historical data path: expert/mid/novice JSON (Edward vote rule).
-      // Tier-3 fallback preserves pre-#97 behaviour byte-identically.
       const diff: Difficulty = this.difficulty;
       const noise = this.priors.getNoiseRate(diff);
 
-      if (!onTeam) {
-        // Edward 2026-04-24 batch 2 fix #1 — rounds 1-2 pre-filter is
-        // already handled above (approve-if-on-team / reject-if-off).
-        // Off-team path: default to cautious reject. Leader must prove the
-        // team is clean — otherwise the good player holds out their approval.
-        const strictThreshold = this.priors.getStrictThreshold(diff);
-        if (hasFailedMember || avgSuspicion > strictThreshold) {
-          return { type: 'team_vote', vote: this.applyNoise(false, noise) };
-        }
+      // ── Team-aware decision (Edward 2026-04-30 rewire) ─────────────
+      // Bad team: at least one strong-red OR team avg leaning red.
+      const teamLooksBad =
+        teamMaxRed >= TEAM_RED_HIGH_MAX ||
+        teamAvgRed >= TEAM_RED_HIGH_AVG;
+      // Clean team: no member strongly red AND avg neutral-or-below.
+      const teamLooksClean =
+        teamMaxRed <= TEAM_RED_LOW_MAX &&
+        teamAvgRed <= TEAM_RED_LOW_AVG;
 
-        // Edward 2026-04-24 batch 7 fix #4 — Blue conservative outer-white
-        // in R3+. Edward verbatim「藍方不可能隨便開異常外白(會被誤認為
-        // 奧伯倫)」. Any blue outer-white in R3+ risks being misread as
-        // Oberon's signature play. Pin approve probability to the
-        // conservative floor so outer-white anomalies are essentially
-        // eliminated in R3+ training data while still keeping a tiny
-        // non-zero rate to avoid degenerate 5-reject auto-loss.
-        if (
-          USE_BLUE_CONSERVATIVE_OUTER_WHITE_R3 &&
-          (obs.currentRound ?? 1) >= 3
-        ) {
-          const baselineVote = Math.random() < BLUE_R3_PLUS_APPROVE_FLOOR ? true : false;
-          return { type: 'team_vote', vote: this.applyNoise(baselineVote, noise) };
-        }
-
-        // No hard signal → baseline reject probability from historical
-        // off-team rejects (L1/L2/L3 rollup, Edward vote rule). Round 1
-        // and round 2+ differ sharply (r1 ~0.99, r2+ ~0.87 for expert).
-        const hasHistory = this.memory.failedTeamHistory.length > 0
-          || this.memory.processedVoteAttempts.size > 0;
-        const roundForPrior = hasHistory ? (obs.currentRound ?? 1) : 1;
-        let baseline = this.priors.getOffTeamRejectRate(diff, {
-          team: 'good',
-          round: roundForPrior,
-          isLeader: false,
-        });
-        // Legacy parity: when no history yet (true r1 with no prior
-        // attempts), relax baseline by 0.6 so the agent doesn't race
-        // to failCount=5 in the total dark. Historical data path
-        // already captures r1 separately, so this dampener only fires
-        // on the very first attempt of the very first round.
-        if (!hasHistory) baseline *= 0.6;
-        const baselineVote = Math.random() < baseline ? false : true;
-        return { type: 'team_vote', vote: this.applyNoise(baselineVote, noise) };
-      }
-
-      // Edward 2026-04-24 batch 2 fix #1 — rounds 1-2 pre-filter is
-      // already handled above; here we are round 3+ on-team.
-      // On-team path: keep legacy avg-suspicion check, but also veto teams
-      // that contain any previously-failed member.
-      if (hasFailedMember) {
+      if (teamLooksBad) {
         return { type: 'team_vote', vote: this.applyNoise(false, noise) };
       }
-      const threshold = this.priors.getSuspicionRejectThreshold(diff);
-      const decision  = avgSuspicion < threshold;
-      return { type: 'team_vote', vote: this.applyNoise(decision, noise) };
+      if (teamLooksClean) {
+        return { type: 'team_vote', vote: this.applyNoise(true, noise) };
+      }
+
+      // Mid-zone — neither clearly clean nor clearly dirty.
+      //   On-team: lean approve (I'm part of the team I'd otherwise be
+      //   doubting; the leader picked me, abstaining is a stronger
+      //   anti-signal than approving a marginal team).
+      //   Off-team: approve unless any single member crosses the mid
+      //   tipping point (TEAM_RED_MID_MAX = 0.7); a single 0.7+ member
+      //   is enough public-info doubt to off-team reject.
+      if (onTeam) {
+        return { type: 'team_vote', vote: this.applyNoise(true, noise) };
+      }
+      const offTeamMidDecision = teamMaxRed < TEAM_RED_MID_MAX;
+      return { type: 'team_vote', vote: this.applyNoise(offTeamMidDecision, noise) };
     } else {
       // Evil: approve if own ally or self is on team, reject otherwise
       // Main logic stays shared — per-role strategy only nudges the

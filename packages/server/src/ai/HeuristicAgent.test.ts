@@ -268,27 +268,40 @@ describe('HeuristicAgent · Team Vote off-team (Phase B)', () => {
     expect(ratio).toBe(1.0);
   });
 
-  it('on-team failed-member veto: even when seated, reject if a teammate previously failed a quest', () => {
-    // Edward 2026-04-29 fundamental fix #1 update — leader-self short-
-    // circuit means a leader auto-approves their own team. This veto
-    // only applies to NON-leader on-team players, so the test scenario
-    // uses a different currentLeader.
+  it('on-team team with strongly-red member (pyramid ≥ 0.85) → reject (team-aware veto)', () => {
+    // Edward 2026-04-30 rewire: the binary "any failed-member on team →
+    // reject" veto is GONE. The team-aware decision evaluates pyramid
+    // stats. A team with a strongly-red member (e.g. ≥ 0.85 from
+    // multiple failed missions OR cycle violation) still rejects via
+    // teamMaxRed >= TEAM_RED_HIGH_MAX. Construct that scenario: P3 was
+    // on TWO failed missions (layer 2 caps at 0.7) AND is a Rule-3 lake
+    // violator (boosted to 0.85+ via VIOLATOR_FLOOR).
     const obs = baseObs({
       myPlayerId:    'P1',
       gamePhase:     'team_vote',
-      currentRound:  2,
-      currentLeader: 'P4',           // someone else picked the team
-      proposedTeam:  ['P1', 'P3'],   // self on team, but P3 is tainted
+      currentRound:  3,
+      currentLeader: 'P4',
+      proposedTeam:  ['P1', 'P3'],
       voteHistory: [
         vote(1, 1, 'P2', ['P2', 'P3'], true,
-             { P1: true, P2: true, P3: true, P4: false, P5: false }),
+             { P1: false, P2: true, P3: true, P4: false, P5: false }),
+        vote(2, 1, 'P3', ['P3', 'P4'], true,
+             { P1: false, P2: false, P3: true, P4: true, P5: false }),
       ],
-      questHistory: [quest(1, ['P2', 'P3'], 'fail', 1)],
+      questHistory: [
+        quest(1, ['P2', 'P3'], 'fail', 1),
+        quest(2, ['P3', 'P4'], 'fail', 1),
+      ],
+      lakeHistory: [
+        // P3 declared P4 blue (Rule 3 violator: P4 was on a failed mission
+        // P3 endorsed) → P3 boosted to ≥ 0.85.
+        { round: 2, holderId: 'P3', targetId: 'P4', declaredClaim: 'good' },
+      ],
     });
 
     const ratio = rejectRate(obs, 'hard', 500);
-    // noise=0.05 → expect >= 0.90 rejection.
-    expect(ratio).toBeGreaterThan(0.90);
+    // teamMaxRed (P3) ≥ 0.85 → teamLooksBad → reject (noise ≈ 5%).
+    expect(ratio).toBeGreaterThan(0.85);
   });
 
   it('force approve at failCount=4 overrides all reject signals', () => {
@@ -2006,7 +2019,15 @@ describe('HeuristicAgent · batch 7 fix #3 (Oberon 5-point strategy)', () => {
   });
 });
 
-describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)', () => {
+describe('HeuristicAgent · team-aware vote rewire (Edward 2026-04-30)', () => {
+  // Edward 2026-04-30 11:27 verbatim: 「黑白球投票本來就是針對這個組合的贊成或反對」
+  //
+  // Vote decisions evaluate the PROPOSED TEAM ITSELF, not global player
+  // ranking. Off-team players who happen to be very red (e.g. P0=1.00)
+  // are IRRELEVANT to "is this team good". This describe block replaces
+  // batch 7 fix #4 (BLUE_R3_PLUS_APPROVE_FLOOR), which capped clean-team
+  // approves at 3% — a global-ranking artefact that broke team-aware
+  // reasoning.
   function approveRate(obs: PlayerObservation, samples: number): number {
     let approves = 0;
     for (let i = 0; i < samples; i++) {
@@ -2019,7 +2040,11 @@ describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)',
     return approves / samples;
   }
 
-  it('R3 good off-team clean team → approve rate ≤ 10% (down from ~13% baseline)', () => {
+  it('R3 good off-team clean team → approve (team itself looks clean, regardless of off-team red ranking)', () => {
+    // R3, all team members had successful R1+R2 quests; vote records have
+    // NO outer-white anomalies (off-team players reject, on-team approve)
+    // → pyramid scores team members close to neutral 0.5. New logic:
+    // clean team → approve.
     const obs = baseObs({
       myPlayerId:    'P1',
       myRole:        'loyal',
@@ -2027,12 +2052,18 @@ describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)',
       gamePhase:     'team_vote',
       currentRound:  3,
       currentLeader: 'P2',
-      proposedTeam:  ['P2', 'P3', 'P4'],  // off-team, clean (no failed members)
+      proposedTeam:  ['P2', 'P3', 'P4'],  // off-team, clean
       voteHistory: [
-        vote(1, 1, 'P2', ['P2', 'P3'], true,
-             { P1: true, P2: true, P3: true, P4: true, P5: false }),
-        vote(2, 1, 'P3', ['P3', 'P4'], true,
-             { P1: true, P2: true, P3: true, P4: true, P5: false }),
+        // R1 team [P2,P3]: on-team approve, off-team reject (zero anomaly)
+        vote(1, 1, 'P2', ['P2', 'P3'], true, {
+          P1: false, P2: true,  P3: true,  P4: false, P5: false,
+          P6: false, P7: false, P8: false, P9: false, P10: false,
+        }),
+        // R2 team [P3,P4]: on-team approve, off-team reject (zero anomaly)
+        vote(2, 1, 'P3', ['P3', 'P4'], true, {
+          P1: false, P2: false, P3: true,  P4: true,  P5: false,
+          P6: false, P7: false, P8: false, P9: false, P10: false,
+        }),
       ],
       questHistory: [
         quest(1, ['P2', 'P3'], 'success', 0),
@@ -2040,11 +2071,11 @@ describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)',
       ],
     });
     const rate = approveRate(obs, 500);
-    // floor = 0.03 with noise=0.05 → worst-case approve ≈ 0.03 + 0.05 ≈ 0.08
-    expect(rate).toBeLessThan(0.12);
+    // Team looks clean (pyramid neutral, no anomalies) → approve dominates.
+    expect(rate).toBeGreaterThan(0.85);
   });
 
-  it('R4 good off-team clean team → approve rate near floor', () => {
+  it('R4 good off-team mid-zone team → approve when all members below mid threshold', () => {
     const obs = baseObs({
       myPlayerId:    'P1',
       myRole:        'loyal',
@@ -2054,19 +2085,26 @@ describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)',
       currentLeader: 'P2',
       proposedTeam:  ['P2', 'P3', 'P4'],
       voteHistory: [
-        vote(1, 1, 'P2', ['P2', 'P3'], true,
-             { P1: true, P2: true, P3: true, P4: true, P5: false }),
+        // Zero-anomaly vote: on-team approve, off-team reject.
+        vote(1, 1, 'P2', ['P2', 'P3'], true, {
+          P1: false, P2: true,  P3: true,  P4: false, P5: false,
+          P6: false, P7: false, P8: false, P9: false, P10: false,
+        }),
       ],
       questHistory: [
         quest(1, ['P2', 'P3'], 'success', 0),
       ],
     });
     const rate = approveRate(obs, 500);
-    expect(rate).toBeLessThan(0.12);
+    // Mid-clean team, all members under TEAM_RED_MID_MAX → approve.
+    expect(rate).toBeGreaterThan(0.85);
   });
 
-  it('R3 good off-team with failed member still forces reject (unchanged by floor)', () => {
-    // Hard-signal veto path fires before the floor, so approve rate = 0.
+  it('R3 good off-team with failed-mission members + outer-white → reject (team-aware)', () => {
+    // Edward 2026-04-30 rewire: instead of binary hasFailedMember veto,
+    // pyramid layer 2 boosts failed-mission members to ≤0.7 and layer 4
+    // boosts outer-white approvers. Combined → teamLooksBad (avg ≥ 0.6
+    // OR max ≥ 0.85) → reject. P2/P4 on failed R1 + P3 outer-white in R1.
     const obs = baseObs({
       myPlayerId:    'P1',
       myRole:        'loyal',
@@ -2080,15 +2118,17 @@ describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)',
              { P1: false, P2: true, P3: true, P4: true, P5: false }),
       ],
       questHistory: [
-        quest(1, ['P2', 'P4'], 'fail', 1),  // P4 failed → hard veto
+        quest(1, ['P2', 'P4'], 'fail', 1),  // P2/P4 → layer-2 boost ~0.65
       ],
     });
     const rate = approveRate(obs, 300);
-    // Noise=0.05 → reject with 95% confidence → approve ~5%.
-    expect(rate).toBeLessThan(0.10);
+    // teamMaxRed ≈ max(0.65, 0.5+layer4, 0.65) and teamAvgRed ≈ 0.7 ≥
+    // TEAM_RED_HIGH_AVG → reject (noise ≈ 5%).
+    expect(rate).toBeLessThan(0.15);
   });
 
-  it('R2 good off-team clean team → batch 4 R1-R2 guard still fires (unchanged, reject=1)', () => {
+  it('R2 good off-team clean team → R1-R2 guard still fires (reject=1)', () => {
+    // R1-R2 cross-faction guard sits ABOVE team-aware logic (preserved).
     const obs = baseObs({
       myPlayerId:    'P1',
       myRole:        'loyal',
@@ -2107,6 +2147,67 @@ describe('HeuristicAgent · batch 7 fix #4 (blue conservative R3+ outer-white)',
     });
     const rate = approveRate(obs, 300);
     expect(rate).toBe(0);
+  });
+
+  it('R3 good off-team — team contains a red-pinned member (avg ≥ 0.6) → reject', () => {
+    // P5 was on a failed mission → pyramid layer 2 boosts. Team [P2,P3,P5]
+    // R1 fail → P5 ~0.65, P2/P3 might be moderately tainted too via vote
+    // patterns. teamMaxRed >= 0.85 OR teamAvgRed >= 0.6 → reject.
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'loyal',
+      myTeam:        'good',
+      gamePhase:     'team_vote',
+      currentRound:  3,
+      currentLeader: 'P2',
+      proposedTeam:  ['P2', 'P3', 'P5'],
+      voteHistory: [
+        vote(1, 1, 'P5', ['P5', 'P6'], true,
+             { P1: false, P2: true, P3: true, P4: false, P5: true,
+               P6: true, P7: false, P8: false, P9: false, P10: false }),
+        vote(2, 1, 'P3', ['P3', 'P4'], true,
+             { P1: true, P2: true, P3: true, P4: true, P5: false,
+               P6: false, P7: false, P8: false, P9: false, P10: true }),
+      ],
+      questHistory: [
+        quest(1, ['P5', 'P6'], 'fail', 1),    // P5, P6 tainted
+        quest(2, ['P3', 'P4'], 'success', 0),
+      ],
+    });
+    const rate = approveRate(obs, 300);
+    // Failed-member veto fires (P5 has 1 prior failed mission). Approve ≈ noise.
+    expect(rate).toBeLessThan(0.12);
+  });
+
+  it('R3 good on-team with clean team → approve (team itself signals clean)', () => {
+    // On-team, no failed members on team, zero anomalies in vote history →
+    // teamLooksClean → approve.
+    const obs = baseObs({
+      myPlayerId:    'P1',
+      myRole:        'loyal',
+      myTeam:        'good',
+      gamePhase:     'team_vote',
+      currentRound:  3,
+      currentLeader: 'P2',  // not self → leader-self short-circuit doesn't fire
+      proposedTeam:  ['P1', 'P2', 'P4'],
+      voteHistory: [
+        // Zero-anomaly: on-team approve, off-team reject.
+        vote(1, 1, 'P2', ['P2', 'P4'], true, {
+          P1: false, P2: true,  P3: false, P4: true,  P5: false,
+          P6: false, P7: false, P8: false, P9: false, P10: false,
+        }),
+        vote(2, 1, 'P4', ['P4', 'P3'], true, {
+          P1: false, P2: false, P3: true,  P4: true,  P5: false,
+          P6: false, P7: false, P8: false, P9: false, P10: false,
+        }),
+      ],
+      questHistory: [
+        quest(1, ['P2', 'P4'], 'success', 0),
+        quest(2, ['P4', 'P3'], 'success', 0),
+      ],
+    });
+    const rate = approveRate(obs, 300);
+    expect(rate).toBeGreaterThan(0.85);
   });
 });
 
