@@ -1454,43 +1454,41 @@ export class HeuristicAgent implements AvalonAgent {
       if (oberonDecision !== null) return oberonDecision;
     }
 
-    // Edward 2026-04-24 batch 4 fix #2 — cross-faction R1-R2 anomaly
-    // suppression (promoted from good-only to all factions).
+    // Edward 2026-04-30 18:10 verbatim — R1-R2 ABSOLUTE forced normal vote.
     //
-    // Edward verbatim (batch 2): 「不是前三局不開白 / 是第1&2局先不要開異常票」
-    // Edward verbatim (batch 4): 「你還是一堆異常票啊」
+    //   「R1R2 都先只能投正常票吧 不然這樣 bug 根本修不完 基本策略都玩不好了
+    //    還一直搞花式」
     //
-    // Root cause of residual anomalies after batch 2: the guard lived
-    // inside the `myTeam === 'good'` branch, so evil players still ran
-    // their standard `hasSelf || hasAlly → approve; else 30-35% approve`
-    // logic — this produced outer-white anomalies (evil off-team + no
-    // ally on team + random approve) in R1-R2 exactly as visible in
-    // the batch-3 self-play output (e.g. R1-P1 team [1,2,3] with evil
-    // seats 6+10 outer-white approving).
+    // Hard rule: in R1 and R2, EVERY player (regardless of role / faction /
+    // pyramid score / failed-member taint) votes the canonical normal:
+    //   • on-team  → approve
+    //   • off-team → reject
     //
-    // Fix: lift the early-round guard above the faction split so it
-    // applies to BOTH good and evil:
-    //   • R1-R2 on-team  → approve  (suppress inner-black for all)
-    //   • R1-R2 off-team → reject   (suppress outer-white for all)
+    // This SUPERSEDES the prior batch-4 guard (which carved out a
+    // `hasFailedMemberEarly` exception for R2 after R1 fail). Edward's
+    // 2026-04-30 intent is "pin R1-R2 anomaly rate to 0% absolute,
+    // until basic 3-round strategy is solid". All花式異常 hooks
+    // (pyramid red veto / wizard veto / cross-faction guard relax /
+    // EV inner-black / pyramid evil clean shield / recognised-red
+    // outer-white limit / role-differentiated approve chance) are
+    // hooked AFTER this short-circuit and therefore disabled in
+    // R1-R2 entirely.
     //
-    // Exception: `hasFailedMemberEarly` — in R2 after a failed R1, any
-    // returning quest member is public-info tainted. Good-side rejects
-    // then are public-evidence-driven, not private-role-driven, so not
-    // truly "anomalies" in the role-identification sense. The guard
-    // stands down and normal heuristics resume; evil-side behaviour on
-    // R2 after R1 fail is unchanged (red always covers ally).
+    // Hard-rule exemptions kept in priority order ABOVE this gate
+    // (intentionally — they are SAFETY rules, not花式 anomalies):
+    //   1. forced-mission (failCount >= 4) approve — preserves R5
+    //      proposal-track invariant.
+    //   2. lake hard rules (硬1 / 硬2) reject — public-info contradictions
+    //      are NOT role-leak anomalies; they reject regardless of round.
+    //   3. leader self-approve — leader rejecting own team is a
+    //      fundamental bug; precedes any anomaly logic.
     //
-    // Trade-offs accepted (Edward's intent is maximal clean data):
-    //   • A Merlin/Percival on team with a knownEvil in R1 is forced to
-    //     approve instead of reject. Sacrifices one r1 inner-black signal
-    //     for zero-anomaly R1-R2 — aligned with "先不要開異常票".
-    //   • Evil off-team with ally on team in R1-R2 is forced to reject
-    //     instead of outer-white approving. Loses one cover approve but
-    //     removes a strong anomaly signature.
-    const hasFailedMemberEarly = proposedTeam.some(
-      id => (this.memory.failedTeamMembers.get(id) ?? 0) >= 1,
-    );
-    if ((obs.currentRound ?? 1) <= 2 && !hasFailedMemberEarly) {
+    // Trade-off (accepted): Edward's "先把 R1-R2 鎖死" mandate explicitly
+    // sacrifices the R2-after-R1-fail evidence-driven reject signal
+    // (~1 inner-black per game) to make anomaly attribution
+    // interpretable. Re-introduce role-leak signals once R3+ logic is
+    // verified sane.
+    if ((obs.currentRound ?? 1) <= 2) {
       return { type: 'team_vote', vote: proposedTeam.includes(myPlayerId) };
     }
 
@@ -1892,9 +1890,68 @@ export class HeuristicAgent implements AvalonAgent {
       if (teammateCount === 0) return 'fail';  // solo recognised-red
       if (teammateCount === 1) {
         if (myRole === 'assassin') return 'fail';
+
+        // Edward 2026-04-30 18:08 verbatim — R3+ 紅在 team 必出失敗 invariant.
+        //
+        //   「位階法應規定「team 內 ≥1 紅必出失敗」, wire 沒生效 / 條件錯」
+        //
+        // Edward 2026-04-30 self-play evidence: R3 team 1470 with seats 1+4
+        // both red (e.g. mordred + morgana, no assassin on team) emitted
+        // OOOO (4 successes / 0 fails). Pre-fix: mordred → success,
+        // morgana observe-first → success, no fail produced even though
+        // 2 reds were on the mission. Failed Edward's "team 內 ≥1 紅必出
+        // 失敗" hard invariant.
+        //
+        // Root cause: at teammateCount=1 the (morgana, mordred) pair where
+        // neither player is the assassin produced 0 fails. mordred's
+        // batch-10 cover-success + morgana's observe-first stacked into
+        // a coverage hole. assassin-on-team cases were correctly handled
+        // by `assassin → fail` short-circuit above.
+        //
+        // R3+ fix: at R3 onwards (ALSO covers solo R4 + listening R5
+        // already through other branches), morgana drops observe-first
+        // and votes fail. This guarantees ≥1 fail in (morgana, mordred)
+        // R3 case: morgana fails → 1 fail. Tradeoffs:
+        //   • (assassin, morgana) at R3: assassin fails + morgana fails =
+        //     2 fails (1 wasted vs 10p R3 needing 1). Acceptable per
+        //     Edward's "除非無謂浪費 = 已超額" — the "已超額" clause is
+        //     about TEAM red count exceeding required fails (e.g. 3 reds
+        //     on team in R3 needing only 1 fail; the 3rd red hides).
+        //     teammateCount=1 means only 2 reds on team → fail count of
+        //     2 is one over but morgana cannot distinguish her teammate
+        //     role from knownEvils alone, so this is the necessary
+        //     conservative choice.
+        //   • (mordred, morgana) at R3: morgana fails → 1 fail ✓ FIX.
+        //   • (assassin, mordred) at R3: assassin fails + mordred success
+        //     = 1 fail ✓ no waste (mordred branch unchanged).
+        //
+        // Why R1-R2 unchanged: R1-R2 quest data is consumed by analytics
+        // (batch 9 EVIL_MISSION_ALWAYS_FAIL invariant + R1 fail signal
+        // for downstream interpretation modules). Morgana observe-first
+        // at R1 still produces inferable signals via `priorJoint` lookup
+        // at R2. R3+ is where Edward's complaint sits and is the
+        // narrowest fix surface.
         if (myRole === 'mordred') return 'success';
         if (myRole === 'morgana') {
-          // Observe-first on her FIRST joint R1-R3 mission. On subsequent
+          if (round >= 3) {
+            // R3 hard rule (Edward 2026-04-30 18:08): ≥1 red must fail.
+            // morgana picks fail per位階 (assassin lowest → assassin
+            // always fails when on team; morgana middle → fails at R3
+            // teammateCount=1 to guarantee ≥1 fail in the (morgana,
+            // mordred) pair where assassin is absent; mordred highest
+            // → still hides at R1-R3 teammateCount=1).
+            //
+            // Why morgana not mordred: Edward's位階 ordering 刺娜德 puts
+            // morgana below mordred — the lower位階 should fail first.
+            // Asymmetric trade-off:
+            //   • (assassin, morgana) at R3: 2 fails (waste 1). Inevitable
+            //     since morgana cannot distinguish teammate role from
+            //     knownEvils alone.
+            //   • (assassin, mordred) at R3: 1 fail (no waste). Preserved.
+            //   • (morgana, mordred) at R3: 1 fail (FIX). Was 0 pre-fix.
+            return 'fail';
+          }
+          // Observe-first on her FIRST joint R1-R2 mission. On subsequent
           // joint missions, infer the teammate's role from the previous
           // joint mission's outcome and mirror the appropriate behaviour.
           const priorJoint = questHistory.find((q) =>

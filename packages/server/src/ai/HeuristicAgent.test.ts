@@ -604,9 +604,14 @@ describe('HeuristicAgent · batch 4 fix #2 (cross-faction R1-R2 anomaly suppress
     expect(approveRate(obs, 'hard', 200)).toBe(0);
   });
 
-  it('R2 after R1 quest fail: guard stands down, falls through to role logic', () => {
-    // hasFailedMemberEarly = true → R1-R2 suppression does NOT apply.
-    // Normal role logic resumes: evil off-team + ally on team → approve.
+  it('R2 after R1 quest fail: ABSOLUTE forced normal vote (Edward 2026-04-30 18:10)', () => {
+    // Edward 2026-04-30 18:10 ABSOLUTE rule: R1-R2 forced normal vote.
+    // Pre-fix (batch 4): hasFailedMemberEarly === true exempted R2 and
+    // fell through to evil role logic (off-team + ally on team → approve).
+    // Post-fix: evidence-driven exemption REMOVED. P1 (morgana) is off
+    // the proposed team → MUST reject in R2 regardless of failed-R1
+    // taint or ally presence. Edward's "把所有花式異常 hook 在 R1R2
+    // 完全 disable" mandate.
     const obs = baseObs({
       myPlayerId:    'P1',
       myRole:        'morgana',
@@ -615,14 +620,14 @@ describe('HeuristicAgent · batch 4 fix #2 (cross-faction R1-R2 anomaly suppress
       gamePhase:     'team_vote',
       currentRound:  2,
       currentLeader: 'P2',
-      proposedTeam:  ['P2', 'P4', 'P5'],  // ally P4 on team
+      proposedTeam:  ['P2', 'P4', 'P5'],  // P1 OFF team → forced reject
       voteHistory: [
         vote(1, 1, 'P2', ['P2', 'P3'], true,
              { P1: true, P2: true, P3: true, P4: false, P5: false }),
       ],
       questHistory: [quest(1, ['P2', 'P3'], 'fail', 1)],
     });
-    expect(approveRate(obs, 'hard', 200)).toBe(1);
+    expect(approveRate(obs, 'hard', 200)).toBe(0);
   });
 
   it('R3 off-team evil — recognised-red outer-white limit forces reject (batch 10)', () => {
@@ -2404,6 +2409,49 @@ describe('HeuristicAgent · batch 10 recognised-red hierarchy (位階法)', () =
           quest(1, ['P1', 'P2'], 'success', 0),  // joint R1 succeeded
         ],
         questResults: ['success'],
+      });
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('success');
+      }
+    });
+
+    // Edward 2026-04-30 18:08 — R3+ ≥1 red on team must fail invariant.
+    // Self-play evidence: R3 1470 含 1+4 紅 oooo 全成功 = bug. Pre-fix
+    // (mordred, morgana) at R3 teammateCount=1 produced 0 fails because
+    // mordred → success and morgana observe → success. Fix: morgana at
+    // R3+ teammateCount=1 always fails (per位階 morgana < mordred,
+    // morgana fails first). Mordred unchanged (still success at R1-R3
+    // teammateCount=1).
+    it('morgana + 1 teammate on R3 → fail (Edward 2026-04-30 R3+ ≥1 red invariant)', () => {
+      const obs = redQuestObs('morgana', {
+        round: 3,
+        proposedTeam: ['P1', 'P2'],
+        // No prior joint mission — pre-fix would observe-success;
+        // post-fix forces fail to guarantee ≥1 red fail in
+        // (morgana, mordred) pair where assassin not on team.
+      });
+      for (let i = 0; i < 30; i++) {
+        const agent = new HeuristicAgent('P1', 'hard');
+        agent.onGameStart(obs);
+        const action = agent.act(obs);
+        expect(action.type).toBe('quest_vote');
+        if (action.type === 'quest_vote') expect(action.vote).toBe('fail');
+      }
+    });
+
+    it('mordred + 1 teammate on R3 → success (cover preserved at R1-R3 teammateCount=1)', () => {
+      // mordred batch-10 behaviour kept at R3 teammateCount=1: success.
+      // The (assassin, mordred) at R3 case still yields 1 fail (assassin
+      // fails); (morgana, mordred) at R3 yields 1 fail because morgana
+      // now fails (above test). mordred only deviates from this success
+      // at R4 teammateCount=1 (R4 hierarchy enforces both fail).
+      const obs = redQuestObs('mordred', {
+        round: 3,
+        proposedTeam: ['P1', 'P2'],
       });
       for (let i = 0; i < 30; i++) {
         const agent = new HeuristicAgent('P1', 'hard');
