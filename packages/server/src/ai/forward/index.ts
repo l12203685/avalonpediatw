@@ -30,3 +30,26 @@ export type {
   RoleProbDistribution,
   InterpretationResult,
 } from './types';
+
+// Wave E PR2 — decision-side wiring.
+export {
+  ForwardAgent,
+  USE_FORWARD_REASONING,
+  evaluatePurposes,
+  scoreCandidate,
+  computePurposeAlignment,
+  PURPOSE_KEYS,
+  zeroPurposeVector,
+  normalizePurpose,
+  roundT,
+  lerp,
+} from './ForwardAgent';
+
+export type {
+  PurposeVector,
+  Candidate,
+  CandidateSignals,
+  ReasoningTrace,
+  ForwardDecision,
+  DecisionType,
+} from './ForwardAgent';

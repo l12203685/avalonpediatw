@@ -617,6 +617,60 @@ function getDefaultPriors(): PriorLookup {
   return DEFAULT_PRIORS;
 }
 
+// ── Wave E PR2 (2026-05-03) — forward reasoning lazy loader ─────
+/**
+ * Lazy-load the ForwardAgent module to break the circular import
+ * (`./forward/ForwardAgent` itself imports `HeuristicAgent` for the
+ * baseline fallback). Loaded once, cached on the module scope.
+ *
+ * Returns `null` if the module fails to load — defensive: any load
+ * error falls back to the legacy baseline path silently.
+ */
+type ForwardAgentModule = typeof import('./forward/ForwardAgent');
+let _forwardModule: ForwardAgentModule | null | 'failed' = null;
+
+function loadForwardModule(): ForwardAgentModule | null {
+  if (_forwardModule === 'failed') return null;
+  if (_forwardModule !== null) return _forwardModule;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    _forwardModule = require('./forward/ForwardAgent') as ForwardAgentModule;
+    return _forwardModule;
+  } catch {
+    _forwardModule = 'failed';
+    return null;
+  }
+}
+
+/**
+ * Whether forward reasoning is enabled. Reads `USE_FORWARD_REASONING`
+ * from the lazy-loaded module. Defaults false (PR2 ship default).
+ *
+ * Type-widening note: `USE_FORWARD_REASONING` is exported as a literal
+ * `false`, which makes a direct `=== true` comparison a TS narrowing
+ * error. We widen via `Boolean(...)` so the strict comparison narrows
+ * cleanly and the flag can be flipped without retyping the export.
+ */
+function forwardReasoningEnabled(): boolean {
+  const m = loadForwardModule();
+  if (!m) return false;
+  const flag: unknown = m.USE_FORWARD_REASONING;
+  return flag === true;
+}
+
+/**
+ * Construct a ForwardAgent for the given baseline + agentId. Returns
+ * null if module load fails — caller should fall back to baseline.
+ */
+function createForwardAgent(
+  agentId: string,
+  baseline: HeuristicAgent,
+): { act: (obs: PlayerObservation) => AgentAction } | null {
+  const m = loadForwardModule();
+  if (!m) return null;
+  return new m.ForwardAgent(agentId, baseline);
+}
+
 export class HeuristicAgent implements AvalonAgent {
   readonly agentId: string;
   readonly agentType = 'heuristic' as const;
@@ -660,6 +714,16 @@ export class HeuristicAgent implements AvalonAgent {
     this.ingestQuestHistory(obs);
     this.ingestLeaderStats(obs);
     this.memory.lastKnownPhase = obs.gamePhase;
+
+    // Wave E PR2 (2026-05-03) — forward reasoning gate.
+    // Feature flag `USE_FORWARD_REASONING` defaults false → baseline
+    // path runs unchanged. Flip to true (manual edit + rebuild) to
+    // route decisions through the 5-step forward pipeline. Lazy-loaded
+    // to avoid circular import (ForwardAgent imports HeuristicAgent).
+    if (forwardReasoningEnabled()) {
+      const fa = createForwardAgent(this.agentId, this);
+      if (fa) return fa.act(obs);
+    }
 
     switch (obs.gamePhase) {
       case 'team_select':  return this.selectTeam(obs);
