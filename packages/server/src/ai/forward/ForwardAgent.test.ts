@@ -59,8 +59,8 @@ function sumPurpose(p: PurposeVector): number {
 
 // ── Feature flag default ────────────────────────────────────────
 describe('USE_FORWARD_REASONING feature flag', () => {
-  it('defaults to false (PR2 ship: inert until Edward flips it)', () => {
-    expect(USE_FORWARD_REASONING).toBe(false);
+  it('defaults to true (Edward 2026-05-05 ack A: flipped after PR2 inert ship)', () => {
+    expect(USE_FORWARD_REASONING).toBe(true);
   });
 });
 

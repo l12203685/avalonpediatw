@@ -57,6 +57,7 @@ import {
   rankBySuspicion,
 } from '../packages/server/src/ai/baseline';
 import { SelfPlayReasoningRepository } from '../packages/server/src/services/SelfPlayReasoningRepository';
+import { getForwardTelemetry, resetForwardTelemetry } from '../packages/server/src/ai/forward';
 
 const PLAYER_COUNT = 10;
 const DIFFICULTY: 'hard' = 'hard';
@@ -1012,6 +1013,10 @@ function renderReasoningTrace(game: CapturedGame, gameNum: number): string {
 async function main() {
   process.env.SELFPLAY_ENABLED = 'false';
 
+  // Wave E PR3 verification: reset forward telemetry before run so we can
+  // measure forward-vs-fallback usage rate for this single self-play run.
+  resetForwardTelemetry();
+
   // Output directly to Edward's main staging dir per task spec.
   const outDir = '/mnt/c/Users/admin/staging/selfplay';
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
@@ -1110,6 +1115,19 @@ async function main() {
   console.log(`[wrote] ${blobPath}  (${blobs.length} reasoning blobs)`);
   console.log(`[wrote] ${summaryPath}`);
   console.log(summaryLines.join('\n'));
+
+  // Wave E PR3 verification: dump forward telemetry so the verification
+  // step can confirm ForwardAgent.decide() actually fired and measure
+  // fallback rate.
+  const tel = getForwardTelemetry();
+  const telPath = path.join(outDir, `${outBase}.forward_telemetry.json`);
+  fs.writeFileSync(telPath, JSON.stringify(tel, null, 2), 'utf8');
+  console.log(`[wrote] ${telPath}`);
+  console.log(
+    `[forward telemetry] decisions=${tel.totalDecisions} ` +
+    `forwardSuccess=${tel.forwardSuccess} fallbacks=${tel.fallbacks} ` +
+    `fallbackRate=${(tel.fallbackRate * 100).toFixed(2)}%`,
+  );
 }
 
 main().catch(err => {

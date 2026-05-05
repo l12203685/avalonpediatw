@@ -43,6 +43,8 @@ export {
   normalizePurpose,
   roundT,
   lerp,
+  getForwardTelemetry,
+  resetForwardTelemetry,
 } from './ForwardAgent';
 
 export type {

@@ -86,7 +86,40 @@ import {
  * the default. To override at runtime, callers should construct a
  * ForwardAgent directly and bypass the flag.
  */
-export const USE_FORWARD_REASONING = false;
+export const USE_FORWARD_REASONING = true;
+
+// ── Telemetry counters (Wave E PR3 verification) ────────────────
+/**
+ * Module-level counters incremented inside `ForwardAgent.decide()` so
+ * smoke tests / self-play harnesses can verify the forward path is
+ * actually taken (vs falling back to baseline). Values are
+ * process-lifetime cumulative; harnesses should snapshot before/after
+ * a run. Not used for production logic.
+ */
+let _forwardDecideCalls = 0;
+let _forwardFallbackCalls = 0;
+
+export function getForwardTelemetry(): {
+  readonly totalDecisions: number;
+  readonly fallbacks: number;
+  readonly forwardSuccess: number;
+  readonly fallbackRate: number;
+} {
+  const forwardSuccess = _forwardDecideCalls - _forwardFallbackCalls;
+  const fallbackRate =
+    _forwardDecideCalls === 0 ? 0 : _forwardFallbackCalls / _forwardDecideCalls;
+  return {
+    totalDecisions: _forwardDecideCalls,
+    fallbacks: _forwardFallbackCalls,
+    forwardSuccess,
+    fallbackRate,
+  };
+}
+
+export function resetForwardTelemetry(): void {
+  _forwardDecideCalls = 0;
+  _forwardFallbackCalls = 0;
+}
 
 // ── Decision type union ─────────────────────────────────────────
 /**
@@ -462,6 +495,7 @@ export class ForwardAgent implements AvalonAgent {
    * On any internal error → fallback to baseline.act(obs).
    */
   decide(obs: PlayerObservation): ForwardDecision {
+    _forwardDecideCalls += 1;
     const decisionType = obs.gamePhase as DecisionType;
     let interp: InterpretationResult;
     try {
@@ -518,6 +552,7 @@ export class ForwardAgent implements AvalonAgent {
     decisionType: DecisionType,
     reason: string,
   ): ForwardDecision {
+    _forwardFallbackCalls += 1;
     const action = this.baseline.act(obs);
     const fallbackCandidate: Candidate = {
       action,
