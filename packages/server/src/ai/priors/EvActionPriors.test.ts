@@ -28,6 +28,18 @@ import {
   DECLARER_POST_ACTION_CONSISTENCY_PATH,
   LAKE_DECLARE_LIE_ROLE_RATE_PATH,
   type HookPathMeta,
+  // v9 hooks (2026-05-05 Phase 5 ship — H20 + H12)
+  declarerVoteBiasPrior,
+  bucketDeclarerVoteBias,
+  percivalAsymmetryPrior,
+  morganaTierAsymmetryPrior,
+  bucketAsymmetryScore,
+  DECLARER_VOTE_BIAS_PATH,
+  PERCIVAL_VS_MORGANA_ASYMMETRY_PATH,
+  MORGANA_TIER_ASYMMETRY_PATH,
+  MORGANA_R3_PLUS_INNER_BLACK_RATE,
+  MERLIN_R3_PLUS_INNER_BLACK_RATE,
+  PERCIVAL_VS_MORGANA_ASYM_GAP,
 } from './EvActionPriors';
 
 // H6 path metadata — retracted from public surface 2026-04-28; inlined here
@@ -389,5 +401,163 @@ describe('pathAwareEvMultiplier (Edward v8 spec)', () => {
         3,
       ),
     ).toBe(0.7);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// v9 hooks (2026-05-05 Phase 5 ship — H12 + H20)
+// ════════════════════════════════════════════════════════════════════
+
+describe('Hook 12 · declarerVoteBiasPrior (3-bucket fallback)', () => {
+  it('紅 declarer 宣藍 + bias=consistent (cover lie) returns positive bump (red signal)', () => {
+    // 假 cover 一致 = 紅角假宣藍且後續 vote 重支持假宣 → declarer 加紅
+    expect(declarerVoteBiasPrior('assassin', 'good', 'consistent')).toBeGreaterThan(0.05);
+    expect(declarerVoteBiasPrior('morgana', 'good', 'consistent')).toBeGreaterThan(0.05);
+    expect(declarerVoteBiasPrior('mordred', 'good', 'consistent')).toBeGreaterThan(0.05);
+    expect(declarerVoteBiasPrior('oberon', 'good', 'consistent')).toBeGreaterThan(0.05);
+  });
+
+  it('紅 declarer 宣藍 + bias=reverse (言行不一) returns negative bump (red 露馬腳)', () => {
+    // 假 cover 不一致 = 紅角宣藍卻反對 → declarer 暴露 → 加紅 (但 sign 是 raw delta;
+    // 我們設計為 -0.10 表「降低 declarer 的對藍信任 / 上紅嫌」, caller 用法是
+    // ADD 到紅嫌 score, 所以 caller 取反或 caller 看待方向. 這裡測 raw value)
+    expect(declarerVoteBiasPrior('assassin', 'good', 'reverse')).toBeLessThan(0);
+    expect(declarerVoteBiasPrior('morgana', 'good', 'reverse')).toBeLessThan(0);
+  });
+
+  it('忠 declarer 宣藍 + bias=consistent (真誠) returns positive trust (G5 sanity)', () => {
+    // G5 0家(忠) 宣 1=刺壞人 + R3/R5 持續反對 1家含隊 → 真誠 → loyal trust
+    expect(declarerVoteBiasPrior('loyal', 'evil', 'consistent')).toBeGreaterThan(0.05);
+    expect(declarerVoteBiasPrior('loyal', 'good', 'consistent')).toBeGreaterThan(0.05);
+  });
+
+  it('returns 0 for neutral bucket', () => {
+    expect(declarerVoteBiasPrior('assassin', 'good', 'neutral')).toBe(0);
+    expect(declarerVoteBiasPrior('loyal', 'good', 'neutral')).toBe(0);
+  });
+
+  it('returns 0 for missing arguments', () => {
+    expect(declarerVoteBiasPrior(undefined, 'good', 'consistent')).toBe(0);
+    expect(declarerVoteBiasPrior('assassin', undefined, 'consistent')).toBe(0);
+    expect(declarerVoteBiasPrior('assassin', 'good', undefined)).toBe(0);
+  });
+
+  it('returns 0 for unknown role', () => {
+    expect(declarerVoteBiasPrior('xxx', 'good', 'consistent')).toBe(0);
+  });
+
+  it('returns 0 when feature flag disabled', () => {
+    const ORIG = process.env.USE_EV_ACTION_PRIORS;
+    process.env.USE_EV_ACTION_PRIORS = '0';
+    expect(declarerVoteBiasPrior('assassin', 'good', 'consistent')).toBe(0);
+    process.env.USE_EV_ACTION_PRIORS = ORIG;
+  });
+
+  it('exposes path metadata = dominant / three_red', () => {
+    expect(DECLARER_VOTE_BIAS_PATH.pathCategory).toBe('dominant');
+    expect(DECLARER_VOTE_BIAS_PATH.primaryOutcome).toBe('three_red');
+  });
+
+  describe('bucketDeclarerVoteBias bucket boundary', () => {
+    it('bias <= -0.5 → reverse', () => {
+      expect(bucketDeclarerVoteBias(-0.5)).toBe('reverse');
+      expect(bucketDeclarerVoteBias(-1.5)).toBe('reverse');
+    });
+    it('|bias| < 0.5 → neutral', () => {
+      expect(bucketDeclarerVoteBias(0)).toBe('neutral');
+      expect(bucketDeclarerVoteBias(0.4)).toBe('neutral');
+      expect(bucketDeclarerVoteBias(-0.4)).toBe('neutral');
+    });
+    it('bias >= +0.5 → consistent', () => {
+      expect(bucketDeclarerVoteBias(0.5)).toBe('consistent');
+      expect(bucketDeclarerVoteBias(2.5)).toBe('consistent');
+    });
+    it('NaN bias → neutral (safe default)', () => {
+      expect(bucketDeclarerVoteBias(Number.NaN)).toBe('neutral');
+    });
+  });
+});
+
+describe('Hook 20 · percival vs morgana asymmetry (派西vs娜)', () => {
+  it('exposes corpus-derived constants (L125 7pp gap)', () => {
+    expect(MORGANA_R3_PLUS_INNER_BLACK_RATE).toBeCloseTo(0.1298, 4);
+    expect(MERLIN_R3_PLUS_INNER_BLACK_RATE).toBeCloseTo(0.2007, 4);
+    expect(PERCIVAL_VS_MORGANA_ASYM_GAP).toBeCloseTo(0.0709, 4);
+  });
+
+  describe('percivalAsymmetryPrior — morgana 候選異白', () => {
+    it('morgana hypothesis × high asym → +EV pull toward red', () => {
+      // 派西看到候選 wizard 顯 morgana cover signature → 加紅嫌
+      expect(percivalAsymmetryPrior('morgana', 'high'))
+        .toBeCloseTo(+PERCIVAL_VS_MORGANA_ASYM_GAP, 4);
+      expect(percivalAsymmetryPrior('morgana', 'high')).toBeGreaterThan(0.05);
+    });
+
+    it('merlin hypothesis × high asym → -EV pull toward blue', () => {
+      // 派西看到候選 wizard 顯 merlin signature (R3+ 異黑反對) → 拉藍
+      expect(percivalAsymmetryPrior('merlin', 'high'))
+        .toBeCloseTo(-PERCIVAL_VS_MORGANA_ASYM_GAP, 4);
+      expect(percivalAsymmetryPrior('merlin', 'high')).toBeLessThan(-0.05);
+    });
+
+    it('low asym (morgana mirrors well) → 0 nudge for both hypotheses', () => {
+      expect(percivalAsymmetryPrior('morgana', 'low')).toBe(0);
+      expect(percivalAsymmetryPrior('merlin', 'low')).toBe(0);
+    });
+
+    it('returns 0 for missing hypothesis', () => {
+      expect(percivalAsymmetryPrior(undefined, 'high')).toBe(0);
+      expect(percivalAsymmetryPrior('merlin', undefined)).toBe(0);
+    });
+
+    it('returns 0 when feature flag disabled', () => {
+      const ORIG = process.env.USE_EV_ACTION_PRIORS;
+      process.env.USE_EV_ACTION_PRIORS = '0';
+      expect(percivalAsymmetryPrior('morgana', 'high')).toBe(0);
+      process.env.USE_EV_ACTION_PRIORS = ORIG;
+    });
+  });
+
+  describe('morganaTierAsymmetryPrior — merlin 候選異黑 mirror', () => {
+    it('high asym → 0.5 multiplier (morgana tighten cover)', () => {
+      // 高手對戰場景 morgana 自身應降低 cover-approve 頻率 (避免被識破)
+      expect(morganaTierAsymmetryPrior('high')).toBe(0.5);
+    });
+    it('low asym → 1.0 multiplier (no down-modulation)', () => {
+      expect(morganaTierAsymmetryPrior('low')).toBe(1);
+    });
+    it('returns 1 for missing bucket (safe baseline)', () => {
+      expect(morganaTierAsymmetryPrior(undefined)).toBe(1);
+    });
+    it('returns 1 when feature flag disabled (no-op = legacy behaviour)', () => {
+      const ORIG = process.env.USE_EV_ACTION_PRIORS;
+      process.env.USE_EV_ACTION_PRIORS = '0';
+      expect(morganaTierAsymmetryPrior('high')).toBe(1);
+      process.env.USE_EV_ACTION_PRIORS = ORIG;
+    });
+  });
+
+  describe('bucketAsymmetryScore boundary', () => {
+    it('score >= 1.0 → high', () => {
+      expect(bucketAsymmetryScore(1.0)).toBe('high');
+      expect(bucketAsymmetryScore(2.5)).toBe('high');
+    });
+    it('score < 1.0 → low', () => {
+      expect(bucketAsymmetryScore(0.0)).toBe('low');
+      expect(bucketAsymmetryScore(0.99)).toBe('low');
+    });
+    it('NaN → low (safe default)', () => {
+      expect(bucketAsymmetryScore(Number.NaN)).toBe('low');
+    });
+  });
+
+  it('exposes path metadata for percival side = dominant / three_blue_alive', () => {
+    expect(PERCIVAL_VS_MORGANA_ASYMMETRY_PATH.pathCategory).toBe('dominant');
+    expect(PERCIVAL_VS_MORGANA_ASYMMETRY_PATH.primaryOutcome).toBe('three_blue_alive');
+  });
+
+  it('exposes path metadata for morgana side = dominant / three_red', () => {
+    expect(MORGANA_TIER_ASYMMETRY_PATH.pathCategory).toBe('dominant');
+    expect(MORGANA_TIER_ASYMMETRY_PATH.primaryOutcome).toBe('three_red');
   });
 });

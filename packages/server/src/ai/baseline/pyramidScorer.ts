@@ -34,6 +34,9 @@ import {
   type LakeChainState,
 } from './lakeChainTracker';
 import { layer4Score } from './voteInferer';
+import {
+  bucketDeclarerVoteBias,
+} from '../priors/EvActionPriors';
 
 // ── Score constants ────────────────────────────────────────────
 const NEUTRAL = 0.5;
@@ -162,6 +165,82 @@ function applyLayer3(
     if (blueTargets.size === 0) continue;
     const cur = scores.get(holder) ?? NEUTRAL;
     scores.set(holder, clamp01(cur - 0.05));
+  }
+
+  // ── H12 · Declarer vote bias (2026-05-05 v9 Phase 5 ship) ─────
+  // For each lake declarer who declared a target blue, compute their
+  // cumulative vote bias on subsequent teams containing that target.
+  //
+  //   bias = Σ (vote_observed_approve - 0.5)
+  //         summed over voteHistory rounds AFTER the lake round where
+  //         declarer cast a vote on a team containing the declared-blue
+  //         target. 0.5 = neutral baseline.
+  //
+  // 3-bucket fallback (Phase 1 §2 spec): reverse / neutral / consistent.
+  //
+  // Observer is role-blind toward the declarer (pyramid is shared baseline)
+  // so we apply a UNIVERSAL signal:
+  //   • bucket=reverse (declarer reversed on own declared-blue) → +red
+  //     (言行不一 = suspicious, regardless of underlying role).
+  //   • bucket=consistent (declarer supported own declared-blue) → mild
+  //     blue lean (consistent with truthful endorsement; covers the
+  //     red-cover-lie case but at lower magnitude — H8 single-bump
+  //     handles the strong case).
+  //   • bucket=neutral (no signal) → no nudge.
+  //
+  // Magnitude (additive on top of layer 3 endorser blue lean above):
+  //   reverse: +0.10 → suspicious
+  //   consistent: -0.03 → minor extra trust (additive on top of -0.05)
+  //   neutral: 0
+  for (const [holder, blueTargets] of lakeChain.declaredBlueByHolder) {
+    if (hardRuleViolators.has(holder)) continue;
+    if (hardRed.has(holder) || hardBlue.has(holder)) continue;
+    if (blueTargets.size === 0) continue;
+
+    // Find the lake record(s) where this holder declared blue.
+    let lakeRoundForHolder = Number.POSITIVE_INFINITY;
+    for (const rec of lakeChain.records) {
+      if (rec.holderId !== holder) continue;
+      if (rec.declaredClaim !== 'good') continue;
+      if (rec.round < lakeRoundForHolder) lakeRoundForHolder = rec.round;
+    }
+    if (!Number.isFinite(lakeRoundForHolder)) continue;
+
+    // Compute cumulative bias across post-lake votes on teams containing
+    // any declared-blue target.
+    let bias = 0;
+    let observableCount = 0;
+    for (const record of obs.voteHistory) {
+      if (record.round <= lakeRoundForHolder) continue;
+      const voteFromHolder = record.votes[holder];
+      if (voteFromHolder === undefined) continue;
+      // Does the proposed team include any declared-blue target?
+      let teamHasDeclared = false;
+      for (const tid of record.team) {
+        if (blueTargets.has(tid)) {
+          teamHasDeclared = true;
+          break;
+        }
+      }
+      if (!teamHasDeclared) continue;
+      observableCount++;
+      // bias contribution: +0.5 for approve, -0.5 for reject (so total
+      // sign reflects net direction; threshold ±0.5 lands on bucket
+      // boundaries per bucketDeclarerVoteBias).
+      bias += voteFromHolder ? +0.5 : -0.5;
+    }
+
+    if (observableCount < 2) continue; // sample-size floor (per spec note)
+
+    const bucket = bucketDeclarerVoteBias(bias);
+    if (bucket === 'reverse') {
+      const cur = scores.get(holder) ?? NEUTRAL;
+      scores.set(holder, clamp01(cur + 0.10));
+    } else if (bucket === 'consistent') {
+      const cur = scores.get(holder) ?? NEUTRAL;
+      scores.set(holder, clamp01(cur - 0.03));
+    }
+    // neutral → no change.
   }
 
   return { lakeChain, hardRuleViolators };

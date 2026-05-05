@@ -549,6 +549,276 @@ export function loyalVsPercivalReversePrior(voteRoundsObserved: number): number 
   return Math.min(1, r / 3);
 }
 
+// ════════════════════════════════════════════════════════════════════
+// v9 hooks (2026-05-05 ship — Phase 5 H20 派西vs娜 + H12 declarer bias)
+// ════════════════════════════════════════════════════════════════════
+
+// ── Hook 12 · Declarer vote bias (3-bucket fallback) ────────────────
+//
+// 2026-05-05 v9 Phase 5 ship (Edward ack: 派西分梅娜 + 隊長偏向).
+//
+// Source: v9_features_research_2026-04-27.md L146 + v9 Phase 1 data
+// validation 2026-05-03 §2 (G5 雙端對稱 sanity pass).
+//
+// Concept: after a lake holder declares a target's camp, observe how the
+// declarer subsequently votes on teams that contain the declared target.
+// A truthful declarer votes consistently with their declaration; a
+// cover-lying declarer votes against (e.g. "I declared 4 blue" but then
+// rejects every team containing 4).
+//
+// Bucket 5-level was the original spec but Phase 1 data validation found
+// vote samples per (role × camp × bias) cell may be sparse (~30% of
+// 2146 games × 4-cell split = ~150 cells). Spec recommended a 3-bucket
+// fallback for safety. We ship the 3-bucket version directly; original
+// 5-bucket retired since it was not implemented.
+//
+// 3-bucket key: bias = sign(Σ (vote_observed_approve - p_baseline_for_role))
+//   - bucket: 'reverse' (bias < 0, declarer voted AGAINST declared-good
+//     target's teams more than baseline → strong red signal)
+//   - bucket: 'neutral' (|bias| ≤ 0)
+//   - bucket: 'consistent' (bias > 0, declarer voted FOR declared-good
+//     target's teams more than baseline)
+//
+// EV semantics (Phase 1 §2 analysis):
+//   - 紅 declarer 宣藍 (cover lie) + bias=consistent → 重支持假宣 → 紅
+//     winning EV (G3 奧 cover, G7 莫甘娜 cover) — declarer trust DOWN.
+//   - 紅 declarer 宣藍 (cover lie) + bias=reverse → 言行不一, easy 識破
+//     → declarer trust DOWN even more (red 露馬腳).
+//   - 藍 declarer 宣藍 (truth) + bias=consistent → 真支持 → declarer
+//     trust UP (G5 忠 真誠).
+//   - 藍 declarer 宣藍 (truth) + bias=reverse → 罕見 (藍角不應反對自己
+//     宣藍 target) → suspicious — minor declarer trust DOWN.
+//
+// Wire: pyramid layer 3 declarer endorsement nudge. Returns a small
+// adjustment (±0.05 ~ ±0.1) onto the declarer's pyramid suspicion in
+// the SAME direction as the consistency signal. Nested onto H8
+// (declarerPostActionConsistencyPrior single-bump 0.217) — H12 acts at
+// finer granularity using the actual observed vote bias rather than a
+// binary "is the lie consistent or not" flag.
+
+export type DeclarerVoteBiasBucket = 'reverse' | 'neutral' | 'consistent';
+
+const DECLARER_VOTE_BIAS_BUMP: Record<
+  string, // role
+  Record<
+    'good' | 'evil', // declared camp
+    Record<DeclarerVoteBiasBucket, number>
+  >
+> = {
+  // 紅 roles 宣藍 (the high-signal lie pattern, per Phase 1 §2)
+  assassin: {
+    good: { reverse: -0.10, neutral: 0.0, consistent: +0.08 },
+    // 紅 declarer 真宣紅 (admit) is rare — fold into neutral baseline.
+    evil:  { reverse: 0.0, neutral: 0.0, consistent: 0.0 },
+  },
+  morgana: {
+    good: { reverse: -0.10, neutral: 0.0, consistent: +0.08 },
+    evil:  { reverse: 0.0, neutral: 0.0, consistent: 0.0 },
+  },
+  mordred: {
+    good: { reverse: -0.10, neutral: 0.0, consistent: +0.08 },
+    evil:  { reverse: 0.0, neutral: 0.0, consistent: 0.0 },
+  },
+  oberon: {
+    good: { reverse: -0.10, neutral: 0.0, consistent: +0.08 },
+    evil:  { reverse: 0.0, neutral: 0.0, consistent: 0.0 },
+  },
+  // 藍 roles — 宣藍 truthful, consistency = high trust
+  loyal: {
+    good: { reverse: -0.05, neutral: 0.0, consistent: +0.10 },
+    evil:  { reverse: -0.05, neutral: 0.0, consistent: +0.10 },
+  },
+  merlin: {
+    good: { reverse: -0.05, neutral: 0.0, consistent: +0.10 },
+    evil:  { reverse: -0.05, neutral: 0.0, consistent: +0.10 },
+  },
+  percival: {
+    good: { reverse: -0.05, neutral: 0.0, consistent: +0.10 },
+    evil:  { reverse: -0.05, neutral: 0.0, consistent: +0.10 },
+  },
+};
+
+export const DECLARER_VOTE_BIAS_PATH: HookPathMeta = {
+  pathCategory: 'dominant',
+  primaryOutcome: 'three_red',
+};
+
+/**
+ * Bucketise a continuous bias score into the 3-bucket fallback domain.
+ *
+ * `bias = Σ (observed_approve - baseline_approve)` summed over rounds
+ * where the declarer voted on a team containing the declared target.
+ *
+ * Threshold ±0.5 chosen so a single anomaly vote (~1.0 swing from
+ * baseline) lands in `consistent` or `reverse`; smaller drifts stay
+ * `neutral`. Caller passes the cumulative number; this helper bucketises.
+ */
+export function bucketDeclarerVoteBias(
+  bias: number,
+): DeclarerVoteBiasBucket {
+  if (!Number.isFinite(bias)) return 'neutral';
+  if (bias <= -0.5) return 'reverse';
+  if (bias >= +0.5) return 'consistent';
+  return 'neutral';
+}
+
+/**
+ * Look up the declarer-vote-bias signed nudge.
+ *
+ * Returns 0 (no nudge) when:
+ *   - feature flag off
+ *   - role / declared camp / bucket missing from table
+ *
+ * Caller adds the result to the declarer's pyramid suspicion score
+ * (positive = pull toward red; negative = pull toward blue).
+ *
+ * Sample-size floor: caller must check N>=2 vote events on declared
+ * target's teams before invoking this hook; H12 spec floor is 30 in
+ * the 2146-game corpus, but in self-play we cap to the smaller threshold
+ * since per-game N rarely exceeds 5.
+ */
+export function declarerVoteBiasPrior(
+  declarerRole: string | undefined,
+  declaredCamp: 'good' | 'evil' | undefined,
+  bucket: DeclarerVoteBiasBucket | undefined,
+): number {
+  if (!isEvActionPriorsEnabled()) return 0;
+  if (!declarerRole || !declaredCamp || !bucket) return 0;
+  const roleMap = DECLARER_VOTE_BIAS_BUMP[declarerRole];
+  if (!roleMap) return 0;
+  const campMap = roleMap[declaredCamp];
+  if (!campMap) return 0;
+  return campMap[bucket] ?? 0;
+}
+
+// ── Hook 20 · 派西 vs 娜 asymmetry (high-tier) ──────────────────────
+//
+// 2026-05-05 v9 Phase 5 ship (Edward ack: 派西分梅娜).
+//
+// Source: v9_features_research_2026-04-27.md L154 + L125 corpus already
+// shipped 7pp gap (morgana R3 inner-black 12.98% vs merlin R3 inner-black
+// 20.07%, n>=350 per cell on 2146 games).
+//
+// Concept: in dual-setup games (派+梅+娜), morgana attempts to MIRROR
+// merlin's behavioural signature so percival can't distinguish. Empirical
+// 2146-game data shows morgana mirrors imperfectly:
+//   - merlin R3+ on-team inner-black (reject when seeing red) ≈ 20.07%
+//   - morgana R3+ on-team inner-black ≈ 12.98%  (cover-approve more often)
+//   - 7pp asymmetry gap = morgana under-rejects relative to true merlin
+//
+// The asymmetry hook helps PERCIVAL (good role, sees both wizards
+// without knowing which is which) reweight the dual-thumb candidates:
+//
+//   • Wizard X showing R3+ inner-black at high rate (≥ merlin baseline
+//     0.20) → likely true merlin (lean blue).
+//   • Wizard Y showing R3+ outer-white cover (off-team approve / on-team
+//     approve when red is on team) at high rate → likely morgana mirror
+//     (lean red).
+//
+// On the morgana side, the hook also signals to morgana herself
+// (HeuristicAgent evil branch) that her morgana-mirror cover behaviour
+// is empirically MORE risky in the highest-tier dual-setup context
+// (where percival is more skilled at spotting asymmetry).
+//
+// Behavioural rate constants (R3+ on-team inner-black rate):
+//   MORGANA_R3_PLUS_INNER_BLACK_RATE = 0.1298   // L125 corpus
+//   MERLIN_R3_PLUS_INNER_BLACK_RATE  = 0.2007   // L125 corpus
+//   ASYMMETRY_GAP                    = 0.0709   // 7.09pp
+//
+// The bump magnitude scales the gap: at the comfortable corpus level
+// (n>=350/cell) we apply the full ±0.07 nudge; the gating gates the
+// observation count downstream so the hook is no-op on cold-start.
+
+export const MORGANA_R3_PLUS_INNER_BLACK_RATE = 0.1298;
+export const MERLIN_R3_PLUS_INNER_BLACK_RATE  = 0.2007;
+export const PERCIVAL_VS_MORGANA_ASYM_GAP     = MERLIN_R3_PLUS_INNER_BLACK_RATE
+                                              - MORGANA_R3_PLUS_INNER_BLACK_RATE;
+
+export type AsymmetryBucket = 'low' | 'high';
+
+/**
+ * Bucket the observed asymmetry score.
+ *
+ * `score = (innerBlackRate × roundsObserved) + leadCount` per spec L154.
+ * Below threshold = morgana mirrors well (low asym, hard for percival).
+ * Above threshold = wizard露馬腳 (high asym, percival can discriminate).
+ *
+ * Threshold 1.0 chosen so a wizard with one R3+ inner-black + one lead
+ * event lands at the boundary; this matches the Phase 1 §4 sanity check
+ * where 7-game self-play showed asymmetry score 0-2 across wizards.
+ */
+export function bucketAsymmetryScore(score: number): AsymmetryBucket {
+  if (!Number.isFinite(score)) return 'low';
+  return score >= 1.0 ? 'high' : 'low';
+}
+
+export const PERCIVAL_VS_MORGANA_ASYMMETRY_PATH: HookPathMeta = {
+  pathCategory: 'dominant',
+  primaryOutcome: 'three_blue_alive',
+};
+
+export const MORGANA_TIER_ASYMMETRY_PATH: HookPathMeta = {
+  pathCategory: 'dominant',
+  primaryOutcome: 'three_red',
+};
+
+/**
+ * Percival-side asymmetry prior — adjust dual-thumb wizard suspicion
+ * based on observed morgana-vs-merlin asymmetry signature.
+ *
+ * Returns a *positive* (toward red) nudge when the observed wizard
+ * matches the morgana cover signature (high inner-black gap → wizard
+ * looks merlin-clean → suspicion goes DOWN, so caller should subtract
+ * the result; OR high outer-white cover → wizard looks morgana-cover →
+ * suspicion goes UP, caller adds).
+ *
+ * Sign convention here: returns the suspicion DELTA to ADD to wizard's
+ * pyramid score. Caller passes:
+ *   - hypothesis: the wizard the caller is scoring as 'merlin-candidate'
+ *     OR 'morgana-candidate'; nudge applies in that direction.
+ *   - asymBucket: 'low' (morgana mirrors well — no signal) | 'high'
+ *     (wizard露馬腳 — asymmetry observed).
+ *
+ * Returns 0 for the 'low' bucket — no signal means we don't move the
+ * baseline. For 'high', morgana-candidate gains +0.07 toward red,
+ * merlin-candidate gains -0.07 toward blue.
+ */
+export function percivalAsymmetryPrior(
+  hypothesis: 'merlin' | 'morgana' | undefined,
+  asymBucket: AsymmetryBucket | undefined,
+): number {
+  if (!isEvActionPriorsEnabled()) return 0;
+  if (!hypothesis || !asymBucket) return 0;
+  if (asymBucket === 'low') return 0;
+  // 'high' asym observed → discriminating signal applies.
+  if (hypothesis === 'merlin')  return -PERCIVAL_VS_MORGANA_ASYM_GAP;
+  if (hypothesis === 'morgana') return +PERCIVAL_VS_MORGANA_ASYM_GAP;
+  return 0;
+}
+
+/**
+ * Morgana-side asymmetry prior — when morgana herself reasons about
+ * her cover behaviour at a given asymmetry score, return a multiplier
+ * that scales her cover-approve probability.
+ *
+ * In high-tier games (where percival can read asym), morgana should
+ * REDUCE her cover-approve rate (push toward more authentic-merlin
+ * behaviour). In low-tier games or when asym hasn't accumulated, she
+ * stays on baseline.
+ *
+ * Returns a multiplier in [0.5, 1.0]:
+ *   - 1.0: no down-modulation (low asym observed so far)
+ *   - 0.5: full down-modulation (high asym already observed → cover
+ *          burning at faster rate, tighten up)
+ */
+export function morganaTierAsymmetryPrior(
+  asymBucket: AsymmetryBucket | undefined,
+): number {
+  if (!isEvActionPriorsEnabled()) return 1;
+  if (!asymBucket) return 1;
+  return asymBucket === 'high' ? 0.5 : 1;
+}
+
 // ── Path-aware EV multiplier ─────────────────────────────────────────
 export type GamePhase = 'mission_pending' | 'mission_done' | 'any';
 
@@ -595,4 +865,9 @@ export const _forTesting = {
   DECLARER_POST_ACTION_CONSISTENCY_BUMP,
   ASSASSIN_TARGET_SEAT_HIT_RATE,
   SAME_TEAM_REVERSE_SUSPICION_DELTA,
+  // v9 internals (2026-05-05 ship — Phase 5 H20 + H12)
+  DECLARER_VOTE_BIAS_BUMP,
+  MORGANA_R3_PLUS_INNER_BLACK_RATE,
+  MERLIN_R3_PLUS_INNER_BLACK_RATE,
+  PERCIVAL_VS_MORGANA_ASYM_GAP,
 } as const;

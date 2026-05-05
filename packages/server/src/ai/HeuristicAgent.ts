@@ -32,6 +32,12 @@ import {
   pathAwareEvMultiplier,
   ASSASSIN_TOP_TIER_SEAT_PATH,
   type R1Outcome,
+  // v9 hooks (2026-05-05 Phase 5 ship — H20 派西vs娜 + H12 declarer bias)
+  declarerVoteBiasPrior,
+  bucketDeclarerVoteBias,
+  percivalAsymmetryPrior,
+  morganaTierAsymmetryPrior,
+  bucketAsymmetryScore,
 } from './priors/EvActionPriors';
 // Wave B 2026-04-28 — baseline pyramid tools (5-layer composition,
 // 4 lake hard rules, time-weighted layer-4 inference). See
@@ -1758,6 +1764,19 @@ export class HeuristicAgent implements AvalonAgent {
           approveChance = clampUnit(approveChance - 0.10, 0.05, 0.95);
         }
       }
+
+      // ── H20 · morgana side asymmetry tighten (2026-05-05 v9 Phase 5 ship) ──
+      // When playing morgana and our own R3+ asymmetry score has accumulated
+      // (we've burned cover signals already), tighten cover-approve rate
+      // to avoid further burn. morganaTierAsymmetryPrior returns 0.5 at
+      // 'high' bucket → halves the cover-approve chance.
+      if ((obs.myRole as string) === 'morgana' && round >= 3) {
+        const selfAsymScore = this.percivalAsymmetryScore(obs.myPlayerId, obs);
+        const selfAsymBucket = bucketAsymmetryScore(selfAsymScore);
+        const morganaCoverMult = morganaTierAsymmetryPrior(selfAsymBucket);
+        approveChance = clampUnit(approveChance * morganaCoverMult, 0.05, 0.95);
+      }
+
       return { type: 'team_vote', vote: Math.random() < approveChance };
     }
   }
@@ -2567,6 +2586,46 @@ export class HeuristicAgent implements AvalonAgent {
   // ─────────────────────────────────────────────────────────────
 
   /**
+   * H20 · 派西 vs 娜 R3+ asymmetry score (2026-05-05 v9 Phase 5 ship).
+   *
+   * Per L125 corpus + Phase 1 §4 sanity: morgana mirrors merlin imperfectly.
+   * Merlin R3+ on-team inner-black ≈ 20.07%; morgana R3+ on-team inner-black
+   * ≈ 12.98% (7.09pp gap). Compute a per-wizard asymmetry score by counting
+   * R3+ on-team inner-black events + R3+ leader events. Higher score means
+   * the wizard has accumulated discriminating signal.
+   *
+   * Score formula (per spec L154):
+   *   score = onTeamInnerBlackCount + leaderRoundsCount
+   *
+   * where:
+   *   - onTeamInnerBlack = R3+ rounds where wizard was on team AND voted
+   *     reject (signature merlin behavior).
+   *   - leaderRounds = R3+ rounds where wizard led (露馬腳 chance).
+   *
+   * Bucketed via `bucketAsymmetryScore` (threshold 1.0).
+   */
+  private percivalAsymmetryScore(
+    wizard: string,
+    obs: PlayerObservation,
+  ): number {
+    let score = 0;
+    const seenRounds = new Set<number>();
+    for (const record of obs.voteHistory) {
+      if (record.round < 3) continue;
+      const onTeam = record.team.includes(wizard);
+      const theirVote = record.votes[wizard];
+      // Inner-black signal: on-team reject.
+      if (onTeam && theirVote === false) score += 1;
+      // Leader exposure: count distinct R3+ rounds where wizard led.
+      if (record.leader === wizard && !seenRounds.has(record.round)) {
+        score += 1;
+        seenRounds.add(record.round);
+      }
+    }
+    return score;
+  }
+
+  /**
    * Detect the「梅林躲刺」pattern (signal weakening trust in inferred Merlin).
    *
    * Hypothesis: a real Merlin in mid-late game (R3+) has many opportunities
@@ -2745,11 +2804,45 @@ export class HeuristicAgent implements AvalonAgent {
     ).size;
     const dualThumbTrust = loyalVsPercivalReversePrior(distinctRoundsObserved);
 
+    // ── H20 · 派西 vs 娜 R3+ asymmetry (2026-05-05 v9 Phase 5 ship) ──
+    // Per L125 corpus 7.09pp gap (merlin R3+ inner-black 20.07% vs morgana
+    // 12.98%): the wizard with HIGH asymmetry score (R3+ inner-black +
+    // leader rounds) is more likely true merlin (rejects red-tainted teams,
+    // unlike morgana who covers). Apply percivalAsymmetryPrior signed nudge:
+    //   - merlin candidate with high asym  → -0.0709 trust delta (→ blue)
+    //   - morgana candidate with high asym → +0.0709 trust delta (→ red)
+    //
+    // The merlin wizard pick (`pickPreferredWizard`) may itself be wrong
+    // when asymmetry contradicts: if the OTHER wizard shows higher merlin
+    // signature, lean trust away from current pick.
+    let merlinTrustAsymBump = 0;
+    if (morganaWizards.length === 1) {
+      const candidateMerlinScore = this.percivalAsymmetryScore(merlinWizard, obs);
+      const candidateMorganaScore = this.percivalAsymmetryScore(morganaWizards[0], obs);
+      const merlinBucket = bucketAsymmetryScore(candidateMerlinScore);
+      const morganaBucket = bucketAsymmetryScore(candidateMorganaScore);
+      // If current merlin pick shows merlin signature → trust UP
+      // (percivalAsymmetryPrior returns negative for merlin hypothesis,
+      // representing "pull toward blue" = trust UP, so subtract).
+      const merlinSelfNudge = percivalAsymmetryPrior('merlin', merlinBucket);
+      merlinTrustAsymBump -= merlinSelfNudge; // subtract: more blue = +trust
+      // If the OTHER wizard (currently inferred as morgana) shows merlin
+      // signature instead, that's a sign our pick may be inverted —
+      // reduce confidence in the merlin pick.
+      const morganaCounterNudge = percivalAsymmetryPrior('morgana', morganaBucket);
+      // If counter-nudge positive (morgana looks like morgana → confirms
+      // pick), no change; if zero, no signal. We only USE the merlin
+      // self-nudge for now — counterNudge available for future expansion.
+      void morganaCounterNudge;
+    }
+
     // Final Merlin trust score in [0, 1]: starts at dualThumbTrust,
     // discounted by hidingSignal, partly recovered by betrayalSignal
     // (because morgana betrayal makes "A != morgana" more credible).
+    // H20 asymmetry bump applied as a final additive nudge.
     const merlinTrust = clampUnit(
-      dualThumbTrust * (1 - 0.7 * hidingSignal) + 0.2 * betrayalSignal,
+      dualThumbTrust * (1 - 0.7 * hidingSignal) + 0.2 * betrayalSignal
+        + merlinTrustAsymBump,
       0,
       1,
     );
