@@ -206,7 +206,7 @@ async function aggregatePlayerStats(): Promise<Map<string, PlayerAgg>> {
 // ---------------------------------------------------------------------------
 
 let _cache: { data: Map<string, PlayerAgg>; ts: number } | null = null;
-const CACHE_TTL_MS = 60_000; // 1 minute
+const CACHE_TTL_MS = 3_600_000; // 1 hour (T6: reduce Spark daily reads — invalidated on game write)
 
 async function getAggregated(): Promise<Map<string, PlayerAgg>> {
   const now = Date.now();

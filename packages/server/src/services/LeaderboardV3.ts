@@ -363,7 +363,7 @@ function computePrecisionMetric(
 // ---------------------------------------------------------------------------
 
 let _cache: { data: LeaderboardV3Response; ts: number } | null = null;
-const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_MS = 3_600_000; // 1 hour (T6: reduce Spark daily reads)
 
 /**
  * Get full v3 leaderboard.
