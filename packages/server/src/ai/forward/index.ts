@@ -37,6 +37,7 @@ export {
   USE_FORWARD_REASONING,
   evaluatePurposes,
   scoreCandidate,
+  computeRoleBias,
   computePurposeAlignment,
   PURPOSE_KEYS,
   zeroPurposeVector,
@@ -55,3 +56,17 @@ export type {
   ForwardDecision,
   DecisionType,
 } from './ForwardAgent';
+
+// 6 角色 Phase 2 (2026-05-05) — per-role override layer.
+export {
+  getRoleSignals,
+  applyRoleBias,
+  scoreWizardAsMerlin,
+  detectMerlinHidingFromAssassin,
+  detectMorganaBetrayal,
+} from './RoleStrategy';
+
+export type {
+  RoleSignals,
+  RoleBiasDelta,
+} from './RoleStrategy';

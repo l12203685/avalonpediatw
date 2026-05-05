@@ -71,6 +71,12 @@ import {
   PYRAMID_VIOLATOR_FLOOR,
   type PyramidScores,
 } from '../baseline';
+import {
+  getRoleSignals,
+  applyRoleBias,
+  type RoleSignals,
+  type RoleBiasDelta,
+} from './RoleStrategy';
 
 // ── Feature flag ────────────────────────────────────────────────
 /**
@@ -585,10 +591,27 @@ export class ForwardAgent implements AvalonAgent {
       return this.fallback(obs, decisionType, 'no candidates generated');
     }
 
+    // 6 角色 Phase 2 (2026-05-05) — per-role signal package. Computed
+    // once per decision; pure projection over `obs`. RoleStrategy.ts
+    // owns the schema; ForwardAgent passes it through to scoreCandidate
+    // unchanged. Spec: staging/subagent_results/six_roles_strategy_spec_2026-05-03.md
+    let roleSignals: RoleSignals;
+    try {
+      roleSignals = getRoleSignals(obs);
+    } catch (error: unknown) {
+      return this.fallback(obs, decisionType, 'getRoleSignals() threw');
+    }
+
     let bestIdx = 0;
     let bestScore = -Infinity;
     for (let i = 0; i < candidates.length; i++) {
-      const s = scoreCandidate(candidates[i], purposes, obs, interp);
+      const s = scoreCandidate(
+        candidates[i],
+        purposes,
+        obs,
+        interp,
+        roleSignals,
+      );
       if (s > bestScore) {
         bestScore = s;
         bestIdx = i;
@@ -700,7 +723,42 @@ export class ForwardAgent implements AvalonAgent {
     if (allIds.length < teamSize) return [];
 
     // Rank everyone by ascending suspicion (least suspicious first).
-    const ranked = rankBySuspicion(pyramid, obs, false);
+    let ranked = rankBySuspicion(pyramid, obs, false);
+
+    // 6 角色 Phase 2 (2026-05-05) — role-specific candidate filtering.
+    //
+    // Merlin (spec §1.4) — hard-exclude `knownEvils` from candidate pool.
+    // Pyramid already pins them to suspicion=1.0 via L1 hardpin, but we
+    // also remove them so even degenerate "rotate the last slot through
+    // alternative picks" candidates can never include a known red.
+    //
+    // Percival (spec §2.4) — prefer to exclude wizard B (predicted
+    // Morgana). Soft preference only: B stays in `ranked` but ranked
+    // last so it surfaces in candidates only when team size demands.
+    //
+    // Assassin / Mordred / Morgana — keep the full pool so the scorer
+    // can choose ally inclusion adaptively per round (R1 mimic-loyal,
+    // R3+ ally cover).
+    const role = obs.myRole;
+    if (role === 'merlin') {
+      const knownEvilSet = new Set(obs.knownEvils);
+      ranked = ranked.filter((id) => !knownEvilSet.has(id));
+    } else if (role === 'percival') {
+      // Soft de-prioritise wizard B (predicted Morgana) by moving to tail.
+      const wizards = obs.knownWizards ?? [];
+      if (wizards.length === 2) {
+        // Use the same A/B split as RoleStrategy.getRoleSignals (without
+        // re-running scoreWizardAsMerlin here — pyramid score is the
+        // cheap proxy: lower = more merlin-like).
+        const [w0, w1] = wizards;
+        const s0 = pyramid.scores.get(w0) ?? 0.5;
+        const s1 = pyramid.scores.get(w1) ?? 0.5;
+        const bId = s0 > s1 ? w0 : w1; // higher suspicion = predicted morgana
+        const without = ranked.filter((id) => id !== bId);
+        const includesB = ranked.includes(bId);
+        ranked = includesB ? [...without, bId] : without;
+      }
+    }
 
     // Edward 2026-05-05 R1-R2 align-baseline invariant:
     //   Baseline `HeuristicAgent.selectTeam` ALWAYS includes self
@@ -865,6 +923,15 @@ export class ForwardAgent implements AvalonAgent {
  * `signals` + the `obs` + `interp` into [-1, 1]. Positive = candidate
  * advances purpose; negative = candidate hurts purpose.
  *
+ * Per-role bias (`roleSignals` optional):
+ *   When provided, role-specific deltas from `RoleStrategy.applyRoleBias`
+ *   are summed onto the generic alignment vector BEFORE the dot product.
+ *   This keeps role asymmetries (派西 wizard A/B, 莫德 R1-leader, etc.)
+ *   isolated from the round-aware purpose weights.
+ *
+ *   Backward-compatible: omitting `roleSignals` reverts to pure generic
+ *   alignment (test helpers and pre-Phase-2 callers stay unbroken).
+ *
  * Exported for unit testing.
  */
 export function scoreCandidate(
@@ -872,13 +939,93 @@ export function scoreCandidate(
   purposes: PurposeVector,
   obs: PlayerObservation,
   interp: InterpretationResult,
+  roleSignals?: RoleSignals,
 ): number {
   const a = computePurposeAlignment(candidate, obs, interp);
   let score = 0;
+
+  // 6 角色 Phase 2 — sum role-specific bias deltas onto the generic
+  // alignment vector before the purpose-weighted dot product.
+  let bias: RoleBiasDelta = {};
+  if (roleSignals !== undefined) {
+    bias = computeRoleBias(candidate, obs, roleSignals);
+  }
   for (const k of PURPOSE_KEYS) {
-    score += (purposes[k] ?? 0) * (a[k] ?? 0);
+    const aligned = (a[k] ?? 0) + (bias[k] ?? 0);
+    // Clamp the combined value back into [-1, 1] so a single role
+    // override cannot saturate the score across multiple purposes.
+    const clamped = aligned > 1 ? 1 : aligned < -1 ? -1 : aligned;
+    score += (purposes[k] ?? 0) * clamped;
   }
   return score;
+}
+
+/**
+ * Resolve the per-role candidate-bias delta. Pure projection — no IO.
+ *
+ * Composes:
+ *   1. Pre-computed candidate signals (from `buildTeamSignals`).
+ *   2. Role-specific signals (from `getRoleSignals(obs)`).
+ *   3. Wizard A/B inclusion derived from candidate team list (Percival).
+ *   4. Assassinate target identity vs `allEvilIds` / Oberon.
+ *
+ * Exported for unit tests.
+ */
+export function computeRoleBias(
+  candidate: Candidate,
+  obs: PlayerObservation,
+  roleSignals: RoleSignals,
+): RoleBiasDelta {
+  const action = candidate.action;
+  const s = candidate.signals;
+
+  // Wizard inclusion derived from team list (Percival only consumes).
+  let teamIncludesPercivalA = false;
+  let teamIncludesPercivalB = false;
+  if (action.type === 'team_select') {
+    if (roleSignals.percivalA) {
+      teamIncludesPercivalA = action.teamIds.includes(roleSignals.percivalA);
+    }
+    if (roleSignals.percivalB) {
+      teamIncludesPercivalB = action.teamIds.includes(roleSignals.percivalB);
+    }
+  } else if (action.type === 'team_vote') {
+    const team = obs.proposedTeam ?? [];
+    if (roleSignals.percivalA) {
+      teamIncludesPercivalA = team.includes(roleSignals.percivalA);
+    }
+    if (roleSignals.percivalB) {
+      teamIncludesPercivalB = team.includes(roleSignals.percivalB);
+    }
+  }
+
+  // Assassinate target classification.
+  let targetIsKnownAlly = false;
+  let targetIsOberon = false;
+  if (action.type === 'assassinate') {
+    const allEvilSet = new Set(obs.allEvilIds ?? obs.knownEvils);
+    const knownAllySet = new Set(obs.knownEvils);
+    targetIsKnownAlly = knownAllySet.has(action.targetId);
+    // Oberon = evil per `allEvilIds` but NOT in `knownEvils` (lone wolf).
+    targetIsOberon =
+      allEvilSet.has(action.targetId) && !knownAllySet.has(action.targetId);
+  }
+
+  return applyRoleBias(obs.myRole, action, obs, {
+    numKnownEvilOnTeam: s.numKnownEvilOnTeam,
+    avgSuspicion: s.avgSuspicion,
+    includesKnownEvil: s.includesKnownEvil,
+    merlinProbForTarget: s.merlinProbForTarget,
+    teamIncludesPercivalA,
+    teamIncludesPercivalB,
+    merlinHidingFromAssassin: roleSignals.merlinHidingFromAssassin,
+    morganaBetrayal: roleSignals.morganaBetrayal,
+    mordredR1Leader: roleSignals.mordredR1Leader,
+    targetIsKnownAlly,
+    targetIsOberon,
+    oberonMissionParticipatedBefore: roleSignals.oberonMissionParticipatedBefore,
+    oberonFailedInMission: roleSignals.oberonFailedInMission,
+  });
 }
 
 /**
