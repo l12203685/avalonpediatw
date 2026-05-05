@@ -739,6 +739,37 @@ export class HeuristicAgent implements AvalonAgent {
     }
   }
 
+  /**
+   * Direct dispatch bypassing the forward-reasoning gate. Used by
+   * ForwardAgent when it needs to delegate a SPECIFIC decision back
+   * to the baseline pipeline (e.g. R1-R2 voteOnTeam force-normal hard
+   * rule, Edward 2026-04-30 18:10 lock — see HeuristicAgent.voteOnTeam
+   * line ~1561) without re-entering ForwardAgent.act and infinite
+   * recursing.
+   *
+   * Mirrors `act()` minus the `forwardReasoningEnabled()` gate:
+   *   - Performs the same idempotent ingestion (vote / quest / leader)
+   *     so memory stays consistent regardless of which path called.
+   *   - Dispatches straight to the per-phase private handler.
+   *
+   * Edward 2026-05-05 verbatim:「Fix 必走相同 hard rule, 不要 forward
+   * 自己再算一遍 (避免分歧). 推薦: ForwardAgent voteOnTeam 直接 delegate
+   * 到 baseline.voteOnTeam (R1R2) + 自己只 override R3+」.
+   */
+  actDirect(obs: PlayerObservation): AgentAction {
+    this.ingestVoteHistory(obs);
+    this.ingestQuestHistory(obs);
+    this.ingestLeaderStats(obs);
+    this.memory.lastKnownPhase = obs.gamePhase;
+
+    switch (obs.gamePhase) {
+      case 'team_select':  return this.selectTeam(obs);
+      case 'team_vote':    return this.voteOnTeam(obs);
+      case 'quest_vote':   return this.voteOnQuest(obs);
+      case 'assassination': return this.assassinate(obs);
+    }
+  }
+
   onGameEnd(_obs: PlayerObservation, _won: boolean): void {
     this.resetMemory();
   }

@@ -497,6 +497,69 @@ export class ForwardAgent implements AvalonAgent {
   decide(obs: PlayerObservation): ForwardDecision {
     _forwardDecideCalls += 1;
     const decisionType = obs.gamePhase as DecisionType;
+
+    // ── Edward 2026-05-05 R1-R2 force-normal vote delegation ────
+    //
+    // Edward 2026-04-30 18:10 verbatim:
+    //   「R1R2 都先只能投正常票吧 不然這樣 bug 根本修不完 基本策略都玩不好了
+    //    還一直搞花式」
+    //
+    // The baseline `HeuristicAgent.voteOnTeam` (line ~1561) pins R1+R2
+    // votes to canonical normal (on-team approve / off-team reject) via
+    // an absolute hard rule with priority chain:
+    //   1. forced-mission approve (failCount >= 4)
+    //   2. lake hard rules (硬1 / 硬2) reject
+    //   3. leader self-approve
+    //   4. R1-R2 force normal
+    //
+    // The ForwardAgent.decide pipeline (interpret → purposes →
+    // candidates → score → pick) does NOT include this hard rule,
+    // so when `USE_FORWARD_REASONING=true` (flipped 2026-05-05 commit
+    // fc318fe5) the R1-R2 anomaly rate spikes (1-game self-play showed
+    // R1=90% / R2=40%). Edward 2026-05-05:「Fix 必走相同 hard rule,
+    // 不要 forward 自己再算一遍 (避免分歧). 推薦: ForwardAgent voteOnTeam
+    // 直接 delegate 到 baseline.voteOnTeam (R1R2) + 自己只 override R3+」.
+    //
+    // Implementation: when the decision is `team_vote` in R1 or R2,
+    // delegate the entire decision to `baseline.actDirect(obs)` (which
+    // bypasses the forward-reasoning gate to avoid infinite recursion).
+    // R3+ falls through to the standard forward pipeline below.
+    //
+    // Trace records this as a non-fallback delegation so smoke tests
+    // can distinguish it from the catastrophic-error fallback path.
+    if (
+      decisionType === 'team_vote' &&
+      (obs.currentRound ?? 1) <= 2
+    ) {
+      const action = this.baseline.actDirect(obs);
+      const delegateCandidate: Candidate = {
+        action,
+        description: 'baseline R1-R2 force normal',
+        signals: {
+          avgSuspicion: 0,
+          maxSuspicion: 0,
+          includesKnownEvil: false,
+          includesSelf:
+            action.type === 'team_vote' && action.vote === true,
+          violatesLakeRules: false,
+          numKnownEvilOnTeam: 0,
+          merlinProbForTarget: 0,
+        },
+      };
+      return {
+        action,
+        reasoningTrace: {
+          decisionType,
+          purposes: zeroPurposeVector(),
+          candidatesEvaluated: 1,
+          chosen: delegateCandidate,
+          chosenScore: 0,
+          usedFallback: false,
+          summary: `${decisionType} → baseline R1-R2 force normal (round=${obs.currentRound ?? 1})`,
+        },
+      };
+    }
+
     let interp: InterpretationResult;
     try {
       interp = interpret(obs);
@@ -553,7 +616,13 @@ export class ForwardAgent implements AvalonAgent {
     reason: string,
   ): ForwardDecision {
     _forwardFallbackCalls += 1;
-    const action = this.baseline.act(obs);
+    // Use `actDirect` (not `act`) to bypass the forward-reasoning gate
+    // — `act` re-checks `forwardReasoningEnabled()` and would otherwise
+    // re-enter ForwardAgent → infinite recursion when fallback fires
+    // in production. Tests pass because vitest's ESM environment fails
+    // the `require()` lazy-load and short-circuits the gate, but the
+    // bug latently triggers in self-play / runtime.
+    const action = this.baseline.actDirect(obs);
     const fallbackCandidate: Candidate = {
       action,
       description: 'baseline fallback',
@@ -633,27 +702,54 @@ export class ForwardAgent implements AvalonAgent {
     // Rank everyone by ascending suspicion (least suspicious first).
     const ranked = rankBySuspicion(pyramid, obs, false);
 
+    // Edward 2026-05-05 R1-R2 align-baseline invariant:
+    //   Baseline `HeuristicAgent.selectTeam` ALWAYS includes self
+    //   (line ~1283 good branch + line ~1317 evil branch:
+    //   `[myPlayerId, ...filteredCandidates]`). When ForwardAgent
+    //   produces a candidate team WITHOUT self, the downstream
+    //   `voteOnTeam` step fires `leader === self → unconditional
+    //   approve` (HeuristicAgent.ts line ~1500), which counts as an
+    //   outer-white anomaly because the leader is off-team. To match
+    //   baseline's R1-R2 zero-anomaly invariant
+    //   (HeuristicAgent.r1r2_zero.test) we restrict candidate teams
+    //   to ones that include self — the leader-self-approve rule
+    //   then becomes on-team approve = no anomaly.
+    //
+    // This is enforced cross-faction (good and evil) because baseline
+    // does so too. The original Candidate A "pure top-N" path was
+    // self-defeating: the scorer can never approve a leader's
+    // off-team selection without leaking an outer-white in R1-R2.
+    //
+    // Self-inclusion is enforced here at candidate generation rather
+    // than as a post-pick fixup so the scorer's choice across
+    // candidates remains coherent (no last-mile rewrite of the chosen
+    // candidate's signals).
+    const selfId = obs.myPlayerId;
+    const otherRanked = ranked.filter((id) => id !== selfId);
+
     // Generate up to MAX_CANDIDATES candidate teams using rotation:
-    //   Candidate 0: top-N least suspicious, including self if good
-    //   Candidate 1: top-(N-1) least suspicious + 2nd-best alternative
-    //   ...
+    //   Candidate 0: self + top-(teamSize-1) least suspicious others
+    //   Candidate 1..N: rotate the LAST slot through alternative picks
     // Bounded by MAX_CANDIDATES to keep evaluation cheap.
     const MAX_CANDIDATES = 8;
     const candidates: Candidate[] = [];
 
-    // Candidate A: pure top-N by low suspicion.
-    const topN = ranked.slice(0, teamSize);
+    // Candidate A: self + top-(N-1) least suspicious others.
+    const topN = [selfId, ...otherRanked.slice(0, teamSize - 1)];
     candidates.push(this.makeTeamSelectCandidate(topN, obs, interp, pyramid));
 
-    // Candidate B: include self in the team (common good heuristic).
-    if (!topN.includes(obs.myPlayerId)) {
-      const withSelf = [obs.myPlayerId, ...ranked.filter((id) => id !== obs.myPlayerId).slice(0, teamSize - 1)];
-      candidates.push(this.makeTeamSelectCandidate(withSelf, obs, interp, pyramid));
-    }
-
-    // Candidate C..N: rotate the LAST slot through alternative picks.
-    for (let alt = teamSize; alt < ranked.length && candidates.length < MAX_CANDIDATES; alt++) {
-      const team = ranked.slice(0, teamSize - 1).concat([ranked[alt]]);
+    // Candidate B..N: rotate the LAST slot through alternative picks
+    // (always keeping self at slot 0).
+    for (
+      let alt = teamSize - 1;
+      alt < otherRanked.length && candidates.length < MAX_CANDIDATES;
+      alt++
+    ) {
+      const team = [
+        selfId,
+        ...otherRanked.slice(0, teamSize - 2),
+        otherRanked[alt],
+      ];
       candidates.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
     }
 

@@ -323,10 +323,37 @@ describe('ForwardAgent.decide (full pipeline)', () => {
     expect(reasoningTrace.candidatesEvaluated).toBeGreaterThan(0);
   });
 
-  it('team_vote: emits both approve and reject candidates and picks one', () => {
+  it('team_select: ALWAYS includes self (baseline R1-R2 align invariant)', () => {
+    // Edward 2026-05-05 R1-R2 align-baseline invariant — leader's
+    // proposed team must include self, so the downstream leader
+    // self-approve step does not produce off-team-approve outer-white
+    // anomalies. Verified across all 5 rounds.
+    for (const r of [1, 2, 3, 4, 5]) {
+      const obs = makeObs({
+        gamePhase: 'team_select',
+        currentRound: r,
+        myPlayerId: 'P0',
+        currentLeader: 'P0',
+      });
+      const { action } = agent.decide(obs);
+      expect(action.type).toBe('team_select');
+      if (action.type === 'team_select') {
+        expect(action.teamIds).toContain('P0');
+      }
+    }
+  });
+
+  it('team_vote (R3+): emits both approve and reject candidates and picks one', () => {
+    // R3+ exercises the forward pipeline (R1-R2 are delegated to baseline).
     const obs = makeObs({
       gamePhase: 'team_vote',
       proposedTeam: ['P1', 'P2'],
+      currentRound: 3,
+      questHistory: [
+        { round: 1, team: ['P0', 'P1'], result: 'success', failCount: 0 },
+        { round: 2, team: ['P0', 'P1', 'P2'], result: 'success', failCount: 0 },
+      ],
+      questResults: ['success', 'success'],
     });
     const { action, reasoningTrace } = agent.decide(obs);
     expect(action.type).toBe('team_vote');
@@ -402,6 +429,193 @@ describe('ForwardAgent.decide (full pipeline)', () => {
   });
 });
 
+// ── R1-R2 force-normal vote delegation (Edward 2026-05-05) ──────
+//
+// Edward 2026-04-30 18:10「R1R2 都先只能投正常票吧」+ 2026-05-05 fix
+// recommendation: ForwardAgent.decide must delegate `team_vote` at
+// R1 / R2 to baseline.actDirect (the same hard-rule chain as
+// HeuristicAgent.voteOnTeam line ~1561). Forward pipeline only runs
+// for R3+.
+describe('ForwardAgent.decide team_vote R1-R2 force normal', () => {
+  it('R1 on-team good player approves', () => {
+    const baseline = new HeuristicAgent('R1-on');
+    baseline.onGameStart(makeObs({}));
+    const fa = new ForwardAgent('R1-on', baseline);
+    const obs = makeObs({
+      gamePhase: 'team_vote',
+      currentRound: 1,
+      proposedTeam: ['P0', 'P1'],
+      currentLeader: 'P3',
+      myPlayerId: 'P0',
+      myRole: 'loyal',
+      myTeam: 'good',
+    });
+    const { action, reasoningTrace } = fa.decide(obs);
+    expect(action.type).toBe('team_vote');
+    if (action.type === 'team_vote') expect(action.vote).toBe(true);
+    expect(reasoningTrace.usedFallback).toBe(false);
+    expect(reasoningTrace.summary).toContain('R1-R2 force normal');
+  });
+
+  it('R1 off-team good player rejects', () => {
+    const baseline = new HeuristicAgent('R1-off');
+    baseline.onGameStart(makeObs({}));
+    const fa = new ForwardAgent('R1-off', baseline);
+    const obs = makeObs({
+      gamePhase: 'team_vote',
+      currentRound: 1,
+      proposedTeam: ['P1', 'P2'],
+      currentLeader: 'P1',
+      myPlayerId: 'P0',
+      myRole: 'loyal',
+      myTeam: 'good',
+    });
+    const { action, reasoningTrace } = fa.decide(obs);
+    expect(action.type).toBe('team_vote');
+    if (action.type === 'team_vote') expect(action.vote).toBe(false);
+    expect(reasoningTrace.usedFallback).toBe(false);
+    expect(reasoningTrace.summary).toContain('R1-R2 force normal');
+  });
+
+  it('R1 evil on-team approves (cross-faction force normal)', () => {
+    const baseline = new HeuristicAgent('R1-evil-on');
+    baseline.onGameStart(makeObs({ knownEvils: ['P0', 'P3'] }));
+    const fa = new ForwardAgent('R1-evil-on', baseline);
+    const obs = makeObs({
+      gamePhase: 'team_vote',
+      currentRound: 1,
+      proposedTeam: ['P0', 'P2'],
+      currentLeader: 'P2',
+      myPlayerId: 'P0',
+      myRole: 'morgana',
+      myTeam: 'evil',
+      knownEvils: ['P0', 'P3'],
+    });
+    const { action } = fa.decide(obs);
+    expect(action.type).toBe('team_vote');
+    if (action.type === 'team_vote') expect(action.vote).toBe(true);
+  });
+
+  it('R1 evil off-team rejects (no outer-white anomaly)', () => {
+    const baseline = new HeuristicAgent('R1-evil-off');
+    baseline.onGameStart(makeObs({ knownEvils: ['P0', 'P3'] }));
+    const fa = new ForwardAgent('R1-evil-off', baseline);
+    const obs = makeObs({
+      gamePhase: 'team_vote',
+      currentRound: 1,
+      proposedTeam: ['P1', 'P2'],
+      currentLeader: 'P1',
+      myPlayerId: 'P0',
+      myRole: 'morgana',
+      myTeam: 'evil',
+      knownEvils: ['P0', 'P3'],
+    });
+    const { action } = fa.decide(obs);
+    expect(action.type).toBe('team_vote');
+    if (action.type === 'team_vote') expect(action.vote).toBe(false);
+  });
+
+  it('R2 on-team good player approves (also force normal)', () => {
+    const baseline = new HeuristicAgent('R2-on');
+    baseline.onGameStart(makeObs({}));
+    const fa = new ForwardAgent('R2-on', baseline);
+    const obs = makeObs({
+      gamePhase: 'team_vote',
+      currentRound: 2,
+      proposedTeam: ['P0', 'P1', 'P2'],
+      currentLeader: 'P4',
+      myPlayerId: 'P0',
+      myRole: 'loyal',
+      myTeam: 'good',
+      questHistory: [
+        { round: 1, team: ['P0', 'P3'], result: 'fail', failCount: 1 },
+      ],
+      questResults: ['fail'],
+    });
+    const { action, reasoningTrace } = fa.decide(obs);
+    expect(action.type).toBe('team_vote');
+    if (action.type === 'team_vote') expect(action.vote).toBe(true);
+    expect(reasoningTrace.summary).toContain('R1-R2 force normal');
+  });
+
+  it('R2 off-team good player rejects (force normal beats failed-member taint)', () => {
+    // Pre-fix bug: ForwardAgent's team_vote candidate scorer let
+    // pyramid suspicion drive an outer-white approve when an off-team
+    // good player saw a failed-member shadow. R1-R2 force normal
+    // explicitly suppresses this花式 anomaly.
+    const baseline = new HeuristicAgent('R2-off');
+    baseline.onGameStart(makeObs({}));
+    const fa = new ForwardAgent('R2-off', baseline);
+    const obs = makeObs({
+      gamePhase: 'team_vote',
+      currentRound: 2,
+      proposedTeam: ['P1', 'P2', 'P4'],
+      currentLeader: 'P1',
+      myPlayerId: 'P0',
+      myRole: 'loyal',
+      myTeam: 'good',
+      questHistory: [
+        { round: 1, team: ['P3', 'P4'], result: 'fail', failCount: 1 },
+      ],
+      questResults: ['fail'],
+    });
+    const { action } = fa.decide(obs);
+    expect(action.type).toBe('team_vote');
+    if (action.type === 'team_vote') expect(action.vote).toBe(false);
+  });
+
+  it('R3 team_vote runs full forward pipeline (no delegation)', () => {
+    const baseline = new HeuristicAgent('R3');
+    baseline.onGameStart(makeObs({}));
+    const fa = new ForwardAgent('R3', baseline);
+    const obs = makeObs({
+      gamePhase: 'team_vote',
+      currentRound: 3,
+      proposedTeam: ['P0', 'P1', 'P2'],
+      currentLeader: 'P4',
+      myPlayerId: 'P0',
+      myRole: 'loyal',
+      myTeam: 'good',
+      questHistory: [
+        { round: 1, team: ['P0', 'P3'], result: 'success', failCount: 0 },
+        { round: 2, team: ['P1', 'P2', 'P4'], result: 'success', failCount: 0 },
+      ],
+      questResults: ['success', 'success'],
+    });
+    const { reasoningTrace } = fa.decide(obs);
+    // Forward pipeline path emits 2 candidates (approve / reject),
+    // never the single delegation candidate.
+    expect(reasoningTrace.candidatesEvaluated).toBeGreaterThanOrEqual(2);
+    expect(reasoningTrace.summary).not.toContain('R1-R2 force normal');
+  });
+
+  it('R1 forced-mission (failCount=4) approves regardless of side', () => {
+    // Baseline priority chain: forced-mission > lake hard rule >
+    // leader self-approve > R1-R2 force normal. Verify delegation
+    // honours the forced-mission gate (Edward 2026-04-24 batch 3
+    // fix #2). At R1 failCount cannot reach 4 organically, but the
+    // delegation must NOT short-circuit before that gate runs.
+    const baseline = new HeuristicAgent('R1-force');
+    baseline.onGameStart(makeObs({}));
+    const fa = new ForwardAgent('R1-force', baseline);
+    const obs = makeObs({
+      gamePhase: 'team_vote',
+      currentRound: 1,
+      // Off-team — force-normal alone would say reject. failCount=4
+      // overrides that to approve (final-attempt rule).
+      proposedTeam: ['P1', 'P2'],
+      currentLeader: 'P1',
+      myPlayerId: 'P0',
+      myRole: 'loyal',
+      myTeam: 'good',
+      failCount: 4,
+    });
+    const { action } = fa.decide(obs);
+    expect(action.type).toBe('team_vote');
+    if (action.type === 'team_vote') expect(action.vote).toBe(true);
+  });
+});
+
 // ── Fallback path ───────────────────────────────────────────────
 describe('ForwardAgent fallback (PR1 module failure)', () => {
   it('falls back to baseline.act if interpret() throws', () => {
@@ -420,7 +634,13 @@ describe('ForwardAgent fallback (PR1 module failure)', () => {
     // Easier path: patch the module reference via vi.spyOn on
     // computePyramidScores or interpret. We use a direct integration
     // check — call decide on a phase that yields zero candidates.
-    const obs = makeObs({ gamePhase: 'team_vote', proposedTeam: [] });
+    // currentRound: 3 to skip R1-R2 baseline delegation and exercise
+    // the forward pipeline.
+    const obs = makeObs({
+      gamePhase: 'team_vote',
+      proposedTeam: [],
+      currentRound: 3,
+    });
     const { reasoningTrace, action } = fa.decide(obs);
     expect(action).toBeDefined();
     expect(['team_vote', 'team_select', 'quest_vote', 'assassinate']).toContain(action.type);
