@@ -221,4 +221,134 @@ describe('5p Baseline R1-P1 banned combos', () => {
       }
     });
   });
+
+  // ── v2 backlog #1 — Merlin selectTeam knownEvils hard-exclude ──
+  //
+  // Edge bug (pre-fix): when Merlin's natural selectTeam produced a
+  // banned combo at R1-P1 (e.g. seat-1 Merlin with evils at seats 3
+  // & 5 → natural `12` banned), `rewriteIfBannedR1P1Combo` walked the
+  // unfiltered swap pool in seat order and could surface a knownEvil
+  // (e.g. swap p2 → p3 producing `13` containing the seat-3 evil).
+  //
+  // Fix excludes knownEvils from the swap pool for good players, so
+  // Merlin's R1-P1 team can never include a privately-known evil
+  // even when the natural pick is banned and a swap is required.
+  //
+  // Tests cover R1-R5 (every attempt). For R2-R5, no banned-combo
+  // rewrite fires (R1-P1 specific) but the natural byTier+slice path
+  // also excludes knownEvils — these assertions guard regression.
+  describe('5p Merlin selectTeam — never includes knownEvils (R1-R5)', () => {
+    it('5p R1-P1 leader seat-1 Merlin (evils seats 3 & 5) never picks knownEvil', () => {
+      // Pre-fix: natural `[p1, p2]` = `12` banned → swap p2 → p3 (evil)
+      // → `13` not banned but includes knownEvil seat-3.
+      const agent = new HeuristicAgent('p1', 'normal');
+      const obs = buildR1P1Obs(
+        'p1',
+        'merlin',
+        'good',
+        ['p3', 'p5'], // evils at seats 3 (morgana) + 5 (assassin)
+        [],
+      );
+      const rng = vi.spyOn(Math, 'random').mockReturnValue(0.001);
+      try {
+        const action = agent.act(obs);
+        expect(action.type).toBe('team_select');
+        if (action.type !== 'team_select') return;
+        // Self always on team.
+        expect(action.teamIds).toContain('p1');
+        expect(action.teamIds.length).toBe(2);
+        // Never include known evils.
+        expect(action.teamIds).not.toContain('p3');
+        expect(action.teamIds).not.toContain('p5');
+        // Banned combos still avoided.
+        const seats = action.teamIds
+          .map((id) => obs.allPlayerIds.indexOf(id) + 1)
+          .sort((a, b) => a - b)
+          .join('');
+        expect(seats).not.toBe('12');
+        expect(seats).not.toBe('15');
+      } finally {
+        rng.mockRestore();
+      }
+    });
+
+    it('5p R1-P1 leader seat-5 Merlin (evils seats 2 & 3) never picks knownEvil', () => {
+      // Pre-fix: natural `[p5, p1]` = `15` banned → swap p1 → p2 (evil)
+      // → `25` not banned but includes knownEvil seat-2.
+      const agent = new HeuristicAgent('p5', 'normal');
+      const obs = buildR1P1Obs(
+        'p5',
+        'merlin',
+        'good',
+        ['p2', 'p3'], // evils at seats 2 + 3
+        [],
+      );
+      const rng = vi.spyOn(Math, 'random').mockReturnValue(0.001);
+      try {
+        const action = agent.act(obs);
+        if (action.type !== 'team_select') return;
+        expect(action.teamIds).toContain('p5');
+        expect(action.teamIds.length).toBe(2);
+        expect(action.teamIds).not.toContain('p2');
+        expect(action.teamIds).not.toContain('p3');
+      } finally {
+        rng.mockRestore();
+      }
+    });
+
+    it('5p R2-R5 Merlin selectTeam never includes knownEvils (every attempt)', () => {
+      // R2-R5 path bypasses the R1-P1 ban rewrite. Natural byTier+slice
+      // sorts knownEvils last so they should never surface unless team
+      // size exceeds non-evil count (impossible in 5p: 2 non-evil
+      // others always cover R2/R4/R5 teamSize=3 with self).
+      const merlinId = 'p1';
+      const knownEvils = ['p3', 'p5'];
+      // Pretend prior round happened so we're past R1-P1.
+      const baseHistory = [
+        {
+          round: 1,
+          attempt: 1,
+          leader: 'p1',
+          team: ['p1', 'p4'],
+          approved: true,
+          votes: { p1: true, p2: true, p3: true, p4: true, p5: true },
+        },
+      ];
+      const baseQuest = [
+        { round: 1, team: ['p1', 'p4'], result: 'success' as const, failCount: 0 },
+      ];
+      for (let round = 2; round <= 5; round++) {
+        for (let attempt = 1; attempt <= 5; attempt++) {
+          const obs: PlayerObservation = {
+            myPlayerId: merlinId,
+            myRole: 'merlin',
+            myTeam: 'good',
+            knownEvils,
+            knownWizards: [],
+            allPlayerIds: ['p1', 'p2', 'p3', 'p4', 'p5'],
+            playerCount: 5,
+            currentRound: round,
+            currentLeader: merlinId,
+            proposedTeam: [],
+            questResults: ['success'],
+            questHistory: baseQuest,
+            voteHistory: baseHistory,
+            failCount: attempt - 1,
+            gamePhase: 'team_select',
+          } as PlayerObservation;
+          const agent = new HeuristicAgent(merlinId, 'normal');
+          const action = agent.act(obs);
+          expect(action.type).toBe('team_select');
+          if (action.type !== 'team_select') continue;
+          expect(action.teamIds).toContain(merlinId);
+          for (const evil of knownEvils) {
+            expect(
+              action.teamIds,
+              `R${round}-P${attempt} merlin team must not contain known evil ${evil}, got ${JSON.stringify(action.teamIds)}`,
+            ).not.toContain(evil);
+          }
+        }
+      }
+    });
+  });
 });

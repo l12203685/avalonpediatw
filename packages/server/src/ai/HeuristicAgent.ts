@@ -1440,7 +1440,33 @@ export class HeuristicAgent implements AvalonAgent {
 
     const selfId = obs.myPlayerId;
     // Candidate replacements: any player not already on the team and not self.
-    const pool = all.filter((id) => !team.includes(id) && id !== selfId);
+    //
+    // v2 backlog #1 fix (2026-05-06) — Merlin selectTeam edge bug:
+    //   Pre-fix `pool` included knownEvils for good players. When the
+    //   natural selectTeam team produced a banned combo (e.g. 5p Merlin
+    //   at seat 1 with evils at seats 3 & 5 → natural team `12` banned),
+    //   the swap loop would walk `pool` in seat order and could insert a
+    //   knownEvil into the team to escape the ban (e.g. swap p2 → p3
+    //   producing `13` which contains the evil at seat 3).
+    //
+    //   Fix: for good players (myTeam === 'good'), exclude knownEvils
+    //   from the swap pool so the rewrite can never pull a privately-
+    //   known evil onto the team. Evil players keep the unfiltered pool
+    //   (their pool already excludes self, and knownEvils for them are
+    //   ALLIES — including them is the existing intended behaviour).
+    //
+    //   If filtering leaves the pool empty (degenerate corner case in
+    //   pathological 5p configs), fall back to the unfiltered pool so
+    //   the rewrite still resolves — better an imperfect swap than an
+    //   undersized team. Real 5p / 10p configs always have ≥1 clean
+    //   non-team non-self candidate available.
+    const isGood = obs.myTeam === 'good';
+    const knownEvilSet = isGood ? new Set(obs.knownEvils) : new Set<string>();
+    const rawPool = all.filter((id) => !team.includes(id) && id !== selfId);
+    const filteredPool = isGood
+      ? rawPool.filter((id) => !knownEvilSet.has(id))
+      : rawPool;
+    const pool = filteredPool.length > 0 ? filteredPool : rawPool;
 
     for (const slot of team) {
       // Never swap out self — leader always stays on their own team.
