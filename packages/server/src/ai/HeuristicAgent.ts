@@ -135,14 +135,61 @@ function mayBreakHardRules(obs: PlayerObservation): boolean {
  * directly — natural ascending index order already produces the canonical
  * digit string when we map index 9 → digit '0'.
  */
-const R1_P1_BANNED_COMBOS: readonly string[] = ['123', '150', '234', '678'];
-const R1_P1_BANNED_COMBO_SET = new Set<string>(R1_P1_BANNED_COMBOS);
+const R1_P1_BANNED_COMBOS_10P: readonly string[] = ['123', '150', '234', '678'];
+const R1_P1_BANNED_COMBO_SET_10P = new Set<string>(R1_P1_BANNED_COMBOS_10P);
+
+/**
+ * Edward 2026-05-06 5p baseline align (HR-5 + HR-7) verbatim:
+ *   wiki_merged_to_M「不要無腦疊票」「直接派反邊是沒有經過思考的表現」
+ *   TOP10 紅方 selectTeam 自陣 49.1% / 對手 50.5% (非極端)
+ *
+ * 5p R1-P1 (teamSize=2): 5p 配置 Merlin/Percival/Loyal/Assassin/Morgana,
+ * 純連號派票 (12/23/34/45/51) 為 naive seat-sort 結果, 違反「無腦疊票」+
+ * 「直接派反邊」, 無策略意義 — 跨陣營 ban.
+ *
+ * 5p banned 5 連號組合 (canonical 2-char seat string):
+ *   - `12` → seats {1, 2}
+ *   - `23` → seats {2, 3}
+ *   - `34` → seats {3, 4}
+ *   - `45` → seats {4, 5}
+ *   - `15` → seats {1, 5}  (5p 環狀, 最後 wrap-around: 5 與 1)
+ *
+ * Banned 後合法 R1-P1 5p teams: 13/14/24/25/35 (skip-1 派法).
+ *
+ * 注意: 5p R1-P1 leader 必含自己 → 自己若坐 1 則 banned 12/15;
+ * 自己 2 則 banned 12/23. selectTeam 的 enforceR1P1Ban 會 swap 一個非自己
+ * 的 member 找合法替代 (5p 4 名其他玩家足夠避開 banned).
+ */
+const R1_P1_BANNED_COMBOS_5P: readonly string[] = ['12', '23', '34', '45', '15'];
+const R1_P1_BANNED_COMBO_SET_5P = new Set<string>(R1_P1_BANNED_COMBOS_5P);
+
+/**
+ * Resolve the active R1-P1 banned combo set for the player count.
+ *
+ * 5p → connected-pair ban (12/23/34/45/15)
+ * 10p → trio ban (123/150/234/678)
+ * Other counts → empty set (no constraint, fallback to natural selectTeam).
+ */
+function bannedComboSetFor(playerCount: number): ReadonlySet<string> {
+  if (playerCount === 5) return R1_P1_BANNED_COMBO_SET_5P;
+  if (playerCount === 10) return R1_P1_BANNED_COMBO_SET_10P;
+  return new Set<string>(); // empty — no constraint at 6/7/8/9p
+}
+
+/**
+ * @deprecated Use bannedComboSetFor(playerCount) instead. Kept for
+ * backward compat with tests that import R1_P1_BANNED_COMBO_SET directly.
+ */
+const R1_P1_BANNED_COMBO_SET = R1_P1_BANNED_COMBO_SET_10P;
 
 /**
  * Render a set of player IDs as Edward's canonical ascending seat-digit
  * string, using `allPlayerIds` as the seat-1-indexed reference.
  *
- * `allPlayerIds[i]` ↔ seat `i + 1` (seat 10 displays as '0').
+ * `allPlayerIds[i]` ↔ seat `i + 1` (seat 10 displays as '0' for 10p only).
+ *
+ * 10p convention: seat 10 → digit '0' (sorts LAST). 5p has no seat 10.
+ * Other counts use straight ascending digit order (seat n → digit n).
  */
 function canonicalSeatString(
   memberIds: readonly string[],
@@ -152,6 +199,8 @@ function canonicalSeatString(
     .map((id) => allPlayerIds.indexOf(id))
     .filter((idx) => idx >= 0)
     .sort((a, b) => a - b);
+  // For 10p, seat 10 (index 9) renders as '0' to match Edward's 1234567890 convention.
+  // For other counts (5/6/7/8/9p), straight digit mapping applies.
   return indices.map((idx) => (idx === 9 ? '0' : String(idx + 1))).join('');
 }
 
@@ -1352,20 +1401,22 @@ export class HeuristicAgent implements AvalonAgent {
 
   /**
    * Edward 2026-04-24 batch 4 fix #1 — R1-P1 banned-combo rewriter.
+   * Edward 2026-05-06 5p baseline align — banned set per playerCount.
    *
-   * If the input team's canonical ascending seat string
-   * (1,2,3,4,5,6,7,8,9,0 convention) equals one of the banned combos
-   * `{'123','150','234','678'}`, swap exactly one non-self member with
-   * an alternative player drawn from `allPlayerIds` — keep trying other
-   * alternatives until the canonical string is no longer banned.
+   * If the input team's canonical ascending seat string equals one of
+   * the banned combos for this player count, swap exactly one non-self
+   * member with an alternative — keep trying until canonical is no
+   * longer banned.
+   *
+   * Banned sets:
+   *   10p (trio teams) — {'123','150','234','678'}
+   *   5p (pair teams)  — {'12','23','34','45','15'} (consecutive seats)
+   *   Other counts     — empty (no constraint)
    *
    * Guarantees:
    *   - Leader (self) stays on the team.
    *   - Team size is preserved.
-   *   - If no legal swap exists (pathological — would require > 4 players
-   *     locked) the original team is returned unchanged, with an upstream
-   *     `console.warn` for visibility. In practice with a 10-player game
-   *     and 4 banned combos the swap always succeeds.
+   *   - If no legal swap exists (pathological) the original team is returned unchanged.
    */
   private rewriteIfBannedR1P1Combo(
     team: readonly string[],
@@ -1373,8 +1424,11 @@ export class HeuristicAgent implements AvalonAgent {
     teamSize: number,
   ): string[] {
     const all = obs.allPlayerIds;
+    const bannedSet = bannedComboSetFor(obs.playerCount);
+    if (bannedSet.size === 0) return [...team];
+
     const canonical = canonicalSeatString(team, all);
-    if (!R1_P1_BANNED_COMBO_SET.has(canonical)) {
+    if (!bannedSet.has(canonical)) {
       return [...team];
     }
 
@@ -1388,7 +1442,7 @@ export class HeuristicAgent implements AvalonAgent {
       for (const replacement of pool) {
         const trial = team.map((id) => (id === slot ? replacement : id));
         const trialCanonical = canonicalSeatString(trial, all);
-        if (!R1_P1_BANNED_COMBO_SET.has(trialCanonical) && trial.length === teamSize) {
+        if (!bannedSet.has(trialCanonical) && trial.length === teamSize) {
           return trial;
         }
       }

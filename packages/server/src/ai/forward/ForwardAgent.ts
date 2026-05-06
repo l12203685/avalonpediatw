@@ -94,6 +94,42 @@ import {
  */
 export const USE_FORWARD_REASONING = true;
 
+// ── Edward 2026-05-06 R1-P1 banned combos (5p baseline align) ────
+/**
+ * Local mirror of HeuristicAgent's R1-P1 banned-combo sets, scoped to
+ * the ForwardAgent path so we don't reach across module boundaries.
+ *
+ *   5p (pair teams)  — {'12','23','34','45','15'} (consecutive seats)
+ *   10p (trio teams) — {'123','150','234','678'}
+ *   Other counts     — empty (no constraint)
+ *
+ * See HeuristicAgent.ts comment block "Edward 2026-04-24 batch 4 fix #1"
+ * for the canonical specification + rationale.
+ */
+const FORWARD_BANNED_5P = new Set<string>(['12', '23', '34', '45', '15']);
+const FORWARD_BANNED_10P = new Set<string>(['123', '150', '234', '678']);
+
+function bannedComboSetFor5p(playerCount: number): ReadonlySet<string> {
+  if (playerCount === 5) return FORWARD_BANNED_5P;
+  if (playerCount === 10) return FORWARD_BANNED_10P;
+  return new Set<string>();
+}
+
+/**
+ * Render a team's canonical ascending seat-digit string. Mirrors
+ * HeuristicAgent.canonicalSeatString — see there for full convention.
+ */
+function canonicalSeatStringForward(
+  memberIds: readonly string[],
+  allPlayerIds: readonly string[],
+): string {
+  const indices = memberIds
+    .map((id) => allPlayerIds.indexOf(id))
+    .filter((idx) => idx >= 0)
+    .sort((a, b) => a - b);
+  return indices.map((idx) => (idx === 9 ? '0' : String(idx + 1))).join('');
+}
+
 // ── Telemetry counters (Wave E PR3 verification) ────────────────
 /**
  * Module-level counters incremented inside `ForwardAgent.decide()` so
@@ -566,6 +602,62 @@ export class ForwardAgent implements AvalonAgent {
       };
     }
 
+    // ── Edward 2026-05-05 22:10 assassinate delegation (Audit fix A) ─
+    //
+    // Audit `staging/subagent_results/assassin_merlin_bug_audit_2026-05-05.md`
+    // root cause: ForwardAgent assassinate path skipped baseline's 6-signal
+    // Merlin scorer (getMerlinScore + getPercivalLikenessPenalty +
+    // assassinTopTierSeatPrior * h9 + seatPriorByRole + assassinTargetPenalty
+    // + pyramidBoost) and only consumed the ToM 5-bucket merlinProb. Multiple
+    // blue candidates landed in the same pyramid bucket → identical
+    // merlinProb → strict `>` tie-break (line ~605) always selected the
+    // seat-order-earliest player. Two consecutive blue-win games (g9/g17 in
+    // forward_batch_20games_2026-05-05) both shot seat 1 (loyal) when real
+    // Merlin sat at seat 7 / seat 3 = structural bias, not sample noise.
+    //
+    // Edward 22:10 verbatim:「6 應該要馬上修 並且跟著刺殺 features 一起做」.
+    //
+    // Fix: same delegate-to-baseline pattern as R1-R2 voteOnTeam (commit
+    // de11bd28). `baseline.actDirect(obs)` recovers the 6 signals + R3+
+    // hypothesised assassin reads (派西 R3+ 異白 morgana exclusion etc. is
+    // handled inside `HeuristicAgent.assassinate` mistakeMap at line 2346
+    // already — it filters candidates whose mistakeMap > 0, which captures
+    // the H20 派西 識破 morgana cover hypothesis without bespoke wiring).
+    //
+    // Forward planning is otherwise undisturbed — only the single
+    // assassination-phase decision delegates. trace.summary marks
+    // 'assassinate-delegate' so smoke tests / batch reports can audit.
+    if (decisionType === 'assassination') {
+      const action = this.baseline.actDirect(obs);
+      const targetId =
+        action.type === 'assassinate' ? action.targetId : '';
+      const delegateCandidate: Candidate = {
+        action,
+        description: `baseline assassinate ${targetId}`,
+        signals: {
+          avgSuspicion: 0,
+          maxSuspicion: 0,
+          includesKnownEvil: false,
+          includesSelf: false,
+          violatesLakeRules: false,
+          numKnownEvilOnTeam: 0,
+          merlinProbForTarget: 0,
+        },
+      };
+      return {
+        action,
+        reasoningTrace: {
+          decisionType,
+          purposes: zeroPurposeVector(),
+          candidatesEvaluated: 1,
+          chosen: delegateCandidate,
+          chosenScore: 0,
+          usedFallback: false,
+          summary: `${decisionType} → baseline assassinate-delegate (target=${targetId})`,
+        },
+      };
+    }
+
     let interp: InterpretationResult;
     try {
       interp = interpret(obs);
@@ -809,6 +901,35 @@ export class ForwardAgent implements AvalonAgent {
         otherRanked[alt],
       ];
       candidates.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
+    }
+
+    // ── Edward 2026-05-06 R1-P1 banned-combo filter (5p HR-5/HR-7) ────
+    // Mirror baseline `HeuristicAgent.rewriteIfBannedR1P1Combo` semantics
+    // in ForwardAgent path: filter out R1-P1 banned canonical seat
+    // combos (5p: 12/23/34/45/15; 10p: 123/150/234/678). Forward picks
+    // a candidate by score, so banned combos must be PHYSICALLY removed
+    // from the candidate set — soft demotion (e.g. -Infinity score)
+    // would still surface them when no alternative scores higher.
+    //
+    // R1-P1 detection: currentRound === 1 AND no prior vote attempts.
+    // If after filtering the candidate set is empty (all rotations land
+    // on a banned combo), keep the original list as a fallback so the
+    // pipeline never collapses; baseline's enforceR1P1Ban will retry
+    // the swap downstream.
+    const isR1P1 = (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0;
+    if (isR1P1) {
+      const bannedSet = bannedComboSetFor5p(obs.playerCount);
+      if (bannedSet.size > 0) {
+        const filtered = candidates.filter((c) => {
+          if (c.action.type !== 'team_select') return true;
+          const canonical = canonicalSeatStringForward(
+            c.action.teamIds,
+            obs.allPlayerIds,
+          );
+          return !bannedSet.has(canonical);
+        });
+        if (filtered.length > 0) return filtered;
+      }
     }
 
     return candidates;
