@@ -5,6 +5,12 @@
  *   「你還不如好好跑一局有品質的 讓我假設自己是每個角色 玩一場」
  *   「你先從最基本的五人局開始吧」
  *
+ * Edward 2026-05-06 16:09 校正後 v2:
+ *   - 5p R1-P1 banned set: {12,34,45,15} (23 解禁, 因 5p 23 是常見好人組合)
+ *   - 派西 "認紅就鐵咬" any round any attempt (HARD-exclude inferred-Morgana)
+ *   - 派西 + 莫甘娜 on-team approve hard rule (innerBlackBonus 不能 override)
+ *   - 視角思維禁簡稱「雜魚 / 娜娜」, 用全名「忠臣 / 莫甘娜」
+ *
  * 5-player config: 3 good (Merlin/Percival/Loyal) + 2 evil (Assassin/Morgana).
  *                   teamSizes R1/R2/R3/R4/R5 = 2/3/2/3/3
  *                   questFailsRequired = 1 across all rounds
@@ -12,7 +18,7 @@
  *                   Difficulty: hard.
  *
  * Outputs:
- *   - /mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v1_2026-05-06.md
+ *   - /mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v2_2026-05-06.md
  *   - One full game with Edward verbatim format: pure rows, lake events inline.
  *
  * Usage: pnpm --filter @avalon/server exec tsx ../../scripts/selfplay_5p_1game.ts
@@ -309,7 +315,7 @@ function renderEdwardFormat(game: CapturedGame, completionTs: string): string {
   const lines: string[] = [];
 
   // Header
-  lines.push(`# 5人版 Avalon Self-Play (5p baseline v1)`);
+  lines.push(`# 5人版 Avalon Self-Play (5p baseline v2 — Edward 16:09 7-correction)`);
   lines.push(`# 完成於 ${completionTs}`);
   lines.push(`# 5-player config: 3 good (Merlin/Percival/Loyal) + 2 evil (Assassin/Morgana)`);
   lines.push(`# team sizes R1/R2/R3/R4/R5 = 2/3/2/3/3; 1 fail required all rounds`);
@@ -404,11 +410,11 @@ async function main(): Promise<void> {
   }).replace('T', ' ') + ' +08';
 
   const md = renderEdwardFormat(game, completionTs);
-  const outputPath = '/mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v1_2026-05-06.md';
+  const outputPath = '/mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v2_2026-05-06.md';
   fs.writeFileSync(outputPath, md, 'utf-8');
 
   // Also dump the seats for use by perspective files.
-  const seatsPath = '/mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v1_2026-05-06.seats.json';
+  const seatsPath = '/mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v2_2026-05-06.seats.json';
   fs.writeFileSync(seatsPath, JSON.stringify({
     seats: game.seats,
     voteHistory: game.voteHistory,

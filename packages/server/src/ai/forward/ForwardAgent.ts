@@ -99,14 +99,18 @@ export const USE_FORWARD_REASONING = true;
  * Local mirror of HeuristicAgent's R1-P1 banned-combo sets, scoped to
  * the ForwardAgent path so we don't reach across module boundaries.
  *
- *   5p (pair teams)  — {'12','23','34','45','15'} (consecutive seats)
+ *   5p (pair teams)  — {'12','34','45','15'} (consecutive seats; 23
+ *                       excluded per Edward 2026-05-06 16:09 校正)
  *   10p (trio teams) — {'123','150','234','678'}
  *   Other counts     — empty (no constraint)
+ *
+ * Edward 2026-05-06 16:09 verbatim:
+ *   「23 不算無腦組合, 因為這是五人局」
  *
  * See HeuristicAgent.ts comment block "Edward 2026-04-24 batch 4 fix #1"
  * for the canonical specification + rationale.
  */
-const FORWARD_BANNED_5P = new Set<string>(['12', '23', '34', '45', '15']);
+const FORWARD_BANNED_5P = new Set<string>(['12', '34', '45', '15']);
 const FORWARD_BANNED_10P = new Set<string>(['123', '150', '234', '678']);
 
 function bannedComboSetFor5p(playerCount: number): ReadonlySet<string> {
@@ -602,6 +606,59 @@ export class ForwardAgent implements AvalonAgent {
       };
     }
 
+    // ── Edward 2026-05-06 16:09 — 派西 / 莫甘娜 on-team approve hard rule ─
+    //
+    // Edward 16:09 verbatim:
+    //   「白癡問題 重點是自己派的組合為什麼開黑」
+    //   「自己派的組合為什麼開黑」
+    //
+    // 派西 reject 自己被派進去的隊 = 邏輯違反 (公開分裂藍方信號).
+    // 莫甘娜 mimicMerlin 但 reject 自己在的隊 = 反 mimic, 自我曝光.
+    //
+    // Hard rule: when 派西 or 莫甘娜 is on-team for a team_vote decision,
+    // delegate to `baseline.actDirect(obs)` which fires the same hard rule
+    // (HeuristicAgent.voteOnTeam line ~1700 / line ~1782). This keeps
+    // ForwardAgent's R3+ pipeline aligned with baseline's hard-rule layer
+    // (per Edward 2026-05-05 verbatim「Fix 必走相同 hard rule, 不要
+    // forward 自己再算一遍」).
+    //
+    // R1-R2 path above already covers (force-normal on-team approve);
+    // this gate adds R3+ on-team approve for these two roles.
+    if (decisionType === 'team_vote' && (obs.currentRound ?? 1) >= 3) {
+      const proposedTeam = obs.proposedTeam ?? [];
+      const onTeam = proposedTeam.includes(obs.myPlayerId);
+      const role = obs.myRole as string;
+      if (onTeam && (role === 'percival' || role === 'morgana')) {
+        const action = this.baseline.actDirect(obs);
+        const delegateCandidate: Candidate = {
+          action,
+          description: `baseline ${role} on-team approve hard rule`,
+          signals: {
+            avgSuspicion: 0,
+            maxSuspicion: 0,
+            includesKnownEvil: false,
+            includesSelf:
+              action.type === 'team_vote' && action.vote === true,
+            violatesLakeRules: false,
+            numKnownEvilOnTeam: 0,
+            merlinProbForTarget: 0,
+          },
+        };
+        return {
+          action,
+          reasoningTrace: {
+            decisionType,
+            purposes: zeroPurposeVector(),
+            candidatesEvaluated: 1,
+            chosen: delegateCandidate,
+            chosenScore: 0,
+            usedFallback: false,
+            summary: `${decisionType} → baseline ${role} on-team approve hard rule (round=${obs.currentRound ?? 1})`,
+          },
+        };
+      }
+    }
+
     // ── Edward 2026-05-05 22:10 assassinate delegation (Audit fix A) ─
     //
     // Audit `staging/subagent_results/assassin_merlin_bug_audit_2026-05-05.md`
@@ -824,9 +881,19 @@ export class ForwardAgent implements AvalonAgent {
     // also remove them so even degenerate "rotate the last slot through
     // alternative picks" candidates can never include a known red.
     //
-    // Percival (spec §2.4) — prefer to exclude wizard B (predicted
-    // Morgana). Soft preference only: B stays in `ranked` but ranked
-    // last so it surfaces in candidates only when team size demands.
+    // Percival (spec §2.4) — Edward 2026-05-06 16:09 verbatim correction:
+    //   「派西維爾並非兩紅後才能鐵咬 而是認為該鐵咬就可以鐵咬」
+    //   → HARD-exclude wizard B (predicted Morgana) any round any attempt
+    //     when 派西 is reasonably confident in identification. Confidence
+    //     is established as soon as 派西 has any voteHistory observation
+    //     to differentiate the wizards (i.e. R1-P2+). For R1-P1 special
+    //     case (voteHistory empty), baseline's selectPercivalTeam handles
+    //     no-wizard fallback.
+    //
+    // Pre-fix bug: only soft-tail ranking; under candidate rotation the
+    // morgana wizard could surface (esp. when ranked candidates run out).
+    // Self-play 5p R3-4 example: Percival p3 picked p1 (morgana) in own
+    // team → "我自己派 45 含娜" 邏輯違反 (perspective_percival.md L43-46).
     //
     // Assassin / Mordred / Morgana — keep the full pool so the scorer
     // can choose ally inclusion adaptively per round (R1 mimic-loyal,
@@ -836,7 +903,7 @@ export class ForwardAgent implements AvalonAgent {
       const knownEvilSet = new Set(obs.knownEvils);
       ranked = ranked.filter((id) => !knownEvilSet.has(id));
     } else if (role === 'percival') {
-      // Soft de-prioritise wizard B (predicted Morgana) by moving to tail.
+      // Edward 2026-05-06 16:09 — HARD-exclude wizard B (predicted Morgana).
       const wizards = obs.knownWizards ?? [];
       if (wizards.length === 2) {
         // Use the same A/B split as RoleStrategy.getRoleSignals (without
@@ -846,9 +913,21 @@ export class ForwardAgent implements AvalonAgent {
         const s0 = pyramid.scores.get(w0) ?? 0.5;
         const s1 = pyramid.scores.get(w1) ?? 0.5;
         const bId = s0 > s1 ? w0 : w1; // higher suspicion = predicted morgana
-        const without = ranked.filter((id) => id !== bId);
-        const includesB = ranked.includes(bId);
-        ranked = includesB ? [...without, bId] : without;
+        // R1-P1 special-case: voteHistory empty means no signal to
+        // discriminate, so HeuristicAgent.selectPercivalTeam handles the
+        // R1-P1 no-wizard fallback. ForwardAgent here is a parallel path
+        // for R2+ — at R2+ we have signal so 鐵咬 fires.
+        const isR1P1 =
+          (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0;
+        if (!isR1P1) {
+          // 鐵咬: hard-remove inferred-morgana wizard from candidate pool.
+          ranked = ranked.filter((id) => id !== bId);
+        } else {
+          // R1-P1: leave wizard tail-soft (baseline path also picks neither).
+          const without = ranked.filter((id) => id !== bId);
+          const includesB = ranked.includes(bId);
+          ranked = includesB ? [...without, bId] : without;
+        }
       }
     }
 

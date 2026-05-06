@@ -2,13 +2,17 @@
  * 5p Baseline alignment tests — Edward 2026-05-06.
  *
  * Verifies the 5p R1-P1 banned-combo enforcement (HR-5/HR-7 alignment).
- * 5p teamSize=2 at R1, banned set is {12, 23, 34, 45, 15} (consecutive
+ * 5p teamSize=2 at R1, banned set is {12, 34, 45, 15} (consecutive
  * pairs including the ring wrap-around 51).
+ *
+ * Edward 2026-05-06 16:09 校正:
+ *   「23 不算無腦組合, 因為這是五人局」 — 23 從 banned set 中移除.
  *
  * See:
  *   - staging/subagent_results/5p_baseline_audit_2026-05-06.md (HR audit)
  *   - staging/subagent_results/wiki_merged_to_M_2026-05-05.md (HR-5/HR-7)
  *   - staging/subagent_results/top10_red_blue_decision_pattern_2026-05-05.md (TOP10 49.1% mix)
+ *   - staging/subagent_results/5p_baseline_v2_fix_2026-05-06.md (16:09 verbatim 7-correction)
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -74,7 +78,7 @@ describe('5p Baseline R1-P1 banned combos', () => {
       }
     });
 
-    it('5p R1-P1 leader p2 (Loyal) — must NOT propose 12/23', () => {
+    it('5p R1-P1 leader p2 (Loyal) — must NOT propose 12 (23 allowed per Edward 16:09)', () => {
       const agent = new HeuristicAgent('p2', 'normal');
       const obs = buildR1P1Obs('p2', 'loyal', 'good', [], []);
       const rng = vi.spyOn(Math, 'random').mockReturnValue(0.001);
@@ -86,7 +90,8 @@ describe('5p Baseline R1-P1 banned combos', () => {
           .sort((a, b) => a - b)
           .join('');
         expect(seats).not.toBe('12');
-        expect(seats).not.toBe('23');
+        // 23 is now ALLOWED per Edward 2026-05-06 16:09 verbatim:
+        //   「23 不算無腦組合, 因為這是五人局」
         expect(action.teamIds).toContain('p2');
         expect(action.teamIds.length).toBe(2);
       } finally {
@@ -94,7 +99,7 @@ describe('5p Baseline R1-P1 banned combos', () => {
       }
     });
 
-    it('5p R1-P1 leader p3 (Percival) — must NOT propose 23/34', () => {
+    it('5p R1-P1 leader p3 (Percival) — must NOT propose 34 (23 allowed per Edward 16:09)', () => {
       const agent = new HeuristicAgent('p3', 'normal');
       const obs = buildR1P1Obs(
         'p3',
@@ -111,7 +116,7 @@ describe('5p Baseline R1-P1 banned combos', () => {
           .map((id) => obs.allPlayerIds.indexOf(id) + 1)
           .sort((a, b) => a - b)
           .join('');
-        expect(seats).not.toBe('23');
+        // 23 is now ALLOWED per Edward 2026-05-06 16:09 校正.
         expect(seats).not.toBe('34');
         expect(action.teamIds).toContain('p3');
         expect(action.teamIds.length).toBe(2);

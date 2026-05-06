@@ -143,30 +143,35 @@ const R1_P1_BANNED_COMBO_SET_10P = new Set<string>(R1_P1_BANNED_COMBOS_10P);
  *   wiki_merged_to_M「不要無腦疊票」「直接派反邊是沒有經過思考的表現」
  *   TOP10 紅方 selectTeam 自陣 49.1% / 對手 50.5% (非極端)
  *
- * 5p R1-P1 (teamSize=2): 5p 配置 Merlin/Percival/Loyal/Assassin/Morgana,
- * 純連號派票 (12/23/34/45/51) 為 naive seat-sort 結果, 違反「無腦疊票」+
- * 「直接派反邊」, 無策略意義 — 跨陣營 ban.
+ * Edward 2026-05-06 16:09 verbatim correction:
+ *   「23 不算無腦組合, 因為這是五人局」
+ *   → 5p 配置不同 10p, 23 是常見好人組合 (梅+忠 / 派+忠), 不該禁.
  *
- * 5p banned 5 連號組合 (canonical 2-char seat string):
+ * 5p R1-P1 (teamSize=2): 5p 配置 Merlin/Percival/Loyal/Assassin/Morgana,
+ * 純連號派票 12/34/45/51 為 naive seat-sort 結果, 違反「無腦疊票」+
+ * 「直接派反邊」, 無策略意義 — 跨陣營 ban. 但 23 被排除 ban-set
+ * (Edward 16:09 校正).
+ *
+ * 5p banned 4 連號組合 (canonical 2-char seat string):
  *   - `12` → seats {1, 2}
- *   - `23` → seats {2, 3}
  *   - `34` → seats {3, 4}
  *   - `45` → seats {4, 5}
  *   - `15` → seats {1, 5}  (5p 環狀, 最後 wrap-around: 5 與 1)
  *
- * Banned 後合法 R1-P1 5p teams: 13/14/24/25/35 (skip-1 派法).
+ * Banned 後合法 R1-P1 5p teams: 13/14/23/24/25/35 (skip-1 派法 + 23).
  *
  * 注意: 5p R1-P1 leader 必含自己 → 自己若坐 1 則 banned 12/15;
- * 自己 2 則 banned 12/23. selectTeam 的 enforceR1P1Ban 會 swap 一個非自己
- * 的 member 找合法替代 (5p 4 名其他玩家足夠避開 banned).
+ * 自己 2 則 banned 12 only (23 已解禁). selectTeam 的 enforceR1P1Ban 會
+ * swap 一個非自己的 member 找合法替代.
  */
-const R1_P1_BANNED_COMBOS_5P: readonly string[] = ['12', '23', '34', '45', '15'];
+const R1_P1_BANNED_COMBOS_5P: readonly string[] = ['12', '34', '45', '15'];
 const R1_P1_BANNED_COMBO_SET_5P = new Set<string>(R1_P1_BANNED_COMBOS_5P);
 
 /**
  * Resolve the active R1-P1 banned combo set for the player count.
  *
- * 5p → connected-pair ban (12/23/34/45/15)
+ * 5p → connected-pair ban (12/34/45/15) — Edward 2026-05-06 16:09 校正:
+ *      23 被排除 ban-set (5p 23 是常見好人組合, 不算無腦)
  * 10p → trio ban (123/150/234/678)
  * Other counts → empty set (no constraint, fallback to natural selectTeam).
  */
@@ -1410,7 +1415,8 @@ export class HeuristicAgent implements AvalonAgent {
    *
    * Banned sets:
    *   10p (trio teams) — {'123','150','234','678'}
-   *   5p (pair teams)  — {'12','23','34','45','15'} (consecutive seats)
+   *   5p (pair teams)  — {'12','34','45','15'} (consecutive seats; 23
+   *                       excluded per Edward 2026-05-06 16:09 校正)
    *   Other counts     — empty (no constraint)
    *
    * Guarantees:
@@ -1695,6 +1701,28 @@ export class HeuristicAgent implements AvalonAgent {
         }
       }
 
+      // ── Edward 2026-05-06 16:09 verbatim — 派西 on-team 必 approve ─────
+      //
+      // Edward 16:09 校正:「白癡問題 重點是自己派的組合為什麼開黑」
+      //   → 派西 reject 自己派的隊 = 邏輯違反.
+      //
+      // Hard rule: 派西 on-team (派西在隊) → ALWAYS approve regardless of
+      // pyramid scores / innerBlackBonus / mid-zone heuristics. Hard vetos
+      // (knownEvil / lake hard rules) ABOVE this gate still apply — they
+      // are public-info contradictions that override on-team-approve.
+      //
+      // Why:
+      //   1. 派西 on-team via wizard pick = 派西自己選了這個隊 (leader 必
+      //      在隊, 隊長 self-approve 已涵蓋 line ~1585).
+      //   2. 派西 on-team via 別人派他 = 別人信派西藍, 派西反對自己被派 =
+      //      公開分裂藍方信號, 紅方收割.
+      //   3. innerBlackBonus EV table 對派西 R2 = 0.105, 但 R1-R2 已 force
+      //      normal, R3+ 派西的 hard rule = on-team approve (即使 R2 EV
+      //      table 有 entry 也不該 fire).
+      if ((obs.myRole as string) === 'percival' && proposedTeam.includes(myPlayerId)) {
+        return { type: 'team_vote', vote: true };
+      }
+
       // ── Edward 2026-04-30 — team-aware vote rewire ─────────────────
       // Pyramid scores are the per-player red-suspicion in [0,1]. Compute
       // team-internal stats (max + avg) and decide ON THE TEAM ITSELF,
@@ -1771,6 +1799,30 @@ export class HeuristicAgent implements AvalonAgent {
       const hasSelf  = proposedTeam.includes(obs.myPlayerId);
       const hasAlly  = proposedTeam.some(id => knownEvils.includes(id));
 
+      // ── Edward 2026-05-06 16:09 verbatim — 莫甘娜 on-team 必 approve ──
+      //
+      // Edward 16:09 校正:「自己派的組合為什麼開黑」
+      //   → 莫甘娜 mimicMerlin 但 reject 自己派的隊 = 邏輯違反.
+      //
+      // Hard rule: 莫甘娜 on-team (hasSelf) → ALWAYS approve. Skip the
+      // innerBlackBonus EV-prior probabilistic flip below for morgana.
+      // Other red roles (assassin / mordred / oberon) keep full
+      // innerBlackBonus path because their disguise purposes differ
+      // (assassin/mordred mimic loyal cleanup, oberon lone-wolf).
+      //
+      // Why specifically morgana:
+      //   1. mimicMerlin 的本質 = 模仿梅林正常投票 (on-team approve / off-team reject).
+      //      Merlin 自己 R3+ on-team inner-black 在 EV table = 0 (no entry).
+      //      娜 mimicMerlin 卻 inner-black on-team = 自我曝光, 反 mimic.
+      //   2. 派的人 reject 自己派的隊 = 跟梅林被識破時拒絕的 pattern 不同 (那是
+      //      非 leader 收到資訊改變判斷, 但 leader self-approve 已 line ~1585 涵蓋).
+      //   3. EV table morgana R3+ inner-black = 12.5%/15.9%/6.4% 是 corpus 平均,
+      //      但 Edward 16:09 verbatim 否認此行為策略意義 ("白癡問題").
+      const hasSelfMorgana = (obs.myRole as string) === 'morgana' && hasSelf;
+      if (hasSelfMorgana) {
+        return { type: 'team_vote', vote: true };
+      }
+
       // ── EV-prior nudge (2026-04-25 ship · Hook 2 voteInnerBlackPrior) ──
       // When on-team at R3+ as a red role with a +EV inner-black signal,
       // probabilistically flip the cover-approve into an inner-black
@@ -1778,6 +1830,10 @@ export class HeuristicAgent implements AvalonAgent {
       // e.g. mordred R3 = +0.205 ≈ 20% chance to inner-black instead of
       // cover-approve. Below R3 (or when bonus = 0) the legacy approve
       // branch keeps full priority.
+      //
+      // Edward 2026-05-06 16:09 校正: morgana 已 short-circuit on-team-approve
+      // 在上方, 此 block 對 morgana 不再 fire (Edward verbatim
+      // 「自己派的組合為什麼開黑」).
       //
       // Listening (match-point) is handled upstream and short-circuits
       // before reaching here, so this block never affects R5 listening.
