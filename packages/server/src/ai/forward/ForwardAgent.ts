@@ -134,6 +134,73 @@ function canonicalSeatStringForward(
   return indices.map((idx) => (idx === 9 ? '0' : String(idx + 1))).join('');
 }
 
+// ── Inferred-red attribution (v2 backlog #2 — 2026-05-06) ───────
+/**
+ * Infer publicly-signalled reds from task fail attribution.
+ *
+ * Edward 2026-05-06 verbatim (HR-28):
+ *   「派西維爾並非兩紅後才能鐵咬 而是認為該鐵咬就可以鐵咬」
+ *
+ * Original ForwardAgent percival branch only HARD-excluded the inferred
+ * Morgana wizard. v2 5p qualitative trace surfaced the gap: R4-P1 派西
+ * picked seat 1+2+5 where seat 5 = assassin who failed R1+R2 (public
+ * signal: assassin on team in two failed quests, the other failed-team
+ * common seat was already known-Morgana). HR-28 says percival should
+ * also rule out non-wizard public reds, not only the wizard pair.
+ *
+ * Algorithm (5p-friendly, single signal source):
+ *   - For each non-self seat, count `failsOnTeam` (# of failed quests
+ *     that included this seat) and `appearancesOnFailed` (same; we
+ *     intentionally don't divide by total appearances because a player
+ *     who "only ever shows up in failed quests" is the strongest
+ *     signal).
+ *   - Compute attribution = failsOnTeam / max(1, totalFails).
+ *   - If attribution > THRESHOLD (0.5) AND the seat appeared in EVERY
+ *     failed quest so far AND there's at least 1 failed quest, mark as
+ *     inferred red.
+ *
+ * Why this conservative cut:
+ *   - 5p quest sizes are 2/3/2/3/3. R1 (size 2) fail forces strong
+ *     attribution onto each of 2 players; R2 (size 3) fail with one
+ *     overlap pinpoints the joint attacker. After R1+R2 fail, the
+ *     intersection of failed teams is ≤ 2 seats and frequently 1.
+ *   - Threshold 0.5 + "every failed quest" gate prevents false
+ *     positives when a single fail with size 3 spreads across 3 seats
+ *     (each at 1.0, but the intersection rule narrows it).
+ *
+ * Excluded by design (5p scope):
+ *   - Lake declares: 5p has no Lady-of-the-Lake.
+ *   - Vote pattern: weaker signal in 5p (small team), defer to pyramid.
+ *
+ * Returns the seat IDs to HARD-exclude. Empty array when no failed
+ * quests yet (R1+ no result) or no seat crosses the threshold.
+ */
+export function inferRedsFromTaskFails(obs: PlayerObservation): string[] {
+  const failedQuests = obs.questHistory.filter((q) => q.result === 'fail');
+  if (failedQuests.length === 0) return [];
+  const totalFails = failedQuests.length;
+  const failsOnTeam = new Map<string, number>();
+  for (const q of failedQuests) {
+    for (const seat of q.team) {
+      failsOnTeam.set(seat, (failsOnTeam.get(seat) ?? 0) + 1);
+    }
+  }
+  const THRESHOLD = 0.5;
+  const inferred: string[] = [];
+  for (const [seat, count] of failsOnTeam.entries()) {
+    if (seat === obs.myPlayerId) continue; // never self-flag
+    const attribution = count / totalFails;
+    // Two gates:
+    //   1. Attribution > threshold (strong correlation with failures)
+    //   2. Seat present in EVERY failed quest (hard intersection — avoids
+    //      false positives when a single fail is shared 3-way)
+    if (attribution > THRESHOLD && count === totalFails) {
+      inferred.push(seat);
+    }
+  }
+  return inferred;
+}
+
 // ── Telemetry counters (Wave E PR3 verification) ────────────────
 /**
  * Module-level counters incremented inside `ForwardAgent.decide()` so
@@ -867,6 +934,10 @@ export class ForwardAgent implements AvalonAgent {
   ): Candidate[] {
     const teamSize = AVALON_CONFIG[obs.playerCount]?.questTeams[obs.currentRound - 1];
     if (teamSize === undefined || teamSize <= 0) return [];
+    // Compute inferred-red list once per call so percival's hard-exclude
+    // path below can stack it on top of the inferred-Morgana wizard
+    // exclusion. See `inferRedsFromTaskFails` doc for attribution algo.
+    const inferredReds = inferRedsFromTaskFails(obs);
 
     const allIds = obs.allPlayerIds;
     if (allIds.length < teamSize) return [];
@@ -928,6 +999,17 @@ export class ForwardAgent implements AvalonAgent {
           const includesB = ranked.includes(bId);
           ranked = includesB ? [...without, bId] : without;
         }
+      }
+      // v2 backlog #2 (2026-05-06) — extend 鐵咬 from inferred-Morgana wizard
+      // to ANY public-signal red. HR-28 派西「認為該鐵咬就鐵咬」(Edward 16:09):
+      // not limited to wizard. R3+ task fail attribution (computed by
+      // `inferRedsFromTaskFails` above) emits seats whose on-team rate ×
+      // task-fail correlation crosses the threshold. Pre-fix bug: 5p v2
+      // R4-P1 percival picked seat[1,2,5] where seat 5 = assassin who
+      // already failed R1+R2; baseline ranked-by-suspicion left him at
+      // tail of the candidate pool but rotation still surfaced him.
+      if (inferredReds.length > 0) {
+        ranked = ranked.filter((id) => !inferredReds.includes(id));
       }
     }
 

@@ -26,6 +26,7 @@ import {
   normalizePurpose,
   roundT,
   lerp,
+  inferRedsFromTaskFails,
   type PurposeVector,
   type Candidate,
 } from './ForwardAgent';
@@ -369,7 +370,10 @@ describe('ForwardAgent.decide (full pipeline)', () => {
     expect(action.type).toBe('quest_vote');
   });
 
-  it('assassinate: targets a non-self player', () => {
+  it('assassinate: targets a non-self player (delegates to baseline)', () => {
+    // Edward 2026-05-05 22:10 audit fix A: assassinate path delegates
+    // to baseline.actDirect (recovers 6-signal Merlin scorer). Trace
+    // emits the single delegate-candidate so candidatesEvaluated=1.
     const obs = makeObs({
       myRole: 'assassin',
       myTeam: 'evil',
@@ -383,12 +387,15 @@ describe('ForwardAgent.decide (full pipeline)', () => {
     if (action.type === 'assassinate') {
       expect(action.targetId).not.toBe(obs.myPlayerId);
     }
-    expect(reasoningTrace.candidatesEvaluated).toBe(obs.allPlayerIds.length - 1);
+    expect(reasoningTrace.usedFallback).toBe(false);
+    expect(reasoningTrace.candidatesEvaluated).toBe(1);
+    expect(reasoningTrace.summary).toContain('assassinate-delegate');
   });
 
   it('assassin late game: prefers high merlin-prob target over known evil', () => {
-    // ToM has tighter merlin-prob signal than the pyramid; ensure
-    // the scorer doesn't pick a known-evil teammate as target.
+    // Baseline.assassinate excludes `allEvilIds` from candidate pool
+    // (HeuristicAgent.ts line 2319-2320), so a known evil is never
+    // chosen as the assassination target.
     const obs = makeObs({
       myRole: 'assassin',
       myTeam: 'evil',
@@ -663,6 +670,364 @@ describe('ForwardAgent fallback (PR1 module failure)', () => {
     const { reasoningTrace } = fa.decide(obs);
     expect(reasoningTrace.usedFallback).toBe(true);
     expect(reasoningTrace.fallbackReason).toBe('no candidates generated');
+  });
+});
+
+// ── Assassinate delegation (Edward 2026-05-05 22:10 audit fix A) ─
+//
+// Audit `staging/subagent_results/assassin_merlin_bug_audit_2026-05-05.md`
+// — ForwardAgent.decide must delegate `assassination` decisions to
+// baseline.actDirect so the 6-signal Merlin scorer + seat priors run.
+// Pre-fix: ToM 5-bucket pyramid → multi-blue tie → strict `>` always
+// picked seat-1 (g9/g17 blue-win games both shot seat 1 = bug, real
+// Merlin sat seat 7 / seat 3). Same delegation pattern as R1-R2
+// voteOnTeam (commit de11bd28).
+describe('ForwardAgent.decide assassinate delegation', () => {
+  it('delegates to baseline.actDirect for assassinate (matches HeuristicAgent.assassinate output)', () => {
+    const baselineFwd = new HeuristicAgent('assassin-fwd');
+    const baselineBare = new HeuristicAgent('assassin-bare');
+    const fa = new ForwardAgent('assassin-fwd', baselineFwd);
+
+    const obs: PlayerObservation = {
+      myPlayerId: 'P0',
+      myRole: 'assassin',
+      myTeam: 'evil',
+      playerCount: 5,
+      allPlayerIds: ['P0', 'P1', 'P2', 'P3', 'P4'],
+      knownEvils: ['P0', 'P3'],
+      allEvilIds: ['P0', 'P3'],
+      currentRound: 5,
+      currentLeader: 'P4',
+      failCount: 0,
+      questResults: ['fail', 'fail', 'success'],
+      gamePhase: 'assassination',
+      voteHistory: [],
+      questHistory: [
+        { round: 1, team: ['P0', 'P3'], result: 'fail', failCount: 1 },
+        { round: 2, team: ['P0', 'P3', 'P4'], result: 'fail', failCount: 1 },
+        { round: 3, team: ['P1', 'P2'], result: 'success', failCount: 0 },
+      ],
+      proposedTeam: [],
+    };
+
+    baselineFwd.onGameStart(obs);
+    baselineBare.onGameStart(obs);
+    fa.onGameStart(obs);
+
+    const { action, reasoningTrace } = fa.decide(obs);
+    const baselineAction = baselineBare.actDirect(obs);
+
+    expect(action.type).toBe('assassinate');
+    expect(JSON.stringify(action)).toBe(JSON.stringify(baselineAction));
+    expect(reasoningTrace.usedFallback).toBe(false);
+    expect(reasoningTrace.summary).toContain('assassinate-delegate');
+    expect(reasoningTrace.candidatesEvaluated).toBe(1);
+  });
+
+  it('does not select a seat-order tie-break victim when blue candidates are symmetric', () => {
+    // Pre-fix bug: when ToM pyramid bucketed multiple blue candidates
+    // identically, strict `>` tie-break always selected the seat-1
+    // player. Two consecutive 20-game-batch blue wins (g9/g17) both
+    // shot seat 1 (loyal) when real Merlin sat at seat 7 / seat 3.
+    //
+    // Post-fix: baseline.assassinate uses 6 signals + seat priors that
+    // distinguish Merlin from Loyal even when public reject/approve
+    // patterns look symmetric. We verify the delegation invariant by
+    // checking that the chosen target is a candidate the BASELINE would
+    // pick — not always seat-1 by construction.
+    const baselineFwd = new HeuristicAgent('seat-bias');
+    const baselineBare = new HeuristicAgent('seat-bias-bare');
+    const fa = new ForwardAgent('seat-bias', baselineFwd);
+    const obs: PlayerObservation = {
+      myPlayerId: 'P0',
+      myRole: 'assassin',
+      myTeam: 'evil',
+      playerCount: 7,
+      allPlayerIds: ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'],
+      knownEvils: ['P0', 'P3'],
+      allEvilIds: ['P0', 'P3'],
+      currentRound: 5,
+      currentLeader: 'P4',
+      failCount: 0,
+      questResults: ['fail', 'fail', 'success'],
+      gamePhase: 'assassination',
+      voteHistory: [],
+      questHistory: [
+        { round: 1, team: ['P0', 'P3'], result: 'fail', failCount: 1 },
+        { round: 2, team: ['P0', 'P3', 'P4'], result: 'fail', failCount: 1 },
+      ],
+      proposedTeam: [],
+    };
+
+    baselineFwd.onGameStart(obs);
+    baselineBare.onGameStart(obs);
+    fa.onGameStart(obs);
+
+    const fwdResult = fa.decide(obs);
+    const baselineAction = baselineBare.actDirect(obs);
+
+    // The forward result MUST equal baseline's choice — that is the
+    // contract of delegation.
+    expect(JSON.stringify(fwdResult.action)).toBe(JSON.stringify(baselineAction));
+  });
+
+  it('R3+ percival outer-white penalises morgana cover (mistakeMap exclusion)', () => {
+    // Audit Section L146-L155 H20 hypothesis: 派西 R3+ 異白 morgana
+    // cover. When a candidate has off-team-approved (outer-white) a
+    // team containing an assassin-known evil, baseline.assassinate's
+    // `getMistakeCount` (HeuristicAgent.ts line 2346) marks them as
+    // "mistaken" and excludes them from the unmistaken candidate pool
+    // — which is exactly the morgana exclusion behaviour we want.
+    //
+    // Setup: P1 outer-white-approved an evil-tainted team in R3 (a
+    // mistake from the assassin's POV). P2 / P4 / P5 stayed clean. The
+    // baseline picks from {P2, P4, P5} (unmistaken pool only) — never P1.
+    const baselineFwd = new HeuristicAgent('h20-fwd');
+    const baselineBare = new HeuristicAgent('h20-bare');
+    const fa = new ForwardAgent('h20-fwd', baselineFwd);
+    const obs: PlayerObservation = {
+      myPlayerId: 'P0',
+      myRole: 'assassin',
+      myTeam: 'evil',
+      playerCount: 7,
+      allPlayerIds: ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'],
+      knownEvils: ['P0', 'P3'],
+      allEvilIds: ['P0', 'P3'],
+      currentRound: 5,
+      currentLeader: 'P5',
+      failCount: 0,
+      questResults: ['fail', 'fail', 'success'],
+      gamePhase: 'assassination',
+      voteHistory: [
+        // R3 attempt 1: P0/P3 (assassin/morgana) on team. P1 = off-team
+        // approver = outer-white on a tainted team = mistake.
+        {
+          round: 3,
+          attempt: 1,
+          leader: 'P5',
+          team: ['P0', 'P3', 'P5'],
+          approved: true,
+          votes: {
+            P0: true,
+            P1: true,
+            P2: false,
+            P3: true,
+            P4: false,
+            P5: true,
+            P6: false,
+          },
+        },
+      ],
+      questHistory: [
+        { round: 1, team: ['P0', 'P3'], result: 'fail', failCount: 1 },
+        { round: 2, team: ['P0', 'P3', 'P4'], result: 'fail', failCount: 1 },
+        { round: 3, team: ['P0', 'P3', 'P5'], result: 'success', failCount: 0 },
+      ],
+      proposedTeam: [],
+    };
+
+    baselineFwd.onGameStart(obs);
+    baselineBare.onGameStart(obs);
+    fa.onGameStart(obs);
+
+    const { action } = fa.decide(obs);
+    const baselineAction = baselineBare.actDirect(obs);
+
+    expect(JSON.stringify(action)).toBe(JSON.stringify(baselineAction));
+    if (action.type === 'assassinate') {
+      // P0 = self, P3 = known evil (filtered by allEvilIds).
+      // P1 was the outer-white mistake — must NOT be the target so
+      // long as the unmistaken pool {P2, P4, P5, P6} is non-empty.
+      expect(action.targetId).not.toBe('P1');
+      expect(action.targetId).not.toBe('P0');
+      expect(action.targetId).not.toBe('P3');
+    }
+  });
+});
+
+// ── v2 backlog #2 — percival inferred-red exclusion ─────────────
+describe('inferRedsFromTaskFails (v2 backlog #2)', () => {
+  it('returns [] when no failed quests yet', () => {
+    const obs: PlayerObservation = {
+      myPlayerId: 'P0',
+      myRole: 'percival',
+      myTeam: 'good',
+      playerCount: 5,
+      allPlayerIds: ['P0', 'P1', 'P2', 'P3', 'P4'],
+      knownEvils: [],
+      knownWizards: ['P1', 'P2'],
+      currentRound: 1,
+      currentLeader: 'P0',
+      failCount: 0,
+      questResults: [],
+      gamePhase: 'team_select',
+      voteHistory: [],
+      questHistory: [],
+      proposedTeam: [],
+    };
+    expect(inferRedsFromTaskFails(obs)).toEqual([]);
+  });
+
+  it('flags the seat that appears in EVERY failed quest (R1+R2 fail intersection)', () => {
+    // 5p R3+ scenario: R1 (size 2) fail w/ {P3,P4}, R2 (size 3) fail w/
+    // {P0,P3,P4}. Intersection = {P3,P4}. P0 is self → never flagged.
+    // P3,P4 each appear in 2/2 failed quests → both inferred red.
+    const obs: PlayerObservation = {
+      myPlayerId: 'P0',
+      myRole: 'percival',
+      myTeam: 'good',
+      playerCount: 5,
+      allPlayerIds: ['P0', 'P1', 'P2', 'P3', 'P4'],
+      knownEvils: [],
+      knownWizards: ['P1', 'P2'],
+      currentRound: 3,
+      currentLeader: 'P0',
+      failCount: 0,
+      questResults: ['fail', 'fail'],
+      gamePhase: 'team_select',
+      voteHistory: [],
+      questHistory: [
+        { round: 1, team: ['P3', 'P4'], result: 'fail', failCount: 1 },
+        { round: 2, team: ['P0', 'P3', 'P4'], result: 'fail', failCount: 2 },
+      ],
+      proposedTeam: [],
+    };
+    const reds = inferRedsFromTaskFails(obs);
+    expect(reds.sort()).toEqual(['P3', 'P4']);
+  });
+
+  it('does NOT flag a seat that appeared in only 1 of 2 failed quests', () => {
+    // R1 fail {P1,P2}, R2 fail {P3,P4,P0}. Intersection empty
+    // (5p impossible in real play but tests the gate).
+    const obs: PlayerObservation = {
+      myPlayerId: 'P0',
+      myRole: 'percival',
+      myTeam: 'good',
+      playerCount: 5,
+      allPlayerIds: ['P0', 'P1', 'P2', 'P3', 'P4'],
+      knownEvils: [],
+      currentRound: 3,
+      currentLeader: 'P0',
+      failCount: 0,
+      questResults: ['fail', 'fail'],
+      gamePhase: 'team_select',
+      voteHistory: [],
+      questHistory: [
+        { round: 1, team: ['P1', 'P2'], result: 'fail', failCount: 1 },
+        { round: 2, team: ['P0', 'P3', 'P4'], result: 'fail', failCount: 1 },
+      ],
+      proposedTeam: [],
+    };
+    expect(inferRedsFromTaskFails(obs)).toEqual([]);
+  });
+
+  it('never self-flags even when the player appears in every failed quest', () => {
+    // Pathological: P0 (self) showed up in both fails. We never infer
+    // self as red — it's defensive against percival mistakenly excluding
+    // their own seat from candidate teams.
+    const obs: PlayerObservation = {
+      myPlayerId: 'P0',
+      myRole: 'percival',
+      myTeam: 'good',
+      playerCount: 5,
+      allPlayerIds: ['P0', 'P1', 'P2', 'P3', 'P4'],
+      knownEvils: [],
+      currentRound: 3,
+      currentLeader: 'P0',
+      failCount: 0,
+      questResults: ['fail', 'fail'],
+      gamePhase: 'team_select',
+      voteHistory: [],
+      questHistory: [
+        { round: 1, team: ['P0', 'P3'], result: 'fail', failCount: 1 },
+        { round: 2, team: ['P0', 'P3', 'P4'], result: 'fail', failCount: 1 },
+      ],
+      proposedTeam: [],
+    };
+    const reds = inferRedsFromTaskFails(obs);
+    expect(reds).not.toContain('P0');
+    expect(reds).toContain('P3'); // P3 in both fails
+  });
+});
+
+describe('ForwardAgent percival hard-excludes inferred reds (v2 backlog #2)', () => {
+  it('R4-P1 percival: excludes assassin seat that failed R1+R2', () => {
+    // 5p v2 R4-P1 scenario from qualitative trace:
+    //   - P0 = percival (self, leader at R4-P1)
+    //   - P1, P2 = wizards (one Merlin, one Morgana)
+    //   - P3 = loyal
+    //   - P4 = assassin (failed R1 + R2 with morgana wizard)
+    //   - questResults: ['fail', 'fail', 'success'] (R1+R2 fail, R3 OK)
+    //   - questHistory: R1 {P1,P4} fail, R2 {P0,P2,P4} fail (P4 = common
+    //     non-wizard seat → assassin is publicly inferred red)
+    // Expected: percival's R4-P1 (size 3) candidate teams MUST exclude
+    // P4 (inferred red from task fails). Pre-fix: only inferred-Morgana
+    // wizard was excluded; P4 still surfaced via candidate rotation.
+    const baselineFwd = new HeuristicAgent('p-fwd');
+    const baselineBare = new HeuristicAgent('p-bare');
+    const fa = new ForwardAgent('p-fwd', baselineFwd);
+    const obs: PlayerObservation = {
+      myPlayerId: 'P0',
+      myRole: 'percival',
+      myTeam: 'good',
+      playerCount: 5,
+      allPlayerIds: ['P0', 'P1', 'P2', 'P3', 'P4'],
+      knownEvils: [],
+      knownWizards: ['P1', 'P2'],
+      currentRound: 4,
+      currentLeader: 'P0',
+      failCount: 0,
+      questResults: ['fail', 'fail', 'success'],
+      gamePhase: 'team_select',
+      voteHistory: [
+        // Trim to a minimal history that lets the percival path discriminate.
+        // R1-P1: leader P3, team {P1,P4}, approved.
+        {
+          round: 1,
+          attempt: 1,
+          leader: 'P3',
+          team: ['P1', 'P4'],
+          approved: true,
+          votes: { P0: true, P1: true, P2: true, P3: true, P4: true },
+        },
+        // R2-P1: leader P4, team {P0,P2,P4}, approved.
+        {
+          round: 2,
+          attempt: 1,
+          leader: 'P4',
+          team: ['P0', 'P2', 'P4'],
+          approved: true,
+          votes: { P0: true, P1: true, P2: true, P3: true, P4: true },
+        },
+        // R3-P1: leader P0 picked clean, success.
+        {
+          round: 3,
+          attempt: 1,
+          leader: 'P0',
+          team: ['P0', 'P3'],
+          approved: true,
+          votes: { P0: true, P1: false, P2: false, P3: true, P4: false },
+        },
+      ],
+      questHistory: [
+        { round: 1, team: ['P1', 'P4'], result: 'fail', failCount: 1 },
+        { round: 2, team: ['P0', 'P2', 'P4'], result: 'fail', failCount: 1 },
+        { round: 3, team: ['P0', 'P3'], result: 'success', failCount: 0 },
+      ],
+      proposedTeam: [],
+    };
+
+    baselineFwd.onGameStart(obs);
+    baselineBare.onGameStart(obs);
+    fa.onGameStart(obs);
+
+    const { action } = fa.decide(obs);
+    expect(action.type).toBe('team_select');
+    if (action.type === 'team_select') {
+      // Hard contract: P4 (inferred red — appears in both failed quests)
+      // MUST NOT be in the chosen team.
+      expect(action.teamIds).not.toContain('P4');
+    }
   });
 });
 
