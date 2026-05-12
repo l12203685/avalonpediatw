@@ -559,17 +559,32 @@ function biasForAssassin(
 }
 
 /**
- * Bias for **莫甘娜 (morgana)** — spec §4.4.
+ * Bias for **莫甘娜 (morgana)** — spec §4.4 (Edward 2026-05-11 doctrine change).
+ *
+ *   Edward verbatim:「不用刻意演 預設策略就是忠臣 莫甘看不到奧 也分不出
+ *   刺/莫德 怎麼演」. Default doctrine = **mimicLoyal** (act exactly like a
+ *   loyal would). The classic mimicMerlin posture is downgraded to advanced /
+ *   late-round opt-in because the morgana lacks the hidden-info needed to
+ *   bluff merlin convincingly:
+ *     1. morgana cannot see oberon (oberon is hidden from all evil except by
+ *        the engine's reveal — morgana POV ⊇ {self, assassin, mordred} only);
+ *     2. morgana cannot distinguish assassin vs mordred internally — so
+ *        attempting to push "I'm merlin and X is morgana" risks fingering
+ *        her own teammate.
+ *   The clean fallback is loyal-mimicry: vote/select as a loyal would
+ *   (findGoodTeam dominates), then fail when listening.
  *
  *   selectTeam:
- *     R1: mimic-merlin clean team — exclude knownEvils.
- *     R3+: mimic + selective ally inclusion.
+ *     R1: mimic-loyal pure clean team — exclude knownEvils (same shape as
+ *         loyal R1 — pick the seat with lowest pyramid suspicion).
+ *     R3+: mimic-loyal + selective ally inclusion when winning red track.
  *   voteOnTeam:
- *     R3+: mimic-merlin — approve clean teams, reject suspect-heavy teams,
- *          cover ally inclusion.
+ *     mimic-loyal — approve clean teams, reject suspect-heavy teams.
+ *     Cover ally inclusion only when red is winning.
  *   voteOnQuest:
- *     listening fail; non-listening earlyFailBonus -0.05 (less aggressive
- *     fail to maintain disguise).
+ *     listening fail; non-listening play success to maintain disguise.
+ *
+ *   HR-8.2「莫甘都想演梅」is downgraded — see HeuristicAgent line ~1830.
  */
 function biasForMorgana(
   action: AgentAction,
@@ -586,41 +601,41 @@ function biasForMorgana(
 
   if (isTeamSelect(action)) {
     if (round === 1) {
-      // R1: mimic-merlin pure clean — exclude allies. Same magnitude
+      // R1: mimic-loyal pure clean — exclude allies. Same magnitude
       // override as assassin §3.4 R1 mimic-loyal: ally inclusion must
       // produce negative net even after base +threeRedWins boost.
       if (signals.numKnownEvilOnTeam > 0) {
-        return { mimicMerlin: -0.7, threeRedWins: -1.5 };
+        return { findGoodTeam: -0.7, threeRedWins: -1.5 };
       }
-      return { mimicMerlin: 0.5, threeRedWins: 1.0 };
+      return { findGoodTeam: 0.5, threeRedWins: 1.0 };
     }
     if (signals.numKnownEvilOnTeam > 0) {
       // R3+: occasional ally inclusion (allyInclusionMultiplier 0.6).
-      return { threeRedWins: 0.3, mimicMerlin: -0.3 };
+      return { threeRedWins: 0.3, findGoodTeam: -0.3 };
     }
-    // Clean team — strong mimic signal.
-    return { mimicMerlin: 0.5, threeRedWins: -0.1 };
+    // Clean team — strong mimic-loyal signal.
+    return { findGoodTeam: 0.5, threeRedWins: -0.1 };
   }
   if (isApprove(action)) {
     if (signals.numKnownEvilOnTeam > 0) return { threeRedWins: 0.5 };
-    if (signals.avgSuspicion < 0.3) return { mimicMerlin: 0.4 };
+    if (signals.avgSuspicion < 0.3) return { findGoodTeam: 0.4 };
     return {};
   }
   if (isReject(action)) {
     if (signals.numKnownEvilOnTeam > 0) {
-      return { threeRedWins: -0.5, mimicMerlin: 0.2 }; // mimic merlin reject sketchy
+      return { threeRedWins: -0.5, findGoodTeam: 0.2 }; // mimic loyal reject sketchy
     }
-    if (signals.avgSuspicion >= 0.6) return { mimicMerlin: 0.3 }; // mimic merlin reject suspect
+    if (signals.avgSuspicion >= 0.6) return { findGoodTeam: 0.3 }; // mimic loyal reject suspect
     return {};
   }
   if (isQuestSuccess(action)) {
     if (listening) return { threeRedWins: -1.0 };
-    if (round <= 3 && obs.knownEvils.length > 0) return { mimicMerlin: 0.3 };
+    if (round <= 3 && obs.knownEvils.length > 0) return { findGoodTeam: 0.3 };
     return {};
   }
   if (isQuestFail(action)) {
     if (listening) return { threeRedWins: 0.8 };
-    if (round <= 3) return { threeRedWins: 0.2, mimicMerlin: -0.2 };
+    if (round <= 3) return { threeRedWins: 0.2, findGoodTeam: -0.2 };
     return { threeRedWins: 0.3 };
   }
   return {};

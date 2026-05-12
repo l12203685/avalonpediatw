@@ -170,10 +170,15 @@ describe('evaluatePurposes (per-role purpose tables)', () => {
     expect(r5.forceMerlinKill).toBeGreaterThan(r1.forceMerlinKill);
   });
 
-  it('morgana: mimicMerlin dominates R1, threeRedWins dominates R5', () => {
+  it('morgana: findGoodTeam (mimicLoyal) dominates R1, threeRedWins dominates R5', () => {
+    // Edward 2026-05-11 doctrine change: morgana default = mimicLoyal
+    // (not mimicMerlin). At R1 the dominant purpose is acting like a loyal
+    // (findGoodTeam ~0.55). At R5 threeRedWins takes over (~0.7).
     const r1 = evaluatePurposes('morgana', 1);
     const r5 = evaluatePurposes('morgana', 5);
-    expect(r1.mimicMerlin).toBeGreaterThan(r1.threeRedWins);
+    expect(r1.findGoodTeam).toBeGreaterThan(r1.threeRedWins);
+    expect(r1.findGoodTeam).toBeGreaterThan(r1.mimicMerlin);
+    expect(r5.threeRedWins).toBeGreaterThan(r5.findGoodTeam);
     expect(r5.threeRedWins).toBeGreaterThan(r5.mimicMerlin);
   });
 

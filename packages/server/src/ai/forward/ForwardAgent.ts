@@ -123,6 +123,21 @@ function bannedComboSetFor5p(playerCount: number): ReadonlySet<string> {
  * Render a team's canonical ascending seat-digit string. Mirrors
  * HeuristicAgent.canonicalSeatString — see there for full convention.
  */
+// ── Fix 5 (2026-05-11 R1 派票 stacking hotfix): FNV-1a 32-bit hash ──
+//
+// Deterministic, no Math.random, pure function. Used at the
+// pick-best-candidate stage to break score ties without reverting to
+// seat order. See `decide()` for the call-site rationale.
+function fnv1a32(input: string): number {
+  let hash = 0x811c9dc5; // FNV offset basis
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    // 32-bit FNV prime multiplication via shifts (avoids BigInt).
+    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+  }
+  return hash;
+}
+
 function canonicalSeatStringForward(
   memberIds: readonly string[],
   allPlayerIds: readonly string[],
@@ -459,9 +474,17 @@ export function evaluatePurposes(
       );
 
     case 'morgana':
+      // Edward 2026-05-11 verbatim:「不用刻意演 預設策略就是忠臣
+      //   莫甘看不到奧 也分不出刺/莫德 怎麼演」.
+      // mimicLoyal = act exactly like a loyal would (findGoodTeam dominates),
+      // not mimicMerlin (which leaks the role to a clever Percival because the
+      // morgana lacks the hidden-info needed to bluff merlin convincingly).
+      // The advanced "演梅" play remains available for late rounds where the
+      // game has degraded enough that the disguise matters less than tempo —
+      // baseline weight stays small.
       return v(
-        { threeRedWins: 0.30, mimicMerlin: 0.70 },
-        { threeRedWins: 0.70, mimicMerlin: 0.30 },
+        { threeRedWins: 0.20, findGoodTeam: 0.55, mimicMerlin: 0.15, hideFromMerlin: 0.10 },
+        { threeRedWins: 0.70, findGoodTeam: 0.20, mimicMerlin: 0.10, hideFromMerlin: 0.00 },
       );
 
     case 'mordred':
@@ -818,20 +841,123 @@ export class ForwardAgent implements AvalonAgent {
       return this.fallback(obs, decisionType, 'getRoleSignals() threw');
     }
 
-    let bestIdx = 0;
-    let bestScore = -Infinity;
-    for (let i = 0; i < candidates.length; i++) {
-      const s = scoreCandidate(
-        candidates[i],
-        purposes,
-        obs,
-        interp,
-        roleSignals,
-      );
-      if (s > bestScore) {
-        bestScore = s;
-        bestIdx = i;
+    // ── Fix 5 (2026-05-11 R1 派票 stacking hotfix): deterministic
+    // hash tie-break. ──
+    //
+    // Edward 5/11 20:35 verbatim:「白癡派票 124 123 123? 還有 思考呢?」
+    //
+    // Root cause (subagent_results/r1_派票_root_cause_2026-05-11.md §2.2):
+    // R1-P1 pyramid is fully NEUTRAL (0.5) for all non-self-non-knownEvil
+    // players. All candidates score identically → strict `>` tie-break
+    // always picks index 0 → seat-order-first wins on every leader's
+    // attempt → 5 leaders all派 [self, otherRanked[0], otherRanked[1]].
+    //
+    // Fix: collect ALL tied-for-max candidates, then deterministic
+    // hash tie-break by (myPlayerId + round + voteHistory.length +
+    // candidate.description). Hash uses a simple FNV-1a 32-bit variant —
+    // deterministic, no Math.random — preserves Q2 (same observation →
+    // identical action) while breaking the seat-order monoculture.
+    //
+    // Why include voteHistory.length: different R1 attempts have
+    // different voteHistory.length (0 for P1, 1 for P2, etc.) so two
+    // consecutive leaders proposing the same canonical team mix get
+    // different tie-break orderings — combined with Fix 2 prior-team
+    // penalty, this ensures R1-P2+ doesn't re-pick the rejected team.
+    // ── Fix 2 (2026-05-11 R1 派票 stacking hotfix): priorAttemptTeams
+    // penalty (HR-3 「修正/延伸前序」wire). ──
+    //
+    // Root cause (subagent_results/r1_派票_root_cause_2026-05-11.md §2.4):
+    // ForwardAgent.scoreCandidate (and computePurposeAlignment) never
+    // read obs.voteHistory, so a later leader could exactly re-propose
+    // an already-rejected team — 5/11 self-play game showed 莫德 2家 派
+    // 123 then 梅林 3家 also 派 123 with zero penalty for repetition.
+    //
+    // HR-3 ("修正/延伸前序"): subsequent leaders should adjust the
+    // prior attempt's team, not blindly mimic it. We approximate this
+    // by computing the canonical seat-string overlap between each
+    // candidate and each prior-attempt team in the current round, then
+    // applying a score penalty proportional to (overlap >= 50%).
+    //
+    // R5-force-normal exception: ForwardAgent already delegates R1-R2
+    // team_vote to baseline (line ~651) but team_select fires here for
+    // every round including R1; the penalty applies cross-round.
+    // priorAttemptTeams is scoped to the CURRENT round only (HR-3 is
+    // about within-round attempts, not cross-round).
+    const priorAttemptTeams = new Set<string>();
+    if (decisionType === 'team_select') {
+      const curRound = obs.currentRound ?? 1;
+      for (const v of obs.voteHistory) {
+        if (v.round !== curRound) continue;
+        if (v.approved) continue; // approved teams already passed; only
+                                  // penalise re-proposing rejected ones
+        const canonical = canonicalSeatStringForward(v.team, obs.allPlayerIds);
+        if (canonical) priorAttemptTeams.add(canonical);
       }
+    }
+    const PRIOR_PENALTY = 0.6;
+    const PRIOR_OVERLAP_THRESHOLD = 0.5; // teams sharing > 50% members count
+                                         // as "mimicking the prior attempt"
+    const scoredCandidates = candidates.map((c, i) => {
+      let s = scoreCandidate(c, purposes, obs, interp, roleSignals);
+      if (
+        c.action.type === 'team_select' &&
+        priorAttemptTeams.size > 0
+      ) {
+        const candidateCanonical = canonicalSeatStringForward(
+          c.action.teamIds,
+          obs.allPlayerIds,
+        );
+        if (priorAttemptTeams.has(candidateCanonical)) {
+          // Exact re-propose: full penalty.
+          s -= PRIOR_PENALTY;
+        } else {
+          // Partial overlap: scale penalty by max-overlap-with-any-prior.
+          const candSet = new Set(c.action.teamIds);
+          let maxOverlapRatio = 0;
+          for (const v of obs.voteHistory) {
+            if (v.round !== (obs.currentRound ?? 1)) continue;
+            if (v.approved) continue;
+            const priorSet = new Set(v.team);
+            let intersect = 0;
+            for (const id of candSet) {
+              if (priorSet.has(id)) intersect++;
+            }
+            const denom = Math.max(candSet.size, priorSet.size);
+            if (denom === 0) continue;
+            const ratio = intersect / denom;
+            if (ratio > maxOverlapRatio) maxOverlapRatio = ratio;
+          }
+          if (maxOverlapRatio > PRIOR_OVERLAP_THRESHOLD) {
+            s -= PRIOR_PENALTY * maxOverlapRatio;
+          }
+        }
+      }
+      return { idx: i, score: s };
+    });
+    let bestScore = -Infinity;
+    for (const sc of scoredCandidates) {
+      if (sc.score > bestScore) bestScore = sc.score;
+    }
+    const EPS = 1e-9;
+    const topTier = scoredCandidates.filter(
+      (sc) => Math.abs(sc.score - bestScore) < EPS,
+    );
+    let bestIdx: number;
+    if (topTier.length === 1) {
+      bestIdx = topTier[0].idx;
+    } else {
+      // Deterministic hash tie-break.
+      const seed =
+        `${obs.myPlayerId}|R${obs.currentRound ?? 1}|V${obs.voteHistory.length}`;
+      const hashed = topTier.map((sc) => ({
+        idx: sc.idx,
+        h: fnv1a32(seed + '|' + candidates[sc.idx].description),
+      }));
+      hashed.sort((a, b) => {
+        if (a.h !== b.h) return a.h - b.h;
+        return a.idx - b.idx; // stable fallback if hash collides
+      });
+      bestIdx = hashed[0].idx;
     }
 
     const chosen = candidates[bestIdx];
@@ -1038,30 +1164,90 @@ export class ForwardAgent implements AvalonAgent {
     const selfId = obs.myPlayerId;
     const otherRanked = ranked.filter((id) => id !== selfId);
 
-    // Generate up to MAX_CANDIDATES candidate teams using rotation:
-    //   Candidate 0: self + top-(teamSize-1) least suspicious others
-    //   Candidate 1..N: rotate the LAST slot through alternative picks
-    // Bounded by MAX_CANDIDATES to keep evaluation cheap.
-    const MAX_CANDIDATES = 8;
+    // ── Fix 1 (2026-05-11 R1 派票 stacking hotfix): full-slot
+    // enumeration. ──
+    //
+    // Edward 5/11 20:35 verbatim:「白癡派票 124 123 123? 還有 思考呢?」
+    //
+    // Root cause (subagent_results/r1_派票_root_cause_2026-05-11.md §2.3):
+    // pre-fix rotation only swapped the LAST slot, locking the first
+    // (teamSize-1) slots to otherRanked[0..teamSize-2]. For 10p R1
+    // teamSize=3 this meant every candidate looked like
+    // [self, otherRanked[0], otherRanked[?]] — and at R1 cold start
+    // pyramid is fully neutral so otherRanked[0] is always the
+    // seat-order-first non-self non-knownEvil player. All 5 R1 leaders
+    // ended up proposing teams that included seat 1 + seat 2 (莫德).
+    //
+    // Fix: enumerate (nearly) all C(K, teamSize-1) combinations of
+    // otherRanked, where K is bounded so the combo count stays
+    // manageable. We restrict to top K = min(otherRanked.length, 9)
+    // (least-suspicious 9) which gives:
+    //   - 10p teamSize=3 → C(9,2) = 36 combos
+    //   - 10p teamSize=4 → C(9,3) = 84 combos → clipped to MAX_CANDIDATES
+    //   - 10p teamSize=5 → C(9,4) = 126 combos → clipped to MAX_CANDIDATES
+    //   - 5p teamSize=2  → C(4,1) = 4 combos
+    //   - 7p teamSize=3  → C(6,2) = 15 combos
+    //
+    // After enumeration, sort by sum-of-suspicion (ascending — least
+    // suspicious first) so scoring still favours low-suspicion teams,
+    // but ties at sum=0 (R1 neutral) get broken downstream by the
+    // hash tie-break in decide().
+    const MAX_CANDIDATES = 50;
     const candidates: Candidate[] = [];
+    const slotCount = teamSize - 1; // non-self slots
+    const TOP_K = Math.min(otherRanked.length, 9);
+    const pool = otherRanked.slice(0, TOP_K);
 
-    // Candidate A: self + top-(N-1) least suspicious others.
-    const topN = [selfId, ...otherRanked.slice(0, teamSize - 1)];
-    candidates.push(this.makeTeamSelectCandidate(topN, obs, interp, pyramid));
+    // Helper: rank-pyramid pair for sorting combos by sum-of-suspicion.
+    const combinations: string[][] = [];
+    if (slotCount > 0 && pool.length >= slotCount) {
+      // Iterative combinations generator (lexicographic over indices).
+      const idx = new Array<number>(slotCount);
+      for (let i = 0; i < slotCount; i++) idx[i] = i;
+      const emit = (): void => {
+        combinations.push(idx.map((j) => pool[j]));
+      };
+      emit();
+      while (true) {
+        // Find rightmost index that can be incremented.
+        let r = slotCount - 1;
+        while (r >= 0 && idx[r] === pool.length - slotCount + r) r--;
+        if (r < 0) break;
+        idx[r]++;
+        for (let s = r + 1; s < slotCount; s++) idx[s] = idx[s - 1] + 1;
+        emit();
+        // Hard cap on enumeration to avoid pathological growth on
+        // larger team sizes. We still sort + take top MAX_CANDIDATES.
+        if (combinations.length >= 200) break;
+      }
+    } else if (slotCount === 0) {
+      combinations.push([]);
+    }
 
-    // Candidate B..N: rotate the LAST slot through alternative picks
-    // (always keeping self at slot 0).
-    for (
-      let alt = teamSize - 1;
-      alt < otherRanked.length && candidates.length < MAX_CANDIDATES;
-      alt++
-    ) {
-      const team = [
-        selfId,
-        ...otherRanked.slice(0, teamSize - 2),
-        otherRanked[alt],
-      ];
+    // Sort combos ascending by sum-of-pyramid-score (cheap proxy: lower
+    // mean suspicion first). At R1 cold start everything sums to the
+    // same value; downstream hash tie-break diverges across leaders.
+    const sumSusp = (combo: string[]): number => {
+      let s = 0;
+      for (const id of combo) {
+        s += pyramid.scores.get(id) ?? 0.5;
+      }
+      return s;
+    };
+    combinations.sort((a, b) => sumSusp(a) - sumSusp(b));
+
+    for (const combo of combinations) {
+      if (candidates.length >= MAX_CANDIDATES) break;
+      const team = [selfId, ...combo];
       candidates.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
+    }
+
+    // Safety fallback: if enumeration produced nothing (e.g. pool too
+    // small after role-specific filtering), keep the legacy "top-(N-1)"
+    // single candidate so the pipeline never returns []
+    if (candidates.length === 0) {
+      const topN = [selfId, ...otherRanked.slice(0, teamSize - 1)];
+      candidates.push(this.makeTeamSelectCandidate(topN, obs, interp, pyramid));
     }
 
     // ── Edward 2026-05-06 R1-P1 banned-combo filter (5p HR-5/HR-7) ────

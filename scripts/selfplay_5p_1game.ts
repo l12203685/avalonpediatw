@@ -410,11 +410,15 @@ async function main(): Promise<void> {
   }).replace('T', ' ') + ' +08';
 
   const md = renderEdwardFormat(game, completionTs);
-  const outputPath = '/mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v2_2026-05-06.md';
+  // Allow callers to override the output path via env (used by Wave 1 doctrine
+  // verification 2026-05-11 to avoid overwriting the v2 baseline file).
+  const outputPath = process.env.SELFPLAY_OUTPUT
+    || '/mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v2_2026-05-06.md';
   fs.writeFileSync(outputPath, md, 'utf-8');
 
   // Also dump the seats for use by perspective files.
-  const seatsPath = '/mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v2_2026-05-06.seats.json';
+  const seatsPath = process.env.SELFPLAY_SEATS_OUTPUT
+    || '/mnt/c/Users/admin/staging/selfplay/qualitative_1game_5p_baseline_v2_2026-05-06.seats.json';
   fs.writeFileSync(seatsPath, JSON.stringify({
     seats: game.seats,
     voteHistory: game.voteHistory,

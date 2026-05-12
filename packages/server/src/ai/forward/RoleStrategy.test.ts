@@ -297,9 +297,12 @@ describe('刺客 (assassin) — R1 mimic + assassinate (§3.4)', () => {
   });
 });
 
-// ── 莫甘娜 morgana — mimic-merlin ────────────────────────────────
-describe('莫甘娜 (morgana) — mimic-merlin (§4.4)', () => {
-  it('R1 selectTeam: prefers mimic-merlin (no ally on team)', () => {
+// ── 莫甘娜 morgana — mimic-loyal (§4.4, Edward 2026-05-11 doctrine change) ──
+describe('莫甘娜 (morgana) — mimic-loyal (§4.4)', () => {
+  it('R1 selectTeam: prefers mimic-loyal clean team (no ally on team)', () => {
+    // Edward 2026-05-11: morgana default = mimicLoyal (not mimicMerlin).
+    // R1 clean team still preferred over ally inclusion — behavior identical,
+    // semantic flipped from "演梅" to "演忠".
     const obs = makeObs({
       myRole: 'morgana',
       myTeam: 'evil',
@@ -315,16 +318,17 @@ describe('莫甘娜 (morgana) — mimic-merlin (§4.4)', () => {
       { type: 'team_select', teamIds: ['P0', 'P5', 'P1'] },
       { numKnownEvilOnTeam: 1, includesKnownEvil: true, avgSuspicion: 0.5 },
     );
-    const teamMimicMerlin = dummyCandidate(
+    const teamMimicLoyal = dummyCandidate(
       { type: 'team_select', teamIds: ['P0', 'P1', 'P2'] },
       { numKnownEvilOnTeam: 0, includesKnownEvil: false, avgSuspicion: 0.3 },
     );
-    expect(scoreCandidate(teamMimicMerlin, purposes, obs, interp, signals))
+    expect(scoreCandidate(teamMimicLoyal, purposes, obs, interp, signals))
       .toBeGreaterThan(scoreCandidate(teamWithAlly, purposes, obs, interp, signals));
   });
 
-  it('R3+ voteOnTeam: mimic-merlin reject sketchy clean team', () => {
-    // High avgSuspicion clean team (no knownEvils) → mimic-merlin reject.
+  it('R3+ voteOnTeam: mimic-loyal reject sketchy clean team', () => {
+    // High avgSuspicion clean team (no knownEvils) → a loyal would reject;
+    // morgana mimics that pattern (findGoodTeam bias).
     const obs = makeObs({
       myRole: 'morgana',
       myTeam: 'evil',
@@ -348,7 +352,7 @@ describe('莫甘娜 (morgana) — mimic-merlin (§4.4)', () => {
       { type: 'team_vote', vote: true },
       { numKnownEvilOnTeam: 0, avgSuspicion: 0.7 },
     );
-    // Mimic-merlin pattern: reject suspect-heavy clean team.
+    // Mimic-loyal pattern: reject suspect-heavy clean team.
     const sR = scoreCandidate(reject, purposes, obs, interp, signals);
     const sA = scoreCandidate(approve, purposes, obs, interp, signals);
     expect(sR).toBeGreaterThanOrEqual(sA - 0.1);

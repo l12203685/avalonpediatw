@@ -483,11 +483,18 @@ export const AVALON_CONFIG: Record<number, GameConfig> = {
     questFailsRequired: [1, 1, 1, 1, 1],
   },
   7: {
-    // 4 good, 3 evil — Round 4 requires 2 fail votes
+    // 4 good, 3 evil — Round 4 requires 2 fail votes.
+    // Edward 2026-05-11 verbatim:「最平衡的是 娜德奧派梅 莫德雷德帶有刺客劍
+    //   好人有湖中女神」.
+    // 3 紅 = morgana + mordred (兼任刺客 — assassin alias) + oberon
+    // 4 藍 = merlin + percival + loyal*2; Lady of the Lake active by default
+    //   (already auto-on for ≥7p in GameEngine).
+    // NOTE: mordred 在此局兼任 assassin — GameEngine.submitAssassination
+    // 容許「無 assassin role 時, mordred 行使刺殺權」(see line ~1356 logic).
     minPlayers: 7,
     maxPlayers: 7,
     maxFailedVotes: 5,
-    roles: ['merlin', 'percival', 'loyal', 'loyal', 'assassin', 'morgana', 'oberon'],
+    roles: ['merlin', 'percival', 'loyal', 'loyal', 'morgana', 'mordred', 'oberon'],
     questTeams: [2, 3, 3, 4, 4],
     questFailsRequired: [1, 1, 1, 2, 1],
   },

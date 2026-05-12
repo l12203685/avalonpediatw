@@ -238,11 +238,13 @@ export class GameEngine {
       const holder = this.room.ladyOfTheLakeHolder;
       if (holder) actors = [holder];
     } else if (state === 'discussion') {
-      const assassinEntry = Object.entries(this.room.players).find(
-        ([_, p]) => p.role === 'assassin'
-      ) ?? Array.from(this.roleAssignments.entries()).find(
-        ([_, role]) => role === 'assassin'
-      );
+      // Edward 2026-05-11: 7p 配置 mordred 兼任 assassin (莫德雷德帶有刺客劍).
+      // Resolve assassinator: prefer 'assassin' role; if absent (e.g. 7p config
+      // has no plain assassin), fall back to 'mordred' as the kill-vote holder.
+      const findByRole = (role: Role) =>
+        Object.entries(this.room.players).find(([_, p]) => p.role === role) ??
+        Array.from(this.roleAssignments.entries()).find(([_, r]) => r === role);
+      const assassinEntry = findByRole('assassin') ?? findByRole('mordred');
       if (assassinEntry) actors = [assassinEntry[0]];
     }
 
@@ -1317,9 +1319,15 @@ export class GameEngine {
     this.room.state = 'discussion';
     this.questVotes = [];
 
-    // Find assassin
-    const assassinId = Array.from(this.roleAssignments.entries())
-      .find(([_, role]) => role === 'assassin')?.[0];
+    // Find assassin (Edward 2026-05-11: 7p 莫德雷德兼任刺客 — fall back to mordred
+    // when no plain assassin exists in the role pool).
+    const findByRoleAssignment = (role: Role): string | undefined =>
+      Array.from(this.roleAssignments.entries()).find(([_, r]) => r === role)?.[0];
+    // Edward 2026-05-11: 7p 配置 = morgana + mordred (兼刺) + oberon, 沒 plain assassin.
+    // Priority: assassin role > mordred (7p kill holder) > morgana (fallback).
+    const assassinId = findByRoleAssignment('assassin')
+      ?? findByRoleAssignment('mordred')
+      ?? findByRoleAssignment('morgana');
 
     this.logEvent('discussion_phase_started', {
       assassinId,
@@ -1351,9 +1359,18 @@ export class GameEngine {
       throw new Error('Not in discussion phase');
     }
 
-    // Validate assassin (room.players is authoritative as it can be updated)
+    // Validate assassin (room.players is authoritative as it can be updated).
+    // Edward 2026-05-11: 7p 配置中莫德雷德兼任刺客 — when the role pool has
+    // no plain `assassin`, the kill-vote falls to the `mordred` holder
+    // (with `morgana` as a further fallback for opt-out cases).
     const assassinRole = this.room.players[assassinId]?.role ?? this.roleAssignments.get(assassinId);
-    if (assassinRole !== 'assassin') {
+    const allRoles = Array.from(this.roleAssignments.values());
+    const hasAssassinRole = allRoles.some((r) => r === 'assassin');
+    const hasMordredRole = allRoles.some((r) => r === 'mordred');
+    const isLegalAssassinator = assassinRole === 'assassin'
+      || (!hasAssassinRole && assassinRole === 'mordred')
+      || (!hasAssassinRole && !hasMordredRole && assassinRole === 'morgana');
+    if (!isLegalAssassinator) {
       throw new Error(`Player ${assassinId} is not the assassin`);
     }
 

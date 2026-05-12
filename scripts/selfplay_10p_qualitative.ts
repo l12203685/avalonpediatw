@@ -58,6 +58,8 @@ import {
 } from '../packages/server/src/ai/baseline';
 import { SelfPlayReasoningRepository } from '../packages/server/src/services/SelfPlayReasoningRepository';
 import { getForwardTelemetry, resetForwardTelemetry } from '../packages/server/src/ai/forward';
+import { ForwardAgent } from '../packages/server/src/ai/forward/ForwardAgent';
+import type { PurposeVector, ReasoningTrace } from '../packages/server/src/ai/forward/ForwardAgent';
 
 const PLAYER_COUNT = 10;
 const DIFFICULTY: 'hard' = 'hard';
@@ -143,7 +145,46 @@ function seatBySid(sid: string, seats: CapturedGame['seats']): number {
 //   紅方: 三紅為優先 + 逼梅林開能力 / 刺殺梅林次之
 //   忠臣: 找好人 (6 能力者 4 紅 + 梅派要躲)
 
-function purposeForRole(role: Role): string {
+// ── Fix 6.A (2026-05-11): purpose dump 改寫成從 ReasoningTrace 拿真實
+// PurposeVector top-3 values, 而不是寫死字典查表 ──
+//
+// 原寫法 (fallback, 僅在 trace 不可用時用) 保留為 purposeForRoleFallback,
+// 真實值由 dumpRealPurposes(trace) 從 ForwardAgent decide() 的輸出
+// 真實 11-dim 浮點 vector 抽出 top-3 (by weight) 顯示.
+//
+// Edward 2026-04-29 grill round 5「思考呢?」: reasoning.json 的 purpose
+// 欄被質疑是寫死字串而非真實計算結果. Fix 6.A 把真實 PurposeVector
+// 反映進 dump, 讓 Edward 能看到 ForwardAgent 真正在算什麼.
+
+const PURPOSE_LABEL_ZH: Record<keyof PurposeVector, string> = {
+  threeBlueWins:     '三藍',
+  threeRedWins:      '三紅',
+  hideMerlin:        '隱梅',
+  findMerlin:        '找梅',
+  mimicMerlin:       '偽梅',
+  hidePercival:      '隱派',
+  hideFromMerlin:    '躲梅',
+  avoidFriendlyFire: '不誤殺',
+  findGoodTeam:      '找好人',
+  dontOverPushRed:   '不過排',
+  forceMerlinKill:   '逼刺',
+};
+
+function dumpRealPurposes(trace: ReasoningTrace | undefined): string {
+  if (!trace) return '陣營目的 (trace unavailable)';
+  const pv = trace.purposes;
+  const entries: Array<[keyof PurposeVector, number]> = [];
+  for (const k of Object.keys(pv) as Array<keyof PurposeVector>) {
+    const v = pv[k];
+    if (v > 0) entries.push([k, v]);
+  }
+  entries.sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) return '陣營目的 (purposes all zero)';
+  const top3 = entries.slice(0, 3).map(([k, v]) => `${PURPOSE_LABEL_ZH[k]}=${v.toFixed(2)}`);
+  return top3.join(' + ');
+}
+
+function purposeForRoleFallback(role: Role): string {
   switch (role) {
     case 'merlin':
       return '三藍前提 + 隱藏梅林身份 (不能曝光)';
@@ -344,16 +385,26 @@ interface BuildEntryArgs {
   anomalyType?:  ReasoningAnomalyType;
   missionVoteType?: ReasoningMissionVoteType;
   interpretation?: string;
+  /** Fix 6.A: real reasoning trace from ForwardAgent.decide() when available. */
+  trace?: ReasoningTrace;
 }
 
 function buildStructuredEntry(args: BuildEntryArgs): ReasoningEntry {
-  const { obs, decisionType, detail, attempt, seats, leaderSid } = args;
+  const { obs, decisionType, detail, attempt, seats, leaderSid, trace } = args;
   const seat = seatBySid(obs.myPlayerId, seats);
   const leaderSeat = seatBySid(leaderSid, seats);
   const interpretation = args.interpretation
     ?? `R${obs.currentRound} ${seatDigit(leaderSeat)}家派, 我${seatDigit(seat) === seatDigit(leaderSeat) ? '是隊長' : '依公開資訊'}推`;
   const logic = buildLogicLine(obs, decisionType, detail, seats);
-  const purpose = purposeForRole(obs.myRole);
+  // Fix 6.A: prefer real PurposeVector from ForwardAgent trace; fallback
+  // to dictionary label when trace unavailable (e.g. assassinate phase
+  // which ForwardAgent delegates to baseline → zeroPurposeVector).
+  const realPurpose = dumpRealPurposes(trace);
+  const purpose = (trace && trace.usedFallback === false &&
+                   !realPurpose.includes('all zero') &&
+                   !realPurpose.includes('unavailable'))
+    ? realPurpose
+    : purposeForRoleFallback(obs.myRole);
   const action = actionPhrase(decisionType, detail);
   const loyalistBaseline = buildLoyalistBaseline(obs, decisionType, detail);
   const myOverride = buildMyOverride(obs, decisionType, loyalistBaseline, seats);
@@ -445,13 +496,36 @@ async function runOneGame(
   let voteAttempt = 0;
   let proposalCounterByRound = new Map<number, number>();
 
+  // Fix 6.A: parallel ForwardAgent instances (1 per seat) used purely
+  // to dump real ReasoningTrace alongside the action. Since ForwardAgent
+  // is deterministic (Q2 contract) and HeuristicAgent.act already wires
+  // through ForwardAgent when USE_FORWARD_REASONING=true, decisions made
+  // here exactly mirror the live game.
+  const forwardForTrace = new Map<string, ForwardAgent>();
+  for (const a of agents) {
+    if (a instanceof HeuristicAgent) {
+      forwardForTrace.set(a.agentId, new ForwardAgent(a.agentId, a));
+    }
+  }
+  const tryTrace = (agentId: string, obs: PlayerObservation): ReasoningTrace | undefined => {
+    const fa = forwardForTrace.get(agentId);
+    if (!fa) return undefined;
+    try {
+      return fa.decide(obs).reasoningTrace;
+    } catch {
+      return undefined;
+    }
+  };
+
   while (room.state !== 'ended') {
     const leaderId = engine.getCurrentLeaderId();
 
     if (room.state === 'voting' && room.questTeam.length === 0) {
       const leader = agents.find(a => a.agentId === leaderId)!;
       const obs = buildObs(leader.agentId, room, roleMap, teamMap, voteHistory, questHistory);
-      const action = leader.act({ ...obs, gamePhase: 'team_select' });
+      const tsObs = { ...obs, gamePhase: 'team_select' as const };
+      const traceForLeader = tryTrace(leader.agentId, tsObs);
+      const action = leader.act(tsObs);
       if (action.type !== 'team_select') throw new Error('Expected team_select');
 
       const teamSeats = action.teamIds.map(id => seatBySid(id, seatsEarly));
@@ -466,6 +540,7 @@ async function runOneGame(
         attempt:      attemptNo,
         seats:        seatsEarly,
         leaderSid:    leader.agentId,
+        trace:        traceForLeader,
       }));
 
       engine.selectQuestTeam(action.teamIds);
@@ -780,8 +855,8 @@ function renderEdwardFormat(game: CapturedGame, gameNum: number): string {
   const lines: string[] = [];
   const seats = game.seats;
 
-  lines.push(`=== Game ${gameNum} === room=${game.roomId} winner=${game.winner === 'good' ? '藍方(好人)' : '紅方(壞人)'}`);
-  lines.push('');
+  // Edward verbatim 2026-04-28 / 5-05 22:16: NO header, NO result line.
+  // Pure rows only — no `=== Game N === room= winner=` etc.
 
   // ── 5 missions ────────────────────────────────────────────
   // Edward 2026-04-29 spec: minimal format — drop `<task X>` headers.
@@ -912,8 +987,8 @@ function renderReasoningTrace(game: CapturedGame, gameNum: number): string {
   const lines: string[] = [];
   const seats = game.seats;
 
-  lines.push(`--- Game ${gameNum} 思維紀錄 ---`);
-  lines.push('');
+  // Edward verbatim 2026-04-28 / 5-05 22:16: NO `--- Game N 思維紀錄 ---` separator.
+  // 思維 block 直接接在牌譜後另列, 不要 markdown header / separator.
 
   for (let r = 1; r <= 5; r++) {
     const votes = game.voteHistory.filter(v => v.round === r);
@@ -1051,33 +1126,13 @@ async function main() {
   const mdPath   = path.join(outDir, `${outBase}.md`);
   const jsonPath = path.join(outDir, `${outBase}.json`);
 
-  const header = [
-    `# 10人版 Avalon Self-Play (Wave A+B 質化驗證)`,
-    `# 完成於 ${ts}`,
-    `# 10-player config: 6 good (Merlin/Percival/4 Loyal) + 4 evil (Assassin/Morgana/Mordred/Oberon)`,
-    `#                   team sizes R1/R2/R3/R4/R5 = 3/4/4/5/5; R4 needs 2 fails`,
-    `#                   Lady of the Lake ON; ladyStart='seat0' (= seat 10 for 10p)`,
-    `#                   Difficulty: ${DIFFICULTY}`,
-    ``,
-    `## 牌譜 (純格式 — 一行一 row)`,
-    ``,
-  ].join('\n');
-
+  // Edward verbatim 2026-04-28 / 5-05 22:16: pure rows, NO file header, NO
+  // markdown ##, NO `## 牌譜` / `## 思維紀錄` / `--- Game ---` separator,
+  // NO `=== Game === room= winner=` line. 牌譜 → 思維 直接另列.
   const board = games.map((g, i) => renderEdwardFormat(g, i + 1)).join('\n\n');
-
-  const reasoningHeader = [
-    ``,
-    `---`,
-    ``,
-    `## 思維紀錄 (牌譜後另列)`,
-    ``,
-    `每個 decision row 對應一個思維 block, 列每個玩家一行。`,
-    ``,
-  ].join('\n');
-
   const reasoning = games.map((g, i) => renderReasoningTrace(g, i + 1)).join('\n\n');
 
-  fs.writeFileSync(mdPath, header + board + reasoningHeader + reasoning, 'utf8');
+  fs.writeFileSync(mdPath, board + '\n\n' + reasoning, 'utf8');
   fs.writeFileSync(jsonPath, JSON.stringify(games, null, 2), 'utf8');
 
   // ── Wave D: Option F DB-equivalent reasoning blob (gzip + base64) ──

@@ -1825,10 +1825,19 @@ export class HeuristicAgent implements AvalonAgent {
       const hasSelf  = proposedTeam.includes(obs.myPlayerId);
       const hasAlly  = proposedTeam.some(id => knownEvils.includes(id));
 
-      // ── Edward 2026-05-06 16:09 verbatim — 莫甘娜 on-team 必 approve ──
+      // ── Edward 2026-05-06 16:09 / 2026-05-11 verbatim — 莫甘娜 on-team 必 approve ──
       //
       // Edward 16:09 校正:「自己派的組合為什麼開黑」
-      //   → 莫甘娜 mimicMerlin 但 reject 自己派的隊 = 邏輯違反.
+      //   → 莫甘娜 reject 自己派的隊 = 邏輯違反 (無論演梅或演忠).
+      //
+      // Edward 2026-05-11 doctrine update: morgana default = **mimicLoyal**
+      // (not mimicMerlin) —「不用刻意演 預設策略就是忠臣 莫甘看不到奧 也分
+      // 不出刺/莫德 怎麼演」. 演梅 (mimicMerlin) 降為 advanced/late-round
+      // opt-in; HR-8.2「莫甘都想演梅」廢除為 conditional, 不再是 default.
+      // mimicLoyal on-team approve = same as mimicMerlin on-team approve
+      // (both = 模仿好人 normal vote), so this hard rule survives the
+      // doctrine flip unchanged — the SEMANTIC of approve flips from
+      // "梅林 normal" to "忠臣 normal", behavior identical.
       //
       // Hard rule: 莫甘娜 on-team (hasSelf) → ALWAYS approve. Skip the
       // innerBlackBonus EV-prior probabilistic flip below for morgana.
@@ -1837,10 +1846,10 @@ export class HeuristicAgent implements AvalonAgent {
       // (assassin/mordred mimic loyal cleanup, oberon lone-wolf).
       //
       // Why specifically morgana:
-      //   1. mimicMerlin 的本質 = 模仿梅林正常投票 (on-team approve / off-team reject).
-      //      Merlin 自己 R3+ on-team inner-black 在 EV table = 0 (no entry).
-      //      娜 mimicMerlin 卻 inner-black on-team = 自我曝光, 反 mimic.
-      //   2. 派的人 reject 自己派的隊 = 跟梅林被識破時拒絕的 pattern 不同 (那是
+      //   1. mimicLoyal 的本質 = 模仿忠臣正常投票 (on-team approve / off-team
+      //      conditional reject). Loyal 自己 on-team inner-black 在 EV table
+      //      亦無 +signal —娜 inner-black on-team = 自我曝光, 反 mimic.
+      //   2. 派的人 reject 自己派的隊 = 跟好人被識破時拒絕的 pattern 不同 (那是
       //      非 leader 收到資訊改變判斷, 但 leader self-approve 已 line ~1585 涵蓋).
       //   3. EV table morgana R3+ inner-black = 12.5%/15.9%/6.4% 是 corpus 平均,
       //      但 Edward 16:09 verbatim 否認此行為策略意義 ("白癡問題").
@@ -1857,9 +1866,10 @@ export class HeuristicAgent implements AvalonAgent {
       // cover-approve. Below R3 (or when bonus = 0) the legacy approve
       // branch keeps full priority.
       //
-      // Edward 2026-05-06 16:09 校正: morgana 已 short-circuit on-team-approve
-      // 在上方, 此 block 對 morgana 不再 fire (Edward verbatim
-      // 「自己派的組合為什麼開黑」).
+      // Edward 2026-05-06 16:09 / 2026-05-11 校正: morgana 已 short-circuit
+      // on-team-approve 在上方 (mimicLoyal doctrine), 此 block 對 morgana 不再
+      // fire (Edward verbatim「自己派的組合為什麼開黑」+「莫甘看不到奧 也分不
+      // 出刺/莫德 怎麼演」).
       //
       // Listening (match-point) is handled upstream and short-circuits
       // before reaching here, so this block never affects R5 listening.
