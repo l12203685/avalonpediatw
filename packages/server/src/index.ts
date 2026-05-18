@@ -25,6 +25,7 @@ import {
   subscribeEloConfigChanges,
 } from './services/EloConfigLoader';
 import { initializeBots, registerBotRoutes } from './bots/index';
+import { initializeAsyncNotifier } from './services/AsyncNotifier';
 
 const app: Express = express();
 
@@ -173,6 +174,16 @@ async function main() {
     console.error('Bot initialization failed:', err);
     // Non-fatal in development; production rethrows inside initializeBots.
   }
+
+  // 5b. Initialise the AsyncNotifier singleton (棋瓦 P2). Must run AFTER
+  //     initializeBots so the live Discord / LINE adapters can resolve the
+  //     bot singletons lazily. Idempotent; safe under hot-reload.
+  //     `webBaseUrl` defaults to process.env.WEB_BASE_URL → http://localhost:5173
+  //     (handled inside AsyncNotifierConfig).
+  initializeAsyncNotifier({
+    webBaseUrl: process.env.WEB_BASE_URL,
+  });
+  console.log('✓ AsyncNotifier initialised (async-mode push fan-out armed)');
 
   // 6. Finally bind the HTTP port — now any connection has a complete handler chain
   httpServer.listen(PORT, () => {

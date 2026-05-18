@@ -4,6 +4,7 @@ import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTime
 import { RoomManager } from '../game/RoomManager';
 import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
+import { getAsyncNotifier } from '../services/AsyncNotifier';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
 import { SocketRateLimiter } from '../middleware/rateLimit';
@@ -1591,19 +1592,46 @@ export class GameServer {
   /**
    * Factory: create a GameEngine wired to broadcast state changes autonomously
    * (vote timeouts, quest timeouts, assassination timeout).
+   *
+   * Async mode (棋瓦 P2): also passes hooks so the engine can fire-and-forget
+   * push notifications via AsyncNotifier whenever pending actors change or
+   * the game ends. The hooks no-op for realtime rooms (notify() inspects
+   * `room.mode === 'async'` itself), so this wiring is zero-regression for
+   * the existing realtime path.
    */
   private createGameEngine(roomId: string, room: Room): GameEngine {
-    return new GameEngine(room, (updatedRoom: Room) => {
-      const r = this.roomManager.getRoom(roomId);
-      if (!r) return;
-      if (r.state === 'ended') {
-        this.broadcastRoomState(roomId, r, true);
-        this.onGameEnded(roomId, r);
-      } else {
-        this.broadcastRoomState(roomId, r);
-        this.scheduleBotActions(roomId);
-      }
-    });
+    return new GameEngine(
+      room,
+      (updatedRoom: Room) => {
+        const r = this.roomManager.getRoom(roomId);
+        if (!r) return;
+        if (r.state === 'ended') {
+          this.broadcastRoomState(roomId, r, true);
+          this.onGameEnded(roomId, r);
+        } else {
+          this.broadcastRoomState(roomId, r);
+          this.scheduleBotActions(roomId);
+        }
+      },
+      {
+        onPendingChanged: (r, pending) => {
+          const notifier = getAsyncNotifier();
+          if (!notifier) return;
+          // Fire-and-forget; AsyncNotifier swallows per-player errors and
+          // returns a summary that callers don't need on the hot path.
+          void notifier.notify(r, pending).catch((err) => {
+            console.error('[GameServer] AsyncNotifier.notify failed:', err);
+          });
+        },
+        onGameEnded: (r) => {
+          const notifier = getAsyncNotifier();
+          if (!notifier) return;
+          void notifier.notifyGameEnded(r).catch((err) => {
+            console.error('[GameServer] AsyncNotifier.notifyGameEnded failed:', err);
+          });
+        },
+      },
+    );
   }
 
   /**
