@@ -1,4 +1,5 @@
 import { createServer } from 'http';
+import path from 'path';
 import express, { Express } from 'express';
 import cors from 'cors';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -62,6 +63,14 @@ app.use(
 );
 
 app.use(express.json());
+
+// ── 極簡 HTML 多人客戶端 (packages/server/public) ──────────────────────────────
+// 與 Socket.IO 同源（避免 CORS），玩家直接開 `<backend>/play` 就能用純 HTML 多人。
+// __dirname 在 dev(tsx=src) 與 prod(node=dist) 下 `../public` 都指向 packages/server/public。
+// express.static 只命中實體檔案，不會遮蔽 /auth、/api 等路由。
+const PUBLIC_DIR = path.resolve(__dirname, '..', 'public');
+app.use(express.static(PUBLIC_DIR));
+app.get('/play', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'play.html')));
 
 // OAuth routes（不需要 Socket 認證，掛在 Socket 之前）
 app.use('/auth', authRouter);

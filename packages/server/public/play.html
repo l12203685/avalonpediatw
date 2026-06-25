@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0b0f" />
+<title>阿瓦隆 · 極簡多人</title>
+<style>
+  :root {
+    --bg: #0b0b0f; --card: #16161d; --card2: #1f1f29; --line: #2a2a36;
+    --gold: #c9a227; --good: #3b82f6; --evil: #ef4444; --txt: #e9e9ee;
+    --muted: #8a8a99; --ok: #22c55e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--txt);
+    font-family: system-ui, -apple-system, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  #app { max-width: 760px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+  .screen { display: none; flex: 1; flex-direction: column; padding: 16px; gap: 14px; }
+  .screen.active { display: flex; }
+  h1, h2, h3 { margin: 0; }
+  .brand { text-align: center; padding: 10px 0; }
+  .brand .logo { font-size: 26px; font-weight: 800; letter-spacing: 2px; color: var(--gold); }
+  .brand .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px; font-weight: 600; }
+  input[type=text], input[type=email], input[type=password] {
+    width: 100%; background: #000; border: 1px solid var(--line); border-radius: 9px;
+    color: var(--txt); padding: 11px 12px; font-size: 15px; outline: none;
+  }
+  input:focus { border-color: var(--gold); }
+  .field { margin-bottom: 12px; }
+  button {
+    font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+    border: none; border-radius: 10px; padding: 11px 14px; color: #000; background: var(--gold);
+    transition: filter .15s; width: 100%;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--txt); border: 1px solid var(--line); }
+  button.good { background: var(--good); color: #fff; }
+  button.evil { background: var(--evil); color: #fff; }
+  button.sm { width: auto; padding: 7px 12px; font-size: 13px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row > * { flex: 1; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .err { color: #fca5a5; font-size: 13px; min-height: 18px; }
+  .tiny-link { color: var(--muted); font-size: 12px; text-align: center; text-decoration: underline; cursor: pointer; }
+  .pill { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.gold { color: var(--gold); border-color: var(--gold); }
+  .pill.good { color: var(--good); border-color: var(--good); }
+  .pill.evil { color: var(--evil); border-color: var(--evil); }
+  .pill.ok { color: var(--ok); border-color: var(--ok); }
+
+  /* top bar */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .topbar .phase { font-weight: 800; color: var(--gold); }
+  .conn { font-size: 11px; }
+  .conn.on { color: var(--ok); } .conn.off { color: var(--evil); }
+
+  /* room list */
+  .roomitem { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card2); margin-bottom: 8px; }
+  .roomitem .meta { font-size: 12px; color: var(--muted); }
+
+  /* players */
+  .players { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .seat { background: var(--card2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; position: relative; }
+  .seat.me { border-color: var(--gold); }
+  .seat.leader { box-shadow: inset 0 0 0 1px var(--gold); }
+  .seat.team { border-color: var(--good); }
+  .seat .nm { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat .badges { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .seat .num { position: absolute; top: 6px; right: 8px; font-size: 11px; color: var(--muted); }
+  .vote-y { color: var(--ok); font-weight: 800; }
+  .vote-n { color: var(--evil); font-weight: 800; }
+
+  /* chat */
+  .chat { display: flex; flex-direction: column; min-height: 220px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  .tabs button { width: auto; padding: 6px 14px; font-size: 13px; background: var(--card2); color: var(--muted); border: 1px solid var(--line); }
+  .tabs button.active { background: var(--gold); color: #000; }
+  .msgs { flex: 1; overflow-y: auto; max-height: 280px; display: flex; flex-direction: column; gap: 6px; padding: 6px 2px; }
+  .msg { font-size: 13px; }
+  .msg .who { color: var(--gold); font-weight: 700; margin-right: 6px; }
+  .msg.sys { color: var(--muted); font-style: italic; }
+  .chat-input { display: flex; gap: 8px; margin-top: 8px; }
+  .chat-input input { flex: 1; } .chat-input button { width: auto; }
+
+  .actions { display: flex; flex-direction: column; gap: 10px; }
+  .hint { background: var(--card2); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .result-good { color: var(--good); font-weight: 800; font-size: 20px; }
+  .result-evil { color: var(--evil); font-weight: 800; font-size: 20px; }
+  .track { display: flex; gap: 6px; }
+  .track .q { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; background: var(--card2); }
+  .track .q.s { background: var(--good); color: #fff; border-color: var(--good); }
+  .track .q.f { background: var(--evil); color: #fff; border-color: var(--evil); }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ── LOGIN ─────────────────────────────────────── -->
+  <section id="screen-login" class="screen active">
+    <div class="brand"><div class="logo">AVALON</div><div class="sub">極簡多人 · 手機/電腦皆可</div></div>
+    <div class="card">
+      <h2 style="font-size:16px;margin-bottom:10px;">登入 / 註冊</h2>
+      <p class="muted" style="margin-top:0">帳號就是信箱。不存在的信箱會自動建立帳號；已註冊則直接登入。</p>
+      <div class="field"><label for="in-email">信箱</label>
+        <input id="in-email" type="email" autocomplete="email" placeholder="email@example.com" /></div>
+      <div class="field"><label for="in-pw">密碼（8 字以上，含英文與數字）</label>
+        <input id="in-pw" type="password" autocomplete="current-password" placeholder="輸入密碼" /></div>
+      <div class="err" id="login-err"></div>
+      <button id="btn-login">登入 / 註冊</button>
+      <div style="height:8px"></div>
+      <button class="ghost" id="btn-guest">以訪客身分快速進入</button>
+      <div style="height:10px"></div>
+      <div class="tiny-link" id="link-full">需要 Google / LINE / Discord 登入？開啟完整版 →</div>
+    </div>
+  </section>
+
+  <!-- ── LOBBY ─────────────────────────────────────── -->
+  <section id="screen-lobby" class="screen">
+    <div class="topbar">
+      <div><span class="logo" style="color:var(--gold);font-weight:800">大廳</span>
+        <span class="muted" id="lobby-me"></span></div>
+      <div><span class="conn off" id="lobby-conn">●離線</span>
+        <button class="ghost sm" id="btn-logout" style="margin-left:6px">登出</button></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="align-items:center">
+        <h2 style="font-size:16px;flex:2">建立房間</h2>
+      </div>
+      <div class="field" style="margin-top:8px"><label for="in-roompw">房間密碼（選填）</label>
+        <input id="in-roompw" type="text" placeholder="留空 = 公開房" /></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--txt)">
+        <input type="checkbox" id="in-casual" style="width:auto" /> 娛樂局（不計 ELO）</label>
+      <div style="height:10px"></div>
+      <button id="btn-create">建立並進入房間</button>
+    </div>
+
+    <div class="card">
+      <div class="topbar"><h2 style="font-size:16px">公開房間</h2>
+        <button class="ghost sm" id="btn-refresh">重新整理</button></div>
+      <div id="room-list" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:6px">
+        <input id="in-joinid" type="text" placeholder="輸入房號加入" />
+        <button class="sm" id="btn-join" style="flex:0 0 auto">加入</button>
+      </div>
+      <div class="err" id="lobby-err"></div>
+    </div>
+
+    <div class="card chat">
+      <h2 style="font-size:15px;margin-bottom:6px">大廳聊天</h2>
+      <div class="msgs" id="lobby-msgs"></div>
+      <div class="chat-input">
+        <input id="in-lobbychat" type="text" placeholder="說點什麼…（訪客唯讀）" />
+        <button class="sm" id="btn-lobbychat">送出</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ROOM ──────────────────────────────────────── -->
+  <section id="screen-room" class="screen">
+    <div class="topbar">
+      <div>
+        <span class="phase" id="room-phase">等待中</span>
+        <span class="muted" id="room-id" title="點擊複製房號" style="cursor:pointer"></span>
+      </div>
+      <div>
+        <span class="conn off" id="room-conn">●離線</span>
+        <button class="ghost sm" id="btn-leave" style="margin-left:6px">離開</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="topbar" style="margin-bottom:8px">
+        <h2 style="font-size:15px">玩家 <span class="muted" id="room-count"></span></h2>
+        <div class="track" id="quest-track"></div>
+      </div>
+      <div class="players" id="players"></div>
+    </div>
+
+    <div class="card actions" id="action-panel"></div>
+
+    <div class="card chat">
+      <div class="tabs">
+        <button class="active" data-ch="room" id="tab-room">本局</button>
+        <button data-ch="lobby" id="tab-lobby">大廳</button>
+      </div>
+      <div class="msgs" id="room-msgs"></div>
+      <div class="chat-input">
+        <input id="in-roomchat" type="text" placeholder="輸入訊息…" />
+        <button class="sm" id="btn-roomchat">送出</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- Socket.IO client served by the same backend (version-matched) -->
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ── tiny helpers ───────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const ORIGIN = window.location.origin;
+  const FULL_APP = "https://avalon-game-platform.web.app";
+  const TOKEN_KEY = "avalon_html_token";
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const PHASE_LABEL = {
+    lobby: "等待中", voting: "投票/選隊", quest: "任務執行",
+    lady_of_the_lake: "湖中女神", discussion: "刺殺階段", ended: "已結束",
+  };
+  // Quest team sizes per player count (canonical) — leader sizing hint only;
+  // server is authoritative and rejects a wrong-sized team.
+  const QUEST_TEAMS = {
+    5: [2,3,2,3,3], 6: [2,3,4,3,4], 7: [2,3,3,4,4],
+    8: [3,4,4,5,5], 9: [3,4,4,5,5], 10: [3,4,4,5,5],
+  };
+  const ROLE_LABEL = {
+    merlin: "梅林", percival: "派西维爾", loyal: "忠臣", assassin: "刺客",
+    morgana: "莫甘娜", oberon: "奧伯倫", mordred: "莫德雷德", minion: "爪牙",
+  };
+
+  // ── state ──────────────────────────────────────────
+  let socket = null;
+  let me = null;              // { uid, displayName }
+  let room = null;            // latest sanitized Room
+  let chatChannel = "room";   // 'room' | 'lobby'
+  const roomMsgs = [];
+  const lobbyMsgs = [];
+  let lobbyJoined = false;
+
+  function show(screen) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    $("screen-" + screen).classList.add("active");
+  }
+  function setConn(on) {
+    ["lobby-conn", "room-conn"].forEach(id => {
+      const el = $(id); if (!el) return;
+      el.textContent = on ? "●連線中" : "●離線";
+      el.className = "conn " + (on ? "on" : "off");
+    });
+  }
+
+  // ── REST auth ──────────────────────────────────────
+  async function postJSON(path, body) {
+    const res = await fetch(ORIGIN + path, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body), credentials: "include",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+    return data;
+  }
+
+  async function doLogin() {
+    const email = $("in-email").value.trim();
+    const pw = $("in-pw").value;
+    $("login-err").textContent = "";
+    if (!email || !pw) { $("login-err").textContent = "信箱與密碼必填"; return; }
+    setBusy("btn-login", true);
+    try {
+      const data = await postJSON("/auth/login", { email, password: pw });
+      await connect(data.token);
+    } catch (e) {
+      $("login-err").textContent = e.message || "登入失敗";
+    } finally { setBusy("btn-login", false); }
+  }
+
+  async function doGuest() {
+    $("login-err").textContent = "";
+    setBusy("btn-guest", true);
+    try {
+      const saved = localStorage.getItem("avalon_player_name");
+      const name = saved || ("訪客_" + Math.floor(Math.random() * 9000 + 1000));
+      const data = await postJSON("/auth/guest", { displayName: name });
+      await connect(data.token);
+    } catch (e) {
+      $("login-err").textContent = e.message || "訪客進入失敗";
+    } finally { setBusy("btn-guest", false); }
+  }
+
+  function setBusy(id, busy) { const b = $(id); if (b) b.disabled = busy; }
+
+  // ── socket connection ──────────────────────────────
+  function connect(token) {
+    return new Promise((resolve, reject) => {
+      try { localStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+      if (socket) { socket.disconnect(); socket = null; }
+      socket = io(ORIGIN, {
+        auth: { token },
+        transports: ["polling", "websocket"],
+        upgrade: true, reconnection: true,
+      });
+
+      let settled = false;
+      const to = setTimeout(() => { if (!settled) { settled = true; reject(new Error("連線逾時")); } }, 12000);
+
+      socket.on("connect", () => setConn(true));
+      socket.on("disconnect", () => setConn(false));
+
+      socket.once("auth:success", (session) => {
+        settled = true; clearTimeout(to);
+        me = { uid: session.user.uid, displayName: session.user.displayName };
+        $("lobby-me").textContent = "· " + me.displayName;
+        setConn(true);
+        enterLobby();
+        resolve();
+      });
+
+      socket.on("connect_error", (err) => {
+        if (!settled) { settled = true; clearTimeout(to); reject(new Error("無法連線：" + err.message)); }
+      });
+
+      wireGameEvents();
+    });
+  }
+
+  function wireGameEvents() {
+    socket.on("game:rooms-list", (rooms) => renderRoomList(rooms || []));
+
+    socket.on("game:state-updated", (r) => { room = r; onRoom(); });
+    socket.on("game:started", (r) => { room = r; sysRoom("🎭 遊戲開始！查看你的角色"); onRoom(); });
+    socket.on("game:ended", (r) => { room = r; onRoom(); });
+
+    socket.on("game:player-joined", (p) => sysRoom((p && p.name ? p.name : "有人") + " 加入了房間"));
+    socket.on("game:player-left", (pid) => sysRoom(nameOf(pid) + " 離開/斷線"));
+    socket.on("game:player-reconnected", (pid) => sysRoom(nameOf(pid) + " 重新連線"));
+
+    socket.on("game:left-room", () => { room = null; enterLobby(); });
+    socket.on("game:kicked", () => { sysLobby("你已被房主移出房間"); room = null; enterLobby(); });
+    socket.on("game:spectating", () => sysRoom("👁 你正在觀戰此房間"));
+
+    socket.on("chat:message-received", (m) => {
+      roomMsgs.push({ who: m.playerName, text: m.message });
+      if (chatChannel === "room") renderMsgs();
+    });
+    socket.on("lobby:snapshot", (list) => {
+      lobbyMsgs.length = 0;
+      (list || []).forEach(m => lobbyMsgs.push({ who: m.playerName || m.name, text: m.message }));
+      if (chatChannel === "lobby" || isLobbyScreen()) renderLobbyMsgs();
+    });
+    socket.on("lobby:message-received", (m) => {
+      lobbyMsgs.push({ who: m.playerName || m.name, text: m.message });
+      if (chatChannel === "lobby" || isLobbyScreen()) renderLobbyMsgs();
+    });
+    socket.on("lobby:error", (code) => {
+      const map = { "guest-read-only": "訪客無法在大廳發言，請先登入", "rate-limited": "發言太頻繁，請稍候",
+        "not-authenticated": "尚未驗證", "invalid-message": "訊息格式不正確" };
+      sysLobby(map[code] || ("大廳錯誤：" + code));
+    });
+
+    socket.on("error", (msg) => {
+      if (isLobbyScreen()) $("lobby-err").textContent = msg;
+      else sysRoom("⚠ " + msg);
+    });
+  }
+
+  function isLobbyScreen() { return $("screen-lobby").classList.contains("active"); }
+  function nameOf(pid) { return (room && room.players[pid] && room.players[pid].name) || pid; }
+
+  // ── lobby ──────────────────────────────────────────
+  function enterLobby() {
+    show("lobby");
+    if (!lobbyJoined) { socket.emit("lobby:join"); lobbyJoined = true; }
+    refreshRooms();
+  }
+  function refreshRooms() { if (socket) socket.emit("game:list-rooms"); }
+
+  function renderRoomList(rooms) {
+    const box = $("room-list");
+    if (!rooms.length) { box.innerHTML = '<div class="muted">目前沒有公開房間，建一個吧！</div>'; return; }
+    box.innerHTML = rooms.map(r => {
+      const count = r.playerCount != null ? r.playerCount
+        : (r.players ? Object.keys(r.players).length : "?");
+      const max = r.maxPlayers != null ? r.maxPlayers : "?";
+      const locked = r.isPrivate ? ' 🔒' : '';
+      const state = PHASE_LABEL[r.state] || r.state || '';
+      return '<div class="roomitem"><div><div style="font-weight:700">' + esc(r.name || r.id) + locked +
+        '</div><div class="meta">' + count + '/' + max + ' 人 · ' + esc(state) + '</div></div>' +
+        '<button class="sm" data-join="' + esc(r.id) + '" style="flex:0 0 auto">加入</button></div>';
+    }).join("");
+    box.querySelectorAll("[data-join]").forEach(b =>
+      b.addEventListener("click", () => joinRoom(b.getAttribute("data-join"))));
+  }
+
+  function createRoom() {
+    const pw = $("in-roompw").value.trim();
+    const casual = $("in-casual").checked;
+    try { localStorage.setItem("avalon_player_name", me.displayName); } catch (e) {}
+    socket.emit("game:create-room", me.displayName, pw || undefined, 1, casual);
+  }
+  function joinRoom(id, pw) {
+    const rid = (id || $("in-joinid").value).trim();
+    if (!rid) return;
+    socket.emit("game:join-room", rid, pw || $("in-roompw").value.trim() || undefined);
+  }
+
+  // ── room rendering ─────────────────────────────────
+  function onRoom() {
+    if (!room) return;
+    show("room");
+    const ids = Object.keys(room.players);
+    $("room-phase").textContent = PHASE_LABEL[room.state] || room.state;
+    $("room-id").textContent = "房號 " + room.id;
+    $("room-count").textContent = "(" + ids.length + "/" + room.maxPlayers + ")";
+    renderTrack();
+    renderPlayers(ids);
+    renderActions(ids);
+  }
+
+  function renderTrack() {
+    const hist = room.questHistory || [];
+    const total = room.maxRounds || 5;
+    let html = "";
+    for (let i = 0; i < total; i++) {
+      const h = hist[i];
+      const cls = h ? (h.result === "success" ? "s" : "f") : "";
+      const label = h ? (h.result === "success" ? "✓" : "✕") : (i + 1);
+      html += '<div class="q ' + cls + '">' + label + '</div>';
+    }
+    $("quest-track").innerHTML = html;
+  }
+
+  function leaderId(ids) { return ids[(room.leaderIndex || 0) % ids.length]; }
+
+  function renderPlayers(ids) {
+    const lid = leaderId(ids);
+    $("players").innerHTML = ids.map((pid, i) => {
+      const p = room.players[pid];
+      const isMe = pid === me.uid;
+      const onTeam = (room.questTeam || []).includes(pid);
+      let cls = "seat";
+      if (isMe) cls += " me";
+      if (pid === lid) cls += " leader";
+      if (onTeam) cls += " team";
+      const badges = [];
+      if (pid === room.host) badges.push('<span class="pill gold">房主</span>');
+      if (pid === lid) badges.push('<span class="pill gold">隊長</span>');
+      if (p.isBot) badges.push('<span class="pill">AI</span>');
+      if (isMe) badges.push('<span class="pill ok">你</span>');
+      if (onTeam) badges.push('<span class="pill good">出任務</span>');
+      if (room.state === "lobby" && (room.readyPlayerIds || []).includes(pid))
+        badges.push('<span class="pill ok">準備✓</span>');
+      // self role (sanitized server only reveals own role unless game ended)
+      if (p.role) {
+        const teamCls = p.team === "evil" ? "evil" : "good";
+        badges.push('<span class="pill ' + teamCls + '">' + (ROLE_LABEL[p.role] || p.role) + '</span>');
+      }
+      // team vote indicator
+      if (room.state === "voting" && (room.questTeam || []).length > 0) {
+        if (room.votes && pid in room.votes) badges.push('<span class="pill ok">已投</span>');
+      }
+      return '<div class="' + cls + '"><span class="num">#' + (i + 1) + '</span>' +
+        '<div class="nm">' + esc(p.name) + '</div>' +
+        '<div class="badges">' + badges.join("") + '</div></div>';
+    }).join("");
+  }
+
+  // ── per-phase action panel ─────────────────────────
+  function renderActions(ids) {
+    const panel = $("action-panel");
+    const lid = leaderId(ids);
+    const amHost = me.uid === room.host;
+    const amLeader = me.uid === lid;
+    panel.innerHTML = "";
+
+    if (room.state === "lobby") {
+      const n = ids.length;
+      const ready = (room.readyPlayerIds || []).includes(me.uid);
+      const h = el("div", "hint", "等待玩家加入。需要 5 人以上才能開始（可加 AI 補位）。目前 " + n + " 人。");
+      panel.appendChild(h);
+      if (amHost) {
+        panel.appendChild(btn("加入 1 隻 AI 機器人", "ghost", () => socket.emit("game:add-bot", room.id)));
+        panel.appendChild(btn("開始遊戲", "", () => socket.emit("game:start-game", room.id), n < 5));
+      } else {
+        panel.appendChild(btn(ready ? "取消準備" : "準備", "ghost",
+          () => socket.emit("game:toggle-ready", room.id, me.uid)));
+      }
+      return;
+    }
+
+    if (room.state === "voting") {
+      const teamPicked = (room.questTeam || []).length > 0;
+      if (!teamPicked) {
+        // leader picks the quest team
+        const size = (QUEST_TEAMS[ids.length] || [])[(room.currentRound || 1) - 1];
+        if (amLeader) {
+          panel.appendChild(el("div", "hint", "你是隊長，請選出 " + (size || "?") + " 位隊員出任務。"));
+          panel.appendChild(teamPicker(ids, size));
+        } else {
+          panel.appendChild(el("div", "hint", "等待隊長 " + esc(nameOf(lid)) + " 選擇任務隊伍…"));
+        }
+      } else {
+        // everyone votes approve / reject
+        const voted = room.votes && (me.uid in room.votes);
+        panel.appendChild(el("div", "hint", "隊長提名了 " + room.questTeam.length + " 位隊員，請表決是否同意。"));
+        if (voted) {
+          panel.appendChild(el("div", "muted", "你已投票，等待其他玩家…"));
+        } else {
+          const wrap = document.createElement("div"); wrap.className = "row";
+          wrap.appendChild(btn("贊成", "good", () => socket.emit("game:vote", room.id, me.uid, true)));
+          wrap.appendChild(btn("反對", "evil", () => socket.emit("game:vote", room.id, me.uid, false)));
+          panel.appendChild(wrap);
+        }
+      }
+      return;
+    }
+
+    if (room.state === "quest") {
+      const onTeam = (room.questTeam || []).includes(me.uid);
+      const myTeam = room.players[me.uid] && room.players[me.uid].team;
+      if (onTeam) {
+        panel.appendChild(el("div", "hint", "你在任務隊伍中，請祕密投出任務結果。"));
+        const wrap = document.createElement("div"); wrap.className = "row";
+        wrap.appendChild(btn("任務成功", "good", () => socket.emit("game:submit-quest-vote", room.id, me.uid, "success")));
+        if (myTeam === "evil")
+          wrap.appendChild(btn("任務失敗", "evil", () => socket.emit("game:submit-quest-vote", room.id, me.uid, "fail")));
+        panel.appendChild(wrap);
+      } else {
+        panel.appendChild(el("div", "hint", "任務進行中（" + (room.questVotedCount || 0) + "/" +
+          room.questTeam.length + " 已投）…等待隊員行動。"));
+      }
+      return;
+    }
+
+    if (room.state === "discussion") {
+      const myRole = room.players[me.uid] && room.players[me.uid].role;
+      if (myRole === "assassin" || myRole === "mordred") {
+        panel.appendChild(el("div", "hint", "好人完成了 3 個任務。你是刺客——選一位玩家刺殺梅林！"));
+        panel.appendChild(targetPicker(ids, (tid) => socket.emit("game:assassinate", room.id, me.uid, tid)));
+      } else {
+        panel.appendChild(el("div", "hint", "好人完成了 3 個任務，刺客正在選擇刺殺目標…"));
+      }
+      return;
+    }
+
+    if (room.state === "lady_of_the_lake") {
+      panel.appendChild(el("div", "hint", "湖中女神查驗階段進行中（完整操作請用完整版）。"));
+      return;
+    }
+
+    if (room.state === "ended") {
+      const evilWin = room.evilWins === true;
+      const title = el("div", evilWin ? "result-evil" : "result-good",
+        evilWin ? "🗡️ 紅方（壞人）獲勝" : "🛡️ 藍方（好人）獲勝");
+      panel.appendChild(title);
+      const reasons = {
+        failed_quests: "三個任務失敗", vote_rejections: "連續否決 5 次",
+        merlin_assassinated: "梅林被刺殺", assassination_failed: "刺殺失敗",
+        assassination_timeout: "刺殺逾時", host_cancelled: "房主取消",
+      };
+      if (room.endReason) panel.appendChild(el("div", "muted", "結束原因：" + (reasons[room.endReason] || room.endReason)));
+      // reveal roles if server included them
+      const reveal = ids.filter(pid => room.players[pid].role)
+        .map(pid => esc(room.players[pid].name) + "=" + (ROLE_LABEL[room.players[pid].role] || room.players[pid].role));
+      if (reveal.length) panel.appendChild(el("div", "muted", "身分：" + reveal.join("、")));
+      if (me.uid === room.host)
+        panel.appendChild(btn("再來一局（重組房間）", "ghost", () => socket.emit("game:rematch", room.id)));
+      panel.appendChild(btn("回到大廳", "", () => socket.emit("game:leave-room", room.id)));
+      return;
+    }
+  }
+
+  // ── small DOM builders ─────────────────────────────
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function btn(label, cls, onClick, disabled) {
+    const b = document.createElement("button"); b.textContent = label;
+    if (cls) b.className = cls; if (disabled) b.disabled = true;
+    b.addEventListener("click", onClick); return b;
+  }
+  function teamPicker(ids, size) {
+    const wrap = document.createElement("div");
+    const chosen = new Set();
+    const grid = document.createElement("div"); grid.className = "players";
+    ids.forEach(pid => {
+      const b = document.createElement("button"); b.className = "ghost sm";
+      b.style.width = "100%"; b.textContent = room.players[pid].name;
+      b.addEventListener("click", () => {
+        if (chosen.has(pid)) { chosen.delete(pid); b.className = "ghost sm"; }
+        else { if (size && chosen.size >= size) return; chosen.add(pid); b.className = "good sm"; }
+        confirmBtn.disabled = size ? chosen.size !== size : chosen.size === 0;
+        confirmBtn.textContent = "確認出隊（" + chosen.size + (size ? "/" + size : "") + "）";
+      });
+      grid.appendChild(b);
+    });
+    wrap.appendChild(grid);
+    const confirmBtn = btn("確認出隊（0" + (size ? "/" + size : "") + "）", "", () => {
+      socket.emit("game:select-quest-team", room.id, Array.from(chosen));
+    }, true);
+    confirmBtn.style.marginTop = "10px";
+    wrap.appendChild(confirmBtn);
+    return wrap;
+  }
+  function targetPicker(ids, onPick) {
+    const wrap = document.createElement("div"); wrap.className = "players";
+    ids.filter(pid => pid !== me.uid).forEach(pid => {
+      const b = document.createElement("button"); b.className = "evil sm"; b.style.width = "100%";
+      b.textContent = room.players[pid].name;
+      b.addEventListener("click", () => { if (confirm("確定刺殺 " + room.players[pid].name + "？")) onPick(pid); });
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
+  // ── chat rendering ─────────────────────────────────
+  function renderMsgs() {
+    const box = $("room-msgs");
+    box.innerHTML = roomMsgs.map(m => m.sys
+      ? '<div class="msg sys">' + esc(m.text) + '</div>'
+      : '<div class="msg"><span class="who">' + esc(m.who) + '</span>' + esc(m.text) + '</div>').join("");
+    box.scrollTop = box.scrollHeight;
+  }
+  function renderLobbyMsgs() {
+    const target = isLobbyScreen() ? "lobby-msgs" : "room-msgs";
+    const box = $(target);
+    if (!isLobbyScreen() && chatChannel !== "lobby") return;
+    box.innerHTML = lobbyMsgs.map(m => m.sys
+      ? '<div class="msg sys">' + esc(m.text) + '</div>'
+      : '<div class="msg"><span class="who">' + esc(m.who) + '</span>' + esc(m.text) + '</div>').join("");
+    box.scrollTop = box.scrollHeight;
+  }
+  function sysRoom(text) { roomMsgs.push({ sys: true, text }); if (chatChannel === "room") renderMsgs(); }
+  function sysLobby(text) { lobbyMsgs.push({ sys: true, text }); renderLobbyMsgs(); }
+
+  function switchChannel(ch) {
+    chatChannel = ch;
+    $("tab-room").classList.toggle("active", ch === "room");
+    $("tab-lobby").classList.toggle("active", ch === "lobby");
+    $("in-roomchat").placeholder = ch === "room" ? "輸入訊息給本局…" : "輸入訊息給大廳…";
+    if (ch === "room") renderMsgs(); else renderLobbyMsgs();
+  }
+  function sendRoomChat() {
+    const inp = $("in-roomchat"); const v = inp.value.trim(); if (!v) return;
+    if (chatChannel === "room") socket.emit("chat:send-message", room.id, v);
+    else socket.emit("lobby:send-message", v);
+    inp.value = "";
+  }
+
+  // ── event wiring ───────────────────────────────────
+  function bind() {
+    $("btn-login").addEventListener("click", doLogin);
+    $("btn-guest").addEventListener("click", doGuest);
+    $("in-pw").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+    $("link-full").addEventListener("click", () => window.location.href = FULL_APP);
+
+    $("btn-create").addEventListener("click", createRoom);
+    $("btn-join").addEventListener("click", () => joinRoom());
+    $("in-joinid").addEventListener("keydown", e => { if (e.key === "Enter") joinRoom(); });
+    $("btn-refresh").addEventListener("click", refreshRooms);
+    $("btn-logout").addEventListener("click", logout);
+    $("btn-lobbychat").addEventListener("click", sendLobbyChat);
+    $("in-lobbychat").addEventListener("keydown", e => { if (e.key === "Enter") sendLobbyChat(); });
+
+    $("btn-leave").addEventListener("click", () => { if (room) socket.emit("game:leave-room", room.id); });
+    $("room-id").addEventListener("click", () => { if (room) navigator.clipboard?.writeText(room.id); });
+    $("tab-room").addEventListener("click", () => switchChannel("room"));
+    $("tab-lobby").addEventListener("click", () => switchChannel("lobby"));
+    $("btn-roomchat").addEventListener("click", sendRoomChat);
+    $("in-roomchat").addEventListener("keydown", e => { if (e.key === "Enter") sendRoomChat(); });
+
+    // auto-resume with stored token
+    const stored = (() => { try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; } })();
+    if (stored) connect(stored).catch(() => { try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} });
+  }
+  function sendLobbyChat() {
+    const inp = $("in-lobbychat"); const v = inp.value.trim(); if (!v) return;
+    socket.emit("lobby:send-message", v); inp.value = "";
+  }
+  function logout() {
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    if (socket) { socket.disconnect(); socket = null; }
+    me = null; room = null; lobbyJoined = false;
+    show("login");
+  }
+
+  bind();
+})();
+</script>
+</body>
+</html>
