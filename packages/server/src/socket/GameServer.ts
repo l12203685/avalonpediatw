@@ -22,6 +22,7 @@ import { GameHistoryRepository } from '../services/GameHistoryRepository';
 import { GameHistoryRepositoryV2 } from '../services/GameHistoryRepositoryV2';
 import { buildV2RecordFromRoom } from '../services/liveGameToV2';
 import { ComputedStatsRepositoryV2 } from '../services/ComputedStatsRepositoryV2';
+import { archiveGameRecordToGitHub } from '../services/GitHubGameArchive';
 
 // Rate limiters for different events
 const voteLimiter = new SocketRateLimiter({
@@ -1340,6 +1341,9 @@ export class GameServer {
       });
       const v2Repo = new GameHistoryRepositoryV2();
       await v2Repo.saveV2(v2Record);
+      // GitHub 完賽歸檔（一場一檔 append-only JSON）。fire-and-forget：
+      // 內部 best-effort，env 未設則 no-op，絕不 throw / 阻塞 game flow。
+      void archiveGameRecordToGitHub(v2Record);
     } catch (err) {
       console.error(
         JSON.stringify({
