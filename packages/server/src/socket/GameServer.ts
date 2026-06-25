@@ -1867,28 +1867,44 @@ export class GameServer {
             const stagger = offset;
             offset += 200 + Math.random() * 250;
             setTimeout(() => {
-              const snapshot = this.roomManager.getRoom(roomId);
-              if (!snapshot || snapshot.state !== 'quest') return;
-              const eng = this.gameEngines.get(roomId);
-              if (!eng) return;
-              const player = snapshot.players[memberId];
-              if (!player?.isBot) return;
-              const agent = this.botAgents.get(memberId);
-              const vote = agent
-                ? (() => {
-                    const obs = this.buildBotObservation(snapshot, memberId, eng, 'quest_vote');
-                    const action = agent.act(obs);
-                    return action.type === 'quest_vote' ? action.vote : 'success';
-                  })()
-                : (player.team === 'evil' && Math.random() > 0.5 ? 'fail' : 'success');
-              eng.submitQuestVote(memberId, vote);
-              const updated = this.roomManager.getRoom(roomId)!;
-              if (updated.state === 'ended') {
-                this.broadcastRoomState(roomId, updated, true);
-                this.onGameEnded(roomId, updated);
-                return;
+              // Defensive try/catch: a `scheduleBotActions` re-tick (line ~1896,
+              // fired so still-pending HUMAN members get re-evaluated) can
+              // re-enter this timer for a bot that ALREADY quest-voted this
+              // round → GameEngine.submitQuestVote throws "already voted". That
+              // throw runs on a fresh timer stack, so it escaped the outer
+              // scheduleBotActions try/catch and crashed the whole process
+              // (repro: mixed human+bot quest team, human slow to vote).
+              // Swallow the redundant double-vote — the engine already rejected
+              // it; there is nothing further to advance.
+              try {
+                const snapshot = this.roomManager.getRoom(roomId);
+                if (!snapshot || snapshot.state !== 'quest') return;
+                const eng = this.gameEngines.get(roomId);
+                if (!eng) return;
+                const player = snapshot.players[memberId];
+                if (!player?.isBot) return;
+                const agent = this.botAgents.get(memberId);
+                const vote = agent
+                  ? (() => {
+                      const obs = this.buildBotObservation(snapshot, memberId, eng, 'quest_vote');
+                      const action = agent.act(obs);
+                      return action.type === 'quest_vote' ? action.vote : 'success';
+                    })()
+                  : (player.team === 'evil' && Math.random() > 0.5 ? 'fail' : 'success');
+                eng.submitQuestVote(memberId, vote);
+                const updated = this.roomManager.getRoom(roomId)!;
+                if (updated.state === 'ended') {
+                  this.broadcastRoomState(roomId, updated, true);
+                  this.onGameEnded(roomId, updated);
+                  return;
+                }
+                this.broadcastRoomState(roomId, updated);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                if (!/already voted/i.test(msg)) {
+                  console.error(`[bot quest-vote] ${memberId} in room ${roomId}:`, err);
+                }
               }
-              this.broadcastRoomState(roomId, updated);
             }, stagger);
           }
           // After all bots have submitted, check state (human members may still need to vote)
