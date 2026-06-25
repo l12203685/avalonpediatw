@@ -1,0 +1,53 @@
+# Render Blueprint — avalonpediatw 後端 (Edward 2026-06-25 改回 Render Free)
+#
+# 用途：Render Dashboard →「New +」→「Blueprint」→ 連這個 repo，Render 會讀
+# 本檔自動建立服務。後端就是 Express + Socket.IO，聽 $PORT、有 /health、無狀態，
+# 不需改任何伺服器程式碼。
+#
+# Free 方案注意：閒置 15 分鐘會休眠、清空記憶體；冷清後第一個請求要等 30~60 秒
+# 冷啟動。只要有人開著分頁（Socket.IO 心跳），進行中的對局通常不會被打斷。
+#
+# 機密類 envVar 設 `sync: false` → 不寫進 repo，請到 Dashboard 的 Environment 填。
+services:
+  - type: web
+    name: avalon-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile.server
+    dockerContext: .
+    region: singapore        # 離台灣最近的 Render 節點
+    plan: free
+    branch: main
+    autoDeploy: true         # push 到 main 自動部署（不需 webhook / GitHub Action）
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # PORT 由 Render 自動注入，server 讀 process.env.PORT — 不要在這寫死。
+
+      # CORS：玩家前端在 Firebase Hosting。多網域用逗號分隔，server 會自動切陣列。
+      - key: CORS_ORIGIN
+        value: https://avalon-game-platform.web.app,https://avalon-game-platform.firebaseapp.com
+
+      # ── 必填機密（到 Dashboard 填；缺 JWT_SECRET server 會拒絕啟動！）──────
+      - key: JWT_SECRET            # openssl rand -hex 32
+        sync: false
+      - key: ADMIN_SECRET
+        sync: false
+
+      # ── Firebase / Supabase（到 Dashboard 填）─────────────────────────────
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+
+      # ── GitHub 完賽歸檔（選用；三個都設好才會啟用，未設則 no-op）──────────
+      - key: GITHUB_RECORDS_TOKEN
+        sync: false
+      - key: GITHUB_RECORDS_REPO
+        value: l12203685/avalon-game-records
+      - key: GITHUB_RECORDS_BRANCH
+        value: main
