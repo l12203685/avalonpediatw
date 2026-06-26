@@ -18,7 +18,7 @@
 
 GitHub-only 架構**不需要 Firebase / Supabase**——全部留空即可。需要兩個 GitHub repo：
 
-- **`avalon-accounts`（PRIVATE）** — 放 email/密碼帳號（含密碼雜湊，務必 private）
+- **`avalonpediatw-accounts`（PRIVATE）** — 放 email/密碼帳號（含密碼雜湊，務必 private）
 - **`avalon-game-records`（public 可）** — 放完賽戰績
 
 到該服務 → **Environment** → 填這些 `sync:false` 的值：

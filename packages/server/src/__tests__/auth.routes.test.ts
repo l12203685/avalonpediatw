@@ -107,6 +107,99 @@ vi.mock('../services/supabase', () => ({
   isSupabaseReady:                () => false,
 }));
 
+// routes/auth.ts now reads/writes accounts via githubAuthAccounts (GitHub-only
+// architecture), not firestoreAuthAccounts — mock an in-memory equivalent so
+// these HTTP-level tests don't need a real GitHub token/repo. vi.hoisted lets
+// the test body below reach the same store the mock factory closes over.
+const ghAccounts = vi.hoisted(() => {
+  interface MockAccount {
+    userId:       string;
+    accountName:  string;
+    primaryEmail: string;
+    displayName:  string;
+    passwordHash: string;
+    emails:       string[];
+  }
+  interface MockResetSession {
+    emailLower: string;
+    expiresAt:  number;
+    consumedAt?: number;
+  }
+
+  let accounts: Map<string, MockAccount> = new Map();
+  let resetSessions: Map<string, MockResetSession> = new Map();
+  let nextId = 1;
+
+  const normalizeEmail = (email: string) => email.trim().toLowerCase();
+  const toRecord = (a: MockAccount) => ({
+    userId:       a.userId,
+    accountName:  a.accountName,
+    primaryEmail: a.primaryEmail,
+    emails:       a.emails,
+    emailsVerified: [] as string[],
+    displayName:  a.displayName,
+    photoUrl:     null as string | null,
+  });
+
+  return {
+    PASSWORD_RESET_TTL_MS: 30 * 60 * 1000,
+    reset() {
+      accounts = new Map();
+      resetSessions = new Map();
+      nextId = 1;
+    },
+    async loginOrRegister(params: { email: string; password: string }) {
+      const emailLower = normalizeEmail(params.email);
+      const existing = accounts.get(emailLower);
+      if (existing) {
+        if (existing.passwordHash !== params.password) {
+          return { ok: false, code: 'bad_credentials', reason: '密碼錯誤' };
+        }
+        return {
+          ok: true,
+          data: { userId: existing.userId, accountName: existing.accountName, primaryEmail: existing.primaryEmail, displayName: existing.displayName, created: false },
+        };
+      }
+      const userId  = `mock-user-${nextId++}`;
+      const display = params.email.split('@')[0];
+      accounts.set(emailLower, {
+        userId, accountName: display, primaryEmail: params.email.trim(), displayName: display,
+        passwordHash: params.password, emails: [params.email.trim()],
+      });
+      return {
+        ok: true,
+        data: { userId, accountName: display, primaryEmail: params.email.trim(), displayName: display, created: true },
+      };
+    },
+    async findAccountByEmail(email: string) {
+      const found = accounts.get(normalizeEmail(email));
+      return found ? toRecord(found) : null;
+    },
+    async ensureAccountByOAuthEmail() {
+      return { ok: false, code: 'no_store', reason: 'OAuth 已停用（GitHub-only）' };
+    },
+    async createPasswordResetSession(params: { userId: string; accountName: string; email: string }) {
+      const token     = `mock-token-${nextId++}-${Math.random().toString(36).slice(2)}`;
+      const expiresAt = Date.now() + 30 * 60 * 1000;
+      resetSessions.set(token, { emailLower: normalizeEmail(params.email), expiresAt });
+      return { ok: true, data: { token, expiresAt } };
+    },
+    async consumePasswordResetAndSet(params: { token: string; newPassword: string }) {
+      const sess = resetSessions.get(params.token);
+      if (!sess) return { ok: false, code: 'token_invalid', reason: '連結失效' };
+      if (sess.consumedAt) return { ok: false, code: 'token_used', reason: '連結已使用過' };
+      if (sess.expiresAt < Date.now()) return { ok: false, code: 'token_expired', reason: '連結已過期' };
+      const acct = accounts.get(sess.emailLower);
+      if (!acct) return { ok: false, code: 'error', reason: '帳號不存在' };
+      acct.passwordHash = params.newPassword;
+      sess.consumedAt = Date.now();
+      return { ok: true, data: { userId: acct.userId } };
+    },
+  };
+});
+
+vi.mock('../services/githubAuthAccounts', () => ghAccounts);
+
 const sentMails: Array<{ to: string; subject: string; text: string }> = [];
 vi.mock('../services/mailer', () => ({
   sendPasswordResetEmail: vi.fn(async (to: string, accountName: string, url: string) => {
@@ -134,6 +227,7 @@ describe('POST /auth/login — email-only login/register', () => {
   beforeEach(() => {
     store = { auth_users: new Map(), password_reset_sessions: new Map(), email_verifications: new Map() };
     sentMails.length = 0;
+    ghAccounts.reset();
   });
 
   it('creates a new account when email is unknown (201)', async () => {
@@ -145,7 +239,7 @@ describe('POST /auth/login — email-only login/register', () => {
     expect(res.body.user.primaryEmail).toBe('new@test.com');
     expect(res.body.user.provider).toBe('password');
     expect(res.body.user.isNew).toBe(true);
-    expect(store.auth_users.size).toBe(1);
+    expect(await ghAccounts.findAccountByEmail('new@test.com')).toBeTruthy();
   });
 
   it('logs in with correct password when email exists (200)', async () => {
@@ -204,9 +298,9 @@ describe('POST /auth/forgot-password + POST /auth/reset-password', () => {
   beforeEach(async () => {
     store = { auth_users: new Map(), password_reset_sessions: new Map(), email_verifications: new Map() };
     sentMails.length = 0;
-    // Pre-seed a Bob account via loginOrRegister
-    const { loginOrRegister } = await import('../services/firestoreAuthAccounts');
-    await loginOrRegister({ email: 'bob@ex.com', password: 'InitialPw01' });
+    ghAccounts.reset();
+    // Pre-seed a Bob account via the (mocked) GitHub accounts store.
+    await ghAccounts.loginOrRegister({ email: 'bob@ex.com', password: 'InitialPw01' });
   });
 
   it('returns 202 and sends an email on match', async () => {
@@ -234,7 +328,8 @@ describe('POST /auth/forgot-password + POST /auth/reset-password', () => {
       email: 'bob@ex.com',
     });
     await new Promise(r => setTimeout(r, 10));
-    const token = Array.from(store.password_reset_sessions.keys())[0];
+    expect(sentMails.length).toBe(1);
+    const token = new URL(sentMails[0].text).searchParams.get('token');
     expect(token).toBeTruthy();
 
     const res = await request(app).post('/auth/reset-password').send({

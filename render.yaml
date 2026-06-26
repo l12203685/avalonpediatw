@@ -41,7 +41,7 @@ services:
       - key: GITHUB_ACCOUNTS_TOKEN
         sync: false
       - key: GITHUB_ACCOUNTS_REPO
-        value: l12203685/avalon-accounts   # 改成你的 PRIVATE repo
+        value: l12203685/avalonpediatw-accounts   # PRIVATE repo
       - key: GITHUB_ACCOUNTS_BRANCH
         value: main
 

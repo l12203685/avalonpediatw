@@ -26,6 +26,7 @@ import {
   isFirestoreReady,
   // Used by resolveSupabaseUserId's Firestore path.
 } from '../services/firestoreAccounts';
+import { isGitHubAccountsConfigured } from '../services/githubAuthAccounts';
 import { getShortCodeByUid } from '../services/shortCodeFirestore';
 import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
@@ -190,6 +191,12 @@ async function resolveSupabaseUserId(auth: ResolvedAuth): Promise<string | null>
     if (UUID_RE.test(auth.playerId)) return auth.playerId;
     if (isFirestoreReady()) return auth.playerId;
   }
+  // password 帳號的 userId 就是該帳號在帳號庫（Firestore 或 GitHub）的 row id，
+  // 不需要查 Supabase/Firestore 對應表 — 之前這裡漏掉這個 provider，導致密碼帳號
+  // 的 profile/me 端點全部回 404（pre-existing gap，非本次新增）。
+  if (auth.provider === 'password') {
+    return auth.playerId;
+  }
   return null;
 }
 
@@ -200,7 +207,7 @@ async function resolveSupabaseUserId(auth: ResolvedAuth): Promise<string | null>
  * denied.
  */
 function isAccountStoreReady(): boolean {
-  return isSupabaseReady() || isFirestoreReady();
+  return isSupabaseReady() || isFirestoreReady() || isGitHubAccountsConfigured();
 }
 
 /**
@@ -467,6 +474,17 @@ router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) =
     }
   }
 
+  // GitHub-only 帳號庫：password 帳號、無 Firestore 時的編輯個人檔案路徑。
+  if (auth.provider === 'password' && isGitHubAccountsConfigured()) {
+    const { updateAuthUserProfileFields: ghUpdateProfile } = await import('../services/githubAuthAccounts');
+    const ghUpd = await ghUpdateProfile(supabaseId, patch);
+    if (ghUpd.ok && ghUpd.data) {
+      anyOk = true;
+      updatedDisplayName = ghUpd.data.display_name ?? updatedDisplayName;
+      updatedPhotoUrl    = ghUpd.data.photo_url    ?? (patch.photo_url === null ? null : updatedPhotoUrl);
+    }
+  }
+
   if (!anyOk) {
     return res.status(500).json({ error: 'Update failed' });
   }
@@ -715,7 +733,23 @@ router.get('/user/me', publicLimiter, async (req: Request, res: Response) => {
       lineEmail:    string | null;
       displayName:  string | null;
     } | null> => {
-      if (!isFirestoreReady()) return null;
+      if (!isFirestoreReady()) {
+        // GitHub-only 退路：password 帳號的 email 存在帳號庫裡，不在 Firestore。
+        if (auth.provider === 'password' && isGitHubAccountsConfigured()) {
+          const { findAccountByUserId } = await import('../services/githubAuthAccounts');
+          const acct = await findAccountByUserId(supabaseId);
+          if (!acct) return null;
+          return {
+            primaryEmail: acct.primaryEmail,
+            emailOnly:    acct.primaryEmail,
+            googleEmail:  null,
+            discordEmail: null,
+            lineEmail:    null,
+            displayName:  acct.displayName,
+          };
+        }
+        return null;
+      }
       try {
         const { getAdminFirestore } = await import('../services/firebase');
         const db = getAdminFirestore();
@@ -866,7 +900,9 @@ router.patch('/user/password', publicLimiter, async (req: Request, res: Response
   if (auth.provider !== 'password') {
     return res.status(403).json({ error: '此帳號未設定密碼', code: 'no_password' });
   }
-  if (!isFirestoreReady()) return res.status(503).json({ error: 'Database not configured' });
+  if (!isFirestoreReady() && !isGitHubAccountsConfigured()) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
 
   const { oldPassword, newPassword } = (req.body ?? {}) as {
     oldPassword?: unknown;
@@ -876,7 +912,10 @@ router.patch('/user/password', publicLimiter, async (req: Request, res: Response
     return res.status(400).json({ error: '請輸入原密碼', code: 'missing_old' });
   }
   const { validatePasswordStrength: vpw } = await import('../services/passwordHash');
-  const { changePassword } = await import('../services/firestoreAuthAccounts');
+  // Firestore 優先（既有帳號的權威來源）；未配置時退到 GitHub 帳號庫。
+  const { changePassword } = isFirestoreReady()
+    ? await import('../services/firestoreAuthAccounts')
+    : await import('../services/githubAuthAccounts');
   const strength = vpw(newPassword);
   if (!strength.ok) {
     return res.status(400).json({ error: strength.reason, code: strength.code });
