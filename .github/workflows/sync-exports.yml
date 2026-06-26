@@ -46,14 +46,12 @@ jobs:
           fi
 
       - name: Sync Google Sheets
-        if: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON != '' && secrets.GOOGLE_SHEETS_ID != '' }}
         run: npm run sync-google-sheets
         env:
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
 
       - name: Sync HackMD
-        if: ${{ secrets.HACKMD_API_TOKEN != '' && secrets.HACKMD_NOTE_ID != '' }}
         run: npm run sync-hackmd
         env:
           HACKMD_API_TOKEN: ${{ secrets.HACKMD_API_TOKEN }}
