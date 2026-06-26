@@ -75,8 +75,9 @@ games/
 ## 寫入機制（pipeline）
 
 - 寫入端程式：avalonpediatw 的 `packages/server/src/services/GitHubGameArchive.ts`。
-- 後端（Google Cloud Run，`asia-east1`）在**每局結束時**，以 GitHub Contents API
-  （`PUT /repos/{owner}/{repo}/contents/{path}`）寫入一筆 JSON。
+- 後端在**每局結束時**，以 GitHub Contents API
+  （`PUT /repos/{owner}/{repo}/contents/{path}`）寫入一筆 JSON。後端目前跑在 Render，
+  但寫入機制本身與部署平台無關，未來更換平台不影響此 repo。
 - 需設定下列三個環境變數才會啟用；**未設定則完全不動作（no-op）**：
 
 | 環境變數 | 值 / 說明 |
@@ -84,6 +85,24 @@ games/
 | `GITHUB_RECORDS_TOKEN` | fine-grained PAT，權限 **Contents: Read and write**，且只勾選本 repo |
 | `GITHUB_RECORDS_REPO` | `l12203685/avalon-game-records` |
 | `GITHUB_RECORDS_BRANCH` | `main` |
+
+---
+
+## 衍生輸出（CSV / Google Sheets / HackMD）
+
+`games/**/*.json` 是**唯一真相來源（source of truth）**。為了方便分析與分享，
+repo 內有單向、唯讀的轉換腳本，從 JSON **算出**以下衍生輸出（不會反向寫回 JSON）：
+
+| 輸出 | 內容 | 觸發方式 |
+|---|---|---|
+| `exports/games.csv` | 所有對局攤平成表格 | push 到 `main` 且 `games/**` 有變動時，GitHub Actions 自動重算並 commit 回 `main` |
+| `STATS.md` | 勝率、排行榜等統計摘要 | 同上 |
+| Google Sheets | 與 CSV 相同的攤平資料，寫入指定試算表 | 同上（需設定 Secrets，見下） |
+| HackMD note | 與 `STATS.md` 相同的統計摘要，推到指定 note | 同上（需設定 Secrets，見下） |
+
+- 這些都是**算出來的展示/分析用輸出**，不是資料庫；唯一真相永遠是 `games/**/*.json`。
+- Google Sheets 與 HackMD 同步為選用功能，沒設對應的 GitHub Secrets 就會自動跳過。
+- 設定步驟（service account、API token 等）見 [`docs/EXPORTS_SETUP.md`](docs/EXPORTS_SETUP.md)。
 
 ---
 

@@ -1,0 +1,13 @@
+{
+  "name": "avalon-game-records-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build-exports": "node scripts/build-exports.mjs",
+    "sync-google-sheets": "node scripts/sync-google-sheets.mjs",
+    "sync-hackmd": "node scripts/sync-hackmd.mjs"
+  },
+  "dependencies": {
+    "google-auth-library": "^9.0.0"
+  }
+}
