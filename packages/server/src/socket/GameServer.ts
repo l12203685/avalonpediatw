@@ -1339,11 +1339,13 @@ export class GameServer {
         startedAtMs: startedAt,
         endedAtMs: endedAt,
       });
+      // GitHub 完賽歸檔（一場一檔 append-only JSON）。fire-and-forget：內部
+      // best-effort、env 未設則 no-op、絕不 throw。**必須擺在 saveV2 之前**：
+      // GitHub-only 模式沒有 Firebase，saveV2 會 throw（getAdminFirestore），
+      // 擺後面就會被跳過 → 歸檔漏掉。擺前面確保 Firestore 在不在都能歸檔。
+      void archiveGameRecordToGitHub(v2Record);
       const v2Repo = new GameHistoryRepositoryV2();
       await v2Repo.saveV2(v2Record);
-      // GitHub 完賽歸檔（一場一檔 append-only JSON）。fire-and-forget：
-      // 內部 best-effort，env 未設則 no-op，絕不 throw / 阻塞 game flow。
-      void archiveGameRecordToGitHub(v2Record);
     } catch (err) {
       console.error(
         JSON.stringify({

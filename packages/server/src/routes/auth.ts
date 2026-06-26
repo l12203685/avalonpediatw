@@ -37,7 +37,7 @@ import {
   createPasswordResetSession,
   consumePasswordResetAndSet,
   PASSWORD_RESET_TTL_MS,
-} from '../services/firestoreAuthAccounts';
+} from '../services/githubAuthAccounts';
 import { isFirestoreReady } from '../services/firestoreAccounts';
 import { verifyIdToken, isFirebaseAdminReady } from '../services/firebase';
 import {

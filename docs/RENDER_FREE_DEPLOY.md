@@ -16,17 +16,22 @@
 
 ## B. 填機密環境變數（**最重要**）
 
+GitHub-only 架構**不需要 Firebase / Supabase**——全部留空即可。需要兩個 GitHub repo：
+
+- **`avalon-accounts`（PRIVATE）** — 放 email/密碼帳號（含密碼雜湊，務必 private）
+- **`avalon-game-records`（public 可）** — 放完賽戰績
+
 到該服務 → **Environment** → 填這些 `sync:false` 的值：
 
 | 變數 | 說明 |
 |---|---|
-| `JWT_SECRET` | **必填**！缺了 server 會拒絕啟動、一直重啟。產生：`openssl rand -hex 32` |
-| `ADMIN_SECRET` | `/api/ai/selfplay` 用，隨意設一組 |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase Admin 服務帳號 JSON |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Supabase 連線 |
-| `GITHUB_RECORDS_TOKEN` | （選用）開完賽歸檔才需要 |
+| `JWT_SECRET` | **必填**！缺了 server 拒絕啟動、一直重啟。`openssl rand -hex 32` |
+| `GITHUB_ACCOUNTS_TOKEN` | 帳號庫 token（PRIVATE repo，Contents R/W）。缺了登入回 no_store |
+| `GITHUB_RECORDS_TOKEN` | 戰績歸檔 token（public repo 可） |
+| `ADMIN_SECRET` | `/api/ai/selfplay` 用，隨意一組 |
 
-> `CORS_ORIGIN`、`GITHUB_RECORDS_REPO/BRANCH`、`NODE_ENV` 已寫在 `render.yaml`，免填。
+> `CORS_ORIGIN`、`GITHUB_ACCOUNTS_REPO`、`GITHUB_RECORDS_REPO/BRANCH`、`NODE_ENV` 已寫在
+> `render.yaml`，免填。Firebase / Supabase 留空 = guest-only 模式 + GitHub 帳號庫接管登入。
 
 ## C. 驗證後端
 

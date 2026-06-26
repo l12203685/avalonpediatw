@@ -36,18 +36,23 @@ services:
       - key: ADMIN_SECRET
         sync: false
 
-      # ── Firebase / Supabase（到 Dashboard 填）─────────────────────────────
-      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+      # ── GitHub 帳號庫（email/密碼登入；GitHub-only 架構核心）──────────────
+      # 務必用 PRIVATE repo（內含密碼雜湊）。Token 缺 → 登入回 no_store。
+      - key: GITHUB_ACCOUNTS_TOKEN
         sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_KEY
-        sync: false
+      - key: GITHUB_ACCOUNTS_REPO
+        value: l12203685/avalon-accounts   # 改成你的 PRIVATE repo
+      - key: GITHUB_ACCOUNTS_BRANCH
+        value: main
 
-      # ── GitHub 完賽歸檔（選用；三個都設好才會啟用，未設則 no-op）──────────
+      # ── GitHub 完賽歸檔（戰績；public repo 可）────────────────────────────
       - key: GITHUB_RECORDS_TOKEN
         sync: false
       - key: GITHUB_RECORDS_REPO
         value: l12203685/avalon-game-records
       - key: GITHUB_RECORDS_BRANCH
         value: main
+
+      # ── Firebase / Supabase：GitHub-only 架構「不需要」，全部留空即可 ──────
+      # 留空 → server 進 guest-only 模式、由上面 GitHub 帳號庫接管登入。僅在
+      # 日後想恢復排行榜 / 個人資料編輯等 Firestore 功能時才需要回填。
