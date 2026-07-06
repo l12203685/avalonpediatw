@@ -1,0 +1,17 @@
+FROM node:20-alpine
+
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# 複製所有文件到容器
+COPY . .
+
+# 安裝依賴
+RUN pnpm install --frozen-lockfile
+
+# 構建 server
+RUN pnpm -C packages/server build
+
+EXPOSE 3001
+CMD ["node", "packages/server/dist/index.js"]

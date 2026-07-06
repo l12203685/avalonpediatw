@@ -1,0 +1,87 @@
+rules_version = '2';
+
+// ============================================================================
+// Avalon Pedia TW — Firestore Security Rules
+// ----------------------------------------------------------------------------
+// Architecture assumption (M2 audit 2026-04-18):
+//   - All Firestore reads/writes go through the backend via Firebase Admin SDK
+//     (which bypasses these rules). See packages/server/src/services/*.ts.
+//   - The web client (packages/web) uses `firebase/auth` only — it does NOT
+//     call Firestore from the browser. Verified via grep for
+//     firebase/firestore usage in packages/web/src.
+//   - Therefore the safe default is: deny all direct client access.
+//
+// Collections in use:
+//   - games/{gameId}           GameHistoryRepository writes; GameAnalytics /
+//                              FirestoreLeaderboard read (server).
+//   - replays/{gameId}         ReplayService writes/reads (server).
+//
+// If the browser later needs to read games/replays directly, relax the read
+// rules here (server-side writes should still be admin-only).
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions kept inline inside the commented owner-only template
+    // below (see users/{uid}) so the rules compiler does not emit
+    // "unused function" warnings while everything is deny-by-default.
+
+    // -------------------------------------------------------------------------
+    // games/{gameId} — completed game archive
+    //
+    // Writes: backend admin SDK only (bypasses rules). Block direct client
+    // writes so users cannot forge/modify game history.
+    //
+    // Reads: blocked by default. Server exposes /api/games/recent,
+    // /api/games/:gameId, /api/games/player/:playerId which do admin reads.
+    // If we later decide to let signed-in players read raw docs, change the
+    // read rule to `allow read: if isSignedIn();` — do NOT open to public.
+    // -------------------------------------------------------------------------
+    match /games/{gameId} {
+      allow read, write: if false;
+
+      // Nested per-round sub-collection (reserved for future use by
+      // GameHistoryRepository schema doc — see services/GameHistoryRepository.ts).
+      match /rounds/{roundIndex} {
+        allow read, write: if false;
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // replays/{gameId} — full replay timelines
+    //
+    // Same model as games/: server-authoritative. Block all client access.
+    // -------------------------------------------------------------------------
+    match /replays/{gameId} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // users/{uid} — reserved. If profile docs move to Firestore later, the
+    // owner-only template below applies:
+    //
+    //   allow read: if isSignedIn();        // public profiles
+    //   allow create: if isOwner(uid);       // own doc only
+    //   allow update: if isOwner(uid)
+    //     && !(request.resource.data.diff(resource.data).affectedKeys()
+    //            .hasAny(['role','admin','banned','eloRating','elo_rating',
+    //                     'totalGames','gamesWon','gamesLost','badges']));
+    //   allow delete: if false;              // never client-delete
+    //
+    // Admin-only fields (role, admin, banned, eloRating, totalGames, badges)
+    // must be server-written only. Today these live in Realtime DB, so this
+    // block is a placeholder preventing accidental writes if added later.
+    // -------------------------------------------------------------------------
+    match /users/{uid} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Default deny for any collection not explicitly matched above.
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
