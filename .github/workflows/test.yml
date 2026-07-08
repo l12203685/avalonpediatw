@@ -7,12 +7,14 @@ on:
       - '**.md'
       - 'docs/**'
       - 'LICENSE'
+      - 'avalon-game-records/**'
   pull_request:
     branches: [main, develop]
     paths-ignore:
       - '**.md'
       - 'docs/**'
       - 'LICENSE'
+      - 'avalon-game-records/**'
 
 jobs:
   test:

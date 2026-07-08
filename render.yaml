@@ -46,10 +46,14 @@ services:
         value: main
 
       # ── GitHub 完賽歸檔（戰績；public repo 可）────────────────────────────
+      # 2026-07-08：avalon-game-records 已併入本 monorepo（avalon-game-records/
+      # 目錄），改寫回本 repo；GITHUB_RECORDS_TOKEN 需重新核發／擴權到這個 repo
+      # （l12203685/avalonpediatw）的 Contents: Read and write，舊 token 若只
+      # 綁定 avalon-game-records 這個獨立 repo 會失效。
       - key: GITHUB_RECORDS_TOKEN
         sync: false
       - key: GITHUB_RECORDS_REPO
-        value: l12203685/avalon-game-records
+        value: l12203685/avalonpediatw
       - key: GITHUB_RECORDS_BRANCH
         value: main
 

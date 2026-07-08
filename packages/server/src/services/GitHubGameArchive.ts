@@ -6,14 +6,17 @@
  *     **只在一場遊戲結束後**把該局的 V2 record 當「一場一檔」append-only JSON
  *     寫進一個 repo。live 遊戲狀態仍留在伺服器記憶體 + Socket.IO，維持即時，
  *     完全不受 GitHub 延遲影響。
- *   - 一場一個檔 `games/{YYYY}/{MM}/{gameId}.json` → 永不修改既有檔 → 不會
- *     merge 衝突；可直接在 github.com 上瀏覽 / git clone 全量備份。
+ *   - 一場一個檔 `avalon-game-records/games/{YYYY}/{MM}/{gameId}.json` → 永不
+ *     修改既有檔 → 不會 merge 衝突；可直接在 github.com 上瀏覽 / git clone 全量備份。
  *
  * 啟用方式（未設定則靜默停用，完全 no-op — 對齊 mailer.ts 的行為）：
  *   GITHUB_RECORDS_TOKEN   一顆有目標 repo `contents:write` 權限的 PAT / fine-grained token
- *   GITHUB_RECORDS_REPO    "owner/repo"，例如 "l12203685/avalon-game-records"
+ *   GITHUB_RECORDS_REPO    "owner/repo"，例如 "l12203685/avalonpediatw"
  *   GITHUB_RECORDS_BRANCH  目標分支（預設 main）
  *   GITHUB_API_BASE        API base（預設 https://api.github.com；GHE 才需改）
+ *
+ * 2026-07-08：avalon-game-records 已從獨立 repo 併入 avalonpediatw monorepo
+ * 的 avalon-game-records/ 目錄，故寫入路徑改帶該前綴（見 recordPath()）。
  *
  * 隱私提醒：若 repo 為 public，戰績即公開。含 email / 私密欄位時請用 private repo。
  * V2 record 以 playerSeats(uid) 為主，預設不含 email，但仍建議 private 起步。
@@ -31,13 +34,13 @@ export function isGitHubArchiveConfigured(): boolean {
   return TOKEN.length > 0 && /^[^/\s]+\/[^/\s]+$/.test(REPO);
 }
 
-/** 一場一檔的路徑：games/{YYYY}/{MM}/{gameId}.json（UTC 分桶，避免單目錄爆量）。 */
+/** 一場一檔的路徑：avalon-game-records/games/{YYYY}/{MM}/{gameId}.json（UTC 分桶，避免單目錄爆量）。 */
 function recordPath(record: GameRecordV2): string {
   const playedAt = typeof record.playedAt === 'number' ? record.playedAt : Date.now();
   const d = new Date(playedAt);
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  return `games/${yyyy}/${mm}/${record.gameId}.json`;
+  return `avalon-game-records/games/${yyyy}/${mm}/${record.gameId}.json`;
 }
 
 function ghHeaders(): Record<string, string> {

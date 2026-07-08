@@ -1,18 +1,22 @@
-name: Sync exports
+name: Game records exports
 
 on:
   push:
     branches: [main]
     paths:
-      - 'games/**'
+      - 'avalon-game-records/games/**'
   workflow_dispatch: {}
 
 permissions:
   contents: write
 
 concurrency:
-  group: sync-exports
+  group: game-records-exports
   cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: avalon-game-records
 
 jobs:
   sync:
@@ -26,6 +30,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: avalon-game-records/package-lock.json
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
@@ -41,7 +46,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "chore: regenerate exports from games/**"
+            git commit -m "chore: regenerate game records exports"
             git push origin main
           fi
 
