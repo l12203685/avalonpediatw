@@ -1,7 +1,12 @@
 # Avalon 完賽紀錄歸檔庫 (avalon-game-records)
 
-> 本 repo 是 [avalonpediatw](https://github.com/l12203685/avalonpediatw) 線上阿瓦隆（Avalon）遊戲的**對戰紀錄歸檔庫**。
+> 本目錄是 [avalonpediatw](https://github.com/l12203685/avalonpediatw) monorepo 內、
+> 線上阿瓦隆（Avalon）遊戲的**對戰紀錄歸檔庫**。
 > 每一局遊戲結束後，後端會自動把該局的完整對戰紀錄寫入這裡，作為 append-only 的歷史存檔。
+>
+> **沿革**：本目錄原本是獨立 public repo
+> [`l12203685/avalon-game-records`](https://github.com/l12203685/avalon-game-records)，
+> 於 2026-07-08 併入 avalonpediatw monorepo（該獨立 repo 現已標記為停用，內容不再更新）。
 
 ---
 
@@ -74,17 +79,20 @@ games/
 
 ## 寫入機制（pipeline）
 
-- 寫入端程式：avalonpediatw 的 `packages/server/src/services/GitHubGameArchive.ts`。
+- 寫入端程式：`packages/server/src/services/GitHubGameArchive.ts`（本 repo 內）。
 - 後端在**每局結束時**，以 GitHub Contents API
   （`PUT /repos/{owner}/{repo}/contents/{path}`）寫入一筆 JSON。後端目前跑在 Render，
-  但寫入機制本身與部署平台無關，未來更換平台不影響此 repo。
+  但寫入機制本身與部署平台無關，未來更換平台不影響此目錄。
 - 需設定下列三個環境變數才會啟用；**未設定則完全不動作（no-op）**：
 
 | 環境變數 | 值 / 說明 |
 |---|---|
-| `GITHUB_RECORDS_TOKEN` | fine-grained PAT，權限 **Contents: Read and write**，且只勾選本 repo |
-| `GITHUB_RECORDS_REPO` | `l12203685/avalon-game-records` |
+| `GITHUB_RECORDS_TOKEN` | fine-grained PAT，權限 **Contents: Read and write**，且只勾選本 repo（`avalonpediatw`） |
+| `GITHUB_RECORDS_REPO` | `l12203685/avalonpediatw` |
 | `GITHUB_RECORDS_BRANCH` | `main` |
+
+> 寫入路徑自動帶 `avalon-game-records/` 前綴（即
+> `avalon-game-records/games/{YYYY}/{MM}/{gameId}.json`），對應本目錄在 monorepo 中的位置。
 
 ---
 
@@ -95,7 +103,7 @@ repo 內有單向、唯讀的轉換腳本，從 JSON **算出**以下衍生輸�
 
 | 輸出 | 內容 | 觸發方式 |
 |---|---|---|
-| `exports/games.csv` | 所有對局攤平成表格 | push 到 `main` 且 `games/**` 有變動時，GitHub Actions 自動重算並 commit 回 `main` |
+| `exports/games.csv` | 所有對局攤平成表格 | push 到 `main` 且本目錄 `games/**` 有變動時，GitHub Actions（`.github/workflows/game-records-exports.yml`，位於 repo 根目錄）自動重算並 commit 回 `main` |
 | `STATS.md` | 勝率、排行榜等統計摘要 | 同上 |
 | Google Sheets | 與 CSV 相同的攤平資料，寫入指定試算表 | 同上（需設定 Secrets，見下） |
 | HackMD note | 與 `STATS.md` 相同的統計摘要，推到指定 note | 同上（需設定 Secrets，見下） |
@@ -110,7 +118,7 @@ repo 內有單向、唯讀的轉換腳本，從 JSON **算出**以下衍生輸�
 
 設定好環境變數、部署後端、並完整打完一局後：
 
-1. 到本 repo 的 `games/{當前 UTC 年}/{當前 UTC 月}/` 目錄，確認出現了新的 `<gameId>.json`。
+1. 到 `avalon-game-records/games/{當前 UTC 年}/{當前 UTC 月}/` 目錄，確認出現了新的 `<gameId>.json`。
 2. 確認該檔可被 JSON 正確 parse。
 3. 檢查欄位齊全且合理：
    - `schemaVersion === 2`
@@ -120,4 +128,4 @@ repo 內有單向、唯讀的轉換腳本，從 JSON **算出**以下衍生輸�
 
 ---
 
-*本歸檔庫由 avalonpediatw 自動維護；資料僅供保存與分析之用。*
+*本歸檔庫由 avalonpediatw 後端自動維護；資料僅供保存與分析之用。*

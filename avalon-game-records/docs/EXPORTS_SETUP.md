@@ -31,7 +31,7 @@ GitHub 預設可能把 Actions 的寫入權限設成唯讀，這樣 Action 算�
    格式像 `xxx@yyy.iam.gserviceaccount.com`），權限給「編輯者」。
 6. 從試算表網址取得 spreadsheet ID：
    `https://docs.google.com/spreadsheets/d/`**`<這段就是 ID>`**`/edit`。
-7. 到本 repo `Settings → Secrets and variables → Actions → New repository secret`，新增：
+7. 到本 repo（avalonpediatw）`Settings → Secrets and variables → Actions → New repository secret`，新增：
    - `GOOGLE_SHEETS_CREDENTIALS_JSON`：貼整份 JSON 金鑰檔的內容
    - `GOOGLE_SHEETS_ID`：貼 spreadsheet ID
 
@@ -44,7 +44,7 @@ GitHub 預設可能把 Actions 的寫入權限設成唯讀，這樣 Action 算�
 1. 登入 HackMD → `Settings → API` → 產生一個 Access Token。
 2. 手動建立一個新 note 當同步目標（內容隨意，例如先打個標題就好）。
 3. 從該 note 的網址取得 note ID：`https://hackmd.io/`**`<note id>`**。
-4. 到本 repo `Settings → Secrets and variables → Actions`，新增：
+4. 到本 repo（avalonpediatw）`Settings → Secrets and variables → Actions`，新增：
    - `HACKMD_API_TOKEN`
    - `HACKMD_NOTE_ID`
 
@@ -59,8 +59,9 @@ GitHub 預設可能把 Actions 的寫入權限設成唯讀，這樣 Action 算�
 
 ## 3. 驗證設定
 
-到本 repo 的 `Actions` 頁籤 → 選 `Sync exports` workflow → `Run workflow`（手動觸發，
-不用等真的有新對局）。跑完後檢查：
+到本 repo（avalonpediatw）的 `Actions` 頁籤 → 選 `Game records exports` workflow
+（定義在 repo 根目錄的 `.github/workflows/game-records-exports.yml`）→
+`Run workflow`（手動觸發，不用等真的有新對局）。跑完後檢查：
 
 - Log 裡有沒有 `Synced ... to Google Sheet ...` / `Synced STATS.md to HackMD note ...`
   （沒設 Secrets 的話會看到 `skipping ... sync` 訊息，這是正常的，不是錯誤）。
@@ -68,4 +69,4 @@ GitHub 預設可能把 Actions 的寫入權限設成唯讀，這樣 Action 算�
 - `exports/games.csv` 與 `STATS.md` 是否被 commit 回 `main`
   （目前 `games/` 還沒有真實對局資料，這兩個檔案的內容會是「尚無資料」，這是預期行為）。
 
-之後每次後端寫入新的一局（`games/**` 有變動 push 到 `main`），都會自動重新跑一次。
+之後每次後端寫入新的一局（本目錄 `games/**` 有變動 push 到 `main`），都會自動重新跑一次。
