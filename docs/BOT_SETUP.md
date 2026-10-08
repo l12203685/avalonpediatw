@@ -70,9 +70,13 @@ The bot initializes automatically when the server starts. Commands are registere
 
 ### Step 3: Configure Webhook
 
-1. In Channel settings, find "Webhook URL"
-2. Set to: `https://your-domain.com/webhook/line`
-3. Enable "Use webhook"
+1. In Channel settings, enable **"Use webhook"** and **"Webhook redelivery"**;
+   turn **off** "Auto-reply messages" and "Greeting messages" (they consume reply tokens).
+2. **Do not type the Webhook URL by hand.** Since 2026-10-08 the server owns it:
+   on boot it derives the URL from `LINE_WEBHOOK_URL` / `PUBLIC_BASE_URL` /
+   `RENDER_EXTERNAL_URL` and `PUT`s it to the LINE Messaging API, then re-checks
+   every 6 hours. Whatever you type in the console gets overwritten with the code's
+   value. See `docs/LINE_DISCORD_SYNC.md`.
 
 ### Step 4: Set Environment Variables
 
@@ -257,15 +261,17 @@ pnpm dev
 ### Local Testing - Line
 
 ```bash
-# Production backend (Cloud Run, asia-east1) is the canonical webhook target —
-# do NOT register temporary tunnel URLs in LINE Console; they go stale on every
-# tunnel restart (root cause of 5+ recurring outages, 2026-04-19→26).
-#   Webhook URL: https://avalon-server-169653523467.asia-east1.run.app/webhook/line
+# The production backend owns the LINE webhook URL (it PUTs it to LINE at boot —
+# see docs/LINE_DISCORD_SYNC.md). Cloud Run (asia-east1) was retired 2026-06-25;
+# the backend is on Render, and RENDER_EXTERNAL_URL is used automatically.
 #
-# 只在「本機 dev 想單測 LINE webhook」時才開臨時 tunnel，並且不要寫進 Console：
+# Never register a temporary tunnel URL in LINE Console — every tunnel restart
+# orphaned the webhook (root cause of the recurring outages, 2026-04-19→09-07).
+# To exercise the webhook locally, run the in-process round-trip suite instead:
+pnpm test:line-sync
+# If you really need a live tunnel, keep it out of the console and self-post a
+# signed LINE event JSON with curl/postman; Ctrl+C when done:
 cloudflared tunnel --url http://localhost:3001
-# 用拿到的 https://<random>.trycloudflare.com URL 走 curl/postman 自送 LINE event
-# JSON 過去；測完 Ctrl+C，URL 失效不影響任何外部 console。
 #
 # 長期穩定別名：見 tree_registry/architecture/url_aliasing.md（Edward 買網域後啟用）
 ```

@@ -1,0 +1,84 @@
+# Layer 1 / Layer 3 auto-verify for the LINE ↔ lobby ↔ Discord sync.
+#
+# Named in tree_registry/architecture/avalon_line_sync.md (2026-04-26) as a
+# permanent invariant; first implemented 2026-10-08 after the 5th outage.
+#
+# Deliberately token-free: it only reads the public /api/bots/status of the
+# deployed server, which already did the privileged work (GET/PUT the webhook
+# endpoint against LINE at boot and every 6 h). So no LINE credential needs to
+# live in GitHub Secrets for this check to run.
+#
+# Setup: repo Settings → Secrets and variables → Actions → Variables →
+#   PUBLIC_SERVER_URL = https://<service>.onrender.com   (no trailing slash)
+# Until that variable exists the job exits 0 with a notice (not a green lie —
+# the step log says "skipped").
+name: Verify LINE webhook
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '17 1 * * *'   # 09:17 +08 daily
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-line-webhook
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SERVER_URL: ${{ vars.PUBLIC_SERVER_URL }}
+    steps:
+      - name: Skip when PUBLIC_SERVER_URL is not configured
+        if: ${{ env.SERVER_URL == '' }}
+        run: echo "::notice::PUBLIC_SERVER_URL repo variable not set — skipped (nothing verified)"
+
+      - name: Fetch /api/bots/status (retries cover Render Free cold start)
+        if: ${{ env.SERVER_URL != '' }}
+        id: fetch
+        run: |
+          set -u
+          url="${SERVER_URL%/}/api/bots/status"
+          out=""
+          for i in 1 2 3 4 5 6; do
+            if out=$(curl -fsS --max-time 40 "$url"); then break; fi
+            echo "attempt $i failed, retrying in 15s"; sleep 15
+          done
+          if [ -z "$out" ]; then echo "::error::$url unreachable after 6 attempts"; exit 1; fi
+          echo "$out" | jq .
+          echo "$out" > status.json
+
+      - name: "Assert LINE leg (Layer 1 webhook URL owned by code / Layer 3 bot ready)"
+        if: ${{ env.SERVER_URL != '' }}
+        run: |
+          set -u
+          fail=0
+          jq -e '.line.enabled == true' status.json >/dev/null || { echo "::error::LINE token not configured on the server (line.enabled=false)"; fail=1; }
+          jq -e '.line.ready == true' status.json >/dev/null || { echo "::error::LINE bot failed to initialise: $(jq -r '.line.error' status.json)"; fail=1; }
+          jq -e '.line.webhook.expected != null' status.json >/dev/null || { echo "::error::server cannot derive its own webhook URL (set LINE_WEBHOOK_URL or PUBLIC_BASE_URL)"; fail=1; }
+          jq -e '.line.webhook.actual == .line.webhook.expected' status.json >/dev/null || { echo "::error::Layer 1 DRIFT — LINE has $(jq -r '.line.webhook.actual' status.json) but code expects $(jq -r '.line.webhook.expected' status.json) (action=$(jq -r '.line.webhook.action' status.json), error=$(jq -r '.line.webhook.lastError' status.json))"; fail=1; }
+          jq -e '.line.webhook.active == true' status.json >/dev/null || { echo "::error::LINE console 'Use webhook' is OFF — flip it on in LINE Developers Console"; fail=1; }
+          jq -e '.line.mirrorGroupConfigured == true' status.json >/dev/null || { echo "::error::LOBBY_MIRROR_LINE_GROUP_ID not set — LINE leg is a no-op"; fail=1; }
+          if jq -e '.line.webhook.verified == false' status.json >/dev/null; then
+            echo "::warning::LINE's own test call to the endpoint failed: $(jq -r '.line.webhook.lastError' status.json)"
+          fi
+          exit $fail
+
+      - name: Assert Discord leg (re-polls once — gateway needs a few seconds after a cold start)
+        if: ${{ env.SERVER_URL != '' }}
+        run: |
+          set -u
+          if jq -e '.discord.enabled == false' status.json >/dev/null; then
+            echo "::warning::Discord token not configured — Discord leg disabled"; exit 0
+          fi
+          if ! jq -e '.discord.ready == true' status.json >/dev/null; then
+            sleep 25
+            curl -fsS --max-time 40 "${SERVER_URL%/}/api/bots/status" > status.json || true
+          fi
+          jq -e '.discord.ready == true' status.json >/dev/null || { echo "::error::Discord bot enabled but not connected: $(jq -r '.discord.error' status.json) (check token + MESSAGE CONTENT INTENT in the Developer Portal)"; exit 1; }
+          jq -e '.discord.mirrorChannelConfigured == true' status.json >/dev/null || { echo "::error::LOBBY_MIRROR_DISCORD_CHANNEL_ID not set — Discord leg is a no-op"; exit 1; }
+          echo "Discord leg OK"

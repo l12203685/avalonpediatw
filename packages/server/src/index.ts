@@ -25,7 +25,13 @@ import {
   loadEloConfigFromFirestore,
   subscribeEloConfigChanges,
 } from './services/EloConfigLoader';
-import { initializeBots, registerBotRoutes } from './bots/index';
+import {
+  initializeBots,
+  registerBotRoutes,
+  syncLineWebhookEndpoint,
+  startLineWebhookWatchdog,
+} from './bots/index';
+import { captureRawBody } from './middleware/rawBody';
 import { initializeAsyncNotifier } from './services/AsyncNotifier';
 
 const app: Express = express();
@@ -62,7 +68,8 @@ app.use(
   })
 );
 
-app.use(express.json());
+// Keep the raw bytes for LINE webhook signature verification (middleware/rawBody.ts).
+app.use(express.json({ verify: captureRawBody }));
 
 // ── 極簡 HTML 多人客戶端 (packages/server/public) ──────────────────────────────
 // 與 Socket.IO 同源（避免 CORS），玩家直接開 `<backend>/play` 就能用純 HTML 多人。
@@ -199,6 +206,11 @@ async function main() {
     console.log(`\nAvalon server running on port ${PORT}`);
     console.log(`CORS Origin: ${CORS_ORIGIN}`);
     console.log(`Environment: ${NODE_ENV}\n`);
+
+    // 7. LINE webhook URL ownership (Layer 1) — must run after the port is
+    //    bound because LINE test-calls the endpoint. Fire-and-forget; the
+    //    outcome is logged and exposed on /api/bots/status.
+    void syncLineWebhookEndpoint().finally(() => startLineWebhookWatchdog());
   });
 }
 

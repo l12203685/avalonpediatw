@@ -9,7 +9,8 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "type-check": "turbo run type-check"
+    "type-check": "turbo run type-check",
+    "test:line-sync": "pnpm --filter @avalon/server test:line-sync"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.0.0",
