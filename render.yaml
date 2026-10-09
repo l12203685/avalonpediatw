@@ -19,6 +19,26 @@ services:
     branch: main
     autoDeploy: true         # push 到 main 自動部署（不需 webhook / GitHub Action）
     healthCheckPath: /health
+    # 只有後端用得到的檔案變動才重新部署（20261009）。每次部署都會重開 server：
+    # 進行中的對局、大廳聊天、LINE 待送佇列都在記憶體裡，會一起消失。戰績歸檔
+    # 每打完一局就 commit 一次 avalon-game-records/** 到 main，沒有這個過濾的話，
+    # 正式機會每局重開一次。server 執行期只讀 packages/server 與 packages/shared。
+    buildFilter:
+      paths:
+        - packages/server/**
+        - packages/shared/**
+        - Dockerfile.server
+        - .dockerignore
+        - package.json
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - .npmrc
+        - tsconfig.json
+        - turbo.json
+      ignoredPaths:
+        - "**/__tests__/**"
+        - "**/*.test.ts"
+        - "**/*.md"
 
     envVars:
       - key: NODE_ENV
