@@ -59,6 +59,12 @@ const DISCORD_CLIENT_ID     = process.env.DISCORD_CLIENT_ID     || '';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 const DISCORD_REDIRECT_URI  = process.env.DISCORD_REDIRECT_URI  ||
   'http://localhost:3001/auth/discord/callback';
+// The Application ID alone does not mean Discord OAuth is configured: the
+// Discord bot needs the same ID to register slash commands (render.yaml
+// pre-fills it), while login / link also need the client secret for the code
+// exchange. Without both, these routes keep answering 503 instead of sending
+// users through Discord's consent screen to a guaranteed failure (2026-10-09).
+const DISCORD_OAUTH_READY = DISCORD_CLIENT_ID !== '' && DISCORD_CLIENT_SECRET !== '';
 
 // Line OAuth
 const LINE_CHANNEL_ID       = process.env.LINE_CHANNEL_ID       || '';
@@ -570,7 +576,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 // ── Discord OAuth ─────────────────────────────────────────────
 
 router.get('/discord', async (_req: Request, res: Response) => {
-  if (!DISCORD_CLIENT_ID) {
+  if (!DISCORD_OAUTH_READY) {
     return res.status(503).json({ error: 'Discord OAuth 未設定' });
   }
   const state = randomState();
@@ -798,7 +804,7 @@ router.get('/line/callback', async (req: Request, res: Response) => {
 // ── Link additional providers (#42 kept path) ────────────────
 
 router.get('/link/discord', async (req: Request, res: Response) => {
-  if (!DISCORD_CLIENT_ID) {
+  if (!DISCORD_OAUTH_READY) {
     return res.status(503).json({ error: 'Discord OAuth 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
@@ -856,7 +862,7 @@ router.get('/link/line', async (req: Request, res: Response) => {
 // 新帳號的模式，所以要 split state。
 
 router.get('/oauth/login/discord', async (_req: Request, res: Response) => {
-  if (!DISCORD_CLIENT_ID) {
+  if (!DISCORD_OAUTH_READY) {
     return res.status(503).json({ error: 'Discord OAuth 未設定' });
   }
   const state = randomState();
