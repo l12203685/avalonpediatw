@@ -197,9 +197,17 @@ describe('Integration: Role assignments work for all player counts', () => {
     const assignedRoles = Object.values(room.players).map((p) => p.role!).sort();
     expect(assignedRoles).toEqual([...config.roles].sort());
 
-    // Verify Merlin and Assassin always present
+    // Verify Merlin and the assassination-right holder always present.
+    // 7p deals no plain assassin: Mordred carries the assassin's sword
+    // (ca5d7de, Edward 2026-05-11) and GameEngine.submitAssassination falls
+    // back to the mordred holder. Every other count deals a plain assassin.
     expect(assignedRoles).toContain('merlin');
-    expect(assignedRoles).toContain('assassin');
+    if (count === 7) {
+      expect(assignedRoles).not.toContain('assassin');
+      expect(assignedRoles).toContain('mordred');
+    } else {
+      expect(assignedRoles).toContain('assassin');
+    }
 
     // Verify every player has a team
     Object.values(room.players).forEach((p) => {

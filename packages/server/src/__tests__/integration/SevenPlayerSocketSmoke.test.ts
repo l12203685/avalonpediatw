@@ -7,10 +7,16 @@
  * Oberon role (canonical 7-role unique to 7+ player tables).
  *
  * 7-player config (from AVALON_CONFIG[7]):
- *   roles:              [merlin, percival, loyal, loyal, assassin, morgana, oberon]
+ *   roles:              [merlin, percival, loyal, loyal, morgana, mordred, oberon]
  *   questTeams:         [2, 3, 3, 4, 4]
  *   questFailsRequired: [1, 1, 1, 2, 1]
  *   maxFailedVotes:     5
+ *
+ * 7p deals no plain assassin: Mordred carries the assassin's sword
+ * (ca5d7de, Edward 2026-05-11「莫德雷德帶有刺客劍」), so the kill-vote
+ * falls to the mordred holder. Tests resolve the assassination holder via
+ * `findAssassinationHolder` (same priority as GameEngine) instead of
+ * hard-coding 'assassin'.
  *
  * Lady of the Lake auto-enables at 7+ players. Each test below explicitly
  * disables it via `game:set-role-options` BEFORE start so the test stays
@@ -109,6 +115,21 @@ function connectGuestClient(
 
 const PLAYER_COUNT = 7;
 const NAMES = ['Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Frank', 'Grace'];
+
+/**
+ * Uid of the player holding the assassination right, using the same
+ * priority as GameEngine.startDiscussionPhase / submitAssassination:
+ * a plain 'assassin' if dealt, else 'mordred' (the 7p kill holder), else
+ * 'morgana'.
+ */
+function findAssassinationHolder(roleByUid: Map<string, Role>): string | undefined {
+  const entries = [...roleByUid.entries()];
+  for (const role of ['assassin', 'mordred', 'morgana'] as const) {
+    const hit = entries.find(([, r]) => r === role);
+    if (hit) return hit[0];
+  }
+  return undefined;
+}
 
 /**
  * Disable Lady of the Lake for the room's host (clients[0]). 7+ player
@@ -217,11 +238,13 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
     const goodUids = [...roleByUid.entries()]
       .filter(([, r]) => r === 'merlin' || r === 'percival' || r === 'loyal')
       .map(([id]) => id);
-    const assassinUid = [...roleByUid.entries()].find(([, r]) => r === 'assassin')![0];
+    const assassinUid = findAssassinationHolder(roleByUid)!;
     const merlinUid = [...roleByUid.entries()].find(([, r]) => r === 'merlin')![0];
 
     expect(goodUids).toHaveLength(4); // 1 merlin + 1 percival + 2 loyal
     expect(assassinUid).toBeTruthy();
+    // 7p deals no plain assassin, so the kill-vote falls to Mordred.
+    expect(roleByUid.get(assassinUid)).toBe('mordred');
     expect(merlinUid).toBeTruthy();
 
     const orderedPlayerIds = Object.keys(host.latestState!.players);
@@ -284,7 +307,7 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
     expect(roomAtDiscussion.state).toBe('discussion');
     expect(roomAtDiscussion.questResults.filter((r) => r === 'success')).toHaveLength(3);
 
-    // Assassin kills Merlin → evil wins.
+    // Assassination holder (Mordred in 7p) kills Merlin → evil wins.
     const assassinClient = clients.find((c) => c.uid === assassinUid)!;
     assassinClient.socket.emit('game:assassinate', roomId, assassinUid, merlinUid);
 
@@ -309,7 +332,7 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
     }
   }, 30_000);
 
-  it('role reveal correctness: 4 good + 3 evil including merlin/percival/assassin/morgana/oberon', async () => {
+  it('role reveal correctness: 4 good + 3 evil including merlin/percival/morgana/mordred/oberon', async () => {
     for (let i = 0; i < NAMES.length; i++) {
       clients.push(await connectGuestClient(port, `roles7-uid-${i + 1}`, NAMES[i]));
     }
@@ -349,10 +372,11 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
     expect(roleCount.get('merlin')).toBe(1);
     expect(roleCount.get('percival')).toBe(1);
     expect(roleCount.get('loyal')).toBe(2);
-    expect(roleCount.get('assassin')).toBe(1);
+    // 7p deals no plain assassin — Mordred carries the assassin's sword.
+    expect(roleCount.get('assassin')).toBeUndefined();
     expect(roleCount.get('morgana')).toBe(1);
+    expect(roleCount.get('mordred')).toBe(1);
     expect(roleCount.get('oberon')).toBe(1);
-    expect(roleCount.get('mordred')).toBeUndefined();
 
     const total = [...roleCount.values()].reduce((a, b) => a + b, 0);
     expect(total).toBe(PLAYER_COUNT);
@@ -360,7 +384,7 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
     const goodCount = ['merlin', 'percival', 'loyal']
       .map((r) => roleCount.get(r as Role) ?? 0)
       .reduce((a, b) => a + b, 0);
-    const evilCount = ['assassin', 'morgana', 'oberon']
+    const evilCount = ['morgana', 'mordred', 'oberon']
       .map((r) => roleCount.get(r as Role) ?? 0)
       .reduce((a, b) => a + b, 0);
     expect(goodCount).toBe(4);
@@ -373,9 +397,9 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
 
   /**
    * R4 quest in 7p requires 2 fail votes (`questFailsRequired[3] === 2`).
-   * Drives R4 with assassin alone failing → quest still SUCCESS because
-   * 1 < 2 threshold. Proves the engine correctly applies the per-round
-   * fail threshold instead of the default 1.
+   * Drives R4 with the assassination holder (Mordred in 7p) alone failing
+   * → quest still SUCCESS because 1 < 2 threshold. Proves the engine
+   * correctly applies the per-round fail threshold instead of the default 1.
    */
   it('R4 single-fail does NOT fail the round (7p needs 2 fails)', async () => {
     for (let i = 0; i < NAMES.length; i++) {
@@ -413,13 +437,14 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
     const goodUids = [...roleByUid.entries()]
       .filter(([, r]) => r === 'merlin' || r === 'percival' || r === 'loyal')
       .map(([id]) => id);
-    const assassinUid = [...roleByUid.entries()].find(([, r]) => r === 'assassin')![0];
+    const assassinUid = findAssassinationHolder(roleByUid)!;
+    expect(assassinUid).toBeTruthy();
     const orderedPlayerIds = Object.keys(host.latestState!.players);
 
     // Drive R1-R2 with mixed outcomes so we hit R4 instead of triggering
     // the "good wins on 3 successes" early discussion path. Plan:
     //   R1 = success (good-only team, all good vote success)
-    //   R2 = fail    (assassin on team votes fail; needs 1 fail = R2 thresh)
+    //   R2 = fail    (assassination holder on team votes fail; needs 1 fail = R2 thresh)
     //   R3 = success (good-only team)
     //   → state arrives at R4 with 2S/1F. Then R4 single-fail must NOT fail.
     async function driveRound(
@@ -467,8 +492,7 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
 
       for (const uid of team) {
         const c = clients.find((cl) => cl.uid === uid)!;
-        const role = roleByUid.get(uid)!;
-        const voteFail = forceFail && role === 'assassin';
+        const voteFail = forceFail && uid === assassinUid;
         c.socket.emit('game:submit-quest-vote', roomId, uid, voteFail ? 'fail' : 'success');
       }
 
@@ -494,8 +518,8 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
     expect(stateAtR4.currentRound).toBe(4);
     expect(stateAtR4.questResults).toEqual(['success', 'fail', 'success']);
 
-    // Drive R4: assassin + 3 good. Assassin votes fail → 1 fail < 2 thresh
-    // → quest result = SUCCESS.
+    // Drive R4: assassination holder + 3 good. Holder votes fail → 1 fail
+    // < 2 thresh → quest result = SUCCESS.
     const r4TeamSize = AVALON_CONFIG[7].questTeams[3]; // 4
     expect(r4TeamSize).toBe(4);
     const r4LeaderId = orderedPlayerIds[stateAtR4.leaderIndex % orderedPlayerIds.length];
@@ -519,11 +543,10 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
       { label: 'R4 quest phase' }
     );
 
-    // Assassin = fail, all good = success → 1 fail < 2 required → success.
+    // Holder = fail, all good = success → 1 fail < 2 required → success.
     for (const uid of r4Team) {
       const c = clients.find((cl) => cl.uid === uid)!;
-      const role = roleByUid.get(uid)!;
-      const isAssassin = role === 'assassin';
+      const isAssassin = uid === assassinUid;
       c.socket.emit('game:submit-quest-vote', roomId, uid, isAssassin ? 'fail' : 'success');
     }
 
