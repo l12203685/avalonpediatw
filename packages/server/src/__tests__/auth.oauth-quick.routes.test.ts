@@ -1,23 +1,28 @@
 /**
- * HTTP-level tests for OAuth-primary login + auto-register (2026-04-23 Edward)
+ * HTTP-level tests for the OAuth quick-login endpoints.
  *
- * Edward 原話（2026-04-23 23:00）：
- *   「如果綁 google => email 直接填入 gmail 信箱。
- *    簡單說 email 綁定是 for 同時沒有 google/line/dc 的」。
+ * 語意演變：
+ *   - 2026-04-23 Edward：OAuth 為主登入路徑，email 不在庫 → 自動建帳（Firestore）。
+ *   - 2026-06-25 Edward（027db19）：「註冊登入不用留 Line/DC/gmail，純粹以信箱+密碼
+ *     （註冊 or 登入）即可」— LoginPage 移除 OAuth 入口。
+ *   - 2026-06-26 Edward（9c2ba13）：「全改 GitHub-only」— routes/auth.ts 帳號庫改為
+ *     githubAuthAccounts，其 ensureAccountByOAuthEmail 刻意一律回 no_store
+ *     （「OAuth 已停用（GitHub-only）」）；1327048 的 auth.routes.test mock 亦同。
  *
- * 新語意：OAuth 成為主登入路徑。不在庫的 email → 自動建新帳號；已在庫 → 登入 +
- * 補綁 provider externalId。舊 `provider_not_linked` 分支改成 auto-register；僅在
- * provider 沒給 email 時回 `provider_no_email` / 後端 store 失敗時 `oauth_autoregister_failed`。
+ * 現行語意（本檔驗證的對象）：OAuth quick-login 不登入、也不自動建帳。不論 email
+ * 是否已註冊，provider 驗證通過後一律失敗 — Google 回 500 `oauth_autoregister_failed`、
+ * Discord / LINE callback 導回 `auth_error=oauth_autoregister_failed`；不發 JWT、
+ * 不建立也不改寫任何帳號（GitHub 帳號庫與舊 Firestore auth_users 皆然）。
+ * 輸入錯誤（missing_fields / bad_id_token / provider_no_email）與 quickLogin state
+ * 建立維持原行為。
  *
  * 覆蓋：
- *   - POST /auth/oauth/login/google 200（email 已在庫 → 登入）
- *   - POST /auth/oauth/login/google 201（email 不在庫 → 自動建帳）
- *   - POST /auth/oauth/login/google 400 provider_no_email（id_token 沒帶 email）
+ *   - POST /auth/oauth/login/google 500 oauth_autoregister_failed（email 已註冊 / 未註冊）
+ *   - POST /auth/oauth/login/google 400 provider_no_email / bad_id_token / missing_fields
  *   - GET  /auth/oauth/login/discord 302 到 Discord OAuth（state mode=quickLogin）
- *   - GET  /auth/discord/callback quickLogin + email 已在庫 → JWT + created=0
- *   - GET  /auth/discord/callback quickLogin + email 不在庫 → JWT + oauth_created=1
- *   - GET  /auth/line/callback quickLogin + email 已在庫 → JWT
- *   - GET  /auth/line/callback quickLogin + email 不在庫 → JWT + oauth_created=1
+ *   - GET  /auth/discord/callback quickLogin → auth_error=oauth_autoregister_failed（已註冊 / 未註冊）
+ *   - GET  /auth/discord/callback quickLogin 無 email → auth_error=provider_no_email
+ *   - GET  /auth/line/callback quickLogin → auth_error=oauth_autoregister_failed（已註冊 / 未註冊）
  */
 
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
@@ -112,6 +117,15 @@ process.env.LINE_CHANNEL_SECRET = 'test-line-secret';
 process.env.LINE_REDIRECT_URI   = 'http://localhost:3001/auth/line/callback';
 process.env.FRONTEND_URL        = 'https://test-frontend.example.com';
 
+// GitHub 帳號庫（githubAuthAccounts 在 import 時讀取）。API base 指向不可解析的
+// 測試網域，請求一律由下方 fetch mock 的假 Contents API 接走，不會打到真 GitHub。
+const GH_API  = 'https://api.github.test';
+const GH_REPO = 'test-owner/test-accounts';
+process.env.GITHUB_ACCOUNTS_TOKEN  = 'test-gh-token';
+process.env.GITHUB_ACCOUNTS_REPO   = GH_REPO;
+process.env.GITHUB_ACCOUNTS_BRANCH = 'main';
+process.env.GITHUB_API_BASE        = GH_API;
+
 const verifyIdTokenMock = vi.fn();
 
 vi.mock('../services/firebase', () => ({
@@ -152,11 +166,41 @@ vi.mock('../services/mailer', () => ({
 // Discord: one happy path + knob to change email / missing email
 let discordEmail: string | undefined = 'mapped@example.com';
 
+// GitHub Contents API 假 repo：path → { base64 content, sha }。githubAuthAccounts
+// 全程跑正式實作（含 ensureAccountByOAuthEmail），只有網路層換成這個。
+let ghRepo = new Map<string, { content: string; sha: string }>();
+let ghShaSeq = 0;
+const GH_CONTENTS_PREFIX = `${GH_API}/repos/${GH_REPO}/contents/`;
+
+function fakeGitHubContents(url: string, opts?: { method?: string; body?: string }): Response {
+  const path = decodeURI(url.slice(GH_CONTENTS_PREFIX.length).split('?')[0]);
+  const file = ghRepo.get(path);
+  if ((opts?.method ?? 'GET') === 'GET') {
+    return file
+      ? { ok: true,  status: 200, json: async () => ({ content: file.content, sha: file.sha }) } as Response
+      : { ok: false, status: 404, json: async () => ({ message: 'Not Found' }) } as Response;
+  }
+  // PUT：對齊 GitHub — 建檔撞既有路徑（沒帶 sha）回 422、sha 不符回 409。
+  const body = JSON.parse(opts?.body ?? '{}') as { content: string; sha?: string };
+  if (file && !body.sha)             return { ok: false, status: 422, json: async () => ({}) } as Response;
+  if (file && body.sha !== file.sha) return { ok: false, status: 409, json: async () => ({}) } as Response;
+  ghRepo.set(path, { content: body.content, sha: `sha-${++ghShaSeq}` });
+  return { ok: true, status: file ? 200 : 201, json: async () => ({}) } as Response;
+}
+
+/** 假 repo 每個檔案的 sha；前後比對 = 證明沒有任何帳號檔被建立或改寫。 */
+function ghRepoShas(): Record<string, string> {
+  return Object.fromEntries(Array.from(ghRepo.entries(), ([path, file]) => [path, file.sha]));
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const realFetch = global.fetch as any;
 beforeAll(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (global as any).fetch = vi.fn(async (url: string, _opts?: unknown) => {
+  (global as any).fetch = vi.fn(async (url: string, opts?: unknown) => {
+    if (url.startsWith(GH_CONTENTS_PREFIX)) {
+      return fakeGitHubContents(url, opts as { method?: string; body?: string } | undefined);
+    }
     if (url === 'https://discord.com/api/oauth2/token') {
       return { ok: true, json: async () => ({ access_token: 'fake-access' }) } as Response;
     }
@@ -198,7 +242,7 @@ beforeAll(() => {
 // ── App factory ─────────────────────────────────────────────────
 
 let app: Express;
-let loginOrRegister: (params: { email: string; password: string }) => Promise<unknown>;
+let loginOrRegister: (params: { email: string; password: string }) => Promise<{ ok: boolean }>;
 
 beforeAll(async () => {
   const { authRouter } = await import('../routes/auth');
@@ -206,8 +250,9 @@ beforeAll(async () => {
   app.use(express.json());
   app.use('/auth', authRouter);
 
-  const fa = await import('../services/firestoreAuthAccounts');
-  loginOrRegister = fa.loginOrRegister;
+  // 「已註冊」前置條件走 /auth/login 現行使用的帳號庫（9c2ba13 起為 githubAuthAccounts）。
+  const ga = await import('../services/githubAuthAccounts');
+  loginOrRegister = ga.loginOrRegister;
 });
 
 function resetStore(): void {
@@ -217,6 +262,7 @@ function resetStore(): void {
     password_reset_sessions: new Map(),
     email_verifications:     new Map(),
   };
+  ghRepo = new Map();
 }
 
 describe('POST /auth/oauth/login/google — quick-login', () => {
@@ -225,10 +271,12 @@ describe('POST /auth/oauth/login/google — quick-login', () => {
     verifyIdTokenMock.mockReset();
   });
 
-  it('returns 200 + JWT when the Firebase-verified email is already registered', async () => {
-    // 1. 前置：email-only 註冊一顆帳號
-    await loginOrRegister({ email: 'mapped@example.com', password: 'Abc12345' });
-    expect(store.auth_users.size).toBe(1);
+  it('returns 500 oauth_autoregister_failed with no JWT even when the Google email is already registered (OAuth disabled under GitHub-only)', async () => {
+    // 1. 前置：email+密碼註冊一顆帳號（落在 GitHub 帳號庫）
+    const reg = await loginOrRegister({ email: 'mapped@example.com', password: 'Abc12345' });
+    expect(reg.ok).toBe(true);
+    const shasBefore = ghRepoShas();
+    expect(Object.keys(shasBefore).length).toBeGreaterThan(0);
 
     // 2. server 驗 idToken 會拿到 email='mapped@example.com'
     verifyIdTokenMock.mockResolvedValueOnce({ uid: 'g-uid', email: 'mapped@example.com' });
@@ -237,16 +285,16 @@ describe('POST /auth/oauth/login/google — quick-login', () => {
       .post('/auth/oauth/login/google')
       .send({ idToken: 'fake-firebase-id-token' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.token).toBeTruthy();
-    expect(res.body.user.provider).toBe('google');
-    expect(res.body.user.primaryEmail).toBe('mapped@example.com');
-    expect(res.body.user.isNew).toBe(false);
-    // 既有 row 沒多開新 doc
-    expect(store.auth_users.size).toBe(1);
+    expect(res.status).toBe(500);
+    expect(res.body.code).toBe('oauth_autoregister_failed');
+    expect(res.body.token).toBeUndefined();
+    expect(res.body.user).toBeUndefined();
+    // 既有帳號沒被登入、也沒被改寫；舊 Firestore auth_users 也沒被寫入
+    expect(ghRepoShas()).toEqual(shasBefore);
+    expect(store.auth_users.size).toBe(0);
   });
 
-  it('returns 201 + JWT and auto-registers when the Google email has never registered', async () => {
+  it('returns 500 oauth_autoregister_failed and creates no account when the Google email has never registered (OAuth disabled under GitHub-only)', async () => {
     verifyIdTokenMock.mockResolvedValueOnce({
       uid:   'g-uid-new',
       email: 'brand-new@example.com',
@@ -257,17 +305,13 @@ describe('POST /auth/oauth/login/google — quick-login', () => {
       .post('/auth/oauth/login/google')
       .send({ idToken: 'fake-firebase-id-token' });
 
-    expect(res.status).toBe(201);
-    expect(res.body.token).toBeTruthy();
-    expect(res.body.user.provider).toBe('google');
-    expect(res.body.user.primaryEmail).toBe('brand-new@example.com');
-    expect(res.body.user.isNew).toBe(true);
-    // Firestore 多了一顆新帳號
-    expect(store.auth_users.size).toBe(1);
-    const row = Array.from(store.auth_users.values())[0] as Record<string, unknown>;
-    expect(row.primaryEmail).toBe('brand-new@example.com');
-    expect(row.firebase_uid).toBe('g-uid-new');
-    expect(row.oauthOnly).toBe(true);
+    expect(res.status).toBe(500);
+    expect(res.body.code).toBe('oauth_autoregister_failed');
+    expect(res.body.token).toBeUndefined();
+    expect(res.body.user).toBeUndefined();
+    // 不自動建帳：GitHub 帳號庫與舊 Firestore auth_users 都沒多出帳號
+    expect(ghRepo.size).toBe(0);
+    expect(store.auth_users.size).toBe(0);
   });
 
   it('returns 400 provider_no_email when Firebase id_token has no email claim', async () => {
@@ -324,9 +368,11 @@ describe('GET /auth/discord/callback — quick-login branch', () => {
     discordEmail = 'mapped@example.com';
   });
 
-  it('redirects back with oauth_token when Discord email matches a registered auth_user', async () => {
-    // Arrange：email 先註冊
-    await loginOrRegister({ email: 'mapped@example.com', password: 'Abc12345' });
+  it('redirects with auth_error=oauth_autoregister_failed and no oauth_token even when the Discord email is already registered', async () => {
+    // Arrange：email 先註冊（GitHub 帳號庫）
+    const reg = await loginOrRegister({ email: 'mapped@example.com', password: 'Abc12345' });
+    expect(reg.ok).toBe(true);
+    const shasBefore = ghRepoShas();
 
     // 建 quickLogin state
     const initRes = await request(app).get('/auth/oauth/login/discord').redirects(0);
@@ -341,12 +387,16 @@ describe('GET /auth/discord/callback — quick-login branch', () => {
     expect(cbRes.status).toBe(302);
     const loc = new URL(cbRes.headers.location);
     expect(loc.origin + loc.pathname).toBe('https://test-frontend.example.com/');
-    expect(loc.searchParams.get('oauth_token')).toBeTruthy();
+    expect(loc.searchParams.get('auth_error')).toBe('oauth_autoregister_failed');
     expect(loc.searchParams.get('provider')).toBe('discord');
-    expect(loc.searchParams.get('quick_login')).toBe('1');
+    expect(loc.searchParams.get('oauth_token')).toBeNull();
+    expect(loc.searchParams.get('quick_login')).toBeNull();
+    // 既有帳號沒被登入、也沒補綁 discord_id；舊 Firestore auth_users 也沒被寫入
+    expect(ghRepoShas()).toEqual(shasBefore);
+    expect(store.auth_users.size).toBe(0);
   });
 
-  it('auto-registers + redirects with oauth_token when Discord email is unregistered', async () => {
+  it('redirects with auth_error=oauth_autoregister_failed and creates no account when the Discord email is unregistered', async () => {
     discordEmail = 'unknown-on-site@example.com';
 
     const initRes = await request(app).get('/auth/oauth/login/discord').redirects(0);
@@ -359,17 +409,15 @@ describe('GET /auth/discord/callback — quick-login branch', () => {
 
     expect(cbRes.status).toBe(302);
     const loc = new URL(cbRes.headers.location);
-    // 不再回 provider_not_linked — 改成 auto-register + 發 JWT
-    expect(loc.searchParams.get('auth_error')).toBeNull();
-    expect(loc.searchParams.get('oauth_token')).toBeTruthy();
+    expect(loc.origin + loc.pathname).toBe('https://test-frontend.example.com/');
+    expect(loc.searchParams.get('auth_error')).toBe('oauth_autoregister_failed');
     expect(loc.searchParams.get('provider')).toBe('discord');
-    expect(loc.searchParams.get('quick_login')).toBe('1');
-    expect(loc.searchParams.get('oauth_created')).toBe('1');
-    // Firestore 多了一顆新帳號
-    expect(store.auth_users.size).toBe(1);
-    const row = Array.from(store.auth_users.values())[0] as Record<string, unknown>;
-    expect(row.primaryEmail).toBe('unknown-on-site@example.com');
-    expect(row.discord_id).toBe('123456789');
+    expect(loc.searchParams.get('oauth_token')).toBeNull();
+    expect(loc.searchParams.get('quick_login')).toBeNull();
+    expect(loc.searchParams.get('oauth_created')).toBeNull();
+    // 不自動建帳
+    expect(ghRepo.size).toBe(0);
+    expect(store.auth_users.size).toBe(0);
   });
 
   it('redirects with auth_error=provider_no_email when Discord OAuth returns no email', async () => {
@@ -395,8 +443,10 @@ describe('GET /auth/line/callback — quick-login branch', () => {
     resetStore();
   });
 
-  it('redirects with oauth_token when LINE id_token email matches a registered auth_user', async () => {
-    await loginOrRegister({ email: 'line-mapped@example.com', password: 'Abc12345' });
+  it('redirects with auth_error=oauth_autoregister_failed and no oauth_token even when the LINE id_token email is already registered', async () => {
+    const reg = await loginOrRegister({ email: 'line-mapped@example.com', password: 'Abc12345' });
+    expect(reg.ok).toBe(true);
+    const shasBefore = ghRepoShas();
 
     const initRes = await request(app).get('/auth/oauth/login/line').redirects(0);
     const state = new URL(initRes.headers.location).searchParams.get('state') as string;
@@ -407,13 +457,18 @@ describe('GET /auth/line/callback — quick-login branch', () => {
 
     expect(cbRes.status).toBe(302);
     const loc = new URL(cbRes.headers.location);
-    expect(loc.searchParams.get('oauth_token')).toBeTruthy();
+    expect(loc.origin + loc.pathname).toBe('https://test-frontend.example.com/');
+    expect(loc.searchParams.get('auth_error')).toBe('oauth_autoregister_failed');
     expect(loc.searchParams.get('provider')).toBe('line');
-    expect(loc.searchParams.get('quick_login')).toBe('1');
+    expect(loc.searchParams.get('oauth_token')).toBeNull();
+    expect(loc.searchParams.get('quick_login')).toBeNull();
+    // 既有帳號沒被登入、也沒補綁 line_id；舊 Firestore auth_users 也沒被寫入
+    expect(ghRepoShas()).toEqual(shasBefore);
+    expect(store.auth_users.size).toBe(0);
   });
 
-  it('auto-registers + redirects with oauth_token when LINE email is unregistered', async () => {
-    // 沒 loginOrRegister → email 不存在 → auto-register
+  it('redirects with auth_error=oauth_autoregister_failed and creates no account when the LINE email is unregistered', async () => {
+    // 沒 loginOrRegister → email 不存在；GitHub-only 下也不自動建帳
     const initRes = await request(app).get('/auth/oauth/login/line').redirects(0);
     const state = new URL(initRes.headers.location).searchParams.get('state') as string;
 
@@ -423,15 +478,14 @@ describe('GET /auth/line/callback — quick-login branch', () => {
 
     expect(cbRes.status).toBe(302);
     const loc = new URL(cbRes.headers.location);
-    expect(loc.searchParams.get('auth_error')).toBeNull();
-    expect(loc.searchParams.get('oauth_token')).toBeTruthy();
+    expect(loc.origin + loc.pathname).toBe('https://test-frontend.example.com/');
+    expect(loc.searchParams.get('auth_error')).toBe('oauth_autoregister_failed');
     expect(loc.searchParams.get('provider')).toBe('line');
-    expect(loc.searchParams.get('quick_login')).toBe('1');
-    expect(loc.searchParams.get('oauth_created')).toBe('1');
-    // 新 auth_users row 有 email + line_id
-    expect(store.auth_users.size).toBe(1);
-    const row = Array.from(store.auth_users.values())[0] as Record<string, unknown>;
-    expect(row.primaryEmail).toBe('line-mapped@example.com');
-    expect(row.line_id).toBe('LINE-UID-789');
+    expect(loc.searchParams.get('oauth_token')).toBeNull();
+    expect(loc.searchParams.get('quick_login')).toBeNull();
+    expect(loc.searchParams.get('oauth_created')).toBeNull();
+    // 不自動建帳
+    expect(ghRepo.size).toBe(0);
+    expect(store.auth_users.size).toBe(0);
   });
 });

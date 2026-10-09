@@ -257,8 +257,11 @@ describe('GET /auth/link/discord — parseBearerUserId paths', () => {
     expect(session.provider).toBe('discord');
   });
 
-  it('Path 2 (auto-register): Firebase ID token for new email → ensureAccountByOAuthEmail creates row + binds', async () => {
+  it('Path 2 (unlinked uid, new email): no account is auto-created under GitHub-only → link target falls back to the raw Firebase uid', async () => {
     // No pre-seeded row. Firebase token carries an email we have never seen.
+    // 9c2ba13（2026-06-26「全改 GitHub-only」）起 ensureAccountByOAuthEmail 來自
+    // githubAuthAccounts，OAuth 自動建帳刻意停用（一律 no_store），所以
+    // parseBearerUserId 走 last-resort：仍放行（不 401），bind 目標為 Firebase uid。
     verifyIdTokenMock.mockResolvedValueOnce({
       uid:   'google-uid-new',
       email: 'brand-new@example.com',
@@ -274,14 +277,13 @@ describe('GET /auth/link/discord — parseBearerUserId paths', () => {
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('https://discord.com/api/oauth2/authorize');
 
-    // ensureAccountByOAuthEmail should have created a fresh auth_users row.
-    expect(store.auth_users.size).toBe(1);
-    const [rowId, row] = Array.from(store.auth_users.entries())[0];
-    expect((row as { primaryEmail: string }).primaryEmail).toBe('brand-new@example.com');
-    expect((row as { firebase_uid: string }).firebase_uid).toBe('google-uid-new');
+    // No auth_users row is auto-created for the unseen email.
+    expect(store.auth_users.size).toBe(0);
 
+    expect(store.oauth_sessions.size).toBe(1);
     const session = Array.from(store.oauth_sessions.values())[0];
-    expect(session.linkUserId).toBe(rowId);
+    expect(session.linkUserId).toBe('google-uid-new');
+    expect(session.provider).toBe('discord');
   });
 
   it('401 when neither JWT nor Firebase token verifies', async () => {
