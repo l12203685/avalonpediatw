@@ -693,7 +693,7 @@ function loadForwardModule(): ForwardAgentModule | null {
   if (_forwardModule === 'failed') return null;
   if (_forwardModule !== null) return _forwardModule;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     _forwardModule = require('./forward/ForwardAgent') as ForwardAgentModule;
     return _forwardModule;
   } catch {
@@ -742,7 +742,7 @@ export class HeuristicAgent implements AvalonAgent {
    *  unified strongest strategy (Wave A baseline + Wave B pyramid +
    *  Wave C role-aware decision tree + 4 hard rules).
    */
-  private readonly difficulty: 'hard' = 'hard';
+  private readonly difficulty = 'hard' as const;
   /** PriorLookup — data-driven thresholds (Phase 1 #97). Injected for DI
    *  in tests; auto-loaded from bundled JSON in production. */
   private readonly priors: PriorLookup;

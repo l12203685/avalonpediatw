@@ -47,14 +47,16 @@
 | round-trip | 大廳→LINE 佇列+Discord、LINE webhook→大廳+Discord+drain、Discord→大廳+LINE 佇列、簽章、迴圈 | `pnpm test:line-sync`（本機與 `test.yml`） |
 
 CI 探測**不需要任何 LINE 憑證**：它只讀正式機公開的 `/api/bots/status`，特權動作（GET/PUT LINE）
-已經由 server 自己在開機時做完。要讓它跑起來只需在 GitHub repo 設一個 **Variable**
-`PUBLIC_SERVER_URL`（不是 Secret），沒設之前它會印 skipped 結束，不會假綠。
+已經由 server 自己在開機時做完。網址取 repo Variable `PUBLIC_SERVER_URL`，沒設就沿用既有的
+secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際在用的網址）；兩者皆無則印 skipped 結束，不會假綠。
 
 ## `/api/bots/status` 怎麼讀
 
 ```json
 {
   "generatedAt": "2026-10-08T01:17:03.000Z",
+  "keepAlive": { "enabled": true, "url": "https://<service>.onrender.com/health", "intervalMs": 600000,
+                 "lastOkAt": 1791314100000, "lastError": null, "consecutiveFailures": 0 },
   "discord": { "enabled": true, "ready": true, "error": null, "mirrorChannelConfigured": true },
   "line": {
     "enabled": true, "ready": true, "error": null,
@@ -82,39 +84,51 @@ CI 探測**不需要任何 LINE 憑證**：它只讀正式機公開的 `/api/bot
 | `line.stats.lastEventAt` | 最後一次收到 LINE 事件 | 群裡剛講話卻沒動 → webhook 沒進來（Layer 1） |
 | `line.replyQueueSize` | 等著回 LINE 的訊息數 | 一直很高 → LINE 群沒人講話（設計如此）或 reply 一直失敗（看 `replyFailures`） |
 | `discord.ready` | gateway 連線中 | `false` 且 `enabled` → token 錯、或 MESSAGE CONTENT INTENT 沒開、或 Render 剛喚醒 |
+| `keepAlive.enabled` | 自我喚醒是否在跑 | Render 上為 `false` → 15 分鐘沒人用就休眠，Discord 腿跟著斷 |
 
 ## 環境變數（Render Dashboard → 服務 → Environment）
 
+需要手填（機密，`sync: false`）只有 4 個：
+
 | 變數 | 來源 | 缺了會怎樣 |
 |---|---|---|
-| `DISCORD_BOT_TOKEN` | Discord Developer Portal → Bot | Discord 腿停用（LINE 不受影響） |
-| `DISCORD_CLIENT_ID` | Developer Portal → General → Application ID | slash command 註冊失敗 → Discord 腿停用 |
-| `LINE_BOT_CHANNEL_ACCESS_TOKEN` | LINE Console → Messaging API → long-lived token | LINE 腿停用 |
+| `DISCORD_BOT_TOKEN` | Discord Developer Portal → 阿瓦隆 bot（App `1138799027664732180`）→ Bot | Discord 腿停用（LINE 不受影響） |
+| `LINE_BOT_CHANNEL_ACCESS_TOKEN` | LINE Console → 阿瓦隆百科 channel → Messaging API → long-lived token | LINE 腿停用 |
 | `LINE_BOT_CHANNEL_SECRET` | LINE Console → Basic settings | 簽章全部 401 |
-| `LOBBY_MIRROR_LINE_GROUP_ID` | 要同步的 LINE 群 `C…` id | LINE 腿變 no-op |
-| `LOBBY_MIRROR_DISCORD_CHANNEL_ID` | Discord 頻道 id | Discord 腿變 no-op |
-| `LINE_WEBHOOK_AUTOSET`（藍圖預設 true） | — | false = 只回報漂移、不寫 LINE |
-| `LINE_REPLY_DRAIN`（藍圖預設 true） | — | false = 逐則 push，吃每月免費額度 |
-| `WEB_BASE_URL`（藍圖已填） | 玩家前端網域 | bot 產生的連結指到 localhost |
-| `LINE_WEBHOOK_URL` / `PUBLIC_BASE_URL` | 只有**非 Render** 部署才需要 | Render 自動用 `RENDER_EXTERNAL_URL` |
+| `LOBBY_MIRROR_LINE_GROUP_ID` | 阿瓦隆百科 LINE 群 `C…` id（不知道見下方「找群組 ID」） | LINE 腿變 no-op |
+
+藍圖已填好、不用動：
+
+| 變數 | 值 | 說明 |
+|---|---|---|
+| `DISCORD_CLIENT_ID` | `1138799027664732180` | 阿瓦隆 bot 的 Application ID（公開值） |
+| `LOBBY_MIRROR_DISCORD_CHANNEL_ID` | `1132901301802504242` | 原本 listen-bot 的阿瓦隆同步頻道（公開值） |
+| `LINE_WEBHOOK_AUTOSET` | `true` | false = 只回報漂移、不寫 LINE |
+| `LINE_REPLY_DRAIN` | `true` | false = 逐則 push，吃每月免費額度 |
+| `KEEP_ALIVE` | `true` | false = 允許 Render 休眠 |
+| `WEB_BASE_URL` | 玩家前端網域 | bot 產生的連結 |
+
+`LINE_WEBHOOK_URL` / `PUBLIC_BASE_URL` 只有**非 Render** 部署才需要；Render 自動用 `RENDER_EXTERNAL_URL`。
 
 `DISCORD_GUILD_ID` 可選（只在單一伺服器註冊指令，測試較快）。
 
 ## 一次性設定（Edward 動手）
 
-1. Render Dashboard 填上表 6 個 `sync: false` 的值 → Save → 等重新部署。
-2. LINE Developers Console → 阿瓦隆百科 channel → Messaging API：
-   - **Use webhook：ON**
-   - **Webhook redelivery：ON**（Render Free 休眠後第一發會逾時，redelivery 會補送）
-   - **Auto-reply messages / Greeting messages：OFF**（會搶 reply_token）
-   - **Webhook URL 欄位不用手填**。server 開機會自己 PUT；手填了也會被覆寫成 code 的值。
-3. Discord Developer Portal → App → Bot：**MESSAGE CONTENT INTENT：ON**；bot 已在伺服器、對該頻道可讀可寫。
-4. GitHub repo → Settings → Secrets and variables → Actions → **Variables** → `PUBLIC_SERVER_URL`。
-5. 驗證（三分鐘）：
-   - `curl https://<service>.onrender.com/api/bots/status` 對照上面的表。
-   - LINE 群講一句 → Discord 頻道應出現 `[…][LINE][你的名字] …`。
+1. **唯一必做**：Render Dashboard → 服務 → Environment，填上表 4 個值 → Save → 自動重新部署。
+2. 以下後台設定以前的同步就依賴它們，多半已是對的；上線後 `/api/bots/status` 與每日 CI 會點名哪一項不對，屆時再改：
+   - LINE Console → Messaging API：**Use webhook ON**（狀態頁 `line.webhook.active`）、**Webhook redelivery ON**、
+     **Auto-reply / Greeting OFF**（會搶 reply_token）。**Webhook URL 不用手填**，server 開機會自己寫入。
+   - Discord Developer Portal → Bot：**MESSAGE CONTENT INTENT ON**（沒開時狀態頁 `discord.error` 會寫 disallowed intents）。
+3. 驗證：
+   - LINE 群講一句 → Discord 頻道出現 `[…][LINE][名字] …`。
    - Discord 頻道講一句 → **回 LINE 群再講一句** → 剛才那句以 `[…][DC][…]` 補進來。延遲是設計，不是壞。
-   - Actions → Verify LINE webhook → Run workflow → 綠。
+   - Actions → Verify LINE webhook → Run workflow → 綠（每天 09:17 +08 也會自動跑）。
+
+### 找群組 ID
+
+LINE 群組 ID 只能從 webhook 事件得知。`LOBBY_MIRROR_LINE_GROUP_ID` 先空著、其他 3 個填好部署後，
+在阿瓦隆百科 LINE 群講一句話 → Render → Logs 搜 `[LINE] event from group` → 那行最後的 `C…` 就是，
+貼回 `LOBBY_MIRROR_LINE_GROUP_ID` 再存一次。只印在 server log，不會出現在公開的狀態頁。
 
 ## 單一擁有者規則
 
@@ -128,12 +142,17 @@ CI 探測**不需要任何 LINE 憑證**：它只讀正式機公開的 `/api/bot
 如果要讓 listen-bot 持有，`LINE_WEBHOOK_URL` 就填 listen-bot 的路徑（例如 `https://<host>/line/webhook/avalon`），
 server 會把那個值 PUT 上去，自己不收 webhook。
 
-## Render Free 的兩個已知限制
+## Render Free 休眠（已處理，20261009）
 
-| 限制 | 影響 | 選項 |
-|---|---|---|
-| 閒置 15 分鐘休眠 | Discord gateway 斷線 → Discord→LINE/大廳 停；LINE→server 第一發逾時（靠 redelivery 補） | (a) 外部每 10 分鐘 ping `/health`（免費，灰色地帶）(b) Starter 方案約 $7/月（要花錢，先問）(c) 接受 |
-| 休眠清記憶體 | reply 佇列（上限 50 則）一起消失：休眠期間 Discord 講的、還沒等到 LINE 群有人講話就被回收的，會丟 | 同上；或接受 |
+Free 方案閒置 15 分鐘會休眠：Discord gateway 斷線（期間 Discord 的訊息永遠收不到）、reply 佇列與大廳聊天清空、
+LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網址 `/health`（經過 Render 邊緣，算 inbound），
+因此不會休眠。免費、不靠外部服務；單一服務全月常駐 ≤ 744 小時，低於 Render 每個 workspace 每月 750 小時的免費額度。
+
+| 注意 | 內容 |
+|---|---|
+| 同 workspace 第二個常駐 Free 服務 | 兩個加起來會超過 750 小時，超過後所有 Free 服務停到下個月 |
+| 重新部署／Render 重啟 | 開機後自動恢復自我喚醒，不需人工 |
+| 要關掉 | `KEEP_ALIVE=false` |
 
 ## 配額
 
@@ -160,6 +179,7 @@ reply 不計、push 計。`LINE_REPLY_DRAIN=true`（預設）下 server 不會 p
 - `packages/server/src/bots/ChatMirror.ts` — 三向扇出
 - `packages/server/src/bots/index.ts` — 初始化（各 bot 失敗隔離）、`/api/bots/status`
 - `packages/server/src/middleware/rawBody.ts` — 保留原始 bytes
+- `packages/server/src/services/keepAlive.ts` — Render Free 自我喚醒
 - `.github/workflows/verify-line-webhook.yml` — 每日探測
 - `render.yaml` — 變數清單
 - 測試：`src/__tests__/LineSyncRoundTrip.test.ts`、`LineReplyQueue.test.ts`、`LineWebhookEndpoint.test.ts`

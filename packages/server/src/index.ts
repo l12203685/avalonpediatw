@@ -33,6 +33,7 @@ import {
 } from './bots/index';
 import { captureRawBody } from './middleware/rawBody';
 import { initializeAsyncNotifier } from './services/AsyncNotifier';
+import { startKeepAlive } from './services/keepAlive';
 
 const app: Express = express();
 
@@ -211,6 +212,11 @@ async function main() {
     //    bound because LINE test-calls the endpoint. Fire-and-forget; the
     //    outcome is logged and exposed on /api/bots/status.
     void syncLineWebhookEndpoint().finally(() => startLineWebhookWatchdog());
+
+    // 8. Render Free sleeps after 15 min without inbound traffic, which drops
+    //    the Discord gateway and wipes in-memory state. Self-ping the public
+    //    URL (no-op off Render / when KEEP_ALIVE=false). services/keepAlive.ts
+    startKeepAlive();
   });
 }
 

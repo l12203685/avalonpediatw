@@ -273,6 +273,21 @@ describe('LINE webhook → lobby + Discord, with reply_token drain', () => {
     expect(mirror.lineReplyQueueSize()).toBe(1);
   });
 
+  it('logs each non-mirror group id once so the operator can find it', async () => {
+    const { bot } = setup();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const ev = groupTextEvent('hello', 'm9', 'rt9');
+    (ev.source as { groupId: string }).groupId = 'Cunknown-group';
+    for (let i = 0; i < 3; i++) {
+      const { req, res } = lineRequest(JSON.stringify({ destination: 'U', events: [ev] }));
+      await bot.handleWebhook(req, res);
+    }
+    const hits = logSpy.mock.calls.filter((c) => String(c[0]).includes('Cunknown-group'));
+    expect(hits).toHaveLength(1);
+    expect(String(hits[0][0])).toContain('LOBBY_MIRROR_LINE_GROUP_ID=Cunknown-group');
+    logSpy.mockRestore();
+  });
+
   it('LINE console "Verify" (empty events) is acked 200', async () => {
     const { bot } = setup();
     const { req, res } = lineRequest(JSON.stringify({ destination: 'U', events: [] }));

@@ -29,12 +29,13 @@ GitHub-only 架構**不需要 Firebase / Supabase**——全部留空即可。�
 | `GITHUB_ACCOUNTS_TOKEN` | 帳號庫 token（PRIVATE repo，Contents R/W）。缺了登入回 no_store |
 | `GITHUB_RECORDS_TOKEN` | 戰績歸檔 token（public repo 可） |
 | `ADMIN_SECRET` | `/api/ai/selfplay` 用，隨意一組 |
-| `DISCORD_BOT_TOKEN` / `DISCORD_CLIENT_ID` | Discord 同步腿。缺 → 只少這條腿 |
+| `DISCORD_BOT_TOKEN` | Discord 同步腿。缺 → 只少這條腿 |
 | `LINE_BOT_CHANNEL_ACCESS_TOKEN` / `LINE_BOT_CHANNEL_SECRET` | LINE 同步腿。缺 → 只少這條腿 |
-| `LOBBY_MIRROR_LINE_GROUP_ID` / `LOBBY_MIRROR_DISCORD_CHANNEL_ID` | 要同步的 LINE 群 / Discord 頻道 id |
+| `LOBBY_MIRROR_LINE_GROUP_ID` | 要同步的 LINE 群 id（找法見 `docs/LINE_DISCORD_SYNC.md`） |
 
 > `CORS_ORIGIN`、`GITHUB_ACCOUNTS_REPO`、`GITHUB_RECORDS_REPO/BRANCH`、`NODE_ENV`、
-> `LINE_WEBHOOK_AUTOSET`、`LINE_REPLY_DRAIN`、`WEB_BASE_URL` 已寫在 `render.yaml`，免填。
+> `DISCORD_CLIENT_ID`、`LOBBY_MIRROR_DISCORD_CHANNEL_ID`、`LINE_WEBHOOK_AUTOSET`、`LINE_REPLY_DRAIN`、
+> `KEEP_ALIVE`、`WEB_BASE_URL` 已寫在 `render.yaml`，免填。
 > Firebase / Supabase 留空 = guest-only 模式 + GitHub 帳號庫接管登入。
 > LINE / Discord 同步的設定、驗證與疑難排解：`docs/LINE_DISCORD_SYNC.md`
 > （2026-06-25 第一版藍圖漏了這六個變數，正式機的同步因此全停；2026-10-08 補回）。
@@ -71,9 +72,8 @@ curl https://<你的服務>.onrender.com/health
 
 ## Free 方案要知道的事
 
-- 閒置 **15 分鐘**後休眠 → 記憶體清空。**進行中的對局狀態在記憶體**，但只要有玩家
-  開著分頁，Socket.IO 心跳會維持喚醒，通常不會中斷。
-- 真正會遇到的：冷清一段時間後**第一個開連結的人要等 ~30–60 秒**冷啟動。
-- 休眠時 **Discord bot 跟著離線**（gateway 是長連線），LINE 的第一發 webhook 會逾時
-  （LINE Console 開 **Webhook redelivery** 可補送）。細節與選項見 `docs/LINE_DISCORD_SYNC.md`。
-- 若哪天覺得冷啟動太擾民，升級 **Starter（~$7/月）**即可常開，其餘設定不變。
+- 閒置 **15 分鐘**後休眠 → 記憶體清空、Discord bot 離線。**20261009 起 server 每 10 分鐘
+  自我喚醒（`KEEP_ALIVE`，免費）**，實際上常駐，不再有冷啟動。
+- 額度：單一服務全月常駐 ≤ 744 小時，低於每個 workspace 每月 750 小時的免費額度；
+  **同 workspace 再開第二個常駐 Free 服務就會超額**（超額後所有 Free 服務停到下個月）。
+- 部署或 Render 重啟後仍有一次 ~30–60 秒冷啟動，之後自動恢復常駐。細節見 `docs/LINE_DISCORD_SYNC.md`。

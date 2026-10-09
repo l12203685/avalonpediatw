@@ -24,6 +24,7 @@ import {
   DiscordAdapter,
   DiscordChannelAdapter,
 } from './ChatMirror';
+import { getKeepAliveState, KeepAliveState } from '../services/keepAlive';
 
 /** Last initialisation error per bot — surfaced on /api/bots/status. */
 const initErrors: { discord: string | null; line: string | null } = {
@@ -226,6 +227,8 @@ export function startLineWebhookWatchdog(): void {
 
 export interface BotStatus {
   generatedAt: string;
+  /** Render Free self-ping; if disabled on Render the Discord leg dies every 15 idle minutes. */
+  keepAlive: KeepAliveState;
   discord: {
     enabled: boolean;
     ready: boolean;
@@ -260,6 +263,7 @@ export function buildBotStatus(): BotStatus {
   const mirror = getChatMirror();
   return {
     generatedAt: new Date().toISOString(),
+    keepAlive: getKeepAliveState(),
     discord: {
       enabled: !!process.env.DISCORD_BOT_TOKEN,
       ready: discordBot?.isClientReady() ?? false,

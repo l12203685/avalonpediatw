@@ -8,10 +8,10 @@
 # endpoint against LINE at boot and every 6 h). So no LINE credential needs to
 # live in GitHub Secrets for this check to run.
 #
-# Setup: repo Settings → Secrets and variables → Actions → Variables →
-#   PUBLIC_SERVER_URL = https://<service>.onrender.com   (no trailing slash)
-# Until that variable exists the job exits 0 with a notice (not a green lie —
-# the step log says "skipped").
+# Server URL: repo Variable PUBLIC_SERVER_URL if set, otherwise the existing
+# secret VITE_SERVER_URL (the backend URL the player frontend is built with —
+# probing the same URL players use is the point). With neither, the job exits
+# 0 with a notice (not a green lie — the step log says "skipped").
 name: Verify LINE webhook
 
 on:
@@ -31,11 +31,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SERVER_URL: ${{ vars.PUBLIC_SERVER_URL }}
+      SERVER_URL: ${{ vars.PUBLIC_SERVER_URL || secrets.VITE_SERVER_URL }}
     steps:
-      - name: Skip when PUBLIC_SERVER_URL is not configured
+      - name: Skip when no server URL is configured
         if: ${{ env.SERVER_URL == '' }}
-        run: echo "::notice::PUBLIC_SERVER_URL repo variable not set — skipped (nothing verified)"
+        run: echo "::notice::neither PUBLIC_SERVER_URL (variable) nor VITE_SERVER_URL (secret) is set — skipped (nothing verified)"
 
       - name: Fetch /api/bots/status (retries cover Render Free cold start)
         if: ${{ env.SERVER_URL != '' }}
@@ -67,6 +67,16 @@ jobs:
             echo "::warning::LINE's own test call to the endpoint failed: $(jq -r '.line.webhook.lastError' status.json)"
           fi
           exit $fail
+
+      - name: Check keep-alive (Render Free sleeps after 15 idle minutes otherwise)
+        if: ${{ env.SERVER_URL != '' }}
+        run: |
+          if jq -e '.keepAlive.enabled == true' status.json >/dev/null; then
+            echo "keep-alive on: $(jq -r '.keepAlive.intervalMs / 60000' status.json) min, consecutiveFailures=$(jq -r '.keepAlive.consecutiveFailures' status.json)"
+            jq -e '.keepAlive.consecutiveFailures < 3' status.json >/dev/null || echo "::warning::keep-alive pings failing: $(jq -r '.keepAlive.lastError' status.json)"
+          else
+            echo "::warning::keep-alive disabled — on Render Free the instance sleeps after 15 idle minutes and the Discord leg goes dark"
+          fi
 
       - name: Assert Discord leg (re-polls once — gateway needs a few seconds after a cold start)
         if: ${{ env.SERVER_URL != '' }}

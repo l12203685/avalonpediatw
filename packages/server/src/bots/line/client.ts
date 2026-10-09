@@ -55,6 +55,8 @@ export class LineBotClient {
     replyFailures: 0,
     lastEventAt: null,
   };
+  /** Non-mirror group ids already logged (each is logged once per process). */
+  private seenOtherGroups = new Set<string>();
 
   constructor(opts: LineBotClientOptions = {}) {
     const channelAccessToken = opts.channelAccessToken ?? LINE_CONFIG.channelAccessToken;
@@ -126,6 +128,10 @@ export class LineBotClient {
           continue;
         }
 
+        if (source.type === 'group') {
+          this.noteNonMirrorGroup(source.groupId);
+        }
+
         if (event.type !== 'message' || event.message.type !== 'text') {
           continue;
         }
@@ -160,6 +166,21 @@ export class LineBotClient {
 
   getWebhookStats(): LineWebhookStats {
     return { ...this.stats };
+  }
+
+  /**
+   * Log each group id the bot hears from that is NOT the mirror group, once.
+   * The only practical way to learn a LINE group id is from a webhook event,
+   * so this is how the operator finds the value for LOBBY_MIRROR_LINE_GROUP_ID
+   * (Render → Logs). Server logs only — never on the public status endpoint.
+   */
+  private noteNonMirrorGroup(groupId: string | undefined): void {
+    if (!groupId || this.seenOtherGroups.has(groupId) || this.seenOtherGroups.size >= 50) return;
+    this.seenOtherGroups.add(groupId);
+    console.log(
+      `[LINE] event from group ${groupId} (not the lobby mirror group). ` +
+        `To mirror this group set LOBBY_MIRROR_LINE_GROUP_ID=${groupId}`,
+    );
   }
 
   /**

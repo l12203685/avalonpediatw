@@ -1208,7 +1208,7 @@ export class ForwardAgent implements AvalonAgent {
         combinations.push(idx.map((j) => pool[j]));
       };
       emit();
-      while (true) {
+      for (;;) {
         // Find rightmost index that can be incremented.
         let r = slotCount - 1;
         while (r >= 0 && idx[r] === pool.length - slotCount + r) r--;
