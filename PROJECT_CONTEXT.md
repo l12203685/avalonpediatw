@@ -5,9 +5,11 @@
 Real-time Avalon/The Resistance social deduction game platform.
 - **Frontend**: React 18 + TypeScript + Vite (`packages/web`)
 - **Backend**: Express + Socket.IO (`packages/server`)
-- **Database**: Firebase Realtime DB + Firebase Auth
+- **Accounts**: email/密碼帳號存 private GitHub repo（GitHub-only，`services/githubAuthAccounts.ts`）；Firebase / Supabase 選用，未設定 = guest-only
+- **Game records**: 本 repo `avalon-game-records/`（一場一檔 JSON，`services/GitHubGameArchive.ts`）
 - **Monorepo**: Turborepo + pnpm workspaces
-- **Deployment**: Firebase Hosting (frontend) + Google Cloud Run (backend, asia-east1)
+- **Deployment**: Firebase Hosting（frontend）+ Render Free（backend `avalon-server`，Singapore，Docker，`render.yaml`，push `main` 自動部署）— 2026-06-25 起；Cloud Run 已停用
+- **LINE / Discord 三向同步**：`docs/LINE_DISCORD_SYNC.md`
 
 ## Build Order (always build shared first)
 
@@ -19,12 +21,14 @@ pnpm --filter @avalon/server build   # or @avalon/web
 ## Key URLs
 
 - Frontend: https://avalon-game-platform.web.app
-- Backend: https://avalon-server-169653523467.asia-east1.run.app
-- Health check: https://avalon-server-169653523467.asia-east1.run.app/health
-- Build version probe: https://avalon-server-169653523467.asia-east1.run.app/api/version
+- Backend: Render `avalon-server`（網址見 Render Dashboard；前端 build 讀 GitHub secret `VITE_SERVER_URL`）
+- Health check: `<backend>/health`
+- Bot / sync status: `<backend>/api/bots/status`
+- Build version probe: `<backend>/api/version`
 
 > URL aliasing rules: see `digital-immortal-tree-lyh/agent/tree_registry/architecture/url_aliasing.md`.
-> Render.com 後端已於 2026-04-23 全面刪除（見 `tree_registry/architecture/render_deprecation.md`），ngrok / trycloudflare 為歷史過渡 URL — 一律不寫死進新 config / docs。
+> 2026-04-23 刪除的是當時的 Render 服務；2026-06-25 起後端回到 Render Free（Cloud Run 長連線計費過高，見 `docs/RENDER_FREE_DEPLOY.md`）。
+> Cloud Run（`*.run.app`）、ngrok、trycloudflare 皆為歷史 URL — 一律不寫死進新 config / docs。
 
 ## gstack
 
