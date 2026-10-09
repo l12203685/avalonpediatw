@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e:5p": "vitest run src/__tests__/integration/FivePlayerSocketSmoke.test.ts"
+    "test:e2e:5p": "vitest run src/__tests__/integration/FivePlayerSocketSmoke.test.ts",
+    "test:line-sync": "vitest run src/__tests__/LineSyncRoundTrip.test.ts src/__tests__/LineReplyQueue.test.ts src/__tests__/LineWebhookEndpoint.test.ts src/__tests__/ChatMirror.test.ts src/__tests__/KeepAlive.test.ts"
   },
   "dependencies": {
     "@avalon/shared": "workspace:*",

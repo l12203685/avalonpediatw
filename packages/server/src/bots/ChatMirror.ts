@@ -60,6 +60,7 @@ import {
   LOBBY_CHAT_MAX_LEN,
 } from '../socket/LobbyChatBuffer';
 import { SocketRateLimiter } from '../middleware/rateLimit';
+import type { LineReplyQueue, QueuedLineText } from './line/replyQueue';
 
 // ─── Adapter contracts ───────────────────────────────────────────────────
 
@@ -218,6 +219,14 @@ export interface ChatMirrorConfig {
    */
   listenBot?: ListenBotEnqueueConfig;
   /**
+   * 2026-10-08 — in-process reply_token drain. When set (and no listen-bot
+   * is configured), outbound LINE texts are queued here instead of pushed;
+   * `bots/line/client.ts` flushes up to 5 per inbound reply_token from the
+   * mirror group. Free (reply does not count against the push quota), at the
+   * cost of latency: LINE sees the message when someone next speaks there.
+   */
+  lineReplyQueue?: LineReplyQueue;
+  /**
    * Rate limit per platform-user per window. Defaults to 5 msgs / 60s to
    * keep spam bots from flooding the channel while staying generous for
    * real chatter. Only applied on inbound, since lobby-side is already
@@ -250,6 +259,7 @@ export class ChatMirror {
   private readonly line?: LineAdapter;
   private readonly discord?: DiscordAdapter;
   private readonly listenBot?: ListenBotEnqueueConfig;
+  private readonly lineReplyQueue?: LineReplyQueue;
   private readonly inboundLimiter: SocketRateLimiter;
   private readonly logger: Required<ChatMirrorConfig>['logger'];
   private lobbyIngest: LobbyIngestFn | null = null;
@@ -260,6 +270,7 @@ export class ChatMirror {
     this.line = config.line;
     this.discord = config.discord;
     this.listenBot = config.listenBot;
+    this.lineReplyQueue = config.lineReplyQueue;
 
     const rl = config.inboundRateLimit ?? { windowMs: 60_000, maxRequests: 5 };
     this.inboundLimiter = new SocketRateLimiter({
@@ -387,12 +398,40 @@ export class ChatMirror {
     return msg;
   }
 
+  // ─── LINE reply-token drain (2026-10-08) ──────────────────────────────
+
+  /** True when outbound LINE goes through the in-process reply queue. */
+  public isLineReplyQueueEnabled(): boolean {
+    return !!this.lineReplyQueue && !!this.lineGroupId;
+  }
+
+  /** Pop up to `max` (≤5) queued LINE texts, oldest first. */
+  public drainLineReplies(max?: number): QueuedLineText[] {
+    return this.lineReplyQueue ? this.lineReplyQueue.drain(max) : [];
+  }
+
+  /** Put a failed batch back at the head so the next reply_token re-sends it. */
+  public requeueLineReplies(batch: QueuedLineText[]): void {
+    if (!this.lineReplyQueue || batch.length === 0) return;
+    const { dropped } = this.lineReplyQueue.requeueFront(batch);
+    if (dropped > 0) {
+      this.logger.warn(`LINE reply queue overflow on requeue — dropped ${dropped} newest message(s)`);
+    }
+  }
+
+  public lineReplyQueueSize(): number {
+    return this.lineReplyQueue?.size() ?? 0;
+  }
+
   // ─── Internals ────────────────────────────────────────────────────────
 
   /**
-   * Route outbound LINE text. Prefers the listen-bot enqueue path (no push
-   * quota), falls back to direct LINE push if the listen-bot is unconfigured
-   * or unreachable.
+   * Route outbound LINE text. Order of preference:
+   *   1. listen-bot enqueue (external service, no push quota)
+   *   2. in-process reply_token queue (no push quota, drained on next inbound)
+   *   3. direct LINE push (costs quota) — only when neither of the above is
+   *      configured, or as a fallback when the listen-bot is unreachable and
+   *      no queue exists.
    *
    * `originMsg` is passed through so we can send the raw fields to the
    * listen-bot — the listen-bot is the single authority that applies the
@@ -414,6 +453,14 @@ export class ChatMirror {
       this.logger.warn(
         'listen-bot enqueue failed, falling back to LINE push',
       );
+    }
+
+    if (this.lineReplyQueue) {
+      const { dropped } = this.lineReplyQueue.enqueue(line);
+      if (dropped > 0) {
+        this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
+      }
+      return;
     }
 
     if (!this.line) return;

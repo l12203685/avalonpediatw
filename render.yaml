@@ -57,6 +57,40 @@ services:
       - key: GITHUB_RECORDS_BRANCH
         value: main
 
+      # ── LINE / Discord 三向同步（#82；2026-10-08 修回）────────────────────
+      # 2026-06-25 重建這份藍圖時沒帶這一段，正式機上 LINE / Discord bot 與
+      # ChatMirror 全部在開機時被跳過 —— 這就是「同步又壞了」的直接原因。
+      # 全部到 Dashboard 填；缺哪個就少哪條腿，不會讓 server 起不來。
+      # 操作與驗證方式：docs/LINE_DISCORD_SYNC.md
+      - key: DISCORD_BOT_TOKEN                 # Discord Developer Portal → 阿瓦隆 bot → Bot → Token
+        sync: false
+      - key: DISCORD_CLIENT_ID                 # 阿瓦隆 bot 的 Application ID（公開值，非機密）
+        value: "1138799027664732180"
+      - key: LINE_BOT_CHANNEL_ACCESS_TOKEN     # LINE Console → Messaging API → long-lived token
+        sync: false
+      - key: LINE_BOT_CHANNEL_SECRET           # LINE Console → Basic settings → Channel secret
+        sync: false
+      - key: LOBBY_MIRROR_LINE_GROUP_ID        # 阿瓦隆百科 LINE 群 groupId（C 開頭）；不知道就先空著，
+        sync: false                            # 在群裡講一句話，Render → Logs 會印出 "[LINE] event from group C…"
+      - key: LOBBY_MIRROR_DISCORD_CHANNEL_ID   # 阿瓦隆百科 LINE↔Discord 同步頻道（公開值，非機密）
+        value: "1132901301802504242"
+      # LINE webhook URL 由 code 持有：啟動時自動 PUT 到 LINE（用 Render 注入的
+      # RENDER_EXTERNAL_URL + /webhook/line），每 6 小時重查。同一個 LINE channel
+      # 只能有一個 webhook → 只允許「一個」部署開 autoset；若地端也在跑，請在
+      # 其中一邊設 false。
+      - key: LINE_WEBHOOK_AUTOSET
+        value: "true"
+      # 出站 LINE 走 reply_token 排隊（免費）；false = 逐則 push（吃每月免費額度）。
+      - key: LINE_REPLY_DRAIN
+        value: "true"
+      # bot 產生的加入連結 / Discord 邀請要指回玩家前端。
+      - key: WEB_BASE_URL
+        value: https://avalon-game-platform.web.app
+      # Free 方案閒置 15 分鐘會休眠：Discord 斷線、記憶體清空。server 每 10 分鐘打一次
+      # 自己的公開網址保持常駐（免費；單一服務全月常駐 ≤ 744 小時 < 免費額度 750）。
+      - key: KEEP_ALIVE
+        value: "true"
+
       # ── Firebase / Supabase：GitHub-only 架構「不需要」，全部留空即可 ──────
       # 留空 → server 進 guest-only 模式、由上面 GitHub 帳號庫接管登入。僅在
       # 日後想恢復排行榜 / 個人資料編輯等 Firestore 功能時才需要回填。

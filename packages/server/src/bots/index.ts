@@ -7,45 +7,70 @@ import { Express, Request, Response } from 'express';
 import { TextChannel } from 'discord.js';
 import { initializeDiscordBot, getDiscordBot } from './discord/client';
 import { initializeLineBot, getLineBot } from './line/client';
+import { LINE_CONFIG } from './line/config';
+import { LineReplyQueue } from './line/replyQueue';
+import {
+  ensureLineWebhookEndpoint,
+  getLineWebhookState,
+  isAutosetEnabled,
+  recheckIntervalMs,
+  resolveExpectedWebhookUrl,
+  LineWebhookState,
+} from './line/webhookEndpoint';
 import {
   initializeChatMirror,
+  getChatMirror,
   LineAdapter,
   DiscordAdapter,
   DiscordChannelAdapter,
 } from './ChatMirror';
+import { getKeepAliveState, KeepAliveState } from '../services/keepAlive';
+
+/** Last initialisation error per bot — surfaced on /api/bots/status. */
+const initErrors: { discord: string | null; line: string | null } = {
+  discord: null,
+  line: null,
+};
+
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function envFlagOff(name: string): boolean {
+  const raw = (process.env[name] || '').trim().toLowerCase();
+  return ['false', '0', 'off', 'no'].includes(raw);
+}
 
 export async function initializeBots(): Promise<void> {
   console.log('🤖 Initializing bots...');
 
-  // Initialize Discord Bot
+  // Each bot is isolated on purpose. Until 2026-10-08 a Discord failure in
+  // production rethrew out of this function, which skipped LINE *and* the
+  // ChatMirror entirely — one bad token silently killed the whole sync. Now
+  // every failure is logged loudly and exposed on /api/bots/status instead.
+
   if (process.env.DISCORD_BOT_TOKEN) {
     try {
       await initializeDiscordBot();
+      initErrors.discord = null;
       console.log('✅ Discord Bot initialized');
     } catch (error) {
+      initErrors.discord = errMsg(error);
       console.error('❌ Failed to initialize Discord Bot:', error);
-      if (process.env.NODE_ENV === 'production') {
-        throw error;
-      }
     }
   } else {
     console.warn('⚠️ DISCORD_BOT_TOKEN not set, skipping Discord Bot');
   }
 
-  // Initialize Line Bot — accept both BOT_-prefixed (preferred) and legacy env names
-  // to stay in sync with bots/line/config.ts which already supports both.
-  const lineAccessToken =
-    process.env.LINE_BOT_CHANNEL_ACCESS_TOKEN ||
-    process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (lineAccessToken) {
+  // LINE_CONFIG already accepts both BOT_-prefixed (preferred) and legacy names.
+  if (LINE_CONFIG.channelAccessToken) {
     try {
       initializeLineBot();
+      initErrors.line = null;
       console.log('✅ Line Bot initialized');
     } catch (error) {
+      initErrors.line = errMsg(error);
       console.error('❌ Failed to initialize Line Bot:', error);
-      if (process.env.NODE_ENV === 'production') {
-        throw error;
-      }
     }
   } else {
     console.warn(
@@ -107,6 +132,9 @@ function buildDiscordAdapter(): DiscordAdapter {
   };
 }
 
+type LineOutboundMode = 'listen-bot' | 'reply-drain' | 'push' | 'disabled';
+let lineOutboundMode: LineOutboundMode = 'disabled';
+
 function initializeLobbyChatMirror(): void {
   const lineGroupId = process.env.LOBBY_MIRROR_LINE_GROUP_ID || '';
   const discordChannelId = process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID || '';
@@ -132,23 +160,128 @@ function initializeLobbyChatMirror(): void {
       }
     : undefined;
 
+  // 2026-10-08 — without a listen-bot (e.g. on Render), queue outbound LINE
+  // texts and flush them on the next inbound reply_token. LINE_REPLY_DRAIN=false
+  // reverts to per-message push (costs monthly quota).
+  const replyDrain = !!lineGroupId && !listenBot && !envFlagOff('LINE_REPLY_DRAIN');
+  const lineReplyQueue = replyDrain ? new LineReplyQueue() : undefined;
+
   initializeChatMirror({
     lineGroupId,
     discordChannelId,
     line: buildLineAdapter() ?? undefined,
     discord: buildDiscordAdapter(),
     listenBot,
+    lineReplyQueue,
   });
+
+  if (!lineGroupId) lineOutboundMode = 'disabled';
+  else if (listenBot) lineOutboundMode = 'listen-bot';
+  else if (lineReplyQueue) lineOutboundMode = 'reply-drain';
+  else lineOutboundMode = 'push';
 
   const enabledPlatforms: string[] = [];
   if (lineGroupId) enabledPlatforms.push('LINE');
   if (discordChannelId) enabledPlatforms.push('Discord');
   if (enabledPlatforms.length > 0) {
-    const lineMode = listenBot ? 'listen-bot enqueue' : 'direct LINE push';
     console.log(
-      `✅ ChatMirror enabled for: ${enabledPlatforms.join(', ')} (LINE via ${lineMode})`,
+      `✅ ChatMirror enabled for: ${enabledPlatforms.join(', ')} (LINE outbound via ${lineOutboundMode})`,
     );
   }
+}
+
+// ─── LINE webhook URL ownership (Layer 1) ────────────────────────────────
+
+/**
+ * Make LINE's registered webhook URL match what this deployment serves.
+ * Call once AFTER the HTTP port is bound (LINE test-calls the endpoint), then
+ * `startLineWebhookWatchdog()` re-checks periodically. Never throws.
+ */
+export async function syncLineWebhookEndpoint(opts: { test?: boolean } = {}): Promise<LineWebhookState | null> {
+  const token = LINE_CONFIG.channelAccessToken;
+  if (!token || !getLineBot()) return null; // LINE leg disabled — nothing to own
+  const state = await ensureLineWebhookEndpoint({
+    token,
+    expected: resolveExpectedWebhookUrl(),
+    autoset: isAutosetEnabled(),
+    test: opts.test ?? true,
+  });
+  console.log(
+    `[LINE webhook] action=${state.action} expected=${state.expected ?? '-'} actual=${state.actual ?? '-'} ` +
+      `active=${state.active ?? '?'} verified=${state.verified ?? '?'}` +
+      (state.lastError ? ` error=${state.lastError}` : ''),
+  );
+  return state;
+}
+
+export function startLineWebhookWatchdog(): void {
+  const ms = recheckIntervalMs();
+  if (ms <= 0 || !getLineBot()) return;
+  const timer = setInterval(() => {
+    void syncLineWebhookEndpoint({ test: false });
+  }, ms);
+  timer.unref();
+}
+
+// ─── Status (Layer 3) ────────────────────────────────────────────────────
+
+export interface BotStatus {
+  generatedAt: string;
+  /** Render Free self-ping; if disabled on Render the Discord leg dies every 15 idle minutes. */
+  keepAlive: KeepAliveState;
+  discord: {
+    enabled: boolean;
+    ready: boolean;
+    error: string | null;
+    mirrorChannelConfigured: boolean;
+  };
+  line: {
+    enabled: boolean;
+    ready: boolean;
+    error: string | null;
+    commandsEnabled: boolean;
+    mirrorGroupConfigured: boolean;
+    outbound: LineOutboundMode;
+    replyQueueSize: number;
+    webhook: LineWebhookState;
+    stats: ReturnType<NonNullable<ReturnType<typeof getLineBot>>['getWebhookStats']> | null;
+  };
+}
+
+/**
+ * Snapshot for /api/bots/status. Contract used by
+ * .github/workflows/verify-line-webhook.yml:
+ *   line.ready === true
+ *   line.webhook.expected !== null && line.webhook.actual === line.webhook.expected
+ *   line.webhook.active === true
+ *   discord.enabled === false || discord.ready === true
+ * No secrets or ids are included — only booleans, counters and our own URL.
+ */
+export function buildBotStatus(): BotStatus {
+  const discordBot = getDiscordBot();
+  const lineBot = getLineBot();
+  const mirror = getChatMirror();
+  return {
+    generatedAt: new Date().toISOString(),
+    keepAlive: getKeepAliveState(),
+    discord: {
+      enabled: !!process.env.DISCORD_BOT_TOKEN,
+      ready: discordBot?.isClientReady() ?? false,
+      error: initErrors.discord,
+      mirrorChannelConfigured: !!(process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID || '').trim(),
+    },
+    line: {
+      enabled: !!LINE_CONFIG.channelAccessToken,
+      ready: !!lineBot,
+      error: initErrors.line,
+      commandsEnabled: LINE_CONFIG.commandsEnabled,
+      mirrorGroupConfigured: !!(process.env.LOBBY_MIRROR_LINE_GROUP_ID || '').trim(),
+      outbound: lineOutboundMode,
+      replyQueueSize: mirror?.lineReplyQueueSize() ?? 0,
+      webhook: getLineWebhookState(),
+      stats: lineBot?.getWebhookStats() ?? null,
+    },
+  };
 }
 
 export function registerBotRoutes(app: Express): void {
@@ -169,6 +302,7 @@ export function registerBotRoutes(app: Express): void {
         status: 'ok',
         ready: discordBot.isClientReady(),
         bot: discordBot.getClient().user?.tag,
+        error: initErrors.discord,
       });
     });
     console.log('📍 Discord Bot status endpoint at /api/bots/discord/status');
@@ -177,26 +311,15 @@ export function registerBotRoutes(app: Express): void {
   // Line Bot status endpoint
   if (lineBot) {
     app.get('/api/bots/line/status', (req: Request, res: Response) => {
-      res.json({
-        status: 'ok',
-        configured: !!process.env.LINE_CHANNEL_ACCESS_TOKEN,
-      });
+      res.json({ status: 'ok', ...buildBotStatus().line });
     });
     console.log('📍 Line Bot status endpoint at /api/bots/line/status');
   }
 
-  // General bot status endpoint
+  // General bot status endpoint — always registered, even when both bots are
+  // off, so the CI probe can tell "disabled" from "server down".
   app.get('/api/bots/status', (req: Request, res: Response) => {
-    res.json({
-      discord: {
-        enabled: !!process.env.DISCORD_BOT_TOKEN,
-        ready: discordBot?.isClientReady() || false,
-      },
-      line: {
-        enabled: !!process.env.LINE_CHANNEL_ACCESS_TOKEN,
-        configured: !!lineBot,
-      },
-    });
+    res.json(buildBotStatus());
   });
   console.log('📍 Bot status endpoint at /api/bots/status');
 }

@@ -3,6 +3,8 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { LINE_CONFIG } from './config';
+import { LINE_REPLY_MAX_PER_DRAIN } from './replyQueue';
+import type { RequestWithRawBody } from '../../middleware/rawBody';
 import {
   createHelpMessage,
   createRulesMessage,
@@ -23,67 +25,121 @@ const userRoomMap = new Map<string, string>();
  * Line Bot Client Setup
  */
 
+export interface LineBotClientOptions {
+  channelAccessToken?: string;
+  channelSecret?: string;
+  /** Inject a pre-built SDK client (tests). */
+  client?: Client;
+}
+
+/** Counters surfaced on /api/bots/status — the "對帳單" for the LINE leg. */
+export interface LineWebhookStats {
+  requests: number;
+  signatureFailures: number;
+  events: number;
+  mirrorGroupEvents: number;
+  repliesDrained: number;
+  replyFailures: number;
+  lastEventAt: number | null;
+}
+
 export class LineBotClient {
   private client: Client;
   private channelSecret: string;
+  private stats: LineWebhookStats = {
+    requests: 0,
+    signatureFailures: 0,
+    events: 0,
+    mirrorGroupEvents: 0,
+    repliesDrained: 0,
+    replyFailures: 0,
+    lastEventAt: null,
+  };
+  /** Non-mirror group ids already logged (each is logged once per process). */
+  private seenOtherGroups = new Set<string>();
 
-  constructor() {
-    this.channelSecret = LINE_CONFIG.channelSecret;
+  constructor(opts: LineBotClientOptions = {}) {
+    const channelAccessToken = opts.channelAccessToken ?? LINE_CONFIG.channelAccessToken;
+    this.channelSecret = opts.channelSecret ?? LINE_CONFIG.channelSecret;
 
-    this.client = new Client({
-      channelAccessToken: LINE_CONFIG.channelAccessToken,
-      channelSecret: LINE_CONFIG.channelSecret,
-    });
+    this.client =
+      opts.client ??
+      new Client({
+        channelAccessToken,
+        channelSecret: this.channelSecret,
+      });
   }
 
   /**
-   * Verify webhook signature
+   * Verify webhook signature over the exact bytes LINE sent (constant-time).
    */
-  verifySignature(body: string, signature: string): boolean {
-    const hash = crypto
+  verifySignature(body: string | Buffer, signature: string): boolean {
+    const expected = crypto
       .createHmac('sha256', this.channelSecret)
       .update(body)
-      .digest('base64');
-
-    return hash === signature;
+      .digest();
+    const given = Buffer.from(signature, 'base64');
+    if (given.length !== expected.length) return false;
+    return crypto.timingSafeEqual(given, expected);
   }
 
   /**
    * Handle webhook events
    */
   async handleWebhook(req: Request, res: Response): Promise<void> {
-    // Verify signature
+    this.stats.requests += 1;
+
+    // Prefer the raw bytes kept by middleware/rawBody.ts; re-serialising the
+    // parsed body is only a fallback for callers that did not keep them.
     const signature = req.get('X-Line-Signature');
-    if (!signature || !this.verifySignature(JSON.stringify(req.body), signature)) {
+    const raw = (req as RequestWithRawBody).rawBody;
+    const signedBody: string | Buffer = raw ?? JSON.stringify(req.body ?? {});
+    if (!signature || !this.verifySignature(signedBody, signature)) {
+      this.stats.signatureFailures += 1;
       res.status(401).json({ error: 'Invalid signature' });
       return;
     }
 
     try {
-      const events: WebhookEvent[] = req.body.events;
+      const events: WebhookEvent[] = Array.isArray(req.body?.events) ? req.body.events : [];
 
       for (const event of events) {
+        this.stats.events += 1;
+        this.stats.lastEventAt = Date.now();
+
+        const source = event.source;
+        const rawReplyToken = (event as { replyToken?: unknown }).replyToken;
+        const replyToken = typeof rawReplyToken === 'string' ? rawReplyToken : undefined;
+
+        // #82 three-way sync: anything from the configured lobby-mirror group
+        // is bridge traffic. Text lands in the lobby ring buffer (→ web
+        // clients) and is cross-pushed to Discord; and EVERY event from that
+        // group that carries a reply_token is a free chance to flush the
+        // outbound LINE queue (reply does not count against push quota).
+        if (source.type === 'group' && this.isMirrorGroup(source.groupId)) {
+          this.stats.mirrorGroupEvents += 1;
+          if (event.type === 'message' && event.message.type === 'text') {
+            const textMessage = event.message as { id: string; text: string };
+            await this.handleGroupMessage(source.groupId, source.userId, textMessage.text, textMessage.id);
+          }
+          if (replyToken) {
+            await this.drainQueuedReplies(replyToken);
+          }
+          continue;
+        }
+
+        if (source.type === 'group') {
+          this.noteNonMirrorGroup(source.groupId);
+        }
+
         if (event.type !== 'message' || event.message.type !== 'text') {
           continue;
         }
 
+        // Commands only make sense in 1:1 DMs (source.type === 'user').
         const messageEvent = event as MessageEvent;
         const textMessage = messageEvent.message as { id: string; text: string };
-        const rawText = textMessage.text;
-
-        // #82 three-way sync: group messages from the configured lobby-mirror
-        // group are bridged into the lobby ring buffer (→ web clients) and
-        // cross-pushed to Discord. Process bridge first so even `/command`
-        // looking text still lands in the mirror. We then fall through to the
-        // command handler only for 1:1 DMs (messageEvent.source.type==='user'),
-        // which is where commands actually make sense.
-        const source = messageEvent.source;
-        if (source.type === 'group') {
-          await this.handleGroupMessage(source.groupId, source.userId, rawText, textMessage.id);
-          continue;
-        }
-
-        const userMessage = rawText.toLowerCase().trim();
+        const userMessage = textMessage.text.toLowerCase().trim();
         await this.handleMessage(
           messageEvent.replyToken,
           source.userId,
@@ -95,6 +151,59 @@ export class LineBotClient {
     } catch (error) {
       console.error('Line Bot Webhook Error:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /** The LINE group that mirrors the lobby, or '' when the mirror is disabled. */
+  private mirrorGroupId(): string {
+    return (process.env.LOBBY_MIRROR_LINE_GROUP_ID || '').trim();
+  }
+
+  private isMirrorGroup(groupId: string | undefined): boolean {
+    const target = this.mirrorGroupId();
+    return !!target && !!groupId && target === groupId;
+  }
+
+  getWebhookStats(): LineWebhookStats {
+    return { ...this.stats };
+  }
+
+  /**
+   * Log each group id the bot hears from that is NOT the mirror group, once.
+   * The only practical way to learn a LINE group id is from a webhook event,
+   * so this is how the operator finds the value for LOBBY_MIRROR_LINE_GROUP_ID
+   * (Render → Logs). Server logs only — never on the public status endpoint.
+   */
+  private noteNonMirrorGroup(groupId: string | undefined): void {
+    if (!groupId || this.seenOtherGroups.has(groupId) || this.seenOtherGroups.size >= 50) return;
+    this.seenOtherGroups.add(groupId);
+    console.log(
+      `[LINE] event from group ${groupId} (not the lobby mirror group). ` +
+        `To mirror this group set LOBBY_MIRROR_LINE_GROUP_ID=${groupId}`,
+    );
+  }
+
+  /**
+   * Flush up to 5 queued outbound texts using this event's reply_token
+   * (free — not push quota). A failed reply puts the exact batch back at the
+   * head of the queue so the next reply_token re-sends it; nothing is lost
+   * (2026-09-07 listen-bot post-mortem §3-1: the old drain dropped the batch).
+   */
+  private async drainQueuedReplies(replyToken: string): Promise<void> {
+    const mirror = getChatMirror();
+    if (!mirror || !mirror.isLineReplyQueueEnabled()) return;
+    const batch = mirror.drainLineReplies(LINE_REPLY_MAX_PER_DRAIN);
+    if (batch.length === 0) return;
+    try {
+      await this.client.replyMessage(
+        replyToken,
+        batch.map((item) => ({ type: 'text' as const, text: item.text })),
+      );
+      this.stats.repliesDrained += batch.length;
+    } catch (error) {
+      this.stats.replyFailures += 1;
+      mirror.requeueLineReplies(batch);
+      console.error(`[LINE reply-drain] replyMessage failed, re-queued ${batch.length}:`, error);
     }
   }
 
@@ -610,7 +719,7 @@ export function initializeLineBot(): LineBotClient {
 
   if (!LINE_CONFIG.channelAccessToken || !LINE_CONFIG.channelSecret) {
     throw new Error(
-      'LINE_CHANNEL_ACCESS_TOKEN or LINE_CHANNEL_SECRET is not set in environment variables'
+      'LINE_BOT_CHANNEL_ACCESS_TOKEN / LINE_BOT_CHANNEL_SECRET (or legacy LINE_CHANNEL_*) not set in environment variables'
     );
   }
 
