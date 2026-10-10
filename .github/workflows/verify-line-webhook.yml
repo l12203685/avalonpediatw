@@ -26,6 +26,7 @@ on:
 
 permissions:
   contents: read
+  deployments: read
 
 concurrency:
   group: verify-line-webhook
@@ -38,6 +39,21 @@ jobs:
     env:
       SERVER_URL: ${{ inputs.server_url || vars.PUBLIC_SERVER_URL || secrets.VITE_SERVER_URL }}
     steps:
+      # Render's GitHub app reports each deploy as a GitHub Deployment
+      # (environment "<branch> - <service>"), so its outcome and the service's
+      # real URL are readable here without a Render API key.
+      - name: Render deploy status (from GitHub Deployments)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$REPO/deployments?per_page=100" \
+            --jq '[.[] | select(.environment | startswith("main - "))] | group_by(.environment) | map(max_by(.created_at)) | .[] | [.id, .environment, .created_at, .sha[0:7]] | @tsv' \
+          | while IFS=$'\t' read -r id env created sha; do
+              st=$(gh api "repos/$REPO/deployments/$id/statuses?per_page=1" --jq '.[0] | "\(.state) \(.created_at) url=\(.environment_url // "-")"' 2>/dev/null || echo "unknown")
+              echo "$env | deployed $created @ $sha | $st"
+            done || echo "::warning::could not read GitHub Deployments"
+
       - name: Health probe (diagnostics — HTTP codes of /health and /api/version)
         if: ${{ env.SERVER_URL != '' }}
         run: |
