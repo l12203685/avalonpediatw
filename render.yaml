@@ -48,7 +48,7 @@ services:
 
       # CORS：玩家前端在 Firebase Hosting。多網域用逗號分隔，server 會自動切陣列。
       - key: CORS_ORIGIN
-        value: https://avalon-game-platform.web.app,https://avalon-game-platform.firebaseapp.com
+        value: https://avalon-game-platform.web.app,https://avalon-game-platform.firebaseapp.com,https://avalonpediatw.pages.dev
 
       # ── 必填機密（到 Dashboard 填；缺 JWT_SECRET server 會拒絕啟動！）──────
       - key: JWT_SECRET            # openssl rand -hex 32

@@ -21,7 +21,7 @@ pnpm --filter @avalon/server build   # or @avalon/web
 ## Key URLs
 
 - Frontend: https://avalon-game-platform.web.app
-- Backend: Render `avalon-server`（網址見 Render Dashboard；前端 build 讀 GitHub secret `VITE_SERVER_URL`）
+- Backend: Render 服務 `avalon-server-z6c0` → https://avalon-server-z6c0-cs0s.onrender.com（前端 build 用 repo variable `PUBLIC_SERVER_URL`，未設時用 deploy-firebase.yml / deploy-cloudflare-pages.yml 內的同一網址；舊 secret `VITE_SERVER_URL` 指向已停用的 Cloud Run，不再使用）。注意 `https://avalon-server-z6c0.onrender.com` 是另一個重複服務 `avalonpediatw` 的網址，不是這台
 - Health check: `<backend>/health`
 - Bot / sync status: `<backend>/api/bots/status`
 - Build version probe: `<backend>/api/version`

@@ -43,7 +43,9 @@ jobs:
       - name: Build all packages
         run: pnpm build
         env:
-          VITE_SERVER_URL: ${{ secrets.VITE_SERVER_URL }}
+          # Render 服務 avalon-server-z6c0 的公開網址（非機密）。舊 secret VITE_SERVER_URL 指向已停用的 Cloud Run，不再使用；
+          # 要改網址就設 repo variable PUBLIC_SERVER_URL。verify-line-webhook.yml 每天比對 Render 實際網址。
+          VITE_SERVER_URL: ${{ vars.PUBLIC_SERVER_URL || 'https://avalon-server-z6c0-cs0s.onrender.com' }}
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}

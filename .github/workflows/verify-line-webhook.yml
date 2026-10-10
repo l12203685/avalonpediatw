@@ -8,10 +8,11 @@
 # endpoint against LINE at boot and every 6 h). So no LINE credential needs to
 # live in GitHub Secrets for this check to run.
 #
-# Server URL: repo Variable PUBLIC_SERVER_URL if set, otherwise the existing
-# secret VITE_SERVER_URL (the backend URL the player frontend is built with —
-# probing the same URL players use is the point). With neither, the job exits
-# 0 with a notice (not a green lie — the step log says "skipped").
+# Server URL: the dispatch input, else repo Variable PUBLIC_SERVER_URL, else the
+# same literal the frontend builds use (deploy-firebase.yml /
+# deploy-cloudflare-pages.yml) — probing the URL players use is the point. The
+# first step cross-checks it against the URL Render itself reports for the
+# avalon-server-z6c0 service and warns on drift.
 name: Verify LINE webhook
 
 on:
@@ -37,7 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SERVER_URL: ${{ inputs.server_url || vars.PUBLIC_SERVER_URL || secrets.VITE_SERVER_URL }}
+      SERVER_URL: ${{ inputs.server_url || vars.PUBLIC_SERVER_URL || 'https://avalon-server-z6c0-cs0s.onrender.com' }}
+      RENDER_SERVICE_ENV: main - avalon-server-z6c0
     steps:
       # Render's GitHub app reports each deploy as a GitHub Deployment
       # (environment "<branch> - <service>"), so its outcome and the service's
@@ -52,6 +54,13 @@ jobs:
           | while IFS=$'\t' read -r id env created sha; do
               st=$(gh api "repos/$REPO/deployments/$id/statuses?per_page=1" --jq '.[0] | "\(.state) \(.created_at) url=\(.environment_url // "-")"' 2>/dev/null || echo "unknown")
               echo "$env | deployed $created @ $sha | $st"
+              if [ "$env" = "$RENDER_SERVICE_ENV" ]; then
+                live="${st##*url=}"
+                case "$st" in success*) ;; *) echo "::error::Render's latest deploy of $env is not successful: $st";; esac
+                if [ "$live" != "-" ] && [ "${live%/}" != "${SERVER_URL%/}" ]; then
+                  echo "::warning::Render reports $live for $env but this check (and the frontend build) uses $SERVER_URL — update PUBLIC_SERVER_URL / the literal in deploy-firebase.yml, deploy-cloudflare-pages.yml and this file"
+                fi
+              fi
             done || echo "::warning::could not read GitHub Deployments"
 
       - name: Health probe (diagnostics — HTTP codes of /health and /api/version)
