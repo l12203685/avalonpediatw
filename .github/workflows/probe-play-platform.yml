@@ -60,6 +60,16 @@ jobs:
                   n = len(re.findall(re.escape(kw), body, re.I))
                   if n: print(f"  mentions {kw!r}: {n}")
               inline = "\n".join(re.findall(r"<script(?![^>]*src)[^>]*>(.*?)</script>", body, re.S | re.I))
+              if path == "/Account/Login":
+                  text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", body, flags=re.S | re.I)
+                  text = re.sub(r"<[^>]+>", " ", text)
+                  text = re.sub(r"\s+", " ", text).strip()
+                  print("  visible text:", text[:2500])
+                  for m in re.finditer(r"機器人|\bbots?\b|\bAI\b|Discord", body):
+                      a, b = max(0, m.start() - 120), m.end() + 120
+                      print("  ctx:", re.sub(r"\s+", " ", body[a:b]))
+                  print(f"  inline script chars: {len(inline)}")
+                  print("  inline head:", re.sub(r"\s+", " ", inline)[:3000])
               for m in sorted(set(re.findall(r"(?:withUrl|HubConnectionBuilder|\.invoke|connection\.on|new WebSocket|io\()\s*\(?\s*['\"][^'\"]{1,80}['\"]", inline)))[:40]:
                   print("  inline-call:", m)
               for src in ext:
