@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, HelpCircle, Shield, ChevronDown, User, Users, Gamepad2, RefreshCcw } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { forceRefresh } from '../utils/forceRefresh';
+import { PLAY_PLATFORM_URL } from '@avalon/shared';
 
 interface FaqItem {
   q: string;
@@ -37,7 +38,16 @@ const FAQ_SECTIONS: FaqSection[] = [
         a: (
           <>
             <span className="text-white font-semibold">可以：</span>
-            開房 / 加入房間 / 玩對局 / 看自己訪客戰績。
+            大廳聊天（與 LINE / Discord 同步）/ 看百科與戰績。對局已改到
+            <a
+              href={PLAY_PLATFORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white font-semibold underline"
+            >
+              {' '}signage-cloud{' '}
+            </a>
+            進行。
             <br />
             <span className="text-white font-semibold">不能：</span>
             加好友 / 出現在排行榜 / 看歷史對局回放。
