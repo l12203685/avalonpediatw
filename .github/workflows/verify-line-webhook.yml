@@ -56,7 +56,11 @@ jobs:
               echo "$env | deployed $created @ $sha | $st"
               if [ "$env" = "$RENDER_SERVICE_ENV" ]; then
                 live="${st##*url=}"
-                case "$st" in success*) ;; *) echo "::error::Render's latest deploy of $env is not successful: $st";; esac
+                case "$st" in
+                  success*) ;;
+                  in_progress*|queued*|pending*) echo "::notice::Render is still deploying $env ($st) — the probe below hits the previous deploy" ;;
+                  *) echo "::error::Render's latest deploy of $env is not successful: $st" ;;
+                esac
                 if [ "$live" != "-" ] && [ "${live%/}" != "${SERVER_URL%/}" ]; then
                   echo "::warning::Render reports $live for $env but this check (and the frontend build) uses $SERVER_URL — update PUBLIC_SERVER_URL / the literal in deploy-firebase.yml, deploy-cloudflare-pages.yml and this file"
                 fi
@@ -109,7 +113,11 @@ jobs:
         run: |
           set -u
           fail=0
-          jq -e '.line.enabled == true' status.json >/dev/null || { echo "::error::LINE token not configured on the server (line.enabled=false)"; fail=1; }
+          if ! jq -e '.line.enabled == true' status.json >/dev/null; then
+            # Everything below is derived from the token — don't pile on misleading errors.
+            echo "::error::LINE token not configured on the server (line.enabled=false) — set LINE_BOT_CHANNEL_ACCESS_TOKEN / LINE_BOT_CHANNEL_SECRET on Render"
+            exit 1
+          fi
           jq -e '.line.ready == true' status.json >/dev/null || { echo "::error::LINE bot failed to initialise: $(jq -r '.line.error' status.json)"; fail=1; }
           jq -e '.line.webhook.expected != null' status.json >/dev/null || { echo "::error::server cannot derive its own webhook URL (set LINE_WEBHOOK_URL or PUBLIC_BASE_URL)"; fail=1; }
           jq -e '.line.webhook.actual == .line.webhook.expected' status.json >/dev/null || { echo "::error::Layer 1 DRIFT — LINE has $(jq -r '.line.webhook.actual' status.json) but code expects $(jq -r '.line.webhook.expected' status.json) (action=$(jq -r '.line.webhook.action' status.json), error=$(jq -r '.line.webhook.lastError' status.json))"; fail=1; }
