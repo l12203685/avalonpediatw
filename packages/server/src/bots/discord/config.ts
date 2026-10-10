@@ -51,3 +51,20 @@ export const COMMANDS = {
   RULES: 'rules',
   ROLES: 'roles',
 };
+
+/**
+ * Game-flow commands that used to drive the self-hosted game. Since the
+ * 2026-10-09 owner decision (games are played on signage-cloud, not on this
+ * server) they stay registered — so existing users get a pointer instead of
+ * "unknown command" — but only reply with the play URL.
+ */
+export const PLAY_PLATFORM_COMMANDS: readonly string[] = [
+  COMMANDS.CREATE,
+  COMMANDS.JOIN,
+  COMMANDS.START,
+  COMMANDS.STATUS,
+  COMMANDS.VOTE,
+  COMMANDS.QUEST,
+  COMMANDS.ASSASSINATE,
+  COMMANDS.END,
+];

@@ -9,19 +9,12 @@ import {
   ActivityType,
   Message,
 } from 'discord.js';
-import { DISCORD_CONFIG, COMMANDS } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS } from './config';
 import {
   handleHelpCommand,
-  handleCreateCommand,
-  handleJoinCommand,
-  handleStatusCommand,
-  handleVoteCommand,
   handleRulesCommand,
   handleRolesCommand,
-  handleStartCommand,
-  handleQuestCommand,
-  handleAssassinateCommand,
-  handleEndCommand,
+  handlePlayPlatformCommand,
 } from './commands';
 import { getChatMirror } from '../ChatMirror';
 
@@ -144,42 +137,17 @@ export class DiscordBotClient {
           await handleHelpCommand(interaction);
           break;
 
+        // 2026-10-09: games are played on signage-cloud — the game-flow
+        // commands only reply with the play URL (see PLAY_PLATFORM_COMMANDS).
         case COMMANDS.CREATE:
-          await handleCreateCommand(interaction);
-          break;
-
-        case COMMANDS.JOIN: {
-          const roomId = interaction.options.getString('room-id') || '';
-          await handleJoinCommand(interaction, roomId);
-          break;
-        }
-
+        case COMMANDS.JOIN:
         case COMMANDS.START:
-          await handleStartCommand(interaction);
-          break;
-
         case COMMANDS.END:
-          await handleEndCommand(interaction);
-          break;
-
         case COMMANDS.STATUS:
-          await handleStatusCommand(interaction);
-          break;
-
-        case COMMANDS.VOTE: {
-          const vote = interaction.options.getString('vote') as 'approve' | 'reject';
-          await handleVoteCommand(interaction, vote);
-          break;
-        }
-
-        case COMMANDS.QUEST: {
-          const vote = interaction.options.getString('result') as 'success' | 'fail';
-          await handleQuestCommand(interaction, vote);
-          break;
-        }
-
+        case COMMANDS.VOTE:
+        case COMMANDS.QUEST:
         case COMMANDS.ASSASSINATE:
-          await handleAssassinateCommand(interaction);
+          await handlePlayPlatformCommand(interaction);
           break;
 
         case COMMANDS.RULES:
@@ -259,57 +227,13 @@ export class DiscordBotClient {
         .setName(COMMANDS.HELP)
         .setDescription('Show help for all Avalon Bot commands'),
 
-      new SlashCommandBuilder()
-        .setName(COMMANDS.CREATE)
-        .setDescription('Create a new Avalon game'),
-
-      new SlashCommandBuilder()
-        .setName(COMMANDS.JOIN)
-        .setDescription('Join an existing Avalon game')
-        .addStringOption((option) =>
-          option
-            .setName('room-id')
-            .setDescription('The room ID to join')
-            .setRequired(true)
-        ),
-
-      new SlashCommandBuilder()
-        .setName(COMMANDS.START)
-        .setDescription('Get the web link so the host can start the game'),
-
-      new SlashCommandBuilder()
-        .setName(COMMANDS.END)
-        .setDescription('Force-end the current room (host only)'),
-
-      new SlashCommandBuilder()
-        .setName(COMMANDS.STATUS)
-        .setDescription('Check the current game status'),
-
-      new SlashCommandBuilder()
-        .setName(COMMANDS.VOTE)
-        .setDescription('Vote on the team proposal')
-        .addStringOption((option) =>
-          option
-            .setName('vote')
-            .setDescription('Your vote: approve or reject')
-            .setRequired(true)
-            .addChoices({ name: 'Approve', value: 'approve' }, { name: 'Reject', value: 'reject' })
-        ),
-
-      new SlashCommandBuilder()
-        .setName(COMMANDS.QUEST)
-        .setDescription('Open the web to submit your quest vote (quest team only)')
-        .addStringOption((option) =>
-          option
-            .setName('result')
-            .setDescription('Your intended quest vote (actual submission is on the web)')
-            .setRequired(true)
-            .addChoices({ name: 'Success', value: 'success' }, { name: 'Fail', value: 'fail' })
-        ),
-
-      new SlashCommandBuilder()
-        .setName(COMMANDS.ASSASSINATE)
-        .setDescription('Open the web to pick the assassination target (assassin only)'),
+      // 2026-10-09: kept registered (no options) so users get a pointer to
+      // signage-cloud instead of "unknown command".
+      ...PLAY_PLATFORM_COMMANDS.map((name) =>
+        new SlashCommandBuilder()
+          .setName(name)
+          .setDescription('Games are played on signage-cloud now — replies with the link (前往 signage-cloud 開局)')
+      ),
 
       new SlashCommandBuilder()
         .setName(COMMANDS.RULES)

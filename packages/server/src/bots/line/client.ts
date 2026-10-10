@@ -1,7 +1,7 @@
 import { Client, WebhookEvent, MessageEvent, Message } from '@line/bot-sdk';
 import { Request, Response } from 'express';
 import crypto from 'crypto';
-import { v4 as uuidv4 } from 'uuid';
+import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { LINE_CONFIG } from './config';
 import { LINE_REPLY_MAX_PER_DRAIN } from './replyQueue';
 import type { RequestWithRawBody } from '../../middleware/rawBody';
@@ -310,12 +310,11 @@ export class LineBotClient {
         response = createHelpMessage();
         break;
 
+      // 2026-10-09: games are played on signage-cloud — no rooms are
+      // created or joined on this server any more.
       case 'create':
-        response = this.createGameResponse(userId);
-        break;
-
       case 'join':
-        response = this.joinGameResponse(userId, args[0]);
+        response = this.playPlatformResponse();
         break;
 
       case 'status':
@@ -370,189 +369,14 @@ export class LineBotClient {
   }
 
   /**
-   * Create a new game room via RoomManager.
+   * create / join reply (2026-10-09 owner decision): games are played on
+   * signage-cloud, so point there instead of creating / joining a room on
+   * this server.
    */
-  private createGameResponse(userId: string | undefined) {
-    const roomManager = getSharedRoomManager();
-
-    const roomId = uuidv4();
-    const hostId = `line:${userId ?? 'unknown'}`;
-    const hostName = 'LINE Player';
-
-    const room = roomManager.createRoom(roomId, hostName, hostId);
-
-    if (userId) {
-      userRoomMap.set(userId, roomId);
-    }
-
-    const baseUrl = process.env.WEB_BASE_URL || 'http://localhost:3000';
-    const joinUrl = `${baseUrl}/game/${roomId}`;
-
+  private playPlatformResponse() {
     return {
-      type: 'flex',
-      altText: '遊戲已建立',
-      contents: {
-        type: 'bubble',
-        body: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: '遊戲已建立!',
-              weight: 'bold',
-              size: 'lg',
-            },
-            {
-              type: 'text',
-              text: `房間代碼:${roomId}`,
-              size: 'sm',
-              color: '#999999',
-              margin: 'md',
-              wrap: true,
-            },
-            {
-              type: 'text',
-              text: '把房間代碼分享給朋友,或用下方連結從網頁加入。',
-              size: 'sm',
-              wrap: true,
-              margin: 'md',
-            },
-          ],
-        },
-        footer: {
-          type: 'box',
-          layout: 'vertical',
-          spacing: 'sm',
-          contents: [
-            {
-              type: 'button',
-              style: 'primary',
-              height: 'sm',
-              action: {
-                type: 'uri',
-                label: '開啟遊戲',
-                uri: joinUrl,
-              },
-            },
-            {
-              type: 'button',
-              style: 'link',
-              height: 'sm',
-              action: {
-                type: 'message',
-                label: '狀態',
-                text: 'status',
-              },
-            },
-          ],
-          flex: 0,
-        },
-      },
-    };
-  }
-
-  /**
-   * Join an existing room via RoomManager.
-   */
-  private joinGameResponse(userId: string | undefined, roomId: string | undefined) {
-    if (!roomId) {
-      return {
-        type: 'text',
-        text: '請提供房間代碼。用法:join <房間代碼>',
-      };
-    }
-
-    const roomManager = getSharedRoomManager();
-    const room = roomManager.getRoom(roomId);
-
-    if (!room) {
-      return {
-        type: 'text',
-        text: `找不到房間「${roomId}」。請確認代碼後再試。`,
-      };
-    }
-
-    if (room.state !== 'lobby') {
-      return {
-        type: 'text',
-        text: '這場遊戲已經開始。只能加入仍在大廳的房間。',
-      };
-    }
-
-    const playerId = `line:${userId ?? 'unknown'}`;
-
-    if (room.players[playerId]) {
-      return {
-        type: 'text',
-        text: '你已經在這個房間裡了。',
-      };
-    }
-
-    if (Object.keys(room.players).length >= room.maxPlayers) {
-      return {
-        type: 'text',
-        text: '這個房間已滿。',
-      };
-    }
-
-    // Add player
-    room.players[playerId] = {
-      id: playerId,
-      name: 'LINE Player',
-      role: null,
-      team: null,
-      status: 'active',
-      createdAt: Date.now(),
-    };
-    room.updatedAt = Date.now();
-
-    if (userId) {
-      userRoomMap.set(userId, roomId);
-    }
-
-    const playerCount = Object.keys(room.players).length;
-
-    return {
-      type: 'flex',
-      altText: '已加入遊戲',
-      contents: {
-        type: 'bubble',
-        body: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [
-            {
-              type: 'text',
-              text: '已加入!',
-              weight: 'bold',
-              size: 'lg',
-              color: '#00b300',
-            },
-            {
-              type: 'text',
-              text: `房間代碼:${roomId}`,
-              size: 'sm',
-              color: '#999999',
-              margin: 'md',
-              wrap: true,
-            },
-            {
-              type: 'text',
-              text: `玩家:${playerCount} / ${room.maxPlayers}`,
-              size: 'sm',
-              margin: 'md',
-            },
-            {
-              type: 'text',
-              text: '等待房主開始遊戲...',
-              size: 'sm',
-              wrap: true,
-              margin: 'md',
-            },
-          ],
-        },
-      },
+      type: 'text',
+      text: `對局已改到 signage-cloud 進行，本站不再開房。\n前往 signage-cloud 開局：${PLAY_PLATFORM_URL}`,
     };
   }
 

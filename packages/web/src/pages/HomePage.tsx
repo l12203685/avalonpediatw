@@ -1,21 +1,19 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { createRoom, joinRoom, listRooms, spectateRoom, getSocket, getStoredToken } from '../services/socket';
+import { createRoom, joinRoom, getStoredToken } from '../services/socket';
 import { useGameStore } from '../store/gameStore';
 import { fetchAdminMe, fetchLinkedAccounts, LinkedAccount, LinkProvider } from '../services/api';
 import {
   Play,
-  LogIn,
   BookOpen,
-  RefreshCw,
-  Eye,
+  ExternalLink,
   Lock,
   BarChart3,
   Clock,
   User,
 } from 'lucide-react';
-import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier } from '@avalon/shared';
+import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier, PLAY_PLATFORM_URL } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import PublicChatPanel from '../components/PublicChatPanel';
 import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
@@ -47,8 +45,9 @@ export default function HomePage(): JSX.Element {
     currentPlayer?.name ?? localStorage.getItem('avalon_player_name') ?? ''
   );
   const [roomId, setRoomId] = useState('');
+  // 2026-10-09: 本站不再自建對局（改到 signage-cloud 玩）。'create' / 'join'
+  // 表單保留但已無任何入口 — 大廳按鈕改成 PLAY_PLATFORM_URL 外連。
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
-  const [openRooms, setOpenRooms] = useState<OpenRoom[]>([]);
   const [roomPassword, setRoomPassword] = useState('');
   const [joinPassword, setJoinPassword] = useState('');
   const [pendingJoinRoom, setPendingJoinRoom] = useState<OpenRoom | null>(null);
@@ -58,22 +57,15 @@ export default function HomePage(): JSX.Element {
   const [authGateTarget, setAuthGateTarget] = useState<AuthGateTarget | null>(null);
 
   // Phase 3 pendingAction hop: user triggered OAuth from BindingField in
-  // create/join mode — after the reload, drop them back into that mode.
-  // Separate localStorage key space from Phase 2 `pendingGateTarget` so the
-  // two flows don't collide.
+  // create/join mode. 2026-10-09: games moved to signage-cloud, so a leftover
+  // hop no longer re-opens the create/join form — just clear the keys and stay
+  // in the lobby (where the signage-cloud notice is shown).
   useEffect(() => {
     if (isGuestPlayer(currentPlayer)) return; // wait for authed state
     const action = localStorage.getItem('pendingAction');
     if (action === 'create' || action === 'join') {
-      setMode(action);
       localStorage.removeItem('pendingAction');
-      if (action === 'join') {
-        const code = localStorage.getItem('pendingRoomCode');
-        if (code) {
-          setRoomId(code);
-          localStorage.removeItem('pendingRoomCode');
-        }
-      }
+      localStorage.removeItem('pendingRoomCode');
     }
   }, [currentPlayer]);
 
@@ -86,10 +78,10 @@ export default function HomePage(): JSX.Element {
     if (!target) return;
     if (isGuestPlayer(currentPlayer)) return; // still guest → keep waiting
     localStorage.removeItem('pendingGateTarget');
+    // 'createRoom' / 'joinRoom' (leftover from before 2026-10-09) → stay in the
+    // lobby; games are played on signage-cloud now.
     if (target === 'stats') setGameState('personalStats');
     else if (target === 'settings') setGameState('settings');
-    else if (target === 'createRoom') setMode('create');
-    else if (target === 'joinRoom') setMode('join');
     else if (target === 'chat') {
       // User came back from the lobby-chat gate. Stay on home; the chat
       // input unlocks itself once currentPlayer.provider !== 'guest'.
@@ -166,44 +158,15 @@ export default function HomePage(): JSX.Element {
     }
   }, [currentPlayer, playerName]);
 
-  // Auto-populate (and auto-join) from ?room=XXXXXXXX invite link
+  // Old ?room=XXXX invite links (self-hosted rooms). 2026-10-09: games moved
+  // to signage-cloud — no more auto-join; just drop the query and stay in the
+  // lobby, where the signage-cloud notice + link are shown. The open-rooms
+  // list (+ its 15 s game:list-rooms poll) is gone from the lobby for the
+  // same reason.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const inviteCode = params.get('room');
-    if (!inviteCode) return;
-
-    const code = inviteCode.toUpperCase().slice(0, 8);
-    setRoomId(code);
+    if (!params.get('room')) return;
     window.history.replaceState({}, '', window.location.pathname);
-
-    // If player already has a name, auto-join immediately
-    const name = currentPlayer?.name ?? playerName;
-    if (name.trim()) {
-      if (currentPlayer) {
-        setCurrentPlayer({ ...currentPlayer, name });
-      }
-      joinRoom(code);
-      setGameState('lobby');
-    } else {
-      setMode('join');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Subscribe to room list updates + auto-refresh every 15 s
-  useEffect(() => {
-    let socket: ReturnType<typeof getSocket> | null = null;
-    try { socket = getSocket(); } catch { return; }
-
-    const handler = (rooms: OpenRoom[]) => setOpenRooms(rooms);
-    socket.on('game:rooms-list', handler);
-    listRooms(); // initial fetch
-
-    const interval = setInterval(listRooms, 15_000);
-    return () => {
-      socket!.off('game:rooms-list', handler);
-      clearInterval(interval);
-    };
   }, []);
 
   // Effective name resolver: logged-in user → currentPlayer.name (displayName);
@@ -400,6 +363,23 @@ export default function HomePage(): JSX.Element {
                 <p className="mt-1 sm:mt-2 text-[11px] sm:text-sm text-zinc-400 tracking-wider">
                   {t('home.subtitle', { defaultValue: '隱藏身分‧邏輯推理‧相互欺瞞' })}
                 </p>
+                {/* 2026-10-09 owner decision: 對局改到 signage-cloud — 一行
+                    小公告 + 外連，不擋畫面。 */}
+                <p
+                  data-testid="home-play-platform-notice"
+                  className="mt-2 text-[11px] sm:text-xs text-amber-200/90"
+                >
+                  {t('home.playPlatformNotice')}{' '}
+                  <a
+                    href={PLAY_PLATFORM_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 font-semibold underline underline-offset-2 hover:text-amber-100 transition-colors"
+                  >
+                    {t('home.playPlatformNoticeLink')}
+                    <ExternalLink size={11} className="flex-shrink-0" />
+                  </a>
+                </p>
               </div>
 
               {/* Main content: 6-button grid + lobby chat */}
@@ -427,31 +407,23 @@ export default function HomePage(): JSX.Element {
                       - 「系統設定」 route → `settings` (基本資料 + 帳號綁定 + 登出)
                       - FAQ 獨立按鈕拿掉；設定頁內可加 FAQ link (未來)
                     */}
-                    {/* Row 1 — Create / Join / Stats
-                        Edward 2026-04-25 19:40: 訪客點建立/加入 → AuthGateModal
-                        要求登入 (Google/LINE/Discord)；綁定後 reload 由
-                        pendingGateTarget effect 帶回 create/join 模式。 */}
-                    <motion.button
+                    {/* Row 1 — Play (signage-cloud) / Stats
+                        2026-10-09 owner decision: 建立房間 / 加入房間 兩顆按鈕
+                        合併成一個外連 (新分頁) 到 signage-cloud — 本站不再開局。
+                        佔兩格維持 3×2 / 2×3 格線。不需登入，故不走 AuthGate。 */}
+                    <motion.a
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => tryGatedNavigate('createRoom', () => setMode('create'))}
-                      data-testid="home-btn-create"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
+                      href={PLAY_PLATFORM_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid="home-btn-play-platform"
+                      className="col-span-2 w-full min-w-0 bg-white hover:bg-zinc-200 text-black font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
                     >
                       <Play size={18} className="flex-shrink-0" />
-                      <span className="truncate">{t('home.createRoom')}</span>
-                    </motion.button>
-
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => tryGatedNavigate('joinRoom', () => setMode('join'))}
-                      data-testid="home-btn-join"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
-                    >
-                      <LogIn size={18} className="flex-shrink-0" />
-                      <span className="truncate">{t('home.joinRoom')}</span>
-                    </motion.button>
+                      <span className="truncate">{t('home.playOnPlatform')}</span>
+                      <ExternalLink size={14} className="flex-shrink-0" />
+                    </motion.a>
 
                     <motion.button
                       whileHover={{ scale: 1.02 }}
@@ -528,85 +500,6 @@ export default function HomePage(): JSX.Element {
                 {/* #63 — Main-page public chat (guests read-only) */}
                 <PublicChatPanel />
               </motion.div>
-
-              {/* Open rooms */}
-              {openRooms.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.45 }}
-                  className="bg-zinc-900/50 border border-zinc-700 rounded-xl p-4 text-left"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                      {t('home.openRooms')}
-                    </h3>
-                    <button
-                      onClick={listRooms}
-                      className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors"
-                      title={t('action.refresh')}
-                    >
-                      <RefreshCw size={12} />
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {openRooms.map(r => (
-                      <div
-                        key={r.id}
-                        className="w-full flex items-center justify-between bg-zinc-900/70 border border-zinc-700 rounded-lg px-3 py-2"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          {r.inProgress && (
-                            <span className="text-xs px-1.5 py-0.5 bg-red-900/50 border border-red-700 text-red-400 rounded font-semibold flex-shrink-0">{t('home.inProgress')}</span>
-                          )}
-                          {r.isPrivate && (
-                            <Lock size={11} className="text-zinc-300 flex-shrink-0" />
-                          )}
-                          <span className="text-sm font-semibold text-white truncate">{r.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                          <span className="text-xs text-zinc-400">
-                            <span className={r.playerCount >= 5 ? 'text-white' : 'text-zinc-400'}>
-                              {r.playerCount}
-                            </span>
-                            /{r.maxPlayers}
-                          </span>
-                          {r.inProgress ? (
-                            <button
-                              onClick={() => spectateRoom(r.fullId)}
-                              className="flex items-center gap-1 text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded transition-colors"
-                              title={t('action.spectate')}
-                            >
-                              <Eye size={11} />
-                              {t('action.spectate')}
-                            </button>
-                          ) : r.isPrivate ? (
-                            <button
-                              onClick={() => tryGatedNavigate('joinRoom', () => {
-                                setPendingJoinRoom(r); setRoomId(r.id); setJoinPassword('');
-                              })}
-                              className="flex items-center gap-1 text-xs px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded transition-colors"
-                            >
-                              <Lock size={11} />
-                              {t('action.join')}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => tryGatedNavigate('joinRoom', () => {
-                                setRoomId(r.id); setMode('join');
-                              })}
-                              className="flex items-center gap-1 text-xs px-2 py-1 bg-white hover:bg-zinc-200 border border-white text-black rounded transition-colors"
-                            >
-                              <LogIn size={11} />
-                              {t('action.join')}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
 
               {/* Edward 2026-04-25 19:18: footer 「欺騙與邏輯的推理遊戲」
                   removed per final spec — subtitle 「隱藏身分‧邏輯推理‧相互

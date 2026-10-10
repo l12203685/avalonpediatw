@@ -5,16 +5,11 @@
  *
  *   1. `buildGameJoinUrl` throws in production when WEB_BASE_URL is missing
  *      (no more silent localhost fallback on live Render) — PR#8.
- *   2. `handleStartCommand`, `handleQuestCommand`, `handleAssassinateCommand`
- *      exist and defer the reply before doing any work (> 3s Discord timeout
- *      guard) — PR#8.
- *   3. The guards — "not in a game", "wrong state", "not the assassin",
- *      "not on the quest team" — surface user-friendly errors rather than
- *      crashing the handler — PR#8.
- *   4. `handleEndCommand` deletes the room when the host runs it, rejects
- *      non-host callers, and clears user→room mappings for every player —
- *      PR#4 bot-full.
- *   5. `roleReveal` correctly computes role knowledge for Merlin (evil
+ *   2. Game-flow commands (/create /join /start /status /vote /quest
+ *      /assassinate /end) only reply with the signage-cloud play URL and never
+ *      create, join or end a room on this server — 2026-10-09 owner decision
+ *      (games are played on signage-cloud). /help points there too.
+ *   3. `roleReveal` correctly computes role knowledge for Merlin (evil
  *      minus Mordred/Oberon), Percival (Merlin+Morgana sorted), evil-
  *      minus-Oberon (other evil minus Oberon), and Oberon (sees nothing,
  *      seen by no one) — PR#4 bot-full.
@@ -24,16 +19,16 @@
  * command handlers.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MessageFlags } from 'discord.js';
+import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import type { Room, Player, Role } from '@avalon/shared';
 
 import { buildGameJoinUrl } from '../bots/discord/invite';
+import { COMMANDS, PLAY_PLATFORM_COMMANDS } from '../bots/discord/config';
 import {
-  handleAssassinateCommand,
-  handleEndCommand,
-  handleQuestCommand,
-  handleStartCommand,
-  __resetUserRoomMapForTest,
-  __setUserRoomForTest,
+  buildPlayPlatformMessage,
+  handleHelpCommand,
+  handlePlayPlatformCommand,
 } from '../bots/discord/commands';
 import {
   buildRoleRevealEmbed,
@@ -52,6 +47,7 @@ import {
 // ---------------------------------------------------------------------------
 
 interface FakeInteraction {
+  commandName: string;
   user: { id: string; username: string; displayName?: string };
   deferReply: ReturnType<typeof vi.fn>;
   editReply: ReturnType<typeof vi.fn>;
@@ -64,54 +60,23 @@ interface FakeInteraction {
   };
 }
 
-function makeInteraction(userId: string): FakeInteraction {
+function makeInteraction(userId: string, commandName = COMMANDS.HELP): FakeInteraction {
   const fake: FakeInteraction = {
+    commandName,
     user: { id: userId, username: `user-${userId}`, displayName: `User ${userId}` },
     deferReply: vi.fn(async () => {
       fake.deferred = true;
     }),
     editReply: vi.fn(async () => {}),
-    reply: vi.fn(async () => {}),
+    reply: vi.fn(async () => {
+      fake.replied = true;
+    }),
     followUp: vi.fn(async () => {}),
     replied: false,
     deferred: false,
     options: { getString: () => '' },
   };
   return fake;
-}
-
-function makeLobbyRoom(id: string, hostId: string): Room {
-  return {
-    id,
-    name: `Room ${id}`,
-    host: hostId,
-    state: 'lobby',
-    players: {
-      [hostId]: {
-        id: hostId,
-        name: 'Host',
-        role: null,
-        team: null,
-        status: 'active',
-        createdAt: Date.now(),
-      },
-    },
-    maxPlayers: 10,
-    currentRound: 0,
-    maxRounds: 5,
-    votes: {},
-    questTeam: [],
-    questResults: [],
-    failCount: 0,
-    evilWins: null,
-    leaderIndex: 0,
-    voteHistory: [],
-    questHistory: [],
-    questVotedCount: 0,
-    readyPlayerIds: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -148,10 +113,16 @@ describe('buildGameJoinUrl', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Command handlers — defer + guards
+// Game-flow commands → signage-cloud pointer (2026-10-09)
 // ---------------------------------------------------------------------------
 
-describe('Discord bot handlers: /start /quest /assassinate', () => {
+describe('PLAY_PLATFORM_URL', () => {
+  it('is the signage-cloud login page the community plays on', () => {
+    expect(PLAY_PLATFORM_URL).toBe('https://avalon.signage-cloud.org/Account/Login');
+  });
+});
+
+describe('Discord bot: game-flow commands point to signage-cloud', () => {
   let rm: RoomManager;
   const userId = 'u-1';
   const discordPlayerId = `discord:${userId}`;
@@ -165,59 +136,72 @@ describe('Discord bot handlers: /start /quest /assassinate', () => {
     rm.destroy();
   });
 
-  it('/start: defers reply then errors when user is not in any game', async () => {
-    const interaction = makeInteraction(userId);
+  it('covers exactly the self-hosted game-flow commands (not /help /rules /roles)', () => {
+    expect([...PLAY_PLATFORM_COMMANDS].sort()).toEqual(
+      ['assassinate', 'create', 'end', 'join', 'quest', 'start', 'status', 'vote'],
+    );
+    for (const kept of [COMMANDS.HELP, COMMANDS.RULES, COMMANDS.ROLES]) {
+      expect(PLAY_PLATFORM_COMMANDS).not.toContain(kept);
+    }
+  });
 
-    await handleStartCommand(interaction as never);
+  it('buildPlayPlatformMessage names the command and carries the play URL', () => {
+    const msg = buildPlayPlatformMessage('create');
+    expect(msg).toContain(PLAY_PLATFORM_URL);
+    expect(msg).toContain('/create');
+    expect(msg).toContain('signage-cloud');
+  });
+
+  it.each([...PLAY_PLATFORM_COMMANDS])(
+    '/%s: replies ephemerally with the play URL and creates no room',
+    async (commandName) => {
+      const interaction = makeInteraction(userId, commandName);
+
+      await handlePlayPlatformCommand(interaction as never);
+
+      expect(interaction.reply).toHaveBeenCalledTimes(1);
+      const [payload] = interaction.reply.mock.calls[0];
+      expect(payload).toMatchObject({
+        content: expect.stringContaining(PLAY_PLATFORM_URL),
+        flags: MessageFlags.Ephemeral,
+      });
+      expect(payload.content).toContain(`/${commandName}`);
+      expect(interaction.editReply).not.toHaveBeenCalled();
+      expect(rm.getRoomCount()).toBe(0);
+    },
+  );
+
+  it.each([...PLAY_PLATFORM_COMMANDS])(
+    '/%s: leaves an existing room on this server untouched',
+    async (commandName) => {
+      const room = rm.createRoom('r1', 'Host', discordPlayerId);
+      const before = JSON.stringify(room);
+
+      const interaction = makeInteraction(userId, commandName);
+      await handlePlayPlatformCommand(interaction as never);
+
+      expect(rm.getRoomCount()).toBe(1);
+      expect(JSON.stringify(rm.getRoom('r1'))).toBe(before);
+      expect(interaction.reply.mock.calls[0][0].content).toContain(PLAY_PLATFORM_URL);
+    },
+  );
+
+  it('/help: points to the play URL and still lists /rules and /roles', async () => {
+    const interaction = makeInteraction(userId, COMMANDS.HELP);
+
+    await handleHelpCommand(interaction as never);
 
     expect(interaction.deferReply).toHaveBeenCalledTimes(1);
     expect(interaction.editReply).toHaveBeenCalledTimes(1);
     const [payload] = interaction.editReply.mock.calls[0];
-    expect(payload).toMatchObject({
-      content: expect.stringContaining('not in any game'),
-    });
-  });
-
-  it('/start: rejects when player count < 5', async () => {
-    const room = makeLobbyRoom('r1', discordPlayerId);
-    rm.updateRoom('r1', room);
-    rm['rooms'].set('r1', room); // force-seed without going through createRoom
-    // Simulate user-room mapping via /create path — directly call handler,
-    // but we need the Map. Use exposed API path: call handleStartCommand after
-    // creating a real room so the map is set.
-    const engineRoom = rm.createRoom('r2', 'Host', discordPlayerId);
-    expect(engineRoom.players[discordPlayerId]).toBeDefined();
-
-    // /start relies on userRoomMap — the only way to populate it here is via
-    // the public handlers. We simulate the /create outcome by calling the
-    // start handler after wiring the map through handleCreateCommand would
-    // add a Discord REST call. Instead we rely on the default-path guard.
-
-    const interaction = makeInteraction(userId);
-    await handleStartCommand(interaction as never);
-    // Without a prior /create/join, the handler hits the "not in any game" guard.
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining('not in any game') })
-    );
-  });
-
-  it('/quest: defers reply then errors when not in any game', async () => {
-    const interaction = makeInteraction(userId);
-    interaction.options.getString = () => 'success';
-    await handleQuestCommand(interaction as never, 'success');
-    expect(interaction.deferReply).toHaveBeenCalledTimes(1);
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining('not in any game') })
-    );
-  });
-
-  it('/assassinate: defers reply then errors when not in any game', async () => {
-    const interaction = makeInteraction(userId);
-    await handleAssassinateCommand(interaction as never);
-    expect(interaction.deferReply).toHaveBeenCalledTimes(1);
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining('not in any game') })
-    );
+    const json = payload.embeds[0].toJSON();
+    expect(json.description).toContain(PLAY_PLATFORM_URL);
+    const names = (json.fields ?? []).map((f: { name: string }) => f.name);
+    expect(names).toContain(`/${COMMANDS.RULES}`);
+    expect(names).toContain(`/${COMMANDS.ROLES}`);
+    // Game-flow commands are no longer advertised as standalone entries.
+    expect(names).not.toContain(`/${COMMANDS.CREATE}`);
+    expect(names).not.toContain(`/${COMMANDS.JOIN} <room-id>`);
   });
 });
 
@@ -231,104 +215,6 @@ describe('roomManagerSingleton', () => {
     setSharedRoomManager(rm);
     expect(getSharedRoomManager()).toBe(rm);
     rm.destroy();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// /end handler
-// ---------------------------------------------------------------------------
-
-describe('Discord bot handler: /end', () => {
-  let rm: RoomManager;
-
-  beforeEach(() => {
-    rm = new RoomManager();
-    setSharedRoomManager(rm);
-    __resetUserRoomMapForTest();
-  });
-
-  afterEach(() => {
-    rm.destroy();
-    __resetUserRoomMapForTest();
-  });
-
-  it('/end: defers reply then errors when user is not in any game', async () => {
-    const interaction = makeInteraction('no-room');
-    await handleEndCommand(interaction as never);
-
-    expect(interaction.deferReply).toHaveBeenCalledTimes(1);
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining('not in any game') })
-    );
-  });
-
-  it('/end: rejects non-host callers with "only the host" message', async () => {
-    const hostDiscordId = 'host-123';
-    const joinerDiscordId = 'join-456';
-    const hostPlayerId = `discord:${hostDiscordId}`;
-    const joinerPlayerId = `discord:${joinerDiscordId}`;
-
-    const room = rm.createRoom('r1', 'Host User', hostPlayerId);
-    room.players[joinerPlayerId] = {
-      id: joinerPlayerId,
-      name: 'Joiner',
-      role: null,
-      team: null,
-      status: 'active',
-      createdAt: Date.now(),
-    };
-
-    __setUserRoomForTest(joinerDiscordId, 'r1');
-
-    const interaction = makeInteraction(joinerDiscordId);
-    await handleEndCommand(interaction as never);
-
-    expect(interaction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: expect.stringContaining('Only the room host'),
-      })
-    );
-    // Room should still exist because a non-host cannot end it.
-    expect(rm.getRoom('r1')).toBeDefined();
-  });
-
-  it('/end: host ends the room, clears map for all players, deletes room', async () => {
-    const hostDiscordId = 'host-999';
-    const joinerDiscordId = 'join-888';
-    const hostPlayerId = `discord:${hostDiscordId}`;
-    const joinerPlayerId = `discord:${joinerDiscordId}`;
-
-    const room = rm.createRoom('r2', 'Host', hostPlayerId);
-    room.players[joinerPlayerId] = {
-      id: joinerPlayerId,
-      name: 'Joiner',
-      role: null,
-      team: null,
-      status: 'active',
-      createdAt: Date.now(),
-    };
-
-    __setUserRoomForTest(hostDiscordId, 'r2');
-    __setUserRoomForTest(joinerDiscordId, 'r2');
-
-    const interaction = makeInteraction(hostDiscordId);
-    await handleEndCommand(interaction as never);
-
-    // Room is deleted from RoomManager.
-    expect(rm.getRoom('r2')).toBeUndefined();
-    // Success embed is sent to the host.
-    const [payload] = interaction.editReply.mock.calls[0];
-    expect(payload).toMatchObject({
-      embeds: expect.any(Array),
-    });
-
-    // The joiner's subsequent /start call must hit the "not in any game"
-    // guard because their userRoomMap entry was cleared.
-    const joinerInteraction = makeInteraction(joinerDiscordId);
-    await handleStartCommand(joinerInteraction as never);
-    expect(joinerInteraction.editReply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining('not in any game') })
-    );
   });
 });
 
