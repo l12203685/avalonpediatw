@@ -1,0 +1,82 @@
+# Read-only look at the Discord channel where game records (牌譜) are posted,
+# to plan importing them into the Google Sheet. Uses the existing GitHub secret
+# DISCORD_BOT_TOKEN (never printed). Prints counts/format stats and only a few
+# truncated samples; this repo is public, so delete the run's logs after reading.
+name: Probe Discord records
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel_id:
+        description: 'Discord channel id'
+        required: false
+        default: '1132683080134578276'
+      samples:
+        description: 'How many record-like messages to print (truncated)'
+        required: false
+        default: '3'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Inspect channel history
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          CHANNEL_ID: ${{ inputs.channel_id }}
+          SAMPLES: ${{ inputs.samples }}
+        run: |
+          python3 - <<'PY'
+          import collections, json, os, re, sys, time, urllib.error, urllib.request
+          token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
+          if not token:
+              print("::notice::GitHub secret DISCORD_BOT_TOKEN is not set"); sys.exit(0)
+          cid = os.environ["CHANNEL_ID"]; samples = int(os.environ.get("SAMPLES") or 3)
+          def api(path):
+              req = urllib.request.Request("https://discord.com/api/v10" + path, headers={
+                  "Authorization": f"Bot {token}", "User-Agent": "DiscordBot (avalonpediatw, 1.0)"})
+              for attempt in range(5):
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          return json.loads(r.read())
+                  except urllib.error.HTTPError as e:
+                      if e.code == 429:
+                          time.sleep(float(json.loads(e.read() or b"{}").get("retry_after", 2)) + 0.5); continue
+                      print(f"::error::GET {path} -> HTTP {e.code}: {e.read()[:200].decode(errors='replace')}"); sys.exit(1)
+          me = api("/users/@me")
+          print(f"bot: {me.get('username')} id={me.get('id')}")
+          ch = api(f"/channels/{cid}")
+          print(f"channel: #{ch.get('name')} type={ch.get('type')} guild={ch.get('guild_id')} topic={(ch.get('topic') or '')[:120]!r}")
+          msgs, before = [], None
+          while len(msgs) < 20000:
+              batch = api(f"/channels/{cid}/messages?limit=100" + (f"&before={before}" if before else ""))
+              if not batch: break
+              msgs.extend(batch); before = batch[-1]["id"]
+          print(f"messages fetched: {len(msgs)}")
+          if not msgs: sys.exit(0)
+          msgs.sort(key=lambda m: int(m["id"]))
+          print(f"range: {msgs[0]['timestamp'][:10]} .. {msgs[-1]['timestamp'][:10]}")
+          months = collections.Counter(m["timestamp"][:7] for m in msgs)
+          print("per month:", dict(sorted(months.items())))
+          authors = collections.Counter((m["author"].get("username"), bool(m["author"].get("bot"))) for m in msgs)
+          print("authors (name, is_bot) top:", authors.most_common(8))
+          att = collections.Counter((a.get("content_type") or a.get("filename", "").rsplit(".", 1)[-1]) for m in msgs for a in m.get("attachments", []))
+          print("attachments by type:", dict(att))
+          print("with embeds:", sum(1 for m in msgs if m.get("embeds")))
+          empty = sum(1 for m in msgs if not m.get("content"))
+          print(f"empty content: {empty} (all empty => Message Content intent off for this bot)")
+          rec = re.compile(r"(?m)^\s*[0-9]{2,5}(?:\s+[0-9]+[+-])*\s*$")
+          mission = re.compile(r"(?m)^\s*[ox]{2,5}\s*$")
+          recordish = [m for m in msgs if len(rec.findall(m.get("content", ""))) >= 3 and mission.search(m.get("content", ""))]
+          print(f"record-like text messages: {len(recordish)}; since 2026-04-01: {sum(1 for m in recordish if m['timestamp'] >= '2026-04-01')}")
+          lens = sorted(len(m.get("content", "")) for m in recordish) or [0]
+          print(f"record-like length median={lens[len(lens)//2]} max={lens[-1]}")
+          for m in (recordish[:1] + recordish[-samples:]) if recordish else msgs[-samples:]:
+              body = m.get("content", "")
+              print(f"\n--- sample {m['timestamp'][:16]} by {m['author'].get('username')} ({len(body)} chars, {len(m.get('attachments', []))} attachments)")
+              print(body[:600])
+          PY
