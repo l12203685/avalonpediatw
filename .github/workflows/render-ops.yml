@@ -1,0 +1,70 @@
+# Operate the Render service avalon-server-z6c0 from GitHub (scripts/render_ops.py).
+#
+# Edward [20261010]: hand Render to automation so nobody has to click through
+# the dashboard. Needs the repo secret RENDER_API_KEY (Render → Account
+# Settings → API Keys). Bot secrets are copied from the GitHub secrets of the
+# same name (DISCORD_BOT_TOKEN, LINE_BOT_CHANNEL_ACCESS_TOKEN,
+# LINE_BOT_CHANNEL_SECRET, optional LOBBY_MIRROR_LINE_GROUP_ID) — values never
+# appear in the log. Manual dispatch only; `status` is read-only.
+name: Render ops
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'status = read-only report; apply = copy bot secrets, fill LINE group id from logs, drop retired keys, deploy'
+        type: choice
+        options: [status, apply]
+        default: status
+      rotate_app_secrets:
+        description: 'apply only: replace JWT_SECRET and ADMIN_SECRET with fresh random values'
+        type: boolean
+        default: false
+      suspend_duplicate:
+        description: 'apply only: suspend the stale duplicate service named avalonpediatw'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-ops
+  cancel-in-progress: false
+
+jobs:
+  ops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Offline tests of render_ops.py
+        run: python3 scripts/test_render_ops.py
+
+      - name: render_ops.py ${{ inputs.action }}
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          GH_DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          GH_LINE_BOT_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_BOT_CHANNEL_ACCESS_TOKEN }}
+          GH_LINE_BOT_CHANNEL_SECRET: ${{ secrets.LINE_BOT_CHANNEL_SECRET }}
+          GH_LOBBY_MIRROR_LINE_GROUP_ID: ${{ secrets.LOBBY_MIRROR_LINE_GROUP_ID }}
+        run: |
+          args="${{ inputs.action }}"
+          if [ "${{ inputs.action }}" = "apply" ]; then
+            [ "${{ inputs.rotate_app_secrets }}" = "true" ] && args="$args --rotate-app-secrets"
+            [ "${{ inputs.suspend_duplicate }}" = "true" ] && args="$args --suspend-duplicate"
+          fi
+          python3 scripts/render_ops.py $args
+
+      - name: Bot status after apply (public /api/bots/status, no secrets)
+        if: ${{ inputs.action == 'apply' }}
+        run: |
+          url="${{ vars.PUBLIC_SERVER_URL || 'https://avalon-server-z6c0-cs0s.onrender.com' }}"
+          sleep 20
+          curl -fsS --max-time 60 "${url%/}/api/bots/status" \
+            | jq '{discord: {enabled: .discord.enabled, ready: .discord.ready, error: .discord.error},
+                   line: {enabled: .line.enabled, ready: .line.ready, error: .line.error,
+                          mirrorGroupConfigured: .line.mirrorGroupConfigured,
+                          webhook: {action: .line.webhook.action, active: .line.webhook.active, verified: .line.webhook.verified}}}' \
+            || echo "::warning::could not read /api/bots/status"
