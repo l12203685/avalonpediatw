@@ -1,0 +1,19 @@
+# Python deps for packages/server/generate_cache.py (analysis_cache.json refresh).
+# Used by .github/workflows/refresh-analysis-cache.yml; also fine on the owner's PC:
+#   pip install -r packages/server/requirements-stats.txt
+# Top-level pins first; the rest is the resolved transitive set (pip freeze, Python 3.11).
+gspread==6.2.1
+google-auth==2.40.3
+
+cachetools==5.5.2
+certifi==2026.7.22
+charset-normalizer==3.5.2
+google-auth-oauthlib==1.5.0
+idna==3.20
+oauthlib==4.0.0
+pyasn1==0.6.4
+pyasn1_modules==0.4.2
+requests==2.34.2
+requests-oauthlib==2.0.0
+rsa==4.9.1
+urllib3==2.8.0

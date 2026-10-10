@@ -41,6 +41,10 @@ Output (top-level key `playstyle`):
 
 Run:
   python3 packages/server/scripts/build_panel_c_playstyle.py
+
+The TSV exists only on the owner's PC, so generate_cache.py (the daily GitHub
+Actions refresh) carries `playstyle` over unchanged and adds
+playstyle_placeholder() rows for players new since the last run.
 """
 
 import csv
@@ -84,6 +88,20 @@ def safe_int(v: str) -> int:
         return int(v)
     except (TypeError, ValueError):
         return 0
+
+
+def playstyle_placeholder(total_games: float) -> Dict[str, object]:
+    """playstyle.perPlayer row for a player without TSV data (UI shows 資料不足)."""
+    return {
+        "r3RejectRate":               {"red": None, "blue": None},
+        "r3RejectPercentile":         {"red": None, "blue": None},
+        "assassinTopSeats":           None,
+        "assassinAttempts":           0,
+        "captainStickiness":          None,
+        "captainStickinessPercentile": None,
+        "sampleSize":                 int(total_games or 0),
+        "hasData":                    False,
+    }
 
 
 def main() -> None:
@@ -185,16 +203,9 @@ def main() -> None:
     for name in cache["playerDetails"].keys():
         agg = raw_per_player.get(name)
         if agg is None:
-            playstyle_per_player[name] = {
-                "r3RejectRate":               {"red": None, "blue": None},
-                "r3RejectPercentile":         {"red": None, "blue": None},
-                "assassinTopSeats":           None,
-                "assassinAttempts":           0,
-                "captainStickiness":          None,
-                "captainStickinessPercentile": None,
-                "sampleSize":                 int(cache["playerDetails"][name]["player"].get("totalGames", 0)),
-                "hasData":                    False,
-            }
+            playstyle_per_player[name] = playstyle_placeholder(
+                cache["playerDetails"][name]["player"].get("totalGames", 0)
+            )
             continue
 
         red_pct = agg["r3RedPct"]

@@ -46,6 +46,11 @@ Output:
 
 Run:
   python3 packages/server/scripts/build_archetype_strength.py
+
+`strength` only needs cache.players, so generate_cache.py (the daily GitHub
+Actions refresh) rebuilds it with build_strength_section(). `archetype` needs
+the TSV above, which exists only on the owner's PC: generate_cache.py carries it
+over and adds archetype_placeholder() rows for players new since the last run.
 """
 
 import csv
@@ -91,6 +96,105 @@ def percentile_rank(value: float, sorted_values: List[float]) -> float:
 def zscore(value: float, mean: float, std: float) -> float:
     if std <= 0: return 0.0
     return round((value - mean) / std, 2)
+
+
+def archetype_placeholder(total_games: float) -> Dict:
+    """archetype.perPlayer row for a player without TSV data (UI shows 資料不足)."""
+    return {
+        "axes":        {"honesty": 0, "consistency": 0, "stickiness": 0, "flip": 0},
+        "percentiles": {"honesty": 0, "consistency": 0, "stickiness": 0, "flip": 0},
+        "sampleSize":  int(total_games or 0),
+        "hasData":     False,  # signals UI to show "資料不足 (<10 場)"
+    }
+
+
+def build_strength_section(players: List[Dict]) -> Dict:
+    """Panel B: per-role z-score signature, computed from cache.players.players only.
+
+    Uses each player's roleWinRates + rawRoleGames. Cohort per role: pool all
+    players' winrate where rawRoleGames[role] >= MIN_ROLE_SAMPLE.
+    """
+    # Per-role population
+    per_role_population: Dict[str, List[float]] = {r: [] for r in ROLES_ORDER}
+    for entry in players:
+        wr_map = entry.get("roleWinRates", {})
+        sample_map = entry.get("rawRoleGames", {})
+        for role in ROLES_ORDER:
+            sample = sample_map.get(role, 0)
+            if sample and sample >= MIN_ROLE_SAMPLE:
+                wr = wr_map.get(role)
+                if wr is not None:
+                    per_role_population[role].append(wr)
+
+    cohort_per_role: Dict[str, Dict[str, float]] = {}
+    for role, vals in per_role_population.items():
+        if len(vals) >= 2:
+            cohort_per_role[role] = {
+                "mean": round(statistics.mean(vals), 1),
+                "std":  round(statistics.pstdev(vals), 1),
+                "n":    len(vals),
+            }
+        elif len(vals) == 1:
+            cohort_per_role[role] = {"mean": round(vals[0], 1), "std": 0.0, "n": 1}
+        else:
+            cohort_per_role[role] = {"mean": 50.0, "std": 0.0, "n": 0}
+
+    strength_per_player: Dict[str, Dict] = {}
+    for entry in players:
+        name = entry["name"]
+        wr_map = entry.get("roleWinRates", {})
+        sample_map = entry.get("rawRoleGames", {})
+        roles_signature = []
+        for role in ROLES_ORDER:
+            sample = int(sample_map.get(role, 0) or 0)
+            wr = wr_map.get(role)
+            if sample >= MIN_ROLE_SAMPLE and wr is not None:
+                stat = cohort_per_role[role]
+                z = zscore(wr, stat["mean"], stat["std"])
+                if z >= 0.5:
+                    color = "high"      # significantly above
+                elif z <= -0.5:
+                    color = "low"       # significantly below
+                else:
+                    color = "neutral"
+                roles_signature.append({
+                    "role":       role,
+                    "winRate":    round(wr, 1),
+                    "sampleSize": sample,
+                    "zScore":     z,
+                    "color":      color,
+                })
+            else:
+                roles_signature.append({
+                    "role":       role,
+                    "winRate":    None,
+                    "sampleSize": sample,
+                    "zScore":     None,
+                    "color":      "insufficient",
+                })
+
+        scored = [r for r in roles_signature if r["zScore"] is not None]
+        scored_sorted = sorted(scored, key=lambda r: -r["zScore"])
+        top_roles = [r["role"] for r in scored_sorted[:2]]
+        bottom_roles = [r["role"] for r in scored_sorted[-1:]] if len(scored_sorted) >= 3 else []
+
+        has_data = any(r["color"] != "insufficient" for r in roles_signature)
+
+        strength_per_player[name] = {
+            "roles":       roles_signature,
+            "topRoles":    top_roles,
+            "bottomRoles": bottom_roles,
+            "hasData":     has_data,
+        }
+
+    return {
+        "perPlayer": strength_per_player,
+        "cohort": {
+            "perRole":         cohort_per_role,
+            "minRoleSample":   MIN_ROLE_SAMPLE,
+            "rolesOrder":      ROLES_ORDER,
+        },
+    }
 
 
 def main() -> None:
@@ -169,12 +273,9 @@ def main() -> None:
                 "hasData":     True,
             }
         else:
-            archetype_per_player[name] = {
-                "axes":        {"honesty": 0, "consistency": 0, "stickiness": 0, "flip": 0},
-                "percentiles": {"honesty": 0, "consistency": 0, "stickiness": 0, "flip": 0},
-                "sampleSize":  int(cache["playerDetails"][name]["player"].get("totalGames", 0)),
-                "hasData":     False,  # signals UI to show "資料不足 (<10 場)"
-            }
+            archetype_per_player[name] = archetype_placeholder(
+                cache["playerDetails"][name]["player"].get("totalGames", 0)
+            )
 
     cache["archetype"] = {
         "perPlayer": archetype_per_player,
@@ -198,93 +299,9 @@ def main() -> None:
     }
 
     # ── Compute Panel B: Strength Signature (per-role z-score) ───────────
-    # Use cache.players[].roleWinRates + rawRoleGames.
-    # Cohort per-role: pool all players' winrate where rawRoleGames[role] >= MIN_ROLE_SAMPLE.
-
-    def zh_role(r: str) -> str:
-        return r  # all already in zh
-
-    # Per-role population
-    per_role_population: Dict[str, List[float]] = {r: [] for r in ROLES_ORDER}
-    for entry in cache["players"]["players"]:
-        wr_map = entry.get("roleWinRates", {})
-        sample_map = entry.get("rawRoleGames", {})
-        for role in ROLES_ORDER:
-            sample = sample_map.get(role, 0)
-            if sample and sample >= MIN_ROLE_SAMPLE:
-                wr = wr_map.get(role)
-                if wr is not None:
-                    per_role_population[role].append(wr)
-
-    cohort_per_role: Dict[str, Dict[str, float]] = {}
-    for role, vals in per_role_population.items():
-        if len(vals) >= 2:
-            cohort_per_role[role] = {
-                "mean": round(statistics.mean(vals), 1),
-                "std":  round(statistics.pstdev(vals), 1),
-                "n":    len(vals),
-            }
-        elif len(vals) == 1:
-            cohort_per_role[role] = {"mean": round(vals[0], 1), "std": 0.0, "n": 1}
-        else:
-            cohort_per_role[role] = {"mean": 50.0, "std": 0.0, "n": 0}
-
-    strength_per_player: Dict[str, Dict] = {}
-    for entry in cache["players"]["players"]:
-        name = entry["name"]
-        wr_map = entry.get("roleWinRates", {})
-        sample_map = entry.get("rawRoleGames", {})
-        roles_signature = []
-        for role in ROLES_ORDER:
-            sample = int(sample_map.get(role, 0) or 0)
-            wr = wr_map.get(role)
-            if sample >= MIN_ROLE_SAMPLE and wr is not None:
-                stat = cohort_per_role[role]
-                z = zscore(wr, stat["mean"], stat["std"])
-                if z >= 0.5:
-                    color = "high"      # significantly above
-                elif z <= -0.5:
-                    color = "low"       # significantly below
-                else:
-                    color = "neutral"
-                roles_signature.append({
-                    "role":       role,
-                    "winRate":    round(wr, 1),
-                    "sampleSize": sample,
-                    "zScore":     z,
-                    "color":      color,
-                })
-            else:
-                roles_signature.append({
-                    "role":       role,
-                    "winRate":    None,
-                    "sampleSize": sample,
-                    "zScore":     None,
-                    "color":      "insufficient",
-                })
-
-        scored = [r for r in roles_signature if r["zScore"] is not None]
-        scored_sorted = sorted(scored, key=lambda r: -r["zScore"])
-        top_roles = [r["role"] for r in scored_sorted[:2]]
-        bottom_roles = [r["role"] for r in scored_sorted[-1:]] if len(scored_sorted) >= 3 else []
-
-        has_data = any(r["color"] != "insufficient" for r in roles_signature)
-
-        strength_per_player[name] = {
-            "roles":       roles_signature,
-            "topRoles":    top_roles,
-            "bottomRoles": bottom_roles,
-            "hasData":     has_data,
-        }
-
-    cache["strength"] = {
-        "perPlayer": strength_per_player,
-        "cohort": {
-            "perRole":         cohort_per_role,
-            "minRoleSample":   MIN_ROLE_SAMPLE,
-            "rolesOrder":      ROLES_ORDER,
-        },
-    }
+    cache["strength"] = build_strength_section(cache["players"]["players"])
+    strength_per_player = cache["strength"]["perPlayer"]
+    cohort_per_role = cache["strength"]["cohort"]["perRole"]
 
     # ── Stats summary ────────────────────────────────────────────────────
     arche_with_data = sum(1 for v in archetype_per_player.values() if v["hasData"])

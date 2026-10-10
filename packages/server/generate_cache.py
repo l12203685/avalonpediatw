@@ -1,31 +1,112 @@
 """
 Pre-compute all analysis API responses and write to analysis_cache.json.
 
-Runs locally. Reads Google Sheets via service account credentials.
-Output: analysis_cache.json with keys matching each API endpoint.
-The server reads this file and returns it directly -- zero parsing at runtime.
+Reads the Avalon Google Sheet via a service account and writes
+analysis_cache.json with keys matching each API endpoint. The server reads this
+file and returns it directly -- zero parsing at runtime.
+
+Runs on the owner's PC and, daily, in GitHub Actions
+(.github/workflows/refresh-analysis-cache.yml), which commits the result.
 
 Usage:
-    python generate_cache.py
+    python generate_cache.py                 # owner's PC: default key path below
+    python generate_cache.py --allow-shrink  # accept a deliberate drop in games/players
+
+Configuration (environment variables, all optional, checked in this order):
+    AVALON_STATS_CREDENTIALS_FILE  path to a service-account JSON key file
+    AVALON_STATS_CREDENTIALS_JSON  the key file's JSON content
+    (neither set)                  C:\\Users\\admin\\.claude\\credentials\\google_sheets_concise_beanbag.json
+    AVALON_STATS_SHEET_ID          spreadsheet id (default: SHEET_ID below)
+
+Where each top-level section comes from:
+    refreshed from the Sheet  overview, players, playerDetails, chemistry,
+                              missions, lake, rounds, seatOrder, captainAnalysis
+    recomputed here           strength (from players, via
+                              scripts/build_archetype_strength.py)
+    carried over              archetype, playstyle, featureStudies and any other
+                              section this script does not build. They are made
+                              by scripts/build_*.py from files that exist only on
+                              the owner's PC, so they are copied unchanged from
+                              the existing analysis_cache.json; players new since
+                              then get the same hasData=false placeholder rows
+                              those scripts write.
+
+Safety: the new cache is checked before it replaces the old file. The write is
+refused (exit 4) if it is empty or malformed, has more than max(5, 1%) fewer
+games or players than the existing file, or has an emptied chemistry matrix
+(all overridable with --allow-shrink), or if players rows would lose fields the
+existing file has (only --allow-field-loss overrides that; CI never passes it).
+
+Caveat (2026-10-10): the committed cache was NOT produced by this script. Commit
+61b7398 (2026-04-26) rebuilt it from a raw 牌譜 export with
+staging/sheets_raw/rebuild_from_raw.py (owner's PC, not in the repo): 198
+players (生涯報表, read below, lists only >=30-game players, ~62 rows) plus the
+per-player rawRed*/rawBlue*/roleSeatStats fields LeaderboardV3 needs. Until that
+logic lives here, the guards above make the refresh refuse instead of
+overwriting it.
+
+Exit codes: 0 ok, 2 credentials misconfigured, 3 Google refused access
+(auth / sheet not shared / not found), 4 data check failed, nothing written.
 """
 
+from __future__ import annotations
+
+import argparse
+import contextlib
+import functools
+import importlib.util
 import json
 import math
+import os
 import re
+import stat
 import sys
+import tempfile
 from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable, Mapping
 
-import gspread
-from google.oauth2.service_account import Credentials
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+except ImportError:  # the pure helpers (and the unit tests) work without the Google libs
+    gspread = None  # type: ignore[assignment]
+    Credentials = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-CREDENTIALS_PATH = Path(r"C:\Users\admin\.claude\credentials\google_sheets_concise_beanbag.json")
+DEFAULT_CREDENTIALS_PATH = Path(r"C:\Users\admin\.claude\credentials\google_sheets_concise_beanbag.json")
+CREDENTIALS_PATH = DEFAULT_CREDENTIALS_PATH  # kept for anyone importing the old name
 SHEET_ID = "174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU"
 OUTPUT_PATH = Path(__file__).parent / "analysis_cache.json"
+SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+
+ENV_CREDENTIALS_FILE = "AVALON_STATS_CREDENTIALS_FILE"
+ENV_CREDENTIALS_JSON = "AVALON_STATS_CREDENTIALS_JSON"
+ENV_SHEET_ID = "AVALON_STATS_SHEET_ID"
+
+# Sections built from the Sheet by this script.
+SHEET_SECTIONS = (
+    "overview", "players", "playerDetails", "chemistry", "missions",
+    "lake", "rounds", "seatOrder", "captainAnalysis",
+)
+# Sections recomputed here from the refreshed players.
+DERIVED_SECTIONS = ("strength",)
+# Sections built on the owner's PC from files not in the repo (carried over).
+OWNER_PC_SECTIONS = ("archetype", "playstyle", "featureStudies")
+CHEMISTRY_MATRICES = ("coWin", "coLose", "winCorr", "coWinMinusLose")
+
+# Sanity guard: allowed drop vs. the existing cache = max(ABS, PCT% of it).
+SHRINK_TOLERANCE_ABS = 5
+SHRINK_TOLERANCE_PCT = 1.0
+
+EXIT_CONFIG = 2
+EXIT_GOOGLE_ACCESS = 3
+EXIT_DATA = 4
 
 MIN_GAMES_THRESHOLD = 50
 
@@ -35,14 +116,230 @@ BLUE_ROLES = {"派西維爾", "梅林", "忠臣"}
 
 
 # ---------------------------------------------------------------------------
-# Google Sheets connection
+# Errors and reporting
 # ---------------------------------------------------------------------------
 
+class FatalError(Exception):
+    """A failure with a clear message for the owner; nothing has been written."""
+
+    def __init__(self, message: str, exit_code: int, title: str = "Analysis cache refresh failed"):
+        super().__init__(message)
+        self.exit_code = exit_code
+        self.title = title
+
+
+def _in_github_actions() -> bool:
+    return os.environ.get("GITHUB_ACTIONS") == "true"
+
+
+def _escape_workflow_data(text: str) -> str:
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def _escape_workflow_property(text: str) -> str:
+    return _escape_workflow_data(text).replace(":", "%3A").replace(",", "%2C")
+
+
+def emit_error(message: str, title: str = "Analysis cache refresh failed") -> None:
+    """Print an error; inside GitHub Actions as an ::error:: annotation."""
+    if _in_github_actions():
+        print(f"::error title={_escape_workflow_property(title)}::{_escape_workflow_data(message)}", flush=True)
+    else:
+        print(f"[ERROR] {title}: {message}", file=sys.stderr, flush=True)
+
+
+def _short(text: object, limit: int = 300) -> str:
+    s = " ".join(str(text).split())
+    return s if len(s) <= limit else s[: limit - 3] + "..."
+
+
+# ---------------------------------------------------------------------------
+# Credentials and sheet id
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CredentialSource:
+    """Where the service-account key comes from. Never holds or prints more than needed."""
+
+    kind: str  # "file" or "json"
+    origin: str  # human-readable origin, e.g. "env AVALON_STATS_CREDENTIALS_FILE"
+    path: Path | None = None
+    info: dict | None = field(default=None, repr=False)  # parsed key; repr=False keeps it out of logs
+
+    def describe(self) -> str:
+        return f"{self.origin} ({self.path})" if self.kind == "file" else self.origin
+
+    def client_email(self) -> str | None:
+        """The service account's email (not secret), or None if unavailable."""
+        info = self.info
+        if info is None and self.path is not None:
+            try:
+                info = json.loads(self.path.read_text(encoding="utf-8-sig"))
+            except (OSError, ValueError):
+                return None
+        if isinstance(info, dict):
+            email = info.get("client_email")
+            if isinstance(email, str) and email.strip():
+                return email.strip()
+        return None
+
+
+def resolve_credentials_source(env: Mapping[str, str] | None = None) -> CredentialSource:
+    """AVALON_STATS_CREDENTIALS_FILE, else AVALON_STATS_CREDENTIALS_JSON, else the default path."""
+    env = os.environ if env is None else env
+
+    file_value = (env.get(ENV_CREDENTIALS_FILE) or "").strip()
+    if file_value:
+        path = Path(file_value).expanduser()
+        if not path.is_file():
+            raise FatalError(
+                f"{ENV_CREDENTIALS_FILE} is set to {path}, but that file does not exist.",
+                EXIT_CONFIG, "Credentials not found",
+            )
+        return CredentialSource(kind="file", origin=f"env {ENV_CREDENTIALS_FILE}", path=path)
+
+    json_value = (env.get(ENV_CREDENTIALS_JSON) or "").strip()
+    if json_value:
+        try:
+            info = json.loads(json_value)
+        except ValueError as exc:
+            # Only the position is reported: the value is a private key.
+            pos = f" (line {exc.lineno}, column {exc.colno})" if isinstance(exc, json.JSONDecodeError) else ""
+            raise FatalError(
+                f"{ENV_CREDENTIALS_JSON} is not valid JSON{pos}. Paste the whole service-account key file content.",
+                EXIT_CONFIG, "Credentials malformed",
+            ) from None
+        if not isinstance(info, dict):
+            raise FatalError(
+                f"{ENV_CREDENTIALS_JSON} must be a JSON object (a service-account key file).",
+                EXIT_CONFIG, "Credentials malformed",
+            )
+        return CredentialSource(kind="json", origin=f"env {ENV_CREDENTIALS_JSON}", info=info)
+
+    return CredentialSource(kind="file", origin="default path", path=DEFAULT_CREDENTIALS_PATH)
+
+
+def resolve_sheet_id(env: Mapping[str, str] | None = None) -> str:
+    env = os.environ if env is None else env
+    return (env.get(ENV_SHEET_ID) or "").strip() or SHEET_ID
+
+
+def _require_google_libs() -> None:
+    if gspread is None or Credentials is None:
+        raise FatalError(
+            "gspread / google-auth are not installed. Run: pip install -r packages/server/requirements-stats.txt",
+            EXIT_CONFIG, "Missing Python dependencies",
+        )
+
+
+def load_credentials(source: CredentialSource):
+    _require_google_libs()
+    try:
+        if source.kind == "json":
+            return Credentials.from_service_account_info(source.info, scopes=SCOPES)
+        return Credentials.from_service_account_file(str(source.path), scopes=SCOPES)
+    except FileNotFoundError:
+        raise FatalError(
+            f"Service-account key file not found: {source.path}. "
+            f"Set {ENV_CREDENTIALS_FILE} (path) or {ENV_CREDENTIALS_JSON} (key JSON).",
+            EXIT_CONFIG, "Credentials not found",
+        ) from None
+    except OSError as exc:
+        raise FatalError(
+            f"Cannot read the service-account key from {source.describe()}: {type(exc).__name__}.",
+            EXIT_CONFIG, "Credentials unreadable",
+        ) from None
+    except Exception as exc:  # building credentials is local (no network): any failure = bad key
+        # google-auth's ValueError/KeyError texts name missing fields only; other errors
+        # (e.g. pyasn1 parsing private_key) are reported by type so no key material is echoed.
+        detail = f": {_short(exc, 200)}" if isinstance(exc, (ValueError, KeyError)) else ""
+        raise FatalError(
+            f"The key from {source.describe()} is not a valid service-account key "
+            f"({type(exc).__name__}{detail}). Paste the whole JSON key file, unmodified.",
+            EXIT_CONFIG, "Credentials malformed",
+        ) from None
+
+
+def open_spreadsheet(source: CredentialSource, sheet_id: str) -> gspread.Spreadsheet:
+    gc = gspread.authorize(load_credentials(source))
+    return gc.open_by_key(sheet_id)
+
+
 def connect() -> gspread.Spreadsheet:
-    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-    creds = Credentials.from_service_account_file(str(CREDENTIALS_PATH), scopes=scopes)
-    gc = gspread.authorize(creds)
-    return gc.open_by_key(SHEET_ID)
+    return open_spreadsheet(resolve_credentials_source(), resolve_sheet_id())
+
+
+def classify_google_error(exc: BaseException) -> str | None:
+    """'auth', 'permission', 'not_found', 'missing_worksheet' or None (anything else).
+
+    Works on class names / status codes so it needs no gspread or google-auth import.
+    """
+    names = {cls.__name__ for cls in type(exc).__mro__}
+    if "TransportError" in names:  # network trouble while talking to Google, not an auth problem
+        return None
+    if names & {"RefreshError", "GoogleAuthError"}:
+        return "auth"
+    if "WorksheetNotFound" in names:
+        return "missing_worksheet"
+    if "SpreadsheetNotFound" in names:
+        return "not_found"
+    if isinstance(exc, PermissionError):  # gspread 6 raises this for HTTP 403 on open_by_key
+        return "permission"
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status == 401:
+        return "auth"
+    if status == 403:
+        return "permission"
+    if status == 404:
+        return "not_found"
+    return None
+
+
+def _google_error_detail(exc: BaseException) -> str:
+    """The most informative message in the exception chain (Google's own error text)."""
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    fallback = ""
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        error = getattr(cur, "error", None)
+        if isinstance(error, Mapping) and error.get("message"):
+            return _short(f"HTTP {error.get('code', '?')}: {error['message']}")
+        if not fallback and str(cur):
+            fallback = _short(f"{type(cur).__name__}: {cur}")
+        cur = cur.__cause__ or cur.__context__
+    return fallback or type(exc).__name__
+
+
+def google_access_error_message(kind: str, exc: BaseException, sheet_id: str, email: str | None) -> str:
+    who = email or "the service account (client_email missing from the key)"
+    detail = _google_error_detail(exc)
+    if kind == "auth":
+        return (
+            f"Google rejected the credentials of service account {who} ({detail}). "
+            "The key may be deleted, disabled or malformed: create a new JSON key for this "
+            "service account and update the secret."
+        )
+    if kind == "permission":
+        lowered = detail.lower()
+        if "has not been used" in lowered or "service_disabled" in lowered or "is disabled" in lowered:
+            return (
+                f"The Google Sheets API is disabled in the Google Cloud project of service account "
+                f"{who} ({detail}). Enable the Google Sheets API for that project, then re-run."
+            )
+        return (
+            f"Service account {who} has no access to spreadsheet {sheet_id} ({detail}). "
+            f"Share the Google Sheet with {who} as Viewer, then re-run."
+        )
+    if kind == "not_found":
+        return (
+            f"Spreadsheet {sheet_id} was not found for service account {who} ({detail}). "
+            f"Check the sheet id ({ENV_SHEET_ID}) and share the sheet with {who} as Viewer."
+        )
+    return (
+        f"A required worksheet is missing from spreadsheet {sheet_id} ({detail}). "
+        "Was a tab renamed? Nothing was written."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1409,27 +1706,14 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
     }
 
 
+
+
 # ---------------------------------------------------------------------------
-# Main
+# Assemble the cache: Sheet sections + derived + carried-over sections
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    print("Connecting to Google Sheets...")
-    sh = connect()
-
-    print("Loading game log (牌譜)...")
-    games = load_game_log(sh)
-    print(f"  Loaded {len(games)} games")
-
-    print("Loading player stats...")
-    players = load_player_stats(sh)
-    print(f"  Loaded {len(players)} players")
-
-    print("Loading chemistry matrices...")
-    chemistry = load_chemistry(sh)
-    print(f"  Loaded {len(chemistry)} matrices")
-
-    print("Computing endpoint responses...")
+def build_cache(games: list[GameRow], players: list[dict], chemistry: dict) -> dict:
+    """The sections computed from the Sheet (SHEET_SECTIONS)."""
     overview = compute_overview(games, players)
 
     # Edward 2026-04-27: extend chemistry with 5th matrix outcomePair before
@@ -1440,7 +1724,7 @@ def main() -> None:
     for p in players:
         p["seatOutcomes"] = seat_outcomes_per_player.get(p["name"], {})
 
-    cache = {
+    return {
         "overview": overview,
         "players": compute_players_endpoint(players),
         "playerDetails": compute_player_details(players),
@@ -1452,17 +1736,340 @@ def main() -> None:
         "captainAnalysis": compute_captain_analysis(games),
     }
 
-    print(f"Writing to {OUTPUT_PATH}...")
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
 
-    size_mb = OUTPUT_PATH.stat().st_size / (1024 * 1024)
-    print(f"Done. {OUTPUT_PATH.name}: {size_mb:.2f} MB")
-    print(f"  overview: {cache['overview']['totalGames']} games, {cache['overview']['totalPlayers']} players")
+@functools.lru_cache(maxsize=None)
+def _load_local_script(stem: str):
+    """Import packages/server/scripts/<stem>.py by path (that folder is not a package)."""
+    path = SCRIPTS_DIR / f"{stem}.py"
+    spec = importlib.util.spec_from_file_location(f"avalon_stats_{stem}", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def default_strength_builder() -> Callable[[list[dict]], dict]:
+    return _load_local_script("build_archetype_strength").build_strength_section
+
+
+def default_placeholder_builders() -> dict[str, Callable[[float], dict]]:
+    """Per-player placeholder rows for carried-over sections, from the scripts that build them."""
+    return {
+        "archetype": _load_local_script("build_archetype_strength").archetype_placeholder,
+        "playstyle": _load_local_script("build_panel_c_playstyle").playstyle_placeholder,
+    }
+
+
+def carry_over_sections(
+    new_cache: dict,
+    previous: Mapping[str, Any] | None,
+    placeholder_builders: Mapping[str, Callable[[float], dict]] | None = None,
+) -> dict[str, int]:
+    """Copy into new_cache every top-level section of `previous` it does not have.
+
+    Existing per-player rows are kept as they are; players in the new
+    playerDetails that a carried section lacks get that section's placeholder
+    row (hasData=false). `previous` is not modified.
+    Returns {section: number of placeholder rows added}.
+    """
+    carried: dict[str, int] = {}
+    if not previous:
+        return carried
+    builders = placeholder_builders or {}
+    details = new_cache.get("playerDetails") or {}
+    for key, value in previous.items():
+        if key in new_cache:
+            continue
+        added = 0
+        builder = builders.get(key)
+        if builder is not None and isinstance(value, dict) and isinstance(value.get("perPlayer"), dict):
+            per_player = dict(value["perPlayer"])
+            for name, detail in details.items():
+                if name not in per_player:
+                    per_player[name] = builder(((detail or {}).get("player") or {}).get("totalGames", 0))
+                    added += 1
+            value = {**value, "perPlayer": per_player}
+        new_cache[key] = value
+        carried[key] = added
+    return carried
+
+
+def order_like(cache: dict, previous: Mapping[str, Any] | None) -> dict:
+    """Keep the existing file's section order (smaller diffs); new sections go last."""
+    if not previous:
+        return cache
+    ordered = {k: cache[k] for k in previous if k in cache}
+    ordered.update((k, v) for k, v in cache.items() if k not in ordered)
+    return ordered
+
+
+def assemble_cache(
+    fresh: dict,
+    previous: Mapping[str, Any] | None,
+    strength_builder: Callable[[list[dict]], dict] | None = None,
+    placeholder_builders: Mapping[str, Callable[[float], dict]] | None = None,
+) -> tuple[dict, dict[str, int]]:
+    cache = dict(fresh)
+    cache["strength"] = (strength_builder or default_strength_builder())(cache["players"]["players"])
+    if placeholder_builders is None:
+        placeholder_builders = default_placeholder_builders()
+    carried = carry_over_sections(cache, previous, placeholder_builders)
+    return order_like(cache, previous), carried
+
+
+# ---------------------------------------------------------------------------
+# Sanity guard
+# ---------------------------------------------------------------------------
+
+def allowed_drop(previous_count: int) -> int:
+    return max(SHRINK_TOLERANCE_ABS, math.ceil(previous_count * SHRINK_TOLERANCE_PCT / 100))
+
+
+def _positive_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
+        return None
+    return int(value) if value > 0 and float(value).is_integer() else None
+
+
+def _count(cache: Mapping[str, Any] | None, section: str, key: str) -> int | None:
+    if not isinstance(cache, Mapping):
+        return None
+    part = cache.get(section)
+    return _positive_int(part.get(key)) if isinstance(part, Mapping) else None
+
+
+def _matrix_size(chemistry: Any, key: str) -> int:
+    matrix = chemistry.get(key) if isinstance(chemistry, Mapping) else None
+    players = matrix.get("players") if isinstance(matrix, Mapping) else None
+    return len(players) if isinstance(players, list) else 0
+
+
+def dropped_player_fields(cache: Mapping[str, Any], previous: Mapping[str, Any] | None) -> list[str]:
+    """Per-player fields the existing players rows have but the new rows lack entirely."""
+    def fields(c: Mapping[str, Any] | None) -> set[str]:
+        rows = ((c or {}).get("players") or {}).get("players") if isinstance(c, Mapping) else None
+        if not isinstance(rows, list):
+            return set()
+        return set().union(*(set(r) for r in rows if isinstance(r, Mapping))) if rows else set()
+
+    new_fields = fields(cache)
+    return sorted(fields(previous) - new_fields) if new_fields else []
+
+
+def validate_new_cache(
+    cache: Mapping[str, Any],
+    previous: Mapping[str, Any] | None,
+    allow_shrink: bool = False,
+    allow_field_loss: bool = False,
+) -> list[str]:
+    """Problems that make `cache` unfit to replace `previous` ([] = OK to write)."""
+    problems: list[str] = []
+    for key in SHEET_SECTIONS + DERIVED_SECTIONS:
+        if not isinstance(cache.get(key), dict):
+            problems.append(f"section '{key}' is missing or not an object")
+    if problems:
+        return problems
+
+    games = _count(cache, "overview", "totalGames")
+    if games is None:
+        problems.append(
+            f"overview.totalGames is {cache['overview'].get('totalGames')!r}; expected a positive "
+            "number (牌譜 tab empty or unreadable?)"
+        )
+    player_list = cache["players"].get("players")
+    if not isinstance(player_list, list) or not player_list:
+        problems.append("players.players is empty (生涯報表 tab missing or unreadable?)")
+    elif cache["players"].get("total") != len(player_list):
+        problems.append(f"players.total={cache['players'].get('total')!r} but players.players has {len(player_list)} rows")
+    if not cache["playerDetails"]:
+        problems.append("playerDetails is empty")
+
+    if previous and not allow_shrink:
+        for label, section, key, new_value in (
+            ("games", "overview", "totalGames", games),
+            ("players", "overview", "totalPlayers", _count(cache, "overview", "totalPlayers")),
+        ):
+            old_value = _count(previous, section, key)
+            if old_value is None or new_value is None:
+                continue
+            tolerance = allowed_drop(old_value)
+            if old_value - new_value > tolerance:
+                problems.append(
+                    f"the new cache has {new_value} {label}, {old_value - new_value} fewer than the existing "
+                    f"{old_value} (tolerance {tolerance}); if rows were removed on purpose, re-run with --allow-shrink"
+                )
+        for key in CHEMISTRY_MATRICES:
+            old_size = _matrix_size(previous.get("chemistry"), key)
+            if old_size and not _matrix_size(cache.get("chemistry"), key):
+                problems.append(
+                    f"chemistry.{key} is empty but the existing cache has {old_size} players "
+                    "(worksheet renamed or emptied?); re-run with --allow-shrink if intended"
+                )
+
+    lost = [] if allow_field_loss else dropped_player_fields(cache, previous)
+    if lost:
+        problems.append(
+            f"players rows would lose fields {', '.join(lost)} that the existing cache has "
+            "(LeaderboardV3 reads rawRed*/rawBlue*/roleSeatStats). The existing cache was built by "
+            "another pipeline (raw-牌譜 rebuild, commit 61b7398) that this script does not reproduce; "
+            "only --allow-field-loss (local runs) overrides this"
+        )
+    return problems
+
+
+def load_previous_cache(path: Path, allow_shrink: bool = False) -> dict | None:
+    """The existing cache (source of carried-over sections and the shrink baseline)."""
+    if not path.exists():
+        print(f"[WARN] {path.name} does not exist yet: nothing to carry over or compare against.")
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("top level is not a JSON object")
+    except (OSError, ValueError) as exc:
+        message = (
+            f"The existing {path.name} cannot be read ({type(exc).__name__}: {_short(exc, 120)}). "
+            "Its carried-over sections (archetype, playstyle, featureStudies) cannot be rebuilt here, "
+            "so it is not overwritten. Restore it from git or re-run with --allow-shrink to write without them."
+        )
+        if not allow_shrink:
+            raise FatalError(message, EXIT_DATA, "Existing cache unreadable") from None
+        print(f"[WARN] {message}")
+        return None
+    return data
+
+
+def write_cache_atomically(cache: Mapping[str, Any], path: Path) -> None:
+    """Write via a temp file + rename, so a crash never leaves a half-written cache."""
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp_name, mode)
+        os.replace(tmp_name, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def fetch_sheet_data(source: CredentialSource, sheet_id: str) -> tuple[list[GameRow], list[dict], dict]:
+    try:
+        print("Connecting to Google Sheets...")
+        sh = open_spreadsheet(source, sheet_id)
+
+        print("Loading game log (牌譜)...")
+        games = load_game_log(sh)
+        print(f"  Loaded {len(games)} games")
+
+        print("Loading player stats...")
+        players = load_player_stats(sh)
+        print(f"  Loaded {len(players)} players")
+
+        print("Loading chemistry matrices...")
+        chemistry = load_chemistry(sh)
+        print(f"  Loaded {len(chemistry)} matrices")
+    except FatalError:
+        raise
+    except Exception as exc:
+        kind = classify_google_error(exc)
+        if kind is None:
+            raise
+        titles = {
+            "auth": "Google rejected the service-account key",
+            "permission": "Service account cannot open the Google Sheet",
+            "not_found": "Google Sheet not found",
+            "missing_worksheet": "Worksheet missing from the Google Sheet",
+        }
+        code = EXIT_DATA if kind == "missing_worksheet" else EXIT_GOOGLE_ACCESS
+        raise FatalError(
+            google_access_error_message(kind, exc, sheet_id, source.client_email()), code, titles[kind]
+        ) from None
+    return games, players, chemistry
+
+
+def _append_step_summary(lines: list[str]) -> None:
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary:
+        return
+    with contextlib.suppress(OSError), open(summary, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def run(output_path: Path = OUTPUT_PATH, allow_shrink: bool = False, allow_field_loss: bool = False) -> int:
+    source = resolve_credentials_source()
+    sheet_id = resolve_sheet_id()
+    print(f"Credentials: {source.describe()}")
+    print(f"Service account: {source.client_email() or '(client_email not found in key)'}")
+    print(f"Spreadsheet: {sheet_id}")
+
+    previous = load_previous_cache(output_path, allow_shrink)
+    games, players, chemistry = fetch_sheet_data(source, sheet_id)
+
+    print("Computing endpoint responses...")
+    cache, carried = assemble_cache(build_cache(games, players, chemistry), previous)
+
+    problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss)
+    if problems:
+        raise FatalError(
+            f"Refusing to overwrite {output_path.name}:\n- " + "\n- ".join(problems),
+            EXIT_DATA, "Analysis cache sanity check failed",
+        )
+
+    print(f"Writing to {output_path}...")
+    write_cache_atomically(cache, output_path)
+
+    size_mb = output_path.stat().st_size / (1024 * 1024)
+    prev_games = _count(previous, "overview", "totalGames")
+    prev_players = _count(previous, "overview", "totalPlayers")
+    carried_desc = ", ".join(
+        f"{k} (+{n} placeholder rows)" if n else k for k, n in carried.items()
+    ) or "none"
+    print(f"Done. {output_path.name}: {size_mb:.2f} MB")
+    print(f"  overview: {cache['overview']['totalGames']} games (was {prev_games}), "
+          f"{cache['overview']['totalPlayers']} players (was {prev_players})")
     print(f"  players: {cache['players']['total']} entries")
     print(f"  playerDetails: {len(cache['playerDetails'])} entries")
     print(f"  chemistry: {len(cache['chemistry'])} matrices")
+    print(f"  refreshed from the Sheet: {', '.join(SHEET_SECTIONS)}")
+    print(f"  recomputed from players: {', '.join(DERIVED_SECTIONS)}")
+    print(f"  carried over from the existing cache: {carried_desc}")
+    _append_step_summary([
+        "### 戰績分析快取",
+        f"- 局數：{prev_games} → {cache['overview']['totalGames']}；玩家：{prev_players} → {cache['overview']['totalPlayers']}",
+        f"- 由試算表重算：{', '.join(SHEET_SECTIONS)}；由 players 重算：{', '.join(DERIVED_SECTIONS)}",
+        f"- 沿用現有快取（需在擁有者電腦重建）：{carried_desc}",
+    ])
+    return 0
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Regenerate analysis_cache.json from the Avalon Google Sheet.")
+    parser.add_argument("--output", type=Path, default=OUTPUT_PATH,
+                        help="cache file to read (carry-over / baseline) and replace (default: %(default)s)")
+    parser.add_argument("--allow-shrink", action="store_true",
+                        help="write even if games/players/chemistry shrank beyond the tolerance")
+    parser.add_argument("--allow-field-loss", action="store_true",
+                        help="write even if players rows lose fields the existing cache has (local use only)")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    try:
+        return run(args.output, args.allow_shrink, args.allow_field_loss)
+    except FatalError as exc:
+        emit_error(str(exc), exc.title)
+        return exc.exit_code
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
