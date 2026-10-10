@@ -1,0 +1,74 @@
+# Read-only look at the public pages of the play platform (signage-cloud), to
+# plan an Avalon bot client. No login, no form posts — GET of public pages and
+# the same-origin scripts they load; prints a short tech summary to the log.
+name: Probe play platform
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Platform origin'
+        required: false
+        default: 'https://avalon.signage-cloud.org'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch public pages and summarise
+        env:
+          BASE: ${{ inputs.base_url }}
+        run: |
+          python3 - <<'PY'
+          import os, re, urllib.request, urllib.parse, urllib.error, http.cookiejar
+          base = os.environ["BASE"].rstrip("/")
+          jar = http.cookiejar.CookieJar()
+          opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+          opener.addheaders = [("User-Agent", "Mozilla/5.0 (compatible; avalonpediatw-probe/1.0)")]
+          seen_js = set()
+          def get(url):
+              try:
+                  with opener.open(url, timeout=30) as r:
+                      return r.status, r.geturl(), dict(r.headers), r.read().decode("utf-8", "replace")
+              except urllib.error.HTTPError as e:
+                  return e.code, url, dict(e.headers), e.read().decode("utf-8", "replace")
+              except Exception as e:
+                  return None, url, {}, f"ERROR {e}"
+          pages = ["/", "/Account/Login", "/Room/Watch", "/robots.txt", "/Home/Privacy", "/Home/About"]
+          for path in pages:
+              code, final, headers, body = get(base + path)
+              print(f"\n=== GET {path} -> {code} (final {final}, {len(body)} chars)")
+              for h in ("Server", "X-Powered-By", "X-AspNet-Version", "Content-Type"):
+                  if h in headers: print(f"  {h}: {headers[h]}")
+              if "Set-Cookie" in headers: print("  cookies:", sorted({c.name for c in jar}))
+              if path == "/robots.txt" or not body.lstrip().startswith("<"):
+                  print("  " + body[:400].replace("\n", "\n  ")); continue
+              t = re.search(r"<title[^>]*>(.*?)</title>", body, re.S | re.I)
+              print("  title:", (t.group(1).strip() if t else "-")[:120])
+              for f in re.findall(r"<form[^>]*>", body, re.I): print("  form:", f[:200])
+              names = re.findall(r"<(?:input|select|textarea)[^>]*name=\"([^\"]+)\"", body, re.I)
+              if names: print("  fields:", sorted(set(names)))
+              links = sorted(set(re.findall(r"href=\"(/[^\"#?]*)", body)))
+              if links: print("  links:", links[:60])
+              ext = sorted(set(re.findall(r"<script[^>]*src=\"([^\"]+)\"", body, re.I)))
+              print("  scripts:", ext)
+              for kw in ("signalr", "websocket", "socket.io", "hub", "blazor", "vue", "react", "jquery", "bot", "AI", "機器人", "規則", "條款"):
+                  n = len(re.findall(re.escape(kw), body, re.I))
+                  if n: print(f"  mentions {kw!r}: {n}")
+              inline = "\n".join(re.findall(r"<script(?![^>]*src)[^>]*>(.*?)</script>", body, re.S | re.I))
+              for m in sorted(set(re.findall(r"(?:withUrl|HubConnectionBuilder|\.invoke|connection\.on|new WebSocket|io\()\s*\(?\s*['\"][^'\"]{1,80}['\"]", inline)))[:40]:
+                  print("  inline-call:", m)
+              for src in ext:
+                  url = urllib.parse.urljoin(final, src)
+                  if urllib.parse.urlparse(url).netloc != urllib.parse.urlparse(base).netloc or url in seen_js: continue
+                  seen_js.add(url)
+                  c2, _, _, js = get(url)
+                  hits = sorted(set(re.findall(r"(?:withUrl|\.invoke|\.send|connection\.on|\.on)\(\s*['\"]([A-Za-z0-9_/\-]{2,60})['\"]", js)))
+                  hubs = sorted(set(re.findall(r"['\"](/[A-Za-z0-9_\-]*[Hh]ub[A-Za-z0-9_/\-]*)['\"]", js)))
+                  apis = sorted(set(re.findall(r"['\"](/(?:api|Room|Game|Account)[A-Za-z0-9_/\-]*)['\"]", js)))
+                  print(f"  -- {src} -> {c2}, {len(js)} chars; hubs={hubs[:10]} calls={hits[:80]} paths={apis[:40]}")
+          PY
