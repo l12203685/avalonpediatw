@@ -41,9 +41,9 @@ export const LEADERBOARD_SIZE = 10;
 /**
  * Only used when the cache has no `overview.topPlayersByTheory` (older or
  * partial cache): rebuild the same ranking the generator uses — roleTheory
- * desc among players with at least MIN_GAMES_THRESHOLD (50) games.
+ * desc among players with at least MIN_GAMES_THRESHOLD (30) games.
  */
-export const LEADERBOARD_FALLBACK_MIN_GAMES = 50;
+export const LEADERBOARD_FALLBACK_MIN_GAMES = 30;
 
 /** Max candidates listed when a name matches several players. */
 export const MAX_NAME_CANDIDATES = 5;
