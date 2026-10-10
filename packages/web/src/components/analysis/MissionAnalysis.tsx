@@ -68,7 +68,7 @@ export default function MissionAnalysis(): JSX.Element {
     twoFail:  Math.round((m.twoFail  / m.total) * 1000) / 10,
   }));
 
-  const corrRows = data.missionOutcomeCorrelation.filter(c => c.round <= 4);
+  const corrRows = (data.missionOutcomeCorrelation ?? []).filter(c => c.round <= 4);
 
   return (
     <div className="space-y-6">
@@ -122,40 +122,42 @@ export default function MissionAnalysis(): JSX.Element {
       </motion.div>
 
       {/* Mission outcome correlation - now 3-outcome split per branch */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 space-y-4"
-      >
-        <div>
-          <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.mission.missionVsOutcomeTitle')}</h3>
-          <p className="text-[10px] text-gray-600">{t('analytics.deep.mission.missionVsOutcomeSub')}</p>
-        </div>
-        <div className="space-y-3">
-          {corrRows.map(r => (
-            <div key={r.round} className="bg-gray-800/40 rounded-lg p-3 space-y-3">
-              <p className="text-xs font-bold text-gray-300">{t('analytics.deep.mission.missionLabel', { round: r.round })}</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-green-400 font-bold">{t('analytics.deep.mission.missionPass')}</span>
-                    <span className="text-gray-500">{r.passedGames} {t('analytics.deep.mission.samples')}</span>
+      {corrRows.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 space-y-4"
+        >
+          <div>
+            <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.mission.missionVsOutcomeTitle')}</h3>
+            <p className="text-[10px] text-gray-600">{t('analytics.deep.mission.missionVsOutcomeSub')}</p>
+          </div>
+          <div className="space-y-3">
+            {corrRows.map(r => (
+              <div key={r.round} className="bg-gray-800/40 rounded-lg p-3 space-y-3">
+                <p className="text-xs font-bold text-gray-300">{t('analytics.deep.mission.missionLabel', { round: r.round })}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-green-400 font-bold">{t('analytics.deep.mission.missionPass')}</span>
+                      <span className="text-gray-500">{r.passedGames} {t('analytics.deep.mission.samples')}</span>
+                    </div>
+                    <OutcomeBar outcomes={r.passedOutcomes} variant="stacked" />
                   </div>
-                  <OutcomeBar outcomes={r.passedOutcomes} variant="stacked" />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-red-400 font-bold">{t('analytics.deep.mission.missionFail')}</span>
-                    <span className="text-gray-500">{r.failedGames} {t('analytics.deep.mission.samples')}</span>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-red-400 font-bold">{t('analytics.deep.mission.missionFail')}</span>
+                      <span className="text-gray-500">{r.failedGames} {t('analytics.deep.mission.samples')}</span>
+                    </div>
+                    <OutcomeBar outcomes={r.failedOutcomes} variant="stacked" />
                   </div>
-                  <OutcomeBar outcomes={r.failedOutcomes} variant="stacked" />
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

@@ -454,7 +454,8 @@ export interface ChemistryData {
 export interface MissionAnalysisData {
   missionPassRates: Array<{ round: number; passRate: number; totalGames: number }>;
   missionOutcomeByRound: Array<{ round: number; allPass: number; oneFail: number; twoFail: number; total: number }>;
-  missionOutcomeCorrelation: Array<{
+  /** Absent in caches rebuilt by the raw-牌譜 pipeline (61b7398) — UI hides the panel. */
+  missionOutcomeCorrelation?: Array<{
     round: number;
     passedGames: number;
     passedThenBlueWin: number;
