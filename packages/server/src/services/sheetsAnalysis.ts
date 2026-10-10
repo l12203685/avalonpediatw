@@ -121,24 +121,57 @@ export interface OverviewData {
   }>;
 }
 
+/**
+ * Shape served by /api/analysis/seat-order (and read by the web
+ * SeatOrderAnalysis panel). Keys: 三藍梅活 / 三藍梅死 / 三紅 (+ `pct`),
+ * 穿插任務, 穿插率, 穿插紅勝率, 無穿插紅勝率.
+ */
 export interface SeatOrderPermutation {
   order: string;
   total: number;
   '\u4e09\u85cd\u6885\u6d3b': number;
   '\u4e09\u85cd\u6885\u6b7b': number;
   '\u4e09\u7d05': number;
+  '\u4e09\u85cd\u6885\u6d3bpct': number;
+  '\u4e09\u85cd\u6885\u6b7bpct': number;
+  '\u4e09\u7d05pct': number;
   '\u7a7f\u63d2\u4efb\u52d9': number;
   redWinRate: number;
   blueWinRate: number;
   merlinKillRate: number;
   '\u7a7f\u63d2\u7387': number;
+  /** 穿插紅勝率 / 無穿插紅勝率 — absent in the raw-牌譜 rebuild (61b7398). */
+  '\u7a7f\u63d2\u7d05\u52dd\u7387'?: number;
+  '\u7121\u7a7f\u63d2\u7d05\u52dd\u7387'?: number;
 }
+
+/**
+ * Permutation as stored in analysis_cache.json. generate_cache.py writes the
+ * full served shape; the raw-牌譜 rebuild (61b7398) writes counts only, under
+ * the short keys 三藍活 / 三藍死, with no `pct` fields.
+ */
+type CachedSeatOrderPermutation = Omit<
+  SeatOrderPermutation,
+  | '\u4e09\u85cd\u6885\u6d3b' | '\u4e09\u85cd\u6885\u6b7b'
+  | '\u4e09\u85cd\u6885\u6d3bpct' | '\u4e09\u85cd\u6885\u6b7bpct' | '\u4e09\u7d05pct'
+> & Partial<Pick<
+  SeatOrderPermutation,
+  | '\u4e09\u85cd\u6885\u6d3b' | '\u4e09\u85cd\u6885\u6b7b'
+  | '\u4e09\u85cd\u6885\u6d3bpct' | '\u4e09\u85cd\u6885\u6b7bpct' | '\u4e09\u7d05pct'
+>> & {
+  '\u4e09\u85cd\u6d3b'?: number;
+  '\u4e09\u85cd\u6b7b'?: number;
+};
 
 export interface SeatOrderData {
   permutations: SeatOrderPermutation[];
   totalGames: number;
   overallRedWinRate: number;
 }
+
+type CachedSeatOrderData = Omit<SeatOrderData, 'permutations'> & {
+  permutations: CachedSeatOrderPermutation[];
+};
 
 export interface CaptainMissionEntry {
   mission: number;
@@ -323,6 +356,18 @@ interface AnalysisCache {
     missionPassRates: Array<{ round: number; passRate: number; totalGames: number }>;
     failDistribution: Array<{ fails: number; count: number; percentage: number }>;
     missionOutcomeByRound: Array<{ round: number; allPass: number; oneFail: number; twoFail: number; total: number }>;
+    /** generate_cache.py only — absent in the raw-牌譜 rebuild (61b7398). */
+    missionOutcomeCorrelation?: Array<{
+      round: number;
+      passedGames: number;
+      passedThenBlueWin: number;
+      passedBlueWinRate: number;
+      passedOutcomes: OutcomeBreakdown;
+      failedGames: number;
+      failedThenRedWin: number;
+      failedRedWinRate: number;
+      failedOutcomes: OutcomeBreakdown;
+    }>;
   };
   lake: {
     perLake: Array<{
@@ -342,19 +387,23 @@ interface AnalysisCache {
       diffFaction: { games: number; redWinRate: number; outcomes: OutcomeBreakdown };
     }>;
   };
+  /**
+   * `outcomes` (三結果) is written by generate_cache.py but not by the
+   * raw-牌譜 rebuild (61b7398), so it is optional throughout.
+   */
   rounds: {
     visionStats: {
-      merlinInTeam: { games: number; mission1PassRate: number; redWinRate: number; blueWinRate: number };
-      merlinNotInTeam: { games: number; mission1PassRate: number; redWinRate: number; blueWinRate: number };
-      percivalInTeam: { games: number; mission1PassRate: number; redWinRate: number };
-      percivalNotInTeam: { games: number; mission1PassRate: number; redWinRate: number };
+      merlinInTeam: { games: number; mission1PassRate: number; redWinRate: number; blueWinRate: number; outcomes?: OutcomeBreakdown };
+      merlinNotInTeam: { games: number; mission1PassRate: number; redWinRate: number; blueWinRate: number; outcomes?: OutcomeBreakdown };
+      percivalInTeam: { games: number; mission1PassRate: number; redWinRate: number; outcomes?: OutcomeBreakdown };
+      percivalNotInTeam: { games: number; mission1PassRate: number; redWinRate: number; outcomes?: OutcomeBreakdown };
     };
-    redInR11: Array<{ redCount: number; games: number; mission1PassRate: number; redWinRate: number }>;
-    mission1Branch: Array<{ passed: boolean; games: number; redWinRate: number; merlinKillRate: number }>;
+    redInR11: Array<{ redCount: number; games: number; mission1PassRate: number; redWinRate: number; outcomes?: OutcomeBreakdown }>;
+    mission1Branch: Array<{ passed: boolean; games: number; redWinRate: number; merlinKillRate: number; outcomes?: OutcomeBreakdown }>;
     roundProgression: Record<string, { bluePct: number; redPct: number; total: number }>;
-    gameStates: Array<{ state: string; games: number; redWinRate: number }>;
+    gameStates: Array<{ state: string; games: number; redWinRate: number; outcomes?: OutcomeBreakdown }>;
   };
-  seatOrder?: SeatOrderData;
+  seatOrder?: CachedSeatOrderData;
   captainAnalysis?: CaptainAnalysisData;
   archetype?: ArchetypeData;
   strength?: StrengthData;
@@ -390,6 +439,42 @@ function loadCache(): AnalysisCache {
   );
 }
 
+/**
+ * Own-property lookup for name-keyed cache maps. Player names come straight
+ * from the URL, so a plain `record[name]` would resolve "constructor" /
+ * "__proto__" / "toString" to Object.prototype members and the accessors
+ * below would then throw on `.player.totalGames` (→ 500 instead of 404).
+ */
+function byName<T>(record: Record<string, T>, name: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(record, name) ? record[name] : undefined;
+}
+
+function rnd1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+/**
+ * Bring a cached permutation to the served shape: canonical 三藍梅活/三藍梅死
+ * counts plus the three `pct` fields, derived from the counts when the cache
+ * only carries counts (raw-牌譜 rebuild). Interleave red-win rates cannot be
+ * derived and stay absent; the UI hides that table.
+ */
+function normalizeSeatOrderPermutation(p: CachedSeatOrderPermutation): SeatOrderPermutation {
+  const blueAlive = p['三藍梅活'] ?? p['三藍活'] ?? 0;
+  const blueDead = p['三藍梅死'] ?? p['三藍死'] ?? 0;
+  const threeRed = p['三紅'] ?? 0;
+  const pct = (n: number): number => (p.total > 0 ? rnd1((n / p.total) * 100) : 0);
+  return {
+    ...p,
+    '三藍梅活': blueAlive,
+    '三藍梅死': blueDead,
+    '三紅': threeRed,
+    '三藍梅活pct': p['三藍梅活pct'] ?? pct(blueAlive),
+    '三藍梅死pct': p['三藍梅死pct'] ?? pct(blueDead),
+    '三紅pct': p['三紅pct'] ?? pct(threeRed),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public API (matching existing function signatures)
 // ---------------------------------------------------------------------------
@@ -403,7 +488,7 @@ export async function getAllPlayerStats(): Promise<PlayerStats[]> {
 }
 
 export async function getPlayerByName(name: string): Promise<PlayerStats | null> {
-  const detail = loadCache().playerDetails[name];
+  const detail = byName(loadCache().playerDetails, name);
   return detail ? detail.player : null;
 }
 
@@ -428,7 +513,10 @@ export async function getSeatOrderAnalysis(): Promise<SeatOrderData> {
   if (!c.seatOrder) {
     return { permutations: [], totalGames: 0, overallRedWinRate: 0 };
   }
-  return c.seatOrder;
+  return {
+    ...c.seatOrder,
+    permutations: c.seatOrder.permutations.map(normalizeSeatOrderPermutation),
+  };
 }
 
 export async function getCaptainAnalysis(): Promise<CaptainAnalysisData> {
@@ -467,9 +555,9 @@ export async function getPlayerArchetype(name: string): Promise<{
 } | null> {
   const c = loadCache();
   if (!c.archetype) return null;
-  const data = c.archetype.perPlayer[name];
+  const data = byName(c.archetype.perPlayer, name);
   if (!data) return null;
-  const detail = c.playerDetails[name];
+  const detail = byName(c.playerDetails, name);
   return {
     player: {
       name,
@@ -494,9 +582,9 @@ export async function getPlayerStrength(name: string): Promise<{
 } | null> {
   const c = loadCache();
   if (!c.strength) return null;
-  const data = c.strength.perPlayer[name];
+  const data = byName(c.strength.perPlayer, name);
   if (!data) return null;
-  const detail = c.playerDetails[name];
+  const detail = byName(c.playerDetails, name);
   return {
     player: {
       name,
@@ -521,9 +609,9 @@ export async function getPlayerPlaystyle(name: string): Promise<{
 } | null> {
   const c = loadCache();
   if (!c.playstyle) return null;
-  const data = c.playstyle.perPlayer[name];
+  const data = byName(c.playstyle.perPlayer, name);
   if (!data) return null;
-  const detail = c.playerDetails[name];
+  const detail = byName(c.playerDetails, name);
   return {
     player: {
       name,

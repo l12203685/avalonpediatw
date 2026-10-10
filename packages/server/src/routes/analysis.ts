@@ -52,6 +52,20 @@ function fail(res: Response, status: number, message: string): Response {
   return res.status(status).json(body);
 }
 
+/**
+ * Express has already percent-decoded `req.params`; the extra
+ * decodeURIComponent is kept for clients that double-encode, but a name that
+ * merely contains "%" (e.g. "100%") must not turn into a URIError → 500.
+ */
+function nameParam(req: Request): string {
+  const raw = req.params.name;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 function sheetsGuard(res: Response): boolean {
   if (!isSheetsReady()) {
     fail(res, 503, 'Google Sheets credentials not configured');
@@ -100,7 +114,7 @@ router.get('/players', limiter, async (_req: Request, res: Response) => {
 router.get('/players/:name', limiter, async (req: Request, res: Response) => {
   if (!sheetsGuard(res)) return;
   try {
-    const player = await getPlayerByName(decodeURIComponent(req.params.name));
+    const player = await getPlayerByName(nameParam(req));
     if (!player) {
       return fail(res, 404, 'Player not found');
     }
@@ -229,7 +243,7 @@ router.get('/captain', limiter, async (_req: Request, res: Response) => {
 router.get('/profile/:name/archetype', limiter, async (req: Request, res: Response) => {
   if (!sheetsGuard(res)) return;
   try {
-    const name = decodeURIComponent(req.params.name);
+    const name = nameParam(req);
     const data = await getPlayerArchetype(name);
     if (!data) {
       return fail(res, 404, 'Player not tracked in analysis cache');
@@ -249,7 +263,7 @@ router.get('/profile/:name/archetype', limiter, async (req: Request, res: Respon
 router.get('/profile/:name/strength', limiter, async (req: Request, res: Response) => {
   if (!sheetsGuard(res)) return;
   try {
-    const name = decodeURIComponent(req.params.name);
+    const name = nameParam(req);
     const data = await getPlayerStrength(name);
     if (!data) {
       return fail(res, 404, 'Player not tracked in analysis cache');
@@ -269,7 +283,7 @@ router.get('/profile/:name/strength', limiter, async (req: Request, res: Respons
 router.get('/profile/:name/playstyle', limiter, async (req: Request, res: Response) => {
   if (!sheetsGuard(res)) return;
   try {
-    const name = decodeURIComponent(req.params.name);
+    const name = nameParam(req);
     const data = await getPlayerPlaystyle(name);
     if (!data) {
       return fail(res, 404, 'Player not tracked in analysis cache');
