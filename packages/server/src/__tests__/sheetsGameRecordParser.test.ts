@@ -463,6 +463,31 @@ describe('parseSheetsGameCell — Edward 第 2139 場 fixture', () => {
     expect(link.truthful).toBe(true);
   });
 
+  it('leaderSeat follows the per-proposal rotation from seat 1 (not teamSeats[0])', () => {
+    // R1 座1..5、R2 座6..10、R3 座1..2、R4 座3..5、R5 座6 — 跨回合不重置。
+    expect(parsed.missions.map((m) => m.leaderSeat)).toEqual([
+      1, 2, 3, 4, 5,
+      6, 7, 8, 9, 10,
+      1, 2,
+      3, 4, 5,
+      6,
+    ]);
+    // 舊 bug：R2 第 1 提議 "2458 6+" 會被記成隊長 2；實際隊長為座 6（場外白）。
+    expect(parsed.missions[5].leaderSeat).toBe(6);
+  });
+
+  it('leaderSeatForProposal wraps around the table', () => {
+    const { leaderSeatForProposal } = __internal;
+    expect(leaderSeatForProposal(0, 10)).toBe(1);
+    expect(leaderSeatForProposal(9, 10)).toBe(10);
+    expect(leaderSeatForProposal(10, 10)).toBe(1);
+    expect(leaderSeatForProposal(23, 10)).toBe(4);
+    expect(leaderSeatForProposal(5, 7)).toBe(6);
+    expect(leaderSeatForProposal(7, 7)).toBe(1);
+    expect(leaderSeatForProposal(0, 10, 4)).toBe(4);
+    expect(leaderSeatForProposal(7, 10, 4)).toBe(1);
+  });
+
   it('all 5 quests recorded in outcomes (missions count ≥ 5)', () => {
     // 總提議數 = 5(R1) + 5(R2) + 2(R3) + 3(R4) + 1(R5) = 16
     expect(parsed.missions).toHaveLength(16);

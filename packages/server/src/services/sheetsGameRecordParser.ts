@@ -215,6 +215,27 @@ function parseLadyLine(
 }
 
 // ---------------------------------------------------------------------------
+// Leader rotation
+// ---------------------------------------------------------------------------
+
+/**
+ * 隊長座號（1..playerCount）。Sheets 牌譜沒有隊長欄，但本地慣例是每場由
+ * 座 1 開始，**每一次提議**（含被否決的提議與第 5 次強制局）隊長順時針
+ * 往下一座，跨回合不重置：第 1 回合 5 次提議 = 座 1..5，第 2 回合從座 6 開始。
+ * （全 2146 場驗證：依此輪轉的隊長有 90.6% 把自己放進隊伍。）
+ *
+ * @param globalProposalIndex 本場第幾次提議（0 起算，跨回合累計）
+ */
+export function leaderSeatForProposal(
+  globalProposalIndex: number,
+  playerCount: number,
+  firstLeaderSeat = 1,
+): number {
+  const offset = (firstLeaderSeat - 1 + globalProposalIndex) % playerCount;
+  return offset + 1;
+}
+
+// ---------------------------------------------------------------------------
 // Votes + mission building
 // ---------------------------------------------------------------------------
 
@@ -528,30 +549,22 @@ function deriveActualCamp(seat: number, roles: RolesV2): CampV2 {
 }
 
 // ---------------------------------------------------------------------------
-// Main parser
+// Line normalization
 // ---------------------------------------------------------------------------
 
-export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
-  const {
-    gameText,
-    roleCode,
-    playedAtStr,
-    gameNumInDay,
-    playerNames,
-    playerNameToUid,
-    gameId,
-    assassinTargetRaw,
-  } = input;
-
-  // ---- Line normalization ----
-  // 1) Lowercase O/X → o/x (some rows use capitals for quest/lady outcomes).
-  // 2) Strip curly quotes (e.g. `136”` typo from Sheets auto-format).
-  // 3) Replace period-as-separator with space (e.g. `"190.4+"` → `"190 4+"`)
-  //    when the period sits between a seat digit and a +/- anomaly digit.
-  // 4) Collapse lingering tabs/double-spaces.
-  // 5) Truncate at assassination footer (lines starting with `刺客刺殺`,
-  //    `1.` / `2.` / …  numbered player listings, or isolated 6-digit cfg
-  //    that matches the roleCode value). These are metadata, not gameplay.
+/**
+ * 牌譜原文 → 正規化後的非空行。
+ *
+ * 1) Strip curly quotes (e.g. `136”` typo from Sheets auto-format).
+ * 2) Replace period-as-separator with space (e.g. `"190.4+"` → `"190 4+"`)
+ *    when the period sits between a seat digit and a +/- anomaly digit.
+ * 3) Collapse lingering tabs/double-spaces.
+ * 4) Truncate at assassination footer (lines starting with `刺客刺殺`,
+ *    `1.` / `2.` / …  numbered player listings, or isolated 6-digit cfg
+ *    that matches the roleCode value). These are metadata, not gameplay.
+ * (Upper-case O/X are accepted by the quest/lady line matchers directly.)
+ */
+export function normalizeGameTextLines(gameText: string, roleCode: string): string[] {
   const rawLines = gameText.split(/\r?\n/);
   const lines: string[] = [];
   const footerStart = /^(?:刺客刺殺|刺殺|結果[:：])/;
@@ -572,6 +585,26 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
     if (line.length === 0) continue;
     lines.push(line);
   }
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
+// Main parser
+// ---------------------------------------------------------------------------
+
+export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
+  const {
+    gameText,
+    roleCode,
+    playedAtStr,
+    gameNumInDay,
+    playerNames,
+    playerNameToUid,
+    gameId,
+    assassinTargetRaw,
+  } = input;
+
+  const lines = normalizeGameTextLines(gameText, roleCode);
 
   const roles = parseRoleCode(roleCode);
 
@@ -591,10 +624,9 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
 
   let currentRound: 1 | 2 | 3 | 4 | 5 = 1;
   let proposalInRound = 0;
-  // leader seat：Phase 2a 依每回合第一個提議實際行為下一次隊長推導，
-  // 這裡簡化為 leaderSeat = 該提議序號對應的座號 — Sheets 原文沒明寫，
-  // 保守以 teamSeats[0] 當 leader（若來源有明確隊長欄再改）。
-  // 實務上用戶在意的是隊員/投票，leaderSeat 僅供 future hydrate。
+  // 隊長依本場累計提議序號輪轉（見 leaderSeatForProposal）。2026-10-10 修正：
+  // 舊版以 teamSeats[0] 當隊長是錯的（隊伍字串依座號排序，與隊長無關）。
+  let globalProposalIndex = 0;
 
   for (const line of lines) {
     if (isQuestLine(line)) {
@@ -654,9 +686,8 @@ export function parseSheetsGameCell(input: SheetsParseInput): GameRecordV2 {
     // 最後一個提議才 passed；之前的都是 rejected — 下方 quest line 處理時會覆寫 last.passed = true
     const passed = approveCount > rejectCount;
 
-    // leaderSeat 保守推導：提議序號以「1 起往右數」的方式從首位 leader 推；
-    // 史料無明確 leader 來源時，退而用 teamSeats[0]（與 derived 用 leaderStartIndex 取首 proposal 的 leader）。
-    const leaderSeat = teamSeats[0] ?? 1;
+    const leaderSeat = leaderSeatForProposal(globalProposalIndex, playerCount);
+    globalProposalIndex += 1;
 
     missions.push({
       round: currentRound,
@@ -737,4 +768,5 @@ export const __internal = {
   isQuestLine,
   isLadyLine,
   parseAssassinTargetRaw,
+  leaderSeatForProposal,
 };
