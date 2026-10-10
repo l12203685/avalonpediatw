@@ -42,10 +42,17 @@ jobs:
         if: ${{ env.SERVER_URL != '' }}
         run: |
           base="${SERVER_URL%/}"
-          for p in /health /api/version; do
-            code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 60 "$base$p" || true)
-            echo "$p -> HTTP $code"; head -c 300 /tmp/body 2>/dev/null; echo
+          # Render Free cold start can exceed a minute — retry before judging.
+          for i in 1 2 3 4; do
+            start=$(date +%s)
+            code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 90 "$base/health" || true)
+            echo "/health attempt $i -> HTTP $code in $(( $(date +%s) - start ))s"
+            [ "$code" = "200" ] && break
+            sleep 10
           done
+          head -c 300 /tmp/body 2>/dev/null || true; echo
+          code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 60 "$base/api/version" || true)
+          echo "/api/version -> HTTP $code"; head -c 300 /tmp/body 2>/dev/null || true; echo
 
       - name: Skip when no server URL is configured
         if: ${{ env.SERVER_URL == '' }}
