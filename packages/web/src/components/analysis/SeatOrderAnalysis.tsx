@@ -13,6 +13,17 @@ const RED        = '#ef4444';
 const BLUE_DEAD  = '#f59e0b';
 const BLUE_ALIVE = '#3b82f6';
 
+function RedRateCell({ value }: { value?: number }): JSX.Element {
+  if (value === undefined) {
+    return <td className="py-2 px-2 text-right text-gray-600">—</td>;
+  }
+  return (
+    <td className={`py-2 px-2 text-right font-bold ${value >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
+      {value}%
+    </td>
+  );
+}
+
 /**
  * 派/梅/娜順序分析 — Edward 2026-04-26 spec
  *
@@ -64,6 +75,11 @@ export default function SeatOrderAnalysis(): JSX.Element {
       </div>
     );
   }
+
+  // The raw-牌譜 rebuild (61b7398) carries no interleave red-win split (and
+  // 穿插任務 is 0 everywhere), so the interleave table only renders when the
+  // cache actually has it.
+  const hasInterleave = data.permutations.some(p => p['穿插紅勝率'] !== undefined);
 
   // Reorder columns to fixed display order 三紅 → 三藍死 → 三藍活.
   const outcomeData = data.permutations.map(p => ({
@@ -147,49 +163,45 @@ export default function SeatOrderAnalysis(): JSX.Element {
       </motion.div>
 
       {/* Interleaving table */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-      >
-        <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.seatOrder.interleaveTitle')}</h3>
-        <p className="text-[10px] text-gray-600 mb-3">{t('analytics.deep.seatOrder.interleaveSub')}</p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th className="text-left  py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.permCol')}</th>
-                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.gamesLabel')}</th>
-                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveCount')}</th>
-                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveRateCol')}</th>
-                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveRedRate')}</th>
-                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.noInterleaveRedRate')}</th>
-                <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.overallRedRate')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.permutations.map(p => (
-                <tr key={p.order} className="border-b border-gray-800">
-                  <td className="py-2 px-2 text-white font-bold">{p.order}</td>
-                  <td className="py-2 px-2 text-right text-gray-300">{p.total}</td>
-                  <td className="py-2 px-2 text-right text-purple-400">{p['穿插任務']}</td>
-                  <td className="py-2 px-2 text-right text-purple-400">{p['穿插率']}%</td>
-                  <td className={`py-2 px-2 text-right font-bold ${p['穿插紅勝率'] >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
-                    {p['穿插紅勝率']}%
-                  </td>
-                  <td className={`py-2 px-2 text-right font-bold ${p['無穿插紅勝率'] >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
-                    {p['無穿插紅勝率']}%
-                  </td>
-                  <td className={`py-2 px-2 text-right font-bold ${p.redWinRate >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
-                    {p.redWinRate}%
-                  </td>
+      {hasInterleave && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
+        >
+          <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.seatOrder.interleaveTitle')}</h3>
+          <p className="text-[10px] text-gray-600 mb-3">{t('analytics.deep.seatOrder.interleaveSub')}</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left  py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.permCol')}</th>
+                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.gamesLabel')}</th>
+                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveCount')}</th>
+                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveRateCol')}</th>
+                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveRedRate')}</th>
+                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.noInterleaveRedRate')}</th>
+                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.overallRedRate')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
+              </thead>
+              <tbody>
+                {data.permutations.map(p => (
+                  <tr key={p.order} className="border-b border-gray-800">
+                    <td className="py-2 px-2 text-white font-bold">{p.order}</td>
+                    <td className="py-2 px-2 text-right text-gray-300">{p.total}</td>
+                    <td className="py-2 px-2 text-right text-purple-400">{p['穿插任務']}</td>
+                    <td className="py-2 px-2 text-right text-purple-400">{p['穿插率']}%</td>
+                    <RedRateCell value={p['穿插紅勝率']} />
+                    <RedRateCell value={p['無穿插紅勝率']} />
+                    <RedRateCell value={p.redWinRate} />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 10 }}

@@ -468,12 +468,16 @@ export interface MissionAnalysisData {
   }>;
 }
 
+/**
+ * `outcomes` (三結果) is absent throughout `rounds` in caches rebuilt by the
+ * raw-牌譜 pipeline (61b7398) — UI falls back to the single redWinRate.
+ */
 interface VisionEntry {
   games: number;
   mission1PassRate: number;
   redWinRate: number;
   blueWinRate?: number;
-  outcomes: OutcomeBreakdown;
+  outcomes?: OutcomeBreakdown;
 }
 
 export interface RoundsAnalysisData {
@@ -483,10 +487,10 @@ export interface RoundsAnalysisData {
     percivalInTeam: VisionEntry;
     percivalNotInTeam: VisionEntry;
   };
-  redInR11: Array<{ redCount: number; games: number; mission1PassRate: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
-  mission1Branch: Array<{ passed: boolean; games: number; redWinRate: number; merlinKillRate: number; outcomes: OutcomeBreakdown }>;
+  redInR11: Array<{ redCount: number; games: number; mission1PassRate: number; redWinRate: number; outcomes?: OutcomeBreakdown }>;
+  mission1Branch: Array<{ passed: boolean; games: number; redWinRate: number; merlinKillRate: number; outcomes?: OutcomeBreakdown }>;
   roundProgression: Record<string, { bluePct: number; redPct: number; total: number }>;
-  gameStates: Array<{ state: string; games: number; redWinRate: number; outcomes: OutcomeBreakdown }>;
+  gameStates: Array<{ state: string; games: number; redWinRate: number; outcomes?: OutcomeBreakdown }>;
 }
 
 interface ApiEnvelope<T> { success: boolean; data?: T; error?: string }
@@ -573,8 +577,9 @@ export interface SeatOrderPermutation {
   blueWinRate: number;
   merlinKillRate: number;
   '\u7a7f\u63d2\u7387': number;
-  '\u7a7f\u63d2\u7d05\u52dd\u7387': number;
-  '\u7121\u7a7f\u63d2\u7d05\u52dd\u7387': number;
+  /** 穿插紅勝率 / 無穿插紅勝率 — absent in the raw-牌譜 rebuild (61b7398); UI hides the interleave table. */
+  '\u7a7f\u63d2\u7d05\u52dd\u7387'?: number;
+  '\u7121\u7a7f\u63d2\u7d05\u52dd\u7387'?: number;
 }
 
 export interface SeatOrderData {

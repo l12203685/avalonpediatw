@@ -20,10 +20,30 @@ import OutcomeBar from './OutcomeBar';
  * blue-merlin-dead games.
  */
 
+type TFn = (k: string, opts?: Record<string, unknown>) => string;
+
+/**
+ * Caches rebuilt from raw 牌譜 (61b7398) carry no `outcomes` in `rounds`, only
+ * redWinRate — show that single number instead of the three-outcome bar.
+ */
+function OutcomeOrRedRate({ outcomes, redWinRate, t }: {
+  outcomes?: OutcomeBreakdown;
+  redWinRate: number;
+  t: TFn;
+}): JSX.Element {
+  if (outcomes) return <OutcomeBar outcomes={outcomes} variant="stacked" />;
+  return (
+    <div className="flex justify-between text-xs">
+      <span className="text-gray-500">{t('analytics.deep.common.redWinRate')}</span>
+      <span className="text-red-400 font-bold">{redWinRate}%</span>
+    </div>
+  );
+}
+
 function VisionCard({ title, data, t }: {
   title: string;
-  data: { games: number; mission1PassRate: number; outcomes: OutcomeBreakdown };
-  t: (k: string, opts?: Record<string, unknown>) => string;
+  data: { games: number; mission1PassRate: number; redWinRate: number; outcomes?: OutcomeBreakdown };
+  t: TFn;
 }): JSX.Element {
   return (
     <div className="bg-gray-800/40 rounded-lg p-3 space-y-2">
@@ -34,7 +54,7 @@ function VisionCard({ title, data, t }: {
         <span className="text-gray-500">{t('analytics.deep.rounds.passRateLabel')}</span>
         <span className="text-green-400 font-bold text-right">{data.mission1PassRate}%</span>
       </div>
-      <OutcomeBar outcomes={data.outcomes} variant="stacked" />
+      <OutcomeOrRedRate outcomes={data.outcomes} redWinRate={data.redWinRate} t={t} />
     </div>
   );
 }
@@ -145,7 +165,7 @@ export default function RoundsAnalysis(): JSX.Element {
                   <span className="text-white font-bold">{t('analytics.deep.rounds.redCountLabel', { count: r.redCount })}</span>
                   <span className="text-gray-500">{r.games} {t('analytics.deep.common.games')}</span>
                 </div>
-                <OutcomeBar outcomes={r.outcomes} variant="stacked" />
+                <OutcomeOrRedRate outcomes={r.outcomes} redWinRate={r.redWinRate} t={t} />
               </div>
             ))}
           </div>
@@ -167,7 +187,7 @@ export default function RoundsAnalysis(): JSX.Element {
                   </span>
                   <span className="text-xs text-gray-500">{b.games} {t('analytics.deep.rounds.branchSamples')}</span>
                 </div>
-                <OutcomeBar outcomes={b.outcomes} variant="stacked" />
+                <OutcomeOrRedRate outcomes={b.outcomes} redWinRate={b.redWinRate} t={t} />
               </div>
             ))}
           </div>
@@ -191,7 +211,7 @@ export default function RoundsAnalysis(): JSX.Element {
                 <div key={s.state} className="bg-gray-800/40 rounded-lg p-2 grid grid-cols-[80px_60px_1fr] items-center gap-2">
                   <span className="text-white font-bold text-xs">{s.state}</span>
                   <span className="text-gray-500 text-[10px] text-right">{s.games} {t('analytics.deep.common.games')}</span>
-                  <OutcomeBar outcomes={s.outcomes} variant="stacked" />
+                  <OutcomeOrRedRate outcomes={s.outcomes} redWinRate={s.redWinRate} t={t} />
                 </div>
               ))}
           </div>
