@@ -1,0 +1,71 @@
+# Build + boot Dockerfile.server exactly the way Render does, so a broken
+# image is caught here instead of as a Render service that silently never
+# comes up (Render holds requests open while the instance cannot boot, which
+# from outside just looks like timeouts — see verify-line-webhook.yml).
+#
+# Paths mirror render.yaml buildFilter. The weekly schedule exists because the
+# Dockerfile installs the latest pnpm from npm, so the build can break with no
+# change in this repo.
+name: Build server image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/server/**'
+      - 'packages/shared/**'
+      - 'Dockerfile.server'
+      - '.dockerignore'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - 'tsconfig.json'
+      - 'turbo.json'
+      - '.github/workflows/build-server-image.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '23 2 * * 1'   # Mondays 10:23 +08
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-server-image
+  cancel-in-progress: true
+
+jobs:
+  build-and-boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: docker build -f Dockerfile.server
+        run: docker build -f Dockerfile.server -t avalon-server:ci .
+
+      - name: Boot the image like Render (PORT=10000, no bot secrets) and wait for /health
+        run: |
+          docker run -d --name avalon -p 10000:10000 \
+            -e PORT=10000 -e NODE_ENV=production -e JWT_SECRET=ci-only \
+            -e KEEP_ALIVE=false -e LINE_WEBHOOK_AUTOSET=true -e LINE_REPLY_DRAIN=true \
+            avalon-server:ci
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://127.0.0.1:10000/health > /tmp/health.json; then ok=1; break; fi
+            if [ "$(docker inspect -f '{{.State.Running}}' avalon)" != "true" ]; then
+              echo "::error::container exited during boot"; break
+            fi
+            sleep 2
+          done
+          echo "----- container log -----"; docker logs avalon 2>&1 | tail -80
+          if [ "$ok" != 1 ]; then
+            echo "::error::image built but /health never answered within 60 s — Render would show this service as never live"
+            exit 1
+          fi
+          cat /tmp/health.json; echo
+          curl -fsS --max-time 5 http://127.0.0.1:10000/api/bots/status | head -c 1500; echo
+
+      - name: Stop container
+        if: always()
+        run: docker rm -f avalon >/dev/null 2>&1 || true
