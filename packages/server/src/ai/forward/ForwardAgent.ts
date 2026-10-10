@@ -961,6 +961,15 @@ export class ForwardAgent implements AvalonAgent {
     }
 
     const chosen = candidates[bestIdx];
+    // Defence in depth (2026-10-10 crash fix): never hand the engine an
+    // illegal team. GameEngine.selectQuestTeam throws on a size mismatch,
+    // which aborts the whole game; the baseline pipeline always fills.
+    if (
+      chosen.action.type === 'team_select' &&
+      !isLegalTeam(chosen.action.teamIds, obs)
+    ) {
+      return this.fallback(obs, decisionType, 'illegal team candidate');
+    }
     const trace: ReasoningTrace = {
       decisionType,
       purposes,
@@ -1070,6 +1079,15 @@ export class ForwardAgent implements AvalonAgent {
 
     // Rank everyone by ascending suspicion (least suspicious first).
     let ranked = rankBySuspicion(pyramid, obs, false);
+    // Snapshot before role-specific hard exclusions so the backfill
+    // below can restore excluded seats when the filtered pool is too
+    // small to fill a legal team (2026-10-10 self-play crash fix).
+    const rankedAll = [...ranked];
+    // seat → exclusion severity (higher = restored later during backfill).
+    const exclusionSeverity = new Map<string, number>();
+    const markExcluded = (id: string, severity: number): void => {
+      exclusionSeverity.set(id, Math.max(exclusionSeverity.get(id) ?? 0, severity));
+    };
 
     // 6 角色 Phase 2 (2026-05-05) — role-specific candidate filtering.
     //
@@ -1098,6 +1116,7 @@ export class ForwardAgent implements AvalonAgent {
     const role = obs.myRole;
     if (role === 'merlin') {
       const knownEvilSet = new Set(obs.knownEvils);
+      for (const id of knownEvilSet) markExcluded(id, 2);
       ranked = ranked.filter((id) => !knownEvilSet.has(id));
     } else if (role === 'percival') {
       // Edward 2026-05-06 16:09 — HARD-exclude wizard B (predicted Morgana).
@@ -1118,6 +1137,7 @@ export class ForwardAgent implements AvalonAgent {
           (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0;
         if (!isR1P1) {
           // 鐵咬: hard-remove inferred-morgana wizard from candidate pool.
+          markExcluded(bId, 2);
           ranked = ranked.filter((id) => id !== bId);
         } else {
           // R1-P1: leave wizard tail-soft (baseline path also picks neither).
@@ -1135,6 +1155,7 @@ export class ForwardAgent implements AvalonAgent {
       // already failed R1+R2; baseline ranked-by-suspicion left him at
       // tail of the candidate pool but rotation still surfaced him.
       if (inferredReds.length > 0) {
+        for (const id of inferredReds) markExcluded(id, 1);
         ranked = ranked.filter((id) => !inferredReds.includes(id));
       }
     }
@@ -1163,6 +1184,31 @@ export class ForwardAgent implements AvalonAgent {
     // candidate's signals).
     const selfId = obs.myPlayerId;
     const otherRanked = ranked.filter((id) => id !== selfId);
+
+    // ── 2026-10-10 self-play crash fix — hard exclusions degrade to soft ──
+    //
+    // Root cause of "Team size must be N, got N−1" (28% of 5p, 45% of 6p,
+    // 7.5% of 8p heuristic self-play games, always a Percival leader):
+    // the Percival 鐵咬 filters above remove wizard B AND every seat in
+    // `inferRedsFromTaskFails`. In small games a single failed mission
+    // marks its whole team (2-4 seats) as inferred red, so the remaining
+    // pool can hold fewer than teamSize-1 seats. Combination enumeration
+    // then emits nothing and the legacy safety fallback sliced an
+    // undersized team, which GameEngine.selectQuestTeam rejects.
+    //
+    // Fix: when the filtered pool cannot fill the team, restore excluded
+    // seats — mildest exclusion first (inferred reds before wizard B /
+    // Merlin's known evils), least-suspicious first within a tier
+    // (Array.prototype.sort is stable, so `rankedAll` order is kept).
+    const slotsNeeded = teamSize - 1;
+    if (otherRanked.length < slotsNeeded) {
+      const backfill = rankedAll
+        .filter((id) => id !== selfId && !otherRanked.includes(id))
+        .sort(
+          (a, b) => (exclusionSeverity.get(a) ?? 0) - (exclusionSeverity.get(b) ?? 0),
+        );
+      otherRanked.push(...backfill.slice(0, slotsNeeded - otherRanked.length));
+    }
 
     // ── Fix 1 (2026-05-11 R1 派票 stacking hotfix): full-slot
     // enumeration. ──
@@ -1621,6 +1667,18 @@ export function computePurposeAlignment(
     forceMerlinKill: clamp(forceMerlinKill),
   };
   return aligned;
+}
+
+/**
+ * True when `teamIds` is a legal proposal for the current round: exact
+ * quest size, no duplicates, every id a seated player.
+ */
+function isLegalTeam(teamIds: readonly string[], obs: PlayerObservation): boolean {
+  const teamSize = AVALON_CONFIG[obs.playerCount]?.questTeams[obs.currentRound - 1];
+  if (teamSize === undefined || teamIds.length !== teamSize) return false;
+  if (new Set(teamIds).size !== teamIds.length) return false;
+  const seated = new Set(obs.allPlayerIds);
+  return teamIds.every((id) => seated.has(id));
 }
 
 function clamp(x: number): number {
