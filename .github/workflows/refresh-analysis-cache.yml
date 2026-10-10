@@ -6,8 +6,12 @@ name: Refresh analysis cache
 # 金鑰：repo secret AVALON_STATS_SHEETS_CREDENTIALS_JSON = Google 服務帳號 JSON 金鑰檔全文；
 #       沒設就退用 GOOGLE_SHEETS_CREDENTIALS_JSON；兩個都沒設 → 印 notice 後略過（不算失敗）。
 #       試算表必須「共用」給金鑰裡的 client_email（檢視者即可）。
-# 守門（generate_cache.py）：局數或玩家比現有快取少超過 max(5, 1%)、默契矩陣變空、
-#       玩家資料欄位遺失、內容空白或格式錯 → 拒絕覆寫並讓本 job 失敗，現有快取不動。
+# 玩家資料（players / playerDetails）由「牌譜」分頁的 玩1..玩0 欄逐局彙整，不再讀「生涯報表」。
+# 預覽：寫入前先跑 generate_cache.py --compare（不寫檔），把與現有快取的差異（玩家數、局數、
+#       局數前 10 名的局數/勝率、多數玩家都變動的欄位、守門結果）寫進 job summary，供稽核。
+# 守門（generate_cache.py）：總局數變少、任一既有玩家的局數變少（牌譜只會往下加局）、
+#       玩家數比現有快取少超過 max(5, 1%)、默契矩陣變空、玩家資料欄位遺失、內容空白或格式錯
+#       → 拒絕覆寫並讓本 job 失敗（exit 4），現有快取不動。
 #       手動執行時可勾 allow_shrink 放寬「變少」檢查；「欄位遺失」檢查在這裡無法關閉。
 
 on:
@@ -16,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       allow_shrink:
-        description: '允許局數/玩家比現有快取少超過 1%、或默契矩陣變空（例如刻意刪除重複局）'
+        description: '允許總局數或某玩家的局數變少、玩家比現有快取少超過 1%、或默契矩陣變空（例如刻意刪除重複局、改正玩家名字）'
         type: boolean
         default: false
 
@@ -110,6 +114,27 @@ jobs:
               sys.exit(1)
           print(f"Using service account {info['client_email']} (from secret {secret}).")
           PY
+
+      - name: Preview the refresh (dry run, diff vs the committed cache)
+        if: steps.creds.outputs.secret != ''
+        env:
+          ALLOW_SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_shrink && '1' || '' }}
+          AVALON_STATS_SHEET_ID: ${{ vars.AVALON_STATS_SHEET_ID }}
+        run: |
+          # Builds and checks the new cache exactly like the next step, appends what would change
+          # to the job summary and writes nothing. If the guards would refuse, it exits 4 here.
+          args=(--compare)
+          if [ "${ALLOW_SHRINK}" = "1" ]; then
+            args+=(--allow-shrink)
+          fi
+          set +e
+          python packages/server/generate_cache.py "${args[@]}"
+          rc=$?
+          set -e
+          if [ "${rc}" -ne 0 ] && [ "${rc}" -ne 2 ] && [ "${rc}" -ne 3 ] && [ "${rc}" -ne 4 ]; then
+            echo "::error title=Analysis cache preview crashed::generate_cache.py --compare exited with ${rc}; see the traceback above. Nothing was written."
+          fi
+          exit "${rc}"
 
       - name: Regenerate analysis_cache.json from the Sheet
         if: steps.creds.outputs.secret != ''

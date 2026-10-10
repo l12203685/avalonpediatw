@@ -10,6 +10,7 @@ Runs on the owner's PC and, daily, in GitHub Actions
 
 Usage:
     python generate_cache.py                 # owner's PC: default key path below
+    python generate_cache.py --compare       # dry run: show what would change, write nothing
     python generate_cache.py --allow-shrink  # accept a deliberate drop in games/players
 
 Configuration (environment variables, all optional, checked in this order):
@@ -19,8 +20,11 @@ Configuration (environment variables, all optional, checked in this order):
     AVALON_STATS_SHEET_ID          spreadsheet id (default: SHEET_ID below)
 
 Where each top-level section comes from:
-    refreshed from the Sheet  overview, players, playerDetails, chemistry,
-                              missions, lake, rounds, seatOrder, captainAnalysis
+    refreshed from the Sheet  overview, players, playerDetails, missions, lake,
+                              rounds, seatOrder, captainAnalysis (all from the
+                              牌譜 game log; players = every name in 玩1..玩0,
+                              see compute_player_stats) and chemistry (同贏 /
+                              同輸 / 贏相關 / 同贏-同輸 tabs). 生涯報表 is not read.
     recomputed here           strength (from players, via
                               scripts/build_archetype_strength.py)
     carried over              archetype, playstyle, featureStudies and any other
@@ -32,18 +36,22 @@ Where each top-level section comes from:
                               those scripts write.
 
 Safety: the new cache is checked before it replaces the old file. The write is
-refused (exit 4) if it is empty or malformed, has more than max(5, 1%) fewer
-games or players than the existing file, or has an emptied chemistry matrix
-(all overridable with --allow-shrink), or if players rows would lose fields the
-existing file has (only --allow-field-loss overrides that; CI never passes it).
+refused (exit 4) if it is empty or malformed, has fewer games in total than the
+existing file, has any existing player with fewer games (games are only ever
+appended to 牌譜), has more than max(5, 1%) fewer players, or has an emptied
+chemistry matrix (all overridable with --allow-shrink), or if players rows would
+lose fields the existing file has (only --allow-field-loss overrides that; CI
+never passes it). --compare runs everything up to the write, prints what would
+change (players, games, top-10 by games, player fields that changed for many
+players, the guard verdict; also to $GITHUB_STEP_SUMMARY) and exits like the
+real run would, without writing.
 
-Caveat (2026-10-10): the committed cache was NOT produced by this script. Commit
-61b7398 (2026-04-26) rebuilt it from a raw 牌譜 export with
-staging/sheets_raw/rebuild_from_raw.py (owner's PC, not in the repo): 198
-players (生涯報表, read below, lists only >=30-game players, ~62 rows) plus the
-per-player rawRed*/rawBlue*/roleSeatStats fields LeaderboardV3 needs. Until that
-logic lives here, the guards above make the refresh refuse instead of
-overwriting it.
+History: the players rows used to come from the 生涯報表 tab (>=30-game players
+only, ~62 rows). Commit 61b7398 (2026-04-26) replaced the committed cache with
+198 players aggregated from a raw 牌譜 export by a one-shot script that is not
+in the repo; compute_player_stats reproduces its formulas (see the comment
+there and test_generate_cache.py). Its outcomes were re-derived from the mission
+strings instead of 結果; this script uses 結果 (see OUTCOMES).
 
 Exit codes: 0 ok, 2 credentials misconfigured, 3 Google refused access
 (auth / sheet not shared / not found), 4 data check failed, nothing written.
@@ -108,11 +116,35 @@ EXIT_CONFIG = 2
 EXIT_GOOGLE_ACCESS = 3
 EXIT_DATA = 4
 
-MIN_GAMES_THRESHOLD = 50
+# overview.topPlayersByTheory only ranks players with at least this many games.
+# 30 (the 生涯報表 cut-off) is what the committed cache (commit 61b7398) used.
+MIN_GAMES_THRESHOLD = 30
 
 CONFIG_ROLE_ORDER = ["刺客", "莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林"]
 RED_ROLES = {"刺客", "莫甘娜", "莫德雷德", "奧伯倫"}
 BLUE_ROLES = {"派西維爾", "梅林", "忠臣"}
+ALL_ROLES = ("刺客", "莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林", "忠臣")
+
+# 牌譜 seat characters in table order; "0" is seat 10. Player names are in 玩1..玩9, 玩0.
+SEATS = ("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+PLAYER_COLUMNS = {s: f"玩{s}" for s in SEATS}
+SEAT_LABELS = {s: ("10" if s == "0" else s) for s in SEATS}  # roleSeatStats keys use 1..10
+
+# 結果 values. NB: like the rest of this script and the committed cache, 三藍死
+# (blue completed 3 missions, Merlin assassinated) counts as a BLUE win.
+# The one-shot rebuild behind the committed cache (commit 61b7398) did not read
+# 結果: it re-derived the outcome from the 第N局成功失敗 strings and 刺殺, counting
+# any "x" as a failed mission (wrong for the 10-player 4th mission, which needs
+# two fails): 27 games that 結果 records as 三藍死/三藍活 became 三紅 there, plus
+# row 1276, whose names and result its export lost (999/499/648 instead of
+# 結果's 971/516/659). This script keeps using 結果 everywhere, players included.
+OUTCOME_THREE_RED = "三紅"
+OUTCOME_BLUE_DEAD = "三藍死"
+OUTCOME_BLUE_ALIVE = "三藍活"
+OUTCOMES = (OUTCOME_THREE_RED, OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE)
+
+# How many offenders the "player lost games" guard names.
+MAX_LISTED_REGRESSIONS = 8
 
 
 # ---------------------------------------------------------------------------
@@ -379,16 +411,6 @@ def count_mission_fails(s: str) -> int:
     return s.count("x") if s else 0
 
 
-def parse_pct(val: str) -> float:
-    if not val:
-        return 0.0
-    cleaned = val.replace("%", "").strip()
-    try:
-        return float(cleaned)
-    except (ValueError, TypeError):
-        return 0.0
-
-
 def rnd1(n: float) -> float:
     """Round to 1 decimal place."""
     return round(n * 10) / 10
@@ -400,7 +422,7 @@ def rnd1(n: float) -> float:
 
 class GameRow:
     __slots__ = (
-        "id", "config", "seat_roles", "outcome",
+        "id", "config", "seat_roles", "seat_players", "outcome",
         "red_win", "blue_win", "merlin_killed",
         "r11_seats", "r11_roles", "r11_red_count", "r11_blue_count",
         "r11_has_merlin", "r11_has_percival",
@@ -421,15 +443,37 @@ class GameRow:
 # Load game log (牌譜)
 # ---------------------------------------------------------------------------
 
+_INVISIBLE_CHARS_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
+
+
+def normalize_player_name(raw: object) -> str:
+    """A 玩1..玩0 cell as a player key: '' for an empty seat.
+
+    Drops zero-width characters, trims and collapses any whitespace (incl.
+    full-width U+3000 and NBSP) to single spaces. Case is kept: the committed
+    cache counts e.g. 'Sin', 'SIN' and 'sin' as three players.
+    """
+    if not raw:
+        return ""
+    return " ".join(_INVISIBLE_CHARS_RE.sub("", str(raw)).split())
+
+
 def load_game_log(sh: gspread.Spreadsheet) -> list[GameRow]:
-    ws = sh.worksheet("牌譜")
-    rows = ws.get_all_values()
+    return parse_game_log(sh.worksheet("牌譜").get_all_values())
+
+
+def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
+    """牌譜 rows (header first, as gspread's get_all_values returns them) -> games.
+
+    Rows without 流水號 or without a 6-character 配置 are skipped.
+    """
     if len(rows) < 2:
         return []
 
     headers = rows[0]
     h_idx: dict[str, int] = {}
     for i, h in enumerate(headers):
+        h = (h or "").strip()
         if h not in h_idx:
             h_idx[h] = i
 
@@ -460,6 +504,11 @@ def load_game_log(sh: gspread.Spreadsheet) -> list[GameRow]:
         g.id = gid
         g.config = config
         g.seat_roles = decode_config(config)
+        g.seat_players = {}
+        for seat in SEATS:
+            name = normalize_player_name(col(row, PLAYER_COLUMNS[seat]))
+            if name:
+                g.seat_players[seat] = name
         g.text_record = col(row, "文字記錄")
         g.outcome = col(row, "結果").strip()
         g.red_win = g.outcome == "三紅"
@@ -523,142 +572,164 @@ def load_game_log(sh: gspread.Spreadsheet) -> list[GameRow]:
 
 
 # ---------------------------------------------------------------------------
-# Load player stats (統計 sheet)
+# Per-player stats, aggregated from the 牌譜 game log
 # ---------------------------------------------------------------------------
+#
+# Reproduces the players rows of the committed cache (commit 61b7398 built them
+# from a raw 牌譜 export with a one-shot script). The formulas below were
+# reverse-engineered from its 198 rows; test_generate_cache checks them two ways:
+# CommittedCachePropertyTest (every row of analysis_cache.json equals the row
+# rebuilt from its own raw counts) and RebuildReplayTest (fed the rebuild's
+# inputs, i.e. the checked-in 牌譜 snapshot with its outcome rule, this code
+# writes the committed players / playerDetails byte for byte).
+#
+#   a player = a distinct normalized 玩1..玩0 name; a game counts for each seat
+#     that has a name and a 結果 of 三紅 / 三藍死 / 三藍活 (other 結果 values are
+#     left out of the player stats so the outcome counts always add up)
+#   win      = red role and 三紅, or blue role and 三藍死 / 三藍活 (see OUTCOMES)
+#   rates    = rnd1(count / denominator * 100), 0.0 when the denominator is 0
+#   raw*     = counts, written as floats (1080.0) like the committed cache
+#   roleTheory     = rnd1(sum(roleDistribution[r] * roleWinRates[r]) / 100) over
+#                    the ROUNDED values, i.e. the player's own win rate up to
+#                    rounding noise (not the 1/10-4/10 role-pick weighting of
+#                    packages/shared roleProbability.ts)
+#   positionTheory = 0.0 for everyone (the rebuild never computed it)
+#   roleSeatStats  = "角色|座號" (座號 1..10, seat 0 written as 10) for every
+#                    role/seat the player had, in first-seen order
+#   order    = totalGames descending, ties in order of first appearance in 牌譜
+#   seatOutcomes / playerDetails: see compute_seat_outcomes_per_player and
+#                    compute_player_details
 
-def load_player_stats(sh: gspread.Spreadsheet) -> list[dict]:
-    """Load player stats from the aggregate sheet.
+def _rate(count: float, total: float) -> float:
+    return rnd1(count / total * 100) if total else 0.0
 
-    Sheet structure: row[0] = aggregate totals, row[1] = header, row[2+] = player data.
-    Headers have many duplicate 1-char role abbreviations (刺/娜/德/奧/派/梅/忠) so we
-    use positional indexing based on the known column layout. Code expands the
-    1-char abbreviations into full role names (刺客/莫甘娜/莫德雷德/奧伯倫/派西維爾/梅林/忠臣).
-    """
-    rows = None
-    for tab in ["生涯報表", "戰績報表", "統計", "個人統計", "Stats"]:
-        try:
-            ws = sh.worksheet(tab)
-            rows = ws.get_all_values()
-            if len(rows) > 3:
-                print(f"  Using stats tab: {tab} ({len(rows)} rows)")
-                break
-        except gspread.exceptions.WorksheetNotFound:
-            continue
 
-    if not rows or len(rows) < 3:
-        print("[WARN] No stats sheet found, returning empty player stats")
-        return []
+class _PlayerTally:
+    """Counts for one player while walking the game log."""
 
-    # Column layout (positional, 0-indexed):
-    # 0: player, 1: 總場次, 2: 勝率, 3: 角色理論, 4: 位置理論,
-    # 5: 紅方三紅, 6: 紅方梅死, 7: 紅方梅活, 8: 紅勝,
-    # 9: 藍方三紅, 10: 藍方梅死, 11: 藍方梅活,
-    # 12: 三藍(wr), 13-19: 刺娜德奧派梅忠 (role win rates)
-    # 20-26: 刺娜德奧派梅忠 (role distribution %)
-    # 27: 紅角率, 28: 藍角率
-    # 29-38: 1勝~0勝 (seat win rates)
-    # 39: 雙尾派, 40: 1-5勝, 41: 6-0勝
-    # 42-51: 1紅勝~0紅勝 (seat red win rates)
-    # 52-61: 1藍勝~0藍勝 (seat blue win rates)
-    # 62-71: 1紅~0紅 (seat red distribution %)
-    # 72-81: 1藍~0藍 (seat blue distribution %)
-    # 82-84: 三紅,三藍死,三藍活 (raw red mission outcomes)
-    # 85-87: 三紅,三藍死,三藍活 (raw blue mission outcomes)
-    # 88-94: 刺娜德奧派梅忠 (raw role game counts - wins)
-    # 95: 紅勝(raw), 96: 藍勝(raw), 97: 總勝(raw)
-    # 98-104: 刺娜德奧派梅忠 (raw role game counts)
-    # 105: 紅場, 106: 藍場
+    __slots__ = (
+        "games", "wins", "role_games", "role_wins", "faction_games", "faction_wins",
+        "faction_outcomes", "seat_games", "seat_wins", "seat_faction_games",
+        "seat_faction_wins", "role_seat",
+    )
 
-    ROLES = ["刺客", "莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林", "忠臣"]
-    SEATS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+    def __init__(self) -> None:
+        self.games = 0
+        self.wins = 0
+        self.role_games: Counter = Counter()
+        self.role_wins: Counter = Counter()
+        self.faction_games: Counter = Counter()  # "red" / "blue"
+        self.faction_wins: Counter = Counter()
+        self.faction_outcomes: Counter = Counter()  # (faction, 結果)
+        self.seat_games: Counter = Counter()
+        self.seat_wins: Counter = Counter()
+        self.seat_faction_games: Counter = Counter()  # (seat, faction)
+        self.seat_faction_wins: Counter = Counter()
+        self.role_seat: dict[str, list[int]] = {}  # "角色|座號" -> [games, wins], first-seen order
 
-    def safe(row: list[str], idx: int) -> str:
-        if idx >= len(row):
-            return ""
-        return row[idx] or ""
+    def add(self, seat: str, role: str, outcome: str, won: bool) -> None:
+        faction = "red" if role in RED_ROLES else "blue"
+        w = 1 if won else 0
+        self.games += 1
+        self.wins += w
+        self.role_games[role] += 1
+        self.role_wins[role] += w
+        self.faction_games[faction] += 1
+        self.faction_wins[faction] += w
+        self.faction_outcomes[(faction, outcome)] += 1
+        self.seat_games[seat] += 1
+        self.seat_wins[seat] += w
+        self.seat_faction_games[(seat, faction)] += 1
+        self.seat_faction_wins[(seat, faction)] += w
+        cell = self.role_seat.setdefault(f"{role}|{SEAT_LABELS[seat]}", [0, 0])
+        cell[0] += 1
+        cell[1] += w
 
-    players: list[dict] = []
+    def to_row(self, name: str) -> dict:
+        total = self.games
+        red_games, blue_games = self.faction_games["red"], self.faction_games["blue"]
+        role_win_rates = {r: _rate(self.role_wins[r], self.role_games[r]) for r in ALL_ROLES}
+        role_distribution = {r: _rate(self.role_games[r], total) for r in ALL_ROLES}
+        # Same expression (order and rounding) as the rebuild; see the block comment above.
+        role_theory = rnd1(sum(role_distribution[r] * role_win_rates[r] for r in ALL_ROLES) / 100)
 
-    # Data starts from row[2] (row[0]=aggregate, row[1]=header)
-    for i in range(2, len(rows)):
-        row = rows[i]
-        name = (row[0] if row else "").strip()
-        if not name:
-            continue
-        total_games = parse_pct(safe(row, 1))
-        if total_games == 0:
-            continue
+        def outcomes(faction: str, outcome: str) -> int:
+            return self.faction_outcomes[(faction, outcome)]
 
-        # Role win rates: columns 13-19 (刺娜德奧派梅忠)
-        role_win_rates: dict[str, float] = {}
-        for j, role in enumerate(ROLES):
-            role_win_rates[role] = parse_pct(safe(row, 13 + j))
+        def seat_rates(faction: str | None) -> dict[str, float]:
+            if faction is None:
+                return {s: _rate(self.seat_wins[s], self.seat_games[s]) for s in SEATS}
+            return {
+                s: _rate(self.seat_faction_wins[(s, faction)], self.seat_faction_games[(s, faction)])
+                for s in SEATS
+            }
 
-        # Role distribution: columns 20-26
-        role_distribution: dict[str, float] = {}
-        for j, role in enumerate(ROLES):
-            role_distribution[role] = parse_pct(safe(row, 20 + j))
-
-        # Raw role games: columns 98-104
-        raw_role_games: dict[str, float] = {}
-        for j, role in enumerate(ROLES):
-            raw_role_games[role] = parse_pct(safe(row, 98 + j))
-
-        # Seat win rates: columns 29-38
-        seat_win_rates: dict[str, float] = {}
-        for j, s in enumerate(SEATS):
-            seat_win_rates[s] = parse_pct(safe(row, 29 + j))
-
-        # Seat red win rates: columns 42-51
-        seat_red_win_rates: dict[str, float] = {}
-        for j, s in enumerate(SEATS):
-            seat_red_win_rates[s] = parse_pct(safe(row, 42 + j))
-
-        # Seat blue win rates: columns 52-61
-        seat_blue_win_rates: dict[str, float] = {}
-        for j, s in enumerate(SEATS):
-            seat_blue_win_rates[s] = parse_pct(safe(row, 52 + j))
-
-        raw_red_wins = parse_pct(safe(row, 95))
-        raw_blue_wins = parse_pct(safe(row, 96))
-        raw_total_wins = parse_pct(safe(row, 97))
-        raw_red_games = parse_pct(safe(row, 105))
-        raw_blue_games = parse_pct(safe(row, 106))
-
-        blue_win = 0.0
-        if raw_blue_games > 0 and raw_blue_wins > 0:
-            blue_win = round((raw_blue_wins / raw_blue_games) * 100 * 10) / 10
-
-        players.append({
+        return {
             "name": name,
-            "totalGames": total_games,
-            "winRate": parse_pct(safe(row, 2)),
-            "roleTheory": parse_pct(safe(row, 3)),
-            "positionTheory": parse_pct(safe(row, 4)),
-            "redWin": parse_pct(safe(row, 8)),
-            "blueWin": blue_win,
-            "red3Red": parse_pct(safe(row, 5)),
-            "redMerlinDead": parse_pct(safe(row, 6)),
-            "redMerlinAlive": parse_pct(safe(row, 7)),
-            "blue3Red": parse_pct(safe(row, 9)),
-            "blueMerlinDead": parse_pct(safe(row, 10)),
-            "blueMerlinAlive": parse_pct(safe(row, 11)),
+            "totalGames": float(total),
+            "winRate": _rate(self.wins, total),
+            "roleTheory": role_theory,
+            "positionTheory": 0.0,
+            "redWin": _rate(self.faction_wins["red"], red_games),
+            "blueWin": _rate(self.faction_wins["blue"], blue_games),
+            "red3Red": _rate(outcomes("red", OUTCOME_THREE_RED), red_games),
+            "redMerlinDead": _rate(outcomes("red", OUTCOME_BLUE_DEAD), red_games),
+            "redMerlinAlive": _rate(outcomes("red", OUTCOME_BLUE_ALIVE), red_games),
+            "blue3Red": _rate(outcomes("blue", OUTCOME_THREE_RED), blue_games),
+            "blueMerlinDead": _rate(outcomes("blue", OUTCOME_BLUE_DEAD), blue_games),
+            "blueMerlinAlive": _rate(outcomes("blue", OUTCOME_BLUE_ALIVE), blue_games),
             "roleWinRates": role_win_rates,
             "roleDistribution": role_distribution,
-            "redRoleRate": parse_pct(safe(row, 27)),
-            "blueRoleRate": parse_pct(safe(row, 28)),
-            "seatWinRates": seat_win_rates,
-            "seatRedWinRates": seat_red_win_rates,
-            "seatBlueWinRates": seat_blue_win_rates,
-            "rawRoleGames": raw_role_games,
-            "rawRedWins": raw_red_wins,
-            "rawBlueWins": raw_blue_wins,
-            "rawTotalWins": raw_total_wins,
-            "rawRedGames": raw_red_games,
-            "rawBlueGames": raw_blue_games,
-        })
+            "redRoleRate": _rate(red_games, total),
+            "blueRoleRate": _rate(blue_games, total),
+            "seatWinRates": seat_rates(None),
+            "seatRedWinRates": seat_rates("red"),
+            "seatBlueWinRates": seat_rates("blue"),
+            "rawRoleGames": {r: float(self.role_games[r]) for r in ALL_ROLES},
+            "rawRedWins": float(self.faction_wins["red"]),
+            "rawBlueWins": float(self.faction_wins["blue"]),
+            "rawTotalWins": float(self.wins),
+            "rawRedGames": float(red_games),
+            "rawBlueGames": float(blue_games),
+            "rawRedThreeRed": float(outcomes("red", OUTCOME_THREE_RED)),
+            "rawRedMerlinDead": float(outcomes("red", OUTCOME_BLUE_DEAD)),
+            "rawRedMerlinAlive": float(outcomes("red", OUTCOME_BLUE_ALIVE)),
+            "rawBlueThreeRed": float(outcomes("blue", OUTCOME_THREE_RED)),
+            "rawBlueMerlinDead": float(outcomes("blue", OUTCOME_BLUE_DEAD)),
+            "rawBlueMerlinAlive": float(outcomes("blue", OUTCOME_BLUE_ALIVE)),
+            "roleSeatStats": {
+                key: {"games": float(n), "wins": float(w), "winRate": _rate(w, n)}
+                for key, (n, w) in self.role_seat.items()
+            },
+        }
 
-    return players
+
+def compute_player_stats(games: list[GameRow]) -> list[dict]:
+    """players.players rows (without seatOutcomes) from the game log."""
+    tallies: dict[str, _PlayerTally] = {}  # insertion order = first appearance
+    for g in games:
+        if g.outcome not in OUTCOMES:
+            continue
+        for seat in SEATS:
+            name = g.seat_players.get(seat)
+            if not name:
+                continue
+            role = g.seat_roles[seat]
+            won = g.red_win if role in RED_ROLES else g.blue_win
+            tallies.setdefault(name, _PlayerTally()).add(seat, role, g.outcome, won)
+    rows = [t.to_row(name) for name, t in tallies.items()]
+    rows.sort(key=lambda r: -r["totalGames"])  # stable: ties keep first-appearance order
+    return rows
+
+
+def game_log_summary(games: list[GameRow]) -> str:
+    named = sum(1 for g in games if g.seat_players)
+    unknown = sum(1 for g in games if g.outcome not in OUTCOMES)
+    seats = sum(len(g.seat_players) for g in games)
+    text = f"{named} of {len(games)} games name players ({seats} named seats)"
+    if unknown:
+        text += f"; {unknown} games have a 結果 other than {'/'.join(OUTCOMES)} and are left out of player stats"
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -848,50 +919,65 @@ def compute_seat_position_win_rates(games: list[GameRow]) -> list[dict]:
     return result
 
 
-def compute_seat_outcomes_per_player(games: list[GameRow], players: list[dict]) -> dict[str, dict[str, dict]]:
-    """Compute per-player per-seat three-outcome breakdown.
-
-    Returns: ``{player_name: {seat_char: OutcomeBreakdown}}``.
-
-    Edward 2026-04-27 spec: SeatHeatmap tooltips need the seat distribution
-    expanded into the three Avalon outcomes (三紅 / 三藍死 / 三藍活).
-
-    Player→seat mapping comes from the per-game ``文字記錄`` text — but the
-    current GameRow only stores aggregate seat_roles, not per-player seat
-    occupancy. Until per-game player→seat data is parsed (separate task), we
-    fall back to a sensible approximation: for each player who actually played
-    a given seat (positive count in players[i].seatWinRates), the outcome
-    distribution mirrors the global per-seat outcome distribution. This keeps
-    the UI semantically correct (sum of pcts = 100%) without requiring the
-    additional parser. When the parser lands, swap this implementation for the
-    real per-player attribution.
-    """
-    SEATS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
-    seat_games: dict[str, list] = {s: [] for s in SEATS}
-    for g in games:
-        for seat_char in SEATS:
-            if g.seat_roles.get(seat_char, ""):
-                seat_games[seat_char].append(g)
-
-    seat_outcomes_global: dict[str, dict] = {
-        s: _outcome_split(seat_games[s]) for s in SEATS
-    }
-
-    out: dict[str, dict[str, dict]] = {}
-    empty_outcome = {
+def _empty_outcome() -> dict:
+    return {
         "threeRed": 0, "threeBlueDead": 0, "threeBlueAlive": 0,
         "threeRedPct": 0, "threeBlueDeadPct": 0, "threeBlueAlivePct": 0,
     }
+
+
+def scaled_outcome(global_outcome: Mapping[str, Any], total: int) -> dict:
+    """The global 三紅/三藍死/三藍活 split projected onto `total` games.
+
+    Same arithmetic as scripts/patch_cache_3outcome.py (which wrote the
+    committed cache's seatOutcomes): counts are total * global pct, rounded,
+    with 三藍活 taking the remainder; the pcts are the global pcts.
+    """
+    if total <= 0:
+        return _empty_outcome()
+    rp = float(global_outcome.get("threeRedPct", 0) or 0)
+    bdp = float(global_outcome.get("threeBlueDeadPct", 0) or 0)
+    bap = float(global_outcome.get("threeBlueAlivePct", 0) or 0)
+    three_red = round(total * rp / 100.0)
+    three_blue_dead = round(total * bdp / 100.0)
+    return {
+        "threeRed": three_red,
+        "threeBlueDead": three_blue_dead,
+        "threeBlueAlive": max(total - three_red - three_blue_dead, 0),
+        "threeRedPct": rnd1(rp),
+        "threeBlueDeadPct": rnd1(bdp),
+        "threeBlueAlivePct": rnd1(bap),
+    }
+
+
+def compute_seat_outcomes_per_player(
+    seat_position_win_rates: list[dict],
+    outcome_breakdown: Mapping[str, Any],
+    players: list[dict],
+) -> dict[str, dict[str, dict]]:
+    """players[].seatOutcomes: ``{player_name: {seat_char: OutcomeBreakdown}}``.
+
+    Reproduces the committed cache, which got this field from
+    scripts/patch_cache_3outcome.py (Edward 2026-04-27): NOT the player's own
+    games but, for every seat where the player's seatWinRates is > 0, the
+    global outcome split projected onto all games at that seat (the same for
+    every such seat and player, e.g. 1000/500/646 for 999/499/648 in 2146
+    games); zeros for the other seats (incl. seats played but never won).
+    """
+    totals = {s: 0 for s in SEATS}
+    for row in seat_position_win_rates:
+        for s, label in SEAT_LABELS.items():
+            if str(row.get("seat")) == label:
+                totals[s] = int(row.get("totalGames", 0) or 0)
+    projected = {s: scaled_outcome(outcome_breakdown, totals[s]) for s in SEATS}
+
+    out: dict[str, dict[str, dict]] = {}
     for p in players:
         seat_wr = p.get("seatWinRates", {}) or {}
-        per_seat: dict[str, dict] = {}
-        for s in SEATS:
-            rate = seat_wr.get(s, 0)
-            if rate and rate > 0:
-                per_seat[s] = seat_outcomes_global[s]
-            else:
-                per_seat[s] = dict(empty_outcome)
-        out[p["name"]] = per_seat
+        out[p["name"]] = {
+            s: dict(projected[s]) if (seat_wr.get(s) or 0) > 0 else _empty_outcome()
+            for s in SEATS
+        }
     return out
 
 
@@ -1516,27 +1602,20 @@ def compute_players_endpoint(players: list[dict]) -> dict:
 
 
 def compute_player_details(players: list[dict]) -> dict[str, dict]:
-    """Pre-compute per-player detail + radar for GET /api/analysis/players/:name.
+    """playerDetails for GET /api/analysis/players/:name, shaped like the committed cache.
 
-    Fix #7: Radar dimensions changed to:
-    - 藍方勝率(三藍梅活) = blueMerlinAlive (blue wins where Merlin survives)
-    - 紅方任務勝率(三紅) = red3Red (red wins by 3 failed missions)
-    - 紅方刺殺勝率(三藍梅死) = redMerlinDead (red wins via Merlin assassination)
-    - 位置率 = positionTheory
-    - 理論勝率 = roleTheory
-    Removed: 藍角率, 紅角率 (not important)
+    ``player`` is the players row without seatOutcomes (the committed cache
+    added seatOutcomes to players.players only); ``radar`` is a copy of the
+    row's roleWinRates. Nothing reads this radar: routes/analysis.ts builds the
+    radar it serves from ``player``.
     """
-    result: dict[str, dict] = {}
-    for p in players:
-        radar = {
-            "blueMerlinAlive": p["blueMerlinAlive"],
-            "red3Red": p["red3Red"],
-            "redMerlinDead": p["redMerlinDead"],
-            "positionTheory": p["positionTheory"],
-            "roleTheory": p["roleTheory"],
+    return {
+        p["name"]: {
+            "player": {k: v for k, v in p.items() if k != "seatOutcomes"},
+            "radar": dict(p["roleWinRates"]),
         }
-        result[p["name"]] = {"player": p, "radar": radar}
-    return result
+        for p in players
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1712,15 +1791,18 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
 # Assemble the cache: Sheet sections + derived + carried-over sections
 # ---------------------------------------------------------------------------
 
-def build_cache(games: list[GameRow], players: list[dict], chemistry: dict) -> dict:
-    """The sections computed from the Sheet (SHEET_SECTIONS)."""
+def build_cache(games: list[GameRow], chemistry: dict) -> dict:
+    """The sections computed from the Sheet (SHEET_SECTIONS); players come from the 牌譜 game log."""
+    players = compute_player_stats(games)
     overview = compute_overview(games, players)
 
     # Edward 2026-04-27: extend chemistry with 5th matrix outcomePair before
     # the players/playerDetails block so seat outcomes can also be attached.
     chemistry["outcomePair"] = compute_outcome_pair_matrix(chemistry, overview["outcomeBreakdown"])
 
-    seat_outcomes_per_player = compute_seat_outcomes_per_player(games, players)
+    seat_outcomes_per_player = compute_seat_outcomes_per_player(
+        overview["seatPositionWinRates"], overview["outcomeBreakdown"], players,
+    )
     for p in players:
         p["seatOutcomes"] = seat_outcomes_per_player.get(p["name"], {})
 
@@ -1857,6 +1939,52 @@ def dropped_player_fields(cache: Mapping[str, Any], previous: Mapping[str, Any] 
     return sorted(fields(previous) - new_fields) if new_fields else []
 
 
+def _players_by_name(cache: Mapping[str, Any] | None) -> dict[str, Mapping[str, Any]]:
+    rows = ((cache or {}).get("players") or {}).get("players") if isinstance(cache, Mapping) else None
+    return {
+        r["name"]: r for r in (rows if isinstance(rows, list) else [])
+        if isinstance(r, Mapping) and isinstance(r.get("name"), str)
+    }
+
+
+def _fmt_count(value: Any) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _player_games(cache: Mapping[str, Any] | None) -> dict[str, float]:
+    """{name: totalGames} of a cache's players rows (rows without a usable count are ignored)."""
+    out: dict[str, float] = {}
+    for name, row in _players_by_name(cache).items():
+        games = row.get("totalGames")
+        if isinstance(games, (int, float)) and not isinstance(games, bool) and games == games:
+            out[name] = float(games)
+    return out
+
+
+def games_regressions(
+    cache: Mapping[str, Any], previous: Mapping[str, Any] | None,
+) -> list[tuple[str, float, float | None]]:
+    """(name, old totalGames, new totalGames or None if gone) for every existing player
+    whose game count went down, biggest drop first.
+
+    牌譜 only ever gets games appended, so a player's count never goes down; when it
+    does, a game row was deleted or became unreadable, or a 玩1..玩0 name was
+    retyped (the old spelling loses games, the new one gains them).
+    """
+    new = _player_games(cache)
+    out = [
+        (name, before, new.get(name))
+        for name, before in _player_games(previous).items()
+        if new.get(name) is None or new[name] < before
+    ]
+    out.sort(key=lambda t: t[1] - (t[2] or 0.0), reverse=True)  # stable: ties keep the old order
+    return out
+
+
 def validate_new_cache(
     cache: Mapping[str, Any],
     previous: Mapping[str, Any] | None,
@@ -1879,25 +2007,42 @@ def validate_new_cache(
         )
     player_list = cache["players"].get("players")
     if not isinstance(player_list, list) or not player_list:
-        problems.append("players.players is empty (生涯報表 tab missing or unreadable?)")
+        problems.append("players.players is empty (牌譜 has no player names in 玩1..玩0, or those columns were renamed?)")
     elif cache["players"].get("total") != len(player_list):
         problems.append(f"players.total={cache['players'].get('total')!r} but players.players has {len(player_list)} rows")
     if not cache["playerDetails"]:
         problems.append("playerDetails is empty")
 
     if previous and not allow_shrink:
-        for label, section, key, new_value in (
-            ("games", "overview", "totalGames", games),
-            ("players", "overview", "totalPlayers", _count(cache, "overview", "totalPlayers")),
-        ):
-            old_value = _count(previous, section, key)
-            if old_value is None or new_value is None:
-                continue
-            tolerance = allowed_drop(old_value)
-            if old_value - new_value > tolerance:
+        # Games are only ever appended to 牌譜: neither the total nor any player's count may go down.
+        old_games = _count(previous, "overview", "totalGames")
+        if old_games is not None and games is not None and games < old_games:
+            problems.append(
+                f"overview.totalGames would drop from {old_games} to {games} ({old_games - games} fewer); "
+                "games are only ever appended to 牌譜, so rows were deleted or became unreadable "
+                "(流水號 blank or 配置 not 6 characters?); if that is intended, re-run with --allow-shrink"
+            )
+        regressions = games_regressions(cache, previous)
+        if regressions:
+            shown = ", ".join(
+                f"{name} {_fmt_count(before)}→{_fmt_count(after) if after is not None else 'gone'}"
+                for name, before, after in regressions[:MAX_LISTED_REGRESSIONS]
+            )
+            more = len(regressions) - MAX_LISTED_REGRESSIONS
+            problems.append(
+                f"{len(regressions)} existing player(s) would have fewer games than in the existing cache: "
+                f"{shown}{f' (+{more} more)' if more > 0 else ''}. A player's count never goes down while "
+                "games are only appended to 牌譜; a deleted row or a retyped 玩1..玩0 name does this. "
+                "If intended, re-run with --allow-shrink"
+            )
+        old_players = _count(previous, "overview", "totalPlayers")
+        new_players = _count(cache, "overview", "totalPlayers")
+        if old_players is not None and new_players is not None:
+            tolerance = allowed_drop(old_players)
+            if old_players - new_players > tolerance:
                 problems.append(
-                    f"the new cache has {new_value} {label}, {old_value - new_value} fewer than the existing "
-                    f"{old_value} (tolerance {tolerance}); if rows were removed on purpose, re-run with --allow-shrink"
+                    f"the new cache has {new_players} players, {old_players - new_players} fewer than the existing "
+                    f"{old_players} (tolerance {tolerance}); if rows were removed on purpose, re-run with --allow-shrink"
                 )
         for key in CHEMISTRY_MATRICES:
             old_size = _matrix_size(previous.get("chemistry"), key)
@@ -1911,11 +2056,82 @@ def validate_new_cache(
     if lost:
         problems.append(
             f"players rows would lose fields {', '.join(lost)} that the existing cache has "
-            "(LeaderboardV3 reads rawRed*/rawBlue*/roleSeatStats). The existing cache was built by "
-            "another pipeline (raw-牌譜 rebuild, commit 61b7398) that this script does not reproduce; "
+            "(LeaderboardV3 reads rawRed*/rawBlue*/roleSeatStats); "
             "only --allow-field-loss (local runs) overrides this"
         )
     return problems
+
+
+# ---------------------------------------------------------------------------
+# Dry run (--compare): what a refresh would change
+# ---------------------------------------------------------------------------
+
+COMPARE_FIELD_CHANGE_PCT = 5.0
+COMPARE_TOP_N = 10
+
+
+def _fmt_rate(value: Any) -> str:
+    return "—" if not isinstance(value, (int, float)) else f"{float(value):.1f}"
+
+
+def _arrow(old: Any, new: Any, fmt: Callable[[Any], str] = _fmt_count) -> str:
+    return fmt(new) if old == new else f"{fmt(old)} → {fmt(new)}"
+
+
+def _names(names: list[str], limit: int = 8) -> str:
+    return "、".join(names[:limit]) + (f"…（共 {len(names)}）" if len(names) > limit else "")
+
+
+def compare_summary(
+    new: Mapping[str, Any],
+    old: Mapping[str, Any] | None,
+    field_change_pct: float = COMPARE_FIELD_CHANGE_PCT,
+    top_n: int = COMPARE_TOP_N,
+) -> list[str]:
+    """Markdown lines: what replacing `old` with `new` would change (for the job summary)."""
+    lines = ["### 戰績分析快取：預覽（--compare，未寫入）"]
+    old_rows, new_rows = _players_by_name(old), _players_by_name(new)
+    added = [n for n in new_rows if n not in old_rows]
+    gone = [n for n in old_rows if n not in new_rows]
+    old_ov = (old or {}).get("overview") or {}
+    new_ov = new.get("overview") or {}
+    lines.append(
+        f"- 玩家：{_arrow(len(old_rows) if old else None, len(new_rows))}"
+        + (f"；新增 {len(added)}：{_names(added)}" if old and added else "")
+        + (f"；消失 {len(gone)}：{_names(gone)}" if gone else "")
+    )
+    lines.append(f"- 局數：{_arrow(old_ov.get('totalGames'), new_ov.get('totalGames'))}")
+    old_ob, new_ob = old_ov.get("outcomeBreakdown") or {}, new_ov.get("outcomeBreakdown") or {}
+    lines.append("- 結果：" + "／".join(
+        f"{label} {_arrow(old_ob.get(key), new_ob.get(key))}"
+        for label, key in (("三紅", "threeRed"), ("三藍死", "threeBlueDead"), ("三藍活", "threeBlueAlive"))
+    ))
+
+    top = sorted(new_rows.values(), key=lambda r: -float(r.get("totalGames") or 0))[:top_n]
+    if top:
+        lines += ["", f"局數前 {len(top)} 名（舊 → 新）：", "", "| # | 玩家 | 局數 | 勝率 |", "|---|---|---|---|"]
+        for i, row in enumerate(top, 1):
+            prev = old_rows.get(row["name"]) or {}
+            lines.append(
+                f"| {i} | {row['name']} | {_arrow(prev.get('totalGames'), row.get('totalGames'))} "
+                f"| {_arrow(prev.get('winRate'), row.get('winRate'), _fmt_rate)} |"
+            )
+
+    common = [n for n in new_rows if n in old_rows]
+    if common:
+        fields = sorted(set().union(*(set(old_rows[n]) | set(new_rows[n]) for n in common)))
+        counts = {f: sum(1 for n in common if old_rows[n].get(f) != new_rows[n].get(f)) for f in fields}
+        changed = [
+            f"`{f}` {n}/{len(common)}（{n / len(common) * 100:.0f}%）"
+            for f, n in sorted(counts.items(), key=lambda kv: -kv[1])  # most-changed first, then by name
+            if n / len(common) * 100 > field_change_pct
+        ]
+        lines += ["", f"超過 {field_change_pct:g}% 共同玩家（{len(common)} 人）值有變動的欄位："
+                  + ("、".join(changed) if changed else "無")]
+    if old:
+        sections = [k for k in new if k in old and new[k] != old[k]]
+        lines.append(f"內容有變動的區塊：{'、'.join(sections) if sections else '無'}")
+    return lines
 
 
 def load_previous_cache(path: Path, allow_shrink: bool = False) -> dict | None:
@@ -1961,18 +2177,14 @@ def write_cache_atomically(cache: Mapping[str, Any], path: Path) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
-def fetch_sheet_data(source: CredentialSource, sheet_id: str) -> tuple[list[GameRow], list[dict], dict]:
+def fetch_sheet_data(source: CredentialSource, sheet_id: str) -> tuple[list[GameRow], dict]:
     try:
         print("Connecting to Google Sheets...")
         sh = open_spreadsheet(source, sheet_id)
 
         print("Loading game log (牌譜)...")
         games = load_game_log(sh)
-        print(f"  Loaded {len(games)} games")
-
-        print("Loading player stats...")
-        players = load_player_stats(sh)
-        print(f"  Loaded {len(players)} players")
+        print(f"  Loaded {len(games)} games: {game_log_summary(games)}")
 
         print("Loading chemistry matrices...")
         chemistry = load_chemistry(sh)
@@ -1993,7 +2205,7 @@ def fetch_sheet_data(source: CredentialSource, sheet_id: str) -> tuple[list[Game
         raise FatalError(
             google_access_error_message(kind, exc, sheet_id, source.client_email()), code, titles[kind]
         ) from None
-    return games, players, chemistry
+    return games, chemistry
 
 
 def _append_step_summary(lines: list[str]) -> None:
@@ -2004,7 +2216,13 @@ def _append_step_summary(lines: list[str]) -> None:
         f.write("\n".join(lines) + "\n")
 
 
-def run(output_path: Path = OUTPUT_PATH, allow_shrink: bool = False, allow_field_loss: bool = False) -> int:
+def run(
+    output_path: Path = OUTPUT_PATH,
+    allow_shrink: bool = False,
+    allow_field_loss: bool = False,
+    compare: bool = False,
+    compare_threshold: float = COMPARE_FIELD_CHANGE_PCT,
+) -> int:
     source = resolve_credentials_source()
     sheet_id = resolve_sheet_id()
     print(f"Credentials: {source.describe()}")
@@ -2012,17 +2230,30 @@ def run(output_path: Path = OUTPUT_PATH, allow_shrink: bool = False, allow_field
     print(f"Spreadsheet: {sheet_id}")
 
     previous = load_previous_cache(output_path, allow_shrink)
-    games, players, chemistry = fetch_sheet_data(source, sheet_id)
+    games, chemistry = fetch_sheet_data(source, sheet_id)
 
     print("Computing endpoint responses...")
-    cache, carried = assemble_cache(build_cache(games, players, chemistry), previous)
+    cache, carried = assemble_cache(build_cache(games, chemistry), previous)
 
     problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss)
+    refusal = f"Refusing to overwrite {output_path.name}:\n- " + "\n- ".join(problems)
+
+    if compare:
+        summary = compare_summary(cache, previous, compare_threshold)
+        if problems:
+            summary += ["", "**守門：會拒絕寫入**（正式執行會以 exit 4 結束，現有快取不動）："]
+            summary += [f"- {p}" for p in problems]
+        else:
+            summary += ["", "守門：通過（正式執行會寫入）"]
+        print("\n".join(summary))
+        _append_step_summary(summary)
+        if problems:
+            raise FatalError(f"Dry run (--compare). {refusal}", EXIT_DATA, "Analysis cache sanity check failed")
+        print(f"Dry run (--compare): {output_path.name} was not written.")
+        return 0
+
     if problems:
-        raise FatalError(
-            f"Refusing to overwrite {output_path.name}:\n- " + "\n- ".join(problems),
-            EXIT_DATA, "Analysis cache sanity check failed",
-        )
+        raise FatalError(refusal, EXIT_DATA, "Analysis cache sanity check failed")
 
     print(f"Writing to {output_path}...")
     write_cache_atomically(cache, output_path)
@@ -2036,7 +2267,7 @@ def run(output_path: Path = OUTPUT_PATH, allow_shrink: bool = False, allow_field
     print(f"Done. {output_path.name}: {size_mb:.2f} MB")
     print(f"  overview: {cache['overview']['totalGames']} games (was {prev_games}), "
           f"{cache['overview']['totalPlayers']} players (was {prev_players})")
-    print(f"  players: {cache['players']['total']} entries")
+    print(f"  players: {cache['players']['total']} entries (from 牌譜 玩1..玩0)")
     print(f"  playerDetails: {len(cache['playerDetails'])} entries")
     print(f"  chemistry: {len(cache['chemistry'])} matrices")
     print(f"  refreshed from the Sheet: {', '.join(SHEET_SECTIONS)}")
@@ -2056,16 +2287,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH,
                         help="cache file to read (carry-over / baseline) and replace (default: %(default)s)")
     parser.add_argument("--allow-shrink", action="store_true",
-                        help="write even if games/players/chemistry shrank beyond the tolerance")
+                        help="write even if games or a player's games went down, players or chemistry "
+                             "shrank beyond the tolerance")
     parser.add_argument("--allow-field-loss", action="store_true",
                         help="write even if players rows lose fields the existing cache has (local use only)")
+    parser.add_argument("--compare", action="store_true",
+                        help="dry run: build and check the new cache, print what would change vs the existing "
+                             "file (also to $GITHUB_STEP_SUMMARY), write nothing; exits like the real run would")
+    parser.add_argument("--compare-threshold", type=float, default=COMPARE_FIELD_CHANGE_PCT, metavar="PCT",
+                        help="--compare lists the player fields whose value changed for more than PCT%% of "
+                             "the players in both files (default: %(default)s)")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        return run(args.output, args.allow_shrink, args.allow_field_loss)
+        return run(args.output, args.allow_shrink, args.allow_field_loss, args.compare, args.compare_threshold)
     except FatalError as exc:
         emit_error(str(exc), exc.title)
         return exc.exit_code
