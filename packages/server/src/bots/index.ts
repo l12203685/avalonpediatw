@@ -15,6 +15,7 @@ import {
   isAutosetEnabled,
   recheckIntervalMs,
   resolveExpectedWebhookUrl,
+  retryUntilVerified,
   LineWebhookState,
 } from './line/webhookEndpoint';
 import {
@@ -214,6 +215,11 @@ export async function syncLineWebhookEndpoint(opts: { test?: boolean } = {}): Pr
       (state.lastError ? ` error=${state.lastError}` : ''),
   );
   return state;
+}
+
+/** First sync after boot; re-tests while LINE cannot reach us yet (see retryUntilVerified). */
+export function syncLineWebhookEndpointAtBoot(): Promise<LineWebhookState | null> {
+  return retryUntilVerified(() => syncLineWebhookEndpoint());
 }
 
 export function startLineWebhookWatchdog(): void {

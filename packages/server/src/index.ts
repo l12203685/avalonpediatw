@@ -28,7 +28,7 @@ import {
 import {
   initializeBots,
   registerBotRoutes,
-  syncLineWebhookEndpoint,
+  syncLineWebhookEndpointAtBoot,
   startLineWebhookWatchdog,
   startStatsDigest,
 } from './bots/index';
@@ -211,8 +211,9 @@ async function main() {
 
     // 7. LINE webhook URL ownership (Layer 1) — must run after the port is
     //    bound because LINE test-calls the endpoint. Fire-and-forget; the
-    //    outcome is logged and exposed on /api/bots/status.
-    void syncLineWebhookEndpoint().finally(() => startLineWebhookWatchdog());
+    //    outcome is logged and exposed on /api/bots/status. Re-tests for a few
+    //    minutes while a Render deploy still routes traffic to the old instance.
+    void syncLineWebhookEndpointAtBoot().finally(() => startLineWebhookWatchdog());
 
     // 8. Render Free sleeps after 15 min without inbound traffic, which drops
     //    the Discord gateway and wipes in-memory state. Self-ping the public

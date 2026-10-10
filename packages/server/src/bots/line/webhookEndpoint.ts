@@ -300,3 +300,31 @@ export async function ensureLineWebhookEndpoint(opts: EnsureOptions): Promise<Li
   state = next;
   return getLineWebhookState();
 }
+
+/**
+ * Render deploys without downtime: the new instance runs its first sync while
+ * public traffic still reaches the previous instance, so LINE's test call can
+ * 404 there (seen 2026-10-10 on the deploy that first added the LINE token).
+ * Re-run the sync (with its test) until LINE verifies the endpoint or the
+ * attempts run out. Only `verified === false` retries — a failed GET/PUT is not
+ * a cutover race.
+ */
+export async function retryUntilVerified(
+  sync: () => Promise<LineWebhookState | null>,
+  opts: { attempts?: number; delayMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<LineWebhookState | null> {
+  const attempts = opts.attempts ?? 4;
+  const delayMs = opts.delayMs ?? 90_000;
+  const sleep =
+    opts.sleep ??
+    ((ms: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, ms).unref();
+      }));
+  let result = await sync();
+  for (let i = 1; i < attempts && result?.verified === false; i++) {
+    await sleep(delayMs);
+    result = await sync();
+  }
+  return result;
+}

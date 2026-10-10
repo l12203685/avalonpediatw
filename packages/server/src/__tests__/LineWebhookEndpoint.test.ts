@@ -5,7 +5,9 @@ import {
   isAutosetEnabled,
   recheckIntervalMs,
   resolveExpectedWebhookUrl,
+  retryUntilVerified,
   __resetLineWebhookStateForTests,
+  type LineWebhookState,
 } from '../bots/line/webhookEndpoint';
 
 type Call = { url: string; method: string; body: unknown };
@@ -258,5 +260,40 @@ describe('ensureLineWebhookEndpoint', () => {
     });
     expect(s.action).toBe('failed');
     expect(s.lastError).toMatch(/ECONNRESET/);
+  });
+});
+
+describe('retryUntilVerified', () => {
+  const st = (verified: boolean | null): LineWebhookState =>
+    ({ ...getLineWebhookState(), action: 'updated', verified }) as LineWebhookState;
+
+  it('re-tests after a failed LINE test call until it passes (deploy cutover race)', async () => {
+    const results = [st(false), st(false), st(true)];
+    const sleeps: number[] = [];
+    let calls = 0;
+    const out = await retryUntilVerified(async () => results[calls++], {
+      delayMs: 5,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    expect(calls).toBe(3);
+    expect(sleeps).toEqual([5, 5]);
+    expect(out?.verified).toBe(true);
+  });
+
+  it('stops after the attempt limit', async () => {
+    let calls = 0;
+    const out = await retryUntilVerified(async () => (calls++, st(false)), { attempts: 3, sleep: async () => {} });
+    expect(calls).toBe(3);
+    expect(out?.verified).toBe(false);
+  });
+
+  it('does not retry when verified is true or unknown, or the leg is disabled', async () => {
+    for (const first of [st(true), st(null), null]) {
+      let calls = 0;
+      await retryUntilVerified(async () => (calls++, first), { sleep: async () => {} });
+      expect(calls).toBe(1);
+    }
   });
 });
