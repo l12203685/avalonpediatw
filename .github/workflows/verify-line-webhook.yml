@@ -51,6 +51,12 @@ jobs:
             sleep 10
           done
           head -c 300 /tmp/body 2>/dev/null || true; echo
+          if [ "$code" != "200" ]; then
+            # Render holds requests open while an instance cannot boot, so a
+            # dead service looks like timeouts (HTTP 000), not an error page.
+            echo "::error::$base/health never answered 200 — the service is not live (deploy failed, still deploying, or wrong URL). Check Render → the service → Events / Logs (e.g. missing JWT_SECRET makes the server exit at boot)."
+            exit 1
+          fi
           code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 60 "$base/api/version" || true)
           echo "/api/version -> HTTP $code"; head -c 300 /tmp/body 2>/dev/null || true; echo
 
