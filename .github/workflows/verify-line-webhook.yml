@@ -152,3 +152,32 @@ jobs:
           jq -e '.discord.ready == true' status.json >/dev/null || { echo "::error::Discord bot enabled but not connected: $(jq -r '.discord.error' status.json) (check token + MESSAGE CONTENT INTENT in the Developer Portal)"; exit 1; }
           jq -e '.discord.mirrorChannelConfigured == true' status.json >/dev/null || { echo "::error::LOBBY_MIRROR_DISCORD_CHANNEL_ID not set — Discord leg is a no-op"; exit 1; }
           echo "Discord leg OK"
+
+      # The website's stats pages are the product now: check the deployed
+      # bundle really calls this backend and that CORS lets the browser read it.
+      - name: Website → backend (bundle URL + CORS on /api/analysis/overview)
+        # always(): independent of the bot legs above, which fail until their secrets are set.
+        if: ${{ always() && env.SERVER_URL != '' }}
+        run: |
+          set -u
+          site=https://avalon-game-platform.web.app
+          fail=0
+          assets=$(curl -fsS --max-time 30 "$site/" | grep -o 'assets/[^"]*\.js' | sort -u || true)
+          if [ -z "$assets" ]; then
+            echo "::warning::could not read $site/ to inspect the bundle"
+          else
+            found=0
+            for a in $assets; do
+              curl -fsS --max-time 30 "$site/$a" | grep -qF "${SERVER_URL%/}" && { found=1; break; }
+            done
+            [ "$found" = 1 ] && echo "bundle on $site calls ${SERVER_URL%/}" \
+              || { echo "::error::the website bundle on $site does not contain ${SERVER_URL%/} — redeploy deploy-firebase.yml"; fail=1; }
+          fi
+          hdr=$(curl -sS -D - -o /tmp/overview.json --max-time 60 -H "Origin: $site" "${SERVER_URL%/}/api/analysis/overview" || true)
+          code=$(printf '%s' "$hdr" | head -1 | awk '{print $2}')
+          acao=$(printf '%s' "$hdr" | tr -d '\r' | awk -F': ' 'tolower($1)=="access-control-allow-origin"{print $2}')
+          echo "/api/analysis/overview -> HTTP $code, access-control-allow-origin: ${acao:-<none>}"
+          [ "$code" = "200" ] || { echo "::error::stats API answered HTTP $code"; fail=1; }
+          [ "$acao" = "$site" ] || [ "$acao" = "*" ] || { echo "::error::CORS: backend does not allow $site (check CORS_ORIGIN on Render)"; fail=1; }
+          jq -r '"totalGames=\(.data.totalGames // .totalGames) totalPlayers=\(.data.totalPlayers // .totalPlayers)"' /tmp/overview.json 2>/dev/null || true
+          exit $fail
