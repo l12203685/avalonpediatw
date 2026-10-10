@@ -134,7 +134,8 @@ class RenderOpsTest(unittest.TestCase):
         self.assertTrue(all(m == "GET" for m, _ in self.fake.calls))
         self.assertIn("DISCORD_BOT_TOKEN: MISSING on Render, set in GitHub secrets", out)
         self.assertIn("GITHUB_ACCOUNTS_TOKEN: still on Render", out)
-        self.assert_no_values_leak(out, list(SECRETS.values()) + ["discord-gh"])
+        self.assertIn(f"LINE groups seen in the last 6 days of logs: 1 ({ops.short(GROUP)})", out)
+        self.assert_no_values_leak(out, list(SECRETS.values()) + ["discord-gh", GROUP])
 
     def test_apply_copies_only_differing_secrets_removes_retired_and_deploys(self) -> None:
         gh = {"DISCORD_BOT_TOKEN": "discord-gh", "LINE_BOT_CHANNEL_ACCESS_TOKEN": "line-token-gh",

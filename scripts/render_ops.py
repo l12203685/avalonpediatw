@@ -13,8 +13,8 @@ very little:
     shortened ids only.
 
 Actions
-  status   read-only: services, latest deploys, which env keys the target has, and
-           which bot secrets exist in GitHub.
+  status   read-only: services, latest deploys, which env keys the target has,
+           which bot secrets exist in GitHub, and which LINE groups wrote to the bot.
   apply    idempotent: copy bot secrets from GitHub secrets (only when they differ),
            fill LOBBY_MIRROR_LINE_GROUP_ID from the "[LINE] event from group" log line
            when unset, delete retired keys, optionally rotate JWT_SECRET/ADMIN_SECRET,
@@ -179,6 +179,8 @@ def status(api: Render, github_env: dict[str, str]) -> int:
     for key in RETIRED_KEYS:
         if key in env:
             print(f"  {key}: still on Render (retired — `apply` removes it)")
+    ids = api.line_group_ids(target)
+    print(f"LINE groups seen in the last 6 days of logs: {len(ids)}" + (f" ({', '.join(short(i) for i in ids)})" if ids else ""))
     return 0
 
 
