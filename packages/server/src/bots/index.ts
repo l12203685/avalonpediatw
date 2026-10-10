@@ -25,6 +25,8 @@ import {
   DiscordChannelAdapter,
 } from './ChatMirror';
 import { getKeepAliveState, KeepAliveState } from '../services/keepAlive';
+import { WeeklyDigestScheduler, DigestDestination } from './stats/weeklyDigest';
+import { weeklyDigestText } from './stats/statsQueries';
 
 /** Last initialisation error per bot — surfaced on /api/bots/status. */
 const initErrors: { discord: string | null; line: string | null } = {
@@ -223,12 +225,70 @@ export function startLineWebhookWatchdog(): void {
   timer.unref();
 }
 
+// ─── Weekly stats digest (2026-10-10) ────────────────────────────────────
+
+let statsDigest: WeeklyDigestScheduler | null = null;
+
+/** Discord mirror channel: post directly (the bot's own message is never mirrored back). */
+function discordDigestDestination(channelId: string): DigestDestination {
+  return {
+    name: 'discord',
+    send: async (text): Promise<boolean | 'skip'> => {
+      if (!channelId) return 'skip';
+      const bot = getDiscordBot();
+      if (!bot) return 'skip'; // Discord leg not configured
+      if (!bot.isClientReady()) return false; // gateway not up yet — retry next tick
+      const ch = await bot.getClient().channels.fetch(channelId);
+      if (!ch || !(ch instanceof TextChannel)) return false;
+      await ch.send({ content: text, allowedMentions: { parse: [] } });
+      return true;
+    },
+  };
+}
+
+/** LINE mirror group: queue on the ChatMirror reply_token queue (free; sent when someone next speaks). */
+function lineDigestDestination(groupId: string): DigestDestination {
+  return {
+    name: 'line',
+    send: async (text): Promise<boolean | 'skip'> => {
+      if (!groupId) return 'skip';
+      const mirror = getChatMirror();
+      if (!mirror) return false;
+      // Never push (monthly quota): without the reply queue, LINE is skipped.
+      return mirror.enqueueLineReplyText(text) ? true : 'skip';
+    },
+  };
+}
+
+/**
+ * Every Monday 12:00 +08 post the leaderboard to the mirror channel / group.
+ * STATS_DIGEST_ENABLED=false turns it off. Call once after initializeBots().
+ */
+export function startStatsDigest(): void {
+  if (statsDigest) return;
+  if (envFlagOff('STATS_DIGEST_ENABLED')) {
+    console.log('ℹ️  STATS_DIGEST_ENABLED=false — weekly stats digest disabled');
+    return;
+  }
+  const discordChannelId = (process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID || '').trim();
+  const lineGroupId = (process.env.LOBBY_MIRROR_LINE_GROUP_ID || '').trim();
+  if (!discordChannelId && !lineGroupId) return;
+  statsDigest = new WeeklyDigestScheduler({
+    buildText: (now) => weeklyDigestText(now),
+    destinations: [discordDigestDestination(discordChannelId), lineDigestDestination(lineGroupId)],
+  });
+  statsDigest.start();
+  console.log('✅ Weekly stats digest armed (Mondays 12:00–12:10 +08)');
+}
+
 // ─── Status (Layer 3) ────────────────────────────────────────────────────
 
 export interface BotStatus {
   generatedAt: string;
   /** Render Free self-ping; if disabled on Render the Discord leg dies every 15 idle minutes. */
   keepAlive: KeepAliveState;
+  /** Monday 12:00 +08 leaderboard post; lastPostedWeek is in-memory (resets on restart). */
+  statsDigest: { running: boolean; lastPostedWeek: Record<string, string> };
   discord: {
     enabled: boolean;
     ready: boolean;
@@ -240,6 +300,7 @@ export interface BotStatus {
     ready: boolean;
     error: string | null;
     commandsEnabled: boolean;
+    statsCommandsEnabled: boolean;
     mirrorGroupConfigured: boolean;
     outbound: LineOutboundMode;
     replyQueueSize: number;
@@ -264,6 +325,7 @@ export function buildBotStatus(): BotStatus {
   return {
     generatedAt: new Date().toISOString(),
     keepAlive: getKeepAliveState(),
+    statsDigest: statsDigest?.getState() ?? { running: false, lastPostedWeek: {} },
     discord: {
       enabled: !!process.env.DISCORD_BOT_TOKEN,
       ready: discordBot?.isClientReady() ?? false,
@@ -275,6 +337,7 @@ export function buildBotStatus(): BotStatus {
       ready: !!lineBot,
       error: initErrors.line,
       commandsEnabled: LINE_CONFIG.commandsEnabled,
+      statsCommandsEnabled: LINE_CONFIG.statsCommandsEnabled,
       mirrorGroupConfigured: !!(process.env.LOBBY_MIRROR_LINE_GROUP_ID || '').trim(),
       outbound: lineOutboundMode,
       replyQueueSize: mirror?.lineReplyQueueSize() ?? 0,

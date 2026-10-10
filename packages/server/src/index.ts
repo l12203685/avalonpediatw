@@ -30,6 +30,7 @@ import {
   registerBotRoutes,
   syncLineWebhookEndpoint,
   startLineWebhookWatchdog,
+  startStatsDigest,
 } from './bots/index';
 import { captureRawBody } from './middleware/rawBody';
 import { initializeAsyncNotifier } from './services/AsyncNotifier';
@@ -217,6 +218,10 @@ async function main() {
     //    the Discord gateway and wipes in-memory state. Self-ping the public
     //    URL (no-op off Render / when KEEP_ALIVE=false). services/keepAlive.ts
     startKeepAlive();
+
+    // 9. Weekly stats digest — Mondays 12:00 +08, leaderboard to the Discord
+    //    mirror channel + LINE reply queue (STATS_DIGEST_ENABLED=false = off).
+    startStatsDigest();
   });
 }
 

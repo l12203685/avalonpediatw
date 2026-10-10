@@ -423,6 +423,22 @@ export class ChatMirror {
     return this.lineReplyQueue?.size() ?? 0;
   }
 
+  /**
+   * Queue a bot-authored text (the weekly stats digest, 2026-10-10) for the
+   * LINE mirror group as-is — it goes out on the next reply_token like any
+   * queued mirror line. Not a fan-out: nothing reaches the lobby or Discord.
+   * Returns false when the reply queue is not in use (listen-bot / push
+   * mode); callers must not fall back to push (it costs monthly quota).
+   */
+  public enqueueLineReplyText(text: string): boolean {
+    if (!this.lineReplyQueue || !this.isLineReplyQueueEnabled()) return false;
+    const { dropped } = this.lineReplyQueue.enqueue(text);
+    if (dropped > 0) {
+      this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
+    }
+    return true;
+  }
+
   // ─── Internals ────────────────────────────────────────────────────────
 
   /**

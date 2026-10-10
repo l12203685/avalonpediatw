@@ -1,6 +1,8 @@
-import { CommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
+import { ChatInputCommandInteraction, CommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from './config';
+import { chemistryReply, leaderboardReply, playerCardReply } from '../stats/statsQueries';
+import { STATS_COMMAND_USAGE, STATS_SITE_URL } from '../stats/statsReplies';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
 
@@ -47,6 +49,15 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
         inline: false,
       },
       {
+        name: '📊 戰績查詢 / Stats',
+        value:
+          `\`${STATS_COMMAND_USAGE.player}\` 個人戰績（名字可打一部分）\n` +
+          `\`${STATS_COMMAND_USAGE.leaderboard}\` 理論勝率排行 Top 10\n` +
+          `\`${STATS_COMMAND_USAGE.chemistry}\` 兩人同隊默契\n` +
+          `每週一 12:00 (+08) 自動貼出本週排行。完整圖表：${STATS_SITE_URL}`,
+        inline: false,
+      },
+      {
         name: `/${COMMANDS.RULES}`,
         value: 'Display game rules',
         inline: false,
@@ -60,6 +71,34 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
     .setFooter({ text: 'Use /help to see all commands' });
 
   await interaction.editReply({ embeds: [embed] });
+}
+
+// ── Stats lookup (2026-10-10) ────────────────────────────────────────────────
+
+/**
+ * /戰績 /排行 /默契 — public replies (not ephemeral) so the whole channel sees
+ * the answer; same text as the LINE bot (bots/stats). Mentions are disabled
+ * because the reply can echo what the user typed (e.g. "@everyone").
+ */
+async function replyStats(interaction: ChatInputCommandInteraction, build: () => Promise<string>): Promise<void> {
+  await interaction.deferReply();
+  const content = await build();
+  await interaction.editReply({ content, allowedMentions: { parse: [] } });
+}
+
+export async function handleStatsCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  const name = interaction.options.getString(STATS_OPTIONS.NAME, true);
+  await replyStats(interaction, () => playerCardReply(name));
+}
+
+export async function handleLeaderboardCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  await replyStats(interaction, () => leaderboardReply());
+}
+
+export async function handleChemistryCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  const a = interaction.options.getString(STATS_OPTIONS.PLAYER_A, true);
+  const b = interaction.options.getString(STATS_OPTIONS.PLAYER_B, true);
+  await replyStats(interaction, () => chemistryReply(a, b));
 }
 
 // ── /rules ───────────────────────────────────────────────────────────────────

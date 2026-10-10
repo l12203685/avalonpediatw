@@ -9,14 +9,71 @@ import {
   ActivityType,
   Message,
 } from 'discord.js';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from './config';
 import {
   handleHelpCommand,
   handleRulesCommand,
   handleRolesCommand,
   handlePlayPlatformCommand,
+  handleStatsCommand,
+  handleLeaderboardCommand,
+  handleChemistryCommand,
 } from './commands';
 import { getChatMirror } from '../ChatMirror';
+
+/**
+ * Slash command definitions registered by `registerCommands()`. Exported so
+ * tests can run discord.js' builder validation (names, lengths) offline.
+ */
+export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>> {
+  return [
+    new SlashCommandBuilder()
+      .setName(COMMANDS.HELP)
+      .setDescription('Show help for all Avalon Bot commands'),
+
+    // 2026-10-09: kept registered (no options) so users get a pointer to
+    // signage-cloud instead of "unknown command".
+    ...PLAY_PLATFORM_COMMANDS.map((name) =>
+      new SlashCommandBuilder()
+        .setName(name)
+        .setDescription('Games are played on signage-cloud now — replies with the link (前往 signage-cloud 開局)')
+    ),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.RULES)
+      .setDescription('Display Avalon game rules'),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.ROLES)
+      .setDescription('Display information about all roles'),
+
+    // 2026-10-10 stats lookup — CJK names, see COMMANDS.STATS in config.ts.
+    new SlashCommandBuilder()
+      .setName(COMMANDS.STATS)
+      .setDescription('查詢玩家戰績（勝率、理論勝率、擅長角色）/ Player stats')
+      .addStringOption((o) =>
+        o
+          .setName(STATS_OPTIONS.NAME)
+          .setDescription('玩家名字（打一部分也可以）/ Player name')
+          .setRequired(true)
+          .setMaxLength(50)
+      ),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.LEADERBOARD)
+      .setDescription('理論勝率排行 Top 10 / Leaderboard'),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.CHEMISTRY)
+      .setDescription('兩位玩家的同隊默契 / Pair chemistry')
+      .addStringOption((o) =>
+        o.setName(STATS_OPTIONS.PLAYER_A).setDescription('第一位玩家 / Player 1').setRequired(true).setMaxLength(50)
+      )
+      .addStringOption((o) =>
+        o.setName(STATS_OPTIONS.PLAYER_B).setDescription('第二位玩家 / Player 2').setRequired(true).setMaxLength(50)
+      ),
+  ];
+}
 
 /**
  * Discord Bot Client Setup
@@ -158,6 +215,18 @@ export class DiscordBotClient {
           await handleRolesCommand(interaction);
           break;
 
+        case COMMANDS.STATS:
+          await handleStatsCommand(interaction);
+          break;
+
+        case COMMANDS.LEADERBOARD:
+          await handleLeaderboardCommand(interaction);
+          break;
+
+        case COMMANDS.CHEMISTRY:
+          await handleChemistryCommand(interaction);
+          break;
+
         default: {
           const msg = '❌ Unknown command!';
           if (interaction.deferred) {
@@ -222,27 +291,7 @@ export class DiscordBotClient {
       throw new Error('DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID is not set');
     }
 
-    const commands = [
-      new SlashCommandBuilder()
-        .setName(COMMANDS.HELP)
-        .setDescription('Show help for all Avalon Bot commands'),
-
-      // 2026-10-09: kept registered (no options) so users get a pointer to
-      // signage-cloud instead of "unknown command".
-      ...PLAY_PLATFORM_COMMANDS.map((name) =>
-        new SlashCommandBuilder()
-          .setName(name)
-          .setDescription('Games are played on signage-cloud now — replies with the link (前往 signage-cloud 開局)')
-      ),
-
-      new SlashCommandBuilder()
-        .setName(COMMANDS.RULES)
-        .setDescription('Display Avalon game rules'),
-
-      new SlashCommandBuilder()
-        .setName(COMMANDS.ROLES)
-        .setDescription('Display information about all roles'),
-    ];
+    const commands = buildSlashCommands();
 
     const rest = new REST({ version: '10' }).setToken(DISCORD_CONFIG.token);
 

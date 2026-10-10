@@ -154,6 +154,31 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
 | 重新部署／Render 重啟 | 開機後自動恢復自我喚醒，不需人工 |
 | 要關掉 | `KEEP_ALIVE=false` |
 
+## 戰績查詢指令與每週排行（20261010）
+
+對局在 signage-cloud，戰績照舊記在 Google Sheet → `analysis_cache.json`；Discord 與 LINE 群都能查。
+兩邊指令寫法相同，回覆文字也相同（`bots/stats/`，一則 ≤ 1800 字）。
+
+| 指令 | 回覆 | Discord | LINE（鏡像群、1 對 1） |
+|---|---|---|---|
+| `/戰績 名字` | 場次、勝率、角色理論勝率、紅／藍方勝率、擅長角色、風格、對戰風格、網站連結 | slash 指令，公開回覆 | ✓ |
+| `/排行`（`/排行榜`） | 理論勝率 Top 10（同網站「數據分析」總覽）＋總場次／玩家數／紅藍勝率 | ✓ | ✓ |
+| `/默契 名字1 名字2` | 同隊場次、一起贏／一起輸、同隊勝率（默契矩陣只收場次最多的 28 位；沒有「對戰」數據） | ✓ | ✓ |
+| `/指令` | 指令說明（Discord 看 `/help`） | — | ✓ |
+
+- 名字比對：完全相同 → 不分大小寫 → 唯一的部分字串；多人符合列出最多 5 位，查無此人會提示查詢指令。
+  表單裡有只差大小寫的不同玩家（`Sin` / `SIN` / `sin`），完全相同優先，卡片會註明另有哪些寫法。
+- Discord 指令名直接用中文（Discord 允許），和 LINE 寫法一致，任何介面語系都一樣；從「/」選單點選即可，不必切輸入法。
+- LINE：在鏡像群裡指令那句**照常同步**到 Discord／大廳，答案只回 LINE。答案和佇列共用同一個 reply_token：
+  一次 `replyMessage`、最多 5 則 = 答案 1 則 + 佇列 4 則，其餘留到下一次；回覆失敗只把取出的佇列訊息放回佇列頭（答案不重送）。
+- 開關：`LINE_STATS_COMMANDS_ENABLED`（預設開，`false` 關），與舊的 `LINE_BOT_COMMANDS_ENABLED`（遊戲指令，預設關）分開；
+  狀態頁 `line.statsCommandsEnabled`、`line.stats.statsReplies`。
+
+**每週排行**：每週一 12:00（+08）把排行貼到 Discord 同步頻道（`LOBBY_MIRROR_DISCORD_CHANNEL_ID`），
+同時排進 LINE reply 佇列（免費，群裡下一次有人講話時送出；不會 push）。只在 12:00–12:10 的窗口內發，
+同一週只發一次（記在記憶體）；窗口外重啟絕不重發，窗口內 Discord 還沒連上會每分鐘重試到 12:10。
+`STATS_DIGEST_ENABLED=false` 關閉；狀態頁 `statsDigest.lastPostedWeek` 顯示最近一次發送的週一日期（重啟歸零）。
+
 ## 配額
 
 LINE 官方帳號免費方案每月免費訊息數有限（台灣目前 200 則，以 LINE 當期公告為準）；
@@ -180,6 +205,8 @@ reply 不計、push 計。`LINE_REPLY_DRAIN=true`（預設）下 server 不會 p
 - `packages/server/src/bots/index.ts` — 初始化（各 bot 失敗隔離）、`/api/bots/status`
 - `packages/server/src/middleware/rawBody.ts` — 保留原始 bytes
 - `packages/server/src/services/keepAlive.ts` — Render Free 自我喚醒
+- `packages/server/src/bots/stats/` — 戰績回覆（`statsReplies.ts` 純格式化、`statsQueries.ts` 讀快取、`textCommands.ts` LINE 指令、`weeklyDigest.ts` 每週排行）
 - `.github/workflows/verify-line-webhook.yml` — 每日探測
 - `render.yaml` — 變數清單
-- 測試：`src/__tests__/LineSyncRoundTrip.test.ts`、`LineReplyQueue.test.ts`、`LineWebhookEndpoint.test.ts`
+- 測試：`src/__tests__/LineSyncRoundTrip.test.ts`、`LineReplyQueue.test.ts`、`LineWebhookEndpoint.test.ts`、
+  `LineStatsCommands.test.ts`（也在 `pnpm test:line-sync`）、`StatsReplies.test.ts`、`DiscordStatsCommands.test.ts`、`StatsWeeklyDigest.test.ts`

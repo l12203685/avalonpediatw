@@ -14,6 +14,7 @@ import {
 } from './messages';
 import { getSharedRoomManager } from '../../game/roomManagerSingleton';
 import { getChatMirror } from '../ChatMirror';
+import { answerStatsTextCommand } from '../stats/textCommands';
 
 /**
  * Map LINE user IDs to the room they're currently in.
@@ -40,6 +41,8 @@ export interface LineWebhookStats {
   mirrorGroupEvents: number;
   repliesDrained: number;
   replyFailures: number;
+  /** Stats command answers sent (/戰績 /排行 /默契 /指令). */
+  statsReplies: number;
   lastEventAt: number | null;
 }
 
@@ -53,6 +56,7 @@ export class LineBotClient {
     mirrorGroupEvents: 0,
     repliesDrained: 0,
     replyFailures: 0,
+    statsReplies: 0,
     lastEventAt: null,
   };
   /** Non-mirror group ids already logged (each is logged once per process). */
@@ -118,12 +122,16 @@ export class LineBotClient {
         // outbound LINE queue (reply does not count against push quota).
         if (source.type === 'group' && this.isMirrorGroup(source.groupId)) {
           this.stats.mirrorGroupEvents += 1;
+          let statsAnswer: string | null = null;
           if (event.type === 'message' && event.message.type === 'text') {
             const textMessage = event.message as { id: string; text: string };
+            // A stats command is still mirrored like any other text; its
+            // answer goes back to LINE only, sharing this reply_token.
             await this.handleGroupMessage(source.groupId, source.userId, textMessage.text, textMessage.id);
+            statsAnswer = await this.statsAnswerFor(textMessage.text);
           }
           if (replyToken) {
-            await this.drainQueuedReplies(replyToken);
+            await this.drainQueuedReplies(replyToken, statsAnswer);
           }
           continue;
         }
@@ -139,6 +147,18 @@ export class LineBotClient {
         // Commands only make sense in 1:1 DMs (source.type === 'user').
         const messageEvent = event as MessageEvent;
         const textMessage = messageEvent.message as { id: string; text: string };
+
+        // Stats commands answer in 1:1 chats regardless of the legacy
+        // LINE_BOT_COMMANDS_ENABLED gate. Matched on the raw text: player
+        // names are case-sensitive (Sin / SIN / sin are different people).
+        if (source.type === 'user') {
+          const statsAnswer = await this.statsAnswerFor(textMessage.text);
+          if (statsAnswer !== null) {
+            await this.replyStatsAnswer(messageEvent.replyToken, statsAnswer);
+            continue;
+          }
+        }
+
         const userMessage = textMessage.text.toLowerCase().trim();
         await this.handleMessage(
           messageEvent.replyToken,
@@ -188,22 +208,52 @@ export class LineBotClient {
    * (free — not push quota). A failed reply puts the exact batch back at the
    * head of the queue so the next reply_token re-sends it; nothing is lost
    * (2026-09-07 listen-bot post-mortem §3-1: the old drain dropped the batch).
+   *
+   * One reply_token = ONE replyMessage call with at most 5 message objects.
+   * When the event was a stats command (2026-10-10), its answer takes the
+   * first slot and only the remaining slots drain the mirror queue; the
+   * answer itself is never queued (on failure only the drained mirror
+   * messages are put back).
    */
-  private async drainQueuedReplies(replyToken: string): Promise<void> {
+  private async drainQueuedReplies(replyToken: string, statsAnswer: string | null = null): Promise<void> {
     const mirror = getChatMirror();
-    if (!mirror || !mirror.isLineReplyQueueEnabled()) return;
-    const batch = mirror.drainLineReplies(LINE_REPLY_MAX_PER_DRAIN);
-    if (batch.length === 0) return;
+    const queue = mirror && mirror.isLineReplyQueueEnabled() ? mirror : null;
+    const lead: Message[] = statsAnswer ? [{ type: 'text', text: statsAnswer }] : [];
+    const batch = queue ? queue.drainLineReplies(LINE_REPLY_MAX_PER_DRAIN - lead.length) : [];
+    if (lead.length === 0 && batch.length === 0) return;
     try {
-      await this.client.replyMessage(
-        replyToken,
-        batch.map((item) => ({ type: 'text' as const, text: item.text })),
-      );
+      await this.client.replyMessage(replyToken, [
+        ...lead,
+        ...batch.map((item) => ({ type: 'text' as const, text: item.text })),
+      ]);
       this.stats.repliesDrained += batch.length;
+      this.stats.statsReplies += lead.length;
     } catch (error) {
       this.stats.replyFailures += 1;
-      mirror.requeueLineReplies(batch);
+      if (queue) queue.requeueLineReplies(batch);
       console.error(`[LINE reply-drain] replyMessage failed, re-queued ${batch.length}:`, error);
+    }
+  }
+
+  /** Stats answer for a typed command, or null (not a command / flag off). Never throws. */
+  private async statsAnswerFor(text: string): Promise<string | null> {
+    if (!LINE_CONFIG.statsCommandsEnabled) return null;
+    try {
+      return await answerStatsTextCommand(text, 'line');
+    } catch (error) {
+      console.error('[LINE stats] building answer failed:', error);
+      return null;
+    }
+  }
+
+  /** 1:1 chat stats reply (no mirror queue there). Failures are logged, never thrown. */
+  private async replyStatsAnswer(replyToken: string, text: string): Promise<void> {
+    try {
+      await this.client.replyMessage(replyToken, [{ type: 'text', text }]);
+      this.stats.statsReplies += 1;
+    } catch (error) {
+      this.stats.replyFailures += 1;
+      console.error('[LINE stats] replyMessage failed:', error);
     }
   }
 

@@ -50,7 +50,23 @@ export const COMMANDS = {
   ASSASSINATE: 'assassinate',
   RULES: 'rules',
   ROLES: 'roles',
+  // 2026-10-10 stats lookup (analysis_cache.json). CJK names on purpose:
+  // Discord allows them (no case, 1–32 chars of \p{L}\p{N}_-), and they are
+  // exactly what the LINE group types, so one syntax works on both platforms
+  // and in every client locale (English names + zh-TW localizations would
+  // show /stats to English-UI users while the docs and LINE say /戰績).
+  // Users pick them from the "/" menu, so no IME is needed to run them.
+  STATS: '戰績',
+  LEADERBOARD: '排行',
+  CHEMISTRY: '默契',
 };
+
+/** Option names of the stats slash commands (same CJK naming rules). */
+export const STATS_OPTIONS = {
+  NAME: '名字',
+  PLAYER_A: '玩家1',
+  PLAYER_B: '玩家2',
+} as const;
 
 /**
  * Game-flow commands that used to drive the self-hosted game. Since the

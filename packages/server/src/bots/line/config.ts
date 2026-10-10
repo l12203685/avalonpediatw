@@ -25,6 +25,14 @@ export const LINE_CONFIG = {
     (process.env.LINE_BOT_COMMANDS_ENABLED || '').trim().toLowerCase()
   ),
 
+  // Feature flag: stats lookup commands (/戰績 /排行 /默契 /指令), 2026-10-10.
+  // Separate from commandsEnabled on purpose — the legacy game commands stay
+  // off while stats answer in the lobby-mirror group and in 1:1 chats.
+  // Default ON; LINE_STATS_COMMANDS_ENABLED=false / 0 / no / off disables.
+  statsCommandsEnabled: !['false', '0', 'no', 'off'].includes(
+    (process.env.LINE_STATS_COMMANDS_ENABLED || '').trim().toLowerCase()
+  ),
+
   // LINE Notify OAuth credentials (for push notifications via LINE Notify API)
   notifyClientId:     process.env.LINE_NOTIFY_CLIENT_ID     || '',
   notifyClientSecret: process.env.LINE_NOTIFY_CLIENT_SECRET || '',
