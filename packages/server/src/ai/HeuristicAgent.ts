@@ -15,6 +15,10 @@ import {
   AgentAction,
 } from './types';
 import { AVALON_CONFIG } from '@avalon/shared';
+import {
+  pickLakeTarget as lakePolicyPickTarget,
+  declareLake as lakePolicyDeclare,
+} from './LakePolicy';
 import { PriorLookup, type Difficulty } from './priors/PriorLookup';
 import {
   assassinTargetPenalty,
@@ -826,6 +830,36 @@ export class HeuristicAgent implements AvalonAgent {
 
   onGameEnd(_obs: PlayerObservation, _won: boolean): void {
     this.resetMemory();
+  }
+
+  // ── Lady of the Lake (agent-level API, 2026-10-10) ──────────
+
+  /**
+   * Choose whom to inspect with the Lady of the Lake. `obs` is the
+   * holder's observation (`obs.myPlayerId` = holder). `validTargets`
+   * defaults to every seat not yet holding / inspected per
+   * `obs.lakeHistory`; pass the engine's authoritative list when known.
+   *
+   * Same policy SelfPlayEngine uses (see `LakePolicy.pickLakeTargetForTeam`).
+   */
+  pickLakeTarget(obs: PlayerObservation, validTargets?: readonly string[]): string {
+    return validTargets === undefined
+      ? lakePolicyPickTarget(obs)
+      : lakePolicyPickTarget(obs, validTargets);
+  }
+
+  /**
+   * Public claim after inspecting `targetId`, whose real camp (privately
+   * revealed to the holder) is `trueFaction`. `null` = do not declare.
+   *
+   * Same policy SelfPlayEngine uses (see `LakePolicy.decideLakeClaimForTeam`).
+   */
+  declareLake(
+    obs: PlayerObservation,
+    targetId: string,
+    trueFaction: 'good' | 'evil' | undefined,
+  ): 'good' | 'evil' | null {
+    return lakePolicyDeclare(obs, targetId, trueFaction);
   }
 
   // ── Memory lifecycle ────────────────────────────────────────
