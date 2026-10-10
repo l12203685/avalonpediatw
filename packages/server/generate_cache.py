@@ -25,6 +25,12 @@ Where each top-level section comes from:
                               牌譜 game log; players = every name in 玩1..玩0,
                               see compute_player_stats) and chemistry (同贏 /
                               同輸 / 贏相關 / 同贏-同輸 tabs). 生涯報表 is not read.
+                              The game log is 牌譜 plus, when that tab exists,
+                              Discord匯入 (games discord_records_import.py
+                              copied from the Discord forum, same columns);
+                              a Discord匯入 game whose record_fingerprint is
+                              already in 牌譜 is dropped (牌譜 wins), see
+                              merge_game_logs.
     recomputed here           strength (from players, via
                               scripts/build_archetype_strength.py)
     carried over              archetype, playstyle, featureStudies and any other
@@ -70,6 +76,7 @@ import re
 import stat
 import sys
 import tempfile
+import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -96,6 +103,11 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 ENV_CREDENTIALS_FILE = "AVALON_STATS_CREDENTIALS_FILE"
 ENV_CREDENTIALS_JSON = "AVALON_STATS_CREDENTIALS_JSON"
 ENV_SHEET_ID = "AVALON_STATS_SHEET_ID"
+
+# Game-log tabs. 牌譜 is required; DISCORD_IMPORT_TAB is optional (written only by
+# discord_records_import.py, append-only, same columns as 牌譜 plus discord_* ones).
+GAME_LOG_TAB = "牌譜"
+DISCORD_IMPORT_TAB = "Discord匯入"
 
 # Sections built from the Sheet by this script.
 SHEET_SECTIONS = (
@@ -264,12 +276,14 @@ def _require_google_libs() -> None:
         )
 
 
-def load_credentials(source: CredentialSource):
+def load_credentials(source: CredentialSource, scopes: list[str] | None = None):
+    """Service-account credentials (read-only Sheets scope unless `scopes` says otherwise)."""
     _require_google_libs()
+    scopes = scopes or SCOPES
     try:
         if source.kind == "json":
-            return Credentials.from_service_account_info(source.info, scopes=SCOPES)
-        return Credentials.from_service_account_file(str(source.path), scopes=SCOPES)
+            return Credentials.from_service_account_info(source.info, scopes=scopes)
+        return Credentials.from_service_account_file(str(source.path), scopes=scopes)
     except FileNotFoundError:
         raise FatalError(
             f"Service-account key file not found: {source.path}. "
@@ -292,8 +306,8 @@ def load_credentials(source: CredentialSource):
         ) from None
 
 
-def open_spreadsheet(source: CredentialSource, sheet_id: str) -> gspread.Spreadsheet:
-    gc = gspread.authorize(load_credentials(source))
+def open_spreadsheet(source: CredentialSource, sheet_id: str, scopes: list[str] | None = None) -> gspread.Spreadsheet:
+    gc = gspread.authorize(load_credentials(source, scopes))
     return gc.open_by_key(sheet_id)
 
 
@@ -458,8 +472,116 @@ def normalize_player_name(raw: object) -> str:
     return " ".join(_INVISIBLE_CHARS_RE.sub("", str(raw)).split())
 
 
+def read_optional_worksheet(sh: gspread.Spreadsheet, title: str) -> list[list[str]] | None:
+    """get_all_values() of tab `title`, or None if the spreadsheet has no such tab."""
+    try:
+        ws = sh.worksheet(title)
+    except Exception as exc:  # gspread's WorksheetNotFound, matched by name (see classify_google_error)
+        if classify_google_error(exc) == "missing_worksheet":
+            return None
+        raise
+    return ws.get_all_values()
+
+
+def load_game_logs(sh: gspread.Spreadsheet) -> "GameLogMerge":
+    """牌譜 (required) + Discord匯入 (optional), merged by merge_game_logs."""
+    main = sh.worksheet(GAME_LOG_TAB).get_all_values()
+    extra = read_optional_worksheet(sh, DISCORD_IMPORT_TAB)
+    return merge_game_logs(main, extra)
+
+
 def load_game_log(sh: gspread.Spreadsheet) -> list[GameRow]:
-    return parse_game_log(sh.worksheet("牌譜").get_all_values())
+    return load_game_logs(sh).games
+
+
+# ---------------------------------------------------------------------------
+# Game fingerprint: the same game in 牌譜 and in Discord匯入
+# ---------------------------------------------------------------------------
+#
+# 配置 + the team of every proposal (seats sorted, 0 = seat 10 last) + every mission
+# result (as counts: o's then x's). Lake lines and vote anomalies are left out (they are
+# the parts most often retyped differently). discord_records_import.py uses this same
+# function on both sides; it writes 文字記錄 in this canonical one-item-per-line form.
+
+_FP_MISSION_RE = re.compile(r"^[oxOX]+$")
+_FP_TEAM_RE = re.compile(r"^[0-9]+")
+# A Discord footer pasted into 文字記錄 ("刺客刺殺：x", "1.name" lines) ends the record.
+_FP_FOOTER_RE = re.compile(r"^(?:刺客刺殺|刺殺)|^(?:10|[0-9])\s*[.．、]\s*\S")
+
+
+def _seat_number(ch: str) -> int:
+    return 10 if ch == "0" else int(ch)
+
+
+def record_fingerprint_parts(config: str, text: str) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    """(配置, proposal teams, mission results) of a 文字記錄, normalized for comparison."""
+    config = (config or "").strip()
+    teams: list[str] = []
+    missions: list[str] = []
+    for raw in re.split(r"\r\n|\r|\n", text or ""):
+        line = unicodedata.normalize("NFKC", raw).strip()
+        if not line:
+            continue
+        if _FP_FOOTER_RE.match(line) or (config and line == config):
+            break
+        if _FP_MISSION_RE.match(line):
+            low = line.lower()
+            missions.append("o" * low.count("o") + "x" * low.count("x"))
+            continue
+        if ">" in line:  # lake line
+            continue
+        m = _FP_TEAM_RE.match(line)
+        if m:
+            teams.append("".join(sorted(m.group(0), key=_seat_number)))
+    return config, tuple(teams), tuple(missions)
+
+
+def record_fingerprint(config: str, text: str) -> str:
+    cfg, teams, missions = record_fingerprint_parts(config, text)
+    return f"{cfg}|{','.join(teams)}|{','.join(missions)}"
+
+
+@dataclass
+class GameLogMerge:
+    """The games of 牌譜 plus the Discord匯入 games not already in 牌譜."""
+
+    games: list[GameRow]
+    main_games: int = 0
+    extra_games: int = 0  # readable games in Discord匯入
+    extra_added: int = 0
+    extra_duplicates: int = 0  # dropped: fingerprint or 流水號 already seen (牌譜 wins)
+
+    def summary(self) -> str:
+        text = f"{self.main_games} from {GAME_LOG_TAB}"
+        if self.extra_games:
+            text += f" + {self.extra_added} from {DISCORD_IMPORT_TAB}"
+            if self.extra_duplicates:
+                text += f" ({self.extra_duplicates} more were games already counted, skipped)"
+        return text
+
+
+def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | None) -> GameLogMerge:
+    """牌譜 games as they are, then each Discord匯入 game whose fingerprint and 流水號 are new.
+
+    牌譜 rows are never deduplicated among themselves (as before this tab existed).
+    """
+    games = parse_game_log(main_rows)
+    merged = GameLogMerge(games=games, main_games=len(games))
+    if not extra_rows:
+        return merged
+    seen_fp = {record_fingerprint(g.config, g.text_record) for g in games}
+    seen_id = {g.id for g in games}
+    for g in parse_game_log(extra_rows):
+        merged.extra_games += 1
+        fp = record_fingerprint(g.config, g.text_record)
+        if fp in seen_fp or g.id in seen_id:
+            merged.extra_duplicates += 1
+            continue
+        seen_fp.add(fp)
+        seen_id.add(g.id)
+        games.append(g)
+        merged.extra_added += 1
+    return merged
 
 
 def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
@@ -2182,9 +2304,10 @@ def fetch_sheet_data(source: CredentialSource, sheet_id: str) -> tuple[list[Game
         print("Connecting to Google Sheets...")
         sh = open_spreadsheet(source, sheet_id)
 
-        print("Loading game log (牌譜)...")
-        games = load_game_log(sh)
-        print(f"  Loaded {len(games)} games: {game_log_summary(games)}")
+        print(f"Loading game log ({GAME_LOG_TAB}, {DISCORD_IMPORT_TAB} if present)...")
+        merged = load_game_logs(sh)
+        games = merged.games
+        print(f"  Loaded {len(games)} games ({merged.summary()}): {game_log_summary(games)}")
 
         print("Loading chemistry matrices...")
         chemistry = load_chemistry(sh)

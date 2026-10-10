@@ -7,6 +7,8 @@ name: Refresh analysis cache
 #       沒設就退用 GOOGLE_SHEETS_CREDENTIALS_JSON；兩個都沒設 → 印 notice 後略過（不算失敗）。
 #       試算表必須「共用」給金鑰裡的 client_email（檢視者即可）。
 # 玩家資料（players / playerDetails）由「牌譜」分頁的 玩1..玩0 欄逐局彙整，不再讀「生涯報表」。
+# 局的來源：「牌譜」+「Discord匯入」分頁（若存在；import-discord-records.yml 每天 03:17 從 Discord
+#   論壇追加），同一局（同指紋）兩邊都有時只算「牌譜」那筆。
 # 預覽：寫入前先跑 generate_cache.py --compare（不寫檔），把與現有快取的差異（玩家數、局數、
 #       局數前 10 名的局數/勝率、多數玩家都變動的欄位、守門結果）寫進 job summary，供稽核。
 # 守門（generate_cache.py）：總局數變少、任一既有玩家的局數變少（牌譜只會往下加局）、
@@ -81,7 +83,9 @@ jobs:
 
       - name: Offline unit tests of the generator
         if: steps.creds.outputs.secret != ''
-        run: python packages/server/test_generate_cache.py
+        run: |
+          python packages/server/test_generate_cache.py
+          python packages/server/test_discord_records_import.py
 
       - name: Write the service-account key to a temp file
         if: steps.creds.outputs.secret != ''
