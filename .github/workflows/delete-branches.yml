@@ -1,0 +1,40 @@
+# Delete remote branches by name (the session's git proxy cannot delete refs).
+# Manual only; refuses main; requires confirm=DELETE. Record what you delete in
+# docs/history/ first so a branch can be recovered by SHA.
+name: Delete branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      branches:
+        description: 'Branch names separated by spaces or newlines'
+        required: true
+      confirm:
+        description: 'Type DELETE'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCHES: ${{ inputs.branches }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          [ "$CONFIRM" = "DELETE" ] || { echo "::error::confirm must be DELETE"; exit 1; }
+          fail=0
+          for b in $BRANCHES; do
+            case "$b" in main|master|HEAD) echo "::error::refusing to delete $b"; fail=1; continue;; esac
+            if gh api -X DELETE "repos/$REPO/git/refs/heads/$b" >/dev/null 2>/tmp/err; then
+              echo "deleted $b"
+            else
+              echo "::warning::could not delete $b: $(head -c 200 /tmp/err)"; fail=1
+            fi
+          done
+          exit $fail
