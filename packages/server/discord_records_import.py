@@ -1030,7 +1030,8 @@ def reply_text(skip: SkippedPost) -> str:
         quoted = " ".join((skip.line_text or "").split())
         if len(quoted) > REPLY_LINE_MAX:
             quoted = quoted[:REPLY_LINE_MAX - 1] + "…"
-        where = f"第 {skip.line_no} 行「{_MARKDOWN_ESCAPE_RE.sub(r'\\\1', quoted)}」：{why}"
+        escaped = _MARKDOWN_ESCAPE_RE.sub(r"\\\1", quoted)  # outside the f-string: Python 3.11 (CI) forbids \ there
+        where = f"第 {skip.line_no} 行「{escaped}」：{why}"
     else:
         where = f"原因：{why}"
     return "\n".join([REPLY_MARKER, REPLY_INTRO, where, "", FORMAT_HINT, "", REPLY_FOOTER])
