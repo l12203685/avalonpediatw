@@ -45,6 +45,5 @@ Edward [20261012]：「舊分支的所有內容 把有用的全部留下來 就�
 | `fix/wiki-markdown-renderer` | `b85f535` | 2026-04-23 | 內容已在 main，或對應功能已停用（登入／綁定／站內對局／站內 ELO 等） |
 | `fix/wire-initialize-bots` | `8228492` | 2026-04-23 | 內容已在 main，或對應功能已停用（登入／綁定／站內對局／站內 ELO 等） |
 | `gh-pages` | `331ec2d` | 2026-04-21 | 舊 GitHub Pages 建置產物（deploy.yml 已停用） |
-| `main` | `4c2f56b` | 2026-10-12 | 內容已在 main，或對應功能已停用（登入／綁定／站內對局／站內 ELO 等） |
 | `staging` | `5cbaa64` | 2026-04-28 | 舊 Cloud Run staging（已停用） |
 | `test/e2e-chatmirror-9p-20260424` | `9fad7c3` | 2026-04-24 | 內容已在 main，或對應功能已停用（登入／綁定／站內對局／站內 ELO 等） |
