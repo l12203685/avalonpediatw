@@ -7,8 +7,8 @@ name: Import Discord records
 # 不動「牌譜」或其他分頁。以 discord_post_id 為鍵，可重跑；已在 牌譜 的局（指紋相同、或同配置
 # 同任務結果同玩家）與標「已收錄」的貼文不匯入；無法完整、無歧義解析的貼文略過並統計原因。
 #
-# 寫入與否：手動執行看 write 勾選（預設不寫，只做 dry run）；排程執行只在 repo variable
-#   DISCORD_IMPORT_WRITE 為 'true' 時寫入，否則 dry run。
+# 寫入與否：手動執行看 write 勾選（預設不寫，只做 dry run）；排程執行預設寫入
+#   （2026-10-12 首次寫入 82 局驗證無誤後開啟），repo variable DISCORD_IMPORT_WRITE 設為 'false' 可暫停。
 # 金鑰：DISCORD_BOT_TOKEN（bot 需能看論壇與讀訊息歷史）；試算表金鑰同 refresh-analysis-cache.yml
 #   （AVALON_STATS_SHEETS_CREDENTIALS_JSON，沒有就用 GOOGLE_SHEETS_CREDENTIALS_JSON）。
 #   寫入需要服務帳號對試算表有「編輯者」權限（dry run 檢視者即可）。
@@ -90,7 +90,7 @@ jobs:
             if [ "${INPUT_WRITE}" = "true" ]; then
               write=true
             fi
-          elif [ "${VAR_WRITE}" = "true" ]; then
+          elif [ "${VAR_WRITE}" != "false" ]; then
             write=true
           fi
           limit="$(printf '%s' "${INPUT_LIMIT}" | tr -d '[:space:]')"
