@@ -135416,87 +135416,162 @@
     }
   },
   "featureStudies": {
-    "generatedAt": "2026-04-27T15:04:56+08:00",
+    "generatedAt": "2026-10-12",
     "sampleSize": {
       "games": 2146,
-      "lakeLinks": 4064
+      "lakeLinks": 4073
     },
     "features": [
       {
         "loopId": "L141",
-        "title": "湖中宣告真假率",
-        "titleEn": "Lake Declaration Honesty by Role",
-        "oneLineHook": "藍方角色幾乎不說謊 (<1.5%), 紅方刺客最會 (54%)",
-        "oneLineHookEn": "Blue roles rarely lie (<1.5%); red Assassin lies most (54%).",
+        "title": "湖中宣告可信度",
+        "titleEn": "Lake claim reliability",
+        "oneLineHook": "持湖者說紅時，目標真的是紅方：首湖 70.8%（n=513）、二湖 85.7%（n=272）、三湖 81.6%（n=212）；說藍時目標真的是藍方：首湖 86.0%（n=1609）、二湖 89.5%（n=977）、三湖 86.5%（n=407）",
+        "oneLineHookEn": "When the lake holder says evil, the target really is evil: Lake 1 70.8% (n=513), Lake 2 85.7% (n=272), Lake 3 81.6% (n=212); when they say good, the target really is good: Lake 1 86.0% (n=1609), Lake 2 89.5% (n=977), Lake 3 86.5% (n=407)",
         "sampleSize": {
           "games": 2146,
-          "links": 4064
+          "links": 4073
         },
-        "visualType": "bar",
+        "visualType": "lakeClaim",
         "data": {
-          "axisLabel": "Lie %",
+          "minSample": 30,
           "rows": [
             {
-              "role": "刺",
-              "roleEn": "Assassin",
-              "camp": "red",
-              "lieRate": 54.09,
-              "total": 318
+              "lake": "首湖",
+              "lakeEn": "Lake 1",
+              "declared": "紅",
+              "declaredEn": "evil",
+              "n": 513,
+              "hits": 363,
+              "hitRate": 70.8,
+              "ciLow": 66.7,
+              "ciHigh": 74.5,
+              "lowSample": false
             },
             {
-              "role": "娜",
-              "roleEn": "Morgana",
-              "camp": "red",
-              "lieRate": 45.33,
-              "total": 353
+              "lake": "首湖",
+              "lakeEn": "Lake 1",
+              "declared": "藍",
+              "declaredEn": "good",
+              "n": 1609,
+              "hits": 1383,
+              "hitRate": 86.0,
+              "ciLow": 84.2,
+              "ciHigh": 87.6,
+              "lowSample": false
             },
             {
-              "role": "奧",
-              "roleEn": "Oberon",
-              "camp": "red",
-              "lieRate": 44.72,
-              "total": 322
+              "lake": "二湖",
+              "lakeEn": "Lake 2",
+              "declared": "紅",
+              "declaredEn": "evil",
+              "n": 272,
+              "hits": 233,
+              "hitRate": 85.7,
+              "ciLow": 81.0,
+              "ciHigh": 89.3,
+              "lowSample": false
             },
             {
-              "role": "德",
-              "roleEn": "Mordred",
-              "camp": "red",
-              "lieRate": 38.15,
-              "total": 401
+              "lake": "二湖",
+              "lakeEn": "Lake 2",
+              "declared": "藍",
+              "declaredEn": "good",
+              "n": 977,
+              "hits": 874,
+              "hitRate": 89.5,
+              "ciLow": 87.4,
+              "ciHigh": 91.2,
+              "lowSample": false
             },
             {
-              "role": "梅",
-              "roleEn": "Merlin",
-              "camp": "blue",
-              "lieRate": 1.33,
-              "total": 452
+              "lake": "三湖",
+              "lakeEn": "Lake 3",
+              "declared": "紅",
+              "declaredEn": "evil",
+              "n": 212,
+              "hits": 173,
+              "hitRate": 81.6,
+              "ciLow": 75.8,
+              "ciHigh": 86.2,
+              "lowSample": false
             },
             {
-              "role": "派",
-              "roleEn": "Percival",
-              "camp": "blue",
-              "lieRate": 0.91,
-              "total": 441
-            },
-            {
-              "role": "忠",
-              "roleEn": "Loyal",
-              "camp": "blue",
-              "lieRate": 0.34,
-              "total": 1760
+              "lake": "三湖",
+              "lakeEn": "Lake 3",
+              "declared": "藍",
+              "declaredEn": "good",
+              "n": 407,
+              "hits": 352,
+              "hitRate": 86.5,
+              "ciLow": 82.8,
+              "ciHigh": 89.5,
+              "lowSample": false
             }
-          ]
+          ],
+          "holderRows": [
+            {
+              "holder": "藍",
+              "holderEn": "good",
+              "declared": "紅",
+              "declaredEn": "evil",
+              "n": 696,
+              "hits": 687,
+              "hitRate": 98.7,
+              "ciLow": 97.6,
+              "ciHigh": 99.3,
+              "lowSample": false
+            },
+            {
+              "holder": "藍",
+              "holderEn": "good",
+              "declared": "藍",
+              "declaredEn": "good",
+              "n": 1960,
+              "hits": 1954,
+              "hitRate": 99.7,
+              "ciLow": 99.3,
+              "ciHigh": 99.9,
+              "lowSample": false
+            },
+            {
+              "holder": "紅",
+              "holderEn": "evil",
+              "declared": "紅",
+              "declaredEn": "evil",
+              "n": 301,
+              "hits": 82,
+              "hitRate": 27.2,
+              "ciLow": 22.5,
+              "ciHigh": 32.5,
+              "lowSample": false
+            },
+            {
+              "holder": "紅",
+              "holderEn": "evil",
+              "declared": "藍",
+              "declaredEn": "good",
+              "n": 1033,
+              "hits": 655,
+              "hitRate": 63.4,
+              "ciLow": 60.4,
+              "ciHigh": 66.3,
+              "lowSample": false
+            }
+          ],
+          "undeclared": 83
         },
-        "takeaway": "AI HeuristicAgent 觀湖宣告 → 用 perRoleLieRate 表估真假機率",
-        "takeawayEn": "AI heuristic agent reads lake declarations using these per-role lie priors.",
-        "sourceReport": "staging/selfplay/features_study_lake_declare_accuracy_3outcome_loop141.md"
+        "takeaway": "藍方持湖幾乎不說謊（說紅 98.7%、說藍 99.7% 屬實），所以看到湖中宣告先判斷持湖者的陣營，再決定信不信；紅方持湖宣告的可信度只有約 55%（說紅 27.2%、說藍 63.4% 屬實，n=1334），紅方說「紅」多半是在誣陷藍方。",
+        "takeawayEn": "A good lake holder almost never lies (98.7% of their evil calls and 99.7% of their good calls are true), so judge the holder's side first; an evil holder's claim is right only about 55% of the time (27.2% of evil calls, 63.4% of good calls, n=1334): an evil holder calling someone evil is usually framing a good player.",
+        "sourceReport": "generate_cache.py",
+        "computedAt": "2026-10-12"
       },
       {
         "loopId": "L142",
         "title": "持湖宣告後言行一致度",
         "titleEn": "Lake Declarer Behavioral Consistency",
-        "oneLineHook": "刺客 100% 言行一致 (掩護精準), 娜 81% 最易露馬腳",
-        "oneLineHookEn": "Assassin is 100% consistent (best cover); Morgana slips most (81%).",
+        "oneLineHook": "言行一致率，每格附 n：忠臣 95%（n=394）、梅林 94%（n=115）、派西維爾 92%（n=88）、莫德雷德 85%（n=33）；樣本不足（n < 30）：刺客 100%（n=15）、奧伯倫 85%（n=13）、莫甘娜 81%（n=16）",
+        "oneLineHookEn": "Consistency rate with n per cell: Loyal 95% (n=394), Merlin 94% (n=115), Percival 92% (n=88), Mordred 85% (n=33); small samples (n < 30): Assassin 100% (n=15), Oberon 85% (n=13), Morgana 81% (n=16)",
         "sampleSize": {
           "games": 2146,
           "links": 4064,
@@ -135512,7 +135587,8 @@
               "consistencyRate": 100.0,
               "total": 15,
               "consistent": 15,
-              "inconsistent": 0
+              "inconsistent": 0,
+              "lowSample": true
             },
             {
               "role": "忠",
@@ -135521,7 +135597,8 @@
               "consistencyRate": 95.43,
               "total": 394,
               "consistent": 376,
-              "inconsistent": 18
+              "inconsistent": 18,
+              "lowSample": false
             },
             {
               "role": "梅",
@@ -135530,7 +135607,8 @@
               "consistencyRate": 93.91,
               "total": 115,
               "consistent": 108,
-              "inconsistent": 7
+              "inconsistent": 7,
+              "lowSample": false
             },
             {
               "role": "派",
@@ -135539,7 +135617,8 @@
               "consistencyRate": 92.05,
               "total": 88,
               "consistent": 81,
-              "inconsistent": 7
+              "inconsistent": 7,
+              "lowSample": false
             },
             {
               "role": "德",
@@ -135548,7 +135627,8 @@
               "consistencyRate": 84.85,
               "total": 33,
               "consistent": 28,
-              "inconsistent": 5
+              "inconsistent": 5,
+              "lowSample": false
             },
             {
               "role": "奧",
@@ -135557,7 +135637,8 @@
               "consistencyRate": 84.62,
               "total": 13,
               "consistent": 11,
-              "inconsistent": 2
+              "inconsistent": 2,
+              "lowSample": true
             },
             {
               "role": "娜",
@@ -135566,7 +135647,8 @@
               "consistencyRate": 81.25,
               "total": 16,
               "consistent": 13,
-              "inconsistent": 3
+              "inconsistent": 3,
+              "lowSample": true
             }
           ],
           "highEvCells": [
@@ -135576,7 +135658,8 @@
               "n": 12,
               "threeRedPct": 91.67,
               "deltaThreeRed": 45.58,
-              "directionEn": "Morgana lying with consistent cover -> strong red"
+              "directionEn": "Morgana lying with consistent cover -> strong red",
+              "lowSample": true
             },
             {
               "label": "奧|宣藍|consistent",
@@ -135584,7 +135667,8 @@
               "n": 10,
               "threeRedPct": 90.0,
               "deltaThreeRed": 43.91,
-              "directionEn": "Oberon consistent blue declaration -> strong red"
+              "directionEn": "Oberon consistent blue declaration -> strong red",
+              "lowSample": true
             },
             {
               "label": "梅|宣藍|consistent",
@@ -135592,7 +135676,8 @@
               "n": 83,
               "threeRedPct": 13.25,
               "deltaThreeRed": -32.83,
-              "directionEn": "Merlin consistent blue declaration -> strong blue"
+              "directionEn": "Merlin consistent blue declaration -> strong blue",
+              "lowSample": false
             },
             {
               "label": "忠|宣藍|inconsistent",
@@ -135600,7 +135685,8 @@
               "n": 9,
               "threeRedPct": 0.0,
               "deltaThreeRed": -46.09,
-              "directionEn": "Loyal saying blue but voting reject -> blue wins"
+              "directionEn": "Loyal saying blue but voting reject -> blue wins",
+              "lowSample": true
             },
             {
               "label": "刺|宣藍|consistent",
@@ -135608,20 +135694,21 @@
               "n": 12,
               "threeRedPct": 66.67,
               "deltaThreeRed": 20.58,
-              "directionEn": "Assassin consistent blue cover -> red leans"
+              "directionEn": "Assassin consistent blue cover -> red leans",
+              "lowSample": true
             }
           ]
         },
-        "takeaway": "言行不一 = 紅方掩護 signal; 高 EV cell 給 AI 條件機率推論",
-        "takeawayEn": "Inconsistent words/actions are red-cover signal; high-EV cells feed conditional priors.",
+        "takeaway": "每格先看 n：刺客、奧伯倫、莫甘娜都不到 30 筆，「刺客 100% 言行一致」只是 15 筆的巧合，不能當規律。樣本夠的角色一致率都落在 85%～95%，差距不大；言行不一致值得追問，但單憑它判不了陣營。",
+        "takeawayEn": "Read n first: Assassin, Oberon, Morgana have fewer than 30 cases, so \"Assassin 100% consistent\" is a 15-case coincidence, not a rule. Roles with enough data all sit within 85-95%, a small spread; an inconsistency is worth a question but does not identify a side on its own.",
         "sourceReport": "staging/selfplay/features_study_lake_declarer_post_3outcome_loop142.md"
       },
       {
         "loopId": "L143",
         "title": "刺客目標座位偏好",
         "titleEn": "Assassin Target Seat Preference",
-        "oneLineHook": "隊長次數最多的玩家被刺中率 49%, 沉默玩家只有 39%",
-        "oneLineHookEn": "Top-leader targets get hit 49%; quiet seats only 39%.",
+        "oneLineHook": "隊長次數多的玩家被刺中率 49%（n=477），少的 39%（n=281）；隊長次數多寡主要是座位輪替造成的，不代表那個人比較主動",
+        "oneLineHookEn": "Players who led most get hit 49% (n=477), those who led least 39% (n=281); how often someone leads is mostly seat rotation, not how active they are",
         "sampleSize": {
           "games": 2146,
           "attempts": 1130
@@ -135683,16 +135770,16 @@
             }
           ]
         },
-        "takeaway": "刺客模仿模式: 鎖隊長多 + 中央座位 (3-6); AI 可學該偏好調目標權重",
-        "takeawayEn": "Pattern: lock onto vocal leaders in central seats (3-6); AI can mimic this prior.",
+        "takeaway": "誰當了幾次隊長主要由座位輪替（從誰開始、打了幾輪）決定，不是玩家主動程度的指標；被刺中率的差距不能讀成「話多的人容易被刺」。想猜梅林，看發言與投票內容，不要看隊長次數或座位。",
+        "takeawayEn": "How many times someone leads is set by seat rotation (who starts, how many rounds), not by how vocal they are; the hit-rate gap does not mean talkative players get shot. To find Merlin, read what people say and how they vote, not their lead count or seat.",
         "sourceReport": "staging/selfplay/features_study_assassin_target_seat_3outcome_loop143.md"
       },
       {
         "loopId": "L136",
         "title": "改隊後投票翻轉率",
         "titleEn": "Vote Flip Rate After Team Change",
-        "oneLineHook": "梅林 +1.57pp 翻得最多 (藍信號), 莫甘娜 -2.18pp 最不翻 (掩護自己)",
-        "oneLineHookEn": "Merlin flips most (+1.57pp blue signal); Morgana flips least (-2.18pp covering self).",
+        "oneLineHook": "各角色改隊後的翻票率差距只有 +1.6pp（梅林）～ -2.2pp（莫甘娜），差距很小",
+        "oneLineHookEn": "Vote-flip rates after a team change differ by only +1.6pp (Merlin) to -2.2pp (Morgana) across roles: a tiny gap",
         "sampleSize": {
           "games": 2146,
           "chances": 228754
@@ -135771,16 +135858,16 @@
             "delta": 2.25
           }
         },
-        "takeaway": "高翻轉率 = 藍方 (彈性反應), 低翻轉率 = 紅方 (一致掩護)",
-        "takeawayEn": "High flip = flexible blue; low flip = red coordinated cover.",
+        "takeaway": "藍紅兩方整體翻票率只差 2.2pp，各角色落在 +1.6 ～ -2.2pp 之間，差距太小、不足以當判斷依據；不要用「他改票了」來推陣營。",
+        "takeawayEn": "Good and evil flip at almost the same rate (overall gap 2.2pp, roles within +1.6 to -2.2pp): far too small to base a read on. Do not infer a side from a changed vote.",
         "sourceReport": "staging/selfplay/features_study_vote_flip_after_team_change_3outcome_loop136.md"
       },
       {
         "loopId": "L139",
         "title": "R3+ 強制 P5 局勢偏移",
         "titleEn": "Forced P5 Round Outcome Shift",
-        "oneLineHook": "R3 出現 forced P5 → 三紅率 +4.50pp, R4 +5.28pp",
-        "oneLineHookEn": "R3 forced P5 boosts 3-red by +4.50pp; R4 by +5.28pp.",
+        "oneLineHook": "R3 出現 forced P5 的局三紅率 50.6%（n=858），比基準 46.1% 高 4.5pp；但這是選擇偏誤，不是因果",
+        "oneLineHookEn": "Games with a forced P5 in R3 end 3-red 50.6% of the time (n=858), 4.5pp over the 46.1% baseline; selection bias, not causation",
         "sampleSize": {
           "games": 2146
         },
@@ -135837,8 +135924,8 @@
           "note": "R1 forced P5 比例異常高 (Sheets 匯入 padding), 該 row 不繪入圖表。",
           "noteEn": "R1 forced P5 frequency is degenerate (Sheets import padding); not plotted."
         },
-        "takeaway": "R3 是 matchpoint, forced P5 = 隊伍 5 連 reject → 紅方掩護成功的強信號",
-        "takeawayEn": "R3 is matchpoint; forced P5 (5 consecutive rejections) is a strong red-cover signal.",
+        "takeaway": "forced P5（連續五次否決，第五隊強制出發）本身就是局勢已經偏向紅方的結果：藍方掌握不了局面才會一路否決到底，這些局本來就比較容易三紅。它只是局勢不利的徵兆，不是「紅方在掩護」的證據，也不能拿來當判斷依據。",
+        "takeawayEn": "A forced P5 (five straight rejections, fifth team goes) is itself the result of a game already tilting evil: good keeps rejecting because it cannot control the table, so these games were headed for 3-red anyway. It is a symptom of a bad position, not evidence of evil cover, and not a read to act on.",
         "sourceReport": "staging/selfplay/features_study_5reject_round_pattern_3outcome_loop139.md"
       }
     ]

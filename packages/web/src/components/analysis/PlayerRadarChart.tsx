@@ -1,29 +1,84 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip,
 } from 'recharts';
 import { Loader, AlertCircle, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   fetchAnalysisPlayers,
   fetchAnalysisPlayerByName,
+  finalFields,
+  fmtPct,
+  fmtSignedPct,
   getErrorMessage,
 } from '../../services/api';
 import type { AnalysisPlayerStats, AnalysisPlayerRadar } from '../../services/api';
+import { useAnalysisOverview } from './useAnalysisOverview';
 
-// Radar axis labels (zh-TW). Keys match backend /api/analysis/players/:name radar payload.
-const RADAR_LABELS: Record<string, string> = {
-  winRate: '勝率',
-  redWinRate: '紅方勝率',
-  blueMerlinProtect: '藍方守梅',
-  roleTheory: '理論勝率',
-  positionTheory: '位置率',
-  redMerlinKillRate: '紅方刺梅',
-  experience: '經驗值',
-};
+/**
+ * 玩家能力雷達 (2026-10-12 兩段結算改版, docs/stats/two_stage_outcome.md)。
+ * 軸：最終勝率、紅方最終勝率、藍方三藍活率、任務結算勝率、超額勝率
+ * (以 50 為中心映射到 0–100)、紅方刺中率、經驗。
+ * 「位置理論」恆為 0 不再顯示；「角色理論」改為「超額勝率」。
+ * 後端 radar 缺新鍵 (舊後端) 時由 finalFields() 以原始計數算，公式同後端。
+ */
+type AxisKey =
+  | 'winRate' | 'redWinRate' | 'blueMerlinProtect' | 'missionWinRate'
+  | 'excessWinRate' | 'redMerlinKillRate' | 'experience';
+
+const AXIS_ORDER: AxisKey[] = [
+  'winRate', 'redWinRate', 'blueMerlinProtect', 'missionWinRate',
+  'excessWinRate', 'redMerlinKillRate', 'experience',
+];
+
+interface AxisPoint {
+  key: AxisKey;
+  dimension: string;
+  /** 畫在圖上的 0–100 值。 */
+  value: number;
+  /** 原始值 (超額勝率可為負；算不出來為 null)。 */
+  raw: number | null;
+}
+
+const RED_ROLES = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫'];
+
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+function clamp100(v: number): number {
+  return Math.max(0, Math.min(100, v));
+}
+
+function buildAxes(
+  data: AnalysisPlayerRadar,
+  roleFinalWinRates: Record<string, number> | undefined,
+  label: (k: AxisKey) => string,
+): AxisPoint[] {
+  const { player, radar } = data;
+  const ff = finalFields(player, roleFinalWinRates);
+  const values: Record<AxisKey, number | null> = {
+    winRate: ff.finalWinRate ?? num(radar.winRate),
+    redWinRate: ff.finalRedWinRate ?? num(radar.redWinRate),
+    blueMerlinProtect: ff.finalBlueWinRate ?? num(radar.blueMerlinProtect) ?? num(player.blueMerlinAlive),
+    missionWinRate: ff.missionWinRate ?? num(radar.missionWinRate) ?? num(player.winRate),
+    excessWinRate: ff.excessWinRate ?? num(radar.excessWinRate),
+    redMerlinKillRate: num(radar.redMerlinKillRate) ?? num(player.redMerlinDead),
+    experience: num(radar.experience) ?? Math.min(player.totalGames / 10, 100),
+  };
+  return AXIS_ORDER.map(key => {
+    const raw = values[key];
+    // 超額勝率以 50 為中心：+10% → 60、−10% → 40；算不出來畫在 50 (持平) 並在 tooltip 顯示「—」。
+    const plotted = key === 'excessWinRate' ? 50 + (raw ?? 0) : (raw ?? 0);
+    return { key, dimension: label(key), value: clamp100(plotted), raw };
+  });
+}
 
 export default function PlayerRadarChart(): JSX.Element {
+  const { t } = useTranslation('common');
+  const { overview } = useAnalysisOverview();
   const [playerList, setPlayerList] = useState<AnalysisPlayerStats[]>([]);
   const [selectedName, setSelectedName] = useState<string>('');
   const [radarData, setRadarData] = useState<AnalysisPlayerRadar | null>(null);
@@ -34,7 +89,7 @@ export default function PlayerRadarChart(): JSX.Element {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    (async (): Promise<void> => {
       try {
         const { players } = await fetchAnalysisPlayers();
         if (!cancelled) {
@@ -47,7 +102,7 @@ export default function PlayerRadarChart(): JSX.Element {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return (): void => { cancelled = true; };
   }, []);
 
   const loadRadar = useCallback(async (name: string) => {
@@ -67,10 +122,25 @@ export default function PlayerRadarChart(): JSX.Element {
     if (selectedName) loadRadar(selectedName);
   }, [selectedName, loadRadar]);
 
+  const axisLabel = useCallback(
+    (k: AxisKey): string => t(`analytics.deep.radar.axes.${k}`),
+    [t],
+  );
+
+  const chartData = useMemo(
+    () => (radarData ? buildAxes(radarData, overview?.roleFinalWinRates, axisLabel) : []),
+    [radarData, overview?.roleFinalWinRates, axisLabel],
+  );
+
+  const ff = useMemo(
+    () => (radarData ? finalFields(radarData.player, overview?.roleFinalWinRates) : null),
+    [radarData, overview?.roleFinalWinRates],
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
-        <Loader size={20} className="animate-spin" /> 載入玩家資料...
+        <Loader size={20} className="animate-spin" /> {t('analytics.deep.radar.loadingPlayers')}
       </div>
     );
   }
@@ -87,13 +157,6 @@ export default function PlayerRadarChart(): JSX.Element {
     ? playerList.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
     : playerList;
 
-  const chartData = radarData
-    ? Object.entries(radarData.radar).map(([key, value]) => ({
-        dimension: RADAR_LABELS[key] || key,
-        value: typeof value === 'number' ? value : 0,
-      }))
-    : [];
-
   return (
     <div className="space-y-4">
       {/* Player selector */}
@@ -102,7 +165,7 @@ export default function PlayerRadarChart(): JSX.Element {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             type="text"
-            placeholder="搜尋玩家..."
+            placeholder={t('analytics.deep.radar.search')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-avalon-card border border-gray-600 rounded-lg pl-8 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
@@ -128,9 +191,9 @@ export default function PlayerRadarChart(): JSX.Element {
       {/* Radar chart */}
       {radarLoading ? (
         <div className="flex items-center justify-center py-16 text-gray-400 gap-3">
-          <Loader size={20} className="animate-spin" /> 載入雷達圖...
+          <Loader size={20} className="animate-spin" /> {t('analytics.deep.radar.loadingRadar')}
         </div>
-      ) : radarData ? (
+      ) : radarData && ff ? (
         <div className="grid md:grid-cols-2 gap-4">
           <motion.div
             initial={{ opacity: 0 }}
@@ -138,7 +201,7 @@ export default function PlayerRadarChart(): JSX.Element {
             className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
           >
             <h3 className="text-sm font-bold text-gray-400 mb-2">
-              {radarData.player.name} — 能力雷達圖
+              {t('analytics.deep.radar.title', { name: radarData.player.name })}
             </h3>
             <ResponsiveContainer width="100%" height={300}>
               <RadarChart data={chartData}>
@@ -153,7 +216,12 @@ export default function PlayerRadarChart(): JSX.Element {
                   fillOpacity={0.3}
                 />
                 <Tooltip
-                  formatter={(val: unknown) => `${Number(val).toFixed(1)}%`}
+                  formatter={(_val: unknown, _name, item) => {
+                    const p = item.payload as AxisPoint;
+                    if (p.key === 'excessWinRate') return [fmtSignedPct(p.raw), p.dimension];
+                    if (p.key === 'experience') return [p.raw === null ? '—' : p.raw.toFixed(1), p.dimension];
+                    return [fmtPct(p.raw), p.dimension];
+                  }}
                   contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
                   itemStyle={{ color: '#d1d5db' }}
                 />
@@ -161,13 +229,9 @@ export default function PlayerRadarChart(): JSX.Element {
             </ResponsiveContainer>
             {/* Radar dimension explanation */}
             <div className="mt-3 text-xs text-gray-500 space-y-1">
-              <p>勝率: 整體遊戲勝率</p>
-              <p>紅方勝率: 擔任紅方(邪惡)時的勝率</p>
-              <p>藍方守梅: 擔任藍方時完成三任務且梅林未被刺殺的勝率</p>
-              <p>理論勝率: 考慮角色分配後的理論勝率</p>
-              <p>位置率: 座位位置對勝率的影響</p>
-              <p>紅方刺梅: 擔任紅方時藍方完成三任務但梅林被刺殺的勝率</p>
-              <p>經驗值: 依總場次換算的經驗指標 (上限 100)</p>
+              {AXIS_ORDER.map(k => (
+                <p key={k}>{t(`analytics.deep.radar.legend.${k}`)}</p>
+              ))}
             </div>
           </motion.div>
 
@@ -178,42 +242,49 @@ export default function PlayerRadarChart(): JSX.Element {
             className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 space-y-3"
           >
             <h3 className="text-sm font-bold text-gray-400">
-              {radarData.player.name} — 詳細數據
+              {t('analytics.deep.radar.details', { name: radarData.player.name })}
             </h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <StatRow label="總場次" value={radarData.player.totalGames.toString()} />
-              <StatRow label="勝率" value={`${radarData.player.winRate}%`} />
-              <StatRow label="理論勝率" value={`${radarData.player.roleTheory}%`} />
-              <StatRow label="位置率" value={`${radarData.player.positionTheory}%`} />
-              <StatRow label="紅方勝率" value={`${radarData.player.redWin}%`} color="text-red-400" />
-              <StatRow label="藍方勝率" value={`${radarData.player.blueWin}%`} color="text-blue-400" />
-              <StatRow label="三紅(紅方)" value={`${radarData.player.red3Red}%`} color="text-red-400" />
-              <StatRow label="三藍梅死(紅方)" value={`${radarData.player.redMerlinDead}%`} color="text-yellow-400" />
-              <StatRow label="三藍梅活(藍方)" value={`${radarData.player.blueMerlinAlive}%`} color="text-blue-400" />
+              <StatRow label={t('analytics.deep.radar.stats.totalGames')} value={radarData.player.totalGames.toString()} />
+              <StatRow label={t('analytics.deep.radar.stats.finalWinRate')} value={fmtPct(ff.finalWinRate)} />
+              <StatRow
+                label={t('analytics.deep.radar.stats.excessWinRate')}
+                value={fmtSignedPct(ff.excessWinRate)}
+                color={ff.excessWinRate === null ? 'text-gray-500' : ff.excessWinRate >= 0 ? 'text-emerald-400' : 'text-rose-400'}
+              />
+              <StatRow label={t('analytics.deep.radar.stats.expectedWinRate')} value={fmtPct(ff.expectedFinalWinRate)} />
+              <StatRow label={t('analytics.deep.radar.stats.missionWinRate')} value={fmtPct(ff.missionWinRate)} />
+              <StatRow label={t('analytics.deep.radar.stats.merlinSurvival')} value={fmtPct(ff.merlinSurvivalRate)} color="text-blue-400" />
+              <StatRow label={t('analytics.deep.radar.stats.redFinal')} value={fmtPct(ff.finalRedWinRate)} color="text-red-400" />
+              <StatRow label={t('analytics.deep.radar.stats.blueFinal')} value={fmtPct(ff.finalBlueWinRate)} color="text-blue-400" />
+              <StatRow label={t('analytics.deep.radar.stats.red3Red')} value={fmtPct(num(radarData.player.red3Red))} color="text-red-400" />
+              <StatRow label={t('analytics.deep.radar.stats.redMerlinDead')} value={fmtPct(num(radarData.player.redMerlinDead))} color="text-yellow-400" />
+              <StatRow label={t('analytics.deep.radar.stats.blueMerlinAlive')} value={fmtPct(num(radarData.player.blueMerlinAlive))} color="text-blue-400" />
             </div>
 
-            {/* Role win rates */}
+            {/* Role win rates (任務結算口徑, 舊欄位保留) */}
             <div>
-              <p className="text-xs font-bold text-gray-500 mb-1.5">角色勝率</p>
+              <p className="text-xs font-bold text-gray-500 mb-1.5">{t('analytics.deep.radar.stats.roleWinRates')}</p>
               <div className="space-y-1">
-                {Object.entries(radarData.player.roleWinRates)
-                  .filter(([, v]) => v > 0)
+                {Object.entries(radarData.player.roleWinRates ?? {})
+                  .filter(([, v]) => typeof v === 'number' && v > 0)
                   .map(([role, wr]) => {
-                    const isRed = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫'].includes(role);
+                    const isRed = RED_ROLES.includes(role);
                     return (
-                    <div key={role} className="flex items-center gap-2">
-                      <span className={`text-xs w-10 font-semibold ${isRed ? 'text-red-400' : 'text-blue-400'}`}>{role}</span>
-                      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${isRed ? 'bg-red-500' : 'bg-blue-500'}`}
-                          style={{ width: `${wr}%` }}
-                        />
+                      <div key={role} className="flex items-center gap-2">
+                        <span className={`text-xs w-12 font-semibold ${isRed ? 'text-red-400' : 'text-blue-400'}`}>{role}</span>
+                        <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${isRed ? 'bg-red-500' : 'bg-blue-500'}`}
+                            style={{ width: `${clamp100(wr)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-400 w-10 text-right">{wr}%</span>
                       </div>
-                      <span className="text-xs text-gray-400 w-10 text-right">{wr}%</span>
-                    </div>
                     );
                   })}
               </div>
+              <p className="text-[10px] text-gray-600 mt-1">{t('analytics.deep.radar.legacyNote')}</p>
             </div>
           </motion.div>
         </div>

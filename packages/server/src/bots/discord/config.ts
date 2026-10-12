@@ -59,6 +59,9 @@ export const COMMANDS = {
   STATS: '戰績',
   LEADERBOARD: '排行',
   CHEMISTRY: '默契',
+  // 2026-10-12 community feedback (bots/feedback): /意見 內容:… — same CJK
+  // naming so LINE's typed "/意見 文字" and this slash command read alike.
+  FEEDBACK: '意見',
 };
 
 /** Option names of the stats slash commands (same CJK naming rules). */
@@ -66,6 +69,11 @@ export const STATS_OPTIONS = {
   NAME: '名字',
   PLAYER_A: '玩家1',
   PLAYER_B: '玩家2',
+} as const;
+
+/** Option name of the /意見 slash command (bots/feedback). */
+export const FEEDBACK_OPTIONS = {
+  CONTENT: '內容',
 } as const;
 
 /**

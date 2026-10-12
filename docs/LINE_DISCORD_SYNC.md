@@ -70,9 +70,16 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
     },
     "stats": { "requests": 12, "signatureFailures": 0, "events": 12, "mirrorGroupEvents": 11,
                "repliesDrained": 7, "replyFailures": 0, "lastEventAt": 1791314200000 }
+  },
+  "feedback": {
+    "commandEnabled": true,
+    "weeks": [ { "week": "2026-W42", "line": { "排行": 3, "問題": 1 }, "discord": { "機器人": 2 } } ],
+    "opinions": { "line": 1, "discord": 0 }
   }
 }
 ```
+
+`feedback` 是社群反應的主題計數與 `/意見` 次數（只有數字，見 `docs/COMMUNITY_FEEDBACK.md`）。
 
 | 欄位 | 意義 | 不對時代表 |
 |---|---|---|
@@ -161,9 +168,10 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
 
 | 指令 | 回覆 | Discord | LINE（鏡像群、1 對 1） |
 |---|---|---|---|
-| `/戰績 名字` | 場次、勝率、角色理論勝率、紅／藍方勝率、擅長角色、風格、對戰風格、網站連結 | slash 指令，公開回覆 | ✓ |
-| `/排行`（`/排行榜`） | 理論勝率 Top 10（同網站「數據分析」總覽）＋總場次／玩家數／紅藍勝率 | ✓ | ✓ |
+| `/戰績 名字` | 場次、**最終勝率**、超額勝率；任務結算 → 刺殺結算 → 最終；紅／藍方最終勝率；擅長角色、風格、對戰風格、網站連結（口徑見 `docs/stats/two_stage_outcome.md`；不再顯示「角色理論勝率」） | slash 指令，公開回覆 | ✓ |
+| `/排行`（`/排行榜`） | 快取 `leaderboard` 的主榜：超額勝率 Top 10（標題含期間與門檻：近 90 天內有出賽、期間至少 20 場），每行「名次 名字 超額 ±x｜最終 y%｜n 場」＋總計（最終紅勝／藍勝、任務結算、三藍局刺中率）。舊快取退回全期超額或理論勝率 | ✓ | ✓ |
 | `/默契 名字1 名字2` | 同隊場次、一起贏／一起輸、同隊勝率（默契矩陣只收場次最多的 28 位；沒有「對戰」數據） | ✓ | ✓ |
+| `/意見 文字` | 固定回覆「已收到」，內容匿名轉貼到 `FEEDBACK_DISCORD_CHANNEL_ID`（見 `docs/COMMUNITY_FEEDBACK.md`） | slash 指令，只有本人看得到回覆 | ✓ |
 | `/指令` | 指令說明（Discord 看 `/help`） | — | ✓ |
 
 - 名字比對：完全相同 → 不分大小寫 → 唯一的部分字串；多人符合列出最多 5 位，查無此人會提示查詢指令。
@@ -175,6 +183,7 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
   狀態頁 `line.statsCommandsEnabled`、`line.stats.statsReplies`。
 
 **每週排行**：每週一 12:00（+08）把排行貼到 Discord 同步頻道（`LOBBY_MIRROR_DISCORD_CHANNEL_ID`），
+內容 = 主榜 Top 10 ＋ 近 90 天 Top 5 ＋ 上月角色王一行（超過 1800 字時從後面的榜開始省略），
 同時排進 LINE reply 佇列（免費，群裡下一次有人講話時送出；不會 push）。只在 12:00–12:10 的窗口內發，
 同一週只發一次（記在記憶體）；窗口外重啟絕不重發，窗口內 Discord 還沒連上會每分鐘重試到 12:10。
 `STATS_DIGEST_ENABLED=false` 關閉；狀態頁 `statsDigest.lastPostedWeek` 顯示最近一次發送的週一日期（重啟歸零）。

@@ -136,8 +136,15 @@ export interface AvalonAgent {
 
 export interface SelfPlayResult {
   roomId:     string;
+  /** 最終勝方：三紅或三藍死 = evil；三藍活 = good。 */
   winner:     'good' | 'evil';
   rounds:     number;
   playerCount: number;
   eventCount: number;
+  /** 任務結算明細（2026-10-12 新增，舊呼叫端可忽略）。 */
+  questResults?: ('success' | 'fail')[];
+  /** 任務結算到了三藍。 */
+  threeBlue?: boolean;
+  /** 刺殺結算：三藍時是否刺中梅林；沒到三藍為 null。 */
+  merlinKilled?: boolean | null;
 }

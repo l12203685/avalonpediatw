@@ -3,13 +3,21 @@ name: Import Discord records
 # 每天把 Discord 論壇 #牌譜紀錄與覆盤（每篇貼文一局）的牌譜匯入 Google 試算表的「Discord匯入」分頁，
 # 30 分鐘後 refresh-analysis-cache.yml 會把 牌譜 + Discord匯入 一起算進戰績分析快取。
 #
-# 只讀 Discord（不貼文、不加標籤）；試算表只會在「Discord匯入」分頁往下追加列（沒有就建立），
-# 不動「牌譜」或其他分頁。以 discord_post_id 為鍵，可重跑；已在 牌譜 的局（指紋相同、或同配置
-# 同任務結果同玩家）與標「已收錄」的貼文不匯入；無法完整、無歧義解析的貼文略過並統計原因。
+# Discord 預設只讀（不加標籤）；只有 reply 開啟時會在討論串貼一則格式回覆（見下）。試算表只會在「Discord匯入」
+# 分頁往下追加列（沒有就建立；reply 開啟時另在「Discord回覆」分頁記下每則已貼的回覆），不動「牌譜」或其他分頁。
+# 以 discord_post_id 為鍵，可重跑；已在 牌譜 的局（指紋相同、或同配置同任務結果同玩家）與標「已收錄」的貼文
+# 不匯入；無法完整、無歧義解析的貼文略過並統計原因。
+#
+# 格式回覆（reply）：開啟時，對 14 天內因格式無法解析（非已收錄／模擬／重複／起始訊息刪除或空白／
+#   沒有牌譜也沒有結果標籤或配置的討論貼文）且尚未回覆過的貼文，在該討論串貼一則「🤖 牌譜格式檢查」：
+#   第幾行、原因、格式提示；不 @ 任何人；每次最多 20 則；bot 沒有發言權限時只警告不中斷。每篇只回一次：
+#   已貼的回覆記在「Discord回覆」分頁，回覆被刪也不再貼；送出遇伺服器錯誤或逾時不重送（可能已貼出，下次先查）。
+#   論壇缺少已收錄／模擬／結果標籤（改名？）時不回覆、只警告。dry run 只計數不貼。
+#   手動執行看 reply 勾選（預設不回）；排程執行要 repo variable DISCORD_IMPORT_REPLY 設為 'true' 才回（預設關）。
 #
 # 寫入與否：手動執行看 write 勾選（預設不寫，只做 dry run）；排程執行預設寫入
 #   （2026-10-12 首次寫入 82 局驗證無誤後開啟），repo variable DISCORD_IMPORT_WRITE 設為 'false' 可暫停。
-# 金鑰：DISCORD_BOT_TOKEN（bot 需能看論壇與讀訊息歷史）；試算表金鑰同 refresh-analysis-cache.yml
+# 金鑰：DISCORD_BOT_TOKEN（bot 需能看論壇與讀訊息歷史；回覆另需在討論串發言的權限）；試算表金鑰同 refresh-analysis-cache.yml
 #   （AVALON_STATS_SHEETS_CREDENTIALS_JSON，沒有就用 GOOGLE_SHEETS_CREDENTIALS_JSON）。
 #   寫入需要服務帳號對試算表有「編輯者」權限（dry run 檢視者即可）。
 # 公開 repo：log 與 job summary 只有數量與固定的原因字串，不含玩家名字、牌譜內容或貼文標題。
@@ -28,6 +36,10 @@ on:
         description: '最多寫入幾局（空白 = 不限；例如第一次先寫 5 局檢查）'
         required: false
         default: ''
+      reply:
+        description: '在 14 天內因格式無法解析的貼文討論串回覆原因與格式提示（不勾 write 時只計數不貼）'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -83,15 +95,26 @@ jobs:
           EVENT: ${{ github.event_name }}
           INPUT_WRITE: ${{ inputs.write }}
           INPUT_LIMIT: ${{ inputs.limit }}
+          INPUT_REPLY: ${{ inputs.reply }}
           VAR_WRITE: ${{ vars.DISCORD_IMPORT_WRITE }}
+          VAR_REPLY: ${{ vars.DISCORD_IMPORT_REPLY }}
         run: |
           write=false
+          reply=false
           if [ "${EVENT}" = "workflow_dispatch" ]; then
             if [ "${INPUT_WRITE}" = "true" ]; then
               write=true
             fi
-          elif [ "${VAR_WRITE}" != "false" ]; then
-            write=true
+            if [ "${INPUT_REPLY}" = "true" ]; then
+              reply=true
+            fi
+          else
+            if [ "${VAR_WRITE}" != "false" ]; then
+              write=true
+            fi
+            if [ "${VAR_REPLY}" = "true" ]; then
+              reply=true
+            fi
           fi
           limit="$(printf '%s' "${INPUT_LIMIT}" | tr -d '[:space:]')"
           if [ -n "${limit}" ] && ! printf '%s' "${limit}" | grep -Eq '^[0-9]+$'; then
@@ -100,10 +123,16 @@ jobs:
           fi
           echo "write=${write}" >> "$GITHUB_OUTPUT"
           echo "limit=${limit}" >> "$GITHUB_OUTPUT"
+          echo "reply=${reply}" >> "$GITHUB_OUTPUT"
           if [ "${write}" = "true" ]; then
             echo "Mode: write (append new games to Discord匯入)${limit:+, at most ${limit}}"
           else
             echo "Mode: dry run (nothing is written)"
+          fi
+          if [ "${reply}" = "true" ]; then
+            echo "Reply: on (format replies in Discord threads; counted only in a dry run)"
+          else
+            echo "Reply: off"
           fi
 
       - name: Checkout
@@ -165,6 +194,7 @@ jobs:
           AVALON_STATS_SHEET_ID: ${{ vars.AVALON_STATS_SHEET_ID }}
           WRITE: ${{ steps.mode.outputs.write }}
           LIMIT: ${{ steps.mode.outputs.limit }}
+          REPLY: ${{ steps.mode.outputs.reply }}
         run: |
           args=()
           if [ "${WRITE}" != "true" ]; then
@@ -172,6 +202,9 @@ jobs:
           fi
           if [ -n "${LIMIT}" ]; then
             args+=(--limit "${LIMIT}")
+          fi
+          if [ "${REPLY}" = "true" ]; then
+            args+=(--reply)
           fi
           set +e
           python packages/server/discord_records_import.py "${args[@]}"

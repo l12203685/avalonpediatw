@@ -21,6 +21,7 @@ import {
   getPlayerStrength,
   getPlayerPlaystyle,
   getFeatureStudies,
+  getLeaderboard,
   invalidateCache,
   isSheetsReady,
 } from '../services/sheetsAnalysis';
@@ -119,15 +120,21 @@ router.get('/players/:name', limiter, async (req: Request, res: Response) => {
       return fail(res, 404, 'Player not found');
     }
 
-    // Radar chart dimensions (matching Python radar chart)
+    // Radar axes per docs/stats/two_stage_outcome.md: winRate / redWinRate are
+    // the FINAL-outcome rates (紅勝 = 三紅 + 三藍死, 藍勝 = 三藍活); the legacy
+    // 任務結算 rate is exposed as missionWinRate. excessWinRate is null when the
+    // cache cannot provide it (web/bot show "—"). roleTheory / positionTheory
+    // (always 0) are kept for the existing web radar.
     const radar = {
-      winRate: player.winRate,
-      redWinRate: player.redWin,
+      winRate: player.finalWinRate ?? player.winRate,
+      redWinRate: player.finalRedWinRate ?? player.redWin,
       blueMerlinProtect: player.blueMerlinAlive,
-      roleTheory: player.roleTheory,
-      positionTheory: player.positionTheory,
+      missionWinRate: player.missionWinRate ?? player.winRate,
+      excessWinRate: player.excessWinRate ?? null,
       redMerlinKillRate: player.redMerlinDead,
       experience: Math.min(player.totalGames / 10, 100),
+      roleTheory: player.roleTheory,
+      positionTheory: 0,
     };
 
     return ok(res, { player, radar });
@@ -313,6 +320,27 @@ router.get('/feature-studies', limiter, async (_req: Request, res: Response) => 
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/feature-studies]', msg);
     return fail(res, 500, 'Failed to load feature studies');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/leaderboard
+// 排行榜（超額勝率 main / online / recent / improved / assassin / newcomers /
+// roleTitles）— boards computed by generate_cache.py (LEADERBOARD_CONFIG),
+// served as-is. Cache predating the section → 503, like feature-studies.
+// ---------------------------------------------------------------------------
+router.get('/leaderboard', limiter, async (_req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const data = await getLeaderboard();
+    if (!data) {
+      return fail(res, 503, 'Leaderboard not yet generated');
+    }
+    return ok(res, data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/leaderboard]', msg);
+    return fail(res, 500, 'Failed to load leaderboard');
   }
 });
 

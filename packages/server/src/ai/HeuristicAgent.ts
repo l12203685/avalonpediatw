@@ -21,6 +21,12 @@ import {
 } from './LakePolicy';
 import { PriorLookup, type Difficulty } from './priors/PriorLookup';
 import {
+  humanQuestCardRule,
+  resolveAgentTuning,
+  type AgentTuning,
+} from './AgentTuning';
+import { pickAssassinTargetByModel, type AssassinModelWeights } from './assassin/AssassinModel';
+import {
   assassinTargetPenalty,
   voteInnerBlackBonus,
   seatPriorByRole,
@@ -750,6 +756,20 @@ export class HeuristicAgent implements AvalonAgent {
   /** PriorLookup — data-driven thresholds (Phase 1 #97). Injected for DI
    *  in tests; auto-loaded from bundled JSON in production. */
   private readonly priors: PriorLookup;
+  /**
+   * Tuning switches (2026-10-12, `AgentTuning.ts`). Resolved once at
+   * construction: production default + `AVALON_TUNING_*` env + the
+   * per-agent overrides passed in (self-play strength benchmark puts
+   * two settings in the same game). ForwardAgent reads this too.
+   */
+  readonly tuning: AgentTuning;
+  /**
+   * Assassin-model weights used when `tuning.assassinModel` is on.
+   * `undefined` = the bundled `ASSASSIN_MODEL_WEIGHTS`; `scripts/
+   * assassinModel.ts` injects a freshly fitted model so its "agent+model"
+   * baseline measures the fit it just produced, not the file on disk.
+   */
+  private readonly assassinModelWeights: AssassinModelWeights | undefined;
 
   private memory: AgentMemory = this.createEmptyMemory();
 
@@ -757,11 +777,15 @@ export class HeuristicAgent implements AvalonAgent {
     agentId: string,
     _legacyDifficulty?: 'normal' | 'hard',
     priors?: PriorLookup,
+    tuning?: Partial<AgentTuning>,
+    assassinModelWeights?: AssassinModelWeights,
   ) {
     this.agentId = agentId;
     // Difficulty parameter intentionally ignored — see field doc above.
     void _legacyDifficulty;
     this.priors = priors ?? getDefaultPriors();
+    this.tuning = resolveAgentTuning(tuning);
+    this.assassinModelWeights = assassinModelWeights;
   }
 
   onGameStart(obs: PlayerObservation): void {
@@ -844,8 +868,8 @@ export class HeuristicAgent implements AvalonAgent {
    */
   pickLakeTarget(obs: PlayerObservation, validTargets?: readonly string[]): string {
     return validTargets === undefined
-      ? lakePolicyPickTarget(obs)
-      : lakePolicyPickTarget(obs, validTargets);
+      ? lakePolicyPickTarget(obs, undefined, this.tuning)
+      : lakePolicyPickTarget(obs, validTargets, this.tuning);
   }
 
   /**
@@ -859,7 +883,7 @@ export class HeuristicAgent implements AvalonAgent {
     targetId: string,
     trueFaction: 'good' | 'evil' | undefined,
   ): 'good' | 'evil' | null {
-    return lakePolicyDeclare(obs, targetId, trueFaction);
+    return lakePolicyDeclare(obs, targetId, trueFaction, this.tuning);
   }
 
   // ── Memory lifecycle ────────────────────────────────────────
@@ -2297,6 +2321,19 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'quest_vote', vote: 'success' };
     }
 
+    // AgentTuning.humanQuestCardRules (2026-10-12): R1 lone Morgana →
+    // fail; R4 visible red < 2 → success only while NOBODY is listening.
+    // Sits above the hierarchy / Oberon branches, but the rule itself
+    // yields to §0 whenever either side has two quest wins: a hidden
+    // Oberon may be on the same team (invisible to the other reds, and he
+    // sees nobody), so two "lone" reds failing flips the quest. In a
+    // standard game R4 is always 2-1, so only the R1 rule is live. See
+    // `humanQuestCardRule`.
+    if (this.tuning.humanQuestCardRules) {
+      const ruled = humanQuestCardRule(obs);
+      if (ruled !== null) return { type: 'quest_vote', vote: ruled };
+    }
+
     // Edward 2026-04-24 batch 10 — recognised-red hierarchy (位階法).
     // Replaces batch 9's blanket hard-fail for {assassin, morgana,
     // mordred}. Oberon SKIPS the hierarchy and uses his dedicated batch
@@ -2501,6 +2538,13 @@ export class HeuristicAgent implements AvalonAgent {
 
     if (goodPlayers.length === 0) {
       return { type: 'assassinate', targetId: allIds.find(id => id !== obs.myPlayerId) ?? allIds[0] };
+    }
+
+    // AgentTuning.assassinModel (2026-10-12): conditional-logit model
+    // trained on the logged games (`assassin/AssassinModel.ts`), using
+    // only the public history plus the assassin's own known allies.
+    if (this.tuning.assassinModel) {
+      return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
     }
 
     // Edward 2026-04-24 batch 2 fix #6: assassin must first prefer

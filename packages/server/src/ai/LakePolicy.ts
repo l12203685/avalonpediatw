@@ -23,6 +23,7 @@ import {
   lakeDeclareLiePrior,
   lakeDeclareLieRoleRate,
 } from './priors/EvActionPriors';
+import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 
 type Camp = 'good' | 'evil';
 
@@ -85,8 +86,9 @@ export function deriveValidLakeTargets(
 export function pickLakeTarget(
   obs: PlayerObservation,
   validTargets: readonly string[] = deriveValidLakeTargets(obs),
+  tuning: AgentTuning = getDefaultAgentTuning(),
 ): string {
-  return pickLakeTargetForTeam(obs.myTeam, obs, [...validTargets]);
+  return pickLakeTargetForTeam(obs.myTeam, obs, [...validTargets], tuning);
 }
 
 /**
@@ -98,8 +100,9 @@ export function declareLake(
   obs: PlayerObservation,
   targetId: string,
   trueFaction: Camp | undefined,
+  tuning: AgentTuning = getDefaultAgentTuning(),
 ): Camp | null {
-  return decideLakeClaimForTeam(obs.myTeam, targetId, obs, trueFaction);
+  return decideLakeClaimForTeam(obs.myTeam, targetId, obs, trueFaction, tuning);
 }
 
 // ── Core decisions (legacy SelfPlayEngine signatures) ───────────
@@ -132,6 +135,7 @@ export function pickLakeTargetForTeam(
   holderTeam: Camp | undefined,
   obs: PlayerObservation,
   validTargets: string[],
+  tuning: AgentTuning = getDefaultAgentTuning(),
 ): string {
   if (!isSmartLakeEnabled()) {
     // Legacy: good picks knownEvils[0] (useless), evil picks random.
@@ -161,6 +165,16 @@ export function pickLakeTargetForTeam(
     const unknownCandidates = validTargets.filter(id => !avoidSet.has(id));
     if (unknownCandidates.length === 0) {
       return validTargets[0];
+    }
+    // ── AgentTuning.goodLakeTargetMostSuspicious (2026-10-12) ──
+    // 一致性基準第 7 節：真人（含 ED）多半湖有失敗紀錄的人；開關打開時
+    // 查最可疑的人（同分依座位序）。預設維持下方的「首湖藍」。
+    if (tuning.goodLakeTargetMostSuspicious) {
+      return rankByDescendingScore(
+        unknownCandidates,
+        id => estimateSuspicionFromHistory(id, obs),
+        obs.allPlayerIds,
+      )[0];
     }
     // ── Edward 2026-04-29 fundamental fix #2 — lake target prefers low red ──
     // Edward 13:35 self-play evidence: R1 任務 130 oox (1 fail) → 1家
@@ -258,6 +272,7 @@ export function decideLakeClaimForTeam(
   targetId: string,
   obs: PlayerObservation,
   actualTargetTeam: Camp | undefined,
+  tuning: AgentTuning = getDefaultAgentTuning(),
 ): Camp | null {
   if (holderTeam !== 'good' && holderTeam !== 'evil') return null;
 
@@ -270,6 +285,10 @@ export function decideLakeClaimForTeam(
   }
 
   // Evil holder.
+  // ── AgentTuning.evilLakeClaimAlwaysGood (2026-10-12) ──
+  // 一致性基準第 7 節：ED 當紅方 14 次有 13 次說實話、top 群也偏向宣
+  // 「好」；開關打開時紅方一律宣好（隊友洗白、對手也說好）。
+  if (tuning.evilLakeClaimAlwaysGood) return 'good';
   const knownEvilSet = new Set(obs.knownEvils);
   if (knownEvilSet.has(targetId)) {
     // Ally → always publicly wash as good.

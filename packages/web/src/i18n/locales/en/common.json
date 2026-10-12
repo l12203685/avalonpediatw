@@ -238,7 +238,9 @@
       "radar": "Player Radar",
       "aiSelfplay": "AI Self-play",
       "deepAnalysis": "Deep Analysis",
-      "featureStudies": "Feature Studies"
+      "featureStudies": "Feature Studies",
+      "boards": "Boards",
+      "analysis": "Analysis"
     },
     "expandTiers": "Tier view (5 ELO groups)",
     "collapseTiers": "Hide tier view",
@@ -258,25 +260,41 @@
       "noteLabel": "Note:",
       "feature": {
         "L141": {
-          "title": "Lake Declaration Honesty by Role",
-          "hook": "Blue roles rarely lie (<1.5%); red Assassin lies most (54%)"
+          "title": "Lake claim reliability",
+          "hook": "A good lake holder almost never lies (99% of calls are true); an evil holder's call is right only ~55% of the time, and an evil \"evil\" call usually frames a good player"
         },
         "L142": {
           "title": "Lake Declarer Behavioral Consistency",
-          "hook": "Assassin is 100% consistent (best cover); Morgana slips most (81%)"
+          "hook": "Roles with enough data all sit at 85–95% consistency, a small spread; \"Assassin 100%\" rests on 15 cases and is too small a sample to be a rule"
         },
         "L143": {
           "title": "Assassin Target Seat Preference",
-          "hook": "Top-leader targets get hit 49%; quiet seats only 39%"
+          "hook": "Players who led most get hit 49%, those who led least 39%, but lead count is mostly seat rotation, not how active someone is"
         },
         "L136": {
           "title": "Vote Flip Rate After Team Change",
-          "hook": "Merlin flips most (+1.57pp blue signal); Morgana flips least (-2.18pp)"
+          "hook": "Flip rates differ by only ±1.6pp across roles (Merlin +1.6, Morgana −2.2): far too small to infer a side from"
         },
         "L139": {
           "title": "Forced P5 Round Outcome Shift",
-          "hook": "R3 forced P5 boosts 3-red by +4.50pp; R4 by +5.28pp"
+          "hook": "Games with a forced P5 in R3 end 3-Red 4.5pp more often, but that is selection bias (the table was already tilting evil), not causation"
         }
+      },
+      "loadError": "Failed to load feature studies",
+      "notFound": "Study {{loopId}} is not in the cache yet",
+      "lowSample": "Low sample",
+      "lowSampleHint": "n < {{min}} is flagged as low sample",
+      "tier": "Lead count",
+      "hitRate": "Hit rate",
+      "seat": "Seat",
+      "lake": {
+        "lake": "Lake",
+        "holder": "Holder",
+        "declaredRed": "Called evil",
+        "declaredBlue": "Called good",
+        "columns": "Each cell: reliability %, [95% CI], n",
+        "byHolder": "By holder's side",
+        "undeclared": "{{count}} more lake links carried no call and are excluded"
       }
     },
     "deep": {
@@ -319,15 +337,35 @@
       "overview": {
         "outcomeBreakdown": "Outcome Breakdown",
         "outcomeCardLabel": "Outcome Distribution",
-        "theoryRanking": "Theoretical Win Rate Ranking (50+ games)",
-        "theoryColumn": "Theoretical Win Rate",
         "gamesRanking": "Most Played",
         "gamesColumn": "Games",
         "seatPositionTitle": "Seat Position Win Rate",
         "seatPositionSub": "Overall win rate per seat with role distribution",
         "seatLabel": "Seat {{seat}}",
         "seatGames": "Seat {{seat}} ({{games}} games)",
-        "overallWinRate": "Overall Win Rate"
+        "overallWinRate": "Overall Win Rate",
+        "stages": {
+          "title": "Three-stage outcome",
+          "mission": "Mission stage",
+          "assassination": "Assassination stage",
+          "final": "Final",
+          "red": "Red",
+          "blue": "Blue",
+          "killed": "Killed",
+          "survived": "Survived",
+          "gamesSuffix": "{{count}} games",
+          "rule": "Mission stage: 3-Red = red, 3-Blue = blue → Assassination stage: was Merlin killed in 3-Blue games → Final: blue only wins with 3-Blue and Merlin alive; 3-Red or 3-Blue-killed is a red win",
+          "derived": "Legacy cache: derived from the outcome breakdown"
+        },
+        "excessRanking": "Excess win rate ranking (30+ games)",
+        "excessRankingLegacy": "Theoretical win rate ranking (legacy mission-stage basis, 30+ games)",
+        "excessColumn": "Excess win rate",
+        "finalWinRateColumn": "Final WR",
+        "legacyTheoryColumn": "Theoretical WR (legacy)",
+        "excessLegend": "Excess = final win rate − win rate expected from the roles played (may be negative); ranked by the all-time shrunk excess",
+        "excessLegendLegacy": "Cache not recomputed yet; showing the legacy theoretical win rate (≈ mission-stage win rate, 3-Blue-killed counts as a blue win)",
+        "excessEmpty": "No player has reached 30 games yet, so the excess ranking is empty",
+        "seatPositionBasis": "Overall and per-role win rates use the mission-stage basis (3-Blue-killed counts as blue); hover for the outcome breakdown"
       },
       "lake": {
         "loading": "Loading Lady of the Lake analysis…",
@@ -478,6 +516,110 @@
         "labelOutcomeHighRed": "55%+ = red dominant",
         "labelOutcomeMid": "40-50% = balanced",
         "labelOutcomeHighBlue": "below 35% = blue dominant"
+      },
+      "assassination": {
+        "title": "Assassination stage",
+        "sub": "3-Blue games only (after blue completes three missions): did the Assassin hit Merlin",
+        "threeBlueGames": "3-Blue games",
+        "killRate": "Merlin kill rate (3-Blue)",
+        "surviveRate": "Merlin survival rate",
+        "killedCount": "{{count}} killed",
+        "survivedCount": "{{count}} survived",
+        "rule": "3-Blue-killed = red wins the game; 3-Blue-alive = blue wins. 3-Red games have no assassination and are excluded",
+        "legacy": "Legacy cache: derived from merlinKillRate (3-Blue kill rate)"
+      },
+      "roleFinal": {
+        "title": "Final win rate by role",
+        "sub": "Red roles = 3-Red + 3-Blue-killed; blue roles = 3-Blue-alive (all players, all time)",
+        "note": "The \"expected win rate\" behind excess is this table weighted by each player's role mix"
+      },
+      "radar": {
+        "loadingPlayers": "Loading players…",
+        "loadingRadar": "Loading radar…",
+        "search": "Search players…",
+        "title": "{{name}} — Skill radar",
+        "details": "{{name}} — Details",
+        "axes": {
+          "winRate": "Final WR",
+          "redWinRate": "Red final WR",
+          "blueMerlinProtect": "Blue 3B-alive",
+          "missionWinRate": "Mission-stage WR",
+          "excessWinRate": "Excess WR",
+          "redMerlinKillRate": "Red kill rate",
+          "experience": "Experience"
+        },
+        "legend": {
+          "winRate": "Final WR: red games ending 3-Red or 3-Blue-killed plus blue games ending 3-Blue-alive, over all games",
+          "redWinRate": "Red final WR: share of red games ending 3-Red or 3-Blue-killed",
+          "blueMerlinProtect": "Blue 3B-alive: share of blue games ending 3-Blue with Merlin alive",
+          "missionWinRate": "Mission-stage WR: legacy basis where 3-Blue-killed also counts as a blue win",
+          "excessWinRate": "Excess WR: final WR − expected WR (weighted by the player's role mix); plotted around 50 on a 0–100 scale (50 = even; drawn at 50 when it cannot be computed)",
+          "redMerlinKillRate": "Red kill rate: share of red games ending 3-Blue-killed",
+          "experience": "Experience: total games / 10 (capped at 100)"
+        },
+        "stats": {
+          "totalGames": "Games",
+          "finalWinRate": "Final WR",
+          "excessWinRate": "Excess WR",
+          "expectedWinRate": "Expected WR",
+          "missionWinRate": "Mission-stage WR",
+          "merlinSurvival": "Merlin survival (blue 3-Blue games)",
+          "redFinal": "Red final WR",
+          "blueFinal": "Blue 3B-alive",
+          "red3Red": "3-Red (red)",
+          "redMerlinDead": "3-Blue-killed (red)",
+          "blueMerlinAlive": "3-Blue-alive (blue)",
+          "roleWinRates": "Role win rates"
+        },
+        "legacyNote": "Role win rates use the mission-stage basis (3-Blue-killed counts as blue)"
+      }
+    },
+    "boards": {
+      "loading": "Loading boards…",
+      "notGenerated": "Leaderboard not generated yet (recomputed daily at 03:47)",
+      "backendOutdated": "The backend has not been updated to a version with the leaderboard API yet (404); try again later",
+      "loadFailed": "Failed to load the leaderboard",
+      "retry": "Retry",
+      "asOf": "As of {{date}}",
+      "datesNote": "{{parsed}} games dated, {{unparsed}} undated",
+      "period": "Period {{period}}",
+      "minGames": "{{count}}+ games",
+      "widened": "Too few qualifiers; window widened to {{span}}",
+      "allTime": "all time",
+      "days": "the last {{count}} days",
+      "empty": "Nobody qualifies for this board yet",
+      "precisionTitle": "Precision Board (8 metrics)",
+      "col": {
+        "rank": "#",
+        "name": "Player",
+        "excess": "Excess",
+        "shrunk": "Rank value (shrunk)",
+        "finalWinRate": "Final WR",
+        "expected": "Expected",
+        "games": "Games"
+      }
+    },
+    "analysis": {
+      "subtitle": "{{count}} live games",
+      "tabs": {
+        "overview": "Overview",
+        "teams": "Team picks",
+        "votes": "Votes",
+        "missions": "Missions",
+        "lake": "Lady of the Lake",
+        "assassination": "Assassination",
+        "position": "Seats",
+        "roles": "Roles & chemistry",
+        "players": "Player radar"
+      },
+      "votesNote": "Votes currently has a single study (vote flip rate after a team change); other vote metrics (approval rate, reject chains, follow votes) are not in the cache yet and will land here when they are.",
+      "section": {
+        "captain": "Captain analysis",
+        "firstVote": "Mission 1 vote 1",
+        "feature": "Feature studies",
+        "seatHeatmap": "Seat win-rate heatmap",
+        "seatOrder": "P/M/M seat order",
+        "chemistry": "Chemistry matrix"
       }
     }
   },

@@ -28,23 +28,39 @@ mission results (the 4th mission of a 10-player game needs two fails).
 What this script does and does not do:
   * reads Discord (bot token) and the 牌譜 / Discord匯入 tabs; writes only by appending
     rows to Discord匯入 (created with 牌譜's header + discord_post_id, discord_title,
-    discord_tags, 匯入時間 if missing). Never writes to Discord or to any other tab.
+    discord_tags, 匯入時間 if missing) and, with --reply, to Discord回覆 (one row per
+    reply posted: discord_post_id, 回覆時間, 原因). Never writes to any other tab.
+  * writes to Discord only with --reply: one message in the thread of each recent post
+    (--reply-since-days, default 14) that could not be parsed because of its format,
+    saying which line and why (SKIP_EXPLANATIONS) plus the format hint, mentioning
+    nobody. Once per post: a post in Discord回覆 is never replied to again (even if that
+    message was deleted), and the bot's own marker message (REPLY_MARKER) is looked for
+    in the thread before posting. At most --reply-limit (20) per run; HTTP 403 is counted
+    and warned about, never fatal; the message is never re-sent after a server error or
+    timeout (Discord may have stored it). Posts tagged 已收錄 / 模擬, deleted or empty
+    starters, duplicates, and posts with no record lines and nothing that says they were
+    meant as a record (no result tag, no 6-digit 配置) get no reply. If the forum lacks
+    one of the tags that decide this (renamed?), no reply is posted at all. With
+    --dry-run the replies are counted, not posted.
   * idempotent: a post already in Discord匯入 (by discord_post_id) is not fetched
     again; a game already in 牌譜 (generate_cache.record_fingerprint, or the same
     配置 + mission results with the same players) or tagged 已收錄 is not imported;
     posts tagged 模擬 (simulations) are not imported either.
   * prints counts and fixed reason strings only (stdout and $GITHUB_STEP_SUMMARY):
-    no player names, no record text, no post titles -- the repository is public.
+    no player names, no record text, no post titles -- the repository is public. The
+    line quoted in a reply exists only in that Discord message.
 
 Usage:
     python discord_records_import.py --dry-run            # parse, dedupe, print counts
     python discord_records_import.py                      # ... and append the new rows
     python discord_records_import.py --since 2026-04-01 --limit 5
+    python discord_records_import.py --reply              # ... and reply to unreadable recent posts
     python discord_records_import.py --dry-run --report skipped.json   # local only
 
 Configuration (environment):
     DISCORD_BOT_TOKEN              the bot's token (View Channel + Read Message History on
-                                   the forum, Message Content intent)
+                                   the forum, Message Content intent; --reply also needs
+                                   Send Messages in Threads)
     AVALON_STATS_CREDENTIALS_FILE, AVALON_STATS_CREDENTIALS_JSON, AVALON_STATS_SHEET_ID
                                    as for generate_cache.py; writing needs Editor access
     DISCORD_RECORDS_FORUM_ID       forum channel id (default FORUM_CHANNEL_ID)
@@ -69,7 +85,7 @@ import urllib.request
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Collection, Iterable, Mapping, Sequence
 
 import generate_cache as gc
 
@@ -97,6 +113,10 @@ TAG_SIMULATION = "模擬"
 RESULT_TAGS = {"三紅": gc.OUTCOME_THREE_RED, "三藍被刀": gc.OUTCOME_BLUE_DEAD, "三藍躲刺": gc.OUTCOME_BLUE_ALIVE}
 CATEGORY_TAGS = ("線瓦", "面瓦")  # -> 分類
 EXPECTED_TAGS = (TAG_RECORDED, TAG_SIMULATION, *RESULT_TAGS, *CATEGORY_TAGS)
+# Tags that decide whether a post gets a --reply (已收錄 / 模擬 exclude it; a result tag is how a
+# three-blue game is read). A forum lacking one of them (renamed?) would make the bot reply to
+# the wrong posts, so the reply phase is skipped then.
+REPLY_GATE_TAGS = (TAG_RECORDED, TAG_SIMULATION, *RESULT_TAGS)
 
 SEATS = gc.SEATS
 TEAM_SIZES = (3, 4, 4, 5, 5)  # 10 players
@@ -116,6 +136,10 @@ DERIVED_COLUMNS = (
     *ROLE_SEAT_COLUMNS, "派5", "派0", "外灑", "組成",
 )
 EXTRA_COLUMNS = ("discord_post_id", "discord_title", "discord_tags", "匯入時間")
+# One row per reply posted (--reply): the record that a post was replied to, kept outside Discord
+# so that a deleted reply is not posted again the next day.
+REPLY_LOG_TAB = "Discord回覆"
+REPLY_LOG_COLUMNS = ("discord_post_id", "回覆時間", "原因")
 # Without these a Discord匯入 row is useless to generate_cache or to this script's dedupe.
 REQUIRED_COLUMNS = (
     "流水號", "文字記錄", "配置", "結果", *(gc.PLAYER_COLUMNS[s] for s in SEATS),
@@ -127,6 +151,7 @@ SKIP_NO_STARTER = "starter message deleted or unreadable"
 SKIP_EMPTY = "starter message has no text (empty or attachments only)"
 SKIP_SIMULATION = "tagged 模擬 (simulation), not imported"
 SKIP_NO_RECORD = "no game record found"
+SKIP_NOT_A_RECORD = "no game record and nothing says it was meant as one (no result tag, no 6-digit 配置)"
 SKIP_UNRECOGNIZED = "unrecognized line inside the record (or record interrupted by footer lines)"
 SKIP_BAD_VOTE = "unparseable vote-anomaly token"
 SKIP_MISSION_NO_TEAM = "mission result without a proposal before it"
@@ -154,11 +179,79 @@ SKIP_INTERNAL = "internal parser error"
 
 
 class SkipPost(Exception):
-    """A post that is not imported; `reason` is one of the SKIP_* strings."""
+    """A post that is not imported; `reason` is one of the SKIP_* strings.
 
-    def __init__(self, reason: str):
+    `line_no` (1-based line of the starter message) and `line_text` (that line as written) are
+    set only when the reason points at one line; otherwise None. Reasons stay the fixed public
+    strings; the line text is for the Discord reply (--reply) only and is never printed.
+    """
+
+    def __init__(self, reason: str, line_no: int | None = None, line_text: str | None = None):
         super().__init__(reason)
         self.reason = reason
+        self.line_no = line_no or None
+        self.line_text = line_text
+
+    def locate(self, lines: Sequence[str]) -> None:
+        """Fill line_text from the post's lines when only the line number is known."""
+        if self.line_no and self.line_text is None and 1 <= self.line_no <= len(lines):
+            self.line_text = lines[self.line_no - 1]
+
+
+# What each skip reason means, for the Discord reply (--reply). Fixed strings; the reason
+# keys above stay the ones printed in logs.
+SKIP_EXPLANATIONS = {
+    SKIP_NO_STARTER: "起始訊息已刪除或無法讀取",
+    SKIP_EMPTY: "起始訊息沒有文字（空白或只有附件）",
+    SKIP_SIMULATION: "標了「模擬」，不收錄",
+    SKIP_NO_RECORD: "找不到牌譜（沒有提議、任務結果這些行）",
+    SKIP_NOT_A_RECORD: "找不到牌譜，也沒有結果標籤或 6 碼配置（不像牌譜貼文，不回覆）",
+    SKIP_UNRECOGNIZED: "這一行看不懂：牌譜裡只能有提議、任務結果（o/x）和湖線，其他文字請放在牌譜前面或後面",
+    SKIP_BAD_VOTE: "投票異常標記看不懂：每個標記是座號加 + 或 -（例如 7+、5-、+39）",
+    SKIP_MISSION_NO_TEAM: "這個任務結果前面沒有提議",
+    SKIP_TRAILING_PROPOSAL: "最後一個任務結果後面還有提議（少打了任務結果？）",
+    SKIP_TOO_MANY_PROPOSALS: "同一輪超過 5 次提議（少打了任務結果？）",
+    SKIP_DUP_SEAT: "同一隊伍裡有重複的座號",
+    SKIP_TEAM_SIZE: "隊伍人數不對（10 人局五輪依序是 3、4、4、5、5 人）",
+    SKIP_MISSION_SIZE: "任務結果的 o/x 數量和隊伍人數不一樣",
+    SKIP_ROUNDS_LT3: "不到 3 輪",
+    SKIP_UNDECIDED: "牌譜結束時還沒有一方滿三次任務",
+    SKIP_AFTER_DECIDED: "已經有一方三次任務之後還有多的輪次",
+    SKIP_BAD_LAKE: "湖線有問題（持湖者和目標相同、湖的傳遞接不上、或不在第 2～4 輪結束後）",
+    SKIP_NO_CONFIG: "找不到 6 碼配置（刺、娜、德、奧、派、梅的座號），本文和標題都沒有",
+    SKIP_BAD_CONFIG: "配置不是 6 個不同的座號",
+    SKIP_CONFIG_CONFLICT: "配置前後不一致（本文裡有兩個不同的，或本文和標題不同）",
+    SKIP_FAILS_GT_RED: "這輪任務的失敗數比隊伍裡的紅方人數還多（配置或隊伍打錯了？）",
+    SKIP_BAD_ASSASSIN: "刺客刺殺那一行看不懂或前後矛盾（寫座號或 x）",
+    SKIP_RESULT_TAGS: "結果標籤超過一個（三紅／三藍被刀／三藍躲刺只能選一個）",
+    SKIP_RESULT_MISMATCH: "結果標籤和任務結果對不起來",
+    SKIP_ASSASSIN_MISMATCH: "刺殺目標和結果標籤對不起來（三藍被刀的刺殺目標要是梅林的座號）",
+    SKIP_NO_RESULT: "三藍但沒有結果標籤也沒有刺殺目標，不知道梅林有沒有被刺中",
+    SKIP_NAMES_MISSING: "玩家名單不完整（要有 1～9 號和 10 號，每個座位一行：1.名字）",
+    SKIP_NAMES_MALFORMED: "玩家名單有問題（同一座位出現兩次、同一名字兩個座位、或一行寫了好幾個人）",
+    SKIP_INTERNAL: "程式內部錯誤",
+}
+
+# The Discord reply (--reply): a fixed marker (also how the bot recognizes its own reply), then
+# the reason, the format hint and what happens next. Sent to the post's thread only; never printed.
+REPLY_MARKER = "🤖 牌譜格式檢查"
+REPLY_INTRO = "這篇牌譜目前無法自動收錄到戰績統計。"
+FORMAT_HINT = "\n".join([
+    "格式提示（照牌譜順序，每行一項）：",
+    "・每次提議一行：隊伍座號連寫（0 = 10 號），可接投票異常標記：座號加 + 或 -，例如 389 +7、469 57-6+",
+    "・每輪任務結果一行：o 成功、x 失敗，例如 ooox",
+    "・湖：持湖者>目標 宣告，例如 0>8 o（o = 宣告藍、x = 宣告紅）",
+    "・牌譜之後：刺客刺殺：座號或 x；配置 6 碼（刺、娜、德、奧、派、梅的座號，例如 936758）；"
+    "玩家名單每人一行：1.名字 … 9.名字、10.名字",
+    "・貼文標籤擇一：三紅／三藍被刀／三藍躲刺",
+])
+REPLY_FOOTER = "修正起始訊息後不用做別的，下次排程（每天凌晨）會自動重新讀取並收錄。"
+REPLY_LINE_MAX = 60  # quoted line text is cut here (the poster can see the whole line anyway)
+REPLY_DEFAULT_DAYS = 14
+REPLY_DEFAULT_LIMIT = 20
+# Skips that are not the poster's formatting (or not a record post at all): no reply for these.
+REPLY_NOT_FOR = frozenset({SKIP_NO_STARTER, SKIP_EMPTY, SKIP_SIMULATION, SKIP_INTERNAL, SKIP_NOT_A_RECORD})
+_MARKDOWN_ESCAPE_RE = re.compile(r"([\\`*_~|])")
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +317,7 @@ def normalize_line(raw: str) -> str:
 class Proposal:
     team: str  # seat chars as written
     votes: tuple[str, ...] = ()  # anomaly tokens, canonical sign-last form ("7+", "5-", "57-6+")
+    line_no: int = 0  # 1-based line of the post (0 = unknown)
 
     def render(self) -> str:
         return " ".join((self.team, *self.votes))
@@ -244,42 +338,43 @@ class Item:
     kind: str  # proposal mission lake config assassin name text
     text: str  # the normalized line
     data: Any = None
+    line_no: int = 0  # 1-based line of the post (0 = unknown)
 
 
-def canonical_vote_token(token: str) -> str:
+def canonical_vote_token(token: str, line_no: int | None = None) -> str:
     """'+7' -> '7+', '-5' -> '5-', '+7-5' -> '7+5-'; sign-last tokens unchanged."""
     if _SUFFIX_TOKEN_RE.match(token):
         return token
     if _PREFIX_TOKEN_RE.match(token):
         return "".join(seats + sign for sign, seats in re.findall(r"([+\-])([0-9]+)", token))
-    raise SkipPost(SKIP_BAD_VOTE)
+    raise SkipPost(SKIP_BAD_VOTE, line_no)
 
 
-def classify_line(raw: str) -> Item | None:
+def classify_line(raw: str, line_no: int = 0) -> Item | None:
     s = normalize_line(raw)
     if not s:
         return None
     m = _ASSASSIN_RE.match(s)
     if m:
-        return Item("assassin", s, m.group(1).strip())
+        return Item("assassin", s, m.group(1).strip(), line_no)
     m = _NAME_LINE_RE.match(gc._INVISIBLE_CHARS_RE.sub("", raw).strip().strip("`*|~"))
     if m:
         seat = unicodedata.normalize("NFKC", m.group(1))
         seat = "0" if seat == "10" else seat
         if seat in SEATS and len(seat) == 1:
-            return Item("name", s, (seat, m.group(2)))
+            return Item("name", s, (seat, m.group(2)), line_no)
     if _CONFIG_RE.match(s):
-        return Item("config", s, s)
+        return Item("config", s, s, line_no)
     if _MISSION_RE.match(s):
-        return Item("mission", s, s.replace(" ", "").lower())
+        return Item("mission", s, s.replace(" ", "").lower(), line_no)
     m = _LAKE_RE.match(s) or _OLD_LAKE_RE.match(s)
     if m:
-        return Item("lake", s, Lake(m.group(1), m.group(2), (m.group(3) or "").lower()))
+        return Item("lake", s, Lake(m.group(1), m.group(2), (m.group(3) or "").lower()), line_no)
     m = _PROPOSAL_RE.match(s)
     if m:
         tokens = ([m.group(2)] if m.group(2) else []) + m.group(3).split()
-        return Item("proposal", s, (m.group(1), tokens, (m.group(4) or "").lower()))
-    return Item("text", s)
+        return Item("proposal", s, (m.group(1), tokens, (m.group(4) or "").lower()), line_no)
+    return Item("text", s, None, line_no)
 
 
 GAME_KINDS = ("proposal", "mission", "lake")
@@ -293,6 +388,7 @@ GAME_KINDS = ("proposal", "mission", "lake")
 class Round:
     proposals: tuple[Proposal, ...]
     mission: str  # lower-case, as written
+    line_no: int = 0  # line of the mission result (the team's line in the 2023 style)
 
 
 @dataclass(frozen=True)
@@ -300,6 +396,7 @@ class LakeUse:
     after_round: int  # completed rounds when the line appeared
     lake: Lake
     mid_round: bool  # a proposal of the next round came before it
+    line_no: int = 0
 
 
 @dataclass
@@ -355,7 +452,7 @@ def _game_block(items: list[Item], title: str) -> tuple[list[Item], list[Item]]:
             nxt = items[i + 1]  # "刺客刺殺:" then the target (or x) on its own line
             if _TARGET_RE.match(nxt.text) or _NO_TARGET_RE.match(nxt.text):
                 consumed.add(i + 1)
-                footer.append(Item("assassin", item.text + " " + nxt.text, nxt.text))
+                footer.append(Item("assassin", item.text + " " + nxt.text, nxt.text, item.line_no))
                 consumed.add(i)
     for i, item in enumerate(items):
         if item.kind != "text" and item.kind not in GAME_KINDS and i not in consumed:
@@ -368,10 +465,13 @@ def _game_block(items: list[Item], title: str) -> tuple[list[Item], list[Item]]:
     for i, item in enumerate(items):
         if first <= i <= last:
             if item.kind not in GAME_KINDS or i in consumed:
-                raise SkipPost(SKIP_UNRECOGNIZED)
+                # A footer line (刺客刺殺 / 配置 / a name) inside the block is fine where it is: the
+                # problem is the record line that came after it. Name that one.
+                culprit = item if item.kind == "text" else next((items[j] for j in game_idx if j > i), item)
+                raise SkipPost(SKIP_UNRECOGNIZED, culprit.line_no)
         elif item.kind == "text" and _GAMEISH_RE.match(item.text):
             if not (i < first and (item.text == norm_title or _TITLE_DATE_RE.match(item.text))):
-                raise SkipPost(SKIP_UNRECOGNIZED)
+                raise SkipPost(SKIP_UNRECOGNIZED, item.line_no)
     return items[first:last + 1], footer
 
 
@@ -380,45 +480,45 @@ def _rounds(block: list[Item]) -> tuple[list[Round], list[LakeUse]]:
     lakes: list[LakeUse] = []
     current: list[Proposal] = []
 
-    def close(mission: str) -> None:
+    def close(mission: str, line_no: int) -> None:
         if not current:
-            raise SkipPost(SKIP_MISSION_NO_TEAM)
-        rounds.append(Round(tuple(current), mission))
+            raise SkipPost(SKIP_MISSION_NO_TEAM, line_no)
+        rounds.append(Round(tuple(current), mission, line_no))
         current.clear()
 
     for item in block:
         if item.kind == "proposal":
             team, tokens, inline_mission = item.data
-            current.append(Proposal(team, tuple(canonical_vote_token(t) for t in tokens)))
+            current.append(Proposal(team, tuple(canonical_vote_token(t, item.line_no) for t in tokens), item.line_no))
             if inline_mission:
-                close(inline_mission)
+                close(inline_mission, item.line_no)
         elif item.kind == "mission":
-            close(item.data)
+            close(item.data, item.line_no)
         else:
-            lakes.append(LakeUse(len(rounds), item.data, bool(current)))
+            lakes.append(LakeUse(len(rounds), item.data, bool(current), item.line_no))
     if current:
-        raise SkipPost(SKIP_TRAILING_PROPOSAL)
+        raise SkipPost(SKIP_TRAILING_PROPOSAL, current[0].line_no)
     return rounds, lakes
 
 
 def _check_rounds(rounds: list[Round]) -> None:
     for r, rnd in enumerate(rounds):
         if r >= len(TEAM_SIZES):
-            raise SkipPost(SKIP_AFTER_DECIDED)
+            raise SkipPost(SKIP_AFTER_DECIDED, rnd.proposals[0].line_no)
         if len(rnd.proposals) > 5:
-            raise SkipPost(SKIP_TOO_MANY_PROPOSALS)
+            raise SkipPost(SKIP_TOO_MANY_PROPOSALS, rnd.proposals[5].line_no)
         for p in rnd.proposals:
             if len(set(p.team)) != len(p.team):
-                raise SkipPost(SKIP_DUP_SEAT)
+                raise SkipPost(SKIP_DUP_SEAT, p.line_no)
             if len(p.team) != TEAM_SIZES[r]:
-                raise SkipPost(SKIP_TEAM_SIZE)
+                raise SkipPost(SKIP_TEAM_SIZE, p.line_no)
         if len(rnd.mission) != TEAM_SIZES[r]:
-            raise SkipPost(SKIP_MISSION_SIZE)
+            raise SkipPost(SKIP_MISSION_SIZE, rnd.line_no)
     decided = decided_after([rnd.mission for rnd in rounds])
     if decided is None:
         raise SkipPost(SKIP_ROUNDS_LT3 if len(rounds) < 3 else SKIP_UNDECIDED)
     if len(rounds) > decided:
-        raise SkipPost(SKIP_AFTER_DECIDED)
+        raise SkipPost(SKIP_AFTER_DECIDED, rounds[decided].proposals[0].line_no)
 
 
 def _check_lakes(lakes: list[LakeUse], rounds: int) -> None:
@@ -428,32 +528,32 @@ def _check_lakes(lakes: list[LakeUse], rounds: int) -> None:
         if (use.mid_round or not 2 <= use.after_round <= 4 or use.after_round <= prev_after
                 or use.after_round >= rounds or lake.holder == lake.target
                 or (prev_target is not None and lake.holder != prev_target)):
-            raise SkipPost(SKIP_BAD_LAKE)
+            raise SkipPost(SKIP_BAD_LAKE, use.line_no)
         prev_after, prev_target = use.after_round, lake.target
 
 
 def _config(footer: list[Item], title: str) -> str:
-    found = {item.data for item in footer if item.kind == "config"}
-    found |= {item.data for item in footer if item.kind == "assassin" and _CONFIG_RE.match(item.data or "")}
-    if len(found) > 1:
-        raise SkipPost(SKIP_CONFIG_CONFLICT)
-    body = next(iter(found), "")
+    found = [(item.data, item.line_no) for item in footer
+             if item.kind == "config" or (item.kind == "assassin" and _CONFIG_RE.match(item.data or ""))]
+    body, body_line = found[0] if found else ("", 0)
+    for value, line_no in found[1:]:
+        if value != body:
+            raise SkipPost(SKIP_CONFIG_CONFLICT, line_no)
     t = normalize_line(title)
     title_cfg = t if _CONFIG_RE.match(t) and len(set(t)) == 6 else ""
     if body and title_cfg and body != title_cfg:
-        raise SkipPost(SKIP_CONFIG_CONFLICT)
+        raise SkipPost(SKIP_CONFIG_CONFLICT, body_line)
     config = body or title_cfg
     if not config:
         raise SkipPost(SKIP_NO_CONFIG)
     if len(set(config)) != 6:
-        raise SkipPost(SKIP_BAD_CONFIG)
+        raise SkipPost(SKIP_BAD_CONFIG, body_line if body else None)
     return config
 
 
-def _assassination(footer: list[Item]) -> tuple[str | None, bool]:
-    """(target seat or None, explicitly marked 'no target' with x)."""
-    targets: set[str] = set()
-    marked_none = False
+def _assassination(footer: list[Item]) -> tuple[str | None, bool, int | None]:
+    """(target seat or None, explicitly marked 'no target' with x, line of the 刺客刺殺 line)."""
+    seen: list[tuple[str, int]] = []  # ("x" or the seat, line) in post order
     for item in footer:
         if item.kind != "assassin":
             continue
@@ -462,18 +562,22 @@ def _assassination(footer: list[Item]) -> tuple[str | None, bool]:
             continue
         m = _TARGET_RE.match(value)
         if m:
-            targets.add("0" if m.group(1) == "10" else m.group(1))
+            seen.append(("0" if m.group(1) == "10" else m.group(1), item.line_no))
         elif _NO_TARGET_RE.match(value):
-            marked_none = True
+            seen.append(("x", item.line_no))
         else:
-            raise SkipPost(SKIP_BAD_ASSASSIN)
-    if len(targets) > 1 or (targets and marked_none):
-        raise SkipPost(SKIP_BAD_ASSASSIN)
-    return next(iter(targets), None), marked_none
+            raise SkipPost(SKIP_BAD_ASSASSIN, item.line_no)
+    if not seen:
+        return None, False, None
+    value, line_no = seen[0]
+    for other, other_line in seen[1:]:
+        if other != value:
+            raise SkipPost(SKIP_BAD_ASSASSIN, other_line)
+    return (None, True, line_no) if value == "x" else (value, False, line_no)
 
 
 def _outcome(rounds: list[Round], config: str, tags: Sequence[str], target: str | None,
-             marked_none: bool) -> tuple[str, str]:
+             marked_none: bool, assassin_line: int | None = None) -> tuple[str, str]:
     """(結果, 刺殺) from the result tag, checked against missions and assassination."""
     red = sum(1 for i, rnd in enumerate(rounds) if round_is_red(rnd.mission, i)) >= 3
     merlin = config[5]
@@ -491,27 +595,32 @@ def _outcome(rounds: list[Round], config: str, tags: Sequence[str], target: str 
         raise SkipPost(SKIP_RESULT_MISMATCH)
     if outcome == gc.OUTCOME_BLUE_DEAD:
         if marked_none or (target is not None and target != merlin):
-            raise SkipPost(SKIP_ASSASSIN_MISMATCH)
+            raise SkipPost(SKIP_ASSASSIN_MISMATCH, assassin_line)
         return outcome, merlin  # Merlin was assassinated: the target is Merlin's seat
     if outcome == gc.OUTCOME_BLUE_ALIVE and target == merlin:
-        raise SkipPost(SKIP_ASSASSIN_MISMATCH)
+        raise SkipPost(SKIP_ASSASSIN_MISMATCH, assassin_line)
     return outcome, target or ""
 
 
 def _names(footer: list[Item]) -> dict[str, str]:
     names: dict[str, str] = {}
+    lines: dict[str, int] = {}
     for item in footer:
         if item.kind != "name":
             continue
         seat, raw_name = item.data
         if seat in names or _ANOTHER_NAME_RE.search(" " + raw_name):
-            raise SkipPost(SKIP_NAMES_MALFORMED)
+            raise SkipPost(SKIP_NAMES_MALFORMED, item.line_no)
         names[seat] = gc.normalize_player_name(raw_name)
+        lines[seat] = item.line_no
     if set(names) != set(SEATS) or not all(names.values()):
-        raise SkipPost(SKIP_NAMES_MISSING)
-    folded = [n.casefold() for n in names.values()]
-    if len(set(folded)) != len(folded):
-        raise SkipPost(SKIP_NAMES_MALFORMED)
+        empty = next((lines[s] for s, n in names.items() if not n), None)
+        raise SkipPost(SKIP_NAMES_MISSING, empty)
+    folded: dict[str, str] = {}
+    for seat, name in names.items():  # post order
+        if name.casefold() in folded:
+            raise SkipPost(SKIP_NAMES_MALFORMED, lines[seat])
+        folded[name.casefold()] = seat
     return {s: names[s] for s in SEATS}
 
 
@@ -539,6 +648,14 @@ def title_date(title: str, created: dt.datetime) -> tuple[str, str, bool]:
     return f"{day.year:04d}/{day.month:02d}/{day.day:02d}", game_no, from_title
 
 
+def meant_as_record(post: Post, lines: Sequence[str]) -> bool:
+    """A result tag, or a 6-digit 配置 in the title or the body: the post was meant as a record
+    (as opposed to a discussion, a question or a notice in the same forum)."""
+    if any(t in RESULT_TAGS for t in post.tags):
+        return True
+    return any(_CONFIG_RE.match(normalize_line(s)) for s in (post.title, *lines))
+
+
 def parse_post(post: Post, content: str | None) -> ParsedGame:
     """The validated game of a post, or SkipPost(reason)."""
     if content is None:
@@ -547,21 +664,28 @@ def parse_post(post: Post, content: str | None) -> ParsedGame:
         raise SkipPost(SKIP_EMPTY)
     if TAG_SIMULATION in post.tags:
         raise SkipPost(SKIP_SIMULATION)
-    items = [item for item in map(classify_line, content.splitlines()) if item is not None]
-    block, footer = _game_block(items, post.title)
-    rounds, lakes = _rounds(block)
-    if not rounds:
-        raise SkipPost(SKIP_NO_RECORD)
-    _check_rounds(rounds)
-    _check_lakes(lakes, len(rounds))
-    config = _config(footer, post.title)
-    reds = set(config[:RED_CONFIG_SLOTS])
-    for rnd in rounds:
-        if rnd.mission.count("x") > len(set(rnd.proposals[-1].team) & reds):
-            raise SkipPost(SKIP_FAILS_GT_RED)
-    target, marked_none = _assassination(footer)
-    outcome, kill = _outcome(rounds, config, post.tags, target, marked_none)
-    names = _names(footer)
+    lines = content.splitlines()
+    try:
+        items = [item for item in (classify_line(raw, n) for n, raw in enumerate(lines, 1)) if item is not None]
+        block, footer = _game_block(items, post.title)
+        rounds, lakes = _rounds(block)
+        if not rounds:
+            raise SkipPost(SKIP_NO_RECORD)
+        _check_rounds(rounds)
+        _check_lakes(lakes, len(rounds))
+        config = _config(footer, post.title)
+        reds = set(config[:RED_CONFIG_SLOTS])
+        for rnd in rounds:
+            if rnd.mission.count("x") > len(set(rnd.proposals[-1].team) & reds):
+                raise SkipPost(SKIP_FAILS_GT_RED, rnd.line_no)
+        target, marked_none, assassin_line = _assassination(footer)
+        outcome, kill = _outcome(rounds, config, post.tags, target, marked_none, assassin_line)
+        names = _names(footer)
+    except SkipPost as exc:
+        if exc.reason == SKIP_NO_RECORD and not meant_as_record(post, lines):
+            raise SkipPost(SKIP_NOT_A_RECORD) from None
+        exc.locate(lines)
+        raise
     categories = [t for t in CATEGORY_TAGS if t in post.tags]
     date, game_no, from_title = title_date(post.title, post.created)
     return ParsedGame(
@@ -745,9 +869,26 @@ class ImportIndex:
             )
 
 
+def replied_post_ids(rows: Sequence[Sequence[str]] | None) -> set[str]:
+    """discord_post_id of every row of the Discord回覆 tab (None: the tab does not exist)."""
+    rows = rows or []
+    idx = _header_index(rows)
+    ids = {_cell(row, idx, "discord_post_id").strip() for row in rows[1:]}
+    ids.discard("")
+    return ids
+
+
 # ---------------------------------------------------------------------------
 # The import plan
 # ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class SkippedPost:
+    post: Post
+    reason: str
+    line_no: int | None = None
+    line_text: str | None = None
+
 
 @dataclass
 class ImportReport:
@@ -766,6 +907,7 @@ class ImportReport:
     new_unknown_names: int = 0  # distinct names in the new rows that neither tab has yet
     skipped: Counter = field(default_factory=Counter)
     skipped_recorded: Counter = field(default_factory=Counter)  # ... of which tagged 已收錄
+    skips: list[SkippedPost] = field(default_factory=list)  # every skipped post, for --reply
     rows: list[list[str]] = field(default_factory=list)
     details: list[dict] = field(default_factory=list)  # per post, for --report (local only)
 
@@ -773,14 +915,15 @@ class ImportReport:
     def new(self) -> int:
         return len(self.rows) + self.held_by_limit
 
-    def note(self, post: Post, outcome: str) -> None:
-        self.details.append({"post_id": post.id, "title": post.title, "tags": list(post.tags), "outcome": outcome})
+    def note(self, post: Post, outcome: str, **extra: Any) -> None:
+        self.details.append({"post_id": post.id, "title": post.title, "tags": list(post.tags), "outcome": outcome, **extra})
 
-    def skip(self, post: Post, reason: str) -> None:
+    def skip(self, post: Post, reason: str, line_no: int | None = None, line_text: str | None = None) -> None:
         self.skipped[reason] += 1
         if TAG_RECORDED in post.tags:
             self.skipped_recorded[reason] += 1
-        self.note(post, f"skipped: {reason}")
+        self.skips.append(SkippedPost(post, reason, line_no, line_text))
+        self.note(post, f"skipped: {reason}", line_no=line_no)
 
 
 def plan_import(
@@ -817,7 +960,7 @@ def plan_import(
         try:
             game = parse_post(post, content)
         except SkipPost as exc:
-            report.skip(post, exc.reason)
+            report.skip(post, exc.reason, exc.line_no, exc.line_text)
             continue
         except Exception:  # never let one odd post (or its text, in a traceback) through
             report.skip(post, SKIP_INTERNAL)
@@ -854,8 +997,101 @@ def plan_import(
     return report
 
 
+# ---------------------------------------------------------------------------
+# Replies to posts that could not be parsed (--reply)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ReplyReport:
+    """Counts only: nothing here identifies a post."""
+    dry_run: bool = False
+    candidates: int = 0  # format skips within --reply-since-days, not tagged 已收錄
+    already_replied: int = 0  # the bot's marker is already in the thread
+    replied: int = 0  # posted (dry run: would be posted)
+    forbidden: int = 0  # HTTP 403 (no permission to read or post in the thread)
+    errors: int = 0  # other Discord errors (per thread; the run goes on)
+    held_by_limit: int = 0
+
+
+def reply_candidates(report: ImportReport, now: dt.datetime, since_days: int) -> list[SkippedPost]:
+    """Skips the poster can fix: a format reason, posted within `since_days`, not tagged 已收錄.
+    Oldest first, like the import itself."""
+    cutoff = now - dt.timedelta(days=since_days)
+    chosen = [s for s in report.skips
+              if s.reason not in REPLY_NOT_FOR and TAG_RECORDED not in s.post.tags and s.post.created >= cutoff]
+    return sorted(chosen, key=lambda s: int(s.post.id))
+
+
+def reply_text(skip: SkippedPost) -> str:
+    """The reply for one post: marker, why (with the line when known), the format hint. This text
+    goes to the post's thread only; it carries record text and must never be printed."""
+    why = SKIP_EXPLANATIONS.get(skip.reason, skip.reason)
+    if skip.line_no:
+        quoted = " ".join((skip.line_text or "").split())
+        if len(quoted) > REPLY_LINE_MAX:
+            quoted = quoted[:REPLY_LINE_MAX - 1] + "…"
+        where = f"第 {skip.line_no} 行「{_MARKDOWN_ESCAPE_RE.sub(r'\\\1', quoted)}」：{why}"
+    else:
+        where = f"原因：{why}"
+    return "\n".join([REPLY_MARKER, REPLY_INTRO, where, "", FORMAT_HINT, "", REPLY_FOOTER])
+
+
+def reply_to_failures(client: Any, candidates: Sequence[SkippedPost], *, limit: int, dry_run: bool,
+                      replied: Collection[str] = frozenset(), posted: list[SkippedPost] | None = None) -> ReplyReport:
+    """Post the reply in each candidate's thread unless the bot already did: posts in `replied`
+    (the Discord回覆 tab) are skipped without reading the thread, then the bot's own marker message
+    is looked for. Each post actually replied to is appended to `posted` (for the Discord回覆 tab).
+    At most `limit` attempts; a dry run only counts. Never raises for one thread: 403, other
+    Discord errors and any odd response are counted and the run goes on."""
+    report = ReplyReport(dry_run=dry_run, candidates=len(candidates))
+    if not candidates:
+        return report
+    try:
+        bot_id = client.bot_user_id()
+    except Exception:  # cannot tell the bot's own messages apart: reply to nothing
+        report.errors += 1
+        report.held_by_limit = len(candidates)
+        return report
+    for skip in candidates:
+        if skip.post.id in replied:  # replied once already, whether or not that message still exists
+            report.already_replied += 1
+            continue
+        if report.replied + report.forbidden + report.errors >= limit:
+            report.held_by_limit += 1
+            continue
+        try:
+            if client.has_bot_message(skip.post.id, bot_id, REPLY_MARKER):
+                report.already_replied += 1
+                continue
+            if not dry_run:
+                client.post_message(skip.post.id, reply_text(skip))
+        except DiscordForbidden:
+            report.forbidden += 1
+            continue
+        except Exception:  # a Discord error or an unexpected response: never printed, counted only
+            report.errors += 1
+            continue
+        report.replied += 1
+        if posted is not None and not dry_run:
+            posted.append(skip)
+    return report
+
+
+def reply_lines(reply: ReplyReport, since_days: int) -> list[str]:
+    """Markdown summary of --reply: counts only."""
+    mode = "dry run：只計數，未貼文" if reply.dry_run else "已貼文"
+    lines = [
+        f"- 格式回覆（--reply，{mode}）：{since_days} 天內因格式無法解析且未標「{TAG_RECORDED}」的貼文 {reply.candidates} 篇",
+        f"  - 已回覆過（略過）：{reply.already_replied}；本次{'可' if reply.dry_run else '已'}回覆：{reply.replied}；"
+        f"沒有發言權限（403）：{reply.forbidden}；其他 Discord 錯誤：{reply.errors}"
+        + (f"；超過 --reply-limit 保留到下次：{reply.held_by_limit}" if reply.held_by_limit else ""),
+    ]
+    return lines
+
+
 def report_lines(report: ImportReport, *, write: bool, written: int, tab_exists: bool,
-                 missing_tags: Sequence[str] = ()) -> list[str]:
+                 missing_tags: Sequence[str] = (), reply: ReplyReport | None = None,
+                 reply_since_days: int = REPLY_DEFAULT_DAYS) -> list[str]:
     """Markdown summary: counts and fixed reason strings only (public logs)."""
     mode = f"已寫入 {written} 列" if write else "dry run，未寫入"
     lines = [
@@ -886,21 +1122,36 @@ def report_lines(report: ImportReport, *, write: bool, written: int, tab_exists:
         lines.append(f"- {gc.DISCORD_IMPORT_TAB} 分頁尚不存在" + ("，已建立" if write and written else "，寫入時會建立"))
     if missing_tags:
         lines.append(f"- 論壇沒有這些預期的標籤（改名了？）：{'、'.join(missing_tags)}")
+    if reply is not None:
+        lines += reply_lines(reply, reply_since_days)
     return lines
 
 
 # ---------------------------------------------------------------------------
-# Discord (read only)
+# Discord (reads; --reply also posts one message per unreadable post)
 # ---------------------------------------------------------------------------
 
 class DiscordError(Exception):
     pass
 
 
-class DiscordClient:
-    """GET-only Discord REST client; honours 429 retry_after and the rate-limit headers.
+class DiscordForbidden(DiscordError):
+    """HTTP 403: the bot lacks a permission (read the thread, or post in it)."""
 
-    Errors name the route template only (no ids, no content) and never the token.
+
+MESSAGES_PAGE = 100
+MAX_MESSAGE_PAGES = 20  # 2000 messages: more than any record thread has
+
+
+class DiscordClient:
+    """Minimal Discord REST client; honours 429 retry_after and the rate-limit headers.
+
+    GET for the forum, its posts and their messages; POST only for --reply (one message in a
+    post's thread). Only a GET is re-sent after a server error or a timeout: Discord may have
+    stored the message of a POST before the response was lost, and sending it again would post a
+    second reply (the next run finds the first one by its marker instead). A 429 is retried for
+    both, Discord did not process it. Errors name the route template only (no ids, no content)
+    and never the token.
     """
 
     def __init__(self, token: str, opener: Callable[..., Any] | None = None,
@@ -910,19 +1161,23 @@ class DiscordClient:
         self._sleep = sleep
         self._pace = pace
 
-    def get(self, path: str, route: str, allow_404: bool = False) -> Any:
-        request = urllib.request.Request(DISCORD_API + path, headers={
-            "Authorization": f"Bot {self._token}", "User-Agent": USER_AGENT})
+    def _request(self, method: str, path: str, route: str, body: Any = None, allow_404: bool = False) -> Any:
+        data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
+        headers = {"Authorization": f"Bot {self._token}", "User-Agent": USER_AGENT}
+        if data is not None:
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(DISCORD_API + path, data=data, headers=headers, method=method)
+        resend = method == "GET"  # a POST is never sent twice (see the class docstring)
         for attempt in range(MAX_ATTEMPTS):
             try:
                 with self._open(request, timeout=30) as response:
-                    body = response.read()
-                    headers = getattr(response, "headers", {}) or {}
-                    if str(headers.get("X-RateLimit-Remaining", "")) == "0":
-                        self._sleep(min(float(headers.get("X-RateLimit-Reset-After") or 1), MAX_RETRY_SLEEP))
+                    raw = response.read()
+                    resp_headers = getattr(response, "headers", {}) or {}
+                    if str(resp_headers.get("X-RateLimit-Remaining", "")) == "0":
+                        self._sleep(min(float(resp_headers.get("X-RateLimit-Reset-After") or 1), MAX_RETRY_SLEEP))
                     elif self._pace:
                         self._sleep(self._pace)
-                    return json.loads(body or b"null")
+                    return json.loads(raw or b"null")
             except urllib.error.HTTPError as exc:
                 payload = _json_or_empty(exc)
                 if exc.code == 429:
@@ -931,15 +1186,53 @@ class DiscordClient:
                     continue
                 if exc.code == 404 and allow_404:
                     return None
-                if exc.code >= 500:
+                if exc.code >= 500 and resend:
                     self._sleep(min(2 ** attempt, MAX_RETRY_SLEEP))
                     continue
-                raise DiscordError(_discord_error_message(exc.code, payload.get("code"), route)) from None
+                message = _discord_error_message(exc.code, payload.get("code"), route, method)
+                raise (DiscordForbidden if exc.code == 403 else DiscordError)(message) from None
             except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
-                if attempt == MAX_ATTEMPTS - 1:
-                    raise DiscordError(f"GET {route}: network error ({type(exc).__name__})") from None
+                if not resend or attempt == MAX_ATTEMPTS - 1:
+                    raise DiscordError(f"{method} {route}: network error ({type(exc).__name__})") from None
                 self._sleep(min(2 ** attempt, MAX_RETRY_SLEEP))
-        raise DiscordError(f"GET {route}: still failing after {MAX_ATTEMPTS} attempts (rate limit or server errors)")
+        raise DiscordError(f"{method} {route}: still failing after {MAX_ATTEMPTS} attempts (rate limit or server errors)")
+
+    def get(self, path: str, route: str, allow_404: bool = False) -> Any:
+        return self._request("GET", path, route, allow_404=allow_404)
+
+    def post(self, path: str, route: str, body: Any) -> Any:
+        return self._request("POST", path, route, body=body)
+
+    def bot_user_id(self) -> str:
+        """The bot's own user id (to recognize its earlier replies)."""
+        me = self.get("/users/@me", "/users/@me") or {}
+        user_id = str(me.get("id") or "")
+        if not user_id:
+            raise DiscordError("GET /users/@me: no user id in the response")
+        return user_id
+
+    def has_bot_message(self, thread_id: str, bot_id: str, prefix: str) -> bool:
+        """True if a message by `bot_id` starting with `prefix` is in the thread (newest first)."""
+        before = None
+        for _ in range(MAX_MESSAGE_PAGES):
+            query = f"?limit={MESSAGES_PAGE}" + (f"&before={before}" if before else "")
+            page = self.get(f"/channels/{thread_id}/messages{query}", "/channels/{thread}/messages") or []
+            for message in page:
+                author = message.get("author") or {}
+                if str(author.get("id") or "") == bot_id and (message.get("content") or "").startswith(prefix):
+                    return True
+            if len(page) < MESSAGES_PAGE or not page[-1].get("id"):
+                break
+            before = page[-1]["id"]
+        return False
+
+    def post_message(self, thread_id: str, content: str) -> None:
+        """One message in a post's thread, mentioning nobody. The nonce (the thread id, one reply
+        per thread) with enforce_nonce makes Discord return the bot's existing message instead of
+        creating another should the same request reach it twice within a few minutes."""
+        self.post(f"/channels/{thread_id}/messages", "/channels/{thread}/messages",
+                  {"content": content, "allowed_mentions": {"parse": []},
+                   "nonce": thread_id, "enforce_nonce": True})
 
     def forum_posts(self, forum_id: str) -> tuple[list[Post], list[str]]:
         """All posts (active + archived public threads) of a forum, and expected tags it lacks."""
@@ -988,10 +1281,13 @@ def _json_or_empty(exc: urllib.error.HTTPError) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _discord_error_message(status: int, code: Any, route: str) -> str:
-    detail = f"GET {route}: HTTP {status}" + (f" (Discord code {code})" if code else "")
+def _discord_error_message(status: int, code: Any, route: str, method: str = "GET") -> str:
+    detail = f"{method} {route}: HTTP {status}" + (f" (Discord code {code})" if code else "")
     if status == 401:
         return f"{detail}. Discord rejected {ENV_DISCORD_TOKEN}: reset the bot token and update the secret."
+    if status == 403 and method == "POST":
+        return (f"{detail}. The bot cannot post in the thread: give it Send Messages in Threads "
+                "on #牌譜紀錄與覆盤.")
     if status == 403:
         return (f"{detail}. The bot cannot read the forum: give it View Channel and Read Message History "
                 "on #牌譜紀錄與覆盤 (and the Message Content intent).")
@@ -1023,13 +1319,14 @@ def import_header(sheet_rows: Sequence[Sequence[str]], import_rows: Sequence[Seq
 
 
 def append_import_rows(sh: Any, header: Sequence[str], rows: Sequence[Sequence[str]],
-                       tab_exists: bool, has_header: bool) -> None:
-    """Create Discord匯入 and its header row if needed, then append `rows` as plain text (RAW:
-    "098735" stays text, nothing is parsed as a formula). INSERT_ROWS never overwrites cells."""
+                       tab_exists: bool, has_header: bool, tab: str = gc.DISCORD_IMPORT_TAB) -> None:
+    """Create `tab` (Discord匯入, or Discord回覆) and its header row if needed, then append `rows` as
+    plain text (RAW: "098735" stays text, nothing is parsed as a formula). INSERT_ROWS never
+    overwrites cells."""
     if tab_exists:
-        ws = sh.worksheet(gc.DISCORD_IMPORT_TAB)
+        ws = sh.worksheet(tab)
     else:
-        ws = sh.add_worksheet(title=gc.DISCORD_IMPORT_TAB, rows=1, cols=len(header))
+        ws = sh.add_worksheet(title=tab, rows=1, cols=len(header))
     if not has_header:
         ws.update(values=[list(header)], range_name="A1", raw=True)
     ws.append_rows([list(r) for r in rows], value_input_option="RAW",
@@ -1089,6 +1386,7 @@ def run(
         sh = opener(source, sheet_id, WRITE_SCOPES if write else None)
         sheet_rows = sh.worksheet(gc.GAME_LOG_TAB).get_all_values()
         import_rows = gc.read_optional_worksheet(sh, gc.DISCORD_IMPORT_TAB)
+        reply_log_rows = gc.read_optional_worksheet(sh, REPLY_LOG_TAB) if args.reply else None
     except gc.FatalError:
         raise
     except Exception as exc:
@@ -1114,7 +1412,8 @@ def run(
                 print(f"  fetched {fetched} starter messages...", flush=True)
             return client.starter_content(post.id)
 
-        stamp = (now or dt.datetime.now(TAIPEI)).astimezone(TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+        now_taipei = (now or dt.datetime.now(TAIPEI)).astimezone(TAIPEI)
+        stamp = now_taipei.strftime("%Y-%m-%d %H:%M:%S")
         report = plan_import(posts, fetch, sheet_rows, import_rows, header,
                              since=args.since, limit=args.limit, imported_at=stamp)
     except DiscordError as exc:
@@ -1139,15 +1438,54 @@ def run(
             raise err from None
         written = len(report.rows)
 
+    # The import summary goes out before the reply phase: whatever happens in Discord afterwards,
+    # the counts of what was written are in the log and the job summary.
+    in_actions = env.get("GITHUB_ACTIONS") == "true"
+    reply_gate = [t for t in REPLY_GATE_TAGS if t in missing_tags] if args.reply else []
     lines = report_lines(report, write=write, written=written, tab_exists=tab_exists, missing_tags=missing_tags)
+    if reply_gate:
+        lines.append(f"- 格式回覆（--reply）：論壇沒有「{'」「'.join(reply_gate)}」標籤，無法判斷哪些貼文該回覆，"
+                     "本次未回覆、未計數")
     print("\n".join(lines))
     gc._append_step_summary(lines)
-    if missing_tags and env.get("GITHUB_ACTIONS") == "true":
+    if missing_tags and in_actions:
         print(f"::warning title=Forum tags missing::{len(missing_tags)} expected forum tag(s) not found; see the job summary.")
+    if reply_gate:
+        _warn("Discord reply skipped", f"{len(reply_gate)} forum tag(s) that decide which posts get a reply not found "
+              "(renamed?); no reply was posted or counted. See the job summary.", in_actions)
+
+    if args.reply and not reply_gate:
+        # After the sheet write and its summary: a Discord problem here never loses imported rows.
+        candidates = reply_candidates(report, now_taipei, args.reply_since_days)
+        posted: list[SkippedPost] = []
+        reply = reply_to_failures(client, candidates, limit=args.reply_limit, dry_run=not write,
+                                  replied=replied_post_ids(reply_log_rows), posted=posted)
+        if posted:
+            try:
+                append_import_rows(sh, REPLY_LOG_COLUMNS, [[s.post.id, stamp, s.reason] for s in posted],
+                                   reply_log_rows is not None, has_header=bool(reply_log_rows), tab=REPLY_LOG_TAB)
+            except Exception as exc:  # the message may quote the values: type only
+                _warn("Discord reply log not written", f"{len(posted)} reply/replies posted but not recorded in "
+                      f"{REPLY_LOG_TAB} ({type(exc).__name__}); the bot's marker message in each thread still "
+                      "prevents a second reply unless that message is deleted.", in_actions)
+        lines = reply_lines(reply, args.reply_since_days)
+        print("\n".join(lines))
+        gc._append_step_summary(lines)
+        if reply.forbidden:
+            _warn("Discord reply forbidden", f"{reply.forbidden} reply/replies not posted (HTTP 403): give the bot "
+                  "Send Messages in Threads and Read Message History on #牌譜紀錄與覆盤.", in_actions)
+        if reply.errors:
+            _warn("Discord reply errors", f"{reply.errors} reply/replies hit a Discord API error or an unexpected "
+                  "response; see the job summary. They are retried on the next run.", in_actions)
     if args.report:
         Path(args.report).write_text(json.dumps(report.details, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"Per-post report written to {args.report} (contains titles: keep it local).")
     return 0
+
+
+def _warn(title: str, message: str, in_actions: bool) -> None:
+    """A fixed warning (counts allowed, never content); an annotation inside GitHub Actions."""
+    print(f"::warning title={title}::{message}" if in_actions else f"[WARNING] {title}: {message}", flush=True)
 
 
 def _date(value: str) -> dt.date:
@@ -1177,6 +1515,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="only posts created on or after this date (Taipei time)")
     parser.add_argument("--report", metavar="PATH",
                         help="local runs only: write per-post outcomes (with titles) as JSON to PATH")
+    parser.add_argument("--reply", action="store_true",
+                        help="reply in the thread of each recent post that could not be parsed because of its "
+                             "format (why, which line, the format hint); once per post. With --dry-run: count only")
+    parser.add_argument("--reply-since-days", type=_positive, default=REPLY_DEFAULT_DAYS, metavar="N",
+                        help=f"--reply only to posts created in the last N days (default {REPLY_DEFAULT_DAYS})")
+    parser.add_argument("--reply-limit", type=_positive, default=REPLY_DEFAULT_LIMIT, metavar="N",
+                        help=f"at most N replies per run, oldest post first (default {REPLY_DEFAULT_LIMIT})")
     return parser.parse_args(argv)
 
 

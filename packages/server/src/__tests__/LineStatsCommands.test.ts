@@ -24,17 +24,21 @@ const fixture = vi.hoisted(() => {
     seatRedWinRates: {}, seatBlueWinRates: {}, rawRoleGames: {}, rawRedWins: 0, rawBlueWins: 0, rawTotalWins: 0,
     rawRedGames: 10, rawBlueGames: 10,
   };
+  // Served players carry the two-stage fields; the cache here has NO `leaderboard`
+  // section, so /排行 takes the all-time excess fallback built from the players.
   const players = [
-    { ...base, name: 'Sin', totalGames: 1080, winRate: 51.4, roleTheory: 51.3, redWin: 50.2, blueWin: 52.2 },
-    { ...base, name: 'HAO', totalGames: 1013, winRate: 59, roleTheory: 59.1, redWin: 56.6, blueWin: 60.5 },
-    { ...base, name: 'SIN', totalGames: 3, winRate: 33.3, roleTheory: 30, redWin: 0, blueWin: 50 },
+    { ...base, name: 'Sin', totalGames: 1080, winRate: 51.4, roleTheory: 51.3, redWin: 50.2, blueWin: 52.2, finalWinRate: 31.2, excessWinRate: -1.4, finalRedWinRate: 60, finalBlueWinRate: 29 },
+    { ...base, name: 'HAO', totalGames: 1013, winRate: 59, roleTheory: 59.1, redWin: 56.6, blueWin: 60.5, finalWinRate: 38.5, excessWinRate: 6.3, finalRedWinRate: 70.1, finalBlueWinRate: 30 },
+    { ...base, name: 'SIN', totalGames: 3, winRate: 33.3, roleTheory: 30, redWin: 0, blueWin: 50, finalWinRate: 33.3, excessWinRate: 20, finalRedWinRate: 0, finalBlueWinRate: 50 },
+    // Highest raw excess but only 30 games: shrunk 7 × 30 / 50 = 4.2 ranks under HAO (6.3 × 1013 / 1033 = 6.2), like the generator.
+    { ...base, name: '新星', totalGames: 30, winRate: 60, roleTheory: 60, redWin: 58, blueWin: 61, finalWinRate: 45, excessWinRate: 7, finalRedWinRate: 75, finalBlueWinRate: 35 },
   ];
   const labels = ['SIN', 'HAO'];
   return {
     players,
     overview: {
-      totalGames: 2146, totalPlayers: 198, redWinRate: 46.6, blueWinRate: 53.4, merlinKillRate: 43.5,
-      outcomeBreakdown: { threeRed: 0, threeBlueDead: 0, threeBlueAlive: 0, threeRedPct: 0, threeBlueDeadPct: 0, threeBlueAlivePct: 0 },
+      totalGames: 2228, totalPlayers: 221, redWinRate: 45.5, blueWinRate: 54.5, merlinKillRate: 43.9,
+      outcomeBreakdown: { threeRed: 1013, threeBlueDead: 533, threeBlueAlive: 682, threeRedPct: 45.5, threeBlueDeadPct: 23.9, threeBlueAlivePct: 30.6 },
       topPlayersByTheory: [
         { name: 'HAO', roleTheory: 59.1, winRate: 59, games: 1013 },
         { name: 'Sin', roleTheory: 51.3, winRate: 51.4, games: 1080 },
@@ -50,10 +54,13 @@ const fixture = vi.hoisted(() => {
   };
 });
 
-vi.mock('../services/sheetsAnalysis', () => ({
+// Only the cache readers are mocked; the real helpers (rnd1, used by the bots' shrunk ordering) stay.
+vi.mock('../services/sheetsAnalysis', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/sheetsAnalysis')>()),
   getAllPlayerStats: async () => fixture.players,
   getPlayerByName: async (name: string) => fixture.players.find((pl) => pl.name === name) ?? null,
   getOverview: async () => fixture.overview,
+  getLeaderboard: async () => null,
   getChemistry: async () => fixture.chemistry,
   getPlayerArchetype: async () => null,
   getPlayerStrength: async () => null,
@@ -192,8 +199,13 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
     expect(h.replies).toHaveLength(1);
     expect(h.replies[0].token).toBe('rt1');
     expect(h.replies[0].texts).toHaveLength(5);
-    expect(h.replies[0].texts[0]).toContain('🏆 理論勝率排行 Top 10');
-    expect(h.replies[0].texts[0]).toContain('🥇 HAO　59.1%');
+    // No `leaderboard` section in this cache → all-time excess ranking (≥ 30 games; SIN's 3 games are out).
+    expect(h.replies[0].texts[0]).toContain('🏆 超額勝率排行 Top 10（全期，至少 30 場）');
+    expect(h.replies[0].texts[0]).toContain('🥇 HAO　超額 +6.3｜最終 38.5%｜1013 場');
+    expect(h.replies[0].texts[0]).toContain('🥈 新星　超額 +7.0｜最終 45.0%｜30 場');
+    expect(h.replies[0].texts[0]).toContain('🥉 Sin　超額 -1.4｜最終 31.2%｜1080 場');
+    expect(h.replies[0].texts[0]).not.toContain('SIN　');
+    expect(h.replies[0].texts[0]).toContain('最終紅勝 69.4%／藍勝 30.6%');
     expect(h.replies[0].texts.slice(1).map(bodyOf)).toEqual(['msg0', 'msg1', 'msg2', 'msg3']);
     expect(h.mirror.lineReplyQueueSize()).toBe(3);
     expect(h.bot.getWebhookStats()).toMatchObject({ repliesDrained: 4, statsReplies: 1, replyFailures: 0 });
@@ -214,6 +226,7 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
     expect(h.discordSent.join('\n')).not.toContain('的戰績');
 
     expect(h.replies).toEqual([{ token: 'rt3', texts: [expect.stringContaining('📊 HAO 的戰績')] }]);
+    expect(h.replies[0].texts[0]).toContain('場次 1013｜最終勝率 38.5%｜超額 +6.3');
     expect(h.mirror.lineReplyQueueSize()).toBe(0); // answer never enters the queue
   });
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Component, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useCallback, Component, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Loader, AlertCircle, ChevronDown, ChevronUp, ExternalLink, RefreshCw } from 'lucide-react';
@@ -9,19 +9,30 @@ import {
 import {
   fetchFeatureStudies,
   getErrorMessage,
+  isAnalysisNotGenerated,
   type FeatureStudiesData,
   type FeatureStudyEntry,
+  type LakeClaimCell,
+  type LakeClaimData,
 } from '../../services/api';
 
 /**
- * 特徵研究 Panel — AnalyticsPage 第三 tab
+ * 特徵研究 (loops 136/139/141/142/143)
  *
- * 5 個高訊號 v7 features (loop 136/139/141/142/143) 從 staging/selfplay
- * 報告萃取成 cache.featureStudies → 後端 /api/analysis/feature-studies →
- * 此 panel 列直立 5 張 card；前 2 張預設展開，後 3 張收合節省 viewport。
+ * cache.featureStudies → 後端 /api/analysis/feature-studies → 這裡。
+ *
+ * (2026-10-12 重構, docs/stats/two_stage_outcome.md)
+ *   - 資料只抓一次：module 級快取 + `useFeatureStudies()`；`FeatureStudyCard`
+ *     可依 loopId 放進「分析」各分頁 (派隊 L139、投票 L136、湖中女神 L141 + L142、
+ *     刺殺 L143)，預設展開。`FeatureStudiesPanel` (全部列出) 保留。
+ *   - 卡片的 title / hook / takeaway 一律以快取文字為準 (結論已由資料層修正)。
+ *   - L141 改為 `lakeClaim`：首湖/二湖/三湖 × 宣告紅/藍 的可信度、95% 區間、n，
+ *     n < minSample 標「樣本不足」；舊形狀 (bar, lieRate) 仍可渲染。
+ *   - L142 / L143 表格加 n 欄與「樣本不足」標記 (lowSample 或 n < 30)。
  *
  * 視覺類型 dispatch:
- *   - bar       — 角色 lie% 橫條圖 (L141) / 隊長 tier hit rate (L143)
+ *   - lakeClaim — 湖中宣告可信度表 (L141 新)
+ *   - bar       — 角色 lie% 橫條圖 (L141 舊) / 隊長 tier hit rate (L143)
  *   - table     — 一致度表 + 高 EV cells (L142)
  *   - divergent — 翻轉率 signed EV bar，0 為中軸 (L136)
  *   - line      — R{n} forced P5 對 outcome shift (L139)
@@ -34,12 +45,83 @@ import {
 const RED_COLOR  = '#ef4444';
 const BLUE_COLOR = '#3b82f6';
 const NEUTRAL_COLOR = '#9ca3af';
+const LOW_SAMPLE_N = 30;
 
 const CHART_TOOLTIP_STYLE = {
   background: '#1f2937',
   border: '1px solid #374151',
   borderRadius: 8,
 };
+
+// ─── Module-level cache + hook ───────────────────────────────────────────────
+
+let fsCache: FeatureStudiesData | null = null;
+let fsInflight: Promise<FeatureStudiesData> | null = null;
+
+export function loadFeatureStudies(force = false): Promise<FeatureStudiesData> {
+  if (!force && fsCache) return Promise.resolve(fsCache);
+  if (!force && fsInflight) return fsInflight;
+  const p = fetchFeatureStudies()
+    .then(d => {
+      fsCache = d;
+      return d;
+    })
+    .finally(() => {
+      if (fsInflight === p) fsInflight = null;
+    });
+  fsInflight = p;
+  return p;
+}
+
+export interface FeatureStudiesState {
+  data: FeatureStudiesData | null;
+  loading: boolean;
+  error: string | null;
+  /** 503：快取尚未產生。 */
+  notGenerated: boolean;
+  reload: () => void;
+}
+
+export function useFeatureStudies(): FeatureStudiesState {
+  const [data, setData] = useState<FeatureStudiesData | null>(fsCache);
+  const [loading, setLoading] = useState<boolean>(fsCache === null);
+  const [error, setError] = useState<string | null>(null);
+  const [notGenerated, setNotGenerated] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadFeatureStudies(reloadKey > 0)
+      .then(d => {
+        if (cancelled) return;
+        setData(d);
+        setError(null);
+        setNotGenerated(false);
+      })
+      .catch(e => {
+        if (cancelled) return;
+        if (isAnalysisNotGenerated(e)) setNotGenerated(true);
+        setError(getErrorMessage(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return (): void => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const reload = useCallback((): void => {
+    setLoading(true);
+    setError(null);
+    setNotGenerated(false);
+    setReloadKey(k => k + 1);
+  }, []);
+
+  return { data, loading, error, notGenerated, reload };
+}
+
+// ─── Error boundary ──────────────────────────────────────────────────────────
 
 interface ChartErrorBoundaryProps {
   fallback: ReactNode;
@@ -68,23 +150,49 @@ class ChartErrorBoundary extends Component<ChartErrorBoundaryProps, ChartErrorBo
   }
 }
 
+// ─── Shared bits ─────────────────────────────────────────────────────────────
+
+function LoadFailed({ error, notGenerated, onRetry, compact }: {
+  error: string | null;
+  notGenerated: boolean;
+  onRetry: () => void;
+  compact?: boolean;
+}): JSX.Element {
+  const { t } = useTranslation('common');
+  return (
+    <div className={`flex flex-col items-center justify-center gap-2 text-amber-300 ${compact ? 'py-4' : 'py-16 gap-3'}`}>
+      <AlertCircle size={compact ? 18 : 28} />
+      <p className="text-sm">{notGenerated ? t('analytics.featureStudies.loadFailed') : t('analytics.featureStudies.loadError')}</p>
+      {error && !notGenerated && <p className="text-xs text-gray-500 max-w-md text-center">{error}</p>}
+      <button
+        onClick={onRetry}
+        className="mt-1 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700"
+      >
+        <RefreshCw size={12} /> {t('analytics.featureStudies.retry')}
+      </button>
+    </div>
+  );
+}
+
+export function LowSampleBadge(): JSX.Element {
+  const { t } = useTranslation('common');
+  return (
+    <span className="ml-1 inline-block align-middle text-[9px] px-1 py-0.5 rounded bg-amber-900/40 border border-amber-800/50 text-amber-300 whitespace-nowrap">
+      {t('analytics.featureStudies.lowSample')}
+    </span>
+  );
+}
+
+function isLow(flag: boolean | undefined, n: number | undefined, min = LOW_SAMPLE_N): boolean {
+  if (typeof flag === 'boolean') return flag;
+  return typeof n === 'number' && n < min;
+}
+
+// ─── Panel (全部列出) ─────────────────────────────────────────────────────────
+
 export default function FeatureStudiesPanel(): JSX.Element {
   const { t } = useTranslation('common');
-  const [data, setData] = useState<FeatureStudiesData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetchFeatureStudies()
-      .then(d => { if (!cancelled) setData(d); })
-      .catch(e => { if (!cancelled) setError(getErrorMessage(e)); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [reloadKey]);
+  const { data, loading, error, notGenerated, reload } = useFeatureStudies();
 
   if (loading) {
     return (
@@ -96,19 +204,7 @@ export default function FeatureStudiesPanel(): JSX.Element {
   }
 
   if (error || !data) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3 text-amber-300">
-        <AlertCircle size={28} />
-        <p className="text-sm">{t('analytics.featureStudies.loadFailed')}</p>
-        {error && <p className="text-xs text-gray-500 max-w-md text-center">{error}</p>}
-        <button
-          onClick={() => setReloadKey(k => k + 1)}
-          className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700"
-        >
-          <RefreshCw size={12} /> {t('analytics.featureStudies.retry')}
-        </button>
-      </div>
-    );
+    return <LoadFailed error={error} notGenerated={notGenerated} onRetry={reload} />;
   }
 
   return (
@@ -128,6 +224,36 @@ export default function FeatureStudiesPanel(): JSX.Element {
   );
 }
 
+// ─── Single card by loopId (放進各分析分頁) ───────────────────────────────────
+
+export function FeatureStudyCard({ loopId, defaultOpen = true }: {
+  loopId: string;
+  defaultOpen?: boolean;
+}): JSX.Element {
+  const { t } = useTranslation('common');
+  const { data, loading, error, notGenerated, reload } = useFeatureStudies();
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-3 text-xs text-gray-500">
+        <Loader size={14} className="animate-spin" /> {t('analytics.featureStudies.loading')}
+      </div>
+    );
+  }
+  if (error || !data) {
+    return <LoadFailed error={error} notGenerated={notGenerated} onRetry={reload} compact />;
+  }
+  const feature = data.features.find(f => f.loopId === loopId);
+  if (!feature) {
+    return (
+      <p className="text-xs text-zinc-500 px-1 py-2">
+        {t('analytics.featureStudies.notFound', { loopId })}
+      </p>
+    );
+  }
+  return <FeatureCard feature={feature} defaultOpen={defaultOpen} orderIndex={0} />;
+}
+
 function FeatureCard({
   feature, defaultOpen, orderIndex,
 }: { feature: FeatureStudyEntry; defaultOpen: boolean; orderIndex: number }): JSX.Element {
@@ -135,6 +261,7 @@ function FeatureCard({
   const [open, setOpen] = useState(defaultOpen);
   const isEn = i18n.language?.toLowerCase().startsWith('en');
 
+  // 文字一律以快取為準 (資料層已修正結論)。
   const title       = isEn ? feature.titleEn       : feature.title;
   const oneLineHook = isEn ? feature.oneLineHookEn : feature.oneLineHook;
   const takeaway    = isEn ? feature.takeawayEn    : feature.takeaway;
@@ -182,7 +309,10 @@ function FeatureCard({
 
           <p className="text-xs text-zinc-300 leading-relaxed">{takeaway}</p>
           <div className="flex items-center justify-between text-[11px] text-zinc-500">
-            <span>{t('analytics.featureStudies.sampleSize', { games: feature.sampleSize.games })}</span>
+            <span>
+              {t('analytics.featureStudies.sampleSize', { games: feature.sampleSize.games })}
+              {feature.computedAt ? ` · ${feature.computedAt}` : ''}
+            </span>
             <a
               href={`/docs/feature-study-${feature.loopId.toLowerCase()}`}
               className="inline-flex items-center gap-1 hover:text-blue-400 transition-colors"
@@ -204,6 +334,7 @@ function FeatureCard({
 
 function FeatureVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
   switch (feature.visualType) {
+    case 'lakeClaim': return <LakeClaimVisual feature={feature} />;
     case 'bar':       return <BarVisual feature={feature} />;
     case 'table':     return <TableVisual feature={feature} />;
     case 'divergent': return <DivergentVisual feature={feature} />;
@@ -217,7 +348,112 @@ function FeatureVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element
   }
 }
 
-// ─── 1. Bar chart (L141 lie rate / L143 leader tier hit rate) ─────────────────
+// ─── 0. Lake claim table (L141, generate_cache.py) ───────────────────────────
+
+function isRedClaim(c: LakeClaimCell): boolean {
+  return c.declaredEn === 'evil' || c.declared === '紅';
+}
+
+function LakeClaimCellView({ cell, min }: { cell: LakeClaimCell | undefined; min: number }): JSX.Element {
+  if (!cell) return <span className="text-zinc-600">—</span>;
+  const low = isLow(cell.lowSample, cell.n, min);
+  return (
+    <span className="whitespace-nowrap">
+      <span className={`font-bold ${low ? 'text-zinc-400' : 'text-white'}`}>{cell.hitRate.toFixed(1)}%</span>
+      <span className="text-zinc-500 text-[10px] ml-1">[{cell.ciLow.toFixed(1)}–{cell.ciHigh.toFixed(1)}]</span>
+      <span className="text-zinc-500 text-[10px] ml-1">n={cell.n}</span>
+      {low && <LowSampleBadge />}
+    </span>
+  );
+}
+
+function LakeClaimTable({ rows, min, firstCol, firstLabel }: {
+  rows: LakeClaimCell[];
+  min: number;
+  firstCol: (c: LakeClaimCell) => string;
+  firstLabel: string;
+}): JSX.Element {
+  const { t } = useTranslation('common');
+  const groups: string[] = [];
+  for (const r of rows) {
+    const k = firstCol(r);
+    if (!groups.includes(k)) groups.push(k);
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs text-zinc-300">
+        <thead>
+          <tr className="border-b border-gray-700 text-zinc-500">
+            <th className="text-left py-2 pr-3">{firstLabel}</th>
+            <th className="text-left py-2 pr-3 text-red-300">{t('analytics.featureStudies.lake.declaredRed')}</th>
+            <th className="text-left py-2 text-blue-300">{t('analytics.featureStudies.lake.declaredBlue')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map(g => {
+            const inGroup = rows.filter(r => firstCol(r) === g);
+            const red = inGroup.find(isRedClaim);
+            const blue = inGroup.find(r => !isRedClaim(r));
+            return (
+              <tr key={g} className="border-b border-zinc-800/60">
+                <td className="py-1.5 pr-3 font-semibold text-zinc-200 whitespace-nowrap">{g}</td>
+                <td className="py-1.5 pr-3"><LakeClaimCellView cell={red} min={min} /></td>
+                <td className="py-1.5"><LakeClaimCellView cell={blue} min={min} /></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LakeClaimVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
+  const { t, i18n } = useTranslation('common');
+  const isEn = i18n.language?.toLowerCase().startsWith('en');
+  const data = feature.data as unknown as LakeClaimData;
+  const min = typeof data.minSample === 'number' ? data.minSample : LOW_SAMPLE_N;
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const holderRows = Array.isArray(data.holderRows) ? data.holderRows : [];
+
+  if (rows.length === 0) {
+    return <pre className="text-xs text-zinc-400">{JSON.stringify(data, null, 2)}</pre>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-[11px] text-zinc-500 mb-1">
+          {t('analytics.featureStudies.lake.columns')} · {t('analytics.featureStudies.lowSampleHint', { min })}
+        </p>
+        <LakeClaimTable
+          rows={rows}
+          min={min}
+          firstLabel={t('analytics.featureStudies.lake.lake')}
+          firstCol={c => (isEn ? (c.lakeEn ?? c.lake ?? '') : (c.lake ?? c.lakeEn ?? ''))}
+        />
+      </div>
+      {holderRows.length > 0 && (
+        <div>
+          <p className="text-[11px] text-zinc-500 mb-1 font-semibold">{t('analytics.featureStudies.lake.byHolder')}</p>
+          <LakeClaimTable
+            rows={holderRows}
+            min={min}
+            firstLabel={t('analytics.featureStudies.lake.holder')}
+            firstCol={c => (isEn ? (c.holderEn ?? c.holder ?? '') : (c.holder ?? c.holderEn ?? ''))}
+          />
+        </div>
+      )}
+      {typeof data.undeclared === 'number' && data.undeclared > 0 && (
+        <p className="text-[11px] text-zinc-500 italic">
+          {t('analytics.featureStudies.lake.undeclared', { count: data.undeclared })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── 1. Bar chart (L141 舊 lie rate / L143 leader tier hit rate) ──────────────
 
 interface LieRow {
   role: string;
@@ -234,20 +470,22 @@ interface LeaderTierRow {
   n: number;
   hitRate: number;
   missRate: number;
+  lowSample?: boolean;
 }
 
 interface SeatRow {
   seat: number;
   n: number;
   hitRate: number;
+  lowSample?: boolean;
 }
 
 function BarVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
-  const { i18n } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const isEn = i18n.language?.toLowerCase().startsWith('en');
   const data = feature.data as Record<string, unknown>;
 
-  // L141 lie rate
+  // L141 (舊形狀) lie rate
   if (Array.isArray(data.rows) && data.rows.length > 0 && (data.rows[0] as Record<string, unknown>).lieRate !== undefined) {
     const rows = data.rows as LieRow[];
     const chartData = rows.map(r => ({
@@ -302,28 +540,57 @@ function BarVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
             <Bar dataKey="value" fill={RED_COLOR} radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-zinc-300">
+            <thead>
+              <tr className="border-b border-gray-700 text-zinc-500">
+                <th className="text-left py-2 pr-4">{t('analytics.featureStudies.tier')}</th>
+                <th className="text-right pr-4">n</th>
+                <th className="text-right">{t('analytics.featureStudies.hitRate')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tierRows.map(r => {
+                const low = isLow(r.lowSample, r.n);
+                return (
+                  <tr key={r.tier} className="border-b border-zinc-800/60">
+                    <td className="py-1 pr-4">{isEn ? r.tierEn : r.tierZh}</td>
+                    <td className="text-right pr-4 text-zinc-400 whitespace-nowrap">{r.n}{low && <LowSampleBadge />}</td>
+                    <td className={`text-right ${low ? 'text-zinc-400' : 'text-red-300'}`}>{r.hitRate.toFixed(2)}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
         {seatRows.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-zinc-300">
               <thead>
                 <tr className="border-b border-gray-700 text-zinc-500">
-                  <th className="text-left py-2 pr-4">Seat</th>
-                  <th className="text-right pr-4">N</th>
-                  <th className="text-right">Hit %</th>
+                  <th className="text-left py-2 pr-4">{t('analytics.featureStudies.seat')}</th>
+                  <th className="text-right pr-4">n</th>
+                  <th className="text-right">{t('analytics.featureStudies.hitRate')}</th>
                 </tr>
               </thead>
               <tbody>
-                {seatRows.map(s => (
-                  <tr key={s.seat} className="border-b border-zinc-800/60">
-                    <td className="py-1 pr-4 font-mono">#{s.seat}</td>
-                    <td className="text-right pr-4 text-zinc-400">{s.n}</td>
-                    <td className="text-right text-red-300">{s.hitRate.toFixed(2)}%</td>
-                  </tr>
-                ))}
+                {seatRows.map(s => {
+                  const low = isLow(s.lowSample, s.n);
+                  return (
+                    <tr key={s.seat} className="border-b border-zinc-800/60">
+                      <td className="py-1 pr-4 font-mono">#{s.seat}</td>
+                      <td className="text-right pr-4 text-zinc-400 whitespace-nowrap">{s.n}{low && <LowSampleBadge />}</td>
+                      <td className={`text-right ${low ? 'text-zinc-400' : 'text-red-300'}`}>{s.hitRate.toFixed(2)}%</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
+        <p className="text-[11px] text-zinc-500">{t('analytics.featureStudies.lowSampleHint', { min: LOW_SAMPLE_N })}</p>
       </div>
     );
   }
@@ -341,6 +608,7 @@ interface ConsistencyRow {
   total: number;
   consistent: number;
   inconsistent: number;
+  lowSample?: boolean;
 }
 
 interface HighEvCell {
@@ -350,6 +618,7 @@ interface HighEvCell {
   threeRedPct: number;
   deltaThreeRed: number;
   directionEn?: string;
+  lowSample?: boolean;
 }
 
 function TableVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
@@ -367,25 +636,29 @@ function TableVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
             <tr className="border-b border-gray-700 text-zinc-500">
               <th className="text-left py-2 pr-4">{t('analytics.featureStudies.role')}</th>
               <th className="text-right pr-4">{t('analytics.featureStudies.consistency')}</th>
-              <th className="text-right pr-4">N</th>
+              <th className="text-right pr-4">n</th>
               <th className="text-right">{t('analytics.featureStudies.consistInconsist')}</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
-              <tr key={r.role} className="border-b border-zinc-800/60">
-                <td className="py-1 pr-4">
-                  <span className={r.camp === 'red' ? 'text-red-300' : 'text-blue-300'}>
-                    {isEn ? r.roleEn : r.role}
-                  </span>
-                </td>
-                <td className="text-right pr-4 font-bold text-white">{r.consistencyRate.toFixed(2)}%</td>
-                <td className="text-right pr-4 text-zinc-400">{r.total}</td>
-                <td className="text-right text-zinc-500">{r.consistent}/{r.inconsistent}</td>
-              </tr>
-            ))}
+            {rows.map(r => {
+              const low = isLow(r.lowSample, r.total);
+              return (
+                <tr key={r.role} className="border-b border-zinc-800/60">
+                  <td className="py-1 pr-4">
+                    <span className={r.camp === 'red' ? 'text-red-300' : 'text-blue-300'}>
+                      {isEn ? r.roleEn : r.role}
+                    </span>
+                  </td>
+                  <td className={`text-right pr-4 font-bold ${low ? 'text-zinc-400' : 'text-white'}`}>{r.consistencyRate.toFixed(2)}%</td>
+                  <td className="text-right pr-4 text-zinc-400 whitespace-nowrap">{r.total}{low && <LowSampleBadge />}</td>
+                  <td className="text-right text-zinc-500">{r.consistent}/{r.inconsistent}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        <p className="text-[11px] text-zinc-500 mt-1">{t('analytics.featureStudies.lowSampleHint', { min: LOW_SAMPLE_N })}</p>
       </div>
 
       {cells.length > 0 && (
@@ -394,22 +667,25 @@ function TableVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
             {t('analytics.featureStudies.highEvCells')}
           </div>
           <div className="space-y-1.5">
-            {cells.map(c => (
-              <div
-                key={c.label}
-                className="flex items-center justify-between gap-2 text-xs bg-zinc-900/40 border border-zinc-800 rounded-lg px-3 py-2"
-              >
-                <span className="text-zinc-300 truncate">
-                  {isEn && c.labelEn ? c.labelEn : c.label}
-                </span>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-zinc-500">n={c.n}</span>
-                  <span className={c.deltaThreeRed >= 0 ? 'text-red-400 font-bold' : 'text-blue-400 font-bold'}>
-                    Δ {c.deltaThreeRed >= 0 ? '+' : ''}{c.deltaThreeRed.toFixed(2)}pp
+            {cells.map(c => {
+              const low = isLow(c.lowSample, c.n);
+              return (
+                <div
+                  key={c.label}
+                  className="flex items-center justify-between gap-2 text-xs bg-zinc-900/40 border border-zinc-800 rounded-lg px-3 py-2"
+                >
+                  <span className="text-zinc-300 truncate">
+                    {isEn && c.labelEn ? c.labelEn : c.label}
                   </span>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-zinc-500 whitespace-nowrap">n={c.n}{low && <LowSampleBadge />}</span>
+                    <span className={low ? 'text-zinc-400 font-bold' : c.deltaThreeRed >= 0 ? 'text-red-400 font-bold' : 'text-blue-400 font-bold'}>
+                      Δ {c.deltaThreeRed >= 0 ? '+' : ''}{c.deltaThreeRed.toFixed(2)}pp
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

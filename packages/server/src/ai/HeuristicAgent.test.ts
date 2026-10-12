@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { HeuristicAgent } from './HeuristicAgent';
+import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING } from './AgentTuning';
+
+/** Pre-2026-10-12 behaviour — tests that pin the legacy decision layers use this. */
+const LEGACY_TUNING = { ...LEGACY_AGENT_TUNING };
 import type { PlayerObservation, VoteRecord, QuestRecord } from './types';
 
 // ── Fixture builders ──────────────────────────────────────────
@@ -1523,7 +1527,10 @@ describe('HeuristicAgent · §0 Listening rule (batch 6 — force-fail incl. Obe
       const rate = (() => {
         let f = 0;
         for (let i = 0; i < 200; i++) {
-          const agent = new HeuristicAgent('P1', 'hard');
+          // Legacy tuning: the 2026-10-12 default (`humanQuestCardRules`)
+          // plays success here — a lone visible red cannot flip a two-fail
+          // quest, and humans play success (docs/ai/strength_benchmark.md).
+          const agent = new HeuristicAgent('P1', 'hard', undefined, LEGACY_TUNING);
           agent.onGameStart(obs);
           const action = agent.act(obs);
           if (action.type === 'quest_vote' && action.vote === 'fail') f++;
@@ -1531,6 +1538,66 @@ describe('HeuristicAgent · §0 Listening rule (batch 6 — force-fail incl. Obe
         return f / 200;
       })();
       expect(rate).toBe(1);
+    });
+
+    it('2026-10-12 default: lone visible red on a two-fail R4 plays success (humanQuestCardRules)', () => {
+      const obs = baseObs({
+        myPlayerId:   'P1',
+        myRole:       'mordred',
+        myTeam:       'evil',
+        playerCount:  10,
+        allPlayerIds: Array.from({ length: 10 }, (_, i) => `P${i + 1}`),
+        knownEvils:   ['P1', 'P7'],
+        gamePhase:    'quest_vote',
+        // 1-1 (nobody listening) — artificial at R4, where a real score is
+        // always 2-1 / 1-2; the §0 listening cases are the next test.
+        questResults: ['success', 'fail'],
+        currentRound: 4,
+        proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P5'],
+      });
+      const agent = new HeuristicAgent('P1', 'hard', undefined, { ...DEFAULT_AGENT_TUNING });
+      agent.onGameStart(obs);
+      expect(agent.act(obs)).toEqual({ type: 'quest_vote', vote: 'success' });
+      // With the ally on the team the rule does not apply → listening fail.
+      const withAlly = { ...obs, proposedTeam: ['P1', 'P7', 'P3', 'P4', 'P5'] };
+      agent.onGameStart(withAlly);
+      expect(agent.act(withAlly)).toEqual({ type: 'quest_vote', vote: 'fail' });
+    });
+
+    it('2026-10-12 default: listening (either side at two wins) on the two-fail R4 → every red fails, assassin + hidden Oberon included', () => {
+      // Review 2026-10-12: in 10p Oberon is invisible to the other reds and
+      // sees nobody, so assassin + Oberon on one R4 team both see "visible
+      // red = 1". Under the first cut of `humanQuestCardRules` both played
+      // success and threw away a won game (two fails = three red) — and at
+      // 2-1 blue handed over the quest track. The §0 listening rule must
+      // win in both states (humans fail 81.5% as the lone visible red at
+      // 2-1 blue, docs/ai/strength_benchmark.md §2.4).
+      const ids = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
+      const team = ['P1', 'P4', 'P5', 'P6', 'P7'];
+      const make = (me: string, role: 'assassin' | 'oberon', knownEvils: string[]): PlayerObservation => baseObs({
+        myPlayerId:   me,
+        myRole:       role,
+        myTeam:       'evil',
+        playerCount:  10,
+        allPlayerIds: ids,
+        knownEvils,
+        gamePhase:    'quest_vote',
+        questResults: ['fail', 'fail', 'success'],
+        currentRound: 4,
+        proposedTeam: team,
+      });
+      for (const [me, role, known] of [['P1', 'assassin', ['P2', 'P3']], ['P4', 'oberon', []]] as const) {
+        const obs = make(me, role, [...known]);
+        const agent = new HeuristicAgent(me, 'hard', undefined, { ...DEFAULT_AGENT_TUNING });
+        agent.onGameStart(obs);
+        expect(agent.act(obs)).toEqual({ type: 'quest_vote', vote: 'fail' });
+        expect(agent.actDirect(obs)).toEqual({ type: 'quest_vote', vote: 'fail' });
+        // Blue listening (2-1 blue): §0 as well.
+        const blue = { ...obs, questResults: ['success', 'success', 'fail'] as ('success' | 'fail')[] };
+        agent.onGameStart(blue);
+        expect(agent.act(blue)).toEqual({ type: 'quest_vote', vote: 'fail' });
+        expect(agent.actDirect(blue)).toEqual({ type: 'quest_vote', vote: 'fail' });
+      }
     });
   });
 });
@@ -2303,12 +2370,18 @@ describe('HeuristicAgent · batch 10 recognised-red hierarchy (位階法)', () =
         const soloObs = { ...obs, knownEvils: role === 'oberon' ? [] : ['P1', 'P7'] };
         const expected: 'fail' | 'success' = role === 'oberon' ? 'success' : 'fail';
         for (let i = 0; i < 50; i++) {
-          const agent = new HeuristicAgent('P1', 'hard');
+          // Legacy tuning — see the 2026-10-12 default case below.
+          const agent = new HeuristicAgent('P1', 'hard', undefined, LEGACY_TUNING);
           agent.onGameStart(soloObs);
           const action = agent.act(soloObs);
           expect(action.type).toBe('quest_vote');
           if (action.type === 'quest_vote') expect(action.vote).toBe(expected);
         }
+        // 2026-10-12 default (`humanQuestCardRules`): a lone visible red on
+        // a two-fail quest plays success for every red role.
+        const tuned = new HeuristicAgent('P1', 'hard', undefined, { ...DEFAULT_AGENT_TUNING });
+        tuned.onGameStart(soloObs);
+        expect(tuned.act(soloObs)).toEqual({ type: 'quest_vote', vote: 'success' });
       });
 
       it(`${role} solo forced-mission (R2 attempt=5, 0-0) → fail (batch 10 preserves batch 9 regression vector)`, () => {
@@ -2629,8 +2702,8 @@ describe('HeuristicAgent · batch 10 recognised-red hierarchy (位階法)', () =
 
     /** Simulate a single quest-vote scenario for every mission round,
      *  running red players through voteOnQuest and asserting fail. */
-    function runSelfPlayInvariant(seed: number): {
-      redVotes: Array<{ role: string; vote: 'success' | 'fail' }>;
+    function runSelfPlayInvariant(seed: number, tuning = LEGACY_TUNING): {
+      redVotes: Array<{ role: string; vote: 'success' | 'fail'; round: number; alone: boolean; goodWins: number; evilWins: number }>;
     } {
       // Deterministic role layout (10-player composition: 6 blue + 4 red).
       // Varying starting round per seed to exercise different code paths.
@@ -2638,9 +2711,12 @@ describe('HeuristicAgent · batch 10 recognised-red hierarchy (位階法)', () =
         'merlin', 'percival', 'loyal', 'loyal', 'loyal', 'loyal',
         'assassin', 'morgana', 'mordred', 'oberon',
       ];
-      const agents = Array.from({ length: 10 }, (_, i) => new HeuristicAgent(`S${i + 1}`, 'hard'));
+      // Legacy tuning by default: the invariant pins the batch-10 hierarchy;
+      // the 2026-10-12 default adds one documented exception (lone visible
+      // red on a two-fail quest plays success), covered by its own case.
+      const agents = Array.from({ length: 10 }, (_, i) => new HeuristicAgent(`S${i + 1}`, 'hard', undefined, tuning));
       const roleMap = buildRoleMap(agents, roles);
-      const redVotes: Array<{ role: string; vote: 'success' | 'fail' }> = [];
+      const redVotes: Array<{ role: string; vote: 'success' | 'fail'; round: number; alone: boolean; goodWins: number; evilWins: number }> = [];
 
       // 5 rounds × varying quest score permutations per seed.
       for (let r = 1; r <= 5; r++) {
@@ -2699,12 +2775,28 @@ describe('HeuristicAgent · batch 10 recognised-red hierarchy (位階法)', () =
           agent.onGameStart(obs);
           const action = agent.act(obs);
           if (action.type === 'quest_vote') {
-            redVotes.push({ role, vote: action.vote });
+            const alone = proposedTeam.filter((id) => id === agent.agentId || obs.knownEvils.includes(id)).length < 2;
+            redVotes.push({ role, vote: action.vote, round: r, alone, goodWins, evilWins });
           }
         }
       }
       return { redVotes };
     }
+
+    it('2026-10-12 default — the only assassin success is the lone visible red on the two-fail R4 while nobody is listening', () => {
+      const all: Array<{ role: string; vote: 'success' | 'fail'; round: number; alone: boolean; goodWins: number; evilWins: number }> = [];
+      for (let g = 0; g < 10; g++) all.push(...runSelfPlayInvariant(g, { ...DEFAULT_AGENT_TUNING }).redVotes);
+      const assassinVotes = all.filter((v) => v.role === 'assassin');
+      expect(assassinVotes.length).toBeGreaterThanOrEqual(10);
+      for (const v of assassinVotes) {
+        if (v.round === 4 && v.alone && v.goodWins < 2 && v.evilWins < 2) expect(v.vote).toBe('success');
+        else expect(v.vote).toBe('fail');
+      }
+      // The harness scores include both a non-listening R4 (rule fires) and
+      // a 2-1 R4 (§0 fail) for the lone assassin.
+      expect(assassinVotes.some((v) => v.round === 4 && v.alone && v.goodWins < 2 && v.evilWins < 2)).toBe(true);
+      expect(assassinVotes.some((v) => v.round === 4 && v.alone && (v.goodWins === 2 || v.evilWins === 2))).toBe(true);
+    });
 
     it('10 self-play games — assassin + oberon always fail when on team (batch 10 hierarchy)', () => {
       // Batch 10 hierarchy: assassin unconditionally fails in all branches
@@ -2773,11 +2865,13 @@ describe('HeuristicAgent · batch 10 Point 2 (mistake action refined)', () => {
           { P1: true, P2: true, P3: false, P4: true, P5: true }),
       ],
     });
-    const agent = new HeuristicAgent('P1', 'hard');
+    // Legacy tuning: the mistake split belongs to the legacy scorer; the
+    // 2026-10-12 default (`assassinModel`) ranks by the trained model.
+    const agent = new HeuristicAgent('P1', 'hard', undefined, LEGACY_TUNING);
     agent.onGameStart(obs);
     // P3: Pattern 1 fires (on-team thumbless reject).
     const p3Obs = obs;  // same observation; P3 is our anti-hero.
-    const agent2 = new HeuristicAgent('P1', 'hard');
+    const agent2 = new HeuristicAgent('P1', 'hard', undefined, LEGACY_TUNING);
     agent2.onGameStart(p3Obs);
     // Using internal count via assassinate path — we assert via the
     // unmistaken split. P3 should be classified as mistaken.

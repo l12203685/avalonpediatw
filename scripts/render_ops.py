@@ -8,9 +8,10 @@ very little:
 
   * it only ever touches the service named TARGET_NAME (default avalon-server-z6c0)
     and, for `suspend`, the stale duplicate named DUPLICATE_NAME (default avalonpediatw);
-  * it never prints an environment-variable value. Every value it handles is
-    masked with ::add-mask:: first, and outputs show keys, "set"/"missing" and
-    shortened ids only.
+  * it never prints an environment-variable value. Every secret-looking value it
+    handles is masked with ::add-mask:: first (see looks_like_secret; plain values
+    such as "true" or "production" are not, so they stay readable elsewhere in the
+    log), and outputs show keys, "set"/"missing" and shortened ids only.
 
 Actions
   status   read-only: services, latest deploys, which env keys the target has,
@@ -61,9 +62,41 @@ class OpsError(Exception):
     pass
 
 
+# What gets ::add-mask::'d. GitHub masks the exact string everywhere in the log afterwards, so
+# masking plain values ("true", "production", "3000") blanks out ordinary output too (the bots
+# status JSON showed *** for true/false). Only secret-looking values are masked: a known token
+# prefix, 32+ characters of anything, 16+ with letters and digits mixed, or base64-ish with
+# + / = in it. The two service names are never masked (they head most output lines).
+_TOKEN_PREFIX_RE = re.compile(r"^(?:rnd_|gh[pousr]_|github_pat_|xox[abp]-|sk-|AIza|ya29\.|Bearer\s)", re.IGNORECASE)
+_BASE64ISH_RE = re.compile(r"^[A-Za-z0-9+/=_.-]{16,}$")
+_HAS_LETTER_RE, _HAS_DIGIT_RE = re.compile(r"[A-Za-z]"), re.compile(r"[0-9]")
+_NEVER_MASK = frozenset({TARGET_NAME, DUPLICATE_NAME})
+
+
+_URL_RE = re.compile(r"^(?:https?://|wss?://)[^\s]+$", re.IGNORECASE)
+
+
+def looks_like_secret(value: str) -> bool:
+    v = value.strip()
+    if not v or v in _NEVER_MASK:
+        return False
+    # URLs (CORS_ORIGIN, WEB_BASE_URL, RENDER_EXTERNAL_URL, ...) are not secrets; masking them
+    # would blank the service url in the status output as well.
+    if _URL_RE.match(v) and "@" not in v:
+        return False
+    if _TOKEN_PREFIX_RE.match(v) or len(v) >= 32:
+        return True
+    if len(v) >= 16 and _HAS_LETTER_RE.search(v) and _HAS_DIGIT_RE.search(v):
+        return True
+    return bool(len(v) >= 16 and _BASE64ISH_RE.match(v) and any(c in v for c in "+/="))
+
+
 def mask(value: str | None) -> None:
-    if value:
-        print(f"::add-mask::{value}", flush=True)
+    """::add-mask:: each secret-looking line of `value` (a multi-line value, e.g. a PEM key, is
+    masked line by line: GitHub reads one command per line)."""
+    for line in (value or "").splitlines():
+        if looks_like_secret(line):
+            print(f"::add-mask::{line}", flush=True)
 
 
 def short(value: str) -> str:
@@ -71,9 +104,10 @@ def short(value: str) -> str:
 
 
 class Render:
-    def __init__(self, api_key: str, base: str = API_BASE, sleep: Callable[[float], None] = time.sleep):
+    def __init__(self, api_key: str, base: str | None = None, sleep: Callable[[float], None] = time.sleep):
         self.api_key = api_key
-        self.base = base
+        # RENDER_API_BASE is read here (not only at import) so a test can point main() at a fake server.
+        self.base = (base or os.environ.get("RENDER_API_BASE") or API_BASE).rstrip("/")
         self.sleep = sleep
 
     def call(self, method: str, path: str, query: dict[str, Any] | None = None, body: Any = None) -> Any:
@@ -90,7 +124,9 @@ class Render:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 raw = resp.read()
         except urllib.error.HTTPError as exc:
-            detail = exc.read()[:300].decode(errors="replace")
+            # A response to a request that carried a value (PUT env-var) may echo it: withhold it.
+            detail = "(response withheld: the request carried a value)" if data is not None \
+                else exc.read()[:300].decode(errors="replace")
             hint = " (RENDER_API_KEY wrong or revoked?)" if exc.code in (401, 403) else ""
             raise OpsError(f"Render API {method} {path} -> HTTP {exc.code}{hint}: {detail}") from None
         return json.loads(raw) if raw.strip() else None

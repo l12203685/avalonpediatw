@@ -9,7 +9,7 @@ import {
   ActivityType,
   Message,
 } from 'discord.js';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS } from './config';
 import {
   handleHelpCommand,
   handleRulesCommand,
@@ -20,6 +20,9 @@ import {
   handleChemistryCommand,
 } from './commands';
 import { getChatMirror } from '../ChatMirror';
+import { FEEDBACK_CONTENT_MAX_CHARS } from '../feedback/config';
+import { getFeedbackService } from '../feedback/service';
+import { handleFeedbackCommand } from '../feedback/discordCommand';
 
 /**
  * Slash command definitions registered by `registerCommands()`. Exported so
@@ -71,6 +74,19 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
       )
       .addStringOption((o) =>
         o.setName(STATS_OPTIONS.PLAYER_B).setDescription('第二位玩家 / Player 2').setRequired(true).setMaxLength(50)
+      ),
+
+    // 2026-10-12 community feedback (bots/feedback) — ephemeral ack, text
+    // forwarded to the owner's channel. docs/COMMUNITY_FEEDBACK.md.
+    new SlashCommandBuilder()
+      .setName(COMMANDS.FEEDBACK)
+      .setDescription('給管理者的建議或回報問題（每週彙整）/ Feedback to the admin')
+      .addStringOption((o) =>
+        o
+          .setName(FEEDBACK_OPTIONS.CONTENT)
+          .setDescription('想說的話，最多 500 字 / What you want to tell the admin')
+          .setRequired(true)
+          .setMaxLength(FEEDBACK_CONTENT_MAX_CHARS)
       ),
   ];
 }
@@ -152,9 +168,14 @@ export class DiscordBotClient {
     }
 
     if (message.author.bot) return;
+    if (message.webhookId) return; // webhook posts (e.g. /api/feedback relay) are not people talking
     const content = message.content?.trim();
     if (!content) return;
     if (content.startsWith('[Avalon]')) return;
+
+    // 2026-10-12 community feedback: reduce this human message to topic
+    // counts (numbers only, see bots/feedback). Independent of the mirror.
+    getFeedbackService().observe('discord', content);
 
     const mirror = getChatMirror();
     if (!mirror) {
@@ -225,6 +246,10 @@ export class DiscordBotClient {
 
         case COMMANDS.CHEMISTRY:
           await handleChemistryCommand(interaction);
+          break;
+
+        case COMMANDS.FEEDBACK:
+          await handleFeedbackCommand(interaction);
           break;
 
         default: {

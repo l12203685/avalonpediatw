@@ -15,12 +15,16 @@ import {
 import { getSharedRoomManager } from '../../game/roomManagerSingleton';
 import { getChatMirror } from '../ChatMirror';
 import { answerStatsTextCommand } from '../stats/textCommands';
+import { answerFeedbackTextCommand, getFeedbackService } from '../feedback/service';
 
 /**
  * Map LINE user IDs to the room they're currently in.
  * Enables vote and status commands without requiring a room-id argument.
  */
 const userRoomMap = new Map<string, string>();
+
+/** How many handled text-event ids are remembered for redelivery dedupe (see isDuplicateDelivery). */
+const LINE_SEEN_EVENT_IDS_MAX = 500;
 
 /**
  * Line Bot Client Setup
@@ -43,7 +47,18 @@ export interface LineWebhookStats {
   replyFailures: number;
   /** Stats command answers sent (/戰績 /排行 /默契 /指令). */
   statsReplies: number;
+  /** /意見 acknowledgements sent (2026-10-12, bots/feedback). */
+  feedbackReplies: number;
   lastEventAt: number | null;
+}
+
+/**
+ * A bot answer that takes the first slot of a reply_token (stats card or
+ * /意見 acknowledgement); `kind` picks the counter it is booked under.
+ */
+interface LeadReply {
+  kind: 'stats' | 'feedback';
+  text: string;
 }
 
 export class LineBotClient {
@@ -57,10 +72,13 @@ export class LineBotClient {
     repliesDrained: 0,
     replyFailures: 0,
     statsReplies: 0,
+    feedbackReplies: 0,
     lastEventAt: null,
   };
   /** Non-mirror group ids already logged (each is logged once per process). */
   private seenOtherGroups = new Set<string>();
+  /** Ids of text events this process handled, newest last (LINE redelivery dedupe). */
+  private seenEventIds = new Set<string>();
 
   constructor(opts: LineBotClientOptions = {}) {
     const channelAccessToken = opts.channelAccessToken ?? LINE_CONFIG.channelAccessToken;
@@ -114,6 +132,14 @@ export class LineBotClient {
         const source = event.source;
         const rawReplyToken = (event as { replyToken?: unknown }).replyToken;
         const replyToken = typeof rawReplyToken === 'string' ? rawReplyToken : undefined;
+        // LINE re-sends an event when our answer was not a prompt 200 (webhook
+        // redelivery is ON, docs/LINE_DISCORD_SYNC.md). When THIS process
+        // already handled it, nothing is counted, mirrored or forwarded a
+        // second time; the bot still answers because the first reply may
+        // never have gone out. An event first seen as a redelivery (the
+        // original timed out before reaching us, e.g. a Render cold start)
+        // is handled normally.
+        const duplicate = this.isDuplicateDelivery(event);
 
         // #82 three-way sync: anything from the configured lobby-mirror group
         // is bridge traffic. Text lands in the lobby ring buffer (→ web
@@ -122,16 +148,18 @@ export class LineBotClient {
         // outbound LINE queue (reply does not count against push quota).
         if (source.type === 'group' && this.isMirrorGroup(source.groupId)) {
           this.stats.mirrorGroupEvents += 1;
-          let statsAnswer: string | null = null;
+          let lead: LeadReply | null = null;
           if (event.type === 'message' && event.message.type === 'text') {
             const textMessage = event.message as { id: string; text: string };
-            // A stats command is still mirrored like any other text; its
-            // answer goes back to LINE only, sharing this reply_token.
-            await this.handleGroupMessage(source.groupId, source.userId, textMessage.text, textMessage.id);
-            statsAnswer = await this.statsAnswerFor(textMessage.text);
+            // A stats / 意見 command is still mirrored like any other text;
+            // its answer goes back to LINE only, sharing this reply_token.
+            if (!duplicate) {
+              await this.handleGroupMessage(source.groupId, source.userId, textMessage.text, textMessage.id);
+            }
+            lead = await this.leadReplyFor(textMessage.text, duplicate);
           }
           if (replyToken) {
-            await this.drainQueuedReplies(replyToken, statsAnswer);
+            await this.drainQueuedReplies(replyToken, lead);
           }
           continue;
         }
@@ -148,13 +176,13 @@ export class LineBotClient {
         const messageEvent = event as MessageEvent;
         const textMessage = messageEvent.message as { id: string; text: string };
 
-        // Stats commands answer in 1:1 chats regardless of the legacy
-        // LINE_BOT_COMMANDS_ENABLED gate. Matched on the raw text: player
-        // names are case-sensitive (Sin / SIN / sin are different people).
+        // Stats and /意見 commands answer in 1:1 chats regardless of the
+        // legacy LINE_BOT_COMMANDS_ENABLED gate. Matched on the raw text:
+        // player names are case-sensitive (Sin / SIN / sin are different people).
         if (source.type === 'user') {
-          const statsAnswer = await this.statsAnswerFor(textMessage.text);
-          if (statsAnswer !== null) {
-            await this.replyStatsAnswer(messageEvent.replyToken, statsAnswer);
+          const lead = await this.leadReplyFor(textMessage.text, duplicate);
+          if (lead !== null) {
+            await this.replyLead(messageEvent.replyToken, lead);
             continue;
           }
         }
@@ -184,6 +212,32 @@ export class LineBotClient {
     return !!target && !!groupId && target === groupId;
   }
 
+  /**
+   * True when `event` is a LINE redelivery (`deliveryContext.isRedelivery`)
+   * of a text message this process already handled. Keyed on
+   * `webhookEventId` (same across redeliveries — LINE's documented dedupe
+   * key), falling back to the message id. Bounded: the oldest ids are
+   * forgotten past LINE_SEEN_EVENT_IDS_MAX. Only ids are kept — no text.
+   */
+  private isDuplicateDelivery(event: WebhookEvent): boolean {
+    if (event.type !== 'message' || event.message.type !== 'text') return false;
+    const meta = event as { webhookEventId?: unknown; deliveryContext?: { isRedelivery?: unknown } };
+    const id =
+      typeof meta.webhookEventId === 'string' && meta.webhookEventId
+        ? `e:${meta.webhookEventId}`
+        : `m:${event.message.id}`;
+    const redelivery = meta.deliveryContext?.isRedelivery === true;
+    const seen = this.seenEventIds.has(id);
+    if (!seen) {
+      this.seenEventIds.add(id);
+      if (this.seenEventIds.size > LINE_SEEN_EVENT_IDS_MAX) {
+        const oldest = this.seenEventIds.values().next().value;
+        if (oldest !== undefined) this.seenEventIds.delete(oldest);
+      }
+    }
+    return redelivery && seen;
+  }
+
   getWebhookStats(): LineWebhookStats {
     return { ...this.stats };
   }
@@ -210,15 +264,15 @@ export class LineBotClient {
    * (2026-09-07 listen-bot post-mortem §3-1: the old drain dropped the batch).
    *
    * One reply_token = ONE replyMessage call with at most 5 message objects.
-   * When the event was a stats command (2026-10-10), its answer takes the
-   * first slot and only the remaining slots drain the mirror queue; the
-   * answer itself is never queued (on failure only the drained mirror
-   * messages are put back).
+   * When the event was a stats command (2026-10-10) or /意見 (2026-10-12),
+   * its answer takes the first slot and only the remaining slots drain the
+   * mirror queue; the answer itself is never queued (on failure only the
+   * drained mirror messages are put back).
    */
-  private async drainQueuedReplies(replyToken: string, statsAnswer: string | null = null): Promise<void> {
+  private async drainQueuedReplies(replyToken: string, leadReply: LeadReply | null = null): Promise<void> {
     const mirror = getChatMirror();
     const queue = mirror && mirror.isLineReplyQueueEnabled() ? mirror : null;
-    const lead: Message[] = statsAnswer ? [{ type: 'text', text: statsAnswer }] : [];
+    const lead: Message[] = leadReply ? [{ type: 'text', text: leadReply.text }] : [];
     const batch = queue ? queue.drainLineReplies(LINE_REPLY_MAX_PER_DRAIN - lead.length) : [];
     if (lead.length === 0 && batch.length === 0) return;
     try {
@@ -227,7 +281,7 @@ export class LineBotClient {
         ...batch.map((item) => ({ type: 'text' as const, text: item.text })),
       ]);
       this.stats.repliesDrained += batch.length;
-      this.stats.statsReplies += lead.length;
+      if (leadReply) this.countLead(leadReply.kind);
     } catch (error) {
       this.stats.replyFailures += 1;
       if (queue) queue.requeueLineReplies(batch);
@@ -246,14 +300,42 @@ export class LineBotClient {
     }
   }
 
-  /** 1:1 chat stats reply (no mirror queue there). Failures are logged, never thrown. */
-  private async replyStatsAnswer(replyToken: string, text: string): Promise<void> {
+  /**
+   * /意見 acknowledgement (or usage hint), or null (not the command / flag
+   * off). Never throws. On a redelivery the text is answered but not counted
+   * or forwarded again.
+   */
+  private async feedbackAnswerFor(text: string, redelivery: boolean): Promise<string | null> {
     try {
-      await this.client.replyMessage(replyToken, [{ type: 'text', text }]);
-      this.stats.statsReplies += 1;
+      return await answerFeedbackTextCommand(text, 'line', { redelivery });
+    } catch (error) {
+      console.error('[LINE feedback] handling /意見 failed:', error);
+      return null;
+    }
+  }
+
+  /** The bot answer a text earns, if any: stats commands first, then /意見. */
+  private async leadReplyFor(text: string, redelivery = false): Promise<LeadReply | null> {
+    const stats = await this.statsAnswerFor(text);
+    if (stats !== null) return { kind: 'stats', text: stats };
+    const feedback = await this.feedbackAnswerFor(text, redelivery);
+    if (feedback !== null) return { kind: 'feedback', text: feedback };
+    return null;
+  }
+
+  private countLead(kind: LeadReply['kind']): void {
+    if (kind === 'stats') this.stats.statsReplies += 1;
+    else this.stats.feedbackReplies += 1;
+  }
+
+  /** 1:1 chat reply (no mirror queue there). Failures are logged, never thrown. */
+  private async replyLead(replyToken: string, lead: LeadReply): Promise<void> {
+    try {
+      await this.client.replyMessage(replyToken, [{ type: 'text', text: lead.text }]);
+      this.countLead(lead.kind);
     } catch (error) {
       this.stats.replyFailures += 1;
-      console.error('[LINE stats] replyMessage failed:', error);
+      console.error(`[LINE ${lead.kind}] replyMessage failed:`, error);
     }
   }
 
@@ -280,6 +362,10 @@ export class LineBotClient {
     if (!targetGroup || targetGroup !== groupId) {
       return;
     }
+
+    // 2026-10-12 community feedback: reduce the text to topic counts
+    // (numbers only, see bots/feedback) before anything else can drop it.
+    getFeedbackService().observe('line', text);
 
     const mirror = getChatMirror();
     if (!mirror) {

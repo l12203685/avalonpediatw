@@ -59,6 +59,7 @@ import type {
   AgentAction,
 } from '../types';
 import { HeuristicAgent } from '../HeuristicAgent';
+import { humanQuestCardRule } from '../AgentTuning';
 import {
   interpret,
   type Facts,
@@ -749,6 +750,50 @@ export class ForwardAgent implements AvalonAgent {
       }
     }
 
+    // ── AgentTuning.humanQuestCardRules (2026-10-12) ──
+    //
+    // Agreement benchmark §7: humans play success as the lone visible red
+    // on R4 (two fails needed) and Morgana fails as the lone red on R1.
+    // Same pure rule as the baseline (`humanQuestCardRule`) so both paths
+    // agree; only fires when the agent's tuning enables it. The R4 rule
+    // yields to the §0 listening rule whenever either side has two quest
+    // wins (a hidden Oberon may be on the team) — `humanQuestCardRule`
+    // returns null there and the baseline delegate below forces the fail.
+    if (
+      decisionType === 'quest_vote' &&
+      this.baseline.tuning.humanQuestCardRules
+    ) {
+      const ruled = humanQuestCardRule(obs);
+      if (ruled !== null) {
+        const action: AgentAction = { type: 'quest_vote', vote: ruled };
+        const ruleCandidate: Candidate = {
+          action,
+          description: `human quest-card rule ${ruled}`,
+          signals: {
+            avgSuspicion: 0,
+            maxSuspicion: 0,
+            includesKnownEvil: false,
+            includesSelf: true,
+            violatesLakeRules: false,
+            numKnownEvilOnTeam: 0,
+            merlinProbForTarget: 0,
+          },
+        };
+        return {
+          action,
+          reasoningTrace: {
+            decisionType,
+            purposes: zeroPurposeVector(),
+            candidatesEvaluated: 1,
+            chosen: ruleCandidate,
+            chosenScore: 0,
+            usedFallback: false,
+            summary: `${decisionType} → human quest-card rule (${ruled}, round=${obs.currentRound ?? 1})`,
+          },
+        };
+      }
+    }
+
     // ── Edward 2026-05-05 22:10 assassinate delegation (Audit fix A) ─
     //
     // Audit `staging/subagent_results/assassin_merlin_bug_audit_2026-05-05.md`
@@ -897,8 +942,26 @@ export class ForwardAgent implements AvalonAgent {
     const PRIOR_PENALTY = 0.6;
     const PRIOR_OVERLAP_THRESHOLD = 0.5; // teams sharing > 50% members count
                                          // as "mimicking the prior attempt"
+    // ── AgentTuning.r3NormalVotePrior (2026-10-12) ──
+    // Agreement benchmark §7: the scorer had no exposure cost for an
+    // anomaly vote, so R3+ anomaly rate was ~37% vs ~20% for humans. Add
+    // a flat bonus to the "normal" candidate (on-team approve / off-team
+    // reject). R1-R2 never reach here (delegated above).
+    const normalVotePrior =
+      decisionType === 'team_vote' &&
+      (!this.baseline.tuning.r3NormalVotePriorEvilOnly || obs.myTeam === 'evil')
+        ? this.baseline.tuning.r3NormalVotePrior
+        : 0;
+    const selfOnProposedTeam = (obs.proposedTeam ?? []).includes(obs.myPlayerId);
     const scoredCandidates = candidates.map((c, i) => {
       let s = scoreCandidate(c, purposes, obs, interp, roleSignals);
+      if (
+        normalVotePrior !== 0 &&
+        c.action.type === 'team_vote' &&
+        c.action.vote === selfOnProposedTeam
+      ) {
+        s += normalVotePrior;
+      }
       if (
         c.action.type === 'team_select' &&
         priorAttemptTeams.size > 0

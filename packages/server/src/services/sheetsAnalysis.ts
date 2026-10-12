@@ -43,10 +43,53 @@ export interface PlayerStats {
   rawRedGames: number;
   rawBlueGames: number;
   /**
+   * Raw three-outcome counts per side (written by generate_cache.py since the
+   * 三結果 rebuild; absent in older caches). `withFinalFields` derives the
+   * two-stage fields below from these when the cache predates them.
+   */
+  rawRedThreeRed?: number;
+  rawRedMerlinDead?: number;
+  rawRedMerlinAlive?: number;
+  rawBlueThreeRed?: number;
+  rawBlueMerlinDead?: number;
+  rawBlueMerlinAlive?: number;
+  /**
    * Edward 2026-04-27 — per-seat three-outcome distribution. Optional for
    * cache backward compatibility; UI uses fallback when missing.
    */
   seatOutcomes?: Record<string, OutcomeBreakdown>;
+
+  // --- Two-stage outcome contract (docs/stats/two_stage_outcome.md, 2026-10-12) ---
+  // 任務結算 = 三紅 vs 三藍; 刺殺結算 = 三藍局是否刺中梅林;
+  // 最終: 紅勝 = 三紅 + 三藍死, 藍勝 = 三藍活.
+  // The legacy fields above (winRate / redWin / blueWin / roleWinRates /
+  // seat*WinRates / roleTheory) keep the 任務結算 meaning (三藍死 counts as a
+  // blue win) and are never reinterpreted.
+  // Optional because a cache produced before schemaVersion 2 lacks them; the
+  // served players always go through `withFinalFields`, which fills in every
+  // field it can compute from the raw counts.
+
+  /** (紅方場三紅 + 紅方場三藍死 + 藍方場三藍活) / 總場數, %. */
+  finalWinRate?: number;
+  /** (三紅 + 三藍死) / 紅方場數, %. 0 when the player never played red. */
+  finalRedWinRate?: number;
+  /** 三藍活 / 藍方場數, %. 0 when the player never played blue. */
+  finalBlueWinRate?: number;
+  /** (紅方場三紅 + 藍方場三藍死 + 藍方場三藍活) / 總場數, % — the old `winRate` semantics. */
+  missionWinRate?: number;
+  /** 藍方場且到達三藍時 三藍活 / (三藍活 + 三藍死), %; 0 when the denominator is 0 (see rawBlueThreeBlue). */
+  merlinSurvivalRate?: number;
+  /** Denominator of merlinSurvivalRate: 藍方場到達三藍的場數. */
+  rawBlueThreeBlue?: number;
+  /** Per-role final win rate (紅角 = 三紅 + 三藍死; 藍角 = 三藍活). Generator only. */
+  roleFinalWinRates?: Record<string, number>;
+  /** Σ_角色 本人該角色出現比例 × 全體該角色最終勝率. null when it cannot be computed. */
+  expectedFinalWinRate?: number | null;
+  /** finalWinRate − expectedFinalWinRate (may be negative). null when it cannot be computed; shown as "—". */
+  excessWinRate?: number | null;
+  /** Earliest / latest parsed game date, YYYY-MM-DD; "" when unknown. Generator only. */
+  firstPlayed?: string;
+  lastPlayed?: string;
 }
 
 export interface ChemistryMatrix {
@@ -97,15 +140,58 @@ export interface OutcomeBreakdown {
   threeBlueAlivePct: number;
 }
 
+/** 任務結算: 三紅 = 紅方, 三藍 (死或活) = 藍方. */
+export interface MissionStageSummary {
+  games: number;
+  threeRed: number;
+  threeBlue: number;
+  redPct: number;
+  bluePct: number;
+}
+
+/** 刺殺結算 — only the 三藍 games: 三藍死 = 刺中, 三藍活 = 沒刺中. */
+export interface AssassinationStageSummary {
+  games: number;
+  merlinKilled: number;
+  merlinSurvived: number;
+  killPct: number;
+  survivePct: number;
+}
+
+/** 最終: 紅勝 = 三紅 + 三藍死, 藍勝 = 三藍活. */
+export interface FinalOutcomeSummary {
+  games: number;
+  redWins: number;
+  blueWins: number;
+  redPct: number;
+  bluePct: number;
+}
+
 export interface OverviewData {
   totalGames: number;
   totalPlayers: number;
+  /** 任務結算 red share (三紅 / all), % — legacy meaning, kept. */
   redWinRate: number;
+  /** 任務結算 blue share (三藍死 + 三藍活) / all, % — legacy meaning, kept. */
   blueWinRate: number;
+  /** 三藍局刺中率, %. */
   merlinKillRate: number;
   outcomeBreakdown: OutcomeBreakdown;
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
+  /**
+   * Two-stage outcome contract (schemaVersion 2, docs/stats/two_stage_outcome.md).
+   * All optional: a cache written before the contract has none of them and the
+   * consumers derive what they need from `outcomeBreakdown` / the legacy rates.
+   */
+  schemaVersion?: number;
+  missionStage?: MissionStageSummary;
+  assassinationStage?: AssassinationStageSummary;
+  final?: FinalOutcomeSummary;
+  /** 全體 per-role final win rate, % (紅角 = 三紅 + 三藍死; 藍角 = 三藍活). */
+  roleFinalWinRates?: Record<string, number>;
+  /** 全期 excess-win-rate ranking, same MIN_GAMES_THRESHOLD (30) as topPlayersByTheory. */
+  topPlayersByExcess?: Array<{ name: string; excessWinRate: number; finalWinRate: number; games: number }>;
   /**
    * Edward 2026-04-27 — `outcomes` (per-seat 三結果 distribution) and
    * `roles[].outcomes` (per-role 三結果 distribution) added so the deep
@@ -119,6 +205,84 @@ export interface OverviewData {
     outcomes?: OutcomeBreakdown;
     roles: Array<{ role: string; winRate: number; games: number; outcomes?: OutcomeBreakdown }>;
   }>;
+}
+
+// ---------------------------------------------------------------------------
+// Leaderboard (cache section `leaderboard`, docs/stats/two_stage_outcome.md)
+// ---------------------------------------------------------------------------
+// Computed entirely by generate_cache.py (LEADERBOARD_CONFIG); the server only
+// reads it. Boards are identified by a fixed `id`; a board the generator could
+// not build (rows would be empty) is omitted from `boards` altogether.
+
+/** Fixed board ids the generator may emit. */
+export type LeaderboardBoardId = 'main' | 'online' | 'recent' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles';
+
+export interface LeaderboardRow {
+  rank: number;
+  name: string;
+  /**
+   * The board's SORT value: main / online / recent / newcomers = the shrunk
+   * excess win rate (excess × games / (games + shrinkK)); improved = the two
+   * spans' final-win-rate difference; assassin = 刺中率; roleTitles = that
+   * role's final win rate. On the excess boards the number shown is
+   * `excessWinRate`, never this.
+   */
+  value: number;
+  /** main / online / recent / newcomers: the unshrunk excess win rate (what the site and the bots print). */
+  excessWinRate?: number;
+  /** main / online / recent / newcomers: final win rate within the board's period, %. Absent on improved / assassin / roleTitles. */
+  finalWinRate?: number;
+  expectedFinalWinRate?: number;
+  /** Games within the board's period (assassin: games as 刺客; roleTitles: games as that role). */
+  games: number;
+  // improved
+  recentFinalWinRate?: number;
+  priorFinalWinRate?: number;
+  recentGames?: number;
+  priorGames?: number;
+  // assassin
+  hits?: number;
+  attempts?: number;
+  // newcomers
+  firstPlayed?: string;
+  // roleTitles
+  /** `roleTitles` only: the role this row is the title holder of. */
+  role?: string;
+  wins?: number;
+}
+
+export interface LeaderboardBoard {
+  /** One of LeaderboardBoardId; typed as string so an unknown board from a newer generator still parses. */
+  id: LeaderboardBoardId | (string & Record<never, never>);
+  title: string;
+  /** e.g. "2025-10-13 ～ 2026-10-12". */
+  period: string;
+  /** Window actually used (after fallback widening); 0 = 全期. */
+  windowDays?: number;
+  minGames?: number;
+  /**
+   * Qualifier for the title, e.g. "近 90 天內有出賽、近 365 天至少 20 場". On the
+   * excess boards the generator appends the excess legend after a "；"; the
+   * bots print only the clause before it (the site shows the whole note).
+   */
+  note?: string;
+  rows: LeaderboardRow[];
+}
+
+export interface LeaderboardSection {
+  /** YYYY-MM-DD the boards were computed for. */
+  asOf: string;
+  dates?: { parsed: number; unparsed: number; earliest: string; latest: string };
+  config?: {
+    windowDays: number;
+    activeDays: number;
+    minGames: number;
+    shrinkK: number;
+    fallbackWindowDays: number[];
+    minBoardRows: number;
+    topN: number;
+  };
+  boards: LeaderboardBoard[];
 }
 
 /**
@@ -324,22 +488,68 @@ export interface PlaystyleData {
 // 結構是「open envelope」: data 內部 schema 隨 visualType 變化，前端 panel
 // 會 dispatch 不同 renderer (bar / table / divergent / line)。
 
-export type FeatureVisualType = 'bar' | 'table' | 'divergent' | 'line';
+export type FeatureVisualType = 'bar' | 'table' | 'divergent' | 'line' | 'lakeClaim';
 
-export interface FeatureStudyEntry {
+/**
+ * L141 (`visualType: "lakeClaim"`, generate_cache.py since 2026-10-12): when the
+ * lake holder declares the target 紅 / 藍, how often the target really is.
+ * One row per (lake, declared); `lowSample` = n < minSample.
+ */
+export interface LakeClaimRow {
+  lake: string;
+  lakeEn: string;
+  declared: string;
+  declaredEn: string;
+  n: number;
+  hitRate: number;
+  /** Wilson 95% interval bounds, %. */
+  ciLow: number;
+  ciHigh: number;
+  lowSample: boolean;
+}
+
+/** Same shape as LakeClaimRow but split by the holder's faction instead of the lake index. */
+export interface LakeClaimHolderRow {
+  holder: string;
+  holderEn: string;
+  declared: string;
+  declaredEn: string;
+  n: number;
+  hitRate: number;
+  ciLow: number;
+  ciHigh: number;
+  lowSample: boolean;
+}
+
+export interface LakeClaimData {
+  minSample: number;
+  rows: LakeClaimRow[];
+  /** Holder faction × declaration (4 cells); optional for older caches. */
+  holderRows?: LakeClaimHolderRow[];
+  /** Lake lines without an x/o declaration (counted, not in `rows`). */
+  undeclared?: number;
+}
+
+interface FeatureStudyEntryBase {
   loopId: string;
   title: string;
   titleEn: string;
   oneLineHook: string;
   oneLineHookEn: string;
   sampleSize: { games: number; links?: number; attempts?: number; chances?: number; leaderEvents?: number };
-  visualType: FeatureVisualType;
-  /** Visual-type-specific payload; consumer dispatches by visualType. */
-  data: Record<string, unknown>;
   takeaway: string;
   takeawayEn: string;
   sourceReport: string;
 }
+
+/** Open envelope: `data` depends on `visualType`; only lakeClaim is typed server-side. */
+export type FeatureStudyEntry =
+  | (FeatureStudyEntryBase & { visualType: 'lakeClaim'; data: LakeClaimData })
+  | (FeatureStudyEntryBase & {
+      visualType: Exclude<FeatureVisualType, 'lakeClaim'>;
+      /** Visual-type-specific payload; consumer dispatches by visualType. */
+      data: Record<string, unknown>;
+    });
 
 export interface FeatureStudiesData {
   generatedAt: string;
@@ -409,6 +619,8 @@ interface AnalysisCache {
   strength?: StrengthData;
   playstyle?: PlaystyleData;
   featureStudies?: FeatureStudiesData;
+  /** Written by generate_cache.py since 2026-10-12; absent in older caches. */
+  leaderboard?: LeaderboardSection;
 }
 
 // ---------------------------------------------------------------------------
@@ -449,8 +661,17 @@ function byName<T>(record: Record<string, T>, name: string): T | undefined {
   return Object.prototype.hasOwnProperty.call(record, name) ? record[name] : undefined;
 }
 
-function rnd1(n: number): number {
-  return Math.round(n * 10) / 10;
+/**
+ * Round to one decimal with ties to even, exactly like Python's round() in
+ * generate_cache.py (rnd1): 56.25 → 56.2, 56.35 → 56.4. Math.round would give
+ * 56.3 and make the fallback differ from the cache by 0.1 on exact ties.
+ */
+export function rnd1(n: number): number {
+  const scaled = n * 10;
+  const floor = Math.floor(scaled);
+  const frac = scaled - floor;
+  if (frac === 0.5) return (floor % 2 === 0 ? floor : floor + 1) / 10;
+  return Math.round(scaled) / 10;
 }
 
 /**
@@ -476,6 +697,96 @@ function normalizeSeatOrderPermutation(p: CachedSeatOrderPermutation): SeatOrder
 }
 
 // ---------------------------------------------------------------------------
+// Two-stage outcome fallback (docs/stats/two_stage_outcome.md)
+// ---------------------------------------------------------------------------
+
+function isNum(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/** n / d as a 1-decimal percentage; 0 when d is 0 (same convention as generate_cache.py). */
+function pctOf(n: number, d: number): number {
+  return d > 0 ? rnd1((n / d) * 100) : 0;
+}
+
+/**
+ * Contract formula (docs/stats/two_stage_outcome.md, generate_cache.py):
+ * rnd1(Σ rawRoleGames[r] × roleFinalWinRates[r] / totalGames). The 0.1%-rounded
+ * `roleDistribution` is only a fallback for a player without raw role counts —
+ * weighting by it drifts 0.1 from the generator. null when no role is covered.
+ */
+function expectedFinalWinRateOf(p: PlayerStats, roleFinalWinRates: Record<string, number>): number | null {
+  const total = isNum(p.totalGames) && p.totalGames > 0 ? p.totalGames : 0;
+  const rawRoleGames = p.rawRoleGames;
+  if (total > 0 && rawRoleGames && typeof rawRoleGames === 'object') {
+    let weighted = 0;
+    let covered = 0;
+    for (const [role, games] of Object.entries(rawRoleGames)) {
+      const rate = roleFinalWinRates[role];
+      if (!isNum(games) || !isNum(rate)) continue;
+      weighted += games * rate;
+      covered += games;
+    }
+    if (covered > 0) return rnd1(weighted / total);
+  }
+  const dist = p.roleDistribution;
+  if (dist && typeof dist === 'object') {
+    let expected = 0;
+    let covered = 0;
+    for (const [role, share] of Object.entries(dist)) {
+      const rate = roleFinalWinRates[role];
+      if (!isNum(share) || !isNum(rate)) continue;
+      expected += (share / 100) * rate;
+      covered += share;
+    }
+    if (covered > 0) return rnd1(expected);
+  }
+  return null;
+}
+
+/**
+ * Fill in the two-stage contract fields a cache may lack (anything produced
+ * before overview.schemaVersion 2), computed from the raw three-outcome
+ * counts. Fields the cache already carries are kept as-is; fields that
+ * cannot be derived (per-role final rates, first/last played) stay absent,
+ * and `expectedFinalWinRate` / `excessWinRate` become null when the cohort
+ * role rates needed for them are unavailable. Pure — returns a new object.
+ */
+export function withFinalFields(p: PlayerStats, roleFinalWinRates?: Record<string, number>): PlayerStats {
+  const out: PlayerStats = { ...p };
+  const raw = [p.rawRedThreeRed, p.rawRedMerlinDead, p.rawRedMerlinAlive, p.rawBlueThreeRed, p.rawBlueMerlinDead, p.rawBlueMerlinAlive];
+  const hasRaw = raw.every(isNum);
+
+  if (hasRaw) {
+    const redThreeRed = p.rawRedThreeRed as number;
+    const redDead = p.rawRedMerlinDead as number;
+    const blueThreeRed = p.rawBlueThreeRed as number;
+    const blueDead = p.rawBlueMerlinDead as number;
+    const blueAlive = p.rawBlueMerlinAlive as number;
+    const total = isNum(p.totalGames) && p.totalGames > 0 ? p.totalGames : raw.reduce((a, b) => a + (b as number), 0);
+    const redGames = isNum(p.rawRedGames) ? p.rawRedGames : redThreeRed + redDead + (p.rawRedMerlinAlive as number);
+    const blueGames = isNum(p.rawBlueGames) ? p.rawBlueGames : blueThreeRed + blueDead + blueAlive;
+    const blueThreeBlue = blueDead + blueAlive;
+
+    if (!isNum(out.finalWinRate)) out.finalWinRate = pctOf(redThreeRed + redDead + blueAlive, total);
+    if (!isNum(out.finalRedWinRate)) out.finalRedWinRate = pctOf(redThreeRed + redDead, redGames);
+    if (!isNum(out.finalBlueWinRate)) out.finalBlueWinRate = pctOf(blueAlive, blueGames);
+    if (!isNum(out.missionWinRate)) out.missionWinRate = pctOf(redThreeRed + blueDead + blueAlive, total);
+    if (!isNum(out.rawBlueThreeBlue)) out.rawBlueThreeBlue = blueThreeBlue;
+    if (!isNum(out.merlinSurvivalRate)) out.merlinSurvivalRate = pctOf(blueAlive, blueThreeBlue);
+  }
+
+  if (!isNum(out.expectedFinalWinRate)) {
+    out.expectedFinalWinRate = roleFinalWinRates ? expectedFinalWinRateOf(p, roleFinalWinRates) : null;
+  }
+  if (!isNum(out.excessWinRate)) {
+    out.excessWinRate =
+      isNum(out.finalWinRate) && isNum(out.expectedFinalWinRate) ? rnd1(out.finalWinRate - out.expectedFinalWinRate) : null;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Public API (matching existing function signatures)
 // ---------------------------------------------------------------------------
 
@@ -483,13 +794,25 @@ export async function getOverview(): Promise<OverviewData> {
   return loadCache().overview;
 }
 
+/** Every player, with the two-stage fields filled in (see withFinalFields). */
 export async function getAllPlayerStats(): Promise<PlayerStats[]> {
-  return loadCache().players.players;
+  const c = loadCache();
+  const roleFinal = c.overview?.roleFinalWinRates;
+  return c.players.players.map((p) => withFinalFields(p, roleFinal));
 }
 
 export async function getPlayerByName(name: string): Promise<PlayerStats | null> {
-  const detail = byName(loadCache().playerDetails, name);
-  return detail ? detail.player : null;
+  const c = loadCache();
+  const detail = byName(c.playerDetails, name);
+  return detail ? withFinalFields(detail.player, c.overview?.roleFinalWinRates) : null;
+}
+
+/**
+ * Leaderboard section (boards computed by generate_cache.py). Returns null
+ * when the cache predates it; the route answers 503 then, like feature-studies.
+ */
+export async function getLeaderboard(): Promise<LeaderboardSection | null> {
+  return loadCache().leaderboard ?? null;
 }
 
 export async function getChemistry(): Promise<ChemistryData> {

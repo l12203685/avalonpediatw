@@ -26,6 +26,22 @@ import {
 } from './types';
 import { declarerPostActionConsistencyPrior } from './priors/EvActionPriors';
 import { pickLakeTargetForTeam, decideLakeClaimForTeam } from './LakePolicy';
+import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
+
+/** Agent-level lake API (HeuristicAgent has it; RandomAgent does not). */
+interface LakeCapableAgent extends AvalonAgent {
+  pickLakeTarget(obs: PlayerObservation, validTargets?: readonly string[]): string;
+  declareLake(
+    obs: PlayerObservation,
+    targetId: string,
+    trueFaction: 'good' | 'evil' | undefined,
+  ): 'good' | 'evil' | null;
+}
+
+function hasLakeApi(agent: AvalonAgent): agent is LakeCapableAgent {
+  const a = agent as Partial<LakeCapableAgent>;
+  return typeof a.pickLakeTarget === 'function' && typeof a.declareLake === 'function';
+}
 
 export class SelfPlayEngine {
   private roomManager = new RoomManager();
@@ -176,12 +192,20 @@ export class SelfPlayEngine {
         if (holder && validTargets.length > 0) {
           const obs = this.buildObservation(holderId, room, roleMap, teamMap, voteHistory, questHistory);
           const holderTeam = teamMap.get(holderId);
-          const targetId = this.pickLadyTarget(holderTeam, obs, validTargets);
+          // Agents that expose the agent-level lake API (HeuristicAgent)
+          // decide for themselves so per-agent tuning applies; the
+          // policy functions are the same ones, so behaviour and the
+          // Math.random call order are unchanged for untuned agents.
+          const targetId = hasLakeApi(holder)
+            ? holder.pickLakeTarget(obs, validTargets)
+            : this.pickLadyTarget(holderTeam, obs, validTargets);
           engine.submitLadyOfTheLakeTarget(holderId, targetId);
           // Optional public declaration (Edward 2026-04-22 12:39 +08 — evil may
           // announce "good" for a just-laked ally to wash pressure).
           const actualTargetTeam = teamMap.get(targetId);
-          const claim = this.decideLakeAnnouncement(holderTeam, targetId, obs, actualTargetTeam);
+          const claim = hasLakeApi(holder)
+            ? holder.declareLake(obs, targetId, actualTargetTeam)
+            : this.decideLakeAnnouncement(holderTeam, targetId, obs, actualTargetTeam);
           if (claim !== null) {
             try {
               engine.declareLakeResult(holderId, claim);
@@ -217,6 +241,10 @@ export class SelfPlayEngine {
 
     // ── Notify agents of outcome ───────────────────────────────
     const evilWins = room.evilWins === true;
+    const finalQuestResults = room.questResults.filter((r): r is 'success' | 'fail' => r !== 'pending');
+    const threeBlue = finalQuestResults.filter((r) => r === 'success').length >= 3;
+    // Merlin dies only when the game reached three blue and evil still won.
+    const merlinKilled = threeBlue ? evilWins : null;
     for (const agent of agents) {
       const won = evilWins ? teamMap.get(agent.agentId) === 'evil' : teamMap.get(agent.agentId) === 'good';
       const obs = this.buildObservation(agent.agentId, room, roleMap, teamMap, voteHistory, questHistory);
@@ -243,6 +271,9 @@ export class SelfPlayEngine {
       rounds:      room.currentRound,
       playerCount,
       eventCount:  events.length,
+      questResults: finalQuestResults,
+      threeBlue,
+      merlinKilled,
     };
   }
 
@@ -293,8 +324,9 @@ export class SelfPlayEngine {
     holderTeam: 'good' | 'evil' | undefined,
     obs:        PlayerObservation,
     validTargets: string[],
+    tuning: AgentTuning = getDefaultAgentTuning(),
   ): string {
-    return pickLakeTargetForTeam(holderTeam, obs, validTargets);
+    return pickLakeTargetForTeam(holderTeam, obs, validTargets, tuning);
   }
 
   /**
@@ -311,8 +343,9 @@ export class SelfPlayEngine {
     targetId:   string,
     obs:        PlayerObservation,
     actualTargetTeam: 'good' | 'evil' | undefined,
+    tuning: AgentTuning = getDefaultAgentTuning(),
   ): 'good' | 'evil' | null {
-    return decideLakeClaimForTeam(holderTeam, targetId, obs, actualTargetTeam);
+    return decideLakeClaimForTeam(holderTeam, targetId, obs, actualTargetTeam, tuning);
   }
 
   /**
@@ -416,10 +449,12 @@ export class SelfPlayEngine {
           .map(([id]) => id);
       }
       case 'percival': {
-        // Percival sees Merlin and Morgana (can't tell which)
-        return Array.from(roleMap.entries())
-          .filter(([id, r]) => (r === 'merlin' || r === 'morgana') && id !== playerId)
-          .map(([id]) => id);
+        // Percival sees Merlin and Morgana but cannot tell which — that
+        // pair goes to `knownWizards` (buildObservation), never to
+        // `knownEvils`. Mirrors GameServer.buildBotObservation (2026-10-12
+        // fix: the harness used to put both wizards here, so self-play
+        // Percival treated Merlin as a known evil).
+        return [];
       }
       case 'assassin':
       case 'morgana':

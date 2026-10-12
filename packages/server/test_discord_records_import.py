@@ -304,6 +304,121 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(skip_reason(post(), "  \n"), dri.SKIP_EMPTY)
         self.assertEqual(skip_reason(post(tags=("模擬", "三藍被刀")), RECENT_BODY), dri.SKIP_SIMULATION)
 
+    def test_no_record_lines_is_a_record_post_only_when_something_says_so(self) -> None:
+        chat = "今天那局大家覺得怎麼樣？\n我覺得第三輪的湖很關鍵。"
+        self.assertEqual(skip_reason(post(title="覆盤", tags=()), chat), dri.SKIP_NOT_A_RECORD)  # a discussion
+        self.assertEqual(skip_reason(post(title="公告", tags=("線瓦",)), chat), dri.SKIP_NOT_A_RECORD)  # a notice
+        self.assertEqual(skip_reason(post(title="覆盤", tags=()), chat + "\n刺客刺殺:"), dri.SKIP_NOT_A_RECORD)
+        self.assertEqual(skip_reason(post(title="覆盤", tags=("三紅",)), chat), dri.SKIP_NO_RECORD)  # a result tag
+        self.assertEqual(skip_reason(post(title="936758", tags=()), chat), dri.SKIP_NO_RECORD)  # a 配置 as the title
+        self.assertEqual(skip_reason(post(title="覆盤", tags=()), chat + "\n９３６７５８"), dri.SKIP_NO_RECORD)  # ... in the body
+        self.assertEqual(skip_reason(post(title="覆盤", tags=()), footer()), dri.SKIP_NO_RECORD)  # the footer alone
+        self.assertEqual(skip_reason(post(title="覆盤", tags=()), "0>8 o"), dri.SKIP_NOT_A_RECORD)  # a lake line alone
+        self.assertEqual(skip_reason(post(title="覆盤", tags=("三紅",)), "0>8 o"), dri.SKIP_NO_RECORD)
+        self.assertIn(dri.SKIP_NOT_A_RECORD, dri.REPLY_NOT_FOR)
+        self.assertNotIn(dri.SKIP_NO_RECORD, dri.REPLY_NOT_FOR)
+
+
+# ---------------------------------------------------------------------------
+# Which line a skip points at (for the Discord reply)
+# ---------------------------------------------------------------------------
+
+def locate(body: str | None, tags: tuple[str, ...] = ("三藍被刀",), title: str = "1009一般場4") -> tuple:
+    try:
+        dri.parse_post(post(title=title, tags=tags), body)
+    except dri.SkipPost as exc:
+        return exc.reason, exc.line_no, exc.line_text
+    return "parsed", None, None
+
+
+class LineLocationTest(unittest.TestCase):
+    """RECENT_BODY: lines 1-19 the record (3 = "389 +7", 6 = "ooo", 12 = "ooox", 13 = "0>8 o", 14 = "1458",
+    15 = "oooo", 16 = "8>4 o", 19 = "ooooo"), 20 = "刺客刺殺:", 21 = "936758", 22-31 = "1.小米" .. "0.菜"."""
+
+    def test_line_is_named_when_one_line_is_wrong(self) -> None:
+        cases = [
+            (RECENT_BODY.replace("389 +7", "389 7"), dri.SKIP_BAD_VOTE, 3, "389 7"),
+            (RECENT_BODY.replace("1458\n", "第三輪\n1458\n"), dri.SKIP_UNRECOGNIZED, 14, "第三輪"),
+            ("ooox 刺殺失敗\n" + RECENT_BODY, dri.SKIP_UNRECOGNIZED, 1, "ooox 刺殺失敗"),
+            (RECENT_BODY.replace("147\n", "1478\n"), dri.SKIP_TEAM_SIZE, 1, "1478"),
+            (RECENT_BODY.replace("147\n", "144\n"), dri.SKIP_DUP_SEAT, 1, "144"),
+            (RECENT_BODY.replace("147\n", "147\n123\n"), dri.SKIP_TOO_MANY_PROPOSALS, 6, "568"),  # the 6th proposal
+            (RECENT_BODY.replace("oooo\n8>4", "ooo\n8>4"), dri.SKIP_MISSION_SIZE, 15, "ooo"),
+            (RECENT_BODY.replace("ooo\n5680", "ooo\noooo\n5680"), dri.SKIP_MISSION_NO_TEAM, 7, "oooo"),
+            (RECENT_BODY.replace("ooooo\n", "ooooo\n14580\n"), dri.SKIP_TRAILING_PROPOSAL, 20, "14580"),
+            (RECENT_BODY.replace("ooooo\n", "ooooo\n14580\nooooo\n"), dri.SKIP_AFTER_DECIDED, 20, "14580"),
+            (RECENT_BODY.replace("8>4 o", "5>4 o"), dri.SKIP_BAD_LAKE, 16, "5>4 o"),
+            (RECENT_BODY.replace("0>8 o\n1458", "1458\n0>8 o"), dri.SKIP_BAD_LAKE, 14, "0>8 o"),
+            (RECENT_BODY.replace("5680\nooox", "5680\nooxx"), dri.SKIP_FAILS_GT_RED, 12, "ooxx"),
+            (RECENT_BODY.replace("936758\n", "936758\n936750\n"), dri.SKIP_CONFIG_CONFLICT, 22, "936750"),
+            (RECENT_BODY.replace("936758\n", "936798\n"), dri.SKIP_BAD_CONFIG, 21, "936798"),
+            (RECENT_BODY.replace("刺客刺殺:", "刺客刺殺: 梅林?"), dri.SKIP_BAD_ASSASSIN, 20, "刺客刺殺: 梅林?"),
+            (RECENT_BODY.replace("刺客刺殺:", "刺客刺殺:5\n刺客刺殺:x"), dri.SKIP_BAD_ASSASSIN, 21, "刺客刺殺:x"),
+            (RECENT_BODY.replace("5.夜貓", "4.夜貓"), dri.SKIP_NAMES_MALFORMED, 26, "4.夜貓"),
+            (RECENT_BODY.replace("5.夜貓", "5.小米"), dri.SKIP_NAMES_MALFORMED, 26, "5.小米"),
+            (RECENT_BODY.replace("5.夜貓", "5. "), dri.SKIP_NAMES_MISSING, 26, "5. "),
+            (RECENT_BODY.replace("1.小米\n2.阿豪", "1.小米 2.阿豪"), dri.SKIP_NAMES_MALFORMED, 22, "1.小米 2.阿豪"),
+            # A record line left after the names: that line is named, not the (correct) 刺客刺殺 line.
+            (RECENT_BODY + "\nooooo", dri.SKIP_UNRECOGNIZED, 32, "ooooo"),
+            (RECENT_BODY + "\n8>4 o", dri.SKIP_UNRECOGNIZED, 32, "8>4 o"),
+            (RECENT_BODY + "\n14580", dri.SKIP_UNRECOGNIZED, 32, "14580"),
+            (RECENT_BODY + "\nMVP：夜貓\nooooo", dri.SKIP_UNRECOGNIZED, 33, "ooooo"),
+            (RECENT_BODY.replace("刺客刺殺:", "刺客刺殺:\n8") + "\nooooo", dri.SKIP_UNRECOGNIZED, 33, "ooooo"),  # not the "8"
+            (RECENT_BODY.replace("刺客刺殺:", "刺客刺殺:\n8") + "\n8>4 o\nooooo", dri.SKIP_UNRECOGNIZED, 33, "8>4 o"),
+        ]
+        for body, reason, line_no, text in cases:
+            with self.subTest(reason=reason, line=line_no):
+                self.assertEqual(locate(body), (reason, line_no, text))
+        # The tag decides, the 刺客刺殺 line is where to fix it (two-line form: the first of the two).
+        self.assertEqual(locate(RECENT_BODY.replace("刺客刺殺:", "刺客刺殺:8"), tags=("三藍躲刺",)),
+                         (dri.SKIP_ASSASSIN_MISMATCH, 20, "刺客刺殺:8"))
+        self.assertEqual(locate(RECENT_BODY.replace("刺客刺殺:", "刺客刺殺:\n8"), tags=("三藍躲刺",)),
+                         (dri.SKIP_ASSASSIN_MISMATCH, 20, "刺客刺殺:"))
+        self.assertEqual(locate(OLD_RECORD + "\n" + footer(assassin=""), title="936750"),
+                         (dri.SKIP_CONFIG_CONFLICT, 16, "936758"))  # body 配置 (line 16) disagrees with the title
+
+    def test_no_line_when_the_reason_is_not_one_line(self) -> None:
+        cases = [
+            (RECENT_BODY, ("三紅",), dri.SKIP_RESULT_MISMATCH),
+            (RECENT_BODY, ("三藍被刀", "三藍躲刺"), dri.SKIP_RESULT_TAGS),
+            (RECENT_BODY, (), dri.SKIP_NO_RESULT),
+            (RECENT_BODY.replace("936758\n", ""), ("三藍被刀",), dri.SKIP_NO_CONFIG),
+            (RECENT_BODY.replace("15678 -5 +39\n14580\nooooo\n", ""), ("三藍被刀",), dri.SKIP_UNDECIDED),
+            (RECENT_BODY.replace("1458\noooo\n8>4 o\n15678 -5 +39\n14580\nooooo\n", ""), ("三藍被刀",), dri.SKIP_ROUNDS_LT3),
+            (RECENT_RECORD + "\n刺客刺殺:\n936758", ("三藍被刀",), dri.SKIP_NAMES_MISSING),
+            (footer(), ("三藍被刀",), dri.SKIP_NO_RECORD),
+            ("今天那局大家覺得怎麼樣？", (), dri.SKIP_NOT_A_RECORD),
+            (None, ("三藍被刀",), dri.SKIP_NO_STARTER),
+            ("  \n", ("三藍被刀",), dri.SKIP_EMPTY),
+            (RECENT_BODY, ("模擬",), dri.SKIP_SIMULATION),
+        ]
+        for body, tags, reason in cases:
+            with self.subTest(reason=reason):
+                self.assertEqual(locate(body, tags=tags), (reason, None, None))
+
+    def test_every_reason_has_an_explanation(self) -> None:
+        reasons = {v for k, v in vars(dri).items() if k.startswith("SKIP_") and isinstance(v, str)}
+        self.assertEqual(reasons, set(dri.SKIP_EXPLANATIONS))
+        self.assertTrue(all(dri.SKIP_EXPLANATIONS.values()))
+        self.assertTrue(dri.REPLY_NOT_FOR <= reasons)
+
+    def test_reply_text(self) -> None:
+        skip = dri.SkippedPost(post(), dri.SKIP_BAD_VOTE, 3, "  389  *7*\t")
+        text = dri.reply_text(skip)
+        lines = text.split("\n")
+        self.assertEqual(lines[0], dri.REPLY_MARKER)
+        self.assertEqual(lines[1], dri.REPLY_INTRO)
+        self.assertEqual(lines[2], "第 3 行「389 \\*7\\*」：" + dri.SKIP_EXPLANATIONS[dri.SKIP_BAD_VOTE])  # markdown escaped
+        self.assertIn("\n" + dri.FORMAT_HINT + "\n", text)
+        self.assertTrue(text.endswith(dri.REPLY_FOOTER))
+        self.assertLess(len(text), 2000)  # Discord's message limit
+        self.assertNotIn("@", text)
+        no_line = dri.reply_text(dri.SkippedPost(post(), dri.SKIP_NAMES_MISSING))
+        self.assertIn("\n原因：" + dri.SKIP_EXPLANATIONS[dri.SKIP_NAMES_MISSING] + "\n", no_line)
+        long = dri.reply_text(dri.SkippedPost(post(), dri.SKIP_UNRECOGNIZED, 9, "x" * 200))
+        self.assertIn("「" + "x" * (dri.REPLY_LINE_MAX - 1) + "…」", long)
+        self.assertLess(len(long), 2000)
+
     def test_title_dates(self) -> None:
         when = dt.datetime(2026, 10, 9, 23, 30, tzinfo=dri.TAIPEI)
         self.assertEqual(dri.title_date("1009一般場4", when), ("2026/10/09", "4", True))
@@ -664,16 +779,106 @@ def http_error(code: int, payload: dict | None = None) -> urllib.error.HTTPError
 class DiscordClientTest(unittest.TestCase):
     def make(self, script):
         self.calls: list[str] = []
+        self.requests: list[tuple[str, str, bytes | None, str | None]] = []  # method, path, body, content type
         self.sleeps: list[float] = []
 
         def opener(request, timeout):
             self.calls.append(request.full_url.replace(dri.DISCORD_API, ""))
+            self.requests.append((request.get_method(), self.calls[-1], request.data, request.get_header("Content-type")))
             self.assertEqual(request.get_header("Authorization"), "Bot TOKEN")
             result = script(self.calls[-1], len(self.calls))
             if isinstance(result, Exception):
                 raise result
             return result
         return dri.DiscordClient("TOKEN", opener=opener, sleep=self.sleeps.append, pace=0)
+
+    def test_reply_calls_me_pages_messages_and_posts_without_mentions(self) -> None:
+        first_page = [{"id": str(1000 - i), "author": {"id": "U1"}, "content": "chat"} for i in range(dri.MESSAGES_PAGE)]
+
+        def script(path, n):
+            if path == "/users/@me":
+                return FakeResponse({"id": "BOT1", "username": "avalon", "bot": True})
+            if path == f"/channels/777/messages?limit={dri.MESSAGES_PAGE}":
+                return FakeResponse(first_page)
+            if path == f"/channels/777/messages?limit={dri.MESSAGES_PAGE}&before=901":
+                return FakeResponse([{"id": "5", "author": {"id": "BOT1"}, "content": dri.REPLY_MARKER + "\n..."}])
+            if path == f"/channels/888/messages?limit={dri.MESSAGES_PAGE}":
+                return FakeResponse([{"id": "9", "author": {"id": "BOT1"}, "content": "another bot message"},
+                                     {"id": "8", "author": {"id": "U2"}, "content": dri.REPLY_MARKER + " (quoted by a human)"}])
+            if path == "/channels/888/messages":
+                return FakeResponse({"id": "new"})
+            raise AssertionError(path)
+
+        client = self.make(script)
+        self.assertEqual(client.bot_user_id(), "BOT1")
+        self.assertTrue(client.has_bot_message("777", "BOT1", dri.REPLY_MARKER))  # found on the second page
+        self.assertEqual(self.calls[1:3], [f"/channels/777/messages?limit={dri.MESSAGES_PAGE}",
+                                           f"/channels/777/messages?limit={dri.MESSAGES_PAGE}&before=901"])
+        self.assertFalse(client.has_bot_message("888", "BOT1", dri.REPLY_MARKER))  # neither the bot's nor the marker
+        client.post_message("888", "第 3 行「389 7」")
+        method, path, body, ctype = self.requests[-1]
+        self.assertEqual((method, path, ctype), ("POST", "/channels/888/messages", "application/json"))
+        self.assertEqual(json.loads(body), {"content": "第 3 行「389 7」", "allowed_mentions": {"parse": []},
+                                            "nonce": "888", "enforce_nonce": True})
+        self.assertTrue(all(m == "GET" for m, _, _, _ in self.requests[:-1]))
+
+    def test_post_is_sent_once_after_a_server_error_or_timeout(self) -> None:
+        failures = [http_error(502), http_error(504, {"code": 0}), TimeoutError(), urllib.error.URLError("timed out"),
+                    ConnectionResetError()]
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__):
+                client = self.make(lambda path, n, f=failure: f)
+                with self.assertRaises(dri.DiscordError) as ctx:
+                    client.post_message("888", "第 3 行「389 7」")
+                self.assertEqual([m for m, _, _, _ in self.requests], ["POST"])  # exactly one request
+                self.assertEqual(self.sleeps, [])
+                self.assertIn("POST /channels/{thread}/messages", str(ctx.exception))
+                self.assertNotIn("888", str(ctx.exception))
+                self.assertNotIn("389", str(ctx.exception))
+        # 429: Discord did not process it, so the same message goes again (with the nonce that makes
+        # a second copy impossible should the first one have been stored after all).
+        client = self.make(lambda path, n: http_error(429, {"retry_after": 0.5}) if n == 1 else FakeResponse({"id": "new"}))
+        client.post_message("888", "第 3 行「389 7」")
+        self.assertEqual([m for m, _, _, _ in self.requests], ["POST", "POST"])
+        self.assertEqual(self.requests[0][2], self.requests[1][2])
+        self.assertEqual(json.loads(self.requests[1][2])["nonce"], "888")
+        self.assertIs(json.loads(self.requests[1][2])["enforce_nonce"], True)
+        # A GET is still retried after a 502 or a timeout.
+        client = self.make(lambda path, n: http_error(502) if n == 1 else FakeResponse({"content": "147"}))
+        self.assertEqual(client.starter_content("123"), "147")
+        self.assertEqual(len(self.requests), 2)
+        client = self.make(lambda path, n: TimeoutError() if n == 1 else FakeResponse({"content": "147"}))
+        self.assertEqual(client.starter_content("123"), "147")
+        self.assertEqual(len(self.requests), 2)
+
+        # Through reply_to_failures with the real client: one POST, counted as an error, no second message.
+        def script(path, n):
+            if path == "/users/@me":
+                return FakeResponse({"id": "BOT1"})
+            if path.startswith("/channels/888/messages?"):
+                return FakeResponse([])
+            if path == "/channels/888/messages":
+                return http_error(502)
+            raise AssertionError(path)
+        client = self.make(script)
+        skip = dri.SkippedPost(dri.Post("888", "1009一般場4", ()), dri.SKIP_BAD_VOTE, 3, "389 7")
+        report = dri.reply_to_failures(client, [skip], limit=10, dry_run=False)
+        self.assertEqual((report.replied, report.errors), (0, 1))
+        self.assertEqual([m for m, _, _, _ in self.requests].count("POST"), 1)
+
+    def test_403_on_post_is_forbidden_with_the_posting_permission_named(self) -> None:
+        client = self.make(lambda path, n: http_error(403, {"code": 50001}))
+        with self.assertRaises(dri.DiscordForbidden) as ctx:
+            client.post_message("424242", "x")
+        self.assertIn("POST /channels/{thread}/messages: HTTP 403", str(ctx.exception))
+        self.assertIn("Send Messages in Threads", str(ctx.exception))
+        self.assertNotIn("424242", str(ctx.exception))
+        self.assertIsInstance(ctx.exception, dri.DiscordError)
+        with self.assertRaises(dri.DiscordForbidden):  # reading the thread can be forbidden too
+            client.has_bot_message("1", "BOT1", dri.REPLY_MARKER)
+        client = self.make(lambda path, n: FakeResponse({"username": "no id"}))
+        with self.assertRaises(dri.DiscordError):
+            client.bot_user_id()
 
     def test_lists_active_and_archived_posts_with_tags(self) -> None:
         forum = dri.FORUM_CHANNEL_ID
@@ -793,15 +998,194 @@ class FakeSheet:
 
 
 class FakeDiscord:
-    def __init__(self, posts, bodies):
+    def __init__(self, posts, bodies, *, replied=(), forbid_post=False, post_error=False, no_me=False,
+                 missing=(), odd_error=False):
         self.posts, self.bodies, self.fetched = posts, bodies, 0
+        self.replied = set(replied)  # threads that already hold the bot's marker message
+        self.forbid_post, self.post_error, self.no_me = forbid_post, post_error, no_me
+        self.missing = list(missing)  # expected forum tags the forum lacks
+        self.odd_error = odd_error  # reading a thread gets a 200 with a non-JSON body
+        self.me_calls = 0
+        self.message_reads: list[str] = []
+        self.posted: list[tuple[str, str]] = []
 
     def forum_posts(self, forum_id):
-        return list(self.posts), []
+        return list(self.posts), list(self.missing)
 
     def starter_content(self, thread_id):
         self.fetched += 1
         return self.bodies[thread_id]
+
+    def bot_user_id(self):
+        self.me_calls += 1
+        if self.no_me:
+            raise dri.DiscordError("GET /users/@me: HTTP 500")
+        return "BOT1"
+
+    def has_bot_message(self, thread_id, bot_id, prefix):
+        self.message_reads.append(thread_id)
+        if self.odd_error:
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+        assert (bot_id, prefix) == ("BOT1", dri.REPLY_MARKER)
+        return thread_id in self.replied or any(t == thread_id and c.startswith(prefix) for t, c in self.posted)
+
+    def post_message(self, thread_id, content):
+        if self.forbid_post:
+            raise dri.DiscordForbidden("POST /channels/{thread}/messages: HTTP 403")
+        if self.post_error:
+            raise dri.DiscordError("POST /channels/{thread}/messages: HTTP 500")
+        self.posted.append((thread_id, content))
+
+
+class ReplyTest(unittest.TestCase):
+    NOW = dt.datetime(2026, 10, 10, 3, 17, tzinfo=dri.TAIPEI)
+
+    def setUp(self) -> None:
+        self.header = dri.import_header([sheet_header()], None)
+        recent = dt.datetime(2026, 10, 9, 22, tzinfo=dri.TAIPEI)
+        old = dt.datetime(2026, 9, 1, 22, tzinfo=dri.TAIPEI)  # 39 days before NOW
+        self.p_old = post(title="0901一般場1", when=old)  # bad vote, too old for the default window
+        self.p_vote = post(when=recent, offset=0)  # bad vote on line 3
+        self.p_names = post(title="1009一般場5", when=recent, offset=1)  # names missing: no line
+        self.p_recorded = post(title="1009一般場6", tags=("三藍被刀", "已收錄"), when=recent, offset=2)
+        self.p_sim = post(title="1009一般場7", tags=("模擬",), when=recent, offset=3)
+        self.p_empty = post(title="1009一般場8", when=recent, offset=4)
+        self.p_deleted = post(title="1009一般場9", when=recent, offset=5)
+        self.p_ok = post(title="1009一般場2", tags=("三紅",), when=recent, offset=6)
+        self.p_dup = post(title="1009一般場3", tags=("三紅",), when=recent, offset=7)  # same game again
+        bad_vote = RECENT_BODY.replace("389 +7", "389 7")
+        self.bodies = {
+            self.p_old.id: bad_vote, self.p_vote.id: bad_vote, self.p_names.id: RECENT_RECORD + "\n刺客刺殺:\n936758",
+            self.p_recorded.id: bad_vote, self.p_sim.id: RECENT_BODY, self.p_empty.id: "", self.p_deleted.id: None,
+            self.p_ok.id: RED_BODY, self.p_dup.id: RED_BODY,
+        }
+        self.posts = [self.p_old, self.p_vote, self.p_names, self.p_recorded, self.p_sim, self.p_empty,
+                      self.p_deleted, self.p_ok, self.p_dup]
+        self.report = dri.plan_import(self.posts, lambda p: self.bodies[p.id], [sheet_header()], None, self.header)
+
+    def fake(self, **kw) -> FakeDiscord:
+        return FakeDiscord(self.posts, self.bodies, **kw)
+
+    def test_candidates_are_recent_format_failures_only(self) -> None:
+        self.assertEqual(sum(self.report.skipped.values()), 7)
+        cands = dri.reply_candidates(self.report, self.NOW, dri.REPLY_DEFAULT_DAYS)
+        self.assertEqual([c.post.id for c in cands], [self.p_vote.id, self.p_names.id])  # oldest first
+        self.assertEqual((cands[0].reason, cands[0].line_no, cands[0].line_text), (dri.SKIP_BAD_VOTE, 3, "389 7"))
+        self.assertEqual((cands[1].reason, cands[1].line_no, cands[1].line_text), (dri.SKIP_NAMES_MISSING, None, None))
+        self.assertEqual([c.post.id for c in dri.reply_candidates(self.report, self.NOW, 60)],
+                         [self.p_old.id, self.p_vote.id, self.p_names.id])
+        self.assertEqual(dri.reply_candidates(self.report, self.NOW, 0), [])
+        self.assertEqual(dri.reply_candidates(dri.ImportReport(), self.NOW, 14), [])
+
+    def test_dry_run_counts_without_posting(self) -> None:
+        cands = dri.reply_candidates(self.report, self.NOW, 14)
+        fake = self.fake()
+        dry = dri.reply_to_failures(fake, cands, limit=20, dry_run=True)
+        self.assertEqual((dry.candidates, dry.replied, dry.already_replied, dry.forbidden, dry.held_by_limit), (2, 2, 0, 0, 0))
+        self.assertTrue(dry.dry_run)
+        self.assertEqual((fake.posted, fake.me_calls, fake.message_reads), ([], 1, [self.p_vote.id, self.p_names.id]))
+        fake = self.fake(replied=[self.p_vote.id])
+        dry = dri.reply_to_failures(fake, cands, limit=20, dry_run=True)
+        self.assertEqual((dry.replied, dry.already_replied, fake.posted), (1, 1, []))
+
+    def test_posts_once_per_thread(self) -> None:
+        cands = dri.reply_candidates(self.report, self.NOW, 14)
+        fake = self.fake()
+        live = dri.reply_to_failures(fake, cands, limit=20, dry_run=False)
+        self.assertEqual((live.replied, live.already_replied, live.forbidden, live.errors), (2, 0, 0, 0))
+        self.assertEqual([t for t, _ in fake.posted], [self.p_vote.id, self.p_names.id])
+        text = fake.posted[0][1]
+        self.assertTrue(text.startswith(dri.REPLY_MARKER + "\n"))
+        self.assertIn("\n第 3 行「389 7」：" + dri.SKIP_EXPLANATIONS[dri.SKIP_BAD_VOTE] + "\n", text)
+        self.assertIn(dri.FORMAT_HINT, text)
+        self.assertIn("\n原因：" + dri.SKIP_EXPLANATIONS[dri.SKIP_NAMES_MISSING] + "\n", fake.posted[1][1])
+        again = dri.reply_to_failures(fake, cands, limit=20, dry_run=False)  # the marker is in both threads now
+        self.assertEqual((again.replied, again.already_replied, len(fake.posted)), (0, 2, 2))
+        fake = self.fake(replied=[self.p_names.id])  # replied by an earlier run
+        third = dri.reply_to_failures(fake, cands, limit=20, dry_run=False)
+        self.assertEqual((third.replied, third.already_replied, [t for t, _ in fake.posted]), (1, 1, [self.p_vote.id]))
+
+    def test_limit_403_and_other_errors(self) -> None:
+        cands = dri.reply_candidates(self.report, self.NOW, 14)
+        fake = self.fake()
+        limited = dri.reply_to_failures(fake, cands, limit=1, dry_run=False)
+        self.assertEqual((limited.replied, limited.held_by_limit, [t for t, _ in fake.posted]), (1, 1, [self.p_vote.id]))
+        self.assertEqual(fake.message_reads, [self.p_vote.id])  # held-back threads are not even read
+        fake = self.fake(forbid_post=True)
+        denied = dri.reply_to_failures(fake, cands, limit=20, dry_run=False)
+        self.assertEqual((denied.forbidden, denied.replied, denied.errors, fake.posted), (2, 0, 0, []))
+        fake = self.fake(post_error=True)
+        errors = dri.reply_to_failures(fake, cands, limit=20, dry_run=False)
+        self.assertEqual((errors.errors, errors.replied, errors.forbidden), (2, 0, 0))
+        fake = self.fake(no_me=True)
+        unknown = dri.reply_to_failures(fake, cands, limit=20, dry_run=False)
+        self.assertEqual((unknown.errors, unknown.replied, unknown.held_by_limit, fake.posted), (1, 0, 2, []))
+        fake = self.fake()
+        none = dri.reply_to_failures(fake, [], limit=20, dry_run=False)
+        self.assertEqual((none.candidates, fake.me_calls, fake.posted), (0, 0, []))
+
+    def test_logged_posts_are_skipped_without_reading_the_thread(self) -> None:
+        cands = dri.reply_candidates(self.report, self.NOW, 14)
+        fake = self.fake()
+        posted: list[dri.SkippedPost] = []
+        live = dri.reply_to_failures(fake, cands, limit=20, dry_run=False, replied={self.p_vote.id}, posted=posted)
+        self.assertEqual((live.replied, live.already_replied, fake.message_reads), (1, 1, [self.p_names.id]))
+        self.assertEqual([(s.post.id, s.reason) for s in posted], [(self.p_names.id, dri.SKIP_NAMES_MISSING)])
+        fake = self.fake()  # the bot's messages were deleted, but the log remembers both posts
+        again = dri.reply_to_failures(fake, cands, limit=20, dry_run=False,
+                                      replied={self.p_vote.id, self.p_names.id}, posted=posted)
+        self.assertEqual((again.replied, again.already_replied, fake.posted, fake.message_reads), (0, 2, [], []))
+        self.assertEqual(len(posted), 1)
+        dry = dri.reply_to_failures(self.fake(), cands, limit=20, dry_run=True, posted=posted)  # nothing to log
+        self.assertEqual((dry.replied, len(posted)), (2, 1))
+        fake = self.fake()  # logged posts are not attempts: they do not count against the limit
+        limited = dri.reply_to_failures(fake, cands, limit=1, dry_run=False, replied={self.p_vote.id})
+        self.assertEqual((limited.replied, limited.already_replied, limited.held_by_limit), (1, 1, 0))
+        self.assertEqual([t for t, _ in fake.posted], [self.p_names.id])
+        self.assertEqual(dri.replied_post_ids(None), set())
+        self.assertEqual(dri.replied_post_ids([]), set())
+        self.assertEqual(dri.replied_post_ids([list(dri.REPLY_LOG_COLUMNS), ["1", "t", "r"], ["", "", ""], [" 2 "]]),
+                         {"1", "2"})
+
+    def test_no_record_posts_reply_only_when_meant_as_a_record(self) -> None:
+        recent = dt.datetime(2026, 10, 9, 22, tzinfo=dri.TAIPEI)
+        p_chat = post(title="今天那局的覆盤", tags=(), when=recent, offset=20)
+        p_notice = post(title="公告", tags=("線瓦",), when=recent, offset=21)
+        p_tagged = post(title="1009一般場9", tags=("三紅",), when=recent, offset=22)
+        p_titled = post(title="936758", tags=(), when=recent, offset=23)
+        chat = "今天那局大家覺得怎麼樣？\n我覺得第三輪的湖很關鍵。"
+        posts = [p_chat, p_notice, p_tagged, p_titled]
+        bodies = {p.id: chat for p in posts}
+        report = dri.plan_import(posts, lambda p: bodies[p.id], [sheet_header()], None, self.header)
+        self.assertEqual(report.skipped, Counter({dri.SKIP_NOT_A_RECORD: 2, dri.SKIP_NO_RECORD: 2}))
+        cands = dri.reply_candidates(report, self.NOW, 14)
+        self.assertEqual([(c.post.id, c.reason) for c in cands],
+                         [(p_tagged.id, dri.SKIP_NO_RECORD), (p_titled.id, dri.SKIP_NO_RECORD)])
+        fake = FakeDiscord(posts, bodies)
+        live = dri.reply_to_failures(fake, cands, limit=20, dry_run=False)
+        self.assertEqual((live.replied, [t for t, _ in fake.posted]), (2, [p_tagged.id, p_titled.id]))
+        self.assertIn("\n原因：" + dri.SKIP_EXPLANATIONS[dri.SKIP_NO_RECORD] + "\n", fake.posted[0][1])
+
+    def test_odd_responses_are_counted_not_raised(self) -> None:
+        cands = dri.reply_candidates(self.report, self.NOW, 14)
+        fake = self.fake(odd_error=True)
+        odd = dri.reply_to_failures(fake, cands, limit=20, dry_run=False)
+        self.assertEqual((odd.errors, odd.replied, odd.forbidden, fake.posted), (2, 0, 0, []))
+        fake = self.fake()
+        with mock.patch.object(fake, "bot_user_id", side_effect=AttributeError("'list' object has no attribute 'get'")):
+            unknown = dri.reply_to_failures(fake, cands, limit=20, dry_run=False)
+        self.assertEqual((unknown.errors, unknown.replied, unknown.held_by_limit, fake.posted), (1, 0, 2, []))
+
+    def test_summary_lines_are_counts_only(self) -> None:
+        lines = "\n".join(dri.reply_lines(dri.ReplyReport(dry_run=False, candidates=3, already_replied=1, replied=1,
+                                                          forbidden=1, held_by_limit=0), 14))
+        self.assertIn("14 天內因格式無法解析且未標「已收錄」的貼文 3 篇", lines)
+        self.assertIn("已回覆過（略過）：1；本次已回覆：1；沒有發言權限（403）：1；其他 Discord 錯誤：0", lines)
+        self.assertNotIn("保留到下次", lines)
+        dry = "\n".join(dri.reply_lines(dri.ReplyReport(dry_run=True, candidates=25, replied=20, held_by_limit=5), 14))
+        self.assertIn("dry run：只計數，未貼文", dry)
+        self.assertIn("本次可回覆：20", dry)
+        self.assertIn("超過 --reply-limit 保留到下次：5", dry)
 
 
 class EndToEndTest(unittest.TestCase):
@@ -824,7 +1208,7 @@ class EndToEndTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_main(self, *args: str, deny_writes: bool = False, ci: bool = True,
-                 write_error: Exception | None = None) -> tuple[int, str]:
+                 write_error: Exception | None = None, **discord_kw) -> tuple[int, str]:
         sheet = FakeSheet(self.tabs, deny_writes, write_error)
 
         def open_sheet(source, sheet_id, scopes):
@@ -834,11 +1218,11 @@ class EndToEndTest(unittest.TestCase):
                "GITHUB_STEP_SUMMARY": str(self.summary)}
         if ci:
             env["GITHUB_ACTIONS"] = "true"
+        self.discord = FakeDiscord(self.posts, self.bodies, **discord_kw)
         out = io.StringIO()
         with quiet_env(**env), redirect_stdout(out), redirect_stderr(out):
             try:
-                rc = dri.run(dri.parse_args(list(args)), open_sheet=open_sheet,
-                             discord=FakeDiscord(self.posts, self.bodies),
+                rc = dri.run(dri.parse_args(list(args)), open_sheet=open_sheet, discord=self.discord,
                              now=dt.datetime(2026, 10, 10, 3, 17, tzinfo=dri.TAIPEI))
             except gc.FatalError as exc:
                 gc.emit_error(str(exc), exc.title)
@@ -846,8 +1230,135 @@ class EndToEndTest(unittest.TestCase):
         return rc, out.getvalue()
 
     def assert_public_safe(self, text: str) -> None:
-        for secret in NAMES + NAMES_B + ["1009一般場", "5680 7+", "15678", "SECRET-MARKER"]:
+        for secret in NAMES + NAMES_B + ["1009一般場", "5680 7+", "15678", "SECRET-MARKER",
+                                         "389 7", dri.REPLY_MARKER, dri.REPLY_INTRO, "格式提示"]:
             self.assertNotIn(secret, text)
+
+    def test_reply_mode_posts_once_and_logs_counts_only(self) -> None:
+        self.posts.append(post(title="1009一般場7", offset=3))  # bad vote on line 3
+        self.bodies[self.posts[3].id] = RECENT_BODY.replace("389 +7", "389 7")
+        self.posts.append(post(title="1009一般場8", tags=("模擬",), offset=4))  # never replied to
+        self.bodies[self.posts[4].id] = "nonsense"
+        self.posts.append(post(title="覆盤", tags=(), offset=5))  # a discussion, not a record: never replied to
+        self.bodies[self.posts[5].id] = "今天那局大家覺得怎麼樣？"
+        rc, log = self.run_main("--dry-run", "--reply")  # counts, posts nothing
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(self.discord.posted, [])
+        self.assertEqual(self.discord.message_reads, [self.posts[2].id, self.posts[3].id])
+        self.assertIn("格式回覆（--reply，dry run：只計數，未貼文）：14 天內因格式無法解析且未標「已收錄」的貼文 2 篇", log)
+        self.assertIn("本次可回覆：2", log)
+        self.assertIn(f"| {dri.SKIP_NOT_A_RECORD} | 1 | 0 |", log)
+        self.assertNotIn("::warning", log)
+        self.assertNotIn(dri.REPLY_LOG_TAB, self.tabs)
+        self.assert_public_safe(log + self.summary.read_text(encoding="utf-8"))
+
+        rc, log = self.run_main("--reply")  # write + reply
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(len(self.tabs["Discord匯入"]), 2)
+        self.assertEqual([t for t, _ in self.discord.posted], [self.posts[2].id, self.posts[3].id])
+        self.assertIn("第 3 行「389 7」", self.discord.posted[1][1])
+        self.assertIn("本次已回覆：2；沒有發言權限（403）：0", log)
+        self.assertEqual(self.tabs[dri.REPLY_LOG_TAB], [  # one row per reply posted
+            list(dri.REPLY_LOG_COLUMNS),
+            [self.posts[2].id, "2026-10-10 03:17:00", dri.SKIP_NAMES_MISSING],
+            [self.posts[3].id, "2026-10-10 03:17:00", dri.SKIP_BAD_VOTE],
+        ])
+        summary = self.summary.read_text(encoding="utf-8")
+        self.assertIn("本次已回覆：2", summary)
+        self.assertLess(summary.index("已寫入 1 列"), summary.index("本次已回覆：2"))  # the import summary first
+        self.assert_public_safe(log + summary)
+
+        rc, log = self.run_main("--reply", replied=[self.posts[2].id, self.posts[3].id])  # next day: once only
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(self.discord.posted, [])
+        self.assertIn("已回覆過（略過）：2；本次已回覆：0", log)
+
+        rc, log = self.run_main("--reply")  # the bot's messages were deleted: Discord回覆 still remembers them
+        self.assertEqual(rc, 0, log)
+        self.assertEqual((self.discord.posted, self.discord.message_reads), ([], []))
+        self.assertIn("已回覆過（略過）：2；本次已回覆：0", log)
+        self.assertEqual(len(self.tabs[dri.REPLY_LOG_TAB]), 3)
+
+        del self.tabs[dri.REPLY_LOG_TAB]  # before the tab existed: the marker check alone
+        rc, log = self.run_main("--reply", "--reply-limit", "1", "--reply-since-days", "3")
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(len(self.discord.posted), 1)
+        self.assertEqual(len(self.tabs[dri.REPLY_LOG_TAB]), 2)
+        self.assertIn("3 天內", log)
+        self.assertIn("超過 --reply-limit 保留到下次：1", log)
+
+        del self.tabs[dri.REPLY_LOG_TAB]
+        rc, log = self.run_main("--reply", forbid_post=True)  # no permission: warned, counted, exit 0
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(self.discord.posted, [])
+        self.assertNotIn(dri.REPLY_LOG_TAB, self.tabs)
+        self.assertIn("沒有發言權限（403）：2", log)
+        self.assertIn("::warning title=Discord reply forbidden::2 reply/replies not posted (HTTP 403)", log)
+        self.assert_public_safe(log + self.summary.read_text(encoding="utf-8"))
+
+        rc, log = self.run_main("--reply", post_error=True, ci=False)
+        self.assertEqual(rc, 0, log)
+        self.assertIn("其他 Discord 錯誤：2", log)
+        self.assertIn("[WARNING] Discord reply errors: 2 reply/replies", log)
+
+        rc, log = self.run_main()  # without --reply nothing is read or posted
+        self.assertEqual((self.discord.me_calls, self.discord.message_reads, self.discord.posted), (0, [], []))
+        self.assertNotIn("格式回覆", log)
+
+    def test_reply_log_write_failure_only_warns(self) -> None:
+        rc, log = self.run_main("--reply")
+        self.assertEqual(rc, 0, log)
+        del self.tabs[dri.REPLY_LOG_TAB]
+        # Nothing new to import, so only the log tab is written -- and that fails.
+        rc, log = self.run_main("--reply", write_error=APIError(500, "Internal error encountered: 小米"))
+        self.assertEqual(rc, 0, log)
+        self.assertEqual([t for t, _ in self.discord.posted], [self.posts[2].id])
+        self.assertNotIn(dri.REPLY_LOG_TAB, self.tabs)
+        self.assertIn("本次已回覆：1", log)
+        self.assertIn("::warning title=Discord reply log not written::1 reply/replies posted but not recorded in "
+                      "Discord回覆 (APIError)", log)
+        self.assert_public_safe(log + self.summary.read_text(encoding="utf-8"))
+
+    def test_reply_skipped_when_a_deciding_tag_is_missing(self) -> None:
+        rc, log = self.run_main("--reply", missing=["已收錄"])  # renamed: recorded posts cannot be told apart
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(len(self.tabs["Discord匯入"]), 2)  # the import itself went ahead
+        self.assertEqual((self.discord.me_calls, self.discord.message_reads, self.discord.posted), (0, [], []))
+        self.assertNotIn(dri.REPLY_LOG_TAB, self.tabs)
+        self.assertIn("論壇沒有這些預期的標籤（改名了？）：已收錄", log)
+        self.assertIn("格式回覆（--reply）：論壇沒有「已收錄」標籤，無法判斷哪些貼文該回覆，本次未回覆、未計數", log)
+        self.assertIn("::warning title=Forum tags missing::1 expected forum tag(s) not found", log)
+        self.assertIn("::warning title=Discord reply skipped::1 forum tag(s) that decide which posts get a reply", log)
+        self.assertNotIn("本次已回覆", log)
+        self.assert_public_safe(log + self.summary.read_text(encoding="utf-8"))
+        for tag in ("模擬", "三藍被刀"):
+            with self.subTest(tag=tag):
+                rc, log = self.run_main("--reply", missing=[tag])
+                self.assertEqual((rc, self.discord.posted), (0, []))
+                self.assertIn(f"論壇沒有「{tag}」標籤", log)
+        rc, log = self.run_main("--reply", missing=["面瓦"])  # a category tag decides nothing: replies go ahead
+        self.assertEqual(rc, 0, log)
+        self.assertEqual([t for t, _ in self.discord.posted], [self.posts[2].id])
+        self.assertIn("::warning title=Forum tags missing::1 expected forum tag(s) not found", log)
+        self.assertNotIn("Discord reply skipped", log)
+
+    def test_import_summary_survives_the_reply_phase(self) -> None:
+        rc, log = self.run_main("--reply", odd_error=True)  # a 200 with a non-JSON body while reading a thread
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(len(self.tabs["Discord匯入"]), 2)
+        self.assertIn("已寫入 1 列", log)
+        self.assertIn("其他 Discord 錯誤：1", log)
+        self.assertIn("::warning title=Discord reply errors::1 reply/replies hit a Discord API error or an unexpected "
+                      "response", log)
+        self.assertNotIn("Expecting value", log)
+        self.assert_public_safe(log + self.summary.read_text(encoding="utf-8"))
+        self.summary.write_text("", encoding="utf-8")
+        with mock.patch.object(dri, "reply_to_failures", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                self.run_main("--reply")
+        summary = self.summary.read_text(encoding="utf-8")
+        self.assertIn("### Discord 牌譜匯入（已寫入 0 列）", summary)  # the import summary was out before the crash
+        self.assertIn("已在 Discord匯入（同一貼文，不再讀取）：1", summary)
 
     def test_dry_run_then_write_then_idempotent(self) -> None:
         rc, log = self.run_main("--dry-run")

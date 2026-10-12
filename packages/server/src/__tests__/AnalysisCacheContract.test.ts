@@ -12,6 +12,12 @@
  * Optional fields mirror the web types in packages/web/src/services/api.ts:
  * when the UI has a fallback for a missing field the contract only checks
  * the field's shape if it is present.
+ *
+ * Two-stage outcome contract (docs/stats/two_stage_outcome.md, 2026-10-12):
+ * once `overview.schemaVersion >= 2` the new overview / player fields and the
+ * `leaderboard` section are REQUIRED; on an older cache they are checked only
+ * when present, and the server's fallback (withFinalFields) must still turn
+ * the raw three-outcome counts into the final-outcome rates.
  */
 import fs from 'fs';
 import http from 'http';
@@ -31,13 +37,19 @@ vi.mock('../middleware/rateLimit', async (importOriginal) => {
 
 import { analysisRouter } from '../routes/analysis';
 import { apiRouter } from '../routes/api';
+import { rnd1, withFinalFields } from '../services/sheetsAnalysis';
+import type { PlayerStats } from '../services/sheetsAnalysis';
 
 const CACHE_PATH = path.resolve(__dirname, '..', '..', 'analysis_cache.json');
 const committedCache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf-8')) as {
+  overview: { schemaVersion?: unknown };
   players: { players: Array<{ name: string; totalGames: number }> };
   playerDetails: Record<string, unknown>;
+  leaderboard?: unknown;
 };
 const playerNames = committedCache.players.players.map((p) => p.name);
+/** Cache written under the two-stage contract → its new fields are mandatory. */
+const V2 = typeof committedCache.overview.schemaVersion === 'number' && committedCache.overview.schemaVersion >= 2;
 
 // ---------------------------------------------------------------------------
 // Tiny shape checker — collects every problem so a failing rebuild reports
@@ -81,6 +93,31 @@ function numRecord(p: Problems, v: unknown, at: string): void {
 }
 function strArray(p: Problems, v: unknown, at: string): void {
   arr(p, v, at).forEach((x, i) => str(p, x, `${at}[${i}]`));
+}
+/** Required on a schemaVersion-2 cache; on an older cache checked only when present. */
+function v2Field(v: unknown, check: () => void): void {
+  if (V2 || v !== undefined) check();
+}
+
+const PLAYER_FINAL_RATES = ['finalWinRate', 'finalRedWinRate', 'finalBlueWinRate', 'missionWinRate', 'merlinSurvivalRate'];
+
+/** Two-stage player fields (contract 玩家層), as served by /players and /players/:name. */
+function twoStagePlayer(p: Problems, pl: Json, at: string): void {
+  for (const k of PLAYER_FINAL_RATES) v2Field(pl[k], () => num(p, pl[k], `${at}.${k}`));
+  for (const k of ['expectedFinalWinRate', 'excessWinRate']) v2Field(pl[k], () => numOrNull(p, pl[k], `${at}.${k}`));
+  v2Field(pl.rawBlueThreeBlue, () => num(p, pl.rawBlueThreeBlue, `${at}.rawBlueThreeBlue`));
+  v2Field(pl.roleFinalWinRates, () => numRecord(p, pl.roleFinalWinRates, `${at}.roleFinalWinRates`));
+  for (const k of ['firstPlayed', 'lastPlayed']) v2Field(pl[k], () => str(p, pl[k], `${at}.${k}`));
+  // The committed cache carries the raw three-outcome counts, so the served
+  // player must have the final rates whatever the schemaVersion (withFinalFields).
+  if (typeof pl.rawRedThreeRed === 'number') {
+    for (const k of PLAYER_FINAL_RATES) num(p, pl[k], `${at}.${k} (derived from raw counts)`);
+    if (pl.excessWinRate === undefined) p.push(`${at}.excessWinRate: expected number or null, got undefined`);
+    const [f, r, b] = [pl.finalWinRate, pl.finalRedWinRate, pl.finalBlueWinRate] as number[];
+    for (const [k, v] of [['finalWinRate', f], ['finalRedWinRate', r], ['finalBlueWinRate', b]] as const) {
+      if (v < 0 || v > 100) p.push(`${at}.${k}: ${v} out of 0..100`);
+    }
+  }
 }
 
 const OUTCOME_KEYS = ['threeRed', 'threeBlueDead', 'threeBlueAlive', 'threeRedPct', 'threeBlueDeadPct', 'threeBlueAlivePct'];
@@ -147,6 +184,30 @@ describe('analysis_cache.json → web contract', () => {
       str(p, x.name, `topPlayersByGames[${i}].name`);
       num(p, x.games, `topPlayersByGames[${i}].games`);
     });
+    // Two-stage sections (schemaVersion 2): 任務結算 / 刺殺結算 / 最終 + cohort role final rates + excess ranking.
+    if (V2) num(p, d.schemaVersion, 'schemaVersion');
+    v2Field(d.missionStage, () => {
+      const s = obj(p, d.missionStage, 'missionStage');
+      for (const k of ['games', 'threeRed', 'threeBlue', 'redPct', 'bluePct']) num(p, s[k], `missionStage.${k}`);
+    });
+    v2Field(d.assassinationStage, () => {
+      const s = obj(p, d.assassinationStage, 'assassinationStage');
+      for (const k of ['games', 'merlinKilled', 'merlinSurvived', 'killPct', 'survivePct']) num(p, s[k], `assassinationStage.${k}`);
+    });
+    v2Field(d.final, () => {
+      const s = obj(p, d.final, 'final');
+      for (const k of ['games', 'redWins', 'blueWins', 'redPct', 'bluePct']) num(p, s[k], `final.${k}`);
+      if (typeof s.redPct === 'number' && typeof s.bluePct === 'number' && Math.abs(s.redPct + s.bluePct - 100) > 0.5) {
+        p.push(`final: redPct + bluePct = ${s.redPct + s.bluePct}`);
+      }
+    });
+    v2Field(d.roleFinalWinRates, () => numRecord(p, d.roleFinalWinRates, 'roleFinalWinRates'));
+    v2Field(d.topPlayersByExcess, () => {
+      arr(p, d.topPlayersByExcess, 'topPlayersByExcess', { nonEmpty: true }).forEach((x, i) => {
+        str(p, x.name, `topPlayersByExcess[${i}].name`);
+        for (const k of ['excessWinRate', 'finalWinRate', 'games']) num(p, x[k], `topPlayersByExcess[${i}].${k}`);
+      });
+    });
     arr(p, d.seatPositionWinRates, 'seatPositionWinRates').forEach((s, i) => {
       const at = `seatPositionWinRates[${i}]`;
       str(p, s.seat, `${at}.seat`);
@@ -173,6 +234,7 @@ describe('analysis_cache.json → web contract', () => {
       for (const k of ['seatWinRates', 'seatRedWinRates', 'seatBlueWinRates', 'roleWinRates', 'rawRoleGames']) {
         numRecord(p, pl[k], `${at}.${k}`);
       }
+      twoStagePlayer(p, pl, at);
       if (pl.seatOutcomes !== undefined) {
         for (const [seat, o] of Object.entries(obj(p, pl.seatOutcomes, `${at}.seatOutcomes`))) {
           outcomes(p, o, `${at}.seatOutcomes.${seat}`);
@@ -197,11 +259,78 @@ describe('analysis_cache.json → web contract', () => {
         num(p, pl[k], `${name}.player.${k}`);
       }
       numRecord(p, pl.roleWinRates, `${name}.player.roleWinRates`);
+      twoStagePlayer(p, pl, `${name}.player`);
+      // Radar per the contract: winRate / redWinRate are the FINAL rates, missionWinRate the legacy one,
+      // excessWinRate may be null, positionTheory stays 0.
       const radar = obj(p, d.radar, `${name}.radar`);
-      for (const k of ['winRate', 'redWinRate', 'blueMerlinProtect', 'roleTheory', 'positionTheory', 'redMerlinKillRate', 'experience']) {
+      for (const k of ['winRate', 'redWinRate', 'blueMerlinProtect', 'missionWinRate', 'roleTheory', 'positionTheory', 'redMerlinKillRate', 'experience']) {
         num(p, radar[k], `${name}.radar.${k}`);
       }
+      numOrNull(p, radar.excessWinRate, `${name}.radar.excessWinRate`);
+      if (radar.positionTheory !== 0) p.push(`${name}.radar.positionTheory: expected 0, got ${show(radar.positionTheory)}`);
+      if (typeof pl.finalWinRate === 'number' && radar.winRate !== pl.finalWinRate) {
+        p.push(`${name}.radar.winRate: ${show(radar.winRate)} ≠ player.finalWinRate ${show(pl.finalWinRate)}`);
+      }
+      if (typeof pl.finalRedWinRate === 'number' && radar.redWinRate !== pl.finalRedWinRate) {
+        p.push(`${name}.radar.redWinRate: ${show(radar.redWinRate)} ≠ player.finalRedWinRate ${show(pl.finalRedWinRate)}`);
+      }
+      if (radar.excessWinRate !== (pl.excessWinRate ?? null)) {
+        p.push(`${name}.radar.excessWinRate: ${show(radar.excessWinRate)} ≠ player.excessWinRate ${show(pl.excessWinRate)}`);
+      }
     }
+    expect(p).toEqual([]);
+  });
+
+  it('GET /leaderboard — 排行榜 boards (503 "not yet generated" until the cache carries the section)', async () => {
+    const res = await request(server).get('/api/analysis/leaderboard');
+    if (res.status === 503) {
+      expect(V2, 'a schemaVersion-2 cache must carry the leaderboard section').toBe(false);
+      expect(committedCache.leaderboard).toBeUndefined();
+      expect(res.body).toEqual({ success: false, error: 'Leaderboard not yet generated' });
+      return;
+    }
+    expect(res.status, JSON.stringify(res.body).slice(0, 200)).toBe(200);
+    expect(res.body.success).toBe(true);
+    const p: Problems = [];
+    const d = res.body.data as Json;
+    str(p, d.asOf, 'asOf');
+    if (d.dates !== undefined) {
+      const dates = obj(p, d.dates, 'dates');
+      for (const k of ['parsed', 'unparsed']) num(p, dates[k], `dates.${k}`);
+      for (const k of ['earliest', 'latest']) str(p, dates[k], `dates.${k}`);
+    }
+    if (d.config !== undefined) {
+      const cfg = obj(p, d.config, 'config');
+      for (const k of ['windowDays', 'activeDays', 'minGames', 'shrinkK', 'minBoardRows', 'topN']) num(p, cfg[k], `config.${k}`);
+      arr(p, cfg.fallbackWindowDays, 'config.fallbackWindowDays').forEach((x, i) => num(p, x, `config.fallbackWindowDays[${i}]`));
+    }
+    // The generator omits every board it cannot build (docs/stats/two_stage_outcome.md:
+    // 「做不出來的榜就不放」), so `boards` may be empty and `main` is not guaranteed — e.g.
+    // when nobody played in the last activeDays. Present boards must be well-formed.
+    const boards = arr(p, d.boards, 'boards');
+    const ids = boards.map((b) => b.id);
+    if (new Set(ids).size !== ids.length) p.push(`boards: duplicate ids ${show(ids)}`);
+    boards.forEach((b, i) => {
+      const at = `boards[${i}:${show(b.id)}]`;
+      for (const k of ['id', 'title', 'period']) str(p, b[k], `${at}.${k}`);
+      for (const k of ['windowDays', 'minGames']) if (b[k] !== undefined) num(p, b[k], `${at}.${k}`);
+      if (b.note !== undefined) str(p, b.note, `${at}.note`);
+      // A board the generator could not build is omitted, so a present board has rows.
+      arr(p, b.rows, `${at}.rows`, { nonEmpty: true }).forEach((r, j) => {
+        const rat = `${at}.rows[${j}]`;
+        str(p, r.name, `${rat}.name`);
+        for (const k of ['rank', 'value', 'games']) num(p, r[k], `${rat}.${k}`);
+        // finalWinRate / expectedFinalWinRate: on the excess boards (main / online / recent /
+        // newcomers); improved, assassin and roleTitles rows carry other fields instead.
+        for (const k of ['excessWinRate', 'finalWinRate', 'expectedFinalWinRate']) if (r[k] !== undefined) num(p, r[k], `${rat}.${k}`);
+        // The excess boards sort by the shrunk `value` and must carry the unshrunk
+        // `excessWinRate` the site and the bots print, plus the period's final win rate.
+        if (['main', 'online', 'recent', 'newcomers'].includes(String(b.id))) {
+          for (const k of ['excessWinRate', 'finalWinRate']) num(p, r[k], `${rat}.${k}`);
+        }
+        if (r.role !== undefined) str(p, r.role, `${rat}.role`);
+      });
+    });
     expect(p).toEqual([]);
   });
 
@@ -376,7 +505,23 @@ describe('analysis_cache.json → web contract', () => {
           for (const k of fields.s ?? []) str(p, r[k], `${at}.data.${key}[${j}].${k}`);
         });
       };
+      // L141 is either the old bar (staging report) or the generator's lakeClaim.
+      if (f.loopId === 'L141' && f.visualType !== 'bar' && f.visualType !== 'lakeClaim') {
+        p.push(`${at}: L141 must be visualType bar or lakeClaim, got ${show(f.visualType)}`);
+      }
       switch (f.visualType) {
+        case 'lakeClaim':
+          num(p, data.minSample, `${at}.data.minSample`);
+          arr(p, data.rows, `${at}.data.rows`, { nonEmpty: true }).forEach((r, j) => {
+            const rat = `${at}.data.rows[${j}]`;
+            for (const k of ['lake', 'lakeEn', 'declared', 'declaredEn']) str(p, r[k], `${rat}.${k}`);
+            for (const k of ['n', 'hitRate', 'ciLow', 'ciHigh']) num(p, r[k], `${rat}.${k}`);
+            bool(p, r.lowSample, `${rat}.lowSample`);
+            if (typeof r.ciLow === 'number' && typeof r.hitRate === 'number' && typeof r.ciHigh === 'number' && !(r.ciLow <= r.hitRate && r.hitRate <= r.ciHigh)) {
+              p.push(`${rat}: hitRate ${r.hitRate} outside [${r.ciLow}, ${r.ciHigh}]`);
+            }
+          });
+          break;
         case 'bar':
           if (Array.isArray(data.leaderTierRows)) {
             rows('leaderTierRows', { n: ['hitRate', 'n'], s: ['tierEn', 'tierZh'] });
@@ -535,5 +680,95 @@ describe('analysis_cache.json → web contract', () => {
     for (const k of ['eligiblePlayers', 'totalPlayers']) num(p, meta[k], `meta.${k}`);
     expect(meta.totalPlayers).toBe(playerNames.length);
     expect(p).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// withFinalFields — the server-side fallback for caches predating schemaVersion 2
+// ---------------------------------------------------------------------------
+
+describe('rnd1 — one decimal, ties to even (same as Python round in generate_cache.py)', () => {
+  it('rounds exact .x5 ties to the even digit and everything else normally', () => {
+    expect(rnd1(56.25)).toBe(56.2); // 9/16 games → the cache stores 56.2
+    expect(rnd1(56.35)).toBe(56.4);
+    expect(rnd1(26.25)).toBe(26.2);
+    expect(rnd1(31.25)).toBe(31.2);
+    expect(rnd1(59.14)).toBe(59.1);
+    expect(rnd1(59.16)).toBe(59.2);
+    expect(rnd1(-2.25)).toBe(-2.2);
+    expect(rnd1(0)).toBe(0);
+    expect(rnd1((9 / 16) * 100)).toBe(56.2);
+  });
+});
+
+describe('withFinalFields (two-stage fields from raw counts)', () => {
+  const base: PlayerStats = {
+    name: 'X', totalGames: 10, winRate: 60, roleTheory: 60, positionTheory: 0, redWin: 50, blueWin: 66.7,
+    red3Red: 50, redMerlinDead: 25, redMerlinAlive: 25, blue3Red: 33.3, blueMerlinDead: 33.3, blueMerlinAlive: 33.3,
+    roleWinRates: {}, roleDistribution: { '刺客': 60, '梅林': 40 }, redRoleRate: 40, blueRoleRate: 60,
+    seatWinRates: {}, seatRedWinRates: {}, seatBlueWinRates: {}, rawRoleGames: { '刺客': 6, '梅林': 4 },
+    rawRedWins: 2, rawBlueWins: 4, rawTotalWins: 6, rawRedGames: 4, rawBlueGames: 6,
+    // red: 2 三紅, 1 三藍死, 1 三藍活; blue: 2 三紅, 2 三藍死, 2 三藍活
+    rawRedThreeRed: 2, rawRedMerlinDead: 1, rawRedMerlinAlive: 1,
+    rawBlueThreeRed: 2, rawBlueMerlinDead: 2, rawBlueMerlinAlive: 2,
+  };
+
+  it('derives every rate from the raw counts; excess is null without cohort role rates', () => {
+    const out = withFinalFields(base);
+    expect(out).toMatchObject({
+      finalWinRate: 50, // (2 + 1 + 2) / 10
+      finalRedWinRate: 75, // (2 + 1) / 4
+      finalBlueWinRate: 33.3, // 2 / 6
+      missionWinRate: 60, // (2 + 2 + 2) / 10 — the legacy winRate
+      merlinSurvivalRate: 50, // 2 / (2 + 2)
+      rawBlueThreeBlue: 4,
+      expectedFinalWinRate: null,
+      excessWinRate: null,
+    });
+    expect(out.missionWinRate).toBe(base.winRate);
+    expect(out).not.toBe(base); // pure
+    expect(base.finalWinRate).toBeUndefined();
+    expect(out.roleFinalWinRates).toBeUndefined(); // cannot be derived
+  });
+
+  it('computes expected / excess with the contract formula: Σ rawRoleGames × cohort roleFinalWinRates / totalGames', () => {
+    const rates = { '刺客': 70, '梅林': 30, '忠臣': 30 };
+    const out = withFinalFields(base, rates);
+    expect(out.expectedFinalWinRate).toBe(54); // (6 × 70 + 4 × 30) / 10
+    expect(out.excessWinRate).toBe(-4); // 50 − 54
+    // The raw counts win over the 0.1%-rounded roleDistribution.
+    expect(withFinalFields({ ...base, roleDistribution: { '刺客': 100 } }, rates).expectedFinalWinRate).toBe(54);
+    // Where the two disagree the generator's number (rawRoleGames) is the right one: 5 刺客 + 6 梅林 of
+    // 11 games → (5 × 70.1 + 6 × 30.2) / 11 = 48.3, while the rounded shares 45.5 / 54.5 would give 48.4.
+    const drift = withFinalFields(
+      { ...base, totalGames: 11, rawRoleGames: { '刺客': 5, '梅林': 6 }, roleDistribution: { '刺客': 45.5, '梅林': 54.5 } },
+      { '刺客': 70.1, '梅林': 30.2 },
+    );
+    expect(drift.expectedFinalWinRate).toBe(48.3);
+    // Only a player without raw role counts falls back to roleDistribution.
+    expect(withFinalFields({ ...base, rawRoleGames: {} }, rates).expectedFinalWinRate).toBe(54); // 0.6 × 70 + 0.4 × 30
+    expect(withFinalFields({ ...base, rawRoleGames: {}, roleDistribution: {} }, rates).expectedFinalWinRate).toBeNull();
+  });
+
+  it('keeps the fields a schemaVersion-2 cache already carries', () => {
+    const given = { ...base, finalWinRate: 51.1, finalRedWinRate: 1, finalBlueWinRate: 2, missionWinRate: 3, merlinSurvivalRate: 4, rawBlueThreeBlue: 9, expectedFinalWinRate: 40, excessWinRate: 11.1, roleFinalWinRates: { '刺客': 100 }, firstPlayed: '2020-01-01', lastPlayed: '' };
+    expect(withFinalFields(given, { '刺客': 0 })).toEqual(given);
+  });
+
+  it('a side never played gives 0, not NaN; no 三藍 as blue gives survival 0 with rawBlueThreeBlue 0', () => {
+    const out = withFinalFields({ ...base, totalGames: 4, rawBlueGames: 0, rawBlueThreeRed: 0, rawBlueMerlinDead: 0, rawBlueMerlinAlive: 0 });
+    expect(out).toMatchObject({ finalWinRate: 75, finalRedWinRate: 75, finalBlueWinRate: 0, merlinSurvivalRate: 0, rawBlueThreeBlue: 0 });
+    const redless = withFinalFields({ ...base, totalGames: 6, rawRedGames: 0, rawRedThreeRed: 0, rawRedMerlinDead: 0, rawRedMerlinAlive: 0 });
+    expect(redless).toMatchObject({ finalWinRate: 33.3, finalRedWinRate: 0, finalBlueWinRate: 33.3 });
+  });
+
+  it('without raw counts the rates stay absent and excess is null (nothing fabricated)', () => {
+    const old: PlayerStats = { ...base };
+    for (const k of ['rawRedThreeRed', 'rawRedMerlinDead', 'rawRedMerlinAlive', 'rawBlueThreeRed', 'rawBlueMerlinDead', 'rawBlueMerlinAlive'] as const) delete old[k];
+    const out = withFinalFields(old);
+    expect(out.finalWinRate).toBeUndefined();
+    expect(out.missionWinRate).toBeUndefined();
+    expect(out.excessWinRate).toBeNull();
+    expect(out.expectedFinalWinRate).toBeNull();
   });
 });

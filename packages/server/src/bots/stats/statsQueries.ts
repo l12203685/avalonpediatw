@@ -11,6 +11,7 @@
 import {
   getAllPlayerStats,
   getChemistry,
+  getLeaderboard,
   getOverview,
   getPlayerArchetype,
   getPlayerByName,
@@ -20,17 +21,22 @@ import {
 import type { PlayerStats } from '../../services/sheetsAnalysis';
 import type { NameMatch } from './statsReplies';
 import {
+  DIGEST_RECENT_SIZE,
   STATS_COMMAND_USAGE,
+  boardView,
   chemistryRoster,
+  findBoard,
   formatChemistry,
   formatLeaderboard,
   formatNameProblem,
   formatNotInChemistry,
   formatPlayerCard,
   formatStatsUnavailable,
+  leaderboardLines,
   lookupPair,
   matchPlayerName,
   normalizeName,
+  roleTitlesLine,
   selectLeaderboard,
 } from './statsReplies';
 import { digestDateLabel } from './weeklyDigest';
@@ -80,24 +86,46 @@ export async function playerCardReply(query: string): Promise<string> {
 
 // ─── /排行 ───────────────────────────────────────────────────────────────
 
-/** Leaderboard text; throws when the cache cannot be read (digest must not post an error). */
+/**
+ * Leaderboard text; throws when the cache cannot be read (digest must not
+ * post an error). The main board comes from the cache's `leaderboard`
+ * section when present (see selectLeaderboard for the fallbacks); with
+ * `digest` the "近 90 天" board and last month's role titles are appended.
+ */
 export async function leaderboardText(
-  opts: { title?: string; footerLines?: string[] } = {},
+  opts: { header?: string; footerLines?: string[]; digest?: boolean } = {},
 ): Promise<string> {
-  const overview = await getOverview();
-  const hasTop = Array.isArray(overview?.topPlayersByTheory) && overview.topPlayersByTheory.length > 0;
-  const players = hasTop ? [] : await getAllPlayerStats();
-  return formatLeaderboard(overview, selectLeaderboard(overview, players), opts);
+  const [overview, leaderboard] = await Promise.all([getOverview(), getLeaderboard()]);
+  const precomputed =
+    findBoard(leaderboard, 'main') !== null ||
+    (Array.isArray(overview?.topPlayersByExcess) && overview.topPlayersByExcess.length > 0);
+  const players = precomputed ? [] : await getAllPlayerStats();
+  const main = selectLeaderboard(leaderboard, overview, players);
+
+  const sections: string[][] = [];
+  if (opts.digest) {
+    const recent = findBoard(leaderboard, 'recent');
+    if (recent) sections.push(leaderboardLines(boardView(recent, DIGEST_RECENT_SIZE, '🔥')));
+    const titles = roleTitlesLine(findBoard(leaderboard, 'roleTitles'));
+    if (titles) sections.push([titles]);
+  }
+  return formatLeaderboard(overview, main, { header: opts.header, sections, footerLines: opts.footerLines });
 }
 
 export async function leaderboardReply(): Promise<string> {
   return safely('leaderboard', () => leaderboardText());
 }
 
-/** Monday digest: the leaderboard with a dated title and a how-to-look-up line. Throws on cache errors. */
+/**
+ * Monday digest: dated header, main board Top 10, "近 90 天" Top 5, last
+ * month's role titles (each only when the cache has it; later sections are
+ * dropped first when the text would exceed the cap) and a how-to-look-up
+ * line. Throws on cache errors.
+ */
 export async function weeklyDigestText(now: number = Date.now()): Promise<string> {
   return leaderboardText({
-    title: `📅 每週排行（${digestDateLabel(now)}）理論勝率 Top 10`,
+    header: `📅 每週排行（${digestDateLabel(now)}）`,
+    digest: true,
     footerLines: [`查個人：${STATS_COMMAND_USAGE.player}｜兩人默契：${STATS_COMMAND_USAGE.chemistry}`],
   });
 }

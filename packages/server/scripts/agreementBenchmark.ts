@@ -17,6 +17,11 @@
  *   --prior K|auto       shrinkage pseudo-games for the adjusted win rate
  *                        (default auto = empirical Bayes per role, clamped 20..300)
  *   --cache PATH         sheets cache (default ./sheets_cache.json)
+ *   --flag NAME[=V]      AgentTuning switch for the agents (repeatable; see
+ *                        src/ai/AgentTuning.ts; default = production default
+ *                        + AVALON_TUNING_* env)
+ *   --legacy             start from the pre-2026-10-12 tuning (all off)
+ *                        before applying --flag
  *
  * Agent = `HeuristicAgent.act` exactly as the GameServer bot calls it (with
  * USE_FORWARD_REASONING the decision is routed through ForwardAgent; the
@@ -28,6 +33,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { HeuristicAgent } from '../src/ai/HeuristicAgent';
+import {
+  LEGACY_AGENT_TUNING,
+  describeAgentTuning,
+  parseTuningFlag,
+  resolveAgentTuning,
+  type AgentTuning,
+} from '../src/ai/AgentTuning';
 import { getForwardTelemetry } from '../src/ai/forward/ForwardAgent';
 import { rowsFromSheet, parseReplayGame, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
 import { replayGame, type DecisionOutcome } from '../src/ai/benchmark/agreement';
@@ -51,6 +63,8 @@ interface Args {
   top: number;
   prior: number | 'auto';
   cache: string;
+  flags: Partial<AgentTuning>;
+  legacy: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -61,6 +75,8 @@ function parseArgs(argv: string[]): Args {
     top: 10,
     prior: 'auto',
     cache: path.resolve(__dirname, '..', 'sheets_cache.json'),
+    flags: {},
+    legacy: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -82,6 +98,8 @@ function parseArgs(argv: string[]): Args {
         break;
       }
       case '--cache': args.cache = path.resolve(next()); break;
+      case '--flag': Object.assign(args.flags, parseTuningFlag(next())); break;
+      case '--legacy': args.legacy = true; break;
       case '--help': case '-h':
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         process.exit(0);
@@ -126,6 +144,7 @@ function roleTable(cohorts: readonly CohortReport[]): string {
 
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
+  const tuning = resolveAgentTuning(args.flags, args.legacy ? { ...LEGACY_AGENT_TUNING } : undefined);
   const started = Date.now();
   const data = JSON.parse(fs.readFileSync(args.cache, 'utf8')) as Record<string, string[][]>;
   const rows = rowsFromSheet(data['牌譜'] ?? []);
@@ -164,7 +183,7 @@ function main(): void {
       if (playerGames.has(name)) playerGames.set(name, (playerGames.get(name) ?? 0) + 1);
     }
     const outcomes: DecisionOutcome[] = replayGame(game, seats, {
-      makeAgent: (id) => new HeuristicAgent(id),
+      makeAgent: (id) => new HeuristicAgent(id, undefined, undefined, tuning),
     });
     for (const o of outcomes) {
       if (args.population) addOutcome(population, o);
@@ -181,6 +200,7 @@ function main(): void {
   console.log(`牌譜 rows with a record: ${recorded}; replayable 10p games: ${allGames.length}; evaluated: ${games.length}`);
   console.log(`skipped: ${[...parseFailures].sort((a, b) => b[1] - a[1]).map(([r, n]) => `${r} ${n}`).join('; ')}`);
   console.log(`games per named player: ${[...playerGames].map(([p, n]) => `${p}=${n}`).join(', ')}`);
+  console.log(`agent tuning: ${describeAgentTuning(tuning)}`);
   console.log(`forward telemetry: ${telemetry.totalDecisions} decisions via ForwardAgent, ${telemetry.fallbacks} fallbacks`);
   if (telemetry.totalDecisions === 0) {
     console.warn('WARNING: ForwardAgent path not active — results reflect the baseline HeuristicAgent only.');
@@ -213,6 +233,7 @@ function main(): void {
     const out = {
       generatedBy: 'packages/server/scripts/agreementBenchmark.ts',
       options: { ...args, cache: path.basename(args.cache) },
+      tuning,
       dataset: {
         recorded,
         replayable: allGames.length,

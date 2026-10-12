@@ -356,15 +356,64 @@ export interface OutcomeBreakdown {
   threeBlueAlivePct: number;
 }
 
+/**
+ * Two-stage outcome contract (docs/stats/two_stage_outcome.md, 2026-10-12).
+ *   任務結算 = 三紅 vs 三藍 (死或活)；刺殺結算 = 三藍局是否刺中梅林；
+ *   最終：紅勝 = 三紅 + 三藍死，藍勝 = 三藍活。
+ * 舊欄位 (winRate / redWin / blueWin / roleWinRates / seat*WinRates / roleTheory)
+ * 全部保留任務結算口徑 (三藍死算藍勝)，不重新解釋。
+ */
+export interface MissionStageSummary {
+  games: number;
+  threeRed: number;
+  threeBlue: number;
+  redPct: number;
+  bluePct: number;
+}
+
+/** 刺殺結算 — 只算三藍局：三藍死 = 刺中、三藍活 = 沒刺中。 */
+export interface AssassinationStageSummary {
+  games: number;
+  merlinKilled: number;
+  merlinSurvived: number;
+  killPct: number;
+  survivePct: number;
+}
+
+/** 最終：紅勝 = 三紅 + 三藍死、藍勝 = 三藍活。 */
+export interface FinalOutcomeSummary {
+  games: number;
+  redWins: number;
+  blueWins: number;
+  redPct: number;
+  bluePct: number;
+}
+
 export interface AnalysisOverview {
   totalGames: number;
   totalPlayers: number;
+  /** 任務結算紅方比例 (三紅 / 全部)，舊口徑保留。 */
   redWinRate: number;
+  /** 任務結算藍方比例 ((三藍死 + 三藍活) / 全部)，舊口徑保留。 */
   blueWinRate: number;
+  /** 三藍局刺中率。 */
   merlinKillRate: number;
   outcomeBreakdown: OutcomeBreakdown;
+  /** 舊口徑 (roleTheory ≈ 任務結算勝率)；有 topPlayersByExcess 時不再顯示。 */
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
+  /**
+   * 契約新欄位 — 舊快取 (schemaVersion < 2) 全部缺，前端用 outcomeBreakdown
+   * 現場算三段結算，排行退回 topPlayersByTheory 並標明舊口徑。
+   */
+  schemaVersion?: number;
+  missionStage?: MissionStageSummary;
+  assassinationStage?: AssassinationStageSummary;
+  final?: FinalOutcomeSummary;
+  /** 全體各角色最終勝率 % (紅角 = 三紅 + 三藍死；藍角 = 三藍活)。 */
+  roleFinalWinRates?: Record<string, number>;
+  /** 全期超額勝率排行，門檻同 topPlayersByTheory (30 場)。 */
+  topPlayersByExcess?: Array<{ name: string; excessWinRate: number; finalWinRate: number; games: number }>;
   /**
    * Edward 2026-04-27 — `outcomes` (per-seat 三結果) and `roles[].outcomes`
    * (per-role 三結果) added so deep-analytics seat tooltip can show the
@@ -383,8 +432,11 @@ export interface AnalysisOverview {
 export interface AnalysisPlayerStats {
   name: string;
   totalGames: number;
+  /** 任務結算勝率 (三藍死算藍勝)，舊口徑保留。 */
   winRate: number;
+  /** ≈ 任務結算勝率，舊口徑；網站改顯示 excessWinRate。 */
   roleTheory: number;
+  /** 恆為 0，網站不再顯示。 */
   positionTheory: number;
   redWin: number;
   blueWin: number;
@@ -407,19 +459,175 @@ export interface AnalysisPlayerStats {
    * (三紅 / 三藍死 / 三藍活). Optional for cache backward compatibility.
    */
   seatOutcomes?: Record<string, OutcomeBreakdown>;
+
+  // --- 原始計數 (快取 players 列都有；finalFields() 的退路用) ---
+  rawRedThreeRed?: number;
+  rawRedMerlinDead?: number;
+  rawRedMerlinAlive?: number;
+  rawBlueThreeRed?: number;
+  rawBlueMerlinDead?: number;
+  rawBlueMerlinAlive?: number;
+  rawRedGames?: number;
+  rawBlueGames?: number;
+  /** 藍方場到達三藍的場數 (merlinSurvivalRate 的分母)。 */
+  rawBlueThreeBlue?: number;
+
+  // --- 兩段結算契約欄位 (docs/stats/two_stage_outcome.md)；舊快取由後端退路補齊 ---
+  /** (紅方場三紅 + 紅方場三藍死 + 藍方場三藍活) / 總場數 %。 */
+  finalWinRate?: number;
+  /** (三紅 + 三藍死) / 紅方場數 %。 */
+  finalRedWinRate?: number;
+  /** 三藍活 / 藍方場數 %。 */
+  finalBlueWinRate?: number;
+  /** 任務結算勝率 % (= 舊 winRate 語意)。 */
+  missionWinRate?: number;
+  /** 藍方場到達三藍時 三藍活 / (三藍活 + 三藍死) %；分母 0 時為 0。 */
+  merlinSurvivalRate?: number;
+  /** Σ 本人該角色出現比例 × 全體該角色最終勝率；算不出來為 null。 */
+  expectedFinalWinRate?: number | null;
+  /** finalWinRate − expectedFinalWinRate (可為負)；算不出來為 null，顯示「—」。 */
+  excessWinRate?: number | null;
+  /** 最早 / 最晚出賽日 YYYY-MM-DD，沒有則 ""。 */
+  firstPlayed?: string;
+  lastPlayed?: string;
 }
 
+/**
+ * /players/:name 的 radar — 契約：winRate / redWinRate 已是最終口徑，
+ * missionWinRate 是舊的任務結算勝率，excessWinRate 可能為 null。
+ * roleTheory / positionTheory 為舊鍵，舊後端仍會送；網站不再顯示。
+ */
 export interface AnalysisPlayerRadar {
   player: AnalysisPlayerStats;
   radar: {
     winRate: number;
     redWinRate: number;
     blueMerlinProtect: number;
-    roleTheory: number;
-    positionTheory: number;
+    missionWinRate?: number;
+    excessWinRate?: number | null;
     redMerlinKillRate: number;
     experience: number;
+    roleTheory?: number;
+    positionTheory?: number;
   };
+}
+
+/** 玩家層的最終口徑欄位 — 缺值時由 finalFields() 以原始計數算出 (與後端 withFinalFields 同公式)。 */
+export interface PlayerFinalFields {
+  finalWinRate: number | null;
+  finalRedWinRate: number | null;
+  finalBlueWinRate: number | null;
+  missionWinRate: number | null;
+  merlinSurvivalRate: number | null;
+  expectedFinalWinRate: number | null;
+  excessWinRate: number | null;
+}
+
+function isFiniteNum(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/**
+ * Round to one decimal with ties to even, exactly like Python's round() in
+ * generate_cache.py (rnd1): 56.25 → 56.2, 56.35 → 56.4. Math.round would give
+ * 56.3 and make the fallback differ from the cache by 0.1 on exact ties.
+ */
+function rnd1(n: number): number {
+  const scaled = n * 10;
+  const floor = Math.floor(scaled);
+  const frac = scaled - floor;
+  if (frac === 0.5) return (floor % 2 === 0 ? floor : floor + 1) / 10;
+  return Math.round(scaled) / 10;
+}
+
+/** n / d 的一位小數百分比；分母 0 時回 0 (與 generate_cache.py 相同慣例)。 */
+function pctOf(n: number, d: number): number {
+  return d > 0 ? rnd1((n / d) * 100) : 0;
+}
+
+/**
+ * 玩家的最終口徑欄位。快取已有的欄位直接用；缺的由原始三結果計數現場算
+ * (公式同 packages/server/services/sheetsAnalysis.ts withFinalFields 與
+ * generate_cache.py)。expectedFinalWinRate 需要 overview.roleFinalWinRates：
+ * 有 rawRoleGames 時用 rnd1(Σ rawRoleGames[r] × rate[r] / totalGames) (Python 口徑)，
+ * 否則用 roleDistribution (%) 加權。算不出來的欄位為 null，顯示「—」。
+ */
+export function finalFields(
+  p: AnalysisPlayerStats,
+  roleFinalWinRates?: Record<string, number>,
+): PlayerFinalFields {
+  const out: PlayerFinalFields = {
+    finalWinRate: isFiniteNum(p.finalWinRate) ? p.finalWinRate : null,
+    finalRedWinRate: isFiniteNum(p.finalRedWinRate) ? p.finalRedWinRate : null,
+    finalBlueWinRate: isFiniteNum(p.finalBlueWinRate) ? p.finalBlueWinRate : null,
+    missionWinRate: isFiniteNum(p.missionWinRate) ? p.missionWinRate : null,
+    merlinSurvivalRate: isFiniteNum(p.merlinSurvivalRate) ? p.merlinSurvivalRate : null,
+    expectedFinalWinRate: isFiniteNum(p.expectedFinalWinRate) ? p.expectedFinalWinRate : null,
+    excessWinRate: isFiniteNum(p.excessWinRate) ? p.excessWinRate : null,
+  };
+
+  const raw = [
+    p.rawRedThreeRed, p.rawRedMerlinDead, p.rawRedMerlinAlive,
+    p.rawBlueThreeRed, p.rawBlueMerlinDead, p.rawBlueMerlinAlive,
+  ];
+  if (raw.every(isFiniteNum)) {
+    const [redThreeRed, redDead, redAlive, blueThreeRed, blueDead, blueAlive] = raw as number[];
+    const total = isFiniteNum(p.totalGames) && p.totalGames > 0
+      ? p.totalGames
+      : redThreeRed + redDead + redAlive + blueThreeRed + blueDead + blueAlive;
+    const redGames = isFiniteNum(p.rawRedGames) ? p.rawRedGames : redThreeRed + redDead + redAlive;
+    const blueGames = isFiniteNum(p.rawBlueGames) ? p.rawBlueGames : blueThreeRed + blueDead + blueAlive;
+    const blueThreeBlue = isFiniteNum(p.rawBlueThreeBlue) ? p.rawBlueThreeBlue : blueDead + blueAlive;
+
+    if (out.finalWinRate === null) out.finalWinRate = pctOf(redThreeRed + redDead + blueAlive, total);
+    if (out.finalRedWinRate === null) out.finalRedWinRate = pctOf(redThreeRed + redDead, redGames);
+    if (out.finalBlueWinRate === null) out.finalBlueWinRate = pctOf(blueAlive, blueGames);
+    if (out.missionWinRate === null) out.missionWinRate = pctOf(redThreeRed + blueDead + blueAlive, total);
+    if (out.merlinSurvivalRate === null) out.merlinSurvivalRate = pctOf(blueAlive, blueThreeBlue);
+  }
+  if (out.missionWinRate === null && isFiniteNum(p.winRate)) out.missionWinRate = p.winRate;
+
+  if (out.expectedFinalWinRate === null && roleFinalWinRates) {
+    const roleGames = p.rawRoleGames;
+    const dist = p.roleDistribution;
+    if (roleGames && typeof roleGames === 'object' && isFiniteNum(p.totalGames) && p.totalGames > 0) {
+      let sum = 0;
+      let covered = 0;
+      for (const [role, games] of Object.entries(roleGames)) {
+        const rate = roleFinalWinRates[role];
+        if (!isFiniteNum(games) || !isFiniteNum(rate)) continue;
+        sum += games * rate;
+        covered += games;
+      }
+      out.expectedFinalWinRate = covered > 0 ? rnd1(sum / p.totalGames) : null;
+    } else if (dist && typeof dist === 'object') {
+      let expected = 0;
+      let covered = 0;
+      for (const [role, share] of Object.entries(dist)) {
+        const rate = roleFinalWinRates[role];
+        if (!isFiniteNum(share) || !isFiniteNum(rate)) continue;
+        expected += (share / 100) * rate;
+        covered += share;
+      }
+      out.expectedFinalWinRate = covered > 0 ? rnd1(expected) : null;
+    }
+  }
+
+  if (out.excessWinRate === null && out.finalWinRate !== null && out.expectedFinalWinRate !== null) {
+    out.excessWinRate = rnd1(out.finalWinRate - out.expectedFinalWinRate);
+  }
+  return out;
+}
+
+/** 百分比顯示；null / 非數字顯示「—」。 */
+export function fmtPct(v: number | null | undefined, digits = 1): string {
+  return isFiniteNum(v) ? `${v.toFixed(digits)}%` : '—';
+}
+
+/** 帶正負號的百分點顯示 (超額勝率用)；null 顯示「—」。 */
+export function fmtSignedPct(v: number | null | undefined, digits = 1): string {
+  if (!isFiniteNum(v)) return '—';
+  return `${v > 0 ? '+' : ''}${v.toFixed(digits)}%`;
 }
 
 export interface ChemistryMatrix {
@@ -495,9 +703,48 @@ export interface RoundsAnalysisData {
 
 interface ApiEnvelope<T> { success: boolean; data?: T; error?: string }
 
+/**
+ * 分析 API 的 HTTP 錯誤 — 帶 status 與伺服器 JSON body 的 `error` 文字，讓
+ * 「快取尚未產生」(503 + "not yet generated") 能與其他 503 (routes/analysis.ts
+ * sheetsGuard 載入快取失敗、Render 重佈時代理層回的 503) 和 404 (舊後端沒有
+ * 這條路由) 分開處理。
+ */
+export class AnalysisApiError extends Error {
+  readonly status: number;
+  /** 伺服器回的 `{ error }` 文字；body 不是 JSON (代理層 HTML) 時為 undefined。 */
+  readonly serverError?: string;
+  constructor(status: number, path: string, serverError?: string) {
+    super(`Analysis API ${status}: ${path}${serverError ? ` (${serverError})` : ''}`);
+    this.name = 'AnalysisApiError';
+    this.status = status;
+    this.serverError = serverError;
+  }
+}
+
+/** 503 且伺服器明說 "… not yet generated"：快取尚無此段，等每日重算。其他 503 不算。 */
+export function isAnalysisNotGenerated(err: unknown): boolean {
+  return err instanceof AnalysisApiError
+    && err.status === 503
+    && /not yet generated/i.test(err.serverError ?? '');
+}
+
+/** 404：後端還是沒有這條路由的舊版本 (網站先於伺服器部署)；不是快取問題，重算也救不了。 */
+export function isAnalysisRouteMissing(err: unknown): boolean {
+  return err instanceof AnalysisApiError && err.status === 404;
+}
+
+async function readServerError(res: Response): Promise<string | undefined> {
+  try {
+    const body = (await res.json()) as Partial<ApiEnvelope<unknown>> | null;
+    return body && typeof body.error === 'string' ? body.error : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function analysisApiFetch<T>(path: string): Promise<T> {
   const res = await fetch(`${SERVER_URL}/api/analysis${path}`);
-  if (!res.ok) throw new Error(`Analysis API ${res.status}: ${path}`);
+  if (!res.ok) throw new AnalysisApiError(res.status, path, await readServerError(res));
   const body = (await res.json()) as ApiEnvelope<T>;
   if (!body.success || !body.data) throw new Error(body.error || 'Unknown error');
   return body.data;
@@ -525,6 +772,85 @@ export async function fetchAnalysisMissions(): Promise<MissionAnalysisData> {
 
 export async function fetchAnalysisRounds(): Promise<RoundsAnalysisData> {
   return analysisApiFetch<RoundsAnalysisData>('/rounds');
+}
+
+// ── Leaderboard (cache section `leaderboard`, docs/stats/two_stage_outcome.md) ──
+// 全部由 generate_cache.py 算好 (LEADERBOARD_CONFIG)；後端與網站只讀不重算。
+// 快取缺此段時 /leaderboard 回 503 "Leaderboard not yet generated" → 顯示「排行尚未產生」；
+// 舊後端沒有此路由時回 404 → 顯示「後端尚未更新」。
+
+export type AnalysisLeaderboardBoardId =
+  | 'main' | 'online' | 'recent' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles';
+
+export interface AnalysisLeaderboardRow {
+  rank: number;
+  name: string;
+  /** 該榜的排序值：main / online / recent / newcomers = 縮減後超額勝率；improved = 勝率差；assassin = 刺中率；roleTitles = 該角色最終勝率。 */
+  value: number;
+  /** 期間內最終勝率 % (improved / assassin / roleTitles 沒有)。 */
+  finalWinRate?: number;
+  expectedFinalWinRate?: number;
+  /**
+   * 未縮減的超額勝率 — generate_cache.py `_excess_rows` 對 main / online / recent /
+   * newcomers 都會輸出 (契約正文只寫在 recent / newcomers)。缺時網站顯示「—」，
+   * 不拿縮減後的 `value` 冒充。
+   */
+  excessWinRate?: number;
+  /** 期間場數 (assassin = 刺客場數；roleTitles = 該角色場數)。 */
+  games: number;
+  // improved
+  recentFinalWinRate?: number;
+  priorFinalWinRate?: number;
+  recentGames?: number;
+  priorGames?: number;
+  // assassin
+  hits?: number;
+  attempts?: number;
+  // newcomers
+  firstPlayed?: string;
+  // roleTitles
+  role?: string;
+  wins?: number;
+}
+
+export interface AnalysisLeaderboardBoard {
+  /** 固定 id；未知 id 仍可解析 (以小卡通用格式顯示)。 */
+  id: AnalysisLeaderboardBoardId | (string & Record<never, never>);
+  title: string;
+  titleEn?: string;
+  /** 例：「2025-10-13 ～ 2026-10-12」。 */
+  period: string;
+  /** 實際採用的視窗 (放寬後)；0 = 全期。 */
+  windowDays?: number;
+  minGames?: number;
+  note?: string;
+  noteEn?: string;
+  /** improved 專用。 */
+  priorPeriod?: string;
+  /** online 專用。 */
+  category?: string;
+  coverage?: number;
+  rows: AnalysisLeaderboardRow[];
+}
+
+export interface AnalysisLeaderboardData {
+  asOf: string;
+  dates?: { parsed: number; unparsed: number; earliest: string; latest: string };
+  config?: {
+    windowDays: number;
+    activeDays: number;
+    minGames: number;
+    shrinkK: number;
+    fallbackWindowDays: number[];
+    minBoardRows: number;
+    topN: number;
+    [key: string]: unknown;
+  };
+  boards: AnalysisLeaderboardBoard[];
+}
+
+export async function fetchAnalysisLeaderboard(): Promise<AnalysisLeaderboardData> {
+  return analysisApiFetch<AnalysisLeaderboardData>('/leaderboard');
 }
 
 export interface LakeRoleStat {
@@ -737,7 +1063,34 @@ export async function fetchPlayerPlaystyle(name: string): Promise<PlaystylePlaye
 
 // ── Feature Studies API (3rd analytics tab) ──────────────────────────────────
 
-export type FeatureVisualType = 'bar' | 'table' | 'divergent' | 'line';
+export type FeatureVisualType = 'bar' | 'table' | 'divergent' | 'line' | 'lakeClaim';
+
+/**
+ * L141 `lakeClaim` 一格 (docs/stats/two_stage_outcome.md)：持湖者宣告紅/藍時，
+ * 目標真的是紅/藍的機率，附 n 與 Wilson 95% 區間；n < minSample 標 lowSample。
+ * `rows` 依首湖/二湖/三湖分；`holderRows` 依持湖者陣營分。
+ */
+export interface LakeClaimCell {
+  lake?: string;
+  lakeEn?: string;
+  holder?: string;
+  holderEn?: string;
+  declared: string;
+  declaredEn?: string;
+  n: number;
+  hits?: number;
+  hitRate: number;
+  ciLow: number;
+  ciHigh: number;
+  lowSample: boolean;
+}
+
+export interface LakeClaimData {
+  minSample?: number;
+  rows: LakeClaimCell[];
+  holderRows?: LakeClaimCell[];
+  undeclared?: number;
+}
 
 export interface FeatureStudyEntry {
   loopId: string;
@@ -758,6 +1111,8 @@ export interface FeatureStudyEntry {
   takeaway: string;
   takeawayEn: string;
   sourceReport: string;
+  /** generate_cache.py 算的研究 (L141) 才有：asOf 日期。 */
+  computedAt?: string | null;
 }
 
 export interface FeatureStudiesData {

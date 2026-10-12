@@ -6,8 +6,10 @@
 重跑（決定性，同資料同碼結果完全相同，約 2.5 分鐘）：
 
 ```bash
-pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin [--limit N] [--json out.json] [--no-population]
+pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin --legacy [--limit N] [--json out.json] [--no-population]
 ```
+
+`--legacy` = 2026-10-12 之前的 agent 行為（`AgentTuning` 全關），本文件第 2–6 節的數字都是這個設定。不加 `--legacy` 跑的是正式預設（已採用的開關，見 `strength_benchmark.md`）；`--flag 開關名[=值]` 可個別切換（第 7 節）。
 
 ## 1. 方法
 
@@ -122,18 +124,23 @@ Sin 的前 5 與 population 同型（541/1337、426/1124、137/357、129/295、1
 
 **agent 有比較像 ED 嗎？** 沒有明顯的。ED 與 population 的一致率在多數項目差不到 1–2 個百分點；ED 在異常票上稍高（45% vs 40%），但任務牌（69% vs 77%）和湖目標（2% vs 12%）反而更低。
 
-## 7. 可調參數（附快速消融實驗）
+## 7. 可調參數（已做成 `AgentTuning` 開關）
 
-消融：在 ED / Sin / top 群上暫時改程式重跑（未提交），只動單一項。
+2026-10-12 起四個槓桿加上刺殺模型都在 `packages/server/src/ai/AgentTuning.ts`，可用 `--flag`、環境變數 `AVALON_TUNING_*` 或建構 `HeuristicAgent` 時傳入；下表數字為「只開該開關、其餘全關」重跑的結果（與最初的消融實驗一致）。採用與否依自我對打結果決定，見 `docs/ai/strength_benchmark.md`。
 
-| 槓桿 | 位置 | 改動 | ED | Sin | top |
-|---|---|---|---|---|---|
-| R3+ 正常票先驗 | `ForwardAgent.decide` team_vote 評分 | 正常票加 +0.3 | 投票 R3+ 61.6→66.1、異常率 36.9→25.9% | 62.3→71.0 | 59.0→64.7 |
-| | | +0.6 | 68.2、異常率 21.4%（≈ED 24.3%） | 74.5 | 67.6 |
-| | | +1.0 | 72.0、異常率 14.5% | 78.7 | 71.5 |
-| 好人湖目標方向 | `LakePolicy.pickLakeTargetForTeam` 好人分支 | 改湖最高嫌疑 | 湖目標 2.0→13.7% | 13.2→19.5% | 13.0→11.7% |
-| 紅方湖宣告 | `LakePolicy.decideLakeClaimForTeam` 紅方分支 | 一律宣「好」 | 50.0→85.7% | 61.1→87.0% | 60.4→77.6% |
-| 紅方任務牌 | ForwardAgent quest_vote / `RoleStrategy` | R4 可見紅 <2 出成功；R1 莫甘娜單紅出失敗 | 69.3（不變） | 79.8→85.3 | 79.7→82.7 |
+| 槓桿 | 開關 | 位置 | 改動 | ED | Sin | top |
+|---|---|---|---|---|---|---|
+| R3+ 正常票先驗 | `r3NormalVotePrior=0.3` | `ForwardAgent.decide` team_vote 評分 | 正常票加 +0.3 | 投票 R3+ 61.6→66.1、異常率 36.9→25.9% | 62.3→71.0 | 59.0→64.7 |
+| | `r3NormalVotePrior=0.6` | | +0.6 | 68.2、異常率 21.4%（≈ED 24.3%） | 74.5 | 67.6 |
+| | `r3NormalVotePrior=1.0` | | +1.0 | 72.0、異常率 14.5% | 78.7 | 71.5 |
+| 好人湖目標方向 | `goodLakeTargetMostSuspicious` | `LakePolicy.pickLakeTargetForTeam` 好人分支 | 改湖最高嫌疑 | 湖目標 2.0→13.7% | 13.2→19.5% | 13.0→11.7% |
+| 紅方湖宣告 | `evilLakeClaimAlwaysGood` | `LakePolicy.decideLakeClaimForTeam` 紅方分支 | 一律宣「好」 | 50.0→85.7% | 61.1→87.0% | 60.4→77.6% |
+| 紅方任務牌 | `humanQuestCardRules` | `AgentTuning.humanQuestCardRule`（HeuristicAgent.voteOnQuest 與 ForwardAgent.decide 共用） | R1 莫甘娜單紅出失敗；R4 可見紅 <2 **且無人聽牌**出成功（任一方已拿兩局時讓位給 §0，2026-10-12 審查修正；標準局 R4 恆聽牌，所以實際只剩 R1 規則） | 第一版 69.3（不變）；修正版待重跑 | 第一版 79.8→85.3；修正版待重跑 | 第一版 79.7→82.7；修正版待重跑 |
+| 刺殺選人 | `assassinModel` | `assassin/AssassinModel.ts`（HeuristicAgent.assassinate） | 牌譜訓練的條件邏輯回歸 | 刺殺一致 17.6（不變）、刺中 11.8→47.1%（n=17） | 20.4→42.9、刺中 20.4→36.7% | 20.8→38.8、刺中 18.8→35.7% |
+
+刺殺模型的「刺中率」在這張表含訓練局（population 1048 局 17.9→30.1%）；不含訓練局的測試集數字（317 局：模型 29.7%、現行 agent 14.8%、真人 47.9%）見 `strength_benchmark.md`。
+
+**採用結果（2026-10-12，依自我對打）**：正常票先驗全員版本讓機器人藍方明顯變弱（合計 47.0%）→ 只採用紅方版本（`r3NormalVotePrior=0.6` + `r3NormalVotePriorEvilOnly`，投票 R3+ ED 61.6→63.7、Sin 62.3→65.2、top 59.0→61.9）；好人湖查最可疑、任務牌真人規則（R4 規則在聽牌時讓位給 §0）、刺殺模型採用為預設；紅方湖一律宣好更像真人但紅方 −0.5pp（區間不含 0），依「不能變弱」不採用、開關保留。數字與方法見 `strength_benchmark.md`。
 
 建議優先序：
 
@@ -142,7 +149,7 @@ Sin 的前 5 與 population 同型（541/1337、426/1124、137/357、129/295、1
 3. **好人湖目標**：「首湖藍」修正與 ED 的實際打法相反；改湖失敗任務成員可讓 ED 一致率 2%→14%，但 top 群略降（11.7%）→ 建議做成依情境（例如 R2 有失敗任務時湖失敗成員）而非全面翻轉。
 4. **刺殺**：agent 刺中率明顯落後真人（18% vs 45–52%），值得用 top 刺客的牌譜當監督訊號檢查 `HeuristicAgent.assassinate` 的特徵權重。
 5. **派隊**：在 `generateTeamSelectCandidates` / `PRIOR_PENALTY`（懲罰重提被否決的隊）上，真人很常沿用前一隊；R3+ 對失敗任務成員的排除可放寬為「已被縮小範圍的成員才排除」。
-6. **任務牌**：R4 單紅出成功、R1 莫甘娜單紅出失敗，Sin/top 各升 3–6 點；ED 樣本小（101）、不受影響。
+6. **任務牌**：R4 單紅出成功、R1 莫甘娜單紅出失敗，Sin/top 各升 3–6 點；ED 樣本小（101）、不受影響。（2026-10-12 審查修正：R4 規則在任一方聽牌時讓位給 §0。按聽牌狀態拆開看，第一版的增益全部來自「紅方聽牌時單紅出成功」（真人 77.1%，n=367），但那正是兩紅同隊會放掉致勝局的分支；「藍方聽牌時單紅出成功」反而與真人相反（真人 81.5% 出失敗，n=259）。修正版整體數字待重跑，見 `strength_benchmark.md` 第 2 節第 4 點。）
 
 ## 8. 限制
 
@@ -150,4 +157,4 @@ Sin 的前 5 與 population 同型（541/1337、426/1124、137/357、129/295、1
 - 任務牌只計「失敗數能確定其牌」的情況，偏向全成功或全失敗的局面。
 - 正式環境的觀測不保留湖主私下看到的結果，重播也不給（與線上一致），會影響湖後的派隊與投票。
 - 僅 10 人局；R1 依本地慣例幾乎都是 5 次提議，R1 派隊訊號低。
-- 自我對弈 harness 的派西 `knownEvils` 為兩拇指，正式伺服器為空陣列（本基準依正式環境）。
+- （已修正 2026-10-12）自我對弈 harness 的派西 `knownEvils` 原本放兩拇指，與正式伺服器（空陣列、拇指在 `knownWizards`）不同；`SelfPlayEngine.getKnownEvils` 已改成一致，本基準一直都是依正式環境重建觀測。

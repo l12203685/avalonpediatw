@@ -24,7 +24,6 @@ import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
 import FriendsPage from './pages/FriendsPage';
 import AiStatsPage from './pages/AiStatsPage';
-import AnalysisPage from './pages/AnalysisPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import PersonalStatsPage from './pages/PersonalStatsPage';
@@ -410,7 +409,8 @@ function App(): JSX.Element {
           {gameState === 'profile' && <ProfilePage />}
           {gameState === 'friends' && <FriendsPage />}
           {gameState === 'aiStats' && <AiStatsPage />}
-          {gameState === 'analysis' && <AnalysisPage />}
+          {/* legacy 'analysis' route (WikiPage / PersonalStatsPage links) lands on the merged analytics page */}
+          {gameState === 'analysis' && <AnalyticsPage />}
           {gameState === 'analytics' && <AnalyticsPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}

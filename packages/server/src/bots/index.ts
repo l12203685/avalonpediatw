@@ -28,6 +28,13 @@ import {
 import { getKeepAliveState, KeepAliveState } from '../services/keepAlive';
 import { WeeklyDigestScheduler, DigestDestination } from './stats/weeklyDigest';
 import { weeklyDigestText } from './stats/statsQueries';
+import {
+  FEEDBACK_CONFIG,
+  FeedbackDiscordForwarder,
+  FeedbackSnapshot,
+  getFeedbackService,
+  initializeFeedback,
+} from './feedback';
 
 /** Last initialisation error per bot — surfaced on /api/bots/status. */
 const initErrors: { discord: string | null; line: string | null } = {
@@ -84,6 +91,30 @@ export async function initializeBots(): Promise<void> {
   // Initialize ChatMirror (#82) — wires lobby chat to LINE + Discord push.
   // Safe even when bots / env vars missing: mirror no-ops if adapters absent.
   initializeLobbyChatMirror();
+
+  // Community feedback (2026-10-12, docs/COMMUNITY_FEEDBACK.md): topic
+  // counts + /意見. Counting works without Discord; forwarding needs it.
+  initializeFeedback({ discord: buildFeedbackForwarder() });
+}
+
+// ─── Community feedback wiring (2026-10-12) ──────────────────────────────
+
+/**
+ * Discord sender for forwarded /意見 texts. Lazy like buildDiscordAdapter():
+ * readiness is re-read on every call. The payload already carries
+ * `allowedMentions: { parse: [] }` so a forwarded opinion can never ping.
+ */
+function buildFeedbackForwarder(): FeedbackDiscordForwarder {
+  return {
+    send: async (channelId, payload): Promise<boolean> => {
+      const bot = getDiscordBot();
+      if (!bot || !bot.isClientReady()) return false;
+      const ch = await bot.getClient().channels.fetch(channelId);
+      if (!ch || !(ch instanceof TextChannel)) return false;
+      await ch.send(payload);
+      return true;
+    },
+  };
 }
 
 // ─── ChatMirror wiring (#82) ──────────────────────────────────────────────
@@ -295,6 +326,12 @@ export interface BotStatus {
   keepAlive: KeepAliveState;
   /** Monday 12:00 +08 leaderboard post; lastPostedWeek is in-memory (resets on restart). */
   statsDigest: { running: boolean; lastPostedWeek: Record<string, string> };
+  /**
+   * Community feedback (docs/COMMUNITY_FEEDBACK.md): weekly topic counts per
+   * platform (ISO weeks +08, newest 8, in-memory) and how many /意見 were
+   * received. Numbers and one flag only — never text, names or ids.
+   */
+  feedback: FeedbackSnapshot & { commandEnabled: boolean };
   discord: {
     enabled: boolean;
     ready: boolean;
@@ -332,6 +369,7 @@ export function buildBotStatus(): BotStatus {
     generatedAt: new Date().toISOString(),
     keepAlive: getKeepAliveState(),
     statsDigest: statsDigest?.getState() ?? { running: false, lastPostedWeek: {} },
+    feedback: { commandEnabled: FEEDBACK_CONFIG.commandEnabled, ...getFeedbackService().snapshot() },
     discord: {
       enabled: !!process.env.DISCORD_BOT_TOKEN,
       ready: discordBot?.isClientReady() ?? false,

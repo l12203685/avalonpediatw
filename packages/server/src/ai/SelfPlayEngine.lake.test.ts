@@ -16,7 +16,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SelfPlayEngine } from './SelfPlayEngine';
 import { RandomAgent } from './RandomAgent';
+import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING } from './AgentTuning';
 import type { PlayerObservation, VoteRecord, QuestRecord } from './types';
+
+// 2026-10-12: the production default (`DEFAULT_AGENT_TUNING`) flips the good
+// holder to "most suspicious" and the evil claim to "always good". The tests
+// below pin the pre-2026-10-12 policy, so they pass the legacy tuning
+// explicitly; `SelfPlayEngine.tuning.test.ts` / `LakePolicy.tuning.test.ts`
+// cover the switches. The two assertions on the new default pass
+// `DEFAULT_AGENT_TUNING` explicitly too: the engine's default argument is
+// `getDefaultAgentTuning()`, which re-reads `AVALON_TUNING_*` from the
+// environment on every call, and strength_benchmark.md tells developers to
+// export those variables as a temporary switch.
+const LEGACY = { ...LEGACY_AGENT_TUNING };
+const PRODUCTION = { ...DEFAULT_AGENT_TUNING };
 
 function makeObs(partial: Partial<PlayerObservation> & {
   allPlayerIds: string[];
@@ -89,8 +102,11 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
       questHistory,
     });
     const validTargets = ids.filter(id => id !== 'P1');
-    const target = engine.pickLadyTarget('good', obs, validTargets);
+    const target = engine.pickLadyTarget('good', obs, validTargets, LEGACY);
     expect(target).toBe('P7'); // lowest suspicion (only-on-success), unknown-camp
+    // 2026-10-12 default (`goodLakeTargetMostSuspicious`): the most
+    // suspicious unknown-camp seat instead — P2 (two failed quests).
+    expect(engine.pickLadyTarget('good', obs, validTargets, PRODUCTION)).toBe('P2');
   });
 
   it('good holder falls back to any valid target when all remaining are known evil', () => {
@@ -133,7 +149,7 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     });
     // P0 is the holder. validTargets exclude self.
     const validTargets = ids.filter(id => id !== 'P0');
-    const target = engine.pickLadyTarget('good', obs, validTargets);
+    const target = engine.pickLadyTarget('good', obs, validTargets, LEGACY);
     // Must NOT lake the highest-red (P1 — pure R1-fail with no recovery).
     expect(target).not.toBe('P1');
     // Should lake either P2 or P7 (only on success — cleanest blue).
@@ -230,7 +246,11 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
       allPlayerIds: ids,
       knownEvils:   ['P3'],
     });
-    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good')).toBe('evil');
+    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', LEGACY)).toBe('evil');
+    // `evilLakeClaimAlwaysGood` is NOT in the production default (更像真人但紅方 −0.5pp，
+    // docs/ai/strength_benchmark.md), so the default still muddies; switched on it says "good".
+    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', PRODUCTION)).toBe('evil');
+    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', { ...PRODUCTION, evilLakeClaimAlwaysGood: true })).toBe('good');
   });
 
   it('evil holder with no pressured ally and no distinct opponent picks deterministically', () => {

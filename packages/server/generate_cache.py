@@ -18,13 +18,17 @@ Configuration (environment variables, all optional, checked in this order):
     AVALON_STATS_CREDENTIALS_JSON  the key file's JSON content
     (neither set)                  C:\\Users\\admin\\.claude\\credentials\\google_sheets_concise_beanbag.json
     AVALON_STATS_SHEET_ID          spreadsheet id (default: SHEET_ID below)
+    AVALON_STATS_AS_OF             leaderboard reference day YYYY-MM-DD (default:
+                                   today in Taiwan, +08); set it to reproduce a run
 
 Where each top-level section comes from:
     refreshed from the Sheet  overview, players, playerDetails, missions, lake,
-                              rounds, seatOrder, captainAnalysis (all from the
-                              牌譜 game log; players = every name in 玩1..玩0,
-                              see compute_player_stats) and chemistry (同贏 /
-                              同輸 / 贏相關 / 同贏-同輸 tabs). 生涯報表 is not read.
+                              rounds, seatOrder, captainAnalysis, leaderboard (all
+                              from the 牌譜 game log; players = every name in
+                              玩1..玩0, see compute_player_stats; leaderboard =
+                              the dated boards of compute_leaderboard, constants
+                              in LEADERBOARD_CONFIG) and chemistry (同贏 / 同輸 /
+                              贏相關 / 同贏-同輸 tabs). 生涯報表 is not read.
                               The game log is 牌譜 plus, when that tab exists,
                               Discord匯入 (games discord_records_import.py
                               copied from the Discord forum, same columns);
@@ -33,13 +37,32 @@ Where each top-level section comes from:
                               merge_game_logs.
     recomputed here           strength (from players, via
                               scripts/build_archetype_strength.py)
-    carried over              archetype, playstyle, featureStudies and any other
-                              section this script does not build. They are made
-                              by scripts/build_*.py from files that exist only on
+    carried over              archetype, playstyle and any other section this
+                              script does not build. They are made by
+                              scripts/build_*.py from files that exist only on
                               the owner's PC, so they are copied unchanged from
                               the existing analysis_cache.json; players new since
                               then get the same hasData=false placeholder rows
                               those scripts write.
+    carried over + refreshed  featureStudies: L141 (lake claim reliability) is
+                              recomputed from the game log on every run
+                              (compute_lake_claim_feature); L142 / L143 / L136 /
+                              L139 keep the numbers of the existing file but get
+                              their conclusions rewritten from those numbers
+                              (annotate_feature_studies). generatedAt and
+                              sampleSize.games are this run's.
+
+The as-of day (leaderboard.asOf, every board's period, featureStudies.generatedAt,
+L141's computedAt) moves on every day, so a run whose only difference from the
+existing file is that day writes nothing (only_the_day_changed): the workflow then
+has nothing to commit and Render does not redeploy. A 日期時間 after the as-of day
+is a typo and counts as no date (drop_dates_after; the run logs how many).
+
+Two-stage outcome (docs/stats/two_stage_outcome.md, Edward 2026-10-12): mission
+stage 三紅 vs 三藍, assassination stage settles 三藍, final result red = 三紅 +
+三藍死 and blue = 三藍活. The final* / excess* player fields, overview.schemaVersion
+2 blocks and the leaderboard use the final result; every older field keeps the
+mission-stage rule (三藍死 = blue win) so no existing number changes.
 
 Safety: the new cache is checked before it replaces the old file. The write is
 refused (exit 4) if it is empty or malformed, has fewer games in total than the
@@ -67,6 +90,8 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
+import datetime as dt
 import functools
 import importlib.util
 import json
@@ -112,11 +137,12 @@ DISCORD_IMPORT_TAB = "Discord匯入"
 # Sections built from the Sheet by this script.
 SHEET_SECTIONS = (
     "overview", "players", "playerDetails", "chemistry", "missions",
-    "lake", "rounds", "seatOrder", "captainAnalysis",
+    "lake", "rounds", "seatOrder", "captainAnalysis", "leaderboard",
 )
 # Sections recomputed here from the refreshed players.
 DERIVED_SECTIONS = ("strength",)
-# Sections built on the owner's PC from files not in the repo (carried over).
+# Sections built on the owner's PC from files not in the repo (carried over). featureStudies
+# is carried over too, then refreshed: see refresh_feature_studies.
 OWNER_PC_SECTIONS = ("archetype", "playstyle", "featureStudies")
 CHEMISTRY_MATRICES = ("coWin", "coLose", "winCorr", "coWinMinusLose")
 
@@ -154,6 +180,43 @@ OUTCOME_THREE_RED = "三紅"
 OUTCOME_BLUE_DEAD = "三藍死"
 OUTCOME_BLUE_ALIVE = "三藍活"
 OUTCOMES = (OUTCOME_THREE_RED, OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE)
+
+# Two-stage outcome (docs/stats/two_stage_outcome.md, Edward 2026-10-12): the mission stage
+# is 三紅 vs 三藍, the assassination stage settles the 三藍 games, and the FINAL result is
+# red = 三紅 + 三藍死, blue = 三藍活. Only the final* / excess fields, overview.missionStage /
+# assassinationStage / final and the leaderboard use it; every older field keeps the
+# mission-stage rule above (三藍死 = blue win) so its numbers never change.
+FINAL_RED_OUTCOMES = (OUTCOME_THREE_RED, OUTCOME_BLUE_DEAD)
+
+# leaderboard section (docs/stats/two_stage_outcome.md): every constant lives here, the
+# TypeScript side only reads the cache. Day windows count back from asOf, asOf included.
+LEADERBOARD_CONFIG: dict[str, Any] = {
+    "windowDays": 365,              # main / online: games in the last N days
+    "activeDays": 90,               # main / online: must have played in the last N days
+    "minGames": 20,                 # main / online: games in the window
+    "shrinkK": 20,                  # value = excess * games / (games + shrinkK)
+    "fallbackWindowDays": [730, 0],  # main: widened to these (0 = every game) under minBoardRows
+    "minBoardRows": 5,
+    "topN": 10,
+    "onlineCategory": "線瓦",
+    "onlineCoverageMinPct": 60.0,   # online: only when this % of the window's games has a 分類
+    "recentDays": 90,
+    "recentMinGames": 10,
+    "improvedDays": 90,             # improved: last N days vs the improvedPriorDays before them
+    "improvedPriorDays": 275,
+    "improvedMinGames": 10,         # in each of the two spans
+    "assassinDays": 7,
+    "newcomerDays": 90,             # newcomers: first game in the last N days
+    "newcomerMinGames": 5,
+    "roleTitleMinGames": 5,         # roleTitles: previous calendar month, per role
+}
+ENV_AS_OF = "AVALON_STATS_AS_OF"  # YYYY-MM-DD; default: today in Taiwan (+08)
+TAIPEI_TZ = dt.timezone(dt.timedelta(hours=8))
+NO_DATE_PLACEHOLDER = "1900-01-01"  # what the Sheet shows for a date that was never entered
+
+# featureStudies L141 (lake claim reliability): cells with fewer claims are flagged lowSample.
+LAKE_CLAIM_MIN_SAMPLE = 30
+LAKE_LABELS = (("首湖", "Lake 1"), ("二湖", "Lake 2"), ("三湖", "Lake 3"))
 
 # How many offenders the "player lost games" guard names.
 MAX_LISTED_REGRESSIONS = 8
@@ -450,6 +513,7 @@ class GameRow:
         "lake3_holder_role", "lake3_target_role",
         "game_state", "rounds", "round_results",
         "text_record",
+        "date", "category", "kill",  # 日期時間 as YYYY-MM-DD or "", 分類, 刺殺 (target seat or "")
     )
 
 
@@ -470,6 +534,62 @@ def normalize_player_name(raw: object) -> str:
     if not raw:
         return ""
     return " ".join(_INVISIBLE_CHARS_RE.sub("", str(raw)).split())
+
+
+_DATE_RE = re.compile(r"^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2})(?!\d)")
+
+
+def parse_game_date(raw: object) -> str:
+    """A 日期時間 cell as YYYY-MM-DD, or '' when there is no usable date.
+
+    Accepts YYYY/MM/DD, YYYY/M/D, YYYY-MM-DD and YYYY.MM.DD (full-width digits and
+    separators included), optionally followed by a time. The Sheet's 1900/01/01
+    placeholder (date never entered), blanks, impossible dates and anything else give
+    ''. Nothing is guessed: a game without a date stays out of every dated statistic.
+    """
+    text = unicodedata.normalize("NFKC", str(raw or "")).strip()
+    m = _DATE_RE.match(text)
+    if not m:
+        return ""
+    try:
+        iso = dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+    except ValueError:
+        return ""
+    return "" if iso == NO_DATE_PLACEHOLDER else iso
+
+
+def resolve_as_of(env: Mapping[str, str] | None = None, today: dt.date | None = None) -> dt.date:
+    """The leaderboard's reference day: AVALON_STATS_AS_OF (YYYY-MM-DD), else today in +08."""
+    env = os.environ if env is None else env
+    value = (env.get(ENV_AS_OF) or "").strip()
+    if value:
+        try:
+            return dt.date.fromisoformat(value)
+        except ValueError:
+            raise FatalError(
+                f"{ENV_AS_OF} is {value!r}; expected a date as YYYY-MM-DD.", EXIT_CONFIG, "Bad as-of date",
+            ) from None
+    return today or dt.datetime.now(TAIPEI_TZ).date()
+
+
+def drop_dates_after(games: list[GameRow], as_of: dt.date) -> tuple[list[GameRow], int]:
+    """`games` with every 日期時間 after `as_of` treated as no date, and how many there were.
+
+    A date in the future is a typo (a mistyped year or month on a hand-entered row). Kept, it
+    would make that player 'active' forever, be their lastPlayed and dates.latest, and sit in
+    no dated window. Nothing is guessed: the game keeps counting, as undated (dates.unparsed),
+    until the Sheet row is fixed. The affected rows are copied; the input is untouched.
+    """
+    limit = as_of.isoformat()
+    out: list[GameRow] = []
+    dropped = 0
+    for g in games:
+        if g.date and g.date > limit:
+            g = copy.copy(g)
+            g.date = ""
+            dropped += 1
+        out.append(g)
+    return out, dropped
 
 
 def read_optional_worksheet(sh: gspread.Spreadsheet, title: str) -> list[list[str]] | None:
@@ -687,6 +807,9 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
         g.game_state = col(row, "局勢")
         g.rounds = [col(row, n) for n in round_names]
         g.round_results = [col(row, n) for n in round_result_names]
+        g.date = parse_game_date(col(row, "日期時間"))
+        g.category = col(row, "分類").strip()
+        g.kill = col(row, "刺殺").strip()
 
         game_rows.append(g)
 
@@ -721,9 +844,29 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
 #   order    = totalGames descending, ties in order of first appearance in 牌譜
 #   seatOutcomes / playerDetails: see compute_seat_outcomes_per_player and
 #                    compute_player_details
+#
+# Two-stage fields (docs/stats/two_stage_outcome.md; appended after the fields above,
+# which keep their values):
+#   finalWinRate     = (red 三紅 + red 三藍死 + blue 三藍活) / totalGames
+#   finalRedWinRate  = (三紅 + 三藍死) / rawRedGames;  finalBlueWinRate = 三藍活 / rawBlueGames
+#   missionWinRate   = winRate under its new name (mission-stage rule)
+#   merlinSurvivalRate = blue 三藍活 / (blue 三藍活 + blue 三藍死); 0.0 when the player's blue
+#                    games never reached 三藍 (rawBlueThreeBlue = that denominator)
+#   roleFinalWinRates = per role, final wins / games of that role
+#   expectedFinalWinRate = rnd1(sum(rawRoleGames[r] * overview.roleFinalWinRates[r]) / totalGames)
+#                    using the published (1-decimal) global rates, so anyone can recompute it
+#                    from the cache alone; excessWinRate = finalWinRate - expectedFinalWinRate
+#   firstPlayed / lastPlayed = earliest / latest parsed 日期時間 of the counted games ('' if none)
 
 def _rate(count: float, total: float) -> float:
     return rnd1(count / total * 100) if total else 0.0
+
+
+def is_final_win(role: str, outcome: str) -> bool:
+    """Final-result win of a seat: red roles by 三紅 or 三藍死, blue roles by 三藍活 only."""
+    if role in RED_ROLES:
+        return outcome in FINAL_RED_OUTCOMES
+    return outcome == OUTCOME_BLUE_ALIVE
 
 
 class _PlayerTally:
@@ -732,7 +875,7 @@ class _PlayerTally:
     __slots__ = (
         "games", "wins", "role_games", "role_wins", "faction_games", "faction_wins",
         "faction_outcomes", "seat_games", "seat_wins", "seat_faction_games",
-        "seat_faction_wins", "role_seat",
+        "seat_faction_wins", "role_seat", "role_outcomes", "first_date", "last_date",
     )
 
     def __init__(self) -> None:
@@ -748,8 +891,11 @@ class _PlayerTally:
         self.seat_faction_games: Counter = Counter()  # (seat, faction)
         self.seat_faction_wins: Counter = Counter()
         self.role_seat: dict[str, list[int]] = {}  # "角色|座號" -> [games, wins], first-seen order
+        self.role_outcomes: Counter = Counter()  # (role, 結果), for the final-result rates
+        self.first_date = ""  # YYYY-MM-DD of the earliest / latest dated game, '' if none
+        self.last_date = ""
 
-    def add(self, seat: str, role: str, outcome: str, won: bool) -> None:
+    def add(self, seat: str, role: str, outcome: str, won: bool, date: str = "") -> None:
         faction = "red" if role in RED_ROLES else "blue"
         w = 1 if won else 0
         self.games += 1
@@ -766,8 +912,21 @@ class _PlayerTally:
         cell = self.role_seat.setdefault(f"{role}|{SEAT_LABELS[seat]}", [0, 0])
         cell[0] += 1
         cell[1] += w
+        self.role_outcomes[(role, outcome)] += 1
+        if date:
+            self.first_date = min(self.first_date, date) if self.first_date else date
+            self.last_date = max(self.last_date, date)
 
-    def to_row(self, name: str) -> dict:
+    def final_wins(self, role: str | None = None) -> int:
+        """Final-result wins over all games, or over the games as `role`."""
+        if role is not None:
+            return sum(n for (r, o), n in self.role_outcomes.items() if r == role and is_final_win(r, o))
+        red = sum(self.faction_outcomes[("red", o)] for o in FINAL_RED_OUTCOMES)
+        return red + self.faction_outcomes[("blue", OUTCOME_BLUE_ALIVE)]
+
+    def to_row(self, name: str, role_final_rates: Mapping[str, float] | None = None) -> dict:
+        """The players row; `role_final_rates` (overview.roleFinalWinRates, %) gives the
+        expected final win rate -- without them expectedFinalWinRate / excessWinRate are None."""
         total = self.games
         red_games, blue_games = self.faction_games["red"], self.faction_games["blue"]
         role_win_rates = {r: _rate(self.role_wins[r], self.role_games[r]) for r in ALL_ROLES}
@@ -785,6 +944,15 @@ class _PlayerTally:
                 s: _rate(self.seat_faction_wins[(s, faction)], self.seat_faction_games[(s, faction)])
                 for s in SEATS
             }
+
+        final_wins = self.final_wins()
+        final_win_rate = _rate(final_wins, total)
+        blue_three_blue = outcomes("blue", OUTCOME_BLUE_ALIVE) + outcomes("blue", OUTCOME_BLUE_DEAD)
+        expected: float | None = None
+        excess: float | None = None
+        if role_final_rates is not None and total:
+            expected = rnd1(sum(self.role_games[r] * float(role_final_rates.get(r, 0.0)) for r in ALL_ROLES) / total)
+            excess = rnd1(final_win_rate - expected)
 
         return {
             "name": name,
@@ -823,12 +991,24 @@ class _PlayerTally:
                 key: {"games": float(n), "wins": float(w), "winRate": _rate(w, n)}
                 for key, (n, w) in self.role_seat.items()
             },
+            # Two-stage fields (final result = 三紅 + 三藍死 red, 三藍活 blue); see the block comment.
+            "finalWinRate": final_win_rate,
+            "finalRedWinRate": _rate(outcomes("red", OUTCOME_THREE_RED) + outcomes("red", OUTCOME_BLUE_DEAD), red_games),
+            "finalBlueWinRate": _rate(outcomes("blue", OUTCOME_BLUE_ALIVE), blue_games),
+            "missionWinRate": _rate(self.wins, total),
+            "merlinSurvivalRate": _rate(outcomes("blue", OUTCOME_BLUE_ALIVE), blue_three_blue),
+            "rawBlueThreeBlue": float(blue_three_blue),
+            "roleFinalWinRates": {r: _rate(self.final_wins(r), self.role_games[r]) for r in ALL_ROLES},
+            "expectedFinalWinRate": expected,
+            "excessWinRate": excess,
+            "firstPlayed": self.first_date,
+            "lastPlayed": self.last_date,
         }
 
 
-def compute_player_stats(games: list[GameRow]) -> list[dict]:
-    """players.players rows (without seatOutcomes) from the game log."""
-    tallies: dict[str, _PlayerTally] = {}  # insertion order = first appearance
+def _player_tallies(games: list[GameRow]) -> dict[str, _PlayerTally]:
+    """One tally per distinct name, in order of first appearance; see compute_player_stats."""
+    tallies: dict[str, _PlayerTally] = {}
     for g in games:
         if g.outcome not in OUTCOMES:
             continue
@@ -838,10 +1018,36 @@ def compute_player_stats(games: list[GameRow]) -> list[dict]:
                 continue
             role = g.seat_roles[seat]
             won = g.red_win if role in RED_ROLES else g.blue_win
-            tallies.setdefault(name, _PlayerTally()).add(seat, role, g.outcome, won)
-    rows = [t.to_row(name) for name, t in tallies.items()]
+            tallies.setdefault(name, _PlayerTally()).add(seat, role, g.outcome, won, g.date)
+    return tallies
+
+
+def compute_role_final_win_rates(games: list[GameRow]) -> dict[str, float]:
+    """overview.roleFinalWinRates: per role, final-result win % over every named seat of
+    the games with a 結果 in OUTCOMES (the same seats the players rows count)."""
+    role_games: Counter = Counter()
+    role_wins: Counter = Counter()
+    for g in games:
+        if g.outcome not in OUTCOMES:
+            continue
+        for seat, name in g.seat_players.items():
+            role = g.seat_roles[seat]
+            role_games[role] += 1
+            role_wins[role] += 1 if is_final_win(role, g.outcome) else 0
+    return {r: _rate(role_wins[r], role_games[r]) for r in ALL_ROLES}
+
+
+def compute_player_stats(games: list[GameRow]) -> list[dict]:
+    """players.players rows (without seatOutcomes) from the game log."""
+    role_final_rates = compute_role_final_win_rates(games)
+    rows = [t.to_row(name, role_final_rates) for name, t in _player_tallies(games).items()]
     rows.sort(key=lambda r: -r["totalGames"])  # stable: ties keep first-appearance order
     return rows
+
+
+def shrunk_excess(excess: float, games: float, shrink_k: float) -> float:
+    """Excess win rate pulled towards 0 for small samples: excess * games / (games + K)."""
+    return rnd1(excess * games / (games + shrink_k)) if games + shrink_k > 0 else 0.0
 
 
 def game_log_summary(games: list[GameRow]) -> str:
@@ -851,7 +1057,20 @@ def game_log_summary(games: list[GameRow]) -> str:
     text = f"{named} of {len(games)} games name players ({seats} named seats)"
     if unknown:
         text += f"; {unknown} games have a 結果 other than {'/'.join(OUTCOMES)} and are left out of player stats"
+    dates = date_summary(games)
+    text += f"; dates: {dates['parsed']} parsed, {dates['unparsed']} without a usable 日期時間"
     return text
+
+
+def date_summary(games: list[GameRow]) -> dict[str, Any]:
+    """leaderboard.dates: how many games have a parsed 日期時間 and the range they span."""
+    dated = sorted(g.date for g in games if g.date)
+    return {
+        "parsed": len(dated),
+        "unparsed": len(games) - len(dated),
+        "earliest": dated[0] if dated else "",
+        "latest": dated[-1] if dated else "",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1124,6 +1343,17 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
     three_blue_alive = sum(1 for g in games if g.outcome == "三藍活")
     three_blue_dead = sum(1 for g in games if g.outcome == "三藍死")
 
+    # Two-stage outcome (schemaVersion 2): over the games whose 結果 is in OUTCOMES, so the
+    # counts of each stage add up. 三藍 = 三藍死 + 三藍活; final red = 三紅 + 三藍死.
+    settled = three_red + three_blue_dead + three_blue_alive
+    three_blue = three_blue_dead + three_blue_alive
+    final_red = three_red + three_blue_dead
+    shrink_k = LEADERBOARD_CONFIG["shrinkK"]
+    ranked_by_excess = [p for p in significant if isinstance(p.get("excessWinRate"), (int, float))]
+    ranked_by_excess.sort(
+        key=lambda p: (-shrunk_excess(p["excessWinRate"], p["totalGames"], shrink_k), -p["totalGames"], p["name"])
+    )
+
     return {
         "totalGames": total,
         "totalPlayers": len(players),
@@ -1148,6 +1378,29 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
         ],
         # Seat position win rates (replaces useless per-role win rate comparison)
         "seatPositionWinRates": compute_seat_position_win_rates(games),
+        # Two-stage outcome (docs/stats/two_stage_outcome.md). The keys above keep the
+        # mission-stage rule (三藍死 = blue win); these use the final result.
+        "schemaVersion": 2,
+        "missionStage": {
+            "games": settled, "threeRed": three_red, "threeBlue": three_blue,
+            "redPct": _rate(three_red, settled), "bluePct": _rate(three_blue, settled),
+        },
+        "assassinationStage": {
+            "games": three_blue, "merlinKilled": three_blue_dead, "merlinSurvived": three_blue_alive,
+            "killPct": _rate(three_blue_dead, three_blue), "survivePct": _rate(three_blue_alive, three_blue),
+        },
+        "final": {
+            "games": settled, "redWins": final_red, "blueWins": three_blue_alive,
+            "redPct": _rate(final_red, settled), "bluePct": _rate(three_blue_alive, settled),
+        },
+        "roleFinalWinRates": compute_role_final_win_rates(games),
+        # Same >= MIN_GAMES_THRESHOLD cut as topPlayersByTheory; ordered by the shrunk excess
+        # (excess * games / (games + shrinkK)), the value shown is the plain excess.
+        "topPlayersByExcess": [
+            {"name": p["name"], "excessWinRate": p["excessWinRate"], "finalWinRate": p["finalWinRate"],
+             "expectedFinalWinRate": p["expectedFinalWinRate"], "games": p["totalGames"]}
+            for p in ranked_by_excess[:10]
+        ],
     }
 
 
@@ -1907,14 +2160,607 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Leaderboard: time-windowed boards on the final result (docs/stats/two_stage_outcome.md)
+# ---------------------------------------------------------------------------
+#
+# Every constant is in LEADERBOARD_CONFIG; the TypeScript side only reads the cache.
+# A window of N days is [asOf - N + 1, asOf]; windowDays 0 means every game, dated or
+# not (全期). A game without a parsed 日期時間 is in no dated window (dates.unparsed
+# counts them). Only games whose 結果 is in OUTCOMES count, like the players rows, and
+# a player is the normalized 玩1..玩0 string (case kept, as everywhere else).
+# value = the board's sort key. For main / online / recent / newcomers it is the
+# excess win rate shrunk towards 0 (excess * games / (games + shrinkK)); the excess
+# itself is finalWinRate - expectedFinalWinRate inside the window, the expectation
+# weighting the player's role mix in the window by overview.roleFinalWinRates (all
+# games, so a short window does not change what a role is "worth").
+
+class _SpanTally:
+    """One player's games inside one date span."""
+
+    __slots__ = (
+        "games", "final_wins", "role_games", "role_final_wins",
+        "assassin_attempts", "assassin_hits", "first_date", "last_date", "undated",
+    )
+
+    def __init__(self) -> None:
+        self.games = 0
+        self.final_wins = 0
+        self.role_games: Counter = Counter()
+        self.role_final_wins: Counter = Counter()
+        self.assassin_attempts = 0  # 刺客 games that reached 三藍 (an assassination happened)
+        self.assassin_hits = 0  # ... and ended 三藍死
+        self.first_date = ""
+        self.last_date = ""
+        self.undated = 0
+
+    def add(self, role: str, outcome: str, date: str) -> None:
+        won = is_final_win(role, outcome)
+        self.games += 1
+        self.final_wins += 1 if won else 0
+        self.role_games[role] += 1
+        self.role_final_wins[role] += 1 if won else 0
+        if role == "刺客" and outcome in (OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE):
+            self.assassin_attempts += 1
+            self.assassin_hits += 1 if outcome == OUTCOME_BLUE_DEAD else 0
+        if date:
+            self.first_date = min(self.first_date, date) if self.first_date else date
+            self.last_date = max(self.last_date, date)
+        else:
+            self.undated += 1
+
+    def final_rate(self) -> float:
+        return _rate(self.final_wins, self.games)
+
+    def expected_rate(self, role_rates: Mapping[str, float]) -> float:
+        return rnd1(sum(self.role_games[r] * float(role_rates.get(r, 0.0)) for r in ALL_ROLES) / self.games) if self.games else 0.0
+
+
+def window_start(end: dt.date, days: int) -> dt.date | None:
+    """First day of the `days`-day window ending on `end` (inclusive); None for 0 = all games."""
+    return end - dt.timedelta(days=days - 1) if days > 0 else None
+
+
+def previous_month(day: dt.date) -> tuple[dt.date, dt.date]:
+    """(first day, last day) of the calendar month before `day`'s."""
+    last = day.replace(day=1) - dt.timedelta(days=1)
+    return last.replace(day=1), last
+
+
+def _in_span(g: GameRow, start: dt.date | None, end: dt.date) -> bool:
+    if start is None:
+        return True
+    return bool(g.date) and start.isoformat() <= g.date <= end.isoformat()
+
+
+def _span_stats(games: list[GameRow], start: dt.date | None, end: dt.date) -> dict[str, _SpanTally]:
+    """{name: tally} over the named seats of the games dated within [start, end]."""
+    out: dict[str, _SpanTally] = {}
+    for g in games:
+        if g.outcome not in OUTCOMES or not _in_span(g, start, end):
+            continue
+        for seat, name in g.seat_players.items():
+            out.setdefault(name, _SpanTally()).add(g.seat_roles[seat], g.outcome, g.date)
+    return out
+
+
+def _ranked(rows: list[dict], top_n: int) -> list[dict]:
+    return [{"rank": i, **row} for i, row in enumerate(rows[:top_n], 1)]
+
+
+def _excess_rows(
+    stats: Mapping[str, _SpanTally], role_rates: Mapping[str, float], min_games: int,
+    shrink_k: float, top_n: int, allowed: set[str] | None = None,
+) -> list[dict]:
+    rows = []
+    for name, s in stats.items():
+        if s.games < min_games or (allowed is not None and name not in allowed):
+            continue
+        final, expected = s.final_rate(), s.expected_rate(role_rates)
+        excess = rnd1(final - expected)
+        rows.append({
+            "name": name, "value": shrunk_excess(excess, s.games, shrink_k), "excessWinRate": excess,
+            "finalWinRate": final, "expectedFinalWinRate": expected, "games": s.games,
+        })
+    rows.sort(key=lambda r: (-r["value"], -r["games"], r["name"]))
+    return _ranked(rows, top_n)
+
+
+def _period(start: dt.date | None, end: dt.date, earliest: str) -> str:
+    return f"{start.isoformat() if start else (earliest or end.isoformat())} ～ {end.isoformat()}"
+
+
+def _board(board_id: str, title: str, title_en: str, period: str, window_days: int, min_games: int,
+           note: str, note_en: str, rows: list[dict], **extra: Any) -> dict:
+    return {
+        "id": board_id, "title": title, "titleEn": title_en, "period": period, "windowDays": window_days,
+        "minGames": min_games, "note": note, "noteEn": note_en, **extra, "rows": rows,
+    }
+
+
+def compute_leaderboard(games: list[GameRow], as_of: dt.date, role_final_rates: Mapping[str, float] | None = None) -> dict:  # noqa: C901
+    """The leaderboard section; boards whose rows are empty are left out."""
+    cfg = LEADERBOARD_CONFIG
+    role_rates = role_final_rates if role_final_rates is not None else compute_role_final_win_rates(games)
+    shrink_k, top_n = cfg["shrinkK"], cfg["topN"]
+    dates = date_summary(games)
+    earliest = dates["earliest"]
+    all_time = _span_stats(games, None, as_of)
+    active_from = window_start(as_of, cfg["activeDays"])
+    active = {
+        name for name, s in all_time.items()
+        if s.last_date and (active_from is None or s.last_date >= active_from.isoformat())
+    }
+    boards: list[dict] = []
+    excess_note = (
+        f"超額勝率 = 期間最終勝率 − 依角色分配算出的預期勝率；排序用縮減值（× 場數 /（場數 + {shrink_k}）），"
+        "樣本少的人不會因為幾場好運就衝到前面"
+    )
+    excess_note_en = (
+        f"Excess = final win rate in the period minus the win rate expected from the roles played; "
+        f"ranked by the shrunk value (× games / (games + {shrink_k})) so a short hot streak does not top the board"
+    )
+
+    # main: widen the window until at least minBoardRows players qualify (0 = every game).
+    main_start: dt.date | None = None
+    main_days = cfg["windowDays"]
+    main_rows: list[dict] = []
+    for days in [cfg["windowDays"], *cfg["fallbackWindowDays"]]:
+        main_days, main_start = days, window_start(as_of, days)
+        main_rows = _excess_rows(_span_stats(games, main_start, as_of), role_rates, cfg["minGames"], shrink_k, top_n, active)
+        if len(main_rows) >= cfg["minBoardRows"]:
+            break
+    main_period = _period(main_start, as_of, earliest)
+    span_label = f"近 {main_days} 天" if main_days else "全期"
+    boards.append(_board(
+        "main", "超額勝率排行", "Excess win rate", main_period, main_days, cfg["minGames"],
+        f"近 {cfg['activeDays']} 天內有出賽、{span_label}至少 {cfg['minGames']} 場；{excess_note}",
+        f"Played in the last {cfg['activeDays']} days and at least {cfg['minGames']} games in the period; {excess_note_en}",
+        main_rows,
+    ))
+
+    # online: 分類 = 線瓦 games of the same period, only when the 分類 column is filled in enough.
+    in_period = [g for g in games if g.outcome in OUTCOMES and _in_span(g, main_start, as_of)]
+    coverage = _rate(sum(1 for g in in_period if g.category), len(in_period))
+    if coverage >= cfg["onlineCoverageMinPct"]:
+        online_games = [g for g in in_period if g.category == cfg["onlineCategory"]]
+        boards.append(_board(
+            "online", f"{cfg['onlineCategory']}超額勝率排行", f"Excess win rate ({cfg['onlineCategory']} games)",
+            main_period, main_days, cfg["minGames"],
+            f"只算分類為「{cfg['onlineCategory']}」的局（期間內 {coverage:.0f}% 的局有填分類）；{excess_note}",
+            f"Games whose 分類 is {cfg['onlineCategory']} only ({coverage:.0f}% of the period's games have a 分類); {excess_note_en}",
+            _excess_rows(_span_stats(online_games, main_start, as_of), role_rates, cfg["minGames"], shrink_k, top_n, active),
+            category=cfg["onlineCategory"], coverage=coverage,
+        ))
+
+    # recent: the last recentDays.
+    recent_start = window_start(as_of, cfg["recentDays"])
+    boards.append(_board(
+        "recent", f"近 {cfg['recentDays']} 天超額勝率", f"Excess win rate, last {cfg['recentDays']} days",
+        _period(recent_start, as_of, earliest), cfg["recentDays"], cfg["recentMinGames"],
+        f"期間至少 {cfg['recentMinGames']} 場；{excess_note}",
+        f"At least {cfg['recentMinGames']} games in the period; {excess_note_en}",
+        _excess_rows(_span_stats(games, recent_start, as_of), role_rates, cfg["recentMinGames"], shrink_k, top_n),
+    ))
+
+    # improved: final win rate of the last improvedDays minus the improvedPriorDays before them.
+    imp_start = window_start(as_of, cfg["improvedDays"])
+    prior_end = imp_start - dt.timedelta(days=1)
+    prior_start = window_start(prior_end, cfg["improvedPriorDays"])
+    recent_stats = _span_stats(games, imp_start, as_of)
+    prior_stats = _span_stats(games, prior_start, prior_end)
+    improved_rows = []
+    for name, now in recent_stats.items():
+        before = prior_stats.get(name)
+        if before is None or now.games < cfg["improvedMinGames"] or before.games < cfg["improvedMinGames"]:
+            continue
+        improved_rows.append({
+            "name": name, "value": rnd1(now.final_rate() - before.final_rate()),
+            "recentFinalWinRate": now.final_rate(), "priorFinalWinRate": before.final_rate(),
+            "recentGames": now.games, "priorGames": before.games, "games": now.games,
+        })
+    improved_rows.sort(key=lambda r: (-r["value"], -r["games"], r["name"]))
+    boards.append(_board(
+        "improved", "進步榜", "Most improved",
+        _period(imp_start, as_of, earliest), cfg["improvedDays"], cfg["improvedMinGames"],
+        f"近 {cfg['improvedDays']} 天最終勝率 − 之前 {cfg['improvedPriorDays']} 天（{_period(prior_start, prior_end, earliest)}）的最終勝率，"
+        f"兩段各至少 {cfg['improvedMinGames']} 場",
+        f"Final win rate of the last {cfg['improvedDays']} days minus that of the {cfg['improvedPriorDays']} days before "
+        f"({_period(prior_start, prior_end, earliest)}); at least {cfg['improvedMinGames']} games in each span",
+        _ranked(improved_rows, top_n), priorPeriod=_period(prior_start, prior_end, earliest),
+    ))
+
+    # assassin: 刺客 hit rate over the last assassinDays (only games that reached 三藍 count).
+    asn_start = window_start(as_of, cfg["assassinDays"])
+    assassin_rows = [
+        {"name": name, "value": _rate(s.assassin_hits, s.assassin_attempts), "hits": s.assassin_hits,
+         "attempts": s.assassin_attempts, "games": s.role_games["刺客"]}
+        for name, s in _span_stats(games, asn_start, as_of).items() if s.assassin_attempts
+    ]
+    assassin_rows.sort(key=lambda r: (-r["value"], -r["attempts"], r["name"]))
+    boards.append(_board(
+        "assassin", f"近 {cfg['assassinDays']} 天刺客刺中率", f"Assassin hit rate, last {cfg['assassinDays']} days",
+        _period(asn_start, as_of, earliest), cfg["assassinDays"], 1,
+        "刺中率 = 三藍死 /（三藍死 + 三藍活）的刺客局；三紅的局沒有刺殺，不算；附刺殺次數與刺客場數",
+        "Hit rate = 三藍死 / (三藍死 + 三藍活) as Assassin; 三紅 games have no assassination and do not count",
+        _ranked(assassin_rows, top_n),
+    ))
+
+    # newcomers: first game (every game dated) within the last newcomerDays.
+    new_start = window_start(as_of, cfg["newcomerDays"])
+    newcomers = {
+        name: s for name, s in all_time.items()
+        if s.first_date and not s.undated and (new_start is None or s.first_date >= new_start.isoformat())
+    }
+    newcomer_rows = _excess_rows(newcomers, role_rates, cfg["newcomerMinGames"], shrink_k, top_n)
+    for row in newcomer_rows:
+        row["firstPlayed"] = newcomers[row["name"]].first_date
+    boards.append(_board(
+        "newcomers", "新人榜", "Newcomers",
+        _period(new_start, as_of, earliest), cfg["newcomerDays"], cfg["newcomerMinGames"],
+        f"首次出賽在近 {cfg['newcomerDays']} 天內、至少 {cfg['newcomerMinGames']} 場；{excess_note}",
+        f"First game within the last {cfg['newcomerDays']} days and at least {cfg['newcomerMinGames']} games; {excess_note_en}",
+        newcomer_rows,
+    ))
+
+    # roleTitles: last calendar month, the best final win rate of each role.
+    month_start, month_end = previous_month(as_of)
+    month_stats = _span_stats(games, month_start, month_end)
+    title_rows: list[dict] = []
+    for role in ALL_ROLES:
+        candidates = [
+            (name, s.role_games[role], s.role_final_wins[role]) for name, s in month_stats.items()
+            if s.role_games[role] >= cfg["roleTitleMinGames"]
+        ]
+        if not candidates:
+            continue
+        name, n, wins = min(candidates, key=lambda c: (-_rate(c[2], c[1]), -c[1], c[0]))
+        title_rows.append({"rank": len(title_rows) + 1, "role": role, "name": name, "value": _rate(wins, n), "games": n, "wins": wins})
+    boards.append(_board(
+        "roleTitles", "上月角色王", "Role titles, last month",
+        _period(month_start, month_end, earliest), (month_end - month_start).days + 1, cfg["roleTitleMinGames"],
+        f"上個月各角色最終勝率第一名（該角色至少 {cfg['roleTitleMinGames']} 場；同率者場數多的優先）",
+        f"Best final win rate per role last month (at least {cfg['roleTitleMinGames']} games as that role; ties go to more games)",
+        title_rows,
+    ))
+
+    return {
+        "asOf": as_of.isoformat(),
+        "dates": dates,
+        "config": copy.deepcopy(cfg),
+        "boards": [b for b in boards if b["rows"]],
+    }
+
+
+def leaderboard_summary(leaderboard: Mapping[str, Any] | None) -> str:
+    """One line for logs / the job summary: counts only, no names."""
+    if not isinstance(leaderboard, Mapping):
+        return "無"
+    boards = leaderboard.get("boards") or []
+    dates = leaderboard.get("dates") or {}
+    parts = [
+        f"{b.get('id')} {len(b.get('rows') or [])} 人" + (f"（{b.get('windowDays')} 天）" if b.get("windowDays") else "（全期）")
+        for b in boards if isinstance(b, Mapping)
+    ]
+    return (
+        f"asOf {leaderboard.get('asOf')}；{'、'.join(parts) if parts else '沒有可做的榜'}；"
+        f"日期可解析 {dates.get('parsed')} 局、無日期 {dates.get('unparsed')} 局"
+    )
+
+
+# ---------------------------------------------------------------------------
+# featureStudies: L141 from the game log; caveats for the carried-over studies
+# ---------------------------------------------------------------------------
+
+_LAKE_LINE_RE = re.compile(r"^(\d)\s*>\s*(\d)(?!\d)\s*(.*)$")
+
+
+def parse_lake_claims(text: str) -> list[tuple[str, str, str]]:
+    """(holder seat, target seat, claim) of every lake line of a 文字記錄, in order.
+
+    A lake line is "H>T x": x = the holder declared the target red, o = blue; no letter
+    (or ?) = no declaration recorded, claim ''. Seats are 牌譜 characters (0 = seat 10).
+    """
+    out: list[tuple[str, str, str]] = []
+    for raw in re.split(r"\r\n|\r|\n", text or ""):
+        m = _LAKE_LINE_RE.match(unicodedata.normalize("NFKC", raw).strip())
+        if not m:
+            continue
+        suffix = m.group(3).strip().lower()
+        out.append((m.group(1), m.group(2), {"x": "紅", "o": "藍"}.get(suffix[:1], "") if suffix else ""))
+    return out
+
+
+def wilson_interval(hits: int, n: int, z: float = 1.959964) -> tuple[float, float]:
+    """Wilson score interval (95% by default) of hits / n, as percentages to 1 decimal."""
+    if n <= 0:
+        return (0.0, 0.0)
+    p = hits / n
+    denominator = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denominator
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denominator
+    return (rnd1(max(0.0, centre - half) * 100), rnd1(min(1.0, centre + half) * 100))
+
+
+def _claim_cell(hits: int, n: int) -> dict:
+    low, high = wilson_interval(hits, n)
+    return {"n": n, "hits": hits, "hitRate": _rate(hits, n), "ciLow": low, "ciHigh": high, "lowSample": n < LAKE_CLAIM_MIN_SAMPLE}
+
+
+def _cell_text(cell: Mapping[str, Any]) -> str:
+    return f"{cell['hitRate']:.1f}%（n={cell['n']}）"
+
+
+def _cell_text_en(cell: Mapping[str, Any]) -> str:
+    return f"{cell['hitRate']:.1f}% (n={cell['n']})"
+
+
+def compute_lake_claim_feature(games: list[GameRow], as_of: dt.date) -> dict:
+    """featureStudies L141 (visualType lakeClaim): when the lake holder declares the target
+    red / blue, how often the target really is, by lake (1st / 2nd / 3rd lake line of the
+    文字記錄) and, in holderRows, by the holder's own faction."""
+    by_lake: dict[tuple[int, str], list[int]] = {(i, c): [0, 0] for i in range(3) for c in ("紅", "藍")}
+    by_holder: dict[tuple[str, str], list[int]] = {(h, c): [0, 0] for h in ("藍", "紅") for c in ("紅", "藍")}
+    links = undeclared = 0
+    for g in games:
+        for i, (holder, target, claim) in enumerate(parse_lake_claims(g.text_record)[:3]):
+            links += 1
+            if not claim:
+                undeclared += 1
+                continue
+            target_faction = "紅" if g.seat_roles.get(target, "忠臣") in RED_ROLES else "藍"
+            holder_faction = "紅" if g.seat_roles.get(holder, "忠臣") in RED_ROLES else "藍"
+            hit = 1 if target_faction == claim else 0
+            for cell in (by_lake[(i, claim)], by_holder[(holder_faction, claim)]):
+                cell[0] += 1
+                cell[1] += hit
+
+    declared_en = {"紅": "evil", "藍": "good"}
+    rows = [
+        {"lake": label, "lakeEn": label_en, "declared": claim, "declaredEn": declared_en[claim],
+         **_claim_cell(by_lake[(i, claim)][1], by_lake[(i, claim)][0])}
+        for i, (label, label_en) in enumerate(LAKE_LABELS) for claim in ("紅", "藍")
+    ]
+    holder_rows = [
+        {"holder": holder, "holderEn": declared_en[holder], "declared": claim, "declaredEn": declared_en[claim],
+         **_claim_cell(by_holder[(holder, claim)][1], by_holder[(holder, claim)][0])}
+        for holder in ("藍", "紅") for claim in ("紅", "藍")
+    ]
+    cell = {(r["lake"], r["declared"]): r for r in rows}
+    hcell = {(r["holder"], r["declared"]): r for r in holder_rows}
+    red_total = _claim_cell(
+        hcell[("紅", "紅")]["hits"] + hcell[("紅", "藍")]["hits"], hcell[("紅", "紅")]["n"] + hcell[("紅", "藍")]["n"],
+    )
+    lakes = [label for label, _ in LAKE_LABELS]
+    low_note = "；n < 30 的格子樣本不足" if any(r["lowSample"] for r in rows) else ""
+    low_note_en = "; cells with n < 30 are small samples" if any(r["lowSample"] for r in rows) else ""
+    hook = (
+        "持湖者說紅時，目標真的是紅方：" + "、".join(f"{lk} {_cell_text(cell[(lk, '紅')])}" for lk in lakes)
+        + "；說藍時目標真的是藍方：" + "、".join(f"{lk} {_cell_text(cell[(lk, '藍')])}" for lk in lakes) + low_note
+    )
+    hook_en = (
+        "When the lake holder says evil, the target really is evil: "
+        + ", ".join(f"{en} {_cell_text_en(cell[(lk, '紅')])}" for lk, en in LAKE_LABELS)
+        + "; when they say good, the target really is good: "
+        + ", ".join(f"{en} {_cell_text_en(cell[(lk, '藍')])}" for lk, en in LAKE_LABELS) + low_note_en
+    )
+    takeaway = (
+        f"藍方持湖幾乎不說謊（說紅 {hcell[('藍', '紅')]['hitRate']:.1f}%、說藍 {hcell[('藍', '藍')]['hitRate']:.1f}% 屬實），"
+        "所以看到湖中宣告先判斷持湖者的陣營，再決定信不信；"
+        f"紅方持湖宣告的可信度只有約 {red_total['hitRate']:.0f}%"
+        f"（說紅 {hcell[('紅', '紅')]['hitRate']:.1f}%、說藍 {hcell[('紅', '藍')]['hitRate']:.1f}% 屬實，n={red_total['n']}），"
+        "紅方說「紅」多半是在誣陷藍方。"
+    )
+    takeaway_en = (
+        f"A good lake holder almost never lies ({hcell[('藍', '紅')]['hitRate']:.1f}% of their evil calls and "
+        f"{hcell[('藍', '藍')]['hitRate']:.1f}% of their good calls are true), so judge the holder's side first; "
+        f"an evil holder's claim is right only about {red_total['hitRate']:.0f}% of the time "
+        f"({hcell[('紅', '紅')]['hitRate']:.1f}% of evil calls, {hcell[('紅', '藍')]['hitRate']:.1f}% of good calls, n={red_total['n']}): "
+        "an evil holder calling someone evil is usually framing a good player."
+    )
+    return {
+        "loopId": "L141",
+        "title": "湖中宣告可信度",
+        "titleEn": "Lake claim reliability",
+        "oneLineHook": hook,
+        "oneLineHookEn": hook_en,
+        "sampleSize": {"games": len(games), "links": links},
+        "visualType": "lakeClaim",
+        "data": {"minSample": LAKE_CLAIM_MIN_SAMPLE, "rows": rows, "holderRows": holder_rows, "undeclared": undeclared},
+        "takeaway": takeaway,
+        "takeawayEn": takeaway_en,
+        "sourceReport": "generate_cache.py",
+        "computedAt": as_of.isoformat(),
+    }
+
+
+_ROLE_FULL_NAMES = {"刺": "刺客", "娜": "莫甘娜", "奧": "奧伯倫", "德": "莫德雷德", "梅": "梅林", "派": "派西維爾", "忠": "忠臣"}
+
+
+def _role_name(row: Mapping[str, Any]) -> str:
+    role = str(row.get("role") or "")
+    return _ROLE_FULL_NAMES.get(role, role)
+
+
+def _annotate_l142(f: dict) -> None:
+    data = f.get("data") if isinstance(f.get("data"), dict) else {}
+    rows = [r for r in (data.get("rows") or []) if isinstance(r, dict)]
+    for r in rows:
+        r["lowSample"] = int(r.get("total") or 0) < LAKE_CLAIM_MIN_SAMPLE
+    for c in data.get("highEvCells") or []:
+        if isinstance(c, dict):
+            c["lowSample"] = int(c.get("n") or 0) < LAKE_CLAIM_MIN_SAMPLE
+    enough = [r for r in rows if not r["lowSample"]]
+    few = [r for r in rows if r["lowSample"]]
+
+    def zh(r: Mapping[str, Any]) -> str:
+        return f"{_role_name(r)} {float(r.get('consistencyRate') or 0):.0f}%（n={r.get('total')}）"
+
+    def en(r: Mapping[str, Any]) -> str:
+        return f"{r.get('roleEn')} {float(r.get('consistencyRate') or 0):.0f}% (n={r.get('total')})"
+
+    f["oneLineHook"] = (
+        "言行一致率，每格附 n：" + "、".join(zh(r) for r in enough)
+        + (f"；樣本不足（n < {LAKE_CLAIM_MIN_SAMPLE}）：" + "、".join(zh(r) for r in few) if few else "")
+    )
+    f["oneLineHookEn"] = (
+        "Consistency rate with n per cell: " + ", ".join(en(r) for r in enough)
+        + (f"; small samples (n < {LAKE_CLAIM_MIN_SAMPLE}): " + ", ".join(en(r) for r in few) if few else "")
+    )
+    few_names = "、".join(_role_name(r) for r in few) or "沒有角色"
+    few_names_en = ", ".join(str(r.get("roleEn")) for r in few) or "no role"
+    rates = [float(r.get("consistencyRate") or 0) for r in enough]
+    span = f"{min(rates):.0f}%～{max(rates):.0f}%" if rates else "—"
+    span_en = f"{min(rates):.0f}-{max(rates):.0f}%" if rates else "n/a"
+    top_few = max(few, key=lambda r: float(r.get("consistencyRate") or 0), default=None)
+    example = f"「{_role_name(top_few)} {float(top_few.get('consistencyRate') or 0):.0f}% 言行一致」只是 {top_few.get('total')} 筆的巧合" if top_few else "小樣本的極端值只是巧合"
+    example_en = (
+        f"\"{top_few.get('roleEn')} {float(top_few.get('consistencyRate') or 0):.0f}% consistent\" is a {top_few.get('total')}-case coincidence"
+        if top_few else "an extreme value from a small sample is a coincidence"
+    )
+    f["takeaway"] = (
+        f"每格先看 n：{few_names}都不到 {LAKE_CLAIM_MIN_SAMPLE} 筆，{example}，不能當規律。"
+        f"樣本夠的角色一致率都落在 {span}，差距不大；言行不一致值得追問，但單憑它判不了陣營。"
+    )
+    f["takeawayEn"] = (
+        f"Read n first: {few_names_en} have fewer than {LAKE_CLAIM_MIN_SAMPLE} cases, so {example_en}, not a rule. "
+        f"Roles with enough data all sit within {span_en}, a small spread; "
+        "an inconsistency is worth a question but does not identify a side on its own."
+    )
+
+
+def _annotate_l143(f: dict) -> None:
+    data = f.get("data") if isinstance(f.get("data"), dict) else {}
+    tiers = {str(r.get("tier")): r for r in (data.get("leaderTierRows") or []) if isinstance(r, dict)}
+    top, low = tiers.get("top_leader") or {}, tiers.get("low_leader") or {}
+
+    def hit(r: Mapping[str, Any]) -> str:
+        return f"{float(r.get('hitRate') or 0):.0f}%（n={r.get('n')}）"
+
+    def hit_en(r: Mapping[str, Any]) -> str:
+        return f"{float(r.get('hitRate') or 0):.0f}% (n={r.get('n')})"
+
+    f["oneLineHook"] = (
+        f"隊長次數多的玩家被刺中率 {hit(top)}，少的 {hit(low)}；隊長次數多寡主要是座位輪替造成的，不代表那個人比較主動"
+    )
+    f["oneLineHookEn"] = (
+        f"Players who led most get hit {hit_en(top)}, those who led least {hit_en(low)}; how often someone leads "
+        "is mostly seat rotation, not how active they are"
+    )
+    f["takeaway"] = (
+        "誰當了幾次隊長主要由座位輪替（從誰開始、打了幾輪）決定，不是玩家主動程度的指標；被刺中率的差距不能讀成"
+        "「話多的人容易被刺」。想猜梅林，看發言與投票內容，不要看隊長次數或座位。"
+    )
+    f["takeawayEn"] = (
+        "How many times someone leads is set by seat rotation (who starts, how many rounds), not by how vocal they are; "
+        "the hit-rate gap does not mean talkative players get shot. To find Merlin, read what people say and how they vote, "
+        "not their lead count or seat."
+    )
+
+
+def _annotate_l136(f: dict) -> None:
+    data = f.get("data") if isinstance(f.get("data"), dict) else {}
+    rows = [r for r in (data.get("rows") or []) if isinstance(r, dict)]
+    hi = max(rows, key=lambda r: float(r.get("signedEv") or 0), default={})
+    lo = min(rows, key=lambda r: float(r.get("signedEv") or 0), default={})
+    hi_ev, lo_ev = float(hi.get("signedEv") or 0), float(lo.get("signedEv") or 0)
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    delta = float(summary.get("delta") or 0)
+    f["oneLineHook"] = (
+        f"各角色改隊後的翻票率差距只有 {hi_ev:+.1f}pp（{_role_name(hi)}）～ {lo_ev:+.1f}pp（{_role_name(lo)}），差距很小"
+    )
+    f["oneLineHookEn"] = (
+        f"Vote-flip rates after a team change differ by only {hi_ev:+.1f}pp ({hi.get('roleEn')}) to "
+        f"{lo_ev:+.1f}pp ({lo.get('roleEn')}) across roles: a tiny gap"
+    )
+    f["takeaway"] = (
+        f"藍紅兩方整體翻票率只差 {delta:.1f}pp，各角色落在 {hi_ev:+.1f} ～ {lo_ev:+.1f}pp 之間，差距太小、不足以當判斷依據；"
+        "不要用「他改票了」來推陣營。"
+    )
+    f["takeawayEn"] = (
+        f"Good and evil flip at almost the same rate (overall gap {delta:.1f}pp, roles within {hi_ev:+.1f} to {lo_ev:+.1f}pp): "
+        "far too small to base a read on. Do not infer a side from a changed vote."
+    )
+
+
+def _annotate_l139(f: dict) -> None:
+    data = f.get("data") if isinstance(f.get("data"), dict) else {}
+    rows = {str(r.get("round")): r for r in (data.get("rows") or []) if isinstance(r, dict)}
+    r3 = rows.get("R3") or {}
+    baseline = float(data.get("baselineRedPct") or 0)
+    delta = float(r3.get("deltaThreeRed") or 0)
+    f["oneLineHook"] = (
+        f"R3 出現 forced P5 的局三紅率 {float(r3.get('threeRedPct') or 0):.1f}%（n={r3.get('n')}），"
+        f"比基準 {baseline:.1f}% {'高' if delta >= 0 else '低'} {abs(delta):.1f}pp；但這是選擇偏誤，不是因果"
+    )
+    f["oneLineHookEn"] = (
+        f"Games with a forced P5 in R3 end 3-red {float(r3.get('threeRedPct') or 0):.1f}% of the time (n={r3.get('n')}), "
+        f"{abs(delta):.1f}pp {'over' if delta >= 0 else 'under'} the {baseline:.1f}% baseline; selection bias, not causation"
+    )
+    f["takeaway"] = (
+        "forced P5（連續五次否決，第五隊強制出發）本身就是局勢已經偏向紅方的結果：藍方掌握不了局面才會一路否決到底，"
+        "這些局本來就比較容易三紅。它只是局勢不利的徵兆，不是「紅方在掩護」的證據，也不能拿來當判斷依據。"
+    )
+    f["takeawayEn"] = (
+        "A forced P5 (five straight rejections, fifth team goes) is itself the result of a game already tilting evil: "
+        "good keeps rejecting because it cannot control the table, so these games were headed for 3-red anyway. "
+        "It is a symptom of a bad position, not evidence of evil cover, and not a read to act on."
+    )
+
+
+_FEATURE_ANNOTATORS: dict[str, Callable[[dict], None]] = {
+    "L142": _annotate_l142, "L143": _annotate_l143, "L136": _annotate_l136, "L139": _annotate_l139,
+}
+
+
+def annotate_feature_studies(section: Mapping[str, Any] | None) -> dict:
+    """A copy of featureStudies whose carried-over studies (L142, L143, L136, L139) get the
+    conclusions their own numbers support -- oneLineHook / takeaway (zh + en) rewritten
+    from the data, lowSample flags (n < LAKE_CLAIM_MIN_SAMPLE) on L142 cells. Pure and
+    idempotent; the numbers and every other study are left as they are."""
+    out = copy.deepcopy(dict(section or {}))
+    for f in out.get("features") or []:
+        if isinstance(f, dict):
+            annotate = _FEATURE_ANNOTATORS.get(str(f.get("loopId")))
+            if annotate is not None:
+                annotate(f)
+    return out
+
+
+def refresh_feature_studies(previous: Mapping[str, Any] | None, games: list[GameRow], as_of: dt.date) -> dict:
+    """featureStudies for this run: the carried-over section (if any) with L141 replaced by
+    the lake-claim study computed from the game log, the other studies annotated, and
+    generatedAt / sampleSize set to this run. Without a previous section it holds L141 only."""
+    section = annotate_feature_studies(previous)
+    feature = compute_lake_claim_feature(games, as_of)
+    features = [f for f in (section.get("features") or []) if isinstance(f, dict)]
+    index = next((i for i, f in enumerate(features) if f.get("loopId") == feature["loopId"]), None)
+    if index is None:
+        features.insert(0, feature)
+    else:
+        features[index] = feature
+    sample = dict(section.get("sampleSize") or {})
+    sample.update({"games": len(games), "lakeLinks": feature["sampleSize"]["links"]})
+    return {
+        "generatedAt": as_of.isoformat(),
+        "sampleSize": sample,
+        **{k: v for k, v in section.items() if k not in ("generatedAt", "sampleSize", "features")},
+        "features": features,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Assemble the cache: Sheet sections + derived + carried-over sections
 # ---------------------------------------------------------------------------
 
-def build_cache(games: list[GameRow], chemistry: dict) -> dict:
-    """The sections computed from the Sheet (SHEET_SECTIONS); players come from the 牌譜 game log."""
+def build_cache(games: list[GameRow], chemistry: dict, as_of: dt.date | None = None) -> dict:
+    """The sections computed from the Sheet (SHEET_SECTIONS); players come from the 牌譜 game log.
+
+    `as_of` is the leaderboard's reference day (resolve_as_of: AVALON_STATS_AS_OF or today +08);
+    a game dated after it counts as undated (drop_dates_after).
+    """
+    as_of = as_of or resolve_as_of()
+    games, _ = drop_dates_after(games, as_of)
     players = compute_player_stats(games)
     overview = compute_overview(games, players)
 
@@ -1938,6 +2784,7 @@ def build_cache(games: list[GameRow], chemistry: dict) -> dict:
         "rounds": compute_rounds(games),
         "seatOrder": compute_seat_order(games),
         "captainAnalysis": compute_captain_analysis(games),
+        "leaderboard": compute_leaderboard(games, as_of, overview["roleFinalWinRates"]),
     }
 
 
@@ -2013,13 +2860,58 @@ def assemble_cache(
     previous: Mapping[str, Any] | None,
     strength_builder: Callable[[list[dict]], dict] | None = None,
     placeholder_builders: Mapping[str, Callable[[float], dict]] | None = None,
+    games: list[GameRow] | None = None,
+    as_of: dt.date | None = None,
 ) -> tuple[dict, dict[str, int]]:
+    """fresh (build_cache) + strength + the carried-over sections of `previous`.
+
+    With `games`, featureStudies is refreshed too (refresh_feature_studies: L141 from the
+    game log, the carried-over studies annotated); without them it is carried as it is.
+    """
     cache = dict(fresh)
     cache["strength"] = (strength_builder or default_strength_builder())(cache["players"]["players"])
     if placeholder_builders is None:
         placeholder_builders = default_placeholder_builders()
     carried = carry_over_sections(cache, previous, placeholder_builders)
+    if games is not None:
+        cache["featureStudies"] = refresh_feature_studies(cache.get("featureStudies"), games, as_of or resolve_as_of())
     return order_like(cache, previous), carried
+
+
+def previous_as_of(previous: Mapping[str, Any] | None) -> dt.date | None:
+    """leaderboard.asOf of the existing cache as a date; None without one (or unreadable)."""
+    leaderboard = (previous or {}).get("leaderboard")
+    value = leaderboard.get("asOf") if isinstance(leaderboard, Mapping) else None
+    try:
+        return dt.date.fromisoformat(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
+
+
+def _canonical(cache: Mapping[str, Any]) -> str:
+    return json.dumps(cache, ensure_ascii=False, sort_keys=True)
+
+
+def only_the_day_changed(cache: Mapping[str, Any], previous: Mapping[str, Any] | None, games: list[GameRow]) -> bool:
+    """True when `cache` differs from `previous` only because the as-of day moved on.
+
+    The as-of day reaches the file through leaderboard (asOf, every board's period and
+    window) and featureStudies (generatedAt, L141's computedAt). Both are rebuilt here from
+    the same games on `previous`'s own asOf; when that reproduces `previous` exactly, the Sheet
+    gave nothing new and the file is left alone (nothing to commit, no redeploy). Without a
+    previous asOf (the first run that writes a leaderboard) everything counts as a change.
+    `games` are the ones `cache` was built from; dates after its own asOf are dropped here
+    as build_cache dropped them.
+    """
+    prev_as_of, as_of = previous_as_of(previous), previous_as_of(cache)
+    if prev_as_of is None or as_of is None or not isinstance(previous, Mapping):
+        return False
+    games, _ = drop_dates_after(games, as_of)
+    replay = dict(cache)
+    overview = cache.get("overview") if isinstance(cache.get("overview"), Mapping) else {}
+    replay["leaderboard"] = compute_leaderboard(games, prev_as_of, overview.get("roleFinalWinRates"))
+    replay["featureStudies"] = refresh_feature_studies(previous.get("featureStudies"), games, prev_as_of)
+    return _canonical(replay) == _canonical(previous)
 
 
 # ---------------------------------------------------------------------------
@@ -2228,6 +3120,13 @@ def compare_summary(
         f"{label} {_arrow(old_ob.get(key), new_ob.get(key))}"
         for label, key in (("三紅", "threeRed"), ("三藍死", "threeBlueDead"), ("三藍活", "threeBlueAlive"))
     ))
+    final = new_ov.get("final") or {}
+    if final:
+        lines.append(
+            f"- 最終（三紅 + 三藍死 = 紅勝）：紅 {_fmt_rate(final.get('redPct'))}%／藍 {_fmt_rate(final.get('bluePct'))}%"
+            f"（{_fmt_count(final.get('games'))} 局）"
+        )
+    lines.append(f"- 排行榜：{leaderboard_summary(new.get('leaderboard'))}")
 
     top = sorted(new_rows.values(), key=lambda r: -float(r.get("totalGames") or 0))[:top_n]
     if top:
@@ -2352,20 +3251,32 @@ def run(
     print(f"Service account: {source.client_email() or '(client_email not found in key)'}")
     print(f"Spreadsheet: {sheet_id}")
 
+    as_of = resolve_as_of()
+    print(f"Leaderboard as of: {as_of.isoformat()}" + (f" (from {ENV_AS_OF})" if os.environ.get(ENV_AS_OF) else ""))
+
     previous = load_previous_cache(output_path, allow_shrink)
     games, chemistry = fetch_sheet_data(source, sheet_id)
+    games, future_dated = drop_dates_after(games, as_of)  # build_cache does this too; here for the log line
+    if future_dated:
+        print(f"  {future_dated} game(s) have a 日期時間 after {as_of.isoformat()} (mistyped in the Sheet?): "
+              "counted as undated until the row is fixed")
 
     print("Computing endpoint responses...")
-    cache, carried = assemble_cache(build_cache(games, chemistry), previous)
+    cache, carried = assemble_cache(build_cache(games, chemistry, as_of), previous, games=games, as_of=as_of)
 
     problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss)
     refusal = f"Refusing to overwrite {output_path.name}:\n- " + "\n- ".join(problems)
+    unchanged = not problems and only_the_day_changed(cache, previous, games)
+    same_but_day = f"與現有快取（asOf {previous_as_of(previous)}）只差 asOf 日期，內容相同"
+    future_lines = [f"- 日期在 asOf 之後的局：{future_dated}（日期時間打錯？已當作無日期）"] if future_dated else []
 
     if compare:
         summary = compare_summary(cache, previous, compare_threshold)
         if problems:
             summary += ["", "**守門：會拒絕寫入**（正式執行會以 exit 4 結束，現有快取不動）："]
             summary += [f"- {p}" for p in problems]
+        elif unchanged:
+            summary += ["", f"守門：通過；{same_but_day}（正式執行不會寫入，不會 commit）"]
         else:
             summary += ["", "守門：通過（正式執行會寫入）"]
         print("\n".join(summary))
@@ -2377,6 +3288,12 @@ def run(
 
     if problems:
         raise FatalError(refusal, EXIT_DATA, "Analysis cache sanity check failed")
+
+    if unchanged:
+        print(f"{output_path.name} differs from the existing file only by the as-of day "
+              f"(existing asOf {previous_as_of(previous)}, this run {as_of.isoformat()}); not written, nothing to commit.")
+        _append_step_summary(["### 戰績分析快取", f"- {same_but_day}，未寫入", *future_lines])
+        return 0
 
     print(f"Writing to {output_path}...")
     write_cache_atomically(cache, output_path)
@@ -2393,14 +3310,18 @@ def run(
     print(f"  players: {cache['players']['total']} entries (from 牌譜 玩1..玩0)")
     print(f"  playerDetails: {len(cache['playerDetails'])} entries")
     print(f"  chemistry: {len(cache['chemistry'])} matrices")
+    print(f"  leaderboard: {leaderboard_summary(cache.get('leaderboard'))}")
     print(f"  refreshed from the Sheet: {', '.join(SHEET_SECTIONS)}")
     print(f"  recomputed from players: {', '.join(DERIVED_SECTIONS)}")
     print(f"  carried over from the existing cache: {carried_desc}")
+    print("  featureStudies: L141 recomputed from the game log; the other studies carried over with their conclusions annotated")
     _append_step_summary([
         "### 戰績分析快取",
         f"- 局數：{prev_games} → {cache['overview']['totalGames']}；玩家：{prev_players} → {cache['overview']['totalPlayers']}",
+        f"- 排行榜：{leaderboard_summary(cache.get('leaderboard'))}",
         f"- 由試算表重算：{', '.join(SHEET_SECTIONS)}；由 players 重算：{', '.join(DERIVED_SECTIONS)}",
-        f"- 沿用現有快取（需在擁有者電腦重建）：{carried_desc}",
+        f"- 沿用現有快取（需在擁有者電腦重建）：{carried_desc}；featureStudies 的 L141 由牌譜重算、其餘沿用並改寫結論",
+        *future_lines,
     ])
     return 0
 

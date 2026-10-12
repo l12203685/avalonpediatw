@@ -238,7 +238,9 @@
       "radar": "玩家雷達",
       "aiSelfplay": "AI 自對弈",
       "deepAnalysis": "深度分析",
-      "featureStudies": "特徵研究"
+      "featureStudies": "特徵研究",
+      "boards": "排行",
+      "analysis": "分析"
     },
     "expandTiers": "分層瀏覽 (5 組 ELO 分層)",
     "collapseTiers": "收合分層瀏覽",
@@ -258,25 +260,41 @@
       "noteLabel": "註:",
       "feature": {
         "L141": {
-          "title": "湖中宣告真假率",
-          "hook": "藍方角色幾乎不說謊 (<1.5%), 紅方刺客最會 (54%)"
+          "title": "湖中宣告可信度",
+          "hook": "藍方持湖幾乎不說謊（宣告與事實一致 99%）；紅方持湖只有約 55% 可信，說「紅」多半是在誣陷藍方"
         },
         "L142": {
           "title": "持湖宣告後言行一致度",
-          "hook": "刺客 100% 言行一致 (掩護精準), 娜 81% 最易露馬腳"
+          "hook": "樣本夠的角色一致率都在 85%～95%，差距不大；刺客 100% 只有 15 筆，樣本不足，不能當規律"
         },
         "L143": {
           "title": "刺客目標座位偏好",
-          "hook": "隊長次數最多的玩家被刺中率 49%, 沉默玩家只有 39%"
+          "hook": "隊長次數多的玩家被刺中率 49%、少的 39%，但隊長次數多寡主要是座位輪替造成，不代表那個人比較主動"
         },
         "L136": {
           "title": "改隊後投票翻轉率",
-          "hook": "梅林 +1.57pp 翻得最多 (藍信號), 莫甘娜 -2.18pp 最不翻"
+          "hook": "各角色改隊後的翻票率差距只有 ±1.6pp（梅林 +1.6、莫甘娜 −2.2），差距很小，不足以判斷陣營"
         },
         "L139": {
           "title": "R3+ 強制 P5 局勢偏移",
-          "hook": "R3 出現 forced P5 → 三紅率 +4.50pp, R4 +5.28pp"
+          "hook": "R3 出現 forced P5 的局三紅率高 4.5pp，但這是選擇偏誤（局勢已偏紅才會否決到底），不是因果"
         }
+      },
+      "loadError": "特徵研究載入失敗",
+      "notFound": "快取裡還沒有 {{loopId}} 這項研究",
+      "lowSample": "樣本不足",
+      "lowSampleHint": "n < {{min}} 標「樣本不足」",
+      "tier": "隊長次數",
+      "hitRate": "被刺中率",
+      "seat": "座位",
+      "lake": {
+        "lake": "湖",
+        "holder": "持湖者",
+        "declaredRed": "宣告紅",
+        "declaredBlue": "宣告藍",
+        "columns": "每格：可信度 %、[95% 區間]、n",
+        "byHolder": "依持湖者陣營",
+        "undeclared": "另有 {{count}} 條湖線沒寫宣告，未計入"
       }
     },
     "deep": {
@@ -319,15 +337,35 @@
       "overview": {
         "outcomeBreakdown": "三種結果分布",
         "outcomeCardLabel": "三種結果分布",
-        "theoryRanking": "理論勝率排行 (50 場以上)",
-        "theoryColumn": "理論勝率",
         "gamesRanking": "場次排行",
         "gamesColumn": "場次",
         "seatPositionTitle": "位置勝率",
         "seatPositionSub": "各位置整體勝率及角色勝率分布",
         "seatLabel": "位置 {{seat}}",
         "seatGames": "{{seat}} 號 ({{games}} 場)",
-        "overallWinRate": "整體勝率"
+        "overallWinRate": "整體勝率",
+        "stages": {
+          "title": "三段結算",
+          "mission": "任務結算",
+          "assassination": "刺殺結算",
+          "final": "最終",
+          "red": "紅",
+          "blue": "藍",
+          "killed": "刺中",
+          "survived": "存活",
+          "gamesSuffix": "{{count}} 局",
+          "rule": "任務結算：三紅 = 紅、三藍 = 藍 → 刺殺結算：三藍局是否刺中梅林 → 最終：藍方要贏必須三藍且梅林活，三紅或三藍死都算紅勝",
+          "derived": "舊快取：由三種結果分布現場算"
+        },
+        "excessRanking": "超額勝率排行（30 場以上）",
+        "excessRankingLegacy": "理論勝率排行（舊口徑：任務結算，30 場以上）",
+        "excessColumn": "超額勝率",
+        "finalWinRateColumn": "最終勝率",
+        "legacyTheoryColumn": "理論勝率（舊口徑）",
+        "excessLegend": "超額勝率 = 最終勝率 − 依角色分配算出的預期勝率，可為負；依全期縮減後超額勝率排序",
+        "excessLegendLegacy": "快取尚未重算，暫以舊的理論勝率（≈ 任務結算勝率，三藍死算藍勝）顯示",
+        "excessEmpty": "尚無玩家達 30 場，超額勝率排行暫無資料",
+        "seatPositionBasis": "整體勝率與角色勝率為任務結算口徑（三藍死算藍勝）；三種結果分布見滑鼠提示"
       },
       "lake": {
         "loading": "載入湖中女神分析…",
@@ -478,6 +516,110 @@
         "labelOutcomeHighRed": "55%+ = 紅方優勢",
         "labelOutcomeMid": "40-50% = 中性",
         "labelOutcomeHighBlue": "35% 以下 = 藍方優勢"
+      },
+      "assassination": {
+        "title": "刺殺結算",
+        "sub": "只算三藍局（藍方完成三任務之後）：刺客是否刺中梅林",
+        "threeBlueGames": "三藍局數",
+        "killRate": "三藍局刺中率",
+        "surviveRate": "梅林存活率",
+        "killedCount": "刺中 {{count}} 局",
+        "survivedCount": "存活 {{count}} 局",
+        "rule": "三藍死 = 紅方最終獲勝；三藍活 = 藍方最終獲勝。三紅的局沒有刺殺，不計入",
+        "legacy": "舊快取：由 merlinKillRate（三藍局刺中率）推算"
+      },
+      "roleFinal": {
+        "title": "各角色最終勝率",
+        "sub": "紅角 = 三紅 + 三藍死；藍角 = 三藍活（全體玩家、全期）",
+        "note": "超額勝率的「預期勝率」就是用這張表依本人各角色出場比例加權算出來的"
+      },
+      "radar": {
+        "loadingPlayers": "載入玩家資料…",
+        "loadingRadar": "載入雷達圖…",
+        "search": "搜尋玩家…",
+        "title": "{{name}} — 能力雷達圖",
+        "details": "{{name}} — 詳細數據",
+        "axes": {
+          "winRate": "最終勝率",
+          "redWinRate": "紅方最終勝率",
+          "blueMerlinProtect": "藍方三藍活率",
+          "missionWinRate": "任務結算勝率",
+          "excessWinRate": "超額勝率",
+          "redMerlinKillRate": "紅方刺中率",
+          "experience": "經驗"
+        },
+        "legend": {
+          "winRate": "最終勝率：紅方場的三紅 + 三藍死、藍方場的三藍活，除以總場數",
+          "redWinRate": "紅方最終勝率：擔任紅方時三紅或三藍死的比例",
+          "blueMerlinProtect": "藍方三藍活率：擔任藍方時三藍且梅林活的比例",
+          "missionWinRate": "任務結算勝率：舊口徑，三藍死也算藍方贏",
+          "excessWinRate": "超額勝率：最終勝率 − 預期勝率（依本人角色分配加權）；圖上以 50 為中心映射到 0–100（50 = 持平，算不出來時畫在 50）",
+          "redMerlinKillRate": "紅方刺中率：擔任紅方時三藍死的比例",
+          "experience": "經驗：總場次 / 10（上限 100）"
+        },
+        "stats": {
+          "totalGames": "總場次",
+          "finalWinRate": "最終勝率",
+          "excessWinRate": "超額勝率",
+          "expectedWinRate": "預期勝率",
+          "missionWinRate": "任務結算勝率",
+          "merlinSurvival": "梅林存活率（藍方三藍局）",
+          "redFinal": "紅方最終勝率",
+          "blueFinal": "藍方三藍活率",
+          "red3Red": "三紅（紅方）",
+          "redMerlinDead": "三藍死（紅方）",
+          "blueMerlinAlive": "三藍活（藍方）",
+          "roleWinRates": "角色勝率"
+        },
+        "legacyNote": "角色勝率為任務結算口徑（三藍死算藍勝）"
+      }
+    },
+    "boards": {
+      "loading": "載入排行…",
+      "notGenerated": "排行尚未產生（每日 03:47 重算）",
+      "backendOutdated": "後端尚未更新到有排行 API 的版本（404），請稍後重試",
+      "loadFailed": "排行載入失敗",
+      "retry": "重試",
+      "asOf": "統計至 {{date}}",
+      "datesNote": "{{parsed}} 局有日期、{{unparsed}} 局無日期",
+      "period": "期間 {{period}}",
+      "minGames": "至少 {{count}} 場",
+      "widened": "人數不足，期間放寬為{{span}}",
+      "allTime": "全期",
+      "days": "近 {{count}} 天",
+      "empty": "此榜尚無人上榜",
+      "precisionTitle": "精算榜（8 項指標）",
+      "col": {
+        "rank": "名次",
+        "name": "玩家",
+        "excess": "超額勝率",
+        "shrunk": "排序值（縮減後）",
+        "finalWinRate": "最終勝率",
+        "expected": "預期勝率",
+        "games": "期間場數"
+      }
+    },
+    "analysis": {
+      "subtitle": "{{count}} 局實戰數據",
+      "tabs": {
+        "overview": "總覽",
+        "teams": "派隊",
+        "votes": "投票",
+        "missions": "任務",
+        "lake": "湖中女神",
+        "assassination": "刺殺",
+        "position": "位置",
+        "roles": "角色與默契",
+        "players": "玩家雷達"
+      },
+      "votesNote": "投票目前只有「改隊後投票翻轉率」一項研究；其他投票相關指標（同意率、否決鏈、跟票）尚未整理進快取，之後補上會放在這一頁。",
+      "section": {
+        "captain": "隊長分析",
+        "firstVote": "1-1 派票",
+        "feature": "特徵研究",
+        "seatHeatmap": "座位勝率熱圖",
+        "seatOrder": "派梅娜順序",
+        "chemistry": "默契矩陣"
       }
     }
   },
