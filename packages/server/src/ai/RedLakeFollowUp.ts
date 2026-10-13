@@ -29,6 +29,48 @@
 import type { PlayerObservation } from './types';
 import { mayBreakHardRules } from './HeuristicAgent';
 
+/**
+ * Tactic knobs of `evilVouchFollowUp`. The default is the policy behind the
+ * switch; the alternative exists for the benchmark scripts only
+ * (`AVALON_VOUCH_FOLLOW_UP_VARIANT`, read by the scripts through
+ * `vouchFollowUpOptionsFromEnv` + `setVouchFollowUpOptions`; the server
+ * never reads it).
+ *   - `decisiveWindow: 'exempt'` — in red's decisive window (Q11,
+ *     `mayBreakHardRules`: red listening / R5 cleanup) the rules are off,
+ *     like the baseline's 硬1 / 硬2 exception;
+ *   - `decisiveWindow: 'follow'` — keep the word there too (humans do: in
+ *     that window a red holder still puts a vouched teammate on 79.5% of
+ *     their later teams, a vouched blue 90.9%, a framed seat 10.2%).
+ */
+export interface VouchFollowUpOptions {
+  decisiveWindow: 'exempt' | 'follow';
+}
+
+export const DEFAULT_VOUCH_FOLLOW_UP_OPTIONS: Readonly<VouchFollowUpOptions> = Object.freeze({
+  decisiveWindow: 'exempt',
+});
+
+let activeVouchFollowUpOptions: Readonly<VouchFollowUpOptions> = DEFAULT_VOUCH_FOLLOW_UP_OPTIONS;
+
+/** Benchmark scripts only (`undefined` restores the default). */
+export function setVouchFollowUpOptions(options: VouchFollowUpOptions | undefined): void {
+  activeVouchFollowUpOptions = Object.freeze({ ...(options ?? DEFAULT_VOUCH_FOLLOW_UP_OPTIONS) });
+}
+
+/** Parses `AVALON_VOUCH_FOLLOW_UP_VARIANT="decisiveWindow=follow"` (scripts only). */
+export function vouchFollowUpOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): VouchFollowUpOptions {
+  const out: VouchFollowUpOptions = { ...DEFAULT_VOUCH_FOLLOW_UP_OPTIONS };
+  for (const part of (env.AVALON_VOUCH_FOLLOW_UP_VARIANT ?? '').split(',')) {
+    const [k, v] = part.split('=').map((x) => x.trim());
+    if (k === 'decisiveWindow' && (v === 'exempt' || v === 'follow')) out.decisiveWindow = v;
+  }
+  return out;
+}
+
+function inExemptWindow(obs: PlayerObservation): boolean {
+  return activeVouchFollowUpOptions.decisiveWindow === 'exempt' && mayBreakHardRules(obs);
+}
+
 export interface OwnLakeDeclarations {
   /** Seats this player publicly declared blue ('good'). */
   blue: string[];
@@ -58,7 +100,7 @@ export function evilVouchTeamConstraint(
   obs: PlayerObservation,
 ): { required: string[]; banned: string[] } | null {
   if (obs.myTeam !== 'evil') return null;
-  if (mayBreakHardRules(obs)) return null;
+  if (inExemptWindow(obs)) return null;
   const own = ownLakeDeclarations(obs);
   const seated = new Set(obs.allPlayerIds);
   const required = own.blue.filter((id) => seated.has(id));
@@ -82,7 +124,7 @@ export function evilVouchVoteRule(obs: PlayerObservation): 'reject' | null {
   if (obs.failCount >= 4) return null;
   if (obs.currentLeader === obs.myPlayerId) return null;
   if ((obs.proposedTeam ?? []).includes(obs.myPlayerId)) return null;
-  if (mayBreakHardRules(obs)) return null;
+  if (inExemptWindow(obs)) return null;
   const own = ownLakeDeclarations(obs);
   if (own.blue.length === 0 && own.red.length === 0) return null;
   const team = new Set(obs.proposedTeam ?? []);

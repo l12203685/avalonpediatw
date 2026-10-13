@@ -65,6 +65,7 @@ import {
   evilLakeHumanOptionsFromEnv,
   setEvilLakeHumanOptions,
 } from '../src/ai/LakePolicy';
+import { setVouchFollowUpOptions, vouchFollowUpOptionsFromEnv } from '../src/ai/RedLakeFollowUp';
 import type { AgentAction, AvalonAgent, PlayerObservation, SelfPlayResult } from '../src/ai/types';
 
 interface Args {
@@ -484,6 +485,11 @@ async function main(): Promise<void> {
   // (AVALON_EVIL_LAKE_HUMAN_VARIANT, e.g. "chaos=never"); the server never reads it.
   const evilLakeOptions = evilLakeHumanOptionsFromEnv();
   setEvilLakeHumanOptions(evilLakeOptions);
+  // Benchmark-only knob for `evilVouchFollowUp` (AVALON_VOUCH_FOLLOW_UP_VARIANT, e.g.
+  // "decisiveWindow=follow"); the server never reads it.
+  const vouchOptions = vouchFollowUpOptionsFromEnv();
+  setVouchFollowUpOptions(vouchOptions);
+  if (process.env.AVALON_VOUCH_FOLLOW_UP_VARIANT) process.stderr.write(`evilVouchFollowUp variant: ${JSON.stringify(vouchOptions)}\n`);
   if (JSON.stringify(evilLakeOptions) !== JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)) {
     process.stderr.write(`evilLakeHumanStrategy tactic mix: ${JSON.stringify(evilLakeOptions)}\n`);
   }

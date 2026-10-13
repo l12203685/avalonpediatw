@@ -56,6 +56,7 @@ import {
   evilLakeHumanOptionsFromEnv,
   setEvilLakeHumanOptions,
 } from '../src/ai/LakePolicy';
+import { setVouchFollowUpOptions, vouchFollowUpOptionsFromEnv } from '../src/ai/RedLakeFollowUp';
 import {
   analyzeLakeChain,
   findRule3Violators,
@@ -517,6 +518,11 @@ async function main(): Promise<void> {
   const baseTuning = resolveAgentTuning(args.base, { ...LEGACY_AGENT_TUNING });
   const evilLakeOptions = evilLakeHumanOptionsFromEnv();
   setEvilLakeHumanOptions(evilLakeOptions);
+  // Benchmark-only knob for `evilVouchFollowUp` (AVALON_VOUCH_FOLLOW_UP_VARIANT, e.g.
+  // "decisiveWindow=follow"); the server never reads it.
+  const vouchOptions = vouchFollowUpOptionsFromEnv();
+  setVouchFollowUpOptions(vouchOptions);
+  if (process.env.AVALON_VOUCH_FOLLOW_UP_VARIANT) process.stderr.write(`evilVouchFollowUp variant: ${JSON.stringify(vouchOptions)}\n`);
   const variantKnob = JSON.stringify(evilLakeOptions) === JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)
     ? 'default' : process.env.AVALON_EVIL_LAKE_HUMAN_VARIANT ?? '';
   installRule3(args.rule3);
