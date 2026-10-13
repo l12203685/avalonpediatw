@@ -59,11 +59,13 @@ function obs(partial: Partial<PlayerObservation>): PlayerObservation {
 }
 
 // The default this switch was measured against (strength_benchmark.md 第 9 節):
-// the other round-3 switches off, so the off / on pair isolates this one.
-// `teamReuse` alone also puts P5 back on the R3 team below (it reuses the
-// successful R2 team and swaps the leader in), so the "off" picks would no
-// longer show the gap; the full current default is checked separately.
-const LANE_BASE: AgentTuning = { ...DEFAULT_AGENT_TUNING, teamReuse: false };
+// the other round-3 switches (`teamReuse`, `redR1Teammate`) off, so the
+// off / on pair isolates this one. `teamReuse` alone also puts P5 back on the
+// R3 team below (it reuses the successful R2 team and swaps the leader in), so
+// the "off" picks would no longer show the gap; `redR1Teammate` only acts on
+// R1 red leaders and is turned off for the same isolation. The full current
+// default is checked separately.
+const LANE_BASE: AgentTuning = { ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false };
 const PROD_OFF: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false };
 const PROD_ON: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: true };
 

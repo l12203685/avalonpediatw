@@ -29,7 +29,15 @@ import { SelfPlayEngine } from '../src/ai/SelfPlayEngine';
 import { LEGACY_AGENT_TUNING, describeAgentTuning, parseTuningFlag, resolveAgentTuning, type AgentTuning } from '../src/ai/AgentTuning';
 import { seededRandom, withSeededRandom } from '../src/ai/benchmark/agreement';
 import { getForwardTelemetry } from '../src/ai/forward/ForwardAgent';
+import {
+  DEFAULT_EVIL_LAKE_HUMAN_OPTIONS,
+  evilLakeHumanOptionsFromEnv,
+  setEvilLakeHumanOptions,
+} from '../src/ai/LakePolicy';
+import { setVouchFollowUpOptions, vouchFollowUpOptionsFromEnv } from '../src/ai/RedLakeFollowUp';
+import { goodVouchOptionsFromEnv, setGoodVouchOptions } from '../src/ai/GoodLakeFollowUp';
 import { DEFAULT_TEAM_REUSE_OPTIONS, setTeamReuseOptions, teamReuseOptionsFromEnv } from '../src/ai/TeamReuse';
+import { redR1TeammateOptionsFromEnv, setRedR1TeammateOptions } from '../src/ai/RedR1Teammate';
 import type { AgentAction, AvalonAgent, PlayerObservation } from '../src/ai/types';
 
 interface Args {
@@ -126,10 +134,27 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const baseTuning = resolveAgentTuning(args.base, { ...LEGACY_AGENT_TUNING });
   const variantTuning = resolveAgentTuning(args.flags, { ...LEGACY_AGENT_TUNING });
+  // Benchmark-only knobs, read the same way as selfPlayStrength.ts (the server never reads them):
+  // AVALON_EVIL_LAKE_HUMAN_VARIANT, AVALON_VOUCH_FOLLOW_UP_VARIANT, AVALON_GOOD_VOUCH_VARIANT,
+  // AVALON_TEAM_REUSE_VARIANT (weights always printed), AVALON_RED_R1_TEAMMATE_VARIANT.
+  const evilLakeOptions = evilLakeHumanOptionsFromEnv();
+  setEvilLakeHumanOptions(evilLakeOptions);
+  if (JSON.stringify(evilLakeOptions) !== JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)) {
+    process.stderr.write(`evilLakeHumanStrategy tactic mix: ${JSON.stringify(evilLakeOptions)}\n`);
+  }
+  const vouchOptions = vouchFollowUpOptionsFromEnv();
+  setVouchFollowUpOptions(vouchOptions);
+  if (process.env.AVALON_VOUCH_FOLLOW_UP_VARIANT) process.stderr.write(`evilVouchFollowUp variant: ${JSON.stringify(vouchOptions)}\n`);
+  const goodVouchOptions = goodVouchOptionsFromEnv();
+  setGoodVouchOptions(goodVouchOptions);
+  if (process.env.AVALON_GOOD_VOUCH_VARIANT) process.stderr.write(`goodVouchFollowUp variant: ${JSON.stringify(goodVouchOptions)}\n`);
   const teamReuseOptions = teamReuseOptionsFromEnv();
   setTeamReuseOptions(teamReuseOptions);
   const isDefault = JSON.stringify(teamReuseOptions) === JSON.stringify(DEFAULT_TEAM_REUSE_OPTIONS);
   process.stderr.write(`teamReuse weights${isDefault ? ' (defaults)' : ' (variant)'}: ${JSON.stringify(teamReuseOptions)}\n`);
+  const redR1Options = redR1TeammateOptionsFromEnv();
+  setRedR1TeammateOptions(redR1Options);
+  if (process.env.AVALON_RED_R1_TEAMMATE_VARIANT) process.stderr.write(`redR1Teammate variant: ${JSON.stringify(redR1Options)}\n`);
 
   const engine = new SelfPlayEngine();
   const shapes = { baseline: new Map<string, Shape>(), variant: new Map<string, Shape>() };

@@ -903,7 +903,7 @@ ED、Sin、top 沒有任何一列下降；population 以完整精度看有幾列
   3. **別人的宣告**：硬1 / 硬2（「A 宣 B 藍 → 派含 A 的隊必含 B」）在 baseline `HeuristicAgent` 是對**所有**隊員的宣告，ForwardAgent 只有紅方與好人持湖者自己的那一份（這個開關）。真人對別人的宣告怎麼做沒有量，若要做是另一個開關。
 
 
-重跑：
+重跑（第 13 節合併之後，正式預設也含 `teamReuse`、`redR1Teammate`：以正式預設為底的指令要先關掉這兩個，或在這條線的提交 58c2511 上跑，見 13.7；`selfPlayStrength.ts` 的指令旗標寫全，不受影響）：
 
 ```bash
 # 真人好人持湖者宣告之後的派隊 / 投票 / 湖鏈 / 梅林，加上同一批局面上 agent（正式預設 vs + goodVouchFollowUp）的行為與一致率
@@ -1084,7 +1084,7 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
 USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayHomogeneous.ts --games 5000 --seed 70003 [同上的 --flag / --base]
 ```
 
-原始輸出不進版本庫；同樣的指令會得到完全相同的數字（決定性）。
+原始輸出不進版本庫；同樣的指令會得到完全相同的數字（決定性）—— 指的是這條線的提交 b1d1ca9。第 13 節合併之後正式預設也含 `goodVouchFollowUp`、`redR1Teammate`，以正式預設為底的指令（一致性基準、`teamReuseStudy.ts --agent`）要先關掉這兩個，見 13.7；`selfPlayStrength.ts`、`selfPlayHomogeneous.ts` 的指令旗標寫全，不受影響。
 
 ### 11.6 審查與修正（2026-10-13）
 
@@ -1346,7 +1346,7 @@ R2 起真人反而比亂選更少放隊友（R4 要兩張失敗也只有 41%）�
      - 所以這個開關「更像真人」最確定的是放隊友的比例（原本 0%，真人 48%），逐次猜中的提升主要在 Sin。
   6. **5–9 人局**：本開關不適用（12.2 第 8 點）。真人資料只有 10 人局；審查量到小局紅方變強（5 人局 +3.8pp）、8 人局紅方變弱（−1.6pp），5 人局還會碰到首派禁止組合。要做得先有各人數的資料，再照協定驗證。
 
-重跑：
+重跑（第 13 節合併之後，正式預設也含 `goodVouchFollowUp`、`teamReuse`：12.3 的 R1 數字不受影響，一致性基準其他列的絕對值會變，要和這一節逐項對照時先關掉這兩個，或在這條線的提交 82651e3 上跑，見 13.7）：
 
 ```bash
 # 真人資料（R1 / R2+ / 後續；--player 另列個人，文件只用 ED / Sin 標籤）；加 --agent 算 12.3 的針對性一致率
@@ -1387,7 +1387,7 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
 
 所以每個開關單獨打開時的行為與它那條線完全相同，三個都關時與合併前的 origin/main 完全相同。種子 9101–9401 只用在這個檢查。
 
-三個開關同時打開時唯一的交會：好人持湖者帶隊、`goodVouchFollowUp` 的派隊限制生效時，若一般候選（含 `teamReuse` 加進來的沿用隊）沒有一隊守住宣告，就照第 10.3 節圍著被宣藍的人重組候選，沿用隊不在其中（宣告優先）；有守住宣告的沿用隊時照常留下、照常加分。`GoodLakeFollowUp.test.ts` 的開 / 關對照因此改成以「第 9 節預設、`teamReuse` 關」為底（`teamReuse` 自己也會把 R3 那位被宣藍的人放回隊上），另加一個用目前完整預設的測試。
+三個開關同時打開時唯一的交會：好人持湖者帶隊、`goodVouchFollowUp` 的派隊限制生效時，若一般候選（含 `teamReuse` 加進來的沿用隊）沒有一隊守住宣告，就照第 10.3 節圍著被宣藍的人重組候選，沿用隊不在其中（宣告優先）；有守住宣告的沿用隊時照常留下、照常加分。`GoodLakeFollowUp.test.ts` 的開 / 關對照因此改成以第 9 節預設為底（另外兩個第三輪開關 `teamReuse`、`redR1Teammate` 都關；`teamReuse` 自己也會把 R3 那位被宣藍的人放回隊上），另加一個用目前完整預設的測試。
 
 ### 13.2 自我對打（對照組 = 第 9 節正式預設）
 
@@ -1434,22 +1434,35 @@ ForwardAgent 157 萬個決策、0 次 fallback。只開 `teamReuse` 時（第 11
 | agent 異常票率 R3+ | 33.9 / 31.6 / 34.2 / 32.5% | 33.9 / 31.4 / 34.1 / 32.4% | 同上 |
 | 投票 R1 / R2、任務牌、湖目標、紅方湖宣告、刺殺、真人異常票時同票 | — | 逐項相同 | — |
 
-每一列都等於第 10.4、11.3、12.3 節各自量到的變化合起來（例如派隊 Jaccard R2+ 只開 `teamReuse` 是 48.8 / 57.1 / 52.4 / 53.1%，`goodVouchFollowUp` 再加 0–0.2 點）。逐項比對兩次的 JSON（全部的列，包括分角色）：比舊預設低的只有 (a) R1 紅方隊長的派隊完全相同 —— population 2.6 → 2.5%，分角色時莫甘娜 top 2.9 → 1.8%（n = 273）、population 3.0 → 2.0%（n = 928），同一批提議的 Jaccard 不變或略升（31.4 → 31.5%、31.8 → 31.8%），刺客、莫德雷德的完全相同與 Jaccard 都升；這是 `redR1Teammate` 抽籤帶隊友的結果，第 12.3 節的總數已含在內；(b) population「真人異常票時 agent 同票」少 0.01–0.04 點，是第 10.4 節已記錄的那 2 票。
+**和三條線各自的變化比**（審查後補做：另外各跑一次只開一個第三輪開關的一致性基準，與第 10.4、11.3、12.3 節逐項相同，見 13.7；以完整精度逐列比對 JSON，四個群的每一個指標都比，含分角色）：
+
+- 投票（R1 / R2 / R3+，含分角色與異常票）、任務牌、湖目標、湖宣告、刺殺：與只開 `goodVouchFollowUp` 那次逐項相同。
+- R1 派隊：與只開 `redR1Teammate` 那次逐項相同。
+- 紅方隊長的派隊 R2+（含各紅方角色）：與只開 `teamReuse` 那次逐項相同；紅方的全部回合列（R1 + R2+）剛好等於 `redR1Teammate` 與 `teamReuse` 兩者的變化相加。
+- **好人隊長的派隊（R2+ 與全部回合）比 `goodVouchFollowUp` 與 `teamReuse` 各自的變化相加略低或相同**：56 列略低，沒有一列高於相加，也沒有一列低於只開 `teamReuse`。整體與好人隊長的派隊 R2+（四個群 × 完全相同 / Jaccard，16 列）低 0–0.34 點，例如派隊 Jaccard R2+ population 相加 53.33%、實測 53.24%；好人隊長 Jaccard R2+ population 54.95 → 54.80%、top 54.45 → 54.21%；派隊完全相同 R2+ top 15.66 → 15.58%、Sin 22.92 → 22.72%（= 只開 `teamReuse`）、Sin 好人隊長 23.74 → 23.40%。分角色最多低 0.54 點（Sin 忠臣派隊完全相同 R2+）。`goodVouchFollowUp` 單獨開時在這 16 列加 0–0.46 點，和 `teamReuse` 一起開時只再加 0–0.28 點：有沿用隊守住宣告時兩者本來就選同一隊，沒有時宣告優先、沿用隊的加分就沒了（13.1 的交會）。
+
+`goodVouchFollowUp` 自己的目標決策在整合後仍然往真人靠（`goodLakeFollowUpStudy.ts` 不加旗標，基準 = 整合後預設關掉 `goodVouchFollowUp`，population）：宣告後自己派隊放宣藍的人 72.1%（287 / 398）→ 100%、放宣紅的人 6.3%（11 / 176）→ 0%（真人 99.2% / 1.7%）；只開這條線時是 47.0% → 100%、35.2% → 0%（10.2），差在 `teamReuse` 已經把一部分宣藍的人放回隊上。宣告後自己派隊的 Jaccard population 59.3 → 63.5%、top 60.1 → 64.5%（逐次配對更接近 / 更遠 87 / 1、18 / 0），不在隊上時對違反宣告的隊的票多對 / 少對 85 / 2、24 / 0。
+
+逐項比對新舊兩次的 JSON（全部的列，包括分角色）：比舊預設低的只有 (a) R1 紅方隊長的派隊完全相同 —— population 2.58 → 2.45%（所以 R1 全部 population 2.74 → 2.69%，顯示到小數一位都是 2.7），分角色時莫甘娜 top 2.9 → 1.8%（n = 273）、population 3.0 → 2.0%（n = 928），同一批提議的 Jaccard 不變或略升（31.4 → 31.5%、31.8 → 31.8%）；(b) population 莫德雷德的 R1 派隊 Jaccard 32.91 → 32.88%（n = 1021；同一批提議的完全相同 3.13 → 3.43%）；刺客、莫德雷德其他的 R1 列都不降（ED 完全相同 0 → 0，其餘都升）。(a)(b) 都是 `redR1Teammate` 抽籤帶隊友的結果，與只開它那次逐項相同，第 12.3 節的總數已含在內；(c) population「真人異常票時 agent 同票」少 0.01–0.04 點，是第 10.4 節已記錄的那 2 票。
 
 ### 13.5 讀法
 
 1. **依規則整組保留**：兩個立場的合併區間都整個在 0 以上，每個種子各自也都在 0 以上。依「更像真人，而且不能讓它變弱」：更像真人（13.4，派隊大幅往真人靠；R1 紅方放隊友照真人的比例；好人持湖者守住自己的宣告），兩個立場都變強。
-2. **和三條線各自的數字比**：紅方 +3.18pp 與 `teamReuse`（+2.77pp [+2.41pp, +3.13pp]）加 `redR1Teammate`（+0.10pp [−0.19pp, +0.39pp]）的和 +2.87pp 一致（區間重疊）。藍方 +4.89pp 略低於 `teamReuse`（+5.08pp [+4.62pp, +5.54pp]）加 `goodVouchFollowUp`（+0.57pp [+0.38pp, +0.77pp]）的和 +5.65pp，區間重疊；兩條線改的都是好人隊長的派隊，宣告限制生效時沿用隊讓位（13.1），部分好處重疊是合理的（推測，沒有逐局追）。
-3. **藍方變強來自任務階段**：B 局三紅率 78.4%，C 局 87.6%（每個種子都低 8–10pp）；三藍局的刺中率 B / C 為 45.5 / 43.6%、43.6 / 39.9%、43.7 / 44.3%，沒有一致的方向，所以梅林沒有因此更容易被看出來。紅方立場的 A 局三紅率 92.5–93.3%，比 C 局高 4–6pp。
+2. **和三條線各自的數字比**（各線的合併結果與本節用的種子都不同，當成獨立估計；標準誤 = 區間半寬 / 1.96）：
+   - 紅方 +3.18pp 與 `teamReuse`（+2.77pp [+2.41pp, +3.13pp]）加 `redR1Teammate`（+0.10pp [−0.19pp, +0.39pp]）的和 +2.87pp 相差 +0.31pp（標準誤 0.34pp，z = 0.92，雙尾 p ≈ 0.36），一致。
+   - 藍方 +4.89pp 比 `teamReuse`（+5.08pp [+4.62pp, +5.54pp]）加 `goodVouchFollowUp`（+0.57pp [+0.38pp, +0.77pp]）的和 +5.65pp **少 0.76pp（標準誤 0.40pp，z = −1.90，雙尾 p ≈ 0.06）**：在顯著的邊緣，不能說「一致」。只用兩條線沒有挑過版本的確認種子（`teamReuse` 67890 / 68888 合併 +5.13pp、`goodVouchFollowUp` 22222 / 33333 合併約 +0.54pp），和也是約 +5.67pp，所以不是選版本種子造成的。
+   - 可能的原因是 13.1 的交會：好人持湖者的宣告限制生效、一般候選（含沿用隊）沒有一隊守住宣告時，候選改成圍著被宣藍的人重組，沿用隊的加分就沒了；兩條線改的都是好人隊長的派隊。若差距來自這裡，大小約 0.5–0.8pp（點估計 0.76pp）。**沒有逐局追，列為後續可量的事項**（13.6）（例如宣告限制先在沿用隊裡找守住宣告的換法）。不影響判定：藍方合併區間仍整個在 0 以上。
+3. **藍方變強來自任務階段**：B 局三紅率 78.4%，C 局 87.6%（每個種子都低 8–10pp）；三藍局的刺中率 B / C 為 45.5 / 43.6%、43.6 / 39.9%、43.7 / 44.3%，三個種子合併 44.3%（1431 / 3233）對 42.6%（795 / 1866），差 +1.7pp（95% 區間約 ±2.8pp；三個種子有兩個 B 較高）：沒有顯著變化，點估計 B 略高。紅方立場的 A 局三紅率 92.5–93.3%，比 C 局高 4–6pp。
 4. **單邊立場與機器人自打自不能同時成立**：上表 96% / 12% 是「只有一邊用新預設」的數字；正式環境每個座位都用新預設，機器人自打自是紅勝 88.7%、藍勝 11.3%（13.3）。真人最終藍勝約 31%，機器人藍方仍然弱很多。
 5. **紅方變強有一部分可能不像真人**：第 11.4 節第 2 點與第 11.5 節第 1、4 點仍然成立 —— 紅方隊長在任務成功後把自己換進成功隊（機器人 96.2%，真人紅方 4.8%）。這是 `teamReuse` 的既有待決事項，整合沒有改變它。
 6. 只在 10 人局量（自我對打與一致性基準都是 10 人局）；`redR1Teammate` 在 5–9 人局不作用，`goodVouchFollowUp` 在 7–8 人局有第 10.5 節的檢查，`teamReuse` 在其他人數沒有自我對打數字。
 
-### 13.6 待 Edward 決定（沿用各節，沒有新增）
+### 13.6 待 Edward 決定（沿用各節，另加審查後的一項）
 
 - 第 10.6 節：硬3 算不算宣告之前的隊；在隊上時要不要也反對；別人的宣告。
 - 第 11.5 節：隊長自己不上的沿用（紅方換自己進成功隊不像真人）；機器人對局裡後續提議沿用得比真人多；紅方權重；換掉誰；練習模式回顧不說明「沿用前一隊」。
 - 第 12.5 節：R2 起的放隊友比例；強制局；R1 兩紅同隊的出牌；哪一種「像真人」；5–9 人局。
+- 13.5 第 2 點：整合後藍方比兩條線相加少 0.76pp（p ≈ 0.06），可能是好人持湖者的宣告限制讓沿用隊讓位；要不要逐局追、或改成先在沿用隊裡找守住宣告的換法（改了要再用新種子驗證）。
 - 上線後用 `/stats` 看真人對局裡機器人的戰績：上面的強度都是機器人對機器人。
 
 重跑（原始輸出不進版本庫；同樣的指令會得到完全相同的數字）：
@@ -1468,3 +1481,15 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/agreeme
 USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin \
   --flag goodVouchFollowUp=0 --flag teamReuse=0 --flag redR1Teammate=0
 ```
+
+### 13.7 合併之後怎麼重跑第 10–12 節
+
+第 10–12 節各自的對照組不含另外兩個第三輪開關。合併之後 `DEFAULT_AGENT_TUNING` 三個都開，所以**以正式預設為底的指令**（`agreementBenchmark.ts`、`goodLakeFollowUpStudy.ts`、`teamReuseStudy.ts --agent`）會帶著另外兩個開關，數字和各節不同（例如 `goodLakeFollowUpStudy.ts` 不加旗標時，基準欄「放宣藍的人」是 72.1% 而不是 10.2 的 47.0%；`agreementBenchmark.ts --flag teamReuse=0` 的派隊 Jaccard R2+ 是 39.4 / 42.5 / 40.4 / 41.5%，不是 11.3 左欄的 39.2 / 42.5 / 40.2 / 41.2%）。要重現各節的數字，先關掉另外兩個開關（一致性基準用 `--flag`，研究腳本用環境變數 `AVALON_TUNING_*`），或在各線的提交（第 10 節 58c2511、第 11 節 b1d1ca9、第 12 節 82651e3）上跑。審查後在合併後的程式上實際重跑過：
+
+| 節 | 一致性基準 | 研究腳本 | 合併後重跑的結果 |
+|---|---|---|---|
+| 10 | `--flag teamReuse=0 --flag redR1Teammate=0`（再加 `--flag goodVouchFollowUp=0` = 左欄） | `AVALON_TUNING_TEAM_REUSE=0 AVALON_TUNING_RED_R1_TEAMMATE=0` 加在 `goodLakeFollowUpStudy.ts` 前 | 一致性基準與 10.4 右欄逐項相同；研究腳本 47.0%（187 / 398）、35.2%（62 / 176）→ 100% / 0%，與 10.2 相同 |
+| 11 | `--flag goodVouchFollowUp=0 --flag redR1Teammate=0`（再加 `--flag teamReuse=0` = 左欄） | `AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP=0 AVALON_TUNING_RED_R1_TEAMMATE=0` 加在 `teamReuseStudy.ts --agent` 前（不加時例如成功後第一個提議 17.7 / 55.9% 會變成 18.2 / 56.2%） | 一致性基準與 11.3 右欄逐項相同；逐情境表與 11.3 相同（例如 R2 起後續提議 1.5 / 38.7% → 15.4 / 52.7%） |
+| 12 | `--flag goodVouchFollowUp=0 --flag teamReuse=0`（再加 `--flag redR1Teammate=0` = 左欄） | 不需要：`redR1TeammateStudy.ts --agent` 只看 R1，另外兩個開關在 R1 不作用 | 一致性基準與 12.3 相同；研究腳本不加旗標與 12.3 逐項相同（例如 population 54.2%、548 / 606；Sin 58.5%、46 / 19） |
+
+這三次「只開一個開關」的一致性基準也是 13.4「和三條線各自的變化比」的根據（都是 283,061 個決策、0 次 fallback）。`selfPlayStrength.ts`、`selfPlayHomogeneous.ts`、`redLakeDiagnosis.ts` 從 legacy 起、旗標寫全，合併後照樣得到各節的數字（13.1 的逐決策比對）。審查後這三個腳本與 `agreementBenchmark.ts` 都讀同一組實驗用環境變數（`AVALON_EVIL_LAKE_HUMAN_VARIANT`、`AVALON_VOUCH_FOLLOW_UP_VARIANT`、`AVALON_GOOD_VOUCH_VARIANT`、`AVALON_TEAM_REUSE_VARIANT`、`AVALON_RED_R1_TEAMMATE_VARIANT`；原本 `selfPlayHomogeneous.ts` 只讀 `teamReuse` 那個，`redLakeDiagnosis.ts` 少讀 `goodVouchFollowUp` 與 `teamReuse` 兩個）；沒設時用預設，數字不變（13.3 的 404040 重跑輸出逐字相同）。
