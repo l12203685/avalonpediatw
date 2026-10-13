@@ -2,11 +2,13 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { Loader } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAnalysisOverview } from './useAnalysisOverview';
+import { seatOutcomesDiffer } from '../../utils/analysisDisplay';
 
 /**
  * 位置勝率圖 — 2026-10-12 從 OverviewPanel 搬到「位置」分頁。
- * 資料是 overview.seatPositionWinRates (任務結算口徑的整體勝率 + 各角色勝率)，
- * tooltip 另附三種結果分布 (快取有 outcomes 時)。
+ * 資料是 overview.seatPositionWinRates (任務結算口徑的整體勝率 + 各角色勝率)。
+ * tooltip 的三種結果分布只在各位置真的不同時才列 (seatOutcomesDiffer)：一局一個結果、
+ * 10 個位置都有人，所以每個位置都是全體的分布 (三紅 45.5 %)，2026-10-13 玩家反應「全員 46%」。
  */
 
 // Canonical role names only. The old short forms (娜美/德魯/奧伯/派西)
@@ -35,6 +37,7 @@ export default function SeatPositionChart(): JSX.Element | null {
 
   const seatData = overview?.seatPositionWinRates ?? [];
   if (seatData.length === 0) return null;
+  const showSeatOutcomes = seatOutcomesDiffer(seatData);
 
   return (
     <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
@@ -52,7 +55,7 @@ export default function SeatPositionChart(): JSX.Element | null {
                 <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 text-xs">
                   <p className="font-bold text-gray-200 mb-1">{t('analytics.deep.overview.seatGames', { seat: d.seat, games: d.totalGames })}</p>
                   <p className="text-gray-300 mb-1">{t('analytics.deep.overview.overallWinRate')}: {d.overallWinRate}%</p>
-                  {d.outcomes && (
+                  {showSeatOutcomes && d.outcomes && (
                     <p className="mb-2 text-[10px]">
                       <span className="text-red-300">{t('analytics.deep.outcomes.threeRed')} {d.outcomes.threeRedPct}%</span>
                       <span className="mx-1 text-gray-600">·</span>
@@ -77,7 +80,9 @@ export default function SeatPositionChart(): JSX.Element | null {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <p className="text-[10px] text-gray-600 mt-2">{t('analytics.deep.overview.seatPositionBasis')}</p>
+      <p className="text-[10px] text-gray-600 mt-2">
+        {t(showSeatOutcomes ? 'analytics.deep.overview.seatPositionBasis' : 'analytics.deep.overview.seatPositionBasisSameOutcomes')}
+      </p>
     </div>
   );
 }

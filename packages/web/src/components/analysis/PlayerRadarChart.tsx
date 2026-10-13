@@ -144,22 +144,18 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
     return (): void => clearTimeout(id);
   }, [matchedName]);
 
-  const loadRadar = useCallback(async (name: string) => {
-    if (!name) return;
-    setRadarLoading(true);
-    try {
-      const data = await fetchAnalysisPlayerByName(name);
-      setRadarData(data);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setRadarLoading(false);
-    }
-  }, []);
-
+  // 換人時舊的請求作廢：連打搜尋 (唯一符合 250 ms 後自動打開) 或連點兩個名字時，
+  // 先送出的那位若較晚回來，不能蓋掉目前選的人。
   useEffect(() => {
-    if (selectedName) loadRadar(selectedName);
-  }, [selectedName, loadRadar]);
+    if (!selectedName) return;
+    let stale = false;
+    setRadarLoading(true);
+    fetchAnalysisPlayerByName(selectedName)
+      .then(data => { if (!stale) setRadarData(data); })
+      .catch(err => { if (!stale) setError(getErrorMessage(err)); })
+      .finally(() => { if (!stale) setRadarLoading(false); });
+    return (): void => { stale = true; };
+  }, [selectedName]);
 
   const axisLabel = useCallback(
     (k: AxisKey): string => t(`analytics.deep.radar.axes.${k}`),

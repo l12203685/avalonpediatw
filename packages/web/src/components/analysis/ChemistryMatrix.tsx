@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Loader, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { fetchAnalysisChemistry, getErrorMessage } from '../../services/api';
+import { fetchAnalysisChemistry, getErrorMessage, theorySettings } from '../../services/api';
 import type { ChemistryData, ChemistryMatrix as ChemistryMatrixType } from '../../services/api';
+import { isThinPairCell } from '../../utils/analysisDisplay';
+import { useAnalysisOverview } from './useAnalysisOverview';
 
 type MatrixKey = 'coWin' | 'coLose' | 'winCorr' | 'coWinMinusLose' | 'outcomePair';
 
@@ -17,6 +19,10 @@ function colorForOutcomePair(value: number): string {
   if (value >= 35) return 'bg-blue-700/50 text-blue-200';
   return 'bg-blue-500/70 text-blue-100';
 }
+
+/** 三結果配對：共同場次太少的格子 (isThinPairCell) 不上紅藍色，灰字虛線框。 */
+// 不用 opacity：會連滑鼠提示一起變淡。
+const THIN_PAIR_CELL = 'bg-gray-900/30 text-gray-500 border border-dashed border-gray-700';
 
 function cellColor(value: number, key: MatrixKey): string {
   if (isNaN(value)) return 'bg-gray-900/30 text-gray-700';
@@ -47,7 +53,9 @@ function cellColor(value: number, key: MatrixKey): string {
  * unchanged. Edward 2026-04-27: a 5th matrix ``outcomePair`` shows the
  * three-outcome distribution across each pair's co-played games — primary
  * cell value is threeRedPct, with tooltip surfacing 三紅 / 三藍死 / 三藍活
- * altogether. Hidden when the cache predates the field.
+ * altogether. Hidden when the cache predates the field. Cells from fewer shared
+ * games than the theory top-up threshold (theoryMinCellGames, 3) get no red/blue (grey, dashed):
+ * 1–2 games can only read 0 / 50 / 100 %.
  */
 export default function ChemistryMatrixPanel(): JSX.Element {
   const { t } = useTranslation('common');
@@ -55,6 +63,8 @@ export default function ChemistryMatrixPanel(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeKey, setActiveKey] = useState<MatrixKey>('coWinMinusLose');
+  const { overview } = useAnalysisOverview();
+  const minPairGames = theorySettings(overview?.theoryConfig).theoryMinCellGames;
 
   useEffect(() => {
     let cancelled = false;
@@ -178,6 +188,9 @@ export default function ChemistryMatrixPanel(): JSX.Element {
               <span className="text-red-400">{t('analytics.deep.chemistry.labelOutcomeHighRed')}</span>
               <span className="text-gray-400">{t('analytics.deep.chemistry.labelOutcomeMid')}</span>
               <span className="text-blue-400">{t('analytics.deep.chemistry.labelOutcomeHighBlue')}</span>
+              {minPairGames > 0 && Array.isArray(matrix.games) && (
+                <span className="text-gray-500">{t('analytics.deep.chemistry.labelOutcomeThin', { n: minPairGames })}</span>
+              )}
             </>
           ) : (
             <>
@@ -230,6 +243,7 @@ export default function ChemistryMatrixPanel(): JSX.Element {
                   const blueDeadVal = threeBlueDeadPct?.[ri]?.[ci];
                   const blueAliveVal = threeBlueAlivePct?.[ri]?.[ci];
                   const sharedGames = pairGames?.[ri]?.[ci];
+                  const thin = safeActiveKey === 'outcomePair' && !isSelf && !isNaN(val) && isThinPairCell(sharedGames, minPairGames);
                   const showOutcomeTooltip =
                     safeActiveKey === 'outcomePair' &&
                     !isSelf &&
@@ -240,7 +254,7 @@ export default function ChemistryMatrixPanel(): JSX.Element {
                     <td key={ci} className="p-0.5">
                       <div
                         className={`group relative w-8 h-6 flex items-center justify-center rounded text-[9px] font-bold cursor-default ${
-                          isSelf ? 'bg-gray-800/60 text-gray-600' : cellColor(val, safeActiveKey)
+                          isSelf ? 'bg-gray-800/60 text-gray-600' : thin ? THIN_PAIR_CELL : cellColor(val, safeActiveKey)
                         }`}
                       >
                         {isSelf ? '-' : isNaN(val) ? '' : val.toFixed(0)}

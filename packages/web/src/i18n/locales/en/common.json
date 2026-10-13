@@ -374,7 +374,8 @@
         "theoryEmpty": "No player has {{games}} games yet",
         "theoryPending": "The ranking is switching to the role-theory win rate; it appears after the next daily refresh",
         "finalWinRateColumn": "Final WR",
-        "seatPositionBasis": "Overall and per-role win rates use the mission-stage basis (3-Blue-killed counts as blue); hover for the outcome breakdown"
+        "seatPositionBasis": "Overall and per-role win rates use the mission-stage basis (3-Blue-killed counts as blue); hover for the outcome breakdown",
+        "seatPositionBasisSameOutcomes": "Overall and per-role win rates use the mission-stage basis (3-Blue-killed counts as blue). Each game has one outcome shared by all 10 seats, so the outcome split is the same for every seat and is not listed per seat (see Overview)"
       },
       "lake": {
         "loading": "Loading Lady of the Lake analysis…",
@@ -525,7 +526,8 @@
         "labelLowPct": "below 30% = low",
         "labelOutcomeHighRed": "55%+ = red dominant",
         "labelOutcomeMid": "40-50% = balanced",
-        "labelOutcomeHighBlue": "below 35% = blue dominant"
+        "labelOutcomeHighBlue": "below 35% = blue dominant",
+        "labelOutcomeThin": "Dashed = fewer than {{n}} shared games, indicative only"
       },
       "assassination": {
         "title": "Assassination stage",

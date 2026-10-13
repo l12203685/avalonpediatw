@@ -374,7 +374,8 @@
         "theoryEmpty": "尚無玩家達 {{games}} 場",
         "theoryPending": "排行改用角色理論勝率，下次每日更新資料後顯示",
         "finalWinRateColumn": "最終勝率",
-        "seatPositionBasis": "整體勝率與角色勝率為任務結算口徑（三藍死算藍勝）；三種結果分布見滑鼠提示"
+        "seatPositionBasis": "整體勝率與角色勝率為任務結算口徑（三藍死算藍勝）；三種結果分布見滑鼠提示",
+        "seatPositionBasisSameOutcomes": "整體勝率與角色勝率為任務結算口徑（三藍死算藍勝）。三種結果每局只有一個、10 個位置都算到，所以每個位置的分布都一樣，不分位置列出（見總覽）"
       },
       "lake": {
         "loading": "載入湖中女神分析…",
@@ -525,7 +526,8 @@
         "labelLowPct": "30% 以下 = 低",
         "labelOutcomeHighRed": "55%+ = 紅方優勢",
         "labelOutcomeMid": "40-50% = 中性",
-        "labelOutcomeHighBlue": "35% 以下 = 藍方優勢"
+        "labelOutcomeHighBlue": "35% 以下 = 藍方優勢",
+        "labelOutcomeThin": "虛線格 = 兩人共同不到 {{n}} 場，僅供參考"
       },
       "assassination": {
         "title": "刺殺結算",
