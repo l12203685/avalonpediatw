@@ -87,7 +87,7 @@ describe('AgentTuning — flags', () => {
 
   it('evilLakeHumanStrategy (2026-10-13): on in the default (owner decision), off in legacy, flag, env var and description', () => {
     // Measured −0.6pp as red, but Edward decided on 2026-10-13 to turn it on
-    // anyway (先像真人，變弱從其他地方補) — strength_benchmark.md 第 6、7 節.
+    // anyway (先像真人，變弱從其他地方補) — strength_benchmark.md 第 6、8 節.
     expect(DEFAULT_AGENT_TUNING.evilLakeHumanStrategy).toBe(true);
     expect(LEGACY_AGENT_TUNING.evilLakeHumanStrategy).toBe(false);
     expect(parseTuningFlag('evilLakeHumanStrategy')).toEqual({ evilLakeHumanStrategy: true });
@@ -98,9 +98,11 @@ describe('AgentTuning — flags', () => {
   });
 
   it('2026-10-13 round-2 red switches: default on/off, flags, env vars, off in legacy', () => {
-    // strength_benchmark.md 第 7 節: vouch follow-up and the human framing rate are
-    // adopted (more human-like, +0.23pp over the lake strategy alone); the Oberon
-    // teammate search is not (lakes red more often than humans and is slightly weaker).
+    // strength_benchmark.md 第 8 節: the vouch follow-up is adopted (+0.35pp over the
+    // lake strategy alone, R3+ votes more human-like); the human framing rate is on
+    // provisionally (strength unchanged, frequency closer to humans but lower claim
+    // agreement — Edward to choose); the Oberon teammate search is not adopted
+    // (lakes red more often than humans and is slightly weaker).
     const round2 = [
       ['evilVouchFollowUp', 'AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP', true],
       ['evilLakeFrameHumanRate', 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE', true],

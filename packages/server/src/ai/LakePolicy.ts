@@ -448,7 +448,7 @@ export interface EvilLakeHumanOptions {
    */
   vouch: 'pressured' | 'consistent';
   /**
-   * Diagnostic ablations (2026-10-13 round 2, strength_benchmark.md 第 7
+   * Diagnostic ablations (2026-10-13 round 2, strength_benchmark.md 第 8
    * 節), benchmark scripts only: 'legacy' hands that part of the lake back
    * to the rule from before the switch.
    *   - `oberon` — Oberon's lakes (target and claim);
@@ -475,7 +475,7 @@ export interface EvilLakeHumanOptions {
  * both intervals entirely below 0; `chaos: 'never'` the same). Edward
  * decided on 2026-10-13 to turn the switch on in `DEFAULT_AGENT_TUNING`
  * anyway (human-likeness first) and recover the strength from other red
- * decisions (strength_benchmark.md 第 7 節).
+ * decisions (strength_benchmark.md 第 8 節).
  */
 export const DEFAULT_EVIL_LAKE_HUMAN_OPTIONS: Readonly<EvilLakeHumanOptions> = Object.freeze({
   lastLake: 'pressured',
@@ -502,14 +502,23 @@ export function setEvilLakeHumanOptions(options: EvilLakeHumanOptions | undefine
 /**
  * The tactic mix for an agent's tuning: the active mix, with the round-2
  * switches layered on top (`evilLakeFrameHumanRate` → `chaos: 'humanRate'`,
- * `oberonLakeSeeksTeammates` → `oberonTarget: 'teammate'`).
+ * `oberonLakeSeeksTeammates` → `oberonTarget: 'teammate'`). A knob a
+ * benchmark script set explicitly to something other than the default
+ * (`AVALON_EVIL_LAKE_HUMAN_VARIANT`, e.g. `chaos=never`) wins over the
+ * switch, so re-running an older variant under the new default tuning
+ * still measures that variant (review 2026-10-13). To get the default
+ * `chaos: 'frame'` back, turn the switch off
+ * (`--flag evilLakeFrameHumanRate=0`).
  */
 export function evilLakeHumanOptionsFor(tuning: AgentTuning): Readonly<EvilLakeHumanOptions> {
-  if (!tuning.evilLakeFrameHumanRate && !tuning.oberonLakeSeeksTeammates) return activeEvilLakeHumanOptions;
+  const active = activeEvilLakeHumanOptions;
+  const frameRate = tuning.evilLakeFrameHumanRate && active.chaos === DEFAULT_EVIL_LAKE_HUMAN_OPTIONS.chaos;
+  const oberonSeeks = tuning.oberonLakeSeeksTeammates && active.oberonTarget === DEFAULT_EVIL_LAKE_HUMAN_OPTIONS.oberonTarget;
+  if (!frameRate && !oberonSeeks) return active;
   return {
-    ...activeEvilLakeHumanOptions,
-    ...(tuning.evilLakeFrameHumanRate ? { chaos: 'humanRate' as const } : {}),
-    ...(tuning.oberonLakeSeeksTeammates ? { oberonTarget: 'teammate' as const } : {}),
+    ...active,
+    ...(frameRate ? { chaos: 'humanRate' as const } : {}),
+    ...(oberonSeeks ? { oberonTarget: 'teammate' as const } : {}),
   };
 }
 
@@ -572,10 +581,13 @@ export function nextLakeExists(obs: PlayerObservation): boolean {
  * How often human red holders declare a blue target red, by state (牌譜
  * population, `scripts/evilLakeStudy.ts` (c), strength_benchmark.md 第
  * 6.1 節): holder and target shared a failed mission × red already has
- * two fails. Overall 25.9% (197/761) of red-held blue lakes. Used by
+ * two fails. The four cells come from the reds who see their teammates
+ * (assassin / Morgana / Mordred): 144/573 = 25.1% of their blue lakes
+ * declared red. The same table is applied to Oberon (humans: 28.2%,
+ * 53/188); all red holders together 25.9% (197/761). Used by
  * `chaos: 'humanRate'` (`AgentTuning.evilLakeFrameHumanRate`, in the
- * default since 2026-10-13 round 2: self-play framing 65.6% → 30.2%,
- * strength unchanged; strength_benchmark.md 第 7 節).
+ * default since 2026-10-13 round 2: self-play framing about 65% → 30%,
+ * strength unchanged; strength_benchmark.md 第 8 節).
  */
 export const HUMAN_FRAME_RATE: Readonly<{
   sharedListening: number;

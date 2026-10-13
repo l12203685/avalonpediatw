@@ -21,6 +21,7 @@ import {
   findTeamHardRuleViolations,
   checkHardRulesForLeader,
   findRule3Violators,
+  setRule3DiagnosticOptions,
 } from './lakeChainTracker';
 import { layer4Score } from './voteInferer';
 import {
@@ -263,6 +264,38 @@ describe('lakeChainTracker', () => {
     const r3 = findRule3Violators(state, obs);
     // P1 endorsed P2 then led a team without P2 → 硬3 violation.
     expect((r3.get('P1') ?? 0) >= 0.85).toBe(true);
+  });
+
+  it('setRule3DiagnosticOptions (diagnosis script only): off / holderFilter / postLakeOnly', () => {
+    const vote = (round: number, leader: string, team: string[]) => ({
+      round, attempt: 1, leader, team, approved: true,
+      votes: { P0: true, P1: true, P2: true, P3: true, P4: true },
+    });
+    const obs = makeObs({
+      lakeHistory: [
+        { round: 2, holderId: 'P1', targetId: 'P2', declaredClaim: 'good' },
+        { round: 2, holderId: 'P3', targetId: 'P4', declaredClaim: 'good' },
+      ],
+      voteHistory: [
+        vote(1, 'P1', ['P1', 'P3']), // P1 left P2 off before the lake
+        vote(3, 'P3', ['P3', 'P0']), // P3 left P4 off after the lake
+      ],
+    });
+    const state = analyzeLakeChain(obs);
+    const flagged = (): string[] =>
+      [...findRule3Violators(state, obs)].filter(([, v]) => v >= 0.85).map(([id]) => id).sort();
+    expect(flagged()).toEqual(['P1', 'P3']);
+    try {
+      setRule3DiagnosticOptions({ off: true });
+      expect(findRule3Violators(state, obs).size).toBe(0);
+      setRule3DiagnosticOptions({ holderFilter: (id) => id === 'P3' });
+      expect(flagged()).toEqual(['P3']);
+      setRule3DiagnosticOptions({ postLakeOnly: true });
+      expect(flagged()).toEqual(['P3']); // P1's team came before its declaration
+    } finally {
+      setRule3DiagnosticOptions(undefined);
+    }
+    expect(flagged()).toEqual(['P1', 'P3']);
   });
 });
 

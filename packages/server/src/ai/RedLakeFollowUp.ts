@@ -1,6 +1,6 @@
 /**
  * Red follow-up on the Lady of the Lake (2026-10-13 round 2,
- * docs/ai/strength_benchmark.md 第 7 節).
+ * docs/ai/strength_benchmark.md 第 8 節).
  *
  * Edward 2026-10-13: 「紅方新湖法先打開 變弱應該從其他地方調整修正 (先像
  * 真人 再從策略上提高勝率)」. With `evilLakeHumanStrategy` on, red holders
@@ -12,7 +12,8 @@
  * (牌譜, `scripts/evilLakeStudy.ts` (e): a red holder who declared a
  * teammate blue puts them on 78.7% of the teams they lead later (top
  * cohort 93.8%), a truthfully vouched blue 92.5%, a framed seat 10.4%; and
- * off the team rejects 94.0% of later teams without the vouched teammate).
+ * when not on a later team that leaves the vouched teammate out, rejects it
+ * 84.3% of the time — 94.0% outside red's decisive window).
  *
  * `AgentTuning.evilVouchFollowUp` makes the red holder keep its word, the
  * way the baseline `HeuristicAgent` already does for 硬1 / 硬2
@@ -22,18 +23,40 @@
  * exception as the baseline (Q11, `mayBreakHardRules`: red listening / R5
  * cleanup) — then winning the mission comes first.
  *
+ * The team rule filters the usual ForwardAgent candidates (a team that
+ * already keeps the word stays the pick); only when none keeps it are
+ * teams built around the vouched seats (review 2026-10-13). It acts only
+ * with `evilLakeHumanStrategy` on (`evilVouchFollowUpActive`).
+ *
  * In `DEFAULT_AGENT_TUNING` since 2026-10-13 round 2: against the lake
- * strategy alone +0.23pp [+0.02pp, +0.45pp] as red (seeds 31337 + 8080 +
- * 2718, 15000 pairs) and R3+ vote agreement up in every cohort; it closes
- * only about a fifth of the lake strategy's gap to the previous default
- * (strength_benchmark.md 第 7.4 節).
+ * strategy alone +0.35pp [+0.14pp, +0.55pp] as red (seeds 31337 + 8080 +
+ * 2718, 15000 pairs; the two confirmation seeds alone +0.36pp [+0.10pp,
+ * +0.62pp]) and R3+ vote agreement up in every cohort; it closes about a
+ * third of the lake strategy's gap to the previous default
+ * (strength_benchmark.md 第 8.4 節).
  *
  * Pure functions over the public record (`obs.lakeHistory`); no
  * `Math.random`.
  */
 
 import type { PlayerObservation } from './types';
+import type { AgentTuning } from './AgentTuning';
 import { mayBreakHardRules } from './HeuristicAgent';
+
+/**
+ * Whether `evilVouchFollowUp` acts for this tuning. It is a follow-up on
+ * the human lake strategy, so it needs `evilLakeHumanStrategy` on too:
+ * `AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=0` alone then restores the
+ * previous default (review 2026-10-13: without the gate the follow-up kept
+ * acting on the old lake rule's declarations, a combination never measured
+ * against the previous default; seed 99 −0.67pp [−1.15pp, −0.19pp], 4242
+ * +0.37pp [−0.09pp, +0.82pp]). Same gate as `evilLakeFrameHumanRate`.
+ */
+export function evilVouchFollowUpActive(
+  tuning: Pick<AgentTuning, 'evilVouchFollowUp' | 'evilLakeHumanStrategy'>,
+): boolean {
+  return tuning.evilVouchFollowUp && tuning.evilLakeHumanStrategy;
+}
 
 /**
  * Tactic knobs of `evilVouchFollowUp`. The default is the policy behind the
@@ -119,9 +142,11 @@ export function evilVouchTeamConstraint(
  * Vote rule (`evilVouchFollowUp`): a red holder who is not on the proposed
  * team rejects it when it leaves out a seat the holder declared blue or
  * includes a seat it declared red. Human red holders off the team reject
- * such a team 81–94% of the time (牌譜; teammate vouched 94.0% 78/83, a
- * vouched blue 88.9% 152/171); on the team they mostly approve (n < 15),
- * so the rule stays off there. Also off on the forced fifth proposal
+ * such a team 84.3% (305/362) of the time when they vouched for a
+ * teammate, 83.4% (461/553) for a vouched blue; outside red's decisive
+ * window 94.0% (78/83) and 88.9% (152/171) (牌譜, `scripts/evilLakeStudy.ts`
+ * (e)). On the team the sample is tiny (teammate n = 4; vouched blue 7
+ * rejections of 23), so the rule stays off there. Also off on the forced fifth proposal
  * (everyone approves), on the holder's own proposal (built to the
  * constraint above) and in red's decisive window (Q11).
  */

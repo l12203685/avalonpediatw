@@ -317,7 +317,7 @@ export function findRule3Violators(
 
 // ── Diagnostic ablations (benchmark scripts only) ───────────────
 /**
- * 2026-10-13 round 2 (docs/ai/strength_benchmark.md 第 7 節): knobs the
+ * 2026-10-13 round 2 (docs/ai/strength_benchmark.md 第 8 節): knobs the
  * self-play diagnosis script (`scripts/redLakeDiagnosis.ts`) uses to
  * measure how much of a result runs through 硬3. Never set by the server
  * or the agents; `undefined` (the default) leaves `findRule3Violators`

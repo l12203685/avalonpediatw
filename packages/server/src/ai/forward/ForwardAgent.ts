@@ -60,7 +60,7 @@ import type {
 } from '../types';
 import { HeuristicAgent } from '../HeuristicAgent';
 import { humanQuestCardRule } from '../AgentTuning';
-import { evilVouchTeamConstraint, evilVouchVoteRule } from '../RedLakeFollowUp';
+import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } from '../RedLakeFollowUp';
 import {
   interpret,
   type Facts,
@@ -754,14 +754,15 @@ export class ForwardAgent implements AvalonAgent {
     // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
     //
     // A red lake holder off the proposed team rejects it when it leaves out
-    // a seat it declared blue or includes a seat it declared red (humans
-    // off the team: 94.0% reject a team without the teammate they vouched
-    // for; the baseline's 硬1 / 硬2 vote rule does the same). Red's
+    // a seat it declared blue or includes a seat it declared red (human red
+    // holders off the team reject a team without the teammate they vouched
+    // for 84.3%, outside red's decisive window 94.0%; the baseline's 硬1 /
+    // 硬2 vote rule does the same). Red's
     // decisive window (Q11) and the forced fifth proposal are exempt — see
     // `RedLakeFollowUp.evilVouchVoteRule`.
     if (
       decisionType === 'team_vote' &&
-      this.baseline.tuning.evilVouchFollowUp &&
+      evilVouchFollowUpActive(this.baseline.tuning) &&
       evilVouchVoteRule(obs) === 'reject'
     ) {
       const action: AgentAction = { type: 'team_vote', vote: false };
@@ -1344,76 +1345,108 @@ export class ForwardAgent implements AvalonAgent {
     // but ties at sum=0 (R1 neutral) get broken downstream by the
     // hash tie-break in decide().
     const MAX_CANDIDATES = 50;
-    const candidates: Candidate[] = [];
-    // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
-    // A red leader keeps its lake word: seats it declared blue are fixed
-    // on the team, seats it declared red stay off (the baseline's 硬1 /
-    // 硬2 team fixup does the same; Q11 window exempt). Off → no change.
-    const vouch = this.baseline.tuning.evilVouchFollowUp ? evilVouchTeamConstraint(obs) : null;
-    const fixedMembers = vouch
-      ? vouch.required.filter((id) => id !== selfId).slice(0, Math.max(0, teamSize - 1))
-      : [];
-    let comboRanked = otherRanked;
-    if (vouch) {
-      const banned = new Set(vouch.banned);
-      const withoutFixed = otherRanked.filter((id) => !fixedMembers.includes(id));
-      const withoutBanned = withoutFixed.filter((id) => !banned.has(id));
-      comboRanked = withoutBanned.length >= teamSize - 1 - fixedMembers.length ? withoutBanned : withoutFixed;
-    }
-    const slotCount = teamSize - 1 - fixedMembers.length; // free non-self slots
-    const TOP_K = Math.min(comboRanked.length, 9);
-    const pool = comboRanked.slice(0, TOP_K);
+    // `fixedMembers` are seats every candidate must carry (empty except
+    // for the evilVouchFollowUp fallback below); combinations fill the
+    // remaining slots from `comboRanked`. With `fixedMembers = []` and
+    // `comboRanked = otherRanked` this is exactly the enumeration used
+    // before 2026-10-13.
+    const enumerateTeams = (
+      fixedMembers: readonly string[],
+      comboRanked: readonly string[],
+    ): Candidate[] => {
+      const out: Candidate[] = [];
+      const slotCount = teamSize - 1 - fixedMembers.length; // free non-self slots
+      const TOP_K = Math.min(comboRanked.length, 9);
+      const pool = comboRanked.slice(0, TOP_K);
 
-    // Helper: rank-pyramid pair for sorting combos by sum-of-suspicion.
-    const combinations: string[][] = [];
-    if (slotCount > 0 && pool.length >= slotCount) {
-      // Iterative combinations generator (lexicographic over indices).
-      const idx = new Array<number>(slotCount);
-      for (let i = 0; i < slotCount; i++) idx[i] = i;
-      const emit = (): void => {
-        combinations.push(idx.map((j) => pool[j]));
-      };
-      emit();
-      for (;;) {
-        // Find rightmost index that can be incremented.
-        let r = slotCount - 1;
-        while (r >= 0 && idx[r] === pool.length - slotCount + r) r--;
-        if (r < 0) break;
-        idx[r]++;
-        for (let s = r + 1; s < slotCount; s++) idx[s] = idx[s - 1] + 1;
+      // Helper: rank-pyramid pair for sorting combos by sum-of-suspicion.
+      const combinations: string[][] = [];
+      if (slotCount > 0 && pool.length >= slotCount) {
+        // Iterative combinations generator (lexicographic over indices).
+        const idx = new Array<number>(slotCount);
+        for (let i = 0; i < slotCount; i++) idx[i] = i;
+        const emit = (): void => {
+          combinations.push(idx.map((j) => pool[j]));
+        };
         emit();
-        // Hard cap on enumeration to avoid pathological growth on
-        // larger team sizes. We still sort + take top MAX_CANDIDATES.
-        if (combinations.length >= 200) break;
+        for (;;) {
+          // Find rightmost index that can be incremented.
+          let r = slotCount - 1;
+          while (r >= 0 && idx[r] === pool.length - slotCount + r) r--;
+          if (r < 0) break;
+          idx[r]++;
+          for (let s = r + 1; s < slotCount; s++) idx[s] = idx[s - 1] + 1;
+          emit();
+          // Hard cap on enumeration to avoid pathological growth on
+          // larger team sizes. We still sort + take top MAX_CANDIDATES.
+          if (combinations.length >= 200) break;
+        }
+      } else if (slotCount === 0) {
+        combinations.push([]);
       }
-    } else if (slotCount === 0) {
-      combinations.push([]);
-    }
 
-    // Sort combos ascending by sum-of-pyramid-score (cheap proxy: lower
-    // mean suspicion first). At R1 cold start everything sums to the
-    // same value; downstream hash tie-break diverges across leaders.
-    const sumSusp = (combo: string[]): number => {
-      let s = 0;
-      for (const id of combo) {
-        s += pyramid.scores.get(id) ?? 0.5;
+      // Sort combos ascending by sum-of-pyramid-score (cheap proxy: lower
+      // mean suspicion first). At R1 cold start everything sums to the
+      // same value; downstream hash tie-break diverges across leaders.
+      const sumSusp = (combo: string[]): number => {
+        let s = 0;
+        for (const id of combo) {
+          s += pyramid.scores.get(id) ?? 0.5;
+        }
+        return s;
+      };
+      combinations.sort((a, b) => sumSusp(a) - sumSusp(b));
+
+      for (const combo of combinations) {
+        if (out.length >= MAX_CANDIDATES) break;
+        const team = [selfId, ...fixedMembers, ...combo];
+        out.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
       }
-      return s;
+
+      // Safety fallback: if enumeration produced nothing (e.g. pool too
+      // small after role-specific filtering), keep the legacy "top-(N-1)"
+      // single candidate so the pipeline never returns []
+      if (out.length === 0) {
+        const topN = [selfId, ...fixedMembers, ...comboRanked.slice(0, Math.max(0, slotCount))];
+        out.push(this.makeTeamSelectCandidate(topN, obs, interp, pyramid));
+      }
+      return out;
     };
-    combinations.sort((a, b) => sumSusp(a) - sumSusp(b));
 
-    for (const combo of combinations) {
-      if (candidates.length >= MAX_CANDIDATES) break;
-      const team = [selfId, ...fixedMembers, ...combo];
-      candidates.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
-    }
+    let candidates: Candidate[] = enumerateTeams([], otherRanked);
 
-    // Safety fallback: if enumeration produced nothing (e.g. pool too
-    // small after role-specific filtering), keep the legacy "top-(N-1)"
-    // single candidate so the pipeline never returns []
-    if (candidates.length === 0) {
-      const topN = [selfId, ...fixedMembers, ...comboRanked.slice(0, slotCount)];
-      candidates.push(this.makeTeamSelectCandidate(topN, obs, interp, pyramid));
+    // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
+    // A red leader keeps its lake word: seats it declared blue go on the
+    // team, seats it declared red stay off (the baseline's 硬1 / 硬2 team
+    // fixup does the same; Q11 window exempt). The rule is a filter on
+    // the usual candidates, so a team that already keeps the word is
+    // still the one chosen (scores are per candidate and the hash
+    // tie-break keeps its order on a subset). Only when no usual
+    // candidate keeps the word are teams built around the vouched seats
+    // (review 2026-10-13: building them every time let in combinations
+    // the low-suspicion cut had dropped, e.g. three visible reds).
+    // Off (or `evilLakeHumanStrategy` off) → no change.
+    const vouch = evilVouchFollowUpActive(this.baseline.tuning) ? evilVouchTeamConstraint(obs) : null;
+    if (vouch) {
+      const fixedMembers = vouch.required
+        .filter((id) => id !== selfId)
+        .slice(0, Math.max(0, teamSize - 1));
+      const banned = new Set(vouch.banned);
+      const keepsWord = (c: Candidate): boolean => {
+        if (c.action.type !== 'team_select') return false;
+        const team = c.action.teamIds;
+        return fixedMembers.every((id) => team.includes(id)) && !team.some((id) => banned.has(id));
+      };
+      const kept = candidates.filter(keepsWord);
+      if (kept.length > 0) {
+        candidates = kept;
+      } else {
+        const withoutFixed = otherRanked.filter((id) => !fixedMembers.includes(id));
+        const withoutBanned = withoutFixed.filter((id) => !banned.has(id));
+        const comboRanked =
+          withoutBanned.length >= teamSize - 1 - fixedMembers.length ? withoutBanned : withoutFixed;
+        candidates = enumerateTeams(fixedMembers, comboRanked);
+      }
     }
 
     // ── Edward 2026-05-06 R1-P1 banned-combo filter (5p HR-5/HR-7) ────

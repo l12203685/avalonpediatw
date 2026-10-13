@@ -1,11 +1,12 @@
 /**
  * Red lake follow-up (`AgentTuning.evilVouchFollowUp`, 2026-10-13 round 2):
  * a red holder keeps its lake word on the teams it leads and the votes it
- * casts (strength_benchmark.md 第 7 節).
+ * casts (strength_benchmark.md 第 8 節).
  */
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_VOUCH_FOLLOW_UP_OPTIONS,
+  evilVouchFollowUpActive,
   evilVouchTeamConstraint,
   evilVouchVoteRule,
   ownLakeDeclarations,
@@ -13,6 +14,7 @@ import {
   vouchFollowUpOptionsFromEnv,
 } from './RedLakeFollowUp';
 import { ForwardAgent } from './forward/ForwardAgent';
+import { interpret } from './forward';
 import { HeuristicAgent } from './HeuristicAgent';
 import { LEGACY_AGENT_TUNING, type AgentTuning } from './AgentTuning';
 import type { LakePublicRecord, PlayerObservation, QuestRecord, VoteRecord } from './types';
@@ -117,30 +119,81 @@ describe('RedLakeFollowUp — pure rules', () => {
 });
 
 describe('RedLakeFollowUp — ForwardAgent wiring', () => {
-  it('switch on: the red leader\'s own R3 team always carries the vouched seat and never the framed one', () => {
-    const lakes: LakePublicRecord[] = [...VOUCH, { round: 2, holderId: 'P1', targetId: 'P9', declaredClaim: 'evil' }];
-    const on = forward({ evilVouchFollowUp: true });
-    const d = on.decide(obs({ lakeHistory: lakes }));
-    expect(d.reasoningTrace.usedFallback).toBe(false);
-    expect(d.action.type).toBe('team_select');
-    if (d.action.type === 'team_select') {
-      expect(d.action.teamIds).toHaveLength(4);
-      expect(d.action.teamIds).toContain('P1');
-      expect(d.action.teamIds).toContain('P3');
-      expect(d.action.teamIds).not.toContain('P9');
-    }
+  // The follow-up acts only together with the lake strategy (`evilVouchFollowUpActive`).
+  const LAKE: Partial<AgentTuning> = { evilLakeHumanStrategy: true };
+  const FOLLOW: Partial<AgentTuning> = { evilLakeHumanStrategy: true, evilVouchFollowUp: true };
+  const declare = (blue: string[], red: string[] = []): LakePublicRecord[] => [
+    ...blue.map((id) => ({ round: 2, holderId: 'P1', targetId: id, declaredClaim: 'good' as const })),
+    ...red.map((id) => ({ round: 2, holderId: 'P1', targetId: id, declaredClaim: 'evil' as const })),
+  ];
+  const teamOf = (d: ReturnType<ForwardAgent['decide']>): string[] =>
+    d.action.type === 'team_select' ? [...d.action.teamIds] : [];
+  const keepsWord = (team: string[], blue: string[], red: string[]): boolean =>
+    blue.every((id) => team.includes(id)) && !red.some((id) => team.includes(id));
+  const usualCandidates = (o: PlayerObservation): string[][] =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((forward(LAKE) as any).generateCandidates('team_select', o, interpret(o)) as Array<{ action: { teamIds: string[] } }>)
+      .map((c) => c.action.teamIds);
+
+  it('the usual R3 pick already keeps the word (P3 on, P9 off) → the same team, not a rebuilt one', () => {
+    const o = obs({ lakeHistory: declare(['P3'], ['P9']) });
+    const off = teamOf(forward(LAKE).decide(o));
+    expect(keepsWord(off, ['P3'], ['P9'])).toBe(true);
+    expect(teamOf(forward(FOLLOW).decide(o))).toEqual(off);
   });
 
-  it('switch off: the pipeline is unchanged (same action as the legacy agent)', () => {
-    const o = obs({});
-    expect(forward({ evilVouchFollowUp: false }).decide(o).action).toEqual(forward({}).decide(o).action);
-    const vo = obs({ currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: ['P6', 'P7', 'P8', 'P9'] });
-    expect(forward({ evilVouchFollowUp: false }).decide(vo).action).toEqual(forward({}).decide(vo).action);
+  it('the usual pick breaks the word (P5 vouched, P4 framed) → the best usual candidate that keeps it', () => {
+    const o = obs({ lakeHistory: declare(['P5'], ['P4']) });
+    const off = teamOf(forward(LAKE).decide(o));
+    expect(off).toContain('P4');
+    expect(off).not.toContain('P5');
+    const d = forward(FOLLOW).decide(o);
+    expect(d.reasoningTrace.usedFallback).toBe(false);
+    const on = teamOf(d);
+    expect(on).toHaveLength(4);
+    expect(on).toContain('P1');
+    expect(keepsWord(on, ['P5'], ['P4'])).toBe(true);
+    // A filter on the usual candidates, never a combination the usual
+    // low-suspicion cut had dropped (review 2026-10-13).
+    const usual = usualCandidates(o).map((t) => [...t].sort().join(','));
+    expect(usual).toContain([...on].sort().join(','));
+  });
+
+  it('no usual candidate keeps the word (P3 and P5 vouched) → teams are built around the vouched seats', () => {
+    const o = obs({ lakeHistory: declare(['P3', 'P5']) });
+    expect(usualCandidates(o).some((t) => keepsWord(t, ['P3', 'P5'], []))).toBe(false);
+    const d = forward(FOLLOW).decide(o);
+    expect(d.reasoningTrace.usedFallback).toBe(false);
+    const on = teamOf(d);
+    expect(on).toHaveLength(4);
+    expect(new Set(on).size).toBe(4);
+    expect(on).toEqual(expect.arrayContaining(['P1', 'P3', 'P5']));
+  });
+
+  it('only acts when the rule applies: no own declaration, or the vouched seat on the team → same as off', () => {
+    const others: LakePublicRecord[] = [{ round: 2, holderId: 'P6', targetId: 'P5', declaredClaim: 'good' }];
+    const o = obs({ lakeHistory: others });
+    expect(forward(FOLLOW).decide(o).action).toEqual(forward(LAKE).decide(o).action);
+    const vo = obs({ lakeHistory: declare(['P3']), currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: ['P6', 'P3', 'P8', 'P9'] });
+    const d = forward(FOLLOW).decide(vo);
+    expect(d.action).toEqual(forward(LAKE).decide(vo).action);
+    expect(d.reasoningTrace.summary).not.toContain('red vouch follow-up');
+  });
+
+  it('without evilLakeHumanStrategy the switch does nothing (so AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=0 restores the previous default)', () => {
+    const o = obs({ lakeHistory: declare(['P5'], ['P4']) });
+    expect(teamOf(forward(FOLLOW).decide(o))).not.toEqual(teamOf(forward(LAKE).decide(o)));
+    expect(forward({ evilVouchFollowUp: true }).decide(o).action).toEqual(forward({}).decide(o).action);
+    const vo = obs({ lakeHistory: declare(['P3']), currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: ['P6', 'P7', 'P8', 'P9'] });
+    expect(forward({ evilVouchFollowUp: true }).decide(vo).reasoningTrace.summary).not.toContain('red vouch follow-up');
+    expect(evilVouchFollowUpActive({ evilVouchFollowUp: true, evilLakeHumanStrategy: false })).toBe(false);
+    expect(evilVouchFollowUpActive({ evilVouchFollowUp: true, evilLakeHumanStrategy: true })).toBe(true);
+    expect(evilVouchFollowUpActive({ evilVouchFollowUp: false, evilLakeHumanStrategy: true })).toBe(false);
   });
 
   it('switch on: R3+ vote on a team without the vouched seat is a reject (trace says why)', () => {
     const vo = obs({ currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: ['P6', 'P7', 'P8', 'P9'] });
-    const d = forward({ evilVouchFollowUp: true }).decide(vo);
+    const d = forward(FOLLOW).decide(vo);
     expect(d.action).toEqual({ type: 'team_vote', vote: false });
     expect(d.reasoningTrace.summary).toContain('red vouch follow-up');
   });

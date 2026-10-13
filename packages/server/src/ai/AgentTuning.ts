@@ -30,12 +30,14 @@
  *                                   「一律宣好」為準。細節見
  *                                   `LakePolicy.pickEvilLakeTargetHuman`。
  *   - 2026-10-13 第二輪（湖法打開後從其他紅方決策補強，見
- *     strength_benchmark.md 第 7 節；三個都是紅方專用、legacy 全關）：
+ *     strength_benchmark.md 第 8 節；三個都是紅方專用、legacy 全關）：
  *     `evilVouchFollowUp`（**預設開**；紅方持湖者言行一致：自己宣藍的人
  *     放進自己派的隊、宣紅的不放；不在隊上時漏掉宣藍者的隊就反對，
- *     `RedLakeFollowUp.ts`）、`evilLakeFrameHumanRate`（**預設開**；嫁禍
- *     頻率照真人比例）、`oberonLakeSeeksTeammates`（預設關；奧伯倫持湖
- *     找隊友，比真人更常湖到紅方而且略弱，不採用）。
+ *     `RedLakeFollowUp.ts`）、`evilLakeFrameHumanRate`（**預設開**，暫定；
+ *     嫁禍頻率照真人比例，但一致性基準的湖宣告分數下降，待 Edward 選）、
+ *     `oberonLakeSeeksTeammates`（預設關；奧伯倫持湖找隊友，比真人更常
+ *     湖到紅方而且略弱，不採用）。前兩個只在 `evilLakeHumanStrategy`
+ *     打開時有作用。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -71,10 +73,15 @@ export interface AgentTuning {
    */
   evilLakeHumanStrategy: boolean;
   /**
-   * 紅方持湖後言行一致（2026-10-13 第二輪，strength_benchmark.md 第 7 節）：
+   * 紅方持湖後言行一致（2026-10-13 第二輪，strength_benchmark.md 第 8 節）：
    * 自己宣藍的人一定放進自己派的隊、宣紅的人不放；自己不在隊上時，漏掉
    * 自己宣藍的人或放了宣紅的人的隊就反對（強制局與紅方聽牌 / R5 收尾時
-   * 例外，同 baseline 的 Q11）。細節見 `RedLakeFollowUp.ts`。
+   * 例外，同 baseline 的 Q11）。派隊是在原本的候選隊伍裡篩選「守信」的
+   * 隊，原本選的隊已經守信就不變；沒有任何候選守信才圍繞被宣的人重組。
+   * 只在 `evilLakeHumanStrategy` 打開時有作用
+   * （`RedLakeFollowUp.evilVouchFollowUpActive`），所以
+   * `AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=0` 一個變數就退回第二輪之前
+   * 的舊預設。細節見 `RedLakeFollowUp.ts`。
    */
   evilVouchFollowUp: boolean;
   /**
@@ -124,7 +131,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
 
 /**
  * 正式預設（2026-10-12 採用，docs/ai/strength_benchmark.md 第 2 節；
- * 2026-10-13 `evilLakeHumanStrategy` 依 Edward 裁定打開，第 6、7 節）。
+ * 2026-10-13 `evilLakeHumanStrategy` 依 Edward 裁定打開，第 6、8 節）。
  * 採用規則（2026-10-12 事前版）：一致性基準更像真人、且自我對打合計勝率
  * 95% 區間下界 ≥ 48%；整合時改依 Edward 原文「更像真人，而且不能讓它
  * 變弱」：任一立場配對差的 95% 區間整個落在 0 以下就算變弱、不採用。
@@ -152,17 +159,21 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     **2026-10-13 Edward 裁定**（原文）：「紅方新湖法先打開 變弱應該從其他
  *     地方調整修正 (先像真人 再從策略上提高勝率)」→ 預設打開（legacy 仍
  *     關；`AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=0` 可關掉），變弱的部分
- *     改由其他紅方決策補回（strength_benchmark.md 第 7 節）。
- *   - 2026-10-13 第二輪（strength_benchmark.md 第 7 節；對照組 = 上面那組
+ *     改由其他紅方決策補回（strength_benchmark.md 第 8 節）。
+ *   - 2026-10-13 第二輪（strength_benchmark.md 第 8 節；對照組 = 上面那組
  *     不含新湖法的舊預設；seed 31337 選版本、8080 / 2718 確認）：變弱幾乎
  *     全部來自「湖留在紅方」× 好人機器人的硬3 規則（藍方持湖者被誤判的
- *     機會變少），不是紅方宣告本身。`evilVouchFollowUp` 與
- *     `evilLakeFrameHumanRate` 採用：兩個都更像真人（R3+ 投票一致性
- *     ED 63.7→64.1、Sin 65.2→65.6、top 61.9→62.4；嫁禍頻率 65%→30%，
- *     真人 26%），三個種子合併對「只開新湖法」+0.23pp [−0.01pp, +0.47pp]。
- *     但新預設對舊預設仍是 −0.79pp [−1.15pp, −0.42pp]（只開新湖法
- *     −1.01pp [−1.36pp, −0.67pp]）：補回約兩成，**仍未達「不變弱」**；
- *     依 Edward 裁定新湖法照樣打開，剩下的差距與待決事項見第 7.6 節。
+ *     機會變少），不是紅方宣告本身。數字是同日審查修正後重跑的。
+ *     `evilVouchFollowUp` 採用：對「只開新湖法」三個種子合併 +0.35pp
+ *     [+0.14pp, +0.55pp]，R3+ 投票一致性 ED 63.7→64.1、Sin 65.2→65.6、
+ *     top 61.9→62.4。`evilLakeFrameHumanRate` 暫時打開：強度不變
+ *     （−0.03pp [−0.20pp, +0.14pp]），嫁禍頻率 65.6%→29.7%（真人 25.9%）
+ *     比較像真人，但一致性基準的紅方湖宣告比只開新湖法低 4.2–5.5 點，
+ *     兩種量法相反，待 Edward 選。新預設對舊預設仍是 −0.70pp [−1.06pp,
+ *     −0.34pp]（只開新湖法 −1.01pp [−1.36pp, −0.67pp]）：補回約三成，
+ *     **仍未達「不變弱」**；依 Edward 裁定新湖法照樣打開，剩下的差距與
+ *     待決事項見第 8.6 節。這裡的採用依「對只開新湖法不變弱」，不是原定
+ *     的「對舊預設不變弱」（沒有任何補強達到），也寫在第 8.6 節。
  *     `oberonLakeSeeksTeammates` 不採用。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent

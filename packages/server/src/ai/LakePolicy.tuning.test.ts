@@ -323,10 +323,17 @@ describe('LakePolicy — evilLakeHumanStrategy', () => {
 
   it('evilLakeFrameHumanRate: no co-suspect hunting; blue claims framed at the human rate of the state', () => {
     const rate = { ...ON, evilLakeFrameHumanRate: true };
-    // The frame-seeking target rule would take P5 (shared the failed R3 with P1, red listening);
-    // the human-rate rule picks the blue by the vouch order instead (P1 led nothing → most suspicious, then seat).
+    // P1 led a team without P5 / P9 but with P6. The frame-seeking target rule
+    // still takes P5 (shared the failed R3 with P1, red listening); the
+    // human-rate rule never hunts a co-suspect and follows the vouch order → P6.
+    const led: VoteRecord[] = [{
+      round: 4, attempt: 1, leader: 'P1', team: ['P1', 'P6', 'P7', 'P8', 'P2'], approved: false,
+      votes: Object.fromEntries(IDS.map((id) => [id, false])),
+    }];
+    const ledLake = obs({ ...lastLake, voteHistory: led });
     expect(pickLakeTargetForTeam('evil', lastLake, ['P3', 'P5', 'P6', 'P9'], ON)).toBe('P5');
-    expect(pickLakeTargetForTeam('evil', lastLake, ['P6', 'P9'], rate)).toBe(pickEvilLakeTargetHuman(lastLake, ['P6', 'P9']));
+    expect(pickLakeTargetForTeam('evil', ledLake, ['P5', 'P6', 'P9'], ON)).toBe('P5');
+    expect(pickLakeTargetForTeam('evil', ledLake, ['P5', 'P6', 'P9'], rate)).toBe('P6');
     expect(humanFrameRate(lastLake, 'P5')).toBeCloseTo(HUMAN_FRAME_RATE.sharedListening);
     expect(humanFrameRate(lastLake, 'P6')).toBeCloseTo(HUMAN_FRAME_RATE.notSharedListening);
     expect(humanFrameRate(firstLake, 'P6')).toBeCloseTo(HUMAN_FRAME_RATE.notSharedNotListening);
@@ -350,6 +357,29 @@ describe('LakePolicy — evilLakeHumanStrategy', () => {
     expect(evilLakeHumanOptionsFor({ ...ON, oberonLakeSeeksTeammates: true }).oberonTarget).toBe('teammate');
     const both = evilLakeHumanOptionsFor({ ...ON, evilLakeFrameHumanRate: true, oberonLakeSeeksTeammates: true });
     expect(both).toEqual({ ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'humanRate', oberonTarget: 'teammate' });
+  });
+
+  it('an explicit benchmark knob (AVALON_EVIL_LAKE_HUMAN_VARIANT) wins over the round-2 switches', () => {
+    setEvilLakeHumanOptions(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'chaos=never,lastLake=always' }));
+    try {
+      const o = evilLakeHumanOptionsFor({ ...ON, evilLakeFrameHumanRate: true, oberonLakeSeeksTeammates: true });
+      expect(o.chaos).toBe('never');
+      expect(o.lastLake).toBe('always');
+      expect(o.oberonTarget).toBe('teammate'); // not set explicitly → the switch applies
+      expect(decideLakeClaimForTeam('evil', 'P5', lastLake, 'good', { ...ON, evilLakeFrameHumanRate: true })).toBe('good');
+    } finally {
+      setEvilLakeHumanOptions(undefined);
+    }
+    setEvilLakeHumanOptions(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'oberonTarget=vouch,target=legacy' }));
+    try {
+      // Knobs left at their default value do not block the switches.
+      const o = evilLakeHumanOptionsFor({ ...ON, evilLakeFrameHumanRate: true, oberonLakeSeeksTeammates: true });
+      expect(o.chaos).toBe('humanRate');
+      expect(o.oberonTarget).toBe('teammate');
+      expect(o.target).toBe('legacy');
+    } finally {
+      setEvilLakeHumanOptions(undefined);
+    }
   });
 
   it('oberonLakeSeeksTeammates: Oberon lakes the seat with the most fail cards he did not play', () => {
