@@ -146,6 +146,10 @@ interface Prop {
   closerTo: 'mission' | 'previous' | 'tie' | null;
   /** First after fail: failed-team members kept (excluding the leader). */
   failedKept: number | null;
+  /** Later proposals re-proposing an earlier team exactly: the leader is on that team. */
+  exactReuseHasLeader: boolean | null;
+  /** What happened to this proposal: rejected / went and succeeded / went and failed. */
+  outcome: 'rejected' | 'succeeded' | 'failed';
 }
 
 function setOf(a: readonly number[]): Set<number> {
@@ -228,6 +232,8 @@ function collect(games: readonly ReplayGame[]): Prop[] {
         reproposedOwnEarlier: later && withLeader.length > 0 ? withLeader.some((x) => sameSet(p.teamSeats, x.teamSeats)) : null,
         closerTo,
         failedKept: ctx === 'first after fail' ? kept.filter((x) => x !== L).length : null,
+        exactReuseHasLeader: later && earlier.some((x) => sameSet(p.teamSeats, x.teamSeats)) ? H.has(L) : null,
+        outcome: !p.wentOnMission ? 'rejected' : g.quests.find((q) => q.round === p.round)?.failed ? 'failed' : 'succeeded',
       });
     }
   }
@@ -287,10 +293,15 @@ function detailTable(props: readonly Prop[]): string {
       }
     }
   }
+  for (const camp of ['good', 'evil'] as const) {
+    const s = succ.filter((p) => p.grow === 0 && p.exact && !p.leaderOnTeam && p.camp === camp);
+    rate(`same-size round, ${camp} leader re-proposed it without self: went and succeeded`, s, (p) => p.outcome === 'succeeded');
+  }
   const later = props.filter((p) => p.ctx === 'R2+ later proposal');
   lines.push('  R2+ later proposals (reference = the proposal just rejected)');
   rate('exact re-proposal of the previous proposal', later, (p) => p.exactSource === 'previous');
   rate('exact re-proposal of an older proposal of the round', later, (p) => p.exactSource === 'older');
+  rate('exact re-proposals (previous or older): the leader is on the team', later.filter((p) => p.exactReuseHasLeader !== null), (p) => p.exactReuseHasLeader === true);
   rate('leader was on an earlier team of the round', later, (p) => p.leaderOnEarlier === true);
   rate('  … re-proposed one of those teams exactly', later.filter((p) => p.leaderOnEarlier), (p) => p.reproposedOwnEarlier === true);
   rate('leader off the reference: swapped self in for one member', later.filter((p) => !p.leaderOnRef), (p) => p.swappedSelfIn);
