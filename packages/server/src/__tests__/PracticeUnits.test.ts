@@ -280,6 +280,24 @@ describe('explain (read-only reasons)', () => {
     expect(ex.reason).toContain('隊上');
   });
 
+  it('forward replay names the lake follow-up vote rule (goodVouchFollowUp)', () => {
+    const base = obs({});
+    const o = obs({
+      currentRound: 3, questResults: ['fail', 'success'],
+      voteHistory: [...base.voteHistory, {
+        round: 2, attempt: 1, leader: 's1', team: ['s1', 's7', 's8', 's9'], approved: true,
+        votes: Object.fromEntries(IDS.map((id) => [id, ['s1', 's7', 's8', 's9', 's3', 's4'].includes(id)])),
+      }],
+      questHistory: [...base.questHistory, { round: 2, team: ['s1', 's7', 's8', 's9'], result: 'success', failCount: 0 }],
+      lakeHistory: [{ round: 2, holderId: 's1', targetId: 's5', declaredClaim: 'good' }],
+      proposedTeam: ['s3', 's6', 's7', 's9'],
+    });
+    const agent = new HeuristicAgent('s1', undefined, undefined, { ...DEFAULT_AGENT_TUNING });
+    const r = replayRule(o, agent, { type: 'team_vote', vote: false }, { forwardActive: true });
+    expect(r?.rule).toBe('持湖者言行一致：自己不在隊上，隊伍漏掉自己（或湖鏈上）宣藍的人、或放了宣紅的人 → 反對');
+    expect(r?.mismatch).toBe(false);
+  });
+
   it('ties are not shown as a ranking; Oberon gets the public view', () => {
     // Round 1, no history: every pyramid score is the 0.50 prior.
     const fresh = obs({ currentRound: 1, questResults: [], voteHistory: [], questHistory: [], gamePhase: 'team_select', proposedTeam: [] });

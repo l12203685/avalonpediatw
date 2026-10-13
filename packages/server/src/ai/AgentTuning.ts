@@ -49,6 +49,10 @@
  *                                   打開時優先於 `goodLakeTargetMostSuspicious`
  *                                   （模型找不到一致的組合時才退回它）；
  *                                   梅林不湖看得到的紅、派西不湖兩拇指照舊。
+ *   - `goodVouchFollowUp`          （2026-10-13 第三輪，**預設開**）好人持湖者
+ *                                   言行一致：自己宣藍的人（含「我宣藍的人之後
+ *                                   宣藍的人」）放進自己派的隊、宣紅的不放；不在
+ *                                   隊上時違反宣告的隊就反對（`GoodLakeFollowUp.ts`）。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -115,6 +119,13 @@ export interface AgentTuning {
    * `GoodLakeInfo.ts`；打開時優先於 `goodLakeTargetMostSuspicious`。
    */
   goodLakeInfoMax: boolean;
+  /**
+   * 好人持湖者言行一致（2026-10-13 第三輪，strength_benchmark.md 第 10 節；
+   * `evilVouchFollowUp` 的藍方版本）：自己宣藍的人一定放進自己派的隊、宣紅
+   * 的人不放；自己不在隊上時，漏掉自己宣藍的人或放了宣紅的人的隊就反對
+   * （強制局例外）。細節見 `GoodLakeFollowUp.ts`。
+   */
+  goodVouchFollowUp: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -131,6 +142,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'evilLakeFrameHumanRate',
   'oberonLakeSeeksTeammates',
   'goodLakeInfoMax',
+  'goodVouchFollowUp',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -146,6 +158,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: false,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: false,
+  goodVouchFollowUp: false,
 });
 
 /**
@@ -212,6 +225,15 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     −0.3pp [−0.6pp, +0.1pp]，區間都含 0 → 依規則不算變弱 → **採用**
  *     （整合時打開；`goodLakeTargetMostSuspicious` 保留，只當模型找不到
  *     一致組合時的退路；AVALON_TUNING_GOOD_LAKE_INFO_MAX=0 可關掉）。
+ *   - `goodVouchFollowUp`（2026-10-13 第三輪，strength_benchmark.md 第 10 節）：
+ *     對照 = 上面這組整合後的正式預設。更像真人（好人持湖者宣告後自己派隊
+ *     放被宣的人 47%→100%，真人 99.2%；目標決策的派隊 Jaccard ED 44.6→53.1、
+ *     Sin 54.7→59.2、top 47.3→56.3；不在隊上時對違反宣告的隊的票 Sin
+ *     85.2→96.3、top 81.8→95.9、ED 100 不變），藍方立場選版本 seed 11111
+ *     +0.64pp [+0.31pp, +0.97pp]，新種子 22222 +0.36pp [−0.00pp, +0.72pp]、
+ *     33333 +0.68pp [+0.36pp, +1.00pp]，三個種子合併 +0.57pp [+0.38pp,
+ *     +0.77pp]（紅方立場恆為 0）→ **採用**（AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP=0
+ *     可關掉）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -231,6 +253,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: true,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: true,
+  goodVouchFollowUp: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -246,6 +269,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   evilLakeFrameHumanRate: 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE',
   oberonLakeSeeksTeammates: 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES',
   goodLakeInfoMax: 'AVALON_TUNING_GOOD_LAKE_INFO_MAX',
+  goodVouchFollowUp: 'AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP',
 });
 
 function parseBool(raw: string): boolean | undefined {

@@ -345,6 +345,18 @@ export function replayRule(
     if (desc.endsWith('on-team approve hard rule')) {
       return { rule: '派西維爾／莫甘娜在隊上一律贊成', mismatch: false };
     }
+    if (desc === 'blue vouch follow-up reject') {
+      return {
+        rule: '持湖者言行一致：自己不在隊上，隊伍漏掉自己（或湖鏈上）宣藍的人、或放了宣紅的人 → 反對',
+        mismatch: !sameAction(action, real),
+      };
+    }
+    if (desc === 'red vouch follow-up reject') {
+      return {
+        rule: '紅方持湖者言行一致：自己不在隊上，隊伍漏掉自己宣藍的人、或放了宣紅的人 → 反對',
+        mismatch: !sameAction(action, real),
+      };
+    }
     if (desc.startsWith('human quest-card rule')) {
       return { rule: '真人任務牌規則（R1 莫甘娜為隊上唯一紅方時出失敗）', mismatch: !sameAction(action, real) };
     }
