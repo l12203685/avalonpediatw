@@ -128,7 +128,7 @@ export type NameMatch =
       kind: 'found';
       name: string;
       /**
-       * Other rows of the same player spelled differently (Sin / SIN / sin). Only a cache
+       * Other rows of the same player spelled differently (Nova / NOVA / nova). Only a cache
        * written before generate_cache.py merged such names has them.
        */
       caseVariants: string[];
@@ -142,7 +142,7 @@ export type NameMatch =
  *
  *   1. exact match
  *   2. the same name ignoring case / width (normalizeName) — the first such name wins
- *      (an old cache may still list one player as Sin / SIN / sin: the one with the
+ *      (an old cache may still list one player as Nova / NOVA / nova: the one with the
  *      most games when `names` is ordered so; the others are its caseVariants)
  *   3. substring match — one hit wins, several are ambiguous
  *   4. otherwise none

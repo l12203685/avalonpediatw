@@ -789,7 +789,7 @@ const INVISIBLE_CHARS = /\u200b|\u200c|\u200d|\u2060|\ufeff/g;
 /**
  * Who a player is, as generate_cache.py player_name_key decides it: NFKC (full-width
  * ＡＢＣ / １２３ → ASCII), zero-width characters dropped, whitespace trimmed and
- * collapsed, lower-cased. "Sin", "SIN", " sin " and "ｓｉｎ" are one player; the cache
+ * collapsed, lower-cased. "Nova", "NOVA", " nova " and "ｎｏｖａ" are one player; the cache
  * (since the 2026-10-13 refresh) has one row per player under the most-used spelling.
  */
 export function playerNameKey(name: string): string {
@@ -823,7 +823,7 @@ function playerKeyIndex(record: Record<string, unknown>): Map<string, string[]> 
 /**
  * The key of `record` that names this player: `name` itself when present, else the key that
  * differs from it only by case / width. A cache written before the names were merged may hold
- * several such keys (Sin / SIN / sin): `rank` (e.g. games played) picks one, else the first.
+ * several such keys (Nova / NOVA / nova): `rank` (e.g. games played) picks one, else the first.
  */
 export function findPlayerKey<T>(
   record: Record<string, T> | null | undefined,

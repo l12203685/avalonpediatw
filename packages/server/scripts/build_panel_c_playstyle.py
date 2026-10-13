@@ -92,7 +92,7 @@ _COUNT_FIELDS = ("totalGames", "r3VotesRed", "r3RejectsRed", "r3VotesBlue", "r3R
 
 def player_name_key(name: str) -> str:
     """generate_cache.player_name_key: NFKC, zero-width characters dropped, whitespace collapsed,
-    lower case. The cache counts 'Sin', 'SIN' and 'ｓｉｎ' as one player (2026-10-13)."""
+    lower case. The cache counts 'Nova', 'NOVA' and 'ｎｏｖａ' as one player (2026-10-13)."""
     text = _INVISIBLE_CHARS_RE.sub("", unicodedata.normalize("NFKC", name or ""))
     return " ".join(text.split()).lower()
 

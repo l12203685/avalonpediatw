@@ -188,12 +188,13 @@ DERIVED_COLUMNS = (
 # discord_hash: post_signature of the post (title, tags that matter, starter text) when the row was
 # written; 更新時間: when the row was last rewritten from an edited post (--recheck-days).
 HASH_COLUMN = "discord_hash"
-UPDATED_COLUMN = "更新時間"
+UPDATED_COLUMN = gc.DISCORD_UPDATED_COLUMN  # generate_cache reads it (its shrink guard allows corrections)
 EXTRA_COLUMNS = ("discord_post_id", "discord_title", "discord_tags", "匯入時間", HASH_COLUMN, UPDATED_COLUMN)
 # Added to an existing Discord匯入 header (after its last column) the first time a row is written.
 LATE_COLUMNS = (HASH_COLUMN, UPDATED_COLUMN)
 # Re-read the posts already in Discord匯入 that were created within this many days (the 待修正 tag's
-# window) and rewrite their row(s) when the post was edited; at most RECHECK_DEFAULT_LIMIT per run.
+# window) and rewrite their row(s) when the post was edited; at most RECHECK_DEFAULT_LIMIT per run
+# (the newest half of that every run, the older posts in turns).
 RECHECK_DEFAULT_DAYS = 90
 RECHECK_DEFAULT_LIMIT = 200
 # Columns that are not the game: a re-read that differs only here is no correction.
@@ -961,7 +962,7 @@ class SheetIndex:
         idx = _header_index(rows)
         self.games = 0
         self.fingerprints: set[str] = set()
-        self.names: set[str] = set()
+        self.names: set[str] = set()  # gc.player_name_key of every 玩1..玩0 name
         self._by_config_missions: dict[tuple[str, tuple[str, ...]], list[tuple[str, ...]]] = {}
         self._by_missions_players: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
         for row in rows[1:]:
@@ -973,7 +974,7 @@ class SheetIndex:
             self.fingerprints.add(gc.record_fingerprint(config, text))
             _, _, missions = gc.record_fingerprint_parts(config, text)
             raw_names = [_cell(row, idx, gc.PLAYER_COLUMNS[s]) for s in SEATS]
-            self.names.update(n for n in map(gc.normalize_player_name, raw_names) if n)
+            self.names.update(n for n in map(gc.player_name_key, raw_names) if n)
             folded = _folded_names(raw_names)
             self._by_config_missions.setdefault((config, missions), []).append(folded)
             if all(folded):
@@ -999,7 +1000,7 @@ class ImportIndex:
         idx = _header_index(rows)
         self.post_ids: set[str] = set()
         self.fingerprints: set[str] = set()
-        self.names: set[str] = set()
+        self.names: set[str] = set()  # gc.player_name_key of every 玩1..玩0 name
         self.rows = 0
         self.rows_of: dict[str, list[int]] = {}  # post id -> indexes into `rows` (sheet row = index + 1)
         for i, row in enumerate(rows[1:], 1):
@@ -1016,9 +1017,7 @@ class ImportIndex:
             config = _cell(row, idx, "配置").strip()
             if len(config) == 6:
                 self.fingerprints.add(gc.record_fingerprint(config, _cell(row, idx, "文字記錄")))
-            self.names.update(
-                n for n in (gc.normalize_player_name(_cell(row, idx, gc.PLAYER_COLUMNS[s])) for s in SEATS) if n
-            )
+            self.names.update(n for n in (gc.player_name_key(_cell(row, idx, gc.PLAYER_COLUMNS[s])) for s in SEATS) if n)
 
 
 def replied_post_ids(rows: Sequence[Sequence[str]] | None) -> set[str]:
@@ -1057,7 +1056,7 @@ class ImportReport:
     dup_run: int = 0  # same game as another post of this run
     held_by_limit: int = 0
     date_from_post_time: int = 0
-    new_unknown_names: int = 0  # distinct names in the new rows that neither tab has yet
+    new_unknown_names: int = 0  # distinct names in the new rows that neither tab has yet (case / width ignored)
     skipped: Counter = field(default_factory=Counter)
     skipped_recorded: Counter = field(default_factory=Counter)  # ... of which tagged 已收錄
     skips: list[SkippedPost] = field(default_factory=list)  # every skipped post, for --reply
@@ -1149,7 +1148,8 @@ def plan_import(
             report.rows.append(build_row(post, game, header, imported_at, post_signature(post, content or "")))
             report.note(post, "new")
             report.date_from_post_time += not game.date_from_title
-            unknown_names.update(n for n in game.names.values() if n not in sheet.names and n not in imported.names)
+            unknown_names.update(key for key in map(gc.player_name_key, game.names.values())
+                                 if key and key not in sheet.names and key not in imported.names)
     report.new_unknown_names = len(unknown_names)
     return report
 
@@ -1167,7 +1167,10 @@ class StarterMessage:
 @dataclass(frozen=True)
 class RowUpdate:
     row: int  # 1-based row of the Discord匯入 tab
-    values: list[str]
+    values: list[str]  # the whole row after the update (cells not in `cols` as they were read)
+    cols: tuple[int, ...] = ()  # 0-based columns written: this script's cells whose value changes
+    key_col: int = 0  # 0-based column that must still hold `key` in `row` when written, else skipped
+    key: str = ""
 
 
 @dataclass
@@ -1178,7 +1181,7 @@ class RecheckReport:
     checked: int = 0  # their starter messages re-read this run
     held: int = 0  # over --recheck-limit: re-read on a later run (the posts take turns)
     unchanged: int = 0  # not edited since the row was written
-    edited_same: int = 0  # edited, but the game in the row stays the same (e.g. a comment)
+    edited_same: int = 0  # edited, but the game in the row stays the same (e.g. a comment): only discord_hash is written
     corrected: int = 0  # edited: row(s) rewritten (dry run: would be)
     rows_updated: int = 0
     unreadable: int = 0  # edited into something the parser cannot read: row kept as it was
@@ -1186,6 +1189,8 @@ class RecheckReport:
     recorded: int = 0  # tagged 已收錄 since: the game is in 牌譜, edited there by hand; left alone
     in_sheet: int = 0  # its row's game has been copied into 牌譜 since (not tagged): left alone too
     simulation: int = 0  # tagged 模擬 since: row kept (delete it by hand)
+    error: str = ""  # error_kind of the Discord error that stopped the pass (the rest: a later run)
+    moved: int = 0  # rows not written: the post's row was elsewhere by the time of the write (sorted?)
     updates: list[RowUpdate] = field(default_factory=list)
 
 
@@ -1229,7 +1234,8 @@ def edited_since_written(post: Post, message: StarterMessage, signature: str,
 def corrected_row(header: Sequence[str], row: Sequence[str], cells: Mapping[str, str], stamp: str) -> list[str] | None:
     """`row` rewritten from a re-read post (`cells`: row_cells), or None when the game in it is the
     same (only NOT_GAME_COLUMNS would change). Columns this script does not write (anything a person
-    added) and 匯入時間 keep their value; 更新時間 = `stamp`."""
+    added) and 匯入時間 keep their value; 更新時間 = `stamp`. Only the cells that change are written
+    (row_update), so a person's cells (formulas included) are never touched."""
     def old(i: int) -> str:
         return (row[i] or "") if i < len(row) else ""
     names = [h.strip() for h in header]
@@ -1244,6 +1250,33 @@ def corrected_row(header: Sequence[str], row: Sequence[str], cells: Mapping[str,
         else:
             out.append(old(i))
     return out
+
+
+def row_update(row_no: int, old: Sequence[str], new: list[str], idx: Mapping[str, int], post_id: str) -> RowUpdate | None:
+    """The write that turns `old` (row `row_no`, 1-based, as read) into `new`: only the cells that
+    differ, guarded by the row's discord_post_id (or its 流水號 D<id> when that cell is blank, as
+    ImportIndex reads it). None when nothing differs."""
+    cols = tuple(i for i, v in enumerate(new) if v != ((old[i] or "") if i < len(old) else ""))
+    if not cols:
+        return None
+    if _cell(old, idx, "discord_post_id").strip():
+        key_col, key = idx["discord_post_id"], post_id
+    else:
+        key_col, key = idx["流水號"], f"D{post_id}"
+    return RowUpdate(row_no, new, cols, key_col, key)
+
+
+def recheck_order(due: list[Post], limit: int, today: dt.date) -> list[Post]:
+    """Which of `due` to re-read today, at most `limit`: the newest limit // 2 every day (a correction
+    usually comes soon after the post), the older ones in turns (the window moves with the day), so
+    every post is re-read every ceil(older / (limit - limit // 2)) days."""
+    due = sorted(due, key=lambda p: int(p.id), reverse=True)
+    if len(due) <= limit:
+        return due
+    fresh = limit // 2
+    rest, turn = due[fresh:], limit - fresh
+    start = (today.toordinal() * turn) % len(rest)
+    return due[:fresh] + (rest[start:] + rest[:start])[:turn]
 
 
 def plan_recheck(
@@ -1262,7 +1295,8 @@ def plan_recheck(
 ) -> RecheckReport:
     """Re-read the posts already in Discord匯入 that were created within `days` and plan a rewrite of
     the row(s) of each one edited since its row was written (edited_since_written, then parsed again
-    and compared: corrected_row). Pure apart from `fetch`.
+    and compared: corrected_row). Pure apart from `fetch`. An edit that leaves the game as it was
+    (a comment) gets only its new discord_hash written, so it is not re-parsed every day.
 
     Only the Discord匯入 rows of that post change. Posts tagged 已收錄 are in 牌譜, which people keep
     by hand: never re-read; nor is a post whose row's game is in `sheet_rows` (牌譜) by now, tagged or
@@ -1270,8 +1304,9 @@ def plan_recheck(
     emptied, or edited into something unreadable: the row stays as it is; an unreadable edit becomes
     a `fixable` skip in `report` (the --reply / 待修正 rules then apply; edited=True words the reply
     for it) and leaves report.ok_ids.
-    At most `limit` posts are re-read per run, newest first; when there are more, the starting point
-    moves with the day so that every post is re-read every few days. `days` or `limit` 0: off.
+    At most `limit` posts are re-read per run (recheck_order: the newest half every run, the older
+    ones in turns). `days` or `limit` 0: off. A Discord error stops the pass (result.error): what was
+    planned until then stands, the rest is re-read on a later run, and the new posts still go in.
     """
     result = RecheckReport(days=days)
     if not import_rows or days <= 0 or limit <= 0:
@@ -1300,14 +1335,15 @@ def plan_recheck(
             result.in_sheet += 1
         else:
             due.append(post)
-    due.sort(key=lambda p: int(p.id), reverse=True)
     result.candidates = len(due)
-    if len(due) > limit:
-        start = (now.date().toordinal() * limit) % len(due)
-        due = (due[start:] + due[:start])[:limit]
-        result.held = result.candidates - limit
-    for post in due:
-        message = fetch(post)
+    result.held = max(len(due) - limit, 0)
+    hash_col = next((i for i, h in enumerate(header) if h.strip() == HASH_COLUMN), None)
+    for post in recheck_order(due, limit, now.date()):
+        try:
+            message = fetch(post)
+        except DiscordError as exc:  # e.g. still 5xx after the retries: keep what was planned so far
+            result.error = error_kind(exc)
+            break
         result.checked += 1
         if message is None or not message.content.strip():
             result.gone += 1
@@ -1328,14 +1364,19 @@ def plan_recheck(
             result.unreadable += 1
             continue
         cells = row_cells(post, game, signature)
-        updates = [RowUpdate(i + 1, new) for i in rows
-                   if (new := corrected_row(header, import_rows[i], cells, stamp)) is not None]
-        if updates:
+        rewritten = [(i, new) for i in rows if (new := corrected_row(header, import_rows[i], cells, stamp)) is not None]
+        if rewritten:
             result.corrected += 1
-            result.rows_updated += len(updates)
-            result.updates += updates
-        else:
+            result.rows_updated += len(rewritten)
+        else:  # the same game (e.g. a comment was added): remember this version, nothing else changes
             result.edited_same += 1
+            if hash_col is not None:
+                for i in rows:
+                    new = [(c or "") for c in import_rows[i]] + [""] * (len(header) - len(import_rows[i]))
+                    new[hash_col] = signature
+                    rewritten.append((i, new[:len(header)]))
+        result.updates += [u for i, new in rewritten
+                           if (u := row_update(i + 1, import_rows[i], new, idx, post.id)) is not None]
     return result
 
 
@@ -1351,6 +1392,10 @@ def recheck_lines(recheck: RecheckReport, *, write: bool) -> list[str]:
         f"  - 後來標「{TAG_RECORDED}」或這局已抄進 {gc.GAME_LOG_TAB}（由人工修正，不動）：{recheck.recorded + recheck.in_sheet}；"
         f"後來標「{TAG_SIMULATION}」（保留原本那列，請人工刪除）：{recheck.simulation}",
     ]
+    if recheck.error:
+        lines.append(f"  - 重讀途中 Discord API 錯誤（{recheck.error}），本次重讀到此為止，其餘下次再讀；新貼文照常收錄")
+    if recheck.moved:
+        lines.append(f"  - 讀取後那一列的位置變了（有人排序、插入或刪除列？），這次沒寫：{recheck.moved} 列，下次再改")
     return lines
 
 
@@ -2316,13 +2361,39 @@ def extend_import_header(sh: Any, width: int, additions: Sequence[str]) -> None:
     ws.update(values=[list(additions)], range_name=f"{column_letters(width + 1)}1", raw=True)
 
 
-def update_import_rows(sh: Any, width: int, updates: Sequence[RowUpdate]) -> None:
-    """Rewrite Discord匯入 rows in place, all in one request, as plain text (RAW, like the append).
-    Only the rows of edited posts; cells right of `width` are not touched."""
+def column_runs(cols: Iterable[int]) -> list[tuple[int, int]]:
+    """(first, last) of each run of adjacent 0-based columns: (0, 1, 2, 5) -> [(0, 2), (5, 5)]."""
+    runs: list[list[int]] = []
+    for c in sorted(set(cols)):
+        if runs and c == runs[-1][1] + 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return [(a, b) for a, b in runs]
+
+
+def update_import_rows(sh: Any, updates: Sequence[RowUpdate]) -> int:
+    """Rewrite Discord匯入 cells in place, all in one request, as plain text (RAW, like the append):
+    per row only the cells that change (RowUpdate.cols), so a cell this script does not write is
+    never touched. First re-reads each row's key column (one read) and skips an update whose row no
+    longer holds that post: the tab was sorted, or rows inserted or deleted, after this run read it.
+    Returns how many rows were skipped (a later run rewrites them)."""
     ws = sh.worksheet(gc.DISCORD_IMPORT_TAB)
-    last = column_letters(width)
-    ws.batch_update([{"range": f"A{u.row}:{last}{u.row}", "values": [list(u.values)]} for u in updates],
-                    value_input_option="RAW")
+    keys = {c: ["" if v is None else str(v).strip() for v in ws.col_values(c + 1)]
+            for c in sorted({u.key_col for u in updates})}
+    data: list[dict] = []
+    moved = 0
+    for u in updates:
+        column = keys[u.key_col]
+        if (column[u.row - 1] if u.row - 1 < len(column) else "") != u.key:
+            moved += 1
+            continue
+        for first, last in column_runs(u.cols):
+            data.append({"range": f"{column_letters(first + 1)}{u.row}:{column_letters(last + 1)}{u.row}",
+                         "values": [list(u.values[first:last + 1])]})
+    if data:
+        ws.batch_update(data, value_input_option="RAW")
+    return moved
 
 
 def google_error(exc: BaseException, sheet_id: str, email: str | None, write: bool) -> gc.FatalError | None:
@@ -2424,7 +2495,7 @@ def run(
             if late_columns:
                 extend_import_header(sh, old_width, late_columns)
             if recheck.updates:  # before the append: rows inserted below never move these
-                update_import_rows(sh, len(header), recheck.updates)
+                recheck.moved = update_import_rows(sh, recheck.updates)
             if report.rows:
                 append_import_rows(sh, header, report.rows, tab_exists, has_header=bool(import_rows))
         except Exception as exc:
@@ -2463,6 +2534,14 @@ def run(
     gc._append_step_summary(lines)
     if missing_tags and in_actions:
         print(f"::warning title=Forum tags missing::{len(missing_tags)} expected forum tag(s) not found; see the job summary.")
+    if recheck.error:
+        _warn("Discord re-read stopped", f"Re-reading imported posts stopped after a Discord API error "
+              f"({recheck.error}) with {recheck.checked} read; the rest are re-read on a later run. New posts "
+              "were imported as usual.", in_actions)
+    if recheck.moved:
+        _warn(f"{gc.DISCORD_IMPORT_TAB} rows moved", f"{recheck.moved} row(s) of edited posts were not rewritten: "
+              "the tab was sorted, or rows inserted or deleted, while this run read Discord. The next run "
+              "rewrites them.", in_actions)
     if reply_gate and args.reply:
         _warn("Discord reply skipped", f"{len(reply_gate)} forum tag(s) that decide which posts get a reply not found "
               "(renamed?); no reply was posted or counted" + (f", no {TAG_FIX} tag changed" if tag_on else "")

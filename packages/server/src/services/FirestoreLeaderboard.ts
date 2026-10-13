@@ -427,7 +427,7 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
     try {
       const sheetsPlayers = await getAllPlayerStats();
       const eloMap = computeEloFromSheets(sheetsPlayers);
-      // Sheets names ignore case / width (playerNameKey): "sin" finds the cache's "Sin".
+      // Sheets names ignore case / width (playerNameKey): "nova" finds the cache's "Nova".
       const wanted = playerNameKey(playerId);
       const sheetName = eloMap.has(playerId)
         ? playerId

@@ -314,6 +314,53 @@ class SanityGuardTest(unittest.TestCase):
             row["name"] = row["name"].lower()  # same players, other case: no regression
         self.assertEqual(gc.games_regressions(recased, prev), [])
 
+    def test_rewritten_discord_rows_explain_a_corrected_name(self) -> None:
+        """A Discord匯入 row rewritten from an edited post (a corrected player id) takes its game
+        from the old spelling; the guard lets that through, and only that much."""
+        prev = fake_cache(players=12)  # P0..P11 with 10..21 games
+        new = fake_cache(players=12)
+        rows = new["players"]["players"]
+        rows[3]["totalGames"] = 12.0  # P3 13 -> 12: the corrected spelling
+        rows[5]["totalGames"] = 16.0  # P5 15 -> 16: the right one
+        self.assertTrue(gc.validate_new_cache(new, prev))
+        self.assertEqual(gc.validate_new_cache(new, prev, rewritten_rows=1), [])
+        rows[4]["totalGames"] = 12.0  # P4 14 -> 12: two games, one row cannot do that
+        self.assertTrue(gc.validate_new_cache(new, prev, rewritten_rows=1))
+        self.assertEqual(gc.validate_new_cache(new, prev, rewritten_rows=2), [])
+        self.assertFalse(gc.explained_by_rewrites([(f"P{i}", 10.0, 9.0) for i in range(11)], 1))  # > 10 seats
+        self.assertTrue(gc.explained_by_rewrites([(f"P{i}", 10.0, 9.0) for i in range(10)], 1))
+        self.assertTrue(gc.explained_by_rewrites([], 0))
+
+        gone = fake_cache(players=12)
+        gone["players"]["players"][0]["name"] = "Q0"  # P0's every game was the typo: P0 is gone
+        self.assertEqual(gc.validate_new_cache(gone, prev, rewritten_rows=10), [])  # no lost player either
+        fewer = fake_cache(games=99, players=12)  # and a game fewer: only a row now a duplicate explains that
+        problems = gc.validate_new_cache(fewer, prev, rewritten_rows=1)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("(1 Discord匯入 row(s) rewritten from edited posts since the existing cache do not explain it)",
+                      problems[0])
+        self.assertEqual(gc.validate_new_cache(fewer, prev, rewritten_rows=1, rewritten_duplicates=1), [])
+
+    def test_public_log_messages_name_nobody(self) -> None:
+        prev = fake_cache(players=12)
+        new = with_theory(fake_cache(players=12))
+        for row in new["players"]["players"][:3]:
+            row["totalGames"] -= 2.0
+            row["theory"]["career"]["games"] = 1
+        new["players"]["players"][11]["name"] = "Q11"
+        problems = gc.validate_new_cache(new, prev, show_names=False, rewritten_rows=1)
+        text = "\n".join(problems)
+        self.assertIn("4 existing player(s) would have fewer games than in the existing cache (1 of them gone; "
+                      "biggest drop 21 game(s); names are listed only outside GitHub Actions)", text)
+        self.assertIn("3 player(s) have a theory block that does not match their games (theory", text)
+        self.assertNotRegex(text, r"\b[PQ]\d+\b")
+        self.assertIn("P11 21→gone", "\n".join(gc.validate_new_cache(new, prev)))  # local runs: named
+        lines = "\n".join(gc.compare_summary(new, prev, show_names=False))
+        self.assertIn("新增 1；消失 1", lines)
+        self.assertIn("| # | 局數 | 勝率 |", lines)
+        self.assertNotRegex(lines, r"\b[PQ]\d+\b")
+        self.assertIn("新增 1：Q11；消失 1：P11", "\n".join(gc.compare_summary(new, prev)))
+
     def test_empty_or_malformed_always_refused(self) -> None:
         empty_games = fake_cache(games=0)
         no_players = fake_cache()
@@ -795,6 +842,25 @@ class PlayerAggregationTest(unittest.TestCase):
     def test_no_field_loss_vs_committed_shape(self) -> None:
         previous = {"players": {"players": [{f: 0 for f in PLAYER_FIELDS}]}}
         self.assertEqual(gc.dropped_player_fields(self.cache, previous), [])
+
+    def test_merge_tracks_rewritten_discord_rows(self) -> None:
+        log = aggregation_log()
+        header = LOG_HEADERS + ["discord_post_id", gc.DISCORD_UPDATED_COLUMN]
+        def extra(gid: str, updated: str, text: str = DEFAULT_TEXT) -> list[str]:
+            return log_row(gid, "135790", "三紅", SEAT_NAMES, text=text) + [gid[1:], updated]
+        dup_text = log[1][LOG_HEADERS.index("文字記錄")]
+        rows = [header, extra("D1", ""), extra("D2", "2026-12-01 03:17:00", "158\nooo"),
+                extra("D3", "2026/11/02 03:17", "159\nooo"), extra("D4", "2026-12-02 03:17:00", "158\nooo"),
+                log_row("D5", "123456", "三紅", SEAT_NAMES, text=dup_text) + ["5", "2026-12-01 03:17:00"]]
+        merged = gc.merge_game_logs(log, rows)
+        self.assertEqual((merged.extra_added, merged.extra_duplicates), (3, 2))
+        # On or after the day: D2, D4 (a duplicate of D2) and D5 (now the same game as a 牌譜 row).
+        self.assertEqual(merged.rewritten_since(dt.date(2026, 12, 1)), (3, 2))
+        self.assertEqual(merged.rewritten_since(dt.date(2026, 12, 2)), (1, 1))  # D4, dropped as D2's duplicate
+        self.assertEqual(merged.rewritten_since(dt.date(2026, 12, 3)), (0, 0))
+        self.assertEqual(merged.rewritten_since(None), (4, 2))
+        self.assertEqual(gc.merge_game_logs(log, [LOG_HEADERS, log_row("D9", "135790", "三紅", SEAT_NAMES)])
+                         .rewritten_since(None), (0, 0))  # a tab without the column
 
     def test_guard_refuses_lost_games(self) -> None:
         log = aggregation_log()
@@ -1818,7 +1884,7 @@ class PlayerNameMergeTest(unittest.TestCase):
                 self.assertEqual(gc.player_name_key(spelling), "nova")
         self.assertEqual(gc.player_name_key("Ｔｅｄ　Ｂｅａｒ"), "ted bear")
         self.assertNotEqual(gc.player_name_key("Nova"), gc.player_name_key("Novo"))
-        self.assertEqual(gc.player_name_key("小米"), "小米")  # CJK untouched
+        self.assertEqual(gc.player_name_key("雪球"), "雪球")  # CJK untouched
         self.assertEqual(gc.player_name_key(None), "")
 
     def test_display_is_the_most_used_spelling_ties_go_to_the_first_seen(self) -> None:

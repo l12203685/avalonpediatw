@@ -811,7 +811,7 @@ describe('player names: case / width do not matter (same rule as generate_cache.
       expect(playerNameKey(typed)).toBe('nova');
     }
     expect(playerNameKey('Ｔｅｄ　 Ｂｅａｒ')).toBe('ted bear');
-    expect(playerNameKey('小米')).toBe('小米');
+    expect(playerNameKey('雪球')).toBe('雪球');
     expect(playerNameKey('Nova')).not.toBe(playerNameKey('Novo'));
   });
 

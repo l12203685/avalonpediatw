@@ -117,7 +117,7 @@ describe('matchPlayerName', () => {
   });
 
   it('case, width, stray spaces and zero-width characters never matter (made-up names)', () => {
-    const names = ['Nova', 'Kite', '小米'];
+    const names = ['Nova', 'Kite', '雪球'];
     for (const typed of ['NOVA', 'nova', ' nOvA ', 'ｎｏｖａ', 'ＮＯＶＡ', 'No\u200bva']) {
       expect(matchPlayerName(typed, names)).toEqual({ kind: 'found', name: 'Nova', caseVariants: [] });
     }
