@@ -112,9 +112,16 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     const validTargets = ids.filter(id => id !== 'P1');
     const target = engine.pickLadyTarget('good', obs, validTargets, LEGACY);
     expect(target).toBe('P7'); // lowest suspicion (only-on-success), unknown-camp
-    // 2026-10-12 default (`goodLakeTargetMostSuspicious`): the most
-    // suspicious unknown-camp seat instead — P2 (two failed quests).
-    expect(engine.pickLadyTarget('good', obs, validTargets, PRODUCTION)).toBe('P2');
+    // 2026-10-12 `goodLakeTargetMostSuspicious` (pinned with
+    // goodLakeInfoMax off, so the expectation does not depend on which
+    // good-lake rule the production default carries): the most suspicious
+    // unknown-camp seat instead — P2 (two failed quests).
+    const mostSuspicious = { ...PRODUCTION, goodLakeTargetMostSuspicious: true, goodLakeInfoMax: false };
+    expect(engine.pickLadyTarget('good', obs, validTargets, mostSuspicious)).toBe('P2');
+    // 2026-10-13 `goodLakeInfoMax` (GoodLakeInfo.ts, takes precedence):
+    // P4 — on the failed R1 mission and the passed R3 one; most likely
+    // good of the R1 members, and inspecting him settles who failed R1.
+    expect(engine.pickLadyTarget('good', obs, validTargets, { ...mostSuspicious, goodLakeInfoMax: true })).toBe('P4');
   });
 
   it('good holder falls back to any valid target when all remaining are known evil', () => {

@@ -28,7 +28,8 @@
  *                                   `evilLakeClaimAlwaysGood` 若也打開則以
  *                                   「一律宣好」為準。細節見
  *                                   `LakePolicy.pickEvilLakeTargetHuman`。
- *   - `goodLakeInfoMax`            （2026-10-13，**預設關**）好人持湖改用
+ *   - `goodLakeInfoMax`            （2026-10-13，**預設關**，已符合採用條件，
+ *                                   見下方 DEFAULT 說明）好人持湖改用
  *                                   「共同資訊極大化」模型（`GoodLakeInfo.ts`）：
  *                                   列舉與持湖者所知一致的紅方組合，挑「宣告
  *                                   後藍方共同視角的不確定性下降最多」的人，
@@ -106,7 +107,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
 
 /**
  * 正式預設（2026-10-12 採用，docs/ai/strength_benchmark.md 第 2 節；
- * 2026-10-13 量過 `evilLakeHumanStrategy` 但不採用，第 6 節）。
+ * 2026-10-13 量過 `evilLakeHumanStrategy` 但不採用，第 6 節；同日的
+ * `goodLakeInfoMax` 符合採用條件，預設切換留待整合，第 7 節）。
  * 採用規則（2026-10-12 事前版）：一致性基準更像真人、且自我對打合計勝率
  * 95% 區間下界 ≥ 48%；整合時改依 Edward 原文「更像真人，而且不能讓它
  * 變弱」：任一立場配對差的 95% 區間整個落在 0 以下就算變弱、不採用。
@@ -132,6 +134,16 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     seed 4242 −0.8pp [−1.4pp, −0.3pp]（區間整個在 0 以下），五個種子
  *     （19000 組）合併 −0.6pp [−0.9pp, −0.3pp] → **不採用**（預設關，可用
  *     AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=1 打開）。
+ *   - `goodLakeInfoMax`（2026-10-13，strength_benchmark.md 第 7 節）：對照
+ *     同樣是上面這組正式預設。好人持湖的湖目標一致性 ED 18.9→35.1%、
+ *     Sin 20.3→22.9%、top 12.2→25.8%、population 14.9→24.7%；自我對打
+ *     藍方立場 seed 4096（選版本）−0.3pp [−1.0pp, +0.3pp]、新種子 6174
+ *     −0.3pp [−0.9pp, +0.4pp]、1729 −0.2pp [−0.9pp, +0.4pp]，三個種子合併
+ *     −0.3pp [−0.7pp, +0.1pp]，區間都含 0 → 依規則不算變弱 → **符合採用
+ *     條件**。預設的切換要和 `src/socket/GameServer.botLake.test.ts`（把
+ *     正式預設的好人湖目標寫成「最可疑」）一起改，留待整合時進行；在那之前
+ *     可用 AVALON_TUNING_GOOD_LAKE_INFO_MAX=1 打開（打開後
+ *     `goodLakeTargetMostSuspicious` 只當模型找不到一致組合時的退路）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
