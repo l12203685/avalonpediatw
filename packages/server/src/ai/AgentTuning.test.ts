@@ -98,8 +98,8 @@ describe('AgentTuning — flags', () => {
   });
 
   it('2026-10-13 round-2 red switches: default on/off, flags, env vars, off in legacy', () => {
-    // strength_benchmark.md 第 8 節: the vouch follow-up is adopted (+0.35pp over the
-    // lake strategy alone, R3+ votes more human-like); the human framing rate is on
+    // strength_benchmark.md 第 8 節: the vouch follow-up is adopted (window-follow version,
+    // +0.54pp over the lake strategy alone, team / R3+ votes more human-like); the human framing rate is on
     // provisionally (strength unchanged, frequency closer to humans but lower claim
     // agreement — Edward to choose); the Oberon teammate search is not adopted
     // (lakes red more often than humans and is slightly weaker).

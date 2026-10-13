@@ -82,25 +82,29 @@ describe('RedLakeFollowUp — pure rules', () => {
     expect(evilVouchTeamConstraint(obs({ myRole: 'loyal', myTeam: 'good', knownEvils: [] }))).toBeNull();
   });
 
-  it('red decisive window (Q11: red listening / R5 cleanup) lifts the rules', () => {
+  it('red decisive window (Q11: red listening / R5 cleanup): the word is kept there too by default', () => {
+    expect(DEFAULT_VOUCH_FOLLOW_UP_OPTIONS.decisiveWindow).toBe('follow');
     const listening = obs({ questResults: ['fail', 'success', 'fail'], currentRound: 4 });
-    expect(evilVouchTeamConstraint(listening)).toBeNull();
-    expect(evilVouchVoteRule({ ...listening, currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: ['P6', 'P7', 'P8', 'P9', 'P10'] })).toBeNull();
+    expect(evilVouchTeamConstraint(listening)).toEqual({ required: ['P3'], banned: [] });
+    expect(evilVouchVoteRule({ ...listening, currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: ['P6', 'P7', 'P8', 'P9', 'P10'] })).toBe('reject');
   });
 
-  it('decisiveWindow=follow keeps the word in red\'s decisive window too (benchmark knob only)', () => {
+  it('decisiveWindow=exempt (first cut, benchmark knob only) lifts the rules in red\'s decisive window', () => {
     expect(vouchFollowUpOptionsFromEnv({})).toEqual(DEFAULT_VOUCH_FOLLOW_UP_OPTIONS);
-    expect(vouchFollowUpOptionsFromEnv({ AVALON_VOUCH_FOLLOW_UP_VARIANT: 'decisiveWindow=follow' })).toEqual({ decisiveWindow: 'follow' });
+    expect(vouchFollowUpOptionsFromEnv({ AVALON_VOUCH_FOLLOW_UP_VARIANT: 'decisiveWindow=exempt' })).toEqual({ decisiveWindow: 'exempt' });
     expect(vouchFollowUpOptionsFromEnv({ AVALON_VOUCH_FOLLOW_UP_VARIANT: 'decisiveWindow=maybe' })).toEqual(DEFAULT_VOUCH_FOLLOW_UP_OPTIONS);
     const listening = obs({ questResults: ['fail', 'success', 'fail'], currentRound: 4 });
-    setVouchFollowUpOptions({ decisiveWindow: 'follow' });
+    setVouchFollowUpOptions({ decisiveWindow: 'exempt' });
     try {
-      expect(evilVouchTeamConstraint(listening)).toEqual({ required: ['P3'], banned: [] });
-      expect(evilVouchVoteRule({ ...listening, currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: ['P6', 'P7', 'P8', 'P9', 'P10'] })).toBe('reject');
+      expect(evilVouchTeamConstraint(listening)).toBeNull();
+      expect(evilVouchVoteRule({ ...listening, currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: ['P6', 'P7', 'P8', 'P9', 'P10'] })).toBeNull();
+      // Oberon never coordinates → no Q11 exception for him.
+      const oberon = obs({ myRole: 'oberon', knownEvils: [], questResults: ['fail', 'success', 'fail'], currentRound: 4 });
+      expect(evilVouchTeamConstraint(oberon)).toEqual({ required: ['P3'], banned: [] });
     } finally {
       setVouchFollowUpOptions(undefined);
     }
-    expect(evilVouchTeamConstraint(listening)).toBeNull();
+    expect(evilVouchTeamConstraint(listening)).toEqual({ required: ['P3'], banned: [] });
   });
 
   it('vote rule (off the team): reject a team without the vouched seat or with the framed seat; not own team, not forced', () => {

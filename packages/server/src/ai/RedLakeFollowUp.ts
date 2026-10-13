@@ -19,21 +19,27 @@
  * way the baseline `HeuristicAgent` already does for 硬1 / 硬2
  * (`fixupTeamHardRules`, `voteOnTeam`): its own proposals include every
  * seat it declared blue and leave out every seat it declared red, and off
- * the team it rejects teams that break its own declaration. Same red
- * exception as the baseline (Q11, `mayBreakHardRules`: red listening / R5
- * cleanup) — then winning the mission comes first.
+ * the team it rejects teams that break its own declaration — also in
+ * red's decisive window (Q11, `mayBreakHardRules`: red listening / R5
+ * cleanup), where the baseline's 硬1 / 硬2 are lifted: humans keep their
+ * word there too (a vouched teammate on 79.5% of the teams they lead in
+ * that window, a vouched blue 90.9%). The first cut lifted the rules in
+ * that window like the baseline; after the review fix the window-follow
+ * version was stronger on the selection seed and more human-like, and was
+ * confirmed on two fresh seeds (strength_benchmark.md 第 8.4 節).
  *
  * The team rule filters the usual ForwardAgent candidates (a team that
  * already keeps the word stays the pick); only when none keeps it are
  * teams built around the vouched seats (review 2026-10-13). It acts only
  * with `evilLakeHumanStrategy` on (`evilVouchFollowUpActive`).
  *
- * In `DEFAULT_AGENT_TUNING` since 2026-10-13 round 2: against the lake
- * strategy alone +0.35pp [+0.14pp, +0.55pp] as red (seeds 31337 + 8080 +
- * 2718, 15000 pairs; the two confirmation seeds alone +0.36pp [+0.10pp,
- * +0.62pp]) and R3+ vote agreement up in every cohort; it closes about a
- * third of the lake strategy's gap to the previous default
- * (strength_benchmark.md 第 8.4 節).
+ * In `DEFAULT_AGENT_TUNING` since 2026-10-13 round 2. Against the lake
+ * strategy alone, as red: the first cut (window exempt) +0.35pp [+0.14pp,
+ * +0.55pp] (seeds 31337 + 8080 + 2718); the default (window follow, with
+ * `evilLakeFrameHumanRate`) +0.54pp [+0.25pp, +0.83pp] (31337 + 16180 +
+ * 14142), +0.60pp [+0.38pp, +0.83pp] over all five lane seeds — about
+ * 60% of the lake strategy's gap to the previous default. Team and R3+
+ * vote agreement up in every cohort (strength_benchmark.md 第 8.4 節).
  *
  * Pure functions over the public record (`obs.lakeHistory`); no
  * `Math.random`.
@@ -64,19 +70,21 @@ export function evilVouchFollowUpActive(
  * (`AVALON_VOUCH_FOLLOW_UP_VARIANT`, read by the scripts through
  * `vouchFollowUpOptionsFromEnv` + `setVouchFollowUpOptions`; the server
  * never reads it).
- *   - `decisiveWindow: 'exempt'` — in red's decisive window (Q11,
- *     `mayBreakHardRules`: red listening / R5 cleanup) the rules are off,
- *     like the baseline's 硬1 / 硬2 exception;
- *   - `decisiveWindow: 'follow'` — keep the word there too (humans do: in
- *     that window a red holder still puts a vouched teammate on 79.5% of
- *     their later teams, a vouched blue 90.9%, a framed seat 10.2%).
+ *   - `decisiveWindow: 'follow'` (default since the 2026-10-13 review fix)
+ *     — keep the word in red's decisive window too (humans do: in that
+ *     window a red holder still puts a vouched teammate on 79.5% of the
+ *     teams they lead, a vouched blue 90.9%, a framed seat 14.7%;
+ *     `scripts/evilLakeStudy.ts` (e));
+ *   - `decisiveWindow: 'exempt'` — the first cut: in red's decisive window
+ *     (Q11, `mayBreakHardRules`: red listening / R5 cleanup) the rules are
+ *     off, like the baseline's 硬1 / 硬2 exception.
  */
 export interface VouchFollowUpOptions {
   decisiveWindow: 'exempt' | 'follow';
 }
 
 export const DEFAULT_VOUCH_FOLLOW_UP_OPTIONS: Readonly<VouchFollowUpOptions> = Object.freeze({
-  decisiveWindow: 'exempt',
+  decisiveWindow: 'follow',
 });
 
 let activeVouchFollowUpOptions: Readonly<VouchFollowUpOptions> = DEFAULT_VOUCH_FOLLOW_UP_OPTIONS;
@@ -86,7 +94,7 @@ export function setVouchFollowUpOptions(options: VouchFollowUpOptions | undefine
   activeVouchFollowUpOptions = Object.freeze({ ...(options ?? DEFAULT_VOUCH_FOLLOW_UP_OPTIONS) });
 }
 
-/** Parses `AVALON_VOUCH_FOLLOW_UP_VARIANT="decisiveWindow=follow"` (scripts only). */
+/** Parses `AVALON_VOUCH_FOLLOW_UP_VARIANT="decisiveWindow=exempt"` (scripts only). */
 export function vouchFollowUpOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): VouchFollowUpOptions {
   const out: VouchFollowUpOptions = { ...DEFAULT_VOUCH_FOLLOW_UP_OPTIONS };
   for (const part of (env.AVALON_VOUCH_FOLLOW_UP_VARIANT ?? '').split(',')) {
@@ -123,7 +131,7 @@ export function ownLakeDeclarations(obs: PlayerObservation): OwnLakeDeclarations
  * Team constraint for a red leader's own proposal (`evilVouchFollowUp`):
  * seats that must be on it (declared blue) and seats that must stay off
  * (declared red). `null` when the rule does not apply (not red, no own
- * declaration, or red's decisive window).
+ * declaration, or red's decisive window with `decisiveWindow: 'exempt'`).
  */
 export function evilVouchTeamConstraint(
   obs: PlayerObservation,
@@ -146,9 +154,10 @@ export function evilVouchTeamConstraint(
  * teammate, 83.4% (461/553) for a vouched blue; outside red's decisive
  * window 94.0% (78/83) and 88.9% (152/171) (牌譜, `scripts/evilLakeStudy.ts`
  * (e)). On the team the sample is tiny (teammate n = 4; vouched blue 7
- * rejections of 23), so the rule stays off there. Also off on the forced fifth proposal
- * (everyone approves), on the holder's own proposal (built to the
- * constraint above) and in red's decisive window (Q11).
+ * rejections of 23), so the rule stays off there. Also off on the forced
+ * fifth proposal (everyone approves) and on the holder's own proposal
+ * (built to the constraint above); in red's decisive window only with the
+ * benchmark knob `decisiveWindow: 'exempt'`.
  */
 export function evilVouchVoteRule(obs: PlayerObservation): 'reject' | null {
   if (obs.myTeam !== 'evil') return null;

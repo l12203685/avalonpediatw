@@ -486,7 +486,7 @@ async function main(): Promise<void> {
   const evilLakeOptions = evilLakeHumanOptionsFromEnv();
   setEvilLakeHumanOptions(evilLakeOptions);
   // Benchmark-only knob for `evilVouchFollowUp` (AVALON_VOUCH_FOLLOW_UP_VARIANT, e.g.
-  // "decisiveWindow=follow"); the server never reads it.
+  // "decisiveWindow=exempt"); the server never reads it.
   const vouchOptions = vouchFollowUpOptionsFromEnv();
   setVouchFollowUpOptions(vouchOptions);
   if (process.env.AVALON_VOUCH_FOLLOW_UP_VARIANT) process.stderr.write(`evilVouchFollowUp variant: ${JSON.stringify(vouchOptions)}\n`);

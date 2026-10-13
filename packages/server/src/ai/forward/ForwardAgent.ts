@@ -757,9 +757,9 @@ export class ForwardAgent implements AvalonAgent {
     // a seat it declared blue or includes a seat it declared red (human red
     // holders off the team reject a team without the teammate they vouched
     // for 84.3%, outside red's decisive window 94.0%; the baseline's 硬1 /
-    // 硬2 vote rule does the same). Red's
-    // decisive window (Q11) and the forced fifth proposal are exempt — see
-    // `RedLakeFollowUp.evilVouchVoteRule`.
+    // 硬2 vote rule does the same, except in red's decisive window; this
+    // rule keeps the word there too, as humans do). The forced fifth
+    // proposal is exempt — see `RedLakeFollowUp.evilVouchVoteRule`.
     if (
       decisionType === 'team_vote' &&
       evilVouchFollowUpActive(this.baseline.tuning) &&
@@ -1418,7 +1418,8 @@ export class ForwardAgent implements AvalonAgent {
     // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
     // A red leader keeps its lake word: seats it declared blue go on the
     // team, seats it declared red stay off (the baseline's 硬1 / 硬2 team
-    // fixup does the same; Q11 window exempt). The rule is a filter on
+    // fixup does the same outside red's decisive window; this rule also
+    // inside it, as humans do). The rule is a filter on
     // the usual candidates, so a team that already keeps the word is
     // still the one chosen (scores are per candidate and the hash
     // tie-break keeps its order on a subset). Only when no usual
