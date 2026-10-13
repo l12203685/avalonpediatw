@@ -1,5 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/gameStore';
+import { usePracticeStore } from '../store/practiceStore';
+import type { PracticeTracePayload } from './practice';
 import {
   Room,
   Player,
@@ -348,6 +350,11 @@ export async function initializeSocket(token: string): Promise<void> {
       const won = room.evilWins ? myTeam === 'evil' : myTeam === 'good';
       store.addToast(won ? '🏆 你贏了！' : '😔 你輸了', won ? 'success' : 'error');
     }
+  });
+
+  // 網站「與機器人練習」: the bot decision trace arrives once, after game:ended.
+  socket.on('practice:trace', (payload: PracticeTracePayload) => {
+    if (payload && typeof payload.roomId === 'string') usePracticeStore.getState().setTrace(payload);
   });
 
   // chat:message-received is handled by ChatPanel component via getSocket().on()
