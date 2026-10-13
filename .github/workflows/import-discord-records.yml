@@ -3,7 +3,7 @@ name: Import Discord records
 # 每天把 Discord 論壇 #牌譜紀錄與覆盤（每篇貼文一局）的牌譜匯入 Google 試算表的「Discord匯入」分頁，
 # 30 分鐘後 refresh-analysis-cache.yml 會把 牌譜 + Discord匯入 一起算進戰績分析快取。
 #
-# Discord 只會寫兩種訊息：格式回覆（reply，在討論串）與每週牌譜修正清單（fix_list，在「牌譜修正」頻道），見下；
+# Discord 只會寫兩種訊息：格式回覆（reply，在討論串）與手動才發的牌譜修正清單（fix_list，在「牌譜修正」頻道），見下；
 # 其他都只讀（不加標籤）。試算表只會在「Discord匯入」分頁往下追加列（沒有就建立；有貼回覆時另在「Discord回覆」
 # 分頁記下每則已貼的回覆），不動「牌譜」或其他分頁。以 discord_post_id 為鍵，可重跑；已在 牌譜 的局（指紋相同、
 # 或同配置同任務結果同玩家）與標「已收錄」的貼文不匯入；無法完整、無歧義解析的貼文略過並統計原因。
@@ -17,13 +17,12 @@ name: Import Discord records
 #   dry run（沒有寫入）只計數不貼。預設回覆；repo variable DISCORD_IMPORT_REPLY 設為 'false' 可關（排程與手動
 #   執行都不回）；手動執行另看 reply 勾選（預設勾）。
 #
-# 每週牌譜修正清單（fix_list）：每週一（台灣時間）的排程，把最近 30 天發文、需要回覆的那些貼文（同上規則）
-#   依牌譜日期列成清單（日期、當天第幾場、原因、第幾行、連結；最多 50 篇，其餘只說「另有 N 篇」；另附累計
-#   待修正篇數），發到 Discord 文字頻道「牌譜修正」（repo variable DISCORD_FIX_CHANNEL_ID 有設就用那個頻道）。
-#   每週只發一次：頻道最近 100 則訊息裡已有 bot 的本週清單就不再發；所以週二、週三的排程也會帶 fix_list，
-#   週一的執行失敗或被 GitHub 略過時會補發，週一已發過就只讀一次頻道。找不到頻道或沒有權限時只留 notice，
-#   不讓整個 job 失敗。bot 在該頻道需要「檢視頻道」「傳送訊息」「讀取訊息歷史」。dry run 只計數不發。
-#   repo variable DISCORD_FIX_LIST 設為 'false' 可關（排程與手動執行都不發）；手動執行另看 fix_list 勾選（預設不勾）。
+# 牌譜修正清單（fix_list）：Edward 2026-10-13 決定不需要每週清單（「應該不用牌譜修正了」）——要修的貼文都有
+#   機器人的「🤖 牌譜格式檢查」回覆，用 Discord 搜尋就找得到（docs/DISCORD_RECORDS_IMPORT.md）。所以排程**不再**
+#   帶 --fix-list；只有手動執行勾 fix_list（預設不勾）時才發：把最近 30 天發文、需要回覆的那些貼文依牌譜日期
+#   列成清單發到 Discord 文字頻道「牌譜修正」（repo variable DISCORD_FIX_CHANNEL_ID 有設就用那個頻道），
+#   每週最多一次。找不到頻道或沒有權限時只留 notice。dry run 只計數不發。repo variable DISCORD_FIX_LIST 設為
+#   'false' 時手動勾了也不發。
 #
 # 寫入與否：手動執行看 write 勾選（預設不寫，只做 dry run）；排程執行預設寫入
 #   （2026-10-12 首次寫入 82 局驗證無誤後開啟），repo variable DISCORD_IMPORT_WRITE 設為 'false' 可暫停
@@ -52,7 +51,7 @@ on:
         type: boolean
         default: true
       fix_list:
-        description: '在「牌譜修正」頻道發本週的牌譜修正清單（每週一次，本週發過就略過；不勾 write 時只計數不發；repo variable DISCORD_FIX_LIST 為 false 時不發）'
+        description: '（只有手動）在「牌譜修正」頻道發本週的牌譜修正清單（本週發過就略過；不勾 write 時只計數不發；repo variable DISCORD_FIX_LIST 為 false 時不發）'
         type: boolean
         default: false
 
@@ -134,12 +133,8 @@ jobs:
               write=true
             fi
             reply=true
-            # The weekly list goes out with the Monday run (03:17 Taipei = Sunday 19:17 UTC); the
-            # Tuesday and Wednesday runs pass it too, so a failed or dropped Monday run is caught up
-            # (the script posts once per ISO week: it finds this week's list in the channel).
-            case "$(TZ=Asia/Taipei date +%u)" in
-              1|2|3) fix_list=true ;;
-            esac
+            # No weekly fix list on schedule any more (owner 2026-10-13): the posts to fix are found by
+            # searching Discord for the bot's replies. fix_list stays a manual-only option.
           fi
           # The repo variables switch these off for every run, the manual reply box being ticked by default.
           reply_note=""
@@ -172,7 +167,7 @@ jobs:
             echo "Reply: off${reply_note}"
           fi
           if [ "${fix_list}" = "true" ]; then
-            echo "Fix list: on (weekly list in the 牌譜修正 channel; counted only in a dry run)"
+            echo "Fix list: on (manual run: list in the 牌譜修正 channel; counted only in a dry run)"
           else
             echo "Fix list: off${fix_list_note}"
           fi
