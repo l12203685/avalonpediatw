@@ -25,12 +25,11 @@ const fixture = vi.hoisted(() => {
     rawRedGames: 10, rawBlueGames: 10,
   };
   // Served players carry the two-stage fields; the cache here has NO `leaderboard`
-  // section, so /排行 takes the all-time excess fallback built from the players.
+  // section, so /排行 takes overview.topPlayersByRoleTheory (≥ 100 career games, any activity).
   const players = [
     { ...base, name: 'Sin', totalGames: 1080, winRate: 51.4, roleTheory: 51.3, redWin: 50.2, blueWin: 52.2, finalWinRate: 31.2, excessWinRate: -1.4, finalRedWinRate: 60, finalBlueWinRate: 29 },
     { ...base, name: 'HAO', totalGames: 1013, winRate: 59, roleTheory: 59.1, redWin: 56.6, blueWin: 60.5, finalWinRate: 38.5, excessWinRate: 6.3, finalRedWinRate: 70.1, finalBlueWinRate: 30 },
     { ...base, name: 'SIN', totalGames: 3, winRate: 33.3, roleTheory: 30, redWin: 0, blueWin: 50, finalWinRate: 33.3, excessWinRate: 20, finalRedWinRate: 0, finalBlueWinRate: 50 },
-    // Highest raw excess but only 30 games: shrunk 7 × 30 / 50 = 4.2 ranks under HAO (6.3 × 1013 / 1033 = 6.2), like the generator.
     { ...base, name: '新星', totalGames: 30, winRate: 60, roleTheory: 60, redWin: 58, blueWin: 61, finalWinRate: 45, excessWinRate: 7, finalRedWinRate: 75, finalBlueWinRate: 35 },
   ];
   const labels = ['SIN', 'HAO'];
@@ -43,7 +42,11 @@ const fixture = vi.hoisted(() => {
         { name: 'HAO', roleTheory: 59.1, winRate: 59, games: 1013 },
         { name: 'Sin', roleTheory: 51.3, winRate: 51.4, games: 1080 },
       ],
-      topPlayersByGames: [], seatPositionWinRates: [],
+      topPlayersByGames: [], seatPositionWinRates: [], schemaVersion: 3,
+      topPlayersByRoleTheory: [
+        { name: 'HAO', roleTheory: 52.3, positionTheory: 50.8, finalWinRate: 49, games: 100, careerGames: 1013 },
+        { name: 'Sin', roleTheory: 48.4, positionTheory: 47.1, finalWinRate: 46, games: 100, careerGames: 1080 },
+      ],
     },
     chemistry: {
       coWin: { players: labels, rowLabels: labels, values: [[452, 108], [108, 467]] },
@@ -199,12 +202,12 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
     expect(h.replies).toHaveLength(1);
     expect(h.replies[0].token).toBe('rt1');
     expect(h.replies[0].texts).toHaveLength(5);
-    // No `leaderboard` section in this cache → all-time excess ranking (≥ 30 games; SIN's 3 games are out).
-    expect(h.replies[0].texts[0]).toContain('🏆 超額勝率排行 Top 10（全期，至少 30 場）');
-    expect(h.replies[0].texts[0]).toContain('🥇 HAO　超額 +6.3｜最終 38.5%｜1013 場');
-    expect(h.replies[0].texts[0]).toContain('🥈 新星　超額 +7.0｜最終 45.0%｜30 場');
-    expect(h.replies[0].texts[0]).toContain('🥉 Sin　超額 -1.4｜最終 31.2%｜1080 場');
-    expect(h.replies[0].texts[0]).not.toContain('SIN　');
+    // No `leaderboard` section in this cache → overview.topPlayersByRoleTheory (last 100 games, ≥ 100 career games).
+    expect(h.replies[0].texts[0]).toContain('🏆 角色理論勝率排行 Top 10（各人最近 100 場，生涯至少 100 場，不限近期出賽）');
+    expect(h.replies[0].texts[0]).toContain('🥇 HAO　角色理論 52.3%｜位置理論 50.8%｜最終 49.0%｜100 場');
+    expect(h.replies[0].texts[0]).toContain('🥈 Sin　角色理論 48.4%｜位置理論 47.1%｜最終 46.0%｜100 場');
+    expect(h.replies[0].texts[0]).not.toContain('新星');
+    expect(h.replies[0].texts[0]).not.toContain('超額');
     expect(h.replies[0].texts[0]).toContain('最終紅勝 69.4%／藍勝 30.6%');
     expect(h.replies[0].texts.slice(1).map(bodyOf)).toEqual(['msg0', 'msg1', 'msg2', 'msg3']);
     expect(h.mirror.lineReplyQueueSize()).toBe(3);
@@ -226,7 +229,9 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
     expect(h.discordSent.join('\n')).not.toContain('的戰績');
 
     expect(h.replies).toEqual([{ token: 'rt3', texts: [expect.stringContaining('📊 HAO 的戰績')] }]);
-    expect(h.replies[0].texts[0]).toContain('場次 1013｜最終勝率 38.5%｜超額 +6.3');
+    expect(h.replies[0].texts[0]).toContain('場次 1013｜最終勝率 38.5%');
+    expect(h.replies[0].texts[0]).toContain('（角色理論／位置理論勝率：下次每日更新資料後提供）'); // this fixture has no theory yet
+    expect(h.replies[0].texts[0]).not.toContain('超額');
     expect(h.mirror.lineReplyQueueSize()).toBe(0); // answer never enters the queue
   });
 

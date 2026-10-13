@@ -122,9 +122,12 @@ router.get('/players/:name', limiter, async (req: Request, res: Response) => {
 
     // Radar axes per docs/stats/two_stage_outcome.md: winRate / redWinRate are
     // the FINAL-outcome rates (紅勝 = 三紅 + 三藍死, 藍勝 = 三藍活); the legacy
-    // 任務結算 rate is exposed as missionWinRate. excessWinRate is null when the
-    // cache cannot provide it (web/bot show "—"). roleTheory / positionTheory
-    // (always 0) are kept for the existing web radar.
+    // 任務結算 rate is exposed as missionWinRate. roleTheory / positionTheory are
+    // the owner's definitions over the player's career (theory.career, Edward
+    // 2026-10-13) — null on a cache written before them, never the legacy
+    // player.roleTheory. excessWinRate stays for older web builds (null when the
+    // cache cannot provide it); the site no longer plots it.
+    const career = player.theory?.career;
     const radar = {
       winRate: player.finalWinRate ?? player.winRate,
       redWinRate: player.finalRedWinRate ?? player.redWin,
@@ -133,8 +136,8 @@ router.get('/players/:name', limiter, async (req: Request, res: Response) => {
       excessWinRate: player.excessWinRate ?? null,
       redMerlinKillRate: player.redMerlinDead,
       experience: Math.min(player.totalGames / 10, 100),
-      roleTheory: player.roleTheory,
-      positionTheory: 0,
+      roleTheory: typeof career?.roleTheory === 'number' ? career.roleTheory : null,
+      positionTheory: typeof career?.positionTheory === 'number' ? career.positionTheory : null,
     };
 
     return ok(res, { player, radar });
@@ -325,8 +328,8 @@ router.get('/feature-studies', limiter, async (_req: Request, res: Response) => 
 
 // ---------------------------------------------------------------------------
 // GET /api/analysis/leaderboard
-// 排行榜（超額勝率 main / online / recent / improved / assassin / newcomers /
-// roleTitles）— boards computed by generate_cache.py (LEADERBOARD_CONFIG),
+// 排行榜（角色理論 main / last50、improved、assassin、newcomers、roleTitles，
+// 各人最近 N 場）— boards computed by generate_cache.py (LEADERBOARD_CONFIG),
 // served as-is. Cache predating the section → 503, like feature-studies.
 // ---------------------------------------------------------------------------
 router.get('/leaderboard', limiter, async (_req: Request, res: Response) => {

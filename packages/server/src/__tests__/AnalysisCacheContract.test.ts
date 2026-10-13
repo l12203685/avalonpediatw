@@ -18,6 +18,10 @@
  * `leaderboard` section are REQUIRED; on an older cache they are checked only
  * when present, and the server's fallback (withFinalFields) must still turn
  * the raw three-outcome counts into the final-outcome rates.
+ *
+ * Theory win rates (schemaVersion 3, Edward 2026-10-13): players[].theory,
+ * overview.seatFinalWinRates / topPlayersByRoleTheory and boards with `metric`
+ * are REQUIRED from version 3 on, checked only when present before that.
  */
 import fs from 'fs';
 import http from 'http';
@@ -50,6 +54,8 @@ const committedCache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf-8')) as {
 const playerNames = committedCache.players.players.map((p) => p.name);
 /** Cache written under the two-stage contract → its new fields are mandatory. */
 const V2 = typeof committedCache.overview.schemaVersion === 'number' && committedCache.overview.schemaVersion >= 2;
+/** Cache written with the theory win rates (players[].theory, theory boards) → mandatory too. */
+const V3 = typeof committedCache.overview.schemaVersion === 'number' && committedCache.overview.schemaVersion >= 3;
 
 // ---------------------------------------------------------------------------
 // Tiny shape checker — collects every problem so a failing rebuild reports
@@ -97,6 +103,29 @@ function strArray(p: Problems, v: unknown, at: string): void {
 /** Required on a schemaVersion-2 cache; on an older cache checked only when present. */
 function v2Field(v: unknown, check: () => void): void {
   if (V2 || v !== undefined) check();
+}
+/** Required on a schemaVersion-3 cache; on an older cache checked only when present. */
+function v3Field(v: unknown, check: () => void): void {
+  if (V3 || v !== undefined) check();
+}
+
+const THEORY_WINDOW_NUMS = ['window', 'games', 'roleTheory', 'positionTheory', 'finalWinRate', 'sparseRoles', 'sparseSeats'];
+
+/** players[].theory: last100 / last50 / career windows (PlayerRadarChart, /戰績). */
+function theoryBlock(p: Problems, v: unknown, totalGames: unknown, at: string): void {
+  const t = obj(p, v, at);
+  for (const key of ['last100', 'last50', 'career']) {
+    const w = obj(p, t[key], `${at}.${key}`);
+    for (const k of THEORY_WINDOW_NUMS) num(p, w[k], `${at}.${key}.${k}`);
+    for (const k of ['from', 'to']) str(p, w[k], `${at}.${key}.${k}`);
+    for (const k of ['roleTheory', 'positionTheory', 'finalWinRate']) {
+      if (typeof w[k] === 'number' && ((w[k] as number) < 0 || (w[k] as number) > 100)) p.push(`${at}.${key}.${k}: ${show(w[k])} out of 0..100`);
+    }
+  }
+  const career = (t.career ?? {}) as Json;
+  if (typeof career.games === 'number' && career.games !== totalGames) {
+    p.push(`${at}.career.games ${show(career.games)} ≠ totalGames ${show(totalGames)}`);
+  }
 }
 
 const PLAYER_FINAL_RATES = ['finalWinRate', 'finalRedWinRate', 'finalBlueWinRate', 'missionWinRate', 'merlinSurvivalRate'];
@@ -202,6 +231,18 @@ describe('analysis_cache.json → web contract', () => {
       }
     });
     v2Field(d.roleFinalWinRates, () => numRecord(p, d.roleFinalWinRates, 'roleFinalWinRates'));
+    v3Field(d.seatFinalWinRates, () => {
+      numRecord(p, d.seatFinalWinRates, 'seatFinalWinRates');
+      const keys = Object.keys(obj(p, d.seatFinalWinRates, 'seatFinalWinRates'));
+      if (keys.join() !== '1,2,3,4,5,6,7,8,9,10') p.push(`seatFinalWinRates keys ${show(keys)}`);
+    });
+    v3Field(d.topPlayersByRoleTheory, () => {
+      // [] is legitimate (nobody with 100 career games); present rows must be complete.
+      arr(p, d.topPlayersByRoleTheory, 'topPlayersByRoleTheory').forEach((x, i) => {
+        str(p, x.name, `topPlayersByRoleTheory[${i}].name`);
+        for (const k of ['roleTheory', 'positionTheory', 'finalWinRate', 'games', 'careerGames']) num(p, x[k], `topPlayersByRoleTheory[${i}].${k}`);
+      });
+    });
     v2Field(d.topPlayersByExcess, () => {
       arr(p, d.topPlayersByExcess, 'topPlayersByExcess', { nonEmpty: true }).forEach((x, i) => {
         str(p, x.name, `topPlayersByExcess[${i}].name`);
@@ -235,6 +276,7 @@ describe('analysis_cache.json → web contract', () => {
         numRecord(p, pl[k], `${at}.${k}`);
       }
       twoStagePlayer(p, pl, at);
+      v3Field(pl.theory, () => theoryBlock(p, pl.theory, pl.totalGames, `${at}.theory`));
       if (pl.seatOutcomes !== undefined) {
         for (const [seat, o] of Object.entries(obj(p, pl.seatOutcomes, `${at}.seatOutcomes`))) {
           outcomes(p, o, `${at}.seatOutcomes.${seat}`);
@@ -260,14 +302,20 @@ describe('analysis_cache.json → web contract', () => {
       }
       numRecord(p, pl.roleWinRates, `${name}.player.roleWinRates`);
       twoStagePlayer(p, pl, `${name}.player`);
+      v3Field(pl.theory, () => theoryBlock(p, pl.theory, pl.totalGames, `${name}.player.theory`));
       // Radar per the contract: winRate / redWinRate are the FINAL rates, missionWinRate the legacy one,
-      // excessWinRate may be null, positionTheory stays 0.
+      // excessWinRate may be null; roleTheory / positionTheory are theory.career's (null before schemaVersion 3,
+      // never the legacy player.roleTheory).
       const radar = obj(p, d.radar, `${name}.radar`);
-      for (const k of ['winRate', 'redWinRate', 'blueMerlinProtect', 'missionWinRate', 'roleTheory', 'positionTheory', 'redMerlinKillRate', 'experience']) {
+      for (const k of ['winRate', 'redWinRate', 'blueMerlinProtect', 'missionWinRate', 'redMerlinKillRate', 'experience']) {
         num(p, radar[k], `${name}.radar.${k}`);
       }
       numOrNull(p, radar.excessWinRate, `${name}.radar.excessWinRate`);
-      if (radar.positionTheory !== 0) p.push(`${name}.radar.positionTheory: expected 0, got ${show(radar.positionTheory)}`);
+      const career = ((pl.theory as Json | undefined)?.career ?? null) as Json | null;
+      for (const k of ['roleTheory', 'positionTheory']) {
+        const expected = career && typeof career[k] === 'number' ? career[k] : null;
+        if (radar[k] !== expected) p.push(`${name}.radar.${k}: ${show(radar[k])} ≠ player.theory.career.${k} ${show(expected)}`);
+      }
       if (typeof pl.finalWinRate === 'number' && radar.winRate !== pl.finalWinRate) {
         p.push(`${name}.radar.winRate: ${show(radar.winRate)} ≠ player.finalWinRate ${show(pl.finalWinRate)}`);
       }
@@ -301,8 +349,16 @@ describe('analysis_cache.json → web contract', () => {
     }
     if (d.config !== undefined) {
       const cfg = obj(p, d.config, 'config');
-      for (const k of ['windowDays', 'activeDays', 'minGames', 'shrinkK', 'minBoardRows', 'topN']) num(p, cfg[k], `config.${k}`);
-      arr(p, cfg.fallbackWindowDays, 'config.fallbackWindowDays').forEach((x, i) => num(p, x, `config.fallbackWindowDays[${i}]`));
+      if (V3 || cfg.theoryWindows !== undefined) {
+        // The theory generator's LEADERBOARD_CONFIG (2026-10-13).
+        for (const k of ['theoryMinCellGames', 'activeDays', 'topN', 'mainGames', 'shortGames', 'improvedGames', 'assassinAttempts', 'newcomerDays', 'roleTitleGames']) {
+          num(p, cfg[k], `config.${k}`);
+        }
+        arr(p, cfg.theoryWindows, 'config.theoryWindows', { nonEmpty: true }).forEach((x, i) => num(p, x, `config.theoryWindows[${i}]`));
+      } else {
+        for (const k of ['windowDays', 'activeDays', 'minGames', 'shrinkK', 'minBoardRows', 'topN']) num(p, cfg[k], `config.${k}`);
+        arr(p, cfg.fallbackWindowDays, 'config.fallbackWindowDays').forEach((x, i) => num(p, x, `config.fallbackWindowDays[${i}]`));
+      }
     }
     // The generator omits every board it cannot build (docs/stats/two_stage_outcome.md:
     // 「做不出來的榜就不放」), so `boards` may be empty and `main` is not guaranteed — e.g.
@@ -313,8 +369,10 @@ describe('analysis_cache.json → web contract', () => {
     boards.forEach((b, i) => {
       const at = `boards[${i}:${show(b.id)}]`;
       for (const k of ['id', 'title', 'period']) str(p, b[k], `${at}.${k}`);
-      for (const k of ['windowDays', 'minGames']) if (b[k] !== undefined) num(p, b[k], `${at}.${k}`);
+      for (const k of ['windowDays', 'windowGames', 'minGames']) if (b[k] !== undefined) num(p, b[k], `${at}.${k}`);
       if (b.note !== undefined) str(p, b.note, `${at}.note`);
+      // Since schemaVersion 3 every board says what its value is; the readers skip boards without it.
+      v3Field(b.metric, () => str(p, b.metric, `${at}.metric`));
       // A board the generator could not build is omitted, so a present board has rows.
       arr(p, b.rows, `${at}.rows`, { nonEmpty: true }).forEach((r, j) => {
         const rat = `${at}.rows[${j}]`;
@@ -323,9 +381,16 @@ describe('analysis_cache.json → web contract', () => {
         // finalWinRate / expectedFinalWinRate: on the excess boards (main / online / recent /
         // newcomers); improved, assassin and roleTitles rows carry other fields instead.
         for (const k of ['excessWinRate', 'finalWinRate', 'expectedFinalWinRate']) if (r[k] !== undefined) num(p, r[k], `${rat}.${k}`);
-        // The excess boards sort by the shrunk `value` and must carry the unshrunk
-        // `excessWinRate` the site and the bots print, plus the period's final win rate.
-        if (['main', 'online', 'recent', 'newcomers'].includes(String(b.id))) {
+        if (b.metric === 'roleTheory') {
+          // main / last50 / newcomers: what the site's table and /排行 print.
+          for (const k of ['roleTheory', 'positionTheory', 'finalWinRate', 'careerGames']) num(p, r[k], `${rat}.${k}`);
+          if (r.value !== r.roleTheory) p.push(`${rat}.value ${show(r.value)} ≠ roleTheory ${show(r.roleTheory)}`);
+        } else if (b.metric === 'roleTheoryDelta') {
+          for (const k of ['recentRoleTheory', 'priorRoleTheory']) num(p, r[k], `${rat}.${k}`);
+        } else if (b.metric === 'hitRate') {
+          for (const k of ['hits', 'attempts']) num(p, r[k], `${rat}.${k}`);
+        } else if (b.metric === undefined && ['main', 'online', 'recent', 'newcomers'].includes(String(b.id))) {
+          // Pre-2026-10-13 excess boards (older caches): the unshrunk excess and the period's final win rate.
           for (const k of ['excessWinRate', 'finalWinRate']) num(p, r[k], `${rat}.${k}`);
         }
         if (r.role !== undefined) str(p, r.role, `${rat}.role`);
