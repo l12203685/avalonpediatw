@@ -72,6 +72,21 @@
  *   - Order: while Discord pictures are being copied, website lobby lines
  *     bound for LINE wait on the same chain, so LINE keeps the order the
  *     lobby and Discord show (review fix 2026-10-13).
+ *
+ * Long messages (2026-10-13, player report: a ~400-character Discord message
+ * reached LINE cut off at 200):
+ *   - LINE ↔ Discord carries the whole text. The website lobby keeps its own
+ *     200-character display cap (LOBBY_CHAT_MAX_LEN, a cut copy with a
+ *     「全文請到 … 看」 note); that copy never reaches LINE or Discord.
+ *   - Split only at a platform limit (LINE 5000 / Discord 2000 characters,
+ *     bots/mirrorSplit.ts): speaker prefix on the first part, 「（續）」 on
+ *     the others. LINE: the parts are one group on the reply queue (same
+ *     5-per-reply budget, images after them, dropped together on overflow).
+ *     Discord: every mirror post (texts, LINE pictures, the weekly digest)
+ *     runs on one send chain, so the parts of one message are never
+ *     interleaved with another post; when a later part fails, a short
+ *     「（續）（後段沒有同步過來…）」 note says so.
+ *   - Rate limit: still one hit per message, however many parts it becomes.
  */
 
 import {
@@ -82,11 +97,21 @@ import {
 import { SocketRateLimiter } from '../middleware/rateLimit';
 import {
   degradeAfterFailedReply,
+  LINE_REPLY_MAX_PER_DRAIN,
   type LineReplyQueue,
   type QueuedLineImage,
   type QueuedLineItem,
 } from './line/replyQueue';
 import { describeError, imageExtension, raceTimeout, sniffImageType } from './media/bytes';
+import {
+  clampLineText,
+  cutUnits,
+  DISCORD_MESSAGE_MAX_CHARS,
+  LINE_TEXT_MAX_CHARS,
+  MIRROR_CONTINUATION_MARKER,
+  MIRROR_TEXT_MAX_CHARS,
+  splitMirrorText,
+} from './mirrorSplit';
 import {
   DISCORD_DEFAULT_UPLOAD_BYTES,
   MEDIA_RELAY_AFTER_SEND_MS,
@@ -127,8 +152,13 @@ export interface DiscordAdapter {
 
 // ─── Formatting ──────────────────────────────────────────────────────────
 
-/** Max characters in a single outbound line — well below LINE's 5000/Discord 2000. */
-const OUTBOUND_TRUNCATE_AT = LOBBY_CHAT_MAX_LEN;
+export {
+  DISCORD_MESSAGE_MAX_CHARS,
+  LINE_TEXT_MAX_CHARS,
+  MIRROR_CONTINUATION_MARKER,
+  MIRROR_TEXT_MAX_CHARS,
+  splitMirrorText,
+} from './mirrorSplit';
 
 /** Legacy prefix tag — kept for backward compat in tests; no longer emitted. */
 const OUTBOUND_PREFIX = '[Avalon]';
@@ -167,6 +197,23 @@ export function formatTaipeiStamp(epochMs: number): string {
   return `${mm}${dd} ${hh}:${mi}`;
 }
 
+/** `[MMDD hh:mm][來源][名字] ` — the unified speaker prefix, trailing space included. */
+function unifiedPrefix(msg: LobbyChatMessage): string {
+  const tag = mapSourceTag(msg.source);
+  const name = msg.isSystem
+    ? 'system'
+    : (msg.playerName ?? '').trim() || 'Unknown';
+  const stamp = formatTaipeiStamp(msg.timestamp || Date.now());
+  return `[${stamp}][${tag}][${name}] `;
+}
+
+/** `[Avalon] name: ` (or `[Avalon] ` for a system notice) — the legacy prefix. */
+function legacyPrefix(msg: LobbyChatMessage): string {
+  if (msg.isSystem) return `${OUTBOUND_PREFIX} `;
+  const name = (msg.playerName ?? 'Unknown').trim() || 'Unknown';
+  return `${OUTBOUND_PREFIX} ${name}: `;
+}
+
 /**
  * 2026-04-24 Edward 指令 — unified cross-platform message format.
  *   `[MMDD hh:mm][{來源}][{username}] {message_content}`
@@ -176,15 +223,12 @@ export function formatTaipeiStamp(epochMs: number): string {
  * LINE ↔ Discord cross-fanout) so the three chat surfaces stay visually
  * identical. System notices keep the speaker slot as `system` so the
  * bracket structure stays uniform (parseable downstream).
+ *
+ * The body is never cut (2026-10-13): a text over a platform limit is split
+ * by formatOutgoingParts() instead.
  */
 export function formatOutgoingUnified(msg: LobbyChatMessage): string {
-  const body = (msg.message ?? '').slice(0, OUTBOUND_TRUNCATE_AT);
-  const tag = mapSourceTag(msg.source);
-  const name = msg.isSystem
-    ? 'system'
-    : (msg.playerName ?? '').trim() || 'Unknown';
-  const stamp = formatTaipeiStamp(msg.timestamp || Date.now());
-  return `[${stamp}][${tag}][${name}] ${body}`;
+  return unifiedPrefix(msg) + (msg.message ?? '');
 }
 
 /**
@@ -195,12 +239,11 @@ export function formatOutgoingUnified(msg: LobbyChatMessage): string {
  * @deprecated use formatOutgoingUnified
  */
 export function formatOutgoingLegacy(msg: LobbyChatMessage): string {
-  const body = (msg.message ?? '').slice(0, OUTBOUND_TRUNCATE_AT);
-  if (msg.isSystem) {
-    return `${OUTBOUND_PREFIX} ${body}`;
-  }
-  const name = (msg.playerName ?? 'Unknown').trim() || 'Unknown';
-  return `${OUTBOUND_PREFIX} ${name}: ${body}`;
+  return legacyPrefix(msg) + (msg.message ?? '');
+}
+
+function useLegacyFormat(): boolean {
+  return process.env.CHAT_MIRROR_USE_LEGACY_FORMAT === 'true';
 }
 
 /**
@@ -209,10 +252,37 @@ export function formatOutgoingLegacy(msg: LobbyChatMessage): string {
  * escape hatch in case we need to revert without a redeploy.
  */
 export function formatOutgoing(msg: LobbyChatMessage): string {
-  if (process.env.CHAT_MIRROR_USE_LEGACY_FORMAT === 'true') {
-    return formatOutgoingLegacy(msg);
-  }
-  return formatOutgoingUnified(msg);
+  return useLegacyFormat() ? formatOutgoingLegacy(msg) : formatOutgoingUnified(msg);
+}
+
+/**
+ * formatOutgoing() as the messages one platform accepts: a single message
+ * (exactly formatOutgoing) when it fits `maxChars`, else parts with the
+ * speaker prefix on the first and 「（續）」 on the others (bots/mirrorSplit.ts).
+ */
+export function formatOutgoingParts(msg: LobbyChatMessage, maxChars: number): string[] {
+  const prefix = useLegacyFormat() ? legacyPrefix(msg) : unifiedPrefix(msg);
+  return splitMirrorText(prefix, msg.message ?? '', maxChars);
+}
+
+/** Platform name in the lobby's 「全文請到 … 看」 note. */
+function platformLabel(source: LobbyChatSource): string {
+  return source === 'line' ? 'LINE' : source === 'discord' ? 'Discord' : '網站';
+}
+
+/**
+ * What the website lobby shows for a LINE / Discord message: the whole text
+ * (plus its media marker) when it fits LOBBY_CHAT_MAX_LEN, else the start of
+ * the text, 「…（全文請到 LINE 看）」 and the marker. Display only — the relay
+ * to the other platform always carries the whole text.
+ */
+export function lobbyDisplayText(text: string, source: LobbyChatSource, marker = ''): string {
+  const whole = withMediaMarker(text, marker);
+  if (whole.length <= LOBBY_CHAT_MAX_LEN) return whole;
+  const note = `…（全文請到 ${platformLabel(source)} 看）`;
+  const tail = marker ? ` ${marker}` : '';
+  const room = Math.max(0, LOBBY_CHAT_MAX_LEN - note.length - tail.length);
+  return `${cutUnits(text.trim(), room).trimEnd()}${note}${tail}`;
 }
 
 // ─── Media markers (2026-10-13) ──────────────────────────────────────────
@@ -272,16 +342,14 @@ export function discordLeftoverNote(counts: { images: number; files: number }): 
 }
 
 /**
- * `text` + ` ` + `marker`, cutting the text (not the marker) so the result
- * fits LOBBY_CHAT_MAX_LEN.
+ * `text` + ` ` + `marker` (either may be empty). Never cuts (2026-10-13): the
+ * relay carries the whole text; the lobby's display cap is lobbyDisplayText().
  */
 export function withMediaMarker(text: string, marker: string): string {
   const body = text.trim();
   if (!marker) return body;
   if (!body) return marker;
-  const room = LOBBY_CHAT_MAX_LEN - marker.length - 1;
-  const cut = body.length > room ? `${body.slice(0, Math.max(0, room - 1))}…` : body;
-  return `${cut} ${marker}`;
+  return `${body} ${marker}`;
 }
 
 /** A LINE message object as sent by the reply drain. */
@@ -312,6 +380,30 @@ export const LINE_IMAGE_DOWNLOAD_MAX_BYTES = 25 * 1024 * 1024;
  */
 export const DISCORD_TO_LINE_MAX_WAITING = 10;
 export const DISCORD_TO_LINE_STEP_TIMEOUT_MS = 90_000;
+
+/**
+ * Bound on ONE Discord call of the send chain (fetch the channel, post a
+ * part, upload a picture, post a note). discord.js times a request out
+ * after 15 s and retries it 3 times; this is longer than all four tries, so
+ * when it fires discord.js has normally given the request up already, and
+ * the chain moving on cannot leave a part that lands late, after the next
+ * message (review fix 2026-10-13: the bound used to be 60 s for a whole
+ * message). It only keeps a hung call from holding every later message.
+ */
+export const DISCORD_SEND_CALL_TIMEOUT_MS = 75_000;
+
+/** discordCall()'s result when the call took longer than DISCORD_SEND_CALL_TIMEOUT_MS. */
+const DISCORD_CALL_TIMED_OUT: unique symbol = Symbol('discord call timed out');
+
+/**
+ * Posted after the parts that did reach Discord when a later part of a long
+ * message failed, so readers see that the rest is missing and where to read
+ * it (review fix 2026-10-13). Starts with 「（續）」, so the chat-log export
+ * puts it in the same row as the parts before it.
+ */
+export function discordMissingPartsNote(source: LobbyChatSource | undefined): string {
+  return `${MIRROR_CONTINUATION_MARKER}（後段沒有同步過來，請到 ${platformLabel(source ?? 'lobby')} 看）`;
+}
 
 // ─── Config surface ──────────────────────────────────────────────────────
 
@@ -380,6 +472,11 @@ export interface ChatMirrorConfig {
    */
   lineImagesToDiscord?: boolean;
   /**
+   * Bound on one Discord call of the send chain (DISCORD_SEND_CALL_TIMEOUT_MS,
+   * the default). Only tests set it.
+   */
+  discordCallTimeoutMs?: number;
+  /**
    * Rate limit per platform-user per window. Defaults to 5 msgs / 60s to
    * keep spam bots from flooding the channel while staying generous for
    * real chatter. Only applied on inbound, since lobby-side is already
@@ -418,6 +515,10 @@ export class ChatMirror {
   /** Discord → LINE steps in arrival order while pictures are copied (relayDiscordToLine). */
   private discordToLineChain: Promise<void> = Promise.resolve();
   private discordToLineWaiting = 0;
+  /** Mirror text posts to Discord, one message (all its parts) at a time (pushDiscord). */
+  private discordSendChain: Promise<void> = Promise.resolve();
+  private discordSendsPending = 0;
+  private readonly discordCallTimeoutMs: number;
   private readonly inboundLimiter: SocketRateLimiter;
   private readonly logger: Required<ChatMirrorConfig>['logger'];
   private lobbyIngest: LobbyIngestFn | null = null;
@@ -431,6 +532,7 @@ export class ChatMirror {
     this.lineReplyQueue = config.lineReplyQueue;
     this.imageRelay = config.lineImageRelay;
     this.imagesToDiscord = config.lineImagesToDiscord ?? true;
+    this.discordCallTimeoutMs = config.discordCallTimeoutMs ?? DISCORD_SEND_CALL_TIMEOUT_MS;
 
     const rl = config.inboundRateLimit ?? { windowMs: 60_000, maxRequests: 5 };
     this.inboundLimiter = new SocketRateLimiter({
@@ -468,13 +570,11 @@ export class ChatMirror {
       return;
     }
 
-    const line = formatOutgoing(msg);
-
     // Run both pushes in parallel; individual failures are logged and swallowed.
     // LINE waits behind Discord messages whose pictures are still being copied.
     await Promise.all([
-      this.pushLineInOrder(line, msg),
-      this.pushDiscord(line),
+      this.pushLineInOrder(msg),
+      this.pushDiscord(msg),
     ]);
   }
 
@@ -484,17 +584,18 @@ export class ChatMirror {
    * downloading reaches LINE after it — the order the lobby and Discord show.
    * Without pending steps (or without the picture relay) it goes at once.
    */
-  private pushLineInOrder(line: string, msg: LobbyChatMessage): Promise<void> {
-    if (!this.lineImageRelay() || this.discordToLineWaiting === 0) return this.pushLine(line, msg);
-    return this.onDiscordToLineChain(() => this.pushLine(line, msg));
+  private pushLineInOrder(msg: LobbyChatMessage): Promise<void> {
+    if (!this.lineImageRelay() || this.discordToLineWaiting === 0) return this.pushLine(msg);
+    return this.onDiscordToLineChain(() => this.pushLine(msg));
   }
 
   /**
    * Cross-platform fanout for a message that originated on LINE or Discord.
    *
-   * Pushes the formatted one-liner to every *configured* external platform
-   * **except** the one the message came from, so LINE ↔ Discord stays in sync
-   * without having to round-trip through the lobby websocket layer.
+   * Pushes the formatted message (split only at a platform limit) to every
+   * *configured* external platform **except** the one the message came from,
+   * so LINE ↔ Discord stays in sync without having to round-trip through the
+   * lobby websocket layer.
    *
    *   source='line'    → pushes to Discord only
    *   source='discord' → pushes to LINE only
@@ -508,10 +609,9 @@ export class ChatMirror {
    */
   public async crossFanout(msg: LobbyChatMessage): Promise<void> {
     const src: LobbyChatSource = msg.source ?? 'lobby';
-    const line = formatOutgoing(msg);
     const pushes: Promise<void>[] = [];
-    if (src !== 'line') pushes.push(this.pushLine(line, msg));
-    if (src !== 'discord') pushes.push(this.pushDiscord(line));
+    if (src !== 'line') pushes.push(this.pushLine(msg));
+    if (src !== 'discord') pushes.push(this.pushDiscord(msg));
     await Promise.all(pushes);
   }
 
@@ -520,6 +620,11 @@ export class ChatMirror {
    * and push it into the lobby buffer via the registered ingest callback.
    * Returns the resulting LobbyChatMessage on success, null if rejected
    * (invalid body / rate-limited / unconfigured / bad source).
+   *
+   * The returned message carries the WHOLE text (+ marker) — it is what the
+   * caller relays to the other platform. The lobby gets a copy cut to its
+   * own display cap (lobbyDisplayText); that copy never leaves the lobby
+   * (2026-10-13: the cut used to be relayed, so LINE saw 200 characters).
    *
    * Phase B wires LINE webhooks + Discord messageCreate to this method.
    */
@@ -535,8 +640,15 @@ export class ChatMirror {
      * pictures never uses up the text limit. Default 'text'.
      */
     kind?: 'text' | 'media';
+    /**
+     * Media marker for a message that carried pictures / files / stickers
+     * (「（圖片）」…), appended after the text. Kept separate so the lobby's
+     * cut copy still ends with it.
+     */
+    marker?: string;
   }): LobbyChatMessage | null {
     const { source, platformUserId, displayName, text, messageId } = params;
+    const marker = (params.marker ?? '').trim();
 
     if (source === 'lobby') {
       this.logger.warn(
@@ -550,7 +662,8 @@ export class ChatMirror {
       return null;
     }
 
-    const trimmed = validateInboundBody(text);
+    const textBeforeMarker = typeof text === 'string' ? text : '';
+    const trimmed = validateInboundBody(marker ? withMediaMarker(textBeforeMarker, marker) : text);
     if (!trimmed) return null;
 
     const rlKey = params.kind === 'media' ? `${source}-media:${platformUserId}` : `${source}:${platformUserId}`;
@@ -569,8 +682,9 @@ export class ChatMirror {
       source,
     };
 
+    const lobbyText = lobbyDisplayText(marker ? textBeforeMarker : trimmed, source, marker);
     try {
-      this.lobbyIngest(msg);
+      this.lobbyIngest(lobbyText === trimmed ? msg : { ...msg, message: lobbyText });
     } catch (err) {
       this.logger.error('lobbyIngest threw', err);
       return null;
@@ -625,7 +739,7 @@ export class ChatMirror {
     let fallbacks = 0;
     const store = this.imageRelay?.store;
     const messages = batch.map((item): LineOutboundMessage => {
-      if (!item.image) return { type: 'text', text: item.text };
+      if (!item.image) return { type: 'text', text: clampLineText(item.text) };
       const ids = item.image.mediaIds;
       // Check every copy first, so a picture whose preview is gone does not
       // pin its original for another day; those leftovers are freed.
@@ -633,7 +747,7 @@ export class ChatMirror {
       if (!live) {
         this.releaseRelayMedia(ids);
         fallbacks += 1;
-        return { type: 'text', text: item.text };
+        return { type: 'text', text: clampLineText(item.text) };
       }
       for (const id of ids) store.keepAlive(id, MEDIA_RELAY_AFTER_SEND_MS);
       images += 1;
@@ -652,15 +766,29 @@ export class ChatMirror {
    * queued mirror line. Not a fan-out: nothing reaches the lobby or Discord.
    * Returns false when the reply queue is not in use (listen-bot / push
    * mode); callers must not fall back to push (it costs monthly quota).
+   * A text over LINE's 5000 characters is queued as parts (「（續）」).
    */
   public enqueueLineReplyText(text: string): boolean {
     if (!this.lineReplyQueue || !this.isLineReplyQueueEnabled()) return false;
-    const { dropped, releasedMediaIds } = this.lineReplyQueue.enqueue(text);
+    this.enqueueLineParts(splitMirrorText('', text, LINE_TEXT_MAX_CHARS));
+    return true;
+  }
+
+  /**
+   * Queue the LINE message(s) of ONE relayed text: a single part exactly as
+   * before; several parts as one group, so on overflow they leave the queue
+   * together (never a 「（續）」 part without its speaker line).
+   */
+  private enqueueLineParts(parts: string[]): void {
+    const queue = this.lineReplyQueue;
+    if (!queue || parts.length === 0) return;
+    const now = Date.now();
+    const { dropped, releasedMediaIds } =
+      parts.length === 1 ? queue.enqueue(parts[0], now) : queue.enqueueGroup(parts.map((text) => ({ text, enqueuedAt: now })));
     this.releaseRelayMedia(releasedMediaIds);
     if (dropped > 0) {
       this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
     }
-    return true;
   }
 
   // ─── Images (2026-10-13) ──────────────────────────────────────────────
@@ -773,10 +901,11 @@ export class ChatMirror {
 
   /**
    * Discord-origin message that carried media → LINE. In reply-queue mode the
-   * text line, each picture (a LINE image message) and the optional note are
-   * queued back to back in one synchronous step, so nothing can slip between
-   * them. In any other mode only the text line goes (as crossFanout) and the
-   * prepared copies are freed — pictures are never pushed (push costs quota).
+   * text line (its parts, when over LINE's limit), each picture (a LINE image
+   * message) and the optional note are queued back to back in one synchronous
+   * step, so nothing can slip between them. In any other mode only the text
+   * line goes (as crossFanout) and the prepared copies are freed — pictures
+   * are never pushed (push costs quota).
    * Never echoes to Discord for a Discord-origin message.
    */
   public async crossFanoutWithLineMedia(
@@ -795,7 +924,7 @@ export class ChatMirror {
     // One group: on overflow the whole message leaves the queue together, so a
     // picture never stays behind without its speaker line.
     const { dropped, releasedMediaIds } = queue.enqueueGroup([
-      { text: formatOutgoing(msg), enqueuedAt: now },
+      ...formatOutgoingParts(msg, LINE_TEXT_MAX_CHARS).map((text) => ({ text, enqueuedAt: now })),
       ...images.map((image) => ({ text: MIRROR_MEDIA_TEXT.discordImageOnDiscord, enqueuedAt: now, image })),
       ...(note ? [{ text: note, enqueuedAt: now }] : []),
     ]);
@@ -803,7 +932,7 @@ export class ChatMirror {
     if (dropped > 0) {
       this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
     }
-    if (src !== 'discord') await this.pushDiscord(formatOutgoing(msg));
+    if (src !== 'discord') await this.pushDiscord(msg);
   }
 
   /**
@@ -812,6 +941,10 @@ export class ChatMirror {
    * the byte cap (the channel's upload limit, at most 25 MB) and must stop
    * past it. Too large / download failed / upload refused → the same prefix
    * with a text note instead. Never throws; returns an outcome code.
+   *
+   * The download runs on its own; the upload (and its note) then runs on the
+   * Discord send chain like every relayed text, so a picture never lands
+   * between the parts of a long message (review fix 2026-10-13).
    */
   public async postLineImageToDiscord(
     msg: LobbyChatMessage,
@@ -833,31 +966,55 @@ export class ChatMirror {
       LINE_IMAGE_DOWNLOAD_MAX_BYTES,
     );
 
-    let outcome: LineImageRelayOutcome = 'download-failed';
-    let note: string = MIRROR_MEDIA_TEXT.lineImageFailed;
+    let got: LineImageFetch | null = null;
     if (ch.sendFiles) {
-      let got: LineImageFetch;
       try {
         got = await fetchImage(limit);
       } catch {
         got = { ok: false, reason: 'failed' };
       }
-      if (got.ok) {
-        const name = `line-image.${imageExtension(sniffImageType(got.data))}`;
-        try {
-          await ch.sendFiles(formatOutgoing(msg), [{ name, data: got.data }]);
-          return 'uploaded';
-        } catch (err) {
-          this.logger.warn(`LINE picture upload to Discord failed (${describeError(err)}) — sending a note`);
-          outcome = 'upload-failed';
+    }
+    const channel = ch;
+    let outcome: LineImageRelayOutcome = 'failed';
+    await this.onDiscordSendChain(async () => {
+      outcome = await this.sendLineImage(channel, msg, got);
+    });
+    return outcome;
+  }
+
+  /** The Discord half of postLineImageToDiscord (on the send chain): the file, else the note. */
+  private async sendLineImage(
+    ch: DiscordChannelAdapter,
+    msg: LobbyChatMessage,
+    got: LineImageFetch | null,
+  ): Promise<LineImageRelayOutcome> {
+    let outcome: LineImageRelayOutcome = 'download-failed';
+    let note: string = MIRROR_MEDIA_TEXT.lineImageFailed;
+    const sendFiles = ch.sendFiles?.bind(ch);
+    if (got?.ok && sendFiles) {
+      const name = `line-image.${imageExtension(sniffImageType(got.data))}`;
+      const data = got.data;
+      try {
+        const sent = await this.discordCall(() => sendFiles(formatOutgoing(msg), [{ name, data }]));
+        if (sent === DISCORD_CALL_TIMED_OUT) {
+          this.logger.warn('LINE picture upload to Discord timed out — continuing with the next message');
+          return 'timeout';
         }
-      } else if (got.reason === 'too-large') {
-        outcome = 'too-large';
-        note = MIRROR_MEDIA_TEXT.lineImageTooLarge;
+        return 'uploaded';
+      } catch (err) {
+        this.logger.warn(`LINE picture upload to Discord failed (${describeError(err)}) — sending a note`);
+        outcome = 'upload-failed';
       }
+    } else if (got && !got.ok && got.reason === 'too-large') {
+      outcome = 'too-large';
+      note = MIRROR_MEDIA_TEXT.lineImageTooLarge;
     }
     try {
-      await ch.send(formatOutgoing({ ...msg, message: note }));
+      const sent = await this.discordCall(() => ch.send(formatOutgoing({ ...msg, message: note })));
+      if (sent === DISCORD_CALL_TIMED_OUT) {
+        this.logger.warn('Discord push timed out — continuing with the next message');
+        return 'timeout';
+      }
     } catch (err) {
       this.logger.error(`Discord push failed (${describeError(err)})`);
       return 'failed';
@@ -875,20 +1032,20 @@ export class ChatMirror {
    *      configured, or as a fallback when the listen-bot is unreachable and
    *      no queue exists.
    *
-   * `originMsg` is passed through so we can send the raw fields to the
-   * listen-bot — the listen-bot is the single authority that applies the
-   * Edward-mandated format, guaranteeing every chat surface sees the same
-   * bracket structure.
+   * The raw fields of `msg` go to the listen-bot — the listen-bot is the
+   * single authority that applies the Edward-mandated format there,
+   * guaranteeing every chat surface sees the same bracket structure.
+   *
+   * 2 and 3 send the whole text: one message when it fits LINE's 5000
+   * characters, else parts (formatOutgoingParts). A push carries up to 5
+   * message objects per call, so a split message is still one push.
    */
-  private async pushLine(
-    line: string,
-    originMsg?: LobbyChatMessage,
-  ): Promise<void> {
+  private async pushLine(msg: LobbyChatMessage): Promise<void> {
     if (!this.lineGroupId) return;
 
     // Prefer listen-bot enqueue (free, uses reply_token drain)
-    if (this.listenBot?.url && originMsg) {
-      const ok = await this.enqueueViaListenBot(originMsg);
+    if (this.listenBot?.url) {
+      const ok = await this.enqueueViaListenBot(msg);
       if (ok) return;
       // Fall through to legacy push only if enqueue failed — belt + braces
       // during rollout so a listen-bot outage doesn't silently drop messages.
@@ -897,24 +1054,22 @@ export class ChatMirror {
       );
     }
 
+    const parts = formatOutgoingParts(msg, LINE_TEXT_MAX_CHARS);
     if (this.lineReplyQueue) {
-      const { dropped, releasedMediaIds } = this.lineReplyQueue.enqueue(line);
-      this.releaseRelayMedia(releasedMediaIds);
-      if (dropped > 0) {
-        this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
-      }
+      this.enqueueLineParts(parts);
       return;
     }
 
     if (!this.line) return;
-    try {
-      await this.line.pushMessage(this.lineGroupId, {
-        type: 'text',
-        text: line,
-      });
-    } catch (err) {
-      // SDK errors embed the request body (chat text) — log a code only.
-      this.logger.error(`LINE push failed (${describeError(err)})`);
+    for (let i = 0; i < parts.length; i += LINE_REPLY_MAX_PER_DRAIN) {
+      const batch = parts.slice(i, i + LINE_REPLY_MAX_PER_DRAIN).map((text) => ({ type: 'text', text }));
+      try {
+        await this.line.pushMessage(this.lineGroupId, batch.length === 1 ? batch[0] : batch);
+      } catch (err) {
+        // SDK errors embed the request body (chat text) — log a code only.
+        this.logger.error(`LINE push failed (${describeError(err)})`);
+        return;
+      }
     }
   }
 
@@ -969,20 +1124,122 @@ export class ChatMirror {
     }
   }
 
-  private async pushDiscord(line: string): Promise<void> {
-    if (!this.discordChannelId || !this.discord) return;
-    try {
-      const ch = await this.discord.fetchChannel(this.discordChannelId);
-      if (!ch) {
-        this.logger.warn(
-          `Discord channel ${this.discordChannelId} unavailable`,
+  /**
+   * Post a relayed text to the Discord sync channel: one message when it fits
+   * Discord's 2000 characters, else parts in order (formatOutgoingParts).
+   * Every Discord post of the mirror runs on ONE send chain (this, LINE
+   * pictures, the weekly digest), so the parts of a long message are never
+   * interleaved with another post and messages keep their call order.
+   * A failed part stops the rest of that message (a 「（續）」 part without
+   * its start would read as nonsense); when parts before it did get there,
+   * a short note says the rest is missing (discordMissingPartsNote). Errors
+   * are logged as a code only. Never rejects.
+   */
+  private pushDiscord(msg: LobbyChatMessage): Promise<void> {
+    if (!this.discordChannelId || !this.discord) return Promise.resolve();
+    const parts = formatOutgoingParts(msg, DISCORD_MESSAGE_MAX_CHARS);
+    return this.onDiscordSendChain(() => this.sendDiscordParts(parts, discordMissingPartsNote(msg.source)));
+  }
+
+  /**
+   * Run `work` after every Discord post queued before it; starts at once when
+   * nothing is waiting. `work` must bound its own Discord calls (discordCall),
+   * so a hung request cannot hold the chain. Never rejects.
+   */
+  private onDiscordSendChain(work: () => Promise<void>): Promise<void> {
+    const step = (): Promise<void> =>
+      work().catch((err: unknown) => {
+        this.logger.error(`Discord push failed (${describeError(err)})`);
+      });
+    this.discordSendsPending += 1;
+    const start = this.discordSendsPending === 1 ? step() : this.discordSendChain.then(step);
+    const run = start.finally(() => {
+      this.discordSendsPending -= 1;
+    });
+    this.discordSendChain = run;
+    return run;
+  }
+
+  /**
+   * Run `post` on the mirror's Discord send chain — for a post to the sync
+   * channel made outside ChatMirror (the weekly digest), so it never lands
+   * between the parts of a long relayed message. Resolves / rejects with
+   * `post` itself; the chain waits for it at most DISCORD_SEND_CALL_TIMEOUT_MS.
+   */
+  public runOnDiscordSendChain<T>(post: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      void this.onDiscordSendChain(async () => {
+        let own: Promise<T>;
+        try {
+          own = post();
+        } catch (err) {
+          reject(err);
+          return;
+        }
+        own.then(resolve, reject);
+        const settled = own.then(
+          () => undefined,
+          () => undefined,
         );
-        return;
-      }
-      await ch.send(line);
+        await raceTimeout(settled, this.discordCallTimeoutMs, () => {
+          this.logger.warn('Discord post timed out — continuing with the next message');
+        });
+      });
+    });
+  }
+
+  /** One Discord call bounded by DISCORD_SEND_CALL_TIMEOUT_MS: its result, or DISCORD_CALL_TIMED_OUT. */
+  private discordCall<T>(call: () => Promise<T>): Promise<T | typeof DISCORD_CALL_TIMED_OUT> {
+    const work = new Promise<T>((resolve) => resolve(call()));
+    return raceTimeout<T | typeof DISCORD_CALL_TIMED_OUT>(work, this.discordCallTimeoutMs, () => DISCORD_CALL_TIMED_OUT);
+  }
+
+  private async sendDiscordParts(parts: string[], missingNote: string): Promise<void> {
+    const discord = this.discord;
+    if (!discord) return;
+    let found: DiscordChannelAdapter | null | typeof DISCORD_CALL_TIMED_OUT;
+    try {
+      found = await this.discordCall(() => discord.fetchChannel(this.discordChannelId));
     } catch (err) {
       // DiscordAPIError carries the request body (chat text) — log a code only.
       this.logger.error(`Discord push failed (${describeError(err)})`);
+      return;
+    }
+    if (found === DISCORD_CALL_TIMED_OUT) {
+      this.logger.warn('Discord push timed out — continuing with the next message');
+      return;
+    }
+    if (!found) {
+      this.logger.warn(
+        `Discord channel ${this.discordChannelId} unavailable`,
+      );
+      return;
+    }
+    const ch = found;
+    for (let i = 0; i < parts.length; i += 1) {
+      const where = parts.length > 1 ? ` — part ${i + 1} of ${parts.length}, the rest not sent` : '';
+      let sent: unknown;
+      try {
+        sent = await this.discordCall(() => ch.send(parts[i]));
+      } catch (err) {
+        this.logger.error(`Discord push failed (${describeError(err)})${where}`);
+        if (i > 0) await this.sendMissingPartsNote(ch, missingNote);
+        return;
+      }
+      if (sent === DISCORD_CALL_TIMED_OUT) {
+        this.logger.warn(`Discord push timed out${where} — continuing with the next message`);
+        return;
+      }
+    }
+  }
+
+  /** One try at discordMissingPartsNote(); a failure is only logged (code). */
+  private async sendMissingPartsNote(ch: DiscordChannelAdapter, note: string): Promise<void> {
+    try {
+      const sent = await this.discordCall(() => ch.send(note));
+      if (sent === DISCORD_CALL_TIMED_OUT) this.logger.warn('Discord note timed out');
+    } catch (err) {
+      this.logger.error(`Discord note failed (${describeError(err)})`);
     }
   }
 
@@ -1014,18 +1271,18 @@ export class ChatMirror {
 // ─── Inbound validation ──────────────────────────────────────────────────
 
 /**
- * Mirror of `LobbyChatBuffer.validateBody` but duplicated here so Phase B
- * doesn't need to import socket-layer internals into the bot layer.
- * Exported for direct unit testing.
+ * Inbound (LINE / Discord) body check: a non-empty trimmed string. NOT the
+ * lobby's 200-character cap any more (2026-10-13) — this text is relayed to
+ * the other platform whole; the lobby cuts its own copy (lobbyDisplayText).
+ * Only a text over MIRROR_TEXT_MAX_CHARS (far above what LINE or Discord
+ * can send) is cut, with `…`. Exported for direct unit testing.
  */
 export function validateInboundBody(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  if (trimmed.length > LOBBY_CHAT_MAX_LEN) {
-    // Truncate rather than reject — external users shouldn't silently lose
-    // long messages; `…` suffix signals the trim.
-    return trimmed.slice(0, LOBBY_CHAT_MAX_LEN - 1) + '…';
+  if (trimmed.length > MIRROR_TEXT_MAX_CHARS) {
+    return `${cutUnits(trimmed, MIRROR_TEXT_MAX_CHARS - 1)}…`;
   }
   return trimmed;
 }

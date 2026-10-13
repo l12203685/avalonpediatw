@@ -13,6 +13,7 @@ import {
   __resetChatMirrorForTests,
   initializeChatMirror,
   getChatMirror,
+  MIRROR_TEXT_MAX_CHARS,
 } from '../bots/ChatMirror';
 import { LobbyChatMessage, LOBBY_CHAT_MAX_LEN } from '../socket/LobbyChatBuffer';
 
@@ -113,12 +114,11 @@ describe('formatOutgoing', () => {
     expect(out).toBe('[Avalon] Unknown: x');
   });
 
-  it('truncates extra-long bodies at LOBBY_CHAT_MAX_LEN', () => {
+  it('never cuts the body (2026-10-13: the lobby cap must not reach LINE / Discord)', () => {
     const huge = 'a'.repeat(LOBBY_CHAT_MAX_LEN + 50);
     const out = formatOutgoing(makeLobbyMsg({ message: huge, playerName: 'X' }));
-    expect(out.length).toBeLessThanOrEqual(
-      OUT_PREFIX_LEN('X') + LOBBY_CHAT_MAX_LEN,
-    );
+    expect(out).toBe(`[Avalon] X: ${huge}`);
+    expect(out.length).toBe(OUT_PREFIX_LEN('X') + huge.length);
   });
 });
 
@@ -143,11 +143,14 @@ describe('validateInboundBody', () => {
     expect(validateInboundBody(42)).toBeNull();
   });
 
-  it('truncates over-long inbound instead of dropping', () => {
+  it('keeps a long inbound text whole (no lobby cap); only past MIRROR_TEXT_MAX_CHARS is it cut', () => {
     const raw = 'x'.repeat(LOBBY_CHAT_MAX_LEN + 20);
-    const out = validateInboundBody(raw);
-    expect(out).not.toBeNull();
-    expect(out!.length).toBe(LOBBY_CHAT_MAX_LEN);
+    expect(validateInboundBody(raw)).toBe(raw);
+    const line = '字'.repeat(5000);
+    expect(validateInboundBody(line)).toBe(line);
+    const absurd = 'y'.repeat(MIRROR_TEXT_MAX_CHARS + 5);
+    const out = validateInboundBody(absurd);
+    expect(out!.length).toBe(MIRROR_TEXT_MAX_CHARS);
     expect(out!.endsWith('…')).toBe(true);
   });
 });

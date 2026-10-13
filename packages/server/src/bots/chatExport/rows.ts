@@ -25,6 +25,17 @@
  *                                              expected in Discord, skipped as a duplicate
  *   [Avalon] 名字: 內容 (legacy format, CHAT_MIRROR_USE_LEGACY_FORMAT=true) → 來源 同步
  *
+ * A LINE text over Discord's 2000 characters arrives as several bot posts
+ * (2026-10-13, bots/mirrorSplit.ts): the first with the prefix above, the
+ * others starting with 「（續）」. Such a part is joined to the bot's previous
+ * TEXT relay post in the same channel — a post with the prefix above and no
+ * attachment; a picture upload, the digest or a command reply in between is
+ * not its start (review fix 2026-10-13) — exactly as split (the line break a
+ * split falls on is in the part), so the row reads like the LINE message;
+ * or skipped like that start — a relayed /意見 never leaks through its
+ * 「（續）」 parts. A part whose start is not in the export (the day before)
+ * is skipped as 'bot'.
+ *
  * Every other message by the bot (stats digest, slash-command replies, format-check
  * replies in the records forum, /意見 forwards) is skipped, as are other bots,
  * webhooks, Discord system messages,
@@ -33,6 +44,7 @@
  */
 
 import { parseFeedbackCommand } from '../feedback/commands';
+import { MIRROR_CONTINUATION_MARKER } from '../mirrorSplit';
 import { CHAT_EXPORT_MESSAGE_MAX_CHARS } from './config';
 import { taipeiStamp } from './window';
 
@@ -262,14 +274,27 @@ export function buildExportRows(messages: RawChatMessage[], channels: ChatChanne
   const byPlatform: Record<ChatPlatform, number> = { discord: 0, line: 0, lobby: 0, relay: 0 };
   const kept: KeptMessage[] = [];
   const seen = new Set<string>();
-  for (const m of messages) {
+  const byTime = (a: { createdAt: number; id: string }, b: { createdAt: number; id: string }): number =>
+    a.createdAt - b.createdAt || (a.id.length - b.id.length) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  // The bot's latest TEXT relay post per channel, for its 「（續）」 parts (time order).
+  const lastSelfRelay = new Map<string, KeptMessage | SkippedMessage>();
+  for (const m of [...messages].sort(byTime)) {
     if (seen.has(m.id)) continue; // the same message read twice (defensive)
     seen.add(m.id);
+    const ownPost = m.authorIsSelf && !m.webhookId && !m.system;
+    if (ownPost && (m.content ?? '').startsWith(MIRROR_CONTINUATION_MARKER)) {
+      const head = lastSelfRelay.get(m.channelId);
+      const part = (m.content ?? '').slice(MIRROR_CONTINUATION_MARKER.length);
+      if (head?.kind === 'keep') head.text = `${head.text}${part}`.trimEnd();
+      else skipped[head?.kind === 'skip' ? head.reason : 'bot'] += 1;
+      continue;
+    }
     const c = classifyMessage(m);
+    if (ownPost && (m.attachmentCount | 0) === 0 && parseRelayLine(m.content ?? '')) lastSelfRelay.set(m.channelId, c);
     if (c.kind === 'skip') skipped[c.reason] += 1;
     else kept.push(c);
   }
-  kept.sort((a, b) => a.createdAt - b.createdAt || (a.id.length - b.id.length) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  kept.sort(byTime);
 
   const channelNames = new Map(channels.map((ch) => [ch.id, ch.name]));
   const threadIds = new Set(channels.filter((ch) => ch.isThread).map((ch) => ch.id));

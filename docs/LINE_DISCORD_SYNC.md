@@ -38,6 +38,7 @@
   等鏡像群任何一個帶 reply_token 的事件（文字、貼圖、加入…）一次最多帶 5 則回出去；
   `LINE_REPLY_DRAIN=false` 才逐則 push。
 - 圖片、貼圖、檔案（20261013 起）：見下方「圖片同步」。
+- 長訊息（20261013 起）：LINE ↔ Discord 一律轉全文，只有超過平台上限才分段；見下方「長訊息」。
 
 ## 三層驗證（這次才真的存在）
 
@@ -294,6 +295,44 @@ Discord 同步頻道貼一張 JPG／PNG → 回 LINE 群講一句 → 群裡先�
 2. LINE Developers Console 不用改：讀圖片內容用的是同一組 channel access token，不需要另外申請。
 3. 沒有新增費用：LINE 內容下載免費、reply 不算 push 額度、圖片只放 server 記憶體（Render Free 512 MB 中最多 50 MB）。
 
+## 長訊息（20261013）
+
+玩家反映：Discord 同步頻道一則約 400 字、好幾行的訊息，到 LINE 群只剩前面一段，要有人手動補貼。
+原因是 LINE／Discord 進來的文字都先套用了**網站大廳的 200 字上限**（進大廳時截成 199 字＋「…」，
+轉出去時又再截一次 200 字），而轉到另一個平台用的正是這份截過的文字。
+
+現在：
+
+| 方向 | 行為 |
+|---|---|
+| Discord → LINE | 全文。超過 LINE 單則上限 5000 字才分段 |
+| LINE → Discord | 全文。超過 Discord 單則上限 2000 字才分段，約每 2000 字一段（LINE 使用者一則可能比 bot 能送的 5000 字更長，就多分幾段） |
+| 網站大廳 → 兩邊 | 不變（大廳本來就只能打 200 字） |
+| LINE／Discord → 網站大廳 | 大廳仍只顯示 200 字：前段＋「…（全文請到 LINE 看）」或「…（全文請到 Discord 看）」，有圖時標記 `（圖片）` 留在最後。這份截短的只給大廳看，**不會**再轉到 LINE 或 Discord |
+
+- 分段：第一段照舊 `[MMDD hh:mm][LINE][名字] …`，後面每段開頭是 `（續）`。盡量切在換行
+  （切在換行時，`（續）` 後面接著換行再接下一行）；沒有換行就切在空白或句讀（。！？，、…）之後；
+  都沒有才在上限硬切（不會切壞 emoji）。切點的換行或空白留在下一段，各段接起來跟原文一字不差。
+- LINE 這一側：同一則訊息的各段在 reply 佇列裡是同一組，排在那則訊息的圖片前面，順序不變；
+  一次回覆最多 5 則照舊（一段算一則），長訊息可能跨兩次回覆送完。回覆失敗照舊整批放回佇列頭；
+  佇列滿時整則（所有段落＋圖）一起丟，不會只剩 `（續）` 沒有開頭。
+  `LINE_REPLY_DRAIN=false`（push 模式）時各段放在**同一次** push 裡（一次最多 5 則），所以還是算一則 push。
+- Discord 這一側：所有同步貼文（文字、LINE 圖片、每週排行）排成一條，同一則訊息的各段連續貼出，
+  不會跟別則或圖片交錯；某一段貼失敗（log 只有代碼，例如 `part 2 of 3`；discord.js 遇到 5xx／逾時本身已重試 3 次）
+  就停在那裡，不會只貼出沒頭的後段；前面已經有段落貼出去時，再補一則
+  `（續）（後段沒有同步過來，請到 LINE 看）`，讓人知道後面還有。
+  單一次 Discord 呼叫卡住超過 75 秒（比 discord.js 自己 4 次 × 15 秒放棄還久）就跳過、繼續下一則。
+- 限流：一則訊息不管分幾段都只算一次（同一個人每 60 秒 5 則照舊）。
+- 不會迴圈：bot 自己貼的段落（Discord 上作者是 bot）照舊不轉回；有人自己打「（續）」開頭的字照常轉。
+- 聊天紀錄匯出：`（續）` 段落會接回 bot 前一則**文字**同步貼文（不含圖片上傳、每週排行、指令回覆），成為同一列，跟原文一樣；前一則被略過（例如 `/意見`）時段落一起略過。
+- LINE webhook 的 JSON 上限從 express 預設 100 KB 提高到 1 MB（只有 `/webhook/line`）：
+  LINE 可能把幾則長訊息放在同一次 webhook，超過 100 KB 會被回 413，整批（連同短訊息）都會遺失。
+- 尚未處理：Discord 沒有 Nitro 的人一次貼超過 2000 字時，Discord 會先把它變成 `message.txt` 附件，
+  bot 收到的是檔案不是文字，所以 LINE 只會看到 `（檔案）` 和「請到 Discord 看」。要轉成文字得另外下載檔案內容。
+
+**驗證**：Discord 同步頻道貼一則 300～500 字、好幾行的訊息 → 回 LINE 群講一句 → 群裡出現完整的一則（換行都在）；
+LINE 群貼一則超過 2000 字的訊息 → Discord 出現 2～3 則，第一則有名字、後面的以 `（續）` 開頭。
+
 ## 配額
 
 LINE 官方帳號免費方案每月免費訊息數有限（台灣目前 200 則，以 LINE 當期公告為準）；
@@ -328,6 +367,7 @@ reply 不計、push 計。`LINE_REPLY_DRAIN=true`（預設）下 server 不會 p
 - `packages/server/src/bots/stats/` — 戰績回覆（`statsReplies.ts` 純格式化、`statsQueries.ts` 讀快取、`textCommands.ts` LINE 指令、`weeklyDigest.ts` 每週排行）
 - `.github/workflows/verify-line-webhook.yml` — 每日探測
 - `render.yaml` — 變數清單
+- `packages/server/src/bots/mirrorSplit.ts` — 長訊息分段（LINE 5000／Discord 2000、`（續）`）
 - 測試：`src/__tests__/LineSyncRoundTrip.test.ts`、`LineReplyQueue.test.ts`、`LineWebhookEndpoint.test.ts`、
-  `LineStatsCommands.test.ts`、`LineDiscordImageSync.test.ts`、`RelayMedia.test.ts`（也在 `pnpm test:line-sync`）、
+  `LineStatsCommands.test.ts`、`LineDiscordImageSync.test.ts`、`RelayMedia.test.ts`、`LongMessageSync.test.ts`（也在 `pnpm test:line-sync`）、
   `StatsReplies.test.ts`、`DiscordStatsCommands.test.ts`、`StatsWeeklyDigest.test.ts`

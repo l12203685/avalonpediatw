@@ -224,8 +224,8 @@ function buildLineAdapter(): LineAdapter | null {
   const client = bot.getClient();
   return {
     pushMessage: async (to, messages) =>
-      // @line/bot-sdk accepts a single Message or an array; we always hand it
-      // a single text object built in ChatMirror, so this signature is safe.
+      // @line/bot-sdk accepts a single Message or an array (≤ 5); ChatMirror
+      // hands it one text object, or the parts of a long text as an array.
       (client as unknown as {
         pushMessage: (to: string, m: unknown) => Promise<unknown>;
       }).pushMessage(to, messages),
@@ -373,7 +373,11 @@ export function startLineWebhookWatchdog(): void {
 
 let statsDigest: WeeklyDigestScheduler | null = null;
 
-/** Discord mirror channel: post directly (the bot's own message is never mirrored back). */
+/**
+ * Discord mirror channel: post directly (the bot's own message is never
+ * mirrored back), on ChatMirror's Discord send chain when the mirror runs,
+ * so the digest never lands between the parts of a long relayed message.
+ */
 function discordDigestDestination(channelId: string): DigestDestination {
   return {
     name: 'discord',
@@ -384,7 +388,9 @@ function discordDigestDestination(channelId: string): DigestDestination {
       if (!bot.isClientReady()) return false; // gateway not up yet — retry next tick
       const ch = await bot.getClient().channels.fetch(channelId);
       if (!ch || !(ch instanceof TextChannel)) return false;
-      await ch.send({ content: text, allowedMentions: { parse: [] } });
+      const post = (): Promise<unknown> => ch.send({ content: text, allowedMentions: { parse: [] } });
+      const mirror = getChatMirror();
+      await (mirror ? mirror.runOnDiscordSendChain(post) : post());
       return true;
     },
   };
