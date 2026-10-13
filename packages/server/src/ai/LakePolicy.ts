@@ -25,6 +25,7 @@ import {
 } from './priors/EvActionPriors';
 import { AVALON_CONFIG } from '@avalon/shared';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
+import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 
 type Camp = 'good' | 'evil';
 
@@ -184,6 +185,17 @@ export function pickLakeTargetForTeam(
     const unknownCandidates = validTargets.filter(id => !avoidSet.has(id));
     if (unknownCandidates.length === 0) {
       return validTargets[0];
+    }
+    // ── AgentTuning.goodLakeInfoMax (Edward 2026-10-13) ──
+    // 「好人湖中的最大原則就是使場上的好人視角能夠更清晰 讓藍方不確定性
+    // 最小化 極大化共同資訊」— expected drop of the blues' common
+    // uncertainty plus a trust-chain term (GoodLakeInfo.ts). Takes
+    // precedence over goodLakeTargetMostSuspicious; falls through to it
+    // (or to the legacy rule) only when no evil set is consistent with
+    // the record. Deterministic; no Math.random.
+    if (tuning.goodLakeInfoMax) {
+      const pick = pickGoodLakeTargetInfoMax(obs, unknownCandidates);
+      if (pick !== null) return pick;
     }
     // ── AgentTuning.goodLakeTargetMostSuspicious (2026-10-12) ──
     // 一致性基準第 7 節：真人（含 ED）多半湖有失敗紀錄的人；開關打開時

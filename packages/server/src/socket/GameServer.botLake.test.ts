@@ -107,13 +107,21 @@ describe('GameServer bot lake — agent decides target and claim', () => {
     expect(server.decideBotLakeClaim(room, 'p1', 'p7', ENGINE)).toBe('good');
   });
 
-  it('good bot (production tuning) inspects the most suspicious seat and tells the truth', () => {
+  it('good bot (production tuning) extends the trust chain at 1-1 and tells the truth', () => {
     const server = makeServer();
     const room = makeRoom({ ladyOfTheLakeHolder: 'p7', ladyOfTheLakeUsed: ['p10', 'p7'] } as Partial<Room>);
     server.botAgents.set('p7', new HeuristicAgent('p7', undefined, undefined, PRODUCTION));
     const eligible = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p8', 'p9'];
     const target = server.pickBotLakeTarget(room, 'p7', eligible, ENGINE);
-    expect(['p2', 'p5', 'p6']).toContain(target); // the failed R1 mission
+    // 1-1 and the holder went on the passed R2 mission: `goodLakeInfoMax`
+    // (GoodLakeInfo.ts, production default since 2026-10-13) lakes a fellow
+    // R2 member — most likely good, so a trusted next holder (Edward:
+    // 「信任鏈的湖中選擇對於一紅一藍時幾乎成立」); p3 / p8 / p9 tie → seat order.
+    expect(target).toBe('p3');
+    // The old production rule (`goodLakeTargetMostSuspicious`) inspects the failed R1 mission.
+    const mostSuspicious = { ...PRODUCTION, goodLakeTargetMostSuspicious: true, goodLakeInfoMax: false };
+    server.botAgents.set('p7', new HeuristicAgent('p7', undefined, undefined, mostSuspicious));
+    expect(['p2', 'p5', 'p6']).toContain(server.pickBotLakeTarget(room, 'p7', eligible, ENGINE));
     const claimRoom = { ...room, ladyOfTheLakeResult: 'evil' } as Room;
     expect(server.decideBotLakeClaim(claimRoom, 'p7', 'p2', ENGINE)).toBe('evil');
   });

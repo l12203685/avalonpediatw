@@ -38,6 +38,17 @@
  *     `oberonLakeSeeksTeammates`（預設關；奧伯倫持湖找隊友，比真人更常
  *     湖到紅方而且略弱，不採用）。前兩個只在 `evilLakeHumanStrategy`
  *     打開時有作用。
+ *   - `goodLakeInfoMax`            （2026-10-13，**預設開**）好人持湖改用
+ *                                   「共同資訊極大化」模型（`GoodLakeInfo.ts`）：
+ *                                   列舉與持湖者所知一致的紅方組合，挑「宣告
+ *                                   後藍方共同視角的不確定性下降最多」的人，
+ *                                   之後還有湖時再加信任鏈項（目標是藍 → 下一
+ *                                   位可信的持湖者：P(藍) × 一次湖的價值，
+ *                                   權重 2）；
+ *                                   紅方已拿兩局或最後一次湖時不加信任鏈項。
+ *                                   打開時優先於 `goodLakeTargetMostSuspicious`
+ *                                   （模型找不到一致的組合時才退回它）；
+ *                                   梅林不湖看得到的紅、派西不湖兩拇指照舊。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -99,6 +110,11 @@ export interface AgentTuning {
    * `evilLakeHumanStrategy` 打開時有作用。
    */
   oberonLakeSeeksTeammates: boolean;
+  /**
+   * 好人持湖改用「共同資訊極大化」模型（Edward 2026-10-13），細節見
+   * `GoodLakeInfo.ts`；打開時優先於 `goodLakeTargetMostSuspicious`。
+   */
+  goodLakeInfoMax: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -114,6 +130,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'evilVouchFollowUp',
   'evilLakeFrameHumanRate',
   'oberonLakeSeeksTeammates',
+  'goodLakeInfoMax',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -128,11 +145,13 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilVouchFollowUp: false,
   evilLakeFrameHumanRate: false,
   oberonLakeSeeksTeammates: false,
+  goodLakeInfoMax: false,
 });
 
 /**
  * 正式預設（2026-10-12 採用，docs/ai/strength_benchmark.md 第 2 節；
- * 2026-10-13 `evilLakeHumanStrategy` 依 Edward 裁定打開，第 6、8 節）。
+ * 2026-10-13 `evilLakeHumanStrategy` 依 Edward 裁定打開，第 6、8 節；同日
+ * 採用 `goodLakeInfoMax`，第 7 節；兩者合併後的整組重跑見第 9 節）。
  * 採用規則（2026-10-12 事前版）：一致性基準更像真人、且自我對打合計勝率
  * 95% 區間下界 ≥ 48%；整合時改依 Edward 原文「更像真人，而且不能讓它
  * 變弱」：任一立場配對差的 95% 區間整個落在 0 以下就算變弱、不採用。
@@ -179,6 +198,16 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     打開，剩下的差距與待決事項見第 8.6 節。這裡的採用依「對只開新湖法
  *     不變弱」，不是原定的「對舊預設不變弱」，也寫在第 8.6 節。
  *     `oberonLakeSeeksTeammates` 不採用。
+ *   - `goodLakeInfoMax`（2026-10-13，strength_benchmark.md 第 7 節）：對照
+ *     同樣是上面這組正式預設。好人持湖的湖目標一致性 ED 18.9→35.1%、
+ *     Sin 20.3→22.9%、top 12.2→25.8%、population 14.9→24.7%（配對比較
+ *     top / population 顯著，ED p≈0.07，Sin 看不出差別）；自我對打
+ *     藍方立場 seed 4096（協定的選版本種子，只跑定案版）−0.3pp
+ *     [−1.0pp, +0.3pp]、新種子 6174 −0.3pp [−0.9pp, +0.4pp]、1729 −0.2pp
+ *     [−0.9pp, +0.4pp]，三個種子合併
+ *     −0.3pp [−0.6pp, +0.1pp]，區間都含 0 → 依規則不算變弱 → **採用**
+ *     （整合時打開；`goodLakeTargetMostSuspicious` 保留，只當模型找不到
+ *     一致組合時的退路；AVALON_TUNING_GOOD_LAKE_INFO_MAX=0 可關掉）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -197,6 +226,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilVouchFollowUp: true,
   evilLakeFrameHumanRate: true,
   oberonLakeSeeksTeammates: false,
+  goodLakeInfoMax: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -211,6 +241,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   evilVouchFollowUp: 'AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP',
   evilLakeFrameHumanRate: 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE',
   oberonLakeSeeksTeammates: 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES',
+  goodLakeInfoMax: 'AVALON_TUNING_GOOD_LAKE_INFO_MAX',
 });
 
 function parseBool(raw: string): boolean | undefined {

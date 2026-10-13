@@ -25,6 +25,8 @@ import { HeuristicAgent } from './HeuristicAgent';
 import { computePyramidScores } from './baseline';
 import { ForwardAgent, USE_FORWARD_REASONING, interpret } from './forward';
 import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory } from './LakePolicy';
+import { analyzeGoodLake } from './GoodLakeInfo';
+import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { AVALON_CONFIG } from '@avalon/shared';
 
 export interface ExplainedSuspect {
@@ -448,7 +450,45 @@ export function explainQuestCard(obs: PlayerObservation, card: 'success' | 'fail
   return withReplay(base, replayRule(obs, agent, { type: 'quest_vote', vote: card }));
 }
 
-export function explainLakeTarget(obs: PlayerObservation, targetId: string, eligible: readonly string[]): DecisionExplanation {
+/**
+ * The `goodLakeInfoMax` numbers for one pick: expected drop of the blues'
+ * common uncertainty, the holder's P(red), the trust-chain term and the
+ * model's top three. `null` when the model has no consistent world (the
+ * policy then fell back to the older rule).
+ */
+function explainGoodLakeInfo(
+  obs: PlayerObservation,
+  targetId: string,
+  candidates: readonly string[],
+): { parts: string[]; redRanked: Ranked[] } | null {
+  const analysis = analyzeGoodLake(obs, candidates);
+  const me = analysis?.candidates.find((c) => c.id === targetId);
+  if (!analysis || !me) return null;
+  const byScore = [...analysis.candidates].sort(
+    (a, b) => b.score - a.score || seatOfId(obs, a.id) - seatOfId(obs, b.id),
+  );
+  const bestGain = Math.max(...analysis.candidates.map((c) => c.infoGain));
+  const parts = [
+    `湖下去後藍方共同資訊預期增加 ${fmt(me.infoGain)} bits（候選最高 ${fmt(bestGain)}）`,
+    `我看他是紅方的機率 ${Math.round(me.pEvil * 100)}%`,
+    analysis.trustWeight > 0
+      ? `之後還有湖、紅方還沒拿兩局 → 加信任鏈分 ${fmt(me.trust)}（湖到好人就多一位可信的持湖者）`
+      : '紅方已拿兩局或這是最後一次湖 → 不加信任鏈分，只看資訊量',
+    `模型總分前三：${byScore.slice(0, 3).map((c) => `${seatTxt(obs, c.id)} ${fmt(c.score)}`).join('、')}`,
+  ];
+  if (analysis.droppedLakes) parts.push('先前的湖宣告彼此矛盾，這次計算沒有採用它們');
+  const redRanked = analysis.candidates
+    .map((c) => ({ id: c.id, score: c.pEvil }))
+    .sort((a, b) => b.score - a.score || seatOfId(obs, a.id) - seatOfId(obs, b.id));
+  return { parts, redRanked };
+}
+
+export function explainLakeTarget(
+  obs: PlayerObservation,
+  targetId: string,
+  eligible: readonly string[],
+  tuning: AgentTuning = getDefaultAgentTuning(),
+): DecisionExplanation {
   const candidates = eligible.filter((id) => id !== obs.myPlayerId);
   const parts: string[] = [`候選 ${candidates.length} 人`];
   parts.push(`${seatTxt(obs, targetId)} ${questRecordTxt(obs, targetId)}`);
@@ -469,6 +509,22 @@ export function explainLakeTarget(obs: PlayerObservation, targetId: string, elig
     };
   }
   if (isOberon(obs)) parts.push(OBERON_NOTE);
+  const avoid = new Set([...obs.knownEvils, ...(obs.knownWizards ?? [])]);
+  // A good holder under `goodLakeInfoMax` (2026-10-13 default) picks with
+  // GoodLakeInfo.ts — show that model's numbers, not a proxy score.
+  if (obs.myTeam === 'good' && tuning.goodLakeInfoMax && !avoid.has(targetId)) {
+    const model = explainGoodLakeInfo(obs, targetId, candidates.filter((id) => !avoid.has(id)));
+    if (model) {
+      return {
+        reason: `湖 ${seatTxt(obs, targetId)}：${[...parts, ...model.parts].join('；')}。`,
+        rule: '好人湖：共同資訊極大化',
+        knowledge: describeKnowledge(obs),
+        suspects: toSuspects(obs, model.redRanked),
+        suspectsLabel: '紅方機率（持湖者看法）',
+        suspectsNote: tieNote(model.redRanked, 3),
+      };
+    }
+  }
   // Both public scores are shown; neither is claimed to be the one the lake
   // policy used (the good / Oberon lake rule may change between versions).
   const ranked = rankRedSuspicion(obs, candidates);
@@ -478,7 +534,6 @@ export function explainLakeTarget(obs: PlayerObservation, targetId: string, elig
   if (ranked.length > 0 && !allTied(ranked)) {
     parts.push(`金字塔最可疑：${rankedTxt(obs, ranked, 2)}；最不可疑：${rankedTxt(obs, [...ranked].reverse(), 2)}`);
   }
-  const avoid = new Set([...obs.knownEvils, ...(obs.knownWizards ?? [])]);
   if (avoid.has(targetId)) parts.push('注意：目標是自己已知身分的人，這次湖得不到新資訊');
   return {
     reason: `湖 ${seatTxt(obs, targetId)}：${parts.join('；')}。`,

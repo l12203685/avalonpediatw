@@ -326,6 +326,17 @@ describe('explain (read-only reasons)', () => {
     const lake = explainLakeTarget(obs({ myPlayerId: 's10' }), 's7', ['s1', 's2', 's7', 's8']);
     expect(lake.reason).toMatch(/^湖 7家：候選 4 人/);
     expect(lake.reason).toContain('還沒出過任務');
+    // Production default `goodLakeInfoMax`: the review shows the model the pick used.
+    expect(lake.rule).toBe('好人湖：共同資訊極大化');
+    expect(lake.reason).toMatch(/藍方共同資訊預期增加 \d\.\d\d bits/);
+    expect(lake.reason).toContain('模型總分前三：');
+    expect(lake.suspectsLabel).toBe('紅方機率（持湖者看法）');
+    const oldRule = explainLakeTarget(obs({ myPlayerId: 's10' }), 's7', ['s1', 's2', 's7', 's8'], {
+      ...DEFAULT_AGENT_TUNING,
+      goodLakeInfoMax: false,
+    });
+    expect(oldRule.rule).toBeUndefined();
+    expect(oldRule.reason).toContain('任務／投票紀錄嫌疑分');
     const lie = explainLakeClaim(obs({ myPlayerId: 's2', myRole: 'assassin', myTeam: 'evil', knownEvils: ['s5'] }), 's5', 'evil', 'good');
     expect(lie.reason).toBe('看到 5家 是壞人，宣告好人（說謊）；對象是紅方隊友。');
     expect(explainLakeClaim(obs({}), 's4', 'good', 'good').rule).toBe('好人照實宣告');
