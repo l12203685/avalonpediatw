@@ -753,11 +753,12 @@ export class ForwardAgent implements AvalonAgent {
 
     // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
     //
-    // A red lake holder rejects a team that leaves out a seat it declared
-    // blue or includes a seat it declared red (humans: 82.7% reject a team
-    // without the teammate they vouched for; the baseline's 硬1 / 硬2 vote
-    // rule does the same). Red's decisive window (Q11) and the forced fifth
-    // proposal are exempt — see `RedLakeFollowUp.evilVouchVoteRule`.
+    // A red lake holder off the proposed team rejects it when it leaves out
+    // a seat it declared blue or includes a seat it declared red (humans
+    // off the team: 94.0% reject a team without the teammate they vouched
+    // for; the baseline's 硬1 / 硬2 vote rule does the same). Red's
+    // decisive window (Q11) and the forced fifth proposal are exempt — see
+    // `RedLakeFollowUp.evilVouchVoteRule`.
     if (
       decisionType === 'team_vote' &&
       this.baseline.tuning.evilVouchFollowUp &&

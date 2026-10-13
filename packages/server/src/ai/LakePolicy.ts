@@ -427,9 +427,13 @@ export interface EvilLakeHumanOptions {
    *                order), and the claim is 'evil' with the human rate of
    *                the state (`HUMAN_FRAME_RATE`: shared failed mission ×
    *                red listening). Consumes one `Math.random` per blue
-   *                target.
+   *                target;
+   *   - 'frameNoHunt' — the 'frame' claim rule, but the target is never
+   *                chosen for framing (blue picks follow the vouch order),
+   *                so framing only happens when the vouched blue happens
+   *                to be a co-suspect while red is listening.
    */
-  chaos: 'frame' | 'never' | 'always' | 'humanRate';
+  chaos: 'frame' | 'never' | 'always' | 'humanRate' | 'frameNoHunt';
   /**
    * Whom to vouch for ("blue" claim) when several candidates are legal:
    *   - 'pressured'  — the most publicly suspected teammate (the claim
@@ -528,7 +532,7 @@ export function evilLakeHumanOptionsFromEnv(env: NodeJS.ProcessEnv = process.env
   for (const part of raw.split(',')) {
     const [k, v] = part.split('=').map((x) => x.trim());
     if (k === 'lastLake' && (v === 'pressured' || v === 'always' || v === 'legacy')) out.lastLake = v;
-    if (k === 'chaos' && (v === 'frame' || v === 'never' || v === 'always' || v === 'humanRate')) out.chaos = v;
+    if (k === 'chaos' && (v === 'frame' || v === 'never' || v === 'always' || v === 'humanRate' || v === 'frameNoHunt')) out.chaos = v;
     if (k === 'vouch' && (v === 'pressured' || v === 'consistent')) out.vouch = v;
     if ((k === 'oberon' || k === 'target' || k === 'claim') && (v === 'human' || v === 'legacy')) out[k] = v;
     if (k === 'oberonTarget' && (v === 'vouch' || v === 'teammate')) out.oberonTarget = v;
@@ -763,6 +767,7 @@ export function decideEvilLakeClaimHuman(
     case 'always': return 'evil';
     case 'never': return 'good';
     case 'humanRate': return Math.random() < humanFrameRate(obs, targetId) ? 'evil' : 'good';
+    case 'frameNoHunt':
     case 'frame':
     default:
       return redListening(obs) && sharedFailedMission(obs, targetId) ? 'evil' : 'good';

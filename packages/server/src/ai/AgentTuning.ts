@@ -29,6 +29,12 @@
  *                                   `evilLakeClaimAlwaysGood` 若也打開則以
  *                                   「一律宣好」為準。細節見
  *                                   `LakePolicy.pickEvilLakeTargetHuman`。
+ *   - 2026-10-13 第二輪（湖法打開後從其他紅方決策補強，見
+ *     strength_benchmark.md 第 7 節；三個都是紅方專用、legacy 全關）：
+ *     `evilVouchFollowUp`（紅方持湖者言行一致：自己宣藍的人放進自己派的
+ *     隊、宣紅的不放；不在隊上時漏掉宣藍者的隊就反對，`RedLakeFollowUp.ts`）、
+ *     `evilLakeFrameHumanRate`（嫁禍頻率照真人比例）、
+ *     `oberonLakeSeeksTeammates`（奧伯倫持湖找隊友）。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。

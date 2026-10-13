@@ -83,13 +83,15 @@ describe('RedLakeFollowUp — pure rules', () => {
     expect(evilVouchVoteRule({ ...listening, currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: ['P6', 'P7', 'P8', 'P9', 'P10'] })).toBeNull();
   });
 
-  it('vote rule: reject a team without the vouched seat or with the framed seat; not own team, not forced', () => {
+  it('vote rule (off the team): reject a team without the vouched seat or with the framed seat; not own team, not forced', () => {
     const v = (team: string[], extra: Partial<PlayerObservation> = {}): PlayerObservation =>
       obs({ currentLeader: 'P6', gamePhase: 'team_vote', proposedTeam: team, ...extra });
     expect(evilVouchVoteRule(v(['P6', 'P7', 'P8', 'P9']))).toBe('reject');
     expect(evilVouchVoteRule(v(['P6', 'P3', 'P8', 'P9']))).toBeNull();
     expect(evilVouchVoteRule(v(['P6', 'P7', 'P8', 'P9'], { failCount: 4 }))).toBeNull();
     expect(evilVouchVoteRule(v(['P6', 'P7', 'P8', 'P9'], { currentLeader: 'P1' }))).toBeNull();
+    // On the team himself: humans mostly approve → no rule.
+    expect(evilVouchVoteRule(v(['P6', 'P1', 'P8', 'P9']))).toBeNull();
     const framed: LakePublicRecord[] = [{ round: 2, holderId: 'P1', targetId: 'P7', declaredClaim: 'evil' }];
     expect(evilVouchVoteRule(v(['P6', 'P7', 'P8', 'P9'], { lakeHistory: framed }))).toBe('reject');
     expect(evilVouchVoteRule(v(['P6', 'P5', 'P8', 'P9'], { lakeHistory: framed }))).toBeNull();

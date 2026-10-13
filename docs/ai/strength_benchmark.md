@@ -32,6 +32,10 @@ pnpm --filter @avalon/server exec tsx scripts/evilLakeStudy.ts [--player ED --pl
 USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 \
   --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel --flag evilLakeHumanStrategy \
   --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel
+# 紅方湖變弱的診斷（第 7 節；只跑 A、C 兩局，另記湖鏈 / 硬3 / 背書後的派隊投票；--rule3 off|redOnly|blueOnly|postlake 做消融，--trace 99:55 逐回合印一局）
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/redLakeDiagnosis.ts --games 5000 --seed 99 --seed 4242 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel --flag evilLakeHumanStrategy \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel [--rule3 off] [--json out.json]
 ```
 
 ## 1. 自我對打方法

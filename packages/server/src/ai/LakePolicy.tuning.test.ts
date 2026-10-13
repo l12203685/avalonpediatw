@@ -202,6 +202,21 @@ describe('LakePolicy — evilLakeHumanStrategy', () => {
     expect(decideLakeClaimForTeam('evil', 'P5', notListening, 'good', ON)).toBe('good');
   });
 
+  it('chaos=frameNoHunt keeps the frame claim but never hunts a co-suspect target', () => {
+    const noHunt = { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'frameNoHunt' as const };
+    // P1 led a team without P5 / P9 but with P6 → the vouch order puts P6 first;
+    // frame hunting still goes for P5 (shared the failed R3, red listening).
+    const led: VoteRecord[] = [{
+      round: 4, attempt: 1, leader: 'P1', team: ['P1', 'P6', 'P7', 'P8', 'P2'], approved: false,
+      votes: Object.fromEntries(IDS.map((id) => [id, false])),
+    }];
+    const o = obs({ ...lastLake, voteHistory: led });
+    expect(pickEvilLakeTargetHuman(o, ['P5', 'P6', 'P9'])).toBe('P5');
+    expect(pickEvilLakeTargetHuman(o, ['P5', 'P6', 'P9'], noHunt)).toBe('P6');
+    expect(decideEvilLakeClaimHuman(lastLake, 'P5', 'good', noHunt)).toBe('evil');
+    expect(decideEvilLakeClaimHuman(lastLake, 'P6', 'good', noHunt)).toBe('good');
+  });
+
   it('tactic-mix knobs: chaos never / always', () => {
     expect(decideEvilLakeClaimHuman(lastLake, 'P5', 'good', { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'never' })).toBe('good');
     expect(decideEvilLakeClaimHuman(lastLake, 'P6', 'good', { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'always' })).toBe('evil');
@@ -253,6 +268,8 @@ describe('LakePolicy — evilLakeHumanStrategy', () => {
     expect(evilLakeHumanOptionsFromEnv({})).toEqual(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS);
     expect(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'lastLake=always,chaos=never,vouch=consistent' }))
       .toEqual({ ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, lastLake: 'always', chaos: 'never', vouch: 'consistent' });
+    expect(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'chaos=frameNoHunt,oberonTarget=teammate' }))
+      .toEqual({ ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'frameNoHunt', oberonTarget: 'teammate' });
     expect(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'oberon=legacy,lastLake=legacy,target=legacy,claim=human' }))
       .toEqual({ ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, oberon: 'legacy', lastLake: 'legacy', target: 'legacy' });
     expect(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'chaos=sometimes,foo=bar' }))

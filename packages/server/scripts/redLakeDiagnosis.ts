@@ -34,7 +34,8 @@
  *     variant's red lake back to the pre-switch rule (LakePolicy).
  *
  * `--json` writes per-seed outcomes so several runs on the same seeds can
- * be compared pairwise (difference of A−C differences).
+ * be compared pairwise (difference of A−C differences); `--trace 99:55`
+ * prints that seed's A and C games move by move (missions, lakes, 硬3).
  */
 
 import * as fs from 'fs';
@@ -72,10 +73,12 @@ interface Args {
   rule3: Rule3Mode;
   json?: string;
   label?: string;
+  /** `seed:index` pairs whose A and C games are printed move by move. */
+  trace: string[];
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { flags: {}, base: {}, games: 2000, seeds: [], rule3: 'on' };
+  const args: Args = { flags: {}, base: {}, games: 2000, seeds: [], rule3: 'on', trace: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = (): string => {
@@ -96,6 +99,7 @@ function parseArgs(argv: string[]): Args {
       }
       case '--json': args.json = next(); break;
       case '--label': args.label = next(); break;
+      case '--trace': args.trace.push(next()); break;
       case '--help': case '-h':
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         process.exit(0);
@@ -369,7 +373,36 @@ async function playGame(
   ctx.rec.threeBlue = result.threeBlue ?? false;
   ctx.rec.merlinKilled = result.merlinKilled ?? null;
   analyseGame(ctx);
+  if (traceSeeds.has(gameSeed)) traceLines.push(...traceGame(ctx, `${gameSeed} ${variantTeam === 'evil' ? 'A' : 'C'}`));
   return ctx.rec;
+}
+
+const traceSeeds = new Set<string>();
+const traceLines: string[] = [];
+
+/** Move-by-move summary of one game (approved teams, missions, lakes, 硬3 flags). */
+function traceGame(ctx: GameContext, label: string): string[] {
+  const obs = ctx.finalObs;
+  if (!obs) return [];
+  const short: Record<string, string> = { assassin: 'ass', morgana: 'mga', mordred: 'mdr', oberon: 'obe', merlin: 'mer' };
+  const tag = (id: string): string => {
+    const role = ctx.role.get(id) ?? '';
+    return `${id}${ctx.camp.get(id) === 'evil' ? `*${short[role] ?? role}` : role === 'merlin' ? '(mer)' : ''}`;
+  };
+  const out = [`── ${label}: ${ctx.rec.evilWon ? 'red' : 'blue'} wins${ctx.rec.threeBlue ? ` (three blue, Merlin ${ctx.rec.merlinKilled ? 'killed' : 'alive'})` : ''}`];
+  for (let r = 1; r <= 5; r++) {
+    const q = obs.questHistory.find((x) => x.round === r);
+    if (!q) break;
+    const props = obs.voteHistory.filter((v) => v.round === r);
+    const flags = findRule3Violators(analyzeLakeChain(truncated(obs, r)), truncated(obs, r));
+    const flagged = [...flags].filter(([, l]) => l >= 0.85).map(([id]) => tag(id));
+    out.push(`  R${r} ${props.length} proposals; mission ${q.team.map(tag).join(' ')} → ${q.result} (${q.failCount})` +
+      `${flagged.length ? `; 硬3 ≥0.85 before: ${flagged.join(' ')}` : ''}`);
+    for (const l of (obs.lakeHistory ?? []).filter((x) => x.round === r)) {
+      out.push(`     lake: ${tag(l.holderId)} → ${tag(l.targetId)} declared ${l.declaredClaim === 'good' ? 'blue' : 'red'}`);
+    }
+  }
+  return out;
 }
 
 let currentGame: GameContext | null = null;
@@ -487,6 +520,7 @@ async function main(): Promise<void> {
   const variantKnob = JSON.stringify(evilLakeOptions) === JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)
     ? 'default' : process.env.AVALON_EVIL_LAKE_HUMAN_VARIANT ?? '';
   installRule3(args.rule3);
+  for (const t of args.trace) traceSeeds.add(t.replace(':', '|'));
   const label = args.label ?? `${describeAgentTuning(variantTuning)} | rule3=${args.rule3} | lake=${variantKnob}`;
   const engine = new SelfPlayEngine();
   const started = Date.now();
@@ -527,6 +561,7 @@ async function main(): Promise<void> {
   for (const line of sideReport('A: variant red', outcomes.map((o) => o.a))) console.log(line);
   for (const line of sideReport('C: baseline red', outcomes.map((o) => o.c))) console.log(line);
   for (const line of flipReport(outcomes)) console.log(line);
+  for (const line of traceLines) console.log(line);
   console.log(`forward telemetry: ${telemetry.totalDecisions} decisions via ForwardAgent, ${telemetry.fallbacks} fallbacks`);
   if (args.json) {
     const compact = outcomes.map((o) => ({
