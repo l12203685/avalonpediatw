@@ -31,6 +31,7 @@ import {
 } from '../services/auth';
 import { getStoredToken } from '../services/socket';
 import { fetchLinkedAccounts, LinkedAccount } from '../services/api';
+import { useLoginProviders } from '../hooks/useLoginProviders';
 
 export type BindingMode = 'create' | 'join';
 
@@ -60,6 +61,8 @@ export default function BindingField({
   const [linked, setLinked] = useState<LinkedAccount[]>([]);
 
   const guest = isGuestPlayer(currentPlayer);
+  // 2026-10-13: only the OAuth flows this deployment can finish are clickable.
+  const providers = useLoginProviders();
 
   // Fetch linked accounts for the "locked" state display (primary provider label).
   useEffect(() => {
@@ -169,7 +172,8 @@ export default function BindingField({
         <button
           type="button"
           onClick={() => { void handleGoogle(); }}
-          disabled={busy !== null || !hasFirebaseAuthConfigured()}
+          disabled={busy !== null || !hasFirebaseAuthConfigured() || providers?.google !== true}
+          title={providers?.google === true ? undefined : t('gate.oauthUnavailable')}
           data-testid={`binding-field-google-${mode}`}
           className="inline-flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white text-sm font-semibold py-2 px-3 rounded border border-zinc-700 transition-colors"
         >
@@ -179,7 +183,8 @@ export default function BindingField({
         <button
           type="button"
           onClick={handleDiscord}
-          disabled={busy !== null}
+          disabled={busy !== null || providers?.discord !== true}
+          title={providers?.discord === true ? undefined : t('gate.oauthUnavailable')}
           data-testid={`binding-field-discord-${mode}`}
           className="inline-flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white text-sm font-semibold py-2 px-3 rounded transition-colors"
         >
@@ -189,7 +194,8 @@ export default function BindingField({
         <button
           type="button"
           onClick={handleLine}
-          disabled={busy !== null}
+          disabled={busy !== null || providers?.line !== true}
+          title={providers?.line === true ? undefined : t('gate.oauthUnavailable')}
           data-testid={`binding-field-line-${mode}`}
           className="inline-flex items-center justify-center gap-2 bg-[#00B900] hover:bg-[#009900] disabled:opacity-50 text-white text-sm font-semibold py-2 px-3 rounded transition-colors"
         >

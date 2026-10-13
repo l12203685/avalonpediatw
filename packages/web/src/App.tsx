@@ -36,6 +36,7 @@ import AdminEloPage from './pages/AdminEloPage';
 import HelpPage from './pages/HelpPage';
 import ToastContainer from './components/ToastContainer';
 import { submitError } from './services/api';
+import { PUBLIC_STATS_STATES, parseStatsHash, type StatsLink } from './utils/statsLinks';
 
 function App(): JSX.Element {
   const { t } = useTranslation();
@@ -43,6 +44,28 @@ function App(): JSX.Element {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [newVersionAvailable, setNewVersionAvailable] = useState(false);
+  // 2026-10-13 (players: 「統計要登入？」「看不到排行」): stats pages never wait for
+  // the session. A #stats / #player=名字 link, or the button on the loading screen,
+  // shows them right away; they also stay reachable when the guest session fails.
+  const [statsFirst, setStatsFirst] = useState<boolean>(() => parseStatsHash(window.location.hash) !== null);
+
+  useEffect(() => {
+    const open = (link: StatsLink | null): void => {
+      if (!link) return;
+      const store = useGameStore.getState();
+      if (link.kind === 'player') store.openPlayerStats(link.name);
+      else store.setGameState('analytics');
+      setStatsFirst(true);
+      // consumed: a later reload starts where the user is, not back on this link
+      try {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+      } catch { /* ignore */ }
+    };
+    open(parseStatsHash(window.location.hash));
+    const onHash = (): void => open(parseStatsHash(window.location.hash));
+    window.addEventListener('hashchange', onHash);
+    return (): void => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   // Version check poller — detects a fresh server deploy and prompts the
   // user to refresh so they don't keep running against a stale JS bundle
@@ -297,12 +320,25 @@ function App(): JSX.Element {
     }
   }, [currentPlayer, t]);
 
-  if (isLoading) {
+  const publicStatsPage = PUBLIC_STATS_STATES.has(gameState);
+
+  if (isLoading && !(statsFirst && publicStatsPage)) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-avalon-dark to-avalon-card">
+      <div className="flex items-center justify-center min-h-screen px-4 bg-gradient-to-br from-avalon-dark to-avalon-card">
         <div className="text-white text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-400 mb-4"></div>
           <p>{t('app.loading')}</p>
+          <button
+            type="button"
+            data-testid="loading-skip-to-stats"
+            onClick={() => {
+              setStatsFirst(true);
+              useGameStore.getState().setGameState('analytics');
+            }}
+            className="mt-4 text-xs text-emerald-200 underline underline-offset-2 hover:text-white"
+          >
+            {t('app.skipToStats', { defaultValue: '不用等，先看戰績排行（不用登入）' })}
+          </button>
         </div>
       </div>
     );
@@ -391,7 +427,7 @@ function App(): JSX.Element {
         )}
       </AnimatePresence>
 
-      {!isAuthenticated && !currentPlayer ? (
+      {!isAuthenticated && !currentPlayer && !publicStatsPage ? (
         // Phase C 簡化登入架構 (2026-04-23)：LoginPage 單頁登入/註冊；
         // forgot-password / reset-password 兩頁保留給忘密流程。
         gameState === 'forgotPassword' ? <ForgotPasswordPage />

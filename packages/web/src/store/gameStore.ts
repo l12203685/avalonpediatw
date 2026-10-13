@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Room, Player } from '@avalon/shared';
 
-type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends' | 'replay' | 'analysis' | 'analytics' | 'settings' | 'personalStats' | 'profileSettings' | 'claimsNew' | 'adminClaims' | 'adminAdmins' | 'adminElo' | 'adminImport' | 'help' | 'forgotPassword' | 'resetPassword';
+export type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends' | 'replay' | 'analysis' | 'analytics' | 'settings' | 'personalStats' | 'profileSettings' | 'claimsNew' | 'adminClaims' | 'adminAdmins' | 'adminElo' | 'adminImport' | 'help' | 'forgotPassword' | 'resetPassword';
 export type SocketStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 export interface Toast {
@@ -15,6 +15,12 @@ interface GameStore {
   room: Room | null;
   currentPlayer: Player | null;
   profileUserId: string | null;
+  /**
+   * 數據分析「玩家雷達」要打開的玩家 (analysis_cache 的名字)；openPlayerStats 設定，
+   * AnalyticsPage 切到該分頁並選這位。seq 每次 +1，同一位再點一次也會重新打開。
+   * 2026-10-13：不用登入就能看任何玩家的戰績頁。
+   */
+  statsFocus: { name: string; seq: number } | null;
   replayRoomId: string | null;
   toasts: Toast[];
   socketStatus: SocketStatus;
@@ -24,6 +30,8 @@ interface GameStore {
   setCurrentPlayer: (player: Player | null) => void;
   updateRoom: (room: Room) => void;
   navigateToProfile: (userId: string | 'me') => void;
+  /** 數據分析 → 分析 → 玩家雷達，選好 `name` (不需要登入)。 */
+  openPlayerStats: (name: string) => void;
   navigateToReplay: (roomId: string) => void;
   addToast: (message: string, type?: Toast['type']) => void;
   removeToast: (id: string) => void;
@@ -36,13 +44,21 @@ export const useGameStore = create<GameStore>((set) => ({
   room: null,
   currentPlayer: null,
   profileUserId: null,
+  statsFocus: null,
   replayRoomId: null,
   toasts: [],
   socketStatus: 'disconnected',
   isSpectator: false,
 
-  setGameState: (state: GameState) => set({ gameState: state }),
+  // Leaving the stats page forgets the player it was opened on (statsFocus), so the next
+  // visit from the lobby starts on 排行 again instead of that player's radar.
+  setGameState: (state: GameState) =>
+    set(state === 'analytics' || state === 'analysis' ? { gameState: state } : { gameState: state, statsFocus: null }),
   navigateToProfile: (userId) => set({ gameState: 'profile', profileUserId: userId }),
+  openPlayerStats: (name): void => set((s) => ({
+    gameState: 'analytics',
+    statsFocus: { name, seq: (s.statsFocus?.seq ?? 0) + 1 },
+  })),
   navigateToReplay: (roomId) => set({ gameState: 'replay', replayRoomId: roomId }),
   setSocketStatus: (status: SocketStatus) => set({ socketStatus: status }),
   setSpectating: (value: boolean) => set({ isSpectator: value }),

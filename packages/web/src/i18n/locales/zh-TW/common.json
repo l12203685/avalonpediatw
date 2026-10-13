@@ -5,7 +5,8 @@
     "loading": "載入中…",
     "playersRange": "5-10 人 / 即時連線對戰",
     "teamBattle": "陣營對戰",
-    "realtime": "即時連線"
+    "realtime": "即時連線",
+    "skipToStats": "不用等，先看戰績排行（不用登入）"
   },
   "language": {
     "label": "語言",
@@ -37,7 +38,12 @@
     "emailPasswordPlaceholder": "密碼（8 字以上，含英文字母與數字）",
     "emailSubmit": "Email 登入 / 註冊",
     "emailMissingFields": "信箱與密碼必填",
-    "or": "或"
+    "or": "或",
+    "statsNoLogin": "看戰績、排行與分析都不用登入。",
+    "goStats": "直接看戰績排行",
+    "oauthClosed": "LINE / Discord 登入目前未開放，可用 Email 登入。",
+    "oauthUnavailable": "目前未開放",
+    "viewPlayerStats": "看 {{name}} 的戰績（玩家雷達）"
   },
   "badge": {
     "guest": "訪客",
@@ -368,7 +374,8 @@
         "theoryEmpty": "尚無玩家達 {{games}} 場",
         "theoryPending": "排行改用角色理論勝率，下次每日更新資料後顯示",
         "finalWinRateColumn": "最終勝率",
-        "seatPositionBasis": "整體勝率與角色勝率為任務結算口徑（三藍死算藍勝）；三種結果分布見滑鼠提示"
+        "seatPositionBasis": "整體勝率與角色勝率為任務結算口徑（三藍死算藍勝）；三種結果分布見滑鼠提示",
+        "seatPositionBasisSameOutcomes": "整體勝率與角色勝率為任務結算口徑（三藍死算藍勝）。三種結果每局只有一個、10 個位置都算到，所以每個位置的分布都一樣，不分位置列出（見總覽）"
       },
       "lake": {
         "loading": "載入湖中女神分析…",
@@ -510,6 +517,7 @@
         "guideCoWinMinusLose2": "數值越大, 兩人合作效果越好.",
         "guideOutcomePair1": "數值 = 兩人共同場次中三紅 (紅方勝) 的比率 (%). 滑鼠移上去看完整三結果分布.",
         "guideOutcomePair2": "紅色 = 紅方優勢; 藍色 = 藍方優勢; 灰色 = 接近平均值.",
+        "pairGames": "共同 {{count}} 場",
         "labelHigh": "+15 以上 = 非常好",
         "labelMid": "−5 ~ +5 = 中性",
         "labelLow": "−15 以下 = 非常差",
@@ -518,7 +526,8 @@
         "labelLowPct": "30% 以下 = 低",
         "labelOutcomeHighRed": "55%+ = 紅方優勢",
         "labelOutcomeMid": "40-50% = 中性",
-        "labelOutcomeHighBlue": "35% 以下 = 藍方優勢"
+        "labelOutcomeHighBlue": "35% 以下 = 藍方優勢",
+        "labelOutcomeThin": "虛線格 = 兩人共同不到 {{n}} 場，僅供參考"
       },
       "assassination": {
         "title": "刺殺結算",
@@ -540,7 +549,7 @@
       "radar": {
         "loadingPlayers": "載入玩家資料…",
         "loadingRadar": "載入雷達圖…",
-        "search": "搜尋玩家…",
+        "search": "搜尋玩家（打名字的一部分也可以）…",
         "title": "{{name}} — 能力雷達圖",
         "details": "{{name}} — 詳細數據",
         "axes": {
@@ -588,7 +597,10 @@
           "role": "；不到 {{n}} 場的角色用全體勝率補到 {{n}} 場",
           "seat": "；不到 {{n}} 場的位置用全體勝率補到 {{n}} 場"
         },
-        "legacyNote": "角色勝率為任務結算口徑（三藍死算藍勝）"
+        "legacyNote": "角色勝率為任務結算口徑（三藍死算藍勝）",
+        "searchMany": "符合 {{count}} 位，點名字查看（按 Enter 開第一位）",
+        "searchNone": "找不到「{{query}}」，可以只打名字的一部分",
+        "searchSuggest": "找不到「{{query}}」，你是不是要找："
       }
     },
     "boards": {

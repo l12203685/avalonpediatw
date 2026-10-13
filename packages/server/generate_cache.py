@@ -154,6 +154,12 @@ DERIVED_SECTIONS = ("strength",)
 OWNER_PC_SECTIONS = ("archetype", "playstyle", "featureStudies")
 CHEMISTRY_MATRICES = ("coWin", "coLose", "winCorr", "coWinMinusLose")
 
+# Where players[].seatOutcomes and chemistry.outcomePair come from. Caches written before
+# 2026-10-13 (round 5) carry the overall 三紅/三藍死/三藍活 split projected onto every player /
+# pair (the same ~46% everywhere) and no marker; the server drops those (sheetsAnalysis.ts).
+SEAT_OUTCOMES_SOURCE_KEY = "seatOutcomesSource"
+OUTCOME_SOURCE_GAMES = "games"
+
 # Sanity guard: allowed drop vs. the existing cache = max(ABS, PCT% of it).
 SHRINK_TOLERANCE_ABS = 5
 SHRINK_TOLERANCE_PCT = 1.0
@@ -865,8 +871,11 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
 #   roleSeatStats  = "角色|座號" (座號 1..10, seat 0 written as 10) for every
 #                    role/seat the player had, in first-seen order
 #   order    = totalGames descending, ties in order of first appearance in 牌譜
-#   seatOutcomes / playerDetails: see compute_seat_outcomes_per_player and
-#                    compute_player_details
+#   seatOutcomes   = per seat, the 三紅 / 三藍死 / 三藍活 split of the player's OWN games in that
+#                    seat (compute_seat_outcomes_per_player; zeros for a seat never played);
+#                    players.seatOutcomesSource = "games" says so (older caches projected the
+#                    overall split onto every player, see projected_seat_outcomes_per_player)
+#   playerDetails  = see compute_player_details
 #
 # Two-stage fields (docs/stats/two_stage_outcome.md; appended after the fields above,
 # which keep their values):
@@ -1273,65 +1282,70 @@ def date_summary(games: list[GameRow]) -> dict[str, Any]:
 # Load chemistry matrices
 # ---------------------------------------------------------------------------
 
-def compute_outcome_pair_matrix(
-    chemistry: dict,
-    overall_outcome: dict,
-) -> dict:
-    """5th chemistry matrix: per-pair three-outcome distribution among co-wins.
+def _pair_key(name: str) -> str:
+    """Name key shared by the chemistry labels (upper-cased: ABC) and the 牌譜 names (Abc / ABC / abc)."""
+    return unicodedata.normalize("NFKC", name or "").strip().casefold()
 
-    Edward 2026-04-27 spec: the chemistry tab needs an outcome pair matrix that
-    expresses, for each player pair, the **三紅 share among the games where the
-    pair co-won**. The primary cell value (``values[i][j]``) is the inferred
-    threeRedPct so the existing colour-scale renderer keeps working; auxiliary
-    fields ``threeBlueDeadPct`` / ``threeBlueAlivePct`` ride alongside for the
-    tooltip.
 
-    Per-game co-win attribution is not currently available at this layer (the
-    Google Sheet exposes pair aggregates, not per-game). As a first-ship we
-    project the **overall outcome distribution** onto each cell: cells where
-    coWin > 0 inherit the global threeRed/threeBlueDead/threeBlueAlive split.
-    Empty / self cells stay null. When per-game pair data is wired up the
-    projection can be replaced with direct counting; the schema and frontend
-    do not need to change.
+def compute_outcome_pair_matrix(chemistry: Mapping[str, Any], games: list[GameRow]) -> dict:
+    """5th chemistry matrix: each pair's 三紅 / 三藍死 / 三藍活 split over the games they played together.
+
+    The web describes it as 「兩人共同場次三結果分布 (主值=三紅率%)」: ``values[i][j]`` is the 三紅 %
+    of the games where both the row and the column player had a seat (so the existing colour scale
+    keeps working), ``threeBlueDeadPct`` / ``threeBlueAlivePct`` ride alongside for the tooltip and
+    ``games`` is how many games that is. The matrix has the shape of ``coWin`` (its players /
+    rowLabels); a label matches every 牌譜 spelling that differs only by case / width (ABC = Abc =
+    abc). Self cells and pairs that never played together are null. ``source`` = "games".
+
+    Until 2026-10-13 (round 5) every non-empty cell held the overall split (45.5 % everywhere):
+    the Sheet only has pair aggregates, but the game log has the seats, so it is counted here.
     """
-    co_win = chemistry.get("coWin")
-    if not co_win:
-        return {"players": [], "rowLabels": [], "values": [], "threeBlueDeadPct": [], "threeBlueAlivePct": []}
+    co_win = chemistry.get("coWin") if isinstance(chemistry, Mapping) else None
+    players: list[str] = list((co_win or {}).get("players", []) or [])
+    row_labels: list[str] = list((co_win or {}).get("rowLabels") or players)
+    empty = {"players": players, "rowLabels": row_labels, "values": [], "threeBlueDeadPct": [],
+             "threeBlueAlivePct": [], "games": [], "source": OUTCOME_SOURCE_GAMES}
+    if not players:
+        return {**empty, "players": [], "rowLabels": []}
 
-    players: list[str] = list(co_win.get("players", []))
-    row_labels: list[str] = list(co_win.get("rowLabels") or players)
-    raw_values: list[list[float | None]] = list(co_win.get("values", []))
-
-    three_red_pct = float(overall_outcome.get("threeRedPct", 0) or 0)
-    three_blue_dead_pct = float(overall_outcome.get("threeBlueDeadPct", 0) or 0)
-    three_blue_alive_pct = float(overall_outcome.get("threeBlueAlivePct", 0) or 0)
+    wanted = {_pair_key(n) for n in players + row_labels}
+    pair_counts: dict[tuple[str, str], Counter] = {}
+    for g in games:
+        if g.outcome not in OUTCOMES:
+            continue
+        present = sorted({k for k in (_pair_key(n) for n in g.seat_players.values() if n) if k in wanted})
+        for i, a in enumerate(present):
+            for b in present[i + 1:]:
+                pair_counts.setdefault((a, b), Counter())[g.outcome] += 1
 
     values: list[list[float | None]] = []
     bd_matrix: list[list[float | None]] = []
     ba_matrix: list[list[float | None]] = []
-
-    for ri in range(len(raw_values)):
+    games_matrix: list[list[int | None]] = []
+    for row_label in row_labels:
+        a = _pair_key(row_label)
         row_v: list[float | None] = []
         row_bd: list[float | None] = []
         row_ba: list[float | None] = []
-        for ci in range(len(raw_values[ri])):
-            cell = raw_values[ri][ci]
-            if cell is None:
+        row_n: list[int | None] = []
+        for col_label in players:
+            b = _pair_key(col_label)
+            counts = pair_counts.get((a, b) if a < b else (b, a)) if a != b else None
+            n = sum(counts.values()) if counts else 0
+            if n == 0:
                 row_v.append(None)
                 row_bd.append(None)
                 row_ba.append(None)
+                row_n.append(None)
                 continue
-            if ri < len(row_labels) and ci < len(players) and row_labels[ri] == players[ci]:
-                row_v.append(None)
-                row_bd.append(None)
-                row_ba.append(None)
-                continue
-            row_v.append(rnd1(three_red_pct))
-            row_bd.append(rnd1(three_blue_dead_pct))
-            row_ba.append(rnd1(three_blue_alive_pct))
+            row_v.append(_rate(counts[OUTCOME_THREE_RED], n))
+            row_bd.append(_rate(counts[OUTCOME_BLUE_DEAD], n))
+            row_ba.append(_rate(counts[OUTCOME_BLUE_ALIVE], n))
+            row_n.append(n)
         values.append(row_v)
         bd_matrix.append(row_bd)
         ba_matrix.append(row_ba)
+        games_matrix.append(row_n)
 
     return {
         "players": players,
@@ -1339,6 +1353,8 @@ def compute_outcome_pair_matrix(
         "values": values,
         "threeBlueDeadPct": bd_matrix,
         "threeBlueAlivePct": ba_matrix,
+        "games": games_matrix,
+        "source": OUTCOME_SOURCE_GAMES,
     }
 
 
@@ -1487,19 +1503,59 @@ def scaled_outcome(global_outcome: Mapping[str, Any], total: int) -> dict:
     }
 
 
-def compute_seat_outcomes_per_player(
+def compute_seat_outcomes_per_player(games: list[GameRow], players: list[dict]) -> dict[str, dict[str, dict]]:
+    """players[].seatOutcomes: ``{player_name: {seat_char: OutcomeBreakdown}}`` from the player's OWN games.
+
+    For each seat (牌譜 characters 1..9, 0), the 三紅 / 三藍死 / 三藍活 counts and % of the games
+    (結果 in OUTCOMES, the games the player rows count) where the player sat there; a seat never
+    played is all zeros (_outcome_split of nothing). The site shows it in the 位置 heatmap's tooltip.
+    """
+    tallies: dict[str, dict[str, Counter]] = {}
+    for g in games:
+        if g.outcome not in OUTCOMES:
+            continue
+        for s in SEATS:
+            name = g.seat_players.get(s)
+            if name:
+                tallies.setdefault(name, {}).setdefault(s, Counter())[g.outcome] += 1
+    out: dict[str, dict[str, dict]] = {}
+    for p in players:
+        per_seat = tallies.get(p["name"], {})
+        out[p["name"]] = {s: _outcome_split_counts(per_seat.get(s, Counter())) for s in SEATS}
+    return out
+
+
+def _outcome_split_counts(counts: Mapping[str, int]) -> dict:
+    """_outcome_split for counts already tallied per 結果 (same keys, rounding and zeros)."""
+    three_red = int(counts.get(OUTCOME_THREE_RED, 0))
+    three_blue_dead = int(counts.get(OUTCOME_BLUE_DEAD, 0))
+    three_blue_alive = int(counts.get(OUTCOME_BLUE_ALIVE, 0))
+    n = three_red + three_blue_dead + three_blue_alive
+    if n == 0:
+        return _empty_outcome()
+    return {
+        "threeRed": three_red,
+        "threeBlueDead": three_blue_dead,
+        "threeBlueAlive": three_blue_alive,
+        "threeRedPct": rnd1(three_red / n * 100),
+        "threeBlueDeadPct": rnd1(three_blue_dead / n * 100),
+        "threeBlueAlivePct": rnd1(three_blue_alive / n * 100),
+    }
+
+
+def projected_seat_outcomes_per_player(
     seat_position_win_rates: list[dict],
     outcome_breakdown: Mapping[str, Any],
     players: list[dict],
 ) -> dict[str, dict[str, dict]]:
-    """players[].seatOutcomes: ``{player_name: {seat_char: OutcomeBreakdown}}``.
+    """LEGACY players[].seatOutcomes of caches without players.seatOutcomesSource (before round 5).
 
-    Reproduces the committed cache, which got this field from
-    scripts/patch_cache_3outcome.py (Edward 2026-04-27): NOT the player's own
-    games but, for every seat where the player's seatWinRates is > 0, the
-    global outcome split projected onto all games at that seat (the same for
-    every such seat and player, e.g. 1000/500/646 for 999/499/648 in 2146
-    games); zeros for the other seats (incl. seats played but never won).
+    What scripts/patch_cache_3outcome.py (Edward 2026-04-27) wrote and this script reproduced
+    until 2026-10-13: NOT the player's own games but, for every seat where the player's
+    seatWinRates is > 0, the global outcome split projected onto all games at that seat (the same
+    for every such seat and player — the 「全員 46%」 the players saw); zeros for the other seats
+    (incl. seats played but never won). Kept so the tests can still check such a cache; the
+    server drops these (sheetsAnalysis.ts) instead of serving them.
     """
     totals = {s: 0 for s in SEATS}
     for row in seat_position_win_rates:
@@ -2193,8 +2249,9 @@ def compute_rounds(games: list[GameRow]) -> dict:
 
 
 def compute_players_endpoint(players: list[dict]) -> dict:
-    """Matches GET /api/analysis/players response shape."""
-    return {"players": players, "total": len(players)}
+    """The players section: GET /api/analysis/players serves {players, total}; seatOutcomesSource
+    marks the rows' seatOutcomes as counted from their own games (compute_seat_outcomes_per_player)."""
+    return {"players": players, "total": len(players), SEAT_OUTCOMES_SOURCE_KEY: OUTCOME_SOURCE_GAMES}
 
 
 def compute_player_details(players: list[dict]) -> dict[str, dict]:
@@ -2920,13 +2977,11 @@ def build_cache(games: list[GameRow], chemistry: dict, as_of: dt.date | None = N
     players = compute_player_stats(games)
     overview = compute_overview(games, players)
 
-    # Edward 2026-04-27: extend chemistry with 5th matrix outcomePair before
-    # the players/playerDetails block so seat outcomes can also be attached.
-    chemistry["outcomePair"] = compute_outcome_pair_matrix(chemistry, overview["outcomeBreakdown"])
+    # Edward 2026-04-27: 5th chemistry matrix outcomePair and players[].seatOutcomes. Both are
+    # counted from the game log since 2026-10-13 (round 5); before, they were the overall split.
+    chemistry["outcomePair"] = compute_outcome_pair_matrix(chemistry, games)
 
-    seat_outcomes_per_player = compute_seat_outcomes_per_player(
-        overview["seatPositionWinRates"], overview["outcomeBreakdown"], players,
-    )
+    seat_outcomes_per_player = compute_seat_outcomes_per_player(games, players)
     for p in players:
         p["seatOutcomes"] = seat_outcomes_per_player.get(p["name"], {})
 

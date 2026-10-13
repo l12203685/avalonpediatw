@@ -1,4 +1,5 @@
 import { User } from '@avalon/shared';
+import { NO_OAUTH_PROVIDERS, parseLoginProviders, type LoginProviders } from '../utils/loginProviders';
 
 // Check if Firebase is configured
 const hasFirebaseConfig = !!(
@@ -73,6 +74,25 @@ export async function signUpWithEmail(email: string, password: string, displayNa
 }
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+
+// Which OAuth sign-ins this deployment can finish: see utils/loginProviders.ts.
+export type { LoginProviders } from '../utils/loginProviders';
+export { NO_OAUTH_PROVIDERS } from '../utils/loginProviders';
+
+let providersRequest: Promise<LoginProviders> | null = null;
+
+/** GET /auth/providers once per page load; on any failure every OAuth button stays hidden (retried next call). */
+export function fetchLoginProviders(): Promise<LoginProviders> {
+  if (!providersRequest) {
+    providersRequest = fetch(`${SERVER_URL}/auth/providers`)
+      .then(async (res) => (res.ok ? parseLoginProviders(await res.json(), hasFirebaseConfig) : NO_OAUTH_PROVIDERS))
+      .catch(() => {
+        providersRequest = null;
+        return NO_OAUTH_PROVIDERS;
+      });
+  }
+  return providersRequest;
+}
 
 /**
  * 取得 server-signed guest token（Plan v2 R1.0 / S10 修補）。

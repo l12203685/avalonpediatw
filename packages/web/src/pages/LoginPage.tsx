@@ -4,6 +4,7 @@ import { loginOrRegister } from '../services/auth';
 import { useGameStore } from '../store/gameStore';
 import { initializeSocket } from '../services/socket';
 import BrandHeader from '../components/BrandHeader';
+import StatsNoLoginNote from '../components/StatsNoLoginNote';
 
 /**
  * 純帳密登入頁（2026-06-25 Edward「外部協作部份全部拿掉，只保留 github；
@@ -57,6 +58,10 @@ export default function LoginPage(): JSX.Element {
             {error}
           </div>
         )}
+
+        {/* 2026-10-13: this page also shows when the guest session could not start —
+            the stats never need it (App renders them without a session). */}
+        <StatsNoLoginNote testId="login-stats-no-login" />
 
         <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-4 sm:p-6 space-y-4">
           <div>

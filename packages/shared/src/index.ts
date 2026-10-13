@@ -8,6 +8,7 @@ export * from './types/database';
 export * from './tokenUtils';
 export * from './game_v2_adapter';
 export * from './playPlatform';
+export * from './playerNameMatch';
 
 // V2 派生指標 + i18n（Phase 2b）
 export * from './derived/gameMetrics';

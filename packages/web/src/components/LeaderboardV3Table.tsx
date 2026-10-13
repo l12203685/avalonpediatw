@@ -221,7 +221,9 @@ function HelpTip({ id, label, hint }: { id: string; label: string; hint: string 
 
 export default function LeaderboardV3Table(): JSX.Element {
   const { t } = useTranslation(['leaderboard', 'common']);
-  const { navigateToProfile } = useGameStore();
+  // 2026-10-13: a row opens that player's 玩家雷達 (analysis cache, no login). The old target,
+  // ProfilePage, reads Firestore accounts — off in production, and these are 牌譜 names anyway.
+  const { openPlayerStats } = useGameStore();
 
   const [data, setData] = useState<V3Response | null>(null);
   const [loading, setLoading] = useState(true);
@@ -741,7 +743,7 @@ export default function LeaderboardV3Table(): JSX.Element {
                 <tr
                   key={e.playerId}
                   className="border-b border-gray-800 hover:bg-gray-800/40 transition-colors cursor-pointer"
-                  onClick={() => navigateToProfile(e.playerId)}
+                  onClick={() => openPlayerStats(e.playerId)}
                 >
                   <td className="py-1 pr-2 sticky left-0 bg-avalon-bg whitespace-nowrap">
                     <span className="text-gray-500 mr-1">{idx + 1}</span>

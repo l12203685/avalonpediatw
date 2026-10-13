@@ -593,13 +593,15 @@ EXPECTED_JIA = {
         "忠臣|1": {"games": 2.0, "wins": 2.0, "winRate": 100.0},
         "刺客|10": {"games": 1.0, "wins": 0.0, "winRate": 0.0},
     },
-    # Projection of the global split (1 三紅 / 1 三藍死 / 2 三藍活 of 5 games, G4 included) onto the
-    # 5 games of seat 1 -- NOT 甲's own games; zero for seat 10, played but never won there.
+    # 甲's OWN games per seat (round 5, 2026-10-13): seat 1 = G1 三紅, G2 三藍活, G5 三藍活; seat 0 (= 10)
+    # = G3 三藍死; the other seats were never played. (Until then this was the overall split projected
+    # onto seat 1's games -- 20 % / 20 % / 40 %, the same for every player.)
     "seatOutcomes": {
-        s: ({"threeRed": 1, "threeBlueDead": 1, "threeBlueAlive": 3,
-             "threeRedPct": 20.0, "threeBlueDeadPct": 20.0, "threeBlueAlivePct": 40.0}
-            if s == "1" else EMPTY_OUTCOME)
-        for s in SEAT_ORDER
+        "1": {"threeRed": 1, "threeBlueDead": 0, "threeBlueAlive": 2,
+              "threeRedPct": 33.3, "threeBlueDeadPct": 0.0, "threeBlueAlivePct": 66.7},
+        **{s: EMPTY_OUTCOME for s in SEAT_ORDER[1:-1]},
+        "0": {"threeRed": 0, "threeBlueDead": 1, "threeBlueAlive": 0,
+              "threeRedPct": 0.0, "threeBlueDeadPct": 100.0, "threeBlueAlivePct": 0.0},
     },
 }
 
@@ -834,6 +836,77 @@ def tally_from_row(row: dict) -> "gc._PlayerTally":
     return t
 
 
+class OwnOutcomesTest(unittest.TestCase):
+    """players[].seatOutcomes and chemistry.outcomePair come from the game log (round 5, 2026-10-13).
+
+    Players saw the same ~46 % (三紅 45.5 %) for everyone in the 位置 heatmap and the 三結果配對
+    matrix: both used to be the overall split projected onto every player / pair.
+    """
+
+    def setUp(self) -> None:
+        self.games = gc.parse_game_log(aggregation_log())
+        chemistry = {"coWin": {"players": ["甲", "乙", "新人"], "rowLabels": ["甲", "乙", "新人"],
+                               "values": [[None, 50.0, 100.0], [50.0, None, 100.0], [100.0, 100.0, None]]}}
+        self.cache = gc.build_cache(self.games, chemistry, as_of=TEST_AS_OF)
+        self.rows = {p["name"]: p for p in self.cache["players"]["players"]}
+
+    def test_seat_outcomes_are_each_players_own_games(self) -> None:
+        self.assertEqual(self.cache["players"][gc.SEAT_OUTCOMES_SOURCE_KEY], gc.OUTCOME_SOURCE_GAMES)
+        self.assertEqual(self.rows["甲"]["seatOutcomes"], EXPECTED_JIA["seatOutcomes"])
+        # 乙: seat 1 only in G3 (三藍死); seat 2 in G1 三紅, G2 三藍活, G5 三藍活.
+        yi = self.rows["乙"]["seatOutcomes"]
+        self.assertEqual((yi["1"]["threeRed"], yi["1"]["threeBlueDead"], yi["1"]["threeBlueAlive"]), (0, 1, 0))
+        self.assertEqual((yi["2"]["threeRed"], yi["2"]["threeBlueDead"], yi["2"]["threeBlueAlive"]), (1, 0, 2))
+        overall = {k: self.cache["overview"]["outcomeBreakdown"][k] for k in ("threeRedPct", "threeBlueDeadPct", "threeBlueAlivePct")}
+        played = [o for row in self.rows.values() for o in row["seatOutcomes"].values() if o != EMPTY_OUTCOME]
+        self.assertTrue(played)
+        self.assertNotEqual({(o["threeRedPct"], o["threeBlueDeadPct"], o["threeBlueAlivePct"]) for o in played},
+                            {tuple(overall.values())})
+        # G4 (no 結果) is not counted: 幽靈 sat in seat 1 only there.
+        self.assertNotIn("幽靈", self.rows)
+        # playerDetails rows still leave seatOutcomes out (only players.players carries it).
+        self.assertNotIn("seatOutcomes", self.cache["playerDetails"]["甲"]["player"])
+
+    def test_outcome_pair_matrix_counts_the_games_played_together(self) -> None:
+        m = self.cache["chemistry"]["outcomePair"]
+        self.assertEqual(m["source"], gc.OUTCOME_SOURCE_GAMES)
+        self.assertEqual((m["players"], m["rowLabels"]), (["甲", "乙", "新人"], ["甲", "乙", "新人"]))
+        # 甲 + 乙: G1 三紅, G2 三藍活, G3 三藍死, G5 三藍活 -> 1 / 1 / 2 of 4. 甲 or 乙 + 新人: G5 only.
+        self.assertEqual(m["values"], [[None, 25.0, 0.0], [25.0, None, 0.0], [0.0, 0.0, None]])
+        self.assertEqual(m["threeBlueDeadPct"], [[None, 25.0, 0.0], [25.0, None, 0.0], [0.0, 0.0, None]])
+        self.assertEqual(m["threeBlueAlivePct"], [[None, 50.0, 100.0], [50.0, None, 100.0], [100.0, 100.0, None]])
+        self.assertEqual(m["games"], [[None, 4, 1], [4, None, 1], [1, 1, None]])
+
+    def test_outcome_pair_labels_match_every_spelling(self) -> None:
+        """Matrix labels are upper-cased (QIX); the 牌譜 has Qix / qix / ＱＩＸ for the same label."""
+        log = [
+            LOG_HEADERS,
+            log_row("P1", "123456", "三紅", ["Qix", "Wub", "", "", "", "", "", "", "", ""]),
+            log_row("P2", "123456", "三藍活", ["qix", "wub", "", "", "", "", "", "", "", ""]),
+            log_row("P3", "123456", "三藍死", ["ＱＩＸ", "Zor", "", "", "", "", "", "", "", ""]),
+        ]
+        chemistry = {"coWin": {"players": ["QIX", "WUB", "ZOR"], "values": [[None, 1.0, 1.0]] * 3}}
+        m = gc.compute_outcome_pair_matrix(chemistry, gc.parse_game_log(log))
+        self.assertEqual(m["rowLabels"], ["QIX", "WUB", "ZOR"])  # rowLabels default to players
+        self.assertEqual(m["games"], [[None, 2, 1], [2, None, None], [1, None, None]])
+        self.assertEqual(m["values"][0], [None, 50.0, 0.0])
+        self.assertEqual(m["threeBlueAlivePct"][0], [None, 50.0, 0.0])
+        self.assertEqual(m["threeBlueDeadPct"][0], [None, 0.0, 100.0])
+
+    def test_no_chemistry_no_matrix(self) -> None:
+        m = gc.compute_outcome_pair_matrix({}, self.games)
+        self.assertEqual((m["players"], m["rowLabels"], m["values"]), ([], [], []))
+
+    def test_legacy_projection_is_the_same_for_everyone(self) -> None:
+        """What older caches hold (and the server now drops): one split for every played seat."""
+        ov = self.cache["overview"]
+        projected = gc.projected_seat_outcomes_per_player(ov["seatPositionWinRates"], ov["outcomeBreakdown"],
+                                                           list(self.rows.values()))
+        splits = {(o["threeRedPct"], o["threeBlueDeadPct"], o["threeBlueAlivePct"])
+                  for per_seat in projected.values() for o in per_seat.values() if o != EMPTY_OUTCOME}
+        self.assertEqual(len(splits), 1)
+
+
 class CommittedCachePropertyTest(unittest.TestCase):
     """The identities compute_player_stats implies hold for every players row of the committed cache.
 
@@ -1020,20 +1093,36 @@ class CommittedCachePropertyTest(unittest.TestCase):
                 yield "career.finalWinRate != finalWinRate"
         self.check_all(check)
 
-    def test_seat_outcomes_are_the_projected_global_split(self) -> None:
+    def test_seat_outcomes(self) -> None:
+        """Own games (players.seatOutcomesSource = "games", round 5) or, before, the projected overall split."""
+        if self.cache["players"].get(gc.SEAT_OUTCOMES_SOURCE_KEY) == gc.OUTCOME_SOURCE_GAMES:
+            def check(row):
+                seat_games = Counter()
+                for key, cell in row["roleSeatStats"].items():
+                    seat_games[key.partition("|")[2]] += int(cell["games"])
+                for s in SEAT_ORDER:
+                    o = row["seatOutcomes"][s]
+                    n = o["threeRed"] + o["threeBlueDead"] + o["threeBlueAlive"]
+                    if n != seat_games[gc.SEAT_LABELS[s]]:
+                        yield f"seat {s}: {n} outcomes for {seat_games[gc.SEAT_LABELS[s]]} games"
+                    elif n and (o["threeRedPct"], o["threeBlueDeadPct"], o["threeBlueAlivePct"]) != (
+                            pct(o["threeRed"], n), pct(o["threeBlueDead"], n), pct(o["threeBlueAlive"], n)):
+                        yield f"seat {s}: pcts"
+            self.check_all(check)
+            return
         overview = self.cache["overview"]
-        projected = gc.compute_seat_outcomes_per_player(
+        projected = gc.projected_seat_outcomes_per_player(
             overview["seatPositionWinRates"], overview["outcomeBreakdown"], self.rows,
         )
 
-        def check(row):
+        def check_legacy(row):
             if row["seatOutcomes"] != projected[row["name"]]:
                 yield "seatOutcomes != projection"
             for s in SEAT_ORDER:
                 played = row["seatWinRates"][s] > 0
                 if (row["seatOutcomes"][s] == EMPTY_OUTCOME) == played:
                     yield f"seat {s}: projected iff seatWinRates > 0"
-        self.check_all(check)
+        self.check_all(check_legacy)
 
     def test_order_details_and_overview(self) -> None:
         games = [r["totalGames"] for r in self.rows]
@@ -1120,7 +1209,13 @@ class RebuildReplayTest(unittest.TestCase):
         def dump(value: object) -> str:
             return json.dumps(value, ensure_ascii=False, indent=2)
 
-        players = {**cache["players"], "players": [old_fields(r) for r in cache["players"]["players"]]}
+        # seatOutcomes are the players' own games since round 5 (the rebuild projected the overall split).
+        def rebuild_fields(row: dict, committed_row: dict) -> dict:
+            return {k: (committed_row.get(k) if k == "seatOutcomes" else v) for k, v in old_fields(row).items()}
+
+        committed_rows = {r["name"]: r for r in self.committed["players"]["players"]}
+        players = {"players": [rebuild_fields(r, committed_rows.get(r["name"], {})) for r in cache["players"]["players"]],
+                   "total": cache["players"]["total"]}
         details = {n: {**d, "player": old_fields(d["player"])} for n, d in cache["playerDetails"].items()}
         self.assertEqual(dump(players), dump(self.committed["players"]))
         self.assertEqual(dump(details), dump(self.committed["playerDetails"]))

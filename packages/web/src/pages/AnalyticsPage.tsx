@@ -73,7 +73,15 @@ const ANALYSIS_TABS: AnalysisTabDef[] = [
 export default function AnalyticsPage(): JSX.Element {
   const { t } = useTranslation();
   const { setGameState } = useGameStore();
-  const [activeTab, setActiveTab] = useState<TopTab>('boards');
+  // openPlayerStats (排行的名字、#player= 連結) → 分析 → 玩家雷達，選好那位。
+  const statsFocus = useGameStore((s) => s.statsFocus);
+  const [activeTab, setActiveTab] = useState<TopTab>(() => (statsFocus ? 'analysis' : 'boards'));
+  const [seenFocus, setSeenFocus] = useState(statsFocus);
+  if (statsFocus !== seenFocus) {
+    // a new openPlayerStats while this page is open (React's "adjust state on prop change")
+    setSeenFocus(statsFocus);
+    if (statsFocus) setActiveTab('analysis');
+  }
 
   return (
     <div className="min-h-screen bg-black p-4 pb-24">
@@ -117,7 +125,7 @@ export default function AnalyticsPage(): JSX.Element {
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'boards'   && <BoardsSection />}
-            {activeTab === 'analysis' && <AnalysisSection />}
+            {activeTab === 'analysis' && <AnalysisSection focus={statsFocus} />}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -172,9 +180,14 @@ function SectionTitle({ children }: { children: ReactNode }): JSX.Element {
   );
 }
 
-function AnalysisSection(): JSX.Element {
+function AnalysisSection({ focus }: { focus: { name: string; seq: number } | null }): JSX.Element {
   const { t } = useTranslation('common');
-  const [tab, setTab] = useState<AnalysisTab>('overview');
+  const [tab, setTab] = useState<AnalysisTab>(() => (focus ? 'players' : 'overview'));
+  const [seenFocus, setSeenFocus] = useState(focus);
+  if (focus !== seenFocus) {
+    setSeenFocus(focus);
+    if (focus) setTab('players');
+  }
   const { overview } = useAnalysisOverview();
   const totalGames = overview?.totalGames;
 
@@ -218,7 +231,7 @@ function AnalysisSection(): JSX.Element {
           {tab === 'assassination' && <AssassinationTab />}
           {tab === 'position'      && <PositionTab />}
           {tab === 'roles'         && <RolesTab />}
-          {tab === 'players'       && <PlayerRadarChart />}
+          {tab === 'players'       && <PlayerRadarChart focus={focus} />}
         </motion.div>
       </AnimatePresence>
     </div>

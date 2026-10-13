@@ -71,6 +71,10 @@ const LINE_CHANNEL_ID       = process.env.LINE_CHANNEL_ID       || '';
 const LINE_CHANNEL_SECRET   = process.env.LINE_CHANNEL_SECRET   || '';
 const LINE_REDIRECT_URI     = process.env.LINE_REDIRECT_URI     ||
   'http://localhost:3001/auth/line/callback';
+// Same rule as Discord: the callback's code exchange needs the channel secret
+// too, so without both the routes answer 503 instead of sending users through
+// LINE's consent screen to a guaranteed failure (2026-10-13).
+const LINE_OAUTH_READY = LINE_CHANNEL_ID !== '' && LINE_CHANNEL_SECRET !== '';
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -573,6 +577,23 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   return res.json({ ok: true, userId: result.data.userId });
 });
 
+// ── Which sign-in methods work here ───────────────────────────
+//
+// GET /auth/providers → { discord, line, google } booleans: whether this
+// deployment can complete that OAuth flow (Discord: client id + secret; LINE:
+// channel id + secret; Google: Firebase admin). The web shows only those
+// buttons — players took the failing LINE / Discord buttons for "the stats need
+// a login" (2026-10-13). Public, read-only, no OAuth session is created.
+// Email / password login is always offered and is not listed here.
+export function loginProviders(): { discord: boolean; line: boolean; google: boolean } {
+  return { discord: DISCORD_OAUTH_READY, line: LINE_OAUTH_READY, google: isFirebaseAdminReady() };
+}
+
+router.get('/providers', (_req: Request, res: Response) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  return res.json(loginProviders());
+});
+
 // ── Discord OAuth ─────────────────────────────────────────────
 
 router.get('/discord', async (_req: Request, res: Response) => {
@@ -692,7 +713,7 @@ router.get('/discord/callback', async (req: Request, res: Response) => {
 // ── Line Login ────────────────────────────────────────────────
 
 router.get('/line', async (_req: Request, res: Response) => {
-  if (!LINE_CHANNEL_ID) {
+  if (!LINE_OAUTH_READY) {
     return res.status(503).json({ error: 'Line Login 未設定' });
   }
   const state = randomState();
@@ -826,7 +847,7 @@ router.get('/link/discord', async (req: Request, res: Response) => {
 });
 
 router.get('/link/line', async (req: Request, res: Response) => {
-  if (!LINE_CHANNEL_ID) {
+  if (!LINE_OAUTH_READY) {
     return res.status(503).json({ error: 'Line Login 未設定' });
   }
   const queryToken = (req.query.token as string | undefined) ?? undefined;
@@ -879,7 +900,7 @@ router.get('/oauth/login/discord', async (_req: Request, res: Response) => {
 });
 
 router.get('/oauth/login/line', async (_req: Request, res: Response) => {
-  if (!LINE_CHANNEL_ID) {
+  if (!LINE_OAUTH_READY) {
     return res.status(503).json({ error: 'Line Login 未設定' });
   }
   const state = randomState();

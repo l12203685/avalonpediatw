@@ -27,15 +27,31 @@ import type {
   StrengthPlayerData,
 } from '../../services/sheetsAnalysis';
 import { isTheoryBoard, theoryLastWindows } from '../../services/sheetsAnalysis';
+import { MAX_NAME_CANDIDATES, matchPlayerName, normalizeName } from '@avalon/shared';
+import type { NameMatch } from '@avalon/shared';
+
+// Name lookup lives in @avalon/shared (the website's player search uses the same rules).
+export { MAX_NAME_CANDIDATES, matchPlayerName, normalizeName };
+export type { NameMatch };
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
 /**
  * Public web app. The SPA has no URL router (pages are switched by in-memory
- * `gameState`), so there is no per-player stats URL to deep-link — replies
- * link the site and name the page (首頁 →「數據分析」) instead.
+ * `gameState`); since 2026-10-13 it reads two hash links instead, which open
+ * the stats straight away without waiting for (or needing) a login:
+ * `#stats` (數據分析) and `#player=<名字>` (that player's 玩家雷達). Players had
+ * taken the site's login screen for "the stats need a login".
  */
 export const STATS_SITE_URL = 'https://avalon-game-platform.web.app';
+
+/** 數據分析 (排行 + 分析), no login. */
+export const STATS_PAGE_URL = `${STATS_SITE_URL}/#stats`;
+
+/** One player's 玩家雷達 on the site (cache name, URL-encoded), no login. */
+export function playerStatsUrl(name: string): string {
+  return `${STATS_SITE_URL}/#player=${encodeURIComponent(name)}`;
+}
 
 /** Hard cap per reply — Discord allows 2000, LINE 5000 characters. */
 export const STATS_REPLY_MAX_CHARS = 1800;
@@ -53,9 +69,6 @@ export const DIGEST_NEWCOMERS_SIZE = 3;
  */
 export const THEORY_MIN_CELL_GAMES = 3;
 
-/** Max candidates listed when a name matches several players. */
-export const MAX_NAME_CANDIDATES = 5;
-
 /** User input echoed back is cut to this many characters. */
 const QUERY_ECHO_MAX = 20;
 
@@ -70,7 +83,7 @@ export const STATS_COMMAND_USAGE = {
   feedback: '/意見 文字',
 } as const;
 
-const SITE_FOOTER = `🔗 完整圖表：${STATS_SITE_URL}（首頁 →「數據分析」）`;
+const SITE_FOOTER = `🔗 完整圖表（不用登入）：${STATS_PAGE_URL}`;
 
 // ─── Small helpers ───────────────────────────────────────────────────────
 
@@ -113,56 +126,9 @@ export function clampReply(text: string, max: number = STATS_REPLY_MAX_CHARS): s
 }
 
 // ─── Name matching ───────────────────────────────────────────────────────
-
-/** NFKC folds full-width letters (ＨＡＯ → HAO); then case-fold. */
-export function normalizeName(s: string): string {
-  return (s ?? '').normalize('NFKC').trim().toLowerCase();
-}
-
-export type NameMatch =
-  | {
-      kind: 'found';
-      name: string;
-      /** Other names that differ only by case (the sheet has e.g. Sin / SIN / sin). */
-      caseVariants: string[];
-    }
-  | { kind: 'ambiguous'; query: string; candidates: string[]; total: number }
-  | { kind: 'none'; query: string };
-
-/**
- * Resolve a typed name against `names` (given in priority order — e.g. most
- * games first; candidate lists keep that order).
- *
- *   1. exact match
- *   2. case-insensitive (NFKC) match — one hit wins, several are ambiguous
- *   3. substring match — one hit wins, several are ambiguous
- *   4. otherwise none
- */
-export function matchPlayerName(query: string, names: readonly string[]): NameMatch {
-  const q = (query ?? '').trim();
-  if (!q) return { kind: 'none', query: '' };
-  const nq = normalizeName(q);
-
-  const sameCase = (name: string): string[] =>
-    names.filter((n) => n !== name && normalizeName(n) === normalizeName(name));
-
-  if (names.includes(q)) {
-    return { kind: 'found', name: q, caseVariants: sameCase(q) };
-  }
-
-  const ci = names.filter((n) => normalizeName(n) === nq);
-  if (ci.length === 1) return { kind: 'found', name: ci[0], caseVariants: [] };
-  if (ci.length > 1) {
-    return { kind: 'ambiguous', query: q, candidates: ci.slice(0, MAX_NAME_CANDIDATES), total: ci.length };
-  }
-
-  const sub = names.filter((n) => normalizeName(n).includes(nq));
-  if (sub.length === 1) return { kind: 'found', name: sub[0], caseVariants: [] };
-  if (sub.length > 1) {
-    return { kind: 'ambiguous', query: q, candidates: sub.slice(0, MAX_NAME_CANDIDATES), total: sub.length };
-  }
-  return { kind: 'none', query: q };
-}
+// matchPlayerName / normalizeName / NameMatch: @avalon/shared playerNameMatch.ts
+// (exact → case-insensitive → ignoring spaces → unique substring or ≤ 5
+// candidates → none with "did you mean" suggestions).
 
 /** Reply for an ambiguous / unknown name. */
 export function formatNameProblem(
@@ -184,6 +150,9 @@ export function formatNameProblem(
       ? `❓ 找不到玩家「${echoQuery(match.query)}」。`
       : '❓ 請輸入玩家名字。',
   ];
+  if (match.suggestions && match.suggestions.length > 0) {
+    lines.push(`你是不是要找：${match.suggestions.slice(0, MAX_NAME_CANDIDATES).join('、')}？`);
+  }
   if (opts.scopeNote) lines.push(opts.scopeNote);
   lines.push(`可用「${usage}」查詢（名字打一部分也可以）。`);
   return clampReply(lines.join('\n'));
@@ -346,7 +315,7 @@ export function formatPlayerCard(input: PlayerCardInput): string {
     lines.push(`ℹ️ 另有大小寫不同的玩家：${input.caseVariants.slice(0, MAX_NAME_CANDIDATES).join('、')}`);
   }
   if (theory) lines.push(theoryFootnote(input.minCellGames ?? THEORY_MIN_CELL_GAMES));
-  lines.push(SITE_FOOTER);
+  lines.push(`🔗 ${p.name} 的雷達圖與完整戰績（不用登入）：${playerStatsUrl(p.name)}`);
   return clampReply(lines.join('\n'));
 }
 

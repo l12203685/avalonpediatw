@@ -5,7 +5,8 @@
     "loading": "Loading…",
     "playersRange": "5-10 players / Real-time Online",
     "teamBattle": "Team Battle",
-    "realtime": "Real-time"
+    "realtime": "Real-time",
+    "skipToStats": "Skip — view stats now (no login needed)"
   },
   "language": {
     "label": "Language",
@@ -37,7 +38,12 @@
     "emailPasswordPlaceholder": "Password (8+ chars, letters + digits)",
     "emailSubmit": "Email login / register",
     "emailMissingFields": "Email and password are required",
-    "or": "or"
+    "or": "or",
+    "statsNoLogin": "Stats, rankings and analysis need no login.",
+    "goStats": "Go to stats",
+    "oauthClosed": "LINE / Discord login is not available right now — use email.",
+    "oauthUnavailable": "Not available right now",
+    "viewPlayerStats": "View {{name}}'s stats (player radar)"
   },
   "badge": {
     "guest": "Guest",
@@ -368,7 +374,8 @@
         "theoryEmpty": "No player has {{games}} games yet",
         "theoryPending": "The ranking is switching to the role-theory win rate; it appears after the next daily refresh",
         "finalWinRateColumn": "Final WR",
-        "seatPositionBasis": "Overall and per-role win rates use the mission-stage basis (3-Blue-killed counts as blue); hover for the outcome breakdown"
+        "seatPositionBasis": "Overall and per-role win rates use the mission-stage basis (3-Blue-killed counts as blue); hover for the outcome breakdown",
+        "seatPositionBasisSameOutcomes": "Overall and per-role win rates use the mission-stage basis (3-Blue-killed counts as blue). Each game has one outcome shared by all 10 seats, so the outcome split is the same for every seat and is not listed per seat (see Overview)"
       },
       "lake": {
         "loading": "Loading Lady of the Lake analysis…",
@@ -510,6 +517,7 @@
         "guideCoWinMinusLose2": "Higher = stronger team synergy.",
         "guideOutcomePair1": "Value = % of 3-Red outcomes in the pair's shared games. Hover for the full 3-outcome split.",
         "guideOutcomePair2": "Red = red dominance; blue = blue dominance; gray = balanced.",
+        "pairGames": "{{count}} shared games",
         "labelHigh": "+15 or above = great",
         "labelMid": "−5 to +5 = neutral",
         "labelLow": "−15 or below = poor",
@@ -518,7 +526,8 @@
         "labelLowPct": "below 30% = low",
         "labelOutcomeHighRed": "55%+ = red dominant",
         "labelOutcomeMid": "40-50% = balanced",
-        "labelOutcomeHighBlue": "below 35% = blue dominant"
+        "labelOutcomeHighBlue": "below 35% = blue dominant",
+        "labelOutcomeThin": "Dashed = fewer than {{n}} shared games, indicative only"
       },
       "assassination": {
         "title": "Assassination stage",
@@ -540,7 +549,7 @@
       "radar": {
         "loadingPlayers": "Loading players…",
         "loadingRadar": "Loading radar…",
-        "search": "Search players…",
+        "search": "Search players (part of the name works)…",
         "title": "{{name}} — Skill radar",
         "details": "{{name}} — Details",
         "axes": {
@@ -588,7 +597,10 @@
           "role": "; roles with fewer than {{n}} games are topped up to {{n}} at the population rate",
           "seat": "; seats with fewer than {{n}} games are topped up to {{n}} at the population rate"
         },
-        "legacyNote": "Role win rates use the mission-stage basis (3-Blue-killed counts as blue)"
+        "legacyNote": "Role win rates use the mission-stage basis (3-Blue-killed counts as blue)",
+        "searchMany": "{{count}} players match — pick one (Enter opens the first)",
+        "searchNone": "No player matches “{{query}}” — part of the name is enough",
+        "searchSuggest": "No player matches “{{query}}” — did you mean:"
       }
     },
     "boards": {
