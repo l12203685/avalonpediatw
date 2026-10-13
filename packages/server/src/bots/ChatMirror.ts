@@ -58,9 +58,10 @@
  *     file with the usual `[MMDD hh:mm][LINE][name]` prefix and a short
  *     label; over Discord's upload limit (or on any failure) a text note
  *     goes instead. The lobby only gets a text marker (MIRROR_MEDIA_TEXT).
- *   - Discord → LINE: `crossFanoutWithLineMedia()` queues the text line and
- *     then one LINE image message per picture on the SAME reply queue (no
- *     push). The picture is served from this server's relay store
+ *   - Discord → LINE: `relayDiscordToLine()` keeps arrival order (one chain,
+ *     one download at a time) and `crossFanoutWithLineMedia()` queues the
+ *     text line and then one LINE image message per picture on the SAME
+ *     reply queue (no push). The picture is served from this server's relay store
  *     (bots/media/relayMedia.ts); `lineMessagesFor()` turns a queued image
  *     whose copy is gone into its text note at drain time.
  *   - Never logged: chat text, names, image URLs or relay ids. SDK errors
@@ -79,7 +80,7 @@ import {
   type QueuedLineImage,
   type QueuedLineItem,
 } from './line/replyQueue';
-import { describeError, imageExtension, sniffImageType } from './media/bytes';
+import { describeError, imageExtension, raceTimeout, sniffImageType } from './media/bytes';
 import {
   DISCORD_DEFAULT_UPLOAD_BYTES,
   MEDIA_RELAY_AFTER_SEND_MS,
@@ -292,10 +293,18 @@ export type LineImageRelayOutcome =
   | 'upload-failed'
   | 'no-channel'
   | 'disabled'
-  | 'failed';
+  | 'failed'
+  | 'timeout';
 
 /** Never read more than this from LINE, whatever the Discord server allows. */
 export const LINE_IMAGE_DOWNLOAD_MAX_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Discord → LINE ordering chain (relayDiscordToLine): messages waiting
+ * before new pictures stop being copied, and the backstop per message.
+ */
+export const DISCORD_TO_LINE_MAX_WAITING = 10;
+export const DISCORD_TO_LINE_STEP_TIMEOUT_MS = 90_000;
 
 // ─── Config surface ──────────────────────────────────────────────────────
 
@@ -392,6 +401,9 @@ export class ChatMirror {
   private readonly listenBot?: ListenBotEnqueueConfig;
   private readonly lineReplyQueue?: LineReplyQueue;
   private readonly imageRelay?: { store: RelayMediaStore; publicBaseUrl: string };
+  /** Discord → LINE steps in arrival order while pictures are copied (relayDiscordToLine). */
+  private discordToLineChain: Promise<void> = Promise.resolve();
+  private discordToLineWaiting = 0;
   private readonly inboundLimiter: SocketRateLimiter;
   private readonly logger: Required<ChatMirrorConfig>['logger'];
   private lobbyIngest: LobbyIngestFn | null = null;
@@ -413,9 +425,11 @@ export class ChatMirror {
 
     this.logger = {
       warn: config.logger?.warn ?? ((m) => console.warn(`[ChatMirror] ${m}`)),
+      // Never the error object itself: SDK errors embed the request (chat text).
       error:
         config.logger?.error ??
-        ((m, err) => console.error(`[ChatMirror] ${m}`, err)),
+        ((m, err) =>
+          console.error(`[ChatMirror] ${m}${err === undefined ? '' : ` (${describeError(err)})`}`)),
       info: config.logger?.info ?? ((m) => console.log(`[ChatMirror] ${m}`)),
     };
   }
@@ -508,7 +522,8 @@ export class ChatMirror {
 
     const rlKey = `${source}:${platformUserId}`;
     if (!this.inboundLimiter.isAllowed(rlKey)) {
-      this.logger.info?.(`inbound rate-limited: ${rlKey}`);
+      // Platform only — never the user id (counts and codes only in logs).
+      this.logger.info?.(`inbound rate-limited: source=${source}`);
       return null;
     }
 
@@ -529,15 +544,6 @@ export class ChatMirror {
     }
 
     return msg;
-  }
-
-  /**
-   * True when an inbound message from this platform user would pass the
-   * rate limit right now. Does not consume a slot (used before downloading
-   * pictures, so a flood never reaches the CDN).
-   */
-  public wouldAdmitInbound(source: LobbyChatSource, platformUserId: string): boolean {
-    return this.inboundLimiter.getRemaining(`${source}:${platformUserId}`) > 0;
   }
 
   // ─── LINE reply-token drain (2026-10-08) ──────────────────────────────
@@ -587,11 +593,15 @@ export class ChatMirror {
     const messages = batch.map((item): LineOutboundMessage => {
       if (!item.image) return { type: 'text', text: item.text };
       const ids = item.image.mediaIds;
-      const live = !!store && ids.length > 0 && ids.every((id) => store.keepAlive(id, MEDIA_RELAY_AFTER_SEND_MS));
+      // Check every copy first, so a picture whose preview is gone does not
+      // pin its original for another day; those leftovers are freed.
+      const live = !!store && ids.length > 0 && ids.every((id) => store.has(id));
       if (!live) {
+        this.releaseRelayMedia(ids);
         fallbacks += 1;
         return { type: 'text', text: item.text };
       }
+      for (const id of ids) store.keepAlive(id, MEDIA_RELAY_AFTER_SEND_MS);
       images += 1;
       return { type: 'image', originalContentUrl: item.image.originalUrl, previewImageUrl: item.image.previewUrl };
     });
@@ -639,6 +649,62 @@ export class ChatMirror {
     const store = this.imageRelay?.store;
     if (!store) return;
     for (const id of ids) store.delete(id);
+  }
+
+  /**
+   * Relay an already-ingested Discord message to LINE (review fix 2026-10-13).
+   *
+   * While pictures can be copied (`lineImageRelay()` non-null, i.e. reply
+   * queue mode), every Discord → LINE step — text-only messages too — runs
+   * on ONE chain in arrival order:
+   *   - a quick text posted while an earlier picture is still downloading
+   *     waits for it, so LINE sees the messages in the order they were sent
+   *     (LINE only gets them at the next reply_token anyway);
+   *   - downloads run one at a time across all users, so at most one
+   *     picture (≤ 10 MB) is in flight however many arrive at once;
+   *   - with DISCORD_TO_LINE_MAX_WAITING messages already waiting, a new
+   *     message's pictures are not downloaded (they go as the text note).
+   * Each step is bounded by DISCORD_TO_LINE_STEP_TIMEOUT_MS so nothing can
+   * hold the chain. Without the relay (push / listen-bot / images off)
+   * nothing is downloaded and the message goes straight out as before.
+   *
+   * `media` is null for a text-only message; otherwise `prepare(relay)`
+   * copies the pictures (relay null → copy nothing) and returns the LINE
+   * image refs plus the note for whatever stays on Discord. Never rejects.
+   */
+  public relayDiscordToLine(
+    msg: LobbyChatMessage,
+    media: {
+      prepare: (
+        relay: { store: RelayMediaStore; publicBaseUrl: string } | null,
+      ) => Promise<{ images: QueuedLineImage[]; note: string | null }>;
+    } | null,
+  ): Promise<void> {
+    const relay = this.lineImageRelay();
+    const step = async (useRelay: typeof relay): Promise<void> => {
+      if (!media) {
+        await this.crossFanout(msg);
+        return;
+      }
+      const prepared = await media.prepare(useRelay);
+      await this.crossFanoutWithLineMedia(msg, prepared.images, prepared.note);
+    };
+    const failed = (err: unknown): void => {
+      this.logger.warn(`Discord → LINE relay failed (${describeError(err)})`);
+    };
+    if (!relay) return step(null).catch(failed);
+
+    const crowded = this.discordToLineWaiting >= DISCORD_TO_LINE_MAX_WAITING;
+    this.discordToLineWaiting += 1;
+    const run = this.discordToLineChain.then(() =>
+      raceTimeout(step(crowded ? null : relay).catch(failed), DISCORD_TO_LINE_STEP_TIMEOUT_MS, () => {
+        this.logger.warn('Discord → LINE relay step timed out — continuing with the next message');
+      }),
+    );
+    this.discordToLineChain = run.finally(() => {
+      this.discordToLineWaiting -= 1;
+    });
+    return this.discordToLineChain;
   }
 
   /**

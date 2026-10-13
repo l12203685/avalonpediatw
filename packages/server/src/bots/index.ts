@@ -24,8 +24,8 @@ import {
   RelayMediaStats,
   RelayMediaStore,
   createRelayMediaHandler,
-  discordUploadLimitBytes,
 } from './media/relayMedia';
+import { mirrorChannelAdapter } from './discord/mirrorChannel';
 import {
   initializeChatMirror,
   getChatMirror,
@@ -192,17 +192,8 @@ function buildDiscordAdapter(): DiscordAdapter {
       try {
         const ch = await bot.getClient().channels.fetch(channelId);
         if (!ch || !(ch instanceof TextChannel)) return null;
-        return {
-          send: async (content: string) => ch.send(content),
-          // 2026-10-13 LINE pictures: needs Attach Files in the sync channel.
-          sendFiles: async (content, files) =>
-            ch.send({
-              content,
-              files: files.map((f) => ({ attachment: f.data, name: f.name })),
-              allowedMentions: { parse: [] },
-            }),
-          maxUploadBytes: discordUploadLimitBytes(ch.guild?.premiumTier),
-        };
+        // 2026-10-13 LINE pictures (sendFiles): needs Attach Files in the sync channel.
+        return mirrorChannelAdapter(ch);
       } catch (err) {
         console.warn(`[ChatMirror] Discord fetchChannel(${channelId}) failed:`, err);
         return null;

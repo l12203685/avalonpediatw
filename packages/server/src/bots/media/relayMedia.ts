@@ -12,13 +12,18 @@
  *
  * - The id is 192 random bits (unguessable); it is never logged and never
  *   shown on /api/bots/status. Unknown, expired or malformed ids → 404.
- * - In memory only, total ≤ MEDIA_RELAY_MAX_TOTAL_BYTES (50 MB): adding past
- *   the cap evicts expired entries first, then the oldest. Each entry lives
- *   MEDIA_RELAY_TTL_MS (72 h); when a reply actually carries it, its life is
- *   extended to at least MEDIA_RELAY_AFTER_SEND_MS (24 h) from then, because
- *   LINE fetches the full image only when someone opens it.
+ * - In memory only, total ≤ MEDIA_RELAY_MAX_TOTAL_BYTES (50 MB). Each entry
+ *   lives MEDIA_RELAY_TTL_MS (72 h); when a reply actually carries it, it is
+ *   marked sent and its life is extended to at least
+ *   MEDIA_RELAY_AFTER_SEND_MS (24 h) from then, in case LINE fetches the full
+ *   image only when someone opens it. Adding past the cap evicts expired
+ *   entries first, then the oldest NOT yet sent (that picture later goes to
+ *   LINE as its text note), and only then the oldest sent one — a sent copy
+ *   that disappears would be a silently broken image in LINE.
  * - A restart empties the store (and the reply queue, which is in memory
- *   too). A queued image whose copy is gone goes out as a text note instead.
+ *   too). On Render every deploy is a restart, and the daily stats-cache
+ *   commit deploys at least once a day, so "72 h" is an upper bound. A
+ *   queued image whose copy is gone goes out as a text note instead.
  * - Free: no storage service, no paid API.
  */
 
@@ -30,9 +35,12 @@ export const MEDIA_RELAY_TTL_MS = 72 * 60 * 60 * 1000;
 export const MEDIA_RELAY_AFTER_SEND_MS = 24 * 60 * 60 * 1000;
 export const MEDIA_RELAY_MAX_TOTAL_BYTES = 50 * 1024 * 1024;
 
-/** LINE image message limits (Messaging API reference, image message object). */
-export const LINE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
-export const LINE_PREVIEW_MAX_BYTES = 1024 * 1024;
+/**
+ * LINE image message limits (Messaging API reference, image message object:
+ * original ≤ 10 MB, preview ≤ 1 MB). Decimal megabytes, the stricter reading.
+ */
+export const LINE_IMAGE_MAX_BYTES = 10_000_000;
+export const LINE_PREVIEW_MAX_BYTES = 1_000_000;
 export const LINE_IMAGE_URL_MAX_CHARS = 2000;
 
 /** Discord attachment upload limit for bots by server boost tier (2024-09 onward). */
@@ -55,6 +63,8 @@ interface Entry {
   data: Buffer;
   type: RelayImageType;
   expiresAt: number;
+  /** A reply carried this copy to LINE (keepAlive); evicted only after unsent ones. */
+  sent: boolean;
 }
 
 /** Counters for /api/bots/status — numbers only. */
@@ -95,20 +105,24 @@ export class RelayMediaStore {
 
   /**
    * Keep a copy; returns its id, or null when the item alone exceeds the
-   * total cap or is empty. Makes room by dropping expired, then oldest items.
+   * total cap or is empty. Makes room by dropping expired items, then the
+   * oldest unsent ones, then the oldest sent ones.
    */
   put(data: Buffer, type: RelayImageType): string | null {
     if (data.length === 0 || data.length > this.maxTotalBytes) return null;
     this.sweep();
-    while (this.bytes + data.length > this.maxTotalBytes && this.entries.size > 0) {
-      const oldest = this.entries.keys().next().value as string;
-      this.remove(oldest);
-      this.counters.evicted += 1;
+    for (const evictSent of [false, true]) {
+      for (const [id, e] of this.entries) {
+        if (this.bytes + data.length <= this.maxTotalBytes) break;
+        if (e.sent !== evictSent) continue;
+        this.remove(id);
+        this.counters.evicted += 1;
+      }
     }
     let id = this.newId();
     while (this.entries.has(id)) id = this.newId();
     if (!ID_RE.test(id)) throw new Error('RelayMediaStore id must be 32 url-safe characters');
-    this.entries.set(id, { data, type, expiresAt: this.now() + this.ttlMs });
+    this.entries.set(id, { data, type, expiresAt: this.now() + this.ttlMs, sent: false });
     this.bytes += data.length;
     this.counters.stored += 1;
     return id;
@@ -132,7 +146,9 @@ export class RelayMediaStore {
 
   /**
    * True when `id` is live; its expiry is moved to at least now + `minMs`
-   * (used when a reply is about to carry the URL to LINE).
+   * and it is marked sent (used when a reply is about to carry the URL to
+   * LINE). Callers check every id of an image with has() first, so a
+   * picture whose preview is gone does not pin its original.
    */
   keepAlive(id: string, minMs: number = MEDIA_RELAY_AFTER_SEND_MS): boolean {
     const e = this.entries.get(id);
@@ -144,6 +160,7 @@ export class RelayMediaStore {
       return false;
     }
     e.expiresAt = Math.max(e.expiresAt, this.now() + minMs);
+    e.sent = true;
     return true;
   }
 

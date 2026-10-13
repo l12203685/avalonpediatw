@@ -5,18 +5,24 @@
  * `handleDiscordMirrorMessage()` takes a structural slice of a discord.js
  * Message.
  *
- * Text only (no attachments / stickers): exactly the pre-2026-10-13 path —
- * ingestInbound → lobby, crossFanout → LINE reply queue.
+ * Every relayed message is first ingested (rate limit + lobby) the moment it
+ * arrives, so the lobby keeps arrival order and a rate-limited message never
+ * downloads anything. LINE then gets it through ChatMirror.relayDiscordToLine
+ * (arrival order, one download at a time across all users).
+ *
+ * Text only (no attachments / stickers): the text line, as before.
  *
  * With attachments / stickers:
- *   1. JPEG / PNG pictures ≤ 10 MB (not spoilers) are downloaded NOW from
- *      the Discord CDN — the signed link expires, and LINE may only fetch
- *      the picture hours later when the reply queue drains — and kept in the
- *      relay store (bots/media/relayMedia.ts). A picture over 1 MB also gets
- *      a ≤ 1 MB preview from Discord's media proxy (resized); no preview →
- *      the picture is not sent (LINE requires one).
- *   2. The lobby / LINE text line is the message text plus a marker
+ *   1. The lobby / LINE text line is the message text plus a marker
  *      (「（圖片）」「（圖片 ×2、檔案）」「（貼圖）」); attachment-only → marker only.
+ *   2. JPEG / PNG pictures ≤ 10 MB (not spoilers) are downloaded from the
+ *      Discord CDN when the message's turn comes (seconds, not hours) — the
+ *      signed link expires, and LINE may only fetch the picture hours later
+ *      when the reply queue drains — and kept in the relay store
+ *      (bots/media/relayMedia.ts). A picture over 1 MB also gets a ≤ 1 MB
+ *      preview from Discord's media proxy (resized); no preview → the
+ *      picture is not sent (LINE requires one). All downloads of one message
+ *      share DISCORD_TO_LINE_PREP_BUDGET_MS; what does not fit becomes the note.
  *   3. LINE gets, back to back on the reply queue: that text line, one LINE
  *      image message per prepared picture, and one note for the rest
  *      (「（Discord 有一張圖片，請到 Discord 看）」 for webp / gif / heic /
@@ -77,6 +83,8 @@ export interface DiscordMirrorDeps {
   fetchImpl?: typeof fetch;
   /** Per-download timeout (ms). */
   timeoutMs?: number;
+  /** Download budget of one message (ms). */
+  budgetMs?: number;
   logger?: { warn: (msg: string) => void };
 }
 
@@ -95,6 +103,10 @@ export const DISCORD_TO_LINE_MAX_IMAGES = 4;
 
 /** Preview sizes tried on Discord's media proxy (longest side, px). */
 export const DISCORD_PREVIEW_SIDES = [640, 320] as const;
+
+/** Per-download timeout and the total download budget of one Discord message. */
+export const DISCORD_FETCH_TIMEOUT_MS = 20_000;
+export const DISCORD_TO_LINE_PREP_BUDGET_MS = 45_000;
 
 const DISCORD_MEDIA_HOSTS = /(^|\.)(discordapp\.com|discordapp\.net|discord\.com|discord\.net)$/i;
 
@@ -163,15 +175,29 @@ export interface PreparedLineImages {
  * nothing is downloaded and every picture counts as unsent. Never throws;
  * failures only raise `unsent`.
  */
+export interface PrepareOptions {
+  fetchImpl?: typeof fetch;
+  /** Per-download timeout (default DISCORD_FETCH_TIMEOUT_MS). */
+  timeoutMs?: number;
+  /** Total budget for all downloads of this message (default DISCORD_TO_LINE_PREP_BUDGET_MS). */
+  budgetMs?: number;
+}
+
+/** A download's timeout within what is left of the message's budget; ≤ 0 → do not start it. */
+function fetchTimeout(opts: PrepareOptions, deadline: number): number {
+  return Math.min(opts.timeoutMs ?? DISCORD_FETCH_TIMEOUT_MS, deadline - Date.now());
+}
+
 export async function prepareLineImages(
   pictures: MirrorAttachmentLike[],
   relay: { store: RelayMediaStore; publicBaseUrl: string } | null,
-  opts: { fetchImpl?: typeof fetch; timeoutMs?: number } = {},
+  opts: PrepareOptions = {},
 ): Promise<PreparedLineImages> {
   const out: PreparedLineImages = { images: [], unsent: 0 };
+  const deadline = Date.now() + (opts.budgetMs ?? DISCORD_TO_LINE_PREP_BUDGET_MS);
   for (const a of pictures) {
     const room = out.images.length < DISCORD_TO_LINE_MAX_IMAGES;
-    const prepared = relay && room ? await prepareOne(a, relay, opts) : null;
+    const prepared = relay && room ? await prepareOne(a, relay, opts, deadline) : null;
     if (prepared) out.images.push(prepared);
     else out.unsent += 1;
   }
@@ -181,13 +207,16 @@ export async function prepareLineImages(
 async function prepareOne(
   a: MirrorAttachmentLike,
   relay: { store: RelayMediaStore; publicBaseUrl: string },
-  opts: { fetchImpl?: typeof fetch; timeoutMs?: number },
+  opts: PrepareOptions,
+  deadline: number,
 ): Promise<QueuedLineImage | null> {
   if (isSpoiler(a) || !declaredJpegOrPng(a)) return null;
   if (!(a.size > 0) || a.size > LINE_IMAGE_MAX_BYTES) return null;
   if (!isDiscordMediaUrl(a.url)) return null;
 
-  const original = await fetchCapped(a.url, { maxBytes: LINE_IMAGE_MAX_BYTES, fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs });
+  const timeoutMs = fetchTimeout(opts, deadline);
+  if (timeoutMs <= 0) return null;
+  const original = await fetchCapped(a.url, { maxBytes: LINE_IMAGE_MAX_BYTES, fetchImpl: opts.fetchImpl, timeoutMs });
   if (!original.ok) return null;
   const type = asRelayType(sniffImageType(original.data));
   if (!type) return null; // declared JPEG/PNG but is not — never serve it
@@ -197,7 +226,7 @@ async function prepareOne(
   let previewId = id;
   let previewType: RelayImageType = type;
   if (original.data.length > LINE_PREVIEW_MAX_BYTES) {
-    const preview = await fetchPreview(a, opts);
+    const preview = await fetchPreview(a, opts, deadline);
     const pid = preview ? relay.store.put(preview.data, preview.type) : null;
     if (!preview || !pid) {
       relay.store.delete(id);
@@ -219,12 +248,15 @@ async function prepareOne(
 
 async function fetchPreview(
   a: MirrorAttachmentLike,
-  opts: { fetchImpl?: typeof fetch; timeoutMs?: number },
+  opts: PrepareOptions,
+  deadline: number,
 ): Promise<{ data: Buffer; type: RelayImageType } | null> {
   for (const side of DISCORD_PREVIEW_SIDES) {
     const url = discordPreviewUrl(a, side);
     if (!url) return null;
-    const got = await fetchCapped(url, { maxBytes: LINE_PREVIEW_MAX_BYTES, fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs });
+    const timeoutMs = fetchTimeout(opts, deadline);
+    if (timeoutMs <= 0) return null;
+    const got = await fetchCapped(url, { maxBytes: LINE_PREVIEW_MAX_BYTES, fetchImpl: opts.fetchImpl, timeoutMs });
     if (!got.ok) continue;
     const type = asRelayType(sniffImageType(got.data));
     if (type) return { data: got.data, type };
@@ -267,35 +299,13 @@ export async function handleDiscordMirrorMessage(
     message.author.username ||
     '';
 
-  if (attachments.length === 0 && stickers === 0) {
-    const ingested = mirror.ingestInbound({
-      source: 'discord',
-      platformUserId: message.author.id,
-      displayName,
-      text: content,
-      messageId: `discord:${message.id}`,
-    });
-    if (!ingested) return 'rate-limited';
-    // Cross-push to LINE (lobby-ingest callback handles web clients).
-    mirror.crossFanout(ingested).catch(() => {
-      deps.logger?.warn('[Discord→LINE] crossFanout rejected');
-    });
-    return 'text';
-  }
-
   const pictures = attachments.filter(isImageAttachment);
   const files = attachments.length - pictures.length;
-  const marker = discordMediaMarker({ images: pictures.length, files, stickers });
-  const text = withMediaMarker(content, marker);
+  const hasMedia = attachments.length > 0 || stickers > 0;
+  const text = hasMedia ? withMediaMarker(content, discordMediaMarker({ images: pictures.length, files, stickers })) : content;
 
-  // Rate limit BEFORE downloading anything (a flood never touches the CDN).
-  if (!mirror.wouldAdmitInbound('discord', message.author.id)) return 'rate-limited';
-
-  const prepared = await prepareLineImages(pictures, mirror.lineImageRelay(), {
-    fetchImpl: deps.fetchImpl,
-    timeoutMs: deps.timeoutMs,
-  });
-
+  // Rate limit + lobby NOW, before any download: the speaker's slot is taken
+  // at arrival, so a burst of picture messages never reaches the CDN.
   const ingested = mirror.ingestInbound({
     source: 'discord',
     platformUserId: message.author.id,
@@ -303,11 +313,23 @@ export async function handleDiscordMirrorMessage(
     text,
     messageId: `discord:${message.id}`,
   });
-  if (!ingested) {
-    mirror.releaseRelayMedia(prepared.images.flatMap((i) => i.mediaIds));
-    return 'rate-limited';
-  }
-  const note = discordLeftoverNote({ images: prepared.unsent, files });
-  await mirror.crossFanoutWithLineMedia(ingested, prepared.images, note);
-  return 'media';
+  if (!ingested) return 'rate-limited';
+
+  // → LINE in arrival order (lobby-ingest callback already handled web clients).
+  await mirror.relayDiscordToLine(
+    ingested,
+    hasMedia
+      ? {
+          prepare: async (relay): Promise<{ images: QueuedLineImage[]; note: string | null }> => {
+            const prepared = await prepareLineImages(pictures, relay, {
+              fetchImpl: deps.fetchImpl,
+              timeoutMs: deps.timeoutMs,
+              budgetMs: deps.budgetMs,
+            });
+            return { images: prepared.images, note: discordLeftoverNote({ images: prepared.unsent, files }) };
+          },
+        }
+      : null,
+  );
+  return hasMedia ? 'media' : 'text';
 }

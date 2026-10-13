@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import crypto from 'crypto';
-import { Readable } from 'stream';
+import { PassThrough, Readable } from 'stream';
 import express from 'express';
 import request from 'supertest';
 import type { Client } from '@line/bot-sdk';
@@ -28,7 +28,7 @@ import {
 import { LineReplyQueue } from '../bots/line/replyQueue';
 import { LineBotClient, lineErrorMentionsImage } from '../bots/line/client';
 import { handleDiscordMirrorMessage, discordPreviewUrl, type MirrorAttachmentLike, type MirrorMessageLike } from '../bots/discord/mirrorInbound';
-import { MEDIA_RELAY_PATH, RelayMediaStore, createRelayMediaHandler } from '../bots/media/relayMedia';
+import { LINE_PREVIEW_MAX_BYTES, MEDIA_RELAY_PATH, RelayMediaStore, createRelayMediaHandler } from '../bots/media/relayMedia';
 import type { LobbyChatMessage } from '../socket/LobbyChatBuffer';
 import { buildExportRows, type RawChatMessage } from '../bots/chatExport/rows';
 import { buildBotStatus } from '../bots/index';
@@ -62,30 +62,46 @@ interface Upload {
   files: DiscordFile[];
 }
 
-function mockDiscord(opts: { maxUploadBytes?: number; uploadFails?: boolean; noFiles?: boolean } = {}): {
+function mockDiscord(opts: {
+  maxUploadBytes?: number;
+  uploadFails?: boolean;
+  noFiles?: boolean;
+  /** The first upload never settles (a hung Discord request). */
+  firstUploadHangs?: boolean;
+  noChannel?: boolean;
+} = {}): {
   adapter: DiscordAdapter;
   sent: string[];
   uploads: Upload[];
+  /** Arrival order on the channel: 'file:<body>' / 'text:<body>'. */
+  order: string[];
 } {
   const sent: string[] = [];
   const uploads: Upload[] = [];
+  const order: string[] = [];
+  let uploadCalls = 0;
+  const body = (c: string): string => c.split('] ').pop() ?? '';
   const channel: DiscordChannelAdapter = {
     send: async (content: string) => {
       sent.push(content);
+      order.push(`text:${body(content)}`);
       return {};
     },
     ...(opts.noFiles
       ? {}
       : {
           sendFiles: async (content: string, files: DiscordFile[]) => {
+            uploadCalls += 1;
+            if (opts.firstUploadHangs && uploadCalls === 1) return new Promise<never>(() => {});
             if (opts.uploadFails) throw Object.assign(new Error('Missing Permissions'), { name: 'DiscordAPIError', status: 403, code: 50013 });
             uploads.push({ content, files });
+            order.push(`file:${body(content)}`);
             return {};
           },
         }),
     ...(opts.maxUploadBytes ? { maxUploadBytes: opts.maxUploadBytes } : {}),
   };
-  return { adapter: { fetchChannel: async () => channel }, sent, uploads };
+  return { adapter: { fetchChannel: async () => (opts.noChannel ? null : channel) }, sent, uploads, order };
 }
 
 type SentLineMessage = { type: string; text?: string; originalContentUrl?: string; previewImageUrl?: string };
@@ -202,6 +218,7 @@ function setup(opts: {
   line?: Parameters<typeof mockLineSdk>[0];
   store?: RelayMediaStore | null;
   rate?: number;
+  mediaTimeouts?: { downloadMs?: number; jobMs?: number; textWaitMs?: number };
 } = {}) {
   __resetChatMirrorForTests(); // each setup() gets its own mirror (the singleton is what the bot reads)
   const discord = mockDiscord(opts.discord);
@@ -219,7 +236,7 @@ function setup(opts: {
   });
   const lobby: LobbyChatMessage[] = [];
   mirror.setLobbyIngest((m) => lobby.push(m));
-  const bot = new LineBotClient({ channelSecret: SECRET, channelAccessToken: 'tok', client: sdk.client });
+  const bot = new LineBotClient({ channelSecret: SECRET, channelAccessToken: 'tok', client: sdk.client, mediaTimeouts: opts.mediaTimeouts });
   return { mirror, discord, sdk, bot, lobby, store, queue };
 }
 
@@ -694,3 +711,220 @@ describe('marker helpers', () => {
   });
 });
 
+
+// ─── Review fixes (2026-10-13 round 3) ───────────────────────────────────
+
+/** Fetch mock that records concurrency and answers after `delayMs`. */
+function slowFetch(delayMs: number, bytes: () => Buffer): { fetchImpl: typeof fetch; calls: string[]; maxInFlight: () => number } {
+  const calls: string[] = [];
+  let inFlight = 0;
+  let max = 0;
+  const fetchImpl = (async (input: string | URL) => {
+    calls.push(String(input));
+    inFlight += 1;
+    max = Math.max(max, inFlight);
+    await new Promise((r) => setTimeout(r, delayMs));
+    inFlight -= 1;
+    return bytesResponse(bytes());
+  }) as unknown as typeof fetch;
+  return { fetchImpl, calls, maxInFlight: () => max };
+}
+
+describe('LINE → Discord: a hung platform call cannot hold later pictures', () => {
+  it('a LINE content stream that never ends times out into a note, is destroyed, and the next picture still uploads', async () => {
+    const hang = new PassThrough();
+    hang.write(jpeg(100)); // some bytes, then nothing, forever
+    const h = setup({
+      line: { content: { stuck: () => hang, next: () => Readable.from([jpeg(100)]) } },
+      mediaTimeouts: { downloadMs: 30 },
+    });
+    await postLine(h.bot, [groupEvent(imageMsg('stuck'), 'r1'), groupEvent(imageMsg('next'), 'r2')]);
+    expect(h.discord.sent).toEqual([expect.stringMatching(/（圖片沒有同步過來，請到 LINE 看）$/)]);
+    expect(h.discord.uploads).toHaveLength(1);
+    expect(hang.destroyed).toBe(true);
+    expect(h.bot.getWebhookStats()).toMatchObject({ imagesToDiscord: 1, imageNotesToDiscord: 1, imageFailures: 0 });
+    expect(logged.some((l) => l.includes('picture download timed out'))).toBe(true);
+    expectCleanLogs();
+  });
+
+  it('a LINE content request that never answers times out too', async () => {
+    const h = setup({
+      line: { content: { never: () => new Promise<never>(() => {}) as unknown as Readable, ok: () => Readable.from([jpeg(100)]) } },
+      mediaTimeouts: { downloadMs: 30 },
+    });
+    await postLine(h.bot, [groupEvent(imageMsg('never'), 'r1'), groupEvent(imageMsg('ok'), 'r2')]);
+    expect(h.discord.sent).toHaveLength(1);
+    expect(h.discord.uploads).toHaveLength(1);
+  });
+
+  it('a Discord upload that never settles is cut off by the job timeout (outcome=timeout) and the chain moves on', async () => {
+    const content = { a: () => Readable.from([jpeg(100)]), b: () => Readable.from([jpeg(100)]) };
+    const h = setup({ discord: { firstUploadHangs: true }, line: { content }, mediaTimeouts: { jobMs: 40 } });
+    await postLine(h.bot, [groupEvent(imageMsg('a'), 'r1'), groupEvent(imageMsg('b'), 'r2')]);
+    expect(h.discord.uploads).toHaveLength(1);
+    expect(h.bot.getWebhookStats()).toMatchObject({ imagesToDiscord: 1, imageFailures: 1 });
+    expect(logged.some((l) => l.includes('picture outcome=timeout'))).toBe(true);
+  });
+
+  it('no Discord channel → counted under imageFailures (not lost silently)', async () => {
+    const h = setup({ discord: { noChannel: true }, line: { content: { a: () => Readable.from([jpeg(100)]) } } });
+    await postLine(h.bot, [groupEvent(imageMsg('a'), 'r1')]);
+    expect(h.bot.getWebhookStats()).toMatchObject({ imagesToDiscord: 0, imageNotesToDiscord: 0, imageFailures: 1 });
+  });
+});
+
+describe('message order next to a picture', () => {
+  it('LINE: a text right after a picture reaches Discord after that picture', async () => {
+    const h = setup({ line: { content: { a: () => Readable.from([jpeg(100)]) } } });
+    await postLine(h.bot, [groupEvent(imageMsg('a'), 'r1'), groupEvent({ type: 'text', id: 't1', text: 'caption-after' }, 'r2')]);
+    expect(h.discord.order).toEqual(['file:（圖片）', 'text:caption-after']);
+    expect(h.lobby.map((m) => m.message)).toEqual(['（圖片）', 'caption-after']);
+  });
+
+  it('LINE: the text waits for earlier pictures at most textWaitMs, then goes anyway', async () => {
+    const h = setup({
+      discord: { firstUploadHangs: true },
+      line: { content: { a: () => Readable.from([jpeg(100)]) } },
+      mediaTimeouts: { textWaitMs: 20, jobMs: 5_000 },
+    });
+    const { req, res } = lineRequest({ destination: 'U', events: [groupEvent(imageMsg('a'), 'r1'), groupEvent({ type: 'text', id: 't1', text: 'later' }, 'r2')] });
+    await h.bot.handleWebhook(req, res);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(h.discord.order).toEqual(['text:later']);
+  });
+
+  it('LINE: with no picture pending, text goes at once exactly as before', async () => {
+    const h = setup();
+    const { req, res } = lineRequest({ destination: 'U', events: [groupEvent({ type: 'text', id: 't1', text: 'plain' }, 'r1')] });
+    await h.bot.handleWebhook(req, res);
+    await new Promise((r) => setImmediate(r));
+    expect(h.discord.order).toEqual(['text:plain']);
+  });
+
+  it('Discord: a quick text after a slowly downloading picture stays behind it on LINE; the lobby keeps arrival order', async () => {
+    const h = setup();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const fetchImpl = (async () => {
+      await gate;
+      return bytesResponse(jpeg(100));
+    }) as unknown as typeof fetch;
+    const deps = { targetChannelId: DISCORD_CH, mirror: h.mirror, fetchImpl };
+    const first = handleDiscordMirrorMessage(discordMessage({ id: 'm1', content: 'look', attachmentsList: [attachment({ key: 'a' })] }), deps);
+    const second = handleDiscordMirrorMessage(discordMessage({ id: 'm2', content: 'second-text' }), deps);
+    await new Promise((r) => setImmediate(r));
+    expect(h.lobby.map((m) => m.message)).toEqual(['look （圖片）', 'second-text']); // lobby at arrival
+    expect(h.mirror.lineReplyQueueSize()).toBe(0); // LINE waits for the picture
+    release();
+    expect(await first).toBe('media');
+    expect(await second).toBe('text');
+    const items = h.mirror.drainLineReplies(5).map((i) => (i.image ? 'IMG' : i.text.split('] ').pop()));
+    expect(items).toEqual(['look （圖片）', 'IMG', 'second-text']);
+  });
+});
+
+describe('Discord → LINE: downloads are bounded however many messages arrive at once', () => {
+  it('one speaker, 10 simultaneous picture messages, limit 5 → the slot is taken at arrival: 5 relayed, 5 refused, no download for them', async () => {
+    const h = setup({ rate: 5 });
+    const f = slowFetch(5, () => jpeg(1000));
+    const deps = { targetChannelId: DISCORD_CH, mirror: h.mirror, fetchImpl: f.fetchImpl };
+    const outcomes = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        handleDiscordMirrorMessage(discordMessage({ id: `c${i}`, attachmentsList: [attachment({ key: `k${i}` }), attachment({ key: `j${i}` })] }), deps),
+      ),
+    );
+    expect(outcomes.filter((o) => o === 'media')).toHaveLength(5);
+    expect(outcomes.filter((o) => o === 'rate-limited')).toHaveLength(5);
+    expect(f.calls).toHaveLength(10); // 5 messages × 2 pictures
+    expect(f.maxInFlight()).toBe(1);
+    expect(h.store!.stats().entries).toBe(10);
+  });
+
+  it('many speakers at once → one download at a time; past 10 waiting messages, pictures go as the note', async () => {
+    const h = setup();
+    const f = slowFetch(2, () => jpeg(500));
+    const deps = { targetChannelId: DISCORD_CH, mirror: h.mirror, fetchImpl: f.fetchImpl };
+    const outcomes = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        handleDiscordMirrorMessage(
+          discordMessage({ id: `u${i}`, author: { id: `user-${i}`, bot: false, globalName: DC_NAME }, attachmentsList: [attachment({ key: `p${i}` })] }),
+          deps,
+        ),
+      ),
+    );
+    expect(outcomes.every((o) => o === 'media')).toBe(true);
+    expect(f.maxInFlight()).toBe(1);
+    expect(f.calls).toHaveLength(10);
+    expect(h.queue.imageCount()).toBe(10);
+    const notes = [];
+    for (let i = 0; i < 10; i++) notes.push(...h.mirror.drainLineReplies(5));
+    expect(notes.filter((n) => n.text === '（Discord 有一張圖片，請到 Discord 看）' && !n.image)).toHaveLength(2);
+  });
+
+  it('a message whose download budget is used up sends its pictures as the note instead of waiting', async () => {
+    const h = setup();
+    const f = mockFetch({ 'https://cdn.discordapp.com/': () => bytesResponse(jpeg(100)) });
+    await handleDiscordMirrorMessage(discordMessage({ attachmentsList: [attachment({ key: 'x' })] }), {
+      targetChannelId: DISCORD_CH,
+      mirror: h.mirror,
+      fetchImpl: f.fetchImpl,
+      budgetMs: 0,
+    });
+    expect(f.calls).toEqual([]);
+    await drainOnce(h.bot, 'rt');
+    expect(h.sdk.replies[0].messages.map((m) => m.text)).toEqual([expect.stringMatching(/\] （圖片）$/), '（Discord 有一張圖片，請到 Discord 看）']);
+  });
+});
+
+describe('relay copies at drain time', () => {
+  it('a picture whose preview copy is gone goes as its note, and its original is freed (not pinned for a day)', async () => {
+    const h = setup();
+    const f = mockFetch({
+      'https://cdn.discordapp.com/': () => bytesResponse(jpeg(2_000_000)),
+      'https://media.discordapp.net/': () => bytesResponse(jpeg(50_000)),
+    });
+    await handleDiscordMirrorMessage(discordMessage({ attachmentsList: [attachment({ key: 'pv', size: 2_000_000 })] }), {
+      targetChannelId: DISCORD_CH,
+      mirror: h.mirror,
+      fetchImpl: f.fetchImpl,
+    });
+    const queued = h.mirror.drainLineReplies(5);
+    const ids = queued.find((i) => i.image)!.image!.mediaIds;
+    expect(ids).toHaveLength(2);
+    h.store!.delete(ids[1]); // the preview is gone
+    const out = h.mirror.lineMessagesFor(queued);
+    expect(out).toMatchObject({ images: 0, fallbacks: 1 });
+    expect(out.messages[1]).toEqual({ type: 'text', text: '（Discord 有一張圖片，請到 Discord 看）' });
+    expect(h.store!.has(ids[0])).toBe(false);
+  });
+
+  it('LINE size limits are read as decimal MB: a 1,000,500-byte picture gets its own preview', async () => {
+    expect(LINE_PREVIEW_MAX_BYTES).toBe(1_000_000);
+    const h = setup();
+    const f = mockFetch({
+      'https://cdn.discordapp.com/': () => bytesResponse(jpeg(1_000_500)),
+      'https://media.discordapp.net/': () => bytesResponse(jpeg(40_000)),
+    });
+    await handleDiscordMirrorMessage(discordMessage({ attachmentsList: [attachment({ key: 'd', size: 1_000_500 })] }), {
+      targetChannelId: DISCORD_CH,
+      mirror: h.mirror,
+      fetchImpl: f.fetchImpl,
+    });
+    expect(f.calls).toHaveLength(2);
+    const image = h.mirror.drainLineReplies(5).find((i) => i.image)!.image!;
+    expect(image.previewUrl).not.toBe(image.originalUrl);
+  });
+});
+
+describe('logs carry no ids', () => {
+  it('a rate-limited speaker is logged by platform only', async () => {
+    const h = setup({ rate: 1 });
+    const deps = { targetChannelId: DISCORD_CH, mirror: h.mirror };
+    await handleDiscordMirrorMessage(discordMessage({ id: 'r1', content: 'one' }), deps);
+    expect(await handleDiscordMirrorMessage(discordMessage({ id: 'r2', content: 'two' }), deps)).toBe('rate-limited');
+    expect(logged).toContain('inbound rate-limited: source=discord');
+    expect(logged.join('\n')).not.toContain('discord:42');
+  });
+});

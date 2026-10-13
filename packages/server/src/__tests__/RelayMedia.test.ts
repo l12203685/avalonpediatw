@@ -3,7 +3,7 @@
  * 2026-10-13) and the small byte / URL helpers behind the image sync.
  * Synthetic bytes only — no real pictures, no network.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Readable } from 'stream';
 import express from 'express';
 import request from 'supertest';
@@ -16,7 +16,9 @@ import {
   isLineImageUrl,
   relayMediaUrl,
 } from '../bots/media/relayMedia';
-import { describeError, fetchCapped, readStreamCapped, sniffImageType } from '../bots/media/bytes';
+import { describeError, fetchCapped, raceTimeout, readStreamCapped, sniffImageType } from '../bots/media/bytes';
+import { mirrorChannelAdapter, type MirrorChannelSendPayload } from '../bots/discord/mirrorChannel';
+import { ChatMirror } from '../bots/ChatMirror';
 import { resolvePublicBaseUrl } from '../bots/line/webhookEndpoint';
 import { degradeAfterFailedReply, LineReplyQueue, type QueuedLineItem } from '../bots/line/replyQueue';
 
@@ -107,6 +109,105 @@ describe('RelayMediaStore', () => {
     c.advance(1000);
     expect(store.keepAlive(id, 5000)).toBe(false);
     expect(store.keepAlive('x'.repeat(32), 5000)).toBe(false);
+  });
+
+  it('the byte cap evicts copies not yet sent before copies already sent to LINE', () => {
+    const store = new RelayMediaStore({ maxTotalBytes: 3000 });
+    const sent = store.put(jpeg(1000), 'jpeg')!;
+    store.keepAlive(sent); // a reply carried it
+    const unsentOld = store.put(jpeg(1000), 'jpeg')!;
+    const unsentNew = store.put(jpeg(1000), 'jpeg')!;
+    const newest = store.put(jpeg(1000), 'jpeg')!;
+    expect(store.has(sent)).toBe(true);
+    expect(store.has(unsentOld)).toBe(false);
+    expect(store.has(unsentNew)).toBe(true);
+    expect(store.has(newest)).toBe(true);
+  });
+
+  it('when only sent copies are left, the oldest sent one goes', () => {
+    const store = new RelayMediaStore({ maxTotalBytes: 2000 });
+    const a = store.put(jpeg(1000), 'jpeg')!;
+    const b = store.put(jpeg(1000), 'jpeg')!;
+    store.keepAlive(a);
+    store.keepAlive(b);
+    const c = store.put(jpeg(1000), 'jpeg')!;
+    expect([store.has(a), store.has(b), store.has(c)]).toEqual([false, true, true]);
+    expect(store.stats()).toMatchObject({ entries: 2, bytes: 2000, evicted: 1 });
+  });
+});
+
+describe('raceTimeout', () => {
+  it('returns the work result when it is first', async () => {
+    expect(await raceTimeout(Promise.resolve('done'), 1000, () => 'late')).toBe('done');
+  });
+
+  it('returns the fallback when the work never settles', async () => {
+    expect(await raceTimeout(new Promise<string>(() => {}), 10, () => 'timeout')).toBe('timeout');
+  });
+
+  it('passes a rejection through, and ignores one that comes after the timeout', async () => {
+    await expect(raceTimeout(Promise.reject(new Error('x')), 1000, () => 'late')).rejects.toThrow('x');
+    let rejectLate: (e: Error) => void = () => {};
+    const late = new Promise<string>((_, reject) => {
+      rejectLate = reject;
+    });
+    expect(await raceTimeout(late, 5, () => 'timeout')).toBe('timeout');
+    rejectLate(new Error('after')); // must not surface as an unhandled rejection
+    await new Promise((r) => setTimeout(r, 5));
+  });
+});
+
+describe('mirrorChannelAdapter (bots/index.ts Discord wiring)', () => {
+  function channel(premiumTier?: number | null): { ch: Parameters<typeof mirrorChannelAdapter>[0]; calls: MirrorChannelSendPayload[] } {
+    const calls: MirrorChannelSendPayload[] = [];
+    return {
+      calls,
+      ch: {
+        send: async (p: MirrorChannelSendPayload) => {
+          calls.push(p);
+          return {};
+        },
+        guild: premiumTier === undefined ? null : { premiumTier },
+      },
+    };
+  }
+
+  it('text goes as a plain string; files go as attachments with mentions disabled', async () => {
+    const { ch, calls } = channel(0);
+    const adapter = mirrorChannelAdapter(ch);
+    await adapter.send('hello');
+    const data = jpeg(10);
+    await adapter.sendFiles!('[x] （圖片）', [{ name: 'line-image.jpg', data }]);
+    expect(calls[0]).toBe('hello');
+    expect(calls[1]).toEqual({
+      content: '[x] （圖片）',
+      files: [{ attachment: data, name: 'line-image.jpg' }],
+      allowedMentions: { parse: [] },
+    });
+  });
+
+  it('upload limit follows the server boost tier (10 MB default)', () => {
+    expect(mirrorChannelAdapter(channel().ch).maxUploadBytes).toBe(10 * 1024 * 1024);
+    expect(mirrorChannelAdapter(channel(1).ch).maxUploadBytes).toBe(10 * 1024 * 1024);
+    expect(mirrorChannelAdapter(channel(2).ch).maxUploadBytes).toBe(50 * 1024 * 1024);
+    expect(mirrorChannelAdapter(channel(3).ch).maxUploadBytes).toBe(100 * 1024 * 1024);
+  });
+});
+
+describe('ChatMirror default error logger', () => {
+  it('prints a short code, never the error object or a trailing "undefined"', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const mirror = new ChatMirror();
+      mirror.setLobbyIngest(() => {
+        throw Object.assign(new Error('secret chat text'), { name: 'BoomError', code: 'E1' });
+      });
+      mirror.ingestInbound({ source: 'line', platformUserId: 'U', displayName: 'n', text: 'hi', messageId: 'x' });
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0]).toEqual(['[ChatMirror] lobbyIngest threw (BoomError code=E1)']);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

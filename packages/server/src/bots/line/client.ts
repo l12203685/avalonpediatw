@@ -23,7 +23,7 @@ import {
   MIRROR_MEDIA_TEXT,
 } from '../ChatMirror';
 import type { LobbyChatMessage } from '../../socket/LobbyChatBuffer';
-import { describeError, readStreamCapped } from '../media/bytes';
+import { describeError, raceTimeout, readStreamCapped } from '../media/bytes';
 import { answerStatsTextCommand } from '../stats/textCommands';
 import { answerFeedbackTextCommand, getFeedbackService } from '../feedback/service';
 
@@ -38,6 +38,18 @@ const LINE_SEEN_EVENT_IDS_MAX = 500;
 
 /** LINE → Discord pictures waiting for download/upload; more are skipped (counted). */
 export const LINE_MEDIA_MAX_PENDING = 20;
+/**
+ * LINE → Discord picture timeouts (review fix 2026-10-13). The bot-sdk sets
+ * no request timeout, and the picture jobs run one at a time, so without
+ * these one hung download would hold every later picture until a restart.
+ *   download — the LINE content API call plus reading its stream;
+ *   job      — download + Discord upload (or note), a backstop;
+ *   textWait — how long a LINE text / short note waits for the pictures
+ *              posted before it, so Discord keeps the LINE order.
+ */
+export const LINE_MEDIA_DOWNLOAD_TIMEOUT_MS = 30_000;
+export const LINE_MEDIA_JOB_TIMEOUT_MS = 60_000;
+export const LINE_TEXT_WAIT_FOR_PICTURES_MS = 20_000;
 /** How long an image set's admit decision is remembered (its images arrive within seconds). */
 const LINE_IMAGE_SET_TTL_MS = 10 * 60 * 1000;
 const LINE_IMAGE_SETS_MAX = 200;
@@ -91,6 +103,8 @@ export interface LineBotClientOptions {
   channelSecret?: string;
   /** Inject a pre-built SDK client (tests). */
   client?: Client;
+  /** Override the LINE → Discord picture timeouts (tests). */
+  mediaTimeouts?: { downloadMs?: number; jobMs?: number; textWaitMs?: number };
 }
 
 /** Counters surfaced on /api/bots/status — the "對帳單" for the LINE leg. */
@@ -111,6 +125,8 @@ export interface LineWebhookStats {
   imageNotesToDiscord: number;
   /** LINE pictures not relayed (rate limit or too many waiting). */
   imagesSkipped: number;
+  /** LINE pictures that reached Discord neither as a file nor as a note (no channel, post failed, timed out). */
+  imageFailures: number;
   /** Stickers / video / audio / file / location relayed as a short text. */
   mediaNotesToDiscord: number;
   /** Discord pictures delivered to LINE as image messages. */
@@ -144,6 +160,7 @@ export class LineBotClient {
     imagesToDiscord: 0,
     imageNotesToDiscord: 0,
     imagesSkipped: 0,
+    imageFailures: 0,
     mediaNotesToDiscord: 0,
     imagesToLine: 0,
     imageNotesToLine: 0,
@@ -156,12 +173,20 @@ export class LineBotClient {
   /** LINE → Discord picture jobs run one at a time (memory, order). */
   private mediaChain: Promise<void> = Promise.resolve();
   private mediaPending = 0;
+  /** Latest LINE text / note that waits for earlier pictures (settleMediaRelays). */
+  private textAfterPictures: Promise<void> = Promise.resolve();
+  private readonly mediaTimeouts: { downloadMs: number; jobMs: number; textWaitMs: number };
   /** Image-set id → whether the set was admitted (one lobby marker + rate-limit hit per set). */
   private imageSets = new Map<string, { admitted: boolean; at: number }>();
 
   constructor(opts: LineBotClientOptions = {}) {
     const channelAccessToken = opts.channelAccessToken ?? LINE_CONFIG.channelAccessToken;
     this.channelSecret = opts.channelSecret ?? LINE_CONFIG.channelSecret;
+    this.mediaTimeouts = {
+      downloadMs: opts.mediaTimeouts?.downloadMs ?? LINE_MEDIA_DOWNLOAD_TIMEOUT_MS,
+      jobMs: opts.mediaTimeouts?.jobMs ?? LINE_MEDIA_JOB_TIMEOUT_MS,
+      textWaitMs: opts.mediaTimeouts?.textWaitMs ?? LINE_TEXT_WAIT_FOR_PICTURES_MS,
+    };
 
     this.client =
       opts.client ??
@@ -280,7 +305,8 @@ export class LineBotClient {
 
       res.status(200).json({ success: true });
     } catch (error) {
-      console.error('Line Bot Webhook Error:', error);
+      // Code only: an SDK error can embed the request body (chat text).
+      console.error(`Line Bot Webhook Error (${describeError(error)})`);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -385,7 +411,7 @@ export class LineBotClient {
     try {
       return await answerStatsTextCommand(text, 'line');
     } catch (error) {
-      console.error('[LINE stats] building answer failed:', error);
+      console.error(`[LINE stats] building answer failed (${describeError(error)})`);
       return null;
     }
   }
@@ -399,7 +425,7 @@ export class LineBotClient {
     try {
       return await answerFeedbackTextCommand(text, 'line', { redelivery });
     } catch (error) {
-      console.error('[LINE feedback] handling /意見 failed:', error);
+      console.error(`[LINE feedback] handling /意見 failed (${describeError(error)})`);
       return null;
     }
   }
@@ -474,11 +500,29 @@ export class LineBotClient {
     });
 
     if (ingested) {
-      // Cross-push to Discord (lobby-ingest callback handles web clients).
-      mirror.crossFanout(ingested).catch((err) => {
-        console.warn('[LINE→Discord] crossFanout rejected:', err);
-      });
+      // Cross-push to Discord (lobby-ingest callback handles web clients),
+      // after any picture posted before it.
+      this.fanoutAfterPictures(mirror, ingested);
     }
+  }
+
+  /**
+   * crossFanout a LINE text / short note to Discord. When pictures posted
+   * before it are still being relayed, it waits for them (at most
+   * textWaitMs) so Discord shows them in the LINE order; otherwise it goes
+   * at once, exactly as before. Never throws.
+   */
+  private fanoutAfterPictures(mirror: ChatMirror, msg: LobbyChatMessage): void {
+    const send = (): Promise<void> =>
+      mirror.crossFanout(msg).catch((err) => {
+        console.warn(`[LINE→Discord] crossFanout rejected (${describeError(err)})`);
+      });
+    if (this.mediaPending === 0) {
+      void send();
+      return;
+    }
+    const sent = raceTimeout(this.mediaChain, this.mediaTimeouts.textWaitMs, () => undefined).then(send, send);
+    this.textAfterPictures = Promise.all([this.textAfterPictures, sent]).then(() => undefined);
   }
 
   /**
@@ -531,9 +575,7 @@ export class LineBotClient {
       const ingested = mirror.ingestInbound({ source: 'line', platformUserId, displayName, text: note, messageId });
       if (!ingested) return;
       this.stats.mediaNotesToDiscord += 1;
-      mirror.crossFanout(ingested).catch((err) => {
-        console.warn(`[LINE→Discord] crossFanout rejected (${describeError(err)})`);
-      });
+      this.fanoutAfterPictures(mirror, ingested);
       return;
     }
 
@@ -555,9 +597,7 @@ export class LineBotClient {
     const fromLine = message.contentProvider?.type !== 'external';
     const fetchImage = (maxBytes: number): Promise<LineImageFetch> =>
       fromLine ? this.downloadContent(message.id, maxBytes) : Promise.resolve({ ok: false, reason: 'failed' });
-    const scheduled = this.scheduleMediaJob(async () => {
-      this.countImageOutcome(await mirror.postLineImageToDiscord(relayed, fetchImage));
-    });
+    const scheduled = this.scheduleMediaJob(() => mirror.postLineImageToDiscord(relayed, fetchImage));
     if (!scheduled) this.stats.imagesSkipped += 1;
   }
 
@@ -597,27 +637,59 @@ export class LineBotClient {
     return !!ingested;
   }
 
-  /** LINE content API → bytes, stopping past `maxBytes`. Never throws. */
+  /**
+   * LINE content API → bytes, stopping past `maxBytes`. Gives up after
+   * downloadMs (the SDK has no timeout; a hung stream is destroyed). Never throws.
+   */
   private async downloadContent(lineMessageId: string, maxBytes: number): Promise<LineImageFetch> {
-    try {
-      const stream = await this.client.getMessageContent(lineMessageId);
-      const read = await readStreamCapped(stream, maxBytes);
+    let timedOut = false;
+    let stream: { destroy?: (err?: Error) => void } | null = null;
+    const work = (async (): Promise<LineImageFetch> => {
+      const s = await this.client.getMessageContent(lineMessageId);
+      stream = s;
+      if (timedOut) {
+        s.destroy();
+        return { ok: false, reason: 'failed' };
+      }
+      const read = await readStreamCapped(s, maxBytes);
       return read.ok ? read : { ok: false, reason: 'too-large' };
-    } catch (err) {
-      console.warn(`[LINE→Discord] picture download failed (${describeError(err)})`);
+    })().catch((err: unknown): LineImageFetch => {
+      if (!timedOut) console.warn(`[LINE→Discord] picture download failed (${describeError(err)})`);
       return { ok: false, reason: 'failed' };
-    }
+    });
+    return raceTimeout(work, this.mediaTimeouts.downloadMs, (): LineImageFetch => {
+      timedOut = true;
+      try {
+        (stream as { destroy?: (err?: Error) => void } | null)?.destroy?.();
+      } catch {
+        /* already closed */
+      }
+      console.warn('[LINE→Discord] picture download timed out');
+      return { ok: false, reason: 'failed' };
+    });
   }
 
-  /** Run picture jobs one at a time; false (skipped) when too many are waiting. */
-  private scheduleMediaJob(job: () => Promise<void>): boolean {
+  /**
+   * Run picture jobs one at a time; false (skipped) when too many are
+   * waiting. Each job is bounded by jobMs, so a hung upload cannot hold
+   * the chain either; its outcome is then 'timeout'.
+   */
+  private scheduleMediaJob(job: () => Promise<LineImageRelayOutcome>): boolean {
     if (this.mediaPending >= LINE_MEDIA_MAX_PENDING) return false;
     this.mediaPending += 1;
     this.mediaChain = this.mediaChain
-      .then(job)
-      .catch((err) => {
-        console.warn(`[LINE→Discord] picture relay failed (${describeError(err)})`);
-      })
+      .then(() =>
+        raceTimeout(
+          job().catch((err: unknown): LineImageRelayOutcome => {
+            console.warn(`[LINE→Discord] picture relay failed (${describeError(err)})`);
+            return 'failed';
+          }),
+          this.mediaTimeouts.jobMs,
+          (): LineImageRelayOutcome => 'timeout',
+        ),
+      )
+      .then((outcome) => this.countImageOutcome(outcome))
+      .catch(() => undefined) // the chain itself must never reject (later jobs / texts wait on it)
       .finally(() => {
         this.mediaPending -= 1;
       });
@@ -628,13 +700,16 @@ export class LineBotClient {
     if (outcome === 'uploaded') this.stats.imagesToDiscord += 1;
     else if (outcome === 'too-large' || outcome === 'download-failed' || outcome === 'upload-failed') {
       this.stats.imageNotesToDiscord += 1;
+    } else {
+      this.stats.imageFailures += 1; // no-channel / disabled / failed / timeout
     }
     if (outcome !== 'uploaded') console.log(`[LINE→Discord] picture outcome=${outcome}`);
   }
 
-  /** Resolves when every picture job scheduled so far has finished (tests, shutdown). */
-  settleMediaRelays(): Promise<void> {
-    return this.mediaChain;
+  /** Resolves when every picture job and waiting text scheduled so far has finished (tests, shutdown). */
+  async settleMediaRelays(): Promise<void> {
+    await this.mediaChain;
+    await this.textAfterPictures;
   }
 
   /**

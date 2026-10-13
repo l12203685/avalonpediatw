@@ -103,6 +103,8 @@ services:
       # 出站 LINE 走 reply_token 排隊（免費）；false = 逐則 push（吃每月免費額度）。
       - key: LINE_REPLY_DRAIN
         value: "true"
+      # 圖片同步（2026-10-13）不需要新變數：Discord → LINE 的圖從 RENDER_EXTERNAL_URL/media/relay/… 提供。
+      #   CHAT_MIRROR_IMAGES   預設開；false = Discord → LINE 的圖改送文字說明（需要時才在 Dashboard 加）
       # bot 產生的加入連結 / Discord 邀請要指回玩家前端。
       - key: WEB_BASE_URL
         value: https://avalon-game-platform.web.app

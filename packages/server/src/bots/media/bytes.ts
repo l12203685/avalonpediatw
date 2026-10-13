@@ -5,6 +5,7 @@
  *   file name or a header the sender controls.
  * - `readStreamCapped` / `fetchCapped` stop reading as soon as a download
  *   passes its byte cap, so an oversized file never sits in memory.
+ * - `raceTimeout` bounds a platform call that has no timeout of its own.
  * - `describeError` turns an SDK / HTTP error into a short code for logs.
  *   SDK errors carry the request (LINE: the reply body with chat text and
  *   image URLs; Discord: the message content), so they are never logged whole.
@@ -127,6 +128,43 @@ export async function fetchCapped(url: string, opts: FetchCappedOptions): Promis
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * `work`'s result, or `onTimeout()`'s after `ms`, whichever comes first.
+ * The timer is cleared (and never keeps the process alive); once the
+ * timeout won, a late result or rejection of `work` is ignored. Used so one
+ * hung platform call (the LINE SDK has no request timeout) can never hold a
+ * picture queue forever.
+ */
+export function raceTimeout<T>(work: Promise<T>, ms: number, onTimeout: () => T): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        resolve(onTimeout());
+      } catch (err) {
+        reject(err);
+      }
+    }, Math.max(0, ms));
+    timer.unref?.();
+    work.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
 
 /**
