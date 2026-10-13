@@ -37,6 +37,7 @@ import { LineReplyQueue } from '../bots/line/replyQueue';
 import { LineBotClient } from '../bots/line/client';
 import { handleDiscordMirrorMessage, type MirrorAttachmentLike, type MirrorMessageLike } from '../bots/discord/mirrorInbound';
 import { RelayMediaStore } from '../bots/media/relayMedia';
+import { buildExportRows, type RawChatMessage } from '../bots/chatExport/rows';
 import { LOBBY_CHAT_MAX_LEN, type LobbyChatMessage } from '../socket/LobbyChatBuffer';
 
 const GROUP = 'Cmirror-group';
@@ -561,5 +562,54 @@ describe('no loop', () => {
     await handleDiscordMirrorMessage(discordMessage(lines(100, 59), { id: 'dx' }), { targetChannelId: DISCORD_CH, mirror: h.mirror });
     expect(h.discord.sent).toHaveLength(before);
     expect(h.mirror.lineReplyQueueSize()).toBe(2); // 6000 → 2 LINE parts
+  });
+});
+
+// ─── Chat-log export ─────────────────────────────────────────────────────
+
+describe('chat-log export joins the parts', () => {
+  const SELF = 'bot-self';
+  const T0 = Date.parse('2026-10-06T12:00:00Z');
+  let seq = 0;
+  function raw(over: Partial<RawChatMessage>): RawChatMessage {
+    seq += 1;
+    return {
+      id: String(4_000_000_000_000_000_000n + BigInt(seq)),
+      channelId: DISCORD_CH,
+      createdAt: T0 + seq * 1000,
+      authorId: 'u-human',
+      authorIsBot: false,
+      authorIsSelf: false,
+      webhookId: null,
+      system: false,
+      content: '',
+      attachmentCount: 0,
+      ...over,
+    };
+  }
+  const bot = (content: string): Partial<RawChatMessage> => ({ authorId: SELF, authorIsBot: true, authorIsSelf: true, content });
+  const channels = [{ id: DISCORD_CH, name: '阿瓦隆同步', isMirror: true }];
+
+  it('one LINE row for a split message (a person speaking in between does not break it); a split /意見 stays out; an orphan part is skipped', () => {
+    const msgs = [
+      raw(bot(`${MARK}orphan tail`)),
+      raw(bot(`[1006 20:01][LINE][${LINE_NAME}] first half`)),
+      raw({ content: 'a human line' }),
+      raw(bot(`${MARK}second half`)),
+      raw(bot(`${MARK}third half`)),
+      raw(bot(`[1006 20:05][LINE][${LINE_NAME}] /意見 private`)),
+      raw(bot(`${MARK}still private`)),
+      raw({ content: `${MARK}a human typed this` }),
+    ];
+    const out = buildExportRows([...msgs].reverse(), channels, '2026-10-06');
+    const contents = out.rows.map((r) => [r[3], r[5]]);
+    expect(contents).toEqual([
+      ['LINE', 'first half ⏎ second half ⏎ third half'],
+      ['Discord', 'a human line'],
+      ['Discord', `${MARK}a human typed this`],
+    ]);
+    expect(out.skipped.command).toBe(2);
+    expect(out.skipped.bot).toBe(1);
+    expect(JSON.stringify(out.rows)).not.toContain(LINE_NAME);
   });
 });
