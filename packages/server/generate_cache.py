@@ -26,8 +26,9 @@ Where each top-level section comes from:
                               rounds, seatOrder, captainAnalysis, leaderboard (all
                               from the 牌譜 game log; players = every name in
                               玩1..玩0, see compute_player_stats; leaderboard =
-                              the dated boards of compute_leaderboard, constants
-                              in LEADERBOARD_CONFIG) and chemistry (同贏 / 同輸 /
+                              the boards of compute_leaderboard over each
+                              player's last N games, constants in
+                              LEADERBOARD_CONFIG) and chemistry (同贏 / 同輸 /
                               贏相關 / 同贏-同輸 tabs). 生涯報表 is not read.
                               The game log is 牌譜 plus, when that tab exists,
                               Discord匯入 (games discord_records_import.py
@@ -52,8 +53,8 @@ Where each top-level section comes from:
                               (annotate_feature_studies). generatedAt and
                               sampleSize.games are this run's.
 
-The as-of day (leaderboard.asOf, every board's period, featureStudies.generatedAt,
-L141's computedAt) moves on every day, so a run whose only difference from the
+The as-of day (leaderboard.asOf, who counts as active, the newcomers' period,
+featureStudies.generatedAt, L141's computedAt) moves on every day, so a run whose only difference from the
 existing file is that day writes nothing (only_the_day_changed): the workflow then
 has nothing to commit and Render does not redeploy. A 日期時間 after the as-of day
 is a typo and counts as no date (drop_dates_after; the run logs how many).
@@ -63,6 +64,12 @@ stage 三紅 vs 三藍, assassination stage settles 三藍, final result red = �
 三藍死 and blue = 三藍活. The final* / excess* player fields, overview.schemaVersion
 2 blocks and the leaderboard use the final result; every older field keeps the
 mission-stage rule (三藍死 = blue win) so no existing number changes.
+
+Theory win rates (Edward 2026-10-13, schemaVersion 3): players[].theory holds 角色理論
+(Σ deal probability × the player's final win rate per role) and 位置理論 (Σ 1/10 × final
+win rate per seat) over their last 100 / last 50 games and career (theory_window); the
+leaderboard ranks active players by them over their own last N games, never a short date
+window. The legacy roleTheory / positionTheory fields keep their old values.
 
 Safety: the new cache is checked before it replaces the old file. The write is
 refused (exit 4) if it is empty or malformed, has fewer games in total than the
@@ -104,8 +111,9 @@ import tempfile
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 try:
     import gspread
@@ -188,28 +196,37 @@ OUTCOMES = (OUTCOME_THREE_RED, OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE)
 # mission-stage rule above (三藍死 = blue win) so its numbers never change.
 FINAL_RED_OUTCOMES = (OUTCOME_THREE_RED, OUTCOME_BLUE_DEAD)
 
-# leaderboard section (docs/stats/two_stage_outcome.md): every constant lives here, the
-# TypeScript side only reads the cache. Day windows count back from asOf, asOf included.
+# Theory win rates (docs/stats/two_stage_outcome.md「理論勝率」, Edward 2026-10-13):
+#   角色理論勝率 = Σ_角色 抽到該角色的機率 × 本人該角色的最終勝率
+#   位置理論勝率 = Σ_位置 抽到該位置的機率 (1/10) × 本人該位置的最終勝率
+# The 10-player deal: 配置 names the seats of the six special roles (CONFIG_ROLE_ORDER), the
+# other four seats are 忠臣, so 忠臣 is dealt with probability 4/10 and every other role 1/10.
+# Weights in tenths so the sums stay exact (see theory_window).
+ROLE_DEAL_TENTHS = {"刺客": 1, "莫甘娜": 1, "莫德雷德": 1, "奧伯倫": 1, "派西維爾": 1, "梅林": 1, "忠臣": 4}
+SEAT_DEAL_TENTHS = {s: 1 for s in SEATS}
+
+# leaderboard section and the players' theory windows (docs/stats/two_stage_outcome.md): every
+# constant lives here, the TypeScript side only reads the cache. Owner's rule (2026-10-13):
+# the FILTER may be recent (who is active), the DATA may not be few games, so the boards use
+# each player's last N games, never a short date window (newcomers are the one exception).
 LEADERBOARD_CONFIG: dict[str, Any] = {
-    "windowDays": 365,              # main / online: games in the last N days
-    "activeDays": 90,               # main / online: must have played in the last N days
-    "minGames": 20,                 # main / online: games in the window
-    "shrinkK": 20,                  # value = excess * games / (games + shrinkK)
-    "fallbackWindowDays": [730, 0],  # main: widened to these (0 = every game) under minBoardRows
-    "minBoardRows": 5,
+    "theoryWindows": [100, 50],     # players[].theory.last100 / last50 (plus .career)
+    "theoryMinCellGames": 3,        # a role / seat with fewer games in the window is topped up to
+                                    # this many games at the population final win rate (0 = off)
+    "activeDays": 90,               # every board but newcomers: played in the last N days (asOf included)
     "topN": 10,
-    "onlineCategory": "線瓦",
-    "onlineCoverageMinPct": 60.0,   # online: only when this % of the window's games has a 分類
-    "recentDays": 90,
-    "recentMinGames": 10,
-    "improvedDays": 90,             # improved: last N days vs the improvedPriorDays before them
-    "improvedPriorDays": 275,
-    "improvedMinGames": 10,         # in each of the two spans
-    "assassinDays": 7,
-    "newcomerDays": 90,             # newcomers: first game in the last N days
-    "newcomerMinGames": 5,
-    "roleTitleMinGames": 5,         # roleTitles: previous calendar month, per role
+    "mainGames": 100,               # main: each player's last N games; needs N career games
+    "shortGames": 50,               # last50: each player's last N games; needs N career games
+    "improvedGames": 50,            # improved: last N games vs the N before them; needs 2N career games
+    "assassinAttempts": 20,         # assassin: the last N assassinations as 刺客 (刺客 games that reached 三藍)
+    "assassinMinAttempts": 10,
+    "newcomerDays": 90,             # newcomers (the exception): first game in the last N days, all their games
+    "newcomerMinGames": 10,
+    "roleTitleMinGames": 20,        # roleTitles: at least N career games in the role ...
+    "roleTitleGames": 20,           # ... scored on the last N games in it
 }
+# overview.topPlayersByExcess (kept for older readers, no longer shown): excess * games / (games + K).
+EXCESS_SHRINK_K = 20
 ENV_AS_OF = "AVALON_STATS_AS_OF"  # YYYY-MM-DD; default: today in Taiwan (+08)
 TAIPEI_TZ = dt.timezone(dt.timedelta(hours=8))
 NO_DATE_PLACEHOLDER = "1900-01-01"  # what the Sheet shows for a date that was never entered
@@ -837,8 +854,10 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
 #   roleTheory     = rnd1(sum(roleDistribution[r] * roleWinRates[r]) / 100) over
 #                    the ROUNDED values, i.e. the player's own win rate up to
 #                    rounding noise (not the 1/10-4/10 role-pick weighting of
-#                    packages/shared roleProbability.ts)
-#   positionTheory = 0.0 for everyone (the rebuild never computed it)
+#                    packages/shared roleProbability.ts). LEGACY: kept unchanged
+#                    because FirestoreLeaderboard's ELO bonus reads it; the owner's
+#                    角色理論 / 位置理論 are in `theory` (theory_window, 2026-10-13)
+#   positionTheory = 0.0 for everyone (the rebuild never computed it; legacy, see theory)
 #   roleSeatStats  = "角色|座號" (座號 1..10, seat 0 written as 10) for every
 #                    role/seat the player had, in first-seen order
 #   order    = totalGames descending, ties in order of first appearance in 牌譜
@@ -857,6 +876,8 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
 #                    using the published (1-decimal) global rates, so anyone can recompute it
 #                    from the cache alone; excessWinRate = finalWinRate - expectedFinalWinRate
 #   firstPlayed / lastPlayed = earliest / latest parsed 日期時間 of the counted games ('' if none)
+#   theory           = {"last100", "last50", "career"}: theory_window over the player's last N
+#                    games / all of them (compute_player_stats; appended after the fields above)
 
 def _rate(count: float, total: float) -> float:
     return rnd1(count / total * 100) if total else 0.0
@@ -1037,10 +1058,156 @@ def compute_role_final_win_rates(games: list[GameRow]) -> dict[str, float]:
     return {r: _rate(role_wins[r], role_games[r]) for r in ALL_ROLES}
 
 
+def compute_seat_final_win_rates(games: list[GameRow]) -> dict[str, float]:
+    """overview.seatFinalWinRates: per seat (keys "1".."10", seat 0 written as 10), the final-result
+    win % of whoever sat there, over the same seats as roleFinalWinRates."""
+    seat_games: Counter = Counter()
+    seat_wins: Counter = Counter()
+    for g in games:
+        if g.outcome not in OUTCOMES:
+            continue
+        for seat in g.seat_players:
+            role = g.seat_roles[seat]
+            seat_games[seat] += 1
+            seat_wins[seat] += 1 if is_final_win(role, g.outcome) else 0
+    return {SEAT_LABELS[s]: _rate(seat_wins[s], seat_games[s]) for s in SEATS}
+
+
+# ---------------------------------------------------------------------------
+# Theory win rates over a window of a player's own games (Edward 2026-10-13)
+# ---------------------------------------------------------------------------
+#
+#   roleTheory     = Σ_r ROLE_DEAL_TENTHS[r]/10 × w_r      (忠臣 4/10, every other role 1/10)
+#   positionTheory = Σ_s 1/10 × w_s                        (the ten seats)
+#   w = the player's FINAL win rate (is_final_win) as that role / in that seat within the window.
+#   Sparse cells: a role or seat with n < m = theoryMinCellGames games in the window counts as
+#   (wins + (m - n) × population rate) / m, the population rate being overview.roleFinalWinRates /
+#   seatFinalWinRates (the published 1-decimal values); a cell with no game is the population
+#   rate. sparseRoles / sparseSeats say how many cells were topped up.
+#   The sums are exact (fractions) and rounded once, half to even like rnd1.
+#   Windows: the player's last N games for N in theoryWindows (all of them when they have
+#   fewer; `games` says how many) and career. Games are ordered by player_timelines.
+
+@dataclass(frozen=True)
+class PlayerSeat:
+    """One player's seat in one game of their timeline."""
+    role: str
+    seat: str  # 牌譜 seat character, "0" = seat 10
+    outcome: str
+    date: str  # YYYY-MM-DD, '' if the game has no usable 日期時間
+
+
+def player_timelines(games: list[GameRow]) -> dict[str, list[PlayerSeat]]:
+    """Each player's seats in the games with a 結果 in OUTCOMES, oldest first.
+
+    Order: by 日期時間, then by position in the merged game log (牌譜 rows, then Discord匯入).
+    A game without a usable date sorts with the closest dated game above it in the log; the
+    undated rows at the top of 牌譜 (games recorded before dates were) sort before everything.
+    """
+    keyed: list[tuple[tuple[str, int], GameRow]] = []
+    last_date = ""
+    for i, g in enumerate(games):
+        if g.date:
+            last_date = g.date
+        if g.outcome in OUTCOMES:
+            keyed.append(((g.date or last_date, i), g))
+    keyed.sort(key=lambda kg: kg[0])
+    out: dict[str, list[PlayerSeat]] = {}
+    for _, g in keyed:
+        for seat in SEATS:
+            name = g.seat_players.get(seat)
+            if name:
+                out.setdefault(name, []).append(PlayerSeat(g.seat_roles[seat], seat, g.outcome, g.date))
+    return out
+
+
+def _round_exact(value: Fraction) -> float:
+    """rnd1 for an exact fraction: one decimal, ties to even."""
+    return round(value * 10) / 10
+
+
+def _cell_rate(wins: int, games: int, population: float, min_games: int) -> Fraction:
+    """Win % of one role / seat cell, topped up to `min_games` games at the population rate."""
+    m = max(min_games, 1)
+    if games >= m:
+        return Fraction(100 * wins, games)
+    return (Fraction(100 * wins) + (m - games) * Fraction(str(population))) / m
+
+
+def theory_window(
+    seats: Sequence[PlayerSeat], role_rates: Mapping[str, float], seat_rates: Mapping[str, float],
+    min_cell: int | None = None, window: int = 0,
+) -> dict:
+    """roleTheory / positionTheory / finalWinRate of these seats (see the block comment).
+
+    `seat_rates` are keyed "1".."10" like overview.seatFinalWinRates; `window` is written as
+    is (0 = career). `from` / `to` are the first / last dated game of the window ('' if none).
+    """
+    if min_cell is None:
+        min_cell = LEADERBOARD_CONFIG["theoryMinCellGames"]
+    role_games: Counter = Counter()
+    role_wins: Counter = Counter()
+    seat_games: Counter = Counter()
+    seat_wins: Counter = Counter()
+    wins = 0
+    for s in seats:
+        w = 1 if is_final_win(s.role, s.outcome) else 0
+        wins += w
+        role_games[s.role] += 1
+        role_wins[s.role] += w
+        seat_games[s.seat] += 1
+        seat_wins[s.seat] += w
+    role_theory = sum(
+        (Fraction(ROLE_DEAL_TENTHS[r], 10) * _cell_rate(role_wins[r], role_games[r], float(role_rates.get(r, 0.0)), min_cell)
+         for r in ALL_ROLES),
+        Fraction(0),
+    )
+    position_theory = sum(
+        (Fraction(SEAT_DEAL_TENTHS[s], 10)
+         * _cell_rate(seat_wins[s], seat_games[s], float(seat_rates.get(SEAT_LABELS[s], 0.0)), min_cell)
+         for s in SEATS),
+        Fraction(0),
+    )
+    dated = [s.date for s in seats if s.date]
+    m = max(min_cell, 1)
+    return {
+        "window": window,
+        "games": len(seats),
+        "roleTheory": _round_exact(role_theory),
+        "positionTheory": _round_exact(position_theory),
+        "finalWinRate": _rate(wins, len(seats)),
+        "from": min(dated) if dated else "",
+        "to": max(dated) if dated else "",
+        "sparseRoles": sum(1 for r in ALL_ROLES if role_games[r] < m),
+        "sparseSeats": sum(1 for s in SEATS if seat_games[s] < m),
+    }
+
+
+def theory_key(window: int) -> str:
+    """players[].theory key of a last-N window: 100 -> "last100"."""
+    return f"last{window}"
+
+
+def player_theory(seats: Sequence[PlayerSeat], role_rates: Mapping[str, float], seat_rates: Mapping[str, float]) -> dict:
+    """players[].theory: {"last100": ..., "last50": ..., "career": ...} (theoryWindows, then career)."""
+    out = {
+        theory_key(n): theory_window(seats[-n:], role_rates, seat_rates, window=n)
+        for n in LEADERBOARD_CONFIG["theoryWindows"]
+    }
+    out["career"] = theory_window(seats, role_rates, seat_rates, window=0)
+    return out
+
+
 def compute_player_stats(games: list[GameRow]) -> list[dict]:
-    """players.players rows (without seatOutcomes) from the game log."""
+    """players.players rows (without seatOutcomes) from the game log; `theory` comes last."""
     role_final_rates = compute_role_final_win_rates(games)
-    rows = [t.to_row(name, role_final_rates) for name, t in _player_tallies(games).items()]
+    seat_final_rates = compute_seat_final_win_rates(games)
+    timelines = player_timelines(games)
+    rows = []
+    for name, t in _player_tallies(games).items():
+        row = t.to_row(name, role_final_rates)
+        row["theory"] = player_theory(timelines.get(name, []), role_final_rates, seat_final_rates)
+        rows.append(row)
     rows.sort(key=lambda r: -r["totalGames"])  # stable: ties keep first-appearance order
     return rows
 
@@ -1348,7 +1515,7 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
     settled = three_red + three_blue_dead + three_blue_alive
     three_blue = three_blue_dead + three_blue_alive
     final_red = three_red + three_blue_dead
-    shrink_k = LEADERBOARD_CONFIG["shrinkK"]
+    shrink_k = EXCESS_SHRINK_K
     ranked_by_excess = [p for p in significant if isinstance(p.get("excessWinRate"), (int, float))]
     ranked_by_excess.sort(
         key=lambda p: (-shrunk_excess(p["excessWinRate"], p["totalGames"], shrink_k), -p["totalGames"], p["name"])
@@ -1379,8 +1546,9 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
         # Seat position win rates (replaces useless per-role win rate comparison)
         "seatPositionWinRates": compute_seat_position_win_rates(games),
         # Two-stage outcome (docs/stats/two_stage_outcome.md). The keys above keep the
-        # mission-stage rule (三藍死 = blue win); these use the final result.
-        "schemaVersion": 2,
+        # mission-stage rule (三藍死 = blue win); these use the final result. 3 = the theory
+        # win rates (players[].theory, seatFinalWinRates, topPlayersByRoleTheory, leaderboard).
+        "schemaVersion": 3,
         "missionStage": {
             "games": settled, "threeRed": three_red, "threeBlue": three_blue,
             "redPct": _rate(three_red, settled), "bluePct": _rate(three_blue, settled),
@@ -1395,13 +1563,35 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
         },
         "roleFinalWinRates": compute_role_final_win_rates(games),
         # Same >= MIN_GAMES_THRESHOLD cut as topPlayersByTheory; ordered by the shrunk excess
-        # (excess * games / (games + shrinkK)), the value shown is the plain excess.
+        # (excess * games / (games + EXCESS_SHRINK_K)), the value shown is the plain excess.
+        # Kept for older readers; the site and the bots no longer show it (2026-10-13).
         "topPlayersByExcess": [
             {"name": p["name"], "excessWinRate": p["excessWinRate"], "finalWinRate": p["finalWinRate"],
              "expectedFinalWinRate": p["expectedFinalWinRate"], "games": p["totalGames"]}
             for p in ranked_by_excess[:10]
         ],
+        # schemaVersion 3 (theory win rates, Edward 2026-10-13): the population final win rate per
+        # seat (the sparse-cell top-up of positionTheory) and the all-time role-theory ranking.
+        "seatFinalWinRates": compute_seat_final_win_rates(games),
+        "topPlayersByRoleTheory": top_players_by_role_theory(players),
     }
+
+
+def top_players_by_role_theory(players: list[dict]) -> list[dict]:
+    """overview.topPlayersByRoleTheory: every player with at least mainGames career games, active
+    or not, ranked by the roleTheory of their last mainGames games (then career games, then name)."""
+    n = LEADERBOARD_CONFIG["mainGames"]
+    key = theory_key(n)
+    eligible = [
+        p for p in players
+        if p["totalGames"] >= n and isinstance((p.get("theory") or {}).get(key), Mapping)
+    ]
+    eligible.sort(key=lambda p: (-p["theory"][key]["roleTheory"], -p["totalGames"], p["name"]))
+    return [
+        {"name": p["name"], "roleTheory": w["roleTheory"], "positionTheory": w["positionTheory"],
+         "finalWinRate": w["finalWinRate"], "games": w["games"], "careerGames": int(p["totalGames"])}
+        for p, w in ((p, p["theory"][key]) for p in eligible[:LEADERBOARD_CONFIG["topN"]])
+    ]
 
 
 def compute_missions(games: list[GameRow]) -> dict:
@@ -2161,272 +2351,202 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Leaderboard: time-windowed boards on the final result (docs/stats/two_stage_outcome.md)
+# Leaderboard: theory win rates over each player's last N games (docs/stats/two_stage_outcome.md)
 # ---------------------------------------------------------------------------
 #
-# Every constant is in LEADERBOARD_CONFIG; the TypeScript side only reads the cache.
-# A window of N days is [asOf - N + 1, asOf]; windowDays 0 means every game, dated or
-# not (全期). A game without a parsed 日期時間 is in no dated window (dates.unparsed
-# counts them). Only games whose 結果 is in OUTCOMES count, like the players rows, and
-# a player is the normalized 玩1..玩0 string (case kept, as everywhere else).
-# value = the board's sort key. For main / online / recent / newcomers it is the
-# excess win rate shrunk towards 0 (excess * games / (games + shrinkK)); the excess
-# itself is finalWinRate - expectedFinalWinRate inside the window, the expectation
-# weighting the player's role mix in the window by overview.roleFinalWinRates (all
-# games, so a short window does not change what a role is "worth").
-
-class _SpanTally:
-    """One player's games inside one date span."""
-
-    __slots__ = (
-        "games", "final_wins", "role_games", "role_final_wins",
-        "assassin_attempts", "assassin_hits", "first_date", "last_date", "undated",
-    )
-
-    def __init__(self) -> None:
-        self.games = 0
-        self.final_wins = 0
-        self.role_games: Counter = Counter()
-        self.role_final_wins: Counter = Counter()
-        self.assassin_attempts = 0  # 刺客 games that reached 三藍 (an assassination happened)
-        self.assassin_hits = 0  # ... and ended 三藍死
-        self.first_date = ""
-        self.last_date = ""
-        self.undated = 0
-
-    def add(self, role: str, outcome: str, date: str) -> None:
-        won = is_final_win(role, outcome)
-        self.games += 1
-        self.final_wins += 1 if won else 0
-        self.role_games[role] += 1
-        self.role_final_wins[role] += 1 if won else 0
-        if role == "刺客" and outcome in (OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE):
-            self.assassin_attempts += 1
-            self.assassin_hits += 1 if outcome == OUTCOME_BLUE_DEAD else 0
-        if date:
-            self.first_date = min(self.first_date, date) if self.first_date else date
-            self.last_date = max(self.last_date, date)
-        else:
-            self.undated += 1
-
-    def final_rate(self) -> float:
-        return _rate(self.final_wins, self.games)
-
-    def expected_rate(self, role_rates: Mapping[str, float]) -> float:
-        return rnd1(sum(self.role_games[r] * float(role_rates.get(r, 0.0)) for r in ALL_ROLES) / self.games) if self.games else 0.0
-
+# Owner's rule (Edward 2026-10-13):「條件篩選可以是近期，但資料篩選不能少場」-- WHO is listed may
+# depend on recent activity (a game in the last activeDays, asOf included), the NUMBERS never come
+# from a short date window: every board is computed over each player's own last N games, in
+# player_timelines order. newcomers is the one exception (all of a newcomer's games; the board
+# says so). Every constant is in LEADERBOARD_CONFIG; the TypeScript side only reads the cache.
+# Only games whose 結果 is in OUTCOMES count, like the players rows; a player is the normalized
+# 玩1..玩0 string (case kept, as everywhere else).
+#
+#   main        roleTheory of the last mainGames games; active, >= mainGames career games
+#   last50      the same over the last shortGames games; active, >= shortGames career games
+#   improved    roleTheory of the last improvedGames games minus that of the improvedGames games
+#               before them; active, >= 2 x improvedGames career games; improvers only
+#   assassin    hit rate over the last assassinAttempts assassinations as 刺客 (刺客 games that
+#               reached 三藍); active, >= assassinMinAttempts of them
+#   newcomers   first game within newcomerDays, every game dated, >= newcomerMinGames: all games
+#   roleTitles  per role, the active player (>= roleTitleMinGames career games in it) with the best
+#               final win rate over their last roleTitleGames games in it
+# value = the board's sort key (roleTheory, the difference, the hit rate, the final win rate);
+# rows are ordered by value, then games, then career games (more first), then name.
 
 def window_start(end: dt.date, days: int) -> dt.date | None:
     """First day of the `days`-day window ending on `end` (inclusive); None for 0 = all games."""
     return end - dt.timedelta(days=days - 1) if days > 0 else None
 
 
-def previous_month(day: dt.date) -> tuple[dt.date, dt.date]:
-    """(first day, last day) of the calendar month before `day`'s."""
-    last = day.replace(day=1) - dt.timedelta(days=1)
-    return last.replace(day=1), last
-
-
-def _in_span(g: GameRow, start: dt.date | None, end: dt.date) -> bool:
-    if start is None:
-        return True
-    return bool(g.date) and start.isoformat() <= g.date <= end.isoformat()
-
-
-def _span_stats(games: list[GameRow], start: dt.date | None, end: dt.date) -> dict[str, _SpanTally]:
-    """{name: tally} over the named seats of the games dated within [start, end]."""
-    out: dict[str, _SpanTally] = {}
-    for g in games:
-        if g.outcome not in OUTCOMES or not _in_span(g, start, end):
-            continue
-        for seat, name in g.seat_players.items():
-            out.setdefault(name, _SpanTally()).add(g.seat_roles[seat], g.outcome, g.date)
-    return out
-
-
 def _ranked(rows: list[dict], top_n: int) -> list[dict]:
+    rows.sort(key=lambda r: (-r["value"], -r["games"], -r.get("careerGames", 0), r["name"]))
     return [{"rank": i, **row} for i, row in enumerate(rows[:top_n], 1)]
 
 
-def _excess_rows(
-    stats: Mapping[str, _SpanTally], role_rates: Mapping[str, float], min_games: int,
-    shrink_k: float, top_n: int, allowed: set[str] | None = None,
-) -> list[dict]:
-    rows = []
-    for name, s in stats.items():
-        if s.games < min_games or (allowed is not None and name not in allowed):
-            continue
-        final, expected = s.final_rate(), s.expected_rate(role_rates)
-        excess = rnd1(final - expected)
-        rows.append({
-            "name": name, "value": shrunk_excess(excess, s.games, shrink_k), "excessWinRate": excess,
-            "finalWinRate": final, "expectedFinalWinRate": expected, "games": s.games,
-        })
-    rows.sort(key=lambda r: (-r["value"], -r["games"], r["name"]))
-    return _ranked(rows, top_n)
-
-
-def _period(start: dt.date | None, end: dt.date, earliest: str) -> str:
-    return f"{start.isoformat() if start else (earliest or end.isoformat())} ～ {end.isoformat()}"
-
-
-def _board(board_id: str, title: str, title_en: str, period: str, window_days: int, min_games: int,
+def _board(board_id: str, metric: str, title: str, title_en: str, period: str, period_en: str, min_games: int,
            note: str, note_en: str, rows: list[dict], **extra: Any) -> dict:
     return {
-        "id": board_id, "title": title, "titleEn": title_en, "period": period, "windowDays": window_days,
-        "minGames": min_games, "note": note, "noteEn": note_en, **extra, "rows": rows,
+        "id": board_id, "metric": metric, "title": title, "titleEn": title_en, "period": period,
+        "periodEn": period_en, "minGames": min_games, "note": note, "noteEn": note_en, **extra, "rows": rows,
     }
 
 
-def compute_leaderboard(games: list[GameRow], as_of: dt.date, role_final_rates: Mapping[str, float] | None = None) -> dict:  # noqa: C901
+def _theory_row(name: str, w: Mapping[str, Any], career_games: int) -> dict:
+    return {
+        "name": name, "value": w["roleTheory"], "roleTheory": w["roleTheory"], "positionTheory": w["positionTheory"],
+        "finalWinRate": w["finalWinRate"], "games": w["games"], "careerGames": career_games,
+        "from": w["from"], "to": w["to"], "sparseRoles": w["sparseRoles"], "sparseSeats": w["sparseSeats"],
+    }
+
+
+def theory_legend(min_cell: int) -> tuple[str, str]:
+    """(zh, en) explanation of roleTheory / positionTheory appended to the boards' notes."""
+    zh = ("角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率；"
+          "位置理論 = Σ 1/10 × 本人該位置的最終勝率")
+    en = ("Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the "
+          "player's final win rate as that role; position theory = Σ 1/10 × their final win rate in that seat")
+    if min_cell > 0:
+        zh += f"；不到 {min_cell} 場的角色或位置，用全體的最終勝率補到 {min_cell} 場"
+        en += f"; a role or seat with fewer than {min_cell} games is topped up to {min_cell} at the population's final win rate"
+    return zh, en
+
+
+def compute_leaderboard(
+    games: list[GameRow], as_of: dt.date,
+    role_final_rates: Mapping[str, float] | None = None, seat_final_rates: Mapping[str, float] | None = None,
+) -> dict:
     """The leaderboard section; boards whose rows are empty are left out."""
     cfg = LEADERBOARD_CONFIG
     role_rates = role_final_rates if role_final_rates is not None else compute_role_final_win_rates(games)
-    shrink_k, top_n = cfg["shrinkK"], cfg["topN"]
-    dates = date_summary(games)
-    earliest = dates["earliest"]
-    all_time = _span_stats(games, None, as_of)
-    active_from = window_start(as_of, cfg["activeDays"])
-    active = {
-        name for name, s in all_time.items()
-        if s.last_date and (active_from is None or s.last_date >= active_from.isoformat())
-    }
+    seat_rates = seat_final_rates if seat_final_rates is not None else compute_seat_final_win_rates(games)
+    top_n, active_days, cell = cfg["topN"], cfg["activeDays"], cfg["theoryMinCellGames"]
+    legend, legend_en = theory_legend(cell)
+    timelines = player_timelines(games)
+    active_from = window_start(as_of, active_days)
+    active: dict[str, list[PlayerSeat]] = {}
+    for name, seats in timelines.items():
+        last = max((s.date for s in seats if s.date), default="")
+        if last and (active_from is None or last >= active_from.isoformat()):
+            active[name] = seats
+
+    def window(seats: Sequence[PlayerSeat], n: int) -> dict:
+        return theory_window(seats, role_rates, seat_rates, cell, window=n)
+
     boards: list[dict] = []
-    excess_note = (
-        f"超額勝率 = 期間最終勝率 − 依角色分配算出的預期勝率；排序用縮減值（× 場數 /（場數 + {shrink_k}）），"
-        "樣本少的人不會因為幾場好運就衝到前面"
-    )
-    excess_note_en = (
-        f"Excess = final win rate in the period minus the win rate expected from the roles played; "
-        f"ranked by the shrunk value (× games / (games + {shrink_k})) so a short hot streak does not top the board"
-    )
 
-    # main: widen the window until at least minBoardRows players qualify (0 = every game).
-    main_start: dt.date | None = None
-    main_days = cfg["windowDays"]
-    main_rows: list[dict] = []
-    for days in [cfg["windowDays"], *cfg["fallbackWindowDays"]]:
-        main_days, main_start = days, window_start(as_of, days)
-        main_rows = _excess_rows(_span_stats(games, main_start, as_of), role_rates, cfg["minGames"], shrink_k, top_n, active)
-        if len(main_rows) >= cfg["minBoardRows"]:
-            break
-    main_period = _period(main_start, as_of, earliest)
-    span_label = f"近 {main_days} 天" if main_days else "全期"
-    boards.append(_board(
-        "main", "超額勝率排行", "Excess win rate", main_period, main_days, cfg["minGames"],
-        f"近 {cfg['activeDays']} 天內有出賽、{span_label}至少 {cfg['minGames']} 場；{excess_note}",
-        f"Played in the last {cfg['activeDays']} days and at least {cfg['minGames']} games in the period; {excess_note_en}",
-        main_rows,
-    ))
-
-    # online: 分類 = 線瓦 games of the same period, only when the 分類 column is filled in enough.
-    in_period = [g for g in games if g.outcome in OUTCOMES and _in_span(g, main_start, as_of)]
-    coverage = _rate(sum(1 for g in in_period if g.category), len(in_period))
-    if coverage >= cfg["onlineCoverageMinPct"]:
-        online_games = [g for g in in_period if g.category == cfg["onlineCategory"]]
+    # main / last50: roleTheory of each active player's last N games.
+    for board_id, n, title, title_en in (
+        ("main", cfg["mainGames"], "角色理論勝率排行", "Role-theory win rate"),
+        ("last50", cfg["shortGames"], f"近 {cfg['shortGames']} 場角色理論勝率", f"Role-theory win rate, last {cfg['shortGames']} games"),
+    ):
+        rows = [_theory_row(name, window(seats[-n:], n), len(seats)) for name, seats in active.items() if len(seats) >= n]
         boards.append(_board(
-            "online", f"{cfg['onlineCategory']}超額勝率排行", f"Excess win rate ({cfg['onlineCategory']} games)",
-            main_period, main_days, cfg["minGames"],
-            f"只算分類為「{cfg['onlineCategory']}」的局（期間內 {coverage:.0f}% 的局有填分類）；{excess_note}",
-            f"Games whose 分類 is {cfg['onlineCategory']} only ({coverage:.0f}% of the period's games have a 分類); {excess_note_en}",
-            _excess_rows(_span_stats(online_games, main_start, as_of), role_rates, cfg["minGames"], shrink_k, top_n, active),
-            category=cfg["onlineCategory"], coverage=coverage,
+            board_id, "roleTheory", title, title_en, f"各人最近 {n} 場", f"Each player's last {n} games", n,
+            f"近 {active_days} 天內有出賽、生涯至少 {n} 場；{legend}",
+            f"Played in the last {active_days} days, at least {n} career games; {legend_en}",
+            _ranked(rows, top_n), windowGames=n,
         ))
 
-    # recent: the last recentDays.
-    recent_start = window_start(as_of, cfg["recentDays"])
-    boards.append(_board(
-        "recent", f"近 {cfg['recentDays']} 天超額勝率", f"Excess win rate, last {cfg['recentDays']} days",
-        _period(recent_start, as_of, earliest), cfg["recentDays"], cfg["recentMinGames"],
-        f"期間至少 {cfg['recentMinGames']} 場；{excess_note}",
-        f"At least {cfg['recentMinGames']} games in the period; {excess_note_en}",
-        _excess_rows(_span_stats(games, recent_start, as_of), role_rates, cfg["recentMinGames"], shrink_k, top_n),
-    ))
-
-    # improved: final win rate of the last improvedDays minus the improvedPriorDays before them.
-    imp_start = window_start(as_of, cfg["improvedDays"])
-    prior_end = imp_start - dt.timedelta(days=1)
-    prior_start = window_start(prior_end, cfg["improvedPriorDays"])
-    recent_stats = _span_stats(games, imp_start, as_of)
-    prior_stats = _span_stats(games, prior_start, prior_end)
+    # improved: the last N games vs the N before them (both full windows).
+    n = cfg["improvedGames"]
     improved_rows = []
-    for name, now in recent_stats.items():
-        before = prior_stats.get(name)
-        if before is None or now.games < cfg["improvedMinGames"] or before.games < cfg["improvedMinGames"]:
+    for name, seats in active.items():
+        if len(seats) < 2 * n:
+            continue
+        now, before = window(seats[-n:], n), window(seats[-2 * n:-n], n)
+        delta = rnd1(now["roleTheory"] - before["roleTheory"])
+        if delta <= 0:
             continue
         improved_rows.append({
-            "name": name, "value": rnd1(now.final_rate() - before.final_rate()),
-            "recentFinalWinRate": now.final_rate(), "priorFinalWinRate": before.final_rate(),
-            "recentGames": now.games, "priorGames": before.games, "games": now.games,
+            "name": name, "value": delta, "recentRoleTheory": now["roleTheory"], "priorRoleTheory": before["roleTheory"],
+            "recentFinalWinRate": now["finalWinRate"], "priorFinalWinRate": before["finalWinRate"],
+            "recentGames": now["games"], "priorGames": before["games"], "games": now["games"], "careerGames": len(seats),
         })
-    improved_rows.sort(key=lambda r: (-r["value"], -r["games"], r["name"]))
     boards.append(_board(
-        "improved", "進步榜", "Most improved",
-        _period(imp_start, as_of, earliest), cfg["improvedDays"], cfg["improvedMinGames"],
-        f"近 {cfg['improvedDays']} 天最終勝率 − 之前 {cfg['improvedPriorDays']} 天（{_period(prior_start, prior_end, earliest)}）的最終勝率，"
-        f"兩段各至少 {cfg['improvedMinGames']} 場",
-        f"Final win rate of the last {cfg['improvedDays']} days minus that of the {cfg['improvedPriorDays']} days before "
-        f"({_period(prior_start, prior_end, earliest)}); at least {cfg['improvedMinGames']} games in each span",
-        _ranked(improved_rows, top_n), priorPeriod=_period(prior_start, prior_end, earliest),
+        "improved", "roleTheoryDelta", "進步榜", "Most improved",
+        f"各人最近 {n} 場 vs 再之前 {n} 場", f"Each player's last {n} games vs the {n} before", 2 * n,
+        f"近 {active_days} 天內有出賽、生涯至少 {2 * n} 場；最近 {n} 場的角色理論勝率 − 再之前 {n} 場的，只列有進步的人；{legend}",
+        f"Played in the last {active_days} days, at least {2 * n} career games; role theory of the last {n} games minus "
+        f"that of the {n} before, improvers only; {legend_en}",
+        _ranked(improved_rows, top_n), windowGames=n,
     ))
 
-    # assassin: 刺客 hit rate over the last assassinDays (only games that reached 三藍 count).
-    asn_start = window_start(as_of, cfg["assassinDays"])
-    assassin_rows = [
-        {"name": name, "value": _rate(s.assassin_hits, s.assassin_attempts), "hits": s.assassin_hits,
-         "attempts": s.assassin_attempts, "games": s.role_games["刺客"]}
-        for name, s in _span_stats(games, asn_start, as_of).items() if s.assassin_attempts
-    ]
-    assassin_rows.sort(key=lambda r: (-r["value"], -r["attempts"], r["name"]))
+    # assassin: hit rate over the last N assassinations as 刺客.
+    a_n, a_min = cfg["assassinAttempts"], cfg["assassinMinAttempts"]
+    assassin_rows = []
+    for name, seats in active.items():
+        attempts = [s for s in seats if s.role == "刺客" and s.outcome in (OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE)][-a_n:]
+        if len(attempts) < max(a_min, 1):
+            continue
+        hits = sum(1 for s in attempts if s.outcome == OUTCOME_BLUE_DEAD)
+        dated = [s.date for s in attempts if s.date]
+        assassin_rows.append({
+            "name": name, "value": _rate(hits, len(attempts)), "hits": hits, "attempts": len(attempts),
+            "games": len(attempts), "careerGames": len(seats), "from": min(dated) if dated else "", "to": max(dated) if dated else "",
+        })
     boards.append(_board(
-        "assassin", f"近 {cfg['assassinDays']} 天刺客刺中率", f"Assassin hit rate, last {cfg['assassinDays']} days",
-        _period(asn_start, as_of, earliest), cfg["assassinDays"], 1,
-        "刺中率 = 三藍死 /（三藍死 + 三藍活）的刺客局；三紅的局沒有刺殺，不算；附刺殺次數與刺客場數",
-        "Hit rate = 三藍死 / (三藍死 + 三藍活) as Assassin; 三紅 games have no assassination and do not count",
-        _ranked(assassin_rows, top_n),
+        "assassin", "hitRate", "刺客刺中率", "Assassin hit rate",
+        f"各人最近 {a_n} 次刺殺", f"Each player's last {a_n} assassinations", a_min,
+        f"近 {active_days} 天內有出賽、至少 {a_min} 次刺殺；刺中率 = 三藍死 /（三藍死 + 三藍活），"
+        f"看各人當刺客、任務做到三藍的最近 {a_n} 局（三紅沒有刺殺，不算）",
+        f"Played in the last {active_days} days, at least {a_min} assassinations; hit rate = 三藍死 / (三藍死 + 三藍活) "
+        f"over the last {a_n} games as Assassin that reached three successful missions (三紅 games have no assassination)",
+        _ranked(assassin_rows, top_n), windowGames=a_n,
     ))
 
-    # newcomers: first game (every game dated) within the last newcomerDays.
-    new_start = window_start(as_of, cfg["newcomerDays"])
-    newcomers = {
-        name: s for name, s in all_time.items()
-        if s.first_date and not s.undated and (new_start is None or s.first_date >= new_start.isoformat())
-    }
-    newcomer_rows = _excess_rows(newcomers, role_rates, cfg["newcomerMinGames"], shrink_k, top_n)
-    for row in newcomer_rows:
-        row["firstPlayed"] = newcomers[row["name"]].first_date
+    # newcomers (the exception): all games of players whose first game is recent.
+    d, m = cfg["newcomerDays"], cfg["newcomerMinGames"]
+    new_start = window_start(as_of, d)
+    newcomer_rows = []
+    for name, seats in timelines.items():
+        if len(seats) < max(m, 1) or any(not s.date for s in seats):
+            continue
+        first = min(s.date for s in seats)
+        if new_start is not None and first < new_start.isoformat():
+            continue
+        newcomer_rows.append({**_theory_row(name, window(seats, 0), len(seats)), "firstPlayed": first})
+    period_start = new_start.isoformat() if new_start else ""
     boards.append(_board(
-        "newcomers", "新人榜", "Newcomers",
-        _period(new_start, as_of, earliest), cfg["newcomerDays"], cfg["newcomerMinGames"],
-        f"首次出賽在近 {cfg['newcomerDays']} 天內、至少 {cfg['newcomerMinGames']} 場；{excess_note}",
-        f"First game within the last {cfg['newcomerDays']} days and at least {cfg['newcomerMinGames']} games; {excess_note_en}",
-        newcomer_rows,
+        "newcomers", "roleTheory", "新人榜", "Newcomers",
+        f"{period_start} ～ {as_of.isoformat()} 首次出賽", f"First game {period_start} to {as_of.isoformat()}", m,
+        f"首次出賽在近 {d} 天內、至少 {m} 場；例外：新人場數少，用他的全部場次，場數越少越接近全體平均；{legend}",
+        f"First game within the last {d} days, at least {m} games; the exception: a newcomer has few games, so all "
+        f"of them count, and the fewer there are the closer the numbers stay to the population; {legend_en}",
+        _ranked(newcomer_rows, top_n), windowDays=d, allGames=True,
     ))
 
-    # roleTitles: last calendar month, the best final win rate of each role.
-    month_start, month_end = previous_month(as_of)
-    month_stats = _span_stats(games, month_start, month_end)
+    # roleTitles: per role, the best final win rate over the last N games in it.
+    t_min, t_n = cfg["roleTitleMinGames"], cfg["roleTitleGames"]
     title_rows: list[dict] = []
     for role in ALL_ROLES:
-        candidates = [
-            (name, s.role_games[role], s.role_final_wins[role]) for name, s in month_stats.items()
-            if s.role_games[role] >= cfg["roleTitleMinGames"]
-        ]
+        candidates = []
+        for name, seats in active.items():
+            in_role = [s for s in seats if s.role == role]
+            if len(in_role) < max(t_min, 1):
+                continue
+            last = in_role[-t_n:]
+            wins = sum(1 for s in last if is_final_win(role, s.outcome))
+            candidates.append((name, len(last), wins, len(in_role)))
         if not candidates:
             continue
-        name, n, wins = min(candidates, key=lambda c: (-_rate(c[2], c[1]), -c[1], c[0]))
-        title_rows.append({"rank": len(title_rows) + 1, "role": role, "name": name, "value": _rate(wins, n), "games": n, "wins": wins})
+        name, games_n, wins, career = min(candidates, key=lambda c: (-_rate(c[2], c[1]), -c[1], -c[3], c[0]))
+        title_rows.append({
+            "rank": len(title_rows) + 1, "role": role, "name": name, "value": _rate(wins, games_n),
+            "games": games_n, "wins": wins, "careerRoleGames": career,
+        })
     boards.append(_board(
-        "roleTitles", "上月角色王", "Role titles, last month",
-        _period(month_start, month_end, earliest), (month_end - month_start).days + 1, cfg["roleTitleMinGames"],
-        f"上個月各角色最終勝率第一名（該角色至少 {cfg['roleTitleMinGames']} 場；同率者場數多的優先）",
-        f"Best final win rate per role last month (at least {cfg['roleTitleMinGames']} games as that role; ties go to more games)",
-        title_rows,
+        "roleTitles", "finalWinRate", "角色王", "Role champions",
+        f"各人該角色最近 {t_n} 場", f"Each player's last {t_n} games in the role", t_min,
+        f"近 {active_days} 天內有出賽、生涯該角色至少 {t_min} 場；比各人該角色最近 {t_n} 場的最終勝率，同率者該角色場數多的優先",
+        f"Played in the last {active_days} days, at least {t_min} career games in the role; best final win rate over "
+        f"the last {t_n} games in it, ties go to more games in the role",
+        title_rows, windowGames=t_n,
     ))
 
     return {
         "asOf": as_of.isoformat(),
-        "dates": dates,
+        "dates": date_summary(games),
         "config": copy.deepcopy(cfg),
         "boards": [b for b in boards if b["rows"]],
     }
@@ -2438,10 +2558,15 @@ def leaderboard_summary(leaderboard: Mapping[str, Any] | None) -> str:
         return "無"
     boards = leaderboard.get("boards") or []
     dates = leaderboard.get("dates") or {}
-    parts = [
-        f"{b.get('id')} {len(b.get('rows') or [])} 人" + (f"（{b.get('windowDays')} 天）" if b.get("windowDays") else "（全期）")
-        for b in boards if isinstance(b, Mapping)
-    ]
+
+    def span(b: Mapping[str, Any]) -> str:
+        if b.get("windowGames"):
+            return f"（最近 {b.get('windowGames')} 場）"
+        if b.get("windowDays"):
+            return f"（{b.get('windowDays')} 天）"
+        return "（全期）"
+
+    parts = [f"{b.get('id')} {len(b.get('rows') or [])} 人{span(b)}" for b in boards if isinstance(b, Mapping)]
     return (
         f"asOf {leaderboard.get('asOf')}；{'、'.join(parts) if parts else '沒有可做的榜'}；"
         f"日期可解析 {dates.get('parsed')} 局、無日期 {dates.get('unparsed')} 局"
@@ -2784,7 +2909,7 @@ def build_cache(games: list[GameRow], chemistry: dict, as_of: dt.date | None = N
         "rounds": compute_rounds(games),
         "seatOrder": compute_seat_order(games),
         "captainAnalysis": compute_captain_analysis(games),
-        "leaderboard": compute_leaderboard(games, as_of, overview["roleFinalWinRates"]),
+        "leaderboard": compute_leaderboard(games, as_of, overview["roleFinalWinRates"], overview["seatFinalWinRates"]),
     }
 
 
@@ -2895,8 +3020,8 @@ def _canonical(cache: Mapping[str, Any]) -> str:
 def only_the_day_changed(cache: Mapping[str, Any], previous: Mapping[str, Any] | None, games: list[GameRow]) -> bool:
     """True when `cache` differs from `previous` only because the as-of day moved on.
 
-    The as-of day reaches the file through leaderboard (asOf, every board's period and
-    window) and featureStudies (generatedAt, L141's computedAt). Both are rebuilt here from
+    The as-of day reaches the file through leaderboard (asOf, who is active, the newcomers'
+    period) and featureStudies (generatedAt, L141's computedAt). Both are rebuilt here from
     the same games on `previous`'s own asOf; when that reproduces `previous` exactly, the Sheet
     gave nothing new and the file is left alone (nothing to commit, no redeploy). Without a
     previous asOf (the first run that writes a leaderboard) everything counts as a change.
@@ -2909,7 +3034,9 @@ def only_the_day_changed(cache: Mapping[str, Any], previous: Mapping[str, Any] |
     games, _ = drop_dates_after(games, as_of)
     replay = dict(cache)
     overview = cache.get("overview") if isinstance(cache.get("overview"), Mapping) else {}
-    replay["leaderboard"] = compute_leaderboard(games, prev_as_of, overview.get("roleFinalWinRates"))
+    replay["leaderboard"] = compute_leaderboard(
+        games, prev_as_of, overview.get("roleFinalWinRates"), overview.get("seatFinalWinRates"),
+    )
     replay["featureStudies"] = refresh_feature_studies(previous.get("featureStudies"), games, prev_as_of)
     return _canonical(replay) == _canonical(previous)
 
@@ -2999,6 +3126,22 @@ def games_regressions(
     return out
 
 
+def theory_mismatches(cache: Mapping[str, Any]) -> list[str]:
+    """Names whose players row has a `theory` block that contradicts the row: not an object, or
+    theory.career.games != totalGames (a timeline that lost or gained games). Rows without
+    `theory` (caches older than schemaVersion 3) are fine."""
+    bad = []
+    for name, row in _players_by_name(cache).items():
+        if "theory" not in row:
+            continue
+        theory = row.get("theory")
+        career = theory.get("career") if isinstance(theory, Mapping) else None
+        games = career.get("games") if isinstance(career, Mapping) else None
+        if not isinstance(games, int) or isinstance(games, bool) or games != row.get("totalGames"):
+            bad.append(name)
+    return bad
+
+
 def validate_new_cache(
     cache: Mapping[str, Any],
     previous: Mapping[str, Any] | None,
@@ -3026,6 +3169,14 @@ def validate_new_cache(
         problems.append(f"players.total={cache['players'].get('total')!r} but players.players has {len(player_list)} rows")
     if not cache["playerDetails"]:
         problems.append("playerDetails is empty")
+    if not isinstance(cache["leaderboard"].get("boards", []), list):
+        problems.append("leaderboard.boards is not a list")
+    bad_theory = theory_mismatches(cache)
+    if bad_theory:
+        problems.append(
+            f"{len(bad_theory)} player(s) have a theory block that does not match their games: "
+            f"{_names(bad_theory)} (theory.career.games must equal totalGames)"
+        )
 
     if previous and not allow_shrink:
         # Games are only ever appended to 牌譜: neither the total nor any player's count may go down.
