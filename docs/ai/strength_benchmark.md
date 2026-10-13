@@ -16,11 +16,11 @@
 | `evilLakeFrameHumanRate` 紅方嫁禍頻率照真人（第二輪） | **兩種量法相反**：嫁禍頻率像真人（自我對打紅方湖到藍方宣紅 65.6%→29.7%，真人 25.9%）；但一致性基準的紅方湖宣告比只開新湖法低 4.2–5.5 點（照比例亂數嫁禍，ED 不變；仍遠高於舊預設），依這個量法是比較**不**像真人，第 8.5 節 | 在 `evilVouchFollowUp` 之上，三個種子合併 −0.03pp [−0.20pp, +0.14pp] | **暫時打開**（強度不變；用哪種量法判斷待 Edward 決定，`AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE=0` 可關掉，第 8.6 節） |
 | `oberonLakeSeeksTeammates` 奧伯倫持湖找隊友（第二輪） | 否（奧伯倫湖到紅方 29%→43%，真人 34%、亂湖 33%；湖目標一致性方向不一） | seed 31337 −0.10pp [−0.22pp, +0.02pp] | 否 |
 | `goodLakeInfoMax` 好人湖「共同資訊極大化」（2026-10-13 Edward 原則；對照組 = 正式預設） | 是（好人持湖的湖目標 ED 18.9→35.1、Sin 20.3→22.9、top 12.2→25.8、population 14.9→24.7；同一批湖配對比較 top、population 顯著（McNemar p < 1e-8），ED 淨多 6 次（7 對 1，p≈0.07，信任鏈項的形式又是在同一份牌譜上挑的），Sin 看不出差別（18 對 15）；被湖的人的特徵 ED 每一項都比舊規則接近真人，population 有兩項例外，第 7.3 節） | 藍方立場：協定的選版本種子 4096（版本已在牌譜上定案，只跑定案版）−0.3pp [−1.0pp, +0.3pp]；新種子 6174 −0.3pp [−0.9pp, +0.4pp]、1729 −0.2pp [−0.9pp, +0.4pp]；三個種子合併 −0.3pp [−0.6pp, +0.1pp] | **是**（區間含 0；`goodLakeTargetMostSuspicious` 只當退路），第 7 節；與紅方第二輪合併後的整組重跑見第 9 節 |
-| **2026-10-13 第二輪正式預設**（舊預設 + `evilLakeHumanStrategy` + `evilVouchFollowUp`（決勝窗口也照做）+ `evilLakeFrameHumanRate`；同日審查修正後） | 是（任務牌、刺殺不變；派隊 Jaccard 與投票 R3+ 略升，紅方湖宣告比舊預設高很多，第 8.5 節） | 紅方對舊預設：選版本 31337 +0.06pp、確認 16180 −0.04pp、14142 −0.94pp，三個種子合併 −0.31pp [−0.68pp, +0.06pp]（區間含 0）；但兩個確認種子單看 −0.49pp [−0.94pp, −0.04pp]，本線五個種子（加上 8080 −0.50pp、2718 −0.66pp）合併 **−0.42pp [−0.70pp, −0.13pp]**（只開新湖法 −1.02pp [−1.29pp, −0.75pp]）；藍方立場恆為 0 | **用全部資料看仍比舊預設弱（約 0.4pp，補回約六成）**；依 Edward 裁定照樣採用（變弱幾乎全部來自「湖留在紅方」× 好人機器人的硬3，第 8.2、8.6 節） |
+| **2026-10-13 第二輪正式預設**（舊預設 + `evilLakeHumanStrategy` + `evilVouchFollowUp`（決勝窗口也照做）+ `evilLakeFrameHumanRate`；同日審查修正後） | 是（任務牌、刺殺不變；派隊 Jaccard 與投票 R3+ 略升，紅方湖宣告比舊預設高很多，第 8.5 節） | 紅方對舊預設：選版本 31337 +0.06pp、確認 16180 −0.04pp、14142 −0.94pp，三個種子合併 −0.31pp [−0.68pp, +0.06pp]（區間含 0）；但兩個確認種子單看 −0.49pp [−0.94pp, −0.04pp]，本線五個種子（加上 8080 −0.50pp、2718 −0.66pp）合併 **−0.42pp [−0.70pp, −0.13pp]**（只開新湖法 −1.02pp [−1.29pp, −0.75pp]）；藍方立場恆為 0 | **用全部資料看仍比舊預設弱（約 0.4pp，補回約六成）**；依 Edward 裁定照樣採用（變弱幾乎全部來自「湖留在紅方」× 好人機器人的硬3，第 8.2、8.6 節）（**第 9 節更新**：整合後用三個新種子重跑，紅方 +0.23pp [−0.14pp, +0.59pp]；與本節五個種子合併約 −0.17pp [−0.40pp, +0.05pp]，區間含 0，不再算變弱） |
 
 採用標準（任務 B 原文）：一致性基準更像真人（ED、Sin、top 群）**且**自我對打不變弱（variant 合計勝率的 95% 區間下界 ≥ 50% − 2pp = 48%）→ 預設打開；否則維持關閉並記錄數字。注意「合計」是紅方立場與藍方立場的平均：只動一方的開關另一方的差恆為 0，所以合計 = 50% + 該立場差 / 2，這條規則等於允許單一立場最多約 −4pp 的**顯著變弱**（區間不含 0 也算通過），以更像真人為交換；本文件中 `evilLakeClaimAlwaysGood` 即屬此例（第 2 節第 2 點）。**2026-10-12 整合裁定**：依 Edward 的原文「更像真人，而且不能讓它變弱」，單一立場的 95% 區間不含 0 就算變弱，所以 `evilLakeClaimAlwaysGood` 不進預設（開關保留）；其餘採用的開關每個立場的區間都含 0 或為正。正式預設在 `packages/server/src/ai/AgentTuning.ts` 的 `DEFAULT_AGENT_TUNING`；2026-10-12 之前的行為 = `LEGACY_AGENT_TUNING`（全關）。部署時可用環境變數臨時切換（`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR`、`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR_EVIL_ONLY`、`AVALON_TUNING_EVIL_LAKE_CLAIM_GOOD`、`AVALON_TUNING_GOOD_LAKE_MOST_SUSPICIOUS`、`AVALON_TUNING_HUMAN_QUEST_CARDS`、`AVALON_TUNING_ASSASSIN_MODEL`、`AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY`、`AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP`、`AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE`、`AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES`、`AVALON_TUNING_GOOD_LAKE_INFO_MAX`；布林用 1/0，先驗用數字，例如 `AVALON_TUNING_ASSASSIN_MODEL=0` 關掉刺殺模型）。**2026-10-13**：`evilLakeHumanStrategy` 依同一條「更像真人，而且不能讓它變弱」規則判定，但對照組換成當時的正式預設（不是 legacy），所以它那幾列的 C 局紅勝率是 93.0% 左右（正式預設自打自），不是 88.4%。同日補上一條做法：**在一個種子上挑版本後，至少再用兩個沒用過的種子確認**，才算「不變弱」 —— `evilLakeHumanStrategy` 就是在挑版本的種子上過關、換種子後變弱。**2026-10-13 第二輪**（第 8 節）的對照組是「不含新湖法的舊預設」，選版本用 seed 31337、確認用 8080 與 2718，以三個種子合併判定；新湖法已依裁定打開，所以補強改用「對只開新湖法的邊際不變弱」判定，和原定標準不同，見第 8.6 節。
 
-新預設在一致性基準上的整體數字（`agreementBenchmark.ts` 不加 `--legacy`，與逐開關的效果相加一致）：投票 R3+ ED 61.6→63.7、Sin 62.3→65.2、top 59.0→61.9；任務牌 Sin 79.8→82.4、top 79.7→82.3、population 77.4→79.7（修正版；第一版曾量到 85.3 / 82.7，見第 2 節第 4 點）；湖目標 ED 2.0→13.7、Sin 13.2→19.5；紅方湖宣告不變（`evilLakeClaimAlwaysGood` 與 2026-10-13 的 `evilLakeHumanStrategy` 都未採用，ED 50.0、Sin 61.1、top 60.4；打開 `evilLakeHumanStrategy` 時為 78.6 / 90.7 / 79.5，見第 6 節）；刺殺目標 Sin 20.4→42.9、top 20.8→38.8（ED n=17 不變）；派隊與 R1–R2 投票不受影響。（這一段是 2026-10-12 的正式預設。2026-10-13 第二輪的正式預設（加上 `evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`）：任務牌、刺殺不變；派隊 Jaccard R2+ Sin 42.3→42.5、top 40.0→40.2、population 41.1→41.2；投票 R3+ ED 63.7→64.1、Sin 65.2→65.9、top 61.9→62.7、population 63.6→64.2；紅方湖宣告 ED 50.0→78.6、Sin 61.1→85.2、top 60.4→74.6、population 58.2→69.1；紅方湖目標 ED 0.0→7.1、Sin 17.9→14.3、top 10.7→15.3、population 10.4→16.3，見第 8.5 節。）
+新預設在一致性基準上的整體數字（`agreementBenchmark.ts` 不加 `--legacy`，與逐開關的效果相加一致）：投票 R3+ ED 61.6→63.7、Sin 62.3→65.2、top 59.0→61.9；任務牌 Sin 79.8→82.4、top 79.7→82.3、population 77.4→79.7（修正版；第一版曾量到 85.3 / 82.7，見第 2 節第 4 點）；湖目標 ED 2.0→13.7、Sin 13.2→19.5；紅方湖宣告不變（`evilLakeClaimAlwaysGood` 與 2026-10-13 的 `evilLakeHumanStrategy` 都未採用，ED 50.0、Sin 61.1、top 60.4；打開 `evilLakeHumanStrategy` 時為 78.6 / 90.7 / 79.5，見第 6 節）；刺殺目標 Sin 20.4→42.9、top 20.8→38.8（ED n=17 不變）；派隊與 R1–R2 投票不受影響。（這一段是 2026-10-12 的正式預設。2026-10-13 第二輪的正式預設（加上 `evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`）：任務牌、刺殺不變；派隊 Jaccard R2+ Sin 42.3→42.5、top 40.0→40.2、population 41.1→41.2；投票 R3+ ED 63.7→64.1、Sin 65.2→65.9、top 61.9→62.7、population 63.6→64.2；紅方湖宣告 ED 50.0→78.6、Sin 61.1→85.2、top 60.4→74.6、population 58.2→69.1；紅方湖目標 ED 0.0→7.1、Sin 17.9→14.3、top 10.7→15.3、population 10.4→16.3，見第 8.5 節。；整合後再加上好人湖 `goodLakeInfoMax`：好人持湖的湖目標 ED 35.1、Sin 22.9、top 25.8、population 24.7，全部持湖者 27.5 / 20.1 / 21.8 / 21.8，見第 9 節。）
 
 重跑：
 
@@ -442,7 +442,7 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
    - 但不能說已經確定不變弱：
      - 只看兩個確認種子是 −0.49pp [−0.94pp, −0.04pp]，整個在 0 以下；
      - 本線五個種子（再加上 8080、2718）全部合併是 −0.42pp [−0.70pp, −0.13pp]，也整個在 0 以下。
-   - 結論：用全部資料看**仍算變弱**，但差距從約 1.0pp 縮小到約 0.4pp（補回約六成）。新湖法依 Edward 裁定照樣打開，剩下的差距與待決事項見第 8.6 節。
+   - 結論：用全部資料看**仍算變弱**，但差距從約 1.0pp 縮小到約 0.4pp（補回約六成）。新湖法依 Edward 裁定照樣打開，剩下的差距與待決事項見第 8.6 節。（**第 9 節更新**：整合後用三個新種子重跑，紅方 +0.23pp [−0.14pp, +0.59pp]；與本節五個種子合併約 −0.17pp [−0.40pp, +0.05pp]，區間含 0，不再算變弱）
    - 一致性基準：任務牌、刺殺不變；派隊 Jaccard 與投票 R3+ 都比舊預設高；紅方湖宣告比舊預設高很多（第 8.5 節）。
 
 ### 8.1 方法
@@ -628,7 +628,7 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
 - **對舊預設**：
   - 選版本加確認的三個種子合併 −0.31pp [−0.68pp, +0.06pp]，區間含 0，依本線的判定算「不變弱」。
   - 但兩個確認種子單看 −0.49pp [−0.94pp, −0.04pp]，五個種子合併 −0.42pp [−0.70pp, −0.13pp]，都整個在 0 以下。
-  - 用全部資料看，**仍算變弱，差距約 0.4pp**（只開新湖法約 1.0pp，補回約六成）。三個種子合併區間含 0，有一部分是種子的運氣（同樣三個種子只開新湖法也只有 −0.85pp）。
+  - 用全部資料看，**仍算變弱，差距約 0.4pp**（只開新湖法約 1.0pp，補回約六成）。三個種子合併區間含 0，有一部分是種子的運氣（同樣三個種子只開新湖法也只有 −0.85pp）。（**第 9 節更新**：整合後用三個新種子重跑，紅方 +0.23pp [−0.14pp, +0.59pp]；與本節五個種子合併約 −0.17pp [−0.40pp, +0.05pp]，區間含 0，不再算變弱）
 - **嫁禍開關**：`evilLakeFrameHumanRate` 不影響強度（−0.03pp [−0.20pp, +0.14pp]）。
 - **依 Edward 裁定**（先像真人），新湖法照樣打開，兩個補強也一起打開；採用的理由與標準見第 8.6 節。
 - 藍方立場恆為 0（三個開關都只動紅方）。正式預設在五個種子合併的嫁禍比例是 29.8%（1289/4325；看得到隊友的紅方 26.9%、奧伯倫 32.0%）。
@@ -670,7 +670,7 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
 - **對舊預設**：
   - 選版本加確認的三個種子（31337 + 16180 + 14142）合併，紅方 −0.31pp [−0.68pp, +0.06pp]。區間含 0，依本線的判定算「不變弱」；同樣三個種子只開新湖法是 −0.85pp。
   - 只看兩個確認種子是 −0.49pp [−0.94pp, −0.04pp]；五個種子合併是 −0.42pp [−0.70pp, −0.13pp]。
-  - 所以用全部資料看**仍算變弱**，差距約 0.4pp（只開新湖法約 1.0pp）。新湖法本來就是依裁定打開，不是依強度規則通過。
+  - 所以用全部資料看**仍算變弱**，差距約 0.4pp（只開新湖法約 1.0pp）。新湖法本來就是依裁定打開，不是依強度規則通過。（**第 9 節更新**：整合後用三個新種子重跑，紅方 +0.23pp [−0.14pp, +0.59pp]；與本節五個種子合併約 −0.17pp [−0.40pp, +0.05pp]，區間含 0，不再算變弱）
 - **採用標準與任務原定的不同（請 Edward 確認）**：
   - 任務原定：補強「對舊預設的合併區間不整個在 0 以下」才採用。
     - 「窗口不適用」的版本在 31337 + 8080 + 2718 上沒有達到：`evilVouchFollowUp` −0.67pp [−1.03pp, −0.30pp]，加上嫁禍開關 −0.70pp [−1.06pp, −0.34pp]。
@@ -709,3 +709,50 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
 - 消融用 `--rule3` 與 `AVALON_EVIL_LAKE_HUMAN_VARIANT`。
 
 結果完全相同（決定性）；機制份額的 bootstrap 用固定的亂數種子。
+
+## 9. 整合後的正式預設：紅方第二輪 + 好人湖一起重跑（2026-10-13）
+
+**正式預設（整合後）** = 2026-10-12 的舊預設（`r3NormalVotePrior=0.6`、`r3NormalVotePriorEvilOnly`、`goodLakeTargetMostSuspicious`、`humanQuestCardRules`、`assassinModel`）+ 紅方第二輪（`evilLakeHumanStrategy`、`evilVouchFollowUp`（決勝窗口也照做）、`evilLakeFrameHumanRate`，第 8 節）+ 好人湖 `goodLakeInfoMax`（第 7 節；`goodLakeTargetMostSuspicious` 只當退路）。對照組 = 舊預設。
+
+做法：第 7、8 節的量測各自只動一方，而且對照組都不含另一方的改動，所以合併後整組再跑一次。版本已經定案、沒有再挑選，因此三個種子都是**沒用過的新種子**（5150 / 8128 / 6561，各 5000 組 × 3 局），直接合併判定。ForwardAgent 每次約 236 萬個決策、0 次 fallback。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 5150（5000） | 93.1%（92.6%） | +0.5pp [−0.1pp, +1.2pp] | 7.1%（7.4%） | −0.3pp [−1.0pp, +0.3pp] | 50.1% [49.7%, 50.5%] | 87.3% / 88.1% / 87.4% | 45.4% / 40.3% / 40.9% |
+| 8128（5000） | 93.6%（93.1%） | +0.5pp [−0.2pp, +1.1pp] | 6.7%（6.9%） | −0.2pp [−0.8pp, +0.5pp] | 50.1% [49.8%, 50.5%] | 87.5% / 88.0% / 87.4% | 48.4% / 43.8% / 44.9% |
+| 6561（5000） | 92.8%（93.1%） | −0.3pp [−0.9pp, +0.4pp] | 6.6%（6.9%） | −0.3pp [−0.9pp, +0.3pp] | 49.7% [49.3%, 50.1%] | 87.5% / 87.3% / 87.7% | 42.9% / 47.9% / 44.1% |
+| **三個合併（15000）** | — | **+0.23pp [−0.14pp, +0.59pp]** | — | **−0.27pp [−0.64pp, +0.11pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7 節。）
+
+讀法：
+
+1. 兩個立場的合併區間都含 0 → 依「更像真人，而且不能讓它變弱」**整組不算變弱**。紅方在這三個新種子上的點估計是 +0.23pp，和第 8 節五個種子的 −0.42pp [−0.70pp, −0.13pp] 方向不同；把兩組（共 8 個種子、40000 組）以同樣方式合併約為 −0.17pp [−0.40pp, +0.05pp]，區間含 0。也就是說，第二輪補強之後剩下的紅方差距在雜訊範圍內；第 8 節「用全部資料看仍算變弱」的結論以這一節為準更新。
+2. 藍方 −0.27pp 與第 7 節單獨量的 −0.27pp [−0.65pp, +0.10pp] 相同：紅方湖法改變之後，好人湖新模型的效果沒有變。
+3. 紅方湖的實際行為（A 局，三個種子合計）：看得到隊友且可湖隊友時湖隊友 99.95%（8576/8580；對照 C 43.5%）；湖到藍方時宣紅 28.4%（294/1037，真人 25.9%）；奧伯倫湖到紅方 29.2%（596/2044）。
+4. 機器人對機器人時藍方只有約 7% 勝率（真人最終藍勝約 31%），這是機器人好人本身的弱點，不是湖的改動造成的；之後要從好人的判讀與派隊（例如第 8.6 節第 2 點：好人持湖者宣藍後自己帶隊只放被宣的人約 45%，真人 99.2%）著手。
+
+一致性基準（整合後的正式預設，`agreementBenchmark.ts` 不加 `--legacy`；283,061 個決策、0 次 fallback；ED / Sin / top / population）：
+
+| 項目 | 舊預設（2026-10-12） | 整合後 |
+|---|---|---|
+| 湖目標（全部持湖者） | 13.7 / 19.5 / 11.7 / 13.3% | **27.5 / 20.1 / 21.8 / 21.8%** |
+| 湖目標（好人持湖） | 18.9 / 20.3 / 12.2 / 14.9% | **35.1 / 22.9 / 25.8 / 24.7%** |
+| 湖目標（紅方持湖） | 0.0 / 17.9 / 10.7 / 10.4% | 7.1 / 14.3 / 15.3 / 16.3% |
+| 紅方湖宣告 | 50.0 / 61.1 / 60.4 / 58.2% | **78.6 / 85.2 / 74.6 / 69.1%** |
+| 投票 R3+ | 63.7 / 65.2 / 61.9 / 63.6% | 64.1 / 65.9 / 62.7 / 64.2% |
+| 派隊 Jaccard R2+ | 39.2 / 42.3 / 40.0 / 41.1% | 39.2 / 42.5 / 40.2 / 41.2% |
+| 任務牌、刺殺、R1–R2 投票 | — | 不變 |
+
+各項與第 7.3、8.5 節分開量的數字一致（好人湖與紅方湖的改動在一致性基準裡互不影響，只有「全部持湖者」一列是兩者合起來）。
+
+重跑：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 5150 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel
+# 換 --seed 8128 / 6561；一致性基準：
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin
+```

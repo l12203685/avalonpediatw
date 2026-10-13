@@ -198,6 +198,10 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     打開，剩下的差距與待決事項見第 8.6 節。這裡的採用依「對只開新湖法
  *     不變弱」，不是原定的「對舊預設不變弱」，也寫在第 8.6 節。
  *     `oberonLakeSeeksTeammates` 不採用。
+ *     整合後（加上 `goodLakeInfoMax`）用三個新種子 5150 / 8128 / 6561 重跑
+ *     （第 9 節）：紅方 +0.23pp [−0.14pp, +0.59pp]、藍方 −0.27pp [−0.64pp,
+ *     +0.11pp]，兩邊區間都含 0；紅方與第 8 節五個種子合併約 −0.17pp
+ *     [−0.40pp, +0.05pp] → 整組不算變弱。
  *   - `goodLakeInfoMax`（2026-10-13，strength_benchmark.md 第 7 節）：對照
  *     同樣是上面這組正式預設。好人持湖的湖目標一致性 ED 18.9→35.1%、
  *     Sin 20.3→22.9%、top 12.2→25.8%、population 14.9→24.7%（配對比較
