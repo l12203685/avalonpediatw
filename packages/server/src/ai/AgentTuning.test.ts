@@ -118,6 +118,16 @@ describe('AgentTuning — flags', () => {
     }
   });
 
+  it('2026-10-13 round-3 teamReuse: default, flag, env var, off in legacy', () => {
+    // strength_benchmark.md 第 11 節.
+    expect(DEFAULT_AGENT_TUNING.teamReuse).toBe(false);
+    expect(LEGACY_AGENT_TUNING.teamReuse).toBe(false);
+    expect(parseTuningFlag('teamReuse')).toEqual({ teamReuse: true });
+    expect(AGENT_TUNING_ENV.teamReuse).toBe('AVALON_TUNING_TEAM_REUSE');
+    expect(tuningFromEnv({ AVALON_TUNING_TEAM_REUSE: '1' })).toEqual({ teamReuse: true });
+    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, teamReuse: true })).toBe('teamReuse');
+  });
+
   it('resolveAgentTuning layers overrides on top of a base', () => {
     const t = resolveAgentTuning({ assassinModel: true }, { ...LEGACY_AGENT_TUNING });
     expect(t).toEqual({ ...LEGACY_AGENT_TUNING, assassinModel: true });

@@ -115,6 +115,15 @@ export interface AgentTuning {
    * `GoodLakeInfo.ts`；打開時優先於 `goodLakeTargetMostSuspicious`。
    */
   goodLakeInfoMax: boolean;
+  /**
+   * 派隊沿用前一隊（2026-10-13 第三輪，strength_benchmark.md 第 11 節）：
+   * ForwardAgent 從 R2 起不再懲罰重提本回合被否決的隊，改成「保留參考隊
+   * 伍成員的比例」加分（參考 = 上一個成功任務的隊、本回合先前的提議），
+   * 並把沿用參考隊的候選（原隊、換自己進去、加一人、換一人）加進候選
+   * 集合；硬1 / 硬2 違規的隊不加分，好人隊長的隊有看得到的紅或湖鏈違規者
+   * 也不加分。細節見 `TeamReuse.ts`。
+   */
+  teamReuse: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -131,6 +140,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'evilLakeFrameHumanRate',
   'oberonLakeSeeksTeammates',
   'goodLakeInfoMax',
+  'teamReuse',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -146,6 +156,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: false,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: false,
+  teamReuse: false,
 });
 
 /**
@@ -231,6 +242,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: true,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: true,
+  teamReuse: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -246,6 +258,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   evilLakeFrameHumanRate: 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE',
   oberonLakeSeeksTeammates: 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES',
   goodLakeInfoMax: 'AVALON_TUNING_GOOD_LAKE_INFO_MAX',
+  teamReuse: 'AVALON_TUNING_TEAM_REUSE',
 });
 
 function parseBool(raw: string): boolean | undefined {

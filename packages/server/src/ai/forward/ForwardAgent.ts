@@ -61,6 +61,7 @@ import type {
 import { HeuristicAgent } from '../HeuristicAgent';
 import { humanQuestCardRule } from '../AgentTuning';
 import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } from '../RedLakeFollowUp';
+import { teamReuseActive, teamReuseCandidateTeams, teamReusePlan, teamReuseScorer } from '../TeamReuse';
 import {
   interpret,
   type Facts,
@@ -971,8 +972,19 @@ export class ForwardAgent implements AvalonAgent {
     // every round including R1; the penalty applies cross-round.
     // priorAttemptTeams is scoped to the CURRENT round only (HR-3 is
     // about within-round attempts, not cross-round).
+    // ── AgentTuning.teamReuse (2026-10-13 round 3) ──
+    // Humans build on the teams already on the table (strength_benchmark.md
+    // 第 11 節): with the switch on, from R2 the penalty below is replaced
+    // by a bonus for the share of a reference team a candidate keeps (see
+    // `TeamReuse.ts`; no bonus for a team breaking 硬1 / 硬2, or for a good
+    // leader's team holding a red it can see). Off → no change.
+    const reusePlan =
+      decisionType === 'team_select' && teamReuseActive(this.baseline.tuning, obs)
+        ? teamReusePlan(obs)
+        : null;
+    const reuseBonus = reusePlan ? teamReuseScorer(reusePlan, obs) : null;
     const priorAttemptTeams = new Set<string>();
-    if (decisionType === 'team_select') {
+    if (decisionType === 'team_select' && !reusePlan?.replacesPriorPenalty) {
       const curRound = obs.currentRound ?? 1;
       for (const v of obs.voteHistory) {
         if (v.round !== curRound) continue;
@@ -1004,6 +1016,9 @@ export class ForwardAgent implements AvalonAgent {
         c.action.vote === selfOnProposedTeam
       ) {
         s += normalVotePrior;
+      }
+      if (reuseBonus && c.action.type === 'team_select') {
+        s += reuseBonus(c.action.teamIds);
       }
       if (
         c.action.type === 'team_select' &&
@@ -1414,6 +1429,23 @@ export class ForwardAgent implements AvalonAgent {
     };
 
     let candidates: Candidate[] = enumerateTeams([], otherRanked);
+
+    // ── AgentTuning.teamReuse (2026-10-13 round 3) ──
+    // Add the teams that reuse a reference team (itself, self swapped in,
+    // grown by one, one-seat swaps), drawn from the same role-filtered pool,
+    // so the reuse bonus in decide() has them to score. Off → no change.
+    if (teamReuseActive(this.baseline.tuning, obs)) {
+      const plan = teamReusePlan(obs);
+      if (plan && plan.refs.length > 0) {
+        const have = new Set(
+          candidates.map((c) => (c.action.type === 'team_select' ? [...c.action.teamIds].sort().join(',') : '')),
+        );
+        for (const team of teamReuseCandidateTeams(plan, obs, otherRanked)) {
+          if (have.has([...team].sort().join(','))) continue;
+          candidates.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
+        }
+      }
+    }
 
     // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
     // A red leader keeps its lake word: seats it declared blue go on the

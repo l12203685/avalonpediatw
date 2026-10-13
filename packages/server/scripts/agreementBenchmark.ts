@@ -50,6 +50,7 @@ import {
   setEvilLakeHumanOptions,
 } from '../src/ai/LakePolicy';
 import { setVouchFollowUpOptions, vouchFollowUpOptionsFromEnv } from '../src/ai/RedLakeFollowUp';
+import { DEFAULT_TEAM_REUSE_OPTIONS, setTeamReuseOptions, teamReuseOptionsFromEnv } from '../src/ai/TeamReuse';
 import { rowsFromSheet, parseReplayGame, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
 import { replayGame, type DecisionOutcome } from '../src/ai/benchmark/agreement';
 import { computeTopPerformers, cohortKey, BENCHMARK_ROLES } from '../src/ai/benchmark/cohorts';
@@ -184,6 +185,13 @@ function main(): void {
   const vouchOptions = vouchFollowUpOptionsFromEnv();
   setVouchFollowUpOptions(vouchOptions);
   if (process.env.AVALON_VOUCH_FOLLOW_UP_VARIANT) process.stderr.write(`evilVouchFollowUp variant: ${JSON.stringify(vouchOptions)}\n`);
+  // Benchmark-only weights of `teamReuse` (AVALON_TEAM_REUSE_VARIANT, e.g.
+  // "success=1,reject=0.45,mission=0.6,evilScale=1,camps=good"); the server never reads it.
+  const teamReuseOptions = teamReuseOptionsFromEnv();
+  setTeamReuseOptions(teamReuseOptions);
+  if (JSON.stringify(teamReuseOptions) !== JSON.stringify(DEFAULT_TEAM_REUSE_OPTIONS)) {
+    process.stderr.write(`teamReuse variant: ${JSON.stringify(teamReuseOptions)}\n`);
+  }
   if (JSON.stringify(evilLakeOptions) !== JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)) {
     process.stderr.write(`evilLakeHumanStrategy tactic mix: ${JSON.stringify(evilLakeOptions)}\n`);
   }
