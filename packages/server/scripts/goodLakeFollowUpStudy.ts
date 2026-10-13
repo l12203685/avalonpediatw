@@ -8,7 +8,7 @@
  *     [--player ED --player Sin] [--json out.json] [--cache PATH] \
  *     [--no-agent] [--flag NAME[=V] ...] [--base NAME[=V] ...]
  *   USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/goodLakeFollowUpStudy.ts \
- *     --selfplay N --seed S [--flag ...] [--base ...] [--json out.json]
+ *     --selfplay N --seed S [--seats 7..10] [--flag ...] [--base ...] [--json out.json]
  *
  * Replay mode (default; `sheets_cache.json` → `牌譜`, the strict replay of
  * the agreement benchmark, games with a valid lake chain only). For every
@@ -26,7 +26,8 @@
  *   (4) the same on the team (member, not leader);
  *   (5) the chain: seats declared by a seat the holder declared blue
  *       (holder A → B blue, then B → C): does A put C on his teams /
- *       reject teams without C / keep a seat B declared red off?
+ *       reject teams without C (off and on the team) / keep a seat B
+ *       declared red off?
  *   (6) Merlin: declared-blue seats Merlin sees as red (a lie somewhere).
  * Then, unless `--no-agent`, the same seats are replayed through
  * `HeuristicAgent.act` exactly like `agreementBenchmark.ts` (same per-seat
@@ -34,13 +35,18 @@
  * production default (+ `--base`) and the variant (+ `--flag`, default
  * `goodVouchFollowUp`), and the agent's teams / votes on those states are
  * scored the same way, plus agreement with the human on the targeted
- * decisions.
+ * decisions ("breaks a bound declaration" = own or chain, the scope the
+ * default rule acts on), and a paired comparison baseline → variant on
+ * the same decisions (teams closer / further, votes gained / lost, exact
+ * McNemar p).
  *
  * Self-play mode (`--selfplay N`): plays the B (variant on the good seats,
  * baseline red) and C (baseline both sides) games of `selfPlayStrength.ts`
  * for N seeds — same seating, roles and per-decision seeding, so wins match
- * that script — and reports the good holders' follow-up from the final
- * public record, the 硬3 flags on blue holders and the stance numbers.
+ * that script at 10 seats — and reports the good holders' follow-up from
+ * the final public record, the 硬3 flags on blue holders and the stance
+ * numbers. `--seats 7|8|9` plays smaller games (the live server plays them
+ * with the lake too; `selfPlayStrength.ts` is 10 seats only).
  *
  * `--flag` / `--base` apply ON TOP OF the production default
  * (`DEFAULT_AGENT_TUNING` + `AVALON_TUNING_*`), in both modes; without them
@@ -84,6 +90,7 @@ interface Args {
   base: Partial<AgentTuning>;
   selfplay?: number;
   seed: number;
+  seats: number;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -94,6 +101,7 @@ function parseArgs(argv: string[]): Args {
     flags: {},
     base: {},
     seed: 20261012,
+    seats: 10,
   };
   let anyFlag = false;
   let anyBase = false;
@@ -113,6 +121,7 @@ function parseArgs(argv: string[]): Args {
       case '--base': Object.assign(args.base, parseTuningFlag(next())); anyBase = true; break;
       case '--selfplay': args.selfplay = Number.parseInt(next(), 10); break;
       case '--seed': args.seed = Number.parseInt(next(), 10); break;
+      case '--seats': args.seats = Number.parseInt(next(), 10); break;
       case '--help': case '-h':
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         process.exit(0);
@@ -120,6 +129,7 @@ function parseArgs(argv: string[]): Args {
       default: throw new Error(`unknown argument ${a}`);
     }
   }
+  if (!Number.isInteger(args.seats) || args.seats < 7 || args.seats > 10) throw new Error('--seats must be 7..10');
   if (!anyFlag) args.flags = { goodVouchFollowUp: true };
   if (!anyBase) args.base = { goodVouchFollowUp: false };
   return args;
@@ -195,8 +205,8 @@ export interface HolderProposal {
   chainRed: string[];
   teamMissesChainBlue: boolean;
   teamHasChainRed: boolean;
-  /** Merlin: a seat bound as blue that Merlin sees as red. */
-  merlinKnownRedBound: boolean;
+  /** Merlin: the seats bound as blue (own or chain) that Merlin sees as red. */
+  merlinKnownRedBound: string[];
   /** Team of the proposal. */
   team: string[];
 }
@@ -246,7 +256,7 @@ function collectHuman(games: readonly ReplayGame[]): HolderProposal[] {
           chainRed: decl.chainRed,
           teamMissesChainBlue: decl.chainBlue.some((id) => !teamSet.has(id)),
           teamHasChainRed: decl.chainRed.some((id) => teamSet.has(id)),
-          merlinKnownRedBound: role === 'merlin' && decl.blue.some((id) => known.has(id)),
+          merlinKnownRedBound: role === 'merlin' ? decl.blue.filter((id) => known.has(id)) : [],
           team,
         });
       });
@@ -305,6 +315,7 @@ function analyseHuman(all: readonly HolderProposal[]): Section[] {
   const chainBlueLeads = all.filter((x) => x.position === 'lead' && x.chainBlue.length > 0);
   const chainRedLeads = all.filter((x) => x.position === 'lead' && x.chainRed.length > 0);
   const chainOff = voted('off');
+  const chainOn = voted('on');
   sections.push({
     title: '(5) chain — holder A declared B blue, then B declared C: what A does with C',
     rows: [
@@ -319,17 +330,23 @@ function analyseHuman(all: readonly HolderProposal[]): Section[] {
         rateOf(chainOff.filter((x) => x.chainRed.length > 0 && x.teamHasChainRed), rejected)),
       rateRow('A off the team, B declared C red; team leaves C out: reject',
         rateOf(chainOff.filter((x) => x.chainRed.length > 0 && !x.teamHasChainRed), rejected)),
+      rateRow('A on the team (member), B declared C blue; team leaves C out: reject',
+        rateOf(chainOn.filter((x) => x.chainBlue.length > 0 && x.teamMissesChainBlue), rejected)),
+      rateRow('A on the team (member), B declared C blue; team includes C: reject',
+        rateOf(chainOn.filter((x) => x.chainBlue.length > 0 && !x.teamMissesChainBlue), rejected)),
+      rateRow('A on the team (member), B declared C red; team includes C: reject',
+        rateOf(chainOn.filter((x) => x.chainRed.length > 0 && x.teamHasChainRed), rejected)),
     ],
   });
   // (6) Merlin
-  const merlinConflict = all.filter((x) => x.merlinKnownRedBound);
+  const merlinConflict = all.filter((x) => x.merlinKnownRedBound.length > 0);
   sections.push({
     title: '(6) Merlin — a seat bound as blue (own or chain) that Merlin sees as red',
     rows: [
       { label: 'proposals after such a declaration (any position)', value: `${merlinConflict.length}` },
       { label: 'distinct holder-games', value: `${new Set(merlinConflict.map((x) => `${x.gameId}|${x.seat}`)).size}` },
-      rateRow('Merlin leads: the known red is on the team',
-        rateOf(merlinConflict.filter((x) => x.position === 'lead'), (x) => x.team.some((id) => id === x.ownTarget || x.chainBlue.includes(id)))),
+      rateRow('Merlin leads: a bound-blue seat he sees as red is on the team',
+        rateOf(merlinConflict.filter((x) => x.position === 'lead'), (x) => x.team.some((id) => x.merlinKnownRedBound.includes(id)))),
     ],
   });
   return sections;
@@ -386,6 +403,16 @@ function agentPoints(
   return out;
 }
 
+/** The team breaks the holder's own declaration (leaves out its blue / includes its red). */
+function breaksOwn(r: HolderProposal): boolean {
+  return (r.ownClaim === 'good' && !r.teamHasOwnTarget) || (r.ownClaim === 'evil' && r.teamHasOwnTarget);
+}
+
+/** …or a chain declaration (the scope the default `goodVouchFollowUp` binds). */
+function breaksBound(r: HolderProposal): boolean {
+  return breaksOwn(r) || r.teamMissesChainBlue || r.teamHasChainRed;
+}
+
 function analyseAgent(points: readonly AgentPoint[]): Section[] {
   const leads = points.filter((p) => p.agentTeam !== undefined);
   const blueLeads = leads.filter((p) => p.rec.ownClaim === 'good');
@@ -427,6 +454,8 @@ function analyseAgent(points: readonly AgentPoint[]): Section[] {
         rateRow('off the team, declared RED included', rateOf(offWithRed, agentRejects)),
         rateRow('on the team, declared BLUE left out', rateOf(onMissBlue, agentRejects)),
         rateRow('off the team, chain BLUE left out', rateOf(off.filter((p) => p.rec.chainBlue.length > 0 && p.rec.teamMissesChainBlue), agentRejects)),
+        rateRow('off the team, chain RED included', rateOf(off.filter((p) => p.rec.teamHasChainRed), agentRejects)),
+        rateRow('on the team, a bound declaration broken (own or chain)', rateOf(on.filter((p) => breaksBound(p.rec)), agentRejects)),
       ],
     },
     {
@@ -437,12 +466,75 @@ function analyseAgent(points: readonly AgentPoint[]): Section[] {
         { label: '  … non-forced: Jaccard (mean)', value: meanJ(leads.filter((p) => !p.rec.forced)) },
         { label: '  … chain seat bound: Jaccard (mean)', value: meanJ(chainLeads) },
         rateRow('vote off the team, team breaks the declaration', rateOf([...offMissBlue, ...offWithRed], match)),
-        rateRow('vote off the team, team keeps the declaration', rateOf(off.filter((p) => !((p.rec.ownClaim === 'good' && !p.rec.teamHasOwnTarget) || (p.rec.ownClaim === 'evil' && p.rec.teamHasOwnTarget))), match)),
-        rateRow('vote on the team, team breaks the declaration', rateOf(on.filter((p) => (p.rec.ownClaim === 'good' && !p.rec.teamHasOwnTarget) || (p.rec.ownClaim === 'evil' && p.rec.teamHasOwnTarget)), match)),
+        rateRow('vote off the team, team keeps the declaration', rateOf(off.filter((p) => !breaksOwn(p.rec)), match)),
+        rateRow('vote on the team, team breaks the declaration', rateOf(on.filter((p) => breaksOwn(p.rec)), match)),
+        rateRow('vote off the team, team breaks a bound declaration (own or chain)', rateOf(off.filter((p) => breaksBound(p.rec)), match)),
+        rateRow('vote on the team, team breaks a bound declaration (own or chain)', rateOf(on.filter((p) => breaksBound(p.rec)), match)),
         rateRow('every vote after own declaration', rateOf(votes, match)),
       ],
     },
   ];
+}
+
+/** Exact two-sided McNemar p (binomial, p = 1/2) for b vs c discordant pairs. */
+function mcnemarP(b: number, c: number): number {
+  const n = b + c;
+  if (n === 0) return 1;
+  const k = Math.min(b, c);
+  let term = Math.pow(0.5, n); // C(n, 0) / 2^n
+  let tail = term;
+  for (let i = 1; i <= k; i++) {
+    term *= (n - i + 1) / i;
+    tail += term;
+  }
+  return Math.min(1, 2 * tail);
+}
+
+/**
+ * Paired baseline → variant on the same human states (same seat, same
+ * proposal): how many teams moved closer to / further from the human's
+ * (Jaccard), and how many votes became / stopped being the human's.
+ */
+function pairedSection(base: readonly AgentPoint[], variant: readonly AgentPoint[]): Section {
+  const key = (p: AgentPoint): string =>
+    `${p.rec.gameId}|${p.rec.seat}|${p.rec.round}|${p.rec.attempt}|${p.agentTeam !== undefined ? 'T' : 'V'}`;
+  const byKey = new Map(variant.map((p) => [key(p), p]));
+  let missing = 0;
+  let closer = 0; let further = 0; let same = 0; let exactGain = 0; let exactLoss = 0;
+  const votes = { offBreak: [0, 0, 0], onBreak: [0, 0, 0], all: [0, 0, 0] }; // [n, gained, lost]
+  for (const b of base) {
+    const v = byKey.get(key(b));
+    if (!v) { missing++; continue; }
+    if (b.agentTeam !== undefined) {
+      const jb = b.outcome.jaccard ?? 0;
+      const jv = v.outcome.jaccard ?? 0;
+      if (jv > jb + 1e-12) closer++; else if (jv < jb - 1e-12) further++; else same++;
+      if (v.outcome.match && !b.outcome.match) exactGain++;
+      if (!v.outcome.match && b.outcome.match) exactLoss++;
+      continue;
+    }
+    const buckets = [votes.all];
+    if (b.rec.position === 'off' && breaksBound(b.rec)) buckets.push(votes.offBreak);
+    if (b.rec.position === 'on' && breaksBound(b.rec)) buckets.push(votes.onBreak);
+    for (const t of buckets) {
+      t[0]++;
+      if (v.outcome.match && !b.outcome.match) t[1]++;
+      if (!v.outcome.match && b.outcome.match) t[2]++;
+    }
+  }
+  const voteRow = (label: string, [n, g, l]: number[]): { label: string; value: string } => ({
+    label, value: `${g} / ${l} (n=${n}; McNemar p = ${mcnemarP(g, l).toPrecision(2)})`,
+  });
+  return {
+    title: '(P) paired baseline → variant on the same decisions',
+    rows: [
+      { label: 'teams after own declaration: closer / further / same', value: `${closer} / ${further} / ${same} (Jaccard; exact match +${exactGain} −${exactLoss}; McNemar p = ${mcnemarP(closer, further).toPrecision(2)})` },
+      voteRow('votes off the team, a bound declaration broken: gained / lost', votes.offBreak),
+      voteRow('votes on the team, a bound declaration broken: gained / lost', votes.onBreak),
+      voteRow('every vote after own declaration: gained / lost', votes.all),
+      ...(missing > 0 ? [{ label: 'baseline decisions without a variant pair', value: `${missing}` }] : []),
+    ],
+  };
 }
 
 // ── Self-play (B and C games of selfPlayStrength.ts) ────────────
@@ -520,7 +612,11 @@ interface SelfPlayTally {
   offWithRed: number; offWithRedReject: number;
   /** Blue holders flagged by 硬3 (≥ 0.85) at the end of the game / blue holders who declared blue. */
   blueHolders: number; blueHoldersFlagged: number;
-  /** …of the flagged ones, flagged only by teams led after the declaration. */
+  /**
+   * …of the flagged ones, those with at least one team led after the
+   * declaration that leaves a declared-blue seat out (they may also have
+   * pre-declaration teams that would flag them).
+   */
   blueHoldersFlaggedPost: number;
   /** Red seats flagged by 硬3 at the end / red seats. */
   redFlagged: number;
@@ -617,7 +713,7 @@ async function runSelfPlay(args: Args, variantTuning: AgentTuning, baseTuning: A
       for (const arrangement of ['variantBlue', 'control'] as const) {
         const tuning = arrangement === 'control' ? baseTuning : variantTuning;
         const ctx = new GameContext();
-        const agents = Array.from({ length: 10 }, (_, k) => new StudyAgent(`P${k + 1}`, 'good', tuning, baseTuning));
+        const agents = Array.from({ length: args.seats }, (_, k) => new StudyAgent(`P${k + 1}`, 'good', tuning, baseTuning));
         for (const a of agents) { a.gameSeed = gameSeed; a.ctx = ctx; }
         const originalRandom = Math.random;
         Math.random = seededRandom(`${gameSeed}|setup`);
@@ -638,7 +734,7 @@ async function runSelfPlay(args: Args, variantTuning: AgentTuning, baseTuning: A
   } finally {
     console.log = originalLog;
   }
-  console.log(`self-play seed ${args.seed}, ${args.selfplay} seeds; B − C good wins: ${bMinusC} games (${((100 * bMinusC) / Math.max(1, args.selfplay ?? 1)).toFixed(2)}pp)`);
+  console.log(`self-play seed ${args.seed}, ${args.seats} seats, ${args.selfplay} seeds; B − C good wins: ${bMinusC} games (${((100 * bMinusC) / Math.max(1, args.selfplay ?? 1)).toFixed(2)}pp)`);
   return tallies;
 }
 
@@ -688,18 +784,26 @@ async function main(): Promise<void> {
       printSections(`humans — ${label} (proposals after a good holder's declaration n=${items.length})`, sections);
     }
     if (args.agent) {
+      const cohortPoints = (points: readonly AgentPoint[]): Array<[string, AgentPoint[]]> => [
+        ['population', [...points]],
+        ['top/role', points.filter((p) => top.members.has(cohortKey(p.rec.name, p.rec.role)))],
+        ...args.players.map((pl): [string, AgentPoint[]] => [pl, points.filter((p) => p.rec.name === pl)]),
+      ];
+      const pointsByTag: Record<string, AgentPoint[]> = {};
       for (const [tag, tuning] of [['baseline', baseTuning], ['variant', variantTuning]] as const) {
         const points = agentPoints(games, human, tuning);
-        const cohorts: Array<[string, AgentPoint[]]> = [
-          ['population', points],
-          ['top/role', points.filter((p) => top.members.has(cohortKey(p.rec.name, p.rec.role)))],
-          ...args.players.map((pl): [string, AgentPoint[]] => [pl, points.filter((p) => p.rec.name === pl)]),
-        ];
-        for (const [label, items] of cohorts) {
+        pointsByTag[tag] = points;
+        for (const [label, items] of cohortPoints(points)) {
           const sections = analyseAgent(items);
           result[`agent ${tag} ${label}`] = sections;
           printSections(`agent ${tag} (${describeAgentTuning(tuning)}) on human states — ${label}`, sections);
         }
+      }
+      const variantCohorts = new Map(cohortPoints(pointsByTag.variant));
+      for (const [label, items] of cohortPoints(pointsByTag.baseline)) {
+        const section = pairedSection(items, variantCohorts.get(label) ?? []);
+        result[`paired ${label}`] = [section];
+        printSections(`paired baseline → variant — ${label}`, [section]);
       }
       const tel = getForwardTelemetry();
       console.log(`\nforward telemetry: ${tel.totalDecisions} decisions via ForwardAgent, ${tel.fallbacks} fallbacks`);
