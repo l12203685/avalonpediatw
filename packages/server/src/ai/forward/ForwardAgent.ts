@@ -61,6 +61,9 @@ import type {
 import { HeuristicAgent } from '../HeuristicAgent';
 import { humanQuestCardRule } from '../AgentTuning';
 import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } from '../RedLakeFollowUp';
+import { goodVouchTeamConstraint, goodVouchVoteRule } from '../GoodLakeFollowUp';
+import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan, teamReuseScorer } from '../TeamReuse';
+import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
 import {
   interpret,
   type Facts,
@@ -636,6 +639,25 @@ export class ForwardAgent implements AvalonAgent {
     _forwardDecideCalls += 1;
     const decisionType = obs.gamePhase as DecisionType;
 
+    // ── AgentTuning.redR1Teammate (2026-10-13 round 3) ──
+    // An R1 red leader who sees teammates no longer leaves them out of
+    // every R1 team (RedR1Teammate.ts). 'asLoyal' proposes the team a loyal
+    // in this seat would (one decision: the inner call is not counted
+    // again); 'withTeammate' filters the candidates below.
+    const r1Plan: RedR1TeamPlan | null =
+      decisionType === 'team_select' ? redR1TeamPlan(obs, this.baseline.tuning) : null;
+    if (r1Plan === 'asLoyal') {
+      _forwardDecideCalls -= 1;
+      const asLoyal = this.decide(loyalViewOf(obs));
+      return {
+        action: asLoyal.action,
+        reasoningTrace: {
+          ...asLoyal.reasoningTrace,
+          summary: `${asLoyal.reasoningTrace.summary} [red R1 team as a loyal would]`,
+        },
+      };
+    }
+
     // ── Edward 2026-05-05 R1-R2 force-normal vote delegation ────
     //
     // Edward 2026-04-30 18:10 verbatim:
@@ -760,15 +782,21 @@ export class ForwardAgent implements AvalonAgent {
     // 硬2 vote rule does the same, except in red's decisive window; this
     // rule keeps the word there too, as humans do). The forced fifth
     // proposal is exempt — see `RedLakeFollowUp.evilVouchVoteRule`.
-    if (
-      decisionType === 'team_vote' &&
-      evilVouchFollowUpActive(this.baseline.tuning) &&
-      evilVouchVoteRule(obs) === 'reject'
-    ) {
+    // AgentTuning.goodVouchFollowUp (2026-10-13 round 3) is the blue
+    // counterpart, off the team only — see `GoodLakeFollowUp.goodVouchVoteRule`.
+    const vouchRejectSide =
+      decisionType !== 'team_vote'
+        ? null
+        : evilVouchFollowUpActive(this.baseline.tuning) && evilVouchVoteRule(obs) === 'reject'
+          ? 'red'
+          : this.baseline.tuning.goodVouchFollowUp && goodVouchVoteRule(obs) === 'reject'
+            ? 'blue'
+            : null;
+    if (vouchRejectSide !== null) {
       const action: AgentAction = { type: 'team_vote', vote: false };
       const ruleCandidate: Candidate = {
         action,
-        description: 'red vouch follow-up reject',
+        description: `${vouchRejectSide} vouch follow-up reject`,
         signals: {
           avgSuspicion: 0,
           maxSuspicion: 0,
@@ -788,7 +816,7 @@ export class ForwardAgent implements AvalonAgent {
           chosen: ruleCandidate,
           chosenScore: 0,
           usedFallback: false,
-          summary: `${decisionType} → red vouch follow-up reject (round=${obs.currentRound ?? 1})`,
+          summary: `${decisionType} → ${vouchRejectSide} vouch follow-up reject (round=${obs.currentRound ?? 1})`,
         },
       };
     }
@@ -909,7 +937,7 @@ export class ForwardAgent implements AvalonAgent {
 
     let candidates: Candidate[];
     try {
-      candidates = this.generateCandidates(decisionType, obs, interp);
+      candidates = this.generateCandidates(decisionType, obs, interp, r1Plan);
     } catch (error: unknown) {
       return this.fallback(obs, decisionType, 'generateCandidates() threw');
     }
@@ -971,6 +999,20 @@ export class ForwardAgent implements AvalonAgent {
     // every round including R1; the penalty applies cross-round.
     // priorAttemptTeams is scoped to the CURRENT round only (HR-3 is
     // about within-round attempts, not cross-round).
+    // ── AgentTuning.teamReuse (2026-10-13 round 3) ──
+    // Humans build on the teams already on the table (strength_benchmark.md
+    // 第 11 節): with the switch on, from R2 the penalty below is replaced
+    // by a bonus for the share of a reference team a candidate keeps (see
+    // `TeamReuse.ts`). A team the reuse guard refuses (硬1 / 硬2 breach, or
+    // a good leader's team holding a seat it treats as red) gets no bonus
+    // and keeps the penalty, so it scores exactly as with the switch off.
+    // Off → no change.
+    const reusePlan =
+      decisionType === 'team_select' && teamReuseActive(this.baseline.tuning, obs)
+        ? teamReusePlan(obs)
+        : null;
+    const reuseGuard = reusePlan ? teamReuseGuard(obs) : null;
+    const reuseBonus = reusePlan && reuseGuard ? teamReuseScorer(reusePlan, obs, reuseGuard) : null;
     const priorAttemptTeams = new Set<string>();
     if (decisionType === 'team_select') {
       const curRound = obs.currentRound ?? 1;
@@ -1005,9 +1047,13 @@ export class ForwardAgent implements AvalonAgent {
       ) {
         s += normalVotePrior;
       }
+      if (reuseBonus && c.action.type === 'team_select') {
+        s += reuseBonus(c.action.teamIds);
+      }
       if (
         c.action.type === 'team_select' &&
-        priorAttemptTeams.size > 0
+        priorAttemptTeams.size > 0 &&
+        !(reusePlan?.replacesPriorPenalty && reuseGuard?.(c.action.teamIds))
       ) {
         const candidateCanonical = canonicalSeatStringForward(
           c.action.teamIds,
@@ -1154,11 +1200,12 @@ export class ForwardAgent implements AvalonAgent {
     decisionType: DecisionType,
     obs: PlayerObservation,
     interp: InterpretationResult,
+    r1Plan: RedR1TeamPlan | null = null,
   ): Candidate[] {
     const pyramid = computePyramidScores(obs);
     switch (decisionType) {
       case 'team_select':
-        return this.generateTeamSelectCandidates(obs, interp, pyramid);
+        return this.generateTeamSelectCandidates(obs, interp, pyramid, r1Plan);
       case 'team_vote':
         return this.generateTeamVoteCandidates(obs, interp, pyramid);
       case 'quest_vote':
@@ -1172,6 +1219,7 @@ export class ForwardAgent implements AvalonAgent {
     obs: PlayerObservation,
     interp: InterpretationResult,
     pyramid: PyramidScores,
+    r1Plan: RedR1TeamPlan | null = null,
   ): Candidate[] {
     const teamSize = AVALON_CONFIG[obs.playerCount]?.questTeams[obs.currentRound - 1];
     if (teamSize === undefined || teamSize <= 0) return [];
@@ -1415,6 +1463,26 @@ export class ForwardAgent implements AvalonAgent {
 
     let candidates: Candidate[] = enumerateTeams([], otherRanked);
 
+    // ── AgentTuning.teamReuse (2026-10-13 round 3) ──
+    // Add the teams that reuse a reference team (itself, self swapped in,
+    // grown by one, one-seat swaps), drawn from the same role-filtered pool
+    // and sized like the teams above, so the reuse bonus in decide() has
+    // them to score; teams the reuse guard refuses are not added. Off → no
+    // change.
+    if (teamReuseActive(this.baseline.tuning, obs)) {
+      const plan = teamReusePlan(obs);
+      if (plan && plan.refs.length > 0) {
+        const have = new Set(
+          candidates.map((c) => (c.action.type === 'team_select' ? [...c.action.teamIds].sort().join(',') : '')),
+        );
+        const accepts = teamReuseGuard(obs, pyramid);
+        for (const team of teamReuseCandidateTeams(plan, obs, otherRanked, teamSize, accepts)) {
+          if (have.has([...team].sort().join(','))) continue;
+          candidates.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
+        }
+      }
+    }
+
     // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
     // A red leader keeps its lake word: seats it declared blue go on the
     // team, seats it declared red stay off (the baseline's 硬1 / 硬2 team
@@ -1427,7 +1495,11 @@ export class ForwardAgent implements AvalonAgent {
     // (review 2026-10-13: building them every time let in combinations
     // the low-suspicion cut had dropped, e.g. three visible reds).
     // Off (or `evilLakeHumanStrategy` off) → no change.
-    const vouch = evilVouchFollowUpActive(this.baseline.tuning) ? evilVouchTeamConstraint(obs) : null;
+    // AgentTuning.goodVouchFollowUp (2026-10-13 round 3): the same filter
+    // for a good leader's own lake word (`GoodLakeFollowUp.goodVouchTeamConstraint`).
+    const vouch =
+      (evilVouchFollowUpActive(this.baseline.tuning) ? evilVouchTeamConstraint(obs) : null) ??
+      (this.baseline.tuning.goodVouchFollowUp ? goodVouchTeamConstraint(obs) : null);
     if (vouch) {
       const fixedMembers = vouch.required
         .filter((id) => id !== selfId)
@@ -1444,10 +1516,48 @@ export class ForwardAgent implements AvalonAgent {
       } else {
         const withoutFixed = otherRanked.filter((id) => !fixedMembers.includes(id));
         const withoutBanned = withoutFixed.filter((id) => !banned.has(id));
-        const comboRanked =
-          withoutBanned.length >= teamSize - 1 - fixedMembers.length ? withoutBanned : withoutFixed;
+        const freeSlots = teamSize - 1 - fixedMembers.length;
+        // goodVouchFollowUp (review 2026-10-13): in 7–8 player games
+        // Percival's 鐵咬 / inferred-red filters can leave too few seats
+        // besides the one he declared red; restore filtered seats (mildest
+        // exclusion first, as the 2026-10-10 backfill above) instead of
+        // letting the declared-red seat back in. Red leaders: unchanged.
+        if (withoutBanned.length < freeSlots && obs.myTeam === 'good') {
+          const restore = rankedAll
+            .filter((id) => id !== selfId && !fixedMembers.includes(id) && !banned.has(id) && !withoutBanned.includes(id))
+            .sort((a, b) => (exclusionSeverity.get(a) ?? 0) - (exclusionSeverity.get(b) ?? 0));
+          withoutBanned.push(...restore.slice(0, freeSlots - withoutBanned.length));
+        }
+        const comboRanked = withoutBanned.length >= freeSlots ? withoutBanned : withoutFixed;
         candidates = enumerateTeams(fixedMembers, comboRanked);
       }
+    }
+
+    // ── AgentTuning.redR1Teammate (2026-10-13 round 3) ──
+    // Plan 'withTeammate': keep the candidates with exactly one visible
+    // teammate (humans put both on 3.2% of R1 teams); the scorer and the
+    // hash tie-break pick among them as usual — the R1 mimic-loyal bias is
+    // the same for every one of them. See RedR1Teammate.ts. The R1-P1
+    // banned seat combos below stay banned: a banned teammate team is no
+    // option, and with none left the old rule stands (review 2026-10-13).
+    if (r1Plan === 'withTeammate') {
+      const r1p1Banned =
+        (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0
+          ? bannedComboSetFor5p(obs.playerCount)
+          : new Set<string>();
+      const allowed = (c: Candidate): boolean =>
+        c.action.type === 'team_select' &&
+        visibleTeammatesOn(obs, c.action.teamIds) === 1 &&
+        !r1p1Banned.has(canonicalSeatStringForward(c.action.teamIds, obs.allPlayerIds));
+      let withOne = candidates.filter(allowed);
+      const mate = otherRanked.find((id) => obs.knownEvils.includes(id));
+      if (withOne.length === 0 && mate !== undefined) {
+        withOne = enumerateTeams(
+          [mate],
+          otherRanked.filter((id) => !obs.knownEvils.includes(id)),
+        ).filter(allowed);
+      }
+      if (withOne.length > 0) candidates = withOne;
     }
 
     // ── Edward 2026-05-06 R1-P1 banned-combo filter (5p HR-5/HR-7) ────

@@ -57,6 +57,9 @@ import {
   setEvilLakeHumanOptions,
 } from '../src/ai/LakePolicy';
 import { setVouchFollowUpOptions, vouchFollowUpOptionsFromEnv } from '../src/ai/RedLakeFollowUp';
+import { goodVouchOptionsFromEnv, setGoodVouchOptions } from '../src/ai/GoodLakeFollowUp';
+import { DEFAULT_TEAM_REUSE_OPTIONS, setTeamReuseOptions, teamReuseOptionsFromEnv } from '../src/ai/TeamReuse';
+import { redR1TeammateOptionsFromEnv, setRedR1TeammateOptions } from '../src/ai/RedR1Teammate';
 import {
   analyzeLakeChain,
   findRule3Violators,
@@ -178,6 +181,15 @@ interface GameRec {
   /** Proposals led by a seeing red (assassin / Morgana / Mordred) per round, and how many carry a visible teammate. */
   seeingLed: number[];
   seeingLedMate: number[];
+  /** R1 (`redR1Teammate`): seeing-red talk (attempts 1–4) / forced proposals and how many carry a visible teammate. */
+  r1TalkLed: number;
+  r1TalkLedMate: number;
+  r1ForcedLed: number;
+  r1ForcedLedMate: number;
+  /** R1 mission: failed; seeing reds on it; fail cards. */
+  r1Failed: boolean;
+  r1SeeingOnMission: number;
+  r1FailCards: number;
 }
 
 function emptyGame(): GameRec {
@@ -194,6 +206,8 @@ function emptyGame(): GameRec {
     blueVouchLed: 0, blueVouchLedIncl: 0,
     missionsAfterLake: 0, redsOnMissionsAfterLake: 0, flaggedRedsOnMissions: 0,
     seeingLed: [0, 0, 0, 0, 0, 0], seeingLedMate: [0, 0, 0, 0, 0, 0],
+    r1TalkLed: 0, r1TalkLedMate: 0, r1ForcedLed: 0, r1ForcedLedMate: 0,
+    r1Failed: false, r1SeeingOnMission: 0, r1FailCards: 0,
   };
 }
 
@@ -377,7 +391,18 @@ function analyseGame(ctx: GameContext): void {
   for (const v of obs.voteHistory) {
     if (!seeing(v.leader) || v.round < 1 || v.round > 5) continue;
     rec.seeingLed[v.round]++;
-    if (v.team.some((id) => id !== v.leader && seeing(id))) rec.seeingLedMate[v.round]++;
+    const mate = v.team.some((id) => id !== v.leader && seeing(id));
+    if (mate) rec.seeingLedMate[v.round]++;
+    if (v.round === 1) {
+      if (v.attempt >= 5) { rec.r1ForcedLed++; if (mate) rec.r1ForcedLedMate++; }
+      else { rec.r1TalkLed++; if (mate) rec.r1TalkLedMate++; }
+    }
+  }
+  const r1 = obs.questHistory.find((q) => q.round === 1);
+  if (r1) {
+    rec.r1Failed = r1.result === 'fail';
+    rec.r1SeeingOnMission = r1.team.filter(seeing).length;
+    rec.r1FailCards = r1.failCount;
   }
   const firstLakeRound = Math.min(...(obs.lakeHistory ?? []).map((l) => l.round), Number.POSITIVE_INFINITY);
   for (const q of obs.questHistory) {
@@ -529,6 +554,11 @@ function sideReport(label: string, games: readonly GameRec[]): string[] {
       `blue holder led ${frac(sum(games, (g) => g.blueVouchLedIncl), sum(games, (g) => g.blueVouchLed))} incl.`,
     `seeing-red leaders: team with a visible teammate ` +
       [1, 2, 3, 4, 5].map((r) => `R${r} ${frac(sum(games, (g) => g.seeingLedMate[r]), sum(games, (g) => g.seeingLed[r]))}`).join(', '),
+    `R1 seeing-red leaders with a visible teammate: talk ${frac(sum(games, (g) => g.r1TalkLedMate), sum(games, (g) => g.r1TalkLed))}, ` +
+      `forced ${frac(sum(games, (g) => g.r1ForcedLedMate), sum(games, (g) => g.r1ForcedLed))}; R1 mission failed ` +
+      `${frac(games.filter((g) => g.r1Failed).length, n)}; with ≥2 seeing reds on it ${frac(games.filter((g) => g.r1SeeingOnMission >= 2).length, n)} ` +
+      `(failed ${frac(games.filter((g) => g.r1SeeingOnMission >= 2 && g.r1Failed).length, games.filter((g) => g.r1SeeingOnMission >= 2).length)}, ` +
+      `two fail cards ${frac(games.filter((g) => g.r1SeeingOnMission >= 2 && g.r1FailCards >= 2).length, games.filter((g) => g.r1SeeingOnMission >= 2).length)})`,
     `missions after the first lake: ${sum(games, (g) => g.missionsAfterLake)}, reds per mission ` +
       `${(sum(games, (g) => g.redsOnMissionsAfterLake) / Math.max(1, sum(games, (g) => g.missionsAfterLake))).toFixed(3)}, ` +
       `flagged reds sent ${sum(games, (g) => g.flaggedRedsOnMissions)}`,
@@ -570,6 +600,18 @@ async function main(): Promise<void> {
   const vouchOptions = vouchFollowUpOptionsFromEnv();
   setVouchFollowUpOptions(vouchOptions);
   if (process.env.AVALON_VOUCH_FOLLOW_UP_VARIANT) process.stderr.write(`evilVouchFollowUp variant: ${JSON.stringify(vouchOptions)}\n`);
+  // Benchmark-only knob for `goodVouchFollowUp` (AVALON_GOOD_VOUCH_VARIANT, e.g. "scope=own").
+  const goodVouchOptions = goodVouchOptionsFromEnv();
+  setGoodVouchOptions(goodVouchOptions);
+  if (process.env.AVALON_GOOD_VOUCH_VARIANT) process.stderr.write(`goodVouchFollowUp variant: ${JSON.stringify(goodVouchOptions)}\n`);
+  // Benchmark-only weights of `teamReuse` (AVALON_TEAM_REUSE_VARIANT); always printed, as in selfPlayStrength.ts.
+  const teamReuseOptions = teamReuseOptionsFromEnv();
+  setTeamReuseOptions(teamReuseOptions);
+  const teamReuseIsDefault = JSON.stringify(teamReuseOptions) === JSON.stringify(DEFAULT_TEAM_REUSE_OPTIONS);
+  process.stderr.write(`teamReuse weights${teamReuseIsDefault ? ' (defaults)' : ' (variant)'}: ${JSON.stringify(teamReuseOptions)}\n`);
+  // Benchmark-only knob for `redR1Teammate` (AVALON_RED_R1_TEAMMATE_VARIANT); the server never reads it.
+  setRedR1TeammateOptions(redR1TeammateOptionsFromEnv());
+  if (process.env.AVALON_RED_R1_TEAMMATE_VARIANT) process.stderr.write(`redR1Teammate variant: ${JSON.stringify(redR1TeammateOptionsFromEnv())}\n`);
   const variantKnob = JSON.stringify(evilLakeOptions) === JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)
     ? 'default' : process.env.AVALON_EVIL_LAKE_HUMAN_VARIANT ?? '';
   installRule3(args.rule3);

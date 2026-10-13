@@ -27,6 +27,7 @@ import { ForwardAgent, USE_FORWARD_REASONING, interpret } from './forward';
 import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory } from './LakePolicy';
 import { analyzeGoodLake } from './GoodLakeInfo';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
+import { redR1TeamPlanDraws, replayBothDraws, visibleTeammatesOn } from './RedR1Teammate';
 import { AVALON_CONFIG } from '@avalon/shared';
 
 export interface ExplainedSuspect {
@@ -334,6 +335,15 @@ export function replayRule(
   if (!forwardActive) return { rule: '基準策略（HeuristicAgent；前向推理未啟用）', mismatch: false };
   try {
     const shadow = new HeuristicAgent(obs.myPlayerId, undefined, undefined, { ...agent.tuning });
+    // redR1Teammate draws whether an R1 red leader brings a teammate; replay both outcomes.
+    if (redR1TeamPlanDraws(obs, shadow.tuning)) {
+      const both = replayBothDraws(() => new ForwardAgent(obs.myPlayerId, shadow).decide(obs).action);
+      const brought = real.type === 'team_select' && visibleTeammatesOn(obs, real.teamIds) > 0;
+      return {
+        rule: `紅方首局帶隊友：R1 依真人比例抽籤決定要不要帶一位看得到的隊友（這次${brought ? '帶' : '不帶'}），其餘照前向推理評分`,
+        mismatch: !sameAction(both.withTeammate, real) && !sameAction(both.without, real),
+      };
+    }
     const { action, reasoningTrace: trace } = new ForwardAgent(obs.myPlayerId, shadow).decide(obs);
     const desc = trace.chosen.description;
     if (trace.usedFallback) {
@@ -344,6 +354,18 @@ export function replayRule(
     }
     if (desc.endsWith('on-team approve hard rule')) {
       return { rule: '派西維爾／莫甘娜在隊上一律贊成', mismatch: false };
+    }
+    if (desc === 'blue vouch follow-up reject') {
+      return {
+        rule: '持湖者言行一致：自己不在隊上，隊伍漏掉自己（或湖鏈上）宣藍的人、或放了宣紅的人 → 反對',
+        mismatch: !sameAction(action, real),
+      };
+    }
+    if (desc === 'red vouch follow-up reject') {
+      return {
+        rule: '紅方持湖者言行一致：自己不在隊上，隊伍漏掉自己宣藍的人、或放了宣紅的人 → 反對',
+        mismatch: !sameAction(action, real),
+      };
     }
     if (desc.startsWith('human quest-card rule')) {
       return { rule: '真人任務牌規則（R1 莫甘娜為隊上唯一紅方時出失敗）', mismatch: !sameAction(action, real) };

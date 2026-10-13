@@ -49,6 +49,22 @@
  *                                   打開時優先於 `goodLakeTargetMostSuspicious`
  *                                   （模型找不到一致的組合時才退回它）；
  *                                   梅林不湖看得到的紅、派西不湖兩拇指照舊。
+ *   - `goodVouchFollowUp`          （2026-10-13 第三輪，**預設開**）好人持湖者
+ *                                   言行一致：自己宣藍的人（含「我宣藍的人之後
+ *                                   宣藍的人」）放進自己派的隊、宣紅的不放；不在
+ *                                   隊上時違反宣告的隊就反對（`GoodLakeFollowUp.ts`）。
+ *   - `teamReuse`                  （2026-10-13 第三輪，**預設開**）派隊沿用
+ *                                   前一隊：ForwardAgent 從 R2 起不再懲罰重提
+ *                                   被否決的隊，改成「保留參考隊成員比例」
+ *                                   加分（上一個成功任務的隊、本回合先前的
+ *                                   提議），沿用的隊加進候選；防護擋下的隊（硬1 /
+ *                                   硬2 違規、好人隊長的隊有自己當作紅的人）不加
+ *                                   分、保留舊懲罰；R1 不變。`TeamReuse.ts`。
+ *   - `redR1Teammate`              （2026-10-13 第三輪，**預設開**）看得到隊友的
+ *                                   紅方 R1 當隊長時，前四次提議（不會過的說話隊）
+ *                                   以真人比例 48.0% 放一位隊友（原本 0%）；第五次
+ *                                   強制局照舊不放。只在 10 人局。細節見
+ *                                   `RedR1Teammate.ts`。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -115,6 +131,31 @@ export interface AgentTuning {
    * `GoodLakeInfo.ts`；打開時優先於 `goodLakeTargetMostSuspicious`。
    */
   goodLakeInfoMax: boolean;
+  /**
+   * 好人持湖者言行一致（2026-10-13 第三輪，strength_benchmark.md 第 10 節；
+   * `evilVouchFollowUp` 的藍方版本）：自己宣藍的人一定放進自己派的隊、宣紅
+   * 的人不放；自己不在隊上時，漏掉自己宣藍的人或放了宣紅的人的隊就反對
+   * （強制局例外）。細節見 `GoodLakeFollowUp.ts`。
+   */
+  goodVouchFollowUp: boolean;
+  /**
+   * 派隊沿用前一隊（2026-10-13 第三輪，strength_benchmark.md 第 11 節）：
+   * ForwardAgent 從 R2 起不再懲罰重提本回合被否決的隊，改成「保留參考隊
+   * 伍成員的比例」加分（參考 = 上一個成功任務的隊、本回合先前的提議），
+   * 並把沿用參考隊的候選（原隊、換自己進去、加一人、換一人）加進候選
+   * 集合；防護擋下的隊（硬1 / 硬2 違規；好人隊長的隊上有看得到的紅、湖鏈 /
+   * 硬3 違規者、失敗任務推得出的紅或金字塔 ≥ 0.85 的人）不加分、保留舊懲罰，
+   * 也不加進候選。細節見 `TeamReuse.ts`。2026-10-13 採用（預設開）。
+   */
+  teamReuse: boolean;
+  /**
+   * 紅方首局帶隊友（2026-10-13 第三輪，strength_benchmark.md 第 12 節）：
+   * 看得到隊友的紅方 R1 當隊長時，不再一律不放隊友（真人 R1 43.9%，前四次
+   * 提議 48.0%、第五次強制局 27.7%）：前四次提議以 48.0% 的機率放一位隊友，
+   * 強制局照舊。只在 10 人局（資料與基準都是 10 人局）。細節見
+   * `RedR1Teammate.ts`。R2+ 不變。
+   */
+  redR1Teammate: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -131,6 +172,9 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'evilLakeFrameHumanRate',
   'oberonLakeSeeksTeammates',
   'goodLakeInfoMax',
+  'goodVouchFollowUp',
+  'teamReuse',
+  'redR1Teammate',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -146,12 +190,17 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: false,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: false,
+  goodVouchFollowUp: false,
+  teamReuse: false,
+  redR1Teammate: false,
 });
 
 /**
  * 正式預設（2026-10-12 採用，docs/ai/strength_benchmark.md 第 2 節；
  * 2026-10-13 `evilLakeHumanStrategy` 依 Edward 裁定打開，第 6、8 節；同日
- * 採用 `goodLakeInfoMax`，第 7 節；兩者合併後的整組重跑見第 9 節）。
+ * 採用 `goodLakeInfoMax`，第 7 節；兩者合併後的整組重跑見第 9 節；第三輪
+ * `goodVouchFollowUp` + `teamReuse` + `redR1Teammate` 合併後的整組重跑見
+ * 第 13 節）。
  * 採用規則（2026-10-12 事前版）：一致性基準更像真人、且自我對打合計勝率
  * 95% 區間下界 ≥ 48%；整合時改依 Edward 原文「更像真人，而且不能讓它
  * 變弱」：任一立場配對差的 95% 區間整個落在 0 以下就算變弱、不採用。
@@ -212,6 +261,43 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     −0.3pp [−0.6pp, +0.1pp]，區間都含 0 → 依規則不算變弱 → **採用**
  *     （整合時打開；`goodLakeTargetMostSuspicious` 保留，只當模型找不到
  *     一致組合時的退路；AVALON_TUNING_GOOD_LAKE_INFO_MAX=0 可關掉）。
+ *   - `goodVouchFollowUp`（2026-10-13 第三輪，strength_benchmark.md 第 10 節）：
+ *     對照 = 上面這組整合後的正式預設。更像真人（好人持湖者宣告後自己派隊
+ *     放被宣的人 47%→100%，真人 99.2%；目標決策的派隊 Jaccard ED 44.6→53.1、
+ *     Sin 54.7→59.2、top 47.3→56.3；不在隊上時對違反宣告的隊的票 Sin
+ *     85.2→96.3、top 81.8→95.9、ED 100 不變），藍方立場選版本 seed 11111
+ *     +0.64pp [+0.31pp, +0.97pp]，新種子 22222 +0.36pp [−0.00pp, +0.72pp]、
+ *     33333 +0.68pp [+0.36pp, +1.00pp]，三個種子合併 +0.57pp [+0.38pp,
+ *     +0.77pp]（紅方立場恆為 0）→ **採用**（AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP=0
+ *     可關掉）。
+ *   - `teamReuse`（2026-10-13 第三輪，strength_benchmark.md 第 11 節；數字
+ *     是同日審查修正後重跑的）：對照 = 整合後的正式預設（第 9 節）。派隊
+ *     一致性 R2+（完全相同 / Jaccard）ED 3.5→11.8 / 39.2→48.8、Sin 4.4→22.7
+ *     / 42.5→57.1、top 3.0→15.4 / 40.2→52.4、population 3.8→16.1 /
+ *     41.2→53.1，其他決策不變；自我對打（單邊立場）選版本種子 44444 + 重跑
+ *     55555 / 66666 + 新種子 67890 / 68888 合併：紅方 +2.77pp [+2.41pp,
+ *     +3.13pp]、藍方 +5.08pp [+4.62pp, +5.54pp]；十個座位都開的機器人自打自
+ *     藍勝約 7.1%→10.5% → **採用**（AVALON_TUNING_TEAM_REUSE=0 可關掉）。
+ *   - `redR1Teammate`（2026-10-13 第三輪，strength_benchmark.md 第 12 節；對照
+ *     組 = 上面整合後的正式預設；只在 10 人局）：R1 紅方隊長「放不放隊友」
+ *     與真人相同的比例，去掉抽籤運氣的期望值 ED 49.0→53.9%、Sin 39.4→
+ *     52.6%、top 52.2→53.6%（population 56.1→54.6%，只當同分參考；這次
+ *     播種實際 61.2 / 58.5 / 52.8 / 54.2%）。與關掉時逐次配對只有 Sin 明確
+ *     較好（46 對 19，McNemar p=0.001），top 持平（175 對 170），ED 11 對 5
+ *     （p=0.21）；放隊友的比例照真人（說話隊 47.7% vs 48.0%）；派隊 Jaccard
+ *     四群都升，其他決策完全不變；自我對打紅方
+ *     選版本 seed 77777 +0.32pp [−0.19pp, +0.83pp]、新種子 88888 +0.24pp
+ *     [−0.27pp, +0.75pp]、99999 −0.22pp [−0.71pp, +0.27pp]，三個種子合併
+ *     +0.10pp [−0.19pp, +0.39pp]，藍方恆為 0 → 不算變弱 → **採用**
+ *     （AVALON_TUNING_RED_R1_TEAMMATE=0 可關掉）。
+ *   - 第三輪整合（strength_benchmark.md 第 13 節）：上面三個第三輪開關各自
+ *     的對照組都不含另外兩個，所以合併後整組重跑。新預設（這裡的全部開關）
+ *     對第 9 節正式預設，三個沒用過的新種子 101010 / 202020 / 303030（各
+ *     5000 組 × 3 局）合併：紅方 +3.18pp [+2.70pp, +3.65pp]、藍方 +4.89pp
+ *     [+4.28pp, +5.49pp]，兩個立場都不在 0 以下 → 整組保留。十個座位都用
+ *     新預設的機器人自打自（seed 404040）藍勝 7.42%→11.32%。一致性基準
+ *     只有派隊（R1、R2+）與 R3+ 投票改變（派隊 Jaccard R2+ ED 39.2→49.0、
+ *     Sin 42.5→57.1、top 40.2→52.5、population 41.2→53.2），其他逐項相同。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -231,6 +317,9 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: true,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: true,
+  goodVouchFollowUp: true,
+  teamReuse: true,
+  redR1Teammate: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -246,6 +335,9 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   evilLakeFrameHumanRate: 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE',
   oberonLakeSeeksTeammates: 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES',
   goodLakeInfoMax: 'AVALON_TUNING_GOOD_LAKE_INFO_MAX',
+  goodVouchFollowUp: 'AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP',
+  teamReuse: 'AVALON_TUNING_TEAM_REUSE',
+  redR1Teammate: 'AVALON_TUNING_RED_R1_TEAMMATE',
 });
 
 function parseBool(raw: string): boolean | undefined {

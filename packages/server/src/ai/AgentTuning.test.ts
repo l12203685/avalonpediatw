@@ -118,6 +118,54 @@ describe('AgentTuning — flags', () => {
     }
   });
 
+  it('2026-10-13 round-3 goodVouchFollowUp: on in the default, flag, env var, off in legacy', () => {
+    // strength_benchmark.md 第 10 節: the blue counterpart of evilVouchFollowUp — more
+    // human-like and blue +0.57pp [+0.38pp, +0.77pp] over seeds 11111 + 22222 + 33333.
+    expect(LEGACY_AGENT_TUNING.goodVouchFollowUp).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.goodVouchFollowUp).toBe(true);
+    expect(tuningFromEnv({ AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP: '0' })).toEqual({ goodVouchFollowUp: false });
+    expect(parseTuningFlag('goodVouchFollowUp')).toEqual({ goodVouchFollowUp: true });
+    expect(AGENT_TUNING_ENV.goodVouchFollowUp).toBe('AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP');
+    expect(tuningFromEnv({ AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP: '1' })).toEqual({ goodVouchFollowUp: true });
+    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, goodVouchFollowUp: true })).toBe('goodVouchFollowUp');
+  });
+
+  it('2026-10-13 round-3 teamReuse: default, flag, env var, off in legacy', () => {
+    // strength_benchmark.md 第 11 節.
+    expect(DEFAULT_AGENT_TUNING.teamReuse).toBe(true);
+    expect(LEGACY_AGENT_TUNING.teamReuse).toBe(false);
+    expect(parseTuningFlag('teamReuse')).toEqual({ teamReuse: true });
+    expect(AGENT_TUNING_ENV.teamReuse).toBe('AVALON_TUNING_TEAM_REUSE');
+    expect(tuningFromEnv({ AVALON_TUNING_TEAM_REUSE: '1' })).toEqual({ teamReuse: true });
+    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, teamReuse: true })).toBe('teamReuse');
+  });
+
+  it('redR1Teammate (2026-10-13 round 3): on in the default, off in legacy, flag, env var and description', () => {
+    // strength_benchmark.md 第 12 節: an R1 red leader who sees teammates brings one on the
+    // talk proposals at the human rate (10p only); agreement up in expectation for ED / Sin /
+    // top (paired, only Sin significant), not weaker as red.
+    expect(DEFAULT_AGENT_TUNING.redR1Teammate).toBe(true);
+    expect(LEGACY_AGENT_TUNING.redR1Teammate).toBe(false);
+    expect(parseTuningFlag('redR1Teammate')).toEqual({ redR1Teammate: true });
+    expect(AGENT_TUNING_ENV.redR1Teammate).toBe('AVALON_TUNING_RED_R1_TEAMMATE');
+    expect(tuningFromEnv({ AVALON_TUNING_RED_R1_TEAMMATE: '0' })).toEqual({ redR1Teammate: false });
+    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, redR1Teammate: true })).toBe('redR1Teammate');
+  });
+
+  it('round-3 integrated default (strength_benchmark.md 第 13 節): the set re-run on seeds 101010 / 202020 / 303030', () => {
+    // Variant of the combined self-play run = exactly this set (red +3.18pp, blue +4.89pp
+    // pooled over the old default); the baseline = this set minus the three round-3 switches.
+    expect(describeAgentTuning(DEFAULT_AGENT_TUNING)).toBe(
+      'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
+        'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
+        'goodVouchFollowUp,teamReuse,redR1Teammate',
+    );
+    expect(describeAgentTuning({ ...DEFAULT_AGENT_TUNING, goodVouchFollowUp: false, teamReuse: false, redR1Teammate: false })).toBe(
+      'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
+        'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax',
+    );
+  });
+
   it('resolveAgentTuning layers overrides on top of a base', () => {
     const t = resolveAgentTuning({ assassinModel: true }, { ...LEGACY_AGENT_TUNING });
     expect(t).toEqual({ ...LEGACY_AGENT_TUNING, assassinModel: true });
