@@ -26,7 +26,7 @@ import type {
   PlaystylePlayerData,
   StrengthPlayerData,
 } from '../../services/sheetsAnalysis';
-import { isTheoryBoard } from '../../services/sheetsAnalysis';
+import { isTheoryBoard, theoryLastWindows } from '../../services/sheetsAnalysis';
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
@@ -292,15 +292,16 @@ function theoryLine(label: string, w: PlayerTheoryWindow): string {
 
 /**
  * "近 100 場｜角色理論 …", "近 50 場｜…", "生涯 N 場｜…" from `player.theory`
- * (schemaVersion 3). A last-N line is printed only when the player has more
- * than N games (otherwise it is the career line again). null on an older cache.
+ * (schemaVersion 3; whatever last-N windows the cache has, largest first). A
+ * last-N line is printed only when the player has more than N games (otherwise
+ * it is the career line again). null on an older cache.
  */
 export function theoryLines(p: Pick<PlayerStats, 'theory'>): string[] | null {
   const career = p.theory?.career;
   if (!career || typeof career.games !== 'number') return null;
   const lines: string[] = [];
-  for (const w of [p.theory?.last100, p.theory?.last50]) {
-    if (w && typeof w.window === 'number' && w.window > 0 && career.games > w.window) {
+  for (const w of theoryLastWindows(p.theory)) {
+    if (career.games > w.window) {
       lines.push(theoryLine(`近 ${w.window} 場`, w));
     }
   }
@@ -378,7 +379,27 @@ export interface LeaderboardView {
   emptyNote?: string;
 }
 
+/**
+ * Shown on a cache written before the theory rates. Such a cache carries none of the new
+ * settings, so this names the generator's defaults (LEADERBOARD_CONFIG.mainGames = 100).
+ */
 export const LEADERBOARD_PENDING_NOTE = '（排行改版中：下次每日更新資料後，會改用「各人最近 100 場」的角色理論勝率排行）';
+
+/**
+ * A setting of the generator: leaderboard.config[key], else overview.theoryConfig[key], else
+ * `fallback` (the generator's default), so the text never contradicts the numbers.
+ */
+function theorySetting(
+  key: 'mainGames' | 'activeDays',
+  fallback: number,
+  ...sources: Array<Record<string, unknown> | null | undefined>
+): number {
+  for (const src of sources) {
+    const v = src?.[key];
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
+  }
+  return fallback;
+}
 
 /** The board with that id, or null when it is absent or has no rows (the generator omits boards it cannot build). */
 export function findBoard(
@@ -439,17 +460,21 @@ export function boardView(board: LeaderboardBoard, size: number = LEADERBOARD_SI
  *      note on a cache written before the theory rates.
  */
 export function selectLeaderboard(
-  leaderboard: Pick<LeaderboardSection, 'boards'> | null | undefined,
-  overview: Pick<OverviewData, 'topPlayersByRoleTheory' | 'schemaVersion'> | null | undefined,
+  leaderboard: (Pick<LeaderboardSection, 'boards'> & Partial<Pick<LeaderboardSection, 'config'>>) | null | undefined,
+  overview: Pick<OverviewData, 'topPlayersByRoleTheory' | 'schemaVersion' | 'theoryConfig'> | null | undefined,
   size: number = LEADERBOARD_SIZE,
 ): LeaderboardView {
   const main = findTheoryBoard(leaderboard, 'main');
   if (main) return boardView(main, size, '🏆');
 
+  // The window / thresholds the generator used (a pre-theory leaderboard.config has none of these keys).
+  const settings = [leaderboard?.config, overview?.theoryConfig as Record<string, unknown> | undefined];
+  const mainGames = theorySetting('mainGames', 100, ...settings);
+  const activeDays = theorySetting('activeDays', 90, ...settings);
   const top = overview?.topPlayersByRoleTheory;
   if (Array.isArray(top) && top.length > 0) {
     return {
-      title: `🏆 角色理論勝率排行 Top ${size}（各人最近 100 場，生涯至少 100 場，不限近期出賽）`,
+      title: `🏆 角色理論勝率排行 Top ${size}（各人最近 ${mainGames} 場，生涯至少 ${mainGames} 場，不限近期出賽）`,
       rows: top.slice(0, size).map((r, i) => ({
         rank: i + 1,
         name: r.name,
@@ -464,7 +489,7 @@ export function selectLeaderboard(
   return {
     title: '🏆 角色理論勝率排行',
     rows: [],
-    emptyNote: current ? '（目前沒有符合條件的玩家：近 90 天內有出賽、生涯至少 100 場）' : LEADERBOARD_PENDING_NOTE,
+    emptyNote: current ? `（目前沒有符合條件的玩家：近 ${activeDays} 天內有出賽、生涯至少 ${mainGames} 場）` : LEADERBOARD_PENDING_NOTE,
   };
 }
 

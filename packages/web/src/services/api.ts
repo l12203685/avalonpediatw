@@ -399,12 +399,12 @@ export interface AnalysisOverview {
   /** 三藍局刺中率。 */
   merlinKillRate: number;
   outcomeBreakdown: OutcomeBreakdown;
-  /** 舊口徑 (roleTheory ≈ 任務結算勝率)；有 topPlayersByExcess 時不再顯示。 */
+  /** 舊口徑 (roleTheory ≈ 任務結算勝率)；2026-10-13 起網站不再顯示 (改看 topPlayersByRoleTheory)。 */
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
   /**
    * 契約新欄位 — 舊快取 (schemaVersion < 2) 全部缺，前端用 outcomeBreakdown
-   * 現場算三段結算，排行退回 topPlayersByTheory 並標明舊口徑。
+   * 現場算三段結算；排行在沒有 topPlayersByRoleTheory 時只提示「下次每日更新後提供」。
    */
   schemaVersion?: number;
   missionStage?: MissionStageSummary;
@@ -417,12 +417,14 @@ export interface AnalysisOverview {
   /** schemaVersion 3：全體各位置最終勝率 %，鍵 "1".."10" (位置理論的補值用)。 */
   seatFinalWinRates?: Record<string, number>;
   /**
-   * schemaVersion 3：生涯 ≥ 100 場 (不限近期出賽) 的玩家，依各人最近 100 場的角色理論勝率排序；
-   * games = 該視窗場數 (100)。舊快取沒有此欄位 → 顯示「下次每日更新後提供」。
+   * schemaVersion 3：生涯 ≥ mainGames (100) 場 (不限近期出賽) 的玩家，依各人最近 mainGames 場的
+   * 角色理論勝率排序；games = 該視窗場數。舊快取沒有此欄位 → 顯示「下次每日更新後提供」。
    */
   topPlayersByRoleTheory?: Array<{
     name: string; roleTheory: number; positionTheory: number; finalWinRate: number; games: number; careerGames: number;
   }>;
+  /** schemaVersion 3：產生器的理論勝率設定；網站的說明文字依此組字，不寫死 100 場、3 場。 */
+  theoryConfig?: AnalysisTheoryConfig;
   /**
    * Edward 2026-04-27 — `outcomes` (per-seat 三結果) and `roles[].outcomes`
    * (per-role 三結果) added so deep-analytics seat tooltip can show the
@@ -524,10 +526,60 @@ export interface PlayerTheoryWindow {
   sparseSeats: number;
 }
 
+/** `last<N>` (N = 產生器的 mainGames / shortGames，現在是 100 / 50) 與 career；讀的時候用 theoryLastWindows()。 */
 export interface PlayerTheory {
   last100?: PlayerTheoryWindow;
   last50?: PlayerTheoryWindow;
   career?: PlayerTheoryWindow;
+  [key: string]: PlayerTheoryWindow | undefined;
+}
+
+/** players[].theory 的「近 N 場」視窗，N 大的在前 (不假設一定是 100 / 50)。 */
+export function theoryLastWindows(theory: PlayerTheory | null | undefined): PlayerTheoryWindow[] {
+  if (!theory || typeof theory !== 'object') return [];
+  return Object.entries(theory)
+    .filter((e): e is [string, PlayerTheoryWindow] => /^last\d+$/.test(e[0]) && !!e[1] && typeof e[1] === 'object')
+    .map(([, w]) => w)
+    .filter(w => typeof w.window === 'number' && w.window > 0)
+    .sort((a, b) => b.window - a.window);
+}
+
+/** overview.theoryConfig (schemaVersion 3)。 */
+export interface AnalysisTheoryConfig {
+  /** 少場補值門檻；0 = 不補。 */
+  theoryMinCellGames: number;
+  /** players[].theory 的近 N 場視窗 (mainGames, shortGames)。 */
+  theoryWindows: number[];
+  /** 主榜與總覽排行的視窗 (也是生涯場數門檻)。 */
+  mainGames: number;
+  /** 「近期出賽」= 近 N 天內有出賽。 */
+  activeDays: number;
+}
+
+/** 產生器的預設值 (舊快取沒有 theoryConfig 時用)。 */
+export const DEFAULT_THEORY_CONFIG: AnalysisTheoryConfig = {
+  theoryMinCellGames: 3, theoryWindows: [100, 50], mainGames: 100, activeDays: 90,
+};
+
+/** overview.theoryConfig 或 leaderboard.config 的值；缺的鍵用預設值。 */
+export function theorySettings(...given: Array<object | null | undefined>): AnalysisTheoryConfig {
+  const sources = given.map(src => (src && typeof src === 'object' ? (src as Record<string, unknown>) : null));
+  const pick = (key: 'theoryMinCellGames' | 'mainGames' | 'activeDays'): number => {
+    for (const src of sources) {
+      const v = src?.[key];
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
+    }
+    return DEFAULT_THEORY_CONFIG[key];
+  };
+  const windows = sources
+    .map(src => src?.theoryWindows)
+    .find((w): w is number[] => Array.isArray(w) && w.length > 0 && w.every(n => typeof n === 'number' && n > 0));
+  return {
+    theoryMinCellGames: pick('theoryMinCellGames'),
+    theoryWindows: windows ?? DEFAULT_THEORY_CONFIG.theoryWindows,
+    mainGames: pick('mainGames'),
+    activeDays: pick('activeDays'),
+  };
 }
 
 /**
@@ -667,6 +719,12 @@ export function fmtPct(v: number | null | undefined, digits = 1): string {
 export function fmtSignedPct(v: number | null | undefined, digits = 1): string {
   if (!isFiniteNum(v)) return '—';
   return `${v > 0 ? '+' : ''}${v.toFixed(digits)}%`;
+}
+
+/** 帶正負號的百分點差 (不加 %，例：+10.4)；用在兩個百分比相減，避免讀成相對成長。 */
+export function fmtSignedPoints(v: number | null | undefined, digits = 1): string {
+  if (!isFiniteNum(v)) return '—';
+  return `${v > 0 ? '+' : ''}${v.toFixed(digits)}`;
 }
 
 export interface ChemistryMatrix {

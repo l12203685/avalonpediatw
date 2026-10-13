@@ -36,8 +36,9 @@ import LeaderboardV3Table from '../components/LeaderboardV3Table';
  *
  * (2026-10-12 兩段結算 / 排行改版, docs/stats/two_stage_outcome.md)
  *   top tab 改成兩個：
- *   - 排行：上方 LeaderboardBoards (/api/analysis/leaderboard：超額勝率 main 榜 +
- *     近 90 天 / 進步 / 本週刺殺 / 新人 / 上月角色稱號小卡)，下方保留 LeaderboardV3Table
+ *   - 排行：上方 LeaderboardBoards (/api/analysis/leaderboard；當時是超額勝率 main 榜 +
+ *     近 90 天 / 進步 / 本週刺殺 / 新人 / 上月角色稱號小卡，2026-10-13 起改版，見下)，
+ *     下方保留 LeaderboardV3Table
  *   - 分析：子分頁依玩家決策分區 — 總覽、派隊、投票、任務、湖中女神、刺殺、位置、
  *     角色與默契、玩家雷達；原「特徵研究」五張卡依主題放進對應分頁 (預設展開)
  *   副標的場數改讀 overview.totalGames，不再寫死。

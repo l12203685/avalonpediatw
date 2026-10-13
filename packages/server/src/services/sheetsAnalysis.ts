@@ -126,12 +126,41 @@ export interface PlayerTheoryWindow {
   sparseSeats: number;
 }
 
-/** players[].theory — keys `last100` / `last50` follow LEADERBOARD_CONFIG.theoryWindows. */
+/**
+ * players[].theory — `last<N>` for N in leaderboard.config.theoryWindows (= the generator's
+ * mainGames and shortGames, 100 and 50 today) plus `career`. Readers go through
+ * theoryLastWindows() instead of assuming the 100 / 50 keys.
+ */
 export interface PlayerTheory {
   last100?: PlayerTheoryWindow;
   last50?: PlayerTheoryWindow;
   career?: PlayerTheoryWindow;
   [key: string]: PlayerTheoryWindow | undefined;
+}
+
+/** The `last<N>` windows of players[].theory, largest N first (whatever N the generator used). */
+export function theoryLastWindows(theory: PlayerTheory | null | undefined): PlayerTheoryWindow[] {
+  if (!theory || typeof theory !== 'object') return [];
+  return Object.entries(theory)
+    .filter((e): e is [string, PlayerTheoryWindow] => /^last\d+$/.test(e[0]) && !!e[1] && typeof e[1] === 'object')
+    .map(([, w]) => w)
+    .filter((w) => typeof w.window === 'number' && w.window > 0)
+    .sort((a, b) => b.window - a.window);
+}
+
+/**
+ * overview.theoryConfig (schemaVersion 3): the generator's settings the readers word the
+ * theory rates with, so a changed LEADERBOARD_CONFIG never leaves stale text behind.
+ */
+export interface TheoryConfig {
+  /** Sparse-cell top-up threshold; 0 = off. */
+  theoryMinCellGames: number;
+  /** players[].theory last-N windows (mainGames, shortGames). */
+  theoryWindows: number[];
+  /** Window of the main board and overview.topPlayersByRoleTheory (also their career-games floor). */
+  mainGames: number;
+  /** "Active" = a game in the last N days. */
+  activeDays: number;
 }
 
 export interface ChemistryMatrix {
@@ -237,10 +266,12 @@ export interface OverviewData {
   /** schemaVersion 3: population final win rate per seat, keys "1".."10" (positionTheory's top-up). */
   seatFinalWinRates?: Record<string, number>;
   /**
-   * schemaVersion 3: everyone with ≥ 100 career games (active or not), ranked by the
-   * roleTheory of their last 100 games; `games` = games in that window.
+   * schemaVersion 3: everyone with ≥ mainGames (100) career games (active or not), ranked by
+   * the roleTheory of their last mainGames games; `games` = games in that window.
    */
   topPlayersByRoleTheory?: TheoryRankingRow[];
+  /** schemaVersion 3: the theory settings (top-up threshold, windows) the site words its notes with. */
+  theoryConfig?: TheoryConfig;
   /**
    * Edward 2026-04-27 — `outcomes` (per-seat 三結果 distribution) and
    * `roles[].outcomes` (per-role 三結果 distribution) added so the deep

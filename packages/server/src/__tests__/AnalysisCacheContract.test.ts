@@ -56,6 +56,16 @@ const playerNames = committedCache.players.players.map((p) => p.name);
 const V2 = typeof committedCache.overview.schemaVersion === 'number' && committedCache.overview.schemaVersion >= 2;
 /** Cache written with the theory win rates (players[].theory, theory boards) → mandatory too. */
 const V3 = typeof committedCache.overview.schemaVersion === 'number' && committedCache.overview.schemaVersion >= 3;
+/**
+ * The last-N theory windows the cache was written with (its own leaderboard.config.theoryWindows,
+ * = the generator's mainGames / shortGames), so changing those knobs never fails this test
+ * before the daily refresh has rewritten the file. 100 / 50 = the generator's defaults.
+ */
+const THEORY_WINDOWS: number[] = (() => {
+  const lb = committedCache.leaderboard as { config?: { theoryWindows?: unknown } } | undefined;
+  const w = lb?.config?.theoryWindows;
+  return Array.isArray(w) && w.length > 0 && w.every((n) => typeof n === 'number' && n > 0) ? (w as number[]) : [100, 50];
+})();
 
 // ---------------------------------------------------------------------------
 // Tiny shape checker — collects every problem so a failing rebuild reports
@@ -111,11 +121,16 @@ function v3Field(v: unknown, check: () => void): void {
 
 const THEORY_WINDOW_NUMS = ['window', 'games', 'roleTheory', 'positionTheory', 'finalWinRate', 'sparseRoles', 'sparseSeats'];
 
-/** players[].theory: last100 / last50 / career windows (PlayerRadarChart, /戰績). */
+/** players[].theory: last<N> (THEORY_WINDOWS) and career windows (PlayerRadarChart, /戰績). */
 function theoryBlock(p: Problems, v: unknown, totalGames: unknown, at: string): void {
   const t = obj(p, v, at);
-  for (const key of ['last100', 'last50', 'career']) {
+  const keys = [...THEORY_WINDOWS.map((n) => `last${n}`), 'career'];
+  if (Object.keys(t).join() !== keys.join()) p.push(`${at} keys ${show(Object.keys(t))} ≠ ${show(keys)}`);
+  for (const [i, key] of keys.entries()) {
     const w = obj(p, t[key], `${at}.${key}`);
+    const n = THEORY_WINDOWS[i] ?? 0; // career: 0
+    if (typeof w.window === 'number' && w.window !== n) p.push(`${at}.${key}.window ${show(w.window)} ≠ ${n}`);
+    if (n > 0 && typeof w.games === 'number' && w.games > n) p.push(`${at}.${key}.games ${show(w.games)} > ${n}`);
     for (const k of THEORY_WINDOW_NUMS) num(p, w[k], `${at}.${key}.${k}`);
     for (const k of ['from', 'to']) str(p, w[k], `${at}.${key}.${k}`);
     for (const k of ['roleTheory', 'positionTheory', 'finalWinRate']) {
@@ -235,6 +250,12 @@ describe('analysis_cache.json → web contract', () => {
       numRecord(p, d.seatFinalWinRates, 'seatFinalWinRates');
       const keys = Object.keys(obj(p, d.seatFinalWinRates, 'seatFinalWinRates'));
       if (keys.join() !== '1,2,3,4,5,6,7,8,9,10') p.push(`seatFinalWinRates keys ${show(keys)}`);
+    });
+    v3Field(d.theoryConfig, () => {
+      // The settings the site words the theory rates with; they must match leaderboard.config.
+      const tc = obj(p, d.theoryConfig, 'theoryConfig');
+      for (const k of ['theoryMinCellGames', 'mainGames', 'activeDays']) num(p, tc[k], `theoryConfig.${k}`);
+      if (show(tc.theoryWindows) !== show(THEORY_WINDOWS)) p.push(`theoryConfig.theoryWindows ${show(tc.theoryWindows)} ≠ ${show(THEORY_WINDOWS)}`);
     });
     v3Field(d.topPlayersByRoleTheory, () => {
       // [] is legitimate (nobody with 100 career games); present rows must be complete.

@@ -257,6 +257,12 @@ describe('formatPlayerCard', () => {
     expect(theoryLines({ theory: { last100: tw(100, 100, 50, 49, 48), last50: tw(50, 50, 51, 50, 49), career: tw(0, 100, 50, 49, 48) } })![0]).toMatch(/^近 50 場/);
     expect(theoryLines({ theory: { career: tw(0, 12, 47.1, 46, 50) } })).toEqual(['生涯 12 場｜角色理論 47.1%｜位置理論 46.0%｜最終 50.0%']);
     expect(theoryLines({})).toBeNull();
+    // Whatever windows the generator wrote (mainGames / shortGames changed to 80 / 30), largest first.
+    expect(theoryLines({ theory: { last30: tw(30, 30, 40, 41, 42), last80: tw(80, 80, 45, 46, 47), career: tw(0, 90, 50, 49, 48) } })).toEqual([
+      '近 80 場｜角色理論 45.0%｜位置理論 46.0%｜最終 47.0%',
+      '近 30 場｜角色理論 40.0%｜位置理論 41.0%｜最終 42.0%',
+      '生涯 90 場｜角色理論 50.0%｜位置理論 49.0%｜最終 48.0%',
+    ]);
     expect(theoryFootnote(3)).toBe('※ 角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 該角色最終勝率；位置理論 = Σ 1/10 × 該位置最終勝率；不到 3 場的角色或位置用全體勝率補到 3 場');
     expect(theoryFootnote(0)).not.toContain('補');
     const card = formatPlayerCard({ player: contractPlayer('A', 12, 50, 1, { theory: { career: tw(0, 12, 47.1, 46, 50) } }), minCellGames: 5 });
@@ -411,6 +417,17 @@ describe('selectLeaderboard', () => {
     expect(leaderboardLines(selectLeaderboard(undefined, undefined))).toEqual(['🏆 角色理論勝率排行', LEADERBOARD_PENDING_NOTE]);
   });
 
+  it('the fallback title and the empty note follow the generator settings (leaderboard.config, else overview.theoryConfig)', () => {
+    const theoryConfig = { theoryMinCellGames: 3, theoryWindows: [80, 50], mainGames: 80, activeDays: 60 };
+    const empty = selectLeaderboard({ boards: [] }, { schemaVersion: 3, topPlayersByRoleTheory: [], theoryConfig });
+    expect(empty.emptyNote).toBe('（目前沒有符合條件的玩家：近 60 天內有出賽、生涯至少 80 場）');
+    const fromConfig = selectLeaderboard({ boards: [], config: { mainGames: 120, activeDays: 30 } }, { ...OVERVIEW, theoryConfig });
+    expect(fromConfig.title).toBe('🏆 角色理論勝率排行 Top 10（各人最近 120 場，生涯至少 120 場，不限近期出賽）');
+    // A pre-theory config (windowDays, minGames, ...) has no mainGames: the defaults.
+    const oldConfig = selectLeaderboard({ boards: [OLD_MAIN], config: { windowDays: 365, activeDays: 90, minGames: 20 } }, OVERVIEW);
+    expect(oldConfig.title).toBe('🏆 角色理論勝率排行 Top 10（各人最近 100 場，生涯至少 100 場，不限近期出賽）');
+  });
+
   it('findBoard ignores boards without rows; findTheoryBoard also ignores pre-2026-10-13 boards', () => {
     expect(findBoard({ boards: [{ ...board('main', 'x', 0) }] }, 'main')).toBeNull();
     expect(findBoard(LEADERBOARD, 'last50')?.id).toBe('last50');
@@ -451,7 +468,7 @@ describe('formatLeaderboard', () => {
   });
 
   it('totals line uses the final / mission / assassination stages, derived from outcomeBreakdown on an old cache', () => {
-    const { missionStage: _m, assassinationStage: _a, final: _f, ...noStages } = OVERVIEW;
+    const noStages = { ...OVERVIEW, missionStage: undefined, assassinationStage: undefined, final: undefined };
     // final red = (1013 + 533) / 2228 = 69.4%, blue = 682 / 2228 = 30.6%.
     expect(overviewTotalsLine(noStages)).toBe(
       '📈 總計 2228 場｜221 位玩家｜最終紅勝 69.4%／藍勝 30.6%（任務結算 紅 45.5%／藍 54.5%，三藍局刺中 43.9%）',

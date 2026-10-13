@@ -9,7 +9,8 @@ import {
   isAnalysisRouteMissing,
   isTheoryBoard,
   fmtPct,
-  fmtSignedPct,
+  fmtSignedPoints,
+  theorySettings,
   type AnalysisLeaderboardData,
   type AnalysisLeaderboardBoard,
   type AnalysisLeaderboardRow,
@@ -17,10 +18,10 @@ import {
 
 /**
  * 排行 (docs/stats/two_stage_outcome.md `leaderboard` 段，Edward 2026-10-13)：
- *  「條件篩選可以是近期，但資料篩選不能少場」— 誰上榜看近 90 天有沒有出賽，數字一律是
- *  各人自己的最近 N 場，不用短期日期區間。
+ *  「條件篩選可以是近期，但資料篩選不能少場」— 誰上榜看近 activeDays (90) 天有沒有出賽，
+ *  數字一律是各人自己的最近 N 場，不用短期日期區間。說明文字的天數、場數讀 leaderboard.config。
  *  - main 榜：表格 — 名次、名字、角色理論、位置理論、最終勝率、場數 (各人最近 100 場)
- *  - 小卡：近 50 場、進步榜 (最近 50 vs 再之前 50)、刺客刺中率 (最近 20 次刺殺)、
+ *  - 小卡：近 50 場、進步榜 (最近 50 vs 再之前 50，差值單位是百分點)、刺客刺中率 (最近 20 次刺殺)、
  *    新人榜 (例外：全部場次)、角色王 (該角色最近 20 場)
  *  - 舊快取的榜 (沒有 metric，超額勝率)：不顯示，提示下次每日更新後提供
  *  - 快取尚無此段 (503 "Leaderboard not yet generated")：顯示「排行尚未產生（每日 03:47 重算）」
@@ -80,6 +81,8 @@ export default function LeaderboardBoards(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<BoardsNotice | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // 天數、場數讀快取的 leaderboard.config (舊快取沒有這些鍵 → 產生器預設值)。
+  const settings = theorySettings(data?.config);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,7 +141,7 @@ export default function LeaderboardBoards(): JSX.Element {
     return (
       <div className="flex items-center gap-3 flex-wrap px-4 py-4 rounded-xl border border-amber-800/40 bg-amber-900/10 text-amber-300 text-sm">
         <Clock size={18} className="flex-shrink-0" />
-        <span className="flex-1">{t(`analytics.boards.${notice}`)}</span>
+        <span className="flex-1">{t(`analytics.boards.${notice}`, { games: settings.mainGames })}</span>
         {retryButton}
       </div>
     );
@@ -173,13 +176,13 @@ export default function LeaderboardBoards(): JSX.Element {
           <> · {t('analytics.boards.datesNote', { parsed: data.dates.parsed, unparsed: data.dates.unparsed })}</>
         )}
       </p>
-      <p className="text-[11px] text-zinc-500 leading-relaxed">{t('analytics.boards.principle')}</p>
+      <p className="text-[11px] text-zinc-500 leading-relaxed">{t('analytics.boards.principle', { days: settings.activeDays })}</p>
 
       {main && main.rows.length > 0 ? (
         <MainBoard board={main} isEn={isEn} />
       ) : (
         <div className="px-4 py-4 rounded-xl border border-gray-700 bg-avalon-card/30 text-sm text-gray-500">
-          {t('analytics.boards.empty')}
+          {t('analytics.boards.empty', { days: settings.activeDays, games: settings.mainGames })}
         </div>
       )}
 
@@ -299,7 +302,10 @@ function BoardRowBody({ board, row }: { board: AnalysisLeaderboardBoard; row: An
       return (
         <>
           <span className="flex-1 font-semibold text-white truncate">{row.name}</span>
-          <span className={`font-bold ${deltaClass(row.value)}`}>{fmtSignedPct(row.value)}</span>
+          {/* 角色理論的差，單位是百分點 (不是相對成長 %) */}
+          <span className={`font-bold ${deltaClass(row.value)}`}>
+            {Number.isFinite(row.value) ? t('analytics.boards.points', { value: fmtSignedPoints(row.value) }) : '—'}
+          </span>
           <span className="text-zinc-500 whitespace-nowrap">
             {fmtPct(row.recentRoleTheory)} ← {fmtPct(row.priorRoleTheory)}
           </span>

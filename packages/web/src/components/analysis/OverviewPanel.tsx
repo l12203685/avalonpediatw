@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import { Loader, AlertCircle, Trophy, Users, Swords } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { fmtPct } from '../../services/api';
+import { fmtPct, theorySettings } from '../../services/api';
 import OutcomeBar from './OutcomeBar';
 import { useAnalysisOverview, deriveStages, type StageSummaries } from './useAnalysisOverview';
 
@@ -190,13 +190,15 @@ export default function OverviewPanel(): JSX.Element {
   const overallOutcomes = overview.outcomeBreakdown;
   const stages = deriveStages(overview);
 
-  // 新舊快取以欄位有無判斷 (舊快取 = 欄位缺，不是 rows 為空)：資料層只列生涯 100 場以上，
+  // 新舊快取以欄位有無判斷 (舊快取 = 欄位缺，不是 rows 為空)：資料層只列生涯 mainGames (100) 場以上，
   // 小資料集的新快取會是 []，不能當成舊快取。
   const hasTheory = Array.isArray(overview.topPlayersByRoleTheory);
   const theoryRows = (overview.topPlayersByRoleTheory ?? [])
     .filter(r => typeof r.roleTheory === 'number' && Number.isFinite(r.roleTheory))
     .slice(0, 10);
   const baseline = theoryBaseline(overview.roleFinalWinRates);
+  // 視窗與補值門檻讀快取 (overview.theoryConfig)，舊快取用產生器預設值 (100 場、補到 3 場)。
+  const settings = theorySettings(overview.theoryConfig);
 
   return (
     <div className="space-y-6">
@@ -228,16 +230,22 @@ export default function OverviewPanel(): JSX.Element {
         </div>
 
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.overview.theoryRanking')}</h3>
+          <h3 className="text-sm font-bold text-gray-400 mb-1">
+            {t('analytics.deep.overview.theoryRanking', { games: settings.mainGames })}
+          </h3>
           <p className="text-[10px] text-gray-600 mb-2">
             {t('analytics.deep.overview.theoryLegend')}
+            {settings.theoryMinCellGames > 0 && t('analytics.deep.overview.theoryTopUp', { n: settings.theoryMinCellGames })}
+            {t('analytics.deep.overview.theoryScope')}
             {baseline !== null && <> {t('analytics.deep.overview.theoryBaseline', { baseline: baseline.toFixed(1) })}</>}
           </p>
           {theoryRows.length > 0 ? (
             <RoleTheoryRankingChart rows={theoryRows} baseline={baseline} />
           ) : (
             <p className="text-xs text-gray-500 py-6 text-center">
-              {hasTheory ? t('analytics.deep.overview.theoryEmpty') : t('analytics.deep.overview.theoryPending')}
+              {hasTheory
+                ? t('analytics.deep.overview.theoryEmpty', { games: settings.mainGames })
+                : t('analytics.deep.overview.theoryPending')}
             </p>
           )}
         </div>
