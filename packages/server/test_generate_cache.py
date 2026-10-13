@@ -566,11 +566,17 @@ EXPECTED_BING = {
 }
 
 
-def build_fresh(log: list[list[str]]) -> dict:
+# Fixed leaderboard reference day for every cache the tests build. Without it build_cache falls
+# back to "today in +08" and the leaderboard expectations break the day after they were written
+# (refresh-analysis-cache run #8, 2026-10-13).
+TEST_AS_OF = dt.date(2026, 10, 12)
+
+
+def build_fresh(log: list[list[str]], as_of: dt.date = TEST_AS_OF) -> dict:
     """build_cache + a stub strength section (what validate_new_cache expects), no carry-over."""
     cache, _ = gc.assemble_cache(
-        gc.build_cache(gc.parse_game_log(log), {}), None,
-        strength_builder=lambda players: {"perPlayer": {}}, placeholder_builders={},
+        gc.build_cache(gc.parse_game_log(log), {}, as_of=as_of), None,
+        strength_builder=lambda players: {"perPlayer": {}}, placeholder_builders={}, as_of=as_of,
     )
     return cache
 
