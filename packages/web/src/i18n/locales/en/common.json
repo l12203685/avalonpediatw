@@ -510,6 +510,7 @@
         "guideCoWinMinusLose2": "Higher = stronger team synergy.",
         "guideOutcomePair1": "Value = % of 3-Red outcomes in the pair's shared games. Hover for the full 3-outcome split.",
         "guideOutcomePair2": "Red = red dominance; blue = blue dominance; gray = balanced.",
+        "pairGames": "{{count}} shared games",
         "labelHigh": "+15 or above = great",
         "labelMid": "−5 to +5 = neutral",
         "labelLow": "−15 or below = poor",

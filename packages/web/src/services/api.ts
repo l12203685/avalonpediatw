@@ -740,6 +740,14 @@ export interface ChemistryMatrix {
    */
   threeBlueDeadPct?: (number | null)[][];
   threeBlueAlivePct?: (number | null)[][];
+  /** `outcomePair` only: games the pair played together (null = none / self). */
+  games?: (number | null)[][];
+  /**
+   * `outcomePair` only: "games" = counted from the game log. Older caches (no source) held the
+   * overall split in every cell (三紅 45.5 % everywhere); the server drops those, and the UI
+   * hides an outcomePair without this marker too.
+   */
+  source?: string;
 }
 
 export interface ChemistryData {

@@ -510,6 +510,7 @@
         "guideCoWinMinusLose2": "數值越大, 兩人合作效果越好.",
         "guideOutcomePair1": "數值 = 兩人共同場次中三紅 (紅方勝) 的比率 (%). 滑鼠移上去看完整三結果分布.",
         "guideOutcomePair2": "紅色 = 紅方優勢; 藍色 = 藍方優勢; 灰色 = 接近平均值.",
+        "pairGames": "共同 {{count}} 場",
         "labelHigh": "+15 以上 = 非常好",
         "labelMid": "−5 ~ +5 = 中性",
         "labelLow": "−15 以下 = 非常差",

@@ -47,7 +47,7 @@ import type { PlayerStats } from '../services/sheetsAnalysis';
 const CACHE_PATH = path.resolve(__dirname, '..', '..', 'analysis_cache.json');
 const committedCache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf-8')) as {
   overview: { schemaVersion?: unknown };
-  players: { players: Array<{ name: string; totalGames: number }> };
+  players: { players: Array<{ name: string; totalGames: number }>; seatOutcomesSource?: unknown };
   playerDetails: Record<string, unknown>;
   leaderboard?: unknown;
 };
@@ -418,6 +418,33 @@ describe('analysis_cache.json → web contract', () => {
       });
     });
     expect(p).toEqual([]);
+  });
+
+  // Players' report 2026-10-13 「全員 46%」: the 位置 heatmap tooltip (players[].seatOutcomes) and the
+  // 三結果配對 matrix (chemistry.outcomePair) showed the overall 三紅 45.5 % for every player / pair —
+  // the generator projected the overall split. Whatever is served must be per player / per pair.
+  it('GET /players + /chemistry — seat / pair outcome splits are never one split for everyone', async () => {
+    const splits = (o: Json): string => `${o.threeRedPct}/${o.threeBlueDeadPct}/${o.threeBlueAlivePct}`;
+    const players = (await analysis('/players')).players as Json[];
+    const seatSplits = new Set<string>();
+    let served = 0;
+    for (const pl of players) {
+      if (pl.seatOutcomes === undefined) continue;
+      served += 1;
+      for (const o of Object.values(pl.seatOutcomes as Record<string, Json>)) {
+        if ((o.threeRed as number) + (o.threeBlueDead as number) + (o.threeBlueAlive as number) > 0) seatSplits.add(splits(o));
+      }
+    }
+    if (served > 0) expect(seatSplits.size).toBeGreaterThan(1);
+    if (committedCache.players.seatOutcomesSource !== 'games') expect(served).toBe(0);
+
+    const chem = await analysis('/chemistry');
+    const pair = chem.outcomePair as Json | undefined;
+    if (pair !== undefined) {
+      expect(pair.source).toBe('games');
+      const cells = (pair.values as Array<Array<number | null>>).flat().filter((v) => v !== null);
+      if (cells.length > 1) expect(new Set(cells).size).toBeGreaterThan(1);
+    }
   });
 
   it('GET /chemistry — ChemistryMatrix', async () => {

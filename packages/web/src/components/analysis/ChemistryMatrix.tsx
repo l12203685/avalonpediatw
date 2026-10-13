@@ -87,10 +87,14 @@ export default function ChemistryMatrixPanel(): JSX.Element {
     );
   }
 
-  // Hide outcomePair button if cache predates the field. Coerce activeKey
-  // back to a safe default in that case so we never render a missing matrix.
-  const availableKeys: MatrixKey[] = MATRIX_KEYS.filter(k => Boolean(data[k]));
-  const safeActiveKey: MatrixKey = data[activeKey] ? activeKey : 'coWinMinusLose';
+  // Hide outcomePair button if cache predates the field — or still holds the old
+  // projection (no `source`: the overall split, 45.5 % in every cell; 2026-10-13
+  // players' report). Coerce activeKey back to a safe default in that case so we
+  // never render a missing matrix.
+  const hasMatrix = (k: MatrixKey): boolean =>
+    k === 'outcomePair' ? data.outcomePair?.source === 'games' : Boolean(data[k]);
+  const availableKeys: MatrixKey[] = MATRIX_KEYS.filter(hasMatrix);
+  const safeActiveKey: MatrixKey = hasMatrix(activeKey) ? activeKey : 'coWinMinusLose';
   const matrix = data[safeActiveKey] as ChemistryMatrixType | undefined;
 
   if (!matrix) {
@@ -107,6 +111,7 @@ export default function ChemistryMatrixPanel(): JSX.Element {
     : players;
   const threeBlueDeadPct = matrix.threeBlueDeadPct;
   const threeBlueAlivePct = matrix.threeBlueAlivePct;
+  const pairGames = matrix.games;
 
   if (players.length === 0) {
     return (
@@ -224,6 +229,7 @@ export default function ChemistryMatrixPanel(): JSX.Element {
                   const val = rawVal == null ? NaN : rawVal;
                   const blueDeadVal = threeBlueDeadPct?.[ri]?.[ci];
                   const blueAliveVal = threeBlueAlivePct?.[ri]?.[ci];
+                  const sharedGames = pairGames?.[ri]?.[ci];
                   const showOutcomeTooltip =
                     safeActiveKey === 'outcomePair' &&
                     !isSelf &&
@@ -248,6 +254,12 @@ export default function ChemistryMatrixPanel(): JSX.Element {
                                 <span className="text-amber-300">{t('analytics.deep.outcomes.threeBlueDead')} {(blueDeadVal as number).toFixed(1)}%</span>
                                 <span className="mx-1 text-gray-600">·</span>
                                 <span className="text-blue-300">{t('analytics.deep.outcomes.threeBlueAlive')} {(blueAliveVal as number).toFixed(1)}%</span>
+                                {typeof sharedGames === 'number' && (
+                                  <>
+                                    <span className="mx-1 text-gray-600">·</span>
+                                    <span>{t('analytics.deep.chemistry.pairGames', { count: sharedGames })}</span>
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>

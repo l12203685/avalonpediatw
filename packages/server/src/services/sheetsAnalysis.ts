@@ -60,8 +60,11 @@ export interface PlayerStats {
   rawBlueMerlinDead?: number;
   rawBlueMerlinAlive?: number;
   /**
-   * Edward 2026-04-27 — per-seat three-outcome distribution. Optional for
-   * cache backward compatibility; UI uses fallback when missing.
+   * Edward 2026-04-27 — per-seat three-outcome distribution of the player's OWN
+   * games in that seat (keys "1".."9", "0"). Only served when the cache says so
+   * (players.seatOutcomesSource === "games", generate_cache.py since 2026-10-13):
+   * older caches hold the overall split projected onto every player — the same
+   * 三紅 45.5 % for everyone — and the accessors drop it. UI hides it when missing.
    */
   seatOutcomes?: Record<string, OutcomeBreakdown>;
 
@@ -181,6 +184,10 @@ export interface ChemistryMatrix {
    */
   threeBlueDeadPct?: (number | null)[][];
   threeBlueAlivePct?: (number | null)[][];
+  /** outcomePair only: games the pair played together (null = none / self). */
+  games?: (number | null)[][];
+  /** outcomePair only: "games" = counted from the game log (OUTCOME_SOURCE_GAMES). */
+  source?: string;
 }
 
 export interface ChemistryData {
@@ -189,10 +196,11 @@ export interface ChemistryData {
   winCorr: ChemistryMatrix;
   coWinMinusLose: ChemistryMatrix;
   /**
-   * Edward 2026-04-27 — 5th matrix added to the deep-analytics chemistry tab.
-   * Per-pair outcome distribution (三紅 / 三藍死 / 三藍活) projected from the
-   * coWin matrix. Optional for cache backward compatibility — older caches
-   * predating this field still serve.
+   * Edward 2026-04-27 — 5th matrix added to the deep-analytics chemistry tab:
+   * each pair's 三紅 / 三藍死 / 三藍活 split over the games they played together.
+   * Served only when `source === "games"` (generate_cache.py since 2026-10-13);
+   * older caches projected the overall split onto every pair (45.5 % in every
+   * cell) and getChemistry() drops it, so the UI hides the matrix.
    */
   outcomePair?: ChemistryMatrix;
 }
@@ -677,7 +685,8 @@ export interface FeatureStudiesData {
 
 interface AnalysisCache {
   overview: OverviewData;
-  players: { players: PlayerStats[]; total: number };
+  /** seatOutcomesSource: "games" when players[].seatOutcomes are the players' own games. */
+  players: { players: PlayerStats[]; total: number; seatOutcomesSource?: string };
   playerDetails: Record<string, { player: PlayerStats; radar: Record<string, number> }>;
   chemistry: ChemistryData;
   missions: {
@@ -912,17 +921,48 @@ export async function getOverview(): Promise<OverviewData> {
   return loadCache().overview;
 }
 
+/**
+ * Marker generate_cache.py writes next to data it counted from the game log
+ * (players.seatOutcomesSource, chemistry.outcomePair.source).
+ */
+export const OUTCOME_SOURCE_GAMES = 'games';
+
+/**
+ * A players row as served: without `seatOutcomes` unless the cache marks them
+ * as the player's own games. Before 2026-10-13 the generator wrote the overall
+ * 三紅/三藍死/三藍活 split for every played seat of every player, so the 位置
+ * heatmap showed 三紅 45.5 % for everyone (players' report: 「全員 46%」). Pure.
+ */
+export function servedPlayerRow(p: PlayerStats, seatOutcomesSource: unknown): PlayerStats {
+  if (seatOutcomesSource === OUTCOME_SOURCE_GAMES || p.seatOutcomes === undefined) return p;
+  const out: PlayerStats = { ...p };
+  delete out.seatOutcomes;
+  return out;
+}
+
+/** Chemistry as served: the outcomePair matrix only when counted from the game log (see ChemistryData). Pure. */
+export function servedChemistry(chemistry: ChemistryData): ChemistryData {
+  const pair = chemistry?.outcomePair;
+  if (!pair || pair.source === OUTCOME_SOURCE_GAMES) return chemistry;
+  const out: ChemistryData = { ...chemistry };
+  delete out.outcomePair;
+  return out;
+}
+
 /** Every player, with the two-stage fields filled in (see withFinalFields). */
 export async function getAllPlayerStats(): Promise<PlayerStats[]> {
   const c = loadCache();
   const roleFinal = c.overview?.roleFinalWinRates;
-  return c.players.players.map((p) => withFinalFields(p, roleFinal));
+  const source = c.players?.seatOutcomesSource;
+  return c.players.players.map((p) => withFinalFields(servedPlayerRow(p, source), roleFinal));
 }
 
 export async function getPlayerByName(name: string): Promise<PlayerStats | null> {
   const c = loadCache();
   const detail = byName(c.playerDetails, name);
-  return detail ? withFinalFields(detail.player, c.overview?.roleFinalWinRates) : null;
+  return detail
+    ? withFinalFields(servedPlayerRow(detail.player, c.players?.seatOutcomesSource), c.overview?.roleFinalWinRates)
+    : null;
 }
 
 /**
@@ -934,7 +974,7 @@ export async function getLeaderboard(): Promise<LeaderboardSection | null> {
 }
 
 export async function getChemistry(): Promise<ChemistryData> {
-  return loadCache().chemistry;
+  return servedChemistry(loadCache().chemistry);
 }
 
 export async function getMissionAnalysis(): Promise<AnalysisCache['missions']> {
