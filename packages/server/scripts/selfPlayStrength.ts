@@ -66,6 +66,7 @@ import {
   setEvilLakeHumanOptions,
 } from '../src/ai/LakePolicy';
 import { setVouchFollowUpOptions, vouchFollowUpOptionsFromEnv } from '../src/ai/RedLakeFollowUp';
+import { goodVouchOptionsFromEnv, setGoodVouchOptions } from '../src/ai/GoodLakeFollowUp';
 import type { AgentAction, AvalonAgent, PlayerObservation, SelfPlayResult } from '../src/ai/types';
 
 interface Args {
@@ -490,6 +491,10 @@ async function main(): Promise<void> {
   const vouchOptions = vouchFollowUpOptionsFromEnv();
   setVouchFollowUpOptions(vouchOptions);
   if (process.env.AVALON_VOUCH_FOLLOW_UP_VARIANT) process.stderr.write(`evilVouchFollowUp variant: ${JSON.stringify(vouchOptions)}\n`);
+  // Benchmark-only knob for `goodVouchFollowUp` (AVALON_GOOD_VOUCH_VARIANT, e.g. "scope=own").
+  const goodVouchOptions = goodVouchOptionsFromEnv();
+  setGoodVouchOptions(goodVouchOptions);
+  if (process.env.AVALON_GOOD_VOUCH_VARIANT) process.stderr.write(`goodVouchFollowUp variant: ${JSON.stringify(goodVouchOptions)}\n`);
   if (JSON.stringify(evilLakeOptions) !== JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)) {
     process.stderr.write(`evilLakeHumanStrategy tactic mix: ${JSON.stringify(evilLakeOptions)}\n`);
   }

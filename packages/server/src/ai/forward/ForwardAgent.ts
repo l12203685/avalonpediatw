@@ -61,6 +61,7 @@ import type {
 import { HeuristicAgent } from '../HeuristicAgent';
 import { humanQuestCardRule } from '../AgentTuning';
 import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } from '../RedLakeFollowUp';
+import { goodVouchTeamConstraint, goodVouchVoteRule } from '../GoodLakeFollowUp';
 import {
   interpret,
   type Facts,
@@ -760,15 +761,21 @@ export class ForwardAgent implements AvalonAgent {
     // 硬2 vote rule does the same, except in red's decisive window; this
     // rule keeps the word there too, as humans do). The forced fifth
     // proposal is exempt — see `RedLakeFollowUp.evilVouchVoteRule`.
-    if (
-      decisionType === 'team_vote' &&
-      evilVouchFollowUpActive(this.baseline.tuning) &&
-      evilVouchVoteRule(obs) === 'reject'
-    ) {
+    // AgentTuning.goodVouchFollowUp (2026-10-13 round 3) is the blue
+    // counterpart, off the team only — see `GoodLakeFollowUp.goodVouchVoteRule`.
+    const vouchRejectSide =
+      decisionType !== 'team_vote'
+        ? null
+        : evilVouchFollowUpActive(this.baseline.tuning) && evilVouchVoteRule(obs) === 'reject'
+          ? 'red'
+          : this.baseline.tuning.goodVouchFollowUp && goodVouchVoteRule(obs) === 'reject'
+            ? 'blue'
+            : null;
+    if (vouchRejectSide !== null) {
       const action: AgentAction = { type: 'team_vote', vote: false };
       const ruleCandidate: Candidate = {
         action,
-        description: 'red vouch follow-up reject',
+        description: `${vouchRejectSide} vouch follow-up reject`,
         signals: {
           avgSuspicion: 0,
           maxSuspicion: 0,
@@ -788,7 +795,7 @@ export class ForwardAgent implements AvalonAgent {
           chosen: ruleCandidate,
           chosenScore: 0,
           usedFallback: false,
-          summary: `${decisionType} → red vouch follow-up reject (round=${obs.currentRound ?? 1})`,
+          summary: `${decisionType} → ${vouchRejectSide} vouch follow-up reject (round=${obs.currentRound ?? 1})`,
         },
       };
     }
@@ -1427,7 +1434,11 @@ export class ForwardAgent implements AvalonAgent {
     // (review 2026-10-13: building them every time let in combinations
     // the low-suspicion cut had dropped, e.g. three visible reds).
     // Off (or `evilLakeHumanStrategy` off) → no change.
-    const vouch = evilVouchFollowUpActive(this.baseline.tuning) ? evilVouchTeamConstraint(obs) : null;
+    // AgentTuning.goodVouchFollowUp (2026-10-13 round 3): the same filter
+    // for a good leader's own lake word (`GoodLakeFollowUp.goodVouchTeamConstraint`).
+    const vouch =
+      (evilVouchFollowUpActive(this.baseline.tuning) ? evilVouchTeamConstraint(obs) : null) ??
+      (this.baseline.tuning.goodVouchFollowUp ? goodVouchTeamConstraint(obs) : null);
     if (vouch) {
       const fixedMembers = vouch.required
         .filter((id) => id !== selfId)

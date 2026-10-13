@@ -118,6 +118,16 @@ describe('AgentTuning — flags', () => {
     }
   });
 
+  it('2026-10-13 round-3 goodVouchFollowUp: flag, env var, off in legacy', () => {
+    // strength_benchmark.md 第 10 節: the blue counterpart of evilVouchFollowUp.
+    expect(LEGACY_AGENT_TUNING.goodVouchFollowUp).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.goodVouchFollowUp).toBe(false);
+    expect(parseTuningFlag('goodVouchFollowUp')).toEqual({ goodVouchFollowUp: true });
+    expect(AGENT_TUNING_ENV.goodVouchFollowUp).toBe('AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP');
+    expect(tuningFromEnv({ AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP: '1' })).toEqual({ goodVouchFollowUp: true });
+    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, goodVouchFollowUp: true })).toBe('goodVouchFollowUp');
+  });
+
   it('resolveAgentTuning layers overrides on top of a base', () => {
     const t = resolveAgentTuning({ assassinModel: true }, { ...LEGACY_AGENT_TUNING });
     expect(t).toEqual({ ...LEGACY_AGENT_TUNING, assassinModel: true });

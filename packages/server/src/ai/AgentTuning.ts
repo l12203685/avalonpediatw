@@ -115,6 +115,13 @@ export interface AgentTuning {
    * `GoodLakeInfo.ts`；打開時優先於 `goodLakeTargetMostSuspicious`。
    */
   goodLakeInfoMax: boolean;
+  /**
+   * 好人持湖者言行一致（2026-10-13 第三輪，strength_benchmark.md 第 10 節；
+   * `evilVouchFollowUp` 的藍方版本）：自己宣藍的人一定放進自己派的隊、宣紅
+   * 的人不放；自己不在隊上時，漏掉自己宣藍的人或放了宣紅的人的隊就反對
+   * （強制局例外）。細節見 `GoodLakeFollowUp.ts`。
+   */
+  goodVouchFollowUp: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -131,6 +138,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'evilLakeFrameHumanRate',
   'oberonLakeSeeksTeammates',
   'goodLakeInfoMax',
+  'goodVouchFollowUp',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -146,6 +154,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: false,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: false,
+  goodVouchFollowUp: false,
 });
 
 /**
@@ -231,6 +240,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: true,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: true,
+  goodVouchFollowUp: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -246,6 +256,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   evilLakeFrameHumanRate: 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE',
   oberonLakeSeeksTeammates: 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES',
   goodLakeInfoMax: 'AVALON_TUNING_GOOD_LAKE_INFO_MAX',
+  goodVouchFollowUp: 'AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP',
 });
 
 function parseBool(raw: string): boolean | undefined {
