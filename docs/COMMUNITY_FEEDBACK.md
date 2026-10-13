@@ -1,7 +1,7 @@
 # 社群反應彙整 — 每週聊天紀錄匯出、主題計數與 `/意見`
 
-> 版號 20261013b（20261012 主題計數與 `/意見`；20261013 付費週報上線又依 Edward 裁定撤掉，改成免費的「每週聊天紀錄匯出」，
-> `/意見` 改轉貼到管理員頻道「大劍管理員」）。
+> 版號 20261013c（20261012 主題計數與 `/意見`；20261013 付費週報上線又依 Edward 裁定撤掉，改成免費的「每週聊天紀錄匯出」，
+> `/意見` 改轉貼到管理員頻道「大劍管理員」；20261013c 加上「匯出紀錄」分頁：重啟或兩台伺服器同時跑都只留一份完整的週）。
 > 程式在 `packages/server/src/bots/chatExport/`、`packages/server/src/bots/feedback/`（Google 登入與試算表呼叫：`bots/digest/sheets.ts`）；
 > 測試 `__tests__/ChatExport*.test.ts`、`__tests__/Feedback*.test.ts`。
 > 相關：`docs/LINE_DISCORD_SYNC.md`（三向同步、指令表、狀態頁）、`docs/DISCORD_RECORDS_IMPORT.md`（牌譜格式回覆）。
@@ -35,7 +35,7 @@
 |---|---|---|
 | 1 讀取 | Render 上的 bot（每週一次，讀 Discord 頻道歷史） | 上一週的公開聊天原文 |
 | 2 換代號 | 同上（記憶體） | 發言者換成「成員N」；對照表只存在這一次執行裡，不存、不送、不印 |
-| 3 寫入 | 私人 Google 試算表（`1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`）的「聊天紀錄」分頁 | 一則訊息一列；只留最近 8 週 |
+| 3 寫入 | 私人 Google 試算表（`1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`）的「聊天紀錄」分頁；「匯出紀錄」分頁記這週寫好了沒 | 一則訊息一列；只留最近 8 週 |
 | 4 閱讀 | AI 管理員（用 Edward 的 Google Drive，每週一次） | 讀「聊天紀錄」分頁，整理後回饋給 Edward、修網站或機器人 |
 
 - 聊天原文**不經過 GitHub**：不進 repo、不進 Actions log、不進 job summary。這個 repo 是公開的。
@@ -48,16 +48,20 @@ Edward 說「真的想寫入試算表 可以寫到阿瓦隆百科 googlesheet �
 而它的 id 就寫在這個公開 repo 裡（戰績快取每天從它重算）。聊天原文寫進去，等於任何人都能翻到整週的群聊——
 就算換了代號，內文裡提到的名字、私事還是看得到。所以聊天紀錄寫在**私人**試算表；戰績、牌譜這些本來就公開的資料才放阿瓦隆百科那份。
 
+程式也擋住這件事：`CHAT_EXPORT_SHEET_ID`（或舊名）設成阿瓦隆百科那份的 id（`174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU`，
+或 `AVALON_STATS_SHEET_ID` 指定的那份；貼整個網址也算）會被拒絕：不匯出，狀態頁 `sheetConfigured=false`，server log 寫 `public-sheet-refused`。
+
 ## 匯出的內容
 
 ### 讀哪些訊息
 
 - Discord 伺服器裡**所有人（@everyone）都看得到**的文字頻道和公告頻道。論壇（#牌譜紀錄與覆盤）和討論串不讀。
-- **LINE↔Discord 同步頻道**（`LOBBY_MIRROR_DISCORD_CHANNEL_ID`，一定讀）。LINE 群的發言是 bot 轉貼進來的，
+- **LINE↔Discord 同步頻道**（`LOBBY_MIRROR_DISCORD_CHANNEL_ID`，就算 @everyone 看不到也讀；除非列在 `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS`）。LINE 群的發言是 bot 轉貼進來的，
   格式 `[1005 21:35][LINE][名字] 內容`；匯出時當成 LINE 的發言，名字換成代號。網站大廳轉貼的 `[…][AP][名字] …` 也一樣（來源記為「網站」）。
 - 不收：bot 自己的其他貼文（每週排行、指令回覆、`📮 意見` 轉貼）、其他 bot、webhook、系統訊息、
   指令（`/戰績`、`/意見`…，包含 LINE 那邊打的）、只有圖片沒有文字的訊息（只算數量）。
-- 一定不讀：`/意見` 轉貼的管理員頻道（「大劍管理員」，或 `FEEDBACK_DISCORD_CHANNEL_ID` 指定的頻道）；私人頻道本來就不在預設名單裡。
+- 一定不讀：管理員頻道「大劍管理員」（不管 `/意見` 轉貼到哪裡、就算 @everyone 看得到），以及 `FEEDBACK_DISCORD_CHANNEL_ID` 另外指定的 `/意見` 頻道；
+  私人頻道本來就不在預設名單裡。
 - 可調：`CHAT_EXPORT_SOURCE_CHANNEL_IDS`（只讀這些頻道；同步頻道仍會讀）、`CHAT_EXPORT_EXCLUDE_CHANNEL_IDS`（不讀這些頻道）。
 - 如果伺服器把所有頻道都對 @everyone 關掉、只開給「成員」之類的身分組，預設規則會找不到公開頻道、只讀同步頻道；
   server log 會提醒，這時請設 `CHAT_EXPORT_SOURCE_CHANNEL_IDS`。
@@ -75,16 +79,35 @@ Edward 說「真的想寫入試算表 可以寫到阿瓦隆百科 googlesheet �
 - **內容**：換行寫成「 ⏎ 」；`@某人` → `@成員N`、`@身分組` → `@某身分組`、`#頻道` → `#頻道名`；附件寫成「〔附件 N〕」；超過 4000 字截斷。
   以 RAW 寫入，所以有人打 `=SUM(...)` 也只是文字，不會變成公式。
 - 匿名的是「誰說的」：內文裡提到的名字（例如「某某昨天那局」）不會被改掉。AI 管理員回報時不點名。
-- 分頁不存在時，bot 會自動建立並寫好標題列（凍結第 1 列）；其他分頁不會被動到。
+- 分頁不存在時，bot 會自動建立「聊天紀錄」和「匯出紀錄」兩個分頁並寫好標題列（凍結第 1 列）；其他分頁不會被動到。
+
+### 「匯出紀錄」分頁的欄位
+
+| 週次 | 狀態 | 列數 | 頻道數 | 時間（+08） | 執行代號 |
+|---|---|---|---|---|---|
+| 2026-10-12 | 進行中 | 0 | 0 | 2026-10-19T09:00:41+08:00 | 3f9a1c07 |
+| 2026-10-12 | 完成 | 356 | 8 | 2026-10-19T09:02:10+08:00 | 3f9a1c07 |
+
+- **完成**＝這週的「聊天紀錄」已經完整寫好（`列數` 就是這週的列數，0 表示這週沒有聊天）。**只有「完成」的週才算數**。
+- **進行中**＝某一台伺服器正在寫這週（執行代號是那個程序隨機產生的 8 碼，重啟就換新的，沒有其他意思）。
+- 這個分頁是程式在用的，請不要手動改（例如刪掉某週的「完成」，那週的聊天列會在下次匯出時被當成沒寫完而刪掉）。
+  整個分頁刪掉不會壞，下次會重建；週一 12:00 前刪掉的話，當週會整週重寫一次（不會重複）。
 
 ### 什麼時候跑、會不會重複
 
 - 每週一 09:00（台灣時間）匯出上週一 00:00 到週日 24:00。09:00 沒跑成（剛好在部署、Discord 還沒連上）的話，
   12:00 以前每分鐘會再看一次，連上就補跑。
-- **同一週只寫一次**：寫之前先看分頁裡有沒有這週的列，有就不再寫（重啟後也一樣）。
-- 一次送 500 列。寫到一半失敗（例如 Google 暫時出錯）會先把這週已寫入的列刪掉，10 分鐘後整週重寫，不會留下半週的資料。
-- 有頻道讀不到（Discord 暫時出問題）會 10 分鐘後再讀一次，第二次就把讀得到的寫進去。一週都沒有聊天就不寫任何列。
-- 每次寫完會**刪掉 8 週以前的列**（這週＋前 7 週保留）；週次欄不是日期的列（標題、有人手寫的備註）不會被刪。
+- **同一週只會有一份完整的資料**，重啟或兩台伺服器同時在跑（Render 部署交接時新舊兩台會重疊一陣子）都一樣：
+  1. 「匯出紀錄」已經有這週的「完成」→ 不再讀、不再寫。
+  2. 開始前先寫一列「進行中」再讀回來：最早的那列（30 分鐘內）是誰的，就由那台寫，另一台等（狀態 `claimed-elsewhere`，10 分鐘後再看）。
+     寫的那台每 10 分鐘重試時會更新自己的「進行中」，所以只要它還活著，別台就不會插手。
+  3. 寫之前，這週在「聊天紀錄」裡如果已經有列（上次寫到一半：程序被關掉、Google 出錯），先全部刪掉，再整週寫入，最後寫「完成」。
+  4. 寫的那台中途被關掉：它的「進行中」30 分鐘後失效，下一台接手，照第 3 步把半週刪掉重寫。
+- 一次送 500 列。寫到一半失敗（例如 Google 暫時出錯）會先試著把這週已寫入的列刪掉，10 分鐘後整週重寫。
+- 有頻道讀不到（Discord 暫時出問題）：一部分讀不到會 10 分鐘後再讀一次，第二次就把讀得到的寫進去；
+  **一個頻道都讀不到**時不會當成「這週沒聊天」，每 10 分鐘再讀一次，直到 12:00。一週真的都沒有聊天，只寫一列「完成」（列數 0）。
+- 每次寫完會**刪掉 8 週以前的列**（兩個分頁都是；這週＋前 7 週保留）；週次欄不是日期的列（標題、有人手寫的備註）不會被刪。
+  更早某週如果只有「進行中」、沒有「完成」（那週一直到 12:00 都沒寫完），那週留下的半週列也會在這時刪掉。
 - 12:00 前都沒跑成（例如 Discord 整個早上都斷線），那週就不會自動補；需要時請 AI 管理員看狀態頁再決定。
 
 ### 費用
@@ -151,13 +174,14 @@ Edward 說「真的想寫入試算表 可以寫到阿瓦隆百科 googlesheet �
 
   | outcome | 意思 |
   |---|---|
-  | `written` | 這週寫好了 |
-  | `already-exported` | 分頁裡早就有這週（重啟後的檢查） |
-  | `empty` | 這週沒有可以匯出的聊天 |
-  | `not-configured` | 沒有試算表 id 或服務帳號 JSON |
+  | `written` | 這週寫好了（「匯出紀錄」有「完成」） |
+  | `already-exported` | 這週早就寫好（「匯出紀錄」已有「完成」，例如重啟後、或另一台伺服器寫的） |
+  | `empty` | 這週沒有可以匯出的聊天（只寫「完成」，列數 0） |
+  | `claimed-elsewhere` | 另一台伺服器正在寫這週（部署交接時會出現），10 分鐘後再看 |
+  | `not-configured` | 沒有試算表 id 或服務帳號 JSON，或 id 是公開的阿瓦隆百科試算表（被拒絕） |
   | `sheet-error` | Google Sheets 呼叫失敗（多半是試算表沒分享給服務帳號），10 分鐘後重試到 12:00 |
-  | `read-error` | 有頻道讀不到，10 分鐘後再讀一次 |
-  | `error` | 未預期的錯誤（server log 有原因代碼） |
+  | `read-error` | 有頻道讀不到：一部分 → 10 分鐘後再讀一次；全部 → 每 10 分鐘再讀到 12:00 |
+  | `error` | 未預期的錯誤（server log 有原因代碼），10 分鐘後重試到 12:00 |
 
 ## 環境變數
 
@@ -165,8 +189,8 @@ Edward 說「真的想寫入試算表 可以寫到阿瓦隆百科 googlesheet �
 |---|---|---|
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | 是（Render ops → apply 從 GitHub secret `AVALON_STATS_SHEETS_CREDENTIALS_JSON` 複製，沒有就用 `GOOGLE_SHEETS_CREDENTIALS_JSON`） | 沒有 → 不匯出（狀態頁 `sheetConfigured=false`） |
 | `CHAT_EXPORT_ENABLED` | 否 | 開；`false` 關 |
-| `CHAT_EXPORT_SHEET_ID` | 否 | `1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`（私人）；`off` 關。舊名 `COMMUNITY_DIGEST_SHEET_ID` 仍有效 |
-| `CHAT_EXPORT_SOURCE_CHANNEL_IDS` / `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空（所有公開頻道＋同步頻道）。舊名 `COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS` / `COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS` 仍有效 |
+| `CHAT_EXPORT_SHEET_ID` | 否 | `1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`（私人）；`off` 關；公開的阿瓦隆百科試算表會被拒絕。舊名 `COMMUNITY_DIGEST_SHEET_ID` 仍有效 |
+| `CHAT_EXPORT_SOURCE_CHANNEL_IDS` / `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空（所有公開頻道＋同步頻道；「大劍管理員」和 `/意見` 頻道一定不讀）。舊名 `COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS` / `COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS` 仍有效 |
 | `FEEDBACK_DISCORD_CHANNEL_ID` | 否 | 管理員頻道「大劍管理員」`1145513360545296574`；`off` 不轉貼 |
 | `FEEDBACK_COMMAND_ENABLED` | 否 | 開 |
 
@@ -183,7 +207,9 @@ Edward 說「真的想寫入試算表 可以寫到阿瓦隆百科 googlesheet �
 
 ## AI 管理員怎麼讀（每週一次）
 
-1. 週一中午以後，用 Edward 的 Google Drive 打開私人試算表的「聊天紀錄」分頁，讀最新那一週（週次＝上週一）。
+1. 週一中午以後，用 Edward 的 Google Drive 打開私人試算表，先看「匯出紀錄」分頁有沒有上週一那週的「完成」：
+   有 → 讀「聊天紀錄」分頁裡那一週（週次＝上週一），列數應該和「完成」那列的列數一樣；
+   沒有 → 那週還沒寫完（或沒跑成），不要讀半週的資料，看 `/api/bots/status` 的 `chatExport.lastRun.outcome` 再決定。
 2. 搭配 `/api/bots/status` 的 `feedback.weeks`（主題計數）和「大劍管理員」裡的 `📮 意見` 貼文。
 3. 回饋的方式是**行動**：該修的網站／機器人問題照一般開發流程修；規則或數據口徑的爭議整理給 Edward 裁定；
    不在群裡公告匯總、不點名、不寫報告（Edward 第 4、6、7 點）。
