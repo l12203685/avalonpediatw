@@ -49,6 +49,10 @@
  *                                   打開時優先於 `goodLakeTargetMostSuspicious`
  *                                   （模型找不到一致的組合時才退回它）；
  *                                   梅林不湖看得到的紅、派西不湖兩拇指照舊。
+ *   - `redR1Teammate`              （2026-10-13 第三輪，**預設開**）看得到隊友的
+ *                                   紅方 R1 當隊長時，前四次提議（不會過的說話隊）
+ *                                   以真人比例 48.0% 放一位隊友（原本 0%）；第五次
+ *                                   強制局照舊不放。細節見 `RedR1Teammate.ts`。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -118,7 +122,8 @@ export interface AgentTuning {
   /**
    * 紅方首局帶隊友（2026-10-13 第三輪，strength_benchmark.md 第 12 節）：
    * 看得到隊友的紅方 R1 當隊長時，不再一律不放隊友（真人 R1 43.9%，前四次
-   * 提議 48.0%、第五次強制局 27.7%），細節見 `RedR1Teammate.ts`。R2+ 不變。
+   * 提議 48.0%、第五次強制局 27.7%）：前四次提議以 48.0% 的機率放一位隊友，
+   * 強制局照舊。細節見 `RedR1Teammate.ts`。R2+ 不變。
    */
   redR1Teammate: boolean;
 }
@@ -210,6 +215,15 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     （第 9 節）：紅方 +0.23pp [−0.14pp, +0.59pp]、藍方 −0.27pp [−0.64pp,
  *     +0.11pp]，兩邊區間都含 0；紅方與第 8 節五個種子合併約 −0.17pp
  *     [−0.40pp, +0.05pp] → 整組不算變弱。
+ *   - `redR1Teammate`（2026-10-13 第三輪，strength_benchmark.md 第 12 節；對照
+ *     組 = 上面整合後的正式預設）：R1 紅方隊長「放不放隊友」與真人相同的
+ *     比例 ED 49.0→61.2%、Sin 39.4→58.5%、top 52.2→52.8%（population
+ *     56.1→54.2%，只當同分參考；去掉抽籤運氣的期望值 53.9 / 52.6 / 53.6 /
+ *     54.6%），派隊 Jaccard 四群都升，其他決策完全不變；自我對打紅方
+ *     選版本 seed 77777 +0.32pp [−0.19pp, +0.83pp]、新種子 88888 +0.24pp
+ *     [−0.27pp, +0.75pp]、99999 −0.22pp [−0.71pp, +0.27pp]，三個種子合併
+ *     +0.10pp [−0.19pp, +0.39pp]，藍方恆為 0 → 不算變弱 → **採用**
+ *     （AVALON_TUNING_RED_R1_TEAMMATE=0 可關掉）。
  *   - `goodLakeInfoMax`（2026-10-13，strength_benchmark.md 第 7 節）：對照
  *     同樣是上面這組正式預設。好人持湖的湖目標一致性 ED 18.9→35.1%、
  *     Sin 20.3→22.9%、top 12.2→25.8%、population 14.9→24.7%（配對比較
@@ -239,7 +253,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: true,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: true,
-  redR1Teammate: false,
+  redR1Teammate: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */

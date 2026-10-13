@@ -9,13 +9,16 @@ import {
   HUMAN_R1_TEAMMATE_RATE,
   loyalViewOf,
   redR1TeamPlan,
+  redR1TeamPlanDraws,
   redR1TeammateOptionsFromEnv,
+  replayBothDraws,
   setRedR1TeammateOptions,
   visibleTeammatesOn,
 } from './RedR1Teammate';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, type AgentTuning } from './AgentTuning';
 import { ForwardAgent } from './forward/ForwardAgent';
 import { HeuristicAgent } from './HeuristicAgent';
+import { replayRule } from './explain';
 import type { PlayerObservation, VoteRecord } from './types';
 
 const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
@@ -112,9 +115,11 @@ describe('redR1TeamPlan', () => {
     expect(visibleTeammatesOn(r1(), ['P1', 'P4', 'P7'])).toBe(2);
   });
 
-  it('is off in legacy and in the production default until adopted', () => {
+  it('adopted 2026-10-13 round 3: on in the production default, off in legacy', () => {
+    // strength_benchmark.md 第 12 節: R1 red-leader agreement up for ED / Sin / top, red stance
+    // pooled over 77777 + 88888 + 99999 +0.10pp [−0.19pp, +0.39pp] (not weaker), blue 0.
+    expect(DEFAULT_AGENT_TUNING.redR1Teammate).toBe(true);
     expect(LEGACY_AGENT_TUNING.redR1Teammate).toBe(false);
-    expect(typeof DEFAULT_AGENT_TUNING.redR1Teammate).toBe('boolean');
   });
 });
 
@@ -164,5 +169,31 @@ describe('ForwardAgent — redR1Teammate', () => {
     expect(teamOf(blue, true)).toEqual(teamOf(blue, false));
     const r2 = r1({ currentRound: 2, failCount: 0, voteHistory: [], questHistory: [{ round: 1, team: ['P5', 'P6', 'P8'], result: 'fail', failCount: 1 }], questResults: ['fail'] }, 1);
     expect(teamOf(r2, true)).toEqual(teamOf(r2, false));
+  });
+});
+
+describe('post-game review (explain.replayRule) — the drawn R1 teammate', () => {
+  it('replays both outcomes of the draw and matches either real team', () => {
+    const o = r1({}, 2);
+    const tuning: Partial<AgentTuning> = { ...DEFAULT_AGENT_TUNING, redR1Teammate: true };
+    expect(redR1TeamPlanDraws(o, { redR1Teammate: true })).toBe(true);
+    expect(redR1TeamPlanDraws(o, { redR1Teammate: false })).toBe(false);
+    expect(redR1TeamPlanDraws(r1({}, 5), { redR1Teammate: true })).toBe(false); // forced: old rule
+    const decide = (): string[] => {
+      const a = new ForwardAgent(o.myPlayerId, new HeuristicAgent(o.myPlayerId, undefined, undefined, tuning));
+      const act = a.decide(o).action;
+      return act.type === 'team_select' ? act.teamIds : [];
+    };
+    const both = replayBothDraws(decide);
+    expect(visibleTeammatesOn(o, both.withTeammate)).toBe(1);
+    expect(visibleTeammatesOn(o, both.without)).toBe(0);
+    const agent = new HeuristicAgent(o.myPlayerId, undefined, undefined, tuning);
+    for (const team of [both.withTeammate, both.without]) {
+      const r = replayRule(o, agent, { type: 'team_select', teamIds: team }, { forwardActive: true });
+      expect(r?.rule).toMatch(/^紅方首局帶隊友/);
+      expect(r?.mismatch).toBe(false);
+    }
+    const other = replayRule(o, agent, { type: 'team_select', teamIds: ['P2', 'P9', 'P10'] }, { forwardActive: true });
+    expect(other?.mismatch).toBe(true);
   });
 });

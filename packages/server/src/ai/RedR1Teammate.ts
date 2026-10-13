@@ -36,6 +36,14 @@
  * ('asLoyal'), or leaves the old rule alone (`null`). Oberon sees nobody
  * and is never covered; R2+ is unchanged.
  *
+ * In `DEFAULT_AGENT_TUNING` since 2026-10-13 round 3 (talk proposals at the
+ * human rate, forced proposal unchanged): on the R1 red-leader proposals of
+ * the 牌譜 the agent now makes the human's choice (teammate or not) more
+ * often for ED 49.0 → 61.2%, Sin 39.4 → 58.5%, top 52.2 → 52.8% (population
+ * 56.1 → 54.2%), every other decision unchanged; red stance in self-play
+ * +0.32pp on the selection seed 77777, +0.24pp / −0.22pp on the fresh seeds
+ * 88888 / 99999, pooled +0.10pp [−0.19pp, +0.39pp]; blue stance 0.
+ *
  * Tactic knobs for the benchmark scripts only
  * (`AVALON_RED_R1_TEAMMATE_VARIANT`, e.g. "talk=always,forced=humanRate";
  * the server never reads it): see `RedR1TeammateOptions`.
@@ -100,6 +108,21 @@ export function redR1TeammateOptionsFromEnv(env: NodeJS.ProcessEnv = process.env
 
 export type RedR1TeamPlan = 'withTeammate' | 'asLoyal';
 
+/** The rule covers this decision: switch on, an R1 team pick of a red who sees teammates. */
+function covers(obs: PlayerObservation, tuning: Pick<AgentTuning, 'redR1Teammate'>): boolean {
+  return tuning.redR1Teammate
+    && obs.gamePhase === 'team_select'
+    && (obs.currentRound ?? 1) === 1
+    && obs.myTeam === 'evil'
+    && SEEING_RED_ROLES.has(obs.myRole as string)
+    && obs.knownEvils.length > 0;
+}
+
+/** The forced fifth proposal of the round (no vote; it goes on the mission). */
+function isForced(obs: PlayerObservation): boolean {
+  return obs.failCount >= 4;
+}
+
 /**
  * Plan for an R1 team of a red leader who sees teammates, or `null` when
  * the old rule stands (switch off, not R1 / not a team pick, Oberon or
@@ -111,11 +134,8 @@ export function redR1TeamPlan(
   tuning: Pick<AgentTuning, 'redR1Teammate'>,
   options: Readonly<RedR1TeammateOptions> = activeOptions,
 ): RedR1TeamPlan | null {
-  if (!tuning.redR1Teammate) return null;
-  if (obs.gamePhase !== 'team_select' || (obs.currentRound ?? 1) !== 1) return null;
-  if (obs.myTeam !== 'evil' || !SEEING_RED_ROLES.has(obs.myRole as string)) return null;
-  if (obs.knownEvils.length === 0) return null;
-  const forced = obs.failCount >= 4;
+  if (!covers(obs, tuning)) return null;
+  const forced = isForced(obs);
   const mode = forced ? options.forced : options.talk;
   switch (mode) {
     case 'never':
@@ -147,4 +167,35 @@ export function loyalViewOf(obs: PlayerObservation): PlayerObservation {
 export function visibleTeammatesOn(obs: PlayerObservation, team: readonly string[]): number {
   const mates = new Set(obs.knownEvils);
   return team.filter((id) => id !== obs.myPlayerId && mates.has(id)).length;
+}
+
+/**
+ * Whether `redR1TeamPlan` would draw for this decision (the rule applies in a
+ * `humanRate` mode). Pure: no draw.
+ */
+export function redR1TeamPlanDraws(
+  obs: PlayerObservation,
+  tuning: Pick<AgentTuning, 'redR1Teammate'>,
+  options: Readonly<RedR1TeammateOptions> = activeOptions,
+): boolean {
+  return covers(obs, tuning) && (isForced(obs) ? options.forced : options.talk) === 'humanRate';
+}
+
+/**
+ * Post-game review (`explain.replayRule`): re-run a decision that draws the
+ * R1 teammate under both outcomes — `Math.random` pinned low (teammate) and
+ * high (no teammate) — so a replay can be matched against the real team.
+ * The rest of the ForwardAgent team pick is deterministic.
+ */
+export function replayBothDraws<T>(decide: () => T): { withTeammate: T; without: T } {
+  const original = Math.random;
+  try {
+    Math.random = (): number => 0;
+    const withTeammate = decide();
+    Math.random = (): number => 1 - Number.EPSILON;
+    const without = decide();
+    return { withTeammate, without };
+  } finally {
+    Math.random = original;
+  }
 }
