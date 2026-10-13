@@ -30,10 +30,10 @@ What this script does and does not do:
     rows to Discord匯入 (created with 牌譜's header + discord_post_id, discord_title,
     discord_tags, 匯入時間 if missing) and, with --reply, to Discord回覆 (one row per
     reply posted: discord_post_id, 回覆時間, 原因). Never writes to any other tab.
-  * writes to Discord only with --reply: one message in the thread of each recent post
-    (--reply-since-days, default 14) that could not be parsed because of its format,
-    saying which line and why (SKIP_EXPLANATIONS) plus the format hint, mentioning
-    nobody. Once per post: a post in Discord回覆 is never replied to again (even if that
+  * writes to Discord only with --reply and --fix-list. --reply: one message in the
+    thread of each recent post (--reply-since-days, default 14) that could not be parsed
+    because of its format, saying which line and why (SKIP_EXPLANATIONS) plus the format
+    hint, mentioning nobody. Once per post: a post in Discord回覆 is never replied to again (even if that
     message was deleted), and the bot's own marker message (REPLY_MARKER) is looked for
     in the thread before posting. At most --reply-limit (20) per run; HTTP 403 is counted
     and warned about, never fatal; the message is never re-sent after a server error or
@@ -42,28 +42,43 @@ What this script does and does not do:
     meant as a record (no result tag, no 6-digit 配置) get no reply. If the forum lacks
     one of the tags that decide this (renamed?), no reply is posted at all. With
     --dry-run the replies are counted, not posted.
+  * --fix-list: the weekly list of posts to fix, in the guild text channel 牌譜修正
+    (FIX_CHANNEL_NAME, or the channel DISCORD_FIX_CHANNEL_ID names): the posts --reply is
+    for (`fixable`) created within --fix-list-days (30), by record date (date, 場次, reason,
+    line, link), at most --fix-list-max (50) of them plus how many more, and the size of the
+    whole backlog. Once per ISO week (Taipei): the bot's marker (FIX_LIST_MARKER + week) in
+    the channel's last FIX_LIST_HISTORY messages means it was posted already (--fix-list-force
+    posts anyway), so the workflow can pass --fix-list on several days of the week to catch up
+    on a lost Monday run. No channel, or no permission there: a notice, never a failed run.
+    With --dry-run the list is built and counted, not posted. Not with --since (the backlog
+    would leave out the older posts).
   * idempotent: a post already in Discord匯入 (by discord_post_id) is not fetched
     again; a game already in 牌譜 (generate_cache.record_fingerprint, or the same
     配置 + mission results with the same players) or tagged 已收錄 is not imported;
     posts tagged 模擬 (simulations) are not imported either.
   * prints counts and fixed reason strings only (stdout and $GITHUB_STEP_SUMMARY):
     no player names, no record text, no post titles -- the repository is public. The
-    line quoted in a reply exists only in that Discord message.
+    line quoted in a reply or the list exists only in that Discord message (markdown,
+    masked links and mentions escaped; no link previews).
 
 Usage:
     python discord_records_import.py --dry-run            # parse, dedupe, print counts
     python discord_records_import.py                      # ... and append the new rows
     python discord_records_import.py --since 2026-04-01 --limit 5
     python discord_records_import.py --reply              # ... and reply to unreadable recent posts
+    python discord_records_import.py --fix-list           # ... and post this week's list in 牌譜修正
     python discord_records_import.py --dry-run --report skipped.json   # local only
 
 Configuration (environment):
     DISCORD_BOT_TOKEN              the bot's token (View Channel + Read Message History on
                                    the forum, Message Content intent; --reply also needs
-                                   Send Messages in Threads)
+                                   Send Messages in Threads; --fix-list needs View Channel,
+                                   Send Messages and Read Message History in 牌譜修正)
     AVALON_STATS_CREDENTIALS_FILE, AVALON_STATS_CREDENTIALS_JSON, AVALON_STATS_SHEET_ID
                                    as for generate_cache.py; writing needs Editor access
     DISCORD_RECORDS_FORUM_ID       forum channel id (default FORUM_CHANNEL_ID)
+    DISCORD_FIX_CHANNEL_ID         --fix-list: the channel to post in (default: the guild's
+                                   text channel named 牌譜修正)
 
 Exit codes: 0 ok, 2 configuration, 3 Google refused access, 4 sheet data problem,
 5 Discord API error. Nothing is written unless everything before the write succeeded.
@@ -251,7 +266,49 @@ REPLY_DEFAULT_DAYS = 14
 REPLY_DEFAULT_LIMIT = 20
 # Skips that are not the poster's formatting (or not a record post at all): no reply for these.
 REPLY_NOT_FOR = frozenset({SKIP_NO_STARTER, SKIP_EMPTY, SKIP_SIMULATION, SKIP_INTERNAL, SKIP_NOT_A_RECORD})
-_MARKDOWN_ESCAPE_RE = re.compile(r"([\\`*_~|])")
+# Quoted record text in the bot's messages: markdown, masked links ([..](..)) and <...> forms
+# (mentions, <url>, timestamps) render as plain text. '>' alone is harmless (湖 lines: 0>8 o).
+_MARKDOWN_ESCAPE_RE = re.compile(r"([\\`*_~|\[\]<])")
+SUPPRESS_EMBEDS = 1 << 2  # message flag: no link previews (a quoted line may hold a URL)
+
+# The weekly list of posts to fix (--fix-list), in the guild text channel 牌譜修正 (or the channel
+# DISCORD_FIX_CHANNEL_ID names). First line: the marker and the ISO week (Taipei); that line, by
+# the bot, in the channel's last FIX_LIST_HISTORY messages means this week's list is out already.
+ENV_FIX_CHANNEL = "DISCORD_FIX_CHANNEL_ID"
+FIX_CHANNEL_NAME = "牌譜修正"
+FIX_LIST_MARKER = "🤖 牌譜修正清單"
+FIX_LIST_DEFAULT_DAYS = 30
+FIX_LIST_DEFAULT_MAX = 50
+FIX_LIST_LINE_MAX = 20  # quoted line text is cut here (the thread's reply quotes more)
+FIX_LIST_HISTORY = 100  # one page of messages (the workflow re-checks Monday to Wednesday)
+FIX_LIST_FOOTER = (
+    "修正方式：直接編輯貼文的第一則訊息（牌譜本文），不用重發；下次排程（每天凌晨）會自動重新讀取並收錄。"
+    f"討論串裡的「{REPLY_MARKER}」回覆有詳細說明和格式提示。"
+    f"如果那局已經另外收進牌譜，幫貼文加上「{TAG_RECORDED}」標籤，就不會再列出。"
+)
+DISCORD_MESSAGE_MAX = 2000  # Discord's limit; counted in UTF-16 units here (the stricter reading)
+GUILD_TEXT_TYPES = frozenset({0, 5})  # text, announcement: what a channel found by name may be
+MESSAGE_CHANNEL_TYPES = frozenset({0, 5, 10, 11, 12})  # ... or a thread, by DISCORD_FIX_CHANNEL_ID
+# FixListReport.status: what happened to this week's list (fixed strings, counts-only summary).
+FIX_POSTED = "posted"
+FIX_DRY_RUN = "dry_run"
+FIX_ALREADY = "already_posted"
+FIX_NO_CHANNEL = "no_channel"
+FIX_NOT_TEXT = "not_text"
+FIX_BAD_VARIABLE = "bad_variable"
+FIX_FORBIDDEN = "forbidden"
+FIX_ERROR = "error"
+FIX_STATUS_TEXT = {
+    FIX_POSTED: "已發出",
+    FIX_DRY_RUN: "dry run：只計數，未發出",
+    FIX_ALREADY: "本週已發過，略過",
+    FIX_NO_CHANNEL: f"找不到「{FIX_CHANNEL_NAME}」文字頻道，未發出",
+    FIX_NOT_TEXT: f"「{FIX_CHANNEL_NAME}」不是可以發訊息的文字頻道，未發出",
+    FIX_BAD_VARIABLE: f"{ENV_FIX_CHANNEL} 不是頻道 id，未發出",
+    FIX_FORBIDDEN: "bot 在該頻道沒有權限（403），未發出",
+    FIX_ERROR: "Discord 錯誤，未發出或只發出一部分",
+}
+FIX_CHANNEL_SKIPS = frozenset({FIX_NO_CHANNEL, FIX_NOT_TEXT, FIX_BAD_VARIABLE})
 
 
 # ---------------------------------------------------------------------------
@@ -1013,13 +1070,25 @@ class ReplyReport:
     held_by_limit: int = 0
 
 
+def fixable(skip: SkippedPost) -> bool:
+    """A skip the poster can fix (who gets a --reply, what --fix-list lists): a format reason, and
+    the post is not tagged 已收錄."""
+    return skip.reason not in REPLY_NOT_FOR and TAG_RECORDED not in skip.post.tags
+
+
 def reply_candidates(report: ImportReport, now: dt.datetime, since_days: int) -> list[SkippedPost]:
-    """Skips the poster can fix: a format reason, posted within `since_days`, not tagged 已收錄.
-    Oldest first, like the import itself."""
+    """Skips the poster can fix (fixable) posted within `since_days`. Oldest first, like the import."""
     cutoff = now - dt.timedelta(days=since_days)
-    chosen = [s for s in report.skips
-              if s.reason not in REPLY_NOT_FOR and TAG_RECORDED not in s.post.tags and s.post.created >= cutoff]
+    chosen = [s for s in report.skips if fixable(s) and s.post.created >= cutoff]
     return sorted(chosen, key=lambda s: int(s.post.id))
+
+
+def quote_line(text: str | None, max_len: int) -> str:
+    """A post's line for a Discord message: one line, cut at max_len, markdown escaped."""
+    quoted = " ".join((text or "").split())
+    if len(quoted) > max_len:
+        quoted = quoted[:max_len - 1] + "…"
+    return _MARKDOWN_ESCAPE_RE.sub(r"\\\1", quoted)  # never inside an f-string: Python 3.11 (CI) forbids \ there
 
 
 def reply_text(skip: SkippedPost) -> str:
@@ -1027,10 +1096,7 @@ def reply_text(skip: SkippedPost) -> str:
     goes to the post's thread only; it carries record text and must never be printed."""
     why = SKIP_EXPLANATIONS.get(skip.reason, skip.reason)
     if skip.line_no:
-        quoted = " ".join((skip.line_text or "").split())
-        if len(quoted) > REPLY_LINE_MAX:
-            quoted = quoted[:REPLY_LINE_MAX - 1] + "…"
-        escaped = _MARKDOWN_ESCAPE_RE.sub(r"\\\1", quoted)  # outside the f-string: Python 3.11 (CI) forbids \ there
+        escaped = quote_line(skip.line_text, REPLY_LINE_MAX)
         where = f"第 {skip.line_no} 行「{escaped}」：{why}"
     else:
         where = f"原因：{why}"
@@ -1090,6 +1156,209 @@ def reply_lines(reply: ReplyReport, since_days: int) -> list[str]:
     return lines
 
 
+# ---------------------------------------------------------------------------
+# The weekly list of posts to fix (--fix-list)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class FixEntry:
+    skip: SkippedPost
+    date: str  # 日期時間 as title_date reads it (YYYY/MM/DD)
+    game_no: str  # 場次 from the title, or ""
+    date_from_title: bool
+
+
+@dataclass
+class FixListReport:
+    """Counts only: nothing here identifies a post."""
+    dry_run: bool = False
+    days: int = FIX_LIST_DEFAULT_DAYS
+    status: str = ""  # one of FIX_STATUS_TEXT
+    channel_found: bool = False
+    entries: int = 0  # fixable posts created within `days`
+    listed: int = 0  # ... of them in the list (at most --fix-list-max)
+    held_by_cap: int = 0
+    backlog: int = 0  # fixable posts of any age
+    messages: int = 0  # messages the list takes
+    posted: int = 0  # ... of them posted
+
+
+def short_explanation(reason: str) -> str:
+    """SKIP_EXPLANATIONS up to its first '：' or '（': the reason without the hint."""
+    text = SKIP_EXPLANATIONS.get(reason, reason)
+    return re.split(r"[：（]", text, maxsplit=1)[0].strip() or text
+
+
+def fix_list_entries(report: ImportReport, now: dt.datetime, days: int) -> tuple[list[FixEntry], int]:
+    """(fixable posts created within `days`, by record date then 場次; the number of fixable posts
+    of any age)."""
+    eligible = [s for s in report.skips if fixable(s)]
+    cutoff = now - dt.timedelta(days=days)
+    entries = []
+    for skip in eligible:
+        if skip.post.created >= cutoff:
+            date, game_no, from_title = title_date(skip.post.title, skip.post.created)
+            # title_date takes the title's last number: a 配置 or a count after the 場次
+            # ('1009一般場4 936758') is no game number; nobody plays 100 games a day.
+            entries.append(FixEntry(skip, date, game_no if len(game_no) <= 2 else "", from_title))
+    entries.sort(key=lambda e: (e.date, 0 if e.game_no else 1, int(e.game_no or 0), int(e.skip.post.id)))
+    return entries, len(eligible)
+
+
+def fix_list_week(now: dt.datetime) -> tuple[str, dt.date]:
+    """(ISO week key like 2026-W42, that week's Monday), Taipei time."""
+    local = now.astimezone(TAIPEI)
+    year, week, _ = local.isocalendar()
+    return f"{year}-W{week:02d}", local.date() - dt.timedelta(days=local.weekday())
+
+
+def fix_list_prefix(now: dt.datetime) -> str:
+    """How this week's list starts (and how the bot finds it in the channel)."""
+    return f"{FIX_LIST_MARKER} {fix_list_week(now)[0]}"
+
+
+def fix_entry_line(n: int, entry: FixEntry, guild_id: str) -> str:
+    """'3. 2026/10/09 第 4 場：投票異常標記看不懂（第 3 行「389 7」） <link>'. Discord shows the link
+    as the post's title."""
+    when = entry.date if entry.date_from_title else f"{entry.date}（依發文時間）"
+    if entry.game_no:
+        when += f" 第 {entry.game_no} 場"
+    why = short_explanation(entry.skip.reason)
+    if entry.skip.line_no:
+        quoted = quote_line(entry.skip.line_text, FIX_LIST_LINE_MAX)
+        why += f"（第 {entry.skip.line_no} 行" + (f"「{quoted}」" if quoted else "") + "）"
+    return f"{n}. {when}：{why} https://discord.com/channels/{guild_id}/{entry.skip.post.id}"
+
+
+def discord_length(text: str) -> int:
+    """Length as Discord's 2000 limit may count it (UTF-16 units: an emoji counts 2)."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def chunk_lines(lines: Sequence[str], limit: int = DISCORD_MESSAGE_MAX) -> list[str]:
+    """Join lines into as few messages of at most `limit` as possible, splitting only between
+    lines (a single longer line is cut)."""
+    chunks: list[str] = []
+    current: list[str] = []
+    size = 0
+    for line in lines:
+        if discord_length(line) > limit:
+            line = line[:limit - 1]
+            while discord_length(line) > limit - 1:
+                line = line[:-1]
+            line += "…"
+        extra = discord_length(line) + (1 if current else 0)
+        if current and size + extra > limit:
+            chunks.append("\n".join(current))
+            current, size, extra = [], 0, discord_length(line)
+        current.append(line)
+        size += extra
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
+
+
+def fix_list_messages(entries: Sequence[FixEntry], backlog: int, *, now: dt.datetime, days: int,
+                      max_entries: int, guild_id: str) -> list[str]:
+    """This week's list as Discord messages (each <= DISCORD_MESSAGE_MAX). It quotes record lines:
+    for the 牌譜修正 channel only, never printed."""
+    key, monday = fix_list_week(now)
+    lines = [f"{FIX_LIST_MARKER} {key}（{monday:%Y/%m/%d} 這週）"]
+    shown = entries[:max_entries]
+    if entries:
+        lines.append(f"最近 {days} 天發文、因為格式問題還沒收進戰績統計的牌譜有 {len(entries)} 篇（依牌譜日期排列）：")
+        lines += [fix_entry_line(i, e, guild_id) for i, e in enumerate(shown, 1)]
+        if len(entries) > len(shown):
+            lines.append(f"另有 {len(entries) - len(shown)} 篇沒列出（一次最多列 {max_entries} 篇）。")
+    else:
+        lines.append(f"最近 {days} 天發文的牌譜都沒有格式問題，不用修正。")
+    older = backlog - len(entries)
+    lines.append(f"累計待修正（不限發文時間）：{backlog} 篇"
+                 + (f"，其中 {older} 篇發文超過 {days} 天，這裡沒有列出" if older > 0 else "") + "。")
+    if backlog:
+        lines.append(FIX_LIST_FOOTER)
+    return chunk_lines(lines)
+
+
+def _is_snowflake(value: str) -> bool:
+    """ASCII digits only (str.isdigit alone accepts full-width digits and superscripts)."""
+    return bool(value) and value.isascii() and value.isdigit()
+
+
+def resolve_fix_channel(client: Any, guild_id: str, configured: str = "") -> tuple[str | None, str]:
+    """(channel id, how): `configured` (DISCORD_FIX_CHANNEL_ID) if set, else the guild's text
+    channel named FIX_CHANNEL_NAME (the oldest if several). Not found: (None, FIX_NO_CHANNEL /
+    FIX_NOT_TEXT / FIX_BAD_VARIABLE). Discord errors (403 included) propagate."""
+    configured = (configured or "").strip()
+    if configured:
+        if not _is_snowflake(configured):
+            return None, FIX_BAD_VARIABLE
+        channel = client.channel(configured)
+        if not isinstance(channel, dict):
+            return None, FIX_NO_CHANNEL
+        if channel.get("type") not in MESSAGE_CHANNEL_TYPES:
+            return None, FIX_NOT_TEXT
+        return configured, "variable"
+    named = [c for c in client.guild_channels(guild_id) or []
+             if isinstance(c, dict) and unicodedata.normalize("NFKC", str(c.get("name") or "")).strip() == FIX_CHANNEL_NAME]
+    usable = sorted((c for c in named if c.get("type") in GUILD_TEXT_TYPES and _is_snowflake(str(c.get("id") or ""))),
+                    key=lambda c: int(c["id"]))
+    if usable:
+        return str(usable[0]["id"]), "name"
+    return None, FIX_NOT_TEXT if named else FIX_NO_CHANNEL
+
+
+def post_fix_list(client: Any, report: ImportReport, *, forum_id: str, now: dt.datetime, dry_run: bool,
+                  days: int = FIX_LIST_DEFAULT_DAYS, max_entries: int = FIX_LIST_DEFAULT_MAX,
+                  configured_channel: str = "", force: bool = False) -> FixListReport:
+    """Post this week's list unless the bot already did this week (or `force`). Never raises: no
+    channel, 403 and other Discord errors end up in the returned status."""
+    entries, backlog = fix_list_entries(report, now, days)
+    fix = FixListReport(dry_run=dry_run, days=days, entries=len(entries), listed=min(len(entries), max_entries),
+                        held_by_cap=max(len(entries) - max_entries, 0), backlog=backlog)
+    try:
+        guild_id = str(client.forum_guild_id(forum_id) or GUILD_ID)
+        channel_id, how = resolve_fix_channel(client, guild_id, configured_channel)
+        if channel_id is None:
+            fix.status = how
+            return fix
+        fix.channel_found = True
+        messages = fix_list_messages(entries, backlog, now=now, days=days, max_entries=max_entries, guild_id=guild_id)
+        fix.messages = len(messages)
+        if not force and client.has_bot_message(channel_id, client.bot_user_id(), fix_list_prefix(now),
+                                                max_messages=FIX_LIST_HISTORY):
+            fix.status = FIX_ALREADY
+            return fix
+        if dry_run:
+            fix.status = FIX_DRY_RUN
+            return fix
+        key = fix_list_week(now)[0]
+        # The nonce (with enforce_nonce) keeps a message from being created twice should the same
+        # request reach Discord twice; a forced re-post is a new message, so it gets its own nonce.
+        stamp = now.astimezone(TAIPEI).strftime("%H%M%S-") if force else ""
+        for i, content in enumerate(messages, 1):
+            client.post_message(channel_id, content, nonce=f"fl{key}-{stamp}{i}")
+            fix.posted += 1
+        fix.status = FIX_POSTED
+    except DiscordForbidden:
+        fix.status = FIX_FORBIDDEN
+    except Exception:  # a Discord error or an odd response: counted, never printed
+        fix.status = FIX_ERROR
+    return fix
+
+
+def fix_list_lines(fix: FixListReport) -> list[str]:
+    """Markdown summary of --fix-list: counts only."""
+    found = "有" if fix.channel_found else "沒有"
+    return [
+        f"- 牌譜修正清單（--fix-list）：{FIX_STATUS_TEXT.get(fix.status, fix.status)}",
+        f"  - 找到頻道：{found}；{fix.days} 天內待修正：{fix.entries} 篇，列出：{fix.listed} 篇"
+        + (f"，超過 --fix-list-max 沒列：{fix.held_by_cap} 篇" if fix.held_by_cap else "")
+        + f"；累計待修正（不限天數）：{fix.backlog} 篇"
+        + (f"；清單共 {fix.messages} 則訊息，本次發出 {fix.posted} 則" if fix.messages else ""),
+    ]
+
+
 def report_lines(report: ImportReport, *, write: bool, written: int, tab_exists: bool,
                  missing_tags: Sequence[str] = (), reply: ReplyReport | None = None,
                  reply_since_days: int = REPLY_DEFAULT_DAYS) -> list[str]:
@@ -1129,7 +1398,7 @@ def report_lines(report: ImportReport, *, write: bool, written: int, tab_exists:
 
 
 # ---------------------------------------------------------------------------
-# Discord (reads; --reply also posts one message per unreadable post)
+# Discord (reads; --reply posts one message per unreadable post, --fix-list the weekly list)
 # ---------------------------------------------------------------------------
 
 class DiscordError(Exception):
@@ -1147,8 +1416,9 @@ MAX_MESSAGE_PAGES = 20  # 2000 messages: more than any record thread has
 class DiscordClient:
     """Minimal Discord REST client; honours 429 retry_after and the rate-limit headers.
 
-    GET for the forum, its posts and their messages; POST only for --reply (one message in a
-    post's thread). Only a GET is re-sent after a server error or a timeout: Discord may have
+    GET for the forum, its posts and their messages (and, for --fix-list, the guild's channels
+    and the fix-list channel's newest messages); POST only for --reply (one message in a post's
+    thread) and --fix-list (the weekly list in one channel). Only a GET is re-sent after a server error or a timeout: Discord may have
     stored the message of a POST before the response was lost, and sending it again would post a
     second reply (the next run finds the first one by its marker instead). A 429 is retried for
     both, Discord did not process it. Errors name the route template only (no ids, no content)
@@ -1161,6 +1431,8 @@ class DiscordClient:
         self._open = opener or urllib.request.urlopen
         self._sleep = sleep
         self._pace = pace
+        self._bot_id = ""
+        self._forum_guilds: dict[str, str] = {}
 
     def _request(self, method: str, path: str, route: str, body: Any = None, allow_404: bool = False) -> Any:
         data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -1205,41 +1477,65 @@ class DiscordClient:
         return self._request("POST", path, route, body=body)
 
     def bot_user_id(self) -> str:
-        """The bot's own user id (to recognize its earlier replies)."""
+        """The bot's own user id (to recognize its earlier replies and lists)."""
+        if self._bot_id:
+            return self._bot_id
         me = self.get("/users/@me", "/users/@me") or {}
         user_id = str(me.get("id") or "")
         if not user_id:
             raise DiscordError("GET /users/@me: no user id in the response")
+        self._bot_id = user_id
         return user_id
 
-    def has_bot_message(self, thread_id: str, bot_id: str, prefix: str) -> bool:
-        """True if a message by `bot_id` starting with `prefix` is in the thread (newest first)."""
+    def has_bot_message(self, thread_id: str, bot_id: str, prefix: str, max_messages: int | None = None) -> bool:
+        """True if a message by `bot_id` starting with `prefix` is among the channel's (thread's)
+        newest `max_messages` (default: up to MAX_MESSAGE_PAGES pages)."""
         before = None
-        for _ in range(MAX_MESSAGE_PAGES):
-            query = f"?limit={MESSAGES_PAGE}" + (f"&before={before}" if before else "")
+        left = MESSAGES_PAGE * MAX_MESSAGE_PAGES if max_messages is None else max_messages
+        while left > 0:
+            size = min(MESSAGES_PAGE, left)
+            query = f"?limit={size}" + (f"&before={before}" if before else "")
             page = self.get(f"/channels/{thread_id}/messages{query}", "/channels/{thread}/messages") or []
             for message in page:
                 author = message.get("author") or {}
                 if str(author.get("id") or "") == bot_id and (message.get("content") or "").startswith(prefix):
                     return True
-            if len(page) < MESSAGES_PAGE or not page[-1].get("id"):
+            left -= size
+            if len(page) < size or not page[-1].get("id"):
                 break
             before = page[-1]["id"]
         return False
 
-    def post_message(self, thread_id: str, content: str) -> None:
-        """One message in a post's thread, mentioning nobody. The nonce (the thread id, one reply
-        per thread) with enforce_nonce makes Discord return the bot's existing message instead of
-        creating another should the same request reach it twice within a few minutes."""
+    def post_message(self, thread_id: str, content: str, nonce: str | None = None) -> None:
+        """One message in a post's thread (or a channel), mentioning nobody and without link
+        previews. The nonce (default the thread id: one reply per thread) with enforce_nonce makes
+        Discord return the bot's existing message instead of creating another should the same
+        request reach it twice within a few minutes."""
         self.post(f"/channels/{thread_id}/messages", "/channels/{thread}/messages",
-                  {"content": content, "allowed_mentions": {"parse": []},
-                   "nonce": thread_id, "enforce_nonce": True})
+                  {"content": content, "allowed_mentions": {"parse": []}, "flags": SUPPRESS_EMBEDS,
+                   "nonce": nonce or thread_id, "enforce_nonce": True})
+
+    def channel(self, channel_id: str) -> dict | None:
+        """A channel object, None if there is no such channel."""
+        return self.get(f"/channels/{channel_id}", "/channels/{channel}", allow_404=True)
+
+    def guild_channels(self, guild_id: str) -> list[dict]:
+        """The guild's channels (not threads)."""
+        return self.get(f"/guilds/{guild_id}/channels", "/guilds/{guild}/channels") or []
+
+    def forum_guild_id(self, forum_id: str) -> str:
+        """The forum's guild (read along with forum_posts, else fetched)."""
+        if forum_id not in self._forum_guilds:
+            channel = self.get(f"/channels/{forum_id}", "/channels/{forum}") or {}
+            self._forum_guilds[forum_id] = str(channel.get("guild_id") or GUILD_ID)
+        return self._forum_guilds[forum_id]
 
     def forum_posts(self, forum_id: str) -> tuple[list[Post], list[str]]:
         """All posts (active + archived public threads) of a forum, and expected tags it lacks."""
         channel = self.get(f"/channels/{forum_id}", "/channels/{forum}")
         tags = {t.get("id"): t.get("name", "") for t in channel.get("available_tags") or []}
         guild = channel.get("guild_id") or GUILD_ID
+        self._forum_guilds[forum_id] = str(guild)
         active = self.get(f"/guilds/{guild}/threads/active", "/guilds/{guild}/threads/active")
         threads = [t for t in (active or {}).get("threads", []) if t.get("parent_id") == forum_id]
         before = None
@@ -1442,18 +1738,24 @@ def run(
     # The import summary goes out before the reply phase: whatever happens in Discord afterwards,
     # the counts of what was written are in the log and the job summary.
     in_actions = env.get("GITHUB_ACTIONS") == "true"
-    reply_gate = [t for t in REPLY_GATE_TAGS if t in missing_tags] if args.reply else []
+    # The tags that decide which posts get a reply also decide which posts the fix list names.
+    reply_gate = [t for t in REPLY_GATE_TAGS if t in missing_tags] if (args.reply or args.fix_list) else []
     lines = report_lines(report, write=write, written=written, tab_exists=tab_exists, missing_tags=missing_tags)
-    if reply_gate:
-        lines.append(f"- 格式回覆（--reply）：論壇沒有「{'」「'.join(reply_gate)}」標籤，無法判斷哪些貼文該回覆，"
-                     "本次未回覆、未計數")
+    gate_tags = "」「".join(reply_gate)
+    if reply_gate and args.reply:
+        lines.append(f"- 格式回覆（--reply）：論壇沒有「{gate_tags}」標籤，無法判斷哪些貼文該回覆，本次未回覆、未計數")
+    if reply_gate and args.fix_list:
+        lines.append(f"- 牌譜修正清單（--fix-list）：論壇沒有「{gate_tags}」標籤，無法判斷哪些貼文要修正，本次未發出、未計數")
     print("\n".join(lines))
     gc._append_step_summary(lines)
     if missing_tags and in_actions:
         print(f"::warning title=Forum tags missing::{len(missing_tags)} expected forum tag(s) not found; see the job summary.")
-    if reply_gate:
+    if reply_gate and args.reply:
         _warn("Discord reply skipped", f"{len(reply_gate)} forum tag(s) that decide which posts get a reply not found "
               "(renamed?); no reply was posted or counted. See the job summary.", in_actions)
+    if reply_gate and args.fix_list:
+        _warn("Fix list skipped", f"{len(reply_gate)} forum tag(s) that decide which posts need fixing not found "
+              "(renamed?); the weekly fix list was not posted. See the job summary.", in_actions)
 
     if args.reply and not reply_gate:
         # After the sheet write and its summary: a Discord problem here never loses imported rows.
@@ -1478,6 +1780,27 @@ def run(
         if reply.errors:
             _warn("Discord reply errors", f"{reply.errors} reply/replies hit a Discord API error or an unexpected "
                   "response; see the job summary. They are retried on the next run.", in_actions)
+    if args.fix_list and not reply_gate:
+        fix = post_fix_list(client, report, forum_id=forum_id, now=now_taipei, dry_run=not write,
+                            days=args.fix_list_days, max_entries=args.fix_list_max,
+                            configured_channel=env.get(ENV_FIX_CHANNEL) or "", force=args.fix_list_force)
+        lines = fix_list_lines(fix)
+        print("\n".join(lines))
+        gc._append_step_summary(lines)
+        if fix.status in FIX_CHANNEL_SKIPS and (env.get(ENV_FIX_CHANNEL) or "").strip():
+            _notice("Fix list skipped", f"The repository variable {ENV_FIX_CHANNEL} does not name a text channel "
+                    f"the bot can see ({fix.status}): fix it (the channel id, digits only) or delete it to use the "
+                    f"channel named {FIX_CHANNEL_NAME}. {fix.entries} post(s) would have been listed.", in_actions)
+        elif fix.status in FIX_CHANNEL_SKIPS:
+            _notice("Fix list skipped", f"No usable channel for the weekly fix list ({fix.status}): create a text "
+                    f"channel named {FIX_CHANNEL_NAME} or set the repository variable {ENV_FIX_CHANNEL}. "
+                    f"{fix.entries} post(s) would have been listed.", in_actions)
+        elif fix.status == FIX_FORBIDDEN:
+            _notice("Fix list skipped", f"The bot may not read or post in the fix-list channel (HTTP 403): give it "
+                    "View Channel, Send Messages and Read Message History there.", in_actions)
+        elif fix.status == FIX_ERROR:
+            _warn("Fix list error", f"Discord API error or unexpected response; {fix.posted} of {fix.messages} "
+                  "message(s) of the weekly fix list posted. See the job summary.", in_actions)
     if args.report:
         Path(args.report).write_text(json.dumps(report.details, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"Per-post report written to {args.report} (contains titles: keep it local).")
@@ -1487,6 +1810,11 @@ def run(
 def _warn(title: str, message: str, in_actions: bool) -> None:
     """A fixed warning (counts allowed, never content); an annotation inside GitHub Actions."""
     print(f"::warning title={title}::{message}" if in_actions else f"[WARNING] {title}: {message}", flush=True)
+
+
+def _notice(title: str, message: str, in_actions: bool) -> None:
+    """A fixed notice (counts allowed, never content); an annotation inside GitHub Actions."""
+    print(f"::notice title={title}::{message}" if in_actions else f"[NOTICE] {title}: {message}", flush=True)
 
 
 def _date(value: str) -> dt.date:
@@ -1503,6 +1831,13 @@ def _positive(value: str) -> int:
         n = -1
     if n < 0:
         raise argparse.ArgumentTypeError(f"not a non-negative integer: {value!r}")
+    return n
+
+
+def _at_least_one(value: str) -> int:
+    n = _positive(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"not a positive integer: {value!r}")
     return n
 
 
@@ -1523,7 +1858,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help=f"--reply only to posts created in the last N days (default {REPLY_DEFAULT_DAYS})")
     parser.add_argument("--reply-limit", type=_positive, default=REPLY_DEFAULT_LIMIT, metavar="N",
                         help=f"at most N replies per run, oldest post first (default {REPLY_DEFAULT_LIMIT})")
-    return parser.parse_args(argv)
+    parser.add_argument("--fix-list", action="store_true",
+                        help=f"post this week's list of posts to fix in the {FIX_CHANNEL_NAME} channel (or "
+                             f"{ENV_FIX_CHANNEL}); once per ISO week. With --dry-run: count only")
+    parser.add_argument("--fix-list-days", type=_at_least_one, default=FIX_LIST_DEFAULT_DAYS, metavar="N",
+                        help=f"--fix-list names posts created in the last N days (default {FIX_LIST_DEFAULT_DAYS})")
+    parser.add_argument("--fix-list-max", type=_at_least_one, default=FIX_LIST_DEFAULT_MAX, metavar="N",
+                        help=f"--fix-list names at most N posts, then how many more (default {FIX_LIST_DEFAULT_MAX})")
+    parser.add_argument("--fix-list-force", action="store_true",
+                        help="--fix-list even if this week's list is already in the channel")
+    args = parser.parse_args(argv)
+    if args.fix_list and args.since is not None:
+        # --since leaves older posts unread: the list's backlog (all ages) would come out too small.
+        parser.error("--fix-list cannot be combined with --since (the backlog counts posts of any age)")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:

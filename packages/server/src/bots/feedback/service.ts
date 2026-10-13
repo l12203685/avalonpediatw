@@ -35,6 +35,13 @@ export interface FeedbackForwardPayload {
  */
 export interface FeedbackDiscordForwarder {
   send(channelId: string, payload: FeedbackForwardPayload): Promise<boolean>;
+  /**
+   * Channel to use when FEEDBACK_DISCORD_CHANNEL_ID is unset (2026-10-13):
+   * the private channel named 「管理者信箱」, or '' when there is none
+   * (discordForwarder.ts). Optional so mocks without it keep "no channel →
+   * not forwarded".
+   */
+  resolveFallbackChannelId?(): Promise<string>;
 }
 
 export type FeedbackForwardOutcome = 'sent' | 'skipped' | 'failed' | 'throttled' | 'none';
@@ -175,7 +182,15 @@ export class FeedbackService {
   }
 
   private async forward(platform: FeedbackPlatform, content: string): Promise<FeedbackForwardOutcome> {
-    const channelId = this.channelId();
+    let channelId = this.channelId();
+    if (!channelId && this.discord?.resolveFallbackChannelId) {
+      try {
+        channelId = (await this.discord.resolveFallbackChannelId()) || '';
+      } catch (err) {
+        this.logger.warn(`looking up the 管理者信箱 channel failed: ${describeError(err)}`);
+        channelId = '';
+      }
+    }
     if (!channelId || !this.discord) {
       this.logger.warn(`opinion from ${platform} acknowledged but not forwarded (no Discord channel / sender)`);
       return 'skipped';

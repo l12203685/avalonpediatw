@@ -5,6 +5,8 @@ Fixtures use made-up names. Two groups read the checked-in 牌譜 snapshot in
 sheets_cache.json (2146 games, 2026-04-03): DerivedColumnsProofTest proves how the
 sheet's derived columns follow from 文字記錄, SnapshotCoverageTest measures how many of
 those records the strict post parser accepts and that each one dedupes to its 牌譜 row.
+WorkflowModeTest runs the workflow's own bash steps (with `date` and `python` stubbed) to check
+which switches a scheduled or manual run turns on.
 
     python packages/server/test_discord_records_import.py
 """
@@ -15,6 +17,9 @@ import datetime as dt
 import io
 import json
 import os
+import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -29,6 +34,7 @@ import discord_records_import as dri  # noqa: E402
 import generate_cache as gc  # noqa: E402
 
 SNAPSHOT = Path(__file__).resolve().parent / "sheets_cache.json"
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "import-discord-records.yml"
 FAKE_KEY = {
     "type": "service_account",
     "client_email": "importer@fake-project.iam.gserviceaccount.com",
@@ -819,7 +825,7 @@ class DiscordClientTest(unittest.TestCase):
         method, path, body, ctype = self.requests[-1]
         self.assertEqual((method, path, ctype), ("POST", "/channels/888/messages", "application/json"))
         self.assertEqual(json.loads(body), {"content": "第 3 行「389 7」", "allowed_mentions": {"parse": []},
-                                            "nonce": "888", "enforce_nonce": True})
+                                            "flags": 4, "nonce": "888", "enforce_nonce": True})  # no link previews
         self.assertTrue(all(m == "GET" for m, _, _, _ in self.requests[:-1]))
 
     def test_post_is_sent_once_after_a_server_error_or_timeout(self) -> None:
@@ -904,6 +910,52 @@ class DiscordClientTest(unittest.TestCase):
                          [("100", "a", ()), ("200", "b", ("已收錄", "線瓦")), ("300", "c", ("三紅",))])
         self.assertEqual(missing, ["模擬", "三藍被刀", "三藍躲刺", "面瓦"])
 
+    def test_fix_list_calls(self) -> None:
+        forum = dri.FORUM_CHANNEL_ID
+        full_page = [{"id": str(500 - i), "author": {"id": "U1"}, "content": "已修正"} for i in range(50)]
+
+        def script(path, n):
+            if path == f"/channels/{forum}":
+                return FakeResponse({"guild_id": "G9", "available_tags": []})
+            if path.endswith("/threads/active"):
+                return FakeResponse({"threads": []})
+            if "archived" in path:
+                return FakeResponse({"has_more": False, "threads": []})
+            if path == "/guilds/G9/channels":
+                return FakeResponse([{"id": "71", "name": "牌譜修正", "type": 0}])
+            if path == "/channels/71":
+                return FakeResponse({"id": "71", "type": 0})
+            if path == "/channels/72":
+                return http_error(404, {"code": 10003})
+            if path == "/channels/71/messages?limit=50":
+                return FakeResponse(full_page)  # a full page, but only the newest 50 are read
+            if path == "/channels/71/messages":
+                return FakeResponse({"id": "new"})
+            if path == "/users/@me":
+                return FakeResponse({"id": "BOT1"})
+            raise AssertionError(path)
+
+        client = self.make(script)
+        self.assertEqual(client.forum_guild_id(forum), "G9")  # fetched when the forum was not listed yet
+        self.assertEqual(self.calls, [f"/channels/{forum}"])
+        client = self.make(script)
+        client.forum_posts(forum)
+        before = len(self.calls)
+        self.assertEqual(client.forum_guild_id(forum), "G9")  # remembered from forum_posts
+        self.assertEqual(len(self.calls), before)
+        self.assertEqual(client.guild_channels("G9"), [{"id": "71", "name": "牌譜修正", "type": 0}])
+        self.assertEqual(client.channel("71"), {"id": "71", "type": 0})
+        self.assertIsNone(client.channel("72"))
+        self.assertFalse(client.has_bot_message("71", "BOT1", dri.FIX_LIST_MARKER, max_messages=50))
+        self.assertEqual(self.calls[-1], "/channels/71/messages?limit=50")
+        client.post_message("71", "清單", nonce="fl2026-W42-1")
+        self.assertEqual(json.loads(self.requests[-1][2]), {"content": "清單", "allowed_mentions": {"parse": []},
+                                                            "flags": 4, "nonce": "fl2026-W42-1", "enforce_nonce": True})
+        self.assertLessEqual(len("fl2026-W42-235959-12"), 25)  # Discord's nonce limit
+        self.assertEqual(client.bot_user_id(), "BOT1")
+        self.assertEqual(client.bot_user_id(), "BOT1")
+        self.assertEqual(self.calls.count("/users/@me"), 1)  # asked once per run
+
     def test_rate_limit_retry_404_and_errors(self) -> None:
         def script(path, n):
             if n == 1:
@@ -948,7 +1000,7 @@ class APIError(Exception):
 
 def quiet_env(**extra: str) -> mock._patch:
     drop = ("GITHUB_ACTIONS", "GITHUB_STEP_SUMMARY", gc.ENV_CREDENTIALS_FILE, gc.ENV_CREDENTIALS_JSON, gc.ENV_SHEET_ID,
-            dri.ENV_DISCORD_TOKEN)
+            dri.ENV_DISCORD_TOKEN, dri.ENV_FIX_CHANNEL, dri.ENV_FORUM_ID)
     env = {k: v for k, v in os.environ.items() if k not in drop}
     env.update(extra)
     return mock.patch.dict(os.environ, env, clear=True)
@@ -997,20 +1049,47 @@ class FakeSheet:
         return FakeWorksheet(self.tabs[title], self)
 
 
+FIX_CHANNEL = "5550001"  # the 牌譜修正 channel of the fake guild
+
+
+def guild_channel(cid: str, name: str, ctype: int = 0) -> dict:
+    return {"id": cid, "name": name, "type": ctype, "guild_id": dri.GUILD_ID}
+
+
 class FakeDiscord:
     def __init__(self, posts, bodies, *, replied=(), forbid_post=False, post_error=False, no_me=False,
-                 missing=(), odd_error=False):
+                 missing=(), odd_error=False, channels=None, history=None, forbid_fix=False, fix_error_at=0):
         self.posts, self.bodies, self.fetched = posts, bodies, 0
         self.replied = set(replied)  # threads that already hold the bot's marker message
         self.forbid_post, self.post_error, self.no_me = forbid_post, post_error, no_me
         self.missing = list(missing)  # expected forum tags the forum lacks
         self.odd_error = odd_error  # reading a thread gets a 200 with a non-JSON body
         self.me_calls = 0
-        self.message_reads: list[str] = []
+        self.message_reads: list[str] = []  # threads read for the reply marker
         self.posted: list[tuple[str, str]] = []
+        self.nonces: list[str | None] = []
+        # The guild's channels (default: a 牌譜修正 text channel) and earlier messages per channel
+        # as (author id, content), newest first.
+        self.channels = [guild_channel(FIX_CHANNEL, dri.FIX_CHANNEL_NAME)] if channels is None else channels
+        self.history: dict[str, list[tuple[str, str]]] = {k: list(v) for k, v in (history or {}).items()}
+        self.forbid_fix = forbid_fix  # 403 reading or posting in the fix-list channel
+        self.fix_error_at = fix_error_at  # the n-th fix-list message gets a 500
+        self.fix_reads: list[tuple[str, str, int | None]] = []  # (channel, prefix, max_messages)
+        self.guild_calls = 0
 
     def forum_posts(self, forum_id):
         return list(self.posts), list(self.missing)
+
+    def forum_guild_id(self, forum_id):
+        return dri.GUILD_ID
+
+    def guild_channels(self, guild_id):
+        assert guild_id == dri.GUILD_ID
+        self.guild_calls += 1
+        return list(self.channels)
+
+    def channel(self, channel_id):
+        return next((c for c in self.channels if c["id"] == channel_id), None)
 
     def starter_content(self, thread_id):
         self.fetched += 1
@@ -1022,19 +1101,33 @@ class FakeDiscord:
             raise dri.DiscordError("GET /users/@me: HTTP 500")
         return "BOT1"
 
-    def has_bot_message(self, thread_id, bot_id, prefix):
+    def has_bot_message(self, thread_id, bot_id, prefix, max_messages=None):
+        assert bot_id == "BOT1"
+        if prefix != dri.REPLY_MARKER:  # the fix-list channel
+            assert prefix.startswith(dri.FIX_LIST_MARKER + " ")
+            self.fix_reads.append((thread_id, prefix, max_messages))
+            if self.forbid_fix:
+                raise dri.DiscordForbidden("GET /channels/{thread}/messages: HTTP 403")
+            newest = ([("BOT1", c) for t, c in reversed(self.posted) if t == thread_id]
+                      + self.history.get(thread_id, []))[:max_messages]
+            return any(a == bot_id and c.startswith(prefix) for a, c in newest)
         self.message_reads.append(thread_id)
         if self.odd_error:
             raise ValueError("Expecting value: line 1 column 1 (char 0)")
-        assert (bot_id, prefix) == ("BOT1", dri.REPLY_MARKER)
         return thread_id in self.replied or any(t == thread_id and c.startswith(prefix) for t, c in self.posted)
 
-    def post_message(self, thread_id, content):
-        if self.forbid_post:
+    def post_message(self, thread_id, content, nonce=None):
+        if any(c["id"] == thread_id for c in self.channels):  # the fix-list channel
+            if self.forbid_fix:
+                raise dri.DiscordForbidden("POST /channels/{thread}/messages: HTTP 403")
+            if self.fix_error_at and len([t for t, _ in self.posted if t == thread_id]) + 1 == self.fix_error_at:
+                raise dri.DiscordError("POST /channels/{thread}/messages: HTTP 500")
+        elif self.forbid_post:
             raise dri.DiscordForbidden("POST /channels/{thread}/messages: HTTP 403")
-        if self.post_error:
+        elif self.post_error:
             raise dri.DiscordError("POST /channels/{thread}/messages: HTTP 500")
         self.posted.append((thread_id, content))
+        self.nonces.append(nonce)
 
 
 class ReplyTest(unittest.TestCase):
@@ -1188,6 +1281,355 @@ class ReplyTest(unittest.TestCase):
         self.assertIn("超過 --reply-limit 保留到下次：5", dry)
 
 
+class FixListTest(unittest.TestCase):
+    NOW = dt.datetime(2026, 10, 12, 3, 17, tzinfo=dri.TAIPEI)  # the Monday run of 2026-W42
+
+    def setUp(self) -> None:
+        header = dri.import_header([sheet_header()], None)
+        at = lambda m, d, h=22: dt.datetime(2026, m, d, h, tzinfo=dri.TAIPEI)  # noqa: E731
+        bad_vote = RECENT_BODY.replace("389 +7", "389 7")
+        self.p_a = post(title="1009一般場4", when=at(10, 9), offset=0)  # bad vote, line 3
+        self.p_b = post(title="1009一般場2", when=at(10, 9), offset=1)  # names missing: no line
+        self.p_c = post(title="覆盤", when=at(10, 5, 21))  # bad 配置 on line 21; no date in the title
+        self.p_d = post(title="1008一般場1", tags=("三藍被刀", "已收錄"), when=at(10, 8))
+        self.p_e = post(title="0901一般場1", when=at(9, 1))  # 41 days old: backlog only
+        self.p_sim = post(title="1007一般場1", tags=("模擬",), when=at(10, 7))
+        self.p_chat = post(title="今天那局", tags=(), when=at(10, 7), offset=1)
+        self.p_ok = post(title="1010一般場1", tags=("三紅",), when=at(10, 10))
+        self.p_md = post(title="1010一般場3", when=at(10, 10, 21))  # unrecognized line 14, with markdown
+        self.bodies = {
+            self.p_a.id: bad_vote, self.p_b.id: RECENT_RECORD + "\n刺客刺殺:\n936758",
+            self.p_c.id: RECENT_BODY.replace("936758\n", "936798\n"), self.p_d.id: bad_vote, self.p_e.id: bad_vote,
+            self.p_sim.id: RECENT_BODY, self.p_chat.id: "今天那局大家覺得怎麼樣？", self.p_ok.id: RED_BODY,
+            self.p_md.id: RECENT_BODY.replace("1458\n", "第三輪 *重要* __湖__ 打錯了請看這裡\n1458\n"),
+        }
+        self.posts = [self.p_a, self.p_b, self.p_c, self.p_d, self.p_e, self.p_sim, self.p_chat, self.p_ok, self.p_md]
+        self.report = dri.plan_import(self.posts, lambda p: self.bodies[p.id], [sheet_header()], None, header)
+        self.entries, self.backlog = dri.fix_list_entries(self.report, self.NOW, 30)
+
+    def fake(self, **kw) -> FakeDiscord:
+        return FakeDiscord(self.posts, self.bodies, **kw)
+
+    def fix(self, fake: FakeDiscord, **kw) -> dri.FixListReport:
+        kw.setdefault("now", self.NOW)
+        kw.setdefault("dry_run", False)
+        return dri.post_fix_list(fake, self.report, forum_id=dri.FORUM_CHANNEL_ID, **kw)
+
+    @staticmethod
+    def link(p: dri.Post) -> str:
+        return f"https://discord.com/channels/{dri.GUILD_ID}/{p.id}"
+
+    def test_entries_are_fixable_posts_by_record_date(self) -> None:
+        self.assertEqual(self.report.parsed, 1)
+        self.assertEqual([e.skip.post.id for e in self.entries], [self.p_c.id, self.p_b.id, self.p_a.id, self.p_md.id])
+        self.assertEqual([(e.date, e.game_no, e.date_from_title) for e in self.entries],
+                         [("2026/10/05", "", False), ("2026/10/09", "2", True), ("2026/10/09", "4", True),
+                          ("2026/10/10", "3", True)])
+        self.assertEqual(self.backlog, 5)  # + the 41-day-old one; never 已收錄, 模擬, discussions, parsed posts
+        older, _ = dri.fix_list_entries(self.report, self.NOW, 60)
+        self.assertEqual([e.skip.post.id for e in older][:2], [self.p_e.id, self.p_c.id])
+        self.assertEqual(dri.fix_list_entries(self.report, self.NOW, 0), ([], 5))
+        self.assertEqual(dri.fix_list_entries(dri.ImportReport(), self.NOW, 30), ([], 0))
+        # The reply and the list name the same posts.
+        self.assertEqual({s.post.id for s in dri.reply_candidates(self.report, self.NOW, 30)},
+                         {e.skip.post.id for e in self.entries})
+
+    def test_entry_lines(self) -> None:
+        lines = [dri.fix_entry_line(i, e, dri.GUILD_ID) for i, e in enumerate(self.entries, 1)]
+        self.assertEqual(lines, [
+            f"1. 2026/10/05（依發文時間）：配置不是 6 個不同的座號（第 21 行「936798」） {self.link(self.p_c)}",
+            f"2. 2026/10/09 第 2 場：玩家名單不完整 {self.link(self.p_b)}",
+            f"3. 2026/10/09 第 4 場：投票異常標記看不懂（第 3 行「389 7」） {self.link(self.p_a)}",
+            # cut at FIX_LIST_LINE_MAX, markdown escaped
+            "4. 2026/10/10 第 3 場：這一行看不懂（第 14 行「第三輪 \\*重要\\* \\_\\_湖\\_\\_ 打錯了請…」） "
+            + self.link(self.p_md),
+        ])
+        no_text = dri.FixEntry(dri.SkippedPost(self.p_a, dri.SKIP_BAD_VOTE, 3, None), "2026/10/09", "4", True)
+        self.assertIn("：投票異常標記看不懂（第 3 行） https://", dri.fix_entry_line(1, no_text, dri.GUILD_ID))
+        # A masked link or a mention in the quoted line comes out as plain text.
+        linked = dri.FixEntry(dri.SkippedPost(self.p_a, dri.SKIP_UNRECOGNIZED, 5, "[看這](http://a.bc)"), "2026/10/09",
+                              "4", True)
+        self.assertIn("（第 5 行「\\[看這\\](http://a.bc)」）", dri.fix_entry_line(1, linked, dri.GUILD_ID))
+        self.assertEqual(dri.quote_line("<@&123> 389 *7* 0>8 o", 60), "\\<@&123> 389 \\*7\\* 0>8 o")
+        # title_date takes the title's last number: a 配置 after the 場次 is no game number.
+        when = dt.datetime(2026, 10, 9, 22, tzinfo=dri.TAIPEI)
+        odd = [post(title=t, when=when, offset=i) for i, t in enumerate(["1009一般場4 936758", "1009 936758", "1009一般場12"])]
+        odd_report = dri.ImportReport(skips=[dri.SkippedPost(p, dri.SKIP_NAMES_MISSING) for p in odd])
+        self.assertEqual([(e.date, e.game_no) for e in dri.fix_list_entries(odd_report, self.NOW, 30)[0]],
+                         [("2026/10/09", "12"), ("2026/10/09", ""), ("2026/10/09", "")])
+        for reason in dri.SKIP_EXPLANATIONS:
+            with self.subTest(reason=reason):
+                short = dri.short_explanation(reason)
+                self.assertTrue(short)
+                self.assertNotIn("：", short)
+                self.assertLessEqual(len(short), 30)
+                self.assertTrue(dri.SKIP_EXPLANATIONS[reason].startswith(short))
+
+    def test_message_cap_backlog_and_nothing_to_fix(self) -> None:
+        head = f"{dri.FIX_LIST_MARKER} 2026-W42（2026/10/12 這週）"
+        capped = dri.fix_list_messages(self.entries, self.backlog, now=self.NOW, days=30, max_entries=2,
+                                       guild_id=dri.GUILD_ID)
+        self.assertEqual(len(capped), 1)
+        lines = capped[0].split("\n")
+        self.assertEqual(lines[0], head)
+        self.assertTrue(capped[0].startswith(dri.fix_list_prefix(self.NOW)))
+        self.assertEqual(lines[1], "最近 30 天發文、因為格式問題還沒收進戰績統計的牌譜有 4 篇（依牌譜日期排列）：")
+        self.assertTrue(lines[2].startswith("1. 2026/10/05（依發文時間）："))
+        self.assertTrue(lines[3].startswith("2. 2026/10/09 第 2 場："))
+        self.assertEqual(lines[4], "另有 2 篇沒列出（一次最多列 2 篇）。")
+        self.assertEqual(lines[5], "累計待修正（不限發文時間）：5 篇，其中 1 篇發文超過 30 天，這裡沒有列出。")
+        self.assertEqual(lines[6:], [dri.FIX_LIST_FOOTER])
+        for p in (self.p_a, self.p_md, self.p_d, self.p_e, self.p_sim, self.p_chat, self.p_ok):
+            self.assertNotIn(p.id, capped[0])
+        full = dri.fix_list_messages(self.entries, self.backlog, now=self.NOW, days=30, max_entries=50,
+                                     guild_id=dri.GUILD_ID)
+        self.assertNotIn("另有", full[0])
+        self.assertEqual(len(full[0].split("\n")), 2 + 4 + 2)
+        self.assertNotIn("@", full[0])
+        self.assertEqual(dri.fix_list_messages([], 0, now=self.NOW, days=30, max_entries=50, guild_id=dri.GUILD_ID),
+                         [head + "\n最近 30 天發文的牌譜都沒有格式問題，不用修正。\n累計待修正（不限發文時間）：0 篇。"])
+        only_old = dri.fix_list_messages([], 3, now=self.NOW, days=30, max_entries=50, guild_id=dri.GUILD_ID)[0]
+        self.assertIn("\n累計待修正（不限發文時間）：3 篇，其中 3 篇發文超過 30 天，這裡沒有列出。\n", only_old)
+        self.assertTrue(only_old.endswith(dri.FIX_LIST_FOOTER))
+
+    def test_chunks_of_at_most_2000_split_between_lines(self) -> None:
+        many = [dri.FixEntry(dri.SkippedPost(dri.Post(str(10 ** 17 + i), f"1009一般場{i}"), dri.SKIP_UNRECOGNIZED, 9,
+                                             "字" * 40), "2026/10/09", str(i), True) for i in range(1, 121)]
+        msgs = dri.fix_list_messages(many, 130, now=self.NOW, days=30, max_entries=120, guild_id=dri.GUILD_ID)
+        self.assertGreater(len(msgs), 3)
+        for m in msgs:
+            self.assertLessEqual(dri.discord_length(m), dri.DISCORD_MESSAGE_MAX)
+            self.assertLessEqual(len(m), 2000)
+        lines = "\n".join(msgs).split("\n")
+        self.assertEqual(sum(m.count("\n") + 1 for m in msgs), len(lines))  # no line was split
+        self.assertEqual(len(lines), 2 + 120 + 2)
+        self.assertEqual([int(x.split(".")[0]) for x in lines if re.match(r"^[0-9]+\. ", x)], list(range(1, 121)))
+        self.assertTrue(msgs[0].startswith(dri.fix_list_prefix(self.NOW)))
+        self.assertFalse(any(m.startswith(dri.FIX_LIST_MARKER) for m in msgs[1:]))
+        self.assertEqual(dri.chunk_lines(["a" * 1000, "b" * 999, "c"]), ["a" * 1000 + "\n" + "b" * 999, "c"])
+        self.assertEqual(dri.chunk_lines(["a" * 1000, "b" * 1000]), ["a" * 1000, "b" * 1000])
+        huge = dri.chunk_lines(["🤖" * 1500, "x"])  # 3000 UTF-16 units: cut
+        self.assertEqual(len(huge), 2)
+        self.assertLessEqual(dri.discord_length(huge[0]), 2000)
+        self.assertTrue(huge[0].endswith("…"))
+        self.assertEqual(dri.chunk_lines([]), [])
+
+    def test_week_key_is_iso_week_in_taipei(self) -> None:
+        cases = [
+            (dt.datetime(2026, 10, 12, 3, 17, tzinfo=dri.TAIPEI), "2026-W42", dt.date(2026, 10, 12)),
+            (dt.datetime(2026, 10, 18, 23, 59, tzinfo=dri.TAIPEI), "2026-W42", dt.date(2026, 10, 12)),
+            (dt.datetime(2026, 10, 11, 23, 59, tzinfo=dri.TAIPEI), "2026-W41", dt.date(2026, 10, 5)),
+            (dt.datetime(2026, 10, 11, 19, 17, tzinfo=dt.timezone.utc), "2026-W42", dt.date(2026, 10, 12)),  # Mon in Taipei
+            (dt.datetime(2027, 1, 1, 3, 17, tzinfo=dri.TAIPEI), "2026-W53", dt.date(2026, 12, 28)),
+        ]
+        for now, key, monday in cases:
+            with self.subTest(now=now):
+                self.assertEqual(dri.fix_list_week(now), (key, monday))
+                self.assertEqual(dri.fix_list_prefix(now), f"{dri.FIX_LIST_MARKER} {key}")
+
+    def test_channel_from_the_variable_or_by_name(self) -> None:
+        channels = [guild_channel("900", dri.FIX_CHANNEL_NAME, 2),  # a voice channel of that name
+                    guild_channel("7002", dri.FIX_CHANNEL_NAME), guild_channel("7001", dri.FIX_CHANNEL_NAME, 5),
+                    guild_channel("7000", dri.FIX_CHANNEL_NAME + "-舊"), guild_channel("6999", "一般"),
+                    guild_channel("8000", "討論串", 11), guild_channel("8001", "論壇", 15)]
+        fake = self.fake(channels=channels)
+        self.assertEqual(dri.resolve_fix_channel(fake, dri.GUILD_ID), ("7001", "name"))  # the oldest usable one
+        self.assertEqual(dri.resolve_fix_channel(self.fake(channels=[guild_channel("1", " 牌譜修正 ")]), dri.GUILD_ID),
+                         ("1", "name"))
+        self.assertEqual(dri.resolve_fix_channel(self.fake(channels=[guild_channel("1", "牌譜修正", 15)]), dri.GUILD_ID),
+                         (None, dri.FIX_NOT_TEXT))  # a forum: no plain messages
+        self.assertEqual(dri.resolve_fix_channel(self.fake(channels=channels[3:]), dri.GUILD_ID), (None, dri.FIX_NO_CHANNEL))
+        self.assertEqual(dri.resolve_fix_channel(self.fake(channels=[]), dri.GUILD_ID), (None, dri.FIX_NO_CHANNEL))
+        fake = self.fake(channels=channels)
+        self.assertEqual(dri.resolve_fix_channel(fake, dri.GUILD_ID, " 6999 "), ("6999", "variable"))
+        self.assertEqual(dri.resolve_fix_channel(fake, dri.GUILD_ID, "8000"), ("8000", "variable"))  # a thread is fine
+        self.assertEqual(dri.resolve_fix_channel(fake, dri.GUILD_ID, "8001"), (None, dri.FIX_NOT_TEXT))
+        self.assertEqual(dri.resolve_fix_channel(fake, dri.GUILD_ID, "123"), (None, dri.FIX_NO_CHANNEL))
+        self.assertEqual(dri.resolve_fix_channel(fake, dri.GUILD_ID, "#牌譜修正"), (None, dri.FIX_BAD_VARIABLE))
+        self.assertEqual(fake.guild_calls, 0)  # the variable wins: the guild's channels are not listed
+
+    def test_posts_once_per_week_unless_forced(self) -> None:
+        fake = self.fake()
+        live = self.fix(fake)
+        self.assertEqual((live.status, live.channel_found, live.entries, live.listed, live.held_by_cap, live.backlog,
+                          live.messages, live.posted), (dri.FIX_POSTED, True, 4, 4, 0, 5, 1, 1))
+        self.assertEqual(([t for t, _ in fake.posted], fake.nonces), ([FIX_CHANNEL], ["fl2026-W42-1"]))
+        self.assertEqual(fake.fix_reads, [(FIX_CHANNEL, f"{dri.FIX_LIST_MARKER} 2026-W42", dri.FIX_LIST_HISTORY)])
+        text = fake.posted[0][1]
+        for p in (self.p_a, self.p_b, self.p_c, self.p_md):
+            self.assertIn(self.link(p), text)
+        for p in (self.p_d, self.p_e, self.p_sim, self.p_chat, self.p_ok):
+            self.assertNotIn(p.id, text)
+        again = self.fix(fake, now=self.NOW + dt.timedelta(days=1))  # Tuesday, same week
+        self.assertEqual((again.status, again.posted, again.messages, len(fake.posted)), (dri.FIX_ALREADY, 0, 1, 1))
+        forced = self.fix(fake, now=self.NOW + dt.timedelta(days=1), force=True)
+        self.assertEqual((forced.status, forced.posted, len(fake.posted)), (dri.FIX_POSTED, 1, 2))
+        self.assertEqual(fake.nonces[-1], "fl2026-W42-031700-1")  # its own nonce: a new message
+        self.assertEqual(len(fake.fix_reads), 2)  # forced: the channel is not read
+        nxt = self.fix(fake, now=self.NOW + dt.timedelta(days=7))
+        self.assertEqual((nxt.status, fake.nonces[-1]), (dri.FIX_POSTED, "fl2026-W43-1"))
+        self.assertTrue(fake.posted[-1][1].startswith(f"{dri.FIX_LIST_MARKER} 2026-W43（2026/10/19 這週）\n"))
+        prefix = dri.fix_list_prefix(self.NOW)
+        # A human quoting the marker, or the bot's list of another week, is not this week's list...
+        fake = self.fake(history={FIX_CHANNEL: [("U2", prefix + "（引用）"), ("BOT1", dri.FIX_LIST_MARKER + " 2026-W41")]})
+        self.assertEqual(self.fix(fake).status, dri.FIX_POSTED)
+        # ... and only the newest FIX_LIST_HISTORY messages are read.
+        self.assertEqual(dri.FIX_LIST_HISTORY, dri.MESSAGES_PAGE)  # one request
+        fake = self.fake(history={FIX_CHANNEL: [("U2", "已修正")] * (dri.FIX_LIST_HISTORY - 1)
+                                  + [("BOT1", prefix + "（2026/10/12 這週）")]})
+        self.assertEqual((self.fix(fake).status, fake.posted), (dri.FIX_ALREADY, []))
+        fake = self.fake(history={FIX_CHANNEL: [("U2", "已修正")] * dri.FIX_LIST_HISTORY
+                                  + [("BOT1", prefix + "（2026/10/12 這週）")]})
+        self.assertEqual(self.fix(fake).status, dri.FIX_POSTED)
+
+    def test_dry_run_counts_and_never_posts(self) -> None:
+        fake = self.fake()
+        dry = self.fix(fake, dry_run=True, max_entries=3)
+        self.assertEqual((dry.status, dry.dry_run, dry.channel_found, dry.listed, dry.held_by_cap, dry.messages,
+                          dry.posted), (dri.FIX_DRY_RUN, True, True, 3, 1, 1, 0))
+        self.assertEqual((fake.posted, len(fake.fix_reads)), ([], 1))
+        self.assertEqual(self.fix(fake, dry_run=True, force=True).status, dri.FIX_DRY_RUN)
+        self.assertEqual(fake.posted, [])
+        fake = self.fake(history={FIX_CHANNEL: [("BOT1", dri.fix_list_prefix(self.NOW))]})
+        self.assertEqual(self.fix(fake, dry_run=True).status, dri.FIX_ALREADY)
+
+    def test_no_channel_403_and_errors_never_raise(self) -> None:
+        fake = self.fake(channels=[])
+        none = self.fix(fake)
+        self.assertEqual((none.status, none.channel_found, none.entries, none.backlog, none.messages, fake.posted,
+                          fake.me_calls), (dri.FIX_NO_CHANNEL, False, 4, 5, 0, [], 0))
+        fake = self.fake(forbid_fix=True)
+        self.assertEqual((self.fix(fake).status, fake.posted), (dri.FIX_FORBIDDEN, []))
+        self.assertEqual(self.fix(fake, force=True).status, dri.FIX_FORBIDDEN)  # 403 on the post itself
+        fake = self.fake(fix_error_at=2)
+        with mock.patch.object(dri, "fix_list_messages", return_value=[dri.fix_list_prefix(self.NOW) + " a", "b", "c"]):
+            partial = self.fix(fake)
+        self.assertEqual((partial.status, partial.messages, partial.posted, len(fake.posted)), (dri.FIX_ERROR, 3, 1, 1))
+        self.assertEqual(self.fix(self.fake(no_me=True)).status, dri.FIX_ERROR)
+        fake = self.fake()
+        with mock.patch.object(fake, "guild_channels", side_effect=ValueError("Expecting value")):
+            self.assertEqual(self.fix(fake).status, dri.FIX_ERROR)
+
+    def test_summary_lines_are_counts_only(self) -> None:
+        lines = "\n".join(dri.fix_list_lines(dri.FixListReport(status=dri.FIX_POSTED, channel_found=True, entries=60,
+                                                               listed=50, held_by_cap=10, backlog=80, messages=3, posted=3)))
+        self.assertEqual(lines, "- 牌譜修正清單（--fix-list）：已發出\n"
+                                "  - 找到頻道：有；30 天內待修正：60 篇，列出：50 篇，超過 --fix-list-max 沒列：10 篇；"
+                                "累計待修正（不限天數）：80 篇；清單共 3 則訊息，本次發出 3 則")
+        missing = "\n".join(dri.fix_list_lines(dri.FixListReport(status=dri.FIX_NO_CHANNEL, entries=2, listed=2, backlog=2)))
+        self.assertIn("找不到「牌譜修正」文字頻道，未發出", missing)
+        self.assertIn("找到頻道：沒有", missing)
+        self.assertNotIn("超過 --fix-list-max", missing)
+        self.assertNotIn("則訊息", missing)  # nothing was built
+        statuses = {v for k, v in vars(dri).items() if k.startswith("FIX_") and k not in (
+            "FIX_CHANNEL_NAME", "FIX_LIST_MARKER", "FIX_LIST_FOOTER", "FIX_STATUS_TEXT", "FIX_CHANNEL_SKIPS")
+            and isinstance(v, str)}
+        self.assertEqual(statuses, set(dri.FIX_STATUS_TEXT))
+        args = dri.parse_args(["--fix-list"])
+        self.assertEqual((args.fix_list, args.fix_list_days, args.fix_list_max, args.fix_list_force), (True, 30, 50, False))
+        for bad in (["--fix-list", "--fix-list-max", "0"], ["--fix-list", "--fix-list-days", "0"],
+                    ["--fix-list", "--since", "2026-10-01"]):  # --since: the backlog would leave out older posts
+            with self.subTest(argv=bad), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                dri.parse_args(bad)
+        self.assertEqual(dri.parse_args(["--since", "2026-10-01", "--reply"]).since, dt.date(2026, 10, 1))
+        self.assertEqual(dri.resolve_fix_channel(self.fake(), dri.GUILD_ID, "１２３"), (None, dri.FIX_BAD_VARIABLE))
+
+
+def workflow_step_script(name: str) -> str:
+    """The `run: |` block of the workflow step called `name`, dedented."""
+    lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == f"- name: {name}")
+    run = next(i for i in range(start, len(lines)) if lines[i].strip() == "run: |")
+    body: list[str] = []
+    indent = None
+    for line in lines[run + 1:]:
+        if not line.strip():
+            body.append("")
+            continue
+        width = len(line) - len(line.lstrip())
+        indent = width if indent is None else indent
+        if width < indent:
+            break
+        body.append(line[indent:])
+    return "\n".join(body)
+
+
+class WorkflowModeTest(unittest.TestCase):
+    """The scheduled run replies, and passes the fix list Monday to Wednesday (Taipei); a manual run
+    follows its inputs. DISCORD_IMPORT_REPLY / DISCORD_FIX_LIST = 'false' switch them off for both."""
+
+    def setUp(self) -> None:
+        # Not on Windows: bash there may be WSL's (no env passed through, no Windows paths).
+        if os.name == "nt" or not WORKFLOW.exists() or not shutil.which("bash"):
+            self.skipTest("workflow file or a POSIX bash not available")
+
+    def bash(self, script: str, env: dict[str, str]) -> tuple[subprocess.CompletedProcess, Path]:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        full_env = {"PATH": os.environ.get("PATH", ""), "GITHUB_OUTPUT": str(tmp / "out"), **env}
+        proc = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                              env=full_env, capture_output=True, text=True, encoding="utf-8", cwd=tmp)
+        return proc, tmp
+
+    def mode(self, event: str, weekday: int = 4, **env: str) -> dict[str, str]:  # Thursday: no list
+        # `date` is stubbed: it records the TZ it was asked in and answers the weekday (%u).
+        stub = f'date() {{ printf %s "$TZ" > tz; echo {weekday}; }}\n'
+        proc, tmp = self.bash(stub + workflow_step_script("Decide dry run or write"), {"EVENT": event, **env})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        out = dict(line.split("=", 1) for line in (tmp / "out").read_text(encoding="utf-8").splitlines())
+        if (tmp / "tz").exists():
+            out["tz"] = (tmp / "tz").read_text(encoding="utf-8")
+        return out
+
+    def test_scheduled_runs(self) -> None:
+        self.assertEqual(self.mode("schedule"), {"write": "true", "limit": "", "reply": "true", "fix_list": "false",
+                                                 "tz": "Asia/Taipei"})
+        for weekday in (1, 2, 3):  # Monday; Tuesday and Wednesday catch up on a lost Monday run
+            self.assertEqual(self.mode("schedule", weekday=weekday)["fix_list"], "true")
+        for weekday in (4, 5, 6, 7):
+            self.assertEqual(self.mode("schedule", weekday=weekday)["fix_list"], "false")
+        self.assertEqual(self.mode("schedule", weekday=1, VAR_FIX_LIST="false")["fix_list"], "false")
+        self.assertEqual(self.mode("schedule", weekday=1, VAR_FIX_LIST="true")["fix_list"], "true")
+        self.assertEqual(self.mode("schedule", VAR_REPLY="false")["reply"], "false")
+        self.assertEqual(self.mode("schedule", VAR_REPLY="true")["reply"], "true")
+        self.assertEqual(self.mode("schedule", VAR_REPLY="")["reply"], "true")
+        paused = self.mode("schedule", VAR_WRITE="false")  # a dry run: replies are counted, not posted
+        self.assertEqual((paused["write"], paused["reply"]), ("false", "true"))
+
+    def test_manual_runs_follow_the_inputs(self) -> None:
+        default = self.mode("workflow_dispatch", weekday=1, INPUT_WRITE="false", INPUT_REPLY="true", INPUT_FIX_LIST="false")
+        self.assertEqual(default, {"write": "false", "limit": "", "reply": "true", "fix_list": "false"})
+        on = self.mode("workflow_dispatch", INPUT_WRITE="true", INPUT_REPLY="false", INPUT_FIX_LIST="true",
+                       INPUT_LIMIT=" 5 ", VAR_REPLY="true", VAR_FIX_LIST="true", VAR_WRITE="false")
+        self.assertEqual(on, {"write": "true", "limit": "5", "reply": "false", "fix_list": "true"})
+        # The variables are off switches for manual runs too (the reply box is ticked by default).
+        off = self.mode("workflow_dispatch", INPUT_WRITE="true", INPUT_REPLY="true", INPUT_FIX_LIST="true",
+                        VAR_REPLY="false", VAR_FIX_LIST="false")
+        self.assertEqual(off, {"write": "true", "limit": "", "reply": "false", "fix_list": "false"})
+        proc, _ = self.bash(workflow_step_script("Decide dry run or write"), {"EVENT": "workflow_dispatch",
+                                                                             "INPUT_LIMIT": "five"})
+        self.assertNotEqual(proc.returncode, 0)
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        reply_input = workflow.split("      reply:\n", 1)[1].split("      fix_list:\n", 1)[0]
+        self.assertIn("default: true", reply_input)  # the manual reply box starts ticked
+        self.assertIn("DISCORD_FIX_CHANNEL_ID: ${{ vars.DISCORD_FIX_CHANNEL_ID }}", workflow)
+
+    def test_import_step_passes_the_switches(self) -> None:
+        stub = 'python() { printf "%s\\n" "$@" > args; }\n'
+        script = stub + workflow_step_script("Import (dry run unless write is on)")
+        cases = [
+            ({"WRITE": "true", "REPLY": "true", "FIX_LIST": "true"}, ["--reply", "--fix-list"]),
+            ({"WRITE": "false", "REPLY": "true", "FIX_LIST": "false", "LIMIT": "5"}, ["--dry-run", "--limit", "5", "--reply"]),
+            ({"WRITE": "true", "REPLY": "false", "FIX_LIST": "false"}, []),
+        ]
+        for env, flags in cases:
+            with self.subTest(env=env):
+                proc, tmp = self.bash(script, env)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                args = (tmp / "args").read_text(encoding="utf-8").split("\n")[:-1]
+                self.assertEqual(args, ["packages/server/discord_records_import.py", *flags])
+
+
 class EndToEndTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -1208,14 +1650,14 @@ class EndToEndTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_main(self, *args: str, deny_writes: bool = False, ci: bool = True,
-                 write_error: Exception | None = None, **discord_kw) -> tuple[int, str]:
+                 write_error: Exception | None = None, env_extra: dict | None = None, **discord_kw) -> tuple[int, str]:
         sheet = FakeSheet(self.tabs, deny_writes, write_error)
 
         def open_sheet(source, sheet_id, scopes):
             self.opened_scopes.append(scopes)
             return sheet
         env = {gc.ENV_CREDENTIALS_JSON: json.dumps(FAKE_KEY), dri.ENV_DISCORD_TOKEN: "TOKEN",
-               "GITHUB_STEP_SUMMARY": str(self.summary)}
+               "GITHUB_STEP_SUMMARY": str(self.summary), **(env_extra or {})}
         if ci:
             env["GITHUB_ACTIONS"] = "true"
         self.discord = FakeDiscord(self.posts, self.bodies, **discord_kw)
@@ -1359,6 +1801,88 @@ class EndToEndTest(unittest.TestCase):
         summary = self.summary.read_text(encoding="utf-8")
         self.assertIn("### Discord 牌譜匯入（已寫入 0 列）", summary)  # the import summary was out before the crash
         self.assertIn("已在 Discord匯入（同一貼文，不再讀取）：1", summary)
+
+    def test_fix_list_posts_weekly_and_logs_counts_only(self) -> None:
+        bad = self.posts[2]  # 1009一般場6, names missing
+        link = f"https://discord.com/channels/{dri.GUILD_ID}/{bad.id}"
+
+        def public_safe(log: str) -> None:
+            self.assert_public_safe(log)
+            for secret in ("discord.com/channels", dri.FIX_LIST_MARKER, FIX_CHANNEL, *(p.id for p in self.posts)):
+                self.assertNotIn(secret, log)
+            self.assertNotIn("::error", log)
+
+        rc, log = self.run_main("--dry-run", "--fix-list")
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(self.discord.posted, [])
+        self.assertIn("- 牌譜修正清單（--fix-list）：dry run：只計數，未發出", log)
+        self.assertIn("找到頻道：有；30 天內待修正：1 篇，列出：1 篇；累計待修正（不限天數）：1 篇；清單共 1 則訊息，本次發出 0 則",
+                      log)
+        public_safe(log + self.summary.read_text(encoding="utf-8"))
+
+        self.summary.write_text("", encoding="utf-8")
+        rc, log = self.run_main("--fix-list")
+        self.assertEqual(rc, 0, log)
+        self.assertEqual([t for t, _ in self.discord.posted], [FIX_CHANNEL])
+        posted = self.discord.posted[0][1]
+        self.assertTrue(posted.startswith(f"{dri.FIX_LIST_MARKER} 2026-W41（2026/10/05 這週）\n"))
+        self.assertIn(f"\n1. 2026/10/09 第 6 場：玩家名單不完整 {link}\n", posted)
+        self.assertIn("- 牌譜修正清單（--fix-list）：已發出", log)
+        self.assertIn("清單共 1 則訊息，本次發出 1 則", log)
+        summary = self.summary.read_text(encoding="utf-8")
+        self.assertLess(summary.index("已寫入 1 列"), summary.index("牌譜修正清單"))
+        public_safe(log + summary)
+
+        rc, log = self.run_main("--fix-list", history={FIX_CHANNEL: [("BOT1", posted)]})  # later that week
+        self.assertEqual((rc, self.discord.posted), (0, []))
+        self.assertIn("- 牌譜修正清單（--fix-list）：本週已發過，略過", log)
+        rc, log = self.run_main("--fix-list", "--fix-list-force", history={FIX_CHANNEL: [("BOT1", posted)]})
+        self.assertEqual(len(self.discord.posted), 1)
+
+        rc, log = self.run_main("--fix-list", channels=[])  # the channel is not created yet
+        self.assertEqual((rc, self.discord.posted), (0, []))
+        self.assertIn("找不到「牌譜修正」文字頻道，未發出", log)
+        self.assertIn("::notice title=Fix list skipped::No usable channel for the weekly fix list (no_channel): create "
+                      "a text channel named 牌譜修正 or set the repository variable DISCORD_FIX_CHANNEL_ID. 1 post(s)", log)
+        public_safe(log + self.summary.read_text(encoding="utf-8"))
+        rc, log = self.run_main("--fix-list", forbid_fix=True)
+        self.assertEqual((rc, self.discord.posted), (0, []))
+        self.assertIn("::notice title=Fix list skipped::The bot may not read or post in the fix-list channel (HTTP 403): "
+                      "give it View Channel, Send Messages and Read Message History there.", log)
+        rc, log = self.run_main("--fix-list", fix_error_at=1, ci=False)
+        self.assertEqual((rc, self.discord.posted), (0, []))
+        self.assertIn("[WARNING] Fix list error: Discord API error or unexpected response; 0 of 1 message(s)", log)
+
+        rc, log = self.run_main("--fix-list", env_extra={dri.ENV_FIX_CHANNEL: "7777"},
+                                channels=[guild_channel("7777", "修正區")])
+        self.assertEqual(([t for t, _ in self.discord.posted], self.discord.guild_calls), (["7777"], 0))
+        public_safe(log.replace("7777", ""))
+        for value in ("#牌譜修正", "8888"):  # not an id; no such channel
+            with self.subTest(variable=value):
+                rc, log = self.run_main("--fix-list", env_extra={dri.ENV_FIX_CHANNEL: value})
+                self.assertEqual((rc, self.discord.posted), (0, []))
+                self.assertIn("::notice title=Fix list skipped::The repository variable DISCORD_FIX_CHANNEL_ID does not "
+                              "name a text channel the bot can see", log)
+                self.assertNotIn("create a text channel", log)
+                self.assertNotIn(value, log.replace("DISCORD_FIX_CHANNEL_ID", ""))
+        self.assertNotIn("7777", log)
+
+        rc, log = self.run_main("--fix-list", missing=["已收錄"])  # cannot tell which posts were recorded
+        self.assertEqual((rc, self.discord.posted, self.discord.fix_reads), (0, [], []))
+        self.assertIn("牌譜修正清單（--fix-list）：論壇沒有「已收錄」標籤，無法判斷哪些貼文要修正，本次未發出、未計數", log)
+        self.assertIn("::warning title=Fix list skipped::1 forum tag(s) that decide which posts need fixing", log)
+        self.assertNotIn("Discord reply skipped", log)
+        self.assertNotIn("格式回覆", log)
+
+        rc, log = self.run_main("--reply", "--fix-list")  # both: the thread reply and the list
+        self.assertEqual(rc, 0, log)
+        self.assertEqual([t for t, _ in self.discord.posted], [bad.id, FIX_CHANNEL])
+        self.assertEqual(self.discord.me_calls, 2)  # the fake does not cache; the real client asks once
+        public_safe(log + self.summary.read_text(encoding="utf-8"))
+
+        rc, log = self.run_main()  # without --fix-list the channel is not even looked up
+        self.assertEqual((self.discord.guild_calls, self.discord.fix_reads, self.discord.posted), (0, [], []))
+        self.assertNotIn("牌譜修正清單", log)
 
     def test_dry_run_then_write_then_idempotent(self) -> None:
         rc, log = self.run_main("--dry-run")

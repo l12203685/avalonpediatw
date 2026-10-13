@@ -32,9 +32,14 @@ import {
   FEEDBACK_CONFIG,
   FeedbackDiscordForwarder,
   FeedbackSnapshot,
+  createFeedbackDiscordForwarder,
   getFeedbackService,
   initializeFeedback,
 } from './feedback';
+import type { Client } from 'discord.js';
+import { createDiscordDigestPort } from './digest/discordPort';
+import { CommunityDigestStatus, communityDigestStatus, initializeCommunityDigest } from './digest/service';
+import { defaultDigestLogger, readDigestConfig } from './digest/config';
 
 /** Last initialisation error per bot — surfaced on /api/bots/status. */
 const initErrors: { discord: string | null; line: string | null } = {
@@ -95,26 +100,49 @@ export async function initializeBots(): Promise<void> {
   // Community feedback (2026-10-12, docs/COMMUNITY_FEEDBACK.md): topic
   // counts + /意見. Counting works without Discord; forwarding needs it.
   initializeFeedback({ discord: buildFeedbackForwarder() });
+
+  // Weekly community digest (2026-10-13, docs/COMMUNITY_FEEDBACK.md): Monday
+  // 09:00 +08 (catch-up until 12:00) summary of the past week's chat to the
+  // private admin channel and the private sheet. Off unless ANTHROPIC_API_KEY is set.
+  startCommunityDigest();
+}
+
+/** The discord.js client once the gateway is ready, else null (re-read on every call). */
+function readyDiscordClient(): Client | null {
+  const bot = getDiscordBot();
+  return bot && bot.isClientReady() ? bot.getClient() : null;
 }
 
 // ─── Community feedback wiring (2026-10-12) ──────────────────────────────
 
 /**
- * Discord sender for forwarded /意見 texts. Lazy like buildDiscordAdapter():
- * readiness is re-read on every call. The payload already carries
- * `allowedMentions: { parse: [] }` so a forwarded opinion can never ping.
+ * Discord sender for forwarded /意見 texts: FEEDBACK_DISCORD_CHANNEL_ID, else
+ * the private channel named 「管理者信箱」 (2026-10-13; used only when no
+ * ordinary member can view it). Lazy like buildDiscordAdapter(): readiness
+ * is re-read on every call. The payload carries `allowedMentions: { parse: [] }`.
+ * Exported for the wiring test.
  */
-function buildFeedbackForwarder(): FeedbackDiscordForwarder {
-  return {
-    send: async (channelId, payload): Promise<boolean> => {
-      const bot = getDiscordBot();
-      if (!bot || !bot.isClientReady()) return false;
-      const ch = await bot.getClient().channels.fetch(channelId);
-      if (!ch || !(ch instanceof TextChannel)) return false;
-      await ch.send(payload);
-      return true;
-    },
-  };
+export function buildFeedbackForwarder(): FeedbackDiscordForwarder {
+  return createFeedbackDiscordForwarder(readyDiscordClient, { guildId: (process.env.DISCORD_GUILD_ID || '').trim() });
+}
+
+// ─── Weekly community digest (2026-10-13) ────────────────────────────────
+
+/**
+ * Arm the Monday 09:00 +08 community digest (bots/digest). The service
+ * always exists (so /社群週報 can answer "disabled"); the timer only runs
+ * when the feature is enabled. Idempotent.
+ */
+export function startCommunityDigest(): void {
+  const service = initializeCommunityDigest({ discord: createDiscordDigestPort(readyDiscordClient) });
+  const cfg = readDigestConfig();
+  if (!cfg.enabled) {
+    defaultDigestLogger.info('disabled (set ANTHROPIC_API_KEY, or COMMUNITY_DIGEST_ENABLED=true)');
+    return;
+  }
+  if (service.isRunning()) return;
+  service.start();
+  defaultDigestLogger.info('armed (Mondays from 09:00 +08, catch-up until 12:00)');
 }
 
 // ─── ChatMirror wiring (#82) ──────────────────────────────────────────────
@@ -332,6 +360,11 @@ export interface BotStatus {
    * received. Numbers and one flag only — never text, names or ids.
    */
   feedback: FeedbackSnapshot & { commandEnabled: boolean };
+  /**
+   * Weekly community digest (bots/digest): four booleans and the last run's
+   * week, time, counts and outcome code — never text, names or channel names.
+   */
+  communityDigest: CommunityDigestStatus;
   discord: {
     enabled: boolean;
     ready: boolean;
@@ -370,6 +403,7 @@ export function buildBotStatus(): BotStatus {
     keepAlive: getKeepAliveState(),
     statsDigest: statsDigest?.getState() ?? { running: false, lastPostedWeek: {} },
     feedback: { commandEnabled: FEEDBACK_CONFIG.commandEnabled, ...getFeedbackService().snapshot() },
+    communityDigest: communityDigestStatus(),
     discord: {
       enabled: !!process.env.DISCORD_BOT_TOKEN,
       ready: discordBot?.isClientReady() ?? false,

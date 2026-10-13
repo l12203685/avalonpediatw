@@ -3,24 +3,35 @@ name: Import Discord records
 # 每天把 Discord 論壇 #牌譜紀錄與覆盤（每篇貼文一局）的牌譜匯入 Google 試算表的「Discord匯入」分頁，
 # 30 分鐘後 refresh-analysis-cache.yml 會把 牌譜 + Discord匯入 一起算進戰績分析快取。
 #
-# Discord 預設只讀（不加標籤）；只有 reply 開啟時會在討論串貼一則格式回覆（見下）。試算表只會在「Discord匯入」
-# 分頁往下追加列（沒有就建立；reply 開啟時另在「Discord回覆」分頁記下每則已貼的回覆），不動「牌譜」或其他分頁。
-# 以 discord_post_id 為鍵，可重跑；已在 牌譜 的局（指紋相同、或同配置同任務結果同玩家）與標「已收錄」的貼文
-# 不匯入；無法完整、無歧義解析的貼文略過並統計原因。
+# Discord 只會寫兩種訊息：格式回覆（reply，在討論串）與每週牌譜修正清單（fix_list，在「牌譜修正」頻道），見下；
+# 其他都只讀（不加標籤）。試算表只會在「Discord匯入」分頁往下追加列（沒有就建立；有貼回覆時另在「Discord回覆」
+# 分頁記下每則已貼的回覆），不動「牌譜」或其他分頁。以 discord_post_id 為鍵，可重跑；已在 牌譜 的局（指紋相同、
+# 或同配置同任務結果同玩家）與標「已收錄」的貼文不匯入；無法完整、無歧義解析的貼文略過並統計原因。
+# 說明文件：docs/DISCORD_RECORDS_IMPORT.md。
 #
-# 格式回覆（reply）：開啟時，對 14 天內因格式無法解析（非已收錄／模擬／重複／起始訊息刪除或空白／
-#   沒有牌譜也沒有結果標籤或配置的討論貼文）且尚未回覆過的貼文，在該討論串貼一則「🤖 牌譜格式檢查」：
-#   第幾行、原因、格式提示；不 @ 任何人；每次最多 20 則；bot 沒有發言權限時只警告不中斷。每篇只回一次：
-#   已貼的回覆記在「Discord回覆」分頁，回覆被刪也不再貼；送出遇伺服器錯誤或逾時不重送（可能已貼出，下次先查）。
-#   論壇缺少已收錄／模擬／結果標籤（改名？）時不回覆、只警告。dry run 只計數不貼。
-#   手動執行看 reply 勾選（預設不回）；排程執行要 repo variable DISCORD_IMPORT_REPLY 設為 'true' 才回（預設關）。
+# 格式回覆（reply，預設開；Edward 2026-10-13 決定）：對 14 天內因格式無法解析（非已收錄／模擬／重複／
+#   起始訊息刪除或空白／沒有牌譜也沒有結果標籤或配置的討論貼文）且尚未回覆過的貼文，在該討論串貼一則
+#   「🤖 牌譜格式檢查」：第幾行、原因、格式提示；不 @ 任何人；每次最多 20 則；bot 沒有發言權限時只警告不中斷。
+#   每篇只回一次：已貼的回覆記在「Discord回覆」分頁，回覆被刪也不再貼；送出遇伺服器錯誤或逾時不重送
+#   （可能已貼出，下次先查）。論壇缺少已收錄／模擬／結果標籤（改名？）時不回覆、只警告。
+#   dry run（沒有寫入）只計數不貼。預設回覆；repo variable DISCORD_IMPORT_REPLY 設為 'false' 可關（排程與手動
+#   執行都不回）；手動執行另看 reply 勾選（預設勾）。
+#
+# 每週牌譜修正清單（fix_list）：每週一（台灣時間）的排程，把最近 30 天發文、需要回覆的那些貼文（同上規則）
+#   依牌譜日期列成清單（日期、當天第幾場、原因、第幾行、連結；最多 50 篇，其餘只說「另有 N 篇」；另附累計
+#   待修正篇數），發到 Discord 文字頻道「牌譜修正」（repo variable DISCORD_FIX_CHANNEL_ID 有設就用那個頻道）。
+#   每週只發一次：頻道最近 100 則訊息裡已有 bot 的本週清單就不再發；所以週二、週三的排程也會帶 fix_list，
+#   週一的執行失敗或被 GitHub 略過時會補發，週一已發過就只讀一次頻道。找不到頻道或沒有權限時只留 notice，
+#   不讓整個 job 失敗。bot 在該頻道需要「檢視頻道」「傳送訊息」「讀取訊息歷史」。dry run 只計數不發。
+#   repo variable DISCORD_FIX_LIST 設為 'false' 可關（排程與手動執行都不發）；手動執行另看 fix_list 勾選（預設不勾）。
 #
 # 寫入與否：手動執行看 write 勾選（預設不寫，只做 dry run）；排程執行預設寫入
-#   （2026-10-12 首次寫入 82 局驗證無誤後開啟），repo variable DISCORD_IMPORT_WRITE 設為 'false' 可暫停。
+#   （2026-10-12 首次寫入 82 局驗證無誤後開啟），repo variable DISCORD_IMPORT_WRITE 設為 'false' 可暫停
+#   （只影響排程執行）。
 # 金鑰：DISCORD_BOT_TOKEN（bot 需能看論壇與讀訊息歷史；回覆另需在討論串發言的權限）；試算表金鑰同 refresh-analysis-cache.yml
 #   （AVALON_STATS_SHEETS_CREDENTIALS_JSON，沒有就用 GOOGLE_SHEETS_CREDENTIALS_JSON）。
 #   寫入需要服務帳號對試算表有「編輯者」權限（dry run 檢視者即可）。
-# 公開 repo：log 與 job summary 只有數量與固定的原因字串，不含玩家名字、牌譜內容或貼文標題。
+# 公開 repo：log 與 job summary 只有數量與固定的原因字串，不含玩家名字、牌譜內容、貼文標題或連結。
 #   不要在這裡加 --report（含標題，只給本機用；CI 中會被拒絕）。
 
 on:
@@ -37,7 +48,11 @@ on:
         required: false
         default: ''
       reply:
-        description: '在 14 天內因格式無法解析的貼文討論串回覆原因與格式提示（不勾 write 時只計數不貼）'
+        description: '在 14 天內因格式無法解析的貼文討論串回覆原因與格式提示（不勾 write 時只計數不貼；repo variable DISCORD_IMPORT_REPLY 為 false 時不回）'
+        type: boolean
+        default: true
+      fix_list:
+        description: '在「牌譜修正」頻道發本週的牌譜修正清單（每週一次，本週發過就略過；不勾 write 時只計數不發；repo variable DISCORD_FIX_LIST 為 false 時不發）'
         type: boolean
         default: false
 
@@ -96,11 +111,14 @@ jobs:
           INPUT_WRITE: ${{ inputs.write }}
           INPUT_LIMIT: ${{ inputs.limit }}
           INPUT_REPLY: ${{ inputs.reply }}
+          INPUT_FIX_LIST: ${{ inputs.fix_list }}
           VAR_WRITE: ${{ vars.DISCORD_IMPORT_WRITE }}
           VAR_REPLY: ${{ vars.DISCORD_IMPORT_REPLY }}
+          VAR_FIX_LIST: ${{ vars.DISCORD_FIX_LIST }}
         run: |
           write=false
           reply=false
+          fix_list=false
           if [ "${EVENT}" = "workflow_dispatch" ]; then
             if [ "${INPUT_WRITE}" = "true" ]; then
               write=true
@@ -108,13 +126,31 @@ jobs:
             if [ "${INPUT_REPLY}" = "true" ]; then
               reply=true
             fi
+            if [ "${INPUT_FIX_LIST}" = "true" ]; then
+              fix_list=true
+            fi
           else
             if [ "${VAR_WRITE}" != "false" ]; then
               write=true
             fi
-            if [ "${VAR_REPLY}" = "true" ]; then
-              reply=true
-            fi
+            reply=true
+            # The weekly list goes out with the Monday run (03:17 Taipei = Sunday 19:17 UTC); the
+            # Tuesday and Wednesday runs pass it too, so a failed or dropped Monday run is caught up
+            # (the script posts once per ISO week: it finds this week's list in the channel).
+            case "$(TZ=Asia/Taipei date +%u)" in
+              1|2|3) fix_list=true ;;
+            esac
+          fi
+          # The repo variables switch these off for every run, the manual reply box being ticked by default.
+          reply_note=""
+          fix_list_note=""
+          if [ "${VAR_REPLY}" = "false" ]; then
+            reply=false
+            reply_note=" (repository variable DISCORD_IMPORT_REPLY is 'false')"
+          fi
+          if [ "${VAR_FIX_LIST}" = "false" ]; then
+            fix_list=false
+            fix_list_note=" (repository variable DISCORD_FIX_LIST is 'false')"
           fi
           limit="$(printf '%s' "${INPUT_LIMIT}" | tr -d '[:space:]')"
           if [ -n "${limit}" ] && ! printf '%s' "${limit}" | grep -Eq '^[0-9]+$'; then
@@ -124,6 +160,7 @@ jobs:
           echo "write=${write}" >> "$GITHUB_OUTPUT"
           echo "limit=${limit}" >> "$GITHUB_OUTPUT"
           echo "reply=${reply}" >> "$GITHUB_OUTPUT"
+          echo "fix_list=${fix_list}" >> "$GITHUB_OUTPUT"
           if [ "${write}" = "true" ]; then
             echo "Mode: write (append new games to Discord匯入)${limit:+, at most ${limit}}"
           else
@@ -132,7 +169,12 @@ jobs:
           if [ "${reply}" = "true" ]; then
             echo "Reply: on (format replies in Discord threads; counted only in a dry run)"
           else
-            echo "Reply: off"
+            echo "Reply: off${reply_note}"
+          fi
+          if [ "${fix_list}" = "true" ]; then
+            echo "Fix list: on (weekly list in the 牌譜修正 channel; counted only in a dry run)"
+          else
+            echo "Fix list: off${fix_list_note}"
           fi
 
       - name: Checkout
@@ -195,6 +237,8 @@ jobs:
           WRITE: ${{ steps.mode.outputs.write }}
           LIMIT: ${{ steps.mode.outputs.limit }}
           REPLY: ${{ steps.mode.outputs.reply }}
+          FIX_LIST: ${{ steps.mode.outputs.fix_list }}
+          DISCORD_FIX_CHANNEL_ID: ${{ vars.DISCORD_FIX_CHANNEL_ID }}
         run: |
           args=()
           if [ "${WRITE}" != "true" ]; then
@@ -205,6 +249,9 @@ jobs:
           fi
           if [ "${REPLY}" = "true" ]; then
             args+=(--reply)
+          fi
+          if [ "${FIX_LIST}" = "true" ]; then
+            args+=(--fix-list)
           fi
           set +e
           python packages/server/discord_records_import.py "${args[@]}"

@@ -62,6 +62,9 @@ export const COMMANDS = {
   // 2026-10-12 community feedback (bots/feedback): /意見 內容:… — same CJK
   // naming so LINE's typed "/意見 文字" and this slash command read alike.
   FEEDBACK: '意見',
+  // 2026-10-13 weekly community digest (bots/digest): admins only
+  // (ManageGuild), ephemeral status reply; deliberately not listed in /help.
+  COMMUNITY_DIGEST: '社群週報',
 };
 
 /** Option names of the stats slash commands (same CJK naming rules). */

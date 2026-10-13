@@ -75,11 +75,18 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
     "commandEnabled": true,
     "weeks": [ { "week": "2026-W42", "line": { "排行": 3, "問題": 1 }, "discord": { "機器人": 2 } } ],
     "opinions": { "line": 1, "discord": 0 }
+  },
+  "communityDigest": {
+    "enabled": true, "anthropicConfigured": true, "adminChannelResolved": true, "sheetConfigured": true,
+    "lastRun": { "week": "2026-10-05", "at": "2026-10-12T01:03:12.000Z", "manual": false,
+                 "messages": 356, "channels": 8, "omitted": 0, "posted": true, "sheetWritten": true, "outcome": "ok" }
   }
 }
 ```
 
 `feedback` 是社群反應的主題計數與 `/意見` 次數（只有數字，見 `docs/COMMUNITY_FEEDBACK.md`）。
+`communityDigest` 是每週社群週報（每週一 09:00 +08 起貼到私人頻道「管理者信箱」，沒跑成會補到 12:00）：四個布林＋最近一次的週次、時間、則數與結果代碼，
+沒有任何文字或名字；`lastRun` 重啟後是 `null`（見 `docs/COMMUNITY_FEEDBACK.md`「每週社群週報」）。
 
 | 欄位 | 意義 | 不對時代表 |
 |---|---|---|
@@ -92,6 +99,8 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 | `line.replyQueueSize` | 等著回 LINE 的訊息數 | 一直很高 → LINE 群沒人講話（設計如此）或 reply 一直失敗（看 `replyFailures`） |
 | `discord.ready` | gateway 連線中 | `false` 且 `enabled` → token 錯、或 MESSAGE CONTENT INTENT 沒開、或 Render 剛喚醒 |
 | `keepAlive.enabled` | 自我喚醒是否在跑 | Render 上為 `false` → 15 分鐘沒人用就休眠，Discord 腿跟著斷 |
+| `communityDigest.adminChannelResolved` | 找得到私人頻道「管理者信箱」（或指定的頻道 id） | `false` → 頻道沒開、bot 沒加進去或沒有「讀取訊息歷史」，或 @everyone／一般身分組看得到（為了隱私不貼）；部署後一分鐘內可能還沒更新 |
+| `communityDigest.lastRun.outcome` | 最近一次週報結果 | `refused` AI 拒絕處理；`rate-limited`／`connection-error` API 暫時失敗；`no-messages` 讀不到訊息（看 bot 的讀取權限） |
 
 ## 環境變數（Render Dashboard → 服務 → Environment）
 
@@ -171,9 +180,10 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
 | `/戰績 名字` | 場次、**最終勝率**、超額勝率；任務結算 → 刺殺結算 → 最終；紅／藍方最終勝率；擅長角色、風格、對戰風格、網站連結（口徑見 `docs/stats/two_stage_outcome.md`；不再顯示「角色理論勝率」） | slash 指令，公開回覆 | ✓ |
 | `/排行`（`/排行榜`） | 快取 `leaderboard` 的主榜：超額勝率 Top 10（標題含期間與門檻：近 90 天內有出賽、期間至少 20 場），每行「名次 名字 超額 ±x｜最終 y%｜n 場」＋總計（最終紅勝／藍勝、任務結算、三藍局刺中率）。舊快取退回全期超額或理論勝率 | ✓ | ✓ |
 | `/默契 名字1 名字2` | 同隊場次、一起贏／一起輸、同隊勝率（默契矩陣只收場次最多的 28 位；沒有「對戰」數據） | ✓ | ✓ |
-| `/意見 文字` | 固定回覆「已收到」，內容匿名轉貼到 `FEEDBACK_DISCORD_CHANNEL_ID`（見 `docs/COMMUNITY_FEEDBACK.md`） | slash 指令，只有本人看得到回覆 | ✓ |
+| `/意見 文字` | 固定回覆「已收到」，內容匿名轉貼到 `FEEDBACK_DISCORD_CHANNEL_ID`，沒設就轉到私人頻道「管理者信箱」（見 `docs/COMMUNITY_FEEDBACK.md`） | slash 指令，只有本人看得到回覆 | ✓ |
 | `/指令` | 指令說明（Discord 看 `/help`） | — | ✓ |
 
+- 管理者另有 `/社群週報`（只有「管理伺服器」權限看得到，不列在 `/help`）：立刻整理最近 7 天的聊天貼到「管理者信箱」，回覆只有狀態數字。
 - 名字比對：完全相同 → 不分大小寫 → 唯一的部分字串；多人符合列出最多 5 位，查無此人會提示查詢指令。
   表單裡有只差大小寫的不同玩家（`Sin` / `SIN` / `sin`），完全相同優先，卡片會註明另有哪些寫法。
 - Discord 指令名直接用中文（Discord 允許），和 LINE 寫法一致，任何介面語系都一樣；從「/」選單點選即可，不必切輸入法。
@@ -214,6 +224,8 @@ reply 不計、push 計。`LINE_REPLY_DRAIN=true`（預設）下 server 不會 p
 - `packages/server/src/bots/index.ts` — 初始化（各 bot 失敗隔離）、`/api/bots/status`
 - `packages/server/src/middleware/rawBody.ts` — 保留原始 bytes
 - `packages/server/src/services/keepAlive.ts` — Render Free 自我喚醒
+- `packages/server/src/bots/digest/` — 每週社群週報（讀頻道歷史、匿名逐字稿、Claude 摘要、貼「管理者信箱」、寫試算表）
+- `packages/server/src/bots/discord/adminChannel.ts` — 私人頻道「管理者信箱」的解析與公開頻道拒貼
 - `packages/server/src/bots/stats/` — 戰績回覆（`statsReplies.ts` 純格式化、`statsQueries.ts` 讀快取、`textCommands.ts` LINE 指令、`weeklyDigest.ts` 每週排行）
 - `.github/workflows/verify-line-webhook.yml` — 每日探測
 - `render.yaml` — 變數清單

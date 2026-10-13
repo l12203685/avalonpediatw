@@ -39,14 +39,18 @@ export const FEEDBACK_RETAIN_WEEKS = 8;
 export const FEEDBACK_MAX_FORWARDS_PER_HOUR = 30;
 
 /**
- * Discord channel that receives forwarded opinions: FEEDBACK_DISCORD_CHANNEL_ID
- * only. Unset → '' → the person is acknowledged and the opinion counted, but
- * nothing is forwarded.
+ * Discord channel that receives forwarded opinions: FEEDBACK_DISCORD_CHANNEL_ID.
+ * Unset → '' → the real forwarder (discordForwarder.ts) falls back to the
+ * private channel named 「管理者信箱」 (2026-10-13); when that does not exist
+ * either, the person is acknowledged and the opinion counted, but nothing
+ * is forwarded.
  *
  * Deliberately NO fallback to LOBBY_MIRROR_DISCORD_CHANNEL_ID (the public
  * community channel): the forwarded line is anonymous by design and anyone
  * who friends the LINE OA or is in the Discord server can submit one, so the
- * target must be a channel the owner chose on purpose (a private one).
+ * target must be a channel the owner chose on purpose (a private one). An
+ * explicitly configured id is used as is (the owner's choice); the 管理者信箱
+ * fallback is used only when it is private (discord/adminChannel.ts).
  */
 export function resolveFeedbackChannelId(): string {
   return (process.env.FEEDBACK_DISCORD_CHANNEL_ID || '').trim();

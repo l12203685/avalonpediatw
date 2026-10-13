@@ -16,6 +16,7 @@
     "test:line-sync": "vitest run src/__tests__/LineSyncRoundTrip.test.ts src/__tests__/LineReplyQueue.test.ts src/__tests__/LineWebhookEndpoint.test.ts src/__tests__/ChatMirror.test.ts src/__tests__/KeepAlive.test.ts src/__tests__/LineStatsCommands.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@avalon/shared": "workspace:*",
     "@line/bot-sdk": "^10.6.0",
     "@supabase/supabase-js": "^2.100.1",
