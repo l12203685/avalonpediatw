@@ -239,6 +239,40 @@
     "footerHint": "Watchlist and matchup stats will be populated in Phase 2"
   },
   "analytics": {
+    "ui": {
+      "sectionTabs": {
+        "label": "Sections"
+      },
+      "table": {
+        "empty": "No data",
+        "n": "n={{n}}",
+        "nTitle": "Sample: {{n}} games",
+        "lowSample": "Low sample (n < {{min}})"
+      },
+      "donut": {
+        "title": "Three-outcome split",
+        "games": "{{value}} games",
+        "gamesUnit": "games",
+        "total": "{{value}} games in total",
+        "item": "{{label}}: {{pct}} ({{games}})"
+      },
+      "blocks": {
+        "group": "Group",
+        "red": "Red",
+        "blue": "Blue",
+        "mission": "Missions",
+        "assassination": "Assassination",
+        "final": "Game result",
+        "missionRule": "3-Blue = blue wins, 3-Red = red wins",
+        "assassinationRule": "3-Blue games only: Merlin alive = blue, killed = red",
+        "finalRule": "3-Blue Merlin alive = blue, anything else = red",
+        "missionHint": "Missions: 3-Red is a red win, 3-Blue (Merlin killed or not) is a blue win; denominator = all of this group's games",
+        "assassinationHint": "Assassination: only games that reached 3 blue missions; Merlin killed is a red win, Merlin alive a blue win; denominator = this group's 3-Blue games (3-Red games have no assassination)",
+        "finalHint": "Game result: 3-Blue Merlin alive is a blue win, 3-Red and 3-Blue Merlin killed are red wins; denominator = all of this group's games",
+        "cellNote": "Each cell is the group's own side's win rate (red groups count red wins, blue groups blue wins); n = the denominator. Assassination counts only games that reached 3 blue missions.",
+        "lowSampleNote": "Faded = fewer than {{min}} games."
+      }
+    },
     "tab": {
       "leaderboard": "Precision Board",
       "radar": "Player Radar",
