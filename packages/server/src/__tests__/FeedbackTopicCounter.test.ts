@@ -7,6 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { inspect } from 'util';
 import {
+  DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID,
   DEFAULT_TOPICS,
   FEEDBACK_ACK_TEXT,
   FEEDBACK_CONFIG,
@@ -208,18 +209,19 @@ describe('FeedbackService.submit', () => {
     expect(snap.weeks[0].line).toMatchObject({ [OPINION_TOPIC_ID]: 1, 排行: 1, 建議: 1 });
   });
 
-  it('never falls back to the public lobby mirror channel when FEEDBACK_DISCORD_CHANNEL_ID is unset', async () => {
+  it('FEEDBACK_DISCORD_CHANNEL_ID unset → the admin channel 大劍管理員, never the public lobby mirror channel', async () => {
     process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID = 'C-mirror';
     const { forwarder, sent } = mockForwarder();
     const svc = new FeedbackService({ discord: forwarder, logger: silent });
     const r = await svc.submit('discord', 'bot 很讚');
     expect(r).toMatchObject({ accepted: true, reply: FEEDBACK_ACK_TEXT });
-    expect(await r.forwarded).toBe('skipped');
-    expect(sent).toEqual([]);
+    expect(await r.forwarded).toBe('sent');
+    expect(sent.map((x) => x.channelId)).toEqual([DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID]);
     expect(svc.snapshot().opinions.discord).toBe(1);
   });
 
-  it('still acknowledges (and counts) when no channel is configured or Discord fails', async () => {
+  it('still acknowledges (and counts) when forwarding is off (FEEDBACK_DISCORD_CHANNEL_ID=off) or Discord fails', async () => {
+    process.env.FEEDBACK_DISCORD_CHANNEL_ID = 'off';
     const { forwarder, sent } = mockForwarder();
     const none = new FeedbackService({ discord: forwarder, logger: silent });
     const r0 = await none.submit('line', '沒有頻道');

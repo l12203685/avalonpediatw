@@ -17,10 +17,10 @@ Actions
   status   read-only: services, latest deploys, which env keys the target has,
            which bot secrets exist in GitHub, and which LINE groups wrote to the bot.
   apply    idempotent: copy bot secrets from GitHub secrets (only when they differ),
-           copy the optional community-digest secrets when present (ANTHROPIC_API_KEY;
-           the Google service-account JSON → GOOGLE_SERVICE_ACCOUNT_JSON),
-           fill LOBBY_MIRROR_LINE_GROUP_ID from the "[LINE] event from group" log line
-           when unset, delete retired keys, optionally rotate JWT_SECRET/ADMIN_SECRET,
+           copy the optional chat-export secret when present (the Google service-account
+           JSON → GOOGLE_SERVICE_ACCOUNT_JSON), fill LOBBY_MIRROR_LINE_GROUP_ID from the
+           "[LINE] event from group" log line when unset, delete retired keys (including
+           ANTHROPIC_API_KEY of the removed paid digest), optionally rotate JWT_SECRET/ADMIN_SECRET,
            optionally suspend the duplicate, then deploy if anything changed and wait.
 
 Stdlib only. RENDER_API_BASE overrides the API URL (tests run against a fake server).
@@ -51,20 +51,19 @@ BOT_SECRET_KEYS = (
     "LINE_BOT_CHANNEL_SECRET",
     "LOBBY_MIRROR_LINE_GROUP_ID",
 )
-# Optional secrets of the weekly community digest (2026-10-13, docs/COMMUNITY_FEEDBACK.md):
+# Optional secret of the weekly chat-log export (2026-10-13, docs/COMMUNITY_FEEDBACK.md):
 # Render key -> GitHub secrets to copy it from, first non-empty wins. Copied only when present;
-# a missing one just leaves that part of the digest off (no API key -> no digest; no
-# service-account JSON -> no sheet row).
+# without the service-account JSON the export stays off (nothing is written to the sheet).
 OPTIONAL_SECRET_SOURCES: dict[str, tuple[str, ...]] = {
-    "ANTHROPIC_API_KEY": ("ANTHROPIC_API_KEY",),
     "GOOGLE_SERVICE_ACCOUNT_JSON": ("AVALON_STATS_SHEETS_CREDENTIALS_JSON", "GOOGLE_SHEETS_CREDENTIALS_JSON"),
 }
 OPTIONAL_SECRET_KEYS = tuple(OPTIONAL_SECRET_SOURCES)
 # Every GitHub secret the workflow hands over as GH_<name>.
 GITHUB_SECRET_NAMES = BOT_SECRET_KEYS + tuple(
     dict.fromkeys(name for names in OPTIONAL_SECRET_SOURCES.values() for name in names))
-# Features retired with website login / on-site games (2026-10-09/10).
-RETIRED_KEYS = ("GITHUB_ACCOUNTS_TOKEN", "GITHUB_RECORDS_TOKEN")
+# Features retired with website login / on-site games (2026-10-09/10), and the paid weekly
+# community digest (2026-10-13: replaced by the free chat-log export, no Anthropic API any more).
+RETIRED_KEYS = ("GITHUB_ACCOUNTS_TOKEN", "GITHUB_RECORDS_TOKEN", "ANTHROPIC_API_KEY")
 ROTATE_KEYS = ("JWT_SECRET", "ADMIN_SECRET")
 REQUIRED_KEYS = ("JWT_SECRET",) + BOT_SECRET_KEYS
 
@@ -227,7 +226,7 @@ def status(api: Render, github_env: dict[str, str]) -> int:
         print(f"  {key}: {'set' if env.get(key) else 'MISSING'} on Render, "
               f"{'set' if github_env.get(key) else 'not set'} in GitHub secrets")
     for key, sources in OPTIONAL_SECRET_SOURCES.items():
-        print(f"  {key} (optional, community digest): {'present' if env.get(key) else 'absent'} on Render, "
+        print(f"  {key} (optional, chat export): {'present' if env.get(key) else 'absent'} on Render, "
               f"{'present' if github_env.get(key) else 'absent'} in GitHub secrets ({' or '.join(sources)})")
     for key in RETIRED_KEYS:
         if key in env:

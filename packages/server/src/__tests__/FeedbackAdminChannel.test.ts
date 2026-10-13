@@ -1,15 +1,16 @@
 /**
- * The owner's private channel (2026-10-13), shared by the weekly community
- * digest and /意見 forwarding:
+ * /意見 forwarding to the owner's admin channel (2026-10-13), and the
+ * private-channel resolver kept from the earlier design:
  *
- *   resolveAdminChannel — configured ids first (in order, a broken one is
- *     reported, never replaced), else the text channel named 「管理者信箱」;
- *     anything @everyone or an ordinary role can view is refused (manager
- *     roles and the bot's integration role are fine); the bot must be able
- *     to post (and, for the digest, read the history).
- *   /意見 — FEEDBACK_DISCORD_CHANNEL_ID set → used as is (the owner's choice,
- *     unchanged from before 2026-10-13); unset → forwarded to 管理者信箱
- *     (private only); still never to the public mirror channel.
+ *   /意見 — FEEDBACK_DISCORD_CHANNEL_ID unset → the admin channel
+ *     「大劍管理員」 (1145513360545296574), used as is (the owner chose it; no
+ *     visibility refusal); set → that channel; off → acknowledged and
+ *     counted, not forwarded; a channel named 「管理者信箱」 is no longer
+ *     looked up; never the public mirror channel; text / announcement
+ *     channels and threads work, a forum or an unknown id does not.
+ *   resolveAdminChannel (discord/adminChannel.ts) — has no caller since the
+ *     paid digest and the 管理者信箱 fallback were removed (2026-10-13); its
+ *     behaviour stays tested until the module is deleted.
  *
  * Fake discord.js objects (only the fields the code reads). No network.
  */
@@ -19,7 +20,7 @@ import type { Client } from 'discord.js';
 
 import { ADMIN_CHANNEL_NAME, describeAdminChannelProblem, resolveAdminChannel } from '../bots/discord/adminChannel';
 import { createFeedbackDiscordForwarder } from '../bots/feedback/discordForwarder';
-import { FeedbackService, type FeedbackForwardPayload } from '../bots/feedback';
+import { DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID, FEEDBACK_ACK_TEXT, FeedbackService, type FeedbackForwardPayload } from '../bots/feedback';
 
 const ME = { id: 'member-bot' };
 
@@ -52,6 +53,8 @@ interface FakeChannel {
   sent: FeedbackForwardPayload[];
   permissionsFor: (who: unknown) => { has: (p: bigint | bigint[]) => boolean };
   send: (p: FeedbackForwardPayload) => Promise<void>;
+  isDMBased: () => boolean;
+  isSendable: () => boolean;
 }
 
 interface FakeGuild {
@@ -100,6 +103,9 @@ function channel(
     send: async (payload) => {
       ch.sent.push(payload);
     },
+    isDMBased: () => false,
+    // discord.js: 'send' in channel — a forum (or a category) has no send().
+    isSendable: () => ch.type !== ChannelType.GuildForum && ch.type !== ChannelType.GuildCategory,
   };
   g.channels.cache.set(id, ch);
   return ch;
@@ -222,81 +228,83 @@ describe('resolveAdminChannel', () => {
   });
 });
 
-describe('/意見 forwarding to 管理者信箱', () => {
+describe('/意見 forwarding to the admin channel 大劍管理員', () => {
   const saved = { ...process.env };
+  const MIRROR_ID = '500000000000000099';
   beforeEach(() => {
     delete process.env.FEEDBACK_DISCORD_CHANNEL_ID;
-    process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID = '500000000000000099';
+    process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID = MIRROR_ID;
   });
   afterEach(() => {
     process.env = { ...saved };
   });
 
-  const warn = vi.fn();
-  const quiet = { warn, error: vi.fn() };
+  const quiet = { warn: vi.fn(), error: vi.fn() };
 
-  function setup(opts: { adminPublic?: boolean; adminRoles?: FakeRole[]; withAdmin?: boolean } = {}) {
+  function setup(opts: { adminPublic?: boolean; adminType?: ChannelType } = {}) {
     const g = guild();
-    const mirror = channel(g, '500000000000000099', '阿瓦隆同步', { publicView: true });
+    const mirror = channel(g, MIRROR_ID, '阿瓦隆同步', { publicView: true });
     const chosen = channel(g, '500000000000000002', 'feedback', { publicView: true });
-    const admin =
-      opts.withAdmin === false
-        ? null
-        : channel(g, '500000000000000001', ADMIN_CHANNEL_NAME, { publicView: !!opts.adminPublic, rolesView: opts.adminRoles });
+    const oldName = channel(g, '500000000000000003', ADMIN_CHANNEL_NAME);
+    const admin = channel(g, DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID, '大劍管理員', {
+      publicView: !!opts.adminPublic,
+      type: opts.adminType,
+    });
     const c = client([g]);
-    const forwarder = createFeedbackDiscordForwarder(() => c, { logger: { warn } });
+    const forwarder = createFeedbackDiscordForwarder(() => c);
     const service = new FeedbackService({ discord: forwarder, logger: quiet });
-    return { mirror, chosen, admin, service };
+    return { g, c, mirror, chosen, oldName, admin, service };
   }
 
-  it('FEEDBACK_DISCORD_CHANNEL_ID unset → posted to the private 管理者信箱, no name, no pings', async () => {
-    const { mirror, admin, service } = setup();
+  it('FEEDBACK_DISCORD_CHANNEL_ID unset → posted to 大劍管理員 (1145513360545296574), no name, no pings', async () => {
+    expect(DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID).toBe('1145513360545296574');
+    const { mirror, oldName, admin, service } = setup();
     const res = await service.submit('line', '排行希望加場次');
+    expect(res.reply).toBe(FEEDBACK_ACK_TEXT);
     expect(await res.forwarded).toBe('sent');
-    expect(admin!.sent).toEqual([{ content: '📮 意見（LINE）：排行希望加場次', allowedMentions: { parse: [] } }]);
+    expect(admin.sent).toEqual([{ content: '📮 意見（LINE）：排行希望加場次', allowedMentions: { parse: [] } }]);
     expect(mirror.sent).toEqual([]);
+    expect(oldName.sent).toEqual([]); // the 管理者信箱 name is no longer looked up
   });
 
-  it('a 管理者信箱 that everyone can see is refused; nothing goes to the mirror channel either', async () => {
-    const { mirror, admin, service } = setup({ adminPublic: true });
+  it('the configured or default channel is used as is — no visibility refusal', async () => {
+    const { admin, service } = setup({ adminPublic: true });
     const res = await service.submit('discord', '匿名文字');
-    expect(await res.forwarded).toBe('skipped');
-    expect(admin!.sent).toEqual([]);
-    expect(mirror.sent).toEqual([]);
-    expect(res.reply).toBe('已收到，謝謝。管理者每週彙整後調整。');
+    expect(await res.forwarded).toBe('sent');
+    expect(admin.sent).toHaveLength(1);
   });
 
-  it('a 管理者信箱 an ordinary member role can see is refused too', async () => {
-    const { mirror, admin, service } = setup({ adminRoles: [MEMBER_ROLE] });
-    const res = await service.submit('line', '匿名文字');
-    expect(await res.forwarded).toBe('skipped');
-    expect(admin!.sent).toEqual([]);
-    expect(mirror.sent).toEqual([]);
-    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toContain('members-visible');
-  });
-
-  it('no 管理者信箱 → acknowledged and counted, not forwarded', async () => {
-    const { mirror, service } = setup({ withAdmin: false });
-    const res = await service.submit('line', '沒有頻道');
-    expect(await res.forwarded).toBe('skipped');
-    expect(mirror.sent).toEqual([]);
-    expect(service.snapshot().opinions).toEqual({ line: 1, discord: 0 });
-  });
-
-  it('FEEDBACK_DISCORD_CHANNEL_ID wins over the name and is used as is (the owner chose it; unchanged behaviour)', async () => {
+  it('FEEDBACK_DISCORD_CHANNEL_ID overrides the default; off → acknowledged and counted, not forwarded', async () => {
     const { mirror, chosen, admin, service } = setup();
     process.env.FEEDBACK_DISCORD_CHANNEL_ID = chosen.id;
-    const res = await service.submit('line', '明確指定');
-    expect(await res.forwarded).toBe('sent');
+    expect(await (await service.submit('line', '明確指定')).forwarded).toBe('sent');
     expect(chosen.sent).toEqual([{ content: '📮 意見（LINE）：明確指定', allowedMentions: { parse: [] } }]);
-    expect(admin!.sent).toEqual([]);
+    expect(admin.sent).toEqual([]);
+
+    process.env.FEEDBACK_DISCORD_CHANNEL_ID = 'off';
+    const off = await service.submit('line', '關掉了');
+    expect(off.reply).toBe(FEEDBACK_ACK_TEXT);
+    expect(await off.forwarded).toBe('skipped');
+    expect(service.snapshot().opinions).toEqual({ line: 2, discord: 0 });
     expect(mirror.sent).toEqual([]);
   });
 
-  it('a mock forwarder without the fallback hook keeps the old behaviour (no channel → not forwarded)', async () => {
-    const sent: string[] = [];
-    const service = new FeedbackService({ discord: { send: async (_id, p) => (sent.push(p.content), true) }, logger: quiet });
-    expect(await (await service.submit('line', 'x')).forwarded).toBe('skipped');
-    expect(sent).toEqual([]);
+  it('announcement channels and threads work; a forum, an unknown id or no Discord → not forwarded', async () => {
+    for (const type of [ChannelType.GuildAnnouncement, ChannelType.PublicThread, ChannelType.PrivateThread]) {
+      const { admin, service } = setup({ adminType: type });
+      expect(await (await service.submit('line', 'x')).forwarded).toBe('sent');
+      expect(admin.sent).toHaveLength(1);
+    }
+    const forum = setup({ adminType: ChannelType.GuildForum });
+    expect(await (await forum.service.submit('line', 'x')).forwarded).toBe('failed');
+    expect(forum.admin.sent).toEqual([]);
+
+    const { service } = setup();
+    process.env.FEEDBACK_DISCORD_CHANNEL_ID = '999999999999999999';
+    expect(await (await service.submit('line', 'x')).forwarded).toBe('failed');
+
+    const offline = new FeedbackService({ discord: createFeedbackDiscordForwarder(() => null), logger: quiet });
+    delete process.env.FEEDBACK_DISCORD_CHANNEL_ID;
+    expect(await (await offline.submit('line', 'x')).forwarded).toBe('failed');
   });
 });

@@ -111,26 +111,19 @@ services:
       - key: KEEP_ALIVE
         value: "true"
 
-      # ── 每週社群週報（2026-10-13；docs/COMMUNITY_FEEDBACK.md「每週社群週報」）──
-      # 每週一 09:00（+08，沒跑成會補到 12:00）bot 讀過去一週的公開頻道與 LINE↔Discord 同步頻道，用
-      # Claude API 摘要後貼到私人頻道「管理者信箱」，並寫一列到私人試算表。聊天原文
-      # 只在 Render 記憶體裡、只送給 Anthropic API，不寫進 log、GitHub 或試算表。
-      # 兩個機密由 Actions → Render ops → apply 從 GitHub secrets 複製，不必手填。
-      # 沒有 ANTHROPIC_API_KEY → 整個功能關閉（/社群週報 會回「目前關閉」）。
-      - key: ANTHROPIC_API_KEY                 # ← GitHub secret ANTHROPIC_API_KEY
-        sync: false
+      # ── 每週聊天紀錄匯出（2026-10-13；docs/COMMUNITY_FEEDBACK.md）──────────
+      # 每週一 09:00（+08，沒跑成會補到 12:00）bot 把上一週公開頻道與 LINE↔Discord 同步頻道的聊天
+      # （發言者換成 成員N）寫進「私人」試算表的「聊天紀錄」分頁，只留最近 8 週，給 AI 管理員每週讀。
+      # 免費：只用 Discord 與 Google Sheets API，沒有付費 API。log 只印數字。
+      # 機密由 Actions → Render ops → apply 從 GitHub secrets 複製，不必手填。
       - key: GOOGLE_SERVICE_ACCOUNT_JSON       # ← GitHub secret AVALON_STATS_SHEETS_CREDENTIALS_JSON（或 GOOGLE_SHEETS_CREDENTIALS_JSON）
-        sync: false                            #   服務帳號 JSON；沒有就只貼 Discord、不寫試算表
+        sync: false                            #   服務帳號 JSON；沒有就不匯出
       # 以下都不是機密、預設就能用，需要時才在 Dashboard 加：
-      #   COMMUNITY_DIGEST_ENABLED            預設：有 ANTHROPIC_API_KEY 就開；false 關閉
-      #   COMMUNITY_DIGEST_MODEL              預設 claude-opus-5-5
-      #   COMMUNITY_DIGEST_MAX_CHARS          逐字稿上限字數，預設 600000（超過時省略最早的訊息並註明則數）
-      #   COMMUNITY_DIGEST_CHANNEL_ID         週報頻道 id；預設依序用 FEEDBACK_DISCORD_CHANNEL_ID、
-      #                                       名為「管理者信箱」的頻道；所有人或一般身分組看得到的一律不貼
-      #   FEEDBACK_DISCORD_CHANNEL_ID         /意見 轉貼頻道 id（設了就照貼）；預設私人的「管理者信箱」
-      #   COMMUNITY_DIGEST_SHEET_ID           預設內建的私人試算表；off 關閉試算表
-      #   COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS 只讀這些頻道（逗號分隔；同步頻道一定會讀）
-      #   COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS 不讀這些頻道（逗號分隔）
+      #   CHAT_EXPORT_ENABLED                 預設開；false 關閉
+      #   CHAT_EXPORT_SHEET_ID                預設內建的私人試算表；off 關閉（公開的阿瓦隆百科試算表會被拒絕）
+      #   CHAT_EXPORT_SOURCE_CHANNEL_IDS      只讀這些頻道（逗號分隔；同步頻道一定會讀）
+      #   CHAT_EXPORT_EXCLUDE_CHANNEL_IDS     不讀這些頻道（逗號分隔；「大劍管理員」與 /意見 頻道一定不讀）
+      #   FEEDBACK_DISCORD_CHANNEL_ID         /意見 轉貼頻道 id；預設管理員頻道「大劍管理員」；off 不轉貼
 
       # ── Firebase / Supabase：GitHub-only 架構「不需要」，全部留空即可 ──────
       # 留空 → server 進 guest-only 模式、由上面 GitHub 帳號庫接管登入。僅在

@@ -11,7 +11,8 @@
  *   Robustness (2026-10-12 review) — the LINE reply / 200 never waits for the
  *             Discord forward; a LINE redelivery is answered but not counted,
  *             mirrored or forwarded twice; without FEEDBACK_DISCORD_CHANNEL_ID
- *             nothing is forwarded (no fallback to the public mirror channel);
+ *             the text goes to the admin channel 大劍管理員 (never the public
+ *             mirror channel); FEEDBACK_DISCORD_CHANNEL_ID=off forwards nothing;
  *             typed stats commands are not topic-counted.
  *
  * Real ChatMirror + LineReplyQueue + LineBotClient; mocked LINE SDK, Discord
@@ -29,6 +30,7 @@ import { LineBotClient } from '../bots/line/client';
 import { LINE_CONFIG } from '../bots/line/config';
 import type { LobbyChatMessage } from '../socket/LobbyChatBuffer';
 import {
+  DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID,
   FEEDBACK_ACK_TEXT,
   FEEDBACK_CONFIG,
   FEEDBACK_DISABLED_TEXT,
@@ -376,8 +378,19 @@ describe('LINE mirror group: /意見', () => {
     expect(getFeedbackService().snapshot().weeks[0].line).toMatchObject({ 排行: 3, 問題: 3 });
   });
 
-  it('without FEEDBACK_DISCORD_CHANNEL_ID nothing is forwarded — not even to the lobby mirror channel — but the ack and the counts still happen', async () => {
+  it('without FEEDBACK_DISCORD_CHANNEL_ID the text goes to the admin channel 大劍管理員 — never to the lobby mirror channel', async () => {
     delete process.env.FEEDBACK_DISCORD_CHANNEL_ID;
+    process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID = 'D1';
+    const h = setup();
+    const forwarded = captureForwards();
+    await deliver(h, groupText('/意見 匿名文字', 'm13b', 'rt13b'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(forwarded.map((f) => f.channelId)).toEqual([DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID]);
+    expect(h.discordSent.join('\n')).not.toContain('📮');
+  });
+
+  it('FEEDBACK_DISCORD_CHANNEL_ID=off → nothing is forwarded, but the ack and the counts still happen', async () => {
+    process.env.FEEDBACK_DISCORD_CHANNEL_ID = 'off';
     process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID = 'D1';
     const h = setup();
     const forwarded = captureForwards();
