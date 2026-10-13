@@ -198,7 +198,9 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
 /**
  * 正式預設（2026-10-12 採用，docs/ai/strength_benchmark.md 第 2 節；
  * 2026-10-13 `evilLakeHumanStrategy` 依 Edward 裁定打開，第 6、8 節；同日
- * 採用 `goodLakeInfoMax`，第 7 節；兩者合併後的整組重跑見第 9 節）。
+ * 採用 `goodLakeInfoMax`，第 7 節；兩者合併後的整組重跑見第 9 節；第三輪
+ * `goodVouchFollowUp` + `teamReuse` + `redR1Teammate` 合併後的整組重跑見
+ * 第 13 節）。
  * 採用規則（2026-10-12 事前版）：一致性基準更像真人、且自我對打合計勝率
  * 95% 區間下界 ≥ 48%；整合時改依 Edward 原文「更像真人，而且不能讓它
  * 變弱」：任一立場配對差的 95% 區間整個落在 0 以下就算變弱、不採用。
@@ -288,6 +290,14 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     [−0.27pp, +0.75pp]、99999 −0.22pp [−0.71pp, +0.27pp]，三個種子合併
  *     +0.10pp [−0.19pp, +0.39pp]，藍方恆為 0 → 不算變弱 → **採用**
  *     （AVALON_TUNING_RED_R1_TEAMMATE=0 可關掉）。
+ *   - 第三輪整合（strength_benchmark.md 第 13 節）：上面三個第三輪開關各自
+ *     的對照組都不含另外兩個，所以合併後整組重跑。新預設（這裡的全部開關）
+ *     對第 9 節正式預設，三個沒用過的新種子 101010 / 202020 / 303030（各
+ *     5000 組 × 3 局）合併：紅方 +3.18pp [+2.70pp, +3.65pp]、藍方 +4.89pp
+ *     [+4.28pp, +5.49pp]，兩個立場都不在 0 以下 → 整組保留。十個座位都用
+ *     新預設的機器人自打自（seed 404040）藍勝 7.42%→11.32%。一致性基準
+ *     只有派隊（R1、R2+）與 R3+ 投票改變（派隊 Jaccard R2+ ED 39.2→49.0、
+ *     Sin 42.5→57.1、top 40.2→52.5、population 41.2→53.2），其他逐項相同。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫

@@ -152,6 +152,20 @@ describe('AgentTuning — flags', () => {
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, redR1Teammate: true })).toBe('redR1Teammate');
   });
 
+  it('round-3 integrated default (strength_benchmark.md 第 13 節): the set re-run on seeds 101010 / 202020 / 303030', () => {
+    // Variant of the combined self-play run = exactly this set (red +3.18pp, blue +4.89pp
+    // pooled over the old default); the baseline = this set minus the three round-3 switches.
+    expect(describeAgentTuning(DEFAULT_AGENT_TUNING)).toBe(
+      'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
+        'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
+        'goodVouchFollowUp,teamReuse,redR1Teammate',
+    );
+    expect(describeAgentTuning({ ...DEFAULT_AGENT_TUNING, goodVouchFollowUp: false, teamReuse: false, redR1Teammate: false })).toBe(
+      'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
+        'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax',
+    );
+  });
+
   it('resolveAgentTuning layers overrides on top of a base', () => {
     const t = resolveAgentTuning({ assassinModel: true }, { ...LEGACY_AGENT_TUNING });
     expect(t).toEqual({ ...LEGACY_AGENT_TUNING, assassinModel: true });

@@ -20,10 +20,11 @@
 | `goodVouchFollowUp` 好人持湖者言行一致（2026-10-13 第三輪；對照組 = 整合後正式預設；第 10 節） | 是（宣藍後自己派隊放被宣的人 47%→100%，真人 99.2%；宣紅的人 35%→0%，真人 1.7%；這些派隊的 Jaccard ED 44.6→53.1、Sin 54.7→59.2、top 47.3→56.3；不在隊上時對違反宣告的隊的票 Sin 85.2→96.3、top 81.8→95.9、ED 100 不變；ED 的派隊進步只來自 2 個隊伍；整體一致性基準沒有任何一列下降超過 0.05 點） | 藍方立場：選版本 11111 +0.64pp [+0.31pp, +0.97pp]；新種子 22222 +0.36pp [−0.00pp, +0.72pp]、33333 +0.68pp [+0.36pp, +1.00pp]；三個種子合併 **+0.57pp [+0.38pp, +0.77pp]**；紅方立場恆為 0（審查修正後同種子重跑，逐局相同） | **是**（藍方變強；三藍率約 +1pp，刺中率不變） |
 | `teamReuse` 派隊沿用前一隊（2026-10-13 第三輪；對照組 = 整合後正式預設；同日審查修正後重跑，第 11 節） | 是（派隊 R2+ 完全相同 ED 3.5→11.8、Sin 4.4→22.7、top 3.0→15.4、population 3.8→16.1；Jaccard 39.2→48.8、42.5→57.1、40.2→52.4、41.2→53.1；Sin、top、population 超過 default 基準，ED 與基準大致持平；其他決策不變） | 單邊立場（只有一邊用開關）：選版本種子 44444 紅方 +2.9pp [+2.1pp, +3.7pp]、藍方 +5.9pp [+4.9pp, +7.0pp]；五個種子合併紅方 +2.77pp [+2.41pp, +3.13pp]、藍方 +5.08pp [+4.62pp, +5.54pp]（兩個新種子 67890 / 68888 合併 +2.61pp / +5.13pp）；十個座位都開的機器人自打自：藍勝 7.1% → 10.5%（紅勝 −3.4pp [−4.4pp, −2.4pp]） | **是**（兩個立場都變強；紅方變強有一部分可能來自不像真人的「把自己換進成功隊」，第 11.4、11.5 節） |
 | `redR1Teammate` 紅方首局帶隊友（2026-10-13 第三輪；對照組 = 整合後的正式預設；只在 10 人局；第 12 節） | 放隊友的比例是（說話隊 0%→47.7%，真人 48.0%）；逐次「放不放隊友」與真人相同，去掉抽籤運氣的期望值 ED 49.0→53.9、Sin 39.4→52.6、top 52.2→53.6（population 56.1→54.6），但與關掉時逐次配對只有 Sin 明確較好（46 對 19，McNemar p=0.001），top 持平（175 對 170），ED 看不出（11 對 5，p=0.21）；派隊 Jaccard 四群都升；其他決策逐項不變 | 紅方立場：選版本 77777 +0.32pp、新種子 88888 +0.24pp、99999 −0.22pp，三個種子合併 +0.10pp [−0.19pp, +0.39pp]；藍方立場恆為 0（審查修正後三個種子重跑，結果逐欄相同） | **是**（確認規則在跑確認種子前寫好；R2 起與強制局沒有動；5–9 人局不適用，第 12.5 節） |
+| **2026-10-13 第三輪正式預設**（第 9 節正式預設 + `goodVouchFollowUp` + `teamReuse` + `redR1Teammate`；對照組 = 第 9 節正式預設；第 13 節） | 是（派隊完全相同 R2+ ED 3.5→11.8、Sin 4.4→22.7、top 3.0→15.6、population 3.8→16.2；Jaccard R2+ 39.2→49.0、42.5→57.1、40.2→52.5、41.2→53.2；R1 紅方放隊友照真人比例；投票 R3+ 略升；其他決策逐項相同） | 三個新種子 101010 / 202020 / 303030 合併：紅方 **+3.18pp [+2.70pp, +3.65pp]**、藍方 **+4.89pp [+4.28pp, +5.49pp]**（每個種子兩個立場都在 0 以上）；十個座位都用新預設的機器人自打自（seed 404040）：藍勝 7.42% → 11.32%（紅勝 −3.90pp [−4.96pp, −2.84pp]） | **是**（整組保留；兩個立場都變強，第 13.5 節） |
 
-採用標準（任務 B 原文）：一致性基準更像真人（ED、Sin、top 群）**且**自我對打不變弱（variant 合計勝率的 95% 區間下界 ≥ 50% − 2pp = 48%）→ 預設打開；否則維持關閉並記錄數字。注意「合計」是紅方立場與藍方立場的平均：只動一方的開關另一方的差恆為 0，所以合計 = 50% + 該立場差 / 2，這條規則等於允許單一立場最多約 −4pp 的**顯著變弱**（區間不含 0 也算通過），以更像真人為交換；本文件中 `evilLakeClaimAlwaysGood` 即屬此例（第 2 節第 2 點）。**2026-10-12 整合裁定**：依 Edward 的原文「更像真人，而且不能讓它變弱」，單一立場的 95% 區間不含 0 就算變弱，所以 `evilLakeClaimAlwaysGood` 不進預設（開關保留）；其餘採用的開關每個立場的區間都含 0 或為正。正式預設在 `packages/server/src/ai/AgentTuning.ts` 的 `DEFAULT_AGENT_TUNING`；2026-10-12 之前的行為 = `LEGACY_AGENT_TUNING`（全關）。部署時可用環境變數臨時切換（`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR`、`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR_EVIL_ONLY`、`AVALON_TUNING_EVIL_LAKE_CLAIM_GOOD`、`AVALON_TUNING_GOOD_LAKE_MOST_SUSPICIOUS`、`AVALON_TUNING_HUMAN_QUEST_CARDS`、`AVALON_TUNING_ASSASSIN_MODEL`、`AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY`、`AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP`、`AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE`、`AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES`、`AVALON_TUNING_GOOD_LAKE_INFO_MAX`；布林用 1/0，先驗用數字，例如 `AVALON_TUNING_ASSASSIN_MODEL=0` 關掉刺殺模型）。**2026-10-13**：`evilLakeHumanStrategy` 依同一條「更像真人，而且不能讓它變弱」規則判定，但對照組換成當時的正式預設（不是 legacy），所以它那幾列的 C 局紅勝率是 93.0% 左右（正式預設自打自），不是 88.4%。同日補上一條做法：**在一個種子上挑版本後，至少再用兩個沒用過的種子確認**，才算「不變弱」 —— `evilLakeHumanStrategy` 就是在挑版本的種子上過關、換種子後變弱。**2026-10-13 第二輪**（第 8 節）的對照組是「不含新湖法的舊預設」，選版本用 seed 31337、確認用 8080 與 2718，以三個種子合併判定；新湖法已依裁定打開，所以補強改用「對只開新湖法的邊際不變弱」判定，和原定標準不同，見第 8.6 節。
+採用標準（任務 B 原文）：一致性基準更像真人（ED、Sin、top 群）**且**自我對打不變弱（variant 合計勝率的 95% 區間下界 ≥ 50% − 2pp = 48%）→ 預設打開；否則維持關閉並記錄數字。注意「合計」是紅方立場與藍方立場的平均：只動一方的開關另一方的差恆為 0，所以合計 = 50% + 該立場差 / 2，這條規則等於允許單一立場最多約 −4pp 的**顯著變弱**（區間不含 0 也算通過），以更像真人為交換；本文件中 `evilLakeClaimAlwaysGood` 即屬此例（第 2 節第 2 點）。**2026-10-12 整合裁定**：依 Edward 的原文「更像真人，而且不能讓它變弱」，單一立場的 95% 區間不含 0 就算變弱，所以 `evilLakeClaimAlwaysGood` 不進預設（開關保留）；其餘採用的開關每個立場的區間都含 0 或為正。正式預設在 `packages/server/src/ai/AgentTuning.ts` 的 `DEFAULT_AGENT_TUNING`；2026-10-12 之前的行為 = `LEGACY_AGENT_TUNING`（全關）。部署時可用環境變數臨時切換（`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR`、`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR_EVIL_ONLY`、`AVALON_TUNING_EVIL_LAKE_CLAIM_GOOD`、`AVALON_TUNING_GOOD_LAKE_MOST_SUSPICIOUS`、`AVALON_TUNING_HUMAN_QUEST_CARDS`、`AVALON_TUNING_ASSASSIN_MODEL`、`AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY`、`AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP`、`AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE`、`AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES`、`AVALON_TUNING_GOOD_LAKE_INFO_MAX`、`AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP`、`AVALON_TUNING_TEAM_REUSE`、`AVALON_TUNING_RED_R1_TEAMMATE`；布林用 1/0，先驗用數字，例如 `AVALON_TUNING_ASSASSIN_MODEL=0` 關掉刺殺模型）。**2026-10-13**：`evilLakeHumanStrategy` 依同一條「更像真人，而且不能讓它變弱」規則判定，但對照組換成當時的正式預設（不是 legacy），所以它那幾列的 C 局紅勝率是 93.0% 左右（正式預設自打自），不是 88.4%。同日補上一條做法：**在一個種子上挑版本後，至少再用兩個沒用過的種子確認**，才算「不變弱」 —— `evilLakeHumanStrategy` 就是在挑版本的種子上過關、換種子後變弱。**2026-10-13 第二輪**（第 8 節）的對照組是「不含新湖法的舊預設」，選版本用 seed 31337、確認用 8080 與 2718，以三個種子合併判定；新湖法已依裁定打開，所以補強改用「對只開新湖法的邊際不變弱」判定，和原定標準不同，見第 8.6 節。
 
-新預設在一致性基準上的整體數字（`agreementBenchmark.ts` 不加 `--legacy`，與逐開關的效果相加一致）：投票 R3+ ED 61.6→63.7、Sin 62.3→65.2、top 59.0→61.9；任務牌 Sin 79.8→82.4、top 79.7→82.3、population 77.4→79.7（修正版；第一版曾量到 85.3 / 82.7，見第 2 節第 4 點）；湖目標 ED 2.0→13.7、Sin 13.2→19.5；紅方湖宣告不變（`evilLakeClaimAlwaysGood` 與 2026-10-13 的 `evilLakeHumanStrategy` 都未採用，ED 50.0、Sin 61.1、top 60.4；打開 `evilLakeHumanStrategy` 時為 78.6 / 90.7 / 79.5，見第 6 節）；刺殺目標 Sin 20.4→42.9、top 20.8→38.8（ED n=17 不變）；派隊與 R1–R2 投票不受影響。（這一段是 2026-10-12 的正式預設。2026-10-13 第二輪的正式預設（加上 `evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`）：任務牌、刺殺不變；派隊 Jaccard R2+ Sin 42.3→42.5、top 40.0→40.2、population 41.1→41.2；投票 R3+ ED 63.7→64.1、Sin 65.2→65.9、top 61.9→62.7、population 63.6→64.2；紅方湖宣告 ED 50.0→78.6、Sin 61.1→85.2、top 60.4→74.6、population 58.2→69.1；紅方湖目標 ED 0.0→7.1、Sin 17.9→14.3、top 10.7→15.3、population 10.4→16.3，見第 8.5 節。；整合後再加上好人湖 `goodLakeInfoMax`：好人持湖的湖目標 ED 35.1、Sin 22.9、top 25.8、population 24.7，全部持湖者 27.5 / 20.1 / 21.8 / 21.8，見第 9 節。）
+新預設在一致性基準上的整體數字（`agreementBenchmark.ts` 不加 `--legacy`，與逐開關的效果相加一致）：投票 R3+ ED 61.6→63.7、Sin 62.3→65.2、top 59.0→61.9；任務牌 Sin 79.8→82.4、top 79.7→82.3、population 77.4→79.7（修正版；第一版曾量到 85.3 / 82.7，見第 2 節第 4 點）；湖目標 ED 2.0→13.7、Sin 13.2→19.5；紅方湖宣告不變（`evilLakeClaimAlwaysGood` 與 2026-10-13 的 `evilLakeHumanStrategy` 都未採用，ED 50.0、Sin 61.1、top 60.4；打開 `evilLakeHumanStrategy` 時為 78.6 / 90.7 / 79.5，見第 6 節）；刺殺目標 Sin 20.4→42.9、top 20.8→38.8（ED n=17 不變）；派隊與 R1–R2 投票不受影響。（這一段是 2026-10-12 的正式預設。2026-10-13 第二輪的正式預設（加上 `evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`）：任務牌、刺殺不變；派隊 Jaccard R2+ Sin 42.3→42.5、top 40.0→40.2、population 41.1→41.2；投票 R3+ ED 63.7→64.1、Sin 65.2→65.9、top 61.9→62.7、population 63.6→64.2；紅方湖宣告 ED 50.0→78.6、Sin 61.1→85.2、top 60.4→74.6、population 58.2→69.1；紅方湖目標 ED 0.0→7.1、Sin 17.9→14.3、top 10.7→15.3、population 10.4→16.3，見第 8.5 節。；整合後再加上好人湖 `goodLakeInfoMax`：好人持湖的湖目標 ED 35.1、Sin 22.9、top 25.8、population 24.7，全部持湖者 27.5 / 20.1 / 21.8 / 21.8，見第 9 節。第三輪再加上 `goodVouchFollowUp`、`teamReuse`、`redR1Teammate`：派隊完全相同 R2+ 11.8 / 22.7 / 15.6 / 16.2%、Jaccard R2+ 49.0 / 57.1 / 52.5 / 53.2%（ED / Sin / top / population），投票 R3+ 64.1 / 66.0 / 62.8 / 64.3%，R1 派隊完全相同 Sin 2.9→3.8%，其他不變，見第 13.4 節。）
 
 重跑：
 
@@ -1062,7 +1063,7 @@ ED（n 小）：成功後第一個提議 18.2 → 42.4%（n = 33），後續提�
   4. **紅方權重是好人的 3 倍**：成功後的第一個提議，紅方隊長幾乎都沿用成功的隊並把自己換進去、不加隊友。真人紅方也七成沿用，但隊長不在成功隊上時多半是自己不上（R3 81.9%），很少換自己進去（4.8%）；機器人紅方因此比真人更常上「成功過的隊」。對機器人變強（+2.8pp），對真人的效果未知；上線後看 `/stats`。
   5. **換掉誰**：真人換一人時，被換掉的是前一位隊長 47.5%（隨機 25.1%，約 1.9 倍）；機器人照自己的嫌疑評分決定，沒有模仿這一點。要模仿可以加一項「換掉前一位隊長」的分數，要重配、重跑。
   6. **練習模式的賽後回顧**（`explain.ts`）不會說明「這一隊是沿用前一隊」；要的話另外加。
-  7. 與同日另外兩條線（好人言行一致、紅方首局帶隊友）合併後，正式預設要像第 9 節一樣用新種子整組重跑。
+  7. 與同日另外兩條線（好人言行一致、紅方首局帶隊友）合併後，正式預設要像第 9 節一樣用新種子整組重跑。（已做：第 13 節，三個新種子合併紅方 +3.18pp、藍方 +4.89pp，整組保留。）
 
 重跑：
 
@@ -1360,4 +1361,110 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
   --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax --flag redR1Teammate \
   --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
   --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax
+```
+
+## 13. 第三輪整合後的正式預設（好人言行一致＋派隊沿用前隊＋紅方首局帶隊友）
+
+**正式預設（第三輪整合後）** = 第 9 節整合後的正式預設（`r3NormalVotePrior=0.6`、`r3NormalVotePriorEvilOnly`、`goodLakeTargetMostSuspicious`、`humanQuestCardRules`、`assassinModel`、`evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`、`goodLakeInfoMax`）+ `goodVouchFollowUp`（第 10 節）+ `teamReuse`（第 11 節）+ `redR1Teammate`（第 12 節，只在 10 人局）。**對照組 = 第 9 節的正式預設**（合併前 origin/main 的 `DEFAULT_AGENT_TUNING`）。
+
+**結論**：**整組保留**。兩個立場的三個種子合併區間都整個在 0 以上：紅方 **+3.18pp [+2.70pp, +3.65pp]**、藍方 **+4.89pp [+4.28pp, +5.49pp]**；十個座位都換成新預設的機器人自打自，藍勝 7.42% → **11.32%**（紅勝 −3.90pp [−4.96pp, −2.84pp]）。一致性基準只有派隊（R1、R2+）與 R3+ 投票改變，而且都是往真人靠；其他決策逐項相同。
+
+做法：第 10、11、12 節各自只開自己的開關，對照組都不含另外兩條線，所以合併後整組再跑一次（同第 9 節）。三個開關的版本都已定案、沒有再挑選，所以直接用三個**從沒用過的新種子**（101010 / 202020 / 303030，各 5000 組 × 3 局，同時最多跑兩個），合併判定。判定規則在跑之前寫好（任務原文）：兩個立場的合併區間只要有一個整個在 0 以下，就照實寫出、不改預設，交給 Edward 決定；否則整組保留。ForwardAgent 每個種子約 234–235 萬個決策、0 次 fallback。
+
+### 13.1 合併前的檢查：每個開關單獨打開時和原本的線逐決策相同
+
+合併只改了 `AgentTuning.ts`（鍵、預設、環境變數、說明）、ForwardAgent 的 import、基準腳本的設定與文件，三個開關的程式碼沒有互相改動（R1 只有 `redR1Teammate` 會動；`teamReuse` 從 R2 起；`goodVouchFollowUp` 只在好人持湖者宣告之後）。用臨時的逐決策比對腳本（沒有進版本庫；與 `selfPlayStrength.ts` 同樣播種，每局把每一個決策、湖目標、湖宣告依序串起來取雜湊）在合併後的程式與各條線的分支上各跑 400 局、其他兩個開關關掉，比對每一局的雜湊：
+
+| 設定（其他兩個開關關掉） | 種子 | 與該線分支逐局相同 | 開關關掉時有幾局不同（確認比對不是空的） |
+|---|---|---|---|
+| 十個座位都開 `goodVouchFollowUp` | 9101 | 400 / 400 | 49 / 400 |
+| 只有好人座位開 `goodVouchFollowUp` | 9102 | 400 / 400 | — |
+| 十個座位都開 `teamReuse` | 9201 | 400 / 400 | 400 / 400 |
+| 只有紅方座位開 `teamReuse` / 只有好人座位開 | 9202 / 9203 | 400 / 400、400 / 400 | — |
+| 十個座位都開 `redR1Teammate` | 9301 | 400 / 400 | 208 / 400 |
+| 只有紅方座位開 `redR1Teammate` | 9302 | 400 / 400 | — |
+| 三個都關（= 第 9 節正式預設），對照 origin/main | 9401 | 400 / 400 | — |
+
+所以每個開關單獨打開時的行為與它那條線完全相同，三個都關時與合併前的 origin/main 完全相同。種子 9101–9401 只用在這個檢查。
+
+三個開關同時打開時唯一的交會：好人持湖者帶隊、`goodVouchFollowUp` 的派隊限制生效時，若一般候選（含 `teamReuse` 加進來的沿用隊）沒有一隊守住宣告，就照第 10.3 節圍著被宣藍的人重組候選，沿用隊不在其中（宣告優先）；有守住宣告的沿用隊時照常留下、照常加分。`GoodLakeFollowUp.test.ts` 的開 / 關對照因此改成以「第 9 節預設、`teamReuse` 關」為底（`teamReuse` 自己也會把 R3 那位被宣藍的人放回隊上），另加一個用目前完整預設的測試。
+
+### 13.2 自我對打（對照組 = 第 9 節正式預設）
+
+`selfPlayStrength.ts`，USE_FORWARD_REASONING=true；`--base` 九個開關（第 9 節正式預設），`--flag` 同樣九個再加 `goodVouchFollowUp`、`teamReuse`、`redR1Teammate`。A 局 = 新預設當紅方、舊預設當藍方；B 局 = 舊預設當紅方、新預設當藍方；C 局 = 兩邊都是舊預設。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 101010（5000，新種子） | 96.2%（92.5%） | +3.72pp [+2.89pp, +4.55pp] | 11.8%（7.5%） | +4.28pp [+3.23pp, +5.33pp] | 54.0% [53.5%, 54.5%] | 92.5% / 78.3% / 86.6% | 48.9% (374) / 45.5% (1084) / 43.6% (669) |
+| 202020（5000，新種子） | 96.1%（92.6%） | +3.54pp [+2.71pp, +4.37pp] | 12.0%（7.4%） | +4.54pp [+3.48pp, +5.60pp] | 54.0% [53.5%, 54.5%] | 93.3% / 78.8% / 87.6% | 42.1% (337) / 43.6% (1062) / 39.9% (619) |
+| 303030（5000，新種子） | 95.9%（93.6%） | +2.32pp [+1.51pp, +3.13pp] | 12.2%（6.4%） | +5.80pp [+4.77pp, +6.83pp] | 54.1% [53.6%, 54.6%] | 92.5% / 78.3% / 88.4% | 45.4% (377) / 43.7% (1087) / 44.3% (578) |
+| **三個合併（15000）** | 96.1%（92.9%） | **+3.18pp [+2.70pp, +3.65pp]** | 12.0%（7.1%） | **+4.89pp [+4.28pp, +5.49pp]** | — | 92.7% / 78.4% / 87.6% | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9 節；合併列的勝率與三紅率是三個種子的總數：A 紅勝 14408 / 15000、C 13929；B 藍勝 1802 / 15000、C 1071。括號內是三藍局的局數。）
+
+### 13.3 十個座位同設定（機器人自打自，描述用）
+
+`selfPlayHomogeneous.ts --games 5000 --seed 404040`，同樣的 `--flag` / `--base`（新種子）：同一組種子各打一局「十個座位都是舊預設」與「十個座位都是新預設」。正式環境（線上機器人、網站練習模式）每個座位都用新預設，所以機器人自打自會看到的是這一組，不參與判定。
+
+| 項目 | 舊預設（第 9 節） | 新預設（第三輪整合後） |
+|---|---|---|
+| 紅勝 | 92.58%（4629 / 5000） | 88.68%（4434 / 5000）；配對差 **−3.90pp [−4.96pp, −2.84pp]** |
+| 藍勝 | 7.42% | **11.32%** |
+| 同回合後續提議（R2 起）：原隊重提 / 換一人 | 0.00% / 0.15% | 15.12% / 48.16%（真人 7.2% / 33.6%，第 11.4 節第 4 點） |
+| 成功後第一個提議：整隊保留（好人 / 紅方隊長） | 35.8%（55.2% / 6.9%） | 53.7%（62.9% / 42.9%）（真人 76.1% / 71.1%） |
+| 失敗後第一個提議、R1 後續提議 | 整隊保留 2.2%、0.0% | 2.0%、0.0%（不沿用，與第 11 節相同） |
+
+ForwardAgent 157 萬個決策、0 次 fallback。只開 `teamReuse` 時（第 11.4 節，seed 70003）是 7.1% → 10.5%（−3.40pp [−4.44pp, −2.36pp]）；三個一起約多 0.5pp 藍勝，方向與 `goodVouchFollowUp` 的藍方效果一致（區間重疊，不能說兩者可以相加）。
+
+### 13.4 一致性基準（舊預設 → 第三輪整合後）
+
+`agreementBenchmark.ts --player ED --player Sin`（不加 `--legacy`）：新預設 = 不加旗標；舊預設 = `--flag goodVouchFollowUp=0 --flag teamReuse=0 --flag redR1Teammate=0`。兩次都是 ForwardAgent 283,061 個決策、0 次 fallback；舊預設那一次與第 9 節的表逐項相同。格式：ED / Sin / top / population。
+
+| 項目 | 舊預設（第 9 節） | 第三輪整合後 | 來自 |
+|---|---|---|---|
+| 派隊完全相同 R2+ | 3.5 / 4.4 / 3.0 / 3.8% | **11.8 / 22.7 / 15.6 / 16.2%** | `teamReuse`（+ `goodVouchFollowUp` 0–0.2 點） |
+| 派隊 Jaccard R2+ | 39.2 / 42.5 / 40.2 / 41.2% | **49.0 / 57.1 / 52.5 / 53.2%** | 同上 |
+| 　好人隊長：完全相同 / Jaccard | 5.6 / 6.4 / 4.7 / 5.3%；41.2 / 44.7 / 42.9 / 43.6% | 12.9 / 23.4 / 16.8 / 17.6%；49.6 / 57.4 / 54.2 / 54.8% | 同上 |
+| 　紅方隊長：完全相同 / Jaccard | 0.0 / 1.4 / 1.1 / 1.4%；35.8 / 39.3 / 37.1 / 37.5% | 10.0 / 21.7 / 14.2 / 13.9%；47.9 / 56.7 / 50.5 / 50.8% | `teamReuse` |
+| 派隊完全相同 R1 | 3.5 / 2.9 / 2.6 / 2.7% | 3.5 / **3.8** / 2.6 / 2.7% | `redR1Teammate` |
+| 派隊 Jaccard R1 | 29.9 / 32.2 / 32.2 / 32.6% | 30.6 / 33.4 / 32.5 / 32.7% | 同上 |
+| 　R1 紅方隊長（含奧伯倫）：完全相同 / Jaccard | 1.7 / 3.4 / 2.8 / 2.6%；26.9 / 30.9 / 31.7 / 31.8% | 1.7 / 5.3 / 2.8 / 2.5%；28.6 / 33.8 / 32.3 / 32.0% | 同上 |
+| 投票 R3+ | 64.1 / 65.9 / 62.7 / 64.2% | 64.1 / 66.0 / 62.8 / 64.3% | `goodVouchFollowUp` |
+| 　好人投票 R3+ | 67.1 / 68.7 / 67.8 / 68.3% | 67.1 / 68.9 / 68.0 / 68.5% | 同上 |
+| agent 異常票率 R3+ | 33.9 / 31.6 / 34.2 / 32.5% | 33.9 / 31.4 / 34.1 / 32.4% | 同上 |
+| 投票 R1 / R2、任務牌、湖目標、紅方湖宣告、刺殺、真人異常票時同票 | — | 逐項相同 | — |
+
+每一列都等於第 10.4、11.3、12.3 節各自量到的變化合起來（例如派隊 Jaccard R2+ 只開 `teamReuse` 是 48.8 / 57.1 / 52.4 / 53.1%，`goodVouchFollowUp` 再加 0–0.2 點）。逐項比對兩次的 JSON（全部的列，包括分角色）：比舊預設低的只有 (a) R1 紅方隊長的派隊完全相同 —— population 2.6 → 2.5%，分角色時莫甘娜 top 2.9 → 1.8%（n = 273）、population 3.0 → 2.0%（n = 928），同一批提議的 Jaccard 不變或略升（31.4 → 31.5%、31.8 → 31.8%），刺客、莫德雷德的完全相同與 Jaccard 都升；這是 `redR1Teammate` 抽籤帶隊友的結果，第 12.3 節的總數已含在內；(b) population「真人異常票時 agent 同票」少 0.01–0.04 點，是第 10.4 節已記錄的那 2 票。
+
+### 13.5 讀法
+
+1. **依規則整組保留**：兩個立場的合併區間都整個在 0 以上，每個種子各自也都在 0 以上。依「更像真人，而且不能讓它變弱」：更像真人（13.4，派隊大幅往真人靠；R1 紅方放隊友照真人的比例；好人持湖者守住自己的宣告），兩個立場都變強。
+2. **和三條線各自的數字比**：紅方 +3.18pp 與 `teamReuse`（+2.77pp [+2.41pp, +3.13pp]）加 `redR1Teammate`（+0.10pp [−0.19pp, +0.39pp]）的和 +2.87pp 一致（區間重疊）。藍方 +4.89pp 略低於 `teamReuse`（+5.08pp [+4.62pp, +5.54pp]）加 `goodVouchFollowUp`（+0.57pp [+0.38pp, +0.77pp]）的和 +5.65pp，區間重疊；兩條線改的都是好人隊長的派隊，宣告限制生效時沿用隊讓位（13.1），部分好處重疊是合理的（推測，沒有逐局追）。
+3. **藍方變強來自任務階段**：B 局三紅率 78.4%，C 局 87.6%（每個種子都低 8–10pp）；三藍局的刺中率 B / C 為 45.5 / 43.6%、43.6 / 39.9%、43.7 / 44.3%，沒有一致的方向，所以梅林沒有因此更容易被看出來。紅方立場的 A 局三紅率 92.5–93.3%，比 C 局高 4–6pp。
+4. **單邊立場與機器人自打自不能同時成立**：上表 96% / 12% 是「只有一邊用新預設」的數字；正式環境每個座位都用新預設，機器人自打自是紅勝 88.7%、藍勝 11.3%（13.3）。真人最終藍勝約 31%，機器人藍方仍然弱很多。
+5. **紅方變強有一部分可能不像真人**：第 11.4 節第 2 點與第 11.5 節第 1、4 點仍然成立 —— 紅方隊長在任務成功後把自己換進成功隊（機器人 96.2%，真人紅方 4.8%）。這是 `teamReuse` 的既有待決事項，整合沒有改變它。
+6. 只在 10 人局量（自我對打與一致性基準都是 10 人局）；`redR1Teammate` 在 5–9 人局不作用，`goodVouchFollowUp` 在 7–8 人局有第 10.5 節的檢查，`teamReuse` 在其他人數沒有自我對打數字。
+
+### 13.6 待 Edward 決定（沿用各節，沒有新增）
+
+- 第 10.6 節：硬3 算不算宣告之前的隊；在隊上時要不要也反對；別人的宣告。
+- 第 11.5 節：隊長自己不上的沿用（紅方換自己進成功隊不像真人）；機器人對局裡後續提議沿用得比真人多；紅方權重；換掉誰；練習模式回顧不說明「沿用前一隊」。
+- 第 12.5 節：R2 起的放隊友比例；強制局；R1 兩紅同隊的出牌；哪一種「像真人」；5–9 人局。
+- 上線後用 `/stats` 看真人對局裡機器人的戰績：上面的強度都是機器人對機器人。
+
+重跑（原始輸出不進版本庫；同樣的指令會得到完全相同的數字）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 101010 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax \
+  --flag goodVouchFollowUp --flag teamReuse --flag redR1Teammate \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax
+# 換 --seed 202020 / 303030；十個座位同設定：同樣的 --flag / --base
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayHomogeneous.ts --games 5000 --seed 404040 [同上的 --flag / --base]
+# 一致性基準：新預設 / 舊預設
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin \
+  --flag goodVouchFollowUp=0 --flag teamReuse=0 --flag redR1Teammate=0
 ```
