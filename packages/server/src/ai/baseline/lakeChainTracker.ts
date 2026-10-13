@@ -279,12 +279,20 @@ export function findRule3Violators(
   obs: PlayerObservation,
 ): Map<string, number> {
   const score = new Map<string, number>();
+  const diag = rule3Diagnostics;
+  if (diag?.off) return score;
   for (const [holder, blueSet] of state.declaredBlueByHolder) {
+    if (diag?.holderFilter && !diag.holderFilter(holder)) continue;
     for (const target of blueSet) {
       // (b) holder later led a team that failed — endorsed B but led
       // a tainted team → semantic 硬3 weak violation.
+      const declaredRound = diag?.postLakeOnly
+        ? Math.min(...state.records
+          .filter((r) => r.holderId === holder && r.targetId === target)
+          .map((r) => r.round))
+        : Number.NEGATIVE_INFINITY;
       const leaderRecords = obs.voteHistory.filter(
-        (v) => v.leader === holder,
+        (v) => v.leader === holder && v.round > declaredRound,
       );
       for (const rec of leaderRecords) {
         const failedQ = obs.questHistory.find(
@@ -305,4 +313,31 @@ export function findRule3Violators(
     }
   }
   return score;
+}
+
+// ── Diagnostic ablations (benchmark scripts only) ───────────────
+/**
+ * 2026-10-13 round 2 (docs/ai/strength_benchmark.md 第 7 節): knobs the
+ * self-play diagnosis script (`scripts/redLakeDiagnosis.ts`) uses to
+ * measure how much of a result runs through 硬3. Never set by the server
+ * or the agents; `undefined` (the default) leaves `findRule3Violators`
+ * exactly as documented above.
+ *   - `off`          — no 硬3 flags at all;
+ *   - `holderFilter` — only holders for which it returns true can be
+ *                      flagged (e.g. only the red ones, using the hidden
+ *                      roles the harness knows);
+ *   - `postLakeOnly` — only teams the holder led after the declaration
+ *                      count (rule (a) and (b)).
+ */
+export interface Rule3DiagnosticOptions {
+  off?: boolean;
+  holderFilter?: (holderId: string) => boolean;
+  postLakeOnly?: boolean;
+}
+
+let rule3Diagnostics: Rule3DiagnosticOptions | undefined;
+
+/** Benchmark scripts only: set (or clear with `undefined`) the 硬3 ablation. */
+export function setRule3DiagnosticOptions(options: Rule3DiagnosticOptions | undefined): void {
+  rule3Diagnostics = options;
 }

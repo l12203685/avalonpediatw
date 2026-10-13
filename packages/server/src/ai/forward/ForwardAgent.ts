@@ -60,6 +60,7 @@ import type {
 } from '../types';
 import { HeuristicAgent } from '../HeuristicAgent';
 import { humanQuestCardRule } from '../AgentTuning';
+import { evilVouchTeamConstraint, evilVouchVoteRule } from '../RedLakeFollowUp';
 import {
   interpret,
   type Facts,
@@ -750,6 +751,46 @@ export class ForwardAgent implements AvalonAgent {
       }
     }
 
+    // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
+    //
+    // A red lake holder rejects a team that leaves out a seat it declared
+    // blue or includes a seat it declared red (humans: 82.7% reject a team
+    // without the teammate they vouched for; the baseline's 硬1 / 硬2 vote
+    // rule does the same). Red's decisive window (Q11) and the forced fifth
+    // proposal are exempt — see `RedLakeFollowUp.evilVouchVoteRule`.
+    if (
+      decisionType === 'team_vote' &&
+      this.baseline.tuning.evilVouchFollowUp &&
+      evilVouchVoteRule(obs) === 'reject'
+    ) {
+      const action: AgentAction = { type: 'team_vote', vote: false };
+      const ruleCandidate: Candidate = {
+        action,
+        description: 'red vouch follow-up reject',
+        signals: {
+          avgSuspicion: 0,
+          maxSuspicion: 0,
+          includesKnownEvil: false,
+          includesSelf: (obs.proposedTeam ?? []).includes(obs.myPlayerId),
+          violatesLakeRules: true,
+          numKnownEvilOnTeam: 0,
+          merlinProbForTarget: 0,
+        },
+      };
+      return {
+        action,
+        reasoningTrace: {
+          decisionType,
+          purposes: zeroPurposeVector(),
+          candidatesEvaluated: 1,
+          chosen: ruleCandidate,
+          chosenScore: 0,
+          usedFallback: false,
+          summary: `${decisionType} → red vouch follow-up reject (round=${obs.currentRound ?? 1})`,
+        },
+      };
+    }
+
     // ── AgentTuning.humanQuestCardRules (2026-10-12) ──
     //
     // Agreement benchmark §7: humans play success as the lone visible red
@@ -1303,9 +1344,24 @@ export class ForwardAgent implements AvalonAgent {
     // hash tie-break in decide().
     const MAX_CANDIDATES = 50;
     const candidates: Candidate[] = [];
-    const slotCount = teamSize - 1; // non-self slots
-    const TOP_K = Math.min(otherRanked.length, 9);
-    const pool = otherRanked.slice(0, TOP_K);
+    // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
+    // A red leader keeps its lake word: seats it declared blue are fixed
+    // on the team, seats it declared red stay off (the baseline's 硬1 /
+    // 硬2 team fixup does the same; Q11 window exempt). Off → no change.
+    const vouch = this.baseline.tuning.evilVouchFollowUp ? evilVouchTeamConstraint(obs) : null;
+    const fixedMembers = vouch
+      ? vouch.required.filter((id) => id !== selfId).slice(0, Math.max(0, teamSize - 1))
+      : [];
+    let comboRanked = otherRanked;
+    if (vouch) {
+      const banned = new Set(vouch.banned);
+      const withoutFixed = otherRanked.filter((id) => !fixedMembers.includes(id));
+      const withoutBanned = withoutFixed.filter((id) => !banned.has(id));
+      comboRanked = withoutBanned.length >= teamSize - 1 - fixedMembers.length ? withoutBanned : withoutFixed;
+    }
+    const slotCount = teamSize - 1 - fixedMembers.length; // free non-self slots
+    const TOP_K = Math.min(comboRanked.length, 9);
+    const pool = comboRanked.slice(0, TOP_K);
 
     // Helper: rank-pyramid pair for sorting combos by sum-of-suspicion.
     const combinations: string[][] = [];
@@ -1347,7 +1403,7 @@ export class ForwardAgent implements AvalonAgent {
 
     for (const combo of combinations) {
       if (candidates.length >= MAX_CANDIDATES) break;
-      const team = [selfId, ...combo];
+      const team = [selfId, ...fixedMembers, ...combo];
       candidates.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
     }
 
@@ -1355,7 +1411,7 @@ export class ForwardAgent implements AvalonAgent {
     // small after role-specific filtering), keep the legacy "top-(N-1)"
     // single candidate so the pipeline never returns []
     if (candidates.length === 0) {
-      const topN = [selfId, ...otherRanked.slice(0, teamSize - 1)];
+      const topN = [selfId, ...fixedMembers, ...comboRanked.slice(0, slotCount)];
       candidates.push(this.makeTeamSelectCandidate(topN, obs, interp, pyramid));
     }
 

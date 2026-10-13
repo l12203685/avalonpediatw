@@ -63,6 +63,27 @@ export interface AgentTuning {
    * 細節見 `LakePolicy.pickEvilLakeTargetHuman` / `decideEvilLakeClaimHuman`。
    */
   evilLakeHumanStrategy: boolean;
+  /**
+   * 紅方持湖後言行一致（2026-10-13 第二輪，strength_benchmark.md 第 7 節）：
+   * 自己宣藍的人一定放進自己派的隊、宣紅的人不放；別人派的隊漏掉自己宣藍
+   * 的人或放了宣紅的人就反對（紅方聽牌 / R5 收尾時例外，同 baseline 的
+   * Q11）。細節見 `RedLakeFollowUp.ts`。
+   */
+  evilVouchFollowUp: boolean;
+  /**
+   * 紅方湖宣紅（嫁禍）的頻率改成真人的比例（2026-10-13 第二輪）：湖目標
+   * 不再為了嫁禍去找一起出過失敗任務的人，湖到藍方時依情境（同出過失敗
+   * 任務 × 紅方聽牌）照牌譜的比例宣紅（`LakePolicy.HUMAN_FRAME_RATE`），
+   * 其餘說實話。只在 `evilLakeHumanStrategy` 打開時有作用。
+   */
+  evilLakeFrameHumanRate: boolean;
+  /**
+   * 奧伯倫持湖時找隊友（2026-10-13 第二輪）：湖「不是自己出的失敗牌」最多
+   * 的人（`LakePolicy.oberonTeammateEvidence`），湖到紅方就宣好掩護、湖留
+   * 在紅方；原本走藍方的背書順序，湖到紅方的比例比亂湖還低。只在
+   * `evilLakeHumanStrategy` 打開時有作用。
+   */
+  oberonLakeSeeksTeammates: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -75,6 +96,9 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'humanQuestCardRules',
   'assassinModel',
   'evilLakeHumanStrategy',
+  'evilVouchFollowUp',
+  'evilLakeFrameHumanRate',
+  'oberonLakeSeeksTeammates',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -86,6 +110,9 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   humanQuestCardRules: false,
   assassinModel: false,
   evilLakeHumanStrategy: false,
+  evilVouchFollowUp: false,
+  evilLakeFrameHumanRate: false,
+  oberonLakeSeeksTeammates: false,
 });
 
 /**
@@ -134,6 +161,9 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   humanQuestCardRules: true,
   assassinModel: true,
   evilLakeHumanStrategy: true,
+  evilVouchFollowUp: false,
+  evilLakeFrameHumanRate: false,
+  oberonLakeSeeksTeammates: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -145,6 +175,9 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   humanQuestCardRules: 'AVALON_TUNING_HUMAN_QUEST_CARDS',
   assassinModel: 'AVALON_TUNING_ASSASSIN_MODEL',
   evilLakeHumanStrategy: 'AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY',
+  evilVouchFollowUp: 'AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP',
+  evilLakeFrameHumanRate: 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE',
+  oberonLakeSeeksTeammates: 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES',
 });
 
 function parseBool(raw: string): boolean | undefined {

@@ -97,6 +97,21 @@ describe('AgentTuning — flags', () => {
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, evilLakeHumanStrategy: true })).toBe('evilLakeHumanStrategy');
   });
 
+  it('2026-10-13 round-2 red switches: flags, env vars, off in legacy', () => {
+    const round2 = [
+      ['evilVouchFollowUp', 'AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP'],
+      ['evilLakeFrameHumanRate', 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE'],
+      ['oberonLakeSeeksTeammates', 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES'],
+    ] as const;
+    for (const [key, env] of round2) {
+      expect(LEGACY_AGENT_TUNING[key]).toBe(false);
+      expect(parseTuningFlag(key)).toEqual({ [key]: true });
+      expect(AGENT_TUNING_ENV[key]).toBe(env);
+      expect(tuningFromEnv({ [env]: '0' })).toEqual({ [key]: false });
+      expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, [key]: true })).toBe(key);
+    }
+  });
+
   it('resolveAgentTuning layers overrides on top of a base', () => {
     const t = resolveAgentTuning({ assassinModel: true }, { ...LEGACY_AGENT_TUNING });
     expect(t).toEqual({ ...LEGACY_AGENT_TUNING, assassinModel: true });

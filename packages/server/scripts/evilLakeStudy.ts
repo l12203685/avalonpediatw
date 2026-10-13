@@ -15,7 +15,11 @@
  *   (c) state features that predict choosing a blue target, and that predict
  *       the truthful-blue declaration;
  *   (d) descriptive final-win rate per strategy (confounded — the strategy
- *       is chosen in response to the state).
+ *       is chosen in response to the state);
+ *   (e) for every declared lake (red and blue holders): does the holder
+ *       later put the target on the teams they lead and vote for teams with
+ *       the target, and does the target do the same towards the holder
+ *       (2026-10-13 round 2: do humans follow up on a vouch?).
  * Oberon holders (see nobody, nobody sees them) are reported separately.
  *
  * Every rate is printed with n and a Wilson 95% interval. Output is
@@ -398,6 +402,107 @@ export function analyse(all: readonly EvilLake[]): Section[] {
   return sections;
 }
 
+// ── (e) After the declaration: follow-up by holder and target ─────
+
+/**
+ * One declared lake (any holder camp) and what the holder / the target did
+ * with the seat afterwards (2026-10-13 round 2, strength_benchmark.md 第 7
+ * 節): teams the holder led later that include the target, the holder's
+ * later votes on teams with the target, and the same from the target's
+ * side towards the holder.
+ */
+export interface LakeFollowUp {
+  name: string;
+  role: string;
+  holderCamp: 'good' | 'evil';
+  targetCamp: 'good' | 'evil';
+  /** Target is a teammate the holder could see (red holders only). */
+  teammate: boolean;
+  claim: 'good' | 'evil';
+  /** Later proposals led by the holder / how many include the target. */
+  holderLed: number;
+  holderLedIncl: number;
+  /** The holder's later (reliable) votes on proposals with the target / approvals. */
+  holderVotes: number;
+  holderVotesApprove: number;
+  /** The holder's later votes on proposals without the target / rejections. */
+  holderVotesOff: number;
+  holderVotesOffReject: number;
+  /** Later proposals led by the target / how many include the holder. */
+  targetLed: number;
+  targetLedIncl: number;
+  /** The target's later votes on proposals with the holder / approvals. */
+  targetVotes: number;
+  targetVotesApprove: number;
+}
+
+function collectFollowUps(games: readonly ReplayGame[]): LakeFollowUp[] {
+  const out: LakeFollowUp[] = [];
+  for (const game of games) {
+    if (!game.lakeChainValid) continue;
+    game.lakes.forEach((lake, lakeIdx) => {
+      if (lake.claim === null) return;
+      const holder = lake.holderSeat;
+      const target = lake.targetSeat;
+      const role = game.seatRoles[holder - 1];
+      const holderCamp = campOf(role);
+      const obs = buildReplayObservation(game, holder, { kind: 'lake', lake: lakeIdx });
+      const later = game.proposals.filter((p) => p.round > lake.round);
+      const voted = later.filter((p) => !p.forced && p.votesReliable);
+      const holderLed = later.filter((p) => p.leaderSeat === holder);
+      const targetLed = later.filter((p) => p.leaderSeat === target);
+      const withTarget = voted.filter((p) => p.teamSeats.includes(target));
+      const withoutTarget = voted.filter((p) => !p.teamSeats.includes(target));
+      const withHolder = voted.filter((p) => p.teamSeats.includes(holder));
+      out.push({
+        name: game.names[holder - 1] ?? '',
+        role,
+        holderCamp,
+        targetCamp: campOf(game.seatRoles[target - 1]),
+        teammate: holderCamp === 'evil' && obs.knownEvils.includes(seatId(target)),
+        claim: lake.claim,
+        holderLed: holderLed.length,
+        holderLedIncl: holderLed.filter((p) => p.teamSeats.includes(target)).length,
+        holderVotes: withTarget.length,
+        holderVotesApprove: withTarget.filter((p) => p.votes[holder - 1]).length,
+        holderVotesOff: withoutTarget.length,
+        holderVotesOffReject: withoutTarget.filter((p) => !p.votes[holder - 1]).length,
+        targetLed: targetLed.length,
+        targetLedIncl: targetLed.filter((p) => p.teamSeats.includes(holder)).length,
+        targetVotes: withHolder.length,
+        targetVotesApprove: withHolder.filter((p) => p.votes[target - 1]).length,
+      });
+    });
+  }
+  return out;
+}
+
+export function analyseFollowUps(all: readonly LakeFollowUp[]): Section[] {
+  const total = (xs: readonly LakeFollowUp[], k: keyof LakeFollowUp): number =>
+    xs.reduce((a, x) => a + (x[k] as number), 0);
+  const groups: Array<[string, (f: LakeFollowUp) => boolean]> = [
+    ['red holder, teammate declared blue', (f) => f.holderCamp === 'evil' && f.teammate && f.claim === 'good'],
+    ['red holder, blue declared blue (truth)', (f) => f.holderCamp === 'evil' && f.targetCamp === 'good' && f.claim === 'good'],
+    ['red holder, blue declared red (lie)', (f) => f.holderCamp === 'evil' && f.targetCamp === 'good' && f.claim === 'evil'],
+    ['blue holder, declared blue', (f) => f.holderCamp === 'good' && f.claim === 'good'],
+    ['blue holder, declared red', (f) => f.holderCamp === 'good' && f.claim === 'evil'],
+  ];
+  const sec = (title: string, num: keyof LakeFollowUp, den: keyof LakeFollowUp): Section => ({
+    title,
+    rows: groups.map(([label, f]) => {
+      const sub = all.filter(f);
+      return { label, rate: wilsonRate(total(sub, num), total(sub, den)) };
+    }),
+  });
+  return [
+    sec('(e) holder later leads: team includes the target (rate over led proposals)', 'holderLedIncl', 'holderLed'),
+    sec('(e) holder later votes on a team WITH the target: approve', 'holderVotesApprove', 'holderVotes'),
+    sec('(e) holder later votes on a team WITHOUT the target: reject', 'holderVotesOffReject', 'holderVotesOff'),
+    sec('(e) target later leads: team includes the holder', 'targetLedIncl', 'targetLed'),
+    sec('(e) target later votes on a team WITH the holder: approve', 'targetVotesApprove', 'targetVotes'),
+  ];
+}
+
 function uniqueLabels<T>(items: readonly T[], f: (x: T) => string): string[] {
   return [...new Set(items.map(f))].sort();
 }
@@ -436,6 +541,18 @@ function main(): void {
     const sections = analyse(items);
     result[label] = sections;
     printSections(`${label} (red-held lakes n=${items.length})`, sections);
+  }
+  // (e) follow-up after any declared lake (red and blue holders).
+  const followUps = collectFollowUps(games);
+  const followCohorts: Array<[string, LakeFollowUp[]]> = [
+    ['population', followUps],
+    ['top/role', followUps.filter((f) => top.members.has(cohortKey(f.name, f.role)))],
+  ];
+  for (const p of args.players) followCohorts.push([p, followUps.filter((f) => f.name === p)]);
+  for (const [label, items] of followCohorts) {
+    const sections = analyseFollowUps(items);
+    result[`${label} follow-up`] = sections;
+    printSections(`${label} — after the declaration (declared lakes n=${items.length})`, sections);
   }
   if (args.json) {
     fs.writeFileSync(path.resolve(args.json), JSON.stringify({

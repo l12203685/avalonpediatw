@@ -10,17 +10,21 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   DEFAULT_EVIL_LAKE_HUMAN_OPTIONS,
+  HUMAN_FRAME_RATE,
   decideEvilLakeClaimHuman,
   decideLakeClaimForTeam,
   declareLake,
   estimateSuspicionFromHistory,
   evilLakeHumanOptionsFromEnv,
   getEvilLakeHumanOptions,
+  humanFrameRate,
   nextLakeExists,
+  oberonTeammateEvidence,
   pickEvilLakeTargetHuman,
   pickLakeTarget,
   pickLakeTargetForTeam,
   setEvilLakeHumanOptions,
+  type EvilLakeHumanOptions,
 } from './LakePolicy';
 import { withSeededRandom } from './benchmark/agreement';
 import { LEGACY_AGENT_TUNING } from './AgentTuning';
@@ -248,7 +252,9 @@ describe('LakePolicy — evilLakeHumanStrategy', () => {
   it('AVALON_EVIL_LAKE_HUMAN_VARIANT parses known knobs and ignores junk', () => {
     expect(evilLakeHumanOptionsFromEnv({})).toEqual(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS);
     expect(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'lastLake=always,chaos=never,vouch=consistent' }))
-      .toEqual({ lastLake: 'always', chaos: 'never', vouch: 'consistent' });
+      .toEqual({ ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, lastLake: 'always', chaos: 'never', vouch: 'consistent' });
+    expect(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'oberon=legacy,lastLake=legacy,target=legacy,claim=human' }))
+      .toEqual({ ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, oberon: 'legacy', lastLake: 'legacy', target: 'legacy' });
     expect(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'chaos=sometimes,foo=bar' }))
       .toEqual(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS);
   });
@@ -272,6 +278,74 @@ describe('LakePolicy — evilLakeHumanStrategy', () => {
       votes: Object.fromEntries(IDS.map((id) => [id, false])),
     }];
     expect(pickLakeTargetForTeam('evil', obs({ ...oberon, voteHistory: led }), v, ON)).toBe('P7');
+  });
+
+  it('diagnostic ablation knobs hand parts of the lake back to the pre-switch rule', () => {
+    const legacyTarget = (o: PlayerObservation, v: string[]): string => pickLakeTargetForTeam('evil', o, [...v], { ...LEGACY_AGENT_TUNING });
+    const oberon = obs({
+      myPlayerId: 'P4', myRole: 'oberon', myTeam: 'evil', knownEvils: [],
+      currentRound: 2, questResults: ['fail', 'success'], questHistory: [R1_FAIL, R2_OK],
+    });
+    const v = IDS.filter((id) => id !== 'P4' && id !== 'P10');
+    const opt = (o: Partial<EvilLakeHumanOptions>): EvilLakeHumanOptions => ({ ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, ...o });
+    // oberon=legacy: Oberon's target and claim follow the old rule; other reds do not.
+    expect(pickEvilLakeTargetHuman(oberon, v, opt({ oberon: 'legacy' }))).toBe(legacyTarget(oberon, v));
+    expect(withSeededRandom('x', () => decideEvilLakeClaimHuman(oberon, 'P9', 'good', opt({ oberon: 'legacy' }))))
+      .toBe(withSeededRandom('x', () => decideLakeClaimForTeam('evil', 'P9', oberon, 'good', { ...LEGACY_AGENT_TUNING })));
+    expect(pickEvilLakeTargetHuman(firstLake, valid, opt({ oberon: 'legacy' }))).toBe('P2');
+    // lastLake=legacy only touches the lake after R4.
+    expect(pickEvilLakeTargetHuman(lastLake, ['P3', 'P5', 'P6', 'P9'], opt({ lastLake: 'legacy' })))
+      .toBe(legacyTarget(lastLake, ['P3', 'P5', 'P6', 'P9']));
+    expect(pickEvilLakeTargetHuman(firstLake, valid, opt({ lastLake: 'legacy' }))).toBe('P2');
+    // target=legacy / claim=legacy split the two halves.
+    expect(pickEvilLakeTargetHuman(firstLake, valid, opt({ target: 'legacy' }))).toBe(legacyTarget(firstLake, valid));
+    expect(decideEvilLakeClaimHuman(lastLake, 'P5', 'good', opt({ target: 'legacy' }))).toBe('evil');
+    expect(pickEvilLakeTargetHuman(firstLake, valid, opt({ claim: 'legacy' }))).toBe('P2');
+  });
+
+  it('evilLakeFrameHumanRate: no co-suspect hunting; blue claims framed at the human rate of the state', () => {
+    const rate = { ...ON, evilLakeFrameHumanRate: true };
+    // The frame-seeking target rule would take P5 (shared the failed R3 with P1, red listening);
+    // the human-rate rule picks the blue by the vouch order instead (P1 led nothing → most suspicious, then seat).
+    expect(pickLakeTargetForTeam('evil', lastLake, ['P3', 'P5', 'P6', 'P9'], ON)).toBe('P5');
+    expect(pickLakeTargetForTeam('evil', lastLake, ['P6', 'P9'], rate)).toBe(pickEvilLakeTargetHuman(lastLake, ['P6', 'P9']));
+    expect(humanFrameRate(lastLake, 'P5')).toBeCloseTo(HUMAN_FRAME_RATE.sharedListening);
+    expect(humanFrameRate(lastLake, 'P6')).toBeCloseTo(HUMAN_FRAME_RATE.notSharedListening);
+    expect(humanFrameRate(firstLake, 'P6')).toBeCloseTo(HUMAN_FRAME_RATE.notSharedNotListening);
+    // Over many seeded draws the claim rate on a blue matches the table; teammates are always washed.
+    let framed = 0;
+    for (let i = 0; i < 2000; i++) {
+      if (withSeededRandom(`f${i}`, () => decideLakeClaimForTeam('evil', 'P5', lastLake, 'good', rate)) === 'evil') framed++;
+      expect(withSeededRandom(`f${i}`, () => decideLakeClaimForTeam('evil', 'P2', lastLake, 'evil', rate))).toBe('good');
+    }
+    expect(framed / 2000).toBeGreaterThan(HUMAN_FRAME_RATE.sharedListening - 0.04);
+    expect(framed / 2000).toBeLessThan(HUMAN_FRAME_RATE.sharedListening + 0.04);
+    // Without evilLakeHumanStrategy the switch does nothing (old evil branch).
+    const onlyRate = { ...LEGACY_AGENT_TUNING, evilLakeFrameHumanRate: true };
+    expect(pickLakeTargetForTeam('evil', lastLake, ['P3', 'P5', 'P6', 'P9'], onlyRate))
+      .toBe(pickLakeTargetForTeam('evil', lastLake, ['P3', 'P5', 'P6', 'P9'], { ...LEGACY_AGENT_TUNING }));
+  });
+
+  it('oberonLakeSeeksTeammates: Oberon lakes the seat with the most fail cards he did not play', () => {
+    const seek = { ...ON, oberonLakeSeeksTeammates: true };
+    // Oberon P4 sat on the failed R1 with P5 (one fail = his own); P2 failed R2 without him.
+    const quests: QuestRecord[] = [
+      { round: 1, team: ['P4', 'P5', 'P6'], result: 'fail', failCount: 1 },
+      { round: 2, team: ['P2', 'P7', 'P8', 'P9'], result: 'fail', failCount: 1 },
+    ];
+    const oberon = obs({
+      myPlayerId: 'P4', myRole: 'oberon', myTeam: 'evil', knownEvils: [],
+      currentRound: 2, questResults: ['fail', 'fail'], questHistory: quests,
+    });
+    const v = IDS.filter((id) => id !== 'P4' && id !== 'P10');
+    expect(oberonTeammateEvidence('P5', oberon)).toBe(0);
+    expect(oberonTeammateEvidence('P2', oberon)).toBeCloseTo(0.25);
+    // Default (vouch order) goes for P5 — the co-suspect of his own fail (framing, red listening).
+    expect(pickLakeTargetForTeam('evil', oberon, [...v], ON)).toBe('P5');
+    // Seeking teammates: a member of the failed R2 he was not on (P2 first by the vouch order tie-break).
+    expect(['P2', 'P7', 'P8', 'P9']).toContain(pickLakeTargetForTeam('evil', oberon, [...v], seek));
+    // A seeing red is unaffected by the switch.
+    expect(pickLakeTargetForTeam('evil', firstLake, [...valid], seek)).toBe(pickLakeTargetForTeam('evil', firstLake, [...valid], ON));
   });
 
   it('evilLakeClaimAlwaysGood wins the claim when both switches are on (target still from the strategy)', () => {
