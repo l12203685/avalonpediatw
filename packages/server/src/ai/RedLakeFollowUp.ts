@@ -22,6 +22,12 @@
  * exception as the baseline (Q11, `mayBreakHardRules`: red listening / R5
  * cleanup) — then winning the mission comes first.
  *
+ * In `DEFAULT_AGENT_TUNING` since 2026-10-13 round 2: against the lake
+ * strategy alone +0.23pp [+0.02pp, +0.45pp] as red (seeds 31337 + 8080 +
+ * 2718, 15000 pairs) and R3+ vote agreement up in every cohort; it closes
+ * only about a fifth of the lake strategy's gap to the previous default
+ * (strength_benchmark.md 第 7.4 節).
+ *
  * Pure functions over the public record (`obs.lakeHistory`); no
  * `Math.random`.
  */

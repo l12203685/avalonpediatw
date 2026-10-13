@@ -573,7 +573,9 @@ export function nextLakeExists(obs: PlayerObservation): boolean {
  * population, `scripts/evilLakeStudy.ts` (c), strength_benchmark.md 第
  * 6.1 節): holder and target shared a failed mission × red already has
  * two fails. Overall 25.9% (197/761) of red-held blue lakes. Used by
- * `chaos: 'humanRate'` (`AgentTuning.evilLakeFrameHumanRate`).
+ * `chaos: 'humanRate'` (`AgentTuning.evilLakeFrameHumanRate`, in the
+ * default since 2026-10-13 round 2: self-play framing 65.6% → 30.2%,
+ * strength unchanged; strength_benchmark.md 第 7 節).
  */
 export const HUMAN_FRAME_RATE: Readonly<{
   sharedListening: number;
