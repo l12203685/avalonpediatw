@@ -37,6 +37,7 @@
 - LINE 出站：有 `LISTEN_BOT_ENQUEUE_URL` → 走 listen-bot；否則 `LINE_REPLY_DRAIN`（預設 true）→ 排隊，
   等鏡像群任何一個帶 reply_token 的事件（文字、貼圖、加入…）一次最多帶 5 則回出去；
   `LINE_REPLY_DRAIN=false` 才逐則 push。
+- 圖片、貼圖、檔案（20261013 起）：見下方「圖片同步」。
 
 ## 三層驗證（這次才真的存在）
 
@@ -211,6 +212,70 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
 同一週只發一次（記在記憶體）；窗口外重啟絕不重發，窗口內 Discord 還沒連上會每分鐘重試到 12:10。
 `STATS_DIGEST_ENABLED=false` 關閉；狀態頁 `statsDigest.lastPostedWeek` 顯示最近一次發送的週一日期（重啟歸零）。
 
+## 圖片同步（20261013）
+
+以前只同步文字，圖片在兩邊都會消失。現在 LINE 群 ↔ Discord 同步頻道兩邊的圖片都會過去，
+全部免費：不用 push、不用付費 API、不用外部儲存。
+
+| 從 → 到 | 怎麼送 | 限制與例外 |
+|---|---|---|
+| LINE 群的圖片 → Discord 同步頻道 | server 用 LINE 內容 API（同一組 channel access token，免費）下載，當**附件**貼出，內文 `[MMDD hh:mm][LINE][名字] （圖片）`；一次傳多張 → 每張一則，標 `（圖片 1/3）`、`（圖片 2/3）`… | 超過 Discord 上傳上限（一般 10 MB；伺服器加成 2 級 50 MB、3 級 100 MB；最多讀 25 MB）→ 改貼文字 `（圖片太大，請到 LINE 看）`；下載失敗、下載超過 30 秒或 bot 沒有附加檔案權限 → `（圖片沒有同步過來，請到 LINE 看）` |
+| LINE 貼圖／影片／語音／檔案／位置 → Discord 與網站大廳 | 一句固定短文字：`（貼圖）`、`（影片，請到 LINE 看）`、`（語音訊息，請到 LINE 聽）`、`（檔案，請到 LINE 看）`、`（位置資訊，請到 LINE 看）` | 不下載、不轉內容、不帶檔名或地址 |
+| Discord 同步頻道的圖片（可附文字）→ LINE 群 | 訊息進來後幾秒內 server 先把圖下載存一份，排進 reply 佇列：先一句 `[…][DC][名字] 文字 （圖片）`，接著每張一則 LINE 圖片訊息，網址是 `https://<server>/media/relay/<隨機碼>.jpg` | 只收 JPEG／PNG、≤ 10 MB（以 10,000,000 bytes 計）、不是防雷（spoiler）圖；超過 1 MB（1,000,000 bytes）的圖另向 Discord 媒體代理拿縮圖當預覽（LINE 規定預覽 ≤ 1 MB）；一則 Discord 訊息最多 4 張圖（文字＋4 張剛好一次回覆）。其餘的、webp／gif／heic、太大、下載失敗 → 一句 `（Discord 有一張圖片，請到 Discord 看）` 或 `（Discord 有 2 張圖片、一個檔案，請到 Discord 看）` |
+| Discord 貼圖／其他檔案 → LINE 與大廳 | 文字後面加 `（貼圖）`／`（檔案）`；檔案另加一句「請到 Discord 看」 | 不轉檔案、不帶檔名 |
+| 任何圖片 → 網站大廳 | 只有文字標記 `（圖片）`（LINE 一次多張 → 一句 `（圖片 ×3）`），網頁不顯示圖 | |
+
+LINE 這一側照舊是「群裡下一次有人講話才送出」：圖片和文字排在同一個佇列、同樣的順序、一次回覆最多 5 則（一張圖算一則）。
+
+**順序與下載量**（審查後修正）：
+
+- 網站大廳：訊息一進來就顯示（圖片只顯示標記），順序就是進來的順序；限流也在這一刻算，被限流的訊息完全不下載。
+- Discord → LINE：所有 Discord 訊息依進來的順序排隊進 LINE 佇列。前一則的圖還在下載時，後面的文字會等它（LINE 本來就要等群裡有人講話才送，多等幾秒看不出來），
+  所以 LINE 上看到的順序和 Discord 一樣。下載一次只跑一張（不管幾個人同時貼），一則訊息所有下載合計最多 45 秒，超過的圖改成那句文字說明；
+  已經有 10 則在等的時候，新訊息的圖不下載、直接改文字說明。
+- LINE → Discord：圖片一張一張上傳；同一個人先傳圖再打字時，文字會等前面的圖貼完再貼（最多等 20 秒），所以 Discord 上也是先圖後字。
+  沒有圖在處理時，文字照舊立刻貼。單張圖下載超過 30 秒、或整個上傳流程超過 60 秒就放棄，不會卡住後面的圖。
+
+**為什麼 Discord → LINE 要先存一份**：LINE 的圖片訊息只是兩個 https 網址，由 LINE 自己來抓；我們的出站是 reply 佇列，
+可能幾小時後才送出，Discord CDN 的簽名網址到時已經過期。所以 server 在 Discord 訊息進來時就下載，從自己的網址提供：
+
+- 網址帶 192 位元隨機碼，猜不到；不寫進 log、不出現在狀態頁。查無、過期、格式不對一律 404。
+- 只放記憶體，總量上限 50 MB，每張最多保存 72 小時；真的送出時延長到送出後至少 24 小時（以防 LINE 要等有人點開大圖才來抓）。
+  滿了先丟過期的，再丟「還沒送出」裡最舊的（那張之後會改成文字說明），最後才丟「已送出」的，因為已送出的副本不見了，LINE 上會變成一張打不開的圖、而且沒有任何地方會報錯。
+- **重開機就清空，而 Render 每次部署都會重開**：除了合併到 main，每天的戰績快取 commit（`chore(stats)`，改 `packages/server/analysis_cache.json`）也會觸發部署，
+  所以實際上**至少每天清空一次**，「72 小時」只是上限。reply 佇列本來也在記憶體，會一起清空；佇列裡的圖若副本已經不在（過期、被擠掉），送出時自動改成那句文字說明。
+- 還沒在正式環境確認的一點：LINE 是送出當下就來抓圖，還是等有人點開才抓。**上線後請確認一次**：在 Discord 同步頻道貼一張圖 → 回 LINE 群講一句讓它送出 →
+  一分鐘內看 `/api/bots/status` 的 `mediaRelay.stats.served`。有增加 1～2 → LINE 送出時就抓走了，部署只影響還在佇列裡的圖（會改成文字說明）；
+  一直不動、要等有人點開圖才增加 → 部署前送出的圖，部署後在 LINE 點開會是壞圖。
+- LINE 拒收某張圖的網址，或同一張圖連續兩次回覆失敗 → 改送文字說明，不會卡住整個佇列；文字訊息的「失敗放回佇列頭」規則不變。
+- 只有 reply 佇列模式（`LINE_REPLY_DRAIN` 預設開）而且算得出 https 公開網址時才送圖（Render 自動用 `RENDER_EXTERNAL_URL`；
+  其他部署設 `PUBLIC_BASE_URL`，或沿用 `LINE_WEBHOOK_URL` 的網域）；否則只送文字標記。`CHAT_MIRROR_IMAGES=false` 可單獨關掉
+  Discord → LINE 的圖（改文字說明）；LINE → Discord 的圖不受影響。
+
+**不會迴圈**：bot 自己貼到 Discord 的圖（作者是 bot）、webhook、`[Avalon]` 開頭的訊息照舊忽略；LINE 來的圖只到 Discord，不會排回 LINE。
+**聊天紀錄匯出**：bot 貼的那則圖片只有固定標記 `（圖片）`，匯出時名字照樣換成「成員N」；檔名、網址、圖片內容都不會進試算表（附件只算數量）。
+目前這種只有標記的貼文（`（圖片）`、`（貼圖）`、`（圖片沒有同步過來…）`）會各成一列，而 Discord 那邊只有附件沒有文字的訊息會被略過；要不要把只有標記的列也略過，由聊天紀錄匯出那邊決定。
+**Log 與狀態頁**只有次數與結果代碼（例如 `picture outcome=too-large`、`status=403 code=50013`），沒有文字、名字、網址：
+
+| 欄位 | 意義 |
+|---|---|
+| `line.stats.imagesToDiscord` / `imageNotesToDiscord` | LINE → Discord：上傳成功／改貼文字說明 |
+| `line.stats.imagesSkipped` | LINE → Discord：限流或排隊太多（> 20 張）而略過 |
+| `line.stats.imageFailures` | LINE → Discord：圖和文字說明都沒貼出去（找不到同步頻道、Discord 貼文失敗、整個流程超過 60 秒） |
+| `line.stats.mediaNotesToDiscord` | 貼圖／影片／語音／檔案／位置轉成短文字的次數 |
+| `line.stats.imagesToLine` / `imageNotesToLine` | Discord → LINE：以圖片送出／副本不在改送文字 |
+| `mediaRelay.enabled` | Discord → LINE 圖片暫存是否開著（`false` → 不是 reply 佇列模式、沒有 https 公開網址，或 `CHAT_MIRROR_IMAGES=false`） |
+| `mediaRelay.stats` | `entries`／`bytes` 目前存量，`stored`／`evicted`／`expired` 累計，`served` LINE 來抓圖的次數，`notFound` 抓不到的次數 |
+
+**驗證**：LINE 群傳一張照片 → Discord 同步頻道出現 `[…][LINE][名字] （圖片）` 和那張圖。
+Discord 同步頻道貼一張 JPG／PNG → 回 LINE 群講一句 → 群裡先出現 `[…][DC][名字] （圖片）`，接著那張圖；`mediaRelay.stats.served` 會增加（見上面「上線後請確認一次」）。
+
+**要 Edward 確認的設定**（其他都不用動）：
+
+1. Discord 同步頻道（`LOBBY_MIRROR_DISCORD_CHANNEL_ID`）要讓 bot 有**附加檔案（Attach Files）**權限；沒有的話 LINE 的圖會變成文字說明，log 會出現 `status=403 code=50013`。
+2. LINE Developers Console 不用改：讀圖片內容用的是同一組 channel access token，不需要另外申請。
+3. 沒有新增費用：LINE 內容下載免費、reply 不算 push 額度、圖片只放 server 記憶體（Render Free 512 MB 中最多 50 MB）。
+
 ## 配額
 
 LINE 官方帳號免費方案每月免費訊息數有限（台灣目前 200 則，以 LINE 當期公告為準）；
@@ -233,7 +298,9 @@ reply 不計、push 計。`LINE_REPLY_DRAIN=true`（預設）下 server 不會 p
 - `packages/server/src/bots/line/webhookEndpoint.ts` — Layer 1 所有權（GET / PUT / test）
 - `packages/server/src/bots/line/replyQueue.ts` — reply_token 佇列
 - `packages/server/src/bots/line/client.ts` — webhook 處理、raw-body 簽章、drain
-- `packages/server/src/bots/ChatMirror.ts` — 三向扇出
+- `packages/server/src/bots/ChatMirror.ts` — 三向扇出（含圖片：LINE 圖上傳 Discord、Discord 圖排進 LINE 佇列）
+- `packages/server/src/bots/media/` — Discord → LINE 圖片暫存與 `/media/relay/` 路由（`relayMedia.ts`）、下載上限與格式判斷（`bytes.ts`）
+- `packages/server/src/bots/discord/mirrorInbound.ts` — Discord 同步頻道訊息（含附件）→ 大廳與 LINE
 - `packages/server/src/bots/index.ts` — 初始化（各 bot 失敗隔離）、`/api/bots/status`
 - `packages/server/src/middleware/rawBody.ts` — 保留原始 bytes
 - `packages/server/src/services/keepAlive.ts` — Render Free 自我喚醒
@@ -244,4 +311,5 @@ reply 不計、push 計。`LINE_REPLY_DRAIN=true`（預設）下 server 不會 p
 - `.github/workflows/verify-line-webhook.yml` — 每日探測
 - `render.yaml` — 變數清單
 - 測試：`src/__tests__/LineSyncRoundTrip.test.ts`、`LineReplyQueue.test.ts`、`LineWebhookEndpoint.test.ts`、
-  `LineStatsCommands.test.ts`（也在 `pnpm test:line-sync`）、`StatsReplies.test.ts`、`DiscordStatsCommands.test.ts`、`StatsWeeklyDigest.test.ts`
+  `LineStatsCommands.test.ts`、`LineDiscordImageSync.test.ts`、`RelayMedia.test.ts`（也在 `pnpm test:line-sync`）、
+  `StatsReplies.test.ts`、`DiscordStatsCommands.test.ts`、`StatsWeeklyDigest.test.ts`

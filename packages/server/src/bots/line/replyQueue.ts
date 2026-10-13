@@ -17,19 +17,74 @@
  *   - Capacity is bounded; overflow trims from the OLDEST end on enqueue, but
  *     requeueFront() keeps the rescued batch at the head and trims the newest
  *     tail instead (rescued messages are older and must go out first).
+ *
+ * Images (2026-10-13, Discord → LINE): an item may carry `image` — the two
+ * HTTPS URLs of a LINE image message served from bots/media/relayMedia.ts.
+ * Its `text` is then the fallback note sent instead when the copy is gone
+ * by drain time. Same queue, same order, same 5-per-reply budget: one image
+ * is one message object.
  */
 
 export const LINE_REPLY_QUEUE_CAP = 50;
 /** LINE replyMessage accepts at most 5 message objects per reply_token. */
 export const LINE_REPLY_MAX_PER_DRAIN = 5;
 
+/** A queued LINE image message (Discord → LINE). */
+export interface QueuedLineImage {
+  /** https URL of the full image (JPEG/PNG ≤ 10 MB). */
+  originalUrl: string;
+  /** https URL of the preview (JPEG/PNG ≤ 1 MB); may equal originalUrl. */
+  previewUrl: string;
+  /** Relay-store ids behind the two URLs (checked and kept alive at drain time). */
+  mediaIds: string[];
+  /** Failed replies that carried this image (see degradeAfterFailedReply). */
+  failedAttempts?: number;
+}
+
+/**
+ * One queued LINE message object. Plain text when `image` is absent; with
+ * `image`, an image message whose `text` is the fallback note.
+ */
 export interface QueuedLineText {
   text: string;
   enqueuedAt: number;
+  image?: QueuedLineImage;
+}
+
+/** Alias that reads better where images are involved. */
+export type QueuedLineItem = QueuedLineText;
+
+/** After this many failed replies an image goes out as its text note instead. */
+export const LINE_IMAGE_MAX_FAILED_REPLIES = 2;
+
+/**
+ * Prepare a drained batch for requeueFront() after a failed reply. Text
+ * items are returned untouched (the exact-batch invariant). An image item
+ * is degraded to its text note when LINE rejected an image URL in this
+ * reply, or when it has now failed LINE_IMAGE_MAX_FAILED_REPLIES times — so
+ * one unusable image can never block the queue forever. Order is kept.
+ */
+export function degradeAfterFailedReply(
+  batch: QueuedLineItem[],
+  opts: { imageRejected?: boolean } = {},
+): { retry: QueuedLineItem[]; degraded: number; releasedMediaIds: string[] } {
+  let degraded = 0;
+  const releasedMediaIds: string[] = [];
+  const retry = batch.map((item): QueuedLineItem => {
+    if (!item.image) return item;
+    const failedAttempts = (item.image.failedAttempts ?? 0) + 1;
+    if (opts.imageRejected || failedAttempts >= LINE_IMAGE_MAX_FAILED_REPLIES) {
+      degraded += 1;
+      releasedMediaIds.push(...item.image.mediaIds);
+      return { text: item.text, enqueuedAt: item.enqueuedAt };
+    }
+    return { ...item, image: { ...item.image, failedAttempts } };
+  });
+  return { retry, degraded, releasedMediaIds };
 }
 
 export class LineReplyQueue {
-  private items: QueuedLineText[] = [];
+  private items: QueuedLineItem[] = [];
   private readonly cap: number;
 
   constructor(cap: number = LINE_REPLY_QUEUE_CAP) {
@@ -41,7 +96,15 @@ export class LineReplyQueue {
 
   /** Append one text. Returns how many OLDEST items were dropped to stay in cap. */
   public enqueue(text: string, now: number = Date.now()): { dropped: number } {
-    this.items.push({ text, enqueuedAt: now });
+    return this.enqueueItem({ text, enqueuedAt: now });
+  }
+
+  /**
+   * Append one item (text or image). Returns how many OLDEST items were
+   * dropped to stay in cap (a dropped image's relay copy simply expires).
+   */
+  public enqueueItem(item: QueuedLineItem): { dropped: number } {
+    this.items.push(item);
     let dropped = 0;
     if (this.items.length > this.cap) {
       dropped = this.items.length - this.cap;
@@ -51,7 +114,7 @@ export class LineReplyQueue {
   }
 
   /** Pop up to `max` oldest items, in order. Empty array when nothing queued. */
-  public drain(max: number = LINE_REPLY_MAX_PER_DRAIN): QueuedLineText[] {
+  public drain(max: number = LINE_REPLY_MAX_PER_DRAIN): QueuedLineItem[] {
     const n = Math.max(0, Math.min(max, LINE_REPLY_MAX_PER_DRAIN, this.items.length));
     if (n === 0) return [];
     const batch = this.items.slice(0, n);
@@ -63,7 +126,7 @@ export class LineReplyQueue {
    * Put a previously drained batch back at the HEAD (send failed). Order is
    * preserved exactly; if that overflows the cap, the NEWEST tail is trimmed.
    */
-  public requeueFront(batch: QueuedLineText[]): { dropped: number } {
+  public requeueFront(batch: QueuedLineItem[]): { dropped: number } {
     if (batch.length === 0) return { dropped: 0 };
     this.items = [...batch, ...this.items];
     let dropped = 0;
@@ -72,6 +135,11 @@ export class LineReplyQueue {
       this.items = this.items.slice(0, this.cap);
     }
     return { dropped };
+  }
+
+  /** How many queued items are images. */
+  public imageCount(): number {
+    return this.items.filter((i) => !!i.image).length;
   }
 
   public size(): number {

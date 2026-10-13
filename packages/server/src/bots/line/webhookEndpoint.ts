@@ -94,6 +94,33 @@ export function resolveExpectedWebhookUrl(env: EnvLike = process.env): string | 
   return `${stripTrailingSlash(base)}${LINE_WEBHOOK_PATH}`;
 }
 
+/**
+ * Public https base of THIS server (no trailing slash), from the same env
+ * the webhook URL comes from: PUBLIC_BASE_URL, else RENDER_EXTERNAL_URL,
+ * else the origin (plus any path prefix before /webhook/line) of an explicit
+ * LINE_WEBHOOK_URL. Null when none is set or the value is not https. Used
+ * for the Discord → LINE image URLs (bots/media/relayMedia.ts), which LINE
+ * fetches from this server.
+ *
+ * Unlike the webhook, the media route is always served by this server, so a
+ * LINE_WEBHOOK_URL that points at another service (listen-bot) is only the
+ * last resort.
+ */
+export function resolvePublicBaseUrl(env: EnvLike = process.env): string | null {
+  const base = (env.PUBLIC_BASE_URL || '').trim() || (env.RENDER_EXTERNAL_URL || '').trim();
+  if (base) return /^https:\/\//i.test(base) ? stripTrailingSlash(base) : null;
+  const explicit = (env.LINE_WEBHOOK_URL || '').trim();
+  if (!explicit || !/^https:\/\//i.test(explicit)) return null;
+  try {
+    const u = new URL(explicit);
+    const path = stripTrailingSlash(u.pathname);
+    const prefix = path.endsWith(LINE_WEBHOOK_PATH) ? path.slice(0, -LINE_WEBHOOK_PATH.length) : '';
+    return stripTrailingSlash(`${u.origin}${prefix}`);
+  } catch {
+    return null;
+  }
+}
+
 /** LINE_WEBHOOK_AUTOSET: default ON; only the literal "false"/"0"/"off" disables. */
 export function isAutosetEnabled(env: EnvLike = process.env): boolean {
   const raw = (env.LINE_WEBHOOK_AUTOSET || '').trim().toLowerCase();

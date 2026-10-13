@@ -23,6 +23,7 @@ import { getChatMirror } from '../ChatMirror';
 import { FEEDBACK_CONTENT_MAX_CHARS } from '../feedback/config';
 import { getFeedbackService } from '../feedback/service';
 import { handleFeedbackCommand } from '../feedback/discordCommand';
+import { handleDiscordMirrorMessage } from './mirrorInbound';
 
 /**
  * Slash command definitions registered by `registerCommands()`. Exported so
@@ -133,13 +134,15 @@ export class DiscordBotClient {
 
     // #82 three-way sync: channel messages in the configured mirror channel
     // are bridged into the Avalon lobby (→ web clients) and cross-posted to
-    // LINE. Loops are prevented by skipping our own bot messages, any other
-    // bot, and the text prefix that identifies messages we just sent out.
+    // LINE (pictures too, 2026-10-13). Loops are prevented by skipping our own
+    // bot messages, any other bot, and the text prefix that identifies
+    // messages we just sent out.
     this.client.on('messageCreate', async (message) => {
       try {
         await this.handleIncomingMirrorMessage(message);
       } catch (err) {
-        console.warn('[Discord→lobby] messageCreate handler threw:', err);
+        // Never the error object: it can carry message content.
+        console.warn(`[Discord→lobby] messageCreate handler threw (${err instanceof Error ? err.name : typeof err})`);
       }
     });
 
@@ -156,58 +159,24 @@ export class DiscordBotClient {
   /**
    * #82 — Forward a Discord channel message into ChatMirror so it lands in
    * the Avalon lobby chat and gets cross-posted to the LINE group.
+   * Logic lives in ./mirrorInbound.ts (testable without a gateway).
    *
-   * Early returns (silent):
+   * Ignored (silent):
    *   - `LOBBY_MIRROR_DISCORD_CHANNEL_ID` unset or mismatched.
-   *   - Author is a bot (ourselves, the role-reveal DM, another bot).
-   *   - Message content is empty (attachment-only / embed-only — future work).
+   *   - Author is a bot (ourselves, the role-reveal DM, another bot) or a webhook.
+   *   - Nothing to relay (no text, no attachment, no sticker).
    *   - Message text starts with the outbound `[Avalon]` tag — guards against
    *     Discord re-delivering our own fanout payload in pathological cases
    *     (edits / pinned messages) even though bot-author check should cover it.
+   * Pictures (2026-10-13) are copied for LINE; see mirrorInbound.ts.
    */
   private async handleIncomingMirrorMessage(message: Message): Promise<void> {
-    const targetChannel = process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID?.trim();
-    if (!targetChannel || message.channelId !== targetChannel) {
-      return;
-    }
-
-    if (message.author.bot) return;
-    if (message.webhookId) return; // webhook posts (e.g. /api/feedback relay) are not people talking
-    const content = message.content?.trim();
-    if (!content) return;
-    if (content.startsWith('[Avalon]')) return;
-
-    // 2026-10-12 community feedback: reduce this human message to topic
-    // counts (numbers only, see bots/feedback). Independent of the mirror.
-    getFeedbackService().observe('discord', content);
-
-    const mirror = getChatMirror();
-    if (!mirror) {
-      console.warn('[Discord→lobby] ChatMirror not initialised yet, dropping message');
-      return;
-    }
-
-    // Prefer guild nickname for recognisability; fall back to global username.
-    const displayName =
-      (message.member?.displayName ?? '').trim() ||
-      message.author.globalName ||
-      message.author.username ||
-      '';
-
-    const ingested = mirror.ingestInbound({
-      source: 'discord',
-      platformUserId: message.author.id,
-      displayName,
-      text: content,
-      messageId: `discord:${message.id}`,
+    await handleDiscordMirrorMessage(message, {
+      targetChannelId: (process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID ?? '').trim(),
+      mirror: getChatMirror(),
+      observe: (text) => getFeedbackService().observe('discord', text),
+      logger: { warn: (m) => console.warn(m) },
     });
-
-    if (ingested) {
-      // Cross-push to LINE (lobby-ingest callback handles web clients).
-      mirror.crossFanout(ingested).catch((err) => {
-        console.warn('[Discord→LINE] crossFanout rejected:', err);
-      });
-    }
   }
 
   private async handleCommand(interaction: ChatInputCommandInteraction): Promise<void> {

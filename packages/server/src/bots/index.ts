@@ -15,9 +15,17 @@ import {
   isAutosetEnabled,
   recheckIntervalMs,
   resolveExpectedWebhookUrl,
+  resolvePublicBaseUrl,
   retryUntilVerified,
   LineWebhookState,
 } from './line/webhookEndpoint';
+import {
+  MEDIA_RELAY_PATH,
+  RelayMediaStats,
+  RelayMediaStore,
+  createRelayMediaHandler,
+} from './media/relayMedia';
+import { mirrorChannelAdapter } from './discord/mirrorChannel';
 import {
   initializeChatMirror,
   getChatMirror,
@@ -185,9 +193,8 @@ function buildDiscordAdapter(): DiscordAdapter {
       try {
         const ch = await bot.getClient().channels.fetch(channelId);
         if (!ch || !(ch instanceof TextChannel)) return null;
-        return {
-          send: async (content: string) => ch.send(content),
-        };
+        // 2026-10-13 LINE pictures (sendFiles): needs Attach Files in the sync channel.
+        return mirrorChannelAdapter(ch);
       } catch (err) {
         console.warn(`[ChatMirror] Discord fetchChannel(${channelId}) failed:`, err);
         return null;
@@ -198,6 +205,9 @@ function buildDiscordAdapter(): DiscordAdapter {
 
 type LineOutboundMode = 'listen-bot' | 'reply-drain' | 'push' | 'disabled';
 let lineOutboundMode: LineOutboundMode = 'disabled';
+
+/** Discord → LINE picture copies (2026-10-13); null when pictures go as text notes. */
+let relayMediaStore: RelayMediaStore | null = null;
 
 function initializeLobbyChatMirror(): void {
   const lineGroupId = process.env.LOBBY_MIRROR_LINE_GROUP_ID || '';
@@ -230,6 +240,13 @@ function initializeLobbyChatMirror(): void {
   const replyDrain = !!lineGroupId && !listenBot && !envFlagOff('LINE_REPLY_DRAIN');
   const lineReplyQueue = replyDrain ? new LineReplyQueue() : undefined;
 
+  // 2026-10-13 — Discord → LINE pictures ride the reply queue as LINE image
+  // messages served from this server (/media/relay/…, bots/media/relayMedia.ts).
+  // Needs the queue and an https public base; CHAT_MIRROR_IMAGES=false → text notes.
+  const publicBaseUrl = resolvePublicBaseUrl();
+  relayMediaStore =
+    lineReplyQueue && publicBaseUrl && !envFlagOff('CHAT_MIRROR_IMAGES') ? new RelayMediaStore() : null;
+
   initializeChatMirror({
     lineGroupId,
     discordChannelId,
@@ -237,6 +254,7 @@ function initializeLobbyChatMirror(): void {
     discord: buildDiscordAdapter(),
     listenBot,
     lineReplyQueue,
+    lineImageRelay: relayMediaStore && publicBaseUrl ? { store: relayMediaStore, publicBaseUrl } : undefined,
   });
 
   if (!lineGroupId) lineOutboundMode = 'disabled';
@@ -368,6 +386,11 @@ export interface BotStatus {
    * never text, names or channel names.
    */
   chatExport: ChatExportStatus;
+  /**
+   * Discord → LINE picture copies (2026-10-13): on/off and counters only —
+   * never ids, URLs or file names. LINE-side counts are in line.stats.
+   */
+  mediaRelay: { enabled: boolean; stats: RelayMediaStats | null };
   discord: {
     enabled: boolean;
     ready: boolean;
@@ -407,6 +430,7 @@ export function buildBotStatus(): BotStatus {
     statsDigest: statsDigest?.getState() ?? { running: false, lastPostedWeek: {} },
     feedback: { commandEnabled: FEEDBACK_CONFIG.commandEnabled, ...getFeedbackService().snapshot() },
     chatExport: chatExportStatus(),
+    mediaRelay: { enabled: !!relayMediaStore, stats: relayMediaStore?.stats() ?? null },
     discord: {
       enabled: !!process.env.DISCORD_BOT_TOKEN,
       ready: discordBot?.isClientReady() ?? false,
@@ -436,6 +460,13 @@ export function registerBotRoutes(app: Express): void {
       await lineBot.handleWebhook(req, res);
     });
     console.log('📍 Line Bot webhook registered at /webhook/line');
+  }
+
+  // Discord → LINE picture copies (2026-10-13): LINE fetches them from here.
+  // Unguessable expiring ids; 404 for anything else; no logging.
+  if (relayMediaStore) {
+    app.get(`${MEDIA_RELAY_PATH}/:file`, createRelayMediaHandler(relayMediaStore));
+    console.log(`📍 Relay media route at ${MEDIA_RELAY_PATH}/:file (Discord → LINE pictures)`);
   }
 
   // Discord Bot status endpoint
