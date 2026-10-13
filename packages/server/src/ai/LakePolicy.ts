@@ -411,8 +411,10 @@ export interface EvilLakeHumanOptions {
  * 節). On the selection seed 20261012 the first cut (`vouch: 'pressured'`)
  * was −1.6pp [−2.2pp, −1.1pp] as red and this mix −0.4pp [−1.0pp, +0.1pp],
  * but fresh seeds put this mix below 0 too (seed 99 −1.0pp, 4242 −0.8pp,
- * both intervals entirely below 0; `chaos: 'never'` the same), so the
- * switch itself is NOT in `DEFAULT_AGENT_TUNING`.
+ * both intervals entirely below 0; `chaos: 'never'` the same). Edward
+ * decided on 2026-10-13 to turn the switch on in `DEFAULT_AGENT_TUNING`
+ * anyway (human-likeness first) and recover the strength from other red
+ * decisions (strength_benchmark.md 第 7 節).
  */
 export const DEFAULT_EVIL_LAKE_HUMAN_OPTIONS: Readonly<EvilLakeHumanOptions> = Object.freeze({
   lastLake: 'pressured',
@@ -481,7 +483,8 @@ function redListening(obs: PlayerObservation): boolean {
 
 /**
  * Edward 2026-10-13 ruling — red Lady-of-the-Lake target (behind the
- * opt-in switch `AgentTuning.evilLakeHumanStrategy`, off by default):
+ * switch `AgentTuning.evilLakeHumanStrategy`; on in the production default
+ * since Edward's decision of the same day, off in legacy):
  *
  *   「紅方湖中應該是盡量留在隊友身上並說謊(湖紅方說藍方), 但看情況依據戰術
  *    可以改變, 例如湖藍方說紅方(不交給隊友但是讓資訊變混亂) 或是湖藍方說

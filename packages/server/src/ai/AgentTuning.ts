@@ -13,7 +13,8 @@
  *                                   一方已拿兩局，所以實際只有 R1 規則生效）。
  *   - `assassinModel`              刺殺改用牌譜訓練的條件邏輯回歸
  *                                   （`assassin/AssassinModel.ts`）。
- *   - `evilLakeHumanStrategy`      （2026-10-13，**預設關**）紅方持湖「盡量
+ *   - `evilLakeHumanStrategy`      （2026-10-13，**預設開**，Edward 當日裁定
+ *                                   「先像真人，再從策略上提高勝率」）紅方持湖「盡量
  *                                   湖隊友並宣好」的真人策略：有隊友可湖就湖
  *                                   隊友並宣好（自己帶隊時最少把他拿掉的那位
  *                                   優先）；最後一次湖只在隊友全都毫無嫌疑時
@@ -89,7 +90,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
 
 /**
  * 正式預設（2026-10-12 採用，docs/ai/strength_benchmark.md 第 2 節；
- * 2026-10-13 量過 `evilLakeHumanStrategy` 但不採用，第 6 節）。
+ * 2026-10-13 `evilLakeHumanStrategy` 依 Edward 裁定打開，第 6、7 節）。
  * 採用規則（2026-10-12 事前版）：一致性基準更像真人、且自我對打合計勝率
  * 95% 區間下界 ≥ 48%；整合時改依 Edward 原文「更像真人，而且不能讓它
  * 變弱」：任一立場配對差的 95% 區間整個落在 0 以下就算變弱、不採用。
@@ -113,8 +114,11 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     但自我對打紅方立場變弱：選定版本用的 seed 20261012 是 −0.4pp
  *     [−1.0pp, +0.1pp]，換新種子重驗 seed 99 −1.0pp [−1.6pp, −0.4pp]、
  *     seed 4242 −0.8pp [−1.4pp, −0.3pp]（區間整個在 0 以下），五個種子
- *     （19000 組）合併 −0.6pp [−0.9pp, −0.3pp] → **不採用**（預設關，可用
- *     AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=1 打開）。
+ *     （19000 組）合併 −0.6pp [−0.9pp, −0.3pp]，依規則原本不採用。
+ *     **2026-10-13 Edward 裁定**（原文）：「紅方新湖法先打開 變弱應該從其他
+ *     地方調整修正 (先像真人 再從策略上提高勝率)」→ 預設打開（legacy 仍
+ *     關；`AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=0` 可關掉），變弱的部分
+ *     改由其他紅方決策補回（strength_benchmark.md 第 7 節）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -129,7 +133,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLakeTargetMostSuspicious: true,
   humanQuestCardRules: true,
   assassinModel: true,
-  evilLakeHumanStrategy: false,
+  evilLakeHumanStrategy: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */

@@ -9,7 +9,7 @@
 pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin --legacy [--limit N] [--json out.json] [--no-population]
 ```
 
-`--legacy` = 2026-10-12 之前的 agent 行為（`AgentTuning` 全關），本文件第 2–6 節的數字都是這個設定。不加 `--legacy` 跑的是正式預設（已採用的開關，見 `strength_benchmark.md`；2026-10-13 的 `evilLakeHumanStrategy` 未採用、預設關）；`--flag 開關名[=值]` 可個別切換（第 7 節）。輸出另有一張「Lady of the Lake」表：湖目標（全部 / 紅方持湖 / 各紅方角色）與紅方湖宣告（整體 / 各紅方角色）。
+`--legacy` = 2026-10-12 之前的 agent 行為（`AgentTuning` 全關），本文件第 2–6 節的數字都是這個設定。不加 `--legacy` 跑的是正式預設（已採用的開關，見 `strength_benchmark.md`；2026-10-13 的 `evilLakeHumanStrategy` 依 Edward 裁定打開，第 7 節）；`--flag 開關名[=值]` 可個別切換（第 7 節）。輸出另有一張「Lady of the Lake」表：湖目標（全部 / 紅方持湖 / 各紅方角色）與紅方湖宣告（整體 / 各紅方角色）。
 
 ## 1. 方法
 
@@ -135,13 +135,13 @@ Sin 的前 5 與 population 同型（541/1337、426/1124、137/357、129/295、1
 | | `r3NormalVotePrior=1.0` | | +1.0 | 72.0、異常率 14.5% | 78.7 | 71.5 |
 | 好人湖目標方向 | `goodLakeTargetMostSuspicious` | `LakePolicy.pickLakeTargetForTeam` 好人分支 | 改湖最高嫌疑 | 湖目標 2.0→13.7% | 13.2→19.5% | 13.0→11.7% |
 | 紅方湖宣告 | `evilLakeClaimAlwaysGood` | `LakePolicy.decideLakeClaimForTeam` 紅方分支 | 一律宣「好」 | 50.0→85.7% | 61.1→87.0% | 60.4→77.6% |
-| 紅方湖策略（2026-10-13，未採用） | `evilLakeHumanStrategy` | `LakePolicy.pickEvilLakeTargetHuman` / `decideEvilLakeClaimHuman` | 盡量湖隊友並宣好（最後一次湖也幾乎都湖隊友）；沒隊友可湖時湖藍方：紅方聽牌且同出過失敗任務就宣紅（嫁禍），否則說實話宣好；只替自己帶隊時最少拿掉的人背書 | 紅方湖宣告 50.0→78.6%、紅方湖目標 0.0→7.1%（對照正式預設；簡單規則 7.1%） | 61.1→90.7%、17.9→14.3%（簡單規則 17.9%） | 60.4→79.5%、10.7→15.0%（簡單規則 16.3%） |
+| 紅方湖策略（2026-10-13，Edward 裁定打開） | `evilLakeHumanStrategy` | `LakePolicy.pickEvilLakeTargetHuman` / `decideEvilLakeClaimHuman` | 盡量湖隊友並宣好（最後一次湖也幾乎都湖隊友）；沒隊友可湖時湖藍方：紅方聽牌且同出過失敗任務就宣紅（嫁禍），否則說實話宣好；只替自己帶隊時最少拿掉的人背書 | 紅方湖宣告 50.0→78.6%、紅方湖目標 0.0→7.1%（對照正式預設；簡單規則 7.1%） | 61.1→90.7%、17.9→14.3%（簡單規則 17.9%） | 60.4→79.5%、10.7→15.0%（簡單規則 16.3%） |
 | 紅方任務牌 | `humanQuestCardRules` | `AgentTuning.humanQuestCardRule`（HeuristicAgent.voteOnQuest 與 ForwardAgent.decide 共用） | R1 莫甘娜單紅出失敗；R4 可見紅 <2 **且無人聽牌**出成功（任一方已拿兩局時讓位給 §0，2026-10-12 審查修正；標準局 R4 恆聽牌，所以實際只剩 R1 規則） | 69.3（不變） | 79.8→82.4（第一版 85.3） | 79.7→82.3（第一版 82.7） |
 | 刺殺選人 | `assassinModel` | `assassin/AssassinModel.ts`（HeuristicAgent.assassinate） | 牌譜訓練的條件邏輯回歸 | 刺殺一致 17.6（不變）、刺中 11.8→47.1%（n=17） | 20.4→42.9、刺中 20.4→36.7% | 20.8→38.8、刺中 18.8→35.7% |
 
 刺殺模型的「刺中率」在這張表含訓練局（population 1048 局 17.9→30.1%）；不含訓練局的測試集數字（317 局：模型 29.7%、現行 agent 14.8%、真人 47.9%）見 `strength_benchmark.md`。
 
-**紅方持湖前後對照（2026-10-13，`evilLakeHumanStrategy`）**：「前」= 2026-10-12 正式預設，「後」= 打開本開關（定案版；這個開關最後沒有採用，見下方採用結果）。格式：agent 一致率（n）。ForwardAgent 283,061 個決策、0 次 fallback。真人資料與策略說明見 `strength_benchmark.md` 第 6 節。
+**紅方持湖前後對照（2026-10-13，`evilLakeHumanStrategy`）**：「前」= 2026-10-12 正式預設，「後」= 打開本開關（定案版；第一輪依規則沒有採用，同日 Edward 裁定打開，見下方採用結果）。格式：agent 一致率（n）。ForwardAgent 283,061 個決策、0 次 fallback。真人資料與策略說明見 `strength_benchmark.md` 第 6 節。
 
 | 項目 | ED | Sin | top/role | population |
 |---|---|---|---|---|
@@ -159,12 +159,12 @@ Sin 的前 5 與 population 同型（541/1337、426/1124、137/357、129/295、1
 
 湖宣告是「以真人實際湖的對象為條件」：真人湖藍方的比例高（約 64%），所以藍方目標的宣告（說實話或嫁禍）影響很大。**這個分數看不到機器人自己選目標時多常嫁禍**：新策略會主動去找能嫁禍的情境，自我對打裡打開開關的紅方湖到藍方時宣紅 65.0%（525/808，奧伯倫 78.6%），真人是 25.9%（197/761），細節見 `strength_benchmark.md` 第 6.4 節。湖目標要對照簡單規則（不湖隊友、湖失敗任務最多的人）：7.1 / 17.9 / 16.3 / 16.4（ED / Sin / top / population），亂湖約 12%；新策略的紅方湖目標只到這個水準，Sin 還從 17.9 降到 14.3。備選組合：藍方一律說實話 → 紅方湖宣告 85.7 / 87.0 / 77.6 / 77.2；藍方一律宣紅 → 7.1 / 50.0 / 49.8 / 45.8（比原本更不像真人）。第一版（湖最被懷疑的隊友）的宣告與定案版相同，紅方湖目標 0.0 / 14.3 / 13.5 / 14.2。
 
-**採用結果（2026-10-12，依自我對打）**：正常票先驗全員版本讓機器人藍方明顯變弱（合計 47.0%）→ 只採用紅方版本（`r3NormalVotePrior=0.6` + `r3NormalVotePriorEvilOnly`，投票 R3+ ED 61.6→63.7、Sin 62.3→65.2、top 59.0→61.9）；好人湖查最可疑、任務牌真人規則（R4 規則在聽牌時讓位給 §0）、刺殺模型採用為預設；紅方湖一律宣好更像真人但紅方 −0.5pp（區間不含 0），依「不能變弱」不採用、開關保留。數字與方法見 `strength_benchmark.md`。**2026-10-13**：Edward 裁定紅方湖「盡量湖隊友並說謊（宣好）」，做成 `evilLakeHumanStrategy`；定案版（只替自己帶隊時最少拿掉的人背書）湖宣告更像真人、湖目標只到簡單規則的水準（上表）。自我對打在挑版本用的種子上紅方 −0.4pp [−1.0pp, +0.1pp]，但換新種子變弱（seed 99 −1.0pp [−1.6pp, −0.4pp]、4242 −0.8pp [−1.4pp, −0.3pp]；五個種子合併 −0.6pp [−0.9pp, −0.3pp]）→ **不採用**，開關保留、預設關；第一版紅方 −1.6pp [−2.2pp, −1.1pp] 也不採用。線上機器人的湖目標與宣告從同日起改由 agent 決定（原本隨機目標、紅方反說；所以線上紅方改用舊紅方規則，不是新策略），`AVALON_BOT_LAKE_VIA_AGENT=0` 可整個退回。
+**採用結果（2026-10-12，依自我對打）**：正常票先驗全員版本讓機器人藍方明顯變弱（合計 47.0%）→ 只採用紅方版本（`r3NormalVotePrior=0.6` + `r3NormalVotePriorEvilOnly`，投票 R3+ ED 61.6→63.7、Sin 62.3→65.2、top 59.0→61.9）；好人湖查最可疑、任務牌真人規則（R4 規則在聽牌時讓位給 §0）、刺殺模型採用為預設；紅方湖一律宣好更像真人但紅方 −0.5pp（區間不含 0），依「不能變弱」不採用、開關保留。數字與方法見 `strength_benchmark.md`。**2026-10-13**：Edward 裁定紅方湖「盡量湖隊友並說謊（宣好）」，做成 `evilLakeHumanStrategy`；定案版（只替自己帶隊時最少拿掉的人背書）湖宣告更像真人、湖目標只到簡單規則的水準（上表）。自我對打在挑版本用的種子上紅方 −0.4pp [−1.0pp, +0.1pp]，但換新種子變弱（seed 99 −1.0pp [−1.6pp, −0.4pp]、4242 −0.8pp [−1.4pp, −0.3pp]；五個種子合併 −0.6pp [−0.9pp, −0.3pp]）→ 依規則**不採用**；第一版紅方 −1.6pp [−2.2pp, −1.1pp] 也不採用。**同日 Edward 裁定打開**（「先像真人 再從策略上提高勝率」），`DEFAULT_AGENT_TUNING.evilLakeHumanStrategy = true`，變弱的原因與補強見 `strength_benchmark.md` 第 7 節。線上機器人的湖目標與宣告從同日起改由 agent 決定（原本隨機目標、紅方反說；所以線上紅方改用舊紅方規則，不是新策略），`AVALON_BOT_LAKE_VIA_AGENT=0` 可整個退回。
 
 建議優先序：
 
 1. **R3+ 投票加「正常票先驗」**（ForwardAgent 目前在評分時完全沒有異常票的曝光成本）。量最大、效果最大；+0.6 時 agent 異常率約 21%，與 ED（24%）、top（21%）相近，R3+ 一致率提升 6–12 個百分點。具體分支：紅方隊外為含隊友隊伍投白（`computePurposeAlignment` threeRedWins +1 與 `RoleStrategy` 的 approve 偏好 +0.5/+0.6）、藍方隊內見失敗成員投黑（threeBlueWins / findGoodTeam 以 avgSuspicion 決定）。注意：只是更像真人，勝率影響要另跑自我對弈驗證。
-2. **紅方湖宣告**：ED 幾乎都說實話，top 也偏向宣「好」→ 把 `merlinScore ≤ 0 → 宣紅` 的預設改成宣好（或說實話），+17–36 個百分點。（2026-10-13 做成 `evilLakeHumanStrategy`：隊友宣好、藍方多半說實話，只在紅方聽牌且同出過失敗任務時嫁禍；宣告更像真人，但自我對打紅方變弱，未採用；見上方對照表與 `strength_benchmark.md` 第 6 節。）
+2. **紅方湖宣告**：ED 幾乎都說實話，top 也偏向宣「好」→ 把 `merlinScore ≤ 0 → 宣紅` 的預設改成宣好（或說實話），+17–36 個百分點。（2026-10-13 做成 `evilLakeHumanStrategy`：隊友宣好、藍方多半說實話，只在紅方聽牌且同出過失敗任務時嫁禍；宣告更像真人，但自我對打紅方變弱；同日 Edward 裁定打開；見上方對照表與 `strength_benchmark.md` 第 6、7 節。）
 3. **好人湖目標**：「首湖藍」修正與 ED 的實際打法相反；改湖失敗任務成員可讓 ED 一致率 2%→14%，但 top 群略降（11.7%）→ 建議做成依情境（例如 R2 有失敗任務時湖失敗成員）而非全面翻轉。
 4. **刺殺**：agent 刺中率明顯落後真人（18% vs 45–52%），值得用 top 刺客的牌譜當監督訊號檢查 `HeuristicAgent.assassinate` 的特徵權重。
 5. **派隊**：在 `generateTeamSelectCandidates` / `PRIOR_PENALTY`（懲罰重提被否決的隊）上，真人很常沿用前一隊；R3+ 對失敗任務成員的排除可放寬為「已被縮小範圍的成員才排除」。

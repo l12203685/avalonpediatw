@@ -85,9 +85,11 @@ describe('AgentTuning — flags', () => {
     expect(t.assassinModel).toBe(DEFAULT_AGENT_TUNING.assassinModel);
   });
 
-  it('evilLakeHumanStrategy (2026-10-13): opt-in (not in the default), flag, env var and description', () => {
-    // Weaker as red on fresh self-play seeds → not adopted (strength_benchmark.md 第 6 節).
-    expect(DEFAULT_AGENT_TUNING.evilLakeHumanStrategy).toBe(false);
+  it('evilLakeHumanStrategy (2026-10-13): on in the default (owner decision), off in legacy, flag, env var and description', () => {
+    // Measured −0.6pp as red, but Edward decided on 2026-10-13 to turn it on
+    // anyway (先像真人，變弱從其他地方補) — strength_benchmark.md 第 6、7 節.
+    expect(DEFAULT_AGENT_TUNING.evilLakeHumanStrategy).toBe(true);
+    expect(LEGACY_AGENT_TUNING.evilLakeHumanStrategy).toBe(false);
     expect(parseTuningFlag('evilLakeHumanStrategy')).toEqual({ evilLakeHumanStrategy: true });
     expect(parseTuningFlag('evilLakeHumanStrategy=0')).toEqual({ evilLakeHumanStrategy: false });
     expect(AGENT_TUNING_ENV.evilLakeHumanStrategy).toBe('AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY');
