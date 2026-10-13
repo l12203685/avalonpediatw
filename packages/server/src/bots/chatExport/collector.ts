@@ -2,12 +2,13 @@
  * Read one week of Discord history for the weekly chat-log export.
  *
  * Sources (default): every guild text / announcement channel that @everyone
- * can view and the bot can read the history of, plus — always — the LINE↔
- * Discord sync channel (LOBBY_MIRROR_DISCORD_CHANNEL_ID), where the bot
+ * can view and the bot can read the history of, plus the LINE↔Discord sync
+ * channel (LOBBY_MIRROR_DISCORD_CHANNEL_ID, even when hidden from @everyone; unless excluded), where the bot
  * relays the LINE group and the website lobby. Forum channels (牌譜紀錄與覆盤) and threads
  * are skipped. CHAT_EXPORT_SOURCE_CHANNEL_IDS replaces the default list
- * (the sync channel is still added); CHAT_EXPORT_EXCLUDE_CHANNEL_IDS and the
- * /意見 admin channel are always left out (config.ts).
+ * (the sync channel is still added); CHAT_EXPORT_EXCLUDE_CHANNEL_IDS, the
+ * admin channel 「大劍管理員」 and the /意見 channel are always left out
+ * (config.ts).
  *
  * Messages are reduced to RawChatMessage and handed to the row builder
  * (rows.ts). Nothing here logs text or names.

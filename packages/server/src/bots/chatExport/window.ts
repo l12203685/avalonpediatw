@@ -27,6 +27,7 @@ interface TaipeiParts {
   date: string;
   hour: number;
   minute: number;
+  second: number;
   /** 0 = Sunday … 6 = Saturday. */
   weekday: number;
 }
@@ -37,6 +38,7 @@ export function taipeiParts(epochMs: number): TaipeiParts {
     date: `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`,
     hour: d.getUTCHours(),
     minute: d.getUTCMinutes(),
+    second: d.getUTCSeconds(),
     weekday: d.getUTCDay(),
   };
 }
@@ -45,6 +47,12 @@ export function taipeiParts(epochMs: number): TaipeiParts {
 export function taipeiStamp(epochMs: number): string {
   const t = taipeiParts(epochMs);
   return `${t.date} ${pad2(t.hour)}:${pad2(t.minute)}`;
+}
+
+/** "2026-10-19T09:01:23+08:00" — readable in the sheet and parseable back with Date.parse (export log). */
+export function taipeiIso(epochMs: number): string {
+  const t = taipeiParts(epochMs);
+  return `${t.date}T${pad2(t.hour)}:${pad2(t.minute)}:${pad2(t.second)}+08:00`;
 }
 
 /** 00:00 +08 of the day containing `epochMs`. */

@@ -120,9 +120,9 @@ services:
         sync: false                            #   服務帳號 JSON；沒有就不匯出
       # 以下都不是機密、預設就能用，需要時才在 Dashboard 加：
       #   CHAT_EXPORT_ENABLED                 預設開；false 關閉
-      #   CHAT_EXPORT_SHEET_ID                預設內建的私人試算表；off 關閉（不可改成公開的阿瓦隆百科試算表）
+      #   CHAT_EXPORT_SHEET_ID                預設內建的私人試算表；off 關閉（公開的阿瓦隆百科試算表會被拒絕）
       #   CHAT_EXPORT_SOURCE_CHANNEL_IDS      只讀這些頻道（逗號分隔；同步頻道一定會讀）
-      #   CHAT_EXPORT_EXCLUDE_CHANNEL_IDS     不讀這些頻道（逗號分隔；/意見 頻道一定不讀）
+      #   CHAT_EXPORT_EXCLUDE_CHANNEL_IDS     不讀這些頻道（逗號分隔；「大劍管理員」與 /意見 頻道一定不讀）
       #   FEEDBACK_DISCORD_CHANNEL_ID         /意見 轉貼頻道 id；預設管理員頻道「大劍管理員」；off 不轉貼
 
       # ── Firebase / Supabase：GitHub-only 架構「不需要」，全部留空即可 ──────

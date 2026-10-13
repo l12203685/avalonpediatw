@@ -3,8 +3,9 @@
  *
  *   selectSourceChannels — public text / announcement channels the bot can
  *     read; private, forum and unreadable ones skipped; the LINE↔Discord
- *     sync channel always included; exclude list + the /意見 admin channel
- *     left out (even if it were public); CHAT_EXPORT_SOURCE_CHANNEL_IDS
+ *     sync channel always included; exclude list + the admin channel
+ *     大劍管理員 (always, even if public or /意見 goes elsewhere) + the /意見
+ *     channel left out; CHAT_EXPORT_SOURCE_CHANNEL_IDS
  *     (or the old COMMUNITY_DIGEST_ name) overrides the default list; a
  *     server with no @everyone-visible channel is reported (publicChannelsFound 0)
  *   fetchWindow          — pages backwards with `before`, keeps [start, end),
@@ -84,14 +85,24 @@ describe('selectSourceChannels', () => {
     expect(picked.channels.map((c) => c.id).sort()).toEqual(['100000000000000001', '100000000000000002', MIRROR].sort());
     expect(picked.publicChannelsFound).toBe(2);
 
-    // A FEEDBACK_DISCORD_CHANNEL_ID override is the channel left out instead; the old exclude name still works.
+    // A FEEDBACK_DISCORD_CHANNEL_ID override is left out too — and 大劍管理員 still is; the old exclude name still works.
     const cfg2 = readChatExportConfig({
       LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR,
       FEEDBACK_DISCORD_CHANNEL_ID: '100000000000000002',
       COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS: '100000000000000006',
     });
     const picked2 = await selectSourceChannels(client([g]), cfg2, ['100000000000000007']);
-    expect(picked2.channels.map((c) => c.id).sort()).toEqual(['100000000000000001', DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID, MIRROR].sort());
+    expect(picked2.channels.map((c) => c.id).sort()).toEqual(['100000000000000001', MIRROR].sort());
+
+    // /意見 forwarding turned off: 大劍管理員 is still never exported.
+    const cfg3 = readChatExportConfig({ LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR, FEEDBACK_DISCORD_CHANNEL_ID: 'off' });
+    expect(cfg3.excludeChannelIds).toEqual([DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID]);
+    const picked3 = await selectSourceChannels(client([g]), cfg3);
+    expect(picked3.channels.map((c) => c.id)).not.toContain(DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID);
+
+    // The sync channel itself can be excluded (then it is not read).
+    const cfg4 = readChatExportConfig({ LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR, CHAT_EXPORT_EXCLUDE_CHANNEL_IDS: MIRROR });
+    expect((await selectSourceChannels(client([g]), cfg4)).channels.map((c) => c.id)).not.toContain(MIRROR);
   });
 
   it('no channel visible to @everyone → only the sync channel, reported as publicChannelsFound 0', async () => {

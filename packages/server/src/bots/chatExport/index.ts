@@ -6,9 +6,9 @@
  *   window.ts      — +08 week math
  *   collector.ts   — Discord history for one week (discord.js)
  *   rows.ts        — relay parsing, filtering, pseudonyms, sheet rows (pure)
- *   sheetWriter.ts — the 「聊天紀錄」 tab: create, check, append, prune
+ *   sheetWriter.ts — tabs 「聊天紀錄」 + 「匯出紀錄」 (export log): create, append, read, prune
  *   discordPort.ts — Discord adapter (collection)
- *   service.ts     — Monday schedule, idempotency, status
+ *   service.ts     — Monday schedule, claim / 完成 (one copy across restarts and instances), status
  *
  * Google auth + Sheets REST: ../digest/sheets.ts (shared helper).
  */

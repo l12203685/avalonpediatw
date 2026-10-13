@@ -8,7 +8,8 @@
  *             columns 週次 / 時間（+08） / 頻道 / 來源 / 發言者代號 / 內容
  *   window  — Monday 09:00–12:00 +08 run window, previous-week window, week
  *             key, the oldest week kept
- *   config  — defaults, CHAT_EXPORT_* and the old COMMUNITY_DIGEST_* names
+ *   config  — defaults, CHAT_EXPORT_* and the old COMMUNITY_DIGEST_* names,
+ *             大劍管理員 always excluded, the public stats sheet refused
  */
 import { describe, expect, it } from 'vitest';
 
@@ -27,6 +28,7 @@ import {
   isWeekKey,
   oldestKeptWeek,
   scheduledWindow,
+  taipeiIso,
   taipeiMondayStart,
   taipeiStamp,
 } from '../bots/chatExport/window';
@@ -35,6 +37,7 @@ import {
   CHAT_EXPORT_HEADER,
   CHAT_EXPORT_TAB,
   DEFAULT_CHAT_EXPORT_SHEET_ID,
+  PUBLIC_STATS_SHEET_ID,
   readChatExportConfig,
 } from '../bots/chatExport/config';
 import { DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID } from '../bots/feedback/config';
@@ -245,6 +248,10 @@ describe('window (+08)', () => {
     // Monday 00:30 +08 is still Monday, not the previous Sunday.
     expect(new Date(taipeiMondayStart(Date.parse('2026-10-11T16:30:00Z'))).toISOString()).toBe('2026-10-11T16:00:00.000Z');
     expect(taipeiStamp(Date.parse('2026-12-31T16:05:00Z'))).toBe('2027-01-01 00:05');
+    // Export-log time: +08 with seconds, parsed back to the same instant.
+    const t = Date.parse('2026-12-31T16:05:07Z');
+    expect(taipeiIso(t)).toBe('2027-01-01T00:05:07+08:00');
+    expect(Date.parse(taipeiIso(t))).toBe(t);
   });
 
   it('8 weeks kept = the exported week and the 7 before it (across a year end)', () => {
@@ -286,7 +293,29 @@ describe('config', () => {
       '123456789012345678',
       '223456789012345678',
     ]);
-    // /意見 turned off → nothing extra to exclude.
-    expect(readChatExportConfig({ FEEDBACK_DISCORD_CHANNEL_ID: 'off' }).excludeChannelIds).toEqual([]);
+    // 大劍管理員 is always left out, also when /意見 is turned off or goes elsewhere.
+    expect(readChatExportConfig({ FEEDBACK_DISCORD_CHANNEL_ID: 'off' }).excludeChannelIds).toEqual(['1145513360545296574']);
+    expect(readChatExportConfig({ FEEDBACK_DISCORD_CHANNEL_ID: '123456789012345678' }).excludeChannelIds).toEqual([
+      '1145513360545296574',
+      '123456789012345678',
+    ]);
+  });
+
+  it('refuses the public 阿瓦隆百科 spreadsheet as the export target (chat would become public)', () => {
+    const pub = '174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU';
+    const creds = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
+    expect(PUBLIC_STATS_SHEET_ID).toBe(pub);
+    const refused = readChatExportConfig({ CHAT_EXPORT_SHEET_ID: pub, GOOGLE_SERVICE_ACCOUNT_JSON: creds });
+    expect(refused).toMatchObject({ sheetId: '', sheetIdRefused: true, sheetCredentialsUsable: true });
+    // Old variable name, a pasted URL, and the AVALON_STATS_SHEET_ID override are refused too.
+    expect(readChatExportConfig({ COMMUNITY_DIGEST_SHEET_ID: pub }).sheetIdRefused).toBe(true);
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: `https://docs.google.com/spreadsheets/d/${pub}/edit#gid=0` }).sheetId).toBe('');
+    expect(
+      readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'another-public-sheet-id-1234', AVALON_STATS_SHEET_ID: 'another-public-sheet-id-1234' })
+        .sheetIdRefused,
+    ).toBe(true);
+    // The private default and other ids are fine.
+    expect(readChatExportConfig({})).toMatchObject({ sheetId: DEFAULT_CHAT_EXPORT_SHEET_ID, sheetIdRefused: false });
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'off' })).toMatchObject({ sheetId: '', sheetIdRefused: false });
   });
 });
