@@ -1,28 +1,31 @@
 /**
- * Weekly chat-log export (2026-10-13) — the service with fake Discord and
- * sheet ports (no network):
+ * Daily chat-log export — the service with fake Discord and sheet ports (no
+ * network):
  *
- *   schedule    — only Monday 09:00–12:00 +08, the previous week, once per
- *                 week; disabled flag; Discord not ready yet → wait; the
- *                 public stats sheet refused (not configured)
- *   idempotency — the export log 「匯出紀錄」: a week with a 完成 row is
- *                 skipped (restart); rows of a week without 完成 (process
+ *   catch-up    — as soon as Discord is ready after a start (any time of
+ *                 day) every one of the last 7 complete days without 完成,
+ *                 oldest first; days with 完成 are not read again
+ *   schedule    — afterwards the day that just ended waits for 04:30 +08;
+ *                 disabled flag; Discord not ready → wait; not configured
+ *                 → logged once a day; the public stats sheet refused
+ *                 unless CHAT_EXPORT_ALLOW_PUBLIC_SHEET opts in
+ *   idempotency — the export log 「匯出紀錄」 per day: a day with a 完成 row
+ *                 is skipped (restart); rows of a day without 完成 (process
  *                 killed mid-write, failed append, failed cleanup) are
- *                 deleted before the week is written again; a 完成 row
- *                 that landed although its request failed is trusted
- *   instances   — two servers (deploy overlap) at the same moment or one
- *                 mid-write: one holder writes, the other waits and then
- *                 finds 完成; a dead holder's claim goes stale after 30
- *                 minutes; a live claim is renewed between attempts
- *   retries     — Sheets errors retried after 10 minutes; some channels
+ *                 deleted before the day is written again; a 完成 row that
+ *                 landed although its request failed is trusted
+ *   instances   — two servers (deploy overlap) catching up at the same
+ *                 moment: every day written exactly once; a dead holder's
+ *                 claim goes stale after 30 minutes; a live claim is renewed
+ *   retries     — Sheets errors stop the pass for 10 minutes; some channels
  *                 unreadable → read once more, then exported; no channel
- *                 readable → never settled as empty, retried until 12:00
- *   pruning     — weeks before (week − 7 weeks) deleted from both tabs after
- *                 each export, and the rows of an older unfinished week
- *   status      — /api/bots/status → chatExport: two booleans + lastRun with
- *                 week / at / messages / channels / outcome, no text
- *   wiring      — startChatExport arms the timer only when enabled; the
- *                 /社群週報 slash command is gone; communityDigest is gone
+ *                 readable → never settled as empty; a quiet day → empty
+ *   retention   — exactly the last 7 complete days in both tabs
+ *   status      — /api/bots/status → chatExport: enabled / sheetConfigured /
+ *                 publicSheet, lastRun (day, counts, outcome), catchUp
+ *                 (exported / skipped / failed / pending); no text in status
+ *                 or logs
+ *   wiring      — startChatExport arms the timer only when enabled
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -30,44 +33,52 @@ import { ChatExportService, __resetChatExportForTests, chatExportStatus, getChat
 import {
   CHAT_EXPORT_STATE_CLAIM,
   CHAT_EXPORT_STATE_DONE,
+  PUBLIC_STATS_SHEET_ID,
   readChatExportConfig,
   type ChatExportConfig,
 } from '../bots/chatExport/config';
 import type { ChatExportDiscordPort } from '../bots/chatExport/discordPort';
 import type { ChatExportSheetPort, ExportLogEntry } from '../bots/chatExport/sheetWriter';
 import type { ChatExportRow, RawChatMessage } from '../bots/chatExport/rows';
-import type { CollectResult } from '../bots/chatExport/collector';
+import { emptyCollectResult, type CollectResult } from '../bots/chatExport/collector';
+import { lastCompleteDays, type ExportWindow } from '../bots/chatExport/window';
 import { buildBotStatus, startChatExport } from '../bots';
 import { buildSlashCommands } from '../bots/discord/client';
 import { COMMANDS } from '../bots/discord/config';
 
-const MON_0900 = Date.parse('2026-10-12T01:00:00Z'); // Mon 09:00 +08
-const WEEK = '2026-10-05';
-const GENERAL = '2000000000000000001';
 const MIN = 60_000;
+const HOUR = 60 * MIN;
+const TUE_1000 = Date.parse('2026-10-13T02:00:00Z'); // Tue 10/13 10:00 +08
+const DAYS = lastCompleteDays(TUE_1000); // 10/06 … 10/12
+const YESTERDAY = '2026-10-12';
+const GENERAL = '2000000000000000001';
+const MIRROR = '3000000000000000001';
+const THREAD = '4000000000000000001';
 
-function chat(i: number, over: Partial<RawChatMessage> = {}): RawChatMessage {
+let seq = 0;
+function chat(at: number, over: Partial<RawChatMessage> = {}): RawChatMessage {
+  seq += 1;
   return {
-    id: String(5_000_000_000_000_000_000n + BigInt(i)),
+    id: String(5_000_000_000_000_000_000n + BigInt(seq)),
     channelId: GENERAL,
-    createdAt: Date.parse('2026-10-06T12:00:00Z') + i * MIN,
-    authorId: `u${i % 2}`,
+    createdAt: at,
+    authorId: `u${seq % 2}`,
     authorIsBot: false,
     authorIsSelf: false,
     webhookId: null,
     system: false,
-    content: `秘密內容 ${i}`,
+    content: `秘密內容 ${seq}`,
     attachmentCount: 0,
     ...over,
   };
 }
 
-function claimRow(week: string, at: number, runId: string): ExportLogEntry {
-  return { week, state: CHAT_EXPORT_STATE_CLAIM, rows: 0, channels: 0, at, runId };
+function claimRow(day: string, at: number, runId: string): ExportLogEntry {
+  return { day, state: CHAT_EXPORT_STATE_CLAIM, rows: 0, channels: 0, at, runId };
 }
 
-function doneRow(week: string, at: number, runId: string, rows = 1): ExportLogEntry {
-  return { week, state: CHAT_EXPORT_STATE_DONE, rows, channels: 1, at, runId };
+function doneRow(day: string, at: number, runId: string, rows = 1): ExportLogEntry {
+  return { day, state: CHAT_EXPORT_STATE_DONE, rows, channels: 1, at, runId };
 }
 
 /** In-memory sheet: both tabs, shared by every service of a test (= several server instances). */
@@ -116,44 +127,70 @@ class FakeSheet implements ChatExportSheetPort {
     this.rows.push(...rows);
     return Math.ceil(rows.length / 500);
   }
-  async deleteWeeks(match: (week: string) => boolean): Promise<number> {
+  async deleteDays(match: (day: string) => boolean): Promise<number> {
     if (this.failDelete) throw new Error('delete failed');
     const before = this.rows.length;
     this.rows = this.rows.filter((r) => !match(r[0]));
     return before - this.rows.length;
   }
-  async deleteLogWeeks(match: (week: string) => boolean): Promise<number> {
+  async deleteLogDays(match: (day: string) => boolean): Promise<number> {
     if (this.failDelete) throw new Error('delete failed');
     const before = this.log.length;
-    this.log = this.log.filter((e) => !match(e.week));
+    this.log = this.log.filter((e) => !match(e.day));
     return before - this.log.length;
   }
-  states(week = WEEK): string[] {
-    return this.log.filter((e) => e.week === week).map((e) => `${e.state}:${e.runId}`);
+  states(day: string): string[] {
+    return this.log.filter((e) => e.day === day).map((e) => `${e.state}:${e.runId}`);
+  }
+  rowsOf(day: string): ChatExportRow[] {
+    return this.rows.filter((r) => r[0] === day);
+  }
+  days(): string[] {
+    return [...new Set(this.rows.map((r) => r[0]))].sort();
+  }
+  doneDays(): string[] {
+    return [...new Set(this.log.filter((e) => e.state === CHAT_EXPORT_STATE_DONE).map((e) => e.day))].sort();
   }
 }
 
-function discordPort(opts: { ready?: boolean; messages?: RawChatMessage[]; failed?: number[]; channels?: number } = {}) {
-  let call = 0;
-  const port: ChatExportDiscordPort & { calls: number; ready: boolean; channels: number } = {
-    calls: 0,
+/** Three conversation messages per day (two channels + a forum thread), unless `messages` says otherwise. */
+function discordPort(
+  opts: {
+    ready?: boolean;
+    messages?: (w: ExportWindow) => RawChatMessage[];
+    /** failedChannels per call (by call index). */
+    failed?: (call: number, w: ExportWindow) => number;
+    channels?: number;
+    extra?: Partial<CollectResult>;
+  } = {},
+) {
+  const port: ChatExportDiscordPort & { calls: string[]; ready: boolean; channels: number } = {
+    calls: [],
     ready: opts.ready ?? true,
-    channels: opts.channels ?? 2,
+    channels: opts.channels ?? 3,
     isReady(): boolean {
       return this.ready;
     },
-    async collect(): Promise<CollectResult> {
-      port.calls += 1;
-      const failed = opts.failed?.[call] ?? 0;
-      call += 1;
+    async collect(_cfg, w): Promise<CollectResult> {
+      const call = port.calls.length;
+      port.calls.push(w.dayKey);
+      const all = [
+        { id: GENERAL, name: '一般聊天', isMirror: false },
+        { id: MIRROR, name: '阿瓦隆同步', isMirror: true },
+        { id: THREAD, name: '討論區／祕密標題', isMirror: false, isThread: true },
+      ];
+      const messages = opts.messages
+        ? opts.messages(w)
+        : [chat(w.start + HOUR), chat(w.start + 2 * HOUR), chat(w.start + 3 * HOUR, { channelId: THREAD })];
       return {
-        messages: port.channels === 0 ? [] : (opts.messages ?? [chat(1), chat(2), chat(3, { channelId: '3000000000000000001' })]),
-        channels: Array.from({ length: port.channels }, (_, i) =>
-          i === 0 ? { id: GENERAL, name: '一般聊天', isMirror: false } : { id: '3000000000000000001', name: '阿瓦隆同步', isMirror: true },
-        ),
-        truncatedChannels: 0,
-        failedChannels: failed,
-        publicChannelsFound: 1,
+        ...emptyCollectResult(),
+        messages: port.channels === 0 ? [] : messages,
+        channels: all.slice(0, port.channels),
+        failedChannels: opts.failed?.(call, w) ?? 0,
+        publicChannelsFound: 2,
+        forums: 1,
+        threadsRead: 1,
+        ...opts.extra,
       };
     },
   };
@@ -172,7 +209,7 @@ function harness(
   const sheet = opts.sheet === undefined ? new FakeSheet() : opts.sheet;
   const discord = opts.discord ?? discordPort();
   const logs: string[] = [];
-  const clock = opts.clock ?? { now: MON_0900 };
+  const clock = opts.clock ?? { now: TUE_1000 };
   const service = new ChatExportService({
     discord,
     sheetFactory: () => (sheet ? { sheet, reason: 'ok' } : { sheet: null, reason: 'no-sheet-id' }),
@@ -189,128 +226,206 @@ function harness(
   return { service, sheet, discord, logs, clock, at };
 }
 
-describe('schedule', () => {
-  it('runs only in the Monday 09:00–12:00 +08 window, for the previous week, once', async () => {
+const outcomes = (r: { days: Array<{ day: string; outcome: string }> }) => r.days.map((d) => `${d.day}:${d.outcome}`);
+
+describe('catch-up after a start', () => {
+  it('as soon as Discord is ready: every one of the last 7 complete days without 完成, oldest first', async () => {
+    const sheet = new FakeSheet();
+    for (const d of ['2026-10-08', '2026-10-10']) {
+      sheet.rows.push([d, `${d} 12:00`, '一般聊天', 'Discord', '成員1', 'x']);
+      sheet.log.push(claimRow(d, TUE_1000 - 3 * 86_400_000, 'old'), doneRow(d, TUE_1000 - 3 * 86_400_000, 'old'));
+    }
+    const h = harness({ sheet });
+    const r = await h.at(TUE_1000);
+    expect(r.state).toBe('ran');
+    expect(outcomes(r)).toEqual([
+      '2026-10-06:written',
+      '2026-10-07:written',
+      '2026-10-08:already-exported',
+      '2026-10-09:written',
+      '2026-10-10:already-exported',
+      '2026-10-11:written',
+      '2026-10-12:written',
+    ]);
+    expect(h.discord.calls).toEqual(['2026-10-06', '2026-10-07', '2026-10-09', '2026-10-11', '2026-10-12']); // done days not read
+    expect(sheet.days()).toEqual(DAYS);
+    for (const d of ['2026-10-06', '2026-10-07', '2026-10-09', '2026-10-11', '2026-10-12']) {
+      expect(sheet.rowsOf(d)).toHaveLength(3);
+      expect(sheet.states(d)).toEqual(['進行中:run-a', '完成:run-a']);
+    }
+    expect(sheet.rowsOf('2026-10-08')).toHaveLength(1); // untouched
+    expect(h.service.getStatus().catchUp).toEqual({
+      startedAt: new Date(TUE_1000).toISOString(),
+      from: '2026-10-06',
+      to: YESTERDAY,
+      exported: 5,
+      skipped: 2,
+      failed: 0,
+      pending: 0,
+    });
+    expect(h.service.getStatus().lastRun).toMatchObject({ day: YESTERDAY, outcome: 'written', messages: 3, channels: 2, threads: 1 });
+    // Nothing more to do today.
+    expect((await h.at(TUE_1000 + MIN)).state).toBe('idle');
+    expect((await h.at(TUE_1000 + 10 * HOUR)).state).toBe('idle');
+    expect(h.discord.calls).toHaveLength(5);
+  });
+
+  it('a start at 01:00 exports yesterday right away; a running server waits for 04:30 for the day that just ended', async () => {
+    const wed0100 = Date.parse('2026-10-13T17:00:00Z'); // Wed 10/14 01:00 +08
     const h = harness();
-    expect(await h.service.tick(MON_0900 - MIN)).toBe('outside-window'); // Mon 08:59
-    expect(await h.service.tick(MON_0900 + 3 * 60 * MIN)).toBe('outside-window'); // Mon 12:00
-    expect(await h.service.tick(MON_0900 + 24 * 60 * MIN)).toBe('outside-window'); // Tuesday
-    expect(h.discord.calls).toBe(0);
-    expect(await h.at(MON_0900)).toBe('written');
-    expect(h.sheet!.rows.map((r) => r[0])).toEqual([WEEK, WEEK, WEEK]);
-    expect(h.sheet!.states()).toEqual(['進行中:run-a', '完成:run-a']);
-    expect(h.sheet!.log[1]).toMatchObject({ rows: 3, channels: 2 });
-    expect(await h.at(MON_0900 + MIN)).toBe('done');
-    expect(h.discord.calls).toBe(1);
-    // The next Monday is a new week.
-    expect(await h.at(MON_0900 + 7 * 24 * 60 * MIN)).toBe('written');
-    expect(new Set(h.sheet!.rows.map((r) => r[0]))).toEqual(new Set([WEEK, '2026-10-12']));
+    const r = await h.at(wed0100);
+    expect(r.days.map((d) => d.day)).toEqual(lastCompleteDays(wed0100)); // 10/07 … 10/13
+    expect(r.days.every((d) => d.outcome === 'written')).toBe(true);
+    // The next night: 10/14 is complete at 00:00, exported from 04:30.
+    const thu = Date.parse('2026-10-14T16:00:00Z'); // Thu 10/15 00:00 +08
+    expect((await h.at(thu + 10 * MIN)).state).toBe('idle');
+    expect((await h.at(thu + 4 * HOUR + 29 * MIN)).state).toBe('idle'); // 04:29
+    const run = await h.at(thu + 4 * HOUR + 30 * MIN); // 04:30
+    expect(outcomes(run)).toEqual(['2026-10-14:written']);
+    expect(h.discord.calls.at(-1)).toBe('2026-10-14');
+    // Retention: the window is now 10/08 … 10/14, so 10/07 was dropped from both tabs.
+    expect(h.sheet!.days()).toEqual(lastCompleteDays(thu + 5 * HOUR));
+    expect(h.sheet!.days()[0]).toBe('2026-10-08');
+    expect(h.sheet!.log.some((e) => e.day === '2026-10-07')).toBe(false);
+    expect((await h.at(thu + 5 * HOUR)).state).toBe('idle');
   });
 
-  it('CHAT_EXPORT_ENABLED=false → nothing; Discord not ready yet → waits and catches up later', async () => {
-    expect(await harness({ config: { enabled: false } }).service.tick(MON_0900)).toBe('disabled');
+  it('Discord not ready → no claim and nothing read; the catch-up starts the minute it is', async () => {
     const h = harness({ discord: discordPort({ ready: false }) });
-    expect(await h.at(MON_0900)).toBe('discord-not-ready');
+    expect((await h.at(TUE_1000)).state).toBe('discord-not-ready');
     expect(h.sheet!.prepared).toBe(0);
-    expect(h.sheet!.log).toEqual([]); // no claim while Discord is down
+    expect(h.sheet!.log).toEqual([]);
+    expect(h.service.getStatus().catchUp).toBeNull();
     h.discord.ready = true;
-    expect(await h.at(MON_0900 + 47 * MIN)).toBe('written'); // catch-up at 09:47
+    const r = await h.at(TUE_1000 + 3 * MIN);
+    expect(r.days).toHaveLength(7);
+    expect(h.sheet!.doneDays()).toEqual(DAYS);
   });
 
-  it('no sheet configured → settled for the week, counted as not-configured, Discord never read', async () => {
+  it('CHAT_EXPORT_ENABLED=false → nothing', async () => {
+    const h = harness({ config: { enabled: false } });
+    expect((await h.at(TUE_1000)).state).toBe('disabled');
+    expect(h.discord.calls).toEqual([]);
+  });
+
+  it('no sheet configured → not-configured (logged once a day), Discord never read', async () => {
     const h = harness({ sheet: null });
-    expect(await h.at(MON_0900)).toBe('not-configured');
-    expect(await h.at(MON_0900 + MIN)).toBe('done');
-    expect(h.discord.calls).toBe(0);
-    expect(h.service.getStatus().lastRun).toMatchObject({ week: WEEK, outcome: 'not-configured', messages: 0 });
-    expect(h.logs.join('\n')).toContain('no-sheet-id');
+    expect((await h.at(TUE_1000)).state).toBe('not-configured');
+    expect((await h.at(TUE_1000 + MIN)).state).toBe('not-configured');
+    expect(h.discord.calls).toEqual([]);
+    expect(h.service.getStatus().lastRun).toMatchObject({ day: YESTERDAY, outcome: 'not-configured', messages: 0 });
+    expect(h.logs.filter((l) => l.includes('no-sheet-id'))).toHaveLength(1);
+    await h.at(TUE_1000 + 24 * HOUR);
+    expect(h.logs.filter((l) => l.includes('no-sheet-id'))).toHaveLength(2);
   });
+});
 
-  it('the public stats sheet as CHAT_EXPORT_SHEET_ID is refused: not configured, nothing written', async () => {
-    const env = {
-      CHAT_EXPORT_SHEET_ID: '174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU',
-      GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' }),
-    };
+describe('the public 阿瓦隆百科 sheet', () => {
+  const creds = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
+
+  function withEnv(env: NodeJS.ProcessEnv) {
     const sheet = new FakeSheet();
     const logs: string[] = [];
     const service = new ChatExportService({
       discord: discordPort(),
-      // The real factory: no client without a sheet id.
+      // Like the real factory: no client without a sheet id.
       sheetFactory: (cfg) => (cfg.sheetId ? { sheet, reason: 'ok' } : { sheet: null, reason: 'no-sheet-id' }),
       config: () => readChatExportConfig(env),
-      now: () => MON_0900,
+      now: () => TUE_1000,
       logger: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
     });
-    expect(service.getStatus().sheetConfigured).toBe(false);
-    expect(await service.tick(MON_0900)).toBe('not-configured');
+    return { sheet, logs, service };
+  }
+
+  it('is refused by default: not configured, nothing written', async () => {
+    const { sheet, logs, service } = withEnv({ CHAT_EXPORT_SHEET_ID: PUBLIC_STATS_SHEET_ID, GOOGLE_SERVICE_ACCOUNT_JSON: creds });
+    expect(service.getStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
+    expect((await service.tick(TUE_1000)).state).toBe('not-configured');
     expect(logs.join('\n')).toContain('public-sheet-refused');
     expect(sheet.prepared).toBe(0);
     expect(sheet.rows).toEqual([]);
   });
+
+  it('with CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1 the days are written there and the status says publicSheet: true', async () => {
+    const { sheet, service } = withEnv({
+      CHAT_EXPORT_SHEET_ID: PUBLIC_STATS_SHEET_ID,
+      CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '1',
+      GOOGLE_SERVICE_ACCOUNT_JSON: creds,
+    });
+    expect(service.getStatus()).toMatchObject({ enabled: true, sheetConfigured: true, publicSheet: true });
+    expect((await service.tick(TUE_1000)).days).toHaveLength(7);
+    expect(sheet.doneDays()).toEqual(DAYS);
+  });
 });
 
-describe('idempotency: the export log', () => {
-  it('a week with a 完成 row (restart, or another instance wrote it) is not read or written again', async () => {
-    const sheet = new FakeSheet();
-    sheet.rows.push([WEEK, '2026-10-06 20:00', '一般聊天', 'Discord', '成員1', 'x']);
-    sheet.log.push(claimRow(WEEK, MON_0900, 'old'), doneRow(WEEK, MON_0900 + MIN, 'old'));
-    const h = harness({ sheet });
-    expect(await h.at(MON_0900 + 20 * MIN)).toBe('already-exported');
-    expect(h.discord.calls).toBe(0);
-    expect(sheet.appendCalls).toBe(0);
-    expect(sheet.rows).toHaveLength(1);
-    expect(h.service.getStatus().lastRun).toMatchObject({ outcome: 'already-exported', messages: 0 });
-    expect(await h.at(MON_0900 + 21 * MIN)).toBe('done');
+describe('idempotency: the export log, per day', () => {
+  it('a restart finds every day 完成: nothing read or written again', async () => {
+    const h = harness();
+    await h.at(TUE_1000);
+    const appends = h.sheet!.appendCalls;
+    const h2 = harness({ sheet: h.sheet, runId: 'run-b', clock: { now: TUE_1000 + 30 * MIN } });
+    const r = await h2.at(TUE_1000 + 30 * MIN);
+    expect(r.days.map((d) => d.outcome)).toEqual(Array(7).fill('already-exported'));
+    expect(h2.discord.calls).toEqual([]);
+    expect(h.sheet!.appendCalls).toBe(appends);
+    expect(h.sheet!.rows).toHaveLength(21);
+    expect(h2.service.getStatus().catchUp).toMatchObject({ exported: 0, skipped: 7, failed: 0 });
   });
 
-  it('process killed after the first batch: the next instance waits for the stale claim, deletes the partial rows, writes the week once', async () => {
+  it('process killed mid-write: the next instance waits for the stale claim, deletes the partial rows, writes the day once', async () => {
     const sheet = new FakeSheet();
-    // The dead instance took the week at 09:00 and got 2 of 3 rows in.
-    sheet.log.push(claimRow(WEEK, MON_0900, 'dead'));
-    sheet.rows.push([WEEK, 'x', 'x', 'Discord', '成員1', 'partial'], [WEEK, 'x', 'x', 'Discord', '成員2', 'partial']);
+    // Every day but yesterday is done; the dead instance took yesterday at 10:00 and got 2 of 3 rows in.
+    for (const d of DAYS.slice(0, 6)) sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old', 3));
+    sheet.log.push(claimRow(YESTERDAY, TUE_1000, 'dead'));
+    sheet.rows.push([YESTERDAY, 'x', 'x', 'Discord', '成員1', 'partial'], [YESTERDAY, 'x', 'x', 'Discord', '成員2', 'partial']);
     const h = harness({ sheet, runId: 'new' });
-    expect(await h.at(MON_0900 + 5 * MIN)).toBe('claimed-elsewhere');
+    expect(outcomes(await h.at(TUE_1000 + 5 * MIN)).at(-1)).toBe(`${YESTERDAY}:claimed-elsewhere`);
     expect(h.service.getStatus().lastRun?.outcome).toBe('claimed-elsewhere');
-    expect(h.discord.calls).toBe(0);
-    expect(await h.at(MON_0900 + 10 * MIN)).toBe('waiting');
-    expect(await h.at(MON_0900 + 16 * MIN)).toBe('claimed-elsewhere'); // still fresh (< 30 min)
-    expect(await h.at(MON_0900 + 30 * MIN)).toBe('written'); // stale → taken over
-    expect(sheet.rows).toHaveLength(3); // not 5
+    expect(h.discord.calls).toEqual([]);
+    expect((await h.at(TUE_1000 + 10 * MIN)).state).toBe('waiting');
+    expect(outcomes(await h.at(TUE_1000 + 16 * MIN))).toEqual([`${YESTERDAY}:claimed-elsewhere`]); // still fresh (< 30 min)
+    expect(outcomes(await h.at(TUE_1000 + 30 * MIN))).toEqual([`${YESTERDAY}:written`]); // stale → taken over
+    expect(sheet.rowsOf(YESTERDAY)).toHaveLength(3); // not 5
     expect(sheet.rows.some((r) => r[5] === 'partial')).toBe(false);
-    expect(sheet.states()).toEqual(['進行中:dead', '進行中:new', '完成:new']);
+    expect(sheet.states(YESTERDAY)).toEqual(['進行中:dead', '進行中:new', '完成:new']);
     expect(h.logs.join('\n')).toContain('removed 2 row(s) left by an interrupted export');
   });
 
-  it('a failed append removes the half-written week and retries 10 minutes later', async () => {
+  it('a failed append removes the half-written day; the pass stops and retries 10 minutes later', async () => {
     const sheet = new FakeSheet();
     sheet.failAfterRows = 2;
     const h = harness({ sheet });
-    expect(await h.at(MON_0900)).toBe('retry');
+    const r = await h.at(TUE_1000);
+    expect(outcomes(r)).toEqual(['2026-10-06:sheet-error']); // the other days are not tried against a failing sheet
     expect(sheet.rows).toEqual([]); // cleaned up
-    expect(sheet.states()).toEqual(['進行中:run-a']); // no 完成
+    expect(sheet.states('2026-10-06')).toEqual(['進行中:run-a']); // no 完成
     expect(h.service.getStatus().lastRun?.outcome).toBe('sheet-error');
-    expect(await h.at(MON_0900 + 5 * MIN)).toBe('waiting');
+    expect(h.service.getStatus().catchUp).toMatchObject({ exported: 0, failed: 1, pending: 6 });
+    expect((await h.at(TUE_1000 + 5 * MIN)).state).toBe('waiting');
     sheet.failAfterRows = null;
-    expect(await h.at(MON_0900 + 11 * MIN)).toBe('written');
-    expect(sheet.rows).toHaveLength(3);
+    const again = await h.at(TUE_1000 + 11 * MIN);
+    expect(again.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(sheet.rows).toHaveLength(21);
+    expect(h.service.getStatus().catchUp).toMatchObject({ exported: 7, failed: 0, pending: 0 });
   });
 
-  it('when the cleanup fails too, the next attempt deletes the week first (no 完成 row) instead of trusting it', async () => {
+  it('when the cleanup fails too, the next attempt deletes the day first (no 完成 row) instead of trusting it', async () => {
     const sheet = new FakeSheet();
     sheet.failAfterRows = 2;
     sheet.beforeAppend = async () => {
       sheet.failDelete = true; // the cleanup after the failed append fails too
     };
     const h = harness({ sheet });
-    expect(await h.at(MON_0900)).toBe('retry');
+    await h.at(TUE_1000);
     expect(sheet.rows).toHaveLength(2); // half-written, cleanup failed
     expect(h.logs.join('\n')).toContain('cleanup failed too');
     sheet.failAfterRows = null;
     sheet.failDelete = false;
     // Even a brand-new process (restart) does not trust those rows.
     const h2 = harness({ sheet, runId: 'run-b' });
-    expect(await h2.at(MON_0900 + 31 * MIN)).toBe('written');
-    expect(sheet.rows).toHaveLength(3); // not 5: the 2 partial rows were deleted first
+    await h2.at(TUE_1000 + 31 * MIN);
+    expect(sheet.rowsOf('2026-10-06')).toHaveLength(3); // not 5: the 2 partial rows were deleted first
+    expect(sheet.doneDays()).toEqual(DAYS);
     expect(h2.logs.join('\n')).toContain('interrupted export');
   });
 
@@ -319,172 +434,215 @@ describe('idempotency: the export log', () => {
     sheet.failDone = true;
     sheet.doneLands = true;
     const h = harness({ sheet });
-    expect(await h.at(MON_0900)).toBe('retry');
-    expect(sheet.rows).toHaveLength(3); // not cleaned up: 完成 may be there
+    expect(outcomes(await h.at(TUE_1000))).toEqual(['2026-10-06:sheet-error']);
+    expect(sheet.rowsOf('2026-10-06')).toHaveLength(3); // not cleaned up: 完成 may be there
     sheet.failDone = false;
-    expect(await h.at(MON_0900 + 10 * MIN)).toBe('already-exported');
-    expect(sheet.rows).toHaveLength(3);
+    const r = await h.at(TUE_1000 + 10 * MIN);
+    expect(r.days[0]).toEqual({ day: '2026-10-06', outcome: 'already-exported' });
+    expect(sheet.rowsOf('2026-10-06')).toHaveLength(3);
   });
 
-  it('the 完成 request fails and did not land: the next attempt deletes the rows and writes the week again', async () => {
+  it('the 完成 request fails and did not land: the next attempt deletes the rows and writes the day again', async () => {
     const sheet = new FakeSheet();
     sheet.failDone = true;
     const h = harness({ sheet });
-    expect(await h.at(MON_0900)).toBe('retry');
+    await h.at(TUE_1000);
     sheet.failDone = false;
-    expect(await h.at(MON_0900 + 10 * MIN)).toBe('written');
-    expect(sheet.rows).toHaveLength(3);
-    expect(sheet.states()).toEqual(['進行中:run-a', '完成:run-a']);
+    const r = await h.at(TUE_1000 + 10 * MIN);
+    expect(r.days[0]).toEqual({ day: '2026-10-06', outcome: 'written' });
+    expect(sheet.rowsOf('2026-10-06')).toHaveLength(3);
+    expect(sheet.states('2026-10-06')).toEqual(['進行中:run-a', '完成:run-a']);
   });
 });
 
 describe('two server instances (deploy overlap)', () => {
-  it('both start at the same moment: one writes the week, the other waits and then finds 完成', async () => {
+  it('both catch up at the same moment: every day is written exactly once', async () => {
     const sheet = new FakeSheet();
-    const clock = { now: MON_0900 };
+    const clock = { now: TUE_1000 };
     const a = harness({ sheet, runId: 'a', clock });
     const b = harness({ sheet, runId: 'b', clock });
-    const results = await Promise.all([a.service.tick(MON_0900), b.service.tick(MON_0900)]);
-    expect([...results].sort()).toEqual(['claimed-elsewhere', 'written']);
-    // Both saw an empty log and both claimed; the first claim in sheet order holds the week.
-    expect(sheet.states()).toEqual(['進行中:a', '進行中:b', '完成:a']);
-    expect(sheet.rows).toHaveLength(3); // not 6
-    expect(sheet.appendCalls).toBe(1);
-    expect(a.discord.calls + b.discord.calls).toBe(1);
-    const loser = results[0] === 'written' ? b : a;
-    expect(await loser.at(MON_0900 + 10 * MIN)).toBe('already-exported');
-    expect(sheet.rows).toHaveLength(3);
+    await Promise.all([a.service.tick(TUE_1000), b.service.tick(TUE_1000)]);
+    // Ten minutes later each looks again at what the other held.
+    await Promise.all([a.at(TUE_1000 + 10 * MIN), b.at(TUE_1000 + 10 * MIN)]);
+    expect(sheet.doneDays()).toEqual(DAYS);
+    for (const d of DAYS) {
+      expect(sheet.rowsOf(d)).toHaveLength(3); // not 6
+      expect(sheet.log.filter((e) => e.day === d && e.state === CHAT_EXPORT_STATE_DONE)).toHaveLength(1);
+    }
+    expect(a.discord.calls.length + b.discord.calls.length).toBe(7); // each day read once in total
+    // They split the days between them (each skips the day the other holds).
+    expect(a.discord.calls.length).toBeGreaterThan(0);
+    expect(b.discord.calls.length).toBeGreaterThan(0);
+    expect((await a.at(TUE_1000 + 20 * MIN)).state).toBe('idle');
+    expect((await b.at(TUE_1000 + 20 * MIN)).state).toBe('idle');
   });
 
-  it('the second instance comes up while the first is writing: it does not read or write', async () => {
+  it('the second instance comes up while the first is writing a day: it does not read or write that day', async () => {
     const sheet = new FakeSheet();
-    const clock = { now: MON_0900 };
+    for (const d of DAYS.slice(0, 6)) sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old', 3));
+    const clock = { now: TUE_1000 };
     const a = harness({ sheet, runId: 'a', clock });
     const b = harness({ sheet, runId: 'b', clock });
-    let mid: string | null = null;
+    let mid: string[] = [];
     sheet.beforeAppend = async () => {
-      mid = await b.service.tick(MON_0900 + MIN);
+      mid = outcomes(await b.service.tick(TUE_1000 + MIN));
     };
-    expect(await a.service.tick(MON_0900)).toBe('written');
-    expect(mid).toBe('claimed-elsewhere');
-    expect(b.discord.calls).toBe(0);
-    expect(sheet.rows).toHaveLength(3);
+    expect(outcomes(await a.service.tick(TUE_1000))).toEqual(
+      [...DAYS.slice(0, 6).map((d) => `${d}:already-exported`), `${YESTERDAY}:written`],
+    );
+    expect(mid.at(-1)).toBe(`${YESTERDAY}:claimed-elsewhere`);
+    expect(b.discord.calls).toEqual([]);
+    expect(sheet.rowsOf(YESTERDAY)).toHaveLength(3);
   });
 
-  it('a live claim is renewed between attempts, so a second instance keeps waiting', async () => {
+  it('a live claim is renewed between attempts; another instance takes the other days meanwhile', async () => {
     const sheet = new FakeSheet();
     const a = harness({ sheet, runId: 'a', discord: discordPort({ channels: 0 }) });
-    for (const m of [0, 10, 20, 30, 40]) expect(await a.at(MON_0900 + m * MIN)).toBe('retry'); // Discord unreadable
-    const claims = sheet.log.filter((e) => e.runId === 'a').map((e) => (e.at - MON_0900) / MIN);
+    for (const m of [0, 10, 20, 30, 40]) expect(outcomes(await a.at(TUE_1000 + m * MIN))).toEqual(['2026-10-06:read-error']);
+    const claims = sheet.log.filter((e) => e.runId === 'a').map((e) => (e.at - TUE_1000) / MIN);
     expect(claims).toEqual([0, 20, 40]); // renewed once older than 15 minutes
+    expect(sheet.doneDays()).toEqual([]); // an unreadable day is never recorded as empty
     const b = harness({ sheet, runId: 'b' });
-    expect(await b.at(MON_0900 + 45 * MIN)).toBe('claimed-elsewhere');
-    // a recovers and writes; b then finds 完成.
-    a.discord.channels = 2;
-    expect(await a.at(MON_0900 + 50 * MIN)).toBe('written');
-    expect(await b.at(MON_0900 + 55 * MIN)).toBe('already-exported');
-    expect(sheet.rows).toHaveLength(3);
+    const rb = await b.at(TUE_1000 + 45 * MIN);
+    expect(rb.days[0]).toEqual({ day: '2026-10-06', outcome: 'claimed-elsewhere' });
+    expect(rb.days.slice(1).every((d) => d.outcome === 'written')).toBe(true);
+    // a recovers and writes its day; b then finds 完成.
+    a.discord.channels = 3;
+    const ra = await a.at(TUE_1000 + 50 * MIN);
+    expect(ra.days[0]).toEqual({ day: '2026-10-06', outcome: 'written' });
+    expect(ra.days.slice(1).every((d) => d.outcome === 'already-exported')).toBe(true);
+    expect((await b.at(TUE_1000 + 56 * MIN)).days).toEqual([{ day: '2026-10-06', outcome: 'already-exported' }]);
+    for (const d of DAYS) expect(sheet.rowsOf(d)).toHaveLength(3);
+    expect(b.service.getStatus().catchUp).toMatchObject({ exported: 6, skipped: 1, failed: 0, pending: 0 });
   });
 });
 
 describe('retries', () => {
-  it('a Sheets error before writing → retried in 10 minutes', async () => {
+  it('a Sheets error at the sheet check → the whole pass waits 10 minutes', async () => {
     const sheet = new FakeSheet();
     sheet.failPrepare = true;
     const h = harness({ sheet });
-    expect(await h.at(MON_0900)).toBe('retry');
-    expect(h.discord.calls).toBe(0);
+    expect(outcomes(await h.at(TUE_1000))).toEqual(['2026-10-06:sheet-error']);
+    expect(h.discord.calls).toEqual([]);
+    expect((await h.at(TUE_1000 + 9 * MIN)).state).toBe('waiting');
     sheet.failPrepare = false;
-    expect(await h.at(MON_0900 + 10 * MIN)).toBe('written');
+    expect((await h.at(TUE_1000 + 10 * MIN)).days).toHaveLength(7);
+    expect(sheet.doneDays()).toEqual(DAYS);
   });
 
-  it('some channels unreadable: read again once, then export what was read', async () => {
-    const h = harness({ discord: discordPort({ failed: [1, 1] }) });
-    expect(await h.at(MON_0900)).toBe('retry');
-    expect(h.service.getStatus().lastRun?.outcome).toBe('read-error');
+  it('some channels unreadable: each day is read again once, then what was read is exported', async () => {
+    const seen = new Set<string>();
+    const discord = discordPort({
+      failed: (_call, w) => {
+        if (seen.has(w.dayKey)) return 1; // still failing the second time
+        seen.add(w.dayKey);
+        return 1;
+      },
+    });
+    const h = harness({ discord });
+    const first = await h.at(TUE_1000);
+    expect(first.days.map((d) => d.outcome)).toEqual(Array(7).fill('read-error'));
     expect(h.sheet!.appendCalls).toBe(0);
-    expect(await h.at(MON_0900 + 10 * MIN)).toBe('written');
-    expect(h.discord.calls).toBe(2);
+    expect(h.service.getStatus().catchUp).toMatchObject({ failed: 7 });
+    const second = await h.at(TUE_1000 + 10 * MIN);
+    expect(second.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(h.discord.calls).toHaveLength(14);
   });
 
-  it('no channel readable at all is never recorded as an empty week: read again every 10 minutes until 12:00', async () => {
-    const h = harness({ discord: discordPort({ channels: 0, failed: Array(20).fill(3) }) });
-    for (let m = 0; m < 180; m += 10) expect(await h.at(MON_0900 + m * MIN)).toBe('retry');
-    expect(h.discord.calls).toBe(18);
-    expect(h.service.getStatus().lastRun).toMatchObject({ outcome: 'read-error', messages: 0 });
-    expect(h.sheet!.log.some((e) => e.state === CHAT_EXPORT_STATE_DONE)).toBe(false);
-    expect(await h.at(MON_0900 + 180 * MIN)).toBe('outside-window');
+  it('a day that keeps failing stays in the window and is retried after midnight too', async () => {
+    const sheet = new FakeSheet();
+    for (const d of DAYS.slice(0, 6)) sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old', 3));
+    const h = harness({ sheet, discord: discordPort({ channels: 0 }) });
+    expect(outcomes(await h.at(TUE_1000)).at(-1)).toBe(`${YESTERDAY}:read-error`);
+    const after = Date.parse('2026-10-13T16:20:00Z'); // Wed 10/14 00:20 +08 (before 04:30)
+    h.discord.channels = 3;
+    const r = await h.at(after);
+    expect(outcomes(r)).toEqual([`${YESTERDAY}:written`]); // 10/13 itself waits for 04:30
   });
 
-  it('no channel readable, then Discord recovers before 12:00 → the week is written', async () => {
-    const h = harness({ discord: discordPort({ channels: 0 }) });
-    expect(await h.at(MON_0900)).toBe('retry');
-    expect(await h.at(MON_0900 + 10 * MIN)).toBe('retry');
-    h.discord.channels = 2;
-    expect(await h.at(MON_0900 + 20 * MIN)).toBe('written');
-    expect(h.sheet!.rows).toHaveLength(3);
-  });
-
-  it('a quiet week (only bot posts and commands) is settled as empty: nothing appended, 完成 with 0 rows', async () => {
-    const h = harness({ discord: discordPort({ messages: [chat(1, { content: '/排行' }), chat(2, { authorIsBot: true })] }) });
-    expect(await h.at(MON_0900)).toBe('empty');
+  it('a quiet day (only bot posts and commands) is settled as empty: nothing appended, 完成 with 0 rows', async () => {
+    const h = harness({
+      discord: discordPort({ messages: (w) => [chat(w.start + HOUR, { content: '/排行' }), chat(w.start + 2 * HOUR, { authorIsBot: true })] }),
+    });
+    const r = await h.at(TUE_1000);
+    expect(r.days.map((d) => d.outcome)).toEqual(Array(7).fill('empty'));
     expect(h.sheet!.appendCalls).toBe(0);
-    expect(h.sheet!.log.at(-1)).toMatchObject({ state: CHAT_EXPORT_STATE_DONE, rows: 0 });
-    expect(await h.at(MON_0900 + MIN)).toBe('done');
+    expect(h.sheet!.log.filter((e) => e.state === CHAT_EXPORT_STATE_DONE).every((e) => e.rows === 0)).toBe(true);
     // After a restart it stays settled.
-    expect(await harness({ sheet: h.sheet, runId: 'run-b' }).at(MON_0900 + 2 * MIN)).toBe('already-exported');
+    const r2 = await harness({ sheet: h.sheet, runId: 'run-b' }).at(TUE_1000 + 2 * MIN);
+    expect(r2.days.map((d) => d.outcome)).toEqual(Array(7).fill('already-exported'));
   });
 });
 
-describe('pruning', () => {
-  it('keeps the exported week and the 7 before it, in both tabs', async () => {
+describe('retention', () => {
+  it('keeps exactly the last 7 complete days in both tabs (notes and the header stay)', async () => {
     const sheet = new FakeSheet();
-    for (const wk of ['2026-08-03', '2026-08-10', '2026-08-17', '2026-09-28']) {
-      sheet.rows.push([wk, '', '', '', '', '']);
-      sheet.log.push(doneRow(wk, Date.parse(`${wk}T01:00:00Z`) + 7 * 86_400_000, 'old'));
+    const old = ['2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05'];
+    for (const d of [...old, ...DAYS]) {
+      sheet.rows.push([d, `${d} 12:00`, '', '', '', '']);
+      sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old'));
     }
     const h = harness({ sheet });
-    expect(await h.at(MON_0900)).toBe('written');
-    expect([...new Set(sheet.rows.map((r) => r[0]))]).toEqual(['2026-08-17', '2026-09-28', WEEK]);
-    expect([...new Set(sheet.log.map((e) => e.week))]).toEqual(['2026-08-17', '2026-09-28', WEEK]);
-    expect(h.logs.join('\n')).toMatch(/pruned=2/);
-  });
-
-  it('rows of an older week that was taken but never finished are deleted at the next export', async () => {
-    const sheet = new FakeSheet();
-    sheet.rows.push(['2026-09-28', '', '', '', '', 'partial'], ['2026-09-21', '', '', '', '', 'complete']);
-    sheet.log.push(
-      doneRow('2026-09-21', MON_0900 - 14 * 86_400_000, 'old'),
-      claimRow('2026-09-28', MON_0900 - 7 * 86_400_000, 'old'), // cut off before 12:00 last Monday
-    );
-    const h = harness({ sheet });
-    expect(await h.at(MON_0900)).toBe('written');
-    expect(sheet.rows.map((r) => r[0])).toEqual(['2026-09-21', WEEK, WEEK, WEEK]);
+    const r = await h.at(TUE_1000);
+    expect(r.days.map((d) => d.outcome)).toEqual(Array(7).fill('already-exported'));
+    expect(sheet.days()).toEqual(DAYS);
+    expect(sheet.days()).toHaveLength(7);
+    expect([...new Set(sheet.log.map((e) => e.day))].sort()).toEqual(DAYS);
+    expect(h.logs.join('\n')).toMatch(/pruned 6 row\(s\) of days before 2026-10-06/);
   });
 
   it('a pruning failure only warns; the export still counts', async () => {
     const sheet = new FakeSheet();
     sheet.rows.push(['2026-01-05', '', '', '', '', '']);
     const h = harness({ sheet });
+    let n = 0;
     sheet.beforeAppend = async () => {
-      sheet.failDelete = true; // after the pre-write cleanup, before pruning
+      n += 1;
     };
-    expect(await h.at(MON_0900)).toBe('written');
-    expect(h.logs.join('\n')).toContain('pruning weeks before 2026-08-17 failed');
+    const orig = sheet.deleteLogDays.bind(sheet);
+    sheet.deleteLogDays = async (m) => {
+      if (n > 0) throw new Error('boom');
+      return orig(m);
+    };
+    const r = await h.at(TUE_1000);
+    expect(r.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(h.logs.join('\n')).toContain('pruning days before 2026-10-06 failed');
   });
 });
 
 describe('status and logs carry no chat text', () => {
-  it('lastRun = week, at, messages, channels, outcome', async () => {
-    const h = harness();
-    expect(h.service.getStatus()).toEqual({ enabled: true, sheetConfigured: false, lastRun: null });
-    await h.at(MON_0900);
+  it('chatExport = enabled / sheetConfigured / publicSheet + lastRun (day, counts, outcome) + catchUp (day counts)', async () => {
+    const h = harness({ discord: discordPort({ extra: { truncatedChannels: 1, threadsOverCap: 2, archivedListsTruncated: 1 } }) });
+    expect(h.service.getStatus()).toEqual({ enabled: true, sheetConfigured: false, publicSheet: false, lastRun: null, catchUp: null });
+    await h.at(TUE_1000);
     const status = h.service.getStatus();
-    expect(Object.keys(status).sort()).toEqual(['enabled', 'lastRun', 'sheetConfigured']);
-    expect(Object.keys(status.lastRun!).sort()).toEqual(['at', 'channels', 'messages', 'outcome', 'week']);
-    expect(status.lastRun).toEqual({ week: WEEK, at: new Date(MON_0900).toISOString(), messages: 3, channels: 2, outcome: 'written' });
+    expect(Object.keys(status).sort()).toEqual(['catchUp', 'enabled', 'lastRun', 'publicSheet', 'sheetConfigured']);
+    expect(status.lastRun).toEqual({
+      day: YESTERDAY,
+      at: new Date(TUE_1000).toISOString(),
+      messages: 3,
+      channels: 2, // 一般聊天 + the thread (the sync channel had nothing)
+      threads: 1,
+      truncated: 4,
+      outcome: 'written',
+    });
+    expect(Object.keys(status.catchUp!).sort()).toEqual(['exported', 'failed', 'from', 'pending', 'skipped', 'startedAt', 'to']);
     const all = JSON.stringify(status) + h.logs.join('\n');
-    for (const leaked of ['秘密內容', '一般聊天', '阿瓦隆同步', 'u0', 'u1', '成員']) expect(all).not.toContain(leaked);
+    for (const leaked of ['秘密內容', '一般聊天', '阿瓦隆同步', '討論區', '祕密標題', 'u0', 'u1', '成員', GENERAL, THREAD]) {
+      expect(all).not.toContain(leaked);
+    }
+    expect(h.logs.join('\n')).toMatch(/threadsOverCap=2 archivedListsTruncated=1/);
+  });
+
+  it('logs on failure paths carry no text either', async () => {
+    const sheet = new FakeSheet();
+    sheet.failAfterRows = 1;
+    const h = harness({ sheet, discord: discordPort({ failed: (call) => (call === 0 ? 1 : 0) }) });
+    await h.at(TUE_1000);
+    await h.at(TUE_1000 + 10 * MIN);
+    const logs = h.logs.join('\n');
+    expect(logs).toMatch(/read-error|failed|writing failed/);
+    for (const leaked of ['秘密內容', '一般聊天', '阿瓦隆同步', '討論區', '祕密標題', '成員']) expect(logs).not.toContain(leaked);
   });
 
   it('the random run id is 8 hex characters, different per process', () => {
@@ -504,7 +662,7 @@ describe('wiring', () => {
   });
 
   it('startChatExport creates the service and arms it only when enabled', () => {
-    // start() ticks once right away: with the sheet off that tick never reaches the network, whatever today is.
+    // start() ticks once right away: with the sheet off that tick never reaches the network.
     process.env.CHAT_EXPORT_SHEET_ID = 'off';
     process.env.CHAT_EXPORT_ENABLED = 'false';
     startChatExport();
@@ -517,14 +675,21 @@ describe('wiring', () => {
     expect(getChatExportService()?.isRunning()).toBe(true);
   });
 
-  it('/api/bots/status has chatExport (booleans + lastRun) and no communityDigest', () => {
+  it('/api/bots/status has chatExport (three booleans, lastRun, catchUp) and no communityDigest', () => {
     process.env.GOOGLE_SERVICE_ACCOUNT_JSON = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
-    expect(chatExportStatus()).toEqual({ enabled: true, sheetConfigured: true, lastRun: null });
+    delete process.env.CHAT_EXPORT_SHEET_ID;
+    delete process.env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET;
+    const expected = { enabled: true, sheetConfigured: true, publicSheet: false, lastRun: null, catchUp: null };
+    expect(chatExportStatus()).toEqual(expected);
     const status = buildBotStatus() as unknown as Record<string, unknown>;
-    expect(status.chatExport).toEqual({ enabled: true, sheetConfigured: true, lastRun: null });
+    expect(status.chatExport).toEqual(expected);
     expect(status).not.toHaveProperty('communityDigest');
     process.env.CHAT_EXPORT_SHEET_ID = 'off';
     expect(chatExportStatus().sheetConfigured).toBe(false);
+    process.env.CHAT_EXPORT_SHEET_ID = PUBLIC_STATS_SHEET_ID;
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
+    process.env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET = '1';
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: true, publicSheet: true });
   });
 
   it('the paid /社群週報 slash command is no longer registered (the bulk overwrite removes it from Discord)', () => {

@@ -1,15 +1,18 @@
 /**
- * Rows of the weekly chat-log export — pure functions, no I/O.
+ * Rows of the daily chat-log export — pure functions, no I/O.
  *
  * Input: Discord messages reduced to the fields below (collector.ts). Output:
  * one sheet row per conversation message, in time order,
  *
- *   週次        時間（+08）         頻道        來源      發言者代號  內容
- *   2026-10-05  2026-10-05 21:33   阿瓦隆同步   LINE      成員3       排行怎麼沒更新
+ *   日期        時間（+08）         頻道                     來源      發言者代號  內容
+ *   2026-10-05  2026-10-05 21:33   阿瓦隆同步                LINE      成員3       排行怎麼沒更新
+ *   2026-10-05  2026-10-05 22:10   牌譜紀錄與覆盤／1005一般場3  Discord   成員1       湖那邊應該驗 3
  *
  * Speakers are replaced by 成員N (owner 2026-10-13: 不點名), numbered per
- * export (one week) in order of first appearance; the mapping lives only
- * inside one buildExportRows() call and is never returned, written or logged.
+ * export (ONE DAY) in order of first appearance — the numbering restarts
+ * every day, so labels do not link days together (the sheet may be the
+ * link-public 阿瓦隆百科 workbook). The mapping lives only inside one
+ * buildExportRows() call and is never returned, written or logged.
  * "<@id>" mentions get the same 成員N label as that person's messages.
  *
  * How LINE shows up here: the bot relays LINE group lines (and website
@@ -22,8 +25,9 @@
  *                                              expected in Discord, skipped as a duplicate
  *   [Avalon] 名字: 內容 (legacy format, CHAT_MIRROR_USE_LEGACY_FORMAT=true) → 來源 同步
  *
- * Every other message by the bot (stats digest, slash-command replies, /意見
- * forwards) is skipped, as are other bots, webhooks, Discord system messages,
+ * Every other message by the bot (stats digest, slash-command replies, format-check
+ * replies in the records forum, /意見 forwards) is skipped, as are other bots,
+ * webhooks, Discord system messages,
  * typed commands ("/戰績 …", "/意見 …", also when relayed from LINE) and
  * messages with no text (attachment-only ones are counted, not exported).
  */
@@ -49,9 +53,12 @@ export interface RawChatMessage {
 
 export interface ChatChannel {
   id: string;
+  /** The 頻道 column: the channel name, or 「論壇名／貼文標題」 for a forum thread. */
   name: string;
   /** The LINE↔Discord sync channel (LOBBY_MIRROR_DISCORD_CHANNEL_ID). */
   isMirror: boolean;
+  /** A forum post (thread). */
+  isThread?: boolean;
 }
 
 export type ChatPlatform = 'discord' | 'line' | 'lobby' | 'relay';
@@ -200,20 +207,22 @@ export function clipMessageText(text: string, max: number = CHAT_EXPORT_MESSAGE_
 
 // ─── Rows ────────────────────────────────────────────────────────────────
 
-export type ChatExportRow = [week: string, time: string, channel: string, source: string, speaker: string, content: string];
+export type ChatExportRow = [day: string, time: string, channel: string, source: string, speaker: string, content: string];
 
 export interface ChatExportRows {
   /** One row per kept message, oldest first. */
   rows: ChatExportRow[];
-  /** Channels with at least one row. */
+  /** Channels (forum threads included) with at least one row. */
   channels: number;
+  /** Forum threads with at least one row. */
+  threads: number;
   /** Distinct speakers among the rows. */
   speakers: number;
   skipped: Record<ChatSkipReason, number>;
   byPlatform: Record<ChatPlatform, number>;
 }
 
-export function buildExportRows(messages: RawChatMessage[], channels: ChatChannel[], weekKey: string): ChatExportRows {
+export function buildExportRows(messages: RawChatMessage[], channels: ChatChannel[], dayKey: string): ChatExportRows {
   const skipped = Object.fromEntries(SKIP_REASONS.map((r) => [r, 0])) as Record<ChatSkipReason, number>;
   const byPlatform: Record<ChatPlatform, number> = { discord: 0, line: 0, lobby: 0, relay: 0 };
   const kept: KeptMessage[] = [];
@@ -228,6 +237,7 @@ export function buildExportRows(messages: RawChatMessage[], channels: ChatChanne
   kept.sort((a, b) => a.createdAt - b.createdAt || (a.id.length - b.id.length) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   const channelNames = new Map(channels.map((ch) => [ch.id, ch.name]));
+  const threadIds = new Set(channels.filter((ch) => ch.isThread).map((ch) => ch.id));
   const pseudo = new Pseudonymizer();
   const speakers = new Set<string>();
   const usedChannels = new Set<string>();
@@ -238,8 +248,9 @@ export function buildExportRows(messages: RawChatMessage[], channels: ChatChanne
     const speaker = pseudo.label(k.speakerKey);
     const body = clipMessageText(rewriteMentions(k.text, pseudo, channelNames));
     const extra = k.attachments > 0 ? `〔附件 ${k.attachments}〕` : '';
-    return [weekKey, taipeiStamp(k.createdAt), channelNames.get(k.channelId) ?? '某頻道', SOURCE_LABEL[k.platform], speaker, `${body}${extra}`];
+    return [dayKey, taipeiStamp(k.createdAt), channelNames.get(k.channelId) ?? '某頻道', SOURCE_LABEL[k.platform], speaker, `${body}${extra}`];
   });
 
-  return { rows, channels: usedChannels.size, speakers: speakers.size, skipped, byPlatform };
+  const threads = [...usedChannels].filter((id) => threadIds.has(id)).length;
+  return { rows, channels: usedChannels.size, threads, speakers: speakers.size, skipped, byPlatform };
 }

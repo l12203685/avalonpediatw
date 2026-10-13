@@ -1,15 +1,17 @@
 /**
- * Weekly chat-log export (2026-10-13) — the pure parts:
+ * Daily chat-log export — the pure parts:
  *
  *   rows    — relay parsing (LINE / lobby / legacy), bot / webhook / system /
- *             command / attachment-only exclusion, per-week pseudonyms (no
+ *             command / attachment-only exclusion, per-day pseudonyms (no
  *             names or ids in the rows), mention rewriting, long-message
  *             clipping, one row per message in time order with the six
- *             columns 週次 / 時間（+08） / 頻道 / 來源 / 發言者代號 / 內容
- *   window  — Monday 09:00–12:00 +08 run window, previous-week window, week
- *             key, the oldest week kept
+ *             columns 日期 / 時間（+08） / 頻道 / 來源 / 發言者代號 / 內容,
+ *             forum threads shown as 「論壇名／貼文標題」
+ *   window  — the day window across +08 midnight, the 04:30 run time, the
+ *             last 7 complete days, the oldest day kept
  *   config  — defaults, CHAT_EXPORT_* and the old COMMUNITY_DIGEST_* names,
  *             大劍管理員 always excluded, the public stats sheet refused
+ *             unless CHAT_EXPORT_ALLOW_PUBLIC_SHEET opts in (publicSheet)
  */
 import { describe, expect, it } from 'vitest';
 
@@ -24,21 +26,28 @@ import {
   type RawChatMessage,
 } from '../bots/chatExport/rows';
 import {
-  isChatExportRunWindow,
-  isWeekKey,
-  oldestKeptWeek,
-  scheduledWindow,
+  dayWindow,
+  isChatExportRunTime,
+  isDayKey,
+  lastCompleteDays,
+  oldestKeptDay,
+  previousDay,
   taipeiIso,
-  taipeiMondayStart,
+  taipeiMidnight,
   taipeiStamp,
 } from '../bots/chatExport/window';
 import { formatOutgoingUnified, formatOutgoingLegacy } from '../bots/ChatMirror';
 import {
   CHAT_EXPORT_HEADER,
+  CHAT_EXPORT_LOG_HEADER,
+  CHAT_EXPORT_LOG_TAB,
+  CHAT_EXPORT_RETAIN_DAYS,
   CHAT_EXPORT_TAB,
   DEFAULT_CHAT_EXPORT_SHEET_ID,
   PUBLIC_STATS_SHEET_ID,
+  STATS_WORKBOOK_TABS,
   readChatExportConfig,
+  spreadsheetIdFrom,
 } from '../bots/chatExport/config';
 import { DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID } from '../bots/feedback/config';
 
@@ -46,7 +55,7 @@ const SELF = 'bot-self';
 const MIRROR = '1132901301802504242';
 const GENERAL = '2000000000000000001';
 const T0 = Date.parse('2026-10-06T12:00:00Z'); // Tue 20:00 +08
-const WEEK = '2026-10-05';
+const DAY = '2026-10-06';
 
 const channels: ChatChannel[] = [
   { id: MIRROR, name: '阿瓦隆同步', isMirror: true },
@@ -101,7 +110,7 @@ describe('relay parsing (how LINE shows up in Discord)', () => {
     expect(parseRelayLine('[1005 21:35][LINE][A]B] hello')).toEqual({ tag: 'LINE', name: 'A]B', body: 'hello' });
     // A body that itself contains "] " is untouched.
     expect(parseRelayLine('[1005 21:35][LINE][小明] [規則] 湖中可以驗自己嗎')).toEqual({ tag: 'LINE', name: '小明', body: '[規則] 湖中可以驗自己嗎' });
-    const t = buildExportRows([lineRelay('[TW]小明', '今天打嗎', at + 1000), lineRelay('[TW]阿華', '我可以', at + 2000)], channels, WEEK);
+    const t = buildExportRows([lineRelay('[TW]小明', '今天打嗎', at + 1000), lineRelay('[TW]阿華', '我可以', at + 2000)], channels, DAY);
     expect(t.speakers).toBe(2);
     expect(t.rows.map((r) => [r[3], r[4], r[5]])).toEqual([
       ['LINE', '成員1', '今天打嗎'],
@@ -154,13 +163,13 @@ describe('buildExportRows', () => {
   ];
 
   it('one six-column row per conversation message, oldest first, no names or ids', () => {
-    const t = buildExportRows(messages().reverse(), channels, WEEK); // input order does not matter
+    const t = buildExportRows(messages().reverse(), channels, DAY); // input order does not matter
     expect(t.rows).toEqual([
-      [WEEK, '2026-10-06 20:01', '一般聊天', 'Discord', '成員1', '這週排行怎麼沒更新 @成員2 你知道嗎 #一般聊天 :pepe: @某身分組'],
-      [WEEK, '2026-10-06 20:03', '阿瓦隆同步', 'LINE', '成員3', '我也看到了'],
-      [WEEK, '2026-10-06 20:04', '一般聊天', 'Discord', '成員2', '應該是快取 ⏎ 明天再看〔附件 1〕'],
-      [WEEK, '2026-10-06 20:05', '一般聊天', 'Discord', '成員1', '好'],
-      [WEEK, '2026-10-06 20:10', '阿瓦隆同步', '網站', '成員4', '網站好用'],
+      [DAY, '2026-10-06 20:01', '一般聊天', 'Discord', '成員1', '這週排行怎麼沒更新 @成員2 你知道嗎 #一般聊天 :pepe: @某身分組'],
+      [DAY, '2026-10-06 20:03', '阿瓦隆同步', 'LINE', '成員3', '我也看到了'],
+      [DAY, '2026-10-06 20:04', '一般聊天', 'Discord', '成員2', '應該是快取 ⏎ 明天再看〔附件 1〕'],
+      [DAY, '2026-10-06 20:05', '一般聊天', 'Discord', '成員1', '好'],
+      [DAY, '2026-10-06 20:10', '阿瓦隆同步', '網站', '成員4', '網站好用'],
     ]);
     for (const row of t.rows) expect(row).toHaveLength(CHAT_EXPORT_HEADER.length);
     expect(t.channels).toBe(2);
@@ -177,17 +186,30 @@ describe('buildExportRows', () => {
   it('the 來源 column is Discord / LINE / 網站 (and 同步 for the legacy relay format)', () => {
     expect(SOURCE_LABEL).toEqual({ discord: 'Discord', line: 'LINE', lobby: '網站', relay: '同步' });
     const legacy = formatOutgoingLegacy({ id: '3', playerId: 'p', playerName: 'Ann', message: '舊格式', timestamp: T0 });
-    const t = buildExportRows([msg({ channelId: MIRROR, authorIsBot: true, authorIsSelf: true, content: legacy })], channels, WEEK);
+    const t = buildExportRows([msg({ channelId: MIRROR, authorIsBot: true, authorIsSelf: true, content: legacy })], channels, DAY);
     expect(t.rows[0].slice(3)).toEqual(['同步', '成員1', '舊格式']);
   });
 
-  it('times are +08 regardless of host TZ; the week column is the given Monday', () => {
+  it('times are +08 regardless of host TZ; the 日期 column is the given day', () => {
     const late = Date.parse('2026-10-05T16:30:00Z'); // 10/06 00:30 +08
-    const t = buildExportRows([msg({ content: '半夜還在打', createdAt: late })], channels, WEEK);
-    expect(t.rows[0].slice(0, 2)).toEqual([WEEK, '2026-10-06 00:30']);
+    const t = buildExportRows([msg({ content: '半夜還在打', createdAt: late })], channels, DAY);
+    expect(t.rows[0].slice(0, 2)).toEqual([DAY, '2026-10-06 00:30']);
   });
 
-  it('pseudonyms are per export (per week): the same speaker keeps one label; LINE and Discord namesakes stay distinct', () => {
+  it('a forum thread is shown as 「論壇名／貼文標題」 and counted as a thread', () => {
+    const thread = '3333333333333333333';
+    const chans: ChatChannel[] = [...channels, { id: thread, name: '討論區／湖中規則', isMirror: false, isThread: true }];
+    const t = buildExportRows(
+      [msg({ channelId: thread, content: '同意' }), msg({ channelId: thread, content: '+1' }), msg({ content: '一般' })],
+      chans,
+      DAY,
+    );
+    expect(t.rows.map((r) => r[2])).toEqual(['討論區／湖中規則', '討論區／湖中規則', '一般聊天']);
+    expect(t.channels).toBe(2);
+    expect(t.threads).toBe(1);
+  });
+
+  it('pseudonyms are per export (per day): the same speaker keeps one label; LINE and Discord namesakes stay distinct', () => {
     const t = buildExportRows(
       [
         msg({ createdAt: T0 + 1_000, authorId: 'd-1', content: 'a' }),
@@ -195,23 +217,23 @@ describe('buildExportRows', () => {
         msg({ createdAt: T0 + 3_000, authorId: 'd-1', content: 'c' }),
       ],
       channels,
-      WEEK,
+      DAY,
     );
     expect(t.rows.map((r) => r[4])).toEqual(['成員1', '成員2', '成員1']);
-    // A new export starts numbering again: the labels do not link weeks together.
-    const next = buildExportRows([lineRelay('d-1', 'x', T0 + 9_000)], channels, '2026-10-12');
+    // The next day's export starts numbering again: the labels do not link days together.
+    const next = buildExportRows([lineRelay('d-1', 'x', T0 + 9_000)], channels, '2026-10-07');
     expect(next.rows[0][4]).toBe('成員1');
   });
 
   it('a message read twice is exported once; an unknown channel is shown as 某頻道', () => {
     const m = msg({ channelId: '9999999999999999999', content: 'hi' });
-    const t = buildExportRows([m, { ...m }], channels, WEEK);
+    const t = buildExportRows([m, { ...m }], channels, DAY);
     expect(t.rows).toHaveLength(1);
     expect(t.rows[0][2]).toBe('某頻道');
   });
 
   it('formula-looking text stays as typed (the sheet is written with RAW input)', () => {
-    const t = buildExportRows([msg({ content: '=HYPERLINK("x")' })], channels, WEEK);
+    const t = buildExportRows([msg({ content: '=HYPERLINK("x")' })], channels, DAY);
     expect(t.rows[0][5]).toBe('=HYPERLINK("x")');
   });
 
@@ -222,7 +244,7 @@ describe('buildExportRows', () => {
   });
 
   it('nothing to export → no rows', () => {
-    const t = buildExportRows([msg({ content: '/排行' }), msg({ content: '', attachmentCount: 1 })], channels, WEEK);
+    const t = buildExportRows([msg({ content: '/排行' }), msg({ content: '', attachmentCount: 1 })], channels, DAY);
     expect(t.rows).toEqual([]);
     expect(t.channels).toBe(0);
     expect(t.skipped['attachment-only']).toBe(1);
@@ -230,47 +252,90 @@ describe('buildExportRows', () => {
 });
 
 describe('window (+08)', () => {
-  it('runs only Monday 09:00–11:59 +08 (start + catch-up)', () => {
-    expect(isChatExportRunWindow(Date.parse('2026-10-12T01:00:00Z'))).toBe(true); // Mon 09:00
-    expect(isChatExportRunWindow(Date.parse('2026-10-12T01:10:00Z'))).toBe(true); // Mon 09:10
-    expect(isChatExportRunWindow(Date.parse('2026-10-12T03:59:59Z'))).toBe(true); // Mon 11:59:59
-    expect(isChatExportRunWindow(Date.parse('2026-10-12T04:00:00Z'))).toBe(false); // Mon 12:00
-    expect(isChatExportRunWindow(Date.parse('2026-10-12T00:59:59Z'))).toBe(false);
-    expect(isChatExportRunWindow(Date.parse('2026-10-13T01:05:00Z'))).toBe(false); // Tuesday
-    expect(isChatExportRunWindow(Date.parse('2026-10-11T17:05:00Z'))).toBe(false); // Mon 01:05 +08
+  it('a day is 00:00 → 24:00 +08, whatever the host TZ (UTC 16:00 is the +08 midnight)', () => {
+    const w = dayWindow('2026-10-12');
+    expect(new Date(w.start).toISOString()).toBe('2026-10-11T16:00:00.000Z');
+    expect(new Date(w.end).toISOString()).toBe('2026-10-12T16:00:00.000Z');
+    expect(w.dayKey).toBe('2026-10-12');
+    // Across the year end too.
+    expect(new Date(dayWindow('2027-01-01').start).toISOString()).toBe('2026-12-31T16:00:00.000Z');
   });
 
-  it('exports the previous Monday 00:00 → Sunday 24:00; the week key is that Monday', () => {
-    const w = scheduledWindow(Date.parse('2026-10-12T01:03:00Z'));
-    expect(new Date(w.start).toISOString()).toBe('2026-10-04T16:00:00.000Z'); // Mon 10/05 00:00 +08
-    expect(new Date(w.end).toISOString()).toBe('2026-10-11T16:00:00.000Z'); // Mon 10/12 00:00 +08
-    expect(w.weekKey).toBe('2026-10-05');
-    // Monday 00:30 +08 is still Monday, not the previous Sunday.
-    expect(new Date(taipeiMondayStart(Date.parse('2026-10-11T16:30:00Z'))).toISOString()).toBe('2026-10-11T16:00:00.000Z');
-    expect(taipeiStamp(Date.parse('2026-12-31T16:05:00Z'))).toBe('2027-01-01 00:05');
-    // Export-log time: +08 with seconds, parsed back to the same instant.
+  it('the previous day just after +08 midnight is the day that just ended (not the UTC date)', () => {
+    // 00:05 +08 on 10/13 is still 10/12 in UTC.
+    const justAfter = Date.parse('2026-10-12T16:05:00Z');
+    expect(previousDay(justAfter).dayKey).toBe('2026-10-12');
+    expect(previousDay(Date.parse('2026-10-12T15:59:59Z')).dayKey).toBe('2026-10-11'); // 23:59:59 +08 on 10/12
+    expect(new Date(taipeiMidnight(justAfter)).toISOString()).toBe('2026-10-12T16:00:00.000Z');
+    expect(previousDay(Date.parse('2027-01-01T00:00:00Z')).dayKey).toBe('2026-12-31'); // 08:00 +08 on New Year's Day
+  });
+
+  it('a message at 23:59:59 +08 belongs to that day, one at 00:00:00 +08 to the next', () => {
+    const w = dayWindow('2026-10-12');
+    const last = Date.parse('2026-10-12T15:59:59.999Z');
+    const next = Date.parse('2026-10-12T16:00:00.000Z');
+    expect(last >= w.start && last < w.end).toBe(true);
+    expect(next >= w.start && next < w.end).toBe(false);
+    expect(taipeiStamp(last)).toBe('2026-10-12 23:59');
+    expect(taipeiStamp(next)).toBe('2026-10-13 00:00');
+  });
+
+  it('the daily run starts at 04:30 +08 and lasts until 23:59 the same day', () => {
+    expect(isChatExportRunTime(Date.parse('2026-10-12T20:29:59Z'))).toBe(false); // 04:29:59 +08
+    expect(isChatExportRunTime(Date.parse('2026-10-12T20:30:00Z'))).toBe(true); // 04:30 +08
+    expect(isChatExportRunTime(Date.parse('2026-10-13T01:00:00Z'))).toBe(true); // 09:00 +08
+    expect(isChatExportRunTime(Date.parse('2026-10-13T15:59:59Z'))).toBe(true); // 23:59:59 +08
+    expect(isChatExportRunTime(Date.parse('2026-10-13T16:00:00Z'))).toBe(false); // 00:00 +08 next day
+    expect(isChatExportRunTime(Date.parse('2026-10-12T16:30:00Z'))).toBe(false); // 00:30 +08
+  });
+
+  it('the last 7 complete days, oldest first, end with yesterday; the oldest kept is today − 7', () => {
+    const now = Date.parse('2026-10-13T02:00:00Z'); // Tue 10/13 10:00 +08
+    expect(CHAT_EXPORT_RETAIN_DAYS).toBe(7);
+    expect(lastCompleteDays(now)).toEqual([
+      '2026-10-06',
+      '2026-10-07',
+      '2026-10-08',
+      '2026-10-09',
+      '2026-10-10',
+      '2026-10-11',
+      '2026-10-12',
+    ]);
+    expect(oldestKeptDay(now)).toBe('2026-10-06');
+    expect(lastCompleteDays(Date.parse('2027-01-02T01:00:00Z'), 3)).toEqual(['2026-12-30', '2026-12-31', '2027-01-01']);
+    // At 00:30 +08 the day that just ended is already complete.
+    expect(lastCompleteDays(Date.parse('2026-10-12T16:30:00Z')).at(-1)).toBe('2026-10-12');
+  });
+
+  it('export-log time: +08 with seconds, parsed back to the same instant; 日期 cells', () => {
     const t = Date.parse('2026-12-31T16:05:07Z');
     expect(taipeiIso(t)).toBe('2027-01-01T00:05:07+08:00');
     expect(Date.parse(taipeiIso(t))).toBe(t);
-  });
-
-  it('8 weeks kept = the exported week and the 7 before it (across a year end)', () => {
-    expect(oldestKeptWeek('2026-10-05', 8)).toBe('2026-08-17');
-    expect(oldestKeptWeek('2027-01-04', 8)).toBe('2026-11-16');
-    expect(oldestKeptWeek('2026-10-05', 1)).toBe('2026-10-05');
-    expect(isWeekKey('2026-10-05')).toBe(true);
-    for (const v of ['週次', '', '2026/10/05', 20261005, null, '2026-10-05 x']) expect(isWeekKey(v)).toBe(false);
+    expect(isDayKey('2026-10-05')).toBe(true);
+    for (const v of ['日期', '週次', '', '2026/10/05', 20261005, null, '2026-10-05 x']) expect(isDayKey(v)).toBe(false);
   });
 });
 
 describe('config', () => {
-  it('defaults: on, the private sheet, tab 聊天紀錄, the /意見 channel excluded', () => {
+  it('defaults: on, the private sheet, tabs 聊天紀錄 / 匯出紀錄 keyed by 日期, the /意見 channel excluded', () => {
     const cfg = readChatExportConfig({});
-    expect(cfg).toMatchObject({ enabled: true, sheetId: DEFAULT_CHAT_EXPORT_SHEET_ID, sheetCredentialsUsable: false, sourceChannelIds: [] });
+    expect(cfg).toMatchObject({
+      enabled: true,
+      sheetId: DEFAULT_CHAT_EXPORT_SHEET_ID,
+      publicSheet: false,
+      sheetCredentialsUsable: false,
+      sourceChannelIds: [],
+    });
     expect(cfg.excludeChannelIds).toEqual([DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID]);
     expect(DEFAULT_CHAT_EXPORT_SHEET_ID).toBe('1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8');
     expect(CHAT_EXPORT_TAB).toBe('聊天紀錄');
-    expect([...CHAT_EXPORT_HEADER]).toEqual(['週次', '時間（+08）', '頻道', '來源', '發言者代號', '內容']);
+    expect(CHAT_EXPORT_LOG_TAB).toBe('匯出紀錄');
+    expect([...CHAT_EXPORT_HEADER]).toEqual(['日期', '時間（+08）', '頻道', '來源', '發言者代號', '內容']);
+    expect([...CHAT_EXPORT_LOG_HEADER]).toEqual(['日期', '狀態', '列數', '頻道數', '時間（+08）', '執行代號']);
+  });
+
+  it('the chat tabs are never one of the tabs the records importer / cache refresh use in the stats workbook', () => {
+    for (const tab of [CHAT_EXPORT_TAB, CHAT_EXPORT_LOG_TAB]) expect(STATS_WORKBOOK_TABS as readonly string[]).not.toContain(tab);
   });
 
   it('switches, sheet id (new and old name), credentials check', () => {
@@ -301,7 +366,7 @@ describe('config', () => {
     ]);
   });
 
-  it('refuses the public 阿瓦隆百科 spreadsheet as the export target (chat would become public)', () => {
+  it('refuses the public 阿瓦隆百科 spreadsheet as the export target unless explicitly opted in', () => {
     const pub = '174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU';
     const creds = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
     expect(PUBLIC_STATS_SHEET_ID).toBe(pub);
@@ -317,5 +382,38 @@ describe('config', () => {
     // The private default and other ids are fine.
     expect(readChatExportConfig({})).toMatchObject({ sheetId: DEFAULT_CHAT_EXPORT_SHEET_ID, sheetIdRefused: false });
     expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'off' })).toMatchObject({ sheetId: '', sheetIdRefused: false });
+    // The opt-in alone does not move anything: the private default stays the target.
+    expect(readChatExportConfig({ CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '1' })).toMatchObject({
+      sheetId: DEFAULT_CHAT_EXPORT_SHEET_ID,
+      publicSheet: false,
+    });
+    // Anything but an explicit yes keeps refusing.
+    for (const v of ['', '0', 'false', 'no', 'maybe']) {
+      expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: pub, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: v })).toMatchObject({
+        sheetId: '',
+        sheetIdRefused: true,
+        publicSheet: false,
+      });
+    }
+  });
+
+  it('CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1 lets CHAT_EXPORT_SHEET_ID be the public sheet (publicSheet: true; a pasted URL works)', () => {
+    const pub = PUBLIC_STATS_SHEET_ID;
+    for (const v of ['1', 'true', 'yes', 'on', ' TRUE ']) {
+      expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: pub, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: v })).toMatchObject({
+        sheetId: pub,
+        sheetIdRefused: false,
+        publicSheet: true,
+      });
+    }
+    const url = `https://docs.google.com/spreadsheets/d/${pub}/edit#gid=0`;
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: url, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '1' })).toMatchObject({
+      sheetId: pub,
+      publicSheet: true,
+    });
+    expect(spreadsheetIdFrom(url)).toBe(pub);
+    expect(spreadsheetIdFrom('abc')).toBe('abc');
+    // The old variable name too.
+    expect(readChatExportConfig({ COMMUNITY_DIGEST_SHEET_ID: pub, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '1' }).publicSheet).toBe(true);
   });
 });

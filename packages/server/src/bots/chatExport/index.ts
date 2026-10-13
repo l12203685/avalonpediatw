@@ -1,14 +1,15 @@
 /**
- * Weekly chat-log export (2026-10-13, docs/COMMUNITY_FEEDBACK.md).
- * Replaced the paid weekly digest: free, rows only, no summary.
+ * Daily chat-log export (2026-10-13, daily with a 7-day window since round 3;
+ * docs/COMMUNITY_FEEDBACK.md). Replaced the paid weekly digest: free, rows
+ * only, no summary, no LLM.
  *
- *   config.ts      — env vars, constants, logger
- *   window.ts      — +08 week math
- *   collector.ts   — Discord history for one week (discord.js)
- *   rows.ts        — relay parsing, filtering, pseudonyms, sheet rows (pure)
- *   sheetWriter.ts — tabs 「聊天紀錄」 + 「匯出紀錄」 (export log): create, append, read, prune
+ *   config.ts      — env vars (incl. the public-sheet opt-in), constants, logger
+ *   window.ts      — +08 day math, the 04:30 run time, the 7-day window
+ *   collector.ts   — Discord history for one day: text channels, sync channel, forum posts (discord.js)
+ *   rows.ts        — relay parsing, filtering, per-day pseudonyms, sheet rows (pure)
+ *   sheetWriter.ts — tabs 「聊天紀錄」 + 「匯出紀錄」 (export log) only: create, append, read, prune
  *   discordPort.ts — Discord adapter (collection)
- *   service.ts     — Monday schedule, claim / 完成 (one copy across restarts and instances), status
+ *   service.ts     — catch-up on start, daily 04:30 run, claim / 完成 (one copy across restarts and instances), status
  *
  * Google auth + Sheets REST: ../digest/sheets.ts (shared helper).
  */
