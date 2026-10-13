@@ -10,7 +10,9 @@
  * downloads anything. LINE then gets it through ChatMirror.relayDiscordToLine
  * (arrival order, one download at a time across all users).
  *
- * Text only (no attachments / stickers): the text line, as before.
+ * Text only (no attachments / stickers): the text line, as before — the
+ * WHOLE text (2026-10-13; only the website lobby shows a cut copy). Over
+ * LINE's 5000 characters it is queued as parts (ChatMirror).
  *
  * With attachments / stickers:
  *   1. The lobby / LINE text line is the message text plus a marker
@@ -42,7 +44,6 @@ import {
   ChatMirror,
   discordLeftoverNote,
   discordMediaMarker,
-  withMediaMarker,
 } from '../ChatMirror';
 import type { QueuedLineImage } from '../line/replyQueue';
 import { fetchCapped, sniffImageType, type SniffedImageType } from '../media/bytes';
@@ -311,7 +312,7 @@ export async function handleDiscordMirrorMessage(
   const pictures = attachments.filter(isImageAttachment);
   const files = attachments.length - pictures.length;
   const hasMedia = attachments.length > 0 || stickers > 0;
-  const text = hasMedia ? withMediaMarker(content, discordMediaMarker({ images: pictures.length, files, stickers })) : content;
+  const marker = hasMedia ? discordMediaMarker({ images: pictures.length, files, stickers }) : '';
 
   // Rate limit + lobby NOW, before any download: the speaker's slot is taken
   // at arrival, so a burst of picture messages never reaches the CDN.
@@ -319,7 +320,8 @@ export async function handleDiscordMirrorMessage(
     source: 'discord',
     platformUserId: message.author.id,
     displayName,
-    text,
+    text: content,
+    marker,
     messageId: `discord:${message.id}`,
     kind: content ? 'text' : 'media',
   });

@@ -39,6 +39,12 @@ export interface LobbyChatMessage {
 }
 
 export const LOBBY_CHAT_MAX = 50;
+/**
+ * The website lobby's own cap: what a web client may send, and how much of a
+ * LINE / Discord message the lobby shows. Never applied to the LINE ↔ Discord
+ * relay (2026-10-13 — it used to be, and cut long messages to 200 characters;
+ * see ChatMirror lobbyDisplayText / bots/mirrorSplit.ts).
+ */
 export const LOBBY_CHAT_MAX_LEN = 200;
 
 export class LobbyChatBuffer {

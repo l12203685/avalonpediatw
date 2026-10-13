@@ -29,6 +29,15 @@
  * the queue overflows, the oldest message leaves WHOLE, so a picture never
  * stays behind without its speaker line. Every overflow / trim returns the
  * relay ids of the pictures it dropped, so their copies are freed.
+ *
+ * Long texts (2026-10-13): a relayed text over LINE's 5000 characters is
+ * queued as parts (ChatMirror / bots/mirrorSplit.ts) in one group, ahead of
+ * that message's pictures. A part is one message object like any other, so
+ * a long message may span two replies; order is kept, and a failed reply
+ * re-queues its exact batch as before. When requeueFront() has to trim the
+ * newest tail, a message cut in two by the trim leaves whole (not a speaker
+ * line without its 「（續）」 parts or pictures) — but never an item of the
+ * rescued batch.
  */
 
 export const LINE_REPLY_QUEUE_CAP = 50;
@@ -91,7 +100,7 @@ export function degradeAfterFailedReply(
     if (opts.imageRejected || failedAttempts >= LINE_IMAGE_MAX_FAILED_REPLIES) {
       degraded += 1;
       releasedMediaIds.push(...item.image.mediaIds);
-      return { text: item.text, enqueuedAt: item.enqueuedAt };
+      return { text: item.text, enqueuedAt: item.enqueuedAt, ...(item.group !== undefined ? { group: item.group } : {}) };
     }
     return { ...item, image: { ...item.image, failedAttempts } };
   });
@@ -166,7 +175,9 @@ export class LineReplyQueue {
 
   /**
    * Put a previously drained batch back at the HEAD (send failed). Order is
-   * preserved exactly; if that overflows the cap, the NEWEST tail is trimmed.
+   * preserved exactly; if that overflows the cap, the NEWEST tail is trimmed
+   * — together with the kept front of a message the trim cuts in two, as
+   * long as that front is not part of the rescued batch.
    */
   public requeueFront(batch: QueuedLineItem[]): QueueTrim {
     if (batch.length === 0) return { dropped: 0, releasedMediaIds: [] };
@@ -174,10 +185,15 @@ export class LineReplyQueue {
     let dropped = 0;
     const releasedMediaIds: string[] = [];
     if (this.items.length > this.cap) {
-      const tail = this.items.slice(this.cap);
+      let keep = this.cap;
+      const cutGroup = this.items[keep].group;
+      if (cutGroup !== undefined) {
+        while (keep > batch.length && this.items[keep - 1].group === cutGroup) keep -= 1;
+      }
+      const tail = this.items.slice(keep);
       dropped = tail.length;
       for (const item of tail) if (item.image) releasedMediaIds.push(...item.image.mediaIds);
-      this.items = this.items.slice(0, this.cap);
+      this.items = this.items.slice(0, keep);
     }
     return { dropped, releasedMediaIds };
   }

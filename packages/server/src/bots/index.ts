@@ -224,8 +224,8 @@ function buildLineAdapter(): LineAdapter | null {
   const client = bot.getClient();
   return {
     pushMessage: async (to, messages) =>
-      // @line/bot-sdk accepts a single Message or an array; we always hand it
-      // a single text object built in ChatMirror, so this signature is safe.
+      // @line/bot-sdk accepts a single Message or an array (≤ 5); ChatMirror
+      // hands it one text object, or the parts of a long text as an array.
       (client as unknown as {
         pushMessage: (to: string, m: unknown) => Promise<unknown>;
       }).pushMessage(to, messages),

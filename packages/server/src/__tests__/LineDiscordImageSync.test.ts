@@ -20,6 +20,7 @@ import {
   __resetChatMirrorForTests,
   discordLeftoverNote,
   discordMediaMarker,
+  lobbyDisplayText,
   withMediaMarker,
   type DiscordAdapter,
   type DiscordChannelAdapter,
@@ -855,9 +856,12 @@ describe('marker helpers', () => {
     expect(discordLeftoverNote({ images: 0, files: 0 })).toBeNull();
     expect(discordLeftoverNote({ images: 1, files: 0 })).toBe('（Discord 有一張圖片，請到 Discord 看）');
     expect(discordLeftoverNote({ images: 0, files: 2 })).toBe('（Discord 有 2 個檔案，請到 Discord 看）');
-    const long = withMediaMarker('字'.repeat(300), '（圖片）');
-    expect(long.length).toBeLessThanOrEqual(200);
-    expect(long.endsWith('… （圖片）')).toBe(true);
+    // 2026-10-13: never cut for the relay; only the lobby's display copy is.
+    expect(withMediaMarker('字'.repeat(300), '（圖片）')).toBe(`${'字'.repeat(300)} （圖片）`);
+    const lobby = lobbyDisplayText('字'.repeat(300), 'discord', '（圖片）');
+    expect(lobby.length).toBeLessThanOrEqual(200);
+    expect(lobby.endsWith('…（全文請到 Discord 看） （圖片）')).toBe(true);
+    expect(lobbyDisplayText('short', 'line', '（圖片）')).toBe('short （圖片）');
   });
 
   it('discordPreviewUrl keeps Discord hosts only', () => {
