@@ -357,14 +357,15 @@
           "rule": "任務結算：三紅 = 紅、三藍 = 藍 → 刺殺結算：三藍局是否刺中梅林 → 最終：藍方要贏必須三藍且梅林活，三紅或三藍死都算紅勝",
           "derived": "舊快取：由三種結果分布現場算"
         },
-        "excessRanking": "超額勝率排行（30 場以上）",
-        "excessRankingLegacy": "理論勝率排行（舊口徑：任務結算，30 場以上）",
-        "excessColumn": "超額勝率",
+        "theoryRanking": "角色理論勝率排行（各人最近 100 場，生涯 100 場以上）",
+        "roleTheoryColumn": "角色理論",
+        "positionTheoryColumn": "位置理論",
+        "careerGames": "生涯 {{count}} 場",
+        "theoryLegend": "角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率；不到 3 場的角色用全體勝率補到 3 場。這裡不限近期出賽，近期排行見「排行」分頁。",
+        "theoryBaseline": "虛線 = 全體基準 {{baseline}}%（每個角色都打出全體平均的人），紅色 = 低於基準。",
+        "theoryEmpty": "尚無玩家達 100 場",
+        "theoryPending": "排行改用角色理論勝率，下次每日更新資料後顯示",
         "finalWinRateColumn": "最終勝率",
-        "legacyTheoryColumn": "理論勝率（舊口徑）",
-        "excessLegend": "超額勝率 = 最終勝率 − 依角色分配算出的預期勝率，可為負；依全期縮減後超額勝率排序",
-        "excessLegendLegacy": "快取尚未重算，暫以舊的理論勝率（≈ 任務結算勝率，三藍死算藍勝）顯示",
-        "excessEmpty": "尚無玩家達 30 場，超額勝率排行暫無資料",
         "seatPositionBasis": "整體勝率與角色勝率為任務結算口徑（三藍死算藍勝）；三種結果分布見滑鼠提示"
       },
       "lake": {
@@ -531,7 +532,7 @@
       "roleFinal": {
         "title": "各角色最終勝率",
         "sub": "紅角 = 三紅 + 三藍死；藍角 = 三藍活（全體玩家、全期）",
-        "note": "超額勝率的「預期勝率」就是用這張表依本人各角色出場比例加權算出來的"
+        "note": "角色理論勝率補值用的就是這張表：某角色不到 3 場時，用這裡的全體勝率補到 3 場；全體基準 = Σ 抽到該角色的機率 × 這張表"
       },
       "radar": {
         "loadingPlayers": "載入玩家資料…",
@@ -544,7 +545,8 @@
           "redWinRate": "紅方最終勝率",
           "blueMerlinProtect": "藍方三藍活率",
           "missionWinRate": "任務結算勝率",
-          "excessWinRate": "超額勝率",
+          "roleTheory": "角色理論勝率",
+          "positionTheory": "位置理論勝率",
           "redMerlinKillRate": "紅方刺中率",
           "experience": "經驗"
         },
@@ -553,15 +555,14 @@
           "redWinRate": "紅方最終勝率：擔任紅方時三紅或三藍死的比例",
           "blueMerlinProtect": "藍方三藍活率：擔任藍方時三藍且梅林活的比例",
           "missionWinRate": "任務結算勝率：舊口徑，三藍死也算藍方贏",
-          "excessWinRate": "超額勝率：最終勝率 − 預期勝率（依本人角色分配加權）；圖上以 50 為中心映射到 0–100（50 = 持平，算不出來時畫在 50）",
+          "roleTheory": "角色理論勝率（生涯）：Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 本人該角色的最終勝率；不到 3 場的角色用全體勝率補到 3 場",
+          "positionTheory": "位置理論勝率（生涯）：Σ 1/10 × 本人各位置的最終勝率；不到 3 場的位置用全體勝率補到 3 場",
           "redMerlinKillRate": "紅方刺中率：擔任紅方時三藍死的比例",
           "experience": "經驗：總場次 / 10（上限 100）"
         },
         "stats": {
           "totalGames": "總場次",
           "finalWinRate": "最終勝率",
-          "excessWinRate": "超額勝率",
-          "expectedWinRate": "預期勝率",
           "missionWinRate": "任務結算勝率",
           "merlinSurvival": "梅林存活率（藍方三藍局）",
           "redFinal": "紅方最終勝率",
@@ -569,7 +570,15 @@
           "red3Red": "三紅（紅方）",
           "redMerlinDead": "三藍死（紅方）",
           "blueMerlinAlive": "三藍活（藍方）",
-          "roleWinRates": "角色勝率"
+          "roleWinRates": "角色勝率",
+          "theoryTitle": "理論勝率",
+          "lastN": "近 {{count}} 場",
+          "career": "生涯 {{count}} 場",
+          "colRoleTheory": "角色理論",
+          "colPositionTheory": "位置理論",
+          "colFinal": "最終勝率",
+          "theoryNote": "場數不到 N 場時只列生涯；不到 3 場的角色或位置用全體最終勝率補到 3 場（場數少的人會比較接近全體平均）",
+          "theoryPending": "理論勝率：下次每日更新資料後提供"
         },
         "legacyNote": "角色勝率為任務結算口徑（三藍死算藍勝）"
       }
@@ -578,25 +587,28 @@
       "loading": "載入排行…",
       "notGenerated": "排行尚未產生（每日 03:47 重算）",
       "backendOutdated": "後端尚未更新到有排行 API 的版本（404），請稍後重試",
+      "upgrading": "排行正在改用「各人最近 100 場」的角色理論勝率，下次每日更新資料（03:47）後就會顯示",
       "loadFailed": "排行載入失敗",
       "retry": "重試",
       "asOf": "統計至 {{date}}",
       "datesNote": "{{parsed}} 局有日期、{{unparsed}} 局無日期",
-      "period": "期間 {{period}}",
-      "minGames": "至少 {{count}} 場",
-      "widened": "人數不足，期間放寬為{{span}}",
-      "allTime": "全期",
-      "days": "近 {{count}} 天",
-      "empty": "此榜尚無人上榜",
+      "principle": "誰上榜看近期（近 90 天內有出賽），數字一律看各人自己的最近 N 場，不用短期的日期區間，所以不會因為幾場運氣好就上榜。",
+      "exception": "例外：看全部場次",
+      "attempts": "{{hits}}/{{attempts}} 次",
+      "tip": {
+        "career": "生涯 {{count}} 場",
+        "span": "{{from}} ～ {{to}}",
+        "sparse": "用全體勝率補值：角色 {{roles}}/7、位置 {{seats}}/10"
+      },
+      "empty": "目前沒有符合條件的玩家（近 90 天內有出賽、生涯至少 100 場）",
       "precisionTitle": "精算榜（8 項指標）",
       "col": {
         "rank": "名次",
         "name": "玩家",
-        "excess": "超額勝率",
-        "shrunk": "排序值（縮減後）",
+        "roleTheory": "角色理論",
+        "positionTheory": "位置理論",
         "finalWinRate": "最終勝率",
-        "expected": "預期勝率",
-        "games": "期間場數"
+        "games": "場數"
       }
     },
     "analysis": {

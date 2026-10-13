@@ -357,14 +357,15 @@
           "rule": "Mission stage: 3-Red = red, 3-Blue = blue → Assassination stage: was Merlin killed in 3-Blue games → Final: blue only wins with 3-Blue and Merlin alive; 3-Red or 3-Blue-killed is a red win",
           "derived": "Legacy cache: derived from the outcome breakdown"
         },
-        "excessRanking": "Excess win rate ranking (30+ games)",
-        "excessRankingLegacy": "Theoretical win rate ranking (legacy mission-stage basis, 30+ games)",
-        "excessColumn": "Excess win rate",
+        "theoryRanking": "Role-theory win rate (each player's last 100 games, 100+ career games)",
+        "roleTheoryColumn": "Role theory",
+        "positionTheoryColumn": "Position theory",
+        "careerGames": "{{count}} career games",
+        "theoryLegend": "Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role; a role with fewer than 3 games is topped up to 3 at the population rate. Not limited to recent players; see the Boards tab for the current ranking.",
+        "theoryBaseline": "Dashed line = population baseline {{baseline}}% (someone who plays every role at the population average); red = below it.",
+        "theoryEmpty": "No player has 100 games yet",
+        "theoryPending": "The ranking is switching to the role-theory win rate; it appears after the next daily refresh",
         "finalWinRateColumn": "Final WR",
-        "legacyTheoryColumn": "Theoretical WR (legacy)",
-        "excessLegend": "Excess = final win rate − win rate expected from the roles played (may be negative); ranked by the all-time shrunk excess",
-        "excessLegendLegacy": "Cache not recomputed yet; showing the legacy theoretical win rate (≈ mission-stage win rate, 3-Blue-killed counts as a blue win)",
-        "excessEmpty": "No player has reached 30 games yet, so the excess ranking is empty",
         "seatPositionBasis": "Overall and per-role win rates use the mission-stage basis (3-Blue-killed counts as blue); hover for the outcome breakdown"
       },
       "lake": {
@@ -531,7 +532,7 @@
       "roleFinal": {
         "title": "Final win rate by role",
         "sub": "Red roles = 3-Red + 3-Blue-killed; blue roles = 3-Blue-alive (all players, all time)",
-        "note": "The \"expected win rate\" behind excess is this table weighted by each player's role mix"
+        "note": "Role theory tops up a role with fewer than 3 games using this table, and the population baseline is Σ chance of being dealt × this table"
       },
       "radar": {
         "loadingPlayers": "Loading players…",
@@ -544,7 +545,8 @@
           "redWinRate": "Red final WR",
           "blueMerlinProtect": "Blue 3B-alive",
           "missionWinRate": "Mission-stage WR",
-          "excessWinRate": "Excess WR",
+          "roleTheory": "Role theory",
+          "positionTheory": "Position theory",
           "redMerlinKillRate": "Red kill rate",
           "experience": "Experience"
         },
@@ -553,15 +555,14 @@
           "redWinRate": "Red final WR: share of red games ending 3-Red or 3-Blue-killed",
           "blueMerlinProtect": "Blue 3B-alive: share of blue games ending 3-Blue with Merlin alive",
           "missionWinRate": "Mission-stage WR: legacy basis where 3-Blue-killed also counts as a blue win",
-          "excessWinRate": "Excess WR: final WR − expected WR (weighted by the player's role mix); plotted around 50 on a 0–100 scale (50 = even; drawn at 50 when it cannot be computed)",
+          "roleTheory": "Role-theory WR (career): Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final WR as that role; roles with fewer than 3 games are topped up to 3 at the population rate",
+          "positionTheory": "Position-theory WR (career): Σ 1/10 × the player's final WR in each seat; seats with fewer than 3 games are topped up to 3 at the population rate",
           "redMerlinKillRate": "Red kill rate: share of red games ending 3-Blue-killed",
           "experience": "Experience: total games / 10 (capped at 100)"
         },
         "stats": {
           "totalGames": "Games",
           "finalWinRate": "Final WR",
-          "excessWinRate": "Excess WR",
-          "expectedWinRate": "Expected WR",
           "missionWinRate": "Mission-stage WR",
           "merlinSurvival": "Merlin survival (blue 3-Blue games)",
           "redFinal": "Red final WR",
@@ -569,7 +570,15 @@
           "red3Red": "3-Red (red)",
           "redMerlinDead": "3-Blue-killed (red)",
           "blueMerlinAlive": "3-Blue-alive (blue)",
-          "roleWinRates": "Role win rates"
+          "roleWinRates": "Role win rates",
+          "theoryTitle": "Theory win rates",
+          "lastN": "Last {{count}}",
+          "career": "Career ({{count}})",
+          "colRoleTheory": "Role theory",
+          "colPositionTheory": "Position theory",
+          "colFinal": "Final WR",
+          "theoryNote": "With fewer than N games only the career row is shown; roles or seats with fewer than 3 games are topped up to 3 at the population final WR (small samples stay near the average)",
+          "theoryPending": "Theory win rates: available after the next daily refresh"
         },
         "legacyNote": "Role win rates use the mission-stage basis (3-Blue-killed counts as blue)"
       }
@@ -578,24 +587,27 @@
       "loading": "Loading boards…",
       "notGenerated": "Leaderboard not generated yet (recomputed daily at 03:47)",
       "backendOutdated": "The backend has not been updated to a version with the leaderboard API yet (404); try again later",
+      "upgrading": "The leaderboard is switching to the role-theory win rate over each player's last 100 games; it appears after the next daily refresh (03:47)",
       "loadFailed": "Failed to load the leaderboard",
       "retry": "Retry",
       "asOf": "As of {{date}}",
       "datesNote": "{{parsed}} games dated, {{unparsed}} undated",
-      "period": "Period {{period}}",
-      "minGames": "{{count}}+ games",
-      "widened": "Too few qualifiers; window widened to {{span}}",
-      "allTime": "all time",
-      "days": "the last {{count}} days",
-      "empty": "Nobody qualifies for this board yet",
+      "principle": "Who is listed depends on recent activity (a game in the last 90 days); the numbers always come from each player's own last N games, never a short date window, so a few lucky games cannot top a board.",
+      "exception": "Exception: all games",
+      "attempts": "{{hits}}/{{attempts}}",
+      "tip": {
+        "career": "{{count}} career games",
+        "span": "{{from}} to {{to}}",
+        "sparse": "Topped up with population rates: {{roles}}/7 roles, {{seats}}/10 seats"
+      },
+      "empty": "Nobody qualifies yet (a game in the last 90 days and at least 100 career games)",
       "precisionTitle": "Precision Board (8 metrics)",
       "col": {
         "rank": "#",
         "name": "Player",
-        "excess": "Excess",
-        "shrunk": "Rank value (shrunk)",
+        "roleTheory": "Role theory",
+        "positionTheory": "Position theory",
         "finalWinRate": "Final WR",
-        "expected": "Expected",
         "games": "Games"
       }
     },
