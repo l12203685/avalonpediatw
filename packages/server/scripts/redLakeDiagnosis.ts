@@ -397,8 +397,9 @@ function traceGame(ctx: GameContext, label: string): string[] {
     const props = obs.voteHistory.filter((v) => v.round === r);
     const flags = findRule3Violators(analyzeLakeChain(truncated(obs, r)), truncated(obs, r));
     const flagged = [...flags].filter(([, l]) => l >= 0.85).map(([id]) => tag(id));
-    out.push(`  R${r} ${props.length} proposals; mission ${q.team.map(tag).join(' ')} → ${q.result} (${q.failCount})` +
+    out.push(`  R${r} mission ${q.team.map(tag).join(' ')} → ${q.result} (${q.failCount})` +
       `${flagged.length ? `; 硬3 ≥0.85 before: ${flagged.join(' ')}` : ''}`);
+    out.push(`     proposals: ${props.map((v) => `${v.leader}:[${v.team.join(' ')}]${v.approved ? '✓' : '✗'}`).join(' ')}`);
     for (const l of (obs.lakeHistory ?? []).filter((x) => x.round === r)) {
       out.push(`     lake: ${tag(l.holderId)} → ${tag(l.targetId)} declared ${l.declaredClaim === 'good' ? 'blue' : 'red'}`);
     }
