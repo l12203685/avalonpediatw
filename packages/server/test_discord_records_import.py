@@ -2066,14 +2066,12 @@ class WorkflowModeTest(unittest.TestCase):
         return out
 
     def test_scheduled_runs(self) -> None:
-        self.assertEqual(self.mode("schedule"), {"write": "true", "limit": "", "reply": "true", "fix_list": "false",
-                                                 "tz": "Asia/Taipei"})
-        for weekday in (1, 2, 3):  # Monday; Tuesday and Wednesday catch up on a lost Monday run
-            self.assertEqual(self.mode("schedule", weekday=weekday)["fix_list"], "true")
-        for weekday in (4, 5, 6, 7):
+        # Edward 2026-10-13「應該不用牌譜修正了」: scheduled runs never post the weekly list (manual only),
+        # on any weekday and whatever DISCORD_FIX_LIST says; the workflow no longer looks at the date.
+        self.assertEqual(self.mode("schedule"), {"write": "true", "limit": "", "reply": "true", "fix_list": "false"})
+        for weekday in range(1, 8):
             self.assertEqual(self.mode("schedule", weekday=weekday)["fix_list"], "false")
-        self.assertEqual(self.mode("schedule", weekday=1, VAR_FIX_LIST="false")["fix_list"], "false")
-        self.assertEqual(self.mode("schedule", weekday=1, VAR_FIX_LIST="true")["fix_list"], "true")
+        self.assertEqual(self.mode("schedule", weekday=1, VAR_FIX_LIST="true")["fix_list"], "false")
         self.assertEqual(self.mode("schedule", VAR_REPLY="false")["reply"], "false")
         self.assertEqual(self.mode("schedule", VAR_REPLY="true")["reply"], "true")
         self.assertEqual(self.mode("schedule", VAR_REPLY="")["reply"], "true")
