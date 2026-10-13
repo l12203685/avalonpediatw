@@ -111,18 +111,19 @@ services:
       - key: KEEP_ALIVE
         value: "true"
 
-      # ── 每週聊天紀錄匯出（2026-10-13；docs/COMMUNITY_FEEDBACK.md）──────────
-      # 每週一 09:00（+08，沒跑成會補到 12:00）bot 把上一週公開頻道與 LINE↔Discord 同步頻道的聊天
-      # （發言者換成 成員N）寫進「私人」試算表的「聊天紀錄」分頁，只留最近 8 週，給 AI 管理員每週讀。
-      # 免費：只用 Discord 與 Google Sheets API，沒有付費 API。log 只印數字。
+      # ── 每日聊天紀錄匯出（2026-10-13；docs/COMMUNITY_FEEDBACK.md）──────────
+      # 每天 04:30（+08）起 bot 把前一天公開頻道、公開論壇貼文與 LINE↔Discord 同步頻道的聊天
+      # （發言者換成 成員N，每天重新編號）寫進試算表的「聊天紀錄」分頁，只留最近 7 天；重啟後自動補齊 7 天。
+      # 免費：只用 Discord 與 Google Sheets API，沒有付費 API、不燒 token。log 只印數字。
       # 機密由 Actions → Render ops → apply 從 GitHub secrets 複製，不必手填。
       - key: GOOGLE_SERVICE_ACCOUNT_JSON       # ← GitHub secret AVALON_STATS_SHEETS_CREDENTIALS_JSON（或 GOOGLE_SHEETS_CREDENTIALS_JSON）
         sync: false                            #   服務帳號 JSON；沒有就不匯出
       # 以下都不是機密、預設就能用，需要時才在 Dashboard 加：
       #   CHAT_EXPORT_ENABLED                 預設開；false 關閉
-      #   CHAT_EXPORT_SHEET_ID                預設內建的私人試算表；off 關閉（公開的阿瓦隆百科試算表會被拒絕）
-      #   CHAT_EXPORT_SOURCE_CHANNEL_IDS      只讀這些頻道（逗號分隔；同步頻道一定會讀）
-      #   CHAT_EXPORT_EXCLUDE_CHANNEL_IDS     不讀這些頻道（逗號分隔；「大劍管理員」與 /意見 頻道一定不讀）
+      #   CHAT_EXPORT_SHEET_ID                預設內建的私人試算表；off 關閉（公開的阿瓦隆百科試算表會被拒絕，除非下一行）
+      #   CHAT_EXPORT_ALLOW_PUBLIC_SHEET      1 = 允許上一行是阿瓦隆百科試算表（知道連結就能看；Edward 決定後才設）
+      #   CHAT_EXPORT_SOURCE_CHANNEL_IDS      只讀這些頻道或論壇（逗號分隔；同步頻道一定會讀）
+      #   CHAT_EXPORT_EXCLUDE_CHANNEL_IDS     不讀這些頻道、論壇或貼文（逗號分隔；「大劍管理員」與 /意見 頻道一定不讀）
       #   FEEDBACK_DISCORD_CHANNEL_ID         /意見 轉貼頻道 id；預設管理員頻道「大劍管理員」；off 不轉貼
 
       # ── Firebase / Supabase：GitHub-only 架構「不需要」，全部留空即可 ──────
