@@ -136,7 +136,7 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 | `CHAT_EXPORT_ENABLED` | 否 | 開；`false` 關 |
 | `CHAT_EXPORT_SHEET_ID` | 否 | 內建的私人試算表；`off` 關（設成公開的阿瓦隆百科試算表會被拒絕、不匯出，除非下一列） |
 | `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | 否 | 不設；`1` ＝允許 `CHAT_EXPORT_SHEET_ID` 是阿瓦隆百科試算表（知道連結就能看，見 `docs/COMMUNITY_FEEDBACK.md`） |
-| `CHAT_EXPORT_SOURCE_CHANNEL_IDS` / `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空（所有公開頻道、公開論壇＋同步頻道；「大劍管理員」和 `/意見` 頻道一定不讀） |
+| `CHAT_EXPORT_EXTRA_SOURCE_IDS` / `CHAT_EXPORT_SOURCE_CHANNEL_IDS` / `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空（所有公開頻道、公開論壇＋同步頻道；「大劍管理員」和 `/意見` 頻道一定不讀）；加讀／取代／排除，見 `docs/COMMUNITY_FEEDBACK.md` |
 | `FEEDBACK_DISCORD_CHANNEL_ID` | 否 | 管理員頻道「大劍管理員」`1145513360545296574`；`off` 不轉貼 |
 | `FEEDBACK_COMMAND_ENABLED` | 否 | 開；`false` 關 `/意見` |
 

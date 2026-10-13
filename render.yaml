@@ -122,7 +122,8 @@ services:
       #   CHAT_EXPORT_ENABLED                 預設開；false 關閉
       #   CHAT_EXPORT_SHEET_ID                預設內建的私人試算表；off 關閉（公開的阿瓦隆百科試算表會被拒絕，除非下一行）
       #   CHAT_EXPORT_ALLOW_PUBLIC_SHEET      1 = 允許上一行是阿瓦隆百科試算表（知道連結就能看；Edward 決定後才設）
-      #   CHAT_EXPORT_SOURCE_CHANNEL_IDS      只讀這些頻道或論壇（逗號分隔；同步頻道一定會讀）
+      #   CHAT_EXPORT_EXTRA_SOURCE_IDS        另外加讀這些頻道或論壇（逗號分隔；預設名單照讀）
+      #   CHAT_EXPORT_SOURCE_CHANNEL_IDS      只讀這些頻道或論壇（取代預設名單；逗號分隔；同步頻道一定會讀）
       #   CHAT_EXPORT_EXCLUDE_CHANNEL_IDS     不讀這些頻道、論壇或貼文（逗號分隔；「大劍管理員」與 /意見 頻道一定不讀）
       #   FEEDBACK_DISCORD_CHANNEL_ID         /意見 轉貼頻道 id；預設管理員頻道「大劍管理員」；off 不轉貼
 
