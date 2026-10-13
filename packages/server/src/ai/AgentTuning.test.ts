@@ -97,13 +97,17 @@ describe('AgentTuning — flags', () => {
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, evilLakeHumanStrategy: true })).toBe('evilLakeHumanStrategy');
   });
 
-  it('2026-10-13 round-2 red switches: flags, env vars, off in legacy', () => {
+  it('2026-10-13 round-2 red switches: default on/off, flags, env vars, off in legacy', () => {
+    // strength_benchmark.md 第 7 節: vouch follow-up and the human framing rate are
+    // adopted (more human-like, +0.23pp over the lake strategy alone); the Oberon
+    // teammate search is not (lakes red more often than humans and is slightly weaker).
     const round2 = [
-      ['evilVouchFollowUp', 'AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP'],
-      ['evilLakeFrameHumanRate', 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE'],
-      ['oberonLakeSeeksTeammates', 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES'],
+      ['evilVouchFollowUp', 'AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP', true],
+      ['evilLakeFrameHumanRate', 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE', true],
+      ['oberonLakeSeeksTeammates', 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES', false],
     ] as const;
-    for (const [key, env] of round2) {
+    for (const [key, env, inDefault] of round2) {
+      expect(DEFAULT_AGENT_TUNING[key]).toBe(inDefault);
       expect(LEGACY_AGENT_TUNING[key]).toBe(false);
       expect(parseTuningFlag(key)).toEqual({ [key]: true });
       expect(AGENT_TUNING_ENV[key]).toBe(env);

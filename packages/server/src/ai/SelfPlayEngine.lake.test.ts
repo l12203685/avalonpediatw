@@ -17,6 +17,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SelfPlayEngine } from './SelfPlayEngine';
 import { RandomAgent } from './RandomAgent';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING } from './AgentTuning';
+import { HUMAN_FRAME_RATE } from './LakePolicy';
+import { withSeededRandom } from './benchmark/agreement';
 import type { PlayerObservation, VoteRecord, QuestRecord } from './types';
 
 // 2026-10-12: the production default (`DEFAULT_AGENT_TUNING`) flips the good
@@ -35,12 +37,21 @@ import type { PlayerObservation, VoteRecord, QuestRecord } from './types';
 // anyway (「紅方新湖法先打開，變弱應該從其他地方調整修正」), so it is in
 // the production default. The evil-holder tests below pin the older evil
 // branch with `LEGACY` / `PREVIOUS_DEFAULT` explicitly and check the human
-// strategy (`HUMAN_STRATEGY`, = the default) next to it.
+// strategy (`HUMAN_STRATEGY`) next to it. Round 2 (same day) also put
+// `evilLakeFrameHumanRate` in the default: a blue target is then framed at
+// the human rate of the state (a seeded `Math.random` draw), so
+// `HUMAN_STRATEGY` pins the deterministic claim rule of 第 6 節 and the
+// production default is checked as a rate.
 // `LakePolicy.tuning.test.ts` covers the strategy itself.
 const LEGACY = { ...LEGACY_AGENT_TUNING };
 const PRODUCTION = { ...DEFAULT_AGENT_TUNING };
-const PREVIOUS_DEFAULT = { ...DEFAULT_AGENT_TUNING, evilLakeHumanStrategy: false };
-const HUMAN_STRATEGY = { ...DEFAULT_AGENT_TUNING, evilLakeHumanStrategy: true };
+const PREVIOUS_DEFAULT = {
+  ...DEFAULT_AGENT_TUNING,
+  evilLakeHumanStrategy: false,
+  evilVouchFollowUp: false,
+  evilLakeFrameHumanRate: false,
+};
+const HUMAN_STRATEGY = { ...DEFAULT_AGENT_TUNING, evilLakeHumanStrategy: true, evilLakeFrameHumanRate: false };
 
 function makeObs(partial: Partial<PlayerObservation> & {
   allPlayerIds: string[];
@@ -277,7 +288,15 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     // blue with no shared failed mission (red not listening) gets the
     // truthful "good".
     expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', HUMAN_STRATEGY)).toBe('good');
-    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', PRODUCTION)).toBe('good');
+    // Production default (+ `evilLakeFrameHumanRate`, 2026-10-13 round 2):
+    // the same blue is framed at the human rate of this state (13.4%: no
+    // shared failed mission, red not listening), otherwise truthful.
+    let framed = 0;
+    for (let i = 0; i < 1000; i++) {
+      if (withSeededRandom(`claim${i}`, () => engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', PRODUCTION)) === 'evil') framed++;
+    }
+    expect(framed / 1000).toBeGreaterThan(HUMAN_FRAME_RATE.notSharedNotListening - 0.04);
+    expect(framed / 1000).toBeLessThan(HUMAN_FRAME_RATE.notSharedNotListening + 0.04);
   });
 
   it('evil holder with no pressured ally and no distinct opponent picks deterministically', () => {
