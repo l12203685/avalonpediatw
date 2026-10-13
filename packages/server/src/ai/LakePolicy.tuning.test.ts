@@ -15,6 +15,7 @@ import {
   decideLakeClaimForTeam,
   declareLake,
   estimateSuspicionFromHistory,
+  evilLakeHumanOptionsFor,
   evilLakeHumanOptionsFromEnv,
   getEvilLakeHumanOptions,
   humanFrameRate,
@@ -341,6 +342,14 @@ describe('LakePolicy — evilLakeHumanStrategy', () => {
     const onlyRate = { ...LEGACY_AGENT_TUNING, evilLakeFrameHumanRate: true };
     expect(pickLakeTargetForTeam('evil', lastLake, ['P3', 'P5', 'P6', 'P9'], onlyRate))
       .toBe(pickLakeTargetForTeam('evil', lastLake, ['P3', 'P5', 'P6', 'P9'], { ...LEGACY_AGENT_TUNING }));
+  });
+
+  it('evilLakeHumanOptionsFor maps the round-2 switches onto the tactic mix', () => {
+    expect(evilLakeHumanOptionsFor({ ...ON })).toEqual(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS);
+    expect(evilLakeHumanOptionsFor({ ...ON, evilLakeFrameHumanRate: true }).chaos).toBe('humanRate');
+    expect(evilLakeHumanOptionsFor({ ...ON, oberonLakeSeeksTeammates: true }).oberonTarget).toBe('teammate');
+    const both = evilLakeHumanOptionsFor({ ...ON, evilLakeFrameHumanRate: true, oberonLakeSeeksTeammates: true });
+    expect(both).toEqual({ ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'humanRate', oberonTarget: 'teammate' });
   });
 
   it('oberonLakeSeeksTeammates: Oberon lakes the seat with the most fail cards he did not play', () => {
