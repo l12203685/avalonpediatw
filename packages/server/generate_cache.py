@@ -209,14 +209,18 @@ SEAT_DEAL_TENTHS = {s: 1 for s in SEATS}
 # constant lives here, the TypeScript side only reads the cache. Owner's rule (2026-10-13):
 # the FILTER may be recent (who is active), the DATA may not be few games, so the boards use
 # each player's last N games, never a short date window (newcomers are the one exception).
+# The players' theory windows are not a separate knob: they are always (mainGames, shortGames), see
+# theory_windows(), so players[].theory, the boards and overview.topPlayersByRoleTheory cannot drift
+# apart. Readers (bots, site, tests) take the window sizes from the cache, never assume 100 / 50.
 LEADERBOARD_CONFIG: dict[str, Any] = {
-    "theoryWindows": [100, 50],     # players[].theory.last100 / last50 (plus .career)
     "theoryMinCellGames": 3,        # a role / seat with fewer games in the window is topped up to
                                     # this many games at the population final win rate (0 = off)
     "activeDays": 90,               # every board but newcomers: played in the last N days (asOf included)
     "topN": 10,
-    "mainGames": 100,               # main: each player's last N games; needs N career games
-    "shortGames": 50,               # last50: each player's last N games; needs N career games
+    "mainGames": 100,               # main: each player's last N games; needs N career games;
+                                    # also players[].theory.last<N> and overview.topPlayersByRoleTheory
+    "shortGames": 50,               # last50: each player's last N games; needs N career games;
+                                    # also players[].theory.last<N>
     "improvedGames": 50,            # improved: last N games vs the N before them; needs 2N career games
     "assassinAttempts": 20,         # assassin: the last N assassinations as 刺客 (刺客 games that reached 三藍)
     "assassinMinAttempts": 10,
@@ -876,8 +880,9 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
 #                    using the published (1-decimal) global rates, so anyone can recompute it
 #                    from the cache alone; excessWinRate = finalWinRate - expectedFinalWinRate
 #   firstPlayed / lastPlayed = earliest / latest parsed 日期時間 of the counted games ('' if none)
-#   theory           = {"last100", "last50", "career"}: theory_window over the player's last N
-#                    games / all of them (compute_player_stats; appended after the fields above)
+#   theory           = {"last100", "last50", "career"} (last<N> for N in theory_windows() = mainGames,
+#                    shortGames): theory_window over the player's last N games / all of them
+#                    (compute_player_stats; appended after the fields above)
 
 def _rate(count: float, total: float) -> float:
     return rnd1(count / total * 100) if total else 0.0
@@ -1085,8 +1090,8 @@ def compute_seat_final_win_rates(games: list[GameRow]) -> dict[str, float]:
 #   seatFinalWinRates (the published 1-decimal values); a cell with no game is the population
 #   rate. sparseRoles / sparseSeats say how many cells were topped up.
 #   The sums are exact (fractions) and rounded once, half to even like rnd1.
-#   Windows: the player's last N games for N in theoryWindows (all of them when they have
-#   fewer; `games` says how many) and career. Games are ordered by player_timelines.
+#   Windows: the player's last N games for N in theory_windows() = (mainGames, shortGames) (all of
+#   them when they have fewer; `games` says how many) and career. Games are ordered by player_timelines.
 
 @dataclass(frozen=True)
 class PlayerSeat:
@@ -1188,11 +1193,35 @@ def theory_key(window: int) -> str:
     return f"last{window}"
 
 
+def theory_windows(cfg: Mapping[str, Any] | None = None) -> list[int]:
+    """The players' last-N theory windows: [mainGames, shortGames] (one entry when they are equal).
+    Derived, so the windows always match the main / last50 boards; written to leaderboard.config
+    and overview.theoryConfig as `theoryWindows` for the readers."""
+    cfg = LEADERBOARD_CONFIG if cfg is None else cfg
+    out: list[int] = []
+    for n in (int(cfg["mainGames"]), int(cfg["shortGames"])):
+        if n > 0 and n not in out:
+            out.append(n)
+    return out
+
+
+def theory_config(cfg: Mapping[str, Any] | None = None) -> dict:
+    """overview.theoryConfig: what the site needs to word the theory rates (top-up threshold and
+    window sizes) without hard-coding them; the bots read the same values from leaderboard.config."""
+    cfg = LEADERBOARD_CONFIG if cfg is None else cfg
+    return {
+        "theoryMinCellGames": int(cfg["theoryMinCellGames"]),
+        "theoryWindows": theory_windows(cfg),
+        "mainGames": int(cfg["mainGames"]),
+        "activeDays": int(cfg["activeDays"]),
+    }
+
+
 def player_theory(seats: Sequence[PlayerSeat], role_rates: Mapping[str, float], seat_rates: Mapping[str, float]) -> dict:
-    """players[].theory: {"last100": ..., "last50": ..., "career": ...} (theoryWindows, then career)."""
+    """players[].theory: {"last100": ..., "last50": ..., "career": ...} (theory_windows(), then career)."""
     out = {
         theory_key(n): theory_window(seats[-n:], role_rates, seat_rates, window=n)
-        for n in LEADERBOARD_CONFIG["theoryWindows"]
+        for n in theory_windows()
     }
     out["career"] = theory_window(seats, role_rates, seat_rates, window=0)
     return out
@@ -1574,6 +1603,8 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
         # seat (the sparse-cell top-up of positionTheory) and the all-time role-theory ranking.
         "seatFinalWinRates": compute_seat_final_win_rates(games),
         "topPlayersByRoleTheory": top_players_by_role_theory(players),
+        # The settings the site words the theory rates with (top-up threshold, windows).
+        "theoryConfig": theory_config(),
     }
 
 
@@ -2547,7 +2578,7 @@ def compute_leaderboard(
     return {
         "asOf": as_of.isoformat(),
         "dates": date_summary(games),
-        "config": copy.deepcopy(cfg),
+        "config": {"theoryWindows": theory_windows(cfg), **copy.deepcopy(cfg)},
         "boards": [b for b in boards if b["rows"]],
     }
 

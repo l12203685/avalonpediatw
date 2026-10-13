@@ -40,6 +40,32 @@ FAKE_KEY = {
 CI_ENV = ("GITHUB_ACTIONS", "GITHUB_STEP_SUMMARY", gc.ENV_CREDENTIALS_FILE, gc.ENV_CREDENTIALS_JSON, gc.ENV_SHEET_ID, gc.ENV_AS_OF)
 AS_OF = dt.date(2026, 10, 12)
 
+# The LEADERBOARD_CONFIG every hand-computed example below was worked out with. The whole module
+# runs with it (setUpModule), so the owner can change a knob in generate_cache.py -- e.g. turn the
+# sparse-cell top-up off with theoryMinCellGames = 0, or rank on the last 80 games -- without
+# failing the daily refresh workflow, which runs these tests before it regenerates the cache.
+# LeaderboardConfigTest checks the owner's real values (REAL_LEADERBOARD_CONFIG) on their own.
+TEST_LEADERBOARD_CONFIG: dict = {
+    "theoryMinCellGames": 3, "activeDays": 90, "topN": 10, "mainGames": 100, "shortGames": 50,
+    "improvedGames": 50, "assassinAttempts": 20, "assassinMinAttempts": 10, "newcomerDays": 90,
+    "newcomerMinGames": 10, "roleTitleMinGames": 20, "roleTitleGames": 20,
+}
+REAL_LEADERBOARD_CONFIG: dict = copy.deepcopy(gc.LEADERBOARD_CONFIG)
+_PINNED_CONFIG = mock.patch.dict(gc.LEADERBOARD_CONFIG, TEST_LEADERBOARD_CONFIG, clear=True)
+
+
+def setUpModule() -> None:  # noqa: N802 (unittest / pytest hook name)
+    _PINNED_CONFIG.start()
+
+
+def tearDownModule() -> None:  # noqa: N802
+    _PINNED_CONFIG.stop()
+
+
+def config_patch(**values: object) -> mock._patch:
+    """LEADERBOARD_CONFIG with `values` changed (on top of TEST_LEADERBOARD_CONFIG)."""
+    return mock.patch.dict(gc.LEADERBOARD_CONFIG, values)
+
 
 def quiet_env(**extra: str) -> mock._patch:
     """os.environ without CI / credential variables (plus `extra`)."""
@@ -691,7 +717,8 @@ class PlayerAggregationTest(unittest.TestCase):
         self.assertEqual((ov["redWinRate"], ov["blueWinRate"]), (20.0, 60.0))
         self.assertEqual(ov["seatFinalWinRates"], EXPECTED_SEAT_FINAL)
         self.assertEqual(ov["topPlayersByRoleTheory"], [])  # nobody has 100 games
-        self.assertEqual(list(ov)[-2:], ["seatFinalWinRates", "topPlayersByRoleTheory"])
+        self.assertEqual(list(ov)[-3:], ["seatFinalWinRates", "topPlayersByRoleTheory", "theoryConfig"])
+        self.assertEqual(ov["theoryConfig"], {"theoryMinCellGames": 3, "theoryWindows": [100, 50], "mainGames": 100, "activeDays": 90})
 
     def test_theory_of_a_fixture_player(self) -> None:
         """甲 (4 games, every one won): the sparse cells are topped up with the fixture's own
@@ -963,7 +990,11 @@ class CommittedCachePropertyTest(unittest.TestCase):
         """Rows written since schemaVersion 3 carry theory windows consistent with the row."""
         if not any("theory" in row for row in self.rows):
             self.skipTest("the committed cache predates the theory win rates")
-        windows = gc.LEADERBOARD_CONFIG["theoryWindows"]
+        # The windows the cache was written with (its own leaderboard.config), not today's
+        # LEADERBOARD_CONFIG: a changed mainGames / shortGames must not fail the workflow
+        # before it has regenerated the file.
+        config = (self.cache.get("leaderboard") or {}).get("config") or {}
+        windows = config.get("theoryWindows") or gc.theory_windows(config if "mainGames" in config else None)
 
         def check(row):
             theory = row["theory"]
@@ -1431,8 +1462,10 @@ class TheoryTest(unittest.TestCase):
             "window": 0, "games": 5, "roleTheory": 58.8, "positionTheory": 48.7, "finalWinRate": 60.0,
             "from": "2026-01-01", "to": "2026-01-05", "sparseRoles": 5, "sparseSeats": 7,
         })
-        self.assertEqual(gc.LEADERBOARD_CONFIG["theoryMinCellGames"], 3)
-        self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 59.4)  # the default
+        # Without min_cell, theory_window follows LEADERBOARD_CONFIG["theoryMinCellGames"].
+        self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 59.4)
+        with config_patch(theoryMinCellGames=0):
+            self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 58.8)
 
     def test_last_100_last_50_and_career(self) -> None:
         """120 games as 忠臣 cycling through the seats: 70 losses, then 50 wins."""
@@ -1440,7 +1473,7 @@ class TheoryTest(unittest.TestCase):
                     for i in range(120)]
         theory = gc.player_theory(timeline, THEORY_ROLE_RATES, THEORY_SEAT_RATES)
         self.assertEqual(list(theory), ["last100", "last50", "career"])
-        specials = 0.1 * (70 + 70 + 69 + 71 + 30 + 31)  # 34.1: the five... six special roles, never played
+        specials = 0.1 * (70 + 70 + 69 + 71 + 30 + 31)  # 34.1: the six special roles, never played
         # last 50: all wins -> 0.4 x 100 + 34.1 = 74.1; every seat 5/5 -> 100.
         self.assertEqual(theory["last50"], {"window": 50, "games": 50, "roleTheory": 74.1, "positionTheory": 100.0,
                                             "finalWinRate": 100.0, "from": "2026-01-08", "to": "2026-01-12",
@@ -1525,8 +1558,8 @@ class LeaderboardTest(unittest.TestCase):
         self.assertEqual(list(self.lb), ["asOf", "dates", "config", "boards"])
         self.assertEqual(self.lb["asOf"], "2026-10-12")
         self.assertEqual(self.lb["dates"], {"parsed": 230, "unparsed": 2, "earliest": "2024-01-01", "latest": "2026-07-25"})
-        self.assertEqual(self.lb["config"], gc.LEADERBOARD_CONFIG)
-        self.assertIsNot(self.lb["config"], gc.LEADERBOARD_CONFIG)
+        self.assertEqual(self.lb["config"], {"theoryWindows": [100, 50], **TEST_LEADERBOARD_CONFIG})
+        self.assertEqual(list(self.lb["config"])[0], "theoryWindows")  # derived: (mainGames, shortGames)
         self.assertEqual(list(self.boards), ["main", "last50", "improved", "assassin", "newcomers", "roleTitles"])
         for board in self.lb["boards"]:
             with self.subTest(board=board["id"]):
@@ -1651,6 +1684,95 @@ class LeaderboardTest(unittest.TestCase):
             self.assertGreaterEqual(r["careerGames"], 100)
         keys = [(-r["roleTheory"], -r["careerGames"], r["name"]) for r in top]
         self.assertEqual(keys, sorted(keys))
+
+    def test_active_means_a_game_in_the_last_90_days_as_of_included(self) -> None:
+        """asOf 2026-10-12: a last game on 2026-07-15 (asOf - 89, the 90th day) is active, 07-14 is not."""
+        on_edge = [f"邊{i}" for i in range(1, 10)]
+        too_old = [f"舊{i}" for i in range(1, 10)]
+        start = dt.date(2026, 4, 6)  # 100 games, one a day: 04-06 .. 07-14
+        rows = [LOG_HEADERS]
+        rows += [dated(f"A{i}", (start + dt.timedelta(days=i + 1)).isoformat(), "三紅", ["甲"] + on_edge) for i in range(100)]
+        rows += [dated(f"B{i}", (start + dt.timedelta(days=i)).isoformat(), "三紅", ["乙"] + too_old) for i in range(100)]
+        cache = build_fresh(rows)
+        last = {p["name"]: p["lastPlayed"] for p in cache["players"]["players"]}
+        self.assertEqual((last["甲"], last["乙"]), ("2026-07-15", "2026-07-14"))
+        boards = {b["id"]: b for b in cache["leaderboard"]["boards"]}
+        for board_id in ("main", "last50", "roleTitles"):
+            with self.subTest(board=board_id):
+                names = {r["name"] for r in boards[board_id]["rows"]}
+                self.assertIn("甲", names)
+                self.assertFalse(names & ({"乙"} | set(too_old)))
+
+    def test_assassin_board_needs_ten_attempts(self) -> None:
+        """Nine assassinations as 刺客 (games that reached 三藍) are too few, ten are enough; 三紅 games
+        as 刺客 are not attempts."""
+        rows = [LOG_HEADERS]
+        for name, attempts in (("十次", 10), ("九次", 9)):
+            others = [f"{name}{i}" for i in range(1, 10)]
+            outcomes = ["三藍死", "三藍活"] * 5
+            rows += [dated(f"{name}{i}", "2026-10-01", outcomes[i], [name] + others) for i in range(attempts)]
+            rows += [dated(f"{name}紅{i}", "2026-10-02", "三紅", [name] + others) for i in range(5)]
+        board = next(b for b in build_fresh(rows)["leaderboard"]["boards"] if b["id"] == "assassin")
+        self.assertEqual([(r["name"], r["hits"], r["attempts"], r["value"]) for r in board["rows"]], [("十次", 5, 10, 50.0)])
+
+
+class LeaderboardConfigTest(unittest.TestCase):
+    """The knobs of LEADERBOARD_CONFIG: the owner's real values, and that changing one flows through
+    to every reader (the doc tells Edward he may)."""
+
+    def test_the_real_config_is_usable(self) -> None:
+        cfg = REAL_LEADERBOARD_CONFIG
+        self.assertEqual(set(cfg), set(TEST_LEADERBOARD_CONFIG))  # same knobs; the values are the owner's
+        for key, value in cfg.items():
+            with self.subTest(key=key):
+                self.assertIsInstance(value, int)
+                self.assertGreaterEqual(value, 1 if key in ("topN", "mainGames", "shortGames") else 0)
+        with mock.patch.dict(gc.LEADERBOARD_CONFIG, REAL_LEADERBOARD_CONFIG, clear=True):
+            cache = build_fresh(leaderboard_log())
+            windows = gc.theory_windows()
+        self.assertEqual(gc.validate_new_cache(cache, None), [])
+        self.assertEqual(cache["leaderboard"]["config"], {"theoryWindows": windows, **REAL_LEADERBOARD_CONFIG})
+        self.assertEqual(cache["overview"]["theoryConfig"]["theoryWindows"], windows)
+        for row in cache["players"]["players"]:
+            self.assertEqual(list(row["theory"]), [gc.theory_key(n) for n in windows] + ["career"])
+
+    def test_windows_are_main_and_short_games(self) -> None:
+        self.assertEqual(gc.theory_windows(), [100, 50])
+        self.assertEqual(gc.theory_windows({"mainGames": 50, "shortGames": 50}), [50])
+        with config_patch(mainGames=80):
+            cache = build_fresh(leaderboard_log())
+        rows = {p["name"]: p for p in cache["players"]["players"]}
+        self.assertEqual(list(rows["甲"]["theory"]), ["last80", "last50", "career"])
+        self.assertEqual(cache["leaderboard"]["config"]["theoryWindows"], [80, 50])
+        self.assertEqual(cache["overview"]["theoryConfig"],
+                         {"theoryMinCellGames": 3, "theoryWindows": [80, 50], "mainGames": 80, "activeDays": 90})
+        main = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "main")
+        self.assertEqual((main["period"], main["windowGames"], main["minGames"]), ("各人最近 80 場", 80, 80))
+        jia = next(r for r in main["rows"] if r["name"] == "甲")
+        self.assertEqual(jia["roleTheory"], rows["甲"]["theory"]["last80"]["roleTheory"])
+        top = cache["overview"]["topPlayersByRoleTheory"]  # still filled: it reads last<mainGames>
+        self.assertEqual(len(top), 10)
+        for r in top:
+            self.assertEqual((r["roleTheory"], r["games"]), (rows[r["name"]]["theory"]["last80"]["roleTheory"], 80))
+        self.assertEqual(gc.validate_new_cache(cache, None), [])
+
+    def test_top_up_off(self) -> None:
+        """theoryMinCellGames = 0: the numbers, the board notes and overview.theoryConfig all follow."""
+        with config_patch(theoryMinCellGames=0):
+            cache = build_fresh(leaderboard_log())
+            seats = gc.player_timelines(gc.parse_game_log(leaderboard_log()))["甲"]
+            overview = cache["overview"]
+            expected = gc.theory_window(seats[-100:], overview["roleFinalWinRates"], overview["seatFinalWinRates"], 0, 100)
+        self.assertEqual(overview["theoryConfig"]["theoryMinCellGames"], 0)
+        self.assertEqual(cache["leaderboard"]["config"]["theoryMinCellGames"], 0)
+        main = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "main")
+        self.assertNotIn("補到", main["note"])
+        self.assertNotIn("topped up", main["noteEn"])
+        jia = next(r for r in main["rows"] if r["name"] == "甲")
+        self.assertEqual((jia["roleTheory"], jia["positionTheory"]), (expected["roleTheory"], expected["positionTheory"]))
+        # (Here every played cell has 50+ games, so only the wording changes; TheoryTest checks the
+        # numbers of a top-up that matters, with and without it.)
+        self.assertEqual(gc.validate_new_cache(cache, None), [])
 
 
 class OnlyTheDayChangedTest(unittest.TestCase):

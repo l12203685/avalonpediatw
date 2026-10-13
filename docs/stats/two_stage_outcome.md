@@ -27,7 +27,7 @@
 | `expectedFinalWinRate` | Σ_角色 本人該角色出現比例 × 全體該角色最終勝率 |
 | `excessWinRate` | `finalWinRate` − `expectedFinalWinRate`（可為負）。保留給舊讀者；2026-10-13 起排行、機器人、網站主畫面都不用 |
 | `firstPlayed` / `lastPlayed` | 解析得到的最早 / 最晚出賽日 `YYYY-MM-DD`，沒有則 `""` |
-| `theory` | 理論勝率：`last100`、`last50`、`career` 三段（schemaVersion 3，見〈理論勝率〉） |
+| `theory` | 理論勝率：`last100`、`last50`、`career` 三段（近 N 場的 N 跟著設定，schemaVersion 3，見〈理論勝率〉） |
 
 舊欄位語意（保留不改）：`winRate`、`redWin`、`blueWin`、`roleWinRates`、`seat*WinRates` 都是任務結算口徑（三藍死算藍勝）。`roleTheory` ≈ 本人任務結算勝率（用本人自己的角色分配加權，所以幾乎等於本人勝率），`positionTheory` 恆為 0：兩個都**不是** Edward 定義的理論勝率，網站與機器人不顯示；數值不改，因為網站精算榜的 ELO 加分（`FirestoreLeaderboard.ts`）還在讀 `roleTheory`。正確的理論勝率在 `theory`。
 
@@ -53,11 +53,13 @@ schemaVersion 3（2026-10-13）另加：
 ```json
 "schemaVersion": 3,
 "seatFinalWinRates": {"1": 46.0, "2": 43.1, "3": 43.4, "4": 46.0, "5": 52.0, "6": 46.4, "7": 42.7, "8": 46.3, "9": 46.8, "10": 48.6},
-"topPlayersByRoleTheory": [{"name": "…", "roleTheory": 55.2, "positionTheory": 55.2, "finalWinRate": 56.0, "games": 100, "careerGames": 1014}]
+"topPlayersByRoleTheory": [{"name": "…", "roleTheory": 55.2, "positionTheory": 55.2, "finalWinRate": 56.0, "games": 100, "careerGames": 1014}],
+"theoryConfig": {"theoryMinCellGames": 3, "theoryWindows": [100, 50], "mainGames": 100, "activeDays": 90}
 ```
 
 - `seatFinalWinRates`：全體各位置（鍵 `1`～`10`，10 號位）的最終勝率，算法同 `roleFinalWinRates`（有名字的座位、結果是三紅／三藍死／三藍活的局）。位置理論補值用。
-- `topPlayersByRoleTheory`：生涯至少 `mainGames`（100）場的玩家，**不限近期出賽**，依各人最近 100 場的角色理論勝率排序（同分看生涯場數多的、再看名字），前 `topN`（10）名；網站總覽用。
+- `topPlayersByRoleTheory`：生涯至少 `mainGames`（100）場的玩家，**不限近期出賽**，依各人最近 `mainGames` 場的角色理論勝率排序（同分看生涯場數多的、再看名字），前 `topN`（10）名；網站總覽用。
+- `theoryConfig`：產生器當下的設定（補值門檻、近 N 場的 N、主榜場數、近期天數），和 `leaderboard.config` 同值。網站的說明文字（總覽、各角色最終勝率表、玩家雷達）照這裡組字，不寫死「100 場」「補到 3 場」。
 
 `players.players[]` 與 `playerDetails[name].player`：上表玩家層欄位全部加入。
 
@@ -70,7 +72,7 @@ schemaVersion 3（2026-10-13）另加：
  "roleTheory": theory.career.roleTheory, "positionTheory": theory.career.positionTheory}
 ```
 
-`roleTheory` / `positionTheory` 是生涯的理論勝率（2026-10-13 起）；快取沒有 `theory` 時為 `null`，不拿舊的 `roleTheory` 充數。網站雷達只讀 `player.theory`（舊後端送的 radar 這兩鍵是舊口徑），`excessWinRate` 不再畫。
+`roleTheory` / `positionTheory` 是生涯的理論勝率（2026-10-13 起）；快取沒有 `theory` 時為 `null`，不拿舊的 `roleTheory` 充數。網站雷達只讀 `player.theory`（舊後端送的 radar 這兩鍵是舊口徑），`excessWinRate` 不再畫；算不出來的軸（例如重算前的舊快取沒有理論勝率）不畫，不會畫成 0%。
 
 快取缺新欄位時（重算前的舊快取），後端用原始計數現場算：`finalWinRate = (rawRedThreeRed + rawRedMerlinDead + rawBlueMerlinAlive) / totalGames` 等；`excessWinRate` 算不出來時為 `null`，網站與機器人顯示「—」。
 
@@ -104,12 +106,13 @@ Edward 10/13 原話：
 }
 ```
 
-- `last100` / `last50`：本人最近 100 / 50 場；場數不夠時就是全部場次，`games` 寫實際場數（機器人與網站此時只列生涯那一段）。`career`：全部場次（`games` = `totalGames`）。
+- `last100` / `last50`：本人最近 `mainGames`（100）/ `shortGames`（50）場；場數不夠時就是全部場次，`games` 寫實際場數（機器人與網站此時只列生涯那一段）。`career`：全部場次（`games` = `totalGames`）。
+- 近 N 場的 N 不是另外一個設定，固定等於主榜的 `mainGames` 與近 50 場榜的 `shortGames`（`theory_windows()`），所以玩家卡、雷達、主榜、總覽排行一定看同樣的場數。設定改了，鍵名跟著改（例如 `mainGames` 改成 80 就是 `last80`）；機器人、網站、測試都依鍵名或 `leaderboard.config.theoryWindows` 讀，不假設一定是 100／50。
 - `from` / `to`：這段場次裡最早 / 最晚有日期的局。
 - 「最近」的順序：先看日期時間，同一天再看在牌譜（接著是 Discord匯入）裡的列序。沒有日期的局跟著它上面最近一筆有日期的局排；牌譜最上面那批沒有日期的舊局排在最前面（最舊）。
 - 只算結果是三紅／三藍死／三藍活的局，和玩家層其他欄位一致。
 
-**少場補值（可以拿掉）**：某個角色或位置在這段場次裡不到 3 場，就用「全體在這個角色／位置的最終勝率」補到 3 場再算。例如最近 100 場只當過 2 次梅林、贏 1 次，梅林那格就算成（贏的 1 場 + 補上的 1 場 × 全體梅林勝率）÷ 3 場；全體梅林勝率 30% 時是 (1 + 0.3) ÷ 3 ≈ 43.3%，不會因為只有 2 場就直接算 50%（或 0%、100%）。完全沒當過的角色就直接用全體勝率。全體勝率用快取裡公開的 `overview.roleFinalWinRates` / `seatFinalWinRates`（一位小數），所以每格怎麼補都查得到。`sparseRoles` / `sparseSeats` 記錄補了幾格（角色共 7 格、位置共 10 格）。這個門檻是 `LEADERBOARD_CONFIG["theoryMinCellGames"]`（3）；**Edward 若不要補值，改成 0 即可**（改成 0 後，有打過的格子用本人自己的勝率，沒打過的格子仍用全體勝率，因為不能留空）。在 2146 局的快照裡，生涯 ≥ 100 場的 40 人，最近 100 場平均補了 0 格；最近 50 場平均補了 0.65 個角色格、1.1 個位置格。
+**少場補值（可以拿掉）**：某個角色或位置在這段場次裡不到 3 場，就用「全體在這個角色／位置的最終勝率」補到 3 場再算。例如最近 100 場只當過 2 次梅林、贏 1 次，梅林那格就算成（贏的 1 場 + 補上的 1 場 × 全體梅林勝率）÷ 3 場；全體梅林勝率 30% 時是 (1 + 0.3) ÷ 3 ≈ 43.3%，不會因為只有 2 場就直接算 50%（或 0%、100%）。完全沒當過的角色就直接用全體勝率。全體勝率用快取裡公開的 `overview.roleFinalWinRates` / `seatFinalWinRates`（一位小數），所以每格怎麼補都查得到。`sparseRoles` / `sparseSeats` 記錄補了幾格（角色共 7 格、位置共 10 格）。這個門檻是 `LEADERBOARD_CONFIG["theoryMinCellGames"]`（3）；**Edward 若不要補值，改成 0 即可，其他地方不用動**（改成 0 後，有打過的格子用本人自己的勝率，沒打過的格子仍用全體勝率，因為不能留空）。機器人的註腳、榜的說明、網站的說明文字都讀快取裡的設定（`leaderboard.config`、`overview.theoryConfig`），改成 0 後就不再提補值；產生器的測試用自己固定的設定（`test_generate_cache.py` 的 `TEST_LEADERBOARD_CONFIG`），所以每日重算前跑的測試不會因為改設定而失敗，`LeaderboardConfigTest` 另外檢查真正的設定能產生合格的快取。在 2146 局的快照裡，生涯 ≥ 100 場的 40 人，最近 100 場平均補了 0 格；最近 50 場平均補了 0.65 個角色格、1.1 個位置格。
 
 **為什麼還不算「最完整理論勝率」（角色 × 位置）**：那要把 7 個角色 × 10 個位置 = 70 格各自算勝率。特殊角色在某一個位置的機率只有 1/10 × 1/10 = 1/100，要平均每格 3 場就要約 300 場，5 場就要約 500 場。2146 局快照實測：生涯 ≥ 100 場的人，最近 100 場裡 70 格中平均只有 12 格有 3 場以上（最多 16 格），其他格子幾乎全靠補值，算出來就只是全體平均；只有生涯 700 場以上的少數老玩家才把 70 格大致填滿。所以照 Edward 說的，先分角色、分位置各算一個。
 
@@ -147,12 +150,15 @@ Edward 10/13 原話：
 | `roleTitles` 角色王 | `finalWinRate` | 每個角色：近 90 天有出賽、生涯該角色 ≥ 20 場 | 各人該角色最近 20 場 | `role`、`wins`、`careerRoleGames`；每個角色只列第一名 |
 
 - 排序：value 高 → 低，同分看 `games` 多的、再看 `careerGames` 多的、再看名字；角色王同率看該角色生涯場數多的、再看名字。每榜最多 `topN`（10）列；做不出來的榜（沒有人符合）就不放。
+- 進步榜的 value 是兩段角色理論勝率相減，單位是**百分點**（網站顯示「+10.4 個百分點」，機器人顯示「+10.4」），不是相對成長幾 %。
+- 角色王：同一個人可以同時拿好幾個角色的稱號。2146 局快照裡，一位玩家拿了 7 個角色中的 5 個（刺客、莫甘娜、莫德雷德、梅林、忠臣），其中莫甘娜、莫德雷德（都是最近 20 場贏 18 場）與忠臣（9/20）三個是同率，靠「該角色生涯場數多」勝出（例如 89 場對 46 場）。要不要改成同率並列、或每人最多一個稱號，由 Edward 決定。
 - 每個榜都有 `id`、`metric`、`title`、`titleEn`、`period`、`periodEn`、`minGames`、`note`、`noteEn`、`rows`；`main`、`last50`、`improved`、`assassin`、`roleTitles` 有 `windowGames`，`newcomers` 有 `windowDays` 與 `allGames`。`note` 第一個「；」前是上榜條件（機器人只印這段），後面是公式說明（網站顯示整段）。
 - 拿掉的舊榜：90 天日期窗的 `recent`、日期窗的 `improved`、7 天的 `assassin`、上個月的 `roleTitles`，以及 `online`（線瓦榜）。線瓦榜拿掉是因為近一年的局幾乎都是線瓦：2026-10-12 的快取裡，近一年的局 100% 有填分類，超額主榜與線瓦榜上是同樣的 10 個人，他們這一年的 627 場出賽中 555 場（約 89%）是線瓦，兩個榜幾乎一樣。
-- 「近 90 天內有出賽」看該玩家全部有日期的局的最晚一場；日期在 asOf 之後（打錯字）的局當作沒有日期。`asOf` 預設為台灣（+08）當天，環境變數 `AVALON_STATS_AS_OF=YYYY-MM-DD` 可覆寫（測試與重現用）；`leaderboard.config` 是 `LEADERBOARD_CONFIG` 的完整複本。日期只影響「誰算近期出賽」與新人榜的期間；若和前一天的檔案相比只差 asOf，就不重寫檔案（`only_the_day_changed`）。
+- 「近 90 天內有出賽」看該玩家全部有日期的局的最晚一場；日期在 asOf 之後（打錯字）的局當作沒有日期。`asOf` 預設為台灣（+08）當天，環境變數 `AVALON_STATS_AS_OF=YYYY-MM-DD` 可覆寫（測試與重現用）；`leaderboard.config` 是 `LEADERBOARD_CONFIG` 的完整複本，前面再加自動帶出的 `theoryWindows`（= [`mainGames`, `shortGames`]）。日期只影響「誰算近期出賽」與新人榜的期間；若和前一天的檔案相比只差 asOf，就不重寫檔案（`only_the_day_changed`）。
 - 舊快取（2026-10-12 版）的榜沒有 `metric`、是超額勝率：網站與機器人一律不顯示，改提示「下次每日更新後提供」；機器人 `/排行` 會先退到 `overview.topPlayersByRoleTheory`。
 - 機器人 `/排行` 每行：名次、名字、角色理論、位置理論、最終勝率、場數；標題附期間與上榜條件。`/戰績`：近 100 場、近 50 場（場數夠才列）、生涯三行的角色理論／位置理論／最終勝率，再接任務結算 → 刺殺結算 → 最終。週一戰績週報：主榜 Top 10、進步榜 Top 5、角色王、新人榜。
 - 守門（`validate_new_cache`）：新快取的 `players[].theory.career.games` 必須等於 `totalGames`，`leaderboard.boards` 必須是陣列；從 2026-10-12 版（沒有 `theory`）換成新版不算欄位遺失。
+- 改設定時：所有門檻都只改 `LEADERBOARD_CONFIG`，機器人與網站的榜名、期間、上榜條件、說明文字都讀快取，隔天重算後自動跟上。只有兩處寫的是預設值：`/help` 裡「角色理論勝率排行 Top 10（各人最近 100 場）」（`bots/stats/statsReplies.ts` 與 `bots/discord/commands.ts`），以及舊快取才會出現的「排行改版中」提示；改 `mainGames` 時這兩行 `/help` 要一起改。
 
 ## 特徵研究（`featureStudies`）
 
@@ -177,6 +183,6 @@ Edward 10/13 原話：
 
 | 範圍 | 檔案 |
 |---|---|
-| 資料層 | `packages/server/generate_cache.py`（`LEADERBOARD_CONFIG`、`player_timelines`、`theory_window`、`compute_leaderboard`）、`test_generate_cache.py`（`TheoryTest` 手算例子、`LeaderboardTest`）、`analysis_cache.json`（每日由 workflow 重算） |
+| 資料層 | `packages/server/generate_cache.py`（`LEADERBOARD_CONFIG`、`player_timelines`、`theory_window`、`compute_leaderboard`）、`test_generate_cache.py`（`TheoryTest` 手算例子、`LeaderboardTest`、`LeaderboardConfigTest`）、`analysis_cache.json`（每日由 workflow 重算） |
 | 後端與機器人 | `services/sheetsAnalysis.ts`、`routes/analysis.ts`、`__tests__/AnalysisCacheContract.test.ts`、`bots/stats/*`、`bots/discord/commands.ts`（/help 文字）、`__tests__/*Stats*.test.ts` |
-| 網站 | `packages/web/src/services/api.ts`、`pages/AnalyticsPage.tsx`、`components/analysis/*`（`LeaderboardBoards`、`OverviewPanel`、`PlayerRadarChart`）、`components/analytics/*`、`i18n/locales/*` |
+| 網站 | `packages/web/src/services/api.ts`、`pages/AnalyticsPage.tsx`、`components/analysis/*`（`LeaderboardBoards`、`OverviewPanel`、`PlayerRadarChart`、`RoleFinalWinRates`）、`components/analytics/*`、`i18n/locales/*` |
