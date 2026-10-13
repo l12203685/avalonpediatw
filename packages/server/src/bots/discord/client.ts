@@ -69,7 +69,7 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
 
     new SlashCommandBuilder()
       .setName(COMMANDS.LEADERBOARD)
-      .setDescription('角色理論勝率排行（各人最近 100 場）/ Leaderboard'),
+      .setDescription('角色理論勝率排行（各角色近 10 場、忠臣近 40 場）/ Leaderboard'),
 
     new SlashCommandBuilder()
       .setName(COMMANDS.CHEMISTRY)

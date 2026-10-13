@@ -353,7 +353,7 @@ describe('weeklyDigestText', () => {
     cache.leaderboard = { asOf: '2026-10-12', boards: cache.boards().map(({ metric: _m, ...b }) => b) };
     let text = await weeklyDigestText(MONDAY);
     expect(text.split('\n')[0]).toBe('📅 每週排行（10/12）');
-    expect(text).toContain('🏆 角色理論勝率排行\n（排行改版中：下次每日更新資料後，會改用「各人最近 100 場」的角色理論勝率排行）');
+    expect(text).toContain('🏆 角色理論勝率排行\n（排行改版中：下次每日更新資料後，會改用「各角色近 10 場、忠臣近 40 場」的角色理論勝率排行）');
     expect(text).not.toContain('M1');
     expect(text).not.toContain('🚀');
     expect(text).not.toContain('👑');

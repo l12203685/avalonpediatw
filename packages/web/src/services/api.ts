@@ -3,6 +3,8 @@
  * Handles leaderboard & user profile endpoints
  */
 
+import type { OutcomeCounts, PlayerOutcomeBlocks } from '@avalon/shared';
+
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 // 2026-04-26: removed `NGROK_SKIP_HEADER` — backend tunnel migrated off ngrok
@@ -389,6 +391,17 @@ export interface FinalOutcomeSummary {
   bluePct: number;
 }
 
+/**
+ * 三塊結果 (Edward 2026-10-14，docs/stats/two_stage_outcome.md「三塊結果」)：任何一組場次 (紅方場、藍方場、
+ * 某角色、某位置) 的 任務結果 (n = 全部場數)、刺殺結果 (n = 到達三藍的場數)、遊戲結果 (n = 全部場數)，
+ * 每塊都是條件機率並附 n；n = 0 時勝率 null。與後端、機器人共用 @avalon/shared 的同一組函式：
+ *   outcomeBlocks(counts, 'red' | 'blue')   一組場次 (counts 可用 {三紅, 三藍死, 三藍活} 或 seatOutcomes 的英文鍵)
+ *   playerOutcomeBlocks(player)             玩家的紅方場、藍方場 (原始計數)、各角色 (roleOutcomes，schemaVersion 4)
+ *   roleFaction(role)                       角色的陣營
+ */
+export { outcomeBlocks, playerOutcomeBlocks, roleFaction } from '@avalon/shared';
+export type { OutcomeBlock, OutcomeBlocks, OutcomeCounts, OutcomeFaction, PlayerOutcomeBlocks } from '@avalon/shared';
+
 export interface AnalysisOverview {
   totalGames: number;
   totalPlayers: number;
@@ -401,7 +414,14 @@ export interface AnalysisOverview {
   outcomeBreakdown: OutcomeBreakdown;
   /** 舊口徑 (roleTheory ≈ 任務結算勝率)；2026-10-13 起網站不再顯示 (改看 topPlayersByRoleTheory)。 */
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
-  topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
+  /**
+   * 場次排行。schemaVersion 4 起每列另有 outcomes (該玩家全部場次的 三紅／三藍死／三藍活，不分陣營)
+   * 與 redGames / blueGames — 總覽「三種結果 + 場次」的圓餅用；舊快取沒有。
+   */
+  topPlayersByGames: Array<{
+    name: string; games: number; winRate: number;
+    outcomes?: OutcomeCounts; redGames?: number; blueGames?: number;
+  }>;
   /**
    * 契約新欄位 — 舊快取 (schemaVersion < 2) 全部缺，前端用 outcomeBreakdown
    * 現場算三段結算；排行在沒有 topPlayersByRoleTheory 時只提示「下次每日更新後提供」。
@@ -417,14 +437,26 @@ export interface AnalysisOverview {
   /** schemaVersion 3：全體各位置最終勝率 %，鍵 "1".."10" (位置理論的補值用)。 */
   seatFinalWinRates?: Record<string, number>;
   /**
-   * schemaVersion 3：生涯 ≥ mainGames (100) 場 (不限近期出賽) 的玩家，依各人最近 mainGames 場的
-   * 角色理論勝率排序；games = 該視窗場數。舊快取沒有此欄位 → 顯示「下次每日更新後提供」。
+   * 角色理論排行 (不限近期出賽)。schemaVersion 4：每個角色都打滿 (各角色近 10 場、忠臣近 40 場，
+   * fullWindows) 的玩家，依各角色視窗的角色理論排序；positionTheory / finalWinRate = 最近 100 場，
+   * overallTheory = 生涯角色理論 (整體理論)，games = 角色視窗的場數 (100)。schemaVersion 3：生涯 ≥ 100 場，
+   * 依最近 100 場的角色理論。舊快取沒有此欄位 → 顯示「下次每日更新後提供」。
    */
   topPlayersByRoleTheory?: Array<{
-    name: string; roleTheory: number; positionTheory: number; finalWinRate: number; games: number; careerGames: number;
+    name: string; roleTheory: number; positionTheory: number; overallTheory?: number; finalWinRate: number;
+    games: number; careerGames: number;
   }>;
-  /** schemaVersion 3：產生器的理論勝率設定；網站的說明文字依此組字，不寫死 100 場、3 場。 */
+  /** schemaVersion 3：產生器的理論勝率設定；網站的說明文字依此組字，不寫死 10／40／100／250 場、3 場。 */
   theoryConfig?: AnalysisTheoryConfig;
+  /** schemaVersion 4：位置理論排行 — 生涯 ≥ positionGames (100) 場，依最近 100 場的位置理論 (不限近期出賽)。 */
+  topPlayersByPositionTheory?: Array<{ name: string; positionTheory: number; finalWinRate: number; games: number; careerGames: number }>;
+  /**
+   * schemaVersion 4：整體理論排行 — 生涯 ≥ overallMinGames (250) 場，依生涯全部場次的角色理論
+   * (不限近期出賽)；positionTheory / finalWinRate 也是生涯的。
+   */
+  topPlayersByOverallTheory?: Array<{
+    name: string; overallTheory: number; positionTheory: number; finalWinRate: number; games: number; careerGames: number;
+  }>;
   /**
    * Edward 2026-04-27 — `outcomes` (per-seat 三結果) and `roles[].outcomes`
    * (per-role 三結果) added so deep-analytics seat tooltip can show the
@@ -501,7 +533,15 @@ export interface AnalysisPlayerStats {
   /** 最早 / 最晚出賽日 YYYY-MM-DD，沒有則 ""。 */
   firstPlayed?: string;
   lastPlayed?: string;
-  /** 理論勝率 (schemaVersion 3)：近 100 場、近 50 場、生涯；舊快取沒有 → 顯示「—」。 */
+  /**
+   * schemaVersion 4：各角色生涯的 {三紅, 三藍死, 三藍活} (七個角色都有，沒打過是 0)；各角色的三塊結果
+   * 用 playerOutcomeBlocks() 算。舊快取沒有。
+   */
+  roleOutcomes?: Record<string, OutcomeCounts>;
+  /**
+   * 理論勝率：schemaVersion 4 = roleWindows (角色理論，各角色近 10 場、忠臣近 40 場)、last100 (位置理論)、
+   * career (整體理論 = 它的 roleTheory)；schemaVersion 3 = 近 100 場、近 50 場、生涯；舊快取沒有 → 顯示「—」。
+   */
   theory?: PlayerTheory;
 }
 
@@ -526,15 +566,56 @@ export interface PlayerTheoryWindow {
   sparseSeats: number;
 }
 
-/** `last<N>` (N = 產生器的 mainGames / shortGames，現在是 100 / 50) 與 career；讀的時候用 theoryLastWindows()。 */
-export interface PlayerTheory {
-  last100?: PlayerTheoryWindow;
-  last50?: PlayerTheoryWindow;
-  career?: PlayerTheoryWindow;
-  [key: string]: PlayerTheoryWindow | undefined;
+/** players[].theory.roleWindows 的一格 (一個角色)。 */
+export interface PlayerRoleWindowCell {
+  /** 用到的場數：該角色最近 min(window, 當該角色的場數) 場。 */
+  games: number;
+  /** 其中最終贏的場數。 */
+  wins: number;
+  /** 這個角色的視窗：特殊角色 10、忠臣 40 (theoryConfig.roleWindowGames)。 */
+  window: number;
+  /** 進到總和的這格最終勝率 %（場數不到補值門檻時是補值後的；沒打過是全體勝率）。 */
+  rate: number;
 }
 
-/** players[].theory 的「近 N 場」視窗，N 大的在前 (不假設一定是 100 / 50)。 */
+/**
+ * schemaVersion 4 (Edward 2026-10-14)：角色理論改看每個角色自己的最近場次 — 特殊角色各近 10 場、忠臣近 40 場
+ * (近 N 場裡每個特殊角色平均只出現 N/10 次，太少)。fullWindows = 每個角色都打滿；角色理論的排行都要它。
+ */
+export interface PlayerRoleWindows {
+  roleTheory: number;
+  fullWindows: boolean;
+  /** 用到的總場數 (打滿時 6 × 10 + 40 = 100)。 */
+  games: number;
+  sparseRoles: number;
+  from: string;
+  to: string;
+  roles: Record<string, PlayerRoleWindowCell>;
+}
+
+/**
+ * schemaVersion 4：roleWindows (角色理論)、`last<N>` (N = mainGames = 100，位置理論) 與 career (整體理論)；
+ * schemaVersion 3：last100、last50、career。近 N 場的視窗用 theoryLastWindows() 讀，角色視窗用 theoryRoleWindows()。
+ */
+export interface PlayerTheory {
+  roleWindows?: PlayerRoleWindows;
+  last100?: PlayerTheoryWindow;
+  /** schemaVersion 3 才有。 */
+  last50?: PlayerTheoryWindow;
+  career?: PlayerTheoryWindow;
+  [key: string]: PlayerTheoryWindow | PlayerRoleWindows | undefined;
+}
+
+/** players[].theory.roleWindows (schemaVersion 4)；舊快取為 null。 */
+export function theoryRoleWindows(theory: PlayerTheory | null | undefined): PlayerRoleWindows | null {
+  const rw = theory && typeof theory === 'object' ? theory.roleWindows : undefined;
+  return rw && typeof rw === 'object' && typeof rw.roleTheory === 'number' && rw.roles && typeof rw.roles === 'object' ? rw : null;
+}
+
+/**
+ * players[].theory 的「近 N 場」視窗，N 大的在前 (不假設一定是 100 / 50；schemaVersion 4 只有 last100，
+ * 沒有 last50 也照常；roleWindows 不算在內)。
+ */
 export function theoryLastWindows(theory: PlayerTheory | null | undefined): PlayerTheoryWindow[] {
   if (!theory || typeof theory !== 'object') return [];
   return Object.entries(theory)
@@ -544,41 +625,83 @@ export function theoryLastWindows(theory: PlayerTheory | null | undefined): Play
     .sort((a, b) => b.window - a.window);
 }
 
-/** overview.theoryConfig (schemaVersion 3)。 */
+/** overview.theoryConfig (schemaVersion 3；後三個鍵 schemaVersion 4 起才有)。 */
 export interface AnalysisTheoryConfig {
   /** 少場補值門檻；0 = 不補。 */
   theoryMinCellGames: number;
-  /** players[].theory 的近 N 場視窗 (mainGames, shortGames)。 */
+  /** players[].theory 的近 N 場視窗：schemaVersion 4 = [mainGames]；schemaVersion 3 = [mainGames, shortGames]。 */
   theoryWindows: number[];
-  /** 主榜與總覽排行的視窗 (也是生涯場數門檻)。 */
+  /** 位置理論的視窗與生涯場數門檻 (schemaVersion 3 也是角色理論的視窗)。 */
   mainGames: number;
   /** 「近期出賽」= 近 N 天內有出賽。 */
   activeDays: number;
+  /** schemaVersion 4：角色理論各角色的視窗 {角色: 場數} (特殊角色 10、忠臣 40)。 */
+  roleWindowGames?: Record<string, number>;
+  /** schemaVersion 4：位置理論的視窗 (= mainGames)。 */
+  positionGames?: number;
+  /** schemaVersion 4：整體理論排行要的生涯場數 (250)。 */
+  overallMinGames?: number;
 }
 
-/** 產生器的預設值 (舊快取沒有 theoryConfig 時用)。 */
-export const DEFAULT_THEORY_CONFIG: AnalysisTheoryConfig = {
+/** theorySettings() 的結果：每個鍵都有值 (舊快取缺的用產生器預設值)。 */
+export interface AnalysisTheorySettings extends AnalysisTheoryConfig {
+  roleWindowGames: Record<string, number>;
+  positionGames: number;
+  overallMinGames: number;
+}
+
+const THEORY_ROLES = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林', '忠臣'];
+
+function roleWindowMap(special: number, loyal: number): Record<string, number> {
+  return Object.fromEntries(THEORY_ROLES.map(r => [r, r === '忠臣' ? loyal : special]));
+}
+
+/** 產生器的預設值 (舊快取沒有 theoryConfig 或缺鍵時用；角色視窗 10 / 忠臣 40、位置 100、整體 250)。 */
+export const DEFAULT_THEORY_CONFIG: AnalysisTheorySettings = {
   theoryMinCellGames: 3, theoryWindows: [100, 50], mainGames: 100, activeDays: 90,
+  roleWindowGames: roleWindowMap(10, 40), positionGames: 100, overallMinGames: 250,
 };
 
-/** overview.theoryConfig 或 leaderboard.config 的值；缺的鍵用預設值。 */
-export function theorySettings(...given: Array<object | null | undefined>): AnalysisTheoryConfig {
+/**
+ * overview.theoryConfig 或 leaderboard.config 的值；缺的鍵用預設值。roleWindowGames 在 theoryConfig 是
+ * {角色: 場數}，在 leaderboard.config 是兩個數字 (roleWindowGames、loyalWindowGames)，兩種都收。
+ * positionGames 缺時用 mainGames。
+ */
+export function theorySettings(...given: Array<object | null | undefined>): AnalysisTheorySettings {
   const sources = given.map(src => (src && typeof src === 'object' ? (src as Record<string, unknown>) : null));
-  const pick = (key: 'theoryMinCellGames' | 'mainGames' | 'activeDays'): number => {
+  const found = (key: string): number | undefined => {
     for (const src of sources) {
       const v = src?.[key];
       if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
     }
-    return DEFAULT_THEORY_CONFIG[key];
+    return undefined;
   };
+  const pick = (key: 'theoryMinCellGames' | 'mainGames' | 'activeDays' | 'overallMinGames'): number =>
+    found(key) ?? DEFAULT_THEORY_CONFIG[key];
   const windows = sources
     .map(src => src?.theoryWindows)
     .find((w): w is number[] => Array.isArray(w) && w.length > 0 && w.every(n => typeof n === 'number' && n > 0));
+  let roleWindowGames = DEFAULT_THEORY_CONFIG.roleWindowGames;
+  for (const src of sources) {
+    const v = src?.roleWindowGames;
+    if (v && typeof v === 'object' && THEORY_ROLES.every(r => typeof (v as Record<string, unknown>)[r] === 'number')) {
+      roleWindowGames = { ...(v as Record<string, number>) };
+      break;
+    }
+    if (typeof v === 'number' && typeof src?.loyalWindowGames === 'number') {
+      roleWindowGames = roleWindowMap(v, src.loyalWindowGames as number);
+      break;
+    }
+  }
+  const mainGames = pick('mainGames');
   return {
     theoryMinCellGames: pick('theoryMinCellGames'),
     theoryWindows: windows ?? DEFAULT_THEORY_CONFIG.theoryWindows,
-    mainGames: pick('mainGames'),
+    mainGames,
     activeDays: pick('activeDays'),
+    roleWindowGames,
+    positionGames: found('positionGames') ?? mainGames,
+    overallMinGames: pick('overallMinGames'),
   };
 }
 
@@ -587,6 +710,10 @@ export function theorySettings(...given: Array<object | null | undefined>): Anal
  * missionWinRate 是舊的任務結算勝率，excessWinRate 可能為 null (網站不再顯示)。
  * roleTheory / positionTheory：新後端 = theory.career 的角色理論／位置理論 (舊快取為 null)；
  * 舊後端送的是舊口徑 (≈ 勝率 / 0)，所以網站只讀 player.theory，不讀這兩個鍵。
+ * redMerlinKillRate (2026-10-14 起的後端)：紅方場到達三藍時的刺中率 = 三藍死 / (三藍死 + 三藍活)，從沒當紅方
+ * 到過三藍為 null；更早的後端送的是 三藍死 / 全部紅方場 (Edward 指出不對的「三藍死(紅方) 25.6%」)。
+ * outcomeBlocks (同一版起)：紅方場、藍方場、各角色 (schemaVersion 4) 的三塊結果，每塊附 n；
+ * 舊後端沒有 → 用 playerOutcomeBlocks(player) 自己算 (同一個 @avalon/shared 函式)。
  */
 export interface AnalysisPlayerRadar {
   player: AnalysisPlayerStats;
@@ -596,10 +723,11 @@ export interface AnalysisPlayerRadar {
     blueMerlinProtect: number;
     missionWinRate?: number;
     excessWinRate?: number | null;
-    redMerlinKillRate: number;
+    redMerlinKillRate: number | null;
     experience: number;
     roleTheory?: number | null;
     positionTheory?: number | null;
+    outcomeBlocks?: PlayerOutcomeBlocks;
   };
 }
 
@@ -887,17 +1015,26 @@ export async function fetchAnalysisRounds(): Promise<RoundsAnalysisData> {
 // 舊後端沒有此路由時回 404 → 顯示「後端尚未更新」。
 
 export type AnalysisLeaderboardBoardId =
-  | 'main' | 'last50' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
-  | 'online' | 'recent'; // online / recent：舊快取才有
+  | 'main' | 'position' | 'overall' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
+  | 'last50' // schemaVersion 3 才有
+  | 'online' | 'recent'; // online / recent：更舊的快取才有
 
 export interface AnalysisLeaderboardRow {
   rank: number;
   name: string;
-  /** 排序值：main / last50 / newcomers = 角色理論；improved = 角色理論差；assassin = 刺中率；roleTitles = 該角色最終勝率。 */
+  /**
+   * 排序值：main / newcomers (/ last50) = 角色理論；position = 位置理論；overall = 整體理論；improved = 角色理論差；
+   * assassin = 刺中率；roleTitles = 該角色最終勝率。
+   */
   value: number;
-  // main / last50 / newcomers：都是該榜視窗 (各人最近 N 場；新人 = 全部場次) 內的數字
+  // schemaVersion 4：main / newcomers 的 roleTheory 是各角色視窗 (各角色近 10 場、忠臣近 40 場)，positionTheory /
+  // finalWinRate 是最近 100 場 (新人 = 全部場次)，overallTheory = 生涯角色理論；position 榜 = 最近 100 場的
+  // positionTheory / finalWinRate；overall 榜 = 生涯的 overallTheory / positionTheory / finalWinRate。
+  // schemaVersion 3：都是該榜視窗 (各人最近 N 場；新人 = 全部場次) 內的數字。
   roleTheory?: number;
   positionTheory?: number;
+  /** schemaVersion 4：整體理論 = 生涯全部場次的角色理論。 */
+  overallTheory?: number;
   finalWinRate?: number;
   /** 生涯場數。 */
   careerGames?: number;
@@ -932,15 +1069,20 @@ export interface AnalysisLeaderboardRow {
 export interface AnalysisLeaderboardBoard {
   /** 固定 id；未知 id 仍可解析 (以小卡通用格式顯示)。 */
   id: AnalysisLeaderboardBoardId | (string & Record<never, never>);
-  /** 這個榜的 value 是什麼；舊快取沒有。 */
-  metric?: 'roleTheory' | 'roleTheoryDelta' | 'hitRate' | 'finalWinRate' | (string & Record<never, never>);
+  /** 這個榜的 value 是什麼；舊快取沒有。positionTheory / overallTheory：schemaVersion 4 起。 */
+  metric?: 'roleTheory' | 'positionTheory' | 'overallTheory' | 'roleTheoryDelta' | 'hitRate' | 'finalWinRate' | (string & Record<never, never>);
   title: string;
   titleEn?: string;
   /** 例：「各人最近 100 場」；新人榜：「2026-07-15 ～ 2026-10-12 首次出賽」。 */
   period: string;
   periodEn?: string;
-  /** 各人最近 N 場 (main 100、last50 50、improved 50、assassin 20 次刺殺、roleTitles 該角色 20 場)。 */
+  /**
+   * 各人最近 N 場 (position 100、assassin 20 次刺殺、roleTitles 該角色 20 場；schemaVersion 3：main 100、
+   * last50 50、improved 50)。
+   */
   windowGames?: number;
+  /** schemaVersion 4 的 main / improved：各角色的視窗 {角色: 場數}，取代 windowGames。 */
+  roleWindowGames?: Record<string, number>;
   /** 新人榜：首次出賽要在近 N 天內 (舊快取：日期視窗)。 */
   windowDays?: number;
   /** 新人榜：看全部場次 (例外)。 */

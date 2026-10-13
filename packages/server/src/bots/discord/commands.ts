@@ -52,7 +52,7 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
         name: '📊 戰績查詢 / Stats',
         value:
           `\`${STATS_COMMAND_USAGE.player}\` 個人戰績（名字可打一部分）\n` +
-          `\`${STATS_COMMAND_USAGE.leaderboard}\` 角色理論勝率排行 Top 10（各人最近 100 場）\n` +
+          `\`${STATS_COMMAND_USAGE.leaderboard}\` 角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場）\n` +
           `\`${STATS_COMMAND_USAGE.chemistry}\` 兩人同隊默契\n` +
           `\`${STATS_COMMAND_USAGE.feedback}\` 給管理者的建議或回報問題\n` +
           `每週一 12:00 (+08) 自動貼出本週排行。完整圖表（不用登入）：${STATS_PAGE_URL}`,

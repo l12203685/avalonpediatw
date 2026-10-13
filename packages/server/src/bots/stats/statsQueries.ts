@@ -119,7 +119,7 @@ export async function leaderboardReply(): Promise<string> {
 }
 
 /**
- * Monday digest: dated header, main board Top 10 (角色理論, 各人最近 100 場),
+ * Monday digest: dated header, main board Top 10 (角色理論, 各角色近 10 場、忠臣近 40 場),
  * 進步榜 Top 5, 角色王, 新人榜 (each only when the cache has it; later sections
  * are dropped first when the text would exceed the cap) and a how-to-look-up
  * line. Throws on cache errors.

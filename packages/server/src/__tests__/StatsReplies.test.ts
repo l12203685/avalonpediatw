@@ -4,18 +4,28 @@
  * (bots/stats/statsReplies.ts), the LINE text-command parser, and a smoke
  * pass over the real analysis_cache.json through statsQueries.ts.
  *
- * Semantics follow docs/stats/two_stage_outcome.md: the card leads with the
- * 角色理論／位置理論／最終勝率 of the player's last 100 / last 50 games and
- * career; the ranking is the 角色理論 of each active player's last 100 games.
+ * Semantics follow docs/stats/two_stage_outcome.md: on a schemaVersion-3 cache the card leads
+ * with the 角色理論／位置理論／最終勝率 of the player's last 100 / last 50 games and career and
+ * the ranking is the 角色理論 of each active player's last 100 games; on a schemaVersion-4 cache
+ * (2026-10-14) 角色理論 is over each role's last 10 games (忠臣 40), 位置理論 over the last 100,
+ * 整體理論 over the career, and the card shows the 紅方 / 藍方 games in three conditional blocks.
  * The excess win rate is never printed.
  */
 import { describe, expect, it } from 'vitest';
-import type { LeaderboardBoard, LeaderboardSection, OverviewData, PlayerStats, PlayerTheoryWindow } from '../services/sheetsAnalysis';
+import type {
+  LeaderboardBoard,
+  LeaderboardSection,
+  OverviewData,
+  PlayerRoleWindows,
+  PlayerStats,
+  PlayerTheoryWindow,
+} from '../services/sheetsAnalysis';
 import { getAllPlayerStats } from '../services/sheetsAnalysis';
 import {
   DIGEST_IMPROVED_SIZE,
   LEADERBOARD_PENDING_NOTE,
   MAX_NAME_CANDIDATES,
+  OUTCOME_BLOCKS_FOOTNOTE,
   STATS_REPLY_MAX_CHARS,
   STATS_SITE_URL,
   boardView,
@@ -300,6 +310,119 @@ describe('formatPlayerCard', () => {
     expect(text).toContain('→ 刺殺結算 → 最終');
     expect(text).not.toContain('擅長角色');
     expect(text).not.toContain('風格');
+  });
+});
+
+// ─── schemaVersion 4 (Edward 2026-10-14) ─────────────────────────────────
+
+/** players[].theory.roleWindows: 10 games per special role, 40 as 忠臣 when full. */
+function roleWindows(roleTheory: number, games: number, full: boolean): PlayerRoleWindows {
+  const roles = Object.fromEntries(['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林', '忠臣'].map((r) => {
+    const window = r === '忠臣' ? 40 : 10;
+    return [r, { games: full ? window : Math.min(window, 3), wins: 1, window, rate: 50 }];
+  }));
+  return { roleTheory, fullWindows: full, games, sparseRoles: 0, from: '2026-05-01', to: '2026-10-10', roles };
+}
+
+/**
+ * An invented schema-4 player: red 405 games (三紅 180, 三藍死 97, 三藍活 128), blue 608 (三紅 275,
+ * 三藍死 150, 三藍活 183).
+ */
+function schema4Player(extra: Partial<PlayerStats> = {}): PlayerStats {
+  return contractPlayer('Tovo Wren', 1013, 38.5, 6.3, {
+    rawRedGames: 405, rawBlueGames: 608,
+    rawRedThreeRed: 180, rawRedMerlinDead: 97, rawRedMerlinAlive: 128,
+    rawBlueThreeRed: 275, rawBlueMerlinDead: 150, rawBlueMerlinAlive: 183,
+    roleOutcomes: { 刺客: { 三紅: 50, 三藍死: 30, 三藍活: 20 }, 忠臣: { 三紅: 100, 三藍死: 60, 三藍活: 80 } },
+    theory: { roleWindows: roleWindows(52.3, 100, true), last100: tw(100, 100, 44, 50.8, 49), career: tw(0, 1013, 47.9, 47.2, 38.5) },
+    ...extra,
+  });
+}
+
+describe('formatPlayerCard on a schemaVersion-4 cache', () => {
+  it('角色理論 (per-role windows) / 位置理論 (last 100) / 整體理論 (career), then the 紅方 / 藍方 conditional blocks', () => {
+    const text = formatPlayerCard({ player: schema4Player() });
+    const lines = text.split('\n');
+    expect(lines.slice(0, 6)).toEqual([
+      '📊 Tovo Wren 的戰績',
+      '角色理論（各角色近 10 場、忠臣近 40 場）52.3%',
+      '位置理論（近 100 場）50.8%｜最終勝率 49.0%',
+      '整體理論（生涯 1013 場）47.9%｜位置理論 47.2%｜最終勝率 38.5%',
+      // 任務結果 180 / 405; 刺殺結果 97 / (97 + 128) — only the games that reached 三藍; 遊戲結果 (180 + 97) / 405.
+      '🔴 紅方 405 場｜任務結果 44.4%｜刺殺結果 43.1%（三藍 225 場）｜遊戲結果 68.4%',
+      // 任務結果 (150 + 183) / 608; 刺殺結果 183 / 333; 遊戲結果 183 / 608.
+      '🔵 藍方 608 場｜任務結果 54.8%｜刺殺結果 55.0%（三藍 333 場）｜遊戲結果 30.1%',
+    ]);
+    expect(text).not.toContain('近 50 場');
+    expect(text).not.toContain('任務結算'); // the schema-3 walk is replaced by the blocks
+    expect(text).toContain(theoryFootnote(3, { special: 10, loyal: 40 }));
+    expect(theoryFootnote(3, { special: 10, loyal: 40 })).toContain('每個角色看最近 10 場、忠臣 40 場');
+    expect(text).toContain(OUTCOME_BLOCKS_FOOTNOTE);
+    expect(text).not.toContain('超額');
+    expect(text.length).toBeLessThanOrEqual(STATS_REPLY_MAX_CHARS);
+  });
+
+  it('windows not full yet: says how many games and that it does not rank; fewer than 100 games: 位置理論（全部 N 場）', () => {
+    const lines = theoryLines({
+      theory: { roleWindows: roleWindows(49.1, 63, false), last100: tw(100, 72, 44, 50, 48), career: tw(0, 72, 49.1, 50, 48) },
+    });
+    expect(lines).toEqual([
+      '角色理論（各角色近 10 場、忠臣近 40 場）49.1%（目前 63 場，還沒有每個角色都打滿，不列入排行）',
+      '位置理論（全部 72 場）50.0%｜最終勝率 48.0%',
+      '整體理論（生涯 72 場）49.1%｜位置理論 50.0%｜最終勝率 48.0%',
+    ]);
+    // A side never played: "0 場", no rates.
+    const card = formatPlayerCard({
+      player: schema4Player({ rawRedGames: 0, rawRedThreeRed: 0, rawRedMerlinDead: 0, rawRedMerlinAlive: 0, rawBlueThreeRed: 5, rawBlueMerlinDead: 0, rawBlueMerlinAlive: 0 }),
+    });
+    expect(card).toContain('🔴 紅方 0 場\n🔵 藍方 5 場｜任務結果 0.0%｜刺殺結果 —（沒有三藍的局）｜遊戲結果 0.0%');
+  });
+
+  it('the same player on a schemaVersion-3 cache keeps the 2026-10-13 card', () => {
+    const v3 = schema4Player({ roleOutcomes: undefined, theory: { last100: tw(100, 100, 52.3, 50.8, 49), last50: tw(50, 50, 55.1, 53.2, 52), career: tw(0, 1013, 47.9, 47.2, 38.5) } });
+    const lines = formatPlayerCard({ player: v3 }).split('\n');
+    expect(lines[1]).toBe('近 100 場｜角色理論 52.3%｜位置理論 50.8%｜最終 49.0%');
+    expect(lines[4]).toBe('任務結算 59.0% → 刺殺結算（三藍局：紅方刺中 43.1%／藍方存活 56.0%）→ 最終 38.5%');
+    expect(lines[5]).toBe('🔴 紅方最終勝率 70.1%（405 場）｜🔵 藍方最終勝率 30.0%（608 場）');
+    expect(lines).toContain(theoryFootnote(3));
+  });
+});
+
+/** The schema-4 main board as generate_cache.py writes it (rows carry overallTheory). */
+function schema4Main(n: number): LeaderboardBoard {
+  return board('main', '角色理論勝率排行', n, {
+    period: '各角色近 10 場、忠臣近 40 場',
+    windowGames: undefined,
+    roleWindowGames: { 刺客: 10, 莫甘娜: 10, 莫德雷德: 10, 奧伯倫: 10, 派西維爾: 10, 梅林: 10, 忠臣: 40 },
+    note: `近 90 天內有出賽、六個特殊角色各至少 10 場、忠臣至少 40 場；位置理論與最終勝率看最近 100 場；${LEGEND}`,
+    rows: Array.from({ length: n }, (_, i) => ({
+      rank: i + 1, name: `R${i + 1}`, value: 56 - i, roleTheory: 56 - i, positionTheory: 55.2, overallTheory: 54.2,
+      finalWinRate: 56, games: 100, careerGames: 1018 - i, from: '2026-05-01', to: '2026-10-10', sparseRoles: 0, sparseSeats: 0,
+    })),
+  });
+}
+
+describe('/排行 on a schemaVersion-4 cache', () => {
+  it('the main board: per-role windows in the title, 整體理論 and the career games on every row', () => {
+    const lines = leaderboardLines(selectLeaderboard({ boards: [schema4Main(12)] }, OVERVIEW));
+    expect(lines[0]).toBe('🏆 角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場，近 90 天內有出賽、六個特殊角色各至少 10 場、忠臣至少 40 場）');
+    expect(lines[1]).toBe('🥇 R1　角色理論 56.0%｜位置理論 55.2%｜整體理論 54.2%｜最終 56.0%｜生涯 1018 場');
+    expect(lines).toHaveLength(11);
+  });
+
+  it('no main board: overview.topPlayersByRoleTheory with the per-role windows; nobody: the per-role qualifier', () => {
+    const theoryConfig = {
+      theoryMinCellGames: 3, theoryWindows: [100], mainGames: 100, activeDays: 90, positionGames: 100, overallMinGames: 250,
+      roleWindowGames: { 刺客: 10, 莫甘娜: 10, 莫德雷德: 10, 奧伯倫: 10, 派西維爾: 10, 梅林: 10, 忠臣: 40 },
+    };
+    const top = [{ name: 'O1', roleTheory: 51.2, positionTheory: 50.1, overallTheory: 48.8, finalWinRate: 49, games: 100, careerGames: 640 }];
+    const view = selectLeaderboard({ boards: [] }, { ...OVERVIEW, schemaVersion: 4, theoryConfig, topPlayersByRoleTheory: top });
+    expect(leaderboardLines(view)).toEqual([
+      '🏆 角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場，每個角色都打滿，不限近期出賽）',
+      '🥇 O1　角色理論 51.2%｜位置理論 50.1%｜整體理論 48.8%｜最終 49.0%｜生涯 640 場',
+    ]);
+    const empty = selectLeaderboard({ boards: [], config: { roleWindowGames: 5, loyalWindowGames: 20, activeDays: 60 } }, { schemaVersion: 4, topPlayersByRoleTheory: [] });
+    expect(empty.emptyNote).toBe('（目前沒有符合條件的玩家：近 60 天內有出賽、六個特殊角色各至少 5 場、忠臣至少 20 場）');
   });
 });
 
@@ -589,7 +712,7 @@ describe('length limits', () => {
   it('help text exists for both platforms and advertises the role-theory ranking and /意見', () => {
     for (const platform of ['line', 'discord'] as const) {
       const text = formatStatsHelp(platform);
-      expect(text).toContain('/排行　角色理論勝率排行 Top 10（各人最近 100 場）');
+      expect(text).toContain('/排行　角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場）');
       expect(text).toContain('/意見 文字　給管理者的建議或回報問題');
       expect(text).toContain('/默契 名字1 名字2');
       expect(text).not.toContain('超額');
@@ -629,8 +752,15 @@ describe('real analysis_cache.json smoke', () => {
     for (const p of players) {
       const text = await playerCardReply(p.name);
       expect(text, p.name).toContain(`📊 ${p.name} 的戰績`);
-      // A theory cache prints 生涯 N 場｜角色理論…; an older one the final win rate and when theory comes.
-      expect(text, p.name).toMatch(p.theory ? /生涯 \d+ 場｜角色理論 \d+\.\d%｜位置理論 \d+\.\d%｜最終 \d+\.\d%/ : /最終勝率 \d+\.\d%/);
+      // schemaVersion 4 prints 整體理論（生涯 N 場）… and the 紅方 / 藍方 blocks; 3 prints 生涯 N 場｜角色理論…;
+      // an older one the final win rate and when theory comes. (AVALON_ANALYSIS_CACHE=<a schema-4 build>
+      // runs this smoke over that file instead of the committed one.)
+      if (p.theory?.roleWindows) {
+        expect(text, p.name).toMatch(/整體理論（生涯 \d+ 場）\d+\.\d%｜位置理論 \d+\.\d%｜最終勝率 \d+\.\d%/);
+        expect(text, p.name).toMatch(/🔴 紅方 \d+ 場/);
+      } else {
+        expect(text, p.name).toMatch(p.theory ? /生涯 \d+ 場｜角色理論 \d+\.\d%｜位置理論 \d+\.\d%｜最終 \d+\.\d%/ : /最終勝率 \d+\.\d%/);
+      }
       expect(text, p.name).not.toContain('超額');
       expect(text.length, p.name).toBeLessThanOrEqual(STATS_REPLY_MAX_CHARS);
     }

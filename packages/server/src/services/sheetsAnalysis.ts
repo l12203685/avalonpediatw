@@ -10,7 +10,8 @@
 
 import path from 'path';
 import fs from 'fs';
-import { findSamePlayerName, playerNameKey } from '@avalon/shared';
+import { findSamePlayerName, playerNameKey, playerOutcomeBlocks } from '@avalon/shared';
+import type { OutcomeCounts, PlayerOutcomeBlocks } from '@avalon/shared';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -101,9 +102,14 @@ export interface PlayerStats {
   firstPlayed?: string;
   lastPlayed?: string;
   /**
-   * Theory win rates (schemaVersion 3, Edward 2026-10-13) over the player's last 100 /
-   * last 50 games and career. Absent in older caches: readers show "—", never the legacy
-   * roleTheory in its place.
+   * schemaVersion 4 (2026-10-14): career 三紅 / 三藍死 / 三藍活 counts per role (every role, zeros
+   * included) — what the conditional outcome blocks per role are computed from
+   * (@avalon/shared outcomeBlocks / playerOutcomeBlocks). Absent in older caches.
+   */
+  roleOutcomes?: Record<string, OutcomeCounts>;
+  /**
+   * Theory win rates (schemaVersion 3, Edward 2026-10-13; windows reworked in schemaVersion 4,
+   * 2026-10-14). Absent in older caches: readers show "—", never the legacy roleTheory in its place.
    */
   theory?: PlayerTheory;
 }
@@ -130,19 +136,53 @@ export interface PlayerTheoryWindow {
   sparseSeats: number;
 }
 
-/**
- * players[].theory — `last<N>` for N in leaderboard.config.theoryWindows (= the generator's
- * mainGames and shortGames, 100 and 50 today) plus `career`. Readers go through
- * theoryLastWindows() instead of assuming the 100 / 50 keys.
- */
-export interface PlayerTheory {
-  last100?: PlayerTheoryWindow;
-  last50?: PlayerTheoryWindow;
-  career?: PlayerTheoryWindow;
-  [key: string]: PlayerTheoryWindow | undefined;
+/** One role's cell of players[].theory.roleWindows. */
+export interface PlayerRoleWindowCell {
+  /** Games used: the player's last min(window, games as the role) games as the role. */
+  games: number;
+  /** Final wins among them. */
+  wins: number;
+  /** K_r: roleWindowGames (10) for a special role, loyalWindowGames (40) for 忠臣. */
+  window: number;
+  /** The cell's final win % that went into the sum (topped up when games < theoryMinCellGames). */
+  rate: number;
 }
 
-/** The `last<N>` windows of players[].theory, largest N first (whatever N the generator used). */
+/**
+ * players[].theory.roleWindows (schemaVersion 4): 角色理論 over each role's own last K_r games
+ * (Edward 2026-10-14: a special role comes up about once in 10 games, so a last-N-games window
+ * holds too few of it). fullWindows = every role has K_r games — any role-theory ranking needs it.
+ */
+export interface PlayerRoleWindows {
+  roleTheory: number;
+  fullWindows: boolean;
+  /** Σ games used (100 with full windows: 6 × 10 + 40). */
+  games: number;
+  sparseRoles: number;
+  from: string;
+  to: string;
+  roles: Record<string, PlayerRoleWindowCell>;
+}
+
+/**
+ * players[].theory — schemaVersion 4: `roleWindows` (角色理論), `last<N>` for N in
+ * leaderboard.config.theoryWindows (= mainGames, 100: 位置理論) and `career` (整體理論 = its
+ * roleTheory). schemaVersion 3 had `last100`, `last50` and `career`. Readers go through
+ * theoryLastWindows() instead of assuming the last-N keys.
+ */
+export interface PlayerTheory {
+  roleWindows?: PlayerRoleWindows;
+  last100?: PlayerTheoryWindow;
+  /** schemaVersion 3 only. */
+  last50?: PlayerTheoryWindow;
+  career?: PlayerTheoryWindow;
+  [key: string]: PlayerTheoryWindow | PlayerRoleWindows | undefined;
+}
+
+/**
+ * The `last<N>` windows of players[].theory, largest N first (whatever N the generator used; a
+ * schemaVersion-4 cache has only last100 — roleWindows is not one of them).
+ */
 export function theoryLastWindows(theory: PlayerTheory | null | undefined): PlayerTheoryWindow[] {
   if (!theory || typeof theory !== 'object') return [];
   return Object.entries(theory)
@@ -159,12 +199,18 @@ export function theoryLastWindows(theory: PlayerTheory | null | undefined): Play
 export interface TheoryConfig {
   /** Sparse-cell top-up threshold; 0 = off. */
   theoryMinCellGames: number;
-  /** players[].theory last-N windows (mainGames, shortGames). */
+  /** players[].theory last-N windows: [mainGames] (schemaVersion 3: [mainGames, shortGames]). */
   theoryWindows: number[];
-  /** Window of the main board and overview.topPlayersByRoleTheory (also their career-games floor). */
+  /** 位置理論 window and career-games floor (schemaVersion 3: also the role-theory window). */
   mainGames: number;
   /** "Active" = a game in the last N days. */
   activeDays: number;
+  /** schemaVersion 4: K_r per role (special roles 10, 忠臣 40) — the 角色理論 windows. */
+  roleWindowGames?: Record<string, number>;
+  /** schemaVersion 4: the 位置理論 window (= mainGames). */
+  positionGames?: number;
+  /** schemaVersion 4: career games the 整體理論 ranking needs (250). */
+  overallMinGames?: number;
 }
 
 export interface ChemistryMatrix {
@@ -258,7 +304,7 @@ export interface OverviewData {
   merlinKillRate: number;
   outcomeBreakdown: OutcomeBreakdown;
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
-  topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
+  topPlayersByGames: TopPlayerByGames[];
   /**
    * Two-stage outcome contract (schemaVersion 2, docs/stats/two_stage_outcome.md).
    * All optional: a cache written before the contract has none of them and the
@@ -275,12 +321,18 @@ export interface OverviewData {
   /** schemaVersion 3: population final win rate per seat, keys "1".."10" (positionTheory's top-up). */
   seatFinalWinRates?: Record<string, number>;
   /**
-   * schemaVersion 3: everyone with ≥ mainGames (100) career games (active or not), ranked by
-   * the roleTheory of their last mainGames games; `games` = games in that window.
+   * All-time 角色理論 ranking (active or not). schemaVersion 4: everyone with full role windows,
+   * ranked by theory.roleWindows.roleTheory (`games` = games in the role windows, 100;
+   * positionTheory / finalWinRate = the last mainGames games; overallTheory = career role theory).
+   * schemaVersion 3: ≥ mainGames career games, the roleTheory of the last mainGames games.
    */
   topPlayersByRoleTheory?: TheoryRankingRow[];
   /** schemaVersion 3: the theory settings (top-up threshold, windows) the site words its notes with. */
   theoryConfig?: TheoryConfig;
+  /** schemaVersion 4: ≥ mainGames (100) career games, by the 位置理論 of the last mainGames games (all-time). */
+  topPlayersByPositionTheory?: PositionTheoryRankingRow[];
+  /** schemaVersion 4: ≥ overallMinGames (250) career games, by 整體理論 = the career role theory (all-time). */
+  topPlayersByOverallTheory?: OverallTheoryRankingRow[];
   /**
    * Edward 2026-04-27 — `outcomes` (per-seat 三結果 distribution) and
    * `roles[].outcomes` (per-role 三結果 distribution) added so the deep
@@ -296,10 +348,42 @@ export interface OverviewData {
   }>;
 }
 
-/** overview.topPlayersByRoleTheory row (the last-100-games window). */
+/** overview.topPlayersByGames row; outcomes / redGames / blueGames since schemaVersion 4. */
+export interface TopPlayerByGames {
+  name: string;
+  games: number;
+  winRate: number;
+  /** The player's games by 結果 (either side). */
+  outcomes?: OutcomeCounts;
+  redGames?: number;
+  blueGames?: number;
+}
+
+/** overview.topPlayersByRoleTheory row (see OverviewData.topPlayersByRoleTheory for the windows). */
 export interface TheoryRankingRow {
   name: string;
   roleTheory: number;
+  positionTheory: number;
+  /** schemaVersion 4: the career role theory (整體理論). */
+  overallTheory?: number;
+  finalWinRate: number;
+  games: number;
+  careerGames: number;
+}
+
+/** overview.topPlayersByPositionTheory row (the last mainGames games). */
+export interface PositionTheoryRankingRow {
+  name: string;
+  positionTheory: number;
+  finalWinRate: number;
+  games: number;
+  careerGames: number;
+}
+
+/** overview.topPlayersByOverallTheory row (the whole career). */
+export interface OverallTheoryRankingRow {
+  name: string;
+  overallTheory: number;
   positionTheory: number;
   finalWinRate: number;
   games: number;
@@ -317,27 +401,37 @@ export interface TheoryRankingRow {
 // excess-win-rate boards without `metric` — readers treat those as "not yet
 // regenerated" (see isTheoryBoard) instead of printing excess.
 
-/** Board ids: the current generator's, then the pre-2026-10-13 ones (online / recent) older caches may carry. */
+/**
+ * Board ids: the current generator's (schemaVersion 4), then last50 (schemaVersion 3 only) and the
+ * pre-2026-10-13 ones (online / recent) older caches may carry.
+ */
 export type LeaderboardBoardId =
-  | 'main' | 'last50' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
-  | 'online' | 'recent';
+  | 'main' | 'position' | 'overall' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
+  | 'last50' | 'online' | 'recent';
 
 /** What a board's `value` is. Absent on boards written before 2026-10-13 (excess). */
-export type LeaderboardMetric = 'roleTheory' | 'roleTheoryDelta' | 'hitRate' | 'finalWinRate';
+export type LeaderboardMetric =
+  | 'roleTheory' | 'positionTheory' | 'overallTheory' | 'roleTheoryDelta' | 'hitRate' | 'finalWinRate';
 
 export interface LeaderboardRow {
   rank: number;
   name: string;
   /**
-   * The board's sort value: main / last50 / newcomers = roleTheory; improved = the
-   * roleTheory difference (last N − the N before); assassin = 刺中率; roleTitles =
-   * that role's final win rate over the last N games in it. (Pre-2026-10-13 boards:
-   * the shrunk excess win rate.)
+   * The board's sort value: main / newcomers (/ last50) = roleTheory; position = positionTheory;
+   * overall = overallTheory; improved = the roleTheory difference (role windows now − the windows
+   * before them); assassin = 刺中率; roleTitles = that role's final win rate over the last N games in
+   * it. (Pre-2026-10-13 boards: the shrunk excess win rate.)
    */
   value: number;
-  // main / last50 / newcomers (metric roleTheory) — all over the board's window of the player's games
+  // schemaVersion 4: main / newcomers — roleTheory over the per-role windows, positionTheory and
+  // finalWinRate over the last mainGames games (newcomers: all games), overallTheory = career role
+  // theory; position — positionTheory / finalWinRate of the last mainGames games; overall —
+  // overallTheory / positionTheory / finalWinRate of the career. schemaVersion 3: every number over
+  // the board's window of the player's games.
   roleTheory?: number;
   positionTheory?: number;
+  /** schemaVersion 4: 整體理論 = the career role theory. */
+  overallTheory?: number;
   /** Final win rate within the window, %. */
   finalWinRate?: number;
   /** All of the player's games (main / last50 / improved / assassin / newcomers). */
@@ -381,13 +475,18 @@ export interface LeaderboardBoard {
   /** e.g. "各人最近 100 場"; newcomers: "2026-07-15 ～ 2026-10-12 首次出賽". */
   period: string;
   periodEn?: string;
-  /** Last-N-games window (main 100, last50 50, improved 50, assassin 20, roleTitles 20). */
+  /** Last-N-games window (position 100, assassin 20, roleTitles 20; schemaVersion 3: main 100, last50 50, improved 50). */
   windowGames?: number;
+  /** schemaVersion 4 main / improved: the per-role windows {role: K_r} instead of windowGames. */
+  roleWindowGames?: Record<string, number>;
   /** Day window (newcomers: first game within it; pre-2026-10-13 boards: the date window). */
   windowDays?: number;
   /** newcomers: every game of the player counts (the documented exception). */
   allGames?: boolean;
-  /** main / last50 / newcomers: career games; improved: 2 × N; assassin: attempts; roleTitles: career games in the role. */
+  /**
+   * main: Σ K_r (each role needs its K_r); improved: 2 × Σ K_r; position / overall / newcomers
+   * (/ last50): career games; assassin: attempts; roleTitles: career games in the role.
+   */
   minGames?: number;
   /**
    * Qualifier for the title, e.g. "近 90 天內有出賽、生涯至少 100 場", then after a
@@ -760,12 +859,24 @@ const CACHE_PATHS = [
   path.resolve(__dirname, '..', '..', '..', '..', '..', 'packages', 'server', 'analysis_cache.json'),
 ];
 
+/**
+ * Serve another analysis_cache.json instead of the committed one (local previews only, e.g. a
+ * schemaVersion-4 cache built offline from the 牌譜 snapshot before the daily refresh writes one;
+ * AnalysisCacheContract.test.ts reads it too). Unset in production.
+ */
+export const ENV_ANALYSIS_CACHE = 'AVALON_ANALYSIS_CACHE';
+
+function cachePaths(): string[] {
+  const override = process.env[ENV_ANALYSIS_CACHE]?.trim();
+  return override ? [path.resolve(override)] : CACHE_PATHS;
+}
+
 let cache: AnalysisCache | null = null;
 
 function loadCache(): AnalysisCache {
   if (cache) return cache;
 
-  for (const p of CACHE_PATHS) {
+  for (const p of cachePaths()) {
     if (fs.existsSync(p)) {
       const raw = fs.readFileSync(p, 'utf-8');
       cache = JSON.parse(raw) as AnalysisCache;
@@ -799,6 +910,14 @@ function byName<T>(record: Record<string, T>, name: string): T | undefined {
  * the bots' /戰績 /默契 and the website's search. Re-exported for the callers of this module.
  */
 export { playerNameKey };
+
+/**
+ * 三塊結果 (任務結果 / 刺殺結果 / 遊戲結果) of a player's red games, blue games and (schemaVersion 4,
+ * players[].roleOutcomes) each role: @avalon/shared outcomeBlocks.ts, re-exported for the routes and
+ * the bots. Every rate is conditional on its group and carries its n (null when n = 0).
+ */
+export { playerOutcomeBlocks };
+export type { PlayerOutcomeBlocks };
 
 /**
  * The key of `record` that names this player (@avalon/shared findSamePlayerName: `name` itself

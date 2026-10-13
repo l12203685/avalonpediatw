@@ -24,9 +24,21 @@ const fixture = vi.hoisted(() => {
   const tw = (window: number, games: number, roleTheory: number, positionTheory: number, finalWinRate: number) => ({
     window, games, roleTheory, positionTheory, finalWinRate, from: '2026-05-01', to: '2026-10-10', sparseRoles: 0, sparseSeats: 0,
   });
+  // A schemaVersion-4 row (2026-10-14; invented name): roleWindows (10 per special role, 40 as 忠臣),
+  // last100, career, the per-side raw outcome counts and roleOutcomes.
+  const roleWindows = {
+    roleTheory: 53.4, fullWindows: true, games: 100, sparseRoles: 0, from: '2026-05-01', to: '2026-10-10',
+    roles: Object.fromEntries(['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林', '忠臣'].map((r) => [r, { games: r === '忠臣' ? 40 : 10, wins: 5, window: r === '忠臣' ? 40 : 10, rate: 50 }])),
+  };
+  const tovo = {
+    ...p('Tovo Wren', 420, 55, 55.1, 44.3, 1.1),
+    rawRedThreeRed: 80, rawRedMerlinDead: 40, rawRedMerlinAlive: 48, rawBlueThreeRed: 110, rawBlueMerlinDead: 60, rawBlueMerlinAlive: 82,
+    roleOutcomes: { 刺客: { 三紅: 20, 三藍死: 10, 三藍活: 12 } },
+    theory: { roleWindows, last100: tw(100, 100, 50.2, 51.7, 47), career: tw(0, 420, 49.9, 48.8, 44.3) },
+  };
   const players = [
     p('Sin', 1080, 51.4, 51.3, 31.2, -1.4), { ...p('HAO', 1013, 59, 59.1, 38.5, 6.3), theory: { last100: tw(100, 100, 52.3, 50.8, 49), last50: tw(50, 50, 55.1, 53.2, 52), career: tw(0, 1013, 47.9, 47.2, 38.5) } },
-    p('尼克', 873, 47.3, 47.5, 30.1, -2), p('SIN', 3, 33.3, 30, 33.3, null), p('sin', 1, 0, 0, 0, null), p('溫', 31, 64.5, 64.6, 45.2, 12.1),
+    p('尼克', 873, 47.3, 47.5, 30.1, -2), p('SIN', 3, 33.3, 30, 33.3, null), p('sin', 1, 0, 0, 0, null), p('溫', 31, 64.5, 64.6, 45.2, 12.1), tovo,
   ];
   const labels = ['SIN', 'HAO', '尼克'];
   // As generate_cache.py writes the theory boards: the qualifier, then the legend after a "；".
@@ -173,6 +185,22 @@ describe('/戰績', () => {
     expect(content).toContain(STATS_SITE_URL);
   });
 
+  it('a schemaVersion-4 player: 角色理論 / 位置理論 / 整體理論 windows, then the 紅方 / 藍方 conditional blocks', async () => {
+    const it1 = makeInteraction(COMMANDS.STATS, { [STATS_OPTIONS.NAME]: 'tovo wren' });
+    await handleStatsCommand(it1 as never);
+    const lines = publicReply(it1).content.split('\n');
+    expect(lines.slice(0, 6)).toEqual([
+      '📊 Tovo Wren 的戰績',
+      '角色理論（各角色近 10 場、忠臣近 40 場）53.4%',
+      '位置理論（近 100 場）51.7%｜最終勝率 47.0%',
+      '整體理論（生涯 420 場）49.9%｜位置理論 48.8%｜最終勝率 44.3%',
+      // red 168: 三紅 80, 三藍死 40, 三藍活 48 → 80 / 168, 40 / 88, 120 / 168.
+      '🔴 紅方 168 場｜任務結果 47.6%｜刺殺結果 45.5%（三藍 88 場）｜遊戲結果 71.4%',
+      // blue 252: 三紅 110, 三藍死 60, 三藍活 82 → 142 / 252, 82 / 142, 82 / 252.
+      '🔵 藍方 252 場｜任務結果 56.3%｜刺殺結果 57.7%（三藍 142 場）｜遊戲結果 32.5%',
+    ]);
+  });
+
   it('resolves a unique substring', async () => {
     const it1 = makeInteraction(COMMANDS.STATS, { [STATS_OPTIONS.NAME]: '尼' });
     await handleStatsCommand(it1 as never);
@@ -247,7 +275,7 @@ describe('/help', () => {
     const json = (it1.editReply.mock.calls[0][0] as { embeds: Array<{ toJSON: () => { fields?: Array<{ name: string; value: string }> } }> }).embeds[0].toJSON();
     const field = json.fields?.find((f) => f.name.includes('戰績'));
     expect(field?.value).toContain('/戰績 名字');
-    expect(field?.value).toContain('`/排行` 角色理論勝率排行 Top 10（各人最近 100 場）');
+    expect(field?.value).toContain('`/排行` 角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場）');
     expect(field?.value).toContain('/默契 名字1 名字2');
     expect(field?.value).toContain('`/意見 文字` 給管理者的建議或回報問題');
     expect(field?.value).not.toContain('超額');

@@ -24,6 +24,7 @@ import {
   getLeaderboard,
   invalidateCache,
   isSheetsReady,
+  playerOutcomeBlocks,
 } from '../services/sheetsAnalysis';
 import fs from 'fs';
 import path from 'path';
@@ -127,17 +128,24 @@ router.get('/players/:name', limiter, async (req: Request, res: Response) => {
     // 2026-10-13) — null on a cache written before them, never the legacy
     // player.roleTheory. excessWinRate stays for older web builds (null when the
     // cache cannot provide it); the site no longer plots it.
+    // Edward 2026-10-14「三藍死(紅方) 應該是 刺殺成功 / 我是紅方且三藍」: redMerlinKillRate is the
+    // conditional 刺殺結果 of the red games — 三藍死 / (三藍死 + 三藍活) — not 三藍死 / all red games
+    // (player.redMerlinDead), null when the player never reached 三藍 as red. outcomeBlocks carries
+    // the three blocks (任務結果 / 刺殺結果 / 遊戲結果, each with its n) of the red games, the blue
+    // games and (schemaVersion 4) every role.
     const career = player.theory?.career;
+    const outcomeBlocks = playerOutcomeBlocks(player);
     const radar = {
       winRate: player.finalWinRate ?? player.winRate,
       redWinRate: player.finalRedWinRate ?? player.redWin,
       blueMerlinProtect: player.blueMerlinAlive,
       missionWinRate: player.missionWinRate ?? player.winRate,
       excessWinRate: player.excessWinRate ?? null,
-      redMerlinKillRate: player.redMerlinDead,
+      redMerlinKillRate: outcomeBlocks.red ? outcomeBlocks.red.assassination.win : player.redMerlinDead,
       experience: Math.min(player.totalGames / 10, 100),
       roleTheory: typeof career?.roleTheory === 'number' ? career.roleTheory : null,
       positionTheory: typeof career?.positionTheory === 'number' ? career.positionTheory : null,
+      outcomeBlocks,
     };
 
     return ok(res, { player, radar });
