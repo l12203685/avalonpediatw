@@ -1455,8 +1455,19 @@ export class ForwardAgent implements AvalonAgent {
       } else {
         const withoutFixed = otherRanked.filter((id) => !fixedMembers.includes(id));
         const withoutBanned = withoutFixed.filter((id) => !banned.has(id));
-        const comboRanked =
-          withoutBanned.length >= teamSize - 1 - fixedMembers.length ? withoutBanned : withoutFixed;
+        const freeSlots = teamSize - 1 - fixedMembers.length;
+        // goodVouchFollowUp (review 2026-10-13): in 7–8 player games
+        // Percival's 鐵咬 / inferred-red filters can leave too few seats
+        // besides the one he declared red; restore filtered seats (mildest
+        // exclusion first, as the 2026-10-10 backfill above) instead of
+        // letting the declared-red seat back in. Red leaders: unchanged.
+        if (withoutBanned.length < freeSlots && obs.myTeam === 'good') {
+          const restore = rankedAll
+            .filter((id) => id !== selfId && !fixedMembers.includes(id) && !banned.has(id) && !withoutBanned.includes(id))
+            .sort((a, b) => (exclusionSeverity.get(a) ?? 0) - (exclusionSeverity.get(b) ?? 0));
+          withoutBanned.push(...restore.slice(0, freeSlots - withoutBanned.length));
+        }
+        const comboRanked = withoutBanned.length >= freeSlots ? withoutBanned : withoutFixed;
         candidates = enumerateTeams(fixedMembers, comboRanked);
       }
     }

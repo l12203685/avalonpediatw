@@ -180,6 +180,58 @@ describe('GoodLakeFollowUp — ForwardAgent wiring', () => {
     expect(forward(PROD_ON).decide(forced).reasoningTrace.summary).not.toContain('vouch follow-up');
   });
 
+  it('forced fifth proposal: the leader still keeps its word (humans 35/35)', () => {
+    const rejected = (attempt: number, leader: string): VoteRecord =>
+      vote(3, attempt, leader, [leader, 'P7', 'P8', 'P9'], [leader], false);
+    const forced = obs({
+      failCount: 4,
+      voteHistory: [...VOTES, rejected(1, 'P6'), rejected(2, 'P7'), rejected(3, 'P8'), rejected(4, 'P9')],
+    });
+    expect(teamOf(forward(PROD_OFF).decide(forced))).not.toContain('P5');
+    const d = forward(PROD_ON).decide(forced);
+    expect(d.reasoningTrace.usedFallback).toBe(false);
+    expect(teamOf(d)).toHaveLength(4);
+    expect(teamOf(d)).toEqual(expect.arrayContaining(['P1', 'P5']));
+  });
+
+  it('7 players: Percival with too few seats left never puts back the seat he declared red (review 2026-10-13)', () => {
+    // Percival P4 declared P1 red; wizard B (P6) and the failed R2 mission
+    // (P3 / P5 / P7) leave only P1 and P2 in his pool, so no usual candidate
+    // keeps the word. Filtered seats are restored instead of P1.
+    const ids7 = ['P1', 'P2', 'P7', 'P6', 'P5', 'P3', 'P4'];
+    const v7 = (round: number, attempt: number, leader: string, team: string[], approvers: string[]): VoteRecord => ({
+      round, attempt, leader, team, approved: attempt === 5,
+      votes: Object.fromEntries(ids7.map((id) => [id, attempt === 5 || approvers.includes(id)])),
+    });
+    const o = obs({
+      myPlayerId: 'P4', myRole: 'percival', playerCount: 7, allPlayerIds: ids7, knownWizards: ['P6', 'P5'],
+      currentRound: 3, currentLeader: 'P4', failCount: 3, questResults: ['success', 'fail'],
+      questHistory: [
+        { round: 1, team: ['P5', 'P4'], result: 'success', failCount: 0 },
+        { round: 2, team: ['P7', 'P5', 'P3'], result: 'fail', failCount: 1 },
+      ],
+      voteHistory: [
+        v7(1, 1, 'P1', ['P1', 'P7'], ['P1', 'P7']), v7(1, 2, 'P2', ['P2', 'P5'], ['P2', 'P5']),
+        v7(1, 3, 'P7', ['P7', 'P4'], ['P4', 'P7']), v7(1, 4, 'P6', ['P6', 'P5'], ['P5', 'P6']),
+        v7(1, 5, 'P5', ['P5', 'P4'], []),
+        v7(2, 1, 'P3', ['P3', 'P4', 'P6'], ['P3', 'P4', 'P6']), v7(2, 2, 'P4', ['P4', 'P1', 'P7'], ['P1', 'P4', 'P7']),
+        v7(2, 3, 'P1', ['P1', 'P2', 'P3'], ['P1', 'P2', 'P3']), v7(2, 4, 'P2', ['P2', 'P5', 'P4'], ['P2', 'P4', 'P5']),
+        v7(2, 5, 'P7', ['P7', 'P5', 'P3'], []),
+        v7(3, 1, 'P6', ['P6', 'P5', 'P3'], ['P3', 'P6']), v7(3, 2, 'P5', ['P5', 'P4', 'P2'], ['P2', 'P4', 'P5']),
+        v7(3, 3, 'P3', ['P3', 'P4', 'P6'], ['P3', 'P4', 'P6']),
+      ],
+      lakeHistory: [{ round: 2, holderId: 'P4', targetId: 'P1', declaredClaim: 'evil' }],
+    });
+    expect(teamOf(forward(PROD_OFF, 'P4').decide(o))).toContain('P1');
+    const d = forward(PROD_ON, 'P4').decide(o);
+    expect(d.reasoningTrace.usedFallback).toBe(false);
+    const team = teamOf(d);
+    expect(team).toHaveLength(3);
+    expect(new Set(team).size).toBe(3);
+    expect(team).toContain('P4');
+    expect(team).not.toContain('P1');
+  });
+
   it('red seats are untouched by the switch', () => {
     const red = obs({
       myRole: 'assassin', myTeam: 'evil', knownEvils: ['P2', 'P3'],
