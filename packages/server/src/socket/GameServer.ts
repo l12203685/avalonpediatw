@@ -24,6 +24,32 @@ import { GameHistoryRepositoryV2 } from '../services/GameHistoryRepositoryV2';
 import { buildV2RecordFromRoom } from '../services/liveGameToV2';
 import { ComputedStatsRepositoryV2 } from '../services/ComputedStatsRepositoryV2';
 import { archiveGameRecordToGitHub } from '../services/GitHubGameArchive';
+import {
+  explainAssassination,
+  explainLakeClaim,
+  explainLakeTarget,
+  explainQuestCard,
+  explainTeamProposal,
+  explainTeamVote,
+  type DecisionExplanation,
+} from '../ai/explain';
+import { PracticeSessions, sanitizeFlagNote } from '../practice/PracticeSessions';
+import {
+  createPracticeReportWriter,
+  practiceReportUnavailableReason,
+  type PracticeFlagSink,
+  type PracticeReportStatus,
+} from '../practice/PracticeReportWriter';
+import {
+  PRACTICE_PLAYER_COUNT,
+  PRACTICE_ROOM_PREFIX,
+  parsePracticeOptions,
+  seatLabelZh,
+  type PracticeDecisionKind,
+  type PracticeFlagResult,
+  type PracticeTraceEntry,
+  type PracticeTracePayload,
+} from '../practice/types';
 
 // Rate limiters for different events
 const voteLimiter = new SocketRateLimiter({
@@ -179,9 +205,37 @@ export function isBotLakeViaAgentEnabled(env: NodeJS.ProcessEnv = process.env): 
   return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
 }
 
+// 網站「與機器人練習」: one new practice room per socket AND per player every
+// 3 s at most (keyed separately, so reconnecting does not reset the limit).
+const practiceCreateLimiter = new SocketRateLimiter({
+  windowMs: 3000,
+  maxRequests: 1,
+});
+
+export interface GameServerOptions {
+  /**
+   * Multiplier for every bot "thinking" delay (default 1 = production
+   * timing). Tests pass a small value so a full game finishes in seconds.
+   */
+  botDelayScale?: number;
+  /**
+   * Where 「這步怪怪的」 practice reports go. Default: the Sheets writer built
+   * from GOOGLE_SERVICE_ACCOUNT_JSON (`createPracticeReportWriter`); `null`
+   * = saving unavailable. Tests inject a fake sink.
+   */
+  practiceReportSink?: PracticeFlagSink | null;
+}
+
 export class GameServer {
   private io: SocketIOServer;
   private roomManager: RoomManager;
+  // 網站「與機器人練習」(2026-10-13): practice-room registry + bot decision traces.
+  private practice: PracticeSessions = new PracticeSessions();
+  private practiceSink: PracticeFlagSink | null;
+  private practiceSinkStatus: PracticeReportStatus;
+  private readonly botDelayScale: number;
+  // `${roomId}:${round}:${holderId}` of bot lake inspections already queued.
+  private pendingBotLake: Set<string> = new Set();
   private gameEngines: Map<string, GameEngine> = new Map();
   // botId → HeuristicAgent instance (for bot-controlled players)
   private botAgents: Map<string, AvalonAgent> = new Map();
@@ -197,9 +251,19 @@ export class GameServer {
   // (MVP scope); persistent sync is tracked under #82.
   private lobbyChat: LobbyChatBuffer = new LobbyChatBuffer();
 
-  constructor(io: SocketIOServer) {
+  constructor(io: SocketIOServer, options: GameServerOptions = {}) {
     this.io = io;
     this.roomManager = new RoomManager();
+    const scale = options.botDelayScale;
+    this.botDelayScale = typeof scale === 'number' && Number.isFinite(scale) && scale >= 0 ? scale : 1;
+    if (options.practiceReportSink !== undefined) {
+      this.practiceSink = options.practiceReportSink;
+      this.practiceSinkStatus = options.practiceReportSink ? 'ok' : 'no-credentials';
+    } else {
+      const built = createPracticeReportWriter(process.env);
+      this.practiceSink = built.writer;
+      this.practiceSinkStatus = built.status;
+    }
     // Make the same RoomManager visible to non-socket callers (Discord /
     // LINE bot handlers) so a room created via /create can be started,
     // joined, and ended from either the web or Discord. Without this wiring
@@ -254,9 +318,33 @@ export class GameServer {
       }
     }, 10 * 60 * 1000); // every 10 minutes
 
+    // 網站「與機器人練習」: drop practice rooms that ended / went idle.
+    const practiceSweep = setInterval(() => this.sweepPracticeRooms(), 60 * 1000);
+    practiceSweep.unref?.();
+
     this.io.on('connection', (socket: Socket) => {
       const user = socket.data.user as User;
       console.log(`✓ Player connected: ${user.displayName} (${socket.id})`);
+
+      // Practice rooms: any event the owner sends for the room counts as
+      // activity (idle cleanup). Most game events carry roomId first.
+      socket.use((packet, next) => {
+        const roomArg = packet[1];
+        if (typeof roomArg === 'string' && this.practice.has(roomArg)) this.practice.touch(roomArg);
+        next();
+      });
+
+      socket.on('practice:create', (rawOptions: unknown, ack?: unknown) => {
+        this.handlePracticeCreate(socket, user, rawOptions, typeof ack === 'function' ? ack as (res: unknown) => void : undefined);
+      });
+
+      socket.on('practice:get-trace', (roomId: unknown, ack?: unknown) => {
+        this.handlePracticeGetTrace(socket, roomId, typeof ack === 'function' ? ack as (res: unknown) => void : undefined);
+      });
+
+      socket.on('practice:flag', (payload: unknown, ack?: unknown) => {
+        void this.handlePracticeFlag(socket, payload, typeof ack === 'function' ? ack as (res: PracticeFlagResult) => void : undefined);
+      });
 
       // Emit user authenticated
       socket.emit('auth:success', {
@@ -293,7 +381,7 @@ export class GameServer {
       });
 
       socket.on('game:start-game', (roomId: string) => {
-        this.handleStartGame(socket, roomId);
+        this.handleStartGameRequest(socket, roomId);
       });
 
       socket.on('game:vote', (roomId: string, playerId: string, vote: boolean) => {
@@ -390,7 +478,7 @@ export class GameServer {
 
       socket.on('game:list-rooms', () => {
         const openRooms = this.roomManager.getAllRooms()
-          .filter(r => r.state !== 'ended' && !r.id.startsWith('AI-'))
+          .filter(r => r.state !== 'ended' && !r.id.startsWith('AI-') && !this.isPracticeRoom(r.id))
           .map(r => ({
             id:          r.id.slice(0, 8).toUpperCase(),
             fullId:      r.id,
@@ -537,7 +625,19 @@ export class GameServer {
         ? record
         : { ...record, result: undefined as unknown as 'good' | 'evil' }
     );
-    return { ...room, players, votes, ladyOfTheLakeHistory: ladyHistory };
+    // 2026-10-13: the live inspection result (`ladyOfTheLakeResult`) is
+    // private to the player who just inspected. It used to be copied to
+    // every client, so devtools showed what a bot saw before it declared.
+    const lastLake = room.ladyOfTheLakeHistory?.[room.ladyOfTheLakeHistory.length - 1];
+    const seesLakeResult = revealAll
+      || (lastLake?.holderId === playerId && lastLake?.targetId === room.ladyOfTheLakeTarget);
+    return {
+      ...room,
+      players,
+      votes,
+      ladyOfTheLakeHistory: ladyHistory,
+      ladyOfTheLakeResult: seesLakeResult ? room.ladyOfTheLakeResult : undefined,
+    };
   }
 
   /**
@@ -574,7 +674,13 @@ export class GameServer {
     const ladyHistory = room.ladyOfTheLakeHistory?.map(record =>
       revealAll ? record : { ...record, result: undefined as unknown as 'good' | 'evil' }
     );
-    return { ...room, players, votes, ladyOfTheLakeHistory: ladyHistory };
+    return {
+      ...room,
+      players,
+      votes,
+      ladyOfTheLakeHistory: ladyHistory,
+      ladyOfTheLakeResult: revealAll ? room.ladyOfTheLakeResult : undefined,
+    };
   }
 
   private handleSetRoomPassword(socket: Socket, roomId: string, password: string | null): void {
@@ -654,6 +760,12 @@ export class GameServer {
 
       const playerId = user.uid;
       const playerExists = room.players[playerId];
+
+      // 網站「與機器人練習」: only the owner may (re)join a practice room.
+      if (!playerExists && this.isPracticeRoom(roomId)) {
+        socket.emit('error', '練習房不開放加入');
+        return;
+      }
 
       // Check password for non-members (reconnects bypass password check)
       if (!playerExists && !this.roomManager.checkRoomPassword(roomId, password)) {
@@ -754,6 +866,35 @@ export class GameServer {
     }
   }
 
+  /**
+   * `game:start-game` from a client. 2026-10-13: only the host of the room
+   * may start, only from the lobby. Before this any socket that knew a room
+   * id could restart a game in progress (wiping its history), and a practice
+   * room could be restarted after it ended (its trace then mixed two games).
+   * Practice rooms are started by the server itself (`practice:create`).
+   */
+  private handleStartGameRequest(socket: Socket, roomId: string): void {
+    const room = typeof roomId === 'string' ? this.roomManager.getRoom(roomId) : undefined;
+    if (!room) {
+      socket.emit('error', 'Room not found');
+      return;
+    }
+    if (this.isPracticeRoom(roomId)) {
+      socket.emit('error', '練習房請按「再練一局」');
+      return;
+    }
+    const requesterId = socket.data.playerId as string | undefined;
+    if (!requesterId || room.host !== requesterId) {
+      socket.emit('error', 'Only the host can start the game');
+      return;
+    }
+    if (room.state !== 'lobby') {
+      socket.emit('error', 'Game already started');
+      return;
+    }
+    this.handleStartGame(socket, roomId);
+  }
+
   private handleStartGame(socket: Socket, roomId: string): void {
     try {
       const room = this.roomManager.getRoom(roomId);
@@ -774,9 +915,13 @@ export class GameServer {
       updatedRoom.readyPlayerIds = [];
 
       this.roomStartTimes.set(roomId, Date.now());
-      updateRoomState(roomId, 'playing').catch(err =>
-        console.error('[supabase] updateRoomState error:', err)
-      );
+      const isPractice = this.isPracticeRoom(roomId);
+      // Practice rooms are never recorded anywhere (網站「與機器人練習」).
+      if (!isPractice) {
+        updateRoomState(roomId, 'playing').catch(err =>
+          console.error('[supabase] updateRoomState error:', err)
+        );
+      }
 
       // Notify each bot agent about their assigned role
       for (const [botId, agent] of this.botAgents.entries()) {
@@ -803,7 +948,7 @@ export class GameServer {
       // socket/bot-only games never need this helper, and loading it would
       // just emit noise in the log. Also skip if a previous load failed (the
       // lazy loader caches the outcome so we warn once, not every game).
-      if (roomHasDiscordPlayer(updatedRoom)) {
+      if (!isPractice && roomHasDiscordPlayer(updatedRoom)) {
         const sendRoleRevealToRoom = getRoleRevealFn();
         if (sendRoleRevealToRoom) {
           Promise.resolve(sendRoleRevealToRoom(updatedRoom)).catch((err: unknown) =>
@@ -1146,19 +1291,29 @@ export class GameServer {
     eligible: readonly string[],
     engine: GameEngine,
   ): string | undefined {
+    return this.pickBotLakeTargetDetailed(r, holderId, eligible, engine)?.target;
+  }
+
+  /** `pickBotLakeTarget` plus whether the agent or the random fallback decided. */
+  private pickBotLakeTargetDetailed(
+    r: Room,
+    holderId: string,
+    eligible: readonly string[],
+    engine: GameEngine,
+  ): { target: string; source: 'agent' | 'fallback' } | undefined {
     if (eligible.length === 0) return undefined;
     const agent = this.botAgents.get(holderId);
     if (isBotLakeViaAgentEnabled() && hasLakeApi(agent)) {
       try {
         const obs = this.buildBotObservation(r, holderId, engine, 'team_select');
         const pick = agent.pickLakeTarget(obs, eligible);
-        if (eligible.includes(pick)) return pick;
+        if (eligible.includes(pick)) return { target: pick, source: 'agent' };
         console.warn(`[bot] lake target ${pick} from ${holderId} is not eligible; using random fallback`);
       } catch (err) {
         console.error(`[bot] Agent threw in pickLakeTarget for ${holderId}:`, err);
       }
     }
-    return eligible[Math.floor(Math.random() * eligible.length)];
+    return { target: eligible[Math.floor(Math.random() * eligible.length)], source: 'fallback' };
   }
 
   /**
@@ -1185,10 +1340,20 @@ export class GameServer {
     targetId: string,
     engine?: GameEngine,
   ): 'good' | 'evil' | null {
+    return this.decideBotLakeClaimDetailed(room, holderId, targetId, engine).claim;
+  }
+
+  /** `decideBotLakeClaim` plus the seen camp and whether the agent decided. */
+  private decideBotLakeClaimDetailed(
+    room: Room,
+    holderId: string,
+    targetId: string,
+    engine?: GameEngine,
+  ): { claim: 'good' | 'evil' | null; actual?: 'good' | 'evil'; source: 'agent' | 'fallback' } {
     const holder = room.players[holderId];
     const target = room.players[targetId];
     const holderTeam = holder?.team;
-    if (holderTeam !== 'good' && holderTeam !== 'evil') return null;
+    if (holderTeam !== 'good' && holderTeam !== 'evil') return { claim: null, source: 'fallback' };
 
     // Prefer the engine-exposed inspection result (authoritative); fall
     // back to target.team if the live snapshot already cleared the
@@ -1199,14 +1364,16 @@ export class GameServer {
         : (target?.team === 'good' || target?.team === 'evil')
           ? target.team
           : undefined;
-    if (actualTargetTeam === undefined) return null;
+    if (actualTargetTeam === undefined) return { claim: null, source: 'fallback' };
 
     const agent = this.botAgents.get(holderId);
     if (engine && isBotLakeViaAgentEnabled() && hasLakeApi(agent)) {
       try {
         const obs = this.buildBotObservation(room, holderId, engine, 'team_select');
         const claim = agent.declareLake(obs, targetId, actualTargetTeam);
-        if (claim === 'good' || claim === 'evil' || claim === null) return claim;
+        if (claim === 'good' || claim === 'evil' || claim === null) {
+          return { claim, actual: actualTargetTeam, source: 'agent' };
+        }
       } catch (err) {
         console.error(`[bot] Agent threw in declareLake for ${holderId}:`, err);
       }
@@ -1214,15 +1381,17 @@ export class GameServer {
 
     if (holderTeam === 'good') {
       // Loyal — declare what was seen.
-      return actualTargetTeam;
+      return { claim: actualTargetTeam, actual: actualTargetTeam, source: 'fallback' };
     }
 
     // Evil holder — invert truth to muddy the water (ally→good, opponent→evil).
-    return actualTargetTeam === 'good' ? 'evil' : 'good';
+    return { claim: actualTargetTeam === 'good' ? 'evil' : 'good', actual: actualTargetTeam, source: 'fallback' };
   }
 
   /** Called whenever a room transitions to 'ended' state */
   private onGameEnded(roomId: string, room: Room): void {
+    // Practice rooms announce the end exactly once (the trace is sent once).
+    if (this.isPracticeRoom(roomId) && !this.practice.markEnded(roomId)) return;
     const evilWins = room.evilWins === true;
     const playerCount = Object.keys(room.players).length;
     const startTime = this.roomStartTimes.get(roomId);
@@ -1240,6 +1409,15 @@ export class GameServer {
     // Emit game:ended — reveal all roles to all players
     this.broadcastRoomState(roomId, room, true);
     this.io.to(roomId).emit('game:ended', room);
+
+    // 網站「與機器人練習」: practice games are never recorded (no Supabase /
+    // Firestore / GitHub archive / ELO / stats). The bot decision trace goes
+    // to the owner now that every role is public; the sweep removes the room
+    // after the review window.
+    if (this.isPracticeRoom(roomId)) {
+      this.onPracticeGameEnded(roomId, room);
+      return;
+    }
 
     // Persist asynchronously — never blocks the game flow
     this.persistGameResult(roomId, room, evilWins, playerCount, durationSec).catch(err =>
@@ -1604,33 +1782,35 @@ export class GameServer {
         socket.emit('error', 'Room is full'); return;
       }
 
-      const botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
-      // Edward 2026-04-29: AI no longer split into difficulty tiers.
-      // Every bot is named "AI" and runs the unified strongest strategy
-      // (Wave A baseline + Wave B pyramid + Wave C role-aware decision
-      //  tree + 4 hard rules). Per-player seat numbers (the PlayerCard
-      // chip) disambiguate multiple bots in the same room.
-      const botName = 'AI';
-
-      room.players[botId] = {
-        id: botId,
-        name: botName,
-        role: null,
-        team: null,
-        status: 'active',
-        isBot: true,
-        createdAt: Date.now(),
-      };
-
-      const agent = new HeuristicAgent(botId);
-
-      this.botAgents.set(botId, agent);
+      this.addBotToRoom(room);
       this.broadcastRoomState(roomId, room);
-      console.log(`✓ Bot ${botName} added to room ${roomId}`);
+      console.log(`✓ Bot AI added to room ${roomId}`);
     } catch (error) {
       console.error('Error adding bot:', error);
       socket.emit('error', 'Failed to add bot');
     }
+  }
+
+  /** Seat a new bot (HeuristicAgent) in `room`; returns its id. */
+  private addBotToRoom(room: Room): string {
+    let botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
+    while (room.players[botId]) botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
+    // Edward 2026-04-29: AI no longer split into difficulty tiers.
+    // Every bot is named "AI" and runs the unified strongest strategy
+    // (Wave A baseline + Wave B pyramid + Wave C role-aware decision
+    //  tree + 4 hard rules). Per-player seat numbers (the PlayerCard
+    // chip) disambiguate multiple bots in the same room.
+    room.players[botId] = {
+      id: botId,
+      name: 'AI',
+      role: null,
+      team: null,
+      status: 'active',
+      isBot: true,
+      createdAt: Date.now(),
+    };
+    this.botAgents.set(botId, new HeuristicAgent(botId));
+    return botId;
   }
 
   private handleRemoveBot(socket: Socket, roomId: string, botId: string): void {
@@ -1805,7 +1985,7 @@ export class GameServer {
     const engine = this.gameEngines.get(roomId);
     if (!engine) return;
 
-    const delay = 250 + Math.random() * 350; // 0.25–0.6s (was 0.6–1.5s)
+    const delay = this.botDelay(250 + Math.random() * 350); // 0.25–0.6s (was 0.6–1.5s)
 
     setTimeout(() => {
       const r = this.roomManager.getRoom(roomId);
@@ -1832,8 +2012,14 @@ export class GameServer {
             };
 
             let chosenTeam: string[] | null = null;
+            const leaderAgent = this.botAgents.get(leaderId);
+            // Practice trace needs the pre-decision view (selectQuestTeam mutates history).
+            const leaderObs = this.isPracticeRoom(roomId)
+              ? this.buildBotObservation(r, leaderId, engine, 'team_select')
+              : null;
+            let teamSource: 'agent' | 'fallback' = 'agent';
             try {
-              const agent = this.botAgents.get(leaderId);
+              const agent = leaderAgent;
               if (agent) {
                 const obs = this.buildBotObservation(r, leaderId, engine, 'team_select');
                 const action = agent.act(obs);
@@ -1847,17 +2033,31 @@ export class GameServer {
 
             if (!chosenTeam) {
               chosenTeam = pickFallbackTeam();
+              teamSource = 'fallback';
               console.warn(`[bot] Using fallback team for bot leader ${leaderId} in room ${roomId}: ${chosenTeam.join(',')}`);
             }
 
+            // Practice trace is prepared before the engine call (the forced
+            // 5th proposal appends to the shared vote history) and stored
+            // only once the engine accepted the team.
+            const traceTeam = (
+              team: string[],
+              source: 'agent' | 'fallback',
+            ): Omit<PracticeTraceEntry, 'id' | 'at'> | null => leaderObs
+              ? this.preparePracticeTrace(r, leaderId, leaderObs, { kind: 'team_propose', teamIds: team, source, agent: leaderAgent })
+              : null;
             try {
+              const teamTrace = traceTeam(chosenTeam, teamSource);
               engine.selectQuestTeam(chosenTeam);
+              this.commitPracticeTrace(roomId, teamTrace);
             } catch (selectErr) {
               // selectQuestTeam can throw on wrong size / unknown id. Retry with fallback.
               console.error(`[bot] selectQuestTeam rejected AI pick for ${leaderId} in room ${roomId}:`, selectErr);
               const safe = pickFallbackTeam();
               try {
+                const safeTrace = traceTeam(safe, 'fallback');
                 engine.selectQuestTeam(safe);
+                this.commitPracticeTrace(roomId, safeTrace);
               } catch (safeErr) {
                 console.error(`[bot] Fallback selectQuestTeam also failed in room ${roomId}:`, safeErr);
                 return; // truly unrecoverable; leave for operator intervention
@@ -1876,24 +2076,43 @@ export class GameServer {
           const botVoters = Object.entries(r.players).filter(
             ([pid, player]) => player.isBot && !(pid in r.votes)
           );
+          // 2026-10-13: identify the proposal these ballots belong to. A
+          // duplicate timer (a second scheduleBotActions tick queued while
+          // bots were still voting) used to fire after the proposal resolved
+          // and drop a ballot into the NEXT, not-yet-proposed team (stale vote).
+          const proposalKey = r.voteHistory.length;
           let offset = 0;
           for (const [pid] of botVoters) {
             const stagger = offset;
-            offset += 150 + Math.random() * 200;
+            offset += this.botDelay(150 + Math.random() * 200);
             setTimeout(() => {
               const snapshot = this.roomManager.getRoom(roomId);
               if (!snapshot || snapshot.state !== 'voting' || pid in snapshot.votes) return;
+              if (snapshot.questTeam.length === 0 || snapshot.voteHistory.length !== proposalKey) return;
               const eng = this.gameEngines.get(roomId);
               if (!eng) return;
               const agent = this.botAgents.get(pid);
+              let voteObs: PlayerObservation | null = null;
+              let voteSource: 'agent' | 'fallback' = 'fallback';
               const vote = agent
                 ? (() => {
                     const obs = this.buildBotObservation(snapshot, pid, eng, 'team_vote');
+                    voteObs = obs;
                     const action = agent.act(obs);
-                    return action.type === 'team_vote' ? action.vote : Math.random() > 0.3;
+                    if (action.type === 'team_vote') {
+                      voteSource = 'agent';
+                      return action.vote;
+                    }
+                    return Math.random() > 0.3;
                   })()
                 : Math.random() > 0.3;
+              const voteTrace = this.isPracticeRoom(roomId)
+                ? this.preparePracticeTrace(snapshot, pid, voteObs ?? this.buildBotObservation(snapshot, pid, eng, 'team_vote'), {
+                    kind: 'team_vote', vote, source: voteSource, agent,
+                  })
+                : null;
               eng.submitVote(pid, vote);
+              this.commitPracticeTrace(roomId, voteTrace);
               const updated = this.roomManager.getRoom(roomId)!;
               if (updated.state === 'ended') {
                 this.broadcastRoomState(roomId, updated);
@@ -1919,7 +2138,14 @@ export class GameServer {
               // moved away from 'voting' (resolveVoting fired this tick).
               // Original "all players voted" guard preserved so non-resolve
               // ticks still chain into late-arriving bot ballots correctly.
+              //
+              // 2026-10-13: a REJECTED proposal keeps state 'voting' and clears
+              // the ballots, so neither guard above matched and the next
+              // (bot) leader waited for the 90 s AFK timer — forever in rooms
+              // without timers. A resolved proposal is detected by the vote
+              // history growing.
               if (updated.state !== 'voting'
+                  || updated.voteHistory.length !== proposalKey
                   || Object.keys(updated.votes).length === Object.keys(updated.players).length) {
                 this.scheduleBotActions(roomId);
               }
@@ -1933,7 +2159,7 @@ export class GameServer {
           let offset = 0;
           for (const memberId of botMembers) {
             const stagger = offset;
-            offset += 200 + Math.random() * 250;
+            offset += this.botDelay(200 + Math.random() * 250);
             setTimeout(() => {
               // Defensive try/catch: a `scheduleBotActions` re-tick (line ~1896,
               // fired so still-pending HUMAN members get re-evaluated) can
@@ -1952,14 +2178,27 @@ export class GameServer {
                 const player = snapshot.players[memberId];
                 if (!player?.isBot) return;
                 const agent = this.botAgents.get(memberId);
+                let questObs: PlayerObservation | null = null;
+                let questSource: 'agent' | 'fallback' = 'fallback';
                 const vote = agent
                   ? (() => {
                       const obs = this.buildBotObservation(snapshot, memberId, eng, 'quest_vote');
+                      questObs = obs;
                       const action = agent.act(obs);
-                      return action.type === 'quest_vote' ? action.vote : 'success';
+                      if (action.type === 'quest_vote') {
+                        questSource = 'agent';
+                        return action.vote;
+                      }
+                      return 'success';
                     })()
                   : (player.team === 'evil' && Math.random() > 0.5 ? 'fail' : 'success');
+                const questTrace = this.isPracticeRoom(roomId)
+                  ? this.preparePracticeTrace(snapshot, memberId, questObs ?? this.buildBotObservation(snapshot, memberId, eng, 'quest_vote'), {
+                      kind: 'quest_card', card: vote, source: questSource, agent,
+                    })
+                  : null;
                 eng.submitQuestVote(memberId, vote);
+                this.commitPracticeTrace(roomId, questTrace);
                 const updated = this.roomManager.getRoom(roomId)!;
                 if (updated.state === 'ended') {
                   this.broadcastRoomState(roomId, updated, true);
@@ -1992,22 +2231,37 @@ export class GameServer {
           const holderId = r.ladyOfTheLakeHolder;
           // CASE 1 — pre-inspection: bot is the current holder and has yet
           // to pick a target. After inspect we synchronously skip declaration.
+          //
+          // 2026-10-13: two scheduleBotActions ticks in the same lady phase
+          // used to queue two inspections; the second always failed with
+          // "not the Lady of the Lake holder". One pending pick per holder.
+          const lakeKey = `${roomId}:${r.currentRound}:${holderId ?? ''}`;
           if (
             holderId
             && r.players[holderId]?.isBot
             && !r.ladyOfTheLakeResult
+            && !this.pendingBotLake.has(lakeKey)
           ) {
             const usedIds = r.ladyOfTheLakeUsed ?? [];
             const eligible = Object.keys(r.players).filter(id => id !== holderId && !usedIds.includes(id));
-            const targetId = this.pickBotLakeTarget(r, holderId, eligible, engine);
+            const lakePick = this.pickBotLakeTargetDetailed(r, holderId, eligible, engine);
+            const targetId = lakePick?.target;
+            const lakeTargetTrace = lakePick && this.isPracticeRoom(roomId)
+              ? this.preparePracticeTrace(r, holderId, this.buildBotObservation(r, holderId, engine, 'team_select'), {
+                  kind: 'lake_target', targetId: lakePick.target, eligible, source: lakePick.source,
+                })
+              : null;
             if (targetId) {
+              this.pendingBotLake.add(lakeKey);
               setTimeout(() => {
+                this.pendingBotLake.delete(lakeKey);
                 const snapshot = this.roomManager.getRoom(roomId);
                 if (!snapshot || snapshot.state !== 'lady_of_the_lake') return;
                 const eng = this.gameEngines.get(roomId);
                 if (!eng) return;
                 try {
                   eng.submitLadyOfTheLakeTarget(holderId, targetId);
+                  this.commitPracticeTrace(roomId, lakeTargetTrace);
                   // Edward 2026-04-25 22:38 +08「湖中女神宣告怪怪的 0>1 ?
                   // 但 0 跟 1 都是忠臣」— bot 之前 100% skip → chat 永遠 `?`，
                   // 即便忠臣 bot 看到忠臣 target 也沒誠實宣告。改成讓 bot 開口：
@@ -2020,9 +2274,16 @@ export class GameServer {
                     const eng2 = this.gameEngines.get(roomId);
                     if (!eng2) return;
                     try {
-                      const claim = this.decideBotLakeClaim(s2, holderId, targetId, eng2);
+                      const decided = this.decideBotLakeClaimDetailed(s2, holderId, targetId, eng2);
+                      const claim = decided.claim;
+                      const claimTrace = this.isPracticeRoom(roomId)
+                        ? this.preparePracticeTrace(s2, holderId, this.buildBotObservation(s2, holderId, eng2, 'team_select'), {
+                            kind: 'lake_declare', targetId, claim, actual: decided.actual, source: decided.source,
+                          })
+                        : null;
                       if (claim !== null) {
                         const record = eng2.declareLakeResult(holderId, claim);
+                        this.commitPracticeTrace(roomId, claimTrace);
                         if (record) {
                           // Edward 2026-04-26 18:35: bot lake-declare 也走 simple
                           // 格式 (對齊 human declare path 上方修改).
@@ -2037,6 +2298,7 @@ export class GameServer {
                         }
                       } else {
                         eng2.skipLakeDeclaration(holderId);
+                        this.commitPracticeTrace(roomId, claimTrace);
                       }
                     } catch (err) {
                       console.error(`[bot] declareLakeResult error in room ${roomId}:`, err);
@@ -2047,11 +2309,11 @@ export class GameServer {
                         console.error(`[bot] skipLakeDeclaration fallback error in room ${roomId}:`, skipErr);
                       }
                     }
-                  }, 1500);
+                  }, this.botDelay(1500));
                 } catch (err) {
                   console.error(`[bot] submitLadyOfTheLakeTarget error in room ${roomId}:`, err);
                 }
-              }, 1000 + Math.random() * 1000);
+              }, this.botDelay(1000 + Math.random() * 1000));
             }
           } else if (
             // CASE 2 — post-inspection by a human: a human just inspected a
@@ -2075,11 +2337,17 @@ export class GameServer {
                 const eng = this.gameEngines.get(roomId);
                 if (!eng) return;
                 try {
+                  const skipTrace = this.isPracticeRoom(roomId)
+                    ? this.preparePracticeTrace(snapshot, last.holderId, this.buildBotObservation(snapshot, last.holderId, eng, 'team_select'), {
+                        kind: 'lake_declare', targetId: last.targetId, claim: null, actual: last.result, source: 'fallback',
+                      })
+                    : null;
                   eng.skipLakeDeclaration(last.holderId);
+                  this.commitPracticeTrace(roomId, skipTrace);
                 } catch (err) {
                   console.error(`[bot] skipLakeDeclaration (post-human) error in room ${roomId}:`, err);
                 }
-              }, 1500);
+              }, this.botDelay(1500));
             }
           }
         } else if (r.state === 'discussion') {
@@ -2089,8 +2357,10 @@ export class GameServer {
             const assassinId = assassinEntry[0];
             const agent = this.botAgents.get(assassinId);
             let targetId: string;
+            let assassinObs: PlayerObservation | null = null;
             if (agent) {
               const obs = this.buildBotObservation(r, assassinId, engine, 'assassination');
+              assassinObs = obs;
               const action = agent.act(obs);
               targetId = action.type === 'assassinate' ? action.targetId : '';
             } else {
@@ -2100,7 +2370,13 @@ export class GameServer {
               targetId = goodPlayers[Math.floor(Math.random() * goodPlayers.length)] ?? '';
             }
             if (targetId && r.players[targetId]) {
+              const killTrace = this.isPracticeRoom(roomId)
+                ? this.preparePracticeTrace(r, assassinId, assassinObs ?? this.buildBotObservation(r, assassinId, engine, 'assassination'), {
+                    kind: 'assassinate', targetId, source: assassinObs ? 'agent' : 'fallback', agent,
+                  })
+                : null;
               engine.submitAssassination(assassinId, targetId);
+              this.commitPracticeTrace(roomId, killTrace);
               const updated = this.roomManager.getRoom(roomId)!;
               // Edward 2026-04-26 19:31 spec 31 — same「系統: A 刺殺 T」
               // announcement for bot-driven assassination (mirror handler
@@ -2126,6 +2402,10 @@ export class GameServer {
       const allRooms = this.roomManager.getAllRooms();
       const room = allRooms.find(r => r.id === roomId || r.id.slice(0, 8).toUpperCase() === roomId.toUpperCase());
       if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (this.isPracticeRoom(room.id)) {
+        socket.emit('error', '練習房不開放觀戰');
+        return;
+      }
       if (room.state === 'lobby' || room.state === 'ended') {
         socket.emit('error', '此房間不可觀戰 (No spectating in lobby/ended rooms)');
         return;
@@ -2167,6 +2447,21 @@ export class GameServer {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) { socket.emit('error', 'Room not found'); return; }
+
+      // 網站「與機器人練習」: the owner leaving removes the practice room.
+      if (this.isPracticeRoom(roomId)) {
+        const practiceOwner = this.practice.get(roomId)?.ownerId;
+        if (practiceOwner && socket.data.playerId === practiceOwner) {
+          this.disposePracticeRoom(roomId);
+          this.playerToSocket.delete(practiceOwner);
+          socket.leave(roomId);
+          socket.data.roomId = undefined;
+          socket.data.playerId = undefined;
+          socket.emit('game:left-room');
+          console.log(`✓ Practice room ${roomId} closed by its player`);
+          return;
+        }
+      }
 
       const playerId = socket.data.playerId as string;
       const inLobby  = room.state === 'lobby';
@@ -2391,6 +2686,11 @@ export class GameServer {
         return;
       }
 
+      if (this.isPracticeRoom(roomId)) {
+        socket.emit('error', '練習房請按「再練一局」');
+        return;
+      }
+
       // Clean up old game engine
       const oldEngine = this.gameEngines.get(roomId);
       if (oldEngine) {
@@ -2535,9 +2835,12 @@ export class GameServer {
         }
 
         // Auto-act for disconnected player to prevent game from stalling
-        // Use a short delay (3s) to allow quick reconnects to cancel this
+        // Use a short delay (3s) to allow quick reconnects to cancel this.
+        // Not in practice rooms (2026-10-13): only the owner is human, nobody
+        // waits on them, and a locked phone screen must not auto-reject a
+        // vote or auto-assassinate. Abandoned practice rooms are swept.
         const engine = this.gameEngines.get(roomId);
-        if (engine && room.state !== 'lobby' && room.state !== 'ended') {
+        if (engine && room.state !== 'lobby' && room.state !== 'ended' && !this.isPracticeRoom(roomId)) {
           setTimeout(() => {
             const r = this.roomManager.getRoom(roomId);
             if (!r || r.state === 'ended' || r.players[playerId]?.status === 'active') return;
@@ -2615,4 +2918,363 @@ export class GameServer {
     console.log(`✓ Player disconnected: ${socket.id}`);
   }
 
+  // ─── 網站「與機器人練習」(2026-10-13) ─────────────────────────────────
+  //
+  // A practice room = the player + 9 bots, created and started in one step
+  // (`practice:create`). It is unlisted, cannot be joined or watched, never
+  // recorded (see onGameEnded / handleStartGame guards), has no phase timers,
+  // and is removed by `sweepPracticeRooms` after it ends or goes idle. Every
+  // bot decision is traced with a reason (`preparePracticeTrace`); the trace
+  // stays server-side until the game ends (`practice:trace`).
+
+  /** Scale a bot "thinking" delay (tests run with a small `botDelayScale`). */
+  private botDelay(ms: number): number {
+    return Math.max(0, Math.round(ms * this.botDelayScale));
+  }
+
+  private isPracticeRoom(roomId: string | undefined | null): boolean {
+    return this.practice.has(roomId);
+  }
+
+  private handlePracticeCreate(
+    socket: Socket,
+    user: User,
+    rawOptions: unknown,
+    ack?: (res: unknown) => void,
+  ): void {
+    const fail = (error: string): void => {
+      if (ack) ack({ ok: false, error });
+      else socket.emit('error', error);
+    };
+    try {
+      const uid = user.uid;
+      const socketOk = practiceCreateLimiter.isAllowed(`${socket.id}:practice-create`);
+      const userOk = practiceCreateLimiter.isAllowed(`user:${uid}:practice-create`);
+      if (!socketOk || !userOk) {
+        fail('建立太頻繁，請稍等幾秒再試');
+        return;
+      }
+      const options = parsePracticeOptions(rawOptions);
+
+      // Refuse while the player sits in any other (non-practice) room, from
+      // any tab: one socket per player, so a practice room would otherwise
+      // take over that room's updates. A lobby the player already left
+      // (disconnected) does not count.
+      const busyIn = this.roomManager.getAllRooms().find((r) => {
+        if (this.isPracticeRoom(r.id) || r.state === 'ended') return false;
+        const me = r.players[uid];
+        if (!me) return false;
+        return r.state !== 'lobby' || me.status !== 'disconnected';
+      });
+      if (busyIn) {
+        fail('你目前在其他房間中，請先離開再開始練習');
+        return;
+      }
+      // One practice room per player: a new one replaces the old.
+      for (const old of this.practice.findByOwner(uid)) this.disposePracticeRoom(old.roomId);
+      // Server-wide cap: make room by dropping the review of the game that
+      // ended first; refuse when every practice room is still being played.
+      if (this.practice.isFull()) {
+        const oldest = this.practice.oldestEnded();
+        if (oldest) this.disposePracticeRoom(oldest);
+      }
+      if (this.practice.isFull()) {
+        fail('目前練習的人太多，請稍後再試');
+        return;
+      }
+
+      let roomId = `${PRACTICE_ROOM_PREFIX}${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+      while (this.roomManager.getRoom(roomId)) {
+        roomId = `${PRACTICE_ROOM_PREFIX}${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+      }
+      // Unlimited thinking time (no AFK timers) + casual: never ranked.
+      const room = this.roomManager.createRoom(roomId, user.displayName || '玩家', uid, { multiplier: null }, true);
+      room.name = '練習房（不計戰績）';
+      room.isPrivate = true;
+      room.roleOptions = { ...room.roleOptions, ladyOfTheLake: true };
+      room.players[uid].avatar = user.photoURL;
+      const botIds: string[] = [];
+      for (let i = 1; i < PRACTICE_PLAYER_COUNT; i++) botIds.push(this.addBotToRoom(room));
+
+      this.practice.create(roomId, uid, options, botIds);
+      const engine = this.createGameEngine(roomId, room);
+      engine.configurePractice({
+        playerId: uid,
+        seatIndex: options.seat !== null ? options.seat - 1 : undefined,
+        role: options.role ?? undefined,
+        quietEventLog: true,
+      });
+      this.gameEngines.set(roomId, engine);
+
+      socket.join(roomId);
+      socket.data.roomId = roomId;
+      socket.data.playerId = uid;
+      this.playerToSocket.set(uid, socket.id);
+
+      if (ack) ack({ ok: true, roomId });
+      this.handleStartGame(socket, roomId);
+      console.log(
+        `✓ Practice room ${roomId} started (seat=${options.seat ?? 'random'}, role=${options.role ?? 'random'})`,
+      );
+    } catch (error) {
+      console.error('[practice] create failed:', error instanceof Error ? error.message : 'unknown');
+      fail('無法建立練習房，請稍後再試');
+    }
+  }
+
+  private handlePracticeGetTrace(socket: Socket, rawRoomId: unknown, ack?: (res: unknown) => void): void {
+    if (!ack) return;
+    const roomId = typeof rawRoomId === 'string' ? rawRoomId : '';
+    const session = this.practice.get(roomId);
+    const uid = (socket.data.user as User | undefined)?.uid;
+    if (!session || !uid || session.ownerId !== uid) {
+      ack({ ok: false, error: '找不到這個練習房（可能已逾時清除）' });
+      return;
+    }
+    const room = this.roomManager.getRoom(roomId);
+    if (!room) {
+      ack({ ok: false, error: '這個練習房已清除' });
+      return;
+    }
+    if (session.endedAt === null || room.state !== 'ended') {
+      ack({ ok: false, error: '對局結束後才會公開機器人的決策' });
+      return;
+    }
+    ack({ ok: true, payload: this.buildPracticePayload(roomId, room) });
+  }
+
+  private async handlePracticeFlag(
+    socket: Socket,
+    rawPayload: unknown,
+    ack?: (res: PracticeFlagResult) => void,
+  ): Promise<void> {
+    const reply = (res: PracticeFlagResult): void => { if (ack) ack(res); };
+    const obj = rawPayload && typeof rawPayload === 'object' ? rawPayload as Record<string, unknown> : {};
+    const roomId = typeof obj.roomId === 'string' ? obj.roomId : '';
+    const uid = (socket.data.user as User | undefined)?.uid;
+    const sink = this.practiceSink;
+    if (!sink) {
+      reply({ ok: false, error: practiceReportUnavailableReason(this.practiceSinkStatus) ?? '目前無法儲存回報' });
+      return;
+    }
+    const check = this.practice.checkFlag(roomId, obj.entryId, uid);
+    if (!check.ok) {
+      reply({ ok: false, error: check.error });
+      return;
+    }
+    const entry = check.entry;
+    const note = sanitizeFlagNote(obj.note);
+    this.practice.commitFlag(roomId, entry.id);
+    try {
+      await sink.appendFlag({
+        at: Date.now(),
+        roomId,
+        round: entry.round,
+        attempt: entry.attempt,
+        botSeat: entry.botSeat,
+        botRole: entry.botRole,
+        kind: entry.kind,
+        decision: entry.action,
+        reason: [entry.reason, entry.rule ? `規則：${entry.rule}` : '', entry.knowledge ?? '']
+          .filter(Boolean)
+          .join(' '),
+        note,
+      });
+      reply({ ok: true, flagsLeft: this.practice.flagsLeft(roomId) });
+    } catch (error) {
+      this.practice.releaseFlag(roomId, entry.id);
+      // Step + HTTP status only — never the note or a response body.
+      const what = error instanceof Error && error.name === 'PracticeReportError' ? error.message : 'unexpected error';
+      console.warn(`[practice] flag not saved for room ${roomId}: ${what}`);
+      reply({ ok: false, error: '儲存失敗，請稍後再試' });
+    }
+  }
+
+  private onPracticeGameEnded(roomId: string, room: Room): void {
+    const session = this.practice.get(roomId);
+    if (!session) return;
+    // The engine mutates the room in place and never bumps updatedAt, so the
+    // general RoomManager cleanup (ended + 30 min since updatedAt) would
+    // otherwise delete the room ~30 min after it was CREATED, cutting the
+    // review window short. Count the window from the end of the game.
+    room.updatedAt = Date.now();
+    const socketId = this.playerToSocket.get(session.ownerId);
+    if (socketId) this.io.to(socketId).emit('practice:trace', this.buildPracticePayload(roomId, room));
+    console.log(`✓ Practice game ended in room ${roomId} (${session.entries.length} bot decisions traced)`);
+  }
+
+  private buildPracticePayload(roomId: string, room: Room): PracticeTracePayload {
+    const session = this.practice.get(roomId);
+    const seats = Object.entries(room.players).map(([pid, p], i) => ({
+      seat: i + 1,
+      playerId: pid,
+      name: p.name,
+      role: p.role ?? null,
+      team: p.team ?? null,
+      isBot: p.isBot === true,
+    }));
+    return {
+      roomId,
+      ownerId: session?.ownerId ?? room.host,
+      winner: room.evilWins === true ? 'evil' : room.evilWins === false ? 'good' : null,
+      endReason: room.endReason,
+      seats,
+      entries: session ? [...session.entries] : [],
+      canFlag: this.practiceSink !== null,
+      flagUnavailableReason: this.practiceSink ? undefined : practiceReportUnavailableReason(this.practiceSinkStatus),
+      flagsLeft: this.practice.flagsLeft(roomId),
+      flaggedEntryIds: session ? [...session.flaggedEntryIds] : [],
+    };
+  }
+
+  /**
+   * Build one trace entry (with its explanation) from the observation the bot
+   * decided from. Must run BEFORE the engine call — the observation shares the
+   * room's history arrays. Never throws; returns null outside practice rooms.
+   */
+  private preparePracticeTrace(
+    room: Room,
+    botId: string,
+    obs: PlayerObservation,
+    input:
+      | { kind: 'team_propose'; teamIds: string[]; source: 'agent' | 'fallback'; agent?: AvalonAgent }
+      | { kind: 'team_vote'; vote: boolean; source: 'agent' | 'fallback'; agent?: AvalonAgent }
+      | { kind: 'quest_card'; card: 'success' | 'fail'; source: 'agent' | 'fallback'; agent?: AvalonAgent }
+      | { kind: 'lake_target'; targetId: string; eligible: readonly string[]; source: 'agent' | 'fallback' }
+      | {
+          kind: 'lake_declare';
+          targetId: string;
+          claim: 'good' | 'evil' | null;
+          actual?: 'good' | 'evil';
+          source: 'agent' | 'fallback';
+        }
+      | { kind: 'assassinate'; targetId: string; source: 'agent' | 'fallback'; agent?: AvalonAgent },
+  ): Omit<PracticeTraceEntry, 'id' | 'at'> | null {
+    try {
+      if (!this.isPracticeRoom(room.id)) return null;
+      const player = room.players[botId];
+      if (!player?.role || (player.team !== 'good' && player.team !== 'evil')) return null;
+      const seatOf = (id: string): number => obs.allPlayerIds.indexOf(id) + 1;
+      const seatsZh = (ids: readonly string[]): string =>
+        ids.map(seatOf).sort((a, b) => a - b).map((n) => (n === 10 ? '0' : String(n))).join('、') + '家';
+      const proposalsSoFar = obs.voteHistory.filter((v) => v.round === obs.currentRound).length;
+      const kind: PracticeDecisionKind = input.kind;
+      let attempt = proposalsSoFar;
+      let action = '';
+      let detail: PracticeTraceEntry['detail'] = {};
+      let explain: () => DecisionExplanation;
+      switch (input.kind) {
+        case 'team_propose':
+          attempt = proposalsSoFar + 1;
+          action = `派隊 ${seatsZh(input.teamIds)}`;
+          detail = { team: input.teamIds.map(seatOf).sort((a, b) => a - b) };
+          explain = (): DecisionExplanation => explainTeamProposal(obs, input.teamIds, input.agent);
+          break;
+        case 'team_vote':
+          attempt = proposalsSoFar + 1;
+          action = input.vote ? '贊成' : '反對';
+          detail = { vote: input.vote, team: (obs.proposedTeam ?? []).map(seatOf).sort((a, b) => a - b) };
+          explain = (): DecisionExplanation => explainTeamVote(obs, input.vote, input.agent);
+          break;
+        case 'quest_card':
+          action = input.card === 'fail' ? '出失敗' : '出成功';
+          detail = { card: input.card };
+          explain = (): DecisionExplanation => explainQuestCard(obs, input.card, input.agent);
+          break;
+        case 'lake_target':
+          action = `湖 ${seatLabelZh(seatOf(input.targetId))}`;
+          detail = { target: seatOf(input.targetId) };
+          explain = (): DecisionExplanation => explainLakeTarget(obs, input.targetId, input.eligible);
+          break;
+        case 'lake_declare':
+          action = input.claim === null
+            ? `不公開 ${seatLabelZh(seatOf(input.targetId))} 的湖中結果`
+            : `宣告 ${seatLabelZh(seatOf(input.targetId))} 是${input.claim === 'good' ? '好人' : '壞人'}`;
+          detail = { target: seatOf(input.targetId), claim: input.claim, actual: input.actual };
+          explain = (): DecisionExplanation => explainLakeClaim(obs, input.targetId, input.actual, input.claim);
+          break;
+        case 'assassinate':
+          action = `刺殺 ${seatLabelZh(seatOf(input.targetId))}`;
+          detail = { target: seatOf(input.targetId) };
+          explain = (): DecisionExplanation => explainAssassination(obs, input.targetId, input.agent);
+          break;
+      }
+      let ex: DecisionExplanation;
+      try {
+        ex = explain();
+      } catch {
+        ex = { reason: '（理由產生失敗）', suspects: [] };
+      }
+      const fallbackNote = input.source === 'fallback' ? '（AI 沒有給出可用的決定，改用備援規則）' : '';
+      return {
+        round: obs.currentRound,
+        attempt,
+        kind,
+        botSeat: seatOf(botId),
+        botRole: player.role,
+        botTeam: player.team,
+        action,
+        detail,
+        reason: `${fallbackNote}${ex.reason}`,
+        rule: ex.rule,
+        suspectsLabel: ex.suspectsLabel,
+        suspects: ex.suspects,
+        suspectsNote: ex.suspectsNote,
+        knowledge: ex.knowledge,
+        source: input.source,
+      };
+    } catch (err) {
+      console.warn('[practice] could not build a trace entry:', err instanceof Error ? err.message : 'unknown');
+      return null;
+    }
+  }
+
+  /** Store a prepared trace entry once the engine accepted the decision. */
+  private commitPracticeTrace(roomId: string, entry: Omit<PracticeTraceEntry, 'id' | 'at'> | null): void {
+    if (entry) this.practice.record(roomId, entry);
+  }
+
+  /** Remove a practice room completely (engine timers, bots, session, room). */
+  private disposePracticeRoom(roomId: string): void {
+    const session = this.practice.get(roomId);
+    const engine = this.gameEngines.get(roomId);
+    if (engine) engine.cleanup();
+    const room = this.roomManager.getRoom(roomId);
+    if (room) {
+      for (const [pid, p] of Object.entries(room.players)) {
+        if (p.isBot) this.botAgents.delete(pid);
+      }
+    }
+    // Also when the room is already gone (removed by another cleanup path).
+    for (const botId of session?.botIds ?? []) this.botAgents.delete(botId);
+    this.spectators.delete(roomId);
+    if (session) {
+      const socketId = this.playerToSocket.get(session.ownerId);
+      const sock = socketId ? this.io.sockets.sockets.get(socketId) : undefined;
+      if (sock && sock.data.roomId === roomId) {
+        sock.leave(roomId);
+        sock.data.roomId = undefined;
+        sock.data.playerId = undefined;
+        this.playerToSocket.delete(session.ownerId);
+      }
+    }
+    this.roomManager.deleteRoom(roomId);
+    this.gameEngines.delete(roomId);
+    this.roomStartTimes.delete(roomId);
+    this.practice.delete(roomId);
+  }
+
+  /** Periodic cleanup: ended (review window over), idle, or orphaned practice rooms. */
+  private sweepPracticeRooms(): void {
+    try {
+      for (const roomId of this.practice.expired()) this.disposePracticeRoom(roomId);
+      // A room removed by some other path (e.g. RoomManager's own cleanup)
+      // leaves its session and bot agents behind — free them too.
+      for (const roomId of this.practice.roomIds()) {
+        if (!this.roomManager.getRoom(roomId)) this.disposePracticeRoom(roomId);
+      }
+    } catch (err) {
+      console.error('[practice] sweep failed:', err instanceof Error ? err.message : 'unknown');
+    }
+  }
 }

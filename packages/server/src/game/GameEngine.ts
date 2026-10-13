@@ -84,9 +84,29 @@ export interface GameEngineState {
   pending?: PendingDecision;
 }
 
+/**
+ * Practice-room overrides (網站「與機器人練習」, 2026-10-13).
+ *
+ * Only the GameServer practice mode calls `GameEngine.configurePractice`.
+ * Every other room leaves the engine's practice config `null`, so seat
+ * shuffling, role dealing and event logging behave exactly as before.
+ */
+export interface PracticeAssignment {
+  /** The human player whose seat / role may be forced. */
+  playerId: string;
+  /** 0-based seat index (seat number − 1); undefined = keep the random seat. */
+  seatIndex?: number;
+  /** Forced role; undefined = keep the random role. Must be in the dealt role list. */
+  role?: Role;
+  /** Skip the per-event console log line (practice games are never recorded). */
+  quietEventLog?: boolean;
+}
+
 export class GameEngine {
   private room: Room;
   private roleAssignments: Map<string, Role> = new Map();
+  /** Practice-room overrides; null for every normal room. */
+  private practice: PracticeAssignment | null = null;
   private teamSelectTimeout: NodeJS.Timeout | null = null;
   private voteTimeout: NodeJS.Timeout | null = null;
   private questVoteTimeout: NodeJS.Timeout | null = null;
@@ -146,6 +166,48 @@ export class GameEngine {
   /** Returns the buffered event log for persistence */
   public getEventLog(): GameEventRecord[] {
     return this.eventBuffer;
+  }
+
+  /**
+   * Practice rooms only (see `PracticeAssignment`): force the human's seat
+   * and/or role for the next `startGame()`, and optionally silence the
+   * per-event console log. Must be called before `startGame()`.
+   */
+  public configurePractice(assignment: PracticeAssignment): void {
+    this.practice = { ...assignment };
+  }
+
+  /** True when `configurePractice` was called (practice room). */
+  public isPractice(): boolean {
+    return this.practice !== null;
+  }
+
+  /** Practice rooms: move the human to the requested seat (swap with whoever sits there). */
+  private applyPracticeSeat(): void {
+    const a = this.practice;
+    if (!a || a.seatIndex === undefined) return;
+    const ids = Object.keys(this.room.players);
+    const from = ids.indexOf(a.playerId);
+    const to = a.seatIndex;
+    if (from < 0 || !Number.isInteger(to) || to < 0 || to >= ids.length || from === to) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    const reordered: Record<string, typeof this.room.players[string]> = {};
+    for (const id of ids) reordered[id] = this.room.players[id];
+    this.room.players = reordered;
+  }
+
+  /** Practice rooms: give the human the requested role (swap with whoever was dealt it). */
+  private applyPracticeRole(playerIds: string[], dealt: Role[]): void {
+    const a = this.practice;
+    if (!a || a.role === undefined) return;
+    const idx = playerIds.indexOf(a.playerId);
+    if (idx < 0 || dealt[idx] === a.role) return;
+    const j = dealt.indexOf(a.role);
+    if (j < 0) {
+      console.warn(`[practice] role ${a.role} is not in this game's role list; keeping the random deal`);
+      return;
+    }
+    [dealt[idx], dealt[j]] = [dealt[j], dealt[idx]];
   }
 
   /**
@@ -299,6 +361,8 @@ export class GameEngine {
     // random arrangement. The Player objects themselves are not mutated —
     // only the insertion order of the record is re-keyed.
     this.shufflePlayerSeats();
+    // Practice rooms only: the human may pick a seat (no-op otherwise).
+    this.applyPracticeSeat();
 
     // Compute effective quest sizes once per game so downstream logic never
     // mutates the shared AVALON_CONFIG object. Honours `swapR1R2` and the
@@ -671,6 +735,8 @@ export class GameEngine {
 
     const playerIds = Object.keys(this.room.players);
     const rolesShuffled = this.shuffleArray([...roles]);
+    // Practice rooms only: the human may pick a role (no-op otherwise).
+    this.applyPracticeRole(playerIds, rolesShuffled);
 
     // Assign roles to players
     playerIds.forEach((playerId, index) => {
@@ -1115,6 +1181,12 @@ export class GameEngine {
     }
     if (holderId !== this.room.ladyOfTheLakeHolder) {
       throw new Error(`Player ${holderId} is not the Lady of the Lake holder`);
+    }
+    // One inspection per Lady phase. The token moves to the target at
+    // inspection while the phase waits for the declaration, so without this
+    // the new holder could inspect again in the same phase (2026-10-13).
+    if (this.room.ladyOfTheLakeTarget) {
+      throw new Error('Lady of the Lake already inspected this round');
     }
     if (!(targetId in this.room.players)) {
       throw new Error(`Target player ${targetId} not found`);
@@ -1637,6 +1709,7 @@ export class GameEngine {
       event_data: { roomId: this.room.id, timestamp: new Date().toISOString(), ...data },
     };
     this.eventBuffer.push(record);
+    if (this.practice?.quietEventLog) return;
     console.log(JSON.stringify({ ...record.event_data, event }));
   }
 }

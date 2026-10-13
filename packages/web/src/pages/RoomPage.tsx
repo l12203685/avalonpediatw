@@ -38,6 +38,11 @@ import {
   ClipboardList,
   Pin,
   PinOff,
+  Bot,
+  RotateCcw,
+  Home,
+  ListChecks,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   AVALON_CONFIG,
@@ -65,6 +70,10 @@ import {
 import { LAKE_IMAGE, getBoardImage } from '../utils/avalonAssets';
 import { CampDisc } from '../components/CampDisc';
 import audioService from '../services/audio';
+import PracticeReviewPanel from '../components/practice/PracticeReviewPanel';
+import { isPracticeRoomId, startPractice } from '../services/practice';
+import { usePracticeStore } from '../store/practiceStore';
+import { PRACTICE_NS } from '../i18n/practice';
 
 // Friendly label for the room-level thinking-time multiplier.
 function timerLabel(multiplier: number | null | undefined): string {
@@ -134,6 +143,10 @@ const ASSASSIN_BASE = 180;
  */
 export default function RoomPage(): JSX.Element {
   const { t } = useTranslation(['game', 'common']);
+  const { t: tp } = useTranslation(PRACTICE_NS);
+  // 網站「與機器人練習」: ended practice rooms show the bot decision review;
+  // this remembers which room the player switched to the table view for.
+  const [practiceBoardFor, setPracticeBoardFor] = useState<string | null>(null);
   const {
     room,
     currentPlayer,
@@ -157,7 +170,10 @@ export default function RoomPage(): JSX.Element {
   const [isAssassinating, setIsAssassinating] = useState(false);
   const [showRoleReveal, setShowRoleReveal] = useState(true);
   const prevRoomState = useRef<string | null>(null);
-  const timerMultiplier = room?.timerConfig?.multiplier ?? 1;
+  // `null` = unlimited thinking time; only a MISSING config means 1x
+  // (`?? 1` turned null into 1, so unlimited rooms showed a countdown).
+  const rawTimerMultiplier = room?.timerConfig?.multiplier;
+  const timerMultiplier = rawTimerMultiplier === undefined ? 1 : rawTimerMultiplier;
   const isUnlimitedTimer = timerMultiplier === null;
   const teamSelectBase = isUnlimitedTimer ? 0 : Math.round(TEAM_SELECT_BASE * (timerMultiplier as number));
   const assassinBase = isUnlimitedTimer ? 0 : Math.round(ASSASSIN_BASE * (timerMultiplier as number));
@@ -212,6 +228,30 @@ export default function RoomPage(): JSX.Element {
   useEffect(() => {
     requestNotificationPermission();
   }, []);
+
+  // A different room (「再練一局」 opens a new practice room without passing
+  // through the lobby): reset every per-game UI state, as the lobby → voting
+  // transition below does for a rematch. Otherwise the previous game's
+  // assassination pick kept every target button disabled.
+  const prevRoomId = useRef<string | null>(null);
+  useEffect(() => {
+    const id = room?.id ?? null;
+    if (id === null) {
+      // Left / between rooms: the next room counts as a fresh start.
+      prevRoomState.current = null;
+      return;
+    }
+    if (prevRoomId.current !== null && prevRoomId.current !== id) {
+      setShowRoleReveal(true);
+      setIsVoting(false);
+      setIsAssassinating(false);
+      setSelectedTarget(null);
+      setSelectedTeamIds(new Set());
+      setScoresheetExpanded(scoresheetTrialPinned);
+      prevRoomState.current = null;
+    }
+    prevRoomId.current = id;
+  }, [room?.id]);
 
   // Show role reveal each time game starts (lobby → voting transition)
   useEffect(() => {
@@ -362,6 +402,8 @@ export default function RoomPage(): JSX.Element {
     room.state === 'lady_of_the_lake' ||
     room.state === 'discussion';
   const isEndedPhase = room.state === 'ended';
+  const isPractice = isPracticeRoomId(room.id);
+  const showPracticeReview = isPractice && isEndedPhase && practiceBoardFor !== room.id;
 
   const playerList = Object.values(room.players);
   const playerIds = Object.keys(room.players);
@@ -999,6 +1041,22 @@ export default function RoomPage(): JSX.Element {
         )}
       </AnimatePresence>
 
+      {isPractice && (
+        <div
+          data-testid="practice-banner"
+          className="relative z-10 shrink-0 flex items-center justify-between gap-2 mx-3 mt-2 rounded-lg border border-emerald-600/60 bg-emerald-950/50 px-3 py-1 text-[10px] sm:text-[11px] text-emerald-100"
+        >
+          <span className="inline-flex items-center gap-1 min-w-0"><Bot size={12} className="shrink-0" /><span className="truncate">{tp('banner')}</span></span>
+          <button
+            type="button"
+            onClick={() => { if (window.confirm(tp('leaveConfirm'))) leaveRoom(room.id); }}
+            className="shrink-0 rounded border border-emerald-700 px-2 py-0.5 text-emerald-200 hover:bg-emerald-900/60"
+          >
+            {tp('leave')}
+          </button>
+        </div>
+      )}
+
       {isSpectator && (
         <div className="relative z-10 shrink-0 flex items-center justify-between mx-3 mt-2 bg-slate-800/40 border border-slate-600 rounded-xl px-4 py-1.5">
           <span className="text-slate-300 text-[11px] sm:text-xs font-semibold">{t('game:spectator.bannerTitle')}</span>
@@ -1164,6 +1222,77 @@ export default function RoomPage(): JSX.Element {
     </>
   );
 
+  // 網站「與機器人練習」ended view: mission track + review/table toggle +
+  // 「再練一局」/「回首頁」 (no lobby, no rematch — each game is a new room).
+  const leavePracticeToHome = (): void => {
+    try {
+      leaveRoom(room.id);
+    } catch {
+      setGameState('home');
+    }
+  };
+  const practiceEndedTopSection = (
+    <>
+      <div className="relative z-10 shrink-0 px-3 pt-2">
+        <MissionTrack room={room} variant="mission-only" />
+      </div>
+      <div className="relative z-10 shrink-0 flex flex-wrap items-center gap-1.5 px-3 pt-1.5 text-[11px] sm:text-xs">
+        <button
+          type="button"
+          onClick={() => {
+            // 「看牌桌」 always lands on the table, even with the scoresheet pinned.
+            if (showPracticeReview) setScoresheetExpanded(false);
+            setPracticeBoardFor(showPracticeReview ? room.id : null);
+          }}
+          data-testid="practice-toggle-view"
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-600 bg-slate-800/60 px-2.5 py-1 font-semibold text-slate-100 hover:bg-slate-700/60"
+        >
+          {showPracticeReview ? <LayoutGrid size={13} /> : <ListChecks size={13} />}
+          {showPracticeReview ? tp('viewBoard') : tp('viewReview')}
+        </button>
+        {/* 牌譜 toggle (the normal ended header's ClipboardList, which the
+            practice header replaces). From the review it opens the scoresheet. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (showPracticeReview) {
+              setPracticeBoardFor(room.id);
+              setScoresheetExpanded(true);
+            } else {
+              setScoresheetExpanded(v => !v);
+            }
+          }}
+          aria-pressed={!showPracticeReview && scoresheetExpanded}
+          data-testid="practice-toggle-scoresheet"
+          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 font-semibold ${
+            !showPracticeReview && scoresheetExpanded
+              ? 'border-emerald-400 bg-emerald-500/30 text-emerald-100 hover:bg-emerald-500/50'
+              : 'border-slate-600 bg-slate-800/60 text-slate-100 hover:bg-slate-700/60'
+          }`}
+        >
+          <ClipboardList size={13} />
+          {!showPracticeReview && scoresheetExpanded ? tp('hideScoresheet') : tp('viewScoresheet')}
+        </button>
+        <button
+          type="button"
+          onClick={() => { void startPractice(usePracticeStore.getState().lastOptions, (error) => tp('createFailed', { error })); }}
+          data-testid="practice-again"
+          className="inline-flex items-center gap-1 rounded-lg border border-emerald-500 bg-emerald-600/80 px-2.5 py-1 font-bold text-white hover:bg-emerald-500"
+        >
+          <RotateCcw size={13} />{tp('again')}
+        </button>
+        <button
+          type="button"
+          onClick={leavePracticeToHome}
+          data-testid="practice-home"
+          className="inline-flex items-center gap-1 rounded-lg border border-zinc-600 bg-zinc-800/60 px-2.5 py-1 font-semibold text-zinc-200 hover:bg-zinc-700/60"
+        >
+          <Home size={13} />{tp('home')}
+        </button>
+      </div>
+    </>
+  );
+
   // ─── Center column phase panel (gameplay only) ──────────────────────
   // Edward 2026-04-26 18:30-18:31 spec 7「砍遊戲資訊方塊 (只用對話紀錄)」+
   // spec 6「本次任務隊伍 chip」: 砍 teamSelected 後的 yellow「本次任務隊伍: ...」
@@ -1269,7 +1398,7 @@ export default function RoomPage(): JSX.Element {
                 </div>
               )}
             </div>
-          ) : isLadyHolder && !room.ladyOfTheLakeResult ? (
+          ) : isLadyHolder && !room.ladyOfTheLakeTarget ? (
             <>
               <div className="text-center">
                 <h2 className="text-base sm:text-xl font-bold text-blue-400">{t('game:lady.title')}</h2>
@@ -1450,7 +1579,7 @@ export default function RoomPage(): JSX.Element {
       {/* ────────── TOP SECTION (phase-specific) ────────── */}
       {isLobbyPhase && lobbyTopSection}
       {isGameplayPhase && gameTopSection}
-      {isEndedPhase && endedTopSection}
+      {isEndedPhase && (isPractice ? practiceEndedTopSection : endedTopSection)}
 
       {/* ────────── PHASE-INFO BANNER (Edward 2026-04-26 spec 33) ──────────
           常駐 sticky 方塊顯當下動作; 不靠 chat 訊息驅動 (避 #25 lag), 直接從
@@ -1473,7 +1602,11 @@ export default function RoomPage(): JSX.Element {
             從 ended 切回 lobby 時 voteHistory / questHistory 仍保留, 玩家可
             review 上場牌譜後再準備下一局. lobby 會用上方專屬「看牌譜」按鈕
             觸發 (gameplay/ended 用頂端 ClipboardList icon). */}
-        {scoresheetExpanded && (room.voteHistory.length > 0 || room.questHistory.length > 0) ? (
+        {showPracticeReview ? (
+          <div className="flex-1 min-h-0 overflow-y-auto pt-2">
+            <PracticeReviewPanel roomId={room.id} currentPlayerId={currentPlayer.id} />
+          </div>
+        ) : scoresheetExpanded && (room.voteHistory.length > 0 || room.questHistory.length > 0) ? (
           <div className="flex-1 min-h-0 overflow-y-auto">
             <FullScoresheetLayout room={room} currentPlayer={currentPlayer} />
           </div>

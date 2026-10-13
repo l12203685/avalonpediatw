@@ -12,6 +12,7 @@ import {
   BarChart3,
   Clock,
   User,
+  Bot,
 } from 'lucide-react';
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier, PLAY_PLATFORM_URL } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
@@ -20,6 +21,11 @@ import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
 import BindingField from '../components/BindingField';
 import InstallButton from '../components/InstallButton';
 import ForceUpdateButton from '../components/ForceUpdateButton';
+import PracticeSetupPanel from '../components/practice/PracticeSetupPanel';
+import { PRACTICE_NS } from '../i18n/practice';
+
+/** `#practice` opens the practice setup directly (works for guests too). */
+const PRACTICE_HASH = '#practice';
 
 function isGuestPlayer(player: { name?: string; provider?: string } | null | undefined): boolean {
   if (!player) return true;
@@ -40,6 +46,7 @@ interface OpenRoom {
 
 export default function HomePage(): JSX.Element {
   const { t } = useTranslation();
+  const { t: tp } = useTranslation(PRACTICE_NS);
   const { setGameState, setCurrentPlayer, currentPlayer, addToast } = useGameStore();
   const [playerName, setPlayerName] = useState(
     currentPlayer?.name ?? localStorage.getItem('avalon_player_name') ?? ''
@@ -47,7 +54,25 @@ export default function HomePage(): JSX.Element {
   const [roomId, setRoomId] = useState('');
   // 2026-10-09: 本站不再自建對局（改到 signage-cloud 玩）。'create' / 'join'
   // 表單保留但已無任何入口 — 大廳按鈕改成 PLAY_PLATFORM_URL 外連。
-  const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
+  // 'practice' = 與機器人練習 setup (2026-10-13); also opened by #practice.
+  const [mode, setMode] = useState<'home' | 'create' | 'join' | 'practice'>(
+    () => (window.location.hash === PRACTICE_HASH ? 'practice' : 'home'),
+  );
+  useEffect(() => {
+    const onHash = (): void => {
+      if (window.location.hash === PRACTICE_HASH) setMode('practice');
+    };
+    window.addEventListener('hashchange', onHash);
+    return (): void => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const openPractice = (): void => {
+    setMode('practice');
+    try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${PRACTICE_HASH}`); } catch { /* ignore */ }
+  };
+  const closePractice = (): void => {
+    setMode('home');
+    try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`); } catch { /* ignore */ }
+  };
   const [roomPassword, setRoomPassword] = useState('');
   const [joinPassword, setJoinPassword] = useState('');
   const [pendingJoinRoom, setPendingJoinRoom] = useState<OpenRoom | null>(null);
@@ -484,6 +509,20 @@ export default function HomePage(): JSX.Element {
                     </motion.button>
                   </div>
 
+                  {/* 2026-10-13 網站「與機器人練習」— one click into a private,
+                      unrecorded game against 9 bots + a post-game review of
+                      every bot decision. No login needed. */}
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={openPractice}
+                    data-testid="home-btn-practice"
+                    className="w-full min-w-0 bg-emerald-900/50 hover:bg-emerald-800/60 border border-emerald-500/70 text-emerald-50 font-semibold py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md text-sm sm:text-base"
+                  >
+                    <Bot size={18} className="flex-shrink-0 text-emerald-300" />
+                    <span className="text-center leading-snug">{tp('entry')}</span>
+                  </motion.button>
+
                   {/* Admin link — small text, only shown to admins */}
                   {isAdminUser && (
                     <div className="pt-1">
@@ -505,6 +544,12 @@ export default function HomePage(): JSX.Element {
                   removed per final spec — subtitle 「隱藏身分‧邏輯推理‧相互
                   欺瞞」 已在頂端 h1 下方呈現，下方 footer 不再需要。 */}
             </motion.div>
+          )}
+
+          {mode === 'practice' && (
+            <div className="max-w-xl mx-auto">
+              <PracticeSetupPanel onBack={closePractice} />
+            </div>
           )}
 
           {mode === 'create' && (
