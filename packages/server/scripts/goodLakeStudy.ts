@@ -21,6 +21,13 @@
  * role. Every rate has n and a Wilson 95% interval; "chance" is the
  * expectation of a uniform pick among the same legal candidates.
  *
+ * It also prints how often each agent rule and each trust-term form of
+ * the model (`TRUST_VARIANTS`, scored on the same model analysis) picks the
+ * human's target — overall and per score — and a paired comparison of
+ * `goodLakeTargetMostSuspicious` vs `goodLakeInfoMax` on the same lakes
+ * (discordant counts, exact two-sided McNemar p). The variants were
+ * compared on these same logs, so their agreement rates are in-sample.
+ *
  * Output is aggregate only; `--player NAME` adds per-player cohorts (the
  * public docs only use the ED / Sin cohort labels).
  *
@@ -35,8 +42,10 @@ import { rowsFromSheet, parseReplayGame, campOf, type ReplayGame } from '../src/
 import { buildReplayObservation, seatId, validLakeTargetSeats } from '../src/ai/benchmark/replayObservation';
 import { computeTopPerformers, cohortKey } from '../src/ai/benchmark/cohorts';
 import { estimateSuspicionFromHistory, pickLakeTargetForTeam } from '../src/ai/LakePolicy';
-import { analyzeGoodLake, pickGoodLakeTargetInfoMax } from '../src/ai/GoodLakeInfo';
+import { AVALON_CONFIG } from '@avalon/shared';
+import { analyzeGoodLake, pickGoodLakeTargetInfoMax, type GoodLakeInfoAnalysis } from '../src/ai/GoodLakeInfo';
 import { LEGACY_AGENT_TUNING, type AgentTuning } from '../src/ai/AgentTuning';
+import type { PlayerObservation } from '../src/ai/types';
 
 /** Agent rules profiled next to the human picks (same legal candidates). */
 const AGENT_RULES: ReadonlyArray<[string, AgentTuning]> = [
@@ -44,6 +53,85 @@ const AGENT_RULES: ReadonlyArray<[string, AgentTuning]> = [
   ['goodLakeTargetMostSuspicious', { ...LEGACY_AGENT_TUNING, goodLakeTargetMostSuspicious: true }],
   ['goodLakeInfoMax', { ...LEGACY_AGENT_TUNING, goodLakeInfoMax: true }],
 ];
+
+/**
+ * Trust-term forms of the `goodLakeInfoMax` model, all scored on the same
+ * `analyzeGoodLake` output: score(c) = ΔH(c) + trust(c), V = max(0, best
+ * ΔH), on = the model's own score-state rule (another lake follows and red
+ * has not won two). The final form λ·(1 − 2p)·V with λ = 1 equals a weight
+ * of 2 on P(good)·V (the −λV part is common to every candidate), so the
+ * "weight 2" row must match the model pick exactly — checked below.
+ */
+interface VariantCtx {
+  obs: PlayerObservation;
+  analysis: GoodLakeInfoAnalysis;
+  /** Score-state rule of the model (λ > 0). */
+  on: boolean;
+  /** Another lake follows (ignores the 兩紅 rule). */
+  nextLake: boolean;
+  /** Lakes still to come after this one. */
+  remaining: number;
+  V: number;
+}
+type VariantScore = (c: GoodLakeInfoAnalysis['candidates'][number], x: VariantCtx) => number;
+const TRUST_VARIANTS: ReadonlyArray<[string, VariantScore | 'mission-goers']> = [
+  ['info only (λ = 0)', (c) => c.infoGain],
+  ['trust weight 1 on P(good)·V', (c, x) => c.infoGain + (x.on ? 1 : 0) * (1 - c.pEvil) * x.V],
+  ['trust weight 2 on P(good)·V (= final λ(1−2p)V, λ = 1)', (c, x) => c.infoGain + (x.on ? 2 : 0) * (1 - c.pEvil) * x.V],
+  ['trust weight 4 (λ = 2)', (c, x) => c.infoGain + (x.on ? 4 : 0) * (1 - c.pEvil) * x.V],
+  ['final form, trust kept on at 兩紅 (0 at the last lake)', (c, x) => c.infoGain + (x.nextLake ? 1 : 0) * (1 - 2 * c.pEvil) * x.V],
+  ['final form × lakes still to come', (c, x) => c.infoGain + (x.on ? x.remaining : 0) * (1 - 2 * c.pEvil) * x.V],
+  ['most likely good (holder belief)', (c) => -c.pEvil],
+  ['most likely good among mission-goers', 'mission-goers'],
+];
+const FINAL_VARIANT = 2;
+
+/** argmax with the model's tie rule: |diff| < 1e-9 → seat order. */
+function argmaxBySeat(ids: readonly string[], f: (id: string) => number, order: readonly string[]): string | undefined {
+  return [...ids].sort((a, b) => {
+    const d = f(b) - f(a);
+    if (Math.abs(d) > 1e-9) return d;
+    return order.indexOf(a) - order.indexOf(b);
+  })[0];
+}
+
+function variantPicks(obs: PlayerObservation, pool: readonly string[], analysis: GoodLakeInfoAnalysis): string[] {
+  const rounds = AVALON_CONFIG[obs.playerCount]?.questTeams.length ?? 5;
+  const ctx: VariantCtx = {
+    obs,
+    analysis,
+    on: analysis.trustWeight > 0,
+    nextLake: obs.currentRound + 2 <= rounds,
+    remaining: Math.max(0, rounds - 1 - obs.currentRound),
+    V: Math.max(0, ...analysis.candidates.map((c) => c.infoGain)),
+  };
+  const byId = new Map(analysis.candidates.map((c) => [c.id, c]));
+  return TRUST_VARIANTS.map(([, score]) => {
+    if (score === 'mission-goers') {
+      const mp = pool.filter((id) => byId.get(id)?.wentOnMission);
+      return argmaxBySeat(mp.length > 0 ? mp : pool, (id) => -(byId.get(id)?.pEvil ?? 1), obs.allPlayerIds) ?? '';
+    }
+    return argmaxBySeat(pool, (id) => { const c = byId.get(id); return c ? score(c, ctx) : -Infinity; }, obs.allPlayerIds) ?? '';
+  });
+}
+
+/** Exact two-sided McNemar p (binomial ½ on the discordant pairs). */
+function mcnemarExact(b: number, c: number): number {
+  const n = b + c;
+  if (n === 0) return 1;
+  const k = Math.min(b, c);
+  let logC = 0;
+  let tail = 0;
+  for (let i = 0; i <= k; i++) {
+    if (i > 0) logC += Math.log(n - i + 1) - Math.log(i);
+    tail += Math.exp(logC - n * Math.LN2);
+  }
+  return Math.min(1, 2 * tail);
+}
+
+function fmtP(p: number): string {
+  return p < 1e-4 ? p.toExponential(1) : p.toFixed(4);
+}
 
 interface Args {
   players: string[];
@@ -142,6 +230,10 @@ export interface GoodLake {
   targetPEvil: number | null;
   /** Each agent rule's pick (`AGENT_RULES` order) on the same candidates. */
   agentPicks: Cand[];
+  /** Each `TRUST_VARIANTS` pick equals the human target (null: no model analysis). */
+  variantMatch: boolean[] | null;
+  /** The final-form variant disagrees with `pickGoodLakeTargetInfoMax` (must stay false). */
+  variantMismatch: boolean;
 }
 
 function collect(games: readonly ReplayGame[]): GoodLake[] {
@@ -180,17 +272,23 @@ function collect(games: readonly ReplayGame[]): GoodLake[] {
       let modelMostLikelyGoodMission: boolean | null = null;
       let modelPickMatch: boolean | null = null;
       let targetPEvil: number | null = null;
+      let variantMatch: boolean[] | null = null;
+      let variantMismatch = false;
       if (analysis) {
         const pe = new Map(analysis.candidates.map((c) => [c.id, c.pEvil]));
-        const order = (a: string, b: string): number =>
-          (pe.get(a) ?? 1) - (pe.get(b) ?? 1) || Number(a.slice(1)) - Number(b.slice(1));
+        // Same tie rule as the model (|diff| < 1e-9 → seat order).
+        const mostLikelyGood = (ids: readonly string[]): string | undefined =>
+          argmaxBySeat(ids, (id) => -(pe.get(id) ?? 1), obs.allPlayerIds);
         const tid = seatId(target.seat);
-        const rankedGood = [...pool].sort(order);
-        modelMostLikelyGood = rankedGood[0] === tid;
+        modelMostLikelyGood = mostLikelyGood(pool) === tid;
         const missionPool = pool.filter((id) => cands.find((c) => seatId(c.seat) === id)?.anyMission);
-        if (missionPool.length > 0) modelMostLikelyGoodMission = [...missionPool].sort(order)[0] === tid;
-        modelPickMatch = pickGoodLakeTargetInfoMax(obs, pool) === tid;
+        if (missionPool.length > 0) modelMostLikelyGoodMission = mostLikelyGood(missionPool) === tid;
+        const modelPick = pickGoodLakeTargetInfoMax(obs, pool);
+        modelPickMatch = modelPick === tid;
         targetPEvil = pe.get(tid) ?? null;
+        const vp = variantPicks(obs, pool, analysis);
+        variantMatch = vp.map((id) => id === tid);
+        variantMismatch = vp[FINAL_VARIANT] !== modelPick;
       }
       const agentPicks = AGENT_RULES.map(([, tuning]) => {
         const id = pickLakeTargetForTeam('good', obs, valid.map(seatId), tuning);
@@ -217,6 +315,8 @@ function collect(games: readonly ReplayGame[]): GoodLake[] {
         modelPickMatch,
         targetPEvil,
         agentPicks,
+        variantMatch,
+        variantMismatch,
       });
     });
   }
@@ -295,6 +395,39 @@ function picksProfile(title: string, items: readonly GoodLake[]): Section {
   return { title: `${title} (n=${items.length})`, rows };
 }
 
+/**
+ * How often each agent rule (real `LakePolicy` picks) and each trust-term
+ * form (`TRUST_VARIANTS`) picks the human's target, plus the paired
+ * most-suspicious vs goodLakeInfoMax comparison on the same lakes.
+ */
+function agreementSection(title: string, items: readonly GoodLake[]): Section {
+  const rows: Array<{ label: string; rate: Rate }> = [];
+  AGENT_RULES.forEach(([name], i) => {
+    rows.push({ label: `agent rule — ${name}`, rate: wilsonRate(items.filter((l) => l.agentPicks[i] === l.target).length, items.length) });
+  });
+  const withModel = items.filter((l) => l.variantMatch !== null);
+  TRUST_VARIANTS.forEach(([name], i) => {
+    rows.push({ label: `model form — ${name}`, rate: wilsonRate(withModel.filter((l) => l.variantMatch?.[i]).length, withModel.length) });
+  });
+  const iDef = AGENT_RULES.findIndex(([name]) => name === 'goodLakeTargetMostSuspicious');
+  const iNew = AGENT_RULES.findIndex(([name]) => name === 'goodLakeInfoMax');
+  let onlyDefault = 0;
+  let onlyNew = 0;
+  for (const l of items) {
+    const d = l.agentPicks[iDef] === l.target;
+    const m = l.agentPicks[iNew] === l.target;
+    if (d && !m) onlyDefault++;
+    if (m && !d) onlyNew++;
+  }
+  const mismatch = withModel.filter((l) => l.variantMismatch).length;
+  return {
+    title: `${title} (n=${items.length})`,
+    rows,
+    note: `paired, same lakes: only goodLakeTargetMostSuspicious right ${onlyDefault}, only goodLakeInfoMax right ${onlyNew}, `
+      + `exact McNemar p = ${fmtP(mcnemarExact(onlyDefault, onlyNew))}; final-form variant ≠ model pick: ${mismatch}`,
+  };
+}
+
 function scoreLabel(l: GoodLake): string {
   return `blue ${l.goodWins} : red ${l.evilWins}`;
 }
@@ -306,6 +439,8 @@ export function analyse(all: readonly GoodLake[]): Section[] {
   const scores = [...new Set(all.map(scoreLabel))].sort();
   for (const s of scores) sections.push(profile(`score ${s}`, all.filter((l) => scoreLabel(l) === s)));
   for (const s of scores) sections.push(picksProfile(`who is laked, score ${s}`, all.filter((l) => scoreLabel(l) === s)));
+  sections.push(agreementSection('same target as the human: agent rules and model forms', all));
+  for (const s of scores) sections.push(agreementSection(`same target as the human, score ${s}`, all.filter((l) => scoreLabel(l) === s)));
   for (const i of [0, 1, 2]) sections.push(profile(LAKE_LABEL[i], all.filter((l) => l.lakeIdx === i)));
   for (const r of ['merlin', 'percival', 'loyal']) sections.push(profile(`holder ${r}`, all.filter((l) => l.role === r)));
   return sections;

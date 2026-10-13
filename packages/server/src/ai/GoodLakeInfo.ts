@@ -37,17 +37,27 @@
  *      Seats that went on missions are coupled to the other members
  *      through the fail counts, so learning one of them also moves the
  *      others — this is where "出過任務" comes from in the model.
+ *      For a loyal holder (belief = common picture) ΔH is a mutual
+ *      information and never negative. For Merlin / Percival the forecast
+ *      uses private knowledge the common picture lacks, so ΔH can be
+ *      slightly negative (a result that is likely to the holder but
+ *      surprising to the blues can leave them less sure; seen down to
+ *      about −0.05 bits on candidates the holder already rates likely red).
  *   3. **Trust chain.** The laked seat holds the next lake. When another
  *      lake follows, a good target becomes a trusted next holder (its
- *      truthful result is worth one more lake, V) and a red target becomes
- *      a lying next holder whose false claim the blues would take on trust
- *      (costing about as much, −V):
- *        T(c) = λ · [P_holder(c good) − P_holder(c red)] · V
- *             = λ · (1 − 2·P_holder(c red)) · V,   V = max_c' ΔH(c')
+ *      truthful result is worth one more lake, V):
+ *        T(c) = λ · (1 − 2·P_holder(c red)) · V,   V = max(0, max_c' ΔH(c'))
  *      (the value of one more trusted lake ≈ the best lake available now).
- *      λ = 1, except when red already has two missions (「兩紅」: a passed
- *      next mission proves its whole team good — 鐵四好 — so the lake need
- *      not seed the chain) and at the last lake (nothing follows): λ = 0.
+ *      V is the same for every candidate, so T(c) = 2λ·P_holder(c good)·V
+ *      − λV and the constant −λV never changes the pick: this is ONE
+ *      choice, a weight of 2λ on "P(good) × V". (It was first written as
+ *      "+V for a trusted holder, −V for a lying one", but that is not a
+ *      separate ingredient.) λ = 1 (effective weight 2), except when red
+ *      already has two missions (「兩紅」: a passed next mission proves its
+ *      whole team good — 鐵四好 — so the lake need not seed the chain) and
+ *      at the last lake (nothing follows): λ = 0. At 2:0 / 2:1 the next
+ *      lake only happens if red wins the next mission; λ is not scaled by
+ *      that chance (docs/ai/strength_benchmark.md 7.5, open item).
  *   4. **Pick.** argmax ΔH(c) + T(c) over the legal candidates the caller
  *      passes (the existing avoid-set — Merlin never lakes a known red,
  *      Percival skips both thumbs — is applied by the caller); ties
@@ -207,9 +217,10 @@ function h2(p: number): number {
 
 export interface GoodLakeInfoOptions {
   /**
-   * Weight λ of the trust-chain term when another lake follows (1 = gain
-   * of a trusted next holder and cost of a lying one both worth one lake);
-   * red-has-two and the last lake force 0.
+   * Weight λ of the trust-chain term λ·(1 − 2·P(red))·V when another lake
+   * follows — the same picks as a weight of 2λ on P(good)·V, since the
+   * −λV part is common to every candidate; red-has-two and the last lake
+   * force 0.
    */
   trustWeight: number;
 }
@@ -224,7 +235,10 @@ export interface GoodLakeCandidateScore {
   pEvil: number;
   /** Common picture's prior that the candidate is red. */
   pEvilCommon: number;
-  /** Expected uncertainty drop of the common picture (bits). */
+  /**
+   * Expected uncertainty drop of the common picture (bits); ≥ 0 for a loyal
+   * holder, can be slightly negative for Merlin / Percival (see module comment).
+   */
   infoGain: number;
   /** Trust-chain term (bits; negative for a likely-red candidate). */
   trust: number;

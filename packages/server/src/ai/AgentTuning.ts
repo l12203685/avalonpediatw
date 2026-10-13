@@ -34,7 +34,8 @@
  *                                   列舉與持湖者所知一致的紅方組合，挑「宣告
  *                                   後藍方共同視角的不確定性下降最多」的人，
  *                                   之後還有湖時再加信任鏈項（目標是藍 → 下一
- *                                   位可信的持湖者；是紅 → 下一湖會說謊）；
+ *                                   位可信的持湖者：P(藍) × 一次湖的價值，
+ *                                   權重 2）；
  *                                   紅方已拿兩局或最後一次湖時不加信任鏈項。
  *                                   打開時優先於 `goodLakeTargetMostSuspicious`
  *                                   （模型找不到一致的組合時才退回它）；
@@ -136,10 +137,12 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=1 打開）。
  *   - `goodLakeInfoMax`（2026-10-13，strength_benchmark.md 第 7 節）：對照
  *     同樣是上面這組正式預設。好人持湖的湖目標一致性 ED 18.9→35.1%、
- *     Sin 20.3→22.9%、top 12.2→25.8%、population 14.9→24.7%；自我對打
- *     藍方立場 seed 4096（選版本）−0.3pp [−1.0pp, +0.3pp]、新種子 6174
- *     −0.3pp [−0.9pp, +0.4pp]、1729 −0.2pp [−0.9pp, +0.4pp]，三個種子合併
- *     −0.3pp [−0.7pp, +0.1pp]，區間都含 0 → 依規則不算變弱 → **符合採用
+ *     Sin 20.3→22.9%、top 12.2→25.8%、population 14.9→24.7%（配對比較
+ *     top / population 顯著，ED p≈0.07，Sin 看不出差別）；自我對打
+ *     藍方立場 seed 4096（協定的選版本種子，只跑定案版）−0.3pp
+ *     [−1.0pp, +0.3pp]、新種子 6174 −0.3pp [−0.9pp, +0.4pp]、1729 −0.2pp
+ *     [−0.9pp, +0.4pp]，三個種子合併
+ *     −0.3pp [−0.6pp, +0.1pp]，區間都含 0 → 依規則不算變弱 → **符合採用
  *     條件**。預設的切換要和 `src/socket/GameServer.botLake.test.ts`（把
  *     正式預設的好人湖目標寫成「最可疑」）一起改，留待整合時進行；在那之前
  *     可用 AVALON_TUNING_GOOD_LAKE_INFO_MAX=1 打開（打開後

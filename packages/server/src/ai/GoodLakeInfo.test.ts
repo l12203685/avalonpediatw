@@ -117,6 +117,48 @@ describe('GoodLakeInfo — holder belief', () => {
     expect(byId(a, 'P10').pEvil).toBeCloseTo(1, 10);
   });
 
+  it('an earlier holder\'s claim weighs ½ in the worlds where that holder is red', () => {
+    // P10 laked the (good) holder P1 after R2 and said "good". Worlds where
+    // P10 is blue: the claim is true for sure (weight 1); worlds where P10
+    // is red: no information (weight ½). With no missions on record:
+    // P(P10 red) = C(8,3)·½ / (C(8,4) + C(8,3)·½) = 28 / 98 = 2/7 (< 4/9).
+    const o = obs({
+      currentRound: 3,
+      questResults: ['success', 'fail', 'success'],
+      lakeHistory: [{ round: 2, holderId: 'P10', targetId: 'P1', declaredClaim: 'good' }],
+    });
+    const a = analyzeGoodLake(o, ['P10', 'P2'])!;
+    expect(a.droppedLakes).toBe(false);
+    expect(byId(a, 'P10').pEvil).toBeCloseTo(2 / 7, 10);
+    expect(byId(a, 'P10').pEvilCommon).toBeCloseTo(2 / 7, 10);
+    // The other seats share the remaining reds: (4 − 2/7) / 8.
+    expect(byId(a, 'P2').pEvil).toBeCloseTo((4 - 2 / 7) / 8, 10);
+  });
+
+  it('drops the lake declarations when they contradict the holder\'s own knowledge', () => {
+    // Merlin sees four reds (P2–P5); P10 laked him and called him red, so
+    // P10 would have to be a fifth red — impossible. The model rebuilds both
+    // pictures without the lake declarations and still picks a seat.
+    const on = { ...LEGACY_AGENT_TUNING, goodLakeInfoMax: true };
+    const o = obs({
+      myRole: 'merlin',
+      knownEvils: ['P2', 'P3', 'P4', 'P5'],
+      currentRound: 3,
+      questResults: ['success', 'fail', 'success'],
+      questHistory: [...Q_1_1, { round: 3, team: ['P6', 'P7', 'P8', 'P9'], result: 'success', failCount: 0 }],
+      lakeHistory: [{ round: 2, holderId: 'P10', targetId: 'P1', declaredClaim: 'evil' }],
+    });
+    const pool = CANDS.filter((id) => !o.knownEvils.includes(id));
+    const a = analyzeGoodLake(o, pool)!;
+    expect(a.droppedLakes).toBe(true);
+    expect(a.trustWeight).toBe(1);
+    for (const c of a.candidates) expect(c.pEvil).toBeCloseTo(0, 10);
+    const pick = pickGoodLakeTargetInfoMax(o, pool);
+    expect(pick).not.toBeNull();
+    expect(pickLakeTarget(o, CANDS, on)).toBe(pick);
+    expect(o.knownEvils).not.toContain(pick);
+  });
+
   it('returns null for a record no evil set can explain (falls back to the old rule)', () => {
     const bad = obs({ questHistory: [{ round: 2, team: ['P2', 'P3'], result: 'fail', failCount: 3 }] });
     expect(analyzeGoodLake(bad, CANDS)).toBeNull();
@@ -167,10 +209,40 @@ describe('GoodLakeInfo — score states (Edward 2026-10-13)', () => {
     expect(analyzeGoodLake(o, ['P2', 'P5', 'P9'])!.trustWeight).toBe(0);
   });
 
-  it('information gain is never negative and the common picture shrinks', () => {
-    const a = analyzeGoodLake(obs({ questHistory: Q_1_1 }), CANDS)!;
-    for (const c of a.candidates) expect(c.infoGain).toBeGreaterThan(0);
-    expect(a.uncertainty).toBeGreaterThan(0);
+  it('second lake (after R3): the trust chain counts at 2:1, not at 1:2 (兩紅)', () => {
+    const lakeHistory = [{ round: 2, holderId: 'P10', targetId: 'P1', declaredClaim: 'good' as const }];
+    const blueLead = obs({
+      currentRound: 3,
+      questResults: ['success', 'fail', 'success'],
+      questHistory: [...Q_1_1, { round: 3, team: ['P2', 'P3', 'P4', 'P9'], result: 'success', failCount: 0 }],
+      lakeHistory,
+    });
+    const a = analyzeGoodLake(blueLead, CANDS)!;
+    expect(a.trustWeight).toBe(1);
+    expect(a.candidates.some((c) => c.trust !== 0)).toBe(true);
+    const redTwo = obs({
+      currentRound: 3,
+      questResults: ['success', 'fail', 'fail'],
+      questHistory: [...Q_1_1, { round: 3, team: ['P5', 'P6', 'P7', 'P9'], result: 'fail', failCount: 1 }],
+      lakeHistory,
+    });
+    const b = analyzeGoodLake(redTwo, CANDS)!;
+    expect(b.trustWeight).toBe(0);
+    for (const c of b.candidates) expect(c.score).toBe(c.infoGain);
+  });
+
+  it('loyal holder (belief = common picture): the information gain is never negative', () => {
+    // ΔH is a mutual information only when the holder forecasts with the
+    // common picture; Merlin / Percival can see slightly negative values
+    // (module comment), which the trust term and V = max(0, ·) absorb.
+    for (const o of [obs({ questHistory: Q_1_1 }), obs({ questHistory: Q_0_2, questResults: ['fail', 'fail'] })]) {
+      const a = analyzeGoodLake(o, CANDS)!;
+      expect(a.uncertainty).toBeGreaterThan(0);
+      for (const c of a.candidates) {
+        expect(c.pEvil).toBeCloseTo(c.pEvilCommon, 12);
+        expect(c.infoGain).toBeGreaterThanOrEqual(-1e-12);
+      }
+    }
   });
 });
 
