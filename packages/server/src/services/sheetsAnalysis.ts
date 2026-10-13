@@ -19,7 +19,13 @@ export interface PlayerStats {
   name: string;
   totalGames: number;
   winRate: number;
+  /**
+   * LEGACY (the 2026-04-26 rebuild): ≈ the player's own 任務結算 win rate, NOT the owner's
+   * 角色理論勝率. Kept unchanged because FirestoreLeaderboard's ELO bonus reads it; the
+   * correct theory rates are in `theory` (schemaVersion 3).
+   */
   roleTheory: number;
+  /** LEGACY: always 0. See `theory`. */
   positionTheory: number;
   redWin: number;
   blueWin: number;
@@ -64,7 +70,7 @@ export interface PlayerStats {
   // 最終: 紅勝 = 三紅 + 三藍死, 藍勝 = 三藍活.
   // The legacy fields above (winRate / redWin / blueWin / roleWinRates /
   // seat*WinRates / roleTheory) keep the 任務結算 meaning (三藍死 counts as a
-  // blue win) and are never reinterpreted.
+  // blue win) and are never reinterpreted; the theory rates are in `theory`.
   // Optional because a cache produced before schemaVersion 2 lacks them; the
   // served players always go through `withFinalFields`, which fills in every
   // field it can compute from the raw counts.
@@ -90,6 +96,71 @@ export interface PlayerStats {
   /** Earliest / latest parsed game date, YYYY-MM-DD; "" when unknown. Generator only. */
   firstPlayed?: string;
   lastPlayed?: string;
+  /**
+   * Theory win rates (schemaVersion 3, Edward 2026-10-13) over the player's last 100 /
+   * last 50 games and career. Absent in older caches: readers show "—", never the legacy
+   * roleTheory in its place.
+   */
+  theory?: PlayerTheory;
+}
+
+/**
+ * 角色理論勝率 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色最終勝率；
+ * 位置理論勝率 = Σ 1/10 × 本人該位置最終勝率 — over one window of the player's own games.
+ * A role / seat with fewer than LEADERBOARD_CONFIG.theoryMinCellGames (3) games in the
+ * window is topped up to that many at the population's final win rate (sparseRoles /
+ * sparseSeats count those cells). docs/stats/two_stage_outcome.md「理論勝率」.
+ */
+export interface PlayerTheoryWindow {
+  /** Window size N (last N games); 0 = career. */
+  window: number;
+  /** Games actually in the window (fewer than `window` when the player has fewer). */
+  games: number;
+  roleTheory: number;
+  positionTheory: number;
+  finalWinRate: number;
+  /** First / last dated game of the window, YYYY-MM-DD ("" when undated). */
+  from: string;
+  to: string;
+  sparseRoles: number;
+  sparseSeats: number;
+}
+
+/**
+ * players[].theory — `last<N>` for N in leaderboard.config.theoryWindows (= the generator's
+ * mainGames and shortGames, 100 and 50 today) plus `career`. Readers go through
+ * theoryLastWindows() instead of assuming the 100 / 50 keys.
+ */
+export interface PlayerTheory {
+  last100?: PlayerTheoryWindow;
+  last50?: PlayerTheoryWindow;
+  career?: PlayerTheoryWindow;
+  [key: string]: PlayerTheoryWindow | undefined;
+}
+
+/** The `last<N>` windows of players[].theory, largest N first (whatever N the generator used). */
+export function theoryLastWindows(theory: PlayerTheory | null | undefined): PlayerTheoryWindow[] {
+  if (!theory || typeof theory !== 'object') return [];
+  return Object.entries(theory)
+    .filter((e): e is [string, PlayerTheoryWindow] => /^last\d+$/.test(e[0]) && !!e[1] && typeof e[1] === 'object')
+    .map(([, w]) => w)
+    .filter((w) => typeof w.window === 'number' && w.window > 0)
+    .sort((a, b) => b.window - a.window);
+}
+
+/**
+ * overview.theoryConfig (schemaVersion 3): the generator's settings the readers word the
+ * theory rates with, so a changed LEADERBOARD_CONFIG never leaves stale text behind.
+ */
+export interface TheoryConfig {
+  /** Sparse-cell top-up threshold; 0 = off. */
+  theoryMinCellGames: number;
+  /** players[].theory last-N windows (mainGames, shortGames). */
+  theoryWindows: number[];
+  /** Window of the main board and overview.topPlayersByRoleTheory (also their career-games floor). */
+  mainGames: number;
+  /** "Active" = a game in the last N days. */
+  activeDays: number;
 }
 
 export interface ChemistryMatrix {
@@ -190,8 +261,17 @@ export interface OverviewData {
   final?: FinalOutcomeSummary;
   /** 全體 per-role final win rate, % (紅角 = 三紅 + 三藍死; 藍角 = 三藍活). */
   roleFinalWinRates?: Record<string, number>;
-  /** 全期 excess-win-rate ranking, same MIN_GAMES_THRESHOLD (30) as topPlayersByTheory. */
+  /** 全期 excess-win-rate ranking (kept for older readers; no longer shown by the site or the bots). */
   topPlayersByExcess?: Array<{ name: string; excessWinRate: number; finalWinRate: number; games: number }>;
+  /** schemaVersion 3: population final win rate per seat, keys "1".."10" (positionTheory's top-up). */
+  seatFinalWinRates?: Record<string, number>;
+  /**
+   * schemaVersion 3: everyone with ≥ mainGames (100) career games (active or not), ranked by
+   * the roleTheory of their last mainGames games; `games` = games in that window.
+   */
+  topPlayersByRoleTheory?: TheoryRankingRow[];
+  /** schemaVersion 3: the theory settings (top-up threshold, windows) the site words its notes with. */
+  theoryConfig?: TheoryConfig;
   /**
    * Edward 2026-04-27 — `outcomes` (per-seat 三結果 distribution) and
    * `roles[].outcomes` (per-role 三結果 distribution) added so the deep
@@ -207,35 +287,63 @@ export interface OverviewData {
   }>;
 }
 
+/** overview.topPlayersByRoleTheory row (the last-100-games window). */
+export interface TheoryRankingRow {
+  name: string;
+  roleTheory: number;
+  positionTheory: number;
+  finalWinRate: number;
+  games: number;
+  careerGames: number;
+}
+
 // ---------------------------------------------------------------------------
 // Leaderboard (cache section `leaderboard`, docs/stats/two_stage_outcome.md)
 // ---------------------------------------------------------------------------
 // Computed entirely by generate_cache.py (LEADERBOARD_CONFIG); the server only
 // reads it. Boards are identified by a fixed `id`; a board the generator could
 // not build (rows would be empty) is omitted from `boards` altogether.
+// Since schemaVersion 3 (Edward 2026-10-13) every board carries `metric` and is
+// computed over each player's own last N games; a cache written before that has
+// excess-win-rate boards without `metric` — readers treat those as "not yet
+// regenerated" (see isTheoryBoard) instead of printing excess.
 
-/** Fixed board ids the generator may emit. */
-export type LeaderboardBoardId = 'main' | 'online' | 'recent' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles';
+/** Board ids: the current generator's, then the pre-2026-10-13 ones (online / recent) older caches may carry. */
+export type LeaderboardBoardId =
+  | 'main' | 'last50' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
+  | 'online' | 'recent';
+
+/** What a board's `value` is. Absent on boards written before 2026-10-13 (excess). */
+export type LeaderboardMetric = 'roleTheory' | 'roleTheoryDelta' | 'hitRate' | 'finalWinRate';
 
 export interface LeaderboardRow {
   rank: number;
   name: string;
   /**
-   * The board's SORT value: main / online / recent / newcomers = the shrunk
-   * excess win rate (excess × games / (games + shrinkK)); improved = the two
-   * spans' final-win-rate difference; assassin = 刺中率; roleTitles = that
-   * role's final win rate. On the excess boards the number shown is
-   * `excessWinRate`, never this.
+   * The board's sort value: main / last50 / newcomers = roleTheory; improved = the
+   * roleTheory difference (last N − the N before); assassin = 刺中率; roleTitles =
+   * that role's final win rate over the last N games in it. (Pre-2026-10-13 boards:
+   * the shrunk excess win rate.)
    */
   value: number;
-  /** main / online / recent / newcomers: the unshrunk excess win rate (what the site and the bots print). */
-  excessWinRate?: number;
-  /** main / online / recent / newcomers: final win rate within the board's period, %. Absent on improved / assassin / roleTitles. */
+  // main / last50 / newcomers (metric roleTheory) — all over the board's window of the player's games
+  roleTheory?: number;
+  positionTheory?: number;
+  /** Final win rate within the window, %. */
   finalWinRate?: number;
-  expectedFinalWinRate?: number;
-  /** Games within the board's period (assassin: games as 刺客; roleTitles: games as that role). */
+  /** All of the player's games (main / last50 / improved / assassin / newcomers). */
+  careerGames?: number;
+  /** First / last dated game of the window, YYYY-MM-DD. */
+  from?: string;
+  to?: string;
+  /** Cells topped up with the population rate (role cells of 7, seat cells of 10). */
+  sparseRoles?: number;
+  sparseSeats?: number;
+  /** Games in the window (assassin: assassinations; roleTitles: games in that role). */
   games: number;
   // improved
+  recentRoleTheory?: number;
+  priorRoleTheory?: number;
   recentFinalWinRate?: number;
   priorFinalWinRate?: number;
   recentGames?: number;
@@ -249,23 +357,35 @@ export interface LeaderboardRow {
   /** `roleTitles` only: the role this row is the title holder of. */
   role?: string;
   wins?: number;
+  careerRoleGames?: number;
+  // pre-2026-10-13 excess boards (older caches only; never printed any more)
+  excessWinRate?: number;
+  expectedFinalWinRate?: number;
 }
 
 export interface LeaderboardBoard {
   /** One of LeaderboardBoardId; typed as string so an unknown board from a newer generator still parses. */
   id: LeaderboardBoardId | (string & Record<never, never>);
+  metric?: LeaderboardMetric | (string & Record<never, never>);
   title: string;
-  /** e.g. "2025-10-13 ～ 2026-10-12". */
+  titleEn?: string;
+  /** e.g. "各人最近 100 場"; newcomers: "2026-07-15 ～ 2026-10-12 首次出賽". */
   period: string;
-  /** Window actually used (after fallback widening); 0 = 全期. */
+  periodEn?: string;
+  /** Last-N-games window (main 100, last50 50, improved 50, assassin 20, roleTitles 20). */
+  windowGames?: number;
+  /** Day window (newcomers: first game within it; pre-2026-10-13 boards: the date window). */
   windowDays?: number;
+  /** newcomers: every game of the player counts (the documented exception). */
+  allGames?: boolean;
+  /** main / last50 / newcomers: career games; improved: 2 × N; assassin: attempts; roleTitles: career games in the role. */
   minGames?: number;
   /**
-   * Qualifier for the title, e.g. "近 90 天內有出賽、近 365 天至少 20 場". On the
-   * excess boards the generator appends the excess legend after a "；"; the
-   * bots print only the clause before it (the site shows the whole note).
+   * Qualifier for the title, e.g. "近 90 天內有出賽、生涯至少 100 場", then after a
+   * "；" the legend; the bots print only the clause before it (the site shows the whole note).
    */
   note?: string;
+  noteEn?: string;
   rows: LeaderboardRow[];
 }
 
@@ -273,16 +393,14 @@ export interface LeaderboardSection {
   /** YYYY-MM-DD the boards were computed for. */
   asOf: string;
   dates?: { parsed: number; unparsed: number; earliest: string; latest: string };
-  config?: {
-    windowDays: number;
-    activeDays: number;
-    minGames: number;
-    shrinkK: number;
-    fallbackWindowDays: number[];
-    minBoardRows: number;
-    topN: number;
-  };
+  /** A copy of generate_cache.py LEADERBOARD_CONFIG (keys differ between cache versions). */
+  config?: Record<string, unknown>;
   boards: LeaderboardBoard[];
+}
+
+/** A board written by the theory generator (schemaVersion 3): it says what its value is. */
+export function isTheoryBoard(board: Pick<LeaderboardBoard, 'metric'> | null | undefined): boolean {
+  return typeof board?.metric === 'string' && board.metric.length > 0;
 }
 
 /**

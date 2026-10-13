@@ -11,26 +11,31 @@ import {
   fetchAnalysisPlayerByName,
   finalFields,
   fmtPct,
-  fmtSignedPct,
   getErrorMessage,
+  theoryLastWindows,
+  theorySettings,
 } from '../../services/api';
-import type { AnalysisPlayerStats, AnalysisPlayerRadar } from '../../services/api';
+import type { AnalysisPlayerStats, AnalysisPlayerRadar, AnalysisTheoryConfig, PlayerTheoryWindow } from '../../services/api';
 import { useAnalysisOverview } from './useAnalysisOverview';
 
 /**
- * 玩家能力雷達 (2026-10-12 兩段結算改版, docs/stats/two_stage_outcome.md)。
- * 軸：最終勝率、紅方最終勝率、藍方三藍活率、任務結算勝率、超額勝率
- * (以 50 為中心映射到 0–100)、紅方刺中率、經驗。
- * 「位置理論」恆為 0 不再顯示；「角色理論」改為「超額勝率」。
+ * 玩家能力雷達 (2026-10-12 兩段結算改版、2026-10-13 理論勝率, docs/stats/two_stage_outcome.md)。
+ * 軸：最終勝率、紅方最終勝率、藍方三藍活率、任務結算勝率、角色理論勝率、位置理論勝率
+ * (兩者都是生涯，Edward 的定義)、紅方刺中率、經驗。
+ * 角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 本人該角色最終勝率；
+ * 位置理論 = Σ 1/10 × 本人該位置最終勝率；只讀 player.theory (舊後端的 radar.roleTheory
+ * 是舊口徑，不讀)。旁邊的表列快取有的近 N 場 (現在是 100、50) 與生涯。超額勝率不再顯示。
+ * 算不出來的軸 (例如舊快取還沒有理論勝率) 不畫，不畫成 0%。補值門檻與視窗讀
+ * overview.theoryConfig，說明文字跟著變 (門檻 0 = 不補，就不提補值)。
  * 後端 radar 缺新鍵 (舊後端) 時由 finalFields() 以原始計數算，公式同後端。
  */
 type AxisKey =
   | 'winRate' | 'redWinRate' | 'blueMerlinProtect' | 'missionWinRate'
-  | 'excessWinRate' | 'redMerlinKillRate' | 'experience';
+  | 'roleTheory' | 'positionTheory' | 'redMerlinKillRate' | 'experience';
 
 const AXIS_ORDER: AxisKey[] = [
   'winRate', 'redWinRate', 'blueMerlinProtect', 'missionWinRate',
-  'excessWinRate', 'redMerlinKillRate', 'experience',
+  'roleTheory', 'positionTheory', 'redMerlinKillRate', 'experience',
 ];
 
 interface AxisPoint {
@@ -38,7 +43,7 @@ interface AxisPoint {
   dimension: string;
   /** 畫在圖上的 0–100 值。 */
   value: number;
-  /** 原始值 (超額勝率可為負；算不出來為 null)。 */
+  /** 原始值 (算不出來的軸不放進圖裡，見 buildAxes)。 */
   raw: number | null;
 }
 
@@ -64,21 +69,22 @@ function buildAxes(
     redWinRate: ff.finalRedWinRate ?? num(radar.redWinRate),
     blueMerlinProtect: ff.finalBlueWinRate ?? num(radar.blueMerlinProtect) ?? num(player.blueMerlinAlive),
     missionWinRate: ff.missionWinRate ?? num(radar.missionWinRate) ?? num(player.winRate),
-    excessWinRate: ff.excessWinRate ?? num(radar.excessWinRate),
+    roleTheory: num(player.theory?.career?.roleTheory),
+    positionTheory: num(player.theory?.career?.positionTheory),
     redMerlinKillRate: num(radar.redMerlinKillRate) ?? num(player.redMerlinDead),
     experience: num(radar.experience) ?? Math.min(player.totalGames / 10, 100),
   };
-  return AXIS_ORDER.map(key => {
+  // 算不出來的軸 (舊快取的角色理論／位置理論等) 不畫：畫在 0 會看起來像 0%。
+  return AXIS_ORDER.flatMap(key => {
     const raw = values[key];
-    // 超額勝率以 50 為中心：+10% → 60、−10% → 40；算不出來畫在 50 (持平) 並在 tooltip 顯示「—」。
-    const plotted = key === 'excessWinRate' ? 50 + (raw ?? 0) : (raw ?? 0);
-    return { key, dimension: label(key), value: clamp100(plotted), raw };
+    return raw === null ? [] : [{ key, dimension: label(key), value: clamp100(raw), raw }];
   });
 }
 
 export default function PlayerRadarChart(): JSX.Element {
   const { t } = useTranslation('common');
   const { overview } = useAnalysisOverview();
+  const settings = useMemo(() => theorySettings(overview?.theoryConfig), [overview?.theoryConfig]);
   const [playerList, setPlayerList] = useState<AnalysisPlayerStats[]>([]);
   const [selectedName, setSelectedName] = useState<string>('');
   const [radarData, setRadarData] = useState<AnalysisPlayerRadar | null>(null);
@@ -218,7 +224,6 @@ export default function PlayerRadarChart(): JSX.Element {
                 <Tooltip
                   formatter={(_val: unknown, _name, item) => {
                     const p = item.payload as AxisPoint;
-                    if (p.key === 'excessWinRate') return [fmtSignedPct(p.raw), p.dimension];
                     if (p.key === 'experience') return [p.raw === null ? '—' : p.raw.toFixed(1), p.dimension];
                     return [fmtPct(p.raw), p.dimension];
                   }}
@@ -229,8 +234,12 @@ export default function PlayerRadarChart(): JSX.Element {
             </ResponsiveContainer>
             {/* Radar dimension explanation */}
             <div className="mt-3 text-xs text-gray-500 space-y-1">
-              {AXIS_ORDER.map(k => (
-                <p key={k}>{t(`analytics.deep.radar.legend.${k}`)}</p>
+              {chartData.map(({ key: k }) => (
+                <p key={k}>
+                  {t(`analytics.deep.radar.legend.${k}`)}
+                  {(k === 'roleTheory' || k === 'positionTheory') && settings.theoryMinCellGames > 0
+                    && t(`analytics.deep.radar.topUp.${k === 'roleTheory' ? 'role' : 'seat'}`, { n: settings.theoryMinCellGames })}
+                </p>
               ))}
             </div>
           </motion.div>
@@ -247,12 +256,6 @@ export default function PlayerRadarChart(): JSX.Element {
             <div className="grid grid-cols-2 gap-2 text-sm">
               <StatRow label={t('analytics.deep.radar.stats.totalGames')} value={radarData.player.totalGames.toString()} />
               <StatRow label={t('analytics.deep.radar.stats.finalWinRate')} value={fmtPct(ff.finalWinRate)} />
-              <StatRow
-                label={t('analytics.deep.radar.stats.excessWinRate')}
-                value={fmtSignedPct(ff.excessWinRate)}
-                color={ff.excessWinRate === null ? 'text-gray-500' : ff.excessWinRate >= 0 ? 'text-emerald-400' : 'text-rose-400'}
-              />
-              <StatRow label={t('analytics.deep.radar.stats.expectedWinRate')} value={fmtPct(ff.expectedFinalWinRate)} />
               <StatRow label={t('analytics.deep.radar.stats.missionWinRate')} value={fmtPct(ff.missionWinRate)} />
               <StatRow label={t('analytics.deep.radar.stats.merlinSurvival')} value={fmtPct(ff.merlinSurvivalRate)} color="text-blue-400" />
               <StatRow label={t('analytics.deep.radar.stats.redFinal')} value={fmtPct(ff.finalRedWinRate)} color="text-red-400" />
@@ -261,6 +264,8 @@ export default function PlayerRadarChart(): JSX.Element {
               <StatRow label={t('analytics.deep.radar.stats.redMerlinDead')} value={fmtPct(num(radarData.player.redMerlinDead))} color="text-yellow-400" />
               <StatRow label={t('analytics.deep.radar.stats.blueMerlinAlive')} value={fmtPct(num(radarData.player.blueMerlinAlive))} color="text-blue-400" />
             </div>
+
+            <TheoryTable player={radarData.player} settings={settings} />
 
             {/* Role win rates (任務結算口徑, 舊欄位保留) */}
             <div>
@@ -289,6 +294,56 @@ export default function PlayerRadarChart(): JSX.Element {
           </motion.div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * 理論勝率表：快取有的近 N 場 (現在是 100、50)、生涯 × 角色理論／位置理論／最終勝率。
+ * 場數沒超過 N 時「近 N 場」就是全部場次，只列生涯那一行；舊快取沒有 theory → 提示。
+ */
+function TheoryTable({ player, settings }: { player: AnalysisPlayerStats; settings: AnalysisTheoryConfig }): JSX.Element {
+  const { t } = useTranslation('common');
+  const theory = player.theory;
+  const career = theory?.career;
+  if (!career) {
+    return <p className="text-xs text-gray-500">{t('analytics.deep.radar.stats.theoryPending')}</p>;
+  }
+  const rows: Array<{ label: string; w: PlayerTheoryWindow }> = [];
+  const windows = theoryLastWindows(theory);
+  for (const w of windows) {
+    if (career.games > w.window) {
+      rows.push({ label: t('analytics.deep.radar.stats.lastN', { count: w.window }), w });
+    }
+  }
+  rows.push({ label: t('analytics.deep.radar.stats.career', { count: career.games }), w: career });
+  return (
+    <div>
+      <p className="text-xs font-bold text-gray-500 mb-1.5">{t('analytics.deep.radar.stats.theoryTitle')}</p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-[10px] text-gray-500">
+            <th className="text-left font-normal py-0.5" />
+            <th className="text-right font-normal py-0.5">{t('analytics.deep.radar.stats.colRoleTheory')}</th>
+            <th className="text-right font-normal py-0.5">{t('analytics.deep.radar.stats.colPositionTheory')}</th>
+            <th className="text-right font-normal py-0.5">{t('analytics.deep.radar.stats.colFinal')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ label, w }) => (
+            <tr key={label} className="border-t border-gray-800">
+              <td className="py-1 text-gray-400">{label}</td>
+              <td className="py-1 text-right font-bold text-amber-200">{fmtPct(w.roleTheory)}</td>
+              <td className="py-1 text-right text-gray-300">{fmtPct(w.positionTheory)}</td>
+              <td className="py-1 text-right text-gray-300">{fmtPct(w.finalWinRate)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-[10px] text-gray-600 mt-1">
+        {windows.length > 0 && t('analytics.deep.radar.stats.theoryNote', { windows: windows.map(w => w.window).join('/') })}
+        {settings.theoryMinCellGames > 0 && t('analytics.deep.radar.stats.theoryNoteTopUp', { n: settings.theoryMinCellGames })}
+      </p>
     </div>
   );
 }

@@ -2,17 +2,18 @@ import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import { Loader, AlertCircle, Trophy, Users, Swords } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { fmtPct, fmtSignedPct } from '../../services/api';
+import { fmtPct, theorySettings } from '../../services/api';
 import OutcomeBar from './OutcomeBar';
 import { useAnalysisOverview, deriveStages, type StageSummaries } from './useAnalysisOverview';
 
 /**
  * 總覽 (2026-10-12 兩段結算改版, docs/stats/two_stage_outcome.md)：
  *  - 卡片：總場次、玩家數、三段結算 (任務結算 → 刺殺結算 → 最終)
- *  - 「理論勝率排行」改為「超額勝率排行 (30 場以上)」(topPlayersByExcess)；
- *    舊快取 (schemaVersion < 2 且沒有 topPlayersByExcess 欄位) 退回 topPlayersByTheory
- *    並把標題標成舊口徑；新快取但沒人達 30 場 (rows 為 []) 顯示「尚無玩家達 30 場」，
- *    不能誤標成「快取尚未重算」
+ *  - 排行 (2026-10-13 Edward 定義)：「角色理論勝率排行」— 生涯 100 場以上的玩家、
+ *    各人最近 100 場的角色理論勝率 (overview.topPlayersByRoleTheory，不限近期出賽；
+ *    近期的排行在「排行」分頁)。虛線 = 全體基準 Σ 抽到機率 × 全體該角色最終勝率。
+ *    舊快取 (沒有 topPlayersByRoleTheory 欄位) 提示「下次每日更新後提供」，不再顯示
+ *    超額勝率或舊口徑理論勝率；新快取但沒人達 100 場 ([]) 顯示「尚無玩家達 100 場」
  *  - 三種結果分布、場次排行保留；位置勝率圖搬到「位置」分頁 (SeatPositionChart)
  */
 
@@ -108,57 +109,54 @@ function StageCard({ stages }: { stages: StageSummaries }): JSX.Element {
   );
 }
 
-interface ExcessRow { name: string; excessWinRate: number; finalWinRate: number; games: number }
-interface LegacyRow { name: string; roleTheory: number; winRate: number; games: number }
+interface TheoryRow { name: string; roleTheory: number; positionTheory: number; finalWinRate: number; games: number; careerGames: number }
 
 const TOOLTIP_STYLE = { backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' };
 
-function ExcessRankingChart({ rows }: { rows: ExcessRow[] }): JSX.Element {
+/** 10 人局發牌：忠臣 4/10，其他角色各 1/10 (generate_cache.py ROLE_DEAL_TENTHS)。 */
+const ROLE_DEAL_PROBABILITY: Record<string, number> = {
+  刺客: 0.1, 莫甘娜: 0.1, 莫德雷德: 0.1, 奧伯倫: 0.1, 派西維爾: 0.1, 梅林: 0.1, 忠臣: 0.4,
+};
+
+/** 全體基準 = Σ 抽到該角色的機率 × 全體該角色最終勝率 (每個角色都打出全體平均的人)；缺角色時 null。 */
+function theoryBaseline(roleFinalWinRates: Record<string, number> | undefined): number | null {
+  if (!roleFinalWinRates) return null;
+  let sum = 0;
+  for (const [role, p] of Object.entries(ROLE_DEAL_PROBABILITY)) {
+    const rate = roleFinalWinRates[role];
+    if (typeof rate !== 'number' || !Number.isFinite(rate)) return null;
+    sum += p * rate;
+  }
+  return Math.round(sum * 10) / 10;
+}
+
+function RoleTheoryRankingChart({ rows, baseline }: { rows: TheoryRow[]; baseline: number | null }): JSX.Element {
   const { t } = useTranslation('common');
-  const maxAbs = Math.max(5, ...rows.map(r => Math.abs(r.excessWinRate))) * 1.15;
+  const values = rows.map(r => r.roleTheory).concat(baseline === null ? [] : [baseline]);
+  const lo = Math.max(0, Math.floor(Math.min(...values) / 5) * 5 - 5);
+  const hi = Math.min(100, Math.ceil(Math.max(...values) / 5) * 5 + 5);
   return (
     <ResponsiveContainer width="100%" height={Math.max(200, rows.length * 26)}>
       <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-        <XAxis type="number" domain={[-maxAbs, maxAbs]} unit="%" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+        <XAxis type="number" domain={[lo, hi]} unit="%" allowDataOverflow tick={{ fontSize: 11, fill: '#9ca3af' }} />
         <YAxis type="category" dataKey="name" width={64} tick={{ fontSize: 11, fill: '#d1d5db' }} />
-        <ReferenceLine x={0} stroke="#6b7280" strokeDasharray="2 2" />
+        {baseline !== null && <ReferenceLine x={baseline} stroke="#6b7280" strokeDasharray="2 2" />}
         <Tooltip
           contentStyle={TOOLTIP_STYLE}
           itemStyle={{ color: '#d1d5db' }}
           formatter={(val: unknown, _n, item) => {
-            const r = item.payload as ExcessRow;
+            const r = item.payload as TheoryRow;
             return [
-              `${fmtSignedPct(Number(val))} · ${t('analytics.deep.overview.finalWinRateColumn')} ${fmtPct(r.finalWinRate)} · ${r.games} ${t('analytics.deep.common.games')}`,
-              t('analytics.deep.overview.excessColumn'),
+              `${fmtPct(Number(val))} · ${t('analytics.deep.overview.positionTheoryColumn')} ${fmtPct(r.positionTheory)} · `
+                + `${t('analytics.deep.overview.finalWinRateColumn')} ${fmtPct(r.finalWinRate)} · `
+                + t('analytics.deep.overview.careerGames', { count: r.careerGames }),
+              t('analytics.deep.overview.roleTheoryColumn'),
             ];
           }}
         />
-        <Bar dataKey="excessWinRate" name={t('analytics.deep.overview.excessColumn')} radius={[0, 4, 4, 0]}>
+        <Bar dataKey="roleTheory" name={t('analytics.deep.overview.roleTheoryColumn')} radius={[0, 4, 4, 0]}>
           {rows.map((r, i) => (
-            <Cell key={i} fill={r.excessWinRate < 0 ? '#f43f5e' : i === 0 ? '#f59e0b' : i < 3 ? '#3b82f6' : '#6b7280'} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-/** 舊快取沒有 topPlayersByExcess 時的退路：roleTheory ≈ 任務結算勝率 (舊口徑)。 */
-function LegacyTheoryChart({ rows }: { rows: LegacyRow[] }): JSX.Element {
-  const { t } = useTranslation('common');
-  return (
-    <ResponsiveContainer width="100%" height={Math.max(200, rows.length * 26)}>
-      <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-        <XAxis type="number" domain={[0, 100]} unit="%" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-        <YAxis type="category" dataKey="name" width={64} tick={{ fontSize: 11, fill: '#d1d5db' }} />
-        <Tooltip
-          contentStyle={TOOLTIP_STYLE}
-          itemStyle={{ color: '#d1d5db' }}
-          formatter={(val: unknown) => [`${val}%`, t('analytics.deep.overview.legacyTheoryColumn')]}
-        />
-        <Bar dataKey="roleTheory" name={t('analytics.deep.overview.legacyTheoryColumn')} radius={[0, 4, 4, 0]}>
-          {rows.map((_, i) => (
-            <Cell key={i} fill={i === 0 ? '#f59e0b' : i < 3 ? '#3b82f6' : '#6b7280'} />
+            <Cell key={i} fill={baseline !== null && r.roleTheory < baseline ? '#f43f5e' : i === 0 ? '#f59e0b' : i < 3 ? '#3b82f6' : '#6b7280'} />
           ))}
         </Bar>
       </BarChart>
@@ -192,15 +190,15 @@ export default function OverviewPanel(): JSX.Element {
   const overallOutcomes = overview.outcomeBreakdown;
   const stages = deriveStages(overview);
 
-  // 新舊快取以欄位有無判斷 (契約：舊快取 = 欄位缺，不是 rows 為空)。資料層對
-  // topPlayersByExcess 以 30 場篩選，小資料集的新快取會是 []，不能當成舊快取。
-  const isV2 = (overview.schemaVersion ?? 0) >= 2 || Array.isArray(overview.topPlayersByExcess);
-  const excessRows = isV2
-    ? (overview.topPlayersByExcess ?? [])
-      .filter(r => typeof r.excessWinRate === 'number' && Number.isFinite(r.excessWinRate))
-      .slice(0, 8)
-    : [];
-  const legacyRows = isV2 ? [] : (overview.topPlayersByTheory ?? []).slice(0, 8);
+  // 新舊快取以欄位有無判斷 (舊快取 = 欄位缺，不是 rows 為空)：資料層只列生涯 mainGames (100) 場以上，
+  // 小資料集的新快取會是 []，不能當成舊快取。
+  const hasTheory = Array.isArray(overview.topPlayersByRoleTheory);
+  const theoryRows = (overview.topPlayersByRoleTheory ?? [])
+    .filter(r => typeof r.roleTheory === 'number' && Number.isFinite(r.roleTheory))
+    .slice(0, 10);
+  const baseline = theoryBaseline(overview.roleFinalWinRates);
+  // 視窗與補值門檻讀快取 (overview.theoryConfig)，舊快取用產生器預設值 (100 場、補到 3 場)。
+  const settings = theorySettings(overview.theoryConfig);
 
   return (
     <div className="space-y-6">
@@ -221,7 +219,7 @@ export default function OverviewPanel(): JSX.Element {
         <StageCard stages={stages} />
       </div>
 
-      {/* Outcome breakdown + excess win-rate ranking */}
+      {/* Outcome breakdown + role-theory ranking */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
           <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.overview.outcomeBreakdown')}</h3>
@@ -233,22 +231,21 @@ export default function OverviewPanel(): JSX.Element {
 
         <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4">
           <h3 className="text-sm font-bold text-gray-400 mb-1">
-            {isV2
-              ? t('analytics.deep.overview.excessRanking')
-              : t('analytics.deep.overview.excessRankingLegacy')}
+            {t('analytics.deep.overview.theoryRanking', { games: settings.mainGames })}
           </h3>
           <p className="text-[10px] text-gray-600 mb-2">
-            {isV2
-              ? t('analytics.deep.overview.excessLegend')
-              : t('analytics.deep.overview.excessLegendLegacy')}
+            {t('analytics.deep.overview.theoryLegend')}
+            {settings.theoryMinCellGames > 0 && t('analytics.deep.overview.theoryTopUp', { n: settings.theoryMinCellGames })}
+            {t('analytics.deep.overview.theoryScope')}
+            {baseline !== null && <> {t('analytics.deep.overview.theoryBaseline', { baseline: baseline.toFixed(1) })}</>}
           </p>
-          {excessRows.length > 0 ? (
-            <ExcessRankingChart rows={excessRows} />
-          ) : legacyRows.length > 0 ? (
-            <LegacyTheoryChart rows={legacyRows} />
+          {theoryRows.length > 0 ? (
+            <RoleTheoryRankingChart rows={theoryRows} baseline={baseline} />
           ) : (
             <p className="text-xs text-gray-500 py-6 text-center">
-              {isV2 ? t('analytics.deep.overview.excessEmpty') : '—'}
+              {hasTheory
+                ? t('analytics.deep.overview.theoryEmpty', { games: settings.mainGames })
+                : t('analytics.deep.overview.theoryPending')}
             </p>
           )}
         </div>

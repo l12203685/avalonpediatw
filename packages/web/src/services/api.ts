@@ -361,7 +361,7 @@ export interface OutcomeBreakdown {
  *   任務結算 = 三紅 vs 三藍 (死或活)；刺殺結算 = 三藍局是否刺中梅林；
  *   最終：紅勝 = 三紅 + 三藍死，藍勝 = 三藍活。
  * 舊欄位 (winRate / redWin / blueWin / roleWinRates / seat*WinRates / roleTheory)
- * 全部保留任務結算口徑 (三藍死算藍勝)，不重新解釋。
+ * 全部保留任務結算口徑 (三藍死算藍勝)，不重新解釋；理論勝率在 players[].theory。
  */
 export interface MissionStageSummary {
   games: number;
@@ -399,12 +399,12 @@ export interface AnalysisOverview {
   /** 三藍局刺中率。 */
   merlinKillRate: number;
   outcomeBreakdown: OutcomeBreakdown;
-  /** 舊口徑 (roleTheory ≈ 任務結算勝率)；有 topPlayersByExcess 時不再顯示。 */
+  /** 舊口徑 (roleTheory ≈ 任務結算勝率)；2026-10-13 起網站不再顯示 (改看 topPlayersByRoleTheory)。 */
   topPlayersByTheory: Array<{ name: string; roleTheory: number; winRate: number; games: number }>;
   topPlayersByGames: Array<{ name: string; games: number; winRate: number }>;
   /**
    * 契約新欄位 — 舊快取 (schemaVersion < 2) 全部缺，前端用 outcomeBreakdown
-   * 現場算三段結算，排行退回 topPlayersByTheory 並標明舊口徑。
+   * 現場算三段結算；排行在沒有 topPlayersByRoleTheory 時只提示「下次每日更新後提供」。
    */
   schemaVersion?: number;
   missionStage?: MissionStageSummary;
@@ -412,8 +412,19 @@ export interface AnalysisOverview {
   final?: FinalOutcomeSummary;
   /** 全體各角色最終勝率 % (紅角 = 三紅 + 三藍死；藍角 = 三藍活)。 */
   roleFinalWinRates?: Record<string, number>;
-  /** 全期超額勝率排行，門檻同 topPlayersByTheory (30 場)。 */
+  /** 全期超額勝率排行 — 舊欄位，2026-10-13 起網站不再顯示 (改看 topPlayersByRoleTheory)。 */
   topPlayersByExcess?: Array<{ name: string; excessWinRate: number; finalWinRate: number; games: number }>;
+  /** schemaVersion 3：全體各位置最終勝率 %，鍵 "1".."10" (位置理論的補值用)。 */
+  seatFinalWinRates?: Record<string, number>;
+  /**
+   * schemaVersion 3：生涯 ≥ mainGames (100) 場 (不限近期出賽) 的玩家，依各人最近 mainGames 場的
+   * 角色理論勝率排序；games = 該視窗場數。舊快取沒有此欄位 → 顯示「下次每日更新後提供」。
+   */
+  topPlayersByRoleTheory?: Array<{
+    name: string; roleTheory: number; positionTheory: number; finalWinRate: number; games: number; careerGames: number;
+  }>;
+  /** schemaVersion 3：產生器的理論勝率設定；網站的說明文字依此組字，不寫死 100 場、3 場。 */
+  theoryConfig?: AnalysisTheoryConfig;
   /**
    * Edward 2026-04-27 — `outcomes` (per-seat 三結果) and `roles[].outcomes`
    * (per-role 三結果) added so deep-analytics seat tooltip can show the
@@ -434,9 +445,9 @@ export interface AnalysisPlayerStats {
   totalGames: number;
   /** 任務結算勝率 (三藍死算藍勝)，舊口徑保留。 */
   winRate: number;
-  /** ≈ 任務結算勝率，舊口徑；網站改顯示 excessWinRate。 */
+  /** 舊欄位 (≈ 任務結算勝率)，不是 Edward 定義的角色理論勝率；網站不顯示，改看 `theory`。 */
   roleTheory: number;
-  /** 恆為 0，網站不再顯示。 */
+  /** 舊欄位，恆為 0；網站不顯示，改看 `theory`。 */
   positionTheory: number;
   redWin: number;
   blueWin: number;
@@ -490,12 +501,92 @@ export interface AnalysisPlayerStats {
   /** 最早 / 最晚出賽日 YYYY-MM-DD，沒有則 ""。 */
   firstPlayed?: string;
   lastPlayed?: string;
+  /** 理論勝率 (schemaVersion 3)：近 100 場、近 50 場、生涯；舊快取沒有 → 顯示「—」。 */
+  theory?: PlayerTheory;
+}
+
+/**
+ * 理論勝率 (Edward 2026-10-13，docs/stats/two_stage_outcome.md「理論勝率」)，在玩家自己的一段場次上算：
+ *   角色理論勝率 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色最終勝率
+ *   位置理論勝率 = Σ 1/10 × 本人該位置最終勝率
+ * 某角色或位置在這段場次中不到 3 場時，用全體的最終勝率補到 3 場 (sparseRoles / sparseSeats = 補了幾格)。
+ */
+export interface PlayerTheoryWindow {
+  /** 視窗大小 N (最近 N 場)；0 = 生涯。 */
+  window: number;
+  /** 實際場數 (玩家場數不足 N 時就是全部場數)。 */
+  games: number;
+  roleTheory: number;
+  positionTheory: number;
+  finalWinRate: number;
+  /** 視窗內最早 / 最晚有日期的局，YYYY-MM-DD。 */
+  from: string;
+  to: string;
+  sparseRoles: number;
+  sparseSeats: number;
+}
+
+/** `last<N>` (N = 產生器的 mainGames / shortGames，現在是 100 / 50) 與 career；讀的時候用 theoryLastWindows()。 */
+export interface PlayerTheory {
+  last100?: PlayerTheoryWindow;
+  last50?: PlayerTheoryWindow;
+  career?: PlayerTheoryWindow;
+  [key: string]: PlayerTheoryWindow | undefined;
+}
+
+/** players[].theory 的「近 N 場」視窗，N 大的在前 (不假設一定是 100 / 50)。 */
+export function theoryLastWindows(theory: PlayerTheory | null | undefined): PlayerTheoryWindow[] {
+  if (!theory || typeof theory !== 'object') return [];
+  return Object.entries(theory)
+    .filter((e): e is [string, PlayerTheoryWindow] => /^last\d+$/.test(e[0]) && !!e[1] && typeof e[1] === 'object')
+    .map(([, w]) => w)
+    .filter(w => typeof w.window === 'number' && w.window > 0)
+    .sort((a, b) => b.window - a.window);
+}
+
+/** overview.theoryConfig (schemaVersion 3)。 */
+export interface AnalysisTheoryConfig {
+  /** 少場補值門檻；0 = 不補。 */
+  theoryMinCellGames: number;
+  /** players[].theory 的近 N 場視窗 (mainGames, shortGames)。 */
+  theoryWindows: number[];
+  /** 主榜與總覽排行的視窗 (也是生涯場數門檻)。 */
+  mainGames: number;
+  /** 「近期出賽」= 近 N 天內有出賽。 */
+  activeDays: number;
+}
+
+/** 產生器的預設值 (舊快取沒有 theoryConfig 時用)。 */
+export const DEFAULT_THEORY_CONFIG: AnalysisTheoryConfig = {
+  theoryMinCellGames: 3, theoryWindows: [100, 50], mainGames: 100, activeDays: 90,
+};
+
+/** overview.theoryConfig 或 leaderboard.config 的值；缺的鍵用預設值。 */
+export function theorySettings(...given: Array<object | null | undefined>): AnalysisTheoryConfig {
+  const sources = given.map(src => (src && typeof src === 'object' ? (src as Record<string, unknown>) : null));
+  const pick = (key: 'theoryMinCellGames' | 'mainGames' | 'activeDays'): number => {
+    for (const src of sources) {
+      const v = src?.[key];
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
+    }
+    return DEFAULT_THEORY_CONFIG[key];
+  };
+  const windows = sources
+    .map(src => src?.theoryWindows)
+    .find((w): w is number[] => Array.isArray(w) && w.length > 0 && w.every(n => typeof n === 'number' && n > 0));
+  return {
+    theoryMinCellGames: pick('theoryMinCellGames'),
+    theoryWindows: windows ?? DEFAULT_THEORY_CONFIG.theoryWindows,
+    mainGames: pick('mainGames'),
+    activeDays: pick('activeDays'),
+  };
 }
 
 /**
  * /players/:name 的 radar — 契約：winRate / redWinRate 已是最終口徑，
- * missionWinRate 是舊的任務結算勝率，excessWinRate 可能為 null。
- * roleTheory / positionTheory 為舊鍵，舊後端仍會送；網站不再顯示。
+ * missionWinRate 是舊的任務結算勝率，excessWinRate 可能為 null (網站不再顯示)。
+ * roleTheory / positionTheory：新後端 = theory.career 的角色理論／位置理論 (舊快取為 null)；
+ * 舊後端送的是舊口徑 (≈ 勝率 / 0)，所以網站只讀 player.theory，不讀這兩個鍵。
  */
 export interface AnalysisPlayerRadar {
   player: AnalysisPlayerStats;
@@ -507,8 +598,8 @@ export interface AnalysisPlayerRadar {
     excessWinRate?: number | null;
     redMerlinKillRate: number;
     experience: number;
-    roleTheory?: number;
-    positionTheory?: number;
+    roleTheory?: number | null;
+    positionTheory?: number | null;
   };
 }
 
@@ -628,6 +719,12 @@ export function fmtPct(v: number | null | undefined, digits = 1): string {
 export function fmtSignedPct(v: number | null | undefined, digits = 1): string {
   if (!isFiniteNum(v)) return '—';
   return `${v > 0 ? '+' : ''}${v.toFixed(digits)}%`;
+}
+
+/** 帶正負號的百分點差 (不加 %，例：+10.4)；用在兩個百分比相減，避免讀成相對成長。 */
+export function fmtSignedPoints(v: number | null | undefined, digits = 1): string {
+  if (!isFiniteNum(v)) return '—';
+  return `${v > 0 ? '+' : ''}${v.toFixed(digits)}`;
 }
 
 export interface ChemistryMatrix {
@@ -776,29 +873,36 @@ export async function fetchAnalysisRounds(): Promise<RoundsAnalysisData> {
 
 // ── Leaderboard (cache section `leaderboard`, docs/stats/two_stage_outcome.md) ──
 // 全部由 generate_cache.py 算好 (LEADERBOARD_CONFIG)；後端與網站只讀不重算。
+// 2026-10-13 起：每個榜都帶 `metric`，數字都是「各人最近 N 場」(條件篩選可以是近期，
+// 資料不能少場)。舊快取的榜沒有 `metric` (超額勝率) → 網站不顯示，改提示「下次每日更新後提供」。
 // 快取缺此段時 /leaderboard 回 503 "Leaderboard not yet generated" → 顯示「排行尚未產生」；
 // 舊後端沒有此路由時回 404 → 顯示「後端尚未更新」。
 
 export type AnalysisLeaderboardBoardId =
-  | 'main' | 'online' | 'recent' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles';
+  | 'main' | 'last50' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
+  | 'online' | 'recent'; // online / recent：舊快取才有
 
 export interface AnalysisLeaderboardRow {
   rank: number;
   name: string;
-  /** 該榜的排序值：main / online / recent / newcomers = 縮減後超額勝率；improved = 勝率差；assassin = 刺中率；roleTitles = 該角色最終勝率。 */
+  /** 排序值：main / last50 / newcomers = 角色理論；improved = 角色理論差；assassin = 刺中率；roleTitles = 該角色最終勝率。 */
   value: number;
-  /** 期間內最終勝率 % (improved / assassin / roleTitles 沒有)。 */
+  // main / last50 / newcomers：都是該榜視窗 (各人最近 N 場；新人 = 全部場次) 內的數字
+  roleTheory?: number;
+  positionTheory?: number;
   finalWinRate?: number;
-  expectedFinalWinRate?: number;
-  /**
-   * 未縮減的超額勝率 — generate_cache.py `_excess_rows` 對 main / online / recent /
-   * newcomers 都會輸出 (契約正文只寫在 recent / newcomers)。缺時網站顯示「—」，
-   * 不拿縮減後的 `value` 冒充。
-   */
-  excessWinRate?: number;
-  /** 期間場數 (assassin = 刺客場數；roleTitles = 該角色場數)。 */
+  /** 生涯場數。 */
+  careerGames?: number;
+  from?: string;
+  to?: string;
+  /** 用全體勝率補值的角色格 (共 7) / 位置格 (共 10) 數。 */
+  sparseRoles?: number;
+  sparseSeats?: number;
+  /** 視窗場數 (assassin = 刺殺次數；roleTitles = 該角色場數)。 */
   games: number;
   // improved
+  recentRoleTheory?: number;
+  priorRoleTheory?: number;
   recentFinalWinRate?: number;
   priorFinalWinRate?: number;
   recentGames?: number;
@@ -811,42 +915,45 @@ export interface AnalysisLeaderboardRow {
   // roleTitles
   role?: string;
   wins?: number;
+  careerRoleGames?: number;
+  // 舊快取的超額榜才有 (網站不再顯示)
+  excessWinRate?: number;
+  expectedFinalWinRate?: number;
 }
 
 export interface AnalysisLeaderboardBoard {
   /** 固定 id；未知 id 仍可解析 (以小卡通用格式顯示)。 */
   id: AnalysisLeaderboardBoardId | (string & Record<never, never>);
+  /** 這個榜的 value 是什麼；舊快取沒有。 */
+  metric?: 'roleTheory' | 'roleTheoryDelta' | 'hitRate' | 'finalWinRate' | (string & Record<never, never>);
   title: string;
   titleEn?: string;
-  /** 例：「2025-10-13 ～ 2026-10-12」。 */
+  /** 例：「各人最近 100 場」；新人榜：「2026-07-15 ～ 2026-10-12 首次出賽」。 */
   period: string;
-  /** 實際採用的視窗 (放寬後)；0 = 全期。 */
+  periodEn?: string;
+  /** 各人最近 N 場 (main 100、last50 50、improved 50、assassin 20 次刺殺、roleTitles 該角色 20 場)。 */
+  windowGames?: number;
+  /** 新人榜：首次出賽要在近 N 天內 (舊快取：日期視窗)。 */
   windowDays?: number;
+  /** 新人榜：看全部場次 (例外)。 */
+  allGames?: boolean;
   minGames?: number;
   note?: string;
   noteEn?: string;
-  /** improved 專用。 */
-  priorPeriod?: string;
-  /** online 專用。 */
-  category?: string;
-  coverage?: number;
   rows: AnalysisLeaderboardRow[];
 }
 
 export interface AnalysisLeaderboardData {
   asOf: string;
   dates?: { parsed: number; unparsed: number; earliest: string; latest: string };
-  config?: {
-    windowDays: number;
-    activeDays: number;
-    minGames: number;
-    shrinkK: number;
-    fallbackWindowDays: number[];
-    minBoardRows: number;
-    topN: number;
-    [key: string]: unknown;
-  };
+  /** generate_cache.py LEADERBOARD_CONFIG 的複本 (新舊快取的鍵不同)。 */
+  config?: Record<string, unknown>;
   boards: AnalysisLeaderboardBoard[];
+}
+
+/** 2026-10-13 之後的榜 (帶 metric)；舊快取的超額榜回 false。 */
+export function isTheoryBoard(board: Pick<AnalysisLeaderboardBoard, 'metric'> | null | undefined): boolean {
+  return typeof board?.metric === 'string' && board.metric.length > 0;
 }
 
 export async function fetchAnalysisLeaderboard(): Promise<AnalysisLeaderboardData> {

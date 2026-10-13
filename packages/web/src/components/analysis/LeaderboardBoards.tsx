@@ -7,25 +7,30 @@ import {
   getErrorMessage,
   isAnalysisNotGenerated,
   isAnalysisRouteMissing,
+  isTheoryBoard,
   fmtPct,
-  fmtSignedPct,
+  fmtSignedPoints,
+  theorySettings,
   type AnalysisLeaderboardData,
   type AnalysisLeaderboardBoard,
   type AnalysisLeaderboardRow,
 } from '../../services/api';
 
 /**
- * 排行 (docs/stats/two_stage_outcome.md `leaderboard` 段)：
- *  - main 榜：表格 — 名次、名字、超額勝率、最終勝率、期間場數；標題含期間與門檻
- *  - 其他榜 (online / recent 近 90 天 / improved 進步最多 / assassin 本週刺殺 /
- *    newcomers 新人 / roleTitles 上月角色稱號)：小卡
+ * 排行 (docs/stats/two_stage_outcome.md `leaderboard` 段，Edward 2026-10-13)：
+ *  「條件篩選可以是近期，但資料篩選不能少場」— 誰上榜看近 activeDays (90) 天有沒有出賽，
+ *  數字一律是各人自己的最近 N 場，不用短期日期區間。說明文字的天數、場數讀 leaderboard.config。
+ *  - main 榜：表格 — 名次、名字、角色理論、位置理論、最終勝率、場數 (各人最近 100 場)
+ *  - 小卡：近 50 場、進步榜 (最近 50 vs 再之前 50，差值單位是百分點)、刺客刺中率 (最近 20 次刺殺)、
+ *    新人榜 (例外：全部場次)、角色王 (該角色最近 20 場)
+ *  - 舊快取的榜 (沒有 metric，超額勝率)：不顯示，提示下次每日更新後提供
  *  - 快取尚無此段 (503 "Leaderboard not yet generated")：顯示「排行尚未產生（每日 03:47 重算）」
  *  - 舊後端沒有此路由 (404，網站先於伺服器部署)：顯示「後端尚未更新」
  *    兩者都附重試鍵；其他 503 (載入快取失敗、代理層) 走一般錯誤並顯示伺服器訊息。
  * 全部由 generate_cache.py 算好；這裡只讀不重算。
  */
 
-const CARD_ORDER = ['recent', 'improved', 'assassin', 'newcomers', 'roleTitles', 'online'];
+const CARD_ORDER = ['last50', 'improved', 'assassin', 'newcomers', 'roleTitles'];
 
 function useIsEn(): boolean {
   const { i18n } = useTranslation('common');
@@ -36,8 +41,19 @@ function boardTitle(board: AnalysisLeaderboardBoard, isEn: boolean): string {
   return isEn && board.titleEn ? board.titleEn : board.title;
 }
 
+function boardPeriod(board: AnalysisLeaderboardBoard, isEn: boolean): string {
+  return isEn && board.periodEn ? board.periodEn : board.period;
+}
+
 function boardNote(board: AnalysisLeaderboardBoard, isEn: boolean): string | undefined {
   return isEn && board.noteEn ? board.noteEn : board.note;
+}
+
+/** The note's first clause (who qualifies); the legend after it is shown once, under the main board. */
+function qualifier(note: string | undefined): string | undefined {
+  if (!note) return undefined;
+  const first = note.split(/[；;]/)[0]?.trim();
+  return first || undefined;
 }
 
 function rankClass(rank: number): string {
@@ -47,24 +63,15 @@ function rankClass(rank: number): string {
   return 'text-gray-500';
 }
 
-function excessClass(v: number | undefined): string {
+function deltaClass(v: number | undefined): string {
   if (typeof v !== 'number' || !Number.isFinite(v)) return 'text-gray-500';
   if (v > 0) return 'text-emerald-300';
   if (v < 0) return 'text-rose-300';
   return 'text-gray-300';
 }
 
-/**
- * 超額榜 (main / online / recent / newcomers) 的超額值：未縮減的 excessWinRate。
- * 缺時回 undefined → 顯示「—」；不拿縮減後的排序值 `value` 冒充超額勝率
- * (排序值另外在 tooltip 以「排序值（縮減後）」標示)。
- */
-function excessOf(row: AnalysisLeaderboardRow): number | undefined {
-  return typeof row.excessWinRate === 'number' ? row.excessWinRate : undefined;
-}
-
-/** 非錯誤的「暫時沒有排行」狀態：快取尚未產生 / 後端版本過舊。 */
-type BoardsNotice = 'notGenerated' | 'backendOutdated';
+/** 非錯誤的「暫時沒有排行」狀態：快取尚未產生 / 後端版本過舊 / 快取還是改版前的格式。 */
+type BoardsNotice = 'notGenerated' | 'backendOutdated' | 'upgrading';
 
 export default function LeaderboardBoards(): JSX.Element {
   const { t } = useTranslation('common');
@@ -74,6 +81,8 @@ export default function LeaderboardBoards(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<BoardsNotice | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // 天數、場數讀快取的 leaderboard.config (舊快取沒有這些鍵 → 產生器預設值)。
+  const settings = theorySettings(data?.config);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +91,9 @@ export default function LeaderboardBoards(): JSX.Element {
         if (cancelled) return;
         setData(d);
         setError(null);
-        setNotice(null);
+        const boards = Array.isArray(d.boards) ? d.boards : [];
+        // 改版前的快取：榜都沒有 metric (超額勝率) → 不顯示，等每日重算。
+        setNotice(boards.length > 0 && !boards.some(isTheoryBoard) ? 'upgrading' : null);
       })
       .catch(e => {
         if (cancelled) return;
@@ -130,11 +141,7 @@ export default function LeaderboardBoards(): JSX.Element {
     return (
       <div className="flex items-center gap-3 flex-wrap px-4 py-4 rounded-xl border border-amber-800/40 bg-amber-900/10 text-amber-300 text-sm">
         <Clock size={18} className="flex-shrink-0" />
-        <span className="flex-1">
-          {notice === 'notGenerated'
-            ? t('analytics.boards.notGenerated')
-            : t('analytics.boards.backendOutdated')}
-        </span>
+        <span className="flex-1">{t(`analytics.boards.${notice}`, { games: settings.mainGames })}</span>
         {retryButton}
       </div>
     );
@@ -151,7 +158,7 @@ export default function LeaderboardBoards(): JSX.Element {
     );
   }
 
-  const boards = Array.isArray(data.boards) ? data.boards : [];
+  const boards = (Array.isArray(data.boards) ? data.boards : []).filter(isTheoryBoard);
   const main = boards.find(b => b.id === 'main');
   const others = boards
     .filter(b => b.id !== 'main' && Array.isArray(b.rows) && b.rows.length > 0)
@@ -169,12 +176,13 @@ export default function LeaderboardBoards(): JSX.Element {
           <> · {t('analytics.boards.datesNote', { parsed: data.dates.parsed, unparsed: data.dates.unparsed })}</>
         )}
       </p>
+      <p className="text-[11px] text-zinc-500 leading-relaxed">{t('analytics.boards.principle', { days: settings.activeDays })}</p>
 
       {main && main.rows.length > 0 ? (
-        <MainBoard board={main} config={data.config} isEn={isEn} />
+        <MainBoard board={main} isEn={isEn} />
       ) : (
         <div className="px-4 py-4 rounded-xl border border-gray-700 bg-avalon-card/30 text-sm text-gray-500">
-          {t('analytics.boards.empty')}
+          {t('analytics.boards.empty', { days: settings.activeDays, games: settings.mainGames })}
         </div>
       )}
 
@@ -189,18 +197,18 @@ export default function LeaderboardBoards(): JSX.Element {
   );
 }
 
-function spanLabel(t: (k: string, o?: Record<string, unknown>) => string, windowDays: number | undefined): string {
-  if (windowDays === undefined) return '';
-  return windowDays === 0 ? t('analytics.boards.allTime') : t('analytics.boards.days', { count: windowDays });
+function rowTip(t: (k: string, o?: Record<string, unknown>) => string, row: AnalysisLeaderboardRow): string {
+  return [
+    typeof row.careerGames === 'number' ? t('analytics.boards.tip.career', { count: row.careerGames }) : null,
+    row.from && row.to ? t('analytics.boards.tip.span', { from: row.from, to: row.to }) : null,
+    (row.sparseRoles ?? 0) > 0 || (row.sparseSeats ?? 0) > 0
+      ? t('analytics.boards.tip.sparse', { roles: row.sparseRoles ?? 0, seats: row.sparseSeats ?? 0 })
+      : null,
+  ].filter(Boolean).join(' · ');
 }
 
-function MainBoard({ board, config, isEn }: {
-  board: AnalysisLeaderboardBoard;
-  config: AnalysisLeaderboardData['config'];
-  isEn: boolean;
-}): JSX.Element {
+function MainBoard({ board, isEn }: { board: AnalysisLeaderboardBoard; isEn: boolean }): JSX.Element {
   const { t } = useTranslation('common');
-  const widened = Boolean(config && typeof board.windowDays === 'number' && board.windowDays !== config.windowDays);
   const note = boardNote(board, isEn);
 
   return (
@@ -213,17 +221,7 @@ function MainBoard({ board, config, isEn }: {
         <div className="flex items-center gap-2 flex-wrap">
           <Trophy size={16} className="text-amber-300" />
           <h3 className="text-base font-bold text-white">{boardTitle(board, isEn)}</h3>
-          <span className="text-xs text-zinc-400">· {t('analytics.boards.period', { period: board.period })}</span>
-          {typeof board.minGames === 'number' && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-300">
-              {t('analytics.boards.minGames', { count: board.minGames })}
-            </span>
-          )}
-          {widened && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-800/50 text-amber-300">
-              {t('analytics.boards.widened', { span: spanLabel(t, board.windowDays) })}
-            </span>
-          )}
+          <span className="text-xs text-zinc-400">· {boardPeriod(board, isEn)}</span>
         </div>
         {note && <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">{note}</p>}
       </div>
@@ -234,32 +232,25 @@ function MainBoard({ board, config, isEn }: {
             <tr className="text-[11px] text-zinc-500 border-b border-zinc-800">
               <th className="text-left py-2 pl-4 pr-2 w-12">{t('analytics.boards.col.rank')}</th>
               <th className="text-left py-2 px-2">{t('analytics.boards.col.name')}</th>
-              <th className="text-right py-2 px-2">{t('analytics.boards.col.excess')}</th>
+              <th className="text-right py-2 px-2">{t('analytics.boards.col.roleTheory')}</th>
+              <th className="text-right py-2 px-2">{t('analytics.boards.col.positionTheory')}</th>
               <th className="text-right py-2 px-2">{t('analytics.boards.col.finalWinRate')}</th>
               <th className="text-right py-2 pl-2 pr-4">{t('analytics.boards.col.games')}</th>
             </tr>
           </thead>
           <tbody>
-            {board.rows.map(row => {
-              const excess = excessOf(row);
-              const tip = [
-                `${t('analytics.boards.col.shrunk')} ${fmtSignedPct(row.value)}`,
-                typeof row.expectedFinalWinRate === 'number'
-                  ? `${t('analytics.boards.col.expected')} ${fmtPct(row.expectedFinalWinRate)}`
-                  : null,
-              ].filter(Boolean).join(' · ');
-              return (
-                <tr key={`${row.rank}-${row.name}`} className="border-b border-zinc-800/60 hover:bg-white/5" title={tip}>
-                  <td className={`py-1.5 pl-4 pr-2 font-black ${rankClass(row.rank)}`}>
-                    {row.rank <= 3 ? <Medal size={14} className="inline -mt-0.5 mr-0.5" /> : null}{row.rank}
-                  </td>
-                  <td className="py-1.5 px-2 font-semibold text-white">{row.name}</td>
-                  <td className={`py-1.5 px-2 text-right font-bold ${excessClass(excess)}`}>{fmtSignedPct(excess)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmtPct(row.finalWinRate)}</td>
-                  <td className="py-1.5 pl-2 pr-4 text-right text-gray-400">{row.games}</td>
-                </tr>
-              );
-            })}
+            {board.rows.map(row => (
+              <tr key={`${row.rank}-${row.name}`} className="border-b border-zinc-800/60 hover:bg-white/5" title={rowTip(t, row)}>
+                <td className={`py-1.5 pl-4 pr-2 font-black ${rankClass(row.rank)}`}>
+                  {row.rank <= 3 ? <Medal size={14} className="inline -mt-0.5 mr-0.5" /> : null}{row.rank}
+                </td>
+                <td className="py-1.5 px-2 font-semibold text-white">{row.name}</td>
+                <td className="py-1.5 px-2 text-right font-bold text-amber-200">{fmtPct(row.roleTheory ?? row.value)}</td>
+                <td className="py-1.5 px-2 text-right text-gray-300">{fmtPct(row.positionTheory)}</td>
+                <td className="py-1.5 px-2 text-right text-gray-300">{fmtPct(row.finalWinRate)}</td>
+                <td className="py-1.5 pl-2 pr-4 text-right text-gray-400">{row.games}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -269,7 +260,7 @@ function MainBoard({ board, config, isEn }: {
 
 function BoardCard({ board, isEn }: { board: AnalysisLeaderboardBoard; isEn: boolean }): JSX.Element {
   const { t } = useTranslation('common');
-  const note = boardNote(board, isEn);
+  const who = qualifier(boardNote(board, isEn));
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -278,20 +269,26 @@ function BoardCard({ board, isEn }: { board: AnalysisLeaderboardBoard; isEn: boo
     >
       <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
         <h4 className="text-sm font-bold text-white">{boardTitle(board, isEn)}</h4>
-        <span className="text-[10px] text-zinc-500">{board.period}</span>
+        <span className="text-[10px] text-zinc-500">{boardPeriod(board, isEn)}</span>
       </div>
-      {typeof board.minGames === 'number' && board.id !== 'assassin' && (
-        <p className="text-[10px] text-zinc-500 mb-2">{t('analytics.boards.minGames', { count: board.minGames })}</p>
+      {(who || board.allGames) && (
+        <p className="text-[10px] text-zinc-500 mb-2">
+          {board.allGames && (
+            <span className="mr-1 px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-800/50 text-amber-300">
+              {t('analytics.boards.exception')}
+            </span>
+          )}
+          {who}
+        </p>
       )}
       <ol className="space-y-1">
         {board.rows.map(row => (
-          <li key={`${row.rank}-${row.role ?? ''}-${row.name}`} className="flex items-center gap-2 text-xs">
+          <li key={`${row.rank}-${row.role ?? ''}-${row.name}`} className="flex items-center gap-2 text-xs" title={rowTip(t, row)}>
             <span className={`w-5 text-right font-black ${rankClass(row.rank)}`}>{row.rank}</span>
             <BoardRowBody board={board} row={row} />
           </li>
         ))}
       </ol>
-      {note && <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">{note}</p>}
     </motion.div>
   );
 }
@@ -300,31 +297,33 @@ function BoardRowBody({ board, row }: { board: AnalysisLeaderboardBoard; row: An
   const { t } = useTranslation('common');
   const games = `${row.games} ${t('analytics.deep.common.games')}`;
 
-  switch (board.id) {
-    case 'improved':
+  switch (board.metric) {
+    case 'roleTheoryDelta':
       return (
         <>
           <span className="flex-1 font-semibold text-white truncate">{row.name}</span>
-          <span className={`font-bold ${excessClass(row.value)}`}>{fmtSignedPct(row.value)}</span>
+          {/* 角色理論的差，單位是百分點 (不是相對成長 %) */}
+          <span className={`font-bold ${deltaClass(row.value)}`}>
+            {Number.isFinite(row.value) ? t('analytics.boards.points', { value: fmtSignedPoints(row.value) }) : '—'}
+          </span>
           <span className="text-zinc-500 whitespace-nowrap">
-            {fmtPct(row.recentFinalWinRate)} / {fmtPct(row.priorFinalWinRate)}
-            {typeof row.recentGames === 'number' && typeof row.priorGames === 'number'
-              ? ` (${row.recentGames}/${row.priorGames})`
-              : ''}
+            {fmtPct(row.recentRoleTheory)} ← {fmtPct(row.priorRoleTheory)}
           </span>
         </>
       );
-    case 'assassin':
+    case 'hitRate':
       return (
         <>
           <span className="flex-1 font-semibold text-white truncate">{row.name}</span>
           <span className="font-bold text-amber-300">{fmtPct(row.value)}</span>
           <span className="text-zinc-500 whitespace-nowrap">
-            {typeof row.hits === 'number' && typeof row.attempts === 'number' ? `${row.hits}/${row.attempts} · ` : ''}{games}
+            {typeof row.hits === 'number' && typeof row.attempts === 'number'
+              ? t('analytics.boards.attempts', { hits: row.hits, attempts: row.attempts })
+              : games}
           </span>
         </>
       );
-    case 'roleTitles':
+    case 'finalWinRate':
       return (
         <>
           <span className="w-14 text-zinc-300">{row.role ?? ''}</span>
@@ -335,28 +334,18 @@ function BoardRowBody({ board, row }: { board: AnalysisLeaderboardBoard; row: An
           </span>
         </>
       );
-    case 'newcomers':
+    default:
+      // roleTheory (last50 / newcomers) and unknown metrics: 角色理論 · 位置理論 · 最終 · 場數
       return (
         <>
           <span className="flex-1 font-semibold text-white truncate">{row.name}</span>
-          <span className={`font-bold ${excessClass(excessOf(row))}`}>{fmtSignedPct(excessOf(row))}</span>
+          <span className="font-bold text-amber-200">{fmtPct(row.roleTheory ?? row.value)}</span>
           <span className="text-zinc-500 whitespace-nowrap">
-            {fmtPct(row.finalWinRate)} · {games}{row.firstPlayed ? ` · ${row.firstPlayed}` : ''}
+            {typeof row.positionTheory === 'number' ? `${t('analytics.boards.col.positionTheory')} ${fmtPct(row.positionTheory)} · ` : ''}
+            {typeof row.finalWinRate === 'number' ? `${t('analytics.boards.col.finalWinRate')} ${fmtPct(row.finalWinRate)} · ` : ''}
+            {games}
           </span>
         </>
       );
-    default: {
-      // online / recent / 未知 id：超額榜通用格式
-      const excess = excessOf(row);
-      return (
-        <>
-          <span className="flex-1 font-semibold text-white truncate">{row.name}</span>
-          <span className={`font-bold ${excessClass(excess)}`}>{fmtSignedPct(excess)}</span>
-          <span className="text-zinc-500 whitespace-nowrap">
-            {typeof row.finalWinRate === 'number' ? `${fmtPct(row.finalWinRate)} · ` : ''}{games}
-          </span>
-        </>
-      );
-    }
   }
 }

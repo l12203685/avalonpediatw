@@ -21,9 +21,7 @@ import {
 import type { PlayerStats } from '../../services/sheetsAnalysis';
 import type { NameMatch } from './statsReplies';
 import {
-  DIGEST_RECENT_SIZE,
   STATS_COMMAND_USAGE,
-  boardView,
   chemistryRoster,
   findBoard,
   formatChemistry,
@@ -32,9 +30,10 @@ import {
   formatNotInChemistry,
   formatPlayerCard,
   formatStatsUnavailable,
-  leaderboardLines,
+  improvedLines,
   lookupPair,
   matchPlayerName,
+  newcomersLine,
   normalizeName,
   roleTitlesLine,
   selectLeaderboard,
@@ -69,17 +68,20 @@ export async function playerCardReply(query: string): Promise<string> {
     const player = (await getPlayerByName(match.name)) ?? players.find((p) => p.name === match.name);
     if (!player) return formatNameProblem({ kind: 'none', query });
 
-    const [archetype, strength, playstyle] = await Promise.all([
+    const [archetype, strength, playstyle, leaderboard] = await Promise.all([
       getPlayerArchetype(match.name).catch(() => null),
       getPlayerStrength(match.name).catch(() => null),
       getPlayerPlaystyle(match.name).catch(() => null),
+      getLeaderboard().catch(() => null),
     ]);
+    const minCell = leaderboard?.config?.theoryMinCellGames;
     return formatPlayerCard({
       player,
       archetype: archetype ? { data: archetype.data, axisLabels: archetype.axisLabels } : null,
       strength: strength?.data ?? null,
       playstyle: playstyle ? { data: playstyle.data, labels: playstyle.labels } : null,
       caseVariants: match.caseVariants,
+      minCellGames: typeof minCell === 'number' ? minCell : undefined,
     });
   });
 }
@@ -89,25 +91,23 @@ export async function playerCardReply(query: string): Promise<string> {
 /**
  * Leaderboard text; throws when the cache cannot be read (digest must not
  * post an error). The main board comes from the cache's `leaderboard`
- * section when present (see selectLeaderboard for the fallbacks); with
- * `digest` the "近 90 天" board and last month's role titles are appended.
+ * section (see selectLeaderboard for the fallbacks); with `digest` the 進步榜
+ * Top 5, the 角色王 line and the 新人榜 line are appended (when the cache has them).
  */
 export async function leaderboardText(
   opts: { header?: string; footerLines?: string[]; digest?: boolean } = {},
 ): Promise<string> {
   const [overview, leaderboard] = await Promise.all([getOverview(), getLeaderboard()]);
-  const precomputed =
-    findBoard(leaderboard, 'main') !== null ||
-    (Array.isArray(overview?.topPlayersByExcess) && overview.topPlayersByExcess.length > 0);
-  const players = precomputed ? [] : await getAllPlayerStats();
-  const main = selectLeaderboard(leaderboard, overview, players);
+  const main = selectLeaderboard(leaderboard, overview);
 
   const sections: string[][] = [];
   if (opts.digest) {
-    const recent = findBoard(leaderboard, 'recent');
-    if (recent) sections.push(leaderboardLines(boardView(recent, DIGEST_RECENT_SIZE, '🔥')));
+    const improved = improvedLines(findBoard(leaderboard, 'improved'));
+    if (improved.length > 0) sections.push(improved);
     const titles = roleTitlesLine(findBoard(leaderboard, 'roleTitles'));
     if (titles) sections.push([titles]);
+    const newcomers = newcomersLine(findBoard(leaderboard, 'newcomers'));
+    if (newcomers) sections.push([newcomers]);
   }
   return formatLeaderboard(overview, main, { header: opts.header, sections, footerLines: opts.footerLines });
 }
@@ -117,9 +117,9 @@ export async function leaderboardReply(): Promise<string> {
 }
 
 /**
- * Monday digest: dated header, main board Top 10, "近 90 天" Top 5, last
- * month's role titles (each only when the cache has it; later sections are
- * dropped first when the text would exceed the cap) and a how-to-look-up
+ * Monday digest: dated header, main board Top 10 (角色理論, 各人最近 100 場),
+ * 進步榜 Top 5, 角色王, 新人榜 (each only when the cache has it; later sections
+ * are dropped first when the text would exceed the cap) and a how-to-look-up
  * line. Throws on cache errors.
  */
 export async function weeklyDigestText(now: number = Date.now()): Promise<string> {

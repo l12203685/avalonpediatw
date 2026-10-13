@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
+import { theorySettings } from '../../services/api';
 import { useAnalysisOverview } from './useAnalysisOverview';
 
 /**
@@ -23,6 +24,8 @@ export default function RoleFinalWinRates(): JSX.Element | null {
   const extra = Object.keys(rates).filter(r => !ROLE_ORDER.includes(r) && typeof rates[r] === 'number');
   const roles = [...known, ...extra];
   if (roles.length === 0) return null;
+  // 補值門檻讀快取 (overview.theoryConfig)；0 = 不補，就不提補值。
+  const minCell = theorySettings(overview?.theoryConfig).theoryMinCellGames;
 
   return (
     <motion.div
@@ -51,7 +54,10 @@ export default function RoleFinalWinRates(): JSX.Element | null {
           );
         })}
       </div>
-      <p className="text-[10px] text-gray-600 mt-3">{t('analytics.deep.roleFinal.note')}</p>
+      <p className="text-[10px] text-gray-600 mt-3">
+        {t('analytics.deep.roleFinal.note')}
+        {minCell > 0 && t('analytics.deep.roleFinal.noteTopUp', { n: minCell })}
+      </p>
     </motion.div>
   );
 }

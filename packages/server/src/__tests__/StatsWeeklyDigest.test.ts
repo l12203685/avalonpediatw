@@ -2,9 +2,9 @@
  * Weekly stats digest (2026-10-10): Monday 12:00 +08, posting window
  * 12:00–12:10, in-memory once-per-week guard, host-TZ independent.
  *
- * Plus the digest TEXT (statsQueries.weeklyDigestText, 2026-10-12): main
- * excess board Top 10 + "近 90 天" Top 5 + last month's role titles, against
- * a mocked analysis cache.
+ * Plus the digest TEXT (statsQueries.weeklyDigestText, 2026-10-13): the main
+ * board (角色理論, each player's last 100 games) Top 10 + 進步榜 Top 5 + 角色王 +
+ * 新人榜, against a mocked analysis cache.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -22,27 +22,44 @@ import type { LeaderboardBoard, LeaderboardRow } from '../services/sheetsAnalysi
 // ─── Mocked cache for the digest text ────────────────────────────────────
 
 const cache = vi.hoisted(() => {
-  // Rows and boards as generate_cache.py (compute_leaderboard, asOf 2026-10-12) really writes them: the
-  // excess boards sort by the shrunk `value` and carry the unshrunk `excessWinRate`, their notes all end
-  // with the same legend after a "；", and improved / assassin / roleTitles rows have no finalWinRate.
-  const LEGEND = '超額勝率 = 期間最終勝率 − 依角色分配算出的預期勝率；排序用縮減值（× 場數 /（場數 + 20）），樣本少的人不會因為幾場好運就衝到前面';
-  const excessRow = (rank: number, name: string, excessWinRate: number, finalWinRate: number, games: number): LeaderboardRow => ({
-    rank, name, value: Math.round(((excessWinRate * games) / (games + 20)) * 10) / 10, excessWinRate, finalWinRate, expectedFinalWinRate: finalWinRate - excessWinRate, games,
+  // Boards as generate_cache.py (compute_leaderboard, asOf 2026-10-12) writes them since 2026-10-13: each
+  // carries `metric`, the theory boards' notes end with the legend after a "；", and the rows hold the
+  // numbers of each player's own last-N-games window.
+  const LEGEND = '角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率；位置理論 = Σ 1/10 × 本人該位置的最終勝率；不到 3 場的角色或位置，用全體的最終勝率補到 3 場';
+  const theoryRow = (rank: number, name: string, roleTheory: number, games: number): LeaderboardRow => ({
+    rank, name, value: roleTheory, roleTheory, positionTheory: roleTheory - 1, finalWinRate: roleTheory + 2, games, careerGames: 300 + rank,
+    from: '2026-05-01', to: '2026-10-10', sparseRoles: 0, sparseSeats: 0,
   });
-  const titleRow = (rank: number, role: string, name: string, value: number, games: number, wins: number): LeaderboardRow => ({ rank, role, name, value, games, wins });
-  const rows = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => excessRow(i + 1, `${prefix}${i + 1}`, 8 - i, 40 - i, 30 - i));
+  const rows = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => theoryRow(i + 1, `${prefix}${i + 1}`, 55 - i, 100));
+  const improvedRow = (rank: number, name: string, recent: number, prior: number): LeaderboardRow => ({
+    rank, name, value: Math.round((recent - prior) * 10) / 10, recentRoleTheory: recent, priorRoleTheory: prior,
+    recentFinalWinRate: recent, priorFinalWinRate: prior, recentGames: 50, priorGames: 50, games: 50, careerGames: 200,
+  });
+  const titleRow = (rank: number, role: string, name: string, value: number, wins: number): LeaderboardRow => ({
+    rank, role, name, value, games: 20, wins, careerRoleGames: 40,
+  });
   const boards = (): LeaderboardBoard[] => [
-    { id: 'main', title: '超額勝率排行', period: '2025-10-13 ～ 2026-10-12', windowDays: 365, minGames: 20, note: `近 90 天內有出賽、近 365 天至少 20 場；${LEGEND}`, rows: rows('M', 12) },
-    { id: 'recent', title: '近 90 天超額勝率', period: '2026-07-15 ～ 2026-10-12', windowDays: 90, minGames: 10, note: `期間至少 10 場；${LEGEND}`, rows: rows('R', 7) },
+    { id: 'main', metric: 'roleTheory', title: '角色理論勝率排行', period: '各人最近 100 場', windowGames: 100, minGames: 100, note: `近 90 天內有出賽、生涯至少 100 場；${LEGEND}`, rows: rows('M', 12) },
+    { id: 'last50', metric: 'roleTheory', title: '近 50 場角色理論勝率', period: '各人最近 50 場', windowGames: 50, minGames: 50, note: `近 90 天內有出賽、生涯至少 50 場；${LEGEND}`, rows: rows('L', 12) },
     {
-      id: 'assassin', title: '近 7 天刺客刺中率', period: '2026-10-06 ～ 2026-10-12', windowDays: 7, minGames: 1,
-      note: '刺中率 = 三藍死 /（三藍死 + 三藍活）的刺客局；三紅的局沒有刺殺，不算；附刺殺次數與刺客場數',
-      rows: [{ rank: 1, name: 'A1', value: 50, hits: 1, attempts: 2, games: 3 }],
+      id: 'improved', metric: 'roleTheoryDelta', title: '進步榜', period: '各人最近 50 場 vs 再之前 50 場', windowGames: 50, minGames: 100,
+      note: `近 90 天內有出賽、生涯至少 100 場；最近 50 場的角色理論勝率 − 再之前 50 場的，只列有進步的人；${LEGEND}`,
+      rows: Array.from({ length: 7 }, (_, i) => improvedRow(i + 1, `I${i + 1}`, 50, 40 + i)),
     },
     {
-      id: 'roleTitles', title: '上月角色王', period: '2026-09-01 ～ 2026-09-30', windowDays: 30, minGames: 5,
-      note: '上個月各角色最終勝率第一名（該角色至少 5 場；同率者場數多的優先）',
-      rows: [titleRow(1, '刺客', 'HAO', 70, 8, 6), titleRow(2, '梅林', 'Sin', 50, 6, 3)],
+      id: 'assassin', metric: 'hitRate', title: '刺客刺中率', period: '各人最近 20 次刺殺', windowGames: 20, minGames: 10,
+      note: '近 90 天內有出賽、至少 10 次刺殺；刺中率 = 三藍死 /（三藍死 + 三藍活）',
+      rows: [{ rank: 1, name: 'A1', value: 60, hits: 12, attempts: 20, games: 20, careerGames: 400 }],
+    },
+    {
+      id: 'newcomers', metric: 'roleTheory', title: '新人榜', period: '2026-07-15 ～ 2026-10-12 首次出賽', windowDays: 90, allGames: true, minGames: 10,
+      note: `首次出賽在近 90 天內、至少 10 場；例外：新人場數少，用他的全部場次；${LEGEND}`,
+      rows: [{ ...theoryRow(1, 'N1', 47, 13), firstPlayed: '2026-08-01' }, { ...theoryRow(2, 'N2', 45.5, 11), firstPlayed: '2026-09-01' }],
+    },
+    {
+      id: 'roleTitles', metric: 'finalWinRate', title: '角色王', period: '各人該角色最近 20 場', windowGames: 20, minGames: 20,
+      note: '近 90 天內有出賽、生涯該角色至少 20 場；比各人該角色最近 20 場的最終勝率',
+      rows: [titleRow(1, '刺客', 'HAO', 90, 18), titleRow(2, '梅林', 'Sin', 55, 11)],
     },
   ];
   return {
@@ -51,7 +68,7 @@ const cache = vi.hoisted(() => {
       outcomeBreakdown: { threeRed: 1013, threeBlueDead: 533, threeBlueAlive: 682, threeRedPct: 45.5, threeBlueDeadPct: 23.9, threeBlueAlivePct: 30.6 },
       topPlayersByTheory: [{ name: 'T1', roleTheory: 60, winRate: 59, games: 100 }],
       topPlayersByGames: [], seatPositionWinRates: [],
-    },
+    } as Record<string, unknown>,
     leaderboard: { asOf: '2026-10-12', boards: boards() } as { asOf: string; boards: ReturnType<typeof boards> } | null,
     boards,
     players: [] as unknown[],
@@ -278,64 +295,82 @@ describe('weeklyDigestText', () => {
     cache.leaderboard = { asOf: '2026-10-12', boards: cache.boards() };
   });
 
-  it('dated header, main Top 10, 近 90 天 Top 5, role titles, totals, how-to line — within the cap', async () => {
+  it('dated header, main Top 10, 進步榜 Top 5, 角色王, 新人榜, totals, how-to line — within the cap', async () => {
     const text = await weeklyDigestText(MONDAY);
     const lines = text.split('\n');
     expect(lines[0]).toBe('📅 每週排行（10/12）');
     // Title: period + the note's qualifier only; the legend after "；" never reaches the digest.
-    expect(lines[1]).toBe('🏆 超額勝率排行 Top 10（2025-10-13 ～ 2026-10-12，近 90 天內有出賽、近 365 天至少 20 場）');
-    // Rows print the unshrunk excessWinRate (8.0), not the shrunk sort value (8 × 30 / 50 = 4.8).
-    expect(lines[2]).toBe('🥇 M1　超額 +8.0｜最終 40.0%｜30 場');
-    expect(lines[11]).toBe('10. M10　超額 -1.0｜最終 31.0%｜21 場');
+    expect(lines[1]).toBe('🏆 角色理論勝率排行 Top 10（各人最近 100 場，近 90 天內有出賽、生涯至少 100 場）');
+    expect(lines[2]).toBe('🥇 M1　角色理論 55.0%｜位置理論 54.0%｜最終 57.0%｜100 場');
+    expect(lines[11]).toBe('10. M10　角色理論 46.0%｜位置理論 45.0%｜最終 48.0%｜100 場');
     expect(text).not.toContain('M11');
-    expect(text).not.toContain('+4.8');
-    expect(text).not.toContain('排序用縮減值');
-    expect(lines[12]).toBe('🔥 近 90 天超額勝率 Top 5（2026-07-15 ～ 2026-10-12，期間至少 10 場）');
-    expect(lines[13]).toBe('🥇 R1　超額 +8.0｜最終 40.0%｜30 場');
-    expect(lines[17]).toBe('5. R5　超額 +4.0｜最終 36.0%｜26 場');
-    expect(text).not.toContain('R6');
-    expect(lines[18]).toBe('🎖️ 上月角色王（2026-09-01 ～ 2026-09-30）：刺客 HAO（70.0%・8 場）、梅林 Sin（50.0%・6 場）');
-    expect(lines[19]).toBe('📈 總計 2228 場｜221 位玩家｜最終紅勝 69.4%／藍勝 30.6%（任務結算 紅 45.5%／藍 54.5%，三藍局刺中 43.9%）');
-    expect(lines[20]).toBe('查個人：/戰績 名字｜兩人默契：/默契 名字1 名字2');
-    expect(lines[21]).toContain('🔗 完整圖表');
-    expect(lines).toHaveLength(22);
+    expect(text).not.toContain('Σ');
+    expect(lines[12]).toBe('🚀 進步榜 Top 5（各人最近 50 場 vs 再之前 50 場，近 90 天內有出賽、生涯至少 100 場）');
+    expect(lines[13]).toBe('1. I1　+10.0（角色理論 50.0% ← 40.0%）');
+    expect(lines[17]).toBe('5. I5　+6.0（角色理論 50.0% ← 44.0%）');
+    expect(text).not.toContain('I6');
+    expect(lines[18]).toBe('👑 角色王（各人該角色最近 20 場）：刺客 HAO 90.0%、梅林 Sin 55.0%');
+    expect(lines[19]).toBe('🌱 新人榜（2026-07-15 ～ 2026-10-12 首次出賽，新人例外：看全部場次）：N1 角色理論 47.0%（13 場）、N2 角色理論 45.5%（11 場）');
+    expect(lines[20]).toBe('📈 總計 2228 場｜221 位玩家｜最終紅勝 69.4%／藍勝 30.6%（任務結算 紅 45.5%／藍 54.5%，三藍局刺中 43.9%）');
+    expect(lines[21]).toBe('查個人：/戰績 名字｜兩人默契：/默契 名字1 名字2');
+    expect(lines[22]).toContain('🔗 完整圖表');
+    expect(lines).toHaveLength(23);
     // Boards the digest does not show stay out.
     expect(text).not.toContain('刺中率');
     expect(text).not.toContain('A1');
+    expect(text).not.toContain('L1');
+    expect(text).not.toContain('超額');
     expect(text.length).toBeLessThanOrEqual(STATS_REPLY_MAX_CHARS);
   });
 
-  it('drops the role titles, then the 近 90 天 board, when the text would exceed the cap', async () => {
+  it('drops the 新人榜, then 角色王, then 進步榜 when the text would exceed the cap', async () => {
     const boards = cache.boards();
-    const titles = boards.find((b) => b.id === 'roleTitles')!;
-    titles.rows = Array.from({ length: 60 }, (_, i) => ({ rank: i + 1, role: '忠臣', name: `玩家${'名'.repeat(20)}${i}`, value: 50, games: 5, wins: 2 }));
+    const newcomers = boards.find((b) => b.id === 'newcomers')!;
+    newcomers.rows = newcomers.rows.map((r) => ({ ...r, name: `${r.name}${'名'.repeat(500)}` }));
     cache.leaderboard = { asOf: '2026-10-12', boards };
     const text = await weeklyDigestText(MONDAY);
     expect(text.length).toBeLessThanOrEqual(STATS_REPLY_MAX_CHARS);
-    expect(text).toContain('🔥 近 90 天超額勝率 Top 5');
-    expect(text).not.toContain('🎖️');
+    expect(text).not.toContain('🌱');
+    expect(text).toContain('👑 角色王');
+    expect(text).toContain('🚀 進步榜 Top 5');
     expect(text).toContain('📈 總計');
     expect(text).toContain('查個人：/戰績 名字');
 
-    const recent = boards.find((b) => b.id === 'recent')!;
-    recent.rows = recent.rows.map((r) => ({ ...r, name: `${r.name}${'名'.repeat(300)}` }));
+    const improved = boards.find((b) => b.id === 'improved')!;
+    improved.rows = improved.rows.map((r) => ({ ...r, name: `${r.name}${'名'.repeat(300)}` }));
     cache.leaderboard = { asOf: '2026-10-12', boards };
     const again = await weeklyDigestText(MONDAY);
     expect(again.length).toBeLessThanOrEqual(STATS_REPLY_MAX_CHARS);
-    expect(again).not.toContain('🔥');
-    expect(again).not.toContain('🎖️');
+    expect(again).not.toContain('🚀');
+    expect(again).not.toContain('👑');
+    expect(again).not.toContain('🌱');
     expect(again).toContain('10. M10');
     expect(again).toContain('📈 總計');
   });
 
-  it('a cache without the leaderboard section posts the fallback board only (no 🔥 / 🎖️ sections)', async () => {
-    cache.leaderboard = null;
-    const text = await weeklyDigestText(MONDAY);
+  it('a cache written before the theory boards posts no excess: the overview ranking, else the pending note', async () => {
+    // Pre-2026-10-13 boards (no `metric`): never printed.
+    cache.leaderboard = { asOf: '2026-10-12', boards: cache.boards().map(({ metric: _m, ...b }) => b) };
+    let text = await weeklyDigestText(MONDAY);
     expect(text.split('\n')[0]).toBe('📅 每週排行（10/12）');
-    expect(text).toContain('🏆 理論勝率排行 Top 10');
-    expect(text).toContain('🥇 T1　60.0%（勝率 59.0%・100 場）');
-    expect(text).not.toContain('🔥');
-    expect(text).not.toContain('🎖️');
+    expect(text).toContain('🏆 角色理論勝率排行\n（排行改版中：下次每日更新資料後，會改用「各人最近 100 場」的角色理論勝率排行）');
+    expect(text).not.toContain('M1');
+    expect(text).not.toContain('🚀');
+    expect(text).not.toContain('👑');
+    expect(text).not.toContain('T1'); // the legacy roleTheory ranking is not a fallback any more
     expect(text).toContain('查個人：/戰績 名字｜兩人默契：/默契 名字1 名字2');
+
+    cache.leaderboard = null;
+    const overview = cache.overview;
+    cache.overview = { ...overview, schemaVersion: 3, topPlayersByRoleTheory: [{ name: 'O1', roleTheory: 51.2, positionTheory: 50.1, finalWinRate: 49, games: 100, careerGames: 640 }] };
+    try {
+      text = await weeklyDigestText(MONDAY);
+      expect(text).toContain('🏆 角色理論勝率排行 Top 10（各人最近 100 場，生涯至少 100 場，不限近期出賽）\n🥇 O1　角色理論 51.2%｜位置理論 50.1%｜最終 49.0%｜100 場');
+      cache.overview = { ...overview, schemaVersion: 3, topPlayersByRoleTheory: [] };
+      text = await weeklyDigestText(MONDAY);
+      expect(text).toContain('（目前沒有符合條件的玩家：近 90 天內有出賽、生涯至少 100 場）');
+    } finally {
+      cache.overview = overview;
+    }
   });
 });

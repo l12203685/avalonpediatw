@@ -21,11 +21,12 @@ import type {
   LeaderboardSection,
   OverviewData,
   PlayerStats,
+  PlayerTheoryWindow,
   PlaystyleData,
   PlaystylePlayerData,
   StrengthPlayerData,
 } from '../../services/sheetsAnalysis';
-import { rnd1 } from '../../services/sheetsAnalysis';
+import { isTheoryBoard, theoryLastWindows } from '../../services/sheetsAnalysis';
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
@@ -41,25 +42,16 @@ export const STATS_REPLY_MAX_CHARS = 1800;
 
 export const LEADERBOARD_SIZE = 10;
 
-/**
- * Only used when the cache has no `leaderboard` section (pre-contract cache):
- * the all-time ranking is rebuilt from the player list with the generator's
- * MIN_GAMES_THRESHOLD (30) — by excess win rate when the players carry it,
- * else by the legacy roleTheory.
- */
-export const LEADERBOARD_FALLBACK_MIN_GAMES = 30;
+/** Rows of the 進步榜 / 新人榜 appended to the Monday digest. */
+export const DIGEST_IMPROVED_SIZE = 5;
+export const DIGEST_NEWCOMERS_SIZE = 3;
 
 /**
- * generate_cache.py LEADERBOARD_CONFIG.shrinkK: every excess ranking is ordered
- * by excess × games / (games + K) so a short hot streak does not top the board.
- * The cache boards and topPlayersByExcess come pre-sorted; only the all-time
- * fallback built from the player list sorts here (the section's config.shrinkK
- * wins when the cache carries one).
+ * generate_cache.py LEADERBOARD_CONFIG.theoryMinCellGames: a role / seat with
+ * fewer games in the window is topped up to this many at the population rate.
+ * The card's footnote uses the cache's value when it carries one.
  */
-export const LEADERBOARD_SHRINK_K = 20;
-
-/** Rows of the "近 90 天" board appended to the Monday digest. */
-export const DIGEST_RECENT_SIZE = 5;
+export const THEORY_MIN_CELL_GAMES = 3;
 
 /** Max candidates listed when a name matches several players. */
 export const MAX_NAME_CANDIDATES = 5;
@@ -207,6 +199,8 @@ export interface PlayerCardInput {
   playstyle?: { data: PlaystylePlayerData; labels: PlaystyleData['labels'] } | null;
   /** Names that differ only by case, shown as a hint. */
   caseVariants?: string[];
+  /** leaderboard.config.theoryMinCellGames of the cache (for the footnote); default 3. */
+  minCellGames?: number;
 }
 
 const ARCHETYPE_AXES: Array<keyof ArchetypeAxes> = ['honesty', 'consistency', 'stickiness', 'flip'];
@@ -286,20 +280,53 @@ function blueSurvivalRate(p: PlayerStats): number | null {
   return null;
 }
 
+/** "※ 角色理論 = …" — how the card's theory numbers are made (top-up clause only when it is on). */
+export function theoryFootnote(minCellGames: number = THEORY_MIN_CELL_GAMES): string {
+  const topUp = minCellGames > 0 ? `；不到 ${minCellGames} 場的角色或位置用全體勝率補到 ${minCellGames} 場` : '';
+  return `※ 角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 該角色最終勝率；位置理論 = Σ 1/10 × 該位置最終勝率${topUp}`;
+}
+
+function theoryLine(label: string, w: PlayerTheoryWindow): string {
+  return `${label}｜角色理論 ${pct(w.roleTheory)}｜位置理論 ${pct(w.positionTheory)}｜最終 ${pct(w.finalWinRate)}`;
+}
+
 /**
- * Player card. Win rates follow docs/stats/two_stage_outcome.md: the headline
- * is the FINAL win rate (藍勝 = 三藍且梅林活) with the excess over the
- * role-expected rate ("—" when the cache cannot provide it); the second line
- * walks 任務結算 → 刺殺結算 → 最終; the third gives the per-side final rates.
- * `missionWinRate` falls back to the legacy `winRate`, which has the same
- * 任務結算 meaning. The old "角色理論勝率" is no longer shown.
+ * "近 100 場｜角色理論 …", "近 50 場｜…", "生涯 N 場｜…" from `player.theory`
+ * (schemaVersion 3; whatever last-N windows the cache has, largest first). A
+ * last-N line is printed only when the player has more than N games (otherwise
+ * it is the career line again). null on an older cache.
+ */
+export function theoryLines(p: Pick<PlayerStats, 'theory'>): string[] | null {
+  const career = p.theory?.career;
+  if (!career || typeof career.games !== 'number') return null;
+  const lines: string[] = [];
+  for (const w of theoryLastWindows(p.theory)) {
+    if (career.games > w.window) {
+      lines.push(theoryLine(`近 ${w.window} 場`, w));
+    }
+  }
+  lines.push(theoryLine(`生涯 ${career.games} 場`, career));
+  return lines;
+}
+
+/**
+ * Player card (Edward 2026-10-13): the theory win rates first — 近 100 場、近 50 場
+ * and 生涯, each with 角色理論／位置理論／最終勝率 — then the 任務結算 → 刺殺結算 →
+ * 最終 walk and the per-side final rates (docs/stats/two_stage_outcome.md).
+ * `missionWinRate` falls back to the legacy `winRate`, which has the same 任務結算
+ * meaning. The excess win rate and the legacy roleTheory are not shown; on a
+ * cache without `theory` the card says the theory rates come with the next refresh.
  */
 export function formatPlayerCard(input: PlayerCardInput): string {
   const p = input.player;
-  const lines: string[] = [
-    `📊 ${p.name} 的戰績`,
-    `場次 ${p.totalGames}｜最終勝率 ${pct(p.finalWinRate)}｜超額 ${signed(p.excessWinRate)}`,
-  ];
+  const lines: string[] = [`📊 ${p.name} 的戰績`];
+  const theory = theoryLines(p);
+  if (theory) {
+    lines.push(...theory);
+  } else {
+    lines.push(`場次 ${p.totalGames}｜最終勝率 ${pct(p.finalWinRate)}`);
+    lines.push('（角色理論／位置理論勝率：下次每日更新資料後提供）');
+  }
   const kill = redKillRate(p);
   const survive = blueSurvivalRate(p);
   const stageParts = [
@@ -318,35 +345,60 @@ export function formatPlayerCard(input: PlayerCardInput): string {
   if (input.caseVariants && input.caseVariants.length > 0) {
     lines.push(`ℹ️ 另有大小寫不同的玩家：${input.caseVariants.slice(0, MAX_NAME_CANDIDATES).join('、')}`);
   }
+  if (theory) lines.push(theoryFootnote(input.minCellGames ?? THEORY_MIN_CELL_GAMES));
   lines.push(SITE_FOOTER);
   return clampReply(lines.join('\n'));
 }
 
 // ─── Leaderboard ─────────────────────────────────────────────────────────
 //
-// Owner decision 2026-10-12 (docs/stats/two_stage_outcome.md, HAO's feedback
-// on the old digest): rank by EXCESS win rate (final win rate minus the
-// role-expected rate), one number per row plus the final win rate and the
-// games in the period, with the period in the title. Boards come precomputed
-// from the cache's `leaderboard` section; older caches fall back to an
-// all-time ranking built here.
+// Owner decision 2026-10-13 (docs/stats/two_stage_outcome.md): rank by the
+// 角色理論勝率 of each player's own last 100 games (players active in the last
+// 90 days with ≥ 100 career games) and print 角色理論／位置理論／最終勝率 and the
+// games of that window — "條件篩選可以是近期，但資料篩選不能少場". Boards come
+// precomputed from the cache's `leaderboard` section. A cache written before
+// that (excess-win-rate boards without `metric`) is never printed as excess:
+// /排行 falls back to overview.topPlayersByRoleTheory, else says the new
+// ranking comes with the next daily refresh.
 
-/** One printed ranking row. `kind` on the view says what `value` / `winRate` mean. */
+/** One printed ranking row (all numbers over the board's window of the player's games). */
 export interface LeaderboardLine {
   rank: number;
   name: string;
-  /** excess: 超額勝率 (unshrunk, percentage points, signed); theory: 角色理論勝率 (%). */
-  value: number;
-  /** excess: 最終勝率; theory: legacy 任務結算 win rate. null when unknown. */
-  winRate: number | null;
+  roleTheory: number | null;
+  positionTheory: number | null;
+  finalWinRate: number | null;
   games: number;
 }
 
 export interface LeaderboardView {
-  kind: 'excess' | 'theory';
-  /** First line of the board, e.g. "🏆 超額勝率排行 Top 10（2025-10-13 ～ 2026-10-12，近 90 天內有出賽、期間至少 20 場）". */
+  /** First line, e.g. "🏆 角色理論勝率排行 Top 10（各人最近 100 場，近 90 天內有出賽、生涯至少 100 場）". */
   title: string;
   rows: LeaderboardLine[];
+  /** Printed instead of rows when there are none. */
+  emptyNote?: string;
+}
+
+/**
+ * Shown on a cache written before the theory rates. Such a cache carries none of the new
+ * settings, so this names the generator's defaults (LEADERBOARD_CONFIG.mainGames = 100).
+ */
+export const LEADERBOARD_PENDING_NOTE = '（排行改版中：下次每日更新資料後，會改用「各人最近 100 場」的角色理論勝率排行）';
+
+/**
+ * A setting of the generator: leaderboard.config[key], else overview.theoryConfig[key], else
+ * `fallback` (the generator's default), so the text never contradicts the numbers.
+ */
+function theorySetting(
+  key: 'mainGames' | 'activeDays',
+  fallback: number,
+  ...sources: Array<Record<string, unknown> | null | undefined>
+): number {
+  for (const src of sources) {
+    const v = src?.[key];
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
+  }
+  return fallback;
 }
 
 /** The board with that id, or null when it is absent or has no rows (the generator omits boards it cannot build). */
@@ -358,37 +410,42 @@ export function findBoard(
   return board && Array.isArray(board.rows) && board.rows.length > 0 ? board : null;
 }
 
+/** findBoard, but only a board written by the theory generator (it carries `metric`). */
+export function findTheoryBoard(
+  leaderboard: Pick<LeaderboardSection, 'boards'> | null | undefined,
+  id: string,
+): LeaderboardBoard | null {
+  const board = findBoard(leaderboard, id);
+  return board && isTheoryBoard(board) ? board : null;
+}
+
 /**
- * The note's first clause only: the generator appends the excess legend
- * (超額勝率 = …；排序用縮減值 …) after a "；", which is for the site's
- * caption, not for a title in brackets.
+ * The note's first clause only: the generator appends the legend (角色理論 = …)
+ * after a "；", which is for the site's caption, not for a title in brackets.
  */
 function noteQualifier(note: unknown): string {
   return typeof note === 'string' ? note.split('；')[0].trim() : '';
 }
 
-function boardTitle(board: LeaderboardBoard, size: number, emoji: string): string {
+function boardTitle(board: LeaderboardBoard, size: number | null, emoji: string): string {
   const qualifier = [board.period, noteQualifier(board.note)].filter((s): s is string => typeof s === 'string' && s.length > 0).join('，');
-  return `${emoji} ${board.title} Top ${size}${qualifier ? `（${qualifier}）` : ''}`;
+  return `${emoji} ${board.title}${size === null ? '' : ` Top ${size}`}${qualifier ? `（${qualifier}）` : ''}`;
 }
 
-/** generate_cache.py shrunk_excess: excess × games / (games + K), one decimal (ties to even, like the generator). */
-export function shrunkExcess(excess: number, games: number, k: number = LEADERBOARD_SHRINK_K): number {
-  return games + k > 0 ? rnd1((excess * games) / (games + k)) : 0;
+function numOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-/** A cache board (main / online / recent …) as a printable view, top `size` rows. */
+/** A theory board (main / last50 / newcomers) as a printable view, top `size` rows. */
 export function boardView(board: LeaderboardBoard, size: number = LEADERBOARD_SIZE, emoji = '🏆'): LeaderboardView {
   return {
-    kind: 'excess',
     title: boardTitle(board, size, emoji),
     rows: board.rows.slice(0, size).map((r, i) => ({
       rank: typeof r.rank === 'number' ? r.rank : i + 1,
       name: r.name,
-      // The rows are sorted by the shrunk `value`; the number people compare
-      // with /戰績 and the site is the unshrunk `excessWinRate` (contract).
-      value: typeof r.excessWinRate === 'number' ? r.excessWinRate : r.value,
-      winRate: typeof r.finalWinRate === 'number' ? r.finalWinRate : null,
+      roleTheory: numOrNull(r.roleTheory) ?? numOrNull(r.value),
+      positionTheory: numOrNull(r.positionTheory),
+      finalWinRate: numOrNull(r.finalWinRate),
       games: r.games,
     })),
   };
@@ -396,68 +453,43 @@ export function boardView(board: LeaderboardBoard, size: number = LEADERBOARD_SI
 
 /**
  * The ranking /排行 and the Monday digest lead with, in order of preference:
- *   1. the cache's `leaderboard` main board (windowed, active players only);
- *   2. `overview.topPlayersByExcess`, else the player list among players with
- *      ≥ LEADERBOARD_FALLBACK_MIN_GAMES games, ordered like the generator
- *      (shrunk excess, then games, then name) and showing the plain excess —
- *      titled "全期";
- *   3. the pre-contract roleTheory ranking (`overview.topPlayersByTheory`,
- *      then the player list) when the cache has no excess fields at all.
+ *   1. the cache's `leaderboard` main board (each active player's last 100 games);
+ *   2. `overview.topPlayersByRoleTheory` (same window, ≥ 100 career games, any
+ *      activity) — e.g. when nobody qualified for the main board;
+ *   3. an empty view: "nobody qualifies" on a current cache, or the pending
+ *      note on a cache written before the theory rates.
  */
 export function selectLeaderboard(
   leaderboard: (Pick<LeaderboardSection, 'boards'> & Partial<Pick<LeaderboardSection, 'config'>>) | null | undefined,
-  overview: Pick<OverviewData, 'topPlayersByTheory' | 'topPlayersByExcess'> | null | undefined,
-  players: readonly PlayerStats[] = [],
+  overview: Pick<OverviewData, 'topPlayersByRoleTheory' | 'schemaVersion' | 'theoryConfig'> | null | undefined,
   size: number = LEADERBOARD_SIZE,
 ): LeaderboardView {
-  const main = findBoard(leaderboard, 'main');
+  const main = findTheoryBoard(leaderboard, 'main');
   if (main) return boardView(main, size, '🏆');
 
-  const allTimeTitle = `🏆 超額勝率排行 Top ${size}（全期，至少 ${LEADERBOARD_FALLBACK_MIN_GAMES} 場）`;
-  const byExcess = overview?.topPlayersByExcess;
-  if (Array.isArray(byExcess) && byExcess.length > 0) {
-    return {
-      kind: 'excess',
-      title: allTimeTitle,
-      rows: byExcess
-        .slice(0, size)
-        .map((r, i) => ({ rank: i + 1, name: r.name, value: r.excessWinRate, winRate: r.finalWinRate, games: r.games })),
-    };
-  }
-  const withExcess = players
-    .map((p) => ({ p, excess: p.excessWinRate }))
-    .filter((x): x is { p: PlayerStats; excess: number } => typeof x.excess === 'number' && x.p.totalGames >= LEADERBOARD_FALLBACK_MIN_GAMES);
-  if (withExcess.length > 0) {
-    const k = typeof leaderboard?.config?.shrinkK === 'number' ? leaderboard.config.shrinkK : LEADERBOARD_SHRINK_K;
-    return {
-      kind: 'excess',
-      title: allTimeTitle,
-      rows: withExcess
-        .map((x) => ({ ...x, shrunk: shrunkExcess(x.excess, x.p.totalGames, k) }))
-        .sort((a, b) => b.shrunk - a.shrunk || b.p.totalGames - a.p.totalGames || (a.p.name < b.p.name ? -1 : a.p.name > b.p.name ? 1 : 0))
-        .slice(0, size)
-        .map((x, i) => ({ rank: i + 1, name: x.p.name, value: x.excess, winRate: x.p.finalWinRate ?? null, games: x.p.totalGames })),
-    };
-  }
-
-  const theoryTitle = `🏆 理論勝率排行 Top ${size}`;
-  const top = overview?.topPlayersByTheory;
+  // The window / thresholds the generator used (a pre-theory leaderboard.config has none of these keys).
+  const settings = [leaderboard?.config, overview?.theoryConfig as Record<string, unknown> | undefined];
+  const mainGames = theorySetting('mainGames', 100, ...settings);
+  const activeDays = theorySetting('activeDays', 90, ...settings);
+  const top = overview?.topPlayersByRoleTheory;
   if (Array.isArray(top) && top.length > 0) {
     return {
-      kind: 'theory',
-      title: theoryTitle,
-      rows: top.slice(0, size).map((r, i) => ({ rank: i + 1, name: r.name, value: r.roleTheory, winRate: r.winRate, games: r.games })),
+      title: `🏆 角色理論勝率排行 Top ${size}（各人最近 ${mainGames} 場，生涯至少 ${mainGames} 場，不限近期出賽）`,
+      rows: top.slice(0, size).map((r, i) => ({
+        rank: i + 1,
+        name: r.name,
+        roleTheory: numOrNull(r.roleTheory),
+        positionTheory: numOrNull(r.positionTheory),
+        finalWinRate: numOrNull(r.finalWinRate),
+        games: r.games,
+      })),
     };
   }
+  const current = Array.isArray(top) || (typeof overview?.schemaVersion === 'number' && overview.schemaVersion >= 3);
   return {
-    kind: 'theory',
-    title: theoryTitle,
-    rows: players
-      .filter((p) => p.totalGames >= LEADERBOARD_FALLBACK_MIN_GAMES)
-      .slice()
-      .sort((a, b) => b.roleTheory - a.roleTheory || b.totalGames - a.totalGames)
-      .slice(0, size)
-      .map((p, i) => ({ rank: i + 1, name: p.name, value: p.roleTheory, winRate: p.winRate, games: p.totalGames })),
+    title: '🏆 角色理論勝率排行',
+    rows: [],
+    emptyNote: current ? `（目前沒有符合條件的玩家：近 ${activeDays} 天內有出賽、生涯至少 ${mainGames} 場）` : LEADERBOARD_PENDING_NOTE,
   };
 }
 
@@ -467,26 +499,40 @@ function rankLabel(rank: number): string {
   return MEDALS[rank - 1] ?? `${rank}.`;
 }
 
-/** Title line + one line per row ("（目前沒有排行資料）" when empty). */
+/** Title line + one line per row: rank, name, 角色理論、位置理論、最終勝率 and games of the window. */
 export function leaderboardLines(view: LeaderboardView): string[] {
   const lines = [view.title];
-  if (view.rows.length === 0) lines.push('（目前沒有排行資料）');
+  if (view.rows.length === 0) lines.push(view.emptyNote ?? '（目前沒有排行資料）');
   for (const r of view.rows) {
     lines.push(
-      view.kind === 'excess'
-        ? `${rankLabel(r.rank)} ${r.name}\u3000超額 ${signed(r.value)}｜最終 ${pct(r.winRate)}｜${r.games} 場`
-        : `${rankLabel(r.rank)} ${r.name}\u3000${pct(r.value)}（勝率 ${pct(r.winRate)}・${r.games} 場）`,
+      `${rankLabel(r.rank)} ${r.name}\u3000角色理論 ${pct(r.roleTheory)}｜位置理論 ${pct(r.positionTheory)}｜最終 ${pct(r.finalWinRate)}｜${r.games} 場`,
     );
   }
   return lines;
 }
 
-/** "🎖️ 上月角色稱號（2026-09）：刺客 HAO（70.0%・8 場）、…" from the `roleTitles` board, or null when absent. */
+/** "🚀 進步榜 Top 5（…）" + "1. 甲 +10.4（角色理論 45.0% ← 34.6%）" from the `improved` board. */
+export function improvedLines(board: LeaderboardBoard | null | undefined, size: number = DIGEST_IMPROVED_SIZE): string[] {
+  if (!board || !isTheoryBoard(board) || !Array.isArray(board.rows) || board.rows.length === 0) return [];
+  const rows = board.rows.slice(0, size);
+  return [
+    boardTitle(board, rows.length, '🚀'),
+    ...rows.map((r, i) => `${typeof r.rank === 'number' ? r.rank : i + 1}. ${r.name}\u3000${signed(r.value)}（角色理論 ${pct(r.recentRoleTheory)} ← ${pct(r.priorRoleTheory)}）`),
+  ];
+}
+
+/** "👑 角色王（各人該角色最近 20 場）：刺客 HAO 90.0%、…" from the `roleTitles` board, or null when absent. */
 export function roleTitlesLine(board: LeaderboardBoard | null | undefined): string | null {
-  if (!board || !Array.isArray(board.rows) || board.rows.length === 0) return null;
-  const parts = board.rows.map((r) => `${r.role ? `${r.role} ` : ''}${r.name}（${pct(r.value)}・${r.games} 場）`);
-  const period = board.period ? `（${board.period}）` : '';
-  return `🎖️ ${board.title}${period}：${parts.join('、')}`;
+  if (!board || !isTheoryBoard(board) || !Array.isArray(board.rows) || board.rows.length === 0) return null;
+  const parts = board.rows.map((r) => `${r.role ? `${r.role} ` : ''}${r.name} ${pct(r.value)}`);
+  return `👑 ${board.title}${board.period ? `（${board.period}）` : ''}：${parts.join('、')}`;
+}
+
+/** "🌱 新人榜（…，全部場次）：甲 角色理論 47.0%（13 場）、…" from the `newcomers` board, or null. */
+export function newcomersLine(board: LeaderboardBoard | null | undefined, size: number = DIGEST_NEWCOMERS_SIZE): string | null {
+  if (!board || !isTheoryBoard(board) || !Array.isArray(board.rows) || board.rows.length === 0) return null;
+  const parts = board.rows.slice(0, size).map((r) => `${r.name} 角色理論 ${pct(numOrNull(r.roleTheory) ?? r.value)}（${r.games} 場）`);
+  return `🌱 ${board.title}（${board.period}，新人例外：看全部場次）：${parts.join('、')}`;
 }
 
 /** The overview fields the totals line reads; the two-stage sections are optional (older caches). */
@@ -526,9 +572,9 @@ export function overviewTotalsLine(o: OverviewTotals): string {
 
 /**
  * Full /排行 or digest text: optional header, the main board, extra sections
- * (the digest's "近 90 天" board and role titles — dropped from the back, one
- * at a time, while the text would exceed STATS_REPLY_MAX_CHARS), the totals
- * line, footer lines and the site link.
+ * (the digest's 進步榜, 角色王 and 新人榜 — dropped from the back, one at a time,
+ * while the text would exceed STATS_REPLY_MAX_CHARS), the totals line, footer
+ * lines and the site link.
  */
 export function formatLeaderboard(
   overview: OverviewTotals,
@@ -632,7 +678,7 @@ export function formatStatsHelp(platform: StatsPlatform): string {
   const lines = [
     '📖 阿瓦隆戰績指令',
     `${STATS_COMMAND_USAGE.player}\u3000個人戰績（名字可打一部分）`,
-    `${STATS_COMMAND_USAGE.leaderboard}\u3000超額勝率排行 Top 10`,
+    `${STATS_COMMAND_USAGE.leaderboard}\u3000角色理論勝率排行 Top 10（各人最近 100 場）`,
     `${STATS_COMMAND_USAGE.chemistry}\u3000兩人同隊默契`,
     `${STATS_COMMAND_USAGE.feedback}\u3000給管理者的建議或回報問題`,
   ];
