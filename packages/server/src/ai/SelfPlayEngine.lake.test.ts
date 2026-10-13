@@ -17,6 +17,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SelfPlayEngine } from './SelfPlayEngine';
 import { RandomAgent } from './RandomAgent';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING } from './AgentTuning';
+import { HUMAN_FRAME_RATE } from './LakePolicy';
+import { withSeededRandom } from './benchmark/agreement';
 import type { PlayerObservation, VoteRecord, QuestRecord } from './types';
 
 // 2026-10-12: the production default (`DEFAULT_AGENT_TUNING`) flips the good
@@ -30,14 +32,26 @@ import type { PlayerObservation, VoteRecord, QuestRecord } from './types';
 // export those variables as a temporary switch.
 //
 // 2026-10-13: `evilLakeHumanStrategy` (Edward's ruling: a red holder keeps
-// the lake on a visible teammate and declares them good) is an opt-in
-// switch — measured weaker as red in self-play, so not in the production
-// default. The evil-holder tests below pin the older evil branch with
-// `LEGACY` explicitly and add the opt-in behaviour (`HUMAN_STRATEGY`) next
-// to it. `LakePolicy.tuning.test.ts` covers the strategy itself.
+// the lake on a visible teammate and declares them good). First measured
+// −0.6pp as red and left off; the same day Edward decided to turn it on
+// anyway (「紅方新湖法先打開，變弱應該從其他地方調整修正」), so it is in
+// the production default. The evil-holder tests below pin the older evil
+// branch with `LEGACY` / `PREVIOUS_DEFAULT` explicitly and check the human
+// strategy (`HUMAN_STRATEGY`) next to it. Round 2 (same day) also put
+// `evilLakeFrameHumanRate` in the default: a blue target is then framed at
+// the human rate of the state (a seeded `Math.random` draw), so
+// `HUMAN_STRATEGY` pins the deterministic claim rule of 第 6 節 and the
+// production default is checked as a rate.
+// `LakePolicy.tuning.test.ts` covers the strategy itself.
 const LEGACY = { ...LEGACY_AGENT_TUNING };
 const PRODUCTION = { ...DEFAULT_AGENT_TUNING };
-const HUMAN_STRATEGY = { ...DEFAULT_AGENT_TUNING, evilLakeHumanStrategy: true };
+const PREVIOUS_DEFAULT = {
+  ...DEFAULT_AGENT_TUNING,
+  evilLakeHumanStrategy: false,
+  evilVouchFollowUp: false,
+  evilLakeFrameHumanRate: false,
+};
+const HUMAN_STRATEGY = { ...DEFAULT_AGENT_TUNING, evilLakeHumanStrategy: true, evilLakeFrameHumanRate: false };
 
 function makeObs(partial: Partial<PlayerObservation> & {
   allPlayerIds: string[];
@@ -246,7 +260,7 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     expect(target).toBe('P4');
     // Declare "good" on the Merlin-like opponent to disguise assassination intel.
     expect(engine.decideLakeAnnouncement('evil', 'P4', obs, 'good', LEGACY)).toBe('good');
-    // Opt-in human strategy (盡量湖隊友): a visible teammate is legal and
+    // Human strategy (盡量湖隊友, default since 2026-10-13): a visible teammate is legal and
     // another lake follows → lake the teammate, declare "good".
     const human = engine.pickLadyTarget('evil', obs, validTargets, HUMAN_STRATEGY);
     expect(['P3', 'P5']).toContain(human);
@@ -266,12 +280,23 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     });
     expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', LEGACY)).toBe('evil');
     // `evilLakeClaimAlwaysGood` is NOT in the production default (更像真人但紅方 −0.5pp，
-    // docs/ai/strength_benchmark.md), so the default still muddies; switched on it says "good".
-    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', PRODUCTION)).toBe('evil');
-    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', { ...PRODUCTION, evilLakeClaimAlwaysGood: true })).toBe('good');
-    // Opt-in human strategy (2026-10-13, not in the default): a blue with no
-    // shared failed mission (red not listening) gets the truthful "good".
+    // docs/ai/strength_benchmark.md); without the human strategy the old
+    // branch still muddies; switched on it says "good".
+    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', PREVIOUS_DEFAULT)).toBe('evil');
+    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', { ...PREVIOUS_DEFAULT, evilLakeClaimAlwaysGood: true })).toBe('good');
+    // Human strategy (2026-10-13, in the default since Edward's decision): a
+    // blue with no shared failed mission (red not listening) gets the
+    // truthful "good".
     expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', HUMAN_STRATEGY)).toBe('good');
+    // Production default (+ `evilLakeFrameHumanRate`, 2026-10-13 round 2):
+    // the same blue is framed at the human rate of this state (13.4%: no
+    // shared failed mission, red not listening), otherwise truthful.
+    let framed = 0;
+    for (let i = 0; i < 1000; i++) {
+      if (withSeededRandom(`claim${i}`, () => engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', PRODUCTION)) === 'evil') framed++;
+    }
+    expect(framed / 1000).toBeGreaterThan(HUMAN_FRAME_RATE.notSharedNotListening - 0.04);
+    expect(framed / 1000).toBeLessThan(HUMAN_FRAME_RATE.notSharedNotListening + 0.04);
   });
 
   it('evil holder with no pressured ally and no distinct opponent picks deterministically', () => {
@@ -290,7 +315,7 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     const target = engine.pickLadyTarget('evil', obs, validTargets, LEGACY);
     expect(['P2', 'P4', 'P5']).toContain(target);
     expect(target).not.toBe('P3'); // no pressure on ally → no wash
-    // Opt-in human strategy: the teammate is laked even without pressure (盡量湖隊友).
+    // Human strategy (default): the teammate is laked even without pressure (盡量湖隊友).
     expect(engine.pickLadyTarget('evil', obs, validTargets, HUMAN_STRATEGY)).toBe('P3');
   });
 });

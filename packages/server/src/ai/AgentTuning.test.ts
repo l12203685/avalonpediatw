@@ -85,14 +85,37 @@ describe('AgentTuning — flags', () => {
     expect(t.assassinModel).toBe(DEFAULT_AGENT_TUNING.assassinModel);
   });
 
-  it('evilLakeHumanStrategy (2026-10-13): opt-in (not in the default), flag, env var and description', () => {
-    // Weaker as red on fresh self-play seeds → not adopted (strength_benchmark.md 第 6 節).
-    expect(DEFAULT_AGENT_TUNING.evilLakeHumanStrategy).toBe(false);
+  it('evilLakeHumanStrategy (2026-10-13): on in the default (owner decision), off in legacy, flag, env var and description', () => {
+    // Measured −0.6pp as red, but Edward decided on 2026-10-13 to turn it on
+    // anyway (先像真人，變弱從其他地方補) — strength_benchmark.md 第 6、8 節.
+    expect(DEFAULT_AGENT_TUNING.evilLakeHumanStrategy).toBe(true);
+    expect(LEGACY_AGENT_TUNING.evilLakeHumanStrategy).toBe(false);
     expect(parseTuningFlag('evilLakeHumanStrategy')).toEqual({ evilLakeHumanStrategy: true });
     expect(parseTuningFlag('evilLakeHumanStrategy=0')).toEqual({ evilLakeHumanStrategy: false });
     expect(AGENT_TUNING_ENV.evilLakeHumanStrategy).toBe('AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY');
     expect(tuningFromEnv({ AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY: 'on' })).toEqual({ evilLakeHumanStrategy: true });
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, evilLakeHumanStrategy: true })).toBe('evilLakeHumanStrategy');
+  });
+
+  it('2026-10-13 round-2 red switches: default on/off, flags, env vars, off in legacy', () => {
+    // strength_benchmark.md 第 8 節: the vouch follow-up is adopted (window-follow version,
+    // +0.54pp over the lake strategy alone, team / R3+ votes more human-like); the human framing rate is on
+    // provisionally (strength unchanged, frequency closer to humans but lower claim
+    // agreement — Edward to choose); the Oberon teammate search is not adopted
+    // (lakes red more often than humans and is slightly weaker).
+    const round2 = [
+      ['evilVouchFollowUp', 'AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP', true],
+      ['evilLakeFrameHumanRate', 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE', true],
+      ['oberonLakeSeeksTeammates', 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES', false],
+    ] as const;
+    for (const [key, env, inDefault] of round2) {
+      expect(DEFAULT_AGENT_TUNING[key]).toBe(inDefault);
+      expect(LEGACY_AGENT_TUNING[key]).toBe(false);
+      expect(parseTuningFlag(key)).toEqual({ [key]: true });
+      expect(AGENT_TUNING_ENV[key]).toBe(env);
+      expect(tuningFromEnv({ [env]: '0' })).toEqual({ [key]: false });
+      expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, [key]: true })).toBe(key);
+    }
   });
 
   it('resolveAgentTuning layers overrides on top of a base', () => {

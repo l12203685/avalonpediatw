@@ -109,7 +109,7 @@ const USE_PYRAMID_BASELINE = true;
  *
  * Logged via console-debug for telemetry; production logs filtered.
  */
-function mayBreakHardRules(obs: PlayerObservation): boolean {
+export function mayBreakHardRules(obs: PlayerObservation): boolean {
   if (obs.myTeam !== 'evil') return false;
   // Oberon never coordinates → cannot strategically break rules.
   if ((obs.myRole as string) === 'oberon') return false;

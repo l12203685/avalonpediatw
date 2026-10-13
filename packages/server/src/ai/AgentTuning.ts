@@ -13,7 +13,8 @@
  *                                   一方已拿兩局，所以實際只有 R1 規則生效）。
  *   - `assassinModel`              刺殺改用牌譜訓練的條件邏輯回歸
  *                                   （`assassin/AssassinModel.ts`）。
- *   - `evilLakeHumanStrategy`      （2026-10-13，**預設關**）紅方持湖「盡量
+ *   - `evilLakeHumanStrategy`      （2026-10-13，**預設開**，Edward 當日裁定
+ *                                   「先像真人，再從策略上提高勝率」）紅方持湖「盡量
  *                                   湖隊友並宣好」的真人策略：有隊友可湖就湖
  *                                   隊友並宣好（自己帶隊時最少把他拿掉的那位
  *                                   優先）；最後一次湖只在隊友全都毫無嫌疑時
@@ -28,6 +29,15 @@
  *                                   `evilLakeClaimAlwaysGood` 若也打開則以
  *                                   「一律宣好」為準。細節見
  *                                   `LakePolicy.pickEvilLakeTargetHuman`。
+ *   - 2026-10-13 第二輪（湖法打開後從其他紅方決策補強，見
+ *     strength_benchmark.md 第 8 節；三個都是紅方專用、legacy 全關）：
+ *     `evilVouchFollowUp`（**預設開**；紅方持湖者言行一致：自己宣藍的人
+ *     放進自己派的隊、宣紅的不放；不在隊上時漏掉宣藍者的隊就反對，
+ *     `RedLakeFollowUp.ts`）、`evilLakeFrameHumanRate`（**預設開**，暫定；
+ *     嫁禍頻率照真人比例，但一致性基準的湖宣告分數下降，待 Edward 選）、
+ *     `oberonLakeSeeksTeammates`（預設關；奧伯倫持湖找隊友，比真人更常
+ *     湖到紅方而且略弱，不採用）。前兩個只在 `evilLakeHumanStrategy`
+ *     打開時有作用。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -62,6 +72,33 @@ export interface AgentTuning {
    * 細節見 `LakePolicy.pickEvilLakeTargetHuman` / `decideEvilLakeClaimHuman`。
    */
   evilLakeHumanStrategy: boolean;
+  /**
+   * 紅方持湖後言行一致（2026-10-13 第二輪，strength_benchmark.md 第 8 節）：
+   * 自己宣藍的人一定放進自己派的隊、宣紅的人不放；自己不在隊上時，漏掉
+   * 自己宣藍的人或放了宣紅的人的隊就反對（強制局例外；紅方聽牌 / R5 收尾
+   * 的決勝窗口也照做，真人在那時一樣守信；baseline 的 硬1 / 硬2 在那時
+   * 依 Q11 不管）。派隊是在原本的候選隊伍裡篩選「守信」的
+   * 隊，原本選的隊已經守信就不變；沒有任何候選守信才圍繞被宣的人重組。
+   * 只在 `evilLakeHumanStrategy` 打開時有作用
+   * （`RedLakeFollowUp.evilVouchFollowUpActive`），所以
+   * `AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=0` 一個變數就退回第二輪之前
+   * 的舊預設。細節見 `RedLakeFollowUp.ts`。
+   */
+  evilVouchFollowUp: boolean;
+  /**
+   * 紅方湖宣紅（嫁禍）的頻率改成真人的比例（2026-10-13 第二輪）：湖目標
+   * 不再為了嫁禍去找一起出過失敗任務的人，湖到藍方時依情境（同出過失敗
+   * 任務 × 紅方聽牌）照牌譜的比例宣紅（`LakePolicy.HUMAN_FRAME_RATE`），
+   * 其餘說實話。只在 `evilLakeHumanStrategy` 打開時有作用。
+   */
+  evilLakeFrameHumanRate: boolean;
+  /**
+   * 奧伯倫持湖時找隊友（2026-10-13 第二輪）：湖「不是自己出的失敗牌」最多
+   * 的人（`LakePolicy.oberonTeammateEvidence`），湖到紅方就宣好掩護、湖留
+   * 在紅方；原本走藍方的背書順序，湖到紅方的比例比亂湖還低。只在
+   * `evilLakeHumanStrategy` 打開時有作用。
+   */
+  oberonLakeSeeksTeammates: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -74,6 +111,9 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'humanQuestCardRules',
   'assassinModel',
   'evilLakeHumanStrategy',
+  'evilVouchFollowUp',
+  'evilLakeFrameHumanRate',
+  'oberonLakeSeeksTeammates',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -85,11 +125,14 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   humanQuestCardRules: false,
   assassinModel: false,
   evilLakeHumanStrategy: false,
+  evilVouchFollowUp: false,
+  evilLakeFrameHumanRate: false,
+  oberonLakeSeeksTeammates: false,
 });
 
 /**
  * 正式預設（2026-10-12 採用，docs/ai/strength_benchmark.md 第 2 節；
- * 2026-10-13 量過 `evilLakeHumanStrategy` 但不採用，第 6 節）。
+ * 2026-10-13 `evilLakeHumanStrategy` 依 Edward 裁定打開，第 6、8 節）。
  * 採用規則（2026-10-12 事前版）：一致性基準更像真人、且自我對打合計勝率
  * 95% 區間下界 ≥ 48%；整合時改依 Edward 原文「更像真人，而且不能讓它
  * 變弱」：任一立場配對差的 95% 區間整個落在 0 以下就算變弱、不採用。
@@ -113,8 +156,29 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     但自我對打紅方立場變弱：選定版本用的 seed 20261012 是 −0.4pp
  *     [−1.0pp, +0.1pp]，換新種子重驗 seed 99 −1.0pp [−1.6pp, −0.4pp]、
  *     seed 4242 −0.8pp [−1.4pp, −0.3pp]（區間整個在 0 以下），五個種子
- *     （19000 組）合併 −0.6pp [−0.9pp, −0.3pp] → **不採用**（預設關，可用
- *     AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=1 打開）。
+ *     （19000 組）合併 −0.6pp [−0.9pp, −0.3pp]，依規則原本不採用。
+ *     **2026-10-13 Edward 裁定**（原文）：「紅方新湖法先打開 變弱應該從其他
+ *     地方調整修正 (先像真人 再從策略上提高勝率)」→ 預設打開（legacy 仍
+ *     關；`AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=0` 可關掉），變弱的部分
+ *     改由其他紅方決策補回（strength_benchmark.md 第 8 節）。
+ *   - 2026-10-13 第二輪（strength_benchmark.md 第 8 節；對照組 = 上面那組
+ *     不含新湖法的舊預設；seed 31337 選版本、8080 / 2718 確認）：變弱幾乎
+ *     全部來自「湖留在紅方」× 好人機器人的硬3 規則（藍方持湖者被誤判的
+ *     機會變少），不是紅方宣告本身。數字是同日審查修正後重跑的。
+ *     `evilVouchFollowUp` 採用，審查修正後改成「決勝窗口也照做」（在選
+ *     版本的種子上比較強、也比較像真人，用沒用過的 16180 / 14142 確認）：
+ *     含 `evilLakeFrameHumanRate` 對「只開新湖法」三個種子（31337 +
+ *     16180 + 14142）合併 +0.54pp [+0.25pp, +0.83pp]；R3+ 投票一致性
+ *     ED 63.7→64.1、Sin 65.2→65.9、top 61.9→62.7。`evilLakeFrameHumanRate`
+ *     暫時打開：強度不變（−0.03pp [−0.20pp, +0.14pp]），嫁禍頻率
+ *     65.6%→29.7%（真人 25.9%）比較像真人，但一致性基準的紅方湖宣告比
+ *     只開新湖法低 4.2–5.5 點，兩種量法相反，待 Edward 選。新預設對舊
+ *     預設：三個種子合併 −0.31pp [−0.68pp, +0.06pp]（區間含 0），但本線
+ *     五個種子合併 −0.42pp [−0.70pp, −0.13pp]（只開新湖法 −1.02pp）：
+ *     補回約六成，用全部資料看**仍算變弱**；依 Edward 裁定新湖法照樣
+ *     打開，剩下的差距與待決事項見第 8.6 節。這裡的採用依「對只開新湖法
+ *     不變弱」，不是原定的「對舊預設不變弱」，也寫在第 8.6 節。
+ *     `oberonLakeSeeksTeammates` 不採用。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -129,7 +193,10 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLakeTargetMostSuspicious: true,
   humanQuestCardRules: true,
   assassinModel: true,
-  evilLakeHumanStrategy: false,
+  evilLakeHumanStrategy: true,
+  evilVouchFollowUp: true,
+  evilLakeFrameHumanRate: true,
+  oberonLakeSeeksTeammates: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -141,6 +208,9 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   humanQuestCardRules: 'AVALON_TUNING_HUMAN_QUEST_CARDS',
   assassinModel: 'AVALON_TUNING_ASSASSIN_MODEL',
   evilLakeHumanStrategy: 'AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY',
+  evilVouchFollowUp: 'AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP',
+  evilLakeFrameHumanRate: 'AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE',
+  oberonLakeSeeksTeammates: 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES',
 });
 
 function parseBool(raw: string): boolean | undefined {
