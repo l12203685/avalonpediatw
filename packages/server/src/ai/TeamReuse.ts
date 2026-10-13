@@ -28,13 +28,29 @@
  * reference — the team itself, the team with self swapped in for one
  * member, the team grown by one seat, one-seat swaps — are added to the
  * usual candidate set (drawn from the same role-filtered pool), so the
- * suspicion-based score still decides which seat goes; the bonus is a
- * prior, not a copy. Safety: no bonus for a team that breaks 硬1 / 硬2 of
- * any member's lake declaration (the leader's own included — so no new 硬3
- * exposure), and for a good leader no bonus for a team holding a red it
- * can see (`knownEvils`) or a lake-chain / 硬3 violator; the leader is
- * always on its own team (the ForwardAgent invariant), red holders still
- * go through `evilVouchFollowUp`.
+ * suspicion-based score still decides which seat makes room (the agreement
+ * benchmark's "default" baseline always drops the last-listed one). Safety:
+ * no bonus for a team that breaks 硬1 / 硬2 of any member's lake
+ * declaration (the leader's own included — so no new 硬3 exposure), and for
+ * a good leader no bonus for a team holding a red it can see (`knownEvils`)
+ * or a lake-chain / 硬3 violator; the leader is always on its own team (the
+ * ForwardAgent invariant: humans who re-propose a successful team without
+ * themselves cannot be matched), red holders still go through
+ * `evilVouchFollowUp`. R1 is unchanged (humans hardly reuse there).
+ *
+ * Weights (`DEFAULT_TEAM_REUSE_OPTIONS`) were fitted on the logs only (70%
+ * of the games, fnv1a split; the other 30% agree as well). Good leaders:
+ * 3 / 0.45 / 0.6 (success / reject / mission); red leaders 3× that, because
+ * their score prefers a visible teammate on the team while human red
+ * leaders keep the successful team as often as blue ones (71.1% vs
+ * 76.1%) — after a successful mission the prior therefore dominates and the
+ * bots keep that team. Agreement R2+ (exact / Jaccard) ED 3.5→12.2 /
+ * 39.2→49.2, Sin 4.4→22.8 / 42.5→57.1, top 3.0→15.5 / 40.2→52.5,
+ * population 3.8→16.2 / 41.2→53.2 (every other decision unchanged).
+ * Self-play against the production default (selection seed 44444,
+ * confirmation 55555 / 66666, pooled): red +2.88pp [+2.41pp, +3.35pp],
+ * blue +4.39pp [+3.80pp, +4.98pp]. In DEFAULT_AGENT_TUNING since
+ * 2026-10-13 round 3.
  *
  * Pure functions of the observation; no `Math.random`.
  */
@@ -73,8 +89,8 @@ export interface TeamReuseOptions {
 }
 
 export const DEFAULT_TEAM_REUSE_OPTIONS: Readonly<TeamReuseOptions> = Object.freeze({
-  good: Object.freeze({ success: 1, reject: 0.45, mission: 0.6, r1: 0 }),
-  evil: Object.freeze({ success: 1, reject: 0.45, mission: 0.6, r1: 0 }),
+  good: Object.freeze({ success: 3, reject: 0.45, mission: 0.6, r1: 0 }),
+  evil: Object.freeze({ success: 9, reject: 1.35, mission: 1.8, r1: 0 }),
 });
 
 let activeTeamReuseOptions: Readonly<TeamReuseOptions> = DEFAULT_TEAM_REUSE_OPTIONS;

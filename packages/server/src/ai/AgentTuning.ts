@@ -49,6 +49,13 @@
  *                                   打開時優先於 `goodLakeTargetMostSuspicious`
  *                                   （模型找不到一致的組合時才退回它）；
  *                                   梅林不湖看得到的紅、派西不湖兩拇指照舊。
+ *   - `teamReuse`                  （2026-10-13 第三輪，**預設開**）派隊沿用
+ *                                   前一隊：ForwardAgent 從 R2 起不再懲罰重提
+ *                                   被否決的隊，改成「保留參考隊成員比例」
+ *                                   加分（上一個成功任務的隊、本回合先前的
+ *                                   提議），沿用的隊加進候選；硬1 / 硬2 違規、
+ *                                   好人隊長的隊有看得到的紅或湖鏈違規者不加
+ *                                   分；R1 不變。`TeamReuse.ts`。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -121,7 +128,7 @@ export interface AgentTuning {
    * 伍成員的比例」加分（參考 = 上一個成功任務的隊、本回合先前的提議），
    * 並把沿用參考隊的候選（原隊、換自己進去、加一人、換一人）加進候選
    * 集合；硬1 / 硬2 違規的隊不加分，好人隊長的隊有看得到的紅或湖鏈違規者
-   * 也不加分。細節見 `TeamReuse.ts`。
+   * 也不加分。細節見 `TeamReuse.ts`。2026-10-13 採用（預設開）。
    */
   teamReuse: boolean;
 }
@@ -223,6 +230,13 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     −0.3pp [−0.6pp, +0.1pp]，區間都含 0 → 依規則不算變弱 → **採用**
  *     （整合時打開；`goodLakeTargetMostSuspicious` 保留，只當模型找不到
  *     一致組合時的退路；AVALON_TUNING_GOOD_LAKE_INFO_MAX=0 可關掉）。
+ *   - `teamReuse`（2026-10-13 第三輪，strength_benchmark.md 第 11 節）：對照
+ *     = 整合後的正式預設（第 9 節）。派隊一致性 R2+（完全相同 / Jaccard）
+ *     ED 3.5→12.2 / 39.2→49.2、Sin 4.4→22.8 / 42.5→57.1、top 3.0→15.5 /
+ *     40.2→52.5、population 3.8→16.2 / 41.2→53.2，其他決策不變；自我對打
+ *     選版本種子 44444 + 確認種子 55555 / 66666 合併：紅方 +2.88pp [+2.41pp,
+ *     +3.35pp]、藍方 +4.39pp [+3.80pp, +4.98pp]（藍方勝率約 6.8%→10.8–11.8%）
+ *     → **採用**（AVALON_TUNING_TEAM_REUSE=0 可關掉）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -242,7 +256,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   evilLakeFrameHumanRate: true,
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: true,
-  teamReuse: false,
+  teamReuse: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */

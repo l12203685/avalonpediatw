@@ -120,7 +120,7 @@ describe('AgentTuning — flags', () => {
 
   it('2026-10-13 round-3 teamReuse: default, flag, env var, off in legacy', () => {
     // strength_benchmark.md 第 11 節.
-    expect(DEFAULT_AGENT_TUNING.teamReuse).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.teamReuse).toBe(true);
     expect(LEGACY_AGENT_TUNING.teamReuse).toBe(false);
     expect(parseTuningFlag('teamReuse')).toEqual({ teamReuse: true });
     expect(AGENT_TUNING_ENV.teamReuse).toBe('AVALON_TUNING_TEAM_REUSE');
