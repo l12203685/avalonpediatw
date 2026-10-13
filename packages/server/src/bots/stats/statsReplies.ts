@@ -26,7 +26,7 @@ import type {
   PlaystylePlayerData,
   StrengthPlayerData,
 } from '../../services/sheetsAnalysis';
-import { isTheoryBoard, theoryLastWindows } from '../../services/sheetsAnalysis';
+import { isTheoryBoard, playerNameKey, theoryLastWindows } from '../../services/sheetsAnalysis';
 
 // ─── Constants ───────────────────────────────────────────────────────────
 
@@ -114,16 +114,23 @@ export function clampReply(text: string, max: number = STATS_REPLY_MAX_CHARS): s
 
 // ─── Name matching ───────────────────────────────────────────────────────
 
-/** NFKC folds full-width letters (ＨＡＯ → HAO); then case-fold. */
+/**
+ * A name as the stats compare it: case, full-/half-width (ＨＡＯ → hao), zero-width
+ * characters and extra spaces do not matter (sheetsAnalysis.playerNameKey, the same rule
+ * generate_cache.py merges players by).
+ */
 export function normalizeName(s: string): string {
-  return (s ?? '').normalize('NFKC').trim().toLowerCase();
+  return playerNameKey(s);
 }
 
 export type NameMatch =
   | {
       kind: 'found';
       name: string;
-      /** Other names that differ only by case (the sheet has e.g. Sin / SIN / sin). */
+      /**
+       * Other rows of the same player spelled differently (Sin / SIN / sin). Only a cache
+       * written before generate_cache.py merged such names has them.
+       */
       caseVariants: string[];
     }
   | { kind: 'ambiguous'; query: string; candidates: string[]; total: number }
@@ -134,7 +141,9 @@ export type NameMatch =
  * games first; candidate lists keep that order).
  *
  *   1. exact match
- *   2. case-insensitive (NFKC) match — one hit wins, several are ambiguous
+ *   2. the same name ignoring case / width (normalizeName) — the first such name wins
+ *      (an old cache may still list one player as Sin / SIN / sin: the one with the
+ *      most games when `names` is ordered so; the others are its caseVariants)
  *   3. substring match — one hit wins, several are ambiguous
  *   4. otherwise none
  */
@@ -151,15 +160,21 @@ export function matchPlayerName(query: string, names: readonly string[]): NameMa
   }
 
   const ci = names.filter((n) => normalizeName(n) === nq);
-  if (ci.length === 1) return { kind: 'found', name: ci[0], caseVariants: [] };
-  if (ci.length > 1) {
-    return { kind: 'ambiguous', query: q, candidates: ci.slice(0, MAX_NAME_CANDIDATES), total: ci.length };
-  }
+  if (ci.length > 0) return { kind: 'found', name: ci[0], caseVariants: ci.slice(1) };
 
+  // One candidate per player: other spellings of a listed player are not separate candidates.
   const sub = names.filter((n) => normalizeName(n).includes(nq));
-  if (sub.length === 1) return { kind: 'found', name: sub[0], caseVariants: [] };
-  if (sub.length > 1) {
-    return { kind: 'ambiguous', query: q, candidates: sub.slice(0, MAX_NAME_CANDIDATES), total: sub.length };
+  const seen = new Set<string>();
+  const players: string[] = [];
+  for (const n of sub) {
+    const key = normalizeName(n);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    players.push(n);
+  }
+  if (players.length === 1) return { kind: 'found', name: players[0], caseVariants: sameCase(players[0]) };
+  if (players.length > 1) {
+    return { kind: 'ambiguous', query: q, candidates: players.slice(0, MAX_NAME_CANDIDATES), total: players.length };
   }
   return { kind: 'none', query: q };
 }
@@ -197,7 +212,7 @@ export interface PlayerCardInput {
   archetype?: { data: ArchetypePlayerData; axisLabels?: Record<string, unknown> | null } | null;
   strength?: StrengthPlayerData | null;
   playstyle?: { data: PlaystylePlayerData; labels: PlaystyleData['labels'] } | null;
-  /** Names that differ only by case, shown as a hint. */
+  /** Other rows of the same player spelled differently (old caches only), shown as a hint. */
   caseVariants?: string[];
   /** leaderboard.config.theoryMinCellGames of the cache (for the footnote); default 3. */
   minCellGames?: number;
@@ -343,7 +358,7 @@ export function formatPlayerCard(input: PlayerCardInput): string {
     if (extra) lines.push(extra);
   }
   if (input.caseVariants && input.caseVariants.length > 0) {
-    lines.push(`ℹ️ 另有大小寫不同的玩家：${input.caseVariants.slice(0, MAX_NAME_CANDIDATES).join('、')}`);
+    lines.push(`ℹ️ 大小寫不同的寫法目前另列：${input.caseVariants.slice(0, MAX_NAME_CANDIDATES).join('、')}（同一人，戰績更新後會合併）`);
   }
   if (theory) lines.push(theoryFootnote(input.minCellGames ?? THEORY_MIN_CELL_GAMES));
   lines.push(SITE_FOOTER);

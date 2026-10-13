@@ -12,7 +12,7 @@
 import { getAdminFirestore } from './firebase';
 import { computeNewElo, expectedScore } from './EloRanking';
 import type { GameRecord, GamePlayerRecord } from './GameHistoryRepository';
-import { getAllPlayerStats, isSheetsReady } from './sheetsAnalysis';
+import { getAllPlayerStats, isSheetsReady, playerNameKey } from './sheetsAnalysis';
 import type { PlayerStats } from './sheetsAnalysis';
 
 // ---------------------------------------------------------------------------
@@ -427,8 +427,13 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
     try {
       const sheetsPlayers = await getAllPlayerStats();
       const eloMap = computeEloFromSheets(sheetsPlayers);
-      const entry = eloMap.get(playerId);
-      if (entry) {
+      // Sheets names ignore case / width (playerNameKey): "sin" finds the cache's "Sin".
+      const wanted = playerNameKey(playerId);
+      const sheetName = eloMap.has(playerId)
+        ? playerId
+        : [...eloMap.keys()].find((name) => playerNameKey(name) === wanted);
+      const entry = sheetName === undefined ? undefined : eloMap.get(sheetName);
+      if (sheetName !== undefined && entry) {
         const { elo, stats } = entry;
         const totalWins = Math.round(stats.totalGames * (stats.winRate / 100));
         const totalLosses = stats.totalGames - totalWins;
@@ -443,7 +448,7 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
         let recent: RecentGame[] = [];
         try {
           const players = await getAggregated();
-          const lower = playerId.toLowerCase();
+          const lower = sheetName.toLowerCase();
           for (const [, candidate] of players) {
             if (candidate.displayName.toLowerCase() === lower) {
               recent = candidate.gameHistory
@@ -467,8 +472,8 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
         }
 
         return {
-          id: playerId,
-          display_name: playerId,
+          id: sheetName,
+          display_name: sheetName,
           photo_url: null,
           provider: 'sheets',
           elo_rating: elo,
@@ -550,11 +555,12 @@ export async function findPlayerByName(name: string): Promise<string | null> {
   if (isSheetsReady()) {
     try {
       const sheetsPlayers = await getAllPlayerStats();
+      const wanted = playerNameKey(name);
       for (const sp of sheetsPlayers) {
-        if (sp.name.toLowerCase() === lower) return sp.name;
+        if (playerNameKey(sp.name) === wanted) return sp.name;
       }
       for (const sp of sheetsPlayers) {
-        if (sp.name.toLowerCase().includes(lower)) return sp.name;
+        if (wanted && playerNameKey(sp.name).includes(wanted)) return sp.name;
       }
     } catch {
       // Sheets not available

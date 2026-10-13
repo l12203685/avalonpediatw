@@ -779,6 +779,84 @@ function byName<T>(record: Record<string, T>, name: string): T | undefined {
   return Object.prototype.hasOwnProperty.call(record, name) ? record[name] : undefined;
 }
 
+// ---------------------------------------------------------------------------
+// Player names: case / width do not matter (Edward 2026-10-13)
+// ---------------------------------------------------------------------------
+
+// An alternation, not a character class: U+200D in a class trips no-misleading-character-class.
+const INVISIBLE_CHARS = /\u200b|\u200c|\u200d|\u2060|\ufeff/g;
+
+/**
+ * Who a player is, as generate_cache.py player_name_key decides it: NFKC (full-width
+ * ＡＢＣ / １２３ → ASCII), zero-width characters dropped, whitespace trimmed and
+ * collapsed, lower-cased. "Sin", "SIN", " sin " and "ｓｉｎ" are one player; the cache
+ * (since the 2026-10-13 refresh) has one row per player under the most-used spelling.
+ */
+export function playerNameKey(name: string): string {
+  return (name ?? '')
+    .normalize('NFKC')
+    .replace(INVISIBLE_CHARS, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+/** Keys of a name-keyed cache map grouped by playerNameKey (built once per map; the cache is static). */
+const playerKeyIndexes = new WeakMap<object, Map<string, string[]>>();
+
+function playerKeyIndex(record: Record<string, unknown>): Map<string, string[]> {
+  let index = playerKeyIndexes.get(record);
+  if (!index) {
+    index = new Map();
+    for (const key of Object.keys(record)) {
+      const k = playerNameKey(key);
+      const spellings = index.get(k);
+      if (spellings) spellings.push(key);
+      else index.set(k, [key]);
+    }
+    playerKeyIndexes.set(record, index);
+  }
+  return index;
+}
+
+/**
+ * The key of `record` that names this player: `name` itself when present, else the key that
+ * differs from it only by case / width. A cache written before the names were merged may hold
+ * several such keys (Sin / SIN / sin): `rank` (e.g. games played) picks one, else the first.
+ */
+export function findPlayerKey<T>(
+  record: Record<string, T> | null | undefined,
+  name: string,
+  rank?: (key: string) => number,
+): string | undefined {
+  if (!record || typeof name !== 'string') return undefined;
+  if (Object.prototype.hasOwnProperty.call(record, name)) return name;
+  const keys = playerKeyIndex(record).get(playerNameKey(name));
+  if (!keys || keys.length === 0) return undefined;
+  if (!rank || keys.length === 1) return keys[0];
+  return keys.reduce((best, k) => (rank(k) > rank(best) ? k : best));
+}
+
+/** playerDetails key of a typed name (case / width ignored; most games first among old split rows). */
+function playerDetailsKey(c: AnalysisCache, name: string): string | undefined {
+  const details = c.playerDetails;
+  return findPlayerKey(details, name, (k) => details[k]?.player?.totalGames ?? 0);
+}
+
+/** A per-player section row (archetype / strength / playstyle) of the player `name` resolves to. */
+function perPlayerRow<T>(
+  c: AnalysisCache,
+  perPlayer: Record<string, T>,
+  name: string,
+): { name: string; data: T; detailKey: string | undefined } | null {
+  const detailKey = playerDetailsKey(c, name);
+  const key = findPlayerKey(perPlayer, detailKey ?? name);
+  if (key === undefined) return null;
+  const data = byName(perPlayer, key);
+  return data === undefined ? null : { name: detailKey ?? key, data, detailKey };
+}
+
 /**
  * Round to one decimal with ties to even, exactly like Python's round() in
  * generate_cache.py (rnd1): 56.25 → 56.2, 56.35 → 56.4. Math.round would give
@@ -919,9 +997,11 @@ export async function getAllPlayerStats(): Promise<PlayerStats[]> {
   return c.players.players.map((p) => withFinalFields(p, roleFinal));
 }
 
+/** One player's stats; `name` is matched ignoring case / width (playerNameKey). */
 export async function getPlayerByName(name: string): Promise<PlayerStats | null> {
   const c = loadCache();
-  const detail = byName(c.playerDetails, name);
+  const key = playerDetailsKey(c, name);
+  const detail = key === undefined ? undefined : byName(c.playerDetails, key);
   return detail ? withFinalFields(detail.player, c.overview?.roleFinalWinRates) : null;
 }
 
@@ -982,7 +1062,8 @@ export async function getFeatureStudies(): Promise<FeatureStudiesData | null> {
 // ---------------------------------------------------------------------------
 
 /**
- * Lookup archetype data for a single player by analysis-cache key (display name).
+ * Lookup archetype data for a single player by analysis-cache key (display name; case / width
+ * ignored, see playerNameKey — `player.name` is the cache's spelling).
  * Returns null when the player isn't tracked in the cache (e.g. brand-new
  * accounts with zero games). Players with N<10 games appear in the cache but
  * with `hasData: false` so the UI can render "資料不足".
@@ -996,12 +1077,13 @@ export async function getPlayerArchetype(name: string): Promise<{
 } | null> {
   const c = loadCache();
   if (!c.archetype) return null;
-  const data = byName(c.archetype.perPlayer, name);
-  if (!data) return null;
-  const detail = byName(c.playerDetails, name);
+  const found = perPlayerRow(c, c.archetype.perPlayer, name);
+  if (!found) return null;
+  const { data } = found;
+  const detail = found.detailKey === undefined ? undefined : byName(c.playerDetails, found.detailKey);
   return {
     player: {
-      name,
+      name: found.name,
       totalGames: detail ? detail.player.totalGames : data.sampleSize,
     },
     data,
@@ -1023,12 +1105,13 @@ export async function getPlayerStrength(name: string): Promise<{
 } | null> {
   const c = loadCache();
   if (!c.strength) return null;
-  const data = byName(c.strength.perPlayer, name);
-  if (!data) return null;
-  const detail = byName(c.playerDetails, name);
+  const found = perPlayerRow(c, c.strength.perPlayer, name);
+  if (!found) return null;
+  const { data } = found;
+  const detail = found.detailKey === undefined ? undefined : byName(c.playerDetails, found.detailKey);
   return {
     player: {
-      name,
+      name: found.name,
       totalGames: detail ? detail.player.totalGames : 0,
     },
     data,
@@ -1050,12 +1133,13 @@ export async function getPlayerPlaystyle(name: string): Promise<{
 } | null> {
   const c = loadCache();
   if (!c.playstyle) return null;
-  const data = byName(c.playstyle.perPlayer, name);
-  if (!data) return null;
-  const detail = byName(c.playerDetails, name);
+  const found = perPlayerRow(c, c.playstyle.perPlayer, name);
+  if (!found) return null;
+  const { data } = found;
+  const detail = found.detailKey === undefined ? undefined : byName(c.playerDetails, found.detailKey);
   return {
     player: {
-      name,
+      name: found.name,
       totalGames: detail ? detail.player.totalGames : data.sampleSize,
     },
     data,

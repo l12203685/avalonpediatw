@@ -31,6 +31,7 @@ import {
   leaderboardLines,
   lookupPair,
   matchPlayerName,
+  normalizeName,
   newcomersLine,
   overviewTotalsLine,
   roleTitlesLine,
@@ -111,12 +112,20 @@ describe('matchPlayerName', () => {
     expect(matchPlayerName('ａｌａｎ', NAMES)).toEqual({ kind: 'found', name: 'Alan', caseVariants: [] });
   });
 
-  it('several case-insensitive hits are ambiguous (listed in the given order)', () => {
-    expect(matchPlayerName('SIn', NAMES)).toEqual({
-      kind: 'ambiguous',
-      query: 'SIn',
-      candidates: ['Sin', 'SIN', 'sin'],
-      total: 3,
+  it('several spellings of one player (an old cache): the first in the given order wins, the rest are variants', () => {
+    expect(matchPlayerName('SIn', NAMES)).toEqual({ kind: 'found', name: 'Sin', caseVariants: ['SIN', 'sin'] });
+  });
+
+  it('case, width, stray spaces and zero-width characters never matter (made-up names)', () => {
+    const names = ['Nova', 'Kite', '小米'];
+    for (const typed of ['NOVA', 'nova', ' nOvA ', 'ｎｏｖａ', 'ＮＯＶＡ', 'No\u200bva']) {
+      expect(matchPlayerName(typed, names)).toEqual({ kind: 'found', name: 'Nova', caseVariants: [] });
+    }
+    expect(normalizeName('Ｔｅｄ　 Ｂｅａｒ')).toBe('ted bear');
+    // A substring hit on two spellings of one player is that player, not a choice between "two".
+    expect(matchPlayerName('ov', ['Nova', 'NOVA', 'Kite'])).toEqual({ kind: 'found', name: 'Nova', caseVariants: ['NOVA'] });
+    expect(matchPlayerName('o', ['Nova', 'NOVA', 'Kite', 'Orca'])).toEqual({
+      kind: 'ambiguous', query: 'o', candidates: ['Nova', 'Orca'], total: 2,
     });
   });
 
@@ -244,7 +253,7 @@ describe('formatPlayerCard', () => {
     expect(text).toContain('擅長角色：刺客 62.3%（106 場）、梅林 65.6%（96 場）；較弱：莫甘娜 50.6%（89 場）');
     expect(text).toContain('誠實度 83（PR37）');
     expect(text).toContain('刺客目標座位偏好 5、2、6 號');
-    expect(text).toContain('另有大小寫不同的玩家：Hao、hao');
+    expect(text).toContain('大小寫不同的寫法目前另列：Hao、hao（同一人，戰績更新後會合併）');
     expect(lines[lines.length - 2]).toBe(theoryFootnote(3));
     expect(lines[lines.length - 1]).toContain(STATS_SITE_URL);
   });
@@ -608,7 +617,7 @@ describe('parseStatsCommand (LINE)', () => {
     expect(parseStatsCommand(text)).toBeNull();
   });
 
-  it('keeps the case of the name (Sin / SIN are different players)', () => {
+  it('passes the name on as typed (matching then ignores case)', () => {
     expect(parseStatsCommand('/戰績 SIN')).toEqual({ kind: 'player', query: 'SIN' });
   });
 });

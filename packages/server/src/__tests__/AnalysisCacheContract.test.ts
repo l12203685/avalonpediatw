@@ -41,7 +41,7 @@ vi.mock('../middleware/rateLimit', async (importOriginal) => {
 
 import { analysisRouter } from '../routes/analysis';
 import { apiRouter } from '../routes/api';
-import { rnd1, withFinalFields } from '../services/sheetsAnalysis';
+import { findPlayerKey, playerNameKey, rnd1, withFinalFields } from '../services/sheetsAnalysis';
 import type { PlayerStats } from '../services/sheetsAnalysis';
 
 const CACHE_PATH = path.resolve(__dirname, '..', '..', 'analysis_cache.json');
@@ -716,6 +716,38 @@ describe('analysis_cache.json → web contract', () => {
     expect(p).toEqual([]);
   });
 
+  it('every per-player route ignores letter case / width (names derived from the cache, none hard-coded)', async () => {
+    // Swap the case of ASCII letters and widen them (A → ａ, b → Ｂ): another spelling of the same player.
+    const retype = (name: string): string =>
+      [...name].map((ch) => {
+        if (!/[A-Za-z]/.test(ch)) return ch;
+        const swapped = ch === ch.toUpperCase() ? ch.toLowerCase() : ch.toUpperCase();
+        return String.fromCharCode(swapped.charCodeAt(0) + 0xfee0);
+      }).join('');
+    const games = new Map(committedCache.players.players.map((x) => [x.name, x.totalGames]));
+    const p: Problems = [];
+    let tried = 0;
+    for (const name of playerNames) {
+      const typed = retype(name);
+      if (typed === name) continue; // no ASCII letter (CJK names)
+      tried += 1;
+      const wanted = playerNameKey(name);
+      // An old cache may still list one player under several spellings: the one with the most games answers.
+      const best = playerNames.filter((n) => playerNameKey(n) === wanted).sort((a, b) => (games.get(b) ?? 0) - (games.get(a) ?? 0))[0];
+      for (const route of [`/players/${enc(typed)}`, ...['archetype', 'strength', 'playstyle'].map((x) => `/profile/${enc(typed)}/${x}`)]) {
+        const res = await request(server).get(`/api/analysis${route}`);
+        if (res.status !== 200) {
+          p.push(`${route} (a retyped player name): HTTP ${res.status}`);
+          continue;
+        }
+        const got = ((res.body.data as Json).player as Json).name;
+        if (got !== best) p.push(`${route}: answered with another player's row`);
+      }
+    }
+    expect(tried).toBeGreaterThan(0);
+    expect(p).toEqual([]);
+  });
+
   it('a 1-game player gets the "資料不足" path, not an error', async () => {
     const oneGame = committedCache.players.players.find((x) => x.totalGames === 1);
     expect(oneGame).toBeDefined();
@@ -772,6 +804,31 @@ describe('analysis_cache.json → web contract', () => {
 // ---------------------------------------------------------------------------
 // withFinalFields — the server-side fallback for caches predating schemaVersion 2
 // ---------------------------------------------------------------------------
+
+describe('player names: case / width do not matter (same rule as generate_cache.py player_name_key)', () => {
+  it('playerNameKey folds case, full-width, stray / doubled spaces and zero-width characters', () => {
+    for (const typed of ['Nova', 'NOVA', ' nova ', 'ｎｏｖａ', 'ＮＯＶＡ', 'No\u200bva', 'nOvA\u3000']) {
+      expect(playerNameKey(typed)).toBe('nova');
+    }
+    expect(playerNameKey('Ｔｅｄ　 Ｂｅａｒ')).toBe('ted bear');
+    expect(playerNameKey('小米')).toBe('小米');
+    expect(playerNameKey('Nova')).not.toBe(playerNameKey('Novo'));
+  });
+
+  it('findPlayerKey: exact first, then the one other spelling, then the best ranked of several', () => {
+    const merged = { Nova: 1, Kite: 2 };
+    expect(findPlayerKey(merged, 'Nova')).toBe('Nova');
+    expect(findPlayerKey(merged, 'ｋｉｔｅ')).toBe('Kite');
+    expect(findPlayerKey(merged, 'Orca')).toBeUndefined();
+    expect(findPlayerKey(merged, '__proto__')).toBeUndefined();
+    expect(findPlayerKey(merged, 'constructor')).toBeUndefined();
+    const split: Record<string, number> = { NOVA: 7, Nova: 40, nova: 3 }; // a cache written before the merge
+    expect(findPlayerKey(split, 'nova')).toBe('nova'); // that exact spelling exists
+    expect(findPlayerKey(split, 'NoVa', (k) => split[k])).toBe('Nova'); // the most games
+    expect(findPlayerKey(split, 'NoVa')).toBe('NOVA'); // no ranking: the first
+    expect(findPlayerKey(null, 'Nova')).toBeUndefined();
+  });
+});
 
 describe('rnd1 — one decimal, ties to even (same as Python round in generate_cache.py)', () => {
   it('rounds exact .x5 ties to the even digit and everything else normally', () => {
