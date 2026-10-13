@@ -170,7 +170,10 @@ export default function RoomPage(): JSX.Element {
   const [isAssassinating, setIsAssassinating] = useState(false);
   const [showRoleReveal, setShowRoleReveal] = useState(true);
   const prevRoomState = useRef<string | null>(null);
-  const timerMultiplier = room?.timerConfig?.multiplier ?? 1;
+  // `null` = unlimited thinking time; only a MISSING config means 1x
+  // (`?? 1` turned null into 1, so unlimited rooms showed a countdown).
+  const rawTimerMultiplier = room?.timerConfig?.multiplier;
+  const timerMultiplier = rawTimerMultiplier === undefined ? 1 : rawTimerMultiplier;
   const isUnlimitedTimer = timerMultiplier === null;
   const teamSelectBase = isUnlimitedTimer ? 0 : Math.round(TEAM_SELECT_BASE * (timerMultiplier as number));
   const assassinBase = isUnlimitedTimer ? 0 : Math.round(ASSASSIN_BASE * (timerMultiplier as number));
@@ -225,6 +228,30 @@ export default function RoomPage(): JSX.Element {
   useEffect(() => {
     requestNotificationPermission();
   }, []);
+
+  // A different room (「再練一局」 opens a new practice room without passing
+  // through the lobby): reset every per-game UI state, as the lobby → voting
+  // transition below does for a rematch. Otherwise the previous game's
+  // assassination pick kept every target button disabled.
+  const prevRoomId = useRef<string | null>(null);
+  useEffect(() => {
+    const id = room?.id ?? null;
+    if (id === null) {
+      // Left / between rooms: the next room counts as a fresh start.
+      prevRoomState.current = null;
+      return;
+    }
+    if (prevRoomId.current !== null && prevRoomId.current !== id) {
+      setShowRoleReveal(true);
+      setIsVoting(false);
+      setIsAssassinating(false);
+      setSelectedTarget(null);
+      setSelectedTeamIds(new Set());
+      setScoresheetExpanded(scoresheetTrialPinned);
+      prevRoomState.current = null;
+    }
+    prevRoomId.current = id;
+  }, [room?.id]);
 
   // Show role reveal each time game starts (lobby → voting transition)
   useEffect(() => {
@@ -1212,12 +1239,39 @@ export default function RoomPage(): JSX.Element {
       <div className="relative z-10 shrink-0 flex flex-wrap items-center gap-1.5 px-3 pt-1.5 text-[11px] sm:text-xs">
         <button
           type="button"
-          onClick={() => setPracticeBoardFor(showPracticeReview ? room.id : null)}
+          onClick={() => {
+            // 「看牌桌」 always lands on the table, even with the scoresheet pinned.
+            if (showPracticeReview) setScoresheetExpanded(false);
+            setPracticeBoardFor(showPracticeReview ? room.id : null);
+          }}
           data-testid="practice-toggle-view"
           className="inline-flex items-center gap-1 rounded-lg border border-slate-600 bg-slate-800/60 px-2.5 py-1 font-semibold text-slate-100 hover:bg-slate-700/60"
         >
           {showPracticeReview ? <LayoutGrid size={13} /> : <ListChecks size={13} />}
           {showPracticeReview ? tp('viewBoard') : tp('viewReview')}
+        </button>
+        {/* 牌譜 toggle (the normal ended header's ClipboardList, which the
+            practice header replaces). From the review it opens the scoresheet. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (showPracticeReview) {
+              setPracticeBoardFor(room.id);
+              setScoresheetExpanded(true);
+            } else {
+              setScoresheetExpanded(v => !v);
+            }
+          }}
+          aria-pressed={!showPracticeReview && scoresheetExpanded}
+          data-testid="practice-toggle-scoresheet"
+          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 font-semibold ${
+            !showPracticeReview && scoresheetExpanded
+              ? 'border-emerald-400 bg-emerald-500/30 text-emerald-100 hover:bg-emerald-500/50'
+              : 'border-slate-600 bg-slate-800/60 text-slate-100 hover:bg-slate-700/60'
+          }`}
+        >
+          <ClipboardList size={13} />
+          {!showPracticeReview && scoresheetExpanded ? tp('hideScoresheet') : tp('viewScoresheet')}
         </button>
         <button
           type="button"
@@ -1344,7 +1398,7 @@ export default function RoomPage(): JSX.Element {
                 </div>
               )}
             </div>
-          ) : isLadyHolder && !room.ladyOfTheLakeResult ? (
+          ) : isLadyHolder && !room.ladyOfTheLakeTarget ? (
             <>
               <div className="text-center">
                 <h2 className="text-base sm:text-xl font-bold text-blue-400">{t('game:lady.title')}</h2>

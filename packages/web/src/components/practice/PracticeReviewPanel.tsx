@@ -311,12 +311,15 @@ function EntryCard({ entry, trace, seat }: { entry: PracticeTraceEntry; trace: P
       <div className="space-y-0.5 text-[11px] leading-relaxed text-zinc-300/90">
         {entry.rule && <p><span className="text-zinc-400">{t('rule')}：</span>{entry.rule}</p>}
         {entry.knowledge && <p><span className="text-zinc-400">{t('knowledge')}：</span>{entry.knowledge}</p>}
-        {entry.suspects && entry.suspects.length > 0 && (
+        {entry.suspects && entry.suspects.length > 0 ? (
           <p>
             <span className="text-zinc-400">{entry.suspectsLabel ?? ''}：</span>
             {entry.suspects.map((s) => `${seatText(s.seat)} ${s.score.toFixed(2)}`).join('、')}
+            {entry.suspectsNote && <span className="text-zinc-400">（{entry.suspectsNote}）</span>}
           </p>
-        )}
+        ) : entry.suspectsNote ? (
+          <p><span className="text-zinc-400">{entry.suspectsLabel ?? ''}：</span>{entry.suspectsNote}</p>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2 pt-0.5">
         {flagged ? (

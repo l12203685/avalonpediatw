@@ -54,6 +54,8 @@ export interface PracticeTraceEntry {
   rule?: string;
   suspectsLabel?: string;
   suspects?: Array<{ seat: number; score: number }>;
+  /** Instead of an empty `suspects` list, or after it when ties decide the order. */
+  suspectsNote?: string;
   knowledge?: string;
   source: 'agent' | 'fallback';
 }

@@ -34,7 +34,9 @@ export default function VotePanel({
 }: VotePanelProps): JSX.Element {
   const { t } = useTranslation(['game']);
   // Derive per-room effective timer: base * multiplier. `null` = unlimited.
-  const multiplier = room.timerConfig?.multiplier ?? 1;
+  // Only a missing config means 1x — `?? 1` used to turn null (unlimited) into 1.
+  const rawMultiplier = room.timerConfig?.multiplier;
+  const multiplier = rawMultiplier === undefined ? 1 : rawMultiplier;
   const isUnlimited = multiplier === null;
   const effectiveSeconds = isUnlimited ? 0 : Math.round(VOTE_BASE_SECONDS * (multiplier as number));
 
