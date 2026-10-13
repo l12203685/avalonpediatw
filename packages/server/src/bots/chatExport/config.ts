@@ -23,10 +23,26 @@ export const PUBLIC_STATS_SHEET_ID = '174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmy
 
 /**
  * The private spreadsheet the export wrote to until 2026-10-13 (still the
- * practice-mode report sheet, src/practice/PracticeReportWriter.ts). Chosen
- * again with CHAT_EXPORT_SHEET_ID set to this id.
+ * practice-mode report sheet, src/practice/PracticeReportWriter.ts — its tab
+ * 「練習回報」 is never touched here). Chosen again with CHAT_EXPORT_SHEET_ID
+ * set to this id; the reading copy's default target (below).
  */
 export const PRIVATE_CHAT_EXPORT_SHEET_ID = '1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8';
+
+/**
+ * The reading copy (2026-10-13): the same rows, days, 7-day window and export
+ * log as the main target, in the two chat tabs of a SMALL spreadsheet, with
+ * 「聊天紀錄」 kept as its FIRST tab. It exists only so the AI manager can
+ * read the chat: its Google Drive connector reads the 阿瓦隆百科 workbook
+ * only as a sample of its huge first tab 牌譜 (never reaching 聊天紀錄),
+ * cannot download the whole workbook, but can download a spreadsheet's first
+ * tab as CSV. Default: the private sheet above (owned by the owner, shared
+ * with the service account as editor). CHAT_EXPORT_READING_COPY_SHEET_ID
+ * picks another one (id or URL); off disables it. Never the main target's
+ * sheet (a pointless duplicate) nor a public stats workbook (its first tab
+ * must stay 牌譜): both leave the copy disabled.
+ */
+export const DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID = PRIVATE_CHAT_EXPORT_SHEET_ID;
 
 /**
  * Where the export writes by default: the 阿瓦隆百科 workbook, the last 7
@@ -167,6 +183,22 @@ export const defaultChatExportLogger: ChatExportLogger = {
   warn: (m) => console.warn(`[chat-export] ${m}`),
 };
 
+/** The reading copy's lines (same rules: counts, dates and codes only). */
+export const readingCopyChatExportLogger: ChatExportLogger = {
+  // eslint-disable-next-line no-console
+  info: (m) => console.log(`[chat-export:reading-copy] ${m}`),
+  warn: (m) => console.warn(`[chat-export:reading-copy] ${m}`),
+};
+
+/**
+ * A Discord read of one day is reused by the other target (main ↔ reading
+ * copy) for this long after it finished — both run at the same minutes, so
+ * the day is read from Discord once. Below CHAT_EXPORT_RETRY_DELAY_MS on
+ * purpose: a retry 10 minutes later (some channels unreadable) always reads
+ * again.
+ */
+export const CHAT_EXPORT_SHARED_READ_TTL_MS = 5 * 60_000;
+
 export interface ChatExportConfig {
   /** CHAT_EXPORT_ENABLED: default on; false / 0 / off / no turns it off. */
   enabled: boolean;
@@ -221,6 +253,12 @@ export interface ChatExportConfig {
    * the bot is in.
    */
   guildId: string;
+  /**
+   * The reading copy's config only (readChatExportReadingCopyConfig): chat
+   * tab kept as the spreadsheet's first tab (created at index 0, moved back
+   * there when found elsewhere). Absent / false for the main target.
+   */
+  pinChatTabFirst?: boolean;
 }
 
 const OFF = ['false', '0', 'off', 'no', 'none'];
@@ -248,6 +286,12 @@ export function spreadsheetIdFrom(raw: string): string {
   return m ? m[1] : raw;
 }
 
+/** `id` is a public stats spreadsheet: the 阿瓦隆百科 workbook, or the one AVALON_STATS_SHEET_ID names. */
+function isPublicStatsSheet(id: string, env: NodeJS.ProcessEnv): boolean {
+  const publicIds = [PUBLIC_STATS_SHEET_ID, spreadsheetIdFrom((env.AVALON_STATS_SHEET_ID || '').trim())].filter(Boolean);
+  return id !== '' && publicIds.some((p) => id === p || (p.length >= 20 && id.includes(p)));
+}
+
 export function readChatExportConfig(env: NodeJS.ProcessEnv = process.env): ChatExportConfig {
   const flag = (env.CHAT_EXPORT_ENABLED || '').trim().toLowerCase();
   const sheetRaw = envFirst(env, 'CHAT_EXPORT_SHEET_ID', 'COMMUNITY_DIGEST_SHEET_ID');
@@ -256,8 +300,7 @@ export function readChatExportConfig(env: NodeJS.ProcessEnv = process.env): Chat
   // The public stats spreadsheet is the default by the owner's decision (2026-10-13).
   // CHAT_EXPORT_ALLOW_PUBLIC_SHEET unset (or a yes) keeps it; any other value refuses it — 0 / false / off / no,
   // and a value not understood too, so a mistyped "no" never publishes chat.
-  const publicIds = [PUBLIC_STATS_SHEET_ID, spreadsheetIdFrom((env.AVALON_STATS_SHEET_ID || '').trim())].filter(Boolean);
-  const isPublic = wanted !== '' && publicIds.some((id) => wanted === id || (id.length >= 20 && wanted.includes(id)));
+  const isPublic = isPublicStatsSheet(wanted, env);
   const allowRaw = (env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET || '').trim().toLowerCase();
   const allowPublic = allowRaw === '' || ON.includes(allowRaw);
   const sheetIdRefused = isPublic && !allowPublic;
@@ -279,5 +322,54 @@ export function readChatExportConfig(env: NodeJS.ProcessEnv = process.env): Chat
     ],
     mirrorChannelId: (env.LOBBY_MIRROR_DISCORD_CHANNEL_ID || '').trim(),
     guildId: (env.DISCORD_GUILD_ID || '').trim() || AVALONPEDIA_DISCORD_GUILD_ID,
+  };
+}
+
+/**
+ * Where the reading copy goes:
+ *   'on'              — `sheetId` (CHAT_EXPORT_READING_COPY_SHEET_ID, id or URL; default the private sheet);
+ *   'off'             — CHAT_EXPORT_READING_COPY_SHEET_ID=off (or false / 0 / no / none);
+ *   'same-as-primary' — the main target's sheet (a pointless duplicate; also the default
+ *                       when CHAT_EXPORT_SHEET_ID names the private sheet);
+ *   'public-refused'  — a public stats workbook (its first tab must stay 牌譜; the chat
+ *                       is already in the 百科 workbook when that is the main target).
+ */
+export type ChatExportReadingCopyState = 'on' | 'off' | 'same-as-primary' | 'public-refused';
+
+export function readingCopyTarget(
+  env: NodeJS.ProcessEnv = process.env,
+  primary: ChatExportConfig = readChatExportConfig(env),
+): { sheetId: string; state: ChatExportReadingCopyState } {
+  const raw = (env.CHAT_EXPORT_READING_COPY_SHEET_ID || '').trim();
+  if (OFF.includes(raw.toLowerCase())) return { sheetId: '', state: 'off' };
+  const id = spreadsheetIdFrom(raw || DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID);
+  // The main target before any refusal ('' = CHAT_EXPORT_SHEET_ID=off).
+  const main = primary.retentionSheetId;
+  if (main !== '' && (id === main || (main.length >= 20 && id.includes(main)))) return { sheetId: '', state: 'same-as-primary' };
+  if (isPublicStatsSheet(id, env)) return { sheetId: '', state: 'public-refused' };
+  return { sheetId: id, state: 'on' };
+}
+
+/**
+ * The reading copy as a ChatExportConfig for its own ChatExportService: the
+ * main target's sources, exclusions, server and on/off switch
+ * (CHAT_EXPORT_ENABLED) — so the same messages become the same rows — with
+ * its own sheet. Not 'on' → enabled false and nothing to prune (the copy is
+ * never written there). CHAT_EXPORT_ENABLED=false with the copy 'on' →
+ * retention only, like the main target (days older than 7 still leave it).
+ * CHAT_EXPORT_ALLOW_PUBLIC_SHEET does not apply (the copy is never public).
+ */
+export function readChatExportReadingCopyConfig(env: NodeJS.ProcessEnv = process.env): ChatExportConfig {
+  const primary = readChatExportConfig(env);
+  const copy = readingCopyTarget(env, primary);
+  return {
+    ...primary,
+    enabled: primary.enabled && copy.state === 'on',
+    sheetId: copy.sheetId,
+    retentionSheetId: copy.sheetId,
+    sheetIdFromRetiredName: false,
+    sheetIdRefused: false,
+    publicSheet: false,
+    pinChatTabFirst: true,
   };
 }

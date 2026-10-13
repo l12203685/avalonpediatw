@@ -60,9 +60,10 @@ import {
   PUBLIC_STATS_SHEET_ID,
   STATS_WORKBOOK_TABS,
   readChatExportConfig,
+  readChatExportReadingCopyConfig,
 } from '../bots/chatExport/config';
 import { ChatExportService } from '../bots/chatExport/service';
-import type { ChatExportDiscordPort } from '../bots/chatExport/discordPort';
+import { shareChatExportReads, type ChatExportDiscordPort } from '../bots/chatExport/discordPort';
 import type { RawChatMessage } from '../bots/chatExport/rows';
 import type { ChatExportRow } from '../bots/chatExport/rows';
 import { emptyCollectResult } from '../bots/chatExport/collector';
@@ -91,10 +92,11 @@ interface Call {
   body: unknown;
 }
 
-/** The two batchUpdate requests the code sends. */
+/** The batchUpdate requests the code sends. */
 interface BatchRequest {
-  addSheet?: { properties: { title: string } };
+  addSheet?: { properties: { title: string; index?: number } };
   deleteDimension?: { range: { sheetId: number; dimension: string; startIndex: number; endIndex: number } };
+  updateSheetProperties?: { properties: { sheetId: number; index: number }; fields: string };
 }
 
 function json(body: unknown, status = 200): Response {
@@ -108,6 +110,7 @@ function parseRange(range: string): { tab: string; cells: string } {
   return { tab: m[1].replace(/''/g, "'"), cells: m[2] };
 }
 
+/** Tab order = the Map's order (like Google, `index` is the position). */
 class FakeSheets {
   readonly tabs = new Map<string, FakeTab>([['工作表1', { sheetId: 0, rows: [] }]]);
   readonly base: string;
@@ -118,6 +121,8 @@ class FakeSheets {
   failAppendStatus = 500;
   failDeleteStatus = 0;
   failMetadataStatus = 0;
+  /** The metadata answer leaves `index` out (the client then uses the listing order). */
+  omitIndex = false;
   appendCount = 0;
   /** Each call waits this long first (a macrotask), so two instances interleave like real network calls. */
   latencyMs = 0;
@@ -137,7 +142,9 @@ class FakeSheets {
     const rest = url.slice(this.base.length);
     if (rest.startsWith('?fields=')) {
       if (this.failMetadataStatus) return json({ error: 'secret detail' }, this.failMetadataStatus);
-      return json({ sheets: [...this.tabs].map(([title, t]) => ({ properties: { sheetId: t.sheetId, title } })) });
+      return json({
+        sheets: [...this.tabs].map(([title, t], index) => ({ properties: { sheetId: t.sheetId, title, ...(this.omitIndex ? {} : { index }) } })),
+      });
     }
     if (rest === ':batchUpdate') return this.batchUpdate(body as { requests: BatchRequest[] });
     const m = /^\/values\/([^?:]+)(:append)?(?:\?(.*))?$/.exec(rest);
@@ -172,7 +179,15 @@ class FakeSheets {
       if (r.addSheet) {
         const id = this.nextId++;
         this.tabs.set(r.addSheet.properties.title, { sheetId: id, rows: [] });
+        if (r.addSheet.properties.index !== undefined) this.moveTo(r.addSheet.properties.title, r.addSheet.properties.index);
         replies.push({ addSheet: { properties: { sheetId: id, title: r.addSheet.properties.title } } });
+      } else if (r.updateSheetProperties) {
+        const { properties, fields } = r.updateSheetProperties;
+        expect(fields).toBe('index'); // nothing but the position
+        const title = [...this.tabs].find(([, t]) => t.sheetId === properties.sheetId)?.[0];
+        if (title === undefined) return json({ error: 'no sheet' }, 400);
+        this.moveTo(title, properties.index);
+        replies.push({});
       } else if (r.deleteDimension) {
         if (this.failDeleteStatus) return json({ error: 'x' }, this.failDeleteStatus);
         const { sheetId, startIndex, endIndex, dimension } = r.deleteDimension.range;
@@ -184,6 +199,21 @@ class FakeSheets {
       }
     }
     return json({ replies });
+  }
+
+  /** Put tab `title` at position `index`; the others keep their order. */
+  moveTo(title: string, index: number): void {
+    const entries = [...this.tabs];
+    const at = entries.findIndex(([t]) => t === title);
+    const [entry] = entries.splice(at, 1);
+    entries.splice(index, 0, entry);
+    this.tabs.clear();
+    for (const [t, tab] of entries) this.tabs.set(t, tab);
+  }
+
+  /** Tab titles in order (index 0 first) — what a CSV export of the spreadsheet starts with. */
+  order(): string[] {
+    return [...this.tabs.keys()];
   }
 
   tab(title = CHAT_EXPORT_TAB): string[][] {
@@ -206,6 +236,10 @@ class FakeSheets {
         for (const r of (c.body as { requests: BatchRequest[] }).requests) {
           if (r.addSheet) out.push({ method: 'addSheet', tab: r.addSheet.properties.title });
           if (r.deleteDimension) out.push({ method: 'deleteRows', tab: byId.get(r.deleteDimension.range.sheetId) ?? `#${r.deleteDimension.range.sheetId}` });
+          if (r.updateSheetProperties) {
+            const id = r.updateSheetProperties.properties.sheetId;
+            out.push({ method: 'moveTab', tab: byId.get(id) ?? `#${id}` });
+          }
         }
       } else {
         const m = /^\/values\/([^?:]+)/.exec(rest);
@@ -252,7 +286,7 @@ describe('Google Sheets client (digest/sheets.ts)', () => {
     expect(buildServiceAccountJwt(creds, 1).split('.')).toHaveLength(3);
     expect(base64url('a+b/c=')).not.toMatch(/[+/=]/);
     expect(g.calls.filter((x) => x.url === GOOGLE_TOKEN_URL)).toHaveLength(1);
-    expect(g.calls[1].url).toBe(`${BASE}?fields=${encodeURIComponent('sheets.properties(sheetId,title)')}`);
+    expect(g.calls[1].url).toBe(`${BASE}?fields=${encodeURIComponent('sheets.properties(sheetId,title,index)')}`);
   });
 
   it('errors carry the step and HTTP status only, never the response body', async () => {
@@ -489,16 +523,17 @@ function discordDaily(perDay: (day: string) => number): ChatExportDiscordPort & 
 
 const busy = (day: string): number => (day === BUSY_DAY ? 620 : 5);
 
-function e2e(g: FakeSheets, discord: ChatExportDiscordPort, clock: { now: number }, env: NodeJS.ProcessEnv = {}) {
+/** One service against `g`: the main target, or (`copy`) the reading copy — config and sheet options as in production. */
+function e2e(g: FakeSheets, discord: ChatExportDiscordPort, clock: { now: number }, env: NodeJS.ProcessEnv = {}, opts: { copy?: boolean } = {}) {
   const logs: string[] = [];
   const service = new ChatExportService({
     discord,
     sheetFactory: (cfg) => {
       if (!cfg.sheetId) return { sheet: null, reason: 'no-sheet-id' };
       expect(cfg.sheetId).toBe(g.spreadsheetId);
-      return { sheet: new ChatExportSheet(g.client(() => clock.now)), reason: 'ok' };
+      return { sheet: new ChatExportSheet(g.client(() => clock.now), cfg.pinChatTabFirst ? { pinChatTabFirst: true } : {}), reason: 'ok' };
     },
-    config: () => readChatExportConfig(env),
+    config: () => (opts.copy ? readChatExportReadingCopyConfig(env) : readChatExportConfig(env)),
     now: () => clock.now,
     logger: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
   });
@@ -689,17 +724,17 @@ describe('retention-only and unsure deletes (review fixes 2026-10-13)', () => {
   });
 });
 
-describe('the 阿瓦隆百科 workbook (the default target since 2026-10-13)', () => {
-  /** The stats workbook as the importer / cache refresh see it. */
-  function statsWorkbook(): FakeSheets {
-    const g = new FakeSheets(PUBLIC_STATS_SHEET_ID);
-    let id = 1;
-    for (const tab of STATS_WORKBOOK_TABS) {
-      g.tabs.set(tab, { sheetId: id++, rows: [['日期時間', '場次', '配置'], ['2026/10/12', '1', '123456'], ['2026-10-01', 'looks like a day', 'x']] });
-    }
-    return g;
+/** The stats workbook as the importer / cache refresh see it. */
+function statsWorkbook(): FakeSheets {
+  const g = new FakeSheets(PUBLIC_STATS_SHEET_ID);
+  let id = 1;
+  for (const tab of STATS_WORKBOOK_TABS) {
+    g.tabs.set(tab, { sheetId: id++, rows: [['日期時間', '場次', '配置'], ['2026/10/12', '1', '123456'], ['2026-10-01', 'looks like a day', 'x']] });
   }
+  return g;
+}
 
+describe('the 阿瓦隆百科 workbook (the default target since 2026-10-13)', () => {
   it('CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses it: no chat is written; only the tab list is read (retention, nothing there)', async () => {
     for (const env of [
       { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON },
@@ -778,5 +813,202 @@ describe('the 阿瓦隆百科 workbook (the default target since 2026-10-13)', (
     expect((await service.tick()).days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
     expect([...new Set(priv.tab().slice(1).map((r) => r[0]))]).toEqual(DAYS);
     expect(priv.calls.every((c) => c.url === GOOGLE_TOKEN_URL || c.url.startsWith(`${SHEETS_API_BASE}/${PRIVATE_CHAT_EXPORT_SHEET_ID}`))).toBe(true);
+  });
+});
+
+// ─── The reading copy (first tab of a small private sheet) ────────────────
+
+const PRACTICE_TAB = '練習回報';
+
+/** The reading copy's default sheet as the owner keeps it: an empty 工作表1 and the practice-mode tab 練習回報. */
+function privateSheet(): FakeSheets {
+  const g = new FakeSheets(PRIVATE_CHAT_EXPORT_SHEET_ID);
+  g.tabs.set(PRACTICE_TAB, {
+    sheetId: 1,
+    rows: [
+      ['時間(+08)', '房間', '回合', '第幾次派隊', '機器人座位', '機器人角色', '決策類型', '決策', '機器人理由', '備註'],
+      ['2026-10-12 21:00:00', 'room-1', '2', '1', '3', '梅林', 'vote', 'x', 'y', ''],
+      ['2026-10-01', 'looks like a day', 'x'],
+    ],
+  });
+  return g;
+}
+
+function batchBodies(g: FakeSheets): unknown[] {
+  return g.calls.filter((c) => c.url === `${g.base}:batchUpdate`).map((c) => c.body);
+}
+
+describe('the reading copy: 聊天紀錄 is the first tab (a CSV export of the spreadsheet is the chat)', () => {
+  it('created at index 0; 匯出紀錄 at the end; 工作表1 and 練習回報 neither read nor written', async () => {
+    const g = privateSheet();
+    const practice = JSON.stringify(g.tab(PRACTICE_TAB));
+    await new ChatExportSheet(g.client(), { pinChatTabFirst: true }).prepare();
+    expect(batchBodies(g)).toEqual([
+      { requests: [{ addSheet: { properties: { title: CHAT_EXPORT_TAB, index: 0, gridProperties: { frozenRowCount: 1, columnCount: 6 } } } }] },
+      { requests: [{ addSheet: { properties: { title: CHAT_EXPORT_LOG_TAB, gridProperties: { frozenRowCount: 1, columnCount: 6 } } } }] },
+    ]);
+    expect(g.order()).toEqual([CHAT_EXPORT_TAB, '工作表1', PRACTICE_TAB, CHAT_EXPORT_LOG_TAB]);
+    expect(g.tab()).toEqual([[...CHAT_EXPORT_HEADER]]);
+    expect(JSON.stringify(g.tab(PRACTICE_TAB))).toBe(practice);
+    expect(g.tab('工作表1')).toEqual([]); // the empty default tab stays (never deleted)
+    const tabs = new Set(g.touched().map((t) => t.tab));
+    expect(tabs).toEqual(new Set(['(metadata)', CHAT_EXPORT_TAB, CHAT_EXPORT_LOG_TAB]));
+    // Next time: already first, header there → nothing sent but the reads.
+    const before = g.calls.length;
+    await new ChatExportSheet(g.client(), { pinChatTabFirst: true }).prepare();
+    expect(g.calls.slice(before).some((c) => c.method !== 'GET' && c.url !== GOOGLE_TOKEN_URL)).toBe(false);
+  });
+
+  it('found elsewhere → moved back to index 0 (updateSheetProperties, the index only); the other tabs keep their order and rows', async () => {
+    const g = privateSheet();
+    g.tabs.set(CHAT_EXPORT_TAB, { sheetId: 7, rows: [[...CHAT_EXPORT_HEADER], row('2026-10-12', 1)] });
+    g.tabs.set(CHAT_EXPORT_LOG_TAB, { sheetId: 8, rows: [[...CHAT_EXPORT_LOG_HEADER]] });
+    const contents = JSON.stringify([...g.tabs].map(([title, t]) => [title, t.rows]).sort());
+    expect(g.order()).toEqual(['工作表1', PRACTICE_TAB, CHAT_EXPORT_TAB, CHAT_EXPORT_LOG_TAB]);
+    await new ChatExportSheet(g.client(), { pinChatTabFirst: true }).prepare();
+    expect(batchBodies(g)).toEqual([{ requests: [{ updateSheetProperties: { properties: { sheetId: 7, index: 0 }, fields: 'index' } }] }]);
+    expect(g.order()).toEqual([CHAT_EXPORT_TAB, '工作表1', PRACTICE_TAB, CHAT_EXPORT_LOG_TAB]);
+    expect(JSON.stringify([...g.tabs].map(([title, t]) => [title, t.rows]).sort())).toBe(contents);
+    expect(g.touched().filter((t) => t.method === 'moveTab')).toEqual([{ method: 'moveTab', tab: CHAT_EXPORT_TAB }]);
+
+    // Already first → no request. The metadata without `index`: the listing order decides.
+    const quiet = async (): Promise<boolean> => {
+      const n = g.calls.length;
+      await new ChatExportSheet(g.client(), { pinChatTabFirst: true }).prepare();
+      return !g.calls.slice(n).some((c) => c.url.endsWith(':batchUpdate'));
+    };
+    expect(await quiet()).toBe(true);
+    g.omitIndex = true;
+    expect(await quiet()).toBe(true);
+    g.moveTo(PRACTICE_TAB, 0); // someone drags 練習回報 in front
+    expect(await quiet()).toBe(false);
+    expect(g.order()).toEqual([CHAT_EXPORT_TAB, PRACTICE_TAB, '工作表1', CHAT_EXPORT_LOG_TAB]);
+
+    // The main target never moves a tab.
+    g.moveTo(CHAT_EXPORT_TAB, 3);
+    const n = g.calls.length;
+    await new ChatExportSheet(g.client()).prepare();
+    expect(g.calls.slice(n).some((c) => c.url.endsWith(':batchUpdate'))).toBe(false);
+    expect(g.order()[3]).toBe(CHAT_EXPORT_TAB);
+  });
+
+  it('a pinned tab with another header is still not ours: refused, not moved', async () => {
+    const g = privateSheet();
+    g.tabs.set(CHAT_EXPORT_TAB, { sheetId: 9, rows: [['姓名', '電話']] });
+    const err = await new ChatExportSheet(g.client(), { pinChatTabFirst: true }).prepare().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ChatTabConflictError);
+    expect(batchBodies(g)).toEqual([]);
+    expect(g.order()).toEqual(['工作表1', PRACTICE_TAB, CHAT_EXPORT_TAB]);
+  });
+
+  it('the production factory: the reading copy\'s sheet gets the chat tab first, the main target\'s does not', async () => {
+    const env = { GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON };
+    const prev = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON = SA_JSON;
+    const priv = privateSheet();
+    const pub = statsWorkbook();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((async (input: string | URL | Request, init?: RequestInit) =>
+      String(input).startsWith(pub.base) ? pub.fetchImpl(input, init) : priv.fetchImpl(input, init)) as typeof fetch);
+    try {
+      await defaultChatSheetFactory(readChatExportReadingCopyConfig(env)).sheet!.prepare();
+      await defaultChatSheetFactory(readChatExportConfig(env)).sheet!.prepare();
+      expect(priv.order()).toEqual([CHAT_EXPORT_TAB, '工作表1', PRACTICE_TAB, CHAT_EXPORT_LOG_TAB]);
+      expect(pub.order().slice(-2)).toEqual([CHAT_EXPORT_TAB, CHAT_EXPORT_LOG_TAB]);
+      expect(pub.order()[0]).not.toBe(CHAT_EXPORT_TAB);
+    } finally {
+      fetchSpy.mockRestore();
+      if (prev === undefined) delete process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+      else process.env.GOOGLE_SERVICE_ACCOUNT_JSON = prev;
+    }
+  });
+});
+
+describe('both targets end to end (the 阿瓦隆百科 workbook + the reading copy)', () => {
+  const env = { GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON }; // the defaults: main = 百科 workbook, copy = the private sheet
+
+  function both(pub: FakeSheets, priv: FakeSheets, clock: { now: number }) {
+    const discord = discordDaily(busy);
+    const shared = shareChatExportReads(discord, { now: () => clock.now });
+    const main = e2e(pub, shared, clock, env);
+    const copy = e2e(priv, shared, clock, env, { copy: true });
+    const tick = () => Promise.all([main.service.tick(), copy.service.tick()]);
+    return { discord, main, copy, tick };
+  }
+
+  /** 完成 rows: day, 列數, 頻道數 (time and run id differ per target). */
+  const done = (g: FakeSheets): string[][] => g.tab(CHAT_EXPORT_LOG_TAB).filter((r) => r[1] === '完成').map((r) => [r[0], r[2], r[3]]);
+
+  it('the same rows, days and 完成 in both, each day read from Discord once; the copy\'s first tab is 聊天紀錄; 練習回報 and the stats tabs untouched', async () => {
+    const pub = statsWorkbook();
+    const priv = privateSheet();
+    const statsBefore = new Map(STATS_WORKBOOK_TABS.map((t) => [t, JSON.stringify(pub.tab(t))]));
+    const practice = JSON.stringify(priv.tab(PRACTICE_TAB));
+    const pubOrder = pub.order();
+    const clock = { now: TUE_1005 };
+    const { discord, main, copy, tick } = both(pub, priv, clock);
+    const [rm, rc] = await tick();
+    expect(rm.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(rc.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(discord.calls).toEqual(DAYS); // one read per day for both targets
+    expect(priv.tab()).toHaveLength(1 + 620 + 6 * 5);
+    expect(priv.tab()).toEqual(pub.tab());
+    expect(done(priv)).toEqual(done(pub));
+    expect(done(priv).map((r) => r[0])).toEqual(DAYS);
+    // The copy: chat first (what a CSV export of the spreadsheet yields); the main target: appended at the end as before.
+    expect(priv.order()).toEqual([CHAT_EXPORT_TAB, '工作表1', PRACTICE_TAB, CHAT_EXPORT_LOG_TAB]);
+    expect(pub.order()).toEqual([...pubOrder, CHAT_EXPORT_TAB, CHAT_EXPORT_LOG_TAB]);
+    expect(pub.touched().some((t) => t.method === 'moveTab')).toBe(false);
+    expect(main.service.getStatus()).toMatchObject({ sheetConfigured: true, publicSheet: true });
+    expect(copy.service.getStatus()).toMatchObject({ enabled: true, sheetConfigured: true, publicSheet: false });
+    expect(copy.service.getStatus().catchUp).toMatchObject({ exported: 7, failed: 0, pending: 0 });
+
+    // The next day at 04:30: the new day in both (read once), the oldest out of both.
+    clock.now = Date.parse('2026-10-13T20:30:00Z'); // Wed 10/14 04:30 +08
+    const [nm, nc] = await tick();
+    expect(nm.days).toEqual([{ day: '2026-10-13', outcome: 'written' }]);
+    expect(nc.days).toEqual([{ day: '2026-10-13', outcome: 'written' }]);
+    expect(discord.calls).toEqual([...DAYS, '2026-10-13']);
+    expect([...new Set(priv.tab().slice(1).map((r) => r[0]))]).toEqual(lastCompleteDays(clock.now));
+    expect(priv.tab()).toEqual(pub.tab());
+    expect(done(priv)).toEqual(done(pub));
+    expect(priv.order()[0]).toBe(CHAT_EXPORT_TAB);
+
+    // Never touched: 練習回報 and 工作表1 in the copy, the stats tabs in the workbook; every request went to its own sheet.
+    expect(JSON.stringify(priv.tab(PRACTICE_TAB))).toBe(practice);
+    expect(new Set(priv.touched().map((t) => t.tab))).toEqual(new Set(['(metadata)', CHAT_EXPORT_TAB, CHAT_EXPORT_LOG_TAB]));
+    for (const t of STATS_WORKBOOK_TABS) expect(JSON.stringify(pub.tab(t))).toBe(statsBefore.get(t));
+    expect(priv.calls.every((c) => c.url === GOOGLE_TOKEN_URL || c.url.startsWith(priv.base))).toBe(true);
+    expect(pub.calls.every((c) => c.url === GOOGLE_TOKEN_URL || c.url.startsWith(pub.base))).toBe(true);
+    // Logs: counts only, in both.
+    expect([...main.logs, ...copy.logs].join('\n')).not.toMatch(/訊息|好耶|小明|一般聊天|阿瓦隆同步/);
+  });
+
+  it('a failing target never blocks the other; once fixed it catches up on its own', async () => {
+    for (const failing of ['copy', 'main'] as const) {
+      const pub = statsWorkbook();
+      const priv = privateSheet();
+      const clock = { now: TUE_1005 };
+      const { discord, main, copy, tick } = both(pub, priv, clock);
+      const bad = failing === 'copy' ? priv : pub;
+      bad.failMetadataStatus = 403; // e.g. the sheet not shared with the service account
+      const [rm, rc] = await tick();
+      const [ok, ko] = failing === 'copy' ? [rm, rc] : [rc, rm];
+      expect(ok.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+      expect(ko.days).toEqual([{ day: DAYS[0], outcome: 'sheet-error' }]);
+      const good = failing === 'copy' ? pub : priv;
+      expect(done(good).map((r) => r[0])).toEqual(DAYS);
+      expect(bad.tab()).toEqual([]);
+      expect((failing === 'copy' ? copy : main).service.getStatus().lastRun?.outcome).toBe('sheet-error');
+      // Fixed: 10 minutes later it writes the same 7 days (Discord read again — the shared read is older than 5 minutes).
+      bad.failMetadataStatus = 0;
+      clock.now += 10 * 60_000;
+      const [am, ac] = await tick();
+      expect((failing === 'copy' ? ac : am).days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+      expect((failing === 'copy' ? am : ac).state).toBe('idle');
+      expect(priv.tab()).toEqual(pub.tab());
+      expect(done(priv)).toEqual(done(pub));
+      expect(priv.order()[0]).toBe(CHAT_EXPORT_TAB);
+      expect(discord.calls).toEqual([...DAYS, ...DAYS]);
+    }
   });
 });

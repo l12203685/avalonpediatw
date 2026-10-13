@@ -42,6 +42,13 @@
  * deleting at once would remove rows of a kept day. The lock is a 「清理中」
  * row in 匯出紀錄 — the first live one (< 10 min, not followed by its own
  * 「清理結束」) holds it; the others skip and try again in 10 minutes.
+ *
+ * The reading copy (config.ts DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID) is a
+ * second ChatExportService with its own sheet, claims, export log, retries and
+ * status (readChatExportReadingCopyConfig: same sources, 「聊天紀錄」 kept as
+ * the first tab). The two share only the Discord reads
+ * (discordPort.ts shareChatExportReads); a failure of one target never stops
+ * the other. /api/bots/status → chatExport.readingCopy.
  */
 
 import crypto from 'crypto';
@@ -60,6 +67,8 @@ import {
   CHAT_EXPORT_STATE_DONE,
   defaultChatExportLogger,
   readChatExportConfig,
+  readChatExportReadingCopyConfig,
+  readingCopyChatExportLogger,
   type ChatExportConfig,
   type ChatExportLogger,
 } from './config';
@@ -151,6 +160,22 @@ export interface ChatExportStatus {
   lastRun: ChatExportLastRun | null;
   catchUp: ChatExportCatchUp | null;
 }
+
+/**
+ * /api/bots/status → chatExport.readingCopy: the reading copy's own state —
+ * enabled (CHAT_EXPORT_ENABLED and a copy target that is not off, the main
+ * target's sheet or a public workbook), sheetConfigured, and its lastRun /
+ * catchUp like the main target's. Counts, dates and codes only.
+ */
+export interface ChatExportReadingCopyStatus {
+  enabled: boolean;
+  sheetConfigured: boolean;
+  lastRun: ChatExportLastRun | null;
+  catchUp: ChatExportCatchUp | null;
+}
+
+/** /api/bots/status → chatExport: the main target plus `readingCopy`. */
+export type ChatExportBotStatus = ChatExportStatus & { readingCopy: ChatExportReadingCopyStatus };
 
 export type ChatExportTickState =
   | 'disabled'
@@ -741,9 +766,10 @@ export class ChatExportService {
   }
 }
 
-// ─── Singleton ───────────────────────────────────────────────────────────
+// ─── Singletons (the main target and the reading copy) ───────────────────
 
 let instance: ChatExportService | null = null;
+let readingCopy: ChatExportService | null = null;
 
 export function initializeChatExport(opts: ChatExportServiceOptions): ChatExportService {
   if (!instance) instance = new ChatExportService(opts);
@@ -754,17 +780,39 @@ export function getChatExportService(): ChatExportService | null {
   return instance;
 }
 
-/** Status block for /api/bots/status, also before (or without) initialisation. */
-export function chatExportStatus(): ChatExportStatus {
-  if (instance) return instance.getStatus();
-  const cfg = readChatExportConfig();
+/**
+ * The reading copy's service: readChatExportReadingCopyConfig and its own
+ * log prefix unless `opts` says otherwise (tests). Pass the same (shared)
+ * Discord port as the main target's.
+ */
+export function initializeChatExportReadingCopy(opts: ChatExportServiceOptions): ChatExportService {
+  if (!readingCopy) {
+    readingCopy = new ChatExportService({
+      config: (): ChatExportConfig => readChatExportReadingCopyConfig(),
+      logger: readingCopyChatExportLogger,
+      ...opts,
+    });
+  }
+  return readingCopy;
+}
+
+export function getChatExportReadingCopyService(): ChatExportService | null {
+  return readingCopy;
+}
+
+/** A status from the config alone (before, or without, initialisation). */
+function statusFromConfig(cfg: ChatExportConfig): ChatExportStatus {
   const sheetConfigured = !!cfg.sheetId && cfg.sheetCredentialsUsable;
+  return { enabled: cfg.enabled, sheetConfigured, publicSheet: cfg.publicSheet && sheetConfigured, lastRun: null, catchUp: null };
+}
+
+/** Status block for /api/bots/status, also before (or without) initialisation. */
+export function chatExportStatus(): ChatExportBotStatus {
+  const main = instance ? instance.getStatus() : statusFromConfig(readChatExportConfig());
+  const copy = readingCopy ? readingCopy.getStatus() : statusFromConfig(readChatExportReadingCopyConfig());
   return {
-    enabled: cfg.enabled,
-    sheetConfigured,
-    publicSheet: cfg.publicSheet && sheetConfigured,
-    lastRun: null,
-    catchUp: null,
+    ...main,
+    readingCopy: { enabled: copy.enabled, sheetConfigured: copy.sheetConfigured, lastRun: copy.lastRun, catchUp: copy.catchUp },
   };
 }
 
@@ -772,4 +820,6 @@ export function chatExportStatus(): ChatExportStatus {
 export function __resetChatExportForTests(): void {
   instance?.stop();
   instance = null;
+  readingCopy?.stop();
+  readingCopy = null;
 }
