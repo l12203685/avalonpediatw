@@ -21,12 +21,26 @@ export const PRACTICE_LIMITS = Object.freeze({
   maxNoteChars: 500,
   /** Safety cap on trace length (a 5-round game has ~150 bot decisions). */
   maxEntries: 2000,
+  /** Server-wide cap on practice rooms that exist at the same time. */
+  maxConcurrentRooms: 50,
+  /** Server-wide cap on flags written to the report sheet per rolling hour. */
+  maxFlagsPerHour: 100,
+  /** Per-player cap on flags per rolling 24 hours (all their practice rooms). */
+  maxFlagsPerUserPerDay: 200,
 });
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 export interface PracticeSession {
   roomId: string;
   ownerId: string;
   options: PracticeOptions;
+  /**
+   * Bot player ids seated at creation. Kept here (not only in the room) so
+   * disposal frees their agents even when the room itself is already gone.
+   */
+  botIds: string[];
   createdAt: number;
   lastActivityAt: number;
   endedAt: number | null;
@@ -41,17 +55,27 @@ export type FlagCheck =
   | { ok: true; entry: PracticeTraceEntry }
   | { ok: false; error: string };
 
+interface FlagStamp {
+  at: number;
+  ownerId: string;
+  roomId: string;
+  entryId: number;
+}
+
 export class PracticeSessions {
   private readonly sessions = new Map<string, PracticeSession>();
+  /** Flags written in the last 24 h, across every practice room (quota). */
+  private flagStamps: FlagStamp[] = [];
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  create(roomId: string, ownerId: string, options: PracticeOptions): PracticeSession {
+  create(roomId: string, ownerId: string, options: PracticeOptions, botIds: readonly string[] = []): PracticeSession {
     const t = this.now();
     const session: PracticeSession = {
       roomId,
       ownerId,
       options: { ...options },
+      botIds: [...botIds],
       createdAt: t,
       lastActivityAt: t,
       endedAt: null,
@@ -69,6 +93,21 @@ export class PracticeSessions {
 
   get(roomId: string): PracticeSession | undefined {
     return this.sessions.get(roomId);
+  }
+
+  /** Whether another practice room may be created (server-wide cap). */
+  isFull(): boolean {
+    return this.sessions.size >= PRACTICE_LIMITS.maxConcurrentRooms;
+  }
+
+  /** The ended practice room whose game finished first (evicted when full). */
+  oldestEnded(): string | undefined {
+    let best: PracticeSession | undefined;
+    for (const s of this.sessions.values()) {
+      if (s.endedAt === null) continue;
+      if (!best || (best.endedAt ?? 0) > s.endedAt) best = s;
+    }
+    return best?.roomId;
   }
 
   /** Practice rooms owned by `ownerId` (normally zero or one). */
@@ -121,6 +160,14 @@ export class PracticeSessions {
     if (this.now() - s.lastFlagAt < PRACTICE_LIMITS.minFlagIntervalMs) {
       return { ok: false, error: '回報太快了，請稍等一下再送' };
     }
+    const t = this.now();
+    this.flagStamps = this.flagStamps.filter((f) => t - f.at < DAY_MS);
+    if (this.flagStamps.filter((f) => t - f.at < HOUR_MS).length >= PRACTICE_LIMITS.maxFlagsPerHour) {
+      return { ok: false, error: '這一小時的回報已達上限，請稍後再送' };
+    }
+    if (this.flagStamps.filter((f) => f.ownerId === s.ownerId).length >= PRACTICE_LIMITS.maxFlagsPerUserPerDay) {
+      return { ok: false, error: `每人每天最多回報 ${PRACTICE_LIMITS.maxFlagsPerUserPerDay} 步` };
+    }
     return { ok: true, entry };
   }
 
@@ -131,11 +178,13 @@ export class PracticeSessions {
     s.flaggedEntryIds.add(entryId);
     s.lastFlagAt = this.now();
     s.lastActivityAt = s.lastFlagAt;
+    this.flagStamps.push({ at: s.lastFlagAt, ownerId: s.ownerId, roomId, entryId });
   }
 
   /** Give the slot back when the write failed, so the player can retry. */
   releaseFlag(roomId: string, entryId: number): void {
     this.sessions.get(roomId)?.flaggedEntryIds.delete(entryId);
+    this.flagStamps = this.flagStamps.filter((f) => !(f.roomId === roomId && f.entryId === entryId));
   }
 
   delete(roomId: string): void {
@@ -158,6 +207,11 @@ export class PracticeSessions {
 
   size(): number {
     return this.sessions.size;
+  }
+
+  /** Every practice room id (sweep checks the room still exists). */
+  roomIds(): string[] {
+    return [...this.sessions.keys()];
   }
 
   /** Count of traced decisions of one kind (tests / smoke). */

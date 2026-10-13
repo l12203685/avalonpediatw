@@ -40,6 +40,8 @@ export interface DecisionExplanation {
   /** What `suspects` ranks. */
   suspectsLabel?: string;
   suspects: ExplainedSuspect[];
+  /** Shown instead of an empty `suspects` list (「尚無區分（全員 0.50）」), or after it when ties decide the order. */
+  suspectsNote?: string;
   /** Private knowledge the bot's role gives it. */
   knowledge?: string;
 }
@@ -133,12 +135,97 @@ function rankMerlinLike(obs: PlayerObservation, among?: readonly string[]): Rank
     .sort((a, b) => b.score - a.score || seatOfId(obs, a.id) - seatOfId(obs, b.id));
 }
 
+/** Equal as displayed (two decimals) — what the reader sees as a tie. */
+function same(a: number, b: number): boolean {
+  return Math.round(a * 100) === Math.round(b * 100);
+}
+
+/** Two or more seats and every score equal — a ranking would only be seat order. */
+function allTied(ranked: readonly Ranked[]): boolean {
+  return ranked.length > 1 && ranked.every((r) => same(r.score, ranked[0].score));
+}
+
+function noSpreadTxt(ranked: readonly Ranked[]): string {
+  return `尚無區分（全員 ${fmt(ranked[0].score)}）`;
+}
+
 function toSuspects(obs: PlayerObservation, ranked: Ranked[], n = 3): ExplainedSuspect[] {
+  if (allTied(ranked)) return [];
   return ranked.slice(0, n).map((r) => ({ seat: seatOfId(obs, r.id), score: Math.round(r.score * 100) / 100 }));
 }
 
+/** How many seats past the first `n` share the n-th score (a tie the cut hides). */
+function hiddenTies(ranked: readonly Ranked[], n: number): number {
+  if (ranked.length <= n || n <= 0) return 0;
+  const edge = ranked[n - 1].score;
+  return ranked.slice(n).filter((r) => same(r.score, edge)).length;
+}
+
+/** Note for a top-`n` list whose order is partly seat order (ties). */
+function tieNote(ranked: readonly Ranked[], n: number): string | undefined {
+  const hidden = hiddenTies(ranked, n);
+  if (hidden > 0) return `另有 ${hidden} 人同為 ${fmt(ranked[n - 1].score)}，依座位順序只列前 ${n} 位`;
+  const top = ranked.slice(0, n);
+  const tiedInside = top.some((r, i) => i > 0 && same(r.score, top[i - 1].score));
+  return tiedInside ? '同分者依座位順序' : undefined;
+}
+
+/** `suspects` + `suspectsNote` for one ranking (no list when every score ties). */
+function suspectsOf(
+  obs: PlayerObservation,
+  label: string,
+  ranked: Ranked[],
+): Pick<DecisionExplanation, 'suspects' | 'suspectsLabel' | 'suspectsNote'> {
+  if (allTied(ranked)) return { suspectsLabel: label, suspects: [], suspectsNote: noSpreadTxt(ranked) };
+  const note = tieNote(ranked, 3);
+  return { suspectsLabel: label, suspects: toSuspects(obs, ranked), ...(note ? { suspectsNote: note } : {}) };
+}
+
 function rankedTxt(obs: PlayerObservation, ranked: Ranked[], n = 3): string {
-  return ranked.slice(0, n).map((r) => `${seatTxt(obs, r.id)} ${fmt(r.score)}`).join('、') || '無';
+  if (allTied(ranked)) return noSpreadTxt(ranked);
+  const list = ranked.slice(0, n).map((r) => `${seatTxt(obs, r.id)} ${fmt(r.score)}`).join('、') || '無';
+  const hidden = hiddenTies(ranked, n);
+  return hidden > 0 ? `${list}（另有 ${hidden} 人同分）` : list;
+}
+
+/** 「隊上最可疑 4家 0.70」, or「隊上最可疑：尚無區分（全員 0.50）」when nobody stands out. */
+function topTxt(obs: PlayerObservation, label: string, ranked: Ranked[]): string {
+  if (allTied(ranked)) return `${label}：${noSpreadTxt(ranked)}`;
+  const hidden = hiddenTies(ranked, 1);
+  return `${label} ${seatTxt(obs, ranked[0].id)} ${fmt(ranked[0].score)}${hidden > 0 ? `（另有 ${hidden} 人同分）` : ''}`;
+}
+
+/**
+ * Where `id` stands in `ranked` (high first), with ties counted honestly:
+ * 「候選中第 2 高」「候選中第 2 高，與 3 人同分」「候選全員同分」.
+ */
+function rankTxt(ranked: readonly Ranked[], id: string, word: string): string {
+  const me = ranked.find((r) => r.id === id);
+  if (!me) return '不在候選中';
+  if (allTied(ranked)) return '候選全員同分';
+  const rank = 1 + ranked.filter((r) => r.score > me.score && !same(r.score, me.score)).length;
+  const ties = ranked.filter((r) => r.id !== id && same(r.score, me.score)).length;
+  return `候選中第 ${rank} ${word}${ties > 0 ? `，與 ${ties} 人同分` : ''}`;
+}
+
+function scoreOf(ranked: readonly Ranked[], id: string, fallback: number): number {
+  return ranked.find((r) => r.id === id)?.score ?? fallback;
+}
+
+/**
+ * 「像梅林分數 0.40（候選中第 2 高；前三：…）」, or「像梅林分數：尚無區分（全員 0.00）」
+ * when every candidate ties.
+ */
+function scoreTxt(
+  ranked: readonly Ranked[],
+  id: string,
+  label: string,
+  word: string,
+  fallback: number,
+  extra?: string,
+): string {
+  if (allTied(ranked)) return `${label}：${noSpreadTxt(ranked)}`;
+  return `${label} ${fmt(scoreOf(ranked, id, fallback))}（${rankTxt(ranked, id, word)}${extra ? `；${extra}` : ''}）`;
 }
 
 /** Ranked by the lake policy's public-history suspicion proxy (high first). */
@@ -149,13 +236,23 @@ function rankHistorySuspicion(obs: PlayerObservation, among: readonly string[]):
     .sort((a, b) => b.score - a.score || seatOfId(obs, a.id) - seatOfId(obs, b.id));
 }
 
-/** Default suspect list for the bot's camp: red-suspicion (good) / Merlin-likeness (red). */
-function campSuspects(obs: PlayerObservation): Pick<DecisionExplanation, 'suspects' | 'suspectsLabel'> {
-  if (obs.myTeam === 'evil') {
-    return { suspectsLabel: '像梅林', suspects: toSuspects(obs, rankMerlinLike(obs)) };
-  }
-  return { suspectsLabel: '紅方嫌疑', suspects: toSuspects(obs, rankRedSuspicion(obs)) };
+/** Oberon is red but sees nobody: no allies to exclude, no Merlin hunt to report. */
+function isOberon(obs: PlayerObservation): boolean {
+  return (obs.myRole as string) === 'oberon';
 }
+
+/**
+ * Default suspect list for the bot's camp: red-suspicion (good) /
+ * Merlin-likeness (red). Oberon knows no ally, so a Merlin-likeness list
+ * would include his own teammates; he gets the public red-suspicion view.
+ */
+function campSuspects(obs: PlayerObservation): Pick<DecisionExplanation, 'suspects' | 'suspectsLabel' | 'suspectsNote'> {
+  if (obs.myTeam === 'evil' && !isOberon(obs)) return suspectsOf(obs, '像梅林', rankMerlinLike(obs));
+  if (isOberon(obs)) return suspectsOf(obs, '紅方嫌疑（公開紀錄）', rankRedSuspicion(obs));
+  return suspectsOf(obs, '紅方嫌疑', rankRedSuspicion(obs));
+}
+
+const OBERON_NOTE = '奧伯倫不認識隊友，只能看公開紀錄';
 
 function questRecordTxt(obs: PlayerObservation, id: string): string {
   let ok = 0;
@@ -278,13 +375,14 @@ export function explainTeamProposal(obs: PlayerObservation, teamIds: readonly st
   parts.push(teamIds.includes(obs.myPlayerId) ? '隊上含自己' : '隊上不含自己');
   const known = new Set(obs.knownEvils);
   const knownOnTeam = teamIds.filter((id) => known.has(id) && id !== obs.myPlayerId);
-  if (obs.myTeam === 'evil') {
-    if (obs.myRole !== 'oberon') parts.push(`隊上的紅方隊友：${seatsTxt(obs, knownOnTeam)}`);
+  if (obs.myTeam === 'evil' && !isOberon(obs)) {
+    parts.push(`隊上的紅方隊友：${seatsTxt(obs, knownOnTeam)}`);
   } else {
+    if (isOberon(obs)) parts.push(OBERON_NOTE);
     const ranked = rankRedSuspicion(obs);
     const onTeam = ranked.filter((r) => teamIds.includes(r.id));
     const offTeam = ranked.filter((r) => !teamIds.includes(r.id));
-    if (onTeam.length > 0) parts.push(`隊上最可疑 ${seatTxt(obs, onTeam[0].id)} ${fmt(onTeam[0].score)}`);
+    if (onTeam.length > 0) parts.push(topTxt(obs, '隊上最可疑', onTeam));
     if (offTeam.length > 0) parts.push(`沒選的人裡最可疑：${rankedTxt(obs, offTeam, 2)}`);
     if (knownOnTeam.length > 0) parts.push(`注意：隊上有自己知道的紅方 ${seatsTxt(obs, knownOnTeam)}`);
     const wizards = (obs.knownWizards ?? []).filter((id) => teamIds.includes(id));
@@ -306,11 +404,12 @@ export function explainTeamVote(obs: PlayerObservation, approve: boolean, agent?
   parts.push(`隊長 ${seatTxt(obs, obs.currentLeader)}，本回合第 ${proposalNumber(obs)} 次派隊（已連續否決 ${obs.failCount} 次）`);
   const known = new Set(obs.knownEvils);
   const knownOnTeam = team.filter((id) => known.has(id) && id !== obs.myPlayerId);
-  if (obs.myTeam === 'evil') {
-    if (obs.myRole !== 'oberon') parts.push(`隊上的紅方隊友：${seatsTxt(obs, knownOnTeam)}`);
+  if (obs.myTeam === 'evil' && !isOberon(obs)) {
+    parts.push(`隊上的紅方隊友：${seatsTxt(obs, knownOnTeam)}`);
   } else {
+    if (isOberon(obs)) parts.push(OBERON_NOTE);
     const onTeamRanked = rankRedSuspicion(obs, team);
-    if (onTeamRanked.length > 0) parts.push(`隊上最可疑 ${seatTxt(obs, onTeamRanked[0].id)} ${fmt(onTeamRanked[0].score)}`);
+    if (onTeamRanked.length > 0) parts.push(topTxt(obs, '隊上最可疑', onTeamRanked));
     if (knownOnTeam.length > 0) parts.push(`隊上有自己知道的紅方 ${seatsTxt(obs, knownOnTeam)}`);
   }
   const base: DecisionExplanation = {
@@ -326,7 +425,7 @@ export function explainQuestCard(obs: PlayerObservation, card: 'success' | 'fail
   if (obs.myTeam !== 'evil') {
     return {
       reason: `好人只能出成功（比分 藍 ${score.good}：紅 ${score.evil}）。`,
-      rule: '規則：好人只能出成功',
+      rule: '好人只能出成功',
       knowledge: describeKnowledge(obs),
       ...campSuspects(obs),
     };
@@ -353,34 +452,30 @@ export function explainLakeTarget(obs: PlayerObservation, targetId: string, elig
   const candidates = eligible.filter((id) => id !== obs.myPlayerId);
   const parts: string[] = [`候選 ${candidates.length} 人`];
   parts.push(`${seatTxt(obs, targetId)} ${questRecordTxt(obs, targetId)}`);
-  if (obs.myTeam === 'evil') {
+  if (obs.myTeam === 'evil' && !isOberon(obs)) {
     const isAlly = obs.knownEvils.includes(targetId);
     if (isAlly) {
       const allies = rankHistorySuspicion(obs, candidates.filter((id) => obs.knownEvils.includes(id)));
-      const pressure = allies.find((r) => r.id === targetId)?.score ?? 0;
+      const pressure = scoreOf(allies, targetId, 0);
       parts.push(`${seatTxt(obs, targetId)} 是紅方隊友（湖隊友可以幫他洗白；任務紀錄嫌疑分 ${fmt(pressure)}）`);
     } else {
       const ranked = rankMerlinLike(obs, candidates);
-      const rank = ranked.findIndex((r) => r.id === targetId) + 1;
-      const s = ranked.find((r) => r.id === targetId)?.score ?? 0;
-      parts.push(`${seatTxt(obs, targetId)} 不是已知隊友，像梅林分數 ${fmt(s)}（候選中第 ${rank || '?'} 高）`);
+      parts.push(`${seatTxt(obs, targetId)} 不是已知隊友，${scoreTxt(ranked, targetId, '像梅林分數', '高', 0)}`);
     }
-    const base: DecisionExplanation = {
+    return {
       reason: `湖 ${seatTxt(obs, targetId)}：${parts.join('；')}。`,
       knowledge: describeKnowledge(obs),
-      suspectsLabel: '像梅林',
-      suspects: toSuspects(obs, rankMerlinLike(obs, candidates)),
+      ...suspectsOf(obs, '像梅林', rankMerlinLike(obs, candidates)),
     };
-    return base;
   }
+  if (isOberon(obs)) parts.push(OBERON_NOTE);
+  // Both public scores are shown; neither is claimed to be the one the lake
+  // policy used (the good / Oberon lake rule may change between versions).
   const ranked = rankRedSuspicion(obs, candidates);
-  const rank = ranked.findIndex((r) => r.id === targetId) + 1;
-  const s = ranked.find((r) => r.id === targetId)?.score ?? 0.5;
-  parts.push(`金字塔紅方嫌疑 ${fmt(s)}（候選中第 ${rank || '?'} 可疑）`);
+  parts.push(scoreTxt(ranked, targetId, '金字塔紅方嫌疑', '可疑', 0.5));
   const hist = rankHistorySuspicion(obs, candidates);
-  const histRank = hist.findIndex((r) => r.id === targetId) + 1;
-  parts.push(`任務／投票紀錄嫌疑分 ${fmt(hist.find((r) => r.id === targetId)?.score ?? 0)}（候選中第 ${histRank || '?'} 高；最高 ${rankedTxt(obs, hist, 2)}）`);
-  if (ranked.length > 0) {
+  parts.push(scoreTxt(hist, targetId, '任務／投票紀錄嫌疑分', '高', 0, `最高 ${rankedTxt(obs, hist, 2)}`));
+  if (ranked.length > 0 && !allTied(ranked)) {
     parts.push(`金字塔最可疑：${rankedTxt(obs, ranked, 2)}；最不可疑：${rankedTxt(obs, [...ranked].reverse(), 2)}`);
   }
   const avoid = new Set([...obs.knownEvils, ...(obs.knownWizards ?? [])]);
@@ -388,8 +483,7 @@ export function explainLakeTarget(obs: PlayerObservation, targetId: string, elig
   return {
     reason: `湖 ${seatTxt(obs, targetId)}：${parts.join('；')}。`,
     knowledge: describeKnowledge(obs),
-    suspectsLabel: '紅方嫌疑',
-    suspects: toSuspects(obs, ranked),
+    ...suspectsOf(obs, isOberon(obs) ? '紅方嫌疑（公開紀錄）' : '紅方嫌疑', ranked),
   };
 }
 
@@ -407,8 +501,10 @@ export function explainLakeClaim(
     const truthful = actual !== undefined && claim === actual;
     parts.push(`看到 ${seatTxt(obs, targetId)} 是${seen}，宣告${claim === 'good' ? '好人' : '壞人'}（${truthful ? '說實話' : '說謊'}）`);
   }
-  if (obs.myTeam === 'evil' && obs.myRole !== 'oberon') {
+  if (obs.myTeam === 'evil' && !isOberon(obs)) {
     parts.push(obs.knownEvils.includes(targetId) ? '對象是紅方隊友' : '對象不是已知隊友');
+  } else if (isOberon(obs)) {
+    parts.push('奧伯倫不認識隊友，看到紅方也不知道是誰');
   }
   return {
     reason: `${parts.join('；')}。`,
@@ -432,17 +528,14 @@ export function explainAssassination(obs: PlayerObservation, targetId: string, a
   }
   const like = rankMerlinLike(obs, candidates);
   const parts: string[] = [`候選 ${candidates.length} 人（排除紅方）`];
-  const tomRank = tom.findIndex((r) => r.id === targetId) + 1;
   if (tom.length > 0) {
-    parts.push(`ToM 梅林機率 ${fmt(tom.find((r) => r.id === targetId)?.score ?? 0)}（第 ${tomRank || '?'} 高；前三：${rankedTxt(obs, tom)}）`);
+    parts.push(scoreTxt(tom, targetId, 'ToM 梅林機率', '高', 0, `前三：${rankedTxt(obs, tom)}`));
   }
-  const likeRank = like.findIndex((r) => r.id === targetId) + 1;
-  parts.push(`像梅林分數 ${fmt(like.find((r) => r.id === targetId)?.score ?? 0)}（第 ${likeRank || '?'} 高）`);
+  parts.push(scoreTxt(like, targetId, '像梅林分數', '高', 0));
   const base: DecisionExplanation = {
     reason: `刺 ${seatTxt(obs, targetId)}：${parts.join('；')}。`,
     knowledge: describeKnowledge(obs),
-    suspectsLabel: tom.length > 0 ? '梅林機率' : '像梅林',
-    suspects: toSuspects(obs, tom.length > 0 ? tom : like),
+    ...suspectsOf(obs, tom.length > 0 ? '梅林機率' : '像梅林', tom.length > 0 ? tom : like),
   };
   return withReplay(base, replayRule(obs, agent, { type: 'assassinate', targetId }));
 }

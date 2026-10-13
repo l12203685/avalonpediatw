@@ -762,6 +762,17 @@ describe('GameEngine · Lady of the Lake declaration flow (Edward 2026-04-24)', 
     engine.cleanup();
   });
 
+  it('one inspection per phase: the new holder cannot inspect while the declaration is pending (2026-10-13)', () => {
+    const { engine, room, declarerId, targetId } = makeLadyRoom();
+    engine.submitLadyOfTheLakeTarget(declarerId, targetId);
+    expect(room.ladyOfTheLakeHolder).toBe(targetId);
+    const third = Object.keys(room.players).find((pid) => pid !== declarerId && pid !== targetId)!;
+    expect(() => engine.submitLadyOfTheLakeTarget(targetId, third)).toThrow(/already inspected/);
+    expect(room.ladyOfTheLakeHistory).toHaveLength(1);
+    expect(room.ladyOfTheLakeTarget).toBe(targetId);
+    engine.cleanup();
+  });
+
   it('declareLakeResult records the claim and advances to the next voting round', () => {
     const { engine, room, declarerId, targetId } = makeLadyRoom();
     engine.submitLadyOfTheLakeTarget(declarerId, targetId);

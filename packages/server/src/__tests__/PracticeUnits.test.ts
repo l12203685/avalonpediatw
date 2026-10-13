@@ -140,6 +140,81 @@ describe('PracticeSessions', () => {
     expect(s.findByOwner('c').map((x) => x.roomId)).toEqual(['BUSY']);
   });
 
+  it('caps rooms server-wide and evicts the review that ended first', () => {
+    let now = 0;
+    const s = new PracticeSessions(() => now);
+    for (let i = 0; i < PRACTICE_LIMITS.maxConcurrentRooms; i++) {
+      now += 1;
+      s.create(`R${i}`, `u${i}`, { seat: null, role: null }, [`b${i}`]);
+    }
+    expect(s.isFull()).toBe(true);
+    expect(s.oldestEnded()).toBeUndefined(); // all still playing → refuse
+    now += 1; s.markEnded('R7');
+    now += 1; s.markEnded('R3');
+    expect(s.oldestEnded()).toBe('R7');
+    expect(s.get('R7')?.botIds).toEqual(['b7']);
+    s.delete('R7');
+    expect(s.isFull()).toBe(false);
+    expect(s.roomIds()).toHaveLength(PRACTICE_LIMITS.maxConcurrentRooms - 1);
+  });
+
+  it('caps flags per hour server-wide and per player per day', () => {
+    let now = 10_000_000;
+    const s = new PracticeSessions(() => now);
+    const fill = (roomId: string, owner: string): void => {
+      s.create(roomId, owner, { seat: null, role: null });
+      for (let i = 0; i < PRACTICE_LIMITS.maxFlagsPerRoom; i++) s.record(roomId, entry);
+      s.markEnded(roomId);
+    };
+    /** Flag every step of `roomId` until refused; returns the refusal. */
+    const flagAll = (roomId: string, owner: string): string | undefined => {
+      for (let id = 1; id <= PRACTICE_LIMITS.maxFlagsPerRoom; id++) {
+        now += PRACTICE_LIMITS.minFlagIntervalMs + 1;
+        const c = s.checkFlag(roomId, id, owner);
+        if (!c.ok) return c.error;
+        s.commitFlag(roomId, id);
+      }
+      return undefined;
+    };
+    // Server-wide hourly cap, reached by several players.
+    let refusal: string | undefined;
+    for (let r = 0; r < 5 && !refusal; r++) {
+      fill(`H${r}`, `player${r}`);
+      refusal = flagAll(`H${r}`, `player${r}`);
+    }
+    expect(refusal).toMatch(/這一小時的回報已達上限/);
+    // An hour later the hourly window has room again.
+    now += 60 * 60 * 1000;
+    fill('H-next', 'player-next');
+    expect(s.checkFlag('H-next', 1, 'player-next').ok).toBe(true);
+
+    // Per-player daily cap: one player, many rooms, flagging just under the hourly cap.
+    const u = new PracticeSessions(() => now);
+    let refusedDaily: string | undefined;
+    for (let r = 0; r < 10 && !refusedDaily; r++) {
+      u.create(`E${r}`, 'heavy', { seat: null, role: null });
+      for (let i = 0; i < PRACTICE_LIMITS.maxFlagsPerRoom; i++) u.record(`E${r}`, entry);
+      u.markEnded(`E${r}`);
+      for (let id = 1; id <= PRACTICE_LIMITS.maxFlagsPerRoom; id++) {
+        now += 37 * 1000; // ~97 per hour: just under the hourly cap
+        const c = u.checkFlag(`E${r}`, id, 'heavy');
+        if (!c.ok) { refusedDaily = c.error; break; }
+        u.commitFlag(`E${r}`, id);
+      }
+    }
+    expect(refusedDaily).toBe(`每人每天最多回報 ${PRACTICE_LIMITS.maxFlagsPerUserPerDay} 步`);
+    // A failed write gives the quota back.
+    const v = new PracticeSessions(() => now);
+    v.create('F', 'f', { seat: null, role: null });
+    v.record('F', entry);
+    v.markEnded('F');
+    expect(v.checkFlag('F', 1, 'f').ok).toBe(true);
+    v.commitFlag('F', 1);
+    v.releaseFlag('F', 1);
+    now += PRACTICE_LIMITS.minFlagIntervalMs + 1;
+    expect(v.checkFlag('F', 1, 'f').ok).toBe(true);
+  });
+
   it('sanitizes notes', () => {
     expect(sanitizeFlagNote('  hi\u0000\u0007 there ')).toBe('hi there');
     expect(sanitizeFlagNote(42)).toBe('');
@@ -205,8 +280,41 @@ describe('explain (read-only reasons)', () => {
     expect(ex.reason).toContain('隊上');
   });
 
+  it('ties are not shown as a ranking; Oberon gets the public view', () => {
+    // Round 1, no history: every pyramid score is the 0.50 prior.
+    const fresh = obs({ currentRound: 1, questResults: [], voteHistory: [], questHistory: [], gamePhase: 'team_select', proposedTeam: [] });
+    const prop = explainTeamProposal(fresh, ['s1', 's2', 's3']);
+    expect(prop.suspects).toEqual([]);
+    expect(prop.suspectsNote).toBe('尚無區分（全員 0.50）');
+    expect(prop.reason).toContain('隊上最可疑：尚無區分（全員 0.50）');
+    expect(prop.reason).not.toMatch(/2家 0\.50、3家 0\.50/);
+
+    const oberon = { myRole: 'oberon', myTeam: 'evil', knownEvils: [] } as Partial<PlayerObservation>;
+    const vote = explainTeamVote(obs({ ...oberon }), true);
+    expect(vote.reason).toContain('奧伯倫不認識隊友，只能看公開紀錄');
+    expect(vote.reason).toMatch(/隊上最可疑 \d家 \d\.\d\d/);
+    expect(vote.suspectsLabel).toBe('紅方嫌疑（公開紀錄）');
+    expect(vote.suspects.length).toBe(3);
+    const lake = explainLakeTarget(obs({ ...oberon, currentRound: 1, questResults: [], voteHistory: [], questHistory: [] }), 's4', IDS.slice(1));
+    expect(lake.reason).toContain('金字塔紅方嫌疑：尚無區分（全員 0.50）');
+    expect(lake.reason).not.toContain('像梅林');
+
+    // Partial ties: the list stays, with a note that seat order broke the tie.
+    // Here seats 5 and 6 (both on the failed R1 team) tie for third place.
+    const failed = explainTeamVote(obs({}), false);
+    expect(failed.suspects.map((x) => x.seat)).toEqual([2, 8, 5]);
+    expect(failed.suspectsNote).toBe('另有 1 人同為 0.65，依座位順序只列前 3 位');
+
+    // Red bot, no history: every Merlin-likeness ties too.
+    const red = explainLakeTarget(obs({ myPlayerId: 's2', myRole: 'assassin', myTeam: 'evil', knownEvils: ['s5'], currentRound: 1, questResults: [], voteHistory: [], questHistory: [] }), 's4', IDS);
+    expect(red.reason).toContain('像梅林分數：尚無區分');
+    expect(red.suspects).toEqual([]);
+  });
+
   it('quest card, lake and assassination texts', () => {
-    expect(explainQuestCard(obs({ gamePhase: 'quest_vote' }), 'success').reason).toMatch(/^好人只能出成功/);
+    const good = explainQuestCard(obs({ gamePhase: 'quest_vote' }), 'success');
+    expect(good.reason).toMatch(/^好人只能出成功/);
+    expect(good.rule).toBe('好人只能出成功'); // the review adds the「規則：」label itself
     const red = explainQuestCard(
       obs({ myPlayerId: 's5', myRole: 'morgana', myTeam: 'evil', knownEvils: ['s2'], gamePhase: 'quest_vote', proposedTeam: ['s2', 's5', 's7', 's9'] }),
       'fail',

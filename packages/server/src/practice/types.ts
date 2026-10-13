@@ -92,6 +92,8 @@ export interface PracticeTraceEntry {
   /** What `suspects` ranks: 紅方嫌疑 (good bots) or 像梅林 (red bots). */
   suspectsLabel?: string;
   suspects?: PracticeSuspect[];
+  /** Instead of an empty `suspects` list (「尚無區分（全員 0.50）」), or after it when ties decide the order. */
+  suspectsNote?: string;
   /** Private knowledge used (梅林看到的紅方、派西看到的兩位、紅方隊友…). */
   knowledge?: string;
   /** 'agent' = the bot's own AI; 'fallback' = AI failed / missing, backup rule used. */

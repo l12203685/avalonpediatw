@@ -9,7 +9,11 @@
  *   - no trace data reaches the client before `game:ended`;
  *   - practice rooms are never persisted (Supabase / Firestore / GitHub
  *     archive / stats spies stay untouched), unlisted, unjoinable, unwatchable;
- *   - 「這步怪怪的」 flags reach the sink with the server-side reason.
+ *   - 「這步怪怪的」 flags reach the sink with the server-side reason;
+ *   - a bot's private lake result never reaches the human's client;
+ *   - nobody can (re)start a practice room; the server never plays for a
+ *     disconnected practice player; cleanup frees bots even when the room
+ *     was removed by another path.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer, Server as HttpServer } from 'http';
@@ -54,6 +58,7 @@ import { GameHistoryRepository } from '../../services/GameHistoryRepository';
 import { GameHistoryRepositoryV2 } from '../../services/GameHistoryRepositoryV2';
 import { ComputedStatsRepositoryV2 } from '../../services/ComputedStatsRepositoryV2';
 import { GameServer } from '../../socket/GameServer';
+import type { RoomManager } from '../../game/RoomManager';
 import { authenticateSocket } from '../../middleware/auth';
 import type { PracticeFlagRow, PracticeFlagSink } from '../../practice/PracticeReportWriter';
 import type { PracticeTracePayload, PracticeTraceEntry, PracticeFlagResult } from '../../practice/types';
@@ -159,7 +164,9 @@ function makeHuman(socket: ClientSocket, uid: string, evilCard: 'success' | 'fai
     } else if (room.state === 'lady_of_the_lake') {
       const hist = room.ladyOfTheLakeHistory ?? [];
       const last = hist[hist.length - 1];
-      if (room.ladyOfTheLakeHolder === uid && !room.ladyOfTheLakeResult) {
+      // Pick only before this phase's inspection (the token moves to the
+      // target at inspection, while the inspector still has to declare).
+      if (room.ladyOfTheLakeHolder === uid && !room.ladyOfTheLakeTarget) {
         const used = room.ladyOfTheLakeUsed ?? [];
         const target = ids.find((id) => id !== uid && !used.includes(id));
         if (target) once(`lake-${round}`, 2000, () => socket.emit('game:lady-of-the-lake', room.id, uid, target));
@@ -239,6 +246,24 @@ function assertTraceComplete(room: Room, humanId: string, human: Human, trace: P
   }
 }
 
+/** No state the human received (before the end) shows a bot's private lake result. */
+function assertNoLakeLeak(human: Human): void {
+  for (const e of human.events) {
+    if (e.name !== 'game:state-updated' && e.name !== 'game:started') continue;
+    const r = (JSON.parse(e.json) as Room[])[0];
+    if (!r || r.state === 'ended' || r.ladyOfTheLakeResult === undefined || r.ladyOfTheLakeResult === null) continue;
+    const hist = r.ladyOfTheLakeHistory ?? [];
+    expect(hist[hist.length - 1]?.holderId, 'lake result sent to a player who did not inspect').toBe(human.uid);
+  }
+}
+
+/** Private GameServer parts the cleanup tests look at. */
+interface GameServerInternals {
+  roomManager: RoomManager;
+  botAgents: Map<string, unknown>;
+  sweepPracticeRooms: () => void;
+}
+
 class FakeSink implements PracticeFlagSink {
   rows: PracticeFlagRow[] = [];
   async appendFlag(row: PracticeFlagRow): Promise<void> {
@@ -251,6 +276,8 @@ describe('practice mode — full games over sockets', () => {
   let io: SocketIOServer;
   let port: number;
   let sink: FakeSink;
+  let gameServer: GameServer;
+  const internals = (): GameServerInternals => gameServer as unknown as GameServerInternals;
   const sockets: ClientSocket[] = [];
   const humans: Human[] = [];
   const spies: Array<ReturnType<typeof vi.spyOn>> = [];
@@ -259,7 +286,8 @@ describe('practice mode — full games over sockets', () => {
     httpServer = createServer();
     io = new SocketIOServer(httpServer, { cors: { origin: true, credentials: true } });
     io.use(authenticateSocket);
-    new GameServer(io, { botDelayScale: BOT_DELAY_SCALE, practiceReportSink }).start();
+    gameServer = new GameServer(io, { botDelayScale: BOT_DELAY_SCALE, practiceReportSink });
+    gameServer.start();
     await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', () => resolve()));
     port = (httpServer.address() as AddressInfo).port;
   }
@@ -363,6 +391,7 @@ describe('practice mode — full games over sockets', () => {
       expect(trace.winner).toBe(room.evilWins ? 'evil' : 'good');
       expect(trace.seats.find((s) => s.playerId === uid)?.isBot).toBe(false);
       assertTraceComplete(room, uid, human, trace);
+      assertNoLakeLeak(human);
       expect(human.errors).toEqual([]);
     }
 
@@ -404,6 +433,14 @@ describe('practice mode — full games over sockets', () => {
     const earlyFlag = await emitAck<PracticeFlagResult>(owner, 'practice:flag', { roomId, entryId: 1, note: 'x' });
     expect(earlyFlag.ok).toBe(false);
 
+    // Nobody (re)starts a practice room: not a stranger, not the owner.
+    other.emit('game:start-game', roomId);
+    owner.emit('game:start-game', roomId);
+    await waitFor(() => otherErrors.includes('練習房請按「再練一局」') && human.errors.includes('練習房請按「再練一局」'), {
+      label: 'start-game refused',
+    });
+    human.errors.splice(0);
+
     other.emit('game:join-room', roomId);
     other.emit('game:spectate-room', roomId);
     const listed = await new Promise<Array<{ fullId: string }>>((resolve) => {
@@ -420,6 +457,12 @@ describe('practice mode — full games over sockets', () => {
     human.stop();
     const trace = human.trace!;
     expect(trace.entries.length).toBeGreaterThan(20);
+    // Still one game: the mid-game start-game attempts changed nothing.
+    assertTraceComplete(human.ended!, 'owner-1', human, trace);
+    // After the end too: no second game, no second game:ended.
+    owner.emit('game:start-game', roomId);
+    await waitFor(() => human.errors.includes('練習房請按「再練一局」'), { label: 'restart after end refused' });
+    expect(human.events.filter((e) => e.name === 'game:ended')).toHaveLength(1);
 
     // Pull again after the end (e.g. after a refresh) — same entries.
     const pulled = await emitAck<{ ok: boolean; payload: PracticeTracePayload }>(owner, 'practice:get-trace', roomId);
@@ -464,6 +507,74 @@ describe('practice mode — full games over sockets', () => {
     const gone = await emitAck<{ ok: boolean }>(owner, 'practice:get-trace', roomId);
     expect(gone.ok).toBe(false);
   }, 120000);
+
+  it('cleanup: review window counts from the end; a room removed elsewhere still frees its bots', async () => {
+    await boot(sink);
+    const createdAt = Date.now();
+    const { human, roomId } = await playPractice('cleanup-human', { seat: 4, role: 'loyal' });
+    const { roomManager, botAgents } = internals();
+    const room = roomManager.getRoom(roomId)!;
+    // RoomManager's own cleanup deletes ended rooms 30 min after updatedAt.
+    expect(room.updatedAt).toBeGreaterThan(createdAt);
+    expect(room.updatedAt).toBeGreaterThanOrEqual(human.events.find((e) => e.name === 'game:ended')!.at - 1000);
+    const botIds = Object.keys(room.players).filter((id) => room.players[id].isBot);
+    expect(botIds).toHaveLength(9);
+    expect(botIds.every((id) => botAgents.has(id))).toBe(true);
+
+    // Simulate the general cleanup removing the room first.
+    roomManager.deleteRoom(roomId);
+    const gone = await emitAck<{ ok: boolean; error?: string }>(human.socket, 'practice:get-trace', roomId);
+    expect(gone).toEqual({ ok: false, error: '這個練習房已清除' });
+    internals().sweepPracticeRooms();
+    expect(botIds.some((id) => botAgents.has(id))).toBe(false);
+    const after = await emitAck<{ ok: boolean; error?: string }>(human.socket, 'practice:get-trace', roomId);
+    expect(after.error).toMatch(/找不到這個練習房/);
+  }, 90000);
+
+  it('a disconnected practice player is never auto-played', async () => {
+    await boot(sink);
+    const uid = 'afk-human';
+    const socket = await connect(port, uid, 'AFK');
+    sockets.push(socket);
+    // Passive client: never acts, so the game soon waits on this player.
+    const res = await emitAck<{ ok: boolean; roomId: string }>(socket, 'practice:create', { seat: 6, role: 'loyal' });
+    const roomId = res.roomId;
+    const { roomManager } = internals();
+    const waitingOnMe = (): boolean => {
+      const r = roomManager.getRoom(roomId);
+      if (!r || r.state !== 'voting') return false;
+      const ids = Object.keys(r.players);
+      const leader = ids[r.leaderIndex % ids.length];
+      if (r.questTeam.length === 0) return leader === uid;
+      return !(uid in r.votes) && Object.keys(r.votes).length === ids.length - 1;
+    };
+    await waitFor(() => waitingOnMe(), { label: 'game waits on the passive player' });
+    const before = JSON.stringify((({ questTeam, votes, voteHistory, leaderIndex }) => ({ questTeam, votes, voteHistory, leaderIndex }))(roomManager.getRoom(roomId)!));
+    socket.disconnect();
+    await new Promise((r) => setTimeout(r, 3600)); // past the 3 s auto-act delay
+    const r = roomManager.getRoom(roomId)!;
+    expect(r.players[uid].status).toBe('disconnected');
+    expect(JSON.stringify((({ questTeam, votes, voteHistory, leaderIndex }) => ({ questTeam, votes, voteHistory, leaderIndex }))(r))).toBe(before);
+  }, 60000);
+
+  it('practice needs the player out of any live room (any tab); only the host starts a normal game', async () => {
+    await boot(sink);
+    const tabA = await connect(port, 'two-tabs', 'TabA');
+    const tabB = await connect(port, 'two-tabs', 'TabB');
+    const stranger = await connect(port, 'stranger-2', 'Stranger');
+    sockets.push(tabA, tabB, stranger);
+    const strangerErrors: string[] = [];
+    stranger.on('error', (m: string) => strangerErrors.push(m));
+    const created = new Promise<Room>((resolve) => tabA.once('game:state-updated', resolve));
+    tabA.emit('game:create-room', 'TabA');
+    const normal = await created;
+    const refused = await emitAck<{ ok: boolean; error?: string }>(tabB, 'practice:create', { seat: null, role: null });
+    expect(refused).toEqual({ ok: false, error: '你目前在其他房間中，請先離開再開始練習' });
+
+    stranger.emit('game:start-game', normal.id);
+    await waitFor(() => strangerErrors.length > 0, { label: 'stranger start refused' });
+    expect(strangerErrors).toContain('Only the host can start the game');
+  }, 30000);
 
   it('without a report sink the review says saving is unavailable', async () => {
     await boot(null);

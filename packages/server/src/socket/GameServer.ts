@@ -205,7 +205,8 @@ export function isBotLakeViaAgentEnabled(env: NodeJS.ProcessEnv = process.env): 
   return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
 }
 
-// 網站「與機器人練習」: one new practice room per socket every 3 s at most.
+// 網站「與機器人練習」: one new practice room per socket AND per player every
+// 3 s at most (keyed separately, so reconnecting does not reset the limit).
 const practiceCreateLimiter = new SocketRateLimiter({
   windowMs: 3000,
   maxRequests: 1,
@@ -380,7 +381,7 @@ export class GameServer {
       });
 
       socket.on('game:start-game', (roomId: string) => {
-        this.handleStartGame(socket, roomId);
+        this.handleStartGameRequest(socket, roomId);
       });
 
       socket.on('game:vote', (roomId: string, playerId: string, vote: boolean) => {
@@ -624,7 +625,19 @@ export class GameServer {
         ? record
         : { ...record, result: undefined as unknown as 'good' | 'evil' }
     );
-    return { ...room, players, votes, ladyOfTheLakeHistory: ladyHistory };
+    // 2026-10-13: the live inspection result (`ladyOfTheLakeResult`) is
+    // private to the player who just inspected. It used to be copied to
+    // every client, so devtools showed what a bot saw before it declared.
+    const lastLake = room.ladyOfTheLakeHistory?.[room.ladyOfTheLakeHistory.length - 1];
+    const seesLakeResult = revealAll
+      || (lastLake?.holderId === playerId && lastLake?.targetId === room.ladyOfTheLakeTarget);
+    return {
+      ...room,
+      players,
+      votes,
+      ladyOfTheLakeHistory: ladyHistory,
+      ladyOfTheLakeResult: seesLakeResult ? room.ladyOfTheLakeResult : undefined,
+    };
   }
 
   /**
@@ -661,7 +674,13 @@ export class GameServer {
     const ladyHistory = room.ladyOfTheLakeHistory?.map(record =>
       revealAll ? record : { ...record, result: undefined as unknown as 'good' | 'evil' }
     );
-    return { ...room, players, votes, ladyOfTheLakeHistory: ladyHistory };
+    return {
+      ...room,
+      players,
+      votes,
+      ladyOfTheLakeHistory: ladyHistory,
+      ladyOfTheLakeResult: revealAll ? room.ladyOfTheLakeResult : undefined,
+    };
   }
 
   private handleSetRoomPassword(socket: Socket, roomId: string, password: string | null): void {
@@ -845,6 +864,35 @@ export class GameServer {
       console.error('Error joining room:', error);
       socket.emit('error', 'Failed to join room');
     }
+  }
+
+  /**
+   * `game:start-game` from a client. 2026-10-13: only the host of the room
+   * may start, only from the lobby. Before this any socket that knew a room
+   * id could restart a game in progress (wiping its history), and a practice
+   * room could be restarted after it ended (its trace then mixed two games).
+   * Practice rooms are started by the server itself (`practice:create`).
+   */
+  private handleStartGameRequest(socket: Socket, roomId: string): void {
+    const room = typeof roomId === 'string' ? this.roomManager.getRoom(roomId) : undefined;
+    if (!room) {
+      socket.emit('error', 'Room not found');
+      return;
+    }
+    if (this.isPracticeRoom(roomId)) {
+      socket.emit('error', '練習房請按「再練一局」');
+      return;
+    }
+    const requesterId = socket.data.playerId as string | undefined;
+    if (!requesterId || room.host !== requesterId) {
+      socket.emit('error', 'Only the host can start the game');
+      return;
+    }
+    if (room.state !== 'lobby') {
+      socket.emit('error', 'Game already started');
+      return;
+    }
+    this.handleStartGame(socket, roomId);
   }
 
   private handleStartGame(socket: Socket, roomId: string): void {
@@ -2787,9 +2835,12 @@ export class GameServer {
         }
 
         // Auto-act for disconnected player to prevent game from stalling
-        // Use a short delay (3s) to allow quick reconnects to cancel this
+        // Use a short delay (3s) to allow quick reconnects to cancel this.
+        // Not in practice rooms (2026-10-13): only the owner is human, nobody
+        // waits on them, and a locked phone screen must not auto-reject a
+        // vote or auto-assassinate. Abandoned practice rooms are swept.
         const engine = this.gameEngines.get(roomId);
-        if (engine && room.state !== 'lobby' && room.state !== 'ended') {
+        if (engine && room.state !== 'lobby' && room.state !== 'ended' && !this.isPracticeRoom(roomId)) {
           setTimeout(() => {
             const r = this.roomManager.getRoom(roomId);
             if (!r || r.state === 'ended' || r.players[playerId]?.status === 'active') return;
@@ -2896,24 +2947,41 @@ export class GameServer {
       else socket.emit('error', error);
     };
     try {
-      if (!practiceCreateLimiter.isAllowed(`${socket.id}:practice-create`)) {
+      const uid = user.uid;
+      const socketOk = practiceCreateLimiter.isAllowed(`${socket.id}:practice-create`);
+      const userOk = practiceCreateLimiter.isAllowed(`user:${uid}:practice-create`);
+      if (!socketOk || !userOk) {
         fail('建立太頻繁，請稍等幾秒再試');
         return;
       }
-      const uid = user.uid;
       const options = parsePracticeOptions(rawOptions);
 
-      // Refuse while the player sits in a live (non-practice) room.
-      const currentRoomId = socket.data.roomId as string | undefined;
-      if (currentRoomId && !this.isPracticeRoom(currentRoomId)) {
-        const current = this.roomManager.getRoom(currentRoomId);
-        if (current && current.players[uid] && current.state !== 'ended') {
-          fail('你目前在其他房間中，請先離開再開始練習');
-          return;
-        }
+      // Refuse while the player sits in any other (non-practice) room, from
+      // any tab: one socket per player, so a practice room would otherwise
+      // take over that room's updates. A lobby the player already left
+      // (disconnected) does not count.
+      const busyIn = this.roomManager.getAllRooms().find((r) => {
+        if (this.isPracticeRoom(r.id) || r.state === 'ended') return false;
+        const me = r.players[uid];
+        if (!me) return false;
+        return r.state !== 'lobby' || me.status !== 'disconnected';
+      });
+      if (busyIn) {
+        fail('你目前在其他房間中，請先離開再開始練習');
+        return;
       }
       // One practice room per player: a new one replaces the old.
       for (const old of this.practice.findByOwner(uid)) this.disposePracticeRoom(old.roomId);
+      // Server-wide cap: make room by dropping the review of the game that
+      // ended first; refuse when every practice room is still being played.
+      if (this.practice.isFull()) {
+        const oldest = this.practice.oldestEnded();
+        if (oldest) this.disposePracticeRoom(oldest);
+      }
+      if (this.practice.isFull()) {
+        fail('目前練習的人太多，請稍後再試');
+        return;
+      }
 
       let roomId = `${PRACTICE_ROOM_PREFIX}${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
       while (this.roomManager.getRoom(roomId)) {
@@ -2925,9 +2993,10 @@ export class GameServer {
       room.isPrivate = true;
       room.roleOptions = { ...room.roleOptions, ladyOfTheLake: true };
       room.players[uid].avatar = user.photoURL;
-      for (let i = 1; i < PRACTICE_PLAYER_COUNT; i++) this.addBotToRoom(room);
+      const botIds: string[] = [];
+      for (let i = 1; i < PRACTICE_PLAYER_COUNT; i++) botIds.push(this.addBotToRoom(room));
 
-      this.practice.create(roomId, uid, options);
+      this.practice.create(roomId, uid, options, botIds);
       const engine = this.createGameEngine(roomId, room);
       engine.configurePractice({
         playerId: uid,
@@ -2963,7 +3032,11 @@ export class GameServer {
       return;
     }
     const room = this.roomManager.getRoom(roomId);
-    if (session.endedAt === null || !room || room.state !== 'ended') {
+    if (!room) {
+      ack({ ok: false, error: '這個練習房已清除' });
+      return;
+    }
+    if (session.endedAt === null || room.state !== 'ended') {
       ack({ ok: false, error: '對局結束後才會公開機器人的決策' });
       return;
     }
@@ -3020,6 +3093,11 @@ export class GameServer {
   private onPracticeGameEnded(roomId: string, room: Room): void {
     const session = this.practice.get(roomId);
     if (!session) return;
+    // The engine mutates the room in place and never bumps updatedAt, so the
+    // general RoomManager cleanup (ended + 30 min since updatedAt) would
+    // otherwise delete the room ~30 min after it was CREATED, cutting the
+    // review window short. Count the window from the end of the game.
+    room.updatedAt = Date.now();
     const socketId = this.playerToSocket.get(session.ownerId);
     if (socketId) this.io.to(socketId).emit('practice:trace', this.buildPracticePayload(roomId, room));
     console.log(`✓ Practice game ended in room ${roomId} (${session.entries.length} bot decisions traced)`);
@@ -3141,6 +3219,7 @@ export class GameServer {
         rule: ex.rule,
         suspectsLabel: ex.suspectsLabel,
         suspects: ex.suspects,
+        suspectsNote: ex.suspectsNote,
         knowledge: ex.knowledge,
         source: input.source,
       };
@@ -3166,6 +3245,9 @@ export class GameServer {
         if (p.isBot) this.botAgents.delete(pid);
       }
     }
+    // Also when the room is already gone (removed by another cleanup path).
+    for (const botId of session?.botIds ?? []) this.botAgents.delete(botId);
+    this.spectators.delete(roomId);
     if (session) {
       const socketId = this.playerToSocket.get(session.ownerId);
       const sock = socketId ? this.io.sockets.sockets.get(socketId) : undefined;
@@ -3182,10 +3264,15 @@ export class GameServer {
     this.practice.delete(roomId);
   }
 
-  /** Periodic cleanup: ended (review window over) or idle practice rooms. */
+  /** Periodic cleanup: ended (review window over), idle, or orphaned practice rooms. */
   private sweepPracticeRooms(): void {
     try {
       for (const roomId of this.practice.expired()) this.disposePracticeRoom(roomId);
+      // A room removed by some other path (e.g. RoomManager's own cleanup)
+      // leaves its session and bot agents behind — free them too.
+      for (const roomId of this.practice.roomIds()) {
+        if (!this.roomManager.getRoom(roomId)) this.disposePracticeRoom(roomId);
+      }
     } catch (err) {
       console.error('[practice] sweep failed:', err instanceof Error ? err.message : 'unknown');
     }

@@ -1182,6 +1182,12 @@ export class GameEngine {
     if (holderId !== this.room.ladyOfTheLakeHolder) {
       throw new Error(`Player ${holderId} is not the Lady of the Lake holder`);
     }
+    // One inspection per Lady phase. The token moves to the target at
+    // inspection while the phase waits for the declaration, so without this
+    // the new holder could inspect again in the same phase (2026-10-13).
+    if (this.room.ladyOfTheLakeTarget) {
+      throw new Error('Lady of the Lake already inspected this round');
+    }
     if (!(targetId in this.room.players)) {
       throw new Error(`Target player ${targetId} not found`);
     }
