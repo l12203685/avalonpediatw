@@ -2,7 +2,7 @@
 /**
  * Red-lake diagnosis — WHY does a red-side switch (here: the human evil
  * lake strategy, `evilLakeHumanStrategy`) change red's self-play win rate?
- * (strength_benchmark.md 第 7 節, 2026-10-13 round 2.)
+ * (strength_benchmark.md 第 8 節, 2026-10-13 round 2.)
  *
  *   USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/redLakeDiagnosis.ts \
  *     --flag ... --base ... [--seed 99 --seed 4242] [--games 5000] \
@@ -144,9 +144,23 @@ interface GameRec {
   /** Their later votes on teams containing that seat, how many approvals. */
   redVouchVotes: number;
   redVouchVotesApprove: number;
-  /** Their later votes on teams WITHOUT that seat, how many rejections. */
+  /** Their later votes on teams WITHOUT that seat, how many rejections (every seat: off the team, on it, own proposal). */
   redVouchOffVotes: number;
   redVouchOffReject: number;
+  /** …only votes where the holder neither led nor sat on the team (the `evilVouchFollowUp` vote rule). */
+  redVouchOffTeamVotes: number;
+  redVouchOffTeamReject: number;
+  /** …off the team and outside red's decisive window (fewer than two fails; R5 only before any fail). */
+  redVouchOffTeamNoWinVotes: number;
+  redVouchOffTeamNoWinReject: number;
+  /** …the holder sat on the team (not the leader) / the holder's own proposal. */
+  redVouchOnTeamVotes: number;
+  redVouchOnTeamReject: number;
+  redVouchOwnVotes: number;
+  redVouchOwnReject: number;
+  /** Teams the red holder led after vouching outside red's decisive window / how many included the seat. */
+  redVouchLedNoWin: number;
+  redVouchLedNoWinIncl: number;
   /** The vouched seat (when red): later teams it led / how many include the red holder. */
   vouchedRedLed: number;
   vouchedRedLedIncl: number;
@@ -171,7 +185,11 @@ function emptyGame(): GameRec {
     evilWon: false, threeBlue: false, merlinKilled: null, lakes: [], r3Flags: {},
     r3End: { red85: 0, blue85: 0, red50: 0, blue50: 0 },
     redVouchLed: 0, redVouchLedIncl: 0, redVouchVotes: 0, redVouchVotesApprove: 0,
-    redVouchOffVotes: 0, redVouchOffReject: 0, vouchedRedLed: 0, vouchedRedLedIncl: 0,
+    redVouchOffVotes: 0, redVouchOffReject: 0,
+    redVouchOffTeamVotes: 0, redVouchOffTeamReject: 0, redVouchOffTeamNoWinVotes: 0, redVouchOffTeamNoWinReject: 0,
+    redVouchOnTeamVotes: 0, redVouchOnTeamReject: 0, redVouchOwnVotes: 0, redVouchOwnReject: 0,
+    redVouchLedNoWin: 0, redVouchLedNoWinIncl: 0,
+    vouchedRedLed: 0, vouchedRedLedIncl: 0,
     redFrameLed: 0, redFrameLedIncl: 0,
     blueVouchLed: 0, blueVouchLedIncl: 0,
     missionsAfterLake: 0, redsOnMissionsAfterLake: 0, flaggedRedsOnMissions: 0,
@@ -303,6 +321,13 @@ function analyseGame(ctx: GameContext): void {
       if (isRed(id)) rec.r3End.red85++; else rec.r3End.blue85++;
     } else if (isRed(id)) rec.r3End.red50++; else rec.r3End.blue50++;
   }
+  // Red's decisive window before a proposal of round r (the Q11 state of
+  // `mayBreakHardRules`: two fails already, or R5 after a fail) — as a
+  // state of the game, so the split matches scripts/evilLakeStudy.ts (e).
+  const decisiveWindow = (round: number): boolean => {
+    const fails = obs.questHistory.filter((q) => q.round < round && q.result === 'fail').length;
+    return fails >= 2 || (round === 5 && fails >= 1);
+  };
   for (const l of obs.lakeHistory ?? []) {
     const later = obs.voteHistory.filter((v) => v.round > l.round);
     const led = later.filter((v) => v.leader === l.holderId);
@@ -320,8 +345,24 @@ function analyseGame(ctx: GameContext): void {
       rec.redVouchVotes += withTarget.length;
       rec.redVouchVotesApprove += withTarget.filter((v) => v.votes[l.holderId] === true).length;
       const withoutTarget = voted.filter((v) => !v.team.includes(l.targetId));
+      const rejects = (vs: typeof withoutTarget): number => vs.filter((v) => v.votes[l.holderId] === false).length;
       rec.redVouchOffVotes += withoutTarget.length;
-      rec.redVouchOffReject += withoutTarget.filter((v) => v.votes[l.holderId] === false).length;
+      rec.redVouchOffReject += rejects(withoutTarget);
+      const offTeam = withoutTarget.filter((v) => v.leader !== l.holderId && !v.team.includes(l.holderId));
+      const offTeamNoWin = offTeam.filter((v) => !decisiveWindow(v.round));
+      const onTeam = withoutTarget.filter((v) => v.leader !== l.holderId && v.team.includes(l.holderId));
+      const own = withoutTarget.filter((v) => v.leader === l.holderId);
+      rec.redVouchOffTeamVotes += offTeam.length;
+      rec.redVouchOffTeamReject += rejects(offTeam);
+      rec.redVouchOffTeamNoWinVotes += offTeamNoWin.length;
+      rec.redVouchOffTeamNoWinReject += rejects(offTeamNoWin);
+      rec.redVouchOnTeamVotes += onTeam.length;
+      rec.redVouchOnTeamReject += rejects(onTeam);
+      rec.redVouchOwnVotes += own.length;
+      rec.redVouchOwnReject += rejects(own);
+      const ledNoWin = led.filter((v) => !decisiveWindow(v.round));
+      rec.redVouchLedNoWin += ledNoWin.length;
+      rec.redVouchLedNoWinIncl += ledNoWin.filter((v) => v.team.includes(l.targetId)).length;
       if (isRed(l.targetId)) {
         const targetLed = later.filter((v) => v.leader === l.targetId);
         rec.vouchedRedLed += targetLed.length;
@@ -475,9 +516,14 @@ function sideReport(label: string, games: readonly GameRec[]): string[] {
         `${r} ${frac(games.filter((g) => (g.r3Flags[r]?.red ?? 0) > 0).length, n)} | ${frac(games.filter((g) => (g.r3Flags[r]?.blue ?? 0) > 0).length, n)}`).join('; '),
     `硬3 at game end: red ≥0.85 ${sum(games, (g) => g.r3End.red85)}, blue ≥0.85 ${sum(games, (g) => g.r3End.blue85)}, ` +
       `red 0.5 ${sum(games, (g) => g.r3End.red50)}, blue 0.5 ${sum(games, (g) => g.r3End.blue50)} (seat-games)`,
-    `vouch follow-up: red holder led after vouching ${frac(sum(games, (g) => g.redVouchLedIncl), sum(games, (g) => g.redVouchLed))} incl. the vouched seat; ` +
-      `red holder approved teams with the vouched seat ${frac(sum(games, (g) => g.redVouchVotesApprove), sum(games, (g) => g.redVouchVotes))}, ` +
-      `rejected teams without it ${frac(sum(games, (g) => g.redVouchOffReject), sum(games, (g) => g.redVouchOffVotes))}; ` +
+    `vouch follow-up: red holder led after vouching ${frac(sum(games, (g) => g.redVouchLedIncl), sum(games, (g) => g.redVouchLed))} incl. the vouched seat ` +
+      `(outside red's decisive window ${frac(sum(games, (g) => g.redVouchLedNoWinIncl), sum(games, (g) => g.redVouchLedNoWin))}); ` +
+      `red holder approved teams with the vouched seat ${frac(sum(games, (g) => g.redVouchVotesApprove), sum(games, (g) => g.redVouchVotes))}; ` +
+      `rejected teams without it: holder off the team ${frac(sum(games, (g) => g.redVouchOffTeamReject), sum(games, (g) => g.redVouchOffTeamVotes))} ` +
+      `(outside the window ${frac(sum(games, (g) => g.redVouchOffTeamNoWinReject), sum(games, (g) => g.redVouchOffTeamNoWinVotes))}), ` +
+      `on the team ${frac(sum(games, (g) => g.redVouchOnTeamReject), sum(games, (g) => g.redVouchOnTeamVotes))}, ` +
+      `own proposal ${frac(sum(games, (g) => g.redVouchOwnReject), sum(games, (g) => g.redVouchOwnVotes))}, ` +
+      `all seats ${frac(sum(games, (g) => g.redVouchOffReject), sum(games, (g) => g.redVouchOffVotes))}; ` +
       `vouched red later led incl. the holder ${frac(sum(games, (g) => g.vouchedRedLedIncl), sum(games, (g) => g.vouchedRedLed))}; ` +
       `red holder led after declaring red ${frac(sum(games, (g) => g.redFrameLedIncl), sum(games, (g) => g.redFrameLed))} incl. the framed seat; ` +
       `blue holder led ${frac(sum(games, (g) => g.blueVouchLedIncl), sum(games, (g) => g.blueVouchLed))} incl.`,

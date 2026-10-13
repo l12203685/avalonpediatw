@@ -19,7 +19,12 @@
  *   (e) for every declared lake (red and blue holders): does the holder
  *       later put the target on the teams they lead and vote for teams with
  *       the target, and does the target do the same towards the holder
- *       (2026-10-13 round 2: do humans follow up on a vouch?).
+ *       (2026-10-13 round 2: do humans follow up on a vouch?). Votes on
+ *       teams without the target are also split by the holder's seat
+ *       (off the team / on it / own proposal) and by red's decisive window
+ *       (Q11 of the bots: two fails already, or R5 after a fail);
+ *   (f) leaders who see their teammates (assassin / Morgana / Mordred):
+ *       how often their proposal includes a visible teammate, by round.
  * Oberon holders (see nobody, nobody sees them) are reported separately.
  *
  * Every rate is printed with n and a Wilson 95% interval. Output is
@@ -34,10 +39,15 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { rowsFromSheet, parseReplayGame, campOf, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
+import { rowsFromSheet, parseReplayGame, campOf, type ReplayGame, type ReplayProposal } from '../src/ai/benchmark/sheetsReplay';
 import { buildReplayObservation, seatId, validLakeTargetSeats } from '../src/ai/benchmark/replayObservation';
 import { computeTopPerformers, cohortKey } from '../src/ai/benchmark/cohorts';
-import { estimateSuspicionFromHistory, estimateMerlinLikenessFromHistory } from '../src/ai/LakePolicy';
+import {
+  DEFAULT_EVIL_LAKE_HUMAN_OPTIONS,
+  estimateSuspicionFromHistory,
+  estimateMerlinLikenessFromHistory,
+  pickEvilLakeTargetHuman,
+} from '../src/ai/LakePolicy';
 import { leaderSeatForProposal } from '../src/services/sheetsGameRecordParser';
 
 interface Args {
@@ -132,10 +142,32 @@ export interface EvilLake {
   targetMerlinLike: number;
   claim: 'good' | 'evil' | null;
   evilWon: boolean;
+  /**
+   * Oberon holders only (null otherwise): does the bots' target rule, replayed
+   * on this human state, land on a red? `vouch` = the default order of
+   * `pickEvilLakeTargetHuman`; `teammate` = `oberonLakeSeeksTeammates`.
+   */
+  ruleTargetRed: { vouch: boolean; teammate: boolean } | null;
 }
 
 function failedMissionCount(game: ReplayGame, seat: number, upToRound: number): number {
   return game.quests.filter((q) => q.round <= upToRound && q.failed && q.teamSeats.includes(seat)).length;
+}
+
+function oberonRuleTargetRed(
+  game: ReplayGame,
+  obs: ReturnType<typeof buildReplayObservation>,
+  valid: readonly number[],
+): { vouch: boolean; teammate: boolean } {
+  const ids = valid.map(seatId);
+  const isRed = (id: string): boolean => {
+    const seat = valid.find((s) => seatId(s) === id);
+    return seat !== undefined && campOf(game.seatRoles[seat - 1]) === 'evil';
+  };
+  return {
+    vouch: isRed(pickEvilLakeTargetHuman(obs, [...ids], DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)),
+    teammate: isRed(pickEvilLakeTargetHuman(obs, [...ids], { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, oberonTarget: 'teammate' })),
+  };
 }
 
 function collect(games: readonly ReplayGame[]): EvilLake[] {
@@ -188,6 +220,7 @@ function collect(games: readonly ReplayGame[]): EvilLake[] {
         targetMerlinLike: estimateMerlinLikenessFromHistory(targetId, obs),
         claim: lake.claim,
         evilWon: game.winner === 'evil',
+        ruleTargetRed: role === 'oberon' ? oberonRuleTargetRed(game, obs, valid) : null,
       });
     });
   }
@@ -395,6 +428,14 @@ export function analyse(all: readonly EvilLake[]): Section[] {
   sections.push(bucket('Oberon: P(blue target → x) by target tainted', obBlue,
     [['blue target on a failed mission', (l) => l.targetTainted], ['blue target clean', (l) => !l.targetTainted]],
     (l) => l.claim === 'evil'));
+  sections.push({
+    title: 'Oberon: the bots\' target rules replayed on the same human states — target is red',
+    rows: [
+      { label: 'vouch order (evilLakeHumanStrategy default)', rate: rateOf(ob, (l) => l.ruleTargetRed?.vouch === true) },
+      { label: 'oberonLakeSeeksTeammates', rate: rateOf(ob, (l) => l.ruleTargetRed?.teammate === true) },
+      { label: 'humans (actual target red)', rate: rateOf(ob, (l) => l.target !== 'blue') },
+    ],
+  });
   sections.push(bucket('Oberon: P(target tainted) — does he lake failed-mission members?', ob,
     [['all Oberon lakes', () => true]], (l) => l.targetTainted));
   sections.push(bucket('Oberon: red final win rate by declaration on a blue (CONFOUNDED)', obBlue,
@@ -406,7 +447,7 @@ export function analyse(all: readonly EvilLake[]): Section[] {
 
 /**
  * One declared lake (any holder camp) and what the holder / the target did
- * with the seat afterwards (2026-10-13 round 2, strength_benchmark.md 第 7
+ * with the seat afterwards (2026-10-13 round 2, strength_benchmark.md 第 8
  * 節): teams the holder led later that include the target, the holder's
  * later votes on teams with the target, and the same from the target's
  * side towards the holder.
@@ -428,12 +469,41 @@ export interface LakeFollowUp {
   /** The holder's later votes on proposals without the target / rejections. */
   holderVotesOff: number;
   holderVotesOffReject: number;
+  /** …of those, the holder neither led nor sat on the team (the rule of `evilVouchFollowUp`). */
+  holderVotesOffTeam: number;
+  holderVotesOffTeamReject: number;
+  /** …off the team and inside / outside red's decisive window. */
+  holderVotesOffTeamWindow: number;
+  holderVotesOffTeamWindowReject: number;
+  holderVotesOffTeamNoWindow: number;
+  holderVotesOffTeamNoWindowReject: number;
+  /** …the holder sat on the team (not the leader). */
+  holderVotesOnTeam: number;
+  holderVotesOnTeamReject: number;
+  /** …the holder's own proposal. */
+  holderVotesOwn: number;
+  holderVotesOwnReject: number;
+  /** Later proposals led by the holder inside / outside red's decisive window. */
+  holderLedWindow: number;
+  holderLedWindowIncl: number;
+  holderLedNoWindow: number;
+  holderLedNoWindowIncl: number;
   /** Later proposals led by the target / how many include the holder. */
   targetLed: number;
   targetLedIncl: number;
   /** The target's later votes on proposals with the holder / approvals. */
   targetVotes: number;
   targetVotesApprove: number;
+}
+
+/**
+ * Red's decisive window before a proposal of `round` — the bots' Q11 state
+ * (`HeuristicAgent.mayBreakHardRules`): red already has two fails, or it is
+ * R5 after at least one fail. A state of the game, whoever holds the lake.
+ */
+export function redDecisiveWindow(game: ReplayGame, round: number): boolean {
+  const fails = game.quests.filter((q) => q.round < round && q.failed).length;
+  return fails >= 2 || (round === 5 && fails >= 1);
 }
 
 function collectFollowUps(games: readonly ReplayGame[]): LakeFollowUp[] {
@@ -454,6 +524,15 @@ function collectFollowUps(games: readonly ReplayGame[]): LakeFollowUp[] {
       const withTarget = voted.filter((p) => p.teamSeats.includes(target));
       const withoutTarget = voted.filter((p) => !p.teamSeats.includes(target));
       const withHolder = voted.filter((p) => p.teamSeats.includes(holder));
+      const offTeam = withoutTarget.filter((p) => p.leaderSeat !== holder && !p.teamSeats.includes(holder));
+      const onTeam = withoutTarget.filter((p) => p.leaderSeat !== holder && p.teamSeats.includes(holder));
+      const own = withoutTarget.filter((p) => p.leaderSeat === holder);
+      const offWindow = offTeam.filter((p) => redDecisiveWindow(game, p.round));
+      const offNoWindow = offTeam.filter((p) => !redDecisiveWindow(game, p.round));
+      const ledWindow = holderLed.filter((p) => redDecisiveWindow(game, p.round));
+      const ledNoWindow = holderLed.filter((p) => !redDecisiveWindow(game, p.round));
+      const rejects = (ps: readonly ReplayProposal[]): number => ps.filter((p) => !p.votes[holder - 1]).length;
+      const incl = (ps: readonly ReplayProposal[]): number => ps.filter((p) => p.teamSeats.includes(target)).length;
       out.push({
         name: game.names[holder - 1] ?? '',
         role,
@@ -466,7 +545,21 @@ function collectFollowUps(games: readonly ReplayGame[]): LakeFollowUp[] {
         holderVotes: withTarget.length,
         holderVotesApprove: withTarget.filter((p) => p.votes[holder - 1]).length,
         holderVotesOff: withoutTarget.length,
-        holderVotesOffReject: withoutTarget.filter((p) => !p.votes[holder - 1]).length,
+        holderVotesOffReject: rejects(withoutTarget),
+        holderVotesOffTeam: offTeam.length,
+        holderVotesOffTeamReject: rejects(offTeam),
+        holderVotesOffTeamWindow: offWindow.length,
+        holderVotesOffTeamWindowReject: rejects(offWindow),
+        holderVotesOffTeamNoWindow: offNoWindow.length,
+        holderVotesOffTeamNoWindowReject: rejects(offNoWindow),
+        holderVotesOnTeam: onTeam.length,
+        holderVotesOnTeamReject: rejects(onTeam),
+        holderVotesOwn: own.length,
+        holderVotesOwnReject: rejects(own),
+        holderLedWindow: ledWindow.length,
+        holderLedWindowIncl: incl(ledWindow),
+        holderLedNoWindow: ledNoWindow.length,
+        holderLedNoWindowIncl: incl(ledNoWindow),
         targetLed: targetLed.length,
         targetLedIncl: targetLed.filter((p) => p.teamSeats.includes(holder)).length,
         targetVotes: withHolder.length,
@@ -496,11 +589,58 @@ export function analyseFollowUps(all: readonly LakeFollowUp[]): Section[] {
   });
   return [
     sec('(e) holder later leads: team includes the target (rate over led proposals)', 'holderLedIncl', 'holderLed'),
+    sec('(e) … led outside red\'s decisive window (fewer than two fails; R5 only before any fail)', 'holderLedNoWindowIncl', 'holderLedNoWindow'),
+    sec('(e) … led inside red\'s decisive window (two fails, or R5 after a fail)', 'holderLedWindowIncl', 'holderLedWindow'),
     sec('(e) holder later votes on a team WITH the target: approve', 'holderVotesApprove', 'holderVotes'),
-    sec('(e) holder later votes on a team WITHOUT the target: reject', 'holderVotesOffReject', 'holderVotesOff'),
+    sec('(e) holder later votes on a team WITHOUT the target: reject (all seats)', 'holderVotesOffReject', 'holderVotesOff'),
+    sec('(e) … holder OFF that team (neither leader nor member): reject', 'holderVotesOffTeamReject', 'holderVotesOffTeam'),
+    sec('(e) … holder off the team, outside red\'s decisive window: reject', 'holderVotesOffTeamNoWindowReject', 'holderVotesOffTeamNoWindow'),
+    sec('(e) … holder off the team, inside red\'s decisive window: reject', 'holderVotesOffTeamWindowReject', 'holderVotesOffTeamWindow'),
+    sec('(e) … holder ON that team (not the leader): reject', 'holderVotesOnTeamReject', 'holderVotesOnTeam'),
+    sec('(e) … the holder\'s own proposal: reject', 'holderVotesOwnReject', 'holderVotesOwn'),
     sec('(e) target later leads: team includes the holder', 'targetLedIncl', 'targetLed'),
     sec('(e) target later votes on a team WITH the holder: approve', 'targetVotesApprove', 'targetVotes'),
   ];
+}
+
+// ── (f) Leaders who see their teammates: a visible teammate on the team ──
+
+/** One proposal led by an assassin / Morgana / Mordred (they see each other, not Oberon). */
+export interface SeeingRedProposal {
+  name: string;
+  role: string;
+  round: number;
+  /** The team includes another assassin / Morgana / Mordred. */
+  withTeammate: boolean;
+}
+
+const SEEING_RED_ROLES = new Set(['assassin', 'morgana', 'mordred']);
+
+function collectSeeingRedProposals(games: readonly ReplayGame[]): SeeingRedProposal[] {
+  const out: SeeingRedProposal[] = [];
+  for (const game of games) {
+    for (const p of game.proposals) {
+      const role = game.seatRoles[p.leaderSeat - 1];
+      if (!SEEING_RED_ROLES.has(role)) continue;
+      out.push({
+        name: game.names[p.leaderSeat - 1] ?? '',
+        role,
+        round: p.round,
+        withTeammate: p.teamSeats.some((s) => s !== p.leaderSeat && SEEING_RED_ROLES.has(game.seatRoles[s - 1])),
+      });
+    }
+  }
+  return out;
+}
+
+export function analyseSeeingRedProposals(all: readonly SeeingRedProposal[]): Section[] {
+  return [{
+    title: '(f) leader sees teammates (assassin / Morgana / Mordred): team includes a visible teammate, by round (every proposal, forced ones too)',
+    rows: [1, 2, 3, 4, 5].map((r) => ({
+      label: `R${r}`,
+      rate: rateOf(all.filter((x) => x.round === r), (x) => x.withTeammate),
+    })),
+  }];
 }
 
 function uniqueLabels<T>(items: readonly T[], f: (x: T) => string): string[] {
@@ -553,6 +693,18 @@ function main(): void {
     const sections = analyseFollowUps(items);
     result[`${label} follow-up`] = sections;
     printSections(`${label} — after the declaration (declared lakes n=${items.length})`, sections);
+  }
+  // (f) visible teammate on the teams of leaders who see their teammates (all replayable games).
+  const seeingProposals = collectSeeingRedProposals(games);
+  const seeingCohorts: Array<[string, SeeingRedProposal[]]> = [
+    ['population', seeingProposals],
+    ['top/role', seeingProposals.filter((x) => top.members.has(cohortKey(x.name, x.role)))],
+  ];
+  for (const p of args.players) seeingCohorts.push([p, seeingProposals.filter((x) => x.name === p)]);
+  for (const [label, items] of seeingCohorts) {
+    const sections = analyseSeeingRedProposals(items);
+    result[`${label} seeing-red leaders`] = sections;
+    printSections(`${label} — proposals led by a red who sees teammates (n=${items.length})`, sections);
   }
   if (args.json) {
     fs.writeFileSync(path.resolve(args.json), JSON.stringify({
