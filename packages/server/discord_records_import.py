@@ -47,15 +47,18 @@ What this script does and does not do:
     name and created (Manage Channels) when the forum lacks it; no permission: a notice and no
     tagging this run. Added to every `fixable` post created within --tag-since-days (90) that
     lacks it (never to a post that already has 5 tags, or a locked one unless --tag-locked);
-    removed from every post, of any age, that carries it and now parses (imported now or
-    earlier, already in 牌譜, a duplicate) or is tagged 已收錄 / 模擬. Posts this run could not
-    judge (starter deleted or empty, not a record, before --since) keep their tags. At most
-    --tag-limit (30) changes per run, removals first, then additions newest post first; the
-    rest wait for the next run. Each change re-reads the post and sends applied_tags = its
-    current tags plus or minus TAG_FIX only (archived:false in the same request when the post
-    is archived: Discord edits no archived thread otherwise; it archives again on its own after
-    inactivity). HTTP 403 (Manage Threads missing): counted, one notice, no further tag change
-    this run; 404 (post deleted): counted. With --dry-run the changes are counted, not made.
+    removed from every post, of any age, locked or not, that carries it and now parses
+    (imported now or earlier, already in 牌譜, a duplicate) or is tagged 已收錄 / 模擬. Posts this
+    run could not judge (starter deleted or empty, not a record, before --since) keep their
+    tags. At most --tag-limit (30) changes per run, removals first, then additions newest post
+    first; the rest wait for the next run (posts the listing shows full or locked are skipped
+    without taking a slot). Each change re-reads the post and sends applied_tags = its current
+    tags plus or minus TAG_FIX only; an archived post gets archived:false in the same request
+    (Discord edits no archived thread otherwise) and is archived again right after. HTTP 403
+    on a change (Manage Threads missing): counted, one notice, no further tag change this run;
+    404 (post deleted): counted; other errors: counted, with a warning naming their kind
+    (method, route template, HTTP status, Discord code; never an id). With --dry-run the
+    changes are counted, not made.
   * --fix-list: the weekly list of posts to fix, in the guild text channel 牌譜修正
     (FIX_CHANNEL_NAME, or the channel DISCORD_FIX_CHANNEL_ID names): the posts --reply is
     for (`fixable`) created within --fix-list-days (30), by record date (date, 場次, reason,
@@ -1222,16 +1225,19 @@ class FixTagReport:
     to_remove: int = 0  # posts carrying it that need no fixing (any age)
     added: int = 0  # dry run: would be added
     removed: int = 0  # dry run: would be removed
-    unarchived: int = 0  # changes that reopened an archived post (archived:false)
-    skipped_full: int = 0  # the post has MAX_APPLIED_TAGS tags already
-    skipped_locked: int = 0  # locked post (without --tag-locked)
-    held_by_limit: int = 0
+    archived: int = 0  # changes on an archived post: reopened for the change, then archived again
+    left_open: int = 0  # ... of them not archived again (an error; Discord archives it after inactivity)
+    skipped_full: int = 0  # adding: the post has MAX_APPLIED_TAGS tags already
+    skipped_locked: int = 0  # adding: locked post (without --tag-locked)
+    held_by_limit: int = 0  # changes left for the next run by --tag-limit
     gone: int = 0  # HTTP 404: the post was deleted
-    forbidden: int = 0  # HTTP 403: no Manage Threads; no further change this run
-    left_after_forbidden: int = 0
+    forbidden: int = 0  # HTTP 403 on a tag change: no Manage Threads; no further change this run
+    left_after_forbidden: int = 0  # changes not tried after that
     errors: int = 0  # other Discord errors or odd responses (per post; the run goes on)
     unchanged: int = 0  # already as wanted when re-read (someone changed it meanwhile)
     untouched: int = 0  # carrying the tag, but this run cannot judge the post: left as it is
+    # error_kind of each error above (and of left_open, and of the tag lookup): fixed labels only.
+    error_kinds: Counter = field(default_factory=Counter)
 
 
 @dataclass(frozen=True)
@@ -1249,6 +1255,13 @@ TAG_UNCHANGED = "unchanged"
 TAG_FULL = "full"
 TAG_LOCKED = "locked"
 TAG_GONE = "gone"
+
+
+@dataclass(frozen=True)
+class TagChangeResult:
+    outcome: str  # TAG_CHANGE, TAG_UNCHANGED, TAG_FULL, TAG_LOCKED or TAG_GONE
+    archived: bool = False  # the post was archived: reopened for the change (archived:false)
+    left_open: str = ""  # ... and could not be archived again: that error's kind
 
 
 def plan_fix_tags(posts: Iterable[Post], report: ImportReport, now: dt.datetime, days: int) -> FixTagPlan:
@@ -1295,46 +1308,62 @@ def tag_change(applied: Iterable[Any], tag_id: str | None, add: bool, *, locked:
                allow_locked: bool) -> tuple[str, list[str]]:
     """(TAG_CHANGE / TAG_UNCHANGED / TAG_LOCKED / TAG_FULL, the post's new applied_tags): its
     current tags, in their order, plus or minus `tag_id` only. `tag_id` None: the tag does not
-    exist yet (a dry run before it is created)."""
+    exist yet (a dry run before it is created). Removing works on any post (a locked one too: the
+    tag must not outlive the problem); adding skips a locked post (unless allow_locked) and one
+    that has Discord's maximum of tags."""
     current = [str(t) for t in applied]
     present = tag_id is not None and tag_id in current
     if present == add:
         return TAG_UNCHANGED, current
-    if locked and not allow_locked:
-        return TAG_LOCKED, current
     if not add:
         return TAG_CHANGE, [t for t in current if t != tag_id]
+    if locked and not allow_locked:
+        return TAG_LOCKED, current
     if len(current) >= MAX_APPLIED_TAGS:
         return TAG_FULL, current
     return TAG_CHANGE, current + [tag_id or ""]
 
 
-def change_fix_tag(client: Any, post: Post, tag_id: str, add: bool, allow_locked: bool) -> tuple[str, bool]:
+def change_fix_tag(client: Any, post: Post, tag_id: str, add: bool, allow_locked: bool) -> TagChangeResult:
     """Re-read the post (its tags may have changed since the listing), then set its applied_tags to
-    tag_change's. (outcome, an archived post was reopened). Discord errors propagate."""
-    thread = client.thread(post.id)
+    tag_change's. An archived post is reopened in the same request (Discord edits no archived
+    thread otherwise) and archived again right after, so it stays where it was in the forum.
+    Discord errors propagate, except that a 403 on reading the post is a plain DiscordError: only
+    a 403 on the change itself means the bot lacks Manage Threads."""
+    try:
+        thread = client.thread(post.id)
+    except DiscordForbidden as exc:
+        raise DiscordError(str(exc), exc.kind) from None
     if thread is None:
-        return TAG_GONE, False
-    applied = thread.get("applied_tags") or []
-    meta = thread.get("thread_metadata") or {}
+        return TagChangeResult(TAG_GONE)
+    applied = (thread.get("applied_tags") or []) if isinstance(thread, dict) else None
+    meta = (thread.get("thread_metadata") or {}) if isinstance(thread, dict) else None
     if not isinstance(applied, list) or not isinstance(meta, dict):
-        raise DiscordError("GET /channels/{thread}: unexpected response")
+        raise DiscordError("GET /channels/{thread}: unexpected response", "GET /channels/{thread} unexpected response")
     outcome, new_tags = tag_change(applied, tag_id, add, locked=bool(meta.get("locked")), allow_locked=allow_locked)
     if outcome != TAG_CHANGE:
-        return outcome, False
+        return TagChangeResult(outcome)
     archived = bool(meta.get("archived"))
     if not client.set_thread_tags(post.id, new_tags, unarchive=archived):
-        return TAG_GONE, False
-    return TAG_CHANGE, archived
+        return TagChangeResult(TAG_GONE)
+    if not archived:
+        return TagChangeResult(TAG_CHANGE)
+    try:
+        client.archive_thread(post.id)
+    except Exception as exc:  # the tag is changed; the post stays open until Discord archives it
+        return TagChangeResult(TAG_CHANGE, archived=True, left_open=error_kind(exc))
+    return TagChangeResult(TAG_CHANGE, archived=True)
 
 
 def tag_fix_posts(client: Any, posts: Sequence[Post], report: ImportReport, *, forum_id: str, now: dt.datetime,
                   dry_run: bool, days: int = TAG_DEFAULT_DAYS, limit: int = TAG_DEFAULT_LIMIT,
                   allow_locked: bool = False) -> FixTagReport:
     """Keep the 待修正 tag on the posts that need fixing (plan_fix_tags): find the tag, create it if
-    missing (not in a dry run), then make at most `limit` changes, removals first. A dry run counts
-    from the listing and changes nothing. Never raises: the tag that cannot be created, 403 (which
-    stops the tag changes for this run), 404 and other Discord errors end up in the counts."""
+    missing (not in a dry run), then make at most `limit` changes, removals first. A post the
+    listing shows full or locked (when adding) is counted and skipped without reading it again, so
+    it never takes a slot of the limit. A dry run counts from the listing and changes nothing.
+    Never raises: the tag that cannot be created, 403 on a change (which stops the tag changes for
+    this run), 404 and other Discord errors end up in the counts."""
     plan = plan_fix_tags(posts, report, now, days)
     tags = FixTagReport(dry_run=dry_run, days=days, candidates=plan.candidates, already_tagged=plan.already_tagged,
                         to_add=len(plan.add), to_remove=len(plan.remove), untouched=plan.untouched)
@@ -1352,49 +1381,61 @@ def tag_fix_posts(client: Any, posts: Sequence[Post], report: ImportReport, *, f
         tags.status = TAG_FORUM_FULL
     except DiscordForbidden:
         tags.status = TAG_CREATE_FORBIDDEN
-    except Exception:  # a Discord error or an odd response: counted, never printed
+    except Exception as exc:  # a Discord error or an odd response: its kind is counted, never its message
         tags.status = TAG_ERROR
+        tags.error_kinds[error_kind(exc)] += 1
     if tags.status in TAG_SKIPS:
         return tags
     changes = 0
     stopped = False
     for post, add in [(p, False) for p in plan.remove] + [(p, True) for p in plan.add]:
-        if stopped:
+        listed, _ = tag_change(post.tag_ids, tag_id, add, locked=post.locked, allow_locked=allow_locked)
+        if listed != TAG_CHANGE:
+            result = TagChangeResult(listed)
+        elif stopped:
             tags.left_after_forbidden += 1
             continue
-        if changes >= limit:
+        elif changes >= limit:
             tags.held_by_limit += 1
             continue
-        if dry_run:
-            outcome, _ = tag_change(post.tag_ids, tag_id, add, locked=post.locked, allow_locked=allow_locked)
-            reopened = post.archived
+        elif dry_run:
+            result = TagChangeResult(TAG_CHANGE, archived=post.archived)
         else:
             try:
-                outcome, reopened = change_fix_tag(client, post, str(tag_id), add, allow_locked)
+                result = change_fix_tag(client, post, str(tag_id), add, allow_locked)
             except DiscordForbidden:
                 tags.forbidden += 1
                 stopped = True
                 continue
-            except Exception:  # never printed, counted only; the next run tries again
+            except Exception as exc:  # its kind is counted, never its message; the next run tries again
                 tags.errors += 1
+                tags.error_kinds[error_kind(exc)] += 1
                 changes += 1
                 continue
-        if outcome == TAG_CHANGE:
+        if result.outcome == TAG_CHANGE:
             changes += 1
             if add:
                 tags.added += 1
             else:
                 tags.removed += 1
-            tags.unarchived += bool(reopened)
-        elif outcome == TAG_FULL:
+            tags.archived += result.archived
+            if result.left_open:
+                tags.left_open += 1
+                tags.error_kinds[result.left_open] += 1
+        elif result.outcome == TAG_FULL:
             tags.skipped_full += 1
-        elif outcome == TAG_LOCKED:
+        elif result.outcome == TAG_LOCKED:
             tags.skipped_locked += 1
-        elif outcome == TAG_GONE:
+        elif result.outcome == TAG_GONE:
             tags.gone += 1
         else:
             tags.unchanged += 1
     return tags
+
+
+def error_kinds_text(kinds: Counter) -> str:
+    """'GET /channels/{thread} HTTP 403 code 50001 ×2; ...', most frequent first (fixed labels)."""
+    return "; ".join(f"{kind} ×{n}" for kind, n in sorted(kinds.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
 def fix_tag_lines(tags: FixTagReport) -> list[str]:
@@ -1409,6 +1450,10 @@ def fix_tag_lines(tags: FixTagReport) -> list[str]:
         return lines
     verb = "可" if tags.dry_run else "已"
     extra = [
+        # Dry run: as listed; a post the format reply reopens first is not archived by then.
+        (tags.archived, "目前已封存的貼文（寫入時暫時開啟，改完再封存）" if tags.dry_run
+         else "已封存的貼文（改標籤時暫時開啟，改完再封存）"),
+        (tags.left_open, "改完後未能再封存（Discord 之後會自動封存）"),
         (tags.skipped_locked, "貼文已鎖定略過"),
         (tags.gone, "貼文已刪除"),
         (tags.unchanged, "重新讀取時已是正確狀態"),
@@ -1416,7 +1461,6 @@ def fix_tag_lines(tags: FixTagReport) -> list[str]:
     ]
     lines.append(
         f"  - 本次{verb}加上：{tags.added}；{verb}移除：{tags.removed}"
-        + (f"（其中重新開啟已封存的貼文：{tags.unarchived}）" if tags.unarchived else "")
         + f"；標籤已滿 {MAX_APPLIED_TAGS} 個略過：{tags.skipped_full}"
         + f"；超過 --tag-limit 保留到下次：{tags.held_by_limit}"
         + f"；沒有權限（403）：{tags.forbidden}"
@@ -1673,7 +1717,20 @@ def report_lines(report: ImportReport, *, write: bool, written: int, tab_exists:
 # ---------------------------------------------------------------------------
 
 class DiscordError(Exception):
-    pass
+    """A Discord API error. The message names the route template only (no ids, no content).
+    `kind`: a short label made of fixed parts only (method, route template, HTTP status, Discord's
+    numeric error code), safe for the public log (error_kind)."""
+
+    def __init__(self, message: str = "", kind: str = ""):
+        super().__init__(message)
+        self.kind = kind
+
+
+def error_kind(exc: BaseException) -> str:
+    """What the public log may say about an error: a DiscordError's kind, else the exception's
+    type name; never its message."""
+    kind = exc.kind if isinstance(exc, DiscordError) else ""
+    return kind or type(exc).__name__
 
 
 class DiscordForbidden(DiscordError):
@@ -1694,7 +1751,8 @@ class DiscordClient:
     GET for the forum, its posts and their messages (and, for --fix-list, the guild's channels
     and the fix-list channel's newest messages); POST only for --reply (one message in a post's
     thread) and --fix-list (the weekly list in one channel); PATCH only for the 待修正 tag (a
-    post's applied_tags, and once the forum's available_tags to create the tag). Only a GET is
+    post's applied_tags, archiving a post again that the change had to reopen, and once the
+    forum's available_tags to create the tag). Only a GET is
     re-sent after a server error or a timeout: Discord may have stored the message of a POST
     before the response was lost, and sending it again would post a second reply (the next run
     finds the first one by its marker instead); a PATCH that created the tag could create it
@@ -1740,13 +1798,18 @@ class DiscordClient:
                 if exc.code >= 500 and resend:
                     self._sleep(min(2 ** attempt, MAX_RETRY_SLEEP))
                     continue
-                message = _discord_error_message(exc.code, payload.get("code"), route, method)
-                raise (DiscordForbidden if exc.code == 403 else DiscordError)(message) from None
+                code = payload.get("code")
+                message = _discord_error_message(exc.code, code, route, method)
+                kind = f"{method} {route} HTTP {exc.code}" + (
+                    f" code {code}" if isinstance(code, int) and not isinstance(code, bool) else "")
+                raise (DiscordForbidden if exc.code == 403 else DiscordError)(message, kind) from None
             except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
                 if not resend or attempt == MAX_ATTEMPTS - 1:
-                    raise DiscordError(f"{method} {route}: network error ({type(exc).__name__})") from None
+                    raise DiscordError(f"{method} {route}: network error ({type(exc).__name__})",
+                                       f"{method} {route} network error {type(exc).__name__}") from None
                 self._sleep(min(2 ** attempt, MAX_RETRY_SLEEP))
-        raise DiscordError(f"{method} {route}: still failing after {MAX_ATTEMPTS} attempts (rate limit or server errors)")
+        raise DiscordError(f"{method} {route}: still failing after {MAX_ATTEMPTS} attempts (rate limit or server errors)",
+                           f"{method} {route} still failing after {MAX_ATTEMPTS} attempts")
 
     def get(self, path: str, route: str, allow_404: bool = False) -> Any:
         return self._request("GET", path, route, allow_404=allow_404)
@@ -1871,7 +1934,8 @@ class DiscordClient:
         tags = [t for t in updated.get("available_tags") or [] if isinstance(t, dict)]
         tag_id = tag_id_named(tags, name)
         if not tag_id:
-            raise DiscordError("PATCH /channels/{forum}: the new tag is not in the response")
+            raise DiscordError("PATCH /channels/{forum}: the new tag is not in the response",
+                               "PATCH /channels/{forum} unexpected response")
         self._forum_tags[forum_id] = tags
         return tag_id
 
@@ -1886,6 +1950,12 @@ class DiscordClient:
         if unarchive:
             body["archived"] = False
         return self.patch(f"/channels/{thread_id}", "/channels/{thread}", body, allow_404=True) is not None
+
+    def archive_thread(self, thread_id: str) -> bool:
+        """Archive a post's thread again (Manage Threads) after a tag change had to reopen it.
+        False if the post was deleted (404)."""
+        return self.patch(f"/channels/{thread_id}", "/channels/{thread}", {"archived": True},
+                          allow_404=True) is not None
 
     def starter_content(self, thread_id: str) -> str | None:
         """The text of a post's starter message, None if it was deleted."""
@@ -2164,14 +2234,22 @@ def tag_fix_phase(client: Any, posts: Sequence[Post], report: ImportReport, args
                 f"tagged from the next run on. {tags.to_add} post(s) would have been tagged.", in_actions)
     elif tags.status == TAG_ERROR:
         _warn("To-fix tag error", f"Reading or creating the forum tag {TAG_FIX} hit a Discord API error or an "
-              "unexpected response; no post tag was changed. Retried on the next run.", in_actions)
+              f"unexpected response ({error_kinds_text(tags.error_kinds)}); no post tag was changed. Retried on the "
+              "next run.", in_actions)
     if tags.forbidden:
         _notice("To-fix tag forbidden", "The bot may not change post tags (HTTP 403): give it 管理討論串 (Manage "
                 "Threads) on #牌譜紀錄與覆盤. Tag changes stopped for this run; "
-                f"{tags.forbidden + tags.left_after_forbidden} change(s) left for the next run.", in_actions)
-    if tags.errors:
-        _warn("To-fix tag errors", f"{tags.errors} tag change(s) hit a Discord API error or an unexpected response; "
-              "they are retried on the next run.", in_actions)
+                f"{tags.forbidden + tags.left_after_forbidden} tag change(s) not made, tried again on the next run.",
+                in_actions)
+    if tags.errors or tags.left_open:
+        problems = []
+        if tags.errors:
+            problems.append(f"{tags.errors} tag change(s) hit a Discord API error or an unexpected response "
+                            "(tried again on the next run)")
+        if tags.left_open:
+            problems.append(f"{tags.left_open} archived post(s) got their tag changed but could not be archived "
+                            "again (Discord archives them after inactivity)")
+        _warn("To-fix tag errors", "; ".join(problems) + f". Errors: {error_kinds_text(tags.error_kinds)}.", in_actions)
     return tags
 
 
@@ -2237,7 +2315,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help=f"at most N {TAG_FIX} tag changes per run, removals first, then additions newest post "
                              f"first (default {TAG_DEFAULT_LIMIT})")
     parser.add_argument("--tag-locked", action="store_true",
-                        help=f"also change {TAG_FIX} on locked posts (skipped by default)")
+                        help=f"also add {TAG_FIX} to locked posts (skipped by default; it is removed from "
+                             "locked posts either way)")
     parser.add_argument("--fix-list", action="store_true",
                         help=f"post this week's list of posts to fix in the {FIX_CHANNEL_NAME} channel (or "
                              f"{ENV_FIX_CHANNEL}); once per ISO week. With --dry-run: count only")

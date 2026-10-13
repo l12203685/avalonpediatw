@@ -1070,6 +1070,10 @@ class DiscordClientTest(unittest.TestCase):
         self.assertTrue(client.set_thread_tags("300", ["9100"]))
         self.assertEqual(json.loads(self.requests[-1][2]), {"applied_tags": ["9100"]})  # nothing else is sent
         self.assertFalse(client.set_thread_tags("404", []))
+        self.assertTrue(client.archive_thread("300"))  # archived again after a change that reopened it
+        method, path, body, _ = self.requests[-1]
+        self.assertEqual((method, path, json.loads(body)), ("PATCH", "/channels/300", {"archived": True}))
+        self.assertFalse(client.archive_thread("404"))
 
         client = self.make(lambda path, n: http_error(403, {"code": 50013}))
         with self.assertRaises(dri.DiscordForbidden) as ctx:
@@ -1077,12 +1081,19 @@ class DiscordClientTest(unittest.TestCase):
         self.assertIn("PATCH /channels/{thread}: HTTP 403", str(ctx.exception))
         self.assertIn("Manage Threads (管理討論串)", str(ctx.exception))
         self.assertNotIn("424242", str(ctx.exception))
-        for failure in (http_error(502), TimeoutError()):
+        self.assertEqual(dri.error_kind(ctx.exception), "PATCH /channels/{thread} HTTP 403 code 50013")
+        with self.assertRaises(dri.DiscordForbidden) as ctx:  # reading the post: a read permission
+            client.thread("424242")
+        self.assertEqual(dri.error_kind(ctx.exception), "GET /channels/{thread} HTTP 403 code 50013")
+        for failure, kind in ((http_error(502), "PATCH /channels/{thread} HTTP 502"),
+                              (http_error(400, {"code": "x"}), "PATCH /channels/{thread} HTTP 400"),  # not a number
+                              (TimeoutError(), "PATCH /channels/{thread} network error TimeoutError")):
             with self.subTest(failure=type(failure).__name__):
                 client = self.make(lambda path, n, f=failure: f)
-                with self.assertRaises(dri.DiscordError):
+                with self.assertRaises(dri.DiscordError) as ctx:
                     client.set_thread_tags("300", ["1"])
                 self.assertEqual(len(self.requests), 1)  # a PATCH is not re-sent after a server error
+                self.assertEqual(dri.error_kind(ctx.exception), kind)
         client = self.make(lambda path, n: http_error(429, {"retry_after": 0.5}) if n == 1 else FakeResponse({"id": "300"}))
         self.assertTrue(client.set_thread_tags("300", ["1"]))
         self.assertEqual(([m for m, _, _, _ in self.requests], self.sleeps), (["PATCH", "PATCH"], [0.75]))
@@ -1160,6 +1171,7 @@ FIX_CHANNEL = "5550001"  # the 牌譜修正 channel of the fake guild
 FORUM_TAGS = [{"id": f"91{i:02d}", "name": name, "moderated": i == 0, "emoji_id": None,
                "emoji_name": "✅" if i == 0 else None} for i, name in enumerate(dri.EXPECTED_TAGS)]
 FIX_TAG_ID = "9199"
+LEAK = "不該出現在公開紀錄"  # in the fakes' error messages: the public log must show only the error's kind
 FIX_TAG = {"id": FIX_TAG_ID, "name": dri.TAG_FIX, "moderated": False, "emoji_id": None, "emoji_name": None}
 
 
@@ -1171,7 +1183,7 @@ class FakeDiscord:
     def __init__(self, posts, bodies, *, replied=(), forbid_post=False, post_error=False, no_me=False,
                  missing=(), odd_error=False, channels=None, history=None, forbid_fix=False, fix_error_at=0,
                  forum_tags=None, threads=None, deleted=(), deleted_on_patch=(), forbid_tag_create=False,
-                 forbid_tags=False, tag_error=False, tag_read_error=False):
+                 forbid_tags=False, tag_error=False, tag_read_error=False, read_forbidden=(), archive_error=False):
         self.posts, self.bodies, self.fetched = posts, bodies, 0
         # The 待修正 tag: the forum's tags, and each post's thread as Discord holds it (applied_tags
         # ids, thread_metadata). `threads` may be shared between runs, so tag changes persist.
@@ -1185,10 +1197,13 @@ class FakeDiscord:
         self.deleted_on_patch = set(deleted_on_patch)  # 404 on the tag change itself
         self.forbid_tag_create, self.forbid_tags, self.tag_error = forbid_tag_create, forbid_tags, tag_error
         self.tag_read_error = tag_read_error  # reading the forum's tags fails
+        self.read_forbidden = set(read_forbidden)  # 403 when the post is re-read
+        self.archive_error = archive_error  # archiving a post again fails
         self.tag_reads = 0
         self.tag_creates: list[str] = []
         self.thread_reads: list[str] = []
         self.tag_edits: list[tuple[str, list[str], bool]] = []  # (post, applied_tags sent, archived:false sent)
+        self.archives: list[str] = []  # posts archived again after a change
         self.replied = set(replied)  # threads that already hold the bot's marker message
         self.forbid_post, self.post_error, self.no_me = forbid_post, post_error, no_me
         self.missing = list(missing)  # expected forum tags the forum lacks
@@ -1219,8 +1234,9 @@ class FakeDiscord:
 
     def forum_tags(self, forum_id):
         self.tag_reads += 1
-        if self.tag_read_error:
-            raise dri.DiscordError("GET /channels/{forum}: HTTP 500")
+        if self.tag_read_error:  # the message (never printed) names ids; the kind does not
+            raise dri.DiscordError(f"GET /channels/{forum_id} {self.posts[0].id}: HTTP 500 {LEAK}",
+                                   "GET /channels/{forum} HTTP 500")
         return [dict(t) for t in self.forum_tag_list]
 
     def create_forum_tag(self, forum_id, name):
@@ -1234,6 +1250,9 @@ class FakeDiscord:
 
     def thread(self, thread_id):
         self.thread_reads.append(thread_id)
+        if thread_id in self.read_forbidden:
+            raise dri.DiscordForbidden(f"GET /channels/{thread_id}: HTTP 403 {LEAK}",
+                                       "GET /channels/{thread} HTTP 403 code 50001")
         if thread_id in self.deleted:
             return None
         thread = self.threads[thread_id]
@@ -1245,13 +1264,22 @@ class FakeDiscord:
         if self.forbid_tags:
             raise dri.DiscordForbidden("PATCH /channels/{thread}: HTTP 403")
         if self.tag_error:
-            raise dri.DiscordError("PATCH /channels/{thread}: HTTP 500")
+            raise dri.DiscordError(f"PATCH /channels/{thread_id}: HTTP 500 {LEAK}", "PATCH /channels/{thread} HTTP 500")
         if thread_id in self.deleted_on_patch:
             return False
         thread = self.threads[thread_id]
+        if thread["thread_metadata"]["archived"] and not unarchive:  # as Discord: no edit of an archived thread
+            raise dri.DiscordError("PATCH /channels/{thread}: HTTP 400", "PATCH /channels/{thread} HTTP 400 code 50083")
         thread["applied_tags"] = list(tag_ids)
         if unarchive:
             thread["thread_metadata"]["archived"] = False
+        return True
+
+    def archive_thread(self, thread_id):
+        self.archives.append(thread_id)
+        if self.archive_error:
+            raise dri.DiscordError(f"PATCH /channels/{thread_id}: HTTP 500 {LEAK}", "PATCH /channels/{thread} HTTP 500")
+        self.threads[thread_id]["thread_metadata"]["archived"] = True
         return True
 
     def forum_guild_id(self, forum_id):
@@ -1745,6 +1773,8 @@ class FixTagTest(unittest.TestCase):
         FakeDiscord(self.posts, self.bodies, forum_tags=FORUM_TAGS + [FIX_TAG], threads=self.threads)
         self.threads[self.p_vote.id]["thread_metadata"]["archived"] = True
         self.threads[self.p_locked.id]["thread_metadata"]["locked"] = True
+        # Marked 已收錄, then locked and archived by a moderator: the tag goes all the same.
+        self.threads[self.p_recorded.id]["thread_metadata"].update(archived=True, locked=True)
         self.tag = {t["name"]: t["id"] for t in FORUM_TAGS + [FIX_TAG]}
 
     def fake(self, **kw) -> FakeDiscord:
@@ -1790,33 +1820,54 @@ class FixTagTest(unittest.TestCase):
         self.assertEqual(tags.status, dri.TAG_FOUND)
         self.assertEqual(fake.tag_edits, [  # removals first, then additions; every other tag kept, in order
             (self.p_sim.id, [t["模擬"]], False),
-            (self.p_recorded.id, [t["三藍被刀"], t["已收錄"]], False),
+            (self.p_recorded.id, [t["三藍被刀"], t["已收錄"]], True),  # locked and archived: removed all the same
             (self.p_imported.id, [t["三藍被刀"]], False),
             (self.p_fixed.id, [t["三紅"]], False),
             (self.p_names.id, [t["三藍被刀"], t["線瓦"], FIX_TAG_ID], False),
             (self.p_vote.id, [t["三藍被刀"], t["線瓦"], FIX_TAG_ID], True),  # archived: archived:false sent with it
         ])
-        self.assertEqual(fake.thread_reads, [*self.ids([self.p_sim, self.p_recorded, self.p_imported, self.p_fixed]),
-                                             self.p_locked.id, self.p_full.id, self.p_names.id, self.p_vote.id])
+        self.assertEqual(fake.archives, [self.p_recorded.id, self.p_vote.id])  # ... and archived again right after
+        for p in (self.p_recorded, self.p_vote):
+            self.assertTrue(self.threads[p.id]["thread_metadata"]["archived"])
+        self.assertTrue(self.threads[self.p_recorded.id]["thread_metadata"]["locked"])  # still locked
+        # The posts the listing shows full (p_full) or locked (p_locked, adding) are not read again.
+        self.assertEqual(fake.thread_reads, self.ids([self.p_sim, self.p_recorded, self.p_imported, self.p_fixed,
+                                                      self.p_names, self.p_vote]))
         self.assertEqual((tags.candidates, tags.already_tagged, tags.to_add, tags.to_remove), (5, 1, 4, 4))
-        self.assertEqual((tags.added, tags.removed, tags.unarchived, tags.skipped_full, tags.skipped_locked),
-                         (2, 4, 1, 1, 1))
+        self.assertEqual((tags.added, tags.removed, tags.archived, tags.left_open, tags.skipped_full,
+                          tags.skipped_locked), (2, 4, 2, 0, 1, 1))
         self.assertEqual((tags.held_by_limit, tags.forbidden, tags.errors, tags.gone, tags.unchanged, tags.untouched),
                          (0, 0, 0, 0, 0, 2))
-        self.assertEqual(fake.tag_creates, [])
-        self.assertFalse(self.threads[self.p_vote.id]["thread_metadata"]["archived"])
+        self.assertEqual((fake.tag_creates, tags.error_kinds), ([], {}))
         for p in (self.p_old_tagged, self.p_deleted, self.p_chat):  # still need fixing, or cannot be judged
             self.assertIn(FIX_TAG_ID, self.threads[p.id]["applied_tags"])
         self.assertNotIn(FIX_TAG_ID, self.threads[self.p_old.id]["applied_tags"])
 
-        fake, again = self.run_tags()  # the next day: nothing left to change
-        self.assertEqual(fake.tag_edits, [])
+        fake, again = self.run_tags()  # the next day: nothing left to change, nothing read again
+        self.assertEqual((fake.tag_edits, fake.thread_reads, fake.archives), ([], [], []))
         self.assertEqual((again.candidates, again.already_tagged, again.to_add, again.to_remove), (5, 3, 2, 0))
         self.assertEqual((again.added, again.removed, again.skipped_full, again.skipped_locked), (0, 0, 1, 1))
 
-        fake, unlocked = self.run_tags(allow_locked=True)  # --tag-locked
+        fake, unlocked = self.run_tags(allow_locked=True)  # --tag-locked: added to locked posts too
         self.assertEqual(fake.tag_edits, [(self.p_locked.id, [t["三藍被刀"], t["線瓦"], FIX_TAG_ID], False)])
         self.assertEqual((unlocked.added, unlocked.skipped_locked), (1, 0))
+
+    def test_tag_change_rule(self) -> None:
+        fix = FIX_TAG_ID
+        cases = [  # (applied, add, locked, allow_locked) -> (outcome, new applied_tags)
+            ((["1", "2"], True, False, False), (dri.TAG_CHANGE, ["1", "2", fix])),
+            ((["1", fix, "2"], False, False, False), (dri.TAG_CHANGE, ["1", "2"])),
+            ((["1", fix], True, False, False), (dri.TAG_UNCHANGED, ["1", fix])),
+            ((["1"], False, False, False), (dri.TAG_UNCHANGED, ["1"])),
+            ((["1"], True, True, False), (dri.TAG_LOCKED, ["1"])),
+            ((["1"], True, True, True), (dri.TAG_CHANGE, ["1", fix])),
+            ((["1", fix], False, True, False), (dri.TAG_CHANGE, ["1"])),  # removed from a locked post all the same
+            ((["1", "2", "3", "4", "5"], True, False, False), (dri.TAG_FULL, ["1", "2", "3", "4", "5"])),
+            ((["1", "2", "3", "4", fix], False, False, False), (dri.TAG_CHANGE, ["1", "2", "3", "4"])),
+        ]
+        for (applied, add, locked, allow), want in cases:
+            with self.subTest(applied=applied, add=add, locked=locked, allow=allow):
+                self.assertEqual(dri.tag_change(applied, fix, add, locked=locked, allow_locked=allow), want)
 
     def test_tag_is_created_when_the_forum_lacks_it(self) -> None:
         threads: dict = {}  # a forum without 待修正: no post carries it
@@ -1838,41 +1889,74 @@ class FixTagTest(unittest.TestCase):
         self.assertEqual((full.status, fake.tag_edits), (dri.TAG_FORUM_FULL, []))
         fake, broken = self.run_tags(self.fake(tag_read_error=True))
         self.assertEqual((broken.status, fake.tag_edits, fake.thread_reads), (dri.TAG_ERROR, [], []))
+        self.assertEqual(broken.error_kinds, {"GET /channels/{forum} HTTP 500": 1})
 
     def test_limit_counts_changes_removals_first(self) -> None:
+        fake, zero = self.run_tags(limit=0)
+        self.assertEqual((fake.tag_edits, fake.thread_reads), ([], []))
+        # Held: the 6 real changes; the full and the locked post are skipped without taking a slot.
+        self.assertEqual((zero.held_by_limit, zero.skipped_full, zero.skipped_locked), (6, 1, 1))
         fake, first = self.run_tags(limit=3)
         self.assertEqual([e[0] for e in fake.tag_edits], self.ids([self.p_sim, self.p_recorded, self.p_imported]))
-        self.assertEqual((first.removed, first.added, first.held_by_limit), (3, 0, 5))
-        fake, second = self.run_tags(limit=3)  # the rest on the next run; skips do not use up the limit
+        self.assertEqual((first.removed, first.added, first.held_by_limit), (3, 0, 3))
+        fake, second = self.run_tags(limit=3)  # the rest on the next run
         self.assertEqual([e[0] for e in fake.tag_edits], self.ids([self.p_fixed, self.p_names, self.p_vote]))
         self.assertEqual((second.removed, second.added, second.skipped_locked, second.skipped_full,
                           second.held_by_limit), (1, 2, 1, 1, 0))
         fake, nothing = self.run_tags(limit=0)
-        self.assertEqual((fake.tag_edits, fake.thread_reads, nothing.held_by_limit), ([], [], 2))
+        self.assertEqual((fake.tag_edits, fake.thread_reads, nothing.held_by_limit), ([], [], 0))
 
     def test_403_stops_404_and_errors_are_counted(self) -> None:
-        threads = {k: {"applied_tags": list(v["applied_tags"]), "thread_metadata": dict(v["thread_metadata"])}
-                   for k, v in self.threads.items()}  # as before any change, for the error cases
+        def copy(threads: dict) -> dict:
+            return {k: {"applied_tags": list(v["applied_tags"]), "thread_metadata": dict(v["thread_metadata"])}
+                    for k, v in threads.items()}
+        before = copy(self.threads)  # Discord's side as before any change
+
+        def fresh() -> dict:
+            return copy(before)
+
         fake, denied = self.run_tags(self.fake(forbid_tags=True))
-        self.assertEqual((len(fake.tag_edits), denied.forbidden, denied.left_after_forbidden), (1, 1, 7))
+        self.assertEqual((len(fake.tag_edits), denied.forbidden, denied.left_after_forbidden), (1, 1, 5))
         self.assertEqual((denied.added, denied.removed, len(fake.thread_reads)), (0, 0, 1))
+        self.assertEqual((denied.skipped_full, denied.skipped_locked), (1, 1))  # not counted as left
         self.assertIn(FIX_TAG_ID, self.threads[self.p_sim.id]["applied_tags"])  # nothing changed
+
+        # A 403 on reading one post is not the missing Manage Threads: an error, and the rest goes on.
+        fake, unreadable = self.run_tags(self.fake(threads=fresh(), read_forbidden=[self.p_sim.id]))
+        self.assertEqual((unreadable.forbidden, unreadable.left_after_forbidden, unreadable.errors,
+                          unreadable.removed, unreadable.added), (0, 0, 1, 3, 2))
+        self.assertEqual(unreadable.error_kinds, {"GET /channels/{thread} HTTP 403 code 50001": 1})
 
         fake, gone = self.run_tags(self.fake(deleted=[self.p_sim.id], deleted_on_patch=[self.p_recorded.id]))
         self.assertEqual((gone.gone, gone.removed, gone.added), (2, 2, 2))
         self.assertNotIn(self.p_sim.id, [e[0] for e in fake.tag_edits])  # deleted before: not even sent
+        self.assertEqual(fake.archives, [self.p_vote.id])
 
-        fake, failed = self.run_tags(self.fake(threads=threads, tag_error=True))
+        fake, failed = self.run_tags(self.fake(threads=fresh(), tag_error=True))
         self.assertEqual((failed.errors, failed.added, failed.removed, failed.skipped_full, failed.skipped_locked),
                          (6, 0, 0, 1, 1))
-        fake, limited = self.run_tags(self.fake(threads=threads, tag_error=True), limit=3)  # errors use up the limit
-        self.assertEqual((limited.errors, limited.held_by_limit), (3, 5))
+        self.assertEqual(failed.error_kinds, {"PATCH /channels/{thread} HTTP 500": 6})
+        fake, limited = self.run_tags(self.fake(threads=fresh(), tag_error=True), limit=3)  # errors use up the limit
+        self.assertEqual((limited.errors, limited.held_by_limit), (3, 3))
         for odd in ({"applied_tags": "9199", "thread_metadata": {}}, ["not", "a", "thread"]):
             with self.subTest(odd=odd):
-                fake = self.fake(threads=threads)
+                fake = self.fake(threads=fresh())
                 with mock.patch.object(fake, "thread", return_value=odd):
                     fake, weird = self.run_tags(fake)
-                self.assertEqual((weird.errors, fake.tag_edits), (8, []))
+                self.assertEqual((weird.errors, fake.tag_edits), (6, []))
+                self.assertEqual(weird.error_kinds, {"GET /channels/{thread} unexpected response": 6})
+        fake = self.fake(threads=fresh())
+        with mock.patch.object(fake, "set_thread_tags", side_effect=RuntimeError(f"{self.p_sim.id} {LEAK}")):
+            fake, crashed = self.run_tags(fake)
+        self.assertEqual((crashed.errors, crashed.error_kinds), (6, {"RuntimeError": 6}))  # the type, not the message
+
+        threads = fresh()  # archiving again fails: the tag is changed, the post stays open for now
+        fake, open_ = self.run_tags(self.fake(threads=threads, archive_error=True))
+        self.assertEqual((open_.added, open_.removed, open_.archived, open_.left_open, open_.errors), (2, 4, 2, 2, 0))
+        self.assertEqual(open_.error_kinds, {"PATCH /channels/{thread} HTTP 500": 2})
+        self.assertEqual(fake.archives, [self.p_recorded.id, self.p_vote.id])
+        self.assertFalse(threads[self.p_vote.id]["thread_metadata"]["archived"])
+        self.assertIn(FIX_TAG_ID, threads[self.p_vote.id]["applied_tags"])
 
     def test_reread_sees_changes_made_meanwhile(self) -> None:
         fake = self.fake()
@@ -1880,40 +1964,52 @@ class FixTagTest(unittest.TestCase):
         self.threads[self.p_names.id]["applied_tags"].append(FIX_TAG_ID)  # tagged by hand after the listing
         self.threads[self.p_sim.id]["applied_tags"].remove(FIX_TAG_ID)  # untagged by hand
         self.threads[self.p_vote.id]["applied_tags"] = [self.tag[n] for n in ("三藍被刀", "線瓦", "面瓦", "三紅", "三藍躲刺")]
+        self.threads[self.p_imported.id]["thread_metadata"]["archived"] = True  # archived since the listing
         tags = dri.tag_fix_posts(fake, posts, report, forum_id=dri.FORUM_CHANNEL_ID, now=self.NOW, dry_run=False)
         self.assertEqual((tags.unchanged, tags.skipped_full, tags.added, tags.removed), (2, 2, 0, 3))
         self.assertEqual([e[0] for e in fake.tag_edits], self.ids([self.p_recorded, self.p_imported, self.p_fixed]))
+        self.assertTrue(fake.tag_edits[1][2])  # the post as re-read decides archived:false
+        self.assertEqual((fake.archives, tags.archived), ([self.p_recorded.id, self.p_imported.id], 2))
 
     def test_dry_run_counts_from_the_listing(self) -> None:
         fake, dry = self.run_tags(dry_run=True)
-        self.assertEqual((fake.tag_edits, fake.thread_reads, fake.tag_creates), ([], [], []))
-        self.assertEqual((dry.status, dry.added, dry.removed, dry.unarchived, dry.skipped_full, dry.skipped_locked),
-                         (dri.TAG_FOUND, 2, 4, 1, 1, 1))
+        self.assertEqual((fake.tag_edits, fake.thread_reads, fake.tag_creates, fake.archives), ([], [], [], []))
+        self.assertEqual((dry.status, dry.added, dry.removed, dry.archived, dry.skipped_full, dry.skipped_locked),
+                         (dri.TAG_FOUND, 2, 4, 2, 1, 1))
         self.assertTrue(dry.dry_run)
         fake, limited = self.run_tags(dry_run=True, limit=3)
-        self.assertEqual((limited.removed, limited.added, limited.held_by_limit, fake.tag_edits), (3, 0, 5, []))
+        self.assertEqual((limited.removed, limited.added, limited.held_by_limit, fake.tag_edits), (3, 0, 3, []))
 
     def test_summary_lines_are_counts_only(self) -> None:
         live = "\n".join(dri.fix_tag_lines(dri.FixTagReport(
             status=dri.TAG_CREATED, candidates=5, already_tagged=1, to_add=4, to_remove=4, added=2, removed=4,
-            unarchived=1, skipped_full=1, skipped_locked=1, untouched=2)))
+            archived=1, skipped_full=1, skipped_locked=1, untouched=2)))
         self.assertIn("- 「待修正」標籤（--reply，已更新）：論壇沒有「待修正」標籤，本次已建立", live)
         self.assertIn("90 天內因格式無法解析且未標「已收錄」的貼文 5 篇（已有標籤 1，待加 4）；"
                       "已不需修正但還有標籤（可解析、已收錄或模擬）：4 篇", live)
-        self.assertIn("本次已加上：2；已移除：4（其中重新開啟已封存的貼文：1）；標籤已滿 5 個略過：1；"
-                      "超過 --tag-limit 保留到下次：0；沒有權限（403）：0；其他 Discord 錯誤：0；貼文已鎖定略過：1；"
+        self.assertIn("本次已加上：2；已移除：4；標籤已滿 5 個略過：1；超過 --tag-limit 保留到下次：0；沒有權限（403）：0；"
+                      "其他 Discord 錯誤：0；已封存的貼文（改標籤時暫時開啟，改完再封存）：1；貼文已鎖定略過：1；"
                       "帶標籤但本次無法判斷、未更動：2", live)
         self.assertNotIn("貼文已刪除", live)
+        self.assertNotIn("未能再封存", live)
+        live = "\n".join(dri.fix_tag_lines(dri.FixTagReport(status=dri.TAG_FOUND, archived=2, left_open=1)))
+        self.assertIn("已封存的貼文（改標籤時暫時開啟，改完再封存）：2；改完後未能再封存（Discord 之後會自動封存）：1", live)
         dry = "\n".join(dri.fix_tag_lines(dri.FixTagReport(dry_run=True, days=30, status=dri.TAG_WOULD_CREATE, added=3,
                                                            held_by_limit=2, forbidden=1, left_after_forbidden=4)))
         self.assertIn("（--reply，dry run：只計數，未更改）：論壇沒有「待修正」標籤（dry run 不建立；寫入時會建立）", dry)
         self.assertIn("30 天內", dry)
         self.assertIn("本次可加上：3；可移除：0；", dry)
         self.assertIn("超過 --tag-limit 保留到下次：2；沒有權限（403）：1（之後停止，留到下次：4）", dry)
+        dry = "\n".join(dri.fix_tag_lines(dri.FixTagReport(dry_run=True, status=dri.TAG_FOUND, archived=2)))
+        self.assertIn("；目前已封存的貼文（寫入時暫時開啟，改完再封存）：2", dry)
         for status in dri.TAG_SKIPS:
             lines = dri.fix_tag_lines(dri.FixTagReport(status=status, to_add=5))
             self.assertEqual(len(lines), 2)  # what the tag needs, and how many posts wait for it
             self.assertIn(dri.TAG_STATUS_TEXT[status], lines[0])
+        self.assertEqual(dri.error_kinds_text(Counter({"b": 1, "a": 2, "c": 1})), "a ×2; b ×1; c ×1")
+        self.assertEqual(dri.error_kind(dri.DiscordError(f"x {LEAK}", "GET /x HTTP 500")), "GET /x HTTP 500")
+        self.assertEqual(dri.error_kind(dri.DiscordError(f"x {LEAK}")), "DiscordError")
+        self.assertEqual(dri.error_kind(ValueError(LEAK)), "ValueError")
         args = dri.parse_args(["--reply"])
         self.assertEqual((args.no_tag, args.tag_since_days, args.tag_limit, args.tag_locked), (False, 90, 30, False))
         args = dri.parse_args(["--reply", "--no-tag", "--tag-since-days", "0", "--tag-limit", "5", "--tag-locked"])
@@ -2285,6 +2381,7 @@ class EndToEndTest(unittest.TestCase):
             self.assert_public_safe(log)
             for p in self.posts:
                 self.assertNotIn(p.id, log)
+            self.assertNotIn(LEAK, log)  # the fakes' error messages: only their kind may be printed
             self.assertNotIn("::error", log)
 
         rc, log = self.run_main("--dry-run", "--reply", forum_tags=forum_tags, threads=threads)
@@ -2339,19 +2436,42 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual((rc, len(self.discord.tag_edits)), (0, 1))  # stopped at the first 403
         self.assertIn("沒有權限（403）：1（之後停止，留到下次：1）", log)
         self.assertIn("::notice title=To-fix tag forbidden::The bot may not change post tags (HTTP 403): give it "
-                      "管理討論串 (Manage Threads) on #牌譜紀錄與覆盤. Tag changes stopped for this run; 2 change(s) left "
-                      "for the next run.", log)
+                      "管理討論串 (Manage Threads) on #牌譜紀錄與覆盤. Tag changes stopped for this run; 2 tag change(s) "
+                      "not made, tried again on the next run.", log)
         self.assertNotIn("::warning", log)
+        public_safe(log + self.summary.read_text(encoding="utf-8"))
+
+        # A 403 on reading a post again: an error with its kind, not the Manage Threads notice.
+        rc, log = self.run_main("--reply", forum_tags=forum_tags, threads={}, read_forbidden=[fixed.id])
+        self.assertEqual((rc, [e[0] for e in self.discord.tag_edits]), (0, [bad.id]))
+        self.assertIn("本次已加上：1；已移除：0；", log)
+        self.assertNotIn("::notice", log)
+        self.assertIn("::warning title=To-fix tag errors::1 tag change(s) hit a Discord API error or an unexpected "
+                      "response (tried again on the next run). Errors: GET /channels/{thread} HTTP 403 code 50001 ×1.",
+                      log)
         public_safe(log + self.summary.read_text(encoding="utf-8"))
 
         rc, log = self.run_main("--reply", forum_tags=forum_tags, threads={}, tag_error=True, ci=False)
         self.assertEqual(rc, 0, log)
         self.assertIn("其他 Discord 錯誤：2", log)
-        self.assertIn("[WARNING] To-fix tag errors: 2 tag change(s) hit a Discord API error", log)
+        self.assertIn("[WARNING] To-fix tag errors: 2 tag change(s) hit a Discord API error or an unexpected response "
+                      "(tried again on the next run). Errors: PATCH /channels/{thread} HTTP 500 ×2.", log)
+        public_safe(log + self.summary.read_text(encoding="utf-8"))
         rc, log = self.run_main("--reply", tag_read_error=True)
         self.assertEqual((rc, self.discord.tag_edits), (0, []))
         self.assertIn("::warning title=To-fix tag error::Reading or creating the forum tag 待修正 hit a Discord API "
-                      "error", log)
+                      "error or an unexpected response (GET /channels/{forum} HTTP 500 ×1); no post tag was changed.", log)
+        public_safe(log + self.summary.read_text(encoding="utf-8"))
+
+        archived = {fixed.id: {"applied_tags": [tag["三紅"], FIX_TAG_ID],  # fixed, archived months ago
+                               "thread_metadata": {"archived": True, "locked": False}}}
+        rc, log = self.run_main("--reply", forum_tags=forum_tags, threads=archived, archive_error=True)
+        self.assertEqual((rc, self.discord.tag_edits[0]), (0, (fixed.id, [tag["三紅"]], True)))
+        self.assertIn("已封存的貼文（改標籤時暫時開啟，改完再封存）：1；改完後未能再封存（Discord 之後會自動封存）：1", log)
+        self.assertIn("::warning title=To-fix tag errors::1 archived post(s) got their tag changed but could not be "
+                      "archived again (Discord archives them after inactivity). Errors: PATCH /channels/{thread} "
+                      "HTTP 500 ×1.", log)
+        public_safe(log + self.summary.read_text(encoding="utf-8"))
 
         rc, log = self.run_main("--reply", missing=["已收錄"], forum_tags=forum_tags, threads={})
         self.assertEqual((rc, self.discord.tag_reads, self.discord.tag_edits), (0, 0, []))
