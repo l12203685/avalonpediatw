@@ -188,7 +188,7 @@ export default function LeaderboardBoards(): JSX.Element {
       )}
 
       {others.length > 0 && (
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {others.map(b => (
             <BoardCard key={b.id} board={b} isEn={isEn} />
           ))}
@@ -273,7 +273,7 @@ function BoardCard({ board, isEn }: { board: AnalysisLeaderboardBoard; isEn: boo
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
+      className="min-w-0 bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
     >
       <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
         <h4 className="text-sm font-bold text-white">{boardTitle(board, isEn)}</h4>
@@ -289,9 +289,10 @@ function BoardCard({ board, isEn }: { board: AnalysisLeaderboardBoard; isEn: boo
           {who}
         </p>
       )}
+      {/* flex-wrap: on a phone the numbers move under the name instead of widening the page. */}
       <ol className="space-y-1">
         {board.rows.map(row => (
-          <li key={`${row.rank}-${row.role ?? ''}-${row.name}`} className="flex items-center gap-2 text-xs" title={rowTip(t, row)}>
+          <li key={`${row.rank}-${row.role ?? ''}-${row.name}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 text-xs" title={rowTip(t, row)}>
             <span className={`w-5 text-right font-black ${rankClass(row.rank)}`}>{row.rank}</span>
             <BoardRowBody board={board} row={row} />
           </li>

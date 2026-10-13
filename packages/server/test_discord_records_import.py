@@ -252,10 +252,18 @@ class ParserTest(unittest.TestCase):
             RECENT_BODY.replace("5.夜貓", "4.夜貓"): dri.SKIP_NAMES_MALFORMED,
             RECENT_BODY.replace("5.夜貓", "5.小米"): dri.SKIP_NAMES_MALFORMED,
             RECENT_BODY.replace("1.小米\n2.阿豪", "1.小米 2.阿豪"): dri.SKIP_NAMES_MALFORMED,
+            # One player on two seats as the cache tells players apart (gc.player_name_key).
+            RECENT_BODY.replace("8.Zed", "8.kai"): dri.SKIP_NAMES_MALFORMED,
+            RECENT_BODY.replace("8.Zed", "8.ＫＡＩ"): dri.SKIP_NAMES_MALFORMED,
+            RECENT_BODY.replace("8.Zed", "8.K\u200bai"): dri.SKIP_NAMES_MALFORMED,
         }
         for body, reason in cases.items():
             with self.subTest(reason=reason):
                 self.assertEqual(skip_reason(post(), body), reason)
+        # Two players for the cache (player_name_key lower-cases, it does not casefold ß to ss).
+        two = dri.parse_post(post(), RECENT_BODY.replace("3.Kai", "3.Tovoß").replace("4.Momo", "4.TOVOSS"))
+        self.assertEqual((two.names["3"], two.names["4"]), ("Tovoß", "TOVOSS"))
+        self.assertNotEqual(gc.player_name_key("Tovoß"), gc.player_name_key("TOVOSS"))
         game = dri.parse_post(post(), RECENT_BODY.replace("0.菜", "10.菜").replace("1.小米", "１．小米"))
         self.assertEqual((game.names["0"], game.names["1"]), ("菜", "小米"))
 
@@ -671,6 +679,11 @@ class DedupeTest(unittest.TestCase):
         retyped_cfg = self.sheet(sheet_row(self.header_sheet, "1", "936750", edited, NAMES, "三藍死"))
         report = self.run_plan([p_cfg], {p_cfg.id: RECENT_BODY}, retyped_cfg)
         self.assertEqual(report.near_dup_sheet, 1)  # same players, same seats, same missions
+        # The 牌譜 copy spells the names in another case / full width: still the same players.
+        wide = ["小米", "阿豪", "ＫＡＩ", "ｍｏｍｏ", "夜貓", "ＰＩＮ", "棉花", "ｚｅｄ", "老王", "菜"]
+        wide_sheet = self.sheet(sheet_row(self.header_sheet, "1", "936758", edited, wide, "三藍死"))
+        report = self.run_plan([p_edited], {p_edited.id: RECENT_BODY}, wide_sheet)
+        self.assertEqual((report.in_sheet, report.near_dup_sheet, report.new), (0, 1, 0))
         other_players = self.sheet(sheet_row(self.header_sheet, "1", "936758", edited, NAMES_B, "三藍死"))
         report = self.run_plan([p_cfg], {p_cfg.id: RECENT_BODY}, other_players)
         self.assertEqual(report.new, 1)  # same 配置 + missions but a different table: a different game

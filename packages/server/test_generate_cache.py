@@ -1979,7 +1979,7 @@ class PlayerNameMergeTest(unittest.TestCase):
         for spelling in ("Nova", "NOVA", "nova", " nova ", "ｎｏｖａ", "ＮＯＶＡ", "No​va", "nOvA　"):
             with self.subTest(spelling=spelling):
                 self.assertEqual(gc.player_name_key(spelling), "nova")
-        self.assertEqual(gc.player_name_key("Ｔｅｄ　Ｂｅａｒ"), "ted bear")
+        self.assertEqual(gc.player_name_key("Ｔｏｖｏ　Ｗｒｅｎ"), "tovo wren")
         self.assertNotEqual(gc.player_name_key("Nova"), gc.player_name_key("Novo"))
         self.assertEqual(gc.player_name_key("雪球"), "雪球")  # CJK untouched
         self.assertEqual(gc.player_name_key(None), "")
@@ -2007,6 +2007,20 @@ class PlayerNameMergeTest(unittest.TestCase):
         again, names2 = gc.canonicalize_player_names(merged)  # idempotent
         self.assertIs(again, merged)
         self.assertEqual(names2.merged_spellings, 0)
+        self.assertEqual((names.doubled_games, names2.doubled_games), (0, 0))
+
+    def test_one_player_on_two_seats_is_counted_for_the_log(self) -> None:
+        """A game listing "Nova" and "ｎｏｖａ" on two seats: one player for the cache, so the log
+        says how many such games there are (counts only), to fix in 玩1..玩0."""
+        def doubled(i: int) -> list[str]:
+            names = variant_names(i)
+            return names[:2] + ["ｎｏｖａ" if i == 0 else names[2]] + names[3:]
+        _, names = gc.canonicalize_player_names(gc.parse_game_log(name_log(doubled)))
+        self.assertEqual(names.doubled_games, 1)
+        self.assertTrue(names.summary().endswith("; 1 game(s) list one player on two seats (check 玩1..玩0)"))
+        _, plain = gc.canonicalize_player_names(gc.parse_game_log(name_log(variant_names)))
+        self.assertEqual(plain.doubled_games, 0)
+        self.assertNotIn("two seats", plain.summary())
 
     def test_every_per_player_structure_merges(self) -> None:
         """Typed with variants or typed the same way every time: the same cache, byte for byte

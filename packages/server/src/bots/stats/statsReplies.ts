@@ -27,12 +27,18 @@ import type {
   StrengthPlayerData,
 } from '../../services/sheetsAnalysis';
 import { isTheoryBoard, theoryLastWindows } from '../../services/sheetsAnalysis';
-import { MAX_NAME_CANDIDATES, matchPlayerName, normalizeName } from '@avalon/shared';
+import {
+  MAX_NAME_CANDIDATES,
+  findSamePlayerName,
+  findTypedPlayerName,
+  matchPlayerName,
+  normalizeName,
+} from '@avalon/shared';
 import type { NameMatch } from '@avalon/shared';
 
 // Name lookup lives in @avalon/shared (the website's player search and the stats API use the
 // same rules; normalizeName = playerNameKey, the rule generate_cache.py merges players by).
-export { MAX_NAME_CANDIDATES, matchPlayerName, normalizeName };
+export { MAX_NAME_CANDIDATES, findSamePlayerName, findTypedPlayerName, matchPlayerName, normalizeName };
 export type { NameMatch };
 
 // ─── Constants ───────────────────────────────────────────────────────────

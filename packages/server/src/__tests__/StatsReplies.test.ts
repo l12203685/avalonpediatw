@@ -121,7 +121,7 @@ describe('matchPlayerName', () => {
     for (const typed of ['NOVA', 'nova', ' nOvA ', 'ｎｏｖａ', 'ＮＯＶＡ', 'No\u200bva']) {
       expect(matchPlayerName(typed, names)).toEqual({ kind: 'found', name: 'Nova', caseVariants: [] });
     }
-    expect(normalizeName('Ｔｅｄ　 Ｂｅａｒ')).toBe('ted bear');
+    expect(normalizeName('Ｔｏｖｏ　 Ｗｒｅｎ')).toBe('tovo wren');
     // A substring hit on two spellings of one player is that player, not a choice between "two".
     expect(matchPlayerName('ov', ['Nova', 'NOVA', 'Kite'])).toEqual({ kind: 'found', name: 'Nova', caseVariants: ['NOVA'] });
     expect(matchPlayerName('o', ['Nova', 'NOVA', 'Kite', 'Orca'])).toEqual({

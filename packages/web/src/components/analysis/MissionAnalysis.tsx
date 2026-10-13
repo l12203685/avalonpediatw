@@ -82,7 +82,7 @@ export default function MissionAnalysis(): JSX.Element {
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={passRateData}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+            <YAxis domain={[0, 100]} allowDataOverflow tick={{ fontSize: 11, fill: '#9ca3af' }} />
             <Tooltip
               formatter={(val: unknown) => `${val}%`}
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
@@ -107,7 +107,7 @@ export default function MissionAnalysis(): JSX.Element {
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={outcomeData}>
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+            <YAxis domain={[0, 100]} allowDataOverflow tick={{ fontSize: 11, fill: '#9ca3af' }} />
             <Tooltip
               formatter={(val: unknown) => `${val}%`}
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}

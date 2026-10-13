@@ -577,7 +577,8 @@ def player_name_key(name: object) -> str:
     """Who a player is: the spelling after NFKC (full-width ＡＢＣ / １２３ -> ASCII), zero-width
     characters dropped, whitespace trimmed and collapsed, lower-cased. 'Nova', 'NOVA', ' nova ' and
     'ｎｏｖａ' are one player (2026-10-13): a name in 牌譜 or a Discord record need not match the
-    case exactly. The TS side (sheetsAnalysis.playerNameKey) is the same rule."""
+    case exactly. The TS side (@avalon/shared playerNameKey) is the same rule; both are tested
+    against src/__tests__/fixtures/player_name_keys.json."""
     text = _INVISIBLE_CHARS_RE.sub("", unicodedata.normalize("NFKC", "" if name is None else str(name)))
     return " ".join(text.split()).lower()
 
@@ -588,6 +589,9 @@ class NameMerge:
 
     display: dict[str, str] = field(default_factory=dict)
     spellings: dict[str, int] = field(default_factory=dict)  # key -> distinct spellings seen (>= 1)
+    # Games that list one player (one key, e.g. "Nova" and "ｎｏｖａ") on two or more seats: a typo in
+    # 玩1..玩0 that the merge turns into one player playing twice. Counted for the log only.
+    doubled_games: int = 0
 
     @property
     def merged_players(self) -> int:
@@ -602,9 +606,13 @@ class NameMerge:
     def summary(self) -> str:
         """Counts only (public logs)."""
         if not self.merged_spellings:
-            return "no player names differ only by letter case / width"
-        return (f"{self.merged_spellings} spelling(s) that differ only by letter case / full- or half-width "
-                f"folded into {self.merged_players} player(s)")
+            text = "no player names differ only by letter case / width"
+        else:
+            text = (f"{self.merged_spellings} spelling(s) that differ only by letter case / full- or half-width "
+                    f"folded into {self.merged_players} player(s)")
+        if self.doubled_games:
+            text += f"; {self.doubled_games} game(s) list one player on two seats (check 玩1..玩0)"
+        return text
 
 
 def canonicalize_player_names(games: list[GameRow]) -> tuple[list[GameRow], NameMerge]:
@@ -620,16 +628,23 @@ def canonicalize_player_names(games: list[GameRow]) -> tuple[list[GameRow], Name
     counts: dict[str, Counter] = {}
     first_seen: dict[str, int] = {}
     order = 0
+    doubled = 0
     for g in games:
+        keys: set[str] = set()
+        seated = 0
         for seat in SEATS:
             name = g.seat_players.get(seat)
             if not name:
                 continue
-            counts.setdefault(player_name_key(name), Counter())[name] += 1
+            key = player_name_key(name)
+            keys.add(key)
+            seated += 1
+            counts.setdefault(key, Counter())[name] += 1
             if name not in first_seen:
                 first_seen[name] = order
                 order += 1
-    merge = NameMerge()
+        doubled += len(keys) < seated
+    merge = NameMerge(doubled_games=doubled)
     for key, spellings in counts.items():
         merge.display[key] = min(spellings, key=lambda s: (-spellings[s], first_seen[s]))
         merge.spellings[key] = len(spellings)
@@ -3759,6 +3774,8 @@ def run(
     print(f"  Player names: {names.summary()}")
     name_lines = ([f"- 只差大小寫／全半形的名字：{names.merged_spellings} 個寫法併入 {names.merged_players} 位玩家"]
                   if names.merged_spellings else [])
+    if names.doubled_games:
+        name_lines.append(f"- 同一位玩家同時坐兩個座位的局：{names.doubled_games}（請檢查那幾局的 玩1～玩0）")
 
     print("Computing endpoint responses...")
     cache, carried = assemble_cache(build_cache(games, chemistry, as_of), previous, games=games, as_of=as_of)

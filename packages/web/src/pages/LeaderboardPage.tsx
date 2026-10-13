@@ -25,6 +25,9 @@ import {
 import {
   TIER_GROUP_LABEL_ZH,
   ELO_TAG_ZH,
+  cleanNameQuery,
+  compactName,
+  normalizeName,
   type TierGroup,
   type EloTag,
   type LeaderboardEntryV2,
@@ -115,15 +118,20 @@ export default function LeaderboardPage(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 當前 tab 的玩家（依 search 過濾） */
+  /**
+   * 當前 tab 的玩家（依 search 過濾）：名字的一部分，不分大小寫／全半形，也可忽略空白與分隔符號
+   * （@avalon/shared playerNameMatch 的同一套正規化，和 /戰績、玩家雷達搜尋一致）。
+   */
   const filtered = useMemo<LeaderboardEntryV2Enriched[]>(() => {
     if (!groups) return [];
     const list = groups[activeTier] ?? [];
-    const q = search.trim().toLowerCase();
+    const cleaned = cleanNameQuery(search);
+    const q = normalizeName(cleaned);
     if (!q) return list;
+    const cq = compactName(cleaned);
     return list.filter((e) => {
-      const name = (e.displayName ?? e.playerId).toLowerCase();
-      return name.includes(q);
+      const name = e.displayName ?? e.playerId;
+      return normalizeName(name).includes(q) || (cq !== '' && compactName(name).includes(cq));
     });
   }, [groups, activeTier, search]);
 

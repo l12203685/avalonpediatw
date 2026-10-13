@@ -16,6 +16,7 @@ import {
   cleanNameQuery,
   compactName,
   findSamePlayerName,
+  findTypedPlayerName,
   matchPlayerName,
   normalizeName,
   playerNameKey,
@@ -35,8 +36,15 @@ const fixture = vi.hoisted(() => {
   return {
     players: [
       row('阿明明', 300), row('大熊貓', 200), row('小雨', 120), row('小雨點', 90), row('小虎', 80),
-      row('小魚', 70), row('小柚', 60), row('小咪', 50), row('Quill Fen', 40),
+      row('小魚', 70), row('小柚', 60), row('小咪', 50), row('Novak', 45), row('Quill Fen', 40), row('Nova', 2),
     ],
+    // /默契: the matrix holds NOVAK (upper-cased label) but not Nova.
+    chemistry: {
+      coWin: { players: ['阿明明', 'NOVAK', 'QUILL FEN'], rowLabels: ['阿明明', 'NOVAK', 'QUILL FEN'], values: [[150, 12, 9], [12, 25, 4], [9, 4, 20]] },
+      coLose: { players: ['阿明明', 'NOVAK', 'QUILL FEN'], rowLabels: ['阿明明', 'NOVAK', 'QUILL FEN'], values: [[150, 8, 7], [8, 20, 3], [7, 3, 20]] },
+      winCorr: { players: ['阿明明', 'NOVAK', 'QUILL FEN'], values: [] },
+      coWinMinusLose: { players: ['阿明明', 'NOVAK', 'QUILL FEN'], values: [] },
+    },
   };
 });
 
@@ -45,6 +53,7 @@ vi.mock('../services/sheetsAnalysis', async (importOriginal) => ({
   getAllPlayerStats: async () => fixture.players,
   getPlayerByName: async (name: string) => fixture.players.find((p) => p.name === name) ?? null,
   getLeaderboard: async () => null,
+  getChemistry: async () => fixture.chemistry,
   getPlayerArchetype: async () => null,
   getPlayerStrength: async () => null,
   getPlayerPlaystyle: async () => null,
@@ -152,15 +161,34 @@ describe('matchPlayerName — nicknames', () => {
   });
 });
 
-describe('findSamePlayerName — the stats API lookup (stages 1–2 of matchPlayerName)', () => {
+describe('findSamePlayerName — the stats API lookup (exact, then the same playerNameKey)', () => {
   it('exact, else the same player ignoring case / width / spacing; never part of a name', () => {
     expect(findSamePlayerName('Quill Fen', NAMES)).toBe('Quill Fen');
     expect(findSamePlayerName('ＱＵＩＬＬ　ｆｅｎ', NAMES)).toBe('Quill Fen');
-    expect(findSamePlayerName('@quill  fen', NAMES)).toBe('Quill Fen'); // a mention typed by hand
+    expect(findSamePlayerName(' quill  fen ', NAMES)).toBe('Quill Fen');
     expect(findSamePlayerName('zed', NAMES)).toBe('Zed');
     expect(findSamePlayerName('明明', NAMES)).toBeUndefined(); // a nickname is the bots' business, not the API's
     expect(findSamePlayerName('quillfen', NAMES)).toBeUndefined(); // another player's name for the cache
     expect(findSamePlayerName('', NAMES)).toBeUndefined();
+  });
+
+  it('takes the name as given: @, brackets and punctuation make another name (as for generate_cache.py)', () => {
+    // An account called "(Zed)" must not get the 牌譜 player Zed's record as its profile.
+    for (const other of ['@Zed', '(Zed)', 'Zed!', '「Zed」', 'Zed?']) {
+      expect(findSamePlayerName(other, NAMES)).toBeUndefined();
+      expect(playerNameKey(other)).not.toBe(playerNameKey('Zed'));
+    }
+    const record = { Zed: 1 };
+    expect(findPlayerKey(record, '(Zed)')).toBeUndefined();
+    expect(findPlayerKey(record, '@zed')).toBeUndefined();
+  });
+
+  it('findTypedPlayerName (stages 1–2 of matchPlayerName, for typed queries) does clean them', () => {
+    expect(findTypedPlayerName('@quill  fen', NAMES)).toBe('Quill Fen'); // a mention typed by hand
+    expect(findTypedPlayerName('「ＺＥＤ」？', NAMES)).toBe('Zed');
+    expect(findTypedPlayerName('明明', NAMES)).toBeUndefined(); // never part of a name
+    expect(findTypedPlayerName('bob', NAMES)).toBe('bob'); // an exact spelling of an old split cache
+    expect(findTypedPlayerName('@BOB', NAMES)).toBe('Bob'); // else the first (most games)
   });
 
   it('several spellings of one player (an old cache): the highest rank, else the first', () => {
@@ -202,5 +230,28 @@ describe('/戰績 end to end (LINE text command; Discord uses the same reply)', 
     const text = (await answerStatsTextCommand('/戰績 大貓', 'line')) ?? '';
     expect(text).toContain('找不到玩家「大貓」');
     expect(text).toContain('你是不是要找：大熊貓？');
+  });
+});
+
+describe('/默契 — a player\'s own name before part of a name in the matrix', () => {
+  it('a player outside the matrix is not swapped for one inside whose name contains his', async () => {
+    // /戰績 Nova opens Nova; /默契 must not answer for NOVAK.
+    expect(await answerStatsTextCommand('/戰績 Nova', 'line')).toContain('📊 Nova 的戰績');
+    for (const typed of ['Nova', 'nova', '@Nova', 'ＮＯＶＡ']) {
+      const text = (await answerStatsTextCommand(`/默契 ${typed} 明明`, 'line')) ?? '';
+      expect(text).toContain('「Nova」不在默契矩陣裡');
+      expect(text).not.toContain('Novak');
+    }
+  });
+
+  it('the player\'s own name maps onto his (upper-cased) matrix label', async () => {
+    const text = (await answerStatsTextCommand('/默契 novak 明明', 'line')) ?? '';
+    expect(text).toContain('🤝 Novak × 阿明明 默契');
+    expect(text).toContain('同隊 20 場：一起贏 12、一起輸 8');
+  });
+
+  it('part of a name still searches the matrix', async () => {
+    const text = (await answerStatsTextCommand('/默契 quill 明明', 'line')) ?? '';
+    expect(text).toContain('🤝 Quill Fen × 阿明明 默契');
   });
 });

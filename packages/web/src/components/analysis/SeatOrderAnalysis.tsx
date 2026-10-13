@@ -148,7 +148,13 @@ export default function SeatOrderAnalysis(): JSX.Element {
         <ResponsiveContainer width="100%" height={250}>
           <BarChart data={outcomeData}>
             <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#d1d5db' }} />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: number) => `${v}%`} />
+            {/* The three shares are rounded to 0.1 each and can add up to 100.1: keep the axis at 0–100. */}
+            <YAxis
+              domain={[0, 100]}
+              allowDataOverflow
+              tick={{ fontSize: 11, fill: '#9ca3af' }}
+              tickFormatter={(v: number) => `${Math.round(v)}%`}
+            />
             <Tooltip
               formatter={(val: unknown) => `${val}%`}
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}

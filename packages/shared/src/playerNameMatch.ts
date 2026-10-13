@@ -8,9 +8,14 @@
  * Who a player is — playerNameKey — is the rule generate_cache.py merges players
  * by (player_name_key): NFKC (full-width ＡＢＣ / １２３ → half-width), zero-width
  * characters dropped, whitespace trimmed and collapsed, lower-cased. Names with one
- * key are ONE player: the cache has one row for them (its most-used spelling),
- * an older cache may still list Abc / ABC / abc separately — then the first of
- * them in `names` stands for the player and the others are its `caseVariants`.
+ * key are ONE player: the cache has one row for them (its most-used spelling).
+ * An older cache may still list Abc / ABC / abc separately: a query that is
+ * exactly one of those spellings gets that row; any other spelling of the player
+ * gets the first of them in `names` (most games first); the other rows are the
+ * answer's `caseVariants` either way.
+ * Unicode tables: the cache is built on Python 3.11 (Unicode 14.0); Node and the
+ * browsers have newer ones. NFKC / lower-casing can differ only for characters added
+ * after Unicode 14 (e.g. U+A7CB); a fuzz over older characters found 0 differences.
  *
  * `names` are the analysis-cache spellings in priority order, e.g. most games
  * first; candidate lists keep that order.
@@ -19,7 +24,9 @@
  *      quotes / brackets, trailing punctuation and zero-width characters dropped,
  *      spaces collapsed)
  *   2. the same player: same playerNameKey (case, full/half width, zero-width,
- *      spacing ignored) — the first such name (findSamePlayerName)
+ *      spacing ignored) — the first such name. Stages 1–2 are findTypedPlayerName;
+ *      the stats API uses findSamePlayerName (the same two steps on the name as
+ *      given, without cleanNameQuery)
  *   3. the same ignoring spaces and separators too (compactName: "Quill Fen" = "quillfen")
  *   4. substring of the name (key, then compact)
  *   At 3 and 4 one player wins and several are ambiguous: one candidate per
@@ -146,11 +153,23 @@ function queryForms(query: string): string[] {
   return [typed, cleaned].filter((q, i, all) => q !== '' && all.indexOf(q) === i);
 }
 
+/** The names in `names` with `name`'s playerNameKey: the highest `rank`, else the first. */
+function sameKeyName(name: string, names: readonly string[], rank?: (name: string) => number): string | undefined {
+  const key = playerNameKey(name);
+  if (!key) return undefined;
+  const same = names.filter((n) => playerNameKey(n) === key);
+  if (same.length === 0) return undefined;
+  if (!rank || same.length === 1) return same[0];
+  return same.reduce((best, n) => (rank(n) > rank(best) ? n : best));
+}
+
 /**
- * The name in `names` that IS this player — stages 1–2 of matchPlayerName, never a partial
- * name: `name` itself (as typed, then cleaned) when listed, else a name with the same
- * playerNameKey. Several of those (an older cache's Nova / NOVA / nova): the highest `rank`
- * (e.g. games played), else the first in `names`. The stats API looks players up with this.
+ * The name in `names` that IS this player, for names that arrive as data (the stats API's
+ * /api/analysis/players/:name and /profile/:name/*, an account's display name): `name` itself
+ * when listed, else a name with the same playerNameKey (case / width / zero-width / spacing) —
+ * never a partial name and no query cleaning: "(Nova)", "@Nova" or "Nova!" are other names for
+ * the cache, as for generate_cache.py. Several same-key names (an older cache's Nova / NOVA /
+ * nova): the highest `rank` (e.g. games played), else the first in `names`.
  */
 export function findSamePlayerName(
   name: string,
@@ -158,17 +177,29 @@ export function findSamePlayerName(
   rank?: (name: string) => number,
 ): string | undefined {
   if (typeof name !== 'string') return undefined;
-  const forms = queryForms(name);
+  if (names.includes(name)) return name;
+  return sameKeyName(name, names, rank);
+}
+
+/**
+ * Stages 1–2 of matchPlayerName, for a name someone typed (bots, website search): the query
+ * as typed, then cleaned (cleanNameQuery: @, brackets, trailing punctuation), exactly; then
+ * either form's playerNameKey. Never a partial name. /默契 checks this against every player
+ * before matching part of a name in the chemistry matrix.
+ */
+export function findTypedPlayerName(
+  query: string,
+  names: readonly string[],
+  rank?: (name: string) => number,
+): string | undefined {
+  if (typeof query !== 'string') return undefined;
+  const forms = queryForms(query);
   for (const q of forms) {
     if (names.includes(q)) return q;
   }
   for (const q of forms) {
-    const key = playerNameKey(q);
-    if (!key) continue;
-    const same = names.filter((n) => playerNameKey(n) === key);
-    if (same.length === 0) continue;
-    if (!rank || same.length === 1) return same[0];
-    return same.reduce((best, n) => (rank(n) > rank(best) ? n : best));
+    const same = sameKeyName(q, names, rank);
+    if (same !== undefined) return same;
   }
   return undefined;
 }
@@ -180,7 +211,7 @@ export function matchPlayerName(query: string, names: readonly string[]): NameMa
   if (!cleaned) return { kind: 'none', query: typed };
 
   // 1–2: this very player (one player even when an older cache spells him several ways).
-  const same = findSamePlayerName(typed, names);
+  const same = findTypedPlayerName(typed, names);
   if (same !== undefined) return { kind: 'found', name: same, caseVariants: otherSpellings(same, names) };
 
   // 3–4: ignoring separators, then part of the name; one candidate per player.

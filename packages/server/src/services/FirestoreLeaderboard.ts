@@ -429,7 +429,8 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
       const sheetsPlayers = await getAllPlayerStats();
       const eloMap = computeEloFromSheets(sheetsPlayers);
       // Sheets names ignore case / width (@avalon/shared findSamePlayerName, the stats API's
-      // lookup): "nova" finds the cache's "Nova"; most games first among an old cache's spellings.
+      // lookup): "nova" finds the cache's "Nova", "(Nova)" or "@Nova" does not; most games first
+      // among an old cache's spellings.
       const sheetName = eloMap.has(playerId)
         ? playerId
         : findSamePlayerName(playerId, [...eloMap.keys()], (name) => eloMap.get(name)?.stats.totalGames ?? 0);
@@ -449,9 +450,9 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
         let recent: RecentGame[] = [];
         try {
           const players = await getAggregated();
-          const lower = sheetName.toLowerCase();
+          const wanted = playerNameKey(sheetName);
           for (const [, candidate] of players) {
-            if (candidate.displayName.toLowerCase() === lower) {
+            if (playerNameKey(candidate.displayName) === wanted) {
               recent = candidate.gameHistory
                 .slice(-20)
                 .reverse()

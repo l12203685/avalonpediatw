@@ -803,8 +803,9 @@ export { playerNameKey };
 /**
  * The key of `record` that names this player (@avalon/shared findSamePlayerName: `name` itself
  * when present, else the key that differs from it only by case / width / spacing — never a
- * partial name). A cache written before the names were merged may hold several such keys
- * (Nova / NOVA / nova): `rank` (e.g. games played) picks one, else the first.
+ * partial name, and "@Nova" / "(Nova)" stay other names). A cache written before the names were
+ * merged may hold several such keys (Nova / NOVA / nova): `rank` (e.g. games played) picks one,
+ * else the first.
  */
 export function findPlayerKey<T>(
   record: Record<string, T> | null | undefined,

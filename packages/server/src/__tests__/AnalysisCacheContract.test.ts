@@ -837,7 +837,7 @@ describe('player names: case / width do not matter (same rule as generate_cache.
     for (const typed of ['Nova', 'NOVA', ' nova ', 'ｎｏｖａ', 'ＮＯＶＡ', 'No\u200bva', 'nOvA\u3000']) {
       expect(playerNameKey(typed)).toBe('nova');
     }
-    expect(playerNameKey('Ｔｅｄ　 Ｂｅａｒ')).toBe('ted bear');
+    expect(playerNameKey('Ｔｏｖｏ　 Ｗｒｅｎ')).toBe('tovo wren');
     expect(playerNameKey('雪球')).toBe('雪球');
     expect(playerNameKey('Nova')).not.toBe(playerNameKey('Novo'));
   });

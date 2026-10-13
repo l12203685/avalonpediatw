@@ -24,6 +24,8 @@ import {
   STATS_COMMAND_USAGE,
   chemistryRoster,
   findBoard,
+  findSamePlayerName,
+  findTypedPlayerName,
   formatChemistry,
   formatLeaderboard,
   formatNameProblem,
@@ -142,6 +144,14 @@ export async function chemistryReply(nameA: string, nameB: string): Promise<stri
     const allNames = namesByGames(players);
 
     const resolve = (query: string): NameMatch | { kind: 'outside'; name: string } => {
+      // A player's own name (or the same player's other spelling) comes first, as for /戰績:
+      // "Nova" is Nova even when only NOVAK is in the matrix — never part of NOVAK's name.
+      const own = findTypedPlayerName(query, allNames);
+      if (own !== undefined) {
+        const label = findSamePlayerName(own, roster);
+        if (label === undefined) return { kind: 'outside', name: own };
+        return { kind: 'found', name: label, caseVariants: [] };
+      }
       const inRoster = matchPlayerName(query, roster);
       if (inRoster.kind !== 'none') return inRoster;
       // Not in the matrix — say so explicitly when the player does exist (a

@@ -751,11 +751,14 @@ def _names(footer: list[Item]) -> dict[str, str]:
     if set(names) != set(SEATS) or not all(names.values()):
         empty = next((lines[s] for s, n in names.items() if not n), None)
         raise SkipPost(SKIP_NAMES_MISSING, empty)
-    folded: dict[str, str] = {}
+    # One player on two seats: the same gc.player_name_key (who a player is for the cache —
+    # "Nova" and "ｎｏｖａ" are one player, "Straße" and "STRASSE" two).
+    keys: dict[str, str] = {}
     for seat, name in names.items():  # post order
-        if name.casefold() in folded:
+        key = gc.player_name_key(name)
+        if key in keys:
             raise SkipPost(SKIP_NAMES_MALFORMED, lines[seat])
-        folded[name.casefold()] = seat
+        keys[key] = seat
     return {s: names[s] for s in SEATS}
 
 
@@ -952,7 +955,8 @@ def _cell(row: Sequence[str], idx: Mapping[str, int], name: str) -> str:
 
 
 def _folded_names(names: Iterable[str]) -> tuple[str, ...]:
-    return tuple(gc.normalize_player_name(n).casefold() for n in names)
+    """Who sits where, as the cache tells players apart (gc.player_name_key)."""
+    return tuple(gc.player_name_key(n) for n in names)
 
 
 class SheetIndex:

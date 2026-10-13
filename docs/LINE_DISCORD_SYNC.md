@@ -211,9 +211,12 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
   多人符合列出最多 5 位（同一人的不同寫法只算一位），查無此人列出「你是不是要找」與查詢指令。
   2026-10-13 起只差大小寫或全形半形的名字（例如 `Nova` / `NOVA` / `ｎｏｖａ`）算同一位玩家：`generate_cache.py`
   的 `player_name_key` 與 `playerNameKey` 是同一規則（兩邊測試共用 `packages/server/src/__tests__/fixtures/player_name_keys.json`），
-  快取合併成一列、顯示最常用的寫法；網站 API（`/api/analysis/players/:name`、`/profile/:name/*`）用同一套的前兩步
-  （`findSamePlayerName`：完全相同或同一位玩家，不做部分比對）。
-  合併前的舊快取仍分列時，取場次最多的那個寫法，卡片註明其他寫法「目前另列」。
+  快取合併成一列、顯示最常用的寫法；網站 API（`/api/analysis/players/:name`、`/profile/:name/*`、個人頁）用同一套的前兩步
+  （`findSamePlayerName`：完全相同或同一位玩家，不做部分比對，也不去掉 @、括號、標點——`(Nova)` 不是 `Nova`）。
+  `/默契` 先看打的是不是某位玩家本人（前兩步 `findTypedPlayerName`，對全部玩家）：是就用他在矩陣裡的那一列，不在矩陣就說不在；
+  不是任何人的名字，才在矩陣裡找名字的一部分。
+  合併前的舊快取仍分列時（部署後第一次戰績分析更新之前）：打的正好是其中一個寫法就用那一列，其他打法取場次最多的那個寫法；
+  卡片註明其他寫法「目前另列」。
 - Discord 指令名直接用中文（Discord 允許），和 LINE 寫法一致，任何介面語系都一樣；從「/」選單點選即可，不必切輸入法。
 - LINE：在鏡像群裡指令那句**照常同步**到 Discord／大廳，答案只回 LINE。答案和佇列共用同一個 reply_token：
   一次 `replyMessage`、最多 5 則 = 答案 1 則 + 佇列 4 則，其餘留到下一次；回覆失敗只把取出的佇列訊息放回佇列頭（答案不重送）。
