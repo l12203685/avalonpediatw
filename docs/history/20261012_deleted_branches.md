@@ -47,3 +47,9 @@ Edward [20261012]：「舊分支的所有內容 把有用的全部留下來 就�
 | `gh-pages` | `331ec2d` | 2026-04-21 | 舊 GitHub Pages 建置產物（deploy.yml 已停用） |
 | `staging` | `5cbaa64` | 2026-04-28 | 舊 Cloud Run staging（已停用） |
 | `test/e2e-chatmirror-9p-20260424` | `9fad7c3` | 2026-04-24 | 內容已在 main，或對應功能已停用（登入／綁定／站內對局／站內 ELO 等） |
+
+## 2026-10-13 追加
+
+| 分支 | 最後 commit | 日期 | 理由 |
+|---|---|---|---|
+| `claude/awesome-heisenberg-xntmyh` | `7db8aa8` | 2026-10-12 | Claude Code 雲端 session 自動建立的工作分支，內容與 main 相同；Edward 2026-10-13「ok 你處理」 |
