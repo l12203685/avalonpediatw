@@ -49,7 +49,9 @@ playstyle_placeholder() rows for players new since the last run.
 
 import csv
 import json
+import re
 import statistics
+import unicodedata
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -81,6 +83,37 @@ def cohort_stats(values: List[float]) -> Dict[str, Optional[float]]:
         "mean": round(statistics.mean(values), 1),
         "std": round(statistics.pstdev(values), 1),
     }
+
+
+_INVISIBLE_CHARS_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
+_COUNT_FIELDS = ("totalGames", "r3VotesRed", "r3RejectsRed", "r3VotesBlue", "r3RejectsBlue",
+                 "assassinAttempts", "leaderProposals", "leaderProposalsSame")
+
+
+def player_name_key(name: str) -> str:
+    """generate_cache.player_name_key: NFKC, zero-width characters dropped, whitespace collapsed,
+    lower case. The cache counts 'Nova', 'NOVA' and 'ｎｏｖａ' as one player (2026-10-13)."""
+    text = _INVISIBLE_CHARS_RE.sub("", unicodedata.normalize("NFKC", name or ""))
+    return " ".join(text.split()).lower()
+
+
+def merge_spellings(rows: Dict[str, Dict[str, object]]) -> Dict[str, Dict[str, object]]:
+    """TSV rows (one per spelling) folded into one row per player_name_key: the counts and the
+    assassin target histogram are summed, so the rates come out as if the spellings were one."""
+    merged: Dict[str, Dict[str, object]] = {}
+    for name, row in rows.items():
+        key = player_name_key(name)
+        if key not in merged:
+            merged[key] = {**row, "assassinTargetSeatHist": dict(row["assassinTargetSeatHist"])}
+            continue
+        into = merged[key]
+        for f in _COUNT_FIELDS:
+            into[f] = int(into[f]) + int(row[f])
+        hist = into["assassinTargetSeatHist"]
+        assert isinstance(hist, dict)
+        for seat, count in dict(row["assassinTargetSeatHist"]).items():
+            hist[seat] = int(hist.get(seat, 0)) + int(count)
+    return merged
 
 
 def safe_int(v: str) -> int:
@@ -144,6 +177,10 @@ def main() -> None:
             }
 
     print(f"[panel_c] TSV rows kept (sheets:* non-unknown): {len(tsv_rows)}")
+    spellings = len(tsv_rows)
+    tsv_rows = merge_spellings(tsv_rows)  # keyed by player_name_key from here on
+    if len(tsv_rows) < spellings:
+        print(f"[panel_c] TSV spellings folded by case / width: {spellings - len(tsv_rows)}")
 
     # ── Compute per-player metrics + cohort sets ────────────────────────────
     r3_red_pcts: List[float] = []
@@ -201,7 +238,7 @@ def main() -> None:
     # ── Build playstyle.perPlayer for every player in cache.playerDetails ───
     playstyle_per_player: Dict[str, Dict[str, object]] = {}
     for name in cache["playerDetails"].keys():
-        agg = raw_per_player.get(name)
+        agg = raw_per_player.get(player_name_key(name))
         if agg is None:
             playstyle_per_player[name] = playstyle_placeholder(
                 cache["playerDetails"][name]["player"].get("totalGames", 0)

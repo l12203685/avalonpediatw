@@ -25,11 +25,16 @@ Where each top-level section comes from:
     refreshed from the Sheet  overview, players, playerDetails, missions, lake,
                               rounds, seatOrder, captainAnalysis, leaderboard (all
                               from the 牌譜 game log; players = every name in
-                              玩1..玩0, see compute_player_stats; leaderboard =
+                              玩1..玩0, see compute_player_stats, names that
+                              differ only by letter case / full- or half-width
+                              being one player (canonicalize_player_names,
+                              shown with their most-used spelling); leaderboard =
                               the boards of compute_leaderboard over each
                               player's last N games, constants in
                               LEADERBOARD_CONFIG) and chemistry (同贏 / 同輸 /
-                              贏相關 / 同贏-同輸 tabs). 生涯報表 is not read.
+                              贏相關 / 同贏-同輸 tabs, labels renamed to the
+                              players' spellings: canonicalize_chemistry).
+                              生涯報表 is not read.
                               The game log is 牌譜 plus, when that tab exists,
                               Discord匯入 (games discord_records_import.py
                               copied from the Discord forum, same columns);
@@ -138,9 +143,14 @@ ENV_CREDENTIALS_JSON = "AVALON_STATS_CREDENTIALS_JSON"
 ENV_SHEET_ID = "AVALON_STATS_SHEET_ID"
 
 # Game-log tabs. 牌譜 is required; DISCORD_IMPORT_TAB is optional (written only by
-# discord_records_import.py, append-only, same columns as 牌譜 plus discord_* ones).
+# discord_records_import.py, same columns as 牌譜 plus discord_* ones). Rows are appended, and
+# the row of a post edited since is rewritten in place; DISCORD_UPDATED_COLUMN then says when
+# (Taipei, 'YYYY-MM-DD HH:MM:SS'). The shrink guard lets such rewrites lower a player's games.
 GAME_LOG_TAB = "牌譜"
 DISCORD_IMPORT_TAB = "Discord匯入"
+DISCORD_UPDATED_COLUMN = "更新時間"
+# Seats per game: one rewritten Discord匯入 row takes at most this many games away from players.
+PLAYERS_PER_GAME = 10
 
 # Sections built from the Sheet by this script.
 SHEET_SECTIONS = (
@@ -552,15 +562,87 @@ _INVISIBLE_CHARS_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
 
 
 def normalize_player_name(raw: object) -> str:
-    """A 玩1..玩0 cell as a player key: '' for an empty seat.
+    """A 玩1..玩0 cell as a player spelling: '' for an empty seat.
 
     Drops zero-width characters, trims and collapses any whitespace (incl.
-    full-width U+3000 and NBSP) to single spaces. Case is kept: the committed
-    cache counts e.g. 'Sin', 'SIN' and 'sin' as three players.
+    full-width U+3000 and NBSP) to single spaces. Case and width are kept here
+    (it is how the name is shown); player_name_key decides who is who.
     """
     if not raw:
         return ""
     return " ".join(_INVISIBLE_CHARS_RE.sub("", str(raw)).split())
+
+
+def player_name_key(name: object) -> str:
+    """Who a player is: the spelling after NFKC (full-width ＡＢＣ / １２３ -> ASCII), zero-width
+    characters dropped, whitespace trimmed and collapsed, lower-cased. 'Nova', 'NOVA', ' nova ' and
+    'ｎｏｖａ' are one player (2026-10-13): a name in 牌譜 or a Discord record need not match the
+    case exactly. The TS side (sheetsAnalysis.playerNameKey) is the same rule."""
+    text = _INVISIBLE_CHARS_RE.sub("", unicodedata.normalize("NFKC", "" if name is None else str(name)))
+    return " ".join(text.split()).lower()
+
+
+@dataclass
+class NameMerge:
+    """How canonicalize_player_names folded spellings: key -> the spelling shown."""
+
+    display: dict[str, str] = field(default_factory=dict)
+    spellings: dict[str, int] = field(default_factory=dict)  # key -> distinct spellings seen (>= 1)
+
+    @property
+    def merged_players(self) -> int:
+        """Players that had more than one spelling."""
+        return sum(1 for n in self.spellings.values() if n > 1)
+
+    @property
+    def merged_spellings(self) -> int:
+        """Spellings folded into another one (= how many fewer players there are)."""
+        return sum(n - 1 for n in self.spellings.values() if n > 1)
+
+    def summary(self) -> str:
+        """Counts only (public logs)."""
+        if not self.merged_spellings:
+            return "no player names differ only by letter case / width"
+        return (f"{self.merged_spellings} spelling(s) that differ only by letter case / full- or half-width "
+                f"folded into {self.merged_players} player(s)")
+
+
+def canonicalize_player_names(games: list[GameRow]) -> tuple[list[GameRow], NameMerge]:
+    """`games` with every 玩1..玩0 name replaced by its player's display spelling.
+
+    Names with the same player_name_key are one player. The display spelling is the one written
+    on the most seats of `games` (every game, with or without a 結果), ties going to the one seen
+    first in log order (牌譜 rows, then Discord匯入). Every per-player number (players,
+    playerDetails, leaderboard, seat / role stats, theory) is aggregated from these names, so
+    they all merge the same way. Games whose names change are copied; the input is untouched.
+    Idempotent: canonical games come back unchanged.
+    """
+    counts: dict[str, Counter] = {}
+    first_seen: dict[str, int] = {}
+    order = 0
+    for g in games:
+        for seat in SEATS:
+            name = g.seat_players.get(seat)
+            if not name:
+                continue
+            counts.setdefault(player_name_key(name), Counter())[name] += 1
+            if name not in first_seen:
+                first_seen[name] = order
+                order += 1
+    merge = NameMerge()
+    for key, spellings in counts.items():
+        merge.display[key] = min(spellings, key=lambda s: (-spellings[s], first_seen[s]))
+        merge.spellings[key] = len(spellings)
+    if not merge.merged_spellings:
+        return games, merge
+    out: list[GameRow] = []
+    for g in games:
+        renamed = {seat: merge.display[player_name_key(name)] for seat, name in g.seat_players.items()}
+        if renamed != g.seat_players:
+            g = copy.copy(g)
+            g.seat_players = renamed
+        out.append(g)
+    return out, merge
 
 
 _DATE_RE = re.compile(r"^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2})(?!\d)")
@@ -697,6 +779,17 @@ class GameLogMerge:
     extra_games: int = 0  # readable games in Discord匯入
     extra_added: int = 0
     extra_duplicates: int = 0  # dropped: fingerprint or 流水號 already seen (牌譜 wins)
+    # (更新時間 as YYYY-MM-DD or "", fingerprint, kept) of every readable Discord匯入 game, in order.
+    extra_log: list[tuple[str, str, bool]] = field(default_factory=list)
+
+    def rewritten_since(self, day: dt.date | None) -> tuple[int, int]:
+        """(Discord匯入 rows rewritten from an edited post on or after `day` -- all of them when `day`
+        is None --, Discord匯入 games dropped as duplicates that such a row now matches). On `day`
+        itself too: the cache of that day may predate the rewrite."""
+        since = day.isoformat() if day else ""
+        fps = {fp for d, fp, _ in self.extra_log if d and d >= since}
+        rewritten = sum(1 for d, _, _ in self.extra_log if d and d >= since)
+        return rewritten, sum(1 for _, fp, kept in self.extra_log if not kept and fp in fps)
 
     def summary(self) -> str:
         text = f"{self.main_games} from {GAME_LOG_TAB}"
@@ -716,12 +809,22 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
     merged = GameLogMerge(games=games, main_games=len(games))
     if not extra_rows:
         return merged
+    header = [(h or "").strip() for h in extra_rows[0]]
+    updated: dict[str, str] = {}  # 流水號 -> 更新時間 day of the rows rewritten from an edited post
+    if DISCORD_UPDATED_COLUMN in header and "流水號" in header:
+        col, gid = header.index(DISCORD_UPDATED_COLUMN), header.index("流水號")
+        for row in extra_rows[1:]:
+            day = parse_game_date(row[col]) if col < len(row) else ""
+            if day and gid < len(row):
+                updated[(row[gid] or "").strip()] = day
     seen_fp = {record_fingerprint(g.config, g.text_record) for g in games}
     seen_id = {g.id for g in games}
     for g in parse_game_log(extra_rows):
         merged.extra_games += 1
         fp = record_fingerprint(g.config, g.text_record)
-        if fp in seen_fp or g.id in seen_id:
+        kept = fp not in seen_fp and g.id not in seen_id
+        merged.extra_log.append((updated.get(g.id, ""), fp, kept))
+        if not kept:
             merged.extra_duplicates += 1
             continue
         seen_fp.add(fp)
@@ -855,7 +958,8 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
 # inputs, i.e. the checked-in 牌譜 snapshot with its outcome rule, this code
 # writes the committed players / playerDetails byte for byte).
 #
-#   a player = a distinct normalized 玩1..玩0 name; a game counts for each seat
+#   a player = a distinct player_name_key of the 玩1..玩0 names (case / width folded, shown with
+#     the most-used spelling: canonicalize_player_names); a game counts for each seat
 #     that has a name and a 結果 of 三紅 / 三藍死 / 三藍活 (other 結果 values are
 #     left out of the player stats so the outcome counts always add up)
 #   win      = red role and 三紅, or blue role and 三藍死 / 三藍活 (see OUTCOMES)
@@ -1282,11 +1386,6 @@ def date_summary(games: list[GameRow]) -> dict[str, Any]:
 # Load chemistry matrices
 # ---------------------------------------------------------------------------
 
-def _pair_key(name: str) -> str:
-    """Name key shared by the chemistry labels (upper-cased: ABC) and the 牌譜 names (Abc / ABC / abc)."""
-    return unicodedata.normalize("NFKC", name or "").strip().casefold()
-
-
 def compute_outcome_pair_matrix(chemistry: Mapping[str, Any], games: list[GameRow]) -> dict:
     """5th chemistry matrix: each pair's 三紅 / 三藍死 / 三藍活 split over the games they played together.
 
@@ -1294,8 +1393,10 @@ def compute_outcome_pair_matrix(chemistry: Mapping[str, Any], games: list[GameRo
     of the games where both the row and the column player had a seat (so the existing colour scale
     keeps working), ``threeBlueDeadPct`` / ``threeBlueAlivePct`` ride alongside for the tooltip and
     ``games`` is how many games that is. The matrix has the shape of ``coWin`` (its players /
-    rowLabels); a label matches every 牌譜 spelling that differs only by case / width (ABC = Abc =
-    abc). Self cells and pairs that never played together are null. ``source`` = "games".
+    rowLabels); a label is the player of the same player_name_key (ABC = Abc = abc, the rule
+    canonicalize_player_names merges by; build_cache has already renamed both the labels and the
+    games' names to the players' spellings, so a merged player's games all count). Self cells and
+    pairs that never played together are null. ``source`` = "games".
 
     Until 2026-10-13 (round 5) every non-empty cell held the overall split (45.5 % everywhere):
     the Sheet only has pair aggregates, but the game log has the seats, so it is counted here.
@@ -1308,12 +1409,12 @@ def compute_outcome_pair_matrix(chemistry: Mapping[str, Any], games: list[GameRo
     if not players:
         return {**empty, "players": [], "rowLabels": []}
 
-    wanted = {_pair_key(n) for n in players + row_labels}
+    wanted = {player_name_key(n) for n in players + row_labels}
     pair_counts: dict[tuple[str, str], Counter] = {}
     for g in games:
         if g.outcome not in OUTCOMES:
             continue
-        present = sorted({k for k in (_pair_key(n) for n in g.seat_players.values() if n) if k in wanted})
+        present = sorted({k for k in (player_name_key(n) for n in g.seat_players.values() if n) if k in wanted})
         for i, a in enumerate(present):
             for b in present[i + 1:]:
                 pair_counts.setdefault((a, b), Counter())[g.outcome] += 1
@@ -1323,13 +1424,13 @@ def compute_outcome_pair_matrix(chemistry: Mapping[str, Any], games: list[GameRo
     ba_matrix: list[list[float | None]] = []
     games_matrix: list[list[int | None]] = []
     for row_label in row_labels:
-        a = _pair_key(row_label)
+        a = player_name_key(row_label)
         row_v: list[float | None] = []
         row_bd: list[float | None] = []
         row_ba: list[float | None] = []
         row_n: list[int | None] = []
         for col_label in players:
-            b = _pair_key(col_label)
+            b = player_name_key(col_label)
             counts = pair_counts.get((a, b) if a < b else (b, a)) if a != b else None
             n = sum(counts.values()) if counts else 0
             if n == 0:
@@ -1398,6 +1499,59 @@ def load_chemistry(sh: gspread.Spreadsheet) -> dict:
         result[key] = {"players": players, "rowLabels": row_labels, "values": values}
 
     return result
+
+
+def canonicalize_chemistry(chemistry: dict, display: Mapping[str, str]) -> tuple[int, int]:
+    """Rename, in place, every chemistry label to its player's display spelling (NameMerge.display).
+
+    The 同贏 / 同輸 / 贏相關 / 同贏-同輸 tabs spell names their own way (often upper-cased), so a
+    label used to match no players row. A label whose player_name_key is nobody's stays as it is.
+    The cells are percentages / counts per pair that cannot be added up, so if two labels of one
+    matrix turn out to be the same player, only the first row / column is kept (the current Sheet
+    has no such pair). Returns (labels renamed, rows + columns dropped); counts only.
+    """
+    renamed = dropped = 0
+
+    def fold(labels: Sequence[Any]) -> tuple[list[Any], list[int]]:
+        nonlocal renamed, dropped
+        out: list[Any] = []
+        keep: list[int] = []
+        seen: set[str] = set()
+        for i, label in enumerate(labels):
+            if not isinstance(label, str):
+                out.append(label)
+                keep.append(i)
+                continue
+            name = display.get(player_name_key(label), label)
+            key = player_name_key(name)
+            if key in seen:
+                dropped += 1
+                continue
+            seen.add(key)
+            renamed += name != label
+            out.append(name)
+            keep.append(i)
+        return out, keep
+
+    for matrix in chemistry.values():
+        if not isinstance(matrix, dict) or not isinstance(matrix.get("players"), list):
+            continue
+        has_rows = isinstance(matrix.get("rowLabels"), list)
+        old_cols = len(matrix["players"])
+        old_rows = len(matrix["rowLabels"]) if has_rows else old_cols  # values rows follow these labels
+        players, keep_cols = fold(matrix["players"])
+        rows, keep_rows = fold(matrix["rowLabels"]) if has_rows else (None, keep_cols)
+        values = matrix.get("values")
+        if isinstance(values, list) and (len(keep_cols) < old_cols or len(keep_rows) < old_rows):
+            kept_rows = set(keep_rows)
+            matrix["values"] = [
+                [row[i] for i in keep_cols if i < len(row)] if isinstance(row, list) else row
+                for r, row in enumerate(values) if r in kept_rows or r >= old_rows
+            ]
+        matrix["players"] = players
+        if has_rows:
+            matrix["rowLabels"] = rows
+    return renamed, dropped
 
 
 # ---------------------------------------------------------------------------
@@ -2970,10 +3124,14 @@ def build_cache(games: list[GameRow], chemistry: dict, as_of: dt.date | None = N
     """The sections computed from the Sheet (SHEET_SECTIONS); players come from the 牌譜 game log.
 
     `as_of` is the leaderboard's reference day (resolve_as_of: AVALON_STATS_AS_OF or today +08);
-    a game dated after it counts as undated (drop_dates_after).
+    a game dated after it counts as undated (drop_dates_after). Player names that differ only by
+    letter case / width are one player (canonicalize_player_names; run() has done it already, it
+    is idempotent) and the chemistry labels get the same spellings (canonicalize_chemistry).
     """
     as_of = as_of or resolve_as_of()
     games, _ = drop_dates_after(games, as_of)
+    games, names = canonicalize_player_names(games)
+    canonicalize_chemistry(chemistry, names.display)
     players = compute_player_stats(games)
     overview = compute_overview(games, players)
 
@@ -3030,7 +3188,9 @@ def carry_over_sections(
 ) -> dict[str, int]:
     """Copy into new_cache every top-level section of `previous` it does not have.
 
-    Existing per-player rows are kept as they are; players in the new
+    Existing per-player rows are kept as they are, except that rows filed under another spelling
+    of a current player (an older cache had 'Nova' and 'NOVA'; the players are merged now, see
+    fold_per_player_rows) move to that player's name; players in the new
     playerDetails that a carried section lacks get that section's placeholder
     row (hasData=false). `previous` is not modified.
     Returns {section: number of placeholder rows added}.
@@ -3045,6 +3205,8 @@ def carry_over_sections(
             continue
         added = 0
         builder = builders.get(key)
+        if isinstance(value, dict) and isinstance(value.get("perPlayer"), dict):
+            value = {**value, "perPlayer": fold_per_player_rows(value["perPlayer"], details)}
         if builder is not None and isinstance(value, dict) and isinstance(value.get("perPlayer"), dict):
             per_player = dict(value["perPlayer"])
             for name, detail in details.items():
@@ -3055,6 +3217,27 @@ def carry_over_sections(
         new_cache[key] = value
         carried[key] = added
     return carried
+
+
+def fold_per_player_rows(per_player: Mapping[str, Any], players: Mapping[str, Any]) -> dict:
+    """A carried perPlayer map (archetype / playstyle, built on the owner's PC) with its rows keyed by
+    the current player names: a row filed under another spelling of a player in `players` (same
+    player_name_key) moves to that player's name. When several rows land on one player, the one with
+    data (hasData) and the largest sampleSize wins, the player's own row on a tie; the others are
+    dropped (they described part of the games of a player who is now one row). Rows of names that
+    match no current player are kept as before. Pure."""
+    current = {player_name_key(n): n for n in players}
+    chosen: dict[str, Any] = {}
+    rank: dict[str, tuple] = {}
+    for name, row in per_player.items():
+        target = current.get(player_name_key(name), name)
+        has_data = bool(row.get("hasData")) if isinstance(row, Mapping) else False
+        size = row.get("sampleSize") if isinstance(row, Mapping) else None
+        size = size if isinstance(size, (int, float)) and not isinstance(size, bool) else 0
+        score = (has_data, size, name == target)
+        if target not in chosen or score > rank[target]:
+            chosen[target], rank[target] = row, score
+    return chosen
 
 
 def order_like(cache: dict, previous: Mapping[str, Any] | None) -> dict:
@@ -3192,24 +3375,61 @@ def _player_games(cache: Mapping[str, Any] | None) -> dict[str, float]:
     return out
 
 
+def _games_by_player(cache: Mapping[str, Any] | None) -> dict[str, tuple[str, float]]:
+    """{player_name_key: (the spelling with the most games, summed totalGames)} of a cache's players
+    rows: a cache written before names were merged has e.g. 'Nova' and 'NOVA' as two rows."""
+    out: dict[str, tuple[str, float, float]] = {}
+    for name, games in _player_games(cache).items():
+        key = player_name_key(name)
+        shown, total, best = out.get(key, (name, 0.0, -1.0))
+        if games > best:
+            shown, best = name, games
+        out[key] = (shown, total + games, best)
+    return {key: (shown, total) for key, (shown, total, _) in out.items()}
+
+
+def distinct_players(cache: Mapping[str, Any] | None) -> int | None:
+    """How many players a cache has when names that differ only by case / width count once
+    (its players rows), else overview.totalPlayers."""
+    by_player = _games_by_player(cache)
+    return len(by_player) if by_player else _count(cache, "overview", "totalPlayers")
+
+
 def games_regressions(
     cache: Mapping[str, Any], previous: Mapping[str, Any] | None,
 ) -> list[tuple[str, float, float | None]]:
     """(name, old totalGames, new totalGames or None if gone) for every existing player
     whose game count went down, biggest drop first.
 
+    Players are matched by player_name_key, an old cache's spellings of one player summed (so
+    the merge of 'Nova' and 'NOVA' is no regression as long as the merged row has their games).
     牌譜 only ever gets games appended, so a player's count never goes down; when it
     does, a game row was deleted or became unreadable, or a 玩1..玩0 name was
-    retyped (the old spelling loses games, the new one gains them).
+    retyped (the old spelling loses games, the new one gains them) -- in 牌譜 by hand, or in a
+    Discord匯入 row rewritten from an edited post (explained_by_rewrites).
     """
-    new = _player_games(cache)
+    new = _games_by_player(cache)
     out = [
-        (name, before, new.get(name))
-        for name, before in _player_games(previous).items()
-        if new.get(name) is None or new[name] < before
+        (name, before, new[key][1] if key in new else None)
+        for key, (name, before) in _games_by_player(previous).items()
+        if key not in new or new[key][1] < before
     ]
     out.sort(key=lambda t: t[1] - (t[2] or 0.0), reverse=True)  # stable: ties keep the old order
     return out
+
+
+def explained_by_rewrites(regressions: Sequence[tuple[str, float, float | None]], rewritten_rows: int) -> bool:
+    """Whether every drop in `regressions` (games_regressions) can come from `rewritten_rows`
+    Discord匯入 rows rewritten from edited posts since the existing cache (a corrected player id:
+    the old spelling loses that game). A row holds a player at most once and takes at most
+    PLAYERS_PER_GAME games away in all, so no player may drop by more than `rewritten_rows` and
+    the drops together by no more than PLAYERS_PER_GAME x `rewritten_rows`."""
+    if not regressions:
+        return True
+    if rewritten_rows <= 0:
+        return False
+    drops = [before - (after or 0.0) for _, before, after in regressions]
+    return max(drops) <= rewritten_rows and sum(drops) <= PLAYERS_PER_GAME * rewritten_rows
 
 
 def theory_mismatches(cache: Mapping[str, Any]) -> list[str]:
@@ -3233,8 +3453,18 @@ def validate_new_cache(
     previous: Mapping[str, Any] | None,
     allow_shrink: bool = False,
     allow_field_loss: bool = False,
+    rewritten_rows: int = 0,
+    show_names: bool = True,
+    rewritten_duplicates: int = 0,
 ) -> list[str]:
-    """Problems that make `cache` unfit to replace `previous` ([] = OK to write)."""
+    """Problems that make `cache` unfit to replace `previous` ([] = OK to write).
+
+    `rewritten_rows`, `rewritten_duplicates`: GameLogMerge.rewritten_since the day of `previous`.
+    A Discord匯入 row rewritten from an edited post (a corrected player id) takes a game away from
+    the old spelling: the player drops that explained_by_rewrites accepts pass. overview.totalGames
+    may drop only by the games dropped as duplicates of such a row (it now matches another game).
+    `show_names`: False in GitHub Actions (public log): problems give counts, never player names.
+    """
     problems: list[str] = []
     for key in SHEET_SECTIONS + DERIVED_SECTIONS:
         if not isinstance(cache.get(key), dict):
@@ -3260,40 +3490,55 @@ def validate_new_cache(
     bad_theory = theory_mismatches(cache)
     if bad_theory:
         problems.append(
-            f"{len(bad_theory)} player(s) have a theory block that does not match their games: "
-            f"{_names(bad_theory)} (theory.career.games must equal totalGames)"
+            f"{len(bad_theory)} player(s) have a theory block that does not match their games"
+            + (f": {_names(bad_theory)}" if show_names else "") + " (theory.career.games must equal totalGames)"
         )
 
     if previous and not allow_shrink:
-        # Games are only ever appended to 牌譜: neither the total nor any player's count may go down.
+        rewritten_rows = max(rewritten_rows, 0)
+        rewrites = (f" ({rewritten_rows} {DISCORD_IMPORT_TAB} row(s) rewritten from edited posts since the "
+                    "existing cache do not explain it)") if rewritten_rows else ""
+        # Games are only ever appended to 牌譜: neither the total nor any player's count may go down,
+        # beyond what rewritten Discord匯入 rows explain.
         old_games = _count(previous, "overview", "totalGames")
-        if old_games is not None and games is not None and games < old_games:
+        if old_games is not None and games is not None and old_games - games > max(rewritten_duplicates, 0):
             problems.append(
-                f"overview.totalGames would drop from {old_games} to {games} ({old_games - games} fewer); "
+                f"overview.totalGames would drop from {old_games} to {games} ({old_games - games} fewer){rewrites}; "
                 "games are only ever appended to 牌譜, so rows were deleted or became unreadable "
                 "(流水號 blank or 配置 not 6 characters?); if that is intended, re-run with --allow-shrink"
             )
         regressions = games_regressions(cache, previous)
-        if regressions:
-            shown = ", ".join(
-                f"{name} {_fmt_count(before)}→{_fmt_count(after) if after is not None else 'gone'}"
-                for name, before, after in regressions[:MAX_LISTED_REGRESSIONS]
-            )
-            more = len(regressions) - MAX_LISTED_REGRESSIONS
+        explained = explained_by_rewrites(regressions, rewritten_rows)
+        if not explained:
+            if show_names:
+                shown = ", ".join(
+                    f"{name} {_fmt_count(before)}→{_fmt_count(after) if after is not None else 'gone'}"
+                    for name, before, after in regressions[:MAX_LISTED_REGRESSIONS]
+                )
+                more = len(regressions) - MAX_LISTED_REGRESSIONS
+                shown = f": {shown}{f' (+{more} more)' if more > 0 else ''}"
+            else:
+                gone = sum(1 for *_, after in regressions if after is None)
+                biggest = max(before - (after or 0.0) for _, before, after in regressions)
+                shown = (f" ({gone} of them gone; biggest drop {_fmt_count(biggest)} game(s); names are listed "
+                         "only outside GitHub Actions)")
             problems.append(
-                f"{len(regressions)} existing player(s) would have fewer games than in the existing cache: "
-                f"{shown}{f' (+{more} more)' if more > 0 else ''}. A player's count never goes down while "
-                "games are only appended to 牌譜; a deleted row or a retyped 玩1..玩0 name does this. "
-                "If intended, re-run with --allow-shrink"
+                f"{len(regressions)} existing player(s) would have fewer games than in the existing cache"
+                f"{shown}{rewrites}. A player's count never goes down while games are only appended to 牌譜; "
+                "a deleted row or a retyped 玩1..玩0 name does this. If intended, re-run with --allow-shrink"
             )
-        old_players = _count(previous, "overview", "totalPlayers")
+        # Names that differ only by case / width count once in the old cache too (they are merged now).
+        old_players = distinct_players(previous)
         new_players = _count(cache, "overview", "totalPlayers")
         if old_players is not None and new_players is not None:
-            tolerance = allowed_drop(old_players)
+            # A player whose every game was a corrected spelling is gone: that is no lost player.
+            corrected_away = sum(1 for *_, after in regressions if after is None) if regressions and explained else 0
+            tolerance = allowed_drop(old_players) + corrected_away
             if old_players - new_players > tolerance:
                 problems.append(
                     f"the new cache has {new_players} players, {old_players - new_players} fewer than the existing "
-                    f"{old_players} (tolerance {tolerance}); if rows were removed on purpose, re-run with --allow-shrink"
+                    f"{old_players} (names that differ only by letter case / width counted once; tolerance "
+                    f"{tolerance}); if rows were removed on purpose, re-run with --allow-shrink"
                 )
         for key in CHEMISTRY_MATRICES:
             old_size = _matrix_size(previous.get("chemistry"), key)
@@ -3338,18 +3583,26 @@ def compare_summary(
     old: Mapping[str, Any] | None,
     field_change_pct: float = COMPARE_FIELD_CHANGE_PCT,
     top_n: int = COMPARE_TOP_N,
+    show_names: bool = True,
 ) -> list[str]:
-    """Markdown lines: what replacing `old` with `new` would change (for the job summary)."""
+    """Markdown lines: what replacing `old` with `new` would change (for the job summary).
+    `show_names` False (GitHub Actions: a public log): players are counted, never named -- new and
+    vanished ones (a vanished one is often a corrected typo of a player id) and the top table."""
     lines = ["### 戰績分析快取：預覽（--compare，未寫入）"]
     old_rows, new_rows = _players_by_name(old), _players_by_name(new)
-    added = [n for n in new_rows if n not in old_rows]
-    gone = [n for n in old_rows if n not in new_rows]
+    old_keys, new_keys = {player_name_key(n) for n in old_rows}, {player_name_key(n) for n in new_rows}
+    added = [n for n in new_rows if player_name_key(n) not in old_keys]
+    gone = [n for n in old_rows if player_name_key(n) not in new_keys]
+    # Old rows of one player spelled differently (Nova / NOVA): now one row; a count, no names.
+    folded = sum(1 for n in old_rows if n not in new_rows and player_name_key(n) in new_keys)
+    old_games = _games_by_player(old)
     old_ov = (old or {}).get("overview") or {}
     new_ov = new.get("overview") or {}
     lines.append(
         f"- 玩家：{_arrow(len(old_rows) if old else None, len(new_rows))}"
-        + (f"；新增 {len(added)}：{_names(added)}" if old and added else "")
-        + (f"；消失 {len(gone)}：{_names(gone)}" if gone else "")
+        + (f"；新增 {len(added)}" + (f"：{_names(added)}" if show_names else "") if old and added else "")
+        + (f"；消失 {len(gone)}" + (f"：{_names(gone)}" if show_names else "") if gone else "")
+        + (f"；只差大小寫／全半形而併入同一位玩家的舊名字 {folded} 個" if folded else "")
     )
     lines.append(f"- 局數：{_arrow(old_ov.get('totalGames'), new_ov.get('totalGames'))}")
     old_ob, new_ob = old_ov.get("outcomeBreakdown") or {}, new_ov.get("outcomeBreakdown") or {}
@@ -3367,11 +3620,13 @@ def compare_summary(
 
     top = sorted(new_rows.values(), key=lambda r: -float(r.get("totalGames") or 0))[:top_n]
     if top:
-        lines += ["", f"局數前 {len(top)} 名（舊 → 新）：", "", "| # | 玩家 | 局數 | 勝率 |", "|---|---|---|---|"]
+        head = ("| # | 玩家 | 局數 | 勝率 |", "|---|---|---|---|") if show_names else ("| # | 局數 | 勝率 |", "|---|---|---|")
+        lines += ["", f"局數前 {len(top)} 名（舊 → 新）：", "", *head]
         for i, row in enumerate(top, 1):
             prev = old_rows.get(row["name"]) or {}
+            before = old_games.get(player_name_key(row["name"]), (None, prev.get("totalGames")))[1]
             lines.append(
-                f"| {i} | {row['name']} | {_arrow(prev.get('totalGames'), row.get('totalGames'))} "
+                f"| {i} |" + (f" {row['name']} |" if show_names else "") + f" {_arrow(before, row.get('totalGames'))} "
                 f"| {_arrow(prev.get('winRate'), row.get('winRate'), _fmt_rate)} |"
             )
 
@@ -3435,7 +3690,7 @@ def write_cache_atomically(cache: Mapping[str, Any], path: Path) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
-def fetch_sheet_data(source: CredentialSource, sheet_id: str) -> tuple[list[GameRow], dict]:
+def fetch_sheet_data(source: CredentialSource, sheet_id: str) -> tuple[GameLogMerge, dict]:
     try:
         print("Connecting to Google Sheets...")
         sh = open_spreadsheet(source, sheet_id)
@@ -3464,7 +3719,7 @@ def fetch_sheet_data(source: CredentialSource, sheet_id: str) -> tuple[list[Game
         raise FatalError(
             google_access_error_message(kind, exc, sheet_id, source.client_email()), code, titles[kind]
         ) from None
-    return games, chemistry
+    return merged, chemistry
 
 
 def _append_step_summary(lines: list[str]) -> None:
@@ -3492,23 +3747,38 @@ def run(
     print(f"Leaderboard as of: {as_of.isoformat()}" + (f" (from {ENV_AS_OF})" if os.environ.get(ENV_AS_OF) else ""))
 
     previous = load_previous_cache(output_path, allow_shrink)
-    games, chemistry = fetch_sheet_data(source, sheet_id)
-    games, future_dated = drop_dates_after(games, as_of)  # build_cache does this too; here for the log line
+    merged, chemistry = fetch_sheet_data(source, sheet_id)
+    # Discord匯入 rows rewritten from an edited post (a corrected player id) since the existing cache.
+    rewritten, rewritten_dups = merged.rewritten_since(previous_as_of(previous)) if previous else (0, 0)
+    games, future_dated = drop_dates_after(merged.games, as_of)  # build_cache does this too; here for the log line
     if future_dated:
         print(f"  {future_dated} game(s) have a 日期時間 after {as_of.isoformat()} (mistyped in the Sheet?): "
               "counted as undated until the row is fixed")
+    # Before build_cache (which does it too) so that only_the_day_changed replays the same names.
+    games, names = canonicalize_player_names(games)
+    print(f"  Player names: {names.summary()}")
+    name_lines = ([f"- 只差大小寫／全半形的名字：{names.merged_spellings} 個寫法併入 {names.merged_players} 位玩家"]
+                  if names.merged_spellings else [])
 
     print("Computing endpoint responses...")
     cache, carried = assemble_cache(build_cache(games, chemistry, as_of), previous, games=games, as_of=as_of)
 
-    problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss)
+    show_names = not _in_github_actions()  # the Actions log and job summary are public
+    problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss, rewritten, show_names, rewritten_dups)
     refusal = f"Refusing to overwrite {output_path.name}:\n- " + "\n- ".join(problems)
     unchanged = not problems and only_the_day_changed(cache, previous, games)
     same_but_day = f"與現有快取（asOf {previous_as_of(previous)}）只差 asOf 日期，內容相同"
-    future_lines = [f"- 日期在 asOf 之後的局：{future_dated}（日期時間打錯？已當作無日期）"] if future_dated else []
+    note_lines = [f"- 日期在 asOf 之後的局：{future_dated}（日期時間打錯？已當作無日期）"] if future_dated else []
+    # Counts only: which players a correction took games from stays out of the public log.
+    corrected = games_regressions(cache, previous) if previous and rewritten and not allow_shrink else []
+    if corrected and explained_by_rewrites(corrected, rewritten):
+        name_lines.append(f"- {DISCORD_IMPORT_TAB} 有 {rewritten} 列因貼文修改而改寫：{len(corrected)} 個名字的局數"
+                          "因此減少（例如改正打錯的玩家 id），不算資料遺失")
+        print(f"  {name_lines[-1][2:]}")
+    note_lines += name_lines
 
     if compare:
-        summary = compare_summary(cache, previous, compare_threshold)
+        summary = compare_summary(cache, previous, compare_threshold, show_names=show_names) + name_lines
         if problems:
             summary += ["", "**守門：會拒絕寫入**（正式執行會以 exit 4 結束，現有快取不動）："]
             summary += [f"- {p}" for p in problems]
@@ -3529,7 +3799,7 @@ def run(
     if unchanged:
         print(f"{output_path.name} differs from the existing file only by the as-of day "
               f"(existing asOf {previous_as_of(previous)}, this run {as_of.isoformat()}); not written, nothing to commit.")
-        _append_step_summary(["### 戰績分析快取", f"- {same_but_day}，未寫入", *future_lines])
+        _append_step_summary(["### 戰績分析快取", f"- {same_but_day}，未寫入", *note_lines])
         return 0
 
     print(f"Writing to {output_path}...")
@@ -3558,7 +3828,7 @@ def run(
         f"- 排行榜：{leaderboard_summary(cache.get('leaderboard'))}",
         f"- 由試算表重算：{', '.join(SHEET_SECTIONS)}；由 players 重算：{', '.join(DERIVED_SECTIONS)}",
         f"- 沿用現有快取（需在擁有者電腦重建）：{carried_desc}；featureStudies 的 L141 由牌譜重算、其餘沿用並改寫結論",
-        *future_lines,
+        *note_lines,
     ])
     return 0
 

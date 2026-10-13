@@ -56,7 +56,9 @@ over and adds archetype_placeholder() rows for players new since the last run.
 import csv
 import json
 import math
+import re
 import statistics
+import unicodedata
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -75,6 +77,16 @@ def safe_float(v: Optional[str]) -> Optional[float]:
         return float(v)
     except (TypeError, ValueError):
         return None
+
+
+_INVISIBLE_CHARS_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
+
+
+def player_name_key(name: str) -> str:
+    """generate_cache.player_name_key: NFKC, zero-width characters dropped, whitespace collapsed,
+    lower case. The cache counts 'Nova', 'NOVA' and 'ｎｏｖａ' as one player (2026-10-13)."""
+    text = _INVISIBLE_CHARS_RE.sub("", unicodedata.normalize("NFKC", name or ""))
+    return " ".join(text.split()).lower()
 
 
 def clip01_100(v: float) -> float:
@@ -228,6 +240,17 @@ def main() -> None:
 
     print(f"[build_archetype_strength] TSV rows: {len(tsv_rows)}")
 
+    # The TSV has one row per spelling; the cache one player per player_name_key. The axes are
+    # rates, so of the spellings of one player the row with the most games stands for them all.
+    by_key: Dict[str, Dict[str, Optional[float]]] = {}
+    for name, axes in tsv_rows.items():
+        key = player_name_key(name)
+        if key not in by_key or (axes["totalGames"] or 0) > (by_key[key]["totalGames"] or 0):
+            by_key[key] = axes
+    if len(by_key) < len(tsv_rows):
+        print(f"[build_archetype_strength] TSV spellings folded by case / width: {len(tsv_rows) - len(by_key)}")
+    tsv_rows = by_key
+
     # ── Compute Panel A: Archetype 4 axes ────────────────────────────────
     # Axis derivation:
     #   honesty     = ladyTruthfulPct (raw 0-100, fallback 50 if no lake hold)
@@ -260,8 +283,9 @@ def main() -> None:
 
     archetype_per_player: Dict[str, Dict] = {}
     for name in cache["playerDetails"].keys():
-        if name in raw_axes:
-            axes = raw_axes[name]
+        key = player_name_key(name)
+        if key in raw_axes:
+            axes = raw_axes[key]
             percentiles = {
                 a: percentile_rank(axes[a], sorted_by_axis[a])
                 for a in ("honesty", "consistency", "stickiness", "flip")
@@ -269,7 +293,7 @@ def main() -> None:
             archetype_per_player[name] = {
                 "axes":        axes,
                 "percentiles": percentiles,
-                "sampleSize":  int(tsv_rows[name]["totalGames"] or 0),
+                "sampleSize":  int(tsv_rows[key]["totalGames"] or 0),
                 "hasData":     True,
             }
         else:

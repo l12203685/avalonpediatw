@@ -30,7 +30,8 @@ import { isTheoryBoard, theoryLastWindows } from '../../services/sheetsAnalysis'
 import { MAX_NAME_CANDIDATES, matchPlayerName, normalizeName } from '@avalon/shared';
 import type { NameMatch } from '@avalon/shared';
 
-// Name lookup lives in @avalon/shared (the website's player search uses the same rules).
+// Name lookup lives in @avalon/shared (the website's player search and the stats API use the
+// same rules; normalizeName = playerNameKey, the rule generate_cache.py merges players by).
 export { MAX_NAME_CANDIDATES, matchPlayerName, normalizeName };
 export type { NameMatch };
 
@@ -127,8 +128,9 @@ export function clampReply(text: string, max: number = STATS_REPLY_MAX_CHARS): s
 
 // ─── Name matching ───────────────────────────────────────────────────────
 // matchPlayerName / normalizeName / NameMatch: @avalon/shared playerNameMatch.ts
-// (exact → case-insensitive → ignoring spaces → unique substring or ≤ 5
-// candidates → none with "did you mean" suggestions).
+// (exact → the same player ignoring case / width / spacing (one player even when an old cache
+// spells him several ways) → ignoring separators → unique substring or ≤ 5 candidates, one per
+// player → none with "did you mean" suggestions).
 
 /** Reply for an ambiguous / unknown name. */
 export function formatNameProblem(
@@ -166,7 +168,7 @@ export interface PlayerCardInput {
   archetype?: { data: ArchetypePlayerData; axisLabels?: Record<string, unknown> | null } | null;
   strength?: StrengthPlayerData | null;
   playstyle?: { data: PlaystylePlayerData; labels: PlaystyleData['labels'] } | null;
-  /** Names that differ only by case, shown as a hint. */
+  /** Other rows of the same player spelled differently (old caches only), shown as a hint. */
   caseVariants?: string[];
   /** leaderboard.config.theoryMinCellGames of the cache (for the footnote); default 3. */
   minCellGames?: number;
@@ -312,7 +314,7 @@ export function formatPlayerCard(input: PlayerCardInput): string {
     if (extra) lines.push(extra);
   }
   if (input.caseVariants && input.caseVariants.length > 0) {
-    lines.push(`ℹ️ 另有大小寫不同的玩家：${input.caseVariants.slice(0, MAX_NAME_CANDIDATES).join('、')}`);
+    lines.push(`ℹ️ 大小寫不同的寫法目前另列：${input.caseVariants.slice(0, MAX_NAME_CANDIDATES).join('、')}（同一人，戰績更新後會合併）`);
   }
   if (theory) lines.push(theoryFootnote(input.minCellGames ?? THEORY_MIN_CELL_GAMES));
   lines.push(`🔗 ${p.name} 的雷達圖與完整戰績（不用登入）：${playerStatsUrl(p.name)}`);

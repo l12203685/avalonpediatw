@@ -1,0 +1,117 @@
+{
+  "_comment": "player name -> key (who the player is). generate_cache.py player_name_key and @avalon/shared playerNameKey must both give these (test_generate_cache.py, PlayerNameLookup.test.ts). Made-up names.",
+  "cases": [
+    {
+      "input": "Nova",
+      "key": "nova"
+    },
+    {
+      "input": "NOVA",
+      "key": "nova"
+    },
+    {
+      "input": " nova ",
+      "key": "nova"
+    },
+    {
+      "input": "ｎｏｖａ",
+      "key": "nova"
+    },
+    {
+      "input": "ＮＯＶＡ",
+      "key": "nova"
+    },
+    {
+      "input": "No\u200bva",
+      "key": "nova"
+    },
+    {
+      "input": "\ufeffNova\u2060",
+      "key": "nova"
+    },
+    {
+      "input": "No\u200c\u200dva",
+      "key": "nova"
+    },
+    {
+      "input": "Ted\u3000\u3000Bear",
+      "key": "ted bear"
+    },
+    {
+      "input": "Ted\u00a0Bear",
+      "key": "ted bear"
+    },
+    {
+      "input": "Ted\tBear\n",
+      "key": "ted bear"
+    },
+    {
+      "input": "Ted\u001cBear",
+      "key": "ted bear"
+    },
+    {
+      "input": "Ted\u0085Bear",
+      "key": "ted bear"
+    },
+    {
+      "input": "Ted\u2028Bear",
+      "key": "ted bear"
+    },
+    {
+      "input": "Ｔｅｄ\u3000Ｂｅａｒ",
+      "key": "ted bear"
+    },
+    {
+      "input": "雪球",
+      "key": "雪球"
+    },
+    {
+      "input": "ＡＢＣ１２３",
+      "key": "abc123"
+    },
+    {
+      "input": "Quill_Fen",
+      "key": "quill_fen"
+    },
+    {
+      "input": "Quill Fen",
+      "key": "quill fen"
+    },
+    {
+      "input": "quill  fen",
+      "key": "quill fen"
+    },
+    {
+      "input": "ΟΔΟΣ",
+      "key": "οδος"
+    },
+    {
+      "input": "İris",
+      "key": "i̇ris"
+    },
+    {
+      "input": "ﬁsh",
+      "key": "fish"
+    },
+    {
+      "input": "Ⅻ",
+      "key": "xii"
+    },
+    {
+      "input": "㈱雪球",
+      "key": "(株)雪球"
+    },
+    {
+      "input": "Ｍｉａ・Ｃｈｅｎ",
+      "key": "mia・chen"
+    },
+    {
+      "input": "",
+      "key": ""
+    },
+    {
+      "input": "   ",
+      "key": ""
+    }
+  ]
+}

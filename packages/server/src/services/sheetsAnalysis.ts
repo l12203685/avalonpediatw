@@ -10,6 +10,7 @@
 
 import path from 'path';
 import fs from 'fs';
+import { findSamePlayerName, playerNameKey } from '@avalon/shared';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -788,6 +789,52 @@ function byName<T>(record: Record<string, T>, name: string): T | undefined {
   return Object.prototype.hasOwnProperty.call(record, name) ? record[name] : undefined;
 }
 
+// ---------------------------------------------------------------------------
+// Player names: case / width do not matter (Edward 2026-10-13)
+// ---------------------------------------------------------------------------
+
+/**
+ * playerNameKey (who a player is: generate_cache.py player_name_key — NFKC, zero-width dropped,
+ * spaces collapsed, lower-cased) and the lookup live in @avalon/shared playerNameMatch.ts, with
+ * the bots' /戰績 /默契 and the website's search. Re-exported for the callers of this module.
+ */
+export { playerNameKey };
+
+/**
+ * The key of `record` that names this player (@avalon/shared findSamePlayerName: `name` itself
+ * when present, else the key that differs from it only by case / width / spacing — never a
+ * partial name). A cache written before the names were merged may hold several such keys
+ * (Nova / NOVA / nova): `rank` (e.g. games played) picks one, else the first.
+ */
+export function findPlayerKey<T>(
+  record: Record<string, T> | null | undefined,
+  name: string,
+  rank?: (key: string) => number,
+): string | undefined {
+  if (!record || typeof name !== 'string') return undefined;
+  if (Object.prototype.hasOwnProperty.call(record, name)) return name;
+  return findSamePlayerName(name, Object.keys(record), rank);
+}
+
+/** playerDetails key of a typed name (case / width ignored; most games first among old split rows). */
+function playerDetailsKey(c: AnalysisCache, name: string): string | undefined {
+  const details = c.playerDetails;
+  return findPlayerKey(details, name, (k) => details[k]?.player?.totalGames ?? 0);
+}
+
+/** A per-player section row (archetype / strength / playstyle) of the player `name` resolves to. */
+function perPlayerRow<T>(
+  c: AnalysisCache,
+  perPlayer: Record<string, T>,
+  name: string,
+): { name: string; data: T; detailKey: string | undefined } | null {
+  const detailKey = playerDetailsKey(c, name);
+  const key = findPlayerKey(perPlayer, detailKey ?? name);
+  if (key === undefined) return null;
+  const data = byName(perPlayer, key);
+  return data === undefined ? null : { name: detailKey ?? key, data, detailKey };
+}
+
 /**
  * Round to one decimal with ties to even, exactly like Python's round() in
  * generate_cache.py (rnd1): 56.25 → 56.2, 56.35 → 56.4. Math.round would give
@@ -957,9 +1004,11 @@ export async function getAllPlayerStats(): Promise<PlayerStats[]> {
   return c.players.players.map((p) => withFinalFields(servedPlayerRow(p, source), roleFinal));
 }
 
+/** One player's stats; `name` is matched ignoring case / width (playerNameKey). */
 export async function getPlayerByName(name: string): Promise<PlayerStats | null> {
   const c = loadCache();
-  const detail = byName(c.playerDetails, name);
+  const key = playerDetailsKey(c, name);
+  const detail = key === undefined ? undefined : byName(c.playerDetails, key);
   return detail
     ? withFinalFields(servedPlayerRow(detail.player, c.players?.seatOutcomesSource), c.overview?.roleFinalWinRates)
     : null;
@@ -1022,7 +1071,8 @@ export async function getFeatureStudies(): Promise<FeatureStudiesData | null> {
 // ---------------------------------------------------------------------------
 
 /**
- * Lookup archetype data for a single player by analysis-cache key (display name).
+ * Lookup archetype data for a single player by analysis-cache key (display name; case / width
+ * ignored, see playerNameKey — `player.name` is the cache's spelling).
  * Returns null when the player isn't tracked in the cache (e.g. brand-new
  * accounts with zero games). Players with N<10 games appear in the cache but
  * with `hasData: false` so the UI can render "資料不足".
@@ -1036,12 +1086,13 @@ export async function getPlayerArchetype(name: string): Promise<{
 } | null> {
   const c = loadCache();
   if (!c.archetype) return null;
-  const data = byName(c.archetype.perPlayer, name);
-  if (!data) return null;
-  const detail = byName(c.playerDetails, name);
+  const found = perPlayerRow(c, c.archetype.perPlayer, name);
+  if (!found) return null;
+  const { data } = found;
+  const detail = found.detailKey === undefined ? undefined : byName(c.playerDetails, found.detailKey);
   return {
     player: {
-      name,
+      name: found.name,
       totalGames: detail ? detail.player.totalGames : data.sampleSize,
     },
     data,
@@ -1063,12 +1114,13 @@ export async function getPlayerStrength(name: string): Promise<{
 } | null> {
   const c = loadCache();
   if (!c.strength) return null;
-  const data = byName(c.strength.perPlayer, name);
-  if (!data) return null;
-  const detail = byName(c.playerDetails, name);
+  const found = perPlayerRow(c, c.strength.perPlayer, name);
+  if (!found) return null;
+  const { data } = found;
+  const detail = found.detailKey === undefined ? undefined : byName(c.playerDetails, found.detailKey);
   return {
     player: {
-      name,
+      name: found.name,
       totalGames: detail ? detail.player.totalGames : 0,
     },
     data,
@@ -1090,12 +1142,13 @@ export async function getPlayerPlaystyle(name: string): Promise<{
 } | null> {
   const c = loadCache();
   if (!c.playstyle) return null;
-  const data = byName(c.playstyle.perPlayer, name);
-  if (!data) return null;
-  const detail = byName(c.playerDetails, name);
+  const found = perPlayerRow(c, c.playstyle.perPlayer, name);
+  if (!found) return null;
+  const { data } = found;
+  const detail = found.detailKey === undefined ? undefined : byName(c.playerDetails, found.detailKey);
   return {
     player: {
-      name,
+      name: found.name,
       totalGames: detail ? detail.player.totalGames : data.sampleSize,
     },
     data,

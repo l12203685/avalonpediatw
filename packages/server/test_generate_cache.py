@@ -27,6 +27,7 @@ import unittest
 from collections import Counter
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from typing import Callable
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -300,7 +301,7 @@ class SanityGuardTest(unittest.TestCase):
 
         renamed = fake_cache(players=12)
         for row in renamed["players"]["players"]:
-            row["name"] = row["name"].lower()  # every old spelling disappears
+            row["name"] = "Q" + row["name"]  # every old name disappears (retyped, not just re-cased)
         problem = next(p for p in gc.validate_new_cache(renamed, prev) if "existing player" in p)
         self.assertIn("12 existing player(s)", problem)
         self.assertIn("P11 21→gone", problem)
@@ -308,6 +309,57 @@ class SanityGuardTest(unittest.TestCase):
         self.assertEqual(
             [r[0] for r in gc.games_regressions(renamed, prev)][:3], ["P11", "P10", "P9"],
         )
+        recased = fake_cache(players=12)
+        for row in recased["players"]["players"]:
+            row["name"] = row["name"].lower()  # same players, other case: no regression
+        self.assertEqual(gc.games_regressions(recased, prev), [])
+
+    def test_rewritten_discord_rows_explain_a_corrected_name(self) -> None:
+        """A Discord匯入 row rewritten from an edited post (a corrected player id) takes its game
+        from the old spelling; the guard lets that through, and only that much."""
+        prev = fake_cache(players=12)  # P0..P11 with 10..21 games
+        new = fake_cache(players=12)
+        rows = new["players"]["players"]
+        rows[3]["totalGames"] = 12.0  # P3 13 -> 12: the corrected spelling
+        rows[5]["totalGames"] = 16.0  # P5 15 -> 16: the right one
+        self.assertTrue(gc.validate_new_cache(new, prev))
+        self.assertEqual(gc.validate_new_cache(new, prev, rewritten_rows=1), [])
+        rows[4]["totalGames"] = 12.0  # P4 14 -> 12: two games, one row cannot do that
+        self.assertTrue(gc.validate_new_cache(new, prev, rewritten_rows=1))
+        self.assertEqual(gc.validate_new_cache(new, prev, rewritten_rows=2), [])
+        self.assertFalse(gc.explained_by_rewrites([(f"P{i}", 10.0, 9.0) for i in range(11)], 1))  # > 10 seats
+        self.assertTrue(gc.explained_by_rewrites([(f"P{i}", 10.0, 9.0) for i in range(10)], 1))
+        self.assertTrue(gc.explained_by_rewrites([], 0))
+
+        gone = fake_cache(players=12)
+        gone["players"]["players"][0]["name"] = "Q0"  # P0's every game was the typo: P0 is gone
+        self.assertEqual(gc.validate_new_cache(gone, prev, rewritten_rows=10), [])  # no lost player either
+        fewer = fake_cache(games=99, players=12)  # and a game fewer: only a row now a duplicate explains that
+        problems = gc.validate_new_cache(fewer, prev, rewritten_rows=1)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("(1 Discord匯入 row(s) rewritten from edited posts since the existing cache do not explain it)",
+                      problems[0])
+        self.assertEqual(gc.validate_new_cache(fewer, prev, rewritten_rows=1, rewritten_duplicates=1), [])
+
+    def test_public_log_messages_name_nobody(self) -> None:
+        prev = fake_cache(players=12)
+        new = with_theory(fake_cache(players=12))
+        for row in new["players"]["players"][:3]:
+            row["totalGames"] -= 2.0
+            row["theory"]["career"]["games"] = 1
+        new["players"]["players"][11]["name"] = "Q11"
+        problems = gc.validate_new_cache(new, prev, show_names=False, rewritten_rows=1)
+        text = "\n".join(problems)
+        self.assertIn("4 existing player(s) would have fewer games than in the existing cache (1 of them gone; "
+                      "biggest drop 21 game(s); names are listed only outside GitHub Actions)", text)
+        self.assertIn("3 player(s) have a theory block that does not match their games (theory", text)
+        self.assertNotRegex(text, r"\b[PQ]\d+\b")
+        self.assertIn("P11 21→gone", "\n".join(gc.validate_new_cache(new, prev)))  # local runs: named
+        lines = "\n".join(gc.compare_summary(new, prev, show_names=False))
+        self.assertIn("新增 1；消失 1", lines)
+        self.assertIn("| # | 局數 | 勝率 |", lines)
+        self.assertNotRegex(lines, r"\b[PQ]\d+\b")
+        self.assertIn("新增 1：Q11；消失 1：P11", "\n".join(gc.compare_summary(new, prev)))
 
     def test_empty_or_malformed_always_refused(self) -> None:
         empty_games = fake_cache(games=0)
@@ -416,6 +468,24 @@ class CarryOverTest(unittest.TestCase):
         builders = gc.default_placeholder_builders()
         self.assertEqual(builders["archetype"](7.0)["sampleSize"], 7)
         self.assertFalse(builders["playstyle"](7.0)["hasData"])
+
+    def test_owner_scripts_key_names_like_the_cache(self) -> None:
+        arche = gc._load_local_script("build_archetype_strength")
+        panel = gc._load_local_script("build_panel_c_playstyle")
+        for spelling in ("Nova", "NOVA", " ｎｏｖａ ", "No\u200bva"):
+            self.assertEqual(arche.player_name_key(spelling), gc.player_name_key(spelling))
+            self.assertEqual(panel.player_name_key(spelling), gc.player_name_key(spelling))
+
+        def row(games: int, votes: int, hist: dict) -> dict:
+            return {"totalGames": games, "r3VotesRed": votes, "r3RejectsRed": 1, "r3VotesBlue": 0, "r3RejectsBlue": 0,
+                    "assassinAttempts": sum(hist.values()), "assassinTargetSeatHist": hist,
+                    "leaderProposals": 2, "leaderProposalsSame": 1}
+        rows = {"Nova": row(30, 8, {"8": 2}), "NOVA": row(5, 4, {"8": 1, "5": 1}), "Kite": row(9, 1, {})}
+        merged = panel.merge_spellings(rows)
+        self.assertEqual(set(merged), {"nova", "kite"})
+        self.assertEqual((merged["nova"]["totalGames"], merged["nova"]["r3VotesRed"], merged["nova"]["r3RejectsRed"]), (35, 12, 2))
+        self.assertEqual(merged["nova"]["assassinTargetSeatHist"], {"8": 3, "5": 1})
+        self.assertEqual(rows["Nova"]["assassinTargetSeatHist"], {"8": 2})  # input untouched
 
 
 # ---------------------------------------------------------------------------
@@ -774,6 +844,25 @@ class PlayerAggregationTest(unittest.TestCase):
     def test_no_field_loss_vs_committed_shape(self) -> None:
         previous = {"players": {"players": [{f: 0 for f in PLAYER_FIELDS}]}}
         self.assertEqual(gc.dropped_player_fields(self.cache, previous), [])
+
+    def test_merge_tracks_rewritten_discord_rows(self) -> None:
+        log = aggregation_log()
+        header = LOG_HEADERS + ["discord_post_id", gc.DISCORD_UPDATED_COLUMN]
+        def extra(gid: str, updated: str, text: str = DEFAULT_TEXT) -> list[str]:
+            return log_row(gid, "135790", "三紅", SEAT_NAMES, text=text) + [gid[1:], updated]
+        dup_text = log[1][LOG_HEADERS.index("文字記錄")]
+        rows = [header, extra("D1", ""), extra("D2", "2026-12-01 03:17:00", "158\nooo"),
+                extra("D3", "2026/11/02 03:17", "159\nooo"), extra("D4", "2026-12-02 03:17:00", "158\nooo"),
+                log_row("D5", "123456", "三紅", SEAT_NAMES, text=dup_text) + ["5", "2026-12-01 03:17:00"]]
+        merged = gc.merge_game_logs(log, rows)
+        self.assertEqual((merged.extra_added, merged.extra_duplicates), (3, 2))
+        # On or after the day: D2, D4 (a duplicate of D2) and D5 (now the same game as a 牌譜 row).
+        self.assertEqual(merged.rewritten_since(dt.date(2026, 12, 1)), (3, 2))
+        self.assertEqual(merged.rewritten_since(dt.date(2026, 12, 2)), (1, 1))  # D4, dropped as D2's duplicate
+        self.assertEqual(merged.rewritten_since(dt.date(2026, 12, 3)), (0, 0))
+        self.assertEqual(merged.rewritten_since(None), (4, 2))
+        self.assertEqual(gc.merge_game_logs(log, [LOG_HEADERS, log_row("D9", "135790", "三紅", SEAT_NAMES)])
+                         .rewritten_since(None), (0, 0))  # a tab without the column
 
     def test_guard_refuses_lost_games(self) -> None:
         log = aggregation_log()
@@ -1141,6 +1230,8 @@ class CommittedCachePropertyTest(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 SNAPSHOT = Path(__file__).resolve().parent / "sheets_cache.json"
+# player name -> key table shared with the TS matcher's test (src/__tests__/PlayerNameLookup.test.ts).
+NAME_KEY_CASES = Path(__file__).resolve().parent / "src" / "__tests__" / "fixtures" / "player_name_keys.json"
 REBUILD_FINGERPRINT = {"totalGames": 2146, "totalPlayers": 198, "threeRed": 999, "threeBlueDead": 499, "threeBlueAlive": 648}
 GAME_1276_PLAYERS = ["呂安", "Dean", "布冬", "軒", "HAO", "洋蔥", "大星", "JOY", "kevin", "Sin"]
 
@@ -1376,6 +1467,44 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(written["leaderboard"]["asOf"], next_day)
         self.assertEqual(written["featureStudies"]["generatedAt"], next_day)
         self.assertEqual(written["featureStudies"]["features"][0]["computedAt"], next_day)
+
+    def test_first_refresh_after_the_name_merge(self) -> None:
+        """The existing file was written before names were merged (Echo / ECHO / ｅｃｈｏ as three
+        players); the refresh merges them, passes the guards, logs counts only, and the next day
+        writes nothing (only_the_day_changed replays the merged names)."""
+        spellings = ["Echo", "ECHO", "ｅｃｈｏ ", "Echo"]
+        self.tabs["牌譜"] = [LOG_HEADERS] + [
+            log_row(f"E{i}", "123456", ("三紅", "三藍活", "三藍死")[i % 3],
+                    [spellings[i % 4], "玩家乙"] + [""] * 8, date=f"2026/10/{i + 1:02d}")
+            for i in range(12)
+        ]
+        self.tabs["同贏"] = [["", "ECHO", "玩家乙"], ["ECHO", "", "40%"], ["玩家乙", "40%", ""]]
+        no_merge = mock.patch.object(gc, "canonicalize_player_names", lambda games: (games, gc.NameMerge()))
+        with no_merge:
+            self.assertEqual(self.run_main()[0], 0)
+        old = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(sorted(old["playerDetails"]), sorted(["Echo", "ECHO", "ｅｃｈｏ", "玩家乙"]))
+
+        rc, log = self.run_main(summary=True)
+        self.assertEqual(rc, 0, log)
+        new = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(sorted(new["playerDetails"]), ["Echo", "玩家乙"])
+        self.assertEqual(new["players"]["players"][0]["totalGames"], 12.0)
+        self.assertEqual(new["chemistry"]["coWin"]["players"], ["Echo", "玩家乙"])
+        newcomers = next(b for b in new["leaderboard"]["boards"] if b["id"] == "newcomers")
+        self.assertEqual([r["name"] for r in newcomers["rows"]], ["Echo", "玩家乙"])  # 12 games: over the 10 needed
+        self.assertIn("Player names: 2 spelling(s) that differ only by letter case / full- or half-width folded "
+                      "into 1 player(s)", log)
+        summary = self.summary.read_text(encoding="utf-8")
+        self.assertIn("只差大小寫／全半形的名字：2 個寫法併入 1 位玩家", summary)
+        for spelling in ("ECHO", "ｅｃｈｏ"):
+            self.assertNotIn(spelling, log + summary)
+        merged_bytes = self.out.read_bytes()
+
+        rc, log = self.run_main(as_of=(AS_OF + dt.timedelta(days=1)).isoformat())
+        self.assertEqual(rc, 0, log)
+        self.assertIn("only by the as-of day", log)
+        self.assertEqual(self.out.read_bytes(), merged_bytes)
 
     def test_future_dated_game_is_logged_and_undated(self) -> None:
         date_col = LOG_HEADERS.index("日期時間")
@@ -1809,6 +1938,182 @@ class LeaderboardTest(unittest.TestCase):
             rows += [dated(f"{name}紅{i}", "2026-10-02", "三紅", [name] + others) for i in range(5)]
         board = next(b for b in build_fresh(rows)["leaderboard"]["boards"] if b["id"] == "assassin")
         self.assertEqual([(r["name"], r["hits"], r["attempts"], r["value"]) for r in board["rows"]], [("十次", 5, 10, 50.0)])
+
+
+# ---------------------------------------------------------------------------
+# Names that differ only by letter case / width are one player (Edward 2026-10-13)
+# ---------------------------------------------------------------------------
+
+def variant_names(i: int) -> list[str]:
+    """Seat names of game S<i> as typed: seat 1 is Nova (54x "Nova", 28x "NOVA", 28x full-width
+    "ｎｏｖａ" with stray spaces), seat 2 is Kite (55x "kite" first, then 55x "KITE": a tie, the
+    spelling seen first wins); the other seats as in leaderboard_log."""
+    nova = ("NOVA", " ｎｏｖａ ", "Nova", "Nova")[i % 4]
+    kite = "kite" if i < 55 else "KITE"
+    return [nova, kite] + (SEAT_NAMES[2:9] + ["新人"] if i >= 97 else SEAT_NAMES[2:])
+
+
+def name_log(names_of: Callable[[int], list[str]]) -> list[list[str]]:
+    rows = [LOG_HEADERS, dated("U0", "", "三紅"), dated("U1", "", "三紅")]
+    for i in range(110):
+        rows.append(dated(f"S{i}", s_date(i), (EARLY if i < 60 else LATE)[i % 4], names_of(i)))
+    return rows
+
+
+def name_chemistry(labels: list[str]) -> dict:
+    values = [[None if a == b else float(10 * a + b) for b in range(len(labels))] for a in range(len(labels))]
+    matrix = {"players": list(labels), "rowLabels": list(labels), "values": values}
+    return {k: copy.deepcopy(matrix) for k in ("coWin", "coLose", "winCorr", "coWinMinusLose")}
+
+
+def build_named(log: list[list[str]], chemistry: dict) -> dict:
+    cache, _ = gc.assemble_cache(
+        gc.build_cache(gc.parse_game_log(log), chemistry, as_of=TEST_AS_OF), None,
+        strength_builder=lambda players: {"perPlayer": {}}, placeholder_builders={}, as_of=TEST_AS_OF,
+    )
+    return cache
+
+
+class PlayerNameMergeTest(unittest.TestCase):
+    def test_key(self) -> None:
+        for spelling in ("Nova", "NOVA", "nova", " nova ", "ｎｏｖａ", "ＮＯＶＡ", "No​va", "nOvA　"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(gc.player_name_key(spelling), "nova")
+        self.assertEqual(gc.player_name_key("Ｔｅｄ　Ｂｅａｒ"), "ted bear")
+        self.assertNotEqual(gc.player_name_key("Nova"), gc.player_name_key("Novo"))
+        self.assertEqual(gc.player_name_key("雪球"), "雪球")  # CJK untouched
+        self.assertEqual(gc.player_name_key(None), "")
+
+    def test_key_matches_the_shared_ts_matcher(self) -> None:
+        """The same table PlayerNameLookup.test.ts checks @avalon/shared playerNameKey against: the bots,
+        the website search and the stats API find a player by exactly the key the cache merged him by."""
+        cases = json.loads(NAME_KEY_CASES.read_text(encoding="utf-8"))["cases"]
+        self.assertGreater(len(cases), 20)
+        for case in cases:
+            with self.subTest(name=case["input"]):
+                self.assertEqual(gc.player_name_key(case["input"]), case["key"])
+
+    def test_display_is_the_most_used_spelling_ties_go_to_the_first_seen(self) -> None:
+        games = gc.parse_game_log(name_log(variant_names))
+        before = [dict(g.seat_players) for g in games]
+        merged, names = gc.canonicalize_player_names(games)
+        self.assertEqual([dict(g.seat_players) for g in games], before)  # input untouched
+        typed = [g for g in merged if g.id.startswith("S")]
+        self.assertEqual({g.seat_players["1"] for g in typed}, {"Nova"})
+        self.assertEqual({g.seat_players["2"] for g in typed}, {"kite"})
+        self.assertEqual((names.merged_players, names.merged_spellings), (2, 3))  # Nova 3 spellings, kite 2
+        self.assertEqual(names.summary(), "3 spelling(s) that differ only by letter case / full- or half-width "
+                                          "folded into 2 player(s)")
+        again, names2 = gc.canonicalize_player_names(merged)  # idempotent
+        self.assertIs(again, merged)
+        self.assertEqual(names2.merged_spellings, 0)
+
+    def test_every_per_player_structure_merges(self) -> None:
+        """Typed with variants or typed the same way every time: the same cache, byte for byte
+        (players, playerDetails, seat / role stats, theory, leaderboard boards and thresholds,
+        overview rankings, chemistry labels)."""
+        def canonical(i: int) -> list[str]:
+            return ["Nova", "kite"] + variant_names(i)[2:]
+        typed = build_named(name_log(variant_names), name_chemistry(["NOVA", "KITE", "丙"]))
+        clean = build_named(name_log(canonical), name_chemistry(["Nova", "kite", "丙"]))
+        self.assertEqual(json.dumps(typed, ensure_ascii=False, sort_keys=True),
+                         json.dumps(clean, ensure_ascii=False, sort_keys=True))
+        rows = {p["name"]: p for p in typed["players"]["players"]}
+        self.assertNotIn("NOVA", rows)
+        self.assertEqual(rows["Nova"]["totalGames"], 110.0)
+        self.assertEqual(rows["Nova"]["theory"]["career"]["games"], 110)
+        self.assertEqual(rows["Nova"]["roleSeatStats"], {"刺客|1": {"games": 110.0, "wins": rows["Nova"]["rawTotalWins"],
+                                                                   "winRate": rows["Nova"]["winRate"]}})
+        self.assertEqual(set(typed["playerDetails"]), set(rows))
+        main = next(b for b in typed["leaderboard"]["boards"] if b["id"] == "main")
+        self.assertIn("Nova", {r["name"] for r in main["rows"]})  # 110 career games: over the 100-game threshold
+        self.assertEqual(typed["chemistry"]["coWin"]["players"], ["Nova", "kite", "丙"])
+        self.assertEqual(typed["chemistry"]["outcomePair"]["rowLabels"], ["Nova", "kite", "丙"])
+        # seatOutcomes / outcomePair are counted after the merge: every spelling's games are Nova's.
+        seat1 = rows["Nova"]["seatOutcomes"]["1"]
+        self.assertEqual(seat1["threeRed"] + seat1["threeBlueDead"] + seat1["threeBlueAlive"], 110)
+        self.assertEqual(typed["chemistry"]["outcomePair"]["games"][0][1], 110)  # Nova + kite, all 110 games
+        self.assertEqual(gc.validate_new_cache(typed, None), [])
+
+    def test_split_names_never_reach_a_threshold_alone(self) -> None:
+        """Nova's 110 games typed three ways used to be three players under the 100-game board."""
+        typed = build_named(name_log(variant_names), name_chemistry(["丙"]))
+        main = next(b for b in typed["leaderboard"]["boards"] if b["id"] == "main")
+        self.assertEqual(main["minGames"], 100)
+        self.assertEqual(len([r for r in main["rows"] if gc.player_name_key(r["name"]) == "nova"]), 1)
+
+    def test_chemistry_labels(self) -> None:
+        chemistry = name_chemistry(["NOVA", "nova", "丙", "Stranger"])
+        renamed, dropped = gc.canonicalize_chemistry(chemistry, {"nova": "Nova", "丙": "丙"})
+        m = chemistry["coWin"]
+        self.assertEqual(m["players"], ["Nova", "丙", "Stranger"])  # a second spelling: first one kept
+        self.assertEqual(m["rowLabels"], ["Nova", "丙", "Stranger"])
+        self.assertEqual(m["values"], [[None, 2.0, 3.0], [20.0, None, 23.0], [30.0, 32.0, None]])
+        self.assertEqual((renamed, dropped), (8, 8))  # NOVA as column and row label of 4 matrices; nova too
+        untouched = name_chemistry(["Nova", "丙"])
+        self.assertEqual(gc.canonicalize_chemistry(untouched, {"nova": "Nova"}), (0, 0))
+        self.assertEqual(untouched, name_chemistry(["Nova", "丙"]))
+
+    def test_old_cache_with_split_names_passes_the_guards(self) -> None:
+        """The first refresh after the merge: the existing file still has Nova / NOVA / nova rows."""
+        prev = fake_cache(players=12)
+        split = [("Nova", 40.0), ("NOVA", 7.0), ("nova", 3.0), ("Kite", 9.0), ("KITE", 2.0)]
+        prev["players"]["players"] += [{"name": n, "totalGames": g} for n, g in split]
+        prev["overview"]["totalPlayers"] = prev["players"]["total"] = 17
+        new = fake_cache(players=12)
+        new["players"]["players"] += [{"name": "Nova", "totalGames": 50.0}, {"name": "Kite", "totalGames": 11.0}]
+        new["overview"]["totalPlayers"] = new["players"]["total"] = 14
+        self.assertEqual(gc.distinct_players(prev), 14)
+        self.assertEqual(gc.games_regressions(new, prev), [])
+        self.assertEqual(gc.validate_new_cache(new, prev), [])
+        new["players"]["players"][-2]["totalGames"] = 49.0  # one game lost: still refused
+        self.assertEqual(gc.games_regressions(new, prev), [("Nova", 50.0, 49.0)])
+        many = fake_cache(players=40)  # 40 players typed two ways = 80 rows; merged: 40, no drop
+        many["players"]["players"] += [{"name": f"p{i}", "totalGames": 1.0} for i in range(40)]
+        many["overview"]["totalPlayers"] = many["players"]["total"] = 80
+        merged = fake_cache(players=40)
+        for row in merged["players"]["players"]:
+            row["totalGames"] += 1
+        self.assertEqual(gc.validate_new_cache(merged, many), [])
+        lines = gc.compare_summary(merged, many)
+        self.assertIn("只差大小寫／全半形而併入同一位玩家的舊名字 40 個", lines[1])
+        self.assertNotIn("消失", lines[1])
+        self.assertNotIn("p1", "\n".join(lines))
+
+    def test_carried_per_player_rows_follow_the_merge(self) -> None:
+        players = {"Nova": {}, "Kite": {}, "丙": {}}
+        per_player = {
+            "NOVA": {"hasData": True, "sampleSize": 30},
+            "Nova": {"hasData": True, "sampleSize": 60},
+            "nova": {"hasData": False, "sampleSize": 2},
+            "KITE": {"hasData": True, "sampleSize": 12},  # Kite's own row is a placeholder
+            "Kite": {"hasData": False, "sampleSize": 3},
+            "Gone": {"hasData": True, "sampleSize": 5},
+        }
+        folded = gc.fold_per_player_rows(per_player, players)
+        self.assertEqual(folded, {"Nova": {"hasData": True, "sampleSize": 60},
+                                  "Kite": {"hasData": True, "sampleSize": 12},
+                                  "Gone": {"hasData": True, "sampleSize": 5}})
+        prev = fake_cache(players=1)
+        prev["archetype"] = {"perPlayer": per_player}
+        new = fake_cache(players=1)
+        new["playerDetails"] = {n: {"player": {"totalGames": 9.0}} for n in players}
+        carried = gc.carry_over_sections(new, prev, {"archetype": placeholder})
+        self.assertEqual(carried["archetype"], 1)  # only 丙 needs a placeholder
+        self.assertEqual(set(new["archetype"]["perPlayer"]), {"Nova", "Kite", "丙", "Gone"})
+        self.assertIn("NOVA", prev["archetype"]["perPlayer"])  # previous untouched
+
+    def test_snapshot_counts(self) -> None:
+        """The checked-in 牌譜 snapshot: how many spellings fold (counts only)."""
+        if not SNAPSHOT.exists():
+            self.skipTest("sheets_cache.json not found")
+        games = gc.parse_game_log(json.loads(SNAPSHOT.read_text(encoding="utf-8")).get("牌譜") or [])
+        if len(games) != 2146:
+            self.skipTest("sheets_cache.json is not the 2146-game snapshot")
+        spellings = {n for g in games for n in g.seat_players.values()}
+        merged, names = gc.canonicalize_player_names(games)
+        self.assertEqual((len(spellings), names.merged_players, names.merged_spellings), (198, 22, 27))
+        self.assertEqual(len(gc.compute_player_stats(merged)), 198 - 27)
 
 
 class LeaderboardConfigTest(unittest.TestCase):

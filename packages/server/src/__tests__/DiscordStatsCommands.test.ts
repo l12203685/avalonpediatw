@@ -179,12 +179,12 @@ describe('/戰績', () => {
     expect(publicReply(it1).content).toContain('📊 尼克 的戰績');
   });
 
-  it('lists candidates when the name is ambiguous', async () => {
+  it('a name typed in another case finds the player (an old cache\'s other spellings are a hint)', async () => {
     const it1 = makeInteraction(COMMANDS.STATS, { [STATS_OPTIONS.NAME]: 'sIN' });
     await handleStatsCommand(it1 as never);
     const { content } = publicReply(it1);
-    expect(content).toContain('符合 3 位玩家');
-    expect(content).toContain('Sin、SIN、sin');
+    expect(content).toContain('📊 Sin 的戰績');
+    expect(content).toContain('大小寫不同的寫法目前另列：SIN、sin');
   });
 
   it('says so when nobody matches, without pinging anyone it echoes', async () => {

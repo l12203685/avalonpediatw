@@ -2,12 +2,24 @@
  * Nickname lookup (players' report 2026-10-13): a player's usual nickname is
  * part of his registered name and looking him up found nothing. The rules live
  * in @avalon/shared (playerNameMatch.ts) and are used by /戰績 /默契 (LINE +
- * Discord) and the website's player search (玩家雷達):
- * exact → case-insensitive → ignoring spaces → unique substring or ≤ 5
- * candidates → none with "did you mean" suggestions. Made-up names only.
+ * Discord), the website's player search (玩家雷達) and the stats API:
+ * exact → the same player (playerNameKey, generate_cache.py's player_name_key:
+ * case / width / zero-width / spacing ignored) → ignoring separators → unique
+ * substring or ≤ 5 candidates, one per player → none with "did you mean"
+ * suggestions. Made-up names only.
  */
+import fs from 'fs';
+import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
-import { MAX_NAME_CANDIDATES, cleanNameQuery, compactName, matchPlayerName } from '@avalon/shared';
+import {
+  MAX_NAME_CANDIDATES,
+  cleanNameQuery,
+  compactName,
+  findSamePlayerName,
+  matchPlayerName,
+  normalizeName,
+  playerNameKey,
+} from '@avalon/shared';
 
 // Priority order = most games first, like the bots and the site pass them.
 const NAMES = ['阿明明', '大熊貓', 'Quill Fen', 'Quilla', 'Mia_Chen', '小雨', '小雨點', 'Bob', 'bob', 'Zed'];
@@ -39,6 +51,26 @@ vi.mock('../services/sheetsAnalysis', async (importOriginal) => ({
 }));
 
 import { answerStatsTextCommand } from '../bots/stats/textCommands';
+import { findPlayerKey, playerNameKey as serverPlayerNameKey } from '../services/sheetsAnalysis';
+
+/** Shared with test_generate_cache.py: generate_cache.player_name_key must give the same keys. */
+const NAME_KEY_CASES = (
+  JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'player_name_keys.json'), 'utf-8')) as {
+    cases: Array<{ input: string; key: string }>;
+  }
+).cases;
+
+describe('playerNameKey — the rule generate_cache.py merges players by', () => {
+  it.each(NAME_KEY_CASES.map((c) => [c.input, c.key]))('%j → %j (same as player_name_key)', (input, key) => {
+    expect(playerNameKey(input)).toBe(key);
+    expect(normalizeName(input)).toBe(key);
+  });
+
+  it('the server (sheetsAnalysis) and the matcher use this one function', () => {
+    expect(serverPlayerNameKey).toBe(playerNameKey);
+    expect(NAME_KEY_CASES.length).toBeGreaterThan(20);
+  });
+});
 
 describe('cleanNameQuery / compactName', () => {
   it.each([
@@ -80,8 +112,29 @@ describe('matchPlayerName — nicknames', () => {
   it('an exact (or case-insensitive) name still wins over a longer name containing it', () => {
     expect(matchPlayerName('小雨', NAMES)).toEqual({ kind: 'found', name: '小雨', caseVariants: [] });
     expect(matchPlayerName('Bob', NAMES)).toEqual({ kind: 'found', name: 'Bob', caseVariants: ['bob'] });
-    expect(matchPlayerName('BOB', NAMES)).toMatchObject({ kind: 'ambiguous', candidates: ['Bob', 'bob'], total: 2 });
     expect(matchPlayerName('zed', NAMES)).toEqual({ kind: 'found', name: 'Zed', caseVariants: [] });
+  });
+
+  it('names that differ only by case / width are one player (an old cache lists Bob and bob): the first answers', () => {
+    expect(matchPlayerName('BOB', NAMES)).toEqual({ kind: 'found', name: 'Bob', caseVariants: ['bob'] });
+    expect(matchPlayerName('ｂｏｂ', NAMES)).toEqual({ kind: 'found', name: 'Bob', caseVariants: ['bob'] }); // full-width: not exact
+    expect(matchPlayerName('bob', NAMES)).toEqual({ kind: 'found', name: 'bob', caseVariants: ['Bob'] }); // exact spelling
+    expect(matchPlayerName('「ＢＯＢ」', NAMES)).toEqual({ kind: 'found', name: 'Bob', caseVariants: ['bob'] });
+    // A substring hit on two spellings of one player is that player, not a choice between "two".
+    expect(matchPlayerName('bo', ['Bob', 'bob', 'Zed'])).toEqual({ kind: 'found', name: 'Bob', caseVariants: ['bob'] });
+  });
+
+  it('names that genuinely differ stay a candidate list, one entry per player', () => {
+    // "Quill Fen" and "quillfen" are two players for the cache (the space is part of the name).
+    expect(matchPlayerName('quill-fen', ['Quill Fen', 'quillfen'])).toEqual({
+      kind: 'ambiguous', query: 'quill-fen', candidates: ['Quill Fen', 'quillfen'], total: 2,
+    });
+    expect(matchPlayerName('QUILLFEN', ['Quill Fen', 'quillfen'])).toEqual({ kind: 'found', name: 'quillfen', caseVariants: [] });
+    expect(matchPlayerName('o', ['Bob', 'BOB', 'bob', 'Zed', 'Orca'])).toEqual({
+      kind: 'ambiguous', query: 'o', candidates: ['Bob', 'Orca'], total: 2,
+    });
+    const many = ['小一', '小一', '小二', '小三', '小四', '小五', '小六'];
+    expect(matchPlayerName('小', many)).toMatchObject({ kind: 'ambiguous', candidates: ['小一', '小二', '小三', '小四', '小五'], total: 6 });
   });
 
   it('several hits: up to 5 candidates in the given order, with the total', () => {
@@ -96,6 +149,34 @@ describe('matchPlayerName — nicknames', () => {
     expect(matchPlayerName('無名氏', NAMES)).toEqual({ kind: 'none', query: '無名氏' });
     expect(matchPlayerName('貓', NAMES)).toMatchObject({ kind: 'found', name: '大熊貓' });
     expect(matchPlayerName('x', NAMES)).toEqual({ kind: 'none', query: 'x' }); // one character: no suggestions
+  });
+});
+
+describe('findSamePlayerName — the stats API lookup (stages 1–2 of matchPlayerName)', () => {
+  it('exact, else the same player ignoring case / width / spacing; never part of a name', () => {
+    expect(findSamePlayerName('Quill Fen', NAMES)).toBe('Quill Fen');
+    expect(findSamePlayerName('ＱＵＩＬＬ　ｆｅｎ', NAMES)).toBe('Quill Fen');
+    expect(findSamePlayerName('@quill  fen', NAMES)).toBe('Quill Fen'); // a mention typed by hand
+    expect(findSamePlayerName('zed', NAMES)).toBe('Zed');
+    expect(findSamePlayerName('明明', NAMES)).toBeUndefined(); // a nickname is the bots' business, not the API's
+    expect(findSamePlayerName('quillfen', NAMES)).toBeUndefined(); // another player's name for the cache
+    expect(findSamePlayerName('', NAMES)).toBeUndefined();
+  });
+
+  it('several spellings of one player (an old cache): the highest rank, else the first', () => {
+    const games: Record<string, number> = { NOVA: 7, Nova: 40, nova: 3 };
+    const names = Object.keys(games);
+    expect(findSamePlayerName('nova', names)).toBe('nova'); // that exact spelling exists
+    expect(findSamePlayerName('ｎｏｖａ', names, (n) => games[n])).toBe('Nova');
+    expect(findSamePlayerName('NoVa', names)).toBe('NOVA');
+  });
+
+  it('sheetsAnalysis.findPlayerKey (players/:name, profile/:name/*) goes through it', () => {
+    const record = { Nova: 1, 'Quill Fen': 2 };
+    expect(findPlayerKey(record, 'ｎｏｖａ')).toBe('Nova');
+    expect(findPlayerKey(record, 'quill fen')).toBe('Quill Fen');
+    expect(findPlayerKey(record, 'Quill')).toBeUndefined();
+    expect(findPlayerKey(record, 'toString')).toBeUndefined();
   });
 });
 

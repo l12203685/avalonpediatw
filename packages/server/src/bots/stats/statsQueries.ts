@@ -163,7 +163,7 @@ export async function chemistryReply(nameA: string, nameB: string): Promise<stri
       }
     }
     if (a.kind !== 'found' || b.kind !== 'found') return formatStatsUnavailable(); // unreachable
-    if (a.name === b.name) return '請輸入兩位「不同」的玩家。';
+    if (normalizeName(a.name) === normalizeName(b.name)) return '請輸入兩位「不同」的玩家。';
 
     // Matrix labels are upper-cased (SIN); show the player-list spelling with
     // the most games instead (Sin), and use its win rate as context.
