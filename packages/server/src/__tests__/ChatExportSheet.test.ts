@@ -26,6 +26,12 @@
  *                      only the retention (old days deleted, no tab created);
  *                      a delete with no definite answer → outcome unknown;
  *                      CHAT_EXPORT_SHEET_ID still picks the private sheet
+ *   reading copy     — 「聊天紀錄」 created at index 0 / moved back there
+ *                      (best effort: a refused move never stops the rows or
+ *                      the retention), 工作表1 and 練習回報 untouched; both
+ *                      targets end to end with one Discord read per day; an
+ *                      earlier version's tabs adopted and its 完成 days
+ *                      written again; a failing target never blocks the other
  */
 import crypto from 'crypto';
 import { describe, expect, it, vi } from 'vitest';
@@ -123,6 +129,8 @@ class FakeSheets {
   failMetadataStatus = 0;
   /** The metadata answer leaves `index` out (the client then uses the listing order). */
   omitIndex = false;
+  /** updateSheetProperties (a tab move) answers with this status; 0 = it works. */
+  failMoveStatus = 0;
   appendCount = 0;
   /** Each call waits this long first (a macrotask), so two instances interleave like real network calls. */
   latencyMs = 0;
@@ -182,6 +190,7 @@ class FakeSheets {
         if (r.addSheet.properties.index !== undefined) this.moveTo(r.addSheet.properties.title, r.addSheet.properties.index);
         replies.push({ addSheet: { properties: { sheetId: id, title: r.addSheet.properties.title } } });
       } else if (r.updateSheetProperties) {
+        if (this.failMoveStatus) return json({ error: 'secret detail' }, this.failMoveStatus);
         const { properties, fields } = r.updateSheetProperties;
         expect(fields).toBe('index'); // nothing but the position
         const title = [...this.tabs].find(([, t]) => t.sheetId === properties.sheetId)?.[0];
@@ -901,6 +910,27 @@ describe('the reading copy: 聊天紀錄 is the first tab (a CSV export of the s
     expect(g.order()).toEqual(['工作表1', PRACTICE_TAB, CHAT_EXPORT_TAB]);
   });
 
+  it('a refused move (e.g. a protected tab) is best effort: prepare() resolves with a code-only note, both tabs usable; the move is tried again next time', async () => {
+    const g = privateSheet();
+    g.tabs.set(CHAT_EXPORT_TAB, { sheetId: 7, rows: [[...CHAT_EXPORT_HEADER]] });
+    g.tabs.set(CHAT_EXPORT_LOG_TAB, { sheetId: 8, rows: [[...CHAT_EXPORT_LOG_HEADER]] });
+    g.failMoveStatus = 403;
+    const sheet = new ChatExportSheet(g.client(), { pinChatTabFirst: true });
+    expect(await sheet.prepare()).toEqual({ pinFailed: 'Google Sheets move-tab failed (HTTP 403)' });
+    expect(await sheet.appendRows([row('2026-10-12', 1)])).toBe(1); // prepared: the other calls work
+    expect(g.order()).toEqual(['工作表1', PRACTICE_TAB, CHAT_EXPORT_TAB, CHAT_EXPORT_LOG_TAB]);
+    g.failMoveStatus = 0;
+    expect(await new ChatExportSheet(g.client(), { pinChatTabFirst: true }).prepare()).toBeUndefined();
+    expect(g.order()[0]).toBe(CHAT_EXPORT_TAB);
+    // A missing tab is still created first (no move needed); other failures still fail prepare().
+    const h = privateSheet();
+    h.failMoveStatus = 403;
+    expect(await new ChatExportSheet(h.client(), { pinChatTabFirst: true }).prepare()).toBeUndefined();
+    expect(h.order()[0]).toBe(CHAT_EXPORT_TAB);
+    h.failMetadataStatus = 500;
+    await expect(new ChatExportSheet(h.client(), { pinChatTabFirst: true }).prepare()).rejects.toBeInstanceOf(SheetError);
+  });
+
   it('the production factory: the reading copy\'s sheet gets the chat tab first, the main target\'s does not', async () => {
     const env = { GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON };
     const prev = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
@@ -981,6 +1011,68 @@ describe('both targets end to end (the 阿瓦隆百科 workbook + the reading co
     expect(pub.calls.every((c) => c.url === GOOGLE_TOKEN_URL || c.url.startsWith(pub.base))).toBe(true);
     // Logs: counts only, in both.
     expect([...main.logs, ...copy.logs].join('\n')).not.toMatch(/訊息|好耶|小明|一般聊天|阿瓦隆同步/);
+  });
+
+  it('an earlier version\'s tabs in the private sheet: adopted, 聊天紀錄 moved first, its 完成 days written again so the copy equals the 百科 tab; 練習回報 untouched', async () => {
+    const pub = statsWorkbook();
+    const priv = privateSheet();
+    // What the main export left there before 2026-10-13 (same headers; tabs at the end; 8-hex run ids).
+    priv.tabs.set(CHAT_EXPORT_TAB, { sheetId: 7, rows: [[...CHAT_EXPORT_HEADER], row('2026-09-30', 1), row('2026-10-10', 2), row('2026-10-11', 3)] });
+    priv.tabs.set(CHAT_EXPORT_LOG_TAB, {
+      sheetId: 8,
+      rows: [
+        [...CHAT_EXPORT_LOG_HEADER],
+        ['2026-09-30', '完成', '1', '1', '2026-10-01T04:31:00+08:00', '3f9a1c07'],
+        ['2026-10-10', '完成', '1', '1', '2026-10-11T04:31:00+08:00', '3f9a1c07'],
+        ['2026-10-11', '進行中', '0', '0', '2026-10-12T04:31:00+08:00', '3f9a1c07'],
+      ],
+    });
+    const practice = JSON.stringify(priv.tab(PRACTICE_TAB));
+    const clock = { now: TUE_1005 };
+    const { discord, copy, tick } = both(pub, priv, clock);
+    const [rm, rc] = await tick();
+    expect(rm.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(rc.days.map((d) => d.outcome)).toEqual(Array(7).fill('written')); // 10-10 too: an earlier version's 完成 does not count
+    expect(discord.calls).toEqual(DAYS);
+    expect(priv.tab()).toEqual(pub.tab()); // the old rows are gone (09-30 pruned, 10-10 / 10-11 replaced)
+    expect(priv.order()).toEqual([CHAT_EXPORT_TAB, '工作表1', PRACTICE_TAB, CHAT_EXPORT_LOG_TAB]);
+    expect(JSON.stringify(priv.tab(PRACTICE_TAB))).toBe(practice);
+    const copyDone = priv.tab(CHAT_EXPORT_LOG_TAB).filter((r) => r[1] === '完成' && r[5].startsWith('copy-'));
+    expect(copyDone.map((r) => [r[0], r[2], r[3]])).toEqual(done(pub));
+    expect(copy.logs.join('\n')).toContain('day 2026-10-10: its 完成 row was not written by a reading copy');
+    // A restart: nothing to do again.
+    const again = e2e(priv, discord, clock, env, { copy: true });
+    clock.now += 5 * 60_000;
+    expect((await again.service.tick()).days.map((d) => d.outcome)).toEqual(Array(7).fill('already-exported'));
+    expect(discord.calls).toEqual(DAYS);
+  });
+
+  it('a refused tab move never blocks the copy: written, old days pruned (also while Discord is down), a code-only warning', async () => {
+    const pub = statsWorkbook();
+    const priv = privateSheet();
+    priv.tabs.set(CHAT_EXPORT_TAB, { sheetId: 7, rows: [[...CHAT_EXPORT_HEADER], row('2026-09-30', 1), row('2026-10-01', 2)] });
+    priv.tabs.set(CHAT_EXPORT_LOG_TAB, { sheetId: 8, rows: [[...CHAT_EXPORT_LOG_HEADER], ['2026-09-30', '完成', '1', '1', '2026-10-01T04:31:00+08:00', 'copy-0a1b2c3d']] });
+    priv.failMoveStatus = 403;
+    const clock = { now: TUE_1005 };
+    const { copy, tick } = both(pub, priv, clock);
+    const [, rc] = await tick();
+    expect(rc.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(priv.tab()).toEqual(pub.tab()); // 09-30 and 10-01 pruned
+    expect(priv.tab(CHAT_EXPORT_LOG_TAB).some((r) => r[0] === '2026-09-30')).toBe(false);
+    expect(copy.logs).toContain('chat tab not moved to the first position (Google Sheets move-tab failed (HTTP 403)) — rows and retention go on; tried again on the next run');
+    expect(copy.logs.join('\n')).not.toMatch(/secret detail|1k-ZNY/);
+    // Discord down after a restart: the retention alone still runs.
+    priv.tab().push(row('2026-10-02', 3));
+    clock.now = Date.parse('2026-10-13T20:30:00Z'); // 10/14 04:30 +08: 10-06 leaves the window too
+    const down = e2e(priv, { isReady: () => false, collect: async () => emptyCollectResult() }, clock, env, { copy: true });
+    expect((await down.service.tick()).state).toBe('discord-not-ready');
+    expect([...new Set(priv.tab().slice(1).map((r) => r[0]))]).toEqual(DAYS.slice(1));
+    expect(down.logs.join('\n')).toContain('chat tab not moved to the first position (Google Sheets move-tab failed (HTTP 403))');
+    // Fixed: the next run moves it.
+    priv.failMoveStatus = 0;
+    clock.now += 60_000;
+    await copy.service.tick();
+    expect(priv.order()[0]).toBe(CHAT_EXPORT_TAB);
   });
 
   it('a failing target never blocks the other; once fixed it catches up on its own', async () => {

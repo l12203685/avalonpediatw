@@ -40,9 +40,22 @@ export const PRIVATE_CHAT_EXPORT_SHEET_ID = '1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbF
  * with the service account as editor). CHAT_EXPORT_READING_COPY_SHEET_ID
  * picks another one (id or URL); off disables it. Never the main target's
  * sheet (a pointless duplicate) nor a public stats workbook (its first tab
- * must stay 牌譜): both leave the copy disabled.
+ * must stay 牌譜): both leave the copy disabled; so does
+ * CHAT_EXPORT_SHEET_ID=off (no sheet at all — review fix 2026-10-13).
  */
 export const DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID = PRIVATE_CHAT_EXPORT_SHEET_ID;
+
+/**
+ * The reading copy's run ids (執行代號) start with this, and in its sheet a
+ * day counts as exported only with a 完成 row whose 執行代號 starts with it.
+ * Earlier versions wrote the main export to the private sheet (until
+ * 2026-10-13, without the later fixes: other servers, `/ 意見`, a day
+ * written while the server was still loading); their 完成 rows do not count
+ * there, so those days are deleted (cleanup lock) and written again with the
+ * main target's rows — the copy never keeps an older version's day (review
+ * fix 2026-10-13). Not hex, so never the start of an 8-hex run id.
+ */
+export const CHAT_EXPORT_READING_COPY_RUN_PREFIX = 'copy-';
 
 /**
  * Where the export writes by default: the 阿瓦隆百科 workbook, the last 7
@@ -193,9 +206,12 @@ export const readingCopyChatExportLogger: ChatExportLogger = {
 /**
  * A Discord read of one day is reused by the other target (main ↔ reading
  * copy) for this long after it finished — both run at the same minutes, so
- * the day is read from Discord once. Below CHAT_EXPORT_RETRY_DELAY_MS on
- * purpose: a retry 10 minutes later (some channels unreadable) always reads
- * again.
+ * a day is normally read from Discord once. Below CHAT_EXPORT_RETRY_DELAY_MS
+ * on purpose: a retry 10 minutes later (some channels unreadable) always
+ * reads again. So while one target keeps failing after its read (e.g. its
+ * sheet refuses the rows), each of its retries reads the day again: at most
+ * one extra read per retry, i.e. never more than the two targets reading on
+ * their own.
  */
 export const CHAT_EXPORT_SHARED_READ_TTL_MS = 5 * 60_000;
 
@@ -256,9 +272,16 @@ export interface ChatExportConfig {
   /**
    * The reading copy's config only (readChatExportReadingCopyConfig): chat
    * tab kept as the spreadsheet's first tab (created at index 0, moved back
-   * there when found elsewhere). Absent / false for the main target.
+   * there when found elsewhere; best effort — a refused move never stops the
+   * rows or the retention). Absent / false for the main target.
    */
   pinChatTabFirst?: boolean;
+  /**
+   * The reading copy's config only: CHAT_EXPORT_READING_COPY_RUN_PREFIX — the
+   * service's run ids start with it and only 完成 rows whose 執行代號 starts
+   * with it count. Absent for the main target (any 完成 row counts).
+   */
+  runIdPrefix?: string;
 }
 
 const OFF = ['false', '0', 'off', 'no', 'none'];
@@ -329,12 +352,16 @@ export function readChatExportConfig(env: NodeJS.ProcessEnv = process.env): Chat
  * Where the reading copy goes:
  *   'on'              — `sheetId` (CHAT_EXPORT_READING_COPY_SHEET_ID, id or URL; default the private sheet);
  *   'off'             — CHAT_EXPORT_READING_COPY_SHEET_ID=off (or false / 0 / no / none);
+ *   'primary-off'     — CHAT_EXPORT_SHEET_ID=off (or the retired name): no sheet at all, the
+ *                       copy of nothing is not written either;
  *   'same-as-primary' — the main target's sheet (a pointless duplicate; also the default
  *                       when CHAT_EXPORT_SHEET_ID names the private sheet);
  *   'public-refused'  — a public stats workbook (its first tab must stay 牌譜; the chat
  *                       is already in the 百科 workbook when that is the main target).
+ * CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 (the 百科 workbook refused) leaves the copy 'on': it
+ * is private, and the AI manager still reads the chat there.
  */
-export type ChatExportReadingCopyState = 'on' | 'off' | 'same-as-primary' | 'public-refused';
+export type ChatExportReadingCopyState = 'on' | 'off' | 'primary-off' | 'same-as-primary' | 'public-refused';
 
 export function readingCopyTarget(
   env: NodeJS.ProcessEnv = process.env,
@@ -343,9 +370,10 @@ export function readingCopyTarget(
   const raw = (env.CHAT_EXPORT_READING_COPY_SHEET_ID || '').trim();
   if (OFF.includes(raw.toLowerCase())) return { sheetId: '', state: 'off' };
   const id = spreadsheetIdFrom(raw || DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID);
-  // The main target before any refusal ('' = CHAT_EXPORT_SHEET_ID=off).
+  // The main target before any refusal ('' = CHAT_EXPORT_SHEET_ID=off: no sheet at all, so no copy either).
   const main = primary.retentionSheetId;
-  if (main !== '' && (id === main || (main.length >= 20 && id.includes(main)))) return { sheetId: '', state: 'same-as-primary' };
+  if (main === '') return { sheetId: '', state: 'primary-off' };
+  if (id === main || (main.length >= 20 && id.includes(main))) return { sheetId: '', state: 'same-as-primary' };
   if (isPublicStatsSheet(id, env)) return { sheetId: '', state: 'public-refused' };
   return { sheetId: id, state: 'on' };
 }
@@ -354,9 +382,10 @@ export function readingCopyTarget(
  * The reading copy as a ChatExportConfig for its own ChatExportService: the
  * main target's sources, exclusions, server and on/off switch
  * (CHAT_EXPORT_ENABLED) — so the same messages become the same rows — with
- * its own sheet. Not 'on' → enabled false and nothing to prune (the copy is
- * never written there). CHAT_EXPORT_ENABLED=false with the copy 'on' →
- * retention only, like the main target (days older than 7 still leave it).
+ * its own sheet, the chat tab pinned first and its own run-id prefix. Not
+ * 'on' → enabled false and nothing to prune (the copy is not written
+ * there). CHAT_EXPORT_ENABLED=false with the copy 'on' → retention only,
+ * like the main target (days older than 7 still leave it).
  * CHAT_EXPORT_ALLOW_PUBLIC_SHEET does not apply (the copy is never public).
  */
 export function readChatExportReadingCopyConfig(env: NodeJS.ProcessEnv = process.env): ChatExportConfig {
@@ -371,5 +400,6 @@ export function readChatExportReadingCopyConfig(env: NodeJS.ProcessEnv = process
     sheetIdRefused: false,
     publicSheet: false,
     pinChatTabFirst: true,
+    runIdPrefix: CHAT_EXPORT_READING_COPY_RUN_PREFIX,
   };
 }

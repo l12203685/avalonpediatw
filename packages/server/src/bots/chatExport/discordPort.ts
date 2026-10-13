@@ -5,8 +5,8 @@
  *
  * Two services read through it — the main target and the reading copy
  * (config.ts DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID) — so bots/index.ts
- * wraps it in shareChatExportReads(): a day is read from Discord once and the
- * same messages become the same rows in both sheets.
+ * wraps it in shareChatExportReads(): a day is normally read from Discord
+ * once and the same messages become the same rows in both sheets.
  */
 
 import type { Client } from 'discord.js';
@@ -56,7 +56,9 @@ function copyResult(r: CollectResult): CollectResult {
  * same sources) that is still running is joined, and one that finished less
  * than `ttlMs` ago (CHAT_EXPORT_SHARED_READ_TTL_MS, 5 minutes) is reused.
  * Kept shorter than the 10-minute retry delay, so a retry (some channels
- * unreadable) always reads again. A failed read is not kept. Entries are
+ * unreadable) always reads again — also the retry of a target whose sheet
+ * failed after its read: one extra read per such retry, never more than the
+ * two targets reading on their own. A failed read is not kept. Entries are
  * dropped when they expire (the messages are not held in memory longer).
  */
 export function shareChatExportReads(

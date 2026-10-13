@@ -106,7 +106,7 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 | `discord.ready` | gateway 連線中 | `false` 且 `enabled` → token 錯、或 MESSAGE CONTENT INTENT 沒開、或 Render 剛喚醒 |
 | `keepAlive.enabled` | 自我喚醒是否在跑 | Render 上為 `false` → 15 分鐘沒人用就休眠，Discord 腿跟著斷 |
 | `chatExport.sheetConfigured` | 有試算表 id，而且 `GOOGLE_SERVICE_ACCOUNT_JSON` 讀得懂 | `false` → Render 少了服務帳號 JSON（跑一次 Render ops → apply）、`CHAT_EXPORT_SHEET_ID=off`，或設了 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0`（阿瓦隆百科試算表被拒絕） |
-| `chatExport.readingCopy.enabled` / `.sheetConfigured` | 閱讀副本開著／私人那份設定好 | `enabled=false` → `CHAT_EXPORT_ENABLED=false`、`CHAT_EXPORT_READING_COPY_SHEET_ID=off`，或副本那份就是主匯出那份（例如 `CHAT_EXPORT_SHEET_ID` 改成私人那份）；`readingCopy.lastRun.outcome=sheet-error` → 私人那份沒分享給服務帳號 |
+| `chatExport.readingCopy.enabled` / `.sheetConfigured` | 閱讀副本開著／私人那份設定好 | `enabled=false` → `CHAT_EXPORT_ENABLED=false`、`CHAT_EXPORT_READING_COPY_SHEET_ID=off`、`CHAT_EXPORT_SHEET_ID=off`，或副本那份就是主匯出那份（例如 `CHAT_EXPORT_SHEET_ID` 改成私人那份）；`readingCopy.lastRun.outcome=sheet-error` → 私人那份沒分享給服務帳號 |
 | `chatExport.lastRun.outcome` | 最近處理的那一天的結果 | `written` 寫好了；`already-exported` 那天早就寫好（「匯出紀錄」有「完成」，例如重啟後）；`empty` 那天沒有聊天；`claimed-elsewhere` 另一台伺服器正在寫那天（部署交接時會出現，10 分鐘後再看）；`sheet-error` 試算表寫不進去（多半是沒分享給服務帳號，10 分鐘後重試）；`tab-conflict` 試算表裡有同名但不是 bot 的分頁；`read-error` 有頻道讀不到（不會當成沒聊天，10 分鐘後再讀）；`error` 未預期的錯誤（看 server log）；`not-configured` 見上一列。`catchUp.failed` > 0 表示補齊時有日子還沒寫好 |
 
 ## 環境變數（Render Dashboard → 服務 → Environment）
@@ -141,9 +141,9 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 |---|---|---|
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | 是（Render ops → apply 從 GitHub secret `AVALON_STATS_SHEETS_CREDENTIALS_JSON` 複製） | 沒有 → 不匯出聊天紀錄 |
 | `CHAT_EXPORT_ENABLED` | 否 | 開；`false` 關 |
-| `CHAT_EXPORT_SHEET_ID` | 否 | 阿瓦隆百科試算表（知道連結就能看；Edward 2026-10-13 決定）；填私人那份的 id 就改寫那份；`off` 關 |
+| `CHAT_EXPORT_SHEET_ID` | 否 | 阿瓦隆百科試算表（知道連結就能看；Edward 2026-10-13 決定）；填私人那份的 id 就改寫那份；`off` 關（閱讀副本也一起停） |
 | `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | 否 | 不設（或 `1`/`true`/`yes`/`on`）＝照寫阿瓦隆百科試算表；其他任何值（`0`/`false`/`off`/`no`，也包括中文「是」、`y`）＝拒絕寫入那份、不匯出，只每天刪 7 天以前的列（見 `docs/COMMUNITY_FEEDBACK.md`）；不影響閱讀副本 |
-| `CHAT_EXPORT_READING_COPY_SHEET_ID` | 否 | 閱讀副本（同樣的列，「聊天紀錄」是第一個分頁，給 AI 管理員讀）：預設私人那份；填別份的 id 或網址就改寫那份；`off` 關；等於主匯出那份或公開戰績試算表時自動停用 |
+| `CHAT_EXPORT_READING_COPY_SHEET_ID` | 否 | 閱讀副本（同樣的列，「聊天紀錄」是第一個分頁，給 AI 管理員讀）：預設私人那份；填別份的 id 或網址就改寫那份；`off` 關；等於主匯出那份、公開戰績試算表，或 `CHAT_EXPORT_SHEET_ID=off` 時自動停用 |
 | `CHAT_EXPORT_EXTRA_SOURCE_IDS` / `CHAT_EXPORT_SOURCE_CHANNEL_IDS` / `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空（所有公開頻道、公開論壇＋同步頻道；「大劍管理員」和 `/意見` 頻道一定不讀）；加讀／取代／排除，見 `docs/COMMUNITY_FEEDBACK.md` |
 | `FEEDBACK_DISCORD_CHANNEL_ID` | 否 | 管理員頻道「大劍管理員」`1145513360545296574`；`off` 不轉貼 |
 | `FEEDBACK_COMMAND_ENABLED` | 否 | 開；`false` 關 `/意見` |

@@ -126,9 +126,9 @@ services:
         sync: false                            #   服務帳號 JSON；沒有就不匯出
       # 以下都不是機密、預設就能用，需要時才在 Dashboard 加：
       #   CHAT_EXPORT_ENABLED                 預設開；false 關閉
-      #   CHAT_EXPORT_SHEET_ID                預設阿瓦隆百科試算表；填私人那份的 id 就改寫那份；off 關閉
+      #   CHAT_EXPORT_SHEET_ID                預設阿瓦隆百科試算表；填私人那份的 id 就改寫那份；off 關閉（閱讀副本也一起停）
       #   CHAT_EXPORT_ALLOW_PUBLIC_SHEET      不設（或 1/true/yes/on）= 照寫；其他任何值（0、no、中文「是」…）= 拒絕寫入、不匯出，只刪 7 天以前的列（不影響閱讀副本）
-      #   CHAT_EXPORT_READING_COPY_SHEET_ID   閱讀副本那份；預設私人那份（練習回報分頁不動）；off 關閉；等於主匯出那份或公開戰績試算表時自動停用
+      #   CHAT_EXPORT_READING_COPY_SHEET_ID   閱讀副本那份；預設私人那份（練習回報分頁不動）；off 關閉；等於主匯出那份、公開戰績試算表或主匯出 off 時自動停用
       #   CHAT_EXPORT_EXTRA_SOURCE_IDS        另外加讀這些頻道或論壇（逗號分隔；預設名單照讀）
       #   CHAT_EXPORT_SOURCE_CHANNEL_IDS      只讀這些頻道或論壇（取代預設名單；逗號分隔；同步頻道一定會讀）
       #   CHAT_EXPORT_EXCLUDE_CHANNEL_IDS     不讀這些頻道、論壇或貼文（逗號分隔；「大劍管理員」與 /意見 頻道一定不讀）

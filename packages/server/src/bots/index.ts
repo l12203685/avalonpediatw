@@ -189,6 +189,7 @@ function startChatExportReadingCopy(service: ChatExportService): void {
   if (state !== 'on') {
     const why = {
       off: 'CHAT_EXPORT_READING_COPY_SHEET_ID=off',
+      'primary-off': 'CHAT_EXPORT_SHEET_ID=off — no sheet at all',
       'same-as-primary': 'its sheet is the main target itself',
       'public-refused': 'a public stats workbook is never the reading copy',
     }[state];
