@@ -52,6 +52,19 @@
  *   - `playerId` is namespaced (`line:<userId>`, `discord:<userId>`) so
  *     #42 multi-account binding can join these identities to a single
  *     Avalon account later without data-migration pain.
+ *
+ * Images (2026-10-13, docs/LINE_DISCORD_SYNC.md「圖片同步」):
+ *   - LINE → Discord: `postLineImageToDiscord()` uploads the picture as a
+ *     file with the usual `[MMDD hh:mm][LINE][name]` prefix and a short
+ *     label; over Discord's upload limit (or on any failure) a text note
+ *     goes instead. The lobby only gets a text marker (MIRROR_MEDIA_TEXT).
+ *   - Discord → LINE: `crossFanoutWithLineMedia()` queues the text line and
+ *     then one LINE image message per picture on the SAME reply queue (no
+ *     push). The picture is served from this server's relay store
+ *     (bots/media/relayMedia.ts); `lineMessagesFor()` turns a queued image
+ *     whose copy is gone into its text note at drain time.
+ *   - Never logged: chat text, names, image URLs or relay ids. SDK errors
+ *     are reduced to a code by describeError() (they embed the request).
  */
 
 import {
@@ -60,7 +73,18 @@ import {
   LOBBY_CHAT_MAX_LEN,
 } from '../socket/LobbyChatBuffer';
 import { SocketRateLimiter } from '../middleware/rateLimit';
-import type { LineReplyQueue, QueuedLineText } from './line/replyQueue';
+import {
+  degradeAfterFailedReply,
+  type LineReplyQueue,
+  type QueuedLineImage,
+  type QueuedLineItem,
+} from './line/replyQueue';
+import { describeError, imageExtension, sniffImageType } from './media/bytes';
+import {
+  DISCORD_DEFAULT_UPLOAD_BYTES,
+  MEDIA_RELAY_AFTER_SEND_MS,
+  type RelayMediaStore,
+} from './media/relayMedia';
 
 // ─── Adapter contracts ───────────────────────────────────────────────────
 
@@ -75,6 +99,18 @@ export interface LineAdapter {
  */
 export interface DiscordChannelAdapter {
   send(content: string): Promise<unknown>;
+  /**
+   * Post `content` with file attachments (mentions disabled). Optional: an
+   * adapter without it gets a text note instead of the picture.
+   */
+  sendFiles?(content: string, files: DiscordFile[]): Promise<unknown>;
+  /** Largest attachment the bot may upload here, in bytes (default 10 MB). */
+  maxUploadBytes?: number;
+}
+
+export interface DiscordFile {
+  name: string;
+  data: Buffer;
 }
 
 export interface DiscordAdapter {
@@ -172,6 +208,95 @@ export function formatOutgoing(msg: LobbyChatMessage): string {
   return formatOutgoingUnified(msg);
 }
 
+// ─── Media markers (2026-10-13) ──────────────────────────────────────────
+
+/**
+ * Fixed texts for pictures, stickers and files. They are the whole body of
+ * the relayed line (never a file name, URL or caption), 繁體中文.
+ */
+export const MIRROR_MEDIA_TEXT = {
+  image: '（圖片）',
+  sticker: '（貼圖）',
+  lineVideo: '（影片，請到 LINE 看）',
+  lineAudio: '（語音訊息，請到 LINE 聽）',
+  lineFile: '（檔案，請到 LINE 看）',
+  lineLocation: '（位置資訊，請到 LINE 看）',
+  lineImageTooLarge: '（圖片太大，請到 LINE 看）',
+  lineImageFailed: '（圖片沒有同步過來，請到 LINE 看）',
+  discordImageOnDiscord: '（Discord 有一張圖片，請到 Discord 看）',
+} as const;
+
+function countWord(n: number, unit: string): string {
+  return n === 1 ? `一${unit}` : `${n} ${unit}`;
+}
+
+/** Label of one LINE picture on Discord: （圖片） or, in a set, （圖片 2/3）. */
+export function lineImageLabel(set?: { index?: number; total?: number } | null): string {
+  const index = set?.index;
+  const total = set?.total;
+  if (index && total && total > 1) return `（圖片 ${index}/${total}）`;
+  return MIRROR_MEDIA_TEXT.image;
+}
+
+/** Lobby marker for n pictures: （圖片） or （圖片 ×3）. */
+export function imageCountMarker(n: number): string {
+  return n > 1 ? `（圖片 ×${n}）` : MIRROR_MEDIA_TEXT.image;
+}
+
+/** Marker appended to a Discord message that carried media, e.g. （圖片 ×2、檔案）. */
+export function discordMediaMarker(counts: { images: number; files: number; stickers: number }): string {
+  const parts: string[] = [];
+  if (counts.images > 0) parts.push(counts.images > 1 ? `圖片 ×${counts.images}` : '圖片');
+  if (counts.files > 0) parts.push(counts.files > 1 ? `檔案 ×${counts.files}` : '檔案');
+  if (counts.stickers > 0) parts.push('貼圖');
+  return parts.length > 0 ? `（${parts.join('、')}）` : '';
+}
+
+/** LINE note for Discord pictures / files that cannot be shown there, or null. */
+export function discordLeftoverNote(counts: { images: number; files: number }): string | null {
+  const parts: string[] = [];
+  if (counts.images > 0) parts.push(countWord(counts.images, '張圖片'));
+  if (counts.files > 0) parts.push(countWord(counts.files, '個檔案'));
+  if (parts.length === 0) return null;
+  if (counts.images === 1 && counts.files === 0) return MIRROR_MEDIA_TEXT.discordImageOnDiscord;
+  const joined = parts.join('、');
+  return `（Discord 有${/^\d/.test(joined) ? ' ' : ''}${joined}，請到 Discord 看）`;
+}
+
+/**
+ * `text` + ` ` + `marker`, cutting the text (not the marker) so the result
+ * fits LOBBY_CHAT_MAX_LEN.
+ */
+export function withMediaMarker(text: string, marker: string): string {
+  const body = text.trim();
+  if (!marker) return body;
+  if (!body) return marker;
+  const room = LOBBY_CHAT_MAX_LEN - marker.length - 1;
+  const cut = body.length > room ? `${body.slice(0, Math.max(0, room - 1))}…` : body;
+  return `${cut} ${marker}`;
+}
+
+/** A LINE message object as sent by the reply drain. */
+export type LineOutboundMessage =
+  | { type: 'text'; text: string }
+  | { type: 'image'; originalContentUrl: string; previewImageUrl: string };
+
+/** Result of downloading a LINE picture for Discord. */
+export type LineImageFetch = { ok: true; data: Buffer } | { ok: false; reason: 'too-large' | 'failed' };
+
+/** Outcome code of one LINE → Discord picture (counts / logs only). */
+export type LineImageRelayOutcome =
+  | 'uploaded'
+  | 'too-large'
+  | 'download-failed'
+  | 'upload-failed'
+  | 'no-channel'
+  | 'disabled'
+  | 'failed';
+
+/** Never read more than this from LINE, whatever the Discord server allows. */
+export const LINE_IMAGE_DOWNLOAD_MAX_BYTES = 25 * 1024 * 1024;
+
 // ─── Config surface ──────────────────────────────────────────────────────
 
 /**
@@ -227,6 +352,12 @@ export interface ChatMirrorConfig {
    */
   lineReplyQueue?: LineReplyQueue;
   /**
+   * 2026-10-13 — Discord → LINE images: where copies are kept and the public
+   * https base they are served from (`<base>/media/relay/<id>.jpg`). Only
+   * used together with `lineReplyQueue`; omit to send text markers only.
+   */
+  lineImageRelay?: { store: RelayMediaStore; publicBaseUrl: string };
+  /**
    * Rate limit per platform-user per window. Defaults to 5 msgs / 60s to
    * keep spam bots from flooding the channel while staying generous for
    * real chatter. Only applied on inbound, since lobby-side is already
@@ -260,6 +391,7 @@ export class ChatMirror {
   private readonly discord?: DiscordAdapter;
   private readonly listenBot?: ListenBotEnqueueConfig;
   private readonly lineReplyQueue?: LineReplyQueue;
+  private readonly imageRelay?: { store: RelayMediaStore; publicBaseUrl: string };
   private readonly inboundLimiter: SocketRateLimiter;
   private readonly logger: Required<ChatMirrorConfig>['logger'];
   private lobbyIngest: LobbyIngestFn | null = null;
@@ -271,6 +403,7 @@ export class ChatMirror {
     this.discord = config.discord;
     this.listenBot = config.listenBot;
     this.lineReplyQueue = config.lineReplyQueue;
+    this.imageRelay = config.lineImageRelay;
 
     const rl = config.inboundRateLimit ?? { windowMs: 60_000, maxRequests: 5 };
     this.inboundLimiter = new SocketRateLimiter({
@@ -398,6 +531,15 @@ export class ChatMirror {
     return msg;
   }
 
+  /**
+   * True when an inbound message from this platform user would pass the
+   * rate limit right now. Does not consume a slot (used before downloading
+   * pictures, so a flood never reaches the CDN).
+   */
+  public wouldAdmitInbound(source: LobbyChatSource, platformUserId: string): boolean {
+    return this.inboundLimiter.getRemaining(`${source}:${platformUserId}`) > 0;
+  }
+
   // ─── LINE reply-token drain (2026-10-08) ──────────────────────────────
 
   /** True when outbound LINE goes through the in-process reply queue. */
@@ -405,18 +547,55 @@ export class ChatMirror {
     return !!this.lineReplyQueue && !!this.lineGroupId;
   }
 
-  /** Pop up to `max` (≤5) queued LINE texts, oldest first. */
-  public drainLineReplies(max?: number): QueuedLineText[] {
+  /** Pop up to `max` (≤5) queued LINE messages (texts and images), oldest first. */
+  public drainLineReplies(max?: number): QueuedLineItem[] {
     return this.lineReplyQueue ? this.lineReplyQueue.drain(max) : [];
   }
 
-  /** Put a failed batch back at the head so the next reply_token re-sends it. */
-  public requeueLineReplies(batch: QueuedLineText[]): void {
+  /**
+   * Put a failed batch back at the head so the next reply_token re-sends it.
+   * Texts go back exactly as drained; an image goes back as its text note
+   * when LINE rejected an image URL (`imageRejected`) or it already failed
+   * before (degradeAfterFailedReply), so one bad image cannot jam the queue.
+   */
+  public requeueLineReplies(batch: QueuedLineItem[], opts: { imageRejected?: boolean } = {}): void {
     if (!this.lineReplyQueue || batch.length === 0) return;
-    const { dropped } = this.lineReplyQueue.requeueFront(batch);
+    const { retry, degraded, releasedMediaIds } = degradeAfterFailedReply(batch, opts);
+    this.releaseRelayMedia(releasedMediaIds);
+    if (degraded > 0) {
+      this.logger.warn(`LINE reply failed — ${degraded} image(s) will be sent as a text note`);
+    }
+    const { dropped } = this.lineReplyQueue.requeueFront(retry);
     if (dropped > 0) {
       this.logger.warn(`LINE reply queue overflow on requeue — dropped ${dropped} newest message(s)`);
     }
+  }
+
+  /**
+   * LINE message objects for a drained batch. A queued image becomes an
+   * image message only while its relay copy is still live (and is then kept
+   * alive ≥ 24 h for LINE to fetch); otherwise its text note goes instead.
+   */
+  public lineMessagesFor(batch: QueuedLineItem[]): {
+    messages: LineOutboundMessage[];
+    images: number;
+    fallbacks: number;
+  } {
+    let images = 0;
+    let fallbacks = 0;
+    const store = this.imageRelay?.store;
+    const messages = batch.map((item): LineOutboundMessage => {
+      if (!item.image) return { type: 'text', text: item.text };
+      const ids = item.image.mediaIds;
+      const live = !!store && ids.length > 0 && ids.every((id) => store.keepAlive(id, MEDIA_RELAY_AFTER_SEND_MS));
+      if (!live) {
+        fallbacks += 1;
+        return { type: 'text', text: item.text };
+      }
+      images += 1;
+      return { type: 'image', originalContentUrl: item.image.originalUrl, previewImageUrl: item.image.previewUrl };
+    });
+    return { messages, images, fallbacks };
   }
 
   public lineReplyQueueSize(): number {
@@ -437,6 +616,121 @@ export class ChatMirror {
       this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
     }
     return true;
+  }
+
+  // ─── Images (2026-10-13) ──────────────────────────────────────────────
+
+  /** True when outbound LINE goes into the in-process reply queue (not listen-bot, not push). */
+  private usesLineReplyQueue(): boolean {
+    return !!this.lineReplyQueue && !!this.lineGroupId && !this.listenBot?.url;
+  }
+
+  /**
+   * Relay store + public base for Discord → LINE pictures, or null when
+   * pictures cannot reach LINE for free (no reply queue, no https base, or
+   * turned off) — callers then send the text marker only.
+   */
+  public lineImageRelay(): { store: RelayMediaStore; publicBaseUrl: string } | null {
+    return this.imageRelay && this.usesLineReplyQueue() ? this.imageRelay : null;
+  }
+
+  /** Free relay copies that will not be sent after all. */
+  public releaseRelayMedia(ids: string[]): void {
+    const store = this.imageRelay?.store;
+    if (!store) return;
+    for (const id of ids) store.delete(id);
+  }
+
+  /**
+   * Discord-origin message that carried media → LINE. In reply-queue mode the
+   * text line, each picture (a LINE image message) and the optional note are
+   * queued back to back in one synchronous step, so nothing can slip between
+   * them. In any other mode only the text line goes (as crossFanout) and the
+   * prepared copies are freed — pictures are never pushed (push costs quota).
+   * Never echoes to Discord for a Discord-origin message.
+   */
+  public async crossFanoutWithLineMedia(
+    msg: LobbyChatMessage,
+    images: QueuedLineImage[],
+    note: string | null,
+  ): Promise<void> {
+    const src: LobbyChatSource = msg.source ?? 'lobby';
+    if (src === 'line' || !this.usesLineReplyQueue() || !this.lineReplyQueue) {
+      this.releaseRelayMedia(images.flatMap((i) => i.mediaIds));
+      await this.crossFanout(msg);
+      return;
+    }
+    const queue = this.lineReplyQueue;
+    const now = Date.now();
+    let dropped = 0;
+    dropped += queue.enqueueItem({ text: formatOutgoing(msg), enqueuedAt: now }).dropped;
+    for (const image of images) {
+      dropped += queue.enqueueItem({ text: MIRROR_MEDIA_TEXT.discordImageOnDiscord, enqueuedAt: now, image }).dropped;
+    }
+    if (note) dropped += queue.enqueueItem({ text: note, enqueuedAt: now }).dropped;
+    if (dropped > 0) {
+      this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
+    }
+    if (src !== 'discord') await this.pushDiscord(formatOutgoing(msg));
+  }
+
+  /**
+   * LINE picture → Discord sync channel as a file, content = the unified
+   * prefix + `msg.message` (the label, e.g. （圖片 2/3）). `fetchImage` gets
+   * the byte cap (the channel's upload limit, at most 25 MB) and must stop
+   * past it. Too large / download failed / upload refused → the same prefix
+   * with a text note instead. Never throws; returns an outcome code.
+   */
+  public async postLineImageToDiscord(
+    msg: LobbyChatMessage,
+    fetchImage: (maxBytes: number) => Promise<LineImageFetch>,
+  ): Promise<LineImageRelayOutcome> {
+    if (!this.discordChannelId || !this.discord) return 'disabled';
+    let ch: DiscordChannelAdapter | null = null;
+    try {
+      ch = await this.discord.fetchChannel(this.discordChannelId);
+    } catch (err) {
+      this.logger.warn(`Discord channel lookup failed (${describeError(err)})`);
+    }
+    if (!ch) {
+      this.logger.warn('Discord sync channel unavailable — LINE picture not relayed');
+      return 'no-channel';
+    }
+    const limit = Math.min(
+      ch.maxUploadBytes && ch.maxUploadBytes > 0 ? ch.maxUploadBytes : DISCORD_DEFAULT_UPLOAD_BYTES,
+      LINE_IMAGE_DOWNLOAD_MAX_BYTES,
+    );
+
+    let outcome: LineImageRelayOutcome = 'download-failed';
+    let note: string = MIRROR_MEDIA_TEXT.lineImageFailed;
+    if (ch.sendFiles) {
+      let got: LineImageFetch;
+      try {
+        got = await fetchImage(limit);
+      } catch {
+        got = { ok: false, reason: 'failed' };
+      }
+      if (got.ok) {
+        const name = `line-image.${imageExtension(sniffImageType(got.data))}`;
+        try {
+          await ch.sendFiles(formatOutgoing(msg), [{ name, data: got.data }]);
+          return 'uploaded';
+        } catch (err) {
+          this.logger.warn(`LINE picture upload to Discord failed (${describeError(err)}) — sending a note`);
+          outcome = 'upload-failed';
+        }
+      } else if (got.reason === 'too-large') {
+        outcome = 'too-large';
+        note = MIRROR_MEDIA_TEXT.lineImageTooLarge;
+      }
+    }
+    try {
+      await ch.send(formatOutgoing({ ...msg, message: note }));
+    } catch (err) {
+      this.logger.error(`Discord push failed (${describeError(err)})`);
+      return 'failed';
+    }
+    return outcome;
   }
 
   // ─── Internals ────────────────────────────────────────────────────────
@@ -486,7 +780,8 @@ export class ChatMirror {
         text: line,
       });
     } catch (err) {
-      this.logger.error('LINE push failed', err);
+      // SDK errors embed the request body (chat text) — log a code only.
+      this.logger.error(`LINE push failed (${describeError(err)})`);
     }
   }
 
@@ -553,7 +848,8 @@ export class ChatMirror {
       }
       await ch.send(line);
     } catch (err) {
-      this.logger.error('Discord push failed', err);
+      // DiscordAPIError carries the request body (chat text) — log a code only.
+      this.logger.error(`Discord push failed (${describeError(err)})`);
     }
   }
 

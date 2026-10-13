@@ -221,7 +221,7 @@ describe('LINE webhook → lobby + Discord, with reply_token drain', () => {
   });
 
   it('uses a reply_token from a non-text mirror-group event too (sticker/join)', async () => {
-    const { bot, mirror, sdk, lobby } = setup();
+    const { bot, mirror, sdk, lobby, discord } = setup();
     await mirror.fanout({ id: 'l', playerId: 'p', playerName: 'C', message: 'hey', timestamp: Date.now(), source: 'lobby' });
     const raw = JSON.stringify({
       destination: 'U',
@@ -236,7 +236,10 @@ describe('LINE webhook → lobby + Discord, with reply_token drain', () => {
     });
     const { req, res } = lineRequest(raw);
     await bot.handleWebhook(req, res);
-    expect(lobby).toEqual([]); // stickers are not bridged as text
+    // 2026-10-13: a sticker is bridged as the fixed marker 「（貼圖）」, never as content.
+    expect(lobby.map((m) => m.message)).toEqual(['（貼圖）']);
+    expect(discord.sent).toHaveLength(2); // the lobby 'hey' above, then the sticker marker
+    expect(discord.sent[1]).toMatch(/^\[\d{4} \d{2}:\d{2}\]\[LINE\]\[LineUser-U2\] （貼圖）$/);
     expect(sdk.replies).toEqual([{ token: 'rt5', texts: [expect.stringContaining('hey')] }]);
     expect(mirror.lineReplyQueueSize()).toBe(0);
   });
