@@ -101,9 +101,10 @@ export async function initializeBots(): Promise<void> {
   // counts + /意見. Counting works without Discord; forwarding needs it.
   initializeFeedback({ discord: buildFeedbackForwarder() });
 
-  // Weekly chat-log export (2026-10-13, docs/COMMUNITY_FEEDBACK.md): Monday
-  // 09:00 +08 (catch-up until 12:00) the past week's public chat, speakers
-  // pseudonymized, appended to the private sheet the AI manager reads. Free.
+  // Daily chat-log export (docs/COMMUNITY_FEEDBACK.md): once Discord is ready
+  // the last 7 days without 完成, then every day from 04:30 +08 the previous
+  // day's public chat, speakers pseudonymized, appended to the sheet the AI
+  // manager reads; 7 days kept. Free.
   startChatExport();
 }
 
@@ -125,10 +126,10 @@ export function buildFeedbackForwarder(): FeedbackDiscordForwarder {
   return createFeedbackDiscordForwarder(readyDiscordClient);
 }
 
-// ─── Weekly chat-log export (2026-10-13) ─────────────────────────────────
+// ─── Daily chat-log export (2026-10-13) ──────────────────────────────────
 
 /**
- * Arm the Monday 09:00 +08 chat-log export (bots/chatExport). The service
+ * Arm the daily chat-log export (bots/chatExport). The service
  * always exists (for the status page); the timer only runs when the
  * feature is enabled (CHAT_EXPORT_ENABLED, default on). Idempotent.
  */
@@ -142,7 +143,7 @@ export function startChatExport(): void {
   if (service.isRunning()) return;
   service.start();
   defaultChatExportLogger.info(
-    `armed (Mondays from 09:00 +08, catch-up until 12:00); sheet ${cfg.sheetId && cfg.sheetCredentialsUsable ? 'configured' : 'NOT configured (GOOGLE_SERVICE_ACCOUNT_JSON missing or invalid, or CHAT_EXPORT_SHEET_ID=off)'}`,
+    `armed (catch-up of the last 7 days once Discord is ready, then daily from 04:30 +08); sheet ${cfg.sheetId && cfg.sheetCredentialsUsable ? (cfg.publicSheet ? 'configured (public stats workbook, opt-in)' : 'configured') : 'NOT configured (GOOGLE_SERVICE_ACCOUNT_JSON missing or invalid, CHAT_EXPORT_SHEET_ID=off, or the public sheet without CHAT_EXPORT_ALLOW_PUBLIC_SHEET)'}`,
   );
 }
 
@@ -362,8 +363,9 @@ export interface BotStatus {
    */
   feedback: FeedbackSnapshot & { commandEnabled: boolean };
   /**
-   * Weekly chat-log export (bots/chatExport): two booleans and the last run's
-   * week, time, counts and outcome code — never text, names or channel names.
+   * Daily chat-log export (bots/chatExport): three booleans, the last day's
+   * date, time, counts and outcome code, and the catch-up's day counts —
+   * never text, names or channel names.
    */
   chatExport: ChatExportStatus;
   discord: {

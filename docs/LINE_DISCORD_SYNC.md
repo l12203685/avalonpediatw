@@ -84,8 +84,8 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 ```
 
 `feedback` 是社群反應的主題計數與 `/意見` 次數（只有數字，見 `docs/COMMUNITY_FEEDBACK.md`）。
-`chatExport` 是每週聊天紀錄匯出（每週一 09:00 +08 起把上週的聊天寫進私人試算表的「聊天紀錄」分頁，沒跑成會補到 12:00）：
-兩個布林＋最近一次的週次、時間、則數、頻道數與結果代碼，沒有任何文字或名字；`lastRun` 重啟後是 `null`（見 `docs/COMMUNITY_FEEDBACK.md`）。
+`chatExport` 是每日聊天紀錄匯出（每天 04:30 +08 起把前一天的聊天寫進試算表的「聊天紀錄」分頁，只留 7 天；重啟後補齊最近 7 天）：
+三個布林（含 `publicSheet`）＋最近一天的日期、時間、則數、頻道數與結果代碼＋補齊的天數，沒有任何文字或名字；`lastRun`、`catchUp` 重啟後是 `null`（見 `docs/COMMUNITY_FEEDBACK.md`）。
 2026-10-13 以前的 `communityDigest`（付費週報）已移除。
 
 | 欄位 | 意義 | 不對時代表 |
@@ -99,8 +99,8 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 | `line.replyQueueSize` | 等著回 LINE 的訊息數 | 一直很高 → LINE 群沒人講話（設計如此）或 reply 一直失敗（看 `replyFailures`） |
 | `discord.ready` | gateway 連線中 | `false` 且 `enabled` → token 錯、或 MESSAGE CONTENT INTENT 沒開、或 Render 剛喚醒 |
 | `keepAlive.enabled` | 自我喚醒是否在跑 | Render 上為 `false` → 15 分鐘沒人用就休眠，Discord 腿跟著斷 |
-| `chatExport.sheetConfigured` | 有私人試算表 id，而且 `GOOGLE_SERVICE_ACCOUNT_JSON` 讀得懂 | `false` → Render 少了服務帳號 JSON（跑一次 Render ops → apply）、`CHAT_EXPORT_SHEET_ID=off`，或 `CHAT_EXPORT_SHEET_ID` 被設成公開的阿瓦隆百科試算表（會被拒絕） |
-| `chatExport.lastRun.outcome` | 最近一次匯出結果 | `written` 寫好了；`already-exported` 這週早就寫好（「匯出紀錄」有「完成」，例如重啟後）；`empty` 這週沒有聊天；`claimed-elsewhere` 另一台伺服器正在寫這週（部署交接時會出現，10 分鐘後再看）；`sheet-error` 試算表寫不進去（多半是沒分享給服務帳號，10 分鐘後重試到 12:00）；`read-error` 有頻道讀不到（一部分讀不到：10 分鐘後再讀一次；全部讀不到：每 10 分鐘再讀到 12:00，不會當成沒聊天）；`error` 未預期的錯誤（看 server log）；`not-configured` 見上一列 |
+| `chatExport.sheetConfigured` | 有試算表 id，而且 `GOOGLE_SERVICE_ACCOUNT_JSON` 讀得懂 | `false` → Render 少了服務帳號 JSON（跑一次 Render ops → apply）、`CHAT_EXPORT_SHEET_ID=off`，或 `CHAT_EXPORT_SHEET_ID` 是公開的阿瓦隆百科試算表但沒設 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1`（會被拒絕） |
+| `chatExport.lastRun.outcome` | 最近處理的那一天的結果 | `written` 寫好了；`already-exported` 那天早就寫好（「匯出紀錄」有「完成」，例如重啟後）；`empty` 那天沒有聊天；`claimed-elsewhere` 另一台伺服器正在寫那天（部署交接時會出現，10 分鐘後再看）；`sheet-error` 試算表寫不進去（多半是沒分享給服務帳號，10 分鐘後重試）；`tab-conflict` 試算表裡有同名但不是 bot 的分頁；`read-error` 有頻道讀不到（不會當成沒聊天，10 分鐘後再讀）；`error` 未預期的錯誤（看 server log）；`not-configured` 見上一列。`catchUp.failed` > 0 表示補齊時有日子還沒寫好 |
 
 ## 環境變數（Render Dashboard → 服務 → Environment）
 
@@ -134,8 +134,9 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 |---|---|---|
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | 是（Render ops → apply 從 GitHub secret `AVALON_STATS_SHEETS_CREDENTIALS_JSON` 複製） | 沒有 → 不匯出聊天紀錄 |
 | `CHAT_EXPORT_ENABLED` | 否 | 開；`false` 關 |
-| `CHAT_EXPORT_SHEET_ID` | 否 | 內建的私人試算表；`off` 關（設成公開的阿瓦隆百科試算表會被拒絕、不匯出） |
-| `CHAT_EXPORT_SOURCE_CHANNEL_IDS` / `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空（所有公開頻道＋同步頻道；「大劍管理員」和 `/意見` 頻道一定不讀） |
+| `CHAT_EXPORT_SHEET_ID` | 否 | 內建的私人試算表；`off` 關（設成公開的阿瓦隆百科試算表會被拒絕、不匯出，除非下一列） |
+| `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | 否 | 不設；`1` ＝允許 `CHAT_EXPORT_SHEET_ID` 是阿瓦隆百科試算表（知道連結就能看，見 `docs/COMMUNITY_FEEDBACK.md`） |
+| `CHAT_EXPORT_EXTRA_SOURCE_IDS` / `CHAT_EXPORT_SOURCE_CHANNEL_IDS` / `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空（所有公開頻道、公開論壇＋同步頻道；「大劍管理員」和 `/意見` 頻道一定不讀）；加讀／取代／排除，見 `docs/COMMUNITY_FEEDBACK.md` |
 | `FEEDBACK_DISCORD_CHANNEL_ID` | 否 | 管理員頻道「大劍管理員」`1145513360545296574`；`off` 不轉貼 |
 | `FEEDBACK_COMMAND_ENABLED` | 否 | 開；`false` 關 `/意見` |
 
@@ -236,7 +237,7 @@ reply 不計、push 計。`LINE_REPLY_DRAIN=true`（預設）下 server 不會 p
 - `packages/server/src/bots/index.ts` — 初始化（各 bot 失敗隔離）、`/api/bots/status`
 - `packages/server/src/middleware/rawBody.ts` — 保留原始 bytes
 - `packages/server/src/services/keepAlive.ts` — Render Free 自我喚醒
-- `packages/server/src/bots/chatExport/` — 每週聊天紀錄匯出（讀頻道歷史、發言者換代號、寫私人試算表「聊天紀錄」分頁、「匯出紀錄」分頁記完成、只留 8 週）
+- `packages/server/src/bots/chatExport/` — 每日聊天紀錄匯出（讀頻道與論壇歷史、發言者換代號、寫試算表「聊天紀錄」分頁、「匯出紀錄」分頁記完成、只留 7 天、重啟後補齊）
 - `packages/server/src/bots/digest/sheets.ts` — 服務帳號登入與 Google Sheets REST（共用）
 - `packages/server/src/bots/feedback/` — 主題計數與 `/意見`（轉貼到管理員頻道）
 - `packages/server/src/bots/stats/` — 戰績回覆（`statsReplies.ts` 純格式化、`statsQueries.ts` 讀快取、`textCommands.ts` LINE 指令、`weeklyDigest.ts` 每週排行）
