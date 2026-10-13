@@ -172,7 +172,7 @@ class ParserTest(unittest.TestCase):
         self.assertEqual((game.config, game.outcome, game.kill), ("936758", "三藍死", "8"))  # Merlin = seat 8
         self.assertEqual((game.date, game.game_no, game.category, game.date_from_title), ("2026/10/09", "4", "線瓦", True))
         header = dri.import_header([sheet_header()], None)
-        row = dict(zip(header, dri.build_row(p, game, header, "2026-10-10 03:17:00")))
+        row = dict(zip(header, dri.build_row(p, game, header, "2026-10-10 03:17:00", dri.post_signature(p, RECENT_BODY))))
         expected = {
             "流水號": f"D{p.id}", "文字記錄": RECENT_CANONICAL, "配置": "936758", "刺殺": "8", "分類": "線瓦",
             "日期時間": "2026/10/09", "場次": "4", "頁碼": "", "note": "", "結果": "三藍死",
@@ -184,10 +184,11 @@ class ParserTest(unittest.TestCase):
             "首湖玩家": "忠", "二湖玩家": "梅", "三湖玩家": "忠", "角1": "忠", "角4": "忠", "角5": "派", "角0": "忠",
             "1-1": "147", "派5": "N", "派0": "N", "外灑": "N",
             "discord_post_id": p.id, "discord_title": "1009一般場4", "discord_tags": "三藍被刀、線瓦",
-            "匯入時間": "2026-10-10 03:17:00",
+            "匯入時間": "2026-10-10 03:17:00", "discord_hash": dri.post_signature(p, RECENT_BODY), "更新時間": "",
         }
         self.assertEqual(row, expected)
-        self.assertEqual(header[-4:], list(dri.EXTRA_COLUMNS))
+        self.assertEqual(header[-6:], list(dri.EXTRA_COLUMNS))
+        self.assertRegex(row["discord_hash"], r"^[0-9a-f]{16}$")
 
     def test_old_2023_inline_style(self) -> None:
         old = post(title="936758", tags=("三藍被刀",), when=dt.datetime(2023, 8, 12, 21, tzinfo=dri.TAIPEI))
@@ -693,6 +694,183 @@ class DedupeTest(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Corrections to posts already in Discord匯入 (plan_recheck)
+# ---------------------------------------------------------------------------
+
+IMPORTED_AT = "2026-10-10 03:17:00"
+LATER = dt.datetime(2026, 12, 1, 3, 17, tzinfo=dri.TAIPEI)  # a month and a half after the post
+STAMP = "2026-12-01 03:17:00"
+FIXED_BODY = RECENT_BODY.replace("4.Momo", "4.Mona")  # a wrong player id corrected on the post
+COMMENTED_BODY = "好局！\n" + RECENT_BODY  # an edit that does not change the game
+
+
+def utc(*args: int) -> dt.datetime:
+    return dt.datetime(*args, tzinfo=dt.timezone.utc)
+
+
+class RecheckTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.header = dri.import_header([sheet_header()], None)  # a tab created now: has discord_hash / 更新時間
+        self.post = post()
+
+    def imported(self, p: dri.Post, body: str, header: list[str] | None = None) -> list[str]:
+        header = header or self.header
+        return dri.build_row(p, dri.parse_post(p, body), header, IMPORTED_AT, dri.post_signature(p, body))
+
+    def recheck(self, posts, bodies, import_rows, header=None, edits=None, now=LATER, report=None, **kw):
+        self.read: list[str] = []
+        edits = edits or {}
+
+        def fetch(p):
+            self.read.append(p.id)
+            body = bodies[p.id]
+            return None if body is None else dri.StarterMessage(body, edits.get(p.id))
+        self.report = report or dri.ImportReport(ok_ids={p.id for p in posts})
+        return dri.plan_recheck(posts, fetch, import_rows, header or self.header, self.report, now=now, stamp=STAMP, **kw)
+
+    def cell(self, row: list[str], name: str, header: list[str] | None = None) -> str:
+        return row[(header or self.header).index(name)]
+
+    def test_a_corrected_player_is_rewritten_in_place(self) -> None:
+        rows = [self.header, self.imported(self.post, RECENT_BODY)]
+        rows[1][self.header.index("note")] = "人工備註"  # a cell a person added: kept
+        result = self.recheck([self.post], {self.post.id: FIXED_BODY}, rows, edits={self.post.id: utc(2026, 11, 20)})
+        self.assertEqual((result.candidates, result.checked, result.corrected, result.rows_updated), (1, 1, 1, 1))
+        [update] = result.updates
+        self.assertEqual(update.row, 2)
+        self.assertEqual(len(update.values), len(self.header))
+        self.assertEqual(self.cell(update.values, "玩4"), "Mona")
+        self.assertIn("MONA", self.cell(update.values, "組成"))
+        self.assertEqual(self.cell(update.values, "匯入時間"), IMPORTED_AT)  # when it was first imported
+        self.assertEqual(self.cell(update.values, "更新時間"), STAMP)
+        self.assertEqual(self.cell(update.values, "discord_hash"), dri.post_signature(self.post, FIXED_BODY))
+        self.assertEqual(self.cell(update.values, "note"), "人工備註")
+        self.assertEqual(self.cell(update.values, "流水號"), f"D{self.post.id}")
+        changed = {h for h, a, b in zip(self.header, rows[1], update.values) if a != b}
+        self.assertEqual(changed, {"玩4", "組成", "discord_hash", "更新時間"})
+
+        rows[1] = update.values  # the next day: nothing to do
+        again = self.recheck([self.post], {self.post.id: FIXED_BODY}, rows, edits={self.post.id: utc(2026, 11, 20)})
+        self.assertEqual((again.unchanged, again.corrected, again.updates), (1, 0, []))
+
+    def test_unedited_and_comment_only_edits_write_nothing(self) -> None:
+        rows = [self.header, self.imported(self.post, RECENT_BODY)]
+        result = self.recheck([self.post], {self.post.id: RECENT_BODY}, rows)
+        self.assertEqual((result.checked, result.unchanged, result.updates), (1, 1, []))
+        result = self.recheck([self.post], {self.post.id: COMMENTED_BODY}, rows, edits={self.post.id: utc(2026, 11, 2)})
+        self.assertEqual((result.edited_same, result.corrected, result.updates), (1, 0, []))
+
+    def test_title_and_result_tag_edits_count(self) -> None:
+        rows = [self.header, self.imported(self.post, RECENT_BODY)]
+        retitled = dri.Post(self.post.id, "1008一般場4", self.post.tags)  # the date in the title was wrong
+        result = self.recheck([retitled], {self.post.id: RECENT_BODY}, rows)
+        self.assertEqual(result.corrected, 1)
+        self.assertEqual(self.cell(result.updates[0].values, "日期時間"), "2026/10/08")
+        bot_tag = dri.Post(self.post.id, self.post.title, (*self.post.tags, dri.TAG_FIX))  # not a tag that matters
+        self.assertEqual(self.recheck([bot_tag], {self.post.id: RECENT_BODY}, rows).unchanged, 1)
+
+    def test_rows_written_before_the_hash_column(self) -> None:
+        legacy = [h for h in self.header if h not in dri.LATE_COLUMNS]
+        rows = [legacy, self.imported(self.post, RECENT_BODY, legacy)]
+        header = legacy + list(dri.LATE_COLUMNS)  # what run() passes: the columns are added on the first write
+        bodies = {self.post.id: FIXED_BODY}
+        before_import = self.recheck([self.post], bodies, rows, header, edits={self.post.id: utc(2026, 10, 9, 15)})
+        self.assertEqual((before_import.unchanged, before_import.updates), (1, []))  # edited before it was imported
+        self.assertEqual(self.read, [self.post.id])
+        never = self.recheck([self.post], bodies, rows, header)
+        self.assertEqual(never.unchanged, 1)  # Discord says it was never edited
+        after = self.recheck([self.post], bodies, rows, header, edits={self.post.id: utc(2026, 11, 20)})
+        self.assertEqual(after.corrected, 1)
+        values = after.updates[0].values
+        self.assertEqual(len(values), len(header))
+        self.assertEqual((self.cell(values, "玩4", header), self.cell(values, "更新時間", header)), ("Mona", STAMP))
+        self.assertEqual(self.cell(values, "discord_hash", header), dri.post_signature(self.post, FIXED_BODY))
+        rows[1] = values[:]
+        rows[0] = header
+        # Edited again later: the new 更新時間 is the reference now.
+        self.assertEqual(self.recheck([self.post], bodies, rows, header, edits={self.post.id: utc(2026, 11, 30)}).unchanged, 1)
+
+    def test_unreadable_edits_keep_the_row_and_become_fixable(self) -> None:
+        rows = [self.header, self.imported(self.post, RECENT_BODY)]
+        broken = RECENT_BODY.replace("389 +7", "389 7")
+        result = self.recheck([self.post], {self.post.id: broken}, rows, edits={self.post.id: utc(2026, 11, 20)},
+                              now=dt.datetime(2026, 10, 12, 3, 17, tzinfo=dri.TAIPEI))
+        self.assertEqual((result.unreadable, result.updates), (1, []))
+        [skip] = self.report.skips
+        self.assertTrue(skip.edited)
+        self.assertEqual((skip.reason, skip.line_no), (dri.SKIP_BAD_VOTE, 3))
+        self.assertNotIn(self.post.id, self.report.ok_ids)
+        self.assertEqual(sum(self.report.skipped.values()), 0)  # not an import skip in the summary table
+        self.assertTrue(dri.fixable(skip))
+        text = dri.reply_text(skip)
+        self.assertIn(dri.REPLY_INTRO_EDITED, text)
+        self.assertNotIn(dri.REPLY_INTRO, text)
+        self.assertEqual(len(dri.reply_candidates(self.report, dt.datetime(2026, 10, 12, 3, 17, tzinfo=dri.TAIPEI), 14)), 1)
+
+    def test_left_alone(self) -> None:
+        recorded = post(title="1009一般場5", tags=("三紅", dri.TAG_RECORDED), offset=1)
+        simulated = post(title="1009一般場6", tags=("三紅", dri.TAG_SIMULATION), offset=2)
+        deleted, emptied = post(offset=3), post(offset=4)
+        old = post(when=dt.datetime(2026, 8, 1, 20, tzinfo=dri.TAIPEI))  # more than 90 days before LATER
+        not_imported = post(offset=5)
+        posts = [recorded, simulated, deleted, emptied, old, not_imported]
+        def as_imported(p: dri.Post) -> dri.Post:  # the tags it had when it was imported
+            return dri.Post(p.id, p.title, tuple(t for t in p.tags if t not in (dri.TAG_RECORDED, dri.TAG_SIMULATION)))
+        rows = [self.header] + [self.imported(as_imported(p), RED_BODY if "三紅" in p.tags else RECENT_BODY)
+                                for p in (recorded, simulated, deleted, emptied, old)]
+        bodies = {p.id: FIXED_BODY for p in posts}
+        bodies.update({deleted.id: None, emptied.id: "  "})
+        result = self.recheck(posts, bodies, rows, edits={p.id: utc(2026, 11, 20) for p in posts})
+        self.assertEqual((result.recorded, result.simulation, result.candidates, result.gone), (1, 1, 2, 2))
+        self.assertEqual(sorted(self.read), sorted([deleted.id, emptied.id]))  # 已收錄 / 模擬 / old: never read
+        self.assertEqual(result.updates, [])
+        self.assertEqual(self.recheck(posts, bodies, rows, days=0).checked, 0)
+        self.assertEqual(self.recheck(posts, bodies, rows, limit=0).checked, 0)
+        self.assertEqual(self.recheck(posts, bodies, [self.header]).candidates, 0)
+        self.assertEqual(self.recheck(posts, bodies, rows, since=dt.date(2026, 10, 10)).candidates, 0)
+
+    def test_a_game_copied_into_the_sheet_since_is_left_to_people(self) -> None:
+        rows = [self.header, self.imported(self.post, RECENT_BODY)]
+        sheet_rows = [sheet_header(), sheet_row(sheet_header(), "1", "936758", RECENT_CANONICAL, NAMES, "三藍死")]
+        result = self.recheck([self.post], {self.post.id: FIXED_BODY}, rows, edits={self.post.id: utc(2026, 11, 20)},
+                              sheet_rows=sheet_rows)
+        self.assertEqual((result.in_sheet, result.candidates, result.updates, self.read), (1, 0, [], []))
+
+    def test_window_and_switches(self) -> None:
+        self.assertEqual(dri.RECHECK_DEFAULT_DAYS, dri.TAG_DEFAULT_DAYS)  # the same 90 days as the 待修正 tag
+        args = dri.parse_args([])
+        self.assertEqual((args.recheck_days, args.recheck_limit), (90, 200))
+        args = dri.parse_args(["--recheck-days", "0", "--recheck-limit", "5"])
+        self.assertEqual((args.recheck_days, args.recheck_limit), (0, 5))
+        self.assertEqual([dri.column_letters(n) for n in (1, 26, 27, 52, 53, 702, 703)],
+                         ["A", "Z", "AA", "AZ", "BA", "ZZ", "AAA"])
+        self.assertEqual(dri.discord_time("2026-11-20T08:00:00.123000+00:00"), dt.datetime(2026, 11, 20, 8, 0, 0, 123000, tzinfo=dt.timezone.utc))
+        self.assertIsNone(dri.discord_time(None))
+        self.assertIsNone(dri.discord_time("not a time"))
+
+    def test_limit_takes_turns(self) -> None:
+        posts = [post(offset=i) for i in range(5)]
+        rows = [self.header] + [self.imported(p, RECENT_BODY) for p in posts]
+        bodies = {p.id: RECENT_BODY for p in posts}
+        seen: set[str] = set()
+        for day in range(3):
+            result = self.recheck(posts, bodies, rows, limit=2, now=LATER + dt.timedelta(days=day))
+            self.assertEqual((result.candidates, result.checked, result.held), (5, 2, 3))
+            seen.update(self.read)
+        self.assertEqual(seen, {p.id for p in posts})  # every post re-read within ceil(5 / 2) days
+
+    def test_summary_lines_are_counts_only(self) -> None:
+        rows = [self.header, self.imported(self.post, RECENT_BODY)]
+        result = self.recheck([self.post], {self.post.id: FIXED_BODY}, rows, edits={self.post.id: utc(2026, 11, 20)})
+        for write, done in ((True, "有修改、已更新：1 篇（1 列）"), (False, "有修改、dry run，會更新：1 篇（1 列）")):
+            text = "\n".join(dri.recheck_lines(result, write=write))
+            self.assertIn("90 天內發的重新檢查修改：1 篇，本次重讀 1", text)
+            self.assertIn(done, text)
+            for secret in NAMES + ["Mona", "1009一般場", self.post.id]:
+                self.assertNotIn(secret, text)
+
+
+# ---------------------------------------------------------------------------
 # generate_cache: 牌譜 + Discord匯入
 # ---------------------------------------------------------------------------
 
@@ -982,6 +1160,20 @@ class DiscordClientTest(unittest.TestCase):
             client.starter_content("1")
         self.assertIn("Read Message History", str(ctx.exception))
 
+    def test_starter_message_carries_the_edit_time(self) -> None:
+        def script(path, n):
+            if path == "/channels/1/messages/1":
+                return FakeResponse({"content": "147", "edited_timestamp": "2026-11-20T08:00:00.123000+00:00"})
+            if path == "/channels/2/messages/2":
+                return FakeResponse({"content": "260", "edited_timestamp": None})
+            return http_error(404, {"code": 10008})
+        client = self.make(script)
+        self.assertEqual(client.starter_message("1"),
+                         dri.StarterMessage("147", dt.datetime(2026, 11, 20, 8, 0, 0, 123000, tzinfo=dt.timezone.utc)))
+        self.assertEqual(client.starter_message("2"), dri.StarterMessage("260", None))
+        self.assertIsNone(client.starter_message("3"))
+        self.assertEqual([m for m, *_ in self.requests], ["GET", "GET", "GET"])  # reads only
+
     def test_forum_tag_lookup_and_creation(self) -> None:
         forum = dri.FORUM_CHANNEL_ID
         state = {"tags": [dict(t) for t in FORUM_TAGS[:3]], "patch": None}
@@ -1122,23 +1314,67 @@ def quiet_env(**extra: str) -> mock._patch:
     return mock.patch.dict(os.environ, env, clear=True)
 
 
+def a1_cell(ref: str) -> tuple[int, int]:
+    """'BA12' -> (row index 11, column index 52)."""
+    m = re.fullmatch(r"([A-Z]+)([0-9]+)", ref)
+    assert m, ref
+    col = 0
+    for ch in m.group(1):
+        col = col * 26 + ord(ch) - 64
+    return int(m.group(2)) - 1, col - 1
+
+
 class FakeWorksheet:
-    def __init__(self, rows, owner):
+    def __init__(self, rows, owner, title=""):
         self.rows = rows
         self.owner = owner
+        self.title = title
+
+    @property
+    def col_count(self):  # the grid: as wide as the widest row unless add_cols made it wider
+        return max([len(r) for r in self.rows] + [self.owner.grid_cols.get(self.title, 0)])
+
+    def add_cols(self, cols):
+        self.owner.check_write()
+        self.owner.grid_cols[self.title] = self.col_count + cols
 
     def get_all_values(self):
-        return [list(r) for r in self.rows]
+        width = max([len(r) for r in self.rows], default=0)  # gspread pads every row to the widest
+        return [list(r) + [""] * (width - len(r)) for r in self.rows]
+
+    def _put(self, ref, values, logged=None):
+        row, col = a1_cell(ref)
+        assert len(values) == 1, "one row per range"
+        assert col + len(values[0]) <= self.col_count, "exceeds grid limits"
+        while len(self.rows) <= row:
+            self.rows.append([])
+        cells = self.rows[row]
+        cells += [""] * (col + len(values[0]) - len(cells))
+        cells[col:col + len(values[0])] = list(values[0])
+        self.owner.writes.append(logged or ref)
 
     def update(self, values, range_name, raw=True):
         self.owner.check_write()
-        assert range_name == "A1" and raw and len(values) == 1
-        self.rows[:1] = [list(values[0])]
+        assert raw
+        if range_name == "A1" and not self.rows:
+            self.rows.append([])
+            self.owner.grid_cols[self.title] = len(values[0])
+        self._put(range_name, values)
+
+    def batch_update(self, data, value_input_option=None):
+        self.owner.check_write()
+        assert value_input_option == "RAW"
+        for item in data:
+            start, end = item["range"].split(":")
+            assert a1_cell(start)[0] == a1_cell(end)[0] and a1_cell(start)[1] == 0
+            assert a1_cell(end)[1] + 1 == len(item["values"][0])
+            self._put(start, item["values"], item["range"])
 
     def append_rows(self, values, value_input_option, insert_data_option, table_range):
         self.owner.check_write()
         assert (value_input_option, insert_data_option, table_range) == ("RAW", "INSERT_ROWS", "A1")
         self.rows.extend(list(r) for r in values)
+        self.owner.writes.append("append")
 
 
 class FakeSheet:
@@ -1146,6 +1382,8 @@ class FakeSheet:
         self.tabs = tabs
         self.deny_writes = deny_writes
         self.write_error = write_error
+        self.grid_cols: dict[str, int] = {}
+        self.writes: list[str] = []  # A1 ranges written (and "append"), in order
 
     def check_write(self):
         if self.deny_writes:  # what gspread 6 raises for HTTP 403
@@ -1156,13 +1394,14 @@ class FakeSheet:
     def worksheet(self, name):
         if name not in self.tabs:
             raise WorksheetNotFound(name)
-        return FakeWorksheet(self.tabs[name], self)
+        return FakeWorksheet(self.tabs[name], self, name)
 
     def add_worksheet(self, title, rows, cols):
         self.check_write()
         assert title not in self.tabs
         self.tabs[title] = []
-        return FakeWorksheet(self.tabs[title], self)
+        self.grid_cols[title] = cols
+        return FakeWorksheet(self.tabs[title], self, title)
 
 
 FIX_CHANNEL = "5550001"  # the 牌譜修正 channel of the fake guild
@@ -1183,8 +1422,11 @@ class FakeDiscord:
     def __init__(self, posts, bodies, *, replied=(), forbid_post=False, post_error=False, no_me=False,
                  missing=(), odd_error=False, channels=None, history=None, forbid_fix=False, fix_error_at=0,
                  forum_tags=None, threads=None, deleted=(), deleted_on_patch=(), forbid_tag_create=False,
-                 forbid_tags=False, tag_error=False, tag_read_error=False, read_forbidden=(), archive_error=False):
+                 forbid_tags=False, tag_error=False, tag_read_error=False, read_forbidden=(), archive_error=False,
+                 edits=None):
         self.posts, self.bodies, self.fetched = posts, bodies, 0
+        self.edits = dict(edits or {})  # post id -> the starter message's edited_timestamp
+        self.rereads: list[str] = []  # starter messages read through starter_message
         # The 待修正 tag: the forum's tags, and each post's thread as Discord holds it (applied_tags
         # ids, thread_metadata). `threads` may be shared between runs, so tag changes persist.
         self.forum_tag_list = [dict(t) for t in (FORUM_TAGS if forum_tags is None else forum_tags)]
@@ -1296,6 +1538,12 @@ class FakeDiscord:
     def starter_content(self, thread_id):
         self.fetched += 1
         return self.bodies[thread_id]
+
+    def starter_message(self, thread_id):
+        self.fetched += 1
+        self.rereads.append(thread_id)
+        body = self.bodies[thread_id]
+        return None if body is None else dri.StarterMessage(body, self.edits.get(thread_id))
 
     def bot_user_id(self):
         self.me_calls += 1
@@ -2133,7 +2381,7 @@ class EndToEndTest(unittest.TestCase):
 
     def run_main(self, *args: str, deny_writes: bool = False, ci: bool = True,
                  write_error: Exception | None = None, env_extra: dict | None = None, **discord_kw) -> tuple[int, str]:
-        sheet = FakeSheet(self.tabs, deny_writes, write_error)
+        sheet = self.sheet = FakeSheet(self.tabs, deny_writes, write_error)
 
         def open_sheet(source, sheet_id, scopes):
             self.opened_scopes.append(scopes)
@@ -2508,6 +2756,58 @@ class EndToEndTest(unittest.TestCase):
         self.assertIn("已在 Discord匯入（同一貼文，不再讀取）：1", log)
         self.assertIn("已寫入 0 列", log)
 
+    def test_a_corrected_post_updates_its_import_row(self) -> None:
+        """The question asked: a post imported weeks ago gets a wrong player fixed -- does the daily
+        import pick it up? Yes: its Discord匯入 row is rewritten in place; 牌譜 is never written."""
+        self.assertEqual(self.run_main()[0], 0)
+        tab = self.tabs["Discord匯入"]
+        header, imported = tab[0], list(tab[1])
+        self.bodies[self.posts[0].id] = FIXED_BODY
+        edits = {self.posts[0].id: utc(2026, 10, 10, 0)}  # after the import (2026-10-09 19:17 UTC)
+
+        rc, log = self.run_main("--dry-run", edits=edits)
+        self.assertEqual(rc, 0, log)
+        self.assertIn("有修改、dry run，會更新：1 篇（1 列）", log)
+        self.assertEqual(tab[1], imported)
+
+        rc, log = self.run_main(edits=edits)
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(len(tab), 2)  # rewritten in place, nothing appended
+        self.assertEqual(tab[1][header.index("玩4")], "Mona")
+        self.assertEqual(tab[1][header.index("匯入時間")], imported[header.index("匯入時間")])
+        self.assertEqual(self.sheet.writes, ["A2:" + dri.column_letters(len(header)) + "2"])
+        self.assertEqual(len(self.tabs["牌譜"]), 2)  # 牌譜 untouched
+        summary = self.summary.read_text(encoding="utf-8")
+        self.assertIn("有修改、已更新：1 篇（1 列）", log)
+        self.assertIn("有修改、已更新：1 篇（1 列）", summary)
+        self.assert_public_safe(log + summary)
+        self.assertNotIn("Mona", log + summary)
+        merged = gc.merge_game_logs(self.tabs["牌譜"], tab)  # what the 03:47 cache refresh reads
+        self.assertEqual(merged.games[-1].seat_players["4"], "Mona")
+
+        rc, log = self.run_main(edits=edits)  # the day after: nothing left to do
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(self.sheet.writes, [])
+        self.assertIn("沒有修改：1", log)
+
+    def test_a_tab_from_before_gets_the_new_columns_on_its_first_write(self) -> None:
+        legacy = [h for h in dri.import_header([sheet_header()], None) if h not in dri.LATE_COLUMNS]
+        p = self.posts[0]
+        row = dri.build_row(p, dri.parse_post(p, RECENT_BODY), legacy, "2026-10-09 23:00:00")
+        self.tabs["Discord匯入"] = [list(legacy), row]
+        self.bodies[p.id] = FIXED_BODY
+        rc, log = self.run_main(edits={p.id: utc(2026, 10, 9, 18)})  # 2026-10-10 02:00 Taipei: after that import
+        self.assertEqual(rc, 0, log)
+        tab = self.tabs["Discord匯入"]
+        self.assertEqual(tab[0], legacy + list(dri.LATE_COLUMNS))
+        self.assertEqual(self.sheet.grid_cols["Discord匯入"], len(legacy) + 2)  # the grid grew first
+        header = tab[0]
+        self.assertEqual((tab[1][header.index("玩4")], tab[1][header.index("更新時間")]), ("Mona", "2026-10-10 03:17:00"))
+        self.assertEqual(tab[1][header.index("discord_hash")], dri.post_signature(p, FIXED_BODY))
+        first, second = self.sheet.writes
+        self.assertEqual(first, dri.column_letters(len(legacy) + 1) + "1")  # the header cells, then the row
+        self.assertTrue(second.startswith("A2:"))
+
     def test_403_on_write_names_the_service_account_and_editor(self) -> None:
         rc, log = self.run_main(deny_writes=True)
         self.assertEqual(rc, gc.EXIT_GOOGLE_ACCESS, log)
@@ -2531,7 +2831,7 @@ class EndToEndTest(unittest.TestCase):
     def test_other_write_errors_do_not_echo_google_messages(self) -> None:
         rc, log = self.run_main(write_error=APIError(400, "Invalid value at data.values[0][5]: 小米 15678 5- 39+"))
         self.assertEqual(rc, gc.EXIT_GOOGLE_ACCESS, log)
-        self.assertIn("::error title=Google Sheets write failed::Appending to Discord匯入 failed (APIError, HTTP 400)", log)
+        self.assertIn("::error title=Google Sheets write failed::Writing to Discord匯入 failed (APIError, HTTP 400)", log)
         self.assert_public_safe(log)
 
     def test_bad_import_header_and_ci_report_refused(self) -> None:

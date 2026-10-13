@@ -26,10 +26,22 @@ result comes from the post's tag (三紅 / 三藍被刀 / 三藍躲刺) and must
 mission results (the 4th mission of a 10-player game needs two fails).
 
 What this script does and does not do:
-  * reads Discord (bot token) and the 牌譜 / Discord匯入 tabs; writes only by appending
-    rows to Discord匯入 (created with 牌譜's header + discord_post_id, discord_title,
-    discord_tags, 匯入時間 if missing) and, with --reply, to Discord回覆 (one row per
-    reply posted: discord_post_id, 回覆時間, 原因). Never writes to any other tab.
+  * reads Discord (bot token) and the 牌譜 / Discord匯入 tabs; writes to Discord匯入 (created
+    with 牌譜's header + discord_post_id, discord_title, discord_tags, 匯入時間, discord_hash,
+    更新時間 if missing) by appending the new games and by rewriting, in place, the row(s) of
+    an already imported post that was edited since (see corrections below), and, with --reply,
+    to Discord回覆 (one row per reply posted: discord_post_id, 回覆時間, 原因). Never writes
+    to any other tab; 牌譜 is only read.
+  * corrections (--recheck-days, default 90; --recheck-limit, default 200 per run): the posts
+    already in Discord匯入 that were created within the window are re-read; a post whose title,
+    deciding tags or starter text changed since its row was written (discord_hash; for rows
+    written before that column, Discord's edited_timestamp after 匯入時間 / 更新時間, or the
+    title / tags) is parsed again and its row(s) rewritten when the game in them differs
+    (columns a person added and 匯入時間 are kept; 更新時間 = now). Posts tagged 已收錄 or whose
+    game is in 牌譜 by now are never touched (牌譜 is corrected by hand); tagged 模擬 since,
+    deleted, or edited into something unreadable: the row stays (an unreadable edit gets the
+    --reply / 待修正 treatment). An existing Discord匯入 header gets discord_hash and 更新時間
+    added after its last column on the first write. All row rewrites go in one request.
   * writes to Discord only with --reply and --fix-list. --reply: one message in the
     thread of each recent post (--reply-since-days, default 14) that could not be parsed
     because of its format, saying which line and why (SKIP_EXPLANATIONS) plus the format
@@ -69,8 +81,9 @@ What this script does and does not do:
     on a lost Monday run. No channel, or no permission there: a notice, never a failed run.
     With --dry-run the list is built and counted, not posted. Not with --since (the backlog
     would leave out the older posts).
-  * idempotent: a post already in Discord匯入 (by discord_post_id) is not fetched
-    again; a game already in 牌譜 (generate_cache.record_fingerprint, or the same
+  * idempotent: a post already in Discord匯入 (by discord_post_id) is not imported
+    again (only re-read for corrections); a game already in 牌譜
+    (generate_cache.record_fingerprint, or the same
     配置 + mission results with the same players) or tagged 已收錄 is not imported;
     posts tagged 模擬 (simulations) are not imported either.
   * prints counts and fixed reason strings only (stdout and $GITHUB_STEP_SUMMARY):
@@ -109,6 +122,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -171,7 +185,19 @@ DERIVED_COLUMNS = (
     "1-1", *ROUND_RESULT_COLUMNS, *ROUND_COLUMNS, "局勢", *LAKE_COLUMNS, *LAKE_PLAYER_COLUMNS,
     *ROLE_SEAT_COLUMNS, "派5", "派0", "外灑", "組成",
 )
-EXTRA_COLUMNS = ("discord_post_id", "discord_title", "discord_tags", "匯入時間")
+# discord_hash: post_signature of the post (title, tags that matter, starter text) when the row was
+# written; 更新時間: when the row was last rewritten from an edited post (--recheck-days).
+HASH_COLUMN = "discord_hash"
+UPDATED_COLUMN = "更新時間"
+EXTRA_COLUMNS = ("discord_post_id", "discord_title", "discord_tags", "匯入時間", HASH_COLUMN, UPDATED_COLUMN)
+# Added to an existing Discord匯入 header (after its last column) the first time a row is written.
+LATE_COLUMNS = (HASH_COLUMN, UPDATED_COLUMN)
+# Re-read the posts already in Discord匯入 that were created within this many days (the 待修正 tag's
+# window) and rewrite their row(s) when the post was edited; at most RECHECK_DEFAULT_LIMIT per run.
+RECHECK_DEFAULT_DAYS = 90
+RECHECK_DEFAULT_LIMIT = 200
+# Columns that are not the game: a re-read that differs only here is no correction.
+NOT_GAME_COLUMNS = frozenset({"匯入時間", HASH_COLUMN, UPDATED_COLUMN, "discord_tags"})
 # One row per reply posted (--reply): the record that a post was replied to, kept outside Discord
 # so that a deleted reply is not posted again the next day.
 REPLY_LOG_TAB = "Discord回覆"
@@ -272,6 +298,8 @@ SKIP_EXPLANATIONS = {
 # the reason, the format hint and what happens next. Sent to the post's thread only; never printed.
 REPLY_MARKER = "🤖 牌譜格式檢查"
 REPLY_INTRO = "這篇牌譜目前無法自動收錄到戰績統計。"
+# For a post already imported and then edited into something the parser cannot read.
+REPLY_INTRO_EDITED = "這篇牌譜修改後無法自動讀取，戰績暫時沿用修改前收錄的版本。"
 FORMAT_HINT = "\n".join([
     "格式提示（照牌譜順序，每行一項）：",
     "・每次提議一行：隊伍座號連寫（0 = 10 號），可接投票異常標記：座號加 + 或 -，例如 389 +7、469 57-6+",
@@ -877,7 +905,9 @@ def outcome_from_record(missions: Sequence[str], kill: str, config: str) -> str:
     return ""
 
 
-def build_row(post: Post, game: ParsedGame, header: Sequence[str], imported_at: str) -> list[str]:
+def row_cells(post: Post, game: ParsedGame, signature: str = "") -> dict[str, str]:
+    """Every Discord匯入 cell this script writes for a post, by column name (匯入時間 and 更新時間
+    aside, which say when)."""
     text = game.text()
     cols = derive_columns(text, game.config, game.names)
     cols.update({
@@ -885,9 +915,23 @@ def build_row(post: Post, game: ParsedGame, header: Sequence[str], imported_at: 
         "分類": game.category, "日期時間": game.date, "場次": game.game_no, "結果": game.outcome,
         **{gc.PLAYER_COLUMNS[s]: game.names[s] for s in SEATS},
         "discord_post_id": post.id, "discord_title": post.title,
-        "discord_tags": "、".join(post.tags), "匯入時間": imported_at,
+        "discord_tags": "、".join(post.tags), HASH_COLUMN: signature,
     })
+    return cols
+
+
+def build_row(post: Post, game: ParsedGame, header: Sequence[str], imported_at: str, signature: str = "") -> list[str]:
+    cols = {**row_cells(post, game, signature), "匯入時間": imported_at}
     return [cols.get(h.strip(), "") for h in header]
+
+
+def post_signature(post: Post, content: str) -> str:
+    """What a Discord匯入 row was made from: the title, the tags that change the row or whether it
+    is imported (EXPECTED_TAGS; not 待修正), and the starter message's text. Kept in discord_hash
+    so that an edit of any of them shows up on a later run (plan_recheck). Never printed."""
+    tags = sorted(t for t in post.tags if t in EXPECTED_TAGS)
+    payload = json.dumps([post.title, tags, content], ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 # ---------------------------------------------------------------------------
@@ -957,7 +1001,8 @@ class ImportIndex:
         self.fingerprints: set[str] = set()
         self.names: set[str] = set()
         self.rows = 0
-        for row in rows[1:]:
+        self.rows_of: dict[str, list[int]] = {}  # post id -> indexes into `rows` (sheet row = index + 1)
+        for i, row in enumerate(rows[1:], 1):
             post_id = _cell(row, idx, "discord_post_id").strip()
             gid = _cell(row, idx, "流水號").strip()
             if not post_id and gid.startswith("D") and gid[1:].isdigit():
@@ -967,6 +1012,7 @@ class ImportIndex:
             self.rows += 1
             if post_id:
                 self.post_ids.add(post_id)
+                self.rows_of.setdefault(post_id, []).append(i)
             config = _cell(row, idx, "配置").strip()
             if len(config) == 6:
                 self.fingerprints.add(gc.record_fingerprint(config, _cell(row, idx, "文字記錄")))
@@ -994,6 +1040,7 @@ class SkippedPost:
     reason: str
     line_no: int | None = None
     line_text: str | None = None
+    edited: bool = False  # already in Discord匯入, edited since, and the edit cannot be read
 
 
 @dataclass
@@ -1099,12 +1146,212 @@ def plan_import(
                 report.held_by_limit += 1
                 report.note(post, "new (held back by --limit)")
                 continue
-            report.rows.append(build_row(post, game, header, imported_at))
+            report.rows.append(build_row(post, game, header, imported_at, post_signature(post, content or "")))
             report.note(post, "new")
             report.date_from_post_time += not game.date_from_title
             unknown_names.update(n for n in game.names.values() if n not in sheet.names and n not in imported.names)
     report.new_unknown_names = len(unknown_names)
     return report
+
+
+# ---------------------------------------------------------------------------
+# Corrections: posts already in Discord匯入 that were edited since (re-read within --recheck-days)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class StarterMessage:
+    content: str
+    edited: dt.datetime | None = None  # Discord's edited_timestamp (None: never edited)
+
+
+@dataclass(frozen=True)
+class RowUpdate:
+    row: int  # 1-based row of the Discord匯入 tab
+    values: list[str]
+
+
+@dataclass
+class RecheckReport:
+    """Counts only (public logs), plus the row rewrites to make (never printed)."""
+    days: int = RECHECK_DEFAULT_DAYS
+    candidates: int = 0  # imported posts created within `days` (not tagged 已收錄 / 模擬, game not in 牌譜)
+    checked: int = 0  # their starter messages re-read this run
+    held: int = 0  # over --recheck-limit: re-read on a later run (the posts take turns)
+    unchanged: int = 0  # not edited since the row was written
+    edited_same: int = 0  # edited, but the game in the row stays the same (e.g. a comment)
+    corrected: int = 0  # edited: row(s) rewritten (dry run: would be)
+    rows_updated: int = 0
+    unreadable: int = 0  # edited into something the parser cannot read: row kept as it was
+    gone: int = 0  # starter message deleted or empty: row kept as it was
+    recorded: int = 0  # tagged 已收錄 since: the game is in 牌譜, edited there by hand; left alone
+    in_sheet: int = 0  # its row's game has been copied into 牌譜 since (not tagged): left alone too
+    simulation: int = 0  # tagged 模擬 since: row kept (delete it by hand)
+    updates: list[RowUpdate] = field(default_factory=list)
+
+
+_SYNC_TIME_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$")
+
+
+def _sync_time(value: str) -> dt.datetime | None:
+    """A 匯入時間 / 更新時間 cell (written as 'YYYY-MM-DD HH:MM:SS', Taipei) as a datetime."""
+    m = _SYNC_TIME_RE.match((value or "").strip())
+    if not m:
+        return None
+    try:
+        return dt.datetime(*(int(x) for x in m.groups()), tzinfo=TAIPEI)
+    except ValueError:
+        return None
+
+
+def _tag_set(tags: Iterable[str]) -> frozenset[str]:
+    return frozenset(t for t in tags if t in EXPECTED_TAGS)
+
+
+def edited_since_written(post: Post, message: StarterMessage, signature: str,
+                         row: Sequence[str], idx: Mapping[str, int]) -> bool:
+    """Whether the post may differ from what its Discord匯入 row was made from. With a discord_hash
+    in the row: the signature differs. A row written before that column existed: the starter
+    message was edited after the row's 匯入時間 / 更新時間 (or that time is unreadable and it was
+    edited at all), or the title or a tag that matters (EXPECTED_TAGS) is not what the row says."""
+    stored = _cell(row, idx, HASH_COLUMN).strip()
+    if stored:
+        return stored != signature
+    if _cell(row, idx, "discord_title") != post.title:
+        return True
+    if _tag_set(_cell(row, idx, "discord_tags").split("、")) != _tag_set(post.tags):
+        return True
+    if message.edited is None:
+        return False
+    times = [t for t in (_sync_time(_cell(row, idx, "匯入時間")), _sync_time(_cell(row, idx, UPDATED_COLUMN))) if t]
+    return not times or message.edited > max(times)
+
+
+def corrected_row(header: Sequence[str], row: Sequence[str], cells: Mapping[str, str], stamp: str) -> list[str] | None:
+    """`row` rewritten from a re-read post (`cells`: row_cells), or None when the game in it is the
+    same (only NOT_GAME_COLUMNS would change). Columns this script does not write (anything a person
+    added) and 匯入時間 keep their value; 更新時間 = `stamp`."""
+    def old(i: int) -> str:
+        return (row[i] or "") if i < len(row) else ""
+    names = [h.strip() for h in header]
+    if all(old(i) == cells[h] for i, h in enumerate(names) if h in cells and h not in NOT_GAME_COLUMNS):
+        return None
+    out = []
+    for i, h in enumerate(names):
+        if h == UPDATED_COLUMN:
+            out.append(stamp)
+        elif h in cells and h != "匯入時間":
+            out.append(cells[h])
+        else:
+            out.append(old(i))
+    return out
+
+
+def plan_recheck(
+    posts: Iterable[Post],
+    fetch: Callable[[Post], StarterMessage | None],
+    import_rows: Sequence[Sequence[str]] | None,
+    header: Sequence[str],
+    report: ImportReport,
+    *,
+    now: dt.datetime,
+    days: int = RECHECK_DEFAULT_DAYS,
+    limit: int = RECHECK_DEFAULT_LIMIT,
+    since: dt.date | None = None,
+    stamp: str = "",
+    sheet_rows: Sequence[Sequence[str]] | None = None,
+) -> RecheckReport:
+    """Re-read the posts already in Discord匯入 that were created within `days` and plan a rewrite of
+    the row(s) of each one edited since its row was written (edited_since_written, then parsed again
+    and compared: corrected_row). Pure apart from `fetch`.
+
+    Only the Discord匯入 rows of that post change. Posts tagged 已收錄 are in 牌譜, which people keep
+    by hand: never re-read; nor is a post whose row's game is in `sheet_rows` (牌譜) by now, tagged or
+    not (same fingerprint, or SheetIndex.near_duplicate). Tagged 模擬 since, starter deleted or
+    emptied, or edited into something unreadable: the row stays as it is; an unreadable edit becomes
+    a `fixable` skip in `report` (the --reply / 待修正 rules then apply; edited=True words the reply
+    for it) and leaves report.ok_ids.
+    At most `limit` posts are re-read per run, newest first; when there are more, the starting point
+    moves with the day so that every post is re-read every few days. `days` or `limit` 0: off.
+    """
+    result = RecheckReport(days=days)
+    if not import_rows or days <= 0 or limit <= 0:
+        return result
+    imported = ImportIndex(import_rows)
+    idx = _header_index(import_rows)
+    sheet = SheetIndex(sheet_rows or [])
+
+    def in_sheet(row: Sequence[str]) -> bool:
+        config, text = _cell(row, idx, "配置").strip(), _cell(row, idx, "文字記錄")
+        names = {s: gc.normalize_player_name(_cell(row, idx, gc.PLAYER_COLUMNS[s])) for s in SEATS}
+        return gc.record_fingerprint(config, text) in sheet.fingerprints or sheet.near_duplicate(config, text, names)
+
+    cutoff = now - dt.timedelta(days=days)
+    due: list[Post] = []
+    for post in posts:
+        if post.id not in imported.rows_of or post.created < cutoff:
+            continue
+        if since is not None and post.created.date() < since:
+            continue
+        if TAG_RECORDED in post.tags:
+            result.recorded += 1
+        elif TAG_SIMULATION in post.tags:
+            result.simulation += 1
+        elif any(in_sheet(import_rows[i]) for i in imported.rows_of[post.id]):
+            result.in_sheet += 1
+        else:
+            due.append(post)
+    due.sort(key=lambda p: int(p.id), reverse=True)
+    result.candidates = len(due)
+    if len(due) > limit:
+        start = (now.date().toordinal() * limit) % len(due)
+        due = (due[start:] + due[:start])[:limit]
+        result.held = result.candidates - limit
+    for post in due:
+        message = fetch(post)
+        result.checked += 1
+        if message is None or not message.content.strip():
+            result.gone += 1
+            continue
+        signature = post_signature(post, message.content)
+        rows = imported.rows_of[post.id]
+        if not any(edited_since_written(post, message, signature, import_rows[i], idx) for i in rows):
+            result.unchanged += 1
+            continue
+        try:
+            game = parse_post(post, message.content)
+        except SkipPost as exc:
+            result.unreadable += 1
+            report.ok_ids.discard(post.id)
+            report.skips.append(SkippedPost(post, exc.reason, exc.line_no, exc.line_text, edited=True))
+            continue
+        except Exception:  # never let one odd post (or its text, in a traceback) through
+            result.unreadable += 1
+            continue
+        cells = row_cells(post, game, signature)
+        updates = [RowUpdate(i + 1, new) for i in rows
+                   if (new := corrected_row(header, import_rows[i], cells, stamp)) is not None]
+        if updates:
+            result.corrected += 1
+            result.rows_updated += len(updates)
+            result.updates += updates
+        else:
+            result.edited_same += 1
+    return result
+
+
+def recheck_lines(recheck: RecheckReport, *, write: bool) -> list[str]:
+    """Summary of the correction pass: counts only (public logs)."""
+    done = "已更新" if write else "dry run，會更新"
+    lines = [
+        f"- 已收進 {gc.DISCORD_IMPORT_TAB} 的貼文，{recheck.days} 天內發的重新檢查修改：{recheck.candidates} 篇，"
+        f"本次重讀 {recheck.checked}" + (f"（超過 --recheck-limit，{recheck.held} 篇之後輪流再讀）" if recheck.held else ""),
+        f"  - 有修改、{done}：{recheck.corrected} 篇（{recheck.rows_updated} 列）；有修改但這局的資料沒變：{recheck.edited_same}；"
+        f"沒有修改：{recheck.unchanged}",
+        f"  - 改了之後讀不懂（保留原本那列，貼文列入待修正）：{recheck.unreadable}；起始訊息被刪除或清空（保留原本那列）：{recheck.gone}",
+        f"  - 後來標「{TAG_RECORDED}」或這局已抄進 {gc.GAME_LOG_TAB}（由人工修正，不動）：{recheck.recorded + recheck.in_sheet}；"
+        f"後來標「{TAG_SIMULATION}」（保留原本那列，請人工刪除）：{recheck.simulation}",
+    ]
+    return lines
 
 
 # ---------------------------------------------------------------------------
@@ -1153,7 +1400,8 @@ def reply_text(skip: SkippedPost) -> str:
         where = f"第 {skip.line_no} 行「{escaped}」：{why}"
     else:
         where = f"原因：{why}"
-    return "\n".join([REPLY_MARKER, REPLY_INTRO, where, "", FORMAT_HINT, "", REPLY_FOOTER])
+    intro = REPLY_INTRO_EDITED if skip.edited else REPLY_INTRO
+    return "\n".join([REPLY_MARKER, intro, where, "", FORMAT_HINT, "", REPLY_FOOTER])
 
 
 def reply_to_failures(client: Any, candidates: Sequence[SkippedPost], *, limit: int, dry_run: bool,
@@ -1957,13 +2205,29 @@ class DiscordClient:
         return self.patch(f"/channels/{thread_id}", "/channels/{thread}", {"archived": True},
                           allow_404=True) is not None
 
-    def starter_content(self, thread_id: str) -> str | None:
-        """The text of a post's starter message, None if it was deleted."""
+    def starter_message(self, thread_id: str) -> StarterMessage | None:
+        """A post's starter message (its text and when it was last edited), None if it was deleted."""
         message = self.get(f"/channels/{thread_id}/messages/{thread_id}",
                            "/channels/{thread}/messages/{thread}", allow_404=True)
         if message is None:
             return None
-        return message.get("content") or ""
+        return StarterMessage(message.get("content") or "", discord_time(message.get("edited_timestamp")))
+
+    def starter_content(self, thread_id: str) -> str | None:
+        """The text of a post's starter message, None if it was deleted."""
+        message = self.starter_message(thread_id)
+        return None if message is None else message.content
+
+
+def discord_time(value: Any) -> dt.datetime | None:
+    """An ISO 8601 timestamp from Discord (e.g. edited_timestamp), None if absent or unreadable."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        when = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=dt.timezone.utc)
 
 
 def _json_or_empty(exc: urllib.error.HTTPError) -> dict:
@@ -2032,6 +2296,35 @@ def append_import_rows(sh: Any, header: Sequence[str], rows: Sequence[Sequence[s
                    insert_data_option="INSERT_ROWS", table_range="A1")
 
 
+def column_letters(n: int) -> str:
+    """A1-notation column of the 1-based column `n`: 1 -> A, 26 -> Z, 27 -> AA."""
+    out = ""
+    while n > 0:
+        n, r = divmod(n - 1, 26)
+        out = chr(65 + r) + out
+    return out
+
+
+def extend_import_header(sh: Any, width: int, additions: Sequence[str]) -> None:
+    """Write `additions` (LATE_COLUMNS) into the Discord匯入 header row right after its `width`
+    columns; the grid gets more columns first when it is too narrow. Only header cells change."""
+    ws = sh.worksheet(gc.DISCORD_IMPORT_TAB)
+    needed = width + len(additions)
+    cols = getattr(ws, "col_count", None)
+    if isinstance(cols, int) and cols < needed:
+        ws.add_cols(needed - cols)
+    ws.update(values=[list(additions)], range_name=f"{column_letters(width + 1)}1", raw=True)
+
+
+def update_import_rows(sh: Any, width: int, updates: Sequence[RowUpdate]) -> None:
+    """Rewrite Discord匯入 rows in place, all in one request, as plain text (RAW, like the append).
+    Only the rows of edited posts; cells right of `width` are not touched."""
+    ws = sh.worksheet(gc.DISCORD_IMPORT_TAB)
+    last = column_letters(width)
+    ws.batch_update([{"range": f"A{u.row}:{last}{u.row}", "values": [list(u.values)]} for u in updates],
+                    value_input_option="RAW")
+
+
 def google_error(exc: BaseException, sheet_id: str, email: str | None, write: bool) -> gc.FatalError | None:
     kind = gc.classify_google_error(exc)
     if kind is None:
@@ -2095,6 +2388,10 @@ def run(
         raise err from None
     tab_exists = import_rows is not None
     header = import_header(sheet_rows, import_rows)
+    # An existing tab written before discord_hash / 更新時間 existed gets them on the first write.
+    late_columns = [c for c in LATE_COLUMNS if c not in header] if import_rows else []
+    old_width = len(header)
+    header = header + late_columns
     print(f"{gc.GAME_LOG_TAB}: {max(len(sheet_rows) - 1, 0)} rows; {gc.DISCORD_IMPORT_TAB}: "
           + (f"{max(len(import_rows) - 1, 0)} rows" if tab_exists else "tab not created yet"))
 
@@ -2115,13 +2412,21 @@ def run(
         stamp = now_taipei.strftime("%Y-%m-%d %H:%M:%S")
         report = plan_import(posts, fetch, sheet_rows, import_rows, header,
                              since=args.since, limit=args.limit, imported_at=stamp)
+        recheck = plan_recheck(posts, lambda post: client.starter_message(post.id), import_rows, header, report,
+                               now=now_taipei, days=args.recheck_days, limit=args.recheck_limit, since=args.since,
+                               stamp=stamp, sheet_rows=sheet_rows)
     except DiscordError as exc:
         raise gc.FatalError(f"{exc} Nothing was written.", EXIT_DISCORD, "Discord API error") from None
 
     written = 0
-    if write and report.rows:
+    if write and (report.rows or recheck.updates):
         try:
-            append_import_rows(sh, header, report.rows, tab_exists, has_header=bool(import_rows))
+            if late_columns:
+                extend_import_header(sh, old_width, late_columns)
+            if recheck.updates:  # before the append: rows inserted below never move these
+                update_import_rows(sh, len(header), recheck.updates)
+            if report.rows:
+                append_import_rows(sh, header, report.rows, tab_exists, has_header=bool(import_rows))
         except Exception as exc:
             err = google_error(exc, sheet_id, email, write=True)
             if err is None:
@@ -2129,9 +2434,10 @@ def run(
                 # the public log. Re-running is safe: rows that did land are skipped by post id.
                 status = getattr(getattr(exc, "response", None), "status_code", None)
                 err = gc.FatalError(
-                    f"Appending to {gc.DISCORD_IMPORT_TAB} failed ({type(exc).__name__}"
+                    f"Writing to {gc.DISCORD_IMPORT_TAB} failed ({type(exc).__name__}"
                     + (f", HTTP {status}" if status else "") + "); details withheld because the log is "
-                    "public. Re-run (posts already written are skipped), or run locally to see the error.",
+                    "public. Re-run (posts already written are skipped, corrections are made again), or run "
+                    "locally to see the error.",
                     gc.EXIT_GOOGLE_ACCESS, "Google Sheets write failed",
                 )
             raise err from None
@@ -2145,6 +2451,7 @@ def run(
     reply_gate = [t for t in REPLY_GATE_TAGS if t in missing_tags] if (args.reply or args.fix_list) else []
     tag_on = args.reply and not args.no_tag
     lines = report_lines(report, write=write, written=written, tab_exists=tab_exists, missing_tags=missing_tags)
+    lines += recheck_lines(recheck, write=write)
     gate_tags = "」「".join(reply_gate)
     if reply_gate and args.reply:
         lines.append(f"- 格式回覆（--reply）：論壇沒有「{gate_tags}」標籤，無法判斷哪些貼文該回覆，本次未回覆、未計數")
@@ -2317,6 +2624,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--tag-locked", action="store_true",
                         help=f"also add {TAG_FIX} to locked posts (skipped by default; it is removed from "
                              "locked posts either way)")
+    parser.add_argument("--recheck-days", type=_positive, default=RECHECK_DEFAULT_DAYS, metavar="N",
+                        help=f"re-read the posts already in {gc.DISCORD_IMPORT_TAB} created in the last N days and "
+                             "rewrite the row of each one edited since it was written (default "
+                             f"{RECHECK_DEFAULT_DAYS}; 0 = off). Posts tagged {TAG_RECORDED} are never touched")
+    parser.add_argument("--recheck-limit", type=_positive, default=RECHECK_DEFAULT_LIMIT, metavar="N",
+                        help=f"re-read at most N of them per run, newest first, taking turns when there are more "
+                             f"(default {RECHECK_DEFAULT_LIMIT}; 0 = off)")
     parser.add_argument("--fix-list", action="store_true",
                         help=f"post this week's list of posts to fix in the {FIX_CHANNEL_NAME} channel (or "
                              f"{ENV_FIX_CHANNEL}); once per ISO week. With --dry-run: count only")
