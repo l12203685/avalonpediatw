@@ -50,7 +50,10 @@ export const useGameStore = create<GameStore>((set) => ({
   socketStatus: 'disconnected',
   isSpectator: false,
 
-  setGameState: (state: GameState) => set({ gameState: state }),
+  // Leaving the stats page forgets the player it was opened on (statsFocus), so the next
+  // visit from the lobby starts on 排行 again instead of that player's radar.
+  setGameState: (state: GameState) =>
+    set(state === 'analytics' || state === 'analysis' ? { gameState: state } : { gameState: state, statsFocus: null }),
   navigateToProfile: (userId) => set({ gameState: 'profile', profileUserId: userId }),
   openPlayerStats: (name): void => set((s) => ({
     gameState: 'analytics',
