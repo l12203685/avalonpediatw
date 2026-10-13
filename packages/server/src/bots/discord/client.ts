@@ -7,9 +7,7 @@ import {
   CommandInteraction,
   ChatInputCommandInteraction,
   ActivityType,
-  InteractionContextType,
   Message,
-  PermissionFlagsBits,
 } from 'discord.js';
 import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS } from './config';
 import {
@@ -25,11 +23,14 @@ import { getChatMirror } from '../ChatMirror';
 import { FEEDBACK_CONTENT_MAX_CHARS } from '../feedback/config';
 import { getFeedbackService } from '../feedback/service';
 import { handleFeedbackCommand } from '../feedback/discordCommand';
-import { handleCommunityDigestCommand } from '../digest/discordCommand';
 
 /**
  * Slash command definitions registered by `registerCommands()`. Exported so
  * tests can run discord.js' builder validation (names, lengths) offline.
+ *
+ * This list is the WHOLE command set: registerCommands() PUTs it (bulk
+ * overwrite) on every boot, so a command removed here — e.g. /社群週報 on
+ * 2026-10-13 — is deleted from Discord by the next deploy.
  */
 export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>> {
   return [
@@ -91,14 +92,6 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
           .setRequired(true)
           .setMaxLength(FEEDBACK_CONTENT_MAX_CHARS)
       ),
-
-    // 2026-10-13 weekly community digest (bots/digest) — admins only: hidden
-    // from members without Manage Server, server channels only, not in /help.
-    new SlashCommandBuilder()
-      .setName(COMMANDS.COMMUNITY_DIGEST)
-      .setDescription('（管理者）立刻彙整最近 7 天的社群聊天，貼到管理者頻道 / Community digest now')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-      .setContexts(InteractionContextType.Guild),
   ];
 }
 
@@ -261,10 +254,6 @@ export class DiscordBotClient {
 
         case COMMANDS.FEEDBACK:
           await handleFeedbackCommand(interaction);
-          break;
-
-        case COMMANDS.COMMUNITY_DIGEST:
-          await handleCommunityDigestCommand(interaction);
           break;
 
         default: {

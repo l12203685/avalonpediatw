@@ -32,7 +32,7 @@ SECRETS = {
 # turns every later true/false in the job log into ***).
 PLAIN = {"NODE_ENV": "production", "FEATURE_FLAG": "true", "PORT": "3000", "LOG_LEVEL": "info"}
 REJECTED_VALUE = "reject-me-9876543210"  # the fake API refuses it and echoes it in the error body
-# Community digest secrets (2026-10-13): fake values shaped like the real ones.
+# Chat-export secret (2026-10-13) and the retired paid-digest key: fake values shaped like the real ones.
 ANTHROPIC_KEY = "sk-ant-api03-" + "Zx9" * 20
 SA_JSON = json.dumps({
     "type": "service_account",
@@ -281,30 +281,35 @@ class RenderOpsTest(unittest.TestCase):
         self.assert_plain_values_not_masked(out)
         self.assert_no_values_leak(out, list(SECRETS.values()) + ["discord-gh-token-0123456789"])
 
-    def test_status_reports_optional_digest_secrets_as_present_or_absent(self) -> None:
-        code, out = self.run_quiet(ops.status, self.api, {"ANTHROPIC_API_KEY": ANTHROPIC_KEY})
+    def test_status_reports_the_optional_chat_export_secret_as_present_or_absent(self) -> None:
+        code, out = self.run_quiet(ops.status, self.api, {"GOOGLE_SERVICE_ACCOUNT_JSON": SA_JSON})
         self.assertEqual(code, 0)
-        self.assertIn("ANTHROPIC_API_KEY (optional, community digest): absent on Render, present in GitHub secrets "
-                      "(ANTHROPIC_API_KEY)", out)
-        self.assertIn("GOOGLE_SERVICE_ACCOUNT_JSON (optional, community digest): absent on Render, absent in GitHub "
+        self.assertIn("GOOGLE_SERVICE_ACCOUNT_JSON (optional, chat export): absent on Render, present in GitHub "
                       "secrets (AVALON_STATS_SHEETS_CREDENTIALS_JSON or GOOGLE_SHEETS_CREDENTIALS_JSON)", out)
-        self.assert_no_values_leak(out, [ANTHROPIC_KEY])
+        self.assertNotIn("ANTHROPIC_API_KEY (optional", out)  # the paid digest is gone (2026-10-13)
+        self.assert_no_values_leak(out, SA_SECRET_LINES)
         self.assertTrue(all(m == "GET" for m, _ in self.fake.calls))
 
-    def test_apply_copies_optional_digest_secrets_when_present(self) -> None:
-        gh = {"ANTHROPIC_API_KEY": ANTHROPIC_KEY, "GOOGLE_SERVICE_ACCOUNT_JSON": SA_JSON}
+    def test_status_flags_a_leftover_anthropic_key_as_retired(self) -> None:
+        self.fake.env["ANTHROPIC_API_KEY"] = ANTHROPIC_KEY
+        code, out = self.run_quiet(ops.status, self.api, {})
+        self.assertEqual(code, 0)
+        self.assertIn("ANTHROPIC_API_KEY: still on Render (retired", out)
+        self.assert_no_values_leak(out, [ANTHROPIC_KEY])
+
+    def test_apply_copies_the_service_account_json_and_never_the_anthropic_key(self) -> None:
+        gh = {"GOOGLE_SERVICE_ACCOUNT_JSON": SA_JSON, "ANTHROPIC_API_KEY": ANTHROPIC_KEY}
         code, out = self.run_quiet(ops.apply, self.api, gh, rotate=False, suspend_duplicate=False)
         self.assertEqual(code, 0, out)
-        self.assertEqual(self.fake.env["ANTHROPIC_API_KEY"], ANTHROPIC_KEY)
         self.assertEqual(self.fake.env["GOOGLE_SERVICE_ACCOUNT_JSON"], SA_JSON)  # multi-line JSON kept as is
-        self.assertIn("ANTHROPIC_API_KEY copied from GitHub secrets", out)
+        self.assertNotIn("ANTHROPIC_API_KEY", self.fake.env)
         self.assertIn("GOOGLE_SERVICE_ACCOUNT_JSON copied from GitHub secrets", out)
+        self.assertNotIn("ANTHROPIC_API_KEY copied", out)
         masked = [line.removeprefix("::add-mask::") for line in out.splitlines() if line.startswith("::add-mask::")]
-        self.assertIn(ANTHROPIC_KEY, masked)
         for line in SA_SECRET_LINES:
             self.assertIn(line, masked)
         self.assertNotIn("{", masked)  # punctuation-only lines of the JSON are not masked
-        self.assert_no_values_leak(out, [ANTHROPIC_KEY] + SA_SECRET_LINES)
+        self.assert_no_values_leak(out, SA_SECRET_LINES)
         self.assert_plain_values_not_masked(out)
         # Idempotent: the second run changes nothing.
         self.fake.calls.clear()
@@ -312,14 +317,20 @@ class RenderOpsTest(unittest.TestCase):
         self.assertIn("nothing to change", out)
         self.assertFalse(any(m in ("PUT", "POST", "DELETE") for m, _ in self.fake.calls))
 
-    def test_apply_without_optional_digest_secrets_leaves_render_alone(self) -> None:
+    def test_apply_removes_a_leftover_anthropic_key_from_render(self) -> None:
         self.fake.env["ANTHROPIC_API_KEY"] = "sk-ant-existing-0000000000000000"
-        code, out = self.run_quiet(ops.apply, self.api, {"ANTHROPIC_API_KEY": "", "GOOGLE_SERVICE_ACCOUNT_JSON": ""},
+        code, out = self.run_quiet(ops.apply, self.api, {}, rotate=False, suspend_duplicate=False)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("ANTHROPIC_API_KEY", self.fake.env)
+        self.assertIn("ANTHROPIC_API_KEY removed (retired)", out)
+        self.assert_no_values_leak(out, ["sk-ant-existing-0000000000000000"])
+
+    def test_apply_without_the_service_account_json_leaves_render_alone(self) -> None:
+        code, out = self.run_quiet(ops.apply, self.api, {"GOOGLE_SERVICE_ACCOUNT_JSON": ""},
                                    rotate=False, suspend_duplicate=False)
         self.assertEqual(code, 0, out)
         puts = [p for m, p in self.fake.calls if m == "PUT"]
-        self.assertFalse(any(p.endswith("/ANTHROPIC_API_KEY") or p.endswith("/GOOGLE_SERVICE_ACCOUNT_JSON") for p in puts))
-        self.assertEqual(self.fake.env["ANTHROPIC_API_KEY"], "sk-ant-existing-0000000000000000")  # never deleted
+        self.assertFalse(any(p.endswith("/GOOGLE_SERVICE_ACCOUNT_JSON") for p in puts))
         self.assertNotIn("GOOGLE_SERVICE_ACCOUNT_JSON", self.fake.env)
 
     def test_service_account_json_prefers_avalon_stats_secret_then_google_sheets(self) -> None:
@@ -334,25 +345,23 @@ class RenderOpsTest(unittest.TestCase):
                 with contextlib.redirect_stdout(buf):
                     found = ops.github_secrets(environ)
                 self.assertEqual(found["GOOGLE_SERVICE_ACCOUNT_JSON"], expected)
-                self.assertEqual(found["ANTHROPIC_API_KEY"], "")
+                self.assertNotIn("ANTHROPIC_API_KEY", found)
                 masked = [line.removeprefix("::add-mask::") for line in buf.getvalue().splitlines()]
                 for value in environ.values():  # every secret line of every source is masked, used or not
                     for line in value.splitlines():
                         if "private_key" in line:
                             self.assertIn(line, masked)
 
-    def test_main_apply_copies_digest_secrets_from_the_workflow_env(self) -> None:
+    def test_main_apply_copies_the_service_account_json_from_the_workflow_env(self) -> None:
         buf = io.StringIO()
         env = {"RENDER_API_KEY": "rnd_test", "RENDER_API_BASE": self.server.base,
-               "GH_ANTHROPIC_API_KEY": ANTHROPIC_KEY, "GH_AVALON_STATS_SHEETS_CREDENTIALS_JSON": "",
-               "GH_GOOGLE_SHEETS_CREDENTIALS_JSON": SA_JSON}
+               "GH_AVALON_STATS_SHEETS_CREDENTIALS_JSON": "", "GH_GOOGLE_SHEETS_CREDENTIALS_JSON": SA_JSON}
         with contextlib.redirect_stdout(buf), unittest.mock.patch.dict("os.environ", env):
             self.assertEqual(ops.main(["apply", "--no-wait"]), 0)
         out = buf.getvalue()
-        self.assertEqual(self.fake.env["ANTHROPIC_API_KEY"], ANTHROPIC_KEY)
         self.assertEqual(self.fake.env["GOOGLE_SERVICE_ACCOUNT_JSON"], SA_JSON)
-        self.assertIn("::add-mask::" + ANTHROPIC_KEY, out)
-        self.assert_no_values_leak(out, [ANTHROPIC_KEY] + SA_SECRET_LINES)
+        self.assertNotIn("ANTHROPIC_API_KEY", self.fake.env)
+        self.assert_no_values_leak(out, SA_SECRET_LINES)
 
     def test_main_without_key_exits_2(self) -> None:
         buf = io.StringIO()

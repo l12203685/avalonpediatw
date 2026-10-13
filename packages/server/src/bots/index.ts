@@ -37,9 +37,9 @@ import {
   initializeFeedback,
 } from './feedback';
 import type { Client } from 'discord.js';
-import { createDiscordDigestPort } from './digest/discordPort';
-import { CommunityDigestStatus, communityDigestStatus, initializeCommunityDigest } from './digest/service';
-import { defaultDigestLogger, readDigestConfig } from './digest/config';
+import { createDiscordChatExportPort } from './chatExport/discordPort';
+import { ChatExportStatus, chatExportStatus, initializeChatExport } from './chatExport/service';
+import { defaultChatExportLogger, readChatExportConfig } from './chatExport/config';
 
 /** Last initialisation error per bot — surfaced on /api/bots/status. */
 const initErrors: { discord: string | null; line: string | null } = {
@@ -101,10 +101,10 @@ export async function initializeBots(): Promise<void> {
   // counts + /意見. Counting works without Discord; forwarding needs it.
   initializeFeedback({ discord: buildFeedbackForwarder() });
 
-  // Weekly community digest (2026-10-13, docs/COMMUNITY_FEEDBACK.md): Monday
-  // 09:00 +08 (catch-up until 12:00) summary of the past week's chat to the
-  // private admin channel and the private sheet. Off unless ANTHROPIC_API_KEY is set.
-  startCommunityDigest();
+  // Weekly chat-log export (2026-10-13, docs/COMMUNITY_FEEDBACK.md): Monday
+  // 09:00 +08 (catch-up until 12:00) the past week's public chat, speakers
+  // pseudonymized, appended to the private sheet the AI manager reads. Free.
+  startChatExport();
 }
 
 /** The discord.js client once the gateway is ready, else null (re-read on every call). */
@@ -117,32 +117,33 @@ function readyDiscordClient(): Client | null {
 
 /**
  * Discord sender for forwarded /意見 texts: FEEDBACK_DISCORD_CHANNEL_ID, else
- * the private channel named 「管理者信箱」 (2026-10-13; used only when no
- * ordinary member can view it). Lazy like buildDiscordAdapter(): readiness
- * is re-read on every call. The payload carries `allowedMentions: { parse: [] }`.
- * Exported for the wiring test.
+ * the owner's admin channel 「大劍管理員」 (2026-10-13, feedback/config.ts).
+ * Lazy like buildDiscordAdapter(): readiness is re-read on every call. The
+ * payload carries `allowedMentions: { parse: [] }`. Exported for the wiring test.
  */
 export function buildFeedbackForwarder(): FeedbackDiscordForwarder {
-  return createFeedbackDiscordForwarder(readyDiscordClient, { guildId: (process.env.DISCORD_GUILD_ID || '').trim() });
+  return createFeedbackDiscordForwarder(readyDiscordClient);
 }
 
-// ─── Weekly community digest (2026-10-13) ────────────────────────────────
+// ─── Weekly chat-log export (2026-10-13) ─────────────────────────────────
 
 /**
- * Arm the Monday 09:00 +08 community digest (bots/digest). The service
- * always exists (so /社群週報 can answer "disabled"); the timer only runs
- * when the feature is enabled. Idempotent.
+ * Arm the Monday 09:00 +08 chat-log export (bots/chatExport). The service
+ * always exists (for the status page); the timer only runs when the
+ * feature is enabled (CHAT_EXPORT_ENABLED, default on). Idempotent.
  */
-export function startCommunityDigest(): void {
-  const service = initializeCommunityDigest({ discord: createDiscordDigestPort(readyDiscordClient) });
-  const cfg = readDigestConfig();
+export function startChatExport(): void {
+  const service = initializeChatExport({ discord: createDiscordChatExportPort(readyDiscordClient) });
+  const cfg = readChatExportConfig();
   if (!cfg.enabled) {
-    defaultDigestLogger.info('disabled (set ANTHROPIC_API_KEY, or COMMUNITY_DIGEST_ENABLED=true)');
+    defaultChatExportLogger.info('disabled (CHAT_EXPORT_ENABLED=false)');
     return;
   }
   if (service.isRunning()) return;
   service.start();
-  defaultDigestLogger.info('armed (Mondays from 09:00 +08, catch-up until 12:00)');
+  defaultChatExportLogger.info(
+    `armed (Mondays from 09:00 +08, catch-up until 12:00); sheet ${cfg.sheetId && cfg.sheetCredentialsUsable ? 'configured' : 'NOT configured (GOOGLE_SERVICE_ACCOUNT_JSON missing or invalid, or CHAT_EXPORT_SHEET_ID=off)'}`,
+  );
 }
 
 // ─── ChatMirror wiring (#82) ──────────────────────────────────────────────
@@ -361,10 +362,10 @@ export interface BotStatus {
    */
   feedback: FeedbackSnapshot & { commandEnabled: boolean };
   /**
-   * Weekly community digest (bots/digest): four booleans and the last run's
+   * Weekly chat-log export (bots/chatExport): two booleans and the last run's
    * week, time, counts and outcome code — never text, names or channel names.
    */
-  communityDigest: CommunityDigestStatus;
+  chatExport: ChatExportStatus;
   discord: {
     enabled: boolean;
     ready: boolean;
@@ -403,7 +404,7 @@ export function buildBotStatus(): BotStatus {
     keepAlive: getKeepAliveState(),
     statsDigest: statsDigest?.getState() ?? { running: false, lastPostedWeek: {} },
     feedback: { commandEnabled: FEEDBACK_CONFIG.commandEnabled, ...getFeedbackService().snapshot() },
-    communityDigest: communityDigestStatus(),
+    chatExport: chatExportStatus(),
     discord: {
       enabled: !!process.env.DISCORD_BOT_TOKEN,
       ready: discordBot?.isClientReady() ?? false,

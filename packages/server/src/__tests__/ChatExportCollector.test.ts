@@ -1,10 +1,11 @@
 /**
- * Weekly community digest (2026-10-13) — Discord collection with fakes:
+ * Weekly chat-log export (2026-10-13) — Discord collection with fakes:
  *
  *   selectSourceChannels — public text / announcement channels the bot can
  *     read; private, forum and unreadable ones skipped; the LINE↔Discord
- *     sync channel always included; exclude list + admin channel left out;
- *     COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS overrides the default list; a
+ *     sync channel always included; exclude list + the /意見 admin channel
+ *     left out (even if it were public); CHAT_EXPORT_SOURCE_CHANNEL_IDS
+ *     (or the old COMMUNITY_DIGEST_ name) overrides the default list; a
  *     server with no @everyone-visible channel is reported (publicChannelsFound 0)
  *   fetchWindow          — pages backwards with `before`, keeps [start, end),
  *     stops at the window start, reports a page-cap truncation
@@ -13,9 +14,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { ChannelType, Collection, PermissionFlagsBits, SnowflakeUtil } from 'discord.js';
 import type { Client, Message } from 'discord.js';
 
-import { fetchWindow, selectSourceChannels, toRawMessage, type MessagePager } from '../bots/digest/collector';
-import { readDigestConfig } from '../bots/digest/config';
-import { scheduledWindow } from '../bots/digest/window';
+import { fetchWindow, selectSourceChannels, toRawMessage, type MessagePager } from '../bots/chatExport/collector';
+import { readChatExportConfig } from '../bots/chatExport/config';
+import { scheduledWindow } from '../bots/chatExport/window';
+import { DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID } from '../bots/feedback/config';
 
 const EVERYONE = { id: 'everyone' };
 const ME = { id: 'me' };
@@ -73,33 +75,46 @@ describe('selectSourceChannels', () => {
     channel(g, '100000000000000004', { type: ChannelType.GuildForum });
     channel(g, '100000000000000005', { botRead: false });
     channel(g, '100000000000000006'); // excluded by env
-    channel(g, '100000000000000007', { publicView: false }); // the admin channel (private anyway)
+    channel(g, '100000000000000007'); // excluded by the caller
+    channel(g, DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID); // the /意見 admin channel: never exported, even if public
     channel(g, MIRROR, { publicView: false }); // sync channel: always read, even when not public
-    const cfg = readDigestConfig({ LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR, COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS: '100000000000000006' });
+    const cfg = readChatExportConfig({ LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR, CHAT_EXPORT_EXCLUDE_CHANNEL_IDS: '100000000000000006' });
+    expect(cfg.excludeChannelIds).toEqual(['100000000000000006', DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID]);
     const picked = await selectSourceChannels(client([g]), cfg, ['100000000000000007']);
     expect(picked.channels.map((c) => c.id).sort()).toEqual(['100000000000000001', '100000000000000002', MIRROR].sort());
     expect(picked.publicChannelsFound).toBe(2);
+
+    // A FEEDBACK_DISCORD_CHANNEL_ID override is the channel left out instead; the old exclude name still works.
+    const cfg2 = readChatExportConfig({
+      LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR,
+      FEEDBACK_DISCORD_CHANNEL_ID: '100000000000000002',
+      COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS: '100000000000000006',
+    });
+    const picked2 = await selectSourceChannels(client([g]), cfg2, ['100000000000000007']);
+    expect(picked2.channels.map((c) => c.id).sort()).toEqual(['100000000000000001', DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID, MIRROR].sort());
   });
 
   it('no channel visible to @everyone → only the sync channel, reported as publicChannelsFound 0', async () => {
     const g = guild();
     channel(g, '300000000000000001', { publicView: false }); // opened to a member role only
     channel(g, MIRROR, { publicView: false });
-    const cfg = readDigestConfig({ LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR });
+    const cfg = readChatExportConfig({ LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR });
     const picked = await selectSourceChannels(client([g]), cfg);
     expect(picked.channels.map((c) => c.id)).toEqual([MIRROR]);
     expect(picked.publicChannelsFound).toBe(0);
   });
 
-  it('COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS replaces the default list (the sync channel is still added)', async () => {
+  it('CHAT_EXPORT_SOURCE_CHANNEL_IDS replaces the default list (the sync channel is still added); the old name is read too', async () => {
     const g = guild();
     channel(g, '200000000000000001');
     channel(g, '200000000000000002', { publicView: false });
     channel(g, MIRROR);
-    const cfg = readDigestConfig({ LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR, COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS: '200000000000000002,999999999999999999' });
-    const picked = await selectSourceChannels(client([g]), cfg);
-    expect(picked.channels.map((c) => c.id).sort()).toEqual(['200000000000000002', MIRROR].sort());
-    expect(picked.publicChannelsFound).toBeNull();
+    for (const name of ['CHAT_EXPORT_SOURCE_CHANNEL_IDS', 'COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS']) {
+      const cfg = readChatExportConfig({ LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR, [name]: '200000000000000002,999999999999999999' });
+      const picked = await selectSourceChannels(client([g]), cfg);
+      expect(picked.channels.map((c) => c.id).sort()).toEqual(['200000000000000002', MIRROR].sort());
+      expect(picked.publicChannelsFound).toBeNull();
+    }
   });
 });
 

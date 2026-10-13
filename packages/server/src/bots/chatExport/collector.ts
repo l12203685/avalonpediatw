@@ -1,23 +1,23 @@
 /**
- * Read one window of Discord history for the weekly community digest.
+ * Read one week of Discord history for the weekly chat-log export.
  *
  * Sources (default): every guild text / announcement channel that @everyone
  * can view and the bot can read the history of, plus — always — the LINE↔
  * Discord sync channel (LOBBY_MIRROR_DISCORD_CHANNEL_ID), where the bot
- * relays the LINE group and the website lobby. Forum channels and threads
- * are skipped. COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS replaces the default list
- * (the sync channel is still added); COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS and
- * the admin channel are always left out.
+ * relays the LINE group and the website lobby. Forum channels (牌譜紀錄與覆盤) and threads
+ * are skipped. CHAT_EXPORT_SOURCE_CHANNEL_IDS replaces the default list
+ * (the sync channel is still added); CHAT_EXPORT_EXCLUDE_CHANNEL_IDS and the
+ * /意見 admin channel are always left out (config.ts).
  *
- * Messages stay in this process: they are reduced to DigestRawMessage and
- * handed to the transcript builder. Nothing here logs text or names.
+ * Messages are reduced to RawChatMessage and handed to the row builder
+ * (rows.ts). Nothing here logs text or names.
  */
 
 import { ChannelType, PermissionFlagsBits, SnowflakeUtil } from 'discord.js';
 import type { Channel, Client, Collection, GuildBasedChannel, Message, NewsChannel, TextChannel } from 'discord.js';
-import type { CommunityDigestConfig } from './config';
-import type { DigestChannel, DigestRawMessage } from './transcript';
-import type { DigestWindow } from './window';
+import type { ChatExportConfig } from './config';
+import type { ChatChannel, RawChatMessage } from './rows';
+import type { ExportWindow } from './window';
 
 /** Pages of 100 per channel before giving up on the oldest part (reported, never silent). */
 export const MAX_PAGES_PER_CHANNEL = 200;
@@ -25,15 +25,15 @@ export const MAX_PAGES_PER_CHANNEL = 200;
 type ReadableChannel = TextChannel | NewsChannel;
 
 export interface CollectResult {
-  messages: DigestRawMessage[];
-  channels: DigestChannel[];
+  messages: RawChatMessage[];
+  channels: ChatChannel[];
   /** Channels whose history hit MAX_PAGES_PER_CHANNEL before reaching the window start. */
   truncatedChannels: number;
   /** Channels that could not be read (permissions changed, deleted…). */
   failedChannels: number;
   /**
    * Channels found by the default rule (visible to @everyone, bot can read),
-   * or null when COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS sets the list. 0 means
+   * or null when CHAT_EXPORT_SOURCE_CHANNEL_IDS sets the list. 0 means
    * only the sync channel is read — e.g. a server that hides everything from
    * @everyone and opens channels to a member role; reported, never silent.
    */
@@ -74,7 +74,7 @@ async function fetchChannel(client: Client, id: string): Promise<ReadableChannel
 /** Decide which channels to read. */
 export async function selectSourceChannels(
   client: Client,
-  cfg: CommunityDigestConfig,
+  cfg: ChatExportConfig,
   excludeIds: string[] = [],
 ): Promise<SourceSelection> {
   const exclude = new Set([...cfg.excludeChannelIds, ...excludeIds].filter(Boolean));
@@ -106,7 +106,7 @@ export async function selectSourceChannels(
   return { channels: [...picked.values()].filter((ch) => !exclude.has(ch.id)), publicChannelsFound };
 }
 
-export function toRawMessage(m: Message, selfId: string): DigestRawMessage {
+export function toRawMessage(m: Message, selfId: string): RawChatMessage {
   return {
     id: m.id,
     channelId: m.channelId,
@@ -132,11 +132,11 @@ export interface MessagePager {
  */
 export async function fetchWindow(
   pager: MessagePager,
-  window: DigestWindow,
+  window: ExportWindow,
   selfId: string,
   maxPages: number = MAX_PAGES_PER_CHANNEL,
-): Promise<{ messages: DigestRawMessage[]; truncated: boolean }> {
-  const out: DigestRawMessage[] = [];
+): Promise<{ messages: RawChatMessage[]; truncated: boolean }> {
+  const out: RawChatMessage[] = [];
   let before: string | undefined = SnowflakeUtil.generate({ timestamp: window.end }).toString();
   for (let page = 0; page < maxPages; page += 1) {
     const batch = await pager.fetch({ limit: 100, before, cache: false });
@@ -160,8 +160,8 @@ export async function fetchWindow(
 
 export async function collectDiscordMessages(
   client: Client,
-  cfg: CommunityDigestConfig,
-  window: DigestWindow,
+  cfg: ChatExportConfig,
+  window: ExportWindow,
   opts: { excludeIds?: string[]; maxPages?: number } = {},
 ): Promise<CollectResult> {
   const selfId = client.user?.id ?? '';

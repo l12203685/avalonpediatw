@@ -4,7 +4,8 @@
  * See docs/COMMUNITY_FEEDBACK.md. Nothing here is a secret: the env vars are
  * a feature flag (read once at module load — FEEDBACK_CONFIG.commandEnabled;
  * tests flip the field directly) and a Discord channel id (read on every
- * call by resolveFeedbackChannelId(), so tests can set the env var).
+ * call by resolveFeedbackChannelId(), so tests can set the env var; default
+ * the owner's admin channel 「大劍管理員」, 2026-10-13).
  */
 
 export type FeedbackPlatform = 'line' | 'discord';
@@ -39,19 +40,28 @@ export const FEEDBACK_RETAIN_WEEKS = 8;
 export const FEEDBACK_MAX_FORWARDS_PER_HOUR = 30;
 
 /**
- * Discord channel that receives forwarded opinions: FEEDBACK_DISCORD_CHANNEL_ID.
- * Unset → '' → the real forwarder (discordForwarder.ts) falls back to the
- * private channel named 「管理者信箱」 (2026-10-13); when that does not exist
- * either, the person is acknowledged and the opinion counted, but nothing
- * is forwarded.
- *
- * Deliberately NO fallback to LOBBY_MIRROR_DISCORD_CHANNEL_ID (the public
- * community channel): the forwarded line is anonymous by design and anyone
- * who friends the LINE OA or is in the Discord server can submit one, so the
- * target must be a channel the owner chose on purpose (a private one). An
- * explicitly configured id is used as is (the owner's choice); the 管理者信箱
- * fallback is used only when it is private (discord/adminChannel.ts).
+ * The owner's admin channel 「大劍管理員」 (Edward 2026-10-13: "大劍管理員就是
+ * 管理員頻道了"): forwarded /意見 texts go here unless
+ * FEEDBACK_DISCORD_CHANNEL_ID says otherwise.
+ * https://discord.com/channels/1132682489840812113/1145513360545296574
  */
-export function resolveFeedbackChannelId(): string {
-  return (process.env.FEEDBACK_DISCORD_CHANNEL_ID || '').trim();
+export const DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID = '1145513360545296574';
+
+const OFF = ['false', '0', 'off', 'no', 'none'];
+
+/**
+ * Discord channel that receives forwarded opinions:
+ *   FEEDBACK_DISCORD_CHANNEL_ID when set (the owner's choice, used as is);
+ *   'off' / 'none' / 'false' / '0' / 'no' → '' (opinions are acknowledged and
+ *   counted, not forwarded);
+ *   unset → DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID (the admin channel).
+ * Either way the id is used as is: the bot does not second-guess the
+ * channel's visibility (the owner picked it). Deliberately never the public
+ * LINE↔Discord sync channel (LOBBY_MIRROR_DISCORD_CHANNEL_ID) as a fallback:
+ * the forwarded line is anonymous and anyone can submit one.
+ */
+export function resolveFeedbackChannelId(env: NodeJS.ProcessEnv = process.env): string {
+  const raw = (env.FEEDBACK_DISCORD_CHANNEL_ID || '').trim();
+  if (OFF.includes(raw.toLowerCase())) return '';
+  return raw || DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID;
 }
