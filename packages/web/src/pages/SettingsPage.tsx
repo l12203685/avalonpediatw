@@ -17,6 +17,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
+import { useLoginProviders } from '../hooks/useLoginProviders';
 import {
   renameGuest,
   signInWithDiscord,
@@ -95,6 +96,8 @@ export default function SettingsPage(): JSX.Element {
   const [upgrading, setUpgrading] = useState(false);
 
   const isGuest = isGuestPlayer(currentPlayer);
+  // 2026-10-13: bind buttons only for the OAuth flows this deployment can finish.
+  const providers = useLoginProviders();
   const isPasswordAccount = (currentPlayer as { provider?: string } | null)?.provider === 'password';
 
   // Phase B: 改密碼 state（provider='password' only）
@@ -569,17 +572,18 @@ export default function SettingsPage(): JSX.Element {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <button
                           onClick={() => handleUpgrade('google')}
-                          disabled={upgrading || !hasFirebaseAuthConfigured()}
+                          disabled={upgrading || !hasFirebaseAuthConfigured() || providers?.google !== true}
                           data-testid="settings-btn-bind-google"
                           className="inline-flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white font-semibold py-2 px-3 rounded-lg border border-zinc-700 transition-colors"
-                          title={hasFirebaseAuthConfigured() ? '' : t('settings.upgradeGoogleUnavailable')}
+                          title={providers?.google === true ? '' : t('gate.oauthUnavailable')}
                         >
                           <Chrome size={16} className="text-blue-400" />
                           {t('settings.upgradeWithGoogle')}
                         </button>
                         <button
                           onClick={() => handleUpgrade('discord')}
-                          disabled={upgrading}
+                          disabled={upgrading || providers?.discord !== true}
+                          title={providers?.discord === true ? '' : t('gate.oauthUnavailable')}
                           data-testid="settings-btn-bind-discord"
                           className="inline-flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white font-semibold py-2 px-3 rounded-lg transition-colors"
                         >
@@ -590,7 +594,8 @@ export default function SettingsPage(): JSX.Element {
                         </button>
                         <button
                           onClick={() => handleUpgrade('line')}
-                          disabled={upgrading}
+                          disabled={upgrading || providers?.line !== true}
+                          title={providers?.line === true ? '' : t('gate.oauthUnavailable')}
                           data-testid="settings-btn-bind-line"
                           className="inline-flex items-center justify-center gap-2 bg-[#00B900] hover:bg-[#009900] disabled:opacity-50 text-white font-semibold py-2 px-3 rounded-lg transition-colors"
                         >
@@ -600,6 +605,12 @@ export default function SettingsPage(): JSX.Element {
                           {t('settings.upgradeWithLine')}
                         </button>
                       </div>
+                    )}
+
+                    {isGuest && providers !== null && !providers.discord && !providers.line && (
+                      <p className="text-[11px] text-zinc-500">
+                        {t('gate.oauthClosed')} {t('gate.statsNoLogin')}
+                      </p>
                     )}
 
                     {/* 2026-04-23 Edward：已綁定時 per-provider 顯「已綁定 @xxx」+ 解綁按鈕 */}

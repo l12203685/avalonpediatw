@@ -5,7 +5,8 @@
     "loading": "Loading…",
     "playersRange": "5-10 players / Real-time Online",
     "teamBattle": "Team Battle",
-    "realtime": "Real-time"
+    "realtime": "Real-time",
+    "skipToStats": "Skip — view stats now (no login needed)"
   },
   "language": {
     "label": "Language",
@@ -37,7 +38,12 @@
     "emailPasswordPlaceholder": "Password (8+ chars, letters + digits)",
     "emailSubmit": "Email login / register",
     "emailMissingFields": "Email and password are required",
-    "or": "or"
+    "or": "or",
+    "statsNoLogin": "Stats, rankings and analysis need no login.",
+    "goStats": "Go to stats",
+    "oauthClosed": "LINE / Discord login is not available right now — use email.",
+    "oauthUnavailable": "Not available right now",
+    "viewPlayerStats": "View {{name}}'s stats (player radar)"
   },
   "badge": {
     "guest": "Guest",

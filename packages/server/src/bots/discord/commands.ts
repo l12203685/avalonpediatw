@@ -2,7 +2,7 @@ import { ChatInputCommandInteraction, CommandInteraction, EmbedBuilder, MessageF
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from './config';
 import { chemistryReply, leaderboardReply, playerCardReply } from '../stats/statsQueries';
-import { STATS_COMMAND_USAGE, STATS_SITE_URL } from '../stats/statsReplies';
+import { STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stats/statsReplies';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
 
@@ -55,7 +55,7 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
           `\`${STATS_COMMAND_USAGE.leaderboard}\` 角色理論勝率排行 Top 10（各人最近 100 場）\n` +
           `\`${STATS_COMMAND_USAGE.chemistry}\` 兩人同隊默契\n` +
           `\`${STATS_COMMAND_USAGE.feedback}\` 給管理者的建議或回報問題\n` +
-          `每週一 12:00 (+08) 自動貼出本週排行。完整圖表：${STATS_SITE_URL}`,
+          `每週一 12:00 (+08) 自動貼出本週排行。完整圖表（不用登入）：${STATS_PAGE_URL}`,
         inline: false,
       },
       {

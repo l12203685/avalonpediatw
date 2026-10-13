@@ -3,6 +3,7 @@ import { useTranslation, Trans } from 'react-i18next';
 import { ArrowLeft, Shield, Swords, TrendingUp, Clock, Loader, Trophy, ExternalLink, UserPlus, UserMinus, Link2, Sparkles, Pencil, Check, X as XIcon, Mail, Copy, Camera, Lock, Eye, EyeOff, RefreshCcw } from 'lucide-react';
 import { getEloRank } from '../utils/eloRank';
 import { CampDisc } from '../components/CampDisc';
+import { useLoginProviders } from '../hooks/useLoginProviders';
 import ArchetypeRadar from '../components/profile/ArchetypeRadar';
 import StrengthSignature from '../components/profile/StrengthSignature';
 import PlaystyleSnapshot from '../components/profile/PlaystyleSnapshot';
@@ -162,7 +163,7 @@ export default function ProfilePage(): JSX.Element {
     minion:   t('game:roleLabel.minion'),
     unknown:  t('game:roleLabel.unknown'),
   };
-  const { setGameState, profileUserId, navigateToProfile, addToast, currentPlayer, setCurrentPlayer } = useGameStore();
+  const { setGameState, profileUserId, navigateToProfile, openPlayerStats, addToast, currentPlayer, setCurrentPlayer } = useGameStore();
   const [profile, setProfile]       = useState<UserProfile | null>(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
@@ -187,6 +188,8 @@ export default function ProfilePage(): JSX.Element {
   // #42 Linked accounts — own profile only
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[] | null>(null);
   const [linkBusy, setLinkBusy] = useState<LinkProvider | null>(null);
+  // 2026-10-13: a 綁定 button only for the OAuth flows this deployment can finish.
+  const providers = useLoginProviders();
   const [linkNotice, setLinkNotice] = useState<{ kind: 'ok' | 'merged' | 'error'; msg: string } | null>(null);
 
   // Edward 2026-04-25 19:44: 把 SettingsPage 獨有功能 (密碼/信箱/清除本機資料)
@@ -581,6 +584,19 @@ export default function ProfilePage(): JSX.Element {
           </div>
         )}
 
+        {/* 2026-10-13: account profiles need the accounts database (off in production);
+            someone else's stats are always on the 玩家雷達, no login needed. */}
+        {error && !isMe && profileUserId && (
+          <button
+            type="button"
+            data-testid="profile-open-player-stats"
+            onClick={() => openPlayerStats(profileUserId)}
+            className="w-full bg-emerald-900/40 hover:bg-emerald-800/50 border border-emerald-700/60 rounded-xl p-3 text-emerald-100 text-sm font-semibold transition-colors"
+          >
+            {t('common:gate.viewPlayerStats', { name: profileUserId })}
+          </button>
+        )}
+
         {profile && (
           <>
             {/* Claim banner — own profile only */}
@@ -893,10 +909,11 @@ export default function ProfilePage(): JSX.Element {
                         ) : (
                           <button
                             onClick={() => handleLinkProvider(acc.provider)}
-                            disabled={linkBusy !== null}
+                            disabled={linkBusy !== null || providers?.[acc.provider] !== true}
+                            title={providers?.[acc.provider] === true ? undefined : t('common:gate.oauthUnavailable')}
                             className="px-2 py-1 text-[11px] rounded border border-blue-700 bg-blue-900/40 text-blue-300 hover:bg-blue-800/60 disabled:opacity-40 transition-colors"
                           >
-                            {t('profile:linked.linkBtn')}
+                            {providers?.[acc.provider] === true ? t('profile:linked.linkBtn') : t('common:gate.oauthUnavailable')}
                           </button>
                         )}
                       </li>

@@ -81,12 +81,13 @@ function buildAxes(
   });
 }
 
-export default function PlayerRadarChart(): JSX.Element {
+export default function PlayerRadarChart({ focus = null }: { focus?: { name: string; seq: number } | null } = {}): JSX.Element {
   const { t } = useTranslation('common');
   const { overview } = useAnalysisOverview();
   const settings = useMemo(() => theorySettings(overview?.theoryConfig), [overview?.theoryConfig]);
   const [playerList, setPlayerList] = useState<AnalysisPlayerStats[]>([]);
-  const [selectedName, setSelectedName] = useState<string>('');
+  // 排行點名字 / #player= 連結帶進來的玩家優先 (store.openPlayerStats)；沒有才預設場次最多的人。
+  const [selectedName, setSelectedName] = useState<string>(focus?.name ?? '');
   const [radarData, setRadarData] = useState<AnalysisPlayerRadar | null>(null);
   const [loading, setLoading] = useState(true);
   const [radarLoading, setRadarLoading] = useState(false);
@@ -100,7 +101,7 @@ export default function PlayerRadarChart(): JSX.Element {
         const { players } = await fetchAnalysisPlayers();
         if (!cancelled) {
           setPlayerList(players);
-          if (players.length > 0) setSelectedName(players[0].name);
+          if (players.length > 0) setSelectedName(prev => prev || players[0].name);
         }
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err));
@@ -110,6 +111,12 @@ export default function PlayerRadarChart(): JSX.Element {
     })();
     return (): void => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!focus?.name) return;
+    setSelectedName(focus.name);
+    setSearch('');
+  }, [focus]);
 
   const loadRadar = useCallback(async (name: string) => {
     if (!name) return;

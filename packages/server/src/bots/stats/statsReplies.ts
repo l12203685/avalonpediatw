@@ -32,10 +32,20 @@ import { isTheoryBoard, theoryLastWindows } from '../../services/sheetsAnalysis'
 
 /**
  * Public web app. The SPA has no URL router (pages are switched by in-memory
- * `gameState`), so there is no per-player stats URL to deep-link — replies
- * link the site and name the page (首頁 →「數據分析」) instead.
+ * `gameState`); since 2026-10-13 it reads two hash links instead, which open
+ * the stats straight away without waiting for (or needing) a login:
+ * `#stats` (數據分析) and `#player=<名字>` (that player's 玩家雷達). Players had
+ * taken the site's login screen for "the stats need a login".
  */
 export const STATS_SITE_URL = 'https://avalon-game-platform.web.app';
+
+/** 數據分析 (排行 + 分析), no login. */
+export const STATS_PAGE_URL = `${STATS_SITE_URL}/#stats`;
+
+/** One player's 玩家雷達 on the site (cache name, URL-encoded), no login. */
+export function playerStatsUrl(name: string): string {
+  return `${STATS_SITE_URL}/#player=${encodeURIComponent(name)}`;
+}
 
 /** Hard cap per reply — Discord allows 2000, LINE 5000 characters. */
 export const STATS_REPLY_MAX_CHARS = 1800;
@@ -70,7 +80,7 @@ export const STATS_COMMAND_USAGE = {
   feedback: '/意見 文字',
 } as const;
 
-const SITE_FOOTER = `🔗 完整圖表：${STATS_SITE_URL}（首頁 →「數據分析」）`;
+const SITE_FOOTER = `🔗 完整圖表（不用登入）：${STATS_PAGE_URL}`;
 
 // ─── Small helpers ───────────────────────────────────────────────────────
 
@@ -346,7 +356,7 @@ export function formatPlayerCard(input: PlayerCardInput): string {
     lines.push(`ℹ️ 另有大小寫不同的玩家：${input.caseVariants.slice(0, MAX_NAME_CANDIDATES).join('、')}`);
   }
   if (theory) lines.push(theoryFootnote(input.minCellGames ?? THEORY_MIN_CELL_GAMES));
-  lines.push(SITE_FOOTER);
+  lines.push(`🔗 ${p.name} 的雷達圖與完整戰績（不用登入）：${playerStatsUrl(p.name)}`);
   return clampReply(lines.join('\n'));
 }
 

@@ -5,7 +5,8 @@
     "loading": "載入中…",
     "playersRange": "5-10 人 / 即時連線對戰",
     "teamBattle": "陣營對戰",
-    "realtime": "即時連線"
+    "realtime": "即時連線",
+    "skipToStats": "不用等，先看戰績排行（不用登入）"
   },
   "language": {
     "label": "語言",
@@ -37,7 +38,12 @@
     "emailPasswordPlaceholder": "密碼（8 字以上，含英文字母與數字）",
     "emailSubmit": "Email 登入 / 註冊",
     "emailMissingFields": "信箱與密碼必填",
-    "or": "或"
+    "or": "或",
+    "statsNoLogin": "看戰績、排行與分析都不用登入。",
+    "goStats": "直接看戰績排行",
+    "oauthClosed": "LINE / Discord 登入目前未開放，可用 Email 登入。",
+    "oauthUnavailable": "目前未開放",
+    "viewPlayerStats": "看 {{name}} 的戰績（玩家雷達）"
   },
   "badge": {
     "guest": "訪客",

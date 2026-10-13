@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Loader, AlertCircle, RefreshCw, Trophy, Clock, Medal } from 'lucide-react';
+import { useGameStore } from '../../store/gameStore';
 import {
   fetchAnalysisLeaderboard,
   getErrorMessage,
@@ -210,6 +211,8 @@ function rowTip(t: (k: string, o?: Record<string, unknown>) => string, row: Anal
 function MainBoard({ board, isEn }: { board: AnalysisLeaderboardBoard; isEn: boolean }): JSX.Element {
   const { t } = useTranslation('common');
   const note = boardNote(board, isEn);
+  // 點名字 → 該玩家的玩家雷達 (不用登入)。
+  const openPlayerStats = useGameStore((s) => s.openPlayerStats);
 
   return (
     <motion.div
@@ -240,7 +243,12 @@ function MainBoard({ board, isEn }: { board: AnalysisLeaderboardBoard; isEn: boo
           </thead>
           <tbody>
             {board.rows.map(row => (
-              <tr key={`${row.rank}-${row.name}`} className="border-b border-zinc-800/60 hover:bg-white/5" title={rowTip(t, row)}>
+              <tr
+                key={`${row.rank}-${row.name}`}
+                className="border-b border-zinc-800/60 hover:bg-white/5 cursor-pointer"
+                title={rowTip(t, row)}
+                onClick={() => openPlayerStats(row.name)}
+              >
                 <td className={`py-1.5 pl-4 pr-2 font-black ${rankClass(row.rank)}`}>
                   {row.rank <= 3 ? <Medal size={14} className="inline -mt-0.5 mr-0.5" /> : null}{row.rank}
                 </td>

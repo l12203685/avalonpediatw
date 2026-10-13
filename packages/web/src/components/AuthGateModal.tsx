@@ -33,6 +33,8 @@ import {
   loginOrRegister,
 } from '../services/auth';
 import { getStoredToken } from '../services/socket';
+import { useLoginProviders } from '../hooks/useLoginProviders';
+import StatsNoLoginNote from './StatsNoLoginNote';
 
 export type AuthGateTarget = 'stats' | 'settings' | 'chat' | 'createRoom' | 'joinRoom';
 
@@ -51,6 +53,12 @@ export default function AuthGateModal({ isOpen, onClose, gateTarget }: AuthGateM
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [showPw,   setShowPw]   = useState(false);
+  // 2026-10-13: only the OAuth flows this deployment can finish get a button
+  // (GET /auth/providers); the others ended on a raw 503 page. null = still asking.
+  const providers = useLoginProviders();
+  const showGoogle = providers?.google === true;
+  const showDiscord = providers?.discord === true;
+  const showLine = providers?.line === true;
 
   async function handleGoogle(): Promise<void> {
     if (!hasFirebaseAuthConfigured()) {
@@ -148,7 +156,7 @@ export default function AuthGateModal({ isOpen, onClose, gateTarget }: AuthGateM
           exit={{ y: 16, opacity: 0, scale: 0.96 }}
           transition={{ type: 'spring', stiffness: 300, damping: 28 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl"
+          className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm max-h-[90dvh] overflow-y-auto p-6 space-y-4 shadow-2xl"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -169,43 +177,57 @@ export default function AuthGateModal({ isOpen, onClose, gateTarget }: AuthGateM
             </button>
           </div>
 
+          <StatsNoLoginNote onNavigate={onClose} testId="gate-stats-no-login" />
+
           <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => { void handleGoogle(); }}
-              disabled={busy !== null}
-              data-testid="gate-btn-google"
-              className="w-full inline-flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white font-semibold py-2 px-3 rounded-lg border border-zinc-700 transition-colors"
-            >
-              {busy === 'google' ? (
-                <Loader size={16} className="animate-spin" />
-              ) : (
-                <Chrome size={16} className="text-blue-400" />
-              )}
-              {t('settings.upgradeWithGoogle', { defaultValue: 'Google 登入' })}
-            </button>
+            {showGoogle && (
+              <button
+                type="button"
+                onClick={() => { void handleGoogle(); }}
+                disabled={busy !== null}
+                data-testid="gate-btn-google"
+                className="w-full inline-flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white font-semibold py-2 px-3 rounded-lg border border-zinc-700 transition-colors"
+              >
+                {busy === 'google' ? (
+                  <Loader size={16} className="animate-spin" />
+                ) : (
+                  <Chrome size={16} className="text-blue-400" />
+                )}
+                {t('settings.upgradeWithGoogle', { defaultValue: 'Google 登入' })}
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={handleDiscord}
-              disabled={busy !== null}
-              data-testid="gate-btn-discord"
-              className="w-full inline-flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white font-semibold py-2 px-3 rounded-lg transition-colors"
-            >
-              {busy === 'discord' ? <Loader size={16} className="animate-spin" /> : null}
-              {t('settings.upgradeWithDiscord', { defaultValue: 'Discord 登入' })}
-            </button>
+            {showDiscord && (
+              <button
+                type="button"
+                onClick={handleDiscord}
+                disabled={busy !== null}
+                data-testid="gate-btn-discord"
+                className="w-full inline-flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white font-semibold py-2 px-3 rounded-lg transition-colors"
+              >
+                {busy === 'discord' ? <Loader size={16} className="animate-spin" /> : null}
+                {t('settings.upgradeWithDiscord', { defaultValue: 'Discord 登入' })}
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={handleLine}
-              disabled={busy !== null}
-              data-testid="gate-btn-line"
-              className="w-full inline-flex items-center justify-center gap-2 bg-[#00B900] hover:bg-[#009900] disabled:opacity-50 text-white font-semibold py-2 px-3 rounded-lg transition-colors"
-            >
-              {busy === 'line' ? <Loader size={16} className="animate-spin" /> : null}
-              {t('settings.upgradeWithLine', { defaultValue: 'LINE 登入' })}
-            </button>
+            {showLine && (
+              <button
+                type="button"
+                onClick={handleLine}
+                disabled={busy !== null}
+                data-testid="gate-btn-line"
+                className="w-full inline-flex items-center justify-center gap-2 bg-[#00B900] hover:bg-[#009900] disabled:opacity-50 text-white font-semibold py-2 px-3 rounded-lg transition-colors"
+              >
+                {busy === 'line' ? <Loader size={16} className="animate-spin" /> : null}
+                {t('settings.upgradeWithLine', { defaultValue: 'LINE 登入' })}
+              </button>
+            )}
+
+            {providers !== null && !showDiscord && !showLine && (
+              <p data-testid="gate-oauth-closed" className="text-[11px] text-zinc-500 leading-relaxed">
+                {t('gate.oauthClosed', { defaultValue: 'LINE / Discord 登入目前未開放，可用 Email 登入。' })}
+              </p>
+            )}
 
             <button
               type="button"
