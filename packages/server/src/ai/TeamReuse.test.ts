@@ -179,18 +179,54 @@ describe('TeamReuse — candidates and bonus', () => {
 });
 
 describe('TeamReuse — ForwardAgent wiring', () => {
-  it('off: no change from the production default; on: a loyal on the successful team keeps it', () => {
+  it('on: a loyal on the successful team keeps it', () => {
     const o = obs({
       myPlayerId: 'P5',
       currentLeader: 'P5',
       voteHistory: VOTES,
     });
-    const on = pick(o, { teamReuse: true });
-    expect(on).toEqual(['P5', 'P6', 'P7', 'P8']);
-    // Legacy tuning without the switch never sees the bonus (byte-identical to before).
-    const legacyA = pick(o, { ...LEGACY_AGENT_TUNING });
-    const legacyB = pick(o, { ...LEGACY_AGENT_TUNING, teamReuse: false });
-    expect(legacyA).toEqual(legacyB);
+    expect(pick(o, { teamReuse: true })).toEqual(['P5', 'P6', 'P7', 'P8']);
+  });
+
+  it('R2+ later proposal: off keeps the old penalty and avoids the rejected team; on re-proposes it', () => {
+    // R1 failed, so the only reference is R2's rejected first proposal (P10's team, with P1 on it).
+    const rejected = ['P10', 'P1', 'P5', 'P6'];
+    const o = obs({
+      currentRound: 2, failCount: 1, questResults: ['fail'], questHistory: [QUESTS[0]],
+      voteHistory: [VOTES[0], vote(2, 1, 'P10', rejected, false)],
+    });
+    const off = pick(o, { teamReuse: false });
+    expect(off.filter((id) => rejected.includes(id)).length).toBeLessThanOrEqual(2); // overlap ≤ 50%: no penalty
+    expect(pick(o, { ...LEGACY_AGENT_TUNING })).not.toEqual([...rejected].sort());
+    expect(pick(o, { teamReuse: true })).toEqual([...rejected].sort());
+  });
+
+  it('red leaders use the red weights (3× the good ones by default)', () => {
+    const red = obs({ myRole: 'assassin', myTeam: 'evil', knownEvils: ['P2', 'P3', 'P4'] });
+    expect(DEFAULT_TEAM_REUSE_OPTIONS.evil.success).toBe(3 * DEFAULT_TEAM_REUSE_OPTIONS.good.success);
+    expect(teamReusePlan(red)?.refs[0].weight).toBe(DEFAULT_TEAM_REUSE_OPTIONS.evil.success);
+    // After the successful R2 mission the red leader keeps three of its four and swaps itself in.
+    const team = pick(red, { teamReuse: true });
+    expect(team).toContain('P1');
+    expect(team.filter((id) => QUESTS[1].team.includes(id))).toHaveLength(3);
+  });
+
+  it('5 players: reuse candidates take the size of the round and the team stays legal', () => {
+    const five = ['P1', 'P2', 'P3', 'P4', 'P5'];
+    const fiveVote = (round: number, attempt: number, leader: string, team: string[], approved: boolean): VoteRecord => ({
+      round, attempt, leader, team, approved,
+      votes: Object.fromEntries(five.map((id) => [id, approved || team.includes(id)])),
+    });
+    const o = obs({
+      allPlayerIds: five, playerCount: 5, currentRound: 2, questResults: ['success'],
+      questHistory: [{ round: 1, team: ['P2', 'P3'], result: 'success', failCount: 0 }],
+      voteHistory: [fiveVote(1, 1, 'P2', ['P2', 'P3'], true)],
+    });
+    const plan = teamReusePlan(o)!;
+    for (const t of teamReuseCandidateTeams(plan, o, ['P2', 'P3', 'P4', 'P5'])) expect(t).toHaveLength(3);
+    const team = pick(o, { teamReuse: true });
+    expect(team).toHaveLength(3);
+    expect(team).toEqual(['P1', 'P2', 'P3']);
   });
 
   it('a leader off the successful team swaps itself in and keeps three of the four', () => {

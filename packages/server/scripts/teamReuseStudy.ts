@@ -24,13 +24,17 @@
  * the `--player` names (the public docs only use the ED / Sin labels).
  *
  * `--agent` also replays every team decision through `HeuristicAgent.act`
- * (production default, and production default + `teamReuse` with the
- * weights in `TeamReuse.ts` or `AVALON_TEAM_REUSE_VARIANT`) and prints team
+ * (production default with `teamReuse` off, and with it on — weights from
+ * `TeamReuse.ts` or `AVALON_TEAM_REUSE_VARIANT`) and prints team
  * agreement (exact / Jaccard) per context next to the "default" baseline
  * of the agreement benchmark, on all games and on a fixed 70/30 game split
  * (fnv1a("teamreuse|" + game id) mod 100 < 70 = the split the weights were
  * fitted on). Same seeding as the agreement benchmark, so the totals equal
- * its team rows.
+ * its team rows. Sections 7–8 compare the shape of the agent's proposals
+ * with the humans' in two places the docs discuss (第 11.5 節): a leader
+ * off a successful mission team in R3 / R5 (re-propose it without self vs
+ * swap self in), and red leaders putting two or more visible teammates on
+ * a team.
  */
 
 import * as fs from 'fs';
@@ -136,7 +140,7 @@ interface Prop {
   /** Kept whole and the extra seat (growth) is the leader. */
   grewBySelf: boolean | null;
   /** Exactly one reference seat dropped: was it the reference's leader / a failed-mission member / an on-team rejecter? */
-  dropped: { prevLeader: boolean; prevLeaderOnRef: boolean; tainted: boolean; taintedShare: number; rejectedRef: boolean | null; refSize: number } | null;
+  dropped: { prevLeader: boolean; prevLeaderOnRef: boolean; tainted: boolean; taintedShare: number; rejectedRef: boolean | null; refSize: number; droppable: number } | null;
   /** Later proposals: exact re-proposal of the previous / an older proposal of the round. */
   exactSource: 'previous' | 'older' | 'none' | null;
   /** Later proposals: leader on some earlier team of the round; re-proposed one of those exactly. */
@@ -189,6 +193,9 @@ function collect(games: readonly ReplayGame[]): Prop[] {
       const changed = Math.max(0, added.length - grow);
       const failedBefore = new Set<number>();
       for (const q of g.quests) if (q.round < p.round && q.failed) for (const s of q.teamSeats) failedBefore.add(s);
+      // Seats that could have been the dropped one: the reference minus the
+      // new leader when it stays on (leaders almost never drop themselves).
+      const droppable = [...P].filter((x) => !(x === L && H.has(L)));
       const earlier = g.proposals.slice(0, i).filter((x) => x.round === p.round);
       const later = p.attempt >= 2;
       const withLeader = later ? earlier.filter((x) => x.teamSeats.includes(L)) : [];
@@ -218,9 +225,10 @@ function collect(games: readonly ReplayGame[]): Prop[] {
             prevLeader: dropped[0] === prev.leaderSeat,
             prevLeaderOnRef: P.has(prev.leaderSeat),
             tainted: failedBefore.has(dropped[0]),
-            taintedShare: [...P].filter((x) => failedBefore.has(x)).length / P.size,
+            taintedShare: droppable.filter((x) => failedBefore.has(x)).length / Math.max(1, droppable.length),
             rejectedRef: prev.forced || !prev.votesReliable ? null : !prev.votes[dropped[0] - 1],
             refSize: P.size,
+            droppable: droppable.length,
           }
           : null,
         exactSource: later
@@ -293,6 +301,13 @@ function detailTable(props: readonly Prop[]): string {
       }
     }
   }
+  for (const r of [3, 5]) {
+    for (const camp of ['good', 'evil'] as const) {
+      const s = succ.filter((p) => p.round === r && !p.leaderOnRef && p.camp === camp);
+      rate(`R${r} ${camp} leader off the mission team: re-proposed it without self`, s, (p) => p.exact);
+      rate(`R${r} ${camp} leader off the mission team: swapped self in for one member`, s, (p) => p.swappedSelfIn);
+    }
+  }
   for (const camp of ['good', 'evil'] as const) {
     const s = succ.filter((p) => p.grow === 0 && p.exact && !p.leaderOnTeam && p.camp === camp);
     rate(`same-size round, ${camp} leader re-proposed it without self: went and succeeded`, s, (p) => p.outcome === 'succeeded');
@@ -306,7 +321,8 @@ function detailTable(props: readonly Prop[]): string {
   rate('  … re-proposed one of those teams exactly', later.filter((p) => p.leaderOnEarlier), (p) => p.reproposedOwnEarlier === true);
   rate('leader off the reference: swapped self in for one member', later.filter((p) => !p.leaderOnRef), (p) => p.swappedSelfIn);
   const one = later.filter((p) => p.dropped !== null && p.changed === 1);
-  const chanceLeader = one.reduce((a, p) => a + (p.dropped?.prevLeaderOnRef ? 1 / (p.dropped?.refSize ?? 1) : 0), 0) / Math.max(1, one.length);
+  // Chance = 1 / (reference seats other than a new leader who stays on), when the previous leader was on the reference.
+  const chanceLeader = one.reduce((a, p) => a + (p.dropped?.prevLeaderOnRef ? 1 / Math.max(1, p.dropped?.droppable ?? 1) : 0), 0) / Math.max(1, one.length);
   rate(`one seat changed: the dropped seat was the previous leader (chance ${p1(chanceLeader)})`, one, (p) => p.dropped?.prevLeader === true);
   const chanceTaint = one.reduce((a, p) => a + (p.dropped?.taintedShare ?? 0), 0) / Math.max(1, one.length);
   rate(`one seat changed: the dropped seat was on a failed mission (chance ${p1(chanceTaint)})`, one, (p) => p.dropped?.tainted === true);
@@ -338,7 +354,13 @@ function roleTable(props: readonly Prop[]): string {
 
 // ── Agent agreement per context ────────────────────────────────
 
-interface AgentTally { n: number; exact: number; jac: number; dExact: number; dJac: number }
+interface AgentTally {
+  n: number; exact: number; jac: number; dExact: number; dJac: number;
+  /** Team = the reference (last mission team) with the leader swapped in for one member: agent / human. */
+  aSwap: number; hSwap: number;
+  /** Red leader (not Oberon): two or more / no visible teammates on the team: agent / human. */
+  aMates2: number; hMates2: number; aMates0: number; hMates0: number;
+}
 
 function agentAgreement(
   games: readonly ReplayGame[],
@@ -346,9 +368,11 @@ function agentAgreement(
   cohorts: readonly { label: string; has: (name: string, role: string) => boolean }[],
 ): Map<string, AgentTally> {
   const tally = new Map<string, AgentTally>();
-  const add = (key: string, exact: boolean, j: number, dExact: boolean, dJ: number): void => {
-    const t = tally.get(key) ?? { n: 0, exact: 0, jac: 0, dExact: 0, dJac: 0 };
+  const add = (key: string, exact: boolean, j: number, dExact: boolean, dJ: number, extra: Pick<AgentTally, 'aSwap' | 'hSwap' | 'aMates2' | 'hMates2' | 'aMates0' | 'hMates0'>): void => {
+    const t = tally.get(key) ?? { n: 0, exact: 0, jac: 0, dExact: 0, dJac: 0, aSwap: 0, hSwap: 0, aMates2: 0, hMates2: 0, aMates0: 0, hMates0: 0 };
     t.n++; t.exact += exact ? 1 : 0; t.jac += j; t.dExact += dExact ? 1 : 0; t.dJac += dJ;
+    t.aSwap += extra.aSwap; t.hSwap += extra.hSwap; t.aMates2 += extra.aMates2; t.hMates2 += extra.hMates2;
+    t.aMates0 += extra.aMates0; t.hMates0 += extra.hMates0;
     tally.set(key, t);
   };
   for (const g of games) {
@@ -375,10 +399,40 @@ function agentAgreement(
       }
       const bucket = p.round === 1 ? 'R1' : 'R2+';
       const camp = campOf(role);
+      const me = seatId(seat);
+      const keys = [bucket, `${bucket} ${camp}`, `${bucket} ${split}`, ctx, `${ctx} ${camp}`];
+      // Same-size round after a success, leader off the mission team: re-propose it without self, or swap self in?
+      const mission = g.quests.find((q) => q.round === p.round - 1);
+      let aSwap = 0;
+      let hSwap = 0;
+      if (ctx === 'first after success' && mission && (p.round === 3 || p.round === 5) && !mission.teamSeats.includes(seat)) {
+        const M = mission.teamSeats.map(seatId);
+        const swapIn = (T: readonly string[]): number =>
+          T.length === M.length && T.includes(me) && T.filter((x) => M.includes(x)).length === M.length - 1 ? 1 : 0;
+        aSwap = swapIn(A);
+        hSwap = swapIn(H);
+        keys.push(`R${p.round} after success, leader off ${camp}`);
+      }
+      // Red leaders who see their teammates (not Oberon): two or more of them on the team?
+      let aMates2 = 0;
+      let hMates2 = 0;
+      let aMates0 = 0;
+      let hMates0 = 0;
+      if (camp === 'evil' && role !== 'oberon' && p.round >= 2) {
+        const mates = new Set(g.seatRoles.map((r, k) => (k + 1 !== seat && campOf(r) === 'evil' && r !== 'oberon' ? seatId(k + 1) : '')).filter(Boolean));
+        const aM = A.filter((x) => mates.has(x)).length;
+        const hM = H.filter((x) => mates.has(x)).length;
+        aMates2 = aM >= 2 ? 1 : 0;
+        hMates2 = hM >= 2 ? 1 : 0;
+        aMates0 = aM === 0 ? 1 : 0;
+        hMates0 = hM === 0 ? 1 : 0;
+        keys.push(`R2+ red leader (sees mates) R${p.round}`);
+        keys.push('R2+ red leader (sees mates)');
+      }
       for (const c of cohorts) {
         if (!c.has(name, role)) continue;
-        for (const key of [bucket, `${bucket} ${camp}`, `${bucket} ${split}`, ctx, `${ctx} ${camp}`]) {
-          add(`${c.label}|${key}`, same(A, H), jaccardIds(A, H), same(D, H), jaccardIds(D, H));
+        for (const key of keys) {
+          add(`${c.label}|${key}`, same(A, H), jaccardIds(A, H), same(D, H), jaccardIds(D, H), { aSwap, hSwap, aMates2, hMates2, aMates0, hMates0 });
         }
       }
     }
@@ -421,14 +475,15 @@ function main(): void {
   if (args.agent) {
     const options = teamReuseOptionsFromEnv();
     setTeamReuseOptions(options);
-    if (JSON.stringify(options) !== JSON.stringify(DEFAULT_TEAM_REUSE_OPTIONS)) process.stderr.write(`teamReuse variant: ${JSON.stringify(options)}\n`);
+    process.stderr.write(`teamReuse weights${JSON.stringify(options) === JSON.stringify(DEFAULT_TEAM_REUSE_OPTIONS) ? ' (defaults)' : ' (variant)'}: ${JSON.stringify(options)}\n`);
     const agentCohorts = [
       { label: 'population', has: (): boolean => true },
       { label: 'top/role', has: (name: string, role: string): boolean => top.members.has(cohortKey(name, role)) },
       ...args.players.map((pl) => ({ label: pl, has: (name: string): boolean => name === pl })),
     ];
+    // Baseline = the production default without the switch (it is in the default since 2026-10-13).
     const tunings: Array<[string, AgentTuning]> = [
-      ['production default', resolveAgentTuning({})],
+      ['production default − teamReuse', resolveAgentTuning({ teamReuse: false })],
       ['+ teamReuse', resolveAgentTuning({ teamReuse: true })],
     ];
     const results = tunings.map(([label, t]) => [label, agentAgreement(games, t, agentCohorts)] as const);
@@ -447,6 +502,30 @@ function main(): void {
         if (!d) continue;
         console.log(`    ${key.padEnd(26)} ${cells.join('   ')}   (default baseline ${p1(d.dExact / d.n)} / ${p1(d.dJac / d.n)}) n=${d.n}`);
       }
+    }
+    console.log('\n7. Same-size round after a success, leader off the mission team (population): human / agent re-proposal shape');
+    const pop = (t: Map<string, AgentTally>, key: string): AgentTally | undefined => t.get(`population|${key}`);
+    for (const r of [3, 5]) {
+      for (const camp of ['good', 'evil']) {
+        const key = `R${r} after success, leader off ${camp}`;
+        const h = pop(results[0][1], key);
+        if (!h) continue;
+        const cells = results.map(([label, t]) => {
+          const x = pop(t, key);
+          return x ? `${label}: swap self in ${fmtRate(x.aSwap, x.n, false)}, exact ${fmtRate(x.exact, x.n, false)}, Jaccard ${p1(x.jac / x.n)}` : `${label}: —`;
+        });
+        console.log(`    ${key.padEnd(34)} humans: swap self in ${fmtRate(h.hSwap, h.n, false)}   ${cells.join('   ')}`);
+      }
+    }
+    console.log('\n8. Red leaders who see their teammates (not Oberon), R2+ (population): two or more / no visible teammates on the team');
+    for (const key of ['R2+ red leader (sees mates)', ...[2, 3, 4, 5].map((r) => `R2+ red leader (sees mates) R${r}`)]) {
+      const h = pop(results[0][1], key);
+      if (!h) continue;
+      const cells = results.map(([label, t]) => {
+        const x = pop(t, key);
+        return x ? `${label}: ${fmtRate(x.aMates2, x.n, false)} / ${fmtRate(x.aMates0, x.n, false)}` : `${label}: —`;
+      });
+      console.log(`    ${key.padEnd(34)} humans: ${fmtRate(h.hMates2, h.n, false)} / ${fmtRate(h.hMates0, h.n, false)}   ${cells.join('   ')}`);
     }
     agentOut = { options, results: Object.fromEntries(results.map(([l, t]) => [l, Object.fromEntries(t)])) };
   }

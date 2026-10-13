@@ -29,28 +29,35 @@
  * member, the team grown by one seat, one-seat swaps — are added to the
  * usual candidate set (drawn from the same role-filtered pool), so the
  * suspicion-based score still decides which seat makes room (the agreement
- * benchmark's "default" baseline always drops the last-listed one). Safety:
- * no bonus for a team that breaks 硬1 / 硬2 of any member's lake
- * declaration (the leader's own included — so no new 硬3 exposure), and for
- * a good leader no bonus for a team holding a red it can see (`knownEvils`)
- * or a lake-chain / 硬3 violator; the leader is always on its own team (the
- * ForwardAgent invariant: humans who re-propose a successful team without
- * themselves cannot be matched), red holders still go through
- * `evilVouchFollowUp`. R1 is unchanged (humans hardly reuse there).
+ * benchmark's "default" baseline always drops the last-listed one).
+ *
+ * Safety — the guard (`teamReuseGuard`): a team it refuses gets no bonus
+ * and keeps the old `PRIOR_PENALTY`, and reuse candidates it refuses are
+ * never added, so a refused team is only chosen where the switch-off agent
+ * would score it the same (review 2026-10-13). It refuses a team that
+ * breaks 硬1 / 硬2 of any member's lake declaration (the leader's own
+ * included — so no new 硬3 exposure) and, for a good leader, a team holding
+ * a seat it treats as red: a red it can see (`knownEvils`), a lake-chain /
+ * 硬3 violator, a member of a failed mission whose fail cards cover every
+ * member but the leader, or a seat the pyramid scores ≥ 0.85. The leader is
+ * always on its own team (the ForwardAgent invariant: humans who re-propose
+ * a successful team without themselves cannot be matched), red holders
+ * still go through `evilVouchFollowUp`. R1 is unchanged (humans hardly
+ * reuse there).
  *
  * Weights (`DEFAULT_TEAM_REUSE_OPTIONS`) were fitted on the logs only (70%
  * of the games, fnv1a split; the other 30% agree as well). Good leaders:
- * 3 / 0.45 / 0.6 (success / reject / mission); red leaders 3× that, because
- * their score prefers a visible teammate on the team while human red
+ * 3 / 0.45 / 0.6 (success / reject / mission); red leaders (Oberon
+ * included) 3× that: their agreement kept rising with the weight, because
+ * the red score prefers a visible teammate on the team while human red
  * leaders keep the successful team as often as blue ones (71.1% vs
- * 76.1%) — after a successful mission the prior therefore dominates and the
- * bots keep that team. Agreement R2+ (exact / Jaccard) ED 3.5→12.2 /
- * 39.2→49.2, Sin 4.4→22.8 / 42.5→57.1, top 3.0→15.5 / 40.2→52.5,
- * population 3.8→16.2 / 41.2→53.2 (every other decision unchanged).
- * Self-play against the production default (selection seed 44444,
- * confirmation 55555 / 66666, pooled): red +2.88pp [+2.41pp, +3.35pp],
- * blue +4.39pp [+3.80pp, +4.98pp]. In DEFAULT_AGENT_TUNING since
- * 2026-10-13 round 3.
+ * 76.1%); Oberon, who sees no teammate, gained the most (R2+ exact
+ * population 0.5% → 18%). After a successful mission the prior dominates
+ * and red bots keep that team with themselves swapped in — human red
+ * leaders off that team mostly re-propose it without themselves, which the
+ * ForwardAgent cannot do (docs 第 11.5 節). Agreement and self-play
+ * numbers: docs/ai/strength_benchmark.md 第 11 節. In DEFAULT_AGENT_TUNING
+ * since 2026-10-13 round 3.
  *
  * Pure functions of the observation; no `Math.random`.
  */
@@ -59,6 +66,7 @@ import { AVALON_CONFIG } from '@avalon/shared';
 import type { PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { analyzeLakeChain, findTeamHardRuleViolations, findRule3Violators } from './baseline/lakeChainTracker';
+import { computePyramidScores, type PyramidScores } from './baseline/pyramidScorer';
 
 /** Weights of the reuse prior for one camp of leaders. */
 export interface TeamReuseWeights {
@@ -210,14 +218,17 @@ export function keptShare(team: readonly string[], ref: readonly string[], selfI
  * role-filtered candidate pool, self excluded): the reference itself with
  * self swapped in / added, the reference grown or shrunk to the round's
  * size, and every one-seat swap. Every team holds the leader and exactly
- * `teamSize` distinct seats; duplicates are dropped.
+ * `teamSize` distinct seats (the caller's team size — ForwardAgent passes
+ * its own so both candidate sets always agree; default: `AVALON_CONFIG`);
+ * duplicates and teams `accepts` refuses (the guard) are dropped.
  */
 export function teamReuseCandidateTeams(
   plan: TeamReusePlan,
   obs: PlayerObservation,
   pool: readonly string[],
+  teamSize: number | undefined = AVALON_CONFIG[obs.playerCount]?.questTeams[(obs.currentRound ?? 1) - 1],
+  accepts: (team: readonly string[]) => boolean = () => true,
 ): string[][] {
-  const teamSize = AVALON_CONFIG[obs.playerCount]?.questTeams[(obs.currentRound ?? 1) - 1];
   if (teamSize === undefined || teamSize <= 0) return [];
   const selfId = obs.myPlayerId;
   const allowed = new Set(pool.filter((id) => id !== selfId));
@@ -229,7 +240,7 @@ export function teamReuseCandidateTeams(
     const key = [...team].sort().join(',');
     if (seen.has(key)) return;
     seen.add(key);
-    out.push(team);
+    if (accepts(team)) out.push(team);
   };
   const slots = teamSize - 1;
   for (const ref of plan.refs) {
@@ -272,31 +283,59 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 }
 
 /**
- * Seats a good leader treats as red for the guard: the reds it can see and
- * the lake-chain / 硬3 violators (pinned at ≥ 0.85 by the pyramid).
+ * Seats a good leader treats as red for the guard: the reds it can see
+ * (`knownEvils`), the lake-chain / 硬3 violators, every member of a failed
+ * mission whose fail cards cover all its members but the leader (certain
+ * reds), and any seat the pyramid scores ≥ `GUARD_RED_SUSPICION` (review
+ * 2026-10-13: without the last two the bonus could put a deducible red
+ * back on the team).
  */
-function goodLeaderRedSet(obs: PlayerObservation): Set<string> {
+export const GUARD_RED_SUSPICION = 0.85;
+
+function goodLeaderRedSet(obs: PlayerObservation, pyramid: PyramidScores): Set<string> {
   const red = new Set<string>(obs.knownEvils);
   const chain = analyzeLakeChain(obs);
   for (const id of chain.violators) red.add(id);
   for (const id of findRule3Violators(chain, obs).keys()) red.add(id);
+  for (const q of obs.questHistory) {
+    if (q.result !== 'fail') continue;
+    const others = q.team.filter((id) => id !== obs.myPlayerId);
+    if (others.length > 0 && q.failCount >= others.length) for (const id of others) red.add(id);
+  }
+  for (const [id, s] of pyramid.scores) if (s >= GUARD_RED_SUSPICION) red.add(id);
   red.delete(obs.myPlayerId);
   return red;
 }
 
 /**
- * Bonus function for one decision: `bonus(team)` = max over references of
- * weight × kept share, 0 for a team the guard rejects (硬1 / 硬2 broken by
- * any member's declaration; for a good leader also a seen red or a
- * lake-chain / 硬3 violator on the team).
+ * The guard for one decision: `true` = the team may get the reuse bonus
+ * and is spared `PRIOR_PENALTY`. It refuses a team that breaks 硬1 / 硬2 of
+ * any member's lake declaration (the leader's own included) and, for a good
+ * leader, a team holding a seat of `goodLeaderRedSet`. `pyramid` defaults
+ * to `computePyramidScores(obs)` (what the ForwardAgent uses).
  */
-export function teamReuseScorer(plan: TeamReusePlan, obs: PlayerObservation): (team: readonly string[]) => number {
+export function teamReuseGuard(
+  obs: PlayerObservation,
+  pyramid: PyramidScores = computePyramidScores(obs),
+): (team: readonly string[]) => boolean {
   const chain = analyzeLakeChain(obs);
-  const redSet = obs.myTeam === 'good' ? goodLeaderRedSet(obs) : new Set<string>();
+  const redSet = obs.myTeam === 'good' ? goodLeaderRedSet(obs, pyramid) : new Set<string>();
+  return (team: readonly string[]): boolean =>
+    !team.some((id) => redSet.has(id)) && findTeamHardRuleViolations(chain, team).length === 0;
+}
+
+/**
+ * Bonus function for one decision: `bonus(team)` = max over references of
+ * weight × kept share, 0 for a team the guard refuses.
+ */
+export function teamReuseScorer(
+  plan: TeamReusePlan,
+  obs: PlayerObservation,
+  accepts: (team: readonly string[]) => boolean = teamReuseGuard(obs),
+): (team: readonly string[]) => number {
   return (team: readonly string[]): number => {
     if (plan.refs.length === 0) return 0;
-    if (team.some((id) => redSet.has(id))) return 0;
-    if (findTeamHardRuleViolations(chain, team).length > 0) return 0;
+    if (!accepts(team)) return 0;
     let best = 0;
     for (const ref of plan.refs) {
       const b = ref.weight * keptShare(team, ref.team, obs.myPlayerId);
