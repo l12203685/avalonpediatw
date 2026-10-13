@@ -6,6 +6,7 @@ import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
 import { getAsyncNotifier } from '../services/AsyncNotifier';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
+import { hasLakeApi } from '../ai/LakePolicy';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
 import { SocketRateLimiter } from '../middleware/rateLimit';
 import { LobbyChatBuffer, LobbyChatMessage } from './LobbyChatBuffer';
@@ -163,6 +164,19 @@ function tryMirrorFanout(msg: LobbyChatMessage): void {
   mirror.fanout(msg).catch((err) => {
     console.warn('[ChatMirror] fanout promise rejected:', err);
   });
+}
+
+/**
+ * Live bot Lady-of-the-Lake routing (2026-10-13). On by default: the bot's
+ * own agent picks the target and the claim (`LakePolicy` with that bot's
+ * `AgentTuning`, the same decisions self-play measures).
+ * `AVALON_BOT_LAKE_VIA_AGENT=0` (or false / off / no) restores the
+ * pre-2026-10-13 live behaviour for every bot: a uniformly random eligible
+ * target, then good = truth / red = invert. Read on every bot lake.
+ */
+export function isBotLakeViaAgentEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = (env.AVALON_BOT_LAKE_VIA_AGENT ?? '').trim().toLowerCase();
+  return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
 }
 
 export class GameServer {
@@ -1115,12 +1129,48 @@ export class GameServer {
   }
 
   /**
-   * Lightweight bot lake-announcement heuristic (live games).
+   * Bot lake target (live games, 2026-10-13 parity with self-play).
    *
-   * SelfPlayEngine has the full `decideLakeAnnouncement` (suspicion-scored
-   * Merlin guess); the live path doesn't need that depth and we want to
-   * avoid pulling SelfPlayEngine's observation builder into the socket
-   * layer. Simplified rule:
+   * Asks the holder's own agent (`HeuristicAgent.pickLakeTarget` →
+   * `LakePolicy`, with that bot's `AgentTuning`: good holders inspect the
+   * most suspicious seat, red holders follow the evil branch / the
+   * `evilLakeHumanStrategy` switch) — the same decision self-play and the
+   * benchmarks measure. Falls back to the pre-2026-10-13 behaviour (a
+   * uniformly random eligible target) when the agent is missing, lacks the
+   * lake API, throws, or returns an ineligible id, and for every bot when
+   * `AVALON_BOT_LAKE_VIA_AGENT=0` (`isBotLakeViaAgentEnabled`).
+   */
+  private pickBotLakeTarget(
+    r: Room,
+    holderId: string,
+    eligible: readonly string[],
+    engine: GameEngine,
+  ): string | undefined {
+    if (eligible.length === 0) return undefined;
+    const agent = this.botAgents.get(holderId);
+    if (isBotLakeViaAgentEnabled() && hasLakeApi(agent)) {
+      try {
+        const obs = this.buildBotObservation(r, holderId, engine, 'team_select');
+        const pick = agent.pickLakeTarget(obs, eligible);
+        if (eligible.includes(pick)) return pick;
+        console.warn(`[bot] lake target ${pick} from ${holderId} is not eligible; using random fallback`);
+      } catch (err) {
+        console.error(`[bot] Agent threw in pickLakeTarget for ${holderId}:`, err);
+      }
+    }
+    return eligible[Math.floor(Math.random() * eligible.length)];
+  }
+
+  /**
+   * Bot lake announcement (live games).
+   *
+   * Asks the holder's own agent (`HeuristicAgent.declareLake` →
+   * `LakePolicy.decideLakeClaimForTeam`, with that bot's `AgentTuning`) —
+   * the same decision self-play and the benchmarks measure (2026-10-13
+   * parity fix: the live path used to run its own inversion rule, so the
+   * lake tuning switches had no effect on live games). When the agent is
+   * missing, lacks the lake API or throws — and for every bot when
+   * `AVALON_BOT_LAKE_VIA_AGENT=0` — falls back to the old rule:
    *   - Good holder  → declare the actual team (loyal players are honest).
    *   - Evil holder  → declare 'good' for an evil ally (washes pressure);
    *                    declare 'evil' for a good target (seeds doubt).
@@ -1133,6 +1183,7 @@ export class GameServer {
     room: Room,
     holderId: string,
     targetId: string,
+    engine?: GameEngine,
   ): 'good' | 'evil' | null {
     const holder = room.players[holderId];
     const target = room.players[targetId];
@@ -1149,6 +1200,17 @@ export class GameServer {
           ? target.team
           : undefined;
     if (actualTargetTeam === undefined) return null;
+
+    const agent = this.botAgents.get(holderId);
+    if (engine && isBotLakeViaAgentEnabled() && hasLakeApi(agent)) {
+      try {
+        const obs = this.buildBotObservation(room, holderId, engine, 'team_select');
+        const claim = agent.declareLake(obs, targetId, actualTargetTeam);
+        if (claim === 'good' || claim === 'evil' || claim === null) return claim;
+      } catch (err) {
+        console.error(`[bot] Agent threw in declareLake for ${holderId}:`, err);
+      }
+    }
 
     if (holderTeam === 'good') {
       // Loyal — declare what was seen.
@@ -1918,9 +1980,10 @@ export class GameServer {
             setTimeout(() => { this.scheduleBotActions(roomId); }, offset);
           }
         } else if (r.state === 'lady_of_the_lake') {
-          // Lady of the Lake — if bot holds the Lady, pick a random eligible
-          // target. After inspection, the bot must skip its declaration so
-          // the phase finalizes and the round advances; otherwise the next
+          // Lady of the Lake — if bot holds the Lady, its agent picks the
+          // target (`pickBotLakeTarget`; random fallback) and then declares
+          // (`decideBotLakeClaim`). After inspection, the bot must declare
+          // or skip so the phase finalizes and the round advances; otherwise the next
           // scheduleBotActions tick (triggered by submitLadyOfTheLakeTarget's
           // onStateChange) sees the new bot holder and chains another inspect,
           // burning the entire lady_of_the_lake round in a single tick and
@@ -1936,7 +1999,7 @@ export class GameServer {
           ) {
             const usedIds = r.ladyOfTheLakeUsed ?? [];
             const eligible = Object.keys(r.players).filter(id => id !== holderId && !usedIds.includes(id));
-            const targetId = eligible[Math.floor(Math.random() * eligible.length)];
+            const targetId = this.pickBotLakeTarget(r, holderId, eligible, engine);
             if (targetId) {
               setTimeout(() => {
                 const snapshot = this.roomManager.getRoom(roomId);
@@ -1957,7 +2020,7 @@ export class GameServer {
                     const eng2 = this.gameEngines.get(roomId);
                     if (!eng2) return;
                     try {
-                      const claim = this.decideBotLakeClaim(s2, holderId, targetId);
+                      const claim = this.decideBotLakeClaim(s2, holderId, targetId, eng2);
                       if (claim !== null) {
                         const record = eng2.declareLakeResult(holderId, claim);
                         if (record) {

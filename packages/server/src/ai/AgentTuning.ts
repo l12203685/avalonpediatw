@@ -13,6 +13,21 @@
  *                                   一方已拿兩局，所以實際只有 R1 規則生效）。
  *   - `assassinModel`              刺殺改用牌譜訓練的條件邏輯回歸
  *                                   （`assassin/AssassinModel.ts`）。
+ *   - `evilLakeHumanStrategy`      （2026-10-13，**預設關**）紅方持湖「盡量
+ *                                   湖隊友並宣好」的真人策略：有隊友可湖就湖
+ *                                   隊友並宣好（自己帶隊時最少把他拿掉的那位
+ *                                   優先）；最後一次湖只在隊友全都毫無嫌疑時
+ *                                   才改湖藍方（實際上很少發生）；沒有隊友
+ *                                   可湖時湖藍方 —— 紅方已聽牌且自己和對方
+ *                                   同在一次失敗任務上就宣紅（嫁禍），其餘說
+ *                                   實話宣好（買好感）。奧伯倫看不到隊友，
+ *                                   一律走「湖藍方」那條（同樣的背書順序，
+ *                                   不是挑最可疑的人），湖到紅方就宣好掩護。
+ *                                   打開時優先於舊的紅方湖目標規則（含
+ *                                   AVALON_EVIL_LAKE_BRING_FRIEND=0）；宣告上
+ *                                   `evilLakeClaimAlwaysGood` 若也打開則以
+ *                                   「一律宣好」為準。細節見
+ *                                   `LakePolicy.pickEvilLakeTargetHuman`。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -42,6 +57,11 @@ export interface AgentTuning {
   humanQuestCardRules: boolean;
   /** 刺殺改用牌譜訓練的模型。 */
   assassinModel: boolean;
+  /**
+   * 紅方持湖改用「盡量湖隊友並宣好」的真人策略（Edward 2026-10-13 裁定），
+   * 細節見 `LakePolicy.pickEvilLakeTargetHuman` / `decideEvilLakeClaimHuman`。
+   */
+  evilLakeHumanStrategy: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -53,6 +73,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodLakeTargetMostSuspicious',
   'humanQuestCardRules',
   'assassinModel',
+  'evilLakeHumanStrategy',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -63,11 +84,15 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLakeTargetMostSuspicious: false,
   humanQuestCardRules: false,
   assassinModel: false,
+  evilLakeHumanStrategy: false,
 });
 
 /**
- * 正式預設（2026-10-12 採用，docs/ai/strength_benchmark.md 第 2 節）。
- * 採用規則：一致性基準更像真人、且自我對打合計勝率 95% 區間下界 ≥ 48%。
+ * 正式預設（2026-10-12 採用，docs/ai/strength_benchmark.md 第 2 節；
+ * 2026-10-13 量過 `evilLakeHumanStrategy` 但不採用，第 6 節）。
+ * 採用規則（2026-10-12 事前版）：一致性基準更像真人、且自我對打合計勝率
+ * 95% 區間下界 ≥ 48%；整合時改依 Edward 原文「更像真人，而且不能讓它
+ * 變弱」：任一立場配對差的 95% 區間整個落在 0 以下就算變弱、不採用。
  * 「合計」= 紅方立場與藍方立場的平均；只動一方的開關另一方恆為 0，
  * 所以這條規則允許單一立場最多約 −4pp 的顯著變弱，換取更像真人。
  *
@@ -78,13 +103,24 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     [−0.9pp, −0.2pp]（統計上可辨地變弱，三個種子方向一致）。合計
  *     49.7% 雖在 48% 線上，Edward 的採用原則是「更像真人，而且不能讓它
  *     變弱」，區間不含 0 就是變弱 → **不採用**（預設關，可用
- *     AVALON_TUNING_EVIL_LAKE_CLAIM_GOOD=1 打開）。注意正式伺服器機器人
- *     的湖宣告走 `GameServer.decideBotLakeClaim`（紅方反說真相），不經
- *     `LakePolicy` / `HeuristicAgent.declareLake`，所以這個開關目前只影響
- *     自我對打與一致性基準，對線上對局沒有效果。
+ *     AVALON_TUNING_EVIL_LAKE_CLAIM_GOOD=1 打開）。
  *   - 其餘開關各自通過，數字見 strength_benchmark.md 第 2 節（
  *     `humanQuestCardRules` 的 R4 規則在聽牌時讓位給 §0，見
  *     `humanQuestCardRule`）。
+ *   - `evilLakeHumanStrategy`（2026-10-13，strength_benchmark.md 第 6 節）：
+ *     對照的是上面這組正式預設（不是 legacy）。更像真人（紅方湖宣告一致性
+ *     ED 50.0→78.6、Sin 61.1→90.7、top 60.4→79.5、population 58.2→73.3），
+ *     但自我對打紅方立場變弱：選定版本用的 seed 20261012 是 −0.4pp
+ *     [−1.0pp, +0.1pp]，換新種子重驗 seed 99 −1.0pp [−1.6pp, −0.4pp]、
+ *     seed 4242 −0.8pp [−1.4pp, −0.3pp]（區間整個在 0 以下），五個種子
+ *     （19000 組）合併 −0.6pp [−0.9pp, −0.3pp] → **不採用**（預設關，可用
+ *     AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY=1 打開）。
+ *
+ * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
+ * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
+ * `HeuristicAgent.pickLakeTarget` / `declareLake`），所以湖相關的開關
+ * 對線上對局同樣有效；agent 出錯時才退回舊的隨機目標 / 紅方反說。
+ * 整個退回舊的線上做法：AVALON_BOT_LAKE_VIA_AGENT=0（GameServer）。
  */
 export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   r3NormalVotePrior: 0.6,
@@ -93,6 +129,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLakeTargetMostSuspicious: true,
   humanQuestCardRules: true,
   assassinModel: true,
+  evilLakeHumanStrategy: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -103,6 +140,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodLakeTargetMostSuspicious: 'AVALON_TUNING_GOOD_LAKE_MOST_SUSPICIOUS',
   humanQuestCardRules: 'AVALON_TUNING_HUMAN_QUEST_CARDS',
   assassinModel: 'AVALON_TUNING_ASSASSIN_MODEL',
+  evilLakeHumanStrategy: 'AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY',
 });
 
 function parseBool(raw: string): boolean | undefined {

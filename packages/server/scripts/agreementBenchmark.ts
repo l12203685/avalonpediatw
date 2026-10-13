@@ -28,6 +28,8 @@
  * forward telemetry printed below confirms it), plus
  * `HeuristicAgent.pickLakeTarget` / `declareLake` for the lake.
  * Deterministic: Math.random is reseeded per (game, seat, decision).
+ * Besides the headline table it prints a Lady-of-the-Lake table (target:
+ * all / red holders / per red role; red holder claim: overall / per role).
  */
 
 import * as fs from 'fs';
@@ -41,6 +43,11 @@ import {
   type AgentTuning,
 } from '../src/ai/AgentTuning';
 import { getForwardTelemetry } from '../src/ai/forward/ForwardAgent';
+import {
+  DEFAULT_EVIL_LAKE_HUMAN_OPTIONS,
+  evilLakeHumanOptionsFromEnv,
+  setEvilLakeHumanOptions,
+} from '../src/ai/LakePolicy';
 import { rowsFromSheet, parseReplayGame, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
 import { replayGame, type DecisionOutcome } from '../src/ai/benchmark/agreement';
 import { computeTopPerformers, cohortKey, BENCHMARK_ROLES } from '../src/ai/benchmark/cohorts';
@@ -142,9 +149,34 @@ function roleTable(cohorts: readonly CohortReport[]): string {
   return all.map((r) => r.map((c, i) => c.padEnd(widths[i])).join('  ')).join('\n');
 }
 
+const EVIL_LAKE_ROLES = ['assassin', 'morgana', 'mordred', 'oberon'] as const;
+
+/**
+ * Lady-of-the-Lake rows for every cohort: target (all / red holders / per
+ * red role) and the red holder's claim (overall / per red role).
+ * Format: agent% (default% / rule%) n.
+ */
+function lakeTable(cohorts: readonly CohortReport[]): string {
+  const rows: Array<{ label: string; key: string }> = [
+    { label: 'lake target (all)', key: 'lakeTarget/all' },
+    { label: 'lake target (red holder)', key: 'lakeTarget/side=evil' },
+    ...EVIL_LAKE_ROLES.map((r) => ({ label: `lake target ${r}`, key: `lakeTarget/role=${r}` })),
+    { label: 'lake claim (red holder)', key: 'lakeClaim/side=evil' },
+    ...EVIL_LAKE_ROLES.map((r) => ({ label: `lake claim ${r}`, key: `lakeClaim/role=${r}` })),
+  ];
+  return formatTable(cohorts, rows).split('\n').slice(0, rows.length + 1).join('\n');
+}
+
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
   const tuning = resolveAgentTuning(args.flags, args.legacy ? { ...LEGACY_AGENT_TUNING } : undefined);
+  // Benchmark-only tactic mix for `evilLakeHumanStrategy`
+  // (AVALON_EVIL_LAKE_HUMAN_VARIANT, e.g. "chaos=never"); the server never reads it.
+  const evilLakeOptions = evilLakeHumanOptionsFromEnv();
+  setEvilLakeHumanOptions(evilLakeOptions);
+  if (JSON.stringify(evilLakeOptions) !== JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)) {
+    process.stderr.write(`evilLakeHumanStrategy tactic mix: ${JSON.stringify(evilLakeOptions)}\n`);
+  }
   const started = Date.now();
   const data = JSON.parse(fs.readFileSync(args.cache, 'utf8')) as Record<string, string[][]>;
   const rows = rowsFromSheet(data['牌譜'] ?? []);
@@ -207,6 +239,8 @@ function main(): void {
   }
   console.log('\nAgreement: agent% (default-baseline% / rule-baseline%) n');
   console.log(formatTable(cohorts));
+  console.log('\nLady of the Lake: agent% (default-baseline% / rule-baseline%) n');
+  console.log(lakeTable(cohorts));
   console.log('\nPer-role agent agreement (agent%/n)');
   console.log(roleTable([primary, topCohort, ...(args.population ? [population] : [])]));
   for (const c of cohorts) {

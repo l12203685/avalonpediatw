@@ -36,6 +36,12 @@
  *   - Combined = per-seed mean of (evil win in A, good win in B); exactly
  *     50% when the variant equals the baseline (the two games coincide).
  *
+ * Run with USE_FORWARD_REASONING=true (production routing); the report
+ * ends with the ForwardAgent telemetry line, which should say 0 fallbacks.
+ * It also prints what red holders did with the lake in A and C (teammate
+ * laked when legal, blue targets declared red, Oberon's hit rate) —
+ * counted only, no randomness consumed, so win numbers are unaffected.
+ *
  * Win definition = the engine's final result: evil wins on three fails or
  * on a Merlin kill after three successes; good wins only when Merlin
  * survives (Edward 2026-10-12 — 最終藍勝 = 三藍活).
@@ -53,6 +59,12 @@ import {
   type AgentTuning,
 } from '../src/ai/AgentTuning';
 import { seededRandom, withSeededRandom } from '../src/ai/benchmark/agreement';
+import { getForwardTelemetry } from '../src/ai/forward/ForwardAgent';
+import {
+  DEFAULT_EVIL_LAKE_HUMAN_OPTIONS,
+  evilLakeHumanOptionsFromEnv,
+  setEvilLakeHumanOptions,
+} from '../src/ai/LakePolicy';
 import type { AgentAction, AvalonAgent, PlayerObservation, SelfPlayResult } from '../src/ai/types';
 
 interface Args {
@@ -122,6 +134,35 @@ export function pairedDiff(diffs: readonly number[]): Interval {
   return { rate: mean, low: mean - half, high: mean + half };
 }
 
+// ── Red-held lake mix (descriptive) ────────────────────────────
+
+/**
+ * What red holders do with the lake, counted per arrangement (A = variant
+ * red, C = baseline red). Observation only: no randomness is consumed, so
+ * the win numbers are identical with or without it. "Seeing" = a red who
+ * sees teammates (assassin / Morgana / Mordred); Oberon sees nobody.
+ */
+export interface RedLakeMix {
+  /** Seeing-red lakes with ≥ 1 visible teammate legal, and how many laked one. */
+  seeingTeammateLegal: number;
+  seeingTeammateLaked: number;
+  /** Seeing-red lakes on a blue target, and how many of those were declared red. */
+  seeingBlue: number;
+  seeingBlueClaimedRed: number;
+  /** Oberon lakes, how many hit a red, and his blue targets declared red. */
+  oberonLakes: number;
+  oberonHitRed: number;
+  oberonBlue: number;
+  oberonBlueClaimedRed: number;
+}
+
+function emptyRedLakeMix(): RedLakeMix {
+  return {
+    seeingTeammateLegal: 0, seeingTeammateLaked: 0, seeingBlue: 0, seeingBlueClaimedRed: 0,
+    oberonLakes: 0, oberonHitRed: 0, oberonBlue: 0, oberonBlueClaimedRed: 0,
+  };
+}
+
 // ── Agents ─────────────────────────────────────────────────────
 
 /**
@@ -137,6 +178,9 @@ class SwitchAgent implements AvalonAgent {
   private readonly base: HeuristicAgent;
   private inner: HeuristicAgent;
   gameSeed = '';
+  /** Red-held lake counter for this game's arrangement (descriptive only). */
+  lakeMix: RedLakeMix | undefined;
+  private pendingLake: { oberon: boolean; teammate: boolean } | null = null;
 
   constructor(
     agentId: string,
@@ -175,7 +219,19 @@ class SwitchAgent implements AvalonAgent {
   }
 
   pickLakeTarget(obs: PlayerObservation, validTargets?: readonly string[]): string {
-    return withSeededRandom(this.seedFor(obs, 'lake'), () => this.inner.pickLakeTarget(obs, validTargets));
+    const target = withSeededRandom(this.seedFor(obs, 'lake'), () => this.inner.pickLakeTarget(obs, validTargets));
+    this.pendingLake = null;
+    if (this.lakeMix && obs.myTeam === 'evil') {
+      const oberon = obs.myRole === 'oberon';
+      const teammate = obs.knownEvils.includes(target);
+      if (oberon) this.lakeMix.oberonLakes++;
+      else if ((validTargets ?? []).some((id) => obs.knownEvils.includes(id))) {
+        this.lakeMix.seeingTeammateLegal++;
+        if (teammate) this.lakeMix.seeingTeammateLaked++;
+      }
+      this.pendingLake = { oberon, teammate };
+    }
+    return target;
   }
 
   declareLake(
@@ -183,8 +239,19 @@ class SwitchAgent implements AvalonAgent {
     targetId: string,
     trueFaction: 'good' | 'evil' | undefined,
   ): 'good' | 'evil' | null {
-    return withSeededRandom(this.seedFor(obs, `claim-${targetId}`), () =>
+    const claim = withSeededRandom(this.seedFor(obs, `claim-${targetId}`), () =>
       this.inner.declareLake(obs, targetId, trueFaction));
+    const pending = this.pendingLake;
+    this.pendingLake = null;
+    if (this.lakeMix && pending && !pending.teammate) {
+      const m = this.lakeMix;
+      if (pending.oberon && trueFaction === 'evil') m.oberonHitRed++;
+      if (trueFaction === 'good') {
+        if (pending.oberon) { m.oberonBlue++; if (claim === 'evil') m.oberonBlueClaimedRed++; }
+        else { m.seeingBlue++; if (claim === 'evil') m.seeingBlueClaimedRed++; }
+      }
+    }
+    return claim;
   }
 
   onGameEnd(obs: PlayerObservation, won: boolean): void {
@@ -227,6 +294,7 @@ async function playPair(
   seed: number,
   variantTuning: AgentTuning,
   baseTuning: AgentTuning,
+  lakeMix?: { variantRed: RedLakeMix; control: RedLakeMix },
 ): Promise<PairOutcome> {
   const out: Partial<PairOutcome> = {};
   const originalRandom = Math.random;
@@ -237,7 +305,8 @@ async function playPair(
     const agents = Array.from({ length: 10 }, (_, i) =>
       new SwitchAgent(`P${i + 1}`, variantTeam, tuning, baseTuning));
     const gameSeed = `${seed}|${index}`;
-    for (const a of agents) a.gameSeed = gameSeed;
+    const mix = arrangement === 'variantBlue' ? undefined : lakeMix?.[arrangement];
+    for (const a of agents) { a.gameSeed = gameSeed; a.lakeMix = mix; }
     // Seat shuffle + role deal use the global Math.random.
     Math.random = seededRandom(`${gameSeed}|setup`);
     try {
@@ -285,6 +354,10 @@ export interface StrengthReport {
   /** Assassination stage (three-blue games only): Merlin-hit rate in A / B / C. */
   merlinHit: { variantRed: StanceStats; variantBlue: StanceStats; control: StanceStats };
   avgRounds: number;
+  /** ForwardAgent routing telemetry for the whole run (USE_FORWARD_REASONING). */
+  forwardTelemetry?: { totalDecisions: number; fallbacks: number };
+  /** Red-held lake mix in A (variant red) and C (baseline red); descriptive. */
+  redLakeMix?: { variantRed: RedLakeMix; control: RedLakeMix };
 }
 
 function summarise(
@@ -374,6 +447,15 @@ export function markdownTable(reports: readonly StrengthReport[]): string {
   return [header, sep, ...rows].join('\n');
 }
 
+function fmtRedLakeMix(m: RedLakeMix): string {
+  const frac = (k: number, n: number): string => (n === 0 ? '—' : `${pct(k / n)} (${k}/${n})`);
+  return [
+    `teammate laked when legal ${frac(m.seeingTeammateLaked, m.seeingTeammateLegal)}`,
+    `blue declared red: seeing reds ${frac(m.seeingBlueClaimedRed, m.seeingBlue)}, Oberon ${frac(m.oberonBlueClaimedRed, m.oberonBlue)}, all ${frac(m.seeingBlueClaimedRed + m.oberonBlueClaimedRed, m.seeingBlue + m.oberonBlue)}`,
+    `Oberon target red ${frac(m.oberonHitRed, m.oberonLakes)}`,
+  ].join('; ');
+}
+
 export function textReport(r: StrengthReport): string {
   return [
     `label: ${r.label}`,
@@ -385,6 +467,12 @@ export function textReport(r: StrengthReport): string {
     `variant combined    ${fmtCombined(r)}`,
     `three-red rate   A ${fmtStance(r.threeRed.variantRed)}   B ${fmtStance(r.threeRed.variantBlue)}   C ${fmtStance(r.threeRed.control)}`,
     `Merlin-hit rate  A ${fmtStance(r.merlinHit.variantRed)}   B ${fmtStance(r.merlinHit.variantBlue)}   C ${fmtStance(r.merlinHit.control)}`,
+    ...(r.redLakeMix
+      ? [
+        `red lake mix A  ${fmtRedLakeMix(r.redLakeMix.variantRed)}`,
+        `red lake mix C  ${fmtRedLakeMix(r.redLakeMix.control)}`,
+      ]
+      : []),
   ].join('\n');
 }
 
@@ -392,17 +480,25 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const variantTuning = resolveAgentTuning(args.flags, { ...LEGACY_AGENT_TUNING });
   const baseTuning = resolveAgentTuning(args.base, { ...LEGACY_AGENT_TUNING });
+  // Benchmark-only tactic mix for `evilLakeHumanStrategy`
+  // (AVALON_EVIL_LAKE_HUMAN_VARIANT, e.g. "chaos=never"); the server never reads it.
+  const evilLakeOptions = evilLakeHumanOptionsFromEnv();
+  setEvilLakeHumanOptions(evilLakeOptions);
+  if (JSON.stringify(evilLakeOptions) !== JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)) {
+    process.stderr.write(`evilLakeHumanStrategy tactic mix: ${JSON.stringify(evilLakeOptions)}\n`);
+  }
   const label = args.label ?? describeAgentTuning(variantTuning);
   const engine = new SelfPlayEngine();
   const started = Date.now();
   const pairs: PairOutcome[] = [];
+  const redLakeMix = { variantRed: emptyRedLakeMix(), control: emptyRedLakeMix() };
 
   // GameEngine prints every event as JSON on stdout; keep the run quiet.
   const originalLog = console.log;
   console.log = (): void => undefined;
   try {
     for (let i = 0; i < args.games; i++) {
-      pairs.push(await playPair(engine, i, args.seed, variantTuning, baseTuning));
+      pairs.push(await playPair(engine, i, args.seed, variantTuning, baseTuning, redLakeMix));
       if ((i + 1) % 100 === 0 || i + 1 === args.games) {
         const elapsed = (Date.now() - started) / 1000;
         const eta = (elapsed / (i + 1)) * (args.games - i - 1);
@@ -414,7 +510,14 @@ async function main(): Promise<void> {
   }
 
   const report = summarise(label, variantTuning, baseTuning, args.seed, pairs, (Date.now() - started) / 1000);
+  const telemetry = getForwardTelemetry();
+  report.forwardTelemetry = { totalDecisions: telemetry.totalDecisions, fallbacks: telemetry.fallbacks };
+  report.redLakeMix = redLakeMix;
   console.log(textReport(report));
+  console.log(`forward telemetry: ${telemetry.totalDecisions} decisions via ForwardAgent, ${telemetry.fallbacks} fallbacks`);
+  if (telemetry.totalDecisions === 0) {
+    console.warn('WARNING: ForwardAgent path not active (set USE_FORWARD_REASONING=true) — results reflect the baseline HeuristicAgent only.');
+  }
   console.log('');
   console.log(markdownTable([report]));
   if (args.json) {

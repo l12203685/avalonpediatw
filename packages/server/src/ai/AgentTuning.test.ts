@@ -85,6 +85,16 @@ describe('AgentTuning — flags', () => {
     expect(t.assassinModel).toBe(DEFAULT_AGENT_TUNING.assassinModel);
   });
 
+  it('evilLakeHumanStrategy (2026-10-13): opt-in (not in the default), flag, env var and description', () => {
+    // Weaker as red on fresh self-play seeds → not adopted (strength_benchmark.md 第 6 節).
+    expect(DEFAULT_AGENT_TUNING.evilLakeHumanStrategy).toBe(false);
+    expect(parseTuningFlag('evilLakeHumanStrategy')).toEqual({ evilLakeHumanStrategy: true });
+    expect(parseTuningFlag('evilLakeHumanStrategy=0')).toEqual({ evilLakeHumanStrategy: false });
+    expect(AGENT_TUNING_ENV.evilLakeHumanStrategy).toBe('AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY');
+    expect(tuningFromEnv({ AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY: 'on' })).toEqual({ evilLakeHumanStrategy: true });
+    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, evilLakeHumanStrategy: true })).toBe('evilLakeHumanStrategy');
+  });
+
   it('resolveAgentTuning layers overrides on top of a base', () => {
     const t = resolveAgentTuning({ assassinModel: true }, { ...LEGACY_AGENT_TUNING });
     expect(t).toEqual({ ...LEGACY_AGENT_TUNING, assassinModel: true });

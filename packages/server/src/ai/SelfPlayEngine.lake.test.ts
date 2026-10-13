@@ -28,8 +28,16 @@ import type { PlayerObservation, VoteRecord, QuestRecord } from './types';
 // `getDefaultAgentTuning()`, which re-reads `AVALON_TUNING_*` from the
 // environment on every call, and strength_benchmark.md tells developers to
 // export those variables as a temporary switch.
+//
+// 2026-10-13: `evilLakeHumanStrategy` (Edward's ruling: a red holder keeps
+// the lake on a visible teammate and declares them good) is an opt-in
+// switch — measured weaker as red in self-play, so not in the production
+// default. The evil-holder tests below pin the older evil branch with
+// `LEGACY` explicitly and add the opt-in behaviour (`HUMAN_STRATEGY`) next
+// to it. `LakePolicy.tuning.test.ts` covers the strategy itself.
 const LEGACY = { ...LEGACY_AGENT_TUNING };
 const PRODUCTION = { ...DEFAULT_AGENT_TUNING };
+const HUMAN_STRATEGY = { ...DEFAULT_AGENT_TUNING, evilLakeHumanStrategy: true };
 
 function makeObs(partial: Partial<PlayerObservation> & {
   allPlayerIds: string[];
@@ -196,10 +204,15 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
       questHistory,
     });
     const validTargets = ids.filter(id => id !== 'P1');
-    const target = engine.pickLadyTarget('evil', obs, validTargets);
+    const target = engine.pickLadyTarget('evil', obs, validTargets, LEGACY);
     expect(target).toBe('P3'); // pressured ally washed, not filtered out
     // Declaration hook → publicly claim ally is "good".
-    expect(engine.decideLakeAnnouncement('evil', 'P3', obs, 'evil')).toBe('good');
+    expect(engine.decideLakeAnnouncement('evil', 'P3', obs, 'evil', LEGACY)).toBe('good');
+    // Same wash under the production default and under the opt-in human
+    // strategy (the pressured ally is also the one P1 never left off a team).
+    expect(engine.pickLadyTarget('evil', obs, validTargets, PRODUCTION)).toBe('P3');
+    expect(engine.pickLadyTarget('evil', obs, validTargets, HUMAN_STRATEGY)).toBe('P3');
+    expect(engine.decideLakeAnnouncement('evil', 'P3', obs, 'evil', HUMAN_STRATEGY)).toBe('good');
   });
 
   it('evil holder lakes the most Merlin-like opponent when no ally is under pressure', () => {
@@ -229,10 +242,15 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
       voteHistory,
     });
     const validTargets = ids.filter(id => id !== 'P1');
-    const target = engine.pickLadyTarget('evil', obs, validTargets);
+    const target = engine.pickLadyTarget('evil', obs, validTargets, LEGACY);
     expect(target).toBe('P4');
     // Declare "good" on the Merlin-like opponent to disguise assassination intel.
-    expect(engine.decideLakeAnnouncement('evil', 'P4', obs, 'good')).toBe('good');
+    expect(engine.decideLakeAnnouncement('evil', 'P4', obs, 'good', LEGACY)).toBe('good');
+    // Opt-in human strategy (盡量湖隊友): a visible teammate is legal and
+    // another lake follows → lake the teammate, declare "good".
+    const human = engine.pickLadyTarget('evil', obs, validTargets, HUMAN_STRATEGY);
+    expect(['P3', 'P5']).toContain(human);
+    expect(engine.decideLakeAnnouncement('evil', human, obs, 'evil', HUMAN_STRATEGY)).toBe('good');
   });
 
   it('evil holder declares "evil" on a clean non-Merlin-like opponent to muddy narrative', () => {
@@ -251,6 +269,9 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
     // docs/ai/strength_benchmark.md), so the default still muddies; switched on it says "good".
     expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', PRODUCTION)).toBe('evil');
     expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', { ...PRODUCTION, evilLakeClaimAlwaysGood: true })).toBe('good');
+    // Opt-in human strategy (2026-10-13, not in the default): a blue with no
+    // shared failed mission (red not listening) gets the truthful "good".
+    expect(engine.decideLakeAnnouncement('evil', 'P2', obs, 'good', HUMAN_STRATEGY)).toBe('good');
   });
 
   it('evil holder with no pressured ally and no distinct opponent picks deterministically', () => {
@@ -266,9 +287,11 @@ describe('SelfPlayEngine — pickLadyTarget (smart path)', () => {
       knownEvils:   ['P3'],
     });
     const validTargets = ['P2', 'P3', 'P4', 'P5'];
-    const target = engine.pickLadyTarget('evil', obs, validTargets);
+    const target = engine.pickLadyTarget('evil', obs, validTargets, LEGACY);
     expect(['P2', 'P4', 'P5']).toContain(target);
     expect(target).not.toBe('P3'); // no pressure on ally → no wash
+    // Opt-in human strategy: the teammate is laked even without pressure (盡量湖隊友).
+    expect(engine.pickLadyTarget('evil', obs, validTargets, HUMAN_STRATEGY)).toBe('P3');
   });
 });
 
@@ -300,10 +323,12 @@ describe('SelfPlayEngine — evil lake (Fix #2 filter-out-allies regression flag
       questHistory,
     });
     const validTargets = ids.filter(id => id !== 'P1');
-    const target = engine.pickLadyTarget('evil', obs, validTargets);
+    const target = engine.pickLadyTarget('evil', obs, validTargets, LEGACY);
     expect(target).not.toBe('P3');
     expect(target).not.toBe('P5');
     expect(['P2', 'P4', 'P6', 'P7']).toContain(target);
+    // `evilLakeHumanStrategy` (opt-in, 2026-10-13) supersedes this regression flag.
+    expect(['P3', 'P5']).toContain(engine.pickLadyTarget('evil', obs, validTargets, HUMAN_STRATEGY));
   });
 });
 

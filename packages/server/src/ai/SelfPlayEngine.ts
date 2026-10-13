@@ -25,23 +25,8 @@ import {
   SelfPlayResult,
 } from './types';
 import { declarerPostActionConsistencyPrior } from './priors/EvActionPriors';
-import { pickLakeTargetForTeam, decideLakeClaimForTeam } from './LakePolicy';
+import { pickLakeTargetForTeam, decideLakeClaimForTeam, hasLakeApi } from './LakePolicy';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
-
-/** Agent-level lake API (HeuristicAgent has it; RandomAgent does not). */
-interface LakeCapableAgent extends AvalonAgent {
-  pickLakeTarget(obs: PlayerObservation, validTargets?: readonly string[]): string;
-  declareLake(
-    obs: PlayerObservation,
-    targetId: string,
-    trueFaction: 'good' | 'evil' | undefined,
-  ): 'good' | 'evil' | null;
-}
-
-function hasLakeApi(agent: AvalonAgent): agent is LakeCapableAgent {
-  const a = agent as Partial<LakeCapableAgent>;
-  return typeof a.pickLakeTarget === 'function' && typeof a.declareLake === 'function';
-}
 
 export class SelfPlayEngine {
   private roomManager = new RoomManager();

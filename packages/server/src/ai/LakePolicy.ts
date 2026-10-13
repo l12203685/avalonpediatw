@@ -18,11 +18,12 @@
  *     on the agent.
  */
 
-import type { PlayerObservation } from './types';
+import type { AvalonAgent, PlayerObservation } from './types';
 import {
   lakeDeclareLiePrior,
   lakeDeclareLieRoleRate,
 } from './priors/EvActionPriors';
+import { AVALON_CONFIG } from '@avalon/shared';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 
 type Camp = 'good' | 'evil';
@@ -58,6 +59,26 @@ export function isEvilLakeBringFriendEnabled(): boolean {
 }
 
 // ── Agent-level API ────────────────────────────────────────────
+
+/**
+ * An agent that makes its own lake decisions (HeuristicAgent does;
+ * RandomAgent does not). SelfPlayEngine and the live GameServer bot path
+ * both ask the agent through this API so per-agent `AgentTuning` applies.
+ */
+export interface LakeCapableAgent extends AvalonAgent {
+  pickLakeTarget(obs: PlayerObservation, validTargets?: readonly string[]): string;
+  declareLake(
+    obs: PlayerObservation,
+    targetId: string,
+    trueFaction: Camp | undefined,
+  ): Camp | null;
+}
+
+export function hasLakeApi(agent: AvalonAgent | undefined): agent is LakeCapableAgent {
+  if (!agent) return false;
+  const a = agent as Partial<LakeCapableAgent>;
+  return typeof a.pickLakeTarget === 'function' && typeof a.declareLake === 'function';
+}
 
 /**
  * Legal lake targets derivable from public information: every seat except
@@ -188,6 +209,15 @@ export function pickLakeTargetForTeam(
     )[0];
   }
 
+  // ── AgentTuning.evilLakeHumanStrategy (Edward 2026-10-13 ruling) ──
+  // 「紅方湖中應該是盡量留在隊友身上並說謊」— supersedes the bring-friend
+  // heuristic below (and its AVALON_EVIL_LAKE_BRING_FRIEND=0 regression
+  // flag) when on. Deterministic; no Math.random calls, so the legacy
+  // call order is untouched when the switch is off.
+  if (tuning.evilLakeHumanStrategy) {
+    return pickEvilLakeTargetHuman(obs, validTargets);
+  }
+
   // Evil branch — Edward 2026-04-22 12:39 +08 correction.
   if (isEvilLakeBringFriendEnabled()) {
     // Consider every valid target (including allies) — do not filter knownEvils.
@@ -288,7 +318,14 @@ export function decideLakeClaimForTeam(
   // ── AgentTuning.evilLakeClaimAlwaysGood (2026-10-12) ──
   // 一致性基準第 7 節：ED 當紅方 14 次有 13 次說實話、top 群也偏向宣
   // 「好」；開關打開時紅方一律宣好（隊友洗白、對手也說好）。
+  // Precedence: this literal "always good" switch wins over
+  // `evilLakeHumanStrategy`'s claim when both are on (the human strategy
+  // still picks the target).
   if (tuning.evilLakeClaimAlwaysGood) return 'good';
+  // ── AgentTuning.evilLakeHumanStrategy (Edward 2026-10-13 ruling) ──
+  if (tuning.evilLakeHumanStrategy) {
+    return decideEvilLakeClaimHuman(obs, targetId, actualTargetTeam);
+  }
   const knownEvilSet = new Set(obs.knownEvils);
   if (knownEvilSet.has(targetId)) {
     // Ally → always publicly wash as good.
@@ -319,6 +356,250 @@ export function decideLakeClaimForTeam(
     }
   }
   return baseDecision;
+}
+
+// ── Human evil-lake strategy (AgentTuning.evilLakeHumanStrategy) ──
+
+/**
+ * Tactic-mix knobs of the human evil-lake strategy. The defaults are the
+ * policy behind `evilLakeHumanStrategy`; the alternatives exist for the
+ * benchmark scripts only (`AVALON_EVIL_LAKE_HUMAN_VARIANT`, read by the
+ * scripts through `evilLakeHumanOptionsFromEnv` + `setEvilLakeHumanOptions`;
+ * the server never reads it) and are documented in
+ * docs/ai/strength_benchmark.md.
+ */
+export interface EvilLakeHumanOptions {
+  /**
+   * Last lake (no lake follows, so keeping the token on the red side has
+   * no value):
+   *   - 'pressured' — lake a visible teammate only when one has any public
+   *     pressure (suspicion > 0) to wash them onto the last mission;
+   *     otherwise lake a blue (default). In practice nearly every teammate
+   *     has some pressure by then (2-2 after R4): on the 147 human
+   *     last-lake states with a legal teammate this still lakes the
+   *     teammate 143 times (humans: 26), so it behaves almost like 'always';
+   *   - 'always'    — always prefer a teammate (pure 「盡量」).
+   */
+  lastLake: 'pressured' | 'always';
+  /**
+   * Declaration on a blue target (the holder saw 'good'):
+   *   - 'frame'  — chaos ('evil') only when the holder and the target sat
+   *                on the same failed mission and red needs just one more
+   *                fail (frame the co-suspect, shift the blame); otherwise
+   *                truthful 'good' (goodwill) (default);
+   *   - 'never'  — always truthful 'good' (pure goodwill);
+   *   - 'always' — always 'evil' (pure chaos).
+   */
+  chaos: 'frame' | 'never' | 'always';
+  /**
+   * Whom to vouch for ("blue" claim) when several candidates are legal:
+   *   - 'pressured'  — the most publicly suspected teammate (the claim
+   *                    washes the most pressure) / the most suspicious
+   *                    blue (first cut);
+   *   - 'consistent' — first the seat the holder left off the fewest
+   *                    teams they led (0 = kept on every one), then the
+   *                    order above (default). Vouching for someone you left
+   *                    off your own teams is the classic tell (硬3「替 B
+   *                    背書」; the bots' `findRule3Violators` pins such a
+   *                    holder at ≥ 0.85 suspicion).
+   */
+  vouch: 'pressured' | 'consistent';
+}
+
+/**
+ * The switch's tactic mix (2026-10-13, docs/ai/strength_benchmark.md 第 6
+ * 節). On the selection seed 20261012 the first cut (`vouch: 'pressured'`)
+ * was −1.6pp [−2.2pp, −1.1pp] as red and this mix −0.4pp [−1.0pp, +0.1pp],
+ * but fresh seeds put this mix below 0 too (seed 99 −1.0pp, 4242 −0.8pp,
+ * both intervals entirely below 0; `chaos: 'never'` the same), so the
+ * switch itself is NOT in `DEFAULT_AGENT_TUNING`.
+ */
+export const DEFAULT_EVIL_LAKE_HUMAN_OPTIONS: Readonly<EvilLakeHumanOptions> = Object.freeze({
+  lastLake: 'pressured',
+  chaos: 'frame',
+  vouch: 'consistent',
+});
+
+let activeEvilLakeHumanOptions: Readonly<EvilLakeHumanOptions> = DEFAULT_EVIL_LAKE_HUMAN_OPTIONS;
+
+/**
+ * Benchmark scripts only: swap the tactic mix used when the strategy
+ * functions get no explicit `options` (`undefined` restores the default).
+ * The server never calls this, so the env knob below cannot reach live
+ * bots.
+ */
+export function setEvilLakeHumanOptions(options: EvilLakeHumanOptions | undefined): void {
+  activeEvilLakeHumanOptions = Object.freeze({ ...(options ?? DEFAULT_EVIL_LAKE_HUMAN_OPTIONS) });
+}
+
+/** The tactic mix currently in effect (the default unless a script set one). */
+export function getEvilLakeHumanOptions(): Readonly<EvilLakeHumanOptions> {
+  return activeEvilLakeHumanOptions;
+}
+
+/**
+ * Parses the benchmark-only knob
+ * `AVALON_EVIL_LAKE_HUMAN_VARIANT="lastLake=always,chaos=never,vouch=consistent"`.
+ * Only the benchmark scripts read it (and hand the result to
+ * `setEvilLakeHumanOptions`); the strategy functions do not look at the
+ * environment. Unknown keys / values are ignored.
+ */
+export function evilLakeHumanOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): EvilLakeHumanOptions {
+  const out: EvilLakeHumanOptions = { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS };
+  const raw = env.AVALON_EVIL_LAKE_HUMAN_VARIANT;
+  if (!raw) return out;
+  for (const part of raw.split(',')) {
+    const [k, v] = part.split('=').map((x) => x.trim());
+    if (k === 'lastLake' && (v === 'pressured' || v === 'always')) out.lastLake = v;
+    if (k === 'chaos' && (v === 'frame' || v === 'never' || v === 'always')) out.chaos = v;
+    if (k === 'vouch' && (v === 'pressured' || v === 'consistent')) out.vouch = v;
+  }
+  return out;
+}
+
+/**
+ * Whether another Lady-of-the-Lake phase can still follow this one. The
+ * lake is used after rounds 2 .. (last − 1), so after round 4 of a
+ * 5-round game the next holder never gets to use it.
+ */
+export function nextLakeExists(obs: PlayerObservation): boolean {
+  const rounds = AVALON_CONFIG[obs.playerCount]?.questTeams.length ?? 5;
+  return obs.currentRound + 2 <= rounds;
+}
+
+/** Holder and `targetId` were both on at least one failed mission. */
+function sharedFailedMission(obs: PlayerObservation, targetId: string): boolean {
+  return obs.questHistory.some(
+    (q) => q.result === 'fail' && q.team.includes(obs.myPlayerId) && q.team.includes(targetId),
+  );
+}
+
+/** Red needs only one more failed mission (two fails already). */
+function redListening(obs: PlayerObservation): boolean {
+  return obs.questResults.filter((r) => r === 'fail').length >= 2;
+}
+
+/**
+ * Edward 2026-10-13 ruling — red Lady-of-the-Lake target (behind the
+ * opt-in switch `AgentTuning.evilLakeHumanStrategy`, off by default):
+ *
+ *   「紅方湖中應該是盡量留在隊友身上並說謊(湖紅方說藍方), 但看情況依據戰術
+ *    可以改變, 例如湖藍方說紅方(不交給隊友但是讓資訊變混亂) 或是湖藍方說
+ *    藍方說實話買取好感度讓自己或隊友進任務」
+ *
+ * The laked player becomes the next holder, so laking a visible teammate
+ * keeps the lake on the red side (blue never gets a true inspection).
+ *
+ *   1. A visible teammate is legal and another lake follows → lake the
+ *      teammate. Which one (`vouch`): by default the teammate the holder
+ *      left off the fewest of the teams they led (a "blue" claim on
+ *      someone you left off your own teams is the classic tell), then the
+ *      most publicly suspected (the claim washes the most pressure), then
+ *      seat order.
+ *   2. Last lake (nothing follows, the token is worthless) → lake a
+ *      teammate when any of them has some pressure (suspicion > 0) — the
+ *      wash helps them onto the deciding mission; only when every legal
+ *      teammate is spotless fall through to a blue (`lastLake: 'always'`
+ *      keeps preferring the teammate). At 2-2 after R4 nearly every
+ *      teammate has some pressure, so this rarely falls through: on the
+ *      147 human last-lake states with a legal teammate the rule lakes the
+ *      teammate 143 times, while humans did so 26 times (17.7%).
+ *   3. No teammate legal (or rule 2 fell through) → lake a blue. Framing
+ *      (`chaos: 'frame'`, red listening): a blue who shared a failed
+ *      mission with the holder (most suspicious first), to be declared
+ *      red. Otherwise goodwill: the same vouch order as rule 1 (fewest
+ *      times left off, then most suspicious, then seat order).
+ *
+ * Oberon sees no teammate, so he always takes rule 3 with the same order
+ * (framing co-suspect when red is listening, else fewest times left off,
+ * then most suspicious) and covers a red find with 'good' (see
+ * `decideEvilLakeClaimHuman`). This does not find hidden reds: on the 289
+ * human Oberon lake states the rule's target is red 27.7% of the time
+ * (80/289), below a uniform pick among legal targets (32.8%) and humans
+ * (33.6%), probably because Oberon's own fails put suspicion on the
+ * blues who went with him, so "most suspicious" is not "most likely red"
+ * from his seat.
+ *
+ * Human data (docs/ai/strength_benchmark.md 第 6 節): humans with a legal
+ * teammate lake one only ~24% of the time (≈ the 22% chance level),
+ * declare a laked teammate blue 84%, and declare a laked blue truthfully
+ * blue 75%; the red claim on a blue peaks (36%; top cohort 52%) when
+ * holder and target shared a failed mission and red is listening. The
+ * target rule follows the ruling (normative), the claim rule the human
+ * majority plus that framing state.
+ */
+export function pickEvilLakeTargetHuman(
+  obs: PlayerObservation,
+  validTargets: readonly string[],
+  options: Readonly<EvilLakeHumanOptions> = activeEvilLakeHumanOptions,
+): string {
+  if (validTargets.length === 0) return '';
+  const visible = new Set(obs.knownEvils);
+  const suspicion = (id: string): number => estimateSuspicionFromHistory(id, obs);
+  const ledTeams = obs.voteHistory.filter((v) => v.leader === obs.myPlayerId);
+  const leftOff = (id: string): number => ledTeams.filter((v) => !v.team.includes(id)).length;
+  // Most suspected first (ties by seat order); with `vouch: 'consistent'`
+  // a stable re-sort puts the seats the holder left off the fewest of
+  // their own teams first (never left off = 0).
+  const vouchOrder = (ids: readonly string[]): string[] => {
+    const ranked = rankByDescendingScore([...ids], suspicion, obs.allPlayerIds);
+    return options.vouch === 'consistent' ? ranked.sort((a, b) => leftOff(a) - leftOff(b)) : ranked;
+  };
+  const allies = vouchOrder(validTargets.filter((id) => visible.has(id)));
+  const others = validTargets.filter((id) => !visible.has(id));
+
+  if (allies.length > 0) {
+    if (nextLakeExists(obs) || options.lastLake === 'always') return allies[0];
+    const pressured = allies.find((id) => suspicion(id) > 0);
+    if (pressured !== undefined) return pressured;
+  }
+  if (others.length === 0) return allies[0] ?? validTargets[0];
+
+  if (options.chaos === 'frame' && redListening(obs)) {
+    const coSuspects = others.filter((id) => sharedFailedMission(obs, id));
+    if (coSuspects.length > 0) {
+      return rankByDescendingScore(coSuspects, suspicion, obs.allPlayerIds)[0];
+    }
+  }
+  // A blue the holder will vouch for (goodwill) follows the vouch order;
+  // under pure chaos the claim is 'evil', so consistency is irrelevant.
+  return options.chaos === 'always'
+    ? rankByDescendingScore(others, suspicion, obs.allPlayerIds)[0]
+    : vouchOrder(others)[0];
+}
+
+/**
+ * Edward 2026-10-13 ruling — red holder's public claim:
+ *   - visible teammate → 'good' (the lie that keeps them clean);
+ *   - a red the holder could not see before (the hidden Oberon for the
+ *     others, any red for Oberon) → 'good' (cover the newly found ally);
+ *   - blue → truthful 'good' (goodwill: looks like an honest blue, helps
+ *     the holder / a teammate onto missions), except the chaos tactic:
+ *     `chaos: 'frame'` declares 'evil' when the holder and the target sat
+ *     on the same failed mission and red is listening (frame the
+ *     co-suspect; humans' red-claim rate peaks there); `'never'` /
+ *     `'always'` are the pure tactics for the benchmark.
+ * Because the target rule seeks out that framing state, bots running the
+ * switch declare a blue target red far more often than humans do (self-play
+ * seed 20261012: 65.0% of red-held blue lakes, Oberon 78.6%; humans 25.9%),
+ * even though the claim agreement — scored on the human's own target —
+ * goes up. Deterministic (no Math.random).
+ */
+export function decideEvilLakeClaimHuman(
+  obs: PlayerObservation,
+  targetId: string,
+  actualTargetTeam: Camp | undefined,
+  options: Readonly<EvilLakeHumanOptions> = activeEvilLakeHumanOptions,
+): Camp {
+  if (obs.knownEvils.includes(targetId)) return 'good';
+  if (actualTargetTeam === 'evil') return 'good';
+  switch (options.chaos) {
+    case 'always': return 'evil';
+    case 'never': return 'good';
+    case 'frame':
+    default:
+      return redListening(obs) && sharedFailedMission(obs, targetId) ? 'evil' : 'good';
+  }
 }
 
 // ── Public-history scorers ─────────────────────────────────────

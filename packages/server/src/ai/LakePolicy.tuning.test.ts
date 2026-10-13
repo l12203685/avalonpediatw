@@ -2,16 +2,27 @@
  * LakePolicy — AgentTuning switches (2026-10-12):
  *   - `evilLakeClaimAlwaysGood`: evil holder always announces "good";
  *   - `goodLakeTargetMostSuspicious`: good holder inspects the most
- *     suspicious unknown-camp seat instead of the least suspicious.
+ *     suspicious unknown-camp seat instead of the least suspicious;
+ *   - `evilLakeHumanStrategy` (2026-10-13): red holder keeps the lake on a
+ *     visible teammate and declares them good, with the framing / goodwill
+ *     exceptions of Edward's ruling.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
+  DEFAULT_EVIL_LAKE_HUMAN_OPTIONS,
+  decideEvilLakeClaimHuman,
   decideLakeClaimForTeam,
   declareLake,
   estimateSuspicionFromHistory,
+  evilLakeHumanOptionsFromEnv,
+  getEvilLakeHumanOptions,
+  nextLakeExists,
+  pickEvilLakeTargetHuman,
   pickLakeTarget,
   pickLakeTargetForTeam,
+  setEvilLakeHumanOptions,
 } from './LakePolicy';
+import { withSeededRandom } from './benchmark/agreement';
 import { LEGACY_AGENT_TUNING } from './AgentTuning';
 import { HeuristicAgent } from './HeuristicAgent';
 import type { PlayerObservation, QuestRecord, VoteRecord } from './types';
@@ -114,5 +125,202 @@ describe('LakePolicy — evilLakeClaimAlwaysGood', () => {
     const tuned = new HeuristicAgent('P1', undefined, undefined, on);
     expect(tuned.declareLake(evil, 'P5', 'good')).toBe('good');
     expect(tuned.declareLake(evil, 'P2', 'evil')).toBe('good');
+  });
+});
+
+// ── evilLakeHumanStrategy (Edward 2026-10-13 ruling) ──────────
+// 「紅方湖中應該是盡量留在隊友身上並說謊(湖紅方說藍方), 但看情況依據戰術
+//  可以改變, 例如湖藍方說紅方 … 或是湖藍方說藍方說實話買取好感度」
+
+describe('LakePolicy — evilLakeHumanStrategy', () => {
+  const ON = { ...LEGACY_AGENT_TUNING, evilLakeHumanStrategy: true };
+  // P1 assassin sees P2 (Morgana) + P3 (Mordred); P4 is the hidden Oberon.
+  const R1_FAIL: QuestRecord = { round: 1, team: ['P2', 'P5', 'P6'], result: 'fail', failCount: 1 };
+  const R2_OK: QuestRecord = { round: 2, team: ['P3', 'P7', 'P8', 'P9'], result: 'success', failCount: 0 };
+  const firstLake = obs({
+    myRole: 'assassin', myTeam: 'evil', knownEvils: ['P2', 'P3'],
+    currentRound: 2, questResults: ['fail', 'success'], questHistory: [R1_FAIL, R2_OK],
+  });
+  const valid = IDS.filter((id) => id !== 'P1' && id !== 'P10');
+
+  it('nextLakeExists: lakes after R2 / R3 have a successor, the one after R4 does not', () => {
+    expect(nextLakeExists(obs({ currentRound: 2 }))).toBe(true);
+    expect(nextLakeExists(obs({ currentRound: 3 }))).toBe(true);
+    expect(nextLakeExists(obs({ currentRound: 4 }))).toBe(false);
+  });
+
+  it('a legal visible teammate is laked (most suspected first) and declared good', () => {
+    const t = pickLakeTargetForTeam('evil', firstLake, [...valid], ON);
+    expect(t).toBe('P2'); // on the failed R1 mission → more pressure than P3
+    expect(decideLakeClaimForTeam('evil', t, firstLake, 'evil', ON)).toBe('good');
+    // Only the clean teammate left → still the teammate (盡量).
+    const onlyP3 = valid.filter((id) => id !== 'P2');
+    expect(pickLakeTargetForTeam('evil', firstLake, onlyP3, ON)).toBe('P3');
+  });
+
+  it('no visible teammate legal → the most suspicious other seat, truthful "good" on a blue', () => {
+    const noAlly = valid.filter((id) => id !== 'P2' && id !== 'P3');
+    const t = pickLakeTargetForTeam('evil', firstLake, noAlly, ON);
+    expect(t).toBe('P5'); // first failed-mission member in seat order
+    expect(decideLakeClaimForTeam('evil', t, firstLake, 'good', ON)).toBe('good');
+  });
+
+  it('a red the holder could not see (the hidden Oberon) is covered with "good"', () => {
+    expect(decideLakeClaimForTeam('evil', 'P4', firstLake, 'evil', ON)).toBe('good');
+  });
+
+  const R3_FAIL: QuestRecord = { round: 3, team: ['P1', 'P5', 'P7', 'P8'], result: 'fail', failCount: 1 };
+  const R4_OK: QuestRecord = { round: 4, team: ['P3', 'P6', 'P7', 'P8', 'P9'], result: 'success', failCount: 0 };
+  const lastLake = obs({
+    myRole: 'assassin', myTeam: 'evil', knownEvils: ['P2', 'P3'],
+    currentRound: 4, questResults: ['fail', 'success', 'fail', 'success'],
+    questHistory: [R1_FAIL, R2_OK, R3_FAIL, R4_OK],
+  });
+
+  it('last lake: a pressured teammate is still washed; a clean one is skipped for a blue', () => {
+    expect(pickLakeTargetForTeam('evil', lastLake, ['P2', 'P5', 'P6', 'P9'], ON)).toBe('P2');
+    // P3 only on successful missions → suspicion ≤ 0 → lake a blue instead.
+    const t = pickLakeTargetForTeam('evil', lastLake, ['P3', 'P6', 'P9'], ON);
+    expect(t).toBe('P6');
+    // `lastLake: always` keeps the teammate.
+    expect(pickEvilLakeTargetHuman(lastLake, ['P3', 'P6', 'P9'], { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, lastLake: 'always' })).toBe('P3');
+  });
+
+  it('framing: red listening + a blue co-member of a failed mission → lake them and declare "evil"', () => {
+    // P1 and P5 were both on the failed R3 mission; red has two fails.
+    const t = pickLakeTargetForTeam('evil', lastLake, ['P3', 'P5', 'P6', 'P9'], ON);
+    expect(t).toBe('P5');
+    expect(decideLakeClaimForTeam('evil', 'P5', lastLake, 'good', ON)).toBe('evil');
+    // A blue without a shared failed mission gets the truthful "good".
+    expect(decideLakeClaimForTeam('evil', 'P6', lastLake, 'good', ON)).toBe('good');
+    // Before red is listening the framing tactic does not fire.
+    const notListening = obs({ ...lastLake, questResults: ['fail', 'success', 'success'], currentRound: 3 });
+    expect(decideLakeClaimForTeam('evil', 'P5', notListening, 'good', ON)).toBe('good');
+  });
+
+  it('tactic-mix knobs: chaos never / always', () => {
+    expect(decideEvilLakeClaimHuman(lastLake, 'P5', 'good', { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'never' })).toBe('good');
+    expect(decideEvilLakeClaimHuman(lastLake, 'P6', 'good', { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'always' })).toBe('evil');
+    // Teammates are always washed, whatever the chaos knob says.
+    expect(decideEvilLakeClaimHuman(lastLake, 'P2', 'evil', { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'always' })).toBe('good');
+  });
+
+  it('vouch=consistent prefers the seat the holder kept on their own teams', () => {
+    const led: VoteRecord[] = [{
+      round: 2, attempt: 1, leader: 'P1', team: ['P1', 'P3', 'P7', 'P8'], approved: false,
+      votes: Object.fromEntries(IDS.map((id) => [id, false])),
+    }];
+    const o2 = obs({ ...firstLake, voteHistory: led });
+    const pressured = { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, vouch: 'pressured' as const };
+    // The switch's default tactic mix is consistent vouching.
+    expect(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS.vouch).toBe('consistent');
+    // First cut: P2 (more suspected). Consistent: P3 (P1 never left P3 off a team it led).
+    expect(pickEvilLakeTargetHuman(o2, valid, pressured)).toBe('P2');
+    expect(pickEvilLakeTargetHuman(o2, valid, DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)).toBe('P3');
+    expect(pickLakeTargetForTeam('evil', o2, [...valid], ON)).toBe('P3');
+    // Goodwill blue pick (no teammate legal): P5 most suspicious, but P1 left
+    // P5 off its team while it kept P7 → consistent vouches for P7.
+    const noAlly = valid.filter((id) => id !== 'P2' && id !== 'P3');
+    expect(pickEvilLakeTargetHuman(o2, noAlly, pressured)).toBe('P5');
+    expect(pickEvilLakeTargetHuman(o2, noAlly, DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)).toBe('P7');
+    // Pure chaos claims 'evil' anyway → plain most-suspicious pick.
+    expect(pickEvilLakeTargetHuman(o2, noAlly, { ...DEFAULT_EVIL_LAKE_HUMAN_OPTIONS, chaos: 'always' })).toBe('P5');
+  });
+
+  it('the variant env knob never reaches the strategy by itself; only a script call to setEvilLakeHumanOptions does', () => {
+    vi.stubEnv('AVALON_EVIL_LAKE_HUMAN_VARIANT', 'chaos=always');
+    try {
+      // A server process with the variable set still uses the default mix.
+      expect(getEvilLakeHumanOptions()).toEqual(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS);
+      expect(decideEvilLakeClaimHuman(lastLake, 'P6', 'good')).toBe('good');
+      // The benchmark scripts opt in explicitly.
+      setEvilLakeHumanOptions(evilLakeHumanOptionsFromEnv());
+      expect(decideEvilLakeClaimHuman(lastLake, 'P6', 'good')).toBe('evil');
+      expect(decideLakeClaimForTeam('evil', 'P6', lastLake, 'good', ON)).toBe('evil');
+    } finally {
+      setEvilLakeHumanOptions(undefined);
+      vi.unstubAllEnvs();
+    }
+    expect(getEvilLakeHumanOptions()).toEqual(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS);
+    expect(decideEvilLakeClaimHuman(lastLake, 'P6', 'good')).toBe('good');
+  });
+
+  it('AVALON_EVIL_LAKE_HUMAN_VARIANT parses known knobs and ignores junk', () => {
+    expect(evilLakeHumanOptionsFromEnv({})).toEqual(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS);
+    expect(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'lastLake=always,chaos=never,vouch=consistent' }))
+      .toEqual({ lastLake: 'always', chaos: 'never', vouch: 'consistent' });
+    expect(evilLakeHumanOptionsFromEnv({ AVALON_EVIL_LAKE_HUMAN_VARIANT: 'chaos=sometimes,foo=bar' }))
+      .toEqual(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS);
+  });
+
+  it('Oberon (sees nobody) takes the blue branch with the vouch order and covers a red find with "good"', () => {
+    const oberon = obs({
+      myPlayerId: 'P4', myRole: 'oberon', myTeam: 'evil', knownEvils: [],
+      currentRound: 2, questResults: ['fail', 'success'], questHistory: [R1_FAIL, R2_OK],
+    });
+    const v = IDS.filter((id) => id !== 'P4' && id !== 'P10');
+    // Never led a team → the vouch order reduces to most suspicious first.
+    const t = pickLakeTargetForTeam('evil', oberon, v, ON);
+    expect(t).toBe('P2'); // first failed-mission member in seat order (happens to be red)
+    expect(decideLakeClaimForTeam('evil', 'P2', oberon, 'evil', ON)).toBe('good');
+    expect(decideLakeClaimForTeam('evil', 'P5', oberon, 'good', ON)).toBe('good');
+    // Oberon led P4 P7 P8 P9: the seats he never left off come first, so he
+    // lakes clean P7 rather than the failed-mission members (not "most
+    // suspicious" — documented in strength_benchmark.md 第 6 節).
+    const led: VoteRecord[] = [{
+      round: 2, attempt: 1, leader: 'P4', team: ['P4', 'P7', 'P8', 'P9'], approved: false,
+      votes: Object.fromEntries(IDS.map((id) => [id, false])),
+    }];
+    expect(pickLakeTargetForTeam('evil', obs({ ...oberon, voteHistory: led }), v, ON)).toBe('P7');
+  });
+
+  it('evilLakeClaimAlwaysGood wins the claim when both switches are on (target still from the strategy)', () => {
+    const both = { ...ON, evilLakeClaimAlwaysGood: true };
+    expect(decideLakeClaimForTeam('evil', 'P5', lastLake, 'good', both)).toBe('good');
+    expect(pickLakeTargetForTeam('evil', lastLake, ['P3', 'P5', 'P6', 'P9'], both)).toBe('P5');
+  });
+
+  it('good holders are untouched by the switch', () => {
+    const good = obs({ questHistory: QUESTS, voteHistory: VOTES });
+    expect(pickLakeTargetForTeam('good', good, [...valid], ON))
+      .toBe(pickLakeTargetForTeam('good', good, [...valid], { ...LEGACY_AGENT_TUNING }));
+    expect(decideLakeClaimForTeam('good', 'P5', good, 'evil', ON)).toBe('evil');
+  });
+
+  it('switch off → byte-identical legacy decisions under the same random stream', () => {
+    const evil = obs({ myRole: 'morgana', myTeam: 'evil', knownEvils: ['P2', 'P3'], questHistory: QUESTS, voteHistory: VOTES });
+    const off = { ...LEGACY_AGENT_TUNING, evilLakeHumanStrategy: false };
+    for (let i = 0; i < 25; i++) {
+      for (const target of ['P2', 'P5', 'P9', 'P4']) {
+        for (const truth of ['good', 'evil'] as const) {
+          const a = withSeededRandom(`s${i}`, () => [decideLakeClaimForTeam('evil', target, evil, truth, off), Math.random()]);
+          const b = withSeededRandom(`s${i}`, () => [decideLakeClaimForTeam('evil', target, evil, truth, { ...LEGACY_AGENT_TUNING }), Math.random()]);
+          expect(a).toEqual(b);
+        }
+      }
+    }
+    expect(pickLakeTargetForTeam('evil', evil, [...valid], off))
+      .toBe(pickLakeTargetForTeam('evil', evil, [...valid], { ...LEGACY_AGENT_TUNING }));
+  });
+
+  it('the strategy itself never consumes Math.random', () => {
+    let calls = 0;
+    const original = Math.random;
+    Math.random = () => { calls++; return original(); };
+    try {
+      pickLakeTargetForTeam('evil', lastLake, ['P3', 'P5', 'P6', 'P9'], ON);
+      decideLakeClaimForTeam('evil', 'P5', lastLake, 'good', ON);
+      decideLakeClaimForTeam('evil', 'P2', lastLake, 'evil', ON);
+    } finally {
+      Math.random = original;
+    }
+    expect(calls).toBe(0);
+  });
+
+  it('HeuristicAgent.pickLakeTarget / declareLake honour the switch', () => {
+    const agent = new HeuristicAgent('P1', undefined, undefined, ON);
+    expect(agent.pickLakeTarget(firstLake, valid)).toBe('P2');
+    expect(agent.declareLake(firstLake, 'P2', 'evil')).toBe('good');
+    expect(agent.declareLake(lastLake, 'P5', 'good')).toBe('evil');
   });
 });
