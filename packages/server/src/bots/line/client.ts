@@ -813,10 +813,15 @@ export class LineBotClient {
     if (outcome !== 'uploaded') console.log(`[LINE→Discord] picture outcome=${outcome}`);
   }
 
-  /** Resolves when every picture job and waiting text scheduled so far has finished (tests, shutdown). */
+  /**
+   * Resolves when every picture job and text scheduled so far has finished —
+   * texts that went straight to Discord too (all parts of a long one) —
+   * (tests, shutdown).
+   */
   async settleMediaRelays(): Promise<void> {
     await this.mediaChain;
     await this.textAfterPictures;
+    await this.textsInFlight;
   }
 
   /**

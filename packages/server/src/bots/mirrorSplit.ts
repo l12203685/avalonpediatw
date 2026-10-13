@@ -15,6 +15,10 @@
  * MIRROR_CONTINUATION_MARKER instead. Splits fall on a line break where one
  * exists in the second half of the room, else on a space, else after
  * sentence punctuation, else at the limit (never inside a surrogate pair).
+ * The line break or space a split falls on starts the next part, right after
+ * the marker (「（續）」 then a new line), so the parts lose nothing: the
+ * bodies concatenated are exactly the text (review fix 2026-10-13 — the
+ * chat-log export joins them back that way).
  *
  * Pure functions, no I/O — chatExport/rows.ts reads the marker too (it joins
  * the parts back into one row).
@@ -30,8 +34,10 @@ export const DISCORD_MESSAGE_MAX_CHARS = 2000;
 export const MIRROR_CONTINUATION_MARKER = '（續）';
 
 /**
- * Backstop for one relayed text. LINE (5000) and Discord (4000 with Nitro)
- * never send more, so in practice nothing is ever cut here.
+ * Backstop for one relayed text. Discord sends at most 4000 (Nitro); a LINE
+ * user's message may be longer than the 5000 a bot can send (the app allows
+ * more), and is then simply more Discord parts. Nothing realistic reaches
+ * this cap.
  */
 export const MIRROR_TEXT_MAX_CHARS = 20_000;
 
@@ -51,33 +57,32 @@ export function cutUnits(text: string, max: number): string {
 }
 
 /**
- * Where to split `text` so the first piece holds at most `room` units:
- * `end` = length of the piece, `next` = where the rest starts (a line break
- * or space at the split is dropped; the parts carry it implicitly).
+ * Length (≥ 1, ≤ `room`) of the first piece when `text` is split so that
+ * piece holds at most `room` units. The rest starts right there — with the
+ * line break or space the split falls on — so nothing is dropped.
  */
-function splitPoint(text: string, room: number): { end: number; next: number } {
+function splitPoint(text: string, room: number): number {
   const min = Math.max(1, Math.floor(room / 2));
   const nl = text.lastIndexOf('\n', room);
   if (nl >= min) {
     const end = text[nl - 1] === '\r' ? nl - 1 : nl;
-    if (end >= 1) return { end, next: nl + 1 };
+    if (end >= 1) return end;
   }
   for (let i = Math.min(room, text.length - 1); i >= min; i -= 1) {
-    if (/\s/.test(text[i])) return { end: i, next: i + 1 };
+    if (/\s/.test(text[i])) return i;
   }
   for (let i = Math.min(room, text.length) - 1; i >= min - 1; i -= 1) {
-    if (BREAK_AFTER.has(text[i])) return { end: i + 1, next: i + 1 };
+    if (BREAK_AFTER.has(text[i])) return i + 1;
   }
-  const end = Math.max(1, cutUnits(text, room).length);
-  return { end, next: end };
+  return Math.max(1, cutUnits(text, room).length);
 }
 
 /**
  * `prefix + body` as one or more messages of at most `maxChars` units each:
  * the first starts with `prefix`, the others with `marker`. Returns exactly
  * `[prefix + body]` when that fits (today's single message, unchanged).
- * Order is the reading order; nothing of `body` is lost except the single
- * line break or space each split falls on.
+ * Order is the reading order; nothing of `body` is lost — the parts without
+ * their prefix / marker, concatenated, are exactly `body`.
  */
 export function splitMirrorText(
   prefix: string,
@@ -98,9 +103,9 @@ export function splitMirrorText(
       parts.push(lead + rest);
       break;
     }
-    const { end, next } = splitPoint(rest, room);
+    const end = splitPoint(rest, room);
     parts.push(lead + rest.slice(0, end));
-    rest = rest.slice(next);
+    rest = rest.slice(end);
     lead = marker;
   }
   return parts.length > 0 ? parts : [lead];

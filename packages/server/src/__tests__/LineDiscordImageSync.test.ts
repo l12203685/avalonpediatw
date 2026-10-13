@@ -223,6 +223,13 @@ function setup(opts: {
   mediaTimeouts?: { downloadMs?: number; jobMs?: number; textWaitMs?: number };
   /** CHAT_MIRROR_IMAGES=false wiring (bots/index.ts): no picture copied in either direction. */
   imagesOff?: boolean;
+  /**
+   * ChatMirror's bound on one Discord call (default 75 s). A LINE picture's
+   * upload holds the Discord send chain (texts and pictures keep their order,
+   * a long text's parts stay together), so a test with a never-settling
+   * upload shortens it to see the chain move on.
+   */
+  discordCallTimeoutMs?: number;
 } = {}) {
   __resetChatMirrorForTests(); // each setup() gets its own mirror (the singleton is what the bot reads)
   const discord = mockDiscord(opts.discord);
@@ -238,6 +245,7 @@ function setup(opts: {
     lineImagesToDiscord: !opts.imagesOff,
     logger,
     inboundRateLimit: { windowMs: 60_000, maxRequests: opts.rate ?? 100 },
+    discordCallTimeoutMs: opts.discordCallTimeoutMs,
   });
   const lobby: LobbyChatMessage[] = [];
   mirror.setLobbyIngest((m) => lobby.push(m));
@@ -447,7 +455,7 @@ describe('LINE picture → Discord', () => {
   it('too many pictures waiting: the one not copied still reaches Discord as a note (not silently dropped)', async () => {
     const ids = Array.from({ length: 21 }, (_, i) => `w${i}`);
     const content = Object.fromEntries(ids.map((id) => [id, () => Readable.from([jpeg(100)])]));
-    const h = setup({ discord: { firstUploadHangs: true }, line: { content }, mediaTimeouts: { jobMs: 300 } });
+    const h = setup({ discord: { firstUploadHangs: true }, line: { content }, mediaTimeouts: { jobMs: 300 }, discordCallTimeoutMs: 200 });
     await postLine(h.bot, ids.map((id) => groupEvent(imageMsg(id), `r-${id}`)));
     await new Promise((r) => setTimeout(r, 5));
     expect(h.discord.sent.map((s) => s.split('] ').pop())).toEqual(['（圖片沒有同步過來，請到 LINE 看）']);
@@ -918,7 +926,8 @@ describe('LINE → Discord: a hung platform call cannot hold later pictures', ()
 
   it('a Discord upload that never settles is cut off by the job timeout (outcome=timeout) and the chain moves on', async () => {
     const content = { a: () => Readable.from([jpeg(100)]), b: () => Readable.from([jpeg(100)]) };
-    const h = setup({ discord: { firstUploadHangs: true }, line: { content }, mediaTimeouts: { jobMs: 40 } });
+    // The job timeout frees the LINE picture line; the Discord call bound frees the send chain.
+    const h = setup({ discord: { firstUploadHangs: true }, line: { content }, mediaTimeouts: { jobMs: 40 }, discordCallTimeoutMs: 60 });
     await postLine(h.bot, [groupEvent(imageMsg('a'), 'r1'), groupEvent(imageMsg('b'), 'r2')]);
     expect(h.discord.uploads).toHaveLength(1);
     expect(h.bot.getWebhookStats()).toMatchObject({ imagesToDiscord: 1, imageFailures: 1 });
@@ -945,6 +954,7 @@ describe('message order next to a picture', () => {
       discord: { firstUploadHangs: true },
       line: { content: { a: () => Readable.from([jpeg(100)]) } },
       mediaTimeouts: { textWaitMs: 20, jobMs: 5_000 },
+      discordCallTimeoutMs: 40, // the hung upload holds the Discord send chain at most this long
     });
     const { req, res } = lineRequest({ destination: 'U', events: [groupEvent(imageMsg('a'), 'r1'), groupEvent({ type: 'text', id: 't1', text: 'later' }, 'r2')] });
     await h.bot.handleWebhook(req, res);

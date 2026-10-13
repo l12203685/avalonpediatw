@@ -373,7 +373,11 @@ export function startLineWebhookWatchdog(): void {
 
 let statsDigest: WeeklyDigestScheduler | null = null;
 
-/** Discord mirror channel: post directly (the bot's own message is never mirrored back). */
+/**
+ * Discord mirror channel: post directly (the bot's own message is never
+ * mirrored back), on ChatMirror's Discord send chain when the mirror runs,
+ * so the digest never lands between the parts of a long relayed message.
+ */
 function discordDigestDestination(channelId: string): DigestDestination {
   return {
     name: 'discord',
@@ -384,7 +388,9 @@ function discordDigestDestination(channelId: string): DigestDestination {
       if (!bot.isClientReady()) return false; // gateway not up yet — retry next tick
       const ch = await bot.getClient().channels.fetch(channelId);
       if (!ch || !(ch instanceof TextChannel)) return false;
-      await ch.send({ content: text, allowedMentions: { parse: [] } });
+      const post = (): Promise<unknown> => ch.send({ content: text, allowedMentions: { parse: [] } });
+      const mirror = getChatMirror();
+      await (mirror ? mirror.runOnDiscordSendChain(post) : post());
       return true;
     },
   };

@@ -26,9 +26,11 @@ export const LINE_WEBHOOK_BODY_PATH = '/webhook/line';
 
 /**
  * JSON body limit of the LINE webhook (2026-10-13). LINE may deliver several
- * events in one request, each text up to 5000 characters; with express's
- * default 100 kB a burst of long messages was answered 413 and LINE dropped
- * the whole delivery — the short messages in it too.
+ * events in one request, each text several thousand characters (a user may
+ * send more than the 5000 a bot may); with express's default 100 kB a burst
+ * of long messages was answered 413 and LINE dropped the whole delivery —
+ * the short messages in it too. The body is parsed before the signature
+ * check, as before; 1 MB of JSON costs milliseconds.
  */
 export const LINE_WEBHOOK_JSON_LIMIT = '1mb';
 

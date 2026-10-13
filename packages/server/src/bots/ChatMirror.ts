@@ -82,8 +82,10 @@
  *     bots/mirrorSplit.ts): speaker prefix on the first part, 「（續）」 on
  *     the others. LINE: the parts are one group on the reply queue (same
  *     5-per-reply budget, images after them, dropped together on overflow).
- *     Discord: every mirror text post runs on one send chain, so the parts of
- *     one message are never interleaved with another relayed message.
+ *     Discord: every mirror post (texts, LINE pictures, the weekly digest)
+ *     runs on one send chain, so the parts of one message are never
+ *     interleaved with another post; when a later part fails, a short
+ *     「（續）（後段沒有同步過來…）」 note says so.
  *   - Rate limit: still one hit per message, however many parts it becomes.
  */
 
@@ -106,6 +108,7 @@ import {
   cutUnits,
   DISCORD_MESSAGE_MAX_CHARS,
   LINE_TEXT_MAX_CHARS,
+  MIRROR_CONTINUATION_MARKER,
   MIRROR_TEXT_MAX_CHARS,
   splitMirrorText,
 } from './mirrorSplit';
@@ -379,11 +382,28 @@ export const DISCORD_TO_LINE_MAX_WAITING = 10;
 export const DISCORD_TO_LINE_STEP_TIMEOUT_MS = 90_000;
 
 /**
- * Backstop for one relayed message (all its parts) on the Discord send chain
- * (pushDiscord). discord.js queues and retries on its own; this only keeps a
- * hung request from holding every later message.
+ * Bound on ONE Discord call of the send chain (fetch the channel, post a
+ * part, upload a picture, post a note). discord.js times a request out
+ * after 15 s and retries it 3 times; this is longer than all four tries, so
+ * when it fires discord.js has normally given the request up already, and
+ * the chain moving on cannot leave a part that lands late, after the next
+ * message (review fix 2026-10-13: the bound used to be 60 s for a whole
+ * message). It only keeps a hung call from holding every later message.
  */
-export const DISCORD_SEND_STEP_TIMEOUT_MS = 60_000;
+export const DISCORD_SEND_CALL_TIMEOUT_MS = 75_000;
+
+/** discordCall()'s result when the call took longer than DISCORD_SEND_CALL_TIMEOUT_MS. */
+const DISCORD_CALL_TIMED_OUT: unique symbol = Symbol('discord call timed out');
+
+/**
+ * Posted after the parts that did reach Discord when a later part of a long
+ * message failed, so readers see that the rest is missing and where to read
+ * it (review fix 2026-10-13). Starts with 「（續）」, so the chat-log export
+ * puts it in the same row as the parts before it.
+ */
+export function discordMissingPartsNote(source: LobbyChatSource | undefined): string {
+  return `${MIRROR_CONTINUATION_MARKER}（後段沒有同步過來，請到 ${platformLabel(source ?? 'lobby')} 看）`;
+}
 
 // ─── Config surface ──────────────────────────────────────────────────────
 
@@ -452,6 +472,11 @@ export interface ChatMirrorConfig {
    */
   lineImagesToDiscord?: boolean;
   /**
+   * Bound on one Discord call of the send chain (DISCORD_SEND_CALL_TIMEOUT_MS,
+   * the default). Only tests set it.
+   */
+  discordCallTimeoutMs?: number;
+  /**
    * Rate limit per platform-user per window. Defaults to 5 msgs / 60s to
    * keep spam bots from flooding the channel while staying generous for
    * real chatter. Only applied on inbound, since lobby-side is already
@@ -493,6 +518,7 @@ export class ChatMirror {
   /** Mirror text posts to Discord, one message (all its parts) at a time (pushDiscord). */
   private discordSendChain: Promise<void> = Promise.resolve();
   private discordSendsPending = 0;
+  private readonly discordCallTimeoutMs: number;
   private readonly inboundLimiter: SocketRateLimiter;
   private readonly logger: Required<ChatMirrorConfig>['logger'];
   private lobbyIngest: LobbyIngestFn | null = null;
@@ -506,6 +532,7 @@ export class ChatMirror {
     this.lineReplyQueue = config.lineReplyQueue;
     this.imageRelay = config.lineImageRelay;
     this.imagesToDiscord = config.lineImagesToDiscord ?? true;
+    this.discordCallTimeoutMs = config.discordCallTimeoutMs ?? DISCORD_SEND_CALL_TIMEOUT_MS;
 
     const rl = config.inboundRateLimit ?? { windowMs: 60_000, maxRequests: 5 };
     this.inboundLimiter = new SocketRateLimiter({
@@ -914,6 +941,10 @@ export class ChatMirror {
    * the byte cap (the channel's upload limit, at most 25 MB) and must stop
    * past it. Too large / download failed / upload refused → the same prefix
    * with a text note instead. Never throws; returns an outcome code.
+   *
+   * The download runs on its own; the upload (and its note) then runs on the
+   * Discord send chain like every relayed text, so a picture never lands
+   * between the parts of a long message (review fix 2026-10-13).
    */
   public async postLineImageToDiscord(
     msg: LobbyChatMessage,
@@ -935,31 +966,55 @@ export class ChatMirror {
       LINE_IMAGE_DOWNLOAD_MAX_BYTES,
     );
 
-    let outcome: LineImageRelayOutcome = 'download-failed';
-    let note: string = MIRROR_MEDIA_TEXT.lineImageFailed;
+    let got: LineImageFetch | null = null;
     if (ch.sendFiles) {
-      let got: LineImageFetch;
       try {
         got = await fetchImage(limit);
       } catch {
         got = { ok: false, reason: 'failed' };
       }
-      if (got.ok) {
-        const name = `line-image.${imageExtension(sniffImageType(got.data))}`;
-        try {
-          await ch.sendFiles(formatOutgoing(msg), [{ name, data: got.data }]);
-          return 'uploaded';
-        } catch (err) {
-          this.logger.warn(`LINE picture upload to Discord failed (${describeError(err)}) — sending a note`);
-          outcome = 'upload-failed';
+    }
+    const channel = ch;
+    let outcome: LineImageRelayOutcome = 'failed';
+    await this.onDiscordSendChain(async () => {
+      outcome = await this.sendLineImage(channel, msg, got);
+    });
+    return outcome;
+  }
+
+  /** The Discord half of postLineImageToDiscord (on the send chain): the file, else the note. */
+  private async sendLineImage(
+    ch: DiscordChannelAdapter,
+    msg: LobbyChatMessage,
+    got: LineImageFetch | null,
+  ): Promise<LineImageRelayOutcome> {
+    let outcome: LineImageRelayOutcome = 'download-failed';
+    let note: string = MIRROR_MEDIA_TEXT.lineImageFailed;
+    const sendFiles = ch.sendFiles?.bind(ch);
+    if (got?.ok && sendFiles) {
+      const name = `line-image.${imageExtension(sniffImageType(got.data))}`;
+      const data = got.data;
+      try {
+        const sent = await this.discordCall(() => sendFiles(formatOutgoing(msg), [{ name, data }]));
+        if (sent === DISCORD_CALL_TIMED_OUT) {
+          this.logger.warn('LINE picture upload to Discord timed out — continuing with the next message');
+          return 'timeout';
         }
-      } else if (got.reason === 'too-large') {
-        outcome = 'too-large';
-        note = MIRROR_MEDIA_TEXT.lineImageTooLarge;
+        return 'uploaded';
+      } catch (err) {
+        this.logger.warn(`LINE picture upload to Discord failed (${describeError(err)}) — sending a note`);
+        outcome = 'upload-failed';
       }
+    } else if (got && !got.ok && got.reason === 'too-large') {
+      outcome = 'too-large';
+      note = MIRROR_MEDIA_TEXT.lineImageTooLarge;
     }
     try {
-      await ch.send(formatOutgoing({ ...msg, message: note }));
+      const sent = await this.discordCall(() => ch.send(formatOutgoing({ ...msg, message: note })));
+      if (sent === DISCORD_CALL_TIMED_OUT) {
+        this.logger.warn('Discord push timed out — continuing with the next message');
+        return 'timeout';
+      }
     } catch (err) {
       this.logger.error(`Discord push failed (${describeError(err)})`);
       return 'failed';
@@ -1072,36 +1127,30 @@ export class ChatMirror {
   /**
    * Post a relayed text to the Discord sync channel: one message when it fits
    * Discord's 2000 characters, else parts in order (formatOutgoingParts).
-   * Every call runs on ONE send chain, so the parts of a long message are
-   * never interleaved with another relayed message and messages keep their
-   * call order. A failed part stops the rest of that message (a 「（續）」
-   * part without its start would read as nonsense); the error is logged as
-   * a code only. Never rejects.
+   * Every Discord post of the mirror runs on ONE send chain (this, LINE
+   * pictures, the weekly digest), so the parts of a long message are never
+   * interleaved with another post and messages keep their call order.
+   * A failed part stops the rest of that message (a 「（續）」 part without
+   * its start would read as nonsense); when parts before it did get there,
+   * a short note says the rest is missing (discordMissingPartsNote). Errors
+   * are logged as a code only. Never rejects.
    */
   private pushDiscord(msg: LobbyChatMessage): Promise<void> {
     if (!this.discordChannelId || !this.discord) return Promise.resolve();
     const parts = formatOutgoingParts(msg, DISCORD_MESSAGE_MAX_CHARS);
-    return this.onDiscordSendChain((stopped) => this.sendDiscordParts(parts, stopped));
+    return this.onDiscordSendChain(() => this.sendDiscordParts(parts, discordMissingPartsNote(msg.source)));
   }
 
   /**
-   * Run `work` after every Discord send queued before it, bounded by
-   * DISCORD_SEND_STEP_TIMEOUT_MS (after which `stopped()` turns true and the
-   * chain moves on). Starts at once when nothing is waiting. Never rejects.
+   * Run `work` after every Discord post queued before it; starts at once when
+   * nothing is waiting. `work` must bound its own Discord calls (discordCall),
+   * so a hung request cannot hold the chain. Never rejects.
    */
-  private onDiscordSendChain(work: (stopped: () => boolean) => Promise<void>): Promise<void> {
-    let stopped = false;
+  private onDiscordSendChain(work: () => Promise<void>): Promise<void> {
     const step = (): Promise<void> =>
-      raceTimeout(
-        work(() => stopped).catch((err: unknown) => {
-          this.logger.error(`Discord push failed (${describeError(err)})`);
-        }),
-        DISCORD_SEND_STEP_TIMEOUT_MS,
-        () => {
-          stopped = true;
-          this.logger.warn('Discord push timed out — continuing with the next message');
-        },
-      );
+      work().catch((err: unknown) => {
+        this.logger.error(`Discord push failed (${describeError(err)})`);
+      });
     this.discordSendsPending += 1;
     const start = this.discordSendsPending === 1 ? step() : this.discordSendChain.then(step);
     const run = start.finally(() => {
@@ -1111,31 +1160,86 @@ export class ChatMirror {
     return run;
   }
 
-  private async sendDiscordParts(parts: string[], stopped: () => boolean): Promise<void> {
-    if (!this.discord) return;
-    let ch: DiscordChannelAdapter | null;
+  /**
+   * Run `post` on the mirror's Discord send chain — for a post to the sync
+   * channel made outside ChatMirror (the weekly digest), so it never lands
+   * between the parts of a long relayed message. Resolves / rejects with
+   * `post` itself; the chain waits for it at most DISCORD_SEND_CALL_TIMEOUT_MS.
+   */
+  public runOnDiscordSendChain<T>(post: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      void this.onDiscordSendChain(async () => {
+        let own: Promise<T>;
+        try {
+          own = post();
+        } catch (err) {
+          reject(err);
+          return;
+        }
+        own.then(resolve, reject);
+        const settled = own.then(
+          () => undefined,
+          () => undefined,
+        );
+        await raceTimeout(settled, this.discordCallTimeoutMs, () => {
+          this.logger.warn('Discord post timed out — continuing with the next message');
+        });
+      });
+    });
+  }
+
+  /** One Discord call bounded by DISCORD_SEND_CALL_TIMEOUT_MS: its result, or DISCORD_CALL_TIMED_OUT. */
+  private discordCall<T>(call: () => Promise<T>): Promise<T | typeof DISCORD_CALL_TIMED_OUT> {
+    const work = new Promise<T>((resolve) => resolve(call()));
+    return raceTimeout<T | typeof DISCORD_CALL_TIMED_OUT>(work, this.discordCallTimeoutMs, () => DISCORD_CALL_TIMED_OUT);
+  }
+
+  private async sendDiscordParts(parts: string[], missingNote: string): Promise<void> {
+    const discord = this.discord;
+    if (!discord) return;
+    let found: DiscordChannelAdapter | null | typeof DISCORD_CALL_TIMED_OUT;
     try {
-      ch = await this.discord.fetchChannel(this.discordChannelId);
+      found = await this.discordCall(() => discord.fetchChannel(this.discordChannelId));
     } catch (err) {
       // DiscordAPIError carries the request body (chat text) — log a code only.
       this.logger.error(`Discord push failed (${describeError(err)})`);
       return;
     }
-    if (!ch) {
+    if (found === DISCORD_CALL_TIMED_OUT) {
+      this.logger.warn('Discord push timed out — continuing with the next message');
+      return;
+    }
+    if (!found) {
       this.logger.warn(
         `Discord channel ${this.discordChannelId} unavailable`,
       );
       return;
     }
+    const ch = found;
     for (let i = 0; i < parts.length; i += 1) {
-      if (stopped()) return;
+      const where = parts.length > 1 ? ` — part ${i + 1} of ${parts.length}, the rest not sent` : '';
+      let sent: unknown;
       try {
-        await ch.send(parts[i]);
+        sent = await this.discordCall(() => ch.send(parts[i]));
       } catch (err) {
-        const where = parts.length > 1 ? ` — part ${i + 1} of ${parts.length}, the rest not sent` : '';
         this.logger.error(`Discord push failed (${describeError(err)})${where}`);
+        if (i > 0) await this.sendMissingPartsNote(ch, missingNote);
         return;
       }
+      if (sent === DISCORD_CALL_TIMED_OUT) {
+        this.logger.warn(`Discord push timed out${where} — continuing with the next message`);
+        return;
+      }
+    }
+  }
+
+  /** One try at discordMissingPartsNote(); a failure is only logged (code). */
+  private async sendMissingPartsNote(ch: DiscordChannelAdapter, note: string): Promise<void> {
+    try {
+      const sent = await this.discordCall(() => ch.send(note));
+      if (sent === DISCORD_CALL_TIMED_OUT) this.logger.warn('Discord note timed out');
+    } catch (err) {
+      this.logger.error(`Discord note failed (${describeError(err)})`);
     }
   }
 

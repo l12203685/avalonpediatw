@@ -28,9 +28,13 @@
  * A LINE text over Discord's 2000 characters arrives as several bot posts
  * (2026-10-13, bots/mirrorSplit.ts): the first with the prefix above, the
  * others starting with 「（續）」. Such a part is joined to the bot's previous
- * relay post in the same channel (one row, like the LINE message), or skipped
- * like it — a relayed /意見 never leaks through its 「（續）」 parts. A part
- * whose start is not in the export (the day before) is skipped as 'bot'.
+ * TEXT relay post in the same channel — a post with the prefix above and no
+ * attachment; a picture upload, the digest or a command reply in between is
+ * not its start (review fix 2026-10-13) — exactly as split (the line break a
+ * split falls on is in the part), so the row reads like the LINE message;
+ * or skipped like that start — a relayed /意見 never leaks through its
+ * 「（續）」 parts. A part whose start is not in the export (the day before)
+ * is skipped as 'bot'.
  *
  * Every other message by the bot (stats digest, slash-command replies, format-check
  * replies in the records forum, /意見 forwards) is skipped, as are other bots,
@@ -272,20 +276,21 @@ export function buildExportRows(messages: RawChatMessage[], channels: ChatChanne
   const seen = new Set<string>();
   const byTime = (a: { createdAt: number; id: string }, b: { createdAt: number; id: string }): number =>
     a.createdAt - b.createdAt || (a.id.length - b.id.length) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  // The bot's latest relay post per channel, for its 「（續）」 parts (time order).
-  const lastSelfPost = new Map<string, KeptMessage | SkippedMessage>();
+  // The bot's latest TEXT relay post per channel, for its 「（續）」 parts (time order).
+  const lastSelfRelay = new Map<string, KeptMessage | SkippedMessage>();
   for (const m of [...messages].sort(byTime)) {
     if (seen.has(m.id)) continue; // the same message read twice (defensive)
     seen.add(m.id);
-    if (m.authorIsSelf && !m.webhookId && !m.system && (m.content ?? '').startsWith(MIRROR_CONTINUATION_MARKER)) {
-      const head = lastSelfPost.get(m.channelId);
+    const ownPost = m.authorIsSelf && !m.webhookId && !m.system;
+    if (ownPost && (m.content ?? '').startsWith(MIRROR_CONTINUATION_MARKER)) {
+      const head = lastSelfRelay.get(m.channelId);
       const part = (m.content ?? '').slice(MIRROR_CONTINUATION_MARKER.length);
-      if (head?.kind === 'keep') head.text = `${head.text}\n${part}`.trim();
+      if (head?.kind === 'keep') head.text = `${head.text}${part}`.trimEnd();
       else skipped[head?.kind === 'skip' ? head.reason : 'bot'] += 1;
       continue;
     }
     const c = classifyMessage(m);
-    if (m.authorIsSelf) lastSelfPost.set(m.channelId, c);
+    if (ownPost && (m.attachmentCount | 0) === 0 && parseRelayLine(m.content ?? '')) lastSelfRelay.set(m.channelId, c);
     if (c.kind === 'skip') skipped[c.reason] += 1;
     else kept.push(c);
   }

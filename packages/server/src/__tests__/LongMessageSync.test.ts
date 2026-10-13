@@ -11,8 +11,10 @@
  *   - over LINE's 5000 → parts in one group on the reply queue, spanning
  *     replies, pictures after them, re-queued exactly on a failed reply
  *   - ordering with pictures in both directions; no loop; one rate-limit hit
- *   - the Discord send chain keeps a message's parts together
- *   - the chat-log export joins the parts back into one row
+ *   - the Discord send chain keeps a message's parts together (pictures
+ *     and the weekly digest wait their turn); a failed later part leaves a
+ *     「（續）（後段沒有同步過來…）」 note
+ *   - the chat-log export joins the parts back into one row, exactly
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import crypto from 'crypto';
@@ -24,7 +26,7 @@ import type { Request, Response } from 'express';
 import {
   ChatMirror,
   DISCORD_MESSAGE_MAX_CHARS,
-  DISCORD_SEND_STEP_TIMEOUT_MS,
+  DISCORD_SEND_CALL_TIMEOUT_MS,
   LINE_TEXT_MAX_CHARS,
   MIRROR_CONTINUATION_MARKER,
   __resetChatMirrorForTests,
@@ -33,6 +35,7 @@ import {
   type DiscordChannelAdapter,
   type DiscordFile,
   type LineAdapter,
+  discordMissingPartsNote,
 } from '../bots/ChatMirror';
 import { clampLineText, cutUnits, splitMirrorText } from '../bots/mirrorSplit';
 import { LineReplyQueue } from '../bots/line/replyQueue';
@@ -67,9 +70,18 @@ function bodyOf(part: string): string {
   return m[1];
 }
 
-/** Parts split on line boundaries joined back. */
+/** bodyOf() for the mock's order log; a legacy `[Avalon] name: ` post is logged as it is. */
+function labelOf(part: string): string {
+  try {
+    return bodyOf(part);
+  } catch {
+    return part;
+  }
+}
+
+/** Parts joined back: the split keeps the line break / space it falls on, so plain concatenation. */
 function joinParts(parts: string[]): string {
-  return parts.map(bodyOf).join('\n');
+  return parts.map(bodyOf).join('');
 }
 
 function jpeg(size: number): Buffer {
@@ -80,7 +92,9 @@ function jpeg(size: number): Buffer {
 
 // ─── Mocks / harness ─────────────────────────────────────────────────────
 
-function mockDiscord(opts: { sendDelayMs?: number; failOnCall?: number; hangOnCall?: number } = {}): {
+function mockDiscord(
+  opts: { sendDelayMs?: number; failOnCall?: number; hangOnCall?: number; uploadDelayMs?: number; onSend?: (content: string) => void } = {},
+): {
   adapter: DiscordAdapter;
   sent: string[];
   order: string[];
@@ -95,10 +109,12 @@ function mockDiscord(opts: { sendDelayMs?: number; failOnCall?: number; hangOnCa
       if (opts.failOnCall === calls) throw Object.assign(new Error(`Invalid Form Body ${content}`), { name: 'DiscordAPIError', status: 400, code: 50035 });
       if (opts.sendDelayMs) await new Promise((r) => setTimeout(r, opts.sendDelayMs));
       sent.push(content);
-      order.push(`text:${content.startsWith(MARK) ? 'cont' : bodyOf(content).slice(0, 12)}`);
+      order.push(`text:${content.startsWith(MARK) ? 'cont' : labelOf(content).slice(0, 12)}`);
+      opts.onSend?.(content);
       return {};
     },
     sendFiles: async (content: string, _files: DiscordFile[]) => {
+      if (opts.uploadDelayMs) await new Promise((r) => setTimeout(r, opts.uploadDelayMs));
       sent.push(content);
       order.push(`file:${bodyOf(content)}`);
       return {};
@@ -274,7 +290,8 @@ describe('splitMirrorText', () => {
     expect(parts.length).toBeGreaterThan(1);
     expect(parts[0].startsWith('[0101 10:00][LINE][A] 第1行')).toBe(true);
     for (const p of parts) expect(p.length).toBeLessThanOrEqual(400);
-    for (const p of parts.slice(1)) expect(p.startsWith(`${MARK}第`)).toBe(true); // each part starts on a new line
+    // Each later part: the marker, then the line break the split fell on, then the next line.
+    for (const p of parts.slice(1)) expect(p.startsWith(`${MARK}\n第`)).toBe(true);
     expect(joinParts(parts)).toBe(text);
   });
 
@@ -282,7 +299,8 @@ describe('splitMirrorText', () => {
     const spaced = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ');
     const bySpace = splitMirrorText('', spaced, 60);
     expect(bySpace.every((p) => p.length <= 60)).toBe(true);
-    expect(bySpace.map((p, i) => (i === 0 ? p : p.slice(MARK.length))).join(' ')).toBe(spaced);
+    expect(bySpace.slice(1).every((p) => p.startsWith(`${MARK} word`))).toBe(true);
+    expect(bySpace.map((p, i) => (i === 0 ? p : p.slice(MARK.length))).join('')).toBe(spaced);
 
     const sentences = '今天輸了。'.repeat(40);
     const byPunct = splitMirrorText('', sentences, 52);
@@ -374,7 +392,7 @@ describe('LINE → Discord over 2000 characters', () => {
     expect(parts.length).toBe(4);
     for (const p of parts) expect(p.length).toBeLessThanOrEqual(DISCORD_MESSAGE_MAX_CHARS);
     expect(parts[0]).toMatch(new RegExp(`^\\[\\d{4} \\d{2}:\\d{2}\\]\\[LINE\\]\\[${LINE_NAME}\\] 第1行`));
-    for (const p of parts.slice(1)) expect(p.startsWith(`${MARK}第`)).toBe(true);
+    for (const p of parts.slice(1)) expect(p.startsWith(`${MARK}\n第`)).toBe(true);
     expect(joinParts(parts)).toBe(text);
     // The split message used ONE slot of the per-user limit (1 per minute here).
     await postLine(h.bot, [groupEvent({ type: 'text', id: 'm-next', text: 'again' }, 'rt-e')]);
@@ -409,31 +427,90 @@ describe('LINE → Discord over 2000 characters', () => {
     expect(joinParts(h.discord.sent.slice(3))).toBe(b);
   });
 
-  it('a failed part stops the rest of that message (logged as a code only); the next message still goes', async () => {
+  it('a failed later part stops the rest of that message and leaves a short 「後段沒有同步過來」 note; the next message still goes', async () => {
     const h = setup({ discord: { failOnCall: 2 } });
     const text = lines(50, 79);
     const m1 = h.mirror.ingestInbound({ source: 'line', platformUserId: 'U1', displayName: LINE_NAME, text, messageId: 'line:1' });
     await h.mirror.crossFanout(m1!);
-    expect(h.discord.sent).toHaveLength(1);
+    expect(h.discord.sent).toHaveLength(2);
+    expect(h.discord.sent[1]).toBe(discordMissingPartsNote('line'));
+    expect(h.discord.sent[1]).toBe(`${MARK}（後段沒有同步過來，請到 LINE 看）`);
     const m2 = h.mirror.ingestInbound({ source: 'line', platformUserId: 'U1', displayName: LINE_NAME, text: 'short one', messageId: 'line:2' });
     await h.mirror.crossFanout(m2!);
-    expect(bodyOf(h.discord.sent[1])).toBe('short one');
+    expect(bodyOf(h.discord.sent[2])).toBe('short one');
     expect(logged.some((l) => l.includes('Discord push failed') && l.includes('part 2 of 3'))).toBe(true);
     expectCleanLogs();
   });
 
-  it('a hung send cannot hold the chain: after the step timeout the next message goes and the stuck one stops', async () => {
+  it('a failed FIRST part posts nothing (no note without a start), like a short message that fails', async () => {
+    const h = setup({ discord: { failOnCall: 1 } });
+    const m1 = h.mirror.ingestInbound({ source: 'line', platformUserId: 'U1', displayName: LINE_NAME, text: lines(50, 79), messageId: 'line:f1' });
+    await h.mirror.crossFanout(m1!);
+    expect(h.discord.sent).toHaveLength(0);
+    expect(logged.some((l) => l.includes('part 1 of 3'))).toBe(true);
+  });
+
+  it('a hung call cannot hold the chain: after the per-call bound the next message goes and the stuck one stops', async () => {
+    // Longer than discord.js's own give-up (15 s × 4 tries), so the stuck request is abandoned, not landing late.
+    expect(DISCORD_SEND_CALL_TIMEOUT_MS).toBeGreaterThan(4 * 15_000);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const h = setup({ discord: { hangOnCall: 1 } });
+    const h = setup({ discord: { hangOnCall: 2 } });
     const text = lines(50, 79);
     const m1 = h.mirror.ingestInbound({ source: 'line', platformUserId: 'U1', displayName: LINE_NAME, text, messageId: 'line:h1' });
     const m2 = h.mirror.ingestInbound({ source: 'line', platformUserId: 'U2', displayName: LINE_NAME, text: 'after the hang', messageId: 'line:h2' });
     const p1 = h.mirror.crossFanout(m1!);
     const p2 = h.mirror.crossFanout(m2!);
-    await vi.advanceTimersByTimeAsync(DISCORD_SEND_STEP_TIMEOUT_MS + 10);
+    await vi.advanceTimersByTimeAsync(DISCORD_SEND_CALL_TIMEOUT_MS - 1_000);
+    expect(h.discord.sent).toHaveLength(1); // still waiting on part 2: nothing else jumps in
+    await vi.advanceTimersByTimeAsync(1_010);
     await Promise.all([p1, p2]);
-    expect(h.discord.sent.map(bodyOf)).toEqual(['after the hang']);
-    expect(logged.some((l) => l.includes('Discord push timed out'))).toBe(true);
+    expect(h.discord.sent.slice(1).map(bodyOf)).toEqual(['after the hang']);
+    expect(logged.some((l) => l.includes('Discord push timed out') && l.includes('part 2 of 3'))).toBe(true);
+    expectCleanLogs();
+  });
+
+  it('a LINE picture whose upload is ready while a long text is going out waits for all its parts (one send chain)', async () => {
+    const h = setup({ discord: { sendDelayMs: 3 } });
+    const text = lines(60, 59); // ≈ 3600 → 2 parts
+    const m = h.mirror.ingestInbound({ source: 'line', platformUserId: 'U1', displayName: LINE_NAME, text, messageId: 'line:t' });
+    const pic: LobbyChatMessage = { id: 'line:p', playerId: 'line:U2', playerName: LINE_NAME, message: '（圖片）', timestamp: Date.now(), source: 'line' };
+    const textDone = h.mirror.crossFanout(m!);
+    const picDone = h.mirror.postLineImageToDiscord(pic, async () => ({ ok: true, data: jpeg(1200) }));
+    await Promise.all([textDone, picDone]);
+    expect(await picDone).toBe('uploaded');
+    expect(h.discord.order).toEqual(['text:第1行：湖中女神驗了三號', 'text:cont', 'file:（圖片）']);
+  });
+
+  it('the weekly digest (runOnDiscordSendChain) waits for a long message’s parts and gets its own result / error', async () => {
+    const h = setup({ discord: { sendDelayMs: 3 } });
+    const m = h.mirror.ingestInbound({ source: 'line', platformUserId: 'U1', displayName: LINE_NAME, text: lines(60, 59), messageId: 'line:d' });
+    const textDone = h.mirror.crossFanout(m!);
+    const digest = h.mirror.runOnDiscordSendChain(async () => {
+      h.discord.order.push('digest');
+      return 'posted';
+    });
+    await expect(digest).resolves.toBe('posted');
+    await textDone;
+    expect(h.discord.order).toEqual(['text:第1行：湖中女神驗了三號', 'text:cont', 'digest']);
+    await expect(h.mirror.runOnDiscordSendChain(async () => Promise.reject(new Error('gateway down')))).rejects.toThrow('gateway down');
+    // The chain still runs after a failed digest.
+    await h.mirror.crossFanout({ ...m!, message: 'later' });
+    expect(bodyOf(h.discord.sent[h.discord.sent.length - 1])).toBe('later');
+  });
+
+  it('legacy format (CHAT_MIRROR_USE_LEGACY_FORMAT=true): `[Avalon] 名字: ` on the first part, 「（續）」 after', async () => {
+    process.env.CHAT_MIRROR_USE_LEGACY_FORMAT = 'true';
+    const h = setup();
+    const text = lines(100, 59);
+    const m = h.mirror.ingestInbound({ source: 'line', platformUserId: 'U1', displayName: LINE_NAME, text, messageId: 'line:legacy' });
+    await h.mirror.crossFanout(m!);
+    const parts = h.discord.sent;
+    expect(parts.length).toBe(4);
+    for (const p of parts) expect(p.length).toBeLessThanOrEqual(DISCORD_MESSAGE_MAX_CHARS);
+    expect(parts[0].startsWith(`[Avalon] ${LINE_NAME}: 第1行`)).toBe(true);
+    for (const p of parts.slice(1)) expect(p.startsWith(`${MARK}\n第`)).toBe(true);
+    const legacyHead = `[Avalon] ${LINE_NAME}: `;
+    expect(parts[0].slice(legacyHead.length) + parts.slice(1).map((p) => p.slice(MARK.length)).join('')).toBe(text);
   });
 });
 
@@ -526,6 +603,43 @@ describe('→ LINE over 5000 characters (reply queue)', () => {
     expect(calls[1]).toMatchObject({ type: 'text' });
   });
 
+  it('the weekly digest over 5000 (enqueueLineReplyText) is queued as one group of parts ≤ 5000', () => {
+    __resetChatMirrorForTests();
+    const queue = new LineReplyQueue();
+    const mirror = new ChatMirror({ lineGroupId: GROUP, lineReplyQueue: queue, logger });
+    const digest = lines(150, 79, '名');
+    expect(mirror.enqueueLineReplyText(digest)).toBe(true);
+    const items = queue.drain();
+    expect(items).toHaveLength(3);
+    expect(new Set(items.map((i) => i.group)).size).toBe(1);
+    expect(items[0].group).toBeDefined();
+    for (const i of items) expect(i.text.length).toBeLessThanOrEqual(LINE_TEXT_MAX_CHARS);
+    expect(items[0].text.startsWith('第1名')).toBe(true);
+    expect(items.map((i, n) => (n === 0 ? i.text : i.text.slice(MARK.length))).join('')).toBe(digest);
+  });
+
+  it('listen-bot mode gets the WHOLE text as raw fields (it formats on its own)', async () => {
+    __resetChatMirrorForTests();
+    const bodies: Record<string, unknown>[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response('{"ok":true}', { status: 200 });
+    }) as unknown as typeof globalThis.fetch;
+    try {
+      const mirror = new ChatMirror({ lineGroupId: GROUP, listenBot: { url: 'http://listen.test/enqueue/line' }, logger });
+      mirror.setLobbyIngest(() => undefined);
+      const text = lines(50, 79); // ≈ 4000, the most Discord (Nitro) can send
+      const msg = mirror.ingestInbound({ source: 'discord', platformUserId: '1', displayName: DC_NAME, text, messageId: 'd-lb' });
+      await mirror.crossFanout(msg!);
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0].content).toBe(text);
+      expect(bodies[0].source).toBe('DC');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('a queued text that is somehow over 5000 is clamped at drain time instead of jamming the queue', () => {
     __resetChatMirrorForTests();
     const queue = new LineReplyQueue();
@@ -598,10 +712,10 @@ describe('chat-log export joins the parts', () => {
       raw(bot(`${MARK}orphan tail`)),
       raw(bot(`[1006 20:01][LINE][${LINE_NAME}] first half`)),
       raw({ content: 'a human line' }),
-      raw(bot(`${MARK}second half`)),
-      raw(bot(`${MARK}third half`)),
+      raw(bot(`${MARK}\nsecond half`)),
+      raw(bot(`${MARK}\nthird half`)),
       raw(bot(`[1006 20:05][LINE][${LINE_NAME}] /意見 private`)),
-      raw(bot(`${MARK}still private`)),
+      raw(bot(`${MARK}\nstill private`)),
       raw({ content: `${MARK}a human typed this` }),
     ];
     const out = buildExportRows([...msgs].reverse(), channels, '2026-10-06');
@@ -614,6 +728,35 @@ describe('chat-log export joins the parts', () => {
     expect(out.skipped.command).toBe(2);
     expect(out.skipped.bot).toBe(1);
     expect(JSON.stringify(out.rows)).not.toContain(LINE_NAME);
+  });
+
+  it('a picture upload, the digest or a command reply landing between the parts is never taken for the start', () => {
+    const msgs = [
+      raw(bot(`[1006 21:00][LINE][${LINE_NAME}] part one`)),
+      raw({ ...bot(`[1006 21:00][LINE][${LINE_NAME}] （圖片）`), attachmentCount: 1 }),
+      raw(bot('本週排行榜：第一名 …')),
+      raw(bot(`${MARK}\npart two`)),
+    ];
+    const out = buildExportRows(msgs, channels, '2026-10-06');
+    expect(out.rows.map((r) => r[5])).toEqual(['part one ⏎ part two', '（圖片）〔附件 1〕']);
+    expect(out.skipped.bot).toBe(1); // the digest
+  });
+
+  it('parts split on a space or inside a line join back without a stray line break; the missing-parts note stays in the row', () => {
+    const text = 'word '.repeat(600).trim(); // no line breaks, ≈ 3000 characters
+    const parts = splitMirrorText(`[1006 22:00][LINE][${LINE_NAME}] `, text, DISCORD_MESSAGE_MAX_CHARS);
+    expect(parts).toHaveLength(2);
+    const out = buildExportRows(parts.map((p) => raw(bot(p))), channels, '2026-10-06');
+    expect(out.rows).toHaveLength(1);
+    expect(out.rows[0][5]).toBe(text);
+    expect(out.rows[0][5]).not.toContain('⏎');
+
+    const cut = buildExportRows(
+      [raw(bot(`[1006 22:05][LINE][${LINE_NAME}] start`)), raw(bot(discordMissingPartsNote('line')))],
+      channels,
+      '2026-10-06',
+    );
+    expect(cut.rows.map((r) => r[5])).toEqual(['start（後段沒有同步過來，請到 LINE 看）']);
   });
 });
 
