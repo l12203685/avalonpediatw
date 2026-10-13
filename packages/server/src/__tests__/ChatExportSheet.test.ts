@@ -12,13 +12,16 @@
  *                      appends in batches of 500 with RAW input, the export
  *                      log written and read back (+08 time with seconds),
  *                      deleteDays (bottom run first; header and non-date
- *                      rows never touched)
+ *                      rows never touched; the cleanup-lock guard false →
+ *                      nothing sent), countDays
  *   end to end       — ChatExportService + ChatExportSheet: the 7-day
  *                      catch-up with 完成 rows, restart idempotency, 7-day
  *                      retention of both tabs, a half-written day cleaned up
  *                      and rewritten, a process killed mid-write taken over
- *                      after its claim went stale; on the public stats
- *                      workbook (opt-in) only the two chat tabs are touched
+ *                      after its claim went stale; two instances pruning at
+ *                      once against index-based deletes lose no row; on
+ *                      the public stats workbook (opt-in) only the two chat
+ *                      tabs are touched
  */
 import crypto from 'crypto';
 import { describe, expect, it, vi } from 'vitest';
@@ -36,7 +39,7 @@ import {
   createSheetsClient,
   parseServiceAccountJson,
 } from '../bots/digest/sheets';
-import { ChatExportSheet, ChatTabConflictError, defaultChatSheetFactory } from '../bots/chatExport/sheetWriter';
+import { ChatCleanupLockLostError, ChatExportSheet, ChatTabConflictError, defaultChatSheetFactory } from '../bots/chatExport/sheetWriter';
 import {
   CHAT_EXPORT_HEADER,
   CHAT_EXPORT_LOG_HEADER,
@@ -103,6 +106,8 @@ class FakeSheets {
   failDeleteStatus = 0;
   failMetadataStatus = 0;
   appendCount = 0;
+  /** Each call waits this long first (a macrotask), so two instances interleave like real network calls. */
+  latencyMs = 0;
 
   constructor(readonly spreadsheetId: string = SHEET_ID) {
     this.base = `${SHEETS_API_BASE}/${spreadsheetId}`;
@@ -112,6 +117,7 @@ class FakeSheets {
     const url = String(input);
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' && init.body.startsWith('{') ? JSON.parse(init.body) : init?.body;
+    if (this.latencyMs > 0) await new Promise((r) => setTimeout(r, this.latencyMs));
     this.calls.push({ method, url, body });
     if (url === GOOGLE_TOKEN_URL) return json({ access_token: 'ya29.test-token', expires_in: 3600 });
     if (!url.startsWith(this.base)) return json({}, 404);
@@ -381,6 +387,12 @@ describe('ChatExportSheet (tab 聊天紀錄)', () => {
     const before = g.calls.length;
     expect(await sheet.deleteDays(() => false)).toBe(0);
     expect(g.calls.slice(before).some((c) => c.url.endsWith(':batchUpdate'))).toBe(false);
+    // countDays reads column A only; the cleanup-lock guard false → nothing is deleted.
+    expect(await sheet.countDays((d) => d >= '2026-10-02')).toBe(2);
+    await expect(sheet.deleteDays((d) => d === '2026-10-12', () => false)).rejects.toBeInstanceOf(ChatCleanupLockLostError);
+    expect(g.calls.slice(before).some((c) => c.url.endsWith(':batchUpdate'))).toBe(false);
+    expect(g.tab().map((r) => r[0])).toEqual(['日期', '備註：這列是人手寫的', '2026-10-02', '2026-10-12']);
+    expect(await sheet.deleteDays((d) => d === '2026-10-12', () => true)).toBe(1);
   });
   it('a tab with another header (someone else’s, or the old 週次 one) is refused before anything is created or written', async () => {
     for (const [title, header] of [
@@ -528,8 +540,11 @@ describe('end to end with the fake Sheets API', () => {
     const clock = { now: TUE_1005 };
     const { service } = e2e(g, discordDaily(() => 3), clock);
     await service.tick();
+    const logDays = (): string[] => [...new Set(g.tab(CHAT_EXPORT_LOG_TAB).slice(1).filter((r) => r[1] === '進行中' || r[1] === '完成').map((r) => r[0]))];
+    const lockRows = (): string[] => g.tab(CHAT_EXPORT_LOG_TAB).slice(1).filter((r) => r[1].startsWith('清理')).map((r) => `${r[0]} ${r[1]}`);
     expect([...new Set(g.tab().slice(1).map((r) => r[0]))]).toEqual(DAYS);
-    expect([...new Set(g.tab(CHAT_EXPORT_LOG_TAB).slice(1).map((r) => r[0]))]).toEqual(DAYS);
+    expect(logDays()).toEqual(DAYS);
+    expect(lockRows()).toEqual(['2026-10-13 清理中', '2026-10-13 清理結束']);
     expect(g.tab()[0]).toEqual([...CHAT_EXPORT_HEADER]);
     expect(g.tab(CHAT_EXPORT_LOG_TAB)[0]).toEqual([...CHAT_EXPORT_LOG_HEADER]);
     // The next day at 04:30: the new day comes in, the oldest goes out — still 7.
@@ -537,7 +552,13 @@ describe('end to end with the fake Sheets API', () => {
     const r = await service.tick();
     expect(r.days).toEqual([{ day: '2026-10-13', outcome: 'written' }]);
     expect([...new Set(g.tab().slice(1).map((r) => r[0]))]).toEqual(lastCompleteDays(clock.now));
-    expect([...new Set(g.tab(CHAT_EXPORT_LOG_TAB).slice(1).map((r) => r[0]))]).toEqual(lastCompleteDays(clock.now));
+    expect(logDays()).toEqual(lastCompleteDays(clock.now));
+    expect(lockRows()).toEqual(['2026-10-13 清理中', '2026-10-13 清理結束', '2026-10-14 清理中', '2026-10-14 清理結束']);
+    // A week on, the lock rows of 10/13 go with the days of that time.
+    clock.now = Date.parse('2026-10-20T20:30:00Z'); // Wed 10/21 04:30 +08
+    await service.tick();
+    expect([...new Set(g.tab().slice(1).map((r) => r[0]))]).toEqual(lastCompleteDays(clock.now));
+    expect(lockRows().some((l) => l.startsWith('2026-10-13'))).toBe(false);
   });
 
   it('an append failing half-way: the partial day is removed and the next attempt writes it whole', async () => {
@@ -580,6 +601,37 @@ describe('end to end with the fake Sheets API', () => {
     expect(g.tab()).toHaveLength(621);
     expect(g.tab().slice(1).every((r) => !/^第\d+則$/.test(r[5]))).toBe(true); // the partial rows are gone
     expect(g.tab(CHAT_EXPORT_LOG_TAB).filter((r) => r[0] === BUSY_DAY).map((r) => r[1])).toEqual(['進行中', '進行中', '完成']);
+  });
+});
+
+describe('two instances against the fake Sheets API (rows deleted by index, like Google)', () => {
+  it('both prune at the same moment: no kept day loses a row or its 完成 (one holds the cleanup lock, the other skips)', async () => {
+    const g = new FakeSheets();
+    g.latencyMs = 1;
+    g.tabs.set(CHAT_EXPORT_TAB, { sheetId: 5, rows: [[...CHAT_EXPORT_HEADER], ...['2026-10-05', ...DAYS].flatMap((d) => [row(d, 1), row(d, 2), row(d, 3)])] });
+    g.tabs.set(CHAT_EXPORT_LOG_TAB, {
+      sheetId: 6,
+      rows: [[...CHAT_EXPORT_LOG_HEADER], ...['2026-10-05', ...DAYS].map((d) => [d, '完成', '3', '1', '2026-10-13T01:00:00+08:00', 'old'])],
+    });
+    const clock = { now: TUE_1005 };
+    const a = e2e(g, discordDaily(() => 3), clock);
+    const b = e2e(g, discordDaily(() => 3), clock);
+    const [ra, rb] = await Promise.all([a.service.tick(), b.service.tick()]);
+    expect([...ra.days, ...rb.days].every((d) => d.outcome === 'already-exported')).toBe(true);
+    const chatDays = g.tab().slice(1).map((r) => r[0]);
+    for (const d of DAYS) expect(chatDays.filter((x) => x === d)).toHaveLength(3);
+    expect(chatDays).toHaveLength(21); // 2026-10-05 gone, nothing else
+    const log = g.tab(CHAT_EXPORT_LOG_TAB).slice(1);
+    for (const d of DAYS) expect(log.filter((r) => r[0] === d && r[1] === '完成')).toHaveLength(1);
+    expect(log.some((r) => r[0] === '2026-10-05')).toBe(false);
+    // The lock rows: dated today, one 清理中 + 清理結束 pair per instance.
+    expect(log.filter((r) => r[1] === '清理中' || r[1] === '清理結束').map((r) => `${r[0]} ${r[1]}`).sort()).toEqual([
+      '2026-10-13 清理中',
+      '2026-10-13 清理中',
+      '2026-10-13 清理結束',
+      '2026-10-13 清理結束',
+    ]);
+    expect(g.touched().filter((t) => t.method === 'deleteRows')).toHaveLength(2); // one instance, both tabs
   });
 });
 

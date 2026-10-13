@@ -6,8 +6,11 @@
  *     LINE↔Discord sync channel always included; exclude list + the admin
  *     channel 大劍管理員 (always, even if public or /意見 goes elsewhere) +
  *     the /意見 channel left out; CHAT_EXPORT_SOURCE_CHANNEL_IDS (or the old
- *     COMMUNITY_DIGEST_ name) overrides the default list; a server with no
- *     @everyone-visible channel is reported (publicChannelsFound 0)
+ *     COMMUNITY_DIGEST_ name) replaces the default list and
+ *     CHAT_EXPORT_EXTRA_SOURCE_IDS adds to it (exclusions still win); a
+ *     single forum post / unknown / unreadable id in either is ignored and
+ *     counted (sourceIdsIgnored); a server with no @everyone-visible channel
+ *     is reported (publicChannelsFound 0)
  *   fetchWindow          — pages backwards with `before`, keeps [start, end),
  *     stops at the window start, reports a page-cap truncation
  *   forums               — active + archived threads (archived listed newest
@@ -156,6 +159,46 @@ describe('selectSourceChannels', () => {
       expect(picked.channels.map((c) => c.id).sort()).toEqual(['200000000000000002', MIRROR].sort());
       expect(picked.forums.map((f) => f.id)).toEqual(['200000000000000003']);
       expect(picked.publicChannelsFound).toBeNull();
+      expect(picked.sourceIdsIgnored).toBe(1); // 999… does not exist: counted, not silent
+    }
+  });
+
+  it('CHAT_EXPORT_EXTRA_SOURCE_IDS adds to the default list (e.g. a records forum hidden from @everyone); the exclude list still wins', async () => {
+    const g = guild();
+    channel(g, '210000000000000001'); // public text: still read
+    channel(g, '210000000000000002', { type: ChannelType.GuildForum }); // public forum: still read
+    channel(g, '210000000000000003', { type: ChannelType.GuildForum, publicView: false }); // hidden forum, named as extra
+    channel(g, '210000000000000004', { publicView: false }); // hidden text channel, not named: not read
+    channel(g, DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID, { publicView: false }); // 大劍管理員 named as extra: still never read
+    const cfg = readChatExportConfig({ CHAT_EXPORT_EXTRA_SOURCE_IDS: `210000000000000003, ${DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID} 210000000000000002` });
+    expect(cfg.extraSourceIds).toEqual(['210000000000000003', DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID, '210000000000000002']);
+    const picked = await selectSourceChannels(client([g]), cfg);
+    expect(picked.channels.map((c) => c.id)).toEqual(['210000000000000001']);
+    expect(picked.forums.map((f) => f.id).sort()).toEqual(['210000000000000002', '210000000000000003']);
+    expect(picked.publicChannelsFound).toBe(2); // the extras are not "found by the default rule"
+    expect(picked.sourceIdsIgnored).toBe(0);
+    // With a replacing list as well, the extras come on top of it.
+    const both = await selectSourceChannels(
+      client([g]),
+      readChatExportConfig({ CHAT_EXPORT_SOURCE_CHANNEL_IDS: '210000000000000001', CHAT_EXPORT_EXTRA_SOURCE_IDS: '210000000000000003' }),
+    );
+    expect(both.channels.map((c) => c.id)).toEqual(['210000000000000001']);
+    expect(both.forums.map((f) => f.id)).toEqual(['210000000000000003']);
+  });
+
+  it('a single forum post (thread) id is no source: ignored and counted, in either list (it only works as an exclusion)', async () => {
+    const g = guild();
+    channel(g, '220000000000000001');
+    channel(g, '220000000000000002', { type: ChannelType.PublicThread });
+    channel(g, '220000000000000003', { botRead: false });
+    for (const env of [
+      { CHAT_EXPORT_SOURCE_CHANNEL_IDS: '220000000000000001 220000000000000002 220000000000000003' },
+      { CHAT_EXPORT_EXTRA_SOURCE_IDS: '220000000000000002 220000000000000003' },
+    ]) {
+      const picked = await selectSourceChannels(client([g]), readChatExportConfig(env));
+      expect(picked.channels.map((c) => c.id)).toEqual(['220000000000000001']);
+      expect(picked.forums).toEqual([]);
+      expect(picked.sourceIdsIgnored).toBe(2); // the thread + the channel the bot cannot read
     }
   });
 });

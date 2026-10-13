@@ -5,6 +5,8 @@
  *   「匯出紀錄」 — the export log: a 「進行中」 row when an instance takes a
  *                 day (claim), a 「完成」 row once the day is fully written.
  *                 A day counts as exported only with a 完成 row.
+ *                 「清理中」/「清理結束」 rows bracket row deletions (the
+ *                 cleanup lock, dated the day they were written).
  *
  * These two tabs are the ONLY ones this module reads rows from, writes to or
  * deletes rows in — the spreadsheet may be the public 阿瓦隆百科 workbook
@@ -18,6 +20,12 @@
  * ChatTabConflictError, and neither tab is created or changed. Column A of
  * both tabs holds the 日期 ("YYYY-MM-DD", +08); rows whose column A is not
  * such a date (the header, a note someone typed) are never deleted.
+ *
+ * Rows are deleted by INDEX (Google has no delete-by-value): column A is read,
+ * then the matching rows are deleted. A delete by another instance in between
+ * would shift the rows, so the service only deletes while it holds the
+ * sheet-wide cleanup lock (service.ts, CHAT_EXPORT_STATE_CLEANUP), and the
+ * `stillHeld` guard is checked right before the delete request is sent.
  */
 
 import {
@@ -43,7 +51,7 @@ import { isDayKey, taipeiIso } from './window';
 export interface ExportLogEntry {
   /** 日期 (+08) of the exported day. */
   day: string;
-  /** CHAT_EXPORT_STATE_CLAIM (進行中) or CHAT_EXPORT_STATE_DONE (完成). */
+  /** CHAT_EXPORT_STATE_CLAIM (進行中), CHAT_EXPORT_STATE_DONE (完成), or the cleanup lock's 清理中 / 清理結束. */
   state: string;
   /** Rows written (完成) — 0 for a claim. */
   rows: number;
@@ -66,6 +74,14 @@ export class ChatTabConflictError extends Error {
   }
 }
 
+/** The cleanup lock was held too long (CHAT_EXPORT_CLEANUP_MAX_MS): nothing was deleted. */
+export class ChatCleanupLockLostError extends Error {
+  constructor() {
+    super('cleanup lock held too long, nothing deleted');
+    this.name = 'ChatCleanupLockLostError';
+  }
+}
+
 /** What the service needs from the sheet (tests inject a fake). */
 export interface ChatExportSheetPort {
   /** Make sure both tabs exist and row 1 of each is the header (ChatTabConflictError when a tab is not ours). */
@@ -76,10 +92,16 @@ export interface ChatExportSheetPort {
   appendLog(entry: ExportLogEntry): Promise<void>;
   /** Append rows to 「聊天紀錄」 in batches; resolves with the number of requests sent. */
   appendRows(rows: ChatExportRow[]): Promise<number>;
-  /** Delete every row of 「聊天紀錄」 whose 日期 matches; resolves with the number of rows deleted. */
-  deleteDays(match: (day: string) => boolean): Promise<number>;
+  /** Rows of 「聊天紀錄」 whose 日期 matches (reads column A only). */
+  countDays(match: (day: string) => boolean): Promise<number>;
+  /**
+   * Delete every row of 「聊天紀錄」 whose 日期 matches; resolves with the
+   * number of rows deleted. By index: call only while holding the cleanup
+   * lock; `stillHeld` false right before the request → ChatCleanupLockLostError.
+   */
+  deleteDays(match: (day: string) => boolean, stillHeld?: () => boolean): Promise<number>;
   /** Same for 「匯出紀錄」. */
-  deleteLogDays(match: (day: string) => boolean): Promise<number>;
+  deleteLogDays(match: (day: string) => boolean, stillHeld?: () => boolean): Promise<number>;
 }
 
 function lastColumn(columns: number): string {
@@ -142,14 +164,26 @@ class DayTab {
     await this.client.appendValues(a1Range(this.title, 'A1'), rows);
   }
 
-  async deleteDays(match: (day: string) => boolean): Promise<number> {
-    if (this.sheetId === null) return 0; // set by inspect / settle (prepare)
+  /** 0-based row indices (header excluded) whose column A is a matching 日期. */
+  private async matchingRows(match: (day: string) => boolean): Promise<number[]> {
     const col = (await this.client.readValues(a1Range(this.title, 'A:A'))).map((r) => (Array.isArray(r) ? r[0] : undefined));
     const indices: number[] = [];
     col.forEach((v, i) => {
       if (i > 0 && isDayKey(v) && match(v)) indices.push(i);
     });
+    return indices;
+  }
+
+  async countDays(match: (day: string) => boolean): Promise<number> {
+    if (this.sheetId === null) return 0;
+    return (await this.matchingRows(match)).length;
+  }
+
+  async deleteDays(match: (day: string) => boolean, stillHeld?: () => boolean): Promise<number> {
+    if (this.sheetId === null) return 0; // set by inspect / settle (prepare)
+    const indices = await this.matchingRows(match);
     if (indices.length === 0) return 0;
+    if (stillHeld && !stillHeld()) throw new ChatCleanupLockLostError();
     await this.client.deleteRows(this.sheetId, contiguousRuns(indices));
     return indices.length;
   }
@@ -228,14 +262,19 @@ export class ChatExportSheet implements ChatExportSheetPort {
     return requests;
   }
 
-  async deleteDays(match: (day: string) => boolean): Promise<number> {
+  async countDays(match: (day: string) => boolean): Promise<number> {
     this.requirePrepared();
-    return this.chat.deleteDays(match);
+    return this.chat.countDays(match);
   }
 
-  async deleteLogDays(match: (day: string) => boolean): Promise<number> {
+  async deleteDays(match: (day: string) => boolean, stillHeld?: () => boolean): Promise<number> {
     this.requirePrepared();
-    return this.log.deleteDays(match);
+    return this.chat.deleteDays(match, stillHeld);
+  }
+
+  async deleteLogDays(match: (day: string) => boolean, stillHeld?: () => boolean): Promise<number> {
+    this.requirePrepared();
+    return this.log.deleteDays(match, stillHeld);
   }
 }
 

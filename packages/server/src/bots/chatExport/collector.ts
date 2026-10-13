@@ -14,10 +14,14 @@
  *     thread archived before the day started (nothing in it can be newer).
  *     In the records forum 「牌譜紀錄與覆盤」 each post's starter message (the
  *     game record: data, not an opinion) is skipped; replies are kept.
- * CHAT_EXPORT_SOURCE_CHANNEL_IDS replaces the default list (text channels
- * or forums; the sync channel is still added); CHAT_EXPORT_EXCLUDE_CHANNEL_IDS,
- * the admin channel 「大劍管理員」 and the /意見 channel are always left out
- * (config.ts) — also when one of them is a forum or a single forum thread.
+ * CHAT_EXPORT_SOURCE_CHANNEL_IDS replaces the default list and
+ * CHAT_EXPORT_EXTRA_SOURCE_IDS adds to it (both: text / announcement channels
+ * or forums, read even when hidden from @everyone; the sync channel is still
+ * added; any other id — a single forum post, a deleted channel, one the bot
+ * cannot read — is ignored and counted in sourceIdsIgnored).
+ * CHAT_EXPORT_EXCLUDE_CHANNEL_IDS, the admin channel 「大劍管理員」 and the
+ * /意見 channel are always left out (config.ts) — also when one of them is a
+ * forum or a single forum thread.
  *
  * Work is bounded (config.ts): pages per channel / thread, archived-thread
  * pages per forum, threads per day. Every cut is counted in CollectResult,
@@ -99,6 +103,8 @@ export interface CollectResult {
   archivedListsTruncated: number;
   /** Starter messages (game records) skipped in the records forum. */
   starterSkipped: number;
+  /** See SourceSelection.sourceIdsIgnored. */
+  sourceIdsIgnored: number;
 }
 
 export function emptyCollectResult(): CollectResult {
@@ -113,6 +119,7 @@ export function emptyCollectResult(): CollectResult {
     threadsOverCap: 0,
     archivedListsTruncated: 0,
     starterSkipped: 0,
+    sourceIdsIgnored: 0,
   };
 }
 
@@ -121,6 +128,12 @@ export interface SourceSelection {
   forums: ForumLike[];
   /** See CollectResult.publicChannelsFound. */
   publicChannelsFound: number | null;
+  /**
+   * Ids in CHAT_EXPORT_SOURCE_CHANNEL_IDS / CHAT_EXPORT_EXTRA_SOURCE_IDS that
+   * are not a text, announcement or forum channel the bot can read (a single
+   * forum post, a deleted channel, no permission): ignored, counted.
+   */
+  sourceIdsIgnored: number;
 }
 
 function isReadableType(ch: Channel | GuildBasedChannel | null | undefined): ch is ReadableChannel {
@@ -166,17 +179,22 @@ export async function selectSourceChannels(
   const picked = new Map<string, ReadableChannel>();
   const forums = new Map<string, ForumChannel>();
   let publicChannelsFound: number | null = null;
+  let sourceIdsIgnored = 0;
 
   const take = (ch: SourceChannel): void => {
     if (isForumType(ch)) forums.set(ch.id, ch);
     else picked.set(ch.id, ch);
   };
+  /** A configured id: read even when hidden from @everyone; excluded ids are not even fetched. */
+  const takeConfigured = async (id: string): Promise<void> => {
+    if (exclude.has(id) || picked.has(id) || forums.has(id)) return;
+    const ch = await fetchChannel(client, id);
+    if (ch && botCanReadHistory(ch)) take(ch);
+    else sourceIdsIgnored += 1;
+  };
 
   if (cfg.sourceChannelIds.length > 0) {
-    for (const id of cfg.sourceChannelIds) {
-      const ch = await fetchChannel(client, id);
-      if (ch && botCanReadHistory(ch)) take(ch);
-    }
+    for (const id of cfg.sourceChannelIds) await takeConfigured(id);
   } else {
     const guilds = cfg.guildId
       ? [client.guilds.cache.get(cfg.guildId)].filter((g): g is NonNullable<typeof g> => !!g)
@@ -188,6 +206,7 @@ export async function selectSourceChannels(
     }
     publicChannelsFound = [...picked.keys(), ...forums.keys()].filter((id) => !exclude.has(id) && id !== cfg.mirrorChannelId).length;
   }
+  for (const id of cfg.extraSourceIds) await takeConfigured(id);
 
   if (cfg.mirrorChannelId && !picked.has(cfg.mirrorChannelId)) {
     const mirror = await fetchChannel(client, cfg.mirrorChannelId);
@@ -198,6 +217,7 @@ export async function selectSourceChannels(
     channels: [...picked.values()].filter((ch) => !exclude.has(ch.id)),
     forums: [...forums.values()].filter((ch) => !exclude.has(ch.id)).map(asForum),
     publicChannelsFound,
+    sourceIdsIgnored,
   };
 }
 
@@ -329,8 +349,8 @@ export async function collectDiscordMessages(
 ): Promise<CollectResult> {
   const selfId = client.user?.id ?? '';
   const exclude = new Set([...cfg.excludeChannelIds, ...(opts.excludeIds ?? [])].filter(Boolean));
-  const { channels: sources, forums, publicChannelsFound } = await selectSourceChannels(client, cfg, opts.excludeIds);
-  const result: CollectResult = { ...emptyCollectResult(), publicChannelsFound };
+  const { channels: sources, forums, publicChannelsFound, sourceIdsIgnored } = await selectSourceChannels(client, cfg, opts.excludeIds);
+  const result: CollectResult = { ...emptyCollectResult(), publicChannelsFound, sourceIdsIgnored };
 
   for (const ch of sources) {
     try {

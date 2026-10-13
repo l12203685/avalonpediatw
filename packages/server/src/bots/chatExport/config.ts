@@ -64,6 +64,27 @@ export const CHAT_EXPORT_CLAIM_STALE_MS = 30 * 60_000;
 export const CHAT_EXPORT_CLAIM_RENEW_MS = 15 * 60_000;
 
 /**
+ * The sheet-wide cleanup lock, for every row deletion (retention, rows of an
+ * interrupted write). Google deletes rows by INDEX, read just before: two
+ * instances deleting at the same time (deploy overlap) would each remove
+ * rows that the other's delete had just moved up — rows of a kept, complete
+ * day, silently. So an instance deletes only while its 「清理中」 row is the
+ * first live one in 「匯出紀錄」 (same rule as the day claims) and ends with
+ * a 「清理結束」 row, also when it did not get the lock. Lock rows carry the
+ * date (+08) they were written and are pruned with the days.
+ */
+export const CHAT_EXPORT_STATE_CLEANUP = '清理中';
+export const CHAT_EXPORT_STATE_CLEANUP_END = '清理結束';
+/** A 清理中 row older than this no longer holds the lock (its instance died mid-cleanup). */
+export const CHAT_EXPORT_CLEANUP_STALE_MS = 10 * 60_000;
+/**
+ * The holder sends no delete request once it has held the lock this long
+ * (a cleanup takes seconds); far enough inside the stale age that clocks a
+ * few minutes apart never let two instances delete at once.
+ */
+export const CHAT_EXPORT_CLEANUP_MAX_MS = 3 * 60_000;
+
+/**
  * Days kept in both tabs: the last 7 complete days (+08), i.e. yesterday and
  * the 6 days before it. Older rows are deleted after each export pass. The
  * catch-up looks at the same 7 days.
@@ -139,8 +160,19 @@ export interface ChatExportConfig {
    * (client_email + private_key). The value itself never leaves digest/sheets.ts.
    */
   sheetCredentialsUsable: boolean;
-  /** CHAT_EXPORT_SOURCE_CHANNEL_IDS — when non-empty, replaces the default source list (text channels and forums). */
+  /**
+   * CHAT_EXPORT_SOURCE_CHANNEL_IDS — when non-empty, REPLACES the default
+   * source list (text / announcement channels and forums; a single forum post
+   * id is not a source and is counted as ignored).
+   */
   sourceChannelIds: string[];
+  /**
+   * CHAT_EXPORT_EXTRA_SOURCE_IDS — read IN ADDITION to the default list (or
+   * to CHAT_EXPORT_SOURCE_CHANNEL_IDS), even when @everyone cannot see them:
+   * e.g. the records forum if it is hidden from @everyone. Same id kinds as
+   * above; the exclude list still wins.
+   */
+  extraSourceIds: string[];
   /**
    * CHAT_EXPORT_EXCLUDE_CHANNEL_IDS plus the admin channel 「大劍管理員」 and
    * the /意見 channel when it is another one (always left out). Applies to
@@ -197,6 +229,7 @@ export function readChatExportConfig(env: NodeJS.ProcessEnv = process.env): Chat
     publicSheet: isPublic && allowPublic,
     sheetCredentialsUsable: parseServiceAccountJson(env.GOOGLE_SERVICE_ACCOUNT_JSON) !== null,
     sourceChannelIds: idList(envFirst(env, 'CHAT_EXPORT_SOURCE_CHANNEL_IDS', 'COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS')),
+    extraSourceIds: idList(env.CHAT_EXPORT_EXTRA_SOURCE_IDS || ''),
     excludeChannelIds: [
       ...new Set([...idList(envFirst(env, 'CHAT_EXPORT_EXCLUDE_CHANNEL_IDS', 'COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS')), ...privateChannelIds]),
     ],

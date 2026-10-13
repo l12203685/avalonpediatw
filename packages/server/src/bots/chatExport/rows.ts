@@ -197,6 +197,17 @@ export function rewriteMentions(text: string, pseudo: Pseudonymizer, channelName
     .replace(/<a?:([A-Za-z0-9_~]+):\d+>/g, ':$1:');
 }
 
+/**
+ * A link to the server's own picture relay (`<host>/media/relay/<random id>`,
+ * Discord → LINE pictures): the random id is the only key to that picture
+ * and the sheet may be the link-public one, so such a link never reaches it.
+ * (Relayed LINE pictures arrive as attachments and are counted as 〔附件 N〕;
+ * this only guards against a link pasted or relayed as text.)
+ */
+export function maskRelayMediaLinks(text: string): string {
+  return text.replace(/https?:\/\/[^\s<>]*\/media\/relay\/[^\s<>]*/gi, '〔圖片連結〕');
+}
+
 /** Newlines → " ⏎ " (one line per row, easy to read as CSV), then cut to `max` code points. */
 export function clipMessageText(text: string, max: number = CHAT_EXPORT_MESSAGE_MAX_CHARS): string {
   const oneLine = text.replace(/\s*\r?\n\s*/g, ' ⏎ ').trim();
@@ -246,7 +257,7 @@ export function buildExportRows(messages: RawChatMessage[], channels: ChatChanne
     usedChannels.add(k.channelId);
     byPlatform[k.platform] += 1;
     const speaker = pseudo.label(k.speakerKey);
-    const body = clipMessageText(rewriteMentions(k.text, pseudo, channelNames));
+    const body = clipMessageText(maskRelayMediaLinks(rewriteMentions(k.text, pseudo, channelNames)));
     const extra = k.attachments > 0 ? `〔附件 ${k.attachments}〕` : '';
     return [dayKey, taipeiStamp(k.createdAt), channelNames.get(k.channelId) ?? '某頻道', SOURCE_LABEL[k.platform], speaker, `${body}${extra}`];
   });

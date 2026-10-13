@@ -16,22 +16,31 @@
  *                 landed although its request failed is trusted
  *   instances   — two servers (deploy overlap) catching up at the same
  *                 moment: every day written exactly once; a dead holder's
- *                 claim goes stale after 30 minutes; a live claim is renewed
+ *                 claim goes stale after 30 minutes; a live claim is renewed;
+ *                 a long catch-up claims each day at the time it is reached
+ *   cleanup     — the fake deletes by row INDEX like Google: two servers
+ *                 pruning at once lose no row of a kept day (one holds the
+ *                 「清理中」 lock); leftover rows wait while another holds
+ *                 it; a dead holder's lock lapses after 10 minutes; a
+ *                 retention that found the lock taken runs again 10 minutes
+ *                 later; a holder stalled past 3 minutes deletes nothing
  *   retries     — Sheets errors stop the pass for 10 minutes; some channels
  *                 unreadable → read once more, then exported; no channel
  *                 readable → never settled as empty; a quiet day → empty
  *   retention   — exactly the last 7 complete days in both tabs
  *   status      — /api/bots/status → chatExport: enabled / sheetConfigured /
  *                 publicSheet, lastRun (day, counts, outcome), catchUp
- *                 (exported / skipped / failed / pending); no text in status
- *                 or logs
+ *                 (exported / skipped / failed / pending / expired); no text
+ *                 in status or logs
  *   wiring      — startChatExport arms the timer only when enabled
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ChatExportService, __resetChatExportForTests, chatExportStatus, getChatExportService } from '../bots/chatExport/service';
+import { ChatExportService, __resetChatExportForTests, chatExportStatus, cleanupHolder, getChatExportService } from '../bots/chatExport/service';
 import {
   CHAT_EXPORT_STATE_CLAIM,
+  CHAT_EXPORT_STATE_CLEANUP,
+  CHAT_EXPORT_STATE_CLEANUP_END,
   CHAT_EXPORT_STATE_DONE,
   PUBLIC_STATS_SHEET_ID,
   readChatExportConfig,
@@ -81,6 +90,10 @@ function doneRow(day: string, at: number, runId: string, rows = 1): ExportLogEnt
   return { day, state: CHAT_EXPORT_STATE_DONE, rows, channels: 1, at, runId };
 }
 
+function lockRow(at: number, runId: string, state: string = CHAT_EXPORT_STATE_CLEANUP): ExportLogEntry {
+  return { day: '2026-10-13', state, rows: 0, channels: 0, at, runId };
+}
+
 /** In-memory sheet: both tabs, shared by every service of a test (= several server instances). */
 class FakeSheet implements ChatExportSheetPort {
   rows: ChatExportRow[] = [];
@@ -96,6 +109,8 @@ class FakeSheet implements ChatExportSheetPort {
   doneLands = false;
   /** Runs at the start of appendRows (another instance acting mid-write). */
   beforeAppend: (() => Promise<void>) | null = null;
+  /** Runs between reading the row indices and deleting them (a slow round trip). */
+  beforeDelete: (() => void) | null = null;
 
   async prepare(): Promise<void> {
     this.prepared += 1;
@@ -127,17 +142,34 @@ class FakeSheet implements ChatExportSheetPort {
     this.rows.push(...rows);
     return Math.ceil(rows.length / 500);
   }
-  async deleteDays(match: (day: string) => boolean): Promise<number> {
-    if (this.failDelete) throw new Error('delete failed');
-    const before = this.rows.length;
-    this.rows = this.rows.filter((r) => !match(r[0]));
-    return before - this.rows.length;
+  async countDays(match: (day: string) => boolean): Promise<number> {
+    return this.rows.filter((r) => match(r[0])).length;
   }
-  async deleteLogDays(match: (day: string) => boolean): Promise<number> {
+  /**
+   * Like Google: the matching row INDICES are read first and deleted one
+   * network round trip later (a macrotask), so two instances deleting at the
+   * same time remove the wrong rows unless the service keeps them apart.
+   */
+  private async deleteByIndex<T>(list: () => T[], set: (rows: T[]) => void, day: (r: T) => string, match: (day: string) => boolean, stillHeld?: () => boolean): Promise<number> {
     if (this.failDelete) throw new Error('delete failed');
-    const before = this.log.length;
-    this.log = this.log.filter((e) => !match(e.day));
-    return before - this.log.length;
+    const indices = list()
+      .map((r, i) => (match(day(r)) ? i : -1))
+      .filter((i) => i >= 0);
+    if (indices.length === 0) return 0;
+    await new Promise((r) => setTimeout(r, 0));
+    this.beforeDelete?.();
+    if (stillHeld && !stillHeld()) throw new Error('cleanup lock held too long, nothing deleted');
+    const doomed = new Set(indices);
+    this.deleteRequests += 1;
+    set(list().filter((_r, i) => !doomed.has(i)));
+    return indices.length;
+  }
+  deleteRequests = 0;
+  async deleteDays(match: (day: string) => boolean, stillHeld?: () => boolean): Promise<number> {
+    return this.deleteByIndex(() => this.rows, (r) => (this.rows = r), (r) => r[0], match, stillHeld);
+  }
+  async deleteLogDays(match: (day: string) => boolean, stillHeld?: () => boolean): Promise<number> {
+    return this.deleteByIndex(() => this.log, (r) => (this.log = r), (e) => e.day, match, stillHeld);
   }
   states(day: string): string[] {
     return this.log.filter((e) => e.day === day).map((e) => `${e.state}:${e.runId}`);
@@ -262,6 +294,7 @@ describe('catch-up after a start', () => {
       skipped: 2,
       failed: 0,
       pending: 0,
+      expired: 0,
     });
     expect(h.service.getStatus().lastRun).toMatchObject({ day: YESTERDAY, outcome: 'written', messages: 3, channels: 2, threads: 1 });
     // Nothing more to do today.
@@ -288,6 +321,30 @@ describe('catch-up after a start', () => {
     expect(h.sheet!.days()[0]).toBe('2026-10-08');
     expect(h.sheet!.log.some((e) => e.day === '2026-10-07')).toBe(false);
     expect((await h.at(thu + 5 * HOUR)).state).toBe('idle');
+  });
+
+  it('a long catch-up: each day is claimed at the time it is reached, not at the pass start (one 進行中 per day)', async () => {
+    const clock = { now: TUE_1000 };
+    const discord = discordPort();
+    const collect = discord.collect;
+    discord.collect = async (cfg, w) => {
+      clock.now += 12 * MIN; // reading one day takes 12 minutes
+      return collect(cfg, w);
+    };
+    const h = harness({ discord, clock });
+    const r = await h.service.tick(TUE_1000);
+    expect(r.days.every((d) => d.outcome === 'written')).toBe(true);
+    const claims = h.sheet!.log.filter((e) => e.state === CHAT_EXPORT_STATE_CLAIM);
+    expect(claims.map((e) => e.day)).toEqual(DAYS); // no extra renewal row
+    expect(claims.map((e) => (e.at - TUE_1000) / MIN)).toEqual([0, 12, 24, 36, 48, 60, 72]); // never backdated
+  });
+
+  it('catchUp: a day that left the 7-day window unsettled counts as expired, not failed or pending', async () => {
+    const h = harness({ discord: discordPort({ channels: 0 }) }); // nothing readable: 10/06 fails, the pass stops
+    await h.at(TUE_1000);
+    expect(h.service.getStatus().catchUp).toMatchObject({ exported: 0, skipped: 0, failed: 1, pending: 6, expired: 0 });
+    h.clock.now = TUE_1000 + 48 * HOUR; // Thu 10/15: the window is 10/08 … 10/14
+    expect(h.service.getStatus().catchUp).toMatchObject({ exported: 0, skipped: 0, failed: 0, pending: 5, expired: 2 });
   });
 
   it('Discord not ready → no claim and nothing read; the catch-up starts the minute it is', async () => {
@@ -477,6 +534,28 @@ describe('two server instances (deploy overlap)', () => {
     expect((await b.at(TUE_1000 + 20 * MIN)).state).toBe('idle');
   });
 
+  it('both prune at the same moment: rows are deleted by index, yet no kept day loses a row (one instance holds the cleanup)', async () => {
+    const sheet = new FakeSheet();
+    for (const d of ['2026-10-05', ...DAYS]) {
+      for (let i = 0; i < 3; i += 1) sheet.rows.push([d, `${d} 12:0${i}`, 'c', 'Discord', `成員${i + 1}`, `x${i}`]);
+      sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old', 3));
+    }
+    const clock = { now: TUE_1000 };
+    const a = harness({ sheet, runId: 'a', clock });
+    const b = harness({ sheet, runId: 'b', clock });
+    const [ra, rb] = await Promise.all([a.service.tick(TUE_1000), b.service.tick(TUE_1000)]);
+    expect(ra.days.map((d) => d.outcome)).toEqual(Array(7).fill('already-exported'));
+    expect(rb.days.map((d) => d.outcome)).toEqual(Array(7).fill('already-exported'));
+    expect(sheet.days()).toEqual(DAYS);
+    for (const d of DAYS) {
+      expect(sheet.rowsOf(d)).toHaveLength(3);
+      expect(sheet.states(d)).toEqual(['完成:old']);
+    }
+    expect(sheet.log.some((e) => e.day === '2026-10-05')).toBe(false);
+    expect(sheet.deleteRequests).toBe(2); // one instance pruned (both tabs), the other skipped
+    expect([...a.logs, ...b.logs].join('\n')).toContain('another server instance is deleting rows');
+  });
+
   it('the second instance comes up while the first is writing a day: it does not read or write that day', async () => {
     const sheet = new FakeSheet();
     for (const d of DAYS.slice(0, 6)) sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old', 3));
@@ -514,6 +593,83 @@ describe('two server instances (deploy overlap)', () => {
     expect((await b.at(TUE_1000 + 56 * MIN)).days).toEqual([{ day: '2026-10-06', outcome: 'already-exported' }]);
     for (const d of DAYS) expect(sheet.rowsOf(d)).toHaveLength(3);
     expect(b.service.getStatus().catchUp).toMatchObject({ exported: 6, skipped: 1, failed: 0, pending: 0 });
+  });
+});
+
+describe('the cleanup lock (row deletions are by index)', () => {
+  it('cleanupHolder: the first live 清理中 in sheet order; 清理結束 releases that run; stale after 10 minutes', () => {
+    const t = TUE_1000;
+    expect(cleanupHolder([], t)).toBeNull();
+    expect(cleanupHolder([lockRow(t, 'a'), lockRow(t, 'b')], t)).toBe('a');
+    expect(cleanupHolder([lockRow(t, 'a'), lockRow(t, 'b'), lockRow(t, 'a', CHAT_EXPORT_STATE_CLEANUP_END)], t)).toBe('b');
+    // A release only covers that run's earlier rows: a's new lock after its release is live again.
+    expect(cleanupHolder([lockRow(t, 'a'), lockRow(t, 'a', CHAT_EXPORT_STATE_CLEANUP_END), lockRow(t, 'b'), lockRow(t, 'a')], t)).toBe('b');
+    expect(cleanupHolder([lockRow(t - 10 * MIN, 'dead'), lockRow(t, 'b')], t)).toBe('b');
+    expect(cleanupHolder([lockRow(t - 9 * MIN, 'slow'), lockRow(t, 'b')], t)).toBe('slow');
+    // Day claims are not the lock and the lock is not a day claim.
+    expect(cleanupHolder([claimRow(YESTERDAY, t, 'x')], t)).toBeNull();
+  });
+
+  it('leftover rows of a day while another instance holds the lock: nothing deleted, the day waits 10 minutes, then is written once', async () => {
+    const sheet = new FakeSheet();
+    for (const d of DAYS.slice(0, 6)) sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old', 3));
+    sheet.log.push(lockRow(TUE_1000, 'other')); // the other instance is deleting rows right now
+    sheet.rows.push([YESTERDAY, 'x', 'x', 'Discord', '成員1', 'partial'], [YESTERDAY, 'x', 'x', 'Discord', '成員2', 'partial']);
+    const h = harness({ sheet, runId: 'new' });
+    expect(outcomes(await h.at(TUE_1000 + MIN)).at(-1)).toBe(`${YESTERDAY}:claimed-elsewhere`);
+    expect(sheet.rowsOf(YESTERDAY)).toHaveLength(2); // untouched
+    expect(sheet.deleteRequests).toBe(0);
+    expect(h.logs.join('\n')).toContain(`day ${YESTERDAY}: another server instance is deleting rows`);
+    expect((await h.at(TUE_1000 + 5 * MIN)).state).toBe('waiting');
+    // 10 minutes on: the other lock lapsed (its instance never released it) → taken, leftovers removed, day written.
+    expect(outcomes(await h.at(TUE_1000 + 11 * MIN))).toEqual([`${YESTERDAY}:written`]);
+    expect(sheet.rowsOf(YESTERDAY)).toHaveLength(3);
+    expect(sheet.rows.some((r) => r[5] === 'partial')).toBe(false);
+    expect(sheet.states('2026-10-13')).toEqual(['清理中:other', '清理中:new', '清理結束:new', '清理中:new', '清理結束:new']);
+  });
+
+  it('a retention that found the lock taken runs again 10 minutes later, even with no day due', async () => {
+    const sheet = new FakeSheet();
+    for (const d of ['2026-10-05', ...DAYS]) {
+      sheet.rows.push([d, `${d} 12:00`, '', '', '', '']);
+      sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old'));
+    }
+    sheet.log.push(lockRow(TUE_1000, 'other'), lockRow(TUE_1000, 'other', CHAT_EXPORT_STATE_CLEANUP_END)); // released: no obstacle
+    sheet.log.push(lockRow(TUE_1000 + 30_000, 'other2')); // live
+    const h = harness({ sheet });
+    const r = await h.at(TUE_1000 + MIN);
+    expect(r.days.map((d) => d.outcome)).toEqual(Array(7).fill('already-exported'));
+    expect(sheet.days()[0]).toBe('2026-10-05'); // kept for now
+    expect(h.logs.join('\n')).toContain('pruning days before 2026-10-06: another server instance is deleting rows');
+    const prepared = sheet.prepared;
+    expect((await h.at(TUE_1000 + 6 * MIN)).state).toBe('idle');
+    expect(sheet.prepared).toBe(prepared); // nothing due: no Sheets call
+    const again = await h.at(TUE_1000 + 11 * MIN); // the retention alone (other2's lock lapsed)
+    expect(again).toEqual({ state: 'ran', days: [] });
+    expect(sheet.days()).toEqual(DAYS);
+    expect(sheet.log.some((e) => e.day === '2026-10-05')).toBe(false);
+    expect((await h.at(TUE_1000 + 30 * MIN)).state).toBe('idle');
+    expect(sheet.prepared).toBe(prepared + 1);
+  });
+
+  it('a holder that would delete after holding the lock too long (3 minutes) deletes nothing and tries again', async () => {
+    const sheet = new FakeSheet();
+    for (const d of ['2026-10-05', ...DAYS]) {
+      sheet.rows.push([d, `${d} 12:00`, '', '', '', '']);
+      sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old'));
+    }
+    const h = harness({ sheet });
+    sheet.beforeDelete = () => {
+      sheet.beforeDelete = null;
+      h.clock.now += 4 * MIN; // a stalled round trip
+    };
+    await h.at(TUE_1000);
+    expect(sheet.days()[0]).toBe('2026-10-05');
+    expect(sheet.deleteRequests).toBe(0);
+    expect(h.logs.join('\n')).toContain('pruning days before 2026-10-06 failed');
+    expect(sheet.states('2026-10-13')).toEqual(['清理中:run-a', '清理結束:run-a']); // released all the same
+    await h.at(TUE_1000 + 15 * MIN);
+    expect(sheet.days()).toEqual(DAYS);
   });
 });
 
@@ -587,8 +743,14 @@ describe('retention', () => {
     expect(r.days.map((d) => d.outcome)).toEqual(Array(7).fill('already-exported'));
     expect(sheet.days()).toEqual(DAYS);
     expect(sheet.days()).toHaveLength(7);
-    expect([...new Set(sheet.log.map((e) => e.day))].sort()).toEqual(DAYS);
-    expect(h.logs.join('\n')).toMatch(/pruned 6 row\(s\) of days before 2026-10-06/);
+    const dayRows = sheet.log.filter((e) => e.state === CHAT_EXPORT_STATE_CLAIM || e.state === CHAT_EXPORT_STATE_DONE);
+    expect([...new Set(dayRows.map((e) => e.day))].sort()).toEqual(DAYS);
+    // The cleanup lock around the deletion, dated today (pruned with the days a week later).
+    expect(sheet.log.filter((e) => !dayRows.includes(e)).map((e) => `${e.day} ${e.state}:${e.runId}`)).toEqual([
+      '2026-10-13 清理中:run-a',
+      '2026-10-13 清理結束:run-a',
+    ]);
+    expect(h.logs.join('\n')).toMatch(/pruned 6 row\(s\) of days before 2026-10-06 \(export log: 6\)/);
   });
 
   it('a pruning failure only warns; the export still counts', async () => {
@@ -612,7 +774,7 @@ describe('retention', () => {
 
 describe('status and logs carry no chat text', () => {
   it('chatExport = enabled / sheetConfigured / publicSheet + lastRun (day, counts, outcome) + catchUp (day counts)', async () => {
-    const h = harness({ discord: discordPort({ extra: { truncatedChannels: 1, threadsOverCap: 2, archivedListsTruncated: 1 } }) });
+    const h = harness({ discord: discordPort({ extra: { truncatedChannels: 1, threadsOverCap: 2, archivedListsTruncated: 1, sourceIdsIgnored: 2 } }) });
     expect(h.service.getStatus()).toEqual({ enabled: true, sheetConfigured: false, publicSheet: false, lastRun: null, catchUp: null });
     await h.at(TUE_1000);
     const status = h.service.getStatus();
@@ -626,12 +788,14 @@ describe('status and logs carry no chat text', () => {
       truncated: 4,
       outcome: 'written',
     });
-    expect(Object.keys(status.catchUp!).sort()).toEqual(['exported', 'failed', 'from', 'pending', 'skipped', 'startedAt', 'to']);
+    expect(Object.keys(status.catchUp!).sort()).toEqual(['expired', 'exported', 'failed', 'from', 'pending', 'skipped', 'startedAt', 'to']);
     const all = JSON.stringify(status) + h.logs.join('\n');
     for (const leaked of ['秘密內容', '一般聊天', '阿瓦隆同步', '討論區', '祕密標題', 'u0', 'u1', '成員', GENERAL, THREAD]) {
       expect(all).not.toContain(leaked);
     }
-    expect(h.logs.join('\n')).toMatch(/threadsOverCap=2 archivedListsTruncated=1/);
+    expect(h.logs.join('\n')).toMatch(/threadsOverCap=2 archivedListsTruncated=1 failedChannels=0 sourceIdsIgnored=2/);
+    // Unusable ids in the source lists: warned once (a count), not once per day.
+    expect(h.logs.filter((l) => l.includes('id(s) in CHAT_EXPORT_SOURCE_CHANNEL_IDS / CHAT_EXPORT_EXTRA_SOURCE_IDS ignored'))).toHaveLength(1);
   });
 
   it('logs on failure paths carry no text either', async () => {

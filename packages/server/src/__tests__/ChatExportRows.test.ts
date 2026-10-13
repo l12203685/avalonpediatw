@@ -21,6 +21,7 @@ import {
   classifyMessage,
   clipMessageText,
   isTypedCommand,
+  maskRelayMediaLinks,
   parseRelayLine,
   type ChatChannel,
   type RawChatMessage,
@@ -235,6 +236,18 @@ describe('buildExportRows', () => {
   it('formula-looking text stays as typed (the sheet is written with RAW input)', () => {
     const t = buildExportRows([msg({ content: '=HYPERLINK("x")' })], channels, DAY);
     expect(t.rows[0][5]).toBe('=HYPERLINK("x")');
+  });
+
+  it('a link to the server’s picture relay (/media/relay/…) never reaches the sheet; other links stay', () => {
+    const relay = 'https://example.onrender.com/media/relay/AbCdEf0123456789AbCdEf0123456789.jpg';
+    expect(maskRelayMediaLinks(`看這張 ${relay} 對吧`)).toBe('看這張 〔圖片連結〕 對吧');
+    const t = buildExportRows(
+      [msg({ content: `圖 ${relay}` }), lineRelay('小明', `轉貼 ${relay.replace('https', 'HTTP')}`, T0 + 60_000), msg({ content: 'https://example.com/page' })],
+      channels,
+      DAY,
+    );
+    expect(t.rows.map((r) => r[5]).sort()).toEqual(['https://example.com/page', '圖 〔圖片連結〕', '轉貼 〔圖片連結〕'].sort());
+    expect(JSON.stringify(t.rows)).not.toContain('/media/relay/');
   });
 
   it('clips one long message to 4000 characters', () => {

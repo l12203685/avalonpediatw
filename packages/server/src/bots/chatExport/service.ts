@@ -29,7 +29,13 @@
  *     without a 完成 row are a write that was cut off — killed process,
  *     Sheets error), then appends, then writes 完成.
  * After each pass, days older than the last 7 complete days are deleted from
- * both tabs.
+ * both tabs (retried 10 minutes later when that failed or had to wait).
+ *
+ * Every row deletion (retention, rows of an interrupted write) holds the
+ * sheet-wide cleanup lock: Google deletes rows by index, and two instances
+ * deleting at once would remove rows of a kept day. The lock is a 「清理中」
+ * row in 匯出紀錄 — the first live one (< 10 min, not followed by its own
+ * 「清理結束」) holds it; the others skip and try again in 10 minutes.
  */
 
 import crypto from 'crypto';
@@ -38,9 +44,13 @@ import { describeError } from '../feedback/service';
 import {
   CHAT_EXPORT_CLAIM_RENEW_MS,
   CHAT_EXPORT_CLAIM_STALE_MS,
+  CHAT_EXPORT_CLEANUP_MAX_MS,
+  CHAT_EXPORT_CLEANUP_STALE_MS,
   CHAT_EXPORT_READ_ATTEMPTS,
   CHAT_EXPORT_RETRY_DELAY_MS,
   CHAT_EXPORT_STATE_CLAIM,
+  CHAT_EXPORT_STATE_CLEANUP,
+  CHAT_EXPORT_STATE_CLEANUP_END,
   CHAT_EXPORT_STATE_DONE,
   defaultChatExportLogger,
   readChatExportConfig,
@@ -51,6 +61,7 @@ import type { CollectResult } from './collector';
 import type { ChatExportDiscordPort } from './discordPort';
 import { buildExportRows } from './rows';
 import {
+  ChatCleanupLockLostError,
   ChatTabConflictError,
   defaultChatSheetFactory,
   type ChatExportSheetPort,
@@ -66,7 +77,11 @@ export type ChatExportOutcome =
   | 'empty'
   /** The day already has a 完成 row (e.g. after a restart, or another instance wrote it). */
   | 'already-exported'
-  /** Another server instance holds the day (deploy overlap); looked at again in 10 minutes. */
+  /**
+   * Another server instance holds the day, or holds the cleanup lock while
+   * this one has to delete the day's leftover rows (deploy overlap); looked
+   * at again in 10 minutes.
+   */
   | 'claimed-elsewhere'
   /** No sheet id (or the public stats sheet id without the opt-in, refused) or no usable service-account JSON. */
   | 'not-configured'
@@ -110,10 +125,12 @@ export interface ChatExportCatchUp {
   exported: number;
   /** Days that already had 完成, or that another instance was writing. */
   skipped: number;
-  /** Days whose latest attempt failed (retried every 10 minutes). */
+  /** Days whose latest attempt failed (retried every 10 minutes while in the 7-day window). */
   failed: number;
   /** Days not attempted yet. */
   pending: number;
+  /** Days that left the 7-day window before this server settled them (no longer tried; not counted as failed or pending). */
+  expired: number;
 }
 
 export interface ChatExportStatus {
@@ -134,7 +151,7 @@ export type ChatExportTickState =
   | 'waiting'
   | 'discord-not-ready'
   | 'not-configured'
-  /** At least one day was handled; see `days`. */
+  /** At least one day was handled (see `days`), or only the retention ran again. */
   | 'ran';
 
 export interface ChatExportTickReport {
@@ -156,6 +173,7 @@ export interface ChatExportServiceOptions {
 function sheetErrorText(err: unknown): string {
   if (err instanceof SheetError) return err.message;
   if (err instanceof ChatTabConflictError) return err.message;
+  if (err instanceof ChatCleanupLockLostError) return err.message;
   return describeError(err);
 }
 
@@ -178,6 +196,21 @@ export function claimHolder(log: ExportLogEntry[], day: string, now: number): st
     if (e.day === day && isClaim(e) && Number.isFinite(e.at) && now - e.at < CHAT_EXPORT_CLAIM_STALE_MS) return e.runId;
   }
   return null;
+}
+
+/**
+ * The instance holding the sheet-wide cleanup lock: in sheet order, the
+ * first 「清理中」 row less than CHAT_EXPORT_CLEANUP_STALE_MS old that is not
+ * followed by a 「清理結束」 row of the same run id; null when none. Like
+ * claimHolder, every instance reading the log agrees on one holder.
+ */
+export function cleanupHolder(log: ExportLogEntry[], now: number): string | null {
+  let live: string[] = [];
+  for (const e of log) {
+    if (e.state === CHAT_EXPORT_STATE_CLEANUP && Number.isFinite(e.at) && now - e.at < CHAT_EXPORT_CLEANUP_STALE_MS) live.push(e.runId);
+    else if (e.state === CHAT_EXPORT_STATE_CLEANUP_END) live = live.filter((r) => r !== e.runId);
+  }
+  return live[0] ?? null;
 }
 
 type ClaimResult = 'mine' | 'other' | 'done';
@@ -210,8 +243,12 @@ export class ChatExportService {
   private readonly retryAt = new Map<string, number>();
   /** The whole pass waits until this time (Sheets failing, tab conflict, Discord unreadable). */
   private passRetryAt = 0;
+  /** > 0: the last retention failed or found the cleanup lock taken; run it again from then (even with no day due). */
+  private pruneRetryAt = 0;
   private catchUp: CatchUpState | null = null;
   private notConfiguredLoggedOn = '';
+  /** The sourceIdsIgnored count last warned about (warned again only when it changes). */
+  private ignoredIdsWarned = 0;
   private inFlight = false;
   private lastRun: ChatExportLastRun | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -247,12 +284,16 @@ export class ChatExportService {
       skipped: 0,
       failed: 0,
       pending: 0,
+      expired: 0,
     };
+    const window = new Set(lastCompleteDays(this.now()));
     for (const day of c.days) {
       const o = c.outcomes.get(day);
-      if (o === undefined) out.pending += 1;
-      else if (o === 'written' || o === 'empty') out.exported += 1;
-      else if (o === 'already-exported' || o === 'claimed-elsewhere') out.skipped += 1;
+      if (o === 'written' || o === 'empty') out.exported += 1;
+      else if (o === 'already-exported') out.skipped += 1;
+      else if (!window.has(day)) out.expired += 1; // never retried again (a long-running server)
+      else if (o === undefined) out.pending += 1;
+      else if (o === 'claimed-elsewhere') out.skipped += 1;
       else out.failed += 1;
     }
     return out;
@@ -315,16 +356,72 @@ export class ChatExportService {
     return claimHolder(log, day, now) === this.runId ? 'mine' : 'other';
   }
 
-  /** Delete days older than the last 7 complete days (both tabs). A failure only warns (the next pass tries again). */
-  private async prune(sheet: ChatExportSheetPort, now: number): Promise<number> {
-    const oldest = oldestKeptDay(now);
+  /**
+   * Run `work` (row deletions) holding the sheet-wide cleanup lock;
+   * { held: false } when another instance holds it. The 「清理中」 row is
+   * always followed by this run's 「清理結束」 (best effort: a lost one lapses
+   * after CHAT_EXPORT_CLEANUP_STALE_MS), so a run that did not get the lock
+   * never blocks the holder's next cleanup.
+   */
+  private async withCleanupLock<T>(
+    sheet: ChatExportSheetPort,
+    work: (stillHeld: () => boolean) => Promise<T>,
+  ): Promise<{ held: true; value: T } | { held: false }> {
+    const row = (state: string, at: number): ExportLogEntry => ({
+      day: taipeiParts(at).date,
+      state,
+      rows: 0,
+      channels: 0,
+      at,
+      runId: this.runId,
+    });
+    const takenAt = this.now();
     try {
-      const removed = await sheet.deleteDays((d) => d < oldest);
-      await sheet.deleteLogDays((d) => d < oldest);
-      return removed;
+      // Inside the try: a 清理中 that landed although its request failed is released too.
+      await sheet.appendLog(row(CHAT_EXPORT_STATE_CLEANUP, takenAt));
+      if (cleanupHolder(await sheet.readLog(), this.now()) !== this.runId) return { held: false };
+      return { held: true, value: await work(() => this.now() - takenAt < CHAT_EXPORT_CLEANUP_MAX_MS) };
+    } finally {
+      try {
+        await sheet.appendLog(row(CHAT_EXPORT_STATE_CLEANUP_END, this.now()));
+      } catch (err) {
+        this.logger.warn(`cleanup lock not released (${sheetErrorText(err)}) — it lapses after 10 minutes`);
+      }
+    }
+  }
+
+  /**
+   * Delete days older than the last 7 complete days (both tabs), holding the
+   * cleanup lock — taken only when there is something to delete. A failure,
+   * or the lock held elsewhere, is tried again 10 minutes later.
+   */
+  private async prune(sheet: ChatExportSheetPort, now: number): Promise<void> {
+    const oldest = oldestKeptDay(now);
+    const old = (d: string): boolean => d < oldest;
+    const retry = (): void => {
+      this.pruneRetryAt = this.later(now);
+    };
+    try {
+      const oldRows = await sheet.countDays(old);
+      const oldLogRows = (await sheet.readLog()).filter((e) => old(e.day)).length;
+      if (oldRows === 0 && oldLogRows === 0) {
+        this.pruneRetryAt = 0;
+        return;
+      }
+      const res = await this.withCleanupLock(sheet, async (stillHeld) => ({
+        rows: await sheet.deleteDays(old, stillHeld),
+        log: await sheet.deleteLogDays(old, stillHeld),
+      }));
+      if (!res.held) {
+        this.logger.info(`pruning days before ${oldest}: another server instance is deleting rows — trying again in 10 minutes`);
+        retry();
+        return;
+      }
+      this.pruneRetryAt = 0;
+      this.logger.info(`pruned ${res.value.rows} row(s) of days before ${oldest} (export log: ${res.value.log})`);
     } catch (err) {
-      this.logger.warn(`pruning days before ${oldest} failed: ${sheetErrorText(err)}`);
-      return 0;
+      this.logger.warn(`pruning days before ${oldest} failed: ${sheetErrorText(err)} — trying again in 10 minutes`);
+      retry();
     }
   }
 
@@ -334,7 +431,8 @@ export class ChatExportService {
     if (!cfg.enabled) return { state: 'disabled', days: [] };
     if (this.inFlight) return { state: 'busy', days: [] };
     const { due, waiting } = this.dueDays(now);
-    if (due.length === 0) return { state: waiting > 0 ? 'waiting' : 'idle', days: [] };
+    const pruneDue = this.pruneRetryAt > 0 && now >= Math.max(this.pruneRetryAt, this.passRetryAt);
+    if (due.length === 0 && !pruneDue) return { state: waiting > 0 ? 'waiting' : 'idle', days: [] };
     if (!this.discord.isReady()) return { state: 'discord-not-ready', days: [] };
     const { sheet, reason } = this.sheetFactory(cfg);
     if (!sheet) {
@@ -343,16 +441,17 @@ export class ChatExportService {
         this.notConfiguredLoggedOn = today;
         this.logger.warn(`not exported: sheet not configured (${cfg.sheetIdRefused ? 'public-sheet-refused' : reason})`);
       }
+      this.pruneRetryAt = 0; // that sheet is no longer configured
       // Not record(): a day is not "attempted" while nothing can be written.
       const day = due[due.length - 1];
-      this.lastRun = { day, at: new Date(now).toISOString(), messages: 0, channels: 0, threads: 0, truncated: 0, outcome: 'not-configured' };
+      if (day) this.lastRun = { day, at: new Date(now).toISOString(), messages: 0, channels: 0, threads: 0, truncated: 0, outcome: 'not-configured' };
       return { state: 'not-configured', days: [] };
     }
 
     this.inFlight = true;
     const days: ChatExportTickReport['days'] = [];
     try {
-      if (!this.catchUp) {
+      if (!this.catchUp && due.length > 0) {
         this.catchUp = { startedAt: now, days: lastCompleteDays(now), outcomes: new Map() };
         const { days: window } = this.catchUp;
         this.logger.info(`catch-up: ${due.length} of the last ${window.length} days to check (${window[0]} → ${window[window.length - 1]})`);
@@ -362,9 +461,12 @@ export class ChatExportService {
       } catch (err) {
         const outcome: ChatExportOutcome = err instanceof ChatTabConflictError ? 'tab-conflict' : 'sheet-error';
         this.logger.warn(`sheet check failed (${outcome}): ${sheetErrorText(err)} — trying again in 10 minutes`);
-        this.record(due[0], outcome);
+        if (due.length > 0) {
+          this.record(due[0], outcome);
+          days.push({ day: due[0], outcome });
+        }
         this.passRetryAt = this.later(now);
-        days.push({ day: due[0], outcome });
+        if (this.pruneRetryAt > 0) this.pruneRetryAt = this.passRetryAt;
         return { state: 'ran', days };
       }
       let reachedSheet = false;
@@ -385,10 +487,7 @@ export class ChatExportService {
           break;
         }
       }
-      if (reachedSheet) {
-        const pruned = await this.prune(sheet, now);
-        if (pruned > 0) this.logger.info(`pruned ${pruned} row(s) of days before ${oldestKeptDay(now)}`);
-      }
+      if (reachedSheet || due.length === 0) await this.prune(sheet, now);
       return { state: 'ran', days };
     } finally {
       this.inFlight = false;
@@ -398,9 +497,10 @@ export class ChatExportService {
   private async exportDay(sheet: ChatExportSheetPort, w: ExportWindow, cfg: ChatExportConfig, now: number): Promise<DayResult> {
     const day = w.dayKey;
 
-    // 1. The day has no 完成 row; this instance holds it.
+    // 1. The day has no 完成 row; this instance holds it. The current time, not the
+    //    pass start: later days of a long catch-up would get backdated (soon stale) claims.
     try {
-      const claim = await this.ensureClaim(sheet, day, now);
+      const claim = await this.ensureClaim(sheet, day, Math.max(now, this.now()));
       if (claim === 'done') {
         this.record(day, 'already-exported');
         return { outcome: 'already-exported', stopPass: false };
@@ -417,7 +517,13 @@ export class ChatExportService {
     this.readAttempts.set(day, attempt);
     const collected: CollectResult = await this.discord.collect(cfg, w);
     if (collected.publicChannelsFound === 0) {
-      this.logger.warn('no channel visible to @everyone was found — only the sync channel is read (set CHAT_EXPORT_SOURCE_CHANNEL_IDS)');
+      this.logger.warn('no channel visible to @everyone was found — only the sync channel is read (set CHAT_EXPORT_EXTRA_SOURCE_IDS)');
+    }
+    if (collected.sourceIdsIgnored > 0 && this.ignoredIdsWarned !== collected.sourceIdsIgnored) {
+      this.ignoredIdsWarned = collected.sourceIdsIgnored;
+      this.logger.warn(
+        `${collected.sourceIdsIgnored} id(s) in CHAT_EXPORT_SOURCE_CHANNEL_IDS / CHAT_EXPORT_EXTRA_SOURCE_IDS ignored: not a text channel or forum the bot can read (a single forum post only works in CHAT_EXPORT_EXCLUDE_CHANNEL_IDS)`,
+      );
     }
     const truncated = collected.truncatedChannels + collected.threadsOverCap + collected.archivedListsTruncated;
     // No channel read at all (Discord outage, gateway dropped): an unreadable day must not pass
@@ -443,7 +549,7 @@ export class ChatExportService {
       `attachmentOnly=${built.skipped['attachment-only']} speakers=${built.speakers} channels=${built.channels}/${collected.channels.length} ` +
       `forums=${collected.forums} threadsRead=${collected.threadsRead} threadsWithRows=${built.threads} starterSkipped=${collected.starterSkipped} ` +
       `truncatedChannels=${collected.truncatedChannels} threadsOverCap=${collected.threadsOverCap} ` +
-      `archivedListsTruncated=${collected.archivedListsTruncated} failedChannels=${collected.failedChannels}`;
+      `archivedListsTruncated=${collected.archivedListsTruncated} failedChannels=${collected.failedChannels} sourceIdsIgnored=${collected.sourceIdsIgnored}`;
     const stats = { messages: built.rows.length, channels: built.channels, threads: built.threads, truncated };
 
     // 3. Still the holder → rows of a write that was cut off removed → append → 完成.
@@ -456,8 +562,11 @@ export class ChatExportService {
         return { outcome: 'already-exported', stopPass: false };
       }
       if (claim === 'other') return this.claimedElsewhere(day, now);
-      const removed = await sheet.deleteDays((d) => d === day);
-      if (removed > 0) this.logger.warn(`day ${day}: removed ${removed} row(s) left by an interrupted export`);
+      if ((await sheet.countDays((d) => d === day)) > 0) {
+        const res = await this.withCleanupLock(sheet, (stillHeld) => sheet.deleteDays((d) => d === day, stillHeld));
+        if (!res.held) return this.cleanupBusy(day, now);
+        if (res.value > 0) this.logger.warn(`day ${day}: removed ${res.value} row(s) left by an interrupted export`);
+      }
       phase = 'rows';
       if (built.rows.length > 0) requests = await sheet.appendRows(built.rows);
       phase = 'done-row';
@@ -475,7 +584,8 @@ export class ChatExportService {
       // landed. Either way the next attempt removes the day's rows first while there is no 完成.
       if (phase === 'rows') {
         try {
-          await sheet.deleteDays((d) => d === day);
+          const res = await this.withCleanupLock(sheet, (stillHeld) => sheet.deleteDays((d) => d === day, stillHeld));
+          if (!res.held) this.logger.warn(`day ${day}: cleanup postponed (another server instance is deleting rows) — removed before the next attempt`);
         } catch (cleanupErr) {
           this.logger.warn(`day ${day}: cleanup failed too (${sheetErrorText(cleanupErr)}) — removed before the next attempt`);
         }
@@ -498,6 +608,14 @@ export class ChatExportService {
     this.record(day, 'claimed-elsewhere');
     this.retryAt.set(day, this.later(now));
     this.logger.info(`day ${day} is held by another server instance — looking again in 10 minutes`);
+    return { outcome: 'claimed-elsewhere', stopPass: false };
+  }
+
+  /** The day has leftover rows to delete first, and another instance holds the cleanup lock. */
+  private cleanupBusy(day: string, now: number): DayResult {
+    this.record(day, 'claimed-elsewhere');
+    this.retryAt.set(day, this.later(now));
+    this.logger.info(`day ${day}: another server instance is deleting rows — looking again in 10 minutes`);
     return { outcome: 'claimed-elsewhere', stopPass: false };
   }
 
