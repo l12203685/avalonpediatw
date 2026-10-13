@@ -547,7 +547,7 @@
       "radar": {
         "loadingPlayers": "載入玩家資料…",
         "loadingRadar": "載入雷達圖…",
-        "search": "搜尋玩家…",
+        "search": "搜尋玩家（打名字的一部分也可以）…",
         "title": "{{name}} — 能力雷達圖",
         "details": "{{name}} — 詳細數據",
         "axes": {
@@ -595,7 +595,10 @@
           "role": "；不到 {{n}} 場的角色用全體勝率補到 {{n}} 場",
           "seat": "；不到 {{n}} 場的位置用全體勝率補到 {{n}} 場"
         },
-        "legacyNote": "角色勝率為任務結算口徑（三藍死算藍勝）"
+        "legacyNote": "角色勝率為任務結算口徑（三藍死算藍勝）",
+        "searchMany": "符合 {{count}} 位，點名字查看（按 Enter 開第一位）",
+        "searchNone": "找不到「{{query}}」，可以只打名字的一部分",
+        "searchSuggest": "找不到「{{query}}」，你是不是要找："
       }
     },
     "boards": {

@@ -144,7 +144,8 @@ export async function chemistryReply(nameA: string, nameB: string): Promise<stri
     const resolve = (query: string): NameMatch | { kind: 'outside'; name: string } => {
       const inRoster = matchPlayerName(query, roster);
       if (inRoster.kind !== 'none') return inRoster;
-      // Not in the matrix — say so explicitly when the player does exist.
+      // Not in the matrix — say so explicitly when the player does exist (a
+      // "did you mean" within the matrix does not count as a hit).
       const anywhere = matchPlayerName(query, allNames);
       if (anywhere.kind === 'found') return { kind: 'outside', name: anywhere.name };
       return inRoster;

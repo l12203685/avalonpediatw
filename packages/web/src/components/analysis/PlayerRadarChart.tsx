@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -17,6 +17,7 @@ import {
 } from '../../services/api';
 import type { AnalysisPlayerStats, AnalysisPlayerRadar, AnalysisTheoryConfig, PlayerTheoryWindow } from '../../services/api';
 import { useAnalysisOverview } from './useAnalysisOverview';
+import { cleanNameQuery, compactName, matchPlayerName, normalizeName, type NameMatch } from '@avalon/shared';
 
 /**
  * 玩家能力雷達 (2026-10-12 兩段結算改版、2026-10-13 理論勝率, docs/stats/two_stage_outcome.md)。
@@ -86,8 +87,10 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
   const { overview } = useAnalysisOverview();
   const settings = useMemo(() => theorySettings(overview?.theoryConfig), [overview?.theoryConfig]);
   const [playerList, setPlayerList] = useState<AnalysisPlayerStats[]>([]);
-  // 排行點名字 / #player= 連結帶進來的玩家優先 (store.openPlayerStats)；沒有才預設場次最多的人。
-  const [selectedName, setSelectedName] = useState<string>(focus?.name ?? '');
+  // 排行點名字 / #player= 連結帶進來的玩家優先 (store.openPlayerStats，名單到了再比對)；
+  // 沒有才預設場次最多的人。
+  const [selectedName, setSelectedName] = useState<string>('');
+  const openedWithFocus = useRef(Boolean(focus?.name));
   const [radarData, setRadarData] = useState<AnalysisPlayerRadar | null>(null);
   const [loading, setLoading] = useState(true);
   const [radarLoading, setRadarLoading] = useState(false);
@@ -101,7 +104,7 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
         const { players } = await fetchAnalysisPlayers();
         if (!cancelled) {
           setPlayerList(players);
-          if (players.length > 0) setSelectedName(prev => prev || players[0].name);
+          if (players.length > 0 && !openedWithFocus.current) setSelectedName(prev => prev || players[0].name);
         }
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err));
@@ -112,11 +115,34 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
     return (): void => { cancelled = true; };
   }, []);
 
+  // 名單：場次多的在前 (快取順序)，暱稱比對與機器人 /戰績 同一套規則 (@avalon/shared)。
+  const names = useMemo(() => playerList.map(p => p.name), [playerList]);
+
+  // 排行點名字 / #player= 連結：名單到了之後用同一套比對 (大小寫、暱稱) 找到那位；
+  // 找不到唯一一位就把名字放進搜尋框，列出候選。
   useEffect(() => {
-    if (!focus?.name) return;
-    setSelectedName(focus.name);
-    setSearch('');
-  }, [focus]);
+    if (!focus?.name || names.length === 0) return;
+    const m = matchPlayerName(focus.name, names);
+    if (m.kind === 'found') {
+      setSelectedName(m.name);
+      setSearch('');
+    } else {
+      setSearch(focus.name);
+    }
+  }, [focus, names]);
+
+  // 搜尋 (2026-10-13 玩家反應：用平常的暱稱查不到人)：完全相同 → 不分大小寫 → 忽略空白 →
+  // 名字的一部分；只有一位就直接打開，多位列出候選，沒有就給「你是不是要找」。
+  const match: NameMatch | null = useMemo(
+    () => (search.trim() && names.length > 0 ? matchPlayerName(search, names) : null),
+    [search, names],
+  );
+  const matchedName = match?.kind === 'found' ? match.name : null;
+  useEffect(() => {
+    if (!matchedName) return;
+    const id = setTimeout(() => setSelectedName(matchedName), 250);
+    return (): void => clearTimeout(id);
+  }, [matchedName]);
 
   const loadRadar = useCallback(async (name: string) => {
     if (!name) return;
@@ -166,9 +192,11 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
     );
   }
 
-  const filteredPlayers = search
-    ? playerList.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
-    : playerList;
+  const filteredPlayers = filterPlayers(playerList, search, match);
+  const pickFirst = (): void => {
+    const first = match?.kind === 'found' ? match.name : filteredPlayers[0]?.name;
+    if (first) setSelectedName(first);
+  };
 
   return (
     <div className="space-y-4">
@@ -181,9 +209,20 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
             placeholder={t('analytics.deep.radar.search')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') pickFirst(); }}
+            data-testid="radar-search"
             className="w-full bg-avalon-card border border-gray-600 rounded-lg pl-8 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
           />
         </div>
+        {match && match.kind !== 'found' && (
+          <p data-testid="radar-search-status" className="text-[11px] text-gray-400 mb-2">
+            {match.kind === 'ambiguous'
+              ? t('analytics.deep.radar.searchMany', { count: match.total })
+              : match.suggestions && match.suggestions.length > 0
+                ? t('analytics.deep.radar.searchSuggest', { query: cleanNameQuery(match.query) })
+                : t('analytics.deep.radar.searchNone', { query: cleanNameQuery(match.query) })}
+          </p>
+        )}
         <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
           {filteredPlayers.map(p => (
             <button
@@ -303,6 +342,21 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
       ) : null}
     </div>
   );
+}
+
+/**
+ * 搜尋框下的名字：名字含搜尋字 (不分大小寫、全半形，也忽略空白與 ._-·) 的全部列出，
+ * 場次多的在前；一個都沒有時列「你是不是要找」的建議。沒打字 = 全部。
+ */
+function filterPlayers(players: AnalysisPlayerStats[], search: string, match: NameMatch | null): AnalysisPlayerStats[] {
+  const cleaned = cleanNameQuery(search);
+  if (!cleaned) return players;
+  const nq = normalizeName(cleaned);
+  const cq = compactName(cleaned);
+  const hits = players.filter(p => normalizeName(p.name).includes(nq) || (cq !== '' && compactName(p.name).includes(cq)));
+  if (hits.length > 0) return hits;
+  const suggested = match?.kind === 'none' ? match.suggestions ?? [] : [];
+  return players.filter(p => suggested.includes(p.name));
 }
 
 /**

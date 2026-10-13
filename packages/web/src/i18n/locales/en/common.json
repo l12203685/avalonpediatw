@@ -547,7 +547,7 @@
       "radar": {
         "loadingPlayers": "Loading players…",
         "loadingRadar": "Loading radar…",
-        "search": "Search players…",
+        "search": "Search players (part of the name works)…",
         "title": "{{name}} — Skill radar",
         "details": "{{name}} — Details",
         "axes": {
@@ -595,7 +595,10 @@
           "role": "; roles with fewer than {{n}} games are topped up to {{n}} at the population rate",
           "seat": "; seats with fewer than {{n}} games are topped up to {{n}} at the population rate"
         },
-        "legacyNote": "Role win rates use the mission-stage basis (3-Blue-killed counts as blue)"
+        "legacyNote": "Role win rates use the mission-stage basis (3-Blue-killed counts as blue)",
+        "searchMany": "{{count}} players match — pick one (Enter opens the first)",
+        "searchNone": "No player matches “{{query}}” — part of the name is enough",
+        "searchSuggest": "No player matches “{{query}}” — did you mean:"
       }
     },
     "boards": {
