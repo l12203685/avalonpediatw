@@ -35,28 +35,52 @@
  *                 cleanup lock until it lapses
  *   status      — /api/bots/status → chatExport: enabled / sheetConfigured /
  *                 publicSheet, lastRun (day, counts, outcome), catchUp
- *                 (exported / skipped / failed / pending / expired); no text
- *                 in status or logs
- *   wiring      — startChatExport arms the timer only when enabled
+ *                 (exported / skipped / failed / pending / expired), and
+ *                 readingCopy (enabled / sheetConfigured / lastRun / catchUp);
+ *                 no text in status or logs
+ *   wiring      — startChatExport arms the timer only when enabled; the
+ *                 reading copy's service next to it
+ *   reading copy — a second service on the private sheet: the same sources
+ *                 and rows, one Discord read per day for both
+ *                 (shareChatExportReads), off switch, never the main
+ *                 target's sheet nor a public workbook, off with
+ *                 CHAT_EXPORT_SHEET_ID=off, CHAT_EXPORT_ENABLED=false →
+ *                 retention only, a failing target never stops the other;
+ *                 only its own (copy-) 完成 rows count — days an earlier
+ *                 version left there are written again
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatExportService, __resetChatExportForTests, chatExportStatus, cleanupHolder, getChatExportService } from '../bots/chatExport/service';
 import {
+  ChatExportService,
+  __resetChatExportForTests,
+  chatExportStatus,
+  cleanupHolder,
+  getChatExportReadingCopyService,
+  getChatExportService,
+  initializeChatExportReadingCopy,
+} from '../bots/chatExport/service';
+import {
+  CHAT_EXPORT_READING_COPY_RUN_PREFIX,
+  CHAT_EXPORT_RETRY_DELAY_MS,
+  CHAT_EXPORT_SHARED_READ_TTL_MS,
   CHAT_EXPORT_STATE_CLAIM,
   CHAT_EXPORT_STATE_CLEANUP,
   CHAT_EXPORT_STATE_CLEANUP_END,
   CHAT_EXPORT_STATE_DONE,
+  DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID,
   PRIVATE_CHAT_EXPORT_SHEET_ID,
   PUBLIC_STATS_SHEET_ID,
   readChatExportConfig,
+  readChatExportReadingCopyConfig,
+  readingCopyTarget,
   type ChatExportConfig,
 } from '../bots/chatExport/config';
-import type { ChatExportDiscordPort } from '../bots/chatExport/discordPort';
-import { ChatDeleteOutcomeUnknownError, type ChatExportSheetPort, type ExportLogEntry } from '../bots/chatExport/sheetWriter';
+import { shareChatExportReads, type ChatExportDiscordPort } from '../bots/chatExport/discordPort';
+import { ChatDeleteOutcomeUnknownError, type ChatExportSheetPort, type ChatSheetPrepareNote, type ExportLogEntry } from '../bots/chatExport/sheetWriter';
 import type { ChatExportRow, RawChatMessage } from '../bots/chatExport/rows';
 import { emptyCollectResult, type CollectResult } from '../bots/chatExport/collector';
-import { lastCompleteDays, type ExportWindow } from '../bots/chatExport/window';
+import { dayWindow, lastCompleteDays, type ExportWindow } from '../bots/chatExport/window';
 import { buildBotStatus, startChatExport } from '../bots';
 import { buildSlashCommands } from '../bots/discord/client';
 import { COMMANDS } from '../bots/discord/config';
@@ -118,9 +142,12 @@ class FakeSheet implements ChatExportSheetPort {
   /** Runs between reading the row indices and deleting them (a slow round trip). */
   beforeDelete: (() => void) | null = null;
 
-  async prepare(): Promise<void> {
+  /** prepare() succeeds with this note (the chat tab could not be moved first). */
+  prepareNote: ChatSheetPrepareNote | null = null;
+  async prepare(): Promise<ChatSheetPrepareNote | void> {
     this.prepared += 1;
     if (this.failPrepare) throw new Error('HTTP 503');
+    if (this.prepareNote) return { ...this.prepareNote };
   }
   /** prepareExisting(): both tabs already there (retention only). */
   tabsExist = true;
@@ -976,27 +1003,72 @@ describe('wiring', () => {
     expect(getChatExportService()?.isRunning()).toBe(true);
   });
 
-  it('/api/bots/status has chatExport (three booleans, lastRun, catchUp) and no communityDigest', () => {
+  it('/api/bots/status has chatExport (three booleans, lastRun, catchUp, readingCopy) and no communityDigest', () => {
     process.env.GOOGLE_SERVICE_ACCOUNT_JSON = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
-    for (const name of ['CHAT_EXPORT_SHEET_ID', 'COMMUNITY_DIGEST_SHEET_ID', 'AVALON_STATS_SHEET_ID', 'CHAT_EXPORT_ALLOW_PUBLIC_SHEET']) delete process.env[name];
-    // The default: the 阿瓦隆百科 sheet.
-    const expected = { enabled: true, sheetConfigured: true, publicSheet: true, lastRun: null, catchUp: null };
+    for (const name of ['CHAT_EXPORT_SHEET_ID', 'COMMUNITY_DIGEST_SHEET_ID', 'AVALON_STATS_SHEET_ID', 'CHAT_EXPORT_ALLOW_PUBLIC_SHEET', 'CHAT_EXPORT_READING_COPY_SHEET_ID']) {
+      delete process.env[name];
+    }
+    // The default: the 阿瓦隆百科 sheet, and the reading copy in the private sheet.
+    const copyOn = { enabled: true, sheetConfigured: true, lastRun: null, catchUp: null };
+    const expected = { enabled: true, sheetConfigured: true, publicSheet: true, lastRun: null, catchUp: null, readingCopy: copyOn };
     expect(chatExportStatus()).toEqual(expected);
     const status = buildBotStatus() as unknown as Record<string, unknown>;
     expect(status.chatExport).toEqual(expected);
     expect(status).not.toHaveProperty('communityDigest');
-    process.env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET = '0';
-    expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
-    process.env.CHAT_EXPORT_SHEET_ID = PRIVATE_CHAT_EXPORT_SHEET_ID;
-    expect(chatExportStatus()).toMatchObject({ sheetConfigured: true, publicSheet: false });
+    process.env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET = '0'; // refuses the 百科 sheet only: the copy is written
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false, readingCopy: copyOn });
+    process.env.CHAT_EXPORT_SHEET_ID = PRIVATE_CHAT_EXPORT_SHEET_ID; // the copy's sheet is now the main target: no copy
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: true, publicSheet: false, readingCopy: { enabled: false, sheetConfigured: false } });
     delete process.env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET;
     expect(chatExportStatus()).toMatchObject({ sheetConfigured: true, publicSheet: false });
-    process.env.CHAT_EXPORT_SHEET_ID = 'off';
-    expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
-    // The default target without usable credentials: not "writing to the public sheet".
+    process.env.CHAT_EXPORT_SHEET_ID = 'off'; // no sheet at all: the copy is off too
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false, readingCopy: { enabled: false, sheetConfigured: false } });
+    delete process.env.CHAT_EXPORT_SHEET_ID;
+    process.env.CHAT_EXPORT_READING_COPY_SHEET_ID = 'off';
+    expect(chatExportStatus().readingCopy).toEqual({ enabled: false, sheetConfigured: false, lastRun: null, catchUp: null });
+    delete process.env.CHAT_EXPORT_READING_COPY_SHEET_ID;
+    // The default target without usable credentials: not "writing to the public sheet"; the copy not configured either.
     delete process.env.CHAT_EXPORT_SHEET_ID;
     delete process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false, readingCopy: { enabled: true, sheetConfigured: false } });
+  });
+
+  it('startChatExport arms the reading copy next to the main target; the copy off, or the main target\'s own sheet → the main target alone', () => {
+    const info = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      // No credentials: the first tick of either never reaches the network.
+      for (const name of ['CHAT_EXPORT_ENABLED', 'GOOGLE_SERVICE_ACCOUNT_JSON', 'CHAT_EXPORT_READING_COPY_SHEET_ID', 'COMMUNITY_DIGEST_SHEET_ID', 'AVALON_STATS_SHEET_ID', 'CHAT_EXPORT_SHEET_ID']) {
+        delete process.env[name];
+      }
+      startChatExport();
+      expect(getChatExportService()?.isRunning()).toBe(true);
+      expect(getChatExportReadingCopyService()?.isRunning()).toBe(true);
+      expect(info.mock.calls.flat().join('\n')).toContain('[chat-export:reading-copy] armed');
+      startChatExport(); // idempotent
+      expect(getChatExportReadingCopyService()?.isRunning()).toBe(true);
+      for (const [copy, main, why] of [
+        ['off', 'off', 'CHAT_EXPORT_READING_COPY_SHEET_ID=off'],
+        ['', 'off', 'CHAT_EXPORT_SHEET_ID=off — no sheet at all'],
+        [PUBLIC_STATS_SHEET_ID, '', 'its sheet is the main target itself'], // main = the 百科 default
+        [PRIVATE_CHAT_EXPORT_SHEET_ID, PRIVATE_CHAT_EXPORT_SHEET_ID, 'its sheet is the main target itself'],
+        [PUBLIC_STATS_SHEET_ID, PRIVATE_CHAT_EXPORT_SHEET_ID, 'a public stats workbook is never the reading copy'],
+      ]) {
+        __resetChatExportForTests();
+        info.mockClear();
+        if (copy) process.env.CHAT_EXPORT_READING_COPY_SHEET_ID = copy;
+        else delete process.env.CHAT_EXPORT_READING_COPY_SHEET_ID;
+        if (main) process.env.CHAT_EXPORT_SHEET_ID = main;
+        else delete process.env.CHAT_EXPORT_SHEET_ID;
+        startChatExport();
+        expect(getChatExportService()?.isRunning()).toBe(true);
+        expect(getChatExportReadingCopyService()?.isRunning()).toBe(false);
+        expect(info.mock.calls.flat().join('\n')).toContain(`[chat-export:reading-copy] disabled (${why})`);
+      }
+    } finally {
+      info.mockRestore();
+      process.env.CHAT_EXPORT_SHEET_ID = 'off';
+      delete process.env.CHAT_EXPORT_READING_COPY_SHEET_ID;
+    }
   });
 
   it('the retired COMMUNITY_DIGEST_SHEET_ID deciding the target is warned about at start', () => {
@@ -1025,5 +1097,389 @@ describe('wiring', () => {
     expect(names).not.toContain('社群週報');
     expect(Object.values(COMMANDS)).not.toContain('社群週報');
     expect(names).toEqual(expect.arrayContaining(['help', '戰績', '排行', '默契', '意見']));
+  });
+});
+
+describe('the reading copy (a second service on a small private sheet, chat as its first tab)', () => {
+  const creds = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
+  /** A made-up spreadsheet id (not a real sheet). */
+  const OTHER = '1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abcd';
+
+  /** A service on `config` whose factory records every sheet id it is asked for. */
+  function service(config: () => ChatExportConfig, sheet: FakeSheet, discord: ChatExportDiscordPort, clock: { now: number }, runId: string) {
+    const ids: string[] = [];
+    const logs: string[] = [];
+    const svc = new ChatExportService({
+      discord,
+      sheetFactory: (cfg) => {
+        if (!cfg.sheetId) return { sheet: null, reason: 'no-sheet-id' };
+        ids.push(cfg.sheetId);
+        return { sheet, reason: 'ok' };
+      },
+      config,
+      now: () => clock.now,
+      logger: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
+      runId,
+    });
+    return { svc, ids, logs, sheet };
+  }
+
+  /** Like Discord: reading a day again returns the same messages (ids, authors, text). */
+  const sameEveryRead = (w: ExportWindow): RawChatMessage[] =>
+    [0, 1, 2].map((k) =>
+      chat(w.start + (k + 1) * HOUR, {
+        id: String(6_000_000_000_000_000_000n + BigInt(w.start / 1000) + BigInt(k)),
+        authorId: `u${k % 2}`,
+        content: `秘密內容 ${k}`,
+        channelId: k === 2 ? THREAD : GENERAL,
+      }),
+    );
+
+  /** The main target and the reading copy as production wires them: one shared Discord port, env → configs. */
+  function pair(env: NodeJS.ProcessEnv, discord = discordPort({ messages: sameEveryRead }), clock = { now: TUE_1000 }) {
+    const shared = shareChatExportReads(discord, { now: () => clock.now });
+    const main = service(() => readChatExportConfig(env), new FakeSheet(), shared, clock, 'main');
+    const copy = service(() => readChatExportReadingCopyConfig(env), new FakeSheet(), shared, clock, 'a'); // run id copy-a
+    const tick = (t = clock.now) => {
+      clock.now = t;
+      return Promise.all([main.svc.tick(t), copy.svc.tick(t)]);
+    };
+    return { main, copy, discord, clock, tick };
+  }
+
+  it('config: the private sheet by default (chat tab pinned first), the main target\'s sources; CHAT_EXPORT_READING_COPY_SHEET_ID takes an id or a URL', () => {
+    const env = { GOOGLE_SERVICE_ACCOUNT_JSON: creds, CHAT_EXPORT_EXTRA_SOURCE_IDS: '1132683080134578276', CHAT_EXPORT_EXCLUDE_CHANNEL_IDS: '123456789012345678' };
+    expect(DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID).toBe(PRIVATE_CHAT_EXPORT_SHEET_ID);
+    expect(readingCopyTarget(env)).toEqual({ sheetId: PRIVATE_CHAT_EXPORT_SHEET_ID, state: 'on' });
+    const main = readChatExportConfig(env);
+    const copy = readChatExportReadingCopyConfig(env);
+    expect(copy).toMatchObject({
+      enabled: true,
+      sheetId: PRIVATE_CHAT_EXPORT_SHEET_ID,
+      retentionSheetId: PRIVATE_CHAT_EXPORT_SHEET_ID,
+      sheetIdRefused: false,
+      publicSheet: false,
+      sheetCredentialsUsable: true,
+      pinChatTabFirst: true,
+      runIdPrefix: CHAT_EXPORT_READING_COPY_RUN_PREFIX,
+    });
+    expect(CHAT_EXPORT_READING_COPY_RUN_PREFIX).toBe('copy-');
+    for (const k of ['sourceChannelIds', 'extraSourceIds', 'excludeChannelIds', 'mirrorChannelId', 'guildId'] as const) expect(copy[k]).toEqual(main[k]);
+    expect(main.pinChatTabFirst).toBeUndefined();
+    expect(main.runIdPrefix).toBeUndefined();
+    // The main target does not depend on the copy's variable at all.
+    expect(readChatExportConfig({ ...env, CHAT_EXPORT_READING_COPY_SHEET_ID: 'off' })).toEqual(main);
+    expect(readChatExportConfig({ ...env, CHAT_EXPORT_READING_COPY_SHEET_ID: OTHER })).toEqual(main);
+    expect(readingCopyTarget({ CHAT_EXPORT_READING_COPY_SHEET_ID: OTHER })).toEqual({ sheetId: OTHER, state: 'on' });
+    expect(readingCopyTarget({ CHAT_EXPORT_READING_COPY_SHEET_ID: ` https://docs.google.com/spreadsheets/u/0/d/${OTHER}/edit#gid=0 ` })).toEqual({
+      sheetId: OTHER,
+      state: 'on',
+    });
+    // Refusing the 百科 sheet (main) does not stop the copy (it is private); CHAT_EXPORT_SHEET_ID=off (no sheet at all) does.
+    expect(readChatExportReadingCopyConfig({ ...env, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0' })).toMatchObject({ enabled: true, sheetId: PRIVATE_CHAT_EXPORT_SHEET_ID });
+    expect(readingCopyTarget({ ...env, CHAT_EXPORT_SHEET_ID: 'off' })).toEqual({ sheetId: '', state: 'primary-off' });
+    expect(readChatExportReadingCopyConfig({ ...env, CHAT_EXPORT_SHEET_ID: 'off' })).toMatchObject({ enabled: false, sheetId: '', retentionSheetId: '' });
+  });
+
+  it('both targets: the same days, rows and 完成 in each sheet, each day read from Discord once', async () => {
+    const p = pair({ GOOGLE_SERVICE_ACCOUNT_JSON: creds });
+    const [rm, rc] = await p.tick();
+    expect(rm.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(rc.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(p.discord.calls).toEqual(DAYS);
+    expect(p.copy.sheet.rows).toEqual(p.main.sheet.rows);
+    expect(p.copy.sheet.rows).toHaveLength(21);
+    expect(p.copy.sheet.doneDays()).toEqual(DAYS);
+    expect(p.main.sheet.doneDays()).toEqual(DAYS);
+    expect(p.copy.sheet.states(YESTERDAY)).toEqual(['進行中:copy-a', '完成:copy-a']); // its own claims and log, its run ids prefixed
+    expect(p.main.sheet.states(YESTERDAY)).toEqual(['進行中:main', '完成:main']);
+    expect(new Set(p.main.ids)).toEqual(new Set([PUBLIC_STATS_SHEET_ID]));
+    expect(new Set(p.copy.ids)).toEqual(new Set([PRIVATE_CHAT_EXPORT_SHEET_ID]));
+    // The next day at 04:30: one read, both written, both still exactly 7 days.
+    const [nm, nc] = await p.tick(Date.parse('2026-10-13T20:30:00Z'));
+    expect(outcomes(nm)).toEqual(['2026-10-13:written']);
+    expect(outcomes(nc)).toEqual(['2026-10-13:written']);
+    expect(p.discord.calls).toEqual([...DAYS, '2026-10-13']);
+    expect(p.copy.sheet.days()).toEqual(lastCompleteDays(p.clock.now));
+    expect(p.copy.sheet.rows).toEqual(p.main.sheet.rows);
+  });
+
+  it('some channels unreadable: both see the same partial read, both read again once 10 minutes later (one read), then both export the same rows', async () => {
+    const p = pair({ GOOGLE_SERVICE_ACCOUNT_JSON: creds }, discordPort({ messages: sameEveryRead, failed: (call) => (call === 0 ? 1 : 0) }));
+    const [rm, rc] = await p.tick();
+    expect(outcomes(rm)[0]).toBe('2026-10-06:read-error');
+    expect(outcomes(rc)[0]).toBe('2026-10-06:read-error');
+    expect(p.discord.calls).toEqual(DAYS);
+    const [am, ac] = await p.tick(TUE_1000 + 10 * MIN);
+    expect(outcomes(am)).toEqual(['2026-10-06:written']);
+    expect(outcomes(ac)).toEqual(['2026-10-06:written']);
+    expect(p.discord.calls).toEqual([...DAYS, '2026-10-06']);
+    expect(p.copy.sheet.rows).toEqual(p.main.sheet.rows);
+  });
+
+  it('a failing target never blocks the other (Sheets error at the check, or mid-write), in either direction', async () => {
+    for (const failing of ['copy', 'main'] as const) {
+      for (const how of ['prepare', 'append'] as const) {
+        const p = pair({ GOOGLE_SERVICE_ACCOUNT_JSON: creds });
+        const bad = failing === 'copy' ? p.copy : p.main;
+        const good = failing === 'copy' ? p.main : p.copy;
+        if (how === 'prepare') bad.sheet.failPrepare = true;
+        else bad.sheet.failAfterRows = 1;
+        await p.tick();
+        expect(good.sheet.doneDays()).toEqual(DAYS);
+        expect(good.svc.getStatus().lastRun).toMatchObject({ day: YESTERDAY, outcome: 'written' });
+        expect(bad.sheet.doneDays()).toEqual([]);
+        expect(bad.svc.getStatus().lastRun?.outcome).toBe('sheet-error');
+        // Fixed: the failing one catches up 10 minutes later; the other has nothing left to do.
+        bad.sheet.failPrepare = false;
+        bad.sheet.failAfterRows = null;
+        const [rm, rc] = await p.tick(TUE_1000 + 10 * MIN);
+        expect((failing === 'copy' ? rm : rc).state).toBe('idle');
+        expect(bad.sheet.doneDays()).toEqual(DAYS);
+        expect(p.copy.sheet.rows).toEqual(p.main.sheet.rows);
+      }
+    }
+  });
+
+  it('a Discord read that throws: both targets record an error for that day and both read it again later (a failed read is not kept)', async () => {
+    const discord = discordPort({ messages: sameEveryRead });
+    const collect = discord.collect.bind(discord);
+    let throwOnce = true;
+    discord.collect = async (cfg, w) => {
+      if (throwOnce && w.dayKey === YESTERDAY) {
+        throwOnce = false;
+        throw new Error('gateway reset');
+      }
+      return collect(cfg, w);
+    };
+    const p = pair({ GOOGLE_SERVICE_ACCOUNT_JSON: creds }, discord);
+    const [rm, rc] = await p.tick();
+    expect(outcomes(rm).at(-1)).toBe(`${YESTERDAY}:error`);
+    expect(outcomes(rc).at(-1)).toBe(`${YESTERDAY}:error`);
+    const [am, ac] = await p.tick(TUE_1000 + 10 * MIN);
+    expect(outcomes(am)).toEqual([`${YESTERDAY}:written`]);
+    expect(outcomes(ac)).toEqual([`${YESTERDAY}:written`]);
+    expect(p.copy.sheet.rows).toEqual(p.main.sheet.rows);
+  });
+
+  it('off switch (off / false / 0 / no / none): the copy is disabled and its sheet is never opened; the main target runs as before', async () => {
+    for (const off of ['off', 'OFF', 'false', '0', 'no', 'none']) {
+      const env = { GOOGLE_SERVICE_ACCOUNT_JSON: creds, CHAT_EXPORT_READING_COPY_SHEET_ID: off };
+      expect(readingCopyTarget(env).state).toBe('off');
+      expect(readChatExportReadingCopyConfig(env)).toMatchObject({ enabled: false, sheetId: '', retentionSheetId: '' });
+      const p = pair(env);
+      const [rm, rc] = await p.tick();
+      expect(rc.state).toBe('disabled');
+      expect(p.copy.ids).toEqual([]);
+      expect(p.copy.sheet.preparedExisting + p.copy.sheet.prepared).toBe(0);
+      expect(rm.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+      expect(p.copy.svc.getStatus()).toMatchObject({ enabled: false, sheetConfigured: false, lastRun: null, catchUp: null });
+    }
+  });
+
+  it('same-id guard: never the main target\'s own sheet (a pointless duplicate) nor a public stats workbook, nor with CHAT_EXPORT_SHEET_ID=off — disabled, nothing opened', async () => {
+    const cases: Array<[NodeJS.ProcessEnv, 'same-as-primary' | 'public-refused' | 'primary-off']> = [
+      [{ CHAT_EXPORT_READING_COPY_SHEET_ID: PUBLIC_STATS_SHEET_ID }, 'same-as-primary'], // the main target is the 百科 default
+      [{ CHAT_EXPORT_READING_COPY_SHEET_ID: `https://docs.google.com/spreadsheets/d/${PUBLIC_STATS_SHEET_ID}/edit` }, 'same-as-primary'],
+      [{ CHAT_EXPORT_READING_COPY_SHEET_ID: PUBLIC_STATS_SHEET_ID, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0' }, 'same-as-primary'],
+      [{ CHAT_EXPORT_SHEET_ID: PRIVATE_CHAT_EXPORT_SHEET_ID }, 'same-as-primary'], // the copy's default is the main target now
+      [{ CHAT_EXPORT_SHEET_ID: OTHER, CHAT_EXPORT_READING_COPY_SHEET_ID: OTHER }, 'same-as-primary'],
+      [{ CHAT_EXPORT_SHEET_ID: PRIVATE_CHAT_EXPORT_SHEET_ID, CHAT_EXPORT_READING_COPY_SHEET_ID: PUBLIC_STATS_SHEET_ID }, 'public-refused'],
+      [{ CHAT_EXPORT_SHEET_ID: 'off', CHAT_EXPORT_READING_COPY_SHEET_ID: PUBLIC_STATS_SHEET_ID }, 'primary-off'],
+      [{ CHAT_EXPORT_SHEET_ID: 'off' }, 'primary-off'], // 「不要任何試算表」: no copy either
+      [{ CHAT_EXPORT_SHEET_ID: 'OFF', CHAT_EXPORT_READING_COPY_SHEET_ID: OTHER }, 'primary-off'],
+      [{ COMMUNITY_DIGEST_SHEET_ID: 'none' }, 'primary-off'], // the retired name
+      [{ CHAT_EXPORT_SHEET_ID: 'off', CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0' }, 'primary-off'],
+      [{ CHAT_EXPORT_SHEET_ID: PRIVATE_CHAT_EXPORT_SHEET_ID, AVALON_STATS_SHEET_ID: OTHER, CHAT_EXPORT_READING_COPY_SHEET_ID: OTHER }, 'public-refused'],
+    ];
+    for (const [vars, state] of cases) {
+      const env = { GOOGLE_SERVICE_ACCOUNT_JSON: creds, ...vars };
+      expect(readingCopyTarget(env)).toEqual({ sheetId: '', state });
+      expect(readChatExportReadingCopyConfig(env)).toMatchObject({ enabled: false, sheetId: '', retentionSheetId: '' });
+      const p = pair(env);
+      const [, rc] = await p.tick();
+      expect(rc.state).toBe('disabled');
+      expect(p.copy.ids).toEqual([]);
+      expect(p.copy.sheet.log).toEqual([]);
+      expect(p.copy.svc.getStatus()).toMatchObject({ enabled: false, sheetConfigured: false });
+    }
+  });
+
+  it('CHAT_EXPORT_ENABLED=false stops the copy too — retention only: days older than 7 still leave it, nothing created or appended', async () => {
+    const env = { GOOGLE_SERVICE_ACCOUNT_JSON: creds, CHAT_EXPORT_ENABLED: 'false' };
+    expect(readChatExportReadingCopyConfig(env)).toMatchObject({ enabled: false, sheetId: PRIVATE_CHAT_EXPORT_SHEET_ID, retentionSheetId: PRIVATE_CHAT_EXPORT_SHEET_ID });
+    const p = pair(env);
+    for (const d of ['2026-10-01', '2026-10-02', '2026-10-10']) {
+      p.copy.sheet.rows.push([d, `${d} 12:00`, '一般聊天', 'Discord', '成員1', '秘密內容']);
+      p.copy.sheet.log.push(doneRow(d, TUE_1000 - 9 * 86_400_000, 'old'));
+    }
+    const [, rc] = await p.tick();
+    expect(rc.state).toBe('disabled');
+    expect(p.copy.sheet.days()).toEqual(['2026-10-10']);
+    expect(p.copy.sheet.prepared).toBe(0);
+    expect(p.copy.sheet.appendCalls).toBe(0);
+    expect(p.discord.calls).toEqual([]);
+    expect(p.copy.svc.getStatus()).toMatchObject({ enabled: false, sheetConfigured: true });
+  });
+
+  it('only the copy\'s own (copy-) 完成 rows count: a day an earlier version left in its sheet is deleted under the cleanup lock and written again; a restart keeps the copy\'s days; the main target\'s rule is unchanged', async () => {
+    const env = { GOOGLE_SERVICE_ACCOUNT_JSON: creds };
+    const p = pair(env);
+    const OLD_RUN = '3f9a1c07'; // an earlier version's 8-hex run id
+    const day = '2026-10-10';
+    // What an earlier version (main export to the private sheet) left: a 完成 day with fewer rows than Discord has.
+    p.copy.sheet.rows.push([day, `${day} 12:00`, '一般聊天', 'Discord', '成員1', '舊版的列']);
+    p.copy.sheet.log.push(claimRow(day, TUE_1000 - 3 * 86_400_000, OLD_RUN), doneRow(day, TUE_1000 - 3 * 86_400_000, OLD_RUN));
+    const [rm, rc] = await p.tick();
+    expect(rm.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(rc.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(p.copy.sheet.rows).toEqual(p.main.sheet.rows); // the old row is gone: the day has the main target's rows
+    expect(p.copy.sheet.rowsOf(day)).toHaveLength(3);
+    expect(p.copy.sheet.states(day)).toEqual([`進行中:${OLD_RUN}`, `完成:${OLD_RUN}`, '進行中:copy-a', '完成:copy-a']);
+    const lock = p.copy.sheet.log.filter((e) => e.state === CHAT_EXPORT_STATE_CLEANUP || e.state === CHAT_EXPORT_STATE_CLEANUP_END);
+    expect(lock.map((e) => `${e.state}:${e.runId}`)).toEqual([`${CHAT_EXPORT_STATE_CLEANUP}:copy-a`, `${CHAT_EXPORT_STATE_CLEANUP_END}:copy-a`]);
+    expect(p.copy.logs.join('\n')).toContain(`day ${day}: its 完成 row was not written by a reading copy (an earlier version, or the main export) — the day is written again`);
+    expect(p.copy.svc.getStatus().catchUp).toMatchObject({ exported: 7, skipped: 0, failed: 0 });
+    expect(p.discord.calls).toEqual(DAYS); // still one Discord read per day
+    // A restart (or a second server): every day was written by a copy → nothing again.
+    const again = service(() => readChatExportReadingCopyConfig(env), p.copy.sheet, discordPort(), p.clock, 'b');
+    expect(again.svc.runId).toBe('copy-b');
+    const r = await again.svc.tick(TUE_1000 + 5 * MIN);
+    expect(r.days.map((d) => d.outcome)).toEqual(Array(7).fill('already-exported'));
+    // A random run id of the copy carries the prefix; the main target's does not.
+    const fresh = new ChatExportService({ discord: discordPort(), config: () => readChatExportReadingCopyConfig(env) });
+    expect(fresh.runId).toMatch(/^copy-[0-9a-f]{8}$/);
+    expect(new ChatExportService({ discord: discordPort(), config: () => readChatExportConfig(env) }).runId).toMatch(/^[0-9a-f]{8}$/);
+    // The main target: any 完成 row counts, an earlier version's included (unchanged).
+    const h = harness();
+    h.sheet!.log.push(doneRow(day, TUE_1000 - 3 * 86_400_000, OLD_RUN));
+    expect(outcomes(await h.at(TUE_1000))).toContain(`${day}:already-exported`);
+    expect(h.logs.join('\n')).not.toContain('earlier version');
+  });
+
+  it('the chat tab could not be moved first (best effort): a warning with a code only; the days are written and old days still leave, also while Discord is down', async () => {
+    const env = { GOOGLE_SERVICE_ACCOUNT_JSON: creds };
+    const note = { pinFailed: 'Google Sheets move-tab failed (HTTP 403)' };
+    const p = pair(env);
+    p.copy.sheet.prepareNote = note;
+    p.copy.sheet.rows.push(['2026-09-30', '2026-09-30 12:00', '一般聊天', 'Discord', '成員1', '秘密內容']);
+    const [rm, rc] = await p.tick();
+    expect(rc.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(rm.days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect(p.copy.sheet.days()).toEqual(DAYS); // 09-30 pruned
+    expect(p.copy.sheet.rows).toEqual(p.main.sheet.rows);
+    expect(p.copy.logs).toContain('chat tab not moved to the first position (Google Sheets move-tab failed (HTTP 403)) — rows and retention go on; tried again on the next run');
+    // Discord down (another start): the retention alone still runs.
+    const sheet = new FakeSheet();
+    sheet.prepareNote = note;
+    sheet.rows.push(['2026-10-01', '2026-10-01 12:00', '一般聊天', 'Discord', '成員1', '秘密內容'], [YESTERDAY, `${YESTERDAY} 12:00`, '一般聊天', 'Discord', '成員1', '秘密內容']);
+    sheet.log.push(doneRow(YESTERDAY, TUE_1000 - HOUR, 'copy-x'));
+    const down = service(() => readChatExportReadingCopyConfig(env), sheet, discordPort({ ready: false }), { now: TUE_1000 }, 'c');
+    expect((await down.svc.tick(TUE_1000)).state).toBe('discord-not-ready');
+    expect(sheet.days()).toEqual([YESTERDAY]);
+    expect(down.logs.join('\n')).toContain('chat tab not moved to the first position');
+    expect(down.logs.join('\n')).not.toMatch(new RegExp(`${PRIVATE_CHAT_EXPORT_SHEET_ID}|秘密內容`));
+  });
+
+  it('status: chatExport.readingCopy = enabled / sheetConfigured / lastRun / catchUp — counts, dates and codes only', async () => {
+    __resetChatExportForTests();
+    const env = { ...process.env };
+    try {
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON = creds;
+      delete process.env.CHAT_EXPORT_READING_COPY_SHEET_ID;
+      delete process.env.CHAT_EXPORT_SHEET_ID;
+      const sheet = new FakeSheet();
+      const logs: string[] = [];
+      const copy = initializeChatExportReadingCopy({
+        discord: discordPort(),
+        sheetFactory: () => ({ sheet, reason: 'ok' }),
+        now: () => TUE_1000,
+        logger: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
+      });
+      expect(getChatExportReadingCopyService()).toBe(copy);
+      expect(chatExportStatus().readingCopy).toEqual({ enabled: true, sheetConfigured: true, lastRun: null, catchUp: null });
+      await copy.tick(TUE_1000);
+      const status = chatExportStatus();
+      expect(Object.keys(status.readingCopy).sort()).toEqual(['catchUp', 'enabled', 'lastRun', 'sheetConfigured']);
+      expect(status.readingCopy.lastRun).toEqual({
+        day: YESTERDAY,
+        at: new Date(TUE_1000).toISOString(),
+        messages: 3,
+        channels: 2,
+        threads: 1,
+        truncated: 0,
+        outcome: 'written',
+      });
+      expect(status.readingCopy.catchUp).toMatchObject({ from: DAYS[0], to: YESTERDAY, exported: 7, skipped: 0, failed: 0, pending: 0, expired: 0 });
+      expect((buildBotStatus() as unknown as { chatExport: unknown }).chatExport).toEqual(status);
+      const all = JSON.stringify(status) + logs.join('\n');
+      for (const leaked of ['秘密內容', '一般聊天', '阿瓦隆同步', '討論區', '祕密標題', '成員', PRIVATE_CHAT_EXPORT_SHEET_ID, GENERAL]) expect(all).not.toContain(leaked);
+    } finally {
+      __resetChatExportForTests();
+      process.env = env;
+    }
+  });
+});
+
+describe('shareChatExportReads: one Discord read per day for both targets', () => {
+  function counting() {
+    const calls: string[] = [];
+    let fail = 0;
+    const port: ChatExportDiscordPort & { calls: string[]; failNext(n: number): void } = {
+      calls,
+      failNext: (n) => {
+        fail = n;
+      },
+      isReady: () => true,
+      async collect(_cfg, w) {
+        calls.push(w.dayKey);
+        await new Promise((r) => setTimeout(r, 0)); // a real read takes a while
+        if (fail > 0) {
+          fail -= 1;
+          throw new Error('read failed');
+        }
+        return { ...emptyCollectResult(), messages: [chat(w.start + HOUR)], channels: [{ id: GENERAL, name: '一般聊天', isMirror: false }] };
+      },
+    };
+    return port;
+  }
+
+  it('a read still running is joined; a finished one is reused for 5 minutes, then read again; another day or other sources are their own read', async () => {
+    expect(CHAT_EXPORT_SHARED_READ_TTL_MS).toBe(5 * MIN);
+    expect(CHAT_EXPORT_SHARED_READ_TTL_MS).toBeLessThan(CHAT_EXPORT_RETRY_DELAY_MS); // a retry always reads again
+    const inner = counting();
+    const clock = { now: TUE_1000 };
+    const shared = shareChatExportReads(inner, { now: () => clock.now });
+    const main = readChatExportConfig({});
+    const copy = readChatExportReadingCopyConfig({});
+    const w = dayWindow(YESTERDAY);
+    const [a, b] = await Promise.all([shared.collect(main, w), shared.collect(copy, w)]);
+    expect(inner.calls).toEqual([YESTERDAY]);
+    expect(b).toEqual(a);
+    expect(b.messages).not.toBe(a.messages); // each caller its own arrays
+    clock.now += 5 * MIN - 1;
+    await shared.collect(copy, w);
+    expect(inner.calls).toHaveLength(1);
+    clock.now += 1;
+    await shared.collect(copy, w);
+    expect(inner.calls).toHaveLength(2);
+    await shared.collect(main, dayWindow('2026-10-11'));
+    expect(inner.calls).toEqual([YESTERDAY, YESTERDAY, '2026-10-11']);
+    await shared.collect({ ...main, extraSourceIds: ['1132683080134578276'] }, w);
+    expect(inner.calls).toHaveLength(4);
+    expect(shared.isReady()).toBe(true);
+  });
+
+  it('a failed read is not kept: both waiting callers see the failure, the next call reads again', async () => {
+    const inner = counting();
+    const shared = shareChatExportReads(inner, { now: () => TUE_1000 });
+    const cfg = readChatExportConfig({});
+    const w = dayWindow(YESTERDAY);
+    inner.failNext(1);
+    const both = await Promise.allSettled([shared.collect(cfg, w), shared.collect(cfg, w)]);
+    expect(both.map((r) => r.status)).toEqual(['rejected', 'rejected']);
+    expect(inner.calls).toHaveLength(1);
+    expect((await shared.collect(cfg, w)).messages).toHaveLength(1);
+    expect(inner.calls).toHaveLength(2);
   });
 });

@@ -15,7 +15,15 @@
  * the list of tab titles is read (to find them).
  *
  * Both tabs are created (with a frozen header row) when missing; a tab that
- * exists with an empty row 1 gets the header. A tab with any other header
+ * exists with an empty row 1 gets the header. For the reading copy
+ * (`pinChatTabFirst`, config.ts DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID)
+ * 「聊天紀錄」 is created as the FIRST tab and moved back there when found
+ * elsewhere (the other tabs keep their order and are never read, written or
+ * deleted — e.g. 「練習回報」, or an empty 工作表1 left by Google), so a CSV
+ * export of that spreadsheet (its first tab) is the chat; the main target's
+ * tabs are never moved. The move is best effort: when Google refuses it (e.g.
+ * a protected tab), prepare() still succeeds and reports it, so the rows and
+ * the 7-day retention never wait for a tab position. A tab with any other header
  * (also the 週次 header of the weekly version, which never ran) is not ours:
  * ChatTabConflictError, and neither tab is created or changed. Column A of
  * both tabs holds the 日期 ("YYYY-MM-DD", +08); rows whose column A is not
@@ -97,10 +105,23 @@ export class ChatDeleteOutcomeUnknownError extends Error {
   }
 }
 
+/**
+ * prepare() succeeded but 「聊天紀錄」 could not be moved to the first tab
+ * (pinChatTabFirst): the SheetError's text (step and HTTP status only).
+ */
+export interface ChatSheetPrepareNote {
+  pinFailed: string;
+}
+
 /** What the service needs from the sheet (tests inject a fake). */
 export interface ChatExportSheetPort {
-  /** Make sure both tabs exist and row 1 of each is the header (ChatTabConflictError when a tab is not ours). */
-  prepare(): Promise<void>;
+  /**
+   * Make sure both tabs exist and row 1 of each is the header
+   * (ChatTabConflictError when a tab is not ours); with pinChatTabFirst also
+   * try to make 「聊天紀錄」 the first tab — a refused move resolves with a
+   * ChatSheetPrepareNote instead of failing (the other calls work).
+   */
+  prepare(): Promise<ChatSheetPrepareNote | void>;
   /**
    * Retention only (export stopped or refused): true when BOTH tabs already
    * exist with our header — then the other calls work; false when either is
@@ -171,10 +192,23 @@ class DayTab {
     return state;
   }
 
-  /** Create the tab and / or write the header, as `inspect` found it. */
-  async settle(state: TabState): Promise<void> {
-    if (state === 'missing') this.sheetId = await this.client.addTab(this.title, { frozenRows: 1, columns: this.header.length });
+  /** Create the tab (at the end, or at `index`) and / or write the header, as `inspect` found it. */
+  async settle(state: TabState, index?: number): Promise<void> {
+    if (state === 'missing') {
+      this.sheetId = await this.client.addTab(this.title, {
+        frozenRows: 1,
+        columns: this.header.length,
+        ...(index !== undefined ? { index } : {}),
+      });
+    }
     if (state !== 'ok') await this.client.updateValues(this.headerRange(), [[...this.header]]);
+  }
+
+  /** Move the (existing) tab to index 0 unless `tabs` already lists it first. */
+  async pinFirst(tabs: SheetTab[]): Promise<void> {
+    const found = tabs.find((t) => t.title === this.title);
+    if (!found || found.index === 0 || this.sheetId === null) return;
+    await this.client.moveTab(this.sheetId, 0);
   }
 
   /** Every row of the used columns (index 0 = row 1 = header). */
@@ -235,20 +269,37 @@ export class ChatExportSheet implements ChatExportSheetPort {
 
   constructor(
     private readonly client: GoogleSheetsClient,
-    private readonly opts: { tab?: string; logTab?: string; batchSize?: number } = {},
+    private readonly opts: {
+      tab?: string;
+      logTab?: string;
+      batchSize?: number;
+      /** The reading copy: 「聊天紀錄」 is created as / moved back to the first tab. */
+      pinChatTabFirst?: boolean;
+    } = {},
   ) {
     this.chat = new DayTab(client, opts.tab ?? CHAT_EXPORT_TAB, CHAT_EXPORT_HEADER, 'chat-tab');
     this.log = new DayTab(client, opts.logTab ?? CHAT_EXPORT_LOG_TAB, CHAT_EXPORT_LOG_HEADER, 'log-tab');
   }
 
-  async prepare(): Promise<void> {
+  async prepare(): Promise<ChatSheetPrepareNote | void> {
     const tabs = await this.client.listTabs();
     // Look at both before creating or changing either: a tab that is not ours stops everything.
     const chatState = await this.chat.inspect(tabs);
     const logState = await this.log.inspect(tabs);
-    await this.chat.settle(chatState);
+    const pin = this.opts.pinChatTabFirst === true;
+    await this.chat.settle(chatState, pin ? 0 : undefined);
     await this.log.settle(logState);
     this.prepared = true;
+    // Created at index 0 above; found elsewhere (someone moved it, or a tab was added in front) → moved back.
+    // Best effort: a refused move must not stop the day's rows or the 7-day retention (review fix 2026-10-13).
+    if (pin && chatState !== 'missing') {
+      try {
+        await this.chat.pinFirst(tabs);
+      } catch (err) {
+        if (err instanceof SheetError) return { pinFailed: err.message };
+        throw err;
+      }
+    }
   }
 
   async prepareExisting(): Promise<boolean> {
@@ -321,5 +372,5 @@ export type ChatSheetFactory = (cfg: ChatExportConfig) => { sheet: ChatExportShe
 
 export const defaultChatSheetFactory: ChatSheetFactory = (cfg) => {
   const { client, reason } = createSheetsClient(cfg.sheetId, process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-  return { sheet: client ? new ChatExportSheet(client) : null, reason };
+  return { sheet: client ? new ChatExportSheet(client, cfg.pinChatTabFirst ? { pinChatTabFirst: true } : {}) : null, reason };
 };

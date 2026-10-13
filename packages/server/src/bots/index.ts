@@ -45,9 +45,15 @@ import {
   initializeFeedback,
 } from './feedback';
 import type { Client } from 'discord.js';
-import { createDiscordChatExportPort } from './chatExport/discordPort';
-import { ChatExportStatus, chatExportStatus, initializeChatExport } from './chatExport/service';
-import { defaultChatExportLogger, readChatExportConfig } from './chatExport/config';
+import { createDiscordChatExportPort, shareChatExportReads } from './chatExport/discordPort';
+import { ChatExportBotStatus, ChatExportService, chatExportStatus, initializeChatExport, initializeChatExportReadingCopy } from './chatExport/service';
+import {
+  defaultChatExportLogger,
+  readChatExportConfig,
+  readChatExportReadingCopyConfig,
+  readingCopyChatExportLogger,
+  readingCopyTarget,
+} from './chatExport/config';
 
 /** Last initialisation error per bot — surfaced on /api/bots/status. */
 const initErrors: { discord: string | null; line: string | null } = {
@@ -111,8 +117,9 @@ export async function initializeBots(): Promise<void> {
 
   // Daily chat-log export (docs/COMMUNITY_FEEDBACK.md): once Discord is ready
   // the last 7 days without 完成, then every day from 04:30 +08 the previous
-  // day's public chat, speakers pseudonymized, appended to the sheet the AI
-  // manager reads; 7 days kept. Free.
+  // day's public chat, speakers pseudonymized, appended to the 阿瓦隆百科
+  // sheet — and the same rows to the reading copy (a small private sheet whose
+  // first tab is the chat, so the AI manager can read it); 7 days kept. Free.
   startChatExport();
 }
 
@@ -137,14 +144,21 @@ export function buildFeedbackForwarder(): FeedbackDiscordForwarder {
 // ─── Daily chat-log export (2026-10-13) ──────────────────────────────────
 
 /**
- * Arm the daily chat-log export (bots/chatExport). The service
- * always exists (for the status page); the timer runs when the feature is
- * enabled (CHAT_EXPORT_ENABLED, default on) — and, when it is turned off,
- * still once a day for the retention alone while the sheet it wrote to is
- * reachable (days older than 7 are deleted; nothing is written). Idempotent.
+ * Arm the daily chat-log export (bots/chatExport): the main target and the
+ * reading copy, two services sharing one Discord read per day. Each service
+ * always exists (for the status page); its timer runs when it is enabled
+ * (CHAT_EXPORT_ENABLED, default on; the reading copy also needs a copy
+ * target) — and, when turned off, still once a day for the retention alone
+ * while the sheet it wrote to is reachable (days older than 7 are deleted;
+ * nothing is written). Idempotent.
  */
 export function startChatExport(): void {
-  const service = initializeChatExport({ discord: createDiscordChatExportPort(readyDiscordClient) });
+  const discord = shareChatExportReads(createDiscordChatExportPort(readyDiscordClient));
+  startMainChatExport(initializeChatExport({ discord }));
+  startChatExportReadingCopy(initializeChatExportReadingCopy({ discord }));
+}
+
+function startMainChatExport(service: ChatExportService): void {
   const cfg = readChatExportConfig();
   if (cfg.sheetIdFromRetiredName) {
     defaultChatExportLogger.warn(
@@ -165,6 +179,36 @@ export function startChatExport(): void {
   const target = cfg.sheetId && cfg.sheetCredentialsUsable ? (cfg.publicSheet ? 'configured (public stats workbook)' : 'configured (another sheet)') : null;
   defaultChatExportLogger.info(
     `armed (catch-up of the last 7 days once Discord is ready, then daily from 04:30 +08); sheet ${target ?? 'NOT configured (GOOGLE_SERVICE_ACCOUNT_JSON missing or invalid, CHAT_EXPORT_SHEET_ID=off, or the public sheet refused by CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0)'}`,
+  );
+}
+
+/** The reading copy (config.ts DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID): same rules as the main target, own sheet. */
+function startChatExportReadingCopy(service: ChatExportService): void {
+  const { state } = readingCopyTarget();
+  const cfg = readChatExportReadingCopyConfig();
+  if (state !== 'on') {
+    const why = {
+      off: 'CHAT_EXPORT_READING_COPY_SHEET_ID=off',
+      'primary-off': 'CHAT_EXPORT_SHEET_ID=off — no sheet at all',
+      'same-as-primary': 'its sheet is the main target itself',
+      'public-refused': 'a public stats workbook is never the reading copy',
+    }[state];
+    readingCopyChatExportLogger.info(`disabled (${why})`);
+    return;
+  }
+  const retentionOnly = !cfg.enabled && !!cfg.retentionSheetId && cfg.sheetCredentialsUsable;
+  if (!cfg.enabled && !retentionOnly) {
+    readingCopyChatExportLogger.info('disabled (CHAT_EXPORT_ENABLED=false)');
+    return;
+  }
+  if (service.isRunning()) return;
+  service.start();
+  if (retentionOnly) {
+    readingCopyChatExportLogger.info('disabled (CHAT_EXPORT_ENABLED=false) — retention only: days older than 7 are still deleted from the two chat tabs');
+    return;
+  }
+  readingCopyChatExportLogger.info(
+    `armed (same days and rows as the main target; chat tab kept first); sheet ${cfg.sheetId && cfg.sheetCredentialsUsable ? 'configured' : 'NOT configured (GOOGLE_SERVICE_ACCOUNT_JSON missing or invalid)'}`,
   );
 }
 
@@ -397,10 +441,11 @@ export interface BotStatus {
   feedback: FeedbackSnapshot & { commandEnabled: boolean };
   /**
    * Daily chat-log export (bots/chatExport): three booleans, the last day's
-   * date, time, counts and outcome code, and the catch-up's day counts —
-   * never text, names or channel names.
+   * date, time, counts and outcome code, and the catch-up's day counts; the
+   * same for the reading copy under `readingCopy` (two booleans, lastRun,
+   * catchUp) — never text, names or channel names.
    */
-  chatExport: ChatExportStatus;
+  chatExport: ChatExportBotStatus;
   /**
    * Discord → LINE picture copies (2026-10-13): on/off and counters only —
    * never ids, URLs or file names. LINE-side counts are in line.stats.

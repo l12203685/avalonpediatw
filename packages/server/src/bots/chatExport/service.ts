@@ -42,6 +42,15 @@
  * deleting at once would remove rows of a kept day. The lock is a 「清理中」
  * row in 匯出紀錄 — the first live one (< 10 min, not followed by its own
  * 「清理結束」) holds it; the others skip and try again in 10 minutes.
+ *
+ * The reading copy (config.ts DEFAULT_CHAT_EXPORT_READING_COPY_SHEET_ID) is a
+ * second ChatExportService with its own sheet, claims, export log, retries and
+ * status (readChatExportReadingCopyConfig: same sources, 「聊天紀錄」 kept as
+ * the first tab, run ids starting with 「copy-」 — there only such 完成 rows
+ * count, so days an earlier version left in that sheet are written again).
+ * The two share only the Discord reads (discordPort.ts
+ * shareChatExportReads); a failure of one target never stops the other.
+ * /api/bots/status → chatExport.readingCopy.
  */
 
 import crypto from 'crypto';
@@ -60,6 +69,8 @@ import {
   CHAT_EXPORT_STATE_DONE,
   defaultChatExportLogger,
   readChatExportConfig,
+  readChatExportReadingCopyConfig,
+  readingCopyChatExportLogger,
   type ChatExportConfig,
   type ChatExportLogger,
 } from './config';
@@ -152,6 +163,22 @@ export interface ChatExportStatus {
   catchUp: ChatExportCatchUp | null;
 }
 
+/**
+ * /api/bots/status → chatExport.readingCopy: the reading copy's own state —
+ * enabled (CHAT_EXPORT_ENABLED and a copy target that is not off, the main
+ * target's sheet or a public workbook), sheetConfigured, and its lastRun /
+ * catchUp like the main target's. Counts, dates and codes only.
+ */
+export interface ChatExportReadingCopyStatus {
+  enabled: boolean;
+  sheetConfigured: boolean;
+  lastRun: ChatExportLastRun | null;
+  catchUp: ChatExportCatchUp | null;
+}
+
+/** /api/bots/status → chatExport: the main target plus `readingCopy`. */
+export type ChatExportBotStatus = ChatExportStatus & { readingCopy: ChatExportReadingCopyStatus };
+
 export type ChatExportTickState =
   | 'disabled'
   | 'busy'
@@ -176,7 +203,10 @@ export interface ChatExportServiceOptions {
   config?: () => ChatExportConfig;
   now?: () => number;
   logger?: ChatExportLogger;
-  /** 執行代號 written to 「匯出紀錄」; random per process by default. */
+  /**
+   * 執行代號 written to 「匯出紀錄」; random per process by default. Prefixed
+   * with the config's runIdPrefix (the reading copy) when it lacks it.
+   */
   runId?: string;
 }
 
@@ -190,6 +220,11 @@ function sheetErrorText(err: unknown): string {
 
 function isDone(e: ExportLogEntry): boolean {
   return e.state === CHAT_EXPORT_STATE_DONE;
+}
+
+/** A 完成 row of `day` that counts: written by a run whose id starts with `prefix` ('' = any run). */
+function isCountedDone(e: ExportLogEntry, day: string, prefix: string): boolean {
+  return e.day === day && isDone(e) && e.runId.startsWith(prefix);
 }
 
 function isClaim(e: ExportLogEntry): boolean {
@@ -244,6 +279,10 @@ export class ChatExportService {
   private readonly now: () => number;
   private readonly logger: ChatExportLogger;
   readonly runId: string;
+  /** config().runIdPrefix at construction ('' = the main target: every 完成 row counts). */
+  private readonly runIdPrefix: string;
+  /** The reading copy: days whose 完成 row not written by a reading copy was already logged. */
+  private readonly uncountedDoneLogged = new Set<string>();
 
   /** Days settled in this process (exported, empty, or already there). */
   private readonly settled = new Set<string>();
@@ -272,7 +311,9 @@ export class ChatExportService {
     this.config = opts.config ?? ((): ChatExportConfig => readChatExportConfig());
     this.now = opts.now ?? Date.now;
     this.logger = opts.logger ?? defaultChatExportLogger;
-    this.runId = opts.runId ?? crypto.randomBytes(4).toString('hex');
+    this.runIdPrefix = this.config().runIdPrefix ?? '';
+    const id = opts.runId ?? crypto.randomBytes(4).toString('hex');
+    this.runId = id.startsWith(this.runIdPrefix) ? id : `${this.runIdPrefix}${id}`;
   }
 
   getStatus(): ChatExportStatus {
@@ -349,14 +390,20 @@ export class ChatExportService {
   }
 
   /**
-   * Take (or keep) the day: 'done' when it has a 完成 row, 'other' when
-   * another instance holds it, 'mine' when this one does. A claim of this
-   * instance older than CHAT_EXPORT_CLAIM_RENEW_MS is renewed (new 進行中
-   * row), so a live claim never goes stale between two attempts.
+   * Take (or keep) the day: 'done' when it has a 完成 row (the reading copy:
+   * one written by a reading copy), 'other' when another instance holds it,
+   * 'mine' when this one does. A claim of this instance older than
+   * CHAT_EXPORT_CLAIM_RENEW_MS is renewed (new 進行中 row), so a live claim
+   * never goes stale between two attempts.
    */
   private async ensureClaim(sheet: ChatExportSheetPort, day: string, now: number): Promise<ClaimResult> {
+    const prefix = this.runIdPrefix;
     let log = await sheet.readLog();
-    if (log.some((e) => e.day === day && isDone(e))) return 'done';
+    if (log.some((e) => isCountedDone(e, day, prefix))) return 'done';
+    if (prefix && !this.uncountedDoneLogged.has(day) && log.some((e) => e.day === day && isDone(e))) {
+      this.uncountedDoneLogged.add(day);
+      this.logger.info(`day ${day}: its 完成 row was not written by a reading copy (an earlier version, or the main export) — the day is written again`);
+    }
     const holder = claimHolder(log, day, now);
     if (holder !== null && holder !== this.runId) return 'other';
     const newestOwn = Math.max(
@@ -366,7 +413,7 @@ export class ChatExportService {
     if (holder === this.runId && now - newestOwn < CHAT_EXPORT_CLAIM_RENEW_MS) return 'mine';
     await sheet.appendLog({ day, state: CHAT_EXPORT_STATE_CLAIM, rows: 0, channels: 0, at: now, runId: this.runId });
     log = await sheet.readLog();
-    if (log.some((e) => e.day === day && isDone(e))) return 'done';
+    if (log.some((e) => isCountedDone(e, day, prefix))) return 'done';
     return claimHolder(log, day, now) === this.runId ? 'mine' : 'other';
   }
 
@@ -535,7 +582,7 @@ export class ChatExportService {
         this.logger.info(`catch-up: ${due.length} of the last ${window.length} days to check (${window[0]} → ${window[window.length - 1]})`);
       }
       try {
-        await sheet.prepare();
+        await this.prepareSheet(sheet);
       } catch (err) {
         const outcome: ChatExportOutcome = err instanceof ChatTabConflictError ? 'tab-conflict' : 'sheet-error';
         this.logger.warn(`sheet check failed (${outcome}): ${sheetErrorText(err)} — trying again in 10 minutes`);
@@ -574,13 +621,23 @@ export class ChatExportService {
     }
   }
 
+  /**
+   * sheet.prepare(); a chat tab that could not be moved first (the reading
+   * copy) is only logged — the rows and the retention go on, and the move is
+   * tried again at the next prepare.
+   */
+  private async prepareSheet(sheet: ChatExportSheetPort): Promise<void> {
+    const note = await sheet.prepare();
+    if (note) this.logger.warn(`chat tab not moved to the first position (${note.pinFailed}) — rows and retention go on; tried again on the next run`);
+  }
+
   /** The retention without an export pass (Discord not ready): prepare the tabs, prune. */
   private async pruneAlone(sheet: ChatExportSheetPort, now: number): Promise<void> {
     if (this.inFlight) return;
     this.inFlight = true;
     try {
       try {
-        await sheet.prepare();
+        await this.prepareSheet(sheet);
       } catch (err) {
         this.logger.warn(`retention: sheet check failed: ${sheetErrorText(err)} — trying again in 10 minutes`);
         this.pruneRetryAt = this.later(now);
@@ -741,9 +798,10 @@ export class ChatExportService {
   }
 }
 
-// ─── Singleton ───────────────────────────────────────────────────────────
+// ─── Singletons (the main target and the reading copy) ───────────────────
 
 let instance: ChatExportService | null = null;
+let readingCopy: ChatExportService | null = null;
 
 export function initializeChatExport(opts: ChatExportServiceOptions): ChatExportService {
   if (!instance) instance = new ChatExportService(opts);
@@ -754,17 +812,39 @@ export function getChatExportService(): ChatExportService | null {
   return instance;
 }
 
-/** Status block for /api/bots/status, also before (or without) initialisation. */
-export function chatExportStatus(): ChatExportStatus {
-  if (instance) return instance.getStatus();
-  const cfg = readChatExportConfig();
+/**
+ * The reading copy's service: readChatExportReadingCopyConfig and its own
+ * log prefix unless `opts` says otherwise (tests). Pass the same (shared)
+ * Discord port as the main target's.
+ */
+export function initializeChatExportReadingCopy(opts: ChatExportServiceOptions): ChatExportService {
+  if (!readingCopy) {
+    readingCopy = new ChatExportService({
+      config: (): ChatExportConfig => readChatExportReadingCopyConfig(),
+      logger: readingCopyChatExportLogger,
+      ...opts,
+    });
+  }
+  return readingCopy;
+}
+
+export function getChatExportReadingCopyService(): ChatExportService | null {
+  return readingCopy;
+}
+
+/** A status from the config alone (before, or without, initialisation). */
+function statusFromConfig(cfg: ChatExportConfig): ChatExportStatus {
   const sheetConfigured = !!cfg.sheetId && cfg.sheetCredentialsUsable;
+  return { enabled: cfg.enabled, sheetConfigured, publicSheet: cfg.publicSheet && sheetConfigured, lastRun: null, catchUp: null };
+}
+
+/** Status block for /api/bots/status, also before (or without) initialisation. */
+export function chatExportStatus(): ChatExportBotStatus {
+  const main = instance ? instance.getStatus() : statusFromConfig(readChatExportConfig());
+  const copy = readingCopy ? readingCopy.getStatus() : statusFromConfig(readChatExportReadingCopyConfig());
   return {
-    enabled: cfg.enabled,
-    sheetConfigured,
-    publicSheet: cfg.publicSheet && sheetConfigured,
-    lastRun: null,
-    catchUp: null,
+    ...main,
+    readingCopy: { enabled: copy.enabled, sheetConfigured: copy.sheetConfigured, lastRun: copy.lastRun, catchUp: copy.catchUp },
   };
 }
 
@@ -772,4 +852,6 @@ export function chatExportStatus(): ChatExportStatus {
 export function __resetChatExportForTests(): void {
   instance?.stop();
   instance = null;
+  readingCopy?.stop();
+  readingCopy = null;
 }

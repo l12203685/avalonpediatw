@@ -92,6 +92,8 @@ export interface SheetTab {
   /** Numeric id of the tab (gid), needed for row deletion. */
   sheetId: number;
   title: string;
+  /** Position of the tab (0 = first): `index` from the API, else its place in the listing (same order). */
+  index: number;
 }
 
 /** A half-open run of 0-based row indices [start, end) on one tab. */
@@ -120,9 +122,9 @@ export interface GoogleSheetsClientOptions {
 }
 
 /**
- * The few Sheets calls the server needs: list / add tabs, read, overwrite,
- * append, delete rows. One access token is reused until a minute before it
- * expires.
+ * The few Sheets calls the server needs: list / add / move tabs, read,
+ * overwrite, append, delete rows. One access token is reused until a minute
+ * before it expires.
  */
 export class GoogleSheetsClient {
   private readonly fetchImpl: typeof fetch;
@@ -179,28 +181,45 @@ export class GoogleSheetsClient {
     return resp.json().catch(() => ({}));
   }
 
-  /** Every tab of the spreadsheet (id and title only). */
+  /** Every tab of the spreadsheet (id, title and position only), in tab order. */
   async listTabs(): Promise<SheetTab[]> {
-    const fields = encodeURIComponent('sheets.properties(sheetId,title)');
+    const fields = encodeURIComponent('sheets.properties(sheetId,title,index)');
     const json = (await this.call('metadata', `?fields=${fields}`, { method: 'GET' })) as {
-      sheets?: Array<{ properties?: { sheetId?: number; title?: string } }>;
+      sheets?: Array<{ properties?: { sheetId?: number; title?: string; index?: number } }>;
     };
     return (json?.sheets ?? [])
-      .map((s) => ({ sheetId: Number(s.properties?.sheetId ?? NaN), title: String(s.properties?.title ?? '') }))
+      .map((s, i) => ({
+        sheetId: Number(s.properties?.sheetId ?? NaN),
+        title: String(s.properties?.title ?? ''),
+        index: Number.isInteger(s.properties?.index) ? Number(s.properties?.index) : i,
+      }))
       .filter((t) => Number.isInteger(t.sheetId) && t.title !== '');
   }
 
-  /** Add a tab; returns its numeric id. */
-  async addTab(title: string, opts: { frozenRows?: number; columns?: number } = {}): Promise<number> {
+  /** Add a tab (at the end, or at `index`: 0 = first); returns its numeric id. */
+  async addTab(title: string, opts: { frozenRows?: number; columns?: number; index?: number } = {}): Promise<number> {
     const gridProperties: Record<string, number> = {};
     if (opts.frozenRows) gridProperties.frozenRowCount = opts.frozenRows;
     if (opts.columns) gridProperties.columnCount = opts.columns;
     const json = (await this.batchUpdate('add-tab', [
-      { addSheet: { properties: { title, ...(Object.keys(gridProperties).length ? { gridProperties } : {}) } } },
+      {
+        addSheet: {
+          properties: {
+            title,
+            ...(opts.index !== undefined ? { index: opts.index } : {}),
+            ...(Object.keys(gridProperties).length ? { gridProperties } : {}),
+          },
+        },
+      },
     ])) as { replies?: Array<{ addSheet?: { properties?: { sheetId?: number } } }> };
     const id = Number(json?.replies?.[0]?.addSheet?.properties?.sheetId ?? NaN);
     if (!Number.isInteger(id)) throw new SheetError('add-tab', null);
     return id;
+  }
+
+  /** Move a tab to `index` (0 = first); the other tabs keep their order and content. */
+  async moveTab(sheetId: number, index: number): Promise<void> {
+    await this.batchUpdate('move-tab', [{ updateSheetProperties: { properties: { sheetId, index }, fields: 'index' } }]);
   }
 
   /** Values of `range` (rows of cells; trailing empty rows and cells are omitted by the API). */
