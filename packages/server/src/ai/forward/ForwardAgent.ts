@@ -61,6 +61,7 @@ import type {
 import { HeuristicAgent } from '../HeuristicAgent';
 import { humanQuestCardRule } from '../AgentTuning';
 import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } from '../RedLakeFollowUp';
+import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
 import {
   interpret,
   type Facts,
@@ -636,6 +637,25 @@ export class ForwardAgent implements AvalonAgent {
     _forwardDecideCalls += 1;
     const decisionType = obs.gamePhase as DecisionType;
 
+    // ── AgentTuning.redR1Teammate (2026-10-13 round 3) ──
+    // An R1 red leader who sees teammates no longer leaves them out of
+    // every R1 team (RedR1Teammate.ts). 'asLoyal' proposes the team a loyal
+    // in this seat would (one decision: the inner call is not counted
+    // again); 'withTeammate' filters the candidates below.
+    const r1Plan: RedR1TeamPlan | null =
+      decisionType === 'team_select' ? redR1TeamPlan(obs, this.baseline.tuning) : null;
+    if (r1Plan === 'asLoyal') {
+      _forwardDecideCalls -= 1;
+      const asLoyal = this.decide(loyalViewOf(obs));
+      return {
+        action: asLoyal.action,
+        reasoningTrace: {
+          ...asLoyal.reasoningTrace,
+          summary: `${asLoyal.reasoningTrace.summary} [red R1 team as a loyal would]`,
+        },
+      };
+    }
+
     // ── Edward 2026-05-05 R1-R2 force-normal vote delegation ────
     //
     // Edward 2026-04-30 18:10 verbatim:
@@ -909,7 +929,7 @@ export class ForwardAgent implements AvalonAgent {
 
     let candidates: Candidate[];
     try {
-      candidates = this.generateCandidates(decisionType, obs, interp);
+      candidates = this.generateCandidates(decisionType, obs, interp, r1Plan);
     } catch (error: unknown) {
       return this.fallback(obs, decisionType, 'generateCandidates() threw');
     }
@@ -1154,11 +1174,12 @@ export class ForwardAgent implements AvalonAgent {
     decisionType: DecisionType,
     obs: PlayerObservation,
     interp: InterpretationResult,
+    r1Plan: RedR1TeamPlan | null = null,
   ): Candidate[] {
     const pyramid = computePyramidScores(obs);
     switch (decisionType) {
       case 'team_select':
-        return this.generateTeamSelectCandidates(obs, interp, pyramid);
+        return this.generateTeamSelectCandidates(obs, interp, pyramid, r1Plan);
       case 'team_vote':
         return this.generateTeamVoteCandidates(obs, interp, pyramid);
       case 'quest_vote':
@@ -1172,6 +1193,7 @@ export class ForwardAgent implements AvalonAgent {
     obs: PlayerObservation,
     interp: InterpretationResult,
     pyramid: PyramidScores,
+    r1Plan: RedR1TeamPlan | null = null,
   ): Candidate[] {
     const teamSize = AVALON_CONFIG[obs.playerCount]?.questTeams[obs.currentRound - 1];
     if (teamSize === undefined || teamSize <= 0) return [];
@@ -1447,6 +1469,26 @@ export class ForwardAgent implements AvalonAgent {
         const comboRanked =
           withoutBanned.length >= teamSize - 1 - fixedMembers.length ? withoutBanned : withoutFixed;
         candidates = enumerateTeams(fixedMembers, comboRanked);
+      }
+    }
+
+    // ── AgentTuning.redR1Teammate (2026-10-13 round 3) ──
+    // Plan 'withTeammate': keep the candidates with exactly one visible
+    // teammate (humans put both on 3.2% of R1 teams); the scorer and the
+    // hash tie-break pick among them as usual — the R1 mimic-loyal bias is
+    // the same for every one of them. See RedR1Teammate.ts.
+    if (r1Plan === 'withTeammate') {
+      const withOne = candidates.filter(
+        (c) => c.action.type === 'team_select' && visibleTeammatesOn(obs, c.action.teamIds) === 1,
+      );
+      const mate = otherRanked.find((id) => obs.knownEvils.includes(id));
+      if (withOne.length > 0) {
+        candidates = withOne;
+      } else if (mate !== undefined) {
+        candidates = enumerateTeams(
+          [mate],
+          otherRanked.filter((id) => !obs.knownEvils.includes(id)),
+        );
       }
     }
 
