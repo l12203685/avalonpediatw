@@ -118,10 +118,12 @@ describe('AgentTuning — flags', () => {
     }
   });
 
-  it('2026-10-13 round-3 goodVouchFollowUp: flag, env var, off in legacy', () => {
-    // strength_benchmark.md 第 10 節: the blue counterpart of evilVouchFollowUp.
+  it('2026-10-13 round-3 goodVouchFollowUp: on in the default, flag, env var, off in legacy', () => {
+    // strength_benchmark.md 第 10 節: the blue counterpart of evilVouchFollowUp — more
+    // human-like and blue +0.57pp [+0.38pp, +0.77pp] over seeds 11111 + 22222 + 33333.
     expect(LEGACY_AGENT_TUNING.goodVouchFollowUp).toBe(false);
-    expect(DEFAULT_AGENT_TUNING.goodVouchFollowUp).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.goodVouchFollowUp).toBe(true);
+    expect(tuningFromEnv({ AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP: '0' })).toEqual({ goodVouchFollowUp: false });
     expect(parseTuningFlag('goodVouchFollowUp')).toEqual({ goodVouchFollowUp: true });
     expect(AGENT_TUNING_ENV.goodVouchFollowUp).toBe('AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP');
     expect(tuningFromEnv({ AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP: '1' })).toEqual({ goodVouchFollowUp: true });

@@ -43,7 +43,9 @@
  * public record, the 硬3 flags on blue holders and the stance numbers.
  *
  * `--flag` / `--base` apply ON TOP OF the production default
- * (`DEFAULT_AGENT_TUNING` + `AVALON_TUNING_*`), in both modes.
+ * (`DEFAULT_AGENT_TUNING` + `AVALON_TUNING_*`), in both modes; without them
+ * the baseline is the production default with `goodVouchFollowUp=0` and the
+ * variant the same with `goodVouchFollowUp=1`.
  * Output is aggregate only; `--player NAME` adds per-player rows (local use
  * only: the public docs carry the existing ED / Sin labels at most).
  */
@@ -94,6 +96,7 @@ function parseArgs(argv: string[]): Args {
     seed: 20261012,
   };
   let anyFlag = false;
+  let anyBase = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = (): string => {
@@ -107,7 +110,7 @@ function parseArgs(argv: string[]): Args {
       case '--cache': args.cache = path.resolve(next()); break;
       case '--no-agent': args.agent = false; break;
       case '--flag': Object.assign(args.flags, parseTuningFlag(next())); anyFlag = true; break;
-      case '--base': Object.assign(args.base, parseTuningFlag(next())); break;
+      case '--base': Object.assign(args.base, parseTuningFlag(next())); anyBase = true; break;
       case '--selfplay': args.selfplay = Number.parseInt(next(), 10); break;
       case '--seed': args.seed = Number.parseInt(next(), 10); break;
       case '--help': case '-h':
@@ -118,6 +121,7 @@ function parseArgs(argv: string[]): Args {
     }
   }
   if (!anyFlag) args.flags = { goodVouchFollowUp: true };
+  if (!anyBase) args.base = { goodVouchFollowUp: false };
   return args;
 }
 

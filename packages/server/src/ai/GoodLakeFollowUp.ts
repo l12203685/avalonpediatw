@@ -22,6 +22,17 @@
  *   - off the proposed team (neither leader nor member) it rejects a team
  *     that leaves out a seat it declared blue or includes a seat it
  *     declared red; the forced fifth proposal is exempt (everyone approves).
+ * By default the holder is also bound by what a seat it declared blue
+ * declares later (the chain: humans put that seat on 98.5% of their teams,
+ * a seat it declared red on 0/80), and Merlin never has a seat he sees as
+ * red forced onto his team.
+ *
+ * In `DEFAULT_AGENT_TUNING` since 2026-10-13 round 3: against the
+ * production default, as blue, +0.64pp [+0.31pp, +0.97pp] on the selection
+ * seed 11111, +0.36pp / +0.68pp on the fresh seeds 22222 / 33333, pooled
+ * +0.57pp [+0.38pp, +0.77pp]; team (R2+ Jaccard) and R3+ vote agreement
+ * up or unchanged in every cohort (strength_benchmark.md 第 10 節).
+ *
  * Pure functions over the public record (`obs.lakeHistory`) plus the
  * holder's role knowledge; no `Math.random`.
  */
