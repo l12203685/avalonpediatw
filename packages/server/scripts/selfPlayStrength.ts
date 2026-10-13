@@ -67,6 +67,7 @@ import {
 } from '../src/ai/LakePolicy';
 import { setVouchFollowUpOptions, vouchFollowUpOptionsFromEnv } from '../src/ai/RedLakeFollowUp';
 import { goodVouchOptionsFromEnv, setGoodVouchOptions } from '../src/ai/GoodLakeFollowUp';
+import { DEFAULT_TEAM_REUSE_OPTIONS, setTeamReuseOptions, teamReuseOptionsFromEnv } from '../src/ai/TeamReuse';
 import type { AgentAction, AvalonAgent, PlayerObservation, SelfPlayResult } from '../src/ai/types';
 
 interface Args {
@@ -495,6 +496,13 @@ async function main(): Promise<void> {
   const goodVouchOptions = goodVouchOptionsFromEnv();
   setGoodVouchOptions(goodVouchOptions);
   if (process.env.AVALON_GOOD_VOUCH_VARIANT) process.stderr.write(`goodVouchFollowUp variant: ${JSON.stringify(goodVouchOptions)}\n`);
+  // Benchmark-only weights of `teamReuse` (AVALON_TEAM_REUSE_VARIANT, e.g.
+  // "success=1,reject=0.45,mission=0.6", "evil.success=9", "camps=good"); the server never reads it.
+  // Always printed, so every run's log records the weights it used.
+  const teamReuseOptions = teamReuseOptionsFromEnv();
+  setTeamReuseOptions(teamReuseOptions);
+  const teamReuseIsDefault = JSON.stringify(teamReuseOptions) === JSON.stringify(DEFAULT_TEAM_REUSE_OPTIONS);
+  process.stderr.write(`teamReuse weights${teamReuseIsDefault ? ' (defaults)' : ' (variant)'}: ${JSON.stringify(teamReuseOptions)}\n`);
   if (JSON.stringify(evilLakeOptions) !== JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)) {
     process.stderr.write(`evilLakeHumanStrategy tactic mix: ${JSON.stringify(evilLakeOptions)}\n`);
   }

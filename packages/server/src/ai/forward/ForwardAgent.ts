@@ -62,6 +62,7 @@ import { HeuristicAgent } from '../HeuristicAgent';
 import { humanQuestCardRule } from '../AgentTuning';
 import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } from '../RedLakeFollowUp';
 import { goodVouchTeamConstraint, goodVouchVoteRule } from '../GoodLakeFollowUp';
+import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan, teamReuseScorer } from '../TeamReuse';
 import {
   interpret,
   type Facts,
@@ -978,6 +979,20 @@ export class ForwardAgent implements AvalonAgent {
     // every round including R1; the penalty applies cross-round.
     // priorAttemptTeams is scoped to the CURRENT round only (HR-3 is
     // about within-round attempts, not cross-round).
+    // ── AgentTuning.teamReuse (2026-10-13 round 3) ──
+    // Humans build on the teams already on the table (strength_benchmark.md
+    // 第 11 節): with the switch on, from R2 the penalty below is replaced
+    // by a bonus for the share of a reference team a candidate keeps (see
+    // `TeamReuse.ts`). A team the reuse guard refuses (硬1 / 硬2 breach, or
+    // a good leader's team holding a seat it treats as red) gets no bonus
+    // and keeps the penalty, so it scores exactly as with the switch off.
+    // Off → no change.
+    const reusePlan =
+      decisionType === 'team_select' && teamReuseActive(this.baseline.tuning, obs)
+        ? teamReusePlan(obs)
+        : null;
+    const reuseGuard = reusePlan ? teamReuseGuard(obs) : null;
+    const reuseBonus = reusePlan && reuseGuard ? teamReuseScorer(reusePlan, obs, reuseGuard) : null;
     const priorAttemptTeams = new Set<string>();
     if (decisionType === 'team_select') {
       const curRound = obs.currentRound ?? 1;
@@ -1012,9 +1027,13 @@ export class ForwardAgent implements AvalonAgent {
       ) {
         s += normalVotePrior;
       }
+      if (reuseBonus && c.action.type === 'team_select') {
+        s += reuseBonus(c.action.teamIds);
+      }
       if (
         c.action.type === 'team_select' &&
-        priorAttemptTeams.size > 0
+        priorAttemptTeams.size > 0 &&
+        !(reusePlan?.replacesPriorPenalty && reuseGuard?.(c.action.teamIds))
       ) {
         const candidateCanonical = canonicalSeatStringForward(
           c.action.teamIds,
@@ -1421,6 +1440,26 @@ export class ForwardAgent implements AvalonAgent {
     };
 
     let candidates: Candidate[] = enumerateTeams([], otherRanked);
+
+    // ── AgentTuning.teamReuse (2026-10-13 round 3) ──
+    // Add the teams that reuse a reference team (itself, self swapped in,
+    // grown by one, one-seat swaps), drawn from the same role-filtered pool
+    // and sized like the teams above, so the reuse bonus in decide() has
+    // them to score; teams the reuse guard refuses are not added. Off → no
+    // change.
+    if (teamReuseActive(this.baseline.tuning, obs)) {
+      const plan = teamReusePlan(obs);
+      if (plan && plan.refs.length > 0) {
+        const have = new Set(
+          candidates.map((c) => (c.action.type === 'team_select' ? [...c.action.teamIds].sort().join(',') : '')),
+        );
+        const accepts = teamReuseGuard(obs, pyramid);
+        for (const team of teamReuseCandidateTeams(plan, obs, otherRanked, teamSize, accepts)) {
+          if (have.has([...team].sort().join(','))) continue;
+          candidates.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
+        }
+      }
+    }
 
     // ── AgentTuning.evilVouchFollowUp (2026-10-13 round 2) ──
     // A red leader keeps its lake word: seats it declared blue go on the

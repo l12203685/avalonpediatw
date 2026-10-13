@@ -58,8 +58,14 @@ function obs(partial: Partial<PlayerObservation>): PlayerObservation {
   };
 }
 
-const PROD_OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodVouchFollowUp: false };
-const PROD_ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodVouchFollowUp: true };
+// The default this switch was measured against (strength_benchmark.md 第 9 節):
+// the other round-3 switches off, so the off / on pair isolates this one.
+// `teamReuse` alone also puts P5 back on the R3 team below (it reuses the
+// successful R2 team and swaps the leader in), so the "off" picks would no
+// longer show the gap; the full current default is checked separately.
+const LANE_BASE: AgentTuning = { ...DEFAULT_AGENT_TUNING, teamReuse: false };
+const PROD_OFF: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false };
+const PROD_ON: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: true };
 
 function forward(tuning: AgentTuning, id = 'P1'): ForwardAgent {
   return new ForwardAgent(id, new HeuristicAgent(id, undefined, undefined, tuning));
@@ -189,6 +195,23 @@ describe('GoodLakeFollowUp — ForwardAgent wiring', () => {
     });
     expect(teamOf(forward(PROD_OFF).decide(forced))).not.toContain('P5');
     const d = forward(PROD_ON).decide(forced);
+    expect(d.reasoningTrace.usedFallback).toBe(false);
+    expect(teamOf(d)).toHaveLength(4);
+    expect(teamOf(d)).toEqual(expect.arrayContaining(['P1', 'P5']));
+  });
+
+  it('full current default (round-3 switches together): the vouched seat is on the R3 team and the forced fifth team', () => {
+    expect(DEFAULT_AGENT_TUNING.goodVouchFollowUp).toBe(true);
+    const r3 = teamOf(forward(DEFAULT_AGENT_TUNING).decide(obs({})));
+    expect(r3).toHaveLength(4);
+    expect(r3).toEqual(expect.arrayContaining(['P1', 'P5']));
+    const rejected = (attempt: number, leader: string): VoteRecord =>
+      vote(3, attempt, leader, [leader, 'P7', 'P8', 'P9'], [leader], false);
+    const forced = obs({
+      failCount: 4,
+      voteHistory: [...VOTES, rejected(1, 'P6'), rejected(2, 'P7'), rejected(3, 'P8'), rejected(4, 'P9')],
+    });
+    const d = forward(DEFAULT_AGENT_TUNING).decide(forced);
     expect(d.reasoningTrace.usedFallback).toBe(false);
     expect(teamOf(d)).toHaveLength(4);
     expect(teamOf(d)).toEqual(expect.arrayContaining(['P1', 'P5']));

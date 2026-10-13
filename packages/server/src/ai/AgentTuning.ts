@@ -53,6 +53,13 @@
  *                                   言行一致：自己宣藍的人（含「我宣藍的人之後
  *                                   宣藍的人」）放進自己派的隊、宣紅的不放；不在
  *                                   隊上時違反宣告的隊就反對（`GoodLakeFollowUp.ts`）。
+ *   - `teamReuse`                  （2026-10-13 第三輪，**預設開**）派隊沿用
+ *                                   前一隊：ForwardAgent 從 R2 起不再懲罰重提
+ *                                   被否決的隊，改成「保留參考隊成員比例」
+ *                                   加分（上一個成功任務的隊、本回合先前的
+ *                                   提議），沿用的隊加進候選；防護擋下的隊（硬1 /
+ *                                   硬2 違規、好人隊長的隊有自己當作紅的人）不加
+ *                                   分、保留舊懲罰；R1 不變。`TeamReuse.ts`。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -126,6 +133,16 @@ export interface AgentTuning {
    * （強制局例外）。細節見 `GoodLakeFollowUp.ts`。
    */
   goodVouchFollowUp: boolean;
+  /**
+   * 派隊沿用前一隊（2026-10-13 第三輪，strength_benchmark.md 第 11 節）：
+   * ForwardAgent 從 R2 起不再懲罰重提本回合被否決的隊，改成「保留參考隊
+   * 伍成員的比例」加分（參考 = 上一個成功任務的隊、本回合先前的提議），
+   * 並把沿用參考隊的候選（原隊、換自己進去、加一人、換一人）加進候選
+   * 集合；防護擋下的隊（硬1 / 硬2 違規；好人隊長的隊上有看得到的紅、湖鏈 /
+   * 硬3 違規者、失敗任務推得出的紅或金字塔 ≥ 0.85 的人）不加分、保留舊懲罰，
+   * 也不加進候選。細節見 `TeamReuse.ts`。2026-10-13 採用（預設開）。
+   */
+  teamReuse: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -143,6 +160,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'oberonLakeSeeksTeammates',
   'goodLakeInfoMax',
   'goodVouchFollowUp',
+  'teamReuse',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -159,6 +177,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: false,
   goodVouchFollowUp: false,
+  teamReuse: false,
 });
 
 /**
@@ -234,6 +253,14 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     33333 +0.68pp [+0.36pp, +1.00pp]，三個種子合併 +0.57pp [+0.38pp,
  *     +0.77pp]（紅方立場恆為 0）→ **採用**（AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP=0
  *     可關掉）。
+ *   - `teamReuse`（2026-10-13 第三輪，strength_benchmark.md 第 11 節；數字
+ *     是同日審查修正後重跑的）：對照 = 整合後的正式預設（第 9 節）。派隊
+ *     一致性 R2+（完全相同 / Jaccard）ED 3.5→11.8 / 39.2→48.8、Sin 4.4→22.7
+ *     / 42.5→57.1、top 3.0→15.4 / 40.2→52.4、population 3.8→16.1 /
+ *     41.2→53.1，其他決策不變；自我對打（單邊立場）選版本種子 44444 + 重跑
+ *     55555 / 66666 + 新種子 67890 / 68888 合併：紅方 +2.77pp [+2.41pp,
+ *     +3.13pp]、藍方 +5.08pp [+4.62pp, +5.54pp]；十個座位都開的機器人自打自
+ *     藍勝約 7.1%→10.5% → **採用**（AVALON_TUNING_TEAM_REUSE=0 可關掉）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -254,6 +281,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   oberonLakeSeeksTeammates: false,
   goodLakeInfoMax: true,
   goodVouchFollowUp: true,
+  teamReuse: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -270,6 +298,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   oberonLakeSeeksTeammates: 'AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES',
   goodLakeInfoMax: 'AVALON_TUNING_GOOD_LAKE_INFO_MAX',
   goodVouchFollowUp: 'AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP',
+  teamReuse: 'AVALON_TUNING_TEAM_REUSE',
 });
 
 function parseBool(raw: string): boolean | undefined {
