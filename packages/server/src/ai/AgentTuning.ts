@@ -28,6 +28,16 @@
  *                                   `evilLakeClaimAlwaysGood` 若也打開則以
  *                                   「一律宣好」為準。細節見
  *                                   `LakePolicy.pickEvilLakeTargetHuman`。
+ *   - `goodLakeInfoMax`            （2026-10-13，**預設關**）好人持湖改用
+ *                                   「共同資訊極大化」模型（`GoodLakeInfo.ts`）：
+ *                                   列舉與持湖者所知一致的紅方組合，挑「宣告
+ *                                   後藍方共同視角的不確定性下降最多」的人，
+ *                                   之後還有湖時再加信任鏈項（目標是藍 → 下一
+ *                                   位可信的持湖者；是紅 → 下一湖會說謊）；
+ *                                   紅方已拿兩局或最後一次湖時不加信任鏈項。
+ *                                   打開時優先於 `goodLakeTargetMostSuspicious`
+ *                                   （模型找不到一致的組合時才退回它）；
+ *                                   梅林不湖看得到的紅、派西不湖兩拇指照舊。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -62,6 +72,11 @@ export interface AgentTuning {
    * 細節見 `LakePolicy.pickEvilLakeTargetHuman` / `decideEvilLakeClaimHuman`。
    */
   evilLakeHumanStrategy: boolean;
+  /**
+   * 好人持湖改用「共同資訊極大化」模型（Edward 2026-10-13），細節見
+   * `GoodLakeInfo.ts`；打開時優先於 `goodLakeTargetMostSuspicious`。
+   */
+  goodLakeInfoMax: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -74,6 +89,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'humanQuestCardRules',
   'assassinModel',
   'evilLakeHumanStrategy',
+  'goodLakeInfoMax',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -85,6 +101,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   humanQuestCardRules: false,
   assassinModel: false,
   evilLakeHumanStrategy: false,
+  goodLakeInfoMax: false,
 });
 
 /**
@@ -130,6 +147,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   humanQuestCardRules: true,
   assassinModel: true,
   evilLakeHumanStrategy: false,
+  goodLakeInfoMax: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -141,6 +159,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   humanQuestCardRules: 'AVALON_TUNING_HUMAN_QUEST_CARDS',
   assassinModel: 'AVALON_TUNING_ASSASSIN_MODEL',
   evilLakeHumanStrategy: 'AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY',
+  goodLakeInfoMax: 'AVALON_TUNING_GOOD_LAKE_INFO_MAX',
 });
 
 function parseBool(raw: string): boolean | undefined {

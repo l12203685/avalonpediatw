@@ -29,7 +29,8 @@
  * `HeuristicAgent.pickLakeTarget` / `declareLake` for the lake.
  * Deterministic: Math.random is reseeded per (game, seat, decision).
  * Besides the headline table it prints a Lady-of-the-Lake table (target:
- * all / red holders / per red role; red holder claim: overall / per role).
+ * all / blue holders / per blue role / red holders / per red role; red
+ * holder claim: overall / per role).
  */
 
 import * as fs from 'fs';
@@ -150,15 +151,18 @@ function roleTable(cohorts: readonly CohortReport[]): string {
 }
 
 const EVIL_LAKE_ROLES = ['assassin', 'morgana', 'mordred', 'oberon'] as const;
+const GOOD_LAKE_ROLES = ['merlin', 'percival', 'loyal'] as const;
 
 /**
- * Lady-of-the-Lake rows for every cohort: target (all / red holders / per
- * red role) and the red holder's claim (overall / per red role).
- * Format: agent% (default% / rule%) n.
+ * Lady-of-the-Lake rows for every cohort: target (all / blue holders / per
+ * blue role / red holders / per red role) and the red holder's claim
+ * (overall / per red role). Format: agent% (default% / rule%) n.
  */
 function lakeTable(cohorts: readonly CohortReport[]): string {
   const rows: Array<{ label: string; key: string }> = [
     { label: 'lake target (all)', key: 'lakeTarget/all' },
+    { label: 'lake target (blue holder)', key: 'lakeTarget/side=good' },
+    ...GOOD_LAKE_ROLES.map((r) => ({ label: `lake target ${r}`, key: `lakeTarget/role=${r}` })),
     { label: 'lake target (red holder)', key: 'lakeTarget/side=evil' },
     ...EVIL_LAKE_ROLES.map((r) => ({ label: `lake target ${r}`, key: `lakeTarget/role=${r}` })),
     { label: 'lake claim (red holder)', key: 'lakeClaim/side=evil' },
