@@ -26,7 +26,10 @@
  * With `--agent` it also replays every R1 red-leader proposal through the
  * production agent (`HeuristicAgent.act`, same seeding as the agreement
  * benchmark; `--flag` / `--legacy` as there) and scores agreement on the
- * targeted decision: teammate included or not, exact team, Jaccard.
+ * targeted decision: teammate included or not, exact team, Jaccard. With
+ * the switch on it replays the same proposals with it off as well and prints
+ * the paired counts (only on / only off makes the human's choice) with an
+ * exact McNemar p.
  *
  * Every rate is printed with n and a Wilson 95% interval. Output is aggregate
  * only; `--player NAME` adds per-player rows (the public docs use the ED / Sin
@@ -165,6 +168,8 @@ export interface RedLeaderProposal {
   /** Number of visible teammates on the team. */
   teammatesOnTeam: number;
   withTeammate: boolean;
+  /** The leader put himself on the team. */
+  leaderOnTeam: boolean;
   /** Team size of the round. */
   teamSize: number;
   /** Attempt ≥ 2: the previous proposal of the round had a visible teammate of this leader on it. */
@@ -202,6 +207,7 @@ function collectRedLeaderProposals(games: readonly ReplayGame[]): RedLeaderPropo
         teammateDistances: mates.map((s) => cw(p.leaderSeat, s, n)),
         teammatesOnTeam: onTeam,
         withTeammate: onTeam > 0,
+        leaderOnTeam: p.teamSeats.includes(p.leaderSeat),
         teamSize: p.teamSeats.length,
         prevHadTeammate: prev ? prev.teamSeats.some((s) => mates.includes(s)) : null,
         prevHadLeader: prev ? prev.teamSeats.includes(p.leaderSeat) : null,
@@ -261,8 +267,15 @@ function r1Sections(items: readonly RedLeaderProposal[], blueSets: Map<number, n
   const r1 = items.filter((x) => x.round === 1);
   const inc = (x: RedLeaderProposal): boolean => x.withTeammate;
   const nearest = (x: RedLeaderProposal): number => Math.min(...x.teammateDistances.map((d) => Math.min(d, 10 - d)));
-  const blueLike = mean(r1.map((x) => blueLikeExpectation(blueSets, x.attempt, x.teammateDistances)));
+  const blueLikeOf = (xs: readonly RedLeaderProposal[]): number =>
+    mean(xs.map((x) => blueLikeExpectation(blueSets, x.attempt, x.teammateDistances)));
+  const blueLike = blueLikeOf(r1);
   const random = randomInclusion(9, 2, 2);
+  // Random team of the same composition: 2 of the 9 others when the leader is on it, 3 when not.
+  const randomOf = (xs: readonly RedLeaderProposal[]): number =>
+    mean(xs.map((x) => randomInclusion(9, x.leaderOnTeam ? x.teamSize - 1 : x.teamSize, 2)));
+  const talk = r1.filter((x) => !x.forced);
+  const forced = r1.filter((x) => x.forced);
   const sections: Section[] = [
     {
       title: 'R1 red leader (sees teammates): team includes a visible teammate',
@@ -276,6 +289,14 @@ function r1Sections(items: readonly RedLeaderProposal[], blueSets: Map<number, n
         { label: 'two teammates on the team', rate: rateOf(r1, (x) => x.teammatesOnTeam === 2) },
         { label: 'reference: random team (2 of 9, 2 teammates)', text: pct(random) },
         { label: 'reference: built like a blue leader (same attempt)', text: pct(blueLike) },
+        {
+          label: 'references, attempts 1–4 only',
+          text: `random ${pct(random)} (${pct(randomOf(talk))} counting ${talk.filter((x) => !x.leaderOnTeam).length}/${talk.length} teams without the leader); blue-like ${pct(blueLikeOf(talk))}`,
+        },
+        {
+          label: 'references, forced 5th proposal only',
+          text: `random ${pct(random)} (${pct(randomOf(forced))} counting ${forced.filter((x) => !x.leaderOnTeam).length}/${forced.length} teams without the leader); blue-like ${pct(blueLikeOf(forced))}`,
+        },
       ],
     },
     {
@@ -504,6 +525,47 @@ function agentSections(rows: readonly AgentRow[]): Section[] {
   }];
 }
 
+/** Exact two-sided McNemar p for discordant counts b, c (binomial, p = 1/2). */
+export function mcnemarExact(b: number, c: number): number {
+  const n = b + c;
+  if (n === 0) return 1;
+  const k = Math.min(b, c);
+  let logC = 0; // log C(n, 0)
+  let tail = 0;
+  for (let i = 0; i <= k; i++) {
+    if (i > 0) logC += Math.log(n - i + 1) - Math.log(i);
+    tail += Math.exp(logC - n * Math.LN2);
+  }
+  return Math.min(1, 2 * tail);
+}
+
+/**
+ * Paired against the switch off (same proposals, same seeding): proposals
+ * where only the switch / only the old rule makes the human's choice.
+ */
+function pairedSections(on: readonly AgentRow[], off: readonly AgentRow[]): Section[] {
+  const agree = (x: AgentRow): boolean => x.humanWith === x.agentWith;
+  let onlyOn = 0;
+  let onlyOff = 0;
+  on.forEach((x, i) => {
+    const a = agree(x);
+    const b = agree(off[i]);
+    if (a && !b) onlyOn += 1;
+    if (b && !a) onlyOff += 1;
+  });
+  return [{
+    title: 'Same choice, paired against redR1Teammate off (same proposals)',
+    rows: [
+      { label: 'off', rate: rateOf(off, agree) },
+      { label: 'on', rate: rateOf(on, agree) },
+      {
+        label: 'only on matches / only off matches',
+        text: `${onlyOn} / ${onlyOff}, exact McNemar p = ${mcnemarExact(onlyOn, onlyOff).toPrecision(2)}`,
+      },
+    ],
+  }];
+}
+
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
   const data = JSON.parse(fs.readFileSync(args.cache, 'utf8')) as Record<string, string[][]>;
@@ -543,11 +605,16 @@ function main(): void {
     setRedR1TeammateOptions(r1Options);
     if (tuning.redR1Teammate) console.log(`redR1Teammate options: ${JSON.stringify(r1Options)}`);
     const agentRows = agentReplay(games, tuning);
+    // Switch on: the same proposals with it off, for the paired comparison.
+    const offRows = tuning.redR1Teammate ? agentReplay(games, { ...tuning, redR1Teammate: false }) : null;
+    if (offRows && offRows.length !== agentRows.length) throw new Error('paired replay: row counts differ');
     console.log(`\nagent tuning: ${describeAgentTuning(tuning)}`);
     const t = getForwardTelemetry();
     console.log(`forward telemetry: ${t.totalDecisions} decisions via ForwardAgent, ${t.fallbacks} fallbacks`);
     for (const [label, keep] of cohorts) {
-      const sections = agentSections(agentRows.filter((x) => keep(x.name, x.role)));
+      const idx = agentRows.map((x, i) => (keep(x.name, x.role) ? i : -1)).filter((i) => i >= 0);
+      const sections = agentSections(idx.map((i) => agentRows[i]));
+      if (offRows) sections.push(...pairedSections(idx.map((i) => agentRows[i]), idx.map((i) => offRows[i])));
       result[`${label} agent`] = sections;
       printSections(`${label} — agent`, sections);
     }

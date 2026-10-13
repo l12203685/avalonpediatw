@@ -120,7 +120,8 @@ describe('AgentTuning — flags', () => {
 
   it('redR1Teammate (2026-10-13 round 3): on in the default, off in legacy, flag, env var and description', () => {
     // strength_benchmark.md 第 12 節: an R1 red leader who sees teammates brings one on the
-    // talk proposals at the human rate; more human-like for ED / Sin / top, not weaker as red.
+    // talk proposals at the human rate (10p only); agreement up in expectation for ED / Sin /
+    // top (paired, only Sin significant), not weaker as red.
     expect(DEFAULT_AGENT_TUNING.redR1Teammate).toBe(true);
     expect(LEGACY_AGENT_TUNING.redR1Teammate).toBe(false);
     expect(parseTuningFlag('redR1Teammate')).toEqual({ redR1Teammate: true });

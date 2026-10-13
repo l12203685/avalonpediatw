@@ -1476,20 +1476,27 @@ export class ForwardAgent implements AvalonAgent {
     // Plan 'withTeammate': keep the candidates with exactly one visible
     // teammate (humans put both on 3.2% of R1 teams); the scorer and the
     // hash tie-break pick among them as usual — the R1 mimic-loyal bias is
-    // the same for every one of them. See RedR1Teammate.ts.
+    // the same for every one of them. See RedR1Teammate.ts. The R1-P1
+    // banned seat combos below stay banned: a banned teammate team is no
+    // option, and with none left the old rule stands (review 2026-10-13).
     if (r1Plan === 'withTeammate') {
-      const withOne = candidates.filter(
-        (c) => c.action.type === 'team_select' && visibleTeammatesOn(obs, c.action.teamIds) === 1,
-      );
+      const r1p1Banned =
+        (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0
+          ? bannedComboSetFor5p(obs.playerCount)
+          : new Set<string>();
+      const allowed = (c: Candidate): boolean =>
+        c.action.type === 'team_select' &&
+        visibleTeammatesOn(obs, c.action.teamIds) === 1 &&
+        !r1p1Banned.has(canonicalSeatStringForward(c.action.teamIds, obs.allPlayerIds));
+      let withOne = candidates.filter(allowed);
       const mate = otherRanked.find((id) => obs.knownEvils.includes(id));
-      if (withOne.length > 0) {
-        candidates = withOne;
-      } else if (mate !== undefined) {
-        candidates = enumerateTeams(
+      if (withOne.length === 0 && mate !== undefined) {
+        withOne = enumerateTeams(
           [mate],
           otherRanked.filter((id) => !obs.knownEvils.includes(id)),
-        );
+        ).filter(allowed);
       }
+      if (withOne.length > 0) candidates = withOne;
     }
 
     // ── Edward 2026-05-06 R1-P1 banned-combo filter (5p HR-5/HR-7) ────

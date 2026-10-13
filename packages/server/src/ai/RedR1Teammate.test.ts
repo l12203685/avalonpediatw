@@ -1,12 +1,14 @@
 /**
  * `AgentTuning.redR1Teammate` (2026-10-13 round 3, strength_benchmark.md 第 12 節):
  * an R1 red leader who sees teammates no longer leaves them out of every
- * R1 team. Pure plan (`redR1TeamPlan`) + the ForwardAgent wiring.
+ * R1 team (10-player games only). Pure plan (`redR1TeamPlan`) + the
+ * ForwardAgent wiring.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   DEFAULT_RED_R1_TEAMMATE_OPTIONS,
   HUMAN_R1_TEAMMATE_RATE,
+  RED_R1_TEAMMATE_PLAYER_COUNT,
   loyalViewOf,
   redR1TeamPlan,
   redR1TeamPlanDraws,
@@ -53,6 +55,38 @@ function r1(partial: Partial<PlayerObservation> = {}, attempt = 1): PlayerObserv
   };
 }
 
+/** First R1 proposal of an `n`-player game: leader P1 (a seeing red) with the visible teammates `mates`. */
+function r1n(n: number, mates: string[], partial: Partial<PlayerObservation> = {}): PlayerObservation {
+  const ids = Array.from({ length: n }, (_, i) => `P${i + 1}`);
+  return {
+    myPlayerId: 'P1',
+    myRole: 'assassin',
+    myTeam: 'evil',
+    playerCount: n,
+    allPlayerIds: ids,
+    knownEvils: mates,
+    currentRound: 1,
+    currentLeader: 'P1',
+    failCount: 0,
+    questResults: [],
+    gamePhase: 'team_select',
+    voteHistory: [],
+    questHistory: [],
+    proposedTeam: [],
+    lakeHistory: [],
+    ...partial,
+  };
+}
+
+/** Ascending seat digits (seat 10 → '0'), as the R1-P1 ban lists write them. */
+function seatString(team: readonly string[]): string {
+  return team
+    .map((id) => Number(id.slice(1)))
+    .sort((a, b) => a - b)
+    .map((s) => (s === 10 ? '0' : String(s)))
+    .join('');
+}
+
 const ON: Pick<AgentTuning, 'redR1Teammate'> = { redR1Teammate: true };
 const OFF: Pick<AgentTuning, 'redR1Teammate'> = { redR1Teammate: false };
 
@@ -73,6 +107,20 @@ describe('redR1TeamPlan', () => {
     expect(redR1TeamPlan(r1({ myRole: 'loyal', myTeam: 'good', knownEvils: [] }), ON, always)).toBeNull();
     expect(redR1TeamPlan(r1({ currentRound: 2 }), ON, always)).toBeNull();
     expect(redR1TeamPlan(r1({ gamePhase: 'team_vote' }), ON, always)).toBeNull();
+  });
+
+  it('10-player games only: 5–9 players keep the old rule and draw nothing (review 2026-10-13)', () => {
+    expect(RED_R1_TEAMMATE_PLAYER_COUNT).toBe(10);
+    const always = { talk: 'always', forced: 'never' } as const;
+    const rnd = vi.spyOn(Math, 'random');
+    for (const n of [5, 6, 7, 8, 9]) {
+      const o = r1n(n, ['P2']);
+      expect(redR1TeamPlan(o, ON, always)).toBeNull();
+      expect(redR1TeamPlan(o, ON)).toBeNull();
+      expect(redR1TeamPlanDraws(o, ON)).toBe(false);
+    }
+    expect(rnd).not.toHaveBeenCalled();
+    expect(redR1TeamPlan(r1n(10, ['P2', 'P6']), ON, always)).toBe('withTeammate');
   });
 
   it('the forced fifth proposal keeps the old rule unless forced=humanRate', () => {
@@ -116,7 +164,8 @@ describe('redR1TeamPlan', () => {
   });
 
   it('adopted 2026-10-13 round 3: on in the production default, off in legacy', () => {
-    // strength_benchmark.md 第 12 節: R1 red-leader agreement up for ED / Sin / top, red stance
+    // strength_benchmark.md 第 12 節: R1 red-leader agreement up in expectation for ED / Sin / top
+    // (paired against off, only Sin significant), inclusion at the human rate; red stance
     // pooled over 77777 + 88888 + 99999 +0.10pp [−0.19pp, +0.39pp] (not weaker), blue 0.
     expect(DEFAULT_AGENT_TUNING.redR1Teammate).toBe(true);
     expect(LEGACY_AGENT_TUNING.redR1Teammate).toBe(false);
@@ -159,6 +208,41 @@ describe('ForwardAgent — redR1Teammate', () => {
     }
     const forced = r1({}, 5);
     expect(teamOf(forced, true)).toEqual(teamOf(forced, false));
+  });
+
+  it('5–9 players: R1 picks are the same with the switch on (5p adjacent teammate, 7p with a hidden Oberon, 8p, 9p)', () => {
+    setRedR1TeammateOptions({ talk: 'always', forced: 'never' });
+    const rnd = vi.spyOn(Math, 'random');
+    const cases: PlayerObservation[] = [
+      r1n(5, ['P2']), // the only teammate team would be the banned pair 12
+      r1n(5, ['P5'], { myRole: 'morgana' }), // ... or 15
+      r1n(6, ['P3']),
+      r1n(7, ['P2'], { myRole: 'morgana' }), // assassin + Morgana visible, Oberon hidden
+      r1n(8, ['P3', 'P6'], { myRole: 'mordred' }),
+      r1n(9, ['P2', 'P5']),
+    ];
+    for (const o of cases) {
+      const before = rnd.mock.calls.length;
+      const on = teamOf(o, true);
+      expect(rnd.mock.calls.length).toBe(before);
+      expect(on).toEqual(teamOf(o, false));
+      expect(visibleTeammatesOn(o, on)).toBe(0);
+    }
+    for (const o of cases.slice(0, 2)) expect(['12', '15']).not.toContain(seatString(teamOf(o, true)));
+  });
+
+  it('10p first proposal with a teammate: never one of the banned R1-P1 trios', () => {
+    setRedR1TeammateOptions({ talk: 'always', forced: 'never' });
+    const banned = new Set(['123', '150', '234', '678']);
+    for (let a = 2; a <= 10; a++) {
+      for (let b = a + 1; b <= 10; b++) {
+        const o = r1n(10, [`P${a}`, `P${b}`]);
+        const team = teamOf(o, true);
+        expect(team).toHaveLength(3);
+        expect(visibleTeammatesOn(o, team)).toBe(1);
+        expect(banned.has(seatString(team))).toBe(false);
+      }
+    }
   });
 
   it('talk=loyal proposes the team a loyal in the seat would; R2+ and blue leaders are untouched', () => {
