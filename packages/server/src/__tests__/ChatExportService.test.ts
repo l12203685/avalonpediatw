@@ -7,8 +7,9 @@
  *                 oldest first; days with 完成 are not read again
  *   schedule    — afterwards the day that just ended waits for 04:30 +08;
  *                 disabled flag; Discord not ready → wait; not configured
- *                 → logged once a day; the public stats sheet refused
- *                 unless CHAT_EXPORT_ALLOW_PUBLIC_SHEET opts in
+ *                 → logged once a day; the 阿瓦隆百科 sheet is the
+ *                 default (publicSheet), CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0
+ *                 refuses it, CHAT_EXPORT_SHEET_ID still picks the private one
  *   idempotency — the export log 「匯出紀錄」 per day: a day with a 完成 row
  *                 is skipped (restart); rows of a day without 完成 (process
  *                 killed mid-write, failed append, failed cleanup) are
@@ -42,6 +43,7 @@ import {
   CHAT_EXPORT_STATE_CLEANUP,
   CHAT_EXPORT_STATE_CLEANUP_END,
   CHAT_EXPORT_STATE_DONE,
+  PRIVATE_CHAT_EXPORT_SHEET_ID,
   PUBLIC_STATS_SHEET_ID,
   readChatExportConfig,
   type ChatExportConfig,
@@ -377,41 +379,63 @@ describe('catch-up after a start', () => {
   });
 });
 
-describe('the public 阿瓦隆百科 sheet', () => {
+describe('the 阿瓦隆百科 sheet (the default since 2026-10-13)', () => {
   const creds = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
 
   function withEnv(env: NodeJS.ProcessEnv) {
     const sheet = new FakeSheet();
     const logs: string[] = [];
+    const ids: string[] = [];
     const service = new ChatExportService({
       discord: discordPort(),
       // Like the real factory: no client without a sheet id.
-      sheetFactory: (cfg) => (cfg.sheetId ? { sheet, reason: 'ok' } : { sheet: null, reason: 'no-sheet-id' }),
+      sheetFactory: (cfg) => {
+        if (!cfg.sheetId) return { sheet: null, reason: 'no-sheet-id' };
+        ids.push(cfg.sheetId);
+        return { sheet, reason: 'ok' };
+      },
       config: () => readChatExportConfig(env),
       now: () => TUE_1000,
       logger: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
     });
-    return { sheet, logs, service };
+    return { sheet, logs, ids, service };
   }
 
-  it('is refused by default: not configured, nothing written', async () => {
-    const { sheet, logs, service } = withEnv({ CHAT_EXPORT_SHEET_ID: PUBLIC_STATS_SHEET_ID, GOOGLE_SERVICE_ACCOUNT_JSON: creds });
-    expect(service.getStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
-    expect((await service.tick(TUE_1000)).state).toBe('not-configured');
-    expect(logs.join('\n')).toContain('public-sheet-refused');
-    expect(sheet.prepared).toBe(0);
-    expect(sheet.rows).toEqual([]);
-  });
-
-  it('with CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1 the days are written there and the status says publicSheet: true', async () => {
-    const { sheet, service } = withEnv({
-      CHAT_EXPORT_SHEET_ID: PUBLIC_STATS_SHEET_ID,
-      CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '1',
-      GOOGLE_SERVICE_ACCOUNT_JSON: creds,
-    });
+  it('by default the days are written there and the status says publicSheet: true', async () => {
+    const { sheet, ids, service } = withEnv({ GOOGLE_SERVICE_ACCOUNT_JSON: creds });
     expect(service.getStatus()).toMatchObject({ enabled: true, sheetConfigured: true, publicSheet: true });
     expect((await service.tick(TUE_1000)).days).toHaveLength(7);
     expect(sheet.doneDays()).toEqual(DAYS);
+    expect(new Set(ids)).toEqual(new Set([PUBLIC_STATS_SHEET_ID]));
+  });
+
+  it('CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses it: not configured, nothing written', async () => {
+    for (const env of [
+      { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', GOOGLE_SERVICE_ACCOUNT_JSON: creds },
+      { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', CHAT_EXPORT_SHEET_ID: PUBLIC_STATS_SHEET_ID, GOOGLE_SERVICE_ACCOUNT_JSON: creds },
+      { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: 'no', GOOGLE_SERVICE_ACCOUNT_JSON: creds },
+    ]) {
+      const { sheet, logs, ids, service } = withEnv(env);
+      expect(service.getStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
+      expect((await service.tick(TUE_1000)).state).toBe('not-configured');
+      expect(logs.join('\n')).toContain('public-sheet-refused');
+      expect(ids).toEqual([]);
+      expect(sheet.prepared).toBe(0);
+      expect(sheet.rows).toEqual([]);
+      expect(sheet.log).toEqual([]);
+    }
+  });
+
+  it('CHAT_EXPORT_SHEET_ID still picks the private sheet: written there, publicSheet: false (CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 does not stop it)', async () => {
+    for (const allow of [undefined, '0']) {
+      const env: NodeJS.ProcessEnv = { CHAT_EXPORT_SHEET_ID: PRIVATE_CHAT_EXPORT_SHEET_ID, GOOGLE_SERVICE_ACCOUNT_JSON: creds };
+      if (allow !== undefined) env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET = allow;
+      const { sheet, ids, service } = withEnv(env);
+      expect(service.getStatus()).toMatchObject({ enabled: true, sheetConfigured: true, publicSheet: false });
+      expect((await service.tick(TUE_1000)).days).toHaveLength(7);
+      expect(sheet.doneDays()).toEqual(DAYS);
+      expect(new Set(ids)).toEqual(new Set([PRIVATE_CHAT_EXPORT_SHEET_ID]));
+    }
   });
 });
 
@@ -775,7 +799,8 @@ describe('retention', () => {
 describe('status and logs carry no chat text', () => {
   it('chatExport = enabled / sheetConfigured / publicSheet + lastRun (day, counts, outcome) + catchUp (day counts)', async () => {
     const h = harness({ discord: discordPort({ extra: { truncatedChannels: 1, threadsOverCap: 2, archivedListsTruncated: 1, sourceIdsIgnored: 2 } }) });
-    expect(h.service.getStatus()).toEqual({ enabled: true, sheetConfigured: false, publicSheet: false, lastRun: null, catchUp: null });
+    // No credentials in the harness config: not configured, but the target is the 阿瓦隆百科 sheet (the default).
+    expect(h.service.getStatus()).toEqual({ enabled: true, sheetConfigured: false, publicSheet: true, lastRun: null, catchUp: null });
     await h.at(TUE_1000);
     const status = h.service.getStatus();
     expect(Object.keys(status).sort()).toEqual(['catchUp', 'enabled', 'lastRun', 'publicSheet', 'sheetConfigured']);
@@ -841,19 +866,21 @@ describe('wiring', () => {
 
   it('/api/bots/status has chatExport (three booleans, lastRun, catchUp) and no communityDigest', () => {
     process.env.GOOGLE_SERVICE_ACCOUNT_JSON = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
-    delete process.env.CHAT_EXPORT_SHEET_ID;
-    delete process.env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET;
-    const expected = { enabled: true, sheetConfigured: true, publicSheet: false, lastRun: null, catchUp: null };
+    for (const name of ['CHAT_EXPORT_SHEET_ID', 'COMMUNITY_DIGEST_SHEET_ID', 'AVALON_STATS_SHEET_ID', 'CHAT_EXPORT_ALLOW_PUBLIC_SHEET']) delete process.env[name];
+    // The default: the 阿瓦隆百科 sheet.
+    const expected = { enabled: true, sheetConfigured: true, publicSheet: true, lastRun: null, catchUp: null };
     expect(chatExportStatus()).toEqual(expected);
     const status = buildBotStatus() as unknown as Record<string, unknown>;
     expect(status.chatExport).toEqual(expected);
     expect(status).not.toHaveProperty('communityDigest');
-    process.env.CHAT_EXPORT_SHEET_ID = 'off';
-    expect(chatExportStatus().sheetConfigured).toBe(false);
-    process.env.CHAT_EXPORT_SHEET_ID = PUBLIC_STATS_SHEET_ID;
+    process.env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET = '0';
     expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
-    process.env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET = '1';
-    expect(chatExportStatus()).toMatchObject({ sheetConfigured: true, publicSheet: true });
+    process.env.CHAT_EXPORT_SHEET_ID = PRIVATE_CHAT_EXPORT_SHEET_ID;
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: true, publicSheet: false });
+    delete process.env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET;
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: true, publicSheet: false });
+    process.env.CHAT_EXPORT_SHEET_ID = 'off';
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
   });
 
   it('the paid /社群週報 slash command is no longer registered (the bulk overwrite removes it from Discord)', () => {

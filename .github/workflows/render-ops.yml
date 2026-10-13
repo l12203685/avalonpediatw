@@ -76,6 +76,6 @@ jobs:
                    line: {enabled: .line.enabled, ready: .line.ready, error: .line.error,
                           mirrorGroupConfigured: .line.mirrorGroupConfigured,
                           webhook: {action: .line.webhook.action, active: .line.webhook.active, verified: .line.webhook.verified}},
-                   chatExport: (.chatExport // {} | {enabled, sheetConfigured,
-                                lastRun: (.lastRun // null | if . == null then null else {week, at, outcome, messages, channels} end)})}' \
+                   chatExport: (.chatExport // {} | {enabled, sheetConfigured, publicSheet,
+                                lastRun: (.lastRun // null | if . == null then null else {day, at, outcome, messages, channels} end)})}' \
             || echo "::warning::could not read /api/bots/status"

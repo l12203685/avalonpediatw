@@ -3,7 +3,7 @@
  * docs/COMMUNITY_FEEDBACK.md). Replaced the paid weekly digest: free, rows
  * only, no summary, no LLM.
  *
- *   config.ts      — env vars (incl. the public-sheet opt-in), constants, logger
+ *   config.ts      — env vars (default sheet: the 阿瓦隆百科 workbook; CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses it), constants, logger
  *   window.ts      — +08 day math, the 04:30 run time, the 7-day window
  *   collector.ts   — Discord history for one day: text channels, sync channel, forum posts (discord.js)
  *   rows.ts        — relay parsing, filtering, per-day pseudonyms, sheet rows (pure)

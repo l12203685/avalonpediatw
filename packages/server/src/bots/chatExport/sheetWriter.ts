@@ -9,9 +9,9 @@
  *                 cleanup lock, dated the day they were written).
  *
  * These two tabs are the ONLY ones this module reads rows from, writes to or
- * deletes rows in — the spreadsheet may be the public 阿瓦隆百科 workbook
- * (CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1), whose 牌譜 / Discord匯入 / … tabs the
- * records importer and the cache refresh read. Besides those two tabs only
+ * deletes rows in — the spreadsheet is by default the public 阿瓦隆百科
+ * workbook (since 2026-10-13), whose 牌譜 / Discord匯入 / … tabs the records
+ * importer and the cache refresh read. Besides those two tabs only
  * the list of tab titles is read (to find them).
  *
  * Both tabs are created (with a frozen header row) when missing; a tab that

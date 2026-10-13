@@ -151,7 +151,7 @@ export function startChatExport(): void {
   if (service.isRunning()) return;
   service.start();
   defaultChatExportLogger.info(
-    `armed (catch-up of the last 7 days once Discord is ready, then daily from 04:30 +08); sheet ${cfg.sheetId && cfg.sheetCredentialsUsable ? (cfg.publicSheet ? 'configured (public stats workbook, opt-in)' : 'configured') : 'NOT configured (GOOGLE_SERVICE_ACCOUNT_JSON missing or invalid, CHAT_EXPORT_SHEET_ID=off, or the public sheet without CHAT_EXPORT_ALLOW_PUBLIC_SHEET)'}`,
+    `armed (catch-up of the last 7 days once Discord is ready, then daily from 04:30 +08); sheet ${cfg.sheetId && cfg.sheetCredentialsUsable ? (cfg.publicSheet ? 'configured (public stats workbook, the default)' : 'configured (another sheet)') : 'NOT configured (GOOGLE_SERVICE_ACCOUNT_JSON missing or invalid, CHAT_EXPORT_SHEET_ID=off, or the public sheet refused by CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0)'}`,
   );
 }
 

@@ -20,8 +20,10 @@
  *                      and rewritten, a process killed mid-write taken over
  *                      after its claim went stale; two instances pruning at
  *                      once against index-based deletes lose no row; on
- *                      the public stats workbook (opt-in) only the two chat
- *                      tabs are touched
+ *                      the 阿瓦隆百科 workbook (the default) only the two
+ *                      chat tabs are touched and no name or id reaches it;
+ *                      CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 → nothing sent to it;
+ *                      CHAT_EXPORT_SHEET_ID still picks the private sheet
  */
 import crypto from 'crypto';
 import { describe, expect, it, vi } from 'vitest';
@@ -45,6 +47,8 @@ import {
   CHAT_EXPORT_LOG_HEADER,
   CHAT_EXPORT_LOG_TAB,
   CHAT_EXPORT_TAB,
+  DEFAULT_CHAT_EXPORT_SHEET_ID,
+  PRIVATE_CHAT_EXPORT_SHEET_ID,
   PUBLIC_STATS_SHEET_ID,
   STATS_WORKBOOK_TABS,
   readChatExportConfig,
@@ -62,7 +66,8 @@ const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
   publicKeyEncoding: { type: 'spki', format: 'pem' },
 });
 const creds = { client_email: 'chat-export-test@example-project.iam.gserviceaccount.com', private_key: privateKey };
-const SHEET_ID = '1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8';
+/** The default target (the 阿瓦隆百科 workbook since 2026-10-13): the end-to-end tests run on the default config. */
+const SHEET_ID = DEFAULT_CHAT_EXPORT_SHEET_ID;
 const BASE = `${SHEETS_API_BASE}/${SHEET_ID}`;
 
 // ─── Fake Google Sheets ───────────────────────────────────────────────────
@@ -258,7 +263,11 @@ describe('Google Sheets client (digest/sheets.ts)', () => {
       }) as unknown as typeof fetch,
     });
     expect(String(await offline.listTabs().catch((e: unknown) => (e as Error).message))).toBe('Google Sheets token failed');
-    const badKey = new GoogleSheetsClient({ spreadsheetId: SHEET_ID, credentials: { client_email: 'x', private_key: 'not a key' } });
+    const badKey = new GoogleSheetsClient({
+      spreadsheetId: SHEET_ID,
+      credentials: { client_email: 'x', private_key: 'not a key' },
+      fetchImpl: g.fetchImpl as unknown as typeof fetch, // never the real network
+    });
     expect(await badKey.listTabs().catch((e: unknown) => (e as SheetError).step)).toBe('sign');
   });
 
@@ -635,7 +644,7 @@ describe('two instances against the fake Sheets API (rows deleted by index, like
   });
 });
 
-describe('the public 阿瓦隆百科 workbook (CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1)', () => {
+describe('the 阿瓦隆百科 workbook (the default target since 2026-10-13)', () => {
   /** The stats workbook as the importer / cache refresh see it. */
   function statsWorkbook(): FakeSheets {
     const g = new FakeSheets(PUBLIC_STATS_SHEET_ID);
@@ -646,23 +655,27 @@ describe('the public 阿瓦隆百科 workbook (CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1)
     return g;
   }
 
-  it('without the opt-in nothing is sent to it at all', async () => {
-    const g = statsWorkbook();
-    const clock = { now: TUE_1005 };
-    const env = { CHAT_EXPORT_SHEET_ID: PUBLIC_STATS_SHEET_ID, GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON };
-    const { service } = e2e(g, discordDaily(busy), clock, env);
-    expect((await service.tick()).state).toBe('not-configured');
-    expect(g.calls).toEqual([]);
-    expect(service.getStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
-    // The real factory builds no client for a refused id either.
-    expect(defaultChatSheetFactory(readChatExportConfig(env))).toEqual({ sheet: null, reason: 'no-sheet-id' });
+  it('CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses it: nothing is sent to it at all', async () => {
+    for (const env of [
+      { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON },
+      { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', CHAT_EXPORT_SHEET_ID: PUBLIC_STATS_SHEET_ID, GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON },
+    ]) {
+      const g = statsWorkbook();
+      const clock = { now: TUE_1005 };
+      const { service } = e2e(g, discordDaily(busy), clock, env);
+      expect((await service.tick()).state).toBe('not-configured');
+      expect(g.calls).toEqual([]);
+      expect(service.getStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
+      // The real factory builds no client for a refused id either.
+      expect(defaultChatSheetFactory(readChatExportConfig(env))).toEqual({ sheet: null, reason: 'no-sheet-id' });
+    }
   });
 
-  it('with it, only the two chat tabs are created, written, read and pruned — 牌譜 / Discord匯入 / … stay byte for byte', async () => {
+  it('by default only the two chat tabs are created, written, read and pruned — 牌譜 / Discord匯入 / … stay byte for byte', async () => {
     const g = statsWorkbook();
     const before = new Map([...g.tabs].map(([title, t]) => [title, JSON.parse(JSON.stringify(t.rows))]));
     const clock = { now: TUE_1005 };
-    const env = { CHAT_EXPORT_SHEET_ID: PUBLIC_STATS_SHEET_ID, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '1', GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON };
+    const env = { GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON }; // no CHAT_EXPORT_SHEET_ID, no CHAT_EXPORT_ALLOW_PUBLIC_SHEET
     const { service } = e2e(g, discordDaily(() => 4), clock, env);
     expect(service.getStatus()).toMatchObject({ enabled: true, sheetConfigured: true, publicSheet: true });
     expect((await service.tick()).days).toHaveLength(7);
@@ -673,9 +686,30 @@ describe('the public 阿瓦隆百科 workbook (CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1)
     await service.tick();
     const touched = g.touched();
     expect(new Set(touched.map((t) => t.tab))).toEqual(new Set(['(metadata)', CHAT_EXPORT_TAB, CHAT_EXPORT_LOG_TAB]));
+    expect(touched.filter((t) => t.method === 'addSheet').map((t) => t.tab).sort()).toEqual([CHAT_EXPORT_LOG_TAB, CHAT_EXPORT_TAB].sort());
     expect(touched.filter((t) => t.method === 'deleteRows').map((t) => t.tab).sort()).toEqual([CHAT_EXPORT_LOG_TAB, CHAT_EXPORT_LOG_TAB, CHAT_EXPORT_TAB, CHAT_EXPORT_TAB]);
+    // Every spreadsheet request went to this workbook (besides the token endpoint).
+    expect(g.calls.every((c) => c.url === GOOGLE_TOKEN_URL || c.url.startsWith(g.base))).toBe(true);
     for (const tab of STATS_WORKBOOK_TABS) expect(g.tab(tab)).toEqual(before.get(tab));
     expect(g.tab('工作表1')).toEqual(before.get('工作表1'));
-    expect([...new Set(g.tab().slice(1).map((r) => r[0]))]).toEqual(lastCompleteDays(clock.now));
+    const days = lastCompleteDays(clock.now);
+    expect([...new Set(g.tab().slice(1).map((r) => r[0]))]).toEqual(days);
+    // What anyone with the link sees: speaker codes only, numbered from 成員1 again every day; no name or Discord id.
+    const chatRows = g.tab().slice(1);
+    expect(chatRows.every((r) => /^成員\d+$/.test(r[4]))).toBe(true);
+    for (const d of days) expect(chatRows.find((r) => r[0] === d)?.[4]).toBe('成員1');
+    const visible = JSON.stringify([g.tab(), g.tab(CHAT_EXPORT_LOG_TAB)]);
+    for (const leaked of ['小明', '900000000000000000', '900000000000000001', '900000000000000002']) expect(visible).not.toContain(leaked);
+  });
+
+  it('CHAT_EXPORT_SHEET_ID still picks the private sheet: everything goes there, publicSheet: false', async () => {
+    const priv = new FakeSheets(PRIVATE_CHAT_EXPORT_SHEET_ID);
+    const clock = { now: TUE_1005 };
+    const env = { CHAT_EXPORT_SHEET_ID: PRIVATE_CHAT_EXPORT_SHEET_ID, GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON };
+    const { service } = e2e(priv, discordDaily(() => 3), clock, env);
+    expect(service.getStatus()).toMatchObject({ enabled: true, sheetConfigured: true, publicSheet: false });
+    expect((await service.tick()).days.map((d) => d.outcome)).toEqual(Array(7).fill('written'));
+    expect([...new Set(priv.tab().slice(1).map((r) => r[0]))]).toEqual(DAYS);
+    expect(priv.calls.every((c) => c.url === GOOGLE_TOKEN_URL || c.url.startsWith(`${SHEETS_API_BASE}/${PRIVATE_CHAT_EXPORT_SHEET_ID}`))).toBe(true);
   });
 });

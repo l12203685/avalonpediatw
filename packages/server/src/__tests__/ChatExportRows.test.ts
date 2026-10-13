@@ -9,9 +9,11 @@
  *             forum threads shown as 「論壇名／貼文標題」
  *   window  — the day window across +08 midnight, the 04:30 run time, the
  *             last 7 complete days, the oldest day kept
- *   config  — defaults, CHAT_EXPORT_* and the old COMMUNITY_DIGEST_* names,
- *             大劍管理員 always excluded, the public stats sheet refused
- *             unless CHAT_EXPORT_ALLOW_PUBLIC_SHEET opts in (publicSheet)
+ *   config  — defaults (the 阿瓦隆百科 sheet, publicSheet), CHAT_EXPORT_*
+ *             and the old COMMUNITY_DIGEST_* names, 大劍管理員 always
+ *             excluded, CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 (or any value that
+ *             is not a yes) refuses the public stats sheet, the private
+ *             sheet still chosen with CHAT_EXPORT_SHEET_ID
  */
 import { describe, expect, it } from 'vitest';
 
@@ -45,6 +47,7 @@ import {
   CHAT_EXPORT_RETAIN_DAYS,
   CHAT_EXPORT_TAB,
   DEFAULT_CHAT_EXPORT_SHEET_ID,
+  PRIVATE_CHAT_EXPORT_SHEET_ID,
   PUBLIC_STATS_SHEET_ID,
   STATS_WORKBOOK_TABS,
   readChatExportConfig,
@@ -330,17 +333,25 @@ describe('window (+08)', () => {
 });
 
 describe('config', () => {
-  it('defaults: on, the private sheet, tabs 聊天紀錄 / 匯出紀錄 keyed by 日期, the /意見 channel excluded', () => {
+  const PUB = '174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU';
+  const PRIV = '1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8';
+  const creds = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
+
+  it('defaults: on, the 阿瓦隆百科 sheet (publicSheet), tabs 聊天紀錄 / 匯出紀錄 keyed by 日期, the /意見 channel excluded', () => {
     const cfg = readChatExportConfig({});
     expect(cfg).toMatchObject({
       enabled: true,
-      sheetId: DEFAULT_CHAT_EXPORT_SHEET_ID,
-      publicSheet: false,
+      sheetId: PUB,
+      sheetIdRefused: false,
+      publicSheet: true,
       sheetCredentialsUsable: false,
       sourceChannelIds: [],
     });
     expect(cfg.excludeChannelIds).toEqual([DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID]);
-    expect(DEFAULT_CHAT_EXPORT_SHEET_ID).toBe('1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8');
+    // Owner 2026-10-13: the 阿瓦隆百科 sheet, not the private one any more.
+    expect(DEFAULT_CHAT_EXPORT_SHEET_ID).toBe(PUB);
+    expect(PUBLIC_STATS_SHEET_ID).toBe(PUB);
+    expect(PRIVATE_CHAT_EXPORT_SHEET_ID).toBe(PRIV);
     expect(CHAT_EXPORT_TAB).toBe('聊天紀錄');
     expect(CHAT_EXPORT_LOG_TAB).toBe('匯出紀錄');
     expect([...CHAT_EXPORT_HEADER]).toEqual(['日期', '時間（+08）', '頻道', '來源', '發言者代號', '內容']);
@@ -363,10 +374,7 @@ describe('config', () => {
     // Sheet credentials count only when they parse as a service-account key.
     expect(readChatExportConfig({ GOOGLE_SERVICE_ACCOUNT_JSON: 'not-json-at-all' }).sheetCredentialsUsable).toBe(false);
     expect(readChatExportConfig({ GOOGLE_SERVICE_ACCOUNT_JSON: '{}' }).sheetCredentialsUsable).toBe(false);
-    expect(
-      readChatExportConfig({ GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' }) })
-        .sheetCredentialsUsable,
-    ).toBe(true);
+    expect(readChatExportConfig({ GOOGLE_SERVICE_ACCOUNT_JSON: creds }).sheetCredentialsUsable).toBe(true);
     expect(readChatExportConfig({ CHAT_EXPORT_SOURCE_CHANNEL_IDS: '123456789012345678, bad ,223456789012345678' }).sourceChannelIds).toEqual([
       '123456789012345678',
       '223456789012345678',
@@ -379,54 +387,64 @@ describe('config', () => {
     ]);
   });
 
-  it('refuses the public 阿瓦隆百科 spreadsheet as the export target unless explicitly opted in', () => {
-    const pub = '174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU';
-    const creds = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
-    expect(PUBLIC_STATS_SHEET_ID).toBe(pub);
-    const refused = readChatExportConfig({ CHAT_EXPORT_SHEET_ID: pub, GOOGLE_SERVICE_ACCOUNT_JSON: creds });
-    expect(refused).toMatchObject({ sheetId: '', sheetIdRefused: true, sheetCredentialsUsable: true });
-    // Old variable name, a pasted URL, and the AVALON_STATS_SHEET_ID override are refused too.
-    expect(readChatExportConfig({ COMMUNITY_DIGEST_SHEET_ID: pub }).sheetIdRefused).toBe(true);
-    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: `https://docs.google.com/spreadsheets/d/${pub}/edit#gid=0` }).sheetId).toBe('');
-    expect(
-      readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'another-public-sheet-id-1234', AVALON_STATS_SHEET_ID: 'another-public-sheet-id-1234' })
-        .sheetIdRefused,
-    ).toBe(true);
-    // The private default and other ids are fine.
-    expect(readChatExportConfig({})).toMatchObject({ sheetId: DEFAULT_CHAT_EXPORT_SHEET_ID, sheetIdRefused: false });
-    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'off' })).toMatchObject({ sheetId: '', sheetIdRefused: false });
-    // The opt-in alone does not move anything: the private default stays the target.
-    expect(readChatExportConfig({ CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '1' })).toMatchObject({
-      sheetId: DEFAULT_CHAT_EXPORT_SHEET_ID,
-      publicSheet: false,
-    });
-    // Anything but an explicit yes keeps refusing.
-    for (const v of ['', '0', 'false', 'no', 'maybe']) {
-      expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: pub, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: v })).toMatchObject({
+  it('CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses the 阿瓦隆百科 spreadsheet, the default included (not configured)', () => {
+    const refused = readChatExportConfig({ CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', GOOGLE_SERVICE_ACCOUNT_JSON: creds });
+    expect(refused).toMatchObject({ sheetId: '', sheetIdRefused: true, publicSheet: false, sheetCredentialsUsable: true });
+    // Set explicitly, under the old variable name, as a pasted URL, or as the AVALON_STATS_SHEET_ID override: refused too.
+    const url = `https://docs.google.com/spreadsheets/d/${PUB}/edit#gid=0`;
+    for (const env of [
+      { CHAT_EXPORT_SHEET_ID: PUB },
+      { COMMUNITY_DIGEST_SHEET_ID: PUB },
+      { CHAT_EXPORT_SHEET_ID: url },
+      { CHAT_EXPORT_SHEET_ID: 'another-public-sheet-id-1234', AVALON_STATS_SHEET_ID: 'another-public-sheet-id-1234' },
+    ]) {
+      expect(readChatExportConfig({ ...env, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0' })).toMatchObject({
         sheetId: '',
         sheetIdRefused: true,
         publicSheet: false,
       });
     }
+    // Every "no", and any value that is not a yes (a typo must never publish chat), refuses.
+    for (const v of ['0', 'false', 'off', 'no', 'none', ' OFF ', 'maybe', 'refuse']) {
+      expect(readChatExportConfig({ CHAT_EXPORT_ALLOW_PUBLIC_SHEET: v })).toMatchObject({ sheetId: '', sheetIdRefused: true, publicSheet: false });
+      expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: PUB, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: v }).sheetIdRefused).toBe(true);
+    }
+    // The switch refuses public sheets only: the private sheet, other ids and off are untouched by it.
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: PRIV, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0' })).toMatchObject({
+      sheetId: PRIV,
+      sheetIdRefused: false,
+      publicSheet: false,
+    });
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'abc', CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0' }).sheetId).toBe('abc');
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'off', CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0' })).toMatchObject({ sheetId: '', sheetIdRefused: false });
   });
 
-  it('CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1 lets CHAT_EXPORT_SHEET_ID be the public sheet (publicSheet: true; a pasted URL works)', () => {
-    const pub = PUBLIC_STATS_SHEET_ID;
-    for (const v of ['1', 'true', 'yes', 'on', ' TRUE ']) {
-      expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: pub, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: v })).toMatchObject({
-        sheetId: pub,
-        sheetIdRefused: false,
-        publicSheet: true,
-      });
+  it('unset, empty or a yes keeps the 阿瓦隆百科 sheet (publicSheet: true; set explicitly, old name, a pasted URL)', () => {
+    for (const v of [undefined, '', '  ', '1', 'true', 'yes', 'on', ' TRUE ']) {
+      const env = v === undefined ? {} : { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: v };
+      expect(readChatExportConfig(env)).toMatchObject({ sheetId: PUB, sheetIdRefused: false, publicSheet: true });
+      expect(readChatExportConfig({ ...env, CHAT_EXPORT_SHEET_ID: PUB })).toMatchObject({ sheetId: PUB, publicSheet: true });
     }
-    const url = `https://docs.google.com/spreadsheets/d/${pub}/edit#gid=0`;
-    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: url, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '1' })).toMatchObject({
-      sheetId: pub,
-      publicSheet: true,
-    });
-    expect(spreadsheetIdFrom(url)).toBe(pub);
+    const url = `https://docs.google.com/spreadsheets/d/${PUB}/edit#gid=0`;
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: url })).toMatchObject({ sheetId: PUB, publicSheet: true });
+    expect(spreadsheetIdFrom(url)).toBe(PUB);
     expect(spreadsheetIdFrom('abc')).toBe('abc');
     // The old variable name too.
-    expect(readChatExportConfig({ COMMUNITY_DIGEST_SHEET_ID: pub, CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '1' }).publicSheet).toBe(true);
+    expect(readChatExportConfig({ COMMUNITY_DIGEST_SHEET_ID: PUB }).publicSheet).toBe(true);
+    // The AVALON_STATS_SHEET_ID override counts as public as well.
+    expect(
+      readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'another-public-sheet-id-1234', AVALON_STATS_SHEET_ID: 'another-public-sheet-id-1234' }).publicSheet,
+    ).toBe(true);
+  });
+
+  it('CHAT_EXPORT_SHEET_ID still picks the private sheet (or any other): not public, not refused; a pasted URL works', () => {
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: PRIV })).toMatchObject({ sheetId: PRIV, sheetIdRefused: false, publicSheet: false });
+    expect(readChatExportConfig({ COMMUNITY_DIGEST_SHEET_ID: PRIV })).toMatchObject({ sheetId: PRIV, publicSheet: false });
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: `https://docs.google.com/spreadsheets/d/${PRIV}/edit` })).toMatchObject({
+      sheetId: PRIV,
+      publicSheet: false,
+    });
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'abc' })).toMatchObject({ sheetId: 'abc', publicSheet: false });
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'off' })).toMatchObject({ sheetId: '', sheetIdRefused: false, publicSheet: false });
   });
 });

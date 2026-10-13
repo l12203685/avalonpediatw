@@ -7,7 +7,7 @@
  * base64 of it). Errors carry the step and the HTTP status only, never a
  * response body (it can echo the values that were sent).
  *
- * Users: the weekly chat-log export (bots/chatExport, 2026-10-13). The path
+ * Users: the daily chat-log export (bots/chatExport, 2026-10-13). The path
  * bots/digest/sheets.ts is historical (the paid weekly digest it was written
  * for is gone) and is kept because other code imports parseServiceAccountJson,
  * buildServiceAccountJwt, base64url, SHEETS_SCOPE, GOOGLE_TOKEN_URL and

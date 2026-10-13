@@ -12,22 +12,33 @@ import { parseServiceAccountJson } from '../digest/sheets';
 import { DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID, resolveFeedbackChannelId } from '../feedback/config';
 
 /**
- * The PRIVATE spreadsheet the export writes to by default (shared with the
- * service account as editor).
- */
-export const DEFAULT_CHAT_EXPORT_SHEET_ID = '1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8';
-
-/**
- * The public 阿瓦隆百科 (stats) spreadsheet — "anyone with the link can
- * view", its id in this public repo (generate_cache.py SHEET_ID). Chat goes
- * there only with the explicit opt-in CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1:
- * without it, CHAT_EXPORT_SHEET_ID set to this id (or to the
- * AVALON_STATS_SHEET_ID override) is refused and the export counts as not
- * configured. With it, only the two chat tabs below are ever touched (the
- * daily records importer and the cache refresh read 牌譜 / Discord匯入 /
- * Discord回覆 / 同贏… in the same workbook).
+ * The 阿瓦隆百科 (stats) spreadsheet — "anyone with the link can view", its
+ * id in this public repo (generate_cache.py SHEET_ID). The export's default
+ * target since 2026-10-13 (DEFAULT_CHAT_EXPORT_SHEET_ID). Only the two chat
+ * tabs below are ever touched there (the daily records importer and the
+ * cache refresh read 牌譜 / Discord匯入 / Discord回覆 / 同贏… in the same
+ * workbook).
  */
 export const PUBLIC_STATS_SHEET_ID = '174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU';
+
+/**
+ * The private spreadsheet the export wrote to until 2026-10-13 (still the
+ * practice-mode report sheet, src/practice/PracticeReportWriter.ts). Chosen
+ * again with CHAT_EXPORT_SHEET_ID set to this id.
+ */
+export const PRIVATE_CHAT_EXPORT_SHEET_ID = '1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8';
+
+/**
+ * Where the export writes by default: the 阿瓦隆百科 workbook, the last 7
+ * days, speakers as 成員N renumbered every day. Owner (Edward) 2026-10-13:
+ * 「聊天紀錄可以一天同步一次嗎 不用搬到私人試算表 搬到 阿瓦隆百科 googlesheet
+ * 就好 然後最多保留近一週的即可」 and, after being told the link is
+ * effectively public, 「照搬 百科群組本身也是公開的 所以不影響」.
+ * CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses a public sheet (the export then
+ * counts as not configured and writes nothing); CHAT_EXPORT_SHEET_ID picks
+ * another sheet.
+ */
+export const DEFAULT_CHAT_EXPORT_SHEET_ID = PUBLIC_STATS_SHEET_ID;
 
 /** Tab the rows go to (created with a header row when missing). */
 export const CHAT_EXPORT_TAB = '聊天紀錄';
@@ -151,9 +162,13 @@ export interface ChatExportConfig {
   enabled: boolean;
   /** '' when turned off (CHAT_EXPORT_SHEET_ID=off) or refused (sheetIdRefused). */
   sheetId: string;
-  /** The configured id is the public stats spreadsheet and CHAT_EXPORT_ALLOW_PUBLIC_SHEET is not set: refused, sheetId ''. */
+  /**
+   * The id (the default included) is a public stats spreadsheet and
+   * CHAT_EXPORT_ALLOW_PUBLIC_SHEET refuses it (0 / false / off / no, or any
+   * value that is not a yes): refused, sheetId ''.
+   */
   sheetIdRefused: boolean;
-  /** The configured id is the public stats spreadsheet and the opt-in is set: written there (two chat tabs only). */
+  /** The id is a public stats spreadsheet (the default) and not refused: written there (two chat tabs only). */
   publicSheet: boolean;
   /**
    * GOOGLE_SERVICE_ACCOUNT_JSON is set AND parses as a service-account key
@@ -214,10 +229,13 @@ export function readChatExportConfig(env: NodeJS.ProcessEnv = process.env): Chat
   const flag = (env.CHAT_EXPORT_ENABLED || '').trim().toLowerCase();
   const sheetRaw = envFirst(env, 'CHAT_EXPORT_SHEET_ID', 'COMMUNITY_DIGEST_SHEET_ID');
   const wanted = OFF.includes(sheetRaw.toLowerCase()) ? '' : spreadsheetIdFrom(sheetRaw || DEFAULT_CHAT_EXPORT_SHEET_ID);
-  // The public stats spreadsheet only with the explicit opt-in (one wrong env value must not publish chat).
+  // The public stats spreadsheet is the default by the owner's decision (2026-10-13).
+  // CHAT_EXPORT_ALLOW_PUBLIC_SHEET unset (or a yes) keeps it; any other value refuses it — 0 / false / off / no,
+  // and a value not understood too, so a mistyped "no" never publishes chat.
   const publicIds = [PUBLIC_STATS_SHEET_ID, spreadsheetIdFrom((env.AVALON_STATS_SHEET_ID || '').trim())].filter(Boolean);
   const isPublic = wanted !== '' && publicIds.some((id) => wanted === id || (id.length >= 20 && wanted.includes(id)));
-  const allowPublic = ON.includes((env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET || '').trim().toLowerCase());
+  const allowRaw = (env.CHAT_EXPORT_ALLOW_PUBLIC_SHEET || '').trim().toLowerCase();
+  const allowPublic = allowRaw === '' || ON.includes(allowRaw);
   const sheetIdRefused = isPublic && !allowPublic;
   // The admin channel 「大劍管理員」 and the /意見 channel (if another one) are private: never exported.
   const feedbackChannelId = resolveFeedbackChannelId(env);

@@ -1,10 +1,11 @@
 # 社群反應彙整 — 每日聊天紀錄匯出、主題計數與 `/意見`
 
-> 版號 20261013d（20261012 主題計數與 `/意見`；20261013 付費週報上線又依 Edward 裁定撤掉，改成免費的聊天紀錄匯出，
+> 版號 20261013f（20261012 主題計數與 `/意見`；20261013 付費週報上線又依 Edward 裁定撤掉，改成免費的聊天紀錄匯出，
 > `/意見` 改轉貼到管理員頻道「大劍管理員」；20261013c 加上「匯出紀錄」分頁：重啟或兩台伺服器同時跑都只留一份；
 > 20261013d 依 Edward 第三輪裁定改成**每天一次、只留最近 7 天、重啟後自動補齊、加讀論壇貼文的回覆**，
 > 並可以明確開啟後寫到阿瓦隆百科試算表；20261013e 審查修正：刪列時先拿「清理」鎖，兩台伺服器不會同時刪、刪錯保留中的日子；
-> 新增 `CHAT_EXPORT_EXTRA_SOURCE_IDS`（加讀，不取代預設名單）；狀態頁 `catchUp.expired`）。
+> 新增 `CHAT_EXPORT_EXTRA_SOURCE_IDS`（加讀，不取代預設名單）；狀態頁 `catchUp.expired`；
+> 20261013f 依 Edward「照搬」：**預設改寫到阿瓦隆百科試算表**，`CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 才拒絕，私人那份要用 `CHAT_EXPORT_SHEET_ID` 指定）。
 > 程式在 `packages/server/src/bots/chatExport/`、`packages/server/src/bots/feedback/`（Google 登入與試算表呼叫：`bots/digest/sheets.ts`）；
 > 測試 `__tests__/ChatExport*.test.ts`、`__tests__/Feedback*.test.ts`。
 > 相關：`docs/LINE_DISCORD_SYNC.md`（三向同步、指令表、狀態頁）、`docs/DISCORD_RECORDS_IMPORT.md`（牌譜格式回覆）。
@@ -14,15 +15,17 @@
 1. Edward 2026-10-13：「你不是可以透過 line bot 或 discord bot 讀取訊息嗎? 不用寫成報告 也不用貼到私人頻道
    主要是你要對玩家的反應有回饋 不要產生額外費用 你真的想寫入試算表 可以寫到阿瓦隆百科 googlesheet 裡面」；
    第三輪：「聊天紀錄可以一天同步一次嗎 不用搬到私人試算表 搬到 阿瓦隆百科 googlesheet 就好 然後最多保留近一週的即可」、
-   「有些程式可以不用燒token 的就用程式碼跑就好」。
-2. 所以：**Render 上的 bot 每天把前一天的公開聊天原文（發言者換成代號）寫進 Google 試算表的「聊天紀錄」分頁，只留最近 7 天**；
+   「有些程式可以不用燒token 的就用程式碼跑就好」；被告知阿瓦隆百科那份「知道連結就能看」、id 又在這個公開 repo 裡之後：
+   「照搬 百科群組本身也是公開的 所以不影響」。
+2. 所以：**Render 上的 bot 每天把前一天的公開聊天原文（發言者換成代號）寫進阿瓦隆百科 Google 試算表的「聊天紀錄」分頁，只留最近 7 天**；
    伺服器重啟（每次部署都會）後，Discord 一連上就把最近 7 天裡還沒寫好的日子補齊。
    AI 管理員（讀 Google Drive 的 Claude Code session）自己讀、自己消化，再把該改的東西改掉、該問的問 Edward。
 3. **純程式、沒有任何費用、不燒 token**：只用 Discord API 和 Google Sheets API（都免費），不呼叫任何 AI／付費 API。
    付費週報（`/社群週報`、`ANTHROPIC_API_KEY`、`@anthropic-ai/sdk`）已整個移除。
 4. 不寫報告、不貼到 Discord、不在群裡公告匯總；bot 也**不回一般聊天**，只回指令。
-5. 寫到哪一份試算表由 Render 的環境變數決定：**預設仍是私人那份**；要改寫到阿瓦隆百科那份，必須另外設
-   `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1`（理由與做法見下方「寫到阿瓦隆百科試算表（要明確開啟）」）。這一步要 Edward 決定、在 Render 上設，程式不會自己切過去。
+5. **寫到阿瓦隆百科試算表**（`174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU`）：這是 Edward 2026-10-13 的決定，程式預設就寫這份，Render 不用設任何變數。
+   這份是「**知道連結的任何人都能檢視**」，所以最近 7 天的群聊原文（發言者是代號、每天重新編號）任何人都看得到；
+   細節、怎麼停、怎麼改回私人那份見下方「寫到阿瓦隆百科試算表（預設）」。
 
 ## Edward 的裁定（2026-10-13）
 
@@ -36,8 +39,9 @@
 | 9 | 要花費就不要週報 | 付費週報移除，改成免費匯出 |
 | 10 | 應該不用牌譜修正了 | 每週「牌譜修正」清單停掉（排程不再發）；要修的貼文用 Discord 搜尋找機器人的回覆（`docs/DISCORD_RECORDS_IMPORT.md`）。貼文底下的格式回覆照舊 |
 | 第三輪 1 | 你現在看的到discord 頻道嗎? 上面有一些意見跟想法你讀的到嗎? 有辦法針對那些想法或回覆做改善嗎? | AI 管理員本身連不到 Discord，只能讀試算表；所以匯出改成每天、並加讀**論壇貼文底下的回覆**（含 #牌譜紀錄與覆盤 裡對機器人格式回覆的回應），讓意見都進得到試算表 |
-| 第三輪 2 | 聊天紀錄可以一天同步一次嗎 不用搬到私人試算表 搬到 阿瓦隆百科 googlesheet 就好 然後最多保留近一週的即可 | 每天 04:30（台灣時間）匯出前一天；只留最近 7 天（兩個分頁都是）；可以寫到阿瓦隆百科試算表，但要在 Render 設 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1`（那份是「知道連結就能看」，見下方） |
+| 第三輪 2 | 聊天紀錄可以一天同步一次嗎 不用搬到私人試算表 搬到 阿瓦隆百科 googlesheet 就好 然後最多保留近一週的即可 | 每天 04:30（台灣時間）匯出前一天；只留最近 7 天（兩個分頁都是）；寫到阿瓦隆百科試算表（見下一列） |
 | 第三輪 3 | 有些程式可以不用燒token 的就用程式碼跑就好 | 匯出全程是伺服器上的一般程式（讀 Discord、換代號、寫試算表），不經過任何 AI，0 token、0 元 |
+| 第三輪 4 | （被告知阿瓦隆百科那份知道連結就能看、id 在公開 repo 裡之後）照搬 百科群組本身也是公開的 所以不影響 | **預設就寫阿瓦隆百科那份**，Render 不用設變數；私人那份不再是預設（要用時以 `CHAT_EXPORT_SHEET_ID` 指定） |
 
 ## 資料怎麼走、誰看得到
 
@@ -45,40 +49,44 @@
 |---|---|---|
 | 1 讀取 | Render 上的 bot（每天一次＋重啟後補齊，讀 Discord 頻道與論壇的歷史） | 前一天（台灣時間 00:00～24:00）的公開聊天原文 |
 | 2 換代號 | 同上（記憶體） | 發言者換成「成員N」；對照表只存在這一次執行裡，不存、不送、不印 |
-| 3 寫入 | `CHAT_EXPORT_SHEET_ID` 那份試算表（預設私人那份 `1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`）的「聊天紀錄」分頁；「匯出紀錄」分頁記哪一天寫好了 | 一則訊息一列；只留最近 7 天 |
+| 3 寫入 | 阿瓦隆百科試算表 `174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU`（預設；`CHAT_EXPORT_SHEET_ID` 可改成別份）的「聊天紀錄」分頁；「匯出紀錄」分頁記哪一天寫好了 | 一則訊息一列；只留最近 7 天；知道連結的人都看得到 |
 | 4 閱讀 | AI 管理員（用 Edward 的 Google Drive） | 讀「聊天紀錄」分頁，整理後回饋給 Edward、修網站或機器人 |
 
 - 聊天原文**不經過 GitHub**：不進 repo、不進 Actions log、不進 job summary。這個 repo 是公開的。
 - server log 和 `/api/bots/status` 只有數字、日期和結果代碼（讀了幾則、寫了幾列、刪了幾列），沒有文字、名字或頻道名稱。
-- 私人那份試算表只有 Edward、AI 管理員（Edward 的 Drive）和服務帳號看得到。**不要**把它改成「知道連結的人都能看」。
+- 試算表本身是公開的（見下一節）：聊天原文不進 GitHub，但任何拿到連結的人都能在試算表裡看到最近 7 天。
+- 私人那份（`1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`，練習模式的「練習回報」也寫在這份）只有 Edward、AI 管理員（Edward 的 Drive）和服務帳號看得到；
+  2026-10-13 起聊天紀錄不再預設寫這份。**不要**把它改成「知道連結的人都能看」。
 
-### 寫到阿瓦隆百科試算表（要明確開啟）
+### 寫到阿瓦隆百科試算表（預設）
 
-Edward 第三輪說「不用搬到私人試算表 搬到 阿瓦隆百科 googlesheet 就好」。程式已經做好，但**預設不會寫過去**，要在 Render 上多設一個開關，
-因為那份試算表跟私人那份不一樣：
+**聊天紀錄寫進阿瓦隆百科試算表，只留最近 7 天，發言者代號每天重新編號——這是 Edward 2026-10-13 的決定**
+（「不用搬到私人試算表 搬到 阿瓦隆百科 googlesheet 就好 然後最多保留近一週的即可」；被告知這份公開之後：「照搬 百科群組本身也是公開的 所以不影響」）。
+程式預設就寫這份，Render 不用設任何變數。
 
-- 阿瓦隆百科那份（`174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU`）現在是「**知道連結的任何人都能檢視**」，
+- 阿瓦隆百科那份（`174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU`）是「**知道連結的任何人都能檢視**」，
   而且它的 id 就寫在這個公開 repo 裡（戰績快取每天從它重算）——等於**任何人都能打開**。
-- 寫過去之後，任何人都能翻到最近 7 天的群聊原文。發言者是代號、每天重新編號，但**內文裡提到的名字、私事、約打的時間地點都看得到**；
+- 所以任何人都能翻到最近 7 天的群聊原文。發言者是代號、每天從「成員1」重新編號，但**內文裡提到的名字、私事、約打的時間地點都看得到**；
   也有人可能每天存一份，所以「只留 7 天」只限制試算表本身，不保證外面沒有副本。
-- 那份的分享設定若改成「限定的使用者」，聊天就不再公開（戰績快取與牌譜匯入用服務帳號讀寫，不受影響）；但它現在公開可能是給社群查資料用的，要不要改由 Edward 決定。
-
-怎麼開（Edward 決定後在 Render → Environment 設，程式和 AI 管理員都不會自己改 Render）：
-
-| 變數 | 值 |
-|---|---|
-| `CHAT_EXPORT_SHEET_ID` | `174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU`（貼整個網址也可以） |
-| `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | `1` |
-
-- 沒設 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1` 時，`CHAT_EXPORT_SHEET_ID`（或舊名）設成這份（或 `AVALON_STATS_SHEET_ID` 指定的那份；貼網址也算）
-  **一律拒絕**：不匯出，狀態頁 `sheetConfigured=false`，server log 寫 `public-sheet-refused`。只設開關、不改 `CHAT_EXPORT_SHEET_ID` 也不會動到這份。
-- 開了之後狀態頁 `chatExport.publicSheet=true`。Render 上的服務帳號 JSON 和每日牌譜匯入用的是同一個 GitHub secret（`AVALON_STATS_SHEETS_CREDENTIALS_JSON`），
+- 那份的分享設定若改成「限定的使用者」，聊天就不再公開（戰績快取與牌譜匯入用服務帳號讀寫，不受影響）；但它公開是給社群查資料用的，要不要改由 Edward 決定。
+- 狀態頁 `chatExport.publicSheet=true` 就是正在寫這份。Render 上的服務帳號 JSON 和每日牌譜匯入用的是同一個 GitHub secret（`AVALON_STATS_SHEETS_CREDENTIALS_JSON`），
   那個帳號本來就在寫這份的「Discord匯入」分頁，通常不用再分享；若 `lastRun.outcome` 是 `sheet-error` 再確認一下。
 - 寫在這份時**只動「聊天紀錄」「匯出紀錄」兩個分頁**（不存在就新增在最後面）：不讀、不寫、不刪「牌譜」「Discord匯入」「Discord回覆」「同贏」…
   任何其他分頁（每日牌譜匯入與戰績快取在讀它們；有測試確認）。如果已經有一個叫「聊天紀錄」或「匯出紀錄」、但標題列不一樣的分頁，
   bot 判定那不是它的，**兩個分頁都不碰**，狀態頁 `outcome=tab-conflict`。
-- 私人那份裡已經寫過的列不會被搬過去；切換後阿瓦隆百科那份會在部署後自動補齊最近 7 天。要切回私人那份，把兩個變數拿掉即可
-  （阿瓦隆百科那份的兩個分頁要手動刪）。
+- 阿瓦隆百科那份在部署後會自動補齊最近 7 天。私人那份如果已經有「聊天紀錄」「匯出紀錄」分頁，裡面的列不會被搬過去、之後也不會再更新，要不要刪由 Edward 決定。
+
+要停或改回私人那份（在 Render → Environment 設，存檔後重新部署；程式和 AI 管理員都不會自己改 Render）：
+
+| 想要 | 設定 |
+|---|---|
+| 不再寫公開的試算表（不匯出） | `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0`（`false`/`off`/`no` 也可；不是「是」的值一律當成拒絕，打錯字也不會公開） |
+| 改寫回私人那份 | `CHAT_EXPORT_SHEET_ID=1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`（貼整個網址也可以） |
+| 整個關掉 | `CHAT_EXPORT_SHEET_ID=off` 或 `CHAT_EXPORT_ENABLED=false` |
+
+- `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 時，阿瓦隆百科那份（預設、`CHAT_EXPORT_SHEET_ID` 或舊名設成這份、貼網址、或 `AVALON_STATS_SHEET_ID` 指定的那份）
+  **一律拒絕**：不匯出、一個請求都不送，狀態頁 `sheetConfigured=false`，server log 寫 `public-sheet-refused`。私人那份與其他試算表不受這個開關影響。
+- 改回私人那份之後，阿瓦隆百科那份的兩個分頁不會自動刪，要手動刪。
 
 ## 匯出的內容
 
@@ -99,7 +107,7 @@ Edward 第三輪說「不用搬到私人試算表 搬到 阿瓦隆百科 googles
   私人頻道與私人論壇本來就不在預設名單裡。
 - 可調（逗號或空白分隔的 id）：
   - `CHAT_EXPORT_EXTRA_SOURCE_IDS`：**另外加讀**這些頻道或論壇，預設名單照讀。@everyone 看不到的也會讀
-    （寫在阿瓦隆百科那份時，等於把那個頻道公開）。例如 #牌譜紀錄與覆盤 若對 @everyone 隱藏，就填 `1132683080134578276`。
+    （寫在阿瓦隆百科那份——預設——時，等於把那個頻道公開）。例如 #牌譜紀錄與覆盤 若對 @everyone 隱藏，就填 `1132683080134578276`。
   - `CHAT_EXPORT_SOURCE_CHANNEL_IDS`：**取代**預設名單，只讀這些頻道或論壇（同步頻道與 `CHAT_EXPORT_EXTRA_SOURCE_IDS` 仍會加上）。
     只填一個 id 就只讀那一個，其他公開頻道與論壇全部不讀——只是想多讀一個的話請用上一個變數。
   - `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS`：不讀這些頻道、論壇或**單一貼文**；排除永遠優先。
@@ -122,7 +130,7 @@ Edward 第三輪說「不用搬到私人試算表 搬到 阿瓦隆百科 googles
 - **日期**＝那則訊息所在的那一天（台灣時間 00:00～24:00）；**時間**＝台灣時間到分鐘。
 - **頻道**：一般頻道寫頻道名；論壇貼文寫「論壇名／貼文標題」。
 - **來源**：`Discord`、`LINE`、`網站`（網站大廳）；舊版同步格式（`CHAT_MIRROR_USE_LEGACY_FORMAT=true`）分不出來源，記為 `同步`。
-- **發言者代號**：同一天裡同一個人同一個代號，**天與天之間不對應**（每天從成員1 重新編號；試算表可能是公開的那份，
+- **發言者代號**：同一天裡同一個人同一個代號，**天與天之間不對應**（每天從成員1 重新編號；試算表預設是公開的阿瓦隆百科那份，
   跨天一致的代號會讓人把一個人好幾天的發言串起來，比較容易認出是誰）；LINE 和 Discord 上同名的人算兩個人。
 - **內容**：換行寫成「 ⏎ 」；`@某人` → `@成員N`、`@身分組` → `@某身分組`、`#頻道` → `#頻道名`；附件寫成「〔附件 N〕」；超過 4000 字截斷。
   伺服器圖片轉傳的連結（`…/media/relay/…`，Discord 圖片轉到 LINE 用的）寫成「〔圖片連結〕」，不會出現在試算表裡。
@@ -224,14 +232,14 @@ Edward 第三輪說「不用搬到私人試算表 搬到 阿瓦隆百科 googles
   "opinions": { "line": 1, "discord": 0 }
 },
 "chatExport": {
-  "enabled": true, "sheetConfigured": true, "publicSheet": false,
+  "enabled": true, "sheetConfigured": true, "publicSheet": true,
   "lastRun": { "day": "2026-10-12", "at": "2026-10-13T02:03:40.000Z", "messages": 356, "channels": 8, "threads": 3, "truncated": 0, "outcome": "written" },
   "catchUp": { "startedAt": "2026-10-13T02:01:05.000Z", "from": "2026-10-06", "to": "2026-10-12", "exported": 7, "skipped": 0, "failed": 0, "pending": 0, "expired": 0 }
 }
 ```
 
 - `chatExport.enabled`：`CHAT_EXPORT_ENABLED`（預設開）。`sheetConfigured`：有試算表 id（沒被拒絕），而且服務帳號 JSON 真的讀得懂。
-  `publicSheet`：正在寫阿瓦隆百科那份（`CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1`）。
+  `publicSheet`：正在寫阿瓦隆百科那份（預設；`false` 表示 `CHAT_EXPORT_SHEET_ID` 指定了別份，或那份被 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 拒絕）。
 - `lastRun`（記憶體，重啟後是 `null`）：最近處理的那一天。`day` 日期、`at` 執行時間、`messages` 寫了幾列、`channels` 有幾個頻道（含論壇貼文）有訊息、
   `threads` 其中幾篇是論壇貼文、`truncated` 讀取上限被觸發幾次（> 0 表示那天可能不完整）、`outcome`：
 
@@ -241,7 +249,7 @@ Edward 第三輪說「不用搬到私人試算表 搬到 阿瓦隆百科 googles
   | `already-exported` | 那天早就寫好（「匯出紀錄」已有「完成」，例如重啟後、或另一台伺服器寫的） |
   | `empty` | 那天沒有可以匯出的聊天（只寫「完成」，列數 0） |
   | `claimed-elsewhere` | 另一台伺服器正在寫那天；或那天有寫到一半的列要先刪、而另一台正拿著「清理」鎖（部署交接時會出現），10 分鐘後再看 |
-  | `not-configured` | 沒有試算表 id 或服務帳號 JSON，或 id 是阿瓦隆百科那份但沒開 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET`（被拒絕） |
+  | `not-configured` | 沒有試算表 id 或服務帳號 JSON，或 id 是阿瓦隆百科那份但設了 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0`（被拒絕） |
   | `sheet-error` | Google Sheets 呼叫失敗（多半是試算表沒分享給服務帳號），整輪停 10 分鐘再試 |
   | `tab-conflict` | 試算表裡已經有同名但標題列不一樣的「聊天紀錄」或「匯出紀錄」分頁，不是 bot 的，不碰；改名或刪掉那個分頁後自動恢復 |
   | `read-error` | 有頻道讀不到：一部分 → 那天 10 分鐘後再讀一次；全部 → 整輪停 10 分鐘再讀 |
@@ -257,8 +265,8 @@ Edward 第三輪說「不用搬到私人試算表 搬到 阿瓦隆百科 googles
 |---|---|---|
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | 是（Render ops → apply 從 GitHub secret `AVALON_STATS_SHEETS_CREDENTIALS_JSON` 複製，沒有就用 `GOOGLE_SHEETS_CREDENTIALS_JSON`） | 沒有 → 不匯出（狀態頁 `sheetConfigured=false`） |
 | `CHAT_EXPORT_ENABLED` | 否 | 開；`false` 關 |
-| `CHAT_EXPORT_SHEET_ID` | 否 | `1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`（私人）；`off` 關；可以貼整個網址。阿瓦隆百科那份要搭配下一列。舊名 `COMMUNITY_DIGEST_SHEET_ID` 仍有效 |
-| `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | 否 | 不設＝拒絕阿瓦隆百科那份；`1`（或 `true`/`yes`/`on`）＝允許 `CHAT_EXPORT_SHEET_ID` 是那份（「知道連結就能看」，見上方） |
+| `CHAT_EXPORT_SHEET_ID` | 否 | 阿瓦隆百科試算表 `174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU`（Edward 2026-10-13 決定；知道連結就能看）；私人那份填 `1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`；`off` 關；可以貼整個網址。舊名 `COMMUNITY_DIGEST_SHEET_ID` 仍有效 |
+| `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | 否 | 不設（或 `1`/`true`/`yes`/`on`）＝寫阿瓦隆百科那份；`0`（或 `false`/`off`/`no`，以及任何不是「是」的值）＝拒絕那份、不匯出（見上方） |
 | `CHAT_EXPORT_EXTRA_SOURCE_IDS` | 否 | 空。**另外加讀**的頻道或論壇（預設名單照讀；@everyone 看不到也讀），例如對 @everyone 隱藏的 #牌譜紀錄與覆盤 `1132683080134578276` |
 | `CHAT_EXPORT_SOURCE_CHANNEL_IDS` | 否 | 空＝所有公開頻道與公開論壇＋同步頻道。有填就**取代**這份名單（只填一個就只讀那一個）。只收頻道或論壇的 id。舊名 `COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS` 仍有效 |
 | `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空。不讀的頻道、論壇或單一貼文（「大劍管理員」和 `/意見` 頻道一定不讀）。舊名 `COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS` 仍有效 |
@@ -271,18 +279,18 @@ Edward 第三輪說「不用搬到私人試算表 搬到 阿瓦隆百科 googles
 ## 部署後要確認的事（一次就好）
 
 1. **試算表要分享給服務帳號（編輯者）**：就是 GitHub secret `AVALON_STATS_SHEETS_CREDENTIALS_JSON` 裡的 `client_email`
-   （戰績匯入用的同一個帳號；阿瓦隆百科那份它本來就在寫，私人那份 20261013 已分享過）。若 `lastRun.outcome` 是 `sheet-error`，多半是這一步沒做。
+   （戰績匯入用的同一個帳號；阿瓦隆百科那份它本來就在寫「Discord匯入」，通常不用再分享；私人那份 20261013 已分享過）。若 `lastRun.outcome` 是 `sheet-error`，多半是這一步沒做。
 2. Render 上要有 `GOOGLE_SERVICE_ACCOUNT_JSON`：狀態頁 `chatExport.sheetConfigured` 是 `true` 就好；`false` 就跑一次 Actions → **Render ops → apply**。
 3. bot 在公開頻道與論壇要有「讀取訊息歷史」（一般預設就有）；在「大劍管理員」要有「檢視頻道」「傳送訊息」。
    #牌譜紀錄與覆盤 如果 @everyone 看不到，預設不會讀：要讀就設 `CHAT_EXPORT_EXTRA_SOURCE_IDS=1132683080134578276`
    （**不要**用 `CHAT_EXPORT_SOURCE_CHANNEL_IDS`，那會取代整份名單，其他公開頻道就都不讀了）。
 4. 部署後幾分鐘（當天看）：狀態頁 `chatExport.catchUp` 應該是 `exported + skipped = 7`、`failed = 0`、`pending = 0`、`expired = 0`；
    試算表的「匯出紀錄」有最近 7 天各一列「完成」。之後每天 04:30 起多一天、少一天。
-5. 要不要改寫到阿瓦隆百科那份：Edward 看過上方「寫到阿瓦隆百科試算表」後自己在 Render 設兩個變數；存檔並重新部署後會自動補齊 7 天。
+5. 狀態頁 `chatExport.publicSheet` 應該是 `true`（寫的是阿瓦隆百科那份）；打開那份試算表，最後面多了「聊天紀錄」「匯出紀錄」兩個分頁，其他分頁沒變。
 
 ## AI 管理員怎麼讀（每天或想看的時候）
 
-1. 用 Edward 的 Google Drive 打開試算表（狀態頁 `publicSheet=true` 就是阿瓦隆百科那份，否則是私人那份），先看「匯出紀錄」分頁：
+1. 用 Edward 的 Google Drive 打開試算表（狀態頁 `publicSheet=true` 就是阿瓦隆百科那份——預設；`false` 時是 `CHAT_EXPORT_SHEET_ID` 指定的那份，多半是私人那份），先看「匯出紀錄」分頁：
    某一天有「完成」→ 讀「聊天紀錄」分頁裡那一天（日期欄），列數應該和「完成」那列的列數一樣；
    沒有 → 那天還沒寫完（或沒跑成），不要讀半天的資料，看 `/api/bots/status` 的 `chatExport.lastRun.outcome` 再決定。
 2. 搭配 `/api/bots/status` 的 `feedback.weeks`（主題計數）和「大劍管理員」裡的 `📮 意見` 貼文。
@@ -299,4 +307,5 @@ Edward 第三輪說「不用搬到私人試算表 搬到 阿瓦隆百科 googles
 | 20261012：主題計數＋`/意見`（只有數字和主動提交的文字） | 保留 |
 | 20261013 上午：每週由 Claude API 寫週報，貼私人頻道「管理者信箱」＋寫私人試算表 | Edward：「要花費就不要週報」「不用寫成報告」「不要公告聊天匯總」→ 撤掉 |
 | 20261013 下午：bot 每週一把上週聊天原文（代號化）寫進私人試算表，AI 管理員自己讀 | 還沒跑過第一次（第一次會是 10/19）就被下一列取代 |
-| 20261013 晚上（第三輪）：每天 04:30 匯出前一天＋重啟後補齊最近 7 天、只留 7 天、加讀論壇回覆；可明確開啟後寫阿瓦隆百科那份 | 現行做法：免費、0 token、不公告、不點名 |
+| 20261013 晚上（第三輪）：每天 04:30 匯出前一天＋重啟後補齊最近 7 天、只留 7 天、加讀論壇回覆；寫阿瓦隆百科那份要另外設開關 | Edward：「照搬 百科群組本身也是公開的 所以不影響」→ 改成下一列 |
+| 20261013 晚上（第三輪，照搬）：同上，但**預設就寫阿瓦隆百科那份**；`CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 才拒絕 | 現行做法：免費、0 token、不公告、不點名 |

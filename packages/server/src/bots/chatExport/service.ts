@@ -83,7 +83,7 @@ export type ChatExportOutcome =
    * at again in 10 minutes.
    */
   | 'claimed-elsewhere'
-  /** No sheet id (or the public stats sheet id without the opt-in, refused) or no usable service-account JSON. */
+  /** No sheet id (or the public stats sheet refused by CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0) or no usable service-account JSON. */
   | 'not-configured'
   /** A Google Sheets call failed (retried every 10 minutes). */
   | 'sheet-error'
@@ -136,7 +136,7 @@ export interface ChatExportCatchUp {
 export interface ChatExportStatus {
   enabled: boolean;
   sheetConfigured: boolean;
-  /** Writing to the link-public 阿瓦隆百科 workbook (CHAT_EXPORT_ALLOW_PUBLIC_SHEET=1). */
+  /** Writing to the link-public 阿瓦隆百科 workbook (the default since 2026-10-13). */
   publicSheet: boolean;
   lastRun: ChatExportLastRun | null;
   catchUp: ChatExportCatchUp | null;

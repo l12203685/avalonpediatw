@@ -10,8 +10,8 @@
  *
  * Speakers are replaced by 成員N (owner 2026-10-13: 不點名), numbered per
  * export (ONE DAY) in order of first appearance — the numbering restarts
- * every day, so labels do not link days together (the sheet may be the
- * link-public 阿瓦隆百科 workbook). The mapping lives only inside one
+ * every day, so labels do not link days together (the sheet is by default
+ * the link-public 阿瓦隆百科 workbook). The mapping lives only inside one
  * buildExportRows() call and is never returned, written or logged.
  * "<@id>" mentions get the same 成員N label as that person's messages.
  *
@@ -200,7 +200,7 @@ export function rewriteMentions(text: string, pseudo: Pseudonymizer, channelName
 /**
  * A link to the server's own picture relay (`<host>/media/relay/<random id>`,
  * Discord → LINE pictures): the random id is the only key to that picture
- * and the sheet may be the link-public one, so such a link never reaches it.
+ * and the sheet is by default the link-public one, so such a link never reaches it.
  * (Relayed LINE pictures arrive as attachments and are counted as 〔附件 N〕;
  * this only guards against a link pasted or relayed as text.)
  */

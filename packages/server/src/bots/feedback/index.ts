@@ -1,6 +1,6 @@
 /**
- * Community feedback (2026-10-12): topic counts and /意見. The weekly chat-log
- * export to the private sheet lives in bots/chatExport (2026-10-13).
+ * Community feedback (2026-10-12): topic counts and /意見. The daily chat-log
+ * export (to the 阿瓦隆百科 sheet by default) lives in bots/chatExport (2026-10-13).
  * docs/COMMUNITY_FEEDBACK.md explains the why; this module is the how:
  *
  *   topicCounter.ts  — keyword → weekly per-platform counts (numbers only)
