@@ -32,7 +32,7 @@ import {
   startLineWebhookWatchdog,
   startStatsDigest,
 } from './bots/index';
-import { captureRawBody } from './middleware/rawBody';
+import { mountJsonBodyParsers } from './middleware/rawBody';
 import { initializeAsyncNotifier } from './services/AsyncNotifier';
 import { startKeepAlive } from './services/keepAlive';
 
@@ -71,7 +71,8 @@ app.use(
 );
 
 // Keep the raw bytes for LINE webhook signature verification (middleware/rawBody.ts).
-app.use(express.json({ verify: captureRawBody }));
+// The LINE webhook gets a 1 MB limit (several long texts in one delivery).
+mountJsonBodyParsers(app);
 
 // ── 極簡 HTML 多人客戶端 (packages/server/public) ──────────────────────────────
 // 與 Socket.IO 同源（避免 CORS），玩家直接開 `<backend>/play` 就能用純 HTML 多人。

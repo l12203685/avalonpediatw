@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'http';
-import type { Request } from 'express';
+import express, { type Express, type Request } from 'express';
 
 /**
  * Keep the exact request bytes next to the parsed JSON body.
@@ -19,4 +19,25 @@ export interface RequestWithRawBody extends Request {
 
 export function captureRawBody(req: IncomingMessage, _res: unknown, buf: Buffer): void {
   (req as RequestWithRawBody).rawBody = Buffer.from(buf);
+}
+
+/** The LINE webhook route (same as bots/line/webhookEndpoint.ts LINE_WEBHOOK_PATH). */
+export const LINE_WEBHOOK_BODY_PATH = '/webhook/line';
+
+/**
+ * JSON body limit of the LINE webhook (2026-10-13). LINE may deliver several
+ * events in one request, each text up to 5000 characters; with express's
+ * default 100 kB a burst of long messages was answered 413 and LINE dropped
+ * the whole delivery — the short messages in it too.
+ */
+export const LINE_WEBHOOK_JSON_LIMIT = '1mb';
+
+/**
+ * Mount the JSON body parsers, raw bytes kept (captureRawBody): the LINE
+ * webhook first with LINE_WEBHOOK_JSON_LIMIT, then every other route with
+ * the default limit (a body already parsed is not parsed again).
+ */
+export function mountJsonBodyParsers(app: Express): void {
+  app.use(LINE_WEBHOOK_BODY_PATH, express.json({ limit: LINE_WEBHOOK_JSON_LIMIT, verify: captureRawBody }));
+  app.use(express.json({ verify: captureRawBody }));
 }

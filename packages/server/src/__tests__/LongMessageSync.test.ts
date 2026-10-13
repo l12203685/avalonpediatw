@@ -17,6 +17,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import crypto from 'crypto';
 import { Readable } from 'stream';
+import express from 'express';
+import request from 'supertest';
 import type { Client } from '@line/bot-sdk';
 import type { Request, Response } from 'express';
 import {
@@ -38,6 +40,7 @@ import { LineBotClient } from '../bots/line/client';
 import { handleDiscordMirrorMessage, type MirrorAttachmentLike, type MirrorMessageLike } from '../bots/discord/mirrorInbound';
 import { RelayMediaStore } from '../bots/media/relayMedia';
 import { buildExportRows, type RawChatMessage } from '../bots/chatExport/rows';
+import { LINE_WEBHOOK_JSON_LIMIT, mountJsonBodyParsers, type RequestWithRawBody } from '../middleware/rawBody';
 import { LOBBY_CHAT_MAX_LEN, type LobbyChatMessage } from '../socket/LobbyChatBuffer';
 
 const GROUP = 'Cmirror-group';
@@ -611,5 +614,26 @@ describe('chat-log export joins the parts', () => {
     expect(out.skipped.command).toBe(2);
     expect(out.skipped.bot).toBe(1);
     expect(JSON.stringify(out.rows)).not.toContain(LINE_NAME);
+  });
+});
+
+// ─── LINE webhook body size ──────────────────────────────────────────────
+
+describe('LINE webhook JSON limit', () => {
+  it(`accepts a delivery of several long texts (up to ${LINE_WEBHOOK_JSON_LIMIT}); other routes keep the default limit`, async () => {
+    const app = express();
+    mountJsonBodyParsers(app);
+    app.post('/webhook/line', (req, res) => {
+      res.json({ events: req.body.events.length, raw: (req as RequestWithRawBody).rawBody?.length ?? 0 });
+    });
+    app.post('/api/other', (_req, res) => res.json({ ok: true }));
+    const event = (i: number) => groupEvent({ type: 'text', id: `big${i}`, text: '字'.repeat(5000) }, `rt${i}`);
+    const body = JSON.stringify({ destination: 'U', events: Array.from({ length: 8 }, (_, i) => event(i)) });
+    expect(Buffer.byteLength(body)).toBeGreaterThan(100 * 1024);
+    const ok = await request(app).post('/webhook/line').set('Content-Type', 'application/json').send(body);
+    expect(ok.status).toBe(200);
+    expect(ok.body).toEqual({ events: 8, raw: Buffer.byteLength(body) });
+    const other = await request(app).post('/api/other').set('Content-Type', 'application/json').send(body);
+    expect(other.status).toBe(413);
   });
 });
