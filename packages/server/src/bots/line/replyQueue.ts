@@ -23,6 +23,12 @@
  * Its `text` is then the fallback note sent instead when the copy is gone
  * by drain time. Same queue, same order, same 5-per-reply budget: one image
  * is one message object.
+ *
+ * Groups (review fix 2026-10-13): the items of one Discord message (its text
+ * line, its pictures, the note) are enqueued together (enqueueGroup); when
+ * the queue overflows, the oldest message leaves WHOLE, so a picture never
+ * stays behind without its speaker line. Every overflow / trim returns the
+ * relay ids of the pictures it dropped, so their copies are freed.
  */
 
 export const LINE_REPLY_QUEUE_CAP = 50;
@@ -49,6 +55,15 @@ export interface QueuedLineText {
   text: string;
   enqueuedAt: number;
   image?: QueuedLineImage;
+  /** Items of one message share a group (set by enqueueGroup); dropped together on overflow. */
+  group?: number;
+}
+
+/** What an enqueue / requeue dropped to stay within the cap. */
+export interface QueueTrim {
+  dropped: number;
+  /** Relay ids of the dropped pictures (to free their copies). */
+  releasedMediaIds: string[];
 }
 
 /** Alias that reads better where images are involved. */
@@ -86,6 +101,7 @@ export function degradeAfterFailedReply(
 export class LineReplyQueue {
   private items: QueuedLineItem[] = [];
   private readonly cap: number;
+  private nextGroup = 1;
 
   constructor(cap: number = LINE_REPLY_QUEUE_CAP) {
     if (!Number.isInteger(cap) || cap <= 0) {
@@ -95,22 +111,48 @@ export class LineReplyQueue {
   }
 
   /** Append one text. Returns how many OLDEST items were dropped to stay in cap. */
-  public enqueue(text: string, now: number = Date.now()): { dropped: number } {
+  public enqueue(text: string, now: number = Date.now()): QueueTrim {
     return this.enqueueItem({ text, enqueuedAt: now });
   }
 
   /**
    * Append one item (text or image). Returns how many OLDEST items were
-   * dropped to stay in cap (a dropped image's relay copy simply expires).
+   * dropped to stay in cap — a dropped item's whole group goes with it — and
+   * the relay ids of the dropped pictures.
    */
-  public enqueueItem(item: QueuedLineItem): { dropped: number } {
+  public enqueueItem(item: QueuedLineItem): QueueTrim {
     this.items.push(item);
+    return this.trimOldest();
+  }
+
+  /**
+   * Append the items of ONE message (text line, pictures, note) as a group:
+   * on overflow they leave the queue together, never a picture without its
+   * text line. Same return as enqueueItem.
+   */
+  public enqueueGroup(items: QueuedLineItem[]): QueueTrim {
+    if (items.length === 0) return { dropped: 0, releasedMediaIds: [] };
+    const group = this.nextGroup;
+    this.nextGroup += 1;
+    for (const item of items) this.items.push({ ...item, group });
+    return this.trimOldest();
+  }
+
+  /** Drop from the oldest end until within cap; a dropped item takes the rest of its group along. */
+  private trimOldest(): QueueTrim {
     let dropped = 0;
-    if (this.items.length > this.cap) {
-      dropped = this.items.length - this.cap;
-      this.items = this.items.slice(dropped);
+    const releasedMediaIds: string[] = [];
+    const drop = (item: QueuedLineItem): void => {
+      dropped += 1;
+      if (item.image) releasedMediaIds.push(...item.image.mediaIds);
+    };
+    while (this.items.length > this.cap) {
+      const head = this.items.shift() as QueuedLineItem;
+      drop(head);
+      if (head.group === undefined) continue;
+      while (this.items.length > 0 && this.items[0].group === head.group) drop(this.items.shift() as QueuedLineItem);
     }
-    return { dropped };
+    return { dropped, releasedMediaIds };
   }
 
   /** Pop up to `max` oldest items, in order. Empty array when nothing queued. */
@@ -126,15 +168,18 @@ export class LineReplyQueue {
    * Put a previously drained batch back at the HEAD (send failed). Order is
    * preserved exactly; if that overflows the cap, the NEWEST tail is trimmed.
    */
-  public requeueFront(batch: QueuedLineItem[]): { dropped: number } {
-    if (batch.length === 0) return { dropped: 0 };
+  public requeueFront(batch: QueuedLineItem[]): QueueTrim {
+    if (batch.length === 0) return { dropped: 0, releasedMediaIds: [] };
     this.items = [...batch, ...this.items];
     let dropped = 0;
+    const releasedMediaIds: string[] = [];
     if (this.items.length > this.cap) {
-      dropped = this.items.length - this.cap;
+      const tail = this.items.slice(this.cap);
+      dropped = tail.length;
+      for (const item of tail) if (item.image) releasedMediaIds.push(...item.image.mediaIds);
       this.items = this.items.slice(0, this.cap);
     }
-    return { dropped };
+    return { dropped, releasedMediaIds };
   }
 
   /** How many queued items are images. */

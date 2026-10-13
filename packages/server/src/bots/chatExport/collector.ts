@@ -1,13 +1,15 @@
 /**
  * Read one day of Discord history for the daily chat-log export.
  *
- * Sources (default):
- *   - every guild text / announcement channel that @everyone can view and
+ * Sources (default), in ONE server only — DISCORD_GUILD_ID, else the
+ * 阿瓦隆百科 server (config.ts AVALONPEDIA_DISCORD_GUILD_ID), never every
+ * server the bot was added to:
+ *   - every text / announcement channel of it that @everyone can view and
  *     the bot can read the history of;
  *   - the LINE↔Discord sync channel (LOBBY_MIRROR_DISCORD_CHANNEL_ID, even
  *     when hidden from @everyone; unless excluded), where the bot relays the
  *     LINE group and the website lobby;
- *   - every forum channel that @everyone can view and the bot can read:
+ *   - every forum channel of it that @everyone can view and the bot can read:
  *     the messages of its posts (threads) that fall inside the day — starter
  *     posts and replies, from active and archived threads. Archived threads
  *     are listed newest-archived first and the listing stops at the first
@@ -22,6 +24,11 @@
  * CHAT_EXPORT_EXCLUDE_CHANNEL_IDS, the admin channel 「大劍管理員」 and the
  * /意見 channel are always left out (config.ts) — also when one of them is a
  * forum or a single forum thread.
+ *
+ * When that server is not loaded (not in the gateway cache yet, an outage
+ * marks it unavailable, or the bot is not in it) nothing is read at all —
+ * the day is "unreadable" and tried again, never exported with only the
+ * sync channel (serverUnavailable).
  *
  * Work is bounded (config.ts): pages per channel / thread, archived-thread
  * pages per forum, threads per day. Every cut is counted in CollectResult,
@@ -105,6 +112,8 @@ export interface CollectResult {
   starterSkipped: number;
   /** See SourceSelection.sourceIdsIgnored. */
   sourceIdsIgnored: number;
+  /** See SourceSelection.serverUnavailable (nothing was read; failedChannels counts it once). */
+  serverUnavailable: boolean;
 }
 
 export function emptyCollectResult(): CollectResult {
@@ -120,6 +129,7 @@ export function emptyCollectResult(): CollectResult {
     archivedListsTruncated: 0,
     starterSkipped: 0,
     sourceIdsIgnored: 0,
+    serverUnavailable: false,
   };
 }
 
@@ -134,6 +144,13 @@ export interface SourceSelection {
    * forum post, a deleted channel, no permission): ignored, counted.
    */
   sourceIdsIgnored: number;
+  /**
+   * Default discovery only: the server (cfg.guildId) is not in the gateway
+   * cache, is marked unavailable, or lists no channel yet. Nothing is
+   * selected — not even the sync channel — so the day counts as unreadable
+   * instead of being exported with part of the server (review fix 2026-10-13).
+   */
+  serverUnavailable: boolean;
 }
 
 function isReadableType(ch: Channel | GuildBasedChannel | null | undefined): ch is ReadableChannel {
@@ -196,13 +213,13 @@ export async function selectSourceChannels(
   if (cfg.sourceChannelIds.length > 0) {
     for (const id of cfg.sourceChannelIds) await takeConfigured(id);
   } else {
-    const guilds = cfg.guildId
-      ? [client.guilds.cache.get(cfg.guildId)].filter((g): g is NonNullable<typeof g> => !!g)
-      : [...client.guilds.cache.values()];
-    for (const guild of guilds) {
-      for (const ch of guild.channels.cache.values()) {
-        if ((isReadableType(ch) || isForumType(ch)) && everyoneCanView(ch) && botCanReadHistory(ch)) take(ch);
-      }
+    // One server only (never every server the bot was added to).
+    const guild = cfg.guildId ? client.guilds.cache.get(cfg.guildId) : undefined;
+    if (!guild || guild.available === false || guild.channels.cache.size === 0) {
+      return { channels: [], forums: [], publicChannelsFound: null, sourceIdsIgnored: 0, serverUnavailable: true };
+    }
+    for (const ch of guild.channels.cache.values()) {
+      if ((isReadableType(ch) || isForumType(ch)) && everyoneCanView(ch) && botCanReadHistory(ch)) take(ch);
     }
     publicChannelsFound = [...picked.keys(), ...forums.keys()].filter((id) => !exclude.has(id) && id !== cfg.mirrorChannelId).length;
   }
@@ -218,6 +235,7 @@ export async function selectSourceChannels(
     forums: [...forums.values()].filter((ch) => !exclude.has(ch.id)).map(asForum),
     publicChannelsFound,
     sourceIdsIgnored,
+    serverUnavailable: false,
   };
 }
 
@@ -294,7 +312,11 @@ export function threadMayCoverWindow(t: ThreadLike, window: ExportWindow): boole
  * The forum's threads that may hold messages of the day: every active one,
  * then archived ones newest-archived first, stopping at the first page that
  * reaches a thread archived before the day start (or at the page cap →
- * truncated).
+ * truncated). The next page starts 1 ms after the oldest archive time seen:
+ * Discord's `before` is exclusive and finer than the millisecond discord.js
+ * reports, so `before = oldest` would skip threads archived in that same
+ * millisecond; the overlap is de-duplicated by id, and a page that brings no
+ * new thread ends the listing (counted as truncated when Discord says there is more).
  */
 export async function listForumThreads(
   forum: ForumLike,
@@ -308,6 +330,7 @@ export async function listForumThreads(
   const active = await forum.threads.fetchActive(false);
   for (const t of active.threads.values()) consider(t);
 
+  const listed = new Set<string>();
   let before: number | undefined;
   for (let page = 0; page < maxArchivedPages; page += 1) {
     const res = await forum.threads.fetchArchived(
@@ -316,8 +339,13 @@ export async function listForumThreads(
     );
     let oldest = Infinity;
     let size = 0;
+    let fresh = 0;
     for (const t of res.threads.values()) {
       size += 1;
+      if (!listed.has(t.id)) {
+        listed.add(t.id);
+        fresh += 1;
+      }
       const archivedAt = t.archiveTimestamp ?? NaN;
       if (Number.isFinite(archivedAt)) oldest = Math.min(oldest, archivedAt);
       if (Number.isFinite(archivedAt) && archivedAt < window.start) continue; // archived before the day: nothing in it
@@ -326,7 +354,9 @@ export async function listForumThreads(
     if (!res.hasMore || size === 0 || !Number.isFinite(oldest) || oldest < window.start) {
       return { threads: [...found.values()], archivedTruncated: false };
     }
-    before = oldest;
+    // Only threads already listed (over 100 archived within one millisecond): cannot page further.
+    if (fresh === 0) return { threads: [...found.values()], archivedTruncated: true };
+    before = oldest + 1;
   }
   return { threads: [...found.values()], archivedTruncated: true };
 }
@@ -349,8 +379,13 @@ export async function collectDiscordMessages(
 ): Promise<CollectResult> {
   const selfId = client.user?.id ?? '';
   const exclude = new Set([...cfg.excludeChannelIds, ...(opts.excludeIds ?? [])].filter(Boolean));
-  const { channels: sources, forums, publicChannelsFound, sourceIdsIgnored } = await selectSourceChannels(client, cfg, opts.excludeIds);
-  const result: CollectResult = { ...emptyCollectResult(), publicChannelsFound, sourceIdsIgnored };
+  const { channels: sources, forums, publicChannelsFound, sourceIdsIgnored, serverUnavailable } = await selectSourceChannels(
+    client,
+    cfg,
+    opts.excludeIds,
+  );
+  const result: CollectResult = { ...emptyCollectResult(), publicChannelsFound, sourceIdsIgnored, serverUnavailable };
+  if (serverUnavailable) result.failedChannels += 1; // nothing read: the day is unreadable, tried again
 
   for (const ch of sources) {
     try {

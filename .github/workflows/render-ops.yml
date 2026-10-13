@@ -7,12 +7,13 @@
 # LINE_BOT_CHANNEL_SECRET, optional LOBBY_MIRROR_LINE_GROUP_ID) — values never
 # appear in the log. Manual dispatch only; `status` is read-only.
 #
-# Weekly chat-log export (2026-10-13, docs/COMMUNITY_FEEDBACK.md): `apply` also
+# Daily chat-log export (2026-10-13, docs/COMMUNITY_FEEDBACK.md): `apply` also
 # copies, only when present, the Google service-account JSON (AVALON_STATS_
 # SHEETS_CREDENTIALS_JSON, else GOOGLE_SHEETS_CREDENTIALS_JSON) → Render
-# GOOGLE_SERVICE_ACCOUNT_JSON, and removes ANTHROPIC_API_KEY from Render (the
-# paid digest is gone). `status` prints present/absent only. No chat text or
-# name ever passes through this workflow.
+# GOOGLE_SERVICE_ACCOUNT_JSON, and removes ANTHROPIC_API_KEY (the paid digest is
+# gone) and COMMUNITY_DIGEST_SHEET_ID (it would override the 阿瓦隆百科 default)
+# from Render. `status` prints present/absent only. No chat text or name ever
+# passes through this workflow.
 name: Render ops
 
 on:

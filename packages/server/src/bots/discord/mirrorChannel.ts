@@ -5,7 +5,8 @@
  * a discord.js gateway: `mirrorChannelAdapter()` takes the slice of a
  * discord.js TextChannel it uses.
  *
- *   send        plain text, exactly as before
+ *   send        text; mentions disabled (review fix 2026-10-13): a LINE display
+ *               name or text such as "@everyone" or "<@id>" is shown, never pings
  *   sendFiles   LINE pictures as attachments; mentions disabled so a relayed
  *               label can never ping anyone (needs Attach Files in the channel)
  *   maxUploadBytes  the bot's upload limit for this server's boost tier
@@ -16,7 +17,7 @@ import { discordUploadLimitBytes } from '../media/relayMedia';
 
 /** What a discord.js message send accepts here (string or options object). */
 export type MirrorChannelSendPayload =
-  | string
+  | { content: string; allowedMentions: { parse: [] } }
   | {
       content: string;
       files: { attachment: Buffer; name: string }[];
@@ -31,7 +32,7 @@ export interface MirrorTextChannelLike {
 
 export function mirrorChannelAdapter(ch: MirrorTextChannelLike): DiscordChannelAdapter {
   return {
-    send: async (content: string) => ch.send(content),
+    send: async (content: string) => ch.send({ content, allowedMentions: { parse: [] } }),
     sendFiles: async (content, files) =>
       ch.send({
         content,

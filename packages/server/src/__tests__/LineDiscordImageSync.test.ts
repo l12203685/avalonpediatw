@@ -137,7 +137,7 @@ function lineRequest(body: unknown): { req: Request; res: Response & { statusCod
   const raw = JSON.stringify(body);
   const sig = crypto.createHmac('sha256', SECRET).update(raw).digest('base64');
   const req = { get: (h: string) => (h === 'X-Line-Signature' ? sig : undefined), body: JSON.parse(raw), rawBody: Buffer.from(raw) } as unknown as Request;
-  const res = {
+  const fake: { statusCode: number; status(code: number): typeof fake; json(): typeof fake } = {
     statusCode: 0,
     status(code: number) {
       this.statusCode = code;
@@ -146,7 +146,8 @@ function lineRequest(body: unknown): { req: Request; res: Response & { statusCod
     json() {
       return this;
     },
-  } as unknown as Response & { statusCode: number };
+  };
+  const res = fake as unknown as Response & { statusCode: number };
   return { req, res };
 }
 
@@ -159,7 +160,7 @@ function imageMsg(id: string, imageSet?: { id: string; index: number; total: num
 }
 
 /** Records every fetch URL; serves bytes per URL prefix. */
-function mockFetch(routes: Record<string, () => Response>): { fetchImpl: typeof fetch; calls: string[] } {
+function mockFetch(routes: Record<string, () => globalThis.Response>): { fetchImpl: typeof fetch; calls: string[] } {
   const calls: string[] = [];
   const fetchImpl = (async (input: string | URL) => {
     const url = String(input);
@@ -171,7 +172,7 @@ function mockFetch(routes: Record<string, () => Response>): { fetchImpl: typeof 
   return { fetchImpl, calls };
 }
 
-function bytesResponse(buf: Buffer): Response {
+function bytesResponse(buf: Buffer): globalThis.Response {
   return new Response(new Uint8Array(buf), { status: 200, headers: { 'content-length': String(buf.length) } });
 }
 
@@ -219,6 +220,8 @@ function setup(opts: {
   store?: RelayMediaStore | null;
   rate?: number;
   mediaTimeouts?: { downloadMs?: number; jobMs?: number; textWaitMs?: number };
+  /** CHAT_MIRROR_IMAGES=false wiring (bots/index.ts): no picture copied in either direction. */
+  imagesOff?: boolean;
 } = {}) {
   __resetChatMirrorForTests(); // each setup() gets its own mirror (the singleton is what the bot reads)
   const discord = mockDiscord(opts.discord);
@@ -230,7 +233,8 @@ function setup(opts: {
     discordChannelId: DISCORD_CH,
     discord: discord.adapter,
     lineReplyQueue: queue,
-    lineImageRelay: store ? { store, publicBaseUrl: BASE } : undefined,
+    lineImageRelay: store && !opts.imagesOff ? { store, publicBaseUrl: BASE } : undefined,
+    lineImagesToDiscord: !opts.imagesOff,
     logger,
     inboundRateLimit: { windowMs: 60_000, maxRequests: opts.rate ?? 100 },
   });
@@ -383,6 +387,93 @@ describe('LINE picture → Discord', () => {
     await postLine(h.bot, [{ ...ev, deliveryContext: { isRedelivery: true } }]);
     expect(h.discord.uploads).toHaveLength(1);
     expect(h.lobby).toHaveLength(1);
+  });
+
+  it('stickers and pictures do not use up the text limit: every text of a mixed burst reaches Discord', async () => {
+    const h = setup({ rate: 3, line: { content: { p1: () => Readable.from([jpeg(100)]) } } });
+    const text = (id: string, t: string) => groupEvent({ type: 'text', id, text: t }, `r-${id}`);
+    const sticker = (id: string) => groupEvent({ type: 'sticker', id, packageId: '1', stickerId: '2' }, `r-${id}`);
+    await postLine(h.bot, [text('t1', 'first'), sticker('k1'), text('t2', 'second'), sticker('k2'), groupEvent(imageMsg('p1'), 'r-p1'), text('t3', 'third')]);
+    await new Promise((r) => setImmediate(r));
+    const texts = h.discord.sent.map((s) => s.split('] ').pop()).filter((b) => ['first', 'second', 'third'].includes(b ?? ''));
+    expect(texts).toEqual(['first', 'second', 'third']);
+    expect(h.lobby.map((m) => m.message)).toEqual(['first', '（貼圖）', 'second', '（貼圖）', '（圖片）', 'third']);
+  });
+
+  it('Discord keeps the LINE order when the earlier event\'s name lookup is the slow one — picture then text, text then picture', async () => {
+    for (const slowFirst of [true, false]) {
+      // slowFirst: the picture comes first; otherwise the text does. Either way the first one's lookup is slow.
+      const h = setup({ line: { content: { p1: () => Readable.from([jpeg(100)]) } } });
+      let call = 0;
+      (h.sdk.client as unknown as { getGroupMemberProfile: () => Promise<{ displayName: string }> }).getGroupMemberProfile = async () => {
+        call += 1;
+        await new Promise((r) => setTimeout(r, call === 1 ? 40 : 0)); // the first event's lookup is the slow one
+        return { displayName: LINE_NAME };
+      };
+      const first = slowFirst ? groupEvent(imageMsg('p1'), 'r1') : groupEvent({ type: 'text', id: 't0', text: 'before-pic' }, 'r1');
+      const second = slowFirst ? groupEvent({ type: 'text', id: 't1', text: 'after-pic' }, 'r2') : groupEvent(imageMsg('p1'), 'r2');
+      const a = lineRequest({ destination: 'U', events: [first] });
+      const b = lineRequest({ destination: 'U', events: [second] });
+      const pa = h.bot.handleWebhook(a.req, a.res);
+      await new Promise((r) => setTimeout(r, 5));
+      const pb = h.bot.handleWebhook(b.req, b.res);
+      await Promise.all([pa, pb]);
+      await h.bot.settleMediaRelays();
+      await new Promise((r) => setTimeout(r, 5));
+      expect(h.discord.order).toEqual(slowFirst ? ['file:（圖片）', 'text:after-pic'] : ['text:before-pic', 'file:（圖片）']);
+    }
+  });
+
+  it('an image set keeps 1/2, 2/2 on Discord although the first picture\'s lookup is slower', async () => {
+    const h = setup({ line: { content: { s1: () => Readable.from([jpeg(100)]), s2: () => Readable.from([jpeg(100)]) } } });
+    let call = 0;
+    (h.sdk.client as unknown as { getGroupMemberProfile: () => Promise<{ displayName: string }> }).getGroupMemberProfile = async () => {
+      call += 1;
+      await new Promise((r) => setTimeout(r, call === 1 ? 40 : 0));
+      return { displayName: LINE_NAME };
+    };
+    const set = (index: number) => ({ id: 'set-B', index, total: 2 });
+    const a = lineRequest({ destination: 'U', events: [groupEvent(imageMsg('s1', set(1)), 'r1')] });
+    const b = lineRequest({ destination: 'U', events: [groupEvent(imageMsg('s2', set(2)), 'r2')] });
+    const pa = h.bot.handleWebhook(a.req, a.res);
+    await new Promise((r) => setTimeout(r, 5));
+    const pb = h.bot.handleWebhook(b.req, b.res);
+    await Promise.all([pa, pb]);
+    await h.bot.settleMediaRelays();
+    expect(h.discord.uploads.map((u) => u.content.split('] ').pop())).toEqual(['（圖片 1/2）', '（圖片 2/2）']);
+  });
+
+  it('too many pictures waiting: the one not copied still reaches Discord as a note (not silently dropped)', async () => {
+    const ids = Array.from({ length: 21 }, (_, i) => `w${i}`);
+    const content = Object.fromEntries(ids.map((id) => [id, () => Readable.from([jpeg(100)])]));
+    const h = setup({ discord: { firstUploadHangs: true }, line: { content }, mediaTimeouts: { jobMs: 300 } });
+    await postLine(h.bot, ids.map((id) => groupEvent(imageMsg(id), `r-${id}`)));
+    await new Promise((r) => setTimeout(r, 5));
+    expect(h.discord.sent.map((s) => s.split('] ').pop())).toEqual(['（圖片沒有同步過來，請到 LINE 看）']);
+    expect(h.discord.uploads).toHaveLength(19); // the first hung (timed out), 2 … 20 uploaded
+    expect(h.bot.getWebhookStats()).toMatchObject({ imagesSkipped: 1, imageNotesToDiscord: 1, imageFailures: 1 });
+  });
+
+  it('CHAT_MIRROR_IMAGES=false: LINE pictures are not downloaded; Discord gets one note per picture or set', async () => {
+    const h = setup({ imagesOff: true, line: { content: { x: () => Readable.from([jpeg(100)]) } } });
+    const set = (index: number) => ({ id: 'set-C', index, total: 2 });
+    await postLine(h.bot, [groupEvent(imageMsg('x'), 'r1'), groupEvent(imageMsg('y1', set(1)), 'r2'), groupEvent(imageMsg('y2', set(2)), 'r3')]);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(h.sdk.contentCalls).toEqual([]);
+    expect(h.discord.uploads).toEqual([]);
+    expect(h.discord.sent.map((s) => s.split('] ').pop())).toEqual(['（圖片，請到 LINE 看）', '（圖片，請到 LINE 看）']);
+    expect(h.lobby.map((m) => m.message)).toEqual(['（圖片）', '（圖片 ×2）']);
+    expect(h.mirror.lineImageRelay()).toBeNull(); // Discord → LINE off as well
+  });
+
+  it('events of other groups do not fill the redelivery memory (only events this process acts on are remembered)', async () => {
+    const h = setup();
+    const other = (id: string) => ({ ...groupEvent(imageMsg(id), `r-${id}`, { webhookEventId: `E-${id}` }), source: { type: 'group', groupId: 'Cother', userId: 'U9' } });
+    await postLine(h.bot, [other('o1'), other('o2'), other('o3')]);
+    const seen = (h.bot as unknown as { seenEventIds: Set<string> }).seenEventIds;
+    expect(seen.size).toBe(0);
+    await postLine(h.bot, [groupEvent({ type: 'text', id: 'm1', text: 'hi' }, 'rt', { webhookEventId: 'E-m1' })]);
+    expect(seen.size).toBe(1);
   });
 
   it('a rate-limited speaker gets no upload (and no download)', async () => {
@@ -666,10 +757,74 @@ describe('Discord picture → LINE (reply queue + relay route)', () => {
     const h = setup({ rate: 1 });
     const f = mockFetch({ 'https://cdn.discordapp.com/': () => bytesResponse(jpeg(100)) });
     const deps = { targetChannelId: DISCORD_CH, mirror: h.mirror, fetchImpl: f.fetchImpl };
-    expect(await handleDiscordMirrorMessage(discordMessage({ content: 'one' }), deps)).toBe('text');
+    expect(await handleDiscordMirrorMessage(discordMessage({ id: 'dm8', attachmentsList: [attachment({ key: 'q' })] }), deps)).toBe('media');
+    expect(f.calls).toHaveLength(1);
     expect(await handleDiscordMirrorMessage(discordMessage({ id: 'dm9', attachmentsList: [attachment({ key: 'r' })] }), deps)).toBe('rate-limited');
+    expect(f.calls).toHaveLength(1); // nothing more downloaded
+    expect(h.store!.stats().entries).toBe(1); // only the admitted picture's copy
+  });
+
+  it('pictures alone do not use up the text limit: five screenshots, then the text still goes through', async () => {
+    const h = setup({ rate: 2 });
+    const f = mockFetch({ 'https://cdn.discordapp.com/': () => bytesResponse(jpeg(100)) });
+    const deps = { targetChannelId: DISCORD_CH, mirror: h.mirror, fetchImpl: f.fetchImpl };
+    const outcomes: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      outcomes.push(await handleDiscordMirrorMessage(discordMessage({ id: `shot${i}`, attachmentsList: [attachment({ key: `s${i}` })] }), deps));
+    }
+    expect(outcomes).toEqual(['media', 'media', 'rate-limited', 'rate-limited', 'rate-limited']); // pictures: their own limit
+    expect(await handleDiscordMirrorMessage(discordMessage({ id: 'txt', content: 'see-above' }), deps)).toBe('text');
+    expect(h.lobby.map((m) => m.message).at(-1)).toBe('see-above');
+    await drainOnce(h.bot, 'rt');
+    expect(JSON.stringify(h.sdk.replies)).toContain('see-above');
+  });
+
+  it('push mode (no reply queue): a picture or sticker alone never goes to LINE (quota); text still does', async () => {
+    __resetChatMirrorForTests();
+    const pushes: unknown[] = [];
+    const mirror = initializeChatMirror({
+      lineGroupId: GROUP,
+      discordChannelId: DISCORD_CH,
+      line: { pushMessage: async (_to, m) => void pushes.push(m) },
+      logger,
+    });
+    const lobby: LobbyChatMessage[] = [];
+    mirror.setLobbyIngest((m) => lobby.push(m));
+    const f = mockFetch({ 'https://cdn.discordapp.com/': () => bytesResponse(jpeg(100)) });
+    const deps = { targetChannelId: DISCORD_CH, mirror, fetchImpl: f.fetchImpl };
+    expect(await handleDiscordMirrorMessage(discordMessage({ id: 'a', attachmentsList: [attachment({ key: 'a' })] }), deps)).toBe('media');
+    expect(await handleDiscordMirrorMessage(discordMessage({ id: 'b', stickerCount: 1 }), deps)).toBe('media');
+    expect(pushes).toEqual([]);
     expect(f.calls).toEqual([]);
-    expect(h.store!.stats().entries).toBe(0);
+    expect(lobby.map((m) => m.message)).toEqual(['（圖片）', '（貼圖）']); // the lobby still sees them
+    expect(await handleDiscordMirrorMessage(discordMessage({ id: 'c', content: 'hello', attachmentsList: [attachment({ key: 'c' })] }), deps)).toBe('media');
+    expect(pushes).toHaveLength(1); // text with a picture: the text line, as before
+  });
+
+  it('a website lobby line sent while a Discord picture is downloading reaches LINE after it (the lobby / Discord order)', async () => {
+    const h = setup();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const f = mockFetch({
+      'https://cdn.discordapp.com/': () => bytesResponse(jpeg(100)),
+    });
+    const slowFetch = (async (input: string | URL) => {
+      await gate;
+      return f.fetchImpl(input);
+    }) as unknown as typeof fetch;
+    const d1 = handleDiscordMirrorMessage(discordMessage({ id: 'd1', content: 'D1', attachmentsList: [attachment({ key: 'd1' })] }), {
+      targetChannelId: DISCORD_CH,
+      mirror: h.mirror,
+      fetchImpl: slowFetch,
+    });
+    await new Promise((r) => setTimeout(r, 5)); // D1 is downloading
+    const l1 = h.mirror.fanout({ id: 'l1', playerId: 'p', playerName: 'Web', message: 'L1', timestamp: Date.now(), source: 'lobby' });
+    await new Promise((r) => setTimeout(r, 5));
+    release();
+    await Promise.all([d1, l1]);
+    await drainOnce(h.bot, 'rt');
+    const shape = h.sdk.replies[0].messages.map((m) => (m.type === 'image' ? 'IMG' : m.text!.split('] ').pop()));
+    expect(shape).toEqual(['D1 （圖片）', 'IMG', 'L1']);
   });
 
   it('text-only messages keep the exact pre-image behaviour', async () => {

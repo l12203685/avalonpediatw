@@ -28,8 +28,14 @@
  *   - the holder deletes the day's rows in 聊天紀錄 before appending (rows
  *     without a 完成 row are a write that was cut off — killed process,
  *     Sheets error), then appends, then writes 完成.
- * After each pass, days older than the last 7 complete days are deleted from
- * both tabs (retried 10 minutes later when that failed or had to wait).
+ * Retention: days older than the last 7 complete days are deleted from both
+ * tabs once per day — right after a start, then from 04:30 when a day
+ * leaves the window (retried 10 minutes later when that failed or had to
+ * wait). It needs only the sheet, so it also runs while Discord is down,
+ * and — retention only, nothing created or appended — while the export is
+ * turned off (CHAT_EXPORT_ENABLED=false) or the public sheet is refused
+ * (CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0): rows already written never outlive
+ * the 7 days (owner 2026-10-13: 「最多保留近一週」). Review fix 2026-10-13.
  *
  * Every row deletion (retention, rows of an interrupted write) holds the
  * sheet-wide cleanup lock: Google deletes rows by index, and two instances
@@ -40,7 +46,7 @@
 
 import crypto from 'crypto';
 import { SheetError } from '../digest/sheets';
-import { describeError } from '../feedback/service';
+import { describeError } from '../media/bytes';
 import {
   CHAT_EXPORT_CLAIM_RENEW_MS,
   CHAT_EXPORT_CLAIM_STALE_MS,
@@ -62,6 +68,7 @@ import type { ChatExportDiscordPort } from './discordPort';
 import { buildExportRows } from './rows';
 import {
   ChatCleanupLockLostError,
+  ChatDeleteOutcomeUnknownError,
   ChatTabConflictError,
   defaultChatSheetFactory,
   type ChatExportSheetPort,
@@ -136,7 +143,10 @@ export interface ChatExportCatchUp {
 export interface ChatExportStatus {
   enabled: boolean;
   sheetConfigured: boolean;
-  /** Writing to the link-public 阿瓦隆百科 workbook (the default since 2026-10-13). */
+  /**
+   * Writing to the link-public 阿瓦隆百科 workbook (the default since
+   * 2026-10-13): its target and the sheet configured (credentials usable).
+   */
   publicSheet: boolean;
   lastRun: ChatExportLastRun | null;
   catchUp: ChatExportCatchUp | null;
@@ -174,6 +184,7 @@ function sheetErrorText(err: unknown): string {
   if (err instanceof SheetError) return err.message;
   if (err instanceof ChatTabConflictError) return err.message;
   if (err instanceof ChatCleanupLockLostError) return err.message;
+  if (err instanceof ChatDeleteOutcomeUnknownError) return err.message;
   return describeError(err);
 }
 
@@ -243,8 +254,10 @@ export class ChatExportService {
   private readonly retryAt = new Map<string, number>();
   /** The whole pass waits until this time (Sheets failing, tab conflict, Discord unreadable). */
   private passRetryAt = 0;
-  /** > 0: the last retention failed or found the cleanup lock taken; run it again from then (even with no day due). */
+  /** > 0: the last retention failed or found the cleanup lock taken; not again before then. */
   private pruneRetryAt = 0;
+  /** oldestKeptDay() of the last retention that finished (deleted, or found nothing to delete); '' = none yet. */
+  private prunedFor = '';
   private catchUp: CatchUpState | null = null;
   private notConfiguredLoggedOn = '';
   /** The sourceIdsIgnored count last warned about (warned again only when it changes). */
@@ -264,10 +277,11 @@ export class ChatExportService {
 
   getStatus(): ChatExportStatus {
     const cfg = this.config();
+    const sheetConfigured = !!cfg.sheetId && cfg.sheetCredentialsUsable;
     return {
       enabled: cfg.enabled,
-      sheetConfigured: !!cfg.sheetId && cfg.sheetCredentialsUsable,
-      publicSheet: cfg.publicSheet,
+      sheetConfigured,
+      publicSheet: cfg.publicSheet && sheetConfigured,
       lastRun: this.lastRun ? { ...this.lastRun } : null,
       catchUp: this.catchUpStatus(),
     };
@@ -376,18 +390,40 @@ export class ChatExportService {
       runId: this.runId,
     });
     const takenAt = this.now();
+    let release = true;
     try {
       // Inside the try: a 清理中 that landed although its request failed is released too.
       await sheet.appendLog(row(CHAT_EXPORT_STATE_CLEANUP, takenAt));
       if (cleanupHolder(await sheet.readLog(), this.now()) !== this.runId) return { held: false };
       return { held: true, value: await work(() => this.now() - takenAt < CHAT_EXPORT_CLEANUP_MAX_MS) };
+    } catch (err) {
+      // A delete that may still land: keep the lock until it lapses, so no other
+      // instance deletes by indices that late delete would shift.
+      if (err instanceof ChatDeleteOutcomeUnknownError) release = false;
+      throw err;
     } finally {
-      try {
-        await sheet.appendLog(row(CHAT_EXPORT_STATE_CLEANUP_END, this.now()));
-      } catch (err) {
-        this.logger.warn(`cleanup lock not released (${sheetErrorText(err)}) — it lapses after 10 minutes`);
+      if (release) {
+        try {
+          await sheet.appendLog(row(CHAT_EXPORT_STATE_CLEANUP_END, this.now()));
+        } catch (err) {
+          this.logger.warn(`cleanup lock not released (${sheetErrorText(err)}) — it lapses after 10 minutes`);
+        }
+      } else {
+        this.logger.warn('cleanup lock kept: a row delete may still be applied — it lapses after 10 minutes');
       }
     }
+  }
+
+  /**
+   * Retention is due: never ran in this process (right after a start), or a
+   * day left the 7-day window since the last one and it is past 04:30 (with
+   * the day's export) — and no retry time is pending (`afterPass`: the
+   * pass that just ran set its own retry time; only the retention's counts).
+   */
+  private pruneDue(now: number, afterPass = false): boolean {
+    if (now < (afterPass ? this.pruneRetryAt : Math.max(this.pruneRetryAt, this.passRetryAt))) return false;
+    if (this.prunedFor === oldestKeptDay(now)) return false;
+    return this.prunedFor === '' || isChatExportRunTime(now);
   }
 
   /**
@@ -406,6 +442,7 @@ export class ChatExportService {
       const oldLogRows = (await sheet.readLog()).filter((e) => old(e.day)).length;
       if (oldRows === 0 && oldLogRows === 0) {
         this.pruneRetryAt = 0;
+        this.prunedFor = oldest;
         return;
       }
       const res = await this.withCleanupLock(sheet, async (stillHeld) => ({
@@ -418,6 +455,7 @@ export class ChatExportService {
         return;
       }
       this.pruneRetryAt = 0;
+      this.prunedFor = oldest;
       this.logger.info(`pruned ${res.value.rows} row(s) of days before ${oldest} (export log: ${res.value.log})`);
     } catch (err) {
       this.logger.warn(`pruning days before ${oldest} failed: ${sheetErrorText(err)} — trying again in 10 minutes`);
@@ -425,15 +463,48 @@ export class ChatExportService {
     }
   }
 
+  /**
+   * Retention only (the export is turned off, or its sheet refused): prune
+   * the two chat tabs of cfg.retentionSheetId when they already exist —
+   * nothing is created, appended or read from Discord. Once per day, like
+   * the retention of a running export.
+   */
+  private async retainOnly(cfg: ChatExportConfig, now: number): Promise<void> {
+    if (this.inFlight || !cfg.retentionSheetId || !cfg.sheetCredentialsUsable || !this.pruneDue(now)) return;
+    const { sheet } = this.sheetFactory({ ...cfg, sheetId: cfg.retentionSheetId });
+    if (!sheet) return;
+    this.inFlight = true;
+    try {
+      let ours: boolean;
+      try {
+        ours = await sheet.prepareExisting();
+      } catch (err) {
+        this.logger.warn(`retention check failed: ${sheetErrorText(err)} — trying again in 10 minutes`);
+        this.pruneRetryAt = this.later(now);
+        return;
+      }
+      if (!ours) {
+        this.prunedFor = oldestKeptDay(now); // no chat tabs there: nothing kept, nothing to delete
+        this.pruneRetryAt = 0;
+        return;
+      }
+      await this.prune(sheet, now);
+    } finally {
+      this.inFlight = false;
+    }
+  }
+
   /** One scheduler step; call every minute (start()) or directly in tests. */
   async tick(now: number = this.now()): Promise<ChatExportTickReport> {
     const cfg = this.config();
-    if (!cfg.enabled) return { state: 'disabled', days: [] };
+    if (!cfg.enabled) {
+      await this.retainOnly(cfg, now);
+      return { state: 'disabled', days: [] };
+    }
     if (this.inFlight) return { state: 'busy', days: [] };
     const { due, waiting } = this.dueDays(now);
-    const pruneDue = this.pruneRetryAt > 0 && now >= Math.max(this.pruneRetryAt, this.passRetryAt);
+    const pruneDue = this.pruneDue(now);
     if (due.length === 0 && !pruneDue) return { state: waiting > 0 ? 'waiting' : 'idle', days: [] };
-    if (!this.discord.isReady()) return { state: 'discord-not-ready', days: [] };
     const { sheet, reason } = this.sheetFactory(cfg);
     if (!sheet) {
       const today = taipeiParts(now).date;
@@ -441,11 +512,18 @@ export class ChatExportService {
         this.notConfiguredLoggedOn = today;
         this.logger.warn(`not exported: sheet not configured (${cfg.sheetIdRefused ? 'public-sheet-refused' : reason})`);
       }
-      this.pruneRetryAt = 0; // that sheet is no longer configured
+      // Refused (or no sheet id): rows already in the target still leave after 7 days.
+      await this.retainOnly(cfg, now);
       // Not record(): a day is not "attempted" while nothing can be written.
       const day = due[due.length - 1];
       if (day) this.lastRun = { day, at: new Date(now).toISOString(), messages: 0, channels: 0, threads: 0, truncated: 0, outcome: 'not-configured' };
       return { state: 'not-configured', days: [] };
+    }
+    if (!this.discord.isReady()) {
+      // Nothing can be read; the retention needs only the sheet (an outage or an
+      // expired Discord token must not keep old days in the sheet).
+      if (pruneDue) await this.pruneAlone(sheet, now);
+      return { state: 'discord-not-ready', days: [] };
     }
 
     this.inFlight = true;
@@ -466,7 +544,6 @@ export class ChatExportService {
           days.push({ day: due[0], outcome });
         }
         this.passRetryAt = this.later(now);
-        if (this.pruneRetryAt > 0) this.pruneRetryAt = this.passRetryAt;
         return { state: 'ran', days };
       }
       let reachedSheet = false;
@@ -487,8 +564,29 @@ export class ChatExportService {
           break;
         }
       }
-      if (reachedSheet || due.length === 0) await this.prune(sheet, now);
+      // Retention once per day (and on its retry), after the pass so a fresh catch-up is complete first.
+      if ((reachedSheet || due.length === 0) && this.pruneDue(now, true)) {
+        await this.prune(sheet, now);
+      }
       return { state: 'ran', days };
+    } finally {
+      this.inFlight = false;
+    }
+  }
+
+  /** The retention without an export pass (Discord not ready): prepare the tabs, prune. */
+  private async pruneAlone(sheet: ChatExportSheetPort, now: number): Promise<void> {
+    if (this.inFlight) return;
+    this.inFlight = true;
+    try {
+      try {
+        await sheet.prepare();
+      } catch (err) {
+        this.logger.warn(`retention: sheet check failed: ${sheetErrorText(err)} — trying again in 10 minutes`);
+        this.pruneRetryAt = this.later(now);
+        return;
+      }
+      await this.prune(sheet, now);
     } finally {
       this.inFlight = false;
     }
@@ -516,6 +614,13 @@ export class ChatExportService {
     const attempt = (this.readAttempts.get(day) ?? 0) + 1;
     this.readAttempts.set(day, attempt);
     const collected: CollectResult = await this.discord.collect(cfg, w);
+    if (collected.serverUnavailable) {
+      this.logger.warn(
+        `day ${day}: the Discord server is not available (not loaded yet, an outage, or DISCORD_GUILD_ID names a server the bot is not in) — reading again in 10 minutes`,
+      );
+      this.record(day, 'read-error');
+      return { outcome: 'read-error', stopPass: true };
+    }
     if (collected.publicChannelsFound === 0) {
       this.logger.warn('no channel visible to @everyone was found — only the sync channel is read (set CHAT_EXPORT_EXTRA_SOURCE_IDS)');
     }
@@ -653,10 +758,11 @@ export function getChatExportService(): ChatExportService | null {
 export function chatExportStatus(): ChatExportStatus {
   if (instance) return instance.getStatus();
   const cfg = readChatExportConfig();
+  const sheetConfigured = !!cfg.sheetId && cfg.sheetCredentialsUsable;
   return {
     enabled: cfg.enabled,
-    sheetConfigured: !!cfg.sheetId && cfg.sheetCredentialsUsable,
-    publicSheet: cfg.publicSheet,
+    sheetConfigured,
+    publicSheet: cfg.publicSheet && sheetConfigured,
     lastRun: null,
     catchUp: null,
   };

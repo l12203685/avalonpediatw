@@ -33,8 +33,12 @@ import { answerFeedbackTextCommand, getFeedbackService } from '../feedback/servi
  */
 const userRoomMap = new Map<string, string>();
 
-/** How many handled message-event ids are remembered for redelivery dedupe (see isDuplicateDelivery). */
-const LINE_SEEN_EVENT_IDS_MAX = 500;
+/**
+ * How many handled message-event ids are remembered for redelivery dedupe
+ * (see isDuplicateDelivery). Only events this process acts on are recorded
+ * (the mirror group, 1:1 texts), ids only — a few hundred KB at most.
+ */
+const LINE_SEEN_EVENT_IDS_MAX = 2000;
 
 /** LINE → Discord pictures waiting for download/upload; more are skipped (counted). */
 export const LINE_MEDIA_MAX_PENDING = 20;
@@ -121,7 +125,7 @@ export interface LineWebhookStats {
   feedbackReplies: number;
   /** 2026-10-13 media sync — counts only. LINE pictures uploaded to Discord. */
   imagesToDiscord: number;
-  /** LINE pictures sent to Discord as a text note (too large / download or upload failed). */
+  /** LINE pictures sent to Discord as a text note (too large, download or upload failed, too many waiting, or CHAT_MIRROR_IMAGES=false). */
   imageNotesToDiscord: number;
   /** LINE pictures not relayed (rate limit or too many waiting). */
   imagesSkipped: number;
@@ -175,6 +179,8 @@ export class LineBotClient {
   private mediaPending = 0;
   /** Latest LINE text / note that waits for earlier pictures (settleMediaRelays). */
   private textAfterPictures: Promise<void> = Promise.resolve();
+  /** LINE texts / notes between their arrival and their hand-off to Discord (pictures arriving later wait for them). */
+  private textsInFlight: Promise<void> = Promise.resolve();
   private readonly mediaTimeouts: { downloadMs: number; jobMs: number; textWaitMs: number };
   /** Image-set id → whether the set was admitted (one lobby marker + rate-limit hit per set). */
   private imageSets = new Map<string, { admitted: boolean; at: number }>();
@@ -243,7 +249,12 @@ export class LineBotClient {
         // never have gone out. An event first seen as a redelivery (the
         // original timed out before reaching us, e.g. a Render cold start)
         // is handled normally.
-        const duplicate = this.isDuplicateDelivery(event);
+        // Only events this process acts on are remembered (the mirror group, 1:1
+        // texts): other groups' pictures and stickers must not push them out.
+        const tracked =
+          (source.type === 'group' && this.isMirrorGroup(source.groupId)) ||
+          (source.type === 'user' && event.type === 'message' && event.message.type === 'text');
+        const duplicate = tracked && this.isDuplicateDelivery(event);
 
         // #82 three-way sync: anything from the configured lobby-mirror group
         // is bridge traffic. Text lands in the lobby ring buffer (→ web
@@ -478,50 +489,92 @@ export class LineBotClient {
     if (!targetGroup || targetGroup !== groupId) {
       return;
     }
+    // The pictures posted before this text, as of its arrival (before the name lookup).
+    const after = this.picturesSoFar();
+    const end = this.textInFlight();
+    let handedOff = false;
+    try {
+      // 2026-10-12 community feedback: reduce the text to topic counts
+      // (numbers only, see bots/feedback) before anything else can drop it.
+      getFeedbackService().observe('line', text);
 
-    // 2026-10-12 community feedback: reduce the text to topic counts
-    // (numbers only, see bots/feedback) before anything else can drop it.
-    getFeedbackService().observe('line', text);
+      const mirror = getChatMirror();
+      if (!mirror) {
+        console.warn('[LINE→lobby] ChatMirror not initialised yet, dropping message');
+        return;
+      }
 
-    const mirror = getChatMirror();
-    if (!mirror) {
-      console.warn('[LINE→lobby] ChatMirror not initialised yet, dropping message');
-      return;
-    }
+      const displayName = await this.displayNameFor(groupId, userId);
 
-    const displayName = await this.displayNameFor(groupId, userId);
+      const ingested = mirror.ingestInbound({
+        source: 'line',
+        platformUserId: userId ?? 'unknown',
+        displayName,
+        text,
+        messageId: `line:${messageId}`,
+      });
 
-    const ingested = mirror.ingestInbound({
-      source: 'line',
-      platformUserId: userId ?? 'unknown',
-      displayName,
-      text,
-      messageId: `line:${messageId}`,
-    });
-
-    if (ingested) {
-      // Cross-push to Discord (lobby-ingest callback handles web clients),
-      // after any picture posted before it.
-      this.fanoutAfterPictures(mirror, ingested);
+      if (ingested) {
+        // Cross-push to Discord (lobby-ingest callback handles web clients),
+        // after any picture posted before it.
+        this.fanoutAfterPictures(mirror, ingested, after, end);
+        handedOff = true;
+      }
+    } finally {
+      if (!handedOff) end();
     }
   }
 
   /**
-   * crossFanout a LINE text / short note to Discord. When pictures posted
-   * before it are still being relayed, it waits for them (at most
-   * textWaitMs) so Discord shows them in the LINE order; otherwise it goes
-   * at once, exactly as before. Never throws.
+   * Mark a LINE text / note as on its way to Discord, from its arrival until
+   * it is handed to Discord (or dropped): a picture that arrives meanwhile
+   * waits for it (at most textWaitMs), so Discord keeps the LINE order in
+   * both directions even when this text's name lookup is the slow one.
+   * Returns the function that ends the mark; it must always be called.
    */
-  private fanoutAfterPictures(mirror: ChatMirror, msg: LobbyChatMessage): void {
+  private textInFlight(): () => void {
+    let end: () => void = () => undefined;
+    const done = new Promise<void>((resolve) => {
+      end = resolve;
+    });
+    this.textsInFlight = Promise.all([this.textsInFlight, done]).then(() => undefined);
+    return end;
+  }
+
+  /**
+   * The picture jobs queued so far, or null when none is pending. Taken when
+   * an event ARRIVES (before its display-name lookup), so a text waits for
+   * exactly the pictures posted before it — not for one posted after it whose
+   * lookup happened to return first (review fix 2026-10-13).
+   */
+  private picturesSoFar(): Promise<void> | null {
+    return this.mediaPending > 0 ? this.mediaChain : null;
+  }
+
+  /**
+   * crossFanout a LINE text / short note to Discord. When pictures posted
+   * before it (`after`, taken at its arrival) are still being relayed, it
+   * waits for them (at most textWaitMs) so Discord shows them in the LINE
+   * order; otherwise it goes at once, exactly as before. Never throws.
+   */
+  private fanoutAfterPictures(
+    mirror: ChatMirror,
+    msg: LobbyChatMessage,
+    after: Promise<void> | null,
+    end: () => void = () => undefined,
+  ): void {
     const send = (): Promise<void> =>
-      mirror.crossFanout(msg).catch((err) => {
-        console.warn(`[LINE→Discord] crossFanout rejected (${describeError(err)})`);
-      });
-    if (this.mediaPending === 0) {
+      mirror
+        .crossFanout(msg)
+        .catch((err) => {
+          console.warn(`[LINE→Discord] crossFanout rejected (${describeError(err)})`);
+        })
+        .finally(end);
+    if (!after) {
       void send();
       return;
     }
-    const sent = raceTimeout(this.mediaChain, this.mediaTimeouts.textWaitMs, () => undefined).then(send, send);
+    const sent = raceTimeout(after, this.mediaTimeouts.textWaitMs, () => undefined).then(send, send);
     this.textAfterPictures = Promise.all([this.textAfterPictures, sent]).then(() => undefined);
   }
 
@@ -552,9 +605,13 @@ export class LineBotClient {
    *            → a short text (「（貼圖）」, 「（影片，請到 LINE 看）」…) to the
    *              lobby and Discord, exactly like a text message.
    *
-   * Rate limit: the same per-user inbound limit as text; an image set
-   * counts once. Downloads run one at a time in the background so the
-   * webhook still answers LINE promptly. Never throws.
+   * Rate limit: marker-only lines have their own per-user limit (ChatMirror
+   * kind 'media'), so stickers and pictures never use up the text limit; an
+   * image set counts once. Downloads run one at a time in the background so
+   * the webhook still answers LINE promptly; a picture takes its place in that
+   * line when its event arrives (before the name lookup), so Discord keeps
+   * the LINE order. Too many waiting, or CHAT_MIRROR_IMAGES=false → a text
+   * note instead of the file (once per image set). Never throws.
    */
   private async handleGroupMedia(
     groupId: string,
@@ -571,40 +628,72 @@ export class LineBotClient {
     if (message.type !== 'image') {
       const note = LINE_MEDIA_NOTE[message.type];
       if (!note) return;
-      const displayName = await this.displayNameFor(groupId, userId);
-      const ingested = mirror.ingestInbound({ source: 'line', platformUserId, displayName, text: note, messageId });
-      if (!ingested) return;
-      this.stats.mediaNotesToDiscord += 1;
-      this.fanoutAfterPictures(mirror, ingested);
+      const after = this.picturesSoFar();
+      const end = this.textInFlight();
+      let handedOff = false;
+      try {
+        const displayName = await this.displayNameFor(groupId, userId);
+        const ingested = mirror.ingestInbound({ source: 'line', platformUserId, displayName, text: note, messageId, kind: 'media' });
+        if (!ingested) return;
+        this.stats.mediaNotesToDiscord += 1;
+        this.fanoutAfterPictures(mirror, ingested, after, end);
+        handedOff = true;
+      } finally {
+        if (!handedOff) end();
+      }
       return;
     }
 
     const set = message.imageSet ?? null;
-    const displayName = await this.displayNameFor(groupId, userId);
-    if (!this.admitImage(mirror, { platformUserId, displayName, messageId, set })) {
-      this.stats.imagesSkipped += 1;
-      return;
+    const copy = mirror.lineImagesToDiscordEnabled();
+    // Place in the picture line taken now, before the (slow) name lookup.
+    const after = this.picturesSoFar();
+    const slot = copy ? this.reserveMediaSlot() : null;
+    // Not copied → a note instead, kept in order like a text.
+    const end = slot ? null : this.textInFlight();
+    let used = false;
+    try {
+      const displayName = await this.displayNameFor(groupId, userId);
+      const admit = this.admitImage(mirror, { platformUserId, displayName, messageId, set });
+      if (!admit.admitted) {
+        this.stats.imagesSkipped += 1;
+        return;
+      }
+      const relayed: LobbyChatMessage = {
+        id: messageId,
+        playerId: `line:${platformUserId}`,
+        playerName: displayName.trim() || 'line-user',
+        message: lineImageLabel(set),
+        timestamp: Date.now(),
+        source: 'line',
+      };
+      if (!slot) {
+        // Not copied (turned off, or too many waiting): Discord still learns there was a picture.
+        if (copy) this.stats.imagesSkipped += 1;
+        if (admit.firstOfSet) {
+          const note = copy ? MIRROR_MEDIA_TEXT.lineImageFailed : MIRROR_MEDIA_TEXT.lineImageOff;
+          this.stats.imageNotesToDiscord += 1;
+          this.fanoutAfterPictures(mirror, { ...relayed, message: note }, after, end ?? undefined);
+          used = true;
+        }
+        return;
+      }
+      const fromLine = message.contentProvider?.type !== 'external';
+      const fetchImage = (maxBytes: number): Promise<LineImageFetch> =>
+        fromLine ? this.downloadContent(message.id, maxBytes) : Promise.resolve({ ok: false, reason: 'failed' });
+      slot.run(() => mirror.postLineImageToDiscord(relayed, fetchImage));
+      used = true;
+    } finally {
+      if (slot && !used) slot.cancel();
+      if (end && !used) end();
     }
-
-    const relayed: LobbyChatMessage = {
-      id: messageId,
-      playerId: `line:${platformUserId}`,
-      playerName: displayName.trim() || 'line-user',
-      message: lineImageLabel(set),
-      timestamp: Date.now(),
-      source: 'line',
-    };
-    const fromLine = message.contentProvider?.type !== 'external';
-    const fetchImage = (maxBytes: number): Promise<LineImageFetch> =>
-      fromLine ? this.downloadContent(message.id, maxBytes) : Promise.resolve({ ok: false, reason: 'failed' });
-    const scheduled = this.scheduleMediaJob(() => mirror.postLineImageToDiscord(relayed, fetchImage));
-    if (!scheduled) this.stats.imagesSkipped += 1;
   }
 
   /**
    * Lobby marker + rate limit for a picture. A picture of an image set
    * reuses the decision of the first one seen, so a set of 6 is one lobby
-   * line 「（圖片 ×6）」 and one rate-limit hit.
+   * line 「（圖片 ×6）」 and one rate-limit hit. `firstOfSet`: a single
+   * picture, or the first one seen of its set.
    */
   private admitImage(
     mirror: ChatMirror,
@@ -614,7 +703,7 @@ export class LineBotClient {
       messageId: string;
       set: { id: string; index?: number; total?: number } | null;
     }
-  ): boolean {
+  ): { admitted: boolean; firstOfSet: boolean } {
     const setId = p.set?.id;
     const now = Date.now();
     if (setId) {
@@ -623,7 +712,7 @@ export class LineBotClient {
         else break;
       }
       const known = this.imageSets.get(setId);
-      if (known) return known.admitted;
+      if (known) return { admitted: known.admitted, firstOfSet: false };
     }
     const marker = setId && p.set?.total ? imageCountMarker(p.set.total) : MIRROR_MEDIA_TEXT.image;
     const ingested = mirror.ingestInbound({
@@ -632,9 +721,10 @@ export class LineBotClient {
       displayName: p.displayName,
       text: marker,
       messageId: p.messageId,
+      kind: 'media',
     });
     if (setId) this.imageSets.set(setId, { admitted: !!ingested, at: now });
-    return !!ingested;
+    return { admitted: !!ingested, firstOfSet: true };
   }
 
   /**
@@ -670,30 +760,47 @@ export class LineBotClient {
   }
 
   /**
-   * Run picture jobs one at a time; false (skipped) when too many are
-   * waiting. Each job is bounded by jobMs, so a hung upload cannot hold
-   * the chain either; its outcome is then 'timeout'.
+   * Take the next place in the picture line (jobs run one at a time); null
+   * when too many are waiting. The caller then either `run`s its job there or
+   * `cancel`s the place (not admitted). Each place is bounded by jobMs from
+   * the moment it is reached — waiting for its job included — so neither a
+   * hung upload nor a hung name lookup can hold the chain; the outcome is
+   * then 'timeout' and a job handed in later never starts.
    */
-  private scheduleMediaJob(job: () => Promise<LineImageRelayOutcome>): boolean {
-    if (this.mediaPending >= LINE_MEDIA_MAX_PENDING) return false;
+  private reserveMediaSlot(): { run: (job: () => Promise<LineImageRelayOutcome>) => void; cancel: () => void } | null {
+    if (this.mediaPending >= LINE_MEDIA_MAX_PENDING) return null;
     this.mediaPending += 1;
+    // Texts that arrived before this picture and are not on Discord yet go first.
+    const textsBefore = this.textsInFlight;
+    let hand: (job: (() => Promise<LineImageRelayOutcome>) | null) => void = () => undefined;
+    const handed = new Promise<(() => Promise<LineImageRelayOutcome>) | null>((resolve) => {
+      hand = resolve;
+    });
+    let expired = false;
+    const place = async (): Promise<LineImageRelayOutcome | null> => {
+      await raceTimeout(textsBefore, this.mediaTimeouts.textWaitMs, () => undefined);
+      const job = await handed;
+      if (!job || expired) return null;
+      return job().catch((err: unknown): LineImageRelayOutcome => {
+        console.warn(`[LINE→Discord] picture relay failed (${describeError(err)})`);
+        return 'failed';
+      });
+    };
     this.mediaChain = this.mediaChain
       .then(() =>
-        raceTimeout(
-          job().catch((err: unknown): LineImageRelayOutcome => {
-            console.warn(`[LINE→Discord] picture relay failed (${describeError(err)})`);
-            return 'failed';
-          }),
-          this.mediaTimeouts.jobMs,
-          (): LineImageRelayOutcome => 'timeout',
-        ),
+        raceTimeout(place(), this.mediaTimeouts.jobMs, (): LineImageRelayOutcome => {
+          expired = true;
+          return 'timeout';
+        }),
       )
-      .then((outcome) => this.countImageOutcome(outcome))
+      .then((outcome) => {
+        if (outcome) this.countImageOutcome(outcome);
+      })
       .catch(() => undefined) // the chain itself must never reject (later jobs / texts wait on it)
       .finally(() => {
         this.mediaPending -= 1;
       });
-    return true;
+    return { run: (job) => hand(job), cancel: () => hand(null) };
   }
 
   private countImageOutcome(outcome: LineImageRelayOutcome): void {

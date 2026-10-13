@@ -79,7 +79,7 @@ function lineRequest(raw: string, opts: { badSignature?: boolean; keepRawBody?: 
     body: JSON.parse(raw),
     ...(opts.keepRawBody === false ? {} : { rawBody: Buffer.from(raw) }),
   } as unknown as Request;
-  const res = {
+  const fake: { statusCode: number; payload: unknown; status(code: number): typeof fake; json(p: unknown): typeof fake } = {
     statusCode: 0,
     payload: null,
     status(code: number) {
@@ -90,7 +90,8 @@ function lineRequest(raw: string, opts: { badSignature?: boolean; keepRawBody?: 
       this.payload = p;
       return this;
     },
-  } as unknown as Response & { statusCode: number; payload: unknown };
+  };
+  const res = fake as unknown as Response & { statusCode: number; payload: unknown };
   return { req, res };
 }
 

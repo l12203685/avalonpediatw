@@ -22,7 +22,9 @@
  *                      once against index-based deletes lose no row; on
  *                      the 阿瓦隆百科 workbook (the default) only the two
  *                      chat tabs are touched and no name or id reaches it;
- *                      CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 → nothing sent to it;
+ *                      CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 → no chat sent to it,
+ *                      only the retention (old days deleted, no tab created);
+ *                      a delete with no definite answer → outcome unknown;
  *                      CHAT_EXPORT_SHEET_ID still picks the private sheet
  */
 import crypto from 'crypto';
@@ -41,7 +43,13 @@ import {
   createSheetsClient,
   parseServiceAccountJson,
 } from '../bots/digest/sheets';
-import { ChatCleanupLockLostError, ChatExportSheet, ChatTabConflictError, defaultChatSheetFactory } from '../bots/chatExport/sheetWriter';
+import {
+  ChatCleanupLockLostError,
+  ChatDeleteOutcomeUnknownError,
+  ChatExportSheet,
+  ChatTabConflictError,
+  defaultChatSheetFactory,
+} from '../bots/chatExport/sheetWriter';
 import {
   CHAT_EXPORT_HEADER,
   CHAT_EXPORT_LOG_HEADER,
@@ -644,6 +652,43 @@ describe('two instances against the fake Sheets API (rows deleted by index, like
   });
 });
 
+describe('retention-only and unsure deletes (review fixes 2026-10-13)', () => {
+  it('prepareExisting: false (nothing created) without both tabs; true with them', async () => {
+    const g = new FakeSheets();
+    expect(await new ChatExportSheet(g.client()).prepareExisting()).toBe(false);
+    expect(g.touched()).toEqual([{ method: 'GET', tab: '(metadata)' }]);
+    await new ChatExportSheet(g.client()).prepare();
+    const sheet = new ChatExportSheet(g.client());
+    expect(await sheet.prepareExisting()).toBe(true);
+    expect(await sheet.countDays(() => true)).toBe(0);
+  });
+
+  it('a row delete with no definite answer (network error, 5xx) is reported as outcome unknown; a 4xx is a plain failure', async () => {
+    for (const [status, unknown] of [[503, true], [500, true], [400, false]] as const) {
+      const g = new FakeSheets();
+      const sheet = new ChatExportSheet(g.client());
+      await sheet.prepare();
+      await sheet.appendRows([['2026-10-01', 'x', 'c', 'Discord', '成員1', 'y']]);
+      g.failDeleteStatus = status;
+      const err = await sheet.deleteDays(() => true).catch((e: unknown) => e);
+      expect(err instanceof ChatDeleteOutcomeUnknownError).toBe(unknown);
+      if (!unknown) expect(err).toBeInstanceOf(SheetError);
+    }
+    // fetch itself failing (timeout / connection reset) on the delete request
+    const g = new FakeSheets();
+    const client = g.client();
+    const sheet = new ChatExportSheet(client);
+    await sheet.prepare();
+    await sheet.appendRows([['2026-10-01', 'x', 'c', 'Discord', '成員1', 'y']]);
+    const orig = g.fetchImpl.getMockImplementation()!;
+    g.fetchImpl.mockImplementation(async (input, init) => {
+      if (String(input).endsWith(':batchUpdate')) throw new TypeError('fetch failed');
+      return orig(input, init);
+    });
+    expect(await sheet.deleteDays(() => true).catch((e: unknown) => e)).toBeInstanceOf(ChatDeleteOutcomeUnknownError);
+  });
+});
+
 describe('the 阿瓦隆百科 workbook (the default target since 2026-10-13)', () => {
   /** The stats workbook as the importer / cache refresh see it. */
   function statsWorkbook(): FakeSheets {
@@ -655,20 +700,42 @@ describe('the 阿瓦隆百科 workbook (the default target since 2026-10-13)', (
     return g;
   }
 
-  it('CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses it: nothing is sent to it at all', async () => {
+  it('CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses it: no chat is written; only the tab list is read (retention, nothing there)', async () => {
     for (const env of [
       { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON },
       { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', CHAT_EXPORT_SHEET_ID: PUBLIC_STATS_SHEET_ID, GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON },
     ]) {
       const g = statsWorkbook();
+      const before = JSON.stringify([...g.tabs]);
       const clock = { now: TUE_1005 };
-      const { service } = e2e(g, discordDaily(busy), clock, env);
+      const discord = discordDaily(busy);
+      const { service } = e2e(g, discord, clock, env);
       expect((await service.tick()).state).toBe('not-configured');
-      expect(g.calls).toEqual([]);
+      expect(g.touched()).toEqual([{ method: 'GET', tab: '(metadata)' }]); // no chat tab there: nothing else
+      expect(JSON.stringify([...g.tabs])).toBe(before);
+      expect(discord.calls).toEqual([]);
       expect(service.getStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
       // The real factory builds no client for a refused id either.
       expect(defaultChatSheetFactory(readChatExportConfig(env))).toEqual({ sheet: null, reason: 'no-sheet-id' });
     }
+  });
+
+  it('refused after it was written to: the days older than 7 still leave both chat tabs; nothing is appended, the stats tabs stay', async () => {
+    const g = statsWorkbook();
+    const clock = { now: TUE_1005 };
+    // A week of export first (the default), then CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0.
+    await e2e(g, discordDaily(() => 3), clock, { GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON }).service.tick();
+    const stats = new Map(STATS_WORKBOOK_TABS.map((t) => [t, JSON.stringify(g.tab(t))]));
+    const refused = e2e(g, discordDaily(() => 3), clock, { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', GOOGLE_SERVICE_ACCOUNT_JSON: SA_JSON });
+    const rowsBefore = g.tab().length;
+    clock.now = Date.parse('2026-10-15T20:30:00Z'); // Fri 10/16 04:30 +08: 10/06 … 10/08 left the window
+    expect((await refused.service.tick()).state).toBe('not-configured');
+    expect([...new Set(g.tab().slice(1).map((r) => r[0]))]).toEqual(DAYS.slice(3));
+    expect(g.tab().length).toBe(rowsBefore - 3 * 3);
+    expect(g.touched().filter((t) => t.method === 'addSheet')).toHaveLength(2); // only the export's own two, a week before
+    for (const t of STATS_WORKBOOK_TABS) expect(JSON.stringify(g.tab(t))).toBe(stats.get(t));
+    // No new chat or 完成 row: only the cleanup lock pair in 匯出紀錄.
+    expect(g.tab(CHAT_EXPORT_LOG_TAB).slice(1).filter((r) => r[0] === '2026-10-16').map((r) => r[1])).toEqual(['清理中', '清理結束']);
   });
 
   it('by default only the two chat tabs are created, written, read and pruned — 牌譜 / Discord匯入 / … stay byte for byte', async () => {

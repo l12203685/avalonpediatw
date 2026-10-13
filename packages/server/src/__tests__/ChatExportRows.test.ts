@@ -41,6 +41,7 @@ import {
 } from '../bots/chatExport/window';
 import { formatOutgoingUnified, formatOutgoingLegacy } from '../bots/ChatMirror';
 import {
+  AVALONPEDIA_DISCORD_GUILD_ID,
   CHAT_EXPORT_HEADER,
   CHAT_EXPORT_LOG_HEADER,
   CHAT_EXPORT_LOG_TAB,
@@ -54,6 +55,7 @@ import {
   spreadsheetIdFrom,
 } from '../bots/chatExport/config';
 import { DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID } from '../bots/feedback/config';
+import { parseFeedbackCommand } from '../bots/feedback/commands';
 
 const SELF = 'bot-self';
 const MIRROR = '1132901301802504242';
@@ -149,6 +151,20 @@ describe('relay parsing (how LINE shows up in Discord)', () => {
     expect(isTypedCommand('/ 笑死')).toBe(false);
     expect(isTypedCommand('!avalon help')).toBe(true);
     expect(isTypedCommand('https://example.org')).toBe(false);
+  });
+
+  it('every /意見 form the /意見 parser forwards privately is skipped too — spaces, a full-width space or a newline after the slash', () => {
+    for (const text of ['/ 意見 排行想加場次', '／　意見 排行想加場次', '/\n意見 排行想加場次', '／ \t 意見']) {
+      expect(parseFeedbackCommand(text)).not.toBeNull(); // forwarded to 大劍管理員 as an opinion …
+      expect(isTypedCommand(text)).toBe(true); // … so never in the sheet
+      expect(classifyMessage(msg({ content: text }))).toMatchObject({ kind: 'skip', reason: 'command' });
+      expect(classifyMessage(lineRelay('小明', text, T0))).toMatchObject({ kind: 'skip', reason: 'command' });
+    }
+    // The stats commands the LINE parser accepts with a space are commands as well.
+    expect(isTypedCommand('/ 戰績 小明')).toBe(true);
+    expect(isTypedCommand('／ 排行')).toBe(true);
+    // A slash, a space and ordinary words stay conversation.
+    expect(isTypedCommand('/ 我覺得意見不錯')).toBe(false);
   });
 });
 
@@ -253,6 +269,26 @@ describe('buildExportRows', () => {
     expect(JSON.stringify(t.rows)).not.toContain('/media/relay/');
   });
 
+  it('relay links are masked in every spelling: no scheme, "/./" segments, full-width letters, an encoded slash, inside <…>', () => {
+    const id = 'AbCdEf0123456789AbCdEf0123456789';
+    for (const link of [
+      `example.onrender.com/media/relay/${id}.jpg`,
+      `https://example.onrender.com/media/./relay/${id}.jpg`,
+      `https://example.onrender.com/media/././relay/${id}.png`,
+      `ｈｔｔｐｓ：／／example.onrender.com／media／relay／${id}.jpg`,
+      `https://example.onrender.com/media%2Frelay%2F${id}.jpg`,
+      `<https://example.onrender.com/media/relay/${id}.jpg>`,
+      `看這張https://example.onrender.com/media/relay/${id}.jpg`,
+    ]) {
+      const out = maskRelayMediaLinks(`前 ${link} 後`);
+      expect(out).toContain('〔圖片連結〕');
+      expect(out).not.toContain(id);
+      expect(out.startsWith('前 ')).toBe(true);
+      expect(out.endsWith(' 後')).toBe(true);
+    }
+    expect(maskRelayMediaLinks('https://example.com/media/photos/relayed.jpg')).toBe('https://example.com/media/photos/relayed.jpg');
+  });
+
   it('clips one long message to 4000 characters', () => {
     expect(Array.from(clipMessageText('長'.repeat(5000)))).toHaveLength(4000 + '…（後略）'.length);
     expect(clipMessageText('短')).toBe('短');
@@ -342,11 +378,17 @@ describe('config', () => {
     expect(cfg).toMatchObject({
       enabled: true,
       sheetId: PUB,
+      retentionSheetId: PUB,
+      sheetIdFromRetiredName: false,
       sheetIdRefused: false,
       publicSheet: true,
       sheetCredentialsUsable: false,
       sourceChannelIds: [],
+      // One server only, also without DISCORD_GUILD_ID: the 阿瓦隆百科 server.
+      guildId: AVALONPEDIA_DISCORD_GUILD_ID,
     });
+    expect(AVALONPEDIA_DISCORD_GUILD_ID).toBe('1132682489840812113');
+    expect(readChatExportConfig({ DISCORD_GUILD_ID: ' 123456789012345678 ' }).guildId).toBe('123456789012345678');
     expect(cfg.excludeChannelIds).toEqual([DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID]);
     // Owner 2026-10-13: the 阿瓦隆百科 sheet, not the private one any more.
     expect(DEFAULT_CHAT_EXPORT_SHEET_ID).toBe(PUB);
@@ -371,6 +413,10 @@ describe('config', () => {
     expect(readChatExportConfig({ COMMUNITY_DIGEST_SHEET_ID: 'old-id' }).sheetId).toBe('old-id');
     expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'new-id', COMMUNITY_DIGEST_SHEET_ID: 'old-id' }).sheetId).toBe('new-id');
     expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: '', COMMUNITY_DIGEST_SHEET_ID: 'none' }).sheetId).toBe('');
+    // The retired name deciding the target is flagged (warned at start); the new name or the default is not.
+    expect(readChatExportConfig({ COMMUNITY_DIGEST_SHEET_ID: 'old-id' }).sheetIdFromRetiredName).toBe(true);
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'new-id', COMMUNITY_DIGEST_SHEET_ID: 'old-id' }).sheetIdFromRetiredName).toBe(false);
+    expect(readChatExportConfig({}).sheetIdFromRetiredName).toBe(false);
     // Sheet credentials count only when they parse as a service-account key.
     expect(readChatExportConfig({ GOOGLE_SERVICE_ACCOUNT_JSON: 'not-json-at-all' }).sheetCredentialsUsable).toBe(false);
     expect(readChatExportConfig({ GOOGLE_SERVICE_ACCOUNT_JSON: '{}' }).sheetCredentialsUsable).toBe(false);
@@ -390,6 +436,9 @@ describe('config', () => {
   it('CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses the 阿瓦隆百科 spreadsheet, the default included (not configured)', () => {
     const refused = readChatExportConfig({ CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', GOOGLE_SERVICE_ACCOUNT_JSON: creds });
     expect(refused).toMatchObject({ sheetId: '', sheetIdRefused: true, publicSheet: false, sheetCredentialsUsable: true });
+    // Rows already written there are still pruned (retention only).
+    expect(refused.retentionSheetId).toBe(PUB);
+    expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: 'off' }).retentionSheetId).toBe('');
     // Set explicitly, under the old variable name, as a pasted URL, or as the AVALON_STATS_SHEET_ID override: refused too.
     const url = `https://docs.google.com/spreadsheets/d/${PUB}/edit#gid=0`;
     for (const env of [
@@ -429,6 +478,11 @@ describe('config', () => {
     expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: url })).toMatchObject({ sheetId: PUB, publicSheet: true });
     expect(spreadsheetIdFrom(url)).toBe(PUB);
     expect(spreadsheetIdFrom('abc')).toBe('abc');
+    // A URL copied while signed in to a second Google account (…/spreadsheets/u/1/d/<id>/…).
+    for (const u of [`https://docs.google.com/spreadsheets/u/0/d/${PUB}/edit`, `https://docs.google.com/spreadsheets/u/1/d/${PUB}/edit#gid=5`]) {
+      expect(spreadsheetIdFrom(u)).toBe(PUB);
+      expect(readChatExportConfig({ CHAT_EXPORT_SHEET_ID: u })).toMatchObject({ sheetId: PUB, publicSheet: true });
+    }
     // The old variable name too.
     expect(readChatExportConfig({ COMMUNITY_DIGEST_SHEET_ID: PUB }).publicSheet).toBe(true);
     // The AVALON_STATS_SHEET_ID override counts as public as well.

@@ -106,15 +106,22 @@ export class RelayMediaStore {
   /**
    * Keep a copy; returns its id, or null when the item alone exceeds the
    * total cap or is empty. Makes room by dropping expired items, then the
-   * oldest unsent ones, then the oldest sent ones.
+   * oldest unsent ones, then the oldest sent ones — never the ids in `keep`
+   * (the copies already prepared for the same message, e.g. a picture's
+   * original while its preview is stored: review fix 2026-10-13); null when
+   * there is no room without them.
    */
-  put(data: Buffer, type: RelayImageType): string | null {
+  put(data: Buffer, type: RelayImageType, keep: readonly string[] = []): string | null {
     if (data.length === 0 || data.length > this.maxTotalBytes) return null;
     this.sweep();
+    const kept = new Set(keep);
+    let keptBytes = 0;
+    for (const id of kept) keptBytes += this.entries.get(id)?.data.length ?? 0;
+    if (keptBytes + data.length > this.maxTotalBytes) return null;
     for (const evictSent of [false, true]) {
       for (const [id, e] of this.entries) {
         if (this.bytes + data.length <= this.maxTotalBytes) break;
-        if (e.sent !== evictSent) continue;
+        if (e.sent !== evictSent || kept.has(id)) continue;
         this.remove(id);
         this.counters.evicted += 1;
       }
@@ -211,17 +218,20 @@ export function isLineImageUrl(url: string): boolean {
 /**
  * Express handler for `GET /media/relay/:file`. 404 (empty body) for
  * anything that is not a live id with the matching extension. No logging.
+ * Only GET counts as served / notFound: Express answers HEAD with the same
+ * handler, and `served` is the post-launch check that LINE fetched a picture.
  */
 export function createRelayMediaHandler(store: RelayMediaStore): (req: Request, res: Response) => void {
   return (req, res) => {
+    const counted = req.method !== 'HEAD';
     const m = FILE_RE.exec(String(req.params.file ?? ''));
     const entry = m ? store.get(m[1]) : null;
     if (!m || !entry || EXT[entry.type] !== m[2]) {
-      store.noteServed(false);
+      if (counted) store.noteServed(false);
       res.status(404).set('Cache-Control', 'no-store').end();
       return;
     }
-    store.noteServed(true);
+    if (counted) store.noteServed(true);
     const maxAge = Math.max(0, Math.floor((entry.expiresAt - Date.now()) / 1000));
     res
       .status(200)

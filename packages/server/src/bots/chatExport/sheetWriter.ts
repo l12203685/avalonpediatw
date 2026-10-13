@@ -30,6 +30,7 @@
 
 import {
   GoogleSheetsClient,
+  SheetError,
   a1Range,
   contiguousRuns,
   createSheetsClient,
@@ -82,10 +83,31 @@ export class ChatCleanupLockLostError extends Error {
   }
 }
 
+/**
+ * A row-delete request failed in a way that leaves its outcome unknown
+ * (network error, timeout, or a Google 5xx): it may still be applied later.
+ * The service then does NOT release the cleanup lock — it lapses after
+ * CHAT_EXPORT_CLEANUP_STALE_MS — so no other instance deletes by indices
+ * that this late delete would shift (review fix 2026-10-13).
+ */
+export class ChatDeleteOutcomeUnknownError extends Error {
+  constructor(readonly status: number | null) {
+    super(`row delete outcome unknown${status !== null ? ` (HTTP ${status})` : ''}`);
+    this.name = 'ChatDeleteOutcomeUnknownError';
+  }
+}
+
 /** What the service needs from the sheet (tests inject a fake). */
 export interface ChatExportSheetPort {
   /** Make sure both tabs exist and row 1 of each is the header (ChatTabConflictError when a tab is not ours). */
   prepare(): Promise<void>;
+  /**
+   * Retention only (export stopped or refused): true when BOTH tabs already
+   * exist with our header — then the other calls work; false when either is
+   * missing or has an empty row 1 (nothing to prune here). Never creates or
+   * changes anything (ChatTabConflictError when a tab is not ours).
+   */
+  prepareExisting(): Promise<boolean>;
   /** Every row of 「匯出紀錄」, in sheet order (header and non-date rows left out). */
   readLog(): Promise<ExportLogEntry[]>;
   /** Append one row to 「匯出紀錄」. */
@@ -184,7 +206,15 @@ class DayTab {
     const indices = await this.matchingRows(match);
     if (indices.length === 0) return 0;
     if (stillHeld && !stillHeld()) throw new ChatCleanupLockLostError();
-    await this.client.deleteRows(this.sheetId, contiguousRuns(indices));
+    try {
+      await this.client.deleteRows(this.sheetId, contiguousRuns(indices));
+    } catch (err) {
+      // Sent (not the token step) and no definite answer: it may land later.
+      if (err instanceof SheetError && err.step === 'delete-rows' && (err.status === null || err.status >= 500)) {
+        throw new ChatDeleteOutcomeUnknownError(err.status);
+      }
+      throw err;
+    }
     return indices.length;
   }
 }
@@ -219,6 +249,15 @@ export class ChatExportSheet implements ChatExportSheetPort {
     await this.chat.settle(chatState);
     await this.log.settle(logState);
     this.prepared = true;
+  }
+
+  async prepareExisting(): Promise<boolean> {
+    const tabs = await this.client.listTabs();
+    const chatState = await this.chat.inspect(tabs);
+    if (chatState !== 'ok') return false;
+    if ((await this.log.inspect(tabs)) !== 'ok') return false;
+    this.prepared = true;
+    return true;
   }
 
   /** Every other call works only after prepare() checked both tabs are ours. */

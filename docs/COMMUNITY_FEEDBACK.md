@@ -1,11 +1,13 @@
 # 社群反應彙整 — 每日聊天紀錄匯出、主題計數與 `/意見`
 
-> 版號 20261013f（20261012 主題計數與 `/意見`；20261013 付費週報上線又依 Edward 裁定撤掉，改成免費的聊天紀錄匯出，
+> 版號 20261013g（20261012 主題計數與 `/意見`；20261013 付費週報上線又依 Edward 裁定撤掉，改成免費的聊天紀錄匯出，
 > `/意見` 改轉貼到管理員頻道「大劍管理員」；20261013c 加上「匯出紀錄」分頁：重啟或兩台伺服器同時跑都只留一份；
 > 20261013d 依 Edward 第三輪裁定改成**每天一次、只留最近 7 天、重啟後自動補齊、加讀論壇貼文的回覆**，
 > 並可以明確開啟後寫到阿瓦隆百科試算表；20261013e 審查修正：刪列時先拿「清理」鎖，兩台伺服器不會同時刪、刪錯保留中的日子；
 > 新增 `CHAT_EXPORT_EXTRA_SOURCE_IDS`（加讀，不取代預設名單）；狀態頁 `catchUp.expired`；
-> 20261013f 依 Edward「照搬」：**預設改寫到阿瓦隆百科試算表**，`CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 才拒絕，私人那份要用 `CHAT_EXPORT_SHEET_ID` 指定）。
+> 20261013f 依 Edward「照搬」：**預設改寫到阿瓦隆百科試算表**，`CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 才拒絕，私人那份要用 `CHAT_EXPORT_SHEET_ID` 指定；
+> 20261013g 審查修正：**只讀阿瓦隆百科這一個 Discord 伺服器**（bot 被加進別的伺服器也不讀）；**7 天保留不再依賴 Discord 或匯出開著**；
+> `/ 意見`（斜線後有空白）也不匯出；伺服器還沒載入時不把那天寫成只有同步頻道；刪列結果不明時不放「清理」鎖）。
 > 程式在 `packages/server/src/bots/chatExport/`、`packages/server/src/bots/feedback/`（Google 登入與試算表呼叫：`bots/digest/sheets.ts`）；
 > 測試 `__tests__/ChatExport*.test.ts`、`__tests__/Feedback*.test.ts`。
 > 相關：`docs/LINE_DISCORD_SYNC.md`（三向同步、指令表、狀態頁）、`docs/DISCORD_RECORDS_IMPORT.md`（牌譜格式回覆）。
@@ -78,21 +80,27 @@
 
 要停或改回私人那份（在 Render → Environment 設，存檔後重新部署；程式和 AI 管理員都不會自己改 Render）：
 
-| 想要 | 設定 |
-|---|---|
-| 不再寫公開的試算表（不匯出） | `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0`（`false`/`off`/`no` 也可；不是「是」的值一律當成拒絕，打錯字也不會公開） |
-| 改寫回私人那份 | `CHAT_EXPORT_SHEET_ID=1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`（貼整個網址也可以） |
-| 整個關掉 | `CHAT_EXPORT_SHEET_ID=off` 或 `CHAT_EXPORT_ENABLED=false` |
+| 想要 | 設定 | 已經寫在阿瓦隆百科那份的最近 7 天 |
+|---|---|---|
+| 不再寫公開的試算表（不匯出） | `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0`（`false`/`off`/`no` 也可；只有不設、`1`、`true`、`yes`、`on` 算「允許」，其他值——包括中文「是」、`y`、打錯字——一律當成拒絕，不會公開） | 每天照樣刪掉超過 7 天的，7 天後就清空；要**馬上**消失就手動刪那兩個分頁 |
+| 整個關掉 | `CHAT_EXPORT_ENABLED=false` | 同上（只刪舊列，不讀 Discord、不寫） |
+| 改寫回私人那份 | `CHAT_EXPORT_SHEET_ID=1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`（貼整個網址也可以，`…/u/0/d/…` 的網址也行） | **不會**再被動到，要手動刪那兩個分頁 |
+| 不要任何試算表 | `CHAT_EXPORT_SHEET_ID=off` | **不會**再被動到，要手動刪那兩個分頁 |
 
 - `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 時，阿瓦隆百科那份（預設、`CHAT_EXPORT_SHEET_ID` 或舊名設成這份、貼網址、或 `AVALON_STATS_SHEET_ID` 指定的那份）
-  **一律拒絕**：不匯出、一個請求都不送，狀態頁 `sheetConfigured=false`，server log 寫 `public-sheet-refused`。私人那份與其他試算表不受這個開關影響。
-- 改回私人那份之後，阿瓦隆百科那份的兩個分頁不會自動刪，要手動刪。
+  **一律拒絕寫入**：不匯出、不讀 Discord、不建分頁、不寫聊天列，狀態頁 `sheetConfigured=false`，server log 寫 `public-sheet-refused`；
+  只剩每天一次的「刪 7 天以前的列」（兩個分頁都已存在時才做，會寫一對「清理中／清理結束」）。私人那份與其他試算表不受這個開關影響。
+- 手動刪：打開阿瓦隆百科那份，刪掉最後面的「聊天紀錄」「匯出紀錄」兩個分頁就好（其他分頁別動）。匯出還開著的話，下次部署會重建、再補最近 7 天。
 
 ## 匯出的內容
 
 ### 讀哪些訊息
 
-- Discord 伺服器裡**所有人（@everyone）都看得到**的文字頻道和公告頻道。
+- **只讀一個 Discord 伺服器**：阿瓦隆百科（`1132682489840812113`）；`DISCORD_GUILD_ID` 有設就改讀那一個（測試用）。
+  bot 的邀請連結是公開的，別人把 bot 加進他自己的伺服器，那邊的聊天**也不會**被讀、更不會寫進公開的試算表。
+  - 那個伺服器還沒載入（Discord 剛連上、伺服器暫時不可用，或 `DISCORD_GUILD_ID` 填了 bot 不在的伺服器）時，那天**一則都不讀**（連同步頻道也不讀），
+    狀態 `read-error`、10 分鐘後再讀——不會把那天寫成「只有同步頻道」又標「完成」。
+- 這個伺服器裡**所有人（@everyone）都看得到**的文字頻道和公告頻道。
 - **論壇**（@everyone 看得到、bot 讀得到的論壇頻道，例如 #牌譜紀錄與覆盤）：那一天在各貼文（討論串）裡發的訊息——
   貼文本身（開頭那則）和底下的回覆都收，進行中與已封存的貼文都讀。
   - **#牌譜紀錄與覆盤**（`1132683080134578276`）例外：每篇貼文開頭那則是牌譜本身（是資料，不是意見），**不收**；
@@ -102,7 +110,8 @@
 - **LINE↔Discord 同步頻道**（`LOBBY_MIRROR_DISCORD_CHANNEL_ID`，就算 @everyone 看不到也讀；除非列在 `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS`）。LINE 群的發言是 bot 轉貼進來的，
   格式 `[1005 21:35][LINE][名字] 內容`；匯出時當成 LINE 的發言，名字換成代號。網站大廳轉貼的 `[…][AP][名字] …` 也一樣（來源記為「網站」）。
 - 不收：bot 自己的其他貼文（每週排行、指令回覆、牌譜格式回覆、`📮 意見` 轉貼）、其他 bot、webhook、系統訊息、
-  指令（`/戰績`、`/意見`…，包含 LINE 那邊打的）、只有圖片沒有文字的訊息（只算數量）。
+  指令（`/戰績`、`/意見`…，包含 LINE 那邊打的；斜線後面有空白、全形空白或換行的 `/ 意見 …` 也算，只要 `/意見` 會把它轉貼成意見，就不匯出）、
+  只有圖片沒有文字的訊息（只算數量）。
 - 一定不讀：管理員頻道「大劍管理員」（不管 `/意見` 轉貼到哪裡、就算 @everyone 看得到），以及 `FEEDBACK_DISCORD_CHANNEL_ID` 另外指定的 `/意見` 頻道（是論壇裡的討論串也一樣）；
   私人頻道與私人論壇本來就不在預設名單裡。
 - 可調（逗號或空白分隔的 id）：
@@ -133,7 +142,8 @@
 - **發言者代號**：同一天裡同一個人同一個代號，**天與天之間不對應**（每天從成員1 重新編號；試算表預設是公開的阿瓦隆百科那份，
   跨天一致的代號會讓人把一個人好幾天的發言串起來，比較容易認出是誰）；LINE 和 Discord 上同名的人算兩個人。
 - **內容**：換行寫成「 ⏎ 」；`@某人` → `@成員N`、`@身分組` → `@某身分組`、`#頻道` → `#頻道名`；附件寫成「〔附件 N〕」；超過 4000 字截斷。
-  伺服器圖片轉傳的連結（`…/media/relay/…`，Discord 圖片轉到 LINE 用的）寫成「〔圖片連結〕」，不會出現在試算表裡。
+  伺服器圖片轉傳的連結（`…/media/relay/…`，Discord 圖片轉到 LINE 用的）寫成「〔圖片連結〕」，不會出現在試算表裡
+  （沒有 `https://`、中間夾 `/./`、全形字母或 `%2F` 的寫法也一樣，含這種連結的整個詞都換掉）。
   以 RAW 寫入，所以有人打 `=SUM(...)` 也只是文字，不會變成公式。
 - 匿名的是「誰說的」：內文裡提到的名字（例如「某某昨天那局」）不會被改掉。AI 管理員回報時不點名。
 - 分頁不存在時，bot 會自動建立「聊天紀錄」和「匯出紀錄」兩個分頁並寫好標題列（凍結第 1 列）；其他分頁不會被動到。
@@ -153,6 +163,8 @@
   Google 刪列是照「第幾列」刪的：兩台同時刪，後刪的那台會刪到往上移的列——也就是保留中、已經「完成」的日子，而且不會有任何警告。
   所以**同一時間只讓一台刪**：還沒「清理結束」、10 分鐘內最早的那列「清理中」是誰的，就由那台刪（拿到後 3 分鐘內沒刪完就放棄、下次再來）；
   另一台這次不刪，寫一列「清理結束」放掉自己那列，10 分鐘後再看。這些列跟著日期，7 天後一起被刪掉。
+  刪列的請求斷線、逾時或 Google 回 5xx（**刪了沒有不確定**，晚一點才生效也有可能）時，那台**不寫**「清理結束」，鎖放著 10 分鐘自然失效，
+  免得另一台在這段時間照舊的列號去刪、刪到別天。
 - 這個分頁是程式在用的，請不要手動改（例如刪掉某天的「完成」，那天的聊天列會在下次被當成沒寫完而刪掉重寫）。
   整個分頁刪掉不會壞：下一次要寫新的一天時 bot 會重建它；下次重啟（部署）時，最近 7 天裡沒有「完成」的日子會整天刪掉重寫一次（不會重複）。
 
@@ -172,8 +184,12 @@
 - 一次送 500 列。寫到一半失敗（例如 Google 暫時出錯）會先試著把那天已寫入的列刪掉，整輪停 10 分鐘後再從那天重寫。
 - 有頻道讀不到（Discord 暫時出問題）：一部分讀不到會 10 分鐘後再讀一次，第二次就把讀得到的寫進去；
   **一個頻道都讀不到**時不會當成「那天沒聊天」，整輪停 10 分鐘再讀。一天真的都沒有聊天，只寫一列「完成」（列數 0）。
-- 每一輪做完會**刪掉 7 天以前的列**（兩個分頁都是；保留昨天往前 7 天）；日期欄不是日期的列（標題、有人手寫的備註）不會被刪。
-  有東西要刪才拿「清理」鎖；鎖在另一台手上（多半是它正在刪同樣的列）或 Google 出錯時，10 分鐘後再刪一次，不用等到隔天。
+- **刪掉 7 天以前的列**（兩個分頁都是；保留昨天往前 7 天）：伺服器啟動後一次，之後每天 04:30 起、有一天超出 7 天時一次；
+  日期欄不是日期的列（標題、有人手寫的備註）不會被刪。有東西要刪才拿「清理」鎖；鎖在另一台手上（多半是它正在刪同樣的列）或 Google 出錯時，
+  10 分鐘後再刪一次，不用等到隔天。
+- 刪舊列**只需要試算表**：Discord 斷線、bot token 失效時照樣刪（不讀 Discord、不寫新的一天）；
+  匯出被停掉（`CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 或 `CHAT_EXPORT_ENABLED=false`）時也照樣刪舊的那份——只刪、不建分頁、不寫聊天列
+  （見上方「要停或改回私人那份」）。所以只要服務帳號還能寫那份試算表，裡面就不會留超過 7 天（Edward：「最多保留近一週」）。
 - 匯出只處理最近 7 天；Discord 或 Google 斷了超過一週，更早的日子就不會補。
 
 ### 費用
@@ -239,7 +255,8 @@
 ```
 
 - `chatExport.enabled`：`CHAT_EXPORT_ENABLED`（預設開）。`sheetConfigured`：有試算表 id（沒被拒絕），而且服務帳號 JSON 真的讀得懂。
-  `publicSheet`：正在寫阿瓦隆百科那份（預設；`false` 表示 `CHAT_EXPORT_SHEET_ID` 指定了別份，或那份被 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 拒絕）。
+  `publicSheet`：正在寫阿瓦隆百科那份（預設，且 `sheetConfigured` 為 `true`；`false` 表示 `CHAT_EXPORT_SHEET_ID`——或舊名 `COMMUNITY_DIGEST_SHEET_ID`——指定了別份、
+  那份被 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 拒絕，或根本沒設好服務帳號 JSON）。
 - `lastRun`（記憶體，重啟後是 `null`）：最近處理的那一天。`day` 日期、`at` 執行時間、`messages` 寫了幾列、`channels` 有幾個頻道（含論壇貼文）有訊息、
   `threads` 其中幾篇是論壇貼文、`truncated` 讀取上限被觸發幾次（> 0 表示那天可能不完整）、`outcome`：
 
@@ -252,7 +269,7 @@
   | `not-configured` | 沒有試算表 id 或服務帳號 JSON，或 id 是阿瓦隆百科那份但設了 `CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0`（被拒絕） |
   | `sheet-error` | Google Sheets 呼叫失敗（多半是試算表沒分享給服務帳號），整輪停 10 分鐘再試 |
   | `tab-conflict` | 試算表裡已經有同名但標題列不一樣的「聊天紀錄」或「匯出紀錄」分頁，不是 bot 的，不碰；改名或刪掉那個分頁後自動恢復 |
-  | `read-error` | 有頻道讀不到：一部分 → 那天 10 分鐘後再讀一次；全部 → 整輪停 10 分鐘再讀 |
+  | `read-error` | 有頻道讀不到：一部分 → 那天 10 分鐘後再讀一次；全部（或 Discord 伺服器還沒載入）→ 整輪停 10 分鐘再讀 |
   | `error` | 未預期的錯誤（server log 有原因代碼），10 分鐘後再試 |
 
 - `catchUp`（記憶體，Discord 連上且試算表設定好後才有）：這次啟動後補齊的那 7 天，依每天最新的結果計數：
@@ -265,8 +282,9 @@
 |---|---|---|
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | 是（Render ops → apply 從 GitHub secret `AVALON_STATS_SHEETS_CREDENTIALS_JSON` 複製，沒有就用 `GOOGLE_SHEETS_CREDENTIALS_JSON`） | 沒有 → 不匯出（狀態頁 `sheetConfigured=false`） |
 | `CHAT_EXPORT_ENABLED` | 否 | 開；`false` 關 |
-| `CHAT_EXPORT_SHEET_ID` | 否 | 阿瓦隆百科試算表 `174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU`（Edward 2026-10-13 決定；知道連結就能看）；私人那份填 `1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`；`off` 關；可以貼整個網址。舊名 `COMMUNITY_DIGEST_SHEET_ID` 仍有效 |
-| `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | 否 | 不設（或 `1`/`true`/`yes`/`on`）＝寫阿瓦隆百科那份；`0`（或 `false`/`off`/`no`，以及任何不是「是」的值）＝拒絕那份、不匯出（見上方） |
+| `CHAT_EXPORT_SHEET_ID` | 否 | 阿瓦隆百科試算表 `174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU`（Edward 2026-10-13 決定；知道連結就能看）；私人那份填 `1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`；`off` 關；可以貼整個網址。舊名 `COMMUNITY_DIGEST_SHEET_ID` 仍會讀（會**蓋過**阿瓦隆百科這個預設），啟動時 server log 會警告；Render ops → apply 會把舊名從 Render 刪掉 |
+| `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | 否 | 不設（或 `1`/`true`/`yes`/`on`）＝寫阿瓦隆百科那份；其他任何值（`0`/`false`/`off`/`no`，也包括中文「是」、`y`）＝拒絕寫入那份、不匯出，只每天刪 7 天以前的列（見上方） |
+| `DISCORD_GUILD_ID` | 否 | 空＝只讀阿瓦隆百科伺服器 `1132682489840812113`。有填就只讀那一個伺服器（測試用；也會讓 slash 指令只註冊在那個伺服器） |
 | `CHAT_EXPORT_EXTRA_SOURCE_IDS` | 否 | 空。**另外加讀**的頻道或論壇（預設名單照讀；@everyone 看不到也讀），例如對 @everyone 隱藏的 #牌譜紀錄與覆盤 `1132683080134578276` |
 | `CHAT_EXPORT_SOURCE_CHANNEL_IDS` | 否 | 空＝所有公開頻道與公開論壇＋同步頻道。有填就**取代**這份名單（只填一個就只讀那一個）。只收頻道或論壇的 id。舊名 `COMMUNITY_DIGEST_SOURCE_CHANNEL_IDS` 仍有效 |
 | `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空。不讀的頻道、論壇或單一貼文（「大劍管理員」和 `/意見` 頻道一定不讀）。舊名 `COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS` 仍有效 |
@@ -287,6 +305,10 @@
 4. 部署後幾分鐘（當天看）：狀態頁 `chatExport.catchUp` 應該是 `exported + skipped = 7`、`failed = 0`、`pending = 0`、`expired = 0`；
    試算表的「匯出紀錄」有最近 7 天各一列「完成」。之後每天 04:30 起多一天、少一天。
 5. 狀態頁 `chatExport.publicSheet` 應該是 `true`（寫的是阿瓦隆百科那份）；打開那份試算表，最後面多了「聊天紀錄」「匯出紀錄」兩個分頁，其他分頁沒變。
+   是 `false` 而 `sheetConfigured` 是 `true`：Render 上還有 `CHAT_EXPORT_SHEET_ID` 或舊的 `COMMUNITY_DIGEST_SHEET_ID`（`render-ops status` 會列出舊名「still on Render (retired)」），
+   跑一次 Render ops → apply 會刪掉舊名。
+6. 建議（Edward 在 Discord Developer Portal 做，一次就好）：bot 的「Public Bot」關掉，別人就不能把 bot 加進他自己的伺服器。
+   就算沒關，匯出也只讀阿瓦隆百科這個伺服器。
 
 ## AI 管理員怎麼讀（每天或想看的時候）
 
@@ -309,3 +331,4 @@
 | 20261013 下午：bot 每週一把上週聊天原文（代號化）寫進私人試算表，AI 管理員自己讀 | 還沒跑過第一次（第一次會是 10/19）就被下一列取代 |
 | 20261013 晚上（第三輪）：每天 04:30 匯出前一天＋重啟後補齊最近 7 天、只留 7 天、加讀論壇回覆；寫阿瓦隆百科那份要另外設開關 | Edward：「照搬 百科群組本身也是公開的 所以不影響」→ 改成下一列 |
 | 20261013 晚上（第三輪，照搬）：同上，但**預設就寫阿瓦隆百科那份**；`CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0` 才拒絕 | 現行做法：免費、0 token、不公告、不點名 |
+| 20261013g 審查修正：只讀阿瓦隆百科伺服器；7 天保留在 Discord 斷線、匯出停掉時也照做；`/ 意見` 不匯出；伺服器未載入不寫半天 | 同上，補洞 |

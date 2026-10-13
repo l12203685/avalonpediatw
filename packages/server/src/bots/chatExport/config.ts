@@ -35,10 +35,20 @@ export const PRIVATE_CHAT_EXPORT_SHEET_ID = '1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbF
  * 就好 然後最多保留近一週的即可」 and, after being told the link is
  * effectively public, 「照搬 百科群組本身也是公開的 所以不影響」.
  * CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 refuses a public sheet (the export then
- * counts as not configured and writes nothing); CHAT_EXPORT_SHEET_ID picks
- * another sheet.
+ * counts as not configured and writes no chat; days older than 7 already in
+ * its two chat tabs are still deleted — 「最多保留近一週」); CHAT_EXPORT_SHEET_ID
+ * picks another sheet.
  */
 export const DEFAULT_CHAT_EXPORT_SHEET_ID = PUBLIC_STATS_SHEET_ID;
+
+/**
+ * The 阿瓦隆百科 Discord server (discord_records_import.py GUILD_ID). The
+ * export only discovers channels in this one server, also when
+ * DISCORD_GUILD_ID is unset: the bot's invite is public, and a server that
+ * added it must never land in the link-public sheet (review fix 2026-10-13).
+ * DISCORD_GUILD_ID names another server (a test server).
+ */
+export const AVALONPEDIA_DISCORD_GUILD_ID = '1132682489840812113';
 
 /** Tab the rows go to (created with a header row when missing). */
 export const CHAT_EXPORT_TAB = '聊天紀錄';
@@ -163,6 +173,15 @@ export interface ChatExportConfig {
   /** '' when turned off (CHAT_EXPORT_SHEET_ID=off) or refused (sheetIdRefused). */
   sheetId: string;
   /**
+   * The sheet whose two chat tabs are kept to the last 7 days: the target
+   * (the default included) even when it is refused or CHAT_EXPORT_ENABLED is
+   * false — rows already written there are still pruned (retention only:
+   * nothing is created or appended); '' with CHAT_EXPORT_SHEET_ID=off.
+   */
+  retentionSheetId: string;
+  /** The target came from the retired name COMMUNITY_DIGEST_SHEET_ID (warned at start). */
+  sheetIdFromRetiredName: boolean;
+  /**
    * The id (the default included) is a public stats spreadsheet and
    * CHAT_EXPORT_ALLOW_PUBLIC_SHEET refuses it (0 / false / off / no, or any
    * value that is not a yes): refused, sheetId ''.
@@ -196,7 +215,11 @@ export interface ChatExportConfig {
   excludeChannelIds: string[];
   /** LOBBY_MIRROR_DISCORD_CHANNEL_ID — read even when not visible to @everyone (LINE + lobby relays land there), unless excluded. */
   mirrorChannelId: string;
-  /** DISCORD_GUILD_ID — limits channel discovery to one server when set. */
+  /**
+   * The one server whose channels are discovered: DISCORD_GUILD_ID, else
+   * the 阿瓦隆百科 server (AVALONPEDIA_DISCORD_GUILD_ID). Never every server
+   * the bot is in.
+   */
   guildId: string;
 }
 
@@ -219,15 +242,16 @@ function idList(raw: string): string[] {
     .filter((s) => /^\d{5,30}$/.test(s));
 }
 
-/** A pasted spreadsheet URL → its id; anything else unchanged. */
+/** A pasted spreadsheet URL (also a …/spreadsheets/u/0/d/<id>/… one) → its id; anything else unchanged. */
 export function spreadsheetIdFrom(raw: string): string {
-  const m = /\/spreadsheets\/d\/([A-Za-z0-9_-]{10,})/.exec(raw);
+  const m = /\/spreadsheets\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]{10,})/.exec(raw);
   return m ? m[1] : raw;
 }
 
 export function readChatExportConfig(env: NodeJS.ProcessEnv = process.env): ChatExportConfig {
   const flag = (env.CHAT_EXPORT_ENABLED || '').trim().toLowerCase();
   const sheetRaw = envFirst(env, 'CHAT_EXPORT_SHEET_ID', 'COMMUNITY_DIGEST_SHEET_ID');
+  const sheetIdFromRetiredName = !(env.CHAT_EXPORT_SHEET_ID ?? '').trim() && !!sheetRaw;
   const wanted = OFF.includes(sheetRaw.toLowerCase()) ? '' : spreadsheetIdFrom(sheetRaw || DEFAULT_CHAT_EXPORT_SHEET_ID);
   // The public stats spreadsheet is the default by the owner's decision (2026-10-13).
   // CHAT_EXPORT_ALLOW_PUBLIC_SHEET unset (or a yes) keeps it; any other value refuses it — 0 / false / off / no,
@@ -243,6 +267,8 @@ export function readChatExportConfig(env: NodeJS.ProcessEnv = process.env): Chat
   return {
     enabled: !OFF.includes(flag),
     sheetId: sheetIdRefused ? '' : wanted,
+    retentionSheetId: wanted,
+    sheetIdFromRetiredName,
     sheetIdRefused,
     publicSheet: isPublic && allowPublic,
     sheetCredentialsUsable: parseServiceAccountJson(env.GOOGLE_SERVICE_ACCOUNT_JSON) !== null,
@@ -252,6 +278,6 @@ export function readChatExportConfig(env: NodeJS.ProcessEnv = process.env): Chat
       ...new Set([...idList(envFirst(env, 'CHAT_EXPORT_EXCLUDE_CHANNEL_IDS', 'COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS')), ...privateChannelIds]),
     ],
     mirrorChannelId: (env.LOBBY_MIRROR_DISCORD_CHANNEL_ID || '').trim(),
-    guildId: (env.DISCORD_GUILD_ID || '').trim(),
+    guildId: (env.DISCORD_GUILD_ID || '').trim() || AVALONPEDIA_DISCORD_GUILD_ID,
   };
 }

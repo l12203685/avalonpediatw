@@ -325,6 +325,19 @@ class RenderOpsTest(unittest.TestCase):
         self.assertIn("ANTHROPIC_API_KEY removed (retired)", out)
         self.assert_no_values_leak(out, ["sk-ant-existing-0000000000000000"])
 
+    def test_the_old_digest_sheet_id_is_retired_but_never_an_exclude_list(self) -> None:
+        # It would override the 阿瓦隆百科 default of the chat export (owner 2026-10-13).
+        self.fake.env["COMMUNITY_DIGEST_SHEET_ID"] = "private-sheet-id-for-test"
+        self.fake.env["COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS"] = "123456789012345678"
+        code, out = self.run_quiet(ops.status, self.api, {})
+        self.assertEqual(code, 0)
+        self.assertIn("COMMUNITY_DIGEST_SHEET_ID: still on Render (retired", out)
+        code, out = self.run_quiet(ops.apply, self.api, {}, rotate=False, suspend_duplicate=False)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("COMMUNITY_DIGEST_SHEET_ID", self.fake.env)
+        self.assertIn("COMMUNITY_DIGEST_SHEET_ID removed (retired)", out)
+        self.assertEqual(self.fake.env["COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS"], "123456789012345678")
+
     def test_apply_without_the_service_account_json_leaves_render_alone(self) -> None:
         code, out = self.run_quiet(ops.apply, self.api, {"GOOGLE_SERVICE_ACCOUNT_JSON": ""},
                                    rotate=False, suspend_duplicate=False)

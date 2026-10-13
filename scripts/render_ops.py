@@ -63,7 +63,10 @@ GITHUB_SECRET_NAMES = BOT_SECRET_KEYS + tuple(
     dict.fromkeys(name for names in OPTIONAL_SECRET_SOURCES.values() for name in names))
 # Features retired with website login / on-site games (2026-10-09/10), and the paid weekly
 # community digest (2026-10-13: replaced by the free chat-log export, no Anthropic API any more).
-RETIRED_KEYS = ("GITHUB_ACCOUNTS_TOKEN", "GITHUB_RECORDS_TOKEN", "ANTHROPIC_API_KEY")
+# COMMUNITY_DIGEST_SHEET_ID is that digest's sheet: still read by the chat export as an old
+# name, it would override the owner's choice of the 阿瓦隆百科 sheet (2026-10-13) — removed.
+# (Its _SOURCE / _EXCLUDE_CHANNEL_IDS siblings are NOT retired: an exclusion must never vanish.)
+RETIRED_KEYS = ("GITHUB_ACCOUNTS_TOKEN", "GITHUB_RECORDS_TOKEN", "ANTHROPIC_API_KEY", "COMMUNITY_DIGEST_SHEET_ID")
 ROTATE_KEYS = ("JWT_SECRET", "ADMIN_SECRET")
 REQUIRED_KEYS = ("JWT_SECRET",) + BOT_SECRET_KEYS
 

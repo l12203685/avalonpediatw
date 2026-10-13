@@ -28,7 +28,12 @@
  *      (「（Discord 有一張圖片，請到 Discord 看）」 for webp / gif / heic /
  *      spoiler / too large / failed downloads, 「…個檔案…」 for other files).
  *   Pictures only go to LINE in reply-queue mode (free); otherwise just the
- *   text line, as before. Rate-limited or loop-tagged messages download nothing.
+ *   text line, as before — and a message with NO text (a picture or sticker
+ *   alone) does not go to LINE at all then: the lobby still gets its marker,
+ *   but push / listen-bot mode would spend quota on it (review fix 2026-10-13).
+ *   Rate-limited or loop-tagged messages download nothing. A marker-only
+ *   message counts against its own per-user limit (ChatMirror kind 'media'),
+ *   so screenshots never use up the text limit.
  *
  * Nothing here logs text, names, file names or URLs.
  */
@@ -197,7 +202,9 @@ export async function prepareLineImages(
   const deadline = Date.now() + (opts.budgetMs ?? DISCORD_TO_LINE_PREP_BUDGET_MS);
   for (const a of pictures) {
     const room = out.images.length < DISCORD_TO_LINE_MAX_IMAGES;
-    const prepared = relay && room ? await prepareOne(a, relay, opts, deadline) : null;
+    // The copies already prepared for this message are never evicted to make room for the next one.
+    const held = out.images.flatMap((i) => i.mediaIds);
+    const prepared = relay && room ? await prepareOne(a, relay, opts, deadline, held) : null;
     if (prepared) out.images.push(prepared);
     else out.unsent += 1;
   }
@@ -209,6 +216,7 @@ async function prepareOne(
   relay: { store: RelayMediaStore; publicBaseUrl: string },
   opts: PrepareOptions,
   deadline: number,
+  held: readonly string[] = [],
 ): Promise<QueuedLineImage | null> {
   if (isSpoiler(a) || !declaredJpegOrPng(a)) return null;
   if (!(a.size > 0) || a.size > LINE_IMAGE_MAX_BYTES) return null;
@@ -220,14 +228,15 @@ async function prepareOne(
   if (!original.ok) return null;
   const type = asRelayType(sniffImageType(original.data));
   if (!type) return null; // declared JPEG/PNG but is not — never serve it
-  const id = relay.store.put(original.data, type);
+  const id = relay.store.put(original.data, type, held);
   if (!id) return null;
 
   let previewId = id;
   let previewType: RelayImageType = type;
   if (original.data.length > LINE_PREVIEW_MAX_BYTES) {
     const preview = await fetchPreview(a, opts, deadline);
-    const pid = preview ? relay.store.put(preview.data, preview.type) : null;
+    // The original stored a moment ago must not be evicted for its own preview.
+    const pid = preview ? relay.store.put(preview.data, preview.type, [...held, id]) : null;
     if (!preview || !pid) {
       relay.store.delete(id);
       return null;
@@ -312,8 +321,12 @@ export async function handleDiscordMirrorMessage(
     displayName,
     text,
     messageId: `discord:${message.id}`,
+    kind: content ? 'text' : 'media',
   });
   if (!ingested) return 'rate-limited';
+
+  // A picture / sticker alone reaches LINE only when that is free (reply queue).
+  if (!content && !mirror.lineOutboundUsesReplyQueue()) return 'media';
 
   // → LINE in arrival order (lobby-ingest callback already handled web clients).
   await mirror.relayDiscordToLine(

@@ -28,14 +28,18 @@
  *   retries     — Sheets errors stop the pass for 10 minutes; some channels
  *                 unreadable → read once more, then exported; no channel
  *                 readable → never settled as empty; a quiet day → empty
- *   retention   — exactly the last 7 complete days in both tabs
+ *   retention   — exactly the last 7 complete days in both tabs; also while
+ *                 Discord is down, and (retention only: nothing created or
+ *                 appended) while the export is off or the public sheet
+ *                 refused; a delete whose outcome is unknown keeps the
+ *                 cleanup lock until it lapses
  *   status      — /api/bots/status → chatExport: enabled / sheetConfigured /
  *                 publicSheet, lastRun (day, counts, outcome), catchUp
  *                 (exported / skipped / failed / pending / expired); no text
  *                 in status or logs
  *   wiring      — startChatExport arms the timer only when enabled
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatExportService, __resetChatExportForTests, chatExportStatus, cleanupHolder, getChatExportService } from '../bots/chatExport/service';
 import {
@@ -49,7 +53,7 @@ import {
   type ChatExportConfig,
 } from '../bots/chatExport/config';
 import type { ChatExportDiscordPort } from '../bots/chatExport/discordPort';
-import type { ChatExportSheetPort, ExportLogEntry } from '../bots/chatExport/sheetWriter';
+import { ChatDeleteOutcomeUnknownError, type ChatExportSheetPort, type ExportLogEntry } from '../bots/chatExport/sheetWriter';
 import type { ChatExportRow, RawChatMessage } from '../bots/chatExport/rows';
 import { emptyCollectResult, type CollectResult } from '../bots/chatExport/collector';
 import { lastCompleteDays, type ExportWindow } from '../bots/chatExport/window';
@@ -117,6 +121,14 @@ class FakeSheet implements ChatExportSheetPort {
   async prepare(): Promise<void> {
     this.prepared += 1;
     if (this.failPrepare) throw new Error('HTTP 503');
+  }
+  /** prepareExisting(): both tabs already there (retention only). */
+  tabsExist = true;
+  preparedExisting = 0;
+  async prepareExisting(): Promise<boolean> {
+    this.preparedExisting += 1;
+    if (this.failPrepare) throw new Error('HTTP 503');
+    return this.tabsExist;
   }
   async readLog(): Promise<ExportLogEntry[]> {
     return this.log.map((e) => ({ ...e }));
@@ -352,8 +364,11 @@ describe('catch-up after a start', () => {
   it('Discord not ready → no claim and nothing read; the catch-up starts the minute it is', async () => {
     const h = harness({ discord: discordPort({ ready: false }) });
     expect((await h.at(TUE_1000)).state).toBe('discord-not-ready');
-    expect(h.sheet!.prepared).toBe(0);
+    expect(h.sheet!.prepared).toBe(1); // the retention alone (nothing old to delete here)
     expect(h.sheet!.log).toEqual([]);
+    expect(h.discord.calls).toEqual([]);
+    expect((await h.at(TUE_1000 + MIN)).state).toBe('discord-not-ready');
+    expect(h.sheet!.prepared).toBe(1); // once a day, not every minute
     expect(h.service.getStatus().catchUp).toBeNull();
     h.discord.ready = true;
     const r = await h.at(TUE_1000 + 3 * MIN);
@@ -419,11 +434,46 @@ describe('the 阿瓦隆百科 sheet (the default since 2026-10-13)', () => {
       expect(service.getStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
       expect((await service.tick(TUE_1000)).state).toBe('not-configured');
       expect(logs.join('\n')).toContain('public-sheet-refused');
-      expect(ids).toEqual([]);
+      // Opened only for the retention (nothing old there): no tab created, nothing appended, Discord never read.
+      expect(ids.every((id) => id === PUBLIC_STATS_SHEET_ID)).toBe(true);
       expect(sheet.prepared).toBe(0);
       expect(sheet.rows).toEqual([]);
       expect(sheet.log).toEqual([]);
+      expect(sheet.appendCalls).toBe(0);
     }
+  });
+
+  it('refused (=0) or turned off (CHAT_EXPORT_ENABLED=false): days older than 7 still leave the sheet — retention only, nothing created or appended', async () => {
+    for (const env of [
+      { CHAT_EXPORT_ALLOW_PUBLIC_SHEET: '0', GOOGLE_SERVICE_ACCOUNT_JSON: creds },
+      { CHAT_EXPORT_ENABLED: 'false', GOOGLE_SERVICE_ACCOUNT_JSON: creds },
+    ]) {
+      const { sheet, ids, service } = withEnv(env);
+      // Left by the export before it was stopped: three old days and one kept day.
+      for (const d of ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-10']) {
+        sheet.rows.push([d, `${d} 12:00`, '一般聊天', 'Discord', '成員1', '秘密內容']);
+        sheet.log.push(doneRow(d, TUE_1000 - 9 * 86_400_000, 'old'));
+      }
+      const r = await service.tick(TUE_1000);
+      expect(r.state).toBe(env.CHAT_EXPORT_ENABLED ? 'disabled' : 'not-configured');
+      expect(new Set(ids)).toEqual(new Set([PUBLIC_STATS_SHEET_ID]));
+      expect(sheet.days()).toEqual(['2026-10-10']);
+      expect(sheet.log.filter((e) => e.state === CHAT_EXPORT_STATE_DONE).map((e) => e.day)).toEqual(['2026-10-10']);
+      expect(sheet.prepared).toBe(0); // prepareExisting only: never creates a tab
+      expect(sheet.appendCalls).toBe(0);
+      expect(sheet.log.filter((e) => e.state === CHAT_EXPORT_STATE_CLAIM)).toEqual([]);
+      // Once a day: nothing more until the next day leaves the window (from 04:30).
+      const calls = sheet.preparedExisting;
+      await service.tick(TUE_1000 + HOUR);
+      expect(sheet.preparedExisting).toBe(calls);
+    }
+    // No chat tabs there: nothing is touched at all.
+    const { sheet, service } = withEnv({ CHAT_EXPORT_ENABLED: 'false', GOOGLE_SERVICE_ACCOUNT_JSON: creds });
+    sheet.tabsExist = false;
+    await service.tick(TUE_1000);
+    expect(sheet.preparedExisting).toBe(1);
+    expect(sheet.log).toEqual([]);
+    expect(sheet.deleteRequests).toBe(0);
   });
 
   it('CHAT_EXPORT_SHEET_ID still picks the private sheet: written there, publicSheet: false (CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0 does not stop it)', async () => {
@@ -755,6 +805,51 @@ describe('retries', () => {
 });
 
 describe('retention', () => {
+  it('runs while Discord is down (an outage, an expired token): only the sheet is needed', async () => {
+    const sheet = new FakeSheet();
+    for (const d of ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-10']) {
+      sheet.rows.push([d, `${d} 12:00`, '', '', '', '']);
+      sheet.log.push(doneRow(d, TUE_1000 - 9 * 86_400_000, 'old'));
+    }
+    const h = harness({ sheet, discord: discordPort({ ready: false }) });
+    expect((await h.at(TUE_1000)).state).toBe('discord-not-ready');
+    expect(sheet.days()).toEqual(['2026-10-10']);
+    expect(sheet.log.filter((e) => e.state === CHAT_EXPORT_STATE_CLAIM)).toEqual([]);
+    expect(h.discord.calls).toEqual([]);
+    // Still down a week later: 10/10 leaves at 04:30 the day it falls out of the 7-day window.
+    const sat = Date.parse('2026-10-17T16:00:00Z'); // Sun 10/18 00:00 +08: window 10/11 … 10/17
+    expect((await h.at(sat + 4 * HOUR)).state).toBe('discord-not-ready'); // 04:00 — not yet
+    expect(sheet.days()).toEqual(['2026-10-10']);
+    await h.at(sat + 4 * HOUR + 30 * MIN); // 04:30
+    expect(sheet.days()).toEqual([]);
+  });
+
+  it('a delete whose outcome is unknown keeps the cleanup lock (no 清理結束) until it lapses, then retries', async () => {
+    const sheet = new FakeSheet();
+    for (const d of ['2026-10-05', ...DAYS]) {
+      sheet.rows.push([d, `${d} 12:00`, '', '', '', '']);
+      sheet.log.push(doneRow(d, TUE_1000 - HOUR, 'old'));
+    }
+    const orig = sheet.deleteDays.bind(sheet);
+    let unsure = true;
+    sheet.deleteDays = async (m, held) => {
+      if (unsure) {
+        unsure = false;
+        throw new ChatDeleteOutcomeUnknownError(null);
+      }
+      return orig(m, held);
+    };
+    const h = harness({ sheet });
+    await h.at(TUE_1000);
+    expect(sheet.states('2026-10-13')).toEqual(['清理中:run-a']); // kept: the delete may still land
+    expect(h.logs.join('\n')).toContain('cleanup lock kept');
+    expect(cleanupHolder(sheet.log, TUE_1000 + 5 * MIN)).toBe('run-a'); // nobody else deletes meanwhile
+    expect((await h.at(TUE_1000 + 5 * MIN)).state).toBe('idle');
+    await h.at(TUE_1000 + 10 * MIN); // lapsed → taken again, deleted, released
+    expect(sheet.days()).toEqual(DAYS);
+    expect(sheet.states('2026-10-13').at(-1)).toBe('清理結束:run-a');
+  });
+
   it('keeps exactly the last 7 complete days in both tabs (notes and the header stay)', async () => {
     const sheet = new FakeSheet();
     const old = ['2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05'];
@@ -799,8 +894,8 @@ describe('retention', () => {
 describe('status and logs carry no chat text', () => {
   it('chatExport = enabled / sheetConfigured / publicSheet + lastRun (day, counts, outcome) + catchUp (day counts)', async () => {
     const h = harness({ discord: discordPort({ extra: { truncatedChannels: 1, threadsOverCap: 2, archivedListsTruncated: 1, sourceIdsIgnored: 2 } }) });
-    // No credentials in the harness config: not configured, but the target is the 阿瓦隆百科 sheet (the default).
-    expect(h.service.getStatus()).toEqual({ enabled: true, sheetConfigured: false, publicSheet: true, lastRun: null, catchUp: null });
+    // No credentials in the harness config: not configured — and so not "writing to the public sheet" either.
+    expect(h.service.getStatus()).toEqual({ enabled: true, sheetConfigured: false, publicSheet: false, lastRun: null, catchUp: null });
     await h.at(TUE_1000);
     const status = h.service.getStatus();
     expect(Object.keys(status).sort()).toEqual(['catchUp', 'enabled', 'lastRun', 'publicSheet', 'sheetConfigured']);
@@ -850,12 +945,29 @@ describe('wiring', () => {
     process.env = { ...env };
   });
 
-  it('startChatExport creates the service and arms it only when enabled', () => {
+  it('startChatExport creates the service and arms it only when enabled (or, turned off, for the retention alone)', () => {
     // start() ticks once right away: with the sheet off that tick never reaches the network.
     process.env.CHAT_EXPORT_SHEET_ID = 'off';
     process.env.CHAT_EXPORT_ENABLED = 'false';
     startChatExport();
     expect(getChatExportService()?.isRunning()).toBe(false);
+    __resetChatExportForTests();
+    // Turned off, but the sheet it wrote to is reachable: armed for the retention only.
+    const info = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline in tests'));
+    try {
+      process.env.CHAT_EXPORT_SHEET_ID = PRIVATE_CHAT_EXPORT_SHEET_ID;
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON = JSON.stringify({ client_email: 'a@b.iam.gserviceaccount.com', private_key: 'k' });
+      startChatExport();
+      expect(getChatExportService()?.isRunning()).toBe(true);
+      expect(info.mock.calls.flat().join('\n')).toContain('retention only');
+    } finally {
+      __resetChatExportForTests();
+      info.mockRestore();
+      fetchSpy.mockRestore();
+      process.env.CHAT_EXPORT_SHEET_ID = 'off';
+      delete process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    }
     __resetChatExportForTests();
     delete process.env.CHAT_EXPORT_ENABLED;
     startChatExport();
@@ -881,6 +993,31 @@ describe('wiring', () => {
     expect(chatExportStatus()).toMatchObject({ sheetConfigured: true, publicSheet: false });
     process.env.CHAT_EXPORT_SHEET_ID = 'off';
     expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
+    // The default target without usable credentials: not "writing to the public sheet".
+    delete process.env.CHAT_EXPORT_SHEET_ID;
+    delete process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    expect(chatExportStatus()).toMatchObject({ sheetConfigured: false, publicSheet: false });
+  });
+
+  it('the retired COMMUNITY_DIGEST_SHEET_ID deciding the target is warned about at start', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      process.env.CHAT_EXPORT_ENABLED = 'false';
+      delete process.env.CHAT_EXPORT_SHEET_ID;
+      delete process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+      process.env.COMMUNITY_DIGEST_SHEET_ID = PRIVATE_CHAT_EXPORT_SHEET_ID;
+      startChatExport();
+      expect(warn.mock.calls.flat().join('\n')).toContain('retired COMMUNITY_DIGEST_SHEET_ID');
+      __resetChatExportForTests();
+      warn.mockClear();
+      process.env.CHAT_EXPORT_SHEET_ID = PRIVATE_CHAT_EXPORT_SHEET_ID; // the new name decides: no warning
+      startChatExport();
+      expect(warn.mock.calls.flat().join('\n')).not.toContain('COMMUNITY_DIGEST_SHEET_ID');
+    } finally {
+      warn.mockRestore();
+      log.mockRestore();
+    }
   });
 
   it('the paid /社群週報 slash command is no longer registered (the bulk overwrite removes it from Discord)', () => {

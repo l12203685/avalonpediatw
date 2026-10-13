@@ -138,20 +138,33 @@ export function buildFeedbackForwarder(): FeedbackDiscordForwarder {
 
 /**
  * Arm the daily chat-log export (bots/chatExport). The service
- * always exists (for the status page); the timer only runs when the
- * feature is enabled (CHAT_EXPORT_ENABLED, default on). Idempotent.
+ * always exists (for the status page); the timer runs when the feature is
+ * enabled (CHAT_EXPORT_ENABLED, default on) — and, when it is turned off,
+ * still once a day for the retention alone while the sheet it wrote to is
+ * reachable (days older than 7 are deleted; nothing is written). Idempotent.
  */
 export function startChatExport(): void {
   const service = initializeChatExport({ discord: createDiscordChatExportPort(readyDiscordClient) });
   const cfg = readChatExportConfig();
-  if (!cfg.enabled) {
+  if (cfg.sheetIdFromRetiredName) {
+    defaultChatExportLogger.warn(
+      'the sheet comes from the retired COMMUNITY_DIGEST_SHEET_ID (it overrides the 阿瓦隆百科 default) — remove it, or set CHAT_EXPORT_SHEET_ID',
+    );
+  }
+  const retentionOnly = !cfg.enabled && !!cfg.retentionSheetId && cfg.sheetCredentialsUsable;
+  if (!cfg.enabled && !retentionOnly) {
     defaultChatExportLogger.info('disabled (CHAT_EXPORT_ENABLED=false)');
     return;
   }
   if (service.isRunning()) return;
   service.start();
+  if (retentionOnly) {
+    defaultChatExportLogger.info('disabled (CHAT_EXPORT_ENABLED=false) — retention only: days older than 7 are still deleted from the two chat tabs');
+    return;
+  }
+  const target = cfg.sheetId && cfg.sheetCredentialsUsable ? (cfg.publicSheet ? 'configured (public stats workbook)' : 'configured (another sheet)') : null;
   defaultChatExportLogger.info(
-    `armed (catch-up of the last 7 days once Discord is ready, then daily from 04:30 +08); sheet ${cfg.sheetId && cfg.sheetCredentialsUsable ? (cfg.publicSheet ? 'configured (public stats workbook, the default)' : 'configured (another sheet)') : 'NOT configured (GOOGLE_SERVICE_ACCOUNT_JSON missing or invalid, CHAT_EXPORT_SHEET_ID=off, or the public sheet refused by CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0)'}`,
+    `armed (catch-up of the last 7 days once Discord is ready, then daily from 04:30 +08); sheet ${target ?? 'NOT configured (GOOGLE_SERVICE_ACCOUNT_JSON missing or invalid, CHAT_EXPORT_SHEET_ID=off, or the public sheet refused by CHAT_EXPORT_ALLOW_PUBLIC_SHEET=0)'}`,
   );
 }
 
@@ -242,10 +255,11 @@ function initializeLobbyChatMirror(): void {
 
   // 2026-10-13 — Discord → LINE pictures ride the reply queue as LINE image
   // messages served from this server (/media/relay/…, bots/media/relayMedia.ts).
-  // Needs the queue and an https public base; CHAT_MIRROR_IMAGES=false → text notes.
+  // Needs the queue and an https public base. CHAT_MIRROR_IMAGES=false → text notes
+  // in BOTH directions (nothing downloaded from Discord or from LINE).
   const publicBaseUrl = resolvePublicBaseUrl();
-  relayMediaStore =
-    lineReplyQueue && publicBaseUrl && !envFlagOff('CHAT_MIRROR_IMAGES') ? new RelayMediaStore() : null;
+  const imagesOn = !envFlagOff('CHAT_MIRROR_IMAGES');
+  relayMediaStore = lineReplyQueue && publicBaseUrl && imagesOn ? new RelayMediaStore() : null;
 
   initializeChatMirror({
     lineGroupId,
@@ -255,6 +269,7 @@ function initializeLobbyChatMirror(): void {
     listenBot,
     lineReplyQueue,
     lineImageRelay: relayMediaStore && publicBaseUrl ? { store: relayMediaStore, publicBaseUrl } : undefined,
+    lineImagesToDiscord: imagesOn,
   });
 
   if (!lineGroupId) lineOutboundMode = 'disabled';

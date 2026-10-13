@@ -32,6 +32,7 @@
  * messages with no text (attachment-only ones are counted, not exported).
  */
 
+import { parseFeedbackCommand } from '../feedback/commands';
 import { CHAT_EXPORT_MESSAGE_MAX_CHARS } from './config';
 import { taipeiStamp } from './window';
 
@@ -129,10 +130,21 @@ export function parseRelayLine(content: string): ParsedRelay | null {
   return null;
 }
 
-/** "/戰績 …", "／意見 …", "!avalon …": a command typed as text, not conversation. */
+/**
+ * The typed stats commands as bots/stats/textCommands.ts reads them (its
+ * COMMAND_RE; not imported, that module pulls in the stats queries).
+ */
+const STATS_COMMAND_RE = /^[/／]\s*(戰績|战绩|排行榜|排行|默契|指令)/u;
+
+/**
+ * "/戰績 …", "／意見 …", "!avalon …": a command typed as text, not
+ * conversation. Also every form the /意見 and stats parsers accept with
+ * spaces, a full-width space or a newline after the slash ("/ 意見 …"): an /意見
+ * text is forwarded to the admins privately and must never reach the sheet.
+ */
 export function isTypedCommand(text: string): boolean {
   const t = text.trim();
-  return /^[/／]\S/u.test(t) || /^!avalon\b/i.test(t);
+  return /^[/／]\S/u.test(t) || parseFeedbackCommand(t) !== null || STATS_COMMAND_RE.test(t) || /^!avalon\b/i.test(t);
 }
 
 const RELAY_PLATFORM: Record<Exclude<ParsedRelay['tag'], 'DC'>, ChatPlatform> = {
@@ -197,15 +209,27 @@ export function rewriteMentions(text: string, pseudo: Pseudonymizer, channelName
     .replace(/<a?:([A-Za-z0-9_~]+):\d+>/g, ':$1:');
 }
 
+/** A word as relay-link matching sees it: NFKC (full-width ｈｔｔｐｓ／…), %2F decoded, "/./" segments collapsed. */
+function relayLinkForm(word: string): string {
+  return word
+    .normalize('NFKC')
+    .replace(/%2f/gi, '/')
+    .replace(/\\/g, '/')
+    .replace(/\/(?:\.\/)+/g, '/');
+}
+
 /**
  * A link to the server's own picture relay (`<host>/media/relay/<random id>`,
  * Discord → LINE pictures): the random id is the only key to that picture
- * and the sheet is by default the link-public one, so such a link never reaches it.
- * (Relayed LINE pictures arrive as attachments and are counted as 〔附件 N〕;
- * this only guards against a link pasted or relayed as text.)
+ * and the sheet is by default the link-public one, so such a link never
+ * reaches it — with or without the scheme, in full-width letters, with
+ * "/./" segments or an encoded slash: every whitespace-separated word that
+ * reads as …media/relay/… is replaced whole. (Relayed LINE pictures arrive
+ * as attachments and are counted as 〔附件 N〕; relay links only ever go
+ * inside LINE image messages — this guards against one pasted as text.)
  */
 export function maskRelayMediaLinks(text: string): string {
-  return text.replace(/https?:\/\/[^\s<>]*\/media\/relay\/[^\s<>]*/gi, '〔圖片連結〕');
+  return text.replace(/[^\s<>]+/gu, (word) => (/media\/+relay(?:\/|$)/i.test(relayLinkForm(word)) ? '〔圖片連結〕' : word));
 }
 
 /** Newlines → " ⏎ " (one line per row, easy to read as CSV), then cut to `max` code points. */

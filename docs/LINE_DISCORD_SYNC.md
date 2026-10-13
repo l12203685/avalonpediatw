@@ -129,7 +129,7 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 
 `LINE_WEBHOOK_URL` / `PUBLIC_BASE_URL` 只有**非 Render** 部署才需要；Render 自動用 `RENDER_EXTERNAL_URL`。
 
-`DISCORD_GUILD_ID` 可選（只在單一伺服器註冊指令，測試較快）。
+`DISCORD_GUILD_ID` 可選（只在單一伺服器註冊指令，測試較快）。聊天紀錄匯出只讀一個伺服器：這個有設就讀它，沒設就讀阿瓦隆百科伺服器 `1132682489840812113`。
 
 社群相關（`docs/COMMUNITY_FEEDBACK.md`）：
 
@@ -138,7 +138,7 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | 是（Render ops → apply 從 GitHub secret `AVALON_STATS_SHEETS_CREDENTIALS_JSON` 複製） | 沒有 → 不匯出聊天紀錄 |
 | `CHAT_EXPORT_ENABLED` | 否 | 開；`false` 關 |
 | `CHAT_EXPORT_SHEET_ID` | 否 | 阿瓦隆百科試算表（知道連結就能看；Edward 2026-10-13 決定）；填私人那份的 id 就改寫那份；`off` 關 |
-| `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | 否 | 不設＝照寫阿瓦隆百科試算表；`0`（或任何不是「是」的值）＝拒絕那份、不匯出（見 `docs/COMMUNITY_FEEDBACK.md`） |
+| `CHAT_EXPORT_ALLOW_PUBLIC_SHEET` | 否 | 不設（或 `1`/`true`/`yes`/`on`）＝照寫阿瓦隆百科試算表；其他任何值（`0`/`false`/`off`/`no`，也包括中文「是」、`y`）＝拒絕寫入那份、不匯出，只每天刪 7 天以前的列（見 `docs/COMMUNITY_FEEDBACK.md`） |
 | `CHAT_EXPORT_EXTRA_SOURCE_IDS` / `CHAT_EXPORT_SOURCE_CHANNEL_IDS` / `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空（所有公開頻道、公開論壇＋同步頻道；「大劍管理員」和 `/意見` 頻道一定不讀）；加讀／取代／排除，見 `docs/COMMUNITY_FEEDBACK.md` |
 | `FEEDBACK_DISCORD_CHANNEL_ID` | 否 | 管理員頻道「大劍管理員」`1145513360545296574`；`off` 不轉貼 |
 | `FEEDBACK_COMMAND_ENABLED` | 否 | 開；`false` 關 `/意見` |
@@ -232,11 +232,20 @@ LINE 這一側照舊是「群裡下一次有人講話才送出」：圖片和文
 **順序與下載量**（審查後修正）：
 
 - 網站大廳：訊息一進來就顯示（圖片只顯示標記），順序就是進來的順序；限流也在這一刻算，被限流的訊息完全不下載。
+- 限流：同一個人每 60 秒 5 則。**只有圖片、貼圖或檔案、沒有文字**的訊息另外算一份（也是每 60 秒 5 則），
+  所以連貼幾張截圖或貼圖之後，接著打的字不會被吃掉；LINE 一次傳多張（同一組）只算一次。
 - Discord → LINE：所有 Discord 訊息依進來的順序排隊進 LINE 佇列。前一則的圖還在下載時，後面的文字會等它（LINE 本來就要等群裡有人講話才送，多等幾秒看不出來），
-  所以 LINE 上看到的順序和 Discord 一樣。下載一次只跑一張（不管幾個人同時貼），一則訊息所有下載合計最多 45 秒，超過的圖改成那句文字說明；
+  所以 LINE 上看到的順序和 Discord 一樣；網站大廳這時打的字也排在後面，不會插隊到圖片前面。
+  下載一次只跑一張（不管幾個人同時貼），一則訊息所有下載合計最多 45 秒，超過的圖改成那句文字說明；
   已經有 10 則在等的時候，新訊息的圖不下載、直接改文字說明。
-- LINE → Discord：圖片一張一張上傳；同一個人先傳圖再打字時，文字會等前面的圖貼完再貼（最多等 20 秒），所以 Discord 上也是先圖後字。
-  沒有圖在處理時，文字照舊立刻貼。單張圖下載超過 30 秒、或整個上傳流程超過 60 秒就放棄，不會卡住後面的圖。
+- LINE 佇列滿（50 則）時從最舊的丟，**一則 Discord 訊息的文字和它的圖、說明一起丟**，不會留下沒有發言者那句的圖；被丟的圖的副本也一起釋放。
+- 同一則訊息的大圖與縮圖：存縮圖時不會把剛存的大圖（或同一則訊息前面的圖）擠掉。
+- LINE → Discord：圖片一張一張上傳，**位置在 LINE 事件進來那一刻就排好**（不是等查完名字才排）：先傳圖再打字，文字等前面的圖貼完再貼（最多等 20 秒）；
+  先打字再傳圖，圖也等前面的字貼完；同一組多張照 1/3、2/3、3/3 的順序。沒有圖在處理時，文字照舊立刻貼。
+  單張圖下載超過 30 秒、或整個上傳流程超過 60 秒就放棄，不會卡住後面的圖。排隊太多（> 20 張）時那張不下載，Discord 改貼 `（圖片沒有同步過來，請到 LINE 看）`。
+- 例外：網站大廳打的字直接貼到 Discord，不會等 LINE 那邊還在上傳的圖（兩條路在不同模組，等待會讓大廳訊息在 Discord 上慢好幾秒）。
+- 推播（`LINE_REPLY_DRAIN=false`）或 listen-bot 模式下，Discord 上**只有圖片／貼圖、沒有文字**的訊息不轉到 LINE（會吃 push 額度），大廳照樣顯示標記；有文字的照舊轉文字。
+- 轉到 Discord 的文字（LINE 名字、內文）一律**不會 @ 到人**：就算寫了 `@everyone` 或 `<@某人>`，Discord 上只顯示文字、不通知。
 
 **為什麼 Discord → LINE 要先存一份**：LINE 的圖片訊息只是兩個 https 網址，由 LINE 自己來抓；我們的出站是 reply 佇列，
 可能幾小時後才送出，Discord CDN 的簽名網址到時已經過期。所以 server 在 Discord 訊息進來時就下載，從自己的網址提供：
@@ -251,8 +260,10 @@ LINE 這一側照舊是「群裡下一次有人講話才送出」：圖片和文
   一直不動、要等有人點開圖才增加 → 部署前送出的圖，部署後在 LINE 點開會是壞圖。
 - LINE 拒收某張圖的網址，或同一張圖連續兩次回覆失敗 → 改送文字說明，不會卡住整個佇列；文字訊息的「失敗放回佇列頭」規則不變。
 - 只有 reply 佇列模式（`LINE_REPLY_DRAIN` 預設開）而且算得出 https 公開網址時才送圖（Render 自動用 `RENDER_EXTERNAL_URL`；
-  其他部署設 `PUBLIC_BASE_URL`，或沿用 `LINE_WEBHOOK_URL` 的網域）；否則只送文字標記。`CHAT_MIRROR_IMAGES=false` 可單獨關掉
-  Discord → LINE 的圖（改文字說明）；LINE → Discord 的圖不受影響。
+  其他部署設 `PUBLIC_BASE_URL`，或沿用 `LINE_WEBHOOK_URL` 的網域）；否則只送文字標記。`CHAT_MIRROR_IMAGES=false` 關掉**兩個方向**的圖：
+  Discord → LINE 改送文字說明；LINE → Discord 不下載、不上傳，Discord 改貼 `（圖片，請到 LINE 看）`（同一組多張只貼一句）。
+- 圖片網址的回應標頭是 `Cache-Control: private`：刻意不讓中間的共用快取（CDN、代理）留一份，副本過期或被刪後就真的抓不到；
+  LINE 抓到後會自己保存，不受影響。`HEAD` 請求照樣回應，但不算進 `served`／`notFound`（`served` 是用來確認 LINE 有來抓圖的）。
 
 **不會迴圈**：bot 自己貼到 Discord 的圖（作者是 bot）、webhook、`[Avalon]` 開頭的訊息照舊忽略；LINE 來的圖只到 Discord，不會排回 LINE。
 **聊天紀錄匯出**：bot 貼的那則圖片只有固定標記 `（圖片）`，匯出時名字照樣換成「成員N」；檔名、網址、圖片內容都不會進試算表（附件只算數量）。
@@ -261,13 +272,13 @@ LINE 這一側照舊是「群裡下一次有人講話才送出」：圖片和文
 
 | 欄位 | 意義 |
 |---|---|
-| `line.stats.imagesToDiscord` / `imageNotesToDiscord` | LINE → Discord：上傳成功／改貼文字說明 |
-| `line.stats.imagesSkipped` | LINE → Discord：限流或排隊太多（> 20 張）而略過 |
+| `line.stats.imagesToDiscord` / `imageNotesToDiscord` | LINE → Discord：上傳成功／改貼文字說明（太大、下載或上傳失敗、排隊太多、`CHAT_MIRROR_IMAGES=false`） |
+| `line.stats.imagesSkipped` | LINE → Discord：限流或排隊太多（> 20 張）而沒上傳（排隊太多時 Discord 仍有一句說明） |
 | `line.stats.imageFailures` | LINE → Discord：圖和文字說明都沒貼出去（找不到同步頻道、Discord 貼文失敗、整個流程超過 60 秒） |
 | `line.stats.mediaNotesToDiscord` | 貼圖／影片／語音／檔案／位置轉成短文字的次數 |
 | `line.stats.imagesToLine` / `imageNotesToLine` | Discord → LINE：以圖片送出／副本不在改送文字 |
 | `mediaRelay.enabled` | Discord → LINE 圖片暫存是否開著（`false` → 不是 reply 佇列模式、沒有 https 公開網址，或 `CHAT_MIRROR_IMAGES=false`） |
-| `mediaRelay.stats` | `entries`／`bytes` 目前存量，`stored`／`evicted`／`expired` 累計，`served` LINE 來抓圖的次數，`notFound` 抓不到的次數 |
+| `mediaRelay.stats` | `entries`／`bytes` 目前存量，`stored`／`evicted`／`expired` 累計，`served` LINE 來抓圖的次數（只算 GET），`notFound` 抓不到的次數 |
 
 **驗證**：LINE 群傳一張照片 → Discord 同步頻道出現 `[…][LINE][名字] （圖片）` 和那張圖。
 Discord 同步頻道貼一張 JPG／PNG → 回 LINE 群講一句 → 群裡先出現 `[…][DC][名字] （圖片）`，接著那張圖；`mediaRelay.stats.served` 會增加（見上面「上線後請確認一次」）。

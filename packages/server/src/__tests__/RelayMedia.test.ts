@@ -124,6 +124,22 @@ describe('RelayMediaStore', () => {
     expect(store.has(newest)).toBe(true);
   });
 
+  it('never evicts the ids in `keep` (a picture\'s original while its preview is stored); null when there is no room without them', () => {
+    const store = new RelayMediaStore({ maxTotalBytes: 10_000 });
+    const sent = Array.from({ length: 4 }, () => store.put(jpeg(2000), 'jpeg')!);
+    for (const id of sent) store.keepAlive(id); // 8 KB already sent to LINE
+    const original = store.put(jpeg(2000), 'jpeg')!; // the new picture: cap reached
+    const preview = store.put(jpeg(500), 'jpeg', [original])!;
+    expect(store.has(original)).toBe(true); // before: the unsent original was evicted for its own preview
+    expect(store.has(preview)).toBe(true);
+    expect(sent.filter((id) => store.has(id))).toHaveLength(3); // the oldest sent copy made room instead
+    // Kept ids alone leave no room: refused, nothing evicted.
+    const tight = new RelayMediaStore({ maxTotalBytes: 1000 });
+    const a = tight.put(jpeg(800), 'jpeg')!;
+    expect(tight.put(jpeg(300), 'jpeg', [a])).toBeNull();
+    expect(tight.has(a)).toBe(true);
+  });
+
   it('when only sent copies are left, the oldest sent one goes', () => {
     const store = new RelayMediaStore({ maxTotalBytes: 2000 });
     const a = store.put(jpeg(1000), 'jpeg')!;
@@ -172,13 +188,13 @@ describe('mirrorChannelAdapter (bots/index.ts Discord wiring)', () => {
     };
   }
 
-  it('text goes as a plain string; files go as attachments with mentions disabled', async () => {
+  it('text and files both go with mentions disabled (a relayed "@everyone" or <@id> never pings)', async () => {
     const { ch, calls } = channel(0);
     const adapter = mirrorChannelAdapter(ch);
-    await adapter.send('hello');
+    await adapter.send('[1013 21:00][LINE][@everyone] <@123456789012345678> hello');
     const data = jpeg(10);
     await adapter.sendFiles!('[x] （圖片）', [{ name: 'line-image.jpg', data }]);
-    expect(calls[0]).toBe('hello');
+    expect(calls[0]).toEqual({ content: '[1013 21:00][LINE][@everyone] <@123456789012345678> hello', allowedMentions: { parse: [] } });
     expect(calls[1]).toEqual({
       content: '[x] （圖片）',
       files: [{ attachment: data, name: 'line-image.jpg' }],
@@ -255,6 +271,18 @@ describe(`GET ${MEDIA_RELAY_PATH}/:file`, () => {
       expect(res.status).toBe(404);
     }
     expect(store.stats().notFound).toBe(6);
+  });
+
+  it('HEAD answers like GET but counts neither as served nor as notFound (served = LINE fetched the picture)', async () => {
+    const store = new RelayMediaStore();
+    const id = store.put(jpeg(64), 'jpeg')!;
+    const app = appFor(store);
+    const head = await request(app).head(`${MEDIA_RELAY_PATH}/${id}.jpg`);
+    expect(head.status).toBe(200);
+    expect((await request(app).head(`${MEDIA_RELAY_PATH}/${'B'.repeat(32)}.jpg`)).status).toBe(404);
+    expect(store.stats()).toMatchObject({ served: 0, notFound: 0 });
+    await request(app).get(`${MEDIA_RELAY_PATH}/${id}.jpg`);
+    expect(store.stats()).toMatchObject({ served: 1, notFound: 0 });
   });
 
   it('404s an id evicted by the byte cap', async () => {
@@ -386,6 +414,29 @@ describe('reply queue items with images', () => {
     expect(second.retry[1]).toEqual({ text: 'note', enqueuedAt: 2 });
     expect(second.degraded).toBe(1);
     expect(second.releasedMediaIds).toEqual(image(1).mediaIds);
+  });
+
+  it('overflow drops the oldest message WHOLE (text line, pictures, note) and returns the dropped pictures\' relay ids', () => {
+    const q = new LineReplyQueue(4);
+    q.enqueueGroup([
+      { text: 'first', enqueuedAt: 1 },
+      { text: 'n1', enqueuedAt: 1, image: image(1) },
+      { text: 'n2', enqueuedAt: 1, image: image(2) },
+    ]);
+    expect(q.enqueue('second', 2)).toEqual({ dropped: 0, releasedMediaIds: [] });
+    const r = q.enqueue('third', 3);
+    // Before: [IMG, IMG, 'second', 'third'] — two pictures without their speaker line.
+    expect(r).toEqual({ dropped: 3, releasedMediaIds: [...image(1).mediaIds, ...image(2).mediaIds] });
+    expect(q.drain().map((b) => (b.image ? 'IMG' : b.text))).toEqual(['second', 'third']);
+    // Plain texts still drop one by one; a dropped image without a group frees its copy too.
+    const p = new LineReplyQueue(2);
+    p.enqueueItem({ text: 'n', enqueuedAt: 1, image: image(3) });
+    p.enqueue('a', 2);
+    expect(p.enqueue('b', 3)).toEqual({ dropped: 1, releasedMediaIds: image(3).mediaIds });
+    // requeueFront trims the newest tail and reports its pictures as well.
+    const t = new LineReplyQueue(2);
+    t.enqueueItem({ text: 'n', enqueuedAt: 1, image: image(4) });
+    expect(t.requeueFront([{ text: 'x', enqueuedAt: 0 }, { text: 'y', enqueuedAt: 0 }])).toEqual({ dropped: 1, releasedMediaIds: image(4).mediaIds });
   });
 
   it('degradeAfterFailedReply: imageRejected degrades every image at once', () => {

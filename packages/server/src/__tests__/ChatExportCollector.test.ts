@@ -10,11 +10,16 @@
  *     CHAT_EXPORT_EXTRA_SOURCE_IDS adds to it (exclusions still win); a
  *     single forum post / unknown / unreadable id in either is ignored and
  *     counted (sourceIdsIgnored); a server with no @everyone-visible channel
- *     is reported (publicChannelsFound 0)
+ *     is reported (publicChannelsFound 0); only ONE server is discovered —
+ *     DISCORD_GUILD_ID, else the 阿瓦隆百科 server, never another server the
+ *     bot was added to; that server not loaded / unavailable / without
+ *     channels → nothing read at all (serverUnavailable, counted as failed)
  *   fetchWindow          — pages backwards with `before`, keeps [start, end),
  *     stops at the window start, reports a page-cap truncation
  *   forums               — active + archived threads (archived listed newest
- *     first, stopping once archived before the day; page cap reported),
+ *     first, stopping once archived before the day; page cap reported; the
+ *     next page starts 1 ms after the oldest seen, so threads archived in the
+ *     same millisecond at a page boundary are not lost),
  *     threads outside the day skipped without reading, starter and replies
  *     of the day kept, the records forum's starter (game record) skipped but
  *     replies — also to the bot's format-check reply — kept, 「論壇／標題」
@@ -36,7 +41,7 @@ import {
   type MessagePager,
   type ThreadLike,
 } from '../bots/chatExport/collector';
-import { RECORDS_FORUM_CHANNEL_ID, readChatExportConfig } from '../bots/chatExport/config';
+import { AVALONPEDIA_DISCORD_GUILD_ID, RECORDS_FORUM_CHANNEL_ID, readChatExportConfig } from '../bots/chatExport/config';
 import { buildExportRows } from '../bots/chatExport/rows';
 import { dayWindow } from '../bots/chatExport/window';
 import { DEFAULT_FEEDBACK_DISCORD_CHANNEL_ID } from '../bots/feedback/config';
@@ -45,8 +50,15 @@ const EVERYONE = { id: 'everyone' };
 const ME = { id: 'me' };
 const MIRROR = '1132901301802504242';
 
-function guild(id = 'g1') {
-  return { id, roles: { everyone: EVERYONE }, members: { me: ME }, channels: { cache: new Map<string, unknown>() } };
+/** By default the 阿瓦隆百科 server — the only one discovered unless DISCORD_GUILD_ID names another. */
+function guild(id = AVALONPEDIA_DISCORD_GUILD_ID, opts: { available?: boolean } = {}) {
+  return {
+    id,
+    available: opts.available ?? true,
+    roles: { everyone: EVERYONE },
+    members: { me: ME },
+    channels: { cache: new Map<string, unknown>() },
+  };
 }
 
 function channel(
@@ -89,6 +101,55 @@ function client(guilds: Array<ReturnType<typeof guild>>): Client {
 }
 
 describe('selectSourceChannels', () => {
+  it('only the 阿瓦隆百科 server is discovered: another server the bot was added to is never read (DISCORD_GUILD_ID unset)', async () => {
+    const home = guild();
+    channel(home, '110000000000000001');
+    const stranger = guild('999000000000000001');
+    channel(stranger, '119000000000000001'); // public in a server that added the (public) bot
+    channel(stranger, '119000000000000002', { type: ChannelType.GuildForum });
+    const cfg = readChatExportConfig({});
+    expect(cfg.guildId).toBe(AVALONPEDIA_DISCORD_GUILD_ID);
+    const picked = await selectSourceChannels(client([stranger, home]), cfg);
+    expect(picked.channels.map((c) => c.id)).toEqual(['110000000000000001']);
+    expect(picked.forums).toEqual([]);
+    expect(picked.publicChannelsFound).toBe(1);
+
+    // Through the collector: the stranger's channels are never even paged.
+    const strangerCh = stranger.channels.cache.get('119000000000000001') as { messages: { fetch: ReturnType<typeof vi.fn> } };
+    (home.channels.cache.get('110000000000000001') as { messages: { fetch: ReturnType<typeof vi.fn> } }).messages.fetch.mockResolvedValue(new Collection());
+    const res = await collectDiscordMessages(client([stranger, home]), cfg, dayWindow('2026-10-11'));
+    expect(strangerCh.messages.fetch).not.toHaveBeenCalled();
+    expect(res.channels.map((c) => c.id)).toEqual(['110000000000000001']);
+
+    // DISCORD_GUILD_ID names the one server instead (a test server).
+    const test = await selectSourceChannels(client([stranger, home]), readChatExportConfig({ DISCORD_GUILD_ID: '999000000000000001' }));
+    expect(test.channels.map((c) => c.id)).toEqual(['119000000000000001']);
+  });
+
+  it('the server not loaded yet, unavailable (outage) or without channels → nothing is read, not even the sync channel', async () => {
+    const cfg = readChatExportConfig({ LOBBY_MIRROR_DISCORD_CHANNEL_ID: MIRROR, CHAT_EXPORT_EXTRA_SOURCE_IDS: '120000000000000009' });
+    const loaded = guild();
+    channel(loaded, MIRROR, { publicView: false });
+    const cases = {
+      'not in the cache': client([guild('999000000000000002')]),
+      unavailable: client([guild(AVALONPEDIA_DISCORD_GUILD_ID, { available: false })]),
+      'no channels yet': client([guild()]),
+    };
+    for (const [why, c] of Object.entries(cases)) {
+      // The sync channel itself is still fetchable by id (REST): it must not be read alone.
+      (c.channels as unknown as { fetch: (id: string) => Promise<unknown> }).fetch = async () => loaded.channels.cache.get(MIRROR);
+      const picked = await selectSourceChannels(c, cfg);
+      expect({ why, channels: picked.channels, forums: picked.forums, serverUnavailable: picked.serverUnavailable }).toEqual({
+        why,
+        channels: [],
+        forums: [],
+        serverUnavailable: true,
+      });
+      const res = await collectDiscordMessages(c, cfg, dayWindow('2026-10-11'));
+      expect(res).toMatchObject({ serverUnavailable: true, failedChannels: 1, channels: [], messages: [] });
+    }
+  });
+
   it('public readable text/announcement channels and forums + the sync channel; skips private, unreadable, excluded', async () => {
     const g = guild();
     channel(g, '100000000000000001'); // public text
@@ -394,13 +455,40 @@ describe('forum threads', () => {
     for (const t of expected) expect(ids.has(t.id)).toBe(true);
     expect(res.threads).toHaveLength(1 + expected.length);
 
-    // A window far in the past: page 2 is fetched with `before` = the oldest archive time of page 1.
+    // A window far in the past: page 2 is fetched with `before` = 1 ms after the oldest archive time of page 1
+    // (Discord's `before` is exclusive and finer than a millisecond; the overlap is de-duplicated).
     const older = dayWindow('2026-10-05');
     const forum2 = fakeForum(F, '討論區', [], archived);
     const res2 = await listForumThreads(forum2, older);
     expect(forum2.archivedCalls).toHaveLength(2);
-    expect(forum2.archivedCalls[1].before?.getTime()).toBe(Math.min(...archived.slice(0, 100).map((t) => t.archiveTimestamp ?? 0)));
+    expect(forum2.archivedCalls[1].before?.getTime()).toBe(Math.min(...archived.slice(0, 100).map((t) => t.archiveTimestamp ?? 0)) + 1);
     expect(res2.archivedTruncated).toBe(false);
+  });
+
+  it('threads archived in the same millisecond at a page boundary are all listed (none skipped by an exclusive `before`)', async () => {
+    const F = '700000000000000003';
+    const archived: FakeThread[] = [];
+    for (let i = 0; i < 101; i += 1) {
+      // 100 and 101 (oldest two) share one archive millisecond; page 1 ends between them.
+      const archivedAt = i < 100 ? DAY.end + 40 * H - i * 60_000 : DAY.end + 40 * H - 99 * 60_000;
+      archived.push(fakeThread({ createdAt: DAY.start + H, name: `s${i}`, parentId: F, archivedAt, messages: [{ at: DAY.start + 2 * H }] }));
+    }
+    const forum = fakeForum(F, '討論區', [], archived);
+    const res = await listForumThreads(forum, DAY);
+    expect(forum.archivedCalls).toHaveLength(2);
+    expect(new Set(res.threads.map((t) => t.id))).toEqual(new Set(archived.map((t) => t.id)));
+    expect(res.archivedTruncated).toBe(false);
+
+    // A page with nothing new (more threads in one millisecond than a page holds) ends the listing, reported.
+    const same = Array.from({ length: 3 }, (_, i) =>
+      fakeThread({ createdAt: DAY.start + H, name: `m${i}`, parentId: F, archivedAt: DAY.end + 5 * H, messages: [{ at: DAY.start + 2 * H }] }),
+    );
+    const tight = fakeForum(F, '討論區', [], same);
+    const origFetch = tight.threads.fetchArchived;
+    tight.threads.fetchArchived = (o, c) => origFetch({ ...o, limit: 2 }, c);
+    const res2 = await listForumThreads(tight, DAY);
+    expect(res2.archivedTruncated).toBe(true);
+    expect(tight.archivedCalls).toHaveLength(2);
   });
 
   it('an archived listing that hits the page cap is reported as truncated', async () => {

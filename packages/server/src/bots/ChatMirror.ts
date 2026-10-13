@@ -66,6 +66,12 @@
  *     whose copy is gone into its text note at drain time.
  *   - Never logged: chat text, names, image URLs or relay ids. SDK errors
  *     are reduced to a code by describeError() (they embed the request).
+ *   - Rate limit: marker-only media (a picture, sticker, file… with no text)
+ *     has its own per-user limit, so pictures never use up the text limit
+ *     (review fix 2026-10-13).
+ *   - Order: while Discord pictures are being copied, website lobby lines
+ *     bound for LINE wait on the same chain, so LINE keeps the order the
+ *     lobby and Discord show (review fix 2026-10-13).
  */
 
 import {
@@ -224,6 +230,7 @@ export const MIRROR_MEDIA_TEXT = {
   lineLocation: '（位置資訊，請到 LINE 看）',
   lineImageTooLarge: '（圖片太大，請到 LINE 看）',
   lineImageFailed: '（圖片沒有同步過來，請到 LINE 看）',
+  lineImageOff: '（圖片，請到 LINE 看）',
   discordImageOnDiscord: '（Discord 有一張圖片，請到 Discord 看）',
 } as const;
 
@@ -367,6 +374,12 @@ export interface ChatMirrorConfig {
    */
   lineImageRelay?: { store: RelayMediaStore; publicBaseUrl: string };
   /**
+   * 2026-10-13 — LINE → Discord pictures (download from LINE, upload as a
+   * file). Default true; false (CHAT_MIRROR_IMAGES=false) sends the text
+   * note MIRROR_MEDIA_TEXT.lineImageOff instead, nothing is downloaded.
+   */
+  lineImagesToDiscord?: boolean;
+  /**
    * Rate limit per platform-user per window. Defaults to 5 msgs / 60s to
    * keep spam bots from flooding the channel while staying generous for
    * real chatter. Only applied on inbound, since lobby-side is already
@@ -401,6 +414,7 @@ export class ChatMirror {
   private readonly listenBot?: ListenBotEnqueueConfig;
   private readonly lineReplyQueue?: LineReplyQueue;
   private readonly imageRelay?: { store: RelayMediaStore; publicBaseUrl: string };
+  private readonly imagesToDiscord: boolean;
   /** Discord → LINE steps in arrival order while pictures are copied (relayDiscordToLine). */
   private discordToLineChain: Promise<void> = Promise.resolve();
   private discordToLineWaiting = 0;
@@ -416,6 +430,7 @@ export class ChatMirror {
     this.listenBot = config.listenBot;
     this.lineReplyQueue = config.lineReplyQueue;
     this.imageRelay = config.lineImageRelay;
+    this.imagesToDiscord = config.lineImagesToDiscord ?? true;
 
     const rl = config.inboundRateLimit ?? { windowMs: 60_000, maxRequests: 5 };
     this.inboundLimiter = new SocketRateLimiter({
@@ -456,10 +471,22 @@ export class ChatMirror {
     const line = formatOutgoing(msg);
 
     // Run both pushes in parallel; individual failures are logged and swallowed.
+    // LINE waits behind Discord messages whose pictures are still being copied.
     await Promise.all([
-      this.pushLine(line, msg),
+      this.pushLineInOrder(line, msg),
       this.pushDiscord(line),
     ]);
+  }
+
+  /**
+   * pushLine, but behind any Discord → LINE step still on the chain
+   * (relayDiscordToLine), so a lobby line sent while a Discord picture is
+   * downloading reaches LINE after it — the order the lobby and Discord show.
+   * Without pending steps (or without the picture relay) it goes at once.
+   */
+  private pushLineInOrder(line: string, msg: LobbyChatMessage): Promise<void> {
+    if (!this.lineImageRelay() || this.discordToLineWaiting === 0) return this.pushLine(line, msg);
+    return this.onDiscordToLineChain(() => this.pushLine(line, msg));
   }
 
   /**
@@ -502,6 +529,12 @@ export class ChatMirror {
     displayName: string;
     text: unknown;
     messageId: string;
+    /**
+     * 'media' — a marker-only line for a picture / sticker / file with no
+     * text: counted against a separate per-user limit, so a burst of
+     * pictures never uses up the text limit. Default 'text'.
+     */
+    kind?: 'text' | 'media';
   }): LobbyChatMessage | null {
     const { source, platformUserId, displayName, text, messageId } = params;
 
@@ -520,7 +553,7 @@ export class ChatMirror {
     const trimmed = validateInboundBody(text);
     if (!trimmed) return null;
 
-    const rlKey = `${source}:${platformUserId}`;
+    const rlKey = params.kind === 'media' ? `${source}-media:${platformUserId}` : `${source}:${platformUserId}`;
     if (!this.inboundLimiter.isAllowed(rlKey)) {
       // Platform only — never the user id (counts and codes only in logs).
       this.logger.info?.(`inbound rate-limited: source=${source}`);
@@ -571,7 +604,8 @@ export class ChatMirror {
     if (degraded > 0) {
       this.logger.warn(`LINE reply failed — ${degraded} image(s) will be sent as a text note`);
     }
-    const { dropped } = this.lineReplyQueue.requeueFront(retry);
+    const { dropped, releasedMediaIds: droppedMedia } = this.lineReplyQueue.requeueFront(retry);
+    this.releaseRelayMedia(droppedMedia);
     if (dropped > 0) {
       this.logger.warn(`LINE reply queue overflow on requeue — dropped ${dropped} newest message(s)`);
     }
@@ -621,7 +655,8 @@ export class ChatMirror {
    */
   public enqueueLineReplyText(text: string): boolean {
     if (!this.lineReplyQueue || !this.isLineReplyQueueEnabled()) return false;
-    const { dropped } = this.lineReplyQueue.enqueue(text);
+    const { dropped, releasedMediaIds } = this.lineReplyQueue.enqueue(text);
+    this.releaseRelayMedia(releasedMediaIds);
     if (dropped > 0) {
       this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
     }
@@ -633,6 +668,21 @@ export class ChatMirror {
   /** True when outbound LINE goes into the in-process reply queue (not listen-bot, not push). */
   private usesLineReplyQueue(): boolean {
     return !!this.lineReplyQueue && !!this.lineGroupId && !this.listenBot?.url;
+  }
+
+  /**
+   * True when Discord → LINE goes out through the in-process reply queue —
+   * free, nothing pushed or enqueued elsewhere. Marker-only Discord messages
+   * (a picture or sticker with no text) only go to LINE then; in push /
+   * listen-bot mode they would cost quota or extra enqueues (review fix 2026-10-13).
+   */
+  public lineOutboundUsesReplyQueue(): boolean {
+    return this.usesLineReplyQueue();
+  }
+
+  /** LINE → Discord pictures are copied (CHAT_MIRROR_IMAGES not false). */
+  public lineImagesToDiscordEnabled(): boolean {
+    return this.imagesToDiscord;
   }
 
   /**
@@ -695,11 +745,25 @@ export class ChatMirror {
     if (!relay) return step(null).catch(failed);
 
     const crowded = this.discordToLineWaiting >= DISCORD_TO_LINE_MAX_WAITING;
+    return this.onDiscordToLineChain(() => step(crowded ? null : relay).catch(failed));
+  }
+
+  /**
+   * Run `work` as the next step of the Discord → LINE chain (arrival order),
+   * bounded by DISCORD_TO_LINE_STEP_TIMEOUT_MS. Resolves when it has run; never rejects.
+   */
+  private onDiscordToLineChain(work: () => Promise<void>): Promise<void> {
     this.discordToLineWaiting += 1;
     const run = this.discordToLineChain.then(() =>
-      raceTimeout(step(crowded ? null : relay).catch(failed), DISCORD_TO_LINE_STEP_TIMEOUT_MS, () => {
-        this.logger.warn('Discord → LINE relay step timed out — continuing with the next message');
-      }),
+      raceTimeout(
+        work().catch((err: unknown) => {
+          this.logger.warn(`Discord → LINE relay failed (${describeError(err)})`);
+        }),
+        DISCORD_TO_LINE_STEP_TIMEOUT_MS,
+        () => {
+          this.logger.warn('Discord → LINE relay step timed out — continuing with the next message');
+        },
+      ),
     );
     this.discordToLineChain = run.finally(() => {
       this.discordToLineWaiting -= 1;
@@ -728,12 +792,14 @@ export class ChatMirror {
     }
     const queue = this.lineReplyQueue;
     const now = Date.now();
-    let dropped = 0;
-    dropped += queue.enqueueItem({ text: formatOutgoing(msg), enqueuedAt: now }).dropped;
-    for (const image of images) {
-      dropped += queue.enqueueItem({ text: MIRROR_MEDIA_TEXT.discordImageOnDiscord, enqueuedAt: now, image }).dropped;
-    }
-    if (note) dropped += queue.enqueueItem({ text: note, enqueuedAt: now }).dropped;
+    // One group: on overflow the whole message leaves the queue together, so a
+    // picture never stays behind without its speaker line.
+    const { dropped, releasedMediaIds } = queue.enqueueGroup([
+      { text: formatOutgoing(msg), enqueuedAt: now },
+      ...images.map((image) => ({ text: MIRROR_MEDIA_TEXT.discordImageOnDiscord, enqueuedAt: now, image })),
+      ...(note ? [{ text: note, enqueuedAt: now }] : []),
+    ]);
+    this.releaseRelayMedia(releasedMediaIds);
     if (dropped > 0) {
       this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
     }
@@ -832,7 +898,8 @@ export class ChatMirror {
     }
 
     if (this.lineReplyQueue) {
-      const { dropped } = this.lineReplyQueue.enqueue(line);
+      const { dropped, releasedMediaIds } = this.lineReplyQueue.enqueue(line);
+      this.releaseRelayMedia(releasedMediaIds);
       if (dropped > 0) {
         this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
       }

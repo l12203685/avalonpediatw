@@ -56,7 +56,7 @@ describe('LineReplyQueue', () => {
   it('requeueFront([]) is a no-op', () => {
     const q = new LineReplyQueue();
     fill(q, 2);
-    expect(q.requeueFront([])).toEqual({ dropped: 0 });
+    expect(q.requeueFront([])).toEqual({ dropped: 0, releasedMediaIds: [] });
     expect(q.size()).toBe(2);
   });
 
@@ -65,7 +65,7 @@ describe('LineReplyQueue', () => {
     q.enqueue('a');
     q.enqueue('b');
     q.enqueue('c');
-    expect(q.enqueue('d')).toEqual({ dropped: 1 });
+    expect(q.enqueue('d')).toEqual({ dropped: 1, releasedMediaIds: [] });
     expect(q.drain().map((b) => b.text)).toEqual(['b', 'c', 'd']);
   });
 
@@ -75,7 +75,7 @@ describe('LineReplyQueue', () => {
     const batch = q.drain(2); // m0, m1 out; m2, m3 remain
     q.enqueue('x'); // m2, m3, x
     q.enqueue('y'); // m2, m3, x, y (full)
-    expect(q.requeueFront(batch)).toEqual({ dropped: 2 }); // m0 m1 m2 m3 | x y trimmed
+    expect(q.requeueFront(batch)).toEqual({ dropped: 2, releasedMediaIds: [] }); // m0 m1 m2 m3 | x y trimmed
     expect(q.size()).toBe(4);
     expect([...q.drain(), ...q.drain()].map((b) => b.text)).toEqual(['m0', 'm1', 'm2', 'm3']);
   });
