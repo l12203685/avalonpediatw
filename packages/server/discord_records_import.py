@@ -42,6 +42,20 @@ What this script does and does not do:
     meant as a record (no result tag, no 6-digit 配置) get no reply. If the forum lacks
     one of the tags that decide this (renamed?), no reply is posted at all. With
     --dry-run the replies are counted, not posted.
+  * --reply also keeps the forum tag 待修正 (TAG_FIX) on the posts that need fixing, so whoever
+    fixes records can filter the forum by it (--no-tag: off). The tag is looked up by its exact
+    name and created (Manage Channels) when the forum lacks it; no permission: a notice and no
+    tagging this run. Added to every `fixable` post created within --tag-since-days (90) that
+    lacks it (never to a post that already has 5 tags, or a locked one unless --tag-locked);
+    removed from every post, of any age, that carries it and now parses (imported now or
+    earlier, already in 牌譜, a duplicate) or is tagged 已收錄 / 模擬. Posts this run could not
+    judge (starter deleted or empty, not a record, before --since) keep their tags. At most
+    --tag-limit (30) changes per run, removals first, then additions newest post first; the
+    rest wait for the next run. Each change re-reads the post and sends applied_tags = its
+    current tags plus or minus TAG_FIX only (archived:false in the same request when the post
+    is archived: Discord edits no archived thread otherwise; it archives again on its own after
+    inactivity). HTTP 403 (Manage Threads missing): counted, one notice, no further tag change
+    this run; 404 (post deleted): counted. With --dry-run the changes are counted, not made.
   * --fix-list: the weekly list of posts to fix, in the guild text channel 牌譜修正
     (FIX_CHANNEL_NAME, or the channel DISCORD_FIX_CHANNEL_ID names): the posts --reply is
     for (`fixable`) created within --fix-list-days (30), by record date (date, 場次, reason,
@@ -65,15 +79,19 @@ Usage:
     python discord_records_import.py --dry-run            # parse, dedupe, print counts
     python discord_records_import.py                      # ... and append the new rows
     python discord_records_import.py --since 2026-04-01 --limit 5
-    python discord_records_import.py --reply              # ... and reply to unreadable recent posts
+    python discord_records_import.py --reply              # ... and reply to unreadable recent posts,
+                                                          #     keeping the 待修正 tag up to date
+    python discord_records_import.py --reply --no-tag     # ... replies only
     python discord_records_import.py --fix-list           # ... and post this week's list in 牌譜修正
     python discord_records_import.py --dry-run --report skipped.json   # local only
 
 Configuration (environment):
     DISCORD_BOT_TOKEN              the bot's token (View Channel + Read Message History on
                                    the forum, Message Content intent; --reply also needs
-                                   Send Messages in Threads; --fix-list needs View Channel,
-                                   Send Messages and Read Message History in 牌譜修正)
+                                   Send Messages in Threads, and Manage Threads for the 待修正
+                                   tag (Manage Channels once, to create the tag; or add it by
+                                   hand); --fix-list needs View Channel, Send Messages and
+                                   Read Message History in 牌譜修正)
     AVALON_STATS_CREDENTIALS_FILE, AVALON_STATS_CREDENTIALS_JSON, AVALON_STATS_SHEET_ID
                                    as for generate_cache.py; writing needs Editor access
     DISCORD_RECORDS_FORUM_ID       forum channel id (default FORUM_CHANNEL_ID)
@@ -310,6 +328,30 @@ FIX_STATUS_TEXT = {
 }
 FIX_CHANNEL_SKIPS = frozenset({FIX_NO_CHANNEL, FIX_NOT_TEXT, FIX_BAD_VARIABLE})
 
+# The forum tag on posts that need fixing (with --reply; Edward 2026-10-13): whoever fixes records
+# filters the forum by it. Kept by the bot: added to `fixable` posts, removed once a post parses.
+TAG_FIX = "待修正"
+TAG_DEFAULT_DAYS = 90
+TAG_DEFAULT_LIMIT = 30
+MAX_APPLIED_TAGS = 5  # Discord: at most 5 tags on a forum post
+MAX_FORUM_TAGS = 20  # Discord: at most 20 tags in a forum
+# FixTagReport.status: what became of the tag itself (fixed strings, counts-only summary).
+TAG_FOUND = "found"
+TAG_CREATED = "created"
+TAG_WOULD_CREATE = "would_create"
+TAG_CREATE_FORBIDDEN = "create_forbidden"
+TAG_FORUM_FULL = "forum_full"
+TAG_ERROR = "error"
+TAG_STATUS_TEXT = {
+    TAG_FOUND: f"論壇已有「{TAG_FIX}」標籤",
+    TAG_CREATED: f"論壇沒有「{TAG_FIX}」標籤，本次已建立",
+    TAG_WOULD_CREATE: f"論壇沒有「{TAG_FIX}」標籤（dry run 不建立；寫入時會建立）",
+    TAG_CREATE_FORBIDDEN: f"論壇沒有「{TAG_FIX}」標籤，bot 沒有權限建立（403），本次未加標籤",
+    TAG_FORUM_FULL: f"論壇沒有「{TAG_FIX}」標籤，且標籤已滿 {MAX_FORUM_TAGS} 個無法建立，本次未加標籤",
+    TAG_ERROR: f"讀取或建立「{TAG_FIX}」標籤時 Discord 錯誤，本次未更動標籤",
+}
+TAG_SKIPS = frozenset({TAG_CREATE_FORBIDDEN, TAG_FORUM_FULL, TAG_ERROR})
+
 
 # ---------------------------------------------------------------------------
 # Posts
@@ -320,6 +362,10 @@ class Post:
     id: str  # thread id = starter message id (snowflake)
     title: str
     tags: tuple[str, ...] = ()
+    # As listed (forum_posts), for the 待修正 tag: the applied tag ids, and the thread's state.
+    tag_ids: tuple[str, ...] = field(default=(), compare=False)
+    archived: bool = field(default=False, compare=False)
+    locked: bool = field(default=False, compare=False)
 
     @property
     def created(self) -> dt.datetime:
@@ -965,6 +1011,8 @@ class ImportReport:
     skipped: Counter = field(default_factory=Counter)
     skipped_recorded: Counter = field(default_factory=Counter)  # ... of which tagged 已收錄
     skips: list[SkippedPost] = field(default_factory=list)  # every skipped post, for --reply
+    # Posts that need no fixing: in Discord匯入 already, or parsed now (whatever the dedupe said).
+    ok_ids: set[str] = field(default_factory=set)
     rows: list[list[str]] = field(default_factory=list)
     details: list[dict] = field(default_factory=list)  # per post, for --report (local only)
 
@@ -1007,6 +1055,7 @@ def plan_import(
             continue
         if post.id in imported.post_ids:
             report.already_imported += 1
+            report.ok_ids.add(post.id)
             report.note(post, "already imported")
             continue
         if TAG_SIMULATION in post.tags:  # no need to fetch it
@@ -1023,6 +1072,7 @@ def plan_import(
             report.skip(post, SKIP_INTERNAL)
             continue
         report.parsed += 1
+        report.ok_ids.add(post.id)
         text = game.text()
         fp = gc.record_fingerprint(game.config, text)
         if fp in sheet.fingerprints:
@@ -1153,6 +1203,227 @@ def reply_lines(reply: ReplyReport, since_days: int) -> list[str]:
         f"沒有發言權限（403）：{reply.forbidden}；其他 Discord 錯誤：{reply.errors}"
         + (f"；超過 --reply-limit 保留到下次：{reply.held_by_limit}" if reply.held_by_limit else ""),
     ]
+    return lines
+
+
+# ---------------------------------------------------------------------------
+# The 待修正 tag on the posts that need fixing (with --reply, unless --no-tag)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class FixTagReport:
+    """Counts only: nothing here identifies a post."""
+    dry_run: bool = False
+    days: int = TAG_DEFAULT_DAYS
+    status: str = ""  # one of TAG_STATUS_TEXT
+    candidates: int = 0  # fixable posts created within `days`
+    already_tagged: int = 0  # ... of them carrying the tag already
+    to_add: int = 0  # ... of them lacking it
+    to_remove: int = 0  # posts carrying it that need no fixing (any age)
+    added: int = 0  # dry run: would be added
+    removed: int = 0  # dry run: would be removed
+    unarchived: int = 0  # changes that reopened an archived post (archived:false)
+    skipped_full: int = 0  # the post has MAX_APPLIED_TAGS tags already
+    skipped_locked: int = 0  # locked post (without --tag-locked)
+    held_by_limit: int = 0
+    gone: int = 0  # HTTP 404: the post was deleted
+    forbidden: int = 0  # HTTP 403: no Manage Threads; no further change this run
+    left_after_forbidden: int = 0
+    errors: int = 0  # other Discord errors or odd responses (per post; the run goes on)
+    unchanged: int = 0  # already as wanted when re-read (someone changed it meanwhile)
+    untouched: int = 0  # carrying the tag, but this run cannot judge the post: left as it is
+
+
+@dataclass(frozen=True)
+class FixTagPlan:
+    add: list[Post]  # newest first
+    remove: list[Post]  # newest first
+    candidates: int
+    already_tagged: int
+    untouched: int
+
+
+# What one tag change comes to (tag_change, change_fix_tag).
+TAG_CHANGE = "change"
+TAG_UNCHANGED = "unchanged"
+TAG_FULL = "full"
+TAG_LOCKED = "locked"
+TAG_GONE = "gone"
+
+
+def plan_fix_tags(posts: Iterable[Post], report: ImportReport, now: dt.datetime, days: int) -> FixTagPlan:
+    """Which posts get the 待修正 tag and which lose it. Add: `fixable` posts (the --reply rule:
+    a format reason, not tagged 已收錄 / 模擬, meant as a record) created within `days` that lack
+    it. Remove: posts of any age that carry it and are tagged 已收錄 / 模擬, or need no fixing now
+    (report.ok_ids: imported now or earlier, already in 牌譜, a duplicate). A post carrying it that
+    this run cannot judge (starter deleted or empty, no longer a record, not read) keeps it, as does
+    an older fixable post."""
+    fix_ids = {s.post.id for s in report.skips if fixable(s)}
+    cutoff = now - dt.timedelta(days=days)
+    add: list[Post] = []
+    remove: list[Post] = []
+    candidates = already = untouched = 0
+    for post in sorted(posts, key=lambda p: int(p.id), reverse=True):
+        carries = TAG_FIX in post.tags
+        if TAG_RECORDED in post.tags or TAG_SIMULATION in post.tags:
+            if carries:
+                remove.append(post)
+        elif post.id in fix_ids:
+            if post.created >= cutoff:
+                candidates += 1
+                if carries:
+                    already += 1
+                else:
+                    add.append(post)
+        elif post.id in report.ok_ids:
+            if carries:
+                remove.append(post)
+        elif carries:
+            untouched += 1
+    return FixTagPlan(add, remove, candidates, already, untouched)
+
+
+def tag_id_named(available: Any, name: str) -> str | None:
+    """The id of the forum tag called exactly `name`, None if there is none."""
+    for tag in available or []:
+        if isinstance(tag, dict) and tag.get("name") == name and tag.get("id"):
+            return str(tag["id"])
+    return None
+
+
+def tag_change(applied: Iterable[Any], tag_id: str | None, add: bool, *, locked: bool,
+               allow_locked: bool) -> tuple[str, list[str]]:
+    """(TAG_CHANGE / TAG_UNCHANGED / TAG_LOCKED / TAG_FULL, the post's new applied_tags): its
+    current tags, in their order, plus or minus `tag_id` only. `tag_id` None: the tag does not
+    exist yet (a dry run before it is created)."""
+    current = [str(t) for t in applied]
+    present = tag_id is not None and tag_id in current
+    if present == add:
+        return TAG_UNCHANGED, current
+    if locked and not allow_locked:
+        return TAG_LOCKED, current
+    if not add:
+        return TAG_CHANGE, [t for t in current if t != tag_id]
+    if len(current) >= MAX_APPLIED_TAGS:
+        return TAG_FULL, current
+    return TAG_CHANGE, current + [tag_id or ""]
+
+
+def change_fix_tag(client: Any, post: Post, tag_id: str, add: bool, allow_locked: bool) -> tuple[str, bool]:
+    """Re-read the post (its tags may have changed since the listing), then set its applied_tags to
+    tag_change's. (outcome, an archived post was reopened). Discord errors propagate."""
+    thread = client.thread(post.id)
+    if thread is None:
+        return TAG_GONE, False
+    applied = thread.get("applied_tags") or []
+    meta = thread.get("thread_metadata") or {}
+    if not isinstance(applied, list) or not isinstance(meta, dict):
+        raise DiscordError("GET /channels/{thread}: unexpected response")
+    outcome, new_tags = tag_change(applied, tag_id, add, locked=bool(meta.get("locked")), allow_locked=allow_locked)
+    if outcome != TAG_CHANGE:
+        return outcome, False
+    archived = bool(meta.get("archived"))
+    if not client.set_thread_tags(post.id, new_tags, unarchive=archived):
+        return TAG_GONE, False
+    return TAG_CHANGE, archived
+
+
+def tag_fix_posts(client: Any, posts: Sequence[Post], report: ImportReport, *, forum_id: str, now: dt.datetime,
+                  dry_run: bool, days: int = TAG_DEFAULT_DAYS, limit: int = TAG_DEFAULT_LIMIT,
+                  allow_locked: bool = False) -> FixTagReport:
+    """Keep the 待修正 tag on the posts that need fixing (plan_fix_tags): find the tag, create it if
+    missing (not in a dry run), then make at most `limit` changes, removals first. A dry run counts
+    from the listing and changes nothing. Never raises: the tag that cannot be created, 403 (which
+    stops the tag changes for this run), 404 and other Discord errors end up in the counts."""
+    plan = plan_fix_tags(posts, report, now, days)
+    tags = FixTagReport(dry_run=dry_run, days=days, candidates=plan.candidates, already_tagged=plan.already_tagged,
+                        to_add=len(plan.add), to_remove=len(plan.remove), untouched=plan.untouched)
+    tag_id: str | None = None
+    try:
+        tag_id = tag_id_named(client.forum_tags(forum_id), TAG_FIX)
+        if tag_id:
+            tags.status = TAG_FOUND
+        elif dry_run:
+            tags.status = TAG_WOULD_CREATE
+        else:
+            tag_id = client.create_forum_tag(forum_id, TAG_FIX)
+            tags.status = TAG_CREATED
+    except ForumTagsFull:
+        tags.status = TAG_FORUM_FULL
+    except DiscordForbidden:
+        tags.status = TAG_CREATE_FORBIDDEN
+    except Exception:  # a Discord error or an odd response: counted, never printed
+        tags.status = TAG_ERROR
+    if tags.status in TAG_SKIPS:
+        return tags
+    changes = 0
+    stopped = False
+    for post, add in [(p, False) for p in plan.remove] + [(p, True) for p in plan.add]:
+        if stopped:
+            tags.left_after_forbidden += 1
+            continue
+        if changes >= limit:
+            tags.held_by_limit += 1
+            continue
+        if dry_run:
+            outcome, _ = tag_change(post.tag_ids, tag_id, add, locked=post.locked, allow_locked=allow_locked)
+            reopened = post.archived
+        else:
+            try:
+                outcome, reopened = change_fix_tag(client, post, str(tag_id), add, allow_locked)
+            except DiscordForbidden:
+                tags.forbidden += 1
+                stopped = True
+                continue
+            except Exception:  # never printed, counted only; the next run tries again
+                tags.errors += 1
+                changes += 1
+                continue
+        if outcome == TAG_CHANGE:
+            changes += 1
+            if add:
+                tags.added += 1
+            else:
+                tags.removed += 1
+            tags.unarchived += bool(reopened)
+        elif outcome == TAG_FULL:
+            tags.skipped_full += 1
+        elif outcome == TAG_LOCKED:
+            tags.skipped_locked += 1
+        elif outcome == TAG_GONE:
+            tags.gone += 1
+        else:
+            tags.unchanged += 1
+    return tags
+
+
+def fix_tag_lines(tags: FixTagReport) -> list[str]:
+    """Markdown summary of the 待修正 tag: counts only."""
+    mode = "dry run：只計數，未更改" if tags.dry_run else "已更新"
+    lines = [
+        f"- 「{TAG_FIX}」標籤（--reply，{mode}）：{TAG_STATUS_TEXT.get(tags.status, tags.status)}",
+        f"  - {tags.days} 天內因格式無法解析且未標「{TAG_RECORDED}」的貼文 {tags.candidates} 篇"
+        f"（已有標籤 {tags.already_tagged}，待加 {tags.to_add}）；已不需修正但還有標籤（可解析、已收錄或模擬）：{tags.to_remove} 篇",
+    ]
+    if tags.status in TAG_SKIPS:
+        return lines
+    verb = "可" if tags.dry_run else "已"
+    extra = [
+        (tags.skipped_locked, "貼文已鎖定略過"),
+        (tags.gone, "貼文已刪除"),
+        (tags.unchanged, "重新讀取時已是正確狀態"),
+        (tags.untouched, "帶標籤但本次無法判斷、未更動"),
+    ]
+    lines.append(
+        f"  - 本次{verb}加上：{tags.added}；{verb}移除：{tags.removed}"
+        + (f"（其中重新開啟已封存的貼文：{tags.unarchived}）" if tags.unarchived else "")
+        + f"；標籤已滿 {MAX_APPLIED_TAGS} 個略過：{tags.skipped_full}"
+        + f"；超過 --tag-limit 保留到下次：{tags.held_by_limit}"
+        + f"；沒有權限（403）：{tags.forbidden}"
+        + (f"（之後停止，留到下次：{tags.left_after_forbidden}）" if tags.left_after_forbidden else "")
+        + f"；其他 Discord 錯誤：{tags.errors}"
+        + "".join(f"；{label}：{n}" for n, label in extra if n)
+    )
     return lines
 
 
@@ -1406,7 +1677,11 @@ class DiscordError(Exception):
 
 
 class DiscordForbidden(DiscordError):
-    """HTTP 403: the bot lacks a permission (read the thread, or post in it)."""
+    """HTTP 403: the bot lacks a permission (read the thread, post in it, or change tags)."""
+
+
+class ForumTagsFull(DiscordError):
+    """The forum has Discord's maximum of tags (MAX_FORUM_TAGS): no tag can be added."""
 
 
 MESSAGES_PAGE = 100
@@ -1418,11 +1693,13 @@ class DiscordClient:
 
     GET for the forum, its posts and their messages (and, for --fix-list, the guild's channels
     and the fix-list channel's newest messages); POST only for --reply (one message in a post's
-    thread) and --fix-list (the weekly list in one channel). Only a GET is re-sent after a server error or a timeout: Discord may have
-    stored the message of a POST before the response was lost, and sending it again would post a
-    second reply (the next run finds the first one by its marker instead). A 429 is retried for
-    both, Discord did not process it. Errors name the route template only (no ids, no content)
-    and never the token.
+    thread) and --fix-list (the weekly list in one channel); PATCH only for the 待修正 tag (a
+    post's applied_tags, and once the forum's available_tags to create the tag). Only a GET is
+    re-sent after a server error or a timeout: Discord may have stored the message of a POST
+    before the response was lost, and sending it again would post a second reply (the next run
+    finds the first one by its marker instead); a PATCH that created the tag could create it
+    twice. A 429 is retried for all, Discord did not process it. Errors name the route template
+    only (no ids, no content) and never the token.
     """
 
     def __init__(self, token: str, opener: Callable[..., Any] | None = None,
@@ -1433,6 +1710,7 @@ class DiscordClient:
         self._pace = pace
         self._bot_id = ""
         self._forum_guilds: dict[str, str] = {}
+        self._forum_tags: dict[str, list[dict]] = {}
 
     def _request(self, method: str, path: str, route: str, body: Any = None, allow_404: bool = False) -> Any:
         data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -1475,6 +1753,9 @@ class DiscordClient:
 
     def post(self, path: str, route: str, body: Any) -> Any:
         return self._request("POST", path, route, body=body)
+
+    def patch(self, path: str, route: str, body: Any, allow_404: bool = False) -> Any:
+        return self._request("PATCH", path, route, body=body, allow_404=allow_404)
 
     def bot_user_id(self) -> str:
         """The bot's own user id (to recognize its earlier replies and lists)."""
@@ -1536,6 +1817,7 @@ class DiscordClient:
         tags = {t.get("id"): t.get("name", "") for t in channel.get("available_tags") or []}
         guild = channel.get("guild_id") or GUILD_ID
         self._forum_guilds[forum_id] = str(guild)
+        self._forum_tags[forum_id] = [t for t in channel.get("available_tags") or [] if isinstance(t, dict)]
         active = self.get(f"/guilds/{guild}/threads/active", "/guilds/{guild}/threads/active")
         threads = [t for t in (active or {}).get("threads", []) if t.get("parent_id") == forum_id]
         before = None
@@ -1554,12 +1836,56 @@ class DiscordClient:
         unique = {t["id"]: t for t in threads if t.get("id")}
         posts = [
             Post(id=t["id"], title=t.get("name") or "",
-                 tags=tuple(tags[x] for x in t.get("applied_tags") or [] if x in tags))
+                 tags=tuple(tags[x] for x in t.get("applied_tags") or [] if x in tags),
+                 tag_ids=tuple(str(x) for x in t.get("applied_tags") or []),
+                 archived=bool((t.get("thread_metadata") or {}).get("archived")),
+                 locked=bool((t.get("thread_metadata") or {}).get("locked")))
             for t in unique.values()
         ]
         posts.sort(key=lambda p: int(p.id))
         names = set(tags.values())
         return posts, [t for t in EXPECTED_TAGS if t not in names]
+
+    def forum_tags(self, forum_id: str) -> list[dict]:
+        """The forum's available tags (read along with forum_posts, else fetched)."""
+        if forum_id not in self._forum_tags:
+            channel = self.get(f"/channels/{forum_id}", "/channels/{forum}") or {}
+            self._forum_tags[forum_id] = [t for t in channel.get("available_tags") or [] if isinstance(t, dict)]
+        return list(self._forum_tags[forum_id])
+
+    def create_forum_tag(self, forum_id: str, name: str) -> str:
+        """Add the tag `name` to the forum (Manage Channels) and return its id. The forum is read
+        again first and its tags are sent back exactly as Discord returned them, so no tag changes
+        and none added meanwhile is lost; a tag of that name found then is used as it is. Raises
+        ForumTagsFull at Discord's maximum, DiscordForbidden without the permission."""
+        channel = self.get(f"/channels/{forum_id}", "/channels/{forum}") or {}
+        existing = [dict(t) for t in channel.get("available_tags") or [] if isinstance(t, dict)]
+        found = tag_id_named(existing, name)
+        if found:
+            self._forum_tags[forum_id] = existing
+            return found
+        if len(existing) >= MAX_FORUM_TAGS:
+            raise ForumTagsFull("PATCH /channels/{forum}: the forum has the maximum number of tags")
+        updated = self.patch(f"/channels/{forum_id}", "/channels/{forum}",
+                             {"available_tags": existing + [{"name": name}]}) or {}
+        tags = [t for t in updated.get("available_tags") or [] if isinstance(t, dict)]
+        tag_id = tag_id_named(tags, name)
+        if not tag_id:
+            raise DiscordError("PATCH /channels/{forum}: the new tag is not in the response")
+        self._forum_tags[forum_id] = tags
+        return tag_id
+
+    def thread(self, thread_id: str) -> dict | None:
+        """A post's thread as it is now (applied_tags, thread_metadata), None if it was deleted."""
+        return self.get(f"/channels/{thread_id}", "/channels/{thread}", allow_404=True)
+
+    def set_thread_tags(self, thread_id: str, tag_ids: Sequence[str], unarchive: bool = False) -> bool:
+        """Set a post's applied_tags (Manage Threads). unarchive: archived=false in the same request
+        (Discord changes no archived thread otherwise). False if the post was deleted (404)."""
+        body: dict[str, Any] = {"applied_tags": list(tag_ids)}
+        if unarchive:
+            body["archived"] = False
+        return self.patch(f"/channels/{thread_id}", "/channels/{thread}", body, allow_404=True) is not None
 
     def starter_content(self, thread_id: str) -> str | None:
         """The text of a post's starter message, None if it was deleted."""
@@ -1582,6 +1908,12 @@ def _discord_error_message(status: int, code: Any, route: str, method: str = "GE
     detail = f"{method} {route}: HTTP {status}" + (f" (Discord code {code})" if code else "")
     if status == 401:
         return f"{detail}. Discord rejected {ENV_DISCORD_TOKEN}: reset the bot token and update the secret."
+    if status == 403 and method == "PATCH" and route == "/channels/{forum}":
+        return (f"{detail}. The bot cannot add a tag to the forum: give it Manage Channels on "
+                f"#牌譜紀錄與覆盤, or add the tag {TAG_FIX} in the forum's settings.")
+    if status == 403 and method == "PATCH":
+        return (f"{detail}. The bot cannot change the post's tags: give it Manage Threads (管理討論串) "
+                "on #牌譜紀錄與覆盤.")
     if status == 403 and method == "POST":
         return (f"{detail}. The bot cannot post in the thread: give it Send Messages in Threads "
                 "on #牌譜紀錄與覆盤.")
@@ -1738,12 +2070,16 @@ def run(
     # The import summary goes out before the reply phase: whatever happens in Discord afterwards,
     # the counts of what was written are in the log and the job summary.
     in_actions = env.get("GITHUB_ACTIONS") == "true"
-    # The tags that decide which posts get a reply also decide which posts the fix list names.
+    # The tags that decide which posts get a reply also decide which posts the fix list names and
+    # which carry the 待修正 tag.
     reply_gate = [t for t in REPLY_GATE_TAGS if t in missing_tags] if (args.reply or args.fix_list) else []
+    tag_on = args.reply and not args.no_tag
     lines = report_lines(report, write=write, written=written, tab_exists=tab_exists, missing_tags=missing_tags)
     gate_tags = "」「".join(reply_gate)
     if reply_gate and args.reply:
         lines.append(f"- 格式回覆（--reply）：論壇沒有「{gate_tags}」標籤，無法判斷哪些貼文該回覆，本次未回覆、未計數")
+    if reply_gate and tag_on:
+        lines.append(f"- 「{TAG_FIX}」標籤：論壇沒有「{gate_tags}」標籤，無法判斷哪些貼文要修正，本次未更動、未計數")
     if reply_gate and args.fix_list:
         lines.append(f"- 牌譜修正清單（--fix-list）：論壇沒有「{gate_tags}」標籤，無法判斷哪些貼文要修正，本次未發出、未計數")
     print("\n".join(lines))
@@ -1752,7 +2088,8 @@ def run(
         print(f"::warning title=Forum tags missing::{len(missing_tags)} expected forum tag(s) not found; see the job summary.")
     if reply_gate and args.reply:
         _warn("Discord reply skipped", f"{len(reply_gate)} forum tag(s) that decide which posts get a reply not found "
-              "(renamed?); no reply was posted or counted. See the job summary.", in_actions)
+              "(renamed?); no reply was posted or counted" + (f", no {TAG_FIX} tag changed" if tag_on else "")
+              + ". See the job summary.", in_actions)
     if reply_gate and args.fix_list:
         _warn("Fix list skipped", f"{len(reply_gate)} forum tag(s) that decide which posts need fixing not found "
               "(renamed?); the weekly fix list was not posted. See the job summary.", in_actions)
@@ -1780,6 +2117,9 @@ def run(
         if reply.errors:
             _warn("Discord reply errors", f"{reply.errors} reply/replies hit a Discord API error or an unexpected "
                   "response; see the job summary. They are retried on the next run.", in_actions)
+    if tag_on and not reply_gate:
+        tag_fix_phase(client, posts, report, args, forum_id=forum_id, now=now_taipei, dry_run=not write,
+                      in_actions=in_actions)
     if args.fix_list and not reply_gate:
         fix = post_fix_list(client, report, forum_id=forum_id, now=now_taipei, dry_run=not write,
                             days=args.fix_list_days, max_entries=args.fix_list_max,
@@ -1805,6 +2145,34 @@ def run(
         Path(args.report).write_text(json.dumps(report.details, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"Per-post report written to {args.report} (contains titles: keep it local).")
     return 0
+
+
+def tag_fix_phase(client: Any, posts: Sequence[Post], report: ImportReport, args: argparse.Namespace, *,
+                  forum_id: str, now: dt.datetime, dry_run: bool, in_actions: bool) -> FixTagReport:
+    """tag_fix_posts, then its summary and annotations (counts and fixed strings only)."""
+    tags = tag_fix_posts(client, posts, report, forum_id=forum_id, now=now, dry_run=dry_run,
+                         days=args.tag_since_days, limit=args.tag_limit, allow_locked=args.tag_locked)
+    lines = fix_tag_lines(tags)
+    print("\n".join(lines))
+    gc._append_step_summary(lines)
+    if tags.status in (TAG_CREATE_FORBIDDEN, TAG_FORUM_FULL):
+        why = ("the bot may not create it (HTTP 403; creating a forum tag needs Manage Channels)"
+               if tags.status == TAG_CREATE_FORBIDDEN else
+               f"it already has {MAX_FORUM_TAGS} tags, Discord's maximum (remove one first)")
+        _notice("To-fix tag missing", f"The forum #牌譜紀錄與覆盤 has no tag named {TAG_FIX} and {why}. The owner "
+                f"should add a tag named exactly {TAG_FIX} in the forum's settings (Edit Channel > Tags); posts are "
+                f"tagged from the next run on. {tags.to_add} post(s) would have been tagged.", in_actions)
+    elif tags.status == TAG_ERROR:
+        _warn("To-fix tag error", f"Reading or creating the forum tag {TAG_FIX} hit a Discord API error or an "
+              "unexpected response; no post tag was changed. Retried on the next run.", in_actions)
+    if tags.forbidden:
+        _notice("To-fix tag forbidden", "The bot may not change post tags (HTTP 403): give it 管理討論串 (Manage "
+                "Threads) on #牌譜紀錄與覆盤. Tag changes stopped for this run; "
+                f"{tags.forbidden + tags.left_after_forbidden} change(s) left for the next run.", in_actions)
+    if tags.errors:
+        _warn("To-fix tag errors", f"{tags.errors} tag change(s) hit a Discord API error or an unexpected response; "
+              "they are retried on the next run.", in_actions)
+    return tags
 
 
 def _warn(title: str, message: str, in_actions: bool) -> None:
@@ -1853,11 +2221,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="local runs only: write per-post outcomes (with titles) as JSON to PATH")
     parser.add_argument("--reply", action="store_true",
                         help="reply in the thread of each recent post that could not be parsed because of its "
-                             "format (why, which line, the format hint); once per post. With --dry-run: count only")
+                             "format (why, which line, the format hint); once per post; and keep the forum tag "
+                             f"{TAG_FIX} on the posts that need fixing (see --no-tag). With --dry-run: count only")
     parser.add_argument("--reply-since-days", type=_positive, default=REPLY_DEFAULT_DAYS, metavar="N",
                         help=f"--reply only to posts created in the last N days (default {REPLY_DEFAULT_DAYS})")
     parser.add_argument("--reply-limit", type=_positive, default=REPLY_DEFAULT_LIMIT, metavar="N",
                         help=f"at most N replies per run, oldest post first (default {REPLY_DEFAULT_LIMIT})")
+    parser.add_argument("--no-tag", action="store_true",
+                        help=f"with --reply: leave the forum tag {TAG_FIX} alone (by default --reply adds it to the "
+                             "posts that need fixing and removes it once they parse)")
+    parser.add_argument("--tag-since-days", type=_positive, default=TAG_DEFAULT_DAYS, metavar="N",
+                        help=f"add {TAG_FIX} only to posts created in the last N days (default {TAG_DEFAULT_DAYS}); "
+                             "it is removed from posts of any age")
+    parser.add_argument("--tag-limit", type=_positive, default=TAG_DEFAULT_LIMIT, metavar="N",
+                        help=f"at most N {TAG_FIX} tag changes per run, removals first, then additions newest post "
+                             f"first (default {TAG_DEFAULT_LIMIT})")
+    parser.add_argument("--tag-locked", action="store_true",
+                        help=f"also change {TAG_FIX} on locked posts (skipped by default)")
     parser.add_argument("--fix-list", action="store_true",
                         help=f"post this week's list of posts to fix in the {FIX_CHANNEL_NAME} channel (or "
                              f"{ENV_FIX_CHANNEL}); once per ISO week. With --dry-run: count only")
