@@ -68,6 +68,7 @@ import {
 import { setVouchFollowUpOptions, vouchFollowUpOptionsFromEnv } from '../src/ai/RedLakeFollowUp';
 import { goodVouchOptionsFromEnv, setGoodVouchOptions } from '../src/ai/GoodLakeFollowUp';
 import { DEFAULT_TEAM_REUSE_OPTIONS, setTeamReuseOptions, teamReuseOptionsFromEnv } from '../src/ai/TeamReuse';
+import { redR1TeammateOptionsFromEnv, setRedR1TeammateOptions } from '../src/ai/RedR1Teammate';
 import type { AgentAction, AvalonAgent, PlayerObservation, SelfPlayResult } from '../src/ai/types';
 
 interface Args {
@@ -503,6 +504,10 @@ async function main(): Promise<void> {
   setTeamReuseOptions(teamReuseOptions);
   const teamReuseIsDefault = JSON.stringify(teamReuseOptions) === JSON.stringify(DEFAULT_TEAM_REUSE_OPTIONS);
   process.stderr.write(`teamReuse weights${teamReuseIsDefault ? ' (defaults)' : ' (variant)'}: ${JSON.stringify(teamReuseOptions)}\n`);
+  // Benchmark-only knob for `redR1Teammate` (AVALON_RED_R1_TEAMMATE_VARIANT, e.g.
+  // "talk=always"); the server never reads it.
+  setRedR1TeammateOptions(redR1TeammateOptionsFromEnv());
+  if (process.env.AVALON_RED_R1_TEAMMATE_VARIANT) process.stderr.write(`redR1Teammate variant: ${JSON.stringify(redR1TeammateOptionsFromEnv())}\n`);
   if (JSON.stringify(evilLakeOptions) !== JSON.stringify(DEFAULT_EVIL_LAKE_HUMAN_OPTIONS)) {
     process.stderr.write(`evilLakeHumanStrategy tactic mix: ${JSON.stringify(evilLakeOptions)}\n`);
   }

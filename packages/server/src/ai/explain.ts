@@ -27,6 +27,7 @@ import { ForwardAgent, USE_FORWARD_REASONING, interpret } from './forward';
 import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory } from './LakePolicy';
 import { analyzeGoodLake } from './GoodLakeInfo';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
+import { redR1TeamPlanDraws, replayBothDraws, visibleTeammatesOn } from './RedR1Teammate';
 import { AVALON_CONFIG } from '@avalon/shared';
 
 export interface ExplainedSuspect {
@@ -334,6 +335,15 @@ export function replayRule(
   if (!forwardActive) return { rule: '基準策略（HeuristicAgent；前向推理未啟用）', mismatch: false };
   try {
     const shadow = new HeuristicAgent(obs.myPlayerId, undefined, undefined, { ...agent.tuning });
+    // redR1Teammate draws whether an R1 red leader brings a teammate; replay both outcomes.
+    if (redR1TeamPlanDraws(obs, shadow.tuning)) {
+      const both = replayBothDraws(() => new ForwardAgent(obs.myPlayerId, shadow).decide(obs).action);
+      const brought = real.type === 'team_select' && visibleTeammatesOn(obs, real.teamIds) > 0;
+      return {
+        rule: `紅方首局帶隊友：R1 依真人比例抽籤決定要不要帶一位看得到的隊友（這次${brought ? '帶' : '不帶'}），其餘照前向推理評分`,
+        mismatch: !sameAction(both.withTeammate, real) && !sameAction(both.without, real),
+      };
+    }
     const { action, reasoningTrace: trace } = new ForwardAgent(obs.myPlayerId, shadow).decide(obs);
     const desc = trace.chosen.description;
     if (trace.usedFallback) {

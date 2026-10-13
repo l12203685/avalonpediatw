@@ -140,6 +140,18 @@ describe('AgentTuning — flags', () => {
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, teamReuse: true })).toBe('teamReuse');
   });
 
+  it('redR1Teammate (2026-10-13 round 3): on in the default, off in legacy, flag, env var and description', () => {
+    // strength_benchmark.md 第 12 節: an R1 red leader who sees teammates brings one on the
+    // talk proposals at the human rate (10p only); agreement up in expectation for ED / Sin /
+    // top (paired, only Sin significant), not weaker as red.
+    expect(DEFAULT_AGENT_TUNING.redR1Teammate).toBe(true);
+    expect(LEGACY_AGENT_TUNING.redR1Teammate).toBe(false);
+    expect(parseTuningFlag('redR1Teammate')).toEqual({ redR1Teammate: true });
+    expect(AGENT_TUNING_ENV.redR1Teammate).toBe('AVALON_TUNING_RED_R1_TEAMMATE');
+    expect(tuningFromEnv({ AVALON_TUNING_RED_R1_TEAMMATE: '0' })).toEqual({ redR1Teammate: false });
+    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, redR1Teammate: true })).toBe('redR1Teammate');
+  });
+
   it('resolveAgentTuning layers overrides on top of a base', () => {
     const t = resolveAgentTuning({ assassinModel: true }, { ...LEGACY_AGENT_TUNING });
     expect(t).toEqual({ ...LEGACY_AGENT_TUNING, assassinModel: true });

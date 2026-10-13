@@ -60,6 +60,11 @@
  *                                   提議），沿用的隊加進候選；防護擋下的隊（硬1 /
  *                                   硬2 違規、好人隊長的隊有自己當作紅的人）不加
  *                                   分、保留舊懲罰；R1 不變。`TeamReuse.ts`。
+ *   - `redR1Teammate`              （2026-10-13 第三輪，**預設開**）看得到隊友的
+ *                                   紅方 R1 當隊長時，前四次提議（不會過的說話隊）
+ *                                   以真人比例 48.0% 放一位隊友（原本 0%）；第五次
+ *                                   強制局照舊不放。只在 10 人局。細節見
+ *                                   `RedR1Teammate.ts`。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -143,6 +148,14 @@ export interface AgentTuning {
    * 也不加進候選。細節見 `TeamReuse.ts`。2026-10-13 採用（預設開）。
    */
   teamReuse: boolean;
+  /**
+   * 紅方首局帶隊友（2026-10-13 第三輪，strength_benchmark.md 第 12 節）：
+   * 看得到隊友的紅方 R1 當隊長時，不再一律不放隊友（真人 R1 43.9%，前四次
+   * 提議 48.0%、第五次強制局 27.7%）：前四次提議以 48.0% 的機率放一位隊友，
+   * 強制局照舊。只在 10 人局（資料與基準都是 10 人局）。細節見
+   * `RedR1Teammate.ts`。R2+ 不變。
+   */
+  redR1Teammate: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -161,6 +174,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodLakeInfoMax',
   'goodVouchFollowUp',
   'teamReuse',
+  'redR1Teammate',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -178,6 +192,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLakeInfoMax: false,
   goodVouchFollowUp: false,
   teamReuse: false,
+  redR1Teammate: false,
 });
 
 /**
@@ -261,6 +276,18 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     55555 / 66666 + 新種子 67890 / 68888 合併：紅方 +2.77pp [+2.41pp,
  *     +3.13pp]、藍方 +5.08pp [+4.62pp, +5.54pp]；十個座位都開的機器人自打自
  *     藍勝約 7.1%→10.5% → **採用**（AVALON_TUNING_TEAM_REUSE=0 可關掉）。
+ *   - `redR1Teammate`（2026-10-13 第三輪，strength_benchmark.md 第 12 節；對照
+ *     組 = 上面整合後的正式預設；只在 10 人局）：R1 紅方隊長「放不放隊友」
+ *     與真人相同的比例，去掉抽籤運氣的期望值 ED 49.0→53.9%、Sin 39.4→
+ *     52.6%、top 52.2→53.6%（population 56.1→54.6%，只當同分參考；這次
+ *     播種實際 61.2 / 58.5 / 52.8 / 54.2%）。與關掉時逐次配對只有 Sin 明確
+ *     較好（46 對 19，McNemar p=0.001），top 持平（175 對 170），ED 11 對 5
+ *     （p=0.21）；放隊友的比例照真人（說話隊 47.7% vs 48.0%）；派隊 Jaccard
+ *     四群都升，其他決策完全不變；自我對打紅方
+ *     選版本 seed 77777 +0.32pp [−0.19pp, +0.83pp]、新種子 88888 +0.24pp
+ *     [−0.27pp, +0.75pp]、99999 −0.22pp [−0.71pp, +0.27pp]，三個種子合併
+ *     +0.10pp [−0.19pp, +0.39pp]，藍方恆為 0 → 不算變弱 → **採用**
+ *     （AVALON_TUNING_RED_R1_TEAMMATE=0 可關掉）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -282,6 +309,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLakeInfoMax: true,
   goodVouchFollowUp: true,
   teamReuse: true,
+  redR1Teammate: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -299,6 +327,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodLakeInfoMax: 'AVALON_TUNING_GOOD_LAKE_INFO_MAX',
   goodVouchFollowUp: 'AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP',
   teamReuse: 'AVALON_TUNING_TEAM_REUSE',
+  redR1Teammate: 'AVALON_TUNING_RED_R1_TEAMMATE',
 });
 
 function parseBool(raw: string): boolean | undefined {
