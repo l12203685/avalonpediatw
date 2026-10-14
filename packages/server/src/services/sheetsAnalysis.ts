@@ -11,7 +11,7 @@
 import path from 'path';
 import fs from 'fs';
 import { findSamePlayerName, playerNameKey, playerOutcomeBlocks } from '@avalon/shared';
-import type { OutcomeCounts, PlayerOutcomeBlocks, PlayerOutcomeSource } from '@avalon/shared';
+import type { OutcomeCounts, PlayerAliases, PlayerOutcomeBlocks, PlayerOutcomeSource } from '@avalon/shared';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -789,8 +789,12 @@ export interface FeatureStudiesData {
 
 interface AnalysisCache {
   overview: OverviewData;
-  /** seatOutcomesSource: "games" when players[].seatOutcomes are the players' own games. */
-  players: { players: PlayerStats[]; total: number; seatOutcomesSource?: string };
+  /**
+   * seatOutcomesSource: "games" when players[].seatOutcomes are the players' own games.
+   * aliases: player_aliases.json (owner-directed) as generate_cache.py applied it — old spelling →
+   * official name, for the aliases whose official name is a players row (absent when none).
+   */
+  players: { players: PlayerStats[]; total: number; seatOutcomesSource?: string; aliases?: Record<string, string> };
   playerDetails: Record<string, { player: PlayerStats; radar: Record<string, number> }>;
   chemistry: ChemistryData;
   missions: {
@@ -952,7 +956,8 @@ export function assassinationWinRates(
 
 /**
  * The key of `record` that names this player (@avalon/shared findSamePlayerName: `name` itself
- * when present, else the key that differs from it only by case / width / spacing — never a
+ * when present, else the key that differs from it only by case / width / spacing, else — with
+ * `aliases`, the cache's players.aliases — the official name of an old name; never a
  * partial name, and "@Nova" / "(Nova)" stay other names). A cache written before the names were
  * merged may hold several such keys (Nova / NOVA / nova): `rank` (e.g. games played) picks one,
  * else the first.
@@ -961,16 +966,47 @@ export function findPlayerKey<T>(
   record: Record<string, T> | null | undefined,
   name: string,
   rank?: (key: string) => number,
+  aliases?: PlayerAliases | null,
 ): string | undefined {
   if (!record || typeof name !== 'string') return undefined;
   if (Object.prototype.hasOwnProperty.call(record, name)) return name;
-  return findSamePlayerName(name, Object.keys(record), rank);
+  return findSamePlayerName(name, Object.keys(record), rank, aliases);
 }
 
-/** playerDetails key of a typed name (case / width ignored; most games first among old split rows). */
+/**
+ * players.aliases of a cache (player_aliases.json as generate_cache.py applied it: old spelling →
+ * official name), only its string → string entries; {} when the cache has none. Pure.
+ */
+export function cachePlayerAliases(players: { aliases?: unknown } | null | undefined): Record<string, string> {
+  const raw = players?.aliases;
+  const out: Record<string, string> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [source, target] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof target === 'string' && source !== '' && target !== '') out[source] = target;
+  }
+  return out;
+}
+
+/**
+ * The owner's player aliases (old spelling → official name) from the cache's players.aliases:
+ * typing an old name (/戰績, /默契, the website search, /api/analysis/players/:name) finds the
+ * official name's row. {} when the cache has none or cannot be read (aliases only help a lookup).
+ */
+export async function getPlayerAliases(): Promise<Record<string, string>> {
+  try {
+    return cachePlayerAliases(loadCache().players);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * playerDetails key of a typed name (case / width ignored; most games first among old split rows;
+ * an old name in players.aliases is its official name).
+ */
 function playerDetailsKey(c: AnalysisCache, name: string): string | undefined {
   const details = c.playerDetails;
-  return findPlayerKey(details, name, (k) => details[k]?.player?.totalGames ?? 0);
+  return findPlayerKey(details, name, (k) => details[k]?.player?.totalGames ?? 0, cachePlayerAliases(c.players));
 }
 
 /** A per-player section row (archetype / strength / playstyle) of the player `name` resolves to. */
@@ -980,7 +1016,7 @@ function perPlayerRow<T>(
   name: string,
 ): { name: string; data: T; detailKey: string | undefined } | null {
   const detailKey = playerDetailsKey(c, name);
-  const key = findPlayerKey(perPlayer, detailKey ?? name);
+  const key = findPlayerKey(perPlayer, detailKey ?? name, undefined, cachePlayerAliases(c.players));
   if (key === undefined) return null;
   const data = byName(perPlayer, key);
   return data === undefined ? null : { name: detailKey ?? key, data, detailKey };
@@ -1155,7 +1191,10 @@ export async function getAllPlayerStats(): Promise<PlayerStats[]> {
   return c.players.players.map((p) => withFinalFields(servedPlayerRow(p, source), roleFinal));
 }
 
-/** One player's stats; `name` is matched ignoring case / width (playerNameKey). */
+/**
+ * One player's stats; `name` is matched ignoring case / width (playerNameKey), and an old name in
+ * players.aliases finds its official name's row (`player.name` is the cache's spelling).
+ */
 export async function getPlayerByName(name: string): Promise<PlayerStats | null> {
   const c = loadCache();
   const key = playerDetailsKey(c, name);

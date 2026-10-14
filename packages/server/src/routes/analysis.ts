@@ -10,6 +10,7 @@ import { createHttpRateLimit } from '../middleware/rateLimit';
 import {
   getOverview,
   getAllPlayerStats,
+  getPlayerAliases,
   getPlayerByName,
   getChemistry,
   getMissionAnalysis,
@@ -96,13 +97,14 @@ router.get('/overview', limiter, async (_req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // GET /api/analysis/players
-// Per-player stats array
+// Per-player stats array; `aliases` = the cache's players.aliases (old spelling → official
+// name, player_aliases.json), so the website search finds a player by an old name.
 // ---------------------------------------------------------------------------
 router.get('/players', limiter, async (_req: Request, res: Response) => {
   if (!sheetsGuard(res)) return;
   try {
-    const players = await getAllPlayerStats();
-    return ok(res, { players, total: players.length });
+    const [players, aliases] = await Promise.all([getAllPlayerStats(), getPlayerAliases()]);
+    return ok(res, { players, total: players.length, aliases });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/players]', msg);

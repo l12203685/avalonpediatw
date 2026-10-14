@@ -87,6 +87,8 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
   const { overview } = useAnalysisOverview();
   const settings = useMemo(() => theorySettings(overview?.theoryConfig), [overview?.theoryConfig]);
   const [playerList, setPlayerList] = useState<AnalysisPlayerStats[]>([]);
+  // 舊名字 → 正式名字 (player_aliases.json)：打舊名字也找得到那位。
+  const [aliases, setAliases] = useState<Record<string, string>>({});
   // 排行點名字 / #player= 連結帶進來的玩家優先 (store.openPlayerStats，名單到了再比對)；
   // 沒有才預設場次最多的人。
   const [selectedName, setSelectedName] = useState<string>('');
@@ -101,9 +103,10 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
     let cancelled = false;
     (async (): Promise<void> => {
       try {
-        const { players } = await fetchAnalysisPlayers();
+        const { players, aliases: playerAliases } = await fetchAnalysisPlayers();
         if (!cancelled) {
           setPlayerList(players);
+          setAliases(playerAliases ?? {});
           if (players.length > 0 && !openedWithFocus.current) setSelectedName(prev => prev || players[0].name);
         }
       } catch (err) {
@@ -122,20 +125,20 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
   // 找不到唯一一位就把名字放進搜尋框，列出候選。
   useEffect(() => {
     if (!focus?.name || names.length === 0) return;
-    const m = matchPlayerName(focus.name, names);
+    const m = matchPlayerName(focus.name, names, aliases);
     if (m.kind === 'found') {
       setSelectedName(m.name);
       setSearch('');
     } else {
       setSearch(focus.name);
     }
-  }, [focus, names]);
+  }, [focus, names, aliases]);
 
   // 搜尋 (2026-10-13 玩家反應：用平常的暱稱查不到人)：完全相同 → 不分大小寫 → 忽略空白 →
   // 名字的一部分；只有一位就直接打開，多位列出候選，沒有就給「你是不是要找」。
   const match: NameMatch | null = useMemo(
-    () => (search.trim() && names.length > 0 ? matchPlayerName(search, names) : null),
-    [search, names],
+    () => (search.trim() && names.length > 0 ? matchPlayerName(search, names, aliases) : null),
+    [search, names, aliases],
   );
   const matchedName = match?.kind === 'found' ? match.name : null;
   useEffect(() => {
@@ -350,7 +353,10 @@ function filterPlayers(players: AnalysisPlayerStats[], search: string, match: Na
   const nq = normalizeName(cleaned);
   const cq = compactName(cleaned);
   const hits = players.filter(p => normalizeName(p.name).includes(nq) || (cq !== '' && compactName(p.name).includes(cq)));
-  if (hits.length > 0) return hits;
+  // 舊名字 (match.alias)：名單裡沒有那個字串，列出它代表的那位。
+  const aliased = match?.kind === 'found' && match.alias !== undefined && !hits.some(p => p.name === match.name)
+    ? players.filter(p => p.name === match.name) : [];
+  if (aliased.length + hits.length > 0) return [...aliased, ...hits];
   const suggested = match?.kind === 'none' ? match.suggestions ?? [] : [];
   return players.filter(p => suggested.includes(p.name));
 }

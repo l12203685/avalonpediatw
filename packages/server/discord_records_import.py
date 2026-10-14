@@ -751,11 +751,12 @@ def _names(footer: list[Item]) -> dict[str, str]:
     if set(names) != set(SEATS) or not all(names.values()):
         empty = next((lines[s] for s, n in names.items() if not n), None)
         raise SkipPost(SKIP_NAMES_MISSING, empty)
-    # One player on two seats: the same gc.player_name_key (who a player is for the cache —
-    # "Nova" and "ｎｏｖａ" are one player, "Straße" and "STRASSE" two).
+    # One player on two seats: the same gc.player_identity_key (who a player is for the cache —
+    # "Nova" and "ｎｏｖａ" are one player, "Straße" and "STRASSE" two, and so are an old name in
+    # player_aliases.json and its official name). The names are written as posted, never renamed.
     keys: dict[str, str] = {}
     for seat, name in names.items():  # post order
-        key = gc.player_name_key(name)
+        key = gc.player_identity_key(name)
         if key in keys:
             raise SkipPost(SKIP_NAMES_MALFORMED, lines[seat])
         keys[key] = seat
@@ -955,8 +956,8 @@ def _cell(row: Sequence[str], idx: Mapping[str, int], name: str) -> str:
 
 
 def _folded_names(names: Iterable[str]) -> tuple[str, ...]:
-    """Who sits where, as the cache tells players apart (gc.player_name_key)."""
-    return tuple(gc.player_name_key(n) for n in names)
+    """Who sits where, as the cache tells players apart (gc.player_identity_key)."""
+    return tuple(gc.player_identity_key(n) for n in names)
 
 
 class SheetIndex:
@@ -966,7 +967,7 @@ class SheetIndex:
         idx = _header_index(rows)
         self.games = 0
         self.fingerprints: set[str] = set()
-        self.names: set[str] = set()  # gc.player_name_key of every 玩1..玩0 name
+        self.names: set[str] = set()  # gc.player_identity_key of every 玩1..玩0 name
         self._by_config_missions: dict[tuple[str, tuple[str, ...]], list[tuple[str, ...]]] = {}
         self._by_missions_players: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
         for row in rows[1:]:
@@ -978,7 +979,7 @@ class SheetIndex:
             self.fingerprints.add(gc.record_fingerprint(config, text))
             _, _, missions = gc.record_fingerprint_parts(config, text)
             raw_names = [_cell(row, idx, gc.PLAYER_COLUMNS[s]) for s in SEATS]
-            self.names.update(n for n in map(gc.player_name_key, raw_names) if n)
+            self.names.update(n for n in map(gc.player_identity_key, raw_names) if n)
             folded = _folded_names(raw_names)
             self._by_config_missions.setdefault((config, missions), []).append(folded)
             if all(folded):
@@ -1004,7 +1005,7 @@ class ImportIndex:
         idx = _header_index(rows)
         self.post_ids: set[str] = set()
         self.fingerprints: set[str] = set()
-        self.names: set[str] = set()  # gc.player_name_key of every 玩1..玩0 name
+        self.names: set[str] = set()  # gc.player_identity_key of every 玩1..玩0 name
         self.rows = 0
         self.rows_of: dict[str, list[int]] = {}  # post id -> indexes into `rows` (sheet row = index + 1)
         for i, row in enumerate(rows[1:], 1):
@@ -1021,7 +1022,8 @@ class ImportIndex:
             config = _cell(row, idx, "配置").strip()
             if len(config) == 6:
                 self.fingerprints.add(gc.record_fingerprint(config, _cell(row, idx, "文字記錄")))
-            self.names.update(n for n in (gc.player_name_key(_cell(row, idx, gc.PLAYER_COLUMNS[s])) for s in SEATS) if n)
+            self.names.update(n for n in (gc.player_identity_key(_cell(row, idx, gc.PLAYER_COLUMNS[s])) for s in SEATS)
+                              if n)
 
 
 def replied_post_ids(rows: Sequence[Sequence[str]] | None) -> set[str]:
@@ -1152,7 +1154,7 @@ def plan_import(
             report.rows.append(build_row(post, game, header, imported_at, post_signature(post, content or "")))
             report.note(post, "new")
             report.date_from_post_time += not game.date_from_title
-            unknown_names.update(key for key in map(gc.player_name_key, game.names.values())
+            unknown_names.update(key for key in map(gc.player_identity_key, game.names.values())
                                  if key and key not in sheet.names and key not in imported.names)
     report.new_unknown_names = len(unknown_names)
     return report
@@ -2441,6 +2443,9 @@ def run(
     token = (env.get(ENV_DISCORD_TOKEN) or "").strip()
     if discord is None and not token:
         raise gc.FatalError(f"{ENV_DISCORD_TOKEN} is not set.", gc.EXIT_CONFIG, "Discord token missing")
+    # player_aliases.json (gc.player_identity_key: an old name and its official name are one player).
+    # Read here, so a malformed file stops the run (exit 2) instead of failing every post's parse.
+    print(f"Player aliases ({gc.ALIASES_PATH.name}): {len(gc.default_player_aliases().names)}")
     source = gc.resolve_credentials_source(env)
     sheet_id = gc.resolve_sheet_id(env)
     email = source.client_email()

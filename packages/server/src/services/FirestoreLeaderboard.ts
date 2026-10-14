@@ -13,7 +13,7 @@ import { getAdminFirestore } from './firebase';
 import { computeNewElo, expectedScore } from './EloRanking';
 import type { GameRecord, GamePlayerRecord } from './GameHistoryRepository';
 import { findSamePlayerName, playerNameKey } from '@avalon/shared';
-import { getAllPlayerStats, isSheetsReady } from './sheetsAnalysis';
+import { getAllPlayerStats, getPlayerAliases, isSheetsReady } from './sheetsAnalysis';
 import type { PlayerStats } from './sheetsAnalysis';
 
 // ---------------------------------------------------------------------------
@@ -430,10 +430,11 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
       const eloMap = computeEloFromSheets(sheetsPlayers);
       // Sheets names ignore case / width (@avalon/shared findSamePlayerName, the stats API's
       // lookup): "nova" finds the cache's "Nova", "(Nova)" or "@Nova" does not; most games first
-      // among an old cache's spellings.
+      // among an old cache's spellings; an old name in players.aliases finds the official name.
       const sheetName = eloMap.has(playerId)
         ? playerId
-        : findSamePlayerName(playerId, [...eloMap.keys()], (name) => eloMap.get(name)?.stats.totalGames ?? 0);
+        : findSamePlayerName(playerId, [...eloMap.keys()], (name) => eloMap.get(name)?.stats.totalGames ?? 0,
+          await getPlayerAliases());
       const entry = sheetName === undefined ? undefined : eloMap.get(sheetName);
       if (sheetName !== undefined && entry) {
         const { elo, stats } = entry;
@@ -558,7 +559,7 @@ export async function findPlayerByName(name: string): Promise<string | null> {
     try {
       const sheetsPlayers = await getAllPlayerStats();
       const names = sheetsPlayers.map((sp) => sp.name);
-      const same = findSamePlayerName(name, names);
+      const same = findSamePlayerName(name, names, undefined, await getPlayerAliases());
       if (same !== undefined) return same;
       const wanted = playerNameKey(name);
       for (const sp of sheetsPlayers) {

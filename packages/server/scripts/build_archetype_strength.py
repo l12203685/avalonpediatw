@@ -89,6 +89,13 @@ def player_name_key(name: str) -> str:
     return " ".join(text.split()).lower()
 
 
+def alias_keys(cache: Dict) -> Dict[str, str]:
+    """The cache's players.aliases (generate_cache.py, from player_aliases.json: old spelling ->
+    official name) by player_name_key: an old name's TSV row belongs to the official name's player."""
+    raw = (cache.get("players") or {}).get("aliases") or {}
+    return {player_name_key(s): player_name_key(t) for s, t in raw.items() if isinstance(s, str) and isinstance(t, str)}
+
+
 def clip01_100(v: float) -> float:
     if v < 0: return 0.0
     if v > 100: return 100.0
@@ -240,11 +247,13 @@ def main() -> None:
 
     print(f"[build_archetype_strength] TSV rows: {len(tsv_rows)}")
 
-    # The TSV has one row per spelling; the cache one player per player_name_key. The axes are
-    # rates, so of the spellings of one player the row with the most games stands for them all.
+    # The TSV has one row per spelling; the cache one player per player_name_key (an old name in
+    # players.aliases: its official name's). The axes are rates, so of the spellings of one player
+    # the row with the most games stands for them all.
+    aliases = alias_keys(cache)
     by_key: Dict[str, Dict[str, Optional[float]]] = {}
     for name, axes in tsv_rows.items():
-        key = player_name_key(name)
+        key = aliases.get(player_name_key(name), player_name_key(name))
         if key not in by_key or (axes["totalGames"] or 0) > (by_key[key]["totalGames"] or 0):
             by_key[key] = axes
     if len(by_key) < len(tsv_rows):

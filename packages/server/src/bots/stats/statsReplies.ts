@@ -177,6 +177,11 @@ export interface PlayerCardInput {
   playstyle?: { data: PlaystylePlayerData; labels: PlaystyleData['labels'] } | null;
   /** Other rows of the same player spelled differently (old caches only), shown as a hint. */
   caseVariants?: string[];
+  /**
+   * The old name the query was (NameMatch.alias: an alias source of the cache's players.aliases,
+   * player_aliases.json); the card says it now shows under the official name.
+   */
+  alias?: string;
   /** leaderboard.config.theoryMinCellGames of the cache (for the footnote); default 3. */
   minCellGames?: number;
   /**
@@ -402,6 +407,7 @@ export function formatPlayerCard(input: PlayerCardInput): string {
   if (input.caseVariants && input.caseVariants.length > 0) {
     lines.push(`ℹ️ 大小寫不同的寫法目前另列：${input.caseVariants.slice(0, MAX_NAME_CANDIDATES).join('、')}（同一人，戰績更新後會合併）`);
   }
+  if (input.alias) lines.push(`ℹ️ 「${input.alias}」現在統一顯示為「${p.name}」（同一位玩家，戰績已合併）`);
   if (theory) lines.push(theoryFootnote(input.minCellGames ?? THEORY_MIN_CELL_GAMES, roleWindows));
   if (blocks?.red && blocks.blue) lines.push(OUTCOME_BLOCKS_FOOTNOTE);
   lines.push(`🔗 ${p.name} 的雷達圖與完整戰績（不用登入）：${playerStatsUrl(p.name)}`);
