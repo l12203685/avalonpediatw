@@ -117,8 +117,10 @@ export interface PlayerStats {
 /**
  * 角色理論勝率 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色最終勝率；
  * 位置理論勝率 = Σ 1/10 × 本人該位置最終勝率 — over one window of the player's own games.
- * A role / seat with fewer than LEADERBOARD_CONFIG.theoryMinCellGames (3) games in the
- * window is topped up to that many at the population's final win rate (sparseRoles /
+ * A role / seat with fewer than LEADERBOARD_CONFIG.theoryMinCellGames games in the window
+ * (5 since 2026-10-14; caches written before were computed with 3 — read the cache's
+ * theoryConfig / leaderboard.config, never assume) is topped up to that many at the
+ * population's final win rate (sparseRoles /
  * sparseSeats count those cells). docs/stats/two_stage_outcome.md「理論勝率」.
  */
 export interface PlayerTheoryWindow {
@@ -461,7 +463,11 @@ export interface LeaderboardRow {
   // newcomers
   firstPlayed?: string;
   // roleTitles
-  /** `roleTitles` only: the role this row is the title holder of. */
+  /**
+   * `roleTitles` only: the role this row is the title holder of. Since 2026-10-14 (Edward: ties 各給)
+   * every player tied at the role's top rate has a row, so a role can appear on several consecutive
+   * rows with the same value; `rank` is then only the row number.
+   */
   role?: string;
   wins?: number;
   careerRoleGames?: number;

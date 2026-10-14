@@ -233,8 +233,14 @@ SEAT_DEAL_TENTHS = {s: 1 for s in SEATS}
 # games). The players' last-N window is not a separate knob: it is always mainGames (theory_windows()),
 # so players[].theory, the boards and the overview rankings cannot drift apart. Readers (bots, site,
 # tests) take the window sizes from the cache, never assume 10 / 40 / 100 / 250.
+# (2026-10-14 Edward：「少於 3 場通常沒有統計意義，用整體平均補，但我建議補到 5 場」) -- theoryMinCellGames
+# 3 -> 5. Caches written before carry 3 in leaderboard.config / overview.theoryConfig, so a reader's
+# fallback for a cache WITHOUT the setting stays 3 (statsReplies THEORY_MIN_CELL_GAMES, the site's
+# DEFAULT_THEORY_CONFIG); only this generator writes 5.
+# (2026-10-14 Edward：角色王同率「各給」) -- every player tied at the top of a role gets that role's
+# title (compute_leaderboard, roleTitles), so a role can have several rows.
 LEADERBOARD_CONFIG: dict[str, Any] = {
-    "theoryMinCellGames": 3,        # a role / seat with fewer games in the window is topped up to
+    "theoryMinCellGames": 5,        # a role / seat with fewer games in the window is topped up to
                                     # this many games at the population final win rate (0 = off)
     "activeDays": 90,               # every board but newcomers: played in the last N days (asOf included)
     "topN": 10,
@@ -2772,10 +2778,14 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
 #               reached 三藍); active, >= assassinMinAttempts of them
 #   newcomers   first game within newcomerDays, every game dated, >= newcomerMinGames: 角色理論 over
 #               the per-role windows of their games (few games: windows not full, cells topped up)
-#   roleTitles  per role, the active player (>= roleTitleMinGames career games in it) with the best
-#               final win rate over their last roleTitleGames games in it
+#   roleTitles  per role, the active players (>= roleTitleMinGames career games in it) with the best
+#               final win rate over their last roleTitleGames games in it: every player tied at that
+#               (rounded) rate gets the title (Edward 2026-10-14「各給」), so a role can have several
+#               rows -- roles in ALL_ROLES order, a role's holders by games, then career games in the
+#               role (more first), then name; not cut to topN
 # value = the board's sort key (the theory rate, the difference, the hit rate, the final win rate);
-# rows are ordered by value, then games, then career games (more first), then name.
+# rows are ordered by value, then games, then career games (more first), then name. `rank` is the
+# row number (1..n) on every board; on roleTitles it is only the row's position, not a ranking.
 
 def window_start(end: dt.date, days: int) -> dt.date | None:
     """First day of the `days`-day window ending on `end` (inclusive); None for 0 = all games."""
@@ -2980,7 +2990,8 @@ def compute_leaderboard(
         _ranked(newcomer_rows, top_n), windowDays=d, allGames=True,
     ))
 
-    # roleTitles: per role, the best final win rate over the last N games in it.
+    # roleTitles: per role, the best final win rate over the last N games in it; every player tied at
+    # that rate gets the title (Edward 2026-10-14「各給」; until then the tie went to more games).
     t_min, t_n = cfg["roleTitleMinGames"], cfg["roleTitleGames"]
     title_rows: list[dict] = []
     for role in ALL_ROLES:
@@ -2994,17 +3005,20 @@ def compute_leaderboard(
             candidates.append((name, len(last), wins, len(in_role)))
         if not candidates:
             continue
-        name, games_n, wins, career = min(candidates, key=lambda c: (-_rate(c[2], c[1]), -c[1], -c[3], c[0]))
-        title_rows.append({
-            "rank": len(title_rows) + 1, "role": role, "name": name, "value": _rate(wins, games_n),
-            "games": games_n, "wins": wins, "careerRoleGames": career,
-        })
+        # Ties compare the published (rounded) rate, the number every reader sees.
+        best = max(_rate(c[2], c[1]) for c in candidates)
+        holders = sorted((c for c in candidates if _rate(c[2], c[1]) == best), key=lambda c: (-c[1], -c[3], c[0]))
+        for name, games_n, wins, career in holders:
+            title_rows.append({
+                "rank": len(title_rows) + 1, "role": role, "name": name, "value": best,
+                "games": games_n, "wins": wins, "careerRoleGames": career,
+            })
     boards.append(_board(
         "roleTitles", "finalWinRate", "角色王", "Role champions",
         f"各人該角色最近 {t_n} 場", f"Each player's last {t_n} games in the role", t_min,
-        f"近 {active_days} 天內有出賽、生涯該角色至少 {t_min} 場；比各人該角色最近 {t_n} 場的最終勝率，同率者該角色場數多的優先",
+        f"近 {active_days} 天內有出賽、生涯該角色至少 {t_min} 場；比各人該角色最近 {t_n} 場的最終勝率，同率者並列、各得稱號",
         f"Played in the last {active_days} days, at least {t_min} career games in the role; best final win rate over "
-        f"the last {t_n} games in it, ties go to more games in the role",
+        f"the last {t_n} games in it, players tied at the top all get the title",
         title_rows, windowGames=t_n,
     ))
 

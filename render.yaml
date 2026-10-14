@@ -132,7 +132,8 @@ services:
       #   CHAT_EXPORT_EXTRA_SOURCE_IDS        另外加讀這些頻道或論壇（逗號分隔；預設名單照讀）
       #   CHAT_EXPORT_SOURCE_CHANNEL_IDS      只讀這些頻道或論壇（取代預設名單；逗號分隔；同步頻道一定會讀）
       #   CHAT_EXPORT_EXCLUDE_CHANNEL_IDS     不讀這些頻道、論壇或貼文（逗號分隔；「大劍管理員」與 /意見 頻道一定不讀）
-      #   FEEDBACK_DISCORD_CHANNEL_ID         /意見 轉貼頻道 id；預設管理員頻道「大劍管理員」；off 不轉貼
+      #   FEEDBACK_DISCORD_CHANNEL_ID         /意見 轉貼頻道 id；預設管理員頻道「大劍管理員」；off 不轉貼（練習回報的 Discord 副本也貼這裡）
+      #   PRACTICE_REPORT_DISCORD             練習模式「這步怪怪的」回報寫進試算表後，另貼一則到上面那個管理員頻道（2026-10-14）；預設開；false 只關 Discord 這份
 
       # ── Firebase / Supabase：GitHub-only 架構「不需要」，全部留空即可 ──────
       # 留空 → server 進 guest-only 模式、由上面 GitHub 帳號庫接管登入。僅在

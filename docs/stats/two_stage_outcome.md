@@ -6,6 +6,8 @@
 
 [20261014] 依 Edward 回饋（schemaVersion 4）：結果相關的數字一律用**條件機率**、分三塊看（見〈三塊結果〉）；角色理論改成「每個角色看自己的最近場次」（特殊角色各近 10 場、忠臣近 40 場），位置理論看近 100 場，另加整體理論（生涯全部場次，排行要生涯 250 場以上）；拿掉近 50 場（場數太少）。
 
+[20261014] 依 Edward 裁定：少場補值從補到 3 場改成**補到 5 場**（「少於 3 場通常沒有統計意義，用整體平均補，但我建議補到 5 場」，見〈理論勝率〉的少場補值）；**角色王同率各給**（同率的人都拿到該角色的稱號，見〈排行〉）。
+
 本文件是 `generate_cache.py`（資料層）、`services/sheetsAnalysis.ts` 與 `routes/analysis.ts`（後端）、`packages/web`（網站）、`bots/stats`（機器人）共同遵守的欄位契約。舊欄位一律保留。
 
 ## 定義
@@ -117,7 +119,7 @@ schemaVersion 4 的 `overview` 另加：
 "topPlayersByRoleTheory": [{"name": "…", "roleTheory": 56.0, "positionTheory": 55.2, "overallTheory": 54.2, "finalWinRate": 56.0, "games": 100, "careerGames": 1018}],
 "topPlayersByPositionTheory": [{"name": "…", "positionTheory": 55.2, "finalWinRate": 56.0, "games": 100, "careerGames": 1018}],
 "topPlayersByOverallTheory": [{"name": "…", "overallTheory": 54.2, "positionTheory": 53.0, "finalWinRate": 54.9, "games": 1018, "careerGames": 1018}],
-"theoryConfig": {"theoryMinCellGames": 3, "theoryWindows": [100], "mainGames": 100, "activeDays": 90,
+"theoryConfig": {"theoryMinCellGames": 5, "theoryWindows": [100], "mainGames": 100, "activeDays": 90,
                  "roleWindowGames": {"刺客": 10, "莫甘娜": 10, "莫德雷德": 10, "奧伯倫": 10, "派西維爾": 10, "梅林": 10, "忠臣": 40},
                  "positionGames": 100, "overallMinGames": 250}
 ```
@@ -164,7 +166,7 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
 }
 ```
 
-- **角色理論** = `roleWindows.roleTheory`：每個角色看本人**當該角色**的最近 K 場（`role_window_theory`）—— 六個特殊角色 K = `roleWindowGames`（10），忠臣 K = `loyalWindowGames`（40；發到忠臣的機會是 4 倍）。當該角色的場數不到 K 就用全部，不到 3 場照下面的補值。`roles` 每格：`games`（用到的場數）、`wins`（其中最終贏的）、`window`（K）、`rate`（進到總和的這格勝率，補值後的；沒打過是全體勝率）。`games` = 用到的總場數（打滿時 6 × 10 + 40 = 100），`fullWindows` = 每個角色都打滿 K 場 —— **任何角色理論的排行都要 `fullWindows`**（資料篩選不能少場；2146 局的快照裡是 35 人，以 2026-03-01 為準近 90 天有出賽的 22 人）。打滿時角色理論剛好等於這 100 場的最終勝率（每個角色的場數比例就是發牌機率）。
+- **角色理論** = `roleWindows.roleTheory`：每個角色看本人**當該角色**的最近 K 場（`role_window_theory`）—— 六個特殊角色 K = `roleWindowGames`（10），忠臣 K = `loyalWindowGames`（40；發到忠臣的機會是 4 倍）。當該角色的場數不到 K 就用全部，不到 `theoryMinCellGames`（5）場照下面的補值。`roles` 每格：`games`（用到的場數）、`wins`（其中最終贏的）、`window`（K）、`rate`（進到總和的這格勝率，補值後的；沒打過是全體勝率）。`games` = 用到的總場數（打滿時 6 × 10 + 40 = 100），`fullWindows` = 每個角色都打滿 K 場 —— **任何角色理論的排行都要 `fullWindows`**（資料篩選不能少場；2146 局的快照裡是 35 人，以 2026-03-01 為準近 90 天有出賽的 22 人）。打滿時角色理論剛好等於這 100 場的最終勝率（每個角色的場數比例就是發牌機率）。
 - **位置理論** = `last100.positionTheory`：本人最近 `mainGames`（100）場；場數不夠時就是全部場次，`games` 寫實際場數。`last100.roleTheory` 仍在（同舊格式），但角色理論不再看它。
 - **整體理論** = `career.roleTheory`：生涯全部場次算的角色理論（每個角色用全部場次，同樣的補值）；`career.positionTheory`、`career.finalWinRate` 是生涯的位置理論與最終勝率，`career.games` = `totalGames`。
 - schemaVersion 3 另有 `last50`（近 50 場），2026-10-14 拿掉（場數太少）；舊快取的讀者照舊用 `theoryLastWindows()` 讀鍵，`last50` 缺也沒關係。
@@ -173,7 +175,9 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
 - 「最近」的順序：先看日期時間，同一天再看在牌譜（接著是 Discord匯入）裡的列序。沒有日期的局跟著它上面最近一筆有日期的局排；牌譜最上面那批沒有日期的舊局排在最前面（最舊）。
 - 只算結果是三紅／三藍死／三藍活的局，和玩家層其他欄位一致。
 
-**少場補值（可以拿掉）**：某個角色或位置在這段場次裡不到 3 場，就用「全體在這個角色／位置的最終勝率」補到 3 場再算。例如最近 100 場只當過 2 次梅林、贏 1 次，梅林那格就算成（贏的 1 場 + 補上的 1 場 × 全體梅林勝率）÷ 3 場；全體梅林勝率 30% 時是 (1 + 0.3) ÷ 3 ≈ 43.3%，不會因為只有 2 場就直接算 50%（或 0%、100%）。完全沒當過的角色就直接用全體勝率。全體勝率用快取裡公開的 `overview.roleFinalWinRates` / `seatFinalWinRates`（一位小數），所以每格怎麼補都查得到。`sparseRoles` / `sparseSeats` 記錄補了幾格（角色共 7 格、位置共 10 格）。這個門檻是 `LEADERBOARD_CONFIG["theoryMinCellGames"]`（3）；**Edward 若不要補值，改成 0 即可，其他地方不用動**（改成 0 後，有打過的格子用本人自己的勝率，沒打過的格子仍用全體勝率，因為不能留空）。機器人的註腳、榜的說明、網站的說明文字都讀快取裡的設定（`leaderboard.config`、`overview.theoryConfig`），改成 0 後就不再提補值；產生器的測試用自己固定的設定（`test_generate_cache.py` 的 `TEST_LEADERBOARD_CONFIG`），所以每日重算前跑的測試不會因為改設定而失敗，`LeaderboardConfigTest` 另外檢查真正的設定能產生合格的快取。在 2146 局的快照裡，生涯 ≥ 100 場的 40 人，最近 100 場平均補了 0 格；（已拿掉的）最近 50 場平均補了 0.65 個角色格、1.1 個位置格；角色視窗（各角色近 10 場、忠臣 40）平均補了 0 格。
+**少場補值（可以拿掉）**：某個角色或位置在這段場次裡不到 5 場，就用「全體在這個角色／位置的最終勝率」補到 5 場再算。例如最近 100 場只當過 2 次梅林、贏 1 次，梅林那格就算成（贏的 1 場 + 補上的 3 場 × 全體梅林勝率）÷ 5 場；全體梅林勝率 30% 時是 (1 + 3 × 0.3) ÷ 5 = 38.0%，不會因為只有 2 場就直接算 50%（或 0%、100%）。剛好 5 場（或更多）就用本人自己的勝率。完全沒當過的角色就直接用全體勝率。全體勝率用快取裡公開的 `overview.roleFinalWinRates` / `seatFinalWinRates`（一位小數），所以每格怎麼補都查得到。`sparseRoles` / `sparseSeats` 記錄補了幾格（角色共 7 格、位置共 10 格）。這個門檻是 `LEADERBOARD_CONFIG["theoryMinCellGames"]`（5）；**Edward 若不要補值，改成 0 即可，其他地方不用動**（改成 0 後，有打過的格子用本人自己的勝率，沒打過的格子仍用全體勝率，因為不能留空）。機器人的註腳、榜的說明、網站的說明文字都讀快取裡的設定（`leaderboard.config`、`overview.theoryConfig`），改成 0 後就不再提補值；產生器的測試用自己固定的設定（`test_generate_cache.py` 的 `TEST_LEADERBOARD_CONFIG`），所以每日重算前跑的測試不會因為改設定而失敗，`LeaderboardConfigTest` 另外檢查真正的設定能產生合格的快取。在 2146 局的快照裡，生涯 ≥ 100 場的 40 人，最近 100 場平均補了 0 格；（已拿掉的）最近 50 場平均補了 0.65 個角色格、1.1 個位置格；角色視窗（各角色近 10 場、忠臣 40）平均補了 0 格。
+
+補到 5 場（2026-10-14 Edward：「少於 3 場通常沒有統計意義，用整體平均補，但我建議補到 5 場」）：門檻從 3 改成 5，只改產生器的 `LEADERBOARD_CONFIG`。之前寫出的快取在 `leaderboard.config` / `overview.theoryConfig` 裡記的是 3（數字也是照 3 算的），所以讀者在快取**沒有**這個設定時的預設仍是 3（機器人 `statsReplies.THEORY_MIN_CELL_GAMES`、網站 `DEFAULT_THEORY_CONFIG`），有設定就照快取；下一次每日重算後註腳、榜的說明、網站文字自動變成「補到 5 場」。測試的固定設定（`TEST_LEADERBOARD_CONFIG`）也改成 5，手算例子照 5 重算（`TheoryTest.test_sparse_cells_are_topped_up_to_five_games`，舊的 3 場例子保留並明寫門檻）。同一份 2146 局快照（以 2026-03-01 為準）用 5 重算：生涯 ≥ 100 場的人最近 100 場平均補 0.15 個角色格、0.32 個位置格（用 3 時都是 0）；角色視窗打滿的 35 人一格都不用補（每格至少 10 場），所以角色理論榜、整體理論榜的數字不變；位置理論榜有 3 列變動不到 0.5 個百分點，總覽位置理論排行第 1 名從 61.2% 變 60.2%（他最近 100 場有位置不到 5 場）。契約：網站表格把樣本太少的格子變淡時，門檻也讀同一個設定（`theoryMinCellGames`，經 `theorySettings()`），不另外寫死。
 
 **為什麼還不算「最完整理論勝率」（角色 × 位置）**：那要把 7 個角色 × 10 個位置 = 70 格各自算勝率。特殊角色在某一個位置的機率只有 1/10 × 1/10 = 1/100，要平均每格 3 場就要約 300 場，5 場就要約 500 場。2146 局快照實測：生涯 ≥ 100 場的人，最近 100 場裡 70 格中平均只有 12 格有 3 場以上（最多 16 格），其他格子幾乎全靠補值，算出來就只是全體平均；只有生涯 700 場以上的少數老玩家才把 70 格大致填滿。所以照 Edward 說的，先分角色、分位置各算一個。
 
@@ -187,7 +191,7 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
 "leaderboard": {
   "asOf": "2026-10-14",
   "dates": {"parsed": 2165, "unparsed": 63, "earliest": "2017-02-13", "latest": "2026-10-10"},
-  "config": {"theoryWindows": [100], "theoryMinCellGames": 3, "activeDays": 90, "topN": 10,
+  "config": {"theoryWindows": [100], "theoryMinCellGames": 5, "activeDays": 90, "topN": 10,
              "mainGames": 100, "roleWindowGames": 10, "loyalWindowGames": 40, "overallMinGames": 250,
              "assassinAttempts": 20, "assassinMinAttempts": 10, "newcomerDays": 90, "newcomerMinGames": 10,
              "roleTitleMinGames": 20, "roleTitleGames": 20},
@@ -210,12 +214,13 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
 | `overall` 整體理論勝率排行 | `overallTheory` = 生涯角色理論 | 近 90 天有出賽、生涯 ≥ 250 場（`overallMinGames`） | 生涯全部場次 | `overallTheory`、`positionTheory`（生涯）、`finalWinRate`（生涯）、`games`（= 生涯場數）、`careerGames`、`from`、`to`、`sparseRoles`、`sparseSeats` |
 | `improved` 進步榜 | `roleTheoryDelta` = 角色視窗的角色理論 − 每個角色再之前同樣場數的角色理論 | 近 90 天有出賽、六個特殊角色各 ≥ 20 場、忠臣 ≥ 80 場（兩段都打滿）；只列有進步（> 0）的人 | 每個角色：最近 10 場（忠臣 40）vs 再之前 10 場（忠臣 40） | `recentRoleTheory`、`priorRoleTheory`、`recentGames`、`priorGames`、`careerGames`；`roleWindowGames` |
 | `assassin` 刺客刺中率 | `hitRate` = 三藍死 /（三藍死 + 三藍活） | 近 90 天有出賽、至少 10 次刺殺 | 各人當刺客、任務做到三藍的最近 20 局（三紅沒有刺殺） | `hits`、`attempts`（= `games`）、`careerGames`、`from`、`to` |
-| `newcomers` 新人榜（例外） | `roleTheory`（角色視窗） | 首次出賽在近 90 天內、每局都有日期、≥ 10 場 | 他的全部場次：角色理論每個角色用全部場次（最多近 10 場、忠臣 40；通常打不滿，不到 3 場補值），位置理論與最終勝率用全部場次（`allGames: true`，`windowDays: 90`） | 同 `main`，加 `firstPlayed` |
-| `roleTitles` 角色王 | `finalWinRate` | 每個角色：近 90 天有出賽、生涯該角色 ≥ 20 場 | 各人該角色最近 20 場 | `role`、`wins`、`careerRoleGames`；每個角色只列第一名 |
+| `newcomers` 新人榜（例外） | `roleTheory`（角色視窗） | 首次出賽在近 90 天內、每局都有日期、≥ 10 場 | 他的全部場次：角色理論每個角色用全部場次（最多近 10 場、忠臣 40；通常打不滿，不到 5 場補值），位置理論與最終勝率用全部場次（`allGames: true`，`windowDays: 90`） | 同 `main`，加 `firstPlayed` |
+| `roleTitles` 角色王 | `finalWinRate` | 每個角色：近 90 天有出賽、生涯該角色 ≥ 20 場 | 各人該角色最近 20 場 | `role`、`wins`、`careerRoleGames`；每個角色列最高的勝率，同率的人並列、各得稱號（一個角色可以有好幾列；2026-10-14 起） |
 
-- 排序：value 高 → 低，同分看 `games` 多的、再看 `careerGames` 多的、再看名字；角色王同率看該角色生涯場數多的、再看名字。每榜最多 `topN`（10）列；做不出來的榜（沒有人符合）就不放。
+- 排序：value 高 → 低，同分看 `games` 多的、再看 `careerGames` 多的、再看名字。每榜最多 `topN`（10）列（角色王除外：每位稱號持有人一列，不截斷）；做不出來的榜（沒有人符合）就不放。`rank` 是列號（1、2、3…）；角色王的 `rank` 只是列的順序，不是角色之間的名次。
+- 角色王的列：角色照 刺客、莫甘娜、莫德雷德、奧伯倫、派西維爾、梅林、忠臣 的順序；同一個角色的稱號持有人（同率，比的是公開的一位小數勝率）依該角色最近場數（`games`）多的、該角色生涯場數（`careerRoleGames`）多的、名字排，順序固定。讀者（網站排行頁、機器人週一戰績週報的角色王那行）要能處理同一個角色好幾列：機器人寫成「莫甘娜 甲／乙 90.0%」（每個角色最多列 5 個名字，再多寫「等 N 人」）。
 - 進步榜的 value 是兩段角色理論勝率相減，單位是**百分點**（網站顯示「+10.4 個百分點」，機器人顯示「+10.4」），不是相對成長幾 %。兩段都打滿時，角色理論剛好等於該段 100 場的最終勝率，所以列裡不再另附 `recentFinalWinRate` / `priorFinalWinRate`。
-- 角色王：同一個人可以同時拿好幾個角色的稱號。2146 局快照裡，一位玩家拿了 7 個角色中的 5 個（刺客、莫甘娜、莫德雷德、梅林、忠臣），其中莫甘娜、莫德雷德（都是最近 20 場贏 18 場）與忠臣（9/20）三個是同率，靠「該角色生涯場數多」勝出（例如 89 場對 46 場）。要不要改成同率並列、或每人最多一個稱號，由 Edward 決定。
+- 角色王：同一個人可以同時拿好幾個角色的稱號。2146 局快照裡，一位玩家拿了 7 個角色中的 5 個（刺客、莫甘娜、莫德雷德、梅林、忠臣），其中莫甘娜、莫德雷德（都是最近 20 場贏 18 場）與忠臣（9/20）三個是同率，原本靠「該角色生涯場數多」勝出（例如 89 場對 46 場）。Edward 2026-10-14 裁定「各給」：同率的人都拿到稱號。同一份快照現在是 10 列、5 位玩家：莫甘娜、莫德雷德、忠臣各 2 位，其他角色各 1 位（那位玩家仍拿 5 個稱號）。
 - 每個榜都有 `id`、`metric`、`title`、`titleEn`、`period`、`periodEn`、`minGames`、`note`、`noteEn`、`rows`；`position`、`assassin`、`roleTitles` 有 `windowGames`，`main`、`improved` 有 `roleWindowGames`（`{角色: 場數}`），`newcomers` 有 `windowDays` 與 `allGames`，`overall` 都沒有（生涯）。`main` 的 `minGames` 是 Σ 角色視窗（100，必要不充分；真正條件是每個角色），`improved` 是它的兩倍。`note` 第一個「；」前是上榜條件（機器人只印這段），後面是公式說明（網站顯示整段）。
 - 拿掉的榜：`last50`（近 50 場角色理論，2026-10-14：場數太少），以及更早的 90 天日期窗的 `recent`、日期窗的 `improved`、7 天的 `assassin`、上個月的 `roleTitles`、`online`（線瓦榜）。線瓦榜拿掉是因為近一年的局幾乎都是線瓦：2026-10-12 的快取裡，近一年的局 100% 有填分類，超額主榜與線瓦榜上是同樣的 10 個人，他們這一年的 627 場出賽中 555 場（約 89%）是線瓦，兩個榜幾乎一樣。設定裡的 `shortGames`、`improvedGames` 也一起拿掉（進步榜改看角色視窗）。
 - 「近 90 天內有出賽」看該玩家全部有日期的局的最晚一場；日期在 asOf 之後（打錯字）的局當作沒有日期。`asOf` 預設為台灣（+08）當天，環境變數 `AVALON_STATS_AS_OF=YYYY-MM-DD` 可覆寫（測試與重現用）；`leaderboard.config` 是 `LEADERBOARD_CONFIG` 的完整複本，前面再加自動帶出的 `theoryWindows`（= [`mainGames`]）。日期只影響「誰算近期出賽」與新人榜的期間；若和前一天的檔案相比只差 asOf，就不重寫檔案（`only_the_day_changed`）。

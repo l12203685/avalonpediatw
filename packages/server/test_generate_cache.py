@@ -47,8 +47,10 @@ AS_OF = dt.date(2026, 10, 12)
 # sparse-cell top-up off with theoryMinCellGames = 0, or rank on the last 80 games -- without
 # failing the daily refresh workflow, which runs these tests before it regenerates the cache.
 # LeaderboardConfigTest checks the owner's real values (REAL_LEADERBOARD_CONFIG) on their own.
+# theoryMinCellGames 5 since 2026-10-14 (Edward：「建議補到 5 場」; the examples were reworked for it,
+# TheoryTest keeps the 3-game example with an explicit min_cell).
 TEST_LEADERBOARD_CONFIG: dict = {
-    "theoryMinCellGames": 3, "activeDays": 90, "topN": 10, "mainGames": 100, "roleWindowGames": 10,
+    "theoryMinCellGames": 5, "activeDays": 90, "topN": 10, "mainGames": 100, "roleWindowGames": 10,
     "loyalWindowGames": 40, "overallMinGames": 250, "assassinAttempts": 20, "assassinMinAttempts": 10,
     "newcomerDays": 90, "newcomerMinGames": 10, "roleTitleMinGames": 20, "roleTitleGames": 20,
 }
@@ -631,26 +633,29 @@ EXPECTED_ROLE_FINAL = per_role(刺客=66.7, 莫甘娜=66.7, 莫德雷德=66.7, �
 EXPECTED_SEAT_FINAL = {"1": 75.0, "2": 50.0, "3": 33.3, "4": 33.3, "5": 0.0, "6": 33.3, "7": 66.7, "8": 66.7, "9": 75.0, "10": 66.7}
 
 # 甲's theory: G1 刺客@1 W, G2 忠臣@1 W, G3 刺客@10 W (三藍死: red wins the final), G5 忠臣@1 W.
-#   roles: 刺客 2 games 2 wins < 3 -> (200 + 66.7) / 3 = 88.9; 忠臣 (200 + 42.9) / 3 = 80.97; the other
-#   five roles have no game -> the population rate. roleTheory = 0.1 x (88.9 + 3 x 66.7 + 50.0 + 33.3)
-#   + 0.4 x 80.97 = 37.23 + 32.387 = 69.617 -> 69.6, every role topped up (sparseRoles 7).
-#   seats: 1 has 3 games, 3 wins -> 100; 10 has 1 win -> (100 + 2 x 66.7) / 3 = 77.8; the other eight are
-#   the population rate (358.3 together). positionTheory = 0.1 x (100 + 77.8 + 358.3) = 53.61 -> 53.6.
+# Topped up to 5 games (theoryMinCellGames, 2026-10-14):
+#   roles: 刺客 2 games 2 wins < 5 -> (200 + 3 x 66.7) / 5 = 80.02; 忠臣 (200 + 3 x 42.9) / 5 = 65.74; the
+#   other five roles have no game -> the population rate. roleTheory = 0.1 x (80.02 + 3 x 66.7 + 50.0 + 33.3)
+#   + 0.4 x 65.74 = 36.342 + 26.296 = 62.638 -> 62.6, every role topped up (sparseRoles 7).
+#   seats: 1 has 3 games, 3 wins < 5 -> (300 + 2 x 75.0) / 5 = 90.0; 10 has 1 win -> (100 + 4 x 66.7) / 5 =
+#   73.36; the other eight are the population rate (358.3 together). positionTheory = 0.1 x (90.0 + 73.36
+#   + 358.3) = 52.166 -> 52.2, every seat topped up (sparseSeats 10).
+#   (With 3 games, until 2026-10-14: 刺客 88.9, 忠臣 80.97, roleTheory 69.6; seat 1 as is, positionTheory 53.6.)
 #   G3 has no date; it sorts after G2 (the dated row above it) and before G5.
 EXPECTED_JIA_THEORY = {
-    "window": 0, "games": 4, "roleTheory": 69.6, "positionTheory": 53.6, "finalWinRate": 100.0,
-    "from": "2026-01-05", "to": "2026-02-01", "sparseRoles": 7, "sparseSeats": 9,
+    "window": 0, "games": 4, "roleTheory": 62.6, "positionTheory": 52.2, "finalWinRate": 100.0,
+    "from": "2026-01-05", "to": "2026-02-01", "sparseRoles": 7, "sparseSeats": 10,
 }
 # 甲's per-role windows: every role has fewer games than its window (10, 忠臣 40), so they hold all four
-# games and the role theory is the career one (69.6); `rate` is the topped-up cell that went into the
-# sum (忠臣 80.97 -> 81.0), the population rate for a role never played.
+# games and the role theory is the career one (62.6); `rate` is the topped-up cell that went into the
+# sum (刺客 80.02 -> 80.0, 忠臣 65.74 -> 65.7), the population rate for a role never played.
 EXPECTED_JIA_ROLE_WINDOWS = {
-    "roleTheory": 69.6, "fullWindows": False, "games": 4, "sparseRoles": 7, "from": "2026-01-05", "to": "2026-02-01",
+    "roleTheory": 62.6, "fullWindows": False, "games": 4, "sparseRoles": 7, "from": "2026-01-05", "to": "2026-02-01",
     "roles": {
-        "刺客": {"games": 2, "wins": 2, "window": 10, "rate": 88.9},
+        "刺客": {"games": 2, "wins": 2, "window": 10, "rate": 80.0},
         **{r: {"games": 0, "wins": 0, "window": 10, "rate": EXPECTED_ROLE_FINAL[r]}
            for r in ("莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林")},
-        "忠臣": {"games": 2, "wins": 2, "window": 40, "rate": 81.0},
+        "忠臣": {"games": 2, "wins": 2, "window": 40, "rate": 65.7},
     },
 }
 # 甲's games per role and 結果: 刺客 G1 三紅, G3 三藍死; 忠臣 G2 三藍活, G5 三藍活.
@@ -836,7 +841,7 @@ class PlayerAggregationTest(unittest.TestCase):
         self.assertEqual(list(ov)[-5:], ["seatFinalWinRates", "topPlayersByRoleTheory", "theoryConfig",
                                          "topPlayersByPositionTheory", "topPlayersByOverallTheory"])
         self.assertEqual(ov["theoryConfig"], {
-            "theoryMinCellGames": 3, "theoryWindows": [100], "mainGames": 100, "activeDays": 90,
+            "theoryMinCellGames": 5, "theoryWindows": [100], "mainGames": 100, "activeDays": 90,
             "roleWindowGames": {r: 40 if r == "忠臣" else 10 for r in ROLE_ORDER}, "positionGames": 100,
             "overallMinGames": 250,
         })
@@ -1800,10 +1805,40 @@ class TheoryTest(unittest.TestCase):
             "window": 0, "games": 5, "roleTheory": 58.8, "positionTheory": 48.7, "finalWinRate": 60.0,
             "from": "2026-01-01", "to": "2026-01-05", "sparseRoles": 5, "sparseSeats": 7,
         })
-        # Without min_cell, theory_window follows LEADERBOARD_CONFIG["theoryMinCellGames"].
-        self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 59.4)
+        # Without min_cell, theory_window follows LEADERBOARD_CONFIG["theoryMinCellGames"] (5 here, see
+        # test_sparse_cells_are_topped_up_to_five_games).
+        self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 54.1)
+        with config_patch(theoryMinCellGames=3):
+            self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 59.4)
         with config_patch(theoryMinCellGames=0):
             self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 58.8)
+
+    def test_sparse_cells_are_topped_up_to_five_games(self) -> None:
+        """The owner's value since 2026-10-14 (「少於 3 場通常沒有統計意義……建議補到 5 場」): the same five
+        games as above, every cell with fewer than 5 games topped up to 5."""
+        seats = [
+            seat("刺客", "1", "三紅", "2026-01-01"),    # W
+            seat("忠臣", "1", "三藍活", "2026-01-02"),  # W
+            seat("忠臣", "1", "三紅"),                   # L, no date
+            seat("刺客", "2", "三藍活", "2026-01-04"),  # L
+            seat("忠臣", "0", "三藍活", "2026-01-05"),  # W, seat 10
+        ]
+        # roles: 刺客 1 win in 2 -> (100 + 3 x 70.0) / 5 = 62.0; 忠臣 2 wins in 3 -> (200 + 2 x 30.0) / 5 = 52.0
+        #   (3 games are no longer enough); the five roles never played -> 271 together.
+        #   roleTheory = 0.1 x (62.0 + 271) + 0.4 x 52.0 = 33.3 + 20.8 = 54.1.
+        # seats: 1 (3 games, 2 wins) -> (200 + 2 x 45) / 5 = 58.0; 2 (0 in 1) -> (0 + 4 x 50) / 5 = 40.0;
+        #   10 (1 in 1) -> (100 + 4 x 48) / 5 = 58.4; the other seven 320 together.
+        #   positionTheory = 0.1 x (58.0 + 40.0 + 58.4 + 320) = 47.64 -> 47.6.
+        self.assertEqual(self.window(seats, min_cell=5), {
+            "window": 0, "games": 5, "roleTheory": 54.1, "positionTheory": 47.6, "finalWinRate": 60.0,
+            "from": "2026-01-01", "to": "2026-01-05", "sparseRoles": 7, "sparseSeats": 10,
+        })
+        # A cell with exactly 5 games is used as is: five 忠臣 games, 3 wins -> 60.0, not topped up.
+        five = [seat("忠臣", "1", "三藍活")] * 3 + [seat("忠臣", "1", "三紅")] * 2
+        w = self.window(five, min_cell=5)
+        # 0.1 x (70 + 70 + 69 + 71 + 30 + 31) + 0.4 x 60.0 = 34.1 + 24 = 58.1; seat 1 as is (60.0) + 9 others
+        # at the population rate (418) -> 0.1 x 478 = 47.8.
+        self.assertEqual((w["roleTheory"], w["positionTheory"], w["sparseRoles"], w["sparseSeats"]), (58.1, 47.8, 6, 9))
 
     def test_role_windows(self) -> None:
         """角色理論 over each role's own last games (schemaVersion 4): 10 per special role, 40 as 忠臣.
@@ -1842,6 +1877,12 @@ class TheoryTest(unittest.TestCase):
         })
         # Top-up off: 派西維爾 is its own 1/2 = 50.0 -> 0.1 x 340 + 10 = 44.0.
         self.assertEqual(gc.role_window_theory(timeline, THEORY_ROLE_RATES, 0)["roleTheory"], 44.0)
+        # Topped up to 5 (2026-10-14): 派西維爾 (100 + 3 x 30.0) / 5 = 38.0; 梅林 has exactly 5 games, as is
+        # (40.0) -> 0.1 x (100 + 50 + 100 + 0 + 38 + 40) + 10 = 42.8, still one sparse role.
+        five = gc.role_window_theory(timeline, THEORY_ROLE_RATES, 5)
+        self.assertEqual((five["roleTheory"], five["sparseRoles"], five["roles"]["派西維爾"]["rate"], five["roles"]["梅林"]["rate"]),
+                         (42.8, 1, 38.0, 40.0))
+        self.assertEqual(gc.role_window_theory(timeline, THEORY_ROLE_RATES)["roleTheory"], 42.8)  # the config's 5
         # The windows before those (the improved board's baseline): 刺客 LL (2 < 3: (0 + 70) / 3 = 23.33),
         # 忠臣 the first five W (100.0), no earlier game in the other roles (the population rates):
         # 0.1 x (23.33 + 70 + 69 + 71 + 30 + 31) + 0.4 x 100 = 29.43 + 40 = 69.43 -> 69.4.
@@ -1969,7 +2010,8 @@ class LeaderboardTest(unittest.TestCase):
                 self.assertEqual(list(board)[:9], ["id", "metric", "title", "titleEn", "period", "periodEn", "minGames", "note", "noteEn"])
                 self.assertEqual(list(board)[-1], "rows")
                 self.assertEqual([r["rank"] for r in board["rows"]], list(range(1, len(board["rows"]) + 1)))
-                self.assertLessEqual(len(board["rows"]), gc.LEADERBOARD_CONFIG["topN"])
+                if board["id"] != "roleTitles":  # one row per title holder, not cut to topN (ties 各給)
+                    self.assertLessEqual(len(board["rows"]), gc.LEADERBOARD_CONFIG["topN"])
                 for r in board["rows"]:
                     self.assertIsInstance(r["value"], float)
                     self.assertIsInstance(r["games"], int)
@@ -1987,7 +2029,8 @@ class LeaderboardTest(unittest.TestCase):
         self.assertEqual((board["period"], board["minGames"], board["windowGames"]), ("各人最近 100 場", 100, 100))
         self.assertTrue(board["note"].startswith("近 90 天內有出賽、生涯至少 100 場；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）"))
         self.assertIn("每個角色看他當該角色的最近 10 場、忠臣 40 場", board["note"])
-        self.assertIn("不到 3 場的角色或位置，用全體的最終勝率補到 3 場", board["note"])
+        self.assertIn("不到 5 場的角色或位置，用全體的最終勝率補到 5 場", board["note"])
+        self.assertIn("fewer than 5 games is topped up to 5", board["noteEn"])
         # 癸 99 career games, 新人 13: too few; 老人 (120 games) last played in 2024: not active.
         self.assertEqual({r["name"] for r in board["rows"]}, set(SEAT_NAMES[:9]))
         for r in board["rows"]:
@@ -2036,15 +2079,46 @@ class LeaderboardTest(unittest.TestCase):
     def test_role_titles(self) -> None:
         board = self.boards["roleTitles"]
         self.assertEqual((board["period"], board["minGames"], board["windowGames"]), ("各人該角色最近 20 場", 20, 20))
-        rows = {r["role"]: r for r in board["rows"]}
-        self.assertEqual(list(rows), ROLE_ORDER)
-        self.assertEqual([r["rank"] for r in board["rows"]], list(range(1, 8)))
+        self.assertTrue(board["note"].endswith("比各人該角色最近 20 場的最終勝率，同率者並列、各得稱號"))
+        self.assertTrue(board["noteEn"].endswith("players tied at the top all get the title"))
+        # Roles in ROLE_ORDER; `rank` is the row number. 刺客..梅林: one player each (seats 1-6).
+        self.assertEqual([r["role"] for r in board["rows"]], ROLE_ORDER[:6] + ["忠臣"] * 4)
+        self.assertEqual([r["rank"] for r in board["rows"]], list(range(1, 11)))
+        rows = {r["role"]: r for r in board["rows"] if r["role"] != "忠臣"}
         # S90..S109 (LATE): red and blue both win 10 of 20.
         self.assertEqual(rows["刺客"], {"rank": 1, "role": "刺客", "name": "甲", "value": 50.0, "games": 20, "wins": 10, "careerRoleGames": 112})
         self.assertEqual((rows["梅林"]["name"], rows["梅林"]["value"]), ("己", 50.0))
-        # 忠臣: 庚 辛 壬 and 癸 (S77..S96) all 10/20; more career games as 忠臣 first (112 > 99), then the
-        # name; 新人 has 13 games as 忠臣 < 20.
-        self.assertEqual((rows["忠臣"]["name"], rows["忠臣"]["value"], rows["忠臣"]["careerRoleGames"]), ("壬", 50.0, 112))
+        # 忠臣 (Edward 2026-10-14: ties 各給): 庚 辛 壬 and 癸 (S77..S96) all 10/20, so all four hold the
+        # title; more career games as 忠臣 first (112 > 99), then the name (code-point order: 壬 庚 辛);
+        # 新人 has 13 games as 忠臣 < 20. Until 2026-10-14 only 壬 was listed.
+        loyal = [(r["rank"], r["name"], r["value"], r["games"], r["wins"], r["careerRoleGames"])
+                 for r in board["rows"] if r["role"] == "忠臣"]
+        self.assertEqual(loyal, [(7, "壬", 50.0, 20, 10, 112), (8, "庚", 50.0, 20, 10, 112),
+                                 (9, "辛", 50.0, 20, 10, 112), (10, "癸", 50.0, 20, 10, 99)])
+
+    def test_role_title_ties_compare_the_rounded_rate(self) -> None:
+        """A tie is the same published (one-decimal) rate; a lower rate is not a title, however many games."""
+        def runs(name_wins: dict[str, int], games_n: int = 20) -> list[list[str]]:
+            # Each name plays 刺客 (seat 1) games_n times; wins first (三紅), then losses (三藍活).
+            rows = [LOG_HEADERS]
+            day = dt.date(2026, 9, 1)
+            for name, wins in name_wins.items():
+                for i in range(games_n):
+                    rows.append(dated(f"{name}{i}", day.isoformat(), "三紅" if i < wins else "三藍活",
+                                      [name] + PASSERS))
+                    day += dt.timedelta(days=0 if i % 2 else 1)
+            return rows
+
+        cache = build_fresh(runs({"甲": 15, "乙": 15, "丙": 14}))
+        board = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "roleTitles")
+        assassins = [(r["name"], r["value"]) for r in board["rows"] if r["role"] == "刺客"]
+        # Same games and career games: by name (code points, 乙 U+4E59 before 甲 U+7532); 丙 14/20 = 70.0 is
+        # not a holder.
+        self.assertEqual(assassins, [("乙", 75.0), ("甲", 75.0)])
+        # Single holder when nobody ties.
+        cache = build_fresh(runs({"甲": 15, "乙": 16}))
+        board = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "roleTitles")
+        self.assertEqual([(r["name"], r["value"]) for r in board["rows"] if r["role"] == "刺客"], [("乙", 80.0)])
 
     def test_future_dated_games_count_as_undated(self) -> None:
         """A mistyped year must not keep a player 'active', be their lastPlayed or dates.latest."""
@@ -2493,7 +2567,7 @@ class LeaderboardConfigTest(unittest.TestCase):
         self.assertEqual(list(rows["甲"]["theory"]), ["roleWindows", "last80", "career"])
         self.assertEqual(cache["leaderboard"]["config"]["theoryWindows"], [80])
         self.assertEqual(cache["overview"]["theoryConfig"], {
-            "theoryMinCellGames": 3, "theoryWindows": [80], "mainGames": 80, "activeDays": 90,
+            "theoryMinCellGames": 5, "theoryWindows": [80], "mainGames": 80, "activeDays": 90,
             "roleWindowGames": {r: 40 if r == "忠臣" else 10 for r in ROLE_ORDER}, "positionGames": 80, "overallMinGames": 250,
         })
         position = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "position")
@@ -2909,7 +2983,18 @@ class SnapshotShapeTest(unittest.TestCase):
         for r in boards["assassin"]["rows"]:
             self.assertTrue(10 <= r["attempts"] <= 20)
             self.assertEqual(r["value"], pct(r["hits"], r["attempts"]))
-        self.assertEqual([r["role"] for r in boards["roleTitles"]["rows"]], ROLE_ORDER)
+        # 角色王 (ties 各給, 2026-10-14): 莫甘娜 and 莫德雷德 (18 of 20 each) and 忠臣 (9 of 20) have two
+        # holders each -- until then the one with more games in the role won -- so 10 rows, 5 players.
+        titles = boards["roleTitles"]["rows"]
+        self.assertEqual([r["role"] for r in titles],
+                         ["刺客", "莫甘娜", "莫甘娜", "莫德雷德", "莫德雷德", "奧伯倫", "派西維爾", "梅林", "忠臣", "忠臣"])
+        self.assertEqual([r["value"] for r in titles], [90.0] * 6 + [45.0, 50.0, 45.0, 45.0])
+        self.assertEqual(len({r["name"] for r in titles}), 5)
+        for role in ROLE_ORDER:
+            holders = [r for r in titles if r["role"] == role]
+            self.assertEqual(len({r["value"] for r in holders}), 1)
+            keys = [(-r["games"], -r["careerRoleGames"], r["name"]) for r in holders]
+            self.assertEqual(keys, sorted(keys))
         ov = self.cache["overview"]
         top = ov["topPlayersByRoleTheory"]
         self.assertEqual(len(top), 10)

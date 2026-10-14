@@ -549,7 +549,8 @@ export interface AnalysisPlayerStats {
  * 理論勝率 (Edward 2026-10-13，docs/stats/two_stage_outcome.md「理論勝率」)，在玩家自己的一段場次上算：
  *   角色理論勝率 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色最終勝率
  *   位置理論勝率 = Σ 1/10 × 本人該位置最終勝率
- * 某角色或位置在這段場次中不到 3 場時，用全體的最終勝率補到 3 場 (sparseRoles / sparseSeats = 補了幾格)。
+ * 某角色或位置在這段場次中不到 theoryMinCellGames 場時，用全體的最終勝率補到那麼多場 (sparseRoles / sparseSeats = 補了幾格)；
+ * 門檻讀快取 (theorySettings)：2026-10-14 起產生器寫 5，之前的快取是 3 (沒有設定時的預設也是 3)。
  */
 export interface PlayerTheoryWindow {
   /** 視窗大小 N (最近 N 場)；0 = 生涯。 */
@@ -656,7 +657,10 @@ function roleWindowMap(special: number, loyal: number): Record<string, number> {
   return Object.fromEntries(THEORY_ROLES.map(r => [r, r === '忠臣' ? loyal : special]));
 }
 
-/** 產生器的預設值 (舊快取沒有 theoryConfig 或缺鍵時用；角色視窗 10 / 忠臣 40、位置 100、整體 250)。 */
+/**
+ * 舊快取沒有 theoryConfig 或缺鍵時用的值 (角色視窗 10 / 忠臣 40、位置 100、整體 250)。theoryMinCellGames 刻意留 3：
+ * 2026-10-14 起產生器寫 5，但沒帶設定的舊快取是照 3 算的。
+ */
 export const DEFAULT_THEORY_CONFIG: AnalysisTheorySettings = {
   theoryMinCellGames: 3, theoryWindows: [100, 50], mainGames: 100, activeDays: 90,
   roleWindowGames: roleWindowMap(10, 40), positionGames: 100, overallMinGames: 250,

@@ -27,6 +27,7 @@ import {
   LEADERBOARD_PENDING_NOTE,
   MAX_NAME_CANDIDATES,
   OUTCOME_BLOCKS_FOOTNOTE,
+  ROLE_TITLE_NAMES_MAX,
   STATS_REPLY_MAX_CHARS,
   STATS_SITE_URL,
   boardView,
@@ -708,6 +709,28 @@ describe('formatLeaderboard', () => {
     expect(bothDropped).toContain('10. main10');
     expect(bothDropped).toContain('📈 總計');
     expect(bothDropped.length).toBeLessThanOrEqual(STATS_REPLY_MAX_CHARS);
+  });
+
+  it('角色王 ties (Edward 2026-10-14「各給」): every holder of a role is named once under it', () => {
+    const row = (rank: number, role: string, name: string, value: number) =>
+      ({ rank, role, name, value, games: 20, wins: Math.round(value / 5), careerRoleGames: 40 - rank });
+    const board: LeaderboardBoard = {
+      id: 'roleTitles', metric: 'finalWinRate', title: '角色王', period: '各人該角色最近 20 場',
+      rows: [
+        row(1, '刺客', 'T1', 90),
+        row(2, '莫甘娜', 'T2', 90), row(3, '莫甘娜', 'T3', 90),
+        row(4, '梅林', 'T4', 50),
+        row(5, '忠臣', 'T5', 45), row(6, '忠臣', 'T6', 45),
+      ],
+    };
+    expect(roleTitlesLine(board)).toBe('👑 角色王（各人該角色最近 20 場）：刺客 T1 90.0%、莫甘娜 T2／T3 90.0%、梅林 T4 50.0%、忠臣 T5／T6 45.0%');
+    // Many holders: the first ROLE_TITLE_NAMES_MAX in the cache's order, then how many there are.
+    const crowd: LeaderboardBoard = {
+      ...board,
+      rows: Array.from({ length: ROLE_TITLE_NAMES_MAX + 2 }, (_, i) => row(i + 1, '忠臣', `L${i + 1}`, 50)),
+    };
+    const names = Array.from({ length: ROLE_TITLE_NAMES_MAX }, (_, i) => `L${i + 1}`).join('／');
+    expect(roleTitlesLine(crowd)).toBe(`👑 角色王（各人該角色最近 20 場）：忠臣 ${names} 等 ${ROLE_TITLE_NAMES_MAX + 2} 人 50.0%`);
   });
 });
 

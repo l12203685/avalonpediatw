@@ -73,9 +73,20 @@ export const DIGEST_NEWCOMERS_SIZE = 3;
 /**
  * generate_cache.py LEADERBOARD_CONFIG.theoryMinCellGames: a role / seat with
  * fewer games in the window is topped up to this many at the population rate.
- * The card's footnote uses the cache's value when it carries one.
+ * The card's footnote uses the cache's value when it carries one; this is only
+ * the fallback for a cache WITHOUT the setting. (2026-10-14 Edward：「建議補到 5
+ * 場」) the generator writes 5 since then, but caches written before carry —
+ * and were computed with — 3, so the fallback stays 3.
  */
 export const THEORY_MIN_CELL_GAMES = 3;
+
+/**
+ * 角色王 line: at most this many names per role, then「等 N 人」. (2026-10-14
+ * Edward：角色王同率「各給」) every player tied at the top gets the title, so a
+ * role can have several rows; the cap only keeps one role from pushing the
+ * whole 角色王 line out of the Monday digest's length budget.
+ */
+export const ROLE_TITLE_NAMES_MAX = 5;
 
 /** User input echoed back is cut to this many characters. */
 const QUERY_ECHO_MAX = 20;
@@ -634,10 +645,27 @@ export function improvedLines(board: LeaderboardBoard | null | undefined, size: 
   ];
 }
 
-/** "👑 角色王（各人該角色最近 20 場）：刺客 HAO 90.0%、…" from the `roleTitles` board, or null when absent. */
+/**
+ * "👑 角色王（各人該角色最近 20 場）：刺客 甲 90.0%、莫甘娜 乙／丙 90.0%、…" from the `roleTitles` board, or
+ * null when absent. Since 2026-10-14 (ties 各給) a role can have several rows, all at the same rate:
+ * they share one entry, names joined with「／」in the cache's order (at most ROLE_TITLE_NAMES_MAX, then
+ * 「等 N 人」). Older caches have one row per role and read as before.
+ */
 export function roleTitlesLine(board: LeaderboardBoard | null | undefined): string | null {
   if (!board || !isTheoryBoard(board) || !Array.isArray(board.rows) || board.rows.length === 0) return null;
-  const parts = board.rows.map((r) => `${r.role ? `${r.role} ` : ''}${r.name} ${pct(r.value)}`);
+  const groups: Array<{ role: string; value: number; names: string[] }> = [];
+  for (const r of board.rows) {
+    const role = typeof r.role === 'string' ? r.role : '';
+    // Rows without a role never merge; holders of one role are grouped wherever they appear.
+    const same = role ? groups.find((g) => g.role === role && g.value === r.value) : undefined;
+    if (same) same.names.push(r.name);
+    else groups.push({ role, value: r.value, names: [r.name] });
+  }
+  const parts = groups.map((g) => {
+    const shown = g.names.slice(0, ROLE_TITLE_NAMES_MAX).join('／');
+    const more = g.names.length > ROLE_TITLE_NAMES_MAX ? ` 等 ${g.names.length} 人` : '';
+    return `${g.role ? `${g.role} ` : ''}${shown}${more} ${pct(g.value)}`;
+  });
   return `👑 ${board.title}${board.period ? `（${board.period}）` : ''}：${parts.join('、')}`;
 }
 
