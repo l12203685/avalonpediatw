@@ -36,9 +36,15 @@ const fixture = vi.hoisted(() => {
     roleOutcomes: { 刺客: { 三紅: 20, 三藍死: 10, 三藍活: 12 } },
     theory: { roleWindows, last100: tw(100, 100, 50.2, 51.7, 47), career: tw(0, 420, 49.9, 48.8, 44.3) },
   };
+  // A schemaVersion-4 newcomer (invented name): 24 games, role windows not full, ranked on the 新人榜.
+  const ilse = {
+    ...p('Ilse Marr', 24, 50, 50, 45.8, null),
+    rawRedThreeRed: 4, rawRedMerlinDead: 3, rawRedMerlinAlive: 3, rawBlueThreeRed: 6, rawBlueMerlinDead: 3, rawBlueMerlinAlive: 5,
+    theory: { roleWindows: { ...roleWindows, roleTheory: 47, fullWindows: false, games: 21 }, last100: tw(100, 24, 46, 47.5, 45.8), career: tw(0, 24, 47, 47.5, 45.8) },
+  };
   const players = [
     p('Sin', 1080, 51.4, 51.3, 31.2, -1.4), { ...p('HAO', 1013, 59, 59.1, 38.5, 6.3), theory: { last100: tw(100, 100, 52.3, 50.8, 49), last50: tw(50, 50, 55.1, 53.2, 52), career: tw(0, 1013, 47.9, 47.2, 38.5) } },
-    p('尼克', 873, 47.3, 47.5, 30.1, -2), p('SIN', 3, 33.3, 30, 33.3, null), p('sin', 1, 0, 0, 0, null), p('溫', 31, 64.5, 64.6, 45.2, 12.1), tovo,
+    p('尼克', 873, 47.3, 47.5, 30.1, -2), p('SIN', 3, 33.3, 30, 33.3, null), p('sin', 1, 0, 0, 0, null), p('溫', 31, 64.5, 64.6, 45.2, 12.1), tovo, ilse,
   ];
   const labels = ['SIN', 'HAO', '尼克'];
   // As generate_cache.py writes the theory boards: the qualifier, then the legend after a "；".
@@ -71,6 +77,11 @@ const fixture = vi.hoisted(() => {
           id: 'improved', metric: 'roleTheoryDelta', title: '進步榜', period: '各人最近 50 場 vs 再之前 50 場', windowGames: 50, minGames: 100,
           note: `近 90 天內有出賽、生涯至少 100 場；最近 50 場的角色理論勝率 − 再之前 50 場的，只列有進步的人；${LEGEND}`,
           rows: [{ rank: 1, name: 'HAO', value: 4.2, recentRoleTheory: 55.1, priorRoleTheory: 50.9, games: 50, careerGames: 1013 }],
+        },
+        {
+          id: 'newcomers', metric: 'roleTheory', title: '新人榜', period: '2026-07-15 ～ 2026-10-12 首次出賽', windowDays: 90, allGames: true, minGames: 10,
+          note: `首次出賽在近 90 天內、至少 10 場；${LEGEND}`,
+          rows: [{ ...row(1, 'Ilse Marr', 47, 47.5, 45.8, 24), games: 21, overallTheory: 47, firstPlayed: '2026-08-01' }],
         },
       ],
     },
@@ -201,6 +212,14 @@ describe('/戰績', () => {
     ]);
   });
 
+  it('a newcomer whose role windows are not full is told their 新人榜 rank, not that they are unranked', async () => {
+    const it1 = makeInteraction(COMMANDS.STATS, { [STATS_OPTIONS.NAME]: 'ilse marr' });
+    await handleStatsCommand(it1 as never);
+    const { content } = publicReply(it1);
+    expect(content.split('\n')[1]).toBe('角色理論（各角色近 10 場、忠臣近 40 場）47.0%（目前 21 場，還沒有每個角色都打滿，不列入角色理論勝率排行；新人榜第 1 名）');
+    expect(content).not.toContain('不列入排行');
+  });
+
   it('resolves a unique substring', async () => {
     const it1 = makeInteraction(COMMANDS.STATS, { [STATS_OPTIONS.NAME]: '尼' });
     await handleStatsCommand(it1 as never);
@@ -269,13 +288,33 @@ describe('/默契', () => {
 });
 
 describe('/help', () => {
+  const statsField = async (): Promise<string | undefined> => {
+    const it1 = makeInteraction(COMMANDS.HELP);
+    await handleHelpCommand(it1 as never);
+    const json = (it1.editReply.mock.calls[0][0] as { embeds: Array<{ toJSON: () => { fields?: Array<{ name: string; value: string }> } }> }).embeds[0].toJSON();
+    return json.fields?.find((f) => f.name.includes('戰績'))?.value;
+  };
+
+  it('names the window /排行 ranks by, from the cache (schemaVersion 3 until the first refresh, then 4)', async () => {
+    // The fixture's main board is a schemaVersion-3 one: /排行 prints 各人最近 100 場, so does /help.
+    expect(await statsField()).toContain('`/排行` 角色理論勝率排行 Top 10（各人最近 100 場）\n');
+    const main = fixture.leaderboard.boards[0];
+    const period = main.period;
+    main.period = '各角色近 10 場、忠臣近 40 場';
+    try {
+      expect(await statsField()).toContain('`/排行` 角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場）\n');
+    } finally {
+      main.period = period;
+    }
+  });
+
   it('advertises the stats commands', async () => {
     const it1 = makeInteraction(COMMANDS.HELP);
     await handleHelpCommand(it1 as never);
     const json = (it1.editReply.mock.calls[0][0] as { embeds: Array<{ toJSON: () => { fields?: Array<{ name: string; value: string }> } }> }).embeds[0].toJSON();
     const field = json.fields?.find((f) => f.name.includes('戰績'));
     expect(field?.value).toContain('/戰績 名字');
-    expect(field?.value).toContain('`/排行` 角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場）');
+    expect(field?.value).toContain('`/排行` 角色理論勝率排行 Top 10（');
     expect(field?.value).toContain('/默契 名字1 名字2');
     expect(field?.value).toContain('`/意見 文字` 給管理者的建議或回報問題');
     expect(field?.value).not.toContain('超額');

@@ -71,7 +71,8 @@ schemaVersion 3（2026-10-13）另加：
 `playerDetails[name].radar`（由 `routes/analysis.ts` 組）：
 
 ```json
-{"winRate": finalWinRate, "redWinRate": finalRedWinRate, "blueMerlinProtect": blueMerlinAlive,
+{"winRate": finalWinRate, "redWinRate": finalRedWinRate,
+ "blueMerlinProtect": rawBlueMerlinAlive / (rawBlueMerlinDead + rawBlueMerlinAlive) (2026-10-14 前是 blueMerlinAlive),
  "missionWinRate": missionWinRate, "excessWinRate": excessWinRate,
  "redMerlinKillRate": rawRedMerlinDead / (rawRedMerlinDead + rawRedMerlinAlive) (2026-10-14 前是 redMerlinDead),
  "experience": min(totalGames/10, 100),
@@ -86,6 +87,8 @@ schemaVersion 3（2026-10-13）另加：
 2026-10-14 起 radar 另有（後端用原始計數算，schemaVersion 3 的快取也有）：
 
 - `redMerlinKillRate` 改成**條件機率**：紅方場、到達三藍的局裡刺中梅林的比例 = 三藍死 /（三藍死 + 三藍活），從沒當紅方到過三藍時為 `null`。之前是 `redMerlinDead`（三藍死 / 全部紅方場，Edward 指出的「三藍死(紅方) 25.6%」）。
+- `blueMerlinProtect` 同理（「其它數據也雷同」）：藍方場、到達三藍的局裡梅林活下來的比例 = 三藍活 /（三藍死 + 三藍活）= `merlinSurvivalRate`，從沒當藍方到過三藍時為 `null`。之前是 `blueMerlinAlive`（三藍活 / 全部藍方場，數字上等於藍方的遊戲結果 `finalBlueWinRate`，網站卻標成「藍方三藍活率」）。藍方遊戲結果仍在 `outcomeBlocks.blue.final` 與 `player.finalBlueWinRate`。
+- 兩個刺殺結果都由 `services/sheetsAnalysis.ts` 的 `assassinationWinRates(player)` 算：有原始計數時就是 `outcomeBlocks.red / blue.assassination.win`；沒有原始計數的舊列改用兩個同分母的百分比相除（`redMerlinDead /（redMerlinDead + redMerlinAlive）`，同機器人的 `redKillRate`），**不會**退回沒有條件的 `redMerlinDead` / `blueMerlinAlive`。
 - `outcomeBlocks`：`{"red": 三塊, "blue": 三塊, "roles": {角色: 三塊} | null}`，`roles` 要 schemaVersion 4 的 `roleOutcomes`。格式見下一節。
 
 ## 三塊結果（2026-10-14）
@@ -217,9 +220,9 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
 - 拿掉的榜：`last50`（近 50 場角色理論，2026-10-14：場數太少），以及更早的 90 天日期窗的 `recent`、日期窗的 `improved`、7 天的 `assassin`、上個月的 `roleTitles`、`online`（線瓦榜）。線瓦榜拿掉是因為近一年的局幾乎都是線瓦：2026-10-12 的快取裡，近一年的局 100% 有填分類，超額主榜與線瓦榜上是同樣的 10 個人，他們這一年的 627 場出賽中 555 場（約 89%）是線瓦，兩個榜幾乎一樣。設定裡的 `shortGames`、`improvedGames` 也一起拿掉（進步榜改看角色視窗）。
 - 「近 90 天內有出賽」看該玩家全部有日期的局的最晚一場；日期在 asOf 之後（打錯字）的局當作沒有日期。`asOf` 預設為台灣（+08）當天，環境變數 `AVALON_STATS_AS_OF=YYYY-MM-DD` 可覆寫（測試與重現用）；`leaderboard.config` 是 `LEADERBOARD_CONFIG` 的完整複本，前面再加自動帶出的 `theoryWindows`（= [`mainGames`]）。日期只影響「誰算近期出賽」與新人榜的期間；若和前一天的檔案相比只差 asOf，就不重寫檔案（`only_the_day_changed`）。
 - 舊快取（2026-10-12 版）的榜沒有 `metric`、是超額勝率：網站與機器人一律不顯示，改提示「下次每日更新後提供」；機器人 `/排行` 會先退到 `overview.topPlayersByRoleTheory`。schemaVersion 3（2026-10-13 版）的快取：榜與玩家卡照 10-13 的樣子（近 100 場、近 50 場）顯示，直到每日重算寫出 schemaVersion 4。
-- 機器人 `/排行`（schemaVersion 4）每行：名次、名字、角色理論、位置理論、整體理論、最終勝率、生涯場數；標題附期間（各角色近 10 場、忠臣近 40 場）與上榜條件。`/戰績`：「角色理論（各角色近 10 場、忠臣近 40 場）」「位置理論（近 100 場）＋最終勝率」「整體理論（生涯 N 場）＋生涯位置理論、最終勝率」三行，角色視窗沒打滿時註明場數、不列入排行；再接紅方、藍方各一行三塊結果（任務結果、刺殺結果附三藍局數、遊戲結果）。schemaVersion 3 的快取照 10-13 的寫法。週一戰績週報：主榜 Top 10、進步榜 Top 5、角色王、新人榜。
+- 機器人 `/排行`（schemaVersion 4）每行：名次、名字、角色理論、位置理論、整體理論、最終勝率、生涯場數；標題附期間（各角色近 10 場、忠臣近 40 場）與上榜條件。`/戰績`：「角色理論（各角色近 10 場、忠臣近 40 場）」「位置理論（近 100 場）＋最終勝率」「整體理論（生涯 N 場）＋生涯位置理論、最終勝率」三行，角色視窗沒打滿時註明場數、「不列入角色理論勝率排行」（只有主榜要每個角色打滿；同一人可能在位置理論、整體理論榜上，所以不寫「不列入排行」），人在新人榜上時再附「新人榜第 k 名」；再接紅方、藍方各一行三塊結果（任務結果、刺殺結果附三藍局數、遊戲結果）。schemaVersion 3 的快取照 10-13 的寫法。週一戰績週報：主榜 Top 10、進步榜 Top 5、角色王、新人榜。新人榜那行印新人自己的場數（`careerGames`；schemaVersion 4 的 `games` 是角色視窗的場數，某個角色超過 10 場時會比較少），並註明「新人例外：看全部場次，角色理論每個角色最多算近 10 場、忠臣 40 場」（數字讀 `leaderboard.config`）。
 - 守門（`validate_new_cache`）：新快取的 `players[].theory.career.games` 必須等於 `totalGames`，`leaderboard.boards` 必須是陣列；從舊版（沒有 `theory` / `roleOutcomes`）換成新版不算欄位遺失。
-- 改設定時：所有門檻都只改 `LEADERBOARD_CONFIG`，機器人與網站的榜名、期間、上榜條件、說明文字都讀快取，隔天重算後自動跟上。只有三處寫的是預設值：`/help` 裡「角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場）」（`bots/stats/statsReplies.ts` 與 `bots/discord/commands.ts`）、Discord `/排行` 指令的說明（`bots/discord/client.ts`），以及舊快取才會出現的「排行改版中」提示；改 `roleWindowGames` / `loyalWindowGames` 時這幾行要一起改。
+- 改設定時：所有門檻都只改 `LEADERBOARD_CONFIG`，機器人與網站的榜名、期間、上榜條件、說明文字都讀快取，隔天重算後自動跟上。`/help`（Discord）與 `/指令`（LINE）的「角色理論勝率排行 Top 10（…）」也讀快取（`statsQueries.leaderboardScopeText` → `statsReplies.leaderboardScope`：主榜的 `period`，沒有主榜時看設定），所以推上去之後、第一次每日重算之前，舊的 schemaVersion 3 快取仍顯示「各人最近 100 場」，和 `/排行` 一致；讀不到快取時不寫期間。只有兩處寫的是預設值：Discord `/排行` 指令的說明（`bots/discord/client.ts`；部署時向 Discord 註冊一次，讀不到快取，所以直接寫 schemaVersion 4 的「各角色近 10 場、忠臣近 40 場」，推上去到第一次重算之間會和舊快取的 `/排行` 不一致），以及舊快取才會出現的「排行改版中」提示（`LEADERBOARD_PENDING_NOTE`）；`formatStatsHelp` 沒給期間時的預設（`DEFAULT_LEADERBOARD_SCOPE`）也是。改 `roleWindowGames` / `loyalWindowGames` 時這幾行要一起改。
 - 本機預覽：環境變數 `AVALON_ANALYSIS_CACHE=<檔案>` 讓後端（`services/sheetsAnalysis.ts`）與 `AnalysisCacheContract.test.ts` 改讀那個檔（例如每日重算前，用 `sheets_cache.json` 快照離線產生的 schemaVersion 4 快取）；正式環境不設。
 
 ## 特徵研究（`featureStudies`）

@@ -25,8 +25,10 @@
  *
  * schemaVersion 4 (Edward 2026-10-14): players[].roleOutcomes, theory.roleWindows (角色理論 over each
  * role's last 10 games, 忠臣 40) without last50, overview.topPlayersByPositionTheory /
- * topPlayersByOverallTheory, topPlayersByGames outcomes, the position / overall boards and the
- * conditional radar.redMerlinKillRate + radar.outcomeBlocks are REQUIRED from version 4 on.
+ * topPlayersByOverallTheory, topPlayersByGames outcomes, the position / overall boards and
+ * radar.outcomeBlocks.roles are REQUIRED from version 4 on. The conditional radar.redMerlinKillRate /
+ * radar.blueMerlinProtect (刺殺結果 of the red / blue games) and radar.outcomeBlocks.red / blue are checked
+ * on every cache whose players carry the raw counts (schemaVersion 3 included: the route computes them).
  *
  * AVALON_ANALYSIS_CACHE=<file> runs the whole contract over that file instead of the committed one
  * (the server serves it too), e.g. a schemaVersion-4 cache built offline before the daily refresh.
@@ -431,13 +433,23 @@ describe('analysis_cache.json → web contract', () => {
       // excessWinRate may be null; roleTheory / positionTheory are theory.career's (null before schemaVersion 3,
       // never the legacy player.roleTheory).
       const radar = obj(p, d.radar, `${name}.radar`);
-      for (const k of ['winRate', 'redWinRate', 'blueMerlinProtect', 'missionWinRate', 'experience']) {
+      for (const k of ['winRate', 'redWinRate', 'missionWinRate', 'experience']) {
         num(p, radar[k], `${name}.radar.${k}`);
       }
       numOrNull(p, radar.excessWinRate, `${name}.radar.excessWinRate`);
-      // Edward 2026-10-14: 紅方刺中率 = 三藍死 / (三藍死 + 三藍活) of the red games (null when the player
-      // never reached 三藍 as red), not 三藍死 / all red games; the blocks carry every rate with its n.
+      // Edward 2026-10-14: 紅方刺中率 = 三藍死 / (三藍死 + 三藍活) of the red games and 藍方梅林存活率 =
+      // 三藍活 / (三藍死 + 三藍活) of the blue games (null when the player never reached 三藍 on that side),
+      // not 三藍死 / all red games or 三藍活 / all blue games; the blocks carry every rate with its n.
       numOrNull(p, radar.redMerlinKillRate, `${name}.radar.redMerlinKillRate`);
+      numOrNull(p, radar.blueMerlinProtect, `${name}.radar.blueMerlinProtect`);
+      if (typeof pl.rawBlueMerlinDead === 'number' && typeof pl.rawBlueMerlinAlive === 'number') {
+        const reached = pl.rawBlueMerlinDead + pl.rawBlueMerlinAlive;
+        const expected = reached > 0 ? rnd1((pl.rawBlueMerlinAlive / reached) * 100) : null;
+        if (radar.blueMerlinProtect !== expected) p.push(`${name}.radar.blueMerlinProtect ${show(radar.blueMerlinProtect)} ≠ ${show(expected)}`);
+        if (reached > 0 && typeof pl.merlinSurvivalRate === 'number' && radar.blueMerlinProtect !== pl.merlinSurvivalRate) {
+          p.push(`${name}.radar.blueMerlinProtect ${show(radar.blueMerlinProtect)} ≠ player.merlinSurvivalRate ${show(pl.merlinSurvivalRate)}`);
+        }
+      }
       if (typeof pl.rawRedMerlinDead === 'number' && typeof pl.rawRedMerlinAlive === 'number') {
         const reached = pl.rawRedMerlinDead + pl.rawRedMerlinAlive;
         const expected = reached > 0 ? rnd1((pl.rawRedMerlinDead / reached) * 100) : null;

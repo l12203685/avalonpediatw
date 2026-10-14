@@ -22,6 +22,7 @@ import type {
 } from '../services/sheetsAnalysis';
 import { getAllPlayerStats } from '../services/sheetsAnalysis';
 import {
+  DEFAULT_LEADERBOARD_SCOPE,
   DIGEST_IMPROVED_SIZE,
   LEADERBOARD_PENDING_NOTE,
   MAX_NAME_CANDIDATES,
@@ -39,6 +40,7 @@ import {
   formatStatsHelp,
   improvedLines,
   leaderboardLines,
+  leaderboardScope,
   lookupPair,
   matchPlayerName,
   normalizeName,
@@ -362,12 +364,14 @@ describe('formatPlayerCard on a schemaVersion-4 cache', () => {
     expect(text.length).toBeLessThanOrEqual(STATS_REPLY_MAX_CHARS);
   });
 
-  it('windows not full yet: says how many games and that it does not rank; fewer than 100 games: 位置理論（全部 N 場）', () => {
+  it('windows not full yet: says how many games and that it is not on the role-theory board; fewer than 100 games: 位置理論（全部 N 場）', () => {
     const lines = theoryLines({
       theory: { roleWindows: roleWindows(49.1, 63, false), last100: tw(100, 72, 44, 50, 48), career: tw(0, 72, 49.1, 50, 48) },
     });
     expect(lines).toEqual([
-      '角色理論（各角色近 10 場、忠臣近 40 場）49.1%（目前 63 場，還沒有每個角色都打滿，不列入排行）',
+      // Only the 角色理論勝率排行 needs full windows: the same player may be on the 位置理論 / 整體理論
+      // boards or the 新人榜, so the card never says 「不列入排行」.
+      '角色理論（各角色近 10 場、忠臣近 40 場）49.1%（目前 63 場，還沒有每個角色都打滿，不列入角色理論勝率排行）',
       '位置理論（全部 72 場）50.0%｜最終勝率 48.0%',
       '整體理論（生涯 72 場）49.1%｜位置理論 50.0%｜最終勝率 48.0%',
     ]);
@@ -376,6 +380,17 @@ describe('formatPlayerCard on a schemaVersion-4 cache', () => {
       player: schema4Player({ rawRedGames: 0, rawRedThreeRed: 0, rawRedMerlinDead: 0, rawRedMerlinAlive: 0, rawBlueThreeRed: 5, rawBlueMerlinDead: 0, rawBlueMerlinAlive: 0 }),
     });
     expect(card).toContain('🔴 紅方 0 場\n🔵 藍方 5 場｜任務結果 0.0%｜刺殺結果 —（沒有三藍的局）｜遊戲結果 0.0%');
+  });
+
+  it('a newcomer on the 新人榜 (windows not full) is told their rank, not that they are unranked', () => {
+    const newcomer = schema4Player({
+      theory: { roleWindows: roleWindows(47, 21, false), last100: tw(100, 24, 46, 47.5, 45.8), career: tw(0, 24, 47, 47.5, 45.8) },
+    });
+    const card = formatPlayerCard({ player: newcomer, newcomerRank: 2 });
+    expect(card.split('\n')[1]).toBe('角色理論（各角色近 10 場、忠臣近 40 場）47.0%（目前 21 場，還沒有每個角色都打滿，不列入角色理論勝率排行；新人榜第 2 名）');
+    expect(card).not.toContain('不列入排行');
+    // Full windows: no qualifier, whatever the newcomers board says.
+    expect(formatPlayerCard({ player: schema4Player(), newcomerRank: 1 }).split('\n')[1]).toBe('角色理論（各角色近 10 場、忠臣近 40 場）52.3%');
   });
 
   it('the same player on a schemaVersion-3 cache keeps the 2026-10-13 card', () => {
@@ -423,6 +438,31 @@ describe('/排行 on a schemaVersion-4 cache', () => {
     ]);
     const empty = selectLeaderboard({ boards: [], config: { roleWindowGames: 5, loyalWindowGames: 20, activeDays: 60 } }, { schemaVersion: 4, topPlayersByRoleTheory: [] });
     expect(empty.emptyNote).toBe('（目前沒有符合條件的玩家：近 60 天內有出賽、六個特殊角色各至少 5 場、忠臣至少 20 場）');
+  });
+
+  it("新人榜 line: the newcomer's own games (careerGames, not the role-window games) and the per-role cap", () => {
+    // generate_cache.py newcomers row: roleTheory / games over the per-role windows (≤ 10 per special role, ≤ 40 as
+    // 忠臣), careerGames = every game of the newcomer. Invented name.
+    const newcomers = board('newcomers', '新人榜', 0, {
+      period: '2026-07-15 ～ 2026-10-12 首次出賽', windowGames: undefined, allGames: true,
+      rows: [{ rank: 1, name: 'Tovo Wren', value: 47, roleTheory: 47, positionTheory: 46, overallTheory: 46.4, finalWinRate: 50, games: 34, careerGames: 41, firstPlayed: '2026-08-01' }],
+    });
+    expect(newcomersLine(newcomers, undefined, { special: 10, loyal: 40 })).toBe(
+      '🌱 新人榜（2026-07-15 ～ 2026-10-12 首次出賽，新人例外：看全部場次，角色理論每個角色最多算近 10 場、忠臣 40 場）：Tovo Wren 角色理論 47.0%（41 場）',
+    );
+  });
+
+  it('leaderboardScope (/help, /指令): the window /排行 ranks by, from the cache', () => {
+    // The main board's period: schemaVersion 4, then the still-live schemaVersion-3 cache.
+    expect(leaderboardScope({ boards: [schema4Main(3)] }, OVERVIEW)).toBe('各角色近 10 場、忠臣近 40 場');
+    expect(leaderboardScope(LEADERBOARD, OVERVIEW)).toBe('各人最近 100 場');
+    // No main board (nobody active qualifies): the cache's settings, like selectLeaderboard's fallback.
+    expect(leaderboardScope({ boards: [], config: { roleWindowGames: 10, loyalWindowGames: 40 } }, { schemaVersion: 4, topPlayersByRoleTheory: [] })).toBe('各角色近 10 場、忠臣近 40 場');
+    expect(leaderboardScope({ boards: [] }, { schemaVersion: 3, topPlayersByRoleTheory: [], theoryConfig: { mainGames: 80 } as OverviewData['theoryConfig'] })).toBe('各人最近 80 場');
+    expect(leaderboardScope(null, OVERVIEW)).toBe('各人最近 100 場');
+    // A cache written before the theory rates (an excess main board, no settings): no window to name.
+    expect(leaderboardScope({ boards: [OLD_MAIN] }, { schemaVersion: 2 })).toBeNull();
+    expect(leaderboardScope(null, null)).toBeNull();
   });
 });
 
@@ -712,7 +752,12 @@ describe('length limits', () => {
   it('help text exists for both platforms and advertises the role-theory ranking and /意見', () => {
     for (const platform of ['line', 'discord'] as const) {
       const text = formatStatsHelp(platform);
-      expect(text).toContain('/排行　角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場）');
+      expect(text).toContain(`/排行\u3000角色理論勝率排行 Top 10（${DEFAULT_LEADERBOARD_SCOPE}）`);
+      expect(DEFAULT_LEADERBOARD_SCOPE).toBe('各角色近 10 場、忠臣近 40 場');
+      // The window comes from the cache (statsQueries.leaderboardScopeText): a schemaVersion-3 cache still ranks by
+      // the last 100 games; unknown (unreadable cache, pre-theory cache) names no window.
+      expect(formatStatsHelp(platform, '各人最近 100 場')).toContain('/排行　角色理論勝率排行 Top 10（各人最近 100 場）');
+      expect(formatStatsHelp(platform, null)).toContain('/排行　角色理論勝率排行 Top 10\n');
       expect(text).toContain('/意見 文字　給管理者的建議或回報問題');
       expect(text).toContain('/默契 名字1 名字2');
       expect(text).not.toContain('超額');

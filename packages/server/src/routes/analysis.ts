@@ -24,6 +24,7 @@ import {
   getLeaderboard,
   invalidateCache,
   isSheetsReady,
+  assassinationWinRates,
   playerOutcomeBlocks,
 } from '../services/sheetsAnalysis';
 import fs from 'fs';
@@ -128,20 +129,24 @@ router.get('/players/:name', limiter, async (req: Request, res: Response) => {
     // 2026-10-13) — null on a cache written before them, never the legacy
     // player.roleTheory. excessWinRate stays for older web builds (null when the
     // cache cannot provide it); the site no longer plots it.
-    // Edward 2026-10-14「三藍死(紅方) 應該是 刺殺成功 / 我是紅方且三藍」: redMerlinKillRate is the
-    // conditional 刺殺結果 of the red games — 三藍死 / (三藍死 + 三藍活) — not 三藍死 / all red games
-    // (player.redMerlinDead), null when the player never reached 三藍 as red. outcomeBlocks carries
-    // the three blocks (任務結果 / 刺殺結果 / 遊戲結果, each with its n) of the red games, the blue
-    // games and (schemaVersion 4) every role.
+    // Edward 2026-10-14「三藍死(紅方) 應該是 刺殺成功 / 我是紅方且三藍」— and likewise for blue:
+    // redMerlinKillRate / blueMerlinProtect are the conditional 刺殺結果 of the red / blue games,
+    // 三藍死 / (三藍死 + 三藍活) and 三藍活 / (三藍死 + 三藍活) (assassinationWinRates), not 三藍死 / all
+    // red games (player.redMerlinDead) or 三藍活 / all blue games (player.blueMerlinAlive, which is the
+    // blue 遊戲結果 = finalBlueWinRate); null when the player never reached 三藍 on that side. A row
+    // without raw counts gets the same ratio from the per-side rates, never the unconditional one.
+    // outcomeBlocks carries the three blocks (任務結果 / 刺殺結果 / 遊戲結果, each with its n) of the red
+    // games, the blue games and (schemaVersion 4) every role.
     const career = player.theory?.career;
     const outcomeBlocks = playerOutcomeBlocks(player);
+    const assassination = assassinationWinRates(player, outcomeBlocks);
     const radar = {
       winRate: player.finalWinRate ?? player.winRate,
       redWinRate: player.finalRedWinRate ?? player.redWin,
-      blueMerlinProtect: player.blueMerlinAlive,
+      blueMerlinProtect: assassination.blue,
       missionWinRate: player.missionWinRate ?? player.winRate,
       excessWinRate: player.excessWinRate ?? null,
-      redMerlinKillRate: outcomeBlocks.red ? outcomeBlocks.red.assassination.win : player.redMerlinDead,
+      redMerlinKillRate: assassination.red,
       experience: Math.min(player.totalGames / 10, 100),
       roleTheory: typeof career?.roleTheory === 'number' ? career.roleTheory : null,
       positionTheory: typeof career?.positionTheory === 'number' ? career.positionTheory : null,
@@ -336,9 +341,10 @@ router.get('/feature-studies', limiter, async (_req: Request, res: Response) => 
 
 // ---------------------------------------------------------------------------
 // GET /api/analysis/leaderboard
-// 排行榜（角色理論 main / last50、improved、assassin、newcomers、roleTitles，
-// 各人最近 N 場）— boards computed by generate_cache.py (LEADERBOARD_CONFIG),
-// served as-is. Cache predating the section → 503, like feature-studies.
+// 排行榜（schemaVersion 4：main 角色理論〔各角色近 10 場、忠臣近 40 場〕、position 位置理論
+// 〔近 100 場〕、overall 整體理論〔生涯〕、improved、assassin、newcomers、roleTitles；schemaVersion 3
+// 的快取是 main / last50〔各人最近 N 場〕）— boards computed by generate_cache.py
+// (LEADERBOARD_CONFIG), served as-is. Cache predating the section → 503, like feature-studies.
 // ---------------------------------------------------------------------------
 router.get('/leaderboard', limiter, async (_req: Request, res: Response) => {
   if (!sheetsGuard(res)) return;

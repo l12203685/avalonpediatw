@@ -712,6 +712,8 @@ export function theorySettings(...given: Array<object | null | undefined>): Anal
  * 舊後端送的是舊口徑 (≈ 勝率 / 0)，所以網站只讀 player.theory，不讀這兩個鍵。
  * redMerlinKillRate (2026-10-14 起的後端)：紅方場到達三藍時的刺中率 = 三藍死 / (三藍死 + 三藍活)，從沒當紅方
  * 到過三藍為 null；更早的後端送的是 三藍死 / 全部紅方場 (Edward 指出不對的「三藍死(紅方) 25.6%」)。
+ * blueMerlinProtect 同理 (同一版起)：藍方場到達三藍時梅林存活率 = 三藍活 / (三藍死 + 三藍活) (= merlinSurvivalRate)，
+ * 從沒當藍方到過三藍為 null；更早的後端送的是 三藍活 / 全部藍方場 (= 藍方遊戲結果 finalBlueWinRate)。
  * outcomeBlocks (同一版起)：紅方場、藍方場、各角色 (schemaVersion 4) 的三塊結果，每塊附 n；
  * 舊後端沒有 → 用 playerOutcomeBlocks(player) 自己算 (同一個 @avalon/shared 函式)。
  */
@@ -720,7 +722,7 @@ export interface AnalysisPlayerRadar {
   radar: {
     winRate: number;
     redWinRate: number;
-    blueMerlinProtect: number;
+    blueMerlinProtect: number | null;
     missionWinRate?: number;
     excessWinRate?: number | null;
     redMerlinKillRate: number | null;
@@ -1043,7 +1045,10 @@ export interface AnalysisLeaderboardRow {
   /** 用全體勝率補值的角色格 (共 7) / 位置格 (共 10) 數。 */
   sparseRoles?: number;
   sparseSeats?: number;
-  /** 視窗場數 (assassin = 刺殺次數；roleTitles = 該角色場數)。 */
+  /**
+   * 視窗場數 (assassin = 刺殺次數；roleTitles = 該角色場數)。schemaVersion 4 的 main / newcomers 是各角色視窗的場數
+   * (每個角色最多 10 場、忠臣 40 場)，新人某個角色超過 10 場時會比他的場數少 —— 要顯示「他打了幾場」用 careerGames。
+   */
   games: number;
   // improved
   recentRoleTheory?: number;

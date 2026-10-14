@@ -11,7 +11,7 @@
 import path from 'path';
 import fs from 'fs';
 import { findSamePlayerName, playerNameKey, playerOutcomeBlocks } from '@avalon/shared';
-import type { OutcomeCounts, PlayerOutcomeBlocks } from '@avalon/shared';
+import type { OutcomeCounts, PlayerOutcomeBlocks, PlayerOutcomeSource } from '@avalon/shared';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -442,7 +442,11 @@ export interface LeaderboardRow {
   /** Cells topped up with the population rate (role cells of 7, seat cells of 10). */
   sparseRoles?: number;
   sparseSeats?: number;
-  /** Games in the window (assassin: assassinations; roleTitles: games in that role). */
+  /**
+   * Games in the window (assassin: assassinations; roleTitles: games in that role). schemaVersion 4
+   * main / newcomers: games in the per-role windows (at most K_r per role), so a newcomer with more
+   * than K_r games in a role has fewer than careerGames — print careerGames as "their games".
+   */
   games: number;
   // improved
   recentRoleTheory?: number;
@@ -918,6 +922,33 @@ export { playerNameKey };
  */
 export { playerOutcomeBlocks };
 export type { PlayerOutcomeBlocks };
+
+/** The player-row fields assassinationWinRates reads (all optional: older caches lack some). */
+export type AssassinationRateSource = PlayerOutcomeSource &
+  Partial<Pick<PlayerStats, 'redMerlinDead' | 'redMerlinAlive' | 'blueMerlinDead' | 'blueMerlinAlive'>>;
+
+/**
+ * 刺殺結果 of a player's red games and blue games — the conditional rates (Edward 2026-10-14「三藍死(紅方)
+ * 應該是 刺殺成功 / 我是紅方且三藍」, docs/stats/two_stage_outcome.md「三塊結果」):
+ *   red  = 三藍死 / (三藍死 + 三藍活) of the red games (紅方刺中率)
+ *   blue = 三藍活 / (三藍死 + 三藍活) of the blue games (藍方梅林存活率 = merlinSurvivalRate)
+ * % with one decimal. From the raw counts (`blocks`, else playerOutcomeBlocks(p): the same numbers as
+ * radar.outcomeBlocks.*.assassination.win); a row without raw counts falls back to the per-side rates
+ * (redMerlinDead / redMerlinAlive are both over all red games, so their ratio is the same conditional
+ * rate, like statsReplies redKillRate). null when that side never reached 三藍 or the row has neither —
+ * never the unconditional redMerlinDead / blueMerlinAlive (三藍死 / all red games, 三藍活 / all blue games).
+ */
+export function assassinationWinRates(
+  p: AssassinationRateSource | null | undefined,
+  blocks: PlayerOutcomeBlocks = playerOutcomeBlocks(p),
+): { red: number | null; blue: number | null } {
+  const ratio = (hit: unknown, miss: unknown): number | null =>
+    isNum(hit) && isNum(miss) && hit + miss > 0 ? rnd1((hit / (hit + miss)) * 100) : null;
+  return {
+    red: blocks.red ? blocks.red.assassination.win : ratio(p?.redMerlinDead, p?.redMerlinAlive),
+    blue: blocks.blue ? blocks.blue.assassination.win : ratio(p?.blueMerlinAlive, p?.blueMerlinDead),
+  };
+}
 
 /**
  * The key of `record` that names this player (@avalon/shared findSamePlayerName: `name` itself

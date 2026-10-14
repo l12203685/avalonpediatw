@@ -12,6 +12,7 @@ import {
   playerOutcomeBlocks,
   roleFaction,
 } from '@avalon/shared';
+import { assassinationWinRates } from '../services/sheetsAnalysis';
 
 describe('outcomeBlocks', () => {
   it('red games: 任務結果 = 三紅 / n, 刺殺結果 = 三藍死 / 三藍 games, 遊戲結果 = (三紅 + 三藍死) / n', () => {
@@ -87,5 +88,36 @@ describe('playerOutcomeBlocks', () => {
     expect(playerOutcomeBlocks({})).toEqual({ red: null, blue: null, roles: null });
     expect(playerOutcomeBlocks(undefined)).toEqual({ red: null, blue: null, roles: null });
     expect(playerOutcomeBlocks({ ...row, rawBlueMerlinAlive: undefined }).blue).toBeNull();
+  });
+});
+
+describe('assassinationWinRates (radar.redMerlinKillRate / radar.blueMerlinProtect)', () => {
+  // 252 blue games: 三紅 110, 三藍死 60, 三藍活 82 → 三藍活 / all blue games = 32.5 % (blueMerlinAlive,
+  // the blue 遊戲結果) but 三藍活 / blue 三藍 games = 82 / 142 = 57.7 % (the 刺殺結果 the radar shows).
+  const row = {
+    rawRedThreeRed: 80, rawRedMerlinDead: 40, rawRedMerlinAlive: 48,
+    rawBlueThreeRed: 110, rawBlueMerlinDead: 60, rawBlueMerlinAlive: 82,
+    redMerlinDead: 23.8, redMerlinAlive: 28.6, blueMerlinDead: 23.8, blueMerlinAlive: 32.5,
+  };
+
+  it('both sides are conditional on reaching 三藍, from the raw counts', () => {
+    expect(assassinationWinRates(row)).toEqual({ red: 45.5, blue: 57.7 });
+    const blocks = playerOutcomeBlocks(row);
+    expect(assassinationWinRates(row, blocks)).toEqual({ red: blocks.red?.assassination.win, blue: blocks.blue?.assassination.win });
+  });
+
+  it('without raw counts: the ratio of the per-side rates (same denominator), never the unconditional rate', () => {
+    const noRaw = { redMerlinDead: 23.8, redMerlinAlive: 28.6, blueMerlinDead: 23.8, blueMerlinAlive: 32.5 };
+    const r = assassinationWinRates(noRaw);
+    expect(r.red).toBe(45.4); // 23.8 / 52.4 — not 23.8
+    expect(r.blue).toBe(57.7); // 32.5 / 56.3 — not 32.5
+  });
+
+  it('null when that side never reached 三藍, or the row has nothing to compute from', () => {
+    expect(assassinationWinRates({ ...row, rawRedMerlinDead: 0, rawRedMerlinAlive: 0 }).red).toBeNull();
+    expect(assassinationWinRates({ ...row, rawBlueMerlinDead: 0, rawBlueMerlinAlive: 0 }).blue).toBeNull();
+    expect(assassinationWinRates({ redMerlinDead: 0, redMerlinAlive: 0, blueMerlinAlive: 12.5 })).toEqual({ red: null, blue: null });
+    expect(assassinationWinRates({})).toEqual({ red: null, blue: null });
+    expect(assassinationWinRates(undefined)).toEqual({ red: null, blue: null });
   });
 });

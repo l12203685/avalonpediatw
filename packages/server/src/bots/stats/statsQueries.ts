@@ -23,6 +23,7 @@ import type { NameMatch } from './statsReplies';
 import {
   STATS_COMMAND_USAGE,
   chemistryRoster,
+  configRoleWindows,
   findBoard,
   findSamePlayerName,
   findTypedPlayerName,
@@ -32,7 +33,9 @@ import {
   formatNotInChemistry,
   formatPlayerCard,
   formatStatsUnavailable,
+  findTheoryBoard,
   improvedLines,
+  leaderboardScope,
   lookupPair,
   matchPlayerName,
   newcomersLine,
@@ -77,6 +80,9 @@ export async function playerCardReply(query: string): Promise<string> {
       getLeaderboard().catch(() => null),
     ]);
     const minCell = leaderboard?.config?.theoryMinCellGames;
+    // 新人榜 ranks role theory over windows that are not full: the card names the rank instead of
+    // saying the player is not ranked.
+    const newcomer = findTheoryBoard(leaderboard, 'newcomers')?.rows.find((r) => r.name === player.name);
     return formatPlayerCard({
       player,
       archetype: archetype ? { data: archetype.data, axisLabels: archetype.axisLabels } : null,
@@ -84,6 +90,7 @@ export async function playerCardReply(query: string): Promise<string> {
       playstyle: playstyle ? { data: playstyle.data, labels: playstyle.labels } : null,
       caseVariants: match.caseVariants,
       minCellGames: typeof minCell === 'number' ? minCell : undefined,
+      newcomerRank: typeof newcomer?.rank === 'number' ? newcomer.rank : null,
     });
   });
 }
@@ -108,7 +115,11 @@ export async function leaderboardText(
     if (improved.length > 0) sections.push(improved);
     const titles = roleTitlesLine(findBoard(leaderboard, 'roleTitles'));
     if (titles) sections.push([titles]);
-    const newcomers = newcomersLine(findBoard(leaderboard, 'newcomers'));
+    const newcomers = newcomersLine(
+      findBoard(leaderboard, 'newcomers'),
+      undefined,
+      configRoleWindows(leaderboard?.config, overview?.theoryConfig as Record<string, unknown> | undefined),
+    );
     if (newcomers) sections.push([newcomers]);
   }
   return formatLeaderboard(overview, main, { header: opts.header, sections, footerLines: opts.footerLines });
@@ -116,6 +127,21 @@ export async function leaderboardText(
 
 export async function leaderboardReply(): Promise<string> {
   return safely('leaderboard', () => leaderboardText());
+}
+
+/**
+ * The window /排行 ranks by, for /help and /指令 (statsReplies.leaderboardScope): 「各角色近 10 場、忠臣近
+ * 40 場」 on a schemaVersion-4 cache, 「各人最近 100 場」 on a schemaVersion-3 one; null when the cache
+ * cannot be read or predates the theory rates (the help text then names no window). Never throws.
+ */
+export async function leaderboardScopeText(): Promise<string | null> {
+  try {
+    const [overview, leaderboard] = await Promise.all([getOverview(), getLeaderboard()]);
+    return leaderboardScope(leaderboard, overview);
+  } catch (err) {
+    console.error('[stats] help scope failed:', err);
+    return null;
+  }
 }
 
 /**
