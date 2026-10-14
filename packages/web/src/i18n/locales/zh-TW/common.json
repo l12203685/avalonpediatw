@@ -540,7 +540,7 @@
           "coLose": "兩人同時輸的比率",
           "winCorr": "勝率正相關程度",
           "coWinMinusLose": "淨默契指標 (越高越好)",
-          "outcomePair": "兩人共同場次三結果分布 (主值=三紅率%)"
+          "outcomePair": "兩人共同場次的三塊結果"
         },
         "guideTitle": "如何解讀:",
         "guideCoWin": "數值 = 兩人同時在同一場遊戲中勝利的次數比率(%). 越高表示兩人越常一起贏.",
@@ -642,6 +642,79 @@
       }
     },
     "r6": {
+      "tabsb": {
+        "pendingUpdate": "下次每日更新後提供",
+        "position": {
+          "tabsLabel": "位置的小分頁",
+          "tabs": {
+            "seats": "各位置",
+            "seatRoles": "位置 × 角色",
+            "players": "玩家 × 位置",
+            "order": "派梅娜順序"
+          }
+        },
+        "roles": {
+          "tabsLabel": "角色與默契的小分頁",
+          "tabs": {
+            "roles": "各角色",
+            "chemistry": "默契矩陣"
+          }
+        },
+        "seats": {
+          "seatLabel": "{{n}} 號",
+          "seatCol": "位置",
+          "red": "坐這個位置當紅方",
+          "blue": "坐這個位置當藍方",
+          "note": "全部對局，每局每個位置算一次（那局當紅方或藍方）。不分陣營的話每個位置都是同一個三種結果分布，所以一定分陣營看；各角色分開看「位置 × 角色」。"
+        },
+        "seatRoles": {
+          "allSeats": "全部位置",
+          "blockLabel": "三塊結果",
+          "note": "每格＝這個角色坐這個位置時自己陣營的勝率，n＝分母；每欄最高的位置加粗、加底線。"
+        },
+        "heatmap": {
+          "modeLabel": "陣營",
+          "modeAll": "全部場次",
+          "modeRed": "當紅方",
+          "modeBlue": "當藍方",
+          "gamesCol": "場數",
+          "cellTitle": "{{name}} · {{seat}} · {{mode}}：任務結果 {{rate}}（n={{n}}），全體 {{ref}}",
+          "cellGames": "坐這裡的全部對局（紅藍都算）：三紅 {{threeRed}}（n={{n}}）、三藍局刺中 {{kill}}（n={{nBlue}}）",
+          "note": "{{min}} 場以上的玩家（最多 {{max}} 位）。每格＝這位玩家坐這個位置時自己陣營的任務結果勝率（三紅＝紅勝、三藍＝藍勝），n＝場數；綠／紅＝高於／低於全體在這個位置（同陣營）的勝率。",
+          "noteBlocks": "刺殺結果與遊戲結果要分陣營的三藍死／三藍活局數，這份快取還沒有；滑鼠移到格子上可看坐這裡的全部對局。"
+        },
+        "order": {
+          "all": "全部",
+          "sub": "派西維爾（派）、梅林（梅）、莫甘娜（娜）三人座位的 6 種順序，共 {{games}} 局。",
+          "blocksTitle": "各順序的三塊結果（紅方視角）",
+          "blocksNote": "分組的是對局（每局一種順序），所以從紅方看：任務＝三紅率、刺殺＝三藍局刺中率、遊戲＝紅方勝率；藍方＝100% 減同一格，n 相同。",
+          "interleaveRed": "穿插：紅方任務勝率",
+          "noInterleaveRed": "不穿插：紅方任務勝率",
+          "overallRed": "全部：紅方任務勝率",
+          "interleaveNote": "快取只有穿插／不穿插的任務結果（三紅＝紅勝），刺殺與遊戲結果要等快取補上局數。",
+          "summary": "刺中率最低 {{killLow}} {{killLowV}}（n={{killLowN}}）、最高 {{killHigh}} {{killHighV}}（n={{killHighN}}）；三紅率最低 {{redLow}} {{redLowV}}（n={{redLowN}}）、最高 {{redHigh}} {{redHighV}}（n={{redHighN}}）。"
+        },
+        "roleBlocks": {
+          "title": "各角色的三塊結果（全部玩家、全期）",
+          "roleCol": "角色",
+          "pending": "任務結果、刺殺結果：下次每日更新後提供（這份快取只有遊戲結果）。",
+          "note": "每局七個角色都在場，同陣營的角色只差在沒有名字的座位，所以幾乎一樣；角色之間的差別看「位置 × 角色」與玩家雷達。"
+        },
+        "chemistry": {
+          "matrixLabel": "默契矩陣",
+          "pairDescription": "從紅方看，藍方＝100% 減同一格",
+          "guide": {
+            "mission": "數值＝兩人共同場次中三紅的比率，n＝共同場次（全體 {{ref}}，n={{n}}）。",
+            "assassination": "數值＝兩人共同的三藍局中梅林被刺中的比率，n＝共同的三藍局（全體 {{ref}}，n={{n}}）。",
+            "final": "數值＝兩人共同場次中紅方贏（三紅＋三藍死）的比率，n＝共同場次（全體 {{ref}}，n={{n}}）。"
+          },
+          "legendRed": "紅＝比全體高 5 個百分點以上（深色 10 以上）",
+          "legendMid": "灰＝與全體差不到 5",
+          "legendBlue": "藍＝比全體低 5 以上（深色 10 以上）",
+          "legendThin": "虛線格＝這一塊的 n 不到 {{n}} 場，僅供參考",
+          "pairTitle": "{{row}} × {{col}}：共同 {{games}} 場｜任務 三紅 {{mission}}（n={{games}}）｜刺殺 刺中 {{assassination}}（n={{nBlue}}）｜遊戲 紅勝 {{final}}（n={{games}}）"
+        }
+      },
       "tabsa": {
         "roles": {
           "assassin": "刺客",

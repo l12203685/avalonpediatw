@@ -1,45 +1,53 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  Legend,
-} from 'recharts';
 import { Loader, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { fetchAnalysisSeatOrder, getErrorMessage } from '../../services/api';
-import type { SeatOrderData } from '../../services/api';
-
-const RED        = '#ef4444';
-const BLUE_DEAD  = '#f59e0b';
-const BLUE_ALIVE = '#3b82f6';
-
-function RedRateCell({ value }: { value?: number }): JSX.Element {
-  if (value === undefined) {
-    return <td className="py-2 px-2 text-right text-gray-600">—</td>;
-  }
-  return (
-    <td className={`py-2 px-2 text-right font-bold ${value >= 50 ? 'text-red-400' : 'text-blue-400'}`}>
-      {value}%
-    </td>
-  );
-}
+import { fetchAnalysisSeatOrder, getErrorMessage, outcomeBlocks, theorySettings } from '../../services/api';
+import type { OutcomeBlocks, SeatOrderData, SeatOrderPermutation } from '../../services/api';
+import { useAnalysisOverview } from './useAnalysisOverview';
+import { blockValues, useIsWide } from './seatRoleBlocks';
+import { MetricBlocks, StatTable, formatRate, type MetricBlockRow, type StatColumn } from './ui';
 
 /**
- * 派/梅/娜順序分析 — Edward 2026-04-26 spec
+ * 派/梅/娜順序分析 — Edward 2026-04-26 spec；(2026-10-14 Edward：「用條件機率」「能用表格就不用圖」「一頁一屏」)
  *
- * Already had the three outcomes baked into the cache, so the only
- * structural change here is reordering the stacked bar segments to match
- * the new fixed display order: 三紅 → 三藍死 → 三藍活, plus i18n.
+ * 六種順序各一列，三塊結果 (紅方視角，藍方 = 100% − 同一格，n 相同)：
+ *   任務結果 = 三紅 / 該順序全部局；刺殺結果 = 三藍死 / 該順序打到三藍的局 (刺中率)；
+ *   遊戲結果 = (三紅 + 三藍死) / 全部局。比率由 @avalon/shared 的 outcomeBlocks 算。
+ * 舊版的「梅林擊殺率」(快取 merlinKillRate) 其實是 三藍死 / 全部局 (含三紅局)，不是刺中率，不再顯示；
+ * 每種順序一張三種結果占比的卡片 + 堆疊長條圖也拿掉 (同樣的數字，表格一眼比完六種)。
+ * 穿插表 (快取有 穿插紅勝率 時) 只有任務結果的紅勝率 (快取 red_win = 三紅)，附各自的 n；
+ * 結論改成依資料算出來的一行 (舊版寫死「~41%」「~48%」)。
  */
+type Perm = SeatOrderPermutation;
+
+function counts(p: Perm): { 三紅: number; 三藍死: number; 三藍活: number } {
+  return { 三紅: p['三紅'], 三藍死: p['三藍梅死'], 三藍活: p['三藍梅活'] };
+}
+
+function extremes(perms: readonly Perm[], pick: (b: OutcomeBlocks) => number | null): { low: Perm; high: Perm; lowV: number; highV: number } | null {
+  let low: Perm | null = null; let high: Perm | null = null;
+  let lowV = Infinity; let highV = -Infinity;
+  for (const p of perms) {
+    const v = pick(outcomeBlocks(counts(p), 'red'));
+    if (typeof v !== 'number') continue;
+    if (v < lowV) { lowV = v; low = p; }
+    if (v > highV) { highV = v; high = p; }
+  }
+  return low && high ? { low, high, lowV, highV } : null;
+}
+
 export default function SeatOrderAnalysis(): JSX.Element {
   const { t } = useTranslation('common');
   const [data, setData] = useState<SeatOrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { overview } = useAnalysisOverview();
+  const minCell = theorySettings(overview?.theoryConfig).theoryMinCellGames;
+  const wide = useIsWide();
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    (async (): Promise<void> => {
       try {
         const d = await fetchAnalysisSeatOrder();
         if (!cancelled) setData(d);
@@ -49,12 +57,12 @@ export default function SeatOrderAnalysis(): JSX.Element {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return (): void => { cancelled = true; };
   }, []);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
+      <div className="flex items-center justify-center py-12 text-gray-400 gap-3">
         <Loader size={20} className="animate-spin" /> {t('analytics.deep.seatOrder.loading')}
       </div>
     );
@@ -62,7 +70,7 @@ export default function SeatOrderAnalysis(): JSX.Element {
 
   if (error || !data) {
     return (
-      <div className="flex items-center justify-center py-20 text-red-400 gap-3">
+      <div className="flex items-center justify-center py-12 text-red-400 gap-3">
         <AlertCircle size={20} /> {error || t('analytics.deep.loadFailed')}
       </div>
     );
@@ -70,158 +78,85 @@ export default function SeatOrderAnalysis(): JSX.Element {
 
   if (data.permutations.length === 0) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-400">
+      <div className="flex items-center justify-center py-12 text-gray-400">
         {t('analytics.deep.seatOrder.noData')}
       </div>
     );
   }
 
-  // The raw-牌譜 rebuild (61b7398) carries no interleave red-win split (and
-  // 穿插任務 is 0 everywhere), so the interleave table only renders when the
-  // cache actually has it.
-  const hasInterleave = data.permutations.some(p => p['穿插紅勝率'] !== undefined);
+  const perms = data.permutations;
+  const total = perms.reduce(
+    (acc, p) => {
+      const c = counts(p);
+      return { 三紅: acc.三紅 + c.三紅, 三藍死: acc.三藍死 + c.三藍死, 三藍活: acc.三藍活 + c.三藍活 };
+    },
+    { 三紅: 0, 三藍死: 0, 三藍活: 0 },
+  );
+  const lowSample = minCell > 0 ? minCell : undefined;
+  const rows: MetricBlockRow[] = [
+    ...perms.map(p => ({ key: p.order, label: p.order, tone: 'red' as const, ...blockValues(outcomeBlocks(counts(p), 'red')) })),
+    { key: 'all', label: t('analytics.r6.tabsb.order.all'), ...blockValues(outcomeBlocks(total, 'red')) },
+  ];
 
-  // Reorder columns to fixed display order 三紅 → 三藍死 → 三藍活.
-  const outcomeData = data.permutations.map(p => ({
-    name: p.order,
-    threeRed:        p['三紅pct'],
-    threeBlueDead:   p['三藍梅死pct'],
-    threeBlueAlive:  p['三藍梅活pct'],
-  }));
+  // The raw-牌譜 rebuild (61b7398) carries no interleave red-win split, so the
+  // interleave table only renders when the cache actually has it.
+  const hasInterleave = perms.some(p => p['穿插紅勝率'] !== undefined);
+  const interleaveColumns: StatColumn<Perm>[] = [
+    { key: 'order', label: t('analytics.deep.seatOrder.permCol') },
+    { key: '穿插率', label: t('analytics.deep.seatOrder.interleaveRateCol'), format: 'pct', n: 'total', lowSample },
+    {
+      key: '穿插紅勝率', label: t('analytics.r6.tabsb.order.interleaveRed'), format: 'pct', tone: 'red',
+      n: p => p['穿插任務'], lowSample,
+    },
+    {
+      key: '無穿插紅勝率', label: t('analytics.r6.tabsb.order.noInterleaveRed'), format: 'pct', tone: 'red',
+      n: p => p.total - p['穿插任務'], lowSample,
+    },
+    { key: 'redWinRate', label: t('analytics.r6.tabsb.order.overallRed'), format: 'pct', tone: 'red', n: 'total', emphasis: true },
+  ];
+
+  const killRange = extremes(perms, b => b.assassination.win);
+  const missionRange = extremes(perms, b => b.mission.win);
 
   return (
-    <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-      >
-        <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.seatOrder.title')}</h3>
-        <p className="text-[10px] text-gray-600 mb-3">
-          {t('analytics.deep.seatOrder.sub', { games: data.totalGames, rate: data.overallRedWinRate })}
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {data.permutations.map(p => {
-            const threeRedPct       = p['三紅pct'];
-            const threeBlueDeadPct  = p['三藍梅死pct'];
-            const threeBlueAlivePct = p['三藍梅活pct'];
-            return (
-              <div key={p.order} className="bg-gray-800/40 rounded-lg p-3 space-y-2">
-                <div className="flex justify-between items-center">
-                  <p className="text-sm font-bold text-white">{p.order}</p>
-                  <p className="text-xs text-gray-500">{p.total} {t('analytics.deep.seatOrder.gamesLabel')}</p>
-                </div>
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span style={{ color: RED }}>{t('analytics.deep.outcomes.threeRed')}</span>
-                    <span className="text-white font-bold">{threeRedPct}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span style={{ color: BLUE_DEAD }}>{t('analytics.deep.outcomes.threeBlueDead')}</span>
-                    <span className="text-white font-bold">{threeBlueDeadPct}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span style={{ color: BLUE_ALIVE }}>{t('analytics.deep.outcomes.threeBlueAlive')}</span>
-                    <span className="text-white font-bold">{threeBlueAlivePct}%</span>
-                  </div>
-                </div>
-                <div className="flex h-2 w-full overflow-hidden rounded bg-zinc-800">
-                  <div style={{ width: `${threeRedPct}%`,        backgroundColor: RED        }} />
-                  <div style={{ width: `${threeBlueDeadPct}%`,   backgroundColor: BLUE_DEAD  }} />
-                  <div style={{ width: `${threeBlueAlivePct}%`,  backgroundColor: BLUE_ALIVE }} />
-                </div>
-              </div>
-            );
+    <div className="space-y-3">
+      <p className="text-[11px] text-zinc-500">
+        {t('analytics.r6.tabsb.order.sub', { games: data.totalGames })}
+      </p>
+      <div className={`grid grid-cols-1 gap-3 ${hasInterleave ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]' : ''}`}>
+        <MetricBlocks
+          rows={rows}
+          caption={t('analytics.r6.tabsb.order.blocksTitle')}
+          groupLabel={t('analytics.deep.seatOrder.permCol')}
+          showRules={wide}
+          lowSample={lowSample}
+          footnote={t('analytics.r6.tabsb.order.blocksNote')}
+        />
+        {hasInterleave && (
+          <StatTable
+            caption={t('analytics.deep.seatOrder.interleaveTitle')}
+            columns={interleaveColumns}
+            rows={perms}
+            rowKey={p => p.order}
+            footnote={
+              <>
+                {t('analytics.deep.seatOrder.interleaveSub')}{' '}
+                {t('analytics.r6.tabsb.order.interleaveNote')}
+              </>
+            }
+          />
+        )}
+      </div>
+      {killRange && missionRange && (
+        <p className="text-xs text-zinc-300">
+          {t('analytics.r6.tabsb.order.summary', {
+            killLow: killRange.low.order, killLowV: formatRate(killRange.lowV), killLowN: outcomeBlocks(counts(killRange.low), 'red').assassination.n,
+            killHigh: killRange.high.order, killHighV: formatRate(killRange.highV), killHighN: outcomeBlocks(counts(killRange.high), 'red').assassination.n,
+            redLow: missionRange.low.order, redLowV: formatRate(missionRange.lowV), redLowN: missionRange.low.total,
+            redHigh: missionRange.high.order, redHighV: formatRate(missionRange.highV), redHighN: missionRange.high.total,
           })}
-        </div>
-      </motion.div>
-
-      {/* Per-permutation outcome distribution stacked bar */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-      >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.seatOrder.outcomeTitle')}</h3>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={outcomeData}>
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#d1d5db' }} />
-            {/* The three shares are rounded to 0.1 each and can add up to 100.1: keep the axis at 0–100. */}
-            <YAxis
-              domain={[0, 100]}
-              allowDataOverflow
-              tick={{ fontSize: 11, fill: '#9ca3af' }}
-              tickFormatter={(v: number) => `${Math.round(v)}%`}
-            />
-            <Tooltip
-              formatter={(val: unknown) => `${val}%`}
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-              itemStyle={{ color: '#d1d5db' }}
-            />
-            <Legend />
-            <Bar dataKey="threeRed"        name={t('analytics.deep.outcomes.threeRed')}       fill={RED}        stackId="a" />
-            <Bar dataKey="threeBlueDead"   name={t('analytics.deep.outcomes.threeBlueDead')}  fill={BLUE_DEAD}  stackId="a" />
-            <Bar dataKey="threeBlueAlive"  name={t('analytics.deep.outcomes.threeBlueAlive')} fill={BLUE_ALIVE} stackId="a" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </motion.div>
-
-      {/* Interleaving table */}
-      {hasInterleave && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-        >
-          <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.seatOrder.interleaveTitle')}</h3>
-          <p className="text-[10px] text-gray-600 mb-3">{t('analytics.deep.seatOrder.interleaveSub')}</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-700">
-                  <th className="text-left  py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.permCol')}</th>
-                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.gamesLabel')}</th>
-                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveCount')}</th>
-                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveRateCol')}</th>
-                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.interleaveRedRate')}</th>
-                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.noInterleaveRedRate')}</th>
-                  <th className="text-right py-2 px-2 text-gray-400">{t('analytics.deep.seatOrder.overallRedRate')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.permutations.map(p => (
-                  <tr key={p.order} className="border-b border-gray-800">
-                    <td className="py-2 px-2 text-white font-bold">{p.order}</td>
-                    <td className="py-2 px-2 text-right text-gray-300">{p.total}</td>
-                    <td className="py-2 px-2 text-right text-purple-400">{p['穿插任務']}</td>
-                    <td className="py-2 px-2 text-right text-purple-400">{p['穿插率']}%</td>
-                    <RedRateCell value={p['穿插紅勝率']} />
-                    <RedRateCell value={p['無穿插紅勝率']} />
-                    <RedRateCell value={p.redWinRate} />
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
+        </p>
       )}
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-      >
-        <h3 className="text-sm font-bold text-gray-400 mb-2">{t('analytics.deep.seatOrder.conclusionTitle')}</h3>
-        <ul className="text-xs text-gray-300 space-y-2 list-disc list-inside">
-          <li>{t('analytics.deep.seatOrder.concl1')}</li>
-          <li>{t('analytics.deep.seatOrder.concl2')}</li>
-          <li>{t('analytics.deep.seatOrder.concl3')}</li>
-        </ul>
-      </motion.div>
     </div>
   );
 }
