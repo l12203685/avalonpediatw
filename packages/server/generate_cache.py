@@ -20,6 +20,9 @@ Configuration (environment variables, all optional, checked in this order):
     AVALON_STATS_SHEET_ID          spreadsheet id (default: SHEET_ID below)
     AVALON_STATS_AS_OF             leaderboard reference day YYYY-MM-DD (default:
                                    today in Taiwan, +08); set it to reproduce a run
+    player_aliases.json (next to this script, owner-directed data): {"aliases": {old
+    spelling: official name}}: the two are one player, shown under the official name
+    (load_player_aliases; docs/stats/two_stage_outcome.md 玩家別名). No file = no aliases.
 
 Where each top-level section comes from:
     refreshed from the Sheet  overview, players, playerDetails, missions, lake,
@@ -28,7 +31,10 @@ Where each top-level section comes from:
                               玩1..玩0, see compute_player_stats, names that
                               differ only by letter case / full- or half-width
                               being one player (canonicalize_player_names,
-                              shown with their most-used spelling); leaderboard =
+                              shown with their most-used spelling), and so are
+                              the names player_aliases.json links (shown with
+                              the official name; players.aliases lists them for
+                              the readers, see load_player_aliases); leaderboard =
                               the boards of compute_leaderboard over each
                               player's last N games, constants in
                               LEADERBOARD_CONFIG) and chemistry (同贏 / 同輸 /
@@ -96,8 +102,8 @@ in the repo; compute_player_stats reproduces its formulas (see the comment
 there and test_generate_cache.py). Its outcomes were re-derived from the mission
 strings instead of 結果; this script uses 結果 (see OUTCOMES).
 
-Exit codes: 0 ok, 2 credentials misconfigured, 3 Google refused access
-(auth / sheet not shared / not found), 4 data check failed, nothing written.
+Exit codes: 0 ok, 2 configuration (credentials, AVALON_STATS_AS_OF, player_aliases.json),
+3 Google refused access (auth / sheet not shared / not found), 4 data check failed, nothing written.
 """
 
 from __future__ import annotations
@@ -138,6 +144,8 @@ CREDENTIALS_PATH = DEFAULT_CREDENTIALS_PATH  # kept for anyone importing the old
 SHEET_ID = "174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU"
 OUTPUT_PATH = Path(__file__).parent / "analysis_cache.json"
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
+# Owner-directed player aliases (source spelling -> official name), see load_player_aliases.
+ALIASES_PATH = Path(__file__).resolve().parent / "player_aliases.json"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 ENV_CREDENTIALS_FILE = "AVALON_STATS_CREDENTIALS_FILE"
@@ -171,6 +179,8 @@ CHEMISTRY_MATRICES = ("coWin", "coLose", "winCorr", "coWinMinusLose")
 # pair (the same ~46% everywhere) and no marker; the server drops those (sheetsAnalysis.ts).
 SEAT_OUTCOMES_SOURCE_KEY = "seatOutcomesSource"
 OUTCOME_SOURCE_GAMES = "games"
+# players.aliases: {source spelling: official name} of player_aliases.json (compute_players_endpoint).
+PLAYER_ALIASES_KEY = "aliases"
 
 # Sanity guard: allowed drop vs. the existing cache = max(ABS, PCT% of it).
 SHRINK_TOLERANCE_ABS = 5
@@ -597,15 +607,156 @@ def player_name_key(name: object) -> str:
     return " ".join(text.split()).lower()
 
 
+# ---------------------------------------------------------------------------
+# Player aliases (player_aliases.json): the owner says two names are one player
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class PlayerAliases:
+    """Spellings the owner says belong to another player, shown under that player's official name
+    from then on (player_aliases.json, Edward 2026-10-14; real names live only in that file).
+
+    `names`: source spelling -> official spelling (as written, tidied like a 玩1..玩0 cell);
+    `keys`: the same by player_name_key (so every case / width variant of a source counts);
+    `official`: official name's key -> its spelling. identity_key = who a player is with them.
+    Built by parse_player_aliases (the file, strict) or cache_aliases (players.aliases, lenient).
+    """
+
+    names: Mapping[str, str] = field(default_factory=dict)
+    keys: Mapping[str, str] = field(default_factory=dict)
+    official: Mapping[str, str] = field(default_factory=dict)
+
+    def identity_key(self, name: object) -> str:
+        """player_name_key, or the official name's key when the name is an alias source."""
+        key = player_name_key(name)
+        return self.keys.get(key, key)
+
+
+NO_ALIASES = PlayerAliases()
+
+
+def _alias_entry(i: int, source: object, target: object, show_names: bool) -> str:
+    return f"aliases entry {i}" + (f" ({source!r}: {target!r})" if show_names else "")
+
+
+def parse_player_aliases(data: Any, show_names: bool = True) -> PlayerAliases:
+    """The aliases of a player_aliases.json document ({"aliases": {source: official name}}), or
+    ValueError saying what is wrong. Each entry: two non-empty names (spaces and zero-width
+    characters tidied as in 玩1..玩0) that are not already one player (same player_name_key); one
+    official name per source; an official name is no entry's source (no chains: point every old
+    spelling straight at the official name) and is spelled one way. `show_names` False (GitHub
+    Actions, a public log): entries are given by number only."""
+    if not isinstance(data, Mapping):
+        raise ValueError("the top level is not a JSON object")
+    raw = data.get("aliases")
+    if not isinstance(raw, Mapping):
+        raise ValueError('"aliases" is missing or is not an object of "source spelling": "official name"')
+    names: dict[str, str] = {}
+    keys: dict[str, str] = {}
+    official: dict[str, str] = {}
+    for i, (source, target) in enumerate(raw.items(), 1):
+        entry = _alias_entry(i, source, target, show_names)
+        if not isinstance(source, str) or not isinstance(target, str):
+            raise ValueError(f"{entry}: both names must be strings")
+        src, dst = normalize_player_name(source), normalize_player_name(target)
+        src_key, dst_key = player_name_key(src), player_name_key(dst)
+        if not src_key or not dst_key:
+            raise ValueError(f"{entry}: a name is empty")
+        if src_key == dst_key:
+            raise ValueError(f"{entry}: both names are one player already (they differ only by letter case / width)")
+        if keys.get(src_key, dst_key) != dst_key:
+            raise ValueError(f"{entry}: another entry gives this name a different official name")
+        if official.get(dst_key, dst) != dst:
+            raise ValueError(f"{entry}: another entry spells this official name differently; use one spelling")
+        names[src], keys[src_key], official[dst_key] = dst, dst_key, dst
+    for i, (source, target) in enumerate(raw.items(), 1):
+        if player_name_key(normalize_player_name(target)) in keys:
+            raise ValueError(f"{_alias_entry(i, source, target, show_names)}: the official name is itself an alias "
+                             "(the source of another entry); point every old spelling straight at the official name")
+    return PlayerAliases(names=names, keys=keys, official=official)
+
+
+def load_player_aliases(path: Path | None = None, show_names: bool | None = None) -> PlayerAliases:
+    """The aliases in `path` (default ALIASES_PATH, packages/server/player_aliases.json). No file = no
+    aliases; a file that cannot be read or is malformed (parse_player_aliases) is a FatalError (exit 2,
+    nothing written). Names appear in the message only outside GitHub Actions."""
+    path = ALIASES_PATH if path is None else path
+    show = (not _in_github_actions()) if show_names is None else show_names
+    if not path.exists():
+        return NO_ALIASES
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise FatalError(
+            f"{path.name} cannot be read ({type(exc).__name__}: {_short(exc, 120)}); fix the JSON (see its "
+            "_comment) or restore it from git.", EXIT_CONFIG, "Player alias file unreadable",
+        ) from None
+    try:
+        return parse_player_aliases(data, show)
+    except ValueError as exc:
+        raise FatalError(
+            f"{path.name}: {exc}. See its _comment and docs/stats/two_stage_outcome.md (玩家別名).",
+            EXIT_CONFIG, "Player alias file malformed",
+        ) from None
+
+
+@functools.lru_cache(maxsize=None)
+def default_player_aliases() -> PlayerAliases:
+    """load_player_aliases() of the repo's file, read once per process."""
+    return load_player_aliases()
+
+
+def player_identity_key(name: object, aliases: PlayerAliases | None = None) -> str:
+    """Who a player is once the owner's aliases apply: player_name_key, or its official name's key
+    when the name is an alias source ('Tovo Wren' -> 'ilse marr' for {"Tovo Wren": "Ilse Marr"}).
+    `aliases` None = player_aliases.json (default_player_aliases). discord_records_import.py tells
+    players apart by this; canonicalize_player_names groups by it."""
+    return (default_player_aliases() if aliases is None else aliases).identity_key(name)
+
+
+def cache_aliases(*caches: Mapping[str, Any] | None) -> PlayerAliases:
+    """The players.aliases of `caches` ({source: official name}, written by build_cache) as one
+    PlayerAliases, leniently: entries that are not two different non-empty names are skipped, and
+    names linked through several entries (an official name another cache lists as a source, or the
+    owner swapping which name is official) all get one key. For the guards and carry-over, which
+    match an existing cache's names to a new one's: a player merged by an alias lost nobody's games."""
+    names: dict[str, str] = {}
+    for cache in caches:
+        section = cache.get("players") if isinstance(cache, Mapping) else None
+        raw = section.get("aliases") if isinstance(section, Mapping) else None
+        if isinstance(raw, Mapping):
+            names.update((s, t) for s, t in raw.items() if isinstance(s, str) and isinstance(t, str))
+    parent: dict[str, str] = {}
+
+    def root(key: str) -> str:
+        while parent.get(key, key) != key:
+            key = parent[key]
+        return key
+
+    for source, target in names.items():
+        a, b = root(player_name_key(source)), root(player_name_key(target))
+        if a and b and a != b:
+            parent[a] = b
+    keys = {k: root(k) for k in parent}
+    return PlayerAliases(names=names, keys={k: r for k, r in keys.items() if k != r})
+
+
 @dataclass
 class NameMerge:
     """How canonicalize_player_names folded spellings: key -> the spelling shown."""
 
+    # player_name_key -> the spelling shown (an alias source's key: its official name)
     display: dict[str, str] = field(default_factory=dict)
-    spellings: dict[str, int] = field(default_factory=dict)  # key -> distinct spellings seen (>= 1)
+    spellings: dict[str, int] = field(default_factory=dict)  # player_name_key -> distinct spellings seen (>= 1)
     # Games that list one player (one key, e.g. "Nova" and "ｎｏｖａ") on two or more seats: a typo in
     # 玩1..玩0 that the merge turns into one player playing twice. Counted for the log only.
     doubled_games: int = 0
+    # player_aliases.json: the player_name_key of each alias source seen in the games -> its official
+    # name's key (those names now show the official name). Counted for the log only.
+    aliased: dict[str, str] = field(default_factory=dict)
+    # The aliases whose official name is a player of these games ({source: official name}, file
+    # order): build_cache writes them as players.aliases for the readers (bots, API, website search).
+    aliases: dict[str, str] = field(default_factory=dict)
 
     @property
     def merged_players(self) -> int:
@@ -617,6 +768,16 @@ class NameMerge:
         """Spellings folded into another one (= how many fewer players there are)."""
         return sum(n - 1 for n in self.spellings.values() if n > 1)
 
+    @property
+    def aliased_names(self) -> int:
+        """Alias sources (by player_name_key) found in the games: now shown under their official name."""
+        return len(self.aliased)
+
+    @property
+    def aliased_players(self) -> int:
+        """The players those names belong to."""
+        return len(set(self.aliased.values()))
+
     def summary(self) -> str:
         """Counts only (public logs)."""
         if not self.merged_spellings:
@@ -624,24 +785,33 @@ class NameMerge:
         else:
             text = (f"{self.merged_spellings} spelling(s) that differ only by letter case / full- or half-width "
                     f"folded into {self.merged_players} player(s)")
+        if self.aliased:
+            text += (f"; {self.aliased_names} name(s) shown under their official name "
+                     f"({ALIASES_PATH.name}, {self.aliased_players} player(s))")
         if self.doubled_games:
             text += f"; {self.doubled_games} game(s) list one player on two seats (check 玩1..玩0)"
         return text
 
 
-def canonicalize_player_names(games: list[GameRow]) -> tuple[list[GameRow], NameMerge]:
+def canonicalize_player_names(
+    games: list[GameRow], aliases: PlayerAliases = NO_ALIASES,
+) -> tuple[list[GameRow], NameMerge]:
     """`games` with every 玩1..玩0 name replaced by its player's display spelling.
 
-    Names with the same player_name_key are one player. The display spelling is the one written
-    on the most seats of `games` (every game, with or without a 結果), ties going to the one seen
-    first in log order (牌譜 rows, then Discord匯入). Every per-player number (players,
-    playerDetails, leaderboard, seat / role stats, theory) is aggregated from these names, so
-    they all merge the same way. Games whose names change are copied; the input is untouched.
-    Idempotent: canonical games come back unchanged.
+    Names with the same player_identity_key are one player: the same player_name_key (letter case /
+    width), and with `aliases` (player_aliases.json; run() passes load_player_aliases()) an alias
+    source and its official name. The display spelling is the official name when the player has one
+    (the owner's choice beats the most-written spelling), else the one written on the most seats of
+    `games` (every game, with or without a 結果), ties going to the one seen first in log order (牌譜
+    rows, then Discord匯入). Every per-player number (players, playerDetails, leaderboard, seat / role
+    stats, theory) is aggregated from these names, so they all merge the same way. Games whose names
+    change are copied; the input is untouched. Idempotent: canonical games come back unchanged (the
+    same list).
     """
-    counts: dict[str, Counter] = {}
+    counts: dict[str, Counter] = {}  # identity key -> spelling -> seats
+    by_name_key: dict[str, set[str]] = {}  # player_name_key -> spellings
     first_seen: dict[str, int] = {}
-    order = 0
+    aliased: dict[str, str] = {}
     doubled = 0
     for g in games:
         keys: set[str] = set()
@@ -650,28 +820,38 @@ def canonicalize_player_names(games: list[GameRow]) -> tuple[list[GameRow], Name
             name = g.seat_players.get(seat)
             if not name:
                 continue
-            key = player_name_key(name)
+            name_key = player_name_key(name)
+            key = aliases.keys.get(name_key, name_key)
+            if key != name_key:
+                aliased[name_key] = key
             keys.add(key)
             seated += 1
             counts.setdefault(key, Counter())[name] += 1
-            if name not in first_seen:
-                first_seen[name] = order
-                order += 1
+            by_name_key.setdefault(name_key, set()).add(name)
+            first_seen.setdefault(name, len(first_seen))
         doubled += len(keys) < seated
-    merge = NameMerge(doubled_games=doubled)
-    for key, spellings in counts.items():
-        merge.display[key] = min(spellings, key=lambda s: (-spellings[s], first_seen[s]))
-        merge.spellings[key] = len(spellings)
-    if not merge.merged_spellings:
-        return games, merge
+    merge = NameMerge(doubled_games=doubled, aliased=aliased)
+    shown = {
+        key: aliases.official.get(key) or min(spellings, key=lambda s: (-spellings[s], first_seen[s]))
+        for key, spellings in counts.items()
+    }
+    for name_key, spellings in by_name_key.items():
+        merge.display[name_key] = shown[aliases.keys.get(name_key, name_key)]
+        merge.spellings[name_key] = len(spellings)
+    for source_key, key in aliases.keys.items():  # a source missing from the games (a chemistry label)
+        if key in shown:
+            merge.display.setdefault(source_key, shown[key])
+    merge.aliases = {s: t for s, t in aliases.names.items() if aliases.identity_key(s) in shown}
     out: list[GameRow] = []
+    changed = False
     for g in games:
         renamed = {seat: merge.display[player_name_key(name)] for seat, name in g.seat_players.items()}
         if renamed != g.seat_players:
             g = copy.copy(g)
             g.seat_players = renamed
+            changed = True
         out.append(g)
-    return out, merge
+    return (out if changed else games), merge
 
 
 _DATE_RE = re.compile(r"^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2})(?!\d)")
@@ -2563,10 +2743,16 @@ def compute_rounds(games: list[GameRow]) -> dict:
     }
 
 
-def compute_players_endpoint(players: list[dict]) -> dict:
-    """The players section: GET /api/analysis/players serves {players, total}; seatOutcomesSource
-    marks the rows' seatOutcomes as counted from their own games (compute_seat_outcomes_per_player)."""
-    return {"players": players, "total": len(players), SEAT_OUTCOMES_SOURCE_KEY: OUTCOME_SOURCE_GAMES}
+def compute_players_endpoint(players: list[dict], aliases: Mapping[str, str] | None = None) -> dict:
+    """The players section: GET /api/analysis/players serves {players, total, aliases}; seatOutcomesSource
+    marks the rows' seatOutcomes as counted from their own games (compute_seat_outcomes_per_player).
+    `aliases` (NameMerge.aliases: {source spelling: official name} of player_aliases.json, only those
+    whose official name is one of `players`) is written as players.aliases when there are any, so the
+    bots, the API and the website find a player by an old name without reading the alias file."""
+    section = {"players": players, "total": len(players), SEAT_OUTCOMES_SOURCE_KEY: OUTCOME_SOURCE_GAMES}
+    if aliases:
+        section[PLAYER_ALIASES_KEY] = dict(aliases)
+    return section
 
 
 def compute_player_details(players: list[dict]) -> dict[str, dict]:
@@ -3361,17 +3547,21 @@ def refresh_feature_studies(previous: Mapping[str, Any] | None, games: list[Game
 # Assemble the cache: Sheet sections + derived + carried-over sections
 # ---------------------------------------------------------------------------
 
-def build_cache(games: list[GameRow], chemistry: dict, as_of: dt.date | None = None) -> dict:
+def build_cache(
+    games: list[GameRow], chemistry: dict, as_of: dt.date | None = None, aliases: PlayerAliases = NO_ALIASES,
+) -> dict:
     """The sections computed from the Sheet (SHEET_SECTIONS); players come from the 牌譜 game log.
 
     `as_of` is the leaderboard's reference day (resolve_as_of: AVALON_STATS_AS_OF or today +08);
     a game dated after it counts as undated (drop_dates_after). Player names that differ only by
-    letter case / width are one player (canonicalize_player_names; run() has done it already, it
-    is idempotent) and the chemistry labels get the same spellings (canonicalize_chemistry).
+    letter case / width are one player, and so are an alias source of `aliases` (player_aliases.json;
+    run() passes load_player_aliases()) and its official name (canonicalize_player_names; run() has
+    done it already, it is idempotent); the chemistry labels get the same spellings
+    (canonicalize_chemistry) and players.aliases lists the aliases whose official name is a player.
     """
     as_of = as_of or resolve_as_of()
     games, _ = drop_dates_after(games, as_of)
-    games, names = canonicalize_player_names(games)
+    games, names = canonicalize_player_names(games, aliases)
     canonicalize_chemistry(chemistry, names.display)
     players = compute_player_stats(games)
     overview = compute_overview(games, players)
@@ -3386,7 +3576,7 @@ def build_cache(games: list[GameRow], chemistry: dict, as_of: dt.date | None = N
 
     return {
         "overview": overview,
-        "players": compute_players_endpoint(players),
+        "players": compute_players_endpoint(players, names.aliases),
         "playerDetails": compute_player_details(players),
         "chemistry": chemistry,
         "missions": compute_missions(games),
@@ -3430,8 +3620,9 @@ def carry_over_sections(
     """Copy into new_cache every top-level section of `previous` it does not have.
 
     Existing per-player rows are kept as they are, except that rows filed under another spelling
-    of a current player (an older cache had 'Nova' and 'NOVA'; the players are merged now, see
-    fold_per_player_rows) move to that player's name; players in the new
+    of a current player (an older cache had 'Nova' and 'NOVA'; the players are merged now, or an
+    old name the new cache's players.aliases maps to an official one; see fold_per_player_rows)
+    move to that player's name; players in the new
     playerDetails that a carried section lacks get that section's placeholder
     row (hasData=false). `previous` is not modified.
     Returns {section: number of placeholder rows added}.
@@ -3441,13 +3632,14 @@ def carry_over_sections(
         return carried
     builders = placeholder_builders or {}
     details = new_cache.get("playerDetails") or {}
+    aliases = cache_aliases(new_cache)
     for key, value in previous.items():
         if key in new_cache:
             continue
         added = 0
         builder = builders.get(key)
         if isinstance(value, dict) and isinstance(value.get("perPlayer"), dict):
-            value = {**value, "perPlayer": fold_per_player_rows(value["perPlayer"], details)}
+            value = {**value, "perPlayer": fold_per_player_rows(value["perPlayer"], details, aliases)}
         if builder is not None and isinstance(value, dict) and isinstance(value.get("perPlayer"), dict):
             per_player = dict(value["perPlayer"])
             for name, detail in details.items():
@@ -3460,18 +3652,21 @@ def carry_over_sections(
     return carried
 
 
-def fold_per_player_rows(per_player: Mapping[str, Any], players: Mapping[str, Any]) -> dict:
+def fold_per_player_rows(
+    per_player: Mapping[str, Any], players: Mapping[str, Any], aliases: PlayerAliases = NO_ALIASES,
+) -> dict:
     """A carried perPlayer map (archetype / playstyle, built on the owner's PC) with its rows keyed by
     the current player names: a row filed under another spelling of a player in `players` (same
-    player_name_key) moves to that player's name. When several rows land on one player, the one with
+    player_identity_key: same player_name_key, or an alias source of `aliases` and its official
+    name) moves to that player's name. When several rows land on one player, the one with
     data (hasData) and the largest sampleSize wins, the player's own row on a tie; the others are
     dropped (they described part of the games of a player who is now one row). Rows of names that
     match no current player are kept as before. Pure."""
-    current = {player_name_key(n): n for n in players}
+    current = {aliases.identity_key(n): n for n in players}
     chosen: dict[str, Any] = {}
     rank: dict[str, tuple] = {}
     for name, row in per_player.items():
-        target = current.get(player_name_key(name), name)
+        target = current.get(aliases.identity_key(name), name)
         has_data = bool(row.get("hasData")) if isinstance(row, Mapping) else False
         size = row.get("sampleSize") if isinstance(row, Mapping) else None
         size = size if isinstance(size, (int, float)) and not isinstance(size, bool) else 0
@@ -3616,12 +3811,15 @@ def _player_games(cache: Mapping[str, Any] | None) -> dict[str, float]:
     return out
 
 
-def _games_by_player(cache: Mapping[str, Any] | None) -> dict[str, tuple[str, float]]:
-    """{player_name_key: (the spelling with the most games, summed totalGames)} of a cache's players
-    rows: a cache written before names were merged has e.g. 'Nova' and 'NOVA' as two rows."""
+def _games_by_player(
+    cache: Mapping[str, Any] | None, aliases: PlayerAliases = NO_ALIASES,
+) -> dict[str, tuple[str, float]]:
+    """{player_identity_key: (the spelling with the most games, summed totalGames)} of a cache's
+    players rows: a cache written before names were merged has e.g. 'Nova' and 'NOVA' as two rows,
+    and one written before an alias of `aliases` (cache_aliases) has the old and the official name."""
     out: dict[str, tuple[str, float, float]] = {}
     for name, games in _player_games(cache).items():
-        key = player_name_key(name)
+        key = aliases.identity_key(name)
         shown, total, best = out.get(key, (name, 0.0, -1.0))
         if games > best:
             shown, best = name, games
@@ -3629,10 +3827,10 @@ def _games_by_player(cache: Mapping[str, Any] | None) -> dict[str, tuple[str, fl
     return {key: (shown, total) for key, (shown, total, _) in out.items()}
 
 
-def distinct_players(cache: Mapping[str, Any] | None) -> int | None:
-    """How many players a cache has when names that differ only by case / width count once
-    (its players rows), else overview.totalPlayers."""
-    by_player = _games_by_player(cache)
+def distinct_players(cache: Mapping[str, Any] | None, aliases: PlayerAliases = NO_ALIASES) -> int | None:
+    """How many players a cache has when names that differ only by case / width, and the names an
+    alias of `aliases` links, count once (its players rows), else overview.totalPlayers."""
+    by_player = _games_by_player(cache, aliases)
     return len(by_player) if by_player else _count(cache, "overview", "totalPlayers")
 
 
@@ -3643,16 +3841,20 @@ def games_regressions(
     whose game count went down, biggest drop first.
 
     Players are matched by player_name_key, an old cache's spellings of one player summed (so
-    the merge of 'Nova' and 'NOVA' is no regression as long as the merged row has their games).
+    the merge of 'Nova' and 'NOVA' is no regression as long as the merged row has their games),
+    and by the aliases of either cache (players.aliases, cache_aliases): an old name the owner
+    merged into an official one (player_aliases.json) is no lost player while the official
+    name's row has both names' games.
     牌譜 only ever gets games appended, so a player's count never goes down; when it
     does, a game row was deleted or became unreadable, or a 玩1..玩0 name was
     retyped (the old spelling loses games, the new one gains them) -- in 牌譜 by hand, or in a
     Discord匯入 row rewritten from an edited post (explained_by_rewrites).
     """
-    new = _games_by_player(cache)
+    aliases = cache_aliases(previous, cache)
+    new = _games_by_player(cache, aliases)
     out = [
         (name, before, new[key][1] if key in new else None)
-        for key, (name, before) in _games_by_player(previous).items()
+        for key, (name, before) in _games_by_player(previous, aliases).items()
         if key not in new or new[key][1] < before
     ]
     out.sort(key=lambda t: t[1] - (t[2] or 0.0), reverse=True)  # stable: ties keep the old order
@@ -3768,8 +3970,9 @@ def validate_new_cache(
                 f"{shown}{rewrites}. A player's count never goes down while games are only appended to 牌譜; "
                 "a deleted row or a retyped 玩1..玩0 name does this. If intended, re-run with --allow-shrink"
             )
-        # Names that differ only by case / width count once in the old cache too (they are merged now).
-        old_players = distinct_players(previous)
+        # Names that differ only by case / width, or that an alias merges, count once in the old
+        # cache too (they are one player now).
+        old_players = distinct_players(previous, cache_aliases(previous, cache))
         new_players = _count(cache, "overview", "totalPlayers")
         if old_players is not None and new_players is not None:
             # A player whose every game was a corrected spelling is gone: that is no lost player.
@@ -3778,7 +3981,8 @@ def validate_new_cache(
             if old_players - new_players > tolerance:
                 problems.append(
                     f"the new cache has {new_players} players, {old_players - new_players} fewer than the existing "
-                    f"{old_players} (names that differ only by letter case / width counted once; tolerance "
+                    f"{old_players} (names that differ only by letter case / width or that {ALIASES_PATH.name} "
+                    f"merges counted once; tolerance "
                     f"{tolerance}); if rows were removed on purpose, re-run with --allow-shrink"
                 )
         for key in CHEMISTRY_MATRICES:
@@ -3831,12 +4035,17 @@ def compare_summary(
     vanished ones (a vanished one is often a corrected typo of a player id) and the top table."""
     lines = ["### 戰績分析快取：預覽（--compare，未寫入）"]
     old_rows, new_rows = _players_by_name(old), _players_by_name(new)
-    old_keys, new_keys = {player_name_key(n) for n in old_rows}, {player_name_key(n) for n in new_rows}
-    added = [n for n in new_rows if player_name_key(n) not in old_keys]
-    gone = [n for n in old_rows if player_name_key(n) not in new_keys]
-    # Old rows of one player spelled differently (Nova / NOVA): now one row; a count, no names.
-    folded = sum(1 for n in old_rows if n not in new_rows and player_name_key(n) in new_keys)
-    old_games = _games_by_player(old)
+    aliases = cache_aliases(old, new)  # player_aliases.json, as either cache wrote it (players.aliases)
+    old_ids, new_ids = {aliases.identity_key(n) for n in old_rows}, {aliases.identity_key(n) for n in new_rows}
+    added = [n for n in new_rows if aliases.identity_key(n) not in old_ids]
+    gone = [n for n in old_rows if aliases.identity_key(n) not in new_ids]
+    # Old rows of a player now shown under another name: spelled differently (Nova / NOVA), or an
+    # old name an alias merged into the official one. Counts, no names.
+    merged = [n for n in old_rows if n not in new_rows and aliases.identity_key(n) in new_ids]
+    new_keys = {player_name_key(n) for n in new_rows}
+    folded = sum(1 for n in merged if player_name_key(n) in new_keys)
+    aliased = len(merged) - folded
+    old_games = _games_by_player(old, aliases)
     old_ov = (old or {}).get("overview") or {}
     new_ov = new.get("overview") or {}
     lines.append(
@@ -3844,6 +4053,7 @@ def compare_summary(
         + (f"；新增 {len(added)}" + (f"：{_names(added)}" if show_names else "") if old and added else "")
         + (f"；消失 {len(gone)}" + (f"：{_names(gone)}" if show_names else "") if gone else "")
         + (f"；只差大小寫／全半形而併入同一位玩家的舊名字 {folded} 個" if folded else "")
+        + (f"；依 {ALIASES_PATH.name} 併入正式名字的舊名字 {aliased} 個" if aliased else "")
     )
     lines.append(f"- 局數：{_arrow(old_ov.get('totalGames'), new_ov.get('totalGames'))}")
     old_ob, new_ob = old_ov.get("outcomeBreakdown") or {}, new_ov.get("outcomeBreakdown") or {}
@@ -3865,7 +4075,7 @@ def compare_summary(
         lines += ["", f"局數前 {len(top)} 名（舊 → 新）：", "", *head]
         for i, row in enumerate(top, 1):
             prev = old_rows.get(row["name"]) or {}
-            before = old_games.get(player_name_key(row["name"]), (None, prev.get("totalGames")))[1]
+            before = old_games.get(aliases.identity_key(row["name"]), (None, prev.get("totalGames")))[1]
             lines.append(
                 f"| {i} |" + (f" {row['name']} |" if show_names else "") + f" {_arrow(before, row.get('totalGames'))} "
                 f"| {_arrow(prev.get('winRate'), row.get('winRate'), _fmt_rate)} |"
@@ -3987,6 +4197,8 @@ def run(
     as_of = resolve_as_of()
     print(f"Leaderboard as of: {as_of.isoformat()}" + (f" (from {ENV_AS_OF})" if os.environ.get(ENV_AS_OF) else ""))
 
+    aliases = load_player_aliases()  # before the Sheet: a malformed file fails fast (exit 2)
+    print(f"Player aliases ({ALIASES_PATH.name}): {len(aliases.names)}")
     previous = load_previous_cache(output_path, allow_shrink)
     merged, chemistry = fetch_sheet_data(source, sheet_id)
     # Discord匯入 rows rewritten from an edited post (a corrected player id) since the existing cache.
@@ -3996,15 +4208,18 @@ def run(
         print(f"  {future_dated} game(s) have a 日期時間 after {as_of.isoformat()} (mistyped in the Sheet?): "
               "counted as undated until the row is fixed")
     # Before build_cache (which does it too) so that only_the_day_changed replays the same names.
-    games, names = canonicalize_player_names(games)
+    games, names = canonicalize_player_names(games, aliases)
     print(f"  Player names: {names.summary()}")
     name_lines = ([f"- 只差大小寫／全半形的名字：{names.merged_spellings} 個寫法併入 {names.merged_players} 位玩家"]
                   if names.merged_spellings else [])
+    if names.aliased:  # counts only: the names stay out of the public log
+        name_lines.append(f"- {ALIASES_PATH.name} 的別名：{names.aliased_names} 個舊名字改顯示為正式名字"
+                          f"（{names.aliased_players} 位玩家）")
     if names.doubled_games:
         name_lines.append(f"- 同一位玩家同時坐兩個座位的局：{names.doubled_games}（請檢查那幾局的 玩1～玩0）")
 
     print("Computing endpoint responses...")
-    cache, carried = assemble_cache(build_cache(games, chemistry, as_of), previous, games=games, as_of=as_of)
+    cache, carried = assemble_cache(build_cache(games, chemistry, as_of, aliases), previous, games=games, as_of=as_of)
 
     show_names = not _in_github_actions()  # the Actions log and job summary are public
     problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss, rewritten, show_names, rewritten_dups)

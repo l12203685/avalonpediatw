@@ -24,7 +24,9 @@
  *      quotes / brackets, trailing punctuation and zero-width characters dropped,
  *      spaces collapsed)
  *   2. the same player: same playerNameKey (case, full/half width, zero-width,
- *      spacing ignored) — the first such name. Stages 1–2 are findTypedPlayerName;
+ *      spacing ignored) — the first such name; then, with `aliases`, an old name the
+ *      owner says is another player's (player_aliases.json → the cache's
+ *      players.aliases, see aliasTarget): that player. Stages 1–2 are findTypedPlayerName;
  *      the stats API uses findSamePlayerName (the same two steps on the name as
  *      given, without cleanNameQuery)
  *   3. the same ignoring spaces and separators too (compactName: "Quill Fen" = "quillfen")
@@ -35,7 +37,7 @@
  *      every character of the query in order (e.g. a nickname that skips a
  *      character); never picked automatically
  *
- * Pure, no dependencies.
+ * Pure, no dependencies: the alias map comes in as an argument.
  */
 
 /** Max candidates / suggestions listed when a name matches several players. */
@@ -50,6 +52,11 @@ export type NameMatch =
        * written before generate_cache.py merged such names has them.
        */
       caseVariants: string[];
+      /**
+       * The query was this old name of the player (an alias source of the cache's players.aliases,
+       * as written there); `name` is the official name. Absent otherwise.
+       */
+      alias?: string;
     }
   | { kind: 'ambiguous'; query: string; candidates: string[]; total: number }
   | { kind: 'none'; query: string; suggestions?: string[] };
@@ -74,6 +81,40 @@ export function playerNameKey(s: string): string {
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
+}
+
+/**
+ * Owner-directed aliases (packages/server/player_aliases.json, written into analysis_cache.json as
+ * players.aliases by generate_cache.py): old spelling → official name. The cache has merged an old
+ * name's games into the official name's row, so the old name is no row of its own any more.
+ */
+export type PlayerAliases = Readonly<Record<string, string>>;
+
+/** [the alias as written, its official name] when `name` has an alias source's playerNameKey. */
+function aliasEntry(name: string, aliases: PlayerAliases | null | undefined): [string, string] | undefined {
+  if (!aliases || typeof name !== 'string') return undefined;
+  const key = playerNameKey(name);
+  if (!key) return undefined;
+  for (const [source, target] of Object.entries(aliases)) {
+    if (typeof target === 'string' && target !== '' && playerNameKey(source) === key) return [source, target];
+  }
+  return undefined;
+}
+
+/**
+ * The official name of an old name in `aliases` (players.aliases; any case / width of the old
+ * name: "ｔｏｖｏ ｗｒｅｎ" for "Tovo Wren"), else undefined.
+ */
+export function aliasTarget(name: string, aliases?: PlayerAliases | null): string | undefined {
+  return aliasEntry(name, aliases)?.[1];
+}
+
+/**
+ * Who a player is with the owner's aliases (generate_cache.py player_identity_key, the same rule):
+ * playerNameKey of the official name when `name` is an alias source, else of `name`.
+ */
+export function playerIdentityKey(name: string, aliases?: PlayerAliases | null): string {
+  return playerNameKey(aliasTarget(name, aliases) ?? name);
 }
 
 /** The name as the matcher compares it: playerNameKey. */
@@ -163,10 +204,24 @@ function sameKeyName(name: string, names: readonly string[], rank?: (name: strin
   return same.reduce((best, n) => (rank(n) > rank(best) ? n : best));
 }
 
+/** The player in `names` an old name in `aliases` stands for: [the alias as written, that name]. */
+function aliasedName(
+  name: string,
+  names: readonly string[],
+  rank: ((name: string) => number) | undefined,
+  aliases: PlayerAliases | null | undefined,
+): [string, string] | undefined {
+  const entry = aliasEntry(name, aliases);
+  if (!entry) return undefined;
+  const target = names.includes(entry[1]) ? entry[1] : sameKeyName(entry[1], names, rank);
+  return target === undefined ? undefined : [entry[0], target];
+}
+
 /**
  * The name in `names` that IS this player, for names that arrive as data (the stats API's
  * /api/analysis/players/:name and /profile/:name/*, an account's display name): `name` itself
- * when listed, else a name with the same playerNameKey (case / width / zero-width / spacing) —
+ * when listed, else a name with the same playerNameKey (case / width / zero-width / spacing),
+ * else, with `aliases` (the cache's players.aliases), the official name of an old name —
  * never a partial name and no query cleaning: "(Nova)", "@Nova" or "Nova!" are other names for
  * the cache, as for generate_cache.py. Several same-key names (an older cache's Nova / NOVA /
  * nova): the highest `rank` (e.g. games played), else the first in `names`.
@@ -175,44 +230,69 @@ export function findSamePlayerName(
   name: string,
   names: readonly string[],
   rank?: (name: string) => number,
+  aliases?: PlayerAliases | null,
 ): string | undefined {
   if (typeof name !== 'string') return undefined;
   if (names.includes(name)) return name;
-  return sameKeyName(name, names, rank);
+  return sameKeyName(name, names, rank) ?? aliasedName(name, names, rank, aliases)?.[1];
+}
+
+/** findTypedPlayerName, saying whether the hit came through an alias (its source as written). */
+function typedPlayer(
+  query: string,
+  names: readonly string[],
+  rank: ((name: string) => number) | undefined,
+  aliases: PlayerAliases | null | undefined,
+): { name: string; alias?: string } | undefined {
+  if (typeof query !== 'string') return undefined;
+  const forms = queryForms(query);
+  for (const q of forms) {
+    if (names.includes(q)) return { name: q };
+  }
+  for (const q of forms) {
+    const same = sameKeyName(q, names, rank);
+    if (same !== undefined) return { name: same };
+  }
+  for (const q of forms) {
+    const hit = aliasedName(q, names, rank, aliases);
+    if (hit) return { name: hit[1], alias: hit[0] };
+  }
+  return undefined;
 }
 
 /**
  * Stages 1–2 of matchPlayerName, for a name someone typed (bots, website search): the query
  * as typed, then cleaned (cleanNameQuery: @, brackets, trailing punctuation), exactly; then
- * either form's playerNameKey. Never a partial name. /默契 checks this against every player
- * before matching part of a name in the chemistry matrix.
+ * either form's playerNameKey; then, with `aliases` (the cache's players.aliases), the official
+ * name of either form when it is an old name. Never a partial name. /默契 checks this against
+ * every player before matching part of a name in the chemistry matrix.
  */
 export function findTypedPlayerName(
   query: string,
   names: readonly string[],
   rank?: (name: string) => number,
+  aliases?: PlayerAliases | null,
 ): string | undefined {
-  if (typeof query !== 'string') return undefined;
-  const forms = queryForms(query);
-  for (const q of forms) {
-    if (names.includes(q)) return q;
-  }
-  for (const q of forms) {
-    const same = sameKeyName(q, names, rank);
-    if (same !== undefined) return same;
-  }
-  return undefined;
+  return typedPlayer(query, names, rank, aliases)?.name;
 }
 
-/** Resolve a typed name against `names` (see the module comment for the order). */
-export function matchPlayerName(query: string, names: readonly string[]): NameMatch {
+/**
+ * Resolve a typed name against `names` (see the module comment for the order). `aliases`: the
+ * cache's players.aliases (old name → official name); an old name finds the official one, and
+ * the answer's `alias` says which old name it was.
+ */
+export function matchPlayerName(query: string, names: readonly string[], aliases?: PlayerAliases | null): NameMatch {
   const typed = (query ?? '').trim();
   const cleaned = cleanNameQuery(typed);
   if (!cleaned) return { kind: 'none', query: typed };
 
-  // 1–2: this very player (one player even when an older cache spells him several ways).
-  const same = findTypedPlayerName(typed, names);
-  if (same !== undefined) return { kind: 'found', name: same, caseVariants: otherSpellings(same, names) };
+  // 1–2: this very player (one player even when an older cache spells him several ways, or the
+  // query is an old name the owner merged into this one).
+  const same = typedPlayer(typed, names, undefined, aliases);
+  if (same !== undefined) {
+    const found = { kind: 'found' as const, name: same.name, caseVariants: otherSpellings(same.name, names) };
+    return same.alias === undefined ? found : { ...found, alias: same.alias };
+  }
 
   // 3–4: ignoring separators, then part of the name; one candidate per player.
   const nq = normalizeName(cleaned);

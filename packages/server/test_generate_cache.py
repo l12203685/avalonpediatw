@@ -493,6 +493,16 @@ class CarryOverTest(unittest.TestCase):
         self.assertEqual((merged["nova"]["totalGames"], merged["nova"]["r3VotesRed"], merged["nova"]["r3RejectsRed"]), (35, 12, 2))
         self.assertEqual(merged["nova"]["assassinTargetSeatHist"], {"8": 3, "5": 1})
         self.assertEqual(rows["Nova"]["assassinTargetSeatHist"], {"8": 2})  # input untouched
+        # players.aliases of the cache they update (made-up names): an old name's row is its official name's.
+        cache = {"players": {"aliases": {"Tovo Wren": "Ilse Marr", "Bad": 3}}}
+        for script in (arche, panel):
+            self.assertEqual(script.alias_keys(cache), {"tovo wren": "ilse marr"})
+            self.assertEqual(script.alias_keys({}), {})
+        aliased = panel.merge_spellings({"TOVO WREN": row(30, 8, {"8": 2}), "Ilse Marr": row(5, 4, {"5": 1})},
+                                        arche.alias_keys(cache))
+        self.assertEqual(set(aliased), {"ilse marr"})
+        self.assertEqual((aliased["ilse marr"]["totalGames"], aliased["ilse marr"]["assassinTargetSeatHist"]),
+                         (35, {"8": 2, "5": 1}))
 
 
 # ---------------------------------------------------------------------------
@@ -1484,6 +1494,8 @@ class EndToEndTest(unittest.TestCase):
             quiet_env(**{gc.ENV_CREDENTIALS_JSON: json.dumps(FAKE_KEY), gc.ENV_AS_OF: AS_OF.isoformat()}),
             mock.patch.object(gc, "open_spreadsheet", lambda source, sheet_id: FakeSheet(self.tabs)),
             mock.patch.object(gc, "gspread", GSPREAD_STUB),
+            # No aliases unless a test writes this file (the repo's own: PlayerAliasTest).
+            mock.patch.object(gc, "ALIASES_PATH", Path(self.tmp.name) / "aliases" / "player_aliases.json"),
         ]
         for p in self.patches:
             p.start()
@@ -1493,11 +1505,14 @@ class EndToEndTest(unittest.TestCase):
             p.stop()
         self.tmp.cleanup()
 
-    def run_main(self, *args: str, summary: bool = False, as_of: str | None = None) -> tuple[int, str]:
+    def run_main(self, *args: str, summary: bool = False, as_of: str | None = None,
+                 actions: bool = False) -> tuple[int, str]:
         out, err = io.StringIO(), io.StringIO()
         env = {"GITHUB_STEP_SUMMARY": str(self.summary)} if summary else {}
         if as_of:
             env[gc.ENV_AS_OF] = as_of
+        if actions:
+            env["GITHUB_ACTIONS"] = "true"
         with redirect_stdout(out), redirect_stderr(err), mock.patch.dict(os.environ, env):
             rc = gc.main(["--output", str(self.out), *args])
         return rc, out.getvalue() + err.getvalue()
@@ -1598,7 +1613,8 @@ class EndToEndTest(unittest.TestCase):
             for i in range(12)
         ]
         self.tabs["同贏"] = [["", "ECHO", "玩家乙"], ["ECHO", "", "40%"], ["玩家乙", "40%", ""]]
-        no_merge = mock.patch.object(gc, "canonicalize_player_names", lambda games: (games, gc.NameMerge()))
+        no_merge = mock.patch.object(gc, "canonicalize_player_names",
+                                     lambda games, aliases=gc.NO_ALIASES: (games, gc.NameMerge()))
         with no_merge:
             self.assertEqual(self.run_main()[0], 0)
         old = json.loads(self.out.read_text(encoding="utf-8"))
@@ -1623,6 +1639,53 @@ class EndToEndTest(unittest.TestCase):
         rc, log = self.run_main(as_of=(AS_OF + dt.timedelta(days=1)).isoformat())
         self.assertEqual(rc, 0, log)
         self.assertIn("only by the as-of day", log)
+        self.assertEqual(self.out.read_bytes(), merged_bytes)
+
+    def test_alias_file_merges_a_player_on_the_next_refresh(self) -> None:
+        """player_aliases.json gains two old names of a player (made-up names): the next refresh shows
+        their games under the official name, passes the guards, names nobody in the public log and
+        summary, and the day after writes nothing. A malformed file stops the run (exit 2)."""
+        old_names = ["Tovo Wren", "Quill Fen", "Ilse Marr", "Tovo Wren"]
+        self.tabs["牌譜"] = [LOG_HEADERS] + [
+            log_row(f"A{i}", "123456", ("三紅", "三藍活", "三藍死")[i % 3],
+                    [old_names[i % 4], "玩家乙"] + [""] * 8, date=f"2026/10/{i + 1:02d}")
+            for i in range(12)
+        ]
+        alias_file = gc.ALIASES_PATH  # setUp: in the temp dir, not there yet
+        alias_file.parent.mkdir()
+        self.assertEqual(self.run_main()[0], 0)
+        old = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(sorted(old["playerDetails"]), sorted(["Tovo Wren", "Quill Fen", "Ilse Marr", "玩家乙"]))
+        old["archetype"] = {"perPlayer": {"Tovo Wren": {"hasData": True, "sampleSize": 6}}}
+        self.out.write_text(json.dumps(old, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        alias_file.write_text(json.dumps(TEST_ALIASES_DOC), encoding="utf-8")
+        rc, log = self.run_main(summary=True, actions=True)
+        self.assertEqual(rc, 0, log)
+        new = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(sorted(new["playerDetails"]), ["Ilse Marr", "玩家乙"])
+        self.assertEqual(new["players"]["players"][0]["name"], "Ilse Marr")
+        self.assertEqual(new["players"]["players"][0]["totalGames"], 12.0)
+        self.assertEqual(new["players"]["aliases"], {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"})
+        self.assertEqual(new["archetype"]["perPlayer"]["Ilse Marr"], {"hasData": True, "sampleSize": 6})
+        self.assertIn("Player aliases (player_aliases.json): 2", log)
+        self.assertIn("2 name(s) shown under their official name (player_aliases.json, 1 player(s))", log)
+        summary = self.summary.read_text(encoding="utf-8")
+        self.assertIn("player_aliases.json 的別名：2 個舊名字改顯示為正式名字（1 位玩家）", summary)
+        self.assertNotRegex(log + summary, "Tovo|Quill|Ilse")
+        merged_bytes = self.out.read_bytes()
+
+        rc, log = self.run_main(as_of=(AS_OF + dt.timedelta(days=1)).isoformat())
+        self.assertEqual(rc, 0, log)
+        self.assertIn("only by the as-of day", log)
+        self.assertEqual(self.out.read_bytes(), merged_bytes)
+
+        alias_file.write_text('{"aliases": {"Tovo Wren": "Ilse Marr", "Ilse Marr": "Quill Fen"}}',
+                              encoding="utf-8")
+        rc, log = self.run_main(actions=True)
+        self.assertEqual(rc, gc.EXIT_CONFIG, log)
+        self.assertIn("::error title=Player alias file malformed::", log)
+        self.assertNotRegex(log, "Tovo|Quill|Ilse")
         self.assertEqual(self.out.read_bytes(), merged_bytes)
 
     def test_future_dated_game_is_logged_and_undated(self) -> None:
@@ -2372,9 +2435,9 @@ def name_chemistry(labels: list[str]) -> dict:
     return {k: copy.deepcopy(matrix) for k in ("coWin", "coLose", "winCorr", "coWinMinusLose")}
 
 
-def build_named(log: list[list[str]], chemistry: dict) -> dict:
+def build_named(log: list[list[str]], chemistry: dict, aliases: gc.PlayerAliases = gc.NO_ALIASES) -> dict:
     cache, _ = gc.assemble_cache(
-        gc.build_cache(gc.parse_game_log(log), chemistry, as_of=TEST_AS_OF), None,
+        gc.build_cache(gc.parse_game_log(log), chemistry, as_of=TEST_AS_OF, aliases=aliases), None,
         strength_builder=lambda players: {"perPlayer": {}}, placeholder_builders={}, as_of=TEST_AS_OF,
     )
     return cache
@@ -2393,11 +2456,20 @@ class PlayerNameMergeTest(unittest.TestCase):
     def test_key_matches_the_shared_ts_matcher(self) -> None:
         """The same table PlayerNameLookup.test.ts checks @avalon/shared playerNameKey against: the bots,
         the website search and the stats API find a player by exactly the key the cache merged him by."""
-        cases = json.loads(NAME_KEY_CASES.read_text(encoding="utf-8"))["cases"]
+        fixture = json.loads(NAME_KEY_CASES.read_text(encoding="utf-8"))
+        cases = fixture["cases"]
         self.assertGreater(len(cases), 20)
         for case in cases:
             with self.subTest(name=case["input"]):
                 self.assertEqual(gc.player_name_key(case["input"]), case["key"])
+        # player_aliases.json: the same table checks @avalon/shared playerIdentityKey / aliasTarget.
+        aliases = gc.parse_player_aliases({"aliases": fixture["aliases"]})
+        self.assertGreater(len(fixture["aliasCases"]), 8)
+        for case in fixture["aliasCases"]:
+            with self.subTest(alias=case["input"]):
+                self.assertEqual(gc.player_identity_key(case["input"], aliases), case["identityKey"])
+                official = aliases.official.get(aliases.keys.get(gc.player_name_key(case["input"]), ""))
+                self.assertEqual(official, case["official"])
 
     def test_display_is_the_most_used_spelling_ties_go_to_the_first_seen(self) -> None:
         games = gc.parse_game_log(name_log(variant_names))
@@ -2534,6 +2606,214 @@ class PlayerNameMergeTest(unittest.TestCase):
         merged, names = gc.canonicalize_player_names(games)
         self.assertEqual((len(spellings), names.merged_players, names.merged_spellings), (198, 22, 27))
         self.assertEqual(len(gc.compute_player_stats(merged)), 198 - 27)
+
+
+# ---------------------------------------------------------------------------
+# Player aliases: the owner says two names are one player (player_aliases.json, Edward 2026-10-14)
+# ---------------------------------------------------------------------------
+
+# Made-up names only: Tovo Wren and Quill Fen are old names of Ilse Marr.
+TEST_ALIASES_DOC = {"_comment": "test", "aliases": {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"}}
+
+
+def sample_aliases() -> gc.PlayerAliases:
+    return gc.parse_player_aliases(TEST_ALIASES_DOC)
+
+
+def alias_names(i: int) -> list[str]:
+    """Seat names of game S<i>: seat 1 is Ilse Marr, typed as her old names (Tovo Wren, also upper-cased
+    with a double space, and Quill Fen) and as her official name in lower case; seat 2 as in variant_names."""
+    one = ("Tovo Wren", "ilse marr", "TOVO  WREN", "Quill Fen")[i % 4]
+    return [one] + variant_names(i)[1:]
+
+
+def official_names(i: int) -> list[str]:
+    return ["Ilse Marr"] + variant_names(i)[1:]
+
+
+class PlayerAliasTest(unittest.TestCase):
+    def test_parse_and_identity_key(self) -> None:
+        aliases = sample_aliases()
+        self.assertEqual(dict(aliases.names), {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"})
+        self.assertEqual(dict(aliases.keys), {"tovo wren": "ilse marr", "quill fen": "ilse marr"})
+        self.assertEqual(dict(aliases.official), {"ilse marr": "Ilse Marr"})
+        for spelling in ("Tovo Wren", "ＴＯＶＯ　ｗｒｅｎ", " tovo  wren ", "Quill Fen", "QUILL FEN", "Ilse Marr", "ilse marr"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(gc.player_identity_key(spelling, aliases), "ilse marr")
+        self.assertEqual(gc.player_identity_key("Nova", aliases), "nova")
+        self.assertEqual(gc.player_identity_key("Tovo", aliases), "tovo")  # part of an alias: someone else
+        self.assertEqual(gc.player_identity_key("Tovo Wren", gc.NO_ALIASES), "tovo wren")
+        tidy = gc.parse_player_aliases({"aliases": {" Tovo​  Wren ": "Ilse　Marr"}})
+        self.assertEqual(dict(tidy.names), {"Tovo Wren": "Ilse Marr"})  # tidied like a 玩1..玩0 cell
+
+    def test_malformed_documents_are_refused(self) -> None:
+        bad = [
+            ([], "the top level is not a JSON object"),
+            ({"_comment": "x"}, '"aliases" is missing'),
+            ({"aliases": ["Tovo Wren", "Ilse Marr"]}, '"aliases" is missing or is not an object'),
+            ({"aliases": {"Tovo Wren": 7}}, "aliases entry 1 ('Tovo Wren': 7): both names must be strings"),
+            ({"aliases": {"Tovo Wren": "  "}}, "a name is empty"),
+            ({"aliases": {"Tovo Wren": "ＴＯＶＯ ＷＲＥＮ"}}, "both names are one player already"),
+            ({"aliases": {"Tovo Wren": "Ilse Marr", "TOVO WREN": "Quill Fen"}},
+             "aliases entry 2 ('TOVO WREN': 'Quill Fen'): another entry gives this name a different official name"),
+            ({"aliases": {"Tovo Wren": "Ilse Marr", "Quill Fen": "ILSE MARR"}}, "spells this official name differently"),
+            ({"aliases": {"Tovo Wren": "Ilse Marr", "Ilse Marr": "Quill Fen"}},
+             "aliases entry 1 ('Tovo Wren': 'Ilse Marr'): the official name is itself an alias"),
+        ]
+        for doc, message in bad:
+            with self.subTest(doc=doc):
+                with self.assertRaises(ValueError) as caught:
+                    gc.parse_player_aliases(doc)
+                self.assertIn(message, str(caught.exception))
+                if isinstance(doc, dict) and isinstance(doc.get("aliases"), dict):
+                    with self.assertRaises(ValueError) as public:
+                        gc.parse_player_aliases(doc, show_names=False)
+                    self.assertNotRegex(str(public.exception), "Tovo|Ilse|Quill|TOVO|ILSE")
+        same_target = gc.parse_player_aliases({"aliases": {"Tovo Wren": "Ilse Marr", "TOVO WREN": "Ilse Marr"}})
+        self.assertEqual(dict(same_target.keys), {"tovo wren": "ilse marr"})  # a repeated source is fine
+
+    def test_load_missing_unreadable_and_malformed_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "player_aliases.json"
+            self.assertIs(gc.load_player_aliases(path), gc.NO_ALIASES)  # no file = no aliases
+            path.write_text(json.dumps(TEST_ALIASES_DOC), encoding="utf-8")
+            self.assertEqual(gc.load_player_aliases(path), sample_aliases())
+            path.write_text('{"aliases": {"Tovo Wren": "Ilse Marr",}}', encoding="utf-8")
+            with self.assertRaises(gc.FatalError) as caught:
+                gc.load_player_aliases(path)
+            self.assertEqual((caught.exception.exit_code, caught.exception.title),
+                             (gc.EXIT_CONFIG, "Player alias file unreadable"))
+            self.assertIn("player_aliases.json cannot be read (JSONDecodeError", str(caught.exception))
+            path.write_text(json.dumps({"aliases": {"Tovo Wren": "Ilse Marr", "Ilse Marr": "Quill Fen"}}),
+                            encoding="utf-8")
+            with quiet_env(GITHUB_ACTIONS="true"), self.assertRaises(gc.FatalError) as public:
+                gc.load_player_aliases(path)
+            self.assertEqual((public.exception.exit_code, public.exception.title),
+                             (gc.EXIT_CONFIG, "Player alias file malformed"))
+            self.assertIn("aliases entry 1: the official name is itself an alias", str(public.exception))
+            self.assertNotRegex(str(public.exception), "Tovo|Ilse|Quill")  # public log: no names
+            with quiet_env(), self.assertRaises(gc.FatalError) as local:
+                gc.load_player_aliases(path)
+            self.assertIn("'Tovo Wren'", str(local.exception))
+
+    def test_the_repo_alias_file_is_valid(self) -> None:
+        """packages/server/player_aliases.json (owner-directed): loads, and every official name is a
+        name nobody is an alias of."""
+        aliases = gc.load_player_aliases(gc.ALIASES_PATH)
+        self.assertTrue(aliases.names)
+        doc = json.loads(gc.ALIASES_PATH.read_text(encoding="utf-8"))
+        self.assertIsInstance(doc.get("_comment"), str)
+        for target_key in aliases.official:
+            self.assertNotIn(target_key, aliases.keys)
+
+    def test_two_old_names_merge_into_the_official_name(self) -> None:
+        """Typed under two old names (and the official one in lower case) or always as the official
+        name: the same cache, byte for byte, except players.aliases."""
+        chemistry = name_chemistry(["QUILL FEN", "KITE", "丙"])
+        typed = build_named(name_log(alias_names), chemistry, sample_aliases())
+        clean = build_named(name_log(official_names), name_chemistry(["Ilse Marr", "kite", "丙"]))
+        self.assertEqual(typed["players"].pop("aliases"), {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"})
+        self.assertNotIn("aliases", clean["players"])
+        self.assertEqual(json.dumps(typed, ensure_ascii=False, sort_keys=True),
+                         json.dumps(clean, ensure_ascii=False, sort_keys=True))
+        rows = {p["name"]: p for p in typed["players"]["players"]}
+        self.assertEqual(rows["Ilse Marr"]["totalGames"], 110.0)  # the official spelling, not the most-written
+        self.assertFalse({"Tovo Wren", "Quill Fen", "ilse marr", "TOVO WREN"} & set(rows))
+        self.assertEqual(typed["chemistry"]["coWin"]["players"], ["Ilse Marr", "kite", "丙"])
+
+        games = gc.parse_game_log(name_log(alias_names))
+        merged, names = gc.canonicalize_player_names(games, sample_aliases())
+        self.assertEqual({g.seat_players["1"] for g in merged if g.id.startswith("S")}, {"Ilse Marr"})
+        self.assertEqual((names.aliased_names, names.aliased_players), (2, 1))  # tovo wren, quill fen
+        self.assertEqual((names.merged_players, names.merged_spellings), (2, 2))  # Tovo Wren / TOVO WREN, kite / KITE
+        self.assertEqual(names.summary(), "2 spelling(s) that differ only by letter case / full- or half-width "
+                                          "folded into 2 player(s); 2 name(s) shown under their official name "
+                                          "(player_aliases.json, 1 player(s))")
+        self.assertEqual(names.aliases, {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"})
+        self.assertEqual(names.display["quill fen"], "Ilse Marr")
+        again, names2 = gc.canonicalize_player_names(merged, sample_aliases())  # idempotent
+        self.assertIs(again, merged)
+        self.assertEqual((names2.aliased_names, names2.aliases), (0, names.aliases))
+        _, plain = gc.canonicalize_player_names(games)  # without aliases: three players
+        self.assertEqual(plain.aliased_names, 0)
+        self.assertEqual(len({plain.display[gc.player_name_key(g.seat_players["1"])] for g in games
+                              if g.id.startswith("S")}), 3)
+
+    def test_rename_only_and_aliases_of_absent_players(self) -> None:
+        """Only an old name in the games: the player is shown under the official one. An alias whose
+        player has no game stays out of players.aliases."""
+        aliases = gc.parse_player_aliases({"aliases": {"Tovo Wren": "Ilse Marr", "Zed Ash": "Orla Pike"}})
+        cache = build_named(name_log(lambda i: ["Tovo Wren"] + variant_names(i)[1:]), name_chemistry(["丙"]), aliases)
+        names = [p["name"] for p in cache["players"]["players"]]
+        self.assertIn("Ilse Marr", names)
+        self.assertNotIn("Tovo Wren", names)
+        self.assertEqual(cache["players"]["aliases"], {"Tovo Wren": "Ilse Marr"})
+        nobody = build_named(name_log(variant_names), name_chemistry(["丙"]), aliases)
+        self.assertNotIn("aliases", nobody["players"])
+
+    def test_old_and_official_name_in_one_game_is_one_player_twice(self) -> None:
+        def doubled(i: int) -> list[str]:
+            names = official_names(i)
+            return names[:2] + (["Tovo Wren"] if i == 0 else names[2:3]) + names[3:]
+        _, names = gc.canonicalize_player_names(gc.parse_game_log(name_log(doubled)), sample_aliases())
+        self.assertEqual(names.doubled_games, 1)
+
+    def test_guard_passes_when_an_alias_merges_a_player(self) -> None:
+        """The first refresh after an alias was added: the existing file has the old names as players
+        of their own; the new one has one row under the official name and players.aliases."""
+        prev = fake_cache(players=12)
+        prev["players"]["players"] += [{"name": n, "totalGames": g} for n, g in
+                                       (("Tovo Wren", 40.0), ("Quill Fen", 3.0), ("Ilse Marr", 5.0))]
+        prev["overview"]["totalPlayers"] = prev["players"]["total"] = 15
+        new = fake_cache(players=12)
+        new["players"]["players"].append({"name": "Ilse Marr", "totalGames": 49.0})  # one new game
+        new["players"]["aliases"] = {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"}
+        new["overview"]["totalPlayers"] = new["players"]["total"] = 13
+        self.assertEqual(gc.games_regressions(new, prev), [])
+        self.assertEqual(gc.distinct_players(prev, gc.cache_aliases(new)), 13)
+        self.assertEqual(gc.validate_new_cache(new, prev), [])
+        self.assertEqual(gc.validate_new_cache(new, prev, show_names=False), [])
+        lines = gc.compare_summary(new, prev, show_names=False)
+        self.assertIn("依 player_aliases.json 併入正式名字的舊名字 2 個", lines[1])
+        self.assertNotIn("消失", lines[1])
+        self.assertNotRegex("\n".join(lines), "Tovo|Quill|Ilse")
+        self.assertIn("| 1 | 48 → 49 |", "\n".join(lines))  # her games before: the three rows summed
+
+        new["players"]["players"][-1]["totalGames"] = 47.0  # a game lost on top of the merge: refused
+        self.assertEqual(gc.games_regressions(new, prev), [("Tovo Wren", 48.0, 47.0)])
+        self.assertTrue(gc.validate_new_cache(new, prev))
+        new["players"]["players"][-1]["totalGames"] = 49.0
+        del new["players"]["aliases"]  # the same rows without the alias: the old names are lost players
+        problem = next(p for p in gc.validate_new_cache(new, prev) if "existing player" in p)
+        self.assertIn("Tovo Wren 40→gone", problem)
+
+    def test_guard_follows_an_alias_turned_around(self) -> None:
+        """The owner makes the old name the official one again: either cache's players.aliases link them."""
+        prev = fake_cache(players=3)
+        prev["players"]["players"].append({"name": "Ilse Marr", "totalGames": 48.0})
+        prev["players"]["aliases"] = {"Tovo Wren": "Ilse Marr"}
+        new = fake_cache(players=3)
+        new["players"]["players"].append({"name": "Tovo Wren", "totalGames": 48.0})
+        new["players"]["aliases"] = {"Ilse Marr": "Tovo Wren"}
+        self.assertEqual(gc.games_regressions(new, prev), [])
+        self.assertEqual(gc.cache_aliases(prev, new).identity_key("Ilse Marr"),
+                         gc.cache_aliases(prev, new).identity_key("tovo wren"))
+        junk = {"players": {"aliases": {"Tovo Wren": 3, "": "Ilse Marr", "Nova": "NOVA"}}}
+        self.assertEqual(dict(gc.cache_aliases(junk, None, {"players": "x"}).keys), {})  # lenient
+
+    def test_carried_rows_of_an_old_name_follow_the_alias(self) -> None:
+        prev = fake_cache(players=1)
+        prev["archetype"] = {"perPlayer": {
+            "Tovo Wren": {"hasData": True, "sampleSize": 40},
+            "Ilse Marr": {"hasData": True, "sampleSize": 5},
+            "Quill Fen": {"hasData": False, "sampleSize": 3},
+        }}
+        new = fake_cache(players=1)
+        new["playerDetails"] = {"Ilse Marr": {"player": {"totalGames": 49.0}}}
+        new["players"]["aliases"] = {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"}
+        carried = gc.carry_over_sections(new, prev, {"archetype": placeholder})
+        self.assertEqual(carried["archetype"], 0)
+        self.assertEqual(new["archetype"]["perPlayer"], {"Ilse Marr": {"hasData": True, "sampleSize": 40}})
 
 
 class LeaderboardConfigTest(unittest.TestCase):

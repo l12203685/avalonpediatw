@@ -993,8 +993,11 @@ export async function fetchAnalysisOverview(): Promise<AnalysisOverview> {
   return analysisApiFetch<AnalysisOverview>('/overview');
 }
 
-export async function fetchAnalysisPlayers(): Promise<{ players: AnalysisPlayerStats[]; total: number }> {
-  return analysisApiFetch<{ players: AnalysisPlayerStats[]; total: number }>('/players');
+/** `aliases`: 擁有者指定的舊名字 → 正式名字 (player_aliases.json，快取 players.aliases)；舊後端沒有。 */
+export async function fetchAnalysisPlayers(): Promise<{
+  players: AnalysisPlayerStats[]; total: number; aliases?: Record<string, string>;
+}> {
+  return analysisApiFetch<{ players: AnalysisPlayerStats[]; total: number; aliases?: Record<string, string> }>('/players');
 }
 
 export async function fetchAnalysisPlayerByName(name: string): Promise<AnalysisPlayerRadar> {

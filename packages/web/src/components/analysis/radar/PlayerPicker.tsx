@@ -21,7 +21,10 @@ export function filterPlayers(players: AnalysisPlayerStats[], search: string, ma
   const nq = normalizeName(cleaned);
   const cq = compactName(cleaned);
   const hits = players.filter(p => normalizeName(p.name).includes(nq) || (cq !== '' && compactName(p.name).includes(cq)));
-  if (hits.length > 0) return hits;
+  // 舊名字 (match.alias)：名單裡沒有那個字串，列出它代表的那位。
+  const aliased = match?.kind === 'found' && match.alias !== undefined && !hits.some(p => p.name === match.name)
+    ? players.filter(p => p.name === match.name) : [];
+  if (aliased.length + hits.length > 0) return [...aliased, ...hits];
   const suggested = match?.kind === 'none' ? match.suggestions ?? [] : [];
   return players.filter(p => suggested.includes(p.name));
 }

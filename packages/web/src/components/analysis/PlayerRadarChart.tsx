@@ -43,6 +43,8 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
   const { overview } = useAnalysisOverview();
   const settings = useMemo(() => theorySettings(overview?.theoryConfig), [overview?.theoryConfig]);
   const [playerList, setPlayerList] = useState<AnalysisPlayerStats[]>([]);
+  // 舊名字 → 正式名字 (player_aliases.json)：打舊名字也找得到那位。
+  const [aliases, setAliases] = useState<Record<string, string>>({});
   // 排行點名字 / #player= 連結帶進來的玩家優先 (store.openPlayerStats，名單到了再比對)；
   // 沒有才預設場次最多的人。
   const [selectedName, setSelectedName] = useState<string>('');
@@ -59,9 +61,10 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
     let cancelled = false;
     (async (): Promise<void> => {
       try {
-        const { players } = await fetchAnalysisPlayers();
+        const { players, aliases: playerAliases } = await fetchAnalysisPlayers();
         if (!cancelled) {
           setPlayerList(players);
+          setAliases(playerAliases ?? {});
           if (players.length > 0 && !openedWithFocus.current) setSelectedName(prev => prev || players[0].name);
         }
       } catch (err) {
@@ -80,7 +83,7 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
   // 找不到唯一一位就把名字放進搜尋框，展開名單列出候選。
   useEffect(() => {
     if (!focus?.name || names.length === 0) return;
-    const m = matchPlayerName(focus.name, names);
+    const m = matchPlayerName(focus.name, names, aliases);
     if (m.kind === 'found') {
       setSelectedName(m.name);
       setSearch('');
@@ -89,13 +92,13 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
       setSearch(focus.name);
       setListOpen(true);
     }
-  }, [focus, names]);
+  }, [focus, names, aliases]);
 
   // 搜尋 (2026-10-13 玩家反應：用平常的暱稱查不到人)：完全相同 → 不分大小寫 → 忽略空白 →
   // 名字的一部分；只有一位就直接打開，多位列出候選，沒有就給「你是不是要找」。
   const match: NameMatch | null = useMemo(
-    () => (search.trim() && names.length > 0 ? matchPlayerName(search, names) : null),
-    [search, names],
+    () => (search.trim() && names.length > 0 ? matchPlayerName(search, names, aliases) : null),
+    [search, names, aliases],
   );
   const matchedName = match?.kind === 'found' ? match.name : null;
   useEffect(() => {

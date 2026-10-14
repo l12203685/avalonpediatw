@@ -59,7 +59,7 @@ const CACHE_PATH = process.env[ENV_ANALYSIS_CACHE]?.trim()
   : path.resolve(__dirname, '..', '..', 'analysis_cache.json');
 const committedCache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf-8')) as {
   overview: { schemaVersion?: unknown };
-  players: { players: Array<{ name: string; totalGames: number }>; seatOutcomesSource?: unknown };
+  players: { players: Array<{ name: string; totalGames: number }>; seatOutcomesSource?: unknown; aliases?: Record<string, unknown> };
   playerDetails: Record<string, unknown>;
   leaderboard?: unknown;
 };
@@ -288,6 +288,23 @@ describe('analysis_cache.json → web contract', () => {
     expect((data.players as Json[]).map((x) => x.name)).toEqual(playerNames);
     // Every listed player resolves by name (PlayerRadarChart clicks a name from the list).
     expect(Object.keys(committedCache.playerDetails).sort()).toEqual([...playerNames].sort());
+  });
+
+  it('players.aliases (player_aliases.json): an old name has no row of its own and opens its official name', async () => {
+    const p: Problems = [];
+    const aliases = committedCache.players.aliases ?? {};
+    for (const [old, official] of Object.entries(aliases)) {
+      if (typeof official !== 'string' || !playerNames.includes(official)) {
+        p.push(`players.aliases[${show(old)}] → ${show(official)}: no such player`);
+        continue;
+      }
+      if (playerNames.some((n) => playerNameKey(n) === playerNameKey(old))) p.push(`old name ${show(old)} still has a row`);
+      const res = await request(server).get(`/api/analysis/players/${enc(old)}`);
+      const got = (res.body?.data as Json | undefined)?.player as Json | undefined;
+      if (res.status !== 200 || got?.name !== official) p.push(`players/${old}: HTTP ${res.status}, ${show(got?.name)}`);
+    }
+    expect(p).toEqual([]);
+    expect((await analysis('/players')).aliases).toEqual(aliases);
   });
 
   it('GET /overview — OverviewPanel', async () => {

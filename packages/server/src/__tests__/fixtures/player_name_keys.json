@@ -113,5 +113,67 @@
       "input": "   ",
       "key": ""
     }
+  ],
+  "_aliasComment": "With the aliases below (player_aliases.json / the cache's players.aliases: old name -> official name), generate_cache.py player_identity_key and @avalon/shared playerIdentityKey must both give identityKey; official is the official name an input stands for (aliasTarget), null when it is no old name. Made-up names; two old names of one player.",
+  "aliases": {
+    "Tovo Wren": "Ilse Marr",
+    "Quill Fen": "Ilse Marr"
+  },
+  "aliasCases": [
+    {
+      "input": "Tovo Wren",
+      "identityKey": "ilse marr",
+      "official": "Ilse Marr"
+    },
+    {
+      "input": "ＴＯＶＯ　ｗｒｅｎ",
+      "identityKey": "ilse marr",
+      "official": "Ilse Marr"
+    },
+    {
+      "input": " tovo​  wren ",
+      "identityKey": "ilse marr",
+      "official": "Ilse Marr"
+    },
+    {
+      "input": "Quill Fen",
+      "identityKey": "ilse marr",
+      "official": "Ilse Marr"
+    },
+    {
+      "input": "QUILL FEN",
+      "identityKey": "ilse marr",
+      "official": "Ilse Marr"
+    },
+    {
+      "input": "Ilse Marr",
+      "identityKey": "ilse marr",
+      "official": null
+    },
+    {
+      "input": "ｉｌｓｅ　ｍａｒｒ",
+      "identityKey": "ilse marr",
+      "official": null
+    },
+    {
+      "input": "Quill_Fen",
+      "identityKey": "quill_fen",
+      "official": null
+    },
+    {
+      "input": "Tovo",
+      "identityKey": "tovo",
+      "official": null
+    },
+    {
+      "input": "Nova",
+      "identityKey": "nova",
+      "official": null
+    },
+    {
+      "input": "",
+      "identityKey": "",
+      "official": null
+    }
   ]
 }

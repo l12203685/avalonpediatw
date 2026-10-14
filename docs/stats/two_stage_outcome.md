@@ -20,6 +20,19 @@
 
 玩家是誰（2026-10-13 起）：牌譜「玩1～玩0」的名字只差大小寫、全形半形、前後或重複空白、零寬字元時算**同一位玩家**（`generate_cache.py` 的 `player_name_key`；機器人、網站搜尋與 API 共用的 `@avalon/shared` `playerNameKey` 同一規則）。所有以玩家為單位的數字（`players`、`playerDetails`、排行榜與門檻、座位／角色統計、位置三結果 `seatOutcomes`、兩人三結果配對 `outcomePair`、理論勝率）都先合併再算，顯示最常用的寫法（同樣多時取最早出現的）；默契矩陣的標籤改成同一個寫法。查詢（機器人、`/api/analysis/players/:name`、`/profile/:name/*`）不分大小寫。
 
+### 玩家別名（2026-10-14 起）
+
+擁有者指定「這兩個名字是同一個人，以後都顯示正式名字」時（Edward 2026-10-14 起），寫在 `packages/server/player_aliases.json`：`{"aliases": {"舊寫法": "正式名字"}}`。這個檔是擁有者指定的資料，真實名字只寫在這裡（文件、測試、commit 訊息一律不寫；測試用虛構名字）。
+
+- **合併**：`generate_cache.py` 每日更新時，名字的 `player_name_key` 等於某個舊寫法的 key（所以舊寫法只差大小寫／全半形也算），就算正式名字那位玩家（`player_identity_key`）。所有以玩家為單位的數字都先合併再算（同上一段），**顯示正式名字**——擁有者指定的寫法優先於最常用的寫法。默契矩陣的標籤、沿用區塊（`archetype`、`playstyle`）的舊名字列也改到正式名字（同一人有多列時留有資料、樣本最多的那列）。試算表（牌譜、Discord匯入）的原始資料**不改**。
+- **快取欄位** `players.aliases`：`{舊寫法: 正式名字}`，只列正式名字是本快取玩家的別名（舊寫法或正式名字有出現在資料裡；兩個都沒出現的別名不寫）。沒有別名時不寫這個欄位。機器人、API、網站都從這裡讀，不讀別名檔。
+- **查詢**：`/戰績`、`/默契`、`/api/analysis/players/:name`、`/profile/:name/*`、個人頁、網站玩家搜尋與 `#player=` 連結，打舊名字（任何大小寫／全半形）都找到正式名字那位（`@avalon/shared` 的 `matchPlayerName` / `findSamePlayerName` / `findTypedPlayerName` 多一個 `aliases` 參數，順序在「完全相同」「同一位玩家」之後、「名字的一部分」之前）；`/戰績` 卡片多一行「ℹ️ 「舊名」現在統一顯示為「正式名字」」。舊名字的一部分不算別名。
+- **Discord 匯入**（`discord_records_import.py`）：同一局重複的玩家、與牌譜近似重複的判斷、「新玩家」計數都用 `player_identity_key`，所以舊名字與正式名字在同一局算同一人坐兩個位置；寫進 Discord匯入 的名字照貼文原樣。
+- **守門**：舊名字的列在新快取裡消失不算「玩家局數變少」——比對新舊快取時，兩邊 `players.aliases` 連起來的名字算同一位玩家、局數相加（`cache_aliases`）；玩家數也這樣算。日誌與 job summary 只寫數量（「N 個舊名字改顯示為正式名字（M 位玩家）」），不寫名字。
+- **規則**（不符合時每日更新以 exit 2 停下、不寫檔，訊息在 GitHub Actions 裡只寫第幾筆）：兩邊都是非空字串、不能只差大小寫／全半形（那本來就是同一人）、同一個舊寫法只能對應一個正式名字、同一個正式名字只能有一種寫法、正式名字不能又是另一筆的舊寫法（不串接：每個舊寫法直接指向正式名字）。沒有這個檔 = 沒有別名。
+
+**新增一筆**：在 `aliases` 加一行 `"舊寫法": "正式名字"`，commit 到 main；下一次每日更新（`refresh-analysis-cache.yml`，或手動執行）就合併，不必 `--allow-shrink`。想先看結果：本機 `python packages/server/generate_cache.py --compare`。拿掉一筆會讓舊名字重新分開（守門同樣會把兩邊別名連起來比對）。
+
 玩家層：
 
 | 欄位 | 定義 |

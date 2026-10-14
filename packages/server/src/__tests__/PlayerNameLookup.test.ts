@@ -13,12 +13,14 @@ import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   MAX_NAME_CANDIDATES,
+  aliasTarget,
   cleanNameQuery,
   compactName,
   findSamePlayerName,
   findTypedPlayerName,
   matchPlayerName,
   normalizeName,
+  playerIdentityKey,
   playerNameKey,
 } from '@avalon/shared';
 
@@ -36,8 +38,11 @@ const fixture = vi.hoisted(() => {
   return {
     players: [
       row('阿明明', 300), row('大熊貓', 200), row('小雨', 120), row('小雨點', 90), row('小虎', 80),
-      row('小魚', 70), row('小柚', 60), row('小咪', 50), row('Novak', 45), row('Quill Fen', 40), row('Nova', 2),
+      row('小魚', 70), row('小柚', 60), row('小咪', 50), row('Novak', 45), row('Quill Fen', 40), row('Ilse Marr', 35),
+      row('Nova', 2),
     ],
+    // players.aliases (player_aliases.json): two old names of Ilse Marr, merged into her row.
+    aliases: { 'Tovo Wren': 'Ilse Marr', Orlapike: 'Ilse Marr' } as Record<string, string>,
     // /默契: the matrix holds NOVAK (upper-cased label) but not Nova.
     chemistry: {
       coWin: { players: ['阿明明', 'NOVAK', 'QUILL FEN'], rowLabels: ['阿明明', 'NOVAK', 'QUILL FEN'], values: [[150, 12, 9], [12, 25, 4], [9, 4, 20]] },
@@ -51,6 +56,7 @@ const fixture = vi.hoisted(() => {
 vi.mock('../services/sheetsAnalysis', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/sheetsAnalysis')>()),
   getAllPlayerStats: async () => fixture.players,
+  getPlayerAliases: async () => fixture.aliases,
   getPlayerByName: async (name: string) => fixture.players.find((p) => p.name === name) ?? null,
   getLeaderboard: async () => null,
   getChemistry: async () => fixture.chemistry,
@@ -60,14 +66,18 @@ vi.mock('../services/sheetsAnalysis', async (importOriginal) => ({
 }));
 
 import { answerStatsTextCommand } from '../bots/stats/textCommands';
-import { findPlayerKey, playerNameKey as serverPlayerNameKey } from '../services/sheetsAnalysis';
+import { cachePlayerAliases, findPlayerKey, playerNameKey as serverPlayerNameKey } from '../services/sheetsAnalysis';
 
 /** Shared with test_generate_cache.py: generate_cache.player_name_key must give the same keys. */
-const NAME_KEY_CASES = (
-  JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'player_name_keys.json'), 'utf-8')) as {
-    cases: Array<{ input: string; key: string }>;
-  }
-).cases;
+const NAME_KEY_FIXTURE = JSON.parse(
+  fs.readFileSync(path.join(__dirname, 'fixtures', 'player_name_keys.json'), 'utf-8'),
+) as {
+  cases: Array<{ input: string; key: string }>;
+  /** player_aliases.json-style map; generate_cache.player_identity_key must give the same identity keys. */
+  aliases: Record<string, string>;
+  aliasCases: Array<{ input: string; identityKey: string; official: string | null }>;
+};
+const NAME_KEY_CASES = NAME_KEY_FIXTURE.cases;
 
 describe('playerNameKey — the rule generate_cache.py merges players by', () => {
   it.each(NAME_KEY_CASES.map((c) => [c.input, c.key]))('%j → %j (same as player_name_key)', (input, key) => {
@@ -78,6 +88,68 @@ describe('playerNameKey — the rule generate_cache.py merges players by', () =>
   it('the server (sheetsAnalysis) and the matcher use this one function', () => {
     expect(serverPlayerNameKey).toBe(playerNameKey);
     expect(NAME_KEY_CASES.length).toBeGreaterThan(20);
+  });
+});
+
+describe('playerIdentityKey / aliasTarget — player_aliases.json, the rule generate_cache.py merges by', () => {
+  it.each(NAME_KEY_FIXTURE.aliasCases.map((c) => [c.input, c.identityKey, c.official]))(
+    '%j → %j (official name %j, same as player_identity_key)',
+    (input, identityKey, official) => {
+      expect(playerIdentityKey(input as string, NAME_KEY_FIXTURE.aliases)).toBe(identityKey);
+      expect(aliasTarget(input as string, NAME_KEY_FIXTURE.aliases) ?? null).toBe(official);
+    },
+  );
+
+  it('two old names of one player; no map = playerNameKey', () => {
+    expect(new Set(Object.values(NAME_KEY_FIXTURE.aliases)).size).toBe(1);
+    expect(Object.keys(NAME_KEY_FIXTURE.aliases).length).toBe(2);
+    expect(playerIdentityKey('Tovo Wren')).toBe('tovo wren');
+    expect(aliasTarget('Tovo Wren', null)).toBeUndefined();
+  });
+});
+
+describe('old names (players.aliases): the official name answers', () => {
+  // Made-up names: Tovo Wren and Orlapike are old names of Ilse Marr.
+  const ALIASES = { 'Tovo Wren': 'Ilse Marr', Orlapike: 'Ilse Marr' };
+  const WITH_ILSE = [...NAMES, 'Ilse Marr'];
+
+  it('typed any way the matcher accepts a name, an old name finds the official one', () => {
+    for (const q of ['Tovo Wren', 'tovo wren', 'ＴＯＶＯ　ＷＲＥＮ', '@Tovo Wren', '「tovo  wren」？']) {
+      expect(matchPlayerName(q, WITH_ILSE, ALIASES)).toEqual({
+        kind: 'found', name: 'Ilse Marr', caseVariants: [], alias: 'Tovo Wren',
+      });
+    }
+    expect(matchPlayerName('ORLAPIKE', WITH_ILSE, ALIASES)).toEqual({
+      kind: 'found', name: 'Ilse Marr', caseVariants: [], alias: 'Orlapike',
+    });
+    expect(findTypedPlayerName('@tovo wren', WITH_ILSE, undefined, ALIASES)).toBe('Ilse Marr');
+    expect(findSamePlayerName('ｔｏｖｏ ｗｒｅｎ', WITH_ILSE, undefined, ALIASES)).toBe('Ilse Marr');
+    expect(findSamePlayerName('@Tovo Wren', WITH_ILSE, undefined, ALIASES)).toBeUndefined(); // data: not cleaned
+  });
+
+  it('the official name itself, part of it, or no map: no alias', () => {
+    expect(matchPlayerName('ilse marr', WITH_ILSE, ALIASES)).toEqual({ kind: 'found', name: 'Ilse Marr', caseVariants: [] });
+    expect(matchPlayerName('Ilse', WITH_ILSE, ALIASES)).toEqual({ kind: 'found', name: 'Ilse Marr', caseVariants: [] });
+    expect(matchPlayerName('Tovo', WITH_ILSE, ALIASES)).toMatchObject({ kind: 'none' }); // part of an old name
+    expect(matchPlayerName('Tovo Wren', WITH_ILSE)).toMatchObject({ kind: 'none' });
+    expect(findSamePlayerName('Tovo Wren', NAMES, undefined, ALIASES)).toBeUndefined(); // official name not listed
+  });
+
+  it('a row under the old name itself wins (a cache written before the alias)', () => {
+    expect(matchPlayerName('Tovo Wren', [...WITH_ILSE, 'Tovo Wren'], ALIASES)).toEqual({
+      kind: 'found', name: 'Tovo Wren', caseVariants: [],
+    });
+  });
+
+  it('findPlayerKey (players/:name, profile/:name/*) and the cache map', () => {
+    expect(findPlayerKey({ 'Ilse Marr': 1 }, 'tovo wren', undefined, ALIASES)).toBe('Ilse Marr');
+    expect(findPlayerKey({ 'Ilse Marr': 1 }, 'tovo wren')).toBeUndefined();
+    expect(cachePlayerAliases({ aliases: { 'Tovo Wren': 'Ilse Marr', Bad: 3, '': 'x', Empty: '' } })).toEqual({
+      'Tovo Wren': 'Ilse Marr',
+    });
+    expect(cachePlayerAliases({})).toEqual({});
+    expect(cachePlayerAliases({ aliases: ['Tovo Wren'] })).toEqual({});
+    expect(cachePlayerAliases(undefined)).toEqual({});
   });
 });
 
@@ -231,6 +303,15 @@ describe('/戰績 end to end (LINE text command; Discord uses the same reply)', 
     expect(text).toContain('找不到玩家「大貓」');
     expect(text).toContain('你是不是要找：大熊貓？');
   });
+
+  it('an old name (players.aliases) → the official name\'s card, with one line saying so', async () => {
+    const text = (await answerStatsTextCommand('/戰績 tovo wren', 'discord')) ?? '';
+    expect(text).toContain('📊 Ilse Marr 的戰績');
+    expect(text).toContain('ℹ️ 「Tovo Wren」現在統一顯示為「Ilse Marr」（同一位玩家，戰績已合併）');
+    const own = (await answerStatsTextCommand('/戰績 Ilse Marr', 'line')) ?? '';
+    expect(own).toContain('📊 Ilse Marr 的戰績');
+    expect(own).not.toContain('統一顯示為');
+  });
 });
 
 describe('/默契 — a player\'s own name before part of a name in the matrix', () => {
@@ -248,6 +329,11 @@ describe('/默契 — a player\'s own name before part of a name in the matrix',
     const text = (await answerStatsTextCommand('/默契 novak 明明', 'line')) ?? '';
     expect(text).toContain('🤝 Novak × 阿明明 默契');
     expect(text).toContain('同隊 20 場：一起贏 12、一起輸 8');
+  });
+
+  it('an old name (players.aliases) is the official name\'s player', async () => {
+    const text = (await answerStatsTextCommand('/默契 orlapike 明明', 'line')) ?? '';
+    expect(text).toContain('「Ilse Marr」不在默契矩陣裡');
   });
 
   it('part of a name still searches the matrix', async () => {

@@ -13,6 +13,7 @@ import {
   getChemistry,
   getLeaderboard,
   getOverview,
+  getPlayerAliases,
   getPlayerArchetype,
   getPlayerByName,
   getPlayerPlaystyle,
@@ -66,8 +67,9 @@ function namesByGames(players: readonly PlayerStats[]): string[] {
 
 export async function playerCardReply(query: string): Promise<string> {
   return safely('player card', async () => {
-    const players = await getAllPlayerStats();
-    const match = matchPlayerName(query, namesByGames(players));
+    const [players, aliases] = await Promise.all([getAllPlayerStats(), getPlayerAliases()]);
+    // An old name in players.aliases (player_aliases.json) finds the official name's card.
+    const match = matchPlayerName(query, namesByGames(players), aliases);
     if (match.kind !== 'found') return formatNameProblem(match);
 
     const player = (await getPlayerByName(match.name)) ?? players.find((p) => p.name === match.name);
@@ -89,6 +91,7 @@ export async function playerCardReply(query: string): Promise<string> {
       strength: strength?.data ?? null,
       playstyle: playstyle ? { data: playstyle.data, labels: playstyle.labels } : null,
       caseVariants: match.caseVariants,
+      alias: match.alias,
       minCellGames: typeof minCell === 'number' ? minCell : undefined,
       newcomerRank: typeof newcomer?.rank === 'number' ? newcomer.rank : null,
     });
@@ -165,14 +168,15 @@ export async function chemistryReply(nameA: string, nameB: string): Promise<stri
     if (!nameA?.trim() || !nameB?.trim()) {
       return `請輸入兩位玩家，例如「${STATS_COMMAND_USAGE.chemistry}」。`;
     }
-    const [chemistry, players] = await Promise.all([getChemistry(), getAllPlayerStats()]);
+    const [chemistry, players, aliases] = await Promise.all([getChemistry(), getAllPlayerStats(), getPlayerAliases()]);
     const roster = chemistryRoster(chemistry);
     const allNames = namesByGames(players);
 
     const resolve = (query: string): NameMatch | { kind: 'outside'; name: string } => {
-      // A player's own name (or the same player's other spelling) comes first, as for /戰績:
-      // "Nova" is Nova even when only NOVAK is in the matrix — never part of NOVAK's name.
-      const own = findTypedPlayerName(query, allNames);
+      // A player's own name (or the same player's other spelling, or an old name in
+      // players.aliases) comes first, as for /戰績: "Nova" is Nova even when only NOVAK is in the
+      // matrix — never part of NOVAK's name.
+      const own = findTypedPlayerName(query, allNames, undefined, aliases);
       if (own !== undefined) {
         const label = findSamePlayerName(own, roster);
         if (label === undefined) return { kind: 'outside', name: own };
