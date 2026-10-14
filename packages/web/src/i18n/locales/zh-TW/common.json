@@ -642,6 +642,56 @@
       }
     },
     "r6": {
+      "boards": {
+        "tabsLabel": "排行榜",
+        "tab": {
+          "main": "角色理論",
+          "position": "位置理論",
+          "overall": "整體理論",
+          "last50": "近 50 場",
+          "improved": "進步",
+          "assassin": "刺客",
+          "newcomers": "新人",
+          "roleTitles": "角色王",
+          "precision": "精算榜"
+        },
+        "who": "上榜：",
+        "sparseNote": "淡色＝有角色或位置不到 {{min}} 場，用全體的最終勝率補到 {{min}} 場。",
+        "sparseCell": "{{count}} 格不到 {{min}} 場，用全體勝率補值",
+        "clickHint": "點一列看該玩家的玩家雷達。",
+        "pending": {
+          "positionTitle": "位置理論勝率排行",
+          "position": "位置理論排行（各人最近 {{games}} 場）下次每日更新後提供。",
+          "positionDef": "位置理論 = Σ 1/10 × 本人該位置的最終勝率。",
+          "overallTitle": "整體理論勝率排行",
+          "overall": "整體理論排行（生涯至少 {{games}} 場，看生涯全部場次）下次每日更新後提供。",
+          "overallDef": "整體理論 = 用生涯全部場次算的角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率。"
+        },
+        "col": {
+          "rankName": "名次・玩家",
+          "name": "玩家",
+          "role": "角色",
+          "tie": "並列",
+          "value": "數值",
+          "roleTheory": "角色理論",
+          "positionTheory": "位置理論",
+          "overallTheory": "整體理論",
+          "finalWinRate": "最終勝率",
+          "windowGames": "視窗場數",
+          "careerGames": "生涯場數",
+          "firstPlayed": "首次出賽",
+          "delta": "進步（百分點）",
+          "recentRoleTheory": "近期角色理論",
+          "priorRoleTheory": "之前角色理論",
+          "recentFinalWinRate": "近期最終勝率",
+          "priorFinalWinRate": "之前最終勝率",
+          "recentPriorGames": "場數（近期 / 之前）",
+          "hitRate": "刺中率",
+          "hitsAttempts": "刺中／刺殺",
+          "winsGames": "勝／場",
+          "careerRoleGames": "生涯該角色場數"
+        }
+      },
       "overview": {
         "summary": {
           "label": "總覽摘要",
