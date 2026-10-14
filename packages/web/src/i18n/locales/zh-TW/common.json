@@ -239,6 +239,40 @@
     "footerHint": "追蹤列表 / 對戰成績 Phase 2 會補實內容"
   },
   "analytics": {
+    "ui": {
+      "sectionTabs": {
+        "label": "小分頁"
+      },
+      "table": {
+        "empty": "沒有資料",
+        "n": "n={{n}}",
+        "nTitle": "樣本 {{n}} 場",
+        "lowSample": "樣本不足（n < {{min}}）"
+      },
+      "donut": {
+        "title": "三種結果分布",
+        "games": "{{value}} 場",
+        "gamesUnit": "場",
+        "total": "共 {{value}} 場",
+        "item": "{{label}}：{{pct}}（{{games}}）"
+      },
+      "blocks": {
+        "group": "分組",
+        "red": "紅方",
+        "blue": "藍方",
+        "mission": "任務結果",
+        "assassination": "刺殺結果",
+        "final": "遊戲結果",
+        "missionRule": "三藍＝藍勝、三紅＝紅勝",
+        "assassinationRule": "只看三藍局：三藍活＝藍勝、三藍死＝紅勝",
+        "finalRule": "三藍活＝藍勝、其餘＝紅勝",
+        "missionHint": "任務結果：三紅算紅勝，三藍（不論梅林死活）算藍勝；分母是這組的全部場次",
+        "assassinationHint": "刺殺結果：只算打到三藍的局，三藍死算紅勝、三藍活算藍勝；分母是這組的三藍局數（三紅局沒有刺殺）",
+        "finalHint": "遊戲結果：三藍活算藍勝，三紅與三藍死都算紅勝；分母是這組的全部場次",
+        "cellNote": "每格是這組自己陣營的勝率（紅方看紅勝、藍方看藍勝），n＝分母場數；刺殺只算打到三藍的局。",
+        "lowSampleNote": "淡色＝樣本少於 {{min}} 場。"
+      }
+    },
     "tab": {
       "leaderboard": "精算榜",
       "radar": "玩家雷達",
