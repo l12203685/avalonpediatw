@@ -152,15 +152,36 @@ describe('AgentTuning — flags', () => {
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, redR1Teammate: true })).toBe('redR1Teammate');
   });
 
-  it('round-3 integrated default (strength_benchmark.md 第 13 節): the set re-run on seeds 101010 / 202020 / 303030', () => {
-    // Variant of the combined self-play run = exactly this set (red +3.18pp, blue +4.89pp
-    // pooled over the old default); the baseline = this set minus the three round-3 switches.
+  it('percivalNoThumbsR1 (2026-10-14): on in the default, off in legacy, flag, env var and description', () => {
+    // strength_benchmark.md 第 14 節 / percival_thumbs.md 第 11 節: R1 Percival teams carry no
+    // thumb; same thumb set as the human 40.4 → 58.4% (population); blue stance pooled over
+    // 515151 + 626262 + 737373 +0.01pp [−0.31pp, +0.32pp] (not weaker), red 0.
+    expect(DEFAULT_AGENT_TUNING.percivalNoThumbsR1).toBe(true);
+    expect(LEGACY_AGENT_TUNING.percivalNoThumbsR1).toBe(false);
+    expect(parseTuningFlag('percivalNoThumbsR1')).toEqual({ percivalNoThumbsR1: true });
+    expect(AGENT_TUNING_ENV.percivalNoThumbsR1).toBe('AVALON_TUNING_PERCIVAL_NO_THUMBS_R1');
+    expect(tuningFromEnv({ AVALON_TUNING_PERCIVAL_NO_THUMBS_R1: '0' })).toEqual({ percivalNoThumbsR1: false });
+    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, percivalNoThumbsR1: true })).toBe('percivalNoThumbsR1');
+  });
+
+  it('round-3 integrated default (strength_benchmark.md 第 13 節) + percivalNoThumbsR1 (第 14 節)', () => {
+    // 第 13 節: the combined self-play variant = the default minus percivalNoThumbsR1 (red
+    // +3.18pp, blue +4.89pp pooled over the old default); its baseline = that set minus the
+    // three round-3 switches. 第 14 節: the baseline = the round-3 default (12 switches),
+    // the variant = the full default below.
     expect(describeAgentTuning(DEFAULT_AGENT_TUNING)).toBe(
+      'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
+        'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
+        'goodVouchFollowUp,teamReuse,redR1Teammate,percivalNoThumbsR1',
+    );
+    expect(describeAgentTuning({ ...DEFAULT_AGENT_TUNING, percivalNoThumbsR1: false })).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
         'goodVouchFollowUp,teamReuse,redR1Teammate',
     );
-    expect(describeAgentTuning({ ...DEFAULT_AGENT_TUNING, goodVouchFollowUp: false, teamReuse: false, redR1Teammate: false })).toBe(
+    expect(describeAgentTuning({
+      ...DEFAULT_AGENT_TUNING, goodVouchFollowUp: false, teamReuse: false, redR1Teammate: false, percivalNoThumbsR1: false,
+    })).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax',
     );

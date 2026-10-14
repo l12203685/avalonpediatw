@@ -64,6 +64,7 @@ import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } f
 import { goodVouchTeamConstraint, goodVouchVoteRule } from '../GoodLakeFollowUp';
 import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan, teamReuseScorer } from '../TeamReuse';
 import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
+import { percivalNoThumbsR1Active } from '../PercivalThumbs';
 import {
   interpret,
   type Facts,
@@ -956,6 +957,12 @@ export class ForwardAgent implements AvalonAgent {
     } catch (error: unknown) {
       return this.fallback(obs, decisionType, 'getRoleSignals() threw');
     }
+    // ── AgentTuning.percivalNoThumbsR1 (2026-10-14) ──
+    // R1 Percival leader: no bonus for a team with thumb A only (the
+    // candidate pool below already leaves both thumbs out). Off → no change.
+    if (decisionType === 'team_select' && percivalNoThumbsR1Active(this.baseline.tuning, obs)) {
+      roleSignals = { ...roleSignals, percivalNoThumbsR1: true };
+    }
 
     // ── Fix 5 (2026-05-11 R1 派票 stacking hotfix): deterministic
     // hash tie-break. ──
@@ -1275,7 +1282,17 @@ export class ForwardAgent implements AvalonAgent {
     } else if (role === 'percival') {
       // Edward 2026-05-06 16:09 — HARD-exclude wizard B (predicted Morgana).
       const wizards = obs.knownWizards ?? [];
-      if (wizards.length === 2) {
+      if (percivalNoThumbsR1Active(this.baseline.tuning, obs)) {
+        // ── AgentTuning.percivalNoThumbsR1 (2026-10-14) ──
+        // Edward 2026-10-14「一開始在沒任何資訊時先預設不派」: in R1 (no
+        // mission result yet; all five proposals, the forced one included)
+        // both thumbs leave the pool, whatever the configuration or seats
+        // (docs/ai/percival_thumbs.md 第 9 節). Same severity as wizard B,
+        // so the 2026-10-10 backfill below restores them only when the pool
+        // cannot fill a team. Off → the old split below.
+        for (const id of wizards) markExcluded(id, 2);
+        ranked = ranked.filter((id) => !wizards.includes(id));
+      } else if (wizards.length === 2) {
         // Use the same A/B split as RoleStrategy.getRoleSignals (without
         // re-running scoreWizardAsMerlin here — pyramid score is the
         // cheap proxy: lower = more merlin-like).
@@ -1798,6 +1815,7 @@ export function computeRoleBias(
     teamIncludesPercivalB,
     merlinHidingFromAssassin: roleSignals.merlinHidingFromAssassin,
     morganaBetrayal: roleSignals.morganaBetrayal,
+    percivalNoThumbsR1: roleSignals.percivalNoThumbsR1 === true,
     mordredR1Leader: roleSignals.mordredR1Leader,
     targetIsKnownAlly,
     targetIsOberon,

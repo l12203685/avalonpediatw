@@ -66,6 +66,12 @@ export interface RoleSignals {
   merlinHidingFromAssassin: boolean;
   /** Percival "娜出賣隊友" — B reject containing known evil → trust B more. */
   morganaBetrayal: boolean;
+  /**
+   * Percival leading in R1 with `AgentTuning.percivalNoThumbsR1` on
+   * (2026-10-14, `PercivalThumbs.ts`): no bonus for a team with thumb A
+   * only. Set by `ForwardAgent.decide`; absent = false.
+   */
+  percivalNoThumbsR1?: boolean;
   /** Oberon-only: have I appeared on at least one prior mission? */
   oberonMissionParticipatedBefore: boolean;
   /** Oberon-only: did any of my prior missions fail publicly? */
@@ -419,6 +425,7 @@ function biasForPercival(
     teamIncludesPercivalB: boolean;
     merlinHidingFromAssassin: boolean;
     morganaBetrayal: boolean;
+    percivalNoThumbsR1?: boolean;
   },
 ): RoleBiasDelta {
   if (isTeamSelect(action)) {
@@ -431,7 +438,13 @@ function biasForPercival(
         bias = { findMerlin: -0.2, hidePercival: -0.2, threeBlueWins: -0.1 };
       }
     } else if (signals.teamIncludesPercivalA) {
-      if (signals.merlinHidingFromAssassin) {
+      if (signals.percivalNoThumbsR1) {
+        // AgentTuning.percivalNoThumbsR1 (2026-10-14): R1 has no basis for
+        // trusting A (no mission result; with no vote yet A is merely the
+        // lower-seated thumb) → no bonus. Such a team only appears when the
+        // candidate pool had to restore a thumb.
+        bias = {};
+      } else if (signals.merlinHidingFromAssassin) {
         // 梅躲刺 detected → don't reward A inclusion.
         bias = { findMerlin: 0.1, hidePercival: 0.1 };
       } else {
@@ -817,6 +830,7 @@ export function applyRoleBias(
     teamIncludesPercivalB: boolean;
     merlinHidingFromAssassin: boolean;
     morganaBetrayal: boolean;
+    percivalNoThumbsR1?: boolean;
     mordredR1Leader: boolean;
     targetIsKnownAlly: boolean;
     targetIsOberon: boolean;

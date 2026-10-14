@@ -26,6 +26,7 @@ import {
   type AgentTuning,
 } from './AgentTuning';
 import { pickAssassinTargetByModel, type AssassinModelWeights } from './assassin/AssassinModel';
+import { percivalNoThumbsR1Active } from './PercivalThumbs';
 import {
   assassinTargetPenalty,
   voteInnerBlackBonus,
@@ -3018,8 +3019,11 @@ export class HeuristicAgent implements AvalonAgent {
 
     // ── Node 1: R1P1 special-case (per Edward Q2=C)
     // Edward verbatim: R1P1 派西派 myself + 2 non-wizard.
+    // AgentTuning.percivalNoThumbsR1 (2026-10-14, Edward「一開始在沒任何資訊時
+    // 先預設不派」): the same no-thumb team for every R1 proposal (P1–P5,
+    // the forced one included; 10-player games, `PercivalThumbs.ts`).
     const isR1P1 = (currentRound ?? 1) === 1 && voteHistory.length === 0;
-    if (isR1P1) {
+    if (isR1P1 || percivalNoThumbsR1Active(this.tuning, obs)) {
       const team: string[] = [myPlayerId];
       const wizardSet = new Set(knownWizards);
       const nonWizardCandidates = candidatesIn.filter(

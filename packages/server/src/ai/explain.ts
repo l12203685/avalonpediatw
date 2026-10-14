@@ -28,6 +28,7 @@ import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory } from 
 import { analyzeGoodLake } from './GoodLakeInfo';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { redR1TeamPlanDraws, replayBothDraws, visibleTeammatesOn } from './RedR1Teammate';
+import { percivalNoThumbsR1Active } from './PercivalThumbs';
 import { AVALON_CONFIG } from '@avalon/shared';
 
 export interface ExplainedSuspect {
@@ -348,6 +349,12 @@ export function replayRule(
     const desc = trace.chosen.description;
     if (trace.usedFallback) {
       return { rule: `前向推理出錯（${trace.fallbackReason ?? '未知'}），改用基準策略`, mismatch: false };
+    }
+    if (obs.gamePhase === 'team_select' && percivalNoThumbsR1Active(shadow.tuning, obs)) {
+      return {
+        rule: '派西首局不放拇指：第一個任務結果出來之前，兩根拇指（梅林／莫甘娜候選）都不放，其餘照前向推理評分',
+        mismatch: !sameAction(action, real),
+      };
     }
     if (desc === 'baseline R1-R2 force normal') {
       return { rule: 'R1–R2 只投正常票（在隊上贊成、不在隊上反對）', mismatch: false };

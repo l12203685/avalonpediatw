@@ -65,6 +65,15 @@
  *                                   以真人比例 48.0% 放一位隊友（原本 0%）；第五次
  *                                   強制局照舊不放。只在 10 人局。細節見
  *                                   `RedR1Teammate.ts`。
+ *   - `percivalNoThumbsR1`         （2026-10-14，**預設開**）派西 R1（第一個
+ *                                   任務結果出來之前，五次提議含強制局）當隊長
+ *                                   時兩根拇指都不放，不分配置、座位；R2 起不變，
+ *                                   湖的避開名單不變；只在 10 人局。Edward
+ *                                   2026-10-14「一開始在沒任何資訊時先預設不派」，
+ *                                   真人資料與預先登記的規則見
+ *                                   `docs/ai/percival_thumbs.md` 第 9、11 節，
+ *                                   強度見 `strength_benchmark.md` 第 14 節，
+ *                                   細節見 `PercivalThumbs.ts`。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -156,6 +165,18 @@ export interface AgentTuning {
    * `RedR1Teammate.ts`。R2+ 不變。
    */
   redR1Teammate: boolean;
+  /**
+   * 派西首局不放拇指（2026-10-14，`docs/ai/percival_thumbs.md` 第 9 節）：
+   * 派西 R1（第一個任務結果出來之前；五次提議都算，含強制局）當隊長時，
+   * 兩根拇指（梅林 / 莫甘娜，分不出誰是誰）都不放進隊，不分配置（拇指在
+   * 派西之前派過幾次隊）、不分派西或拇指的座位；人數不夠時才依 2026-10-10
+   * 的補位順序放回。R2 起照原本的辨識邏輯，湖的避開名單不變。原本只有
+   * R1 第一次提議（而且只在 fallback 的 baseline 路徑）不放，正式路徑的
+   * ForwardAgent 在 R1 一律放座位較小的那根。只在 10 人局。2026-10-14 依
+   * 預先登記的規則採用（strength_benchmark.md 第 14 節）。細節見
+   * `PercivalThumbs.ts`。
+   */
+  percivalNoThumbsR1: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -175,6 +196,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodVouchFollowUp',
   'teamReuse',
   'redR1Teammate',
+  'percivalNoThumbsR1',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -193,6 +215,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodVouchFollowUp: false,
   teamReuse: false,
   redR1Teammate: false,
+  percivalNoThumbsR1: false,
 });
 
 /**
@@ -298,6 +321,19 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     新預設的機器人自打自（seed 404040）藍勝 7.42%→11.32%。一致性基準
  *     只有派隊（R1、R2+）與 R3+ 投票改變（派隊 Jaccard R2+ ED 39.2→49.0、
  *     Sin 42.5→57.1、top 40.2→52.5、population 41.2→53.2），其他逐項相同。
+ *   - `percivalNoThumbsR1`（2026-10-14，strength_benchmark.md 第 14 節、
+ *     percival_thumbs.md 第 9、11 節；對照組 = 上面第三輪整合後的正式預設；
+ *     只在 10 人局）：Edward「一開始在沒任何資訊時先預設不派」。規則與門檻
+ *     在跑任何種子之前預先登記。一致性：派西派隊「拇指組合與真人相同」
+ *     population 40.4→58.4%、top 40.7→59.0%、Sin 40.8→57.0%（ED 22/47→
+ *     29/47）；一致性基準只有 R1 派西隊長的派隊列改變（R1 派西完全相同
+ *     population 0.9→3.4%、top 0.7→4.4%、Sin 0→0%，Jaccard 29.8→34.6、
+ *     29.2→36.3、30.6→35.5%），其他每一列（含 R2+ 派隊、投票、任務牌、湖、
+ *     刺殺）逐項相同。自我對打藍方立場 515151 +0.16pp [−0.37pp, +0.69pp]、
+ *     新種子 626262 +0.02pp [−0.54pp, +0.58pp]、737373 −0.18pp [−0.74pp,
+ *     +0.38pp]，三個合併 +0.01pp [−0.31pp, +0.32pp]、兩個確認種子合併
+ *     −0.08pp [−0.47pp, +0.32pp]；紅方立場恆為 0；0 次 fallback → 不算
+ *     變弱 → **採用**（AVALON_TUNING_PERCIVAL_NO_THUMBS_R1=0 可關掉）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -320,6 +356,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodVouchFollowUp: true,
   teamReuse: true,
   redR1Teammate: true,
+  percivalNoThumbsR1: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -338,6 +375,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodVouchFollowUp: 'AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP',
   teamReuse: 'AVALON_TUNING_TEAM_REUSE',
   redR1Teammate: 'AVALON_TUNING_RED_R1_TEAMMATE',
+  percivalNoThumbsR1: 'AVALON_TUNING_PERCIVAL_NO_THUMBS_R1',
 });
 
 function parseBool(raw: string): boolean | undefined {
