@@ -9,6 +9,12 @@
  * counts (TopicCounter) and exposed as numbers on /api/bots/status.
  * Nothing here logs message content — not even inside an error object
  * (see describeError).
+ *
+ * (2026-10-14 Edward：練習回報「要」也貼到大劍管理員) The same Discord sender
+ * also carries the practice mode's 「這步怪怪的」 reports to the same channel
+ * (practice/PracticeReportDiscord.ts: own hourly cap and counters, shown as
+ * feedback.practiceReports on /api/bots/status; PRACTICE_REPORT_DISCORD=false
+ * turns that copy off).
  */
 
 import {
@@ -121,6 +127,15 @@ export class FeedbackService {
   /** Late-bind the Discord sender (bots/index.ts, after the Discord bot exists). */
   setDiscordForwarder(forwarder: FeedbackDiscordForwarder | undefined): void {
     this.discord = forwarder;
+  }
+
+  /**
+   * The Discord sender attached by bots/index.ts (undefined until then). (2026-10-14 Edward：練習回報
+   * 也貼到大劍管理員) practice/PracticeReportDiscord.ts posts 「這步怪怪的」 reports with it, to the
+   * same channel, with its own hourly cap and counters.
+   */
+  getDiscordForwarder(): FeedbackDiscordForwarder | undefined {
+    return this.discord;
   }
 
   /**

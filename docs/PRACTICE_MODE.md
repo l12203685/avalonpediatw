@@ -47,6 +47,25 @@
 - 每局最多回報 30 步、兩次回報至少隔 2 秒、同一步只能回報一次；全站每小時最多 100 則、每人每 24 小時最多 200 則（避免被灌爆試算表）。寫入失敗不會占用額度。備註不會寫進伺服器日誌。
 - 需要 Render 上的 `GOOGLE_SERVICE_ACCOUNT_JSON`，而且試算表要分享給這個服務帳號（編輯者）。沒設定時按鈕會說明「目前無法儲存」。`PRACTICE_REPORT_SHEET_ID` 可以換試算表，設成 `off` 關閉。
 
+### 同時貼到管理員頻道「大劍管理員」（2026-10-14）
+
+Edward 10/14：練習回報「要」也貼到管理員頻道。每一則**寫進試算表成功**的回報，另外在 Discord 管理員頻道貼一則短訊息：
+
+```
+🧪 練習回報「這步怪怪的」｜PRACTICE-AB12CD34EF｜第 2 回合・第 3 次派隊
+機器人 4家 梅林｜投票：贊成
+理由：……（最多 300 字）
+玩家備註：……（最多 300 字；沒寫就是「（沒寫）」）
+```
+
+- 頻道和 `/意見` 同一個：`FEEDBACK_DISCORD_CHANNEL_ID` 有設就貼那裡，沒設就是「大劍管理員」（`1145513360545296574`），設 `off` 就不貼（試算表照寫）。用的也是 `/意見` 同一個 Discord 發送器（`bots/feedback`），Discord 機器人還沒連上時這則就不貼、只記數。
+- **不帶玩家的名字或帳號**；備註裡的 @everyone、@here、@某人、@身分組 會被改成不會通知人的寫法，訊息本身也設成不准通知任何人（`allowedMentions` 空）。完整欄位（含機器人理由全文）仍在試算表「練習回報」分頁。
+- 只在試算表寫入成功後才貼：寫入失敗時玩家會重送，不會貼兩次；貼 Discord 不會拖慢玩家看到「已回報」。
+- 限流：每小時最多 30 則（和 `/意見` 各算各的，互不擠掉）；超過的只寫試算表不貼。Discord 暫時壞掉時不占額度。
+- 失敗只記數、不丟錯，伺服器日誌只寫固定的原因（例如「每小時上限」），不寫備註或訊息內容。`/api/bots/status` 的 `feedback.practiceReports` 有 `enabled`、`sent`、`skipped`（沒有頻道或機器人還沒連上）、`failed`、`throttled`（數字，伺服器重啟歸零）。
+- 開關：`PRACTICE_REPORT_DISCORD=false`（或 `0`、`off`、`no`）只關掉這份 Discord 副本，試算表照寫；不設就是開。每則回報時重新讀，不用重啟。
+- 程式：`packages/server/src/practice/PracticeReportDiscord.ts`；測試 `src/__tests__/PracticeReportDiscord.test.ts`。
+
 ## 技術摘要
 
 - Socket 事件：`practice:create`（建立並開局，回 `{ ok, roomId }`）、`practice:trace`（對局結束後只送給房主）、`practice:get-trace`（結束後重新拉；結束前一律拒絕）、`practice:flag`（回報）。
@@ -57,10 +76,11 @@
   - 「開始遊戲」只有房主、只在大廳能送（以前任何知道房號的人都能把進行中的局重來）。
   - 湖中女神的查驗結果只送給剛查驗的人（以前每個人的瀏覽器都收得到，只是畫面不顯示）；查驗後拿到湖的人在同一階段不能再查一次。
   - 不計時的房間，投票／任務／派隊／刺殺畫面不再顯示 90 秒等倒數（以前把「不計時」當成 1 倍）。
+- 回報的 Discord 副本：`GameServer` 在試算表寫入成功、回覆玩家之後呼叫 `PracticeReportDiscord.forward(row)`（不等它）；`GameServerOptions.practiceReportDiscord` 可換掉（測試用；注入 `practiceReportSink` 時預設不貼）。
 - 測試：`src/__tests__/integration/PracticeMode.test.ts`（腳本化真人 socket 跑完整局：指定座位角色、每個機器人決策都有紀錄且只在結束後送出、湖的結果不外洩、不寫任何紀錄、不能加入／觀戰／重開、斷線不代打、房間被別處刪掉仍會釋放機器人、回報）、`PracticeUnits.test.ts`、`PracticeReportWriter.test.ts`。
 
 ## 已知限制
 
 - 回顧只在當下這個分頁：對局結束後只要重新整理頁面就看不到了（瀏覽器在結束時就忘了這個房間，也沒有重新讀取的入口；之後可以考慮存到瀏覽器）。
-- 只有 10 人局；回報不會另外貼到 Discord 管理員頻道。
+- 只有 10 人局。（「回報不會另外貼到 Discord 管理員頻道」已在 2026-10-14 改掉，見上方〈同時貼到管理員頻道〉。）
 - 「理由」是根據機器人看到的資訊整理出來的說明，基準策略（`HeuristicAgent` 內部）的細節分支沒有逐條列出；被前向推理委派給基準策略的步驟（R1–R2 投票、刺殺）只標出走了哪條路。

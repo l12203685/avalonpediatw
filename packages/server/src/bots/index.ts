@@ -45,6 +45,7 @@ import {
   initializeFeedback,
 } from './feedback';
 import type { Client } from 'discord.js';
+import { getPracticeReportDiscord, type PracticeReportDiscordStats } from '../practice/PracticeReportDiscord';
 import { createDiscordChatExportPort, shareChatExportReads } from './chatExport/discordPort';
 import { ChatExportBotStatus, ChatExportService, chatExportStatus, initializeChatExport, initializeChatExportReadingCopy } from './chatExport/service';
 import {
@@ -134,6 +135,8 @@ function readyDiscordClient(): Client | null {
 /**
  * Discord sender for forwarded /意見 texts: FEEDBACK_DISCORD_CHANNEL_ID, else
  * the owner's admin channel 「大劍管理員」 (2026-10-13, feedback/config.ts).
+ * Since 2026-10-14 it also posts the practice mode's 「這步怪怪的」 copies
+ * (practice/PracticeReportDiscord.ts reads it from the FeedbackService).
  * Lazy like buildDiscordAdapter(): readiness is re-read on every call. The
  * payload carries `allowedMentions: { parse: [] }`. Exported for the wiring test.
  */
@@ -443,8 +446,10 @@ export interface BotStatus {
    * Community feedback (docs/COMMUNITY_FEEDBACK.md): weekly topic counts per
    * platform (ISO weeks +08, newest 8, in-memory) and how many /意見 were
    * received. Numbers and one flag only — never text, names or ids.
+   * practiceReports (2026-10-14): the practice mode's 「這步怪怪的」 copies to the same admin
+   * channel — on/off (PRACTICE_REPORT_DISCORD) and sent / skipped / failed / throttled counts.
    */
-  feedback: FeedbackSnapshot & { commandEnabled: boolean };
+  feedback: FeedbackSnapshot & { commandEnabled: boolean; practiceReports: PracticeReportDiscordStats };
   /**
    * Daily chat-log export (bots/chatExport): three booleans, the last day's
    * date, time, counts and outcome code, and the catch-up's day counts; the
@@ -494,7 +499,11 @@ export function buildBotStatus(): BotStatus {
     generatedAt: new Date().toISOString(),
     keepAlive: getKeepAliveState(),
     statsDigest: statsDigest?.getState() ?? { running: false, lastPostedWeek: {} },
-    feedback: { commandEnabled: FEEDBACK_CONFIG.commandEnabled, ...getFeedbackService().snapshot() },
+    feedback: {
+      commandEnabled: FEEDBACK_CONFIG.commandEnabled,
+      ...getFeedbackService().snapshot(),
+      practiceReports: getPracticeReportDiscord().snapshot(),
+    },
     chatExport: chatExportStatus(),
     mediaRelay: { enabled: !!relayMediaStore, stats: relayMediaStore?.stats() ?? null },
     discord: {

@@ -280,6 +280,7 @@
 - 防洗版：每小時最多轉貼 30 則，超過仍回覆、仍計數、不轉貼。
 - LINE 群裡打的 `/意見 …` 原文照常同步到 Discord 同步頻道與網站大廳（Edward 第 5 點：要同步）。
 - 旗標：`FEEDBACK_COMMAND_ENABLED`（預設開；`false/0/no/off` 關）。
+- 練習回報（2026-10-14 Edward：「要」也貼到大劍管理員）：網站練習模式的「這步怪怪的」回報寫進試算表後，用同一個發送器貼到同一個頻道（`🧪 練習回報「這步怪怪的」｜…`，沒有玩家名字、不會 @ 人），每小時最多 30 則、和 `/意見` 分開算；`PRACTICE_REPORT_DISCORD=false` 只關這份。`/api/bots/status` 的 `feedback.practiceReports` 是它的次數。詳見 `docs/PRACTICE_MODE.md`。
 
 
 ## `/api/bots/status`（公開，只有數字）
@@ -288,7 +289,8 @@
 "feedback": {
   "commandEnabled": true,
   "weeks": [ { "week": "2026-W42", "line": { "排行": 3, "問題": 1, "...": 0 }, "discord": { "機器人": 2, "...": 0 } } ],
-  "opinions": { "line": 1, "discord": 0 }
+  "opinions": { "line": 1, "discord": 0 },
+  "practiceReports": { "enabled": true, "sent": 2, "skipped": 0, "failed": 0, "throttled": 0 }
 },
 "chatExport": {
   "enabled": true, "sheetConfigured": true, "publicSheet": true,
@@ -342,6 +344,7 @@
 | `CHAT_EXPORT_EXCLUDE_CHANNEL_IDS` | 否 | 空。不讀的頻道、論壇或單一貼文（「大劍管理員」和 `/意見` 頻道一定不讀）。舊名 `COMMUNITY_DIGEST_EXCLUDE_CHANNEL_IDS` 仍有效 |
 | `FEEDBACK_DISCORD_CHANNEL_ID` | 否 | 管理員頻道「大劍管理員」`1145513360545296574`；`off` 不轉貼 |
 | `FEEDBACK_COMMAND_ENABLED` | 否 | 開 |
+| `PRACTICE_REPORT_DISCORD` | 否 | 開：練習模式「這步怪怪的」回報也貼到 `FEEDBACK_DISCORD_CHANNEL_ID` 那個頻道；`false/0/off/no` 只關 Discord 這份（2026-10-14） |
 
 已移除：`ANTHROPIC_API_KEY`（Render ops → apply 會把它從 Render 刪掉）、`COMMUNITY_DIGEST_ENABLED`、`COMMUNITY_DIGEST_MODEL`、
 `COMMUNITY_DIGEST_MAX_CHARS`、`COMMUNITY_DIGEST_CHANNEL_ID`。
