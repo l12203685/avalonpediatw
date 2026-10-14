@@ -290,7 +290,7 @@
       "loading": "Loading feature studies…",
       "loadFailed": "Feature studies cache not yet generated",
       "retry": "Retry",
-      "chartError": "Chart render failed; falling back to table view",
+      "chartError": "This study's data could not be displayed",
       "sampleSize": "{{games}} games",
       "viewFullReport": "Read full study",
       "role": "Role",
@@ -642,6 +642,283 @@
       }
     },
     "r6": {
+      "tabsa": {
+        "roles": {
+          "assassin": "Assassin",
+          "morgana": "Morgana",
+          "mordred": "Mordred",
+          "oberon": "Oberon",
+          "percival": "Percival",
+          "merlin": "Merlin",
+          "loyal": "Loyal Servant"
+        },
+        "faction": {
+          "red": "Evil",
+          "blue": "Good"
+        },
+        "outcomeTable": {
+          "group": "Group",
+          "all": "All games",
+          "games": "Games",
+          "gamesTitle": "Games in this group; also the denominator of the mission and game results",
+          "mission": "Mission result",
+          "missionRule": "3-red ÷ games",
+          "missionTitle": "Mission result: share of this group's games where evil failed three missions (3-red); denominator = the group's games",
+          "assassination": "Assassination",
+          "assassinationRule": "3-blue dead ÷ 3-blue games",
+          "assassinationTitle": "Assassination result: only this group's games that reached 3-blue; share where Merlin was shot (3-blue dead); n = those 3-blue games (3-red games have no assassination)",
+          "final": "Game result",
+          "finalRule": "evil wins ÷ games",
+          "finalTitle": "Game result: share of games evil finally won (3-red + 3-blue dead); denominator = the group's games",
+          "note": "Seen from evil: mission result = 3-red rate; assassination = share of the 3-blue games where Merlin was shot (n = 3-blue games); game result = evil's final win rate (3-red + 3-blue dead). Good's number = 100% minus the same cell, same denominator.",
+          "lowSample": "Faded = denominator under {{min}} games (the same threshold as the theory top-up)."
+        },
+        "missions": {
+          "tabs": {
+            "pass": "Pass rate",
+            "outcome": "Mission → ending"
+          },
+          "round": "Mission",
+          "reached": "Reached",
+          "reachedTitle": "Games that reached this mission (the denominator)",
+          "passRate": "Pass rate",
+          "passRateTitle": "Share of this mission with 0 fail cards (the cache's definition of a pass)",
+          "passCaption": "Pass rate and fail-card split by mission",
+          "passNote": "Denominator = games that reached the mission. \"Pass\" follows the cache: 0 fail cards; on mission 4 a single fail card counts under \"1 fail\" here even where the rules let the mission pass.",
+          "group": "Mission",
+          "passed": "Mission {{round}} passed",
+          "failed": "Mission {{round}} failed",
+          "outcomeCaption": "Mission result → three endings (conditional rates)",
+          "outcomeNote": "\"Passed\" = 0 fail cards, \"failed\" = 1 or more; mission 5 is left out (it decides 3-red or 3-blue by itself).",
+          "noCorrelation": "This cache has no mission → ending data; available after the next daily update."
+        },
+        "lake": {
+          "tabs": {
+            "faction": "Sides",
+            "holderRole": "Holder role",
+            "targetRole": "Target role",
+            "claim": "Claim reliability",
+            "consistency": "Word vs deed"
+          },
+          "picker": "Which lake",
+          "gamesBadge": "{{count}} games",
+          "group": "Holder → target",
+          "allGames": "All games with this lake",
+          "redHolder": "Evil holder",
+          "blueHolder": "Good holder",
+          "comboTitle": "Holder's side → target's side",
+          "factionCaption": "{{lake}}: holder's side and whom they checked → three endings",
+          "factionNote": "\"Same side / other side\" is just the four combinations added in pairs, so it is not listed.",
+          "holderRole": "Holder's role",
+          "targetRole": "Target's role",
+          "holderRoleCaption": "{{lake}}: the holder's role → three endings",
+          "targetRoleCaption": "{{lake}}: the target's role → three endings"
+        },
+        "assassination": {
+          "tabs": {
+            "summary": "Assassination",
+            "seat": "Seats",
+            "target": "Assassin's target"
+          },
+          "blocksCaption": "All games, three blocks (the assassination block counts 3-blue games only)",
+          "side": "Side",
+          "seat": "Seat",
+          "seatLabel": "Seat {{seat}}",
+          "allThreeBlue": "All 3-blue games",
+          "seatCaption": "Hit rate when Merlin / the Assassin sits in each seat (3-blue games only)",
+          "merlinSeat": "Merlin here",
+          "assassinSeat": "Assassin here",
+          "seatRule": "3-blue dead ÷ 3-blue games",
+          "merlinSeatTitle": "Games with Merlin in this seat that reached 3-blue: share where Merlin was shot; n = those 3-blue games",
+          "assassinSeatTitle": "Games with the Assassin in this seat that reached 3-blue: share where the Assassin hit Merlin; n = those 3-blue games",
+          "seatNote": "Hit rate = 3-blue dead ÷ (3-blue dead + 3-blue alive); n = 3-blue games with that role in that seat.",
+          "seatMissing": "This cache has no per-seat role results; available after the next daily update."
+        },
+        "studyTable": {
+          "lowHint": "Faded = n < {{min}} (small sample).",
+          "computedCi": "\"95% CI (computed)\" is computed by the site from n and the rate with the Wilson method (the cache has no interval).",
+          "ciComputed": "95% CI (computed)",
+          "byLake": "By lake",
+          "redHolder": "Evil holder",
+          "blueHolder": "Good holder",
+          "claimRedTitle": "Of the times the holder said evil, the share where the target really was evil",
+          "claimBlueTitle": "Of the times the holder said good, the share where the target really was good",
+          "hits": "true {{hits}}",
+          "lieRate": "Lie rate",
+          "byTier": "By how often the target led",
+          "topSeats": "By the target's seat (top {{count}} only)",
+          "seatLabel": "Seat {{seat}}",
+          "hitRateTitle": "Of these shots, the share where the target really was Merlin",
+          "hitRateNote": "Hit rate = share of shots whose target really was Merlin; n = shots in the group.",
+          "missRate": "Missed",
+          "consistencyTitle": "When the lake holder later leads, the share of picks that match their lake claim",
+          "consistencyNote": "Consistency = consistent ÷ (consistent + inconsistent); n = events for that role.",
+          "consistent": "consistent",
+          "inconsistent": "inconsistent",
+          "combo": "Combination",
+          "threeRedRate": "3-red rate",
+          "deltaThreeRed": "Δ 3-red",
+          "deltaThreeBlueDead": "Δ 3-blue dead",
+          "deltaThreeBlueAlive": "Δ 3-blue alive",
+          "highEvNote": "Δ 3-red = this group's 3-red rate − the rate over all games; these cells were picked from many combinations for the largest gaps, and most have a small n.",
+          "flipRed": "Flip % (red)",
+          "flipBlue": "Flip % (blue)",
+          "flipColsTitle": "Cache fields flipRedPct / flipBluePct: the role's flip rate under two groupings; see Method",
+          "signedEv": "signed EV",
+          "signedEvTitle": "signed EV = flip % (blue) − flip % (red), in points; the original study reads a positive value as a \"good signal\"",
+          "chances": "Chances",
+          "chancesTitle": "Votes this role cast after the team changed",
+          "flipSummary": "Overall flip rate: good {{blue}}, evil {{red}}, only {{delta}}pp apart.",
+          "flipNote": "signed EV = flip % (blue) − flip % (red); roles differ by only about ±2pp. The two raw flip columns and how to read them are in the full study.",
+          "flipNoteFull": "signed EV = flip % (blue) − flip % (red). A player's several votes in one game are not independent samples, so no interval is given.",
+          "forcedRound": "Round reaching P5",
+          "forcedRoundTitle": "Games where this round's mission went all the way to the fifth proposal (P5, forced)",
+          "forcedBaseline": "Δ = this group's share − all games (baseline 3-red {{baseline}}%).",
+          "r3Compare": "With / without P5 in R3",
+          "r3CompareLine": "P5 reached in R3: 3-red {{withRate}} (n={{withN}}); not reached: {{withoutRate}} (n={{withoutN}}).",
+          "withR3": "P5 reached in R3",
+          "withoutR3": "P5 not reached in R3",
+          "group": "Group",
+          "deltaBaseline": "Δ baseline"
+        },
+        "study": {
+          "back": "Back",
+          "close": "Close the full study",
+          "dialogTitle": "{{title}} · full study",
+          "copyLink": "Copy link",
+          "copied": "Copied",
+          "tabsLabel": "Full study sections",
+          "tabs": {
+            "data": "Findings & data",
+            "method": "Method & definitions",
+            "read": "How to read · caveats"
+          },
+          "question": "Question",
+          "takeaway": "Conclusion (generated from the numbers by the data layer)",
+          "fullData": "Full data",
+          "method": "Method & definitions",
+          "noMethod": "No method write-up for this study yet.",
+          "legacyL141": "This is the old cache's L141 (lake lie rate by role, a one-off study). The new \"lake claim reliability\" is recomputed from the game logs every day; its method write-up appears after the next daily update.",
+          "sampleTitle": "Sample and date",
+          "howToRead": "How to read",
+          "caveats": "Caveats",
+          "source": "Source: {{source}}",
+          "units": {
+            "links": "{{value}} lake checks",
+            "chances": "{{value}} vote chances",
+            "attempts": "{{value}} assassinations",
+            "leaderEvents": "{{value}} holder-led teams"
+          },
+          "live": "data as of {{date}} (recomputed from the game logs every day)",
+          "snapshot": "one-off study snapshot (on the site since {{since}}); the daily update does not recompute it",
+          "L141": {
+            "question": "When the lake holder announces that the target is evil or good, how often is the target really on that side? Split by first / second / third lake and by the holder's own side.",
+            "method": [
+              "Recomputed every day by generate_cache.py (compute_lake_claim_feature) from every game log in the spreadsheet: this time {{games}} games and {{links}} lake checks, data as of {{date}}.",
+              "A lake check is a line \"H>T x\" in the text record: H is the holder's seat, T the target's seat (0 means seat 10), a trailing x = announced evil, o = announced good, nothing (or ?) = no announcement. Only the first three lake lines of a game count, as the first, second and third lake.",
+              "Sides come from the game's role sheet: Assassin, Morgana, Mordred and Oberon are evil, every other role is good.",
+              "Reliability = announcements that match the target's real side ÷ announcements in the cell (n).",
+              "\"By holder\" pools the three lakes and splits them by the holder's own side into four cells.",
+              "95% intervals are Wilson score intervals (z = 1.96) from the cache; cells with n < {{min}} are flagged as small samples.",
+              "Lake lines with no announcement ({{undeclared}} this time) are left out of every cell but counted in the total."
+            ],
+            "read": [
+              "\"Said evil {{exRate}}% [{{exLo}}–{{exHi}}] n={{exN}}\" means: of the {{exN}} times a {{exLakeEn}} holder said evil, the target really was evil {{exRate}}% of the time; the true rate is roughly between {{exLo}}% and {{exHi}}%.",
+              "Check the holder's side first: good holders almost always tell the truth; only part of an evil holder's announcements are true, and an evil holder calling someone evil is usually framing a good player (see \"By holder\").",
+              "The per-lake numbers mix good and evil holders: the more evil holders, the lower the overall reliability. Differences between lakes mostly reflect who holds the lake, not a person changing how they announce."
+            ],
+            "caveats": [
+              "The Lady of the Lake shows the holder the target's real side, so an announcement that does not match is almost always a lie; a few may be typos in the record.",
+              "By the rules the next holder is the previous target, so second and third holders are in effect chosen by the previous holder, and their good / evil mix differs from the first lake.",
+              "Game logs are typed by hand: a missing mark is left out, a wrong mark is counted.",
+              "These are averages over all players, not any one player; individual habits can differ a lot."
+            ]
+          },
+          "L142": {
+            "question": "After announcing a lake result, does the holder pick teams that match the announcement when they lead? Does the consistency rate differ by role?",
+            "method": [
+              "One-off study: the original report {{source}} lives on the owner's PC, not in the repository; scripts/build_feature_studies.py wrote its numbers into the cache: a {{games}}-game snapshot, {{links}} lake checks, {{leaderEvents}} teams picked by a holder who had announced a lake result.",
+              "The daily update does not recompute these numbers; generate_cache.py (annotate_feature_studies) only rewrites the conclusion from them and flags cells with n < {{min}} as small samples.",
+              "One event = one team picked by a holder who had announced; a pick that matches the announcement is \"consistent\", otherwise \"inconsistent\" (the report's Section 2 \"leader picks alignment\"; the typical inconsistency is calling someone evil and then putting them on the team).",
+              "Consistency = consistent ÷ (consistent + inconsistent), n = events for the role; the role is the holder's own role.",
+              "High-EV cells: among the combinations role × announced evil / good × consistent or not, the {{cellCount}} whose games ended 3-red furthest from the baseline (3-red rate over all games of the snapshot, {{baseline}}%); Δ 3-red = the group's 3-red rate − baseline.",
+              "95% intervals are computed by the site: consistency from consistent / total; high-EV cells from the 3-red rate × n back to a count, then the Wilson method (z = 1.96)."
+            ],
+            "read": [
+              "Read n and the interval first: roles with enough data differ little and their intervals overlap; roles with n < {{min}} (including the 100% cell) have very wide intervals and show no pattern.",
+              "An inconsistency is worth a question but does not identify a side on its own.",
+              "Treat the high-EV cells as hints only: they are the extremes picked from many cells and will most likely shrink with new data."
+            ],
+            "caveats": [
+              "Only holders who later lead produce events; evil holders rarely lead afterwards, so almost every evil role is a small sample.",
+              "The high-EV cells are the largest gaps picked from all combinations, mostly with small n: picking extremes exaggerates them (multiple comparisons).",
+              "Δ 3-red is a correlation, not a cause: consistency and how the game is going affect each other.",
+              "One-off study: the numbers stay at the {{games}}-game snapshot and do not follow the daily update."
+            ]
+          },
+          "L143": {
+            "question": "When the Assassin shoots after 3-blue, is the target related to how often they led or where they sat? Does the chance of hitting Merlin change with that?",
+            "method": [
+              "One-off study: the original report {{source}} is not in the repository; scripts/build_feature_studies.py wrote it into the cache: a {{games}}-game snapshot, {{attempts}} assassinations. The daily update does not recompute the numbers; generate_cache.py only rewrites the conclusion from them.",
+              "Hit rate = shots whose target really was Merlin ÷ shots in the group (n); missed = 100% − hit rate.",
+              "Leader tiers: shots are split by how many times the target led in that game into most / middle / least (cut points as in the original report; the site cannot verify them); the three tiers add up to {{tierTotal}} shots.",
+              "The seat table splits by the target's seat; the cache only keeps the {{seatCount}} seats with the highest hit rate, the others are not provided.",
+              "95% intervals are computed by the site from hit rate × n back to a count, then the Wilson method (z = 1.96); n < {{min}} is flagged as a small sample."
+            ],
+            "read": [
+              "Hit rate is \"how often the Assassin was right when choosing this kind of player\", not \"how often this kind of player gets chosen\".",
+              "The most-led tier has a higher hit rate, but check whether the intervals overlap first; and how often someone leads is mostly seat rotation (who starts, how many rounds), not how active they are.",
+              "To find Merlin, read what people say and how they vote, not their lead count or seat."
+            ],
+            "caveats": [
+              "The seat table lists only the top seats: listing the highest ones overstates the gap, and the seats left out may be about the same (selection bias).",
+              "Lead count is tied to seat and game length (longer games give everyone more leads): a confounder.",
+              "One-off study: the numbers stay at the {{games}}-game snapshot and do not follow the daily update."
+            ]
+          },
+          "L136": {
+            "question": "After the team changes, do players change their vote (approve to reject or back)? Do good, evil and each role flip at different rates?",
+            "method": [
+              "One-off study: the original report {{source}} is not in the repository; scripts/build_feature_studies.py wrote it into the cache: a {{games}}-game snapshot, {{chances}} vote chances. The daily update does not recompute the numbers; generate_cache.py only rewrites the conclusion from them.",
+              "From the study's name: a chance = one player's vote after the team changed, a flip = that vote differs from their vote on the previous team (about {{perPlayerGame}} chances per player per game).",
+              "Overall flip rate by side (cache summary): good {{blue}}%, evil {{red}}%, a {{delta}}pp gap.",
+              "Each role also has two flip columns (cache fields flipRedPct / flipBluePct, labelled red / blue); how the two are split is only in the original report and the site cannot confirm it, so they are labelled by field name.",
+              "signed EV = flip % (blue) − flip % (red) (the cache's numbers check out), in points; the original study reads a positive value as a \"good signal\".",
+              "No interval: a player's several votes in one game are not independent, so the {{chances}} chances cannot be treated as independent samples."
+            ],
+            "read": [
+              "Roles' signed EV fall within {{span}}pp; the sides differ by only {{delta}}pp overall.",
+              "A player has about {{perPlayerGame}} chances per game, so a {{delta}}pp gap is about {{perGameDiff}} more or fewer flips per game: impossible to tell at the table.",
+              "Do not infer a side from a changed vote."
+            ],
+            "caveats": [
+              "A \"flip\" ignores direction and reason (who was swapped in or out); averaging different situations can cancel out.",
+              "The sample is large, so such a small gap may be statistically real, but it is of little practical use.",
+              "One-off study: the numbers stay at the {{games}}-game snapshot and do not follow the daily update."
+            ]
+          },
+          "L139": {
+            "question": "In games where a round's mission went all the way to the fifth proposal (P5, forced), do the three endings come out differently from other games?",
+            "method": [
+              "One-off study: the original report {{source}} is not in the repository; scripts/build_feature_studies.py wrote it into the cache: a {{games}}-game snapshot. The daily update does not recompute the numbers; generate_cache.py only rewrites the conclusion from them.",
+              "P5 = the fifth proposal of a round: when the first four teams are all rejected, the fifth goes on the mission without a vote (forced). \"P5 in R3\" = games whose third mission went to the fifth proposal.",
+              "3-red rate = share of these games that ended 3-red; baseline {{baseline}}% = the 3-red rate over all games of the snapshot. Δ 3-red / Δ 3-blue dead / Δ 3-blue alive = the group's share of that ending − the share over all games (points); the three add up to about 0.",
+              "\"With / without P5 in R3\" splits all games in two: {{withN}} + {{withoutN}} = {{games}} games.",
+              "R1 is left out: almost every game reaches P5 in R1, so there is no comparison group (the report attributes it to padding in the spreadsheet import; in this community the first four R1 proposals are also often \"talk teams\" that never go on a mission).",
+              "95% intervals are computed by the site from the 3-red rate × n back to a count, then the Wilson method (z = 1.96); n < {{min}} is flagged as a small sample."
+            ],
+            "read": [
+              "This is a conditional rate: among games reaching P5 in R3, 3-red differs from the baseline by {{r3delta}}pp. It only says these games end 3-red at a different frequency, not that reaching P5 makes evil stronger.",
+              "R4 and R5 have few games ({{r4n}} and {{r5n}}) and wide intervals: check whether the interval covers the baseline before reading the gap."
+            ],
+            "caveats": [
+              "Selection bias: rejecting all the way to P5 is itself the result of a game already tilting evil (good cannot control the table); P5 is a symptom of a bad position, not the cause, and not evidence of evil cover.",
+              "One-off study: the numbers stay at the {{games}}-game snapshot and do not follow the daily update."
+            ],
+            "baselineNow": "The {{baseline}}% baseline is the 3-red rate of the study's snapshot; the current cache's 3-red rate over all games is {{currentThreeRed}}% (different snapshot and filters), so the two cannot be subtracted directly."
+          }
+        }
+      },
       "teams": {
         "tabsLabel": "Team-pick sub-pages",
         "tabs": {

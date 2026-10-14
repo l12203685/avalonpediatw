@@ -16,6 +16,8 @@ import AssassinationTab from '../components/analysis/tabs/AssassinationTab';
 import PositionTab from '../components/analysis/tabs/PositionTab';
 import RolesTab from '../components/analysis/tabs/RolesTab';
 import PlayersTab from '../components/analysis/tabs/PlayersTab';
+import FeatureStudyReportHost from '../components/analytics/FeatureStudyReport';
+import { STUDY_HOME_TAB, studyInLocation } from '../components/analytics/studyLink';
 
 /**
  * #98 (2026-04-23) IA 重整：數據排行頁拆成兩大區 —
@@ -48,6 +50,10 @@ import PlayersTab from '../components/analysis/tabs/PlayersTab';
  * (2026-10-14 第六輪分工前置) 各分頁內容拆到 components/analysis/tabs/ 下各自一個檔案
  *   (BoardsTab、OverviewTab、TeamsTab … PlayersTab)，一個分頁只有一個負責的檔案；
  *   這裡只留頁面外框、上層兩個 tab 與「分析」子分頁切換。
+ *
+ * (2026-10-14 Edward：「查看完整研究」大多點不開) 掛一個 FeatureStudyReportHost：網址 #study=<id>
+ *   時顯示那項特徵研究的完整研究 (各分頁卡片的連結都打開它)；從 #study= 連結直接進來時，
+ *   先切到 分析 → 該研究卡片所在的分頁 (STUDY_HOME_TAB)，關掉研究後就在卡片旁邊。
  */
 type TopTab = 'boards' | 'analysis';
 type AnalysisTab =
@@ -74,7 +80,7 @@ export default function AnalyticsPage(): JSX.Element {
   const { setGameState } = useGameStore();
   // openPlayerStats (排行的名字、#player= 連結) → 分析 → 玩家雷達，選好那位。
   const statsFocus = useGameStore((s) => s.statsFocus);
-  const [activeTab, setActiveTab] = useState<TopTab>(() => (statsFocus ? 'analysis' : 'boards'));
+  const [activeTab, setActiveTab] = useState<TopTab>(() => (statsFocus || studyInLocation() ? 'analysis' : 'boards'));
   const [seenFocus, setSeenFocus] = useState(statsFocus);
   if (statsFocus !== seenFocus) {
     // a new openPlayerStats while this page is open (React's "adjust state on prop change")
@@ -128,6 +134,7 @@ export default function AnalyticsPage(): JSX.Element {
           </motion.div>
         </AnimatePresence>
       </div>
+      <FeatureStudyReportHost />
     </div>
   );
 }
@@ -158,7 +165,12 @@ function TopTabButton({
 
 function AnalysisSection({ focus }: { focus: { name: string; seq: number } | null }): JSX.Element {
   const { t } = useTranslation('common');
-  const [tab, setTab] = useState<AnalysisTab>(() => (focus ? 'players' : 'overview'));
+  const [tab, setTab] = useState<AnalysisTab>(() => {
+    if (focus) return 'players';
+    const study = studyInLocation();
+    const home = study ? STUDY_HOME_TAB[study] : undefined;
+    return ANALYSIS_TABS.some(d => d.id === home) ? (home as AnalysisTab) : 'overview';
+  });
   const [seenFocus, setSeenFocus] = useState(focus);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
