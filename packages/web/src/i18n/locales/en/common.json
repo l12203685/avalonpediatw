@@ -584,54 +584,6 @@
         "loadingPlayers": "Loading players…",
         "loadingRadar": "Loading radar…",
         "search": "Search players (part of the name works)…",
-        "title": "{{name}} — Skill radar",
-        "details": "{{name}} — Details",
-        "axes": {
-          "winRate": "Final WR",
-          "redWinRate": "Red final WR",
-          "blueMerlinProtect": "Blue 3B-alive",
-          "missionWinRate": "Mission-stage WR",
-          "roleTheory": "Role theory",
-          "positionTheory": "Position theory",
-          "redMerlinKillRate": "Red kill rate",
-          "experience": "Experience"
-        },
-        "legend": {
-          "winRate": "Final WR: red games ending 3-Red or 3-Blue-killed plus blue games ending 3-Blue-alive, over all games",
-          "redWinRate": "Red final WR: share of red games ending 3-Red or 3-Blue-killed",
-          "blueMerlinProtect": "Blue 3B-alive: share of blue games ending 3-Blue with Merlin alive",
-          "missionWinRate": "Mission-stage WR: legacy basis where 3-Blue-killed also counts as a blue win",
-          "roleTheory": "Role-theory WR (career): Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final WR as that role",
-          "positionTheory": "Position-theory WR (career): Σ 1/10 × the player's final WR in each seat",
-          "redMerlinKillRate": "Red kill rate: share of red games ending 3-Blue-killed",
-          "experience": "Experience: total games / 10 (capped at 100)"
-        },
-        "stats": {
-          "totalGames": "Games",
-          "finalWinRate": "Final WR",
-          "missionWinRate": "Mission-stage WR",
-          "merlinSurvival": "Merlin survival (blue 3-Blue games)",
-          "redFinal": "Red final WR",
-          "blueFinal": "Blue 3B-alive",
-          "red3Red": "3-Red (red)",
-          "redMerlinDead": "3-Blue-killed (red)",
-          "blueMerlinAlive": "3-Blue-alive (blue)",
-          "roleWinRates": "Role win rates",
-          "theoryTitle": "Theory win rates",
-          "lastN": "Last {{count}}",
-          "career": "Career ({{count}})",
-          "colRoleTheory": "Role theory",
-          "colPositionTheory": "Position theory",
-          "colFinal": "Final WR",
-          "theoryNote": "A last-{{windows}} row is shown only when the player has more games than that; otherwise it equals the career row.",
-          "theoryNoteTopUp": " Roles or seats with fewer than {{n}} games are topped up to {{n}} at the population final WR (small samples stay near the average).",
-          "theoryPending": "Theory win rates: available after the next daily refresh"
-        },
-        "topUp": {
-          "role": "; roles with fewer than {{n}} games are topped up to {{n}} at the population rate",
-          "seat": "; seats with fewer than {{n}} games are topped up to {{n}} at the population rate"
-        },
-        "legacyNote": "Role win rates use the mission-stage basis (3-Blue-killed counts as blue)",
         "searchMany": "{{count}} players match — pick one (Enter opens the first)",
         "searchNone": "No player matches “{{query}}” — part of the name is enough",
         "searchSuggest": "No player matches “{{query}}” — did you mean:"
@@ -687,6 +639,102 @@
         "seatHeatmap": "Seat win-rate heatmap",
         "seatOrder": "P/M/M seat order",
         "chemistry": "Chemistry matrix"
+      }
+    },
+    "r6": {
+      "radar": {
+        "picker": {
+          "label": "Choose a player",
+          "toggle": "Show or hide the player list",
+          "list": "Players",
+          "all": "All {{count}} players, most games first",
+          "matches": "{{count}} matching",
+          "none": "No matching player",
+          "games": "{{count}} games"
+        },
+        "summary": {
+          "games": "{{count}} career games",
+          "final": "Final WR"
+        },
+        "tabs": {
+          "label": "Player radar sections",
+          "radar": "Radar",
+          "blocks": "Three blocks",
+          "theory": "Theory WR"
+        },
+        "pending": "Available after the next daily refresh",
+        "axes": {
+          "winRate": "Final WR",
+          "redWinRate": "Red final WR",
+          "blueMerlinProtect": "Blue Merlin survival",
+          "missionWinRate": "Mission WR",
+          "roleTheory": "Role theory",
+          "positionTheory": "Position theory",
+          "redMerlinKillRate": "Red kill rate",
+          "experience": "Experience"
+        },
+        "axisDef": {
+          "winRate": "Game result: (red 3-Red + red 3-Blue-killed + blue 3-Blue-alive) / all games",
+          "redWinRate": "Red game result: (3-Red + 3-Blue-killed) / red games",
+          "blueMerlinProtect": "Blue assassination result: 3-Blue-alive / blue 3-Blue games (3-Red games excluded)",
+          "missionWinRate": "Mission result: (red 3-Red + blue 3-Blue) / all games",
+          "roleTheory": "Each role's last {{special}} games, Loyal Servant's last {{loyal}} (see Theory WR)",
+          "positionTheory": "Last {{games}} games (see Theory WR)",
+          "redMerlinKillRate": "Red assassination result: 3-Blue-killed / red 3-Blue games (3-Red games excluded)",
+          "experience": "Total games / 10 (capped at 100); not a win rate"
+        },
+        "colAxis": "Metric",
+        "colValue": "Value",
+        "colDef": "How it is computed",
+        "chartAria": "{{name}}'s skill radar",
+        "tooFewAxes": "Fewer than three metrics can be drawn; the numbers are in the table.",
+        "radarNote": "Only computable axes are drawn (missing ones are not drawn as 0%). n = the denominator; for theory win rates n = the games used.",
+        "blocks": {
+          "group": "Group",
+          "empty": "Three blocks: available after the next daily refresh",
+          "rolesNote": "Red, blue and every role cover the whole career.",
+          "rolesPending": "Per-role three blocks: available after the next daily refresh."
+        },
+        "theory": {
+          "summaryCaption": "Three theory win rates",
+          "rolesCaption": "Games behind role theory",
+          "colTheory": "Theory",
+          "colRate": "Theory WR",
+          "colRange": "Range",
+          "colGames": "Games",
+          "colGamesHint": "Games used / window; full = enough games",
+          "colTopUp": "Topped up",
+          "colTopUpHint": "Cells with fewer than {{n}} games, topped up at the population final WR (7 role cells, 10 seat cells)",
+          "colFinal": "Actual final WR",
+          "colFinalHint": "The actual final WR over the same games (unweighted), to compare with the theory WR",
+          "role": "Role theory",
+          "position": "Position theory",
+          "overall": "Overall theory",
+          "windowRole": "Each role's last {{special}} (Loyal Servant: last {{loyal}})",
+          "windowPosition": "Last {{count}} games",
+          "windowCareer": "Whole career",
+          "full": "full",
+          "notFull": "not full",
+          "careerGames": "{{count}} games",
+          "cells": "{{count}} cells",
+          "overallLocked": "Shown from {{min}} career games",
+          "note": "Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's recent final WR in that role (each role's last {{special}}, Loyal Servant's last {{loyal}}); position theory = Σ 1/10 × the player's final WR in each seat over the last {{position}} games; overall theory = role theory over the whole career, listed from {{overall}} career games.",
+          "noteTopUp": "Cells with fewer than {{n}} games are topped up to {{n}} at the population final WR.",
+          "colRole": "Role",
+          "colWins": "Won / played",
+          "colWindow": "Window",
+          "colCellRate": "WR in the sum",
+          "colCellRateHint": "This role's final WR as it enters the role-theory sum (after any top-up)",
+          "colStatus": "Status",
+          "status": {
+            "full": "full",
+            "partial": "not full",
+            "topUp": "topped up to {{n}}",
+            "none": "never played · population rate"
+          },
+          "rolesNote": "Role-theory rankings only list players whose every role window is full.",
+          "rolesPending": "Per-role windows: available after the next daily refresh"
+        }
       }
     }
   },

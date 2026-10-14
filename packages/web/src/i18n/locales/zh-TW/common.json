@@ -584,54 +584,6 @@
         "loadingPlayers": "載入玩家資料…",
         "loadingRadar": "載入雷達圖…",
         "search": "搜尋玩家（打名字的一部分也可以）…",
-        "title": "{{name}} — 能力雷達圖",
-        "details": "{{name}} — 詳細數據",
-        "axes": {
-          "winRate": "最終勝率",
-          "redWinRate": "紅方最終勝率",
-          "blueMerlinProtect": "藍方三藍活率",
-          "missionWinRate": "任務結算勝率",
-          "roleTheory": "角色理論勝率",
-          "positionTheory": "位置理論勝率",
-          "redMerlinKillRate": "紅方刺中率",
-          "experience": "經驗"
-        },
-        "legend": {
-          "winRate": "最終勝率：紅方場的三紅 + 三藍死、藍方場的三藍活，除以總場數",
-          "redWinRate": "紅方最終勝率：擔任紅方時三紅或三藍死的比例",
-          "blueMerlinProtect": "藍方三藍活率：擔任藍方時三藍且梅林活的比例",
-          "missionWinRate": "任務結算勝率：舊口徑，三藍死也算藍方贏",
-          "roleTheory": "角色理論勝率（生涯）：Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 本人該角色的最終勝率",
-          "positionTheory": "位置理論勝率（生涯）：Σ 1/10 × 本人各位置的最終勝率",
-          "redMerlinKillRate": "紅方刺中率：擔任紅方時三藍死的比例",
-          "experience": "經驗：總場次 / 10（上限 100）"
-        },
-        "stats": {
-          "totalGames": "總場次",
-          "finalWinRate": "最終勝率",
-          "missionWinRate": "任務結算勝率",
-          "merlinSurvival": "梅林存活率（藍方三藍局）",
-          "redFinal": "紅方最終勝率",
-          "blueFinal": "藍方三藍活率",
-          "red3Red": "三紅（紅方）",
-          "redMerlinDead": "三藍死（紅方）",
-          "blueMerlinAlive": "三藍活（藍方）",
-          "roleWinRates": "角色勝率",
-          "theoryTitle": "理論勝率",
-          "lastN": "近 {{count}} 場",
-          "career": "生涯 {{count}} 場",
-          "colRoleTheory": "角色理論",
-          "colPositionTheory": "位置理論",
-          "colFinal": "最終勝率",
-          "theoryNote": "場數沒超過 {{windows}} 場時，那一段就等於生涯，不另列。",
-          "theoryNoteTopUp": "不到 {{n}} 場的角色或位置用全體最終勝率補到 {{n}} 場（場數少的人會比較接近全體平均）。",
-          "theoryPending": "理論勝率：下次每日更新資料後提供"
-        },
-        "topUp": {
-          "role": "；不到 {{n}} 場的角色用全體勝率補到 {{n}} 場",
-          "seat": "；不到 {{n}} 場的位置用全體勝率補到 {{n}} 場"
-        },
-        "legacyNote": "角色勝率為任務結算口徑（三藍死算藍勝）",
         "searchMany": "符合 {{count}} 位，點名字查看（按 Enter 開第一位）",
         "searchNone": "找不到「{{query}}」，可以只打名字的一部分",
         "searchSuggest": "找不到「{{query}}」，你是不是要找："
@@ -687,6 +639,102 @@
         "seatHeatmap": "座位勝率熱圖",
         "seatOrder": "派梅娜順序",
         "chemistry": "默契矩陣"
+      }
+    },
+    "r6": {
+      "radar": {
+        "picker": {
+          "label": "選擇玩家",
+          "toggle": "展開／收起玩家名單",
+          "list": "玩家名單",
+          "all": "全部 {{count}} 位，場次多的在前",
+          "matches": "符合 {{count}} 位",
+          "none": "沒有符合的玩家",
+          "games": "{{count}} 場"
+        },
+        "summary": {
+          "games": "生涯 {{count}} 場",
+          "final": "最終勝率"
+        },
+        "tabs": {
+          "label": "玩家雷達小分頁",
+          "radar": "雷達圖",
+          "blocks": "三塊勝率",
+          "theory": "理論勝率"
+        },
+        "pending": "下次每日更新後提供",
+        "axes": {
+          "winRate": "最終勝率",
+          "redWinRate": "紅方最終勝率",
+          "blueMerlinProtect": "藍方梅林存活率",
+          "missionWinRate": "任務勝率",
+          "roleTheory": "角色理論",
+          "positionTheory": "位置理論",
+          "redMerlinKillRate": "紅方刺中率",
+          "experience": "經驗"
+        },
+        "axisDef": {
+          "winRate": "遊戲結果：（紅方場三紅＋三藍死＋藍方場三藍活）÷ 全部場次",
+          "redWinRate": "紅方場遊戲結果：（三紅＋三藍死）÷ 紅方場次",
+          "blueMerlinProtect": "藍方場刺殺結果：三藍活 ÷ 藍方的三藍局（三紅局不算）",
+          "missionWinRate": "任務結果：（紅方場三紅＋藍方場三藍）÷ 全部場次",
+          "roleTheory": "各角色近 {{special}} 場、忠臣近 {{loyal}} 場（見理論勝率）",
+          "positionTheory": "近 {{games}} 場（見理論勝率）",
+          "redMerlinKillRate": "紅方場刺殺結果：三藍死 ÷ 紅方的三藍局（三紅局不算）",
+          "experience": "總場次 ÷ 10（上限 100），不是勝率"
+        },
+        "colAxis": "指標",
+        "colValue": "數值",
+        "colDef": "怎麼算",
+        "chartAria": "{{name}} 的能力雷達圖",
+        "tooFewAxes": "可畫的指標不到三個，數字見右邊的表。",
+        "radarNote": "圖只畫算得出來的軸（缺的不畫成 0%）。n＝分母場數；理論勝率的 n＝用到的場數。",
+        "blocks": {
+          "group": "分組",
+          "empty": "三塊勝率：下次每日更新後提供",
+          "rolesNote": "紅方、藍方與各角色都是生涯全部場次。",
+          "rolesPending": "各角色的三塊勝率：下次每日更新後提供。"
+        },
+        "theory": {
+          "summaryCaption": "三種理論勝率",
+          "rolesCaption": "角色理論用到的場次",
+          "colTheory": "理論",
+          "colRate": "理論勝率",
+          "colRange": "範圍",
+          "colGames": "場數",
+          "colGamesHint": "用到的場數 / 視窗；打滿＝場數夠",
+          "colTopUp": "補值",
+          "colTopUpHint": "不到 {{n}} 場、用全體最終勝率補值的格數（角色共 7 格、位置共 10 格）",
+          "colFinal": "同段最終勝率",
+          "colFinalHint": "同一段場次實際的最終勝率（不加權），和理論勝率對照",
+          "role": "角色理論",
+          "position": "位置理論",
+          "overall": "整體理論",
+          "windowRole": "各角色近 {{special}} 場、忠臣近 {{loyal}} 場",
+          "windowPosition": "近 {{count}} 場",
+          "windowCareer": "生涯全部場次",
+          "full": "打滿",
+          "notFull": "未打滿",
+          "careerGames": "{{count}} 場",
+          "cells": "{{count}} 格",
+          "overallLocked": "生涯滿 {{min}} 場後顯示",
+          "note": "角色理論＝Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 本人該角色最近的最終勝率（各角色近 {{special}} 場、忠臣近 {{loyal}} 場）；位置理論＝Σ 1/10 × 本人近 {{position}} 場各位置的最終勝率；整體理論＝生涯全部場次的角色理論，生涯滿 {{overall}} 場才列。",
+          "noteTopUp": "不到 {{n}} 場的格子用全體最終勝率補到 {{n}} 場。",
+          "colRole": "角色",
+          "colWins": "勝／場",
+          "colWindow": "視窗",
+          "colCellRate": "進總和的勝率",
+          "colCellRateHint": "這個角色進角色理論總和的最終勝率（補值後）",
+          "colStatus": "狀態",
+          "status": {
+            "full": "打滿",
+            "partial": "未打滿",
+            "topUp": "補到 {{n}} 場",
+            "none": "沒打過・用全體"
+          },
+          "rolesNote": "排行的角色理論只收每個角色都打滿的玩家。",
+          "rolesPending": "各角色近幾場的角色理論：下次每日更新後提供"
+        }
       }
     }
   },
