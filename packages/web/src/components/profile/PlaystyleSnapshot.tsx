@@ -1,16 +1,4 @@
-/**
- * Panel C — 對戰風格快照 (Playstyle Snapshot)
- *
- * Three signals derived from real Firestore game records:
- *   1. R3+ 強硬度 (reject rate at round 3+, split by player's role camp)
- *      = reject votes / total votes cast in R3-R5
- *   2. 刺客目標座位偏好 (assassin attacker's top-3 target seats),
- *      shown only when player has been assassin >= 3 times
- *   3. 隊長 stickiness (proportion of leader proposals where the next proposal
- *      keeps the same team), shown only when player has led >= 5 proposals
- *
- * Data source: backend /api/analysis/profile/:name/playstyle.
- */
+/** 對戰風格：牌譜每日重算投票；刺座與同隊重提比仍沿用既有資料。 */
 import { useEffect, useState } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
 import {
@@ -21,20 +9,6 @@ import {
 
 interface PlaystyleSnapshotProps {
   playerName: string;
-}
-
-function formatPctile(p: number | null): string {
-  if (p === null) return '';
-  if (p >= 80) return `top ${(100 - p).toFixed(0)}%`;
-  if (p <= 20) return `bottom ${p.toFixed(0)}%`;
-  return `${p.toFixed(0)} 百分位`;
-}
-
-function pctileColor(p: number | null): string {
-  if (p === null) return 'text-gray-500';
-  if (p >= 70) return 'text-emerald-300';
-  if (p <= 30) return 'text-rose-300';
-  return 'text-slate-200';
 }
 
 function seatRangeLabel(seats: number[]): string {
@@ -77,35 +51,34 @@ export default function PlaystyleSnapshot({ playerName }: PlaystyleSnapshotProps
     );
   }
 
-  if (!resp || !resp.data.hasData) {
-    return (
-      <div className="bg-zinc-900/50 border border-gray-700 rounded-xl p-6 text-center text-gray-400">
-        <AlertCircle size={20} className="inline mr-2 align-middle" />
-        資料不足（需 R3+ 投票 ≥ {resp?.thresholds.r3MinVotes ?? 10} 次或刺客 ≥ {resp?.thresholds.assassinMinAttempts ?? 3} 場）
-      </div>
-    );
-  }
+  if (!resp) return <p className="text-sm text-gray-400">下次每日更新後提供</p>;
 
   const d = resp.data;
   const labels = resp.labels;
-
+  const voting = resp.voting;
   const rows: Array<{ label: string; value: string; pctile: number | null; sub?: string }> = [];
 
-  if (d.r3RejectRate.red !== null) {
-    rows.push({
-      label: labels.r3RejectRedLabel,
-      value: `${d.r3RejectRate.red.toFixed(2)}`,
-      pctile: d.r3RejectPercentile.red,
-      sub: 'R3-R5 紅角投否決比 (越高 = 越強硬)',
-    });
-  }
-  if (d.r3RejectRate.blue !== null) {
-    rows.push({
-      label: labels.r3RejectBlueLabel,
-      value: `${d.r3RejectRate.blue.toFixed(2)}`,
-      pctile: d.r3RejectPercentile.blue,
-      sub: 'R3-R5 藍角投否決比 (高 = 強硬)',
-    });
+  if (voting) {
+    for (const [key, label] of [['loyal', '忠臣'], ['red', '紅方']] as const) {
+      const cell = voting.r3Reject[key];
+      rows.push({
+        label: `${label}第 3 局後反對率`,
+        value: cell.rate === null ? '樣本不足' : `${cell.rate.toFixed(1)}%`,
+        pctile: cell.pr,
+        sub: `反對 ${cell.hits}／有效 ${cell.votes} 票；PR 母體 ${cell.cohortPlayers} 人`,
+      });
+    }
+    for (const [window, title] of [['r3Plus', 'R3–R5'], ['all', '全部回合']] as const) {
+      for (const [metric, label] of [['evilTeamReject', '有紅方的隊反對率'], ['goodTeamApprove', '全藍的隊贊成率']] as const) {
+        const cell = voting.teamComposition[window][metric];
+        rows.push({
+          label: `${title} · ${label}`,
+          value: cell.rate === null ? '樣本不足' : `${cell.rate.toFixed(1)}%`,
+          pctile: null,
+          sub: `${metric === 'evilTeamReject' ? '反對' : '贊成'} ${cell.hits}／符合隊伍條件的有效 ${cell.votes} 票`,
+        });
+      }
+    }
   }
   if (d.assassinTopSeats && d.assassinTopSeats.length > 0) {
     const range = seatRangeLabel(d.assassinTopSeats);
@@ -129,24 +102,30 @@ export default function PlaystyleSnapshot({ playerName }: PlaystyleSnapshotProps
     <div className="bg-zinc-900/50 border border-gray-700 rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-gray-300">對戰風格快照</h3>
-        <span className="text-xs text-gray-500">vs 全玩家 cohort</span>
+        <span className="text-xs text-gray-500">有效票數與比較母體</span>
       </div>
 
+      {!voting && <p className="text-sm text-gray-400">第 3 局後反對率：下次每日更新後提供</p>}
+      <p className="text-xs text-gray-400 leading-relaxed">
+        第 3 局後包含 R3–R5；第 5 次強制提議沒有投票，一律排除。
+        每項至少 {voting?.minVotes ?? 10} 票才顯示百分率。忠臣視角不含梅林、派西維爾。
+        隊伍條件用事後揭曉的真實身分，涵蓋玩家所有角色，不能解讀成當時已知資訊或實力排名。
+      </p>
       <div className="space-y-2">
         {rows.map(r => (
           <div
             key={r.label}
             className="flex items-baseline justify-between gap-2 px-3 py-2 rounded-lg bg-zinc-800/40 border border-gray-700/60"
           >
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <span className="text-xs font-semibold text-gray-300">{r.label}</span>
               {r.sub && <span className="text-[10px] text-gray-500">{r.sub}</span>}
             </div>
-            <div className="flex flex-col items-end">
+            <div className="flex shrink-0 flex-col items-end">
               <span className="text-sm font-bold text-gray-100 font-mono">{r.value}</span>
               {r.pctile !== null && (
-                <span className={`text-[10px] ${pctileColor(r.pctile)}`}>
-                  {formatPctile(r.pctile)}
+                <span className="text-[10px] text-slate-300">
+                  PR {r.pctile.toFixed(1)}
                 </span>
               )}
             </div>
@@ -155,8 +134,7 @@ export default function PlaystyleSnapshot({ playerName }: PlaystyleSnapshotProps
       </div>
 
       <div className="text-[10px] text-gray-500">
-        cohort: R3+ 紅 n={resp.cohort.r3Red.n} · R3+ 藍 n={resp.cohort.r3Blue.n}
-        · 隊長 n={resp.cohort.captainStickiness.n}
+        刺座與隊長資料沿用既有計算；隊長比較母體 {resp.cohort.captainStickiness.n} 人
         · 刺客 ≥{resp.thresholds.assassinMinAttempts} 場 n={resp.cohort.assassinAttempts.n}
       </div>
     </div>

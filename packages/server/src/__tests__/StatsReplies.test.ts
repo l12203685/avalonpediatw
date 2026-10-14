@@ -312,7 +312,8 @@ describe('formatPlayerCard', () => {
     expect(text).toContain('場次 3');
     expect(text).toContain('→ 刺殺結算 → 最終');
     expect(text).not.toContain('擅長角色');
-    expect(text).not.toContain('風格');
+    expect(text).toContain('第 3 局後反對率：下次每日更新後提供');
+    expect(text).not.toContain('強硬度');
   });
 });
 
@@ -848,5 +849,24 @@ describe('real analysis_cache.json smoke', () => {
     const text = await chemistryReply(a.name, b.name);
     expect(text).toContain('默契');
     expect(text.length).toBeLessThanOrEqual(STATS_REPLY_MAX_CHARS);
+  });
+});
+
+
+describe('每日牌譜投票顯示', () => {
+  it('採用新投票欄位並附分子、分母與 PR 母體', () => {
+    const cell = { hits: 3, votes: 12, rate: 25, pr: 62.5, cohortPlayers: 4 };
+    const empty = { hits: 0, votes: 0, rate: null, pr: null, cohortPlayers: 4 };
+    const text = formatPlayerCard({ player: schema4Player({ voting: {
+      version: 1, minVotes: 10, r3Reject: { loyal: cell, red: empty },
+      teamComposition: {
+        all: { evilTeamReject: cell, goodTeamApprove: empty },
+        r3Plus: { evilTeamReject: cell, goodTeamApprove: empty },
+      },
+    } }) });
+    expect(text).toContain('忠臣第 3 局後反對率 25.0%（3/12 票，PR62.5／4 人）');
+    expect(text).toContain('紅方第 3 局後反對率 樣本不足（0/10 票）');
+    expect(text).toContain('排除第 5 次強制提議');
+    expect(text).not.toContain('強硬度');
   });
 });

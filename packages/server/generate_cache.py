@@ -108,6 +108,8 @@ Exit codes: 0 ok, 2 configuration (credentials, AVALON_STATS_AS_OF, player_alias
 
 from __future__ import annotations
 
+from voting_stats import compute_player_voting, parse_voting_proposals
+
 import argparse
 import contextlib
 import copy
@@ -573,7 +575,7 @@ class GameRow:
         "lake3_holder_faction", "lake3_target_faction",
         "lake3_holder_role", "lake3_target_role",
         "game_state", "rounds", "round_results",
-        "text_record",
+        "text_record", "voting_proposals",
         "date", "category", "kill",  # 日期時間 as YYYY-MM-DD or "", 分類, 刺殺 (target seat or "")
     )
 
@@ -1091,6 +1093,7 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
             if name:
                 g.seat_players[seat] = name
         g.text_record = col(row, "文字記錄")
+        g.voting_proposals = parse_voting_proposals(g.text_record)
         g.outcome = col(row, "結果").strip()
         g.red_win = g.outcome == "三紅"
         g.blue_win = g.outcome in ("三藍死", "三藍活")
@@ -1617,10 +1620,12 @@ def compute_player_stats(games: list[GameRow]) -> list[dict]:
     role_final_rates = compute_role_final_win_rates(games)
     seat_final_rates = compute_seat_final_win_rates(games)
     timelines = player_timelines(games)
+    voting = compute_player_voting(games)
     rows = []
     for name, t in _player_tallies(games).items():
         row = t.to_row(name, role_final_rates)
         row["theory"] = player_theory(timelines.get(name, []), role_final_rates, seat_final_rates)
+        row["voting"] = voting[name]
         rows.append(row)
     rows.sort(key=lambda r: -r["totalGames"])  # stable: ties keep first-appearance order
     return rows

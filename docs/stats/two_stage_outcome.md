@@ -270,3 +270,25 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
 | 共用 | `packages/shared/src/derived/outcomeBlocks.ts`（三塊結果）；測試 `packages/server/src/__tests__/OutcomeBlocks.test.ts` |
 | 後端與機器人 | `services/sheetsAnalysis.ts`、`routes/analysis.ts`、`__tests__/AnalysisCacheContract.test.ts`、`bots/stats/*`、`bots/discord/commands.ts`、`bots/discord/client.ts`（/help 與 /排行 說明文字）、`__tests__/*Stats*.test.ts` |
 | 網站 | `packages/web/src/services/api.ts`、`pages/AnalyticsPage.tsx`、`components/analysis/*`（`LeaderboardBoards`、`OverviewPanel`、`PlayerRadarChart`、`RoleFinalWinRates`）、`components/analytics/*`、`i18n/locales/*` |
+
+## 牌譜投票（`players[].voting`，2026-10-14）
+
+「第 3 局後反對率」包含第 3、4、5 局（R3–R5）。舊 `playstyle.r3RejectRate`、`r3RejectPercentile` 保留原值供相容，但機器人與網站不再展示；缺少新欄位時顯示「下次每日更新後提供」。每日由 `generate_cache.py` 呼叫 `voting_stats.py` 的純函式重算，不依賴擁有者電腦或當天日期。
+
+| 路徑 | 分子 | 分母 |
+|---|---|---|
+| `r3Reject.loyal` | 玩家當忠臣時，R3–R5 的反對票 | 同一條件下玩家的有效投票數（不含梅林、派西維爾） |
+| `r3Reject.red` | 玩家當任一紅方角色時，R3–R5 的反對票 | 同一條件下玩家的有效投票數 |
+| `teamComposition.{all,r3Plus}.evilTeamReject` | 隊上至少一個紅方時，玩家投反對的票 | 隊上至少一個紅方時，玩家的有效投票數 |
+| `teamComposition.{all,r3Plus}.goodTeamApprove` | 隊上全藍時，玩家投贊成的票 | 隊上全藍時，玩家的有效投票數 |
+
+- `all` = 所有回合，`r3Plus` = R3–R5。條件機率涵蓋玩家所有角色，不套忠臣／紅方視角；用事後揭曉的身分判定隊伍，不能解讀成玩家當時已知的資訊或能力排名。
+- 僅採結果為三紅／三藍死／三藍活的十人局、有名字的座位。每個提議對每位玩家最多貢獻一票。名字先經 `player_name_key` 與別名表合併，才計數。
+- 每個 cell 有 `hits`（分子）、`votes`（分母）、`rate`（百分比）、`pr`、`cohortPlayers`。有效票數不足 `minVotes=10`：保留票數、`rate/pr=null`；零票也不輸出 0% 假象。
+- PR = `(低於此公開率的人數 + 0.5 × 同率人數) / 該指標滿 10 票的人數 × 100`，一位小數、五成雙。同一位玩家每個指標各有資格條件；隱藏榜單玩家不改動計算母體。
+- 解析採牌譜慣例：隊內預設贊成、隊外預設反對，再套 `7+`／`-5` 等例外；支援全半形與結果同行。**第 5 次提議沒有投票**，結構中保留 `attempt=5`、贊成座位空字串，計算一律排除。任務成功／失敗票不是派隊投票，不能當分母。
+- 只採有任務結果、隊伍人數與座位合法、異常票可完整辨識且最多五次提議的回合。異常提議使該回合全部投票略過，序號不壓縮；尾端未完成回合亦略過。沒有記錄的票不補值，原始記錄若漏掉整行提議仍無法事後確認，故有效票數不代表全部歷史投票。
+- `GameRow.voting_proposals` 是 `(round, attempt, team, approvedSeats)` 陣列，只含回合、序號與座位。複合篩選資料集應直接攜帶此結構；篩選後重跑同樣計數與 PR，不攜帶牌譜原文。
+- 舊刺座與隊長同隊重提比繼續沿用 `playstyle`，網站明示來源。`build_panel_c_playstyle.py` 僅維持舊欄位，不覆寫 `players[].voting`。
+
+手算例（虛構對局）：三局各有四次 R3 有效提議與一次強制提議，忠臣反對 3／12 票 = 25.0%；紅方反對 6／12 票 = 50.0%。忠臣比較母體公開率為 0、0、25、50，25 的 PR 為 62.5（4 人）；紅方母體 50、100、100、100，50 的 PR 為 12.5（4 人）。第 5 次提議不增加任何分母。測試另涵蓋 9／10 票邊界、同分、梅林／派西維爾排除、異常回合、純函式及名字正規化。

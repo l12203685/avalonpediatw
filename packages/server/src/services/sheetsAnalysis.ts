@@ -11,13 +11,14 @@
 import path from 'path';
 import fs from 'fs';
 import { findSamePlayerName, playerNameKey, playerOutcomeBlocks } from '@avalon/shared';
-import type { OutcomeCounts, PlayerAliases, PlayerOutcomeBlocks, PlayerOutcomeSource } from '@avalon/shared';
+import type { OutcomeCounts, PlayerAliases, PlayerOutcomeBlocks, PlayerOutcomeSource, PlayerVoting } from '@avalon/shared';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface PlayerStats {
+  voting?: PlayerVoting;
   name: string;
   totalGames: number;
   winRate: number;
@@ -1331,26 +1332,37 @@ export async function getPlayerStrength(name: string): Promise<{
  */
 export async function getPlayerPlaystyle(name: string): Promise<{
   player: { name: string; totalGames: number };
+  voting?: PlayerVoting;
   data: PlaystylePlayerData;
   cohort: PlaystyleCohort;
   thresholds: PlaystyleData['thresholds'];
   labels: PlaystyleData['labels'];
 } | null> {
   const c = loadCache();
-  if (!c.playstyle) return null;
-  const found = perPlayerRow(c, c.playstyle.perPlayer, name);
-  if (!found) return null;
-  const { data } = found;
-  const detail = found.detailKey === undefined ? undefined : byName(c.playerDetails, found.detailKey);
+  const found = perPlayerRow(c, c.playstyle?.perPlayer ?? {}, name);
+  const player = await getPlayerByName(name);
+  if (!found && !player) return null;
+  const data = found?.data ?? {
+    r3RejectRate: { red: null, blue: null }, r3RejectPercentile: { red: null, blue: null },
+    assassinTopSeats: null, assassinAttempts: 0, captainStickiness: null,
+    captainStickinessPercentile: null, sampleSize: player?.totalGames ?? 0, hasData: false,
+  };
   return {
     player: {
-      name: found.name,
-      totalGames: detail ? detail.player.totalGames : data.sampleSize,
+      name: player?.name ?? found?.name ?? name,
+      totalGames: player?.totalGames ?? data.sampleSize,
     },
+    voting: player?.voting,
     data,
-    cohort:     c.playstyle.cohort,
-    thresholds: c.playstyle.thresholds,
-    labels:     c.playstyle.labels,
+    cohort: c.playstyle?.cohort ?? {
+      r3Red: { n: 0, mean: null, std: null }, r3Blue: { n: 0, mean: null, std: null },
+      captainStickiness: { n: 0, mean: null, std: null }, assassinAttempts: { n: 0 },
+    },
+    thresholds: c.playstyle?.thresholds ?? { r3MinVotes: 10, assassinMinAttempts: 3, captainMinProposals: 5 },
+    labels: c.playstyle?.labels ?? {
+      r3RejectRedLabel: '紅方第 3 局後反對率', r3RejectBlueLabel: '忠臣第 3 局後反對率',
+      assassinTargetLabel: '刺客目標座位偏好', captainStickinessLabel: '隊長同隊重提比',
+    },
   };
 }
 

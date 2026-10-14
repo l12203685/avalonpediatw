@@ -33,8 +33,8 @@ Output (top-level key `playstyle`):
       captainMinProposals: int                                     # 5
     }
     labels: {
-      r3RejectRedLabel: '紅角 R3+ 強硬度'
-      r3RejectBlueLabel: '藍角 R3+ 強硬度'
+      r3RejectRedLabel: '舊版紅方 R3+ 反對率（停止展示）'
+      r3RejectBlueLabel: '舊版藍方 R3+ 反對率（停止展示）'
       assassinTargetLabel: '刺客目標座位偏好'
       captainStickinessLabel: '隊長 stickiness'
     }
@@ -59,6 +59,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CACHE_PATH = ROOT / "analysis_cache.json"
 TSV_PATH = Path("/mnt/c/Users/admin/staging/selfplay/real_games_panel_c_playstyle.tsv")
 
+# 舊 r3 欄位僅保留相容；正式投票指標由 generate_cache.py 寫入 players[].voting。
 R3_MIN_VOTES = 10              # min R3+ votes (per camp) to compute reject rate
 ASSASSIN_MIN_ATTEMPTS = 3      # min assassin attempts to show top seats
 CAPTAIN_MIN_PROPOSALS = 5      # min leader proposals to show stickiness
@@ -296,8 +297,8 @@ def main() -> None:
             "captainMinProposals": CAPTAIN_MIN_PROPOSALS,
         },
         "labels": {
-            "r3RejectRedLabel":      "紅角 R3+ 強硬度",
-            "r3RejectBlueLabel":     "藍角 R3+ 強硬度",
+            "r3RejectRedLabel":      "舊版紅方 R3+ 反對率（停止展示）",
+            "r3RejectBlueLabel":     "舊版藍方 R3+ 反對率（停止展示）",
             "assassinTargetLabel":   "刺客目標座位偏好",
             "captainStickinessLabel": "隊長 stickiness",
         },

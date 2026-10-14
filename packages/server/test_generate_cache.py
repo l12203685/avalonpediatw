@@ -392,8 +392,8 @@ class SanityGuardTest(unittest.TestCase):
         self.assertEqual(gc.validate_new_cache(new, two_stage), [])  # the 2026-10-12 shape -> schemaVersion 4
         self.assertEqual(gc.validate_new_cache(new, schema3), [])  # the 2026-10-13 shape -> schemaVersion 4
         self.assertEqual(gc.dropped_player_fields(prev, new),
-                         sorted(NEW_PLAYER_FIELDS + ROLE_OUTCOME_FIELDS + THEORY_FIELDS))  # the reverse would be a loss
-        self.assertEqual(gc.dropped_player_fields(schema3, new), ROLE_OUTCOME_FIELDS)
+                         sorted(NEW_PLAYER_FIELDS + ROLE_OUTCOME_FIELDS + THEORY_FIELDS + ["voting"]))  # the reverse would be a loss
+        self.assertEqual(gc.dropped_player_fields(schema3, new), ROLE_OUTCOME_FIELDS + ["voting"])
 
     def test_theory_must_match_the_row(self) -> None:
         new = with_theory(fake_cache(players=4))
@@ -594,7 +594,8 @@ THEORY_FIELDS = ["theory"]
 ROLE_OUTCOME_FIELDS = ["roleOutcomes"]
 TWO_STAGE_PLAYER_FIELDS = PLAYER_FIELDS[:-1] + NEW_PLAYER_FIELDS + ["seatOutcomes"]
 SCHEMA3_PLAYER_FIELDS = PLAYER_FIELDS[:-1] + NEW_PLAYER_FIELDS + THEORY_FIELDS + ["seatOutcomes"]
-ALL_PLAYER_FIELDS = PLAYER_FIELDS[:-1] + NEW_PLAYER_FIELDS + ROLE_OUTCOME_FIELDS + THEORY_FIELDS + ["seatOutcomes"]
+PRE_VOTING_PLAYER_FIELDS = PLAYER_FIELDS[:-1] + NEW_PLAYER_FIELDS + ROLE_OUTCOME_FIELDS + THEORY_FIELDS + ["seatOutcomes"]
+ALL_PLAYER_FIELDS = PRE_VOTING_PLAYER_FIELDS[:-1] + ["voting", "seatOutcomes"]
 THEORY_WINDOW_FIELDS = ["window", "games", "roleTheory", "positionTheory", "finalWinRate", "from", "to", "sparseRoles", "sparseSeats"]
 ROLE_WINDOWS_FIELDS = ["roleTheory", "fullWindows", "games", "sparseRoles", "from", "to", "roles"]
 EMPTY_OUTCOME = {"threeRed": 0, "threeBlueDead": 0, "threeBlueAlive": 0,
@@ -604,7 +605,7 @@ EMPTY_OUTCOME = {"threeRed": 0, "threeBlueDead": 0, "threeBlueAlive": 0,
 def old_fields(row: dict) -> dict:
     """The row without the two-stage, role-outcome and theory fields (what the 2026-04-26 rebuild wrote)."""
     return {k: v for k, v in row.items()
-            if k not in NEW_PLAYER_FIELDS and k not in THEORY_FIELDS and k not in ROLE_OUTCOME_FIELDS}
+            if k not in NEW_PLAYER_FIELDS and k not in THEORY_FIELDS and k not in ROLE_OUTCOME_FIELDS and k != "voting"}
 
 
 def per_role(**values: float) -> dict[str, float]:
@@ -1086,8 +1087,8 @@ class CommittedCachePropertyTest(unittest.TestCase):
 
     def check_all(self, check) -> None:
         failures = []
-        for row in self.rows:
-            failures += [f"{row['name']}: {msg}" for msg in check(row)]
+        for index, row in enumerate(self.rows):
+            failures += [f"row[{index}]: {msg}" for msg in check(row)]
         self.assertEqual(failures[:10], [], f"{len(failures)} failures")
 
     def test_fields_and_types(self) -> None:
@@ -1095,7 +1096,7 @@ class CommittedCachePropertyTest(unittest.TestCase):
 
         def check(row):
             # the rebuild's, 10-12's, 10-13's (schemaVersion 3) or this script's
-            if list(row) not in (PLAYER_FIELDS, TWO_STAGE_PLAYER_FIELDS, SCHEMA3_PLAYER_FIELDS, ALL_PLAYER_FIELDS):
+            if list(row) not in (PLAYER_FIELDS, TWO_STAGE_PLAYER_FIELDS, SCHEMA3_PLAYER_FIELDS, PRE_VOTING_PLAYER_FIELDS, ALL_PLAYER_FIELDS):
                 yield f"fields {list(row)}"
             for key in ("roleWinRates", "roleDistribution", "rawRoleGames"):
                 if list(row[key]) != ROLE_ORDER:
@@ -3304,6 +3305,66 @@ class SnapshotShapeTest(unittest.TestCase):
         holders = {(r["holder"], r["declared"]): r["hitRate"] for r in l141["data"]["holderRows"]}
         self.assertGreater(min(holders[("藍", "紅")], holders[("藍", "藍")]), 98.0)  # blue holders do not lie
         self.assertIn("首湖 70.8%（n=513）", l141["oneLineHook"])
+
+
+class PlayerVotingTest(unittest.TestCase):
+    """虛構三局：R3 每局四次有效提議加一次強制派隊，逐票手算。"""
+
+    NAMES = ["Ilse Marr", "Fenn Pike", "Daro Yew", "Neri Moss", "Oren Vale",
+             "Sela Brook", "Tovo Wren", "Jori Vale", "Quill Fen", "Vela Reed"]
+    TEXT = "789\nooo\n1789 1- 0+\noooo\n1789\n7890\n1789 7- 0+\n7890 0-\n1789\noooo"
+
+    def games(self, n: int = 3, text: str | None = None) -> list[gc.GameRow]:
+        return gc.parse_game_log([LOG_HEADERS] + [
+            log_row(str(i), "123456", "三藍活", self.NAMES, date="2026-01-02", text=text or self.TEXT)
+            for i in range(n)])
+
+    def test_hand_count_denominators_forced_fifth_and_pr(self) -> None:
+        rows = gc.compute_player_voting(self.games())
+        loyal = rows["Tovo Wren"]
+        self.assertEqual(loyal["r3Reject"]["loyal"],
+                         {"hits": 3, "votes": 12, "rate": 25.0, "pr": 62.5, "cohortPlayers": 4})
+        self.assertEqual(rows["Ilse Marr"]["r3Reject"]["red"],
+                         {"hits": 6, "votes": 12, "rate": 50.0, "pr": 12.5, "cohortPlayers": 4})
+        for window, evil, good in (("r3Plus", (3, 6), (6, 6)), ("all", (3, 9), (9, 9))):
+            self.assertEqual(tuple(loyal["teamComposition"][window]["evilTeamReject"][k] for k in ("hits", "votes")), evil)
+            self.assertEqual(tuple(loyal["teamComposition"][window]["goodTeamApprove"][k] for k in ("hits", "votes")), good)
+        self.assertEqual(rows["Sela Brook"]["r3Reject"]["loyal"]["votes"], 0)  # 梅林不混入忠臣
+        self.assertEqual(rows["Oren Vale"]["r3Reject"]["loyal"]["votes"], 0)  # 派西維爾亦同
+
+    def test_nine_and_ten_votes_threshold(self) -> None:
+        games = self.games(10, "789\nooo\n1789\noooo\n1789\noooo")
+        nine = gc.compute_player_voting(games[:9])["Tovo Wren"]["r3Reject"]["loyal"]
+        ten = gc.compute_player_voting(games)["Tovo Wren"]["r3Reject"]["loyal"]
+        self.assertEqual((nine["votes"], nine["rate"], nine["pr"]), (9, None, None))
+        self.assertEqual((ten["votes"], ten["rate"], ten["pr"]), (10, 0.0, 37.5))
+
+    def test_prefix_suffix_fullwidth_inline_and_old_lake(self) -> None:
+        text = "７８９　００＋　ＯＯＯ\n０４Ｏ\n1789 -1+0 oooo\n1789 1-0+ oooo"
+        proposals = gc.parse_voting_proposals(text)
+        self.assertEqual(proposals, [(1, 1, "789", "7890"), (2, 1, "1789", "7890"), (3, 1, "1789", "7890")])
+
+    def test_bad_round_is_omitted_without_shifting_round_or_forced_index(self) -> None:
+        text = "789\nooo\n1789\noooo\n1789\n1789 7\n1789\n1789\n1789\noooo\n17890\nooooo"
+        proposals = gc.parse_voting_proposals(text)
+        self.assertEqual([p[0] for p in proposals], [1, 2, 4])
+        self.assertEqual(gc.parse_voting_proposals("789 7-7+\nooo"), [])
+        self.assertEqual(gc.parse_voting_proposals("778\nooo"), [])
+        self.assertEqual(gc.parse_voting_proposals("789\n" * 6 + "ooo"), [])
+        self.assertEqual(gc.parse_voting_proposals("789"), [])
+
+    def test_cache_aliases_purity_and_legacy_fields(self) -> None:
+        games = self.games()
+        before = copy.deepcopy(games)
+        once = gc.compute_player_voting(games)
+        self.assertEqual(once, gc.compute_player_voting(games))
+        self.assertEqual([g.voting_proposals for g in games], [g.voting_proposals for g in before])
+        games[1].seat_players["7"] = "ｔｏｖｏ　ｗｒｅｎ"
+        cache = gc.build_cache(games, {}, as_of=AS_OF)
+        rows = {p["name"]: p for p in cache["players"]["players"]}
+        self.assertEqual(rows["Tovo Wren"]["voting"]["r3Reject"]["loyal"]["votes"], 12)
+        self.assertEqual(rows["Tovo Wren"]["winRate"], 100)
+        self.assertEqual(cache["playerDetails"]["Tovo Wren"]["player"]["voting"], rows["Tovo Wren"]["voting"])
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

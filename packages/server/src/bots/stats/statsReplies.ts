@@ -242,23 +242,26 @@ function archetypeLine(arch: PlayerCardInput['archetype']): string | null {
   return `🧭 風格：${parts.join('、')}`;
 }
 
-function playstyleLine(ps: PlayerCardInput['playstyle']): string | null {
-  if (!ps?.data?.hasData) return null;
-  const { data, labels } = ps;
+function playstyleLine(ps: PlayerCardInput['playstyle'], voting: PlayerStats['voting']): string {
   const parts: string[] = [];
-  if (data.r3RejectRate?.red !== null && data.r3RejectRate?.red !== undefined) {
-    parts.push(`${labels?.r3RejectRedLabel || '紅角 R3+ 強硬度'} ${pct(data.r3RejectRate.red)}`);
+  if (!voting) {
+    parts.push('第 3 局後反對率：下次每日更新後提供');
+  } else {
+    for (const [key, label] of [['loyal', '忠臣'], ['red', '紅方']] as const) {
+      const cell = voting.r3Reject[key];
+      const rate = cell.rate === null ? `樣本不足（${cell.votes}/${voting.minVotes} 票）`
+        : `${pct(cell.rate)}（${cell.hits}/${cell.votes} 票，PR${cell.pr}／${cell.cohortPlayers} 人）`;
+      parts.push(`${label}第 3 局後反對率 ${rate}`);
+    }
+    parts.push('R3–R5，排除第 5 次強制提議');
   }
-  if (data.r3RejectRate?.blue !== null && data.r3RejectRate?.blue !== undefined) {
-    parts.push(`${labels?.r3RejectBlueLabel || '藍角 R3+ 強硬度'} ${pct(data.r3RejectRate.blue)}`);
-  }
-  if (Array.isArray(data.assassinTopSeats) && data.assassinTopSeats.length > 0) {
+  const { data, labels } = ps ?? {};
+  if (Array.isArray(data?.assassinTopSeats) && data.assassinTopSeats.length > 0) {
     parts.push(`${labels?.assassinTargetLabel || '刺客目標座位偏好'} ${data.assassinTopSeats.join('、')} 號`);
   }
-  if (typeof data.captainStickiness === 'number') {
+  if (typeof data?.captainStickiness === 'number') {
     parts.push(`${labels?.captainStickinessLabel || '隊長 stickiness'} ${pct(data.captainStickiness)}`);
   }
-  if (parts.length === 0) return null;
   return `🎯 對戰風格：${parts.join('、')}`;
 }
 
@@ -418,7 +421,7 @@ export function formatPlayerCard(input: PlayerCardInput): string {
     lines.push(`🔴 紅方最終勝率 ${pct(p.finalRedWinRate)}${redGames}｜🔵 藍方最終勝率 ${pct(p.finalBlueWinRate)}${blueGames}`);
   }
 
-  for (const extra of [strengthLine(input.strength), archetypeLine(input.archetype), playstyleLine(input.playstyle)]) {
+  for (const extra of [strengthLine(input.strength), archetypeLine(input.archetype), playstyleLine(input.playstyle, p.voting)]) {
     if (extra) lines.push(extra);
   }
   if (input.caseVariants && input.caseVariants.length > 0) {

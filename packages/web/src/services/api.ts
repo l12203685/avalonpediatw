@@ -3,7 +3,7 @@
  * Handles leaderboard & user profile endpoints
  */
 
-import type { OutcomeCounts, PlayerOutcomeBlocks } from '@avalon/shared';
+import type { OutcomeCounts, PlayerOutcomeBlocks, PlayerVoting } from '@avalon/shared';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -473,6 +473,7 @@ export interface AnalysisOverview {
 }
 
 export interface AnalysisPlayerStats {
+  voting?: PlayerVoting;
   name: string;
   totalGames: number;
   /** 任務結算勝率 (三藍死算藍勝)，舊口徑保留。 */
@@ -1286,7 +1287,7 @@ export async function fetchPlayerStrength(name: string): Promise<StrengthPlayerR
   );
 }
 
-// ── Panel C: Playstyle snapshot (R3+ 強硬度 / 刺座 / 隊長 stickiness) ─────────
+// ── Panel C：每日重算投票指標／舊版刺座與隊長資料 ─────────
 
 export interface PlaystyleSplit {
   red: number | null;
@@ -1294,6 +1295,7 @@ export interface PlaystyleSplit {
 }
 
 export interface PlaystylePlayerResponse {
+  voting?: PlayerVoting;
   player: { name: string; totalGames: number };
   data: {
     r3RejectRate: PlaystyleSplit;
