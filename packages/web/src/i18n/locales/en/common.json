@@ -688,6 +688,58 @@
         "seatOrder": "P/M/M seat order",
         "chemistry": "Chemistry matrix"
       }
+    },
+    "r6": {
+      "boards": {
+        "tabsLabel": "Boards",
+        "tab": {
+          "main": "Role theory",
+          "position": "Position theory",
+          "overall": "Overall theory",
+          "last50": "Last 50",
+          "improved": "Improved",
+          "assassin": "Assassin",
+          "newcomers": "Newcomers",
+          "roleTitles": "Role champions",
+          "precision": "Precision"
+        },
+        "who": "Who: ",
+        "sparseNote": "Faded = a role or seat with fewer than {{min}} games, topped up to {{min}} at the population's final win rate.",
+        "sparseCell": "{{count}} cells under {{min}} games, topped up with population rates",
+        "clickHint": "Click a row to open that player's radar.",
+        "pending": {
+          "positionTitle": "Position-theory win rate",
+          "position": "The position-theory board (each player's last {{games}} games) arrives with the next daily refresh.",
+          "positionDef": "Position theory = Σ 1/10 × the player's final win rate in that seat.",
+          "overallTitle": "Overall theory win rate",
+          "overall": "The overall-theory board (at least {{games}} career games, whole career) arrives with the next daily refresh.",
+          "overallDef": "Overall theory = the role theory of the whole career = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role."
+        },
+        "col": {
+          "rankName": "# Player",
+          "name": "Player",
+          "role": "Role",
+          "tie": "tie",
+          "value": "Value",
+          "roleTheory": "Role theory",
+          "positionTheory": "Position theory",
+          "overallTheory": "Overall theory",
+          "finalWinRate": "Final WR",
+          "windowGames": "Window games",
+          "careerGames": "Career games",
+          "firstPlayed": "First game",
+          "delta": "Gain (pts)",
+          "recentRoleTheory": "Recent role theory",
+          "priorRoleTheory": "Prior role theory",
+          "recentFinalWinRate": "Recent final WR",
+          "priorFinalWinRate": "Prior final WR",
+          "recentPriorGames": "Games (recent / prior)",
+          "hitRate": "Hit rate",
+          "hitsAttempts": "Hits / attempts",
+          "winsGames": "Wins / games",
+          "careerRoleGames": "Career games in role"
+        }
+      }
     }
   },
   "guest": {
