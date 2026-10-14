@@ -688,6 +688,62 @@
         "seatOrder": "P/M/M seat order",
         "chemistry": "Chemistry matrix"
       }
+    },
+    "r6": {
+      "overview": {
+        "summary": {
+          "label": "Overview summary",
+          "threeBlueOnly": "3-Blue games"
+        },
+        "outcomes": {
+          "title": "Outcomes and most played",
+          "viewLabel": "View",
+          "viewDonut": "Donuts",
+          "viewTable": "Table",
+          "overall": "All games",
+          "topPlayers": "Top {{count}} by games: each player's own outcome split (either side); centre = games",
+          "topPlayersGames": "Top {{count}} by games",
+          "playerDonut": "{{name}}: {{games}} games",
+          "playersPending": "Per-player outcome splits arrive with the next daily refresh.",
+          "tableNote": "% = share of the row's games (either side); count in brackets (hidden on phones)."
+        },
+        "theory": {
+          "title": "Theory win-rate rankings",
+          "scope": "All players, not only recent ones (recent: Boards)",
+          "role": "Role theory",
+          "position": "Position theory",
+          "overall": "Overall theory",
+          "value": "Theory WR",
+          "nHint": "n = games used for this rate",
+          "windowRole": "last {{special}} per role · Loyal {{loyal}}",
+          "windowLast": "last {{games}} · {{games}}+ career",
+          "windowCareer": "career · {{min}}+ games",
+          "defRole": "Role theory = Σ P(role) (Loyal Servant 4/10, others 1/10) × the player's recent final win rate as that role; every role window must be full.",
+          "defRoleLegacy": "Role theory = Σ P(role) (Loyal Servant 4/10, others 1/10) × the player's final win rate as that role.",
+          "defPosition": "Position theory = Σ 1/10 × final win rate per seat.",
+          "defOverall": "Overall theory = career role theory.",
+          "topUp": "Roles or seats under {{n}} games are topped up to {{n}} at population rates.",
+          "baseline": "baseline {{parts}} (red = below)",
+          "baselineRole": "role {{value}}%",
+          "baselineSeat": "seat {{value}}%",
+          "listSep": ", ",
+          "pending": "Available after the next daily refresh",
+          "empty": "No player qualifies yet",
+          "tipPositionLast": "Position theory (last {{games}}) {{value}}",
+          "tipFinalLast": "Final WR (last {{games}}) {{value}}",
+          "tipOverall": "Overall theory {{value}}",
+          "tipPositionCareer": "Career position theory {{value}}",
+          "tipFinalCareer": "Career final WR {{value}}",
+          "tipOpen": "Click for the player radar",
+          "sentenceSep": "; ",
+          "roleUpgrade": "From the next daily refresh, role theory uses each role's last {{special}} games (Loyal Servant {{loyal}}; every window must be full to be ranked); the current version is shown meanwhile.",
+          "pendingTitle": "{{names}} rankings: available after the next daily refresh"
+        },
+        "tabs": {
+          "label": "Overview sections",
+          "outcomes": "Outcomes"
+        }
+      }
     }
   },
   "guest": {
