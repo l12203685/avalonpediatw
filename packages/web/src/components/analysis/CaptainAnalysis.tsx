@@ -1,251 +1,161 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts';
-import { Loader, AlertCircle } from 'lucide-react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchAnalysisCaptain, getErrorMessage } from '../../services/api';
+import { StatTable, type StatColumn } from './ui';
 import type { CaptainAnalysisData } from '../../services/api';
-import OutcomeBar from './OutcomeBar';
-
-const RED_COLOR  = '#ef4444';
-const BLUE_COLOR = '#3b82f6';
+import { useCaptainData } from './teams/useTeamsData';
+import TeamsLoadState from './teams/TeamsLoadState';
+import OutcomeBlocksTable, {
+  BlockHeader, OutcomeBlocksNote, lacksOutcomes,
+  type OutcomeGroupRow, type OutcomeGroupRowWithBlocks,
+} from './teams/OutcomeBlocksTable';
 
 /**
- * 隊長分析 — Edward 2026-04-26 spec
+ * 隊長分析 — 派隊分頁的「隊長」小分頁
  *
- * Captain-faction × mission-result outcome cards now show the three
- * mutually-exclusive game outcomes (三紅 / 三藍死 / 三藍活) instead of two
- * single percentages (red game win / blue game win). The original
- * red/blue split hid whether blue wins came from Merlin surviving or
- * Merlin being assassinated.
+ * Edward 2026-04-26 spec：隊長陣營 × 任務結果的整局結果不再只給紅勝／藍勝兩個數字，要分出
+ * 三藍是梅林活著還是被刺中。
+ *
+ * (2026-10-14 Edward：派隊「分析很好但太散」、能用表格數字就不用圖、結果比率用條件機率並附 n、一頁一屏)
+ *   - 各任務隊長陣營：長條圖 + 表 → 只留表，比率背後的淡色長條就看得出紅方隊長越來越少。
+ *   - 「隊長陣營 vs 任務結果」兩張卡 + 「× 任務結果 → 三種結果」四條堆疊條 → 合成一張表：
+ *     每列一種 隊長陣營 × 任務結果，先是這個結果佔該陣營隊長任務的比例 (n = 該陣營隊長的任務數)，
+ *     再接三塊條件結果 (任務結果、到三藍時的刺殺結果、遊戲結果，各附 n；見 teams/OutcomeBlocksTable)。
+ *   這裡的單位是「任務」：一局有好幾個任務，每個任務各算一次 (n = 任務數)。
  */
-export default function CaptainAnalysis(): JSX.Element {
+
+type Faction = '紅方' | '藍方';
+
+interface PerMissionRow {
+  key: string;
+  label: string;
+  red: number;
+  blue: number;
+  games: number;
+}
+
+interface CaptainRow extends OutcomeGroupRow {
+  faction: Faction;
+  passed: boolean;
+  /** 這個結果佔該陣營隊長任務的比例 (0–100)。 */
+  share: number | null;
+  /** 該陣營隊長的任務數 (share 的分母)。 */
+  factionTotal: number;
+}
+
+const FACTIONS: readonly Faction[] = ['紅方', '藍方'];
+const RESULTS: readonly ('pass' | 'fail')[] = ['pass', 'fail'];
+
+function buildCaptainRows(data: CaptainAnalysisData): CaptainRow[] {
+  const rows: CaptainRow[] = [];
+  for (const faction of FACTIONS) {
+    const vsRows = data.captainFactionVsOutcome.filter(r => r.captainFaction === faction);
+    const factionTotal = vsRows.reduce((sum, r) => sum + (Number.isFinite(r.count) ? r.count : 0), 0);
+    for (const result of RESULTS) {
+      const vs = vsRows.find(r => r.missionResult === result);
+      const wr = data.captainMissionGameWinRates.find(r => r.captainFaction === faction && r.missionResult === result);
+      if (!vs && !wr) continue;
+      rows.push({
+        key: `${faction}-${result}`,
+        label: `${faction}-${result}`,
+        faction,
+        passed: result === 'pass',
+        n: wr?.totalMissions ?? vs?.count ?? 0,
+        outcomes: wr?.outcomes ?? null,
+        // captainMissionGameWinRates.redGameWinRate 是任務結算口徑 (= 三紅率)；只在沒有 outcomes 時用。
+        missionRedRate: wr?.redGameWinRate ?? null,
+        share: typeof vs?.percentage === 'number' ? vs.percentage : null,
+        factionTotal,
+      });
+    }
+  }
+  return rows;
+}
+
+export default function CaptainAnalysis({ lowSample }: { lowSample?: number }): JSX.Element {
   const { t } = useTranslation('common');
-  const [data, setData] = useState<CaptainAnalysisData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, notGenerated } = useCaptainData();
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const d = await fetchAnalysisCaptain();
-        if (!cancelled) setData(d);
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const perMissionRows = useMemo<PerMissionRow[]>(
+    () => (data?.perMission ?? []).map(m => ({
+      key: String(m.mission),
+      label: t('analytics.r6.teams.captain.missionN', { n: m.mission }),
+      red: m.redCaptainRate,
+      blue: m.blueCaptainRate,
+      games: m.games,
+    })),
+    [data, t],
+  );
+  const captainRows = useMemo(() => (data ? buildCaptainRows(data) : []), [data]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
-        <Loader size={20} className="animate-spin" /> {t('analytics.deep.captain.loading')}
-      </div>
-    );
-  }
+  const perMissionColumns: StatColumn<PerMissionRow>[] = [
+    { key: 'label', label: t('analytics.r6.teams.captain.mission') },
+    {
+      key: 'red', label: t('analytics.r6.teams.captain.redCaptain'),
+      format: 'pct', tone: 'red', bar: { max: 100 }, emphasis: true,
+    },
+    { key: 'blue', label: t('analytics.r6.teams.captain.blueCaptain'), format: 'pct', tone: 'blue' },
+    { key: 'games', label: t('analytics.r6.teams.captain.games'), format: 'int' },
+  ];
 
-  if (error || !data) {
-    return (
-      <div className="flex items-center justify-center py-20 text-red-400 gap-3">
-        <AlertCircle size={20} /> {error || t('analytics.deep.loadFailed')}
-      </div>
-    );
-  }
+  const shareColumn: StatColumn<OutcomeGroupRowWithBlocks<CaptainRow>> = {
+    key: 'share',
+    label: <BlockHeader name={t('analytics.r6.teams.captain.share')} sub={t('analytics.r6.teams.captain.shareSub')} />,
+    title: t('analytics.r6.teams.captain.shareHint'),
+    align: 'center',
+    format: 'pct',
+    value: row => row.share,
+    n: row => row.factionTotal,
+    lowSample,
+    tone: row => (row.passed ? 'blue' : 'red'),
+  };
 
-  if (data.perMission.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-20 text-gray-400">
-        {t('analytics.deep.captain.noData')}
-      </div>
-    );
-  }
-
-  const missionChartData = data.perMission.map(m => ({
-    name: t('analytics.deep.mission.missionLabel', { round: m.mission }),
-    red: m.redCaptainRate,
-    blue: m.blueCaptainRate,
-    games: m.games,
-  }));
-
-  const redRows  = data.captainFactionVsOutcome.filter(r => r.captainFaction === '紅方');
-  const blueRows = data.captainFactionVsOutcome.filter(r => r.captainFaction === '藍方');
-  const redPass  = redRows.find(r => r.missionResult === 'pass');
-  const redFail  = redRows.find(r => r.missionResult === 'fail');
-  const bluePass = blueRows.find(r => r.missionResult === 'pass');
-  const blueFail = blueRows.find(r => r.missionResult === 'fail');
-
-  const winRateRows = data.captainMissionGameWinRates;
+  const renderLabel = (row: CaptainRow): JSX.Element => (
+    <span className="inline-flex items-baseline gap-1">
+      <span className={row.faction === '紅方' ? 'text-red-300' : 'text-blue-300'}>
+        {t(row.faction === '紅方' ? 'analytics.r6.teams.captain.redShort' : 'analytics.r6.teams.captain.blueShort')}
+      </span>
+      <span className="text-zinc-600">·</span>
+      <span className={row.passed ? 'text-blue-300' : 'text-red-300'}>
+        {t(row.passed ? 'analytics.r6.teams.captain.pass' : 'analytics.r6.teams.captain.fail')}
+      </span>
+    </span>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-avalon-card/40 rounded-xl p-4 border border-gray-700"
-      >
-        <h2 className="text-lg font-bold text-white mb-1">{t('analytics.deep.captain.headerTitle')}</h2>
-        <p className="text-xs text-gray-400">
-          {t('analytics.deep.captain.headerSub', { count: data.perMission[0]?.games ?? 0 })}
-        </p>
-      </motion.div>
-
-      {/* Per-mission captain faction rate */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="bg-avalon-card/40 rounded-xl p-4 border border-gray-700"
-      >
-        <h3 className="text-sm font-semibold text-gray-300 mb-3">{t('analytics.deep.captain.perMissionTitle')}</h3>
-        <p className="text-xs text-gray-500 mb-4">{t('analytics.deep.captain.perMissionSub')}</p>
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={missionChartData} margin={{ top: 4, right: 8, left: -16, bottom: 4 }}>
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#9ca3af' }} />
-            <YAxis unit="%" tick={{ fontSize: 11, fill: '#9ca3af' }} domain={[0, 100]} />
-            <Tooltip
-              contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
-              formatter={(value: unknown, name: unknown) => [
-                `${value}%`,
-                name === 'red' ? t('analytics.deep.captain.redCaptain') : t('analytics.deep.captain.blueCaptain'),
-              ]}
-            />
-            <Legend
-              formatter={(v) => v === 'red' ? t('analytics.deep.captain.redCaptain') : t('analytics.deep.captain.blueCaptain')}
-              wrapperStyle={{ fontSize: 12 }}
-            />
-            <Bar dataKey="red"  name="red"  fill={RED_COLOR}  radius={[3, 3, 0, 0]} />
-            <Bar dataKey="blue" name="blue" fill={BLUE_COLOR} radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-xs text-gray-300">
-            <thead>
-              <tr className="border-b border-gray-700 text-gray-500">
-                <th className="text-left py-2 pr-4">{t('analytics.deep.mission.missionLabel', { round: '' }).trim()}</th>
-                <th className="text-right pr-4">{t('analytics.deep.captain.redCaptain')} %</th>
-                <th className="text-right pr-4">{t('analytics.deep.captain.blueCaptain')} %</th>
-                <th className="text-right">{t('analytics.deep.captain.captainSampleSize')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.perMission.map(m => (
-                <tr key={m.mission} className="border-b border-gray-800 hover:bg-white/5">
-                  <td className="py-1.5 pr-4 font-medium">{t('analytics.deep.mission.missionLabel', { round: m.mission })}</td>
-                  <td className="text-right pr-4 text-red-400">{m.redCaptainRate}%</td>
-                  <td className="text-right pr-4 text-blue-400">{m.blueCaptainRate}%</td>
-                  <td className="text-right text-gray-500">{m.games}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
-
-      {/* Captain faction vs mission pass/fail */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="bg-avalon-card/40 rounded-xl p-4 border border-gray-700"
-      >
-        <h3 className="text-sm font-semibold text-gray-300 mb-1">{t('analytics.deep.captain.factionVsResultTitle')}</h3>
-        <p className="text-xs text-gray-500 mb-4">{t('analytics.deep.captain.factionVsResultSub')}</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-red-900/20 border border-red-800/40 rounded-lg p-4">
-            <div className="text-xs text-red-400 font-semibold mb-3">{t('analytics.deep.captain.redCaptain')}</div>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">{t('analytics.deep.captain.missionPass')}</span>
-                <span className="text-sm font-bold text-green-400">
-                  {redPass?.percentage ?? 0}%
-                  <span className="text-xs text-gray-500 ml-1">({redPass?.count ?? 0})</span>
-                </span>
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-1.5">
-                <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${redPass?.percentage ?? 0}%` }} />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">{t('analytics.deep.captain.missionFail')}</span>
-                <span className="text-sm font-bold text-red-400">
-                  {redFail?.percentage ?? 0}%
-                  <span className="text-xs text-gray-500 ml-1">({redFail?.count ?? 0})</span>
-                </span>
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-1.5">
-                <div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${redFail?.percentage ?? 0}%` }} />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-blue-900/20 border border-blue-800/40 rounded-lg p-4">
-            <div className="text-xs text-blue-400 font-semibold mb-3">{t('analytics.deep.captain.blueCaptain')}</div>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">{t('analytics.deep.captain.missionPass')}</span>
-                <span className="text-sm font-bold text-green-400">
-                  {bluePass?.percentage ?? 0}%
-                  <span className="text-xs text-gray-500 ml-1">({bluePass?.count ?? 0})</span>
-                </span>
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-1.5">
-                <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${bluePass?.percentage ?? 0}%` }} />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">{t('analytics.deep.captain.missionFail')}</span>
-                <span className="text-sm font-bold text-red-400">
-                  {blueFail?.percentage ?? 0}%
-                  <span className="text-xs text-gray-500 ml-1">({blueFail?.count ?? 0})</span>
-                </span>
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-1.5">
-                <div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${blueFail?.percentage ?? 0}%` }} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Captain faction + mission outcome -> 3-outcome game result */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="bg-avalon-card/40 rounded-xl p-4 border border-gray-700"
-      >
-        <h3 className="text-sm font-semibold text-gray-300 mb-1">{t('analytics.deep.captain.winRateTitle')}</h3>
-        <p className="text-xs text-gray-500 mb-4">{t('analytics.deep.captain.winRateSub')}</p>
+    <TeamsLoadState
+      loading={loading}
+      error={error}
+      notGenerated={notGenerated}
+      empty={!data || data.perMission.length === 0}
+    >
+      {() => (
         <div className="space-y-3">
-          {winRateRows.map((r, i) => {
-            const factionShort = r.captainFaction === '紅方'
-              ? t('analytics.deep.captain.leaderRedShort')
-              : t('analytics.deep.captain.leaderBlueShort');
-            const resultLabel = r.missionResult === 'pass'
-              ? t('analytics.deep.captain.missionPass')
-              : t('analytics.deep.captain.missionFail');
-            return (
-              <div key={i} className="bg-gray-800/40 rounded-lg p-3 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-gray-200">
-                    <span className={r.captainFaction === '紅方' ? 'text-red-400' : 'text-blue-400'}>{factionShort}</span>
-                    <span className="text-gray-500 mx-1.5">·</span>
-                    <span className={r.missionResult === 'pass' ? 'text-green-400' : 'text-red-400'}>{resultLabel}</span>
-                  </span>
-                  <span className="text-xs text-gray-500">{r.totalMissions} {t('analytics.deep.captain.missionCount')}</span>
-                </div>
-                <OutcomeBar outcomes={r.outcomes} variant="stacked" />
-              </div>
-            );
-          })}
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            {t('analytics.r6.teams.captain.intro', { count: perMissionRows[0]?.games ?? 0 })}
+          </p>
+          <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            <StatTable
+              caption={t('analytics.r6.teams.captain.perMissionCaption')}
+              columns={perMissionColumns}
+              rows={perMissionRows}
+              rowKey={row => row.key}
+            />
+            <OutcomeBlocksTable
+              caption={t('analytics.r6.teams.captain.resultCaption')}
+              groupLabel={t('analytics.r6.teams.captain.group')}
+              rows={captainRows}
+              renderLabel={renderLabel}
+              leadColumns={[shareColumn]}
+              lowSample={lowSample}
+            />
+          </div>
+          <OutcomeBlocksNote
+            lowSample={lowSample}
+            pending={lacksOutcomes(captainRows)}
+            extra={t('analytics.r6.teams.captain.nNote')}
+          />
         </div>
-      </motion.div>
-    </div>
+      )}
+    </TeamsLoadState>
   );
 }

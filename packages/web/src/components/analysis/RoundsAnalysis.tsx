@@ -1,222 +1,238 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  Legend,
-} from 'recharts';
-import { Loader, AlertCircle } from 'lucide-react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchAnalysisRounds, getErrorMessage } from '../../services/api';
-import type { RoundsAnalysisData, OutcomeBreakdown } from '../../services/api';
-import OutcomeBar from './OutcomeBar';
+import { StatTable, type StatColumn } from './ui';
+import type { RoundsAnalysisData } from '../../services/api';
+import { useRoundsData } from './teams/useTeamsData';
+import TeamsLoadState from './teams/TeamsLoadState';
+import OutcomeBlocksTable, {
+  BlockHeader, OutcomeBlocksNote, lacksOutcomes,
+  type OutcomeGroupRow, type OutcomeGroupRowWithBlocks,
+} from './teams/OutcomeBlocksTable';
 
 /**
- * 回合分析 — Edward 2026-04-26 spec
+ * 回合分析 — 派隊分頁的「1-1 派票」與「任務進程」兩個小分頁 (同一份 /rounds 資料)
  *
- * Vision cards now show pass rate + the three outcome breakdown instead of
- * a single 紅勝率 number. The "first vote red count", "mission 1 branch"
- * and "common game states" sections also surface the 3-outcome split so
- * users can see whether a low red rate comes from blue-merlin-alive or
- * blue-merlin-dead games.
+ * Edward 2026-04-26 spec：1-1 隊伍組成、紅方人數、任務 1 分歧、常見局勢都要看到三種結果，
+ * 才分得出低紅勝率是來自三藍活還是三藍死。
+ *
+ * (2026-10-14 Edward：派隊太散 → 依主題合併；能用表格數字就不用圖；結果比率用條件機率並附 n；一頁一屏)
+ *   - section='firstVote' (1-1 派票)：「1-1 隊裡有誰」四張卡 + 「1-1 紅方人數」四條堆疊條 → 兩張同欄位的表
+ *     (任務 1 成功率 + 三塊條件結果)，並排比較。
+ *   - section='progression' (任務進程)：各任務成功率 (原本的堆疊長條圖 → 表，n = 打到那個任務的場數)、
+ *     任務 1 成功／失敗之後 (原「任務 1 分歧」)、完整任務路徑 (原「常見局勢」：不再只挑 20 場以上且非全紅／全藍，
+ *     快取存的路徑全列在可捲動的表裡，樣本少的變淡)。
+ *   三塊的算法與舊快取 (沒有 outcomes) 的退路見 teams/OutcomeBlocksTable。
  */
 
-type TFn = (k: string, opts?: Record<string, unknown>) => string;
+export type RoundsSection = 'firstVote' | 'progression';
 
-/**
- * Caches rebuilt from raw 牌譜 (61b7398) carry no `outcomes` in `rounds`, only
- * redWinRate — show that single number instead of the three-outcome bar.
- */
-function OutcomeOrRedRate({ outcomes, redWinRate, t }: {
-  outcomes?: OutcomeBreakdown;
-  redWinRate: number;
-  t: TFn;
-}): JSX.Element {
-  if (outcomes) return <OutcomeBar outcomes={outcomes} variant="stacked" />;
+/** roundProgression 的鍵 (generate_cache.py round_labels)；不認得的鍵照原樣顯示。 */
+const ROUND_KEYS = ['第一局', '第二局', '第三局', '第四局', '第五局'];
+
+const FV = 'analytics.r6.teams.firstVote';
+const PG = 'analytics.r6.teams.progression';
+
+interface RoundRow {
+  key: string;
+  label: string;
+  pass: number;
+  fail: number;
+  total: number;
+}
+
+interface FirstVoteRow extends OutcomeGroupRow {
+  mission1PassRate: number | null;
+}
+
+function finite(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+/** 路徑 (例「紅紅藍藍藍」) 畫成一排色塊：紅 = 任務失敗、藍 = 任務成功。 */
+function PathChips({ path, label }: { path: string; label: string }): JSX.Element {
   return (
-    <div className="flex justify-between text-xs">
-      <span className="text-gray-500">{t('analytics.deep.common.redWinRate')}</span>
-      <span className="text-red-400 font-bold">{redWinRate}%</span>
-    </div>
+    <span role="img" className="inline-flex items-center gap-0.5" title={path} aria-label={label}>
+      {Array.from(path).map((c, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className={`inline-block h-3 w-3 rounded-[3px] ${
+            c === '紅' ? 'bg-red-500' : c === '藍' ? 'bg-blue-500' : 'bg-zinc-600'
+          }`}
+        />
+      ))}
+    </span>
   );
 }
 
-function VisionCard({ title, data, t }: {
-  title: string;
-  data: { games: number; mission1PassRate: number; redWinRate: number; outcomes?: OutcomeBreakdown };
-  t: TFn;
-}): JSX.Element {
-  return (
-    <div className="bg-gray-800/40 rounded-lg p-3 space-y-2">
-      <p className="text-xs font-bold text-gray-400">{title}</p>
-      <div className="grid grid-cols-2 gap-1 text-xs">
-        <span className="text-gray-500">{t('analytics.deep.common.games')}</span>
-        <span className="text-white font-bold text-right">{data.games}</span>
-        <span className="text-gray-500">{t('analytics.deep.rounds.passRateLabel')}</span>
-        <span className="text-green-400 font-bold text-right">{data.mission1PassRate}%</span>
-      </div>
-      <OutcomeOrRedRate outcomes={data.outcomes} redWinRate={data.redWinRate} t={t} />
-    </div>
-  );
-}
-
-export default function RoundsAnalysis(): JSX.Element {
+function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample?: number }): JSX.Element {
   const { t } = useTranslation('common');
-  const [data, setData] = useState<RoundsAnalysisData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const d = await fetchAnalysisRounds();
-        if (!cancelled) setData(d);
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const visionRows = useMemo<FirstVoteRow[]>(() => {
+    const v = data.visionStats;
+    const defs = [
+      { key: 'merlinIn', entry: v?.merlinInTeam },
+      { key: 'merlinOut', entry: v?.merlinNotInTeam },
+      { key: 'percivalIn', entry: v?.percivalInTeam },
+      { key: 'percivalOut', entry: v?.percivalNotInTeam },
+    ];
+    return defs.flatMap(({ key, entry }) => (entry
+      ? [{
+        key,
+        label: t(`${FV}.${key}`),
+        n: entry.games,
+        outcomes: entry.outcomes ?? null,
+        missionRedRate: finite(entry.redWinRate),
+        mission1PassRate: finite(entry.mission1PassRate),
+      }]
+      : []));
+  }, [data, t]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
-        <Loader size={20} className="animate-spin" /> {t('analytics.deep.rounds.loading')}
-      </div>
-    );
-  }
+  const redRows = useMemo<FirstVoteRow[]>(
+    () => (data.redInR11 ?? []).map(r => ({
+      key: String(r.redCount),
+      label: t(`${FV}.redCountLabel`, { count: r.redCount }),
+      n: r.games,
+      outcomes: r.outcomes ?? null,
+      missionRedRate: finite(r.redWinRate),
+      mission1PassRate: finite(r.mission1PassRate),
+    })),
+    [data, t],
+  );
 
-  if (error || !data) {
-    return (
-      <div className="flex items-center justify-center py-20 text-red-400 gap-3">
-        <AlertCircle size={20} /> {error || t('analytics.deep.loadFailed')}
-      </div>
-    );
-  }
-
-  // Round progression chart data
-  const progressionData = Object.entries(data.roundProgression).map(([round, v]) => ({
-    name: round,
-    bluePct: v.bluePct,
-    redPct: v.redPct,
-    total: v.total,
-  }));
+  const m1Column: StatColumn<OutcomeGroupRowWithBlocks<FirstVoteRow>> = {
+    key: 'm1',
+    label: <BlockHeader name={t(`${FV}.m1Pass`)} sub={t(`${FV}.m1PassSub`)} />,
+    title: t(`${FV}.m1PassHint`),
+    align: 'center',
+    format: 'pct',
+    value: row => row.mission1PassRate,
+    n: row => row.n,
+    lowSample,
+    tone: 'blue',
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Vision stats */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-      >
-        <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.rounds.firstVoteTitle')}</h3>
-        <p className="text-[10px] text-gray-600 mb-3">{t('analytics.deep.rounds.firstVoteSub')}</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <VisionCard title={t('analytics.deep.rounds.merlinIn')}    data={data.visionStats.merlinInTeam}    t={t} />
-          <VisionCard title={t('analytics.deep.rounds.merlinOut')}   data={data.visionStats.merlinNotInTeam} t={t} />
-          <VisionCard title={t('analytics.deep.rounds.percivalIn')}  data={data.visionStats.percivalInTeam}  t={t} />
-          <VisionCard title={t('analytics.deep.rounds.percivalOut')} data={data.visionStats.percivalNotInTeam} t={t} />
-        </div>
-      </motion.div>
-
-      {/* Round progression - blue/red split is mission-level so stays as-is */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-      >
-        <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.rounds.progressionTitle')}</h3>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={progressionData}>
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#d1d5db' }} />
-            <YAxis domain={[0, 100]} allowDataOverflow tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <Tooltip
-              formatter={(val: unknown) => `${val}%`}
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-              itemStyle={{ color: '#d1d5db' }}
-            />
-            <Legend />
-            <Bar dataKey="bluePct" name={t('analytics.deep.rounds.progressionBlue')} fill="#3b82f6" stackId="a" />
-            <Bar dataKey="redPct"  name={t('analytics.deep.rounds.progressionRed')}  fill="#ef4444" stackId="a" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </motion.div>
-
-      {/* Red count in first vote + Mission 1 branch */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 space-y-3"
-        >
-          <div>
-            <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.rounds.redCountTitle')}</h3>
-            <p className="text-[10px] text-gray-600">{t('analytics.deep.rounds.redCountSub')}</p>
-          </div>
-          <div className="space-y-3">
-            {data.redInR11.map(r => (
-              <div key={r.redCount} className="bg-gray-800/40 rounded-lg p-2 space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-white font-bold">{t('analytics.deep.rounds.redCountLabel', { count: r.redCount })}</span>
-                  <span className="text-gray-500">{r.games} {t('analytics.deep.common.games')}</span>
-                </div>
-                <OutcomeOrRedRate outcomes={r.outcomes} redWinRate={r.redWinRate} t={t} />
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-        >
-          <h3 className="text-sm font-bold text-gray-400 mb-3">{t('analytics.deep.rounds.mission1BranchTitle')}</h3>
-          <div className="space-y-3">
-            {data.mission1Branch.map(b => (
-              <div key={String(b.passed)} className="bg-gray-800/40 rounded-lg p-3 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className={`font-bold text-sm ${b.passed ? 'text-green-400' : 'text-red-400'}`}>
-                    {b.passed ? t('analytics.deep.rounds.branchPassed') : t('analytics.deep.rounds.branchFailed')}
-                  </span>
-                  <span className="text-xs text-gray-500">{b.games} {t('analytics.deep.rounds.branchSamples')}</span>
-                </div>
-                <OutcomeOrRedRate outcomes={b.outcomes} redWinRate={b.redWinRate} t={t} />
-              </div>
-            ))}
-          </div>
-        </motion.div>
+    <div className="space-y-3">
+      <p className="text-xs text-zinc-400 leading-relaxed">{t(`${FV}.intro`)}</p>
+      <div className="grid items-start gap-3 lg:grid-cols-2">
+        <OutcomeBlocksTable
+          caption={t(`${FV}.visionCaption`)}
+          groupLabel={t(`${FV}.team`)}
+          rows={visionRows}
+          leadColumns={[m1Column]}
+          lowSample={lowSample}
+        />
+        <OutcomeBlocksTable
+          caption={t(`${FV}.redCountCaption`)}
+          groupLabel={t(`${FV}.redCount`)}
+          rows={redRows}
+          leadColumns={[m1Column]}
+          lowSample={lowSample}
+        />
       </div>
-
-      {/* Game states - 3-outcome stacked */}
-      {data.gameStates.filter(s => s.state !== '紅紅紅' && s.state !== '藍藍藍' && s.games >= 20).length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-        >
-          <h3 className="text-sm font-bold text-gray-400 mb-1">{t('analytics.deep.rounds.stateTitle')}</h3>
-          <p className="text-[10px] text-gray-600 mb-3">{t('analytics.deep.rounds.stateSub')}</p>
-          <div className="space-y-2">
-            {data.gameStates
-              .filter(s => s.state !== '紅紅紅' && s.state !== '藍藍藍' && s.games >= 20)
-              .map(s => (
-                <div key={s.state} className="bg-gray-800/40 rounded-lg p-2 grid grid-cols-[80px_60px_1fr] items-center gap-2">
-                  <span className="text-white font-bold text-xs">{s.state}</span>
-                  <span className="text-gray-500 text-[10px] text-right">{s.games} {t('analytics.deep.common.games')}</span>
-                  <OutcomeOrRedRate outcomes={s.outcomes} redWinRate={s.redWinRate} t={t} />
-                </div>
-              ))}
-          </div>
-        </motion.div>
-      )}
+      <OutcomeBlocksNote lowSample={lowSample} pending={lacksOutcomes(visionRows, redRows)} />
     </div>
+  );
+}
+
+function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample?: number }): JSX.Element {
+  const { t } = useTranslation('common');
+
+  const roundRows = useMemo<RoundRow[]>(
+    () => Object.entries(data.roundProgression ?? {}).map(([key, v]) => {
+      const idx = ROUND_KEYS.indexOf(key);
+      return {
+        key,
+        label: idx >= 0 ? t(`${PG}.roundN`, { n: idx + 1 }) : key,
+        pass: v.bluePct,
+        fail: v.redPct,
+        total: v.total,
+      };
+    }),
+    [data, t],
+  );
+
+  const branchRows = useMemo<OutcomeGroupRow[]>(
+    () => (data.mission1Branch ?? []).map(b => ({
+      key: b.passed ? 'passed' : 'failed',
+      label: t(b.passed ? `${PG}.branchPassed` : `${PG}.branchFailed`),
+      tone: b.passed ? 'blue' : 'red',
+      n: b.games,
+      outcomes: b.outcomes ?? null,
+      missionRedRate: finite(b.redWinRate),
+    })),
+    [data, t],
+  );
+
+  const pathRows = useMemo<(OutcomeGroupRow & { path: string })[]>(
+    () => (data.gameStates ?? []).map(s => ({
+      key: s.state,
+      label: s.state,
+      path: s.state,
+      n: s.games,
+      outcomes: s.outcomes ?? null,
+      missionRedRate: finite(s.redWinRate),
+      title: s.state,
+    })),
+    [data],
+  );
+
+  const roundColumns: StatColumn<RoundRow>[] = [
+    { key: 'label', label: t(`${PG}.round`) },
+    {
+      key: 'pass', label: t(`${PG}.pass`), title: t(`${PG}.roundHint`),
+      format: 'pct', tone: 'blue', n: 'total', lowSample, bar: { max: 100 }, emphasis: true,
+    },
+    { key: 'fail', label: t(`${PG}.fail`), title: t(`${PG}.roundHint`), format: 'pct', tone: 'red' },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-zinc-400 leading-relaxed">{t(`${PG}.intro`)}</p>
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className="min-w-0 space-y-3">
+          <StatTable
+            caption={t(`${PG}.roundCaption`)}
+            columns={roundColumns}
+            rows={roundRows}
+            rowKey={row => row.key}
+          />
+          <OutcomeBlocksTable
+            caption={t(`${PG}.branchCaption`)}
+            groupLabel={t(`${PG}.branchGroup`)}
+            rows={branchRows}
+            lowSample={lowSample}
+          />
+        </div>
+        <OutcomeBlocksTable
+          caption={t(`${PG}.pathCaption`)}
+          groupLabel={t(`${PG}.path`)}
+          rows={pathRows}
+          renderLabel={row => <PathChips path={row.path} label={t(`${PG}.pathAria`, { path: row.path })} />}
+          lowSample={lowSample}
+          // 約與左欄 (各任務成功率 + 任務 1 之後) 同高，1280×800 一屏放得下；其餘路徑在表格自己的容器裡捲
+          maxHeight={300}
+        />
+      </div>
+      <OutcomeBlocksNote
+        lowSample={lowSample}
+        pending={lacksOutcomes(branchRows, pathRows)}
+        extra={t(`${PG}.pathNote`, { count: pathRows.length })}
+      />
+    </div>
+  );
+}
+
+export default function RoundsAnalysis({ section, lowSample }: { section: RoundsSection; lowSample?: number }): JSX.Element {
+  const { data, loading, error, notGenerated } = useRoundsData();
+  return (
+    <TeamsLoadState loading={loading} error={error} notGenerated={notGenerated} empty={!data}>
+      {() => (data
+        ? section === 'firstVote'
+          ? <FirstVoteSection data={data} lowSample={lowSample} />
+          : <ProgressionSection data={data} lowSample={lowSample} />
+        : null)}
+    </TeamsLoadState>
   );
 }
