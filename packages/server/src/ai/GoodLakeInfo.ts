@@ -70,6 +70,9 @@
 
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { PlayerObservation } from './types';
+import { certaintyParamsFor, declaredLakes, enumerateWorlds, evilCountFor, popcount } from './belief/Certainty';
+
+export { evilCountFor };
 
 // ── Mission likelihood (human 10-player data) ─────────────────
 
@@ -103,36 +106,10 @@ export function missionLikelihood(round: number, k: number, f: number): number {
 
 // ── Worlds ─────────────────────────────────────────────────────
 
-const EVIL_ROLE_NAMES = new Set(['assassin', 'morgana', 'mordred', 'oberon', 'minion']);
-
-/** Number of reds in a standard game of `playerCount` players. */
-export function evilCountFor(playerCount: number): number {
-  const roles = AVALON_CONFIG[playerCount]?.roles;
-  if (roles) return roles.filter((r) => EVIL_ROLE_NAMES.has(r)).length;
-  return Math.ceil(playerCount / 3);
-}
-
 interface World {
   /** Bit i set ⇔ allPlayerIds[i] is red. */
   mask: number;
   w: number;
-}
-
-function combinations(pool: readonly number[], k: number): number[] {
-  const out: number[] = [];
-  const rec = (start: number, left: number, mask: number): void => {
-    if (left === 0) { out.push(mask); return; }
-    for (let i = start; i <= pool.length - left; i++) rec(i + 1, left - 1, mask | (1 << pool[i]));
-  };
-  rec(0, k, 0);
-  return out;
-}
-
-function popcount(x: number): number {
-  let c = 0;
-  let v = x;
-  while (v) { v &= v - 1; c++; }
-  return c;
 }
 
 /**
@@ -140,56 +117,45 @@ function popcount(x: number): number {
  * the holder's role knowledge (holder belief); without it the worlds are the
  * common picture (public record + "the holder is good"). `useLakes` = false
  * drops the earlier lake declarations (fallback for inconsistent records).
+ *
+ * 2026-10-14 (S1-0): the 0/1 part — which red sets are possible at all — now
+ * comes from the shared certainty layer (`belief/Certainty.enumerateWorlds`,
+ * holder assumed good, role sight when `usePrivate`, A0 on the declared
+ * lakes when `useLakes`; the holder's own lake results are not used, as
+ * before). This function only adds the weights: the mission likelihood and
+ * ½ for an earlier red holder's claim. Same worlds in the same order with
+ * the same weights as before, so every pick is unchanged
+ * (`GoodLakeInfo.identical.test.ts`, all lake-legal replays).
  */
 function buildWorlds(obs: PlayerObservation, usePrivate: boolean, useLakes: boolean): World[] {
   const ids = obs.allPlayerIds;
   const idx = new Map(ids.map((id, i) => [id, i]));
-  const holder = idx.get(obs.myPlayerId);
-  if (holder === undefined || ids.length > 30) return [];
-  const pool = ids.map((_, i) => i).filter((i) => i !== holder);
-  const nEvil = evilCountFor(obs.playerCount);
+  if (idx.get(obs.myPlayerId) === undefined || ids.length > 30) return [];
   const bit = (id: string): number => {
     const i = idx.get(id);
     return i === undefined ? 0 : 1 << i;
   };
-
-  let requiredMask = 0;
-  let wizardMask = 0;
-  let wizardCount = 0;
-  if (usePrivate) {
-    for (const id of obs.knownEvils) requiredMask |= bit(id);
-    for (const id of obs.knownWizards ?? []) { wizardMask |= bit(id); wizardCount++; }
-  }
+  const masks = enumerateWorlds(
+    obs,
+    { self: 'good', sight: usePrivate, ownLakeResults: false, lakes: useLakes },
+    certaintyParamsFor(obs),
+  );
   const quests = obs.questHistory.map((q) => ({
     round: q.round,
     mask: q.team.reduce((m, id) => m | bit(id), 0),
     fails: q.failCount ?? 0,
   }));
   const lakes = useLakes
-    ? (obs.lakeHistory ?? []).map((l) => ({
-      holder: bit(l.holderId),
-      target: bit(l.targetId),
-      saysEvil: l.declaredClaim === 'evil',
-    }))
+    ? declaredLakes(obs.lakeHistory).map((l) => ({ holder: bit(l.holderId), target: bit(l.targetId) }))
     : [];
 
   const out: World[] = [];
-  for (const mask of combinations(pool, nEvil)) {
-    if ((mask & requiredMask) !== requiredMask) continue;
-    // Percival: the two thumbs are Merlin and Morgana — exactly one red.
-    if (wizardCount >= 2 && popcount(mask & wizardMask) !== 1) continue;
-    if (wizardCount === 1 && (mask & wizardMask) !== 0) continue;
+  for (const mask of masks) {
     let w = 1;
-    for (const q of quests) {
-      w *= missionLikelihood(q.round, popcount(mask & q.mask), q.fails);
-      if (w === 0) break;
-    }
-    if (w === 0) continue;
+    for (const q of quests) w *= missionLikelihood(q.round, popcount(mask & q.mask), q.fails);
     for (const l of lakes) {
       if (l.holder === 0 || l.target === 0) continue;
-      if ((mask & l.holder) !== 0) { w *= 0.5; continue; }
-      const targetEvil = (mask & l.target) !== 0;
-      if (targetEvil !== l.saysEvil) { w = 0; break; }
+      if ((mask & l.holder) !== 0) w *= 0.5;
     }
     if (w > 0) out.push({ mask, w });
   }

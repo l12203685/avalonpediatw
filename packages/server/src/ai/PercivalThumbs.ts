@@ -27,21 +27,40 @@
  * The baseline's "R1-P1: self + two non-thumbs" rule
  * (`HeuristicAgent.selectPercivalTeam`) only ran on the fallback path.
  *
- * With the switch on, in R1 of a 10-player game Percival as captain:
+ * With the switch on, in R1 of a 6–10-player game Percival (two thumbs) as
+ * captain:
  *   - ForwardAgent: both thumbs leave the candidate pool (same severity as
  *     the inferred-Morgana thumb; the 2026-10-10 backfill restores seats only
  *     when the pool cannot fill a team), and the Percival bias gives no bonus
- *     to a team with thumb A only;
+ *     to a team with thumb A only — except the thumb-on-thumb exception
+ *     below, which keeps the included thumb in the pool and treats it as A;
  *   - baseline (`selectPercivalTeam`, fallback / forward reasoning off): the
  *     R1-P1 no-thumb branch covers R1-P2..P5 too.
  * From R2 on nothing changes (the current identification: inferred Morgana
  * excluded, inferred Merlin rewarded), never both thumbs, and Percival's lake
  * still avoids the thumbs (`LakePolicy.pickLakeTargetForTeam`).
  *
- * 10-player games only (`PERCIVAL_NO_THUMBS_R1_PLAYER_COUNT`), as
- * `redR1Teammate`: the human data and every benchmark are 10-player games,
- * and in a 5-player game the R1-P1 banned seat pairs could be the only
- * no-thumb teams left.
+ * Player counts 6–10 (`PERCIVAL_NO_THUMBS_R1_MIN_PLAYERS`..`_MAX_PLAYERS`;
+ * 2026-10-14 GM decision D5, `docs/ai/logic_first.md`): the first version
+ * acted in 10-player games only, but the stated reason — the banned R1-P1
+ * seat pairs — exists only in 5-player games (`ForwardAgent.
+ * bannedComboSetFor5p` is empty for 6–9), so 6–9-player rooms now follow
+ * the owner ruling too; 5-player games keep the old behaviour.
+ *
+ * Gate on two thumbs (`knownWizards.length === 2`, D5): with Morgana turned
+ * off in the lobby Percival sees one wizard, who is certainly Merlin
+ * (`GameEngine.assignRoles` maps Morgana to a minion) — there is nothing to
+ * tell apart, so the rule does not apply and Merlin may be sent.
+ *
+ * The thumb-on-thumb exception (`AgentTuning.percivalR1ThumbOnThumb`, D5 (b)):
+ * if, earlier in R1, one thumb as captain put the other thumb on its own
+ * team, that included thumb may go on Percival's team. Human data
+ * (percival_followups, 1970 games): a Morgana captain puts Merlin on her R1
+ * team 153/750, a Merlin captain puts Morgana on hers 21/773, so the
+ * included thumb is Merlin 87.9% [82.3%, 92.0%] (153/174); human Percivals
+ * put it on their team 34/46 = 73.9% [59.7%, 84.4%]. This is information,
+ * so the owner's "no information → no thumbs" default does not cover it.
+ * When both thumbs included each other the signal cancels → no exception.
  *
  * In `DEFAULT_AGENT_TUNING` since 2026-10-14 (rule and thresholds registered
  * before any seed ran; docs/ai/percival_thumbs.md 第 11 節,
@@ -52,18 +71,22 @@
  * teams, votes, quest cards, lake and assassination identical). Self-play
  * blue stance +0.16pp (515151), +0.02pp / −0.18pp on the fresh seeds 626262 /
  * 737373, pooled +0.01pp [−0.31pp, +0.32pp]; red stance 0; 0 fallbacks.
+ * The D5 fixes (gate, 6–9 players, exception) are measured in
+ * strength_benchmark.md 第 15 節.
  */
 
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 
-/** The only player count the switch acts in (the data and the benchmarks are 10p). */
-export const PERCIVAL_NO_THUMBS_R1_PLAYER_COUNT = 10;
+/** Smallest player count the switch acts in (5p: banned R1-P1 pairs could collide). */
+export const PERCIVAL_NO_THUMBS_R1_MIN_PLAYERS = 6;
+/** Largest player count (the standard games end at 10). */
+export const PERCIVAL_NO_THUMBS_R1_MAX_PLAYERS = 10;
 
 /**
  * Whether `percivalNoThumbsR1` acts on this observation: switch on, Percival
- * who sees thumbs, 10-player game, R1 (no mission result yet). The callers
- * are Percival's team-selection paths.
+ * who sees exactly two thumbs, 6–10-player game, R1 (no mission result
+ * yet). The callers are Percival's team-selection paths.
  */
 export function percivalNoThumbsR1Active(
   tuning: Pick<AgentTuning, 'percivalNoThumbsR1'>,
@@ -72,8 +95,40 @@ export function percivalNoThumbsR1Active(
   return (
     tuning.percivalNoThumbsR1 &&
     obs.myRole === 'percival' &&
-    obs.playerCount === PERCIVAL_NO_THUMBS_R1_PLAYER_COUNT &&
+    obs.playerCount >= PERCIVAL_NO_THUMBS_R1_MIN_PLAYERS &&
+    obs.playerCount <= PERCIVAL_NO_THUMBS_R1_MAX_PLAYERS &&
     (obs.currentRound ?? 1) === 1 &&
-    (obs.knownWizards?.length ?? 0) > 0
+    (obs.knownWizards?.length ?? 0) === 2
   );
+}
+
+/**
+ * The thumb that the other thumb, as captain of an earlier R1 proposal, put
+ * on its own team — `null` when no thumb did, or when both did (the signal
+ * cancels). Pure function of the public R1 record plus Percival's two thumbs.
+ */
+export function percivalR1IncludedThumb(obs: PlayerObservation): string | null {
+  const thumbs = obs.knownWizards ?? [];
+  if (thumbs.length !== 2) return null;
+  const [a, b] = thumbs;
+  const included = new Set<string>();
+  for (const v of obs.voteHistory) {
+    if (v.round !== 1) continue;
+    if (v.leader === a && v.team.includes(b)) included.add(b);
+    if (v.leader === b && v.team.includes(a)) included.add(a);
+  }
+  return included.size === 1 ? [...included][0] : null;
+}
+
+/**
+ * The thumb exempted from the R1 no-thumb rule by `percivalR1ThumbOnThumb`
+ * (D5 (b)), or `null` (switch off, rule not active, or no unique included
+ * thumb).
+ */
+export function percivalR1ThumbException(
+  tuning: Pick<AgentTuning, 'percivalNoThumbsR1' | 'percivalR1ThumbOnThumb'>,
+  obs: PlayerObservation,
+): string | null {
+  if (!tuning.percivalR1ThumbOnThumb || !percivalNoThumbsR1Active(tuning, obs)) return null;
+  return percivalR1IncludedThumb(obs);
 }

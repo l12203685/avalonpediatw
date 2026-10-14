@@ -73,7 +73,18 @@
  *                                   真人資料與預先登記的規則見
  *                                   `docs/ai/percival_thumbs.md` 第 9、11 節，
  *                                   強度見 `strength_benchmark.md` 第 14 節，
- *                                   細節見 `PercivalThumbs.ts`。
+ *                                   細節見 `PercivalThumbs.ts`。2026-10-14 依
+ *                                   GM 決定 D5 修正：只在看得到兩根拇指時作用
+ *                                   （大廳關掉莫甘娜時唯一的拇指確定是梅林）、
+ *                                   擴到 6–9 人局（5 人局仍不適用）。
+ *   - 2026-10-14 邏輯第一（`docs/ai/logic_first.md`，第 1A / 1B 批；每個開關
+ *     只做一件事，legacy 全關，不變量 0 違規後預設開）：
+ *     `percivalR1ThumbOnThumb`（D5 (b) 例外：R1 一根拇指當隊長時把另一根
+ *     放進自己的隊，被放的那根可以進派西的隊，`PercivalThumbs.ts`）、
+ *     `goodQuestSuccessGuard`（好人任務牌一律成功的防護，ForwardAgent 開頭；
+ *     INV-Q1）、`assassinHeuristicVisibility`（舊刺殺啟發式的視野修正：梅林
+ *     看得到刺客自己、奧伯倫與兩位隊友中的一位，看不到莫德雷德；只在
+ *     `assassinModel` 關掉時跑，INV-A1）。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -177,6 +188,29 @@ export interface AgentTuning {
    * `PercivalThumbs.ts`。
    */
   percivalNoThumbsR1: boolean;
+  /**
+   * 派西首局不放拇指的例外（2026-10-14，GM 決定 D5 (b)，`docs/ai/logic_first.md`）：
+   * R1 在派西之前，一根拇指當隊長時把另一根拇指放進自己的隊，被放的那根
+   * 可以進派西的隊（真人資料：被放的那根 87.9% 是梅林，真人派西 73.9% 會放
+   * 她）；兩根互相放過則訊號抵銷、不例外。只在 `percivalNoThumbsR1` 生效時
+   * 有作用。細節見 `PercivalThumbs.percivalR1ThumbException`。
+   */
+  percivalR1ThumbOnThumb: boolean;
+  /**
+   * 好人任務牌防護（2026-10-14，S1-11，INV-Q1）：好人機器人被要求出任務牌
+   * 時，`ForwardAgent.decide` 一開始就回「成功」，不進評分。好人本來就 0 次
+   * 出失敗（22995 次），這是防護，不改行為。
+   */
+  goodQuestSuccessGuard: boolean;
+  /**
+   * 舊刺殺啟發式的視野修正（2026-10-14，S1-11，INV-A1、M1）：`assassinModel`
+   * 關掉時才跑的 `getMistakeCount` / `getPercivalLikenessPenalty` 把刺客的
+   * `knownEvils`（莫甘娜 + 莫德雷德）當成「梅林看得到的紅」；正確的是刺客
+   * 自己、奧伯倫確定看得到，莫甘娜與莫德雷德之中梅林只看得到莫甘娜（刺客
+   * 分不出隊友角色時 = 兩位隊友中恰一位）。正式預設的刺殺走模型，所以只影響
+   * fallback 與 legacy。
+   */
+  assassinHeuristicVisibility: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -197,6 +231,9 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'teamReuse',
   'redR1Teammate',
   'percivalNoThumbsR1',
+  'percivalR1ThumbOnThumb',
+  'goodQuestSuccessGuard',
+  'assassinHeuristicVisibility',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -216,6 +253,9 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   teamReuse: false,
   redR1Teammate: false,
   percivalNoThumbsR1: false,
+  percivalR1ThumbOnThumb: false,
+  goodQuestSuccessGuard: false,
+  assassinHeuristicVisibility: false,
 });
 
 /**
@@ -334,6 +374,10 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     +0.38pp]，三個合併 +0.01pp [−0.31pp, +0.32pp]、兩個確認種子合併
  *     −0.08pp [−0.47pp, +0.32pp]；紅方立場恆為 0；0 次 fallback → 不算
  *     變弱 → **採用**（AVALON_TUNING_PERCIVAL_NO_THUMBS_R1=0 可關掉）。
+ *   - 2026-10-14 邏輯第一（`docs/ai/logic_first.md`，新的採用順序：邏輯正確
+ *     優先，強度只量測回報、不用來回退）：`percivalR1ThumbOnThumb`、
+ *     `goodQuestSuccessGuard`、`assassinHeuristicVisibility` 預設開（不變量
+ *     INV-R1NT / INV-Q1 / INV-A1 為 0）；強度見 strength_benchmark.md 第 15 節。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -357,6 +401,9 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   teamReuse: true,
   redR1Teammate: true,
   percivalNoThumbsR1: true,
+  percivalR1ThumbOnThumb: true,
+  goodQuestSuccessGuard: true,
+  assassinHeuristicVisibility: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -376,6 +423,9 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   teamReuse: 'AVALON_TUNING_TEAM_REUSE',
   redR1Teammate: 'AVALON_TUNING_RED_R1_TEAMMATE',
   percivalNoThumbsR1: 'AVALON_TUNING_PERCIVAL_NO_THUMBS_R1',
+  percivalR1ThumbOnThumb: 'AVALON_TUNING_PERCIVAL_R1_THUMB_ON_THUMB',
+  goodQuestSuccessGuard: 'AVALON_TUNING_GOOD_QUEST_SUCCESS_GUARD',
+  assassinHeuristicVisibility: 'AVALON_TUNING_ASSASSIN_HEURISTIC_VISIBILITY',
 });
 
 function parseBool(raw: string): boolean | undefined {

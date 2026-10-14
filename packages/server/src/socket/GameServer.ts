@@ -7,6 +7,7 @@ import { GameEngine } from '../game/GameEngine';
 import { getAsyncNotifier } from '../services/AsyncNotifier';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { hasLakeApi } from '../ai/LakePolicy';
+import { privateLakeResults, publicLakeHistory } from '../ai/lakeRecords';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
 import { SocketRateLimiter } from '../middleware/rateLimit';
 import { LobbyChatBuffer, LobbyChatMessage } from './LobbyChatBuffer';
@@ -203,6 +204,23 @@ function tryMirrorFanout(msg: LobbyChatMessage): void {
 export function isBotLakeViaAgentEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = (env.AVALON_BOT_LAKE_VIA_AGENT ?? '').trim().toLowerCase();
   return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
+}
+
+/**
+ * Faction guard on the bot quest-card path (S1-11, 2026-10-14; logic_audit.md
+ * F16): a good player can only play success. The human socket path already
+ * refuses a good "fail"; the bot path now enforces the same rule on whatever
+ * the agent returned. Red bots are untouched.
+ */
+export function goodBotQuestCard(
+  team: string | null | undefined,
+  card: 'success' | 'fail',
+): 'success' | 'fail' {
+  if (team === 'good' && card === 'fail') {
+    console.warn('[bot quest-vote] a good bot asked for a fail card; played success');
+    return 'success';
+  }
+  return card;
 }
 
 // 網站「與機器人練習」: one new practice room per socket AND per player every
@@ -1934,17 +1952,12 @@ export class GameServer {
           .map(([id]) => id)
       : undefined;
 
-    // Public-only Lake history. Only declared records — pending lake
-    // hidden so the holder's intermediate state stays private. `result`
-    // (private) stripped; only `declaredClaim` (public) carried.
-    const lakeHistory = (r.ladyOfTheLakeHistory ?? [])
-      .filter((rec) => rec.declared === true && rec.declaredClaim !== undefined)
-      .map((rec) => ({
-        round:         rec.round,
-        holderId:      rec.holderId,
-        targetId:      rec.targetId,
-        declaredClaim: rec.declaredClaim as 'good' | 'evil',
-      }));
+    // Public-only Lake history: declared records, plus finished undeclared
+    // ones as 'none' (S1-9c, 2026-10-14) — the pending lake stays hidden so
+    // the holder's intermediate state stays private. `result` (private) is
+    // stripped; the holder alone gets it through `myLakeResults` (S1-9b).
+    const lakeHistory = publicLakeHistory(r);
+    const myLakeResults = privateLakeResults(r, botId);
 
     return {
       myPlayerId:    botId,
@@ -1964,6 +1977,8 @@ export class GameServer {
       questHistory:  r.questHistory,
       proposedTeam:  r.questTeam,
       lakeHistory,
+      myLakeResults,
+      evilCount:     Object.values(r.players).filter((p) => p.team === 'evil').length,
     };
   }
 
@@ -2180,7 +2195,7 @@ export class GameServer {
                 const agent = this.botAgents.get(memberId);
                 let questObs: PlayerObservation | null = null;
                 let questSource: 'agent' | 'fallback' = 'fallback';
-                const vote = agent
+                const chosenCard = agent
                   ? (() => {
                       const obs = this.buildBotObservation(snapshot, memberId, eng, 'quest_vote');
                       questObs = obs;
@@ -2192,6 +2207,10 @@ export class GameServer {
                       return 'success';
                     })()
                   : (player.team === 'evil' && Math.random() > 0.5 ? 'fail' : 'success');
+                // S1-11 (2026-10-14): the same faction guard as the human path
+                // ("Good players can only vote success") — a good bot's card is
+                // success whatever its agent returned.
+                const vote = goodBotQuestCard(player.team, chosenCard);
                 const questTrace = this.isPracticeRoom(roomId)
                   ? this.preparePracticeTrace(snapshot, memberId, questObs ?? this.buildBotObservation(snapshot, memberId, eng, 'quest_vote'), {
                       kind: 'quest_card', card: vote, source: questSource, agent,

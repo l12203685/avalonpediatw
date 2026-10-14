@@ -164,23 +164,41 @@ describe('AgentTuning — flags', () => {
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, percivalNoThumbsR1: true })).toBe('percivalNoThumbsR1');
   });
 
-  it('round-3 integrated default (strength_benchmark.md 第 13 節) + percivalNoThumbsR1 (第 14 節)', () => {
-    // 第 13 節: the combined self-play variant = the default minus percivalNoThumbsR1 (red
-    // +3.18pp, blue +4.89pp pooled over the old default); its baseline = that set minus the
-    // three round-3 switches. 第 14 節: the baseline = the round-3 default (12 switches),
-    // the variant = the full default below.
+  it('round-3 integrated default (strength_benchmark.md 第 13 節) + percivalNoThumbsR1 (第 14 節) + logic-first 1A/1B (第 15 節)', () => {
+    // 第 13 節: the combined self-play variant = the round-3 default (red +3.18pp, blue
+    // +4.89pp pooled over the old default); its baseline = that set minus the three
+    // round-3 switches. 第 14 節: baseline = the round-3 default (12 switches), variant =
+    // + percivalNoThumbsR1. 第 15 節 (logic_first.md batch 1A/1B): baseline = the 13
+    // switches of 第 14 節, variant = the full default below.
+    const LOGIC_1AB = ['percivalR1ThumbOnThumb', 'goodQuestSuccessGuard', 'assassinHeuristicVisibility'] as const;
+    for (const key of LOGIC_1AB) {
+      expect(DEFAULT_AGENT_TUNING[key]).toBe(true);
+      expect(LEGACY_AGENT_TUNING[key]).toBe(false);
+      expect(tuningFromEnv({ [AGENT_TUNING_ENV[key]]: '0' })).toEqual({ [key]: false });
+      expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, [key]: true })).toBe(key);
+    }
+    expect(AGENT_TUNING_ENV.percivalR1ThumbOnThumb).toBe('AVALON_TUNING_PERCIVAL_R1_THUMB_ON_THUMB');
+    expect(AGENT_TUNING_ENV.goodQuestSuccessGuard).toBe('AVALON_TUNING_GOOD_QUEST_SUCCESS_GUARD');
+    expect(AGENT_TUNING_ENV.assassinHeuristicVisibility).toBe('AVALON_TUNING_ASSASSIN_HEURISTIC_VISIBILITY');
     expect(describeAgentTuning(DEFAULT_AGENT_TUNING)).toBe(
+      'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
+        'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
+        'goodVouchFollowUp,teamReuse,redR1Teammate,percivalNoThumbsR1,' +
+        'percivalR1ThumbOnThumb,goodQuestSuccessGuard,assassinHeuristicVisibility',
+    );
+    const before1AB = { ...DEFAULT_AGENT_TUNING, percivalR1ThumbOnThumb: false, goodQuestSuccessGuard: false, assassinHeuristicVisibility: false };
+    expect(describeAgentTuning(before1AB)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
         'goodVouchFollowUp,teamReuse,redR1Teammate,percivalNoThumbsR1',
     );
-    expect(describeAgentTuning({ ...DEFAULT_AGENT_TUNING, percivalNoThumbsR1: false })).toBe(
+    expect(describeAgentTuning({ ...before1AB, percivalNoThumbsR1: false })).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
         'goodVouchFollowUp,teamReuse,redR1Teammate',
     );
     expect(describeAgentTuning({
-      ...DEFAULT_AGENT_TUNING, goodVouchFollowUp: false, teamReuse: false, redR1Teammate: false, percivalNoThumbsR1: false,
+      ...before1AB, goodVouchFollowUp: false, teamReuse: false, redR1Teammate: false, percivalNoThumbsR1: false,
     })).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax',

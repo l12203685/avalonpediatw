@@ -11,13 +11,15 @@
  *   - the assassin additionally gets `allEvilIds` in the assassination phase;
  *   - forced 5th proposals appear as unanimous-approve vote records (what
  *     GameEngine synthesises), other proposals carry the reconstructed votes;
- *   - `lakeHistory` holds only declared lakes from earlier rounds.
- *
- * Production gives the lake holder no private record of what they saw, so
- * neither does the replay.
+ *   - `lakeHistory` holds the lakes of earlier rounds; an undeclared one
+ *     carries `declaredClaim: 'none'` (S1-9c, 2026-10-14 — it used to be
+ *     dropped);
+ *   - `myLakeResults` holds what this seat saw with the lake (S1-9b,
+ *     2026-10-14: the holder's private result; nobody else gets it);
+ *   - `evilCount` = the number of reds of the game.
  */
 
-import type { PlayerObservation, QuestRecord, VoteRecord, LakePublicRecord } from '../types';
+import type { PlayerObservation, QuestRecord, VoteRecord, LakePublicRecord, PrivateLakeResult } from '../types';
 import {
   campOf,
   EVIL_ROLES,
@@ -157,14 +159,19 @@ export function buildReplayObservation(
   const cut = cutFor(game, point);
   const voteHistory = game.proposals.slice(0, cut.votesUntil).map((p) => toVoteRecord(game, p));
   const quests = game.quests.filter((q) => q.round < cut.questsBefore);
-  const lakeHistory: LakePublicRecord[] = game.lakes
-    .slice(0, cut.lakesUntil)
-    .filter((l) => l.claim !== null)
+  const visibleLakes = game.lakes.slice(0, cut.lakesUntil);
+  const lakeHistory: LakePublicRecord[] = visibleLakes.map((l) => ({
+    round: l.round,
+    holderId: seatId(l.holderSeat),
+    targetId: seatId(l.targetSeat),
+    declaredClaim: l.claim ?? 'none',
+  }));
+  const myLakeResults: PrivateLakeResult[] = visibleLakes
+    .filter((l) => l.holderSeat === seat)
     .map((l) => ({
       round: l.round,
-      holderId: seatId(l.holderSeat),
       targetId: seatId(l.targetSeat),
-      declaredClaim: l.claim as 'good' | 'evil',
+      result: campOf(game.seatRoles[l.targetSeat - 1]),
     }));
 
   let currentRound: number;
@@ -230,6 +237,8 @@ export function buildReplayObservation(
     questHistory: quests.map(toQuestRecord),
     proposedTeam,
     lakeHistory,
+    myLakeResults,
+    evilCount: game.seatRoles.filter((r) => EVIL_ROLES.has(r)).length,
   };
 }
 

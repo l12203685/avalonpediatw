@@ -120,6 +120,7 @@ export function ownLakeDeclarations(obs: PlayerObservation): OwnLakeDeclarations
   const blue: string[] = [];
   const red: string[] = [];
   for (const rec of obs.lakeHistory ?? []) {
+    if (rec.declaredClaim === 'none') continue; // undeclared: no claim to keep
     if (rec.holderId !== obs.myPlayerId || rec.targetId === obs.myPlayerId) continue;
     const list = rec.declaredClaim === 'good' ? blue : red;
     if (!list.includes(rec.targetId)) list.push(rec.targetId);

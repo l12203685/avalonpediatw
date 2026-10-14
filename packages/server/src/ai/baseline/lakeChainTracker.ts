@@ -11,9 +11,9 @@
  *
  * Pyramid layer 3: 湖中宣告 (declarations) — public but defeatable
  * by built-in or mission ground truth. Within layer 3, declarations
- * ARE constrained by these 4 hard rules; declarations that violate
- * one (e.g. cycle of mutual blue claims that cannot all be true) tag
- * the violator with high suspicion (≥0.85).
+ * ARE constrained by these 4 hard rules. (The old "cycle of mutual
+ * claims" violator tagging was removed 2026-10-14: the lake path rule
+ * makes such cycles impossible — see `analyzeLakeChain`.)
  *
  * Pure module: input is `obs.lakeHistory`; output is a struct of
  * derived facts (declarationsAsBlue, declarationsAsRed, violators).
@@ -40,9 +40,8 @@ export interface LakeChainState {
   /** targetId → set of holderIds who declared this target red. */
   declaredRedByTarget: Map<string, Set<string>>;
   /**
-   * Players whose declarations are inconsistent with at least one
-   * other declaration in the chain (cycle SAT failure / hard-rule
-   * violation). Suspicion boost ≥0.85 for these.
+   * Always empty since 2026-10-14 (S1-11): declarations cannot contradict
+   * each other under the lake path rule; kept for the existing readers.
    */
   violators: Set<string>;
   /** All public declarations in chronological order. */
@@ -61,20 +60,24 @@ const EMPTY_STATE: LakeChainState = {
 // ── Analyze ────────────────────────────────────────────────────
 /**
  * Build the full chain state from `obs.lakeHistory` (Wave A schema).
+ * Undeclared lakes (`declaredClaim: 'none'`, S1-9c) carry no claim and
+ * are left out, exactly as before they appeared in the observation.
  *
- * Cycle SAT detection: if `A 湖 B 宣藍` AND `B 湖 A 宣紅` exists, at
- * least one of (A, B) is lying. Conservative: tag both. Same for
- * a 3-cycle where transitivity demands "all blue" but a chain of
- * blues includes one declared-red. The detection here is a simple
- * pairwise + triangle scan — sufficient for Avalon's small lake
- * count (≤4 declarations per game) without a full SAT solver.
+ * 2026-10-14 (S1-11, logic_audit.md F13): the "cycle SAT" detection that
+ * used to fill `violators` is gone. It could not fire — a lake target can
+ * never be an earlier holder (path rule C7; 0 of 1970 replayed games) —
+ * and its three-step rule was wrong anyway ("A→B blue, B→C blue, C→A red"
+ * is consistent with A red, B and C blue, so tagging C was unfounded).
+ * Contradictions with the fail counts, the role sight and A0 are now the
+ * certainty layer's job (`belief/Certainty.ts`, the L1-empty fallback).
+ * `violators` stays in the state (always empty) for the existing readers.
  *
  * `undefined` / empty `lakeHistory` returns the empty state.
  */
 export function analyzeLakeChain(
   obs: PlayerObservation,
 ): LakeChainState {
-  const records = obs.lakeHistory ?? [];
+  const records = (obs.lakeHistory ?? []).filter((rec) => rec.declaredClaim !== 'none');
   if (records.length === 0) return EMPTY_STATE;
 
   const declaredBlueByHolder = new Map<string, Set<string>>();
@@ -102,46 +105,12 @@ export function analyzeLakeChain(
     }
   }
 
-  // Cycle SAT — pairwise mutual-contradiction scan.
-  // If A→B blue AND B→A red, at least one lies. Conservative: both.
-  // If A→B red AND B→A blue, mirror.
-  const violators = new Set<string>();
-  for (const rec of records) {
-    const opposite =
-      rec.declaredClaim === 'good'
-        ? declaredRedByHolder.get(rec.targetId)
-        : declaredBlueByHolder.get(rec.targetId);
-    if (opposite && opposite.has(rec.holderId)) {
-      violators.add(rec.holderId);
-      violators.add(rec.targetId);
-    }
-  }
-
-  // 3-step: A→B blue, B→C blue, but C→A red is inconsistent
-  // (transitivity says A and C should both be blue from A's view).
-  // If A claimed blue on B and B claimed blue on C, C claiming A red
-  // contradicts the implied blue-chain — tag C as the violator.
-  for (const rec1 of records) {
-    if (rec1.declaredClaim !== 'good') continue;
-    const middle = rec1.targetId;
-    const blueFromMiddle = declaredBlueByHolder.get(middle);
-    if (!blueFromMiddle) continue;
-    for (const tail of blueFromMiddle) {
-      const tailRedFollowups = declaredRedByHolder.get(tail);
-      if (!tailRedFollowups) continue;
-      if (tailRedFollowups.has(rec1.holderId)) {
-        // tail (C) declares the chain-head (A) red, breaking transitivity.
-        violators.add(tail);
-      }
-    }
-  }
-
   return {
     declaredBlueByHolder,
     declaredRedByHolder,
     declaredBlueByTarget,
     declaredRedByTarget,
-    violators,
+    violators: new Set<string>(),
     records,
   };
 }

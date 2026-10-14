@@ -64,7 +64,7 @@ import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } f
 import { goodVouchTeamConstraint, goodVouchVoteRule } from '../GoodLakeFollowUp';
 import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan, teamReuseScorer } from '../TeamReuse';
 import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
-import { percivalNoThumbsR1Active } from '../PercivalThumbs';
+import { percivalNoThumbsR1Active, percivalR1ThumbException } from '../PercivalThumbs';
 import {
   interpret,
   type Facts,
@@ -604,6 +604,14 @@ export class ForwardAgent implements AvalonAgent {
   /** Wrapped baseline agent. Used for fallback + onGameStart/End delegation. */
   private readonly baseline: HeuristicAgent;
 
+  /**
+   * Seats the last team selection hard-excluded from its candidate pool
+   * (seat → severity: 1 inferred red, 2 wizard / known evil), after the
+   * backfill restored any it needed. Read-only diagnostics for the
+   * invariant harness (INV-Pe2, `invariants/`); never read by the agent.
+   */
+  private lastExclusions: ReadonlyMap<string, number> = new Map();
+
   constructor(agentId: string, baseline?: HeuristicAgent) {
     this.agentId = agentId;
     this.baseline = baseline ?? new HeuristicAgent(agentId);
@@ -611,6 +619,11 @@ export class ForwardAgent implements AvalonAgent {
 
   onGameStart(obs: PlayerObservation): void {
     this.baseline.onGameStart(obs);
+  }
+
+  /** Hard exclusions of the last `team_select` (see `lastExclusions`). */
+  lastTeamExclusions(): ReadonlyMap<string, number> {
+    return this.lastExclusions;
   }
 
   onGameEnd(obs: PlayerObservation, won: boolean): void {
@@ -639,6 +652,43 @@ export class ForwardAgent implements AvalonAgent {
   decide(obs: PlayerObservation): ForwardDecision {
     _forwardDecideCalls += 1;
     const decisionType = obs.gamePhase as DecisionType;
+    if (decisionType === 'team_select') this.lastExclusions = new Map();
+
+    // ── AgentTuning.goodQuestSuccessGuard (2026-10-14, S1-11, INV-Q1) ──
+    // Game rule: a good player can only play success. The scorer has never
+    // chosen fail for a good bot (0 / 22995 on the replays); this makes it
+    // impossible instead of merely unobserved. Off → the scorer decides.
+    if (
+      decisionType === 'quest_vote' &&
+      obs.myTeam === 'good' &&
+      this.baseline.tuning.goodQuestSuccessGuard
+    ) {
+      const action: AgentAction = { type: 'quest_vote', vote: 'success' };
+      return {
+        action,
+        reasoningTrace: {
+          decisionType,
+          purposes: zeroPurposeVector(),
+          candidatesEvaluated: 1,
+          chosen: {
+            action,
+            description: 'good players play success',
+            signals: {
+              avgSuspicion: 0,
+              maxSuspicion: 0,
+              includesKnownEvil: false,
+              includesSelf: true,
+              violatesLakeRules: false,
+              numKnownEvilOnTeam: 0,
+              merlinProbForTarget: 0,
+            },
+          },
+          chosenScore: 0,
+          usedFallback: false,
+          summary: 'quest_vote → success (good players only play success)',
+        },
+      };
+    }
 
     // ── AgentTuning.redR1Teammate (2026-10-13 round 3) ──
     // An R1 red leader who sees teammates no longer leaves them out of
@@ -960,8 +1010,24 @@ export class ForwardAgent implements AvalonAgent {
     // ── AgentTuning.percivalNoThumbsR1 (2026-10-14) ──
     // R1 Percival leader: no bonus for a team with thumb A only (the
     // candidate pool below already leaves both thumbs out). Off → no change.
+    // `percivalR1ThumbOnThumb` (D5 (b)): when one thumb, captaining earlier
+    // in R1, put the other on its own team, the included thumb is the
+    // likely Merlin (87.9% in human data) — it becomes A (usual A bonus) and
+    // the other thumb B (excluded from the pool below).
     if (decisionType === 'team_select' && percivalNoThumbsR1Active(this.baseline.tuning, obs)) {
-      roleSignals = { ...roleSignals, percivalNoThumbsR1: true };
+      const keep = percivalR1ThumbException(this.baseline.tuning, obs);
+      const other = keep ? (obs.knownWizards ?? []).find((id) => id !== keep) : undefined;
+      roleSignals = keep && other
+        ? {
+          ...roleSignals,
+          percivalA: keep,
+          percivalB: other,
+          // The R1 signal is the inclusion itself; the R2+ probes (梅躲刺 /
+          // 娜出賣) were computed for the vote-based A and do not apply.
+          merlinHidingFromAssassin: false,
+          morganaBetrayal: false,
+        }
+        : { ...roleSignals, percivalNoThumbsR1: true };
     }
 
     // ── Fix 5 (2026-05-11 R1 派票 stacking hotfix): deterministic
@@ -1290,8 +1356,12 @@ export class ForwardAgent implements AvalonAgent {
         // (docs/ai/percival_thumbs.md 第 9 節). Same severity as wizard B,
         // so the 2026-10-10 backfill below restores them only when the pool
         // cannot fill a team. Off → the old split below.
-        for (const id of wizards) markExcluded(id, 2);
-        ranked = ranked.filter((id) => !wizards.includes(id));
+        // `percivalR1ThumbOnThumb` (D5 (b)): the thumb that the other thumb
+        // put on its own R1 team stays in the pool.
+        const keep = percivalR1ThumbException(this.baseline.tuning, obs);
+        const excluded = wizards.filter((id) => id !== keep);
+        for (const id of excluded) markExcluded(id, 2);
+        ranked = ranked.filter((id) => !excluded.includes(id));
       } else if (wizards.length === 2) {
         // Use the same A/B split as RoleStrategy.getRoleSignals (without
         // re-running scoreWizardAsMerlin here — pyramid score is the
@@ -1380,6 +1450,9 @@ export class ForwardAgent implements AvalonAgent {
         );
       otherRanked.push(...backfill.slice(0, slotsNeeded - otherRanked.length));
     }
+    this.lastExclusions = new Map(
+      [...exclusionSeverity].filter(([id]) => id !== selfId && !otherRanked.includes(id)),
+    );
 
     // ── Fix 1 (2026-05-11 R1 派票 stacking hotfix): full-slot
     // enumeration. ──

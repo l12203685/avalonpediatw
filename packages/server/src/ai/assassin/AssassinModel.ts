@@ -198,7 +198,10 @@ export function assassinCandidateFeatures(obs: PlayerObservation, candidateId: s
   // 湖
   let lakedByEvilGood = 0, lakedByEvilEvil = 0, lakedByOtherGood = 0, lakedByOtherEvil = 0;
   let heldLake = 0, lakeTargetEvil = 0;
+  // Undeclared lakes (`'none'`, S1-9c) were absent before 2026-10-14; the
+  // trained weights expect that, so they stay out.
   for (const rec of obs.lakeHistory ?? []) {
+    if (rec.declaredClaim === 'none') continue;
     if (rec.targetId === c) {
       const evilHolder = evilAll.has(rec.holderId);
       if (rec.declaredClaim === 'good') {

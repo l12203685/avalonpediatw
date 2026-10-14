@@ -102,6 +102,19 @@ export function deriveValidLakeTargets(
 }
 
 /**
+ * Seats a good holder never lakes (`pickLakeTargetForTeam`, smart path):
+ * `knownEvils` ∪ `knownWizards` — Merlin's visible reds, and both of
+ * Percival's thumbs. Exported for the invariant harness (INV-PL, structural:
+ * the owner ruled 2026-10-14 that Percival's lake is a blue lake, so the
+ * thumbs leave this set in batch 1E / S1-8).
+ */
+export function goodLakeAvoidSet(obs: PlayerObservation): Set<string> {
+  const avoidSet = new Set<string>(obs.knownEvils);
+  for (const wizardId of obs.knownWizards ?? []) avoidSet.add(wizardId);
+  return avoidSet;
+}
+
+/**
  * Agent-level lake target decision for the holder `obs.myPlayerId`.
  * `validTargets` defaults to `deriveValidLakeTargets(obs)`.
  */
@@ -180,8 +193,7 @@ export function pickLakeTargetForTeam(
     //                filter (loyal must rely on suspicion ranking alone).
     // The filter set is knownEvils ∪ knownWizards so each role's view
     // is honoured without branching on myRole.
-    const avoidSet = new Set<string>(obs.knownEvils);
-    for (const wizardId of obs.knownWizards ?? []) avoidSet.add(wizardId);
+    const avoidSet = goodLakeAvoidSet(obs);
     const unknownCandidates = validTargets.filter(id => !avoidSet.has(id));
     if (unknownCandidates.length === 0) {
       return validTargets[0];

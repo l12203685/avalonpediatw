@@ -124,7 +124,11 @@ describe('lakeChainTracker', () => {
     expect(state.violators.size).toBe(0);
   });
 
-  it('detects mutual contradiction (cycle SAT)', () => {
+  it('no cycle tagging (S1-11, 2026-10-14): a lake target can never be an earlier holder', () => {
+    // This record is impossible in a real game (path rule C7: P1 held the
+    // lake, so P2 cannot inspect P1). The old cycle detection tagged both;
+    // it could never fire on a legal record and is gone. Contradictions are
+    // the certainty layer's job (belief/Certainty.ts).
     const obs = makeObs({
       lakeHistory: [
         { round: 2, holderId: 'P1', targetId: 'P2', declaredClaim: 'good' },
@@ -132,8 +136,23 @@ describe('lakeChainTracker', () => {
       ],
     });
     const state = analyzeLakeChain(obs);
-    expect(state.violators.has('P1')).toBe(true);
-    expect(state.violators.has('P2')).toBe(true);
+    expect(state.violators.size).toBe(0);
+    expect(state.declaredBlueByHolder.get('P1')?.has('P2')).toBe(true);
+    expect(state.declaredRedByHolder.get('P2')?.has('P1')).toBe(true);
+  });
+
+  it('undeclared lakes (declaredClaim none, S1-9c) carry no claim', () => {
+    const obs = makeObs({
+      lakeHistory: [
+        { round: 2, holderId: 'P1', targetId: 'P2', declaredClaim: 'none' },
+        { round: 3, holderId: 'P2', targetId: 'P3', declaredClaim: 'good' },
+      ],
+    });
+    const state = analyzeLakeChain(obs);
+    expect(state.records).toHaveLength(1);
+    expect(state.declaredBlueByHolder.has('P1')).toBe(false);
+    expect(state.declaredRedByHolder.has('P1')).toBe(false);
+    expect(state.declaredBlueByHolder.get('P2')?.has('P3')).toBe(true);
   });
 
   it('硬1 — declared-blue MUST be on team led by declarer', () => {
@@ -371,7 +390,7 @@ describe('pyramidScorer', () => {
     expect(py.scores.get('P0')).toBe(PYRAMID_HARD_BLUE);
   });
 
-  it('lake violators boosted to ≥0.85', () => {
+  it('no lake-cycle violators any more (S1-11): an impossible cycle record pins nobody', () => {
     const obs = makeObs({
       lakeHistory: [
         { round: 2, holderId: 'P1', targetId: 'P2', declaredClaim: 'good' },
@@ -379,8 +398,8 @@ describe('pyramidScorer', () => {
       ],
     });
     const py = computePyramidScores(obs);
-    expect((py.scores.get('P1') ?? 0) >= PYRAMID_VIOLATOR_FLOOR).toBe(true);
-    expect((py.scores.get('P2') ?? 0) >= PYRAMID_VIOLATOR_FLOOR).toBe(true);
+    expect(py.scores.get('P1') ?? 0).toBeLessThan(PYRAMID_VIOLATOR_FLOOR);
+    expect(py.scores.get('P2') ?? 0).toBeLessThan(PYRAMID_VIOLATOR_FLOOR);
   });
 
   it('failed-mission members nudged toward red but not pinned', () => {

@@ -20,9 +20,16 @@ export type { VoteRecord, QuestRecord };
  *   - who they targeted
  *   - what camp they publicly claimed to have seen ('good' | 'evil')
  *
- * Records appear in `lakeHistory` only AFTER the holder has declared.
- * Pending lake (used but not yet declared) is NOT included to avoid
- * leaking the holder's pending state.
+ * Records appear in `lakeHistory` only AFTER the holder has declared, or —
+ * since 2026-10-14 (S1-9c, docs/ai/logic_first.md) — after the lake phase
+ * ended without a declaration (`declaredClaim: 'none'`). A pending lake
+ * (inspected, declaration still open) is NOT included to avoid leaking the
+ * holder's pending state.
+ *
+ * `'none'` is plumbing only: every reader that interprets claims skips it
+ * (`belief/Certainty.declaredLakes`); legality readers (who was already
+ * inspected) count it. Stage 3 will read it as a likelihood (red holders
+ * leave a lake undeclared about 18 times as often as good ones).
  *
  * Wave A scope: schema only — no caller in HeuristicAgent or
  * SelfPlayEngine reads `lakeHistory` yet. Wave B will wire the four
@@ -35,8 +42,20 @@ export interface LakePublicRecord {
   holderId:       string;
   /** Player who was inspected. */
   targetId:       string;
-  /** Public claim: what camp the holder declared they saw. */
-  declaredClaim:  'good' | 'evil';
+  /** Public claim: what camp the holder declared they saw; `'none'` = the lake phase ended undeclared. */
+  declaredClaim:  'good' | 'evil' | 'none';
+}
+
+/**
+ * The holder's own private Lady-of-the-Lake result (S1-9b, 2026-10-14):
+ * what the holder actually saw. Only ever present in the holder's own
+ * observation (`PlayerObservation.myLakeResults`); never in anyone else's.
+ */
+export interface PrivateLakeResult {
+  round:    number;
+  targetId: string;
+  /** The target's camp as the lake shows it (Mordred / Oberon red, Merlin good). */
+  result:   'good' | 'evil';
 }
 
 // ── Observation ────────────────────────────────────────────────
@@ -82,6 +101,19 @@ export interface PlayerObservation {
    * wire the four hard 湖中 rules (傳遞鏈) on top of this field.
    */
   lakeHistory?:  LakePublicRecord[];
+  /**
+   * S1-9b (2026-10-14): this player's own lake results — what they saw
+   * when they held the lake (at most one entry per lake they held). Private:
+   * the harness fills it for the holder only (GameServer, SelfPlayEngine,
+   * the replay). Optional; readers treat `undefined` as `[]`.
+   */
+  myLakeResults?: PrivateLakeResult[];
+  /**
+   * Number of reds in this game (the public lobby setup). Optional; readers
+   * fall back to the standard table (`belief/Certainty.evilCountFor`). It
+   * differs from the table in the 9-player Oberon variants.
+   */
+  evilCount?:    number;
 }
 
 // ── Actions ────────────────────────────────────────────────────

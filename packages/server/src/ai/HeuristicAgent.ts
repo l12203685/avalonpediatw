@@ -26,7 +26,7 @@ import {
   type AgentTuning,
 } from './AgentTuning';
 import { pickAssassinTargetByModel, type AssassinModelWeights } from './assassin/AssassinModel';
-import { percivalNoThumbsR1Active } from './PercivalThumbs';
+import { percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import {
   assassinTargetPenalty,
   voteInnerBlackBonus,
@@ -2707,6 +2707,7 @@ export class HeuristicAgent implements AvalonAgent {
    * (unmistaken vs. mistaken); the absolute magnitude is secondary.
    */
   private getMistakeCount(playerId: string, obs: PlayerObservation): number {
+    if (this.tuning.assassinHeuristicVisibility) return this.getCertainMistakeCount(playerId, obs);
     let mistakes = 0;
     for (const record of obs.voteHistory) {
       const teamHasThumb = record.team.some(id => obs.knownEvils.includes(id));
@@ -2738,6 +2739,62 @@ export class HeuristicAgent implements AvalonAgent {
   }
 
   /**
+   * What Merlin sees, from the assassin's seat (`AgentTuning.
+   * assassinHeuristicVisibility`, 2026-10-14, S1-11 / logic_audit.md F12):
+   * Merlin sees every red but Mordred. The assassin knows the whole red
+   * roster at the assassination (`allEvilIds`) but not which of its seen
+   * teammates is Mordred. So `certain` = the reds Merlin surely sees (the
+   * assassin itself, Oberon, and — when there is no Mordred in the game or
+   * the assassin is Mordred — every teammate); `ambiguous` = the teammates
+   * among whom exactly one (Mordred) is invisible to Merlin.
+   */
+  private merlinSightFromAssassin(obs: PlayerObservation): { certain: Set<string>; ambiguous: string[] } {
+    const self = obs.myPlayerId;
+    const teammates = obs.knownEvils.filter((id) => id !== self);
+    const all = new Set<string>(obs.allEvilIds ?? [...teammates, self]);
+    const certain = new Set<string>();
+    const selfIsMordred = (obs.myRole as string) === 'mordred';
+    if (!selfIsMordred) certain.add(self);
+    for (const id of all) if (id !== self && !teammates.includes(id)) certain.add(id); // Oberon
+    const mordredInGame = AVALON_CONFIG[obs.playerCount]?.roles.includes('mordred') ?? false;
+    if (!mordredInGame || selfIsMordred) {
+      // No hidden Mordred among the teammates: Merlin sees them all.
+      for (const id of teammates) certain.add(id);
+      return { certain, ambiguous: [] };
+    }
+    // A lone teammate is Mordred himself (invisible); otherwise exactly one
+    // of them is.
+    return { certain, ambiguous: teammates.length >= 2 ? teammates : [] };
+  }
+
+  /**
+   * The 2026-10-14 version of `getMistakeCount`: count only the mistakes
+   * that are certain from what Merlin sees (`merlinSightFromAssassin`). A
+   * team holds a visible red for sure when it holds a `certain` red or more
+   * ambiguous teammates than could all be Mordred (≥ 2 of them); it is
+   * surely free of visible reds when it holds neither kind. A team with
+   * exactly one ambiguous teammate is unclear and counts as no mistake —
+   * Merlin could have been on either side of it.
+   */
+  private getCertainMistakeCount(playerId: string, obs: PlayerObservation): number {
+    const { certain, ambiguous } = this.merlinSightFromAssassin(obs);
+    let mistakes = 0;
+    for (const record of obs.voteHistory) {
+      const certainOnTeam = record.team.some((id) => certain.has(id));
+      const ambiguousOnTeam = record.team.filter((id) => ambiguous.includes(id)).length;
+      const surelyThumb = certainOnTeam || ambiguousOnTeam >= 2;
+      const surelyClean = !certainOnTeam && ambiguousOnTeam === 0;
+      const onTeam = record.team.includes(playerId);
+      const vote = record.votes[playerId];
+      if (record.leader === playerId && surelyThumb) mistakes += 1;
+      if (vote === undefined) continue;
+      if (surelyClean && onTeam && vote === false) mistakes += 1;
+      if (surelyThumb && !onTeam && vote === true) mistakes += 1;
+    }
+    return mistakes;
+  }
+
+  /**
    * Score how "Percival-like" a player's leadership pattern is. Percival
    * typically includes a wizard candidate (Merlin or Morgana) on every
    * team he proposes — Merlin, by contrast, avoids any *known* evil but
@@ -2755,9 +2812,20 @@ export class HeuristicAgent implements AvalonAgent {
   private getPercivalLikenessPenalty(playerId: string, obs: PlayerObservation): number {
     let morganaIncludedAsLeader = 0;
     let ledCount = 0;
+    // `assassinHeuristicVisibility` (2026-10-14): the assassin sees its
+    // teammates but not their roles, so "Morgana on the team" is the share
+    // of the seen teammates on it (both of Morgana / Mordred → certain, one
+    // → ½); the old reading counted Mordred as Morgana.
+    const teammates = obs.knownEvils.filter((id) => id !== obs.myPlayerId);
     for (const vote of obs.voteHistory) {
       if (vote.leader !== playerId) continue;
       ledCount++;
+      if (this.tuning.assassinHeuristicVisibility) {
+        if (teammates.length > 0) {
+          morganaIncludedAsLeader += vote.team.filter((id) => teammates.includes(id)).length / teammates.length;
+        }
+        continue;
+      }
       // Morgana is visible to the assassin — check if this leader
       // consistently includes her on proposed teams (Percival thumb).
       if (vote.team.some((id) => obs.knownEvils.includes(id))) {
@@ -2767,7 +2835,10 @@ export class HeuristicAgent implements AvalonAgent {
     if (ledCount === 0) return 0;
     // Two-thumb leaders → 1.5 penalty (similar magnitude to the "+1.5
     // merlin behaviour" signals in getMerlinScore so the two balance).
-    return morganaIncludedAsLeader >= 1 ? 1.5 * (morganaIncludedAsLeader / ledCount) : 0;
+    // (With `assassinHeuristicVisibility` the count is an expectation, so any
+    // positive share counts.)
+    const threshold = this.tuning.assassinHeuristicVisibility ? Number.MIN_VALUE : 1;
+    return morganaIncludedAsLeader >= threshold ? 1.5 * (morganaIncludedAsLeader / ledCount) : 0;
   }
 
   /**
@@ -3021,10 +3092,17 @@ export class HeuristicAgent implements AvalonAgent {
     // Edward verbatim: R1P1 派西派 myself + 2 non-wizard.
     // AgentTuning.percivalNoThumbsR1 (2026-10-14, Edward「一開始在沒任何資訊時
     // 先預設不派」): the same no-thumb team for every R1 proposal (P1–P5,
-    // the forced one included; 10-player games, `PercivalThumbs.ts`).
+    // the forced one included; 6–10-player games, `PercivalThumbs.ts`).
+    // D5 (2026-10-14): a lone wizard (Morgana off in the lobby) is certainly
+    // Merlin, so with the switch on the R1-P1 no-thumb branch no longer drops
+    // him; `percivalR1ThumbOnThumb` keeps the thumb the other thumb put on
+    // its own R1 team (PercivalThumbs.ts).
     const isR1P1 = (currentRound ?? 1) === 1 && voteHistory.length === 0;
-    if (isR1P1 || percivalNoThumbsR1Active(this.tuning, obs)) {
+    const loneMerlin = this.tuning.percivalNoThumbsR1 && knownWizards.length === 1;
+    if ((isR1P1 && !loneMerlin) || percivalNoThumbsR1Active(this.tuning, obs)) {
       const team: string[] = [myPlayerId];
+      const keep = percivalR1ThumbException(this.tuning, obs);
+      if (keep && keep !== myPlayerId && candidatesIn.includes(keep) && team.length < teamSize) team.push(keep);
       const wizardSet = new Set(knownWizards);
       const nonWizardCandidates = candidatesIn.filter(
         (id) => id !== myPlayerId && !wizardSet.has(id),
@@ -3416,6 +3494,10 @@ export class HeuristicAgent implements AvalonAgent {
   }
 
   /** Percival likeness penalty for assassin targeting (tests only). */
+  _getMistakeCountForTesting(playerId: string, obs: PlayerObservation): number {
+    return this.getMistakeCount(playerId, obs);
+  }
+
   _getPercivalLikenessPenaltyForTesting(playerId: string, obs: PlayerObservation): number {
     return this.getPercivalLikenessPenalty(playerId, obs);
   }

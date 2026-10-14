@@ -121,6 +121,7 @@ export function goodVouchDeclarations(
   const chainRed: string[] = [];
   const known = new Set<string>();
   for (const rec of obs.lakeHistory ?? []) {
+    if (rec.declaredClaim === 'none') continue; // undeclared: no claim to keep
     if (rec.targetId === me) continue;
     const own = rec.holderId === me;
     if (!own && !(options.scope === 'chain' && blue.includes(rec.holderId))) continue;

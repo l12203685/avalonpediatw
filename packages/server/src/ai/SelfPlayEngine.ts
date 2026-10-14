@@ -27,6 +27,7 @@ import {
 import { declarerPostActionConsistencyPrior } from './priors/EvActionPriors';
 import { pickLakeTargetForTeam, decideLakeClaimForTeam, hasLakeApi } from './LakePolicy';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
+import { privateLakeResults, publicLakeHistory } from './lakeRecords';
 
 export class SelfPlayEngine {
   private roomManager = new RoomManager();
@@ -381,18 +382,13 @@ export class SelfPlayEngine {
           .map(([id]) => id)
       : undefined;
 
-    // Public-only Lake history. Only declared records are exposed to
-    // readers; pending lake (used but not yet declared) is filtered out
-    // to avoid leaking the holder's intermediate state. The private
-    // `result` field stays out — only `declaredClaim` is public.
-    const lakeHistory = (room.ladyOfTheLakeHistory ?? [])
-      .filter((rec) => rec.declared === true && rec.declaredClaim !== undefined)
-      .map((rec) => ({
-        round:         rec.round,
-        holderId:      rec.holderId,
-        targetId:      rec.targetId,
-        declaredClaim: rec.declaredClaim as 'good' | 'evil',
-      }));
+    // Public-only Lake history (`publicLakeHistory`): declared records, plus
+    // finished undeclared ones as 'none' (S1-9c); the pending lake (used,
+    // declaration still open) is filtered out to avoid leaking the holder's
+    // intermediate state. The private `result` reaches the holder only, via
+    // `myLakeResults` (S1-9b).
+    const lakeHistory = publicLakeHistory(room);
+    const myLakeResults = privateLakeResults(room, playerId);
 
     return {
       myPlayerId:    playerId,
@@ -412,6 +408,8 @@ export class SelfPlayEngine {
       questHistory:  [...questHistory],
       proposedTeam:  [...room.questTeam],
       lakeHistory,
+      myLakeResults,
+      evilCount:     Array.from(teamMap.values()).filter((t) => t === 'evil').length,
     };
   }
 

@@ -28,7 +28,7 @@ import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory } from 
 import { analyzeGoodLake } from './GoodLakeInfo';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { redR1TeamPlanDraws, replayBothDraws, visibleTeammatesOn } from './RedR1Teammate';
-import { percivalNoThumbsR1Active } from './PercivalThumbs';
+import { percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { AVALON_CONFIG } from '@avalon/shared';
 
 export interface ExplainedSuspect {
@@ -349,6 +349,12 @@ export function replayRule(
     const desc = trace.chosen.description;
     if (trace.usedFallback) {
       return { rule: `前向推理出錯（${trace.fallbackReason ?? '未知'}），改用基準策略`, mismatch: false };
+    }
+    if (obs.gamePhase === 'team_select' && percivalR1ThumbException(shadow.tuning, obs)) {
+      return {
+        rule: '派西首局不放拇指的例外：先前有一根拇指當隊長時把另一根放進自己的隊，被放的那根（多半是梅林）可以進派西的隊，另一根不放',
+        mismatch: !sameAction(action, real),
+      };
     }
     if (obs.gamePhase === 'team_select' && percivalNoThumbsR1Active(shadow.tuning, obs)) {
       return {

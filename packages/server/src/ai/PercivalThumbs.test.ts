@@ -2,9 +2,20 @@
  * `AgentTuning.percivalNoThumbsR1` (2026-10-14, docs/ai/percival_thumbs.md 第 9 節):
  * Percival leaves both thumbs (Merlin / Morgana, which he cannot tell apart)
  * off every R1 team he leads; R2+ unchanged. Fake games only.
+ *
+ * 2026-10-14 D5 (docs/ai/logic_first.md): the gate needs two thumbs (a lone
+ * wizard is certainly Merlin), the rule covers 6–10 players (5p keeps the old
+ * behaviour), and `percivalR1ThumbOnThumb` lets the thumb that the other
+ * thumb put on its own R1 team go on Percival's team.
  */
 import { describe, it, expect } from 'vitest';
-import { PERCIVAL_NO_THUMBS_R1_PLAYER_COUNT, percivalNoThumbsR1Active } from './PercivalThumbs';
+import {
+  PERCIVAL_NO_THUMBS_R1_MAX_PLAYERS,
+  PERCIVAL_NO_THUMBS_R1_MIN_PLAYERS,
+  percivalNoThumbsR1Active,
+  percivalR1IncludedThumb,
+  percivalR1ThumbException,
+} from './PercivalThumbs';
 import {
   AGENT_TUNING_ENV,
   DEFAULT_AGENT_TUNING,
@@ -78,17 +89,22 @@ function r2(thumbs: [string, string], r1Team: string[], result: 'success' | 'fai
   };
 }
 
-const tuned = (on: boolean): Partial<AgentTuning> => ({ ...DEFAULT_AGENT_TUNING, percivalNoThumbsR1: on });
+/** Production default with the switch on / off; the D5 exception off unless asked for. */
+const tuned = (on: boolean, thumbOnThumb = false): Partial<AgentTuning> => ({
+  ...DEFAULT_AGENT_TUNING,
+  percivalNoThumbsR1: on,
+  percivalR1ThumbOnThumb: thumbOnThumb,
+});
 
-function forwardDecision(o: PlayerObservation, on: boolean): ReturnType<ForwardAgent['decide']> {
-  const base = new HeuristicAgent(o.myPlayerId, undefined, undefined, tuned(on));
+function forwardDecision(o: PlayerObservation, on: boolean, thumbOnThumb = false): ReturnType<ForwardAgent['decide']> {
+  const base = new HeuristicAgent(o.myPlayerId, undefined, undefined, tuned(on, thumbOnThumb));
   const a = new ForwardAgent(o.myPlayerId, base);
   a.onGameStart(o);
   return a.decide(o);
 }
 
-function forwardTeam(o: PlayerObservation, on: boolean): string[] {
-  const d = forwardDecision(o, on);
+function forwardTeam(o: PlayerObservation, on: boolean, thumbOnThumb = false): string[] {
+  const d = forwardDecision(o, on, thumbOnThumb);
   expect(d.reasoningTrace.usedFallback).toBe(false);
   if (d.action.type !== 'team_select') throw new Error('expected a team');
   return d.action.teamIds;
@@ -108,17 +124,45 @@ describe('percivalNoThumbsR1Active', () => {
   const ON = { percivalNoThumbsR1: true };
   const OFF = { percivalNoThumbsR1: false };
 
-  it('covers Percival in R1 of a 10-player game with the switch on, nothing else', () => {
-    expect(PERCIVAL_NO_THUMBS_R1_PLAYER_COUNT).toBe(10);
+  it('covers Percival with two thumbs in R1 of a 6–10-player game with the switch on, nothing else', () => {
+    expect(PERCIVAL_NO_THUMBS_R1_MIN_PLAYERS).toBe(6);
+    expect(PERCIVAL_NO_THUMBS_R1_MAX_PLAYERS).toBe(10);
     for (const attempt of [1, 2, 3, 4, 5]) expect(percivalNoThumbsR1Active(ON, r1(['P3', 'P7'], attempt))).toBe(true);
     expect(percivalNoThumbsR1Active(OFF, r1(['P3', 'P7']))).toBe(false);
     expect(percivalNoThumbsR1Active(ON, r2(['P3', 'P7'], ['P5', 'P8', 'P9'], 'success'))).toBe(false);
     expect(percivalNoThumbsR1Active(ON, r1(['P3', 'P7'], 1, { myRole: 'loyal', knownWizards: undefined }))).toBe(false);
     expect(percivalNoThumbsR1Active(ON, r1(['P3', 'P7'], 1, { myRole: 'merlin' }))).toBe(false);
     expect(percivalNoThumbsR1Active(ON, r1(['P3', 'P7'], 1, { knownWizards: [] }))).toBe(false);
-    for (const n of [5, 6, 7, 8, 9]) {
-      expect(percivalNoThumbsR1Active(ON, r1(['P3', 'P4'], 1, { playerCount: n, allPlayerIds: IDS.slice(0, n) }))).toBe(false);
+    // D5: one wizard (Morgana off in the lobby) is certainly Merlin → the rule does not apply.
+    expect(percivalNoThumbsR1Active(ON, r1(['P3', 'P7'], 1, { knownWizards: ['P3'] }))).toBe(false);
+    // D5: 6–9 players are covered (no banned-pair conflict), 5 is not.
+    expect(percivalNoThumbsR1Active(ON, r1(['P3', 'P4'], 1, { playerCount: 5, allPlayerIds: IDS.slice(0, 5) }))).toBe(false);
+    for (const n of [6, 7, 8, 9]) {
+      expect(percivalNoThumbsR1Active(ON, r1(['P3', 'P4'], 1, { playerCount: n, allPlayerIds: IDS.slice(0, n) }))).toBe(true);
     }
+  });
+
+  it('percivalR1IncludedThumb: the thumb the other thumb put on its own R1 team; none when both or neither', () => {
+    // P1 leads [P1, P2, P3] (rejected(1)); thumbs P1 / P3 → P1 put P3 on its team.
+    expect(percivalR1IncludedThumb(r1(['P1', 'P3'], 2))).toBe('P3');
+    // Thumbs P2 / P5: P1's team [P1, P2, P3] holds P2 but P1 is no thumb → nothing.
+    expect(percivalR1IncludedThumb(r1(['P2', 'P5'], 2))).toBeNull();
+    // Thumbs P2 / P3: P2 leads [P2, P3, P4] (rejected(2)) → P3 included by P2.
+    expect(percivalR1IncludedThumb(r1(['P2', 'P3'], 3))).toBe('P3');
+    // Both thumbs put each other on their teams → the signal cancels.
+    const both = r1(['P1', 'P2'], 3, {
+      voteHistory: [
+        { round: 1, attempt: 1, leader: 'P1', team: ['P1', 'P2', 'P5'], approved: false, votes: {} },
+        { round: 1, attempt: 2, leader: 'P2', team: ['P2', 'P1', 'P6'], approved: false, votes: {} },
+      ],
+    });
+    expect(percivalR1IncludedThumb(both)).toBeNull();
+    // R2+ never counts (the rule is R1 only, and the exception with it).
+    expect(percivalR1ThumbException({ percivalNoThumbsR1: true, percivalR1ThumbOnThumb: true }, r2(['P1', 'P3'], ['P1', 'P3', 'P8'], 'fail'))).toBeNull();
+    // The exception needs both switches.
+    expect(percivalR1ThumbException({ percivalNoThumbsR1: true, percivalR1ThumbOnThumb: true }, r1(['P1', 'P3'], 2))).toBe('P3');
+    expect(percivalR1ThumbException({ percivalNoThumbsR1: true, percivalR1ThumbOnThumb: false }, r1(['P1', 'P3'], 2))).toBeNull();
+    expect(percivalR1ThumbException({ percivalNoThumbsR1: false, percivalR1ThumbOnThumb: true }, r1(['P1', 'P3'], 2))).toBeNull();
   });
 
   it('flag plumbing: legacy off, on in the default (adopted 2026-10-14), CLI flag, env var, description', () => {
@@ -131,6 +175,12 @@ describe('percivalNoThumbsR1Active', () => {
     expect(AGENT_TUNING_ENV.percivalNoThumbsR1).toBe('AVALON_TUNING_PERCIVAL_NO_THUMBS_R1');
     expect(tuningFromEnv({ AVALON_TUNING_PERCIVAL_NO_THUMBS_R1: '1' })).toEqual({ percivalNoThumbsR1: true });
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, percivalNoThumbsR1: true })).toBe('percivalNoThumbsR1');
+    // D5 (b) exception: its own switch, legacy off, default on (logic_first.md, batch 1A).
+    expect(LEGACY_AGENT_TUNING.percivalR1ThumbOnThumb).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.percivalR1ThumbOnThumb).toBe(true);
+    expect(parseTuningFlag('percivalR1ThumbOnThumb=0')).toEqual({ percivalR1ThumbOnThumb: false });
+    expect(AGENT_TUNING_ENV.percivalR1ThumbOnThumb).toBe('AVALON_TUNING_PERCIVAL_R1_THUMB_ON_THUMB');
+    expect(tuningFromEnv({ AVALON_TUNING_PERCIVAL_R1_THUMB_ON_THUMB: '0' })).toEqual({ percivalR1ThumbOnThumb: false });
   });
 });
 
@@ -199,16 +249,84 @@ describe('ForwardAgent — percivalNoThumbsR1', () => {
     expect(forwardTeam(merlin, true)).toEqual(forwardTeam(merlin, false));
   });
 
-  it('5–9 players: the same R1 team with the switch on and off', () => {
-    for (const n of [5, 6, 7, 8, 9]) {
+  it('5 players: the same R1 team with the switch on and off (banned R1-P1 pairs)', () => {
+    const o: PlayerObservation = { ...r1(['P2', 'P4'], 1), playerCount: 5, allPlayerIds: IDS.slice(0, 5) };
+    expect(forwardTeam(o, true)).toEqual(forwardTeam(o, false));
+  });
+
+  it('6–9 players (D5): no thumb on R1 teams with the switch on', () => {
+    for (const n of [6, 7, 8, 9]) {
       const ids = IDS.slice(0, n);
-      const o: PlayerObservation = {
-        ...r1(['P2', 'P4'], 1),
-        playerCount: n,
-        allPlayerIds: ids,
-      };
+      for (const attempt of [1, 2, 3]) {
+        const o: PlayerObservation = {
+          ...r1(['P4', 'P5'], attempt),
+          playerCount: n,
+          allPlayerIds: ids,
+          voteHistory: Array.from({ length: attempt - 1 }, (_, i) => rejected(i + 1, ids)),
+        };
+        const team = forwardTeam(o, true);
+        expect(team).toContain(o.myPlayerId);
+        expect(team.filter((id) => id === 'P4' || id === 'P5')).toEqual([]);
+      }
+    }
+  });
+
+  it('one wizard (Morgana off, D5): the lone thumb is certainly Merlin and is not dropped', () => {
+    // Without the gate fix the switch removed this certain Merlin from every R1 team.
+    for (const attempt of [2, 3, 4]) {
+      const o = r1(['P3', 'P7'], attempt, { knownWizards: [attempt === 3 ? 'P2' : 'P3'] });
       expect(forwardTeam(o, true)).toEqual(forwardTeam(o, false));
     }
+  });
+
+  it('thumb-on-thumb exception (D5 (b)): the included thumb may go on the team, the other never', () => {
+    let included = 0;
+    let cases = 0;
+    for (const attempt of [2, 3, 4, 5]) {
+      for (const thumbs of thumbPairs(attempt)) {
+        const o = r1(thumbs, attempt);
+        const keep = percivalR1IncludedThumb(o);
+        const team = forwardTeam(o, true, true);
+        expect(team).toHaveLength(3);
+        expect(team).toContain(o.myPlayerId);
+        if (keep === null) {
+          expect(team.filter((id) => thumbs.includes(id))).toEqual([]);
+          continue;
+        }
+        cases++;
+        const other = thumbs.find((id) => id !== keep)!;
+        expect(team).not.toContain(other);
+        if (team.includes(keep)) included++;
+      }
+    }
+    // The fixtures produce several exception cases. The included thumb gets
+    // the usual thumb-A bonus but no guarantee: in these fixtures Percival
+    // usually sat on the thumb's rejected team, so a team with him and the
+    // included thumb repeats that team (the HR-3 re-proposal penalty).
+    expect(cases).toBeGreaterThan(5);
+    expect(included).toBeGreaterThan(0);
+  });
+
+  it('thumb-on-thumb exception: Percival not on the thumb\'s team → the included thumb goes on his team', () => {
+    // P1 (thumb) led [P1, P3, P7] with the other thumb P3; Percival is P4 and
+    // sat on none of the earlier R1 teams (so no re-proposal penalty applies).
+    const normal = (attempt: number, leader: string, team: string[]): VoteRecord => {
+      const votes: Record<string, boolean> = {};
+      for (const id of IDS) votes[id] = team.includes(id);
+      return { round: 1, attempt, leader, team, approved: false, votes };
+    };
+    const history: VoteRecord[] = [
+      normal(1, 'P1', ['P1', 'P3', 'P7']),
+      normal(2, 'P2', ['P2', 'P5', 'P6']),
+      normal(3, 'P3', ['P3', 'P8', 'P9']),
+    ];
+    const o = r1(['P1', 'P3'], 4, { voteHistory: history });
+    expect(percivalR1IncludedThumb(o)).toBe('P3');
+    const on = forwardTeam(o, true, true);
+    expect(on).toContain('P3');
+    expect(on).not.toContain('P1');
+    // Exception off: no thumb at all.
+    expect(forwardTeam(o, true, false).filter((id) => id === 'P1' || id === 'P3')).toEqual([]);
   });
 });
 
@@ -250,6 +368,7 @@ describe('HeuristicAgent.selectPercivalTeam (fallback path) — percivalNoThumbs
   };
 
   it('switch on: R1-P2..P5 also leave both thumbs off (R1-P1 already did)', () => {
+    // (P6 / P7 never lead before Percival here, so the D5 exception never applies.)
     for (const attempt of [1, 2, 3, 4, 5]) {
       const o = r1(['P6', 'P7'], attempt);
       const team = pick(o, true);
@@ -270,6 +389,25 @@ describe('HeuristicAgent.selectPercivalTeam (fallback path) — percivalNoThumbs
     expect(off.filter((id) => id === 'P2' || id === 'P3')).toHaveLength(1);
     const on = pick(o, true);
     expect(on.filter((id) => id === 'P2' || id === 'P3')).toEqual([]);
+  });
+
+  it('D5 on the fallback path: the included thumb goes on the team; a lone wizard is not dropped at R1-P1', () => {
+    // P2 (thumb) led [P2, P3, P4] with the other thumb P3 → P3 included.
+    const o = r1(['P2', 'P3'], 4);
+    const agent = new HeuristicAgent(o.myPlayerId, undefined, undefined, tuned(true, true));
+    agent.onGameStart(o);
+    const team = agent._selectPercivalTeamForTesting(o, 3, IDS.filter((id) => id !== o.myPlayerId), null);
+    expect(team).toContain('P3');
+    expect(team).not.toContain('P2');
+    // Lone wizard at R1-P1: the switch keeps the certain Merlin available; switch off keeps the old drop.
+    const lone = r1(['P2', 'P3'], 1, { knownWizards: ['P2'] });
+    const pool = IDS.filter((id) => id !== lone.myPlayerId);
+    const offAgent = new HeuristicAgent(lone.myPlayerId, undefined, undefined, tuned(false));
+    offAgent.onGameStart(lone);
+    expect(offAgent._selectPercivalTeamForTesting(lone, 3, pool, null)).not.toContain('P2');
+    const onAgent = new HeuristicAgent(lone.myPlayerId, undefined, undefined, tuned(true));
+    onAgent.onGameStart(lone);
+    expect(onAgent._selectPercivalTeamForTesting(lone, 3, pool, null)).toHaveLength(3);
   });
 });
 
