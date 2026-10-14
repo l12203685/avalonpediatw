@@ -1,14 +1,15 @@
 /**
  * 模擬瓦（2026-10-14）— session 引擎：選題（角色／座位／題號、題目不夠）、一人一題、取代、
- * /派 /區間 /下一步 /公布 /結束 的轉移、期限（假時鐘）、上限與淘汰、限流、送出後才 commit、
- * LINE 重送不走第二步、沒有任何 log（更不會有使用者打的字）、狀態頁只有數字和布林。
+ * /派 /區間 /下一步 /公布 /結束 的轉移、期限（假時鐘）、上限與淘汰（一人跨聊天室最多 2 題、結束原因）、
+ * 限流（slash 的用法也受限流）、送出後才 commit、同一題的指令排隊（withLock）、
+ * LINE 重送已經回過的事件不再回、沒有任何 log（更不會有使用者打的字）、狀態頁只有數字和布林。
  * 題庫是編的（fixtures/simGames.ts），沒有真實玩家。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SimBankLoader } from '../bots/simulation/bank';
 import { SIM_CONFIG } from '../bots/simulation/config';
 import { __setSimForTests, simulationStatus } from '../bots/simulation';
-import { NO_SESSION_TEXT, RATE_LIMITED_TEXT } from '../bots/simulation/replies';
+import { NO_SESSION_TEXT, RATE_LIMITED_TEXT, endedNoticeText } from '../bots/simulation/replies';
 import { SimEngine, type SimRequest } from '../bots/simulation/session';
 import { FAKE_NAMES, fixtureBank } from './fixtures/simGames';
 
@@ -114,24 +115,41 @@ describe('a whole exercise', () => {
     const e = engine();
     await say(e, '/模擬 忠臣 4');
     const fb = (await say(e, '/派 469')) ?? '';
-    expect(fb.split('\n')[0]).toBe('【W0000-4・4家忠臣】你派 469');
-    expect(fb).toContain('① 實際這位 4家派：469（跟你一樣）→ 否決');
-    expect(fb).toContain('② 同位置真人（第1局 4家忠臣，24 次，樣本少）：含自己 100%（你✓）');
-    expect(fb).toContain('・全好讀法（隊長＋隊員都好）：1家 1460、2家 279、3家 370 各 15/126');
-    expect(fb).toContain('・1家＋2家 合起來 7 人＞6 好人 → 不可能都對（1、2 至少一個錯）');
-    expect(fb).toContain('・1家＋3家 只剩紅 2589；2家＋3家 只剩紅 1568');
-    expect(fb).toContain('④ 469 放出的資訊（後面的人只看得到公開資訊）：4 6 9 好 → 1 2 3 5 7 8 0 有 4 紅（35 種）');
-    expect(fb).toContain('・對 3家 370：打對邊，都對只剩紅 1258');
-    expect(fb).toContain('・對照：派 468 會跟 2家 279 打對邊，都對只剩紅 1350（派 469 還有 5 種）');
+    // ④（每次作答都不一樣）在前，③ 邏輯在後，② 同位置真人最後。
+    expect(fb.split('\n')).toEqual([
+      '【W0000-4・4家忠臣】你派 469',
+      '① 實際這位 4家派：469（跟你一樣）→ 否決',
+      '④ 469 放出的資訊（後面的人讀你全好）：4 6 9 好 → 1 2 3 5 7 8 0 *4',
+      '・對 1家 460：延伸（4 6）→ 都對：2 3 5 7 8 *4',
+      '・對 2家 279：部分（9）→ 都對：1 3 5 8 0 *4',
+      '・對 3家 370：打對邊 → 都對：只剩紅 1258',
+      '・你在說：1、3 至少一個錯；2、3 至少一個錯 → 共同點 3：等於在說 3家 的讀法錯',
+      '・對照：派 468 會跟 2家 279 打對邊 → 都對：只剩紅 1350（派 469：1 3 5 8 0 *4）',
+      '③ 邏輯（純邏輯：只用確定資訊，還沒算派票行為）',
+      '・你是好人，4 紅在其他 9 人（126 種）：任務前純邏輯分不出誰，區間要從派票讀',
+      '・派票解讀：2家 279 跟 1家 打對邊｜3家 370 騎牆（挑 1家 的 0、2家 的 7）',
+      '・不能都對：1家＋2家（7 人＞6）→ 1、2 至少一個錯',
+      '・兩個都對：1家＋3家 只剩紅 2589；2家＋3家 只剩紅 1568',
+      '② 同位置真人（第1局 4家忠臣，24 次，樣本少）：含自己 100%（你：有）',
+      '\u3000跟上一次 3家 370 重疊 0 人 100%（你 0 人）',
+      '/區間 寫下你的區間｜/下一步｜/公布｜/結束',
+    ]);
+    // 同一個決定點再派一次：③ 一行帶過。
+    const again = (await say(e, '/派 468')) ?? '';
+    expect(again).toContain('・對 2家 279：打對邊 → 都對：只剩紅 1350');
+    expect(again).toContain('③ 邏輯與派票解讀跟這一題第一次 /派 的回覆一樣（還是同一個決定點）');
+    expect(again).not.toContain('・派票解讀');
 
     const iv = (await say(e, '/區間 789=2 460=1')) ?? '';
     expect(iv.split('\n')).toEqual([
-      '【W0000-4 區間】（純邏輯，還沒算派票）',
-      '・789=2：45/126（36%）',
-      '・460=1：你是好人 → 6 0 有 1 紅，70/126（56%）',
-      '・兩個都成立：24/126（19%）',
-      '/公布 後會對答案｜/派 作答｜/下一步',
+      '【W0000-4 區間】純邏輯只檢查有沒有矛盾，不判斷像不像（像不像要靠你讀派票，/公布 對答案）',
+      '・789=2：可能（留 45/126 種）',
+      '・460=1：你是好人 → 6 0 有 1 紅，可能（留 70/126 種）',
+      '・全部一起：126 種縮到 24 種',
+      '/派 作答（會照你的區間做最後檢查）｜/下一步｜/公布',
     ]);
+    // 派票完的最後檢查：照你的區間，469 全好有幾種。
+    expect(await say(e, '/派 469')).toMatch(/・最後檢查（照你的 \/區間，24 種）：469 全好 \d+ 種/);
 
     const next = (await say(e, '/下一步')) ?? '';
     expect(next).toContain('（之後照實際對局進行，你的答案不改變後面發生的事）');
@@ -139,14 +157,19 @@ describe('a whole exercise', () => {
     expect(next).toContain('0家 1460（第 5 次，強制出發）');
     expect(next).toContain('湖：0家 湖 4家，說好人（o）');
     expect(next).toContain('輪到你派 4 人（第 3 局第 4 次）。');
-    expect(next).toContain('・第 1 局 1 5 7 出 1 失敗 → 至少 1 紅；第 2 局 1 4 6 0 全成功（不代表全好）');
+    // 只有出過失敗牌的任務有確定資訊（成功不代表全好），一行。
+    expect(next).toContain('・確定：第 1 局 1 5 7 至少 1 紅');
+    expect(next).not.toContain('全成功');
     expect(e.activeSessions()).toBe(1);
 
     const fb2 = (await say(e, '/派 1468')) ?? '';
     expect(fb2).toContain('① 實際這位 4家派：1468 20+（跟你一樣）→ 通過，任務 oooo');
     expect(fb2).toContain('② 同位置真人（第3局 忠臣，');
-    expect(fb2).toContain('・第 1 局 1 5 7 出 1 失敗 → 至少 1 紅');
-    expect(fb2).toContain('・湖讀法：若 0家 是好人說實話，你是好人 → 剩 65 種');
+    expect(fb2).toContain('・區間：1 5 7 *1-3（第 1 局任務）｜2 3 6 8 9 0 *1-3');
+    expect(fb2).toContain('・派票解讀：9家 4689 全換｜1家 1246 拆車（留 1 4 6）｜2家 1257 跟 9家 打對邊，回選 1，拆車（留 1）｜3家 3579 騎牆（挑 9家 的 9、2家 的 5 7），全換');
+    // 0家 說你（好人）是好人：說實話的好人本來就會這樣說，不印。
+    expect(fb2).not.toContain('湖讀法');
+    expect(fb2.length).toBeLessThanOrEqual(900);
 
     const end = (await say(e, '/下一步')) ?? '';
     expect(end).not.toContain('（之後照實際對局進行'); // said once
@@ -155,21 +178,26 @@ describe('a whole exercise', () => {
     expect(await say(e, '/派 123')).toContain('你在這局已經沒有下一次派票了');
 
     const reveal = (await say(e, '/公布')) ?? '';
+    // 每一次 /派 都留著；角色附百科的代碼；從開局起每一次派票的隊長角色與隊上幾紅。
     expect(reveal.split('\n')).toEqual([
       '【W0000-4 公布】你是 4家・忠臣',
-      '角色：梅林1 派西維爾2 莫德雷德3 莫甘娜5 刺客7 奧伯倫9；忠臣 4 6 8 0',
+      '角色：梅林1 派西維爾2 莫德雷德3 莫甘娜5 刺客7 奧伯倫9；忠臣 4 6 8 0（刺7娜5莫3奧9派2梅1）',
       '紅：3 5 7 9',
-      '你的派票：第 1 局 469：1 紅（9）✗；第 3 局 1468：0 紅✓',
+      '你的派票：第 1 局 469：1 紅（9）✗、468：0 紅✓、469：1 紅（9）✗；第 3 局 1468：0 紅✓',
       '區間：789=2 ✓（紅 7 9）、460=1 ✗（0 紅）',
       '・真正的紅方不在你的區間留下的組合裡 ✗',
-      '前面派票：9家 奧伯倫 4689 有 1 紅（含自己）；0家 忠臣 1460 全好；1家 梅林 1246 全好；2家 派西 1257 有 2 紅；3家 莫德雷德 3579 有 4 紅（含自己）',
+      '派票對答案（座位＋角色、隊伍、隊上幾紅）：',
+      '第 1 局：1梅 460 全好、2派 279 2紅、3莫 370 2紅（含自己）、4忠 469 1紅、5娜 157 2紅（含自己）',
+      '第 2 局：6忠 1246 全好、7刺 3579 4紅（含自己）、8忠 2468 全好、9奧 4689 1紅（含自己）、0忠 1460 全好',
+      '第 3 局：1梅 1246 全好、2派 1257 2紅、3莫 3579 4紅（含自己）、4忠 1468 全好',
+      '第 4 局：5娜 13579 4紅（含自己）、6忠 12468 全好',
       '這局結果：三藍死（刺 1家，刺中梅林）',
       '再來一題：/模擬',
     ]);
     expect(e.activeSessions()).toBe(0);
     expect(await say(e, '/公布')).toBe(NO_SESSION_TEXT);
     expect(e.counts).toMatchObject({
-      started: { line: 1, discord: 0 }, answers: 2, sameAsReal: 2, intervals: 1, steps: 2, reveals: 1,
+      started: { line: 1, discord: 0 }, answers: 4, sameAsReal: 3, intervals: 1, steps: 2, reveals: 1,
       intervalGroupsTotal: 2, intervalGroupsRight: 1, noSession: 1,
     });
     expect(e.counts.byRole.loyal).toBe(1);
@@ -211,14 +239,18 @@ describe('a whole exercise', () => {
 });
 
 describe('lifetime, caps and rate limit', () => {
-  it('30 idle minutes end the exercise (counted as expired)', async () => {
+  it('30 idle minutes end the exercise (counted as expired); the next command says which one and how to restart', async () => {
     const e = engine({ ttlMs: 30 * MIN });
     await say(e, '/模擬 忠臣 4');
     clock.now += 29 * MIN;
     expect(await say(e, '/派 469')).toContain('你派 469');
     clock.now += 31 * MIN;
-    expect(await say(e, '/下一步')).toBe(NO_SESSION_TEXT);
+    expect(await say(e, '/下一步')).toBe(endedNoticeText('W0000-4', 'expired'));
+    expect(endedNoticeText('W0000-4', 'expired')).toBe('你的模擬 W0000-4 已經結束（太久沒動作）。/模擬 題 W0000-4 從頭再做一次，或 /模擬 開新的一題');
     expect(e.counts.expired).toBe(1);
+    // 沒有任何紀錄（例如伺服器重啟）時是一般的說明，講明會結束的原因。
+    expect(await say(e, '/下一步', { platform: 'line', chatId: 'other', userId: 'U9' })).toBe(NO_SESSION_TEXT);
+    expect(NO_SESSION_TEXT).toContain('伺服器重新啟動');
   });
 
   it('2 hours is the hard cap even when active', async () => {
@@ -229,7 +261,7 @@ describe('lifetime, caps and rate limit', () => {
       expect(await say(e, '/區間 789=2')).toContain('區間】');
     }
     clock.now += 10 * MIN;
-    expect(await say(e, '/區間 789=2')).toBe(NO_SESSION_TEXT);
+    expect(await say(e, '/區間 789=2')).toBe(endedNoticeText('W0000-4', 'expired'));
   });
 
   it('at most N sessions (least recently used goes) and at most M per chat', async () => {
@@ -238,13 +270,24 @@ describe('lifetime, caps and rate limit', () => {
     await say(e, '/區間 789=2', { platform: 'line', chatId: 'C-A', userId: 'A' }); // A is now the most recent
     await say(e, '/模擬 忠臣 4', { platform: 'line', chatId: 'C-D', userId: 'D' });
     expect(e.activeSessions()).toBe(3);
-    expect(await say(e, '/下一步', { platform: 'line', chatId: 'C-B', userId: 'B' })).toBe(NO_SESSION_TEXT);
+    expect(await say(e, '/下一步', { platform: 'line', chatId: 'C-B', userId: 'B' })).toBe(endedNoticeText('W0000-4', 'evicted'));
     expect(await say(e, '/下一步', { platform: 'line', chatId: 'C-A', userId: 'A' })).toContain('下一步】');
 
     const f = engine({ maxPerChat: 2 });
     for (const u of ['1', '2', '3']) await say(f, '/模擬 忠臣 4', { platform: 'discord', chatId: 'CH', userId: u });
     expect(f.activeSessions()).toBe(2);
-    expect(await say(f, '/下一步', { platform: 'discord', chatId: 'CH', userId: '1' })).toBe(NO_SESSION_TEXT);
+    expect(await say(f, '/下一步', { platform: 'discord', chatId: 'CH', userId: '1' })).toContain('同時開的題目太多');
+  });
+
+  it('one person holds at most 2 open exercises across chats (one account cannot fill the global cap)', async () => {
+    const e = engine();
+    for (const ch of ['CH1', 'CH2', 'CH3', 'CH4']) await say(e, '/模擬 忠臣 4', { platform: 'discord', chatId: ch, userId: 'spam' });
+    expect(e.activeSessions()).toBe(2);
+    expect(await say(e, '/下一步', { platform: 'discord', chatId: 'CH1', userId: 'spam' })).toContain('同時開的題目太多');
+    expect(await say(e, '/下一步', { platform: 'discord', chatId: 'CH4', userId: 'spam' })).toContain('下一步】');
+    // 別人不受影響。
+    await say(e, '/模擬 忠臣 4', { platform: 'discord', chatId: 'CH1', userId: 'other' });
+    expect(e.activeSessions()).toBe(3);
   });
 
   it('rate limit: one notice, then silence, until the window passes', async () => {
@@ -289,19 +332,58 @@ describe('commit after delivery, LINE redelivery', () => {
     expect(await say(e, '/下一步')).toContain('三藍：任務成功三次');
   });
 
-  it('a LINE redelivery of the same event re-sends the last reply without advancing', async () => {
+  it('withLock: a second command waits for the first one\'s reply and commit, so its reply matches the state', async () => {
+    const e = engine();
+    await say(e, '/模擬 忠臣 4');
+    const order: string[] = [];
+    const sendSlowly = (text: string, ms: number) => e.withLock(LINE_USER, async () => {
+      const r = await e.handleText(text, LINE_USER);
+      await new Promise((resolve) => setTimeout(resolve, ms)); // replyMessage in flight
+      order.push(r?.text.split('\n')[0] ?? '');
+      r?.commit();
+      return r?.text ?? '';
+    });
+    const [propose, next] = await Promise.all([sendSlowly('/派 469', 30), sendSlowly('/下一步', 0)]);
+    expect(propose).toContain('你派 469');
+    expect(next).toContain('第 3 局第 4 次');
+    expect(order).toEqual(['【W0000-4・4家忠臣】你派 469', '【W0000-4 下一步】（之後照實際對局進行，你的答案不改變後面發生的事）']);
+    // 兩步都算數：現在在第 3 局的決定點。
+    expect(await say(e, '/派 1468')).toContain('你派 1468');
+    expect(e.counts).toMatchObject({ answers: 2, steps: 1 });
+  });
+
+  it('withLock never wedges a person: a stuck send is waited for at most lockWaitMs', async () => {
+    const e = engine({ lockWaitMs: 20 });
+    void e.withLock(LINE_USER, () => new Promise(() => undefined)); // never settles
+    const t0 = Date.now();
+    expect(await e.withLock(LINE_USER, async () => 'ran')).toBe('ran');
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
+
+  it('a LINE redelivery of an event whose reply already went out gets nothing (no second copy in the group)', async () => {
     const e = engine();
     const req = (eventKey: string, duplicate = false): SimRequest => ({ ...LINE_USER, eventKey, duplicate });
     await say(e, '/模擬 忠臣 4', req('e1'));
-    const first = await say(e, '/下一步', req('e2'));
-    const again = await e.handleText('/下一步', req('e2', true));
-    expect(again?.kind).toBe('resend');
-    expect(again?.text).toBe(first);
-    again?.commit();
+    await say(e, '/下一步', req('e2'));
+    await say(e, '/區間 789=2', req('e3'));
+    expect(await e.handleText('/下一步', req('e2', true))).toBeNull(); // an older event, out of order
+    expect(await e.handleText('/模擬 忠臣 4', req('e1', true))).toBeNull();
     expect(e.counts.steps).toBe(1);
-    // A redelivery whose first reply never went out (no lastReply for it) runs normally.
-    const fresh = await e.handleText('/區間 789=2', req('e3', true));
+    // A redelivery whose first reply never went out (never committed) runs normally.
+    const fresh = await e.handleText('/區間 789=2', req('e4', true));
     expect(fresh?.kind).toBe('interval');
+  });
+
+  it('Discord-style explicit commands: a malformed /派 without an exercise gets the usage, but only within the rate limit', async () => {
+    const e = engine({ rateLimit: { windowMs: 10 * MIN, max: 1 } });
+    const req: SimRequest = { platform: 'discord', chatId: 'CH', userId: 'u', explicit: true };
+    const usage = { kind: 'usage', command: 'propose', problem: '同一個座位寫了兩次' } as const;
+    expect((await e.handle(usage, req))?.text).toContain('用法：/派');
+    expect((await e.handle(usage, req))?.text).toBe(RATE_LIMITED_TEXT);
+    expect(await e.handle(usage, req)).toBeNull();
+    expect(await e.handle(usage, req)).toBeNull();
+    // LINE 打字（不是 explicit）沒有題目時當聊天。
+    expect(await engine().handle(usage, LINE_USER)).toBeNull();
   });
 });
 

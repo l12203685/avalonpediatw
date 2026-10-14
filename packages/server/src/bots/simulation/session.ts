@@ -5,12 +5,16 @@
  * 模擬瓦比較像是練習邏輯思考跟派隊資訊的釋放與解讀」。
  *
  *   - 一人一個聊天室一題（key = 平台:聊天室:使用者；LINE 群組事件沒有 userId 時整個聊天室共用一題）。
- *     新的 /模擬 取代舊的，回覆第一行講明。
+ *     新的 /模擬 取代舊的，回覆第一行講明。同一個人跨聊天室最多同時 2 題（最久沒動的先結束）。
  *   - 閒置 30 分鐘（SIM_SESSION_TTL_MINUTES）自動結束，不論如何 2 小時結束；最多 500 題（最久沒動的先結束），
  *     同一個聊天室最多 30 題；每人 10 分鐘最多 30 個模擬指令，超過提醒一次後不回。
+ *     過期或被擠掉的題目，之後打指令會說是哪一題、為什麼結束、怎麼重開（只記在記憶體）。
  *   - 不存檔：部署或重啟就清空（每天約 03:47 +08 快取更新會重新部署）。
  *   - **送出後才算數**：handle() 回 `{ text, commit }`，呼叫端確定回覆送出後才呼叫 commit()，
- *     回覆失敗不會跳過一步。LINE 重送（同一個事件）直接重送上一則回覆，不會走兩步。
+ *     回覆失敗不會跳過一步。
+ *   - **同一題一次只處理一個指令**：呼叫端用 withLock() 把「算回覆 → 送出 → commit」包起來
+ *     （LINE 的 webhook、Discord 的 interaction 都可能同時進來），不會出現「回覆說走了一步、狀態卻沒走」。
+ *   - LINE 重送（同一個事件）：上一次的回覆已經送出（commit 過）就不再回；沒送出才重算。
  *   - 打的字、答案、區間只在這裡的記憶體；log 只有固定文字（這個檔案沒有 log）。
  */
 
@@ -20,22 +24,25 @@ import type { SimBank } from './bank';
 import { parseSimCommand, type IntervalGroup, type SimCommand } from './commands';
 import {
   SIM_CONFIG,
+  SIM_LOCK_WAIT_MS,
   SIM_MAX_SESSIONS,
   SIM_MAX_SESSIONS_PER_CHAT,
+  SIM_MAX_SESSIONS_PER_USER,
   SIM_RATE_LIMIT_MAX,
   SIM_RATE_LIMIT_WINDOW_MS,
   SIM_SESSION_HARD_CAP_MS,
   simBeliefModelId,
   simSessionTtlMs,
 } from './config';
-import { humanAggFor, proposalFeatures } from './human';
+import { campShares, humanAggFor, proposalFeatures } from './human';
 import { beliefModelFor, type SimBeliefModel } from './logic';
 import { emptySimCounts, type SimCounts } from './metrics';
-import { evaluateInterval, intervalGroupTrue, logicPanel, readableProposals, releasePanel, type ProposalEvent } from './reading';
+import { evaluateInterval, intervalGroupTrue, logicPanel, releasePanel, teamCleanUnder, type ProposalEvent } from './reading';
 import {
   BANK_NOT_READY_TEXT,
   NO_SESSION_TEXT,
   RATE_LIMITED_TEXT,
+  endedNoticeText,
   endedText,
   formatInterval,
   formatNext,
@@ -66,10 +73,17 @@ import { maskOf } from './seats';
 
 export type SimPhase = 'answering' | 'answered' | 'no-more-decisions';
 
+/** 同一個決定點最多記幾次 /派（公布時全部列出）。 */
+export const SIM_ANSWERS_PER_DECISION = 5;
+/** 記住幾個已經回過的 LINE 事件（重送判斷）。 */
+const ANSWERED_EVENTS_MAX = 10;
+
 export interface SimSession {
   key: string;
   /** `平台:聊天室`（同一聊天室的上限用）。 */
   chatKey: string;
+  /** `平台:使用者`（同一個人跨聊天室的上限用）；沒有使用者 id 時沒有。 */
+  userKey?: string;
   exerciseId: string;
   game: number;
   seat: number;
@@ -78,16 +92,18 @@ export interface SimSession {
   decision: number;
   /** 已經顯示的公開事件數。 */
   cursor: number;
-  /** 決定 → 你派的隊伍。 */
-  answers: Map<number, number[]>;
+  /** 決定 → 你派過的隊伍（照順序，最後一個是最後的答案）。 */
+  answers: Map<number, number[][]>;
   interval?: IntervalGroup[];
   /** 最後一次 /區間 留下的世界（公布時對答案）。 */
   intervalWorlds?: number[];
+  /** ③ 邏輯面板已經在這個決定點的 /派 回覆裡完整印過。 */
+  logicShownFor?: number;
   phase: SimPhase;
   /** 「之後照實際對局進行」已經講過。 */
   notedReplay: boolean;
-  /** LINE 重送：同一個事件重送這則，不再走一步。 */
-  lastReply?: { eventKey: string; text: string };
+  /** 已經送出回覆的 LINE 事件（重送時不再回）。 */
+  answeredEvents: string[];
   startedAt: number;
   lastActiveAt: number;
   /** 每次 commit 加一；過期的轉移不會蓋掉較新的狀態。 */
@@ -103,11 +119,16 @@ export interface SimRequest {
   eventKey?: string;
   /** 這是 LINE 對同一個事件的重送。 */
   duplicate?: boolean;
+  /**
+   * 明確的指令（Discord slash）：看不懂的 /派、/區間 沒有題目時也給用法（LINE 打字時當聊天不回）。
+   * 一樣受限流管。
+   */
+  explicit?: boolean;
 }
 
 export type SimReplyKind =
   | 'start' | 'propose' | 'interval' | 'next' | 'reveal' | 'end'
-  | 'usage' | 'no-session' | 'bank' | 'select' | 'rate-limited' | 'resend' | 'no-more';
+  | 'usage' | 'no-session' | 'bank' | 'select' | 'rate-limited' | 'no-more';
 
 export interface SimReply {
   text: string;
@@ -129,11 +150,18 @@ export interface SimStoreOptions {
   hardCapMs: number;
   maxSessions: number;
   maxPerChat: number;
+  maxPerUser: number;
 }
+
+export type EndedReason = 'expired' | 'evicted';
+
+/** 過期或被擠掉的題目（記住題號，下次打指令時告訴本人）。 */
+const ENDED_MEMORY_MAX = 1000;
 
 /** Map 的順序 = 最近使用的在最後（LRU）。 */
 export class SimSessionStore {
   private readonly sessions = new Map<string, SimSession>();
+  private readonly ended = new Map<string, { exerciseId: string; reason: EndedReason }>();
 
   constructor(private readonly opts: SimStoreOptions, private readonly onExpire: () => void = () => undefined) {}
 
@@ -141,11 +169,29 @@ export class SimSessionStore {
     return now - s.lastActiveAt > this.opts.ttlMs || now - s.startedAt > this.opts.hardCapMs;
   }
 
+  private remember(s: SimSession, reason: EndedReason): void {
+    this.ended.delete(s.key);
+    this.ended.set(s.key, { exerciseId: s.exerciseId, reason });
+    while (this.ended.size > ENDED_MEMORY_MAX) {
+      const oldest = this.ended.keys().next().value;
+      if (oldest === undefined) break;
+      this.ended.delete(oldest);
+    }
+  }
+
+  private evict(key: string): void {
+    const s = this.sessions.get(key);
+    if (!s) return;
+    this.sessions.delete(key);
+    this.remember(s, 'evicted');
+  }
+
   /** 清掉過期的（每次指令都順便做，最多 500 個，很便宜）。 */
   sweep(now: number): void {
     for (const [key, s] of this.sessions) {
       if (this.expired(s, now)) {
         this.sessions.delete(key);
+        this.remember(s, 'expired');
         this.onExpire();
       }
     }
@@ -156,16 +202,26 @@ export class SimSessionStore {
     return this.sessions.get(key) ?? null;
   }
 
+  /** 這個 key 上一題怎麼結束的（過期／被擠掉），沒有就是 null。 */
+  endedInfo(key: string): { exerciseId: string; reason: EndedReason } | null {
+    return this.ended.get(key) ?? null;
+  }
+
   /** 放進去（放到最後 = 最近使用）；超過上限就結束最久沒動的。 */
   set(session: SimSession): void {
     this.sessions.delete(session.key);
+    this.ended.delete(session.key);
     this.sessions.set(session.key, session);
     const sameChat = [...this.sessions.values()].filter((s) => s.chatKey === session.chatKey);
-    for (let i = 0; i < sameChat.length - this.opts.maxPerChat; i++) this.sessions.delete(sameChat[i].key);
+    for (let i = 0; i < sameChat.length - this.opts.maxPerChat; i++) this.evict(sameChat[i].key);
+    if (session.userKey) {
+      const sameUser = [...this.sessions.values()].filter((s) => s.userKey === session.userKey);
+      for (let i = 0; i < sameUser.length - this.opts.maxPerUser; i++) this.evict(sameUser[i].key);
+    }
     while (this.sessions.size > this.opts.maxSessions) {
       const oldest = this.sessions.keys().next().value;
       if (oldest === undefined) break;
-      this.sessions.delete(oldest);
+      this.evict(oldest);
     }
   }
 
@@ -213,10 +269,13 @@ export interface SimEngineOptions {
   hardCapMs?: number;
   maxSessions?: number;
   maxPerChat?: number;
+  maxPerUser?: number;
   rateLimit?: { windowMs: number; max: number };
   model?: SimBeliefModel;
   /** 選題亂數（測試可以固定）。 */
   random?: (seed: string) => () => number;
+  /** withLock 等前一個指令最久多久（毫秒）；之後照樣處理，不會卡死。 */
+  lockWaitMs?: number;
 }
 
 const NOOP = (): void => undefined;
@@ -227,6 +286,7 @@ export class SimEngine {
   private readonly now: () => number;
   private readonly model: SimBeliefModel;
   private readonly random: (seed: string) => () => number;
+  private readonly locks = new Map<string, Promise<void>>();
   readonly counts: SimCounts = emptySimCounts();
 
   constructor(private readonly opts: SimEngineOptions) {
@@ -237,6 +297,7 @@ export class SimEngine {
         hardCapMs: opts.hardCapMs ?? SIM_SESSION_HARD_CAP_MS,
         maxSessions: opts.maxSessions ?? SIM_MAX_SESSIONS,
         maxPerChat: opts.maxPerChat ?? SIM_MAX_SESSIONS_PER_CHAT,
+        maxPerUser: opts.maxPerUser ?? SIM_MAX_SESSIONS_PER_USER,
       },
       () => { this.counts.expired += 1; },
     );
@@ -250,6 +311,11 @@ export class SimEngine {
     return this.store.size();
   }
 
+  /** 這個人在這個聊天室有沒有開著的題目。 */
+  hasSession(req: Pick<SimRequest, 'platform' | 'chatId' | 'userId'>): boolean {
+    return this.store.get(sessionKeyFor(req), this.now()) !== null;
+  }
+
   get beliefModelId(): string {
     return this.model.id;
   }
@@ -259,6 +325,29 @@ export class SimEngine {
     return this.model.weighsBehaviour;
   }
 
+  /**
+   * 同一題（同一個 session key）的「算回覆 → 送出 → commit」一次只跑一個。前一個最久等
+   * lockWaitMs（送出卡住也不會把這個人永遠卡住）。`fn` 丟出的錯照樣往外丟。
+   */
+  async withLock<T>(req: Pick<SimRequest, 'platform' | 'chatId' | 'userId'>, fn: () => Promise<T>): Promise<T> {
+    const key = sessionKeyFor(req);
+    const prev = this.locks.get(key) ?? Promise.resolve();
+    let release: () => void = NOOP;
+    const mine = new Promise<void>((resolve) => { release = resolve; });
+    const tail = prev.then(() => mine);
+    this.locks.set(key, tail);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const waitMs = this.opts.lockWaitMs ?? SIM_LOCK_WAIT_MS;
+    await Promise.race([prev, new Promise<void>((resolve) => { timer = setTimeout(resolve, waitMs); timer.unref?.(); })]);
+    if (timer) clearTimeout(timer);
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.locks.get(key) === tail) this.locks.delete(key);
+    }
+  }
+
   /** LINE：一段文字 → 回覆，或 null（不是模擬指令／不該回）。 */
   async handleText(text: string, req: SimRequest): Promise<SimReply | null> {
     if (!SIM_CONFIG.commandsEnabled) return null;
@@ -266,19 +355,21 @@ export class SimEngine {
     return cmd ? this.handle(cmd, req) : null;
   }
 
+  /**
+   * 一個指令 → 回覆，或 null：不是給模擬的（聊天）、被限流（提醒過之後）、或 LINE 重送一個
+   * 已經回過的事件。null 時呼叫端什麼都不送。
+   */
   async handle(cmd: SimCommand, req: SimRequest): Promise<SimReply | null> {
     if (!SIM_CONFIG.commandsEnabled) return null;
     const now = this.now();
     const key = sessionKeyFor(req);
     const session = this.store.get(key, now);
 
-    // LINE 重送同一個事件：重送上一則，不走第二步。
-    if (req.duplicate && req.eventKey && session?.lastReply?.eventKey === req.eventKey) {
-      return { text: session.lastReply.text, kind: 'resend', commit: NOOP, sessionOpen: true };
-    }
+    // LINE 重送同一個事件，而第一次的回覆已經送出：不再回（也不走第二步）。
+    if (req.duplicate && req.eventKey && session?.answeredEvents.includes(req.eventKey)) return null;
 
-    // 看不懂的 /派、/區間 又沒有題目：當作一般聊天（例如 /派西 2）。
-    if (cmd.kind === 'usage' && cmd.command !== 'start' && !session) return null;
+    // 看不懂的 /派、/區間 又沒有題目：LINE 打字當作一般聊天（例如 /派西 2）；Discord slash 給用法。
+    if (cmd.kind === 'usage' && cmd.command !== 'start' && !session && !req.explicit) return null;
 
     const rate = this.limiter.hit(`${req.platform}:${req.userId ?? req.chatId}`, now);
     if (rate !== 'ok') {
@@ -287,11 +378,17 @@ export class SimEngine {
     }
 
     if (cmd.kind === 'start') return this.start(cmd, req, key, session, now);
-    if (cmd.kind === 'usage' && cmd.command === 'start') {
-      return this.reply(usageText('start', cmd.problem), 'usage', session, req, now, () => { this.counts.usage += 1; });
+    if (cmd.kind === 'usage' && (cmd.command === 'start' || !session)) {
+      return this.reply(usageText(cmd.command, cmd.problem), 'usage', session, req, now, () => { this.counts.usage += 1; });
     }
     if (!session) {
-      return { text: NO_SESSION_TEXT, kind: 'no-session', commit: (): void => { this.counts.noSession += 1; }, sessionOpen: false };
+      const ended = this.store.endedInfo(key);
+      return {
+        text: ended ? endedNoticeText(ended.exerciseId, ended.reason) : NO_SESSION_TEXT,
+        kind: 'no-session',
+        commit: (): void => { this.counts.noSession += 1; },
+        sessionOpen: false,
+      };
     }
     const bank = await this.opts.bank();
     if (!bank || !bank.games[session.game]) {
@@ -323,7 +420,7 @@ export class SimEngine {
     }
   }
 
-  /** 綁在一題上的回覆：commit 時更新 lastActiveAt / lastReply（以及 `update` 的狀態）。 */
+  /** 綁在一題上的回覆：commit 時更新 lastActiveAt / answeredEvents（以及 `update` 的狀態）。 */
   private reply(
     text: string,
     kind: SimReplyKind,
@@ -340,14 +437,14 @@ export class SimEngine {
       commit: (): void => {
         if (!session) { count(); return; }
         const current = this.store.get(session.key, this.now());
-        // 這段回覆算出來之後，這一題已經變了（例如連按兩次 /下一步）：不再套用，也不計數。
+        // 這段回覆算出來之後，這一題已經變了（呼叫端沒有用 withLock 時才可能）：不再套用，也不計數。
         if (!current || current.version !== session.version) return;
         count();
         this.store.set({
           ...current,
           ...(update ? update(current) : {}),
           lastActiveAt: now,
-          lastReply: req.eventKey ? { eventKey: req.eventKey, text } : undefined,
+          answeredEvents: req.eventKey ? [...current.answeredEvents, req.eventKey].slice(-ANSWERED_EVENTS_MAX) : current.answeredEvents,
           version: current.version + 1,
         });
       },
@@ -390,6 +487,7 @@ export class SimEngine {
         this.store.set({
           key,
           chatKey: `${req.platform}:${req.chatId}`,
+          ...(req.userId ? { userKey: `${req.platform}:${req.userId}` } : {}),
           exerciseId,
           game: picked.game,
           seat: picked.seat,
@@ -399,7 +497,7 @@ export class SimEngine {
           answers: new Map(),
           phase: 'answering',
           notedReplay: false,
-          lastReply: req.eventKey ? { eventKey: req.eventKey, text } : undefined,
+          answeredEvents: req.eventKey ? [req.eventKey] : [],
           startedAt: now,
           lastActiveAt: now,
           version: (previous?.version ?? 0) + 1,
@@ -426,8 +524,11 @@ export class SimEngine {
       : undefined;
     const human = humanAggFor(bank.humans, game, session.decision);
     const mine = proposalFeatures(game, session.decision, team);
+    const camps = campShares(bank.humans, game, session.decision, mine.shape);
     const prevEvent = [...view.events].reverse().find((e): e is ProposalEvent => e.kind === 'proposal');
-    const merlinShare = session.role === 'merlin' && human.agg.hitsN > 0 ? (human.agg.hitsN - human.agg.hits[0]) / human.agg.hitsN : undefined;
+    const logic = logicPanel(view, this.model);
+    // 派票完的最後檢查：你寫過 /區間 的話，照你的區間（用現在看得到的資訊重算）你的隊伍全好有幾種。
+    const own = session.interval && session.interval.length > 0 ? evaluateInterval(view, session.interval, this.model) : undefined;
     const text = formatProposeFeedback(
       {
         exerciseId: session.exerciseId,
@@ -436,12 +537,14 @@ export class SimEngine {
         decision,
         team,
         realQuest,
-        human: { agg: human.agg, mine, prev: prevEvent },
-        logic: logicPanel(view, this.model),
-        release: releasePanel(view, team),
+        human: { agg: human.agg, mine, prev: prevEvent, camps },
+        logic,
+        release: releasePanel(view, team, logic.analysis),
         platform: req.platform,
+        showLogic: session.logicShownFor !== session.decision,
+        ...(own ? { ownInterval: { worlds: own.jointWorlds.length, clean: teamCleanUnder(own.jointWorlds, team) } } : {}),
       },
-      { sight: view.sight, shown: view.events, ownLakes: view.ownLakes, humanMerlinShare: merlinShare },
+      { sight: view.sight, shown: view.events, ownLakes: view.ownLakes },
     );
     const same = maskOf(team) === maskOf(decision.teamSeats);
     return this.reply(text, 'propose', session, req, now, () => {
@@ -449,15 +552,15 @@ export class SimEngine {
       if (same) this.counts.sameAsReal += 1;
     }, (s) => {
       const answers = new Map(s.answers);
-      answers.set(s.decision, [...team]);
-      return { answers, phase: 'answered' };
+      answers.set(s.decision, [...(answers.get(s.decision) ?? []), [...team]].slice(-SIM_ANSWERS_PER_DECISION));
+      return { answers, phase: 'answered', logicShownFor: s.decision };
     });
   }
 
   private interval(groups: IntervalGroup[], game: SimGame, session: SimSession, req: SimRequest, now: number): SimReply {
     const view = viewAt(game, session.seat, session.cursor);
     const ev = evaluateInterval(view, groups, this.model);
-    const text = formatInterval(session.exerciseId, ev, this.model);
+    const text = formatInterval(session.exerciseId, ev, this.model, view.seat);
     return this.reply(text, 'interval', session, req, now, () => { this.counts.intervals += 1; }, () => ({
       interval: groups.map((g) => ({ ...g, seats: [...g.seats] })),
       intervalWorlds: ev.jointWorlds,
@@ -491,10 +594,12 @@ export class SimEngine {
   private reveal(game: SimGame, session: SimSession): SimReply {
     const events = publicEvents(game);
     const decisionCursor = eventIndexOfProposal(events, session.decision);
-    const readable = readableProposals(viewAt(game, session.seat, decisionCursor, events));
+    // 從題目開頭看過的每一次派票，到最後一個決定點為止（沒有下一次了就是整局）。
+    const end = session.phase === 'no-more-decisions' ? events.length : decisionCursor;
+    const seen = events.slice(0, end).filter((e): e is ProposalEvent => e.kind === 'proposal');
     const answers = [...session.answers.entries()]
       .sort((a, b) => a[0] - b[0])
-      .map(([d, team]) => ({ decision: events[eventIndexOfProposal(events, d)] as ProposalEvent, team }));
+      .map(([d, teams]) => ({ decision: events[eventIndexOfProposal(events, d)] as ProposalEvent, teams }));
     const text = formatReveal({
       exerciseId: session.exerciseId,
       game,
@@ -502,7 +607,7 @@ export class SimEngine {
       answers,
       interval: session.interval,
       intervalWorlds: session.intervalWorlds,
-      readable,
+      proposals: seen,
     });
     const redMask = maskOf(game.seatRoles.map((r, i) => (isRed(r) ? i + 1 : 0)).filter(Boolean));
     return {

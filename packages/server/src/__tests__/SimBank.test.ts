@@ -1,13 +1,15 @@
 /**
  * 模擬瓦（2026-10-14）— 題庫：格式、題號、篩選、沒有名字和日期，以及對 commit 進來的
  * `sim_bank.json` 跑的性質測試（慢，跟 benchmark.test.ts 一樣讀真資料）：
- *   每個決定點真正的紅方都還在世界裡、每則回覆 ≤ 1800 字、只有預期的字元。
+ *   每個決定點真正的紅方都還在世界裡、每則回覆 ≤ 1800 字（/派 ≤ 900 字）、只有預期的字元；
+ *   ④ 的延伸／部分／打對邊照全好讀法（隊長＋隊員）算、對照真的打對邊、派西的拇指機率跟 ③ 一致
+ *   （Edward 2026-10-14 審查修正）；分段載入跟一次載入一模一樣。
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 import { parseReplayGame, type ReplayGame } from '../ai/benchmark/sheetsReplay';
-import { buildSimBank, readSimBankFile, SimBankLoader } from '../bots/simulation/bank';
+import { buildSimBank, buildSimBankAsync, readSimBankFile, SimBankLoader } from '../bots/simulation/bank';
 import {
   assignIds,
   bankEntryFor,
@@ -18,8 +20,9 @@ import {
   serialiseRecord,
   type SimBankFile,
 } from '../bots/simulation/bankCodec';
-import { SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
-import { logicModel } from '../bots/simulation/logic';
+import { SIM_PROPOSE_SOFT_MAX_CHARS, SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
+import { analyze, logicModel } from '../bots/simulation/logic';
+import { claimMaskOf, logicPanel, overlapLabel, releasePanel } from '../bots/simulation/reading';
 import { SimEngine } from '../bots/simulation/session';
 import {
   decisionsOf,
@@ -29,7 +32,8 @@ import {
   publicEvents,
   viewAt,
 } from '../bots/simulation/scenario';
-import { maskOf, teamDigits } from '../bots/simulation/seats';
+import { maskOf, seatBit, teamDigits } from '../bots/simulation/seats';
+import { popcount } from '../ai/worlds';
 import { builderRows, FAKE_DATE, FAKE_NAMES, FAKE_NOTE, shortRow, wikiRow } from './fixtures/simGames';
 
 const BANK_PATH = path.resolve(__dirname, '..', '..', 'sim_bank.json');
@@ -124,6 +128,22 @@ describe('buildBankFile', () => {
 });
 
 describe('loader', () => {
+  it('the boot-time build yields between chunks and gives exactly the same bank', async () => {
+    const { file } = buildBankFile(builderRows());
+    let pauses = 0;
+    const chunked = await buildSimBankAsync(file, 1, async () => { pauses++; });
+    expect(pauses).toBeGreaterThanOrEqual(4); // 2 entries + 2 games, one pause each
+    const once = buildSimBank(file);
+    expect(chunked.games).toEqual(once.games);
+    expect([...chunked.byId]).toEqual([...once.byId]);
+    expect([...chunked.pool]).toEqual([...once.pool]);
+    expect([...chunked.humans]).toEqual([...once.humans]);
+    expect(chunked.decisionPoints).toBe(once.decisionPoints);
+    const loader = new SimBankLoader(async () => chunked);
+    expect(await loader.get()).toBe(chunked);
+    expect(loader.status()).toMatchObject({ loaded: true, games: 2 });
+  });
+
   it('a missing file → not loaded (fixed log text only)', async () => {
     const warns: string[] = [];
     const orig = console.warn;
@@ -177,6 +197,71 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     expect(points).toBe(bank.decisionPoints);
   });
 
+  it('the chunked boot-time build equals the one-shot build on the real bank', async () => {
+    const chunked = await buildSimBankAsync(file);
+    expect(chunked.games).toEqual(bank.games);
+    expect([...chunked.humans]).toEqual([...bank.humans]);
+  });
+
+  it('④ labels compare whole readings; the 對照 is really 打對邊; 派西 odds match ③; impossible readings always say why', () => {
+    let checked = 0;
+    for (const g of bank.games) {
+      const events = publicEvents(g);
+      for (let seat = 1; seat <= 10; seat++) {
+        for (const d of decisionsOf(g, seat)) {
+          const view = viewAt(g, seat, eventIndexOfProposal(events, d), events);
+          const team = g.proposals[d].teamSeats;
+          const analysis = analyze(logicModel.worlds(view));
+          const r = releasePanel(view, team, analysis);
+          const mine = maskOf(team) | seatBit(seat);
+          for (const v of r.vs) {
+            const shared = popcount(mine & claimMaskOf(v.proposal));
+            if (v.label !== overlapLabel(shared) || v.shared.length !== shared) throw new Error(`label at ${g.id} seat ${seat} proposal ${d}`);
+          }
+          if (r.contrast && (maskOf([...r.contrast.alternative, seat]) & claimMaskOf(r.contrast.proposal)) !== 0) {
+            throw new Error(`contrast not opposite at ${g.id} seat ${seat} proposal ${d}`);
+          }
+          if (r.privateCheck.kind === 'percival') {
+            const pc = r.privateCheck;
+            pc.thumbsOnTeam.forEach((t, i) => { if (pc.odds[i] !== analysis.marginal(t)) throw new Error('odds'); });
+          }
+          for (const c of logicPanel(view, logicModel).claims) {
+            if (c.weight > 0) continue;
+            if (c.impossible === 'sight' && (!c.reason || (c.reason.kind === 'known-red' && c.reason.seats.length === 0))) {
+              throw new Error(`no reason at ${g.id} seat ${seat} proposal ${d}`);
+            }
+          }
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBe(bank.decisionPoints);
+  }, 300_000);
+
+  it('the reviewers\' cases: 回選 is 延伸, the 對照 drops the earlier leader too, a 6-seat reading is 7 good with you', async () => {
+    let now = 1;
+    const engine = new SimEngine({ bank: async () => bank, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const req = { platform: 'line' as const, chatId: 'C', userId: 'U' };
+    const say = async (t: string): Promise<string> => {
+      now += 1000;
+      const r = await engine.handleText(t, req);
+      r?.commit();
+      return r?.text ?? '';
+    };
+    await say('/模擬 題 01RH8-3');
+    expect(await say('/派 140')).toContain('・對 1家 367：延伸（1 3），回選 1 → 都對：只剩紅 2589');
+    await say('/模擬 題 046Z5-6');
+    const fb = await say('/派 2569');
+    expect(fb).toContain('・對 2家 139：延伸（2 9），回選 2');
+    expect(fb).not.toMatch(/派 2560 會跟 2家 139 打對邊/);
+    await say('/模擬 題 046Z5-2');
+    await say('/下一步');
+    await say('/下一步');
+    expect(await say('/派 23678')).toContain('0家 13689 讀全好：連你在內 7 個好人＞6 → 不成立');
+    await say('/模擬 題 00VG7-2');
+    expect(await say('/下一步')).toContain('1家 2480（票沒記全） → 出發');
+  });
+
   it('every reply of every exercise (each seat of each game, all its decisions) fits 1800 characters and uses only expected characters', async () => {
     let now = 1_000_000;
     const engine = new SimEngine({ bank: async () => bank, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
@@ -198,6 +283,8 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
             replies++;
             longest = Math.max(longest, r.text.length);
             expect(r.text.length).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
+            // /派 stays short enough for a phone (SIM_PROPOSE_SOFT_MAX_CHARS).
+            if (r.kind === 'propose') expect(r.text.length).toBeLessThanOrEqual(SIM_PROPOSE_SOFT_MAX_CHARS);
             if (!ALLOWED.test(r.text)) {
               const bad = [...r.text].filter((ch) => !ALLOWED.test(ch)).map((ch) => `U+${ch.codePointAt(0)?.toString(16)}`);
               throw new Error(`unexpected character ${bad.join(',')} in a reply for ${g.id}-${seat}`);

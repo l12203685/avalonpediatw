@@ -128,6 +128,11 @@ export type PublicEvent =
     forced: boolean;
     /** 這個隊伍出了任務。 */
     approved: boolean;
+    /**
+     * 照「隊內贊成、隊外反對＋記號」重建的票跟結果對得上（解析器的 votesReliable）。
+     * 舊紀錄常常沒記出發那次的記號；false 時回覆標「票沒記全」，不把重建的票當事實。
+     */
+    votesReliable: boolean;
   }
   | { kind: 'quest'; round: number; teamSeats: number[]; successCount: number; failCount: number; failed: boolean }
   | { kind: 'lake'; index: number; round: number; holderSeat: number; targetSeat: number; claim: ReplayLake['claim'] };
@@ -147,6 +152,7 @@ export function publicEvents(game: SimGame): PublicEvent[] {
       minusSeats: sortSeats(p.minusSeats),
       forced: p.forced,
       approved: p.wentOnMission,
+      votesReliable: p.forced || p.votesReliable,
     });
     if (!p.wentOnMission) continue;
     const q = game.quests.find((x) => x.round === p.round);

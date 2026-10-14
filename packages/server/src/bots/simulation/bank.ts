@@ -5,16 +5,21 @@
  * 由 `scripts/buildSimBank.ts` 從牌譜快照產生。`sheets_cache.json` 不進 Render 映像檔
  * （.dockerignore），而且裡面有玩家名字，所以伺服器不讀它。
  *
- * 伺服器開機後在背景讀一次（約 0.1–0.3 秒）；第一個 /模擬 如果題庫還在讀就等它。
+ * 伺服器開機後在背景讀一次；第一個 /模擬 如果題庫還在讀就等它。
  * 每一列都重新嚴格解析，壞的丟掉並計數。檔案不見或壞掉 → /模擬 回「題庫還沒準備好」，
  * 狀態頁 bank.loaded=false。log 只有固定文字和數字。
+ *
+ * Edward 2026-10-14 審查修正：整個建起來要 0.35 秒以上的 CPU（解析＋同位置真人統計），
+ * Render 免費方案 0.1 CPU 會卡住幾秒——剛好是叫醒伺服器的那個 webhook 在等的時候，
+ * LINE 逾時就會重送。所以開機讀題庫時每 SIM_BANK_CHUNK 局讓出一次（buildSimBankAsync），
+ * 一段只有幾毫秒，webhook 照常回。
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { describeError } from '../media/bytes';
 import { parseBankEntry, SIM_BANK_VERSION, type SimBankFile } from './bankCodec';
-import { buildHumanAggregates, type HumanAgg } from './human';
+import { addGameToAggregates, buildHumanAggregates, type HumanAgg } from './human';
 import { buildDecisionPool, type DecisionRef, type SimGame } from './scenario';
 
 export interface SimBank {
@@ -31,28 +36,61 @@ export interface SimBank {
   decisionPoints: number;
 }
 
-/** 檔案內容 → 題庫。 */
+/** 一列 → 加進 games／byId；壞的或重複的回 false。 */
+function addEntry(entry: SimBankFile['games'][number], games: SimGame[], byId: Map<string, number>): boolean {
+  const res = parseBankEntry(entry);
+  if (!res.ok || byId.has(entry.id)) return false;
+  // 名字欄位一律丟掉（題庫本來就沒有）：SimGame 沒有 names。
+  const game: SimGame & { names?: string[] } = { ...res.game };
+  delete game.names;
+  byId.set(game.id, games.length);
+  games.push(game);
+  return true;
+}
+
+function finish(games: SimGame[], byId: Map<string, number>, humans: Map<string, HumanAgg>, dropped: number): SimBank {
+  return {
+    games,
+    byId,
+    pool: buildDecisionPool(games),
+    humans,
+    dropped,
+    decisionPoints: games.reduce((n, g) => n + g.proposals.length, 0),
+  };
+}
+
+/** 檔案內容 → 題庫（一次做完；測試與工具用）。 */
 export function buildSimBank(file: SimBankFile): SimBank {
   const games: SimGame[] = [];
   const byId = new Map<string, number>();
   let dropped = 0;
   for (const entry of Array.isArray(file?.games) ? file.games : []) {
-    const res = parseBankEntry(entry);
-    if (!res.ok || byId.has(entry.id)) { dropped++; continue; }
-    // 名字欄位一律丟掉（題庫本來就沒有）：SimGame 沒有 names。
-    const game: SimGame & { names?: string[] } = { ...res.game };
-    delete game.names;
-    byId.set(game.id, games.length);
-    games.push(game);
+    if (!addEntry(entry, games, byId)) dropped++;
   }
-  return {
-    games,
-    byId,
-    pool: buildDecisionPool(games),
-    humans: buildHumanAggregates(games),
-    dropped,
-    decisionPoints: games.reduce((n, g) => n + g.proposals.length, 0),
-  };
+  return finish(games, byId, buildHumanAggregates(games), dropped);
+}
+
+/** 開機讀題庫時每幾局讓出一次 CPU。 */
+export const SIM_BANK_CHUNK = 25;
+
+const yieldToLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+/** 跟 buildSimBank 一樣的結果，但每 `chunk` 局讓出一次（開機時不擋 webhook）。 */
+export async function buildSimBankAsync(file: SimBankFile, chunk = SIM_BANK_CHUNK, pause: () => Promise<void> = yieldToLoop): Promise<SimBank> {
+  const games: SimGame[] = [];
+  const byId = new Map<string, number>();
+  let dropped = 0;
+  const entries = Array.isArray(file?.games) ? file.games : [];
+  for (let i = 0; i < entries.length; i++) {
+    if (!addEntry(entries[i], games, byId)) dropped++;
+    if ((i + 1) % chunk === 0) await pause();
+  }
+  const humans = new Map<string, HumanAgg>();
+  for (let i = 0; i < games.length; i++) {
+    addGameToAggregates(humans, games[i]);
+    if ((i + 1) % chunk === 0) await pause();
+  }
+  return finish(games, byId, humans, dropped);
 }
 
 export const SIM_BANK_FILE = 'sim_bank.json';
@@ -100,9 +138,9 @@ export class SimBankLoader {
   private promise: Promise<SimBank | null> | null = null;
   private bank: SimBank | null = null;
 
-  constructor(private readonly load: () => SimBank | null = () => {
+  constructor(private readonly load: () => SimBank | null | Promise<SimBank | null> = async () => {
     const file = readSimBankFile();
-    return file ? buildSimBank(file) : null;
+    return file ? buildSimBankAsync(file) : null;
   }) {}
 
   /** 開機後在背景開始讀（不擋開機）。 */
@@ -113,9 +151,9 @@ export class SimBankLoader {
   get(): Promise<SimBank | null> {
     if (!this.promise) {
       this.promise = new Promise<SimBank | null>((resolve) => {
-        setImmediate(() => {
+        setImmediate(async () => {
           try {
-            this.bank = this.load();
+            this.bank = await this.load();
           } catch (err) {
             console.warn(`[sim] building the bank failed (${describeError(err)})`);
             this.bank = null;

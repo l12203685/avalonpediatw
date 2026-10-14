@@ -25,9 +25,13 @@ import {
   claimMaskOf,
   evaluateInterval,
   logicPanel,
+  missionRelation,
   readableProposals,
   releasePanel,
+  sightReasonFor,
 } from '../bots/simulation/reading';
+import { proposalFeatures } from '../bots/simulation/human';
+import { releaseLines } from '../bots/simulation/replies';
 import {
   decisionsOf,
   eventIndexOfProposal,
@@ -83,7 +87,8 @@ describe('golden: 百科模擬題 753921, 4家忠臣 at R1', () => {
   it('126 worlds, every other seat 4/9, joint entropy log2 126', () => {
     expect(panel.analysis.count).toBe(126);
     expect(panel.analysis.entropyBits).toBeCloseTo(Math.log2(126), 9);
-    expect(panel.groups).toEqual([{ seats: [1, 2, 3, 5, 6, 7, 8, 9, 10], marginal: 4 / 9, min: 4, max: 4 }]);
+    // 任務前、忠臣：結構上只有「其他 9 人 *4」一組（區間要從派票讀）。
+    expect(panel.groups).toEqual([{ seats: [1, 2, 3, 5, 6, 7, 8, 9, 10], min: 4, max: 4, kind: 'rest' }]);
   });
 
   it('全好讀法 15/126 each; 1+2 impossible (7 > 6), 1+3 → 紅 2589, 2+3 → 紅 1568', () => {
@@ -104,6 +109,32 @@ describe('golden: 百科模擬題 753921, 4家忠臣 at R1', () => {
     expect(r.rejects.map((x) => [x.a.leaderSeat, x.b.leaderSeat])).toEqual([[1, 3], [2, 3]]);
     expect(r.contrast).toMatchObject({ alternative: [4, 6, 8], weight: 1, yourWeight: 5 });
     expect(r.contrast?.worlds?.map(maskDigits)).toEqual(['1350']);
+    // 「1、3」「2、3」兩組都有 3：你其實在說 3家 的讀法錯。
+    expect(r.rejectCommon).toBe(3);
+  });
+
+  it('延伸／部分／打對邊 compare whole readings (leader + team): picking an earlier leader, or a proposal that picked you, is shared', () => {
+    // 123：選了 1（460 的隊長），460 也選了你（4）→ 共同 1 4 = 延伸，回選 1；選 2、3 同理。
+    const r = releasePanel(view, [1, 2, 3]);
+    expect(r.vs.map((v) => [v.proposal.leaderSeat, v.label, v.shared, v.recall])).toEqual([
+      [1, '延伸', [1, 4], true],
+      [2, '部分', [2], true],
+      [3, '部分', [3], true],
+    ]);
+    // 對照：只共用對方隊長 2 → 換掉 2 才打對邊；換完一定沒有共同的人。
+    for (const team of [[1, 2, 3], [4, 6, 9], [2, 5, 8], [1, 5, 8]]) {
+      const c = releasePanel(view, team).contrast;
+      if (c) expect(maskOf([...c.alternative, 4]) & claimMaskOf(c.proposal)).toBe(0);
+    }
+  });
+
+  it('解讀 tags: 2家 279 opposes 1家 460; 3家 370 straddles them (picks 0 from 460, 7 from 279)', () => {
+    const tags = panel.tags;
+    expect(tags.map((t) => t.proposal.leaderSeat)).toEqual([1, 2, 3]);
+    expect(tags[1].opposite.map((p) => p.leaderSeat)).toEqual([1]);
+    expect(tags[2].straddle).toMatchObject({ fromA: [10], fromB: [7] });
+    expect([tags[2].straddle?.a.leaderSeat, tags[2].straddle?.b.leaderSeat]).toEqual([1, 2]);
+    expect(tags[0].straddle).toBeUndefined();
   });
 
   it('區間 789=2 460=1: 45/126, reduced to 6 0 一紅 70/126, both 24/126', () => {
@@ -193,9 +224,12 @@ describe('mission facts (H1), own lakes (H3) and invariants', () => {
     const view = viewAt(WIKI, 4, eventIndexOfProposal(events, d), events);
     expect(view.ownLakes).toEqual([{ targetSeat: 3, evil: true }]);
     expect(logicModel.worlds(view).every((w) => (w.redMask & maskOf([3])) !== 0)).toBe(true);
-    // Other people's lake claims are readings, not facts.
-    const panel = logicPanel(view, logicModel);
-    expect(panel.lakes.map((l) => [l.holderSeat, l.targetSeat, l.claimEvil])).toEqual([[10, 4, false]]);
+    // 0家 說 4家（你，好人）是好人：說實話的好人本來就會這樣說，什麼都沒驗證到 → 不印。
+    expect(logicPanel(view, logicModel).lakes).toEqual([]);
+    // Other people's lake claims are readings, not facts: 5家 sees both claims as readings.
+    const v5 = viewAt(WIKI, 5, eventIndexOfProposal(events, d), events);
+    expect(logicPanel(v5, logicModel).lakes.map((l) => [l.holderSeat, l.targetSeat, l.claimEvil])).toEqual([[10, 4, false], [4, 3, true]]);
+    expect(v5.ownLakes).toEqual([]);
   });
 
   it('every world satisfies the constraints, and the true red set survives at every decision of every seat', () => {
@@ -217,5 +251,81 @@ describe('mission facts (H1), own lakes (H3) and invariants', () => {
   it('claim masks are captain ∪ team', () => {
     const p = readableProposals(firstView(WIKI, 4))[0];
     expect(maskDigits(claimMaskOf(p))).toBe('1460');
+  });
+});
+
+describe('role branches and private checks (Edward 2026-10-14 review fixes)', () => {
+  it('派西 2家（拇指 1 5）: 「若 1 是梅林 → 460 全好 → 紅 5＋3 7 8 9 *3」 and 「若 5 是梅林 → 460 是娜派的」', () => {
+    const panel = logicPanel(firstView(WIKI, 2), logicModel);
+    expect(panel.thumbs.map((b) => [b.merlin, b.morgana])).toEqual([[1, 5], [5, 1]]);
+    expect(panel.thumbs[0].merlinRead?.summary).toEqual({ count: 4, reds: [5], rest: [3, 7, 8, 9], min: 3, max: 3 });
+    expect(panel.thumbs[1].morganaRead).toMatchObject({ min: 0, max: 3 });
+    expect(panel.thumbs[1].morganaRead?.proposal.leaderSeat).toBe(1);
+  });
+
+  it('派西 opposing a thumb\'s proposal is flagged: 279 vs 1家 460 → read as 「信 1 是娜」', () => {
+    const r = releasePanel(firstView(WIKI, 2), [2, 7, 9]);
+    expect(r.thumbStances.map((t) => [t.thumb, t.label])).toEqual([[1, '打對邊']]);
+    const text = releaseLines(r, 2).map((p) => p.text).join('\n');
+    expect(text).toContain('・你跟拇指 1 的 460 打對邊 → 後面的人會讀成你信 1 是娜');
+  });
+
+  it('派西 thumb odds come from the same analysis (not always 一半)', () => {
+    const view = firstView(WIKI, 2);
+    const worlds = logicModel.worlds(view);
+    // 讓 5 是紅的世界佔 3/4：其中三個 5 紅、一個 1 紅。
+    const red5 = worlds.filter((w) => (w.redMask & maskOf([5])) !== 0).slice(0, 3);
+    const red1 = worlds.filter((w) => (w.redMask & maskOf([1])) !== 0).slice(0, 1);
+    const r = releasePanel(view, [2, 5, 9], analyze([...red5, ...red1]));
+    expect(r.privateCheck).toEqual({ kind: 'percival', thumbsOnTeam: [5], odds: [0.75] });
+    expect(releaseLines(r, 2).map((p) => p.text)).toContain('・你派了拇指 5：依目前邏輯 75% 是莫甘娜');
+    const half = releasePanel(view, [2, 5, 9]);
+    expect(releaseLines(half, 2).map((p) => p.text)).toContain('・你派了拇指 5：一半機率是莫甘娜');
+  });
+
+  it('紅方找梅林: 3家莫德雷德 sees 1家 460 avoid every visible red, 2家 279 hit 7', () => {
+    const panel = logicPanel(firstView(WIKI, 3), logicModel);
+    expect(panel.hunt.map((h) => [h.proposal.leaderSeat, h.hits, h.ours])).toEqual([[1, [], false], [2, [7], false]]);
+    expect(logicPanel(firstView(WIKI, 5), logicModel).hunt.map((h) => [h.proposal.leaderSeat, h.hits])).toEqual([[1, []], [2, [7]], [3, [3, 7]], [4, []]]);
+  });
+
+  it('why a 全好讀法 is impossible: a known red, both thumbs, too many good players, or one thumb short', () => {
+    const loyal = firstView(WIKI, 4);
+    expect(sightReasonFor(loyal, maskOf([1, 2, 3, 5, 6, 7]))).toEqual({ kind: 'good-count', goods: 7, extra: [4] });
+    const merlin = firstView(WIKI, 1);
+    expect(sightReasonFor(merlin, maskOf([2, 5, 8]))).toEqual({ kind: 'known-red', seats: [5] });
+    const percival = firstView(WIKI, 2);
+    expect(sightReasonFor(percival, maskOf([1, 5, 6]))).toEqual({ kind: 'thumbs', seats: [1, 5] });
+    // 3 4 6 7 8 + 你 2 = 6 好，兩根拇指 1 5 都在外面 → 其中梅林那根也是好人 → 7 好。
+    expect(sightReasonFor(percival, maskOf([3, 4, 6, 7, 8]))).toEqual({ kind: 'thumb-count', goods: 6 });
+    // 一根拇指在讀法裡不是「你知道的紅」。
+    expect(sightReasonFor(percival, maskOf([1, 3, 4, 6, 7, 8]))).toEqual({ kind: 'good-count', goods: 7, extra: [2] });
+  });
+
+  it('structural 區間 after a failed mission: the failed team (minus you) and the rest', () => {
+    const panel = logicPanel(firstView(WIKI, 6), logicModel); // R2，157 oox
+    expect(panel.groups).toEqual([
+      { seats: [1, 5, 7], min: 1, max: 3, kind: 'mission', round: 1 },
+      { seats: [2, 3, 4, 8, 9, 10], min: 1, max: 3, kind: 'rest' },
+    ]);
+  });
+
+  it('mission relations: 3+1, 外撒, 拆車, 全換, 原隊', () => {
+    expect(missionRelation([1, 5, 7, 4], 4, [1, 5, 7])).toEqual({ relation: 'plus-self', kept: [1, 5, 7] });
+    expect(missionRelation([1, 5, 7, 9], 4, [1, 5, 7])).toEqual({ relation: 'spread', kept: [1, 5, 7] });
+    expect(missionRelation([1, 2, 4, 6], 4, [1, 5, 7])).toEqual({ relation: 'split', kept: [1] });
+    expect(missionRelation([2, 4, 6, 8], 4, [1, 5, 7])).toEqual({ relation: 'swap', kept: [] });
+    expect(missionRelation([1, 4, 6, 10], 1, [1, 4, 6, 10])).toEqual({ relation: 'same', kept: [1, 4, 6, 10] });
+  });
+
+  it('「派到失敗任務的人」 counts failed missions only (an R4 mission with one fail succeeded)', () => {
+    const game = {
+      ...WIKI,
+      proposals: [{ ...WIKI.proposals[0], round: 5, globalIndex: 0, leaderSeat: 6, teamSeats: [1, 2, 6, 7, 8] }],
+      quests: [{ round: 4, teamSeats: [1, 2, 3, 4, 5], successCount: 4, failCount: 1, failed: false }],
+    } as SimGame;
+    expect(proposalFeatures(game, 0).failedMember).toBeNull();
+    const failed = { ...game, quests: [{ ...game.quests[0], failCount: 2, successCount: 3, failed: true }] } as SimGame;
+    expect(proposalFeatures(failed, 0).failedMember).toBe(true);
   });
 });

@@ -3,7 +3,9 @@
  *
  *   - registered next to the stats commands, discord.js builder validation offline (21 commands);
  *   - every handler defers, then edits the reply with mentions off; the step is applied only after
- *     the edit went out;
+ *     the edit went out, and a throwing commit never replaces the posted answer;
+ *   - the rate limit covers malformed commands too (no endless public usage replies);
+ *   - /help and the LINE /指令 list /模擬 only while SIM_COMMANDS_ENABLED is on;
  *   - public everywhere when SIM_DISCORD_PUBLIC_CHANNEL_IDS is empty, else public only there;
  *   - a bot reply in the sync channel is never mirrored (bots are ignored by the mirror);
  *   - errors are logged as codes only.
@@ -20,6 +22,7 @@ import { SIM_CONFIG, SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
 import { handleSimCommand, simCommandFromInteraction, simReplyIsPublic, SIM_ERROR_TEXT } from '../bots/simulation/discordCommand';
 import { __setSimForTests } from '../bots/simulation';
 import { SimEngine } from '../bots/simulation/session';
+import { NO_SESSION_TEXT } from '../bots/simulation/replies';
 import { formatStatsHelp } from '../bots/stats/statsReplies';
 import { fixtureBank } from './fixtures/simGames';
 
@@ -112,15 +115,25 @@ describe('registration', () => {
     expect(json.find((c) => c.name === COMMANDS.SIM_INTERVAL)?.options).toEqual([expect.objectContaining({ name: SIM_OPTIONS.CONTENT, required: true })]);
   });
 
-  it('/help and the LINE /指令 advertise /模擬', async () => {
-    const it1 = makeInteraction(COMMANDS.HELP);
-    await handleHelpCommand(it1 as never);
-    const embed = (it1.editReply.mock.calls[0][0] as { embeds: { toJSON: () => { fields: { name: string; value: string }[] } }[] }).embeds[0].toJSON();
-    const field = embed.fields.find((f) => f.name.includes('模擬瓦'));
+  it('/help and the LINE /指令 advertise /模擬 (only while it is on)', async () => {
+    const helpFields = async (): Promise<{ name: string; value: string }[]> => {
+      const it1 = makeInteraction(COMMANDS.HELP);
+      await handleHelpCommand(it1 as never);
+      return (it1.editReply.mock.calls[0][0] as { embeds: { toJSON: () => { fields: { name: string; value: string }[] } }[] }).embeds[0].toJSON().fields;
+    };
+    const field = (await helpFields()).find((f) => f.name.includes('模擬瓦'));
     expect(field?.value).toContain('/模擬 [角色] [座位]');
     expect(field?.value).toContain('/派 /區間 /下一步 /公布 /結束');
-    expect(formatStatsHelp('line')).toContain('/模擬 [角色] [座位]　模擬瓦：練派票資訊的釋放與解讀');
+    expect(formatStatsHelp('line')).toContain('/模擬 [角色] [座位]\u3000模擬瓦：練派票資訊的釋放與解讀');
     expect(formatStatsHelp('discord')).toContain('/模擬 [角色] [座位]');
+
+    SIM_CONFIG.commandsEnabled = false;
+    try {
+      expect((await helpFields()).some((f) => f.name.includes('模擬瓦'))).toBe(false);
+      expect(formatStatsHelp('line')).not.toContain('/模擬');
+    } finally {
+      SIM_CONFIG.commandsEnabled = true;
+    }
   });
 });
 
@@ -150,10 +163,10 @@ describe('handlers', () => {
     expect(start).toContain('```\n1家 460 1+\n2家 279\n3家 370\n```');
 
     expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' })).toContain('① 實際這位 4家派：469（跟你一樣）→ 否決');
-    expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('・789=2：45/126（36%）');
+    expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('・789=2：可能（留 45/126 種）');
     expect(await run(COMMANDS.SIM_NEXT)).toContain('輪到你派 4 人（第 3 局第 4 次）。');
     expect(await run(COMMANDS.SIM_REVEAL)).toContain('角色：梅林1 派西維爾2 莫德雷德3 莫甘娜5 刺客7 奧伯倫9；忠臣 4 6 8 0');
-    expect(await run(COMMANDS.SIM_END)).toBe('你目前沒有進行中的模擬，輸入 /模擬 開一題（30 分鐘沒動作會自動結束）');
+    expect(await run(COMMANDS.SIM_END)).toBe(NO_SESSION_TEXT);
     expect(engine.counts.started.discord).toBe(1);
   });
 
@@ -178,6 +191,36 @@ describe('handlers', () => {
 
   it('a malformed /派 without an exercise still answers with the usage (a slash command is explicit)', async () => {
     expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '西 2' })).toContain('用法：/派');
+  });
+
+  it('malformed commands are rate limited too: after the notice, nothing is posted (no echo, no usage)', async () => {
+    const loader = new SimBankLoader(() => BANK);
+    __setSimForTests({ loader, engine: new SimEngine({ bank: () => loader.get(), rateLimit: { windowMs: 600_000, max: 2 } }) });
+    const bad = { [SIM_OPTIONS.CONTENT]: '12=1 假名01是梅林' };
+    const first = await run(COMMANDS.SIM_INTERVAL, bad);
+    expect(first).toMatch(/^第 2 組看不懂/);
+    expect(first).not.toContain('假名');
+    await run(COMMANDS.SIM_INTERVAL, bad);
+    expect(await run(COMMANDS.SIM_INTERVAL, bad)).toBe('模擬指令太頻繁了，10 分鐘後再試。');
+    for (let i = 0; i < 3; i++) {
+      const again = makeInteraction(COMMANDS.SIM_INTERVAL, bad);
+      await handleSimCommand(again as never);
+      expect(again.editReply).not.toHaveBeenCalled();
+      expect(again.deleteReply).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('a commit that throws after the answer was posted leaves the answer (logs a code only)', async () => {
+    vi.spyOn(engine, 'handle').mockResolvedValueOnce({
+      text: '模擬回覆', kind: 'start', sessionOpen: true, commit: () => { throw new Error('boom 469'); },
+    });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const it1 = makeInteraction(COMMANDS.SIM);
+    await handleSimCommand(it1 as never);
+    expect(it1.editReply).toHaveBeenCalledTimes(1);
+    expect(it1.editReply).toHaveBeenLastCalledWith({ content: '模擬回覆', allowedMentions: { parse: [] } });
+    expect(errors.mock.calls.flat().join(' ')).toBe('[sim] Discord commit failed (Error)');
+    errors.mockRestore();
   });
 
   it('the step is applied only after the edit went out', async () => {

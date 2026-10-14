@@ -2,7 +2,7 @@
  * 模擬瓦（2026-10-14）— Discord slash 指令：/模擬 /派 /區間 /下一步 /公布 /結束。
  *
  * 跟 LINE 同一個引擎、同一套文字。session key = discord:頻道:使用者。
- * 每個指令先 defer，再 editReply（allowedMentions 全關：回覆可能回顯使用者打的字）。
+ * 每個指令先 defer，再 editReply（allowedMentions 全關；回覆不回顯使用者打的字）。
  * 公開或只有本人看得到：SIM_DISCORD_PUBLIC_CHANNEL_IDS 空 = 到處公開（跟 /戰績 一樣），
  * 有設 = 只有那些頻道公開。slash 指令不會產生使用者訊息、機器人回覆是 bot 發的，
  * 所以同步（mirrorInbound 不收 bot）和聊天匯出都碰不到 Discord 的模擬。
@@ -15,7 +15,6 @@ import { describeError } from '../media/bytes';
 import { normalizeExerciseId, parseInterval, parseRoleChoice, parseTeam, type SimCommand } from './commands';
 import { SIM_CONFIG, simDiscordPublicChannelIds } from './config';
 import { getSimEngine } from './index';
-import { usageText } from './replies';
 
 export const SIM_DISABLED_TEXT = '模擬瓦目前停用。';
 
@@ -96,20 +95,23 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
     await interaction.deleteReply();
     return;
   }
-  const reply = await getSimEngine().handle(cmd, {
-    platform: 'discord',
-    chatId: interaction.channelId ?? 'dm',
-    userId: interaction.user.id,
-  });
-  if (!reply) {
-    // 看不懂的 /派、/區間 而且沒有題目：在 Discord 這是明確的指令，給用法；被限流則什麼都不留。
-    if (cmd.kind === 'usage') {
-      await interaction.editReply({ content: usageText(cmd.command, cmd.problem), allowedMentions: { parse: [] } });
-    } else {
+  const engine = getSimEngine();
+  // explicit：看不懂的 /派、/區間 沒有題目時也給用法（slash 是明確的指令），一樣受限流管。
+  const req = { platform: 'discord' as const, chatId: interaction.channelId ?? 'dm', userId: interaction.user.id, explicit: true };
+  // 同一個人同一個頻道的指令排隊：「算回覆 → 送出 → commit」一次一個（Edward 2026-10-14 審查修正）。
+  await engine.withLock(req, async () => {
+    const reply = await engine.handle(cmd, req);
+    if (!reply) {
+      // 被限流（提醒過之後）：什麼都不留。
       await interaction.deleteReply();
+      return;
     }
-    return;
-  }
-  await interaction.editReply({ content: reply.text, allowedMentions: { parse: [] } });
-  reply.commit();
+    await interaction.editReply({ content: reply.text, allowedMentions: { parse: [] } });
+    // 回覆已經送出：commit 出錯也不能把已經貼出去的答案改成錯誤訊息。
+    try {
+      reply.commit();
+    } catch (err) {
+      console.error(`[sim] Discord commit failed (${describeError(err)})`);
+    }
+  });
 }

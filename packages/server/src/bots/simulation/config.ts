@@ -23,6 +23,11 @@ export const SIM_CONFIG = {
  * 不 import 戰績模組：chatExport/rows.ts 會 import 這裡的指令判斷，不能連帶載入快取讀取。
  */
 export const SIM_REPLY_MAX_CHARS = 1800;
+/**
+ * /派 的回覆超過這個長度就從次要的段落開始省略（Edward 2026-10-14 審查修正：手機上一則讀得完）。
+ * 先省 ② 的分布、湖讀法、全好讀法的種數，再省兩兩合讀與對照；④ 的主線和 ③ 的區間、派票解讀留著。
+ */
+export const SIM_PROPOSE_SOFT_MAX_CHARS = 900;
 
 /** 閒置多久自動結束（分鐘）；SIM_SESSION_TTL_MINUTES 可改（1–240）。 */
 export const SIM_SESSION_TTL_MINUTES_DEFAULT = 30;
@@ -32,6 +37,13 @@ export const SIM_SESSION_HARD_CAP_MS = 2 * 60 * 60 * 1000;
 export const SIM_MAX_SESSIONS = 500;
 /** 同一個聊天室（群組／頻道）最多幾題。 */
 export const SIM_MAX_SESSIONS_PER_CHAT = 30;
+/**
+ * 同一個人跨聊天室最多同時幾題（Edward 2026-10-14 審查修正：一個 Discord 帳號在很多頻道開題，
+ * 不能把全站 500 題的名額擠光）。
+ */
+export const SIM_MAX_SESSIONS_PER_USER = 2;
+/** 同一題的指令排隊：前一個指令（算回覆＋送出）最久等這麼久，之後照樣處理。 */
+export const SIM_LOCK_WAIT_MS = 15_000;
 /** 每人 10 分鐘最多 30 個模擬指令；超過只提醒一次，之後不回。 */
 export const SIM_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 export const SIM_RATE_LIMIT_MAX = 30;
@@ -64,6 +76,16 @@ export function simDiscordPublicChannelIds(env: NodeJS.ProcessEnv = process.env)
  */
 export function simLineGroupIds(env: NodeJS.ProcessEnv = process.env): Set<string> {
   return idList(env.SIM_LINE_GROUP_IDS);
+}
+
+/**
+ * LINE 鏡像群裡、已經開著一題的人打的後續指令（/派 /區間 /下一步 /公布 /結束）要不要同步到
+ * Discord／大廳（SIM_MIRROR_FOLLOWUPS）。預設不同步：機器人的回答本來就不同步，只剩一串
+ * 沒有上下文的指令行在 Discord 洗版（一題 5–10 個指令）。開題的 /模擬 照 /戰績 同步一行。
+ * 設 true 就跟一般文字一樣全部同步（docs/SIMULATION.md D2）。
+ */
+export function simMirrorFollowUps(env: NodeJS.ProcessEnv = process.env): boolean {
+  return ['true', '1', 'yes', 'on'].includes((env.SIM_MIRROR_FOLLOWUPS || '').trim().toLowerCase());
 }
 
 export type SimBeliefModelId = 'logic' | 'belief';

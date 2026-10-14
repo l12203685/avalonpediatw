@@ -3,6 +3,7 @@ import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from './config';
 import { chemistryReply, leaderboardReply, leaderboardScopeText, playerCardReply } from '../stats/statsQueries';
 import { SIM_HELP_FOLLOW_UP, STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stats/statsReplies';
+import { SIM_CONFIG } from '../simulation/config';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
 
@@ -60,13 +61,16 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
           `每週一 12:00 (+08) 自動貼出本週排行。完整圖表（不用登入）：${STATS_PAGE_URL}`,
         inline: false,
       },
-      {
-        name: '🧩 模擬瓦 / Proposal drill',
-        value:
-          `\`${STATS_COMMAND_USAGE.simulation}\` 真人對局停在你派票的當下：看前面的派票、寫區間、自己派，看你的派票放出什麼資訊\n` +
-          `接著用 ${SIM_HELP_FOLLOW_UP}（一人一題，30 分鐘沒動作自動結束）`,
-        inline: false,
-      },
+      // 模擬瓦 (2026-10-14 review fix): listed only while SIM_COMMANDS_ENABLED is on.
+      ...(SIM_CONFIG.commandsEnabled
+        ? [{
+          name: '🧩 模擬瓦 / Proposal drill',
+          value:
+            `\`${STATS_COMMAND_USAGE.simulation}\` 真人對局停在你派票的當下：看前面的派票、寫區間、自己派，看你的派票放出什麼資訊\n` +
+            `接著用 ${SIM_HELP_FOLLOW_UP}（一人一題，30 分鐘沒動作自動結束）`,
+          inline: false,
+        }]
+        : []),
       {
         name: `/${COMMANDS.RULES}`,
         value: 'Display game rules',

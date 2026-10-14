@@ -26,7 +26,14 @@ import type { LobbyChatMessage } from '../../socket/LobbyChatBuffer';
 import { describeError, raceTimeout, readStreamCapped } from '../media/bytes';
 import { answerStatsTextCommand } from '../stats/textCommands';
 import { answerFeedbackTextCommand, getFeedbackService } from '../feedback/service';
-import { answerSimTextCommand, simQuickReply } from '../simulation/textCommands';
+import {
+  answerSimTextCommand,
+  hideSimFollowUp,
+  isActiveSimCommand,
+  simHelpFor,
+  simQuickReply,
+  withSimLock,
+} from '../simulation/textCommands';
 import { simLineGroupIds } from '../simulation/config';
 
 /**
@@ -303,33 +310,45 @@ export class LineBotClient {
         // outbound LINE queue (reply does not count against push quota).
         if (source.type === 'group' && this.isMirrorGroup(source.groupId)) {
           this.stats.mirrorGroupEvents += 1;
-          let lead: LeadReply | null = null;
           if (event.type === 'message' && event.message.type === 'text') {
             const textMessage = event.message as { id: string; text: string };
-            // A stats / 意見 command is still mirrored like any other text;
-            // its answer goes back to LINE only, sharing this reply_token.
-            if (!duplicate) {
-              await this.handleGroupMessage(source.groupId, source.userId, textMessage.text, textMessage.id);
-            }
-            lead = await this.leadReplyFor(textMessage.text, {
-              duplicate,
-              chatId: source.groupId,
-              userId: source.userId,
-              quoteToken: quoteTokenOf(event.message),
-              eventKey: eventKeyOf(event),
+            const groupId = source.groupId;
+            const userId = source.userId;
+            const sim = { platform: 'line' as const, chatId: groupId, userId };
+            // 模擬瓦 (2026-10-14 review fix): one 模擬 command per person at a
+            // time — compute → reply → commit — so a second command never
+            // reads a step that is still being sent.
+            await withSimLock(sim, textMessage.text, async () => {
+              // A stats / 意見 command is still mirrored like any other text;
+              // its answer goes back to LINE only, sharing this reply_token.
+              // 模擬 follow-ups (/派 /區間 /下一步 /公布 /結束 of an open
+              // exercise) are not mirrored unless SIM_MIRROR_FOLLOWUPS=true.
+              if (!duplicate && !hideSimFollowUp(textMessage.text, sim)) {
+                await this.handleGroupMessage(groupId, userId, textMessage.text, textMessage.id);
+              }
+              const lead = await this.leadReplyFor(textMessage.text, {
+                duplicate,
+                chatId: groupId,
+                userId,
+                quoteToken: quoteTokenOf(event.message),
+                eventKey: eventKeyOf(event),
+              });
+              if (replyToken) await this.drainQueuedReplies(replyToken, lead);
             });
-          } else if (event.type === 'message' && !duplicate) {
+            continue;
+          }
+          if (event.type === 'message' && !duplicate) {
             // 2026-10-13: pictures → Discord as files; stickers / video /
             // audio / file / location → a short text. Never text content.
             await this.handleGroupMedia(source.groupId, source.userId, event.message);
           }
           if (replyToken) {
-            await this.drainQueuedReplies(replyToken, lead);
+            await this.drainQueuedReplies(replyToken, null);
           }
           continue;
         }
 
-        if (source.type === 'group') {
+        if (source.type === 'group' && !simGroup) {
           this.noteNonMirrorGroup(source.groupId);
         }
 
@@ -345,30 +364,41 @@ export class LineBotClient {
         // legacy LINE_BOT_COMMANDS_ENABLED gate. Matched on the raw text:
         // player names are case-sensitive (Sin / SIN / sin are different people).
         if (source.type === 'user') {
-          const lead = await this.leadReplyFor(textMessage.text, {
-            duplicate,
-            chatId: source.userId,
-            userId: source.userId,
-            eventKey: eventKeyOf(event),
-          });
-          if (lead !== null) {
+          const userId = source.userId;
+          const answered = await withSimLock({ platform: 'line', chatId: userId, userId }, textMessage.text, async () => {
+            const lead = await this.leadReplyFor(textMessage.text, {
+              duplicate,
+              chatId: userId,
+              userId,
+              eventKey: eventKeyOf(event),
+            });
+            if (lead === null) return false;
             await this.replyLead(messageEvent.replyToken, lead, true);
-            continue;
-          }
+            return true;
+          });
+          if (answered) continue;
+          // 模擬瓦 (2026-10-14 review fix): a 模擬 command with no answer
+          // (rate limited, an already-answered redelivery, /派西 2 with no
+          // exercise) never falls through to the legacy "未知指令" handler.
+          if (isActiveSimCommand(textMessage.text)) continue;
         }
 
         // 模擬瓦 (2026-10-14): an allow-listed practice group answers 模擬
-        // commands only, on its own reply_token (nothing drained there).
+        // commands (and /指令) only, on its own reply_token (nothing drained there).
         if (simGroup && source.type === 'group') {
-          const lead = await this.leadReplyFor(textMessage.text, {
-            duplicate,
-            chatId: source.groupId,
-            userId: source.userId,
-            quoteToken: quoteTokenOf(messageEvent.message),
-            eventKey: eventKeyOf(event),
-            simOnly: true,
+          const groupId = source.groupId;
+          const userId = source.userId;
+          await withSimLock({ platform: 'line', chatId: groupId, userId }, textMessage.text, async () => {
+            const lead = await this.leadReplyFor(textMessage.text, {
+              duplicate,
+              chatId: groupId,
+              userId,
+              quoteToken: quoteTokenOf(messageEvent.message),
+              eventKey: eventKeyOf(event),
+              simOnly: true,
+            });
+            if (lead !== null) await this.replyLead(messageEvent.replyToken, lead, false);
           });
-          if (lead !== null) await this.replyLead(messageEvent.replyToken, lead, false);
           continue;
         }
 
@@ -464,12 +494,13 @@ export class LineBotClient {
     // Queued Discord pictures become image messages while their relay copy
     // is live, else their text note (ChatMirror.lineMessagesFor).
     const out = queue ? queue.lineMessagesFor(batch) : { messages: [], images: 0, fallbacks: 0 };
+    let delivered = false;
     try {
       await this.client.replyMessage(replyToken, [...lead, ...(out.messages as Message[])]);
       this.stats.repliesDrained += batch.length;
       this.stats.imagesToLine += out.images;
       this.stats.imageNotesToLine += out.fallbacks;
-      if (leadReply) this.leadDelivered(leadReply);
+      delivered = true;
     } catch (error) {
       this.stats.replyFailures += 1;
       const imageRejected = out.images > 0 && lineErrorMentionsImage(error);
@@ -480,6 +511,9 @@ export class LineBotClient {
           (imageRejected ? ' (image URL rejected — those go as a text note)' : ''),
       );
     }
+    // Outside the try (2026-10-14 review fix): a throwing commit must never
+    // re-queue mirror messages that were already delivered.
+    if (delivered && leadReply) this.leadDelivered(leadReply);
   }
 
   /** Stats answer for a typed command, or null (not a command / flag off). Never throws. */
@@ -528,9 +562,16 @@ export class LineBotClient {
     }
   }
 
-  /** The bot answer a text earns, if any: stats commands first, then /意見, then 模擬瓦. */
+  /**
+   * The bot answer a text earns, if any: stats commands first, then /意見, then 模擬瓦.
+   * An allow-listed 模擬 practice group gets 模擬 commands and /指令 (模擬 help) only.
+   */
   private async leadReplyFor(text: string, ctx: LeadContext): Promise<LeadReply | null> {
-    if (ctx.simOnly) return this.simAnswerFor(text, ctx);
+    if (ctx.simOnly) {
+      const help = simHelpFor(text);
+      if (help !== null) return { kind: 'sim', text: help, quoteToken: ctx.quoteToken };
+      return this.simAnswerFor(text, ctx);
+    }
     const stats = await this.statsAnswerFor(text);
     if (stats !== null) return { kind: 'stats', text: stats };
     const feedback = await this.feedbackAnswerFor(text, ctx.duplicate);
@@ -546,23 +587,31 @@ export class LineBotClient {
     return msg as unknown as Message;
   }
 
-  /** The lead reply went out: count it and, for 模擬瓦, apply the step. */
+  /**
+   * The lead reply went out: count it and, for 模擬瓦, apply the step. Never
+   * throws (a commit error is logged as a code; the reply already went out).
+   */
   private leadDelivered(lead: LeadReply): void {
     if (lead.kind === 'stats') this.stats.statsReplies += 1;
     else if (lead.kind === 'feedback') this.stats.feedbackReplies += 1;
     else this.stats.simReplies += 1;
-    lead.commit?.();
+    try {
+      lead.commit?.();
+    } catch (error) {
+      console.error(`[LINE sim] commit failed (${describeError(error)})`);
+    }
   }
 
   /** 1:1 chat (or SIM_LINE_GROUP_IDS group) reply — no mirror queue there. Failures are logged, never thrown. */
   private async replyLead(replyToken: string, lead: LeadReply, oneToOne: boolean): Promise<void> {
     try {
       await this.client.replyMessage(replyToken, [this.leadMessage(lead, oneToOne)]);
-      this.leadDelivered(lead);
     } catch (error) {
       this.stats.replyFailures += 1;
       console.error(`[LINE ${lead.kind}] replyMessage failed (${describeError(error)})`);
+      return;
     }
+    this.leadDelivered(lead);
   }
 
   /**

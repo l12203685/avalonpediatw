@@ -8,12 +8,19 @@
  *   /模擬 派西 2          指定角色／座位（順序不拘，也可以只給其中一個；紅、藍 = 隨機紅方／藍方角色）
  *   /模擬 題 K7Q2M-4      指定題號（整群可以做同一題）
  *   /派 469               作答（0 = 第 10 家；`4 6 9`、`4,6,9`、`4 6 10` 都可以）
- *   /區間 789=2 460=1     區間（選填；百科寫法 `7 8 9 *2 4 6 0 *1`、`12=1-2`、`3=紅`、`5=好` 也可以）
+ *   /區間 789=2 460=1     區間（選填；百科寫法 `7 8 9 *2 4 6 0 *1`、`12=1-2`、`3=紅`、`3 壞`、`5=好`、
+ *                         `1 5 9 *1+` 也可以；各組可以重疊，跟百科「1 2 *1-2」「2 3 7 *2」一樣）
  *   /下一步  /公布（/解答）  /結束
  *
  * 斜線可以是全形「／」，指令和內容之間的空白可有可無（跟 /戰績 一樣），全形數字照收。
  * 只認這幾個指令字：`/派西 2` 不是 /派（後面不是數字 → 'usage'，沒有進行中的題目時呼叫端不回），
  * `/結束了嗎` 不是 /結束（不回）。一般聊天一律回 null。
+ *
+ * Edward 2026-10-14 審查修正：
+ *   - 看不懂時**絕不回顯使用者打的字**（鏡像群是公開的，回顯等於機器人替人把名字貼出去），
+ *     只說第幾組看不懂；
+ *   - 像聊天的斜線句子不回：`/模擬什麼時候可以玩`（沒有角色、座位、題號）、`/派對 今晚`、
+ *     `/區間 我覺得…`（後面沒有數字）都是 null。
  */
 
 import type { Role } from '@avalon/shared';
@@ -114,39 +121,38 @@ export function parseTeam(raw: string): { team: number[] } | { problem: string }
   return { team: [...seats].sort((a, b) => a - b) };
 }
 
-const COUNT_RE = /^(\d{1,2})(?:\s*[-~～到]\s*(\d{1,2}))?$/u;
+/** 紅數：`2`、`1-2`（`~`、`～`、`到` 也可以）、`1+`（至少 1）。 */
+const COUNT_RE = /^(\d{1,2})(?:\s*(?:[-~～到]\s*(\d{1,2})|(\+)))?$/u;
 
 /**
- * /區間 的內容 → 各組。每組 = 座位 + `=k` 或 `*k`（k 可以是 `1-2` 這種範圍，
- * 或 `紅`（全紅）、`好`（全好））。各組座位不能重疊。
+ * /區間 的內容 → 各組。每組 = 座位 + `=k` 或 `*k`（k 可以是 `1-2` 這種範圍、`1+`（至少），
+ * 或 `紅`（全紅）、`好`（全好）），或座位直接接 `紅`／`壞`／`好`（百科：「3 壞」）。
+ * 各組可以重疊（百科 4家：「1 2 *1-2」「2 3 7 *2」）。看不懂時只說第幾組，不回顯打的字。
  */
 export function parseInterval(raw: string): { groups: IntervalGroup[] } | { problem: string } {
   const t = (raw ?? '').normalize('NFKC').replace(/[壞坏]/g, '紅').replace(/红/g, '紅').trim();
   if (!t) return { problem: '請寫區間，例如 /區間 789=2 460=1' };
   const groups: IntervalGroup[] = [];
-  const seen = new Set<number>();
-  const re = /([0-9][0-9\s,、]*?)\s*[=*]\s*(\d{1,2}(?:\s*[-~～到]\s*\d{1,2})?|紅|好)/gu;
+  const re = /([0-9][0-9\s,、]*?)\s*(?:[=*]\s*(\d{1,2}\s*(?:[-~～到]\s*\d{1,2}|\+)?|紅|好)|(紅|好))/gu;
+  const unreadable = (): { problem: string } => ({ problem: `第 ${groups.length + 1} 組看不懂（每組寫成 789=2、7 8 9 *2 或 3 紅）` });
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(t)) !== null) {
-    if (t.slice(last, m.index).trim()) return { problem: '看不懂這一段：' + clip(t.slice(last, m.index).trim()) };
+    if (t.slice(last, m.index).trim()) return unreadable();
     last = re.lastIndex;
+    const spec = (m[2] ?? m[3] ?? '').trim();
     const seats = parseSeatDigits(m[1]);
-    if (!seats || seats.length === 0) return { problem: '每一組要先寫座位' };
-    if (new Set(seats).size !== seats.length) return { problem: '同一組裡座位重複' };
-    for (const s of seats) {
-      if (seen.has(s)) return { problem: `第 ${s === 10 ? 0 : s} 家寫在兩組裡，各組不能重疊` };
-    }
-    seats.forEach((s) => seen.add(s));
+    if (!seats || seats.length === 0) return unreadable();
+    if (new Set(seats).size !== seats.length) return { problem: `第 ${groups.length + 1} 組裡座位重複` };
     let min: number;
     let max: number;
-    if (m[2] === '紅') { min = seats.length; max = seats.length; }
-    else if (m[2] === '好') { min = 0; max = 0; }
+    if (spec === '紅') { min = seats.length; max = seats.length; }
+    else if (spec === '好') { min = 0; max = 0; }
     else {
-      const c = COUNT_RE.exec(m[2].trim());
-      if (!c) return { problem: '紅的數量看不懂' };
+      const c = COUNT_RE.exec(spec);
+      if (!c) return unreadable();
       min = Number(c[1]);
-      max = c[2] === undefined ? min : Number(c[2]);
+      max = c[3] ? Math.min(seats.length, 4) : c[2] === undefined ? min : Number(c[2]);
       if (min > max) [min, max] = [max, min];
     }
     if (max > seats.length) return { problem: `${seats.map((s) => (s === 10 ? 0 : s)).join('')} 只有 ${seats.length} 人，不會有 ${max} 紅` };
@@ -154,18 +160,17 @@ export function parseInterval(raw: string): { groups: IntervalGroup[] } | { prob
     groups.push({ seats: [...seats].sort((a, b) => a - b), min, max });
     if (groups.length > 10) return { problem: '最多 10 組' };
   }
-  if (t.slice(last).trim()) return { problem: '看不懂這一段：' + clip(t.slice(last).trim()) };
+  if (t.slice(last).trim()) return unreadable();
   if (groups.length === 0) return { problem: '請寫區間，例如 /區間 789=2 460=1' };
   return { groups };
 }
 
-/** 使用者打的字最多回顯這麼多（避免整段貼回）。 */
-function clip(s: string): string {
-  return s.length > 12 ? `${s.slice(0, 12)}…` : s;
-}
-
-function parseStartArgs(rest: string): SimCommand {
-  let t = rest.normalize('NFKC').trim();
+/**
+ * /模擬 後面的內容。照段落看：數字（可以接「家」）是座位、其他字要剛好是角色別名。
+ * 一個都認不得（`/模擬什麼時候可以玩`）→ null，當一般聊天；認得一部分 → 用法。
+ */
+function parseStartArgs(rest: string): SimCommand | null {
+  const t = rest.normalize('NFKC').trim();
   if (!t) return { kind: 'start' };
   const byId = /^(?:題號?|题号?|#)\s*(\S+)$/u.exec(t);
   if (byId) {
@@ -177,20 +182,23 @@ function parseStartArgs(rest: string): SimCommand {
 
   let role: SimRoleChoice | undefined;
   let seat: number | undefined;
-  for (const [alias, r] of ROLE_ALIASES) {
-    const i = t.indexOf(alias);
-    if (i >= 0) {
-      role = r;
-      t = `${t.slice(0, i)} ${t.slice(i + alias.length)}`;
-      break;
+  let recognized = false;
+  let junk = false;
+  for (const m of t.matchAll(/(\d+)\s*[家號号]?|([^\d\s,、]+)/gu)) {
+    if (m[1] !== undefined) {
+      // 數字一定是想選座位（`/模擬 11` 給用法，不是聊天）。
+      recognized = true;
+      const s = seatOfToken(m[1]);
+      if (s === null || seat !== undefined) junk = true;
+      else seat = s;
+      continue;
     }
+    const r = parseRoleChoice(m[2]);
+    if (r === null || role !== undefined) { junk = true; continue; }
+    role = r;
+    recognized = true;
   }
-  const tokens = t.split(/[\s,、]+/u).filter(Boolean);
-  for (const tok of tokens) {
-    const s = seatOfToken(tok.replace(/[家號号]$/u, ''));
-    if (s === null || seat !== undefined) return { kind: 'usage', command: 'start' };
-    seat = s;
-  }
+  if (junk) return recognized ? { kind: 'usage', command: 'start' } : null;
   return { kind: 'start', ...(role ? { role } : {}), ...(seat !== undefined ? { seat } : {}) };
 }
 
@@ -201,6 +209,8 @@ export function parseSimCommand(text: string): SimCommand | null {
   const m = FULL_RE.exec((text ?? '').normalize('NFKC').trim());
   if (!m) return null;
   const rest = m[2];
+  // `/派對 今晚`、`/區間 我覺得…`：後面有字但沒有任何數字 → 聊天，不是作答。
+  const chatty = rest.trim() !== '' && !/[0-9]/.test(rest);
   switch (m[1]) {
     case '模擬瓦':
     case '模拟瓦':
@@ -208,11 +218,13 @@ export function parseSimCommand(text: string): SimCommand | null {
     case '模拟':
       return parseStartArgs(rest);
     case '派': {
+      if (chatty) return null;
       const r = parseTeam(rest);
       return 'team' in r ? { kind: 'propose', team: r.team } : { kind: 'usage', command: 'propose', problem: r.problem };
     }
     case '區間':
     case '区间': {
+      if (chatty) return null;
       const r = parseInterval(rest);
       return 'groups' in r ? { kind: 'interval', groups: r.groups } : { kind: 'usage', command: 'interval', problem: r.problem };
     }

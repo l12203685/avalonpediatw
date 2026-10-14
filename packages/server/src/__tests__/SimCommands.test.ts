@@ -1,6 +1,7 @@
 /**
  * 模擬瓦（2026-10-14）— 指令解析：每一種寫法（全形斜線、全形數字、沒有空白、別名、0 / 10 = 第 10 家、
- * 人數與重複、區間重疊、百科的 * 寫法），以及 `/派西 2` 不是 /派、`/結束了` 不是 /結束。
+ * 人數與重複、區間重疊（可以）、百科的 * 寫法與「3 壞」），以及 `/派西 2` 不是 /派、`/結束了` 不是 /結束、
+ * 像聊天的 `/模擬什麼時候可以玩`、`/派對 今晚` 不回，看不懂時不回顯使用者打的字。
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -54,8 +55,13 @@ describe('/模擬', () => {
     expect(parseSimCommand(text)).toEqual(expected);
   });
 
-  it.each(['/模擬 xyz', '/模擬 派西 2 3', '/模擬 11', '/模擬 題 ???'])('usage for %s', (text) => {
+  it.each(['/模擬 派西 2 3', '/模擬 11', '/模擬 題 ???', '/模擬 派西 xyz'])('usage for %s', (text) => {
     expect(parseSimCommand(text)).toMatchObject({ kind: 'usage', command: 'start' });
+  });
+
+  // Edward 2026-10-14 審查修正：沒有角色、座位、題號的 /模擬… 是聊天，不回。
+  it.each(['/模擬 xyz', '/模擬什麼時候可以玩', '/模擬 德州撲克', '／模擬 排行榜'])('chat, not a command: %s', (text) => {
+    expect(parseSimCommand(text)).toBeNull();
   });
 });
 
@@ -84,6 +90,12 @@ describe('/派', () => {
     expect(parseSimCommand('/派')).toMatchObject({ kind: 'usage', command: 'propose' });
   });
 
+  it('text with no digit after /派 or /區間 is chat (/派對 今晚)', () => {
+    expect(parseSimCommand('/派對 今晚')).toBeNull();
+    expect(parseSimCommand('/區間 我覺得都很難')).toBeNull();
+    expect(parseSimCommand('/區間')).toMatchObject({ kind: 'usage', command: 'interval' });
+  });
+
   it('parseTeam sorts, seat 10 last', () => {
     expect(parseTeam('096')).toEqual({ team: [6, 9, 10] });
     expect(parseSeatDigits('4 6 10')).toEqual([4, 6, 10]);
@@ -109,16 +121,39 @@ describe('/區間', () => {
     expect(parseInterval('3=壞')).toEqual({ groups: [{ seats: [3], min: 1, max: 1 }] });
   });
 
+  it('the wiki shorthand: 「3 壞」, 「1 5 9 *1+」 (at least), and overlapping groups like the 4家 answer', () => {
+    expect(parseInterval('7 8 9 *2 3 壞')).toEqual({ groups: [{ seats: [7, 8, 9], min: 2, max: 2 }, { seats: [3], min: 1, max: 1 }] });
+    expect(parseInterval('5 好')).toEqual({ groups: [{ seats: [5], min: 0, max: 0 }] });
+    expect(parseInterval('1 5 9 *1+')).toEqual({ groups: [{ seats: [1, 5, 9], min: 1, max: 3 }] });
+    // 百科 4家：「1 2 *1-2」「2 3 7 *2」「5 0 *1」，2 在兩組裡。
+    expect(parseInterval('12=1-2 237=2 50=1')).toEqual({
+      groups: [{ seats: [1, 2], min: 1, max: 2 }, { seats: [2, 3, 7], min: 2, max: 2 }, { seats: [5, 10], min: 1, max: 1 }],
+    });
+    expect(parseInterval('789=2 7=1')).toEqual({ groups: [{ seats: [7, 8, 9], min: 2, max: 2 }, { seats: [7], min: 1, max: 1 }] });
+  });
+
   it.each([
-    ['789=2 7=1', '兩組'],
     ['789=4', '只有 3 人'],
     ['12345=5', '只有 4 紅'],
-    ['abc', '看不懂'],
-    ['789=2 然後', '看不懂'],
+    ['abc', '第 1 組看不懂'],
+    ['789=2 然後', '第 2 組看不懂'],
     ['', '請寫區間'],
+    ['778=1', '座位重複'],
   ])('rejects %j', (raw, problem) => {
     const r = parseInterval(raw);
     expect('problem' in r && r.problem).toContain(problem);
+  });
+
+  it('never echoes what was typed (a name next to a role claim must not be posted by the bot)', () => {
+    for (const raw of ['12=1 假名01是梅林', '假名02=紅', '3 壞 假名03', '7 8 9 *2 假名04 *1']) {
+      const r = parseInterval(raw);
+      expect('problem' in r).toBe(true);
+      if ('problem' in r) {
+        expect(r.problem).not.toMatch(/假名|梅林/);
+        expect(r.problem).toMatch(/^第 \d 組看不懂/);
+      }
+    }
+    expect(parseSimCommand('/區間 12=1 假名01是梅林')).toMatchObject({ kind: 'usage', problem: expect.not.stringContaining('假名') });
   });
 
   it('formats groups back in the same notation', () => {
