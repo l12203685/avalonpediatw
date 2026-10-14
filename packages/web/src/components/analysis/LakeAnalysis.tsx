@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, type ReactNode } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { fetchAnalysisLake, getErrorMessage } from '../../services/api';
-import type { LakeAnalysisData, OutcomeBreakdown } from '../../services/api';
-import OutcomeBar from './OutcomeBar';
+import { fetchAnalysisLake, getErrorMessage, roleFaction } from '../../services/api';
+import type { LakeAnalysisData, LakeRoleStat, OutcomeBreakdown } from '../../services/api';
+import { SectionTabs } from './ui';
+import OutcomeBlocksTable, { type OutcomeGroup } from './OutcomeBlocksTable';
+import { roleOrderIndex, useRoleLabel } from './roleLabels';
 
 /**
  * 湖中女神分析 — Edward 2026-04-26 spec
@@ -22,29 +23,89 @@ import OutcomeBar from './OutcomeBar';
  *
  * All hard-coded English strings (`holder=target faction`, etc.) have been
  *   replaced with translated keys so the bilingual switch covers them.
+ *
+ * (2026-10-14 Edward：一頁一屏、表格優先、比率用條件機率並附 n)
+ *   - 原本一頁往下排 持湖陣營卡 → 同／跨陣營卡 → 陣營組合 → 持湖角色 → 被湖角色 (約 5 個螢幕高)，
+ *     現在拆成三個視圖 (view)，由 LakeTab 的 SectionTabs 切換；第幾次湖的選擇在三個視圖間共用。
+ *   - 每個視圖一張 OutcomeBlocksTable：任務結果 (三紅率)、刺殺結果 (三藍死 ÷ 三藍局，附三藍局數)、
+ *     遊戲結果 (紅方最終勝)。舊的堆疊長條把三藍死除以全部局，不是條件機率。
+ *   - 陣營視圖：紅方持湖、藍方持湖、四種「持湖者 → 被湖者」陣營組合，最上面是這次湖的全部局；
+ *     「同陣營／跨陣營」兩列就是組合兩兩相加，省略。
+ *   - 角色視圖：七個角色都列 (舊版藏掉 < 5 場的角色)，少樣本用 theoryMinCellGames 變淡。
+ *   - 資料只抓一次 (module 級快取)，切換視圖不重抓。
  */
 
-export default function LakeAnalysis(): JSX.Element {
-  const { t } = useTranslation('common');
-  const [data, setData] = useState<LakeAnalysisData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedLake, setSelectedLake] = useState(0);
+export type LakeView = 'faction' | 'holderRole' | 'targetRole';
 
+let lakeCache: LakeAnalysisData | null = null;
+let lakeInflight: Promise<LakeAnalysisData> | null = null;
+
+function loadLake(): Promise<LakeAnalysisData> {
+  if (lakeCache) return Promise.resolve(lakeCache);
+  if (lakeInflight) return lakeInflight;
+  const p = fetchAnalysisLake()
+    .then(d => {
+      lakeCache = d;
+      return d;
+    })
+    .finally(() => {
+      if (lakeInflight === p) lakeInflight = null;
+    });
+  lakeInflight = p;
+  return p;
+}
+
+function useLakeData(): { data: LakeAnalysisData | null; loading: boolean; error: string | null } {
+  const [data, setData] = useState<LakeAnalysisData | null>(lakeCache);
+  const [loading, setLoading] = useState(lakeCache === null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const d = await fetchAnalysisLake();
-        if (!cancelled) setData(d);
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    loadLake()
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(err => { if (!cancelled) setError(getErrorMessage(err)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return (): void => { cancelled = true; };
   }, []);
+  return { data, loading, error };
+}
+
+const RED = '紅方';
+
+/** 幾組 OutcomeBreakdown 相加 (例：紅方持湖 + 藍方持湖 = 這次湖的全部局)。 */
+function sumOutcomes(list: Array<OutcomeBreakdown | undefined>): { threeRed: number; threeBlueDead: number; threeBlueAlive: number } {
+  const sum = { threeRed: 0, threeBlueDead: 0, threeBlueAlive: 0 };
+  for (const o of list) {
+    if (!o) continue;
+    sum.threeRed += o.threeRed ?? 0;
+    sum.threeBlueDead += o.threeBlueDead ?? 0;
+    sum.threeBlueAlive += o.threeBlueAlive ?? 0;
+  }
+  return sum;
+}
+
+function FactionText({ faction }: { faction: string }): JSX.Element {
+  const { t } = useTranslation('common');
+  const red = faction === RED;
+  return (
+    <span className={red ? 'text-red-300' : 'text-blue-300'}>
+      {t(red ? 'analytics.r6.tabsa.faction.red' : 'analytics.r6.tabsa.faction.blue')}
+    </span>
+  );
+}
+
+export interface LakeAnalysisProps {
+  view: LakeView;
+  /** 第幾次湖 (0 = 首位接湖者)。 */
+  lake: number;
+  onLakeChange: (lake: number) => void;
+}
+
+export default function LakeAnalysis({ view, lake, onLakeChange }: LakeAnalysisProps): JSX.Element {
+  const { t } = useTranslation('common');
+  const roleLabel = useRoleLabel();
+  const { data, loading, error } = useLakeData();
+  const k = 'analytics.r6.tabsa.lake';
 
   if (loading) {
     return (
@@ -67,187 +128,99 @@ export default function LakeAnalysis(): JSX.Element {
     t('analytics.deep.lake.tabSecond'),
     t('analytics.deep.lake.tabThird'),
   ];
-  const currentTabLabel = tabLabels[selectedLake];
-  const currentPerLake = data.perLake[selectedLake];
-  const currentDetail = data.allLakeRoleStats[selectedLake];
+  const perLake = data.perLake ?? [];
+  const selected = perLake[lake] ? lake : 0;
+  const current = perLake[selected];
+  const detail = (data.allLakeRoleStats ?? [])[selected];
+  const lakeLabel = tabLabels[selected];
 
-  return (
-    <div className="space-y-6">
-      {/* Lake selector */}
-      <div className="flex flex-wrap gap-2">
-        {tabLabels.map((label, i) => (
-          <button
-            key={label}
-            onClick={() => setSelectedLake(i)}
-            disabled={!data.perLake[i]}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              selectedLake === i
-                ? 'bg-cyan-600 text-white'
-                : data.perLake[i]
-                  ? 'bg-avalon-card/40 text-gray-500 hover:text-white border border-gray-700'
-                  : 'bg-gray-900/30 text-gray-700 cursor-not-allowed border border-gray-800'
-            }`}
-          >
-            {label} {data.perLake[i] ? `(${data.perLake[i].totalGames} ${t('analytics.deep.common.games')})` : ''}
-          </button>
-        ))}
-      </div>
-
-      {currentPerLake && (
-        <>
-          {/* Holder faction → outcome breakdown */}
-          <motion.div
-            key={`holder-${selectedLake}`}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 space-y-3"
-          >
-            <h3 className="text-sm font-bold text-gray-400">
-              {t('analytics.deep.lake.holderFactionVsRedWin', { lake: currentTabLabel })}
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {currentPerLake.holderStats.map(h => (
-                <div key={h.faction} className="bg-gray-800/40 rounded-lg p-3 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <p className={`text-sm font-bold ${h.faction === '紅方' ? 'text-red-400' : 'text-blue-400'}`}>
-                      {h.faction === '紅方' ? t('analytics.deep.common.redHeld') : t('analytics.deep.common.blueHeld')}
-                    </p>
-                    <p className="text-xs text-gray-500">{h.games} {t('analytics.deep.common.games')}</p>
-                  </div>
-                  <OutcomeBar outcomes={h.outcomes} variant="rows" showRawCounts={true} />
-                  <OutcomeBar outcomes={h.outcomes} variant="stacked" />
-                </div>
-              ))}
-            </div>
-
-            {/* Same vs different faction */}
-            {currentDetail && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                <SameOrDiffCard
-                  title={t('analytics.deep.lake.sameFactionLabel')}
-                  games={currentDetail.sameFaction.games}
-                  outcomes={currentDetail.sameFaction.outcomes}
-                  t={t}
-                />
-                <SameOrDiffCard
-                  title={t('analytics.deep.lake.diffFactionLabel')}
-                  games={currentDetail.diffFaction.games}
-                  outcomes={currentDetail.diffFaction.outcomes}
-                  t={t}
-                />
-              </div>
-            )}
-          </motion.div>
-
-          {/* Combo stats: holder × target faction */}
-          {currentPerLake.comboStats.filter(c => c.targetFaction !== '').length > 0 && (
-            <motion.div
-              key={`combo-${selectedLake}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-            >
-              <h3 className="text-sm font-bold text-gray-400 mb-3">
-                {t('analytics.deep.lake.comboFactionTitle', { lake: currentTabLabel })}
-              </h3>
-              <div className="space-y-3">
-                {currentPerLake.comboStats
-                  .filter(c => c.targetFaction !== '')
-                  .map((c, i) => (
-                    <div key={i} className="bg-gray-800/40 rounded-lg p-3 space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-bold text-gray-300">
-                          <span className={c.holderFaction === '紅方' ? 'text-red-400' : 'text-blue-400'}>{c.holderFaction}</span>
-                          <span className="text-gray-500 mx-1.5">→</span>
-                          <span className={c.targetFaction === '紅方' ? 'text-red-400' : 'text-blue-400'}>{c.targetFaction}</span>
-                        </span>
-                        <span className="text-xs text-gray-500">{c.games} {t('analytics.deep.common.games')}</span>
-                      </div>
-                      <OutcomeBar outcomes={c.outcomes} variant="stacked" />
-                    </div>
-                  ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Holder role outcome breakdown */}
-          {currentDetail && currentDetail.holderRoleStats.filter(r => r.games >= 5).length > 0 && (
-            <motion.div
-              key={`hrole-${selectedLake}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-            >
-              <h3 className="text-sm font-bold text-gray-400 mb-3">
-                {t('analytics.deep.lake.holderRoleVsRedWin', { lake: currentTabLabel })}
-              </h3>
-              <RoleOutcomeTable rows={currentDetail.holderRoleStats.filter(r => r.games >= 5)} t={t} />
-            </motion.div>
-          )}
-
-          {/* Target role outcome breakdown */}
-          {currentDetail && currentDetail.targetRoleStats.filter(r => r.games >= 5).length > 0 && (
-            <motion.div
-              key={`trole-${selectedLake}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
-            >
-              <h3 className="text-sm font-bold text-gray-400 mb-3">
-                {t('analytics.deep.lake.targetRoleVsRedWin', { lake: currentTabLabel })}
-              </h3>
-              <RoleOutcomeTable rows={currentDetail.targetRoleStats.filter(r => r.games >= 5)} t={t} />
-            </motion.div>
-          )}
-        </>
-      )}
-    </div>
+  const picker = (
+    <SectionTabs
+      items={tabLabels.map((label, i) => ({
+        id: String(i),
+        label,
+        badge: perLake[i] ? t(`${k}.gamesBadge`, { count: perLake[i].totalGames }) : undefined,
+        disabled: !perLake[i],
+      }))}
+      value={String(selected)}
+      onChange={id => onLakeChange(Number(id))}
+      ariaLabel={t(`${k}.picker`)}
+      className="mb-2"
+    />
   );
-}
 
-function SameOrDiffCard({ title, games, outcomes, t }: {
-  title: string;
-  games: number;
-  outcomes: OutcomeBreakdown;
-  t: (k: string, opts?: Record<string, unknown>) => string;
-}): JSX.Element {
+  if (!current) {
+    return <p className="py-8 text-center text-xs text-zinc-500">{t('analytics.ui.table.empty')}</p>;
+  }
+
+  const allRow: OutcomeGroup = {
+    key: 'all',
+    label: t(`${k}.allGames`),
+    counts: sumOutcomes(current.holderStats.map(h => h.outcomes)),
+    reference: true,
+  };
+
+  let table: ReactNode;
+  if (view === 'faction') {
+    const holderOrder = (f: string): number => (f === RED ? 0 : 1);
+    const holders = [...current.holderStats].sort((a, b) => holderOrder(a.faction) - holderOrder(b.faction));
+    const combos = current.comboStats
+      .filter(c => c.targetFaction !== '')
+      .sort((a, b) => holderOrder(a.holderFaction) - holderOrder(b.holderFaction) || holderOrder(a.targetFaction) - holderOrder(b.targetFaction));
+    const rows: OutcomeGroup[] = [
+      allRow,
+      ...holders.map((h): OutcomeGroup => ({
+        key: `h-${h.faction}`,
+        label: t(h.faction === RED ? `${k}.redHolder` : `${k}.blueHolder`),
+        tone: h.faction === RED ? 'red' : 'blue',
+        counts: h.outcomes,
+      })),
+      ...combos.map((c): OutcomeGroup => ({
+        key: `c-${c.holderFaction}-${c.targetFaction}`,
+        label: (
+          <span className="font-normal">
+            <FactionText faction={c.holderFaction} />
+            <span className="mx-1 text-zinc-500">→</span>
+            <FactionText faction={c.targetFaction} />
+          </span>
+        ),
+        title: t(`${k}.comboTitle`),
+        counts: c.outcomes,
+      })),
+    ];
+    table = (
+      <OutcomeBlocksTable
+        caption={t(`${k}.factionCaption`, { lake: lakeLabel })}
+        groupLabel={t(`${k}.group`)}
+        rows={rows}
+        footnote={t(`${k}.factionNote`)}
+      />
+    );
+  } else {
+    const stats: LakeRoleStat[] = (view === 'holderRole' ? detail?.holderRoleStats : detail?.targetRoleStats) ?? [];
+    const sorted = [...stats].sort((a, b) => roleOrderIndex(a.role) - roleOrderIndex(b.role));
+    const rows: OutcomeGroup[] = [
+      allRow,
+      ...sorted.map((r): OutcomeGroup => ({
+        key: r.role,
+        label: roleLabel(r.role),
+        tone: roleFaction(r.role) === 'red' ? 'red' : 'blue',
+        counts: r.outcomes,
+      })),
+    ];
+    table = (
+      <OutcomeBlocksTable
+        caption={t(view === 'holderRole' ? `${k}.holderRoleCaption` : `${k}.targetRoleCaption`, { lake: lakeLabel })}
+        groupLabel={t(view === 'holderRole' ? `${k}.holderRole` : `${k}.targetRole`)}
+        rows={rows}
+      />
+    );
+  }
+
   return (
-    <div className="bg-gray-800/40 rounded-lg p-3 space-y-2">
-      <div className="flex justify-between items-center">
-        <p className="text-xs font-bold text-gray-300">{title}</p>
-        <p className="text-xs text-gray-500">{games} {t('analytics.deep.common.games')}</p>
-      </div>
-      <OutcomeBar outcomes={outcomes} variant="rows" showRawCounts={true} />
-      <OutcomeBar outcomes={outcomes} variant="stacked" />
-    </div>
-  );
-}
-
-interface RoleOutcomeRow {
-  role: string;
-  games: number;
-  outcomes: OutcomeBreakdown;
-}
-
-function RoleOutcomeTable({ rows, t }: {
-  rows: RoleOutcomeRow[];
-  t: (k: string, opts?: Record<string, unknown>) => string;
-}): JSX.Element {
-  const sorted = [...rows].sort((a, b) => b.games - a.games);
-  return (
-    <div className="space-y-2">
-      {sorted.map(r => (
-        <div key={r.role} className="bg-gray-800/40 rounded-lg p-3 space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-bold text-white">{r.role}</span>
-            <span className="text-xs text-gray-500">{r.games} {t('analytics.deep.common.games')}</span>
-          </div>
-          <OutcomeBar outcomes={r.outcomes} variant="stacked" />
-        </div>
-      ))}
+    <div>
+      {picker}
+      {table}
     </div>
   );
 }

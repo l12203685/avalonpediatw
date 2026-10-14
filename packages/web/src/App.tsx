@@ -56,6 +56,8 @@ function App(): JSX.Element {
       if (link.kind === 'player') store.openPlayerStats(link.name);
       else store.setGameState('analytics');
       setStatsFirst(true);
+      // #study=… stays while that study is open (FeatureStudyReport reads it and clears it on close)
+      if (link.kind === 'study') return;
       // consumed: a later reload starts where the user is, not back on this link
       try {
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);

@@ -1,11 +1,7 @@
-import { useState, useEffect, useMemo, useCallback, Component, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, Component, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { Loader, AlertCircle, ChevronDown, ChevronUp, ExternalLink, RefreshCw } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line, CartesianGrid, ReferenceLine, Legend,
-} from 'recharts';
+import { Loader, AlertCircle, ChevronDown, ChevronUp, BookOpen, RefreshCw } from 'lucide-react';
 import {
   fetchFeatureStudies,
   getErrorMessage,
@@ -15,6 +11,10 @@ import {
   type LakeClaimCell,
   type LakeClaimData,
 } from '../../services/api';
+import { StatTable, type StatColumn, type Tone } from '../analysis/ui';
+import { useRoleLabel } from '../analysis/roleLabels';
+import { studyHash } from '../../utils/statsLinks';
+import { openStudy } from './studyLink';
 
 /**
  * 特徵研究 (loops 136/139/141/142/143)
@@ -30,28 +30,26 @@ import {
  *     n < minSample 標「樣本不足」；舊形狀 (bar, lieRate) 仍可渲染。
  *   - L142 / L143 表格加 n 欄與「樣本不足」標記 (lowSample 或 n < 30)。
  *
- * 視覺類型 dispatch:
- *   - lakeClaim — 湖中宣告可信度表 (L141 新)
- *   - bar       — 角色 lie% 橫條圖 (L141 舊) / 隊長 tier hit rate (L143)
- *   - table     — 一致度表 + 高 EV cells (L142)
- *   - divergent — 翻轉率 signed EV bar，0 為中軸 (L136)
- *   - line      — R{n} forced P5 對 outcome shift (L139)
+ * (2026-10-14 Edward：「有些可以用表格數字，不一定要用圖」「查看完整研究大多點不開」)
+ *   - 五項研究全部改成 StatTable 數字表 (比率 + n、樣本不足變淡)，不再用 recharts：
+ *     L136 的差距只有 ±2pp、L139 只有 4 輪，數字比長條／折線清楚 (舊的發散長條圖刻度還會印出
+ *     -2.398000000006pp 這種數字)。
+ *   - 「查看完整研究」以前連到不存在的 /docs/feature-study-*，而且 preventDefault，永遠打不開；
+ *     現在連到 #study=<id>，打開站內的完整研究 (FeatureStudyReport：問題、方法與定義、樣本與日期、
+ *     完整數字表 + 95% 區間、注意事項)。哪個分頁的卡片都一樣能開，網址可以直接分享。
+ *   - FeatureVisual 有 full 模式 (完整研究用)：多列出區間、原始欄位與次要表 (L142 高 EV 格、
+ *     L139 有無 R3 forced P5 的比較、L136 陣營整體)。快取沒有區間的研究，完整研究裡的 95% 區間
+ *     由網站依 n 與比率以 Wilson 法推算 (wilson95，公式同 generate_cache.py 的 wilson_interval)。
+ *   - 樣本不足門檻用研究自己的 minSample (L141 data.minSample；其餘同 generate_cache.py
+ *     LAKE_CLAIM_MIN_SAMPLE = 30)，不是理論勝率的 theoryMinCellGames (那是玩家單一角色的場數門檻)。
  *
  * Error handling:
  *   - 503 (cache 未生成) → 顯「特徵研究 cache 尚未生成」+ retry button
- *   - chart render fail  → ErrorBoundary fallback to table view
+ *   - 資料形狀不對、渲染失敗 → ErrorBoundary 顯示提示，不讓整頁壞掉
  */
 
-const RED_COLOR  = '#ef4444';
-const BLUE_COLOR = '#3b82f6';
-const NEUTRAL_COLOR = '#9ca3af';
-const LOW_SAMPLE_N = 30;
-
-const CHART_TOOLTIP_STYLE = {
-  background: '#1f2937',
-  border: '1px solid #374151',
-  borderRadius: 8,
-};
+/** generate_cache.py LAKE_CLAIM_MIN_SAMPLE：研究表格 n 低於這個值標「樣本不足」。 */
+export const LOW_SAMPLE_N = 30;
 
 // ─── Module-level cache + hook ───────────────────────────────────────────────
 
@@ -123,26 +121,26 @@ export function useFeatureStudies(): FeatureStudiesState {
 
 // ─── Error boundary ──────────────────────────────────────────────────────────
 
-interface ChartErrorBoundaryProps {
+interface StudyErrorBoundaryProps {
   fallback: ReactNode;
   children: ReactNode;
 }
 
-interface ChartErrorBoundaryState {
+interface StudyErrorBoundaryState {
   hasError: boolean;
 }
 
-class ChartErrorBoundary extends Component<ChartErrorBoundaryProps, ChartErrorBoundaryState> {
-  constructor(props: ChartErrorBoundaryProps) {
+export class StudyErrorBoundary extends Component<StudyErrorBoundaryProps, StudyErrorBoundaryState> {
+  constructor(props: StudyErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
   }
-  static getDerivedStateFromError(): ChartErrorBoundaryState {
+  static getDerivedStateFromError(): StudyErrorBoundaryState {
     return { hasError: true };
   }
   componentDidCatch(error: unknown): void {
     // eslint-disable-next-line no-console
-    console.error('[FeatureStudies] chart render error', error);
+    console.error('[FeatureStudies] render error', error);
   }
   render(): ReactNode {
     if (this.state.hasError) return this.props.fallback;
@@ -152,7 +150,7 @@ class ChartErrorBoundary extends Component<ChartErrorBoundaryProps, ChartErrorBo
 
 // ─── Shared bits ─────────────────────────────────────────────────────────────
 
-function LoadFailed({ error, notGenerated, onRetry, compact }: {
+export function LoadFailed({ error, notGenerated, onRetry, compact }: {
   error: string | null;
   notGenerated: boolean;
   onRetry: () => void;
@@ -183,9 +181,65 @@ export function LowSampleBadge(): JSX.Element {
   );
 }
 
-function isLow(flag: boolean | undefined, n: number | undefined, min = LOW_SAMPLE_N): boolean {
-  if (typeof flag === 'boolean') return flag;
-  return typeof n === 'number' && n < min;
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+function rnd1(v: number): number {
+  return Math.round(v * 10) / 10;
+}
+
+/**
+ * Wilson score 95% 區間 (%，一位小數)，公式同 generate_cache.py wilson_interval。
+ * 給快取沒附區間的研究用 (完整研究裡標「網站推算」)。n ≤ 0 時 null。
+ */
+export function wilson95(hits: number, n: number): [number, number] | null {
+  if (!(n > 0) || !(hits >= 0)) return null;
+  const z = 1.959964;
+  const p = Math.min(1, hits / n);
+  const denominator = 1 + (z * z) / n;
+  const centre = (p + (z * z) / (2 * n)) / denominator;
+  const half = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / denominator;
+  return [rnd1(Math.max(0, centre - half) * 100), rnd1(Math.min(1, centre + half) * 100)];
+}
+
+/** 比率 % 與 n → 推回筆數 (快取只給兩位小數的比率時用)，再算 Wilson 區間。 */
+export function wilsonFromRate(ratePct: number | null | undefined, n: number | null | undefined): [number, number] | null {
+  const r = num(ratePct);
+  const size = num(n);
+  if (r === null || size === null) return null;
+  return wilson95(Math.round((r / 100) * size), size);
+}
+
+function CiText({ ci }: { ci: [number, number] | null | undefined }): JSX.Element | null {
+  if (!ci) return null;
+  return <span className="text-[10px] font-normal text-zinc-500">[{ci[0].toFixed(1)}–{ci[1].toFixed(1)}]</span>;
+}
+
+function pctText(v: unknown, digits = 1): string {
+  const n = num(v);
+  return n === null ? '—' : `${n.toFixed(digits)}%`;
+}
+
+function signedPp(v: unknown, digits = 2): string {
+  const n = num(v);
+  if (n === null) return '—';
+  return `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n).toFixed(digits)}pp`;
+}
+
+function campTone(camp: unknown): Tone | undefined {
+  return camp === 'red' ? 'red' : camp === 'blue' ? 'blue' : undefined;
+}
+
+/** 研究的樣本不足門檻：L141 用 data.minSample，其餘 30。 */
+export function studyMinSample(feature: FeatureStudyEntry): number {
+  const v = num((feature.data as Record<string, unknown> | undefined)?.minSample);
+  return v !== null && v > 0 ? v : LOW_SAMPLE_N;
+}
+
+function useIsEn(): boolean {
+  const { i18n } = useTranslation('common');
+  return i18n.language?.toLowerCase().startsWith('en') ?? false;
 }
 
 // ─── Panel (全部列出) ─────────────────────────────────────────────────────────
@@ -254,12 +308,30 @@ export function FeatureStudyCard({ loopId, defaultOpen = true }: {
   return <FeatureCard feature={feature} defaultOpen={defaultOpen} orderIndex={0} />;
 }
 
+/** 「查看完整研究」連結：href 是 #study=<id> (中鍵／新分頁也能開)，點擊直接打開站內完整研究。 */
+export function StudyLink({ loopId, className = '' }: { loopId: string; className?: string }): JSX.Element {
+  const { t } = useTranslation('common');
+  return (
+    <a
+      href={studyHash(loopId)}
+      className={`inline-flex items-center gap-1 font-semibold text-blue-300 hover:text-blue-200 transition-colors ${className}`}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // 新分頁：交給瀏覽器
+        e.preventDefault();
+        openStudy(loopId);
+      }}
+    >
+      <BookOpen size={12} aria-hidden /> {t('analytics.featureStudies.viewFullReport')}
+    </a>
+  );
+}
+
 function FeatureCard({
   feature, defaultOpen, orderIndex,
 }: { feature: FeatureStudyEntry; defaultOpen: boolean; orderIndex: number }): JSX.Element {
-  const { t, i18n } = useTranslation('common');
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(defaultOpen);
-  const isEn = i18n.language?.toLowerCase().startsWith('en');
+  const isEn = useIsEn();
 
   // 文字一律以快取為準 (資料層已修正結論)。
   const title       = isEn ? feature.titleEn       : feature.title;
@@ -276,11 +348,11 @@ function FeatureCard({
       {/* Header (always visible, click to toggle) */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors"
+        className="w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors"
         aria-expanded={open}
       >
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-0.5">
             <span className="text-[10px] font-mono px-1.5 py-0.5 bg-blue-900/40 border border-blue-800/50 text-blue-300 rounded">
               {feature.loopId}
             </span>
@@ -296,8 +368,8 @@ function FeatureCard({
 
       {/* Body (visible when open) */}
       {open && (
-        <div className="border-t border-gray-700 px-4 py-4 space-y-3">
-          <ChartErrorBoundary
+        <div className="border-t border-gray-700 px-4 py-3 space-y-2.5">
+          <StudyErrorBoundary
             fallback={(
               <div className="text-xs text-amber-300 bg-amber-900/20 border border-amber-800/40 rounded-lg p-3">
                 {t('analytics.featureStudies.chartError')}
@@ -305,24 +377,15 @@ function FeatureCard({
             )}
           >
             <FeatureVisual feature={feature} />
-          </ChartErrorBoundary>
+          </StudyErrorBoundary>
 
           <p className="text-xs text-zinc-300 leading-relaxed">{takeaway}</p>
-          <div className="flex items-center justify-between text-[11px] text-zinc-500">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-zinc-500">
             <span>
               {t('analytics.featureStudies.sampleSize', { games: feature.sampleSize.games })}
               {feature.computedAt ? ` · ${feature.computedAt}` : ''}
             </span>
-            <a
-              href={`/docs/feature-study-${feature.loopId.toLowerCase()}`}
-              className="inline-flex items-center gap-1 hover:text-blue-400 transition-colors"
-              onClick={(e) => {
-                // Wiki route not yet wired; prevent navigation but keep semantics.
-                e.preventDefault();
-              }}
-            >
-              {t('analytics.featureStudies.viewFullReport')} <ExternalLink size={11} />
-            </a>
+            <StudyLink loopId={feature.loopId} />
           </div>
         </div>
       )}
@@ -332,13 +395,19 @@ function FeatureCard({
 
 // ─── Visual dispatcher ────────────────────────────────────────────────────────
 
-function FeatureVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
+/**
+ * 研究的數字表。full = 完整研究 (多列區間、原始欄位與次要表)；預設是分頁卡片的精簡版。
+ */
+export function FeatureVisual({ feature, full = false }: { feature: FeatureStudyEntry; full?: boolean }): JSX.Element {
+  const data = (feature.data ?? {}) as Record<string, unknown>;
   switch (feature.visualType) {
-    case 'lakeClaim': return <LakeClaimVisual feature={feature} />;
-    case 'bar':       return <BarVisual feature={feature} />;
-    case 'table':     return <TableVisual feature={feature} />;
-    case 'divergent': return <DivergentVisual feature={feature} />;
-    case 'line':      return <LineVisual feature={feature} />;
+    case 'lakeClaim': return <LakeClaimVisual feature={feature} full={full} />;
+    case 'bar':
+      if (Array.isArray(data.leaderTierRows)) return <AssassinTargetVisual feature={feature} full={full} />;
+      return <LegacyLieVisual feature={feature} />;
+    case 'table':     return <ConsistencyVisual feature={feature} full={full} />;
+    case 'divergent': return <VoteFlipVisual feature={feature} full={full} />;
+    case 'line':      return <ForcedP5Visual feature={feature} full={full} />;
     default:
       return (
         <pre className="text-xs text-zinc-400 overflow-x-auto bg-zinc-900/40 rounded-lg p-3">
@@ -348,112 +417,145 @@ function FeatureVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element
   }
 }
 
-// ─── 0. Lake claim table (L141, generate_cache.py) ───────────────────────────
+function LowHint({ min }: { min: number }): JSX.Element {
+  const { t } = useTranslation('common');
+  return <>{t('analytics.r6.tabsa.studyTable.lowHint', { min })}</>;
+}
+
+function ComputedCiHint(): JSX.Element {
+  const { t } = useTranslation('common');
+  return <>{t('analytics.r6.tabsa.studyTable.computedCi')}</>;
+}
+
+// ─── L141 湖中宣告可信度 (lakeClaim, generate_cache.py) ───────────────────────
 
 function isRedClaim(c: LakeClaimCell): boolean {
   return c.declaredEn === 'evil' || c.declared === '紅';
 }
 
-function LakeClaimCellView({ cell, min }: { cell: LakeClaimCell | undefined; min: number }): JSX.Element {
-  if (!cell) return <span className="text-zinc-600">—</span>;
-  const low = isLow(cell.lowSample, cell.n, min);
-  return (
-    <span className="whitespace-nowrap">
-      <span className={`font-bold ${low ? 'text-zinc-400' : 'text-white'}`}>{cell.hitRate.toFixed(1)}%</span>
-      <span className="text-zinc-500 text-[10px] ml-1">[{cell.ciLow.toFixed(1)}–{cell.ciHigh.toFixed(1)}]</span>
-      <span className="text-zinc-500 text-[10px] ml-1">n={cell.n}</span>
-      {low && <LowSampleBadge />}
-    </span>
-  );
+interface ClaimRow {
+  key: string;
+  label: string;
+  tone?: Tone;
+  red?: LakeClaimCell;
+  blue?: LakeClaimCell;
 }
 
-function LakeClaimTable({ rows, min, firstCol, firstLabel }: {
-  rows: LakeClaimCell[];
+function claimRows(cells: LakeClaimCell[], groupOf: (c: LakeClaimCell) => string, toneOf?: (c: LakeClaimCell) => Tone | undefined): ClaimRow[] {
+  const rows: ClaimRow[] = [];
+  for (const c of cells) {
+    const g = groupOf(c);
+    let row = rows.find(r => r.key === g);
+    if (!row) {
+      row = { key: g, label: g, tone: toneOf?.(c) };
+      rows.push(row);
+    }
+    if (isRedClaim(c)) row.red = c;
+    else row.blue = c;
+  }
+  return rows;
+}
+
+function LakeClaimTable({ rows, min, firstLabel, full, caption }: {
+  rows: ClaimRow[];
   min: number;
-  firstCol: (c: LakeClaimCell) => string;
   firstLabel: string;
+  full: boolean;
+  caption?: ReactNode;
 }): JSX.Element {
   const { t } = useTranslation('common');
-  const groups: string[] = [];
-  for (const r of rows) {
-    const k = firstCol(r);
-    if (!groups.includes(k)) groups.push(k);
-  }
+  const k = 'analytics.r6.tabsa.studyTable';
+  const cellColumn = (side: 'red' | 'blue'): StatColumn<ClaimRow> => ({
+    key: side,
+    label: side === 'red' ? t('analytics.featureStudies.lake.declaredRed') : t('analytics.featureStudies.lake.declaredBlue'),
+    title: t(side === 'red' ? `${k}.claimRedTitle` : `${k}.claimBlueTitle`),
+    align: 'right',
+    value: row => row[side]?.hitRate,
+    format: (_v, row): ReactNode => {
+      const c = row[side];
+      if (!c) return '—';
+      // 手機上區間換到第二行，表格不必橫捲那麼多
+      return (
+        <span className="inline-flex flex-col items-end leading-tight sm:flex-row sm:items-baseline sm:gap-1">
+          <span>{pctText(c.hitRate)}</span>
+          <CiText ci={num(c.ciLow) !== null && num(c.ciHigh) !== null ? [c.ciLow, c.ciHigh] : null} />
+          {full && typeof c.hits === 'number' && (
+            <span className="text-[10px] font-normal text-zinc-500">{t(`${k}.hits`, { hits: c.hits })}</span>
+          )}
+        </span>
+      );
+    },
+    n: row => row[side]?.n,
+    lowSample: min,
+    tone: side,
+  });
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs text-zinc-300">
-        <thead>
-          <tr className="border-b border-gray-700 text-zinc-500">
-            <th className="text-left py-2 pr-3">{firstLabel}</th>
-            <th className="text-left py-2 pr-3 text-red-300">{t('analytics.featureStudies.lake.declaredRed')}</th>
-            <th className="text-left py-2 text-blue-300">{t('analytics.featureStudies.lake.declaredBlue')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map(g => {
-            const inGroup = rows.filter(r => firstCol(r) === g);
-            const red = inGroup.find(isRedClaim);
-            const blue = inGroup.find(r => !isRedClaim(r));
-            return (
-              <tr key={g} className="border-b border-zinc-800/60">
-                <td className="py-1.5 pr-3 font-semibold text-zinc-200 whitespace-nowrap">{g}</td>
-                <td className="py-1.5 pr-3"><LakeClaimCellView cell={red} min={min} /></td>
-                <td className="py-1.5"><LakeClaimCellView cell={blue} min={min} /></td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <StatTable
+      caption={caption}
+      columns={[
+        { key: 'label', label: firstLabel, format: (_v, row) => row.label, tone: row => row.tone },
+        cellColumn('red'),
+        cellColumn('blue'),
+      ]}
+      rows={rows}
+      rowKey={row => row.key}
+    />
   );
 }
 
-function LakeClaimVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
-  const { t, i18n } = useTranslation('common');
-  const isEn = i18n.language?.toLowerCase().startsWith('en');
+function LakeClaimVisual({ feature, full }: { feature: FeatureStudyEntry; full: boolean }): JSX.Element {
+  const { t } = useTranslation('common');
+  const isEn = useIsEn();
   const data = feature.data as unknown as LakeClaimData;
-  const min = typeof data.minSample === 'number' ? data.minSample : LOW_SAMPLE_N;
-  const rows = Array.isArray(data.rows) ? data.rows : [];
-  const holderRows = Array.isArray(data.holderRows) ? data.holderRows : [];
+  const min = studyMinSample(feature);
+  const cells = Array.isArray(data.rows) ? data.rows : [];
+  const holderCells = Array.isArray(data.holderRows) ? data.holderRows : [];
 
-  if (rows.length === 0) {
+  if (cells.length === 0) {
     return <pre className="text-xs text-zinc-400">{JSON.stringify(data, null, 2)}</pre>;
   }
 
+  const byLake = claimRows(cells, c => (isEn ? (c.lakeEn ?? c.lake ?? '') : (c.lake ?? c.lakeEn ?? '')));
+  const byHolder = claimRows(
+    holderCells,
+    c => {
+      const red = c.holderEn === 'evil' || c.holder === '紅';
+      return t(red ? 'analytics.r6.tabsa.studyTable.redHolder' : 'analytics.r6.tabsa.studyTable.blueHolder');
+    },
+    c => (c.holderEn === 'evil' || c.holder === '紅' ? 'red' : 'blue'),
+  );
+
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-[11px] text-zinc-500 mb-1">
-          {t('analytics.featureStudies.lake.columns')} · {t('analytics.featureStudies.lowSampleHint', { min })}
-        </p>
+    <div className="space-y-2">
+      <div className={`grid gap-3 ${full ? '' : 'md:grid-cols-2'}`}>
         <LakeClaimTable
-          rows={rows}
+          rows={byLake}
           min={min}
+          full={full}
           firstLabel={t('analytics.featureStudies.lake.lake')}
-          firstCol={c => (isEn ? (c.lakeEn ?? c.lake ?? '') : (c.lake ?? c.lakeEn ?? ''))}
+          caption={<span className="text-[11px] font-semibold text-zinc-500">{t('analytics.r6.tabsa.studyTable.byLake')}</span>}
         />
-      </div>
-      {holderRows.length > 0 && (
-        <div>
-          <p className="text-[11px] text-zinc-500 mb-1 font-semibold">{t('analytics.featureStudies.lake.byHolder')}</p>
+        {byHolder.length > 0 && (
           <LakeClaimTable
-            rows={holderRows}
+            rows={byHolder}
             min={min}
+            full={full}
             firstLabel={t('analytics.featureStudies.lake.holder')}
-            firstCol={c => (isEn ? (c.holderEn ?? c.holder ?? '') : (c.holder ?? c.holderEn ?? ''))}
+            caption={<span className="text-[11px] font-semibold text-zinc-500">{t('analytics.featureStudies.lake.byHolder')}</span>}
           />
-        </div>
-      )}
-      {typeof data.undeclared === 'number' && data.undeclared > 0 && (
-        <p className="text-[11px] text-zinc-500 italic">
-          {t('analytics.featureStudies.lake.undeclared', { count: data.undeclared })}
-        </p>
-      )}
+        )}
+      </div>
+      <p className="text-[10px] leading-relaxed text-zinc-500">
+        {t('analytics.featureStudies.lake.columns')} · <LowHint min={min} />
+        {typeof data.undeclared === 'number' && data.undeclared > 0 && (
+          <> {t('analytics.featureStudies.lake.undeclared', { count: data.undeclared })}</>
+        )}
+      </p>
     </div>
   );
 }
 
-// ─── 1. Bar chart (L141 舊 lie rate / L143 leader tier hit rate) ──────────────
+// ─── L141 舊形狀 (bar, lieRate)：只剩舊快取會出現 ───────────────────────────────
 
 interface LieRow {
   role: string;
@@ -462,6 +564,30 @@ interface LieRow {
   lieRate: number;
   total: number;
 }
+
+function LegacyLieVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
+  const { t } = useTranslation('common');
+  const isEn = useIsEn();
+  const role = useRoleLabel();
+  const data = feature.data as Record<string, unknown>;
+  const rows = Array.isArray(data.rows) ? (data.rows as LieRow[]).filter(r => r && typeof r === 'object') : [];
+  if (rows.length === 0 || rows[0].lieRate === undefined) {
+    return <pre className="text-xs text-zinc-400">{JSON.stringify(data, null, 2)}</pre>;
+  }
+  return (
+    <StatTable
+      columns={[
+        { key: 'role', label: t('analytics.featureStudies.role'), value: r => (isEn ? r.roleEn : role(r.role)), tone: r => campTone(r.camp) },
+        { key: 'lieRate', label: t('analytics.r6.tabsa.studyTable.lieRate'), format: 'pct', n: 'total', lowSample: LOW_SAMPLE_N, emphasis: true },
+      ]}
+      rows={rows}
+      rowKey={r => r.role}
+      footnote={<LowHint min={LOW_SAMPLE_N} />}
+    />
+  );
+}
+
+// ─── L143 刺客目標 (bar, leaderTierRows + topSeatRows) ────────────────────────
 
 interface LeaderTierRow {
   tier: string;
@@ -480,125 +606,66 @@ interface SeatRow {
   lowSample?: boolean;
 }
 
-function BarVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
-  const { t, i18n } = useTranslation('common');
-  const isEn = i18n.language?.toLowerCase().startsWith('en');
+function AssassinTargetVisual({ feature, full }: { feature: FeatureStudyEntry; full: boolean }): JSX.Element {
+  const { t } = useTranslation('common');
+  const isEn = useIsEn();
+  const k = 'analytics.r6.tabsa.studyTable';
   const data = feature.data as Record<string, unknown>;
+  const tierRows = ((data.leaderTierRows as LeaderTierRow[] | undefined) ?? []).filter(r => r && typeof r === 'object');
+  const seatRows = ((data.topSeatRows as SeatRow[] | undefined) ?? []).filter(r => r && typeof r === 'object');
+  const min = LOW_SAMPLE_N;
 
-  // L141 (舊形狀) lie rate
-  if (Array.isArray(data.rows) && data.rows.length > 0 && (data.rows[0] as Record<string, unknown>).lieRate !== undefined) {
-    const rows = data.rows as LieRow[];
-    const chartData = rows.map(r => ({
-      label: isEn ? r.roleEn : r.role,
-      value: r.lieRate,
-      camp:  r.camp,
-      total: r.total,
-    }));
-    return (
-      <div className="space-y-2">
-        <ResponsiveContainer width="100%" height={Math.max(220, chartData.length * 32)}>
-          <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
-            <XAxis type="number" domain={[0, 60]} unit="%" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <YAxis type="category" dataKey="label" width={72} tick={{ fontSize: 12, fill: '#d1d5db' }} />
-            <Tooltip
-              contentStyle={CHART_TOOLTIP_STYLE}
-              formatter={(v: unknown) => [`${Number(v).toFixed(2)}%`, String(data.axisLabel ?? 'Lie %')]}
-            />
-            <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-              {chartData.map((entry, i) => (
-                <Cell key={i} fill={entry.camp === 'red' ? RED_COLOR : BLUE_COLOR} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+  const tierColumns: StatColumn<LeaderTierRow>[] = [
+    { key: 'tier', label: t('analytics.featureStudies.tier'), value: r => (isEn ? r.tierEn : r.tierZh) },
+    {
+      key: 'hitRate', label: t('analytics.featureStudies.hitRate'), title: t(`${k}.hitRateTitle`),
+      format: 'pct', n: 'n', lowSample: min, tone: 'amber', emphasis: true,
+    },
+  ];
+  if (full) {
+    tierColumns.push(
+      { key: 'ci', label: t(`${k}.ciComputed`), align: 'right', value: r => r.hitRate, format: (_v, r) => <CiText ci={wilsonFromRate(r.hitRate, r.n)} /> },
+      { key: 'missRate', label: t(`${k}.missRate`), format: 'pct' },
     );
   }
+  const seatColumns: StatColumn<SeatRow>[] = [
+    { key: 'seat', label: t('analytics.featureStudies.seat'), value: r => t(`${k}.seatLabel`, { seat: r.seat }) },
+    {
+      key: 'hitRate', label: t('analytics.featureStudies.hitRate'), title: t(`${k}.hitRateTitle`),
+      format: 'pct', n: 'n', lowSample: min, tone: 'amber',
+    },
+  ];
+  if (full) {
+    seatColumns.push({ key: 'ci', label: t(`${k}.ciComputed`), align: 'right', value: r => r.hitRate, format: (_v, r) => <CiText ci={wilsonFromRate(r.hitRate, r.n)} /> });
+  }
 
-  // L143 leader tier + seat top
-  if (Array.isArray(data.leaderTierRows)) {
-    const tierRows  = data.leaderTierRows as LeaderTierRow[];
-    const seatRows  = (data.topSeatRows as SeatRow[] | undefined) ?? [];
-    const tierChart = tierRows.map(r => ({
-      label: isEn ? r.tierEn : r.tierZh,
-      value: r.hitRate,
-      n:     r.n,
-    }));
-    return (
-      <div className="space-y-4">
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={tierChart} margin={{ top: 4, right: 16, left: -16, bottom: 4 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <YAxis unit="%" domain={[0, 60]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
-            <Tooltip
-              contentStyle={CHART_TOOLTIP_STYLE}
-              formatter={(v: unknown, _n, p) => [
-                `${Number(v).toFixed(2)}%  (n=${(p.payload as { n: number }).n})`,
-                'Hit %',
-              ]}
-            />
-            <Bar dataKey="value" fill={RED_COLOR} radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-zinc-300">
-            <thead>
-              <tr className="border-b border-gray-700 text-zinc-500">
-                <th className="text-left py-2 pr-4">{t('analytics.featureStudies.tier')}</th>
-                <th className="text-right pr-4">n</th>
-                <th className="text-right">{t('analytics.featureStudies.hitRate')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tierRows.map(r => {
-                const low = isLow(r.lowSample, r.n);
-                return (
-                  <tr key={r.tier} className="border-b border-zinc-800/60">
-                    <td className="py-1 pr-4">{isEn ? r.tierEn : r.tierZh}</td>
-                    <td className="text-right pr-4 text-zinc-400 whitespace-nowrap">{r.n}{low && <LowSampleBadge />}</td>
-                    <td className={`text-right ${low ? 'text-zinc-400' : 'text-red-300'}`}>{r.hitRate.toFixed(2)}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
+  return (
+    <div className="space-y-2">
+      <div className={`grid gap-3 ${full ? '' : 'md:grid-cols-2'}`}>
+        <StatTable
+          caption={<span className="text-[11px] font-semibold text-zinc-500">{t(`${k}.byTier`)}</span>}
+          columns={tierColumns}
+          rows={tierRows}
+          rowKey={r => r.tier}
+        />
         {seatRows.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-zinc-300">
-              <thead>
-                <tr className="border-b border-gray-700 text-zinc-500">
-                  <th className="text-left py-2 pr-4">{t('analytics.featureStudies.seat')}</th>
-                  <th className="text-right pr-4">n</th>
-                  <th className="text-right">{t('analytics.featureStudies.hitRate')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {seatRows.map(s => {
-                  const low = isLow(s.lowSample, s.n);
-                  return (
-                    <tr key={s.seat} className="border-b border-zinc-800/60">
-                      <td className="py-1 pr-4 font-mono">#{s.seat}</td>
-                      <td className="text-right pr-4 text-zinc-400 whitespace-nowrap">{s.n}{low && <LowSampleBadge />}</td>
-                      <td className={`text-right ${low ? 'text-zinc-400' : 'text-red-300'}`}>{s.hitRate.toFixed(2)}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <StatTable
+            caption={<span className="text-[11px] font-semibold text-zinc-500">{t(`${k}.topSeats`, { count: seatRows.length })}</span>}
+            columns={seatColumns}
+            rows={seatRows}
+            rowKey={r => String(r.seat)}
+          />
         )}
-        <p className="text-[11px] text-zinc-500">{t('analytics.featureStudies.lowSampleHint', { min: LOW_SAMPLE_N })}</p>
       </div>
-    );
-  }
-
-  return <pre className="text-xs text-zinc-400">{JSON.stringify(data, null, 2)}</pre>;
+      <p className="text-[10px] leading-relaxed text-zinc-500">
+        {t(`${k}.hitRateNote`)} <LowHint min={min} />
+        {full && <> <ComputedCiHint /></>}
+      </p>
+    </div>
+  );
 }
 
-// ─── 2. Table (L142 consistency rate + high-EV cells) ─────────────────────────
+// ─── L142 持湖宣告後言行一致度 (table) ────────────────────────────────────────
 
 interface ConsistencyRow {
   role: string;
@@ -621,81 +688,76 @@ interface HighEvCell {
   lowSample?: boolean;
 }
 
-function TableVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
-  const { t, i18n } = useTranslation('common');
-  const isEn = i18n.language?.toLowerCase().startsWith('en');
+function ConsistencyVisual({ feature, full }: { feature: FeatureStudyEntry; full: boolean }): JSX.Element {
+  const { t } = useTranslation('common');
+  const isEn = useIsEn();
+  const role = useRoleLabel();
+  const k = 'analytics.r6.tabsa.studyTable';
   const data = feature.data as Record<string, unknown>;
-  const rows = (data.rows as ConsistencyRow[] | undefined) ?? [];
-  const cells = (data.highEvCells as HighEvCell[] | undefined) ?? [];
+  const rows = ((data.rows as ConsistencyRow[] | undefined) ?? []).filter(r => r && typeof r === 'object');
+  const cells = ((data.highEvCells as HighEvCell[] | undefined) ?? []).filter(c => c && typeof c === 'object');
+  const min = LOW_SAMPLE_N;
+
+  const columns: StatColumn<ConsistencyRow>[] = [
+    { key: 'role', label: t('analytics.featureStudies.role'), value: r => (isEn ? r.roleEn : role(r.role)), tone: r => campTone(r.camp) },
+    {
+      key: 'consistencyRate', label: t('analytics.featureStudies.consistency'), title: t(`${k}.consistencyTitle`),
+      format: 'pct', n: 'total', lowSample: min, emphasis: true,
+    },
+  ];
+  if (full) {
+    columns.push({
+      key: 'ci', label: t(`${k}.ciComputed`), align: 'right', value: r => r.consistencyRate,
+      format: (_v, r) => <CiText ci={wilson95(r.consistent, r.total)} />,
+    });
+  }
+  columns.push({
+    key: 'split', label: t('analytics.featureStudies.consistInconsist'), align: 'right',
+    value: r => `${r.consistent} / ${r.inconsistent}`, className: 'text-zinc-500',
+  });
+
+  // 「娜|宣藍|consistent」→ 莫甘娜・宣告藍・言行一致
+  const cellLabel = (c: HighEvCell): string => {
+    if (isEn && c.labelEn) return c.labelEn;
+    const [r, claim, kind] = String(c.label ?? '').split('|');
+    if (!claim || !kind) return c.label;
+    const claimText = claim.includes('紅') ? t('analytics.featureStudies.lake.declaredRed') : t('analytics.featureStudies.lake.declaredBlue');
+    const kindText = kind === 'consistent' ? t(`${k}.consistent`) : t(`${k}.inconsistent`);
+    return `${role(r)}・${claimText}・${kindText}`;
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs text-zinc-300">
-          <thead>
-            <tr className="border-b border-gray-700 text-zinc-500">
-              <th className="text-left py-2 pr-4">{t('analytics.featureStudies.role')}</th>
-              <th className="text-right pr-4">{t('analytics.featureStudies.consistency')}</th>
-              <th className="text-right pr-4">n</th>
-              <th className="text-right">{t('analytics.featureStudies.consistInconsist')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => {
-              const low = isLow(r.lowSample, r.total);
-              return (
-                <tr key={r.role} className="border-b border-zinc-800/60">
-                  <td className="py-1 pr-4">
-                    <span className={r.camp === 'red' ? 'text-red-300' : 'text-blue-300'}>
-                      {isEn ? r.roleEn : r.role}
-                    </span>
-                  </td>
-                  <td className={`text-right pr-4 font-bold ${low ? 'text-zinc-400' : 'text-white'}`}>{r.consistencyRate.toFixed(2)}%</td>
-                  <td className="text-right pr-4 text-zinc-400 whitespace-nowrap">{r.total}{low && <LowSampleBadge />}</td>
-                  <td className="text-right text-zinc-500">{r.consistent}/{r.inconsistent}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <p className="text-[11px] text-zinc-500 mt-1">{t('analytics.featureStudies.lowSampleHint', { min: LOW_SAMPLE_N })}</p>
-      </div>
-
-      {cells.length > 0 && (
-        <div>
-          <div className="text-xs text-zinc-500 mb-2 font-semibold">
-            {t('analytics.featureStudies.highEvCells')}
-          </div>
-          <div className="space-y-1.5">
-            {cells.map(c => {
-              const low = isLow(c.lowSample, c.n);
-              return (
-                <div
-                  key={c.label}
-                  className="flex items-center justify-between gap-2 text-xs bg-zinc-900/40 border border-zinc-800 rounded-lg px-3 py-2"
-                >
-                  <span className="text-zinc-300 truncate">
-                    {isEn && c.labelEn ? c.labelEn : c.label}
-                  </span>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-zinc-500 whitespace-nowrap">n={c.n}{low && <LowSampleBadge />}</span>
-                    <span className={low ? 'text-zinc-400 font-bold' : c.deltaThreeRed >= 0 ? 'text-red-400 font-bold' : 'text-blue-400 font-bold'}>
-                      Δ {c.deltaThreeRed >= 0 ? '+' : ''}{c.deltaThreeRed.toFixed(2)}pp
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+    <div className="space-y-3">
+      <StatTable
+        columns={columns}
+        rows={rows}
+        rowKey={r => r.role}
+        footnote={<>{t(`${k}.consistencyNote`)} <LowHint min={min} />{full && <> <ComputedCiHint /></>}</>}
+      />
+      {full && cells.length > 0 && (
+        <StatTable
+          caption={<span className="text-[11px] font-semibold text-zinc-500">{t('analytics.featureStudies.highEvCells')}</span>}
+          columns={[
+            { key: 'label', label: t(`${k}.combo`), value: cellLabel, className: 'whitespace-normal min-w-[9rem]' },
+            { key: 'threeRedPct', label: t(`${k}.threeRedRate`), format: 'pct', n: 'n', lowSample: min, tone: 'red' },
+            { key: 'ci', label: t(`${k}.ciComputed`), align: 'right', value: c => c.threeRedPct, format: (_v, c) => <CiText ci={wilsonFromRate(c.threeRedPct, c.n)} /> },
+            {
+              key: 'deltaThreeRed', label: t(`${k}.deltaThreeRed`), align: 'right',
+              format: v => signedPp(v), tone: c => (c.deltaThreeRed >= 0 ? 'red' : 'blue'),
+            },
+          ]}
+          rows={cells}
+          rowKey={c => c.label}
+          footnote={<>{t(`${k}.highEvNote`)} <LowHint min={min} /></>}
+        />
       )}
     </div>
   );
 }
 
-// ─── 3. Divergent bar (L136 signed EV with 0 axis) ────────────────────────────
+// ─── L136 改隊後投票翻轉率 (divergent) ────────────────────────────────────────
 
-interface DivergentRow {
+interface VoteFlipRow {
   role: string;
   roleEn: string;
   camp: string;
@@ -705,57 +767,61 @@ interface DivergentRow {
   flipBluePct: number;
 }
 
-function DivergentVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
-  const { i18n } = useTranslation('common');
-  const isEn = i18n.language?.toLowerCase().startsWith('en');
+interface VoteFlipSummary {
+  blueOverall?: number;
+  redOverall?: number;
+  delta?: number;
+}
+
+function VoteFlipVisual({ feature, full }: { feature: FeatureStudyEntry; full: boolean }): JSX.Element {
+  const { t } = useTranslation('common');
+  const isEn = useIsEn();
+  const role = useRoleLabel();
+  const k = 'analytics.r6.tabsa.studyTable';
   const data = feature.data as Record<string, unknown>;
-  const rows = (data.rows as DivergentRow[] | undefined) ?? [];
+  const rows = ((data.rows as VoteFlipRow[] | undefined) ?? []).filter(r => r && typeof r === 'object');
+  const summary = (data.summary && typeof data.summary === 'object' ? data.summary : {}) as VoteFlipSummary;
 
-  const chartData = useMemo(
-    () => rows.map(r => ({
-      label: isEn ? r.roleEn : r.role,
-      value: r.signedEv,
-      camp:  r.camp,
-      n:     r.totalChances,
-    })),
-    [rows, isEn],
+  const columns: StatColumn<VoteFlipRow>[] = [
+    { key: 'role', label: t('analytics.featureStudies.role'), value: r => (isEn ? r.roleEn : role(r.role)), tone: r => campTone(r.camp) },
+  ];
+  if (full) {
+    columns.push(
+      { key: 'flipRedPct', label: t(`${k}.flipRed`), title: t(`${k}.flipColsTitle`), format: v => pctText(v, 2), align: 'right' },
+      { key: 'flipBluePct', label: t(`${k}.flipBlue`), title: t(`${k}.flipColsTitle`), format: v => pctText(v, 2), align: 'right' },
+    );
+  }
+  columns.push(
+    {
+      key: 'signedEv', label: t(`${k}.signedEv`), title: t(`${k}.signedEvTitle`), align: 'right', emphasis: true,
+      format: v => signedPp(v), tone: r => (r.signedEv >= 0 ? 'blue' : 'red'),
+    },
+    { key: 'totalChances', label: t(`${k}.chances`), title: t(`${k}.chancesTitle`), format: 'int', className: 'text-zinc-400' },
   );
 
-  const maxAbs = useMemo(
-    () => Math.max(0.5, ...chartData.map(d => Math.abs(d.value))) * 1.1,
-    [chartData],
-  );
-
+  const hasSummary = num(summary.blueOverall) !== null && num(summary.redOverall) !== null;
   return (
-    <ResponsiveContainer width="100%" height={Math.max(220, chartData.length * 30)}>
-      <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
-        <XAxis
-          type="number"
-          domain={[-maxAbs, maxAbs]}
-          unit="pp"
-          tick={{ fontSize: 11, fill: '#9ca3af' }}
-        />
-        <YAxis type="category" dataKey="label" width={72} tick={{ fontSize: 12, fill: '#d1d5db' }} />
-        <ReferenceLine x={0} stroke="#6b7280" strokeDasharray="2 2" />
-        <Tooltip
-          contentStyle={CHART_TOOLTIP_STYLE}
-          formatter={(v: unknown, _n, p) => {
-            const raw = Number(v);
-            const n = (p.payload as { n: number }).n;
-            return [`${raw >= 0 ? '+' : ''}${raw.toFixed(2)}pp  (n=${n.toLocaleString()})`, 'signed EV'];
-          }}
-        />
-        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-          {chartData.map((entry, i) => (
-            <Cell key={i} fill={entry.value >= 0 ? BLUE_COLOR : RED_COLOR} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="space-y-2">
+      {hasSummary && (
+        <p className="text-xs text-zinc-400">
+          {t(`${k}.flipSummary`, {
+            blue: pctText(summary.blueOverall, 2),
+            red: pctText(summary.redOverall, 2),
+            delta: num(summary.delta) !== null ? (summary.delta as number).toFixed(2) : '—',
+          })}
+        </p>
+      )}
+      <StatTable
+        columns={columns}
+        rows={rows}
+        rowKey={r => r.role}
+        footnote={t(full ? `${k}.flipNoteFull` : `${k}.flipNote`)}
+      />
+    </div>
   );
 }
 
-// ─── 4. Line (L139 forced P5 round shift) ─────────────────────────────────────
+// ─── L139 R3+ 強制 P5 (line) ──────────────────────────────────────────────────
 
 interface ForcedRow {
   round: string;
@@ -766,52 +832,76 @@ interface ForcedRow {
   deltaThreeBlueDead: number;
 }
 
-function LineVisual({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
-  const { t, i18n } = useTranslation('common');
-  const isEn = i18n.language?.toLowerCase().startsWith('en');
-  const data = feature.data as Record<string, unknown>;
-  const rows = (data.rows as ForcedRow[] | undefined) ?? [];
-  const note = isEn ? (data.noteEn as string | undefined) : (data.note as string | undefined);
+interface ForcedComparison {
+  n: number;
+  threeRedPct: number;
+  deltaBaseline: number;
+}
 
-  const chartData = rows.map(r => ({
-    round: r.round,
-    threeRed:  r.deltaThreeRed,
-    blueAlive: r.deltaThreeBlueAlive,
-    blueDead:  r.deltaThreeBlueDead,
-    n:         r.n,
-  }));
+function ForcedP5Visual({ feature, full }: { feature: FeatureStudyEntry; full: boolean }): JSX.Element {
+  const { t } = useTranslation('common');
+  const k = 'analytics.r6.tabsa.studyTable';
+  const data = feature.data as Record<string, unknown>;
+  const rows = ((data.rows as ForcedRow[] | undefined) ?? []).filter(r => r && typeof r === 'object');
+  const baseline = num(data.baselineRedPct);
+  const comparison = (data.comparison && typeof data.comparison === 'object' ? data.comparison : {}) as Record<string, ForcedComparison | undefined>;
+  const withR3 = comparison.withR3Forced;
+  const withoutR3 = comparison.withoutR3Forced;
+  const min = LOW_SAMPLE_N;
+
+  const columns: StatColumn<ForcedRow>[] = [
+    { key: 'round', label: t(`${k}.forcedRound`), title: t(`${k}.forcedRoundTitle`) },
+    { key: 'threeRedPct', label: t(`${k}.threeRedRate`), format: v => pctText(v, 2), align: 'right', n: 'n', lowSample: min, tone: 'red', emphasis: true },
+  ];
+  if (full) {
+    columns.push({ key: 'ci', label: t(`${k}.ciComputed`), align: 'right', value: r => r.threeRedPct, format: (_v, r) => <CiText ci={wilsonFromRate(r.threeRedPct, r.n)} /> });
+  }
+  columns.push({ key: 'deltaThreeRed', label: t(`${k}.deltaThreeRed`), align: 'right', format: v => signedPp(v), tone: r => (r.deltaThreeRed >= 0 ? 'red' : 'blue') });
+  if (full) {
+    columns.push(
+      { key: 'deltaThreeBlueDead', label: t(`${k}.deltaThreeBlueDead`), align: 'right', format: v => signedPp(v), tone: 'amber' },
+      { key: 'deltaThreeBlueAlive', label: t(`${k}.deltaThreeBlueAlive`), align: 'right', format: v => signedPp(v), tone: 'blue' },
+    );
+  }
+
+  interface CompareRow { key: string; label: string; c: ForcedComparison }
+  const compareRows: CompareRow[] = [];
+  if (withR3) compareRows.push({ key: 'with', label: t(`${k}.withR3`), c: withR3 });
+  if (withoutR3) compareRows.push({ key: 'without', label: t(`${k}.withoutR3`), c: withoutR3 });
 
   return (
-    <div className="space-y-3">
-      <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={chartData} margin={{ top: 8, right: 16, left: -16, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis dataKey="round" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-          <YAxis unit="pp" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-          <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="2 2" />
-          <Tooltip
-            contentStyle={CHART_TOOLTIP_STYLE}
-            formatter={(v: unknown) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}pp`}
-          />
-          <Legend
-            wrapperStyle={{ fontSize: 11 }}
-            formatter={(name) => {
-              if (name === 'threeRed')  return isEn ? 'Δ 3-Red'        : 'Δ 三紅';
-              if (name === 'blueAlive') return isEn ? 'Δ 3-Blue Alive' : 'Δ 三藍活';
-              if (name === 'blueDead')  return isEn ? 'Δ 3-Blue Dead'  : 'Δ 三藍死';
-              return String(name);
-            }}
-          />
-          <Line type="monotone" dataKey="threeRed"  stroke={RED_COLOR}  strokeWidth={2} dot />
-          <Line type="monotone" dataKey="blueAlive" stroke={BLUE_COLOR} strokeWidth={2} dot />
-          <Line type="monotone" dataKey="blueDead"  stroke={NEUTRAL_COLOR} strokeWidth={2} dot />
-        </LineChart>
-      </ResponsiveContainer>
-      {note && (
-        <p className="text-[11px] text-zinc-500 italic">
-          {t('analytics.featureStudies.noteLabel')} {note}
+    <div className="space-y-2.5">
+      <StatTable
+        columns={columns}
+        rows={rows}
+        rowKey={r => r.round}
+        footnote={
+          <>
+            {baseline !== null && t(`${k}.forcedBaseline`, { baseline: baseline.toFixed(2) })} <LowHint min={min} />
+            {full && <> <ComputedCiHint /></>}
+          </>
+        }
+      />
+      {compareRows.length > 0 && (full ? (
+        <StatTable
+          caption={<span className="text-[11px] font-semibold text-zinc-500">{t(`${k}.r3Compare`)}</span>}
+          columns={[
+            { key: 'label', label: t(`${k}.group`), value: r => r.label },
+            { key: 'rate', label: t(`${k}.threeRedRate`), value: r => r.c.threeRedPct, format: v => pctText(v, 2), align: 'right', n: r => r.c.n, tone: 'red' },
+            { key: 'ci', label: t(`${k}.ciComputed`), align: 'right', value: r => r.c.threeRedPct, format: (_v, r) => <CiText ci={wilsonFromRate(r.c.threeRedPct, r.c.n)} /> },
+            { key: 'delta', label: t(`${k}.deltaBaseline`), align: 'right', value: r => r.c.deltaBaseline, format: v => signedPp(v) },
+          ]}
+          rows={compareRows}
+          rowKey={r => r.key}
+        />
+      ) : (
+        <p className="text-xs text-zinc-400">
+          {t(`${k}.r3CompareLine`, {
+            withRate: pctText(withR3?.threeRedPct, 2), withN: withR3?.n ?? '—',
+            withoutRate: pctText(withoutR3?.threeRedPct, 2), withoutN: withoutR3?.n ?? '—',
+          })}
         </p>
-      )}
+      ))}
     </div>
   );
 }
