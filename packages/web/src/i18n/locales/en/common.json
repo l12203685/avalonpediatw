@@ -642,6 +642,82 @@
       }
     },
     "r6": {
+      "teams": {
+        "tabsLabel": "Team-pick sub-pages",
+        "tabs": {
+          "captain": "Captains",
+          "firstVote": "Vote 1-1",
+          "progression": "Mission flow",
+          "study": "Study L139"
+        },
+        "loading": "Loading team-pick analysis…",
+        "pending": "Available after the next daily update",
+        "blocks": {
+          "mission": "Missions",
+          "missionSub": "3-Red rate",
+          "missionHint": "Missions: 3-Red ÷ all of this group's games (red failed three missions); blue = 3-Blue ÷ all",
+          "assassination": "Assassination",
+          "assassinationSub": "Merlin killed in 3-Blue games",
+          "assassinationHint": "Assassination: only games that reached 3 blue missions, 3-Blue dead ÷ (3-Blue dead + 3-Blue alive), i.e. how often the assassin hit Merlin; n = 3-Blue games (3-Red games have no assassination)",
+          "final": "Game result",
+          "finalSub": "Red win rate",
+          "finalHint": "Game result: (3-Red + 3-Blue dead) ÷ all of this group's games; blue win rate = 3-Blue alive ÷ all",
+          "note": "All three blocks are from red's side; blue = 100% − red. Missions = 3-Red ÷ all; Assassination = 3-Blue dead ÷ 3-Blue games (3-Red games have no assassination); Game result = (3-Red + 3-Blue dead) ÷ all. The n after each rate is its denominator.",
+          "lowSample": "Faded = fewer than {{min}} games.",
+          "pendingNote": "This cache has no three-outcome counts: Missions uses the legacy field for now, Assassination and Game result arrive after the next daily update."
+        },
+        "captain": {
+          "intro": "Captain = the leader of the team that actually went on each mission (seat from the text record mapped to the role), {{count}} games. Red captains get rarer in later missions, and the same failed mission ends differently depending on whose captain it was.",
+          "perMissionCaption": "Captain side per mission",
+          "mission": "Mission",
+          "missionN": "Mission {{n}}",
+          "redCaptain": "Red captain",
+          "blueCaptain": "Blue captain",
+          "games": "Games",
+          "resultCaption": "Captain side × mission result → game outcome",
+          "group": "Captain · mission",
+          "redShort": "Red cpt.",
+          "blueShort": "Blue cpt.",
+          "pass": "pass",
+          "fail": "fail",
+          "share": "Share",
+          "shareSub": "of that side's captained missions",
+          "shareHint": "Of the missions led by this side's captains, how many passed / failed; n = missions led by this side",
+          "nNote": "The captain table counts missions: a game has several missions and each counts once (n = missions)."
+        },
+        "firstVote": {
+          "intro": "1-1 = the first team vote of mission 1. Whether that team had Merlin / Percival and how many reds it had, and how mission 1 and the game turned out.",
+          "visionCaption": "Who was on the 1-1 team",
+          "redCountCaption": "Reds on the 1-1 team",
+          "team": "1-1 team",
+          "redCount": "Reds",
+          "merlinIn": "Merlin on",
+          "merlinOut": "Merlin off",
+          "percivalIn": "Percival on",
+          "percivalOut": "Percival off",
+          "redCountLabel": "{{count}} red",
+          "m1Pass": "Mission 1",
+          "m1PassSub": "pass rate",
+          "m1PassHint": "How often mission 1 passed (whether or not the 1-1 team went); n = this group's games"
+        },
+        "progression": {
+          "intro": "Each mission's pass rate, what happened after mission 1 passed or failed, and the outcome of every full mission path.",
+          "roundCaption": "Pass rate per mission",
+          "round": "Mission",
+          "roundN": "Mission {{n}}",
+          "pass": "Pass (blue)",
+          "fail": "Fail (red)",
+          "roundHint": "Of the games that reached this mission, how often it passed / failed; n = games that reached it",
+          "branchCaption": "After mission 1 passed / failed",
+          "branchGroup": "Mission 1",
+          "branchPassed": "passed",
+          "branchFailed": "failed",
+          "pathCaption": "Full mission paths",
+          "path": "Path",
+          "pathAria": "Mission path {{path}}",
+          "pathNote": "Path squares: red = mission failed, blue = mission passed; sorted by games (the cache keeps the {{count}} most common)."
+        }
+      },
       "boards": {
         "tabsLabel": "Boards",
         "tab": {
