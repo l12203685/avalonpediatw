@@ -44,6 +44,7 @@
  */
 
 import { parseFeedbackCommand } from '../feedback/commands';
+import { SIM_COMMAND_RE } from '../simulation/commands';
 import { MIRROR_CONTINUATION_MARKER } from '../mirrorSplit';
 import { CHAT_EXPORT_MESSAGE_MAX_CHARS } from './config';
 import { taipeiStamp } from './window';
@@ -153,10 +154,12 @@ const STATS_COMMAND_RE = /^[/／]\s*(戰績|战绩|排行榜|排行|默契|指�
  * conversation. Also every form the /意見 and stats parsers accept with
  * spaces, a full-width space or a newline after the slash ("/ 意見 …"): an /意見
  * text is forwarded to the admins privately and must never reach the sheet.
+ * 模擬瓦 commands (2026-10-14, "/ 派 469") are skipped the same way: answers and
+ * 區間 are practice, not conversation.
  */
 export function isTypedCommand(text: string): boolean {
   const t = text.trim();
-  return /^[/／]\S/u.test(t) || parseFeedbackCommand(t) !== null || STATS_COMMAND_RE.test(t) || /^!avalon\b/i.test(t);
+  return /^[/／]\S/u.test(t) || parseFeedbackCommand(t) !== null || STATS_COMMAND_RE.test(t) || SIM_COMMAND_RE.test(t) || /^!avalon\b/i.test(t);
 }
 
 const RELAY_PLATFORM: Record<Exclude<ParsedRelay['tag'], 'DC'>, ChatPlatform> = {

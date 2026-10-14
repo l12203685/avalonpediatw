@@ -48,6 +48,8 @@ import type { Client } from 'discord.js';
 import { getPracticeReportDiscord, type PracticeReportDiscordStats } from '../practice/PracticeReportDiscord';
 import { createDiscordChatExportPort, shareChatExportReads } from './chatExport/discordPort';
 import { ChatExportBotStatus, ChatExportService, chatExportStatus, initializeChatExport, initializeChatExportReadingCopy } from './chatExport/service';
+import { simulationStatus, startSimulation } from './simulation';
+import type { SimulationStatus } from './simulation/metrics';
 import {
   defaultChatExportLogger,
   readChatExportConfig,
@@ -122,6 +124,10 @@ export async function initializeBots(): Promise<void> {
   // sheet — and the same rows to the reading copy (a small private sheet whose
   // first tab is the chat, so the AI manager can read it); 7 days kept. Free.
   startChatExport();
+
+  // 模擬瓦 (2026-10-14, docs/SIMULATION.md): read the name-free sim_bank.json in
+  // the background; the first /模擬 waits for it if it is still loading.
+  startSimulation();
 }
 
 /** The discord.js client once the gateway is ready, else null (re-read on every call). */
@@ -462,6 +468,12 @@ export interface BotStatus {
    * never ids, URLs or file names. LINE-side counts are in line.stats.
    */
   mediaRelay: { enabled: boolean; stats: RelayMediaStats | null };
+  /**
+   * 模擬瓦 (bots/simulation, docs/SIMULATION.md): on/off, the bank's counts,
+   * open exercises and usage counters — numbers and booleans only, never
+   * exercise ids, chat ids, user ids or anything anyone typed.
+   */
+  simulation: SimulationStatus;
   discord: {
     enabled: boolean;
     ready: boolean;
@@ -506,6 +518,7 @@ export function buildBotStatus(): BotStatus {
     },
     chatExport: chatExportStatus(),
     mediaRelay: { enabled: !!relayMediaStore, stats: relayMediaStore?.stats() ?? null },
+    simulation: simulationStatus(),
     discord: {
       enabled: !!process.env.DISCORD_BOT_TOKEN,
       ready: discordBot?.isClientReady() ?? false,

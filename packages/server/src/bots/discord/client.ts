@@ -9,7 +9,7 @@ import {
   ActivityType,
   Message,
 } from 'discord.js';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES } from './config';
 import {
   handleHelpCommand,
   handleRulesCommand,
@@ -24,6 +24,7 @@ import { FEEDBACK_CONTENT_MAX_CHARS } from '../feedback/config';
 import { getFeedbackService } from '../feedback/service';
 import { handleFeedbackCommand } from '../feedback/discordCommand';
 import { handleDiscordMirrorMessage } from './mirrorInbound';
+import { handleSimCommand } from '../simulation/discordCommand';
 
 /**
  * Slash command definitions registered by `registerCommands()`. Exported so
@@ -96,6 +97,51 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
           .setRequired(true)
           .setMaxLength(FEEDBACK_CONTENT_MAX_CHARS)
       ),
+
+    // 2026-10-14 模擬瓦 (bots/simulation, docs/SIMULATION.md) — same words as the
+    // LINE typed commands; one exercise per user per channel.
+    new SlashCommandBuilder()
+      .setName(COMMANDS.SIM)
+      .setDescription('模擬瓦：真人對局停在你派票的當下，練派票資訊的釋放與解讀 / Team-proposal drill')
+      .addStringOption((o) =>
+        o
+          .setName(SIM_OPTIONS.ROLE)
+          .setDescription('角色（紅、藍 = 隨機紅方／藍方角色）/ Role')
+          .setRequired(false)
+          .addChoices(...SIM_ROLE_CHOICES.map((name) => ({ name, value: name })))
+      )
+      .addIntegerOption((o) =>
+        o.setName(SIM_OPTIONS.SEAT).setDescription('座位 1–10（10 = 0 家）/ Seat').setRequired(false).setMinValue(1).setMaxValue(10)
+      )
+      .addStringOption((o) =>
+        o.setName(SIM_OPTIONS.ID).setDescription('題號，例如 K7Q2M-4（大家做同一題）/ Exercise id').setRequired(false).setMaxLength(12)
+      ),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.SIM_PROPOSE)
+      .setDescription('模擬瓦作答：你的派票，例如 469（0 = 10 家）/ Your team')
+      .addStringOption((o) =>
+        o.setName(SIM_OPTIONS.TEAM).setDescription('座位，例如 469、4 6 9 / Seats').setRequired(true).setMaxLength(30)
+      ),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.SIM_INTERVAL)
+      .setDescription('模擬瓦：寫下你的區間，例如 789=2 460=1 / Your interval reading')
+      .addStringOption((o) =>
+        o.setName(SIM_OPTIONS.CONTENT).setDescription('例如 789=2 460=1、7 8 9 *2、12=1-2 / Groups').setRequired(true).setMaxLength(100)
+      ),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.SIM_NEXT)
+      .setDescription('模擬瓦：照實際對局往下走到你下一次派票 / Next decision'),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.SIM_REVEAL)
+      .setDescription('模擬瓦：公布角色、對答案 / Reveal roles'),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.SIM_END)
+      .setDescription('模擬瓦：結束這一題（不公布）/ End the exercise'),
   ];
 }
 
@@ -226,6 +272,15 @@ export class DiscordBotClient {
 
         case COMMANDS.FEEDBACK:
           await handleFeedbackCommand(interaction);
+          break;
+
+        case COMMANDS.SIM:
+        case COMMANDS.SIM_PROPOSE:
+        case COMMANDS.SIM_INTERVAL:
+        case COMMANDS.SIM_NEXT:
+        case COMMANDS.SIM_REVEAL:
+        case COMMANDS.SIM_END:
+          await handleSimCommand(interaction);
           break;
 
         default: {
