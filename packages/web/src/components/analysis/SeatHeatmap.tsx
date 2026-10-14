@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { Loader, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { fetchAnalysisPlayers, getErrorMessage } from '../../services/api';
-import type { AnalysisPlayerStats } from '../../services/api';
+import { theorySettings, outcomeBlocks } from '../../services/api';
+import { useAnalysisOverview } from './useAnalysisOverview';
+import {
+  PLAYER_SEAT_KEYS, playerSeatGameBlocks, playerSeatGames, playerSeatRate, seatFactionCounts, seatNumber,
+  useAnalysisPlayerRows, useIsWide, type PlayerWithSeatStats, type SeatMode,
+} from './seatRoleBlocks';
+import { SectionTabs, StatTable, formatRate, type SectionTabItem, type StatColumn } from './ui';
 
-const SEATS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
-
-type Mode = 'overall' | 'red' | 'blue';
+/** 30 場以上的玩家才列 (同舊版)；最多 25 位 (快取 players 依場數排序)。 */
+const MIN_PLAYER_GAMES = 30;
+const MAX_ROWS = 25;
 
 function colorForDeviation(deviation: number): string {
   if (deviation >= 8)  return 'bg-green-600/80 text-green-100';
@@ -18,163 +21,150 @@ function colorForDeviation(deviation: number): string {
 }
 
 /**
- * 座位分析 — Edward 2026-04-26 + 2026-04-27
+ * 玩家 × 位置 — Edward 2026-04-26 + 2026-04-27；(2026-10-14 Edward：「用條件機率」「每個數字附 n」「一頁一屏」)
  *
- * The heatmap is intrinsically about per-seat, per-player win rates so the
- * existing 總勝率 / 紅方勝率 / 藍方勝率 toggle stays. Edward 2026-04-27 spec:
- * the tooltip now ALSO surfaces the per-seat three-outcome distribution
- * (三紅 / 三藍死 / 三藍活) when the cache provides ``seatOutcomes`` for
- * the player. Falls back gracefully when the field is missing.
+ * 每格 = 這位玩家坐這個位置時「自己陣營」的任務結果勝率 (三紅＝紅勝、三藍＝藍勝；快取 seatWinRates /
+ * seatRedWinRates / seatBlueWinRates) + n (players[].roleSeatStats 加總)，可切 全部 / 當紅方 / 當藍方。
+ * 顏色 = 與全體在這個位置 (同一陣營) 的任務結果勝率的差；n 不到補值門檻 (theoryMinCellGames，讀快取)
+ * 不上色並變淡。舊版把 n = 0 和 0% 混在一起 (都顯示「-」)，現在有 n 就分得開。
+ *
+ * 刺殺結果與遊戲結果要分陣營的三藍死／三藍活局數，玩家 × 位置的快取沒有 (seatOutcomes 紅藍混在一起)，
+ * 所以表格只放任務結果；滑鼠移到格子上另列「坐這裡的全部對局」的條件比率 (seatOutcomes：
+ * 三紅率 n = 全部、三藍局刺中率 n = 三藍局)，取代舊版的三種結果占全部對局的比例。
+ * 表格在自己的容器裡上下／左右捲，整頁不拉長。
  */
 export default function SeatHeatmap(): JSX.Element {
   const { t } = useTranslation('common');
-  const [players, setPlayers] = useState<AnalysisPlayerStats[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>('overall');
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { players: pl } = await fetchAnalysisPlayers();
-        if (!cancelled) setPlayers(pl.filter(p => p.totalGames >= 30));
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const { players, loading, error } = useAnalysisPlayerRows();
+  const { overview } = useAnalysisOverview();
+  // 表格在自己的容器裡捲：桌機留給頁面外框後約 19rem，手機頁面可到 1.5 屏，給 60vh。
+  const wide = useIsWide();
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
+      <div className="flex items-center justify-center py-12 text-gray-400 gap-3">
         <Loader size={20} className="animate-spin" /> {t('analytics.deep.seat.loading')}
       </div>
     );
   }
 
-  if (error || players.length === 0) {
+  const rows = (players ?? []).filter(p => p.totalGames >= MIN_PLAYER_GAMES).slice(0, MAX_ROWS);
+  if (error || rows.length === 0) {
     return (
-      <div className="flex items-center justify-center py-20 text-red-400 gap-3">
+      <div className="flex items-center justify-center py-12 text-red-400 gap-3">
         <AlertCircle size={20} /> {error || t('analytics.deep.seat.noData')}
       </div>
     );
   }
 
-  const getSeatRate = (p: AnalysisPlayerStats, seat: string): number => {
-    if (mode === 'red')  return p.seatRedWinRates[seat]  || 0;
-    if (mode === 'blue') return p.seatBlueWinRates[seat] || 0;
-    return p.seatWinRates[seat] || 0;
+  const minCell = theorySettings(overview?.theoryConfig).theoryMinCellGames;
+  const factionSeats = seatFactionCounts(overview);
+  /** 全體在這個位置的任務結果勝率 (players[] 的座位鍵)；算不出來時 null = 不上色。 */
+  const reference = (seat: string, mode: SeatMode): number | null => {
+    const label = seatNumber(seat);
+    if (mode === 'all') {
+      const v = overview?.seatPositionWinRates?.find(s => String(s.seat) === label)?.overallWinRate;
+      return typeof v === 'number' ? v : null;
+    }
+    const counts = factionSeats?.find(s => s.seat === label)?.[mode];
+    return counts ? outcomeBlocks(counts, mode).mission.win : null;
   };
 
-  const displayedPlayers = players.slice(0, 25);
-  const seatAverages: Record<string, number> = {};
-  for (const seat of SEATS) {
-    const rates = displayedPlayers.map(p => getSeatRate(p, seat)).filter(r => r > 0);
-    seatAverages[seat] = rates.length > 0 ? rates.reduce((a, b) => a + b, 0) / rates.length : 50;
-  }
+  const modeItems: SectionTabItem<SeatMode>[] = [
+    { id: 'all', label: t('analytics.r6.tabsb.heatmap.modeAll') },
+    { id: 'red', label: t('analytics.r6.tabsb.heatmap.modeRed') },
+    { id: 'blue', label: t('analytics.r6.tabsb.heatmap.modeBlue') },
+  ];
 
-  const guideKey   = mode === 'red' ? 'guide3Red' : mode === 'blue' ? 'guide3Blue' : 'guide3Overall';
-  const footnoteKey = mode === 'red' ? 'footnoteRed' : mode === 'blue' ? 'footnoteBlue' : 'footnoteOverall';
+  const modeGames = (p: PlayerWithSeatStats, mode: SeatMode): number | null => {
+    const v = mode === 'red' ? p.rawRedGames : mode === 'blue' ? p.rawBlueGames : p.totalGames;
+    return typeof v === 'number' ? v : null;
+  };
+
+  const renderTable = (mode: SeatMode): JSX.Element => {
+    const seatColumn = (seat: string): StatColumn<PlayerWithSeatStats> => {
+      const ref = reference(seat, mode);
+      const seatLabel = t('analytics.r6.tabsb.seats.seatLabel', { n: seatNumber(seat) });
+      return {
+        key: `seat-${seat}`,
+        label: seatLabel,
+        align: 'right',
+        value: (p): number | null => {
+          const n = playerSeatGames(p, seat, mode);
+          // 有 n：0 場顯示「—」；沒有 n (舊快取)：比率 0 當作沒打過 (舊版行為)。
+          if (n === 0) return null;
+          const rate = playerSeatRate(p, seat, mode);
+          return n === null && rate === 0 ? null : rate;
+        },
+        n: (p): number | null => {
+          const n = playerSeatGames(p, seat, mode);
+          return n === 0 ? null : n;
+        },
+        lowSample: minCell > 0 ? minCell : undefined,
+        format: (v, p): JSX.Element => {
+          if (typeof v !== 'number') return <span className="text-zinc-600">—</span>;
+          const n = playerSeatGames(p, seat, mode);
+          const thin = n !== null && minCell > 0 && n < minCell;
+          const colour = ref !== null && !thin ? colorForDeviation(v - ref) : 'bg-zinc-800/60 text-zinc-300';
+          const games = playerSeatGameBlocks(p, seat, 'red');
+          const parts = [
+            t('analytics.r6.tabsb.heatmap.cellTitle', {
+              name: p.name, seat: seatLabel, mode: t(`analytics.r6.tabsb.heatmap.mode${mode === 'all' ? 'All' : mode === 'red' ? 'Red' : 'Blue'}`),
+              rate: formatRate(v), n: n ?? '—', ref: formatRate(ref),
+            }),
+          ];
+          if (games && games.mission.n > 0) {
+            parts.push(t('analytics.r6.tabsb.heatmap.cellGames', {
+              threeRed: formatRate(games.mission.win), n: games.mission.n,
+              kill: formatRate(games.assassination.win), nBlue: games.assassination.n,
+            }));
+          }
+          return (
+            <span title={parts.join('\n')} className={`inline-block min-w-[2.6rem] rounded px-1 text-center font-bold ${colour}`}>
+              {v.toFixed(1)}
+            </span>
+          );
+        },
+      };
+    };
+
+    const columns: StatColumn<PlayerWithSeatStats>[] = [
+      { key: 'name', label: t('analytics.deep.seat.playerCol') },
+      {
+        key: 'games',
+        label: t('analytics.r6.tabsb.heatmap.gamesCol'),
+        format: 'int',
+        value: p => modeGames(p, mode),
+        className: 'text-zinc-500',
+      },
+      ...PLAYER_SEAT_KEYS.map(seatColumn),
+    ];
+
+    return (
+      <StatTable
+        columns={columns}
+        rows={rows}
+        rowKey={p => p.name}
+        maxHeight={wide ? 'min(19rem, 52vh)' : '60vh'}
+        footnote={
+          <>
+            {t('analytics.r6.tabsb.heatmap.note', { min: MIN_PLAYER_GAMES, max: MAX_ROWS })}
+            {minCell > 0 && <> {t('analytics.ui.blocks.lowSampleNote', { min: minCell })}</>}
+            {' '}{t('analytics.r6.tabsb.heatmap.noteBlocks')}
+          </>
+        }
+      />
+    );
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        {([
-          { id: 'overall' as Mode, label: t('analytics.deep.seat.modeOverall'), color: 'bg-gray-600' },
-          { id: 'red' as Mode,     label: t('analytics.deep.seat.modeRed'),     color: 'bg-red-700' },
-          { id: 'blue' as Mode,    label: t('analytics.deep.seat.modeBlue'),    color: 'bg-blue-700' },
-        ]).map(m => (
-          <button
-            key={m.id}
-            onClick={() => setMode(m.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              mode === m.id
-                ? `${m.color} text-white`
-                : 'bg-avalon-card/40 text-gray-500 hover:text-white border border-gray-700'
-            }`}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-3 text-[10px] text-gray-500 space-y-1">
-        <p className="font-bold text-gray-400">{t('analytics.deep.seat.guideTitle')}</p>
-        <p>{t('analytics.deep.seat.guide1')}</p>
-        <p>{t('analytics.deep.seat.guide2')}</p>
-        <p>{t(`analytics.deep.seat.${guideKey}`)}</p>
-      </div>
-
-      <div className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4 overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr>
-              <th className="text-left text-gray-500 px-2 py-1 font-semibold sticky left-0 bg-avalon-card/30">
-                {t('analytics.deep.seat.playerCol')}
-              </th>
-              {SEATS.map(s => (
-                <th key={s} className="text-center text-gray-500 px-2 py-1 font-semibold min-w-[44px]">
-                  {t('analytics.deep.seat.seatCol', { n: s === '0' ? '10' : s })}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {players.slice(0, 25).map((p, i) => (
-              <motion.tr
-                key={p.name}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: i * 0.02 }}
-              >
-                <td className="text-white font-semibold px-2 py-1 sticky left-0 bg-avalon-card/30 whitespace-nowrap">
-                  {p.name}
-                </td>
-                {SEATS.map(seat => {
-                  const rate = getSeatRate(p, seat);
-                  const deviation = rate > 0 ? rate - seatAverages[seat] : 0;
-                  const seatOutcome = p.seatOutcomes?.[seat];
-                  return (
-                    <td key={seat} className="px-1 py-1">
-                      <div
-                        className={`group relative text-center rounded px-1 py-0.5 font-bold cursor-default ${
-                          rate > 0 ? colorForDeviation(deviation) : 'bg-gray-800/40 text-gray-700'
-                        }`}
-                      >
-                        {rate > 0 ? `${rate}` : '-'}
-                        {rate > 0 && (
-                          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-[10px] text-gray-200 whitespace-nowrap shadow-lg pointer-events-none space-y-0.5">
-                            <div>
-                              {p.name} · {t('analytics.deep.seat.seatCol', { n: seat === '0' ? '10' : seat })}: {rate}% (avg {seatAverages[seat].toFixed(1)}%, {deviation >= 0 ? '+' : ''}{deviation.toFixed(1)}%)
-                            </div>
-                            {seatOutcome && seatOutcome.threeRedPct + seatOutcome.threeBlueDeadPct + seatOutcome.threeBlueAlivePct > 0 && (
-                              <div className="text-[9px] text-gray-400">
-                                <span className="text-red-300">{t('analytics.deep.outcomes.threeRed')} {seatOutcome.threeRedPct}%</span>
-                                <span className="mx-1 text-gray-600">·</span>
-                                <span className="text-amber-300">{t('analytics.deep.outcomes.threeBlueDead')} {seatOutcome.threeBlueDeadPct}%</span>
-                                <span className="mx-1 text-gray-600">·</span>
-                                <span className="text-blue-300">{t('analytics.deep.outcomes.threeBlueAlive')} {seatOutcome.threeBlueAlivePct}%</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
-              </motion.tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="text-xs text-gray-600 text-center">
-        {t(`analytics.deep.seat.${footnoteKey}`)}
-      </p>
-    </div>
+    <SectionTabs
+      items={modeItems}
+      persistKey="analysis.position.heatmapMode"
+      ariaLabel={t('analytics.r6.tabsb.heatmap.modeLabel')}
+    >
+      {renderTable}
+    </SectionTabs>
   );
 }
+
