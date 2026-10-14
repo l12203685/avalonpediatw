@@ -1,7 +1,7 @@
 import { ChatInputCommandInteraction, CommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from './config';
-import { chemistryReply, leaderboardReply, playerCardReply } from '../stats/statsQueries';
+import { chemistryReply, leaderboardReply, leaderboardScopeText, playerCardReply } from '../stats/statsQueries';
 import { STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stats/statsReplies';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
@@ -32,6 +32,8 @@ export async function handlePlayPlatformCommand(interaction: CommandInteraction)
 
 export async function handleHelpCommand(interaction: CommandInteraction): Promise<void> {
   await interaction.deferReply();
+  // The window /排行 ranks by, from the cache (a schemaVersion-3 cache still ranks by 各人最近 100 場).
+  const scope = await leaderboardScopeText();
 
   const embed = new EmbedBuilder()
     .setColor(DISCORD_CONFIG.colors.neutral)
@@ -52,7 +54,7 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
         name: '📊 戰績查詢 / Stats',
         value:
           `\`${STATS_COMMAND_USAGE.player}\` 個人戰績（名字可打一部分）\n` +
-          `\`${STATS_COMMAND_USAGE.leaderboard}\` 角色理論勝率排行 Top 10（各人最近 100 場）\n` +
+          `\`${STATS_COMMAND_USAGE.leaderboard}\` 角色理論勝率排行 Top 10${scope ? `（${scope}）` : ''}\n` +
           `\`${STATS_COMMAND_USAGE.chemistry}\` 兩人同隊默契\n` +
           `\`${STATS_COMMAND_USAGE.feedback}\` 給管理者的建議或回報問題\n` +
           `每週一 12:00 (+08) 自動貼出本週排行。完整圖表（不用登入）：${STATS_PAGE_URL}`,

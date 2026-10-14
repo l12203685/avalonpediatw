@@ -13,6 +13,8 @@ export * from './playerNameMatch';
 // V2 派生指標 + i18n（Phase 2b）
 export * from './derived/gameMetrics';
 export * from './derived/roleProbability';
+// 三塊結果 (任務結果 / 刺殺結果 / 遊戲結果) — docs/stats/two_stage_outcome.md
+export * from './derived/outcomeBlocks';
 export * from './i18n/winReason.zh';
 export * from './i18n/eloTag.zh';
 

@@ -70,11 +70,13 @@ stage 三紅 vs 三藍, assassination stage settles 三藍, final result red = �
 2 blocks and the leaderboard use the final result; every older field keeps the
 mission-stage rule (三藍死 = blue win) so no existing number changes.
 
-Theory win rates (Edward 2026-10-13, schemaVersion 3): players[].theory holds 角色理論
-(Σ deal probability × the player's final win rate per role) and 位置理論 (Σ 1/10 × final
-win rate per seat) over their last 100 / last 50 games and career (theory_window); the
-leaderboard ranks active players by them over their own last N games, never a short date
-window. The legacy roleTheory / positionTheory fields keep their old values.
+Theory win rates (Edward 2026-10-13, schemaVersion 3; windows reworked 2026-10-14, schemaVersion
+4): players[].theory holds 角色理論 (Σ deal probability × the player's final win rate per role)
+over each role's own last games (roleWindows: 10 per special role, 40 as 忠臣), 位置理論 (Σ 1/10 ×
+final win rate per seat) over the last 100 games and both over the career (整體理論 = the career
+role theory); the leaderboard ranks active players by them, never over a short date window.
+players[].roleOutcomes counts 三紅 / 三藍死 / 三藍活 per role for the conditional outcome blocks
+(任務結果 / 刺殺結果 / 遊戲結果). The legacy roleTheory / positionTheory fields keep their old values.
 
 Safety: the new cache is checked before it replaces the old file. The write is
 refused (exit 4) if it is empty or malformed, has fewer games in total than the
@@ -225,19 +227,25 @@ SEAT_DEAL_TENTHS = {s: 1 for s in SEATS}
 # constant lives here, the TypeScript side only reads the cache. Owner's rule (2026-10-13):
 # the FILTER may be recent (who is active), the DATA may not be few games, so the boards use
 # each player's last N games, never a short date window (newcomers are the one exception).
-# The players' theory windows are not a separate knob: they are always (mainGames, shortGames), see
-# theory_windows(), so players[].theory, the boards and overview.topPlayersByRoleTheory cannot drift
-# apart. Readers (bots, site, tests) take the window sizes from the cache, never assume 100 / 50.
+# schemaVersion 4 (Edward 2026-10-14):「角色理論 50 場太少了，因為每 10 場除了忠臣以外平均也只會
+# 出現 1 場」-- 角色理論 takes each role's own last roleWindowGames games (忠臣 loyalWindowGames),
+# 位置理論 the last mainGames games, 整體理論 the whole career (ranked from overallMinGames career
+# games). The players' last-N window is not a separate knob: it is always mainGames (theory_windows()),
+# so players[].theory, the boards and the overview rankings cannot drift apart. Readers (bots, site,
+# tests) take the window sizes from the cache, never assume 10 / 40 / 100 / 250.
 LEADERBOARD_CONFIG: dict[str, Any] = {
     "theoryMinCellGames": 3,        # a role / seat with fewer games in the window is topped up to
                                     # this many games at the population final win rate (0 = off)
     "activeDays": 90,               # every board but newcomers: played in the last N days (asOf included)
     "topN": 10,
-    "mainGames": 100,               # main: each player's last N games; needs N career games;
-                                    # also players[].theory.last<N> and overview.topPlayersByRoleTheory
-    "shortGames": 50,               # last50: each player's last N games; needs N career games;
-                                    # also players[].theory.last<N>
-    "improvedGames": 50,            # improved: last N games vs the N before them; needs 2N career games
+    "mainGames": 100,               # 位置理論: each player's last N games (players[].theory.last<N>);
+                                    # the position board and overview.topPlayersByPositionTheory need
+                                    # N career games
+    "roleWindowGames": 10,          # 角色理論: each special role's last N games (players[].theory.roleWindows);
+                                    # the main board needs N games in every special role ...
+    "loyalWindowGames": 40,         # ... and N games as 忠臣 (dealt 4 times as often); improved: the
+                                    # windows before those, so 2 x N in every role
+    "overallMinGames": 250,         # 整體理論 (career role theory): the overall board needs N career games
     "assassinAttempts": 20,         # assassin: the last N assassinations as 刺客 (刺客 games that reached 三藍)
     "assassinMinAttempts": 10,
     "newcomerDays": 90,             # newcomers (the exception): first game in the last N days, all their games
@@ -1008,9 +1016,13 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
 #                    using the published (1-decimal) global rates, so anyone can recompute it
 #                    from the cache alone; excessWinRate = finalWinRate - expectedFinalWinRate
 #   firstPlayed / lastPlayed = earliest / latest parsed 日期時間 of the counted games ('' if none)
-#   theory           = {"last100", "last50", "career"} (last<N> for N in theory_windows() = mainGames,
-#                    shortGames): theory_window over the player's last N games / all of them
-#                    (compute_player_stats; appended after the fields above)
+#   roleOutcomes     = {role: {"三紅": n, "三藍死": n, "三藍活": n}} for every role (career counts;
+#                    schemaVersion 4): what the conditional outcome blocks (任務結果 / 刺殺結果 /
+#                    遊戲結果, @avalon/shared outcomeBlocks) are computed from per role
+#   theory           = {"roleWindows", "last100", "career"} (schemaVersion 4; last<N> for N in
+#                    theory_windows() = mainGames): role_window_theory over each role's own last games,
+#                    theory_window over the player's last N games / all of them (compute_player_stats;
+#                    appended after the fields above)
 
 def _rate(count: float, total: float) -> float:
     return rnd1(count / total * 100) if total else 0.0
@@ -1157,6 +1169,8 @@ class _PlayerTally:
             "excessWinRate": excess,
             "firstPlayed": self.first_date,
             "lastPlayed": self.last_date,
+            # schemaVersion 4: per-role 三紅 / 三藍死 / 三藍活 counts (the conditional outcome blocks).
+            "roleOutcomes": {r: {o: self.role_outcomes[(r, o)] for o in OUTCOMES} for r in ALL_ROLES},
         }
 
 
@@ -1218,8 +1232,15 @@ def compute_seat_final_win_rates(games: list[GameRow]) -> dict[str, float]:
 #   seatFinalWinRates (the published 1-decimal values); a cell with no game is the population
 #   rate. sparseRoles / sparseSeats say how many cells were topped up.
 #   The sums are exact (fractions) and rounded once, half to even like rnd1.
-#   Windows: the player's last N games for N in theory_windows() = (mainGames, shortGames) (all of
-#   them when they have fewer; `games` says how many) and career. Games are ordered by player_timelines.
+#   Windows (schemaVersion 4, Edward 2026-10-14), games ordered by player_timelines:
+#     roleWindows  角色理論: in each role r its own last K_r games (role_window_theory; K_r =
+#                  roleWindowGames for the six special roles, loyalWindowGames for 忠臣 -- a special
+#                  role comes up about once in 10 games, so a last-N-games window holds too few of it);
+#                  all of them when the player has fewer, then the top-up above. fullWindows = every
+#                  role has K_r games: what any role-theory ranking requires.
+#     last<N>      位置理論 (and the window's final win rate): the last N = mainGames games
+#                  (theory_window; all of them when the player has fewer; `games` says how many).
+#     career       整體理論 = the role theory of the whole career (and its position theory).
 
 @dataclass(frozen=True)
 class PlayerSeat:
@@ -1322,35 +1343,85 @@ def theory_key(window: int) -> str:
 
 
 def theory_windows(cfg: Mapping[str, Any] | None = None) -> list[int]:
-    """The players' last-N theory windows: [mainGames, shortGames] (one entry when they are equal).
-    Derived, so the windows always match the main / last50 boards; written to leaderboard.config
-    and overview.theoryConfig as `theoryWindows` for the readers."""
+    """The players' last-N theory windows: [mainGames] (位置理論; schemaVersion 3 also had
+    shortGames = 50, dropped 2026-10-14 as too few games). Derived, so the window always matches the
+    position board; written to leaderboard.config and overview.theoryConfig as `theoryWindows`."""
     cfg = LEADERBOARD_CONFIG if cfg is None else cfg
-    out: list[int] = []
-    for n in (int(cfg["mainGames"]), int(cfg["shortGames"])):
-        if n > 0 and n not in out:
-            out.append(n)
-    return out
+    n = int(cfg["mainGames"])
+    return [n] if n > 0 else []
+
+
+def role_window_games(cfg: Mapping[str, Any] | None = None) -> dict[str, int]:
+    """K_r per role, ALL_ROLES order: loyalWindowGames for 忠臣, roleWindowGames for the others."""
+    cfg = LEADERBOARD_CONFIG if cfg is None else cfg
+    return {r: int(cfg["loyalWindowGames"] if r == "忠臣" else cfg["roleWindowGames"]) for r in ALL_ROLES}
 
 
 def theory_config(cfg: Mapping[str, Any] | None = None) -> dict:
     """overview.theoryConfig: what the site needs to word the theory rates (top-up threshold and
-    window sizes) without hard-coding them; the bots read the same values from leaderboard.config."""
+    window sizes) without hard-coding them; the bots read the same values from leaderboard.config.
+    NB roleWindowGames is the per-role map here ({role: K_r}); leaderboard.config, a copy of
+    LEADERBOARD_CONFIG, has the two knobs roleWindowGames / loyalWindowGames instead."""
     cfg = LEADERBOARD_CONFIG if cfg is None else cfg
     return {
         "theoryMinCellGames": int(cfg["theoryMinCellGames"]),
         "theoryWindows": theory_windows(cfg),
         "mainGames": int(cfg["mainGames"]),
         "activeDays": int(cfg["activeDays"]),
+        "roleWindowGames": role_window_games(cfg),
+        "positionGames": int(cfg["mainGames"]),
+        "overallMinGames": int(cfg["overallMinGames"]),
+    }
+
+
+def role_window_theory(
+    seats: Sequence[PlayerSeat], role_rates: Mapping[str, float], min_cell: int | None = None, previous: bool = False,
+) -> dict:
+    """players[].theory.roleWindows: 角色理論 over each role's own last K_r games (role_window_games).
+
+    `previous`: the K_r games before those in each role instead (the improved board's baseline).
+    Per role, `games` / `wins` are the games used and their final wins, `window` is K_r and `rate`
+    the cell's final win % that goes into the sum (topped up like theory_window when games <
+    theoryMinCellGames; the population rate when 0), rounded to one decimal. `games` = Σ games used,
+    `fullWindows` = every role has K_r of them, `from` / `to` = first / last dated game used.
+    """
+    if min_cell is None:
+        min_cell = LEADERBOARD_CONFIG["theoryMinCellGames"]
+    windows = role_window_games()
+    by_role: dict[str, list[PlayerSeat]] = {r: [] for r in ALL_ROLES}
+    for s in seats:
+        by_role[s.role].append(s)
+    m = max(min_cell, 1)
+    total = Fraction(0)
+    roles: dict[str, dict] = {}
+    used: list[PlayerSeat] = []
+    for r in ALL_ROLES:
+        k = windows[r]
+        in_role = by_role[r]
+        picked = (in_role[-2 * k:-k] if len(in_role) > k else []) if previous else in_role[-k:]
+        wins = sum(1 for s in picked if is_final_win(s.role, s.outcome))
+        cell = _cell_rate(wins, len(picked), float(role_rates.get(r, 0.0)), min_cell)
+        total += Fraction(ROLE_DEAL_TENTHS[r], 10) * cell
+        roles[r] = {"games": len(picked), "wins": wins, "window": k, "rate": _round_exact(cell)}
+        used += picked
+    dated = [s.date for s in used if s.date]
+    return {
+        "roleTheory": _round_exact(total),
+        "fullWindows": all(roles[r]["games"] >= windows[r] for r in ALL_ROLES),
+        "games": len(used),
+        "sparseRoles": sum(1 for r in ALL_ROLES if roles[r]["games"] < m),
+        "from": min(dated) if dated else "",
+        "to": max(dated) if dated else "",
+        "roles": roles,
     }
 
 
 def player_theory(seats: Sequence[PlayerSeat], role_rates: Mapping[str, float], seat_rates: Mapping[str, float]) -> dict:
-    """players[].theory: {"last100": ..., "last50": ..., "career": ...} (theory_windows(), then career)."""
-    out = {
-        theory_key(n): theory_window(seats[-n:], role_rates, seat_rates, window=n)
-        for n in theory_windows()
-    }
+    """players[].theory: {"roleWindows": ..., "last100": ..., "career": ...} (role_window_theory, the
+    theory_windows(), then career)."""
+    out: dict[str, dict] = {"roleWindows": role_window_theory(seats, role_rates)}
+    for n in theory_windows():
+        out[theory_key(n)] = theory_window(seats[-n:], role_rates, seat_rates, window=n)
     out["career"] = theory_window(seats, role_rates, seat_rates, window=0)
     return out
 
@@ -1793,16 +1864,19 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
             {"name": p["name"], "roleTheory": p["roleTheory"], "winRate": p["winRate"], "games": p["totalGames"]}
             for p in top_by_theory
         ],
+        # schemaVersion 4 adds each player's 三紅 / 三藍死 / 三藍活 counts (all their games, either side)
+        # and their red / blue games (the overview's 「三種結果 + 場次」 pies).
         "topPlayersByGames": [
-            {"name": p["name"], "games": p["totalGames"], "winRate": p["winRate"]}
+            {"name": p["name"], "games": p["totalGames"], "winRate": p["winRate"], **player_game_outcomes(p)}
             for p in top_by_games
         ],
         # Seat position win rates (replaces useless per-role win rate comparison)
         "seatPositionWinRates": compute_seat_position_win_rates(games),
         # Two-stage outcome (docs/stats/two_stage_outcome.md). The keys above keep the
         # mission-stage rule (三藍死 = blue win); these use the final result. 3 = the theory
-        # win rates (players[].theory, seatFinalWinRates, topPlayersByRoleTheory, leaderboard).
-        "schemaVersion": 3,
+        # win rates (players[].theory, seatFinalWinRates, topPlayersByRoleTheory, leaderboard);
+        # 4 = per-role theory windows, roleOutcomes, the position / overall rankings (2026-10-14).
+        "schemaVersion": 4,
         "missionStage": {
             "games": settled, "threeRed": three_red, "threeBlue": three_blue,
             "redPct": _rate(three_red, settled), "bluePct": _rate(three_blue, settled),
@@ -1825,29 +1899,95 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
             for p in ranked_by_excess[:10]
         ],
         # schemaVersion 3 (theory win rates, Edward 2026-10-13): the population final win rate per
-        # seat (the sparse-cell top-up of positionTheory) and the all-time role-theory ranking.
+        # seat (the sparse-cell top-up of positionTheory) and the all-time theory rankings (4: role
+        # theory over the per-role windows, plus the position and overall rankings).
         "seatFinalWinRates": compute_seat_final_win_rates(games),
         "topPlayersByRoleTheory": top_players_by_role_theory(players),
         # The settings the site words the theory rates with (top-up threshold, windows).
         "theoryConfig": theory_config(),
+        "topPlayersByPositionTheory": top_players_by_position_theory(players),
+        "topPlayersByOverallTheory": top_players_by_overall_theory(players),
     }
 
 
+def player_game_outcomes(p: Mapping[str, Any]) -> dict:
+    """{"outcomes": {"三紅", "三藍死", "三藍活"}, "redGames", "blueGames"} of a players row, from its raw
+    counts (both sides: 三紅 = red 三紅 + blue 三紅, ...); 0 for a row without them."""
+    def raw(key: str) -> int:
+        value = p.get(key)
+        return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+    return {
+        "outcomes": {
+            OUTCOME_THREE_RED: raw("rawRedThreeRed") + raw("rawBlueThreeRed"),
+            OUTCOME_BLUE_DEAD: raw("rawRedMerlinDead") + raw("rawBlueMerlinDead"),
+            OUTCOME_BLUE_ALIVE: raw("rawRedMerlinAlive") + raw("rawBlueMerlinAlive"),
+        },
+        "redGames": raw("rawRedGames"),
+        "blueGames": raw("rawBlueGames"),
+    }
+
+
+def _theory_block(p: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:
+    block = (p.get("theory") or {}).get(key) if isinstance(p.get("theory"), Mapping) else None
+    return block if isinstance(block, Mapping) else None
+
+
+def _ranked_overview(rows: list[tuple[float, dict]], top_n: int) -> list[dict]:
+    """Rows (sort value, row) ordered by value (high first), then career games, then name."""
+    rows.sort(key=lambda vr: (-vr[0], -vr[1]["careerGames"], vr[1]["name"]))
+    return [row for _, row in rows[:top_n]]
+
+
 def top_players_by_role_theory(players: list[dict]) -> list[dict]:
-    """overview.topPlayersByRoleTheory: every player with at least mainGames career games, active
-    or not, ranked by the roleTheory of their last mainGames games (then career games, then name)."""
+    """overview.topPlayersByRoleTheory: every player with full role windows (fullWindows: K_r games in
+    every role), active or not, ranked by the role theory over those windows (then career games, then
+    name). positionTheory / finalWinRate are their last mainGames games', overallTheory the career
+    role theory; games = games in the role windows."""
+    key = theory_key(LEADERBOARD_CONFIG["mainGames"])
+    rows = []
+    for p in players:
+        rw, last, career = _theory_block(p, "roleWindows"), _theory_block(p, key), _theory_block(p, "career")
+        if not (rw and last and career and rw.get("fullWindows")):
+            continue
+        rows.append((rw["roleTheory"], {
+            "name": p["name"], "roleTheory": rw["roleTheory"], "positionTheory": last["positionTheory"],
+            "overallTheory": career["roleTheory"], "finalWinRate": last["finalWinRate"], "games": rw["games"],
+            "careerGames": int(p["totalGames"]),
+        }))
+    return _ranked_overview(rows, LEADERBOARD_CONFIG["topN"])
+
+
+def top_players_by_position_theory(players: list[dict]) -> list[dict]:
+    """overview.topPlayersByPositionTheory: every player with at least mainGames career games, active or
+    not, ranked by the position theory of their last mainGames games."""
     n = LEADERBOARD_CONFIG["mainGames"]
-    key = theory_key(n)
-    eligible = [
-        p for p in players
-        if p["totalGames"] >= n and isinstance((p.get("theory") or {}).get(key), Mapping)
-    ]
-    eligible.sort(key=lambda p: (-p["theory"][key]["roleTheory"], -p["totalGames"], p["name"]))
-    return [
-        {"name": p["name"], "roleTheory": w["roleTheory"], "positionTheory": w["positionTheory"],
-         "finalWinRate": w["finalWinRate"], "games": w["games"], "careerGames": int(p["totalGames"])}
-        for p, w in ((p, p["theory"][key]) for p in eligible[:LEADERBOARD_CONFIG["topN"]])
-    ]
+    rows = []
+    for p in players:
+        last = _theory_block(p, theory_key(n))
+        if last is None or p["totalGames"] < n:
+            continue
+        rows.append((last["positionTheory"], {
+            "name": p["name"], "positionTheory": last["positionTheory"], "finalWinRate": last["finalWinRate"],
+            "games": last["games"], "careerGames": int(p["totalGames"]),
+        }))
+    return _ranked_overview(rows, LEADERBOARD_CONFIG["topN"])
+
+
+def top_players_by_overall_theory(players: list[dict]) -> list[dict]:
+    """overview.topPlayersByOverallTheory: every player with at least overallMinGames career games, active
+    or not, ranked by 整體理論 = the role theory of their whole career; positionTheory / finalWinRate are
+    the career ones too."""
+    rows = []
+    for p in players:
+        career = _theory_block(p, "career")
+        if career is None or p["totalGames"] < LEADERBOARD_CONFIG["overallMinGames"]:
+            continue
+        rows.append((career["roleTheory"], {
+            "name": p["name"], "overallTheory": career["roleTheory"], "positionTheory": career["positionTheory"],
+            "finalWinRate": career["finalWinRate"], "games": career["games"], "careerGames": int(p["totalGames"]),
+        }))
+    return _ranked_overview(rows, LEADERBOARD_CONFIG["topN"])
 
 
 def compute_missions(games: list[GameRow]) -> dict:
@@ -2619,16 +2759,22 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
 # Only games whose 結果 is in OUTCOMES count, like the players rows; a player is the normalized
 # 玩1..玩0 string (case kept, as everywhere else).
 #
-#   main        roleTheory of the last mainGames games; active, >= mainGames career games
-#   last50      the same over the last shortGames games; active, >= shortGames career games
-#   improved    roleTheory of the last improvedGames games minus that of the improvedGames games
-#               before them; active, >= 2 x improvedGames career games; improvers only
+# schemaVersion 4 (Edward 2026-10-14): 角色理論 over each role's own last K_r games (K_r =
+# roleWindowGames, loyalWindowGames for 忠臣; role_window_theory), 位置理論 over the last mainGames
+# games, 整體理論 = the career role theory. The last-50-games board is gone (too few games).
+#
+#   main        角色理論 over the per-role windows; active, fullWindows (K_r games in every role)
+#   position    位置理論 of the last mainGames games; active, >= mainGames career games
+#   overall     整體理論 (career role theory); active, >= overallMinGames career games
+#   improved    角色理論 over the per-role windows minus that over the K_r games before them in each
+#               role; active, >= 2 x K_r games in every role; improvers only
 #   assassin    hit rate over the last assassinAttempts assassinations as 刺客 (刺客 games that
 #               reached 三藍); active, >= assassinMinAttempts of them
-#   newcomers   first game within newcomerDays, every game dated, >= newcomerMinGames: all games
+#   newcomers   first game within newcomerDays, every game dated, >= newcomerMinGames: 角色理論 over
+#               the per-role windows of their games (few games: windows not full, cells topped up)
 #   roleTitles  per role, the active player (>= roleTitleMinGames career games in it) with the best
 #               final win rate over their last roleTitleGames games in it
-# value = the board's sort key (roleTheory, the difference, the hit rate, the final win rate);
+# value = the board's sort key (the theory rate, the difference, the hit rate, the final win rate);
 # rows are ordered by value, then games, then career games (more first), then name.
 
 def window_start(end: dt.date, days: int) -> dt.date | None:
@@ -2649,20 +2795,29 @@ def _board(board_id: str, metric: str, title: str, title_en: str, period: str, p
     }
 
 
-def _theory_row(name: str, w: Mapping[str, Any], career_games: int) -> dict:
+def _role_row(name: str, rw: Mapping[str, Any], last: Mapping[str, Any], career: Mapping[str, Any],
+              career_games: int) -> dict:
+    """A main / newcomers row: value = 角色理論 over the per-role windows (rw); positionTheory and
+    finalWinRate of `last` (the last mainGames games, or all games for a newcomer); overallTheory =
+    the career role theory; games = games in the role windows."""
     return {
-        "name": name, "value": w["roleTheory"], "roleTheory": w["roleTheory"], "positionTheory": w["positionTheory"],
-        "finalWinRate": w["finalWinRate"], "games": w["games"], "careerGames": career_games,
-        "from": w["from"], "to": w["to"], "sparseRoles": w["sparseRoles"], "sparseSeats": w["sparseSeats"],
+        "name": name, "value": rw["roleTheory"], "roleTheory": rw["roleTheory"],
+        "positionTheory": last["positionTheory"], "overallTheory": career["roleTheory"],
+        "finalWinRate": last["finalWinRate"], "games": rw["games"], "careerGames": career_games,
+        "from": rw["from"], "to": rw["to"], "sparseRoles": rw["sparseRoles"], "sparseSeats": last["sparseSeats"],
     }
 
 
-def theory_legend(min_cell: int) -> tuple[str, str]:
-    """(zh, en) explanation of roleTheory / positionTheory appended to the boards' notes."""
-    zh = ("角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率；"
-          "位置理論 = Σ 1/10 × 本人該位置的最終勝率")
-    en = ("Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the "
-          "player's final win rate as that role; position theory = Σ 1/10 × their final win rate in that seat")
+def theory_legend(min_cell: int, cfg: Mapping[str, Any] | None = None) -> tuple[str, str]:
+    """(zh, en) explanation of the three theory rates appended to the boards' notes."""
+    cfg = LEADERBOARD_CONFIG if cfg is None else cfg
+    k, kl = cfg["roleWindowGames"], cfg["loyalWindowGames"]
+    zh = (f"角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的"
+          f"最近 {k} 場、忠臣 {kl} 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論")
+    en = (f"Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the "
+          f"player's final win rate as that role (over their last {k} games in each role, {kl} as Loyal Servant); "
+          f"position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their "
+          f"whole career")
     if min_cell > 0:
         zh += f"；不到 {min_cell} 場的角色或位置，用全體的最終勝率補到 {min_cell} 場"
         en += f"; a role or seat with fewer than {min_cell} games is topped up to {min_cell} at the population's final win rate"
@@ -2690,43 +2845,91 @@ def compute_leaderboard(
     def window(seats: Sequence[PlayerSeat], n: int) -> dict:
         return theory_window(seats, role_rates, seat_rates, cell, window=n)
 
+    def role_windows(seats: Sequence[PlayerSeat], previous: bool = False) -> dict:
+        return role_window_theory(seats, role_rates, cell, previous=previous)
+
     boards: list[dict] = []
+    n, k, kl, overall_min = cfg["mainGames"], cfg["roleWindowGames"], cfg["loyalWindowGames"], cfg["overallMinGames"]
+    windows = role_window_games(cfg)
+    role_games = sum(windows.values())  # games in full role windows (6 x 10 + 40 = 100)
+    role_period, role_period_en = f"各角色近 {k} 場、忠臣近 {kl} 場", f"Each role's last {k} games (Loyal Servant: last {kl})"
 
-    # main / last50: roleTheory of each active player's last N games.
-    for board_id, n, title, title_en in (
-        ("main", cfg["mainGames"], "角色理論勝率排行", "Role-theory win rate"),
-        ("last50", cfg["shortGames"], f"近 {cfg['shortGames']} 場角色理論勝率", f"Role-theory win rate, last {cfg['shortGames']} games"),
-    ):
-        rows = [_theory_row(name, window(seats[-n:], n), len(seats)) for name, seats in active.items() if len(seats) >= n]
-        boards.append(_board(
-            board_id, "roleTheory", title, title_en, f"各人最近 {n} 場", f"Each player's last {n} games", n,
-            f"近 {active_days} 天內有出賽、生涯至少 {n} 場；{legend}",
-            f"Played in the last {active_days} days, at least {n} career games; {legend_en}",
-            _ranked(rows, top_n), windowGames=n,
-        ))
+    # main: 角色理論 over the per-role windows, full windows only.
+    main_rows = []
+    for name, seats in active.items():
+        rw = role_windows(seats)
+        if rw["fullWindows"]:
+            main_rows.append(_role_row(name, rw, window(seats[-n:], n), window(seats, 0), len(seats)))
+    boards.append(_board(
+        "main", "roleTheory", "角色理論勝率排行", "Role-theory win rate", role_period, role_period_en, role_games,
+        f"近 {active_days} 天內有出賽、六個特殊角色各至少 {k} 場、忠臣至少 {kl} 場；位置理論與最終勝率看最近 {n} 場；{legend}",
+        f"Played in the last {active_days} days, at least {k} games in each special role and {kl} as Loyal Servant; "
+        f"position theory and final win rate over the last {n} games; {legend_en}",
+        _ranked(main_rows, top_n), roleWindowGames=windows,
+    ))
 
-    # improved: the last N games vs the N before them (both full windows).
-    n = cfg["improvedGames"]
+    # position: 位置理論 of each active player's last mainGames games.
+    position_rows = []
+    for name, seats in active.items():
+        if len(seats) < n:
+            continue
+        last = window(seats[-n:], n)
+        position_rows.append({
+            "name": name, "value": last["positionTheory"], "positionTheory": last["positionTheory"],
+            "overallTheory": window(seats, 0)["roleTheory"], "finalWinRate": last["finalWinRate"], "games": last["games"],
+            "careerGames": len(seats), "from": last["from"], "to": last["to"], "sparseSeats": last["sparseSeats"],
+        })
+    boards.append(_board(
+        "position", "positionTheory", "位置理論勝率排行", "Position-theory win rate",
+        f"各人最近 {n} 場", f"Each player's last {n} games", n,
+        f"近 {active_days} 天內有出賽、生涯至少 {n} 場；{legend}",
+        f"Played in the last {active_days} days, at least {n} career games; {legend_en}",
+        _ranked(position_rows, top_n), windowGames=n,
+    ))
+
+    # overall: 整體理論 = the career role theory.
+    overall_rows = []
+    for name, seats in active.items():
+        if len(seats) < overall_min:
+            continue
+        career = window(seats, 0)
+        overall_rows.append({
+            "name": name, "value": career["roleTheory"], "overallTheory": career["roleTheory"],
+            "positionTheory": career["positionTheory"], "finalWinRate": career["finalWinRate"], "games": career["games"],
+            "careerGames": len(seats), "from": career["from"], "to": career["to"],
+            "sparseRoles": career["sparseRoles"], "sparseSeats": career["sparseSeats"],
+        })
+    boards.append(_board(
+        "overall", "overallTheory", "整體理論勝率排行", "Overall theory win rate",
+        "各人生涯全部場次", "Each player's whole career", overall_min,
+        f"近 {active_days} 天內有出賽、生涯至少 {overall_min} 場；整體理論、位置理論、最終勝率都看生涯全部場次；{legend}",
+        f"Played in the last {active_days} days, at least {overall_min} career games; overall theory, position "
+        f"theory and final win rate over the whole career; {legend_en}",
+        _ranked(overall_rows, top_n),
+    ))
+
+    # improved: 角色理論 over the per-role windows vs the windows before them (both full).
     improved_rows = []
     for name, seats in active.items():
-        if len(seats) < 2 * n:
+        now, before = role_windows(seats), role_windows(seats, previous=True)
+        if not (now["fullWindows"] and before["fullWindows"]):
             continue
-        now, before = window(seats[-n:], n), window(seats[-2 * n:-n], n)
         delta = rnd1(now["roleTheory"] - before["roleTheory"])
         if delta <= 0:
             continue
         improved_rows.append({
             "name": name, "value": delta, "recentRoleTheory": now["roleTheory"], "priorRoleTheory": before["roleTheory"],
-            "recentFinalWinRate": now["finalWinRate"], "priorFinalWinRate": before["finalWinRate"],
             "recentGames": now["games"], "priorGames": before["games"], "games": now["games"], "careerGames": len(seats),
         })
     boards.append(_board(
         "improved", "roleTheoryDelta", "進步榜", "Most improved",
-        f"各人最近 {n} 場 vs 再之前 {n} 場", f"Each player's last {n} games vs the {n} before", 2 * n,
-        f"近 {active_days} 天內有出賽、生涯至少 {2 * n} 場；最近 {n} 場的角色理論勝率 − 再之前 {n} 場的，只列有進步的人；{legend}",
-        f"Played in the last {active_days} days, at least {2 * n} career games; role theory of the last {n} games minus "
-        f"that of the {n} before, improvers only; {legend_en}",
-        _ranked(improved_rows, top_n), windowGames=n,
+        f"{role_period} vs 再之前同樣場數", f"{role_period_en} vs the same number of games before them", 2 * role_games,
+        f"近 {active_days} 天內有出賽、六個特殊角色各至少 {2 * k} 場、忠臣至少 {2 * kl} 場；各角色最近 {k} 場（忠臣 {kl} 場）"
+        f"的角色理論勝率 − 每個角色再之前同樣場數的，只列有進步的人；{legend}",
+        f"Played in the last {active_days} days, at least {2 * k} games in each special role and {2 * kl} as Loyal "
+        f"Servant; role theory over each role's last {k} games ({kl} as Loyal Servant) minus that over the games "
+        f"before them in each role, improvers only; {legend_en}",
+        _ranked(improved_rows, top_n), roleWindowGames=windows,
     ))
 
     # assassin: hit rate over the last N assassinations as 刺客.
@@ -2762,14 +2965,18 @@ def compute_leaderboard(
         first = min(s.date for s in seats)
         if new_start is not None and first < new_start.isoformat():
             continue
-        newcomer_rows.append({**_theory_row(name, window(seats, 0), len(seats)), "firstPlayed": first})
+        career = window(seats, 0)
+        newcomer_rows.append({**_role_row(name, role_windows(seats), career, career, len(seats)), "firstPlayed": first})
     period_start = new_start.isoformat() if new_start else ""
     boards.append(_board(
         "newcomers", "roleTheory", "新人榜", "Newcomers",
         f"{period_start} ～ {as_of.isoformat()} 首次出賽", f"First game {period_start} to {as_of.isoformat()}", m,
-        f"首次出賽在近 {d} 天內、至少 {m} 場；例外：新人場數少，用他的全部場次，場數越少越接近全體平均；{legend}",
-        f"First game within the last {d} days, at least {m} games; the exception: a newcomer has few games, so all "
-        f"of them count, and the fewer there are the closer the numbers stay to the population; {legend_en}",
+        f"首次出賽在近 {d} 天內、至少 {m} 場；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 {k} 場、"
+        f"忠臣 {kl} 場），位置理論與最終勝率用他的全部場次，場數越少越接近全體平均；{legend}",
+        f"First game within the last {d} days, at least {m} games; the exception: a newcomer has few games, so role "
+        f"theory takes all of their games in each role (at most the last {k}, {kl} as Loyal Servant) and position theory "
+        f"and final win rate all of their games; the fewer there are the closer the numbers stay to the population; "
+        f"{legend_en}",
         _ranked(newcomer_rows, top_n), windowDays=d, allGames=True,
     ))
 
@@ -2817,6 +3024,11 @@ def leaderboard_summary(leaderboard: Mapping[str, Any] | None) -> str:
     dates = leaderboard.get("dates") or {}
 
     def span(b: Mapping[str, Any]) -> str:
+        role_windows = b.get("roleWindowGames")
+        if isinstance(role_windows, Mapping) and role_windows:
+            loyal = role_windows.get("忠臣")
+            other = next((v for r, v in role_windows.items() if r != "忠臣"), None)
+            return f"（各角色近 {other} 場、忠臣 {loyal} 場）"
         if b.get("windowGames"):
             return f"（最近 {b.get('windowGames')} 場）"
         if b.get("windowDays"):

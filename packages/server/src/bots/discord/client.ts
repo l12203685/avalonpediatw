@@ -67,9 +67,12 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
           .setMaxLength(50)
       ),
 
+    // Registered once per deploy, so it cannot follow the cache: it names the schemaVersion-4 window
+    // (Edward 2026-10-14). The /排行 reply and /help read the window from the cache (a schemaVersion-3
+    // cache, live until the first daily refresh after the deploy, still ranks by 各人最近 100 場).
     new SlashCommandBuilder()
       .setName(COMMANDS.LEADERBOARD)
-      .setDescription('角色理論勝率排行（各人最近 100 場）/ Leaderboard'),
+      .setDescription('角色理論勝率排行（各角色近 10 場、忠臣近 40 場）/ Leaderboard'),
 
     new SlashCommandBuilder()
       .setName(COMMANDS.CHEMISTRY)
