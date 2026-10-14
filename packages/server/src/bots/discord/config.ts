@@ -62,6 +62,14 @@ export const COMMANDS = {
   // 2026-10-12 community feedback (bots/feedback): /意見 內容:… — same CJK
   // naming so LINE's typed "/意見 文字" and this slash command read alike.
   FEEDBACK: '意見',
+  // 2026-10-14 模擬瓦（bots/simulation, docs/SIMULATION.md）— same CJK naming as
+  // the LINE typed commands. /解答 is LINE-only (Discord has no aliases).
+  SIM: '模擬',
+  SIM_PROPOSE: '派',
+  SIM_INTERVAL: '區間',
+  SIM_NEXT: '下一步',
+  SIM_REVEAL: '公布',
+  SIM_END: '結束',
   // 2026-10-13: the admin-only /社群週報 (paid weekly digest) was removed;
   // registerCommands() overwrites the whole command list, so it disappears
   // from Discord on the next deploy (see client.ts).
@@ -78,6 +86,18 @@ export const STATS_OPTIONS = {
 export const FEEDBACK_OPTIONS = {
   CONTENT: '內容',
 } as const;
+
+/** Option names of the 模擬瓦 slash commands (bots/simulation). */
+export const SIM_OPTIONS = {
+  ROLE: '角色',
+  SEAT: '座位',
+  ID: '題號',
+  TEAM: '隊伍',
+  CONTENT: '內容',
+} as const;
+
+/** /模擬 角色 choices (value = the LINE alias the parser reads). */
+export const SIM_ROLE_CHOICES: readonly string[] = ['梅林', '派西維爾', '忠臣', '刺客', '莫甘娜', '莫德雷德', '奧伯倫', '紅', '藍'];
 
 /**
  * Game-flow commands that used to drive the self-hosted game. Since the

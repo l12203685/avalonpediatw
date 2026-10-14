@@ -22,6 +22,7 @@ import {
 import { formatFeedbackForward, parseFeedbackCommand } from './commands';
 import { OPINION_TOPIC_ID, TopicCounter, type TopicWeekSnapshot } from './topicCounter';
 import { parseStatsCommand } from '../stats/textCommands';
+import { isSimCommandText } from '../simulation/commands';
 
 /** What the service hands to Discord: content + no pings, ever. */
 export interface FeedbackForwardPayload {
@@ -138,6 +139,8 @@ export class FeedbackService {
   observe(platform: FeedbackPlatform, text: string): string[] {
     try {
       if (parseStatsCommand(text)) return [];
+      // 模擬瓦 (2026-10-14) commands are usage, not reactions.
+      if (isSimCommandText(text)) return [];
       if (platform === 'line' && FEEDBACK_CONFIG.commandEnabled && parseFeedbackCommand(text)) return [];
       return this.counter.observe(platform, text);
     } catch (err) {

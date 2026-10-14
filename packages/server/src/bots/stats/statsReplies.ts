@@ -89,7 +89,12 @@ export const STATS_COMMAND_USAGE = {
   chemistry: '/默契 名字1 名字2',
   /** Handled by bots/feedback (owner inbox); listed here so every help text advertises it. */
   feedback: '/意見 文字',
+  /** 模擬瓦 (2026-10-14, bots/simulation); listed here so every help text advertises it. */
+  simulation: '/模擬 [角色] [座位]',
 } as const;
+
+/** The 模擬瓦 follow-up commands, for the help texts (bots/simulation, docs/SIMULATION.md). */
+export const SIM_HELP_FOLLOW_UP = '/派 /區間 /下一步 /公布 /結束';
 
 const SITE_FOOTER = `🔗 完整圖表（不用登入）：${STATS_PAGE_URL}`;
 
@@ -835,6 +840,7 @@ export function formatStatsHelp(platform: StatsPlatform, scope: string | null = 
     `${STATS_COMMAND_USAGE.leaderboard}\u3000角色理論勝率排行 Top 10${scope ? `（${scope}）` : ''}`,
     `${STATS_COMMAND_USAGE.chemistry}\u3000兩人同隊默契`,
     `${STATS_COMMAND_USAGE.feedback}\u3000給管理者的建議或回報問題`,
+    `${STATS_COMMAND_USAGE.simulation}\u3000模擬瓦：練派票資訊的釋放與解讀（接著用 ${SIM_HELP_FOLLOW_UP}）`,
   ];
   if (platform === 'line') lines.push('/指令\u3000顯示這份說明');
   lines.push('每週一 12:00 會自動貼出本週排行。');

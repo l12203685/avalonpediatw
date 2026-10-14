@@ -1,0 +1,226 @@
+/**
+ * 模擬瓦 on Discord (2026-10-14): the six slash commands /模擬 /派 /區間 /下一步 /公布 /結束.
+ *
+ *   - registered next to the stats commands, discord.js builder validation offline (21 commands);
+ *   - every handler defers, then edits the reply with mentions off; the step is applied only after
+ *     the edit went out;
+ *   - public everywhere when SIM_DISCORD_PUBLIC_CHANNEL_IDS is empty, else public only there;
+ *   - a bot reply in the sync channel is never mirrored (bots are ignored by the mirror);
+ *   - errors are logged as codes only.
+ * Hand-rolled interaction mock; invented bank (fixtures/simGames.ts).
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MessageFlags } from 'discord.js';
+import { buildSlashCommands } from '../bots/discord/client';
+import { COMMANDS, SIM_OPTIONS, SIM_ROLE_CHOICES } from '../bots/discord/config';
+import { handleHelpCommand } from '../bots/discord/commands';
+import { handleDiscordMirrorMessage } from '../bots/discord/mirrorInbound';
+import { SimBankLoader } from '../bots/simulation/bank';
+import { SIM_CONFIG, SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
+import { handleSimCommand, simCommandFromInteraction, simReplyIsPublic, SIM_ERROR_TEXT } from '../bots/simulation/discordCommand';
+import { __setSimForTests } from '../bots/simulation';
+import { SimEngine } from '../bots/simulation/session';
+import { formatStatsHelp } from '../bots/stats/statsReplies';
+import { fixtureBank } from './fixtures/simGames';
+
+vi.mock('../bots/stats/statsQueries', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../bots/stats/statsQueries')>()),
+  leaderboardScopeText: async () => null,
+}));
+
+const BANK = fixtureBank();
+
+function makeInteraction(commandName: string, options: Record<string, string | number> = {}, channelId = 'CH-1', userId = 'u-1') {
+  const fake = {
+    commandName,
+    channelId,
+    user: { id: userId, username: 'user-1' },
+    deferred: false,
+    replied: false,
+    deferReply: vi.fn(async (_opts?: unknown) => {
+      fake.deferred = true;
+    }),
+    editReply: vi.fn(async (_payload: unknown) => {}),
+    deleteReply: vi.fn(async () => {}),
+    reply: vi.fn(async (_payload: unknown) => {
+      fake.replied = true;
+    }),
+    followUp: vi.fn(async (_payload: unknown) => {}),
+    options: {
+      getString: vi.fn((name: string, required?: boolean) => {
+        const v = options[name];
+        if (v === undefined && required) throw new Error(`missing option ${name}`);
+        return v === undefined ? null : String(v);
+      }),
+      getInteger: vi.fn((name: string) => {
+        const v = options[name];
+        return v === undefined ? null : Number(v);
+      }),
+    },
+  };
+  return fake;
+}
+
+type Fake = ReturnType<typeof makeInteraction>;
+
+/** The one edited reply. */
+function content(it1: Fake): { content: string; allowedMentions?: unknown } {
+  expect(it1.deferReply).toHaveBeenCalledTimes(1);
+  expect(it1.editReply).toHaveBeenCalledTimes(1);
+  const payload = it1.editReply.mock.calls[0][0] as { content: string; allowedMentions?: unknown };
+  expect(payload.allowedMentions).toEqual({ parse: [] });
+  expect(payload.content.length).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
+  return payload;
+}
+
+async function run(name: string, options: Record<string, string | number> = {}, channelId?: string, userId?: string): Promise<string> {
+  const it1 = makeInteraction(name, options, channelId, userId);
+  await handleSimCommand(it1 as never);
+  return content(it1).content;
+}
+
+let engine: SimEngine;
+beforeEach(() => {
+  delete process.env.SIM_DISCORD_PUBLIC_CHANNEL_IDS;
+  SIM_CONFIG.commandsEnabled = true;
+  const loader = new SimBankLoader(() => BANK);
+  engine = new SimEngine({ bank: () => loader.get(), random: () => () => 0 });
+  __setSimForTests({ loader, engine });
+});
+afterEach(() => {
+  __setSimForTests({ loader: null, engine: null });
+  delete process.env.SIM_DISCORD_PUBLIC_CHANNEL_IDS;
+});
+
+describe('registration', () => {
+  it('six 模擬 commands pass discord.js validation; 21 commands in all', () => {
+    const json = buildSlashCommands().map((c) => c.toJSON());
+    expect(json).toHaveLength(21);
+    const names = json.map((c) => c.name);
+    expect(names).toEqual(expect.arrayContaining(['模擬', '派', '區間', '下一步', '公布', '結束', '戰績', '排行', '默契', '意見', 'help']));
+    for (const c of json) {
+      expect(c.name.length).toBeLessThanOrEqual(32);
+      expect(c.description.length).toBeLessThanOrEqual(100);
+    }
+    const sim = json.find((c) => c.name === COMMANDS.SIM);
+    expect(sim?.options?.map((o) => [o.name, o.required ?? false])).toEqual([[SIM_OPTIONS.ROLE, false], [SIM_OPTIONS.SEAT, false], [SIM_OPTIONS.ID, false]]);
+    const role = sim?.options?.[0] as { choices?: { name: string; value: string }[] };
+    expect(role.choices?.map((c) => c.value)).toEqual([...SIM_ROLE_CHOICES]);
+    const seat = sim?.options?.[1] as { min_value?: number; max_value?: number };
+    expect([seat.min_value, seat.max_value]).toEqual([1, 10]);
+    expect(json.find((c) => c.name === COMMANDS.SIM_PROPOSE)?.options).toEqual([expect.objectContaining({ name: SIM_OPTIONS.TEAM, required: true })]);
+    expect(json.find((c) => c.name === COMMANDS.SIM_INTERVAL)?.options).toEqual([expect.objectContaining({ name: SIM_OPTIONS.CONTENT, required: true })]);
+  });
+
+  it('/help and the LINE /指令 advertise /模擬', async () => {
+    const it1 = makeInteraction(COMMANDS.HELP);
+    await handleHelpCommand(it1 as never);
+    const embed = (it1.editReply.mock.calls[0][0] as { embeds: { toJSON: () => { fields: { name: string; value: string }[] } }[] }).embeds[0].toJSON();
+    const field = embed.fields.find((f) => f.name.includes('模擬瓦'));
+    expect(field?.value).toContain('/模擬 [角色] [座位]');
+    expect(field?.value).toContain('/派 /區間 /下一步 /公布 /結束');
+    expect(formatStatsHelp('line')).toContain('/模擬 [角色] [座位]　模擬瓦：練派票資訊的釋放與解讀');
+    expect(formatStatsHelp('discord')).toContain('/模擬 [角色] [座位]');
+  });
+});
+
+describe('options → command', () => {
+  it('maps every command, with the same parsers as LINE', () => {
+    const m = (name: string, o: Record<string, string | number> = {}) => simCommandFromInteraction(makeInteraction(name, o) as never);
+    expect(m(COMMANDS.SIM)).toEqual({ kind: 'start' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '派西維爾', [SIM_OPTIONS.SEAT]: 2 })).toEqual({ kind: 'start', role: 'percival', seat: 2 });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '紅' })).toEqual({ kind: 'start', role: 'red' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.SEAT]: 10 })).toEqual({ kind: 'start', seat: 10 });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: 'w0001-4' })).toEqual({ kind: 'start', exerciseId: 'W0001-4' });
+    expect(m(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '４ ６ ０' })).toEqual({ kind: 'propose', team: [4, 6, 10] });
+    expect(m(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '7 8 9 *2' })).toEqual({ kind: 'interval', groups: [{ seats: [7, 8, 9], min: 2, max: 2 }] });
+    expect(m(COMMANDS.SIM_NEXT)).toEqual({ kind: 'next' });
+    expect(m(COMMANDS.SIM_REVEAL)).toEqual({ kind: 'reveal' });
+    expect(m(COMMANDS.SIM_END)).toEqual({ kind: 'end' });
+  });
+});
+
+describe('handlers', () => {
+  it('a whole exercise; the proposals sit in a code block; mentions off; public by default', async () => {
+    const it1 = makeInteraction(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 });
+    await handleSimCommand(it1 as never);
+    expect(it1.deferReply.mock.calls[0][0]).toBeUndefined(); // public, like /戰績
+    const start = content(it1).content;
+    expect(start).toContain('【模擬瓦 W0000-4】你是 4家・忠臣（沒有額外資訊）');
+    expect(start).toContain('```\n1家 460 1+\n2家 279\n3家 370\n```');
+
+    expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' })).toContain('① 實際這位 4家派：469（跟你一樣）→ 否決');
+    expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('・789=2：45/126（36%）');
+    expect(await run(COMMANDS.SIM_NEXT)).toContain('輪到你派 4 人（第 3 局第 4 次）。');
+    expect(await run(COMMANDS.SIM_REVEAL)).toContain('角色：梅林1 派西維爾2 莫德雷德3 莫甘娜5 刺客7 奧伯倫9；忠臣 4 6 8 0');
+    expect(await run(COMMANDS.SIM_END)).toBe('你目前沒有進行中的模擬，輸入 /模擬 開一題（30 分鐘沒動作會自動結束）');
+    expect(engine.counts.started.discord).toBe(1);
+  });
+
+  it('each user in each channel has their own exercise', async () => {
+    await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-1', 'a');
+    expect(await run(COMMANDS.SIM_NEXT, {}, 'CH-1', 'b')).toContain('你目前沒有進行中的模擬');
+    expect(await run(COMMANDS.SIM_NEXT, {}, 'CH-2', 'a')).toContain('你目前沒有進行中的模擬');
+    expect(await run(COMMANDS.SIM_NEXT, {}, 'CH-1', 'a')).toContain('下一步】');
+  });
+
+  it('SIM_DISCORD_PUBLIC_CHANNEL_IDS set → public there, only-you elsewhere', async () => {
+    process.env.SIM_DISCORD_PUBLIC_CHANNEL_IDS = 'CH-SIM';
+    expect(simReplyIsPublic('CH-SIM')).toBe(true);
+    expect(simReplyIsPublic('CH-1')).toBe(false);
+    const elsewhere = makeInteraction(COMMANDS.SIM, {}, 'CH-1');
+    await handleSimCommand(elsewhere as never);
+    expect(elsewhere.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+    const there = makeInteraction(COMMANDS.SIM, {}, 'CH-SIM');
+    await handleSimCommand(there as never);
+    expect(there.deferReply.mock.calls[0][0]).toBeUndefined();
+  });
+
+  it('a malformed /派 without an exercise still answers with the usage (a slash command is explicit)', async () => {
+    expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '西 2' })).toContain('用法：/派');
+  });
+
+  it('the step is applied only after the edit went out', async () => {
+    await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 });
+    const failing = makeInteraction(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' });
+    failing.editReply.mockRejectedValueOnce(Object.assign(new Error('Unknown interaction: 469 回覆內容'), { code: 10062 }));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await handleSimCommand(failing as never);
+    expect(errors.mock.calls.flat().join(' ')).toBe('[sim] Discord command failed (Error code=10062)');
+    errors.mockRestore();
+    expect(failing.editReply).toHaveBeenLastCalledWith({ content: SIM_ERROR_TEXT, allowedMentions: { parse: [] } });
+    expect(engine.counts.answers).toBe(0);
+    expect(await run(COMMANDS.SIM_REVEAL)).toContain('你這題沒有作答。');
+  });
+
+  it('flag off → a fixed "停用" reply', async () => {
+    SIM_CONFIG.commandsEnabled = false;
+    expect(await run(COMMANDS.SIM)).toBe('模擬瓦目前停用。');
+    SIM_CONFIG.commandsEnabled = true;
+  });
+
+  it('rate limited past the notice → the deferred reply is deleted, nothing posted', async () => {
+    const loader = new SimBankLoader(() => BANK);
+    __setSimForTests({ loader, engine: new SimEngine({ bank: () => loader.get(), rateLimit: { windowMs: 600_000, max: 1 } }) });
+    await run(COMMANDS.SIM);
+    expect(await run(COMMANDS.SIM_NEXT)).toBe('模擬指令太頻繁了，10 分鐘後再試。');
+    const third = makeInteraction(COMMANDS.SIM_NEXT);
+    await handleSimCommand(third as never);
+    expect(third.editReply).not.toHaveBeenCalled();
+    expect(third.deleteReply).toHaveBeenCalledTimes(1);
+  });
+
+  it("the bot's own reply in the sync channel is never mirrored", async () => {
+    const ingested: unknown[] = [];
+    const mirror = { ingestInbound: (m: unknown) => { ingested.push(m); return null; } };
+    const outcome = await handleDiscordMirrorMessage(
+      {
+        id: 'b1', channelId: 'SYNC', content: '【模擬瓦 W0000-4】你是 4家・忠臣（沒有額外資訊）', webhookId: null,
+        author: { id: 'bot', bot: true, username: 'avalon-bot' }, member: null, attachments: null, stickers: null,
+      },
+      { targetChannelId: 'SYNC', mirror: mirror as never },
+    );
+    expect(outcome).toBe('ignored');
+    expect(ingested).toEqual([]);
+  });
+});

@@ -26,6 +26,8 @@ import type { LobbyChatMessage } from '../../socket/LobbyChatBuffer';
 import { describeError, raceTimeout, readStreamCapped } from '../media/bytes';
 import { answerStatsTextCommand } from '../stats/textCommands';
 import { answerFeedbackTextCommand, getFeedbackService } from '../feedback/service';
+import { answerSimTextCommand, simQuickReply } from '../simulation/textCommands';
+import { simLineGroupIds } from '../simulation/config';
 
 /**
  * Map LINE user IDs to the room they're currently in.
@@ -123,6 +125,8 @@ export interface LineWebhookStats {
   statsReplies: number;
   /** /意見 acknowledgements sent (2026-10-12, bots/feedback). */
   feedbackReplies: number;
+  /** 模擬瓦 replies sent (2026-10-14, bots/simulation): /模擬 /派 /區間 /下一步 /公布 /結束. */
+  simReplies: number;
   /** 2026-10-13 media sync — counts only. LINE pictures uploaded to Discord. */
   imagesToDiscord: number;
   /** LINE pictures sent to Discord as a text note (too large, download or upload failed, too many waiting, or CHAT_MIRROR_IMAGES=false). */
@@ -141,12 +145,46 @@ export interface LineWebhookStats {
 }
 
 /**
- * A bot answer that takes the first slot of a reply_token (stats card or
- * /意見 acknowledgement); `kind` picks the counter it is booked under.
+ * A bot answer that takes the first slot of a reply_token (stats card,
+ * /意見 acknowledgement or a 模擬瓦 step); `kind` picks the counter it is
+ * booked under.
  */
 interface LeadReply {
-  kind: 'stats' | 'feedback';
+  kind: 'stats' | 'feedback' | 'sim';
   text: string;
+  /**
+   * 模擬瓦 (2026-10-14): applies the step only once the reply went out, so a
+   * failed reply never skips a step (bots/simulation/session.ts).
+   */
+  commit?: () => void;
+  /** Group replies quote the command they answer (no name is ever written). */
+  quoteToken?: string;
+  /** 1:1 only: 模擬瓦 quick-reply buttons while the exercise is open. */
+  quickReply?: boolean;
+}
+
+/** Where a text came from, for the 模擬瓦 session key and LINE redelivery. */
+interface LeadContext {
+  duplicate: boolean;
+  /** Group id, or the user id in a 1:1 chat. */
+  chatId: string;
+  userId?: string;
+  quoteToken?: string;
+  eventKey?: string;
+  /** An allow-listed practice group (SIM_LINE_GROUP_IDS): 模擬 commands only. */
+  simOnly?: boolean;
+}
+
+/** LINE's dedupe key of an event (webhookEventId, else the message id). */
+function eventKeyOf(event: WebhookEvent): string | undefined {
+  const meta = event as { webhookEventId?: unknown; message?: { id?: unknown } };
+  if (typeof meta.webhookEventId === 'string' && meta.webhookEventId) return `e:${meta.webhookEventId}`;
+  return typeof meta.message?.id === 'string' ? `m:${meta.message.id}` : undefined;
+}
+
+function quoteTokenOf(message: unknown): string | undefined {
+  const q = (message as { quoteToken?: unknown } | null)?.quoteToken;
+  return typeof q === 'string' && q ? q : undefined;
 }
 
 export class LineBotClient {
@@ -161,6 +199,7 @@ export class LineBotClient {
     replyFailures: 0,
     statsReplies: 0,
     feedbackReplies: 0,
+    simReplies: 0,
     imagesToDiscord: 0,
     imageNotesToDiscord: 0,
     imagesSkipped: 0,
@@ -251,9 +290,10 @@ export class LineBotClient {
         // is handled normally.
         // Only events this process acts on are remembered (the mirror group, 1:1
         // texts): other groups' pictures and stickers must not push them out.
+        const simGroup = source.type === 'group' && !!source.groupId && simLineGroupIds().has(source.groupId);
         const tracked =
           (source.type === 'group' && this.isMirrorGroup(source.groupId)) ||
-          (source.type === 'user' && event.type === 'message' && event.message.type === 'text');
+          ((source.type === 'user' || simGroup) && event.type === 'message' && event.message.type === 'text');
         const duplicate = tracked && this.isDuplicateDelivery(event);
 
         // #82 three-way sync: anything from the configured lobby-mirror group
@@ -271,7 +311,13 @@ export class LineBotClient {
             if (!duplicate) {
               await this.handleGroupMessage(source.groupId, source.userId, textMessage.text, textMessage.id);
             }
-            lead = await this.leadReplyFor(textMessage.text, duplicate);
+            lead = await this.leadReplyFor(textMessage.text, {
+              duplicate,
+              chatId: source.groupId,
+              userId: source.userId,
+              quoteToken: quoteTokenOf(event.message),
+              eventKey: eventKeyOf(event),
+            });
           } else if (event.type === 'message' && !duplicate) {
             // 2026-10-13: pictures → Discord as files; stickers / video /
             // audio / file / location → a short text. Never text content.
@@ -299,11 +345,31 @@ export class LineBotClient {
         // legacy LINE_BOT_COMMANDS_ENABLED gate. Matched on the raw text:
         // player names are case-sensitive (Sin / SIN / sin are different people).
         if (source.type === 'user') {
-          const lead = await this.leadReplyFor(textMessage.text, duplicate);
+          const lead = await this.leadReplyFor(textMessage.text, {
+            duplicate,
+            chatId: source.userId,
+            userId: source.userId,
+            eventKey: eventKeyOf(event),
+          });
           if (lead !== null) {
-            await this.replyLead(messageEvent.replyToken, lead);
+            await this.replyLead(messageEvent.replyToken, lead, true);
             continue;
           }
+        }
+
+        // 模擬瓦 (2026-10-14): an allow-listed practice group answers 模擬
+        // commands only, on its own reply_token (nothing drained there).
+        if (simGroup && source.type === 'group') {
+          const lead = await this.leadReplyFor(textMessage.text, {
+            duplicate,
+            chatId: source.groupId,
+            userId: source.userId,
+            quoteToken: quoteTokenOf(messageEvent.message),
+            eventKey: eventKeyOf(event),
+            simOnly: true,
+          });
+          if (lead !== null) await this.replyLead(messageEvent.replyToken, lead, false);
+          continue;
         }
 
         const userMessage = textMessage.text.toLowerCase().trim();
@@ -392,7 +458,7 @@ export class LineBotClient {
   private async drainQueuedReplies(replyToken: string, leadReply: LeadReply | null = null): Promise<void> {
     const mirror = getChatMirror();
     const queue = mirror && mirror.isLineReplyQueueEnabled() ? mirror : null;
-    const lead: Message[] = leadReply ? [{ type: 'text', text: leadReply.text }] : [];
+    const lead: Message[] = leadReply ? [this.leadMessage(leadReply, false)] : [];
     const batch = queue ? queue.drainLineReplies(LINE_REPLY_MAX_PER_DRAIN - lead.length) : [];
     if (lead.length === 0 && batch.length === 0) return;
     // Queued Discord pictures become image messages while their relay copy
@@ -403,7 +469,7 @@ export class LineBotClient {
       this.stats.repliesDrained += batch.length;
       this.stats.imagesToLine += out.images;
       this.stats.imageNotesToLine += out.fallbacks;
-      if (leadReply) this.countLead(leadReply.kind);
+      if (leadReply) this.leadDelivered(leadReply);
     } catch (error) {
       this.stats.replyFailures += 1;
       const imageRejected = out.images > 0 && lineErrorMentionsImage(error);
@@ -441,25 +507,58 @@ export class LineBotClient {
     }
   }
 
-  /** The bot answer a text earns, if any: stats commands first, then /意見. */
-  private async leadReplyFor(text: string, redelivery = false): Promise<LeadReply | null> {
+  /**
+   * 模擬瓦 answer (2026-10-14, bots/simulation), or null (not a 模擬 command,
+   * flag off, rate limited). Never throws; logs a code only (no text, no ids).
+   */
+  private async simAnswerFor(text: string, ctx: LeadContext): Promise<LeadReply | null> {
+    try {
+      const reply = await answerSimTextCommand(text, {
+        platform: 'line',
+        chatId: ctx.chatId,
+        userId: ctx.userId,
+        eventKey: ctx.eventKey,
+        duplicate: ctx.duplicate,
+      });
+      if (!reply) return null;
+      return { kind: 'sim', text: reply.text, commit: reply.commit, quoteToken: ctx.quoteToken, quickReply: reply.sessionOpen };
+    } catch (error) {
+      console.error(`[LINE sim] building answer failed (${describeError(error)})`);
+      return null;
+    }
+  }
+
+  /** The bot answer a text earns, if any: stats commands first, then /意見, then 模擬瓦. */
+  private async leadReplyFor(text: string, ctx: LeadContext): Promise<LeadReply | null> {
+    if (ctx.simOnly) return this.simAnswerFor(text, ctx);
     const stats = await this.statsAnswerFor(text);
     if (stats !== null) return { kind: 'stats', text: stats };
-    const feedback = await this.feedbackAnswerFor(text, redelivery);
+    const feedback = await this.feedbackAnswerFor(text, ctx.duplicate);
     if (feedback !== null) return { kind: 'feedback', text: feedback };
-    return null;
+    return this.simAnswerFor(text, ctx);
   }
 
-  private countLead(kind: LeadReply['kind']): void {
-    if (kind === 'stats') this.stats.statsReplies += 1;
-    else this.stats.feedbackReplies += 1;
+  /** The lead message object: quotes the command in groups; 1:1 模擬 replies carry quick-reply buttons. */
+  private leadMessage(lead: LeadReply, oneToOne: boolean): Message {
+    const msg: Record<string, unknown> = { type: 'text', text: lead.text };
+    if (lead.quoteToken) msg.quoteToken = lead.quoteToken;
+    if (oneToOne && lead.kind === 'sim' && lead.quickReply) msg.quickReply = simQuickReply();
+    return msg as unknown as Message;
   }
 
-  /** 1:1 chat reply (no mirror queue there). Failures are logged, never thrown. */
-  private async replyLead(replyToken: string, lead: LeadReply): Promise<void> {
+  /** The lead reply went out: count it and, for 模擬瓦, apply the step. */
+  private leadDelivered(lead: LeadReply): void {
+    if (lead.kind === 'stats') this.stats.statsReplies += 1;
+    else if (lead.kind === 'feedback') this.stats.feedbackReplies += 1;
+    else this.stats.simReplies += 1;
+    lead.commit?.();
+  }
+
+  /** 1:1 chat (or SIM_LINE_GROUP_IDS group) reply — no mirror queue there. Failures are logged, never thrown. */
+  private async replyLead(replyToken: string, lead: LeadReply, oneToOne: boolean): Promise<void> {
     try {
-      await this.client.replyMessage(replyToken, [{ type: 'text', text: lead.text }]);
-      this.countLead(lead.kind);
+      await this.client.replyMessage(replyToken, [this.leadMessage(lead, oneToOne)]);
+      this.leadDelivered(lead);
     } catch (error) {
       this.stats.replyFailures += 1;
       console.error(`[LINE ${lead.kind}] replyMessage failed (${describeError(error)})`);

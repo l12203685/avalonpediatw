@@ -2,7 +2,7 @@ import { ChatInputCommandInteraction, CommandInteraction, EmbedBuilder, MessageF
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from './config';
 import { chemistryReply, leaderboardReply, leaderboardScopeText, playerCardReply } from '../stats/statsQueries';
-import { STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stats/statsReplies';
+import { SIM_HELP_FOLLOW_UP, STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stats/statsReplies';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
 
@@ -58,6 +58,13 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
           `\`${STATS_COMMAND_USAGE.chemistry}\` 兩人同隊默契\n` +
           `\`${STATS_COMMAND_USAGE.feedback}\` 給管理者的建議或回報問題\n` +
           `每週一 12:00 (+08) 自動貼出本週排行。完整圖表（不用登入）：${STATS_PAGE_URL}`,
+        inline: false,
+      },
+      {
+        name: '🧩 模擬瓦 / Proposal drill',
+        value:
+          `\`${STATS_COMMAND_USAGE.simulation}\` 真人對局停在你派票的當下：看前面的派票、寫區間、自己派，看你的派票放出什麼資訊\n` +
+          `接著用 ${SIM_HELP_FOLLOW_UP}（一人一題，30 分鐘沒動作自動結束）`,
         inline: false,
       },
       {

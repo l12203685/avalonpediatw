@@ -70,6 +70,7 @@
 
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { PlayerObservation } from './types';
+import { combinations, evilCountFor, popcount } from './worlds';
 
 // ── Mission likelihood (human 10-player data) ─────────────────
 
@@ -103,36 +104,13 @@ export function missionLikelihood(round: number, k: number, f: number): number {
 
 // ── Worlds ─────────────────────────────────────────────────────
 
-const EVIL_ROLE_NAMES = new Set(['assassin', 'morgana', 'mordred', 'oberon', 'minion']);
-
-/** Number of reds in a standard game of `playerCount` players. */
-export function evilCountFor(playerCount: number): number {
-  const roles = AVALON_CONFIG[playerCount]?.roles;
-  if (roles) return roles.filter((r) => EVIL_ROLE_NAMES.has(r)).length;
-  return Math.ceil(playerCount / 3);
-}
+// evilCountFor / combinations / popcount 搬到 ./worlds.ts（2026-10-14，模擬瓦共用；行為不變）。
+export { evilCountFor };
 
 interface World {
   /** Bit i set ⇔ allPlayerIds[i] is red. */
   mask: number;
   w: number;
-}
-
-function combinations(pool: readonly number[], k: number): number[] {
-  const out: number[] = [];
-  const rec = (start: number, left: number, mask: number): void => {
-    if (left === 0) { out.push(mask); return; }
-    for (let i = start; i <= pool.length - left; i++) rec(i + 1, left - 1, mask | (1 << pool[i]));
-  };
-  rec(0, k, 0);
-  return out;
-}
-
-function popcount(x: number): number {
-  let c = 0;
-  let v = x;
-  while (v) { v &= v - 1; c++; }
-  return c;
 }
 
 /**
