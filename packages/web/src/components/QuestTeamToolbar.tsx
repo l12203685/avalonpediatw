@@ -81,24 +81,25 @@ export default function QuestTeamToolbar({
         total: expectedTeamSize,
       })}
     >
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-2">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-2 [container-type:inline-size]">
         {/* Edward 2026-04-26 18:32 spec 9「計時器重複顯示」: 砍底部 timer 進度條,
             只留頂端 row 2 (否決+timer+eye) 那處. 頂端 chip 已含 teamSelectTimer
             倒數; 底部本來這條進度條視覺上重複, 直接整段砍.
             (timer / timerTotal props 仍保留 — 未來若改成 sticky-bar mini-indicator
             可重啟而不必改 caller signature.) */}
 
-        {/* Row: progress + clear + confirm */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* 中欄不足 30rem 時縮小間距與按鈕，避免已選人數被截斷。 */}
+        <div className="flex items-center gap-2 sm:gap-3 [@container_(max-width:30rem)]:gap-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Shield size={18} className="text-yellow-400 flex-shrink-0" fill="#facc15" />
-            <span className="text-sm sm:text-base font-bold text-white truncate">
+            <span className="text-sm sm:text-base [@container_(max-width:30rem)]:text-sm font-bold text-white truncate">
               {t('game:teamSelect.toolbarSelected', {
                 selected,
                 total: expectedTeamSize,
               })}
             </span>
-            <span className="hidden sm:inline text-[11px] text-gray-400 truncate">
+            {/* 提示在中欄至少 36rem 時顯示，優先保留人數與操作按鈕。 */}
+            <span className="hidden [@container_(min-width:36rem)]:inline text-[11px] text-gray-400 truncate shrink-[100]">
               {t('game:teamSelect.shieldHint')}
             </span>
           </div>
@@ -108,7 +109,7 @@ export default function QuestTeamToolbar({
             whileTap={selected > 0 ? { scale: 0.96 } : {}}
             onClick={onClear}
             disabled={selected === 0 || isSubmitting}
-            className={`flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold border transition-colors ${
+            className={`flex items-center gap-1 px-2.5 sm:px-3 [@container_(max-width:30rem)]:px-2.5 py-1.5 rounded-lg text-xs sm:text-sm [@container_(max-width:30rem)]:text-xs font-semibold border transition-colors ${
               selected > 0 && !isSubmitting
                 ? 'border-gray-500 text-gray-200 hover:bg-gray-700/60'
                 : 'border-gray-700 text-gray-500 cursor-not-allowed'
@@ -123,7 +124,7 @@ export default function QuestTeamToolbar({
             whileTap={isFull && !isSubmitting ? { scale: 0.96 } : {}}
             onClick={handleConfirm}
             disabled={!isFull || isSubmitting}
-            className={`px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+            className={`px-3 sm:px-5 [@container_(max-width:30rem)]:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm [@container_(max-width:30rem)]:text-xs font-bold transition-all ${
               isFull && !isSubmitting
                 ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-500/30'
                 : 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-70'

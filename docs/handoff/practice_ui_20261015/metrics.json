@@ -1,0 +1,10828 @@
+[
+  {
+    "width": 956,
+    "height": 907,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 907,
+    "viewportHeight": 907,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 893,
+        "scroll": false,
+        "contentHeight": 893
+      },
+      {
+        "height": 893,
+        "scroll": false,
+        "contentHeight": 893
+      }
+    ],
+    "cards": [
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 126,
+        "height": 168
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 956,
+    "height": 907,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 907,
+    "viewportHeight": 907,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      },
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      }
+    ],
+    "cards": [
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 108,
+        "height": 144
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 956,
+    "height": 907,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 907,
+    "viewportHeight": 907,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      },
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      }
+    ],
+    "cards": [
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 108,
+        "height": 144
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 956,
+    "height": 907,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 907,
+    "viewportHeight": 907,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      },
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      }
+    ],
+    "cards": [
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 108,
+        "height": 144
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 956,
+    "height": 907,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 907,
+    "viewportHeight": 907,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      },
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      }
+    ],
+    "cards": [
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 108,
+        "height": 144
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 956,
+    "height": 907,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 907,
+    "viewportHeight": 907,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      },
+      {
+        "height": 753,
+        "scroll": false,
+        "contentHeight": 753
+      }
+    ],
+    "cards": [
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 108,
+        "height": 144
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 956,
+    "height": 907,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 907,
+    "viewportHeight": 907,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 793,
+        "scroll": false,
+        "contentHeight": 793
+      },
+      {
+        "height": 793,
+        "scroll": false,
+        "contentHeight": 793
+      }
+    ],
+    "cards": [
+      {
+        "width": 111,
+        "height": 148
+      },
+      {
+        "width": 111,
+        "height": 148
+      },
+      {
+        "width": 111,
+        "height": 148
+      },
+      {
+        "width": 111,
+        "height": 148
+      },
+      {
+        "width": 111,
+        "height": 148
+      },
+      {
+        "width": 111,
+        "height": 148
+      },
+      {
+        "width": 111,
+        "height": 148
+      },
+      {
+        "width": 111,
+        "height": 148
+      },
+      {
+        "width": 111,
+        "height": 148
+      },
+      {
+        "width": 111,
+        "height": 148
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 720,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 720,
+    "viewportHeight": 720,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 706,
+        "scroll": false,
+        "contentHeight": 706
+      },
+      {
+        "height": 706,
+        "scroll": false,
+        "contentHeight": 706
+      }
+    ],
+    "cards": [
+      {
+        "width": 101,
+        "height": 135
+      },
+      {
+        "width": 98,
+        "height": 131
+      },
+      {
+        "width": 98,
+        "height": 131
+      },
+      {
+        "width": 98,
+        "height": 131
+      },
+      {
+        "width": 98,
+        "height": 131
+      },
+      {
+        "width": 98,
+        "height": 131
+      },
+      {
+        "width": 98,
+        "height": 131
+      },
+      {
+        "width": 98,
+        "height": 131
+      },
+      {
+        "width": 98,
+        "height": 131
+      },
+      {
+        "width": 98,
+        "height": 131
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 720,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 720,
+    "viewportHeight": 720,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      },
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      }
+    ],
+    "cards": [
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 79,
+        "height": 106
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 720,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 720,
+    "viewportHeight": 720,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      },
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      }
+    ],
+    "cards": [
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 79,
+        "height": 106
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 720,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 720,
+    "viewportHeight": 720,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      },
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      }
+    ],
+    "cards": [
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 79,
+        "height": 106
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 720,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 720,
+    "viewportHeight": 720,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      },
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      }
+    ],
+    "cards": [
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 79,
+        "height": 106
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 720,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 720,
+    "viewportHeight": 720,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      },
+      {
+        "height": 566,
+        "scroll": false,
+        "contentHeight": 566
+      }
+    ],
+    "cards": [
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 79,
+        "height": 106
+      },
+      {
+        "width": 77,
+        "height": 103
+      },
+      {
+        "width": 77,
+        "height": 103
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 720,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 720,
+    "viewportHeight": 720,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 606,
+        "scroll": false,
+        "contentHeight": 606
+      },
+      {
+        "height": 606,
+        "scroll": false,
+        "contentHeight": 606
+      }
+    ],
+    "cards": [
+      {
+        "width": 83,
+        "height": 111
+      },
+      {
+        "width": 83,
+        "height": 111
+      },
+      {
+        "width": 83,
+        "height": 111
+      },
+      {
+        "width": 83,
+        "height": 111
+      },
+      {
+        "width": 83,
+        "height": 111
+      },
+      {
+        "width": 83,
+        "height": 111
+      },
+      {
+        "width": 83,
+        "height": 111
+      },
+      {
+        "width": 86,
+        "height": 114
+      },
+      {
+        "width": 83,
+        "height": 111
+      },
+      {
+        "width": 83,
+        "height": 111
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 800,
+    "viewportHeight": 800,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 786,
+        "scroll": false,
+        "contentHeight": 786
+      },
+      {
+        "height": 786,
+        "scroll": false,
+        "contentHeight": 786
+      }
+    ],
+    "cards": [
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 113,
+        "height": 151
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 800,
+    "viewportHeight": 800,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      },
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      }
+    ],
+    "cards": [
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 92,
+        "height": 122
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 800,
+    "viewportHeight": 800,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      },
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      }
+    ],
+    "cards": [
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 92,
+        "height": 122
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 800,
+    "viewportHeight": 800,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      },
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      }
+    ],
+    "cards": [
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 92,
+        "height": 122
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 800,
+    "viewportHeight": 800,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      },
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      }
+    ],
+    "cards": [
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 92,
+        "height": 122
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 800,
+    "viewportHeight": 800,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      },
+      {
+        "height": 646,
+        "scroll": false,
+        "contentHeight": 646
+      }
+    ],
+    "cards": [
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 92,
+        "height": 122
+      },
+      {
+        "width": 89,
+        "height": 119
+      },
+      {
+        "width": 89,
+        "height": 119
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 800,
+    "viewportHeight": 800,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 686,
+        "scroll": false,
+        "contentHeight": 686
+      },
+      {
+        "height": 686,
+        "scroll": false,
+        "contentHeight": 686
+      }
+    ],
+    "cards": [
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 98,
+        "height": 131
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 768,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 768,
+    "viewportHeight": 768,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 754,
+        "scroll": false,
+        "contentHeight": 754
+      },
+      {
+        "height": 754,
+        "scroll": false,
+        "contentHeight": 754
+      }
+    ],
+    "cards": [
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 768,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 768,
+    "viewportHeight": 768,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      },
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      }
+    ],
+    "cards": [
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 87,
+        "height": 116
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 768,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 768,
+    "viewportHeight": 768,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      },
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      }
+    ],
+    "cards": [
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 87,
+        "height": 116
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 768,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 768,
+    "viewportHeight": 768,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      },
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      }
+    ],
+    "cards": [
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 87,
+        "height": 116
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 768,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 768,
+    "viewportHeight": 768,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      },
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      }
+    ],
+    "cards": [
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 87,
+        "height": 116
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 768,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 768,
+    "viewportHeight": 768,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      },
+      {
+        "height": 614,
+        "scroll": false,
+        "contentHeight": 614
+      }
+    ],
+    "cards": [
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 87,
+        "height": 116
+      },
+      {
+        "width": 84,
+        "height": 112
+      },
+      {
+        "width": 84,
+        "height": 112
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 768,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 768,
+    "viewportHeight": 768,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 654,
+        "scroll": false,
+        "contentHeight": 654
+      },
+      {
+        "height": 654,
+        "scroll": false,
+        "contentHeight": 654
+      }
+    ],
+    "cards": [
+      {
+        "width": 90,
+        "height": 120
+      },
+      {
+        "width": 90,
+        "height": 120
+      },
+      {
+        "width": 90,
+        "height": 120
+      },
+      {
+        "width": 90,
+        "height": 120
+      },
+      {
+        "width": 90,
+        "height": 120
+      },
+      {
+        "width": 90,
+        "height": 120
+      },
+      {
+        "width": 90,
+        "height": 120
+      },
+      {
+        "width": 93,
+        "height": 124
+      },
+      {
+        "width": 90,
+        "height": 120
+      },
+      {
+        "width": 90,
+        "height": 120
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1536,
+    "height": 864,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 864,
+    "viewportHeight": 864,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 850,
+        "scroll": false,
+        "contentHeight": 850
+      },
+      {
+        "height": 850,
+        "scroll": false,
+        "contentHeight": 850
+      }
+    ],
+    "cards": [
+      {
+        "width": 120,
+        "height": 160
+      },
+      {
+        "width": 120,
+        "height": 160
+      },
+      {
+        "width": 120,
+        "height": 160
+      },
+      {
+        "width": 120,
+        "height": 160
+      },
+      {
+        "width": 120,
+        "height": 160
+      },
+      {
+        "width": 120,
+        "height": 160
+      },
+      {
+        "width": 120,
+        "height": 160
+      },
+      {
+        "width": 120,
+        "height": 160
+      },
+      {
+        "width": 120,
+        "height": 160
+      },
+      {
+        "width": 120,
+        "height": 160
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1536,
+    "height": 864,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 864,
+    "viewportHeight": 864,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      },
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 102,
+        "height": 136
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1536,
+    "height": 864,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 864,
+    "viewportHeight": 864,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      },
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 102,
+        "height": 136
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1536,
+    "height": 864,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 864,
+    "viewportHeight": 864,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      },
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 102,
+        "height": 136
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1536,
+    "height": 864,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 864,
+    "viewportHeight": 864,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      },
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 102,
+        "height": 136
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1536,
+    "height": 864,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 864,
+    "viewportHeight": 864,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      },
+      {
+        "height": 710,
+        "scroll": false,
+        "contentHeight": 710
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 102,
+        "height": 136
+      },
+      {
+        "width": 99,
+        "height": 132
+      },
+      {
+        "width": 99,
+        "height": 132
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1536,
+    "height": 864,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 864,
+    "viewportHeight": 864,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 750,
+        "scroll": false,
+        "contentHeight": 750
+      },
+      {
+        "height": 750,
+        "scroll": false,
+        "contentHeight": 750
+      }
+    ],
+    "cards": [
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 108,
+        "height": 144
+      },
+      {
+        "width": 105,
+        "height": 140
+      },
+      {
+        "width": 105,
+        "height": 140
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 1080,
+    "viewportHeight": 1080,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1066,
+        "scroll": false,
+        "contentHeight": 1066
+      },
+      {
+        "height": 1066,
+        "scroll": false,
+        "contentHeight": 1066
+      }
+    ],
+    "cards": [
+      {
+        "width": 152,
+        "height": 203
+      },
+      {
+        "width": 152,
+        "height": 203
+      },
+      {
+        "width": 152,
+        "height": 203
+      },
+      {
+        "width": 152,
+        "height": 203
+      },
+      {
+        "width": 152,
+        "height": 203
+      },
+      {
+        "width": 152,
+        "height": 203
+      },
+      {
+        "width": 152,
+        "height": 203
+      },
+      {
+        "width": 152,
+        "height": 203
+      },
+      {
+        "width": 152,
+        "height": 203
+      },
+      {
+        "width": 152,
+        "height": 203
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 1080,
+    "viewportHeight": 1080,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      },
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      }
+    ],
+    "cards": [
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 135,
+        "height": 180
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 1080,
+    "viewportHeight": 1080,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      },
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      }
+    ],
+    "cards": [
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 135,
+        "height": 180
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 1080,
+    "viewportHeight": 1080,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      },
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      }
+    ],
+    "cards": [
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 135,
+        "height": 180
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 1080,
+    "viewportHeight": 1080,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      },
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      }
+    ],
+    "cards": [
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 135,
+        "height": 180
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 1080,
+    "viewportHeight": 1080,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      },
+      {
+        "height": 926,
+        "scroll": false,
+        "contentHeight": 926
+      }
+    ],
+    "cards": [
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 135,
+        "height": 180
+      },
+      {
+        "width": 131,
+        "height": 175
+      },
+      {
+        "width": 131,
+        "height": 175
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1920,
+    "height": 1080,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 1080,
+    "viewportHeight": 1080,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 966,
+        "scroll": false,
+        "contentHeight": 966
+      },
+      {
+        "height": 966,
+        "scroll": false,
+        "contentHeight": 966
+      }
+    ],
+    "cards": [
+      {
+        "width": 137,
+        "height": 183
+      },
+      {
+        "width": 137,
+        "height": 183
+      },
+      {
+        "width": 137,
+        "height": 183
+      },
+      {
+        "width": 137,
+        "height": 183
+      },
+      {
+        "width": 137,
+        "height": 183
+      },
+      {
+        "width": 137,
+        "height": 183
+      },
+      {
+        "width": 137,
+        "height": 183
+      },
+      {
+        "width": 141,
+        "height": 188
+      },
+      {
+        "width": 137,
+        "height": 183
+      },
+      {
+        "width": 137,
+        "height": 183
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 2560,
+    "height": 1440,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 1440,
+    "viewportHeight": 1440,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1426,
+        "scroll": false,
+        "contentHeight": 1426
+      },
+      {
+        "height": 1426,
+        "scroll": false,
+        "contentHeight": 1426
+      }
+    ],
+    "cards": [
+      {
+        "width": 206,
+        "height": 275
+      },
+      {
+        "width": 206,
+        "height": 275
+      },
+      {
+        "width": 206,
+        "height": 275
+      },
+      {
+        "width": 206,
+        "height": 275
+      },
+      {
+        "width": 206,
+        "height": 275
+      },
+      {
+        "width": 206,
+        "height": 275
+      },
+      {
+        "width": 206,
+        "height": 275
+      },
+      {
+        "width": 206,
+        "height": 275
+      },
+      {
+        "width": 206,
+        "height": 275
+      },
+      {
+        "width": 206,
+        "height": 275
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 2560,
+    "height": 1440,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 1440,
+    "viewportHeight": 1440,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      },
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      }
+    ],
+    "cards": [
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 191,
+        "height": 254
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 2560,
+    "height": 1440,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 1440,
+    "viewportHeight": 1440,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      },
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      }
+    ],
+    "cards": [
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 191,
+        "height": 254
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 2560,
+    "height": 1440,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 1440,
+    "viewportHeight": 1440,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      },
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      }
+    ],
+    "cards": [
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 191,
+        "height": 254
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 2560,
+    "height": 1440,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 1440,
+    "viewportHeight": 1440,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      },
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      }
+    ],
+    "cards": [
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 191,
+        "height": 254
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 2560,
+    "height": 1440,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 1440,
+    "viewportHeight": 1440,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      },
+      {
+        "height": 1286,
+        "scroll": false,
+        "contentHeight": 1286
+      }
+    ],
+    "cards": [
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 191,
+        "height": 254
+      },
+      {
+        "width": 185,
+        "height": 247
+      },
+      {
+        "width": 185,
+        "height": 247
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 2560,
+    "height": 1440,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 1440,
+    "viewportHeight": 1440,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1326,
+        "scroll": false,
+        "contentHeight": 1326
+      },
+      {
+        "height": 1326,
+        "scroll": false,
+        "contentHeight": 1326
+      }
+    ],
+    "cards": [
+      {
+        "width": 191,
+        "height": 255
+      },
+      {
+        "width": 191,
+        "height": 255
+      },
+      {
+        "width": 191,
+        "height": 255
+      },
+      {
+        "width": 191,
+        "height": 255
+      },
+      {
+        "width": 191,
+        "height": 255
+      },
+      {
+        "width": 191,
+        "height": 255
+      },
+      {
+        "width": 191,
+        "height": 255
+      },
+      {
+        "width": 197,
+        "height": 262
+      },
+      {
+        "width": 191,
+        "height": 255
+      },
+      {
+        "width": 191,
+        "height": 255
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 768,
+    "height": 1024,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1010,
+        "scroll": false,
+        "contentHeight": 1010
+      },
+      {
+        "height": 1010,
+        "scroll": false,
+        "contentHeight": 1010
+      }
+    ],
+    "cards": [
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 768,
+    "height": 1024,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 768,
+    "height": 1024,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 768,
+    "height": 1024,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 768,
+    "height": 1024,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 768,
+    "height": 1024,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 768,
+    "height": 1024,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 910,
+        "scroll": false,
+        "contentHeight": 910
+      },
+      {
+        "height": 910,
+        "scroll": false,
+        "contentHeight": 910
+      }
+    ],
+    "cards": [
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 133,
+        "height": 177
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 844,
+    "viewportHeight": 844,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 608,
+        "scroll": false,
+        "contentHeight": 608
+      },
+      {
+        "height": 608,
+        "scroll": false,
+        "contentHeight": 608
+      }
+    ],
+    "cards": [
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      }
+    ],
+    "nameClips": [
+      "Mira Quill",
+      "Fenn Vale",
+      "Tovo Wren"
+    ]
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 844,
+    "viewportHeight": 844,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 564,
+        "scroll": false,
+        "contentHeight": 564
+      },
+      {
+        "height": 564,
+        "scroll": false,
+        "contentHeight": 564
+      }
+    ],
+    "cards": [
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      }
+    ],
+    "nameClips": [
+      "Mira Quill",
+      "Fenn Vale",
+      "Tovo Wren"
+    ]
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 844,
+    "viewportHeight": 844,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 548,
+        "scroll": false,
+        "contentHeight": 548
+      },
+      {
+        "height": 548,
+        "scroll": false,
+        "contentHeight": 548
+      }
+    ],
+    "cards": [
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      }
+    ],
+    "nameClips": [
+      "Mira Quill",
+      "Fenn Vale",
+      "Tovo Wren"
+    ]
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 844,
+    "viewportHeight": 844,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 526,
+        "scroll": false,
+        "contentHeight": 526
+      },
+      {
+        "height": 526,
+        "scroll": false,
+        "contentHeight": 526
+      }
+    ],
+    "cards": [
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      }
+    ],
+    "nameClips": [
+      "Mira Quill",
+      "Fenn Vale",
+      "Tovo Wren"
+    ]
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 844,
+    "viewportHeight": 844,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 624,
+        "scroll": false,
+        "contentHeight": 624
+      },
+      {
+        "height": 624,
+        "scroll": false,
+        "contentHeight": 624
+      }
+    ],
+    "cards": [
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      }
+    ],
+    "nameClips": [
+      "Mira Quill",
+      "Fenn Vale",
+      "Tovo Wren"
+    ]
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 844,
+    "viewportHeight": 844,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 624,
+        "scroll": false,
+        "contentHeight": 624
+      },
+      {
+        "height": 624,
+        "scroll": false,
+        "contentHeight": 624
+      }
+    ],
+    "cards": [
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      }
+    ],
+    "nameClips": [
+      "Mira Quill",
+      "Fenn Vale",
+      "Tovo Wren"
+    ]
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 844,
+    "viewportHeight": 844,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 730,
+        "scroll": false,
+        "contentHeight": 730
+      },
+      {
+        "height": 730,
+        "scroll": false,
+        "contentHeight": 730
+      }
+    ],
+    "cards": [
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 66,
+        "height": 87
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 66,
+        "height": 87
+      }
+    ],
+    "nameClips": [
+      "Fenn Vale",
+      "Tovo Wren"
+    ]
+  },
+  {
+    "width": 360,
+    "height": 780,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 780,
+    "viewportHeight": 780,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 544,
+        "scroll": false,
+        "contentHeight": 544
+      },
+      {
+        "height": 544,
+        "scroll": false,
+        "contentHeight": 544
+      }
+    ],
+    "cards": [
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 61,
+        "height": 81
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      }
+    ],
+    "nameClips": [
+      "砂丘雪鹿",
+      "Mira Quill",
+      "雲杉石塔",
+      "Fenn Vale",
+      "霧林紙鶴",
+      "Tovo Wren",
+      "月光木舟"
+    ]
+  },
+  {
+    "width": 360,
+    "height": 780,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 780,
+    "viewportHeight": 780,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 500,
+        "scroll": false,
+        "contentHeight": 500
+      },
+      {
+        "height": 500,
+        "scroll": false,
+        "contentHeight": 500
+      }
+    ],
+    "cards": [
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 61,
+        "height": 81
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      }
+    ],
+    "nameClips": [
+      "砂丘雪鹿",
+      "Mira Quill",
+      "雲杉石塔",
+      "Fenn Vale",
+      "Tovo Wren",
+      "月光木舟"
+    ]
+  },
+  {
+    "width": 360,
+    "height": 780,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 780,
+    "viewportHeight": 780,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 484,
+        "scroll": false,
+        "contentHeight": 484
+      },
+      {
+        "height": 484,
+        "scroll": false,
+        "contentHeight": 484
+      }
+    ],
+    "cards": [
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 61,
+        "height": 81
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      }
+    ],
+    "nameClips": [
+      "砂丘雪鹿",
+      "Mira Quill",
+      "雲杉石塔",
+      "Fenn Vale",
+      "Tovo Wren",
+      "月光木舟"
+    ]
+  },
+  {
+    "width": 360,
+    "height": 780,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 780,
+    "viewportHeight": 780,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 462,
+        "scroll": false,
+        "contentHeight": 462
+      },
+      {
+        "height": 462,
+        "scroll": false,
+        "contentHeight": 462
+      }
+    ],
+    "cards": [
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 61,
+        "height": 81
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      }
+    ],
+    "nameClips": [
+      "砂丘雪鹿",
+      "Mira Quill",
+      "雲杉石塔",
+      "Fenn Vale",
+      "Tovo Wren",
+      "月光木舟"
+    ]
+  },
+  {
+    "width": 360,
+    "height": 780,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 780,
+    "viewportHeight": 780,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 560,
+        "scroll": false,
+        "contentHeight": 560
+      },
+      {
+        "height": 560,
+        "scroll": false,
+        "contentHeight": 560
+      }
+    ],
+    "cards": [
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 61,
+        "height": 81
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      }
+    ],
+    "nameClips": [
+      "砂丘雪鹿",
+      "Mira Quill",
+      "雲杉石塔",
+      "Fenn Vale",
+      "Tovo Wren",
+      "月光木舟"
+    ]
+  },
+  {
+    "width": 360,
+    "height": 780,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 780,
+    "viewportHeight": 780,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 560,
+        "scroll": false,
+        "contentHeight": 560
+      },
+      {
+        "height": 560,
+        "scroll": false,
+        "contentHeight": 560
+      }
+    ],
+    "cards": [
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 61,
+        "height": 81
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      }
+    ],
+    "nameClips": [
+      "砂丘雪鹿",
+      "Mira Quill",
+      "雲杉石塔",
+      "Fenn Vale",
+      "Tovo Wren",
+      "月光木舟"
+    ]
+  },
+  {
+    "width": 360,
+    "height": 780,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 780,
+    "viewportHeight": 780,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 633,
+        "scroll": false,
+        "contentHeight": 633
+      },
+      {
+        "height": 633,
+        "scroll": false,
+        "contentHeight": 633
+      }
+    ],
+    "cards": [
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 59,
+        "height": 79
+      },
+      {
+        "width": 61,
+        "height": 81
+      },
+      {
+        "width": 61,
+        "height": 81
+      },
+      {
+        "width": 59,
+        "height": 79
+      }
+    ],
+    "nameClips": [
+      "Mira Quill",
+      "Fenn Vale",
+      "Tovo Wren"
+    ]
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 626,
+        "scroll": false,
+        "contentHeight": 626
+      },
+      {
+        "height": 626,
+        "scroll": false,
+        "contentHeight": 626
+      }
+    ],
+    "cards": [
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 189,
+        "height": 118
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 526,
+        "scroll": false,
+        "contentHeight": 526
+      },
+      {
+        "height": 526,
+        "scroll": false,
+        "contentHeight": 526
+      }
+    ],
+    "cards": [
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 156,
+        "height": 98
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 657,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 643,
+        "scroll": false,
+        "contentHeight": 643
+      },
+      {
+        "height": 643,
+        "scroll": false,
+        "contentHeight": 643
+      }
+    ],
+    "cards": [
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 657,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 657,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 657,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 657,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 657,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1366,
+    "height": 657,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 543,
+        "scroll": false,
+        "contentHeight": 543
+      },
+      {
+        "height": 543,
+        "scroll": false,
+        "contentHeight": 543
+      }
+    ],
+    "cards": [
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 76,
+        "height": 101
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 631,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 631,
+    "viewportHeight": 631,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 617,
+        "scroll": false,
+        "contentHeight": 617
+      },
+      {
+        "height": 617,
+        "scroll": false,
+        "contentHeight": 617
+      }
+    ],
+    "cards": [
+      {
+        "width": 181,
+        "height": 113
+      },
+      {
+        "width": 181,
+        "height": 113
+      },
+      {
+        "width": 181,
+        "height": 113
+      },
+      {
+        "width": 181,
+        "height": 113
+      },
+      {
+        "width": 181,
+        "height": 113
+      },
+      {
+        "width": 181,
+        "height": 113
+      },
+      {
+        "width": 181,
+        "height": 113
+      },
+      {
+        "width": 181,
+        "height": 113
+      },
+      {
+        "width": 181,
+        "height": 113
+      },
+      {
+        "width": 181,
+        "height": 113
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 631,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 631,
+    "viewportHeight": 631,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      },
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      }
+    ],
+    "cards": [
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 141,
+        "height": 88
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 631,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 631,
+    "viewportHeight": 631,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      },
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      }
+    ],
+    "cards": [
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 141,
+        "height": 88
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 631,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 631,
+    "viewportHeight": 631,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      },
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      }
+    ],
+    "cards": [
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 141,
+        "height": 88
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 631,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 631,
+    "viewportHeight": 631,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      },
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      }
+    ],
+    "cards": [
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 141,
+        "height": 88
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 631,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 631,
+    "viewportHeight": 631,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      },
+      {
+        "height": 477,
+        "scroll": false,
+        "contentHeight": 477
+      }
+    ],
+    "cards": [
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 141,
+        "height": 88
+      },
+      {
+        "width": 137,
+        "height": 85
+      },
+      {
+        "width": 137,
+        "height": 85
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 631,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 631,
+    "viewportHeight": 631,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 517,
+        "scroll": false,
+        "contentHeight": 517
+      },
+      {
+        "height": 517,
+        "scroll": false,
+        "contentHeight": 517
+      }
+    ],
+    "cards": [
+      {
+        "width": 149,
+        "height": 93
+      },
+      {
+        "width": 149,
+        "height": 93
+      },
+      {
+        "width": 149,
+        "height": 93
+      },
+      {
+        "width": 149,
+        "height": 93
+      },
+      {
+        "width": 149,
+        "height": 93
+      },
+      {
+        "width": 149,
+        "height": 93
+      },
+      {
+        "width": 149,
+        "height": 93
+      },
+      {
+        "width": 153,
+        "height": 96
+      },
+      {
+        "width": 149,
+        "height": 93
+      },
+      {
+        "width": 149,
+        "height": 93
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 600,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 600,
+    "viewportHeight": 600,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 586,
+        "scroll": false,
+        "contentHeight": 586
+      },
+      {
+        "height": 586,
+        "scroll": false,
+        "contentHeight": 586
+      }
+    ],
+    "cards": [
+      {
+        "width": 171,
+        "height": 107
+      },
+      {
+        "width": 171,
+        "height": 107
+      },
+      {
+        "width": 171,
+        "height": 107
+      },
+      {
+        "width": 171,
+        "height": 107
+      },
+      {
+        "width": 171,
+        "height": 107
+      },
+      {
+        "width": 171,
+        "height": 107
+      },
+      {
+        "width": 171,
+        "height": 107
+      },
+      {
+        "width": 171,
+        "height": 107
+      },
+      {
+        "width": 171,
+        "height": 107
+      },
+      {
+        "width": 171,
+        "height": 107
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 600,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 600,
+    "viewportHeight": 600,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      },
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      }
+    ],
+    "cards": [
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 131,
+        "height": 82
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 600,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 600,
+    "viewportHeight": 600,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      },
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      }
+    ],
+    "cards": [
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 131,
+        "height": 82
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 600,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 600,
+    "viewportHeight": 600,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      },
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      }
+    ],
+    "cards": [
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 131,
+        "height": 82
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 600,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 600,
+    "viewportHeight": 600,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      },
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      }
+    ],
+    "cards": [
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 131,
+        "height": 82
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 600,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 600,
+    "viewportHeight": 600,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      },
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      }
+    ],
+    "cards": [
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 131,
+        "height": 82
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 600,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 600,
+    "viewportHeight": 600,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 683,
+    "height": 657,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 643,
+        "scroll": false,
+        "contentHeight": 643
+      },
+      {
+        "height": 643,
+        "scroll": false,
+        "contentHeight": 643
+      }
+    ],
+    "cards": [
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      },
+      {
+        "width": 89,
+        "height": 118
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 683,
+    "height": 657,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 683,
+    "height": 657,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 683,
+    "height": 657,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 683,
+    "height": 657,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 683,
+    "height": 657,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      },
+      {
+        "height": 503,
+        "scroll": false,
+        "contentHeight": 503
+      }
+    ],
+    "cards": [
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 70,
+        "height": 93
+      },
+      {
+        "width": 68,
+        "height": 90
+      },
+      {
+        "width": 68,
+        "height": 90
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 683,
+    "height": 657,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 657,
+    "viewportHeight": 657,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 543,
+        "scroll": false,
+        "contentHeight": 543
+      },
+      {
+        "height": 543,
+        "scroll": false,
+        "contentHeight": 543
+      }
+    ],
+    "cards": [
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 76,
+        "height": 101
+      },
+      {
+        "width": 74,
+        "height": 98
+      },
+      {
+        "width": 74,
+        "height": 98
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 640,
+    "height": 700,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 700,
+    "viewportHeight": 700,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 686,
+        "scroll": false,
+        "contentHeight": 686
+      },
+      {
+        "height": 686,
+        "scroll": false,
+        "contentHeight": 686
+      }
+    ],
+    "cards": [
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      },
+      {
+        "width": 95,
+        "height": 127
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 640,
+    "height": 700,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 700,
+    "viewportHeight": 700,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      },
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      }
+    ],
+    "cards": [
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 76,
+        "height": 102
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 640,
+    "height": 700,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 700,
+    "viewportHeight": 700,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      },
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      }
+    ],
+    "cards": [
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 76,
+        "height": 102
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 640,
+    "height": 700,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 700,
+    "viewportHeight": 700,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      },
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      }
+    ],
+    "cards": [
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 76,
+        "height": 102
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 640,
+    "height": 700,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 700,
+    "viewportHeight": 700,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      },
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      }
+    ],
+    "cards": [
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 76,
+        "height": 102
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 640,
+    "height": 700,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 700,
+    "viewportHeight": 700,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      },
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      }
+    ],
+    "cards": [
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 76,
+        "height": 102
+      },
+      {
+        "width": 74,
+        "height": 99
+      },
+      {
+        "width": 74,
+        "height": 99
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 640,
+    "height": 700,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 700,
+    "viewportHeight": 700,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 586,
+        "scroll": false,
+        "contentHeight": 586
+      },
+      {
+        "height": 586,
+        "scroll": false,
+        "contentHeight": 586
+      }
+    ],
+    "cards": [
+      {
+        "width": 80,
+        "height": 107
+      },
+      {
+        "width": 80,
+        "height": 107
+      },
+      {
+        "width": 80,
+        "height": 107
+      },
+      {
+        "width": 80,
+        "height": 107
+      },
+      {
+        "width": 80,
+        "height": 107
+      },
+      {
+        "width": 80,
+        "height": 107
+      },
+      {
+        "width": 80,
+        "height": 107
+      },
+      {
+        "width": 82,
+        "height": 110
+      },
+      {
+        "width": 80,
+        "height": 107
+      },
+      {
+        "width": 80,
+        "height": 107
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 700,
+    "height": 900,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 900,
+    "viewportHeight": 900,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 886,
+        "scroll": false,
+        "contentHeight": 886
+      },
+      {
+        "height": 886,
+        "scroll": false,
+        "contentHeight": 886
+      }
+    ],
+    "cards": [
+      {
+        "width": 125,
+        "height": 167
+      },
+      {
+        "width": 125,
+        "height": 167
+      },
+      {
+        "width": 125,
+        "height": 167
+      },
+      {
+        "width": 125,
+        "height": 167
+      },
+      {
+        "width": 125,
+        "height": 167
+      },
+      {
+        "width": 125,
+        "height": 167
+      },
+      {
+        "width": 125,
+        "height": 167
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 125,
+        "height": 167
+      },
+      {
+        "width": 125,
+        "height": 167
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 700,
+    "height": 900,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 900,
+    "viewportHeight": 900,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      },
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      }
+    ],
+    "cards": [
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 107,
+        "height": 143
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 700,
+    "height": 900,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 900,
+    "viewportHeight": 900,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      },
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      }
+    ],
+    "cards": [
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 107,
+        "height": 143
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 700,
+    "height": 900,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 900,
+    "viewportHeight": 900,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      },
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      }
+    ],
+    "cards": [
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 107,
+        "height": 143
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 700,
+    "height": 900,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 900,
+    "viewportHeight": 900,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      },
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      }
+    ],
+    "cards": [
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 107,
+        "height": 143
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 700,
+    "height": 900,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 900,
+    "viewportHeight": 900,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      },
+      {
+        "height": 746,
+        "scroll": false,
+        "contentHeight": 746
+      }
+    ],
+    "cards": [
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 107,
+        "height": 143
+      },
+      {
+        "width": 104,
+        "height": 139
+      },
+      {
+        "width": 104,
+        "height": 139
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 700,
+    "height": 900,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 900,
+    "viewportHeight": 900,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 786,
+        "scroll": false,
+        "contentHeight": 786
+      },
+      {
+        "height": 786,
+        "scroll": false,
+        "contentHeight": 786
+      }
+    ],
+    "cards": [
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 113,
+        "height": 151
+      },
+      {
+        "width": 110,
+        "height": 147
+      },
+      {
+        "width": 110,
+        "height": 147
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 767,
+    "height": 1024,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1010,
+        "scroll": false,
+        "contentHeight": 1010
+      },
+      {
+        "height": 1010,
+        "scroll": false,
+        "contentHeight": 1010
+      }
+    ],
+    "cards": [
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 144,
+        "height": 192
+      },
+      {
+        "width": 140,
+        "height": 187
+      },
+      {
+        "width": 140,
+        "height": 187
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 767,
+    "height": 1024,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 767,
+    "height": 1024,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 767,
+    "height": 1024,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 767,
+    "height": 1024,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 767,
+    "height": 1024,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      },
+      {
+        "height": 870,
+        "scroll": false,
+        "contentHeight": 870
+      }
+    ],
+    "cards": [
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 126,
+        "height": 168
+      },
+      {
+        "width": 123,
+        "height": 164
+      },
+      {
+        "width": 123,
+        "height": 164
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 767,
+    "height": 1024,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 1024,
+    "viewportHeight": 1024,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 910,
+        "scroll": false,
+        "contentHeight": 910
+      },
+      {
+        "height": 910,
+        "scroll": false,
+        "contentHeight": 910
+      }
+    ],
+    "cards": [
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 133,
+        "height": 177
+      },
+      {
+        "width": 129,
+        "height": 172
+      },
+      {
+        "width": 129,
+        "height": 172
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 480,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 480,
+    "viewportHeight": 480,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 466,
+        "scroll": false,
+        "contentHeight": 466
+      },
+      {
+        "height": 466,
+        "scroll": false,
+        "contentHeight": 466
+      }
+    ],
+    "cards": [
+      {
+        "width": 133,
+        "height": 83
+      },
+      {
+        "width": 133,
+        "height": 83
+      },
+      {
+        "width": 133,
+        "height": 83
+      },
+      {
+        "width": 133,
+        "height": 83
+      },
+      {
+        "width": 133,
+        "height": 83
+      },
+      {
+        "width": 133,
+        "height": 83
+      },
+      {
+        "width": 133,
+        "height": 83
+      },
+      {
+        "width": 133,
+        "height": 83
+      },
+      {
+        "width": 133,
+        "height": 83
+      },
+      {
+        "width": 133,
+        "height": 83
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 480,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 480,
+    "viewportHeight": 480,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      },
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      }
+    ],
+    "cards": [
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 96,
+        "height": 60
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 480,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 480,
+    "viewportHeight": 480,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      },
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      }
+    ],
+    "cards": [
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 96,
+        "height": 60
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 480,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 480,
+    "viewportHeight": 480,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      },
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      }
+    ],
+    "cards": [
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 96,
+        "height": 60
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 480,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 480,
+    "viewportHeight": 480,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      },
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      }
+    ],
+    "cards": [
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 96,
+        "height": 60
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 480,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 480,
+    "viewportHeight": 480,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      },
+      {
+        "height": 326,
+        "scroll": false,
+        "contentHeight": 326
+      }
+    ],
+    "cards": [
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 96,
+        "height": 60
+      },
+      {
+        "width": 93,
+        "height": 58
+      },
+      {
+        "width": 93,
+        "height": 58
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 480,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 480,
+    "viewportHeight": 480,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 366,
+        "scroll": false,
+        "contentHeight": 366
+      },
+      {
+        "height": 366,
+        "scroll": false,
+        "contentHeight": 366
+      }
+    ],
+    "cards": [
+      {
+        "width": 105,
+        "height": 65
+      },
+      {
+        "width": 105,
+        "height": 65
+      },
+      {
+        "width": 105,
+        "height": 65
+      },
+      {
+        "width": 105,
+        "height": 65
+      },
+      {
+        "width": 105,
+        "height": 65
+      },
+      {
+        "width": 105,
+        "height": 65
+      },
+      {
+        "width": 105,
+        "height": 65
+      },
+      {
+        "width": 108,
+        "height": 67
+      },
+      {
+        "width": 105,
+        "height": 65
+      },
+      {
+        "width": 105,
+        "height": 65
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 800,
+    "height": 1280,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 1280,
+    "viewportHeight": 1280,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1266,
+        "scroll": false,
+        "contentHeight": 1266
+      },
+      {
+        "height": 1266,
+        "scroll": false,
+        "contentHeight": 1266
+      }
+    ],
+    "cards": [
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 800,
+    "height": 1280,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 1280,
+    "viewportHeight": 1280,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      },
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      }
+    ],
+    "cards": [
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 800,
+    "height": 1280,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 1280,
+    "viewportHeight": 1280,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      },
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      }
+    ],
+    "cards": [
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 800,
+    "height": 1280,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 1280,
+    "viewportHeight": 1280,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      },
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      }
+    ],
+    "cards": [
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 800,
+    "height": 1280,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 1280,
+    "viewportHeight": 1280,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      },
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      }
+    ],
+    "cards": [
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 800,
+    "height": 1280,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 1280,
+    "viewportHeight": 1280,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      },
+      {
+        "height": 1126,
+        "scroll": false,
+        "contentHeight": 1126
+      }
+    ],
+    "cards": [
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 800,
+    "height": 1280,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 1280,
+    "viewportHeight": 1280,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1166,
+        "scroll": false,
+        "contentHeight": 1166
+      },
+      {
+        "height": 1166,
+        "scroll": false,
+        "contentHeight": 1166
+      }
+    ],
+    "cards": [
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 147,
+        "height": 196
+      },
+      {
+        "width": 147,
+        "height": 196
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 820,
+    "height": 1180,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 1180,
+    "viewportHeight": 1180,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1166,
+        "scroll": false,
+        "contentHeight": 1166
+      },
+      {
+        "height": 1166,
+        "scroll": false,
+        "contentHeight": 1166
+      }
+    ],
+    "cards": [
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 156,
+        "height": 208
+      },
+      {
+        "width": 152,
+        "height": 202
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 820,
+    "height": 1180,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 1180,
+    "viewportHeight": 1180,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      },
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      }
+    ],
+    "cards": [
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 150,
+        "height": 201
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 820,
+    "height": 1180,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 1180,
+    "viewportHeight": 1180,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      },
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      }
+    ],
+    "cards": [
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 150,
+        "height": 201
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 820,
+    "height": 1180,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 1180,
+    "viewportHeight": 1180,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      },
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      }
+    ],
+    "cards": [
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 150,
+        "height": 201
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 820,
+    "height": 1180,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 1180,
+    "viewportHeight": 1180,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      },
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      }
+    ],
+    "cards": [
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 150,
+        "height": 201
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 820,
+    "height": 1180,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 1180,
+    "viewportHeight": 1180,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      },
+      {
+        "height": 1026,
+        "scroll": false,
+        "contentHeight": 1026
+      }
+    ],
+    "cards": [
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 150,
+        "height": 201
+      },
+      {
+        "width": 146,
+        "height": 195
+      },
+      {
+        "width": 146,
+        "height": 195
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 820,
+    "height": 1180,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 1180,
+    "viewportHeight": 1180,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 1066,
+        "scroll": false,
+        "contentHeight": 1066
+      },
+      {
+        "height": 1066,
+        "scroll": false,
+        "contentHeight": 1066
+      }
+    ],
+    "cards": [
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 156,
+        "height": 208
+      },
+      {
+        "width": 152,
+        "height": 202
+      },
+      {
+        "width": 152,
+        "height": 202
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 560,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 560,
+    "viewportHeight": 560,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      },
+      {
+        "height": 546,
+        "scroll": false,
+        "contentHeight": 546
+      }
+    ],
+    "cards": [
+      {
+        "width": 158,
+        "height": 99
+      },
+      {
+        "width": 158,
+        "height": 99
+      },
+      {
+        "width": 158,
+        "height": 99
+      },
+      {
+        "width": 158,
+        "height": 99
+      },
+      {
+        "width": 158,
+        "height": 99
+      },
+      {
+        "width": 158,
+        "height": 99
+      },
+      {
+        "width": 158,
+        "height": 99
+      },
+      {
+        "width": 158,
+        "height": 99
+      },
+      {
+        "width": 158,
+        "height": 99
+      },
+      {
+        "width": 158,
+        "height": 99
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 560,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 560,
+    "viewportHeight": 560,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      },
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      }
+    ],
+    "cards": [
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 120,
+        "height": 75
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 560,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 560,
+    "viewportHeight": 560,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      },
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      }
+    ],
+    "cards": [
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 120,
+        "height": 75
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 560,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 560,
+    "viewportHeight": 560,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      },
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      }
+    ],
+    "cards": [
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 120,
+        "height": 75
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 560,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 560,
+    "viewportHeight": 560,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      },
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      }
+    ],
+    "cards": [
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 120,
+        "height": 75
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 560,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 560,
+    "viewportHeight": 560,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      },
+      {
+        "height": 406,
+        "scroll": false,
+        "contentHeight": 406
+      }
+    ],
+    "cards": [
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 120,
+        "height": 75
+      },
+      {
+        "width": 116,
+        "height": 73
+      },
+      {
+        "width": 116,
+        "height": 73
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1280,
+    "height": 560,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 560,
+    "viewportHeight": 560,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      },
+      {
+        "height": 446,
+        "scroll": false,
+        "contentHeight": 446
+      }
+    ],
+    "cards": [
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 132,
+        "height": 82
+      },
+      {
+        "width": 128,
+        "height": 80
+      },
+      {
+        "width": 128,
+        "height": 80
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 500,
+    "scale": 1,
+    "phase": "lobby",
+    "contentHeight": 500,
+    "viewportHeight": 500,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 500,
+    "scale": 1,
+    "phase": "team",
+    "contentHeight": 500,
+    "viewportHeight": 500,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      },
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 102,
+        "height": 64
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 500,
+    "scale": 1,
+    "phase": "vote",
+    "contentHeight": 500,
+    "viewportHeight": 500,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      },
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 102,
+        "height": 64
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 500,
+    "scale": 1,
+    "phase": "quest",
+    "contentHeight": 500,
+    "viewportHeight": 500,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      },
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 102,
+        "height": 64
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 500,
+    "scale": 1,
+    "phase": "lake",
+    "contentHeight": 500,
+    "viewportHeight": 500,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      },
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 102,
+        "height": 64
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 500,
+    "scale": 1,
+    "phase": "assassination",
+    "contentHeight": 500,
+    "viewportHeight": 500,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      },
+      {
+        "height": 346,
+        "scroll": false,
+        "contentHeight": 346
+      }
+    ],
+    "cards": [
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 102,
+        "height": 64
+      },
+      {
+        "width": 99,
+        "height": 62
+      },
+      {
+        "width": 99,
+        "height": 62
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 500,
+    "scale": 1,
+    "phase": "ended",
+    "contentHeight": 500,
+    "viewportHeight": 500,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 386,
+        "scroll": false,
+        "contentHeight": 386
+      },
+      {
+        "height": 386,
+        "scroll": false,
+        "contentHeight": 386
+      }
+    ],
+    "cards": [
+      {
+        "width": 110,
+        "height": 69
+      },
+      {
+        "width": 110,
+        "height": 69
+      },
+      {
+        "width": 110,
+        "height": 69
+      },
+      {
+        "width": 110,
+        "height": 69
+      },
+      {
+        "width": 110,
+        "height": 69
+      },
+      {
+        "width": 110,
+        "height": 69
+      },
+      {
+        "width": 110,
+        "height": 69
+      },
+      {
+        "width": 114,
+        "height": 71
+      },
+      {
+        "width": 110,
+        "height": 69
+      },
+      {
+        "width": 110,
+        "height": 69
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1.25,
+    "phase": "lobby",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 626,
+        "scroll": false,
+        "contentHeight": 626
+      },
+      {
+        "height": 626,
+        "scroll": false,
+        "contentHeight": 626
+      }
+    ],
+    "cards": [
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 189,
+        "height": 118
+      },
+      {
+        "width": 184,
+        "height": 115
+      },
+      {
+        "width": 184,
+        "height": 115
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1.25,
+    "phase": "team",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1.25,
+    "phase": "vote",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1.25,
+    "phase": "quest",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1.25,
+    "phase": "lake",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1.25,
+    "phase": "assassination",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      },
+      {
+        "height": 486,
+        "scroll": false,
+        "contentHeight": 486
+      }
+    ],
+    "cards": [
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 143,
+        "height": 90
+      },
+      {
+        "width": 139,
+        "height": 87
+      },
+      {
+        "width": 139,
+        "height": 87
+      }
+    ],
+    "nameClips": []
+  },
+  {
+    "width": 1024,
+    "height": 640,
+    "scale": 1.25,
+    "phase": "ended",
+    "contentHeight": 640,
+    "viewportHeight": 640,
+    "horizontalOverflow": false,
+    "rails": [
+      {
+        "height": 526,
+        "scroll": false,
+        "contentHeight": 526
+      },
+      {
+        "height": 526,
+        "scroll": false,
+        "contentHeight": 526
+      }
+    ],
+    "cards": [
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 156,
+        "height": 98
+      },
+      {
+        "width": 152,
+        "height": 95
+      },
+      {
+        "width": 152,
+        "height": 95
+      }
+    ],
+    "nameClips": []
+  }
+]
