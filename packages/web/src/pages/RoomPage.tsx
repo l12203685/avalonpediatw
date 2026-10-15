@@ -74,6 +74,7 @@ import PracticeReviewPanel from '../components/practice/PracticeReviewPanel';
 import { isPracticeRoomId, startPractice } from '../services/practice';
 import { usePracticeStore } from '../store/practiceStore';
 import { PRACTICE_NS } from '../i18n/practice';
+import { useMediaQuery, WIDE_BOARD_QUERY } from '../hooks/useMediaQuery';
 
 // Friendly label for the room-level thinking-time multiplier.
 function timerLabel(multiplier: number | null | undefined): string {
@@ -147,6 +148,10 @@ export default function RoomPage(): JSX.Element {
   // 網站「與機器人練習」: ended practice rooms show the bot decision review;
   // this remembers which room the player switched to the table view for.
   const [practiceBoardFor, setPracticeBoardFor] = useState<string | null>(null);
+  // 寬視窗將操作列放在中欄，保留側欄完整高度；手機維持底部操作。action panels (隊長選人 / 投票 / 任務) go under the
+  // center column (GameBoard `centerFooter`), so the player rails keep the full
+  // height and all 10 cards fit; phones keep them full-width at the bottom.
+  const panelsInCenter = useMediaQuery(WIDE_BOARD_QUERY);
   const {
     room,
     currentPlayer,
@@ -590,8 +595,9 @@ export default function RoomPage(): JSX.Element {
     const isHostBadge = player.id === room.host;
     return (
       <>
+        {/* 準備勾勾置中，與右上角踢人按鈕分開。 */}
         {!player.isBot && !isHostBadge && (
-          <span className={`absolute top-1 left-9 sm:left-11 text-[8px] sm:text-[10px] px-1 py-0.5 rounded-full font-bold border z-30 ${
+          <span className={`absolute top-1 ${panelsInCenter ? 'left-1/2 -translate-x-1/2' : 'left-9 sm:left-11'} text-[8px] sm:text-[10px] px-1 py-0.5 rounded-full font-bold border z-30 ${
             readyIds.includes(player.id)
               ? 'bg-blue-900/70 border-blue-500 text-blue-200'
               : 'bg-gray-800/70 border-gray-600 text-gray-500'
@@ -1017,6 +1023,25 @@ export default function RoomPage(): JSX.Element {
     </>
   );
 
+  // 寬視窗將輪到你的提示放在中欄，避免側欄隨回合縮放。
+  const actionBannerInCenter = panelsInCenter && !scoresheetExpanded;
+  const actionBannerEl = (
+    <AnimatePresence>
+      {actionBanner && (
+        <motion.div
+          key={actionBanner.msg}
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          className={`relative z-10 shrink-0 ${actionBannerInCenter ? '' : 'mx-3 mt-1'} flex items-center gap-2 border rounded-lg px-3 py-1.5 text-[11px] sm:text-xs font-semibold ${actionBanner.color}`}
+        >
+          <Bell size={14} className="flex-shrink-0" />
+          {actionBanner.msg}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   const gameTopSection = (
     <>
       <AnimatePresence>
@@ -1074,97 +1099,93 @@ export default function RoomPage(): JSX.Element {
             Row 1: R1-R5 任務軌 (mission circles only, 結果用藍紅圓圈整個蓋)
             Row 2: 否決: 4 灰格 + ⏰ 倒數 + 眼睛 + 牌譜 (右側)
           砍掉舊「Row1=否決+眼睛 / Row2=mission」分離 + 中間空白 — 對齊 Edward
-          「上方排版太佔空間」原則. */}
-      {/* Row 1 — mission circles */}
-      <div className="relative z-10 shrink-0 px-3 pt-2">
-        <MissionTrack room={room} variant="mission-only" />
-      </div>
+          「上方排版太佔空間」原則.
+          寬視窗的行動提示移至中欄。 */}
+      <div className="relative z-10 shrink-0">
+        {/* Row 1 — mission circles */}
+        <div className="px-3 pt-2">
+          <MissionTrack room={room} variant="mission-only" />
+        </div>
 
-      {/* Row 2 — 否決 + countdown + eye + 牌譜 */}
-      <div className="relative z-10 shrink-0 flex items-center justify-between gap-2 px-3 pt-1.5">
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          <MissionTrack room={room} variant="rejection-only" />
-          {room.state === 'voting' && room.questTeam.length === 0 && !isUnlimitedTimer && (
-            <span
-              className={`inline-flex items-center gap-1 text-[10px] sm:text-[11px] px-1.5 py-0.5 rounded-full font-semibold border ${
-                teamSelectTimer < 20
-                  ? 'bg-red-900/60 text-red-300 border-red-800'
-                  : 'bg-gray-800/60 text-gray-400 border-gray-700'
+        {/* Row 2 — 否決 + countdown + eye + 牌譜 */}
+        <div
+          className={`flex items-center justify-between gap-2 px-3 ${
+            panelsInCenter
+              ? 'absolute inset-x-0 top-1/2 -translate-y-1/2 pt-2 pointer-events-none [&>*]:pointer-events-auto'
+              : 'pt-1.5'
+          }`}
+        >
+          <div className={`${panelsInCenter ? '' : 'flex-1'} min-w-0 flex items-center gap-2`}>
+            <MissionTrack room={room} variant="rejection-only" />
+            {room.state === 'voting' && room.questTeam.length === 0 && !isUnlimitedTimer && (
+              <span
+                className={`inline-flex items-center gap-1 text-[10px] sm:text-[11px] px-1.5 py-0.5 rounded-full font-semibold border ${
+                  teamSelectTimer < 20
+                    ? 'bg-red-900/60 text-red-300 border-red-800'
+                    : 'bg-gray-800/60 text-gray-400 border-gray-700'
+                }`}
+              >
+                <Clock size={10} />
+                {teamSelectTimer}s
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              onClick={() => setLoyalView(v => !v)}
+              title={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+              aria-label={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
+              aria-pressed={loyalView}
+              className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+                loyalView
+                  ? 'bg-yellow-500/30 hover:bg-yellow-500/50 border-yellow-400 text-yellow-200 shadow-md shadow-yellow-400/30'
+                  : 'bg-blue-900/40 hover:bg-blue-800/70 border-blue-700/60 text-blue-300'
               }`}
             >
-              <Clock size={10} />
-              {teamSelectTimer}s
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button
-            onClick={() => setLoyalView(v => !v)}
-            title={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
-            aria-label={loyalView ? t('game:header.loyalViewOff') : t('game:header.loyalViewOn')}
-            aria-pressed={loyalView}
-            className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
-              loyalView
-                ? 'bg-yellow-500/30 hover:bg-yellow-500/50 border-yellow-400 text-yellow-200 shadow-md shadow-yellow-400/30'
-                : 'bg-blue-900/40 hover:bg-blue-800/70 border-blue-700/60 text-blue-300'
-            }`}
-          >
-            <Eye size={14} />
-          </button>
-          {/* Edward 2026-04-26 17:05 牌譜 toggle — 點開後主畫面整個替換為
-              FullScoresheetLayout (砍 PlayerCardGrid + ChatPanel), 再點收回. */}
-          <button
-            onClick={() => setScoresheetExpanded(v => !v)}
-            title={scoresheetExpanded ? t('game:scoresheet.collapse', { defaultValue: '收回牌譜' }) : t('game:scoresheet.expand', { defaultValue: '展開牌譜' })}
-            aria-label={scoresheetExpanded ? '收回牌譜' : '展開牌譜'}
-            aria-pressed={scoresheetExpanded}
-            data-testid="game-btn-scoresheet-toggle"
-            className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
-              scoresheetExpanded
-                ? 'bg-emerald-500/30 hover:bg-emerald-500/50 border-emerald-400 text-emerald-200'
-                : 'bg-slate-800/60 hover:bg-slate-700 border-slate-600 text-slate-300'
-            }`}
-          >
-            <ClipboardList size={14} />
-          </button>
-          {/* Edward 2026-04-27 #192 試行 mode 釘住按鈕 — 一鍵讓牌譜全展變 GamePage
-              主 layout (持久化 localStorage). 釘住後新場開始 auto-expand. 解除即
-              回 #229 一次性 toggle 行為. 預設 OFF, 不破默認. */}
-          <button
-            onClick={() => {
-              const next = !scoresheetTrialPinned;
-              setScoresheetTrialPinned(next);
-              setScoresheetExpanded(next);
-            }}
-            title={scoresheetTrialPinned ? '取消釘住牌譜（試行模式）' : '釘住牌譜為主畫面（試行模式）'}
-            aria-label={scoresheetTrialPinned ? '取消釘住牌譜' : '釘住牌譜為主畫面'}
-            aria-pressed={scoresheetTrialPinned}
-            data-testid="game-btn-scoresheet-pin"
-            className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
-              scoresheetTrialPinned
-                ? 'bg-amber-500/30 hover:bg-amber-500/50 border-amber-400 text-amber-200'
-                : 'bg-slate-800/60 hover:bg-slate-700 border-slate-600 text-slate-300'
-            }`}
-          >
-            {scoresheetTrialPinned ? <Pin size={14} /> : <PinOff size={14} />}
-          </button>
+              <Eye size={14} />
+            </button>
+            {/* Edward 2026-04-26 17:05 牌譜 toggle — 點開後主畫面整個替換為
+                FullScoresheetLayout (砍 PlayerCardGrid + ChatPanel), 再點收回. */}
+            <button
+              onClick={() => setScoresheetExpanded(v => !v)}
+              title={scoresheetExpanded ? t('game:scoresheet.collapse', { defaultValue: '收回牌譜' }) : t('game:scoresheet.expand', { defaultValue: '展開牌譜' })}
+              aria-label={scoresheetExpanded ? '收回牌譜' : '展開牌譜'}
+              aria-pressed={scoresheetExpanded}
+              data-testid="game-btn-scoresheet-toggle"
+              className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+                scoresheetExpanded
+                  ? 'bg-emerald-500/30 hover:bg-emerald-500/50 border-emerald-400 text-emerald-200'
+                  : 'bg-slate-800/60 hover:bg-slate-700 border-slate-600 text-slate-300'
+              }`}
+            >
+              <ClipboardList size={14} />
+            </button>
+            {/* Edward 2026-04-27 #192 試行 mode 釘住按鈕 — 一鍵讓牌譜全展變 GamePage
+                主 layout (持久化 localStorage). 釘住後新場開始 auto-expand. 解除即
+                回 #229 一次性 toggle 行為. 預設 OFF, 不破默認. */}
+            <button
+              onClick={() => {
+                const next = !scoresheetTrialPinned;
+                setScoresheetTrialPinned(next);
+                setScoresheetExpanded(next);
+              }}
+              title={scoresheetTrialPinned ? '取消釘住牌譜（試行模式）' : '釘住牌譜為主畫面（試行模式）'}
+              aria-label={scoresheetTrialPinned ? '取消釘住牌譜' : '釘住牌譜為主畫面'}
+              aria-pressed={scoresheetTrialPinned}
+              data-testid="game-btn-scoresheet-pin"
+              className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors border ${
+                scoresheetTrialPinned
+                  ? 'bg-amber-500/30 hover:bg-amber-500/50 border-amber-400 text-amber-200'
+                  : 'bg-slate-800/60 hover:bg-slate-700 border-slate-600 text-slate-300'
+              }`}
+            >
+              {scoresheetTrialPinned ? <Pin size={14} /> : <PinOff size={14} />}
+            </button>
+          </div>
         </div>
       </div>
 
-      <AnimatePresence>
-        {actionBanner && (
-          <motion.div
-            key={actionBanner.msg}
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className={`relative z-10 shrink-0 mx-3 mt-1 flex items-center gap-2 border rounded-lg px-3 py-1.5 text-[11px] sm:text-xs font-semibold ${actionBanner.color}`}
-          >
-            <Bell size={14} className="flex-shrink-0" />
-            {actionBanner.msg}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {!actionBannerInCenter && actionBannerEl}
     </>
   );
 
@@ -1550,6 +1571,47 @@ export default function RoomPage(): JSX.Element {
     </>
   );
 
+  // 派隊／投票／任務操作：寬視窗放中欄下方，手機放頁面底部。
+  const stickyPanels = (
+    <>
+      <AnimatePresence>
+        {isLeaderPicking && !scoresheetExpanded && (
+          <QuestTeamToolbar
+            key="quest-team-toolbar"
+            room={room}
+            selectedTeamIds={selectedTeamIds}
+            onClear={clearSelectedTeam}
+            isSubmitting={isVoting}
+            timer={teamSelectTimer}
+            timerTotal={teamSelectBase}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {teamVotePhaseSticky && !scoresheetExpanded && (
+          <VotePanel
+            key="vote-panel-sticky"
+            room={room}
+            currentPlayer={currentPlayer}
+            onVote={handleVote}
+            isLoading={isVoting}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {questPhaseSticky && !scoresheetExpanded && (
+          <QuestPanel
+            key="quest-panel-sticky"
+            room={room}
+            currentPlayer={currentPlayer}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+
   return (
     // Edward 2026-04-27 PWA status-bar fix: pt-safe pushes the Lobby /
     // Game / Ended top section below the iOS / Android status bar (notch +
@@ -1577,7 +1639,7 @@ export default function RoomPage(): JSX.Element {
       )}
 
       {/* ────────── TOP SECTION (phase-specific) ────────── */}
-      {isLobbyPhase && lobbyTopSection}
+      {isLobbyPhase && !panelsInCenter && lobbyTopSection}
       {isGameplayPhase && gameTopSection}
       {isEndedPhase && (isPractice ? practiceEndedTopSection : endedTopSection)}
 
@@ -1628,7 +1690,10 @@ export default function RoomPage(): JSX.Element {
             // 的 ClipboardList icon (eye 旁) 提供, 點開後整個主畫面切到
             // FullScoresheetLayout. 留 chat panel 獨佔 center column 下半.
             scoresheetSlot={undefined}
+            centerFooter={panelsInCenter ? stickyPanels : undefined}
           >
+            {isLobbyPhase && panelsInCenter && lobbyTopSection}
+            {isGameplayPhase && actionBannerInCenter && actionBannerEl}
             {(isGameplayPhase || isEndedPhase) && gameCenterPanel}
           </GameBoard>
         )}
@@ -1636,42 +1701,9 @@ export default function RoomPage(): JSX.Element {
 
       {/* ────────── BOTTOM TOOLBAR (phase-specific sticky panels) ──────────
           Edward 2026-04-26 17:05: 牌譜全展時也藏 sticky toolbar — 對齊「主畫面
-          整個替換」精神; 收回後 sticky 自然回來. */}
-      <AnimatePresence>
-        {isLeaderPicking && !scoresheetExpanded && (
-          <QuestTeamToolbar
-            key="quest-team-toolbar"
-            room={room}
-            selectedTeamIds={selectedTeamIds}
-            onClear={clearSelectedTeam}
-            isSubmitting={isVoting}
-            timer={teamSelectTimer}
-            timerTotal={teamSelectBase}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {teamVotePhaseSticky && !scoresheetExpanded && (
-          <VotePanel
-            key="vote-panel-sticky"
-            room={room}
-            currentPlayer={currentPlayer}
-            onVote={handleVote}
-            isLoading={isVoting}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {questPhaseSticky && !scoresheetExpanded && (
-          <QuestPanel
-            key="quest-panel-sticky"
-            room={room}
-            currentPlayer={currentPlayer}
-          />
-        )}
-      </AnimatePresence>
+          整個替換」精神; 收回後 sticky 自然回來.
+          寬視窗改由 GameBoard 的 centerFooter 顯示。 */}
+      {!panelsInCenter && stickyPanels}
     </div>
   );
 }

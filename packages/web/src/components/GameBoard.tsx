@@ -2,8 +2,9 @@ import { Room, Player } from '@avalon/shared';
 import PlayerCard from './PlayerCard';
 import { motion } from 'framer-motion';
 import audioService from '../services/audio';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMediaQuery, WIDE_BOARD_QUERY } from '../hooks/useMediaQuery';
 
 interface GameBoardProps {
   room: Room;
@@ -21,6 +22,8 @@ interface GameBoardProps {
    */
   chatSlot?: ReactNode;
   scoresheetSlot?: ReactNode;
+  /** 寬視窗的派隊、投票與任務操作列，固定在中欄捲動區下方。 */
+  centerFooter?: ReactNode;
   /**
    * Leader team-selection wiring (#83 Phase 1). When `isPicking` is true, every
    * rail `PlayerCard` becomes a shield candidate; clicking toggles membership in
@@ -75,9 +78,8 @@ interface GameBoardProps {
  * 0-based index, so `seat 10` always renders as `seatNumber={10}` regardless of
  * which rail it lives in after the reverse.
  *
- * Desktop: three columns (~210px | flex-1 | ~210px).
- * Mobile (<768px): two vertical rails side-by-side (1fr | 1fr), center column wraps
- *   below spanning both columns. No horizontal scroll — every seat visible at once.
+ * 寬視窗依牌桌高度計算側欄寬度，讓每側五張卡完整顯示。
+ * 高度不足時改用橫卡，手機維持依寬度排列。
  */
 export default function GameBoard({
   room,
@@ -85,6 +87,7 @@ export default function GameBoard({
   children,
   chatSlot,
   scoresheetSlot,
+  centerFooter,
   isPicking = false,
   selectedTeamIds,
   onSeatClick,
@@ -93,6 +96,9 @@ export default function GameBoard({
   renderPlayerOverlay,
 }: GameBoardProps): JSX.Element {
   const { t } = useTranslation('game');
+  // 不支援容器單位的瀏覽器沿用原本欄寬。
+  const fitRailsToHeight =
+    useMediaQuery(WIDE_BOARD_QUERY) && typeof CSS !== 'undefined' && CSS.supports?.('width', '1cqh') === true;
   const players = Object.values(room.players);
   const playerIds = Object.keys(room.players);
   const leaderId = playerIds[room.leaderIndex % playerIds.length];
@@ -113,6 +119,49 @@ export default function GameBoard({
     .slice(splitIndex)
     .map((player, i) => ({ player, seatIndex: splitIndex + i }))
     .reverse();
+
+  // 欄寬同時受牌桌寬、高限制；扣除內距、邊框、列距與 4px 捨入餘裕。
+  // 大廳以房間容量計算列數，避免玩家加入時卡片跳動。
+  const railRows = Math.max(1, Math.ceil(Math.max(players.length, lobbyMode ? room.maxPlayers ?? 0 : 0) / 2));
+  const railByWidth = 'calc((100cqw - 8px - 2 * var(--board-gap)) / 4.5)';
+  const railByHeight =
+    `calc((100cqh - 2 * var(--rail-pad) - 2px - ${railRows - 1} * var(--rail-gap) - 4px) / ${railRows} * var(--player-card-ratio, 0.75) + 2 * var(--rail-pad) + 2px)`;
+  const railWidth = `min(${railByWidth}, max(52px, ${railByHeight}))`;
+  const gridColumns = fitRailsToHeight
+    ? `${railWidth} minmax(0, 1fr) ${railWidth}`
+    : 'minmax(0, 1fr) minmax(0, 2.5fr) minmax(0, 1fr)';
+
+  // 通知放在中欄聊天區，避免蓋住右側玩家或下方操作。離開牌桌時清除定位。
+  const centerSectionRef = useRef<HTMLElement>(null);
+  const chatWrapRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const section = centerSectionRef.current;
+    if (!section) return undefined;
+    const rootStyle = document.documentElement.style;
+    const publish = (): void => {
+      const r = section.getBoundingClientRect();
+      const chatTop = chatWrapRef.current?.getBoundingClientRect().top ?? r.top;
+      const top = Math.min(Math.max(r.top, chatTop), r.bottom - 120) + 8;
+      const vw = document.documentElement.clientWidth;
+      rootStyle.setProperty('--toast-right', `${Math.max(8, Math.round(vw - r.right + 8))}px`);
+      rootStyle.setProperty('--toast-top', `${Math.max(8, Math.round(top))}px`);
+      rootStyle.setProperty('--toast-bottom', 'auto');
+      rootStyle.setProperty('--toast-max-w', `${Math.max(160, Math.round(r.width - 16))}px`);
+    };
+    publish();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(publish) : null;
+    ro?.observe(section);
+    if (chatWrapRef.current) ro?.observe(chatWrapRef.current);
+    window.addEventListener('resize', publish);
+    return (): void => {
+      ro?.disconnect();
+      window.removeEventListener('resize', publish);
+      rootStyle.removeProperty('--toast-right');
+      rootStyle.removeProperty('--toast-top');
+      rootStyle.removeProperty('--toast-bottom');
+      rootStyle.removeProperty('--toast-max-w');
+    };
+  }, [fitRailsToHeight]);
 
   // Play sound on state change
   useEffect(() => {
@@ -264,6 +313,8 @@ export default function GameBoard({
           // tiles stay untouched (their tracker info is public Avalon state).
           selfTrackerHidden={!lobbyMode && player.id === currentPlayer.id && !isGameEnded}
           variant={lobbyMode ? 'lobby' : 'game'}
+          // 窄卡分層顯示底部資訊，圖示依卡寬縮放。
+          compact={fitRailsToHeight}
         />
         {overlay}
       </motion.div>
@@ -284,7 +335,7 @@ export default function GameBoard({
   const centerExtras = (chatSlot || scoresheetSlot) ? (
     <div className="flex flex-col lg:flex-row gap-3 flex-1 min-h-0">
       {chatSlot && (
-        <div className="flex-1 min-h-[360px] lg:min-h-0 flex flex-col">
+        <div ref={chatWrapRef} className="flex-1 min-h-[360px] lg:min-h-0 flex flex-col">
           {chatSlot}
         </div>
       )}
@@ -304,32 +355,50 @@ export default function GameBoard({
   //   gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2.5fr) minmax(0, 1fr)'
   // Each rail owns its own overflow-y-auto + min-h-0 so player columns never
   // grow the page; center section also owns its own scroll for phase panels.
+  //
+  // 內距與列距共用 CSS 變數，確保卡片尺寸公式和實際排版一致。
   return (
-    <main
-      className="grid gap-1 sm:gap-3 lg:gap-4 flex-1 min-h-0 px-1"
-      style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2.5fr) minmax(0, 1fr)' }}
+    <div
+      className={`flex-1 min-h-0 flex [--board-gap:4px] sm:[--board-gap:12px] lg:[--board-gap:16px] ${
+        fitRailsToHeight
+          ? '[container-type:size] [--rail-pad:clamp(4px,1.6cqh,8px)] [--rail-gap:clamp(4px,1.6cqh,8px)] [@media(max-height:640px)]:[--player-card-ratio:1.6] [@media(max-height:640px)]:[--card-token-max:18px] [@media(max-height:640px)]:[--card-top-max:16px]'
+          : '[--rail-pad:4px] sm:[--rail-pad:8px] [--rail-gap:4px] sm:[--rail-gap:8px]'
+      }`}
     >
-      {/* Left player rail — seats N..splitIndex+1 top-to-bottom (clockwise wrap) */}
-      <aside className="flex flex-col gap-1 sm:gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-lg sm:rounded-xl p-1 sm:p-2 overflow-y-auto min-h-0 min-w-0">
-        {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
-      </aside>
+      <main
+        className="grid gap-[var(--board-gap)] w-full h-full min-h-0 px-1"
+        style={{ gridTemplateColumns: gridColumns }}
+      >
+        {/* Left player rail — seats N..splitIndex+1 top-to-bottom (clockwise wrap) */}
+        <aside className="flex flex-col gap-[var(--rail-gap)] bg-avalon-card/30 border border-gray-700/60 rounded-lg sm:rounded-xl p-[var(--rail-pad)] overflow-y-auto min-h-0 min-w-0">
+          {leftRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'left'))}
+        </aside>
 
-      {/* Center — children (quest/vote/history) + chat/scoresheet slots
-          Edward 2026-04-25 19:56「上面要有一大塊空白」根因：center-column 頂部
-          原有 state banner（大字「投票中」+ X/N 已投票）與 GamePage header 的
-          actionBanner / MissionTrack 雙重指示 phase，多一條重複橫條 = 上方空白
-          + 推擠 children。砍 banner，actionBanner / MissionTrack 已足以指示
-          狀態。對齊 Edward 之前砍 currentActorLabel / goodCount/evilCount strip
-          的「上方排版太佔空間」一致原則。 */}
-      <section className="flex flex-col gap-2 sm:gap-3 min-w-0 min-h-0 overflow-y-auto">
-        {children}
-        {centerExtras}
-      </section>
+        {/* Center — children (quest/vote/history) + chat/scoresheet slots
+            Edward 2026-04-25 19:56「上面要有一大塊空白」根因：center-column 頂部
+            原有 state banner（大字「投票中」+ X/N 已投票）與 GamePage header 的
+            actionBanner / MissionTrack 雙重指示 phase，多一條重複橫條 = 上方空白
+            + 推擠 children。砍 banner，actionBanner / MissionTrack 已足以指示
+            狀態。對齊 Edward 之前砍 currentActorLabel / goodCount/evilCount strip
+            的「上方排版太佔空間」一致原則。
+            寬視窗操作列固定在中欄下方，不會跟著聊天內容捲走。 */}
+        <div className="flex flex-col gap-2 min-w-0 min-h-0">
+          <section ref={centerSectionRef} className="flex-1 flex flex-col gap-2 sm:gap-3 min-w-0 min-h-0 overflow-y-auto">
+            {children}
+            {centerExtras}
+          </section>
+          {centerFooter && (
+            <div className="shrink-0 min-w-0 rounded-lg sm:rounded-xl overflow-hidden empty:hidden">
+              {centerFooter}
+            </div>
+          )}
+        </div>
 
-      {/* Right player rail — seats 1..splitIndex top-to-bottom (clockwise start) */}
-      <aside className="flex flex-col gap-1 sm:gap-2 bg-avalon-card/30 border border-gray-700/60 rounded-lg sm:rounded-xl p-1 sm:p-2 overflow-y-auto min-h-0 min-w-0">
-        {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
-      </aside>
-    </main>
+        {/* Right player rail — seats 1..splitIndex top-to-bottom (clockwise start) */}
+        <aside className="flex flex-col gap-[var(--rail-gap)] bg-avalon-card/30 border border-gray-700/60 rounded-lg sm:rounded-xl p-[var(--rail-pad)] overflow-y-auto min-h-0 min-w-0">
+          {rightRail.map(({ player, seatIndex }) => renderPlayerCard(player, seatIndex, 'right'))}
+        </aside>
+      </main>
+    </div>
   );
 }
