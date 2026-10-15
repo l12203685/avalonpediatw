@@ -1521,6 +1521,48 @@ class EndToEndTest(unittest.TestCase):
     def files(self) -> list[str]:
         return sorted(p for p in os.listdir(self.tmp.name) if p != self.summary.name)
 
+    def test_raw_export_uses_current_merged_rows_even_when_cache_unchanged(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        first = self.out.read_bytes()
+        raw = Path(self.tmp.name) / "raw-sheets.json"
+        rc, log = self.run_main("--export-raw-sheets", str(raw), actions=True, summary=True)
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(self.out.read_bytes(), first)
+        self.assertEqual(json.loads(raw.read_text(encoding="utf-8")), {"牌譜": self.tabs["牌譜"]})
+        self.assertEqual(stat.S_IMODE(raw.stat().st_mode), 0o600)
+        self.assertIn("牌譜暫存匯出：4 列", log)
+        self.assertNotIn(str(raw), log + self.summary.read_text(encoding="utf-8"))
+        self.assertNotIn(self.tabs["牌譜"][1][LOG_HEADERS.index("文字記錄")], log)
+        self.assertFalse(any(name in log for name in E2E_PLAYERS))
+
+    def test_raw_export_refuses_compare_repo_and_cache_paths_before_fetch(self) -> None:
+        raw = Path(self.tmp.name) / "raw-sheets.json"
+        targets = [(["--compare"], raw), ([], gc.OUTPUT_PATH.parent / "raw-sheets.json"), ([], self.out)]
+        with mock.patch.object(gc, "open_spreadsheet") as fetch:
+            for args, target in targets:
+                rc, log = self.run_main(*args, "--export-raw-sheets", str(target))
+                self.assertEqual(rc, gc.EXIT_CONFIG)
+                self.assertNotIn(str(target), log)
+            fetch.assert_not_called()
+        self.assertFalse(raw.exists())
+
+    def test_raw_export_guard_failure_writes_no_export(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        self.tabs["牌譜"].pop()
+        raw = Path(self.tmp.name) / "raw-sheets.json"
+        rc, _ = self.run_main("--export-raw-sheets", str(raw))
+        self.assertEqual(rc, gc.EXIT_DATA)
+        self.assertFalse(raw.exists())
+
+    def test_raw_export_failure_does_not_log_path_or_replace_cache(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        before = self.out.read_bytes()
+        raw = Path(self.tmp.name) / "missing" / "raw-sheets.json"
+        rc, log = self.run_main("--export-raw-sheets", str(raw))
+        self.assertEqual(rc, gc.EXIT_DATA)
+        self.assertNotIn(str(raw), log)
+        self.assertEqual(self.out.read_bytes(), before)
+
     def test_refresh_carry_over_idempotence_and_guard(self) -> None:
         rc, log = self.run_main()  # first ever run: no previous file
         self.assertEqual(rc, 0, log)
@@ -3365,6 +3407,58 @@ class PlayerVotingTest(unittest.TestCase):
         self.assertEqual(rows["Tovo Wren"]["voting"]["r3Reject"]["loyal"]["votes"], 12)
         self.assertEqual(rows["Tovo Wren"]["winRate"], 100)
         self.assertEqual(cache["playerDetails"]["Tovo Wren"]["player"]["voting"], rows["Tovo Wren"]["voting"])
+class RawSheetsExportTest(unittest.TestCase):
+    def test_raw_rows_follow_merge_decisions_and_align_headers(self) -> None:
+        names = ["Tovo Wren"] + [""] * 9
+        main = [LOG_HEADERS, log_row("T1", "123456", "三紅", names, text="123\nxxx")]
+        # 本表既有的重複列仍保留；只沿用跨來源與匯入表內的既有去重規則。
+        main.append(main[1][:])
+        header = list(reversed(LOG_HEADERS)) + ["來源註記"]
+        added = log_row("T2", "987654", "三藍活", names, text="456\nooo")
+        extra = [header,
+                 list(reversed(log_row("D1", "123456", "三紅", names, text="123\nxxx"))) + ["虛構重複列"],
+                 list(reversed(added)) + ["虛構來源"],
+                 list(reversed(added)) + ["虛構重複列"],
+                 list(reversed(log_row("", "123456", "三紅", names))) + ["虛構無效列"]]
+        merged = gc.merge_game_logs(main, extra)
+        self.assertEqual((len(merged.games), merged.extra_added, merged.extra_duplicates), (3, 1, 2))
+        self.assertEqual(merged.raw_rows, [LOG_HEADERS + ["來源註記"], main[1] + [""], main[2] + [""],
+                                           added + ["虛構來源"]])
+        def fields(g: gc.GameRow) -> dict:
+            return {key: getattr(g, key) for key in gc.GameRow.__slots__}
+        self.assertEqual([fields(g) for g in gc.parse_game_log(merged.raw_rows)], [fields(g) for g in merged.games])
+
+    def test_export_is_atomic_private_and_logs_only_row_count(self) -> None:
+        merged = gc.merge_game_logs([LOG_HEADERS, log_row("T1", "123456", "三紅", ["Tovo Wren"] + [""] * 9)], None)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "raw.json"
+            path.write_text("{}", encoding="utf-8")
+            path.chmod(0o644)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                gc.export_raw_sheets(merged, path)
+            self.assertEqual(out.getvalue(), "牌譜暫存匯出：1 列\n")
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            before = path.read_bytes()
+            with mock.patch.object(gc.os, "replace", side_effect=OSError("虛構敏感路徑")):
+                with self.assertRaises(gc.FatalError) as error:
+                    gc.export_raw_sheets(merged, path)
+            self.assertNotIn("虛構敏感路徑", str(error.exception))
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(list(Path(tmp).iterdir()), [path])
+
+    def test_other_git_worktrees_and_symlinks_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            repo.mkdir()
+            (repo / ".git").write_text("gitdir: /fictional/path", encoding="utf-8")
+            link = root / "link"
+            link.symlink_to(repo, target_is_directory=True)
+            for target in (repo / "raw.json", link / "raw.json"):
+                with self.assertRaises(gc.FatalError):
+                    gc.raw_sheets_export_path(target, root / "analysis.json", False)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
