@@ -990,6 +990,8 @@ class GameLogMerge:
     extra_duplicates: int = 0  # dropped: fingerprint or 流水號 already seen (牌譜 wins)
     # (更新時間 as YYYY-MM-DD or "", fingerprint, kept) of every readable Discord匯入 game, in order.
     extra_log: list[tuple[str, str, bool]] = field(default_factory=list)
+    # 只供同一工作流程的暫存匯出；表頭在首列，資料列與 games 一一對應。
+    raw_rows: list[list[str]] = field(default_factory=list, repr=False)
 
     def rewritten_since(self, day: dt.date | None) -> tuple[int, int]:
         """(Discord匯入 rows rewritten from an edited post on or after `day` -- all of them when `day`
@@ -1014,8 +1016,19 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
 
     牌譜 rows are never deduplicated among themselves (as before this tab existed).
     """
-    games = parse_game_log(main_rows)
-    merged = GameLogMerge(games=games, main_games=len(games))
+    main_kept: list[list[str]] = []
+    games = parse_game_log(main_rows, kept_rows=main_kept)
+    headers = list(dict.fromkeys((h or "").strip() for rows in (main_rows, extra_rows)
+                                 if rows for h in rows[0]))
+
+    def align(rows: list[list[str]], row: list[str]) -> list[str]:
+        values: dict[str, str] = {}
+        for i, header in enumerate(rows[0]):
+            values.setdefault((header or "").strip(), row[i] if i < len(row) else "")
+        return [values.get(header, "") for header in headers]
+
+    merged = GameLogMerge(games=games, main_games=len(games),
+                          raw_rows=[headers] + [align(main_rows, row) for row in main_kept])
     if not extra_rows:
         return merged
     header = [(h or "").strip() for h in extra_rows[0]]
@@ -1028,7 +1041,8 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
                 updated[(row[gid] or "").strip()] = day
     seen_fp = {record_fingerprint(g.config, g.text_record) for g in games}
     seen_id = {g.id for g in games}
-    for g in parse_game_log(extra_rows):
+    extra_kept: list[list[str]] = []
+    for g, row in zip(parse_game_log(extra_rows, kept_rows=extra_kept), extra_kept):
         merged.extra_games += 1
         fp = record_fingerprint(g.config, g.text_record)
         kept = fp not in seen_fp and g.id not in seen_id
@@ -1039,11 +1053,12 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
         seen_fp.add(fp)
         seen_id.add(g.id)
         games.append(g)
+        merged.raw_rows.append(align(extra_rows, row))
         merged.extra_added += 1
     return merged
 
 
-def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
+def parse_game_log(rows: list[list[str]], *, kept_rows: list[list[str]] | None = None) -> list[GameRow]:
     """牌譜 rows (header first, as gspread's get_all_values returns them) -> games.
 
     Rows without 流水號 or without a 6-character 配置 are skipped.
@@ -1151,6 +1166,8 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
         g.kill = col(row, "刺殺").strip()
 
         game_rows.append(g)
+        if kept_rows is not None:
+            kept_rows.append(row)
 
     return game_rows
 
@@ -4120,9 +4137,10 @@ def load_previous_cache(path: Path, allow_shrink: bool = False) -> dict | None:
     return data
 
 
-def write_cache_atomically(cache: Mapping[str, Any], path: Path) -> None:
+def write_cache_atomically(cache: Mapping[str, Any], path: Path, *, mode: int | None = None) -> None:
     """Write via a temp file + rename, so a crash never leaves a half-written cache."""
-    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+    if mode is None:
+        mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -4135,6 +4153,28 @@ def write_cache_atomically(cache: Mapping[str, Any], path: Path) -> None:
         with contextlib.suppress(OSError):
             os.unlink(tmp_name)
         raise
+
+
+def raw_sheets_export_path(path: Path, output_path: Path, compare: bool) -> Path:
+    """含姓名及原始牌譜，只允許寫在 Git 工作目錄以外，且不能覆蓋分析快取。"""
+    target = path.resolve()
+    repo_root = Path(__file__).resolve().parents[2]
+    if compare:
+        raise FatalError("--export-raw-sheets 不能與 --compare 同時使用。", EXIT_CONFIG, "匯出設定錯誤")
+    if (target == output_path.resolve() or target.is_relative_to(repo_root)
+            or any((parent / ".git").exists() for parent in target.parents)):
+        raise FatalError("牌譜暫存檔必須放在 Git 工作目錄以外，且不能覆蓋分析快取。",
+                         EXIT_CONFIG, "匯出設定錯誤")
+    return target
+
+
+def export_raw_sheets(merged: GameLogMerge, path: Path) -> None:
+    """輸出當次去重後的列；消費端結束後必須刪除，不得提交或上傳 artifact。"""
+    try:
+        write_cache_atomically({GAME_LOG_TAB: merged.raw_rows}, path, mode=0o600)
+    except OSError:
+        raise FatalError("牌譜暫存匯出失敗。", EXIT_DATA, "牌譜暫存匯出失敗") from None
+    print(f"牌譜暫存匯出：{len(merged.games)} 列")
 
 
 # ---------------------------------------------------------------------------
@@ -4187,7 +4227,10 @@ def run(
     allow_field_loss: bool = False,
     compare: bool = False,
     compare_threshold: float = COMPARE_FIELD_CHANGE_PCT,
+    export_raw_sheets_path: Path | None = None,
 ) -> int:
+    raw_path = (raw_sheets_export_path(export_raw_sheets_path, output_path, compare)
+                if export_raw_sheets_path is not None else None)
     source = resolve_credentials_source()
     sheet_id = resolve_sheet_id()
     print(f"Credentials: {source.describe()}")
@@ -4254,6 +4297,9 @@ def run(
     if problems:
         raise FatalError(refusal, EXIT_DATA, "Analysis cache sanity check failed")
 
+    if raw_path is not None:
+        export_raw_sheets(merged, raw_path)
+
     if unchanged:
         print(f"{output_path.name} differs from the existing file only by the as-of day "
               f"(existing asOf {previous_as_of(previous)}, this run {as_of.isoformat()}); not written, nothing to commit.")
@@ -4306,13 +4352,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--compare-threshold", type=float, default=COMPARE_FIELD_CHANGE_PCT, metavar="PCT",
                         help="--compare lists the player fields whose value changed for more than PCT%% of "
                              "the players in both files (default: %(default)s)")
+    parser.add_argument("--export-raw-sheets", type=Path, metavar="PATH",
+                        help="將當次去重合併的牌譜列寫至 Git 工作目錄外的暫存檔；不得提交或上傳 artifact，"
+                             "消費步驟結束後須刪除；不可與 --compare 同用")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        return run(args.output, args.allow_shrink, args.allow_field_loss, args.compare, args.compare_threshold)
+        return run(args.output, args.allow_shrink, args.allow_field_loss, args.compare, args.compare_threshold,
+                   args.export_raw_sheets)
     except FatalError as exc:
         emit_error(str(exc), exc.title)
         return exc.exit_code
