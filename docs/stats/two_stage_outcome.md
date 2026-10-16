@@ -63,7 +63,7 @@
 "assassinationStage": {"games": 1228, "merlinKilled": 540, "merlinSurvived": 688, "killPct": 44.0, "survivePct": 56.0},
 "final": {"games": 2228, "redWins": 1540, "blueWins": 688, "redPct": 69.1, "bluePct": 30.9},
 "roleFinalWinRates": {"刺客": 70.1, "莫甘娜": 70.2, "莫德雷德": 70.0, "奧伯倫": 70.0, "派西維爾": 30.0, "梅林": 30.0, "忠臣": 30.0},
-"topPlayersByExcess": [{"name": "HAO", "excessWinRate": 7.9, "finalWinRate": 38.5, "games": 600}]
+"topPlayersByExcess": [{"name": "Tovo Wren", "excessWinRate": 7.9, "finalWinRate": 38.5, "games": 600}]
 ```
 
 `topPlayersByExcess` 門檻同 `topPlayersByTheory`（`MIN_GAMES_THRESHOLD` = 30），依全期縮減後超額勝率排序（`EXCESS_SHRINK_K` = 20）；保留給舊讀者，網站與機器人不再顯示。
@@ -263,6 +263,8 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
   實作補充：只改 `oneLineHook`／`oneLineHookEn`／`takeaway`／`takeawayEn`（文字由各研究自己的數字生成），數字欄位不動；`L142.data.rows[]` 與 `data.highEvCells[]` 各加 `lowSample`（`total` / `n` < 30）。函式是純函式且冪等，第一次沒有舊快取時 featureStudies 只有 L141。
 
 ## 檔案分工
+
+複合篩選的每局資料集、PR 母體、投票重算與默契分母見 [filter_engine.md](filter_engine.md)。資料集版本 2 只保存解析後的提案座位與票數資訊，不包含牌譜原文；`players[].voting` 由同一組篩選後對局重算，第 5 次強制提議一律不算票。角色理論的 PR 必須先打滿各角色視窗，自訂最低場數只能增加資格限制。
 
 | 範圍 | 檔案 |
 |---|---|

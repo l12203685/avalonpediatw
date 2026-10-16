@@ -337,6 +337,10 @@ export interface OverviewData {
   /** schemaVersion 4: ≥ overallMinGames (250) career games, by 整體理論 = the career role theory (all-time). */
   topPlayersByOverallTheory?: OverallTheoryRankingRow[];
   /**
+   * 複合篩選：同一次產生的每局資料集批次鍵；端點只提供與分析快取批次相同的資料集。
+   */
+  gamesKey?: string;
+  /**
    * Edward 2026-04-27 — `outcomes` (per-seat 三結果 distribution) and
    * `roles[].outcomes` (per-role 三結果 distribution) added so the deep
    * analytics overview tooltip can show the seat outcome split. Optional for
@@ -794,7 +798,7 @@ export interface FeatureStudiesData {
   features: FeatureStudyEntry[];
 }
 
-interface AnalysisCache {
+export interface AnalysisCache {
   overview: OverviewData;
   /**
    * seatOutcomesSource: "games" when players[].seatOutcomes are the players' own games.
@@ -903,6 +907,13 @@ function loadCache(): AnalysisCache {
   throw new Error(
     'analysis_cache.json not found. Run generate_cache.py locally to create it.',
   );
+}
+
+/**
+ * 回傳唯讀分析快取；缺檔時拋出錯誤。每局資料集端點據此建立計算背景並驗證引擎結果。
+ */
+export function getAnalysisCache(): Readonly<AnalysisCache> {
+  return loadCache();
 }
 
 /**

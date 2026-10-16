@@ -1,7 +1,10 @@
 """Offline tests for generate_cache.py: credentials, sanity guards, carry-over, write path,
 --compare, the per-player stats it aggregates from 牌譜, the two-stage outcome fields, the
-theory win rates (TheoryTest: hand-computed), the leaderboard, and the featureStudies it
-computes / annotates. Every cache is built for a fixed reference day (never "today").
+theory win rates (TheoryTest: hand-computed), the leaderboard, the featureStudies it
+computes / annotates, and the game-level dataset games_cache.json written with the cache
+(複合篩選, Edward 2026-10-14: NoteTagTest, GamesDatasetTest, SnapshotDatasetTest,
+DatasetEndToEndTest -- round trip, no free text, written together or withheld). Every cache is
+built for a fixed reference day (never "today").
 
 No network and no Google libraries needed (stdlib unittest; pytest also collects it).
 Fixtures are fake, except read-only checks against checked-in data: the committed
@@ -776,7 +779,7 @@ class PlayerAggregationTest(unittest.TestCase):
         self.assertEqual(gc.normalize_player_name(" 甲\u3000"), "甲")
         self.assertEqual(gc.normalize_player_name("\u200b乙\ufeff"), "乙")
         self.assertEqual(gc.normalize_player_name("A\u3000 \u00a0B"), "A B")
-        self.assertEqual(gc.normalize_player_name("Sin"), "Sin")  # case kept: Sin / SIN / sin differ
+        self.assertEqual(gc.normalize_player_name("Tovo Wren"), "Tovo Wren")  # 保留大小寫。
         self.assertEqual(gc.normalize_player_name(""), "")
         self.assertEqual(gc.normalize_player_name(None), "")
 
@@ -1363,7 +1366,7 @@ SNAPSHOT = Path(__file__).resolve().parent / "sheets_cache.json"
 # player name -> key table shared with the TS matcher's test (src/__tests__/PlayerNameLookup.test.ts).
 NAME_KEY_CASES = Path(__file__).resolve().parent / "src" / "__tests__" / "fixtures" / "player_name_keys.json"
 REBUILD_FINGERPRINT = {"totalGames": 2146, "totalPlayers": 198, "threeRed": 999, "threeBlueDead": 499, "threeBlueAlive": 648}
-GAME_1276_PLAYERS = ["呂安", "Dean", "布冬", "軒", "HAO", "洋蔥", "大星", "JOY", "kevin", "Sin"]
+GAME_1276_PLAYERS = ['Tovo Wren', 'Ilse Marr', 'Quill Fen', 'Fable Alder', 'Fable Birch', 'Fable Cedar', 'Fable Elm', 'Fable Fir', 'Fable Hazel', 'Fable Willow']
 
 
 def rebuild_outcome(row: list[str], idx: dict[str, int]) -> str:
@@ -1617,7 +1620,7 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(rc, gc.EXIT_DATA)
         self.assertIn("players.players is empty", log)
         self.assertEqual(self.out.read_bytes(), second_bytes)
-        self.assertEqual(self.files(), ["analysis_cache.json"])
+        self.assertEqual(self.files(), ["analysis_cache.json", "games_cache.json"])
 
     def test_next_day_without_new_games_writes_nothing(self) -> None:
         self.assertEqual(self.run_main()[0], 0)
@@ -1629,7 +1632,7 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(self.out.read_bytes(), first_bytes)  # not rewritten: the workflow has nothing to commit
         self.assertIn("only by the as-of day", log)
         self.assertIn("not written", log)
-        self.assertEqual(self.files(), ["analysis_cache.json"])
+        self.assertEqual(self.files(), ["analysis_cache.json", "games_cache.json"])
 
         rc, log = self.run_main("--compare", as_of=next_day, summary=True)  # the preview says so too
         self.assertEqual(rc, 0, log)
@@ -1763,7 +1766,7 @@ class EndToEndTest(unittest.TestCase):
         rc, log = self.run_main("--compare", summary=True)
         self.assertEqual(rc, 0, log)
         self.assertEqual(self.out.read_bytes(), before)  # nothing written
-        self.assertEqual(self.files(), ["analysis_cache.json"])
+        self.assertEqual(self.files(), ["analysis_cache.json", "games_cache.json"])
         summary = self.summary.read_text(encoding="utf-8")
         self.assertIn("預覽（--compare，未寫入）", summary)
         self.assertIn("- 玩家：3 → 4；新增 1：玩家新", summary)
@@ -2221,7 +2224,7 @@ class LeaderboardTest(unittest.TestCase):
         # Same games and career games: by name (code points, 乙 U+4E59 before 甲 U+7532); 丙 14/20 = 70.0 is
         # not a holder.
         self.assertEqual(assassins, [("乙", 75.0), ("甲", 75.0)])
-        # Single holder when nobody ties.
+        # Fable Willowgle holder when nobody ties.
         cache = build_fresh(runs({"甲": 15, "乙": 16}))
         board = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "roleTitles")
         self.assertEqual([(r["name"], r["value"]) for r in board["rows"] if r["role"] == "刺客"], [("乙", 80.0)])
@@ -3426,6 +3429,383 @@ class RawSheetsExportTest(unittest.TestCase):
                                            added + ["虛構來源"]])
         def fields(g: gc.GameRow) -> dict:
             return {key: getattr(g, key) for key in gc.GameRow.__slots__}
+        self.assertEqual([fields(g) for g in gc.parse_game_log(merged.raw_rows)], [fields(g) for g in merged.games])
+
+    def test_export_is_atomic_private_and_logs_only_row_count(self) -> None:
+        merged = gc.merge_game_logs([LOG_HEADERS, log_row("T1", "123456", "三紅", ["Tovo Wren"] + [""] * 9)], None)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "raw.json"
+            path.write_text("{}", encoding="utf-8")
+            path.chmod(0o644)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                gc.export_raw_sheets(merged, path)
+            self.assertEqual(out.getvalue(), "牌譜暫存匯出：1 列\n")
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            before = path.read_bytes()
+            with mock.patch.object(gc.os, "replace", side_effect=OSError("虛構敏感路徑")):
+                with self.assertRaises(gc.FatalError) as error:
+                    gc.export_raw_sheets(merged, path)
+            self.assertNotIn("虛構敏感路徑", str(error.exception))
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(list(Path(tmp).iterdir()), [path])
+
+    def test_other_git_worktrees_and_symlinks_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            repo.mkdir()
+            (repo / ".git").write_text("gitdir: /fictional/path", encoding="utf-8")
+            link = root / "link"
+            link.symlink_to(repo, target_is_directory=True)
+            for target in (repo / "raw.json", link / "raw.json"):
+                with self.assertRaises(gc.FatalError):
+                    gc.raw_sheets_export_path(target, root / "analysis.json", False)
+
+
+# ---------------------------------------------------------------------------
+# Game-level dataset (games_cache.json; 複合篩選, Edward 2026-10-14)
+# ---------------------------------------------------------------------------
+
+DATASET_HEADERS = LOG_HEADERS + ["場次", "note"]
+# Free text that must never reach games_cache.json (invented: the note's 測試員丁 is nobody).
+SECRET_NOTE = "[3-2]9家改為測試員丁代打。"
+SECRET_TEXT = "1237 +4 -5 說他是紅的\nooo\n2>8 x 機密宣告\n2468 機密提案\noxo"
+SECRET_TITLE = "秘密貼文標題"
+
+
+def dataset_row(gid: str, config: str, outcome: str, names: list[str], date: str = "", slot: str = "", note: str = "",
+                **cells: str) -> list[str]:
+    """A 牌譜 row with the 場次 and note columns; `cells` overrides any column (e.g. 首湖="7o>1")."""
+    row = log_row(gid, config, outcome, names, date=date, category=cells.pop("分類", "線瓦"),
+                  text=cells.pop("文字記錄", DEFAULT_TEXT), kill=cells.pop("刺殺", ""))
+    row += [slot, note]
+    for column, value in cells.items():
+        row[DATASET_HEADERS.index(column)] = value
+    return row
+
+
+def dataset_log() -> list[list[str]]:
+    """leaderboard_log() (boards, timelines, undated games) with 場次 / note, plus odd cells the dataset must
+    carry without changing any number: a stray character in 1-1, 局勢, 第一局 and 第一局成功失敗, a lake
+    cell like 7o>1, a 分類 and a 結果 outside the lists, a two-character 刺殺, a full-width captain."""
+    rows = [DATASET_HEADERS] + [row + [str(i % 7 + 1), ("S2", "古亭", "", "我旁觀")[i % 4]]
+                                for i, row in enumerate(leaderboard_log()[1:])]
+    rows += [
+        dataset_row("X1", "123456", "三藍活", SEAT_NAMES, date="2026/07/26", slot="3", note=SECRET_NOTE,
+                    **{"1-1": "1 5", "局勢": "", "第一局": "紅 ", "第一局成功失敗": "oox ", "首湖": "7o>1",
+                       "分類": "比賽", "刺殺": "10", "文字記錄": "３457\nooo\n" + SECRET_TEXT}),
+        dataset_row("X2", "654321", "平手", SEAT_NAMES, date="2026/07/27", note="測試員丁線瓦"),
+        dataset_row("X3", "135790", "三紅", SEAT_NAMES, date="2026/07/27", note="Discopia星球[1-2]梅林踩拇指"),
+    ]
+    return rows
+
+
+def run_like_games(log: list[list[str]], as_of: dt.date = TEST_AS_OF, extra: list[list[str]] | None = None) -> list:
+    """與 run 相同：合併牌譜、檢查日期、合併名字並固定排序日期。"""
+    games, _ = gc.drop_dates_after(gc.merge_game_logs(log, extra).games, as_of)
+    games, _ = gc.canonicalize_player_names(games)
+    return gc.assign_timeline_dates(games)
+
+
+def dataset_and_cache(games: list, as_of: dt.date = TEST_AS_OF) -> tuple[dict, dict]:
+    dataset = gc.encode_games_dataset(games)
+    cache, _ = gc.assemble_cache(
+        gc.build_cache(games, {}, as_of, games_key=dataset["key"]), None,
+        strength_builder=lambda players: {"perPlayer": {}}, placeholder_builders={}, games=games, as_of=as_of,
+    )
+    return dataset, json.loads(json.dumps(cache, ensure_ascii=False))
+
+
+class NoteTagTest(unittest.TestCase):
+    def test_whitelist_only(self) -> None:
+        cases = {
+            "S2": ("season:S2",), " 古亭週五 ": ("venue:古亭",), "九號": ("venue:九號",), "９號": ("venue:九號",),
+            "台中家": ("venue:台中家",), "我旁觀": ("flag:spectated",), "旁觀": ("flag:spectated",),
+            "不是我打的": ("flag:notRecorderGame",), "覆盤局": ("flag:review",), "爛局": ("flag:badGame",),
+            "[2025/8/14 update]湖女": ("flag:lakeCorrected",),
+            "Discopia星球[1-4]梅林踩拇指[2025/8/14 update]湖女": ("venue:Discopia星球", "flag:lakeCorrected", "flag:incident"),
+            "[1-1]派西踩拇指": ("flag:incident",), SECRET_NOTE: ("flag:substitution", "flag:incident"),
+            "測試員丁": (), "測試員丁線瓦": (), "古亭XYZ": (), "6家在1-5表壞": (), "S4": (), "": (), None: (),
+        }
+        for raw, tags in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(gc.parse_note_tags(raw), tags)
+        self.assertEqual(len(gc.NOTE_TAG_VOCAB), len(set(gc.NOTE_TAG_VOCAB)))
+        self.assertTrue(all(t.startswith(("season:", "venue:", "flag:")) for t in gc.NOTE_TAG_VOCAB))
+
+    def test_slot(self) -> None:
+        for raw, slot in {"3": 3, " 12 ": 12, "１２": 12, "": 0, None: 0, "3a": 0, "-1": 0}.items():
+            self.assertEqual(gc.parse_slot(raw), slot)
+
+
+class GamesDatasetTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.games = run_like_games(dataset_log())
+        cls.dataset, cls.cache = dataset_and_cache(cls.games)
+        cls.text = gc.dump_games_dataset(cls.dataset)
+
+    def test_shape(self) -> None:
+        ds = self.dataset
+        self.assertEqual(list(ds), ["format", "version", "key", "cacheSchemaVersion", "config", "constants", "counts",
+                                    "vocab", "players", "aliases", "fields", "games"])
+        self.assertEqual((ds["format"], ds["version"], ds["cacheSchemaVersion"]), ("avalon-games", 2, 4))
+        self.assertEqual(ds["counts"], {"games": 235, "fromSheet": 235, "fromDiscord": 0, "players": 21, "dated": 233, "undated": 2})
+        self.assertEqual(ds["config"]["leaderboard"], gc.LEADERBOARD_CONFIG)
+        self.assertEqual(ds["config"]["theoryWindows"], [100])
+        self.assertEqual(ds["constants"]["roleDealTenths"]["忠臣"], 4)
+        self.assertEqual(ds["players"][:3], ["甲", "乙", "丙"])
+        self.assertEqual(ds["aliases"], {})
+        self.assertEqual(self.cache["overview"]["gamesKey"], ds["key"])
+        self.assertEqual(json.loads(self.text), ds)  # the file is the dataset
+        # 每局一行，每日新增對局只需增加少量行數。
+        self.assertEqual(sum(1 for line in self.text.splitlines() if line.startswith('    ["')), 235)
+
+    def test_rows(self) -> None:
+        ds = self.dataset
+        fields = ds["fields"]
+        rows = {r[0]: dict(zip(fields, r)) for r in ds["games"]}
+        self.assertTrue(all(gid.startswith("H") and len(gid) == 11 for gid in rows))  # U0, Y0, S0...: hashed
+        tiny = [LOG_HEADERS, log_row("1234", "123456", "三紅", SEAT_NAMES), log_row("1235", "123456", "三紅", SEAT_NAMES)]
+        tiny[2][LOG_HEADERS.index("局勢")] = "紅藍?"  # not ^[紅藍]{1,5}$: "?" (a top-20 state then withholds, see below)
+        small = gc.encode_games_dataset(gc.parse_game_log(tiny))
+        self.assertEqual([r[0] for r in small["games"]], ["1234", "1235"])  # a plain 流水號 stays
+        self.assertEqual(small["vocab"]["state"], ["藍紅藍", "?"])
+        self.assertEqual([r[fields.index("state")] for r in small["games"]], [0, 1])
+        x1 = next(dict(zip(fields, r)) for r in ds["games"] if r[fields.index("slot")] == 3 and r[fields.index("note")] == [
+            gc.NOTE_TAG_VOCAB.index("flag:substitution"), gc.NOTE_TAG_VOCAB.index("flag:incident")])
+        self.assertEqual(ds["vocab"]["category"][x1["cat"]], "其他")  # 比賽
+        self.assertEqual(x1["kill"], "?")  # 10: not one seat character
+        self.assertEqual(x1["firstTeam"], "1?5")
+        self.assertEqual(x1["rounds"], "?RB--")
+        self.assertEqual(x1["missions"], "oox?|oxo|ooo||")
+        self.assertEqual(x1["state"], -1)  # blank
+        self.assertEqual(x1["lakes"], "?1----")
+        self.assertEqual(x1["captains"], "?12")  # ３457 (full-width), 1237, 2468
+        self.assertEqual(x1["claims"], "28x")
+        x2 = next(dict(zip(fields, r)) for r in ds["games"] if ds["vocab"]["outcome"][r[fields.index("outcome")]] == "其他")
+        self.assertEqual(x2["note"], [])
+        three_red_kills = [r[fields.index("kill")] for r in ds["games"] if r[fields.index("outcome")] == 0]
+        self.assertEqual(set(three_red_kills), {""})  # 刺殺 only travels with 三藍 games
+
+    def test_round_trip_reproduces_every_section(self) -> None:
+        self.assertEqual(gc.games_dataset_problems(self.dataset, self.cache, self.games, TEST_AS_OF), [])
+        decoded = gc.decode_games_dataset(json.loads(self.text))
+        rebuilt = gc.build_cache(decoded, {}, TEST_AS_OF, games_key=self.dataset["key"])
+        for key in gc.GAMES_DATASET_SECTIONS:
+            self.assertEqual(gc._canonical({"v": rebuilt[key]}), gc._canonical({"v": self.cache[key]}), key)
+        self.assertEqual([g.timeline_date for g in decoded], [g.timeline_date for g in self.games])
+        self.assertEqual([g.captains for g in decoded][-3:], [("?", "1", "2"), ("1", "2"), ("1", "2")])
+
+    def test_nothing_but_structured_fields(self) -> None:
+        for secret in ("測試員丁", "代打", "機密", "說他", "踩拇指", "比賽", "平手", "1 5"):
+            self.assertNotIn(secret, self.text)
+        self.assertEqual(gc.games_dataset_privacy_problems(self.dataset), [])
+        tampered = copy.deepcopy(self.dataset)
+        tampered["games"][0][gc.GAMES_DATASET_FIELDS.index("missions")] = "ooo 機密|||| "
+        tampered["vocab"]["state"][0] = "機密"
+        tampered["key"] = gc.games_dataset_key(tampered)
+        problems = gc.games_dataset_privacy_problems(tampered)
+        self.assertEqual(problems, ["vocab.state", "games[].missions: 1 row(s)"])
+        self.assertFalse(any("機密" in p for p in problems))
+        tampered["key"] = "0" * 16
+        self.assertIn("key does not match the content", gc.games_dataset_privacy_problems(tampered))
+
+    def test_discord_rows(self) -> None:
+        header = DATASET_HEADERS + ["discord_post_id", "discord_title"]
+        extra = [header, dataset_row("D123456789", "246802", "三藍死", SEAT_NAMES, date="2026/07/28")
+                 + ["123456789", SECRET_TITLE]]
+        games = run_like_games(dataset_log(), extra=extra)
+        dataset, cache = dataset_and_cache(games)
+        text = gc.dump_games_dataset(dataset)
+        self.assertNotIn(SECRET_TITLE, text)
+        self.assertNotIn("123456789", text)
+        self.assertEqual((dataset["counts"]["fromSheet"], dataset["counts"]["fromDiscord"]), (235, 1))
+        last = dataset["games"][-1]
+        self.assertTrue(last[0].startswith("D") and len(last[0]) == 11)
+        self.assertEqual(last[1], gc.GAME_SOURCE_DISCORD)
+        self.assertEqual(gc.games_dataset_problems(dataset, cache, games, TEST_AS_OF), [])
+
+    def test_key(self) -> None:
+        again = gc.encode_games_dataset(run_like_games(dataset_log()))
+        self.assertEqual(again, self.dataset)
+        self.assertRegex(self.dataset["key"], r"^[0-9a-f]{16}$")
+        log = dataset_log()
+        log[5][DATASET_HEADERS.index("分類")] = "面瓦"  # only a 分類: no section changes, the key does
+        other = gc.encode_games_dataset(run_like_games(log))
+        self.assertNotEqual(other["key"], self.dataset["key"])
+
+    def test_withheld_when_the_round_trip_differs(self) -> None:
+        """A 配置 with a letter turns into "?", like a lake holder "7o": both now name the same seat."""
+        log = dataset_log()
+        log.append(dataset_row("X9", "12a456", "三紅", SEAT_NAMES, date="2026/07/28", **{"首湖": "7o>1"}))
+        games = run_like_games(log)
+        dataset, cache = dataset_and_cache(games)
+        problems = gc.games_dataset_problems(dataset, cache, games, TEST_AS_OF)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("round trip differs at", problems[0])
+        self.assertIn("lake.perLake[0]", problems[0])
+        stale = copy.deepcopy(cache)
+        stale["overview"]["gamesKey"] = "0" * 16
+        self.assertIn("overview.gamesKey is not the dataset's key", gc.games_dataset_problems(self.dataset, stale, self.games, TEST_AS_OF))
+
+    def test_refactor_changes_no_number(self) -> None:
+        """captains / lake_claims are 文字記錄 parsed once; timeline_date is player_timelines' own rule."""
+        raw = gc.merge_game_logs(dataset_log(), None).games
+        for g in raw:
+            self.assertEqual(g.captains, tuple(gc._parse_captain_per_mission(g.text_record)[:5]))
+            self.assertEqual(g.lake_claims, tuple(gc.parse_lake_claims(g.text_record)[:3]))
+        plain = gc.build_cache(raw, {}, TEST_AS_OF)
+        fixed = gc.build_cache(gc.assign_timeline_dates(raw), {}, TEST_AS_OF)
+        self.assertEqual(gc._canonical(plain), gc._canonical(fixed))
+        if sys.version_info < (3, 12):  # 3.12 compensates; _sum_ltr is the 3.11 behaviour CI runs
+            values = [0.1 * i for i in range(1, 30)]
+            self.assertEqual(gc._sum_ltr(values), sum(values))
+
+    def test_timeline_of_a_subset_keeps_each_game_in_place(self) -> None:
+        """甲 plays A0 (dated 03-02), A1 (undated: sorts with A0), A2 (03-01). Without A0 the plain rule would
+        move A1 to the top; with timeline_date from all the games it stays after A2."""
+        rows = [LOG_HEADERS,
+                log_row("A0", "123456", "三紅", SEAT_NAMES, date="2026/03/02"),
+                log_row("A1", "213456", "三紅", SEAT_NAMES),
+                log_row("A2", "231456", "三紅", SEAT_NAMES, date="2026/03/01")]
+        games = gc.assign_timeline_dates(gc.parse_game_log(rows))
+        subset = games[1:]
+        self.assertEqual([s.role for s in gc.player_timelines(subset)["甲"]], ["莫德雷德", "莫甘娜"])
+        plain = gc.parse_game_log(rows)[1:]
+        self.assertEqual([s.role for s in gc.player_timelines(plain)["甲"]], ["莫甘娜", "莫德雷德"])
+
+
+class SnapshotDatasetTest(unittest.TestCase):
+    """固定 2,146 局牌譜快照：每個支援區塊皆可由資料集完全重現。"""
+
+    def test_snapshot_round_trip(self) -> None:
+        if not SNAPSHOT.exists():
+            self.skipTest("sheets_cache.json not found")
+        log = json.loads(SNAPSHOT.read_text(encoding="utf-8")).get("牌譜") or []
+        as_of = dt.date(2026, 2, 28)
+        games = run_like_games(log, as_of)
+        if len(games) != 2146:
+            self.skipTest("sheets_cache.json is not the 2146-game snapshot")
+        dataset, cache = dataset_and_cache(games, as_of)
+        self.assertEqual(gc.games_dataset_problems(dataset, cache, games, as_of), [])
+        self.assertEqual((dataset["counts"]["players"], dataset["counts"]["dated"]), (171, 2083))
+        cats = Counter(r[gc.GAMES_DATASET_FIELDS.index("cat")] for r in dataset["games"])
+        self.assertEqual([cats[i] for i in range(5)], [1373, 627, 146, 0, 0])
+        self.assertLess(len(gc.dump_games_dataset(dataset).encode("utf-8")), 2_000_000)
+
+
+class DatasetEndToEndTest(unittest.TestCase):
+    """以虛構試算表驗證兩份快取一起更新，以及資料集停寫時的退回行為。"""
+
+    setUp = EndToEndTest.setUp
+    tearDown = EndToEndTest.tearDown
+    run_main = EndToEndTest.run_main
+    files = EndToEndTest.files
+
+    def games_file(self) -> Path:
+        return self.out.with_name(gc.GAMES_OUTPUT_NAME)
+
+    def test_written_together_and_bound_by_the_key(self) -> None:
+        rc, log = self.run_main(summary=True)
+        self.assertEqual(rc, 0, log)
+        cache = json.loads(self.out.read_text(encoding="utf-8"))
+        dataset = json.loads(self.games_file().read_text(encoding="utf-8"))
+        self.assertEqual(cache["overview"]["gamesKey"], dataset["key"])
+        self.assertEqual(len(dataset["games"]), cache["overview"]["totalGames"])
+        self.assertIn("每局資料集：4 局、3 位", self.summary.read_text(encoding="utf-8"))
+        self.assertIn("round-trip 通過", self.summary.read_text(encoding="utf-8"))
+        first = (self.out.read_bytes(), self.games_file().read_bytes())
+
+        rc, _ = self.run_main(as_of=(AS_OF + dt.timedelta(days=1)).isoformat())  # only the day: neither
+        self.assertEqual(rc, 0)
+        self.assertEqual((self.out.read_bytes(), self.games_file().read_bytes()), first)
+
+        self.tabs["牌譜"][2][LOG_HEADERS.index("分類")] = "面瓦"  # no section changes, the dataset does
+        rc, log = self.run_main()
+        self.assertEqual(rc, 0, log)
+        cache2 = json.loads(self.out.read_text(encoding="utf-8"))
+        dataset2 = json.loads(self.games_file().read_text(encoding="utf-8"))
+        self.assertNotEqual(dataset2["key"], dataset["key"])
+        self.assertEqual(cache2["overview"]["gamesKey"], dataset2["key"])  # both rewritten
+        self.assertEqual({k: v for k, v in cache2["overview"].items() if k != "gamesKey"},
+                         {k: v for k, v in cache["overview"].items() if k != "gamesKey"})
+
+        self.games_file().unlink()  # a missing dataset is written again even if the cache would not change
+        rc, _ = self.run_main()
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.loads(self.games_file().read_text(encoding="utf-8")), dataset2)
+
+    def test_withheld_dataset_keeps_the_cache_going(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        old_dataset = self.games_file().read_bytes()
+        row = self.tabs["牌譜"][1]
+        row[LOG_HEADERS.index("配置")] = "12a456"  # round trip differs (see GamesDatasetTest)
+        row[LOG_HEADERS.index("首湖")] = "7o>1"
+        self.tabs["牌譜"].append(log_row("T9", "123456", "三紅", E2E_PLAYERS + [""] * 7))
+        github_output = Path(self.tmp.name) / "github_output"
+        env = {"GITHUB_ACTIONS": "true", "GITHUB_OUTPUT": str(github_output)}
+        with mock.patch.dict(os.environ, env):
+            rc, log = self.run_main(summary=True)
+        self.assertEqual(rc, 0, log)
+        cache = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(cache["overview"]["totalGames"], 5)  # the cache moved on
+        self.assertEqual(self.games_file().read_bytes(), old_dataset)  # the dataset did not
+        self.assertNotEqual(cache["overview"]["gamesKey"], json.loads(old_dataset)["key"])  # -> filters off
+        self.assertIn("games_dataset=withheld", github_output.read_text(encoding="utf-8"))
+        self.assertIn("::error title=Games dataset withheld::", log)
+        self.assertIn("暫停寫入", self.summary.read_text(encoding="utf-8"))
+        for name in E2E_PLAYERS:  # public log: counts and paths only
+            self.assertNotIn(name, log + self.summary.read_text(encoding="utf-8"))
+        self.assertEqual(self.files(), ["analysis_cache.json", "games_cache.json", "github_output"])
+
+        row[LOG_HEADERS.index("配置")] = "123456"  # fixed in the Sheet: both written again
+        with mock.patch.dict(os.environ, env):
+            rc, log = self.run_main()
+        self.assertEqual(rc, 0, log)
+        self.assertIn("games_dataset=ok", github_output.read_text(encoding="utf-8"))
+        dataset = json.loads(self.games_file().read_text(encoding="utf-8"))
+        self.assertEqual(json.loads(self.out.read_text(encoding="utf-8"))["overview"]["gamesKey"], dataset["key"])
+
+    def test_compare_writes_neither(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        before = (self.out.read_bytes(), self.games_file().read_bytes())
+        self.tabs["牌譜"].append(log_row("T9", "123456", "三紅", E2E_PLAYERS + [""] * 7))
+        rc, log = self.run_main("--compare", summary=True)
+        self.assertEqual(rc, 0, log)
+        self.assertEqual((self.out.read_bytes(), self.games_file().read_bytes()), before)
+        self.assertIn("每局資料集：5 局", self.summary.read_text(encoding="utf-8"))
+        self.assertIn("nor games_cache.json", log)
+
+    def test_games_output_flag(self) -> None:
+        other = Path(self.tmp.name) / "sub"
+        other.mkdir()
+        rc, log = self.run_main("--games-output", str(other / "g.json"))
+        self.assertEqual(rc, 0, log)
+        self.assertTrue((other / "g.json").exists())
+        self.assertFalse(self.games_file().exists())
+
+
+class RawSheetsExportTest(unittest.TestCase):
+    def test_raw_rows_follow_merge_decisions_and_align_headers(self) -> None:
+        names = ["Tovo Wren"] + [""] * 9
+        main = [LOG_HEADERS, log_row("T1", "123456", "三紅", names, text="123\nxxx")]
+        # 本表既有的重複列仍保留；只沿用跨來源與匯入表內的既有去重規則。
+        main.append(main[1][:])
+        header = list(reversed(LOG_HEADERS)) + ["來源註記"]
+        added = log_row("T2", "987654", "三藍活", names, text="456\nooo")
+        extra = [header,
+                 list(reversed(log_row("D1", "123456", "三紅", names, text="123\nxxx"))) + ["虛構重複列"],
+                 list(reversed(added)) + ["虛構來源"],
+                 list(reversed(added)) + ["虛構重複列"],
+                 list(reversed(log_row("", "123456", "三紅", names))) + ["虛構無效列"]]
+        merged = gc.merge_game_logs(main, extra)
+        self.assertEqual((len(merged.games), merged.extra_added, merged.extra_duplicates), (3, 1, 2))
+        self.assertEqual(merged.raw_rows, [LOG_HEADERS + ["來源註記"], main[1] + [""], main[2] + [""],
+                                           added + ["虛構來源"]])
+        def fields(g: gc.GameRow) -> dict:
+            return {key: getattr(g, key) for key in gc.GameRow.__slots__ if key != "source"}
         self.assertEqual([fields(g) for g in gc.parse_game_log(merged.raw_rows)], [fields(g) for g in merged.games])
 
     def test_export_is_atomic_private_and_logs_only_row_count(self) -> None:

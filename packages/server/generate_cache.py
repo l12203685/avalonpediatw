@@ -12,6 +12,8 @@ Usage:
     python generate_cache.py                 # owner's PC: default key path below
     python generate_cache.py --compare       # dry run: show what would change, write nothing
     python generate_cache.py --allow-shrink  # accept a deliberate drop in games/players
+    python generate_cache.py --games-output PATH  # the game-level dataset (default: games_cache.json
+                                                  # 預設位於 --output 旁）
 
 Configuration (environment variables, all optional, checked in this order):
     AVALON_STATS_CREDENTIALS_FILE  path to a service-account JSON key file
@@ -70,6 +72,17 @@ existing file is that day writes nothing (only_the_day_changed): the workflow th
 has nothing to commit and Render does not redeploy. A 日期時間 after the as-of day
 is a typo and counts as no date (drop_dates_after; the run logs how many).
 
+Game-level dataset (複合篩選, Edward 2026-10-14「我希望所有數據都有可以複合篩選的功能」): the same run
+writes games_cache.json next to the cache (--games-output; encode_games_dataset): one row per game of
+the merged log with the parsed, structured fields only (names via a players table; never 文字記錄, the
+note text, 頁碼, 組成 or a Discord title -- note becomes whitelisted tags, parse_note_tags). The
+@avalon/shared stats engine recomputes the sections from a filtered list of these games. Both files are
+bound by overview.gamesKey = the dataset's key, and they are written together or not at all; a dataset
+that fails its own checks (games_dataset_problems: counts, a round trip through decode_games_dataset +
+build_cache that must reproduce every section computed from games, the privacy check) is withheld: the
+cache is still written, the site then turns the filters off (key mismatch) and the run says so
+(games_dataset=withheld in $GITHUB_OUTPUT). The public log only ever gets counts.
+
 Two-stage outcome (docs/stats/two_stage_outcome.md, Edward 2026-10-12): mission
 stage 三紅 vs 三藍, assassination stage settles 三藍, final result red = 三紅 +
 三藍死 and blue = 三藍活. The final* / excess* player fields, overview.schemaVersion
@@ -115,6 +128,8 @@ import contextlib
 import copy
 import datetime as dt
 import functools
+import gzip
+import hashlib
 import importlib.util
 import json
 import math
@@ -128,7 +143,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 try:
     import gspread
@@ -145,6 +160,9 @@ DEFAULT_CREDENTIALS_PATH = Path(r"C:\Users\admin\.claude\credentials\google_shee
 CREDENTIALS_PATH = DEFAULT_CREDENTIALS_PATH  # kept for anyone importing the old name
 SHEET_ID = "174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU"
 OUTPUT_PATH = Path(__file__).parent / "analysis_cache.json"
+# 每局資料集預設放在 --output 指定的分析快取旁。
+GAMES_OUTPUT_NAME = "games_cache.json"
+GAMES_OUTPUT_PATH = OUTPUT_PATH.with_name(GAMES_OUTPUT_NAME)
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 # Owner-directed player aliases (source spelling -> official name), see load_player_aliases.
 ALIASES_PATH = Path(__file__).resolve().parent / "player_aliases.json"
@@ -163,6 +181,9 @@ DISCORD_IMPORT_TAB = "Discord匯入"
 DISCORD_UPDATED_COLUMN = "更新時間"
 # Seats per game: one rewritten Discord匯入 row takes at most this many games away from players.
 PLAYERS_PER_GAME = 10
+# GameRow.source 與資料集 src：記錄合併前的來源分頁。
+GAME_SOURCE_SHEET = 0
+GAME_SOURCE_DISCORD = 1
 
 # Sections built from the Sheet by this script.
 SHEET_SECTIONS = (
@@ -191,6 +212,9 @@ SHRINK_TOLERANCE_PCT = 1.0
 EXIT_CONFIG = 2
 EXIT_GOOGLE_ACCESS = 3
 EXIT_DATA = 4
+
+# overview.schemaVersion；每局資料集以 cacheSchemaVersion 記錄同一版本。
+CACHE_SCHEMA_VERSION = 4
 
 # overview.topPlayersByTheory only ranks players with at least this many games.
 # 30 (the 生涯報表 cut-off) is what the committed cache (commit 61b7398) used.
@@ -577,6 +601,13 @@ class GameRow:
         "game_state", "rounds", "round_results",
         "text_record", "voting_proposals",
         "date", "category", "kill",  # 日期時間 as YYYY-MM-DD or "", 分類, 刺殺 (target seat or "")
+        # 每局資料集保留解析後欄位，統計不再讀取文字記錄；原文僅留作去重指紋。
+        "source",         # 來源分頁（牌譜／Discord 匯入）
+        "slot",           # 當日第幾場；缺值或非數字為 0
+        "note_tags",      # note 白名單標籤，不保留原文
+        "captains",       # 每個任務的隊長座位，缺值為 None，最多五筆
+        "lake_claims",    # 最多三筆湖宣告（持湖、目標、紅／藍／空）
+        "timeline_date",  # 全資料固定的排序日期；None 表示尚未設定
     )
 
 
@@ -878,6 +909,66 @@ def parse_game_date(raw: object) -> str:
     return "" if iso == NO_DATE_PLACEHOLDER else iso
 
 
+def parse_slot(raw: object) -> int:
+    """將當日場次轉為整數；空白或非純數字回傳 0。"""
+    text = unicodedata.normalize("NFKC", str(raw or "")).strip()
+    return int(text) if text.isascii() and text.isdigit() else 0
+
+
+# note 是自由文字，僅輸出賽季、地點與旗標白名單，不輸出事件描述或名字。
+# 以 NFKC 與空白正規化後的完整欄位或固定前綴比對；不接受以人名命名的地點。
+# 古亭週五合併為古亭（沿用 r9 架構決策，仍可由擁有者調整白名單）。
+NOTE_SEASONS = ("S1", "S2", "S3", "S5")
+NOTE_VENUES: dict[str, str] = {  # 完整欄位或事件前綴對應地點標籤
+    "古亭": "古亭", "古亭週五": "古亭", "九號": "九號", "9號": "九號", "台中": "台中", "東門": "東門",
+    "小巨蛋": "小巨蛋", "Discopia星球": "Discopia星球", "台中家": "台中家", "學餐": "學餐",
+    "新竹謎寶": "新竹謎寶", "不鳥谷": "不鳥谷", "政大": "政大",
+}
+NOTE_FLAG_CELLS: dict[str, str] = {
+    "我旁觀": "spectated", "旁觀": "spectated", "不是我打的": "notRecorderGame", "覆盤局": "review", "爛局": "badGame",
+}
+NOTE_LAKE_CORRECTED_MARK = "[2025/8/14 update]湖女"  # 後來更正該局湖欄的標記
+NOTE_FLAGS = ("spectated", "notRecorderGame", "review", "badGame", "lakeCorrected", "substitution", "incident")
+# 標籤順序固定；隱私守門要求資料集 vocab.noteTags 與此完全相同。
+NOTE_TAG_VOCAB: tuple[str, ...] = (
+    *(f"season:{s}" for s in NOTE_SEASONS),
+    *dict.fromkeys(f"venue:{v}" for v in NOTE_VENUES.values()),
+    *(f"flag:{f}" for f in NOTE_FLAGS),
+)
+_NOTE_INCIDENT_RE = re.compile(r"^\[\d-\d\]")  # 固定事件前綴；只保留旗標
+
+
+def parse_note_tags(raw: object) -> tuple[str, ...]:
+    """將 note 轉為 NOTE_TAG_VOCAB 白名單標籤，不回傳任何原文。
+
+    完整欄位可識別賽季、地點與記錄者旗標；湖修正標記可出現在任意位置。
+    事件格式只保留 incident 旗標，含代打時另標 substitution；其他文字全部捨棄。"""
+    text = " ".join(_INVISIBLE_CHARS_RE.sub("", unicodedata.normalize("NFKC", str(raw or ""))).split())
+    if not text:
+        return ()
+    tags: set[str] = set()
+    if NOTE_LAKE_CORRECTED_MARK in text:
+        tags.add("flag:lakeCorrected")
+        text = text.replace(NOTE_LAKE_CORRECTED_MARK, "").strip()
+    if "代打" in text:
+        tags.add("flag:substitution")
+    if text in NOTE_SEASONS:
+        tags.add(f"season:{text}")
+    elif text in NOTE_VENUES:
+        tags.add(f"venue:{NOTE_VENUES[text]}")
+    elif text in NOTE_FLAG_CELLS:
+        tags.add(f"flag:{NOTE_FLAG_CELLS[text]}")
+    else:
+        venue = next((v for v in sorted(NOTE_VENUES, key=len, reverse=True)
+                      if text.startswith(v) and _NOTE_INCIDENT_RE.match(text[len(v):])), None)
+        if venue is not None:
+            tags.add(f"venue:{NOTE_VENUES[venue]}")
+            tags.add("flag:incident")
+        elif _NOTE_INCIDENT_RE.match(text):
+            tags.add("flag:incident")
+    return tuple(t for t in NOTE_TAG_VOCAB if t in tags)
+
+
 def resolve_as_of(env: Mapping[str, str] | None = None, today: dt.date | None = None) -> dt.date:
     """The leaderboard's reference day: AVALON_STATS_AS_OF (YYYY-MM-DD), else today in +08."""
     env = os.environ if env is None else env
@@ -1044,7 +1135,7 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
     seen_fp = {record_fingerprint(g.config, g.text_record) for g in games}
     seen_id = {g.id for g in games}
     extra_kept: list[list[str]] = []
-    for g, row in zip(parse_game_log(extra_rows, kept_rows=extra_kept), extra_kept):
+    for g, row in zip(parse_game_log(extra_rows, GAME_SOURCE_DISCORD, kept_rows=extra_kept), extra_kept):
         merged.extra_games += 1
         fp = record_fingerprint(g.config, g.text_record)
         kept = fp not in seen_fp and g.id not in seen_id
@@ -1060,11 +1151,43 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
     return merged
 
 
-def parse_game_log(rows: list[list[str]], *, kept_rows: list[list[str]] | None = None) -> list[GameRow]:
-    """牌譜 rows (header first, as gspread's get_all_values returns them) -> games.
+def _set_first_team(g: GameRow, seats: list[str]) -> None:
+    """從首隊座位字元與已解碼角色設定 GameRow.r11_*。"""
+    g.r11_seats = seats
+    g.r11_roles = [g.seat_roles.get(s, "?") for s in g.r11_seats]
+    g.r11_red_count = sum(1 for r in g.r11_roles if r in RED_ROLES)
+    g.r11_blue_count = sum(1 for r in g.r11_roles if r in BLUE_ROLES)
+    g.r11_has_merlin = "梅林" in g.r11_roles
+    g.r11_has_percival = "派西維爾" in g.r11_roles
 
-    Rows without 流水號 or without a 6-character 配置 are skipped.
-    """
+
+def _lake_factions(lake_parsed: tuple[str, str] | None, seat_roles: Mapping[str, str]) -> tuple[str, str, str, str]:
+    """由湖鏈回傳持湖者與目標的陣營、角色。"""
+    if lake_parsed is None:
+        return ("", "", "", "")
+    h_role = seat_roles.get(lake_parsed[0], "")
+    t_role = seat_roles.get(lake_parsed[1], "")
+    return (
+        role_faction(h_role) if h_role else "",
+        role_faction(t_role) if t_role else "",
+        h_role,
+        t_role,
+    )
+
+
+def _set_lakes(g: GameRow, *lakes: tuple[str, str] | None) -> None:
+    """設定三條湖鏈及其持湖者／目標的陣營與角色。"""
+    g.lake1, g.lake2, g.lake3 = lakes
+    g.lake1_holder_faction, g.lake1_target_faction, g.lake1_holder_role, g.lake1_target_role = _lake_factions(g.lake1, g.seat_roles)
+    g.lake2_holder_faction, g.lake2_target_faction, g.lake2_holder_role, g.lake2_target_role = _lake_factions(g.lake2, g.seat_roles)
+    g.lake3_holder_faction, g.lake3_target_faction, g.lake3_holder_role, g.lake3_target_role = _lake_factions(g.lake3, g.seat_roles)
+
+
+def parse_game_log(rows: list[list[str]], source: int = GAME_SOURCE_SHEET, *, kept_rows: list[list[str]] | None = None) -> list[GameRow]:
+    """牌譜列（含表頭）轉為對局；缺流水號或配置不是六字元的列略過。
+
+    source 記錄來源分頁。文字記錄只在此解析為隊長、湖宣告與投票；note 轉為白名單標籤。
+    kept_rows 若提供，會接收實際保留的原始列，供同次流程的暫存匯出使用。"""
     if len(rows) < 2:
         return []
 
@@ -1116,12 +1239,7 @@ def parse_game_log(rows: list[list[str]], *, kept_rows: list[list[str]] | None =
 
         # 1-1 team
         r11_str = col(row, "1-1")
-        g.r11_seats = list(r11_str) if r11_str else []
-        g.r11_roles = [g.seat_roles.get(s, "?") for s in g.r11_seats]
-        g.r11_red_count = sum(1 for r in g.r11_roles if r in RED_ROLES)
-        g.r11_blue_count = sum(1 for r in g.r11_roles if r in BLUE_ROLES)
-        g.r11_has_merlin = "梅林" in g.r11_roles
-        g.r11_has_percival = "派西維爾" in g.r11_roles
+        _set_first_team(g, list(r11_str) if r11_str else [])
 
         # Missions
         g.missions = []
@@ -1137,29 +1255,7 @@ def parse_game_log(rows: list[list[str]], *, kept_rows: list[list[str]] | None =
             })
 
         # Lake
-        def lake_factions(lake_parsed, seat_roles):
-            if lake_parsed is None:
-                return ("", "", "", "")
-            h_role = seat_roles.get(lake_parsed[0], "")
-            t_role = seat_roles.get(lake_parsed[1], "")
-            return (
-                role_faction(h_role) if h_role else "",
-                role_faction(t_role) if t_role else "",
-                h_role,
-                t_role,
-            )
-
-        g.lake1 = parse_lake(col(row, "首湖"))
-        g.lake2 = parse_lake(col(row, "二湖"))
-        g.lake3 = parse_lake(col(row, "三湖"))
-
-        l1 = lake_factions(g.lake1, g.seat_roles)
-        l2 = lake_factions(g.lake2, g.seat_roles)
-        l3 = lake_factions(g.lake3, g.seat_roles)
-
-        g.lake1_holder_faction, g.lake1_target_faction, g.lake1_holder_role, g.lake1_target_role = l1
-        g.lake2_holder_faction, g.lake2_target_faction, g.lake2_holder_role, g.lake2_target_role = l2
-        g.lake3_holder_faction, g.lake3_target_faction, g.lake3_holder_role, g.lake3_target_role = l3
+        _set_lakes(g, parse_lake(col(row, "首湖")), parse_lake(col(row, "二湖")), parse_lake(col(row, "三湖")))
 
         g.game_state = col(row, "局勢")
         g.rounds = [col(row, n) for n in round_names]
@@ -1167,6 +1263,12 @@ def parse_game_log(rows: list[list[str]], *, kept_rows: list[list[str]] | None =
         g.date = parse_game_date(col(row, "日期時間"))
         g.category = col(row, "分類").strip()
         g.kill = col(row, "刺殺").strip()
+        g.source = source
+        g.slot = parse_slot(col(row, "場次"))
+        g.note_tags = parse_note_tags(col(row, "note"))
+        g.captains = tuple(_parse_captain_per_mission(g.text_record)[:5])
+        g.lake_claims = tuple(parse_lake_claims(g.text_record)[:3])
+        g.timeline_date = None
 
         game_rows.append(g)
         if kept_rows is not None:
@@ -1232,6 +1334,16 @@ def parse_game_log(rows: list[list[str]], *, kept_rows: list[list[str]] | None =
 
 def _rate(count: float, total: float) -> float:
     return rnd1(count / total * 100) if total else 0.0
+
+
+def _sum_ltr(values: Iterable[float]) -> float:
+    """浮點數由左到右加總，固定採 Python 3.11 的行為。
+
+    Python 3.12 的補償加總可能改變最後一個位元，因此與 TS 引擎都明確使用此順序。"""
+    total = 0.0
+    for v in values:
+        total += v
+    return total
 
 
 def is_final_win(role: str, outcome: str) -> bool:
@@ -1304,7 +1416,7 @@ class _PlayerTally:
         role_win_rates = {r: _rate(self.role_wins[r], self.role_games[r]) for r in ALL_ROLES}
         role_distribution = {r: _rate(self.role_games[r], total) for r in ALL_ROLES}
         # Same expression (order and rounding) as the rebuild; see the block comment above.
-        role_theory = rnd1(sum(role_distribution[r] * role_win_rates[r] for r in ALL_ROLES) / 100)
+        role_theory = rnd1(_sum_ltr(role_distribution[r] * role_win_rates[r] for r in ALL_ROLES) / 100)
 
         def outcomes(faction: str, outcome: str) -> int:
             return self.faction_outcomes[(faction, outcome)]
@@ -1323,7 +1435,7 @@ class _PlayerTally:
         expected: float | None = None
         excess: float | None = None
         if role_final_rates is not None and total:
-            expected = rnd1(sum(self.role_games[r] * float(role_final_rates.get(r, 0.0)) for r in ALL_ROLES) / total)
+            expected = rnd1(_sum_ltr(self.role_games[r] * float(role_final_rates.get(r, 0.0)) for r in ALL_ROLES) / total)
             excess = rnd1(final_win_rate - expected)
 
         return {
@@ -1463,6 +1575,8 @@ def player_timelines(games: list[GameRow]) -> dict[str, list[PlayerSeat]]:
     Order: by 日期時間, then by position in the merged game log (牌譜 rows, then Discord匯入).
     A game without a usable date sorts with the closest dated game above it in the log; the
     undated rows at the top of 牌譜 (games recorded before dates were) sort before everything.
+    A game whose timeline_date was set (assign_timeline_dates, over all games) sorts by that date
+    instead, so a subset of the games (a filter) keeps every game where it was.
     """
     keyed: list[tuple[tuple[str, int], GameRow]] = []
     last_date = ""
@@ -1470,7 +1584,8 @@ def player_timelines(games: list[GameRow]) -> dict[str, list[PlayerSeat]]:
         if g.date:
             last_date = g.date
         if g.outcome in OUTCOMES:
-            keyed.append(((g.date or last_date, i), g))
+            fixed = getattr(g, "timeline_date", None)
+            keyed.append(((fixed if fixed is not None else (g.date or last_date), i), g))
     keyed.sort(key=lambda kg: kg[0])
     out: dict[str, list[PlayerSeat]] = {}
     for _, g in keyed:
@@ -1478,6 +1593,22 @@ def player_timelines(games: list[GameRow]) -> dict[str, list[PlayerSeat]]:
             name = g.seat_players.get(seat)
             if name:
                 out.setdefault(name, []).append(PlayerSeat(g.seat_roles[seat], seat, g.outcome, g.date))
+    return out
+
+
+def assign_timeline_dates(games: list[GameRow]) -> list[GameRow]:
+    """複製對局並設定排序日期：有日期用該日，缺日期沿用前一筆有日期的對局，最前方為空。
+
+    先在全部對局（含缺結果）上固定日期，避免篩選掉上一筆對局後排序位移。
+    run 在日期檢查與名字正規化之後呼叫；資料集解碼採相同規則。"""
+    out: list[GameRow] = []
+    last_date = ""
+    for g in games:
+        if g.date:
+            last_date = g.date
+        g = copy.copy(g)
+        g.timeline_date = g.date or last_date
+        out.append(g)
     return out
 
 
@@ -2084,7 +2215,7 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
         # mission-stage rule (三藍死 = blue win); these use the final result. 3 = the theory
         # win rates (players[].theory, seatFinalWinRates, topPlayersByRoleTheory, leaderboard);
         # 4 = per-role theory windows, roleOutcomes, the position / overall rankings (2026-10-14).
-        "schemaVersion": 4,
+        "schemaVersion": CACHE_SCHEMA_VERSION,
         "missionStage": {
             "games": settled, "threeRed": three_red, "threeBlue": three_blue,
             "redPct": _rate(three_red, settled), "bluePct": _rate(three_blue, settled),
@@ -2835,8 +2966,8 @@ def _parse_captain_per_mission(text_record: str) -> list[str | None]:
 def compute_captain_analysis(games: list[GameRow]) -> dict:
     """Compute captain faction vs mission outcome statistics.
 
-    For each game we parse the 文字記錄 (text_record stored in GameRow) and
-    identify which seat captained each mission.  We then map the seat to its
+    For each game the 文字記錄 tells which seat captained each mission (GameRow.captains,
+    parsed by parse_game_log).  We then map the seat to its
     role and faction (red / blue).
 
     Two output tables:
@@ -2855,15 +2986,8 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
     faction_outcome_total: dict[str, int] = defaultdict(int)
 
     for g in games:
-        # text_record must be fetched from the raw sheet; GameRow doesn't store
-        # it directly.  We attach it in load_game_log below via a new attribute.
-        text_record: str = getattr(g, "text_record", "") or ""
-        if not text_record:
-            continue
-
-        captains = _parse_captain_per_mission(text_record)
-
-        for m_idx, captain_seat in enumerate(captains):
+        # 隊長在解析牌譜時已算好；資料集沒有原文，也能取得完全相同的座位。
+        for m_idx, captain_seat in enumerate(g.captains):
             if m_idx >= 5:
                 break
             if captain_seat is None:
@@ -2921,11 +3045,7 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
     # blue wins together (Edward 2026-04-26: 三紅 / 三藍死 / 三藍活 split).
     faction_mission_games: dict[tuple[str, bool], list[GameRow]] = defaultdict(list)
     for g in games:
-        text_record = getattr(g, "text_record", "") or ""
-        if not text_record:
-            continue
-        captains = _parse_captain_per_mission(text_record)
-        for m_idx, captain_seat in enumerate(captains):
+        for m_idx, captain_seat in enumerate(g.captains):
             if m_idx >= 5 or captain_seat is None:
                 continue
             role = g.seat_roles.get(captain_seat, "忠臣")
@@ -3319,7 +3439,7 @@ def compute_lake_claim_feature(games: list[GameRow], as_of: dt.date) -> dict:
     by_holder: dict[tuple[str, str], list[int]] = {(h, c): [0, 0] for h in ("藍", "紅") for c in ("紅", "藍")}
     links = undeclared = 0
     for g in games:
-        for i, (holder, target, claim) in enumerate(parse_lake_claims(g.text_record)[:3]):
+        for i, (holder, target, claim) in enumerate(g.lake_claims):  # parse_lake_claims(文字記錄)[:3]
             links += 1
             if not claim:
                 undeclared += 1
@@ -3571,6 +3691,7 @@ def refresh_feature_studies(previous: Mapping[str, Any] | None, games: list[Game
 
 def build_cache(
     games: list[GameRow], chemistry: dict, as_of: dt.date | None = None, aliases: PlayerAliases = NO_ALIASES,
+    games_key: str | None = None,
 ) -> dict:
     """The sections computed from the Sheet (SHEET_SECTIONS); players come from the 牌譜 game log.
 
@@ -3580,6 +3701,7 @@ def build_cache(
     run() passes load_player_aliases()) and its official name (canonicalize_player_names; run() has
     done it already, it is idempotent); the chemistry labels get the same spellings
     (canonicalize_chemistry) and players.aliases lists the aliases whose official name is a player.
+    games_key 將快取與同批每局資料集綁定，供伺服器檢查。
     """
     as_of = as_of or resolve_as_of()
     games, _ = drop_dates_after(games, as_of)
@@ -3587,6 +3709,8 @@ def build_cache(
     canonicalize_chemistry(chemistry, names.display)
     players = compute_player_stats(games)
     overview = compute_overview(games, players)
+    if games_key is not None:
+        overview["gamesKey"] = games_key
 
     # Edward 2026-04-27: 5th chemistry matrix outcomePair and players[].seatOutcomes. Both are
     # counted from the game log since 2026-10-13 (round 5); before, they were the overall split.
@@ -3766,6 +3890,441 @@ def only_the_day_changed(cache: Mapping[str, Any], previous: Mapping[str, Any] |
     )
     replay["featureStudies"] = refresh_feature_studies(previous.get("featureStudies"), games, prev_as_of)
     return _canonical(replay) == _canonical(previous)
+
+
+# ---------------------------------------------------------------------------
+# 每局資料集（games_cache.json）：供複合篩選使用的解析後對局
+# ---------------------------------------------------------------------------
+#
+# 複合篩選從保留的對局重算每個區塊；不篩選時須與當次 Python 快取逐欄相同。
+# 每局以 GAMES_DATASET_FIELDS 的固定位置陣列儲存，順序等同合併後的牌譜。
+# 名字只放 players 表，對局內使用索引；不保留自由文字。寫檔前再次驗證全部字串。
+#   id        純數字流水號；其他值改成 H／D 前綴與 SHA-256 的前十碼。
+#   src       0 = 牌譜，1 = Discord 匯入。
+#   date      日期檢查後的 YYYY-MM-DD 或空字串。
+#   cat       分類白名單的索引；slot 為當日場次，0 表示缺值。
+#   note      白名單標籤索引，不能放原文。
+#   config    六字元配置，非數字轉成 ?。
+#   outcome   三種結果、空值或其他的索引。
+#   kill      僅三藍局保留刺殺座位；三紅局的刺殺欄不是實際刺殺，固定清空。
+#   seats     座位 1..9、0 的玩家索引；-1 表示沒寫名字。
+#   missions  五個任務結果以 | 連接，只留 o/x/O/X；其他字元轉 ?，保留長度與小寫 x 數。
+#   rounds    五個回合：R 紅、B 藍、- 空白、? 其他。
+#   state     純紅藍局勢字串的索引；空白 -1，異常值 ?。
+#   firstTeam 首隊座位，非數字轉 ?。
+#   lakes     三條持湖與目標座位；-- 表示缺值，非單一數字轉 ?。
+#   claims    最多三筆持湖、目標及宣告；x 紅、o 藍、- 未宣告。
+#   captains  每個任務的隊長；- 表示缺值，非 ASCII 數字轉 ?。
+#   votes     [回合, 提議次數, 隊伍, 贊成座位]；第 5 次強制派隊沒有票。
+# Python 與 TS 以相同規則解碼；編碼與解碼後的統計若不一致，禁止寫入資料集。
+
+GAMES_DATASET_FORMAT = "avalon-games"
+GAMES_DATASET_VERSION = 2
+GAMES_DATASET_FIELDS = (
+    "id", "src", "date", "cat", "slot", "note", "config", "outcome", "kill",
+    "seats", "missions", "rounds", "state", "firstTeam", "lakes", "claims", "captains", "votes",
+)
+DATASET_OTHER = "其他"
+DATASET_CATEGORIES = ("線瓦", "面瓦", "娛樂", "", DATASET_OTHER)
+DATASET_OUTCOMES = (OUTCOME_THREE_RED, OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE, "", DATASET_OTHER)
+DATASET_UNKNOWN = "?"
+_DATASET_STATE_RE = re.compile(r"[紅藍]{1,5}")
+_ROUND_CODES = {"紅": "R", "藍": "B", "": "-"}
+_ROUND_NAMES = {"R": "紅", "B": "藍", "-": "", "?": DATASET_UNKNOWN}
+_CLAIM_CODES = {"紅": "x", "藍": "o", "": "-"}
+_CLAIM_NAMES = {"x": "紅", "o": "藍", "-": ""}
+# 對局字串的固定形狀，供隱私守門檢查。
+_DATASET_ROW_PATTERNS = {
+    "id": re.compile(r"[0-9]+|[DH][0-9a-f]{10}"),
+    "date": re.compile(r"|[0-9]{4}-[0-9]{2}-[0-9]{2}"),
+    "config": re.compile(r"[0-9?]{6}"),
+    "kill": re.compile(r"[0-9?]?"),
+    "missions": re.compile(r"[oxOX?]*(?:\|[oxOX?]*){4}"),
+    "rounds": re.compile(r"[RB?-]{5}"),
+    "firstTeam": re.compile(r"[0-9?]*"),
+    "lakes": re.compile(r"(?:[0-9?]{2}|--){3}"),
+    "claims": re.compile(r"(?:[0-9?]{2}[xo-]){0,3}"),
+    "captains": re.compile(r"[0-9?-]{0,5}"),
+}
+
+
+def _ascii_digit(ch: str) -> bool:
+    return len(ch) == 1 and "0" <= ch <= "9"
+
+
+def _digits_or_unknown(text: str) -> str:
+    return "".join(c if _ascii_digit(c) else DATASET_UNKNOWN for c in text)
+
+
+def _dataset_game_id(g: GameRow) -> str:
+    gid = str(g.id)
+    if g.source == GAME_SOURCE_SHEET and gid.isascii() and gid.isdigit():
+        return gid
+    prefix = "D" if g.source == GAME_SOURCE_DISCORD else "H"
+    return prefix + hashlib.sha256(gid.encode("utf-8")).hexdigest()[:10]
+
+
+def _vocab_index(values: Sequence[str], value: str) -> int:
+    return values.index(value) if value in values else values.index(DATASET_OTHER)
+
+
+def games_dataset_config() -> dict:
+    """產生器的計算設定，引擎直接讀取而不自行假設門檻。"""
+    return {
+        "leaderboard": copy.deepcopy(LEADERBOARD_CONFIG),
+        "theoryWindows": theory_windows(),
+        "minGamesThreshold": MIN_GAMES_THRESHOLD,
+        "excessShrinkK": EXCESS_SHRINK_K,
+        "lakeClaimMinSample": LAKE_CLAIM_MIN_SAMPLE,
+    }
+
+
+def games_dataset_constants() -> dict:
+    """資料集使用的遊戲常數，引擎比對後才使用，避免定義漂移。"""
+    return {
+        "allRoles": list(ALL_ROLES),
+        "configRoleOrder": list(CONFIG_ROLE_ORDER),
+        "redRoles": [r for r in ALL_ROLES if r in RED_ROLES],
+        "seats": list(SEATS),
+        "roleDealTenths": dict(ROLE_DEAL_TENTHS),
+    }
+
+
+def games_dataset_key(doc: Mapping[str, Any]) -> str:
+    """排除 key 後以固定鍵順序 JSON 計算 SHA-256，取前 16 個十六進位字元。"""
+    body = {k: v for k, v in doc.items() if k != "key"}
+    text = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def encode_games_dataset(games: Sequence[GameRow], aliases: Mapping[str, str] | None = None) -> dict:
+    """將同次合併、日期檢查與名字正規化後的對局編碼為每局資料集。
+
+    aliases 沿用快取的舊名對正式名字映射；只使用可 JSON 序列化的陣列與字典。"""
+    players: dict[str, int] = {}
+    for g in games:
+        for seat in SEATS:
+            name = g.seat_players.get(seat)
+            if name and name not in players:
+                players[name] = len(players)
+    states = list(dict.fromkeys(
+        g.game_state for g in games if g.game_state and _DATASET_STATE_RE.fullmatch(g.game_state)
+    )) + [DATASET_UNKNOWN]
+    state_index = {s: i for i, s in enumerate(states)}
+    rows: list[list[Any]] = []
+    for g in games:
+        kill = g.kill if g.outcome in (OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE) else ""
+        lakes = "".join(
+            "--" if lake is None else
+            "".join(x if _ascii_digit(x) else DATASET_UNKNOWN for x in lake)
+            for lake in (g.lake1, g.lake2, g.lake3)
+        )
+        claims = "".join(
+            "".join(x if _ascii_digit(x) else DATASET_UNKNOWN for x in (h, t)) + _CLAIM_CODES.get(c, "-")
+            for h, t, c in g.lake_claims
+        )
+        captains = "".join("-" if c is None else (c if _ascii_digit(c) else DATASET_UNKNOWN) for c in g.captains)
+        state = g.game_state or ""
+        rows.append([
+            _dataset_game_id(g),
+            int(g.source),
+            g.date or "",
+            _vocab_index(DATASET_CATEGORIES, g.category or ""),
+            int(g.slot),
+            [NOTE_TAG_VOCAB.index(t) for t in g.note_tags],
+            _digits_or_unknown(g.config),
+            _vocab_index(DATASET_OUTCOMES, g.outcome or ""),
+            "" if not kill else (kill if _ascii_digit(kill) else DATASET_UNKNOWN),
+            [players[g.seat_players[s]] if g.seat_players.get(s) else -1 for s in SEATS],
+            "|".join("".join(c if c in "oxOX" else DATASET_UNKNOWN for c in r) for r in g.round_results),
+            "".join(_ROUND_CODES.get(r, DATASET_UNKNOWN) for r in g.rounds),
+            -1 if not state else state_index.get(state, state_index[DATASET_UNKNOWN]),
+            _digits_or_unknown("".join(g.r11_seats)),
+            lakes,
+            claims,
+            captains,
+            [list(proposal) for proposal in g.voting_proposals],
+        ])
+    dated = sum(1 for g in games if g.date)
+    doc: dict[str, Any] = {
+        "format": GAMES_DATASET_FORMAT,
+        "version": GAMES_DATASET_VERSION,
+        "key": "",
+        "cacheSchemaVersion": CACHE_SCHEMA_VERSION,
+        "config": games_dataset_config(),
+        "constants": games_dataset_constants(),
+        "counts": {
+            "games": len(games),
+            "fromSheet": sum(1 for g in games if g.source == GAME_SOURCE_SHEET),
+            "fromDiscord": sum(1 for g in games if g.source == GAME_SOURCE_DISCORD),
+            "players": len(players),
+            "dated": dated,
+            "undated": len(games) - dated,
+        },
+        "vocab": {
+            "category": list(DATASET_CATEGORIES),
+            "outcome": list(DATASET_OUTCOMES),
+            "state": states,
+            "noteTags": list(NOTE_TAG_VOCAB),
+        },
+        "players": list(players),
+        "aliases": dict(aliases or {}),
+        "fields": list(GAMES_DATASET_FIELDS),
+        "games": rows,
+    }
+    doc["key"] = games_dataset_key(doc)
+    return doc
+
+
+def decode_games_dataset(doc: Mapping[str, Any]) -> list[GameRow]:
+    """資料集還原為 GameRow；text_record 為空，排序日期在全部對局上重新設定。
+
+    每日的 games_dataset_problems 驗證解碼後重算與原快取完全相同。"""
+    idx = {name: i for i, name in enumerate(doc["fields"])}
+    players: list[str] = doc["players"]
+    vocab = doc["vocab"]
+    out: list[GameRow] = []
+    for row in doc["games"]:
+        def get(name: str) -> Any:
+            return row[idx[name]]
+
+        g = GameRow()
+        g.id = get("id")
+        g.source = get("src")
+        g.date = get("date")
+        g.category = vocab["category"][get("cat")]
+        g.slot = get("slot")
+        g.note_tags = tuple(vocab["noteTags"][i] for i in get("note"))
+        g.config = get("config")
+        g.seat_roles = decode_config(g.config)
+        g.outcome = vocab["outcome"][get("outcome")]
+        g.red_win = g.outcome == OUTCOME_THREE_RED
+        g.blue_win = g.outcome in (OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE)
+        g.merlin_killed = g.outcome == OUTCOME_BLUE_DEAD
+        g.kill = get("kill")
+        g.seat_players = {s: players[i] for s, i in zip(SEATS, get("seats")) if i >= 0}
+        g.round_results = get("missions").split("|")
+        g.missions = [
+            {"round": i + 1, "result": cell, "fails": count_mission_fails(cell), "total": len(cell)}
+            for i, cell in enumerate(g.round_results) if cell
+        ]
+        g.rounds = [_ROUND_NAMES[c] for c in get("rounds")]
+        state = get("state")
+        g.game_state = vocab["state"][state] if state >= 0 else ""
+        _set_first_team(g, list(get("firstTeam")))
+        lakes = get("lakes")
+        _set_lakes(g, *(None if lakes[i:i + 2] == "--" else (lakes[i], lakes[i + 1]) for i in (0, 2, 4)))
+        claims = get("claims")
+        g.lake_claims = tuple((claims[i], claims[i + 1], _CLAIM_NAMES[claims[i + 2]]) for i in range(0, len(claims), 3))
+        g.captains = tuple(None if c == "-" else c for c in get("captains"))
+        g.voting_proposals = [tuple(proposal) for proposal in get("votes")]
+        g.text_record = ""
+        g.timeline_date = None
+        out.append(g)
+    return assign_timeline_dates(out)
+
+
+def games_dataset_privacy_problems(doc: Mapping[str, Any]) -> list[str]:
+    """逐欄驗證白名單、字串格式與索引範圍；回傳路徑與計數，不回傳欄位值。
+
+    名字只能出現在 players 與 aliases；所有對局字串均須符合固定模式。"""
+    problems: list[str] = []
+    expected_keys = ["format", "version", "key", "cacheSchemaVersion", "config", "constants", "counts",
+                     "vocab", "players", "aliases", "fields", "games"]
+    if list(doc) != expected_keys:
+        return [f"top-level keys are not {', '.join(expected_keys)}"]
+    if doc["format"] != GAMES_DATASET_FORMAT or doc["version"] != GAMES_DATASET_VERSION:
+        problems.append("format / version")
+    if doc["key"] != games_dataset_key(doc):
+        problems.append("key does not match the content")
+    if doc["config"] != games_dataset_config():
+        problems.append("config is not the generator's")
+    if doc["constants"] != games_dataset_constants():
+        problems.append("constants are not the generator's")
+    if list(doc["fields"]) != list(GAMES_DATASET_FIELDS):
+        problems.append("fields")
+    vocab = doc["vocab"]
+    states: Any = vocab.get("state") if isinstance(vocab, Mapping) else None
+    if (not isinstance(vocab, Mapping) or list(vocab) != ["category", "outcome", "state", "noteTags"]
+            or vocab["category"] != list(DATASET_CATEGORIES) or vocab["outcome"] != list(DATASET_OUTCOMES)
+            or vocab["noteTags"] != list(NOTE_TAG_VOCAB)):
+        problems.append("vocab is not the whitelist")
+    if not isinstance(states, list) or not states or states[-1] != DATASET_UNKNOWN or not all(
+            isinstance(s, str) and _DATASET_STATE_RE.fullmatch(s) for s in states[:-1]):
+        problems.append("vocab.state")
+        states = states if isinstance(states, list) else []
+    players = doc["players"]
+    if not isinstance(players, list) or not all(isinstance(n, str) and n for n in players):
+        problems.append("players")
+        players = []
+    aliases = doc["aliases"]
+    if not isinstance(aliases, Mapping) or not all(isinstance(k, str) and isinstance(v, str) for k, v in aliases.items()):
+        problems.append("aliases")
+
+    def is_int(x: Any, lo: int, hi: int) -> bool:
+        return type(x) is int and lo <= x < hi
+
+    bad: Counter = Counter()
+    idx = {name: i for i, name in enumerate(GAMES_DATASET_FIELDS)}
+    games = doc["games"] if isinstance(doc["games"], list) else []
+    if not isinstance(doc["games"], list):
+        problems.append("games is not a list")
+    for row in games:
+        if not isinstance(row, list) or len(row) != len(GAMES_DATASET_FIELDS):
+            bad["row shape"] += 1
+            continue
+        for name, pattern in _DATASET_ROW_PATTERNS.items():
+            value = row[idx[name]]
+            if not isinstance(value, str) or not pattern.fullmatch(value):
+                bad[name] += 1
+        seats, note = row[idx["seats"]], row[idx["note"]]
+        votes = row[idx["votes"]]
+        checks = {
+            "src": is_int(row[idx["src"]], 0, 2),
+            "cat": is_int(row[idx["cat"]], 0, len(DATASET_CATEGORIES)),
+            "slot": is_int(row[idx["slot"]], 0, 1 << 31),
+            "note": isinstance(note, list) and all(is_int(i, 0, len(NOTE_TAG_VOCAB)) for i in note),
+            "outcome": is_int(row[idx["outcome"]], 0, len(DATASET_OUTCOMES)),
+            "seats": isinstance(seats, list) and len(seats) == len(SEATS) and all(is_int(i, -1, len(players)) for i in seats),
+            "state": is_int(row[idx["state"]], -1, len(states)),
+            "votes": isinstance(votes, list) and len(votes) <= 25 and all(
+                isinstance(p, list) and len(p) == 4 and is_int(p[0], 1, 6) and is_int(p[1], 1, 6)
+                and isinstance(p[2], str) and re.fullmatch(r"[0-9]{3,5}", p[2])
+                and len(set(p[2])) == len(p[2])
+                and isinstance(p[3], str) and re.fullmatch(r"[0-9]{0,10}", p[3])
+                and len(set(p[3])) == len(p[3]) and (p[1] < 5 or not p[3]) for p in votes),
+        }
+        for name, ok in checks.items():
+            if not ok:
+                bad[name] += 1
+    problems += [f"games[].{name}: {n} row(s)" for name, n in sorted(bad.items())]
+    return problems
+
+
+def _diff_paths(a: Any, b: Any, path: str, out: list[str], limit: int = 20) -> None:
+    """回傳最多 limit 個差異路徑；以名字為鍵的映射改顯示 #索引。"""
+    if len(out) >= limit:
+        return
+    if isinstance(a, Mapping) and isinstance(b, Mapping):
+        named = path == "playerDetails" or path.endswith(".aliases")
+        for i, k in enumerate(sorted(set(a) | set(b), key=str)):
+            label = f"#{i}" if named else str(k)
+            if k not in a or k not in b:
+                out.append(f"{path}.{label} (only on one side)")
+            else:
+                _diff_paths(a[k], b[k], f"{path}.{label}", out, limit)
+            if len(out) >= limit:
+                return
+    elif isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            out.append(f"{path} (length {len(a)} vs {len(b)})")
+            return
+        for i, (x, y) in enumerate(zip(a, b)):
+            _diff_paths(x, y, f"{path}[{i}]", out, limit)
+            if len(out) >= limit:
+                return
+    elif _canonical({"v": a}) != _canonical({"v": b}):
+        out.append(path)
+
+
+# 每局資料集必須重現以下區塊，另檢查 chemistry.outcomePair 與 L141。
+GAMES_DATASET_SECTIONS = ("overview", "players", "playerDetails", "missions", "lake", "rounds", "seatOrder",
+                          "captainAnalysis", "leaderboard")
+
+
+def games_dataset_problems(
+    doc: Mapping[str, Any], cache: Mapping[str, Any], games: Sequence[GameRow], as_of: dt.date,
+) -> list[str]:
+    """資料集寫檔守門；空清單表示通過，錯誤僅有計數與欄位路徑。
+
+    除隱私形狀外，還驗證解碼後重算的全部區塊、三結果默契矩陣與 L141 都與原快取完全相同。"""
+    problems = games_dataset_privacy_problems(doc)
+    if problems:
+        return [f"privacy / shape: {p}" for p in problems]
+    overview = cache.get("overview") or {}
+    if len(doc["games"]) != len(games) or len(doc["games"]) != overview.get("totalGames"):
+        problems.append(f"{len(doc['games'])} games in the dataset, {overview.get('totalGames')} in the cache")
+    known = set(doc["players"])
+    missing = sum(1 for p in (cache.get("players") or {}).get("players") or [] if p.get("name") not in known)
+    if missing:
+        problems.append(f"{missing} player(s) of the cache are not in the dataset")
+    if overview.get("gamesKey") != doc["key"]:
+        problems.append("overview.gamesKey is not the dataset's key")
+    decoded = decode_games_dataset(doc)
+    rebuilt = build_cache(decoded, copy.deepcopy(cache.get("chemistry") or {}), as_of,
+                          cache_aliases({"players": {"aliases": doc["aliases"]}}), games_key=doc["key"])
+    paths: list[str] = []
+    for key in GAMES_DATASET_SECTIONS:
+        if _canonical({"v": rebuilt.get(key)}) != _canonical({"v": cache.get(key)}):
+            _diff_paths(rebuilt.get(key), cache.get(key), key, paths)
+    pair = (cache.get("chemistry") or {}).get("outcomePair")
+    if _canonical({"v": rebuilt["chemistry"].get("outcomePair")}) != _canonical({"v": pair}):
+        paths.append("chemistry.outcomePair")
+    l141 = next((f for f in ((cache.get("featureStudies") or {}).get("features") or [])
+                 if isinstance(f, Mapping) and f.get("loopId") == "L141"), None)
+    if l141 is not None and _canonical(compute_lake_claim_feature(decoded, as_of)) != _canonical(l141):
+        paths.append("featureStudies.L141")
+    if paths:
+        more = "+" if len(paths) >= 20 else ""
+        problems.append(f"round trip differs at {len(paths)}{more} path(s): {', '.join(paths)}")
+    return problems
+
+
+def dump_games_dataset(doc: Mapping[str, Any]) -> str:
+    """每個頂層鍵一行；players 每個名字一行、games 每局一行，讓每日新增對局的差異保持精簡。"""
+    def compact(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+    lines = ["{"]
+    keys = list(doc)
+    for n, key in enumerate(keys):
+        comma = "," if n < len(keys) - 1 else ""
+        value = doc[key]
+        if key in ("players", "games") and isinstance(value, list) and value:
+            lines.append(f"  {compact(key)}: [")
+            lines += [f"    {compact(v)}{',' if i < len(value) - 1 else ''}" for i, v in enumerate(value)]
+            lines.append(f"  ]{comma}")
+        else:
+            lines.append(f"  {compact(key)}: {compact(value)}{comma}")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def write_games_dataset_atomically(doc: Mapping[str, Any], path: Path) -> None:
+    """先寫暫存檔再重新命名，與分析快取的原子寫入方式一致。"""
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(dump_games_dataset(doc))
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp_name, mode)
+        os.replace(tmp_name, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+
+
+def load_previous_games(path: Path) -> dict | None:
+    """讀取既有資料集；缺檔或無法解析回傳 None，下一次執行會重建。"""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def games_dataset_summary(doc: Mapping[str, Any], problems: Sequence[str]) -> str:
+    """供日誌與工作摘要使用的一行計數。"""
+    text = dump_games_dataset(doc).encode("utf-8")
+    cats = Counter(row[GAMES_DATASET_FIELDS.index("cat")] for row in doc["games"])
+    labels = ("線瓦", "面瓦", "娛樂", "未分類", "其他")
+    split = " / ".join(f"{label} {cats.get(i, 0)}" for i, label in enumerate(labels))
+    verdict = "round-trip 通過" if not problems else f"暫停寫入（{len(problems)} 個問題）"
+    return (f"每局資料集：{len(doc['games'])} 局、{len(doc['players'])} 位、約 {len(text) // 1024} KB"
+            f"（gzip {len(gzip.compress(text, 9)) // 1024} KB）；分類 {split}；{verdict}")
 
 
 # ---------------------------------------------------------------------------
@@ -4226,21 +4785,37 @@ def _append_step_summary(lines: list[str]) -> None:
         f.write("\n".join(lines) + "\n")
 
 
+def _set_step_output(name: str, value: str) -> None:
+    """寫入 GitHub Actions 的 name=value 輸出；其他環境不寫檔。"""
+    output = os.environ.get("GITHUB_OUTPUT")
+    if not output:
+        return
+    with contextlib.suppress(OSError), open(output, "a", encoding="utf-8") as f:
+        f.write(f"{name}={value}\n")
+
+
 def run(
     output_path: Path = OUTPUT_PATH,
     allow_shrink: bool = False,
     allow_field_loss: bool = False,
     compare: bool = False,
     compare_threshold: float = COMPARE_FIELD_CHANGE_PCT,
+    games_output: Path | None = None,
     export_raw_sheets_path: Path | None = None,
 ) -> int:
+    games_output = games_output or output_path.with_name(GAMES_OUTPUT_NAME)
     raw_path = (raw_sheets_export_path(export_raw_sheets_path, output_path, compare)
                 if export_raw_sheets_path is not None else None)
+    if raw_path is not None and raw_path == games_output.resolve():
+        raise FatalError("牌譜暫存檔不能覆蓋每局資料集。", EXIT_CONFIG, "匯出設定錯誤")
     source = resolve_credentials_source()
     sheet_id = resolve_sheet_id()
-    print(f"Credentials: {source.describe()}")
-    print(f"Service account: {source.client_email() or '(client_email not found in key)'}")
-    print(f"Spreadsheet: {sheet_id}")
+    if _in_github_actions():
+        print("認證來源：1；資料來源：1")
+    else:
+        print(f"Credentials: {source.describe()}")
+        print(f"Service account: {source.client_email() or '(client_email not found in key)'}")
+        print(f"Spreadsheet: {sheet_id}")
 
     as_of = resolve_as_of()
     print(f"Leaderboard as of: {as_of.isoformat()}" + (f" (from {ENV_AS_OF})" if os.environ.get(ENV_AS_OF) else ""))
@@ -4265,14 +4840,26 @@ def run(
                           f"（{names.aliased_players} 位玩家）")
     if names.doubled_games:
         name_lines.append(f"- 同一位玩家同時坐兩個座位的局：{names.doubled_games}（請檢查那幾局的 玩1～玩0）")
+    # The game-level dataset (複合篩選): the same games, their timeline order fixed over all of them.
+    games = assign_timeline_dates(games)
+    dataset = encode_games_dataset(games, names.aliases)
 
     print("Computing endpoint responses...")
-    cache, carried = assemble_cache(build_cache(games, chemistry, as_of, aliases), previous, games=games, as_of=as_of)
+    cache, carried = assemble_cache(
+        build_cache(games, chemistry, as_of, aliases, games_key=dataset["key"]), previous, games=games, as_of=as_of,
+    )
 
     show_names = not _in_github_actions()  # the Actions log and job summary are public
     problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss, rewritten, show_names, rewritten_dups)
     refusal = f"Refusing to overwrite {output_path.name}:\n- " + "\n- ".join(problems)
-    unchanged = not problems and only_the_day_changed(cache, previous, games)
+    # 不論本機或 CI，資料集檢查均只回報計數與欄位路徑。
+    dataset_problems = [] if problems else games_dataset_problems(dataset, cache, games, as_of)
+    withheld = bool(dataset_problems)
+    dataset_line = games_dataset_summary(dataset, dataset_problems)
+    print(f"  {dataset_line}")
+    # 停寫資料集時只依分析快取判斷有無變動，避免修復前每天因日期不同而重寫。
+    same_dataset = withheld or load_previous_games(games_output) == dataset
+    unchanged = not problems and only_the_day_changed(cache, previous, games) and same_dataset
     same_but_day = f"與現有快取（asOf {previous_as_of(previous)}）只差 asOf 日期，內容相同"
     note_lines = [f"- 日期在 asOf 之後的局：{future_dated}（日期時間打錯？已當作無日期）"] if future_dated else []
     # Counts only: which players a correction took games from stays out of the public log.
@@ -4282,35 +4869,47 @@ def run(
                           "因此減少（例如改正打錯的玩家 id），不算資料遺失")
         print(f"  {name_lines[-1][2:]}")
     note_lines += name_lines
+    dataset_lines = [f"- {dataset_line}"] + [f"  - {p}" for p in dataset_problems]
+    if withheld:
+        emit_error(
+            f"{games_output.name} is not written ({len(dataset_problems)} problem(s)): " + "; ".join(dataset_problems)
+            + f". {output_path.name} is updated as usual; the site turns its filters off until both files match again.",
+            "Games dataset withheld",
+        )
 
     if compare:
-        summary = compare_summary(cache, previous, compare_threshold, show_names=show_names) + name_lines
+        summary = compare_summary(cache, previous, compare_threshold, show_names=show_names) + name_lines + dataset_lines
         if problems:
             summary += ["", "**守門：會拒絕寫入**（正式執行會以 exit 4 結束，現有快取不動）："]
             summary += [f"- {p}" for p in problems]
         elif unchanged:
             summary += ["", f"守門：通過；{same_but_day}（正式執行不會寫入，不會 commit）"]
         else:
-            summary += ["", "守門：通過（正式執行會寫入）"]
+            summary += ["", "守門：通過（正式執行會寫入）" + ("；每局資料集暫停寫入" if withheld else "")]
         print("\n".join(summary))
         _append_step_summary(summary)
         if problems:
             raise FatalError(f"Dry run (--compare). {refusal}", EXIT_DATA, "Analysis cache sanity check failed")
-        print(f"Dry run (--compare): {output_path.name} was not written.")
+        print(f"Dry run (--compare): {output_path.name} was not written, nor {games_output.name}.")
         return 0
 
     if problems:
         raise FatalError(refusal, EXIT_DATA, "Analysis cache sanity check failed")
 
+    _set_step_output("games_dataset", "withheld" if withheld else "ok")
     if raw_path is not None:
         export_raw_sheets(merged, raw_path)
 
     if unchanged:
         print(f"{output_path.name} differs from the existing file only by the as-of day "
               f"(existing asOf {previous_as_of(previous)}, this run {as_of.isoformat()}); not written, nothing to commit.")
-        _append_step_summary(["### 戰績分析快取", f"- {same_but_day}，未寫入", *note_lines])
+        _append_step_summary(["### 戰績分析快取", f"- {same_but_day}，未寫入", *dataset_lines, *note_lines])
         return 0
 
+    # 先寫資料集；途中若中斷，兩檔批次鍵不符，伺服器停用篩選直到下次重建。
+    if not withheld:
+        print(f"Writing to {games_output}...")
+        write_games_dataset_atomically(dataset, games_output)
     print(f"Writing to {output_path}...")
     write_cache_atomically(cache, output_path)
 
@@ -4331,12 +4930,15 @@ def run(
     print(f"  recomputed from players: {', '.join(DERIVED_SECTIONS)}")
     print(f"  carried over from the existing cache: {carried_desc}")
     print("  featureStudies: L141 recomputed from the game log; the other studies carried over with their conclusions annotated")
+    print(f"  {games_output.name}: " + ("withheld (see the error above)" if withheld else
+                                       f"{len(dataset['games'])} games, {len(dataset['players'])} players"))
     _append_step_summary([
         "### 戰績分析快取",
         f"- 局數：{prev_games} → {cache['overview']['totalGames']}；玩家：{prev_players} → {cache['overview']['totalPlayers']}",
         f"- 排行榜：{leaderboard_summary(cache.get('leaderboard'))}",
         f"- 由試算表重算：{', '.join(SHEET_SECTIONS)}；由 players 重算：{', '.join(DERIVED_SECTIONS)}",
         f"- 沿用現有快取（需在擁有者電腦重建）：{carried_desc}；featureStudies 的 L141 由牌譜重算、其餘沿用並改寫結論",
+        *dataset_lines,
         *note_lines,
     ])
     return 0
@@ -4346,6 +4948,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Regenerate analysis_cache.json from the Avalon Google Sheet.")
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH,
                         help="cache file to read (carry-over / baseline) and replace (default: %(default)s)")
+    parser.add_argument("--games-output", type=Path, default=None,
+                        help=f"the game-level dataset written with the cache (default: {GAMES_OUTPUT_NAME} next to --output)")
     parser.add_argument("--allow-shrink", action="store_true",
                         help="write even if games or a player's games went down, players or chemistry "
                              "shrank beyond the tolerance")
@@ -4367,7 +4971,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         return run(args.output, args.allow_shrink, args.allow_field_loss, args.compare, args.compare_threshold,
-                   args.export_raw_sheets)
+                   args.games_output, args.export_raw_sheets)
     except FatalError as exc:
         emit_error(str(exc), exc.title)
         return exc.exit_code

@@ -1,0 +1,41 @@
+[
+  { "id": "none", "filter": { "v": 1, "clauses": [] } },
+  { "id": "online", "filter": { "v": 1, "clauses": [{ "kind": "category", "in": ["線瓦"] }] } },
+  { "id": "offline", "filter": { "v": 1, "clauses": [{ "kind": "category", "in": ["面瓦"] }] } },
+  { "id": "noCasual", "filter": { "v": 1, "clauses": [{ "kind": "category", "in": ["娛樂"], "not": true }] } },
+  { "id": "year2024", "filter": { "v": 1, "clauses": [{ "kind": "date", "from": "2024-01-01", "to": "2024-12-31" }] } },
+  { "id": "fullNames", "filter": { "v": 1, "clauses": [{ "kind": "namedSeats", "min": 10 }] } },
+  {
+    "id": "dropTopRoleTheory",
+    "filter": { "v": 1, "clauses": [
+      { "kind": "excludePlayers", "scope": "dropGames", "who": { "by": "metric", "metric": "roleTheory", "op": "gt", "pr": 90 } }
+    ] }
+  },
+  {
+    "id": "hideTopRoleTheory",
+    "filter": { "v": 1, "clauses": [
+      { "kind": "excludePlayers", "scope": "hideFromLists", "who": { "by": "metric", "metric": "roleTheory", "op": "gt", "pr": 90 } }
+    ] }
+  },
+  {
+    "id": "onlineHideLowPosition",
+    "filter": { "v": 1, "clauses": [
+      { "kind": "category", "in": ["線瓦"] },
+      { "kind": "excludePlayers", "scope": "hideFromLists", "who": { "by": "metric", "metric": "positionTheory", "op": "lt", "value": 45 } }
+    ] }
+  },
+  {
+    "id": "offlineDropTopOverallFiltered",
+    "filter": { "v": 1, "clauses": [
+      { "kind": "category", "in": ["面瓦", "娛樂"] },
+      { "kind": "excludePlayers", "scope": "dropGames", "who": { "by": "metric", "metric": "overallTheory", "op": "ge", "pr": 75, "evaluatedOn": "filtered", "minGames": 50 } }
+    ] }
+  },
+  {
+    "id": "dropHeavyIncomplete",
+    "filter": { "v": 1, "clauses": [
+      { "kind": "excludePlayers", "scope": "dropGames", "dropIncompleteGames": true, "who": { "by": "metric", "metric": "games", "op": "gt", "value": 300 } },
+      { "kind": "excludePlayers", "scope": "hideFromLists", "who": { "by": "metric", "metric": "finalWinRate", "op": "le", "pr": 20, "ineligible": "select" } }
+    ] }
+  }
+]
