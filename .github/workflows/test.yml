@@ -2,7 +2,7 @@ name: Test & Lint
 
 on:
   push:
-    branches: [main, develop, 'claude/**']
+    branches: [main, develop, 'claude/**', 'gpt/**']
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -50,8 +50,30 @@ jobs:
       - name: Run linting
         run: pnpm lint
 
+      # 複合篩選須與 Python 逐欄一致。含名字的快照答案只寫入暫存目錄，結束即刪除。
+      - name: Set up Python 3.11 (the generator's version)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generator unit tests
+        run: |
+          python packages/server/test_generate_cache.py
+          python packages/server/test_discord_records_import.py
+
+      - name: Stats engine parity references from the 牌譜 snapshot
+        run: |
+          python packages/server/scripts/build_stats_parity_fixtures.py --source snapshot --out "${RUNNER_TEMP}/stats-parity"
+          python packages/server/scripts/build_mission_parity_fixture.py --source snapshot --out "${RUNNER_TEMP}/stats-parity"
+          python packages/server/scripts/build_lake_parity_fixture.py --source snapshot --out "${RUNNER_TEMP}/stats-parity"
+          echo "AVALON_STATS_PARITY_DIR=${RUNNER_TEMP}/stats-parity" >> "$GITHUB_ENV"
+
       - name: Run tests
         run: pnpm --filter @avalon/server test
+
+      - name: Remove private parity references
+        if: always()
+        run: rm -rf -- "${RUNNER_TEMP}/stats-parity"
 
       - name: Build all packages
         run: pnpm build

@@ -28,6 +28,7 @@ import {
   assassinationWinRates,
   playerOutcomeBlocks,
 } from '../services/sheetsAnalysis';
+import { invalidateGamesPayload, loadGamesPayload, pickEncoding } from '../services/gamesDataset';
 import fs from 'fs';
 import path from 'path';
 
@@ -262,7 +263,7 @@ router.get('/captain', limiter, async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/analysis/profile/:name/archetype
 // Panel A — 4-axis archetype radar (誠實 / 一致 / 專精 / 浮動) + percentile
-// `:name` = analysis-cache display name (e.g. "Sin", "HAO"). Resolve from the
+// :name 是分析快取的玩家顯示名稱，由別名與正規化規則解析。
 // auth profile's display_name on the frontend before calling.
 // ---------------------------------------------------------------------------
 router.get('/profile/:name/archetype', limiter, async (req: Request, res: Response) => {
@@ -364,6 +365,38 @@ router.get('/leaderboard', limiter, async (_req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/analysis/games
+// 複合篩選（Edward 2026-10-14）：每局資料集 games_cache.json + context（快取的 asOf、gamesKey、設定），
+// 網站的計算引擎（@avalon/shared/stats）在瀏覽器重算篩選後的區塊。兩檔不同批、檔案不存在或執行期
+// 一致性檢查失敗 → 503（網站顯示「篩選暫時無法使用」，預設畫面不受影響）。預先壓縮、強 ETag、304。
+// ---------------------------------------------------------------------------
+router.get('/games', limiter, (req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const load = loadGamesPayload();
+    if (!load.ok) return fail(res, load.status, load.error);
+    const { payload } = load;
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.setHeader('ETag', payload.etag);
+    res.setHeader('Vary', 'Accept-Encoding');
+    const match = req.headers['if-none-match'];
+    if (typeof match === 'string' && match.split(',').some((tag) => tag.trim().replace(/^W\//, '') === payload.etag)) {
+      return res.status(304).end();
+    }
+    const encoding = pickEncoding(req.headers['accept-encoding']);
+    const body = encoding === 'br' ? payload.br : encoding === 'gzip' ? payload.gzip : payload.identity;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    if (encoding !== 'identity') res.setHeader('Content-Encoding', encoding);
+    res.setHeader('Content-Length', String(body.length));
+    return res.status(200).end(body);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/games]', msg);
+    return fail(res, 500, 'Failed to load the games dataset');
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/analysis/wiki
 // Serve wiki articles from wiki_data.json
 // ---------------------------------------------------------------------------
@@ -406,6 +439,7 @@ router.post('/cache/invalidate', limiter, async (req: Request, res: Response) =>
     return fail(res, 401, 'Unauthorized');
   }
   invalidateCache();
+  invalidateGamesPayload();
   return ok(res, { message: 'Cache invalidated' });
 });
 

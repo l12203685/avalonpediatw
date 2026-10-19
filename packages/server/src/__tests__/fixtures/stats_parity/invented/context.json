@@ -1,0 +1,66 @@
+{
+  "asOf": "2026-02-28",
+  "source": "invented",
+  "presets": [
+    "none",
+    "online",
+    "offline",
+    "noCasual",
+    "year2024",
+    "fullNames",
+    "dropTopRoleTheory",
+    "hideTopRoleTheory",
+    "onlineHideLowPosition",
+    "offlineDropTopOverallFiltered",
+    "dropHeavyIncomplete"
+  ],
+  "aliases": {
+    "Tovo Wren": "Ｚ測試"
+  },
+  "chemistryRoster": {
+    "players": [
+      "Ｚ測試",
+      "虛構己",
+      "虛構戊",
+      "虛構寅",
+      "虛構辛",
+      "虛構癸",
+      "虛構壬",
+      "測試😀",
+      "虛構子",
+      "虛構辰",
+      "虛構甲",
+      "虛構卯",
+      "虛構乙",
+      "測試𠀀",
+      "虛構庚",
+      "虛構丁",
+      "虛構丑",
+      "虛構丙",
+      "新手一",
+      "新手二"
+    ],
+    "rowLabels": [
+      "新手二",
+      "新手一",
+      "虛構丙",
+      "虛構丑",
+      "虛構丁",
+      "虛構庚",
+      "測試𠀀",
+      "虛構乙",
+      "虛構卯",
+      "虛構甲",
+      "虛構辰",
+      "虛構子",
+      "測試😀",
+      "虛構壬",
+      "虛構癸",
+      "虛構辛",
+      "虛構寅",
+      "虛構戊",
+      "虛構己",
+      "Ｚ測試"
+    ]
+  }
+}
