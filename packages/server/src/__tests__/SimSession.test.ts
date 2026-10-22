@@ -1,16 +1,29 @@
 /**
  * 模擬瓦（2026-10-14）— session 引擎：選題（角色／座位／題號、題目不夠）、一人一題、取代、
  * /派 /區間 /下一步 /公布 /結束 的轉移、期限（假時鐘）、上限與淘汰（一人跨聊天室最多 2 題、結束原因）、
- * 限流（slash 的用法也受限流）、送出後才 commit、同一題的指令排隊（withLock）、
- * LINE 重送已經回過的事件不再回、沒有任何 log（更不會有使用者打的字）、狀態頁只有數字和布林。
+ * 限流（slash 的用法也受限流）、送出後才 commit、同一個聊天室的指令排隊（withLock）、
+ * LINE 重送已經回過的事件不再回（題目結束了也一樣，也不代答）、代答（只在 shared 的聊天室、只有寫對的指令、
+ * 剛聽過結束說明時 /公布 /結束 不代答、代答的區間與派票怎麼寫）、沒有任何 log（更不會有使用者打的字）、
+ * 狀態頁只有數字和布林。
  * 題庫是編的（fixtures/simGames.ts），沒有真實玩家。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SimBankLoader } from '../bots/simulation/bank';
 import { SIM_CONFIG } from '../bots/simulation/config';
 import { __setSimForTests, simulationStatus } from '../bots/simulation';
-import { parseSimCommand } from '../bots/simulation/commands';
-import { CO_ANSWER_MARK, NO_SESSION_TEXT, PROPOSE_USAGE, RATE_LIMITED_TEXT, SIM_HELP_TEXT, endedNoticeText } from '../bots/simulation/replies';
+import { parseSimCommand, type SimCommand } from '../bots/simulation/commands';
+import {
+  ANSWER_FOOTER,
+  CO_ANSWER_MARK,
+  NO_SESSION_TEXT,
+  PROPOSE_USAGE,
+  RATE_LIMITED_TEXT,
+  SIM_HELP_TEXT,
+  SIM_HELP_TEXT_DISCORD,
+  endedNoticeText,
+  sharedNote,
+  simHelpText,
+} from '../bots/simulation/replies';
 import { SimEngine, type SimRequest } from '../bots/simulation/session';
 import { FAKE_NAMES, fixtureBank } from './fixtures/simGames';
 
@@ -135,7 +148,7 @@ describe('a whole exercise', () => {
       '・派票解讀：2家 279 跟 1家 打對邊｜3家 370 騎牆（兩邊各挑了人：挑 1家 的 0、2家 的 7）',
       '・不能都對（兩次派票不可能同時全是好人）：1家＋2家（加起來 7 人＞6）→ 1家、2家 至少一個錯',
       '・兩個都對時：1家＋3家 只剩紅 2589；2家＋3家 只剩紅 1568',
-      '② 同位置的真人怎麼派（題庫裡第1局 4家忠臣，24 次，樣本少）：有派自己的佔 100%（你：有）',
+      '② 同位置的真人怎麼派（題庫裡第 1 局 4家忠臣，24 次，樣本少）：有派自己的佔 100%（你：有）',
       '　跟上一次 3家 370 重疊 0 人 100%（你 0 人）',
       '/區間 寫你的區間｜/下一步｜/公布｜/結束｜/模擬 說明',
     ]);
@@ -174,7 +187,7 @@ describe('a whole exercise', () => {
 
     const fb2 = (await say(e, '/派 1468')) ?? '';
     expect(fb2).toContain('① 當時真人怎麼派：4家 派 1468，隊外 2 0家 投贊成（跟你一樣）→ 通過出發，任務牌 oooo');
-    expect(fb2).toContain('② 同位置的真人怎麼派（題庫裡第3局 忠臣，');
+    expect(fb2).toContain('② 同位置的真人怎麼派（題庫裡第 3 局 忠臣，');
     expect(fb2).toContain('・區間（哪幾個座位裡有幾個紅）：1 5 7 有 1-3 紅（第 1 局任務）｜2 3 6 8 9 0 有 1-3 紅');
     expect(fb2).toContain('・2家 1257 的全好讀法不成立：跟任務結果矛盾');
     expect(fb2).toContain('・派票解讀：9家 4689 全換（上一局任務隊全部換掉）｜1家 1246 拆車（上一局任務隊只留一部分：留 1 4 6）｜2家 1257 跟 9家 打對邊，回選 1，拆車（留 1）｜3家 3579 騎牆（兩邊各挑了人：挑 9家 的 9、2家 的 5 7），全換');
@@ -219,14 +232,14 @@ describe('a whole exercise', () => {
 
   it('every /派 reply of every seat fits the 900-char cap with its primary sections intact; every term is glossed at most once per reply; no marker leaks', async () => {
     const e = engine({ rateLimit: { windowMs: 1, max: 1_000_000 } });
-    const sayN = (text: string): Promise<string | null> => say(e, text, { platform: 'line', chatId: 'cap', userId: 'cap' });
+    const sayN = (text: string): Promise<string | null> => say(e, text, { platform: 'line', chatId: 'cap', userId: 'cap', shared: true });
     const markers = new RegExp(`[${String.fromCharCode(0xe000)}-${String.fromCharCode(0xe002)}]`, 'u');
     let proposals = 0;
     for (const id of ['W0000', 'S0000']) {
       for (let seat = 1; seat <= 10; seat++) {
         const start = (await sayN(`/模擬 題 ${id}-${seat}`)) ?? '';
         if (!start.includes('【模擬瓦')) continue; // a seat without a decision in that game
-        expect(start.split('\n').at(-1)).toContain('/模擬 說明');
+        expect(start.split('\n').slice(-2)).toEqual([ANSWER_FOOTER, sharedNote('line')]); // the group line last
         expect(start).toMatch(/例：\/派 \d+ = 派 /u);
         expect(start).toContain('例：/區間 789=2 460=1 = 7 8 9 裡有 2 紅、4 6 0 裡有 1 紅');
         let prompt = start;
@@ -237,9 +250,9 @@ describe('a whole exercise', () => {
           proposals++;
           expect(fb.length, `${id}-${seat}`).toBeLessThanOrEqual(900);
           expect(fb).not.toMatch(markers);
-          for (const head of ['①', '④', '② 同位置的真人怎麼派', '/區間 寫你的區間']) expect(fb, `${id}-${seat} ${head}`).toContain(head);
+          for (const head of ['①', '④', '② 同位置的真人怎麼派', '/區間 寫你的區間', sharedNote('line')]) expect(fb, `${id}-${seat} ${head}`).toContain(head);
           expect(fb).toMatch(/③ 邏輯上確定的|③ 邏輯與派票解讀跟這一題第一次/u);
-          for (const say1 of ['把隊長和隊員全當好人', '有 2 人以上一樣', '只有 1 人一樣', '完全沒有一樣的人', '兩邊各挑了人', '把前面的隊長派進隊裡', '哪幾個座位裡有幾個紅', '兩次派票的人全是好人', '兩次派票不可能同時全是好人', '紅方就只能是這幾個']) {
+          for (const say1 of ['把隊長和隊員全當好人', '有 2 人以上一樣', '只有 1 人一樣', '完全沒有一樣的人', '兩邊各挑了人', '把前面的隊長派進隊裡', '哪幾個座位裡有幾個紅', '兩次派票的人全是好人', '兩次派票不可能同時全是好人', '紅方就只能是這幾個', '紅方只能是這幾組之一']) {
             expect((fb.match(new RegExp(say1, 'gu')) ?? []).length, `${id}-${seat} ${say1}`).toBeLessThanOrEqual(1);
           }
           prompt = (await sayN('/下一步')) ?? '';
@@ -285,6 +298,10 @@ describe('a whole exercise', () => {
   });
 });
 
+/** A LINE group: everyone sees the replies, so co-answering is on (`shared`). */
+const G = (userId: string, extra: Partial<SimRequest> = {}): SimRequest => ({ platform: 'line', chatId: 'G', userId, shared: true, ...extra });
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 describe('help and co-answering (2026-10-22, first real players)', () => {
   it('/模擬 說明 (幫助、指令、?) lists every command in one plain line each, with or without an open exercise', async () => {
     const e = engine();
@@ -294,18 +311,33 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     for (const t of ['/模擬 幫助', '/模擬 指令', '/模擬 ?', '／模擬　？']) expect(await say(e, t)).toBe(SIM_HELP_TEXT);
     expect(e.activeSessions()).toBe(1); // help never touches the exercise
     expect(e.counts.help).toBe(5);
-    for (const cmd of ['/模擬', '/派 469', '/區間 789=2 460=1', '/下一步', '/公布', '/結束', '/模擬 說明', '代答']) expect(SIM_HELP_TEXT).toContain(cmd);
-    expect(SIM_HELP_TEXT.length).toBeLessThanOrEqual(600);
+    for (const cmd of ['/模擬', '/派 469', '/區間 789=2 460=1', '/下一步', '/公布', '/解答', '/結束', '/模擬 說明', '代答']) expect(SIM_HELP_TEXT).toContain(cmd);
+    expect(SIM_HELP_TEXT.length).toBeLessThanOrEqual(700);
   });
 
-  it('a member without an exercise answers the newest open one in that chat; the reply is marked 代答 and names nobody', async () => {
+  it('Discord gets the help in the slash UI\'s own words (option names, no /解答); LINE gets the typed form', async () => {
     const e = engine();
-    const A: SimRequest = { platform: 'line', chatId: 'G', userId: 'A' };
-    const B: SimRequest = { platform: 'line', chatId: 'G', userId: 'B' };
-    const C: SimRequest = { platform: 'line', chatId: 'G', userId: 'C' };
-    await say(e, '/模擬 忠臣 4', A);
+    const discord = (await e.handle({ kind: 'help' }, { platform: 'discord', chatId: 'CH', userId: 'u', explicit: true }))?.text ?? '';
+    expect(discord).toBe(SIM_HELP_TEXT_DISCORD);
+    expect(simHelpText('discord')).toBe(SIM_HELP_TEXT_DISCORD);
+    expect(simHelpText('line')).toBe(SIM_HELP_TEXT);
+    for (const form of ['/模擬 角色:派西維爾 座位:2', '/模擬 題號:K7Q2M-4', '/派 隊伍:469', '/區間 內容:789=2 460=1', '/下一步', '/公布', '/結束', '/模擬 說明:True', '代答']) {
+      expect(discord).toContain(form);
+    }
+    for (const lineOnly of ['/解答', '/模擬 題 ', '/派 469　', '/模擬 說明　']) expect(discord).not.toContain(lineOnly);
+    expect(discord.length).toBeLessThanOrEqual(700);
+  });
+
+  it('a member without an exercise answers the newest open one in a group; marked 代答, names nobody; the owner is told on start and in /派', async () => {
+    const e = engine();
+    const [A, B, C] = [G('A'), G('B'), G('C')];
+    const start = (await say(e, '/模擬 忠臣 4', A)) ?? '';
+    // (2) one line: others may help, and /公布 or /結束 ends the exercise for everyone.
+    expect(start.split('\n').at(-1)).toBe(sharedNote('line'));
+    expect(sharedNote('line')).toBe('群組裡沒開題的人也能幫忙答（標「代答」）；誰打 /公布 或 /結束 都會結束這題');
     const fb = (await say(e, '/派 468', B)) ?? '';
     expect(fb.split('\n').slice(0, 2)).toEqual([CO_ANSWER_MARK, '【W0000-4・4家忠臣】你派 468']);
+    expect(fb.split('\n').slice(-2)).toEqual(['/區間 寫你的區間｜/下一步｜/公布｜/結束｜/模擬 說明', sharedNote('line')]);
     expect(fb).not.toMatch(/[ABC]\b/u);
     expect(fb.length).toBeLessThanOrEqual(900);
     expect((await say(e, '/區間 789=2', B)) ?? '').toMatch(/^（代答：[^\n]*\n【W0000-4 區間】/u);
@@ -313,39 +345,83 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     // The shared exercise really advanced, for its owner too (no 代答 mark on the owner's own reply).
     const own = (await say(e, '/派 1468', A)) ?? '';
     expect(own.startsWith('【W0000-4・4家忠臣】你派 1468')).toBe(true);
-    expect(own).toContain('・最後檢查（照你寫的區間，剩 39 種）');
-    // A malformed co-answer gets the usage, marked too; a /公布 by a co-answerer ends the exercise and lists every answer.
+    // (1) B wrote the 區間: the owner is not told 「你寫的」.
+    expect(own).toContain('・最後檢查（照這題目前的區間，剩 39 種）');
+    expect(own).not.toContain('你寫的區間');
+    // A wrong-sized /派 is well-formed: it co-answers with the size hint, marked too.
     expect(await say(e, '/派 12', B)).toBe(`${CO_ANSWER_MARK}\n這次要派 4 人，你寫了 2 人。\n${PROPOSE_USAGE}`);
+    // (3) /公布 by a co-answerer ends the exercise; answers given by co-answerers are marked 「（代答）」, the 區間 too.
     const reveal = (await say(e, '/公布', C)) ?? '';
     expect(reveal.split('\n')[0]).toBe(CO_ANSWER_MARK);
-    expect(reveal).toContain('你的派票：第 1 局 468：0 紅✓；第 3 局 1468：0 紅✓');
+    expect(reveal).toContain('這題的派票：第 1 局 468（代答）：0 紅✓；第 3 局 1468：0 紅✓');
+    expect(reveal).toContain('區間（代答）：789=2 ✓（紅 7 9）');
+    expect(reveal).toContain('・真正的紅方在這題目前的區間留下的 45 種裡 ✓');
     expect(e.activeSessions()).toBe(0);
     expect(await say(e, '/派 469', A)).toBe(NO_SESSION_TEXT);
     expect(e.counts).toMatchObject({ coAnswers: 5, answers: 2, intervals: 1, steps: 1, reveals: 1, usage: 1 });
   });
 
+  it('the owner\'s own 區間 stays 「你寫的」 for the owner, and is 「這題目前的區間」 in a co-answer; the owner\'s own answers carry no tag', async () => {
+    const e = engine();
+    await say(e, '/模擬 忠臣 4', G('A'));
+    await say(e, '/區間 789=2 460=1', G('A'));
+    expect(await say(e, '/派 469', G('B'))).toMatch(/・最後檢查（照這題目前的區間，剩 24 種）/u);
+    expect(await say(e, '/派 468', G('A'))).toMatch(/・最後檢查（照你寫的區間，剩 24 種）/u);
+    const reveal = (await say(e, '/公布', G('A'))) ?? '';
+    expect(reveal).toContain('這題的派票：469（代答）：1 紅（9）✗、468：0 紅✓');
+    expect(reveal).toContain('區間：789=2 ✓（紅 7 9）、460=1 ✗（0 紅）');
+    expect(reveal).toContain('・真正的紅方不在你的區間留下的組合裡 ✗');
+  });
+
+  it('co-answering only where everyone sees the replies: never without `shared` (1:1 chats, Discord channels whose replies are only-you)', async () => {
+    const e = engine();
+    await say(e, '/模擬 忠臣 4', G('A'));
+    for (const t of ['/派 469', '/區間 789=2', '/下一步', '/公布', '/結束']) {
+      expect(await say(e, t, { platform: 'line', chatId: 'G', userId: 'B' })).toBe(NO_SESSION_TEXT);
+      expect(e.answersFollowUp({ platform: 'line', chatId: 'G', userId: 'B' }, parseSimCommand(t) as SimCommand)).toBe(false);
+    }
+    expect(e.activeSessions()).toBe(1);
+    expect(await say(e, '/公布', G('A'))).toContain('你這題沒有作答。');
+    // A start outside a group says nothing about co-answering.
+    expect(await say(e, '/模擬 忠臣 4', LINE_USER)).not.toContain('幫忙答');
+    expect(await say(e, '/派 469', LINE_USER)).not.toContain('幫忙答');
+  });
+
+  it('only well-formed follow-ups co-answer: a malformed /派 or /區間 from a member without an exercise gets nothing, is not hidden, and does not keep the owner\'s exercise alive', async () => {
+    const e = engine({ ttlMs: 30 * MIN });
+    await say(e, '/模擬 忠臣 4', G('A'));
+    expect(e.answersFollowUp(G('A'), parseSimCommand('/派西 2') as SimCommand)).toBe(true); // the owner's own: as before
+    clock.now += 20 * MIN;
+    for (const t of ['/派西 2', '/區間 12=1 我覺得', '/派 4 4 6', '/區間 789=9']) {
+      expect(parseSimCommand(t)?.kind).toBe('usage');
+      expect(await say(e, t, G('B'))).toBeNull();
+      expect(e.answersFollowUp(G('B'), parseSimCommand(t) as SimCommand)).toBe(false);
+    }
+    expect(e.answersFollowUp(G('B'), parseSimCommand('/派 469') as SimCommand)).toBe(true);
+    clock.now += 15 * MIN; // 35 minutes after the owner's last command
+    expect(await say(e, '/下一步', G('A'))).toBe(endedNoticeText('W0000-4', 'expired'));
+    expect(e.counts).toMatchObject({ coAnswers: 0, usage: 0 });
+  });
+
   it('a member with their own exercise keeps acting on it; the newest exercise in the chat is the one co-answered; other chats are separate', async () => {
     const e = engine();
-    const A: SimRequest = { platform: 'line', chatId: 'G', userId: 'A' };
-    const B: SimRequest = { platform: 'line', chatId: 'G', userId: 'B' };
-    const C: SimRequest = { platform: 'line', chatId: 'G', userId: 'C' };
+    const [A, B, C] = [G('A'), G('B'), G('C')];
     await say(e, '/模擬 忠臣 4', A);
     await say(e, '/模擬 派西 2', B);
     expect((await say(e, '/派 469', A)) ?? '').toMatch(/^【W0000-4・4家忠臣】你派 469/u);
     expect((await say(e, '/派 279', B)) ?? '').toMatch(/^【W0000-2・2家派西】你派 279/u);
     // C has none: the newest (B's) is answered. A's is untouched.
     expect((await say(e, '/派 279', C)) ?? '').toMatch(/^（代答：[^\n]*\n【W0000-2・2家派西】你派 279/u);
-    expect(await say(e, '/公布', C)).toContain('你的派票：279：2 紅（7 9）✗、279：2 紅（7 9）✗');
+    expect(await say(e, '/公布', C)).toContain('這題的派票：279：2 紅（7 9）✗、279（代答）：2 紅（7 9）✗');
     expect((await say(e, '/下一步', C)) ?? '').toMatch(/^（代答：[^\n]*\n【W0000-4 下一步】/u); // now A's is the newest
-    expect(await say(e, '/下一步', { platform: 'line', chatId: 'other', userId: 'C' })).toBe(NO_SESSION_TEXT);
+    expect(await say(e, '/下一步', G('C', { chatId: 'other' }))).toBe(NO_SESSION_TEXT);
     expect(await say(e, '/結束', C)).toBe(`${CO_ANSWER_MARK}\n已結束 W0000-4（沒有公布）。再來一題：/模擬`);
     expect(e.activeSessions()).toBe(0);
   });
 
   it('an exercise that expired or was evicted is explained to its owner once; the next follow-up co-answers', async () => {
     const e = engine({ maxPerChat: 1 });
-    const A: SimRequest = { platform: 'line', chatId: 'G', userId: 'A' };
-    const B: SimRequest = { platform: 'line', chatId: 'G', userId: 'B' };
+    const [A, B] = [G('A'), G('B')];
     await say(e, '/模擬 忠臣 4', A);
     await say(e, '/模擬 派西 2', B); // A's is evicted (one per chat)
     expect(await say(e, '/派 279', A)).toBe(endedNoticeText('W0000-4', 'evicted'));
@@ -359,25 +435,76 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     expect(await say(e, '/派 469', A)).toBe(endedNoticeText('W0000-4', 'evicted'));
   });
 
-  it('withLock queues a co-answer behind the owner\'s command on the same exercise', async () => {
-    const e = engine();
-    const A: SimRequest = { platform: 'line', chatId: 'G', userId: 'A' };
-    const B: SimRequest = { platform: 'line', chatId: 'G', userId: 'B' };
+  it('right after that notice, /公布 and /結束 never act on someone else\'s exercise; another command first, then they co-answer', async () => {
+    const e = engine({ maxPerChat: 1 });
+    const [A, B] = [G('A'), G('B')];
     await say(e, '/模擬 忠臣 4', A);
+    await say(e, '/模擬 派西 2', B); // A's is evicted
+    expect(await say(e, '/公布', A)).toBe(endedNoticeText('W0000-4', 'evicted'));
+    expect(await say(e, '/公布', A)).toBe(NO_SESSION_TEXT);
+    expect(await say(e, '/結束', A)).toBe(NO_SESSION_TEXT);
+    expect(await say(e, '/公布', A)).toBe(NO_SESSION_TEXT);
+    expect(e.activeSessions()).toBe(1); // B's is still open
+    expect((await say(e, '/下一步', A)) ?? '').toMatch(/^（代答：[^\n]*\n【W0000-2 下一步】/u);
+    expect(await say(e, '/結束', A)).toBe(`${CO_ANSWER_MARK}\n已結束 W0000-2（沒有公布）。再來一題：/模擬`);
+  });
+
+  it('a LINE redelivery is never re-targeted: an /結束 or /公布 that already went out is remembered after its exercise is gone, and a redelivery never co-answers', async () => {
+    const e = engine();
+    const ev = (r: SimRequest, eventKey: string, duplicate = false): SimRequest => ({ ...r, eventKey, duplicate });
+    await say(e, '/模擬 忠臣 4', ev(G('A'), 'a1'));
+    await say(e, '/模擬 派西 2', ev(G('B'), 'b1'));
+    expect(await say(e, '/結束', ev(G('A'), 'a2'))).toBe('已結束 W0000-4（沒有公布）。再來一題：/模擬');
+    // The owner's /結束 redelivered: nothing, and B's exercise (the newest in the chat) is not ended.
+    expect(await e.handleText('/結束', ev(G('A'), 'a2', true))).toBeNull();
+    expect(e.activeSessions()).toBe(1);
+    // B reveals; a new exercise starts; B's /公布 redelivered does not reveal the new one.
+    expect(await say(e, '/公布', ev(G('B'), 'b2'))).toContain('【W0000-2 公布】');
+    await say(e, '/模擬 梅林 1', ev(G('C'), 'c1'));
+    expect(await e.handleText('/公布', ev(G('B'), 'b2', true))).toBeNull();
+    // A co-answer that went out is not repeated on another exercise.
+    expect(await say(e, '/下一步', ev(G('D'), 'd1'))).toMatch(/^（代答：[^\n]*\n【W0000-1 下一步】/u);
+    await say(e, '/模擬 忠臣 4', ev(G('A'), 'a3')); // now A's is the newest
+    expect(await e.handleText('/下一步', ev(G('D'), 'd1', true))).toBeNull();
+    // A redelivery whose first copy never went out does not co-answer (it may have been meant for another exercise).
+    expect(await e.handleText('/派 469', ev(G('D'), 'd2', true))).toBeNull();
+    expect(await e.handleText('/公布', ev(G('D'), 'd3', true))).toBeNull();
+    expect(e.counts).toMatchObject({ ended: 1, reveals: 1, steps: 1, answers: 0, coAnswers: 1 });
+    expect(e.activeSessions()).toBe(2);
+  });
+
+  it('commands of one chat run one at a time: a co-answer queued behind an /結束 acts on the exercise that is newest when its turn comes, and every commit lands', async () => {
+    const e = engine();
+    const [A, B, C] = [G('A'), G('B'), G('C')];
+    await say(e, '/模擬 忠臣 4', A);
+    await say(e, '/模擬 派西 2', B); // the newest
     const order: string[] = [];
-    const slow = (req: SimRequest, text: string, ms: number) => e.withLock(req, async () => {
+    const slow = (req: SimRequest, text: string, ms: number): Promise<string> => e.withLock(req, async () => {
       const r = await e.handleText(text, req);
-      await new Promise((resolve) => setTimeout(resolve, ms));
+      await sleep(ms); // replyMessage in flight
       order.push(`${req.userId}:${r?.kind}`);
       r?.commit();
       return r?.text ?? '';
-    }, parseSimCommand(text));
-    const [a, b] = await Promise.all([slow(A, '/下一步', 30), slow(B, '/派 1468', 0)]);
-    expect(order).toEqual(['A:next', 'B:propose']);
-    expect(a).toContain('第 3 局第 4 次');
-    expect(b).toContain('你派 1468'); // computed after A's step: the R3 decision takes 4 seats
-    expect(e.answersFollowUp(B)).toBe(true);
-    expect(e.answersFollowUp({ platform: 'line', chatId: 'elsewhere', userId: 'B' })).toBe(false);
+    });
+    const [, co] = await Promise.all([slow(B, '/結束', 30), slow(C, '/派 469', 0), slow(A, '/區間 789=2', 20), slow(C, '/下一步', 0)]);
+    expect(order).toEqual(['B:end', 'C:propose', 'A:interval', 'C:next']);
+    expect(co).toMatch(/^（代答：[^\n]*\n【W0000-4・4家忠臣】你派 469/u); // B's was gone by then: A's is the newest
+    expect(e.counts).toMatchObject({ ended: 1, answers: 1, intervals: 1, steps: 1, coAnswers: 2 });
+    expect(await say(e, '/公布', A)).toContain('這題的派票：469（代答）：1 紅（9）✗');
+  });
+
+  it('an exercise that starts before any proposal explains the notation the first time /下一步 shows proposals', async () => {
+    const e = engine();
+    const start = (await say(e, '/模擬 梅林 1')) ?? '';
+    expect(start).toContain('第 1 局第一個隊長，前面沒有派票');
+    expect(start).not.toContain('怎麼讀');
+    const next = (await say(e, '/下一步')) ?? '';
+    expect(next).toContain('怎麼讀：「1家 460」= 1家派 4、6、0家（0 = 10家）；座位後面的 + 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對；任務的 o = 成功牌、x = 失敗牌');
+    expect(next.indexOf('怎麼讀')).toBeGreaterThan(next.indexOf('1家 460'));
+    expect(await say(e, '/下一步')).not.toContain('怎麼讀');
+    // An exercise that starts after proposals already had it in the start reply: /下一步 does not repeat it.
+    await say(e, '/模擬 忠臣 4');
+    expect(await say(e, '/下一步')).not.toContain('怎麼讀');
   });
 });
 

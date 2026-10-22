@@ -7,6 +7,7 @@
  *   - the rate limit covers malformed commands too (no endless public usage replies);
  *   - /help and the LINE /指令 list /模擬 only while SIM_COMMANDS_ENABLED is on;
  *   - public everywhere when SIM_DISCORD_PUBLIC_CHANNEL_IDS is empty, else public only there;
+ *   - co-answering (2026-10-22) only where the replies are public; /模擬 說明:True gets the Discord wording;
  *   - a bot reply in the sync channel is never mirrored (bots are ignored by the mirror);
  *   - errors are logged as codes only.
  * Hand-rolled interaction mock; invented bank (fixtures/simGames.ts).
@@ -22,7 +23,7 @@ import { SIM_CONFIG, SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
 import { handleSimCommand, simCommandFromInteraction, simReplyIsPublic, SIM_ERROR_TEXT } from '../bots/simulation/discordCommand';
 import { __setSimForTests } from '../bots/simulation';
 import { SimEngine } from '../bots/simulation/session';
-import { CO_ANSWER_MARK, NO_SESSION_TEXT, SIM_HELP_TEXT } from '../bots/simulation/replies';
+import { CO_ANSWER_MARK, NO_SESSION_TEXT, SIM_HELP_TEXT, SIM_HELP_TEXT_DISCORD, sharedNote } from '../bots/simulation/replies';
 import { formatStatsHelp } from '../bots/stats/statsReplies';
 import { fixtureBank } from './fixtures/simGames';
 
@@ -179,11 +180,19 @@ describe('handlers', () => {
   });
 
   it('each user in each channel has their own exercise; a user without one co-answers the newest in the channel (marked 代答)', async () => {
-    await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-1', 'a');
+    const start = await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-1', 'a');
+    // Public channel: the owner is told others may help and that /公布 or /結束 ends it for everyone.
+    expect(start.split('\n').at(-1)).toBe(sharedNote('discord'));
+    expect(sharedNote('discord')).toContain('頻道裡');
     const co = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }, 'CH-1', 'b');
     expect(co.split('\n').slice(0, 2)).toEqual([CO_ANSWER_MARK, '【W0000-4・4家忠臣】你派 469']);
+    expect(co.split('\n').at(-1)).toBe(sharedNote('discord'));
     expect(co).not.toContain('u-1');
     expect(co.length).toBeLessThanOrEqual(900);
+    // A malformed /派 from someone without an exercise is answered with the usage only (never a co-answer).
+    const bad = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '西 2' }, 'CH-1', 'b');
+    expect(bad).toContain('用法：/派');
+    expect(bad).not.toContain(CO_ANSWER_MARK);
     expect(await run(COMMANDS.SIM_NEXT, {}, 'CH-2', 'a')).toContain('你目前沒有進行中的模擬');
     const own = await run(COMMANDS.SIM_NEXT, {}, 'CH-1', 'a');
     expect(own).toContain('下一步】');
@@ -191,8 +200,31 @@ describe('handlers', () => {
     expect(engine.counts.coAnswers).toBe(1);
   });
 
-  it('/模擬 說明:True → the command list, without opening an exercise', async () => {
-    expect(await run(COMMANDS.SIM, { [SIM_OPTIONS.HELP]: true })).toBe(SIM_HELP_TEXT);
+  it('no co-answering where sim replies are only-you (SIM_DISCORD_PUBLIC_CHANNEL_IDS set): the others never saw the exercise', async () => {
+    process.env.SIM_DISCORD_PUBLIC_CHANNEL_IDS = 'CH-SIM';
+    const start = await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-1', 'a');
+    expect(start).not.toContain('幫忙答');
+    for (const [name, opts] of [[COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }], [COMMANDS.SIM_NEXT, {}], [COMMANDS.SIM_REVEAL, {}], [COMMANDS.SIM_END, {}]] as const) {
+      expect(await run(name, opts, 'CH-1', 'b')).toBe(NO_SESSION_TEXT);
+    }
+    expect(engine.activeSessions()).toBe(1);
+    expect(await run(COMMANDS.SIM_REVEAL, {}, 'CH-1', 'a')).toContain('你這題沒有作答。');
+    // The public channel still co-answers.
+    await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-SIM', 'a');
+    expect((await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }, 'CH-SIM', 'b')).split('\n')[0]).toBe(CO_ANSWER_MARK);
+    expect(engine.counts.coAnswers).toBe(1);
+  });
+
+  it('/模擬 說明:True → the Discord command list (slash option names), without opening an exercise', async () => {
+    const help = await run(COMMANDS.SIM, { [SIM_OPTIONS.HELP]: true });
+    expect(help).toBe(SIM_HELP_TEXT_DISCORD);
+    expect(help).not.toBe(SIM_HELP_TEXT);
+    expect(help).toContain(`/${COMMANDS.SIM_PROPOSE} ${SIM_OPTIONS.TEAM}:469`);
+    expect(help).toContain(`/${COMMANDS.SIM_INTERVAL} ${SIM_OPTIONS.CONTENT}:789=2 460=1`);
+    expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.ROLE}:派西維爾 ${SIM_OPTIONS.SEAT}:2`);
+    expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.ID}:K7Q2M-4`);
+    expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.HELP}:True`);
+    expect(help).not.toContain('/解答'); // LINE only
     expect(engine.activeSessions()).toBe(0);
     expect(engine.counts.help).toBe(1);
   });

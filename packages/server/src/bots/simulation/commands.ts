@@ -50,10 +50,17 @@ export type SimCommand =
   /** 是模擬指令，但內容看不懂；`problem` 是給使用者看的一句話。 */
   | { kind: 'usage'; command: SimUsageCommand; problem?: string };
 
-/** 對開著的題目做的事（/派 /區間 /下一步 /公布 /結束，以及看不懂的 /派、/區間）：可以幫別人的題目代答。 */
+/** 對開著的題目做的事（/派 /區間 /下一步 /公布 /結束，以及看不懂的 /派、/區間）。 */
 export function isFollowUpCommand(cmd: SimCommand): boolean {
-  return cmd.kind === 'propose' || cmd.kind === 'interval' || cmd.kind === 'next' || cmd.kind === 'reveal' || cmd.kind === 'end'
-    || (cmd.kind === 'usage' && cmd.command !== 'start');
+  return isCoAnswerable(cmd) || (cmd.kind === 'usage' && cmd.command !== 'start');
+}
+
+/**
+ * 可以幫別人的題目代答的指令：只有**寫對的** /派 /區間 /下一步 /公布 /結束（2026-10-22 審查修正）。
+ * 看不懂的 /派、/區間（像聊天的斜線句子）不代答：自己沒開題的人打的照舊不回、照舊同步、不延長別人的題目。
+ */
+export function isCoAnswerable(cmd: SimCommand): boolean {
+  return cmd.kind === 'propose' || cmd.kind === 'interval' || cmd.kind === 'next' || cmd.kind === 'reveal' || cmd.kind === 'end';
 }
 
 /** /模擬 後面的「說明」字：說明、幫助、指令、?（全形也可以）。 */

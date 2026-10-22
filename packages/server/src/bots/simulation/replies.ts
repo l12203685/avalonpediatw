@@ -20,9 +20,18 @@
  *   - 開題的回覆先講這題要做什麼、/派 和 /區間 各給一個例子（區間 = 哪幾個座位裡有幾個紅），
  *     最後一行提 /模擬 說明；
  *   - 幫別人開的題目作答（代答）時第一行標「代答」，不寫任何名字。
+ *
+ * 2026-10-22 審查修正：
+ *   - 大家都看得到回覆的聊天室（`shared`）裡，開題回覆和 /派 的最後一行說「別人也能幫忙答、誰打 /公布 或
+ *     /結束 都會結束這題」（題主不會被嚇到）；/公布 列出的派票裡，代答派的標「（代答）」；代答寫的區間，
+ *     題主之後的回覆寫「這題目前的區間」；
+ *   - /模擬 說明 分 LINE 版和 Discord 版（Discord 照 slash 的選項名寫）；
+ *   - ④「兩次不能都對」沒有超過 6 人時寫原因（跟任務結果矛盾）；開題時還沒有派票（第 1 局第一個隊長）的題目，
+ *     /下一步 第一次印出派票時附「怎麼讀」；② 寫「第 1 局」（有空格）；「只剩紅」兩組以上時解釋成「這幾組之一」。
  */
 
 import type { Role } from '@avalon/shared';
+import { COMMANDS, SIM_OPTIONS } from '../discord/config';
 import { ROLE_ZH, formatIntervalGroup, type IntervalGroup } from './commands';
 import { SIM_HUMAN_SMALL_SAMPLE, SIM_PROPOSE_SOFT_MAX_CHARS, SIM_REPLY_MAX_CHARS } from './config';
 import { hasHits, type Camp, type CampShare, type HumanAgg, type ProposalFeatures } from './human';
@@ -81,6 +90,13 @@ function redCount(min: number, max: number): string {
 
 // ─── 術語解釋（同一則回覆只解釋一次）────────────────────────────────────────
 
+/** 術語的白話；`sayMany` = 細節列了兩組以上（用「、」分開）時的說法。 */
+interface GlossSpec {
+  say: string;
+  sayMany?: string;
+  after?: boolean;
+}
+
 /**
  * 術語第一次出現時的白話。`after` 的術語把細節寫在術語後面、解釋放最後
  * （`只剩紅 1258（紅方就只能是這幾個）`、`回選 1（把前面的隊長派進隊裡）`），
@@ -96,12 +112,12 @@ export const GLOSSES = {
   區間: { say: '哪幾個座位裡有幾個紅' },
   都對: { say: '兩次派票的人全是好人' },
   不能都對: { say: '兩次派票不可能同時全是好人' },
-  只剩紅: { say: '紅方就只能是這幾個', after: true },
+  只剩紅: { say: '紅方就只能是這幾個', sayMany: '紅方只能是這幾組之一', after: true },
   拆車: { say: '上一局任務隊只留一部分' },
   全換: { say: '上一局任務隊全部換掉' },
   外撒: { say: '上一局任務隊加別人' },
   原隊: { say: '照上一局任務隊再派' },
-} as const satisfies Record<string, { say: string; after?: boolean }>;
+} as const satisfies Record<string, GlossSpec>;
 
 export type GlossTerm = keyof typeof GLOSSES;
 
@@ -125,10 +141,10 @@ export function resolveGlosses(text: string): string {
   const closed = String.fromCharCode(0xe003);
   return text
     .replace(GLOSS_RE, (_m, term: string, detail: string) => {
-      const g = (GLOSSES as Record<string, { say: string; after?: boolean }>)[term];
+      const g = (GLOSSES as Record<string, GlossSpec>)[term];
       const first = !said.has(term);
       said.add(term);
-      const say = first && g ? g.say : '';
+      const say = first && g ? (g.sayMany && detail.includes('、') ? g.sayMany : g.say) : '';
       let out: string;
       if (g?.after) out = `${term}${detail ? ` ${detail}` : ''}${say ? `（${say}）` : ''}`;
       else {
@@ -193,6 +209,9 @@ function codeBlock(lines: readonly string[], platform: SimPlatform): string {
 
 /** 幫別人開的題目作答時，回覆的第一行（沒有任何名字）。 */
 export const CO_ANSWER_MARK = '（代答：這題是別人開的，你幫忙回答）';
+
+/** /公布 列出的派票、區間裡，代答寫的那一個後面的標記（沒有名字）。 */
+export const CO_ANSWER_TAG = '（代答）';
 
 export function withCoAnswerMark(text: string, coAnswer: boolean | undefined): string {
   return coAnswer ? `${CO_ANSWER_MARK}\n${text}` : text;
@@ -319,6 +338,14 @@ function answerHint(p: ProposalEvent): string[] {
 }
 
 export const HELP_HINT = '/模擬 說明 看全部指令';
+
+/**
+ * 大家都看得到回覆的聊天室（LINE 群組、公開的 Discord 頻道）：開題回覆和 /派 的最後一行
+ * （題主知道別人可以代答、/公布 /結束 是對整題的）。
+ */
+export function sharedNote(platform: SimPlatform): string {
+  return `${platform === 'discord' ? '頻道' : '群組'}裡沒開題的人也能幫忙答（標「代答」）；誰打 /公布 或 /結束 都會結束這題`;
+}
 export const ANSWER_FOOTER = `/下一步 跳過這次｜/公布 看角色｜/結束｜${HELP_HINT}`;
 
 /** 一句「確定資訊」的任務事實（只有出過失敗牌的任務有資訊：成功不代表全好）。 */
@@ -339,6 +366,8 @@ export interface StartInput {
   platform: SimPlatform;
   /** 取代了上一題時的提醒。 */
   replacedId?: string;
+  /** 大家都看得到回覆的聊天室（最後加一行 sharedNote）。 */
+  shared?: boolean;
 }
 
 export const START_TASK_LINE = '這題要做的事：看完前面的派票，想想紅方可能在哪，然後換你派一次隊，看你的派票會放出什麼資訊。';
@@ -369,6 +398,7 @@ export function formatStart(input: StartInput): string {
   parts.push({ text: decisionPrompt(decision) });
   for (const line of answerHint(decision)) parts.push({ text: line });
   parts.push({ text: ANSWER_FOOTER });
+  if (input.shared) parts.push({ text: sharedNote(platform) });
   return assembleReply(parts);
 }
 
@@ -388,10 +418,15 @@ export interface ProposeInput {
   platform: SimPlatform;
   /** 這個決定點第一次 /派：③ 完整印；之後一行帶過。 */
   showLogic?: boolean;
-  /** 你寫過 /區間：照你的區間留下幾種、你的隊伍全好的有幾種。 */
-  ownInterval?: { worlds: number; clean: number };
+  /**
+   * 這題有 /區間：照區間留下幾種、你的隊伍全好的有幾種。`yours` = 你自己寫的（寫「你寫的區間」）；
+   * 代答寫的、或這次是代答，寫「這題目前的區間」。
+   */
+  ownInterval?: { worlds: number; clean: number; yours?: boolean };
   /** 幫別人開的題目作答：第一行標代答（算在長度裡）。 */
   coAnswer?: boolean;
+  /** 大家都看得到回覆的聊天室（最後加一行 sharedNote）。 */
+  shared?: boolean;
 }
 
 function sameTeam(a: readonly number[], b: readonly number[]): boolean {
@@ -463,7 +498,7 @@ export function humanLines(input: ProposeInput): string[] {
   const { agg, mine, prev, camps } = input.human;
   const d = input.decision;
   const role = input.game.seatRoles[d.leaderSeat - 1];
-  const where = d.round <= 2 ? `第${d.round}局 ${seatLabel(d.leaderSeat)}${roleShort(role)}` : `第${d.round}局 ${roleShort(role)}`;
+  const where = d.round <= 2 ? `第 ${d.round} 局 ${seatLabel(d.leaderSeat)}${roleShort(role)}` : `第 ${d.round} 局 ${roleShort(role)}`;
   if (agg.n <= 0) return [`② 同位置的真人怎麼派（${where}）：題庫裡沒有其他同樣處境的局`];
   const small = agg.n < SIM_HUMAN_SMALL_SAMPLE ? '，樣本少' : '';
   const lines = [`② 同位置的真人怎麼派（題庫裡${where}，${agg.n} 次${small}）：有派自己的佔 ${pct(agg.self / agg.n)}（你：${mine.self ? '有' : '沒有'}）`];
@@ -713,7 +748,7 @@ function oddsText(p: number): string {
 }
 
 /** ④ 你的派票放出的資訊：第一行是白話結論（後面的人會讀成什麼），細節在後面。 */
-export function releaseLines(r: ReleasePanel, seat: number, ownInterval?: { worlds: number; clean: number }): ReplyPart[] {
+export function releaseLines(r: ReleasePanel, seat: number, ownInterval?: { worlds: number; clean: number; yours?: boolean }): ReplyPart[] {
   const parts: ReplyPart[] = [];
   const claim = seatList(seatsOfMask(r.claimMask));
   const who = (p: ProposalEvent): string => (p.leaderSeat === seat ? `你上一次的 ${teamDigits(p.teamSeats)}` : `${seatLabel(p.leaderSeat)} ${teamDigits(p.teamSeats)}`);
@@ -734,8 +769,9 @@ export function releaseLines(r: ReleasePanel, seat: number, ownInterval?: { worl
       const label = gloss(v.label, v.shared.length ? seatList(v.shared) : '');
       const recall = v.recall ? `，${gloss('回選', seatChar(v.proposal.leaderSeat))}` : '';
       const n = popcountMask(v.union);
+      // 不能都對：超過 6 人，或（後面的人只看公開資訊）跟任務結果矛盾。
       const tail = v.weight === 0
-        ? `兩次${gloss('不能都對', n > 6 ? `加起來 ${n} 人＞6` : '')}`
+        ? `兩次${gloss('不能都對', n > 6 ? `加起來 ${n} 人＞6` : '跟任務結果矛盾')}`
         : `兩次${gloss('都對')}時${sp(restText(v.union, v.weight, v.worlds))}`;
       parts.push({ text: `・跟 ${who(v.proposal)} 比：${label}${recall} → ${tail}`, optional: true, priority: 2 });
     }
@@ -754,10 +790,11 @@ export function releaseLines(r: ReleasePanel, seat: number, ownInterval?: { worl
     }
   }
   if (ownInterval) {
+    const whose = intervalOwnerWords(ownInterval.yours !== false);
     parts.push({
       text: ownInterval.worlds === 0
-        ? '・最後檢查：你寫的區間合起來不可能，先改 /區間'
-        : `・最後檢查（照你寫的區間，剩 ${ownInterval.worlds} 種）：${teamDigits(r.team)} 全好的有 ${ownInterval.clean} 種（${pct(ownInterval.clean / ownInterval.worlds)}）`,
+        ? `・最後檢查：${whose}合起來不可能，先改 /區間`
+        : `・最後檢查（照${whose}，剩 ${ownInterval.worlds} 種）：${teamDigits(r.team)} 全好的有 ${ownInterval.clean} 種（${pct(ownInterval.clean / ownInterval.worlds)}）`,
     });
   }
   for (const st of r.thumbStances) {
@@ -790,6 +827,11 @@ export function releaseLines(r: ReleasePanel, seat: number, ownInterval?: { worl
   return parts;
 }
 
+/** 「你寫的區間」（自己寫的）或「這題目前的區間」（代答寫的、或這次是代答）。 */
+export function intervalOwnerWords(yours: boolean): string {
+  return yours ? '你寫的區間' : '這題目前的區間';
+}
+
 function popcountMask(m: number): number {
   return seatsOfMask(m).length;
 }
@@ -809,6 +851,7 @@ export function formatProposeFeedback(input: ProposeInput, extras: { sight: Sigh
   // ② 的分布先省略（priority 7）；「跟你同樣派法」三方比較留久一點（priority 3）。
   humanLines(input).forEach((t, i) => parts.push({ text: t, optional: i > 0, priority: t.startsWith(LEAK_PREFIX) ? 3 : 7 }));
   parts.push({ text: PROPOSE_FOOTER });
+  if (input.shared) parts.push({ text: sharedNote(input.platform) });
   return assembleReply(parts, SIM_REPLY_MAX_CHARS, SIM_PROPOSE_SOFT_MAX_CHARS);
 }
 
@@ -893,6 +936,12 @@ export function formatNext(input: NextInput): string {
   if (input.coAnswer) parts.push({ text: CO_ANSWER_MARK });
   parts.push({ text: `【${input.exerciseId} 下一步】${input.showNote ? REPLAY_NOTE : ''}` });
   parts.push({ text: codeBlock(eventLines(input.events, input.seat, input.game), input.platform) });
+  // 開題時還沒有派票（第 1 局第一個隊長）：第一次印出派票時講怎麼讀（+ -、任務的 o x）。
+  const before = input.shownAll.slice(0, input.shownAll.length - input.events.length);
+  const firstShown = input.events.find((e): e is ProposalEvent => e.kind === 'proposal');
+  if (firstShown && !before.some((e) => e.kind === 'proposal')) {
+    parts.push({ text: notationNote(firstShown, { quests: input.events.some((e) => e.kind === 'quest') }) });
+  }
   if (input.events.some((e) => e.kind === 'proposal' && !e.votesReliable)) parts.push({ text: UNRELIABLE_NOTE, optional: true, priority: 2 });
   if (input.next) {
     parts.push({ text: decisionPrompt(input.next) });
@@ -915,11 +964,13 @@ export interface RevealInput {
   exerciseId: string;
   game: SimGame;
   seat: number;
-  /** 每個決定點（照時間）你派過的隊伍（照順序）。 */
-  answers: { decision: ProposalEvent; teams: number[][] }[];
+  /** 每個決定點（照時間）這題派過的隊伍（照順序）；`coAnswer` = 代答派的（標「（代答）」）。 */
+  answers: { decision: ProposalEvent; teams: { team: number[]; coAnswer: boolean }[] }[];
   interval?: IntervalGroup[];
-  /** 你的區間在最後一次 /區間 時留下的世界。 */
+  /** 區間在最後一次 /區間 時留下的世界。 */
   intervalWorlds?: number[];
+  /** 區間是你自己寫的（沒給 = 是）；否則寫「這題目前的區間」、區間那一行標「（代答）」。 */
+  intervalYours?: boolean;
   /** 從開局到你最後一個決定點，看過的每一次派票。 */
   proposals: ProposalEvent[];
   coAnswer?: boolean;
@@ -958,29 +1009,33 @@ export function formatReveal(input: RevealInput): string {
   parts.push({ text: `紅：${seatList(seatsOfMask(redMask))}` });
 
   const viewerRed = isRed(g.seatRoles[input.seat - 1]);
+  // 有代答派的（或這次是代答）就寫「這題的派票」：不全是看這則回覆的人派的。
+  const mixed = input.coAnswer || input.answers.some((a) => a.teams.some((t) => t.coAnswer));
   if (input.answers.length > 0) {
     const items = input.answers.map(({ decision, teams }) => {
       const label = input.answers.length > 1 ? `第 ${decision.round} 局 ` : '';
-      const each = teams.map((team) => {
+      const each = teams.map(({ team, coAnswer }) => {
         const reds = team.filter((s) => isRed(g.seatRoles[s - 1]));
         const mark = viewerRed ? '' : reds.length === 0 ? '✓' : '✗';
-        return `${teamDigits(team)}：${reds.length} 紅${reds.length ? `（${seatList(reds)}）` : ''}${mark}`;
+        return `${teamDigits(team)}${coAnswer ? CO_ANSWER_TAG : ''}：${reds.length} 紅${reds.length ? `（${seatList(reds)}）` : ''}${mark}`;
       });
       return `${label}${each.join('、')}`;
     });
-    parts.push({ text: `你的派票：${items.join('；')}` });
+    parts.push({ text: `${mixed ? '這題的派票' : '你的派票'}：${items.join('；')}` });
   } else {
-    parts.push({ text: '你這題沒有作答。' });
+    parts.push({ text: input.coAnswer ? '這題沒有人作答。' : '你這題沒有作答。' });
   }
   if (input.interval && input.interval.length > 0) {
+    const yours = input.intervalYours !== false;
     const items = input.interval.map((grp) => {
       const reds = grp.seats.filter((s) => isRed(g.seatRoles[s - 1]));
       return `${formatIntervalGroup(grp)} ${intervalGroupTrue(grp, redMask) ? '✓' : '✗'}（${reds.length ? `紅 ${seatList(reds)}` : '0 紅'}）`;
     });
-    parts.push({ text: `區間：${items.join('、')}` });
+    parts.push({ text: `區間${yours ? '' : CO_ANSWER_TAG}：${items.join('、')}` });
     if (input.intervalWorlds) {
       const kept = input.intervalWorlds.includes(redMask);
-      parts.push({ text: kept ? `・真正的紅方在你的區間留下的 ${input.intervalWorlds.length} 種裡 ✓` : '・真正的紅方不在你的區間留下的組合裡 ✗' });
+      const whose = yours ? '你的區間' : intervalOwnerWords(false);
+      parts.push({ text: kept ? `・真正的紅方在${whose}留下的 ${input.intervalWorlds.length} 種裡 ✓` : `・真正的紅方不在${whose}留下的組合裡 ✗` });
     }
   }
   if (input.proposals.length > 0) {
@@ -1010,23 +1065,52 @@ export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/�
 export const PROPOSE_USAGE = '用法：/派 加座位，例如 /派 469 = 派 4、6、9家（0 = 10家；4 6 9、4,6,9 也可以）';
 export const INTERVAL_USAGE = '用法：/區間 789=2 460=1 = 7 8 9 裡有 2 紅、4 6 0 裡有 1 紅（也可以 7 8 9 *2、12=1-2、1 5 9 *1+、3 紅、5=好；各組可以重疊）';
 
+/** 說明的第一行（兩個平台一樣）。 */
+const HELP_TITLE = '🧩 模擬瓦指令（真人對局停在某一家要派票的當下，換你來派，看你的派票放出什麼資訊）';
+const HELP_PROPOSE_WORDS = '作答：派 4、6、9家（0 = 10家；人數要對，可以派好幾次比較）';
+const HELP_INTERVAL_WORDS = '（選填）寫你覺得哪幾個座位裡有幾個紅：7 8 9 裡 2 紅、4 6 0 裡 1 紅';
+const HELP_NEXT = '/下一步\u3000照實際對局走到你下一次派票（還沒作答也可以跳過）';
+const HELP_END = '/結束\u3000不公布，直接結束';
+
 /**
- * /模擬 說明（/模擬 幫助、/模擬 指令、/模擬 ?）和只回模擬的 LINE 練習群（SIM_LINE_GROUP_IDS）裡的 /指令：
+ * LINE 的 /模擬 說明（/模擬 幫助、/模擬 指令、/模擬 ?）和只回模擬的 LINE 練習群（SIM_LINE_GROUP_IDS）裡的 /指令：
  * 全部指令，每個一行白話。
  */
 export const SIM_HELP_TEXT = [
-  '🧩 模擬瓦指令（真人對局停在某一家要派票的當下，換你來派，看你的派票放出什麼資訊）',
+  HELP_TITLE,
   '/模擬\u3000隨機開一題（第 1 局、2～5 家、任何角色）',
   '/模擬 角色 座位\u3000指定角色或座位，例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅',
   '/模擬 題 題號\u3000做指定的題目，例：/模擬 題 K7Q2M-4（大家可以做同一題）',
-  '/派 469\u3000作答：派 4、6、9家（0 = 10家；人數要對，可以派好幾次比較）',
-  '/區間 789=2 460=1\u3000（選填）寫你覺得哪幾個座位裡有幾個紅：7 8 9 裡 2 紅、4 6 0 裡 1 紅',
-  '/下一步\u3000照實際對局走到你下一次派票（還沒作答也可以跳過）',
-  '/公布\u3000公布角色、對答案，這題結束（LINE 也可以打 /解答）',
-  '/結束\u3000不公布，直接結束',
+  `/派 469\u3000${HELP_PROPOSE_WORDS}`,
+  `/區間 789=2 460=1\u3000${HELP_INTERVAL_WORDS}`,
+  HELP_NEXT,
+  '/公布\u3000公布角色、對答案，這題結束（也可以打 /解答）',
+  HELP_END,
   '/模擬 說明\u3000這份說明（/模擬 幫助、/模擬 指令、/模擬 ? 也可以）',
-  '自己沒開題的人也可以幫忙答這個聊天室最新開的一題（/派 /區間 /下一步 /公布 /結束），回覆會標「代答」。',
+  '群組裡自己沒開題的人也可以幫忙答群組裡最新開的一題（/派 /區間 /下一步 /公布 /結束），回覆會標「代答」；'
+    + '誰打 /公布 或 /結束 都會結束那一題。1 對 1 聊天沒有代答。',
 ].join('\n');
+
+/** Discord 的 /模擬 說明:True：跟 slash 指令的選項名一樣（角色、座位、題號、隊伍、內容）；Discord 沒有 /解答。 */
+export const SIM_HELP_TEXT_DISCORD = [
+  HELP_TITLE,
+  `/${COMMANDS.SIM}\u3000隨機開一題（第 1 局、2～5 家、任何角色）`,
+  `/${COMMANDS.SIM} ${SIM_OPTIONS.ROLE}:派西維爾 ${SIM_OPTIONS.SEAT}:2\u3000指定角色或座位（可以只選一個；${SIM_OPTIONS.ROLE}選 紅／藍 = 隨機紅方／藍方角色）`,
+  `/${COMMANDS.SIM} ${SIM_OPTIONS.ID}:K7Q2M-4\u3000做指定的題目（大家可以做同一題）`,
+  `/${COMMANDS.SIM_PROPOSE} ${SIM_OPTIONS.TEAM}:469\u3000${HELP_PROPOSE_WORDS}`,
+  `/${COMMANDS.SIM_INTERVAL} ${SIM_OPTIONS.CONTENT}:789=2 460=1\u3000${HELP_INTERVAL_WORDS}`,
+  HELP_NEXT,
+  `/${COMMANDS.SIM_REVEAL}\u3000公布角色、對答案，這題結束`,
+  HELP_END,
+  `/${COMMANDS.SIM} ${SIM_OPTIONS.HELP}:True\u3000這份說明`,
+  '回覆公開的頻道裡，自己沒開題的人也可以幫忙答頻道裡最新開的一題（/派 /區間 /下一步 /公布 /結束），回覆會標「代答」；'
+    + '誰打 /公布 或 /結束 都會結束那一題。只有自己看得到回覆的頻道沒有代答。',
+].join('\n');
+
+/** 這個平台的 /模擬 說明。 */
+export function simHelpText(platform: SimPlatform): string {
+  return platform === 'discord' ? SIM_HELP_TEXT_DISCORD : SIM_HELP_TEXT;
+}
 
 export function usageText(command: 'start' | 'propose' | 'interval', problem?: string): string {
   const usage = command === 'start' ? START_USAGE : command === 'propose' ? PROPOSE_USAGE : INTERVAL_USAGE;

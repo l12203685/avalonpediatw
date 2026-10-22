@@ -1,10 +1,11 @@
 /**
  * 模擬瓦（2026-10-14）— Discord slash 指令：/模擬 /派 /區間 /下一步 /公布 /結束。
  *
- * 跟 LINE 同一個引擎、同一套文字。session key = discord:頻道:使用者。
+ * 跟 LINE 同一個引擎、同一套文字（/模擬 說明 有 Discord 版）。session key = discord:頻道:使用者。
  * 每個指令先 defer，再 editReply（allowedMentions 全關；回覆不回顯使用者打的字）。
  * 公開或只有本人看得到：SIM_DISCORD_PUBLIC_CHANNEL_IDS 空 = 到處公開（跟 /戰績 一樣），
- * 有設 = 只有那些頻道公開。slash 指令不會產生使用者訊息、機器人回覆是 bot 發的，
+ * 有設 = 只有那些頻道公開。代答（2026-10-22）只在回覆公開的頻道（request 的 `shared`）。
+ * slash 指令不會產生使用者訊息、機器人回覆是 bot 發的，
  * 所以同步（mirrorInbound 不收 bot）和聊天匯出都碰不到 Discord 的模擬。
  * 只有固定文字和錯誤代碼會進 log。
  */
@@ -25,7 +26,7 @@ export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInte
   };
   switch (interaction.commandName) {
     case COMMANDS.SIM: {
-      // /模擬 說明:True → 指令說明（跟 LINE 的 /模擬 說明 同一段文字）。
+      // /模擬 說明:True → 指令說明（Discord 版：照 slash 的選項名寫，見 replies.ts simHelpText）。
       if (opts.getBoolean?.(SIM_OPTIONS.HELP, false)) return { kind: 'help' };
       const roleRaw = opts.getString(SIM_OPTIONS.ROLE, false);
       const seat = opts.getInteger(SIM_OPTIONS.SEAT, false);
@@ -101,9 +102,17 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
   }
   const engine = getSimEngine();
   // explicit：看不懂的 /派、/區間 沒有題目時也給用法（slash 是明確的指令），一樣受限流管。
-  const req = { platform: 'discord' as const, chatId: interaction.channelId ?? 'dm', userId: interaction.user.id, explicit: true };
-  // 同一題的指令排隊：「算回覆 → 送出 → commit」一次一個（Edward 2026-10-14 審查修正）；
-  // 代答（自己沒開題、幫頻道裡最新的一題作答）排在那一題的隊伍裡。
+  // shared：回覆公開時頻道裡的人都看得到，才可以代答（2026-10-22 審查修正：只有本人看得到回覆的頻道裡，
+  // 沒看過題目的人不能推進、公布或結束別人的題目，題主也看不到代答的回覆）。
+  const req = {
+    platform: 'discord' as const,
+    chatId: interaction.channelId ?? 'dm',
+    userId: interaction.user.id,
+    explicit: true,
+    shared: !ephemeral && !!interaction.channelId,
+  };
+  // 同一個頻道的模擬指令排隊：「算回覆 → 送出 → commit」一次一個（Edward 2026-10-14 審查修正；
+  // 2026-10-22 起整個頻道一條隊，代答要動哪一題輪到它時才決定）。
   await engine.withLock(req, async () => {
     const reply = await engine.handle(cmd, req);
     if (!reply) {
@@ -118,5 +127,5 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
     } catch (err) {
       console.error(`[sim] Discord commit failed (${describeError(err)})`);
     }
-  }, cmd);
+  });
 }

@@ -272,6 +272,23 @@ describe('role branches and private checks (Edward 2026-10-14 review fixes)', ()
     expect(text).toContain('・你的派票跟拇指 1 的 460 打對邊 → 後面的人會讀成你信 1 是娜（莫甘娜）');
   });
 
+  it('④ 「兩次不能都對」 always says why: more than 6 people, or (6 or fewer) the mission results (2026-10-22 review fix)', () => {
+    const r = releasePanel(firstView(WIKI, 4), [4, 6, 9]);
+    const v = r.vs[0];
+    // A reading of 6 or fewer people that the public record (the missions) rules out.
+    const six = maskOf([1, 2, 4, 6, 9, 10]);
+    const text = assembleReply(releaseLines({ ...r, vs: [{ ...v, union: six, weight: 0, worlds: undefined }] }, 4));
+    expect(text).toContain('・跟 1家 460 比：延伸（有 2 人以上一樣：4 6）→ 兩次不能都對（兩次派票不可能同時全是好人：跟任務結果矛盾）');
+    const seven = maskOf([1, 2, 3, 4, 6, 9, 10]);
+    expect(assembleReply(releaseLines({ ...r, vs: [{ ...v, union: seven, weight: 0, worlds: undefined }] }, 4)))
+      .toContain('→ 兩次不能都對（兩次派票不可能同時全是好人：加起來 7 人＞6）');
+  });
+
+  it('只剩紅 with two or more sets reads as one of these sets (plural-aware gloss); one set keeps 「這幾個」', () => {
+    expect(resolveGlosses(`${gloss('只剩紅', '1370、3570')}；${gloss('只剩紅', '1258')}`)).toBe('只剩紅 1370、3570（紅方只能是這幾組之一）；只剩紅 1258');
+    expect(resolveGlosses(gloss('只剩紅', '1258'))).toBe('只剩紅 1258（紅方就只能是這幾個）');
+  });
+
   it('gloss markers: the first occurrence per reply carries the explanation, later ones only the detail; nothing leaks', () => {
     const text = resolveGlosses(`${gloss('延伸', '4 6')}、${gloss('延伸')}、${gloss('只剩紅', '1258')}、${gloss('只剩紅', '1350')}、${gloss('回選', '1')} → x`);
     expect(text).toBe('延伸（有 2 人以上一樣：4 6）、延伸、只剩紅 1258（紅方就只能是這幾個）、只剩紅 1350、回選 1（把前面的隊長派進隊裡）→ x');

@@ -8,6 +8,8 @@
  *   - follow-up commands of an open exercise (/派 /區間 /下一步 /公布 /結束) are not mirrored unless
  *     SIM_MIRROR_FOLLOWUPS=true (2026-10-14 review fix: they flooded Discord without their answers);
  *   - two commands of one person are handled one at a time (compute → reply → commit), even across webhooks;
+ *   - co-answering (2026-10-22): only well-formed follow-ups; a malformed one from a member without an exercise
+ *     is plain chat (mirrored, no reply); an owner's /結束 redelivered never ends another member's exercise;
  *   - a throwing commit never re-queues mirror messages that already went out;
  *   - 1:1: no drain, quick-reply buttons /下一步 /公布 /結束 while the exercise is open; a 模擬 command with
  *     no answer (rate limited) never falls through to the legacy 「未知指令」 handler;
@@ -34,7 +36,7 @@ import { SimBankLoader } from '../bots/simulation/bank';
 import { SIM_CONFIG } from '../bots/simulation/config';
 import { __setSimForTests } from '../bots/simulation';
 import { SimEngine } from '../bots/simulation/session';
-import { CO_ANSWER_MARK, NO_SESSION_TEXT, RATE_LIMITED_TEXT, SIM_HELP_TEXT } from '../bots/simulation/replies';
+import { CO_ANSWER_MARK, NO_SESSION_TEXT, RATE_LIMITED_TEXT, SIM_HELP_TEXT, sharedNote } from '../bots/simulation/replies';
 import { __resetFeedbackForTests, getFeedbackService } from '../bots/feedback/service';
 import type { LobbyChatMessage } from '../socket/LobbyChatBuffer';
 import { fixtureBank } from './fixtures/simGames';
@@ -303,9 +305,38 @@ describe('mirror group', () => {
     expect(h.replies[0].messages[0].text).toBe(NO_SESSION_TEXT);
   });
 
+  it('a malformed or chatty /派 /區間 from a member without an exercise is plain chat: no reply, mirrored, never a co-answer', async () => {
+    const h = setup();
+    await deliver(h, groupText('/模擬 忠臣 4', 'p1', 'rp1'));
+    const fromU2 = (text: string, id: string) => ({ ...groupText(typed(text), id, `r${id}`), source: { type: 'group', groupId: GROUP, userId: 'U2' } });
+    await deliver(h, fromU2('/派西 2', 'p2'), fromU2('/區間 12=1 假名03覺得', 'p3'), fromU2('/派 4 4 6', 'p4'));
+    expect(h.replies).toHaveLength(1); // only the start reply
+    expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4', '/派西 2', '/區間 12=1 假名03覺得', '/派 4 4 6']);
+    // The owner's own malformed line still gets the usage and is not mirrored (as before).
+    await deliver(h, groupText('/派西 2', 'p5', 'rp5'));
+    expect(h.replies.at(-1)?.messages[0].text).toContain('用法：/派');
+    expect(h.lobby).toHaveLength(4);
+  });
+
+  it('the redelivery of an owner\'s /結束 never ends another member\'s exercise in the group', async () => {
+    const h = setup();
+    const fromU2 = (text: string, id: string, rt: string, extra: Record<string, unknown> = {}) => ({ ...groupText(text, id, rt, GROUP, extra), source: { type: 'group', groupId: GROUP, userId: 'U2' } });
+    const first = { deliveryContext: { isRedelivery: false } };
+    await deliver(h, groupText('/模擬 忠臣 4', 'x1', 'rx1', GROUP, { webhookEventId: 'X1', ...first }));
+    await deliver(h, fromU2('/模擬 派西 2', 'x2', 'rx2', { webhookEventId: 'X2', ...first }));
+    await deliver(h, groupText('/結束', 'x3', 'rx3', GROUP, { webhookEventId: 'X3', ...first }));
+    expect(h.replies.at(-1)?.messages[0].text).toBe('已結束 W0000-4（沒有公布）。再來一題：/模擬');
+    await deliver(h, groupText('/結束', 'x3', 'rx3b', GROUP, { webhookEventId: 'X3', deliveryContext: { isRedelivery: true } }));
+    expect(h.replies).toHaveLength(3);
+    await deliver(h, fromU2('/下一步', 'x4', 'rx4'));
+    expect(h.replies.at(-1)?.messages[0].text).toMatch(/^【W0000-2 下一步】/u); // U2's own, still open
+  });
+
   it('a member without an exercise co-answers the newest one in the group (marked 代答, not mirrored); /模擬 說明 lists the commands', async () => {
     const h = setup();
     await deliver(h, groupText('/模擬 忠臣 4', 'k1', 'rk1'));
+    // The group start reply tells the owner others may help and /公布 or /結束 ends it for everyone.
+    expect(h.replies.at(-1)?.messages[0].text.split('\n').at(-1)).toBe(sharedNote('line'));
     const fromU2 = { ...groupText(typed('/派 469'), 'k2', 'rk2'), source: { type: 'group', groupId: GROUP, userId: 'U2' } };
     await deliver(h, fromU2);
     const answer = h.replies.at(-1)?.messages[0].text ?? '';
@@ -314,9 +345,9 @@ describe('mirror group', () => {
     expect(h.replies.at(-1)?.messages[0].quoteToken).toBe('q-k2');
     // A co-answer is a follow-up of an open exercise: not mirrored (SIM_MIRROR_FOLLOWUPS off).
     expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4']);
-    // The owner continues on the same exercise (now answered).
+    // The owner continues on the same exercise (now answered); the co-answered /派 is marked in the listing.
     await deliver(h, groupText('/公布', 'k3', 'rk3'));
-    expect(h.replies.at(-1)?.messages[0].text).toContain('你的派票：469：1 紅（9）✗');
+    expect(h.replies.at(-1)?.messages[0].text).toContain('這題的派票：469（代答）：1 紅（9）✗');
 
     await deliver(h, groupText('/模擬 說明', 'k4', 'rk4'));
     expect(h.replies.at(-1)?.messages[0].text).toBe(SIM_HELP_TEXT);
