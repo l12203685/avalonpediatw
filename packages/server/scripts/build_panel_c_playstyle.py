@@ -33,8 +33,8 @@ Output (top-level key `playstyle`):
       captainMinProposals: int                                     # 5
     }
     labels: {
-      r3RejectRedLabel: '紅角 R3+ 強硬度'
-      r3RejectBlueLabel: '藍角 R3+ 強硬度'
+      r3RejectRedLabel: '舊版紅方 R3+ 反對率（停止展示）'
+      r3RejectBlueLabel: '舊版藍方 R3+ 反對率（停止展示）'
       assassinTargetLabel: '刺客目標座位偏好'
       captainStickinessLabel: '隊長 stickiness'
     }
@@ -59,6 +59,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CACHE_PATH = ROOT / "analysis_cache.json"
 TSV_PATH = Path("/mnt/c/Users/admin/staging/selfplay/real_games_panel_c_playstyle.tsv")
 
+# 舊 r3 欄位僅保留相容；正式投票指標由 generate_cache.py 寫入 players[].voting。
 R3_MIN_VOTES = 10              # min R3+ votes (per camp) to compute reject rate
 ASSASSIN_MIN_ATTEMPTS = 3      # min assassin attempts to show top seats
 CAPTAIN_MIN_PROPOSALS = 5      # min leader proposals to show stickiness
@@ -97,12 +98,23 @@ def player_name_key(name: str) -> str:
     return " ".join(text.split()).lower()
 
 
-def merge_spellings(rows: Dict[str, Dict[str, object]]) -> Dict[str, Dict[str, object]]:
-    """TSV rows (one per spelling) folded into one row per player_name_key: the counts and the
-    assassin target histogram are summed, so the rates come out as if the spellings were one."""
+def alias_keys(cache: Dict) -> Dict[str, str]:
+    """The cache's players.aliases (generate_cache.py, from player_aliases.json: old spelling ->
+    official name) by player_name_key: an old name's TSV row belongs to the official name's player."""
+    raw = (cache.get("players") or {}).get("aliases") or {}
+    return {player_name_key(s): player_name_key(t) for s, t in raw.items() if isinstance(s, str) and isinstance(t, str)}
+
+
+def merge_spellings(
+    rows: Dict[str, Dict[str, object]], aliases: Optional[Dict[str, str]] = None,
+) -> Dict[str, Dict[str, object]]:
+    """TSV rows (one per spelling) folded into one row per player_name_key (an old name in `aliases`,
+    alias_keys: its official name's key): the counts and the assassin target histogram are summed,
+    so the rates come out as if the spellings were one."""
     merged: Dict[str, Dict[str, object]] = {}
     for name, row in rows.items():
         key = player_name_key(name)
+        key = (aliases or {}).get(key, key)
         if key not in merged:
             merged[key] = {**row, "assassinTargetSeatHist": dict(row["assassinTargetSeatHist"])}
             continue
@@ -178,7 +190,7 @@ def main() -> None:
 
     print(f"[panel_c] TSV rows kept (sheets:* non-unknown): {len(tsv_rows)}")
     spellings = len(tsv_rows)
-    tsv_rows = merge_spellings(tsv_rows)  # keyed by player_name_key from here on
+    tsv_rows = merge_spellings(tsv_rows, alias_keys(cache))  # keyed by player_name_key from here on
     if len(tsv_rows) < spellings:
         print(f"[panel_c] TSV spellings folded by case / width: {spellings - len(tsv_rows)}")
 
@@ -285,8 +297,8 @@ def main() -> None:
             "captainMinProposals": CAPTAIN_MIN_PROPOSALS,
         },
         "labels": {
-            "r3RejectRedLabel":      "紅角 R3+ 強硬度",
-            "r3RejectBlueLabel":     "藍角 R3+ 強硬度",
+            "r3RejectRedLabel":      "舊版紅方 R3+ 反對率（停止展示）",
+            "r3RejectBlueLabel":     "舊版藍方 R3+ 反對率（停止展示）",
             "assassinTargetLabel":   "刺客目標座位偏好",
             "captainStickinessLabel": "隊長 stickiness",
         },

@@ -1,7 +1,10 @@
 """Offline tests for generate_cache.py: credentials, sanity guards, carry-over, write path,
 --compare, the per-player stats it aggregates from 牌譜, the two-stage outcome fields, the
-theory win rates (TheoryTest: hand-computed), the leaderboard, and the featureStudies it
-computes / annotates. Every cache is built for a fixed reference day (never "today").
+theory win rates (TheoryTest: hand-computed), the leaderboard, the featureStudies it
+computes / annotates, and the game-level dataset games_cache.json written with the cache
+(複合篩選, Edward 2026-10-14: NoteTagTest, GamesDatasetTest, SnapshotDatasetTest,
+DatasetEndToEndTest -- round trip, no free text, written together or withheld). Every cache is
+built for a fixed reference day (never "today").
 
 No network and no Google libraries needed (stdlib unittest; pytest also collects it).
 Fixtures are fake, except read-only checks against checked-in data: the committed
@@ -26,6 +29,7 @@ import tempfile
 import unittest
 from collections import Counter
 from contextlib import redirect_stderr, redirect_stdout
+from fractions import Fraction
 from pathlib import Path
 from typing import Callable
 from unittest import mock
@@ -46,10 +50,12 @@ AS_OF = dt.date(2026, 10, 12)
 # sparse-cell top-up off with theoryMinCellGames = 0, or rank on the last 80 games -- without
 # failing the daily refresh workflow, which runs these tests before it regenerates the cache.
 # LeaderboardConfigTest checks the owner's real values (REAL_LEADERBOARD_CONFIG) on their own.
+# theoryMinCellGames 5 since 2026-10-14 (Edward：「建議補到 5 場」; the examples were reworked for it,
+# TheoryTest keeps the 3-game example with an explicit min_cell).
 TEST_LEADERBOARD_CONFIG: dict = {
-    "theoryMinCellGames": 3, "activeDays": 90, "topN": 10, "mainGames": 100, "shortGames": 50,
-    "improvedGames": 50, "assassinAttempts": 20, "assassinMinAttempts": 10, "newcomerDays": 90,
-    "newcomerMinGames": 10, "roleTitleMinGames": 20, "roleTitleGames": 20,
+    "theoryMinCellGames": 5, "activeDays": 90, "topN": 10, "mainGames": 100, "roleWindowGames": 10,
+    "loyalWindowGames": 40, "overallMinGames": 250, "assassinAttempts": 20, "assassinMinAttempts": 10,
+    "newcomerDays": 90, "newcomerMinGames": 10, "roleTitleMinGames": 20, "roleTitleGames": 20,
 }
 REAL_LEADERBOARD_CONFIG: dict = copy.deepcopy(gc.LEADERBOARD_CONFIG)
 _PINNED_CONFIG = mock.patch.dict(gc.LEADERBOARD_CONFIG, TEST_LEADERBOARD_CONFIG, clear=True)
@@ -383,10 +389,14 @@ class SanityGuardTest(unittest.TestCase):
     def test_new_player_fields_are_not_a_loss(self) -> None:
         prev = fake_cache(player_fields={f: 0 for f in PLAYER_FIELDS if f != "name"})
         two_stage = fake_cache(player_fields={f: 0 for f in TWO_STAGE_PLAYER_FIELDS if f != "name"})
+        schema3 = with_theory(fake_cache(player_fields={f: 0 for f in SCHEMA3_PLAYER_FIELDS if f not in ("name", "theory")}))
         new = with_theory(fake_cache(player_fields={f: 0 for f in ALL_PLAYER_FIELDS if f not in ("name", "theory")}))
         self.assertEqual(gc.validate_new_cache(new, prev), [])
-        self.assertEqual(gc.validate_new_cache(new, two_stage), [])  # the 2026-10-12 shape -> schemaVersion 3
-        self.assertEqual(gc.dropped_player_fields(prev, new), sorted(NEW_PLAYER_FIELDS + THEORY_FIELDS))  # the reverse would be a loss
+        self.assertEqual(gc.validate_new_cache(new, two_stage), [])  # the 2026-10-12 shape -> schemaVersion 4
+        self.assertEqual(gc.validate_new_cache(new, schema3), [])  # the 2026-10-13 shape -> schemaVersion 4
+        self.assertEqual(gc.dropped_player_fields(prev, new),
+                         sorted(NEW_PLAYER_FIELDS + ROLE_OUTCOME_FIELDS + THEORY_FIELDS + ["voting"]))  # the reverse would be a loss
+        self.assertEqual(gc.dropped_player_fields(schema3, new), ROLE_OUTCOME_FIELDS + ["voting"])
 
     def test_theory_must_match_the_row(self) -> None:
         new = with_theory(fake_cache(players=4))
@@ -486,6 +496,16 @@ class CarryOverTest(unittest.TestCase):
         self.assertEqual((merged["nova"]["totalGames"], merged["nova"]["r3VotesRed"], merged["nova"]["r3RejectsRed"]), (35, 12, 2))
         self.assertEqual(merged["nova"]["assassinTargetSeatHist"], {"8": 3, "5": 1})
         self.assertEqual(rows["Nova"]["assassinTargetSeatHist"], {"8": 2})  # input untouched
+        # players.aliases of the cache they update (made-up names): an old name's row is its official name's.
+        cache = {"players": {"aliases": {"Tovo Wren": "Ilse Marr", "Bad": 3}}}
+        for script in (arche, panel):
+            self.assertEqual(script.alias_keys(cache), {"tovo wren": "ilse marr"})
+            self.assertEqual(script.alias_keys({}), {})
+        aliased = panel.merge_spellings({"TOVO WREN": row(30, 8, {"8": 2}), "Ilse Marr": row(5, 4, {"5": 1})},
+                                        arche.alias_keys(cache))
+        self.assertEqual(set(aliased), {"ilse marr"})
+        self.assertEqual((aliased["ilse marr"]["totalGames"], aliased["ilse marr"]["assassinTargetSeatHist"]),
+                         (35, {"8": 2, "5": 1}))
 
 
 # ---------------------------------------------------------------------------
@@ -573,16 +593,22 @@ NEW_PLAYER_FIELDS = [
 ]
 # Theory win rates (Edward 2026-10-13, schemaVersion 3), written after lastPlayed.
 THEORY_FIELDS = ["theory"]
+# Per-role 三紅 / 三藍死 / 三藍活 counts (schemaVersion 4, 2026-10-14), between lastPlayed and theory.
+ROLE_OUTCOME_FIELDS = ["roleOutcomes"]
 TWO_STAGE_PLAYER_FIELDS = PLAYER_FIELDS[:-1] + NEW_PLAYER_FIELDS + ["seatOutcomes"]
-ALL_PLAYER_FIELDS = PLAYER_FIELDS[:-1] + NEW_PLAYER_FIELDS + THEORY_FIELDS + ["seatOutcomes"]
+SCHEMA3_PLAYER_FIELDS = PLAYER_FIELDS[:-1] + NEW_PLAYER_FIELDS + THEORY_FIELDS + ["seatOutcomes"]
+PRE_VOTING_PLAYER_FIELDS = PLAYER_FIELDS[:-1] + NEW_PLAYER_FIELDS + ROLE_OUTCOME_FIELDS + THEORY_FIELDS + ["seatOutcomes"]
+ALL_PLAYER_FIELDS = PRE_VOTING_PLAYER_FIELDS[:-1] + ["voting", "seatOutcomes"]
 THEORY_WINDOW_FIELDS = ["window", "games", "roleTheory", "positionTheory", "finalWinRate", "from", "to", "sparseRoles", "sparseSeats"]
+ROLE_WINDOWS_FIELDS = ["roleTheory", "fullWindows", "games", "sparseRoles", "from", "to", "roles"]
 EMPTY_OUTCOME = {"threeRed": 0, "threeBlueDead": 0, "threeBlueAlive": 0,
                  "threeRedPct": 0, "threeBlueDeadPct": 0, "threeBlueAlivePct": 0}
 
 
 def old_fields(row: dict) -> dict:
-    """The row without the two-stage and theory fields (what the 2026-04-26 rebuild wrote)."""
-    return {k: v for k, v in row.items() if k not in NEW_PLAYER_FIELDS and k not in THEORY_FIELDS}
+    """The row without the two-stage, role-outcome and theory fields (what the 2026-04-26 rebuild wrote)."""
+    return {k: v for k, v in row.items()
+            if k not in NEW_PLAYER_FIELDS and k not in THEORY_FIELDS and k not in ROLE_OUTCOME_FIELDS and k != "voting"}
 
 
 def per_role(**values: float) -> dict[str, float]:
@@ -621,16 +647,35 @@ EXPECTED_ROLE_FINAL = per_role(刺客=66.7, 莫甘娜=66.7, 莫德雷德=66.7, �
 EXPECTED_SEAT_FINAL = {"1": 75.0, "2": 50.0, "3": 33.3, "4": 33.3, "5": 0.0, "6": 33.3, "7": 66.7, "8": 66.7, "9": 75.0, "10": 66.7}
 
 # 甲's theory: G1 刺客@1 W, G2 忠臣@1 W, G3 刺客@10 W (三藍死: red wins the final), G5 忠臣@1 W.
-#   roles: 刺客 2 games 2 wins < 3 -> (200 + 66.7) / 3 = 88.9; 忠臣 (200 + 42.9) / 3 = 80.97; the other
-#   five roles have no game -> the population rate. roleTheory = 0.1 x (88.9 + 3 x 66.7 + 50.0 + 33.3)
-#   + 0.4 x 80.97 = 37.23 + 32.387 = 69.617 -> 69.6, every role topped up (sparseRoles 7).
-#   seats: 1 has 3 games, 3 wins -> 100; 10 has 1 win -> (100 + 2 x 66.7) / 3 = 77.8; the other eight are
-#   the population rate (358.3 together). positionTheory = 0.1 x (100 + 77.8 + 358.3) = 53.61 -> 53.6.
+# Topped up to 5 games (theoryMinCellGames, 2026-10-14):
+#   roles: 刺客 2 games 2 wins < 5 -> (200 + 3 x 66.7) / 5 = 80.02; 忠臣 (200 + 3 x 42.9) / 5 = 65.74; the
+#   other five roles have no game -> the population rate. roleTheory = 0.1 x (80.02 + 3 x 66.7 + 50.0 + 33.3)
+#   + 0.4 x 65.74 = 36.342 + 26.296 = 62.638 -> 62.6, every role topped up (sparseRoles 7).
+#   seats: 1 has 3 games, 3 wins < 5 -> (300 + 2 x 75.0) / 5 = 90.0; 10 has 1 win -> (100 + 4 x 66.7) / 5 =
+#   73.36; the other eight are the population rate (358.3 together). positionTheory = 0.1 x (90.0 + 73.36
+#   + 358.3) = 52.166 -> 52.2, every seat topped up (sparseSeats 10).
+#   (With 3 games, until 2026-10-14: 刺客 88.9, 忠臣 80.97, roleTheory 69.6; seat 1 as is, positionTheory 53.6.)
 #   G3 has no date; it sorts after G2 (the dated row above it) and before G5.
 EXPECTED_JIA_THEORY = {
-    "window": 0, "games": 4, "roleTheory": 69.6, "positionTheory": 53.6, "finalWinRate": 100.0,
-    "from": "2026-01-05", "to": "2026-02-01", "sparseRoles": 7, "sparseSeats": 9,
+    "window": 0, "games": 4, "roleTheory": 62.6, "positionTheory": 52.2, "finalWinRate": 100.0,
+    "from": "2026-01-05", "to": "2026-02-01", "sparseRoles": 7, "sparseSeats": 10,
 }
+# 甲's per-role windows: every role has fewer games than its window (10, 忠臣 40), so they hold all four
+# games and the role theory is the career one (62.6); `rate` is the topped-up cell that went into the
+# sum (刺客 80.02 -> 80.0, 忠臣 65.74 -> 65.7), the population rate for a role never played.
+EXPECTED_JIA_ROLE_WINDOWS = {
+    "roleTheory": 62.6, "fullWindows": False, "games": 4, "sparseRoles": 7, "from": "2026-01-05", "to": "2026-02-01",
+    "roles": {
+        "刺客": {"games": 2, "wins": 2, "window": 10, "rate": 80.0},
+        **{r: {"games": 0, "wins": 0, "window": 10, "rate": EXPECTED_ROLE_FINAL[r]}
+           for r in ("莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林")},
+        "忠臣": {"games": 2, "wins": 2, "window": 40, "rate": 65.7},
+    },
+}
+# 甲's games per role and 結果: 刺客 G1 三紅, G3 三藍死; 忠臣 G2 三藍活, G5 三藍活.
+EXPECTED_JIA_ROLE_OUTCOMES = {
+    r: {"三紅": 0, "三藍死": 0, "三藍活": 0} for r in ROLE_ORDER
+} | {"刺客": {"三紅": 1, "三藍死": 1, "三藍活": 0}, "忠臣": {"三紅": 0, "三藍死": 0, "三藍活": 2}}
 
 # 甲: G1 刺客@1 三紅 (win), G2 忠臣@1 三藍活 (win), G3 刺客@10 三藍死 (loss: 三藍死 is a blue win),
 #     G5 忠臣@1 三藍活 (win).
@@ -734,7 +779,7 @@ class PlayerAggregationTest(unittest.TestCase):
         self.assertEqual(gc.normalize_player_name(" 甲\u3000"), "甲")
         self.assertEqual(gc.normalize_player_name("\u200b乙\ufeff"), "乙")
         self.assertEqual(gc.normalize_player_name("A\u3000 \u00a0B"), "A B")
-        self.assertEqual(gc.normalize_player_name("Sin"), "Sin")  # case kept: Sin / SIN / sin differ
+        self.assertEqual(gc.normalize_player_name("Tovo Wren"), "Tovo Wren")  # 保留大小寫。
         self.assertEqual(gc.normalize_player_name(""), "")
         self.assertEqual(gc.normalize_player_name(None), "")
 
@@ -775,9 +820,25 @@ class PlayerAggregationTest(unittest.TestCase):
                              rnd1(sum(row["rawRoleGames"][r] * EXPECTED_ROLE_FINAL[r] for r in ROLE_ORDER) / total))
             self.assertEqual(row["excessWinRate"], rnd1(row["finalWinRate"] - row["expectedFinalWinRate"]))
 
+    def test_role_outcomes(self) -> None:
+        """roleOutcomes (schemaVersion 4): career 三紅 / 三藍死 / 三藍活 per role, what the conditional blocks
+        (任務結果 / 刺殺結果 / 遊戲結果) are computed from; they add up to the per-side raw counts."""
+        self.assertEqual(self.rows["甲"]["roleOutcomes"], EXPECTED_JIA_ROLE_OUTCOMES)
+        self.assertEqual(list(self.rows["甲"]["roleOutcomes"]), ROLE_ORDER)
+        self.assertEqual(self.cache["playerDetails"]["甲"]["player"]["roleOutcomes"], EXPECTED_JIA_ROLE_OUTCOMES)
+        for row in self.rows.values():
+            ro = row["roleOutcomes"]
+            for r in ROLE_ORDER:
+                self.assertEqual(list(ro[r]), ["三紅", "三藍死", "三藍活"])
+                self.assertTrue(all(isinstance(n, int) for n in ro[r].values()))
+                self.assertEqual(sum(ro[r].values()), row["rawRoleGames"][r])
+            for side, roles in (("Red", RED_ROLES), ("Blue", set(ROLE_ORDER) - RED_ROLES)):
+                for outcome, field in (("三紅", "ThreeRed"), ("三藍死", "MerlinDead"), ("三藍活", "MerlinAlive")):
+                    self.assertEqual(sum(ro[r][outcome] for r in roles), row[f"raw{side}{field}"])
+
     def test_two_stage_overview(self) -> None:
         ov = self.cache["overview"]
-        self.assertEqual(ov["schemaVersion"], 3)
+        self.assertEqual(ov["schemaVersion"], 4)
         self.assertEqual(ov["totalGames"], 5)  # G4 (no 結果) still counts here, as before
         self.assertEqual(ov["missionStage"], {"games": 4, "threeRed": 1, "threeBlue": 3, "redPct": 25.0, "bluePct": 75.0})
         self.assertEqual(ov["assassinationStage"],
@@ -788,22 +849,40 @@ class PlayerAggregationTest(unittest.TestCase):
         # Old overview keys keep the mission-stage rule (三藍死 = blue win).
         self.assertEqual((ov["redWinRate"], ov["blueWinRate"]), (20.0, 60.0))
         self.assertEqual(ov["seatFinalWinRates"], EXPECTED_SEAT_FINAL)
-        self.assertEqual(ov["topPlayersByRoleTheory"], [])  # nobody has 100 games
-        self.assertEqual(list(ov)[-3:], ["seatFinalWinRates", "topPlayersByRoleTheory", "theoryConfig"])
-        self.assertEqual(ov["theoryConfig"], {"theoryMinCellGames": 3, "theoryWindows": [100, 50], "mainGames": 100, "activeDays": 90})
+        self.assertEqual(ov["topPlayersByRoleTheory"], [])  # nobody has full role windows
+        self.assertEqual(ov["topPlayersByPositionTheory"], [])  # nobody has 100 games
+        self.assertEqual(ov["topPlayersByOverallTheory"], [])  # nobody has 250 games
+        self.assertEqual(list(ov)[-5:], ["seatFinalWinRates", "topPlayersByRoleTheory", "theoryConfig",
+                                         "topPlayersByPositionTheory", "topPlayersByOverallTheory"])
+        self.assertEqual(ov["theoryConfig"], {
+            "theoryMinCellGames": 5, "theoryWindows": [100], "mainGames": 100, "activeDays": 90,
+            "roleWindowGames": {r: 40 if r == "忠臣" else 10 for r in ROLE_ORDER}, "positionGames": 100,
+            "overallMinGames": 250,
+        })
+        self.assertEqual(list(ov["theoryConfig"]["roleWindowGames"]), ROLE_ORDER)
+        # topPlayersByGames (schemaVersion 4): each player's 三種結果 over all their games and their sides.
+        top = {r["name"]: r for r in ov["topPlayersByGames"]}
+        self.assertEqual(top["甲"], {"name": "甲", "games": 4.0, "winRate": 75.0,
+                                     "outcomes": {"三紅": 1, "三藍死": 1, "三藍活": 2}, "redGames": 2, "blueGames": 2})
+        for r in ov["topPlayersByGames"]:
+            self.assertEqual(sum(r["outcomes"].values()), r["games"])
+            self.assertEqual(r["redGames"] + r["blueGames"], r["games"])
 
     def test_theory_of_a_fixture_player(self) -> None:
         """甲 (4 games, every one won): the sparse cells are topped up with the fixture's own
         population rates (EXPECTED_ROLE_FINAL, EXPECTED_SEAT_FINAL)."""
         jia = self.rows["甲"]["theory"]
-        self.assertEqual(list(jia), ["last100", "last50", "career"])
+        self.assertEqual(list(jia), ["roleWindows", "last100", "career"])  # no last50 since schemaVersion 4
         self.assertEqual(jia["career"], EXPECTED_JIA_THEORY)
         self.assertEqual(jia["last100"], {**EXPECTED_JIA_THEORY, "window": 100})  # fewer than 100 games: all of them
-        self.assertEqual(jia["last50"], {**EXPECTED_JIA_THEORY, "window": 50})
+        self.assertEqual(jia["roleWindows"], EXPECTED_JIA_ROLE_WINDOWS)
         for row in self.rows.values():
             self.assertEqual(row["theory"]["career"]["games"], row["totalGames"])
             self.assertEqual(row["theory"]["career"]["finalWinRate"], row["finalWinRate"])
             self.assertEqual(list(row["theory"]["career"]), THEORY_WINDOW_FIELDS)
+            self.assertEqual(list(row["theory"]["roleWindows"]), ROLE_WINDOWS_FIELDS)
+            # Few games: every window holds all of them, so the role windows give the career role theory.
+            self.assertEqual(row["theory"]["roleWindows"]["roleTheory"], row["theory"]["career"]["roleTheory"])
         # The legacy fields keep their old values (FirestoreLeaderboard's ELO bonus reads roleTheory).
         self.assertEqual((self.rows["甲"]["roleTheory"], self.rows["甲"]["positionTheory"]), (75.0, 0.0))
 
@@ -1011,15 +1090,16 @@ class CommittedCachePropertyTest(unittest.TestCase):
 
     def check_all(self, check) -> None:
         failures = []
-        for row in self.rows:
-            failures += [f"{row['name']}: {msg}" for msg in check(row)]
+        for index, row in enumerate(self.rows):
+            failures += [f"row[{index}]: {msg}" for msg in check(row)]
         self.assertEqual(failures[:10], [], f"{len(failures)} failures")
 
     def test_fields_and_types(self) -> None:
         self.assertGreaterEqual(len(self.rows), 1)
 
         def check(row):
-            if list(row) not in (PLAYER_FIELDS, TWO_STAGE_PLAYER_FIELDS, ALL_PLAYER_FIELDS):  # the rebuild's, 10-12's or this script's
+            # the rebuild's, 10-12's, 10-13's (schemaVersion 3) or this script's
+            if list(row) not in (PLAYER_FIELDS, TWO_STAGE_PLAYER_FIELDS, SCHEMA3_PLAYER_FIELDS, PRE_VOTING_PLAYER_FIELDS, ALL_PLAYER_FIELDS):
                 yield f"fields {list(row)}"
             for key in ("roleWinRates", "roleDistribution", "rawRoleGames"):
                 if list(row[key]) != ROLE_ORDER:
@@ -1149,20 +1229,24 @@ class CommittedCachePropertyTest(unittest.TestCase):
         self.check_all(check)
 
     def test_theory_when_present(self) -> None:
-        """Rows written since schemaVersion 3 carry theory windows consistent with the row."""
+        """Rows written since schemaVersion 3 carry theory windows consistent with the row (4: plus
+        roleWindows, the per-role windows of 角色理論)."""
         if not any("theory" in row for row in self.rows):
             self.skipTest("the committed cache predates the theory win rates")
         # The windows the cache was written with (its own leaderboard.config), not today's
-        # LEADERBOARD_CONFIG: a changed mainGames / shortGames must not fail the workflow
+        # LEADERBOARD_CONFIG: a changed mainGames / roleWindowGames must not fail the workflow
         # before it has regenerated the file.
         config = (self.cache.get("leaderboard") or {}).get("config") or {}
         windows = config.get("theoryWindows") or gc.theory_windows(config if "mainGames" in config else None)
+        schema4 = (self.cache["overview"].get("schemaVersion") or 0) >= 4
 
         def check(row):
             theory = row["theory"]
-            if list(theory) != [gc.theory_key(n) for n in windows] + ["career"]:
+            if list(theory) != (["roleWindows"] if schema4 else []) + [gc.theory_key(n) for n in windows] + ["career"]:
                 yield f"theory keys {list(theory)}"
                 return
+            if schema4:
+                yield from check_role_windows(theory["roleWindows"], row)
             total = int(row["totalGames"])
             for key, n in [(gc.theory_key(n), n) for n in windows] + [("career", 0)]:
                 w = theory[key]
@@ -1180,6 +1264,52 @@ class CommittedCachePropertyTest(unittest.TestCase):
                     yield f"{key} from after to"
             if theory["career"]["finalWinRate"] != row["finalWinRate"]:
                 yield "career.finalWinRate != finalWinRate"
+
+        def check_role_windows(rw, row):
+            if list(rw) != ROLE_WINDOWS_FIELDS or list(rw["roles"]) != ROLE_ORDER:
+                yield f"roleWindows fields {list(rw)} / roles {list(rw.get('roles') or {})}"
+                return
+            min_cell = max(int(config.get("theoryMinCellGames", 3)), 1)
+            games, full, sparse, tenths = 0, True, 0, 0.0
+            for r, c in rw["roles"].items():
+                # The last min(K_r, games as r) games as r, never more than the window.
+                if list(c) != ["games", "wins", "window", "rate"] or not 0 <= c["wins"] <= c["games"] <= c["window"]:
+                    yield f"roleWindows.roles.{r} {c}"
+                    continue
+                if c["games"] != min(c["window"], int(row["rawRoleGames"][r])):
+                    yield f"roleWindows.roles.{r}.games {c['games']} (window {c['window']}, {row['rawRoleGames'][r]} games as {r})"
+                if not 0 <= c["rate"] <= 100:
+                    yield f"roleWindows.roles.{r}.rate {c['rate']}"
+                games += c["games"]
+                full = full and c["games"] >= c["window"]
+                sparse += c["games"] < min_cell
+                tenths += gc.ROLE_DEAL_TENTHS[r] * c["rate"]
+            if (rw["games"], rw["fullWindows"], rw["sparseRoles"]) != (games, full, sparse):
+                yield f"roleWindows games/fullWindows/sparseRoles {rw['games']}/{rw['fullWindows']}/{rw['sparseRoles']}"
+            # The rates are rounded to one decimal, the sum was rounded once: allow that much drift.
+            if abs(tenths / 10 - rw["roleTheory"]) > 0.1:
+                yield f"roleWindows.roleTheory {rw['roleTheory']} != Σ deal x rate {tenths / 10:.2f}"
+            if rw["from"] > rw["to"]:
+                yield "roleWindows from after to"
+        self.check_all(check)
+
+    def test_role_outcomes_when_present(self) -> None:
+        """roleOutcomes (schemaVersion 4) add up to the row's per-role games and per-side outcome counts."""
+        if not any("roleOutcomes" in row for row in self.rows):
+            self.skipTest("the committed cache predates roleOutcomes (schemaVersion 4)")
+
+        def check(row):
+            ro = row["roleOutcomes"]
+            if list(ro) != ROLE_ORDER:
+                yield f"roleOutcomes keys {list(ro)}"
+                return
+            for r in ROLE_ORDER:
+                if sum(ro[r].values()) != row["rawRoleGames"][r]:
+                    yield f"roleOutcomes.{r} adds up to {sum(ro[r].values())}, not rawRoleGames"
+            for side, roles in (("Red", RED_ROLES), ("Blue", set(ROLE_ORDER) - RED_ROLES)):
+                for outcome, field in (("三紅", "ThreeRed"), ("三藍死", "MerlinDead"), ("三藍活", "MerlinAlive")):
+                    if sum(ro[r][outcome] for r in roles) != row[f"raw{side}{field}"]:
+                        yield f"{side} {outcome} != raw{side}{field}"
         self.check_all(check)
 
     def test_seat_outcomes(self) -> None:
@@ -1222,7 +1352,10 @@ class CommittedCachePropertyTest(unittest.TestCase):
         self.assertEqual(list(self.cache["playerDetails"]), [r["name"] for r in self.rows])
         top = gc.compute_overview([], self.rows)
         self.assertEqual(self.cache["overview"]["topPlayersByTheory"], top["topPlayersByTheory"])
-        self.assertEqual(self.cache["overview"]["topPlayersByGames"], top["topPlayersByGames"])
+        # A cache older than schemaVersion 4 has no outcomes / redGames / blueGames in these rows.
+        committed = self.cache["overview"]["topPlayersByGames"]
+        self.assertEqual(committed, [{k: row[k] for k in old} for old, row in zip(committed, top["topPlayersByGames"])])
+        self.assertEqual(len(committed), len(top["topPlayersByGames"]))
 
 
 # ---------------------------------------------------------------------------
@@ -1233,7 +1366,7 @@ SNAPSHOT = Path(__file__).resolve().parent / "sheets_cache.json"
 # player name -> key table shared with the TS matcher's test (src/__tests__/PlayerNameLookup.test.ts).
 NAME_KEY_CASES = Path(__file__).resolve().parent / "src" / "__tests__" / "fixtures" / "player_name_keys.json"
 REBUILD_FINGERPRINT = {"totalGames": 2146, "totalPlayers": 198, "threeRed": 999, "threeBlueDead": 499, "threeBlueAlive": 648}
-GAME_1276_PLAYERS = ["呂安", "Dean", "布冬", "軒", "HAO", "洋蔥", "大星", "JOY", "kevin", "Sin"]
+GAME_1276_PLAYERS = ['Tovo Wren', 'Ilse Marr', 'Quill Fen', 'Fable Alder', 'Fable Birch', 'Fable Cedar', 'Fable Elm', 'Fable Fir', 'Fable Hazel', 'Fable Willow']
 
 
 def rebuild_outcome(row: list[str], idx: dict[str, int]) -> str:
@@ -1365,6 +1498,8 @@ class EndToEndTest(unittest.TestCase):
             quiet_env(**{gc.ENV_CREDENTIALS_JSON: json.dumps(FAKE_KEY), gc.ENV_AS_OF: AS_OF.isoformat()}),
             mock.patch.object(gc, "open_spreadsheet", lambda source, sheet_id: FakeSheet(self.tabs)),
             mock.patch.object(gc, "gspread", GSPREAD_STUB),
+            # No aliases unless a test writes this file (the repo's own: PlayerAliasTest).
+            mock.patch.object(gc, "ALIASES_PATH", Path(self.tmp.name) / "aliases" / "player_aliases.json"),
         ]
         for p in self.patches:
             p.start()
@@ -1374,17 +1509,62 @@ class EndToEndTest(unittest.TestCase):
             p.stop()
         self.tmp.cleanup()
 
-    def run_main(self, *args: str, summary: bool = False, as_of: str | None = None) -> tuple[int, str]:
+    def run_main(self, *args: str, summary: bool = False, as_of: str | None = None,
+                 actions: bool = False) -> tuple[int, str]:
         out, err = io.StringIO(), io.StringIO()
         env = {"GITHUB_STEP_SUMMARY": str(self.summary)} if summary else {}
         if as_of:
             env[gc.ENV_AS_OF] = as_of
+        if actions:
+            env["GITHUB_ACTIONS"] = "true"
         with redirect_stdout(out), redirect_stderr(err), mock.patch.dict(os.environ, env):
             rc = gc.main(["--output", str(self.out), *args])
         return rc, out.getvalue() + err.getvalue()
 
     def files(self) -> list[str]:
         return sorted(p for p in os.listdir(self.tmp.name) if p != self.summary.name)
+
+    def test_raw_export_uses_current_merged_rows_even_when_cache_unchanged(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        first = self.out.read_bytes()
+        raw = Path(self.tmp.name) / "raw-sheets.json"
+        rc, log = self.run_main("--export-raw-sheets", str(raw), actions=True, summary=True)
+        self.assertEqual(rc, 0, log)
+        self.assertEqual(self.out.read_bytes(), first)
+        self.assertEqual(json.loads(raw.read_text(encoding="utf-8")), {"牌譜": self.tabs["牌譜"]})
+        self.assertEqual(stat.S_IMODE(raw.stat().st_mode), 0o600)
+        self.assertIn("牌譜暫存匯出：4 列", log)
+        self.assertNotIn(str(raw), log + self.summary.read_text(encoding="utf-8"))
+        self.assertNotIn(self.tabs["牌譜"][1][LOG_HEADERS.index("文字記錄")], log)
+        self.assertFalse(any(name in log for name in E2E_PLAYERS))
+
+    def test_raw_export_refuses_compare_repo_and_cache_paths_before_fetch(self) -> None:
+        raw = Path(self.tmp.name) / "raw-sheets.json"
+        targets = [(["--compare"], raw), ([], gc.OUTPUT_PATH.parent / "raw-sheets.json"), ([], self.out)]
+        with mock.patch.object(gc, "open_spreadsheet") as fetch:
+            for args, target in targets:
+                rc, log = self.run_main(*args, "--export-raw-sheets", str(target))
+                self.assertEqual(rc, gc.EXIT_CONFIG)
+                self.assertNotIn(str(target), log)
+            fetch.assert_not_called()
+        self.assertFalse(raw.exists())
+
+    def test_raw_export_guard_failure_writes_no_export(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        self.tabs["牌譜"].pop()
+        raw = Path(self.tmp.name) / "raw-sheets.json"
+        rc, _ = self.run_main("--export-raw-sheets", str(raw))
+        self.assertEqual(rc, gc.EXIT_DATA)
+        self.assertFalse(raw.exists())
+
+    def test_raw_export_failure_does_not_log_path_or_replace_cache(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        before = self.out.read_bytes()
+        raw = Path(self.tmp.name) / "missing" / "raw-sheets.json"
+        rc, log = self.run_main("--export-raw-sheets", str(raw))
+        self.assertEqual(rc, gc.EXIT_DATA)
+        self.assertNotIn(str(raw), log)
+        self.assertEqual(self.out.read_bytes(), before)
 
     def test_refresh_carry_over_idempotence_and_guard(self) -> None:
         rc, log = self.run_main()  # first ever run: no previous file
@@ -1394,7 +1574,7 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(set(first), set(gc.SHEET_SECTIONS) | {"strength", "featureStudies"})
         self.assertEqual([p["name"] for p in first["players"]["players"]], E2E_PLAYERS)
         self.assertEqual(first["players"]["players"][0]["totalGames"], 4.0)
-        self.assertEqual(first["overview"]["schemaVersion"], 3)
+        self.assertEqual(first["overview"]["schemaVersion"], 4)
         self.assertEqual(first["leaderboard"]["asOf"], AS_OF.isoformat())
         self.assertEqual(first["leaderboard"]["boards"], [])  # fixture games have no 日期時間
         self.assertEqual(first["leaderboard"]["dates"], {"parsed": 0, "unparsed": 4, "earliest": "", "latest": ""})
@@ -1440,7 +1620,7 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(rc, gc.EXIT_DATA)
         self.assertIn("players.players is empty", log)
         self.assertEqual(self.out.read_bytes(), second_bytes)
-        self.assertEqual(self.files(), ["analysis_cache.json"])
+        self.assertEqual(self.files(), ["analysis_cache.json", "games_cache.json"])
 
     def test_next_day_without_new_games_writes_nothing(self) -> None:
         self.assertEqual(self.run_main()[0], 0)
@@ -1452,7 +1632,7 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(self.out.read_bytes(), first_bytes)  # not rewritten: the workflow has nothing to commit
         self.assertIn("only by the as-of day", log)
         self.assertIn("not written", log)
-        self.assertEqual(self.files(), ["analysis_cache.json"])
+        self.assertEqual(self.files(), ["analysis_cache.json", "games_cache.json"])
 
         rc, log = self.run_main("--compare", as_of=next_day, summary=True)  # the preview says so too
         self.assertEqual(rc, 0, log)
@@ -1479,7 +1659,8 @@ class EndToEndTest(unittest.TestCase):
             for i in range(12)
         ]
         self.tabs["同贏"] = [["", "ECHO", "玩家乙"], ["ECHO", "", "40%"], ["玩家乙", "40%", ""]]
-        no_merge = mock.patch.object(gc, "canonicalize_player_names", lambda games: (games, gc.NameMerge()))
+        no_merge = mock.patch.object(gc, "canonicalize_player_names",
+                                     lambda games, aliases=gc.NO_ALIASES: (games, gc.NameMerge()))
         with no_merge:
             self.assertEqual(self.run_main()[0], 0)
         old = json.loads(self.out.read_text(encoding="utf-8"))
@@ -1504,6 +1685,53 @@ class EndToEndTest(unittest.TestCase):
         rc, log = self.run_main(as_of=(AS_OF + dt.timedelta(days=1)).isoformat())
         self.assertEqual(rc, 0, log)
         self.assertIn("only by the as-of day", log)
+        self.assertEqual(self.out.read_bytes(), merged_bytes)
+
+    def test_alias_file_merges_a_player_on_the_next_refresh(self) -> None:
+        """player_aliases.json gains two old names of a player (made-up names): the next refresh shows
+        their games under the official name, passes the guards, names nobody in the public log and
+        summary, and the day after writes nothing. A malformed file stops the run (exit 2)."""
+        old_names = ["Tovo Wren", "Quill Fen", "Ilse Marr", "Tovo Wren"]
+        self.tabs["牌譜"] = [LOG_HEADERS] + [
+            log_row(f"A{i}", "123456", ("三紅", "三藍活", "三藍死")[i % 3],
+                    [old_names[i % 4], "玩家乙"] + [""] * 8, date=f"2026/10/{i + 1:02d}")
+            for i in range(12)
+        ]
+        alias_file = gc.ALIASES_PATH  # setUp: in the temp dir, not there yet
+        alias_file.parent.mkdir()
+        self.assertEqual(self.run_main()[0], 0)
+        old = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(sorted(old["playerDetails"]), sorted(["Tovo Wren", "Quill Fen", "Ilse Marr", "玩家乙"]))
+        old["archetype"] = {"perPlayer": {"Tovo Wren": {"hasData": True, "sampleSize": 6}}}
+        self.out.write_text(json.dumps(old, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        alias_file.write_text(json.dumps(TEST_ALIASES_DOC), encoding="utf-8")
+        rc, log = self.run_main(summary=True, actions=True)
+        self.assertEqual(rc, 0, log)
+        new = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(sorted(new["playerDetails"]), ["Ilse Marr", "玩家乙"])
+        self.assertEqual(new["players"]["players"][0]["name"], "Ilse Marr")
+        self.assertEqual(new["players"]["players"][0]["totalGames"], 12.0)
+        self.assertEqual(new["players"]["aliases"], {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"})
+        self.assertEqual(new["archetype"]["perPlayer"]["Ilse Marr"], {"hasData": True, "sampleSize": 6})
+        self.assertIn("Player aliases (player_aliases.json): 2", log)
+        self.assertIn("2 name(s) shown under their official name (player_aliases.json, 1 player(s))", log)
+        summary = self.summary.read_text(encoding="utf-8")
+        self.assertIn("player_aliases.json 的別名：2 個舊名字改顯示為正式名字（1 位玩家）", summary)
+        self.assertNotRegex(log + summary, "Tovo|Quill|Ilse")
+        merged_bytes = self.out.read_bytes()
+
+        rc, log = self.run_main(as_of=(AS_OF + dt.timedelta(days=1)).isoformat())
+        self.assertEqual(rc, 0, log)
+        self.assertIn("only by the as-of day", log)
+        self.assertEqual(self.out.read_bytes(), merged_bytes)
+
+        alias_file.write_text('{"aliases": {"Tovo Wren": "Ilse Marr", "Ilse Marr": "Quill Fen"}}',
+                              encoding="utf-8")
+        rc, log = self.run_main(actions=True)
+        self.assertEqual(rc, gc.EXIT_CONFIG, log)
+        self.assertIn("::error title=Player alias file malformed::", log)
+        self.assertNotRegex(log, "Tovo|Quill|Ilse")
         self.assertEqual(self.out.read_bytes(), merged_bytes)
 
     def test_future_dated_game_is_logged_and_undated(self) -> None:
@@ -1538,7 +1766,7 @@ class EndToEndTest(unittest.TestCase):
         rc, log = self.run_main("--compare", summary=True)
         self.assertEqual(rc, 0, log)
         self.assertEqual(self.out.read_bytes(), before)  # nothing written
-        self.assertEqual(self.files(), ["analysis_cache.json"])
+        self.assertEqual(self.files(), ["analysis_cache.json", "games_cache.json"])
         summary = self.summary.read_text(encoding="utf-8")
         self.assertIn("預覽（--compare，未寫入）", summary)
         self.assertIn("- 玩家：3 → 4；新增 1：玩家新", summary)
@@ -1686,22 +1914,120 @@ class TheoryTest(unittest.TestCase):
             "window": 0, "games": 5, "roleTheory": 58.8, "positionTheory": 48.7, "finalWinRate": 60.0,
             "from": "2026-01-01", "to": "2026-01-05", "sparseRoles": 5, "sparseSeats": 7,
         })
-        # Without min_cell, theory_window follows LEADERBOARD_CONFIG["theoryMinCellGames"].
-        self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 59.4)
+        # Without min_cell, theory_window follows LEADERBOARD_CONFIG["theoryMinCellGames"] (5 here, see
+        # test_sparse_cells_are_topped_up_to_five_games).
+        self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 54.1)
+        with config_patch(theoryMinCellGames=3):
+            self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 59.4)
         with config_patch(theoryMinCellGames=0):
             self.assertEqual(gc.theory_window(seats, THEORY_ROLE_RATES, THEORY_SEAT_RATES)["roleTheory"], 58.8)
 
-    def test_last_100_last_50_and_career(self) -> None:
+    def test_sparse_cells_are_topped_up_to_five_games(self) -> None:
+        """The owner's value since 2026-10-14 (「少於 3 場通常沒有統計意義……建議補到 5 場」): the same five
+        games as above, every cell with fewer than 5 games topped up to 5."""
+        seats = [
+            seat("刺客", "1", "三紅", "2026-01-01"),    # W
+            seat("忠臣", "1", "三藍活", "2026-01-02"),  # W
+            seat("忠臣", "1", "三紅"),                   # L, no date
+            seat("刺客", "2", "三藍活", "2026-01-04"),  # L
+            seat("忠臣", "0", "三藍活", "2026-01-05"),  # W, seat 10
+        ]
+        # roles: 刺客 1 win in 2 -> (100 + 3 x 70.0) / 5 = 62.0; 忠臣 2 wins in 3 -> (200 + 2 x 30.0) / 5 = 52.0
+        #   (3 games are no longer enough); the five roles never played -> 271 together.
+        #   roleTheory = 0.1 x (62.0 + 271) + 0.4 x 52.0 = 33.3 + 20.8 = 54.1.
+        # seats: 1 (3 games, 2 wins) -> (200 + 2 x 45) / 5 = 58.0; 2 (0 in 1) -> (0 + 4 x 50) / 5 = 40.0;
+        #   10 (1 in 1) -> (100 + 4 x 48) / 5 = 58.4; the other seven 320 together.
+        #   positionTheory = 0.1 x (58.0 + 40.0 + 58.4 + 320) = 47.64 -> 47.6.
+        self.assertEqual(self.window(seats, min_cell=5), {
+            "window": 0, "games": 5, "roleTheory": 54.1, "positionTheory": 47.6, "finalWinRate": 60.0,
+            "from": "2026-01-01", "to": "2026-01-05", "sparseRoles": 7, "sparseSeats": 10,
+        })
+        # A cell with exactly 5 games is used as is: five 忠臣 games, 3 wins -> 60.0, not topped up.
+        five = [seat("忠臣", "1", "三藍活")] * 3 + [seat("忠臣", "1", "三紅")] * 2
+        w = self.window(five, min_cell=5)
+        # 0.1 x (70 + 70 + 69 + 71 + 30 + 31) + 0.4 x 60.0 = 34.1 + 24 = 58.1; seat 1 as is (60.0) + 9 others
+        # at the population rate (418) -> 0.1 x 478 = 47.8.
+        self.assertEqual((w["roleTheory"], w["positionTheory"], w["sparseRoles"], w["sparseSeats"]), (58.1, 47.8, 6, 9))
+
+    def test_role_windows(self) -> None:
+        """角色理論 over each role's own last games (schemaVersion 4): 10 per special role, 40 as 忠臣.
+        W = a final win, L = a loss; the roles' games are interleaved in time, which changes nothing."""
+        def games(role: str, results: str) -> list:
+            win, loss = ("三紅", "三藍活") if role in RED_ROLES else ("三藍活", "三藍死")
+            return [seat(role, "1", win if ch == "W" else loss) for ch in results]
+
+        per_role = [games(role, results) for role, results in (
+            ("刺客", "LL" + "W" * 10),           # 12 games: only the last 10 count -> 10/10 = 100.0
+            ("莫甘娜", "W" * 5 + "L" * 5),       # exactly 10 -> 50.0
+            ("莫德雷德", "W" * 10),              # 100.0
+            ("奧伯倫", "L" * 10),                # 0.0
+            ("派西維爾", "WL"),                  # 2 < 3: topped up -> (100 + 1 x 30.0) / 3 = 43.33
+            ("梅林", "WWLLL"),                   # 5 < 10: all of them -> 40.0
+            ("忠臣", "W" * 5 + "W" * 10 + "L" * 30),  # 45 games: the last 40 -> 10/40 = 25.0
+        )]
+        timeline = []
+        while any(per_role):  # round robin: the roles interleave, each role keeps its own order
+            for games_in_role in per_role:
+                if games_in_role:
+                    timeline.append(games_in_role.pop(0))
+        rw = gc.role_window_theory(timeline, THEORY_ROLE_RATES, 3)
+        # 0.1 x (100 + 50 + 100 + 0 + 43.33 + 40) + 0.4 x 25 = 33.33 + 10 = 43.33 -> 43.3
+        self.assertEqual(rw, {
+            "roleTheory": 43.3, "fullWindows": False, "games": 87, "sparseRoles": 1, "from": "", "to": "",
+            "roles": {
+                "刺客": {"games": 10, "wins": 10, "window": 10, "rate": 100.0},
+                "莫甘娜": {"games": 10, "wins": 5, "window": 10, "rate": 50.0},
+                "莫德雷德": {"games": 10, "wins": 10, "window": 10, "rate": 100.0},
+                "奧伯倫": {"games": 10, "wins": 0, "window": 10, "rate": 0.0},
+                "派西維爾": {"games": 2, "wins": 1, "window": 10, "rate": 43.3},
+                "梅林": {"games": 5, "wins": 2, "window": 10, "rate": 40.0},
+                "忠臣": {"games": 40, "wins": 10, "window": 40, "rate": 25.0},
+            },
+        })
+        # Top-up off: 派西維爾 is its own 1/2 = 50.0 -> 0.1 x 340 + 10 = 44.0.
+        self.assertEqual(gc.role_window_theory(timeline, THEORY_ROLE_RATES, 0)["roleTheory"], 44.0)
+        # Topped up to 5 (2026-10-14): 派西維爾 (100 + 3 x 30.0) / 5 = 38.0; 梅林 has exactly 5 games, as is
+        # (40.0) -> 0.1 x (100 + 50 + 100 + 0 + 38 + 40) + 10 = 42.8, still one sparse role.
+        five = gc.role_window_theory(timeline, THEORY_ROLE_RATES, 5)
+        self.assertEqual((five["roleTheory"], five["sparseRoles"], five["roles"]["派西維爾"]["rate"], five["roles"]["梅林"]["rate"]),
+                         (42.8, 1, 38.0, 40.0))
+        self.assertEqual(gc.role_window_theory(timeline, THEORY_ROLE_RATES)["roleTheory"], 42.8)  # the config's 5
+        # The windows before those (the improved board's baseline): 刺客 LL (2 < 3: (0 + 70) / 3 = 23.33),
+        # 忠臣 the first five W (100.0), no earlier game in the other roles (the population rates):
+        # 0.1 x (23.33 + 70 + 69 + 71 + 30 + 31) + 0.4 x 100 = 29.43 + 40 = 69.43 -> 69.4.
+        before = gc.role_window_theory(timeline, THEORY_ROLE_RATES, 3, previous=True)
+        self.assertEqual((before["roleTheory"], before["games"], before["sparseRoles"], before["fullWindows"]),
+                         (69.4, 7, 6, False))
+        self.assertEqual(before["roles"]["忠臣"], {"games": 5, "wins": 5, "window": 40, "rate": 100.0})
+        self.assertEqual(before["roles"]["刺客"], {"games": 2, "wins": 0, "window": 10, "rate": 23.3})
+
+    def test_full_windows(self) -> None:
+        """fullWindows: K_r games in every role -- 10 each, 40 as 忠臣 -- and nothing less."""
+        full = [seat(r, "1", "三紅", f"2026-02-{1 + i % 28:02d}") for r in ROLE_ORDER
+                for i in range(40 if r == "忠臣" else 10)]
+        rw = gc.role_window_theory(full, THEORY_ROLE_RATES, 3)
+        self.assertEqual((rw["fullWindows"], rw["games"], rw["sparseRoles"]), (True, 100, 0))
+        # All 三紅: the red roles win, the blue ones lose -> 0.1 x 4 x 100 = 40.0, the same as the plain
+        # final win rate of these 100 games (40 of 100): full windows are dealt like the cards are.
+        self.assertEqual(rw["roleTheory"], 40.0)
+        self.assertEqual((rw["from"], rw["to"]), ("2026-02-01", "2026-02-28"))
+        short = [s for s in full if s.role != "梅林"] + [s for s in full if s.role == "梅林"][:9]
+        self.assertFalse(gc.role_window_theory(short, THEORY_ROLE_RATES, 3)["fullWindows"])
+        with config_patch(roleWindowGames=9):  # the window follows the config
+            self.assertTrue(gc.role_window_theory(short, THEORY_ROLE_RATES, 3)["fullWindows"])
+        self.assertEqual(gc.role_window_games(), {r: 40 if r == "忠臣" else 10 for r in ROLE_ORDER})
+
+    def test_last_100_and_career(self) -> None:
         """120 games as 忠臣 cycling through the seats: 70 losses, then 50 wins."""
         timeline = [seat("忠臣", SEAT_ORDER[i % 10], "三紅" if i < 70 else "三藍活", f"2026-01-{1 + i // 10:02d}")
                     for i in range(120)]
         theory = gc.player_theory(timeline, THEORY_ROLE_RATES, THEORY_SEAT_RATES)
-        self.assertEqual(list(theory), ["last100", "last50", "career"])
+        self.assertEqual(list(theory), ["roleWindows", "last100", "career"])  # schemaVersion 4: no last50
         specials = 0.1 * (70 + 70 + 69 + 71 + 30 + 31)  # 34.1: the six special roles, never played
-        # last 50: all wins -> 0.4 x 100 + 34.1 = 74.1; every seat 5/5 -> 100.
-        self.assertEqual(theory["last50"], {"window": 50, "games": 50, "roleTheory": 74.1, "positionTheory": 100.0,
-                                            "finalWinRate": 100.0, "from": "2026-01-08", "to": "2026-01-12",
-                                            "sparseRoles": 6, "sparseSeats": 0})
+        # roleWindows: the last 40 games as 忠臣 (S80..S119) are all wins -> 0.4 x 100 + 34.1 = 74.1.
+        self.assertEqual({k: v for k, v in theory["roleWindows"].items() if k != "roles"},
+                         {"roleTheory": 74.1, "fullWindows": False, "games": 40, "sparseRoles": 6,
+                          "from": "2026-01-09", "to": "2026-01-12"})
         # last 100: 50 wins -> 0.4 x 50 + 34.1 = 54.1; every seat 5/10 -> 50.
         self.assertEqual(theory["last100"], {"window": 100, "games": 100, "roleTheory": 54.1, "positionTheory": 50.0,
                                              "finalWinRate": 50.0, "from": "2026-01-03", "to": "2026-01-12",
@@ -1712,9 +2038,10 @@ class TheoryTest(unittest.TestCase):
                                             "sparseRoles": 6, "sparseSeats": 0})
         self.assertAlmostEqual(specials, 34.1)
 
-        short = gc.player_theory(timeline[-30:], THEORY_ROLE_RATES, THEORY_SEAT_RATES)  # fewer than 50 games: all of them
+        short = gc.player_theory(timeline[-30:], THEORY_ROLE_RATES, THEORY_SEAT_RATES)  # fewer than 100 games: all of them
         self.assertEqual(short["last100"]["games"], 30)
-        self.assertEqual({k: {**w, "window": 0} for k, w in short.items()}, {k: short["career"] for k in short})
+        self.assertEqual({**short["last100"], "window": 0}, short["career"])
+        self.assertEqual(short["roleWindows"]["roleTheory"], short["career"]["roleTheory"])  # 30 < 40 as 忠臣
 
 
 class TimelineTest(unittest.TestCase):
@@ -1782,64 +2109,63 @@ class LeaderboardTest(unittest.TestCase):
         self.assertEqual(list(self.lb), ["asOf", "dates", "config", "boards"])
         self.assertEqual(self.lb["asOf"], "2026-10-12")
         self.assertEqual(self.lb["dates"], {"parsed": 230, "unparsed": 2, "earliest": "2024-01-01", "latest": "2026-07-25"})
-        self.assertEqual(self.lb["config"], {"theoryWindows": [100, 50], **TEST_LEADERBOARD_CONFIG})
-        self.assertEqual(list(self.lb["config"])[0], "theoryWindows")  # derived: (mainGames, shortGames)
-        self.assertEqual(list(self.boards), ["main", "last50", "improved", "assassin", "newcomers", "roleTitles"])
+        self.assertEqual(self.lb["config"], {"theoryWindows": [100], **TEST_LEADERBOARD_CONFIG})
+        self.assertEqual(list(self.lb["config"])[0], "theoryWindows")  # derived: [mainGames]
+        # Everyone here plays one role all the time: nobody has full role windows (no main / improved
+        # board) and nobody 250 games (no overall board). RotationBoardsTest has those.
+        self.assertEqual(list(self.boards), ["position", "assassin", "newcomers", "roleTitles"])
         for board in self.lb["boards"]:
             with self.subTest(board=board["id"]):
                 self.assertEqual(list(board)[:9], ["id", "metric", "title", "titleEn", "period", "periodEn", "minGames", "note", "noteEn"])
                 self.assertEqual(list(board)[-1], "rows")
                 self.assertEqual([r["rank"] for r in board["rows"]], list(range(1, len(board["rows"]) + 1)))
-                self.assertLessEqual(len(board["rows"]), gc.LEADERBOARD_CONFIG["topN"])
+                if board["id"] != "roleTitles":  # one row per title holder, not cut to topN (ties 各給)
+                    self.assertLessEqual(len(board["rows"]), gc.LEADERBOARD_CONFIG["topN"])
                 for r in board["rows"]:
                     self.assertIsInstance(r["value"], float)
                     self.assertIsInstance(r["games"], int)
                 if board["id"] != "roleTitles":
                     keys = [(-r["value"], -r["games"], -r["careerGames"], r["name"]) for r in board["rows"]]
                     self.assertEqual(keys, sorted(keys))
-        self.assertEqual({b["metric"] for b in self.lb["boards"]}, {"roleTheory", "roleTheoryDelta", "hitRate", "finalWinRate"})
+        self.assertEqual({b["metric"] for b in self.lb["boards"]}, {"positionTheory", "roleTheory", "hitRate", "finalWinRate"})
 
     def theory_fields(self, name: str, key: str) -> dict:
         w = self.players[name]["theory"][key]
         return {k: w[k] for k in ("roleTheory", "positionTheory", "finalWinRate", "games", "from", "to", "sparseRoles", "sparseSeats")}
 
-    def test_main_board_is_each_players_last_100_games(self) -> None:
-        main = self.boards["main"]
-        self.assertEqual((main["period"], main["minGames"], main["windowGames"]), ("各人最近 100 場", 100, 100))
-        self.assertTrue(main["note"].startswith("近 90 天內有出賽、生涯至少 100 場；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）"))
-        self.assertIn("不到 3 場的角色或位置，用全體的最終勝率補到 3 場", main["note"])
+    def test_position_board_is_each_players_last_100_games(self) -> None:
+        board = self.boards["position"]
+        self.assertEqual((board["period"], board["minGames"], board["windowGames"]), ("各人最近 100 場", 100, 100))
+        self.assertTrue(board["note"].startswith("近 90 天內有出賽、生涯至少 100 場；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）"))
+        self.assertIn("每個角色看他當該角色的最近 10 場、忠臣 40 場", board["note"])
+        self.assertIn("不到 5 場的角色或位置，用全體的最終勝率補到 5 場", board["note"])
+        self.assertIn("fewer than 5 games is topped up to 5", board["noteEn"])
         # 癸 99 career games, 新人 13: too few; 老人 (120 games) last played in 2024: not active.
-        self.assertEqual({r["name"] for r in main["rows"]}, set(SEAT_NAMES[:9]))
-        for r in main["rows"]:
-            self.assertEqual((r["games"], r["careerGames"], r["value"]), (100, 112, r["roleTheory"]))
-            self.assertEqual({k: r[k] for k in self.theory_fields(r["name"], "last100")}, self.theory_fields(r["name"], "last100"))
+        self.assertEqual({r["name"] for r in board["rows"]}, set(SEAT_NAMES[:9]))
+        for r in board["rows"]:
+            last = self.players[r["name"]]["theory"]["last100"]
+            self.assertEqual(list(r), ["rank", "name", "value", "positionTheory", "overallTheory", "finalWinRate", "games",
+                                       "careerGames", "from", "to", "sparseSeats"])
+            self.assertEqual((r["games"], r["careerGames"], r["value"]), (100, 112, last["positionTheory"]))
+            self.assertEqual((r["positionTheory"], r["finalWinRate"], r["sparseSeats"]),
+                             (last["positionTheory"], last["finalWinRate"], last["sparseSeats"]))
+            self.assertEqual(r["overallTheory"], self.players[r["name"]]["theory"]["career"]["roleTheory"])
             self.assertEqual((r["from"], r["to"]), ("2026-06-06", "2026-07-25"))  # S10..S109: the undated U0 U1 are older
-            self.assertEqual((r["sparseRoles"], r["sparseSeats"]), (6, 9))  # one role, one seat each
-        jia = next(r for r in main["rows"] if r["name"] == "甲")
+            self.assertEqual(r["sparseSeats"], 9)  # one seat each
+        jia = next(r for r in board["rows"] if r["name"] == "甲")
         # 刺客 in S10..S109: EARLY loses only on i % 4 == 3 (13 of 50), LATE wins on i % 4 in (2, 3) (24 of 50).
         self.assertEqual(jia["finalWinRate"], 61.0)
 
-    def test_last50_board(self) -> None:
-        board = self.boards["last50"]
-        self.assertEqual((board["period"], board["minGames"], board["windowGames"]), ("各人最近 50 場", 50, 50))
-        self.assertEqual({r["name"] for r in board["rows"]}, set(SEAT_NAMES))  # 癸's 99 games are enough here
-        gui = next(r for r in board["rows"] if r["name"] == "癸")
-        self.assertEqual((gui["games"], gui["careerGames"], gui["to"]), (50, 99, "2026-07-19"))
-        self.assertEqual({k: gui[k] for k in self.theory_fields("癸", "last50")}, self.theory_fields("癸", "last50"))
-
-    def test_improved_board(self) -> None:
-        board = self.boards["improved"]
-        self.assertEqual((board["period"], board["minGames"]), ("各人最近 50 場 vs 再之前 50 場", 100))
-        # Blue players won 13/50 games of S10..S59 and 26/50 of S60..S109; 忠臣 weighs 4/10, 派西維爾
-        # and 梅林 1/10, everything else is the same population rate in both windows: +10.4 and +2.6.
-        # Red players got worse and are left out; 癸 (99 games) cannot fill two windows.
-        self.assertEqual([r["name"] for r in board["rows"]], ["壬", "庚", "辛", "己", "戊"])
-        for r in board["rows"]:
-            self.assertEqual(r["value"], rnd1(r["recentRoleTheory"] - r["priorRoleTheory"]))
-            self.assertAlmostEqual(r["value"], 10.4 if r["name"] in ("壬", "庚", "辛") else 2.6, delta=0.1)
-            self.assertEqual((r["recentFinalWinRate"], r["priorFinalWinRate"]), (52.0, 26.0))
-            self.assertEqual((r["recentGames"], r["priorGames"], r["games"], r["careerGames"]), (50, 50, 50, 112))
-        self.assertEqual(board["rows"][0]["recentRoleTheory"], self.players["壬"]["theory"]["last50"]["roleTheory"])
+    def test_role_theory_needs_full_role_windows(self) -> None:
+        """One role all the time is not enough for 角色理論: the main board and the overview ranking need
+        10 games in every special role and 40 as 忠臣 (資料篩選不能少場)."""
+        self.assertNotIn("main", self.boards)
+        self.assertNotIn("improved", self.boards)
+        self.assertEqual(self.cache["overview"]["topPlayersByRoleTheory"], [])
+        rw = self.players["甲"]["theory"]["roleWindows"]  # 刺客 in all 112 games: the last 10 of them
+        self.assertEqual((rw["fullWindows"], rw["games"], rw["sparseRoles"]), (False, 10, 6))
+        self.assertEqual(rw["roles"]["刺客"], {"games": 10, "wins": 4, "window": 10, "rate": 40.0})  # S100..S109 (LATE)
+        self.assertFalse(any(p["theory"]["roleWindows"]["fullWindows"] for p in self.players.values()))
 
     def test_assassin_board(self) -> None:
         board = self.boards["assassin"]
@@ -1862,15 +2188,46 @@ class LeaderboardTest(unittest.TestCase):
     def test_role_titles(self) -> None:
         board = self.boards["roleTitles"]
         self.assertEqual((board["period"], board["minGames"], board["windowGames"]), ("各人該角色最近 20 場", 20, 20))
-        rows = {r["role"]: r for r in board["rows"]}
-        self.assertEqual(list(rows), ROLE_ORDER)
-        self.assertEqual([r["rank"] for r in board["rows"]], list(range(1, 8)))
+        self.assertTrue(board["note"].endswith("比各人該角色最近 20 場的最終勝率，同率者並列、各得稱號"))
+        self.assertTrue(board["noteEn"].endswith("players tied at the top all get the title"))
+        # Roles in ROLE_ORDER; `rank` is the row number. 刺客..梅林: one player each (seats 1-6).
+        self.assertEqual([r["role"] for r in board["rows"]], ROLE_ORDER[:6] + ["忠臣"] * 4)
+        self.assertEqual([r["rank"] for r in board["rows"]], list(range(1, 11)))
+        rows = {r["role"]: r for r in board["rows"] if r["role"] != "忠臣"}
         # S90..S109 (LATE): red and blue both win 10 of 20.
         self.assertEqual(rows["刺客"], {"rank": 1, "role": "刺客", "name": "甲", "value": 50.0, "games": 20, "wins": 10, "careerRoleGames": 112})
         self.assertEqual((rows["梅林"]["name"], rows["梅林"]["value"]), ("己", 50.0))
-        # 忠臣: 庚 辛 壬 and 癸 (S77..S96) all 10/20; more career games as 忠臣 first (112 > 99), then the
-        # name; 新人 has 13 games as 忠臣 < 20.
-        self.assertEqual((rows["忠臣"]["name"], rows["忠臣"]["value"], rows["忠臣"]["careerRoleGames"]), ("壬", 50.0, 112))
+        # 忠臣 (Edward 2026-10-14: ties 各給): 庚 辛 壬 and 癸 (S77..S96) all 10/20, so all four hold the
+        # title; more career games as 忠臣 first (112 > 99), then the name (code-point order: 壬 庚 辛);
+        # 新人 has 13 games as 忠臣 < 20. Until 2026-10-14 only 壬 was listed.
+        loyal = [(r["rank"], r["name"], r["value"], r["games"], r["wins"], r["careerRoleGames"])
+                 for r in board["rows"] if r["role"] == "忠臣"]
+        self.assertEqual(loyal, [(7, "壬", 50.0, 20, 10, 112), (8, "庚", 50.0, 20, 10, 112),
+                                 (9, "辛", 50.0, 20, 10, 112), (10, "癸", 50.0, 20, 10, 99)])
+
+    def test_role_title_ties_compare_the_rounded_rate(self) -> None:
+        """A tie is the same published (one-decimal) rate; a lower rate is not a title, however many games."""
+        def runs(name_wins: dict[str, int], games_n: int = 20) -> list[list[str]]:
+            # Each name plays 刺客 (seat 1) games_n times; wins first (三紅), then losses (三藍活).
+            rows = [LOG_HEADERS]
+            day = dt.date(2026, 9, 1)
+            for name, wins in name_wins.items():
+                for i in range(games_n):
+                    rows.append(dated(f"{name}{i}", day.isoformat(), "三紅" if i < wins else "三藍活",
+                                      [name] + PASSERS))
+                    day += dt.timedelta(days=0 if i % 2 else 1)
+            return rows
+
+        cache = build_fresh(runs({"甲": 15, "乙": 15, "丙": 14}))
+        board = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "roleTitles")
+        assassins = [(r["name"], r["value"]) for r in board["rows"] if r["role"] == "刺客"]
+        # Same games and career games: by name (code points, 乙 U+4E59 before 甲 U+7532); 丙 14/20 = 70.0 is
+        # not a holder.
+        self.assertEqual(assassins, [("乙", 75.0), ("甲", 75.0)])
+        # Fable Willowgle holder when nobody ties.
+        cache = build_fresh(runs({"甲": 15, "乙": 16}))
+        board = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "roleTitles")
+        self.assertEqual([(r["name"], r["value"]) for r in board["rows"] if r["role"] == "刺客"], [("乙", 80.0)])
 
     def test_future_dated_games_count_as_undated(self) -> None:
         """A mistyped year must not keep a player 'active', be their lastPlayed or dates.latest."""
@@ -1881,7 +2238,7 @@ class LeaderboardTest(unittest.TestCase):
         lb = cache["leaderboard"]
         self.assertEqual(lb["dates"], {"parsed": 230, "unparsed": 13, "earliest": "2024-01-01", "latest": "2026-07-25"})
         boards = {b["id"]: b for b in lb["boards"]}
-        self.assertNotIn("老人", {r["name"] for r in boards["last50"]["rows"]})  # still not active
+        self.assertNotIn("老人", {r["name"] for r in boards["position"]["rows"]})  # still not active
         self.assertEqual([r["name"] for r in boards["newcomers"]["rows"]], ["新人"])  # 未來人 has no dated first game
         rows = {p["name"]: p for p in cache["players"]["players"]}
         self.assertEqual((rows["老人"]["totalGames"], rows["老人"]["firstPlayed"], rows["老人"]["lastPlayed"]),
@@ -1894,20 +2251,31 @@ class LeaderboardTest(unittest.TestCase):
         self.assertEqual(lb["boards"], [])
         self.assertEqual(gc.leaderboard_summary(lb), "asOf 2026-10-12；沒有可做的榜；日期可解析 22 局、無日期 0 局")
         summary = gc.leaderboard_summary(self.lb)
-        self.assertIn("main 9 人（最近 100 場）", summary)
+        self.assertIn("position 9 人（最近 100 場）", summary)
         self.assertIn("newcomers 1 人（90 天）", summary)
         self.assertEqual(gc.leaderboard_summary(None), "無")
 
     def test_overview_ranking_ignores_activity(self) -> None:
-        top = self.cache["overview"]["topPlayersByRoleTheory"]
+        ov = self.cache["overview"]
+        top = ov["topPlayersByPositionTheory"]
         # Everyone with 100 career games, active or not: 甲..壬 and 老人 / 路人1..9 (120 games in 2024) -> top 10.
         self.assertEqual(len(top), 10)
-        self.assertEqual(list(top[0]), ["name", "roleTheory", "positionTheory", "finalWinRate", "games", "careerGames"])
+        self.assertEqual(list(top[0]), ["name", "positionTheory", "finalWinRate", "games", "careerGames"])
         for r in top:
-            self.assertEqual(r["roleTheory"], self.players[r["name"]]["theory"]["last100"]["roleTheory"])
+            last = self.players[r["name"]]["theory"]["last100"]
+            self.assertEqual((r["positionTheory"], r["finalWinRate"], r["games"]), (last["positionTheory"], last["finalWinRate"], 100))
             self.assertGreaterEqual(r["careerGames"], 100)
-        keys = [(-r["roleTheory"], -r["careerGames"], r["name"]) for r in top]
+        keys = [(-r["positionTheory"], -r["careerGames"], r["name"]) for r in top]
         self.assertEqual(keys, sorted(keys))
+        self.assertEqual(ov["topPlayersByOverallTheory"], [])  # nobody has 250 games
+        with config_patch(overallMinGames=112):  # 甲..壬 112 games, 老人 and 路人1..9 120 -> 19 players
+            overall = gc.compute_overview([], self.cache["players"]["players"])["topPlayersByOverallTheory"]
+        self.assertEqual(len(overall), 10)
+        self.assertEqual(list(overall[0]), ["name", "overallTheory", "positionTheory", "finalWinRate", "games", "careerGames"])
+        for r in overall:
+            career = self.players[r["name"]]["theory"]["career"]
+            self.assertEqual((r["overallTheory"], r["positionTheory"], r["finalWinRate"], r["games"]),
+                             (career["roleTheory"], career["positionTheory"], career["finalWinRate"], r["careerGames"]))
 
     def test_active_means_a_game_in_the_last_90_days_as_of_included(self) -> None:
         """asOf 2026-10-12: a last game on 2026-07-15 (asOf - 89, the 90th day) is active, 07-14 is not."""
@@ -1921,7 +2289,7 @@ class LeaderboardTest(unittest.TestCase):
         last = {p["name"]: p["lastPlayed"] for p in cache["players"]["players"]}
         self.assertEqual((last["甲"], last["乙"]), ("2026-07-15", "2026-07-14"))
         boards = {b["id"]: b for b in cache["leaderboard"]["boards"]}
-        for board_id in ("main", "last50", "roleTitles"):
+        for board_id in ("position", "roleTitles"):
             with self.subTest(board=board_id):
                 names = {r["name"] for r in boards[board_id]["rows"]}
                 self.assertIn("甲", names)
@@ -1938,6 +2306,153 @@ class LeaderboardTest(unittest.TestCase):
             rows += [dated(f"{name}紅{i}", "2026-10-02", "三紅", [name] + others) for i in range(5)]
         board = next(b for b in build_fresh(rows)["leaderboard"]["boards"] if b["id"] == "assassin")
         self.assertEqual([(r["name"], r["hits"], r["attempts"], r["value"]) for r in board["rows"]], [("十次", 5, 10, 50.0)])
+
+
+# Ten players who keep their seats while the deal rotates: in game R<i> special role j (刺客 莫甘娜 莫德雷德
+# 奧伯倫 派西維爾 梅林) sits in seat index (j + i) % 10, so every 10 games each player is dealt every special
+# role once and 忠臣 four times -- 26 games per special role and 104 as 忠臣 in 260 games. R0..R159 are all
+# 三紅 (red roles win, blue roles lose: role theory 40.0 for everyone); R160..R259 follow ROT_LATE[i % 10],
+# so in those games each player's result is fixed per role. Three games a day from 2026-05-01 (R259 =
+# 2026-07-26): everyone is active as of 2026-10-12.
+ROT_NAMES = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉"]  # seats 1..9, then seat 0 (= 10)
+ROT_LATE = ["三紅", "三藍活", "三藍死", "三藍活", "三紅", "三藍活", "三藍死", "三紅", "三藍活", "三藍活"]
+ROT_GAMES, ROT_SWITCH = 260, 160
+
+
+def rot_config(i: int) -> str:
+    return "".join(gc.SEATS[(j + i) % 10] for j in range(6))
+
+
+def rot_outcome(i: int) -> str:
+    return "三紅" if i < ROT_SWITCH else ROT_LATE[i % 10]
+
+
+def rotation_log() -> list[list[str]]:
+    return [LOG_HEADERS] + [
+        log_row(f"R{i}", rot_config(i), rot_outcome(i), ROT_NAMES, date=(dt.date(2026, 5, 1) + dt.timedelta(days=i // 3)).isoformat())
+        for i in range(ROT_GAMES)
+    ]
+
+
+def rot_win(role: str, outcome: str) -> bool:
+    """The final result, written out again: red roles win on 三紅 / 三藍死, blue roles on 三藍活 only."""
+    return outcome in ("三紅", "三藍死") if role in RED_ROLES else outcome == "三藍活"
+
+
+def rot_role(s: int, i: int) -> str:
+    """The role of the player in seat index s in game R<i>."""
+    j = (s - i) % 10
+    return ROLE_ORDER[j] if j < 6 else "忠臣"
+
+
+def rot_expected_role_theory(s: int, pick: Callable[[list, int], list]) -> float:
+    """Role theory of the player in seat index s, recomputed from the fixture's rule (not from the cache):
+    `pick(games as the role, K)` chooses the games of each role (no cell here has fewer than 3)."""
+    total = Fraction(0)
+    for j, role in enumerate(ROLE_ORDER):
+        k = 40 if role == "忠臣" else 10
+        used = pick([i for i in range(ROT_GAMES) if rot_role(s, i) == role], k)
+        wins = sum(1 for i in used if rot_win(role, rot_outcome(i)))
+        total += Fraction(gc.ROLE_DEAL_TENTHS[role], 10) * Fraction(100 * wins, len(used))
+    return round(total * 10) / 10
+
+
+class RotationBoardsTest(unittest.TestCase):
+    """main / improved / overall / position boards and the overview rankings on a rotating deal."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.cache = build_fresh(rotation_log())
+        cls.boards = {b["id"]: b for b in cls.cache["leaderboard"]["boards"]}
+        cls.players = {p["name"]: p for p in cls.cache["players"]["players"]}
+
+    def test_fixture(self) -> None:
+        zi = self.players["子"]
+        self.assertEqual(zi["rawRoleGames"], {r: 104.0 if r == "忠臣" else 26.0 for r in ROLE_ORDER})
+        self.assertEqual(list(self.boards), ["main", "position", "overall", "improved", "assassin", "roleTitles"])
+
+    def test_main_board_is_role_theory_over_the_role_windows(self) -> None:
+        board = self.boards["main"]
+        self.assertEqual((board["period"], board["minGames"]), ("各角色近 10 場、忠臣近 40 場", 100))
+        self.assertEqual(board["roleWindowGames"], {r: 40 if r == "忠臣" else 10 for r in ROLE_ORDER})
+        self.assertNotIn("windowGames", board)
+        self.assertTrue(board["note"].startswith("近 90 天內有出賽、六個特殊角色各至少 10 場、忠臣至少 40 場；位置理論與最終勝率看最近 100 場；"))
+        self.assertEqual(len(board["rows"]), 10)
+        for r in board["rows"]:
+            s, theory = ROT_NAMES.index(r["name"]), self.players[r["name"]]["theory"]
+            self.assertEqual(list(r), ["rank", "name", "value", "roleTheory", "positionTheory", "overallTheory",
+                                       "finalWinRate", "games", "careerGames", "from", "to", "sparseRoles", "sparseSeats"])
+            self.assertEqual(r["value"], rot_expected_role_theory(s, lambda games, k: games[-k:]))
+            self.assertEqual((r["roleTheory"], r["games"], r["sparseRoles"]), (r["value"], 100, 0))
+            self.assertEqual(theory["roleWindows"]["roleTheory"], r["value"])
+            self.assertTrue(theory["roleWindows"]["fullWindows"])
+            self.assertEqual((r["positionTheory"], r["finalWinRate"]),
+                             (theory["last100"]["positionTheory"], theory["last100"]["finalWinRate"]))
+            self.assertEqual((r["overallTheory"], r["careerGames"]), (theory["career"]["roleTheory"], 260))
+        # 子 (seat 1) in R160..R259: 刺客 wins (三紅), 莫甘娜 and 莫德雷德 lose (三藍活), 奧伯倫 wins (三紅),
+        # 派西維爾 loses (三藍死), 梅林 wins (三藍活), 忠臣 wins 2 of 4 -> 0.1 x 300 + 0.4 x 50 = 50.0. Their
+        # last 10 games as 刺客 are R160..R250 (2026-06-23 on), the last as 莫甘娜 R259 (2026-07-26).
+        zi = next(r for r in board["rows"] if r["name"] == "子")
+        self.assertEqual((zi["value"], zi["from"], zi["to"]), (50.0, "2026-06-23", "2026-07-26"))
+        top = self.cache["overview"]["topPlayersByRoleTheory"]  # all-time, same people here
+        self.assertEqual([(t["name"], t["roleTheory"], t["overallTheory"]) for t in top],
+                         [(r["name"], r["roleTheory"], r["overallTheory"]) for r in board["rows"]])
+
+    def test_improved_board_compares_the_role_windows_before(self) -> None:
+        board = self.boards["improved"]
+        self.assertEqual((board["period"], board["minGames"]), ("各角色近 10 場、忠臣近 40 場 vs 再之前同樣場數", 200))
+        # The windows before (R60..R159 in every role) are all 三紅: 40.0 for everyone.
+        expected = {n: rnd1(rot_expected_role_theory(s, lambda games, k: games[-k:]) - 40.0) for s, n in enumerate(ROT_NAMES)}
+        self.assertEqual({r["name"]: r["value"] for r in board["rows"]}, {n: d for n, d in expected.items() if d > 0})
+        for r in board["rows"]:
+            self.assertEqual((r["priorRoleTheory"], r["recentGames"], r["priorGames"], r["games"], r["careerGames"]),
+                             (40.0, 100, 100, 100, 260))
+            self.assertEqual(r["value"], rnd1(r["recentRoleTheory"] - r["priorRoleTheory"]))
+        self.assertEqual(next(r for r in board["rows"] if r["name"] == "子")["value"], 10.0)
+        self.assertEqual(rot_expected_role_theory(0, lambda games, k: games[-2 * k:-k]), 40.0)
+
+    def test_overall_board_is_the_career_role_theory(self) -> None:
+        board = self.boards["overall"]
+        self.assertEqual((board["period"], board["minGames"]), ("各人生涯全部場次", 250))
+        self.assertNotIn("allGames", board)  # not the newcomers' exception
+        for r in board["rows"]:
+            career = self.players[r["name"]]["theory"]["career"]
+            self.assertEqual(r["value"], rot_expected_role_theory(ROT_NAMES.index(r["name"]), lambda games, k: games))
+            self.assertEqual((r["overallTheory"], r["positionTheory"], r["finalWinRate"], r["games"]),
+                             (r["value"], career["positionTheory"], career["finalWinRate"], 260))
+            self.assertNotIn("roleTheory", r)
+        # 子's career: 刺客 26/26, 莫甘娜 and 莫德雷德 16/26, 奧伯倫 26/26, 派西維爾 0/26, 梅林 10/26, 忠臣
+        # 20/104 -> 0.1 x 361.54 + 0.4 x 19.23 = 43.85 -> 43.8.
+        self.assertEqual(next(r for r in board["rows"] if r["name"] == "子")["value"], 43.8)
+        overall = self.cache["overview"]["topPlayersByOverallTheory"]
+        self.assertEqual([(t["name"], t["overallTheory"]) for t in overall], [(r["name"], r["value"]) for r in board["rows"]])
+        with config_patch(overallMinGames=261):  # nobody qualifies: the board is left out
+            ids = [b["id"] for b in build_fresh(rotation_log())["leaderboard"]["boards"]]
+        self.assertNotIn("overall", ids)
+
+    def test_position_board(self) -> None:
+        board = self.boards["position"]
+        seat_rates = self.cache["overview"]["seatFinalWinRates"]
+        for r in board["rows"]:
+            s = ROT_NAMES.index(r["name"])
+            label = gc.SEAT_LABELS[gc.SEATS[s]]
+            wins = sum(1 for i in range(ROT_SWITCH, ROT_GAMES) if rot_win(rot_role(s, i), rot_outcome(i)))
+            # One seat played (100 games), the other nine at the population rate.
+            expected = (Fraction(wins) + sum(Fraction(str(v)) for k, v in seat_rates.items() if k != label)) / 10
+            self.assertEqual(r["value"], round(expected * 10) / 10)
+            self.assertEqual((r["games"], r["sparseSeats"]), (100, 9))
+
+    def test_windows_follow_the_config(self) -> None:
+        with config_patch(roleWindowGames=5, loyalWindowGames=20):
+            cache = build_fresh(rotation_log())
+        boards = {b["id"]: b for b in cache["leaderboard"]["boards"]}
+        self.assertEqual(boards["main"]["period"], "各角色近 5 場、忠臣近 20 場")
+        self.assertEqual(cache["overview"]["theoryConfig"]["roleWindowGames"], {r: 20 if r == "忠臣" else 5 for r in ROLE_ORDER})
+        self.assertEqual((cache["leaderboard"]["config"]["roleWindowGames"], cache["leaderboard"]["config"]["loyalWindowGames"]), (5, 20))
+        zi = {p["name"]: p for p in cache["players"]["players"]}["子"]["theory"]["roleWindows"]
+        self.assertEqual((zi["games"], zi["roles"]["忠臣"]["window"], zi["roleTheory"]), (50, 20, 50.0))
+        # The 5 / 20 games before the last ones are R160 on too: nobody improved, so no improved board.
+        self.assertNotIn("improved", boards)
 
 
 # ---------------------------------------------------------------------------
@@ -1966,9 +2481,9 @@ def name_chemistry(labels: list[str]) -> dict:
     return {k: copy.deepcopy(matrix) for k in ("coWin", "coLose", "winCorr", "coWinMinusLose")}
 
 
-def build_named(log: list[list[str]], chemistry: dict) -> dict:
+def build_named(log: list[list[str]], chemistry: dict, aliases: gc.PlayerAliases = gc.NO_ALIASES) -> dict:
     cache, _ = gc.assemble_cache(
-        gc.build_cache(gc.parse_game_log(log), chemistry, as_of=TEST_AS_OF), None,
+        gc.build_cache(gc.parse_game_log(log), chemistry, as_of=TEST_AS_OF, aliases=aliases), None,
         strength_builder=lambda players: {"perPlayer": {}}, placeholder_builders={}, as_of=TEST_AS_OF,
     )
     return cache
@@ -1987,11 +2502,20 @@ class PlayerNameMergeTest(unittest.TestCase):
     def test_key_matches_the_shared_ts_matcher(self) -> None:
         """The same table PlayerNameLookup.test.ts checks @avalon/shared playerNameKey against: the bots,
         the website search and the stats API find a player by exactly the key the cache merged him by."""
-        cases = json.loads(NAME_KEY_CASES.read_text(encoding="utf-8"))["cases"]
+        fixture = json.loads(NAME_KEY_CASES.read_text(encoding="utf-8"))
+        cases = fixture["cases"]
         self.assertGreater(len(cases), 20)
         for case in cases:
             with self.subTest(name=case["input"]):
                 self.assertEqual(gc.player_name_key(case["input"]), case["key"])
+        # player_aliases.json: the same table checks @avalon/shared playerIdentityKey / aliasTarget.
+        aliases = gc.parse_player_aliases({"aliases": fixture["aliases"]})
+        self.assertGreater(len(fixture["aliasCases"]), 8)
+        for case in fixture["aliasCases"]:
+            with self.subTest(alias=case["input"]):
+                self.assertEqual(gc.player_identity_key(case["input"], aliases), case["identityKey"])
+                official = aliases.official.get(aliases.keys.get(gc.player_name_key(case["input"]), ""))
+                self.assertEqual(official, case["official"])
 
     def test_display_is_the_most_used_spelling_ties_go_to_the_first_seen(self) -> None:
         games = gc.parse_game_log(name_log(variant_names))
@@ -2039,8 +2563,8 @@ class PlayerNameMergeTest(unittest.TestCase):
         self.assertEqual(rows["Nova"]["roleSeatStats"], {"刺客|1": {"games": 110.0, "wins": rows["Nova"]["rawTotalWins"],
                                                                    "winRate": rows["Nova"]["winRate"]}})
         self.assertEqual(set(typed["playerDetails"]), set(rows))
-        main = next(b for b in typed["leaderboard"]["boards"] if b["id"] == "main")
-        self.assertIn("Nova", {r["name"] for r in main["rows"]})  # 110 career games: over the 100-game threshold
+        position = next(b for b in typed["leaderboard"]["boards"] if b["id"] == "position")
+        self.assertIn("Nova", {r["name"] for r in position["rows"]})  # 110 career games: over the 100-game threshold
         self.assertEqual(typed["chemistry"]["coWin"]["players"], ["Nova", "kite", "丙"])
         self.assertEqual(typed["chemistry"]["outcomePair"]["rowLabels"], ["Nova", "kite", "丙"])
         # seatOutcomes / outcomePair are counted after the merge: every spelling's games are Nova's.
@@ -2052,9 +2576,9 @@ class PlayerNameMergeTest(unittest.TestCase):
     def test_split_names_never_reach_a_threshold_alone(self) -> None:
         """Nova's 110 games typed three ways used to be three players under the 100-game board."""
         typed = build_named(name_log(variant_names), name_chemistry(["丙"]))
-        main = next(b for b in typed["leaderboard"]["boards"] if b["id"] == "main")
-        self.assertEqual(main["minGames"], 100)
-        self.assertEqual(len([r for r in main["rows"] if gc.player_name_key(r["name"]) == "nova"]), 1)
+        position = next(b for b in typed["leaderboard"]["boards"] if b["id"] == "position")
+        self.assertEqual(position["minGames"], 100)
+        self.assertEqual(len([r for r in position["rows"] if gc.player_name_key(r["name"]) == "nova"]), 1)
 
     def test_chemistry_labels(self) -> None:
         chemistry = name_chemistry(["NOVA", "nova", "丙", "Stranger"])
@@ -2130,6 +2654,214 @@ class PlayerNameMergeTest(unittest.TestCase):
         self.assertEqual(len(gc.compute_player_stats(merged)), 198 - 27)
 
 
+# ---------------------------------------------------------------------------
+# Player aliases: the owner says two names are one player (player_aliases.json, Edward 2026-10-14)
+# ---------------------------------------------------------------------------
+
+# Made-up names only: Tovo Wren and Quill Fen are old names of Ilse Marr.
+TEST_ALIASES_DOC = {"_comment": "test", "aliases": {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"}}
+
+
+def sample_aliases() -> gc.PlayerAliases:
+    return gc.parse_player_aliases(TEST_ALIASES_DOC)
+
+
+def alias_names(i: int) -> list[str]:
+    """Seat names of game S<i>: seat 1 is Ilse Marr, typed as her old names (Tovo Wren, also upper-cased
+    with a double space, and Quill Fen) and as her official name in lower case; seat 2 as in variant_names."""
+    one = ("Tovo Wren", "ilse marr", "TOVO  WREN", "Quill Fen")[i % 4]
+    return [one] + variant_names(i)[1:]
+
+
+def official_names(i: int) -> list[str]:
+    return ["Ilse Marr"] + variant_names(i)[1:]
+
+
+class PlayerAliasTest(unittest.TestCase):
+    def test_parse_and_identity_key(self) -> None:
+        aliases = sample_aliases()
+        self.assertEqual(dict(aliases.names), {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"})
+        self.assertEqual(dict(aliases.keys), {"tovo wren": "ilse marr", "quill fen": "ilse marr"})
+        self.assertEqual(dict(aliases.official), {"ilse marr": "Ilse Marr"})
+        for spelling in ("Tovo Wren", "ＴＯＶＯ　ｗｒｅｎ", " tovo  wren ", "Quill Fen", "QUILL FEN", "Ilse Marr", "ilse marr"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(gc.player_identity_key(spelling, aliases), "ilse marr")
+        self.assertEqual(gc.player_identity_key("Nova", aliases), "nova")
+        self.assertEqual(gc.player_identity_key("Tovo", aliases), "tovo")  # part of an alias: someone else
+        self.assertEqual(gc.player_identity_key("Tovo Wren", gc.NO_ALIASES), "tovo wren")
+        tidy = gc.parse_player_aliases({"aliases": {" Tovo​  Wren ": "Ilse　Marr"}})
+        self.assertEqual(dict(tidy.names), {"Tovo Wren": "Ilse Marr"})  # tidied like a 玩1..玩0 cell
+
+    def test_malformed_documents_are_refused(self) -> None:
+        bad = [
+            ([], "the top level is not a JSON object"),
+            ({"_comment": "x"}, '"aliases" is missing'),
+            ({"aliases": ["Tovo Wren", "Ilse Marr"]}, '"aliases" is missing or is not an object'),
+            ({"aliases": {"Tovo Wren": 7}}, "aliases entry 1 ('Tovo Wren': 7): both names must be strings"),
+            ({"aliases": {"Tovo Wren": "  "}}, "a name is empty"),
+            ({"aliases": {"Tovo Wren": "ＴＯＶＯ ＷＲＥＮ"}}, "both names are one player already"),
+            ({"aliases": {"Tovo Wren": "Ilse Marr", "TOVO WREN": "Quill Fen"}},
+             "aliases entry 2 ('TOVO WREN': 'Quill Fen'): another entry gives this name a different official name"),
+            ({"aliases": {"Tovo Wren": "Ilse Marr", "Quill Fen": "ILSE MARR"}}, "spells this official name differently"),
+            ({"aliases": {"Tovo Wren": "Ilse Marr", "Ilse Marr": "Quill Fen"}},
+             "aliases entry 1 ('Tovo Wren': 'Ilse Marr'): the official name is itself an alias"),
+        ]
+        for doc, message in bad:
+            with self.subTest(doc=doc):
+                with self.assertRaises(ValueError) as caught:
+                    gc.parse_player_aliases(doc)
+                self.assertIn(message, str(caught.exception))
+                if isinstance(doc, dict) and isinstance(doc.get("aliases"), dict):
+                    with self.assertRaises(ValueError) as public:
+                        gc.parse_player_aliases(doc, show_names=False)
+                    self.assertNotRegex(str(public.exception), "Tovo|Ilse|Quill|TOVO|ILSE")
+        same_target = gc.parse_player_aliases({"aliases": {"Tovo Wren": "Ilse Marr", "TOVO WREN": "Ilse Marr"}})
+        self.assertEqual(dict(same_target.keys), {"tovo wren": "ilse marr"})  # a repeated source is fine
+
+    def test_load_missing_unreadable_and_malformed_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "player_aliases.json"
+            self.assertIs(gc.load_player_aliases(path), gc.NO_ALIASES)  # no file = no aliases
+            path.write_text(json.dumps(TEST_ALIASES_DOC), encoding="utf-8")
+            self.assertEqual(gc.load_player_aliases(path), sample_aliases())
+            path.write_text('{"aliases": {"Tovo Wren": "Ilse Marr",}}', encoding="utf-8")
+            with self.assertRaises(gc.FatalError) as caught:
+                gc.load_player_aliases(path)
+            self.assertEqual((caught.exception.exit_code, caught.exception.title),
+                             (gc.EXIT_CONFIG, "Player alias file unreadable"))
+            self.assertIn("player_aliases.json cannot be read (JSONDecodeError", str(caught.exception))
+            path.write_text(json.dumps({"aliases": {"Tovo Wren": "Ilse Marr", "Ilse Marr": "Quill Fen"}}),
+                            encoding="utf-8")
+            with quiet_env(GITHUB_ACTIONS="true"), self.assertRaises(gc.FatalError) as public:
+                gc.load_player_aliases(path)
+            self.assertEqual((public.exception.exit_code, public.exception.title),
+                             (gc.EXIT_CONFIG, "Player alias file malformed"))
+            self.assertIn("aliases entry 1: the official name is itself an alias", str(public.exception))
+            self.assertNotRegex(str(public.exception), "Tovo|Ilse|Quill")  # public log: no names
+            with quiet_env(), self.assertRaises(gc.FatalError) as local:
+                gc.load_player_aliases(path)
+            self.assertIn("'Tovo Wren'", str(local.exception))
+
+    def test_the_repo_alias_file_is_valid(self) -> None:
+        """packages/server/player_aliases.json (owner-directed): loads, and every official name is a
+        name nobody is an alias of."""
+        aliases = gc.load_player_aliases(gc.ALIASES_PATH)
+        self.assertTrue(aliases.names)
+        doc = json.loads(gc.ALIASES_PATH.read_text(encoding="utf-8"))
+        self.assertIsInstance(doc.get("_comment"), str)
+        for target_key in aliases.official:
+            self.assertNotIn(target_key, aliases.keys)
+
+    def test_two_old_names_merge_into_the_official_name(self) -> None:
+        """Typed under two old names (and the official one in lower case) or always as the official
+        name: the same cache, byte for byte, except players.aliases."""
+        chemistry = name_chemistry(["QUILL FEN", "KITE", "丙"])
+        typed = build_named(name_log(alias_names), chemistry, sample_aliases())
+        clean = build_named(name_log(official_names), name_chemistry(["Ilse Marr", "kite", "丙"]))
+        self.assertEqual(typed["players"].pop("aliases"), {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"})
+        self.assertNotIn("aliases", clean["players"])
+        self.assertEqual(json.dumps(typed, ensure_ascii=False, sort_keys=True),
+                         json.dumps(clean, ensure_ascii=False, sort_keys=True))
+        rows = {p["name"]: p for p in typed["players"]["players"]}
+        self.assertEqual(rows["Ilse Marr"]["totalGames"], 110.0)  # the official spelling, not the most-written
+        self.assertFalse({"Tovo Wren", "Quill Fen", "ilse marr", "TOVO WREN"} & set(rows))
+        self.assertEqual(typed["chemistry"]["coWin"]["players"], ["Ilse Marr", "kite", "丙"])
+
+        games = gc.parse_game_log(name_log(alias_names))
+        merged, names = gc.canonicalize_player_names(games, sample_aliases())
+        self.assertEqual({g.seat_players["1"] for g in merged if g.id.startswith("S")}, {"Ilse Marr"})
+        self.assertEqual((names.aliased_names, names.aliased_players), (2, 1))  # tovo wren, quill fen
+        self.assertEqual((names.merged_players, names.merged_spellings), (2, 2))  # Tovo Wren / TOVO WREN, kite / KITE
+        self.assertEqual(names.summary(), "2 spelling(s) that differ only by letter case / full- or half-width "
+                                          "folded into 2 player(s); 2 name(s) shown under their official name "
+                                          "(player_aliases.json, 1 player(s))")
+        self.assertEqual(names.aliases, {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"})
+        self.assertEqual(names.display["quill fen"], "Ilse Marr")
+        again, names2 = gc.canonicalize_player_names(merged, sample_aliases())  # idempotent
+        self.assertIs(again, merged)
+        self.assertEqual((names2.aliased_names, names2.aliases), (0, names.aliases))
+        _, plain = gc.canonicalize_player_names(games)  # without aliases: three players
+        self.assertEqual(plain.aliased_names, 0)
+        self.assertEqual(len({plain.display[gc.player_name_key(g.seat_players["1"])] for g in games
+                              if g.id.startswith("S")}), 3)
+
+    def test_rename_only_and_aliases_of_absent_players(self) -> None:
+        """Only an old name in the games: the player is shown under the official one. An alias whose
+        player has no game stays out of players.aliases."""
+        aliases = gc.parse_player_aliases({"aliases": {"Tovo Wren": "Ilse Marr", "Zed Ash": "Orla Pike"}})
+        cache = build_named(name_log(lambda i: ["Tovo Wren"] + variant_names(i)[1:]), name_chemistry(["丙"]), aliases)
+        names = [p["name"] for p in cache["players"]["players"]]
+        self.assertIn("Ilse Marr", names)
+        self.assertNotIn("Tovo Wren", names)
+        self.assertEqual(cache["players"]["aliases"], {"Tovo Wren": "Ilse Marr"})
+        nobody = build_named(name_log(variant_names), name_chemistry(["丙"]), aliases)
+        self.assertNotIn("aliases", nobody["players"])
+
+    def test_old_and_official_name_in_one_game_is_one_player_twice(self) -> None:
+        def doubled(i: int) -> list[str]:
+            names = official_names(i)
+            return names[:2] + (["Tovo Wren"] if i == 0 else names[2:3]) + names[3:]
+        _, names = gc.canonicalize_player_names(gc.parse_game_log(name_log(doubled)), sample_aliases())
+        self.assertEqual(names.doubled_games, 1)
+
+    def test_guard_passes_when_an_alias_merges_a_player(self) -> None:
+        """The first refresh after an alias was added: the existing file has the old names as players
+        of their own; the new one has one row under the official name and players.aliases."""
+        prev = fake_cache(players=12)
+        prev["players"]["players"] += [{"name": n, "totalGames": g} for n, g in
+                                       (("Tovo Wren", 40.0), ("Quill Fen", 3.0), ("Ilse Marr", 5.0))]
+        prev["overview"]["totalPlayers"] = prev["players"]["total"] = 15
+        new = fake_cache(players=12)
+        new["players"]["players"].append({"name": "Ilse Marr", "totalGames": 49.0})  # one new game
+        new["players"]["aliases"] = {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"}
+        new["overview"]["totalPlayers"] = new["players"]["total"] = 13
+        self.assertEqual(gc.games_regressions(new, prev), [])
+        self.assertEqual(gc.distinct_players(prev, gc.cache_aliases(new)), 13)
+        self.assertEqual(gc.validate_new_cache(new, prev), [])
+        self.assertEqual(gc.validate_new_cache(new, prev, show_names=False), [])
+        lines = gc.compare_summary(new, prev, show_names=False)
+        self.assertIn("依 player_aliases.json 併入正式名字的舊名字 2 個", lines[1])
+        self.assertNotIn("消失", lines[1])
+        self.assertNotRegex("\n".join(lines), "Tovo|Quill|Ilse")
+        self.assertIn("| 1 | 48 → 49 |", "\n".join(lines))  # her games before: the three rows summed
+
+        new["players"]["players"][-1]["totalGames"] = 47.0  # a game lost on top of the merge: refused
+        self.assertEqual(gc.games_regressions(new, prev), [("Tovo Wren", 48.0, 47.0)])
+        self.assertTrue(gc.validate_new_cache(new, prev))
+        new["players"]["players"][-1]["totalGames"] = 49.0
+        del new["players"]["aliases"]  # the same rows without the alias: the old names are lost players
+        problem = next(p for p in gc.validate_new_cache(new, prev) if "existing player" in p)
+        self.assertIn("Tovo Wren 40→gone", problem)
+
+    def test_guard_follows_an_alias_turned_around(self) -> None:
+        """The owner makes the old name the official one again: either cache's players.aliases link them."""
+        prev = fake_cache(players=3)
+        prev["players"]["players"].append({"name": "Ilse Marr", "totalGames": 48.0})
+        prev["players"]["aliases"] = {"Tovo Wren": "Ilse Marr"}
+        new = fake_cache(players=3)
+        new["players"]["players"].append({"name": "Tovo Wren", "totalGames": 48.0})
+        new["players"]["aliases"] = {"Ilse Marr": "Tovo Wren"}
+        self.assertEqual(gc.games_regressions(new, prev), [])
+        self.assertEqual(gc.cache_aliases(prev, new).identity_key("Ilse Marr"),
+                         gc.cache_aliases(prev, new).identity_key("tovo wren"))
+        junk = {"players": {"aliases": {"Tovo Wren": 3, "": "Ilse Marr", "Nova": "NOVA"}}}
+        self.assertEqual(dict(gc.cache_aliases(junk, None, {"players": "x"}).keys), {})  # lenient
+
+    def test_carried_rows_of_an_old_name_follow_the_alias(self) -> None:
+        prev = fake_cache(players=1)
+        prev["archetype"] = {"perPlayer": {
+            "Tovo Wren": {"hasData": True, "sampleSize": 40},
+            "Ilse Marr": {"hasData": True, "sampleSize": 5},
+            "Quill Fen": {"hasData": False, "sampleSize": 3},
+        }}
+        new = fake_cache(players=1)
+        new["playerDetails"] = {"Ilse Marr": {"player": {"totalGames": 49.0}}}
+        new["players"]["aliases"] = {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"}
+        carried = gc.carry_over_sections(new, prev, {"archetype": placeholder})
+        self.assertEqual(carried["archetype"], 0)
+        self.assertEqual(new["archetype"]["perPlayer"], {"Ilse Marr": {"hasData": True, "sampleSize": 40}})
+
+
 class LeaderboardConfigTest(unittest.TestCase):
     """The knobs of LEADERBOARD_CONFIG: the owner's real values, and that changing one flows through
     to every reader (the doc tells Edward he may)."""
@@ -2140,7 +2872,7 @@ class LeaderboardConfigTest(unittest.TestCase):
         for key, value in cfg.items():
             with self.subTest(key=key):
                 self.assertIsInstance(value, int)
-                self.assertGreaterEqual(value, 1 if key in ("topN", "mainGames", "shortGames") else 0)
+                self.assertGreaterEqual(value, 1 if key in ("topN", "mainGames", "roleWindowGames", "loyalWindowGames") else 0)
         with mock.patch.dict(gc.LEADERBOARD_CONFIG, REAL_LEADERBOARD_CONFIG, clear=True):
             cache = build_fresh(leaderboard_log())
             windows = gc.theory_windows()
@@ -2148,26 +2880,30 @@ class LeaderboardConfigTest(unittest.TestCase):
         self.assertEqual(cache["leaderboard"]["config"], {"theoryWindows": windows, **REAL_LEADERBOARD_CONFIG})
         self.assertEqual(cache["overview"]["theoryConfig"]["theoryWindows"], windows)
         for row in cache["players"]["players"]:
-            self.assertEqual(list(row["theory"]), [gc.theory_key(n) for n in windows] + ["career"])
+            self.assertEqual(list(row["theory"]), ["roleWindows"] + [gc.theory_key(n) for n in windows] + ["career"])
+            self.assertEqual({r: c["window"] for r, c in row["theory"]["roleWindows"]["roles"].items()},
+                             cache["overview"]["theoryConfig"]["roleWindowGames"])
 
-    def test_windows_are_main_and_short_games(self) -> None:
-        self.assertEqual(gc.theory_windows(), [100, 50])
-        self.assertEqual(gc.theory_windows({"mainGames": 50, "shortGames": 50}), [50])
+    def test_windows_follow_main_games(self) -> None:
+        self.assertEqual(gc.theory_windows(), [100])
+        self.assertEqual(gc.theory_windows({"mainGames": 0}), [])
         with config_patch(mainGames=80):
             cache = build_fresh(leaderboard_log())
         rows = {p["name"]: p for p in cache["players"]["players"]}
-        self.assertEqual(list(rows["甲"]["theory"]), ["last80", "last50", "career"])
-        self.assertEqual(cache["leaderboard"]["config"]["theoryWindows"], [80, 50])
-        self.assertEqual(cache["overview"]["theoryConfig"],
-                         {"theoryMinCellGames": 3, "theoryWindows": [80, 50], "mainGames": 80, "activeDays": 90})
-        main = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "main")
-        self.assertEqual((main["period"], main["windowGames"], main["minGames"]), ("各人最近 80 場", 80, 80))
-        jia = next(r for r in main["rows"] if r["name"] == "甲")
-        self.assertEqual(jia["roleTheory"], rows["甲"]["theory"]["last80"]["roleTheory"])
-        top = cache["overview"]["topPlayersByRoleTheory"]  # still filled: it reads last<mainGames>
+        self.assertEqual(list(rows["甲"]["theory"]), ["roleWindows", "last80", "career"])
+        self.assertEqual(cache["leaderboard"]["config"]["theoryWindows"], [80])
+        self.assertEqual(cache["overview"]["theoryConfig"], {
+            "theoryMinCellGames": 5, "theoryWindows": [80], "mainGames": 80, "activeDays": 90,
+            "roleWindowGames": {r: 40 if r == "忠臣" else 10 for r in ROLE_ORDER}, "positionGames": 80, "overallMinGames": 250,
+        })
+        position = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "position")
+        self.assertEqual((position["period"], position["windowGames"], position["minGames"]), ("各人最近 80 場", 80, 80))
+        jia = next(r for r in position["rows"] if r["name"] == "甲")
+        self.assertEqual(jia["positionTheory"], rows["甲"]["theory"]["last80"]["positionTheory"])
+        top = cache["overview"]["topPlayersByPositionTheory"]  # still filled: it reads last<mainGames>
         self.assertEqual(len(top), 10)
         for r in top:
-            self.assertEqual((r["roleTheory"], r["games"]), (rows[r["name"]]["theory"]["last80"]["roleTheory"], 80))
+            self.assertEqual((r["positionTheory"], r["games"]), (rows[r["name"]]["theory"]["last80"]["positionTheory"], 80))
         self.assertEqual(gc.validate_new_cache(cache, None), [])
 
     def test_top_up_off(self) -> None:
@@ -2179,11 +2915,11 @@ class LeaderboardConfigTest(unittest.TestCase):
             expected = gc.theory_window(seats[-100:], overview["roleFinalWinRates"], overview["seatFinalWinRates"], 0, 100)
         self.assertEqual(overview["theoryConfig"]["theoryMinCellGames"], 0)
         self.assertEqual(cache["leaderboard"]["config"]["theoryMinCellGames"], 0)
-        main = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "main")
-        self.assertNotIn("補到", main["note"])
-        self.assertNotIn("topped up", main["noteEn"])
-        jia = next(r for r in main["rows"] if r["name"] == "甲")
-        self.assertEqual((jia["roleTheory"], jia["positionTheory"]), (expected["roleTheory"], expected["positionTheory"]))
+        position = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "position")
+        self.assertNotIn("補到", position["note"])
+        self.assertNotIn("topped up", position["noteEn"])
+        jia = next(r for r in position["rows"] if r["name"] == "甲")
+        self.assertEqual(jia["positionTheory"], expected["positionTheory"])
         # (Here every played cell has 50+ games, so only the wording changes; TheoryTest checks the
         # numbers of a top-up that matters, with and without it.)
         self.assertEqual(gc.validate_new_cache(cache, None), [])
@@ -2548,26 +3284,50 @@ class SnapshotShapeTest(unittest.TestCase):
         lb = self.cache["leaderboard"]
         self.assertEqual(lb["dates"], {"parsed": 2083, "unparsed": 63, "earliest": "2017-02-13", "latest": "2026-02-27"})
         boards = {b["id"]: b for b in lb["boards"]}
-        # 32 players active since 2025-12-02; 23 of them have 100 career games, 24 have 50; no newcomer
-        # has 10 games.
-        self.assertEqual(list(boards), ["main", "last50", "improved", "assassin", "roleTitles"])
+        # 32 players active since 2025-12-02 (171 in all): 22 of them have full role windows (35 in all),
+        # 23 have 100 career games, 18 have 250 (24 in all); no newcomer has 10 games.
+        self.assertEqual(list(boards), ["main", "position", "overall", "improved", "assassin", "roleTitles"])
         rows = {p["name"]: p for p in self.cache["players"]["players"]}
-        for board_id, n, key in (("main", 100, "last100"), ("last50", 50, "last50")):
+        self.assertEqual(sum(p["theory"]["roleWindows"]["fullWindows"] for p in rows.values()), 35)
+        for board_id in ("main", "position", "overall"):
             self.assertEqual(len(boards[board_id]["rows"]), 10)
             for r in boards[board_id]["rows"]:
-                self.assertEqual(r["games"], n)
-                self.assertGreaterEqual(r["careerGames"], n)
-                self.assertEqual(r["roleTheory"], rows[r["name"]]["theory"][key]["roleTheory"])
                 self.assertGreaterEqual(r["to"], "2025-12-02")  # active
+        for r in boards["main"]["rows"]:
+            rw = rows[r["name"]]["theory"]["roleWindows"]
+            self.assertTrue(rw["fullWindows"])
+            self.assertEqual((r["roleTheory"], r["games"], r["sparseRoles"]), (rw["roleTheory"], 100, 0))
+        for r in boards["position"]["rows"]:
+            self.assertEqual((r["games"], r["value"]), (100, rows[r["name"]]["theory"]["last100"]["positionTheory"]))
+            self.assertGreaterEqual(r["careerGames"], 100)
+        for r in boards["overall"]["rows"]:
+            self.assertEqual(r["value"], rows[r["name"]]["theory"]["career"]["roleTheory"])
+            self.assertGreaterEqual(r["careerGames"], 250)
         for r in boards["improved"]["rows"]:
             self.assertGreater(r["value"], 0)
+            self.assertEqual((r["recentGames"], r["priorGames"]), (100, 100))
         for r in boards["assassin"]["rows"]:
             self.assertTrue(10 <= r["attempts"] <= 20)
             self.assertEqual(r["value"], pct(r["hits"], r["attempts"]))
-        self.assertEqual([r["role"] for r in boards["roleTitles"]["rows"]], ROLE_ORDER)
-        top = self.cache["overview"]["topPlayersByRoleTheory"]
+        # 角色王 (ties 各給, 2026-10-14): 莫甘娜 and 莫德雷德 (18 of 20 each) and 忠臣 (9 of 20) have two
+        # holders each -- until then the one with more games in the role won -- so 10 rows, 5 players.
+        titles = boards["roleTitles"]["rows"]
+        self.assertEqual([r["role"] for r in titles],
+                         ["刺客", "莫甘娜", "莫甘娜", "莫德雷德", "莫德雷德", "奧伯倫", "派西維爾", "梅林", "忠臣", "忠臣"])
+        self.assertEqual([r["value"] for r in titles], [90.0] * 6 + [45.0, 50.0, 45.0, 45.0])
+        self.assertEqual(len({r["name"] for r in titles}), 5)
+        for role in ROLE_ORDER:
+            holders = [r for r in titles if r["role"] == role]
+            self.assertEqual(len({r["value"] for r in holders}), 1)
+            keys = [(-r["games"], -r["careerRoleGames"], r["name"]) for r in holders]
+            self.assertEqual(keys, sorted(keys))
+        ov = self.cache["overview"]
+        top = ov["topPlayersByRoleTheory"]
         self.assertEqual(len(top), 10)
         self.assertTrue(all(t["careerGames"] >= 100 and t["games"] == 100 for t in top))
+        self.assertTrue(all(t["careerGames"] >= 100 for t in ov["topPlayersByPositionTheory"]))
+        self.assertTrue(all(t["careerGames"] >= 250 for t in ov["topPlayersByOverallTheory"]))
+        self.assertEqual((len(ov["topPlayersByPositionTheory"]), len(ov["topPlayersByOverallTheory"])), (10, 10))
         # The population baseline: Σ deal probability x role final win rate ≈ 46%.
         ov = self.cache["overview"]
         baseline = sum(gc.ROLE_DEAL_TENTHS[r] * ov["roleFinalWinRates"][r] for r in ROLE_ORDER) / 10
@@ -2590,6 +3350,495 @@ class SnapshotShapeTest(unittest.TestCase):
         holders = {(r["holder"], r["declared"]): r["hitRate"] for r in l141["data"]["holderRows"]}
         self.assertGreater(min(holders[("藍", "紅")], holders[("藍", "藍")]), 98.0)  # blue holders do not lie
         self.assertIn("首湖 70.8%（n=513）", l141["oneLineHook"])
+
+
+class PlayerVotingTest(unittest.TestCase):
+    """虛構三局：R3 每局四次有效提議加一次強制派隊，逐票手算。"""
+
+    NAMES = ["Ilse Marr", "Fenn Pike", "Daro Yew", "Neri Moss", "Oren Vale",
+             "Sela Brook", "Tovo Wren", "Jori Vale", "Quill Fen", "Vela Reed"]
+    TEXT = "789\nooo\n1789 1- 0+\noooo\n1789\n7890\n1789 7- 0+\n7890 0-\n1789\noooo"
+
+    def games(self, n: int = 3, text: str | None = None) -> list[gc.GameRow]:
+        return gc.parse_game_log([LOG_HEADERS] + [
+            log_row(str(i), "123456", "三藍活", self.NAMES, date="2026-01-02", text=text or self.TEXT)
+            for i in range(n)])
+
+    def test_hand_count_denominators_forced_fifth_and_pr(self) -> None:
+        rows = gc.compute_player_voting(self.games())
+        loyal = rows["Tovo Wren"]
+        self.assertEqual(loyal["r3Reject"]["loyal"],
+                         {"hits": 3, "votes": 12, "rate": 25.0, "pr": 62.5, "cohortPlayers": 4})
+        self.assertEqual(rows["Ilse Marr"]["r3Reject"]["red"],
+                         {"hits": 6, "votes": 12, "rate": 50.0, "pr": 12.5, "cohortPlayers": 4})
+        for window, evil, good in (("r3Plus", (3, 6), (6, 6)), ("all", (3, 9), (9, 9))):
+            self.assertEqual(tuple(loyal["teamComposition"][window]["evilTeamReject"][k] for k in ("hits", "votes")), evil)
+            self.assertEqual(tuple(loyal["teamComposition"][window]["goodTeamApprove"][k] for k in ("hits", "votes")), good)
+        self.assertEqual(rows["Sela Brook"]["r3Reject"]["loyal"]["votes"], 0)  # 梅林不混入忠臣
+        self.assertEqual(rows["Oren Vale"]["r3Reject"]["loyal"]["votes"], 0)  # 派西維爾亦同
+
+    def test_nine_and_ten_votes_threshold(self) -> None:
+        games = self.games(10, "789\nooo\n1789\noooo\n1789\noooo")
+        nine = gc.compute_player_voting(games[:9])["Tovo Wren"]["r3Reject"]["loyal"]
+        ten = gc.compute_player_voting(games)["Tovo Wren"]["r3Reject"]["loyal"]
+        self.assertEqual((nine["votes"], nine["rate"], nine["pr"]), (9, None, None))
+        self.assertEqual((ten["votes"], ten["rate"], ten["pr"]), (10, 0.0, 37.5))
+
+    def test_prefix_suffix_fullwidth_inline_and_old_lake(self) -> None:
+        text = "７８９　００＋　ＯＯＯ\n０４Ｏ\n1789 -1+0 oooo\n1789 1-0+ oooo"
+        proposals = gc.parse_voting_proposals(text)
+        self.assertEqual(proposals, [(1, 1, "789", "7890"), (2, 1, "1789", "7890"), (3, 1, "1789", "7890")])
+
+    def test_bad_round_is_omitted_without_shifting_round_or_forced_index(self) -> None:
+        text = "789\nooo\n1789\noooo\n1789\n1789 7\n1789\n1789\n1789\noooo\n17890\nooooo"
+        proposals = gc.parse_voting_proposals(text)
+        self.assertEqual([p[0] for p in proposals], [1, 2, 4])
+        self.assertEqual(gc.parse_voting_proposals("789 7-7+\nooo"), [])
+        self.assertEqual(gc.parse_voting_proposals("778\nooo"), [])
+        self.assertEqual(gc.parse_voting_proposals("789\n" * 6 + "ooo"), [])
+        self.assertEqual(gc.parse_voting_proposals("789"), [])
+
+    def test_cache_aliases_purity_and_legacy_fields(self) -> None:
+        games = self.games()
+        before = copy.deepcopy(games)
+        once = gc.compute_player_voting(games)
+        self.assertEqual(once, gc.compute_player_voting(games))
+        self.assertEqual([g.voting_proposals for g in games], [g.voting_proposals for g in before])
+        games[1].seat_players["7"] = "ｔｏｖｏ　ｗｒｅｎ"
+        cache = gc.build_cache(games, {}, as_of=AS_OF)
+        rows = {p["name"]: p for p in cache["players"]["players"]}
+        self.assertEqual(rows["Tovo Wren"]["voting"]["r3Reject"]["loyal"]["votes"], 12)
+        self.assertEqual(rows["Tovo Wren"]["winRate"], 100)
+        self.assertEqual(cache["playerDetails"]["Tovo Wren"]["player"]["voting"], rows["Tovo Wren"]["voting"])
+class RawSheetsExportTest(unittest.TestCase):
+    def test_raw_rows_follow_merge_decisions_and_align_headers(self) -> None:
+        names = ["Tovo Wren"] + [""] * 9
+        main = [LOG_HEADERS, log_row("T1", "123456", "三紅", names, text="123\nxxx")]
+        # 本表既有的重複列仍保留；只沿用跨來源與匯入表內的既有去重規則。
+        main.append(main[1][:])
+        header = list(reversed(LOG_HEADERS)) + ["來源註記"]
+        added = log_row("T2", "987654", "三藍活", names, text="456\nooo")
+        extra = [header,
+                 list(reversed(log_row("D1", "123456", "三紅", names, text="123\nxxx"))) + ["虛構重複列"],
+                 list(reversed(added)) + ["虛構來源"],
+                 list(reversed(added)) + ["虛構重複列"],
+                 list(reversed(log_row("", "123456", "三紅", names))) + ["虛構無效列"]]
+        merged = gc.merge_game_logs(main, extra)
+        self.assertEqual((len(merged.games), merged.extra_added, merged.extra_duplicates), (3, 1, 2))
+        self.assertEqual(merged.raw_rows, [LOG_HEADERS + ["來源註記"], main[1] + [""], main[2] + [""],
+                                           added + ["虛構來源"]])
+        def fields(g: gc.GameRow) -> dict:
+            return {key: getattr(g, key) for key in gc.GameRow.__slots__}
+        self.assertEqual([fields(g) for g in gc.parse_game_log(merged.raw_rows)], [fields(g) for g in merged.games])
+
+    def test_export_is_atomic_private_and_logs_only_row_count(self) -> None:
+        merged = gc.merge_game_logs([LOG_HEADERS, log_row("T1", "123456", "三紅", ["Tovo Wren"] + [""] * 9)], None)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "raw.json"
+            path.write_text("{}", encoding="utf-8")
+            path.chmod(0o644)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                gc.export_raw_sheets(merged, path)
+            self.assertEqual(out.getvalue(), "牌譜暫存匯出：1 列\n")
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            before = path.read_bytes()
+            with mock.patch.object(gc.os, "replace", side_effect=OSError("虛構敏感路徑")):
+                with self.assertRaises(gc.FatalError) as error:
+                    gc.export_raw_sheets(merged, path)
+            self.assertNotIn("虛構敏感路徑", str(error.exception))
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(list(Path(tmp).iterdir()), [path])
+
+    def test_other_git_worktrees_and_symlinks_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            repo.mkdir()
+            (repo / ".git").write_text("gitdir: /fictional/path", encoding="utf-8")
+            link = root / "link"
+            link.symlink_to(repo, target_is_directory=True)
+            for target in (repo / "raw.json", link / "raw.json"):
+                with self.assertRaises(gc.FatalError):
+                    gc.raw_sheets_export_path(target, root / "analysis.json", False)
+
+
+# ---------------------------------------------------------------------------
+# Game-level dataset (games_cache.json; 複合篩選, Edward 2026-10-14)
+# ---------------------------------------------------------------------------
+
+DATASET_HEADERS = LOG_HEADERS + ["場次", "note"]
+# Free text that must never reach games_cache.json (invented: the note's 測試員丁 is nobody).
+SECRET_NOTE = "[3-2]9家改為測試員丁代打。"
+SECRET_TEXT = "1237 +4 -5 說他是紅的\nooo\n2>8 x 機密宣告\n2468 機密提案\noxo"
+SECRET_TITLE = "秘密貼文標題"
+
+
+def dataset_row(gid: str, config: str, outcome: str, names: list[str], date: str = "", slot: str = "", note: str = "",
+                **cells: str) -> list[str]:
+    """A 牌譜 row with the 場次 and note columns; `cells` overrides any column (e.g. 首湖="7o>1")."""
+    row = log_row(gid, config, outcome, names, date=date, category=cells.pop("分類", "線瓦"),
+                  text=cells.pop("文字記錄", DEFAULT_TEXT), kill=cells.pop("刺殺", ""))
+    row += [slot, note]
+    for column, value in cells.items():
+        row[DATASET_HEADERS.index(column)] = value
+    return row
+
+
+def dataset_log() -> list[list[str]]:
+    """leaderboard_log() (boards, timelines, undated games) with 場次 / note, plus odd cells the dataset must
+    carry without changing any number: a stray character in 1-1, 局勢, 第一局 and 第一局成功失敗, a lake
+    cell like 7o>1, a 分類 and a 結果 outside the lists, a two-character 刺殺, a full-width captain."""
+    rows = [DATASET_HEADERS] + [row + [str(i % 7 + 1), ("S2", "古亭", "", "我旁觀")[i % 4]]
+                                for i, row in enumerate(leaderboard_log()[1:])]
+    rows += [
+        dataset_row("X1", "123456", "三藍活", SEAT_NAMES, date="2026/07/26", slot="3", note=SECRET_NOTE,
+                    **{"1-1": "1 5", "局勢": "", "第一局": "紅 ", "第一局成功失敗": "oox ", "首湖": "7o>1",
+                       "分類": "比賽", "刺殺": "10", "文字記錄": "３457\nooo\n" + SECRET_TEXT}),
+        dataset_row("X2", "654321", "平手", SEAT_NAMES, date="2026/07/27", note="測試員丁線瓦"),
+        dataset_row("X3", "135790", "三紅", SEAT_NAMES, date="2026/07/27", note="Discopia星球[1-2]梅林踩拇指"),
+    ]
+    return rows
+
+
+def run_like_games(log: list[list[str]], as_of: dt.date = TEST_AS_OF, extra: list[list[str]] | None = None) -> list:
+    """與 run 相同：合併牌譜、檢查日期、合併名字並固定排序日期。"""
+    games, _ = gc.drop_dates_after(gc.merge_game_logs(log, extra).games, as_of)
+    games, _ = gc.canonicalize_player_names(games)
+    return gc.assign_timeline_dates(games)
+
+
+def dataset_and_cache(games: list, as_of: dt.date = TEST_AS_OF) -> tuple[dict, dict]:
+    dataset = gc.encode_games_dataset(games)
+    cache, _ = gc.assemble_cache(
+        gc.build_cache(games, {}, as_of, games_key=dataset["key"]), None,
+        strength_builder=lambda players: {"perPlayer": {}}, placeholder_builders={}, games=games, as_of=as_of,
+    )
+    return dataset, json.loads(json.dumps(cache, ensure_ascii=False))
+
+
+class NoteTagTest(unittest.TestCase):
+    def test_whitelist_only(self) -> None:
+        cases = {
+            "S2": ("season:S2",), " 古亭週五 ": ("venue:古亭",), "九號": ("venue:九號",), "９號": ("venue:九號",),
+            "台中家": ("venue:台中家",), "我旁觀": ("flag:spectated",), "旁觀": ("flag:spectated",),
+            "不是我打的": ("flag:notRecorderGame",), "覆盤局": ("flag:review",), "爛局": ("flag:badGame",),
+            "[2025/8/14 update]湖女": ("flag:lakeCorrected",),
+            "Discopia星球[1-4]梅林踩拇指[2025/8/14 update]湖女": ("venue:Discopia星球", "flag:lakeCorrected", "flag:incident"),
+            "[1-1]派西踩拇指": ("flag:incident",), SECRET_NOTE: ("flag:substitution", "flag:incident"),
+            "測試員丁": (), "測試員丁線瓦": (), "古亭XYZ": (), "6家在1-5表壞": (), "S4": (), "": (), None: (),
+        }
+        for raw, tags in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(gc.parse_note_tags(raw), tags)
+        self.assertEqual(len(gc.NOTE_TAG_VOCAB), len(set(gc.NOTE_TAG_VOCAB)))
+        self.assertTrue(all(t.startswith(("season:", "venue:", "flag:")) for t in gc.NOTE_TAG_VOCAB))
+
+    def test_slot(self) -> None:
+        for raw, slot in {"3": 3, " 12 ": 12, "１２": 12, "": 0, None: 0, "3a": 0, "-1": 0}.items():
+            self.assertEqual(gc.parse_slot(raw), slot)
+
+
+class GamesDatasetTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.games = run_like_games(dataset_log())
+        cls.dataset, cls.cache = dataset_and_cache(cls.games)
+        cls.text = gc.dump_games_dataset(cls.dataset)
+
+    def test_shape(self) -> None:
+        ds = self.dataset
+        self.assertEqual(list(ds), ["format", "version", "key", "cacheSchemaVersion", "config", "constants", "counts",
+                                    "vocab", "players", "aliases", "fields", "games"])
+        self.assertEqual((ds["format"], ds["version"], ds["cacheSchemaVersion"]), ("avalon-games", 2, 4))
+        self.assertEqual(ds["counts"], {"games": 235, "fromSheet": 235, "fromDiscord": 0, "players": 21, "dated": 233, "undated": 2})
+        self.assertEqual(ds["config"]["leaderboard"], gc.LEADERBOARD_CONFIG)
+        self.assertEqual(ds["config"]["theoryWindows"], [100])
+        self.assertEqual(ds["constants"]["roleDealTenths"]["忠臣"], 4)
+        self.assertEqual(ds["players"][:3], ["甲", "乙", "丙"])
+        self.assertEqual(ds["aliases"], {})
+        self.assertEqual(self.cache["overview"]["gamesKey"], ds["key"])
+        self.assertEqual(json.loads(self.text), ds)  # the file is the dataset
+        # 每局一行，每日新增對局只需增加少量行數。
+        self.assertEqual(sum(1 for line in self.text.splitlines() if line.startswith('    ["')), 235)
+
+    def test_rows(self) -> None:
+        ds = self.dataset
+        fields = ds["fields"]
+        rows = {r[0]: dict(zip(fields, r)) for r in ds["games"]}
+        self.assertTrue(all(gid.startswith("H") and len(gid) == 11 for gid in rows))  # U0, Y0, S0...: hashed
+        tiny = [LOG_HEADERS, log_row("1234", "123456", "三紅", SEAT_NAMES), log_row("1235", "123456", "三紅", SEAT_NAMES)]
+        tiny[2][LOG_HEADERS.index("局勢")] = "紅藍?"  # not ^[紅藍]{1,5}$: "?" (a top-20 state then withholds, see below)
+        small = gc.encode_games_dataset(gc.parse_game_log(tiny))
+        self.assertEqual([r[0] for r in small["games"]], ["1234", "1235"])  # a plain 流水號 stays
+        self.assertEqual(small["vocab"]["state"], ["藍紅藍", "?"])
+        self.assertEqual([r[fields.index("state")] for r in small["games"]], [0, 1])
+        x1 = next(dict(zip(fields, r)) for r in ds["games"] if r[fields.index("slot")] == 3 and r[fields.index("note")] == [
+            gc.NOTE_TAG_VOCAB.index("flag:substitution"), gc.NOTE_TAG_VOCAB.index("flag:incident")])
+        self.assertEqual(ds["vocab"]["category"][x1["cat"]], "其他")  # 比賽
+        self.assertEqual(x1["kill"], "?")  # 10: not one seat character
+        self.assertEqual(x1["firstTeam"], "1?5")
+        self.assertEqual(x1["rounds"], "?RB--")
+        self.assertEqual(x1["missions"], "oox?|oxo|ooo||")
+        self.assertEqual(x1["state"], -1)  # blank
+        self.assertEqual(x1["lakes"], "?1----")
+        self.assertEqual(x1["captains"], "?12")  # ３457 (full-width), 1237, 2468
+        self.assertEqual(x1["claims"], "28x")
+        x2 = next(dict(zip(fields, r)) for r in ds["games"] if ds["vocab"]["outcome"][r[fields.index("outcome")]] == "其他")
+        self.assertEqual(x2["note"], [])
+        three_red_kills = [r[fields.index("kill")] for r in ds["games"] if r[fields.index("outcome")] == 0]
+        self.assertEqual(set(three_red_kills), {""})  # 刺殺 only travels with 三藍 games
+
+    def test_round_trip_reproduces_every_section(self) -> None:
+        self.assertEqual(gc.games_dataset_problems(self.dataset, self.cache, self.games, TEST_AS_OF), [])
+        decoded = gc.decode_games_dataset(json.loads(self.text))
+        rebuilt = gc.build_cache(decoded, {}, TEST_AS_OF, games_key=self.dataset["key"])
+        for key in gc.GAMES_DATASET_SECTIONS:
+            self.assertEqual(gc._canonical({"v": rebuilt[key]}), gc._canonical({"v": self.cache[key]}), key)
+        self.assertEqual([g.timeline_date for g in decoded], [g.timeline_date for g in self.games])
+        self.assertEqual([g.captains for g in decoded][-3:], [("?", "1", "2"), ("1", "2"), ("1", "2")])
+
+    def test_nothing_but_structured_fields(self) -> None:
+        for secret in ("測試員丁", "代打", "機密", "說他", "踩拇指", "比賽", "平手", "1 5"):
+            self.assertNotIn(secret, self.text)
+        self.assertEqual(gc.games_dataset_privacy_problems(self.dataset), [])
+        tampered = copy.deepcopy(self.dataset)
+        tampered["games"][0][gc.GAMES_DATASET_FIELDS.index("missions")] = "ooo 機密|||| "
+        tampered["vocab"]["state"][0] = "機密"
+        tampered["key"] = gc.games_dataset_key(tampered)
+        problems = gc.games_dataset_privacy_problems(tampered)
+        self.assertEqual(problems, ["vocab.state", "games[].missions: 1 row(s)"])
+        self.assertFalse(any("機密" in p for p in problems))
+        tampered["key"] = "0" * 16
+        self.assertIn("key does not match the content", gc.games_dataset_privacy_problems(tampered))
+
+    def test_discord_rows(self) -> None:
+        header = DATASET_HEADERS + ["discord_post_id", "discord_title"]
+        extra = [header, dataset_row("D123456789", "246802", "三藍死", SEAT_NAMES, date="2026/07/28")
+                 + ["123456789", SECRET_TITLE]]
+        games = run_like_games(dataset_log(), extra=extra)
+        dataset, cache = dataset_and_cache(games)
+        text = gc.dump_games_dataset(dataset)
+        self.assertNotIn(SECRET_TITLE, text)
+        self.assertNotIn("123456789", text)
+        self.assertEqual((dataset["counts"]["fromSheet"], dataset["counts"]["fromDiscord"]), (235, 1))
+        last = dataset["games"][-1]
+        self.assertTrue(last[0].startswith("D") and len(last[0]) == 11)
+        self.assertEqual(last[1], gc.GAME_SOURCE_DISCORD)
+        self.assertEqual(gc.games_dataset_problems(dataset, cache, games, TEST_AS_OF), [])
+
+    def test_key(self) -> None:
+        again = gc.encode_games_dataset(run_like_games(dataset_log()))
+        self.assertEqual(again, self.dataset)
+        self.assertRegex(self.dataset["key"], r"^[0-9a-f]{16}$")
+        log = dataset_log()
+        log[5][DATASET_HEADERS.index("分類")] = "面瓦"  # only a 分類: no section changes, the key does
+        other = gc.encode_games_dataset(run_like_games(log))
+        self.assertNotEqual(other["key"], self.dataset["key"])
+
+    def test_withheld_when_the_round_trip_differs(self) -> None:
+        """A 配置 with a letter turns into "?", like a lake holder "7o": both now name the same seat."""
+        log = dataset_log()
+        log.append(dataset_row("X9", "12a456", "三紅", SEAT_NAMES, date="2026/07/28", **{"首湖": "7o>1"}))
+        games = run_like_games(log)
+        dataset, cache = dataset_and_cache(games)
+        problems = gc.games_dataset_problems(dataset, cache, games, TEST_AS_OF)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("round trip differs at", problems[0])
+        self.assertIn("lake.perLake[0]", problems[0])
+        stale = copy.deepcopy(cache)
+        stale["overview"]["gamesKey"] = "0" * 16
+        self.assertIn("overview.gamesKey is not the dataset's key", gc.games_dataset_problems(self.dataset, stale, self.games, TEST_AS_OF))
+
+    def test_refactor_changes_no_number(self) -> None:
+        """captains / lake_claims are 文字記錄 parsed once; timeline_date is player_timelines' own rule."""
+        raw = gc.merge_game_logs(dataset_log(), None).games
+        for g in raw:
+            self.assertEqual(g.captains, tuple(gc._parse_captain_per_mission(g.text_record)[:5]))
+            self.assertEqual(g.lake_claims, tuple(gc.parse_lake_claims(g.text_record)[:3]))
+        plain = gc.build_cache(raw, {}, TEST_AS_OF)
+        fixed = gc.build_cache(gc.assign_timeline_dates(raw), {}, TEST_AS_OF)
+        self.assertEqual(gc._canonical(plain), gc._canonical(fixed))
+        if sys.version_info < (3, 12):  # 3.12 compensates; _sum_ltr is the 3.11 behaviour CI runs
+            values = [0.1 * i for i in range(1, 30)]
+            self.assertEqual(gc._sum_ltr(values), sum(values))
+
+    def test_timeline_of_a_subset_keeps_each_game_in_place(self) -> None:
+        """甲 plays A0 (dated 03-02), A1 (undated: sorts with A0), A2 (03-01). Without A0 the plain rule would
+        move A1 to the top; with timeline_date from all the games it stays after A2."""
+        rows = [LOG_HEADERS,
+                log_row("A0", "123456", "三紅", SEAT_NAMES, date="2026/03/02"),
+                log_row("A1", "213456", "三紅", SEAT_NAMES),
+                log_row("A2", "231456", "三紅", SEAT_NAMES, date="2026/03/01")]
+        games = gc.assign_timeline_dates(gc.parse_game_log(rows))
+        subset = games[1:]
+        self.assertEqual([s.role for s in gc.player_timelines(subset)["甲"]], ["莫德雷德", "莫甘娜"])
+        plain = gc.parse_game_log(rows)[1:]
+        self.assertEqual([s.role for s in gc.player_timelines(plain)["甲"]], ["莫甘娜", "莫德雷德"])
+
+
+class SnapshotDatasetTest(unittest.TestCase):
+    """固定 2,146 局牌譜快照：每個支援區塊皆可由資料集完全重現。"""
+
+    def test_snapshot_round_trip(self) -> None:
+        if not SNAPSHOT.exists():
+            self.skipTest("sheets_cache.json not found")
+        log = json.loads(SNAPSHOT.read_text(encoding="utf-8")).get("牌譜") or []
+        as_of = dt.date(2026, 2, 28)
+        games = run_like_games(log, as_of)
+        if len(games) != 2146:
+            self.skipTest("sheets_cache.json is not the 2146-game snapshot")
+        dataset, cache = dataset_and_cache(games, as_of)
+        self.assertEqual(gc.games_dataset_problems(dataset, cache, games, as_of), [])
+        self.assertEqual((dataset["counts"]["players"], dataset["counts"]["dated"]), (171, 2083))
+        cats = Counter(r[gc.GAMES_DATASET_FIELDS.index("cat")] for r in dataset["games"])
+        self.assertEqual([cats[i] for i in range(5)], [1373, 627, 146, 0, 0])
+        self.assertLess(len(gc.dump_games_dataset(dataset).encode("utf-8")), 2_000_000)
+
+
+class DatasetEndToEndTest(unittest.TestCase):
+    """以虛構試算表驗證兩份快取一起更新，以及資料集停寫時的退回行為。"""
+
+    setUp = EndToEndTest.setUp
+    tearDown = EndToEndTest.tearDown
+    run_main = EndToEndTest.run_main
+    files = EndToEndTest.files
+
+    def games_file(self) -> Path:
+        return self.out.with_name(gc.GAMES_OUTPUT_NAME)
+
+    def test_written_together_and_bound_by_the_key(self) -> None:
+        rc, log = self.run_main(summary=True)
+        self.assertEqual(rc, 0, log)
+        cache = json.loads(self.out.read_text(encoding="utf-8"))
+        dataset = json.loads(self.games_file().read_text(encoding="utf-8"))
+        self.assertEqual(cache["overview"]["gamesKey"], dataset["key"])
+        self.assertEqual(len(dataset["games"]), cache["overview"]["totalGames"])
+        self.assertIn("每局資料集：4 局、3 位", self.summary.read_text(encoding="utf-8"))
+        self.assertIn("round-trip 通過", self.summary.read_text(encoding="utf-8"))
+        first = (self.out.read_bytes(), self.games_file().read_bytes())
+
+        rc, _ = self.run_main(as_of=(AS_OF + dt.timedelta(days=1)).isoformat())  # only the day: neither
+        self.assertEqual(rc, 0)
+        self.assertEqual((self.out.read_bytes(), self.games_file().read_bytes()), first)
+
+        self.tabs["牌譜"][2][LOG_HEADERS.index("分類")] = "面瓦"  # no section changes, the dataset does
+        rc, log = self.run_main()
+        self.assertEqual(rc, 0, log)
+        cache2 = json.loads(self.out.read_text(encoding="utf-8"))
+        dataset2 = json.loads(self.games_file().read_text(encoding="utf-8"))
+        self.assertNotEqual(dataset2["key"], dataset["key"])
+        self.assertEqual(cache2["overview"]["gamesKey"], dataset2["key"])  # both rewritten
+        self.assertEqual({k: v for k, v in cache2["overview"].items() if k != "gamesKey"},
+                         {k: v for k, v in cache["overview"].items() if k != "gamesKey"})
+
+        self.games_file().unlink()  # a missing dataset is written again even if the cache would not change
+        rc, _ = self.run_main()
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.loads(self.games_file().read_text(encoding="utf-8")), dataset2)
+
+    def test_withheld_dataset_keeps_the_cache_going(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        old_dataset = self.games_file().read_bytes()
+        row = self.tabs["牌譜"][1]
+        row[LOG_HEADERS.index("配置")] = "12a456"  # round trip differs (see GamesDatasetTest)
+        row[LOG_HEADERS.index("首湖")] = "7o>1"
+        self.tabs["牌譜"].append(log_row("T9", "123456", "三紅", E2E_PLAYERS + [""] * 7))
+        github_output = Path(self.tmp.name) / "github_output"
+        env = {"GITHUB_ACTIONS": "true", "GITHUB_OUTPUT": str(github_output)}
+        with mock.patch.dict(os.environ, env):
+            rc, log = self.run_main(summary=True)
+        self.assertEqual(rc, 0, log)
+        cache = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(cache["overview"]["totalGames"], 5)  # the cache moved on
+        self.assertEqual(self.games_file().read_bytes(), old_dataset)  # the dataset did not
+        self.assertNotEqual(cache["overview"]["gamesKey"], json.loads(old_dataset)["key"])  # -> filters off
+        self.assertIn("games_dataset=withheld", github_output.read_text(encoding="utf-8"))
+        self.assertIn("::error title=Games dataset withheld::", log)
+        self.assertIn("暫停寫入", self.summary.read_text(encoding="utf-8"))
+        for name in E2E_PLAYERS:  # public log: counts and paths only
+            self.assertNotIn(name, log + self.summary.read_text(encoding="utf-8"))
+        self.assertEqual(self.files(), ["analysis_cache.json", "games_cache.json", "github_output"])
+
+        row[LOG_HEADERS.index("配置")] = "123456"  # fixed in the Sheet: both written again
+        with mock.patch.dict(os.environ, env):
+            rc, log = self.run_main()
+        self.assertEqual(rc, 0, log)
+        self.assertIn("games_dataset=ok", github_output.read_text(encoding="utf-8"))
+        dataset = json.loads(self.games_file().read_text(encoding="utf-8"))
+        self.assertEqual(json.loads(self.out.read_text(encoding="utf-8"))["overview"]["gamesKey"], dataset["key"])
+
+    def test_compare_writes_neither(self) -> None:
+        self.assertEqual(self.run_main()[0], 0)
+        before = (self.out.read_bytes(), self.games_file().read_bytes())
+        self.tabs["牌譜"].append(log_row("T9", "123456", "三紅", E2E_PLAYERS + [""] * 7))
+        rc, log = self.run_main("--compare", summary=True)
+        self.assertEqual(rc, 0, log)
+        self.assertEqual((self.out.read_bytes(), self.games_file().read_bytes()), before)
+        self.assertIn("每局資料集：5 局", self.summary.read_text(encoding="utf-8"))
+        self.assertIn("nor games_cache.json", log)
+
+    def test_games_output_flag(self) -> None:
+        other = Path(self.tmp.name) / "sub"
+        other.mkdir()
+        rc, log = self.run_main("--games-output", str(other / "g.json"))
+        self.assertEqual(rc, 0, log)
+        self.assertTrue((other / "g.json").exists())
+        self.assertFalse(self.games_file().exists())
+
+
+class RawSheetsExportTest(unittest.TestCase):
+    def test_raw_rows_follow_merge_decisions_and_align_headers(self) -> None:
+        names = ["Tovo Wren"] + [""] * 9
+        main = [LOG_HEADERS, log_row("T1", "123456", "三紅", names, text="123\nxxx")]
+        # 本表既有的重複列仍保留；只沿用跨來源與匯入表內的既有去重規則。
+        main.append(main[1][:])
+        header = list(reversed(LOG_HEADERS)) + ["來源註記"]
+        added = log_row("T2", "987654", "三藍活", names, text="456\nooo")
+        extra = [header,
+                 list(reversed(log_row("D1", "123456", "三紅", names, text="123\nxxx"))) + ["虛構重複列"],
+                 list(reversed(added)) + ["虛構來源"],
+                 list(reversed(added)) + ["虛構重複列"],
+                 list(reversed(log_row("", "123456", "三紅", names))) + ["虛構無效列"]]
+        merged = gc.merge_game_logs(main, extra)
+        self.assertEqual((len(merged.games), merged.extra_added, merged.extra_duplicates), (3, 1, 2))
+        self.assertEqual(merged.raw_rows, [LOG_HEADERS + ["來源註記"], main[1] + [""], main[2] + [""],
+                                           added + ["虛構來源"]])
+        def fields(g: gc.GameRow) -> dict:
+            return {key: getattr(g, key) for key in gc.GameRow.__slots__ if key != "source"}
+        self.assertEqual([fields(g) for g in gc.parse_game_log(merged.raw_rows)], [fields(g) for g in merged.games])
+
+    def test_export_is_atomic_private_and_logs_only_row_count(self) -> None:
+        merged = gc.merge_game_logs([LOG_HEADERS, log_row("T1", "123456", "三紅", ["Tovo Wren"] + [""] * 9)], None)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "raw.json"
+            path.write_text("{}", encoding="utf-8")
+            path.chmod(0o644)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                gc.export_raw_sheets(merged, path)
+            self.assertEqual(out.getvalue(), "牌譜暫存匯出：1 列\n")
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            before = path.read_bytes()
+            with mock.patch.object(gc.os, "replace", side_effect=OSError("虛構敏感路徑")):
+                with self.assertRaises(gc.FatalError) as error:
+                    gc.export_raw_sheets(merged, path)
+            self.assertNotIn("虛構敏感路徑", str(error.exception))
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(list(Path(tmp).iterdir()), [path])
+
+    def test_other_git_worktrees_and_symlinks_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            repo.mkdir()
+            (repo / ".git").write_text("gitdir: /fictional/path", encoding="utf-8")
+            link = root / "link"
+            link.symlink_to(repo, target_is_directory=True)
+            for target in (repo / "raw.json", link / "raw.json"):
+                with self.assertRaises(gc.FatalError):
+                    gc.raw_sheets_export_path(target, root / "analysis.json", False)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

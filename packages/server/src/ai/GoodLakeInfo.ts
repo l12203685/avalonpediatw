@@ -70,7 +70,8 @@
 
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { PlayerObservation } from './types';
-import { certaintyParamsFor, declaredLakes, enumerateWorlds, evilCountFor, popcount } from './belief/Certainty';
+import { certaintyParamsFor, declaredLakes, enumerateWorlds } from './belief/Certainty';
+import { evilCountFor, popcount } from './worlds';
 
 export { evilCountFor };
 
@@ -106,6 +107,8 @@ export function missionLikelihood(round: number, k: number, f: number): number {
 
 // ── Worlds ─────────────────────────────────────────────────────
 
+// evilCountFor / combinations / popcount 住在 ./worlds.ts（2026-10-14，模擬瓦共用）；
+// 世界列舉在 ./belief/Certainty.ts（第 1 階段確定性層）。行為不變。
 interface World {
   /** Bit i set ⇔ allPlayerIds[i] is red. */
   mask: number;

@@ -280,6 +280,8 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
     const h = setup();
     await deliver(h, groupText('/指令', 'a1', 'rtA'), groupText('/默契 Sin HAO', 'a2', 'rtB'));
     expect(h.replies[0]).toEqual({ token: 'rtA', texts: [expect.stringContaining('/默契 名字1 名字2')] });
+    // The window comes from the cache: this fixture is a schemaVersion-3 one, which /排行 ranks by the last 100 games.
+    expect(h.replies[0].texts[0]).toContain('/排行　角色理論勝率排行 Top 10（各人最近 100 場）');
     expect(h.replies[1].texts[0]).toContain('同隊 239 場');
   });
 

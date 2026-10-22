@@ -715,6 +715,62 @@ class DedupeTest(unittest.TestCase):
         self.assertEqual(report.skipped, Counter({dri.SKIP_INTERNAL: 1}))
 
 
+# Made-up names: Tovo Wren and Quill Fen are old names of Ilse Marr (as player_aliases.json would say).
+TEST_ALIASES = gc.parse_player_aliases({"aliases": {"Tovo Wren": "Ilse Marr", "Quill Fen": "Ilse Marr"}})
+
+
+class PlayerAliasTest(unittest.TestCase):
+    """An old name in player_aliases.json and its official name are one player for every same-player
+    check (gc.player_identity_key); the rows keep the names as posted."""
+
+    def setUp(self) -> None:
+        patch = mock.patch.object(gc, "default_player_aliases", return_value=TEST_ALIASES)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.header_sheet = sheet_header()
+        self.header = dri.import_header([self.header_sheet], None)
+
+    def without_aliases(self) -> mock._patch:
+        return mock.patch.object(gc, "default_player_aliases", return_value=gc.NO_ALIASES)
+
+    def test_old_and_official_name_in_one_post_is_one_player_twice(self) -> None:
+        twice = RECENT_BODY.replace("3.Kai", "3.Tovo Wren").replace("4.Momo", "4.ilse marr")
+        self.assertEqual(skip_reason(post(), twice), dri.SKIP_NAMES_MALFORMED)
+        two_old = RECENT_BODY.replace("3.Kai", "3.ＴＯＶＯ ＷＲＥＮ").replace("4.Momo", "4.Quill Fen")
+        self.assertEqual(skip_reason(post(), two_old), dri.SKIP_NAMES_MALFORMED)
+        with self.without_aliases():
+            self.assertEqual(skip_reason(post(), twice), "parsed")
+        p = post()
+        body = RECENT_BODY.replace("3.Kai", "3.Tovo Wren")
+        game = dri.parse_post(p, body)
+        row = dict(zip(self.header, dri.build_row(p, game, self.header, "2026-10-10 03:17:00", dri.post_signature(p, body))))
+        self.assertEqual(row[gc.PLAYER_COLUMNS["3"]], "Tovo Wren")  # written as posted, never renamed
+
+    def test_sheet_copy_under_the_official_name_is_the_same_game(self) -> None:
+        """配置 retyped in the 牌譜 copy, which lists the player under her official name."""
+        edited = RECENT_CANONICAL.replace("260", "250")
+        sheet_names = NAMES[:2] + ["Ilse Marr"] + NAMES[3:]
+        rows = [self.header_sheet, sheet_row(self.header_sheet, "1", "936750", edited, sheet_names, "三藍死")]
+        p = post()
+        posted = RECENT_BODY.replace("3.Kai", "3.Tovo Wren")
+        report = dri.plan_import([p], lambda _: posted, rows, None, self.header)
+        self.assertEqual((report.near_dup_sheet, report.new), (1, 0))
+        with self.without_aliases():
+            report = dri.plan_import([p], lambda _: posted, rows, None, self.header)
+        self.assertEqual((report.near_dup_sheet, report.new), (0, 1))
+
+    def test_an_old_name_of_a_known_player_is_no_new_player(self) -> None:
+        rows = [self.header_sheet, sheet_row(self.header_sheet, "1", "936758", RECENT_CANONICAL,
+                                             ["Ilse Marr", *NAMES[1:]], "三藍死")]
+        p = post(tags=("三紅",))
+        posted = RED_BODY.replace("3.丙", "3.Tovo Wren")
+        report = dri.plan_import([p], lambda _: posted, rows, None, self.header)
+        self.assertEqual((report.new, report.new_unknown_names), (1, 9))  # NAMES_B but 丙; Tovo Wren is known
+        with self.without_aliases():
+            report = dri.plan_import([p], lambda _: posted, rows, None, self.header)
+        self.assertEqual(report.new_unknown_names, 10)
+
+
 # ---------------------------------------------------------------------------
 # Corrections to posts already in Discord匯入 (plan_recheck)
 # ---------------------------------------------------------------------------
@@ -3059,6 +3115,22 @@ class EndToEndTest(unittest.TestCase):
             rc = dri.main(["--dry-run"])
         self.assertEqual(rc, gc.EXIT_CONFIG)
         self.assertIn("DISCORD_BOT_TOKEN is not set", out.getvalue())
+
+    def test_malformed_alias_file_stops_the_run_before_any_read(self) -> None:
+        """player_aliases.json is read first: a malformed file is exit 2 (no names in the public log),
+        not a parse failure of every post."""
+        bad = Path(self.tmp.name) / "player_aliases.json"
+        bad.write_text('{"aliases": {"Tovo Wren": "Ilse Marr", "Ilse Marr": "Quill Fen"}}', encoding="utf-8")
+        gc.default_player_aliases.cache_clear()
+        try:
+            with mock.patch.object(gc, "ALIASES_PATH", bad):
+                rc, log = self.run_main("--dry-run")
+        finally:
+            gc.default_player_aliases.cache_clear()
+        self.assertEqual(rc, gc.EXIT_CONFIG, log)
+        self.assertIn("::error title=Player alias file malformed::", log)
+        self.assertNotRegex(log, "Tovo|Ilse|Quill")
+        self.assertEqual(self.opened_scopes, [])  # the Sheet was never opened
 
 
 if __name__ == "__main__":

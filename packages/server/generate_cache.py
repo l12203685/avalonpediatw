@@ -12,6 +12,8 @@ Usage:
     python generate_cache.py                 # owner's PC: default key path below
     python generate_cache.py --compare       # dry run: show what would change, write nothing
     python generate_cache.py --allow-shrink  # accept a deliberate drop in games/players
+    python generate_cache.py --games-output PATH  # the game-level dataset (default: games_cache.json
+                                                  # 預設位於 --output 旁）
 
 Configuration (environment variables, all optional, checked in this order):
     AVALON_STATS_CREDENTIALS_FILE  path to a service-account JSON key file
@@ -20,6 +22,9 @@ Configuration (environment variables, all optional, checked in this order):
     AVALON_STATS_SHEET_ID          spreadsheet id (default: SHEET_ID below)
     AVALON_STATS_AS_OF             leaderboard reference day YYYY-MM-DD (default:
                                    today in Taiwan, +08); set it to reproduce a run
+    player_aliases.json (next to this script, owner-directed data): {"aliases": {old
+    spelling: official name}}: the two are one player, shown under the official name
+    (load_player_aliases; docs/stats/two_stage_outcome.md 玩家別名). No file = no aliases.
 
 Where each top-level section comes from:
     refreshed from the Sheet  overview, players, playerDetails, missions, lake,
@@ -28,7 +33,10 @@ Where each top-level section comes from:
                               玩1..玩0, see compute_player_stats, names that
                               differ only by letter case / full- or half-width
                               being one player (canonicalize_player_names,
-                              shown with their most-used spelling); leaderboard =
+                              shown with their most-used spelling), and so are
+                              the names player_aliases.json links (shown with
+                              the official name; players.aliases lists them for
+                              the readers, see load_player_aliases); leaderboard =
                               the boards of compute_leaderboard over each
                               player's last N games, constants in
                               LEADERBOARD_CONFIG) and chemistry (同贏 / 同輸 /
@@ -64,17 +72,30 @@ existing file is that day writes nothing (only_the_day_changed): the workflow th
 has nothing to commit and Render does not redeploy. A 日期時間 after the as-of day
 is a typo and counts as no date (drop_dates_after; the run logs how many).
 
+Game-level dataset (複合篩選, Edward 2026-10-14「我希望所有數據都有可以複合篩選的功能」): the same run
+writes games_cache.json next to the cache (--games-output; encode_games_dataset): one row per game of
+the merged log with the parsed, structured fields only (names via a players table; never 文字記錄, the
+note text, 頁碼, 組成 or a Discord title -- note becomes whitelisted tags, parse_note_tags). The
+@avalon/shared stats engine recomputes the sections from a filtered list of these games. Both files are
+bound by overview.gamesKey = the dataset's key, and they are written together or not at all; a dataset
+that fails its own checks (games_dataset_problems: counts, a round trip through decode_games_dataset +
+build_cache that must reproduce every section computed from games, the privacy check) is withheld: the
+cache is still written, the site then turns the filters off (key mismatch) and the run says so
+(games_dataset=withheld in $GITHUB_OUTPUT). The public log only ever gets counts.
+
 Two-stage outcome (docs/stats/two_stage_outcome.md, Edward 2026-10-12): mission
 stage 三紅 vs 三藍, assassination stage settles 三藍, final result red = 三紅 +
 三藍死 and blue = 三藍活. The final* / excess* player fields, overview.schemaVersion
 2 blocks and the leaderboard use the final result; every older field keeps the
 mission-stage rule (三藍死 = blue win) so no existing number changes.
 
-Theory win rates (Edward 2026-10-13, schemaVersion 3): players[].theory holds 角色理論
-(Σ deal probability × the player's final win rate per role) and 位置理論 (Σ 1/10 × final
-win rate per seat) over their last 100 / last 50 games and career (theory_window); the
-leaderboard ranks active players by them over their own last N games, never a short date
-window. The legacy roleTheory / positionTheory fields keep their old values.
+Theory win rates (Edward 2026-10-13, schemaVersion 3; windows reworked 2026-10-14, schemaVersion
+4): players[].theory holds 角色理論 (Σ deal probability × the player's final win rate per role)
+over each role's own last games (roleWindows: 10 per special role, 40 as 忠臣), 位置理論 (Σ 1/10 ×
+final win rate per seat) over the last 100 games and both over the career (整體理論 = the career
+role theory); the leaderboard ranks active players by them, never over a short date window.
+players[].roleOutcomes counts 三紅 / 三藍死 / 三藍活 per role for the conditional outcome blocks
+(任務結果 / 刺殺結果 / 遊戲結果). The legacy roleTheory / positionTheory fields keep their old values.
 
 Safety: the new cache is checked before it replaces the old file. The write is
 refused (exit 4) if it is empty or malformed, has fewer games in total than the
@@ -94,17 +115,21 @@ in the repo; compute_player_stats reproduces its formulas (see the comment
 there and test_generate_cache.py). Its outcomes were re-derived from the mission
 strings instead of 結果; this script uses 結果 (see OUTCOMES).
 
-Exit codes: 0 ok, 2 credentials misconfigured, 3 Google refused access
-(auth / sheet not shared / not found), 4 data check failed, nothing written.
+Exit codes: 0 ok, 2 configuration (credentials, AVALON_STATS_AS_OF, player_aliases.json),
+3 Google refused access (auth / sheet not shared / not found), 4 data check failed, nothing written.
 """
 
 from __future__ import annotations
+
+from voting_stats import compute_player_voting, parse_voting_proposals
 
 import argparse
 import contextlib
 import copy
 import datetime as dt
 import functools
+import gzip
+import hashlib
 import importlib.util
 import json
 import math
@@ -118,7 +143,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 try:
     import gspread
@@ -135,7 +160,12 @@ DEFAULT_CREDENTIALS_PATH = Path(r"C:\Users\admin\.claude\credentials\google_shee
 CREDENTIALS_PATH = DEFAULT_CREDENTIALS_PATH  # kept for anyone importing the old name
 SHEET_ID = "174L-by-dtP6IY1pRy8nMpG6_3RMBQXmAV4kTfIgmyIU"
 OUTPUT_PATH = Path(__file__).parent / "analysis_cache.json"
+# 每局資料集預設放在 --output 指定的分析快取旁。
+GAMES_OUTPUT_NAME = "games_cache.json"
+GAMES_OUTPUT_PATH = OUTPUT_PATH.with_name(GAMES_OUTPUT_NAME)
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
+# Owner-directed player aliases (source spelling -> official name), see load_player_aliases.
+ALIASES_PATH = Path(__file__).resolve().parent / "player_aliases.json"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 ENV_CREDENTIALS_FILE = "AVALON_STATS_CREDENTIALS_FILE"
@@ -151,6 +181,9 @@ DISCORD_IMPORT_TAB = "Discord匯入"
 DISCORD_UPDATED_COLUMN = "更新時間"
 # Seats per game: one rewritten Discord匯入 row takes at most this many games away from players.
 PLAYERS_PER_GAME = 10
+# GameRow.source 與資料集 src：記錄合併前的來源分頁。
+GAME_SOURCE_SHEET = 0
+GAME_SOURCE_DISCORD = 1
 
 # Sections built from the Sheet by this script.
 SHEET_SECTIONS = (
@@ -169,6 +202,8 @@ CHEMISTRY_MATRICES = ("coWin", "coLose", "winCorr", "coWinMinusLose")
 # pair (the same ~46% everywhere) and no marker; the server drops those (sheetsAnalysis.ts).
 SEAT_OUTCOMES_SOURCE_KEY = "seatOutcomesSource"
 OUTCOME_SOURCE_GAMES = "games"
+# players.aliases: {source spelling: official name} of player_aliases.json (compute_players_endpoint).
+PLAYER_ALIASES_KEY = "aliases"
 
 # Sanity guard: allowed drop vs. the existing cache = max(ABS, PCT% of it).
 SHRINK_TOLERANCE_ABS = 5
@@ -177,6 +212,9 @@ SHRINK_TOLERANCE_PCT = 1.0
 EXIT_CONFIG = 2
 EXIT_GOOGLE_ACCESS = 3
 EXIT_DATA = 4
+
+# overview.schemaVersion；每局資料集以 cacheSchemaVersion 記錄同一版本。
+CACHE_SCHEMA_VERSION = 4
 
 # overview.topPlayersByTheory only ranks players with at least this many games.
 # 30 (the 生涯報表 cut-off) is what the committed cache (commit 61b7398) used.
@@ -225,19 +263,31 @@ SEAT_DEAL_TENTHS = {s: 1 for s in SEATS}
 # constant lives here, the TypeScript side only reads the cache. Owner's rule (2026-10-13):
 # the FILTER may be recent (who is active), the DATA may not be few games, so the boards use
 # each player's last N games, never a short date window (newcomers are the one exception).
-# The players' theory windows are not a separate knob: they are always (mainGames, shortGames), see
-# theory_windows(), so players[].theory, the boards and overview.topPlayersByRoleTheory cannot drift
-# apart. Readers (bots, site, tests) take the window sizes from the cache, never assume 100 / 50.
+# schemaVersion 4 (Edward 2026-10-14):「角色理論 50 場太少了，因為每 10 場除了忠臣以外平均也只會
+# 出現 1 場」-- 角色理論 takes each role's own last roleWindowGames games (忠臣 loyalWindowGames),
+# 位置理論 the last mainGames games, 整體理論 the whole career (ranked from overallMinGames career
+# games). The players' last-N window is not a separate knob: it is always mainGames (theory_windows()),
+# so players[].theory, the boards and the overview rankings cannot drift apart. Readers (bots, site,
+# tests) take the window sizes from the cache, never assume 10 / 40 / 100 / 250.
+# (2026-10-14 Edward：「少於 3 場通常沒有統計意義，用整體平均補，但我建議補到 5 場」) -- theoryMinCellGames
+# 3 -> 5. Caches written before carry 3 in leaderboard.config / overview.theoryConfig, so a reader's
+# fallback for a cache WITHOUT the setting stays 3 (statsReplies THEORY_MIN_CELL_GAMES, the site's
+# DEFAULT_THEORY_CONFIG); only this generator writes 5.
+# (2026-10-14 Edward：角色王同率「各給」) -- every player tied at the top of a role gets that role's
+# title (compute_leaderboard, roleTitles), so a role can have several rows.
 LEADERBOARD_CONFIG: dict[str, Any] = {
-    "theoryMinCellGames": 3,        # a role / seat with fewer games in the window is topped up to
+    "theoryMinCellGames": 5,        # a role / seat with fewer games in the window is topped up to
                                     # this many games at the population final win rate (0 = off)
     "activeDays": 90,               # every board but newcomers: played in the last N days (asOf included)
     "topN": 10,
-    "mainGames": 100,               # main: each player's last N games; needs N career games;
-                                    # also players[].theory.last<N> and overview.topPlayersByRoleTheory
-    "shortGames": 50,               # last50: each player's last N games; needs N career games;
-                                    # also players[].theory.last<N>
-    "improvedGames": 50,            # improved: last N games vs the N before them; needs 2N career games
+    "mainGames": 100,               # 位置理論: each player's last N games (players[].theory.last<N>);
+                                    # the position board and overview.topPlayersByPositionTheory need
+                                    # N career games
+    "roleWindowGames": 10,          # 角色理論: each special role's last N games (players[].theory.roleWindows);
+                                    # the main board needs N games in every special role ...
+    "loyalWindowGames": 40,         # ... and N games as 忠臣 (dealt 4 times as often); improved: the
+                                    # windows before those, so 2 x N in every role
+    "overallMinGames": 250,         # 整體理論 (career role theory): the overall board needs N career games
     "assassinAttempts": 20,         # assassin: the last N assassinations as 刺客 (刺客 games that reached 三藍)
     "assassinMinAttempts": 10,
     "newcomerDays": 90,             # newcomers (the exception): first game in the last N days, all their games
@@ -549,8 +599,15 @@ class GameRow:
         "lake3_holder_faction", "lake3_target_faction",
         "lake3_holder_role", "lake3_target_role",
         "game_state", "rounds", "round_results",
-        "text_record",
+        "text_record", "voting_proposals",
         "date", "category", "kill",  # 日期時間 as YYYY-MM-DD or "", 分類, 刺殺 (target seat or "")
+        # 每局資料集保留解析後欄位，統計不再讀取文字記錄；原文僅留作去重指紋。
+        "source",         # 來源分頁（牌譜／Discord 匯入）
+        "slot",           # 當日第幾場；缺值或非數字為 0
+        "note_tags",      # note 白名單標籤，不保留原文
+        "captains",       # 每個任務的隊長座位，缺值為 None，最多五筆
+        "lake_claims",    # 最多三筆湖宣告（持湖、目標、紅／藍／空）
+        "timeline_date",  # 全資料固定的排序日期；None 表示尚未設定
     )
 
 
@@ -583,15 +640,156 @@ def player_name_key(name: object) -> str:
     return " ".join(text.split()).lower()
 
 
+# ---------------------------------------------------------------------------
+# Player aliases (player_aliases.json): the owner says two names are one player
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class PlayerAliases:
+    """Spellings the owner says belong to another player, shown under that player's official name
+    from then on (player_aliases.json, Edward 2026-10-14; real names live only in that file).
+
+    `names`: source spelling -> official spelling (as written, tidied like a 玩1..玩0 cell);
+    `keys`: the same by player_name_key (so every case / width variant of a source counts);
+    `official`: official name's key -> its spelling. identity_key = who a player is with them.
+    Built by parse_player_aliases (the file, strict) or cache_aliases (players.aliases, lenient).
+    """
+
+    names: Mapping[str, str] = field(default_factory=dict)
+    keys: Mapping[str, str] = field(default_factory=dict)
+    official: Mapping[str, str] = field(default_factory=dict)
+
+    def identity_key(self, name: object) -> str:
+        """player_name_key, or the official name's key when the name is an alias source."""
+        key = player_name_key(name)
+        return self.keys.get(key, key)
+
+
+NO_ALIASES = PlayerAliases()
+
+
+def _alias_entry(i: int, source: object, target: object, show_names: bool) -> str:
+    return f"aliases entry {i}" + (f" ({source!r}: {target!r})" if show_names else "")
+
+
+def parse_player_aliases(data: Any, show_names: bool = True) -> PlayerAliases:
+    """The aliases of a player_aliases.json document ({"aliases": {source: official name}}), or
+    ValueError saying what is wrong. Each entry: two non-empty names (spaces and zero-width
+    characters tidied as in 玩1..玩0) that are not already one player (same player_name_key); one
+    official name per source; an official name is no entry's source (no chains: point every old
+    spelling straight at the official name) and is spelled one way. `show_names` False (GitHub
+    Actions, a public log): entries are given by number only."""
+    if not isinstance(data, Mapping):
+        raise ValueError("the top level is not a JSON object")
+    raw = data.get("aliases")
+    if not isinstance(raw, Mapping):
+        raise ValueError('"aliases" is missing or is not an object of "source spelling": "official name"')
+    names: dict[str, str] = {}
+    keys: dict[str, str] = {}
+    official: dict[str, str] = {}
+    for i, (source, target) in enumerate(raw.items(), 1):
+        entry = _alias_entry(i, source, target, show_names)
+        if not isinstance(source, str) or not isinstance(target, str):
+            raise ValueError(f"{entry}: both names must be strings")
+        src, dst = normalize_player_name(source), normalize_player_name(target)
+        src_key, dst_key = player_name_key(src), player_name_key(dst)
+        if not src_key or not dst_key:
+            raise ValueError(f"{entry}: a name is empty")
+        if src_key == dst_key:
+            raise ValueError(f"{entry}: both names are one player already (they differ only by letter case / width)")
+        if keys.get(src_key, dst_key) != dst_key:
+            raise ValueError(f"{entry}: another entry gives this name a different official name")
+        if official.get(dst_key, dst) != dst:
+            raise ValueError(f"{entry}: another entry spells this official name differently; use one spelling")
+        names[src], keys[src_key], official[dst_key] = dst, dst_key, dst
+    for i, (source, target) in enumerate(raw.items(), 1):
+        if player_name_key(normalize_player_name(target)) in keys:
+            raise ValueError(f"{_alias_entry(i, source, target, show_names)}: the official name is itself an alias "
+                             "(the source of another entry); point every old spelling straight at the official name")
+    return PlayerAliases(names=names, keys=keys, official=official)
+
+
+def load_player_aliases(path: Path | None = None, show_names: bool | None = None) -> PlayerAliases:
+    """The aliases in `path` (default ALIASES_PATH, packages/server/player_aliases.json). No file = no
+    aliases; a file that cannot be read or is malformed (parse_player_aliases) is a FatalError (exit 2,
+    nothing written). Names appear in the message only outside GitHub Actions."""
+    path = ALIASES_PATH if path is None else path
+    show = (not _in_github_actions()) if show_names is None else show_names
+    if not path.exists():
+        return NO_ALIASES
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise FatalError(
+            f"{path.name} cannot be read ({type(exc).__name__}: {_short(exc, 120)}); fix the JSON (see its "
+            "_comment) or restore it from git.", EXIT_CONFIG, "Player alias file unreadable",
+        ) from None
+    try:
+        return parse_player_aliases(data, show)
+    except ValueError as exc:
+        raise FatalError(
+            f"{path.name}: {exc}. See its _comment and docs/stats/two_stage_outcome.md (玩家別名).",
+            EXIT_CONFIG, "Player alias file malformed",
+        ) from None
+
+
+@functools.lru_cache(maxsize=None)
+def default_player_aliases() -> PlayerAliases:
+    """load_player_aliases() of the repo's file, read once per process."""
+    return load_player_aliases()
+
+
+def player_identity_key(name: object, aliases: PlayerAliases | None = None) -> str:
+    """Who a player is once the owner's aliases apply: player_name_key, or its official name's key
+    when the name is an alias source ('Tovo Wren' -> 'ilse marr' for {"Tovo Wren": "Ilse Marr"}).
+    `aliases` None = player_aliases.json (default_player_aliases). discord_records_import.py tells
+    players apart by this; canonicalize_player_names groups by it."""
+    return (default_player_aliases() if aliases is None else aliases).identity_key(name)
+
+
+def cache_aliases(*caches: Mapping[str, Any] | None) -> PlayerAliases:
+    """The players.aliases of `caches` ({source: official name}, written by build_cache) as one
+    PlayerAliases, leniently: entries that are not two different non-empty names are skipped, and
+    names linked through several entries (an official name another cache lists as a source, or the
+    owner swapping which name is official) all get one key. For the guards and carry-over, which
+    match an existing cache's names to a new one's: a player merged by an alias lost nobody's games."""
+    names: dict[str, str] = {}
+    for cache in caches:
+        section = cache.get("players") if isinstance(cache, Mapping) else None
+        raw = section.get("aliases") if isinstance(section, Mapping) else None
+        if isinstance(raw, Mapping):
+            names.update((s, t) for s, t in raw.items() if isinstance(s, str) and isinstance(t, str))
+    parent: dict[str, str] = {}
+
+    def root(key: str) -> str:
+        while parent.get(key, key) != key:
+            key = parent[key]
+        return key
+
+    for source, target in names.items():
+        a, b = root(player_name_key(source)), root(player_name_key(target))
+        if a and b and a != b:
+            parent[a] = b
+    keys = {k: root(k) for k in parent}
+    return PlayerAliases(names=names, keys={k: r for k, r in keys.items() if k != r})
+
+
 @dataclass
 class NameMerge:
     """How canonicalize_player_names folded spellings: key -> the spelling shown."""
 
+    # player_name_key -> the spelling shown (an alias source's key: its official name)
     display: dict[str, str] = field(default_factory=dict)
-    spellings: dict[str, int] = field(default_factory=dict)  # key -> distinct spellings seen (>= 1)
+    spellings: dict[str, int] = field(default_factory=dict)  # player_name_key -> distinct spellings seen (>= 1)
     # Games that list one player (one key, e.g. "Nova" and "ｎｏｖａ") on two or more seats: a typo in
     # 玩1..玩0 that the merge turns into one player playing twice. Counted for the log only.
     doubled_games: int = 0
+    # player_aliases.json: the player_name_key of each alias source seen in the games -> its official
+    # name's key (those names now show the official name). Counted for the log only.
+    aliased: dict[str, str] = field(default_factory=dict)
+    # The aliases whose official name is a player of these games ({source: official name}, file
+    # order): build_cache writes them as players.aliases for the readers (bots, API, website search).
+    aliases: dict[str, str] = field(default_factory=dict)
 
     @property
     def merged_players(self) -> int:
@@ -603,6 +801,16 @@ class NameMerge:
         """Spellings folded into another one (= how many fewer players there are)."""
         return sum(n - 1 for n in self.spellings.values() if n > 1)
 
+    @property
+    def aliased_names(self) -> int:
+        """Alias sources (by player_name_key) found in the games: now shown under their official name."""
+        return len(self.aliased)
+
+    @property
+    def aliased_players(self) -> int:
+        """The players those names belong to."""
+        return len(set(self.aliased.values()))
+
     def summary(self) -> str:
         """Counts only (public logs)."""
         if not self.merged_spellings:
@@ -610,24 +818,33 @@ class NameMerge:
         else:
             text = (f"{self.merged_spellings} spelling(s) that differ only by letter case / full- or half-width "
                     f"folded into {self.merged_players} player(s)")
+        if self.aliased:
+            text += (f"; {self.aliased_names} name(s) shown under their official name "
+                     f"({ALIASES_PATH.name}, {self.aliased_players} player(s))")
         if self.doubled_games:
             text += f"; {self.doubled_games} game(s) list one player on two seats (check 玩1..玩0)"
         return text
 
 
-def canonicalize_player_names(games: list[GameRow]) -> tuple[list[GameRow], NameMerge]:
+def canonicalize_player_names(
+    games: list[GameRow], aliases: PlayerAliases = NO_ALIASES,
+) -> tuple[list[GameRow], NameMerge]:
     """`games` with every 玩1..玩0 name replaced by its player's display spelling.
 
-    Names with the same player_name_key are one player. The display spelling is the one written
-    on the most seats of `games` (every game, with or without a 結果), ties going to the one seen
-    first in log order (牌譜 rows, then Discord匯入). Every per-player number (players,
-    playerDetails, leaderboard, seat / role stats, theory) is aggregated from these names, so
-    they all merge the same way. Games whose names change are copied; the input is untouched.
-    Idempotent: canonical games come back unchanged.
+    Names with the same player_identity_key are one player: the same player_name_key (letter case /
+    width), and with `aliases` (player_aliases.json; run() passes load_player_aliases()) an alias
+    source and its official name. The display spelling is the official name when the player has one
+    (the owner's choice beats the most-written spelling), else the one written on the most seats of
+    `games` (every game, with or without a 結果), ties going to the one seen first in log order (牌譜
+    rows, then Discord匯入). Every per-player number (players, playerDetails, leaderboard, seat / role
+    stats, theory) is aggregated from these names, so they all merge the same way. Games whose names
+    change are copied; the input is untouched. Idempotent: canonical games come back unchanged (the
+    same list).
     """
-    counts: dict[str, Counter] = {}
+    counts: dict[str, Counter] = {}  # identity key -> spelling -> seats
+    by_name_key: dict[str, set[str]] = {}  # player_name_key -> spellings
     first_seen: dict[str, int] = {}
-    order = 0
+    aliased: dict[str, str] = {}
     doubled = 0
     for g in games:
         keys: set[str] = set()
@@ -636,28 +853,38 @@ def canonicalize_player_names(games: list[GameRow]) -> tuple[list[GameRow], Name
             name = g.seat_players.get(seat)
             if not name:
                 continue
-            key = player_name_key(name)
+            name_key = player_name_key(name)
+            key = aliases.keys.get(name_key, name_key)
+            if key != name_key:
+                aliased[name_key] = key
             keys.add(key)
             seated += 1
             counts.setdefault(key, Counter())[name] += 1
-            if name not in first_seen:
-                first_seen[name] = order
-                order += 1
+            by_name_key.setdefault(name_key, set()).add(name)
+            first_seen.setdefault(name, len(first_seen))
         doubled += len(keys) < seated
-    merge = NameMerge(doubled_games=doubled)
-    for key, spellings in counts.items():
-        merge.display[key] = min(spellings, key=lambda s: (-spellings[s], first_seen[s]))
-        merge.spellings[key] = len(spellings)
-    if not merge.merged_spellings:
-        return games, merge
+    merge = NameMerge(doubled_games=doubled, aliased=aliased)
+    shown = {
+        key: aliases.official.get(key) or min(spellings, key=lambda s: (-spellings[s], first_seen[s]))
+        for key, spellings in counts.items()
+    }
+    for name_key, spellings in by_name_key.items():
+        merge.display[name_key] = shown[aliases.keys.get(name_key, name_key)]
+        merge.spellings[name_key] = len(spellings)
+    for source_key, key in aliases.keys.items():  # a source missing from the games (a chemistry label)
+        if key in shown:
+            merge.display.setdefault(source_key, shown[key])
+    merge.aliases = {s: t for s, t in aliases.names.items() if aliases.identity_key(s) in shown}
     out: list[GameRow] = []
+    changed = False
     for g in games:
         renamed = {seat: merge.display[player_name_key(name)] for seat, name in g.seat_players.items()}
         if renamed != g.seat_players:
             g = copy.copy(g)
             g.seat_players = renamed
+            changed = True
         out.append(g)
-    return out, merge
+    return (out if changed else games), merge
 
 
 _DATE_RE = re.compile(r"^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2})(?!\d)")
@@ -680,6 +907,66 @@ def parse_game_date(raw: object) -> str:
     except ValueError:
         return ""
     return "" if iso == NO_DATE_PLACEHOLDER else iso
+
+
+def parse_slot(raw: object) -> int:
+    """將當日場次轉為整數；空白或非純數字回傳 0。"""
+    text = unicodedata.normalize("NFKC", str(raw or "")).strip()
+    return int(text) if text.isascii() and text.isdigit() else 0
+
+
+# note 是自由文字，僅輸出賽季、地點與旗標白名單，不輸出事件描述或名字。
+# 以 NFKC 與空白正規化後的完整欄位或固定前綴比對；不接受以人名命名的地點。
+# 古亭週五合併為古亭（沿用 r9 架構決策，仍可由擁有者調整白名單）。
+NOTE_SEASONS = ("S1", "S2", "S3", "S5")
+NOTE_VENUES: dict[str, str] = {  # 完整欄位或事件前綴對應地點標籤
+    "古亭": "古亭", "古亭週五": "古亭", "九號": "九號", "9號": "九號", "台中": "台中", "東門": "東門",
+    "小巨蛋": "小巨蛋", "Discopia星球": "Discopia星球", "台中家": "台中家", "學餐": "學餐",
+    "新竹謎寶": "新竹謎寶", "不鳥谷": "不鳥谷", "政大": "政大",
+}
+NOTE_FLAG_CELLS: dict[str, str] = {
+    "我旁觀": "spectated", "旁觀": "spectated", "不是我打的": "notRecorderGame", "覆盤局": "review", "爛局": "badGame",
+}
+NOTE_LAKE_CORRECTED_MARK = "[2025/8/14 update]湖女"  # 後來更正該局湖欄的標記
+NOTE_FLAGS = ("spectated", "notRecorderGame", "review", "badGame", "lakeCorrected", "substitution", "incident")
+# 標籤順序固定；隱私守門要求資料集 vocab.noteTags 與此完全相同。
+NOTE_TAG_VOCAB: tuple[str, ...] = (
+    *(f"season:{s}" for s in NOTE_SEASONS),
+    *dict.fromkeys(f"venue:{v}" for v in NOTE_VENUES.values()),
+    *(f"flag:{f}" for f in NOTE_FLAGS),
+)
+_NOTE_INCIDENT_RE = re.compile(r"^\[\d-\d\]")  # 固定事件前綴；只保留旗標
+
+
+def parse_note_tags(raw: object) -> tuple[str, ...]:
+    """將 note 轉為 NOTE_TAG_VOCAB 白名單標籤，不回傳任何原文。
+
+    完整欄位可識別賽季、地點與記錄者旗標；湖修正標記可出現在任意位置。
+    事件格式只保留 incident 旗標，含代打時另標 substitution；其他文字全部捨棄。"""
+    text = " ".join(_INVISIBLE_CHARS_RE.sub("", unicodedata.normalize("NFKC", str(raw or ""))).split())
+    if not text:
+        return ()
+    tags: set[str] = set()
+    if NOTE_LAKE_CORRECTED_MARK in text:
+        tags.add("flag:lakeCorrected")
+        text = text.replace(NOTE_LAKE_CORRECTED_MARK, "").strip()
+    if "代打" in text:
+        tags.add("flag:substitution")
+    if text in NOTE_SEASONS:
+        tags.add(f"season:{text}")
+    elif text in NOTE_VENUES:
+        tags.add(f"venue:{NOTE_VENUES[text]}")
+    elif text in NOTE_FLAG_CELLS:
+        tags.add(f"flag:{NOTE_FLAG_CELLS[text]}")
+    else:
+        venue = next((v for v in sorted(NOTE_VENUES, key=len, reverse=True)
+                      if text.startswith(v) and _NOTE_INCIDENT_RE.match(text[len(v):])), None)
+        if venue is not None:
+            tags.add(f"venue:{NOTE_VENUES[venue]}")
+            tags.add("flag:incident")
+        elif _NOTE_INCIDENT_RE.match(text):
+            tags.add("flag:incident")
+    return tuple(t for t in NOTE_TAG_VOCAB if t in tags)
 
 
 def resolve_as_of(env: Mapping[str, str] | None = None, today: dt.date | None = None) -> dt.date:
@@ -796,6 +1083,8 @@ class GameLogMerge:
     extra_duplicates: int = 0  # dropped: fingerprint or 流水號 already seen (牌譜 wins)
     # (更新時間 as YYYY-MM-DD or "", fingerprint, kept) of every readable Discord匯入 game, in order.
     extra_log: list[tuple[str, str, bool]] = field(default_factory=list)
+    # 只供同一工作流程的暫存匯出；表頭在首列，資料列與 games 一一對應。
+    raw_rows: list[list[str]] = field(default_factory=list, repr=False)
 
     def rewritten_since(self, day: dt.date | None) -> tuple[int, int]:
         """(Discord匯入 rows rewritten from an edited post on or after `day` -- all of them when `day`
@@ -820,8 +1109,19 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
 
     牌譜 rows are never deduplicated among themselves (as before this tab existed).
     """
-    games = parse_game_log(main_rows)
-    merged = GameLogMerge(games=games, main_games=len(games))
+    main_kept: list[list[str]] = []
+    games = parse_game_log(main_rows, kept_rows=main_kept)
+    headers = list(dict.fromkeys((h or "").strip() for rows in (main_rows, extra_rows)
+                                 if rows for h in rows[0]))
+
+    def align(rows: list[list[str]], row: list[str]) -> list[str]:
+        values: dict[str, str] = {}
+        for i, header in enumerate(rows[0]):
+            values.setdefault((header or "").strip(), row[i] if i < len(row) else "")
+        return [values.get(header, "") for header in headers]
+
+    merged = GameLogMerge(games=games, main_games=len(games),
+                          raw_rows=[headers] + [align(main_rows, row) for row in main_kept])
     if not extra_rows:
         return merged
     header = [(h or "").strip() for h in extra_rows[0]]
@@ -834,7 +1134,8 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
                 updated[(row[gid] or "").strip()] = day
     seen_fp = {record_fingerprint(g.config, g.text_record) for g in games}
     seen_id = {g.id for g in games}
-    for g in parse_game_log(extra_rows):
+    extra_kept: list[list[str]] = []
+    for g, row in zip(parse_game_log(extra_rows, GAME_SOURCE_DISCORD, kept_rows=extra_kept), extra_kept):
         merged.extra_games += 1
         fp = record_fingerprint(g.config, g.text_record)
         kept = fp not in seen_fp and g.id not in seen_id
@@ -845,15 +1146,48 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
         seen_fp.add(fp)
         seen_id.add(g.id)
         games.append(g)
+        merged.raw_rows.append(align(extra_rows, row))
         merged.extra_added += 1
     return merged
 
 
-def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
-    """牌譜 rows (header first, as gspread's get_all_values returns them) -> games.
+def _set_first_team(g: GameRow, seats: list[str]) -> None:
+    """從首隊座位字元與已解碼角色設定 GameRow.r11_*。"""
+    g.r11_seats = seats
+    g.r11_roles = [g.seat_roles.get(s, "?") for s in g.r11_seats]
+    g.r11_red_count = sum(1 for r in g.r11_roles if r in RED_ROLES)
+    g.r11_blue_count = sum(1 for r in g.r11_roles if r in BLUE_ROLES)
+    g.r11_has_merlin = "梅林" in g.r11_roles
+    g.r11_has_percival = "派西維爾" in g.r11_roles
 
-    Rows without 流水號 or without a 6-character 配置 are skipped.
-    """
+
+def _lake_factions(lake_parsed: tuple[str, str] | None, seat_roles: Mapping[str, str]) -> tuple[str, str, str, str]:
+    """由湖鏈回傳持湖者與目標的陣營、角色。"""
+    if lake_parsed is None:
+        return ("", "", "", "")
+    h_role = seat_roles.get(lake_parsed[0], "")
+    t_role = seat_roles.get(lake_parsed[1], "")
+    return (
+        role_faction(h_role) if h_role else "",
+        role_faction(t_role) if t_role else "",
+        h_role,
+        t_role,
+    )
+
+
+def _set_lakes(g: GameRow, *lakes: tuple[str, str] | None) -> None:
+    """設定三條湖鏈及其持湖者／目標的陣營與角色。"""
+    g.lake1, g.lake2, g.lake3 = lakes
+    g.lake1_holder_faction, g.lake1_target_faction, g.lake1_holder_role, g.lake1_target_role = _lake_factions(g.lake1, g.seat_roles)
+    g.lake2_holder_faction, g.lake2_target_faction, g.lake2_holder_role, g.lake2_target_role = _lake_factions(g.lake2, g.seat_roles)
+    g.lake3_holder_faction, g.lake3_target_faction, g.lake3_holder_role, g.lake3_target_role = _lake_factions(g.lake3, g.seat_roles)
+
+
+def parse_game_log(rows: list[list[str]], source: int = GAME_SOURCE_SHEET, *, kept_rows: list[list[str]] | None = None) -> list[GameRow]:
+    """牌譜列（含表頭）轉為對局；缺流水號或配置不是六字元的列略過。
+
+    source 記錄來源分頁。文字記錄只在此解析為隊長、湖宣告與投票；note 轉為白名單標籤。
+    kept_rows 若提供，會接收實際保留的原始列，供同次流程的暫存匯出使用。"""
     if len(rows) < 2:
         return []
 
@@ -897,6 +1231,7 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
             if name:
                 g.seat_players[seat] = name
         g.text_record = col(row, "文字記錄")
+        g.voting_proposals = parse_voting_proposals(g.text_record)
         g.outcome = col(row, "結果").strip()
         g.red_win = g.outcome == "三紅"
         g.blue_win = g.outcome in ("三藍死", "三藍活")
@@ -904,12 +1239,7 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
 
         # 1-1 team
         r11_str = col(row, "1-1")
-        g.r11_seats = list(r11_str) if r11_str else []
-        g.r11_roles = [g.seat_roles.get(s, "?") for s in g.r11_seats]
-        g.r11_red_count = sum(1 for r in g.r11_roles if r in RED_ROLES)
-        g.r11_blue_count = sum(1 for r in g.r11_roles if r in BLUE_ROLES)
-        g.r11_has_merlin = "梅林" in g.r11_roles
-        g.r11_has_percival = "派西維爾" in g.r11_roles
+        _set_first_team(g, list(r11_str) if r11_str else [])
 
         # Missions
         g.missions = []
@@ -925,29 +1255,7 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
             })
 
         # Lake
-        def lake_factions(lake_parsed, seat_roles):
-            if lake_parsed is None:
-                return ("", "", "", "")
-            h_role = seat_roles.get(lake_parsed[0], "")
-            t_role = seat_roles.get(lake_parsed[1], "")
-            return (
-                role_faction(h_role) if h_role else "",
-                role_faction(t_role) if t_role else "",
-                h_role,
-                t_role,
-            )
-
-        g.lake1 = parse_lake(col(row, "首湖"))
-        g.lake2 = parse_lake(col(row, "二湖"))
-        g.lake3 = parse_lake(col(row, "三湖"))
-
-        l1 = lake_factions(g.lake1, g.seat_roles)
-        l2 = lake_factions(g.lake2, g.seat_roles)
-        l3 = lake_factions(g.lake3, g.seat_roles)
-
-        g.lake1_holder_faction, g.lake1_target_faction, g.lake1_holder_role, g.lake1_target_role = l1
-        g.lake2_holder_faction, g.lake2_target_faction, g.lake2_holder_role, g.lake2_target_role = l2
-        g.lake3_holder_faction, g.lake3_target_faction, g.lake3_holder_role, g.lake3_target_role = l3
+        _set_lakes(g, parse_lake(col(row, "首湖")), parse_lake(col(row, "二湖")), parse_lake(col(row, "三湖")))
 
         g.game_state = col(row, "局勢")
         g.rounds = [col(row, n) for n in round_names]
@@ -955,8 +1263,16 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
         g.date = parse_game_date(col(row, "日期時間"))
         g.category = col(row, "分類").strip()
         g.kill = col(row, "刺殺").strip()
+        g.source = source
+        g.slot = parse_slot(col(row, "場次"))
+        g.note_tags = parse_note_tags(col(row, "note"))
+        g.captains = tuple(_parse_captain_per_mission(g.text_record)[:5])
+        g.lake_claims = tuple(parse_lake_claims(g.text_record)[:3])
+        g.timeline_date = None
 
         game_rows.append(g)
+        if kept_rows is not None:
+            kept_rows.append(row)
 
     return game_rows
 
@@ -1008,12 +1324,26 @@ def parse_game_log(rows: list[list[str]]) -> list[GameRow]:
 #                    using the published (1-decimal) global rates, so anyone can recompute it
 #                    from the cache alone; excessWinRate = finalWinRate - expectedFinalWinRate
 #   firstPlayed / lastPlayed = earliest / latest parsed 日期時間 of the counted games ('' if none)
-#   theory           = {"last100", "last50", "career"} (last<N> for N in theory_windows() = mainGames,
-#                    shortGames): theory_window over the player's last N games / all of them
-#                    (compute_player_stats; appended after the fields above)
+#   roleOutcomes     = {role: {"三紅": n, "三藍死": n, "三藍活": n}} for every role (career counts;
+#                    schemaVersion 4): what the conditional outcome blocks (任務結果 / 刺殺結果 /
+#                    遊戲結果, @avalon/shared outcomeBlocks) are computed from per role
+#   theory           = {"roleWindows", "last100", "career"} (schemaVersion 4; last<N> for N in
+#                    theory_windows() = mainGames): role_window_theory over each role's own last games,
+#                    theory_window over the player's last N games / all of them (compute_player_stats;
+#                    appended after the fields above)
 
 def _rate(count: float, total: float) -> float:
     return rnd1(count / total * 100) if total else 0.0
+
+
+def _sum_ltr(values: Iterable[float]) -> float:
+    """浮點數由左到右加總，固定採 Python 3.11 的行為。
+
+    Python 3.12 的補償加總可能改變最後一個位元，因此與 TS 引擎都明確使用此順序。"""
+    total = 0.0
+    for v in values:
+        total += v
+    return total
 
 
 def is_final_win(role: str, outcome: str) -> bool:
@@ -1086,7 +1416,7 @@ class _PlayerTally:
         role_win_rates = {r: _rate(self.role_wins[r], self.role_games[r]) for r in ALL_ROLES}
         role_distribution = {r: _rate(self.role_games[r], total) for r in ALL_ROLES}
         # Same expression (order and rounding) as the rebuild; see the block comment above.
-        role_theory = rnd1(sum(role_distribution[r] * role_win_rates[r] for r in ALL_ROLES) / 100)
+        role_theory = rnd1(_sum_ltr(role_distribution[r] * role_win_rates[r] for r in ALL_ROLES) / 100)
 
         def outcomes(faction: str, outcome: str) -> int:
             return self.faction_outcomes[(faction, outcome)]
@@ -1105,7 +1435,7 @@ class _PlayerTally:
         expected: float | None = None
         excess: float | None = None
         if role_final_rates is not None and total:
-            expected = rnd1(sum(self.role_games[r] * float(role_final_rates.get(r, 0.0)) for r in ALL_ROLES) / total)
+            expected = rnd1(_sum_ltr(self.role_games[r] * float(role_final_rates.get(r, 0.0)) for r in ALL_ROLES) / total)
             excess = rnd1(final_win_rate - expected)
 
         return {
@@ -1157,6 +1487,8 @@ class _PlayerTally:
             "excessWinRate": excess,
             "firstPlayed": self.first_date,
             "lastPlayed": self.last_date,
+            # schemaVersion 4: per-role 三紅 / 三藍死 / 三藍活 counts (the conditional outcome blocks).
+            "roleOutcomes": {r: {o: self.role_outcomes[(r, o)] for o in OUTCOMES} for r in ALL_ROLES},
         }
 
 
@@ -1218,8 +1550,15 @@ def compute_seat_final_win_rates(games: list[GameRow]) -> dict[str, float]:
 #   seatFinalWinRates (the published 1-decimal values); a cell with no game is the population
 #   rate. sparseRoles / sparseSeats say how many cells were topped up.
 #   The sums are exact (fractions) and rounded once, half to even like rnd1.
-#   Windows: the player's last N games for N in theory_windows() = (mainGames, shortGames) (all of
-#   them when they have fewer; `games` says how many) and career. Games are ordered by player_timelines.
+#   Windows (schemaVersion 4, Edward 2026-10-14), games ordered by player_timelines:
+#     roleWindows  角色理論: in each role r its own last K_r games (role_window_theory; K_r =
+#                  roleWindowGames for the six special roles, loyalWindowGames for 忠臣 -- a special
+#                  role comes up about once in 10 games, so a last-N-games window holds too few of it);
+#                  all of them when the player has fewer, then the top-up above. fullWindows = every
+#                  role has K_r games: what any role-theory ranking requires.
+#     last<N>      位置理論 (and the window's final win rate): the last N = mainGames games
+#                  (theory_window; all of them when the player has fewer; `games` says how many).
+#     career       整體理論 = the role theory of the whole career (and its position theory).
 
 @dataclass(frozen=True)
 class PlayerSeat:
@@ -1236,6 +1575,8 @@ def player_timelines(games: list[GameRow]) -> dict[str, list[PlayerSeat]]:
     Order: by 日期時間, then by position in the merged game log (牌譜 rows, then Discord匯入).
     A game without a usable date sorts with the closest dated game above it in the log; the
     undated rows at the top of 牌譜 (games recorded before dates were) sort before everything.
+    A game whose timeline_date was set (assign_timeline_dates, over all games) sorts by that date
+    instead, so a subset of the games (a filter) keeps every game where it was.
     """
     keyed: list[tuple[tuple[str, int], GameRow]] = []
     last_date = ""
@@ -1243,7 +1584,8 @@ def player_timelines(games: list[GameRow]) -> dict[str, list[PlayerSeat]]:
         if g.date:
             last_date = g.date
         if g.outcome in OUTCOMES:
-            keyed.append(((g.date or last_date, i), g))
+            fixed = getattr(g, "timeline_date", None)
+            keyed.append(((fixed if fixed is not None else (g.date or last_date), i), g))
     keyed.sort(key=lambda kg: kg[0])
     out: dict[str, list[PlayerSeat]] = {}
     for _, g in keyed:
@@ -1251,6 +1593,22 @@ def player_timelines(games: list[GameRow]) -> dict[str, list[PlayerSeat]]:
             name = g.seat_players.get(seat)
             if name:
                 out.setdefault(name, []).append(PlayerSeat(g.seat_roles[seat], seat, g.outcome, g.date))
+    return out
+
+
+def assign_timeline_dates(games: list[GameRow]) -> list[GameRow]:
+    """複製對局並設定排序日期：有日期用該日，缺日期沿用前一筆有日期的對局，最前方為空。
+
+    先在全部對局（含缺結果）上固定日期，避免篩選掉上一筆對局後排序位移。
+    run 在日期檢查與名字正規化之後呼叫；資料集解碼採相同規則。"""
+    out: list[GameRow] = []
+    last_date = ""
+    for g in games:
+        if g.date:
+            last_date = g.date
+        g = copy.copy(g)
+        g.timeline_date = g.date or last_date
+        out.append(g)
     return out
 
 
@@ -1322,35 +1680,85 @@ def theory_key(window: int) -> str:
 
 
 def theory_windows(cfg: Mapping[str, Any] | None = None) -> list[int]:
-    """The players' last-N theory windows: [mainGames, shortGames] (one entry when they are equal).
-    Derived, so the windows always match the main / last50 boards; written to leaderboard.config
-    and overview.theoryConfig as `theoryWindows` for the readers."""
+    """The players' last-N theory windows: [mainGames] (位置理論; schemaVersion 3 also had
+    shortGames = 50, dropped 2026-10-14 as too few games). Derived, so the window always matches the
+    position board; written to leaderboard.config and overview.theoryConfig as `theoryWindows`."""
     cfg = LEADERBOARD_CONFIG if cfg is None else cfg
-    out: list[int] = []
-    for n in (int(cfg["mainGames"]), int(cfg["shortGames"])):
-        if n > 0 and n not in out:
-            out.append(n)
-    return out
+    n = int(cfg["mainGames"])
+    return [n] if n > 0 else []
+
+
+def role_window_games(cfg: Mapping[str, Any] | None = None) -> dict[str, int]:
+    """K_r per role, ALL_ROLES order: loyalWindowGames for 忠臣, roleWindowGames for the others."""
+    cfg = LEADERBOARD_CONFIG if cfg is None else cfg
+    return {r: int(cfg["loyalWindowGames"] if r == "忠臣" else cfg["roleWindowGames"]) for r in ALL_ROLES}
 
 
 def theory_config(cfg: Mapping[str, Any] | None = None) -> dict:
     """overview.theoryConfig: what the site needs to word the theory rates (top-up threshold and
-    window sizes) without hard-coding them; the bots read the same values from leaderboard.config."""
+    window sizes) without hard-coding them; the bots read the same values from leaderboard.config.
+    NB roleWindowGames is the per-role map here ({role: K_r}); leaderboard.config, a copy of
+    LEADERBOARD_CONFIG, has the two knobs roleWindowGames / loyalWindowGames instead."""
     cfg = LEADERBOARD_CONFIG if cfg is None else cfg
     return {
         "theoryMinCellGames": int(cfg["theoryMinCellGames"]),
         "theoryWindows": theory_windows(cfg),
         "mainGames": int(cfg["mainGames"]),
         "activeDays": int(cfg["activeDays"]),
+        "roleWindowGames": role_window_games(cfg),
+        "positionGames": int(cfg["mainGames"]),
+        "overallMinGames": int(cfg["overallMinGames"]),
+    }
+
+
+def role_window_theory(
+    seats: Sequence[PlayerSeat], role_rates: Mapping[str, float], min_cell: int | None = None, previous: bool = False,
+) -> dict:
+    """players[].theory.roleWindows: 角色理論 over each role's own last K_r games (role_window_games).
+
+    `previous`: the K_r games before those in each role instead (the improved board's baseline).
+    Per role, `games` / `wins` are the games used and their final wins, `window` is K_r and `rate`
+    the cell's final win % that goes into the sum (topped up like theory_window when games <
+    theoryMinCellGames; the population rate when 0), rounded to one decimal. `games` = Σ games used,
+    `fullWindows` = every role has K_r of them, `from` / `to` = first / last dated game used.
+    """
+    if min_cell is None:
+        min_cell = LEADERBOARD_CONFIG["theoryMinCellGames"]
+    windows = role_window_games()
+    by_role: dict[str, list[PlayerSeat]] = {r: [] for r in ALL_ROLES}
+    for s in seats:
+        by_role[s.role].append(s)
+    m = max(min_cell, 1)
+    total = Fraction(0)
+    roles: dict[str, dict] = {}
+    used: list[PlayerSeat] = []
+    for r in ALL_ROLES:
+        k = windows[r]
+        in_role = by_role[r]
+        picked = (in_role[-2 * k:-k] if len(in_role) > k else []) if previous else in_role[-k:]
+        wins = sum(1 for s in picked if is_final_win(s.role, s.outcome))
+        cell = _cell_rate(wins, len(picked), float(role_rates.get(r, 0.0)), min_cell)
+        total += Fraction(ROLE_DEAL_TENTHS[r], 10) * cell
+        roles[r] = {"games": len(picked), "wins": wins, "window": k, "rate": _round_exact(cell)}
+        used += picked
+    dated = [s.date for s in used if s.date]
+    return {
+        "roleTheory": _round_exact(total),
+        "fullWindows": all(roles[r]["games"] >= windows[r] for r in ALL_ROLES),
+        "games": len(used),
+        "sparseRoles": sum(1 for r in ALL_ROLES if roles[r]["games"] < m),
+        "from": min(dated) if dated else "",
+        "to": max(dated) if dated else "",
+        "roles": roles,
     }
 
 
 def player_theory(seats: Sequence[PlayerSeat], role_rates: Mapping[str, float], seat_rates: Mapping[str, float]) -> dict:
-    """players[].theory: {"last100": ..., "last50": ..., "career": ...} (theory_windows(), then career)."""
-    out = {
-        theory_key(n): theory_window(seats[-n:], role_rates, seat_rates, window=n)
-        for n in theory_windows()
-    }
+    """players[].theory: {"roleWindows": ..., "last100": ..., "career": ...} (role_window_theory, the
+    theory_windows(), then career)."""
+    out: dict[str, dict] = {"roleWindows": role_window_theory(seats, role_rates)}
+    for n in theory_windows():
+        out[theory_key(n)] = theory_window(seats[-n:], role_rates, seat_rates, window=n)
     out["career"] = theory_window(seats, role_rates, seat_rates, window=0)
     return out
 
@@ -1360,10 +1768,12 @@ def compute_player_stats(games: list[GameRow]) -> list[dict]:
     role_final_rates = compute_role_final_win_rates(games)
     seat_final_rates = compute_seat_final_win_rates(games)
     timelines = player_timelines(games)
+    voting = compute_player_voting(games)
     rows = []
     for name, t in _player_tallies(games).items():
         row = t.to_row(name, role_final_rates)
         row["theory"] = player_theory(timelines.get(name, []), role_final_rates, seat_final_rates)
+        row["voting"] = voting[name]
         rows.append(row)
     rows.sort(key=lambda r: -r["totalGames"])  # stable: ties keep first-appearance order
     return rows
@@ -1793,16 +2203,19 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
             {"name": p["name"], "roleTheory": p["roleTheory"], "winRate": p["winRate"], "games": p["totalGames"]}
             for p in top_by_theory
         ],
+        # schemaVersion 4 adds each player's 三紅 / 三藍死 / 三藍活 counts (all their games, either side)
+        # and their red / blue games (the overview's 「三種結果 + 場次」 pies).
         "topPlayersByGames": [
-            {"name": p["name"], "games": p["totalGames"], "winRate": p["winRate"]}
+            {"name": p["name"], "games": p["totalGames"], "winRate": p["winRate"], **player_game_outcomes(p)}
             for p in top_by_games
         ],
         # Seat position win rates (replaces useless per-role win rate comparison)
         "seatPositionWinRates": compute_seat_position_win_rates(games),
         # Two-stage outcome (docs/stats/two_stage_outcome.md). The keys above keep the
         # mission-stage rule (三藍死 = blue win); these use the final result. 3 = the theory
-        # win rates (players[].theory, seatFinalWinRates, topPlayersByRoleTheory, leaderboard).
-        "schemaVersion": 3,
+        # win rates (players[].theory, seatFinalWinRates, topPlayersByRoleTheory, leaderboard);
+        # 4 = per-role theory windows, roleOutcomes, the position / overall rankings (2026-10-14).
+        "schemaVersion": CACHE_SCHEMA_VERSION,
         "missionStage": {
             "games": settled, "threeRed": three_red, "threeBlue": three_blue,
             "redPct": _rate(three_red, settled), "bluePct": _rate(three_blue, settled),
@@ -1825,29 +2238,95 @@ def compute_overview(games: list[GameRow], players: list[dict]) -> dict:  # noqa
             for p in ranked_by_excess[:10]
         ],
         # schemaVersion 3 (theory win rates, Edward 2026-10-13): the population final win rate per
-        # seat (the sparse-cell top-up of positionTheory) and the all-time role-theory ranking.
+        # seat (the sparse-cell top-up of positionTheory) and the all-time theory rankings (4: role
+        # theory over the per-role windows, plus the position and overall rankings).
         "seatFinalWinRates": compute_seat_final_win_rates(games),
         "topPlayersByRoleTheory": top_players_by_role_theory(players),
         # The settings the site words the theory rates with (top-up threshold, windows).
         "theoryConfig": theory_config(),
+        "topPlayersByPositionTheory": top_players_by_position_theory(players),
+        "topPlayersByOverallTheory": top_players_by_overall_theory(players),
     }
 
 
+def player_game_outcomes(p: Mapping[str, Any]) -> dict:
+    """{"outcomes": {"三紅", "三藍死", "三藍活"}, "redGames", "blueGames"} of a players row, from its raw
+    counts (both sides: 三紅 = red 三紅 + blue 三紅, ...); 0 for a row without them."""
+    def raw(key: str) -> int:
+        value = p.get(key)
+        return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+    return {
+        "outcomes": {
+            OUTCOME_THREE_RED: raw("rawRedThreeRed") + raw("rawBlueThreeRed"),
+            OUTCOME_BLUE_DEAD: raw("rawRedMerlinDead") + raw("rawBlueMerlinDead"),
+            OUTCOME_BLUE_ALIVE: raw("rawRedMerlinAlive") + raw("rawBlueMerlinAlive"),
+        },
+        "redGames": raw("rawRedGames"),
+        "blueGames": raw("rawBlueGames"),
+    }
+
+
+def _theory_block(p: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:
+    block = (p.get("theory") or {}).get(key) if isinstance(p.get("theory"), Mapping) else None
+    return block if isinstance(block, Mapping) else None
+
+
+def _ranked_overview(rows: list[tuple[float, dict]], top_n: int) -> list[dict]:
+    """Rows (sort value, row) ordered by value (high first), then career games, then name."""
+    rows.sort(key=lambda vr: (-vr[0], -vr[1]["careerGames"], vr[1]["name"]))
+    return [row for _, row in rows[:top_n]]
+
+
 def top_players_by_role_theory(players: list[dict]) -> list[dict]:
-    """overview.topPlayersByRoleTheory: every player with at least mainGames career games, active
-    or not, ranked by the roleTheory of their last mainGames games (then career games, then name)."""
+    """overview.topPlayersByRoleTheory: every player with full role windows (fullWindows: K_r games in
+    every role), active or not, ranked by the role theory over those windows (then career games, then
+    name). positionTheory / finalWinRate are their last mainGames games', overallTheory the career
+    role theory; games = games in the role windows."""
+    key = theory_key(LEADERBOARD_CONFIG["mainGames"])
+    rows = []
+    for p in players:
+        rw, last, career = _theory_block(p, "roleWindows"), _theory_block(p, key), _theory_block(p, "career")
+        if not (rw and last and career and rw.get("fullWindows")):
+            continue
+        rows.append((rw["roleTheory"], {
+            "name": p["name"], "roleTheory": rw["roleTheory"], "positionTheory": last["positionTheory"],
+            "overallTheory": career["roleTheory"], "finalWinRate": last["finalWinRate"], "games": rw["games"],
+            "careerGames": int(p["totalGames"]),
+        }))
+    return _ranked_overview(rows, LEADERBOARD_CONFIG["topN"])
+
+
+def top_players_by_position_theory(players: list[dict]) -> list[dict]:
+    """overview.topPlayersByPositionTheory: every player with at least mainGames career games, active or
+    not, ranked by the position theory of their last mainGames games."""
     n = LEADERBOARD_CONFIG["mainGames"]
-    key = theory_key(n)
-    eligible = [
-        p for p in players
-        if p["totalGames"] >= n and isinstance((p.get("theory") or {}).get(key), Mapping)
-    ]
-    eligible.sort(key=lambda p: (-p["theory"][key]["roleTheory"], -p["totalGames"], p["name"]))
-    return [
-        {"name": p["name"], "roleTheory": w["roleTheory"], "positionTheory": w["positionTheory"],
-         "finalWinRate": w["finalWinRate"], "games": w["games"], "careerGames": int(p["totalGames"])}
-        for p, w in ((p, p["theory"][key]) for p in eligible[:LEADERBOARD_CONFIG["topN"]])
-    ]
+    rows = []
+    for p in players:
+        last = _theory_block(p, theory_key(n))
+        if last is None or p["totalGames"] < n:
+            continue
+        rows.append((last["positionTheory"], {
+            "name": p["name"], "positionTheory": last["positionTheory"], "finalWinRate": last["finalWinRate"],
+            "games": last["games"], "careerGames": int(p["totalGames"]),
+        }))
+    return _ranked_overview(rows, LEADERBOARD_CONFIG["topN"])
+
+
+def top_players_by_overall_theory(players: list[dict]) -> list[dict]:
+    """overview.topPlayersByOverallTheory: every player with at least overallMinGames career games, active
+    or not, ranked by 整體理論 = the role theory of their whole career; positionTheory / finalWinRate are
+    the career ones too."""
+    rows = []
+    for p in players:
+        career = _theory_block(p, "career")
+        if career is None or p["totalGames"] < LEADERBOARD_CONFIG["overallMinGames"]:
+            continue
+        rows.append((career["roleTheory"], {
+            "name": p["name"], "overallTheory": career["roleTheory"], "positionTheory": career["positionTheory"],
+            "finalWinRate": career["finalWinRate"], "games": career["games"], "careerGames": int(p["totalGames"]),
+        }))
+    return _ranked_overview(rows, LEADERBOARD_CONFIG["topN"])
 
 
 def compute_missions(games: list[GameRow]) -> dict:
@@ -2417,10 +2896,16 @@ def compute_rounds(games: list[GameRow]) -> dict:
     }
 
 
-def compute_players_endpoint(players: list[dict]) -> dict:
-    """The players section: GET /api/analysis/players serves {players, total}; seatOutcomesSource
-    marks the rows' seatOutcomes as counted from their own games (compute_seat_outcomes_per_player)."""
-    return {"players": players, "total": len(players), SEAT_OUTCOMES_SOURCE_KEY: OUTCOME_SOURCE_GAMES}
+def compute_players_endpoint(players: list[dict], aliases: Mapping[str, str] | None = None) -> dict:
+    """The players section: GET /api/analysis/players serves {players, total, aliases}; seatOutcomesSource
+    marks the rows' seatOutcomes as counted from their own games (compute_seat_outcomes_per_player).
+    `aliases` (NameMerge.aliases: {source spelling: official name} of player_aliases.json, only those
+    whose official name is one of `players`) is written as players.aliases when there are any, so the
+    bots, the API and the website find a player by an old name without reading the alias file."""
+    section = {"players": players, "total": len(players), SEAT_OUTCOMES_SOURCE_KEY: OUTCOME_SOURCE_GAMES}
+    if aliases:
+        section[PLAYER_ALIASES_KEY] = dict(aliases)
+    return section
 
 
 def compute_player_details(players: list[dict]) -> dict[str, dict]:
@@ -2481,8 +2966,8 @@ def _parse_captain_per_mission(text_record: str) -> list[str | None]:
 def compute_captain_analysis(games: list[GameRow]) -> dict:
     """Compute captain faction vs mission outcome statistics.
 
-    For each game we parse the 文字記錄 (text_record stored in GameRow) and
-    identify which seat captained each mission.  We then map the seat to its
+    For each game the 文字記錄 tells which seat captained each mission (GameRow.captains,
+    parsed by parse_game_log).  We then map the seat to its
     role and faction (red / blue).
 
     Two output tables:
@@ -2501,15 +2986,8 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
     faction_outcome_total: dict[str, int] = defaultdict(int)
 
     for g in games:
-        # text_record must be fetched from the raw sheet; GameRow doesn't store
-        # it directly.  We attach it in load_game_log below via a new attribute.
-        text_record: str = getattr(g, "text_record", "") or ""
-        if not text_record:
-            continue
-
-        captains = _parse_captain_per_mission(text_record)
-
-        for m_idx, captain_seat in enumerate(captains):
+        # 隊長在解析牌譜時已算好；資料集沒有原文，也能取得完全相同的座位。
+        for m_idx, captain_seat in enumerate(g.captains):
             if m_idx >= 5:
                 break
             if captain_seat is None:
@@ -2567,11 +3045,7 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
     # blue wins together (Edward 2026-04-26: 三紅 / 三藍死 / 三藍活 split).
     faction_mission_games: dict[tuple[str, bool], list[GameRow]] = defaultdict(list)
     for g in games:
-        text_record = getattr(g, "text_record", "") or ""
-        if not text_record:
-            continue
-        captains = _parse_captain_per_mission(text_record)
-        for m_idx, captain_seat in enumerate(captains):
+        for m_idx, captain_seat in enumerate(g.captains):
             if m_idx >= 5 or captain_seat is None:
                 continue
             role = g.seat_roles.get(captain_seat, "忠臣")
@@ -2619,17 +3093,27 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
 # Only games whose 結果 is in OUTCOMES count, like the players rows; a player is the normalized
 # 玩1..玩0 string (case kept, as everywhere else).
 #
-#   main        roleTheory of the last mainGames games; active, >= mainGames career games
-#   last50      the same over the last shortGames games; active, >= shortGames career games
-#   improved    roleTheory of the last improvedGames games minus that of the improvedGames games
-#               before them; active, >= 2 x improvedGames career games; improvers only
+# schemaVersion 4 (Edward 2026-10-14): 角色理論 over each role's own last K_r games (K_r =
+# roleWindowGames, loyalWindowGames for 忠臣; role_window_theory), 位置理論 over the last mainGames
+# games, 整體理論 = the career role theory. The last-50-games board is gone (too few games).
+#
+#   main        角色理論 over the per-role windows; active, fullWindows (K_r games in every role)
+#   position    位置理論 of the last mainGames games; active, >= mainGames career games
+#   overall     整體理論 (career role theory); active, >= overallMinGames career games
+#   improved    角色理論 over the per-role windows minus that over the K_r games before them in each
+#               role; active, >= 2 x K_r games in every role; improvers only
 #   assassin    hit rate over the last assassinAttempts assassinations as 刺客 (刺客 games that
 #               reached 三藍); active, >= assassinMinAttempts of them
-#   newcomers   first game within newcomerDays, every game dated, >= newcomerMinGames: all games
-#   roleTitles  per role, the active player (>= roleTitleMinGames career games in it) with the best
-#               final win rate over their last roleTitleGames games in it
-# value = the board's sort key (roleTheory, the difference, the hit rate, the final win rate);
-# rows are ordered by value, then games, then career games (more first), then name.
+#   newcomers   first game within newcomerDays, every game dated, >= newcomerMinGames: 角色理論 over
+#               the per-role windows of their games (few games: windows not full, cells topped up)
+#   roleTitles  per role, the active players (>= roleTitleMinGames career games in it) with the best
+#               final win rate over their last roleTitleGames games in it: every player tied at that
+#               (rounded) rate gets the title (Edward 2026-10-14「各給」), so a role can have several
+#               rows -- roles in ALL_ROLES order, a role's holders by games, then career games in the
+#               role (more first), then name; not cut to topN
+# value = the board's sort key (the theory rate, the difference, the hit rate, the final win rate);
+# rows are ordered by value, then games, then career games (more first), then name. `rank` is the
+# row number (1..n) on every board; on roleTitles it is only the row's position, not a ranking.
 
 def window_start(end: dt.date, days: int) -> dt.date | None:
     """First day of the `days`-day window ending on `end` (inclusive); None for 0 = all games."""
@@ -2649,20 +3133,29 @@ def _board(board_id: str, metric: str, title: str, title_en: str, period: str, p
     }
 
 
-def _theory_row(name: str, w: Mapping[str, Any], career_games: int) -> dict:
+def _role_row(name: str, rw: Mapping[str, Any], last: Mapping[str, Any], career: Mapping[str, Any],
+              career_games: int) -> dict:
+    """A main / newcomers row: value = 角色理論 over the per-role windows (rw); positionTheory and
+    finalWinRate of `last` (the last mainGames games, or all games for a newcomer); overallTheory =
+    the career role theory; games = games in the role windows."""
     return {
-        "name": name, "value": w["roleTheory"], "roleTheory": w["roleTheory"], "positionTheory": w["positionTheory"],
-        "finalWinRate": w["finalWinRate"], "games": w["games"], "careerGames": career_games,
-        "from": w["from"], "to": w["to"], "sparseRoles": w["sparseRoles"], "sparseSeats": w["sparseSeats"],
+        "name": name, "value": rw["roleTheory"], "roleTheory": rw["roleTheory"],
+        "positionTheory": last["positionTheory"], "overallTheory": career["roleTheory"],
+        "finalWinRate": last["finalWinRate"], "games": rw["games"], "careerGames": career_games,
+        "from": rw["from"], "to": rw["to"], "sparseRoles": rw["sparseRoles"], "sparseSeats": last["sparseSeats"],
     }
 
 
-def theory_legend(min_cell: int) -> tuple[str, str]:
-    """(zh, en) explanation of roleTheory / positionTheory appended to the boards' notes."""
-    zh = ("角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率；"
-          "位置理論 = Σ 1/10 × 本人該位置的最終勝率")
-    en = ("Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the "
-          "player's final win rate as that role; position theory = Σ 1/10 × their final win rate in that seat")
+def theory_legend(min_cell: int, cfg: Mapping[str, Any] | None = None) -> tuple[str, str]:
+    """(zh, en) explanation of the three theory rates appended to the boards' notes."""
+    cfg = LEADERBOARD_CONFIG if cfg is None else cfg
+    k, kl = cfg["roleWindowGames"], cfg["loyalWindowGames"]
+    zh = (f"角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的"
+          f"最近 {k} 場、忠臣 {kl} 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論")
+    en = (f"Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the "
+          f"player's final win rate as that role (over their last {k} games in each role, {kl} as Loyal Servant); "
+          f"position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their "
+          f"whole career")
     if min_cell > 0:
         zh += f"；不到 {min_cell} 場的角色或位置，用全體的最終勝率補到 {min_cell} 場"
         en += f"; a role or seat with fewer than {min_cell} games is topped up to {min_cell} at the population's final win rate"
@@ -2690,43 +3183,91 @@ def compute_leaderboard(
     def window(seats: Sequence[PlayerSeat], n: int) -> dict:
         return theory_window(seats, role_rates, seat_rates, cell, window=n)
 
+    def role_windows(seats: Sequence[PlayerSeat], previous: bool = False) -> dict:
+        return role_window_theory(seats, role_rates, cell, previous=previous)
+
     boards: list[dict] = []
+    n, k, kl, overall_min = cfg["mainGames"], cfg["roleWindowGames"], cfg["loyalWindowGames"], cfg["overallMinGames"]
+    windows = role_window_games(cfg)
+    role_games = sum(windows.values())  # games in full role windows (6 x 10 + 40 = 100)
+    role_period, role_period_en = f"各角色近 {k} 場、忠臣近 {kl} 場", f"Each role's last {k} games (Loyal Servant: last {kl})"
 
-    # main / last50: roleTheory of each active player's last N games.
-    for board_id, n, title, title_en in (
-        ("main", cfg["mainGames"], "角色理論勝率排行", "Role-theory win rate"),
-        ("last50", cfg["shortGames"], f"近 {cfg['shortGames']} 場角色理論勝率", f"Role-theory win rate, last {cfg['shortGames']} games"),
-    ):
-        rows = [_theory_row(name, window(seats[-n:], n), len(seats)) for name, seats in active.items() if len(seats) >= n]
-        boards.append(_board(
-            board_id, "roleTheory", title, title_en, f"各人最近 {n} 場", f"Each player's last {n} games", n,
-            f"近 {active_days} 天內有出賽、生涯至少 {n} 場；{legend}",
-            f"Played in the last {active_days} days, at least {n} career games; {legend_en}",
-            _ranked(rows, top_n), windowGames=n,
-        ))
+    # main: 角色理論 over the per-role windows, full windows only.
+    main_rows = []
+    for name, seats in active.items():
+        rw = role_windows(seats)
+        if rw["fullWindows"]:
+            main_rows.append(_role_row(name, rw, window(seats[-n:], n), window(seats, 0), len(seats)))
+    boards.append(_board(
+        "main", "roleTheory", "角色理論勝率排行", "Role-theory win rate", role_period, role_period_en, role_games,
+        f"近 {active_days} 天內有出賽、六個特殊角色各至少 {k} 場、忠臣至少 {kl} 場；位置理論與最終勝率看最近 {n} 場；{legend}",
+        f"Played in the last {active_days} days, at least {k} games in each special role and {kl} as Loyal Servant; "
+        f"position theory and final win rate over the last {n} games; {legend_en}",
+        _ranked(main_rows, top_n), roleWindowGames=windows,
+    ))
 
-    # improved: the last N games vs the N before them (both full windows).
-    n = cfg["improvedGames"]
+    # position: 位置理論 of each active player's last mainGames games.
+    position_rows = []
+    for name, seats in active.items():
+        if len(seats) < n:
+            continue
+        last = window(seats[-n:], n)
+        position_rows.append({
+            "name": name, "value": last["positionTheory"], "positionTheory": last["positionTheory"],
+            "overallTheory": window(seats, 0)["roleTheory"], "finalWinRate": last["finalWinRate"], "games": last["games"],
+            "careerGames": len(seats), "from": last["from"], "to": last["to"], "sparseSeats": last["sparseSeats"],
+        })
+    boards.append(_board(
+        "position", "positionTheory", "位置理論勝率排行", "Position-theory win rate",
+        f"各人最近 {n} 場", f"Each player's last {n} games", n,
+        f"近 {active_days} 天內有出賽、生涯至少 {n} 場；{legend}",
+        f"Played in the last {active_days} days, at least {n} career games; {legend_en}",
+        _ranked(position_rows, top_n), windowGames=n,
+    ))
+
+    # overall: 整體理論 = the career role theory.
+    overall_rows = []
+    for name, seats in active.items():
+        if len(seats) < overall_min:
+            continue
+        career = window(seats, 0)
+        overall_rows.append({
+            "name": name, "value": career["roleTheory"], "overallTheory": career["roleTheory"],
+            "positionTheory": career["positionTheory"], "finalWinRate": career["finalWinRate"], "games": career["games"],
+            "careerGames": len(seats), "from": career["from"], "to": career["to"],
+            "sparseRoles": career["sparseRoles"], "sparseSeats": career["sparseSeats"],
+        })
+    boards.append(_board(
+        "overall", "overallTheory", "整體理論勝率排行", "Overall theory win rate",
+        "各人生涯全部場次", "Each player's whole career", overall_min,
+        f"近 {active_days} 天內有出賽、生涯至少 {overall_min} 場；整體理論、位置理論、最終勝率都看生涯全部場次；{legend}",
+        f"Played in the last {active_days} days, at least {overall_min} career games; overall theory, position "
+        f"theory and final win rate over the whole career; {legend_en}",
+        _ranked(overall_rows, top_n),
+    ))
+
+    # improved: 角色理論 over the per-role windows vs the windows before them (both full).
     improved_rows = []
     for name, seats in active.items():
-        if len(seats) < 2 * n:
+        now, before = role_windows(seats), role_windows(seats, previous=True)
+        if not (now["fullWindows"] and before["fullWindows"]):
             continue
-        now, before = window(seats[-n:], n), window(seats[-2 * n:-n], n)
         delta = rnd1(now["roleTheory"] - before["roleTheory"])
         if delta <= 0:
             continue
         improved_rows.append({
             "name": name, "value": delta, "recentRoleTheory": now["roleTheory"], "priorRoleTheory": before["roleTheory"],
-            "recentFinalWinRate": now["finalWinRate"], "priorFinalWinRate": before["finalWinRate"],
             "recentGames": now["games"], "priorGames": before["games"], "games": now["games"], "careerGames": len(seats),
         })
     boards.append(_board(
         "improved", "roleTheoryDelta", "進步榜", "Most improved",
-        f"各人最近 {n} 場 vs 再之前 {n} 場", f"Each player's last {n} games vs the {n} before", 2 * n,
-        f"近 {active_days} 天內有出賽、生涯至少 {2 * n} 場；最近 {n} 場的角色理論勝率 − 再之前 {n} 場的，只列有進步的人；{legend}",
-        f"Played in the last {active_days} days, at least {2 * n} career games; role theory of the last {n} games minus "
-        f"that of the {n} before, improvers only; {legend_en}",
-        _ranked(improved_rows, top_n), windowGames=n,
+        f"{role_period} vs 再之前同樣場數", f"{role_period_en} vs the same number of games before them", 2 * role_games,
+        f"近 {active_days} 天內有出賽、六個特殊角色各至少 {2 * k} 場、忠臣至少 {2 * kl} 場；各角色最近 {k} 場（忠臣 {kl} 場）"
+        f"的角色理論勝率 − 每個角色再之前同樣場數的，只列有進步的人；{legend}",
+        f"Played in the last {active_days} days, at least {2 * k} games in each special role and {2 * kl} as Loyal "
+        f"Servant; role theory over each role's last {k} games ({kl} as Loyal Servant) minus that over the games "
+        f"before them in each role, improvers only; {legend_en}",
+        _ranked(improved_rows, top_n), roleWindowGames=windows,
     ))
 
     # assassin: hit rate over the last N assassinations as 刺客.
@@ -2762,18 +3303,23 @@ def compute_leaderboard(
         first = min(s.date for s in seats)
         if new_start is not None and first < new_start.isoformat():
             continue
-        newcomer_rows.append({**_theory_row(name, window(seats, 0), len(seats)), "firstPlayed": first})
+        career = window(seats, 0)
+        newcomer_rows.append({**_role_row(name, role_windows(seats), career, career, len(seats)), "firstPlayed": first})
     period_start = new_start.isoformat() if new_start else ""
     boards.append(_board(
         "newcomers", "roleTheory", "新人榜", "Newcomers",
         f"{period_start} ～ {as_of.isoformat()} 首次出賽", f"First game {period_start} to {as_of.isoformat()}", m,
-        f"首次出賽在近 {d} 天內、至少 {m} 場；例外：新人場數少，用他的全部場次，場數越少越接近全體平均；{legend}",
-        f"First game within the last {d} days, at least {m} games; the exception: a newcomer has few games, so all "
-        f"of them count, and the fewer there are the closer the numbers stay to the population; {legend_en}",
+        f"首次出賽在近 {d} 天內、至少 {m} 場；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 {k} 場、"
+        f"忠臣 {kl} 場），位置理論與最終勝率用他的全部場次，場數越少越接近全體平均；{legend}",
+        f"First game within the last {d} days, at least {m} games; the exception: a newcomer has few games, so role "
+        f"theory takes all of their games in each role (at most the last {k}, {kl} as Loyal Servant) and position theory "
+        f"and final win rate all of their games; the fewer there are the closer the numbers stay to the population; "
+        f"{legend_en}",
         _ranked(newcomer_rows, top_n), windowDays=d, allGames=True,
     ))
 
-    # roleTitles: per role, the best final win rate over the last N games in it.
+    # roleTitles: per role, the best final win rate over the last N games in it; every player tied at
+    # that rate gets the title (Edward 2026-10-14「各給」; until then the tie went to more games).
     t_min, t_n = cfg["roleTitleMinGames"], cfg["roleTitleGames"]
     title_rows: list[dict] = []
     for role in ALL_ROLES:
@@ -2787,17 +3333,20 @@ def compute_leaderboard(
             candidates.append((name, len(last), wins, len(in_role)))
         if not candidates:
             continue
-        name, games_n, wins, career = min(candidates, key=lambda c: (-_rate(c[2], c[1]), -c[1], -c[3], c[0]))
-        title_rows.append({
-            "rank": len(title_rows) + 1, "role": role, "name": name, "value": _rate(wins, games_n),
-            "games": games_n, "wins": wins, "careerRoleGames": career,
-        })
+        # Ties compare the published (rounded) rate, the number every reader sees.
+        best = max(_rate(c[2], c[1]) for c in candidates)
+        holders = sorted((c for c in candidates if _rate(c[2], c[1]) == best), key=lambda c: (-c[1], -c[3], c[0]))
+        for name, games_n, wins, career in holders:
+            title_rows.append({
+                "rank": len(title_rows) + 1, "role": role, "name": name, "value": best,
+                "games": games_n, "wins": wins, "careerRoleGames": career,
+            })
     boards.append(_board(
         "roleTitles", "finalWinRate", "角色王", "Role champions",
         f"各人該角色最近 {t_n} 場", f"Each player's last {t_n} games in the role", t_min,
-        f"近 {active_days} 天內有出賽、生涯該角色至少 {t_min} 場；比各人該角色最近 {t_n} 場的最終勝率，同率者該角色場數多的優先",
+        f"近 {active_days} 天內有出賽、生涯該角色至少 {t_min} 場；比各人該角色最近 {t_n} 場的最終勝率，同率者並列、各得稱號",
         f"Played in the last {active_days} days, at least {t_min} career games in the role; best final win rate over "
-        f"the last {t_n} games in it, ties go to more games in the role",
+        f"the last {t_n} games in it, players tied at the top all get the title",
         title_rows, windowGames=t_n,
     ))
 
@@ -2817,6 +3366,11 @@ def leaderboard_summary(leaderboard: Mapping[str, Any] | None) -> str:
     dates = leaderboard.get("dates") or {}
 
     def span(b: Mapping[str, Any]) -> str:
+        role_windows = b.get("roleWindowGames")
+        if isinstance(role_windows, Mapping) and role_windows:
+            loyal = role_windows.get("忠臣")
+            other = next((v for r, v in role_windows.items() if r != "忠臣"), None)
+            return f"（各角色近 {other} 場、忠臣 {loyal} 場）"
         if b.get("windowGames"):
             return f"（最近 {b.get('windowGames')} 場）"
         if b.get("windowDays"):
@@ -2885,7 +3439,7 @@ def compute_lake_claim_feature(games: list[GameRow], as_of: dt.date) -> dict:
     by_holder: dict[tuple[str, str], list[int]] = {(h, c): [0, 0] for h in ("藍", "紅") for c in ("紅", "藍")}
     links = undeclared = 0
     for g in games:
-        for i, (holder, target, claim) in enumerate(parse_lake_claims(g.text_record)[:3]):
+        for i, (holder, target, claim) in enumerate(g.lake_claims):  # parse_lake_claims(文字記錄)[:3]
             links += 1
             if not claim:
                 undeclared += 1
@@ -3135,20 +3689,28 @@ def refresh_feature_studies(previous: Mapping[str, Any] | None, games: list[Game
 # Assemble the cache: Sheet sections + derived + carried-over sections
 # ---------------------------------------------------------------------------
 
-def build_cache(games: list[GameRow], chemistry: dict, as_of: dt.date | None = None) -> dict:
+def build_cache(
+    games: list[GameRow], chemistry: dict, as_of: dt.date | None = None, aliases: PlayerAliases = NO_ALIASES,
+    games_key: str | None = None,
+) -> dict:
     """The sections computed from the Sheet (SHEET_SECTIONS); players come from the 牌譜 game log.
 
     `as_of` is the leaderboard's reference day (resolve_as_of: AVALON_STATS_AS_OF or today +08);
     a game dated after it counts as undated (drop_dates_after). Player names that differ only by
-    letter case / width are one player (canonicalize_player_names; run() has done it already, it
-    is idempotent) and the chemistry labels get the same spellings (canonicalize_chemistry).
+    letter case / width are one player, and so are an alias source of `aliases` (player_aliases.json;
+    run() passes load_player_aliases()) and its official name (canonicalize_player_names; run() has
+    done it already, it is idempotent); the chemistry labels get the same spellings
+    (canonicalize_chemistry) and players.aliases lists the aliases whose official name is a player.
+    games_key 將快取與同批每局資料集綁定，供伺服器檢查。
     """
     as_of = as_of or resolve_as_of()
     games, _ = drop_dates_after(games, as_of)
-    games, names = canonicalize_player_names(games)
+    games, names = canonicalize_player_names(games, aliases)
     canonicalize_chemistry(chemistry, names.display)
     players = compute_player_stats(games)
     overview = compute_overview(games, players)
+    if games_key is not None:
+        overview["gamesKey"] = games_key
 
     # Edward 2026-04-27: 5th chemistry matrix outcomePair and players[].seatOutcomes. Both are
     # counted from the game log since 2026-10-13 (round 5); before, they were the overall split.
@@ -3160,7 +3722,7 @@ def build_cache(games: list[GameRow], chemistry: dict, as_of: dt.date | None = N
 
     return {
         "overview": overview,
-        "players": compute_players_endpoint(players),
+        "players": compute_players_endpoint(players, names.aliases),
         "playerDetails": compute_player_details(players),
         "chemistry": chemistry,
         "missions": compute_missions(games),
@@ -3204,8 +3766,9 @@ def carry_over_sections(
     """Copy into new_cache every top-level section of `previous` it does not have.
 
     Existing per-player rows are kept as they are, except that rows filed under another spelling
-    of a current player (an older cache had 'Nova' and 'NOVA'; the players are merged now, see
-    fold_per_player_rows) move to that player's name; players in the new
+    of a current player (an older cache had 'Nova' and 'NOVA'; the players are merged now, or an
+    old name the new cache's players.aliases maps to an official one; see fold_per_player_rows)
+    move to that player's name; players in the new
     playerDetails that a carried section lacks get that section's placeholder
     row (hasData=false). `previous` is not modified.
     Returns {section: number of placeholder rows added}.
@@ -3215,13 +3778,14 @@ def carry_over_sections(
         return carried
     builders = placeholder_builders or {}
     details = new_cache.get("playerDetails") or {}
+    aliases = cache_aliases(new_cache)
     for key, value in previous.items():
         if key in new_cache:
             continue
         added = 0
         builder = builders.get(key)
         if isinstance(value, dict) and isinstance(value.get("perPlayer"), dict):
-            value = {**value, "perPlayer": fold_per_player_rows(value["perPlayer"], details)}
+            value = {**value, "perPlayer": fold_per_player_rows(value["perPlayer"], details, aliases)}
         if builder is not None and isinstance(value, dict) and isinstance(value.get("perPlayer"), dict):
             per_player = dict(value["perPlayer"])
             for name, detail in details.items():
@@ -3234,18 +3798,21 @@ def carry_over_sections(
     return carried
 
 
-def fold_per_player_rows(per_player: Mapping[str, Any], players: Mapping[str, Any]) -> dict:
+def fold_per_player_rows(
+    per_player: Mapping[str, Any], players: Mapping[str, Any], aliases: PlayerAliases = NO_ALIASES,
+) -> dict:
     """A carried perPlayer map (archetype / playstyle, built on the owner's PC) with its rows keyed by
     the current player names: a row filed under another spelling of a player in `players` (same
-    player_name_key) moves to that player's name. When several rows land on one player, the one with
+    player_identity_key: same player_name_key, or an alias source of `aliases` and its official
+    name) moves to that player's name. When several rows land on one player, the one with
     data (hasData) and the largest sampleSize wins, the player's own row on a tie; the others are
     dropped (they described part of the games of a player who is now one row). Rows of names that
     match no current player are kept as before. Pure."""
-    current = {player_name_key(n): n for n in players}
+    current = {aliases.identity_key(n): n for n in players}
     chosen: dict[str, Any] = {}
     rank: dict[str, tuple] = {}
     for name, row in per_player.items():
-        target = current.get(player_name_key(name), name)
+        target = current.get(aliases.identity_key(name), name)
         has_data = bool(row.get("hasData")) if isinstance(row, Mapping) else False
         size = row.get("sampleSize") if isinstance(row, Mapping) else None
         size = size if isinstance(size, (int, float)) and not isinstance(size, bool) else 0
@@ -3326,6 +3893,441 @@ def only_the_day_changed(cache: Mapping[str, Any], previous: Mapping[str, Any] |
 
 
 # ---------------------------------------------------------------------------
+# 每局資料集（games_cache.json）：供複合篩選使用的解析後對局
+# ---------------------------------------------------------------------------
+#
+# 複合篩選從保留的對局重算每個區塊；不篩選時須與當次 Python 快取逐欄相同。
+# 每局以 GAMES_DATASET_FIELDS 的固定位置陣列儲存，順序等同合併後的牌譜。
+# 名字只放 players 表，對局內使用索引；不保留自由文字。寫檔前再次驗證全部字串。
+#   id        純數字流水號；其他值改成 H／D 前綴與 SHA-256 的前十碼。
+#   src       0 = 牌譜，1 = Discord 匯入。
+#   date      日期檢查後的 YYYY-MM-DD 或空字串。
+#   cat       分類白名單的索引；slot 為當日場次，0 表示缺值。
+#   note      白名單標籤索引，不能放原文。
+#   config    六字元配置，非數字轉成 ?。
+#   outcome   三種結果、空值或其他的索引。
+#   kill      僅三藍局保留刺殺座位；三紅局的刺殺欄不是實際刺殺，固定清空。
+#   seats     座位 1..9、0 的玩家索引；-1 表示沒寫名字。
+#   missions  五個任務結果以 | 連接，只留 o/x/O/X；其他字元轉 ?，保留長度與小寫 x 數。
+#   rounds    五個回合：R 紅、B 藍、- 空白、? 其他。
+#   state     純紅藍局勢字串的索引；空白 -1，異常值 ?。
+#   firstTeam 首隊座位，非數字轉 ?。
+#   lakes     三條持湖與目標座位；-- 表示缺值，非單一數字轉 ?。
+#   claims    最多三筆持湖、目標及宣告；x 紅、o 藍、- 未宣告。
+#   captains  每個任務的隊長；- 表示缺值，非 ASCII 數字轉 ?。
+#   votes     [回合, 提議次數, 隊伍, 贊成座位]；第 5 次強制派隊沒有票。
+# Python 與 TS 以相同規則解碼；編碼與解碼後的統計若不一致，禁止寫入資料集。
+
+GAMES_DATASET_FORMAT = "avalon-games"
+GAMES_DATASET_VERSION = 2
+GAMES_DATASET_FIELDS = (
+    "id", "src", "date", "cat", "slot", "note", "config", "outcome", "kill",
+    "seats", "missions", "rounds", "state", "firstTeam", "lakes", "claims", "captains", "votes",
+)
+DATASET_OTHER = "其他"
+DATASET_CATEGORIES = ("線瓦", "面瓦", "娛樂", "", DATASET_OTHER)
+DATASET_OUTCOMES = (OUTCOME_THREE_RED, OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE, "", DATASET_OTHER)
+DATASET_UNKNOWN = "?"
+_DATASET_STATE_RE = re.compile(r"[紅藍]{1,5}")
+_ROUND_CODES = {"紅": "R", "藍": "B", "": "-"}
+_ROUND_NAMES = {"R": "紅", "B": "藍", "-": "", "?": DATASET_UNKNOWN}
+_CLAIM_CODES = {"紅": "x", "藍": "o", "": "-"}
+_CLAIM_NAMES = {"x": "紅", "o": "藍", "-": ""}
+# 對局字串的固定形狀，供隱私守門檢查。
+_DATASET_ROW_PATTERNS = {
+    "id": re.compile(r"[0-9]+|[DH][0-9a-f]{10}"),
+    "date": re.compile(r"|[0-9]{4}-[0-9]{2}-[0-9]{2}"),
+    "config": re.compile(r"[0-9?]{6}"),
+    "kill": re.compile(r"[0-9?]?"),
+    "missions": re.compile(r"[oxOX?]*(?:\|[oxOX?]*){4}"),
+    "rounds": re.compile(r"[RB?-]{5}"),
+    "firstTeam": re.compile(r"[0-9?]*"),
+    "lakes": re.compile(r"(?:[0-9?]{2}|--){3}"),
+    "claims": re.compile(r"(?:[0-9?]{2}[xo-]){0,3}"),
+    "captains": re.compile(r"[0-9?-]{0,5}"),
+}
+
+
+def _ascii_digit(ch: str) -> bool:
+    return len(ch) == 1 and "0" <= ch <= "9"
+
+
+def _digits_or_unknown(text: str) -> str:
+    return "".join(c if _ascii_digit(c) else DATASET_UNKNOWN for c in text)
+
+
+def _dataset_game_id(g: GameRow) -> str:
+    gid = str(g.id)
+    if g.source == GAME_SOURCE_SHEET and gid.isascii() and gid.isdigit():
+        return gid
+    prefix = "D" if g.source == GAME_SOURCE_DISCORD else "H"
+    return prefix + hashlib.sha256(gid.encode("utf-8")).hexdigest()[:10]
+
+
+def _vocab_index(values: Sequence[str], value: str) -> int:
+    return values.index(value) if value in values else values.index(DATASET_OTHER)
+
+
+def games_dataset_config() -> dict:
+    """產生器的計算設定，引擎直接讀取而不自行假設門檻。"""
+    return {
+        "leaderboard": copy.deepcopy(LEADERBOARD_CONFIG),
+        "theoryWindows": theory_windows(),
+        "minGamesThreshold": MIN_GAMES_THRESHOLD,
+        "excessShrinkK": EXCESS_SHRINK_K,
+        "lakeClaimMinSample": LAKE_CLAIM_MIN_SAMPLE,
+    }
+
+
+def games_dataset_constants() -> dict:
+    """資料集使用的遊戲常數，引擎比對後才使用，避免定義漂移。"""
+    return {
+        "allRoles": list(ALL_ROLES),
+        "configRoleOrder": list(CONFIG_ROLE_ORDER),
+        "redRoles": [r for r in ALL_ROLES if r in RED_ROLES],
+        "seats": list(SEATS),
+        "roleDealTenths": dict(ROLE_DEAL_TENTHS),
+    }
+
+
+def games_dataset_key(doc: Mapping[str, Any]) -> str:
+    """排除 key 後以固定鍵順序 JSON 計算 SHA-256，取前 16 個十六進位字元。"""
+    body = {k: v for k, v in doc.items() if k != "key"}
+    text = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def encode_games_dataset(games: Sequence[GameRow], aliases: Mapping[str, str] | None = None) -> dict:
+    """將同次合併、日期檢查與名字正規化後的對局編碼為每局資料集。
+
+    aliases 沿用快取的舊名對正式名字映射；只使用可 JSON 序列化的陣列與字典。"""
+    players: dict[str, int] = {}
+    for g in games:
+        for seat in SEATS:
+            name = g.seat_players.get(seat)
+            if name and name not in players:
+                players[name] = len(players)
+    states = list(dict.fromkeys(
+        g.game_state for g in games if g.game_state and _DATASET_STATE_RE.fullmatch(g.game_state)
+    )) + [DATASET_UNKNOWN]
+    state_index = {s: i for i, s in enumerate(states)}
+    rows: list[list[Any]] = []
+    for g in games:
+        kill = g.kill if g.outcome in (OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE) else ""
+        lakes = "".join(
+            "--" if lake is None else
+            "".join(x if _ascii_digit(x) else DATASET_UNKNOWN for x in lake)
+            for lake in (g.lake1, g.lake2, g.lake3)
+        )
+        claims = "".join(
+            "".join(x if _ascii_digit(x) else DATASET_UNKNOWN for x in (h, t)) + _CLAIM_CODES.get(c, "-")
+            for h, t, c in g.lake_claims
+        )
+        captains = "".join("-" if c is None else (c if _ascii_digit(c) else DATASET_UNKNOWN) for c in g.captains)
+        state = g.game_state or ""
+        rows.append([
+            _dataset_game_id(g),
+            int(g.source),
+            g.date or "",
+            _vocab_index(DATASET_CATEGORIES, g.category or ""),
+            int(g.slot),
+            [NOTE_TAG_VOCAB.index(t) for t in g.note_tags],
+            _digits_or_unknown(g.config),
+            _vocab_index(DATASET_OUTCOMES, g.outcome or ""),
+            "" if not kill else (kill if _ascii_digit(kill) else DATASET_UNKNOWN),
+            [players[g.seat_players[s]] if g.seat_players.get(s) else -1 for s in SEATS],
+            "|".join("".join(c if c in "oxOX" else DATASET_UNKNOWN for c in r) for r in g.round_results),
+            "".join(_ROUND_CODES.get(r, DATASET_UNKNOWN) for r in g.rounds),
+            -1 if not state else state_index.get(state, state_index[DATASET_UNKNOWN]),
+            _digits_or_unknown("".join(g.r11_seats)),
+            lakes,
+            claims,
+            captains,
+            [list(proposal) for proposal in g.voting_proposals],
+        ])
+    dated = sum(1 for g in games if g.date)
+    doc: dict[str, Any] = {
+        "format": GAMES_DATASET_FORMAT,
+        "version": GAMES_DATASET_VERSION,
+        "key": "",
+        "cacheSchemaVersion": CACHE_SCHEMA_VERSION,
+        "config": games_dataset_config(),
+        "constants": games_dataset_constants(),
+        "counts": {
+            "games": len(games),
+            "fromSheet": sum(1 for g in games if g.source == GAME_SOURCE_SHEET),
+            "fromDiscord": sum(1 for g in games if g.source == GAME_SOURCE_DISCORD),
+            "players": len(players),
+            "dated": dated,
+            "undated": len(games) - dated,
+        },
+        "vocab": {
+            "category": list(DATASET_CATEGORIES),
+            "outcome": list(DATASET_OUTCOMES),
+            "state": states,
+            "noteTags": list(NOTE_TAG_VOCAB),
+        },
+        "players": list(players),
+        "aliases": dict(aliases or {}),
+        "fields": list(GAMES_DATASET_FIELDS),
+        "games": rows,
+    }
+    doc["key"] = games_dataset_key(doc)
+    return doc
+
+
+def decode_games_dataset(doc: Mapping[str, Any]) -> list[GameRow]:
+    """資料集還原為 GameRow；text_record 為空，排序日期在全部對局上重新設定。
+
+    每日的 games_dataset_problems 驗證解碼後重算與原快取完全相同。"""
+    idx = {name: i for i, name in enumerate(doc["fields"])}
+    players: list[str] = doc["players"]
+    vocab = doc["vocab"]
+    out: list[GameRow] = []
+    for row in doc["games"]:
+        def get(name: str) -> Any:
+            return row[idx[name]]
+
+        g = GameRow()
+        g.id = get("id")
+        g.source = get("src")
+        g.date = get("date")
+        g.category = vocab["category"][get("cat")]
+        g.slot = get("slot")
+        g.note_tags = tuple(vocab["noteTags"][i] for i in get("note"))
+        g.config = get("config")
+        g.seat_roles = decode_config(g.config)
+        g.outcome = vocab["outcome"][get("outcome")]
+        g.red_win = g.outcome == OUTCOME_THREE_RED
+        g.blue_win = g.outcome in (OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE)
+        g.merlin_killed = g.outcome == OUTCOME_BLUE_DEAD
+        g.kill = get("kill")
+        g.seat_players = {s: players[i] for s, i in zip(SEATS, get("seats")) if i >= 0}
+        g.round_results = get("missions").split("|")
+        g.missions = [
+            {"round": i + 1, "result": cell, "fails": count_mission_fails(cell), "total": len(cell)}
+            for i, cell in enumerate(g.round_results) if cell
+        ]
+        g.rounds = [_ROUND_NAMES[c] for c in get("rounds")]
+        state = get("state")
+        g.game_state = vocab["state"][state] if state >= 0 else ""
+        _set_first_team(g, list(get("firstTeam")))
+        lakes = get("lakes")
+        _set_lakes(g, *(None if lakes[i:i + 2] == "--" else (lakes[i], lakes[i + 1]) for i in (0, 2, 4)))
+        claims = get("claims")
+        g.lake_claims = tuple((claims[i], claims[i + 1], _CLAIM_NAMES[claims[i + 2]]) for i in range(0, len(claims), 3))
+        g.captains = tuple(None if c == "-" else c for c in get("captains"))
+        g.voting_proposals = [tuple(proposal) for proposal in get("votes")]
+        g.text_record = ""
+        g.timeline_date = None
+        out.append(g)
+    return assign_timeline_dates(out)
+
+
+def games_dataset_privacy_problems(doc: Mapping[str, Any]) -> list[str]:
+    """逐欄驗證白名單、字串格式與索引範圍；回傳路徑與計數，不回傳欄位值。
+
+    名字只能出現在 players 與 aliases；所有對局字串均須符合固定模式。"""
+    problems: list[str] = []
+    expected_keys = ["format", "version", "key", "cacheSchemaVersion", "config", "constants", "counts",
+                     "vocab", "players", "aliases", "fields", "games"]
+    if list(doc) != expected_keys:
+        return [f"top-level keys are not {', '.join(expected_keys)}"]
+    if doc["format"] != GAMES_DATASET_FORMAT or doc["version"] != GAMES_DATASET_VERSION:
+        problems.append("format / version")
+    if doc["key"] != games_dataset_key(doc):
+        problems.append("key does not match the content")
+    if doc["config"] != games_dataset_config():
+        problems.append("config is not the generator's")
+    if doc["constants"] != games_dataset_constants():
+        problems.append("constants are not the generator's")
+    if list(doc["fields"]) != list(GAMES_DATASET_FIELDS):
+        problems.append("fields")
+    vocab = doc["vocab"]
+    states: Any = vocab.get("state") if isinstance(vocab, Mapping) else None
+    if (not isinstance(vocab, Mapping) or list(vocab) != ["category", "outcome", "state", "noteTags"]
+            or vocab["category"] != list(DATASET_CATEGORIES) or vocab["outcome"] != list(DATASET_OUTCOMES)
+            or vocab["noteTags"] != list(NOTE_TAG_VOCAB)):
+        problems.append("vocab is not the whitelist")
+    if not isinstance(states, list) or not states or states[-1] != DATASET_UNKNOWN or not all(
+            isinstance(s, str) and _DATASET_STATE_RE.fullmatch(s) for s in states[:-1]):
+        problems.append("vocab.state")
+        states = states if isinstance(states, list) else []
+    players = doc["players"]
+    if not isinstance(players, list) or not all(isinstance(n, str) and n for n in players):
+        problems.append("players")
+        players = []
+    aliases = doc["aliases"]
+    if not isinstance(aliases, Mapping) or not all(isinstance(k, str) and isinstance(v, str) for k, v in aliases.items()):
+        problems.append("aliases")
+
+    def is_int(x: Any, lo: int, hi: int) -> bool:
+        return type(x) is int and lo <= x < hi
+
+    bad: Counter = Counter()
+    idx = {name: i for i, name in enumerate(GAMES_DATASET_FIELDS)}
+    games = doc["games"] if isinstance(doc["games"], list) else []
+    if not isinstance(doc["games"], list):
+        problems.append("games is not a list")
+    for row in games:
+        if not isinstance(row, list) or len(row) != len(GAMES_DATASET_FIELDS):
+            bad["row shape"] += 1
+            continue
+        for name, pattern in _DATASET_ROW_PATTERNS.items():
+            value = row[idx[name]]
+            if not isinstance(value, str) or not pattern.fullmatch(value):
+                bad[name] += 1
+        seats, note = row[idx["seats"]], row[idx["note"]]
+        votes = row[idx["votes"]]
+        checks = {
+            "src": is_int(row[idx["src"]], 0, 2),
+            "cat": is_int(row[idx["cat"]], 0, len(DATASET_CATEGORIES)),
+            "slot": is_int(row[idx["slot"]], 0, 1 << 31),
+            "note": isinstance(note, list) and all(is_int(i, 0, len(NOTE_TAG_VOCAB)) for i in note),
+            "outcome": is_int(row[idx["outcome"]], 0, len(DATASET_OUTCOMES)),
+            "seats": isinstance(seats, list) and len(seats) == len(SEATS) and all(is_int(i, -1, len(players)) for i in seats),
+            "state": is_int(row[idx["state"]], -1, len(states)),
+            "votes": isinstance(votes, list) and len(votes) <= 25 and all(
+                isinstance(p, list) and len(p) == 4 and is_int(p[0], 1, 6) and is_int(p[1], 1, 6)
+                and isinstance(p[2], str) and re.fullmatch(r"[0-9]{3,5}", p[2])
+                and len(set(p[2])) == len(p[2])
+                and isinstance(p[3], str) and re.fullmatch(r"[0-9]{0,10}", p[3])
+                and len(set(p[3])) == len(p[3]) and (p[1] < 5 or not p[3]) for p in votes),
+        }
+        for name, ok in checks.items():
+            if not ok:
+                bad[name] += 1
+    problems += [f"games[].{name}: {n} row(s)" for name, n in sorted(bad.items())]
+    return problems
+
+
+def _diff_paths(a: Any, b: Any, path: str, out: list[str], limit: int = 20) -> None:
+    """回傳最多 limit 個差異路徑；以名字為鍵的映射改顯示 #索引。"""
+    if len(out) >= limit:
+        return
+    if isinstance(a, Mapping) and isinstance(b, Mapping):
+        named = path == "playerDetails" or path.endswith(".aliases")
+        for i, k in enumerate(sorted(set(a) | set(b), key=str)):
+            label = f"#{i}" if named else str(k)
+            if k not in a or k not in b:
+                out.append(f"{path}.{label} (only on one side)")
+            else:
+                _diff_paths(a[k], b[k], f"{path}.{label}", out, limit)
+            if len(out) >= limit:
+                return
+    elif isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            out.append(f"{path} (length {len(a)} vs {len(b)})")
+            return
+        for i, (x, y) in enumerate(zip(a, b)):
+            _diff_paths(x, y, f"{path}[{i}]", out, limit)
+            if len(out) >= limit:
+                return
+    elif _canonical({"v": a}) != _canonical({"v": b}):
+        out.append(path)
+
+
+# 每局資料集必須重現以下區塊，另檢查 chemistry.outcomePair 與 L141。
+GAMES_DATASET_SECTIONS = ("overview", "players", "playerDetails", "missions", "lake", "rounds", "seatOrder",
+                          "captainAnalysis", "leaderboard")
+
+
+def games_dataset_problems(
+    doc: Mapping[str, Any], cache: Mapping[str, Any], games: Sequence[GameRow], as_of: dt.date,
+) -> list[str]:
+    """資料集寫檔守門；空清單表示通過，錯誤僅有計數與欄位路徑。
+
+    除隱私形狀外，還驗證解碼後重算的全部區塊、三結果默契矩陣與 L141 都與原快取完全相同。"""
+    problems = games_dataset_privacy_problems(doc)
+    if problems:
+        return [f"privacy / shape: {p}" for p in problems]
+    overview = cache.get("overview") or {}
+    if len(doc["games"]) != len(games) or len(doc["games"]) != overview.get("totalGames"):
+        problems.append(f"{len(doc['games'])} games in the dataset, {overview.get('totalGames')} in the cache")
+    known = set(doc["players"])
+    missing = sum(1 for p in (cache.get("players") or {}).get("players") or [] if p.get("name") not in known)
+    if missing:
+        problems.append(f"{missing} player(s) of the cache are not in the dataset")
+    if overview.get("gamesKey") != doc["key"]:
+        problems.append("overview.gamesKey is not the dataset's key")
+    decoded = decode_games_dataset(doc)
+    rebuilt = build_cache(decoded, copy.deepcopy(cache.get("chemistry") or {}), as_of,
+                          cache_aliases({"players": {"aliases": doc["aliases"]}}), games_key=doc["key"])
+    paths: list[str] = []
+    for key in GAMES_DATASET_SECTIONS:
+        if _canonical({"v": rebuilt.get(key)}) != _canonical({"v": cache.get(key)}):
+            _diff_paths(rebuilt.get(key), cache.get(key), key, paths)
+    pair = (cache.get("chemistry") or {}).get("outcomePair")
+    if _canonical({"v": rebuilt["chemistry"].get("outcomePair")}) != _canonical({"v": pair}):
+        paths.append("chemistry.outcomePair")
+    l141 = next((f for f in ((cache.get("featureStudies") or {}).get("features") or [])
+                 if isinstance(f, Mapping) and f.get("loopId") == "L141"), None)
+    if l141 is not None and _canonical(compute_lake_claim_feature(decoded, as_of)) != _canonical(l141):
+        paths.append("featureStudies.L141")
+    if paths:
+        more = "+" if len(paths) >= 20 else ""
+        problems.append(f"round trip differs at {len(paths)}{more} path(s): {', '.join(paths)}")
+    return problems
+
+
+def dump_games_dataset(doc: Mapping[str, Any]) -> str:
+    """每個頂層鍵一行；players 每個名字一行、games 每局一行，讓每日新增對局的差異保持精簡。"""
+    def compact(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+    lines = ["{"]
+    keys = list(doc)
+    for n, key in enumerate(keys):
+        comma = "," if n < len(keys) - 1 else ""
+        value = doc[key]
+        if key in ("players", "games") and isinstance(value, list) and value:
+            lines.append(f"  {compact(key)}: [")
+            lines += [f"    {compact(v)}{',' if i < len(value) - 1 else ''}" for i, v in enumerate(value)]
+            lines.append(f"  ]{comma}")
+        else:
+            lines.append(f"  {compact(key)}: {compact(value)}{comma}")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def write_games_dataset_atomically(doc: Mapping[str, Any], path: Path) -> None:
+    """先寫暫存檔再重新命名，與分析快取的原子寫入方式一致。"""
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(dump_games_dataset(doc))
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp_name, mode)
+        os.replace(tmp_name, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+
+
+def load_previous_games(path: Path) -> dict | None:
+    """讀取既有資料集；缺檔或無法解析回傳 None，下一次執行會重建。"""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def games_dataset_summary(doc: Mapping[str, Any], problems: Sequence[str]) -> str:
+    """供日誌與工作摘要使用的一行計數。"""
+    text = dump_games_dataset(doc).encode("utf-8")
+    cats = Counter(row[GAMES_DATASET_FIELDS.index("cat")] for row in doc["games"])
+    labels = ("線瓦", "面瓦", "娛樂", "未分類", "其他")
+    split = " / ".join(f"{label} {cats.get(i, 0)}" for i, label in enumerate(labels))
+    verdict = "round-trip 通過" if not problems else f"暫停寫入（{len(problems)} 個問題）"
+    return (f"每局資料集：{len(doc['games'])} 局、{len(doc['players'])} 位、約 {len(text) // 1024} KB"
+            f"（gzip {len(gzip.compress(text, 9)) // 1024} KB）；分類 {split}；{verdict}")
+
+
+# ---------------------------------------------------------------------------
 # Sanity guard
 # ---------------------------------------------------------------------------
 
@@ -3390,12 +4392,15 @@ def _player_games(cache: Mapping[str, Any] | None) -> dict[str, float]:
     return out
 
 
-def _games_by_player(cache: Mapping[str, Any] | None) -> dict[str, tuple[str, float]]:
-    """{player_name_key: (the spelling with the most games, summed totalGames)} of a cache's players
-    rows: a cache written before names were merged has e.g. 'Nova' and 'NOVA' as two rows."""
+def _games_by_player(
+    cache: Mapping[str, Any] | None, aliases: PlayerAliases = NO_ALIASES,
+) -> dict[str, tuple[str, float]]:
+    """{player_identity_key: (the spelling with the most games, summed totalGames)} of a cache's
+    players rows: a cache written before names were merged has e.g. 'Nova' and 'NOVA' as two rows,
+    and one written before an alias of `aliases` (cache_aliases) has the old and the official name."""
     out: dict[str, tuple[str, float, float]] = {}
     for name, games in _player_games(cache).items():
-        key = player_name_key(name)
+        key = aliases.identity_key(name)
         shown, total, best = out.get(key, (name, 0.0, -1.0))
         if games > best:
             shown, best = name, games
@@ -3403,10 +4408,10 @@ def _games_by_player(cache: Mapping[str, Any] | None) -> dict[str, tuple[str, fl
     return {key: (shown, total) for key, (shown, total, _) in out.items()}
 
 
-def distinct_players(cache: Mapping[str, Any] | None) -> int | None:
-    """How many players a cache has when names that differ only by case / width count once
-    (its players rows), else overview.totalPlayers."""
-    by_player = _games_by_player(cache)
+def distinct_players(cache: Mapping[str, Any] | None, aliases: PlayerAliases = NO_ALIASES) -> int | None:
+    """How many players a cache has when names that differ only by case / width, and the names an
+    alias of `aliases` links, count once (its players rows), else overview.totalPlayers."""
+    by_player = _games_by_player(cache, aliases)
     return len(by_player) if by_player else _count(cache, "overview", "totalPlayers")
 
 
@@ -3417,16 +4422,20 @@ def games_regressions(
     whose game count went down, biggest drop first.
 
     Players are matched by player_name_key, an old cache's spellings of one player summed (so
-    the merge of 'Nova' and 'NOVA' is no regression as long as the merged row has their games).
+    the merge of 'Nova' and 'NOVA' is no regression as long as the merged row has their games),
+    and by the aliases of either cache (players.aliases, cache_aliases): an old name the owner
+    merged into an official one (player_aliases.json) is no lost player while the official
+    name's row has both names' games.
     牌譜 only ever gets games appended, so a player's count never goes down; when it
     does, a game row was deleted or became unreadable, or a 玩1..玩0 name was
     retyped (the old spelling loses games, the new one gains them) -- in 牌譜 by hand, or in a
     Discord匯入 row rewritten from an edited post (explained_by_rewrites).
     """
-    new = _games_by_player(cache)
+    aliases = cache_aliases(previous, cache)
+    new = _games_by_player(cache, aliases)
     out = [
         (name, before, new[key][1] if key in new else None)
-        for key, (name, before) in _games_by_player(previous).items()
+        for key, (name, before) in _games_by_player(previous, aliases).items()
         if key not in new or new[key][1] < before
     ]
     out.sort(key=lambda t: t[1] - (t[2] or 0.0), reverse=True)  # stable: ties keep the old order
@@ -3542,8 +4551,9 @@ def validate_new_cache(
                 f"{shown}{rewrites}. A player's count never goes down while games are only appended to 牌譜; "
                 "a deleted row or a retyped 玩1..玩0 name does this. If intended, re-run with --allow-shrink"
             )
-        # Names that differ only by case / width count once in the old cache too (they are merged now).
-        old_players = distinct_players(previous)
+        # Names that differ only by case / width, or that an alias merges, count once in the old
+        # cache too (they are one player now).
+        old_players = distinct_players(previous, cache_aliases(previous, cache))
         new_players = _count(cache, "overview", "totalPlayers")
         if old_players is not None and new_players is not None:
             # A player whose every game was a corrected spelling is gone: that is no lost player.
@@ -3552,7 +4562,8 @@ def validate_new_cache(
             if old_players - new_players > tolerance:
                 problems.append(
                     f"the new cache has {new_players} players, {old_players - new_players} fewer than the existing "
-                    f"{old_players} (names that differ only by letter case / width counted once; tolerance "
+                    f"{old_players} (names that differ only by letter case / width or that {ALIASES_PATH.name} "
+                    f"merges counted once; tolerance "
                     f"{tolerance}); if rows were removed on purpose, re-run with --allow-shrink"
                 )
         for key in CHEMISTRY_MATRICES:
@@ -3605,12 +4616,17 @@ def compare_summary(
     vanished ones (a vanished one is often a corrected typo of a player id) and the top table."""
     lines = ["### 戰績分析快取：預覽（--compare，未寫入）"]
     old_rows, new_rows = _players_by_name(old), _players_by_name(new)
-    old_keys, new_keys = {player_name_key(n) for n in old_rows}, {player_name_key(n) for n in new_rows}
-    added = [n for n in new_rows if player_name_key(n) not in old_keys]
-    gone = [n for n in old_rows if player_name_key(n) not in new_keys]
-    # Old rows of one player spelled differently (Nova / NOVA): now one row; a count, no names.
-    folded = sum(1 for n in old_rows if n not in new_rows and player_name_key(n) in new_keys)
-    old_games = _games_by_player(old)
+    aliases = cache_aliases(old, new)  # player_aliases.json, as either cache wrote it (players.aliases)
+    old_ids, new_ids = {aliases.identity_key(n) for n in old_rows}, {aliases.identity_key(n) for n in new_rows}
+    added = [n for n in new_rows if aliases.identity_key(n) not in old_ids]
+    gone = [n for n in old_rows if aliases.identity_key(n) not in new_ids]
+    # Old rows of a player now shown under another name: spelled differently (Nova / NOVA), or an
+    # old name an alias merged into the official one. Counts, no names.
+    merged = [n for n in old_rows if n not in new_rows and aliases.identity_key(n) in new_ids]
+    new_keys = {player_name_key(n) for n in new_rows}
+    folded = sum(1 for n in merged if player_name_key(n) in new_keys)
+    aliased = len(merged) - folded
+    old_games = _games_by_player(old, aliases)
     old_ov = (old or {}).get("overview") or {}
     new_ov = new.get("overview") or {}
     lines.append(
@@ -3618,6 +4634,7 @@ def compare_summary(
         + (f"；新增 {len(added)}" + (f"：{_names(added)}" if show_names else "") if old and added else "")
         + (f"；消失 {len(gone)}" + (f"：{_names(gone)}" if show_names else "") if gone else "")
         + (f"；只差大小寫／全半形而併入同一位玩家的舊名字 {folded} 個" if folded else "")
+        + (f"；依 {ALIASES_PATH.name} 併入正式名字的舊名字 {aliased} 個" if aliased else "")
     )
     lines.append(f"- 局數：{_arrow(old_ov.get('totalGames'), new_ov.get('totalGames'))}")
     old_ob, new_ob = old_ov.get("outcomeBreakdown") or {}, new_ov.get("outcomeBreakdown") or {}
@@ -3639,7 +4656,7 @@ def compare_summary(
         lines += ["", f"局數前 {len(top)} 名（舊 → 新）：", "", *head]
         for i, row in enumerate(top, 1):
             prev = old_rows.get(row["name"]) or {}
-            before = old_games.get(player_name_key(row["name"]), (None, prev.get("totalGames")))[1]
+            before = old_games.get(aliases.identity_key(row["name"]), (None, prev.get("totalGames")))[1]
             lines.append(
                 f"| {i} |" + (f" {row['name']} |" if show_names else "") + f" {_arrow(before, row.get('totalGames'))} "
                 f"| {_arrow(prev.get('winRate'), row.get('winRate'), _fmt_rate)} |"
@@ -3684,9 +4701,10 @@ def load_previous_cache(path: Path, allow_shrink: bool = False) -> dict | None:
     return data
 
 
-def write_cache_atomically(cache: Mapping[str, Any], path: Path) -> None:
+def write_cache_atomically(cache: Mapping[str, Any], path: Path, *, mode: int | None = None) -> None:
     """Write via a temp file + rename, so a crash never leaves a half-written cache."""
-    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+    if mode is None:
+        mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -3699,6 +4717,28 @@ def write_cache_atomically(cache: Mapping[str, Any], path: Path) -> None:
         with contextlib.suppress(OSError):
             os.unlink(tmp_name)
         raise
+
+
+def raw_sheets_export_path(path: Path, output_path: Path, compare: bool) -> Path:
+    """含姓名及原始牌譜，只允許寫在 Git 工作目錄以外，且不能覆蓋分析快取。"""
+    target = path.resolve()
+    repo_root = Path(__file__).resolve().parents[2]
+    if compare:
+        raise FatalError("--export-raw-sheets 不能與 --compare 同時使用。", EXIT_CONFIG, "匯出設定錯誤")
+    if (target == output_path.resolve() or target.is_relative_to(repo_root)
+            or any((parent / ".git").exists() for parent in target.parents)):
+        raise FatalError("牌譜暫存檔必須放在 Git 工作目錄以外，且不能覆蓋分析快取。",
+                         EXIT_CONFIG, "匯出設定錯誤")
+    return target
+
+
+def export_raw_sheets(merged: GameLogMerge, path: Path) -> None:
+    """輸出當次去重後的列；消費端結束後必須刪除，不得提交或上傳 artifact。"""
+    try:
+        write_cache_atomically({GAME_LOG_TAB: merged.raw_rows}, path, mode=0o600)
+    except OSError:
+        raise FatalError("牌譜暫存匯出失敗。", EXIT_DATA, "牌譜暫存匯出失敗") from None
+    print(f"牌譜暫存匯出：{len(merged.games)} 列")
 
 
 # ---------------------------------------------------------------------------
@@ -3745,22 +4785,43 @@ def _append_step_summary(lines: list[str]) -> None:
         f.write("\n".join(lines) + "\n")
 
 
+def _set_step_output(name: str, value: str) -> None:
+    """寫入 GitHub Actions 的 name=value 輸出；其他環境不寫檔。"""
+    output = os.environ.get("GITHUB_OUTPUT")
+    if not output:
+        return
+    with contextlib.suppress(OSError), open(output, "a", encoding="utf-8") as f:
+        f.write(f"{name}={value}\n")
+
+
 def run(
     output_path: Path = OUTPUT_PATH,
     allow_shrink: bool = False,
     allow_field_loss: bool = False,
     compare: bool = False,
     compare_threshold: float = COMPARE_FIELD_CHANGE_PCT,
+    games_output: Path | None = None,
+    export_raw_sheets_path: Path | None = None,
 ) -> int:
+    games_output = games_output or output_path.with_name(GAMES_OUTPUT_NAME)
+    raw_path = (raw_sheets_export_path(export_raw_sheets_path, output_path, compare)
+                if export_raw_sheets_path is not None else None)
+    if raw_path is not None and raw_path == games_output.resolve():
+        raise FatalError("牌譜暫存檔不能覆蓋每局資料集。", EXIT_CONFIG, "匯出設定錯誤")
     source = resolve_credentials_source()
     sheet_id = resolve_sheet_id()
-    print(f"Credentials: {source.describe()}")
-    print(f"Service account: {source.client_email() or '(client_email not found in key)'}")
-    print(f"Spreadsheet: {sheet_id}")
+    if _in_github_actions():
+        print("認證來源：1；資料來源：1")
+    else:
+        print(f"Credentials: {source.describe()}")
+        print(f"Service account: {source.client_email() or '(client_email not found in key)'}")
+        print(f"Spreadsheet: {sheet_id}")
 
     as_of = resolve_as_of()
     print(f"Leaderboard as of: {as_of.isoformat()}" + (f" (from {ENV_AS_OF})" if os.environ.get(ENV_AS_OF) else ""))
 
+    aliases = load_player_aliases()  # before the Sheet: a malformed file fails fast (exit 2)
+    print(f"Player aliases ({ALIASES_PATH.name}): {len(aliases.names)}")
     previous = load_previous_cache(output_path, allow_shrink)
     merged, chemistry = fetch_sheet_data(source, sheet_id)
     # Discord匯入 rows rewritten from an edited post (a corrected player id) since the existing cache.
@@ -3770,20 +4831,35 @@ def run(
         print(f"  {future_dated} game(s) have a 日期時間 after {as_of.isoformat()} (mistyped in the Sheet?): "
               "counted as undated until the row is fixed")
     # Before build_cache (which does it too) so that only_the_day_changed replays the same names.
-    games, names = canonicalize_player_names(games)
+    games, names = canonicalize_player_names(games, aliases)
     print(f"  Player names: {names.summary()}")
     name_lines = ([f"- 只差大小寫／全半形的名字：{names.merged_spellings} 個寫法併入 {names.merged_players} 位玩家"]
                   if names.merged_spellings else [])
+    if names.aliased:  # counts only: the names stay out of the public log
+        name_lines.append(f"- {ALIASES_PATH.name} 的別名：{names.aliased_names} 個舊名字改顯示為正式名字"
+                          f"（{names.aliased_players} 位玩家）")
     if names.doubled_games:
         name_lines.append(f"- 同一位玩家同時坐兩個座位的局：{names.doubled_games}（請檢查那幾局的 玩1～玩0）")
+    # The game-level dataset (複合篩選): the same games, their timeline order fixed over all of them.
+    games = assign_timeline_dates(games)
+    dataset = encode_games_dataset(games, names.aliases)
 
     print("Computing endpoint responses...")
-    cache, carried = assemble_cache(build_cache(games, chemistry, as_of), previous, games=games, as_of=as_of)
+    cache, carried = assemble_cache(
+        build_cache(games, chemistry, as_of, aliases, games_key=dataset["key"]), previous, games=games, as_of=as_of,
+    )
 
     show_names = not _in_github_actions()  # the Actions log and job summary are public
     problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss, rewritten, show_names, rewritten_dups)
     refusal = f"Refusing to overwrite {output_path.name}:\n- " + "\n- ".join(problems)
-    unchanged = not problems and only_the_day_changed(cache, previous, games)
+    # 不論本機或 CI，資料集檢查均只回報計數與欄位路徑。
+    dataset_problems = [] if problems else games_dataset_problems(dataset, cache, games, as_of)
+    withheld = bool(dataset_problems)
+    dataset_line = games_dataset_summary(dataset, dataset_problems)
+    print(f"  {dataset_line}")
+    # 停寫資料集時只依分析快取判斷有無變動，避免修復前每天因日期不同而重寫。
+    same_dataset = withheld or load_previous_games(games_output) == dataset
+    unchanged = not problems and only_the_day_changed(cache, previous, games) and same_dataset
     same_but_day = f"與現有快取（asOf {previous_as_of(previous)}）只差 asOf 日期，內容相同"
     note_lines = [f"- 日期在 asOf 之後的局：{future_dated}（日期時間打錯？已當作無日期）"] if future_dated else []
     # Counts only: which players a correction took games from stays out of the public log.
@@ -3793,32 +4869,47 @@ def run(
                           "因此減少（例如改正打錯的玩家 id），不算資料遺失")
         print(f"  {name_lines[-1][2:]}")
     note_lines += name_lines
+    dataset_lines = [f"- {dataset_line}"] + [f"  - {p}" for p in dataset_problems]
+    if withheld:
+        emit_error(
+            f"{games_output.name} is not written ({len(dataset_problems)} problem(s)): " + "; ".join(dataset_problems)
+            + f". {output_path.name} is updated as usual; the site turns its filters off until both files match again.",
+            "Games dataset withheld",
+        )
 
     if compare:
-        summary = compare_summary(cache, previous, compare_threshold, show_names=show_names) + name_lines
+        summary = compare_summary(cache, previous, compare_threshold, show_names=show_names) + name_lines + dataset_lines
         if problems:
             summary += ["", "**守門：會拒絕寫入**（正式執行會以 exit 4 結束，現有快取不動）："]
             summary += [f"- {p}" for p in problems]
         elif unchanged:
             summary += ["", f"守門：通過；{same_but_day}（正式執行不會寫入，不會 commit）"]
         else:
-            summary += ["", "守門：通過（正式執行會寫入）"]
+            summary += ["", "守門：通過（正式執行會寫入）" + ("；每局資料集暫停寫入" if withheld else "")]
         print("\n".join(summary))
         _append_step_summary(summary)
         if problems:
             raise FatalError(f"Dry run (--compare). {refusal}", EXIT_DATA, "Analysis cache sanity check failed")
-        print(f"Dry run (--compare): {output_path.name} was not written.")
+        print(f"Dry run (--compare): {output_path.name} was not written, nor {games_output.name}.")
         return 0
 
     if problems:
         raise FatalError(refusal, EXIT_DATA, "Analysis cache sanity check failed")
 
+    _set_step_output("games_dataset", "withheld" if withheld else "ok")
+    if raw_path is not None:
+        export_raw_sheets(merged, raw_path)
+
     if unchanged:
         print(f"{output_path.name} differs from the existing file only by the as-of day "
               f"(existing asOf {previous_as_of(previous)}, this run {as_of.isoformat()}); not written, nothing to commit.")
-        _append_step_summary(["### 戰績分析快取", f"- {same_but_day}，未寫入", *note_lines])
+        _append_step_summary(["### 戰績分析快取", f"- {same_but_day}，未寫入", *dataset_lines, *note_lines])
         return 0
 
+    # 先寫資料集；途中若中斷，兩檔批次鍵不符，伺服器停用篩選直到下次重建。
+    if not withheld:
+        print(f"Writing to {games_output}...")
+        write_games_dataset_atomically(dataset, games_output)
     print(f"Writing to {output_path}...")
     write_cache_atomically(cache, output_path)
 
@@ -3839,12 +4930,15 @@ def run(
     print(f"  recomputed from players: {', '.join(DERIVED_SECTIONS)}")
     print(f"  carried over from the existing cache: {carried_desc}")
     print("  featureStudies: L141 recomputed from the game log; the other studies carried over with their conclusions annotated")
+    print(f"  {games_output.name}: " + ("withheld (see the error above)" if withheld else
+                                       f"{len(dataset['games'])} games, {len(dataset['players'])} players"))
     _append_step_summary([
         "### 戰績分析快取",
         f"- 局數：{prev_games} → {cache['overview']['totalGames']}；玩家：{prev_players} → {cache['overview']['totalPlayers']}",
         f"- 排行榜：{leaderboard_summary(cache.get('leaderboard'))}",
         f"- 由試算表重算：{', '.join(SHEET_SECTIONS)}；由 players 重算：{', '.join(DERIVED_SECTIONS)}",
         f"- 沿用現有快取（需在擁有者電腦重建）：{carried_desc}；featureStudies 的 L141 由牌譜重算、其餘沿用並改寫結論",
+        *dataset_lines,
         *note_lines,
     ])
     return 0
@@ -3854,6 +4948,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Regenerate analysis_cache.json from the Avalon Google Sheet.")
     parser.add_argument("--output", type=Path, default=OUTPUT_PATH,
                         help="cache file to read (carry-over / baseline) and replace (default: %(default)s)")
+    parser.add_argument("--games-output", type=Path, default=None,
+                        help=f"the game-level dataset written with the cache (default: {GAMES_OUTPUT_NAME} next to --output)")
     parser.add_argument("--allow-shrink", action="store_true",
                         help="write even if games or a player's games went down, players or chemistry "
                              "shrank beyond the tolerance")
@@ -3865,13 +4961,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--compare-threshold", type=float, default=COMPARE_FIELD_CHANGE_PCT, metavar="PCT",
                         help="--compare lists the player fields whose value changed for more than PCT%% of "
                              "the players in both files (default: %(default)s)")
+    parser.add_argument("--export-raw-sheets", type=Path, metavar="PATH",
+                        help="將當次去重合併的牌譜列寫至 Git 工作目錄外的暫存檔；不得提交或上傳 artifact，"
+                             "消費步驟結束後須刪除；不可與 --compare 同用")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        return run(args.output, args.allow_shrink, args.allow_field_loss, args.compare, args.compare_threshold)
+        return run(args.output, args.allow_shrink, args.allow_field_loss, args.compare, args.compare_threshold,
+                   args.games_output, args.export_raw_sheets)
     except FatalError as exc:
         emit_error(str(exc), exc.title)
         return exc.exit_code

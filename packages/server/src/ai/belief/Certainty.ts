@@ -46,17 +46,13 @@
 
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { LakePublicRecord, PlayerObservation } from '../types';
+import { evilCountFor, popcount } from '../worlds';
 
 // ── Parameters ─────────────────────────────────────────────────
 
-const EVIL_ROLE_NAMES = new Set(['assassin', 'morgana', 'mordred', 'oberon', 'minion']);
-
-/** Number of reds in a standard game of `playerCount` players. */
-export function evilCountFor(playerCount: number): number {
-  const roles = AVALON_CONFIG[playerCount]?.roles;
-  if (roles) return roles.filter((r) => EVIL_ROLE_NAMES.has(r)).length;
-  return Math.ceil(playerCount / 3);
-}
+// evilCountFor / popcount 住在 ../worlds.ts（模擬瓦與確定性層共用）；這裡轉出口，
+// 讓既有的 import 不用改。
+export { evilCountFor, popcount };
 
 export interface CertaintyParams {
   playerCount: number;
@@ -81,13 +77,6 @@ export function failsRequiredFor(params: CertaintyParams, round: number): number
 }
 
 // ── Bits ───────────────────────────────────────────────────────
-
-export function popcount(x: number): number {
-  let c = 0;
-  let v = x;
-  while (v) { v &= v - 1; c++; }
-  return c;
-}
 
 /** Lake records that carry a claim (undeclared lakes say nothing about camps). */
 export function declaredLakes(

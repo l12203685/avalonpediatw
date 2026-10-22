@@ -38,9 +38,11 @@ import { PracticeSessions, sanitizeFlagNote } from '../practice/PracticeSessions
 import {
   createPracticeReportWriter,
   practiceReportUnavailableReason,
+  type PracticeFlagRow,
   type PracticeFlagSink,
   type PracticeReportStatus,
 } from '../practice/PracticeReportWriter';
+import { getPracticeReportDiscord, type PracticeReportCopy } from '../practice/PracticeReportDiscord';
 import {
   PRACTICE_PLAYER_COUNT,
   PRACTICE_ROOM_PREFIX,
@@ -242,6 +244,12 @@ export interface GameServerOptions {
    * = saving unavailable. Tests inject a fake sink.
    */
   practiceReportSink?: PracticeFlagSink | null;
+  /**
+   * (2026-10-14 Edward：練習回報也貼到大劍管理員) Where a copy of each saved report is
+   * posted. Default: the Discord admin-channel copier (`getPracticeReportDiscord`) —
+   * unless `practiceReportSink` is injected (tests), then none unless given here.
+   */
+  practiceReportDiscord?: PracticeReportCopy | null;
 }
 
 export class GameServer {
@@ -251,6 +259,7 @@ export class GameServer {
   private practice: PracticeSessions = new PracticeSessions();
   private practiceSink: PracticeFlagSink | null;
   private practiceSinkStatus: PracticeReportStatus;
+  private practiceDiscord: PracticeReportCopy | null;
   private readonly botDelayScale: number;
   // `${roomId}:${round}:${holderId}` of bot lake inspections already queued.
   private pendingBotLake: Set<string> = new Set();
@@ -282,6 +291,9 @@ export class GameServer {
       this.practiceSink = built.writer;
       this.practiceSinkStatus = built.status;
     }
+    this.practiceDiscord = options.practiceReportDiscord !== undefined
+      ? options.practiceReportDiscord
+      : options.practiceReportSink !== undefined ? null : getPracticeReportDiscord();
     // Make the same RoomManager visible to non-socket callers (Discord /
     // LINE bot handlers) so a room created via /create can be started,
     // joined, and ended from either the web or Discord. Without this wiring
@@ -3084,29 +3096,35 @@ export class GameServer {
     const entry = check.entry;
     const note = sanitizeFlagNote(obj.note);
     this.practice.commitFlag(roomId, entry.id);
+    const row: PracticeFlagRow = {
+      at: Date.now(),
+      roomId,
+      round: entry.round,
+      attempt: entry.attempt,
+      botSeat: entry.botSeat,
+      botRole: entry.botRole,
+      kind: entry.kind,
+      decision: entry.action,
+      reason: [entry.reason, entry.rule ? `規則：${entry.rule}` : '', entry.knowledge ?? '']
+        .filter(Boolean)
+        .join(' '),
+      note,
+    };
     try {
-      await sink.appendFlag({
-        at: Date.now(),
-        roomId,
-        round: entry.round,
-        attempt: entry.attempt,
-        botSeat: entry.botSeat,
-        botRole: entry.botRole,
-        kind: entry.kind,
-        decision: entry.action,
-        reason: [entry.reason, entry.rule ? `規則：${entry.rule}` : '', entry.knowledge ?? '']
-          .filter(Boolean)
-          .join(' '),
-        note,
-      });
-      reply({ ok: true, flagsLeft: this.practice.flagsLeft(roomId) });
+      await sink.appendFlag(row);
     } catch (error) {
       this.practice.releaseFlag(roomId, entry.id);
       // Step + HTTP status only — never the note or a response body.
       const what = error instanceof Error && error.name === 'PracticeReportError' ? error.message : 'unexpected error';
       console.warn(`[practice] flag not saved for room ${roomId}: ${what}`);
       reply({ ok: false, error: '儲存失敗，請稍後再試' });
+      return;
     }
+    reply({ ok: true, flagsLeft: this.practice.flagsLeft(roomId) });
+    // Saved → also a short post in the admin channel 大劍管理員 (2026-10-14). Detached (the ack
+    // never waits for Discord) and never rejects; only after the sheet write, so a failed write
+    // that the player retries never posts twice.
+    void this.practiceDiscord?.forward(row);
   }
 
   private onPracticeGameEnded(roomId: string, room: Room): void {

@@ -10,6 +10,7 @@ import { createHttpRateLimit } from '../middleware/rateLimit';
 import {
   getOverview,
   getAllPlayerStats,
+  getPlayerAliases,
   getPlayerByName,
   getChemistry,
   getMissionAnalysis,
@@ -24,7 +25,10 @@ import {
   getLeaderboard,
   invalidateCache,
   isSheetsReady,
+  assassinationWinRates,
+  playerOutcomeBlocks,
 } from '../services/sheetsAnalysis';
+import { invalidateGamesPayload, loadGamesPayload, pickEncoding } from '../services/gamesDataset';
 import fs from 'fs';
 import path from 'path';
 
@@ -94,13 +98,14 @@ router.get('/overview', limiter, async (_req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // GET /api/analysis/players
-// Per-player stats array
+// Per-player stats array; `aliases` = the cache's players.aliases (old spelling → official
+// name, player_aliases.json), so the website search finds a player by an old name.
 // ---------------------------------------------------------------------------
 router.get('/players', limiter, async (_req: Request, res: Response) => {
   if (!sheetsGuard(res)) return;
   try {
-    const players = await getAllPlayerStats();
-    return ok(res, { players, total: players.length });
+    const [players, aliases] = await Promise.all([getAllPlayerStats(), getPlayerAliases()]);
+    return ok(res, { players, total: players.length, aliases });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/players]', msg);
@@ -127,17 +132,28 @@ router.get('/players/:name', limiter, async (req: Request, res: Response) => {
     // 2026-10-13) — null on a cache written before them, never the legacy
     // player.roleTheory. excessWinRate stays for older web builds (null when the
     // cache cannot provide it); the site no longer plots it.
+    // Edward 2026-10-14「三藍死(紅方) 應該是 刺殺成功 / 我是紅方且三藍」— and likewise for blue:
+    // redMerlinKillRate / blueMerlinProtect are the conditional 刺殺結果 of the red / blue games,
+    // 三藍死 / (三藍死 + 三藍活) and 三藍活 / (三藍死 + 三藍活) (assassinationWinRates), not 三藍死 / all
+    // red games (player.redMerlinDead) or 三藍活 / all blue games (player.blueMerlinAlive, which is the
+    // blue 遊戲結果 = finalBlueWinRate); null when the player never reached 三藍 on that side. A row
+    // without raw counts gets the same ratio from the per-side rates, never the unconditional one.
+    // outcomeBlocks carries the three blocks (任務結果 / 刺殺結果 / 遊戲結果, each with its n) of the red
+    // games, the blue games and (schemaVersion 4) every role.
     const career = player.theory?.career;
+    const outcomeBlocks = playerOutcomeBlocks(player);
+    const assassination = assassinationWinRates(player, outcomeBlocks);
     const radar = {
       winRate: player.finalWinRate ?? player.winRate,
       redWinRate: player.finalRedWinRate ?? player.redWin,
-      blueMerlinProtect: player.blueMerlinAlive,
+      blueMerlinProtect: assassination.blue,
       missionWinRate: player.missionWinRate ?? player.winRate,
       excessWinRate: player.excessWinRate ?? null,
-      redMerlinKillRate: player.redMerlinDead,
+      redMerlinKillRate: assassination.red,
       experience: Math.min(player.totalGames / 10, 100),
       roleTheory: typeof career?.roleTheory === 'number' ? career.roleTheory : null,
       positionTheory: typeof career?.positionTheory === 'number' ? career.positionTheory : null,
+      outcomeBlocks,
     };
 
     return ok(res, { player, radar });
@@ -247,7 +263,7 @@ router.get('/captain', limiter, async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/analysis/profile/:name/archetype
 // Panel A — 4-axis archetype radar (誠實 / 一致 / 專精 / 浮動) + percentile
-// `:name` = analysis-cache display name (e.g. "Sin", "HAO"). Resolve from the
+// :name 是分析快取的玩家顯示名稱，由別名與正規化規則解析。
 // auth profile's display_name on the frontend before calling.
 // ---------------------------------------------------------------------------
 router.get('/profile/:name/archetype', limiter, async (req: Request, res: Response) => {
@@ -328,9 +344,10 @@ router.get('/feature-studies', limiter, async (_req: Request, res: Response) => 
 
 // ---------------------------------------------------------------------------
 // GET /api/analysis/leaderboard
-// 排行榜（角色理論 main / last50、improved、assassin、newcomers、roleTitles，
-// 各人最近 N 場）— boards computed by generate_cache.py (LEADERBOARD_CONFIG),
-// served as-is. Cache predating the section → 503, like feature-studies.
+// 排行榜（schemaVersion 4：main 角色理論〔各角色近 10 場、忠臣近 40 場〕、position 位置理論
+// 〔近 100 場〕、overall 整體理論〔生涯〕、improved、assassin、newcomers、roleTitles；schemaVersion 3
+// 的快取是 main / last50〔各人最近 N 場〕）— boards computed by generate_cache.py
+// (LEADERBOARD_CONFIG), served as-is. Cache predating the section → 503, like feature-studies.
 // ---------------------------------------------------------------------------
 router.get('/leaderboard', limiter, async (_req: Request, res: Response) => {
   if (!sheetsGuard(res)) return;
@@ -344,6 +361,38 @@ router.get('/leaderboard', limiter, async (_req: Request, res: Response) => {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/leaderboard]', msg);
     return fail(res, 500, 'Failed to load leaderboard');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/games
+// 複合篩選（Edward 2026-10-14）：每局資料集 games_cache.json + context（快取的 asOf、gamesKey、設定），
+// 網站的計算引擎（@avalon/shared/stats）在瀏覽器重算篩選後的區塊。兩檔不同批、檔案不存在或執行期
+// 一致性檢查失敗 → 503（網站顯示「篩選暫時無法使用」，預設畫面不受影響）。預先壓縮、強 ETag、304。
+// ---------------------------------------------------------------------------
+router.get('/games', limiter, (req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const load = loadGamesPayload();
+    if (!load.ok) return fail(res, load.status, load.error);
+    const { payload } = load;
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    res.setHeader('ETag', payload.etag);
+    res.setHeader('Vary', 'Accept-Encoding');
+    const match = req.headers['if-none-match'];
+    if (typeof match === 'string' && match.split(',').some((tag) => tag.trim().replace(/^W\//, '') === payload.etag)) {
+      return res.status(304).end();
+    }
+    const encoding = pickEncoding(req.headers['accept-encoding']);
+    const body = encoding === 'br' ? payload.br : encoding === 'gzip' ? payload.gzip : payload.identity;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    if (encoding !== 'identity') res.setHeader('Content-Encoding', encoding);
+    res.setHeader('Content-Length', String(body.length));
+    return res.status(200).end(body);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/games]', msg);
+    return fail(res, 500, 'Failed to load the games dataset');
   }
 });
 
@@ -390,6 +439,7 @@ router.post('/cache/invalidate', limiter, async (req: Request, res: Response) =>
     return fail(res, 401, 'Unauthorized');
   }
   invalidateCache();
+  invalidateGamesPayload();
   return ok(res, { message: 'Cache invalidated' });
 });
 

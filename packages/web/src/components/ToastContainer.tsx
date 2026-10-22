@@ -36,8 +36,17 @@ function ToastItem({ toast }: { toast: Toast }): JSX.Element {
 export default function ToastContainer(): JSX.Element {
   const { toasts } = useGameStore();
 
+  // 牌桌提供中欄定位，避免通知蓋住玩家；其他頁面沿用右下角。
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none">
+    <div
+      className="fixed z-[9999] flex flex-col gap-2 pointer-events-none"
+      style={{
+        right: 'var(--toast-right, 1.5rem)',
+        top: 'var(--toast-top, auto)',
+        bottom: 'var(--toast-bottom, 1.5rem)',
+        maxWidth: 'var(--toast-max-w, none)',
+      }}
+    >
       <AnimatePresence mode="popLayout">
         {toasts.map((toast) => (
           <div key={toast.id} className="pointer-events-auto">

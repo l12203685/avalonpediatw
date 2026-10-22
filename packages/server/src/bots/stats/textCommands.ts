@@ -14,7 +14,7 @@
  */
 
 import { formatStatsHelp, StatsPlatform } from './statsReplies';
-import { chemistryReply, leaderboardReply, playerCardReply } from './statsQueries';
+import { chemistryReply, leaderboardReply, leaderboardScopeText, playerCardReply } from './statsQueries';
 
 export type StatsTextCommand =
   | { kind: 'player'; query: string }
@@ -59,6 +59,6 @@ export async function answerStatsTextCommand(
     case 'chemistry':
       return chemistryReply(cmd.args[0] ?? '', cmd.args[1] ?? '');
     case 'help':
-      return formatStatsHelp(platform);
+      return formatStatsHelp(platform, await leaderboardScopeText());
   }
 }

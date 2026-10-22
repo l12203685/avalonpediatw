@@ -54,7 +54,11 @@ const cache = vi.hoisted(() => {
     {
       id: 'newcomers', metric: 'roleTheory', title: '新人榜', period: '2026-07-15 ～ 2026-10-12 首次出賽', windowDays: 90, allGames: true, minGames: 10,
       note: `首次出賽在近 90 天內、至少 10 場；例外：新人場數少，用他的全部場次；${LEGEND}`,
-      rows: [{ ...theoryRow(1, 'N1', 47, 13), firstPlayed: '2026-08-01' }, { ...theoryRow(2, 'N2', 45.5, 11), firstPlayed: '2026-09-01' }],
+      // A newcomer's careerGames is all of their games (the generator's len(seats)).
+      rows: [
+        { ...theoryRow(1, 'N1', 47, 13), careerGames: 13, firstPlayed: '2026-08-01' },
+        { ...theoryRow(2, 'N2', 45.5, 11), careerGames: 11, firstPlayed: '2026-09-01' },
+      ],
     },
     {
       id: 'roleTitles', metric: 'finalWinRate', title: '角色王', period: '各人該角色最近 20 場', windowGames: 20, minGames: 20,
@@ -69,7 +73,7 @@ const cache = vi.hoisted(() => {
       topPlayersByTheory: [{ name: 'T1', roleTheory: 60, winRate: 59, games: 100 }],
       topPlayersByGames: [], seatPositionWinRates: [],
     } as Record<string, unknown>,
-    leaderboard: { asOf: '2026-10-12', boards: boards() } as { asOf: string; boards: ReturnType<typeof boards> } | null,
+    leaderboard: { asOf: '2026-10-12', boards: boards() } as { asOf: string; boards: ReturnType<typeof boards>; config?: Record<string, unknown> } | null,
     boards,
     players: [] as unknown[],
   };
@@ -323,6 +327,24 @@ describe('weeklyDigestText', () => {
     expect(text.length).toBeLessThanOrEqual(STATS_REPLY_MAX_CHARS);
   });
 
+  it('schemaVersion 4 新人榜: prints the newcomer\'s games, not the role-window games, and says role theory is capped per role', async () => {
+    // generate_cache.py (schemaVersion 4) newcomers rows: roleTheory and `games` over the per-role windows (at most
+    // 10 games per special role, 40 as 忠臣), careerGames = all of the newcomer's games. Invented names.
+    const boards = cache.boards();
+    const newcomers = boards.find((b) => b.id === 'newcomers')!;
+    newcomers.rows = [
+      { ...newcomers.rows[0], name: 'Tovo Wren', games: 34, careerGames: 41, overallTheory: 46.1 },
+      { ...newcomers.rows[1], name: 'Ilse Marr', games: 12, careerGames: 12, overallTheory: 44 },
+    ];
+    cache.leaderboard = { asOf: '2026-10-12', boards, config: { mainGames: 100, roleWindowGames: 10, loyalWindowGames: 40, activeDays: 90 } };
+    const text = await weeklyDigestText(MONDAY);
+    expect(text).toContain(
+      '🌱 新人榜（2026-07-15 ～ 2026-10-12 首次出賽，新人例外：看全部場次，角色理論每個角色最多算近 10 場、忠臣 40 場）：' +
+        'Tovo Wren 角色理論 47.0%（41 場）、Ilse Marr 角色理論 45.5%（12 場）',
+    );
+    expect(text).not.toContain('（34 場）');
+  });
+
   it('drops the 新人榜, then 角色王, then 進步榜 when the text would exceed the cap', async () => {
     const boards = cache.boards();
     const newcomers = boards.find((b) => b.id === 'newcomers')!;
@@ -353,7 +375,7 @@ describe('weeklyDigestText', () => {
     cache.leaderboard = { asOf: '2026-10-12', boards: cache.boards().map(({ metric: _m, ...b }) => b) };
     let text = await weeklyDigestText(MONDAY);
     expect(text.split('\n')[0]).toBe('📅 每週排行（10/12）');
-    expect(text).toContain('🏆 角色理論勝率排行\n（排行改版中：下次每日更新資料後，會改用「各人最近 100 場」的角色理論勝率排行）');
+    expect(text).toContain('🏆 角色理論勝率排行\n（排行改版中：下次每日更新資料後，會改用「各角色近 10 場、忠臣近 40 場」的角色理論勝率排行）');
     expect(text).not.toContain('M1');
     expect(text).not.toContain('🚀');
     expect(text).not.toContain('👑');

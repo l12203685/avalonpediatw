@@ -239,6 +239,40 @@
     "footerHint": "追蹤列表 / 對戰成績 Phase 2 會補實內容"
   },
   "analytics": {
+    "ui": {
+      "sectionTabs": {
+        "label": "小分頁"
+      },
+      "table": {
+        "empty": "沒有資料",
+        "n": "n={{n}}",
+        "nTitle": "樣本 {{n}} 場",
+        "lowSample": "樣本不足（n < {{min}}）"
+      },
+      "donut": {
+        "title": "三種結果分布",
+        "games": "{{value}} 場",
+        "gamesUnit": "場",
+        "total": "共 {{value}} 場",
+        "item": "{{label}}：{{pct}}（{{games}}）"
+      },
+      "blocks": {
+        "group": "分組",
+        "red": "紅方",
+        "blue": "藍方",
+        "mission": "任務結果",
+        "assassination": "刺殺結果",
+        "final": "遊戲結果",
+        "missionRule": "三藍＝藍勝、三紅＝紅勝",
+        "assassinationRule": "只看三藍局：三藍活＝藍勝、三藍死＝紅勝",
+        "finalRule": "三藍活＝藍勝、其餘＝紅勝",
+        "missionHint": "任務結果：三紅算紅勝，三藍（不論梅林死活）算藍勝；分母是這組的全部場次",
+        "assassinationHint": "刺殺結果：只算打到三藍的局，三藍死算紅勝、三藍活算藍勝；分母是這組的三藍局數（三紅局沒有刺殺）",
+        "finalHint": "遊戲結果：三藍活算藍勝，三紅與三藍死都算紅勝；分母是這組的全部場次",
+        "cellNote": "每格是這組自己陣營的勝率（紅方看紅勝、藍方看藍勝），n＝分母場數；刺殺只算打到三藍的局。",
+        "lowSampleNote": "淡色＝樣本少於 {{min}} 場。"
+      }
+    },
     "tab": {
       "leaderboard": "精算榜",
       "radar": "玩家雷達",
@@ -256,7 +290,7 @@
       "loading": "載入特徵研究…",
       "loadFailed": "特徵研究 cache 尚未生成",
       "retry": "重試",
-      "chartError": "無法渲染圖表，已切換為表格檢視",
+      "chartError": "這項研究的資料格式無法顯示",
       "sampleSize": "樣本 {{games}} 場",
       "viewFullReport": "查看完整研究",
       "role": "角色",
@@ -506,7 +540,7 @@
           "coLose": "兩人同時輸的比率",
           "winCorr": "勝率正相關程度",
           "coWinMinusLose": "淨默契指標 (越高越好)",
-          "outcomePair": "兩人共同場次三結果分布 (主值=三紅率%)"
+          "outcomePair": "兩人共同場次的三塊結果"
         },
         "guideTitle": "如何解讀:",
         "guideCoWin": "數值 = 兩人同時在同一場遊戲中勝利的次數比率(%). 越高表示兩人越常一起贏.",
@@ -550,54 +584,6 @@
         "loadingPlayers": "載入玩家資料…",
         "loadingRadar": "載入雷達圖…",
         "search": "搜尋玩家（打名字的一部分也可以）…",
-        "title": "{{name}} — 能力雷達圖",
-        "details": "{{name}} — 詳細數據",
-        "axes": {
-          "winRate": "最終勝率",
-          "redWinRate": "紅方最終勝率",
-          "blueMerlinProtect": "藍方三藍活率",
-          "missionWinRate": "任務結算勝率",
-          "roleTheory": "角色理論勝率",
-          "positionTheory": "位置理論勝率",
-          "redMerlinKillRate": "紅方刺中率",
-          "experience": "經驗"
-        },
-        "legend": {
-          "winRate": "最終勝率：紅方場的三紅 + 三藍死、藍方場的三藍活，除以總場數",
-          "redWinRate": "紅方最終勝率：擔任紅方時三紅或三藍死的比例",
-          "blueMerlinProtect": "藍方三藍活率：擔任藍方時三藍且梅林活的比例",
-          "missionWinRate": "任務結算勝率：舊口徑，三藍死也算藍方贏",
-          "roleTheory": "角色理論勝率（生涯）：Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 本人該角色的最終勝率",
-          "positionTheory": "位置理論勝率（生涯）：Σ 1/10 × 本人各位置的最終勝率",
-          "redMerlinKillRate": "紅方刺中率：擔任紅方時三藍死的比例",
-          "experience": "經驗：總場次 / 10（上限 100）"
-        },
-        "stats": {
-          "totalGames": "總場次",
-          "finalWinRate": "最終勝率",
-          "missionWinRate": "任務結算勝率",
-          "merlinSurvival": "梅林存活率（藍方三藍局）",
-          "redFinal": "紅方最終勝率",
-          "blueFinal": "藍方三藍活率",
-          "red3Red": "三紅（紅方）",
-          "redMerlinDead": "三藍死（紅方）",
-          "blueMerlinAlive": "三藍活（藍方）",
-          "roleWinRates": "角色勝率",
-          "theoryTitle": "理論勝率",
-          "lastN": "近 {{count}} 場",
-          "career": "生涯 {{count}} 場",
-          "colRoleTheory": "角色理論",
-          "colPositionTheory": "位置理論",
-          "colFinal": "最終勝率",
-          "theoryNote": "場數沒超過 {{windows}} 場時，那一段就等於生涯，不另列。",
-          "theoryNoteTopUp": "不到 {{n}} 場的角色或位置用全體最終勝率補到 {{n}} 場（場數少的人會比較接近全體平均）。",
-          "theoryPending": "理論勝率：下次每日更新資料後提供"
-        },
-        "topUp": {
-          "role": "；不到 {{n}} 場的角色用全體勝率補到 {{n}} 場",
-          "seat": "；不到 {{n}} 場的位置用全體勝率補到 {{n}} 場"
-        },
-        "legacyNote": "角色勝率為任務結算口徑（三藍死算藍勝）",
         "searchMany": "符合 {{count}} 位，點名字查看（按 Enter 開第一位）",
         "searchNone": "找不到「{{query}}」，可以只打名字的一部分",
         "searchSuggest": "找不到「{{query}}」，你是不是要找："
@@ -653,6 +639,632 @@
         "seatHeatmap": "座位勝率熱圖",
         "seatOrder": "派梅娜順序",
         "chemistry": "默契矩陣"
+      }
+    },
+    "r6": {
+      "tabsb": {
+        "pendingUpdate": "下次每日更新後提供",
+        "position": {
+          "tabsLabel": "位置的小分頁",
+          "tabs": {
+            "seats": "各位置",
+            "seatRoles": "位置 × 角色",
+            "players": "玩家 × 位置",
+            "order": "派梅娜順序"
+          }
+        },
+        "roles": {
+          "tabsLabel": "角色與默契的小分頁",
+          "tabs": {
+            "roles": "各角色",
+            "chemistry": "默契矩陣"
+          }
+        },
+        "seats": {
+          "seatLabel": "{{n}} 號",
+          "seatCol": "位置",
+          "red": "坐這個位置當紅方",
+          "blue": "坐這個位置當藍方",
+          "note": "全部對局，每局每個位置算一次（那局當紅方或藍方）。不分陣營的話每個位置都是同一個三種結果分布，所以一定分陣營看；各角色分開看「位置 × 角色」。"
+        },
+        "seatRoles": {
+          "allSeats": "全部位置",
+          "blockLabel": "三塊結果",
+          "note": "每格＝這個角色坐這個位置時自己陣營的勝率，n＝分母；每欄最高的位置加粗、加底線。"
+        },
+        "heatmap": {
+          "modeLabel": "陣營",
+          "modeAll": "全部場次",
+          "modeRed": "當紅方",
+          "modeBlue": "當藍方",
+          "gamesCol": "場數",
+          "cellTitle": "{{name}} · {{seat}} · {{mode}}：任務結果 {{rate}}（n={{n}}），全體 {{ref}}",
+          "cellGames": "坐這裡的全部對局（紅藍都算）：三紅 {{threeRed}}（n={{n}}）、三藍局刺中 {{kill}}（n={{nBlue}}）",
+          "note": "{{min}} 場以上的玩家（最多 {{max}} 位）。每格＝這位玩家坐這個位置時自己陣營的任務結果勝率（三紅＝紅勝、三藍＝藍勝），n＝場數；綠／紅＝高於／低於全體在這個位置（同陣營）的勝率。",
+          "noteBlocks": "刺殺結果與遊戲結果要分陣營的三藍死／三藍活局數，這份快取還沒有；滑鼠移到格子上可看坐這裡的全部對局。"
+        },
+        "order": {
+          "all": "全部",
+          "sub": "派西維爾（派）、梅林（梅）、莫甘娜（娜）三人座位的 6 種順序，共 {{games}} 局。",
+          "blocksTitle": "各順序的三塊結果（紅方視角）",
+          "blocksNote": "分組的是對局（每局一種順序），所以從紅方看：任務＝三紅率、刺殺＝三藍局刺中率、遊戲＝紅方勝率；藍方＝100% 減同一格，n 相同。",
+          "interleaveRed": "穿插：紅方任務勝率",
+          "noInterleaveRed": "不穿插：紅方任務勝率",
+          "overallRed": "全部：紅方任務勝率",
+          "interleaveNote": "快取只有穿插／不穿插的任務結果（三紅＝紅勝），刺殺與遊戲結果要等快取補上局數。",
+          "summary": "刺中率最低 {{killLow}} {{killLowV}}（n={{killLowN}}）、最高 {{killHigh}} {{killHighV}}（n={{killHighN}}）；三紅率最低 {{redLow}} {{redLowV}}（n={{redLowN}}）、最高 {{redHigh}} {{redHighV}}（n={{redHighN}}）。"
+        },
+        "roleBlocks": {
+          "title": "各角色的三塊結果（全部玩家、全期）",
+          "roleCol": "角色",
+          "pending": "任務結果、刺殺結果：下次每日更新後提供（這份快取只有遊戲結果）。",
+          "note": "每局七個角色都在場，同陣營的角色只差在沒有名字的座位，所以幾乎一樣；角色之間的差別看「位置 × 角色」與玩家雷達。"
+        },
+        "chemistry": {
+          "matrixLabel": "默契矩陣",
+          "pairDescription": "從紅方看，藍方＝100% 減同一格",
+          "guide": {
+            "mission": "數值＝兩人共同場次中三紅的比率，n＝共同場次（全體 {{ref}}，n={{n}}）。",
+            "assassination": "數值＝兩人共同的三藍局中梅林被刺中的比率，n＝共同的三藍局（全體 {{ref}}，n={{n}}）。",
+            "final": "數值＝兩人共同場次中紅方贏（三紅＋三藍死）的比率，n＝共同場次（全體 {{ref}}，n={{n}}）。"
+          },
+          "legendRed": "紅＝比全體高 5 個百分點以上（深色 10 以上）",
+          "legendMid": "灰＝與全體差不到 5",
+          "legendBlue": "藍＝比全體低 5 以上（深色 10 以上）",
+          "legendThin": "虛線格＝這一塊的 n 不到 {{n}} 場，僅供參考",
+          "pairTitle": "{{row}} × {{col}}：共同 {{games}} 場｜任務 三紅 {{mission}}（n={{games}}）｜刺殺 刺中 {{assassination}}（n={{nBlue}}）｜遊戲 紅勝 {{final}}（n={{games}}）"
+        }
+      },
+      "tabsa": {
+        "roles": {
+          "assassin": "刺客",
+          "morgana": "莫甘娜",
+          "mordred": "莫德雷德",
+          "oberon": "奧伯倫",
+          "percival": "派西維爾",
+          "merlin": "梅林",
+          "loyal": "忠臣"
+        },
+        "faction": {
+          "red": "紅方",
+          "blue": "藍方"
+        },
+        "outcomeTable": {
+          "group": "分組",
+          "all": "全部局",
+          "games": "局數",
+          "gamesTitle": "這一組的局數，也是任務結果與遊戲結果的分母",
+          "mission": "任務結果",
+          "missionRule": "三紅 ÷ 局數",
+          "missionTitle": "任務結果：這組局裡紅方做滿三次失敗任務（三紅）的比率，分母是這組的局數",
+          "assassination": "刺殺結果",
+          "assassinationRule": "三藍死 ÷ 三藍局",
+          "assassinationTitle": "刺殺結果：只看這組裡打到三藍的局，梅林被刺中（三藍死）的比率；n 是三藍局數（三紅局沒有刺殺，不算）",
+          "final": "遊戲結果",
+          "finalRule": "紅勝 ÷ 局數",
+          "finalTitle": "遊戲結果：紅方最終獲勝（三紅＋三藍死）的比率，分母是這組的局數",
+          "note": "從紅方看：任務結果＝三紅率；刺殺結果＝打到三藍的局裡刺中梅林的比率（n＝三藍局數）；遊戲結果＝紅方最終勝率（三紅＋三藍死）。藍方＝100% 減去同一格，分母相同。",
+          "lowSample": "淡色＝分母少於 {{min}} 局（與理論勝率的補值門檻相同）。"
+        },
+        "missions": {
+          "tabs": {
+            "pass": "通過率",
+            "outcome": "任務 → 結局"
+          },
+          "round": "任務",
+          "reached": "打到這輪",
+          "reachedTitle": "打到這一輪任務的局數（分母）",
+          "passRate": "通過率",
+          "passRateTitle": "這一輪任務 0 張失敗票的比率（快取的「通過」口徑）",
+          "passCaption": "各輪任務的通過率與失敗票分布",
+          "passNote": "分母＝打到這一輪的局數。「通過」沿用快取口徑：該輪 0 張失敗票；第 4 輪就算規則上 1 張失敗仍算通過，這裡也歸在「1 張失敗」。",
+          "group": "第幾輪任務",
+          "passed": "第 {{round}} 輪通過",
+          "failed": "第 {{round}} 輪失敗",
+          "outcomeCaption": "任務結果 → 三種結局（條件機率）",
+          "outcomeNote": "「通過」＝該輪 0 張失敗票、「失敗」＝1 張以上；第 5 輪省略（第 5 輪的結果直接決定三紅或三藍）。",
+          "noCorrelation": "這份快取沒有「任務結果 → 結局」的資料，下次每日更新後提供。"
+        },
+        "lake": {
+          "tabs": {
+            "faction": "陣營",
+            "holderRole": "持湖角色",
+            "targetRole": "被湖角色",
+            "claim": "宣告可信度",
+            "consistency": "言行一致"
+          },
+          "picker": "第幾次湖",
+          "gamesBadge": "{{count}} 局",
+          "group": "持湖者 → 被湖者",
+          "allGames": "這次湖的全部局",
+          "redHolder": "紅方持湖",
+          "blueHolder": "藍方持湖",
+          "comboTitle": "持湖者陣營 → 被湖者陣營",
+          "factionCaption": "{{lake}}：持湖陣營與湖到誰 → 三種結局",
+          "factionNote": "「同陣營／跨陣營」就是四種組合兩兩相加，不另列。",
+          "holderRole": "持湖者角色",
+          "targetRole": "被湖者角色",
+          "holderRoleCaption": "{{lake}}：持湖者的角色 → 三種結局",
+          "targetRoleCaption": "{{lake}}：被湖者的角色 → 三種結局"
+        },
+        "assassination": {
+          "tabs": {
+            "summary": "刺殺結算",
+            "seat": "座位與刺殺",
+            "target": "刺客目標"
+          },
+          "blocksCaption": "全部局的三塊結果（刺殺結果的分母是三藍局）",
+          "side": "陣營",
+          "seat": "位置",
+          "seatLabel": "{{seat}} 號",
+          "allThreeBlue": "全部三藍局",
+          "seatCaption": "梅林、刺客坐在各位置時的刺中率（只算三藍局）",
+          "merlinSeat": "梅林坐這裡",
+          "assassinSeat": "刺客坐這裡",
+          "seatRule": "三藍死 ÷ 三藍局",
+          "merlinSeatTitle": "梅林坐在這個位置、打到三藍的局裡，梅林被刺中的比率；n＝這些三藍局數",
+          "assassinSeatTitle": "刺客坐在這個位置、打到三藍的局裡，刺中梅林的比率；n＝這些三藍局數",
+          "seatNote": "刺中率＝三藍死 ÷（三藍死＋三藍活）；n＝該角色坐這個位置時打到三藍的局數。",
+          "seatMissing": "這份快取沒有各位置的角色結果，下次每日更新後提供。"
+        },
+        "studyTable": {
+          "lowHint": "淡色＝n < {{min}}（樣本不足）。",
+          "computedCi": "「95% 區間（推算）」由網站依 n 與比率以 Wilson 法推算（快取沒有附區間）。",
+          "ciComputed": "95% 區間（推算）",
+          "byLake": "依第幾次湖",
+          "redHolder": "紅方持湖",
+          "blueHolder": "藍方持湖",
+          "claimRedTitle": "持湖者說「紅」的次數裡，被湖的人真的是紅方的比率",
+          "claimBlueTitle": "持湖者說「藍」的次數裡，被湖的人真的是藍方的比率",
+          "hits": "屬實 {{hits}}",
+          "lieRate": "說謊率",
+          "byTier": "依被刺者當隊長的次數",
+          "topSeats": "依被刺者座位（只收最高的 {{count}} 個）",
+          "seatLabel": "{{seat}} 號",
+          "hitRateTitle": "這一組刺殺裡，被刺的人真的是梅林的比率",
+          "hitRateNote": "被刺中率＝刺殺目標真的是梅林的比率，n＝這組的刺殺次數。",
+          "missRate": "沒刺中",
+          "consistencyTitle": "持湖宣告後當隊長派隊，派隊與宣告一致的比率",
+          "consistencyNote": "一致率＝一致 ÷（一致＋不一致），n＝該角色的事件數。",
+          "consistent": "言行一致",
+          "inconsistent": "言行不一致",
+          "combo": "組合",
+          "threeRedRate": "三紅率",
+          "deltaThreeRed": "Δ三紅",
+          "deltaThreeBlueDead": "Δ三藍死",
+          "deltaThreeBlueAlive": "Δ三藍活",
+          "highEvNote": "Δ三紅＝這組局的三紅率 − 全部局的三紅率；這幾格是從很多組合裡挑出差距最大的，n 多半很小。",
+          "flipRed": "翻票率（紅）",
+          "flipBlue": "翻票率（藍）",
+          "flipColsTitle": "快取欄位 flipRedPct／flipBluePct：同一角色在兩種分組下的翻票率，分組方式見「方法與定義」",
+          "signedEv": "signed EV",
+          "signedEvTitle": "signed EV＝翻票率（藍）− 翻票率（紅），單位百分點；正值＝原研究說的「藍方訊號」",
+          "chances": "機會數",
+          "chancesTitle": "隊伍換人之後，這個角色的投票次數",
+          "flipSummary": "陣營整體翻票率：藍方 {{blue}}、紅方 {{red}}，只差 {{delta}}pp。",
+          "flipNote": "signed EV＝翻票率（藍）− 翻票率（紅）；各角色只差約 ±2pp。兩欄原始翻票率與讀法見完整研究。",
+          "flipNoteFull": "signed EV＝翻票率（藍）− 翻票率（紅）。同一位玩家一局的多次投票不是獨立樣本，所以不算區間。",
+          "forcedRound": "打到 P5 的輪",
+          "forcedRoundTitle": "這一輪任務一路派到第五次提議（P5，強制局）的局",
+          "forcedBaseline": "Δ＝這組局的比例 − 全部局（基準三紅率 {{baseline}}%）。",
+          "r3Compare": "R3 有／沒有打到 P5",
+          "r3CompareLine": "R3 有打到 P5：三紅 {{withRate}}（n={{withN}}）；沒有：{{withoutRate}}（n={{withoutN}}）。",
+          "withR3": "R3 有打到 P5",
+          "withoutR3": "R3 沒有打到 P5",
+          "group": "分組",
+          "deltaBaseline": "Δ基準"
+        },
+        "study": {
+          "back": "返回",
+          "close": "關閉完整研究",
+          "dialogTitle": "{{title}}・完整研究",
+          "copyLink": "複製連結",
+          "copied": "已複製",
+          "tabsLabel": "完整研究的小分頁",
+          "tabs": {
+            "data": "結論與資料",
+            "method": "方法與定義",
+            "read": "怎麼讀・注意事項"
+          },
+          "question": "問題",
+          "takeaway": "結論（資料層依數字產生）",
+          "fullData": "完整資料",
+          "method": "方法與定義",
+          "noMethod": "這項研究還沒有方法說明。",
+          "legacyL141": "這是舊版快取的 L141（各角色湖中說謊率，一次性研究）。新版「湖中宣告可信度」由每日更新從牌譜重算，下次每日更新後提供方法說明。",
+          "sampleTitle": "樣本與日期",
+          "howToRead": "怎麼讀",
+          "caveats": "注意事項",
+          "source": "來源：{{source}}",
+          "units": {
+            "links": "{{value}} 條湖線",
+            "chances": "{{value}} 次投票機會",
+            "attempts": "{{value}} 次刺殺",
+            "leaderEvents": "{{value}} 次持湖後當隊長"
+          },
+          "live": "資料日期 {{date}}（每天從牌譜重算）",
+          "snapshot": "一次性研究的快照（{{since}} 起放上網站），每日更新不重算數字",
+          "L141": {
+            "question": "持湖者宣告「被湖的人是紅方」或「是藍方」時，對方真的是那一方的機率有多高？分首湖／二湖／三湖，也分持湖者自己是紅是藍來看。",
+            "method": [
+              "每天更新快取時，由 generate_cache.py（compute_lake_claim_feature）從試算表的全部牌譜重算：這次 {{games}} 局、{{links}} 條湖線，資料日期 {{date}}。",
+              "湖線＝文字記錄裡「H>T x」格式的行：H 是持湖者座位、T 是被湖者座位（0 代表 10 號），結尾 x＝宣告紅、o＝宣告藍，沒寫（或寫 ?）＝沒有宣告。每局只取前三條湖線，依序算首湖、二湖、三湖。",
+              "陣營看該局的角色表：刺客、莫甘娜、莫德雷德、奧伯倫是紅方，其他角色是藍方。",
+              "可信度＝宣告的陣營跟被湖者真實陣營相同的次數 ÷ 這一格的宣告次數 n。",
+              "「依持湖者陣營」把三次湖合在一起，再依持湖者自己是紅方或藍方分成四格。",
+              "95% 區間用 Wilson 法（z＝1.96）計算，由快取提供；n < {{min}} 的格子標「樣本不足」。",
+              "沒有宣告的湖線（這次 {{undeclared}} 條）不計入任何一格，但算在湖線總數裡。"
+            ],
+            "read": [
+              "「說紅 {{exRate}}% [{{exLo}}–{{exHi}}] n={{exN}}」＝{{exLake}}持湖者說「紅」的 {{exN}} 次裡，{{exRate}}% 被湖的人真的是紅方；真實比率大概落在 {{exLo}}%～{{exHi}}% 之間。",
+              "先看持湖者是哪一方：藍方持湖幾乎都說實話；紅方持湖的宣告只有一部分屬實，紅方說「紅」多半是在誣陷藍方（見「依持湖者陣營」）。",
+              "首湖／二湖／三湖的數字混合了紅藍兩方的持湖者：持湖者裡紅方越多，整體可信度就越低。各次湖之間的差距多半是持湖者的組成不同，不是同一個人的說法改變。"
+            ],
+            "caveats": [
+              "湖中女神讓持湖者看到被湖者的真實陣營，所以宣告跟事實不符幾乎就是說謊；少數可能是牌譜記錄寫錯。",
+              "依規則，下一次的持湖者是上一次被湖的人，所以二湖、三湖的持湖者等於是前一位持湖者挑出來的，紅藍組成跟首湖不同。",
+              "牌譜是手打的，宣告符號可能漏寫或寫錯：漏寫的不計入，寫錯的會算進去。",
+              "這是全部玩家的平均，不代表某一位玩家；每個人的說謊習慣可能差很多。"
+            ]
+          },
+          "L142": {
+            "question": "持湖者宣告之後，自己當隊長派的隊伍跟宣告一致嗎？各角色的一致率有沒有差別？",
+            "method": [
+              "一次性研究：原始報告 {{source}} 在擁有者電腦上，不在 repo 裡，由 scripts/build_feature_studies.py 把數字寫進快取：{{games}} 局快照、{{links}} 條湖線、{{leaderEvents}} 次「宣告過的持湖者之後當隊長」的派隊。",
+              "每日更新不重算這些數字，只由 generate_cache.py（annotate_feature_studies）依數字改寫結論文字，並在 n < {{min}} 的格子加「樣本不足」標記。",
+              "一次事件＝一位宣告過的持湖者之後當隊長時的一次派隊；派隊跟他的宣告相符算「一致」，不相符算「不一致」（原報告 Section 2 的 leader picks alignment；典型的不一致是說某人是紅方，卻又把他派進隊伍）。",
+              "一致率＝一致 ÷（一致＋不一致），n＝該角色的事件數；表上的角色是持湖者自己的角色。",
+              "高 EV 條件格：「角色 × 宣告紅／藍 × 一致與否」的組合中，這組局最後三紅的比例跟基準（研究快照全部局的三紅率 {{baseline}}%）差最多的 {{cellCount}} 格；Δ三紅＝這組三紅率 − 基準。",
+              "95% 區間由網站推算：一致率用一致／總數；高 EV 格用三紅率 × n 推回局數，再以 Wilson 法（z＝1.96）計算。"
+            ],
+            "read": [
+              "先看 n 和區間：樣本夠的角色一致率差距不大，區間彼此重疊；n < {{min}} 的角色（包括一致率 100% 的那一格）區間很寬，看不出規律。",
+              "言行不一致值得追問，但單憑它判斷不了陣營。",
+              "高 EV 格只能當線索：它們是從很多格裡挑出來的極端值，下一批資料多半會縮小。"
+            ],
+            "caveats": [
+              "只有持湖後又當上隊長的人才有事件；紅方持湖後當隊長的次數少，紅方各角色幾乎都樣本不足。",
+              "高 EV 格是從所有組合裡挑出差距最大的幾格，n 又多半很小：挑最極端的結果天生會誇大（多重比較）。",
+              "Δ三紅 是相關不是因果：言行一致與否跟局勢好壞互相影響。",
+              "一次性研究：數字停在 {{games}} 局快照，不會隨每日更新。"
+            ]
+          },
+          "L143": {
+            "question": "刺客在三藍後刺殺時，被刺的人跟他當隊長的次數、座位有沒有關係？選這種人時刺中梅林的比率有沒有不同？",
+            "method": [
+              "一次性研究：原始報告 {{source}} 不在 repo 裡，由 scripts/build_feature_studies.py 寫進快取：{{games}} 局快照、{{attempts}} 次刺殺。每日更新不重算數字，只由 generate_cache.py 依數字改寫結論文字。",
+              "被刺中率＝刺殺目標真的是梅林的次數 ÷ 這一組的刺殺次數 n；沒刺中＝100% − 被刺中率。",
+              "隊長次數分組：依被刺的人在那一局當隊長的次數分成多／中／少三組（切點依原報告，網站無法驗證）；三組合計 {{tierTotal}} 次。",
+              "座位表依被刺者的座位分；快取只收被刺中率最高的 {{seatCount}} 個位置，其他位置沒有提供。",
+              "95% 區間由網站依被刺中率 × n 推回次數，再以 Wilson 法（z＝1.96）推算；n < {{min}} 標「樣本不足」。"
+            ],
+            "read": [
+              "被刺中率是「刺客選這種人時選對梅林的比率」，不是「這種人被選中的機率」。",
+              "隊長次數多的組被刺中率比較高，但先看兩組的區間有沒有重疊；而且隊長次數主要由座位輪替決定（從誰開始、打了幾輪），不代表那個人比較主動。",
+              "想找梅林要看發言與投票內容，不要看隊長次數或座位。"
+            ],
+            "caveats": [
+              "座位表只列最高的幾個位置：挑最高的列出來會高估差距，沒列出的位置可能差不多（選擇偏誤）。",
+              "隊長次數跟座位、局的長短綁在一起（局越長，每個人當隊長的機會越多），是混雜因素。",
+              "一次性研究：數字停在 {{games}} 局快照，不會隨每日更新。"
+            ]
+          },
+          "L136": {
+            "question": "隊伍換人之後，玩家會不會改變投票（贊成變反對、反對變贊成）？藍方、紅方和各角色翻票的比率有沒有差別？",
+            "method": [
+              "一次性研究：原始報告 {{source}} 不在 repo 裡，由 scripts/build_feature_studies.py 寫進快取：{{games}} 局快照、{{chances}} 次投票機會。每日更新不重算數字，只由 generate_cache.py 依數字改寫結論文字。",
+              "依研究名稱：機會＝隊伍換人之後一位玩家的一次投票，翻票＝這一票跟他對前一隊的票不同（平均每位玩家每局約 {{perPlayerGame}} 次機會）。",
+              "陣營整體翻票率（快取 summary）：藍方 {{blue}}%、紅方 {{red}}%，差 {{delta}}pp。",
+              "每個角色另有兩欄翻票率（快取欄位 flipRedPct／flipBluePct，表上標「紅」「藍」）；兩欄的確切分組只寫在原報告，網站無法確認，所以只照欄位名稱標示。",
+              "signed EV＝翻票率（藍）− 翻票率（紅）（快取的數字可以驗算），單位百分點；原研究把正值解讀為「藍方訊號」。",
+              "沒有算區間：同一位玩家同一局的多次投票彼此不獨立，不能把 {{chances}} 次當成獨立樣本。"
+            ],
+            "read": [
+              "各角色的 signed EV 落在 {{span}}pp，陣營整體只差 {{delta}}pp。",
+              "一位玩家一局大約只有 {{perPlayerGame}} 次機會，{{delta}}pp 的差距等於一局多翻或少翻約 {{perGameDiff}} 次，在桌上分辨不出來。",
+              "不要用「他改票了」來推陣營。"
+            ],
+            "caveats": [
+              "「翻票」不分方向與原因（換了誰、換成誰），不同情境平均在一起可能互相抵消。",
+              "樣本很大，這麼小的差距在統計上可能不是雜訊，但實際用處很小。",
+              "一次性研究：數字停在 {{games}} 局快照，不會隨每日更新。"
+            ]
+          },
+          "L139": {
+            "question": "某一輪任務一路派到第五次提議（P5，強制局）的局，最後三種結局的比例跟其他局有沒有不同？",
+            "method": [
+              "一次性研究：原始報告 {{source}} 不在 repo 裡，由 scripts/build_feature_studies.py 寫進快取：{{games}} 局快照。每日更新不重算數字，只由 generate_cache.py 依數字改寫結論文字。",
+              "P5＝一輪裡的第五次提議：前四隊都被否決時，第五隊不投票、直接出任務（強制局）。「R3 打到 P5」＝第 3 輪任務派到第五次提議的局。",
+              "三紅率＝這組局最後三紅的比例；基準 {{baseline}}%＝研究快照全部局的三紅率。Δ三紅／Δ三藍死／Δ三藍活＝這組局該結局的比例 − 全部局該結局的比例（百分點），三個加起來約等於 0。",
+              "「R3 有／沒有打到 P5」把全部局分成兩組：{{withN}}＋{{withoutN}}＝{{games}} 局。",
+              "R1 不列：R1 幾乎每局都打到 P5，沒有對照組（原報告註記為試算表匯入的填補；本社群 R1 的前四次提議也常是不出任務的「說話隊」）。",
+              "95% 區間由網站依三紅率 × n 推回局數，再以 Wilson 法（z＝1.96）推算；n < {{min}} 標「樣本不足」。"
+            ],
+            "read": [
+              "這是條件機率：「R3 打到 P5 的局」裡三紅的比例跟基準差 {{r3delta}}pp，只說明這種局走到三紅的頻率不同，不代表打到 P5 讓紅方變強。",
+              "R4、R5 的局數少（{{r4n}}、{{r5n}} 局），區間很寬：先看區間有沒有蓋過基準，再看差距。"
+            ],
+            "caveats": [
+              "選擇偏誤：會一路否決到 P5，本身就是局勢已經偏向紅方（藍方掌握不了局面）的結果；P5 是局勢不利的徵兆，不是原因，也不是「紅方在掩護」的證據。",
+              "一次性研究：數字停在 {{games}} 局快照，不會隨每日更新。"
+            ],
+            "baselineNow": "基準 {{baseline}}% 是研究那份快照的三紅率；目前快取全部局的三紅率是 {{currentThreeRed}}%（快照與篩選不同），兩邊的數字不能直接相減。"
+          }
+        }
+      },
+      "teams": {
+        "tabsLabel": "派隊小分頁",
+        "tabs": {
+          "captain": "隊長",
+          "firstVote": "1-1 派票",
+          "progression": "任務進程",
+          "study": "研究 L139"
+        },
+        "loading": "載入派隊分析…",
+        "pending": "下次每日更新後提供",
+        "blocks": {
+          "mission": "任務結果",
+          "missionSub": "三紅率",
+          "missionHint": "任務結果：三紅 ÷ 這組全部場次（紅方做滿三次失敗任務的比例）；藍方＝三藍 ÷ 全部",
+          "assassination": "刺殺結果",
+          "assassinationSub": "三藍局刺中率",
+          "assassinationHint": "刺殺結果：只看打到三藍的局，三藍死 ÷（三藍死＋三藍活），也就是刺客刺中梅林的比例；n 是三藍局數（三紅局沒有刺殺）",
+          "final": "遊戲結果",
+          "finalSub": "紅方勝率",
+          "finalHint": "遊戲結果：（三紅＋三藍死）÷ 這組全部場次；藍方勝率＝三藍活 ÷ 全部",
+          "note": "三塊都從紅方看，藍方＝100% − 紅方：任務結果＝三紅 ÷ 全部；刺殺結果＝三藍死 ÷ 三藍局（三紅局沒有刺殺）；遊戲結果＝（三紅＋三藍死）÷ 全部。每個比率後面的 n 是它的分母。",
+          "lowSample": "淡色＝樣本少於 {{min}} 場。",
+          "pendingNote": "這份快取沒有三種結果的局數：任務結果暫用舊欄位，刺殺與遊戲結果下次每日更新後提供。"
+        },
+        "captain": {
+          "intro": "隊長＝每個任務實際出發那一隊的隊長（文字紀錄的席位對應到角色），共 {{count}} 局。紅方隊長越到後面越少；同樣是任務失敗，隊長是哪一方，整局結果也不一樣。",
+          "perMissionCaption": "各任務的隊長陣營",
+          "mission": "任務",
+          "missionN": "任務 {{n}}",
+          "redCaptain": "紅方隊長",
+          "blueCaptain": "藍方隊長",
+          "games": "場數",
+          "resultCaption": "隊長陣營 × 任務結果 → 整局結果",
+          "group": "隊長 · 任務",
+          "redShort": "紅隊長",
+          "blueShort": "藍隊長",
+          "pass": "成功",
+          "fail": "失敗",
+          "share": "比例",
+          "shareSub": "佔該陣營隊長的任務",
+          "shareHint": "這一方的隊長帶出去的任務裡，成功／失敗各佔多少；n＝這一方隊長的任務數",
+          "nNote": "隊長表以任務為單位：一局有好幾個任務，每個任務各算一次（n＝任務數）。"
+        },
+        "firstVote": {
+          "intro": "1-1＝第一局的第一次派票。那一隊裡有沒有梅林／派西維爾、有幾個紅方，任務 1 的成功率與整局結果差多少。",
+          "visionCaption": "1-1 隊裡有誰",
+          "redCountCaption": "1-1 隊裡的紅方人數",
+          "team": "1-1 隊伍",
+          "redCount": "紅方人數",
+          "merlinIn": "有梅林",
+          "merlinOut": "沒有梅林",
+          "percivalIn": "有派西維爾",
+          "percivalOut": "沒有派西維爾",
+          "redCountLabel": "{{count}} 紅",
+          "m1Pass": "任務 1",
+          "m1PassSub": "成功率",
+          "m1PassHint": "任務 1 成功的比例（不論 1-1 這隊最後有沒有出發）；n＝這組的場數"
+        },
+        "progression": {
+          "intro": "每個任務的成功率、任務 1 成功或失敗之後，以及每條完整任務路徑各自的結果。",
+          "roundCaption": "各任務成功率",
+          "round": "任務",
+          "roundN": "任務 {{n}}",
+          "pass": "成功（藍）",
+          "fail": "失敗（紅）",
+          "roundHint": "打到這個任務的局裡，任務成功／失敗的比例；n＝打到這個任務的場數",
+          "branchCaption": "任務 1 成功／失敗之後",
+          "branchGroup": "任務 1",
+          "branchPassed": "成功",
+          "branchFailed": "失敗",
+          "pathCaption": "完整任務路徑",
+          "path": "路徑",
+          "pathAria": "任務路徑 {{path}}",
+          "pathNote": "路徑的色塊：紅＝任務失敗、藍＝任務成功；依場數排序（快取存最常見的 {{count}} 條）。"
+        }
+      },
+      "boards": {
+        "tabsLabel": "排行榜",
+        "tab": {
+          "main": "角色理論",
+          "position": "位置理論",
+          "overall": "整體理論",
+          "last50": "近 50 場",
+          "improved": "進步",
+          "assassin": "刺客",
+          "newcomers": "新人",
+          "roleTitles": "角色王",
+          "precision": "精算榜"
+        },
+        "who": "上榜：",
+        "sparseNote": "淡色＝有角色或位置不到 {{min}} 場，用全體的最終勝率補到 {{min}} 場。",
+        "sparseCell": "{{count}} 格不到 {{min}} 場，用全體勝率補值",
+        "clickHint": "點一列看該玩家的玩家雷達。",
+        "pending": {
+          "positionTitle": "位置理論勝率排行",
+          "position": "位置理論排行（各人最近 {{games}} 場）下次每日更新後提供。",
+          "positionDef": "位置理論 = Σ 1/10 × 本人該位置的最終勝率。",
+          "overallTitle": "整體理論勝率排行",
+          "overall": "整體理論排行（生涯至少 {{games}} 場，看生涯全部場次）下次每日更新後提供。",
+          "overallDef": "整體理論 = 用生涯全部場次算的角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率。"
+        },
+        "col": {
+          "rankName": "名次・玩家",
+          "name": "玩家",
+          "role": "角色",
+          "tie": "並列",
+          "value": "數值",
+          "roleTheory": "角色理論",
+          "positionTheory": "位置理論",
+          "overallTheory": "整體理論",
+          "finalWinRate": "最終勝率",
+          "windowGames": "視窗場數",
+          "careerGames": "生涯場數",
+          "firstPlayed": "首次出賽",
+          "delta": "進步（百分點）",
+          "recentRoleTheory": "近期角色理論",
+          "priorRoleTheory": "之前角色理論",
+          "recentFinalWinRate": "近期最終勝率",
+          "priorFinalWinRate": "之前最終勝率",
+          "recentPriorGames": "場數（近期 / 之前）",
+          "hitRate": "刺中率",
+          "hitsAttempts": "刺中／刺殺",
+          "winsGames": "勝／場",
+          "careerRoleGames": "生涯該角色場數"
+        }
+      },
+      "overview": {
+        "summary": {
+          "label": "總覽摘要",
+          "threeBlueOnly": "三藍局"
+        },
+        "outcomes": {
+          "title": "三種結果與場次排行",
+          "viewLabel": "顯示方式",
+          "viewDonut": "圓餅",
+          "viewTable": "表格",
+          "overall": "全體",
+          "topPlayers": "場次前 {{count}} 名：各自全部場次的三種結果（不分陣營），圓心 = 場數",
+          "topPlayersGames": "場次前 {{count}} 名",
+          "playerDonut": "{{name}}：{{games}} 場",
+          "playersPending": "每位玩家的三種結果：下次每日更新後提供。",
+          "tableNote": "% = 該結果占這一列全部場次的比例（不分陣營），括號 = 場數（手機上省略）。"
+        },
+        "theory": {
+          "title": "理論勝率排行",
+          "scope": "不限近期出賽，近期排行見「排行」",
+          "role": "角色理論",
+          "position": "位置理論",
+          "overall": "整體理論",
+          "value": "理論勝率",
+          "nHint": "n = 算這個勝率用到的場數",
+          "windowRole": "各角色近 {{special}}・忠臣近 {{loyal}} 場",
+          "windowLast": "近 {{games}} 場・生涯 {{games}} 場以上",
+          "windowCareer": "生涯全部・{{min}} 場以上",
+          "defRole": "角色理論 = Σ 抽到機率（忠臣 4/10、其他各 1/10）× 本人當該角色最近場次的最終勝率，每個角色都打滿才上榜。",
+          "defRoleLegacy": "角色理論 = Σ 抽到機率（忠臣 4/10、其他各 1/10）× 本人該角色的最終勝率。",
+          "defPosition": "位置理論 = Σ 1/10 × 本人各位置最終勝率。",
+          "defOverall": "整體理論 = 生涯全部場次的角色理論。",
+          "topUp": "不到 {{n}} 場的角色／位置以全體勝率補到 {{n}} 場。",
+          "baseline": "全體基準 {{parts}}（低於基準標紅）",
+          "baselineRole": "角色 {{value}}%",
+          "baselineSeat": "位置 {{value}}%",
+          "listSep": "、",
+          "pending": "下次每日更新後提供",
+          "empty": "尚無玩家符合",
+          "tipPositionLast": "位置理論（近 {{games}} 場）{{value}}",
+          "tipFinalLast": "最終勝率（近 {{games}} 場）{{value}}",
+          "tipOverall": "整體理論 {{value}}",
+          "tipPositionCareer": "生涯位置理論 {{value}}",
+          "tipFinalCareer": "生涯最終勝率 {{value}}",
+          "tipOpen": "點一下看玩家雷達",
+          "sentenceSep": "；",
+          "roleUpgrade": "下次每日更新後，角色理論改看各角色近 {{special}} 場、忠臣近 {{loyal}} 場（每個角色都打滿才上榜）；這裡先列目前的版本。",
+          "pendingTitle": "{{names}}排行：下次每日更新後提供"
+        },
+        "tabs": {
+          "label": "總覽小分頁",
+          "outcomes": "結果與場次"
+        }
+      },
+      "radar": {
+        "picker": {
+          "label": "選擇玩家",
+          "toggle": "展開／收起玩家名單",
+          "list": "玩家名單",
+          "all": "全部 {{count}} 位，場次多的在前",
+          "matches": "符合 {{count}} 位",
+          "none": "沒有符合的玩家",
+          "games": "{{count}} 場"
+        },
+        "summary": {
+          "games": "生涯 {{count}} 場",
+          "final": "最終勝率"
+        },
+        "tabs": {
+          "label": "玩家雷達小分頁",
+          "radar": "雷達圖",
+          "blocks": "三塊勝率",
+          "theory": "理論勝率"
+        },
+        "pending": "下次每日更新後提供",
+        "axes": {
+          "winRate": "最終勝率",
+          "redWinRate": "紅方最終勝率",
+          "blueMerlinProtect": "藍方梅林存活率",
+          "missionWinRate": "任務勝率",
+          "roleTheory": "角色理論",
+          "positionTheory": "位置理論",
+          "redMerlinKillRate": "紅方刺中率",
+          "experience": "經驗"
+        },
+        "axisDef": {
+          "winRate": "遊戲結果：（紅方場三紅＋三藍死＋藍方場三藍活）÷ 全部場次",
+          "redWinRate": "紅方場遊戲結果：（三紅＋三藍死）÷ 紅方場次",
+          "blueMerlinProtect": "藍方場刺殺結果：三藍活 ÷ 藍方的三藍局（三紅局不算）",
+          "missionWinRate": "任務結果：（紅方場三紅＋藍方場三藍）÷ 全部場次",
+          "roleTheory": "各角色近 {{special}} 場、忠臣近 {{loyal}} 場（見理論勝率）",
+          "positionTheory": "近 {{games}} 場（見理論勝率）",
+          "redMerlinKillRate": "紅方場刺殺結果：三藍死 ÷ 紅方的三藍局（三紅局不算）",
+          "experience": "總場次 ÷ 10（上限 100），不是勝率"
+        },
+        "colAxis": "指標",
+        "colValue": "數值",
+        "colDef": "怎麼算",
+        "chartAria": "{{name}} 的能力雷達圖",
+        "tooFewAxes": "可畫的指標不到三個，數字見右邊的表。",
+        "radarNote": "圖只畫算得出來的軸（缺的不畫成 0%）。n＝分母場數；理論勝率的 n＝用到的場數。",
+        "blocks": {
+          "group": "分組",
+          "empty": "三塊勝率：下次每日更新後提供",
+          "rolesNote": "紅方、藍方與各角色都是生涯全部場次。",
+          "rolesPending": "各角色的三塊勝率：下次每日更新後提供。"
+        },
+        "theory": {
+          "summaryCaption": "三種理論勝率",
+          "rolesCaption": "角色理論用到的場次",
+          "colTheory": "理論",
+          "colRate": "理論勝率",
+          "colRange": "範圍",
+          "colGames": "場數",
+          "colGamesHint": "用到的場數 / 視窗；打滿＝場數夠",
+          "colTopUp": "補值",
+          "colTopUpHint": "不到 {{n}} 場、用全體最終勝率補值的格數（角色共 7 格、位置共 10 格）",
+          "colFinal": "同段最終勝率",
+          "colFinalHint": "同一段場次實際的最終勝率（不加權），和理論勝率對照",
+          "role": "角色理論",
+          "position": "位置理論",
+          "overall": "整體理論",
+          "windowRole": "各角色近 {{special}} 場、忠臣近 {{loyal}} 場",
+          "windowPosition": "近 {{count}} 場",
+          "windowCareer": "生涯全部場次",
+          "full": "打滿",
+          "notFull": "未打滿",
+          "careerGames": "{{count}} 場",
+          "cells": "{{count}} 格",
+          "overallLocked": "生涯滿 {{min}} 場後顯示",
+          "note": "角色理論＝Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 本人該角色最近的最終勝率（各角色近 {{special}} 場、忠臣近 {{loyal}} 場）；位置理論＝Σ 1/10 × 本人近 {{position}} 場各位置的最終勝率；整體理論＝生涯全部場次的角色理論，生涯滿 {{overall}} 場才列。",
+          "noteTopUp": "不到 {{n}} 場的格子用全體最終勝率補到 {{n}} 場。",
+          "colRole": "角色",
+          "colWins": "勝／場",
+          "colWindow": "視窗",
+          "colCellRate": "進總和的勝率",
+          "colCellRateHint": "這個角色進角色理論總和的最終勝率（補值後）",
+          "colStatus": "狀態",
+          "status": {
+            "full": "打滿",
+            "partial": "未打滿",
+            "topUp": "補到 {{n}} 場",
+            "none": "沒打過・用全體"
+          },
+          "rolesNote": "排行的角色理論只收每個角色都打滿的玩家。",
+          "rolesPending": "各角色近幾場的角色理論：下次每日更新後提供"
+        }
       }
     }
   },

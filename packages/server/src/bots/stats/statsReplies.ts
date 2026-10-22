@@ -20,13 +20,14 @@ import type {
   LeaderboardBoard,
   LeaderboardSection,
   OverviewData,
+  PlayerRoleWindows,
   PlayerStats,
   PlayerTheoryWindow,
   PlaystyleData,
   PlaystylePlayerData,
   StrengthPlayerData,
 } from '../../services/sheetsAnalysis';
-import { isTheoryBoard, theoryLastWindows } from '../../services/sheetsAnalysis';
+import { isTheoryBoard, playerOutcomeBlocks, theoryLastWindows } from '../../services/sheetsAnalysis';
 import {
   MAX_NAME_CANDIDATES,
   findSamePlayerName,
@@ -34,7 +35,8 @@ import {
   matchPlayerName,
   normalizeName,
 } from '@avalon/shared';
-import type { NameMatch } from '@avalon/shared';
+import type { NameMatch, OutcomeBlocks } from '@avalon/shared';
+import { SIM_CONFIG } from '../simulation/config';
 
 // Name lookup lives in @avalon/shared (the website's player search and the stats API use the
 // same rules; normalizeName = playerNameKey, the rule generate_cache.py merges players by).
@@ -72,9 +74,20 @@ export const DIGEST_NEWCOMERS_SIZE = 3;
 /**
  * generate_cache.py LEADERBOARD_CONFIG.theoryMinCellGames: a role / seat with
  * fewer games in the window is topped up to this many at the population rate.
- * The card's footnote uses the cache's value when it carries one.
+ * The card's footnote uses the cache's value when it carries one; this is only
+ * the fallback for a cache WITHOUT the setting. (2026-10-14 Edward：「建議補到 5
+ * 場」) the generator writes 5 since then, but caches written before carry —
+ * and were computed with — 3, so the fallback stays 3.
  */
 export const THEORY_MIN_CELL_GAMES = 3;
+
+/**
+ * 角色王 line: at most this many names per role, then「等 N 人」. (2026-10-14
+ * Edward：角色王同率「各給」) every player tied at the top gets the title, so a
+ * role can have several rows; the cap only keeps one role from pushing the
+ * whole 角色王 line out of the Monday digest's length budget.
+ */
+export const ROLE_TITLE_NAMES_MAX = 5;
 
 /** User input echoed back is cut to this many characters. */
 const QUERY_ECHO_MAX = 20;
@@ -88,7 +101,12 @@ export const STATS_COMMAND_USAGE = {
   chemistry: '/默契 名字1 名字2',
   /** Handled by bots/feedback (owner inbox); listed here so every help text advertises it. */
   feedback: '/意見 文字',
+  /** 模擬瓦 (2026-10-14, bots/simulation); listed here so every help text advertises it. */
+  simulation: '/模擬 [角色] [座位]',
 } as const;
+
+/** The 模擬瓦 follow-up commands, for the help texts (bots/simulation, docs/SIMULATION.md). */
+export const SIM_HELP_FOLLOW_UP = '/派 /區間 /下一步 /公布 /結束';
 
 const SITE_FOOTER = `🔗 完整圖表（不用登入）：${STATS_PAGE_URL}`;
 
@@ -176,8 +194,18 @@ export interface PlayerCardInput {
   playstyle?: { data: PlaystylePlayerData; labels: PlaystyleData['labels'] } | null;
   /** Other rows of the same player spelled differently (old caches only), shown as a hint. */
   caseVariants?: string[];
+  /**
+   * The old name the query was (NameMatch.alias: an alias source of the cache's players.aliases,
+   * player_aliases.json); the card says it now shows under the official name.
+   */
+  alias?: string;
   /** leaderboard.config.theoryMinCellGames of the cache (for the footnote); default 3. */
   minCellGames?: number;
+  /**
+   * The player's rank on the cache's 新人榜 (the newcomers board), when they are on it: it ranks
+   * role theory over windows that are not full, so the card must not say they are unranked.
+   */
+  newcomerRank?: number | null;
 }
 
 const ARCHETYPE_AXES: Array<keyof ArchetypeAxes> = ['honesty', 'consistency', 'stickiness', 'flip'];
@@ -214,23 +242,26 @@ function archetypeLine(arch: PlayerCardInput['archetype']): string | null {
   return `🧭 風格：${parts.join('、')}`;
 }
 
-function playstyleLine(ps: PlayerCardInput['playstyle']): string | null {
-  if (!ps?.data?.hasData) return null;
-  const { data, labels } = ps;
+function playstyleLine(ps: PlayerCardInput['playstyle'], voting: PlayerStats['voting']): string {
   const parts: string[] = [];
-  if (data.r3RejectRate?.red !== null && data.r3RejectRate?.red !== undefined) {
-    parts.push(`${labels?.r3RejectRedLabel || '紅角 R3+ 強硬度'} ${pct(data.r3RejectRate.red)}`);
+  if (!voting) {
+    parts.push('第 3 局後反對率：下次每日更新後提供');
+  } else {
+    for (const [key, label] of [['loyal', '忠臣'], ['red', '紅方']] as const) {
+      const cell = voting.r3Reject[key];
+      const rate = cell.rate === null ? `樣本不足（${cell.votes}/${voting.minVotes} 票）`
+        : `${pct(cell.rate)}（${cell.hits}/${cell.votes} 票，PR${cell.pr}／${cell.cohortPlayers} 人）`;
+      parts.push(`${label}第 3 局後反對率 ${rate}`);
+    }
+    parts.push('R3–R5，排除第 5 次強制提議');
   }
-  if (data.r3RejectRate?.blue !== null && data.r3RejectRate?.blue !== undefined) {
-    parts.push(`${labels?.r3RejectBlueLabel || '藍角 R3+ 強硬度'} ${pct(data.r3RejectRate.blue)}`);
-  }
-  if (Array.isArray(data.assassinTopSeats) && data.assassinTopSeats.length > 0) {
+  const { data, labels } = ps ?? {};
+  if (Array.isArray(data?.assassinTopSeats) && data.assassinTopSeats.length > 0) {
     parts.push(`${labels?.assassinTargetLabel || '刺客目標座位偏好'} ${data.assassinTopSeats.join('、')} 號`);
   }
-  if (typeof data.captainStickiness === 'number') {
+  if (typeof data?.captainStickiness === 'number') {
     parts.push(`${labels?.captainStickinessLabel || '隊長 stickiness'} ${pct(data.captainStickiness)}`);
   }
-  if (parts.length === 0) return null;
   return `🎯 對戰風格：${parts.join('、')}`;
 }
 
@@ -257,25 +288,83 @@ function blueSurvivalRate(p: PlayerStats): number | null {
   return null;
 }
 
-/** "※ 角色理論 = …" — how the card's theory numbers are made (top-up clause only when it is on). */
-export function theoryFootnote(minCellGames: number = THEORY_MIN_CELL_GAMES): string {
+/**
+ * "※ 角色理論 = …" — how the card's theory numbers are made (top-up clause only when it is on).
+ * With `roleWindows` (schemaVersion 4, {special, loyal} = K_r) it names the per-role windows and 整體理論.
+ */
+export function theoryFootnote(
+  minCellGames: number = THEORY_MIN_CELL_GAMES,
+  roleWindows?: { special: number; loyal: number } | null,
+): string {
   const topUp = minCellGames > 0 ? `；不到 ${minCellGames} 場的角色或位置用全體勝率補到 ${minCellGames} 場` : '';
+  if (roleWindows) {
+    return (
+      `※ 角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 該角色最終勝率（每個角色看最近 ${roleWindows.special} 場、` +
+      `忠臣 ${roleWindows.loyal} 場）；位置理論 = Σ 1/10 × 該位置最終勝率；整體理論 = 生涯全部場次算的角色理論${topUp}`
+    );
+  }
   return `※ 角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 該角色最終勝率；位置理論 = Σ 1/10 × 該位置最終勝率${topUp}`;
 }
+
+/** "※ 任務結果 …" — the three conditional outcome blocks on the card (schemaVersion 4). */
+export const OUTCOME_BLOCKS_FOOTNOTE =
+  '※ 任務結果 = 三紅（紅勝）或三藍（藍勝）÷ 該方全部場數；刺殺結果只看到達三藍的局：三藍死（紅勝）或三藍活（藍勝）÷ 三藍局數；' +
+  '遊戲結果 = 三紅、三藍死算紅勝，三藍活算藍勝 ÷ 該方全部場數';
 
 function theoryLine(label: string, w: PlayerTheoryWindow): string {
   return `${label}｜角色理論 ${pct(w.roleTheory)}｜位置理論 ${pct(w.positionTheory)}｜最終 ${pct(w.finalWinRate)}`;
 }
 
+/** K_r of a special role and of 忠臣 in players[].theory.roleWindows (schemaVersion 4), else null. */
+export function roleWindowSizes(rw: PlayerRoleWindows | null | undefined): { special: number; loyal: number } | null {
+  const roles = rw?.roles;
+  if (!roles || typeof roles !== 'object') return null;
+  const loyal = roles['忠臣']?.window;
+  const special = Object.entries(roles).find(([r]) => r !== '忠臣')?.[1]?.window;
+  return typeof loyal === 'number' && typeof special === 'number' ? { special, loyal } : null;
+}
+
 /**
- * "近 100 場｜角色理論 …", "近 50 場｜…", "生涯 N 場｜…" from `player.theory`
- * (schemaVersion 3; whatever last-N windows the cache has, largest first). A
- * last-N line is printed only when the player has more than N games (otherwise
- * it is the career line again). null on an older cache.
+ * schemaVersion 4 (Edward 2026-10-14): 角色理論（各角色近 10 場、忠臣近 40 場）、位置理論（近 100
+ * 場）、整體理論（生涯 N 場）— the windows read from the cache. A role-window line whose windows are
+ * not all full says how many games it has and that it is not on the 角色理論勝率排行 (the main board
+ * needs full windows) — only that board: the same player can be on the 位置理論 / 整體理論 boards,
+ * and a newcomer on the 新人榜 (`newcomerRank`, printed when given). A player with fewer than N games
+ * gets 「位置理論（全部 N 場）」.
  */
-export function theoryLines(p: Pick<PlayerStats, 'theory'>): string[] | null {
+function roleWindowTheoryLines(
+  p: Pick<PlayerStats, 'theory'>,
+  rw: PlayerRoleWindows,
+  sizes: { special: number; loyal: number },
+  newcomerRank?: number | null,
+): string[] | null {
   const career = p.theory?.career;
   if (!career || typeof career.games !== 'number') return null;
+  const newcomer = typeof newcomerRank === 'number' ? `；新人榜第 ${newcomerRank} 名` : '';
+  const lines = [`角色理論（各角色近 ${sizes.special} 場、忠臣近 ${sizes.loyal} 場）${pct(rw.roleTheory)}` +
+    (rw.fullWindows ? '' : `（目前 ${rw.games} 場，還沒有每個角色都打滿，不列入角色理論勝率排行${newcomer}）`)];
+  const last = theoryLastWindows(p.theory)[0];
+  if (last) {
+    const label = last.games < last.window ? `全部 ${last.games} 場` : `近 ${last.window} 場`;
+    lines.push(`位置理論（${label}）${pct(last.positionTheory)}｜最終勝率 ${pct(last.finalWinRate)}`);
+  }
+  lines.push(`整體理論（生涯 ${career.games} 場）${pct(career.roleTheory)}｜位置理論 ${pct(career.positionTheory)}｜最終勝率 ${pct(career.finalWinRate)}`);
+  return lines;
+}
+
+/**
+ * The card's theory lines from `player.theory`, null on a cache without it.
+ * schemaVersion 4 (`roleWindows`): see roleWindowTheoryLines (`newcomerRank`: the player's 新人榜 rank,
+ * when on it). schemaVersion 3: "近 100 場｜角色理論 …", "近 50 場｜…", "生涯 N 場｜…" (whatever last-N
+ * windows the cache has, largest first; a last-N line only when the player has more than N games,
+ * otherwise it is the career line again).
+ */
+export function theoryLines(p: Pick<PlayerStats, 'theory'>, newcomerRank?: number | null): string[] | null {
+  const career = p.theory?.career;
+  if (!career || typeof career.games !== 'number') return null;
+  const rw = p.theory?.roleWindows;
+  const sizes = roleWindowSizes(rw);
+  if (rw && sizes) return roleWindowTheoryLines(p, rw, sizes, newcomerRank);
   const lines: string[] = [];
   for (const w of theoryLastWindows(p.theory)) {
     if (career.games > w.window) {
@@ -286,43 +375,61 @@ export function theoryLines(p: Pick<PlayerStats, 'theory'>): string[] | null {
   return lines;
 }
 
+/** "🔴 紅方 405 場｜任務結果 x%｜刺殺結果 y%（三藍 n 場）｜遊戲結果 z%" — every rate conditional on the side. */
+function outcomeBlockLine(label: string, b: OutcomeBlocks): string {
+  if (b.mission.n === 0) return `${label} 0 場`;
+  const kill = b.assassination.n > 0 ? `${pct(b.assassination.win)}（三藍 ${b.assassination.n} 場）` : '—（沒有三藍的局）';
+  return `${label} ${b.mission.n} 場｜任務結果 ${pct(b.mission.win)}｜刺殺結果 ${kill}｜遊戲結果 ${pct(b.final.win)}`;
+}
+
 /**
- * Player card (Edward 2026-10-13): the theory win rates first — 近 100 場、近 50 場
- * and 生涯, each with 角色理論／位置理論／最終勝率 — then the 任務結算 → 刺殺結算 →
- * 最終 walk and the per-side final rates (docs/stats/two_stage_outcome.md).
- * `missionWinRate` falls back to the legacy `winRate`, which has the same 任務結算
- * meaning. The excess win rate and the legacy roleTheory are not shown; on a
- * cache without `theory` the card says the theory rates come with the next refresh.
+ * Player card. schemaVersion 4 (Edward 2026-10-14; the player row has theory.roleWindows): 角色理論（各角色
+ * 近 10 場、忠臣近 40 場）、位置理論（近 100 場）、整體理論（生涯 N 場）, then the 紅方 / 藍方 games in three
+ * conditional blocks — 任務結果、刺殺結果（只看三藍局，附局數）、遊戲結果 (docs/stats/two_stage_outcome.md
+ * 「三塊結果」). schemaVersion 3 (and older), unchanged since 2026-10-13: 近 100 場、近 50 場 and 生涯, each
+ * with 角色理論／位置理論／最終勝率, then the 任務結算 → 刺殺結算 → 最終 walk and the per-side final rates
+ * (`missionWinRate` falls back to the legacy `winRate`, which has the same 任務結算 meaning). The excess
+ * win rate and the legacy roleTheory are never shown; on a cache without `theory` the card says the
+ * theory rates come with the next refresh.
  */
 export function formatPlayerCard(input: PlayerCardInput): string {
   const p = input.player;
   const lines: string[] = [`📊 ${p.name} 的戰績`];
-  const theory = theoryLines(p);
+  const theory = theoryLines(p, input.newcomerRank);
+  const roleWindows = roleWindowSizes(p.theory?.roleWindows);
+  const blocks = roleWindows ? playerOutcomeBlocks(p) : null;
   if (theory) {
     lines.push(...theory);
   } else {
     lines.push(`場次 ${p.totalGames}｜最終勝率 ${pct(p.finalWinRate)}`);
     lines.push('（角色理論／位置理論勝率：下次每日更新資料後提供）');
   }
-  const kill = redKillRate(p);
-  const survive = blueSurvivalRate(p);
-  const stageParts = [
-    kill === null ? null : `紅方刺中 ${pct(kill)}`,
-    survive === null ? null : `藍方存活 ${pct(survive)}`,
-  ].filter((s): s is string => s !== null);
-  const stage = stageParts.length > 0 ? `刺殺結算（三藍局：${stageParts.join('／')}）→` : '刺殺結算 →';
-  lines.push(`任務結算 ${pct(p.missionWinRate ?? p.winRate)} → ${stage} 最終 ${pct(p.finalWinRate)}`);
-  const redGames = typeof p.rawRedGames === 'number' ? `（${p.rawRedGames} 場）` : '';
-  const blueGames = typeof p.rawBlueGames === 'number' ? `（${p.rawBlueGames} 場）` : '';
-  lines.push(`🔴 紅方最終勝率 ${pct(p.finalRedWinRate)}${redGames}｜🔵 藍方最終勝率 ${pct(p.finalBlueWinRate)}${blueGames}`);
+  if (blocks?.red && blocks.blue) {
+    lines.push(outcomeBlockLine('🔴 紅方', blocks.red));
+    lines.push(outcomeBlockLine('🔵 藍方', blocks.blue));
+  } else {
+    const kill = redKillRate(p);
+    const survive = blueSurvivalRate(p);
+    const stageParts = [
+      kill === null ? null : `紅方刺中 ${pct(kill)}`,
+      survive === null ? null : `藍方存活 ${pct(survive)}`,
+    ].filter((s): s is string => s !== null);
+    const stage = stageParts.length > 0 ? `刺殺結算（三藍局：${stageParts.join('／')}）→` : '刺殺結算 →';
+    lines.push(`任務結算 ${pct(p.missionWinRate ?? p.winRate)} → ${stage} 最終 ${pct(p.finalWinRate)}`);
+    const redGames = typeof p.rawRedGames === 'number' ? `（${p.rawRedGames} 場）` : '';
+    const blueGames = typeof p.rawBlueGames === 'number' ? `（${p.rawBlueGames} 場）` : '';
+    lines.push(`🔴 紅方最終勝率 ${pct(p.finalRedWinRate)}${redGames}｜🔵 藍方最終勝率 ${pct(p.finalBlueWinRate)}${blueGames}`);
+  }
 
-  for (const extra of [strengthLine(input.strength), archetypeLine(input.archetype), playstyleLine(input.playstyle)]) {
+  for (const extra of [strengthLine(input.strength), archetypeLine(input.archetype), playstyleLine(input.playstyle, p.voting)]) {
     if (extra) lines.push(extra);
   }
   if (input.caseVariants && input.caseVariants.length > 0) {
     lines.push(`ℹ️ 大小寫不同的寫法目前另列：${input.caseVariants.slice(0, MAX_NAME_CANDIDATES).join('、')}（同一人，戰績更新後會合併）`);
   }
-  if (theory) lines.push(theoryFootnote(input.minCellGames ?? THEORY_MIN_CELL_GAMES));
+  if (input.alias) lines.push(`ℹ️ 「${input.alias}」現在統一顯示為「${p.name}」（同一位玩家，戰績已合併）`);
+  if (theory) lines.push(theoryFootnote(input.minCellGames ?? THEORY_MIN_CELL_GAMES, roleWindows));
+  if (blocks?.red && blocks.blue) lines.push(OUTCOME_BLOCKS_FOOTNOTE);
   lines.push(`🔗 ${p.name} 的雷達圖與完整戰績（不用登入）：${playerStatsUrl(p.name)}`);
   return clampReply(lines.join('\n'));
 }
@@ -338,7 +445,12 @@ export function formatPlayerCard(input: PlayerCardInput): string {
 // /排行 falls back to overview.topPlayersByRoleTheory, else says the new
 // ranking comes with the next daily refresh.
 
-/** One printed ranking row (all numbers over the board's window of the player's games). */
+/**
+ * One printed ranking row. schemaVersion 3: every number over the board's window of the player's
+ * games. schemaVersion 4 (overallTheory present): roleTheory over the per-role windows,
+ * positionTheory / finalWinRate over the last 100 games, overallTheory = career role theory, and
+ * the career games are printed instead of the window's.
+ */
 export interface LeaderboardLine {
   rank: number;
   name: string;
@@ -346,10 +458,13 @@ export interface LeaderboardLine {
   positionTheory: number | null;
   finalWinRate: number | null;
   games: number;
+  /** schemaVersion 4: 整體理論 (career role theory). */
+  overallTheory?: number | null;
+  careerGames?: number | null;
 }
 
 export interface LeaderboardView {
-  /** First line, e.g. "🏆 角色理論勝率排行 Top 10（各人最近 100 場，近 90 天內有出賽、生涯至少 100 場）". */
+  /** First line, e.g. "🏆 角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場，近 90 天內有出賽、…）". */
   title: string;
   rows: LeaderboardLine[];
   /** Printed instead of rows when there are none. */
@@ -358,9 +473,10 @@ export interface LeaderboardView {
 
 /**
  * Shown on a cache written before the theory rates. Such a cache carries none of the new
- * settings, so this names the generator's defaults (LEADERBOARD_CONFIG.mainGames = 100).
+ * settings, so this names the generator's defaults (LEADERBOARD_CONFIG roleWindowGames = 10,
+ * loyalWindowGames = 40).
  */
-export const LEADERBOARD_PENDING_NOTE = '（排行改版中：下次每日更新資料後，會改用「各人最近 100 場」的角色理論勝率排行）';
+export const LEADERBOARD_PENDING_NOTE = '（排行改版中：下次每日更新資料後，會改用「各角色近 10 場、忠臣近 40 場」的角色理論勝率排行）';
 
 /**
  * A setting of the generator: leaderboard.config[key], else overview.theoryConfig[key], else
@@ -376,6 +492,31 @@ function theorySetting(
     if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
   }
   return fallback;
+}
+
+/**
+ * The 角色理論 windows {special, loyal} of a schemaVersion-4 cache: overview.theoryConfig.roleWindowGames
+ * ({role: K_r}) or leaderboard.config roleWindowGames / loyalWindowGames (two numbers); null on an
+ * older cache (its role theory is over the last mainGames games).
+ */
+export function configRoleWindows(...sources: Array<Record<string, unknown> | null | undefined>): { special: number; loyal: number } | null {
+  for (const src of sources) {
+    const v = src?.roleWindowGames;
+    if (v && typeof v === 'object') {
+      const map = v as Record<string, unknown>;
+      const loyal = map['忠臣'];
+      const special = Object.entries(map).find(([r]) => r !== '忠臣')?.[1];
+      if (typeof loyal === 'number' && typeof special === 'number') return { special, loyal };
+    } else if (typeof v === 'number' && typeof src?.loyalWindowGames === 'number') {
+      return { special: v, loyal: src.loyalWindowGames as number };
+    }
+  }
+  return null;
+}
+
+/** The window /排行 ranks by: 「各角色近 10 場、忠臣近 40 場」 (schemaVersion 4) or 「各人最近 100 場」 (schemaVersion 3). */
+function rankingWindow(roleWindows: { special: number; loyal: number } | null, mainGames: number): string {
+  return roleWindows ? `各角色近 ${roleWindows.special} 場、忠臣近 ${roleWindows.loyal} 場` : `各人最近 ${mainGames} 場`;
 }
 
 /** The board with that id, or null when it is absent or has no rows (the generator omits boards it cannot build). */
@@ -413,7 +554,7 @@ function numOrNull(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-/** A theory board (main / last50 / newcomers) as a printable view, top `size` rows. */
+/** A theory board (main / newcomers; schemaVersion 3 also last50) as a printable view, top `size` rows. */
 export function boardView(board: LeaderboardBoard, size: number = LEADERBOARD_SIZE, emoji = '🏆'): LeaderboardView {
   return {
     title: boardTitle(board, size, emoji),
@@ -424,15 +565,17 @@ export function boardView(board: LeaderboardBoard, size: number = LEADERBOARD_SI
       positionTheory: numOrNull(r.positionTheory),
       finalWinRate: numOrNull(r.finalWinRate),
       games: r.games,
+      ...(r.overallTheory !== undefined ? { overallTheory: numOrNull(r.overallTheory), careerGames: numOrNull(r.careerGames) } : {}),
     })),
   };
 }
 
 /**
  * The ranking /排行 and the Monday digest lead with, in order of preference:
- *   1. the cache's `leaderboard` main board (each active player's last 100 games);
- *   2. `overview.topPlayersByRoleTheory` (same window, ≥ 100 career games, any
- *      activity) — e.g. when nobody qualified for the main board;
+ *   1. the cache's `leaderboard` main board (schemaVersion 4: each active player's per-role
+ *      windows, everyone with full windows; schemaVersion 3: each active player's last 100 games);
+ *   2. `overview.topPlayersByRoleTheory` (the same, any activity) — e.g. when nobody qualified
+ *      for the main board;
  *   3. an empty view: "nobody qualifies" on a current cache, or the pending
  *      note on a cache written before the theory rates.
  */
@@ -448,10 +591,15 @@ export function selectLeaderboard(
   const settings = [leaderboard?.config, overview?.theoryConfig as Record<string, unknown> | undefined];
   const mainGames = theorySetting('mainGames', 100, ...settings);
   const activeDays = theorySetting('activeDays', 90, ...settings);
+  // schemaVersion 4: 角色理論 over the per-role windows (each role needs its K_r games).
+  const roleWindows = configRoleWindows(...settings);
+  const window = rankingWindow(roleWindows, mainGames);
   const top = overview?.topPlayersByRoleTheory;
   if (Array.isArray(top) && top.length > 0) {
     return {
-      title: `🏆 角色理論勝率排行 Top ${size}（各人最近 ${mainGames} 場，生涯至少 ${mainGames} 場，不限近期出賽）`,
+      title: roleWindows
+        ? `🏆 角色理論勝率排行 Top ${size}（${window}，每個角色都打滿，不限近期出賽）`
+        : `🏆 角色理論勝率排行 Top ${size}（${window}，生涯至少 ${mainGames} 場，不限近期出賽）`,
       rows: top.slice(0, size).map((r, i) => ({
         rank: i + 1,
         name: r.name,
@@ -459,14 +607,18 @@ export function selectLeaderboard(
         positionTheory: numOrNull(r.positionTheory),
         finalWinRate: numOrNull(r.finalWinRate),
         games: r.games,
+        ...(r.overallTheory !== undefined ? { overallTheory: numOrNull(r.overallTheory), careerGames: numOrNull(r.careerGames) } : {}),
       })),
     };
   }
   const current = Array.isArray(top) || (typeof overview?.schemaVersion === 'number' && overview.schemaVersion >= 3);
+  const qualifies = roleWindows
+    ? `近 ${activeDays} 天內有出賽、六個特殊角色各至少 ${roleWindows.special} 場、忠臣至少 ${roleWindows.loyal} 場`
+    : `近 ${activeDays} 天內有出賽、生涯至少 ${mainGames} 場`;
   return {
     title: '🏆 角色理論勝率排行',
     rows: [],
-    emptyNote: current ? `（目前沒有符合條件的玩家：近 ${activeDays} 天內有出賽、生涯至少 ${mainGames} 場）` : LEADERBOARD_PENDING_NOTE,
+    emptyNote: current ? `（目前沒有符合條件的玩家：${qualifies}）` : LEADERBOARD_PENDING_NOTE,
   };
 }
 
@@ -476,11 +628,21 @@ function rankLabel(rank: number): string {
   return MEDALS[rank - 1] ?? `${rank}.`;
 }
 
-/** Title line + one line per row: rank, name, 角色理論、位置理論、最終勝率 and games of the window. */
+/**
+ * Title line + one line per row: rank, name, 角色理論、位置理論、最終勝率 and games of the window;
+ * schemaVersion 4 rows add 整體理論 and print the career games (full role windows are always 100).
+ */
 export function leaderboardLines(view: LeaderboardView): string[] {
   const lines = [view.title];
   if (view.rows.length === 0) lines.push(view.emptyNote ?? '（目前沒有排行資料）');
   for (const r of view.rows) {
+    if (r.overallTheory !== undefined) {
+      const games = typeof r.careerGames === 'number' ? `生涯 ${r.careerGames} 場` : `${r.games} 場`;
+      lines.push(
+        `${rankLabel(r.rank)} ${r.name}\u3000角色理論 ${pct(r.roleTheory)}｜位置理論 ${pct(r.positionTheory)}｜整體理論 ${pct(r.overallTheory)}｜最終 ${pct(r.finalWinRate)}｜${games}`,
+      );
+      continue;
+    }
     lines.push(
       `${rankLabel(r.rank)} ${r.name}\u3000角色理論 ${pct(r.roleTheory)}｜位置理論 ${pct(r.positionTheory)}｜最終 ${pct(r.finalWinRate)}｜${r.games} 場`,
     );
@@ -498,18 +660,50 @@ export function improvedLines(board: LeaderboardBoard | null | undefined, size: 
   ];
 }
 
-/** "👑 角色王（各人該角色最近 20 場）：刺客 HAO 90.0%、…" from the `roleTitles` board, or null when absent. */
+/**
+ * "👑 角色王（各人該角色最近 20 場）：刺客 甲 90.0%、莫甘娜 乙／丙 90.0%、…" from the `roleTitles` board, or
+ * null when absent. Since 2026-10-14 (ties 各給) a role can have several rows, all at the same rate:
+ * they share one entry, names joined with「／」in the cache's order (at most ROLE_TITLE_NAMES_MAX, then
+ * 「等 N 人」). Older caches have one row per role and read as before.
+ */
 export function roleTitlesLine(board: LeaderboardBoard | null | undefined): string | null {
   if (!board || !isTheoryBoard(board) || !Array.isArray(board.rows) || board.rows.length === 0) return null;
-  const parts = board.rows.map((r) => `${r.role ? `${r.role} ` : ''}${r.name} ${pct(r.value)}`);
+  const groups: Array<{ role: string; value: number; names: string[] }> = [];
+  for (const r of board.rows) {
+    const role = typeof r.role === 'string' ? r.role : '';
+    // Rows without a role never merge; holders of one role are grouped wherever they appear.
+    const same = role ? groups.find((g) => g.role === role && g.value === r.value) : undefined;
+    if (same) same.names.push(r.name);
+    else groups.push({ role, value: r.value, names: [r.name] });
+  }
+  const parts = groups.map((g) => {
+    const shown = g.names.slice(0, ROLE_TITLE_NAMES_MAX).join('／');
+    const more = g.names.length > ROLE_TITLE_NAMES_MAX ? ` 等 ${g.names.length} 人` : '';
+    return `${g.role ? `${g.role} ` : ''}${shown}${more} ${pct(g.value)}`;
+  });
   return `👑 ${board.title}${board.period ? `（${board.period}）` : ''}：${parts.join('、')}`;
 }
 
-/** "🌱 新人榜（…，全部場次）：甲 角色理論 47.0%（13 場）、…" from the `newcomers` board, or null. */
-export function newcomersLine(board: LeaderboardBoard | null | undefined, size: number = DIGEST_NEWCOMERS_SIZE): string | null {
+/**
+ * "🌱 新人榜（…，新人例外：看全部場次）：甲 角色理論 47.0%（13 場）、…" from the `newcomers` board, or null.
+ * The games printed are the newcomer's games (careerGames). schemaVersion 4 (`roleWindows` = the cache's
+ * role windows, configRoleWindows): a row's role theory and `games` are over the per-role windows, capped
+ * at K games per role, so a newcomer with more than K games in a role has `games` below their real
+ * count; the qualifier says so.
+ */
+export function newcomersLine(
+  board: LeaderboardBoard | null | undefined,
+  size: number = DIGEST_NEWCOMERS_SIZE,
+  roleWindows: { special: number; loyal: number } | null = null,
+): string | null {
   if (!board || !isTheoryBoard(board) || !Array.isArray(board.rows) || board.rows.length === 0) return null;
-  const parts = board.rows.slice(0, size).map((r) => `${r.name} 角色理論 ${pct(numOrNull(r.roleTheory) ?? r.value)}（${r.games} 場）`);
-  return `🌱 ${board.title}（${board.period}，新人例外：看全部場次）：${parts.join('、')}`;
+  const parts = board.rows
+    .slice(0, size)
+    .map((r) => `${r.name} 角色理論 ${pct(numOrNull(r.roleTheory) ?? r.value)}（${numOrNull(r.careerGames) ?? r.games} 場）`);
+  const scope = roleWindows
+    ? `新人例外：看全部場次，角色理論每個角色最多算近 ${roleWindows.special} 場、忠臣 ${roleWindows.loyal} 場`
+    : '新人例外：看全部場次';
+  return `🌱 ${board.title}（${board.period}，${scope}）：${parts.join('、')}`;
 }
 
 /** The overview fields the totals line reads; the two-stage sections are optional (older caches). */
@@ -651,14 +845,44 @@ export function formatNotInChemistry(name: string, rosterSize: number): string {
 
 // ─── Help / errors ───────────────────────────────────────────────────────
 
-export function formatStatsHelp(platform: StatsPlatform): string {
+/** The generator's default ranking window (LEADERBOARD_CONFIG roleWindowGames / loyalWindowGames), for a help text built without a cache. */
+export const DEFAULT_LEADERBOARD_SCOPE = '各角色近 10 場、忠臣近 40 場';
+
+/**
+ * The window /排行 ranks by, for the help texts next to the command, so they never contradict the
+ * board: the main board's period (schemaVersion 4「各角色近 10 場、忠臣近 40 場」, schemaVersion 3「各人
+ * 最近 100 場」), else the cache's settings (the same rule as selectLeaderboard's fallback), else null
+ * — a cache written before the theory rates, where /排行 says the ranking is coming.
+ */
+export function leaderboardScope(
+  leaderboard: (Pick<LeaderboardSection, 'boards'> & Partial<Pick<LeaderboardSection, 'config'>>) | null | undefined,
+  overview: Pick<OverviewData, 'topPlayersByRoleTheory' | 'schemaVersion' | 'theoryConfig'> | null | undefined,
+): string | null {
+  const main = findTheoryBoard(leaderboard, 'main');
+  if (main && typeof main.period === 'string' && main.period.length > 0) return main.period;
+  const settings = [leaderboard?.config, overview?.theoryConfig as Record<string, unknown> | undefined];
+  const roleWindows = configRoleWindows(...settings);
+  const current = Array.isArray(overview?.topPlayersByRoleTheory) || (typeof overview?.schemaVersion === 'number' && overview.schemaVersion >= 3);
+  if (!roleWindows && !current) return null;
+  return rankingWindow(roleWindows, theorySetting('mainGames', 100, ...settings));
+}
+
+/**
+ * The /指令 (LINE) and /help text. `scope` is the window /排行 ranks by, read from the cache
+ * (leaderboardScope; statsQueries.leaderboardScopeText); null prints the command without one.
+ */
+export function formatStatsHelp(platform: StatsPlatform, scope: string | null = DEFAULT_LEADERBOARD_SCOPE): string {
   const lines = [
     '📖 阿瓦隆戰績指令',
     `${STATS_COMMAND_USAGE.player}\u3000個人戰績（名字可打一部分）`,
-    `${STATS_COMMAND_USAGE.leaderboard}\u3000角色理論勝率排行 Top 10（各人最近 100 場）`,
+    `${STATS_COMMAND_USAGE.leaderboard}\u3000角色理論勝率排行 Top 10${scope ? `（${scope}）` : ''}`,
     `${STATS_COMMAND_USAGE.chemistry}\u3000兩人同隊默契`,
     `${STATS_COMMAND_USAGE.feedback}\u3000給管理者的建議或回報問題`,
   ];
+  // 模擬瓦 (2026-10-14 review fix): advertised only while SIM_COMMANDS_ENABLED is on.
+  if (SIM_CONFIG.commandsEnabled) {
+    lines.push(`${STATS_COMMAND_USAGE.simulation}\u3000模擬瓦：練派票資訊的釋放與解讀（接著用 ${SIM_HELP_FOLLOW_UP}）`);
+  }
   if (platform === 'line') lines.push('/指令\u3000顯示這份說明');
   lines.push('每週一 12:00 會自動貼出本週排行。');
   lines.push(SITE_FOOTER);

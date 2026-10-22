@@ -78,6 +78,14 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
     "weeks": [ { "week": "2026-W42", "line": { "排行": 3, "問題": 1 }, "discord": { "機器人": 2 } } ],
     "opinions": { "line": 1, "discord": 0 }
   },
+  "simulation": {
+    "enabled": true, "weighsBehaviour": false,
+    "bank": { "loaded": true, "games": 1778, "dropped": 0, "decisionPoints": 26881 },
+    "sessions": { "active": 3 },
+    "counts": { "started": { "line": 2, "discord": 1 }, "byRole": { "merlin": 1, "percival": 0, "loyal": 2, "...": 0 },
+                "answers": 4, "sameAsReal": 1, "intervals": 2, "intervalGroupsRight": 3, "intervalGroupsTotal": 4,
+                "steps": 3, "reveals": 2, "ended": 0, "expired": 1, "usage": 0, "noSession": 0, "rateLimited": 0 }
+  },
   "chatExport": {
     "enabled": true, "sheetConfigured": true, "publicSheet": true,
     "lastRun": { "day": "2026-10-12", "at": "2026-10-13T02:03:40.000Z", "messages": 356, "channels": 8, "threads": 3, "truncated": 0, "outcome": "written" },
@@ -88,6 +96,8 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 ```
 
 `feedback` 是社群反應的主題計數與 `/意見` 次數（只有數字，見 `docs/COMMUNITY_FEEDBACK.md`）。
+`simulation` 是模擬瓦（20261014，`docs/SIMULATION.md`）：題庫有沒有讀到、局數與決定點數、進行中的題數、各種指令的次數——只有數字和布林，
+沒有題號、聊天室或使用者 id、沒有任何人打的字；重啟歸零。LINE 這邊另有 `line.stats.simReplies`。
 `chatExport` 是每日聊天紀錄匯出（每天 04:30 +08 起把前一天的聊天寫進**阿瓦隆百科試算表**的「聊天紀錄」分頁，只留 7 天；重啟後補齊最近 7 天。
 那份試算表知道連結的人都能看，發言者換成每天重新編號的「成員N」；Edward 2026-10-13 決定）：
 三個布林（含 `publicSheet`）＋最近一天的日期、時間、則數、頻道數與結果代碼＋補齊的天數，沒有任何文字或名字；`lastRun`、`catchUp` 重啟後是 `null`（見 `docs/COMMUNITY_FEEDBACK.md`）。
@@ -149,6 +159,17 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 | `FEEDBACK_DISCORD_CHANNEL_ID` | 否 | 管理員頻道「大劍管理員」`1145513360545296574`；`off` 不轉貼 |
 | `FEEDBACK_COMMAND_ENABLED` | 否 | 開；`false` 關 `/意見` |
 
+模擬瓦（`docs/SIMULATION.md`，都不是機密）：
+
+| 變數 | 預設 | 說明 |
+|---|---|---|
+| `SIM_COMMANDS_ENABLED` | 開 | `false` 關 `/模擬` 系列 |
+| `SIM_SESSION_TTL_MINUTES` | 30 | 閒置幾分鐘自動結束（最長 2 小時） |
+| `SIM_DISCORD_PUBLIC_CHANNEL_IDS` | 空 = 到處公開 | 有設 = 只有這些頻道公開回覆，其他地方只有本人看得到 |
+| `SIM_LINE_GROUP_IDS` | 空 | 鏡像群以外可以玩模擬的 LINE 群（只回模擬指令和 `/指令`、用自己的 reply_token） |
+| `SIM_MIRROR_FOLLOWUPS` | 關 | 鏡像群裡開著題目的人打的 `/派` `/區間` `/下一步` `/公布` `/結束` 要不要同步到 Discord／大廳（預設不同步；`/模擬` 開題那句照常同步） |
+| `SIM_BELIEF_MODEL` | `logic` | v1 只有純邏輯 |
+
 ## 一次性設定（Edward 動手）
 
 1. **唯一必做**：Render Dashboard → 服務 → Environment，填上表 4 個值 → Save → 自動重新部署。
@@ -203,9 +224,10 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
 | `/默契 名字1 名字2` | 同隊場次、一起贏／一起輸、同隊勝率（默契矩陣只收場次最多的 28 位；沒有「對戰」數據） | ✓ | ✓ |
 | `/意見 文字` | 固定回覆「已收到」，內容匿名轉貼到管理員頻道「大劍管理員」（`FEEDBACK_DISCORD_CHANNEL_ID` 可改；見 `docs/COMMUNITY_FEEDBACK.md`） | slash 指令，只有本人看得到回覆 | ✓ |
 | `/指令` | 指令說明（Discord 看 `/help`） | — | ✓ |
+| `/模擬 [角色] [座位]`（`/模擬 題 題號`）＋ `/派` `/區間` `/下一步` `/公布`（LINE 也收 `/解答`）`/結束` | 模擬瓦（20261014，`docs/SIMULATION.md`）：真人對局停在你派票的當下，讀前面的派票、寫區間、自己派，回饋真人怎麼派、同位置真人的派法、純邏輯的區間與全好讀法、你的派票放出的資訊；`/公布` 對答案。一人一題、30 分鐘沒動作自動結束 | 6 個 slash 指令，預設公開（`SIM_DISCORD_PUBLIC_CHANNEL_IDS` 可限定頻道） | ✓（1 對 1 有快速按鈕；鏡像群回覆引用那句指令；其他群要 `SIM_LINE_GROUP_IDS`） |
 
 - 2026-10-13 起沒有 `/社群週報` 了（付費週報移除；指令清單每次開機整批覆寫，部署後就從 Discord 消失）。
-  機器人不回一般聊天，只回上表的指令。
+  機器人不回一般聊天，只回上表的指令（模擬指令只認那幾個字：`/派西 2` 不是 `/派`；`/模擬什麼時候可以玩`、`/派對 今晚` 也不回）。
 - 名字比對（`@avalon/shared` 的 `matchPlayerName`，網站玩家搜尋同一套）：完全相同（開頭的 @、括號、句尾標點不算）
   → 同一位玩家（只差大小寫／全形半形／空白／零寬字元，`playerNameKey`）→ 忽略空白與分隔符號 → 名字的一部分；
   多人符合列出最多 5 位（同一人的不同寫法只算一位），查無此人列出「你是不是要找」與查詢指令。
@@ -217,11 +239,18 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
   不是任何人的名字，才在矩陣裡找名字的一部分。
   合併前的舊快取仍分列時（部署後第一次戰績分析更新之前）：打的正好是其中一個寫法就用那一列，其他打法取場次最多的那個寫法；
   卡片註明其他寫法「目前另列」。
+  擁有者指定的別名（`packages/server/player_aliases.json` → 快取 `players.aliases`，見 `docs/stats/two_stage_outcome.md`〈玩家別名〉）：
+  打舊名字找到正式名字那位（`/戰績`、`/默契`、網站、API 同一套），`/戰績` 卡片多一行「「舊名」現在統一顯示為「正式名字」」。
 - Discord 指令名直接用中文（Discord 允許），和 LINE 寫法一致，任何介面語系都一樣；從「/」選單點選即可，不必切輸入法。
 - LINE：在鏡像群裡指令那句**照常同步**到 Discord／大廳，答案只回 LINE。答案和佇列共用同一個 reply_token：
   一次 `replyMessage`、最多 5 則 = 答案 1 則 + 佇列 4 則，其餘留到下一次；回覆失敗只把取出的佇列訊息放回佇列頭（答案不重送）。
 - 開關：`LINE_STATS_COMMANDS_ENABLED`（預設開，`false` 關），與舊的 `LINE_BOT_COMMANDS_ENABLED`（遊戲指令，預設關）分開；
   狀態頁 `line.statsCommandsEnabled`、`line.stats.statsReplies`。
+- 模擬瓦（20261014）在鏡像群：開題的 `/模擬` 跟 `/戰績` 一樣同步一行、答案只回 LINE、答案佔 reply_token 第 1 則；
+  開著題目的人之後打的 `/派` `/區間` `/下一步` `/公布` `/結束` **預設不同步**（答案本來就不同步，只剩指令行會洗版；
+  `SIM_MIRROR_FOLLOWUPS=true` 恢復同步）。答案**送出成功才算數**（回覆失敗不會跳過一步）；同一個人的模擬指令排隊處理
+  （算回覆 → 送出 → 才處理下一個）；LINE 重送一個已經回過的事件不再回第二次（只照常清佇列）。
+  1 對 1 裡被限流的模擬指令不會掉進舊的遊戲指令（不會回「未知指令」）。機器人從不回顯使用者打的字。開關 `SIM_COMMANDS_ENABLED`。
 
 **每週排行**：每週一 12:00（+08）把排行貼到 Discord 同步頻道（`LOBBY_MIRROR_DISCORD_CHANNEL_ID`），
 內容 = 主榜 Top 10 ＋ 近 90 天 Top 5 ＋ 上月角色王一行（超過 1800 字時從後面的榜開始省略），
@@ -374,9 +403,11 @@ reply 不計、push 計。`LINE_REPLY_DRAIN=true`（預設）下 server 不會 p
 - `packages/server/src/bots/digest/sheets.ts` — 服務帳號登入與 Google Sheets REST（共用）
 - `packages/server/src/bots/feedback/` — 主題計數與 `/意見`（轉貼到管理員頻道）
 - `packages/server/src/bots/stats/` — 戰績回覆（`statsReplies.ts` 純格式化、`statsQueries.ts` 讀快取、`textCommands.ts` LINE 指令、`weeklyDigest.ts` 每週排行）
+- `packages/server/src/bots/simulation/` — 模擬瓦（題庫 `packages/server/sim_bank.json`、`scripts/buildSimBank.ts`；見 `docs/SIMULATION.md`）
 - `.github/workflows/verify-line-webhook.yml` — 每日探測
 - `render.yaml` — 變數清單
 - `packages/server/src/bots/mirrorSplit.ts` — 長訊息分段（LINE 5000／Discord 2000、`（續）`）
 - 測試：`src/__tests__/LineSyncRoundTrip.test.ts`、`LineReplyQueue.test.ts`、`LineWebhookEndpoint.test.ts`、
   `LineStatsCommands.test.ts`、`LineDiscordImageSync.test.ts`、`RelayMedia.test.ts`、`LongMessageSync.test.ts`（也在 `pnpm test:line-sync`）、
-  `StatsReplies.test.ts`、`DiscordStatsCommands.test.ts`、`StatsWeeklyDigest.test.ts`
+  `StatsReplies.test.ts`、`DiscordStatsCommands.test.ts`、`StatsWeeklyDigest.test.ts`、
+  模擬瓦 `LineSimCommands.test.ts`（也在 `pnpm test:line-sync`）、`DiscordSimCommands.test.ts`、`SimSession.test.ts`、`SimLogic.test.ts`、`SimBank.test.ts`、`SimCommands.test.ts`

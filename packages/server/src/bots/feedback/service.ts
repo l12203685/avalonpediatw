@@ -9,6 +9,12 @@
  * counts (TopicCounter) and exposed as numbers on /api/bots/status.
  * Nothing here logs message content — not even inside an error object
  * (see describeError).
+ *
+ * (2026-10-14 Edward：練習回報「要」也貼到大劍管理員) The same Discord sender
+ * also carries the practice mode's 「這步怪怪的」 reports to the same channel
+ * (practice/PracticeReportDiscord.ts: own hourly cap and counters, shown as
+ * feedback.practiceReports on /api/bots/status; PRACTICE_REPORT_DISCORD=false
+ * turns that copy off).
  */
 
 import {
@@ -22,6 +28,7 @@ import {
 import { formatFeedbackForward, parseFeedbackCommand } from './commands';
 import { OPINION_TOPIC_ID, TopicCounter, type TopicWeekSnapshot } from './topicCounter';
 import { parseStatsCommand } from '../stats/textCommands';
+import { isSimCommandText } from '../simulation/commands';
 
 /** What the service hands to Discord: content + no pings, ever. */
 export interface FeedbackForwardPayload {
@@ -124,6 +131,15 @@ export class FeedbackService {
   }
 
   /**
+   * The Discord sender attached by bots/index.ts (undefined until then). (2026-10-14 Edward：練習回報
+   * 也貼到大劍管理員) practice/PracticeReportDiscord.ts posts 「這步怪怪的」 reports with it, to the
+   * same channel, with its own hourly cap and counters.
+   */
+  getDiscordForwarder(): FeedbackDiscordForwarder | undefined {
+    return this.discord;
+  }
+
+  /**
    * Count the topics a human message touches. The text is read once and
    * dropped. Texts the bot answers as commands are usage, not reactions, so
    * they are skipped:
@@ -138,6 +154,8 @@ export class FeedbackService {
   observe(platform: FeedbackPlatform, text: string): string[] {
     try {
       if (parseStatsCommand(text)) return [];
+      // 模擬瓦 (2026-10-14) commands are usage, not reactions.
+      if (isSimCommandText(text)) return [];
       if (platform === 'line' && FEEDBACK_CONFIG.commandEnabled && parseFeedbackCommand(text)) return [];
       return this.counter.observe(platform, text);
     } catch (err) {

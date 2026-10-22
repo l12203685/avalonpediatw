@@ -44,6 +44,7 @@ import { handleFeedbackCommand } from '../bots/feedback/discordCommand';
 import { buildSlashCommands } from '../bots/discord/client';
 import { COMMANDS, FEEDBACK_OPTIONS } from '../bots/discord/config';
 import { buildBotStatus } from '../bots/index';
+import { __resetPracticeReportDiscordForTests } from '../practice/PracticeReportDiscord';
 
 const GROUP = 'Cmirror-group';
 const SECRET = 'test-channel-secret';
@@ -566,12 +567,20 @@ describe('/api/bots/status → feedback', () => {
     for (const platform of [w.line, w.discord]) {
       for (const n of Object.values(platform)) expect(Number.isInteger(n)).toBe(true);
     }
-    expect(Object.keys(feedback).sort()).toEqual(['commandEnabled', 'opinions', 'weeks']);
+    expect(Object.keys(feedback).sort()).toEqual(['commandEnabled', 'opinions', 'practiceReports', 'weeks']);
     expect(JSON.stringify(feedback)).not.toMatch(/排行怪怪的|牌譜格式|u-1/);
   });
 
   it('is present (empty) when nothing has been heard yet', () => {
+    __resetPracticeReportDiscordForTests();
+    delete process.env.PRACTICE_REPORT_DISCORD;
     const { feedback } = buildBotStatus();
-    expect(feedback).toEqual({ commandEnabled: true, weeks: [], opinions: { line: 0, discord: 0 } });
+    expect(feedback).toEqual({
+      commandEnabled: true, weeks: [], opinions: { line: 0, discord: 0 },
+      // 2026-10-14: the practice mode's 「這步怪怪的」 copies to the same admin channel (numbers only).
+      practiceReports: { enabled: true, sent: 0, skipped: 0, failed: 0, throttled: 0 },
+    });
+    process.env.PRACTICE_REPORT_DISCORD = 'off';
+    expect(buildBotStatus().feedback.practiceReports.enabled).toBe(false);
   });
 });

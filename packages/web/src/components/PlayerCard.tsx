@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { Player, Role } from '@avalon/shared';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WifiOff } from 'lucide-react';
@@ -143,6 +144,35 @@ interface PlayerCardProps {
    * during gameplay; real values come back at game-end (room.state==='ended').
    */
   selfTrackerHidden?: boolean;
+  /** 窄卡的圖示隨卡寬縮放，底部依序排列投票／任務、角色、名字。 */
+  compact?: boolean;
+}
+
+/** 窄卡尺寸；cqw 為卡片內寬的 1%，矮視窗另限制圖示上限。 */
+const COMPACT = {
+  seatFont: 'clamp(12px, 22cqw, 14px)',
+  top: 'clamp(10px, calc((100cqw - 8px) / 3), var(--card-top-max, 28px))',
+  topGlyph: 'clamp(8px, calc((100cqw - 8px) / 5.5), 16px)',
+  token: 'clamp(15px, 28cqw, var(--card-token-max, 30px))',
+  campGlyph: 'clamp(14px, 40cqw, 36px)',
+} as const;
+
+/** 估算單行字寬：漢字／全形約 1em，其餘約 0.62em。 */
+function emWidth(text: string): number {
+  let em = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0) ?? 0;
+    const wide =
+      (cp >= 0x2e80 && cp <= 0x9fff) || (cp >= 0xac00 && cp <= 0xd7af) ||
+      (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xff00 && cp <= 0xffef) || cp >= 0x1f000;
+    em += wide ? 1 : 0.62;
+  }
+  return Math.max(1, em);
+}
+
+/** 扣除預留內距後縮放字級；名字仍放不下時最多換成兩行。 */
+function fitFont(text: string, reservePx: number, minPx: number, maxPx: number): string {
+  return `clamp(${minPx}px, calc((100cqw - ${reservePx}px) / ${emWidth(text).toFixed(2)}), ${maxPx}px)`;
 }
 
 /**
@@ -236,6 +266,7 @@ export default function PlayerCard({
   assassinated = false,
   variant = 'game',
   selfTrackerHidden = false,
+  compact = false,
 }: PlayerCardProps): JSX.Element {
   // `isOnQuestTeam` retained for API compat (GamePage still passes it) but the
   // 21:52 #7 redesign drives the shield purely off `lastQuestParticipation`.
@@ -281,6 +312,42 @@ export default function PlayerCard({
   // hangs from the card (left rail → bubble pinned right; right rail →
   // bubble pinned left).
   const bubbleAlign = side === 'left' ? 'items-end pr-1' : 'items-start pl-1';
+
+  // 泡泡透過 portal 避開側欄裁切；桌機在卡片側邊，手機在卡片下方。
+  // 捲動或縮放時重新定位，手機寬度不受窄卡限制。
+  const tileRef = useRef<HTMLDivElement>(null);
+  const bubbleVisible = showBubble && Boolean(latestEntry);
+  const [bubbleAnchor, setBubbleAnchor] = useState<{ top: number; left?: number; right?: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!bubbleVisible) return undefined;
+    const place = (): void => {
+      const tile = tileRef.current;
+      if (!tile) return;
+      const r = tile.getBoundingClientRect();
+      const top = compact ? r.top + r.height * 0.3 : Math.min(r.bottom + 4, window.innerHeight - 28);
+      setBubbleAnchor(
+        !compact
+          ? side === 'left' ? { top, left: r.left } : { top, right: document.documentElement.clientWidth - r.right }
+          : side === 'left'
+          ? { top, left: r.right + 6 }
+          : { top, right: document.documentElement.clientWidth - r.left + 6 },
+      );
+    };
+    place();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
+    if (tileRef.current) {
+      ro?.observe(tileRef.current);
+      const board = tileRef.current.closest('main');
+      if (board) ro?.observe(board);
+    }
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return (): void => {
+      ro?.disconnect();
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [compact, bubbleVisible, side]);
 
   // Edward 2026-04-25 21:52 角色揭露 logic 三檔位 (修正前: 只要 role===null
   // 一律 role-back; 修正後: 視陣營 / candidates 細分):
@@ -361,9 +428,354 @@ export default function PlayerCard({
     !showCandidateHint &&
     (lastQuestParticipation === 'success' || lastQuestParticipation === 'fail');
 
+  // 窄卡圖示收進邊框內，底部圖示另排一列，保留完整名字。
+  const topIconStyle: CSSProperties | undefined = compact ? { width: COMPACT.top, height: COMPACT.top } : undefined;
+  const tokenStyle: CSSProperties | undefined = compact ? { width: COMPACT.token, height: COMPACT.token } : undefined;
+  const tokenLeftPos = compact ? 'relative shrink-0' : 'absolute -bottom-1 -left-1';
+  const tokenRightPos = compact ? 'relative shrink-0' : 'absolute -bottom-1 -right-1';
+  const nameShadow = { textShadow: '0 1px 2px rgba(0,0,0,0.85)' };
+
+  /*
+    Player name overlay — Edward 2026-04-25 21:52 #8「牌背拉長砍下方空白」.
+    When the role is hidden (role-back / camp-only / candidate split), the
+    painted card art needs to fill the entire tile so the previously-
+    visible black band beneath the card disappears. We swap the full-
+    bleed bg-black/65 strip for a compact, centred chip with a heavy
+    text-shadow so the card art stays visible behind and around the name.
+    When the role is revealed, the original full-width strip is kept so
+    portraits with bright lower-thirds still have legible name text.
+    窄卡名字放在底部最下層，字級 10–12px，必要時換行。
+    AI 標記跟在名字前方，避開座位號與紅方問號。
+  */
+  const aiInline = compact && player.isBot ? (
+    <span aria-label="AI 玩家" className="mr-px">
+      🤖
+    </span>
+  ) : null;
+  const nameFitText = `${aiInline ? '🤖' : ''}${player.name}`;
+  const nameWrap = 'line-clamp-2 text-balance [overflow-wrap:anywhere] leading-[1.15]';
+  const nameLabel = isRoleHidden ? (
+    <div
+      className={
+        compact
+          ? 'flex justify-center px-0.5 pb-0.5'
+          : 'absolute bottom-1 inset-x-1 pointer-events-none flex justify-center z-10'
+      }
+    >
+      <span
+        className={`max-w-full bg-black/40 font-bold ${
+          compact ? `rounded px-px ${nameWrap}` : 'truncate rounded-md px-1.5 py-0.5 text-[10px] sm:text-xs leading-tight'
+        } ${player.status === 'disconnected' ? 'text-gray-300' : 'text-white'}`}
+        style={compact ? { ...nameShadow, fontSize: fitFont(nameFitText, 7, 10, 12) } : nameShadow}
+        title={player.name}
+      >
+        {aiInline}
+        {player.name}
+      </span>
+    </div>
+  ) : (
+    <div
+      className={`bg-black/65 backdrop-blur-[1px] ${
+        compact ? 'px-0.5 py-px' : 'absolute bottom-0 inset-x-0 px-1 py-0.5'
+      }`}
+    >
+      <p
+        className={`text-center font-bold ${compact ? nameWrap : 'truncate text-[10px] sm:text-xs leading-tight'} ${
+          player.status === 'disconnected' ? 'text-gray-400' : 'text-white'
+        }`}
+        style={compact ? { fontSize: fitFont(nameFitText, 5, 10, 12) } : undefined}
+        title={player.name}
+      >
+        {aiInline}
+        {player.name}
+      </p>
+    </div>
+  );
+
+  /*
+    Bottom-right — mission shield. Edward 2026-04-25 21:52 #7 collapses
+    the previous 3-phase shield logic to per-player participation in the
+    most recently completed quest. Picking-phase overlays still take
+    priority (so the leader can see active picks), but the resting-state
+    shield is now strictly outcome-based:
+      1. Leader picking team + shield candidate / selected → quest-team
+         selection overlay (yellow outline hint / solid yellow shield).
+      2. Otherwise, when this player joined the most recent completed
+         quest → painted shield + coloured ring (blue=success, red=fail).
+      3. Otherwise → no shield. The legacy "active quest member with no
+         result yet" fallback that flashed yellow on every current quest
+         team member was removed (Edward「盾牌應每玩家依參與最後任務顯
+         示，不能 hardcode 一樣」).
+    Suppressed on role-hidden tiles.
+  */
+  const shieldToken: JSX.Element | null = showSelectOverlay ? (
+    <motion.div
+      initial={{ scale: 0, rotate: -10 }}
+      animate={{ scale: 1, rotate: 0 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+      className={`${tokenRightPos} pointer-events-none z-20 rounded-full ring-2 ring-yellow-300 shadow-lg shadow-yellow-400/40`}
+      style={tokenStyle}
+      aria-label="已選入任務隊伍"
+    >
+      <img
+        src={getMissionShieldUrl()}
+        alt=""
+        aria-hidden="true"
+        className={`${compact ? 'block w-full h-full' : 'w-7 h-7 sm:w-8 sm:h-8'} object-contain`}
+        loading="lazy"
+        draggable={false}
+        onError={(e) => {
+          // eslint-disable-next-line no-console
+          console.warn('[asset miss] mission-shield(select)', (e.target as HTMLImageElement).src);
+        }}
+      />
+    </motion.div>
+  ) : showCandidateHint ? (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 0.55 }}
+      className={`${tokenRightPos} pointer-events-none z-10 rounded-full ring-2 ring-yellow-300/60`}
+      style={tokenStyle}
+      aria-hidden="true"
+    >
+      <img
+        src={getMissionShieldUrl()}
+        alt=""
+        aria-hidden="true"
+        className={`${compact ? 'block w-full h-full' : 'w-6 h-6 sm:w-7 sm:h-7'} object-contain opacity-70`}
+        loading="lazy"
+        draggable={false}
+        onError={(e) => {
+          // eslint-disable-next-line no-console
+          console.warn('[asset miss] mission-shield(hint)', (e.target as HTMLImageElement).src);
+        }}
+      />
+    </motion.div>
+  ) : showResultShield ? (
+    <motion.div
+      initial={{ scale: 0, rotate: -8 }}
+      animate={{ scale: 1, rotate: 0 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+      // Edward 2026-04-25 22:38 GamePage 3-fix #3: when this is the
+      // local player's own tile mid-game, the shield ring colour stops
+      // encoding pass/fail (would leak whether the viewer's last quest
+      // succeeded). We render a neutral gray ring + role-back graphic
+      // so the slot is visually anchored but the outcome stays hidden
+      // until the game ends (selfTrackerHidden=false → ring returns).
+      className={`${tokenRightPos} pointer-events-none z-10 rounded-full ring-2 ${
+        selfTrackerHidden ? 'ring-gray-500' : missionShieldRing
+      } shadow-md`}
+      style={tokenStyle}
+      aria-label={
+        selfTrackerHidden
+          ? '你最近任務（遊戲結束才揭曉）'
+          : lastQuestParticipation === 'success'
+          ? '最近任務成功'
+          : '最近任務失敗'
+      }
+    >
+      <img
+        src={selfTrackerHidden ? getRoleBackUrl() : getMissionShieldUrl()}
+        alt=""
+        aria-hidden="true"
+        className={`${compact ? 'block w-full h-full' : 'w-6 h-6 sm:w-7 sm:h-7'} object-contain`}
+        loading="lazy"
+        draggable={false}
+        onError={(e) => {
+          // eslint-disable-next-line no-console
+          console.warn('[asset miss] mission-shield(result)', (e.target as HTMLImageElement).src);
+        }}
+      />
+    </motion.div>
+  ) : null;
+
+  /*
+    Bottom-left — vote token (黑白球). Edward 2026-04-25 21:59「常態保留」
+    仔細看清楚 #190 撤回: 球在這裡 *常態顯示*, 規則:
+      A. `room.state === 'voting'` (in-flight): 由 `hasVoted` + `voted` 決定
+         - hasVoted=true, voted=undefined → 紫色背面 (private vote)
+         - hasVoted=true, voted=true       → 白球 (vote-yes)
+         - hasVoted=true, voted=false      → 黑球 (vote-no)
+         - hasVoted=false                  → 不渲染 (尚未投票)
+      B. 其他 phase (quest / lady_of_the_lake / team-select / ended): 由
+         `lastVoteApproved` 決定
+         - lastVoteApproved=true  → 白球 (上一輪投了贊成)
+         - lastVoteApproved=false → 黑球 (上一輪投了反對)
+         - lastVoteApproved=undefined → 不渲染 (這場還沒完成過任何投票)
+    GameBoard 從 `room.voteHistory[len-1].votes[id]` 推導 `lastVoteApproved`,
+    所以伺服器在 phase 切換時清掉 `room.votes` 不會影響持久顯示。
+    Suppressed on role-hidden tiles per 20:12 rule.
+  */
+  const voteBoxSize = compact ? '' : 'w-7 h-7 sm:w-8 sm:h-8';
+  const voteToken: JSX.Element | null = ((): JSX.Element | null => {
+    // Edward 2026-04-25 22:38 GamePage 3-fix #3「你的投票/任務盾/湖中女神 都
+    // 只有最後開牌才顯示, 遊戲過程中只有未知身分牌背」: when this is the
+    // viewer's own tile and the game is mid-flight, swap the real
+    // outcome (yes / no / undetermined) for a generic vote-back token
+    // so a shoulder-surfer can't read off the local vote. The local
+    // player still sees their own vote in the VotePanel button + chat
+    // system feed — this just stops it leaking off the PlayerCard.
+    // We render the back even when the player hasn't voted yet so the
+    // self-tile keeps a stable visual placeholder (other rules still
+    // apply: role-hidden tiles short-circuit before we get here).
+    if (selfTrackerHidden) {
+      return (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+          className={`${tokenLeftPos} pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/70 shadow-md ${voteBoxSize} bg-black/40`}
+          style={tokenStyle}
+          aria-label="你的投票（遊戲結束才揭曉）"
+        >
+          <img
+            src={getVoteBackUrl()}
+            alt=""
+            aria-hidden="true"
+            className="w-full h-full object-cover"
+            loading="lazy"
+            draggable={false}
+            onError={(e) => {
+              // eslint-disable-next-line no-console
+              console.warn('[asset miss] vote-back(self)', (e.target as HTMLImageElement).src);
+            }}
+          />
+        </motion.div>
+      );
+    }
+    // In-flight branch: voting phase + this player has voted in *this*
+    // round. Picks the painted token by `voted` (ternary: face-down for
+    // others, own actual outcome for self).
+    if (hasVoted) {
+      const inFlightSrc =
+        voted === undefined
+          ? getVoteBackUrl()
+          : voted
+          ? VOTE_IMAGES.yes
+          : VOTE_IMAGES.no;
+      return (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+          className={`${tokenLeftPos} pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/80 shadow-md ${voteBoxSize} bg-black/40`}
+          style={tokenStyle}
+          aria-label={
+            voted === undefined ? '已投票' : voted ? '贊成' : '反對'
+          }
+        >
+          <img
+            src={inFlightSrc}
+            alt=""
+            aria-hidden="true"
+            className="w-full h-full object-cover"
+            loading="lazy"
+            draggable={false}
+            onError={(e) => {
+              // eslint-disable-next-line no-console
+              console.warn('[asset miss] vote-inflight', (e.target as HTMLImageElement).src);
+            }}
+          />
+        </motion.div>
+      );
+    }
+    // Persistent branch: no in-flight vote, but a previous round resolved
+    // for this player → keep showing the last outcome until next vote.
+    if (lastVoteApproved !== undefined) {
+      return (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+          className={`${tokenLeftPos} pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/70 shadow-md ${voteBoxSize} bg-black/40`}
+          style={tokenStyle}
+          aria-label={lastVoteApproved ? '上輪贊成' : '上輪反對'}
+        >
+          <img
+            src={lastVoteApproved ? VOTE_IMAGES.yes : VOTE_IMAGES.no}
+            alt=""
+            aria-hidden="true"
+            className="w-full h-full object-cover"
+            loading="lazy"
+            draggable={false}
+            onError={(e) => {
+              // eslint-disable-next-line no-console
+              console.warn('[asset miss] vote-persistent', (e.target as HTMLImageElement).src);
+            }}
+          />
+        </motion.div>
+      );
+    }
+    return null;
+  })();
+
+  /*
+    Edward 2026-04-25 22:04 game-end role-label chip. After the inline
+    reveal panel was cut, PlayerCard owns the role-name display directly:
+    a slim chip stacked just above the bottom name strip so the painted
+    portrait + 角色名 + 玩家名 all read in a single glance. Active only
+    when `endGameRoleLabel` is provided (GameBoard passes it iff
+    room.state === 'ended'); transparent during normal gameplay so the
+    square portrait stays uncluttered. Tinted by team — blue/red bg lets
+    the rail summarise camp distribution at a glance.
+    窄卡的角色標籤放在圖示與名字之間，依角色字數縮放。
+  */
+  const roleChip = endGameRoleLabel ? (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={
+        compact
+          ? 'flex justify-center pb-px'
+          : 'absolute bottom-5 inset-x-1 pointer-events-none flex justify-center z-10'
+      }
+    >
+      <span
+        className={`max-w-full truncate font-bold border ${
+          compact ? 'rounded px-px py-px leading-[1.15]' : 'rounded-md px-1.5 py-0.5 text-[10px] sm:text-[11px] leading-tight'
+        } ${
+          effectiveTeam === 'evil'
+            ? 'bg-red-900/80 border-red-400 text-red-100'
+            : effectiveTeam === 'good'
+            ? 'bg-blue-900/80 border-blue-400 text-blue-100'
+            : 'bg-gray-900/80 border-gray-400 text-gray-100'
+        }`}
+        style={compact ? { ...nameShadow, fontSize: fitFont(endGameRoleLabel, 5, 9, 11) } : nameShadow}
+      >
+        {endGameRoleLabel}
+      </span>
+    </motion.div>
+  ) : null;
+
+  // Chat bubble — Edward 2026-04-25 19:40 (see the JSX comment at the bottom).
+  const bubble = latestEntry ? (
+    <motion.div
+      key={`bubble-${latestEntry.timestamp}`}
+      initial={{ opacity: 0, y: -4, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.18 }}
+      className={
+        compact
+          ? `pointer-events-none fixed z-40 max-w-[min(240px,30vw)] truncate rounded-xl bg-slate-900/90 backdrop-blur-sm border border-white/25 px-2 py-1 text-[11px] leading-tight text-white shadow-lg ${
+              side === 'left' ? 'rounded-tl-none' : 'rounded-tr-none'
+            }`
+          : `pointer-events-none fixed z-40 w-max max-w-[140px] truncate rounded-xl bg-slate-900/90 backdrop-blur-sm border border-white/20 px-2 py-1 text-[10px] leading-tight text-white shadow-md ${
+              side === 'left' ? 'rounded-tr-none' : 'rounded-tl-none'
+            }`
+      }
+      style={bubbleAnchor ? { top: bubbleAnchor.top, left: bubbleAnchor.left, right: bubbleAnchor.right } : undefined}
+      data-testid={`player-chat-bubble-${player.id}`}
+      title={latestEntry.text}
+    >
+      {latestEntry.text}
+    </motion.div>
+  ) : null;
+
   return (
-    <div className={`flex flex-col w-full gap-1 ${bubbleAlign}`}>
+    <div className={compact ? 'relative w-full' : `flex flex-col w-full gap-1 ${bubbleAlign}`}>
       <motion.div
+        ref={tileRef}
         whileHover={{ scale: 1.03 }}
         whileTap={{ scale: 0.97 }}
         onClick={isShieldInteractive ? handleShieldClick : undefined}
@@ -380,7 +792,7 @@ export default function PlayerCard({
               }
             : undefined
         }
-        className={`relative aspect-[3/4] w-full rounded-xl overflow-hidden border-[3px] bg-cover bg-center transition-all ${borderClass} ${
+        className={`relative aspect-[var(--player-card-ratio,0.75)] w-full ${compact ? '[container-type:inline-size]' : ''} rounded-xl overflow-hidden border-[3px] bg-cover bg-center transition-all ${borderClass} ${
           shieldSelected
             ? 'ring-2 ring-yellow-400 shadow-md shadow-yellow-400/40'
             : isActiveTurn
@@ -418,13 +830,16 @@ export default function PlayerCard({
           時, server 已把具體 role mask 成 null, 但 keep team='evil'. 此處渲染
           紅色滿版 + 中央 ❓ 取代具體角色 portrait, 讓 viewer 一眼讀出「這座位
           是紅方陣營, 但我不知道具體是刺/娜/德/奧」.
-        */}
+          窄卡問號依卡寬縮放，底部留空間顯示名字。 */}
         {isCampOnly && (
           <div
             aria-label="紅方陣營"
-            className="absolute inset-0 bg-gradient-to-br from-red-900 via-red-700 to-red-950 flex items-center justify-center"
+            className={`absolute inset-0 bg-gradient-to-br from-red-900 via-red-700 to-red-950 flex items-center justify-center ${compact ? 'pb-[22%]' : ''}`}
           >
-            <span className="text-white/90 text-3xl sm:text-4xl font-black drop-shadow-lg select-none">
+            <span
+              className={`text-white/90 font-black drop-shadow-lg select-none ${compact ? 'leading-none' : 'text-3xl sm:text-4xl'}`}
+              style={compact ? { fontSize: COMPACT.campGlyph } : undefined}
+            >
               ?
             </span>
           </div>
@@ -470,39 +885,20 @@ export default function PlayerCard({
           />
         )}
 
-        {/*
-          Player name overlay — Edward 2026-04-25 21:52 #8「牌背拉長砍下方空白」.
-          When the role is hidden (role-back / camp-only / candidate split), the
-          painted card art needs to fill the entire tile so the previously-
-          visible black band beneath the card disappears. We swap the full-
-          bleed bg-black/65 strip for a compact, centred chip with a heavy
-          text-shadow so the card art stays visible behind and around the name.
-          When the role is revealed, the original full-width strip is kept so
-          portraits with bright lower-thirds still have legible name text.
-        */}
-        {isRoleHidden ? (
-          <div className="absolute bottom-1 inset-x-1 pointer-events-none flex justify-center z-10">
-            <span
-              className={`max-w-full truncate rounded-md bg-black/40 px-1.5 py-0.5 text-[10px] sm:text-xs font-bold leading-tight ${
-                player.status === 'disconnected' ? 'text-gray-300' : 'text-white'
-              }`}
-              style={{ textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-              title={player.name}
-            >
-              {player.name}
-            </span>
+        {/* 窄卡底部依序排列圖示、角色、名字，避免彼此遮擋。 */}
+        {compact ? (
+          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col pointer-events-none">
+            {(voteToken || shieldToken) && (
+              <div className="flex items-end justify-between px-0.5 pb-px">
+                {voteToken ?? <span aria-hidden="true" />}
+                {shieldToken ?? <span aria-hidden="true" />}
+              </div>
+            )}
+            {roleChip}
+            {nameLabel}
           </div>
         ) : (
-          <div className="absolute bottom-0 inset-x-0 bg-black/65 backdrop-blur-[1px] px-1 py-0.5">
-            <p
-              className={`text-center font-bold leading-tight truncate text-[10px] sm:text-xs ${
-                player.status === 'disconnected' ? 'text-gray-400' : 'text-white'
-              }`}
-              title={player.name}
-            >
-              {player.name}
-            </p>
-          </div>
+          nameLabel
         )}
 
         {/*
@@ -517,12 +913,13 @@ export default function PlayerCard({
             aria-label={`座位 ${displaySeatNumber(seatNumber)}`}
           >
             <span
-              className={`text-xs sm:text-sm font-black leading-none whitespace-nowrap ${
+              className={`${compact ? '' : 'text-xs sm:text-sm'} font-black leading-none whitespace-nowrap ${
                 isCurrentPlayer ? 'text-yellow-300' : 'text-white'
               }`}
               style={{
                 textShadow:
                   '0 0 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.95)',
+                ...(compact ? { fontSize: COMPACT.seatFont } : {}),
               }}
             >
               {displaySeatNumber(seatNumber)}
@@ -538,19 +935,21 @@ export default function PlayerCard({
           tile 上看不到隊長王冠 / 任務盾 / 球. 隊長身份 / 任務參與 / 投票結果都是
           公開資訊 (Avalon 規則桌面上人人看得到), 不該因為「viewer 不知該座位
           具體角色」就藏起來. 從這條開始 4 corner indicators 全部 unconditional 渲染.
+          王冠置中交由 motion 的 x 位移處理，避免動畫覆蓋 CSS 位移後撞到湖標記。
         */}
         {isLeader && (
           <motion.div
-            initial={{ scale: 0, y: -4 }}
-            animate={{ scale: 1, y: 0 }}
-            className="absolute -top-2 left-1/2 -translate-x-1/2 pointer-events-none z-10"
+            initial={{ scale: 0, y: -4, x: '-50%' }}
+            animate={{ scale: 1, y: 0, x: '-50%' }}
+            className={`absolute ${compact ? 'top-0.5' : '-top-2'} left-1/2 pointer-events-none z-10`}
             aria-label="隊長"
           >
             <img
               src={getLeaderCrownUrl()}
               alt=""
               aria-hidden="true"
-              className="w-6 h-6 sm:w-7 sm:h-7 object-contain drop-shadow-lg"
+              className={`${compact ? 'block' : 'w-6 h-6 sm:w-7 sm:h-7'} object-contain drop-shadow-lg`}
+              style={topIconStyle}
               loading="lazy"
               draggable={false}
               onError={(e) => {
@@ -578,11 +977,12 @@ export default function PlayerCard({
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
-            className={`absolute -top-1 -right-1 ${
+            className={`absolute ${compact ? 'top-0.5 right-0.5' : '-top-1 -right-1 w-7 h-7 sm:w-8 sm:h-8'} ${
               selfTrackerHidden
                 ? 'bg-purple-700 border-2 border-purple-300'
                 : 'bg-cyan-500 border-2 border-cyan-200'
-            } rounded-full overflow-hidden pointer-events-none shadow-md z-10 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center`}
+            } rounded-full overflow-hidden pointer-events-none shadow-md z-10 flex items-center justify-center`}
+            style={topIconStyle}
             aria-label={selfTrackerHidden ? '你持有湖中女神（遊戲結束才揭曉）' : '持有湖中女神'}
           >
             {/* Edward 2026-04-25 22:38 GamePage 3-fix #3: when this is the
@@ -609,217 +1009,11 @@ export default function PlayerCard({
           </motion.div>
         )}
 
-        {/*
-          Bottom-right — mission shield. Edward 2026-04-25 21:52 #7 collapses
-          the previous 3-phase shield logic to per-player participation in the
-          most recently completed quest. Picking-phase overlays still take
-          priority (so the leader can see active picks), but the resting-state
-          shield is now strictly outcome-based:
-            1. Leader picking team + shield candidate / selected → quest-team
-               selection overlay (yellow outline hint / solid yellow shield).
-            2. Otherwise, when this player joined the most recent completed
-               quest → painted shield + coloured ring (blue=success, red=fail).
-            3. Otherwise → no shield. The legacy "active quest member with no
-               result yet" fallback that flashed yellow on every current quest
-               team member was removed (Edward「盾牌應每玩家依參與最後任務顯
-               示，不能 hardcode 一樣」).
-          Suppressed on role-hidden tiles.
-        */}
-        {showSelectOverlay && (
-          <motion.div
-            initial={{ scale: 0, rotate: -10 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            className="absolute -bottom-1 -right-1 pointer-events-none z-20 rounded-full ring-2 ring-yellow-300 shadow-lg shadow-yellow-400/40"
-            aria-label="已選入任務隊伍"
-          >
-            <img
-              src={getMissionShieldUrl()}
-              alt=""
-              aria-hidden="true"
-              className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
-              loading="lazy"
-              draggable={false}
-              onError={(e) => {
-                // eslint-disable-next-line no-console
-                console.warn('[asset miss] mission-shield(select)', (e.target as HTMLImageElement).src);
-              }}
-            />
-          </motion.div>
-        )}
-        {showCandidateHint && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.55 }}
-            className="absolute -bottom-1 -right-1 pointer-events-none z-10 rounded-full ring-2 ring-yellow-300/60"
-            aria-hidden="true"
-          >
-            <img
-              src={getMissionShieldUrl()}
-              alt=""
-              aria-hidden="true"
-              className="w-6 h-6 sm:w-7 sm:h-7 object-contain opacity-70"
-              loading="lazy"
-              draggable={false}
-              onError={(e) => {
-                // eslint-disable-next-line no-console
-                console.warn('[asset miss] mission-shield(hint)', (e.target as HTMLImageElement).src);
-              }}
-            />
-          </motion.div>
-        )}
-        {showResultShield && (
-          <motion.div
-            initial={{ scale: 0, rotate: -8 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-            // Edward 2026-04-25 22:38 GamePage 3-fix #3: when this is the
-            // local player's own tile mid-game, the shield ring colour stops
-            // encoding pass/fail (would leak whether the viewer's last quest
-            // succeeded). We render a neutral gray ring + role-back graphic
-            // so the slot is visually anchored but the outcome stays hidden
-            // until the game ends (selfTrackerHidden=false → ring returns).
-            className={`absolute -bottom-1 -right-1 pointer-events-none z-10 rounded-full ring-2 ${
-              selfTrackerHidden ? 'ring-gray-500' : missionShieldRing
-            } shadow-md`}
-            aria-label={
-              selfTrackerHidden
-                ? '你最近任務（遊戲結束才揭曉）'
-                : lastQuestParticipation === 'success'
-                ? '最近任務成功'
-                : '最近任務失敗'
-            }
-          >
-            <img
-              src={selfTrackerHidden ? getRoleBackUrl() : getMissionShieldUrl()}
-              alt=""
-              aria-hidden="true"
-              className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
-              loading="lazy"
-              draggable={false}
-              onError={(e) => {
-                // eslint-disable-next-line no-console
-                console.warn('[asset miss] mission-shield(result)', (e.target as HTMLImageElement).src);
-              }}
-            />
-          </motion.div>
-        )}
+        {/* 右下任務盾；窄卡已在底部資訊列顯示。 */}
+        {!compact && shieldToken}
 
-        {/*
-          Bottom-left — vote token (黑白球). Edward 2026-04-25 21:59「常態保留」
-          仔細看清楚 #190 撤回: 球在這裡 *常態顯示*, 規則:
-            A. `room.state === 'voting'` (in-flight): 由 `hasVoted` + `voted` 決定
-               - hasVoted=true, voted=undefined → 紫色背面 (private vote)
-               - hasVoted=true, voted=true       → 白球 (vote-yes)
-               - hasVoted=true, voted=false      → 黑球 (vote-no)
-               - hasVoted=false                  → 不渲染 (尚未投票)
-            B. 其他 phase (quest / lady_of_the_lake / team-select / ended): 由
-               `lastVoteApproved` 決定
-               - lastVoteApproved=true  → 白球 (上一輪投了贊成)
-               - lastVoteApproved=false → 黑球 (上一輪投了反對)
-               - lastVoteApproved=undefined → 不渲染 (這場還沒完成過任何投票)
-          GameBoard 從 `room.voteHistory[len-1].votes[id]` 推導 `lastVoteApproved`,
-          所以伺服器在 phase 切換時清掉 `room.votes` 不會影響持久顯示。
-          Suppressed on role-hidden tiles per 20:12 rule.
-        */}
-        {(() => {
-          // Edward 2026-04-25 22:38 GamePage 3-fix #3「你的投票/任務盾/湖中女神 都
-          // 只有最後開牌才顯示, 遊戲過程中只有未知身分牌背」: when this is the
-          // viewer's own tile and the game is mid-flight, swap the real
-          // outcome (yes / no / undetermined) for a generic vote-back token
-          // so a shoulder-surfer can't read off the local vote. The local
-          // player still sees their own vote in the VotePanel button + chat
-          // system feed — this just stops it leaking off the PlayerCard.
-          // We render the back even when the player hasn't voted yet so the
-          // self-tile keeps a stable visual placeholder (other rules still
-          // apply: role-hidden tiles short-circuit before we get here).
-          if (selfTrackerHidden) {
-            return (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-                className="absolute -bottom-1 -left-1 pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/70 shadow-md w-7 h-7 sm:w-8 sm:h-8 bg-black/40"
-                aria-label="你的投票（遊戲結束才揭曉）"
-              >
-                <img
-                  src={getVoteBackUrl()}
-                  alt=""
-                  aria-hidden="true"
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  draggable={false}
-                  onError={(e) => {
-                    // eslint-disable-next-line no-console
-                    console.warn('[asset miss] vote-back(self)', (e.target as HTMLImageElement).src);
-                  }}
-                />
-              </motion.div>
-            );
-          }
-          // In-flight branch: voting phase + this player has voted in *this*
-          // round. Picks the painted token by `voted` (ternary: face-down for
-          // others, own actual outcome for self).
-          if (hasVoted) {
-            const inFlightSrc =
-              voted === undefined
-                ? getVoteBackUrl()
-                : voted
-                ? VOTE_IMAGES.yes
-                : VOTE_IMAGES.no;
-            return (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-                className="absolute -bottom-1 -left-1 pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/80 shadow-md w-7 h-7 sm:w-8 sm:h-8 bg-black/40"
-                aria-label={
-                  voted === undefined ? '已投票' : voted ? '贊成' : '反對'
-                }
-              >
-                <img
-                  src={inFlightSrc}
-                  alt=""
-                  aria-hidden="true"
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  draggable={false}
-                  onError={(e) => {
-                    // eslint-disable-next-line no-console
-                    console.warn('[asset miss] vote-inflight', (e.target as HTMLImageElement).src);
-                  }}
-                />
-              </motion.div>
-            );
-          }
-          // Persistent branch: no in-flight vote, but a previous round resolved
-          // for this player → keep showing the last outcome until next vote.
-          if (lastVoteApproved !== undefined) {
-            return (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-                className="absolute -bottom-1 -left-1 pointer-events-none z-10 rounded-full overflow-hidden border-2 border-white/70 shadow-md w-7 h-7 sm:w-8 sm:h-8 bg-black/40"
-                aria-label={lastVoteApproved ? '上輪贊成' : '上輪反對'}
-              >
-                <img
-                  src={lastVoteApproved ? VOTE_IMAGES.yes : VOTE_IMAGES.no}
-                  alt=""
-                  aria-hidden="true"
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  draggable={false}
-                  onError={(e) => {
-                    // eslint-disable-next-line no-console
-                    console.warn('[asset miss] vote-persistent', (e.target as HTMLImageElement).src);
-                  }}
-                />
-              </motion.div>
-            );
-          }
-          return null;
-        })()}
+        {/* 左下投票球；窄卡已在底部資訊列顯示。 */}
+        {!compact && voteToken}
 
         {/*
           Bot icon — Edward's 4-corner spec doesn't reserve a slot, so we tuck
@@ -827,46 +1021,19 @@ export default function PlayerCard({
           top-left cluster. Suppressed on role-hidden tiles (the unknown card
           intentionally hides identity hints; the operator can still spot bots
           via the lobby roster).
+          手機 AI 徽章保留原位；窄卡改在名字前方顯示。
         */}
-        {player.isBot && (
+        {player.isBot && !compact && (
           <div
-            className="absolute top-0 left-9 sm:left-11 bg-slate-900/80 border border-slate-500 rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center pointer-events-none z-10 shadow-sm"
+            className="absolute top-4 sm:top-5 left-0.5 bg-slate-900/80 border border-slate-500 rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center pointer-events-none z-10 shadow-sm"
             aria-label="AI 玩家"
           >
             <span className="text-[10px] sm:text-xs leading-none">🤖</span>
           </div>
         )}
 
-        {/*
-          Edward 2026-04-25 22:04 game-end role-label chip. After the inline
-          reveal panel was cut, PlayerCard owns the role-name display directly:
-          a slim chip stacked just above the bottom name strip so the painted
-          portrait + 角色名 + 玩家名 all read in a single glance. Active only
-          when `endGameRoleLabel` is provided (GameBoard passes it iff
-          room.state === 'ended'); transparent during normal gameplay so the
-          square portrait stays uncluttered. Tinted by team — blue/red bg lets
-          the rail summarise camp distribution at a glance.
-        */}
-        {endGameRoleLabel && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`absolute bottom-5 inset-x-1 pointer-events-none flex justify-center z-10`}
-          >
-            <span
-              className={`max-w-full truncate rounded-md px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold leading-tight border ${
-                effectiveTeam === 'evil'
-                  ? 'bg-red-900/80 border-red-400 text-red-100'
-                  : effectiveTeam === 'good'
-                  ? 'bg-blue-900/80 border-blue-400 text-blue-100'
-                  : 'bg-gray-900/80 border-gray-400 text-gray-100'
-              }`}
-              style={{ textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
-            >
-              {endGameRoleLabel}
-            </span>
-          </motion.div>
-        )}
+        {/* 賽後角色；窄卡已在底部資訊列顯示。 */}
+        {!compact && roleChip}
 
         {/*
           Edward 2026-04-25 22:04 game-end assassinated marker — painted card
@@ -879,10 +1046,16 @@ export default function PlayerCard({
           <motion.div
             initial={{ scale: 0, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
-            className="absolute -top-1 -right-1 bg-red-700 border-2 border-red-300 rounded-full w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center pointer-events-none shadow-md z-20"
+            className={`absolute ${compact ? 'top-0.5 right-0.5' : '-top-1 -right-1 w-7 h-7 sm:w-8 sm:h-8'} bg-red-700 border-2 border-red-300 rounded-full flex items-center justify-center pointer-events-none shadow-md z-20`}
+            style={topIconStyle}
             aria-label="被刺殺"
           >
-            <span className="text-[14px] sm:text-base leading-none">🗡️</span>
+            <span
+              className={`${compact ? '' : 'text-[14px] sm:text-base'} leading-none`}
+              style={compact ? { fontSize: COMPACT.topGlyph } : undefined}
+            >
+              🗡️
+            </span>
           </motion.div>
         )}
 
@@ -904,30 +1077,9 @@ export default function PlayerCard({
         )}
       </motion.div>
 
-      {/*
-        Edward 2026-04-25 19:40 — chat bubble overlay below the PlayerCard.
-        Renders the player's most recent chat line for ~5s then fades out.
-        Truncated to one line at small max-width so it doesn't push neighbour
-        cards down the rail; the full conversation still lives in ChatPanel.
-      */}
-      <AnimatePresence>
-        {showBubble && latestEntry && (
-          <motion.div
-            key={`bubble-${latestEntry.timestamp}`}
-            initial={{ opacity: 0, y: -4, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ duration: 0.18 }}
-            className={`pointer-events-none max-w-[140px] truncate rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 px-2 py-1 text-[10px] leading-tight text-white shadow-md ${
-              side === 'left' ? 'rounded-tr-none' : 'rounded-tl-none'
-            }`}
-            data-testid={`player-chat-bubble-${player.id}`}
-            title={latestEntry.text}
-          >
-            {latestEntry.text}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* 桌機泡泡在卡片側邊；手機保留卡片下方位置，最寬 140px。 */}
+      {typeof document !== 'undefined' &&
+        createPortal(<AnimatePresence>{bubbleVisible && bubbleAnchor && bubble}</AnimatePresence>, document.body)}
     </div>
   );
 }

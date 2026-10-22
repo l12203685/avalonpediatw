@@ -1,22 +1,24 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { Loader, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { fetchAnalysisChemistry, getErrorMessage, theorySettings } from '../../services/api';
+import { fetchAnalysisChemistry, getErrorMessage, outcomeBlocks, theorySettings } from '../../services/api';
 import type { ChemistryData, ChemistryMatrix as ChemistryMatrixType } from '../../services/api';
 import { isThinPairCell } from '../../utils/analysisDisplay';
 import { useAnalysisOverview } from './useAnalysisOverview';
+import { pairOutcomeCounts } from './seatRoleBlocks';
+import { SectionTabs, formatRate, useSectionTab, type MetricBlockKey, type SectionTabItem } from './ui';
 
 type MatrixKey = 'coWin' | 'coLose' | 'winCorr' | 'coWinMinusLose' | 'outcomePair';
 
 const MATRIX_KEYS: MatrixKey[] = ['coWin', 'coLose', 'winCorr', 'coWinMinusLose', 'outcomePair'];
+const BLOCKS: readonly MetricBlockKey[] = ['mission', 'assassination', 'final'];
 
-function colorForOutcomePair(value: number): string {
-  if (isNaN(value)) return 'bg-gray-900/30 text-gray-700';
-  if (value >= 55) return 'bg-red-500/70 text-red-100';
-  if (value >= 50) return 'bg-red-700/50 text-red-200';
-  if (value >= 40) return 'bg-gray-700/40 text-gray-300';
-  if (value >= 35) return 'bg-blue-700/50 text-blue-200';
+/** 三結果配對：與全體同一塊的差 (百分點)，正 = 紅方較好。 */
+function colorForPairDeviation(deviation: number): string {
+  if (deviation >= 10)  return 'bg-red-500/70 text-red-100';
+  if (deviation >= 5)   return 'bg-red-700/50 text-red-200';
+  if (deviation > -5)   return 'bg-gray-700/40 text-gray-300';
+  if (deviation > -10)  return 'bg-blue-700/50 text-blue-200';
   return 'bg-blue-500/70 text-blue-100';
 }
 
@@ -26,10 +28,6 @@ const THIN_PAIR_CELL = 'bg-gray-900/30 text-gray-500 border border-dashed border
 
 function cellColor(value: number, key: MatrixKey): string {
   if (isNaN(value)) return 'bg-gray-900/30 text-gray-700';
-
-  if (key === 'outcomePair') {
-    return colorForOutcomePair(value);
-  }
 
   if (key === 'coWinMinusLose' || key === 'winCorr') {
     if (value >= 15)  return 'bg-green-500/70 text-green-100';
@@ -50,25 +48,44 @@ function cellColor(value: number, key: MatrixKey): string {
  * 默契矩陣 — Edward 2026-04-26 + 2026-04-27
  *
  * The original 4 matrices (coWin / coLose / winCorr / coWinMinusLose) stay
- * unchanged. Edward 2026-04-27: a 5th matrix ``outcomePair`` shows the
- * three-outcome distribution across each pair's co-played games — primary
- * cell value is threeRedPct, with tooltip surfacing 三紅 / 三藍死 / 三藍活
- * altogether. Hidden when the cache predates the field. Cells from fewer shared
- * games than the theory top-up threshold (theoryMinCellGames, 3) get no red/blue (grey, dashed):
- * 1–2 games can only read 0 / 50 / 100 %.
+ * unchanged. Edward 2026-04-27: a 5th matrix ``outcomePair`` from each pair's
+ * co-played games. Hidden when the cache predates the field.
+ *
+ * (2026-10-14 Edward：「用條件機率」「每個數字附 n」「一頁一屏」)
+ *  - 三結果配對不再顯示「三紅占全部共同場次」：改成三塊結果 (紅方視角，藍方 = 100% − 同一格)，
+ *    用小分頁切 任務結果 (三紅 / 共同場次) / 刺殺結果 (三藍死 / 共同的三藍局 = 刺中率) /
+ *    遊戲結果 ((三紅 + 三藍死) / 共同場次)。局數由快取的 % 與共同場數還原 (pairOutcomeCounts，
+ *    兩份快取每格都精確)，比率由 @avalon/shared 的 outcomeBlocks 算；顏色 = 與全體同一塊的差。
+ *    這一塊的 n 不到補值門檻 (theoryMinCellGames，讀快取) 的格子不上色、虛線框 —— 刺殺的 n 比共同場次少。
+ *  - 矩陣切換改用 SectionTabs (三塊切換放同一列)，說明縮成一行，矩陣在自己的容器裡上下／左右捲 (表頭與名字固定)，
+ *    整頁不拉長；滑鼠提示改用 title (不會被捲動容器切掉)。
  */
 export default function ChemistryMatrixPanel(): JSX.Element {
   const { t } = useTranslation('common');
   const [data, setData] = useState<ChemistryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeKey, setActiveKey] = useState<MatrixKey>('coWinMinusLose');
   const { overview } = useAnalysisOverview();
   const minPairGames = theorySettings(overview?.theoryConfig).theoryMinCellGames;
 
+  // outcomePair only when counted from the game log (`source: 'games'`); older caches held the
+  // overall split in every cell (45.5 % everywhere; 2026-10-13 players' report).
+  const hasMatrix = (k: MatrixKey): boolean =>
+    !!data && (k === 'outcomePair' ? data.outcomePair?.source === 'games' : Boolean(data[k]));
+  const matrixItems: SectionTabItem<MatrixKey>[] = MATRIX_KEYS.filter(hasMatrix).map(k => ({
+    id: k,
+    label: t(`analytics.deep.chemistry.matrices.${k}`),
+  }));
+  const blockItems: SectionTabItem<MetricBlockKey>[] = BLOCKS.map(b => ({ id: b, label: t(`analytics.ui.blocks.${b}`) }));
+  // 兩排小分頁 (矩陣、三結果配對的哪一塊) 放同一列，記住上次選的。
+  const [matrixKey, setMatrixKey] = useSectionTab(matrixItems, {
+    defaultValue: 'coWinMinusLose', persistKey: 'analysis.roles.chemistryMatrix',
+  });
+  const [block = 'mission', setBlock] = useSectionTab(blockItems, { persistKey: 'analysis.roles.chemistryBlock' });
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    (async (): Promise<void> => {
       try {
         const chem = await fetchAnalysisChemistry();
         if (!cancelled) setData(chem);
@@ -78,12 +95,12 @@ export default function ChemistryMatrixPanel(): JSX.Element {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return (): void => { cancelled = true; };
   }, []);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
+      <div className="flex items-center justify-center py-12 text-gray-400 gap-3">
         <Loader size={20} className="animate-spin" /> {t('analytics.deep.chemistry.loading')}
       </div>
     );
@@ -91,122 +108,29 @@ export default function ChemistryMatrixPanel(): JSX.Element {
 
   if (error || !data) {
     return (
-      <div className="flex items-center justify-center py-20 text-red-400 gap-3">
+      <div className="flex items-center justify-center py-12 text-red-400 gap-3">
         <AlertCircle size={20} /> {error || t('analytics.deep.loadFailed')}
       </div>
     );
   }
 
-  // Hide outcomePair button if cache predates the field — or still holds the old
-  // projection (no `source`: the overall split, 45.5 % in every cell; 2026-10-13
-  // players' report). Coerce activeKey back to a safe default in that case so we
-  // never render a missing matrix.
-  const hasMatrix = (k: MatrixKey): boolean =>
-    k === 'outcomePair' ? data.outcomePair?.source === 'games' : Boolean(data[k]);
-  const availableKeys: MatrixKey[] = MATRIX_KEYS.filter(hasMatrix);
-  const safeActiveKey: MatrixKey = hasMatrix(activeKey) ? activeKey : 'coWinMinusLose';
-  const matrix = data[safeActiveKey] as ChemistryMatrixType | undefined;
-
-  if (!matrix) {
-    return (
-      <div className="flex items-center justify-center py-20 text-gray-500">
-        {t('analytics.deep.chemistry.noData')}
-      </div>
-    );
+  if (matrixItems.length === 0 || matrixKey === undefined) {
+    return <div className="py-12 text-center text-gray-500">{t('analytics.deep.chemistry.noData')}</div>;
   }
+  const baseline = overview?.outcomeBreakdown ? outcomeBlocks(overview.outcomeBreakdown, 'red') : null;
 
-  const { players, values } = matrix;
-  const rowLabels: string[] = matrix.rowLabels && matrix.rowLabels.length > 0
-    ? matrix.rowLabels
-    : players;
-  const threeBlueDeadPct = matrix.threeBlueDeadPct;
-  const threeBlueAlivePct = matrix.threeBlueAlivePct;
-  const pairGames = matrix.games;
+  const renderMatrix = (key: MatrixKey, block: MetricBlockKey): JSX.Element => {
+    const matrix = data[key] as ChemistryMatrixType | undefined;
+    if (!matrix || matrix.players.length === 0) {
+      return <div className="py-12 text-center text-gray-500">{t('analytics.deep.chemistry.noData')}</div>;
+    }
+    const { players, values } = matrix;
+    const rowLabels: string[] = matrix.rowLabels && matrix.rowLabels.length > 0 ? matrix.rowLabels : players;
+    const isPair = key === 'outcomePair';
+    const ref = baseline?.[block].win ?? null;
 
-  if (players.length === 0) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-500">
-        {t('analytics.deep.chemistry.noData')}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {availableKeys.map(k => (
-          <button
-            key={k}
-            onClick={() => setActiveKey(k)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              safeActiveKey === k
-                ? 'bg-purple-600 text-white'
-                : 'bg-avalon-card/40 text-gray-500 hover:text-white border border-gray-700'
-            }`}
-            title={t(`analytics.deep.chemistry.descriptions.${k}`)}
-          >
-            {t(`analytics.deep.chemistry.matrices.${k}`)}
-          </button>
-        ))}
-      </div>
-
-      <p className="text-xs text-gray-500">
-        {t(`analytics.deep.chemistry.descriptions.${safeActiveKey}`)}
-      </p>
-
-      <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-3 text-[10px] text-gray-500 space-y-1">
-        <p className="font-bold text-gray-400">{t('analytics.deep.chemistry.guideTitle')}</p>
-        {safeActiveKey === 'coWin'  && <p>{t('analytics.deep.chemistry.guideCoWin')}</p>}
-        {safeActiveKey === 'coLose' && <p>{t('analytics.deep.chemistry.guideCoLose')}</p>}
-        {safeActiveKey === 'winCorr' && (
-          <>
-            <p>{t('analytics.deep.chemistry.guideWinCorr1')}</p>
-            <p>{t('analytics.deep.chemistry.guideWinCorr2')}</p>
-          </>
-        )}
-        {safeActiveKey === 'coWinMinusLose' && (
-          <>
-            <p>{t('analytics.deep.chemistry.guideCoWinMinusLose1')}</p>
-            <p>{t('analytics.deep.chemistry.guideCoWinMinusLose2')}</p>
-          </>
-        )}
-        {safeActiveKey === 'outcomePair' && (
-          <>
-            <p>{t('analytics.deep.chemistry.guideOutcomePair1')}</p>
-            <p>{t('analytics.deep.chemistry.guideOutcomePair2')}</p>
-          </>
-        )}
-        <div className="flex flex-wrap gap-3 mt-1">
-          {(safeActiveKey === 'coWinMinusLose' || safeActiveKey === 'winCorr') ? (
-            <>
-              <span className="text-green-400">{t('analytics.deep.chemistry.labelHigh')}</span>
-              <span className="text-gray-400">{t('analytics.deep.chemistry.labelMid')}</span>
-              <span className="text-red-400">{t('analytics.deep.chemistry.labelLow')}</span>
-            </>
-          ) : safeActiveKey === 'outcomePair' ? (
-            <>
-              <span className="text-red-400">{t('analytics.deep.chemistry.labelOutcomeHighRed')}</span>
-              <span className="text-gray-400">{t('analytics.deep.chemistry.labelOutcomeMid')}</span>
-              <span className="text-blue-400">{t('analytics.deep.chemistry.labelOutcomeHighBlue')}</span>
-              {minPairGames > 0 && Array.isArray(matrix.games) && (
-                <span className="text-gray-500">{t('analytics.deep.chemistry.labelOutcomeThin', { n: minPairGames })}</span>
-              )}
-            </>
-          ) : (
-            <>
-              <span className="text-blue-400">{t('analytics.deep.chemistry.labelHighPct')}</span>
-              <span className="text-gray-400">{t('analytics.deep.chemistry.labelMidPct')}</span>
-              <span className="text-purple-400">{t('analytics.deep.chemistry.labelLowPct')}</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-2 overflow-auto max-h-[70vh]"
-      >
+      <div className="overflow-auto overscroll-contain max-h-[min(26rem,60vh)] sm:max-h-[19rem] rounded-xl border border-gray-700 bg-avalon-card/30 p-1">
         <table className="text-[10px] border-collapse">
           <thead>
             <tr>
@@ -214,17 +138,10 @@ export default function ChemistryMatrixPanel(): JSX.Element {
               {players.map((name, i) => (
                 <th
                   key={i}
-                  className="sticky top-0 z-10 bg-avalon-card p-1 text-gray-400 font-semibold whitespace-nowrap"
-                  style={{ height: 80, verticalAlign: 'bottom', padding: 2 }}
+                  className="sticky top-0 z-10 bg-avalon-card text-gray-400 font-semibold whitespace-nowrap"
+                  style={{ height: 72, verticalAlign: 'bottom', padding: 2 }}
                 >
-                  <span
-                    className="inline-block"
-                    style={{
-                      transform: 'rotate(-90deg)',
-                      transformOrigin: 'center',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
+                  <span className="inline-block" style={{ transform: 'rotate(-90deg)', transformOrigin: 'center', whiteSpace: 'nowrap' }}>
                     {name}
                   </span>
                 </th>
@@ -234,50 +151,41 @@ export default function ChemistryMatrixPanel(): JSX.Element {
           <tbody>
             {rowLabels.map((rowName, ri) => (
               <tr key={ri}>
-                <td className="sticky left-0 z-10 bg-avalon-card px-2 py-0.5 text-gray-300 font-semibold whitespace-nowrap">
+                <th scope="row" className="sticky left-0 z-10 bg-avalon-card px-2 py-0.5 text-left text-gray-300 font-semibold whitespace-nowrap">
                   {rowName}
-                </td>
+                </th>
                 {values[ri]?.map((rawVal, ci) => {
                   const isSelf = rowLabels[ri] === players[ci];
-                  const val = rawVal == null ? NaN : rawVal;
-                  const blueDeadVal = threeBlueDeadPct?.[ri]?.[ci];
-                  const blueAliveVal = threeBlueAlivePct?.[ri]?.[ci];
-                  const sharedGames = pairGames?.[ri]?.[ci];
-                  const thin = safeActiveKey === 'outcomePair' && !isSelf && !isNaN(val) && isThinPairCell(sharedGames, minPairGames);
-                  const showOutcomeTooltip =
-                    safeActiveKey === 'outcomePair' &&
-                    !isSelf &&
-                    !isNaN(val) &&
-                    blueDeadVal != null &&
-                    blueAliveVal != null;
+                  let val = rawVal == null ? NaN : rawVal;
+                  let title = '';
+                  let colour = '';
+                  if (isPair && !isSelf) {
+                    const c = pairOutcomeCounts(matrix, ri, ci);
+                    const b = c ? outcomeBlocks(c, 'red') : null;
+                    const cell = b?.[block];
+                    val = typeof cell?.win === 'number' ? cell.win : NaN;
+                    const thin = !isNaN(val) && isThinPairCell(cell?.n, minPairGames);
+                    colour = thin ? THIN_PAIR_CELL : isNaN(val) || ref === null ? cellColor(NaN, key) : colorForPairDeviation(val - ref);
+                    if (b) {
+                      title = t('analytics.r6.tabsb.chemistry.pairTitle', {
+                        row: rowName, col: players[ci], games: b.mission.n,
+                        mission: formatRate(b.mission.win), assassination: formatRate(b.assassination.win), nBlue: b.assassination.n,
+                        final: formatRate(b.final.win),
+                      });
+                    }
+                  } else if (!isSelf && !isNaN(val)) {
+                    colour = cellColor(val, key);
+                    title = `${rowName} × ${players[ci]}: ${val.toFixed(1)}`;
+                  }
                   return (
                     <td key={ci} className="p-0.5">
                       <div
-                        className={`group relative w-8 h-6 flex items-center justify-center rounded text-[9px] font-bold cursor-default ${
-                          isSelf ? 'bg-gray-800/60 text-gray-600' : thin ? THIN_PAIR_CELL : cellColor(val, safeActiveKey)
+                        title={title || undefined}
+                        className={`w-8 h-6 flex items-center justify-center rounded text-[9px] font-bold cursor-default ${
+                          isSelf ? 'bg-gray-800/60 text-gray-600' : colour || cellColor(NaN, key)
                         }`}
                       >
                         {isSelf ? '-' : isNaN(val) ? '' : val.toFixed(0)}
-                        {!isSelf && !isNaN(val) && (
-                          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-[10px] text-gray-200 whitespace-nowrap shadow-lg pointer-events-none space-y-0.5">
-                            <div>{rowName} × {players[ci]}: {val.toFixed(1)}</div>
-                            {showOutcomeTooltip && (
-                              <div className="text-[9px] text-gray-400">
-                                <span className="text-red-300">{t('analytics.deep.outcomes.threeRed')} {val.toFixed(1)}%</span>
-                                <span className="mx-1 text-gray-600">·</span>
-                                <span className="text-amber-300">{t('analytics.deep.outcomes.threeBlueDead')} {(blueDeadVal as number).toFixed(1)}%</span>
-                                <span className="mx-1 text-gray-600">·</span>
-                                <span className="text-blue-300">{t('analytics.deep.outcomes.threeBlueAlive')} {(blueAliveVal as number).toFixed(1)}%</span>
-                                {typeof sharedGames === 'number' && (
-                                  <>
-                                    <span className="mx-1 text-gray-600">·</span>
-                                    <span>{t('analytics.deep.chemistry.pairGames', { count: sharedGames })}</span>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     </td>
                   );
@@ -286,7 +194,76 @@ export default function ChemistryMatrixPanel(): JSX.Element {
             ))}
           </tbody>
         </table>
-      </motion.div>
+      </div>
+    );
+  };
+
+  const legend = (key: MatrixKey): JSX.Element => {
+    if (key === 'coWinMinusLose' || key === 'winCorr') {
+      return (
+        <>
+          <span className="text-green-400">{t('analytics.deep.chemistry.labelHigh')}</span>
+          <span className="text-gray-400">{t('analytics.deep.chemistry.labelMid')}</span>
+          <span className="text-red-400">{t('analytics.deep.chemistry.labelLow')}</span>
+        </>
+      );
+    }
+    if (key === 'outcomePair') {
+      return (
+        <>
+          <span className="text-red-400">{t('analytics.r6.tabsb.chemistry.legendRed')}</span>
+          <span className="text-gray-400">{t('analytics.r6.tabsb.chemistry.legendMid')}</span>
+          <span className="text-blue-400">{t('analytics.r6.tabsb.chemistry.legendBlue')}</span>
+          {minPairGames > 0 && <span className="text-gray-500">{t('analytics.r6.tabsb.chemistry.legendThin', { n: minPairGames })}</span>}
+        </>
+      );
+    }
+    return (
+      <>
+        <span className="text-blue-400">{t('analytics.deep.chemistry.labelHighPct')}</span>
+        <span className="text-gray-400">{t('analytics.deep.chemistry.labelMidPct')}</span>
+        <span className="text-purple-400">{t('analytics.deep.chemistry.labelLowPct')}</span>
+      </>
+    );
+  };
+
+  const guide = (key: MatrixKey, block: MetricBlockKey): string => {
+    switch (key) {
+      case 'coWin': return t('analytics.deep.chemistry.guideCoWin');
+      case 'coLose': return t('analytics.deep.chemistry.guideCoLose');
+      case 'winCorr': return `${t('analytics.deep.chemistry.guideWinCorr1')} ${t('analytics.deep.chemistry.guideWinCorr2')}`;
+      case 'coWinMinusLose': return t('analytics.deep.chemistry.guideCoWinMinusLose1');
+      default: return t(`analytics.r6.tabsb.chemistry.guide.${block}`, {
+        ref: formatRate(baseline?.[block].win ?? null), n: baseline?.[block].n ?? '—',
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <SectionTabs
+          items={matrixItems}
+          value={matrixKey}
+          onChange={setMatrixKey}
+          ariaLabel={t('analytics.r6.tabsb.chemistry.matrixLabel')}
+        />
+        {matrixKey === 'outcomePair' && (
+          <SectionTabs
+            items={blockItems}
+            value={block}
+            onChange={setBlock}
+            ariaLabel={t('analytics.r6.tabsb.seatRoles.blockLabel')}
+          />
+        )}
+      </div>
+      <p className="text-[11px] leading-snug text-zinc-400">
+        <span className="font-semibold text-zinc-300">{t(`analytics.deep.chemistry.descriptions.${matrixKey}`)}</span>
+        {matrixKey === 'outcomePair' && <> · {t('analytics.r6.tabsb.chemistry.pairDescription')}</>}
+        {' — '}{guide(matrixKey, block)}
+      </p>
+      <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">{legend(matrixKey)}</p>
+      {renderMatrix(matrixKey, block)}
     </div>
   );
 }

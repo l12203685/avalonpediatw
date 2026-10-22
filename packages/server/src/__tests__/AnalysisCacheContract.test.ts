@@ -22,6 +22,16 @@
  * Theory win rates (schemaVersion 3, Edward 2026-10-13): players[].theory,
  * overview.seatFinalWinRates / topPlayersByRoleTheory and boards with `metric`
  * are REQUIRED from version 3 on, checked only when present before that.
+ *
+ * schemaVersion 4 (Edward 2026-10-14): players[].roleOutcomes, theory.roleWindows (角色理論 over each
+ * role's last 10 games, 忠臣 40) without last50, overview.topPlayersByPositionTheory /
+ * topPlayersByOverallTheory, topPlayersByGames outcomes, the position / overall boards and
+ * radar.outcomeBlocks.roles are REQUIRED from version 4 on. The conditional radar.redMerlinKillRate /
+ * radar.blueMerlinProtect (刺殺結果 of the red / blue games) and radar.outcomeBlocks.red / blue are checked
+ * on every cache whose players carry the raw counts (schemaVersion 3 included: the route computes them).
+ *
+ * AVALON_ANALYSIS_CACHE=<file> runs the whole contract over that file instead of the committed one
+ * (the server serves it too), e.g. a schemaVersion-4 cache built offline before the daily refresh.
  */
 import fs from 'fs';
 import http from 'http';
@@ -41,13 +51,15 @@ vi.mock('../middleware/rateLimit', async (importOriginal) => {
 
 import { analysisRouter } from '../routes/analysis';
 import { apiRouter } from '../routes/api';
-import { findPlayerKey, playerNameKey, rnd1, withFinalFields } from '../services/sheetsAnalysis';
+import { ENV_ANALYSIS_CACHE, findPlayerKey, playerNameKey, rnd1, withFinalFields } from '../services/sheetsAnalysis';
 import type { PlayerStats } from '../services/sheetsAnalysis';
 
-const CACHE_PATH = path.resolve(__dirname, '..', '..', 'analysis_cache.json');
+const CACHE_PATH = process.env[ENV_ANALYSIS_CACHE]?.trim()
+  ? path.resolve(process.env[ENV_ANALYSIS_CACHE]!.trim())
+  : path.resolve(__dirname, '..', '..', 'analysis_cache.json');
 const committedCache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf-8')) as {
   overview: { schemaVersion?: unknown };
-  players: { players: Array<{ name: string; totalGames: number }>; seatOutcomesSource?: unknown };
+  players: { players: Array<{ name: string; totalGames: number }>; seatOutcomesSource?: unknown; aliases?: Record<string, unknown> };
   playerDetails: Record<string, unknown>;
   leaderboard?: unknown;
 };
@@ -56,6 +68,10 @@ const playerNames = committedCache.players.players.map((p) => p.name);
 const V2 = typeof committedCache.overview.schemaVersion === 'number' && committedCache.overview.schemaVersion >= 2;
 /** Cache written with the theory win rates (players[].theory, theory boards) → mandatory too. */
 const V3 = typeof committedCache.overview.schemaVersion === 'number' && committedCache.overview.schemaVersion >= 3;
+/** Cache written with the per-role windows, roleOutcomes and the position / overall rankings (2026-10-14). */
+const V4 = typeof committedCache.overview.schemaVersion === 'number' && committedCache.overview.schemaVersion >= 4;
+const ROLES = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林', '忠臣'];
+const OUTCOME_NAMES = ['三紅', '三藍死', '三藍活'];
 /**
  * The last-N theory windows the cache was written with (its own leaderboard.config.theoryWindows,
  * = the generator's mainGames / shortGames), so changing those knobs never fails this test
@@ -118,15 +134,63 @@ function v2Field(v: unknown, check: () => void): void {
 function v3Field(v: unknown, check: () => void): void {
   if (V3 || v !== undefined) check();
 }
+/** Required on a schemaVersion-4 cache; on an older cache checked only when present. */
+function v4Field(v: unknown, check: () => void): void {
+  if (V4 || v !== undefined) check();
+}
+
+/** {三紅, 三藍死, 三藍活} counts (players[].roleOutcomes cells, topPlayersByGames outcomes). */
+function outcomeCounts(p: Problems, v: unknown, at: string): void {
+  const o = obj(p, v, at);
+  if (Object.keys(o).join() !== OUTCOME_NAMES.join()) p.push(`${at} keys ${show(Object.keys(o))}`);
+  for (const k of OUTCOME_NAMES) num(p, o[k], `${at}.${k}`);
+}
+
+/** One block of @avalon/shared outcomeBlocks: {win: % or null when n = 0, wins, n}. */
+function outcomeBlock(p: Problems, v: unknown, at: string): void {
+  const b = obj(p, v, at);
+  numOrNull(p, b.win, `${at}.win`);
+  for (const k of ['wins', 'n']) num(p, b[k], `${at}.${k}`);
+  if (b.n === 0 && b.win !== null) p.push(`${at}: n = 0 but win ${show(b.win)}`);
+}
+function outcomeBlocks(p: Problems, v: unknown, at: string): void {
+  const b = obj(p, v, at);
+  for (const k of ['mission', 'assassination', 'final']) outcomeBlock(p, b[k], `${at}.${k}`);
+}
 
 const THEORY_WINDOW_NUMS = ['window', 'games', 'roleTheory', 'positionTheory', 'finalWinRate', 'sparseRoles', 'sparseSeats'];
 
-/** players[].theory: last<N> (THEORY_WINDOWS) and career windows (PlayerRadarChart, /戰績). */
+/** players[].theory.roleWindows (schemaVersion 4): the per-role windows of 角色理論. */
+function roleWindowsBlock(p: Problems, v: unknown, at: string): void {
+  const rw = obj(p, v, at);
+  for (const k of ['roleTheory', 'games', 'sparseRoles']) num(p, rw[k], `${at}.${k}`);
+  bool(p, rw.fullWindows, `${at}.fullWindows`);
+  for (const k of ['from', 'to']) str(p, rw[k], `${at}.${k}`);
+  const roles = obj(p, rw.roles, `${at}.roles`);
+  if (Object.keys(roles).join() !== ROLES.join()) p.push(`${at}.roles keys ${show(Object.keys(roles))}`);
+  let games = 0;
+  let full = true;
+  for (const r of ROLES) {
+    const c = obj(p, roles[r], `${at}.roles.${r}`);
+    for (const k of ['games', 'wins', 'window', 'rate']) num(p, c[k], `${at}.roles.${r}.${k}`);
+    if (typeof c.games === 'number' && typeof c.window === 'number') {
+      if (c.games > c.window) p.push(`${at}.roles.${r}: ${c.games} games > window ${c.window}`);
+      games += c.games;
+      full = full && c.games >= c.window;
+    }
+  }
+  if (rw.games !== games) p.push(`${at}.games ${show(rw.games)} ≠ Σ roles.games ${games}`);
+  if (rw.fullWindows !== full) p.push(`${at}.fullWindows ${show(rw.fullWindows)} ≠ every role full (${full})`);
+}
+
+/** players[].theory: [roleWindows,] last<N> (THEORY_WINDOWS) and career windows (PlayerRadarChart, /戰績). */
 function theoryBlock(p: Problems, v: unknown, totalGames: unknown, at: string): void {
   const t = obj(p, v, at);
-  const keys = [...THEORY_WINDOWS.map((n) => `last${n}`), 'career'];
+  const lastKeys = [...THEORY_WINDOWS.map((n) => `last${n}`), 'career'];
+  const keys = V4 ? ['roleWindows', ...lastKeys] : lastKeys;
   if (Object.keys(t).join() !== keys.join()) p.push(`${at} keys ${show(Object.keys(t))} ≠ ${show(keys)}`);
-  for (const [i, key] of keys.entries()) {
+  if (V4) roleWindowsBlock(p, t.roleWindows, `${at}.roleWindows`);
+  for (const [i, key] of lastKeys.entries()) {
     const w = obj(p, t[key], `${at}.${key}`);
     const n = THEORY_WINDOWS[i] ?? 0; // career: 0
     if (typeof w.window === 'number' && w.window !== n) p.push(`${at}.${key}.window ${show(w.window)} ≠ ${n}`);
@@ -152,6 +216,19 @@ function twoStagePlayer(p: Problems, pl: Json, at: string): void {
   v2Field(pl.rawBlueThreeBlue, () => num(p, pl.rawBlueThreeBlue, `${at}.rawBlueThreeBlue`));
   v2Field(pl.roleFinalWinRates, () => numRecord(p, pl.roleFinalWinRates, `${at}.roleFinalWinRates`));
   for (const k of ['firstPlayed', 'lastPlayed']) v2Field(pl[k], () => str(p, pl[k], `${at}.${k}`));
+  // schemaVersion 4: per-role 三紅 / 三藍死 / 三藍活 (every role), adding up to the role's games.
+  v4Field(pl.roleOutcomes, () => {
+    const ro = obj(p, pl.roleOutcomes, `${at}.roleOutcomes`);
+    if (Object.keys(ro).join() !== ROLES.join()) p.push(`${at}.roleOutcomes keys ${show(Object.keys(ro))}`);
+    for (const r of ROLES) {
+      outcomeCounts(p, ro[r], `${at}.roleOutcomes.${r}`);
+      const cell = (ro[r] ?? {}) as Record<string, number>;
+      const games = ((pl.rawRoleGames ?? {}) as Record<string, number>)[r];
+      if (typeof games === 'number' && OUTCOME_NAMES.reduce((s, k) => s + (cell[k] ?? 0), 0) !== games) {
+        p.push(`${at}.roleOutcomes.${r} does not add up to rawRoleGames ${games}`);
+      }
+    }
+  });
   // The committed cache carries the raw three-outcome counts, so the served
   // player must have the final rates whatever the schemaVersion (withFinalFields).
   if (typeof pl.rawRedThreeRed === 'number') {
@@ -213,6 +290,23 @@ describe('analysis_cache.json → web contract', () => {
     expect(Object.keys(committedCache.playerDetails).sort()).toEqual([...playerNames].sort());
   });
 
+  it('players.aliases (player_aliases.json): an old name has no row of its own and opens its official name', async () => {
+    const p: Problems = [];
+    const aliases = committedCache.players.aliases ?? {};
+    for (const [old, official] of Object.entries(aliases)) {
+      if (typeof official !== 'string' || !playerNames.includes(official)) {
+        p.push(`players.aliases[${show(old)}] → ${show(official)}: no such player`);
+        continue;
+      }
+      if (playerNames.some((n) => playerNameKey(n) === playerNameKey(old))) p.push(`old name ${show(old)} still has a row`);
+      const res = await request(server).get(`/api/analysis/players/${enc(old)}`);
+      const got = (res.body?.data as Json | undefined)?.player as Json | undefined;
+      if (res.status !== 200 || got?.name !== official) p.push(`players/${old}: HTTP ${res.status}, ${show(got?.name)}`);
+    }
+    expect(p).toEqual([]);
+    expect((await analysis('/players')).aliases).toEqual(aliases);
+  });
+
   it('GET /overview — OverviewPanel', async () => {
     const p: Problems = [];
     const d = await analysis('/overview');
@@ -227,6 +321,13 @@ describe('analysis_cache.json → web contract', () => {
     arr(p, d.topPlayersByGames, 'topPlayersByGames', { nonEmpty: true }).forEach((x, i) => {
       str(p, x.name, `topPlayersByGames[${i}].name`);
       num(p, x.games, `topPlayersByGames[${i}].games`);
+      // schemaVersion 4: the player's 三種結果 (either side) and red / blue games — the overview's pies.
+      v4Field(x.outcomes, () => {
+        outcomeCounts(p, x.outcomes, `topPlayersByGames[${i}].outcomes`);
+        for (const k of ['redGames', 'blueGames']) num(p, x[k], `topPlayersByGames[${i}].${k}`);
+        const o = (x.outcomes ?? {}) as Record<string, number>;
+        if (OUTCOME_NAMES.reduce((s, k) => s + (o[k] ?? 0), 0) !== x.games) p.push(`topPlayersByGames[${i}].outcomes do not add up to games`);
+      });
     });
     // Two-stage sections (schemaVersion 2): 任務結算 / 刺殺結算 / 最終 + cohort role final rates + excess ranking.
     if (V2) num(p, d.schemaVersion, 'schemaVersion');
@@ -256,14 +357,35 @@ describe('analysis_cache.json → web contract', () => {
       const tc = obj(p, d.theoryConfig, 'theoryConfig');
       for (const k of ['theoryMinCellGames', 'mainGames', 'activeDays']) num(p, tc[k], `theoryConfig.${k}`);
       if (show(tc.theoryWindows) !== show(THEORY_WINDOWS)) p.push(`theoryConfig.theoryWindows ${show(tc.theoryWindows)} ≠ ${show(THEORY_WINDOWS)}`);
+      // schemaVersion 4: the per-role windows {role: K_r}, the position window and the overall floor.
+      v4Field(tc.roleWindowGames, () => {
+        numRecord(p, tc.roleWindowGames, 'theoryConfig.roleWindowGames');
+        if (Object.keys(obj(p, tc.roleWindowGames, 'theoryConfig.roleWindowGames')).join() !== ROLES.join()) p.push('theoryConfig.roleWindowGames keys');
+        for (const k of ['positionGames', 'overallMinGames']) num(p, tc[k], `theoryConfig.${k}`);
+      });
     });
     v3Field(d.topPlayersByRoleTheory, () => {
-      // [] is legitimate (nobody with 100 career games); present rows must be complete.
+      // [] is legitimate (nobody with full role windows / 100 career games); present rows must be complete.
       arr(p, d.topPlayersByRoleTheory, 'topPlayersByRoleTheory').forEach((x, i) => {
         str(p, x.name, `topPlayersByRoleTheory[${i}].name`);
         for (const k of ['roleTheory', 'positionTheory', 'finalWinRate', 'games', 'careerGames']) num(p, x[k], `topPlayersByRoleTheory[${i}].${k}`);
+        if (V4) num(p, x.overallTheory, `topPlayersByRoleTheory[${i}].overallTheory`);
       });
     });
+    const ranking = (key: string, fields: string[], floor: unknown): void => {
+      v4Field(d[key], () => {
+        arr(p, d[key], key).forEach((x, i) => {
+          str(p, x.name, `${key}[${i}].name`);
+          for (const k of fields) num(p, x[k], `${key}[${i}].${k}`);
+          if (typeof floor === 'number' && typeof x.careerGames === 'number' && x.careerGames < floor) {
+            p.push(`${key}[${i}].careerGames ${x.careerGames} < ${floor}`);
+          }
+        });
+      });
+    };
+    const tc = (d.theoryConfig ?? {}) as Json;
+    ranking('topPlayersByPositionTheory', ['positionTheory', 'finalWinRate', 'games', 'careerGames'], tc.positionGames);
+    ranking('topPlayersByOverallTheory', ['overallTheory', 'positionTheory', 'finalWinRate', 'games', 'careerGames'], tc.overallMinGames);
     v2Field(d.topPlayersByExcess, () => {
       arr(p, d.topPlayersByExcess, 'topPlayersByExcess', { nonEmpty: true }).forEach((x, i) => {
         str(p, x.name, `topPlayersByExcess[${i}].name`);
@@ -328,10 +450,35 @@ describe('analysis_cache.json → web contract', () => {
       // excessWinRate may be null; roleTheory / positionTheory are theory.career's (null before schemaVersion 3,
       // never the legacy player.roleTheory).
       const radar = obj(p, d.radar, `${name}.radar`);
-      for (const k of ['winRate', 'redWinRate', 'blueMerlinProtect', 'missionWinRate', 'redMerlinKillRate', 'experience']) {
+      for (const k of ['winRate', 'redWinRate', 'missionWinRate', 'experience']) {
         num(p, radar[k], `${name}.radar.${k}`);
       }
       numOrNull(p, radar.excessWinRate, `${name}.radar.excessWinRate`);
+      // Edward 2026-10-14: 紅方刺中率 = 三藍死 / (三藍死 + 三藍活) of the red games and 藍方梅林存活率 =
+      // 三藍活 / (三藍死 + 三藍活) of the blue games (null when the player never reached 三藍 on that side),
+      // not 三藍死 / all red games or 三藍活 / all blue games; the blocks carry every rate with its n.
+      numOrNull(p, radar.redMerlinKillRate, `${name}.radar.redMerlinKillRate`);
+      numOrNull(p, radar.blueMerlinProtect, `${name}.radar.blueMerlinProtect`);
+      if (typeof pl.rawBlueMerlinDead === 'number' && typeof pl.rawBlueMerlinAlive === 'number') {
+        const reached = pl.rawBlueMerlinDead + pl.rawBlueMerlinAlive;
+        const expected = reached > 0 ? rnd1((pl.rawBlueMerlinAlive / reached) * 100) : null;
+        if (radar.blueMerlinProtect !== expected) p.push(`${name}.radar.blueMerlinProtect ${show(radar.blueMerlinProtect)} ≠ ${show(expected)}`);
+        if (reached > 0 && typeof pl.merlinSurvivalRate === 'number' && radar.blueMerlinProtect !== pl.merlinSurvivalRate) {
+          p.push(`${name}.radar.blueMerlinProtect ${show(radar.blueMerlinProtect)} ≠ player.merlinSurvivalRate ${show(pl.merlinSurvivalRate)}`);
+        }
+      }
+      if (typeof pl.rawRedMerlinDead === 'number' && typeof pl.rawRedMerlinAlive === 'number') {
+        const reached = pl.rawRedMerlinDead + pl.rawRedMerlinAlive;
+        const expected = reached > 0 ? rnd1((pl.rawRedMerlinDead / reached) * 100) : null;
+        if (radar.redMerlinKillRate !== expected) p.push(`${name}.radar.redMerlinKillRate ${show(radar.redMerlinKillRate)} ≠ ${show(expected)}`);
+        const blocks = obj(p, radar.outcomeBlocks, `${name}.radar.outcomeBlocks`);
+        outcomeBlocks(p, blocks.red, `${name}.radar.outcomeBlocks.red`);
+        outcomeBlocks(p, blocks.blue, `${name}.radar.outcomeBlocks.blue`);
+        if (V4) {
+          const roles = obj(p, blocks.roles, `${name}.radar.outcomeBlocks.roles`);
+          for (const r of ROLES) outcomeBlocks(p, roles[r], `${name}.radar.outcomeBlocks.roles.${r}`);
+        }
+      }
       const career = ((pl.theory as Json | undefined)?.career ?? null) as Json | null;
       for (const k of ['roleTheory', 'positionTheory']) {
         const expected = career && typeof career[k] === 'number' ? career[k] : null;
@@ -371,10 +518,13 @@ describe('analysis_cache.json → web contract', () => {
     if (d.config !== undefined) {
       const cfg = obj(p, d.config, 'config');
       if (V3 || cfg.theoryWindows !== undefined) {
-        // The theory generator's LEADERBOARD_CONFIG (2026-10-13).
-        for (const k of ['theoryMinCellGames', 'activeDays', 'topN', 'mainGames', 'shortGames', 'improvedGames', 'assassinAttempts', 'newcomerDays', 'roleTitleGames']) {
-          num(p, cfg[k], `config.${k}`);
-        }
+        // The theory generator's LEADERBOARD_CONFIG (2026-10-13; 2026-10-14 = schemaVersion 4: per-role
+        // windows and the overall floor instead of shortGames / improvedGames).
+        const keys = V4
+          ? ['theoryMinCellGames', 'activeDays', 'topN', 'mainGames', 'roleWindowGames', 'loyalWindowGames', 'overallMinGames', 'assassinAttempts', 'newcomerDays', 'roleTitleGames']
+          : ['theoryMinCellGames', 'activeDays', 'topN', 'mainGames', 'shortGames', 'improvedGames', 'assassinAttempts', 'newcomerDays', 'roleTitleGames'];
+        for (const k of keys) num(p, cfg[k], `config.${k}`);
+        if (V4 && cfg.shortGames !== undefined) p.push('config.shortGames: removed in schemaVersion 4');
         arr(p, cfg.theoryWindows, 'config.theoryWindows', { nonEmpty: true }).forEach((x, i) => num(p, x, `config.theoryWindows[${i}]`));
       } else {
         for (const k of ['windowDays', 'activeDays', 'minGames', 'shrinkK', 'minBoardRows', 'topN']) num(p, cfg[k], `config.${k}`);
@@ -403,9 +553,16 @@ describe('analysis_cache.json → web contract', () => {
         // newcomers); improved, assassin and roleTitles rows carry other fields instead.
         for (const k of ['excessWinRate', 'finalWinRate', 'expectedFinalWinRate']) if (r[k] !== undefined) num(p, r[k], `${rat}.${k}`);
         if (b.metric === 'roleTheory') {
-          // main / last50 / newcomers: what the site's table and /排行 print.
+          // main / newcomers (/ last50): what the site's table and /排行 print.
           for (const k of ['roleTheory', 'positionTheory', 'finalWinRate', 'careerGames']) num(p, r[k], `${rat}.${k}`);
+          if (V4) num(p, r.overallTheory, `${rat}.overallTheory`);
           if (r.value !== r.roleTheory) p.push(`${rat}.value ${show(r.value)} ≠ roleTheory ${show(r.roleTheory)}`);
+        } else if (b.metric === 'positionTheory') {
+          for (const k of ['positionTheory', 'finalWinRate', 'careerGames']) num(p, r[k], `${rat}.${k}`);
+          if (r.value !== r.positionTheory) p.push(`${rat}.value ${show(r.value)} ≠ positionTheory ${show(r.positionTheory)}`);
+        } else if (b.metric === 'overallTheory') {
+          for (const k of ['overallTheory', 'positionTheory', 'finalWinRate', 'careerGames']) num(p, r[k], `${rat}.${k}`);
+          if (r.value !== r.overallTheory) p.push(`${rat}.value ${show(r.value)} ≠ overallTheory ${show(r.overallTheory)}`);
         } else if (b.metric === 'roleTheoryDelta') {
           for (const k of ['recentRoleTheory', 'priorRoleTheory']) num(p, r[k], `${rat}.${k}`);
         } else if (b.metric === 'hitRate') {

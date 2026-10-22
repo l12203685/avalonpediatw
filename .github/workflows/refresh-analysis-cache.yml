@@ -17,6 +17,10 @@ name: Refresh analysis cache
 #       玩家數比現有快取少超過 max(5, 1%)、默契矩陣變空、玩家資料欄位遺失、內容空白或格式錯
 #       → 拒絕覆寫並讓本 job 失敗（exit 4），現有快取不動。
 #       手動執行時可勾 allow_shrink 放寬「變少」檢查；「欄位遺失」檢查在這裡無法關閉。
+# 每局資料集（複合篩選，Edward 2026-10-14）：同一次執行另寫 packages/server/games_cache.json（只有解析後的
+#       結構化欄位，沒有文字記錄 / note 原文），與快取「同寫或同不寫」、一起 commit；快取的 overview.gamesKey
+#       = 資料集的 key，網站與伺服器靠它確認兩檔同一批。資料集自己的檢查（round-trip、隱私形狀）沒過時只寫快取、
+#       不寫資料集（網站篩選暫停），快取照常推送，最後一步讓 job 亮紅燈。公開紀錄一樣只有數量。
 
 on:
   schedule:
@@ -46,6 +50,7 @@ jobs:
     timeout-minutes: 20
     env:
       CACHE_PATH: packages/server/analysis_cache.json
+      GAMES_PATH: packages/server/games_cache.json
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Pick the credentials secret
@@ -104,7 +109,7 @@ jobs:
           else
             printf '%s' "${FALLBACK_JSON}" > "${key_file}"
           fi
-          # Validate the shape and print only client_email (not secret) -- never the key itself.
+          # 檢查必要欄位；公開日誌只印計數。
           python - "${key_file}" "${SECRET_NAME}" <<'PY'
           import json, sys
           path, secret = sys.argv[1], sys.argv[2]
@@ -118,7 +123,7 @@ jobs:
                     "service-account JSON key (needs client_email and private_key). Paste the whole "
                     "downloaded key file content.")
               sys.exit(1)
-          print(f"Using service account {info['client_email']} (from secret {secret}).")
+          print("認證設定通過：1")
           PY
 
       - name: Preview the refresh (dry run, diff vs the committed cache)
@@ -142,7 +147,8 @@ jobs:
           fi
           exit "${rc}"
 
-      - name: Regenerate analysis_cache.json from the Sheet
+      - name: Regenerate analysis_cache.json (and games_cache.json) from the Sheet
+        id: regen
         if: steps.creds.outputs.secret != ''
         env:
           ALLOW_SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_shrink && '1' || '' }}
@@ -165,9 +171,12 @@ jobs:
 
       - name: Commit and push if the cache changed
         if: steps.creds.outputs.secret != ''
+        env:
+          GAMES_DATASET: ${{ steps.regen.outputs.games_dataset }}
         run: |
-          if git diff --quiet -- "${CACHE_PATH}"; then
-            echo "analysis_cache.json is unchanged; nothing to commit."
+          # 首次產生的資料集尚未追蹤，須以 git status 判斷有無變動。
+          if [ -z "$(git status --porcelain -- "${CACHE_PATH}" "${GAMES_PATH}")" ]; then
+            echo "analysis_cache.json and games_cache.json are unchanged; nothing to commit."
             echo "- 結果：快取無變動，未 commit" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -176,12 +185,23 @@ jobs:
           players="$(count totalPlayers < "${CACHE_PATH}")"
           prev_games="$(git show "HEAD:${CACHE_PATH}" | count totalGames)"
           prev_players="$(git show "HEAD:${CACHE_PATH}" | count totalPlayers)"
+          if [ "${GAMES_DATASET}" = "withheld" ]; then
+            dataset_note="每局資料集暫停寫入（網站篩選暫停）"
+          elif [ -n "$(git status --porcelain -- "${GAMES_PATH}")" ] && [ -f "${GAMES_PATH}" ]; then
+            dataset_games="$(python -c 'import json, sys; print(json.load(sys.stdin)["counts"]["games"])' < "${GAMES_PATH}")"
+            dataset_note="每局資料集 ${dataset_games} 局"
+          else
+            dataset_note="每局資料集無變動"
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- "${CACHE_PATH}"
+          if [ -f "${GAMES_PATH}" ]; then
+            git add -- "${GAMES_PATH}"
+          fi
           git commit -q -m "chore(stats): 每日更新戰績分析快取（${games} 局）" \
-            -m "局數 ${prev_games} → ${games}，玩家 ${prev_players} → ${players}。由 refresh-analysis-cache workflow 從 Google 試算表重算；archetype、playstyle、featureStudies 沿用前次快取。"
+            -m "局數 ${prev_games} → ${games}，玩家 ${prev_players} → ${players}；${dataset_note}。由 refresh-analysis-cache workflow 從 Google 試算表重算；archetype、playstyle、featureStudies 沿用前次快取。"
 
           for attempt in 1 2 3; do
             git fetch -q origin main
@@ -199,6 +219,14 @@ jobs:
             sleep $((attempt * 5))
           done
           echo "::error title=Analysis cache not pushed::git push to main was rejected 3 times (branch protection or concurrent pushes)."
+          exit 1
+
+      - name: Fail when the games dataset was withheld
+        # 分析快取照常推送；若資料集被停寫，最後讓工作失敗並提示檢查原因。
+        if: steps.creds.outputs.secret != '' && steps.regen.outputs.games_dataset == 'withheld'
+        run: |
+          echo "::error title=Games dataset withheld::games_cache.json was not updated (see the annotation of the regenerate step); the site's filters stay off until both files match again."
+          echo "- 每局資料集：暫停寫入（網站篩選暫停），請看 regenerate 步驟的錯誤說明" >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
       - name: Remove the service-account key file

@@ -1,26 +1,23 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Trophy, BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
-import OverviewPanel from '../components/analysis/OverviewPanel';
-import PlayerRadarChart from '../components/analysis/PlayerRadarChart';
-import SeatHeatmap from '../components/analysis/SeatHeatmap';
-import SeatPositionChart from '../components/analysis/SeatPositionChart';
-import ChemistryMatrix from '../components/analysis/ChemistryMatrix';
-import RoleFinalWinRates from '../components/analysis/RoleFinalWinRates';
-import MissionAnalysis from '../components/analysis/MissionAnalysis';
-import RoundsAnalysis from '../components/analysis/RoundsAnalysis';
-import LakeAnalysis from '../components/analysis/LakeAnalysis';
-import SeatOrderAnalysis from '../components/analysis/SeatOrderAnalysis';
-import CaptainAnalysis from '../components/analysis/CaptainAnalysis';
-import AssassinationCard from '../components/analysis/AssassinationCard';
-import LeaderboardBoards from '../components/analysis/LeaderboardBoards';
 import { useAnalysisOverview } from '../components/analysis/useAnalysisOverview';
-import { FeatureStudyCard } from '../components/analytics/FeatureStudiesPanel';
-import LeaderboardV3Table from '../components/LeaderboardV3Table';
+import BoardsTab from '../components/analysis/tabs/BoardsTab';
+import OverviewTab from '../components/analysis/tabs/OverviewTab';
+import TeamsTab from '../components/analysis/tabs/TeamsTab';
+import VotesTab from '../components/analysis/tabs/VotesTab';
+import MissionsTab from '../components/analysis/tabs/MissionsTab';
+import LakeTab from '../components/analysis/tabs/LakeTab';
+import AssassinationTab from '../components/analysis/tabs/AssassinationTab';
+import PositionTab from '../components/analysis/tabs/PositionTab';
+import RolesTab from '../components/analysis/tabs/RolesTab';
+import PlayersTab from '../components/analysis/tabs/PlayersTab';
+import FeatureStudyReportHost from '../components/analytics/FeatureStudyReport';
+import { STUDY_HOME_TAB, studyInLocation } from '../components/analytics/studyLink';
 
 /**
  * #98 (2026-04-23) IA 重整：數據排行頁拆成兩大區 —
@@ -49,6 +46,14 @@ import LeaderboardV3Table from '../components/LeaderboardV3Table';
  *   (各人最近 100 場) + 近 50 場 / 進步 / 刺客 / 新人 (例外：全部場次) / 角色王小卡；
  *   超額勝率不再顯示。總覽與玩家雷達同步改用角色理論／位置理論。
  * LeaderboardPage 仍保留供 'leaderboard' route 用作備援/Alternative entry。
+ *
+ * (2026-10-14 第六輪分工前置) 各分頁內容拆到 components/analysis/tabs/ 下各自一個檔案
+ *   (BoardsTab、OverviewTab、TeamsTab … PlayersTab)，一個分頁只有一個負責的檔案；
+ *   這裡只留頁面外框、上層兩個 tab 與「分析」子分頁切換。
+ *
+ * (2026-10-14 Edward：「查看完整研究」大多點不開) 掛一個 FeatureStudyReportHost：網址 #study=<id>
+ *   時顯示那項特徵研究的完整研究 (各分頁卡片的連結都打開它)；從 #study= 連結直接進來時，
+ *   先切到 分析 → 該研究卡片所在的分頁 (STUDY_HOME_TAB)，關掉研究後就在卡片旁邊。
  */
 type TopTab = 'boards' | 'analysis';
 type AnalysisTab =
@@ -75,7 +80,7 @@ export default function AnalyticsPage(): JSX.Element {
   const { setGameState } = useGameStore();
   // openPlayerStats (排行的名字、#player= 連結) → 分析 → 玩家雷達，選好那位。
   const statsFocus = useGameStore((s) => s.statsFocus);
-  const [activeTab, setActiveTab] = useState<TopTab>(() => (statsFocus ? 'analysis' : 'boards'));
+  const [activeTab, setActiveTab] = useState<TopTab>(() => (statsFocus || studyInLocation() ? 'analysis' : 'boards'));
   const [seenFocus, setSeenFocus] = useState(statsFocus);
   if (statsFocus !== seenFocus) {
     // a new openPlayerStats while this page is open (React's "adjust state on prop change")
@@ -124,11 +129,12 @@ export default function AnalyticsPage(): JSX.Element {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'boards'   && <BoardsSection />}
+            {activeTab === 'boards'   && <BoardsTab />}
             {activeTab === 'analysis' && <AnalysisSection focus={statsFocus} />}
           </motion.div>
         </AnimatePresence>
       </div>
+      <FeatureStudyReportHost />
     </div>
   );
 }
@@ -154,35 +160,17 @@ function TopTabButton({
 }
 
 // ──────────────────────────────────────────────────────────────
-// 排行：角色理論勝率排行 (LeaderboardBoards) + 精算榜 (V3 8-metric)
+// 分析：子分頁依玩家決策分區 (各分頁內容見 components/analysis/tabs/)
 // ──────────────────────────────────────────────────────────────
-
-function BoardsSection(): JSX.Element {
-  const { t } = useTranslation('common');
-  return (
-    <div className="space-y-8">
-      <LeaderboardBoards />
-      <div>
-        <SectionTitle>{t('analytics.boards.precisionTitle')}</SectionTitle>
-        <LeaderboardV3Table />
-      </div>
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────
-// 分析：子分頁依玩家決策分區
-// ──────────────────────────────────────────────────────────────
-
-function SectionTitle({ children }: { children: ReactNode }): JSX.Element {
-  return (
-    <h2 className="text-sm font-bold text-zinc-400 mb-2 mt-1 tracking-wide">{children}</h2>
-  );
-}
 
 function AnalysisSection({ focus }: { focus: { name: string; seq: number } | null }): JSX.Element {
   const { t } = useTranslation('common');
-  const [tab, setTab] = useState<AnalysisTab>(() => (focus ? 'players' : 'overview'));
+  const [tab, setTab] = useState<AnalysisTab>(() => {
+    if (focus) return 'players';
+    const study = studyInLocation();
+    const home = study ? STUDY_HOME_TAB[study] : undefined;
+    return ANALYSIS_TABS.some(d => d.id === home) ? (home as AnalysisTab) : 'overview';
+  });
   const [seenFocus, setSeenFocus] = useState(focus);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
@@ -223,110 +211,17 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.18 }}
         >
-          {tab === 'overview'      && <OverviewPanel />}
+          {tab === 'overview'      && <OverviewTab />}
           {tab === 'teams'         && <TeamsTab />}
           {tab === 'votes'         && <VotesTab />}
-          {tab === 'missions'      && <MissionAnalysis />}
+          {tab === 'missions'      && <MissionsTab />}
           {tab === 'lake'          && <LakeTab />}
           {tab === 'assassination' && <AssassinationTab />}
           {tab === 'position'      && <PositionTab />}
           {tab === 'roles'         && <RolesTab />}
-          {tab === 'players'       && <PlayerRadarChart focus={focus} />}
+          {tab === 'players'       && <PlayersTab focus={focus} />}
         </motion.div>
       </AnimatePresence>
-    </div>
-  );
-}
-
-/** 派隊：隊長分析 + 1-1 派票 (RoundsAnalysis) + L139 (forced P5，選擇偏誤)。 */
-function TeamsTab(): JSX.Element {
-  const { t } = useTranslation('common');
-  return (
-    <div className="space-y-8">
-      <div>
-        <SectionTitle>{t('analytics.analysis.section.captain')}</SectionTitle>
-        <CaptainAnalysis />
-      </div>
-      <div>
-        <SectionTitle>{t('analytics.analysis.section.firstVote')}</SectionTitle>
-        <RoundsAnalysis />
-      </div>
-      <div>
-        <SectionTitle>{t('analytics.analysis.section.feature')}</SectionTitle>
-        <FeatureStudyCard loopId="L139" defaultOpen />
-      </div>
-    </div>
-  );
-}
-
-/** 投票：目前只有改隊後翻轉率 (L136) 一項。 */
-function VotesTab(): JSX.Element {
-  const { t } = useTranslation('common');
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-zinc-500 leading-relaxed">{t('analytics.analysis.votesNote')}</p>
-      <FeatureStudyCard loopId="L136" defaultOpen />
-    </div>
-  );
-}
-
-/** 湖中女神：LakeAnalysis + L141 (宣告可信度) + L142 (言行一致度)。 */
-function LakeTab(): JSX.Element {
-  const { t } = useTranslation('common');
-  return (
-    <div className="space-y-8">
-      <LakeAnalysis />
-      <div className="space-y-4">
-        <SectionTitle>{t('analytics.analysis.section.feature')}</SectionTitle>
-        <FeatureStudyCard loopId="L141" defaultOpen />
-        <FeatureStudyCard loopId="L142" defaultOpen />
-      </div>
-    </div>
-  );
-}
-
-/** 刺殺：刺殺結算卡 + L143 (刺客目標座位偏好)。 */
-function AssassinationTab(): JSX.Element {
-  const { t } = useTranslation('common');
-  return (
-    <div className="space-y-8">
-      <AssassinationCard />
-      <div>
-        <SectionTitle>{t('analytics.analysis.section.feature')}</SectionTitle>
-        <FeatureStudyCard loopId="L143" defaultOpen />
-      </div>
-    </div>
-  );
-}
-
-/** 位置：座位熱圖 + 位置勝率圖 (從總覽搬來) + 派梅娜順序。 */
-function PositionTab(): JSX.Element {
-  const { t } = useTranslation('common');
-  return (
-    <div className="space-y-8">
-      <div>
-        <SectionTitle>{t('analytics.analysis.section.seatHeatmap')}</SectionTitle>
-        <SeatHeatmap />
-      </div>
-      <SeatPositionChart />
-      <div>
-        <SectionTitle>{t('analytics.analysis.section.seatOrder')}</SectionTitle>
-        <SeatOrderAnalysis />
-      </div>
-    </div>
-  );
-}
-
-/** 角色與默契：默契矩陣 + 各角色最終勝率表 (舊快取沒有時隱藏)。 */
-function RolesTab(): JSX.Element {
-  const { t } = useTranslation('common');
-  return (
-    <div className="space-y-8">
-      <RoleFinalWinRates />
-      <div>
-        <SectionTitle>{t('analytics.analysis.section.chemistry')}</SectionTitle>
-        <ChemistryMatrix />
-      </div>
     </div>
   );
 }

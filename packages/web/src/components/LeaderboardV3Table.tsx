@@ -16,6 +16,10 @@
  *   - 修 ELO 分類 filter chip click bug (state val 對齊 *_tag 簡碼)
  *   - 表格字體縮緊不換行
  *   - 母體均值 + tooltip 文案明確化
+ *
+ * (2026-10-14 Edward：「頁面不要拉太長，最好分頁切過去一頁可以顯示全部該分頁的內容」)
+ *   精算榜改成「排行」的最後一個小分頁 (BoardsTab)。只改版面、不改邏輯：說明併成兩行、篩選 chips
+ *   併進結果模式那一列 (會換行)、表格在自己的框裡直捲／橫捲 (表頭固定)，整頁不再拉長。
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -203,7 +207,13 @@ function writeFiltersToUrl(games: GamesFilter, tier: TierFilter): void {
   window.history.replaceState({}, '', next);
 }
 
-/** Tooltip wrapper — pure CSS hover, no extra dep */
+/**
+ * 2026-10-14 一屏：表身在自己的框裡捲 (表頭固定)，整頁不必拉長；至少 15rem，其餘跟著視窗高度
+ * (30rem ≈ 頁首、排行小分頁列、說明與篩選列、頁尾留白；1280×800 剛好一屏)。
+ */
+const TABLE_MAX_HEIGHT = 'max(15rem, calc(100vh - 30rem))';
+
+/** Tooltip wrapper — pure CSS hover, no extra dep (2026-10-14: opens downward, the header row is at the top of a scroll box) */
 function HelpTip({ id, label, hint }: { id: string; label: string; hint: string }): JSX.Element {
   return (
     <span className="relative group inline-flex items-center cursor-help" aria-describedby={id}>
@@ -211,7 +221,7 @@ function HelpTip({ id, label, hint }: { id: string; label: string; hint: string 
       <span
         id={id}
         role="tooltip"
-        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 rounded bg-gray-900 text-gray-100 text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 border border-gray-700"
+        className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-1 rounded bg-gray-900 text-gray-100 text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 border border-gray-700"
       >
         {hint}
       </span>
@@ -477,30 +487,31 @@ export default function LeaderboardV3Table(): JSX.Element {
   const gm = data.globalMeans;
 
   return (
-    <div className="space-y-3">
-      {/* Subtitle + meta — Edward 2026-04-27: 上榜條件 + 母體均值說明 */}
+    <div className="space-y-2">
+      {/* Subtitle + meta — Edward 2026-04-27: 上榜條件 + 母體均值說明
+          (2026-10-14 一屏：上榜條件與人數併一行、母體均值兩句併一行) */}
       <div className="text-[11px] text-gray-400 leading-relaxed">
-        <p className="text-gray-300">{t('leaderboard:v3.eligibilityRule')}</p>
-        <p className="mt-1">
-          {t('leaderboard:v3.eligibleCount', {
-            eligible: meta.eligiblePlayers,
-            total: meta.totalPlayers,
-          })}
+        <p className="flex flex-wrap gap-x-3">
+          <span className="text-gray-300">{t('leaderboard:v3.eligibilityRule')}</span>
+          <span>
+            {t('leaderboard:v3.eligibleCount', {
+              eligible: meta.eligiblePlayers,
+              total: meta.totalPlayers,
+            })}
+          </span>
         </p>
-        <p className="mt-1 text-[10px] text-gray-500">
-          {t('leaderboard:v3.popAvgExplain')}
-        </p>
-        <p className="mt-1 text-[10px] text-gray-500">
-          {t('leaderboard:v3.globalMeans')}: 三紅={gm.threeRedOnRed}% · 三藍死={gm.threeBlueDeadOnRed}% · 三藍活={gm.threeBlueAliveOnBlue}% · cell={gm.cellMean}%
+        <p className="text-[10px] text-gray-500">
+          {t('leaderboard:v3.popAvgExplain')} · {t('leaderboard:v3.globalMeans')}: 三紅={gm.threeRedOnRed}% · 三藍死={gm.threeBlueDeadOnRed}% · 三藍活={gm.threeBlueAliveOnBlue}% · cell={gm.cellMean}%
         </p>
       </div>
 
       {/*
         Toolbar — Edward 2026-04-27 砍 raw/shrunk toggle (永遠用 raw)：
           left   : outcome-mode segmented control
-          right  : filter clear button (chips below)
+          right  : filter label + clear, then the filter chips
+        (2026-10-14 一屏：篩選 chips 併進同一個會換行的列，按鈕縮小)
       */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
         {/* Outcome-mode segmented control */}
         <div className="flex items-center gap-1" role="group" aria-label="outcome mode">
           {(['all', 'threeRed', 'threeBlueDead', 'threeBlueAlive'] as const).map((om) => {
@@ -517,7 +528,7 @@ export default function LeaderboardV3Table(): JSX.Element {
               <button
                 key={om}
                 onClick={() => switchOutcomeMode(om)}
-                className={`px-3 py-1.5 rounded-full border transition-all ${
+                className={`px-2.5 py-1 rounded-full border transition-all ${
                   active
                     ? activeCls
                     : 'bg-gray-800/60 text-gray-400 border-gray-700 hover:border-gray-500'
@@ -530,9 +541,9 @@ export default function LeaderboardV3Table(): JSX.Element {
           })}
         </div>
 
-        {/* Right segment — filter label + clear */}
+        {/* Filter label + clear */}
         <div
-          className="ml-auto inline-flex items-center gap-1 text-[10px]"
+          className="inline-flex items-center gap-1 text-[10px]"
           data-slot="leaderboard-v3-filter-toolbar"
         >
           <span className="inline-flex items-center gap-1 text-gray-400 font-semibold">
@@ -548,69 +559,69 @@ export default function LeaderboardV3Table(): JSX.Element {
             </button>
           )}
         </div>
-      </div>
 
-      {/* Filter chips row — Edward 2026-04-27 simplified to 場次 (3 檔) + ELO 分類 */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px]">
-        {/* 場次區間 — 3 檔 */}
-        <div className="inline-flex items-center gap-1">
-          <span className="text-gray-500 mr-1">{t('leaderboard:v3.filters.games.label')}</span>
-          {(
-            [
-              ['all', t('leaderboard:v3.filters.all')],
-              ['lt100', t('leaderboard:v3.filters.games.lt100')],
-              ['100to200', t('leaderboard:v3.filters.games.100to200')],
-              ['gt200', t('leaderboard:v3.filters.games.gt200')],
-            ] as const
-          ).map(([val, label]) => (
-            <button
-              key={val}
-              onClick={() => setGamesFilter(val as GamesFilter)}
-              className={`px-2 py-0.5 rounded-full border transition-all whitespace-nowrap ${
-                gamesFilter === val
-                  ? 'bg-amber-900/50 text-amber-200 border-amber-600'
-                  : 'bg-gray-800/60 text-gray-400 border-gray-700 hover:border-gray-500'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* ELO 分類 — Edward 2026-04-27 修 chip click bug (state val 對齊 *_tag) */}
-        <div
-          className="inline-flex items-center gap-1"
-          title={eloLoadFailed ? t('leaderboard:v3.filters.tier.loadFailed') : undefined}
-        >
-          <span className={`mr-1 ${eloLoadFailed ? 'text-gray-600' : 'text-gray-500'}`}>
-            {t('leaderboard:v3.filters.tier.label')}
-          </span>
-          {(
-            [
-              ['all', t('leaderboard:v3.filters.all')],
-              ['novice_tag', t('leaderboard:v3.filters.tier.novice')],
-              ['mid_tag', t('leaderboard:v3.filters.tier.mid')],
-              ['top_tag', t('leaderboard:v3.filters.tier.top')],
-            ] as const
-          ).map(([val, label]) => {
-            const disabled = eloLoadFailed && val !== 'all';
-            return (
+        {/* Filter chips — Edward 2026-04-27 simplified to 場次 (3 檔) + ELO 分類 */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px]">
+          {/* 場次區間 — 3 檔 */}
+          <div className="inline-flex items-center gap-1">
+            <span className="text-gray-500 mr-1">{t('leaderboard:v3.filters.games.label')}</span>
+            {(
+              [
+                ['all', t('leaderboard:v3.filters.all')],
+                ['lt100', t('leaderboard:v3.filters.games.lt100')],
+                ['100to200', t('leaderboard:v3.filters.games.100to200')],
+                ['gt200', t('leaderboard:v3.filters.games.gt200')],
+              ] as const
+            ).map(([val, label]) => (
               <button
                 key={val}
-                onClick={() => !disabled && setTierFilter(val as TierFilter)}
-                disabled={disabled}
+                onClick={() => setGamesFilter(val as GamesFilter)}
                 className={`px-2 py-0.5 rounded-full border transition-all whitespace-nowrap ${
-                  disabled
-                    ? 'bg-gray-900/40 text-gray-600 border-gray-800 cursor-not-allowed'
-                    : tierFilter === val
-                      ? 'bg-blue-900/50 text-blue-200 border-blue-600'
-                      : 'bg-gray-800/60 text-gray-400 border-gray-700 hover:border-gray-500'
+                  gamesFilter === val
+                    ? 'bg-amber-900/50 text-amber-200 border-amber-600'
+                    : 'bg-gray-800/60 text-gray-400 border-gray-700 hover:border-gray-500'
                 }`}
               >
                 {label}
               </button>
-            );
-          })}
+            ))}
+          </div>
+
+          {/* ELO 分類 — Edward 2026-04-27 修 chip click bug (state val 對齊 *_tag) */}
+          <div
+            className="inline-flex items-center gap-1"
+            title={eloLoadFailed ? t('leaderboard:v3.filters.tier.loadFailed') : undefined}
+          >
+            <span className={`mr-1 ${eloLoadFailed ? 'text-gray-600' : 'text-gray-500'}`}>
+              {t('leaderboard:v3.filters.tier.label')}
+            </span>
+            {(
+              [
+                ['all', t('leaderboard:v3.filters.all')],
+                ['novice_tag', t('leaderboard:v3.filters.tier.novice')],
+                ['mid_tag', t('leaderboard:v3.filters.tier.mid')],
+                ['top_tag', t('leaderboard:v3.filters.tier.top')],
+              ] as const
+            ).map(([val, label]) => {
+              const disabled = eloLoadFailed && val !== 'all';
+              return (
+                <button
+                  key={val}
+                  onClick={() => !disabled && setTierFilter(val as TierFilter)}
+                  disabled={disabled}
+                  className={`px-2 py-0.5 rounded-full border transition-all whitespace-nowrap ${
+                    disabled
+                      ? 'bg-gray-900/40 text-gray-600 border-gray-800 cursor-not-allowed'
+                      : tierFilter === val
+                        ? 'bg-blue-900/50 text-blue-200 border-blue-600'
+                        : 'bg-gray-800/60 text-gray-400 border-gray-700 hover:border-gray-500'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -682,13 +693,18 @@ export default function LeaderboardV3Table(): JSX.Element {
       {/*
         Sortable table — Edward 2026-04-27: 字體縮緊 + nowrap，永遠用 raw 數值。
         Container: text-[11px] (smaller than text-xs); cells/headers: whitespace-nowrap.
+        (2026-10-14 一屏) 表格在自己的框裡直捲、橫捲，表頭固定 (sticky top)；名字欄固定在左邊。
+        原本的 bg-avalon-bg 沒有定義 (固定欄是透明的)，改成跟框一樣的 bg-zinc-950。
       */}
-      <div className="overflow-x-auto -mx-4 px-4">
+      <div
+        className="overflow-auto overscroll-contain rounded-lg border border-gray-800 bg-zinc-950"
+        style={{ maxHeight: TABLE_MAX_HEIGHT }}
+      >
         <table className="w-full text-[11px] border-collapse">
           <thead>
             <tr className="border-b border-gray-700 text-gray-400">
               <th
-                className="text-left py-2 pr-2 font-semibold sticky left-0 bg-avalon-bg whitespace-nowrap"
+                className="text-left py-2 pl-2 pr-2 font-semibold sticky left-0 top-0 z-20 bg-zinc-950 whitespace-nowrap"
                 style={{ minWidth: '72px' }}
               >
                 {t('leaderboard:v3.headers.player')}
@@ -696,19 +712,20 @@ export default function LeaderboardV3Table(): JSX.Element {
               {HEADERS.map((h) => {
                 const emp = getEmphasis(outcomeMode, h.key);
                 // emphasis tier classNames — applied IN ADDITION to existing styling
-                //   highlight: brighter accent text + soft background tint
+                //   highlight: brighter accent text + amber underline (2026-10-14: the header is sticky
+                //              now and needs an opaque background, so no translucent tint here)
                 //   dim      : opacity-50 to push column back visually
                 //   normal   : no extra class
                 const empCls =
                   emp === 'highlight'
-                    ? 'text-amber-200 bg-amber-900/10'
+                    ? 'text-amber-200 shadow-[inset_0_-2px_0_rgba(180,83,9,0.7)]'
                     : emp === 'dim'
                       ? 'opacity-50'
                       : '';
                 return (
                   <th
                     key={h.key}
-                    className={`py-2 px-1 font-semibold cursor-pointer hover:text-white transition-colors whitespace-nowrap text-${h.align} ${
+                    className={`sticky top-0 z-10 bg-zinc-950 py-2 px-1 font-semibold cursor-pointer hover:text-white transition-colors whitespace-nowrap text-${h.align} ${
                       h.derived ? 'text-gray-500 italic' : ''
                     } ${empCls}`}
                     onClick={() => handleSort(h.key)}
@@ -745,7 +762,7 @@ export default function LeaderboardV3Table(): JSX.Element {
                   className="border-b border-gray-800 hover:bg-gray-800/40 transition-colors cursor-pointer"
                   onClick={() => openPlayerStats(e.playerId)}
                 >
-                  <td className="py-1 pr-2 sticky left-0 bg-avalon-bg whitespace-nowrap">
+                  <td className="py-1 pl-2 pr-2 sticky left-0 bg-zinc-950 whitespace-nowrap">
                     <span className="text-gray-500 mr-1">{idx + 1}</span>
                     <span className="text-white font-medium">{e.displayName}</span>
                   </td>
