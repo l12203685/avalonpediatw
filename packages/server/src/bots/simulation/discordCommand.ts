@@ -109,7 +109,8 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
     chatId: interaction.channelId ?? 'dm',
     userId: interaction.user.id,
     explicit: true,
-    shared: !ephemeral && !!interaction.channelId,
+    // 私訊沒有別人看得到：不代答、也不加「頻道裡…」那一行（全域註冊的指令在私訊也能用）。
+    shared: !ephemeral && !!interaction.guildId,
   };
   // 同一個頻道的模擬指令排隊：「算回覆 → 送出 → commit」一次一個（Edward 2026-10-14 審查修正；
   // 2026-10-22 起整個頻道一條隊，代答要動哪一題輪到它時才決定）。

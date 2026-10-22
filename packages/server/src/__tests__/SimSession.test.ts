@@ -373,6 +373,17 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     expect(reveal).toContain('・真正的紅方不在你的區間留下的組合裡 ✗');
   });
 
+  it('a co-answerer\'s /公布 does not tag the owner\'s own 區間 as 代答, but words it 「這題目前的區間」', async () => {
+    const e = engine();
+    await say(e, '/模擬 忠臣 4', G('A'));
+    await say(e, '/區間 789=2 460=1', G('A'));
+    const reveal = (await say(e, '/公布', G('B'))) ?? '';
+    expect(reveal.split('\n')[0]).toBe(CO_ANSWER_MARK);
+    expect(reveal).toContain('區間：789=2 ✓（紅 7 9）、460=1 ✗（0 紅）');
+    expect(reveal).not.toContain('區間（代答）');
+    expect(reveal).toContain('・真正的紅方不在這題目前的區間留下的組合裡 ✗');
+  });
+
   it('co-answering only where everyone sees the replies: never without `shared` (1:1 chats, Discord channels whose replies are only-you)', async () => {
     const e = engine();
     await say(e, '/模擬 忠臣 4', G('A'));

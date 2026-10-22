@@ -969,8 +969,10 @@ export interface RevealInput {
   interval?: IntervalGroup[];
   /** 區間在最後一次 /區間 時留下的世界。 */
   intervalWorlds?: number[];
-  /** 區間是你自己寫的（沒給 = 是）；否則寫「這題目前的區間」、區間那一行標「（代答）」。 */
+  /** 看的人是區間的作者（沒給 = 是）；否則寫「這題目前的區間」。 */
   intervalYours?: boolean;
+  /** 區間是代答寫的：區間那一行標「（代答）」（跟上面分開：題主看代答寫的要標，代答者看題主寫的不標）。 */
+  intervalByCoAnswer?: boolean;
   /** 從開局到你最後一個決定點，看過的每一次派票。 */
   proposals: ProposalEvent[];
   coAnswer?: boolean;
@@ -1031,7 +1033,7 @@ export function formatReveal(input: RevealInput): string {
       const reds = grp.seats.filter((s) => isRed(g.seatRoles[s - 1]));
       return `${formatIntervalGroup(grp)} ${intervalGroupTrue(grp, redMask) ? '✓' : '✗'}（${reds.length ? `紅 ${seatList(reds)}` : '0 紅'}）`;
     });
-    parts.push({ text: `區間${yours ? '' : CO_ANSWER_TAG}：${items.join('、')}` });
+    parts.push({ text: `區間${input.intervalByCoAnswer ? CO_ANSWER_TAG : ''}：${items.join('、')}` });
     if (input.intervalWorlds) {
       const kept = input.intervalWorlds.includes(redMask);
       const whose = yours ? '你的區間' : intervalOwnerWords(false);

@@ -777,7 +777,9 @@ export class SimEngine {
       answers,
       interval: session.interval,
       intervalWorlds: session.intervalWorlds,
+      // 標「（代答）」看誰寫的；「你的／這題目前的」看誰在看（代答者看到的一律是「這題目前的」）。
       intervalYours: !t.coAnswer && !session.intervalByCoAnswer,
+      intervalByCoAnswer: !!session.intervalByCoAnswer,
       proposals: seen,
       coAnswer: t.coAnswer,
     });

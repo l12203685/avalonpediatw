@@ -34,10 +34,11 @@ vi.mock('../bots/stats/statsQueries', async (importOriginal) => ({
 
 const BANK = fixtureBank();
 
-function makeInteraction(commandName: string, options: Record<string, string | number | boolean> = {}, channelId = 'CH-1', userId = 'u-1') {
+function makeInteraction(commandName: string, options: Record<string, string | number | boolean> = {}, channelId = 'CH-1', userId = 'u-1', guildId: string | null = 'G-1') {
   const fake = {
     commandName,
     channelId,
+    guildId,
     user: { id: userId, username: 'user-1' },
     deferred: false,
     replied: false,
@@ -81,8 +82,8 @@ function content(it1: Fake): { content: string; allowedMentions?: unknown } {
   return payload;
 }
 
-async function run(name: string, options: Record<string, string | number | boolean> = {}, channelId?: string, userId?: string): Promise<string> {
-  const it1 = makeInteraction(name, options, channelId, userId);
+async function run(name: string, options: Record<string, string | number | boolean> = {}, channelId?: string, userId?: string, guildId?: string | null): Promise<string> {
+  const it1 = makeInteraction(name, options, channelId, userId, guildId);
   await handleSimCommand(it1 as never);
   return content(it1).content;
 }
@@ -177,6 +178,15 @@ describe('handlers', () => {
     expect(await run(COMMANDS.SIM_REVEAL)).toContain('角色：梅林1 派西維爾2 莫德雷德3 莫甘娜5 刺客7 奧伯倫9；忠臣 4 6 8 0');
     expect(await run(COMMANDS.SIM_END)).toBe(NO_SESSION_TEXT);
     expect(engine.counts.started.discord).toBe(1);
+  });
+
+  it('a DM (no guild) is not shared: no co-answer note on the start reply and no co-answering', async () => {
+    const start = await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'DM-1', 'a', null);
+    expect(start).toContain('【模擬瓦 W0000-4】');
+    expect(start).not.toContain(sharedNote('discord'));
+    const other = await run(COMMANDS.SIM_NEXT, {}, 'DM-1', 'b', null);
+    expect(other).toContain('你目前沒有進行中的模擬');
+    expect(engine.counts.coAnswers).toBe(0);
   });
 
   it('each user in each channel has their own exercise; a user without one co-answers the newest in the channel (marked 代答)', async () => {
