@@ -206,7 +206,9 @@ export function findHardRuleViolations(
 export function findTeamHardRuleViolations(
   state: LakeChainState,
   proposedTeam: readonly string[],
+  strict?: StrictTeamRuleContext,
 ): Array<{ rule: 1 | 2; holderId: string; targetId: string }> {
+  if (strict) return strictTeamHardRuleViolations(state, proposedTeam, strict);
   const out: Array<{ rule: 1 | 2; holderId: string; targetId: string }> = [];
   const teamSet = new Set(proposedTeam);
 
@@ -220,6 +222,96 @@ export function findTeamHardRuleViolations(
     const redTargets = state.declaredRedByHolder.get(holder);
     if (redTargets) {
       for (const t of redTargets) {
+        if (teamSet.has(t)) out.push({ rule: 2, holderId: holder, targetId: t });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The deciding seat's picture for the strict reading of 硬1 / 硬2
+ * (logic-first batch 1D, S1-3 team gate; plan §2.1, critique X1 / X4).
+ */
+export interface StrictTeamRuleContext {
+  /** The deciding seat's own certainty view (L1 = A0 hard, GM decision D1). */
+  view: CertaintyView;
+  /** The round the team is for (fails required: R4 of 7+ players needs two). */
+  round: number;
+}
+
+/**
+ * Seats `holder` vouches for through declared-blue chains: B when the
+ * holder declared B blue, C when B then declared C blue, and so on (A0:
+ * A good ⇒ B good ⇒ C good — K3, "choosing A ⇒ must choose B ⇒ must choose
+ * C"). Chronological order, no duplicates, the holder itself left out.
+ */
+export function declaredBlueClosure(
+  state: LakeChainState,
+  holder: string,
+  binds: (holder: string, target: string) => boolean = () => true,
+): string[] {
+  const out: string[] = [];
+  const queue = [holder];
+  const seen = new Set([holder]);
+  while (queue.length > 0) {
+    const h = queue.shift() as string;
+    for (const t of state.declaredBlueByHolder.get(h) ?? []) {
+      if (seen.has(t) || !binds(h, t)) continue;
+      seen.add(t);
+      out.push(t);
+      queue.push(t);
+    }
+  }
+  return out;
+}
+
+/**
+ * Strict 硬1 / 硬2 (S1-3 team gate, `AgentTuning.teamDominanceGate`): only
+ * what is certain from the deciding seat's own view under A0.
+ *   - 硬1 with chain closure and strict dominance (K1′ / K3, X4): a member A
+ *     vouches (directly or along a declared-blue chain) for a seat B that is
+ *     not on the team, and some member X ≠ A is the only red of the team in
+ *     some consistent L1 world — swapping X for B then raises P(team all
+ *     good) strictly under every belief on L1 (A good ⇒ B good). A team of
+ *     seats the viewer can prove good without B is a tie, not a breach.
+ *   - 硬2 (K2): both members of a declared-red pair on the team in a round
+ *     one fail card decides — at least one of them is red under A0, so the
+ *     team must fail (the must-fail gate covers it too). With two fails
+ *     needed (R4) a single certain red is the probability layer's (D2).
+ * Nothing is certain at the K level when A0 leaves no world (L1 empty): no
+ * entry then; a declaration the viewer itself made but privately saw
+ * contradicted binds nothing either (`CertaintyView.vouches`). Checked pair by pair, a chain closes by itself (a team with A
+ * and B but without C breaches B→C); the closure entries tell a fixer every
+ * seat it must add. One rule-1 entry exists iff
+ * `CertaintyView.strictlyDominated(team)` is non-null (the INV-K1 check).
+ */
+function strictTeamHardRuleViolations(
+  state: LakeChainState,
+  proposedTeam: readonly string[],
+  ctx: StrictTeamRuleContext,
+): Array<{ rule: 1 | 2; holderId: string; targetId: string }> {
+  const out: Array<{ rule: 1 | 2; holderId: string; targetId: string }> = [];
+  const { view } = ctx;
+  if (view.l1Empty) return out;
+  const teamSet = new Set(proposedTeam);
+  const teamMask = view.maskOf(proposedTeam);
+  // Members that are the team's only red in some L1 world.
+  const soleRed = new Set(proposedTeam.filter((x) => {
+    const xb = view.bitOf(x);
+    if (xb === 0) return false;
+    const rest = teamMask & ~xb;
+    return view.l1.some((w) => (w & xb) !== 0 && (w & rest) === 0);
+  }));
+  for (const holder of teamSet) {
+    const swappable = [...soleRed].some((x) => x !== holder);
+    if (swappable) {
+      for (const t of declaredBlueClosure(state, holder, (h, t2) => view.vouches(h, t2))) {
+        if (!teamSet.has(t)) out.push({ rule: 1, holderId: holder, targetId: t });
+      }
+    }
+    if (view.failsRequired(ctx.round) === 1) {
+      for (const t of state.declaredRedByHolder.get(holder) ?? []) {
         if (teamSet.has(t)) out.push({ rule: 2, holderId: holder, targetId: t });
       }
     }

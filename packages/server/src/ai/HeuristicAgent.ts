@@ -64,6 +64,16 @@ import {
   type PyramidScores,
 } from './baseline';
 
+import {
+  anyGate,
+  certaintyFor,
+  compliantTeams,
+  gateOptionsFrom,
+  goodVoteGate,
+  teamGateBreach,
+  type GateOptions,
+} from './LogicGates';
+
 // ── Strategy thresholds ────────────────────────────────────────
 // #97 Phase 1 (2026-04-22): SUSPICION_REJECT_THRESHOLD / STRICT_THRESHOLD /
 // OFF_TEAM_REJECT_BASELINE / NOISE_RATE now live inside PriorLookup's
@@ -777,6 +787,12 @@ export class HeuristicAgent implements AvalonAgent {
    */
   readonly belief: Readonly<BeliefOptions>;
   /**
+   * The decision gates of `tuning` (logic-first batch 1D, 2026-10-22,
+   * `LogicGates.ts`): the same gates ForwardAgent applies, so the baseline
+   * fallback never proposes or approves what the production path refuses.
+   */
+  readonly gates: Readonly<GateOptions>;
+  /**
    * Assassin-model weights used when `tuning.assassinModel` is on.
    * `undefined` = the bundled `ASSASSIN_MODEL_WEIGHTS`; `scripts/
    * assassinModel.ts` injects a freshly fitted model so its "agent+model"
@@ -799,6 +815,7 @@ export class HeuristicAgent implements AvalonAgent {
     this.priors = priors ?? getDefaultPriors();
     this.tuning = resolveAgentTuning(tuning);
     this.belief = beliefOptionsFrom(this.tuning);
+    this.gates = gateOptionsFrom(this.tuning);
     this.assassinModelWeights = assassinModelWeights;
   }
 
@@ -1407,7 +1424,10 @@ export class HeuristicAgent implements AvalonAgent {
         const percivalFixed = this.fixupTeamHardRules(
           obs, percivalTeam, filteredCandidates, pyramid, teamSize,
         );
-        return { type: 'team_select', teamIds: enforceR1P1Ban(percivalFixed) };
+        return {
+          type: 'team_select',
+          teamIds: this.gateGoodTeam(obs, enforceR1P1Ban(percivalFixed), teamSize, pyramidScore, knownEvilSet),
+        };
       }
 
       const team = [myPlayerId, ...filteredCandidates].slice(0, teamSize);
@@ -1416,7 +1436,10 @@ export class HeuristicAgent implements AvalonAgent {
       const teamFixed = this.fixupTeamHardRules(
         obs, team, filteredCandidates, pyramid, teamSize,
       );
-      return { type: 'team_select', teamIds: enforceR1P1Ban(teamFixed) };
+      return {
+        type: 'team_select',
+        teamIds: this.gateGoodTeam(obs, enforceR1P1Ban(teamFixed), teamSize, pyramidScore, knownEvilSet),
+      };
     } else {
       // Evil: include self, prefer to include one evil ally on larger teams
       // Main logic stays shared — per-role strategy only nudges the
@@ -1478,6 +1501,36 @@ export class HeuristicAgent implements AvalonAgent {
       );
       return { type: 'team_select', teamIds: enforceR1P1Ban(teamFixedEvil) };
     }
+  }
+
+  /**
+   * Logic-first batch 1D (2026-10-22, `LogicGates.ts`): the good leader's
+   * final team check on the baseline path — the same gates as ForwardAgent
+   * (`mustFailGate`: no team that must fail in the leader's own view;
+   * `teamDominanceGate`: no strictly dominated team). A team that passes is
+   * returned unchanged; otherwise the best compliant self-inclusive team
+   * (fewest seats the leader sees as red, then lowest pyramid suspicion).
+   */
+  private gateGoodTeam(
+    obs: PlayerObservation,
+    team: string[],
+    teamSize: number,
+    score: (id: string) => number,
+    avoid: ReadonlySet<string>,
+  ): string[] {
+    if (obs.myTeam !== 'good' || !anyGate(this.gates)) return team;
+    const view = certaintyFor(obs);
+    if (teamGateBreach(obs, view, team, obs.currentRound ?? 1, this.gates) === null) return team;
+    const isR1P1 = (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0;
+    const banned = isR1P1 ? bannedComboSetFor(obs.playerCount) : new Set<string>();
+    const teams = compliantTeams(obs, view, teamSize, this.gates, {
+      rank: (t) => t.filter((id) => avoid.has(id)).length,
+      score,
+      allowed: banned.size > 0
+        ? (t: readonly string[]): boolean => !banned.has(canonicalSeatString(t, obs.allPlayerIds))
+        : undefined,
+    });
+    return teams[0] ?? team;
   }
 
   /**
@@ -1624,6 +1677,17 @@ export class HeuristicAgent implements AvalonAgent {
     // Cross-faction gate: applies regardless of team.
     if (failCount >= FORCE_APPROVE_FAIL_COUNT) {
       return { type: 'team_vote', vote: true };
+    }
+
+    // ── Logic-first batch 1D (2026-10-22, `LogicGates.ts`) ──────
+    // The good vote gates, as on the production ForwardAgent path: never
+    // approve a team that must fail in this seat's own view (`mustFailGate`;
+    // on the team with one fail deciding, nor one holding a seat it declared
+    // red itself — P2) nor a strictly dominated one (`teamDominanceGate`).
+    // R3+ only (R1–R2 = the normal-vote table rule below, owner's D3
+    // ruling); the forced fifth proposal returned above.
+    if (myTeam === 'good' && goodVoteGate(obs, this.gates) !== null) {
+      return { type: 'team_vote', vote: false };
     }
 
     // ── Wave B 2026-04-28 — 4 lake hard rules (vote side) ────────

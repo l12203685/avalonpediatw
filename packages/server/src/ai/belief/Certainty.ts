@@ -232,6 +232,7 @@ export class CertaintyView {
   readonly l1Empty: boolean;
   private readonly index: Map<string, number>;
   private readonly declaredBlue: Array<{ holder: string; target: string }>;
+  private readonly allDeclaredBlue: Set<string>;
   private readonly cache = new Map<string, { and: number; or: number }>();
 
   constructor(obs: PlayerObservation, l0: number[], l1: number[], params: CertaintyParams) {
@@ -241,9 +242,31 @@ export class CertaintyView {
     this.l0 = l0;
     this.l1 = l1;
     this.l1Empty = l1.length === 0;
+    // A declared-blue pair binds ("A good ⇒ B good") only where L1 enforces
+    // it. The viewer's own declaration is superseded by its private result
+    // (`enumerateWorlds`): a seat it declared blue but saw red (a lie, or a
+    // wrong record — A0 broken by the viewer itself) vouches for nothing.
+    this.allDeclaredBlue = new Set(declaredLakes(obs.lakeHistory)
+      .filter((l) => l.declaredClaim === 'good')
+      .map((l) => `${l.holderId}>${l.targetId}`));
+    const sawRed = new Set((obs.myLakeResults ?? [])
+      .filter((r) => r.result === 'evil')
+      .map((r) => `${r.round}|${r.targetId}`));
     this.declaredBlue = declaredLakes(obs.lakeHistory)
       .filter((l) => l.declaredClaim === 'good')
+      .filter((l) => !(l.holderId === obs.myPlayerId && sawRed.has(`${l.round}|${l.targetId}`)))
       .map((l) => ({ holder: l.holderId, target: l.targetId }));
+  }
+
+  /**
+   * Whether `holder` declaring `target` blue binds in this view (L1: holder
+   * good ⇒ target good). False only for the viewer's own declaration that
+   * its private lake result contradicts; true for every other declared-blue
+   * pair (and for pairs that were never declared — callers pass declared ones).
+   */
+  vouches(holder: string, target: string): boolean {
+    return this.declaredBlue.some((p) => p.holder === holder && p.target === target)
+      || !this.allDeclaredBlue.has(`${holder}>${target}`);
   }
 
   worlds(level: CertaintyLevel = 'L1*'): readonly number[] {
@@ -341,7 +364,9 @@ export class CertaintyView {
    * team is good — then swapping X for B strictly raises P(all good) under
    * every belief supported on L1 (A good ⇒ B good). Pairs are checked one by
    * one, so a chain A→B→C closes automatically (a team with A and B but not
-   * C breaches B→C). `null` when the team is not dominated.
+   * C breaches B→C). Only pairs that bind in this view count (`vouches`: the
+   * viewer's own declaration contradicted by its own lake result does not —
+   * batch 1D). `null` when the team is not dominated.
    */
   strictlyDominated(team: readonly string[]): DominanceWitness | null {
     if (this.l1Empty) return null;

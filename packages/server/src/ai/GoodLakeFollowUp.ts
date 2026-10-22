@@ -37,6 +37,7 @@
  * holder's role knowledge; no `Math.random`.
  */
 
+import { AVALON_CONFIG } from '@avalon/shared';
 import type { PlayerObservation } from './types';
 
 /**
@@ -163,17 +164,44 @@ export function goodVouchTeamConstraint(
 }
 
 /**
+ * P2 (logic-first batch 1D, `AgentTuning.mustFailGate`): `team` holds a seat
+ * this good player itself declared red. A good holder declares what it saw
+ * (A0), so the seat is red as surely as its own lake result — no A0 about
+ * anyone else is needed.
+ */
+export function ownDeclaredRedOnTeam(obs: PlayerObservation, team: readonly string[] = obs.proposedTeam ?? []): boolean {
+  if (obs.myTeam !== 'good') return false;
+  const me = obs.myPlayerId;
+  return (obs.lakeHistory ?? []).some(
+    (l) => l.holderId === me && l.declaredClaim === 'evil' && l.targetId !== me && team.includes(l.targetId),
+  );
+}
+
+/**
  * Vote rule (`goodVouchFollowUp`): a good player off the proposed team
  * rejects it when it leaves out a seat the player is bound to as blue or
  * includes one bound as red. Off on the forced fifth proposal (everyone
  * approves), on the player's own proposal (built to the constraint above),
  * and — with the default `onTeam: 'off'` — when the player sits on the team.
+ *
+ * `ownRedOnTeam` (logic-first batch 1D, `AgentTuning.mustFailGate`; plan
+ * §2.1 S1-4, logic_audit.md F9, P2): on the team — or leading it — the only
+ * veto is a seat the player itself declared red, and only in a round one
+ * fail card decides (that team must fail); with two fails needed (R4) one
+ * certain red is the probability layer's (D2). Off the team the rule above
+ * is unchanged.
  */
-export function goodVouchVoteRule(obs: PlayerObservation): 'reject' | null {
+export function goodVouchVoteRule(obs: PlayerObservation, ownRedOnTeam = false): 'reject' | null {
   if (obs.myTeam !== 'good') return null;
   if (obs.failCount >= 4) return null;
-  if (obs.currentLeader === obs.myPlayerId) return null;
   const team = new Set(obs.proposedTeam ?? []);
+  const onTeam = team.has(obs.myPlayerId) || obs.currentLeader === obs.myPlayerId;
+  if (ownRedOnTeam && onTeam) {
+    const round = obs.currentRound ?? 1;
+    const oneFail = (AVALON_CONFIG[obs.playerCount]?.questFailsRequired[round - 1] ?? 1) === 1;
+    if (oneFail && ownDeclaredRedOnTeam(obs, [...team])) return 'reject';
+  }
+  if (obs.currentLeader === obs.myPlayerId) return null;
   if (team.has(obs.myPlayerId) && activeGoodVouchOptions.onTeam === 'off') return null;
   const decl = goodVouchDeclarations(obs);
   if (!decl || (decl.blue.length === 0 && decl.red.length === 0)) return null;

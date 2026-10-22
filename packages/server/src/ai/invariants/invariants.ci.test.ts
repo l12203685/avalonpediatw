@@ -8,7 +8,8 @@
  *     included);
  *   - every `pending:<batch>` invariant has no more violations than the
  *     baseline below (a ratchet: the batch that fixes it lowers the number to
- *     0 and flips the catalog entry to `enforced`);
+ *     0 and flips the catalog entry to `enforced`; after batch 1D only the
+ *     batch-1E / 1F rules are pending);
  *   - the registered exemptions are counted (the R1–R2 normal-vote rule);
  *   - 0 ForwardAgent fallbacks.
  * The full run (all 1970 replays + 2000 self-play games) is
@@ -26,7 +27,7 @@ import { staticResultReads } from './staticScan';
 
 /**
  * Bot violations of the pending invariants on this sample at the 2026-10-22
- * baseline (batch 1C, production default). Lower is fine (update the number);
+ * baseline (batch 1D, production default). Lower is fine (update the number);
  * higher fails.
  *
  * History: the 2026-10-14 baseline (batch 1A/1B) was replay T1 7 / V1 13 /
@@ -34,27 +35,18 @@ import { staticResultReads } from './staticScan';
  * / PL 20, probe T1 68 / K1 30 / K2 4, self-play T1 20 / V1 45 / K1 2 / B1
  * 102 / B2 506 / H3a 46 / H3b 9 / F0 474 / Pe1 1 / Pe2 62 / PL 7 / R1 5, and
  * 27 static INV-B3 reads. Batch 1C brought B1 / B2 / B3 / H3a / H3b / F0 to 0
- * (enforced now) and lowered most of the rest; replay INV-V1 rose 13 → 15:
- * the two extra approvals are Percival, off the team, on teams that must fail
- * as a *set* (both thumbs, no single seat certain) while the pinned certain
- * goods lower the team's average suspicion — the team-average gap batch 1D's
- * must-fail veto (S1-4) closes; recorded, not hidden. Self-play INV-PL (batch
- * 1E's, untouched here) reads 7 when this file runs alone and 6 inside the
- * full vitest run (the 1A/1B baseline was 7); the ratchet keeps 7.
+ * (enforced) and left replay T1 2 / V1 15 / K1 4 / K2 1 / Pe1 4, probe T1 4 /
+ * K1 6 / K2 1, self-play T1 1 / V1 7 / K2 1 / Pe1 1 (V1 15: teams that must
+ * fail as a set, no single certain seat). Batch 1D's gates (LogicGates.ts)
+ * brought T1 / V1 / K1 / K2 / P3 / L1, the new K1V and Pe1 to 0 on this
+ * sample and on the full run (all 1970 replays, the probe, 2000 self-play
+ * games) — all enforced now. Self-play INV-PL (batch 1E's) reads 7 when this
+ * file runs alone and 6 inside the full vitest run; the ratchet keeps 7.
  */
 const PENDING_BASELINE: Record<'replay' | 'probe' | 'selfplay', Record<string, number>> = {
-  replay: {
-    'INV-T1': 2, 'INV-V1': 15, 'INV-K1': 4, 'INV-K2': 1, 'INV-P3': 0, 'INV-L1': 0, 'INV-Pe1': 4, 'INV-Pe2': 149,
-    'INV-PL': 20, 'INV-R1': 0,
-  },
-  probe: {
-    'INV-T1': 4, 'INV-V1': 0, 'INV-K1': 6, 'INV-K2': 1, 'INV-P3': 0, 'INV-L1': 0, 'INV-Pe1': 0, 'INV-Pe2': 0,
-    'INV-PL': 0, 'INV-R1': 0,
-  },
-  selfplay: {
-    'INV-T1': 1, 'INV-V1': 7, 'INV-K1': 0, 'INV-K2': 1, 'INV-P3': 0, 'INV-L1': 0, 'INV-Pe1': 1, 'INV-Pe2': 49,
-    'INV-PL': 7, 'INV-R1': 4,
-  },
+  replay: { 'INV-Pe2': 149, 'INV-PL': 20, 'INV-R1': 0 },
+  probe: { 'INV-Pe2': 0, 'INV-PL': 0, 'INV-R1': 0 },
+  selfplay: { 'INV-Pe2': 49, 'INV-PL': 7, 'INV-R1': 4 },
 };
 
 function loadGames(n: number): ReplayGame[] {
@@ -103,6 +95,10 @@ describe('invariant harness — CI sample', () => {
     }
     // The registered R1–R2 normal-vote exemption is counted, not hidden.
     expect(result.replay.tallies.get('INV-V1')?.exempt['R1-R2 normal vote (D3)'] ?? 0).toBeGreaterThan(0);
+    // The batch-1D gates have something to gate on this sample (opportunities, not exemptions only).
+    for (const id of ['INV-T1', 'INV-V1', 'INV-K1', 'INV-K1V']) {
+      expect(result.replay.tallies.get(id)?.opportunities ?? 0, `replay ${id} opportunities`).toBeGreaterThan(0);
+    }
     expect(result.selfplay.tallies.get('INV-M1')?.exempt['R1-R2 normal vote (D3)'] ?? 0).toBeGreaterThan(0);
     // INV-B3 (static), enforced since batch 1C: no agent code reads a mission result without its fail count.
     expect(staticResultReads(path.resolve(__dirname, '..'))).toEqual([]);

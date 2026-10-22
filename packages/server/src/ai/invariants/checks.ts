@@ -256,6 +256,14 @@ export function checkDecision(
         L.record('INV-V1', { exempt, violated: approve, unreliable });
         if (!exempt && humanVote !== undefined) L.human('INV-V1', humanVote);
       }
+      // INV-K1V (batch 1D): 硬1 for votes — no approval of a strictly
+      // dominated team (only exists once a declared-blue pair does; never
+      // with L1 empty).
+      if (view.strictlyDominated(team) !== null) {
+        const exempt = voteExemption(obs, view, false);
+        L.record('INV-K1V', { exempt, violated: approve, unreliable });
+        if (!exempt && humanVote !== undefined) L.human('INV-K1V', humanVote);
+      }
       // INV-P3
       const accusers = accusersOf(obs);
       if (accusers.some((id) => team.includes(id))) {

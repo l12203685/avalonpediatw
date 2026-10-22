@@ -1698,3 +1698,42 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
   --base teamReuse --base redR1Teammate --base percivalNoThumbsR1 --base percivalR1ThumbOnThumb --base goodQuestSuccessGuard --base assassinHeuristicVisibility
 # 換 --seed 555666 / 666777
 ```
+
+## 17. 邏輯第一原理 第 1D 批：決策閘門（2026-10-22；`teamDominanceGate`、`mustFailGate`）
+
+**來由**：`logic_first.md` 第 7 節（S1-3 派隊閘門：好人不派、R3 起不贊成「嚴格被支配」的隊，湖鏈 A→B→C 閉合；S1-4 + S1-5 必敗隊閘門：好人不派、R3 起非強制局不贊成「每一種可能的紅方組合都足以讓任務失敗」的隊，在派西 / 莫甘娜「在隊上一律贊成」等所有角色捷徑之前執行；R1–R2 照桌規，Edward 對 D3 的定案裁定）。兩個開關預設開，legacy 全關。不變量：INV-T1 / V1 / K1 / K1V / K2 / P3 / L1（以及 INV-Pe1）在 1970 局重播、探針與 2000 局自我對打上 0 違規（`logic_first.md` 7.2）；一致性見 `agreement_benchmark.md` 第 7 節末與 `logic_first.md` 7.4。本節是強度，**只回報**（第一關的修改；變弱時開補償工作單，不回退）。
+
+**對照組 = 第 16 節的 variant**（`lane/r7-ai-1c` 正式預設的 20 個開關：`r3NormalVotePrior=0.6`、`r3NormalVotePriorEvilOnly`、`goodLakeTargetMostSuspicious`、`humanQuestCardRules`、`assassinModel`、`evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`、`goodLakeInfoMax`、`goodVouchFollowUp`、`teamReuse`、`redR1Teammate`、`percivalNoThumbsR1`、`percivalR1ThumbOnThumb`、`goodQuestSuccessGuard`、`assassinHeuristicVisibility`、`beliefCertainFacts`、`rule3PostLakeOnly`、`beliefChainProjection`、`forcedVoteZeroBits`）；variant = 同樣 20 個再加本批兩個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個新種子 777888 / 888999 / 135791（沒有出現在本文件、`agreement_benchmark.md`、`logic_first.md`、scripts 或 src，也不在 `lane/r7-ai-1c` 上；第 15、16 節用掉的避開）；沒有選版本的種子，三個都是確認種子（版本在跑之前定案）。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 777888（5000） | 87.58%（87.58%） | +0.00pp | 13.42%（12.42%） | **+1.00pp [+0.65pp, +1.35pp]** | 50.50% | 76.12% / 74.18% / 76.12% | 48.0% (1194) / 48.0% (1291) / 48.0% (1194) |
+| 888999（5000） | 88.06%（88.06%） | +0.00pp | 13.14%（11.94%） | **+1.20pp [+0.83pp, +1.57pp]** | 50.60% | 76.90% / 74.74% / 76.90% | 48.3% (1155) / 48.0% (1263) / 48.3% (1155) |
+| 135791（5000） | 86.54%（86.54%） | +0.00pp | 14.36%（13.46%） | **+0.90pp [+0.51pp, +1.29pp]** | 50.45% | 75.98% / 74.18% / 75.98% | 44.0% (1201) / 44.4% (1291) / 44.0% (1201) |
+| **三個合併（15000）** | — | **0** | — | **+1.04pp [+0.82pp, +1.25pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9、13–16 節。ForwardAgent 每個種子約 210 萬個決策（2,101,440 / 2,103,619 / 2,103,421）、0 次 fallback。）
+
+讀法：
+
+- **紅方立場逐局相同、差恆為 0**：兩個閘門只綁好人座位（紅方座位不讀這兩個開關；紅方 R1 隊長「照忠臣視角派隊」的路徑在 R1 沒有任何任務結果與湖，閘門不會觸發），所以 variant 當紅方時每一局都和對照相同。
+- **藍方立場變強**（合併區間整個在 0 以上，三個種子都是）：好人不再派、不再贊成必敗隊與被湖鏈嚴格支配的隊；三紅率 variant 當藍方時再降約 2 點（約 76% → 74%）。
+- 第 16 節開的紅方補償工作單（`logic_first.md` 6.7）不受本批影響、仍然開著；本批沒有新的補償項目。
+
+**這一節用到的種子**：777888、888999、135791。之後要加種子，避開本文件全部各節的。
+
+重跑（原始輸出不進版本庫）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 777888 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax --flag goodVouchFollowUp \
+  --flag teamReuse --flag redR1Teammate --flag percivalNoThumbsR1 --flag percivalR1ThumbOnThumb --flag goodQuestSuccessGuard --flag assassinHeuristicVisibility \
+  --flag beliefCertainFacts --flag rule3PostLakeOnly --flag beliefChainProjection --flag forcedVoteZeroBits \
+  --flag teamDominanceGate --flag mustFailGate \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax --base goodVouchFollowUp \
+  --base teamReuse --base redR1Teammate --base percivalNoThumbsR1 --base percivalR1ThumbOnThumb --base goodQuestSuccessGuard --base assassinHeuristicVisibility \
+  --base beliefCertainFacts --base rule3PostLakeOnly --base beliefChainProjection --base forcedVoteZeroBits
+# 換 --seed 888999 / 135791
+```

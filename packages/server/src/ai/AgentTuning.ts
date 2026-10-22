@@ -96,6 +96,16 @@
  *     s(C) ≤ s(B) ≤ s(A)、宣紅的一對 s(A) + s(B) ≥ 1 的投影；INV-B1）、
  *     `forcedVoteZeroBits`（S1-9a：第 5 次強制提議的合成票不算資訊；INV-F0）。
  *     細節見 `belief/BeliefOptions.ts`。
+ *   - 2026-10-22 邏輯第一第 1D 批（建在修正後信念上的決策閘門；
+ *     `docs/ai/logic_first.md` 第 7 節；兩個開關各做一件事，legacy 全關，
+ *     不變量歸零後預設開，細節見 `LogicGates.ts`）：
+ *     `teamDominanceGate`（S1-3 派隊閘門：好人隊長不派、好人 R3+ 不贊成「嚴格
+ *     被支配」的隊 —— A 在隊上、A 宣藍的 B 不在、隊上另有人可能是唯一的紅，
+ *     逐對檢查所以湖鏈 A→B→C 自動閉合；INV-K1）、`mustFailGate`（S1-4 + S1-5
+ *     必敗隊閘門：好人隊長不派、好人在非強制的 R3+ 提議不贊成「確定性層 L1*
+ *     的 minReds ≥ 該局所需失敗數」的隊；R1–R2 照桌規（D3 定案）；在所有角色
+ *     的「在隊上一律贊成」捷徑之前執行；持湖者在隊上時，一張失敗就夠而隊上有
+ *     自己宣紅的人 → 反對（P2）；INV-T1、V1、K2、P3、L1）。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -253,6 +263,29 @@ export interface AgentTuning {
    * 內黑、記憶、派西的梅林辨識、宣告者投票偏差）略過 `attempt >= 5` 的紀錄。
    */
   forcedVoteZeroBits: boolean;
+  /**
+   * S1-3 派隊閘門（2026-10-22，第 1D 批，INV-K1）：好人隊長的候選隊先過
+   * 「嚴格支配」檢查（確定性層 L1、A0 為硬規則）：隊上有 A、A 宣藍的 B 不在、
+   * 而且隊上有 A 以外的人在某個一致的世界裡是隊上唯一的紅（把他換成 B 會讓
+   * P(全隊藍) 嚴格變大，critique X4）的隊不派 —— 有合格候選時丟掉不合格的，
+   * 沒有時從全部含自己的隊裡挑合格的（一定存在）；逐對檢查，所以 A→B→C 的
+   * 鏈自動閉合（選 A 必選 B 必選 C，Edward 第一原理例 (ii)）。好人在非強制的
+   * R3+ 提議也不贊成這種隊（硬1 在正式路徑生效）。L1 為空（A0 被違反）時不
+   * 適用。只動好人座位。
+   */
+  teamDominanceGate: boolean;
+  /**
+   * S1-4 + S1-5 必敗隊閘門（2026-10-22，第 1D 批，INV-T1 / V1 / K2 / P3 / L1）：
+   * 「必敗」= 確定性層 L1*（L1 為空時退回 L0）的每個一致世界裡，隊上的紅都
+   * 不少於該局所需的失敗數（GM 決定 D2；R4 要確定兩紅）。好人隊長不派（任何
+   * 回合、含強制局；沒有合格候選時從全部含自己的隊裡挑）；好人在非強制的 R3+
+   * 提議不贊成 —— 在派西 / 莫甘娜「在隊上一律贊成」等所有角色捷徑之前執行；
+   * R1–R2 照「一律正常票」桌規（Edward 2026-10-14 對 D3 的定案裁定：維持、
+   * 無例外、不建替代開關）。持湖者在隊上時，一張失敗就夠而隊上有自己宣紅的
+   * 人 → 反對（`GoodLakeFollowUp` 的在隊上條款，P2）。指控者（宣我紅的人）
+   * 在 L1 是確定紅（S1-5），含他的隊在一張失敗就夠的回合是必敗隊。
+   */
+  mustFailGate: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -280,6 +313,8 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'rule3PostLakeOnly',
   'beliefChainProjection',
   'forcedVoteZeroBits',
+  'teamDominanceGate',
+  'mustFailGate',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -306,6 +341,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   rule3PostLakeOnly: false,
   beliefChainProjection: false,
   forcedVoteZeroBits: false,
+  teamDominanceGate: false,
+  mustFailGate: false,
 });
 
 /**
@@ -433,6 +470,9 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     （INV-B1 / B2 / B3 / H3a / H3b / F0 在 1970 局重播與 2000 局自我對打上為 0）。
  *     強度只回報（strength_benchmark.md 第 16 節）：藍方立場變強、紅方立場變弱
  *     （區間整個在 0 以下）→ 依第一關的規則照樣採用，紅方補償另開工作單。
+ *   - 2026-10-22 第 1D 批（決策閘門，`logic_first.md` 第 7 節）：`teamDominanceGate`、
+ *     `mustFailGate` 預設開（INV-T1 / V1 / K1 / K2 / P3 / L1 在 1970 局重播、探針與
+ *     2000 局自我對打上為 0）。強度只回報（strength_benchmark.md 第 17 節）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -463,6 +503,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   rule3PostLakeOnly: true,
   beliefChainProjection: true,
   forcedVoteZeroBits: true,
+  teamDominanceGate: true,
+  mustFailGate: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -489,6 +531,8 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   rule3PostLakeOnly: 'AVALON_TUNING_RULE3_POST_LAKE_ONLY',
   beliefChainProjection: 'AVALON_TUNING_BELIEF_CHAIN_PROJECTION',
   forcedVoteZeroBits: 'AVALON_TUNING_FORCED_VOTE_ZERO_BITS',
+  teamDominanceGate: 'AVALON_TUNING_TEAM_DOMINANCE_GATE',
+  mustFailGate: 'AVALON_TUNING_MUST_FAIL_GATE',
 });
 
 function parseBool(raw: string): boolean | undefined {

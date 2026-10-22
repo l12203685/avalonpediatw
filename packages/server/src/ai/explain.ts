@@ -364,6 +364,14 @@ export function replayRule(
         mismatch: !sameAction(action, real),
       };
     }
+    if (desc.startsWith('logic gate reject')) {
+      const why = desc.includes('mustFail')
+        ? '依任務失敗張數、自己的視野、湖的結果（好人持湖者說實話），這隊每一種可能的紅方組合都有足夠讓任務失敗的紅'
+        : desc.includes('dominated')
+          ? '隊上有某人、卻沒有他宣藍的人（湖鏈 A→B→C：選 A 必選 B 必選 C），而且隊上另有人可能是唯一的紅 —— 換成被宣藍的人一定不會更差'
+          : '自己在隊上，隊上有自己湖到並宣紅的人，這一局一張失敗就夠';
+      return { rule: `邏輯閘門（R3 起、非強制局）：${why} → 反對`, mismatch: !sameAction(action, real) };
+    }
     if (desc === 'baseline R1-R2 force normal') {
       return { rule: 'R1–R2 只投正常票（在隊上贊成、不在隊上反對）', mismatch: false };
     }

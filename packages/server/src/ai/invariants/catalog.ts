@@ -25,7 +25,12 @@
  *
  * Batch 1C (2026-10-22, docs/ai/logic_first.md 第 1C 節) brought INV-B1, B2,
  * B3, H3a, H3b and F0 to 0 on all 1970 replays and 2000 self-play games;
- * they are enforced from then on.
+ * they are enforced from then on. Batch 1D (2026-10-22, 第 7 節, the
+ * decision gates `teamDominanceGate` / `mustFailGate`, `LogicGates.ts`)
+ * brought INV-T1, V1, K1, K2, P3, L1 and the new INV-K1V to 0 on the
+ * replays, the probe and the self-play games — and INV-Pe1 with them (both
+ * thumbs on a one-fail team is a must-fail team; batch 1E still owns the
+ * Percival rules themselves); all enforced from then on.
  */
 
 export type InvariantKind = 'hard' | 'policy' | 'metamorphic' | 'structural' | 'static';
@@ -49,13 +54,15 @@ export const INVARIANTS: readonly InvariantSpec[] = [
     rule: 'games where some good seat\'s L1 (A0) is empty and the layer falls back to L0 are logged (one record per game; the fallback is an exemption, never a violation)' },
   { id: 'INV-Q1', refs: ['rule'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'a good player never plays a fail card' },
-  { id: 'INV-T1', refs: ['C2', 'C4', 'C6', 'P1', 'P2', 'K2'], kind: 'hard', status: 'pending:1D', side: 'good',
+  { id: 'INV-T1', refs: ['C2', 'C4', 'C6', 'P1', 'P2', 'K2'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'a good leader never proposes a team that must fail (minReds at L1* >= fails required)' },
-  { id: 'INV-V1', refs: ['C2', 'C4', 'C6', 'P1', 'P2', 'K2'], kind: 'hard', status: 'pending:1D', side: 'good',
-    rule: 'a good voter never approves a must-fail team on a non-forced proposal (R1-R2 = policy until D3)' },
-  { id: 'INV-K1', refs: ['K1′', 'K3', 'X4'], kind: 'hard', status: 'pending:1D', side: 'good',
-    rule: 'a good leader never proposes a strictly dominated team (A in, B out, A declared B blue, someone else can be the only red), pairwise so chains close' },
-  { id: 'INV-K2', refs: ['K2'], kind: 'hard', status: 'pending:1D', side: 'good',
+  { id: 'INV-V1', refs: ['C2', 'C4', 'C6', 'P1', 'P2', 'K2'], kind: 'hard', status: 'enforced', side: 'good',
+    rule: 'a good voter never approves a must-fail team on a non-forced proposal (R1-R2 = the normal-vote table rule, registered exemption; owner ruling on D3 final)' },
+  { id: 'INV-K1', refs: ['K1′', 'K3', 'X4'], kind: 'hard', status: 'enforced', side: 'good',
+    rule: 'a good leader never proposes a strictly dominated team (A in, B out, A declared B blue, someone else can be the only red), pairwise so chains close; a declaration the leader itself saw contradicted binds nothing' },
+  { id: 'INV-K1V', refs: ['K1′', 'K3', 'X4'], kind: 'hard', status: 'enforced', side: 'good',
+    rule: 'a good voter never approves a strictly dominated team on a non-forced R3+ proposal (硬1 for votes; batch 1D, new)' },
+  { id: 'INV-K2', refs: ['K2'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'a good leader never puts both members of a declared-red pair on a team when one fail suffices (subsumed by INV-T1)' },
   { id: 'INV-B1', refs: ['K1', 'K3', 'K5'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'suspicion along a declared-blue pair: score(B) <= score(A) unless a certainty pins one of them (then exempt)' },
@@ -69,12 +76,12 @@ export const INVARIANTS: readonly InvariantSpec[] = [
     rule: 'an honest blue holder is flagged by the rule-3 marker only for a team it led after its lake without its declared-blue seat' },
   { id: 'INV-F0', refs: ['T4', 'M1'], kind: 'metamorphic', status: 'enforced', side: 'good',
     rule: 'flipping the synthetic votes of forced fifth proposals changes no suspicion score' },
-  { id: 'INV-P3', refs: ['P3'], kind: 'hard', status: 'pending:1D', side: 'good',
+  { id: 'INV-P3', refs: ['P3'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'a good voter never approves a non-forced team holding its accuser when one fail suffices' },
-  { id: 'INV-L1', refs: ['P2'], kind: 'hard', status: 'pending:1D', side: 'good',
+  { id: 'INV-L1', refs: ['P2'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'a good holder never approves a non-forced team holding its own declared red when one fail suffices' },
-  { id: 'INV-Pe1', refs: ['Pe1'], kind: 'hard', status: 'pending:1E', side: 'good',
-    rule: 'Percival never approves a non-forced R3+ team holding both thumbs when one fail suffices (R1-R2 = policy)' },
+  { id: 'INV-Pe1', refs: ['Pe1'], kind: 'hard', status: 'enforced', side: 'good',
+    rule: 'Percival never approves a non-forced R3+ team holding both thumbs when one fail suffices (R1-R2 = the table rule; at 0 since batch 1D: such a team must fail)' },
   { id: 'INV-Pe2', refs: ['Pe1', 'C3'], kind: 'hard', status: 'pending:1E', side: 'good',
     rule: 'Percival never hard-excludes a seat that is not certRed (the R1 no-thumb owner ruling is exempt)' },
   { id: 'INV-R1NT', refs: ['owner 2026-10-14', 'D5'], kind: 'hard', status: 'enforced', side: 'good',

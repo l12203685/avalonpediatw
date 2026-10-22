@@ -68,6 +68,16 @@ import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan
 import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
 import { percivalNoThumbsR1Active, percivalR1ThumbException } from '../PercivalThumbs';
 import {
+  anyGate,
+  certaintyFor,
+  compliantTeams,
+  gateOptionsFrom,
+  goodVoteGate,
+  teamGateBreach,
+  type GateOptions,
+} from '../LogicGates';
+import { analyzeLakeChain, findTeamHardRuleViolations } from '../baseline/lakeChainTracker';
+import {
   interpret,
   type Facts,
   type InterpretationResult,
@@ -626,10 +636,18 @@ export class ForwardAgent implements AvalonAgent {
    */
   private readonly belief: Readonly<BeliefOptions>;
 
+  /**
+   * The decision gates of this agent's tuning (logic-first batch 1D,
+   * `LogicGates.ts`): S1-3 team gate and the S1-4 / S1-5 must-fail gate.
+   * They bind good seats only.
+   */
+  private readonly gates: Readonly<GateOptions>;
+
   constructor(agentId: string, baseline?: HeuristicAgent) {
     this.agentId = agentId;
     this.baseline = baseline ?? new HeuristicAgent(agentId);
     this.belief = beliefOptionsFrom(this.baseline.tuning);
+    this.gates = gateOptionsFrom(this.baseline.tuning);
   }
 
   onGameStart(obs: PlayerObservation): void {
@@ -786,6 +804,54 @@ export class ForwardAgent implements AvalonAgent {
       };
     }
 
+    // ── Logic-first batch 1D (2026-10-22): the good vote gates ──
+    //
+    // AgentTuning.mustFailGate (S1-4 / S1-5; INV-V1, P3, L1): a good voter
+    // never approves a team that must fail in its own view (every
+    // consistent L1* world puts at least the round's fails-required reds on
+    // it; R4 needs two), nor — on the team, one fail deciding — a team
+    // holding a seat it declared red itself (P2). AgentTuning.
+    // teamDominanceGate (S1-3; 硬1 in production): nor a team that is
+    // strictly dominated along a declared-blue chain (A in, B out, someone
+    // else can be its only red). R1–R2 keep the normal-vote table rule (the
+    // delegation above; owner's D3 ruling, final) and the forced fifth
+    // proposal holds no vote. Runs BEFORE every role shortcut below — the
+    // Percival / Morgana on-team approve included (Percival is a loyal with
+    // one more fact; a 2026-10 practice report had Percival approve, on the
+    // team, an R4 team the missions and lakes had already proved
+    // failable). See LogicGates.ts.
+    if (decisionType === 'team_vote') {
+      const gate = goodVoteGate(obs, this.gates);
+      if (gate !== null) {
+        const action: AgentAction = { type: 'team_vote', vote: false };
+        const gateCandidate: Candidate = {
+          action,
+          description: `logic gate reject (${gate})`,
+          signals: {
+            avgSuspicion: 0,
+            maxSuspicion: 0,
+            includesKnownEvil: false,
+            includesSelf: (obs.proposedTeam ?? []).includes(obs.myPlayerId),
+            violatesLakeRules: gate === 'dominated',
+            numKnownEvilOnTeam: 0,
+            merlinProbForTarget: 0,
+          },
+        };
+        return {
+          action,
+          reasoningTrace: {
+            decisionType,
+            purposes: zeroPurposeVector(),
+            candidatesEvaluated: 1,
+            chosen: gateCandidate,
+            chosenScore: 0,
+            usedFallback: false,
+            summary: `${decisionType} → logic gate reject (${gate}, round=${obs.currentRound ?? 1})`,
+          },
+        };
+      }
+    }
+
     // ── Edward 2026-05-06 16:09 — 派西 / 莫甘娜 on-team approve hard rule ─
     //
     // Edward 16:09 verbatim:
@@ -855,7 +921,7 @@ export class ForwardAgent implements AvalonAgent {
         ? null
         : evilVouchFollowUpActive(this.baseline.tuning) && evilVouchVoteRule(obs) === 'reject'
           ? 'red'
-          : this.baseline.tuning.goodVouchFollowUp && goodVouchVoteRule(obs) === 'reject'
+          : this.baseline.tuning.goodVouchFollowUp && goodVouchVoteRule(obs, this.gates.mustFail) === 'reject'
             ? 'blue'
             : null;
     if (vouchRejectSide !== null) {
@@ -1679,8 +1745,9 @@ export class ForwardAgent implements AvalonAgent {
     // pipeline never collapses; baseline's enforceR1P1Ban will retry
     // the swap downstream.
     const isR1P1 = (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0;
+    const r1p1BannedSet = isR1P1 ? bannedComboSetFor5p(obs.playerCount) : new Set<string>();
     if (isR1P1) {
-      const bannedSet = bannedComboSetFor5p(obs.playerCount);
+      const bannedSet = r1p1BannedSet;
       if (bannedSet.size > 0) {
         const filtered = candidates.filter((c) => {
           if (c.action.type !== 'team_select') return true;
@@ -1690,7 +1757,53 @@ export class ForwardAgent implements AvalonAgent {
           );
           return !bannedSet.has(canonical);
         });
-        if (filtered.length > 0) return filtered;
+        if (filtered.length > 0) candidates = filtered;
+      }
+    }
+
+    // ── Logic-first batch 1D (2026-10-22): the good leader's team gates ──
+    // AgentTuning.mustFailGate (S1-4; INV-T1, K2): no team that must fail in
+    // the leader's own view (L1*; any round, the forced fifth proposal too).
+    // AgentTuning.teamDominanceGate (S1-3; INV-K1): no team strictly
+    // dominated along a declared-blue chain (choosing A ⇒ B ⇒ C). Violating
+    // candidates are dropped whenever a compliant one is left — the scorer
+    // and the hash tie-break then pick among the rest exactly as before, so
+    // a decision that already passed is unchanged. When none is left, every
+    // self-inclusive team is checked and the compliant ones become the
+    // candidates (one always exists, `LogicGates.ts`), preferring teams that
+    // keep the role exclusions above (Merlin's sighted reds, Percival's
+    // thumbs / 鐵咬) and the leader's own lake word, then low suspicion.
+    if (obs.myTeam === 'good' && anyGate(this.gates)) {
+      const view = certaintyFor(obs);
+      const round = obs.currentRound ?? 1;
+      const passes = (c: Candidate): boolean =>
+        c.action.type !== 'team_select' || teamGateBreach(obs, view, c.action.teamIds, round, this.gates) === null;
+      const kept = candidates.filter(passes);
+      if (kept.length > 0) {
+        candidates = kept;
+      } else {
+        const vouchRule = this.baseline.tuning.goodVouchFollowUp ? goodVouchTeamConstraint(obs) : null;
+        const excluded = new Set([...exclusionSeverity.keys()].filter((id) => id !== selfId));
+        const rank = (team: readonly string[]): number => {
+          let r = team.filter((id) => excluded.has(id)).length;
+          if (vouchRule) {
+            r += vouchRule.required.filter((id) => !team.includes(id)).length;
+            r += vouchRule.banned.filter((id) => team.includes(id)).length;
+          }
+          return r;
+        };
+        const teams = compliantTeams(obs, view, teamSize, this.gates, {
+          rank,
+          score: (id) => pyramid.scores.get(id) ?? 0.5,
+          allowed: r1p1BannedSet.size > 0
+            ? (team: readonly string[]): boolean => !r1p1BannedSet.has(canonicalSeatStringForward(team, obs.allPlayerIds))
+            : undefined,
+        });
+        if (teams.length > 0) {
+          candidates = teams
+            .slice(0, MAX_CANDIDATES)
+            .map((team) => this.makeTeamSelectCandidate(team, obs, interp, pyramid));
+        }
       }
     }
 
@@ -1703,12 +1816,26 @@ export class ForwardAgent implements AvalonAgent {
     interp: InterpretationResult,
     pyramid: PyramidScores,
   ): Candidate {
-    const signals = buildTeamSignals(teamIds, obs, pyramid);
+    const signals = buildTeamSignals(teamIds, obs, pyramid, this.lakeRuleCheck(obs));
     return {
       action: { type: 'team_select', teamIds: [...teamIds] },
       description: `team [${teamIds.join(',')}]`,
       signals,
     };
+  }
+
+  /**
+   * `teamDominanceGate` on, good seat: the strict 硬1 / 硬2 check of the
+   * seat's own view (`findTeamHardRuleViolations` with chain closure and
+   * strict dominance) for `CandidateSignals.violatesLakeRules`; otherwise
+   * none (the signal stays false, as before batch 1D).
+   */
+  private lakeRuleCheck(obs: PlayerObservation): ((team: readonly string[]) => boolean) | undefined {
+    if (!this.gates.teamDominance || obs.myTeam !== 'good') return undefined;
+    const view = certaintyFor(obs);
+    const chain = analyzeLakeChain(obs);
+    const round = obs.currentRound ?? 1;
+    return (team) => findTeamHardRuleViolations(chain, team, { view, round }).length > 0;
   }
 
   private generateTeamVoteCandidates(
@@ -1717,7 +1844,7 @@ export class ForwardAgent implements AvalonAgent {
     pyramid: PyramidScores,
   ): Candidate[] {
     const proposedTeam = obs.proposedTeam ?? [];
-    const signals = buildTeamSignals(proposedTeam, obs, pyramid);
+    const signals = buildTeamSignals(proposedTeam, obs, pyramid, this.lakeRuleCheck(obs));
 
     return [
       {
@@ -2062,6 +2189,7 @@ function buildTeamSignals(
   teamIds: readonly string[],
   obs: PlayerObservation,
   pyramid: PyramidScores,
+  lakeRules?: (team: readonly string[]) => boolean,
 ): CandidateSignals {
   if (teamIds.length === 0) {
     return {
@@ -2101,11 +2229,12 @@ function buildTeamSignals(
     maxSuspicion: max,
     includesKnownEvil,
     includesSelf,
-    // Lake rule violation detection is intentionally LEFT to the
-    // baseline (it owns the 4 hard rules). PR2 doesn't recompute —
-    // a false here means the scorer doesn't slam this candidate; the
-    // baseline path still enforces the rules elsewhere.
-    violatesLakeRules: false,
+    // Before batch 1D lake-rule detection was left to the baseline (which
+    // the production R3+ path never reached). With `teamDominanceGate` on a
+    // good seat's strict 硬1 / 硬2 check fills it (`lakeRuleCheck`); the
+    // gates themselves act in candidate generation and the vote gate, so
+    // the scorer does not read it.
+    violatesLakeRules: lakeRules ? lakeRules(teamIds) : false,
     numKnownEvilOnTeam: knownEvilCount,
     merlinProbForTarget: 0,
   };
