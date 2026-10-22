@@ -9,6 +9,9 @@
  *     不交給舊的指令處理（不然會回「未知指令」，限流也形同虛設）；
  *   - hideSimFollowUp()：鏡像群裡開著題目的人打的後續指令預設不同步到 Discord／大廳；
  *   - simHelpFor()：只回模擬的練習群（SIM_LINE_GROUP_IDS）也回 /指令。
+ *
+ * 2026-10-22 代答：自己沒開題的人打的後續指令（/派 /區間 /下一步 /公布 /結束）會作用在這個聊天室
+ * 最新開的一題上，所以排隊（withSimLock）和不同步（hideSimFollowUp）都照那一題算。
  */
 
 import { isSimCommandText, parseSimCommand } from './commands';
@@ -32,21 +35,22 @@ export function isActiveSimCommand(text: string): boolean {
  */
 export function withSimLock<T>(req: Pick<SimRequest, 'platform' | 'chatId' | 'userId'>, text: string, fn: () => Promise<T>): Promise<T> {
   if (!isActiveSimCommand(text)) return fn();
-  return getSimEngine().withLock(req, fn);
+  return getSimEngine().withLock(req, fn, parseSimCommand(text));
 }
 
 const FOLLOW_UPS = new Set(['propose', 'interval', 'next', 'reveal', 'end']);
 
 /**
- * 鏡像群：這段文字是開著題目的人打的後續指令（/派 /區間 /下一步 /公布 /結束），而且
- * SIM_MIRROR_FOLLOWUPS 沒開 → 不同步到 Discord／大廳（答案本來就不同步，只剩指令行會洗版）。
+ * 鏡像群：這段文字是後續指令（/派 /區間 /下一步 /公布 /結束），打的人自己開著題目、或是在代答
+ * 這個聊天室裡別人的題目，而且 SIM_MIRROR_FOLLOWUPS 沒開 → 不同步到 Discord／大廳
+ * （答案本來就不同步，只剩指令行會洗版）。
  */
 export function hideSimFollowUp(text: string, req: Pick<SimRequest, 'platform' | 'chatId' | 'userId'>): boolean {
   if (!SIM_CONFIG.commandsEnabled || simMirrorFollowUps()) return false;
   const cmd = parseSimCommand(text);
   if (!cmd) return false;
   const followUp = FOLLOW_UPS.has(cmd.kind) || (cmd.kind === 'usage' && cmd.command !== 'start');
-  return followUp && getSimEngine().hasSession(req);
+  return followUp && getSimEngine().answersFollowUp(req);
 }
 
 /** 只回模擬的練習群裡的 /指令、/help → 模擬瓦的指令說明；其他 null。 */

@@ -67,7 +67,8 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
           name: '🧩 模擬瓦 / Proposal drill',
           value:
             `\`${STATS_COMMAND_USAGE.simulation}\` 真人對局停在你派票的當下：看前面的派票、寫區間、自己派，看你的派票放出什麼資訊\n` +
-            `接著用 ${SIM_HELP_FOLLOW_UP}（一人一題，30 分鐘沒動作自動結束）`,
+            `接著用 ${SIM_HELP_FOLLOW_UP}（一人一題，30 分鐘沒動作自動結束；沒開題的人也可以幫忙答頻道裡最新的一題）\n` +
+            `\`/模擬 說明:True\` 全部指令的白話說明`,
           inline: false,
         }]
         : []),

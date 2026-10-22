@@ -34,7 +34,7 @@ import { SimBankLoader } from '../bots/simulation/bank';
 import { SIM_CONFIG } from '../bots/simulation/config';
 import { __setSimForTests } from '../bots/simulation';
 import { SimEngine } from '../bots/simulation/session';
-import { NO_SESSION_TEXT, RATE_LIMITED_TEXT, SIM_HELP_TEXT } from '../bots/simulation/replies';
+import { CO_ANSWER_MARK, NO_SESSION_TEXT, RATE_LIMITED_TEXT, SIM_HELP_TEXT } from '../bots/simulation/replies';
 import { __resetFeedbackForTests, getFeedbackService } from '../bots/feedback/service';
 import type { LobbyChatMessage } from '../socket/LobbyChatBuffer';
 import { fixtureBank } from './fixtures/simGames';
@@ -301,6 +301,26 @@ describe('mirror group', () => {
     expect(h.replies).toEqual([]);
     await deliver(h, groupText('/派 469', 'c3', 'rc3'));
     expect(h.replies[0].messages[0].text).toBe(NO_SESSION_TEXT);
+  });
+
+  it('a member without an exercise co-answers the newest one in the group (marked 代答, not mirrored); /模擬 說明 lists the commands', async () => {
+    const h = setup();
+    await deliver(h, groupText('/模擬 忠臣 4', 'k1', 'rk1'));
+    const fromU2 = { ...groupText(typed('/派 469'), 'k2', 'rk2'), source: { type: 'group', groupId: GROUP, userId: 'U2' } };
+    await deliver(h, fromU2);
+    const answer = h.replies.at(-1)?.messages[0].text ?? '';
+    expect(answer.split('\n').slice(0, 2)).toEqual([CO_ANSWER_MARK, '【W0000-4・4家忠臣】你派 469']);
+    expect(answer).not.toMatch(/U1|U2|LineUser/u); // nobody is named
+    expect(h.replies.at(-1)?.messages[0].quoteToken).toBe('q-k2');
+    // A co-answer is a follow-up of an open exercise: not mirrored (SIM_MIRROR_FOLLOWUPS off).
+    expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4']);
+    // The owner continues on the same exercise (now answered).
+    await deliver(h, groupText('/公布', 'k3', 'rk3'));
+    expect(h.replies.at(-1)?.messages[0].text).toContain('你的派票：469：1 紅（9）✗');
+
+    await deliver(h, groupText('/模擬 說明', 'k4', 'rk4'));
+    expect(h.replies.at(-1)?.messages[0].text).toBe(SIM_HELP_TEXT);
+    expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4', '/模擬 說明']); // mirrored like /模擬
   });
 
   it('SIM_COMMANDS_ENABLED off → /模擬 is plain chat', async () => {

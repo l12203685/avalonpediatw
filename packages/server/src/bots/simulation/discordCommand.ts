@@ -20,9 +20,13 @@ export const SIM_DISABLED_TEXT = '模擬瓦目前停用。';
 
 /** slash 指令的選項 → 模擬指令（跟 LINE 打字的解析同一套）。 */
 export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInteraction, 'commandName' | 'options'>): SimCommand | null {
-  const opts = interaction.options;
+  const opts = interaction.options as Pick<ChatInputCommandInteraction['options'], 'getString' | 'getInteger'> & {
+    getBoolean?: ChatInputCommandInteraction['options']['getBoolean'];
+  };
   switch (interaction.commandName) {
     case COMMANDS.SIM: {
+      // /模擬 說明:True → 指令說明（跟 LINE 的 /模擬 說明 同一段文字）。
+      if (opts.getBoolean?.(SIM_OPTIONS.HELP, false)) return { kind: 'help' };
       const roleRaw = opts.getString(SIM_OPTIONS.ROLE, false);
       const seat = opts.getInteger(SIM_OPTIONS.SEAT, false);
       const idRaw = opts.getString(SIM_OPTIONS.ID, false);
@@ -98,7 +102,8 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
   const engine = getSimEngine();
   // explicit：看不懂的 /派、/區間 沒有題目時也給用法（slash 是明確的指令），一樣受限流管。
   const req = { platform: 'discord' as const, chatId: interaction.channelId ?? 'dm', userId: interaction.user.id, explicit: true };
-  // 同一個人同一個頻道的指令排隊：「算回覆 → 送出 → commit」一次一個（Edward 2026-10-14 審查修正）。
+  // 同一題的指令排隊：「算回覆 → 送出 → commit」一次一個（Edward 2026-10-14 審查修正）；
+  // 代答（自己沒開題、幫頻道裡最新的一題作答）排在那一題的隊伍裡。
   await engine.withLock(req, async () => {
     const reply = await engine.handle(cmd, req);
     if (!reply) {
@@ -113,5 +118,5 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
     } catch (err) {
       console.error(`[sim] Discord commit failed (${describeError(err)})`);
     }
-  });
+  }, cmd);
 }

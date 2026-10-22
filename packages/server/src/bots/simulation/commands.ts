@@ -11,6 +11,7 @@
  *   /區間 789=2 460=1     區間（選填；百科寫法 `7 8 9 *2 4 6 0 *1`、`12=1-2`、`3=紅`、`3 壞`、`5=好`、
  *                         `1 5 9 *1+` 也可以；各組可以重疊，跟百科「1 2 *1-2」「2 3 7 *2」一樣）
  *   /下一步  /公布（/解答）  /結束
+ *   /模擬 說明            全部指令，每個一行白話（/模擬 幫助、/模擬 指令、/模擬 ? 也可以；2026-10-22）
  *
  * 斜線可以是全形「／」，指令和內容之間的空白可有可無（跟 /戰績 一樣），全形數字照收。
  * 只認這幾個指令字：`/派西 2` 不是 /派（後面不是數字 → 'usage'，沒有進行中的題目時呼叫端不回），
@@ -44,8 +45,19 @@ export type SimCommand =
   | { kind: 'next' }
   | { kind: 'reveal' }
   | { kind: 'end' }
+  /** /模擬 說明：全部指令的白話說明。 */
+  | { kind: 'help' }
   /** 是模擬指令，但內容看不懂；`problem` 是給使用者看的一句話。 */
   | { kind: 'usage'; command: SimUsageCommand; problem?: string };
+
+/** 對開著的題目做的事（/派 /區間 /下一步 /公布 /結束，以及看不懂的 /派、/區間）：可以幫別人的題目代答。 */
+export function isFollowUpCommand(cmd: SimCommand): boolean {
+  return cmd.kind === 'propose' || cmd.kind === 'interval' || cmd.kind === 'next' || cmd.kind === 'reveal' || cmd.kind === 'end'
+    || (cmd.kind === 'usage' && cmd.command !== 'start');
+}
+
+/** /模擬 後面的「說明」字：說明、幫助、指令、?（全形也可以）。 */
+const HELP_WORDS = new Set(['說明', '说明', '幫助', '帮助', '指令', '?', '？', 'help']);
 
 /** 指令字（長的在前：模擬瓦 先於 模擬）。chatExport/rows.ts 也用它認出打字的指令。 */
 export const SIM_COMMAND_RE = /^[/／]\s*(模擬瓦|模拟瓦|模擬|模拟|區間|区间|下一步|公布|解答|結束|结束|派)/u;
@@ -172,6 +184,7 @@ export function parseInterval(raw: string): { groups: IntervalGroup[] } | { prob
 function parseStartArgs(rest: string): SimCommand | null {
   const t = rest.normalize('NFKC').trim();
   if (!t) return { kind: 'start' };
+  if (HELP_WORDS.has(t.toLowerCase())) return { kind: 'help' };
   const byId = /^(?:題號?|题号?|#)\s*(\S+)$/u.exec(t);
   if (byId) {
     const id = normalizeExerciseId(byId[1]);

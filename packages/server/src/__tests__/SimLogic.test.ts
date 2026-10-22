@@ -31,7 +31,7 @@ import {
   sightReasonFor,
 } from '../bots/simulation/reading';
 import { proposalFeatures } from '../bots/simulation/human';
-import { releaseLines } from '../bots/simulation/replies';
+import { assembleReply, gloss, releaseLines, resolveGlosses } from '../bots/simulation/replies';
 import {
   decisionsOf,
   eventIndexOfProposal,
@@ -266,8 +266,20 @@ describe('role branches and private checks (Edward 2026-10-14 review fixes)', ()
   it('派西 opposing a thumb\'s proposal is flagged: 279 vs 1家 460 → read as 「信 1 是娜」', () => {
     const r = releasePanel(firstView(WIKI, 2), [2, 7, 9]);
     expect(r.thumbStances.map((t) => [t.thumb, t.label])).toEqual([[1, '打對邊']]);
-    const text = releaseLines(r, 2).map((p) => p.text).join('\n');
-    expect(text).toContain('・你跟拇指 1 的 460 打對邊 → 後面的人會讀成你信 1 是娜');
+    // 打對邊 is glossed where it first appears (the 1家 460 line); the stance line reuses the bare term.
+    const text = assembleReply(releaseLines(r, 2));
+    expect(text).toContain('・跟 1家 460 比：打對邊（完全沒有一樣的人）→ 兩次不能都對（兩次派票不可能同時全是好人：加起來 7 人＞6）');
+    expect(text).toContain('・你的派票跟拇指 1 的 460 打對邊 → 後面的人會讀成你信 1 是娜（莫甘娜）');
+  });
+
+  it('gloss markers: the first occurrence per reply carries the explanation, later ones only the detail; nothing leaks', () => {
+    const text = resolveGlosses(`${gloss('延伸', '4 6')}、${gloss('延伸')}、${gloss('只剩紅', '1258')}、${gloss('只剩紅', '1350')}、${gloss('回選', '1')} → x`);
+    expect(text).toBe('延伸（有 2 人以上一樣：4 6）、延伸、只剩紅 1258（紅方就只能是這幾個）、只剩紅 1350、回選 1（把前面的隊長派進隊裡）→ x');
+    expect(text).not.toMatch(new RegExp(`[${String.fromCharCode(0xe000)}-${String.fromCharCode(0xe002)}]`, 'u'));
+    // Dropping an optional part never drops the explanation with it: the kept parts are glossed after the choice.
+    const parts = [{ text: `A ${gloss('打對邊')}`, optional: true, priority: 9 }, { text: `B ${gloss('打對邊')}` }];
+    expect(assembleReply(parts, 16)).toBe('B 打對邊（完全沒有一樣的人）');
+    expect(assembleReply(parts, 100)).toBe('A 打對邊（完全沒有一樣的人）\nB 打對邊');
   });
 
   it('派西 thumb odds come from the same analysis (not always 一半)', () => {
