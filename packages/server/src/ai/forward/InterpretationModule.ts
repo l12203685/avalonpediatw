@@ -19,7 +19,8 @@
  *
  * Pure module (Q2=A deterministic, Q4=A internal-only):
  *   `interpret(obs)` is a pure function — no class state outside the
- *   wrapper, no IO, no RNG. Given the same observation it always returns
+ *   wrapper, no IO, no RNG. Given the same observation (and belief
+ *   switches, `belief/BeliefOptions.ts`, 2026-10-22) it always returns
  *   the same `InterpretationResult`. No Discord / Edward notification.
  *
  * Trace-source (Q3=A):
@@ -33,6 +34,7 @@ import {
   getOuterWhiteApprovers,
   analyzeLakeChain,
 } from '../baseline';
+import { defaultBeliefOptions, type BeliefOptions } from '../belief/BeliefOptions';
 import {
   reverseEngineerMind,
 } from './ToMReverseEngine';
@@ -57,9 +59,12 @@ import type {
  *   `outerWhiteApprovers` already filters self (baseline contract), so
  *   we don't double-filter here.
  */
-export function extractFacts(obs: PlayerObservation): Facts {
-  const failedMissionMembers = getFailedMissionSuspects(obs);
-  const outerWhiteApprovers = getOuterWhiteApprovers(obs);
+export function extractFacts(
+  obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): Facts {
+  const failedMissionMembers = getFailedMissionSuspects(obs, opts);
+  const outerWhiteApprovers = getOuterWhiteApprovers(obs, opts);
   const lakeChainState = analyzeLakeChain(obs);
 
   return {
@@ -87,11 +92,12 @@ export function extractFacts(obs: PlayerObservation): Facts {
 function buildMindMap(
   obs: PlayerObservation,
   facts: Facts,
+  opts: Readonly<BeliefOptions>,
 ): Map<string, MindState> {
   const mindBy = new Map<string, MindState>();
   for (const pid of obs.allPlayerIds) {
     if (pid === obs.myPlayerId) continue;
-    mindBy.set(pid, reverseEngineerMind(obs, facts, pid));
+    mindBy.set(pid, reverseEngineerMind(obs, facts, pid, opts));
   }
   return mindBy;
 }
@@ -106,12 +112,16 @@ function buildMindMap(
  * Pure function — no side effects. Caller can log the result internally
  * (Q4=A internal log only) or feed it into PR2's decision pipeline.
  *
- * @param obs Agent's full private observation.
- * @returns   `InterpretationResult` carrying Facts + per-other-player MindState.
+ * @param obs  Agent's full private observation.
+ * @param opts Belief switches (default: production default + environment).
+ * @returns    `InterpretationResult` carrying Facts + per-other-player MindState.
  */
-export function interpret(obs: PlayerObservation): InterpretationResult {
-  const facts = extractFacts(obs);
-  const mindBy = buildMindMap(obs, facts);
+export function interpret(
+  obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): InterpretationResult {
+  const facts = extractFacts(obs, opts);
+  const mindBy = buildMindMap(obs, facts, opts);
   return { facts, mindBy };
 }
 
@@ -131,7 +141,7 @@ export class InterpretationModule {
    * Static-equivalent: `new InterpretationModule().interpret(obs)` ===
    * `interpret(obs)` for any `obs`.
    */
-  interpret(obs: PlayerObservation): InterpretationResult {
-    return interpret(obs);
+  interpret(obs: PlayerObservation, opts?: Readonly<BeliefOptions>): InterpretationResult {
+    return interpret(obs, opts);
   }
 }

@@ -45,6 +45,8 @@ import {
   PYRAMID_VIOLATOR_FLOOR,
   type PyramidScores,
 } from '../baseline';
+import { defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from '../belief/BeliefOptions';
+import { beliefFailCards, missionFailed } from '../missionFacts';
 
 // ── Role signal package ─────────────────────────────────────────
 /**
@@ -115,6 +117,7 @@ function scoreWizardAsMerlin(
   wizardId: string,
   obs: PlayerObservation,
   pyramid: PyramidScores,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): number {
   if (obs.voteHistory.length === 0) return 0.5;
   const knownEvilSet = new Set(obs.knownEvils);
@@ -122,7 +125,9 @@ function scoreWizardAsMerlin(
   let total = 0;
 
   // Signal 1: rejected teams that contained pyramid-suspect / known-evil.
+  // S1-9a: the forced fifth proposal's synthetic votes are not votes.
   for (const v of obs.voteHistory) {
+    if (opts.forcedVotesZero && isForcedVoteRecord(v)) continue;
     const teamHasSuspect = v.team.some(
       (id) => knownEvilSet.has(id) ||
         ((pyramid.scores.get(id) ?? 0.5) >= PYRAMID_VIOLATOR_FLOOR),
@@ -135,9 +140,10 @@ function scoreWizardAsMerlin(
     if (teamHasSuspect && myVote === true) score -= 0.5; // approve sketchy → red signal
   }
 
-  // Signal 2: appeared on fail mission → NOT Merlin.
+  // Signal 2: appeared on a mission that showed a fail card → NOT Merlin
+  // (S1-1: by fail cards, so an R4 success with a card counts).
   for (const q of obs.questHistory) {
-    if (q.result === 'fail' && q.team.includes(wizardId)) {
+    if (beliefFailCards(q, opts.certainFacts) > 0 && q.team.includes(wizardId)) {
       score -= 1;
       total += 1;
     }
@@ -169,12 +175,14 @@ function scoreWizardAsMerlin(
 function detectMerlinHidingFromAssassin(
   wizardId: string,
   obs: PlayerObservation,
+  opts: Readonly<BeliefOptions>,
 ): boolean {
   if (obs.voteHistory.length < 2) return false;
   let suspiciouslyBaseline = 0;
   let total = 0;
   for (const v of obs.voteHistory) {
     if (v.round > 3) continue; // only R1-R3
+    if (opts.forcedVotesZero && isForcedVoteRecord(v)) continue; // S1-9a: no vote was held
     const myVote = v.votes[wizardId];
     if (myVote === undefined) continue;
     total += 1;
@@ -196,14 +204,17 @@ function detectMerlinHidingFromAssassin(
 function detectMorganaBetrayal(
   wizardId: string,
   obs: PlayerObservation,
+  opts: Readonly<BeliefOptions>,
 ): boolean {
-  // Failed-mission members = public information any role can read.
+  // Failed-mission members = public information any role can read
+  // (S1-1: by fail cards).
   const failedMembers = new Set<string>();
   for (const q of obs.questHistory) {
-    if (q.result === 'fail') for (const id of q.team) failedMembers.add(id);
+    if (beliefFailCards(q, opts.certainFacts) > 0) for (const id of q.team) failedMembers.add(id);
   }
   if (failedMembers.size === 0) return false;
   for (const v of obs.voteHistory) {
+    if (opts.forcedVotesZero && isForcedVoteRecord(v)) continue;
     const myVote = v.votes[wizardId];
     if (myVote !== false) continue;
     if (v.team.some((id) => failedMembers.has(id))) return true;
@@ -223,11 +234,14 @@ function detectMorganaBetrayal(
  * - oberon:   participation flags from buildOberonContext (subset)
  * - loyal:    neutral (no override)
  */
-export function getRoleSignals(obs: PlayerObservation): RoleSignals {
+export function getRoleSignals(
+  obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): RoleSignals {
   const role = obs.myRole;
   if (role === 'loyal' || role === 'minion') return neutralRoleSignals();
 
-  const pyramid = computePyramidScores(obs);
+  const pyramid = computePyramidScores(obs, opts);
 
   const knownWizardSuspicions = new Map<string, number>();
   const wizardMerlinScores = new Map<string, number>();
@@ -242,7 +256,7 @@ export function getRoleSignals(obs: PlayerObservation): RoleSignals {
     }
     for (const w of wizards) {
       knownWizardSuspicions.set(w, pyramid.scores.get(w) ?? 0.5);
-      wizardMerlinScores.set(w, scoreWizardAsMerlin(w, obs, pyramid));
+      wizardMerlinScores.set(w, scoreWizardAsMerlin(w, obs, pyramid, opts));
     }
     // Pick A = max merlinScore wizard, B = the other.
     let aId = wizards[0];
@@ -250,8 +264,8 @@ export function getRoleSignals(obs: PlayerObservation): RoleSignals {
     if ((wizardMerlinScores.get(bId) ?? 0) > (wizardMerlinScores.get(aId) ?? 0)) {
       [aId, bId] = [bId, aId];
     }
-    const merlinHidingFromAssassin = detectMerlinHidingFromAssassin(aId, obs);
-    const morganaBetrayal = detectMorganaBetrayal(bId, obs);
+    const merlinHidingFromAssassin = detectMerlinHidingFromAssassin(aId, obs, opts);
+    const morganaBetrayal = detectMorganaBetrayal(bId, obs, opts);
     return {
       ...neutralRoleSignals(),
       knownWizardSuspicions,
@@ -300,7 +314,8 @@ export function getRoleSignals(obs: PlayerObservation): RoleSignals {
     for (const q of obs.questHistory) {
       if (q.team.includes(obs.myPlayerId)) {
         mp = true;
-        if (q.result === 'fail') fm = true;
+        // The public outcome (did the mission fail), not a camp fact.
+        if (missionFailed(q)) fm = true;
       }
     }
     return {

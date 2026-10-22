@@ -33,11 +33,15 @@ import {
 } from '../benchmark/replayObservation';
 import { CertaintyView, certaintyParamsFor, enumerateWorlds } from '../belief/Certainty';
 import type { AgentTuning } from '../AgentTuning';
+import { beliefOptionsFrom } from '../belief/BeliefOptions';
 import type { PlayerObservation } from '../types';
 import { AuditAgent, type DecisionRecord } from './AuditAgent';
 import { checkDecision, checkObservation, checkPublicRound } from './checks';
 import { truthFromRoles, type Truth } from './context';
 import { Ledger } from './ledger';
+
+/** INV-W2 is a log, not a violation: a game where some good seat fell back to L0. */
+const L1_EMPTY_LOGGED = 'game with an L1-empty good seat (logged, L0 fallback)';
 
 export interface HarnessResult {
   replay: Ledger;
@@ -97,6 +101,7 @@ export interface ReplayOptions {
 export function auditReplayGame(game: ReplayGame, opts: ReplayOptions, result: HarnessResult): void {
   const truth = replayTruth(game);
   const L = result.replay;
+  const belief = beliefOptionsFrom(opts.tuning);
   let l1Empty = false;
   result.l1EmptyGames.replayGames++;
 
@@ -104,7 +109,7 @@ export function auditReplayGame(game: ReplayGame, opts: ReplayOptions, result: H
   for (let r = 3; r <= game.quests.length; r++) {
     const pIdx = game.proposals.findIndex((p) => p.round === r);
     if (pIdx < 0) continue;
-    checkPublicRound(buildReplayObservation(game, 1, { kind: 'team_select', proposal: pIdx }), L, truth);
+    checkPublicRound(buildReplayObservation(game, 1, { kind: 'team_select', proposal: pIdx }), L, truth, belief);
   }
   // Every seat's picture at the openings of R2..R5.
   if (opts.observationChecks) {
@@ -112,7 +117,7 @@ export function auditReplayGame(game: ReplayGame, opts: ReplayOptions, result: H
       const pIdx = game.proposals.findIndex((p) => p.round === r);
       if (pIdx < 0) continue;
       for (let seat = 1; seat <= game.playerCount; seat++) {
-        checkObservation(buildReplayObservation(game, seat, { kind: 'team_select', proposal: pIdx }), L, truth);
+        checkObservation(buildReplayObservation(game, seat, { kind: 'team_select', proposal: pIdx }), L, truth, belief);
       }
     }
   }
@@ -124,7 +129,7 @@ export function auditReplayGame(game: ReplayGame, opts: ReplayOptions, result: H
     agent.onGameStart(buildReplayObservation(game, seat, { kind: 'team_select', proposal: 0 }));
     const seed = (key: string): string => `${game.id}|${seat}|${key}`;
     const check = (rec: DecisionRecord): void => {
-      if (checkDecision(rec, L, truth)) l1Empty = true;
+      if (checkDecision(rec, L, truth, belief)) l1Empty = true;
     };
 
     let proposalIdx = 0;
@@ -176,6 +181,7 @@ export function auditReplayGame(game: ReplayGame, opts: ReplayOptions, result: H
     }
   }
   if (l1Empty) result.l1EmptyGames.replay++;
+  L.record('INV-W2', l1Empty ? { exempt: L1_EMPTY_LOGGED } : {});
   if (opts.probe) probeGame(game, opts.tuning, result.probe, truth);
 }
 
@@ -212,7 +218,7 @@ function probeGame(game: ReplayGame, tuning: AgentTuning, L: Ledger, truth: Trut
       if (hard.minReds(team, 'L1') >= hard.failsRequired(round)) { L.inc('X5chk.provablyFailable'); L.inc(`X5chk.provablyFailable.R${round}`); }
       if (hard.minReds(team, 'L1') >= 1) { L.inc('X5chk.provablyTainted'); L.inc(`X5chk.provablyTainted.R${round}`); }
       if (!team.some((x) => truth.evil.has(x))) L.inc('X5chk.clean');
-      checkDecision({ kind: 'team_select', obs, action: d.action, usedFallback: d.reasoningTrace.usedFallback }, L, truth);
+      checkDecision({ kind: 'team_select', obs, action: d.action, usedFallback: d.reasoningTrace.usedFallback }, L, truth, beliefOptionsFrom(tuning));
     });
   }
 }
@@ -232,6 +238,7 @@ export async function auditSelfPlay(opts: SelfPlayOptions, result: HarnessResult
   if (!AVALON_CONFIG[opts.playerCount]) throw new Error(`no config for ${opts.playerCount} players`);
   const engine = new SelfPlayEngine();
   const L = result.selfplay;
+  const belief = beliefOptionsFrom(opts.tuning);
   for (let i = 0; i < opts.games; i++) {
     const agents = Array.from({ length: opts.playerCount }, (_, k) => new AuditAgent(`P${k + 1}`, opts.tuning));
     const gameSeed = `${opts.seed}|${i}`;
@@ -260,7 +267,7 @@ export async function auditSelfPlay(opts: SelfPlayOptions, result: HarnessResult
     const roundOpenings = new Map<number, PlayerObservation>();
     for (const a of agents) {
       for (const rec of a.records) {
-        if (checkDecision(rec, L, truth)) l1Empty = true;
+        if (checkDecision(rec, L, truth, belief)) l1Empty = true;
         if (rec.kind === 'team_vote' && rec.obs.currentRound >= 2) {
           const key = `${a.agentId}|${rec.obs.currentRound}`;
           if (!firstVoteOfRound.has(key)) firstVoteOfRound.set(key, rec.obs);
@@ -268,8 +275,9 @@ export async function auditSelfPlay(opts: SelfPlayOptions, result: HarnessResult
         }
       }
     }
-    if (opts.observationChecks) for (const obs of firstVoteOfRound.values()) checkObservation(obs, L, truth);
-    for (const obs of roundOpenings.values()) checkPublicRound(obs, L, truth);
+    if (opts.observationChecks) for (const obs of firstVoteOfRound.values()) checkObservation(obs, L, truth, belief);
+    for (const obs of roundOpenings.values()) checkPublicRound(obs, L, truth, belief);
     if (l1Empty) result.l1EmptyGames.selfplay++;
+    L.record('INV-W2', l1Empty ? { exempt: L1_EMPTY_LOGGED } : {});
   }
 }

@@ -23,6 +23,7 @@
 import type { AgentAction, AvalonAgent, PlayerObservation } from './types';
 import { HeuristicAgent } from './HeuristicAgent';
 import { computePyramidScores } from './baseline';
+import { missionFailed } from './missionFacts';
 import { ForwardAgent, USE_FORWARD_REASONING, interpret } from './forward';
 import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory } from './LakePolicy';
 import { analyzeGoodLake } from './GoodLakeInfo';
@@ -263,7 +264,8 @@ function questRecordTxt(obs: PlayerObservation, id: string): string {
   let bad = 0;
   for (const q of obs.questHistory) {
     if (!q.team.includes(id)) continue;
-    if (q.result === 'success') ok += 1;
+    // The public outcome, as the table reads it (the review shows the score, not the cards).
+    if (!missionFailed(q)) ok += 1;
     else bad += 1;
   }
   if (ok + bad === 0) return '還沒出過任務';

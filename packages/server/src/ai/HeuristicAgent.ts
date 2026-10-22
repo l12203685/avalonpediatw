@@ -27,6 +27,8 @@ import {
 } from './AgentTuning';
 import { pickAssassinTargetByModel, type AssassinModelWeights } from './assassin/AssassinModel';
 import { percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
+import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
+import { beliefFailCards, missionFailed } from './missionFacts';
 import {
   assassinTargetPenalty,
   voteInnerBlackBonus,
@@ -57,6 +59,8 @@ import {
   computePyramidScores,
   findHardRuleViolations,
   findTeamHardRuleViolations,
+  getFailedMissionSuspects,
+  getLoyalSuspectSet,
   type PyramidScores,
 } from './baseline';
 
@@ -569,7 +573,8 @@ function buildOberonContext(obs: PlayerObservation): OberonContext {
     const onTeam = quest.team.includes(myId);
     if (onTeam) {
       missionParticipatedBefore = true;
-      if (quest.result === 'fail') {
+      // The public outcome (the mission failed), not a camp fact.
+      if (missionFailed(quest)) {
         failedInMission = true;
         // Track the EARLIEST round where Oberon was on a failed mission.
         // Rule 3 (batch 8 generalisation) triggers on any round > this.
@@ -578,7 +583,7 @@ function buildOberonContext(obs: PlayerObservation): OberonContext {
         }
       }
     }
-    if (quest.result === 'fail') {
+    if (missionFailed(quest)) {
       totalMissionFails++;
       // R1-R3 failed missions contribute members to the teammate-suspect
       // pool (Rule 4). R4 quest_history entries wouldn't hurt semantically
@@ -765,6 +770,13 @@ export class HeuristicAgent implements AvalonAgent {
    */
   readonly tuning: AgentTuning;
   /**
+   * The belief switches of `tuning` (logic-first batch 1C, 2026-10-22,
+   * `belief/BeliefOptions.ts`): every pyramid / suspect-set / vote-memory
+   * reader of this agent passes them, so two tunings in one process never
+   * share a belief setting.
+   */
+  readonly belief: Readonly<BeliefOptions>;
+  /**
    * Assassin-model weights used when `tuning.assassinModel` is on.
    * `undefined` = the bundled `ASSASSIN_MODEL_WEIGHTS`; `scripts/
    * assassinModel.ts` injects a freshly fitted model so its "agent+model"
@@ -786,6 +798,7 @@ export class HeuristicAgent implements AvalonAgent {
     void _legacyDifficulty;
     this.priors = priors ?? getDefaultPriors();
     this.tuning = resolveAgentTuning(tuning);
+    this.belief = beliefOptionsFrom(this.tuning);
     this.assassinModelWeights = assassinModelWeights;
   }
 
@@ -977,6 +990,8 @@ export class HeuristicAgent implements AvalonAgent {
       const key = `${record.round}-${record.attempt}`;
       if (this.memory.processedVoteAttempts.has(key)) continue;
       this.memory.processedVoteAttempts.add(key);
+      // S1-9a (`forcedVoteZeroBits`): the forced fifth proposal holds no vote.
+      if (this.belief.forcedVotesZero && isForcedVoteRecord(record)) continue;
 
       for (const [pid, approved] of Object.entries(record.votes)) {
         if (approved) {
@@ -1042,7 +1057,7 @@ export class HeuristicAgent implements AvalonAgent {
         );
       }
 
-      if (quest.result !== 'fail') continue;
+      if (beliefFailCards(quest, this.belief.certainFacts) === 0) continue;
 
       // Blacklist bookkeeping for failed quests
       for (const pid of quest.team) {
@@ -1059,6 +1074,8 @@ export class HeuristicAgent implements AvalonAgent {
         (r) => r.round === quest.round && r.approved,
       );
       if (!approvingRecord) continue;
+      // S1-9a: the forced fifth proposal's unanimous approve is synthetic.
+      if (this.belief.forcedVotesZero && isForcedVoteRecord(approvingRecord)) continue;
 
       for (const [pid, approved] of Object.entries(approvingRecord.votes)) {
         if (approved && approvingRecord.team.includes(pid)) {
@@ -1082,7 +1099,7 @@ export class HeuristicAgent implements AvalonAgent {
   private ingestLeaderStats(obs: PlayerObservation): void {
     const tally = new Map<string, number>();
     for (const quest of obs.questHistory) {
-      if (quest.result !== 'fail') continue;
+      if (beliefFailCards(quest, this.belief.certainFacts) === 0) continue;
       const approvingRecord = obs.voteHistory.find(
         (r) => r.round === quest.round && r.approved,
       );
@@ -1325,7 +1342,7 @@ export class HeuristicAgent implements AvalonAgent {
       // sort so role-private knowledge (knownEvils etc.) still wins;
       // pyramid only breaks ties when tier+suspicion are identical.
       const pyramid: PyramidScores | null = USE_PYRAMID_BASELINE
-        ? computePyramidScores(obs)
+        ? computePyramidScores(obs, this.belief)
         : null;
       const pyramidScore = (id: string): number =>
         pyramid?.scores.get(id) ?? 0.5;
@@ -1413,7 +1430,7 @@ export class HeuristicAgent implements AvalonAgent {
       // shift (the camp goal is unchanged: 3 fails or assassinate).
       const evilAllies = knownEvils.filter(id => id !== myPlayerId);
       const pyramidEvil: PyramidScores | null = USE_PYRAMID_BASELINE
-        ? computePyramidScores(obs)
+        ? computePyramidScores(obs, this.belief)
         : null;
       const evilPyramidScore = (id: string): number =>
         pyramidEvil?.scores.get(id) ?? 0.5;
@@ -1561,12 +1578,8 @@ export class HeuristicAgent implements AvalonAgent {
    * empty set (caller should then fall back to raw suspicion scores).
    */
   private getFailedMissionSuspects(obs: PlayerObservation): Set<string> {
-    const suspects = new Set<string>();
-    for (const quest of obs.questHistory) {
-      if (quest.result !== 'fail') continue;
-      for (const pid of quest.team) suspects.add(pid);
-    }
-    return suspects;
+    // Batch 1C: the baseline tool, with this agent's belief switches (fail cards, S1-1).
+    return getFailedMissionSuspects(obs, this.belief);
   }
 
   /**
@@ -1589,18 +1602,8 @@ export class HeuristicAgent implements AvalonAgent {
    * Self is explicitly excluded (a loyal never self-suspects).
    */
   private getLoyalSuspectSet(obs: PlayerObservation): Set<string> {
-    const suspects = this.getFailedMissionSuspects(obs);
-    // Add outer-white approvers.
-    for (const record of obs.voteHistory) {
-      for (const [pid, approved] of Object.entries(record.votes)) {
-        if (pid === obs.myPlayerId) continue;
-        const onTeam = record.team.includes(pid);
-        if (!onTeam && approved === true) {
-          suspects.add(pid);
-        }
-      }
-    }
-    return suspects;
+    // Batch 1C: the baseline tool (forced votes skipped with S1-9a).
+    return getLoyalSuspectSet(obs, this.belief);
   }
 
   // ── Team Vote ────────────────────────────────────────────────
@@ -1642,7 +1645,7 @@ export class HeuristicAgent implements AvalonAgent {
     // decisive cleanup window may break the rule (e.g. listening +
     // attacking). `mayBreakHardRules(obs)` encodes that gate.
     if (USE_PYRAMID_BASELINE && !mayBreakHardRules(obs)) {
-      const pyramidPre = computePyramidScores(obs);
+      const pyramidPre = computePyramidScores(obs, this.belief);
       const teamViolations = findTeamHardRuleViolations(
         pyramidPre.lakeChain,
         proposedTeam,
@@ -1821,7 +1824,7 @@ export class HeuristicAgent implements AvalonAgent {
       // explicitly removes — it ignored team composition (e.g. one
       // 0.65-suspect on an otherwise blue 4-man team should NOT auto-reject).
       const pyramidVote: PyramidScores | null = USE_PYRAMID_BASELINE
-        ? computePyramidScores(obs)
+        ? computePyramidScores(obs, this.belief)
         : null;
       const teamRedScore = (id: string): number =>
         pyramidVote?.scores.get(id) ?? 0.5;
@@ -1879,7 +1882,7 @@ export class HeuristicAgent implements AvalonAgent {
       // through (approve) is a cover burn for marginal gain — better
       // to reject. Captured below as `pyramidEvilCleanlinessShield`.
       const pyramidVoteEvil: PyramidScores | null = USE_PYRAMID_BASELINE
-        ? computePyramidScores(obs)
+        ? computePyramidScores(obs, this.belief)
         : null;
       const hasSelf  = proposedTeam.includes(obs.myPlayerId);
       const hasAlly  = proposedTeam.some(id => knownEvils.includes(id));
@@ -2289,7 +2292,7 @@ export class HeuristicAgent implements AvalonAgent {
           //     assassin does in this regime).
           //   joint-mission succeeded → teammate = mordred → mirror
           //     mordred's success (both hiding).
-          return priorJoint.result === 'fail' ? 'fail' : 'success';
+          return beliefFailCards(priorJoint, this.belief.certainFacts) > 0 ? 'fail' : 'success';
         }
       }
       if (teammateCount >= 2) {
@@ -2458,7 +2461,7 @@ export class HeuristicAgent implements AvalonAgent {
     // listening + not under hierarchy. We use the score to break ties
     // in baseline rates only; never override deterministic rules.
     const pyramidQuest: PyramidScores | null = USE_PYRAMID_BASELINE
-      ? computePyramidScores(obs)
+      ? computePyramidScores(obs, this.belief)
       : null;
     const ownPyramidScore = pyramidQuest?.scores.get(obs.myPlayerId) ?? 0.5;
     // Cover-burn bonus: if our score is already blown (>= 0.7) the
@@ -2628,7 +2631,7 @@ export class HeuristicAgent implements AvalonAgent {
     // to merlinScore so candidates the table sees as bluest get
     // ranked highest — exactly the Merlin profile.
     const pyramidAssassinate: PyramidScores | null = USE_PYRAMID_BASELINE
-      ? computePyramidScores(obs)
+      ? computePyramidScores(obs, this.belief)
       : null;
 
     for (const id of candidatePool) {
@@ -2865,7 +2868,7 @@ export class HeuristicAgent implements AvalonAgent {
     }
 
     // Never on a failed quest → suspicious of being the protected Merlin.
-    const onFailedQuest = obs.questHistory.some(q => q.result === 'fail' && q.team.includes(playerId));
+    const onFailedQuest = obs.questHistory.some(q => beliefFailCards(q, this.belief.certainFacts) > 0 && q.team.includes(playerId));
     if (!onFailedQuest && obs.questHistory.length > 0) {
       score += 1.5;
     }
@@ -2873,7 +2876,7 @@ export class HeuristicAgent implements AvalonAgent {
     // Always on successful quests = likely trusted good role (Merlin is always trusted).
     {
       const questAppearances = obs.questHistory.filter(q => q.team.includes(playerId));
-      const allSucceeded = questAppearances.every(q => q.result === 'success');
+      const allSucceeded = questAppearances.every(q => beliefFailCards(q, this.belief.certainFacts) === 0);
       if (allSucceeded && questAppearances.length >= 2) score += 1.0;
     }
 
@@ -3275,8 +3278,9 @@ export class HeuristicAgent implements AvalonAgent {
   private scoreWizardAsMerlin(wizardId: string, obs: PlayerObservation): number {
     let score = 0;
 
-    // Signal 1: vote pattern.
+    // Signal 1: vote pattern (S1-9a: the forced fifth proposal holds no vote).
     for (const record of obs.voteHistory) {
+      if (this.belief.forcedVotesZero && isForcedVoteRecord(record)) continue;
       const theirVote = record.votes[wizardId];
       if (theirVote === undefined) continue;
 
@@ -3310,18 +3314,18 @@ export class HeuristicAgent implements AvalonAgent {
       if (record.leader !== wizardId) continue;
       // Did this leader's team later fail (as a proxy for "contained evil")?
       const failed = obs.questHistory.find(
-        (q) => q.round === record.round && q.result === 'fail',
+        (q) => q.round === record.round && beliefFailCards(q, this.belief.certainFacts) > 0,
       );
       if (failed && failed.team.every((id) => record.team.includes(id))) {
         score -= 1.0;  // Morgana-ish: led a tainted team.
-      } else if (record.approved) {
+      } else if (record.approved && !(this.belief.forcedVotesZero && isForcedVoteRecord(record))) {
         score += 0.5;  // Clean approved team: Merlin-ish.
       }
     }
 
     // Signal 3: participation in failed quests.
     for (const quest of obs.questHistory) {
-      if (quest.result !== 'fail') continue;
+      if (beliefFailCards(quest, this.belief.certainFacts) === 0) continue;
       if (quest.team.includes(wizardId)) {
         // Morgana herself could have dropped the fail token.
         score -= 0.5;

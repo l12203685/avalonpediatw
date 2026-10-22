@@ -17,8 +17,15 @@
  *   - `static`      — a source-code scan.
  * Registered exemptions (counted, never violations): the forced fifth
  * proposal (no vote is held), the R1–R2 normal-vote table rule (owner ruling
- * 2026-04-30; D3 pending), Percival's R1 no-thumb owner ruling (for the
- * hard-exclusion rule), and the L1-empty fallback to L0.
+ * 2026-04-30, confirmed final 2026-10-14 — D3: no exception, no alternative
+ * flag), Percival's R1 no-thumb owner ruling (for the hard-exclusion rule),
+ * the L1-empty fallback to L0, and — for INV-B1 — a declared-blue pair with a
+ * seat the certainty layer pins (the order of two pinned or half-pinned seats
+ * is the certainty layer's, not the probability layer's).
+ *
+ * Batch 1C (2026-10-22, docs/ai/logic_first.md 第 1C 節) brought INV-B1, B2,
+ * B3, H3a, H3b and F0 to 0 on all 1970 replays and 2000 self-play games;
+ * they are enforced from then on.
  */
 
 export type InvariantKind = 'hard' | 'policy' | 'metamorphic' | 'structural' | 'static';
@@ -39,7 +46,7 @@ export const INVARIANTS: readonly InvariantSpec[] = [
   { id: 'INV-W1', refs: ['C2', 'C5'], kind: 'hard', status: 'enforced', side: 'all',
     rule: 'every world the certainty layer keeps satisfies every fail count, the role sight and the own lake results; the true red set is always among the L0 worlds' },
   { id: 'INV-W2', refs: ['X3'], kind: 'policy', status: 'enforced', side: 'all',
-    rule: 'games where some good seat\'s L1 (A0) is empty and the layer falls back to L0 are logged' },
+    rule: 'games where some good seat\'s L1 (A0) is empty and the layer falls back to L0 are logged (one record per game; the fallback is an exemption, never a violation)' },
   { id: 'INV-Q1', refs: ['rule'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'a good player never plays a fail card' },
   { id: 'INV-T1', refs: ['C2', 'C4', 'C6', 'P1', 'P2', 'K2'], kind: 'hard', status: 'pending:1D', side: 'good',
@@ -50,17 +57,17 @@ export const INVARIANTS: readonly InvariantSpec[] = [
     rule: 'a good leader never proposes a strictly dominated team (A in, B out, A declared B blue, someone else can be the only red), pairwise so chains close' },
   { id: 'INV-K2', refs: ['K2'], kind: 'hard', status: 'pending:1D', side: 'good',
     rule: 'a good leader never puts both members of a declared-red pair on a team when one fail suffices (subsumed by INV-T1)' },
-  { id: 'INV-B1', refs: ['K1', 'K3', 'K5'], kind: 'hard', status: 'pending:1C', side: 'good',
-    rule: 'suspicion along a declared-blue pair: score(B) <= score(A) unless a certainty pins one of them' },
-  { id: 'INV-B2', refs: ['C2', 'P1', 'P2', 'P3', 'M2', 'Pe1'], kind: 'hard', status: 'pending:1C', side: 'good',
+  { id: 'INV-B1', refs: ['K1', 'K3', 'K5'], kind: 'hard', status: 'enforced', side: 'good',
+    rule: 'suspicion along a declared-blue pair: score(B) <= score(A) unless a certainty pins one of them (then exempt)' },
+  { id: 'INV-B2', refs: ['C2', 'P1', 'P2', 'P3', 'M2', 'Pe1'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'certRed => score >= 1-eps; certGood => score <= eps (eps = 0.01; deduced reds only, sighted reds are pinned already)' },
-  { id: 'INV-B3', refs: ['C5'], kind: 'static', status: 'pending:1C', side: 'all',
-    rule: 'no belief code reads a mission result without its fail count' },
-  { id: 'INV-H3a', refs: ['T1', 'T3'], kind: 'metamorphic', status: 'pending:1C', side: 'good',
+  { id: 'INV-B3', refs: ['C5'], kind: 'static', status: 'enforced', side: 'all',
+    rule: 'no agent code reads a mission result without its fail count (the outcome read lives in missionFacts.ts only)' },
+  { id: 'INV-H3a', refs: ['T1', 'T3'], kind: 'metamorphic', status: 'enforced', side: 'good',
     rule: 'removing the pre-lake leader records of a declared-blue holder does not change the rule-3 score' },
-  { id: 'INV-H3b', refs: ['T1', 'X2'], kind: 'hard', status: 'pending:1C', side: 'good',
-    rule: 'an honest blue holder is flagged (>= 0.85) only by a team it led after its lake without its declared-blue seat' },
-  { id: 'INV-F0', refs: ['T4', 'M1'], kind: 'metamorphic', status: 'pending:1C', side: 'good',
+  { id: 'INV-H3b', refs: ['T1', 'X2'], kind: 'hard', status: 'enforced', side: 'good',
+    rule: 'an honest blue holder is flagged by the rule-3 marker only for a team it led after its lake without its declared-blue seat' },
+  { id: 'INV-F0', refs: ['T4', 'M1'], kind: 'metamorphic', status: 'enforced', side: 'good',
     rule: 'flipping the synthetic votes of forced fifth proposals changes no suspicion score' },
   { id: 'INV-P3', refs: ['P3'], kind: 'hard', status: 'pending:1D', side: 'good',
     rule: 'a good voter never approves a non-forced team holding its accuser when one fail suffices' },

@@ -1642,3 +1642,59 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
 # 一致性基準：正式預設（已含本開關）/ 關掉本開關；派西的針對性一致率見 percival_thumbs.md 11.5 末
 USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin [--flag percivalNoThumbsR1=0]
 ```
+
+## 15. 邏輯第一原理 第 1A / 1B 批（2026-10-14；`percivalR1ThumbOnThumb`、`goodQuestSuccessGuard`、`assassinHeuristicVisibility`）
+
+**來由**：Edward 2026-10-14 的新採用順序（邏輯正確 → 像真人 → 強度；`docs/ai/logic_first.md` 第 1 節）。這一批的內容、不變量與一致性見 `logic_first.md` 第 5 節；本節只記強度（**只回報，不用來判定**）。
+
+**對照組 = 第 14 節的正式預設**（13 個開關：`r3NormalVotePrior=0.6`、`r3NormalVotePriorEvilOnly`、`goodLakeTargetMostSuspicious`、`humanQuestCardRules`、`assassinModel`、`evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`、`goodLakeInfoMax`、`goodVouchFollowUp`、`teamReuse`、`redR1Teammate`、`percivalNoThumbsR1`）；variant = 同樣 13 個再加這一批的三個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個種子都是新的（沒有出現在本文件、`agreement_benchmark.md`、scripts 或 src）。
+
+| 種子（組數） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|
+| 111222（5000） | +0.00pp（89.94% = 89.94%） | 10.08%（10.06%） | +0.02pp [−0.10pp, +0.14pp] | 50.01% | 81.08% / 81.04% / 81.08% | 46.8% (946) / 46.8% (948) / 46.8% (946) |
+| 222333（5000） | +0.00pp（88.82%） | 11.36%（11.18%） | +0.18pp [+0.06pp, +0.30pp] | 50.09% | 79.88% / 79.70% / 79.88% | 44.4% (1006) / 44.0% (1015) / 44.4% (1006) |
+| 333444（5000） | +0.00pp（89.00%） | 11.08%（11.00%） | +0.08pp [−0.07pp, +0.23pp] | 50.04% | 79.54% / 79.46% / 79.54% | 46.2% (1023) / 46.1% (1027) / 46.2% (1023) |
+| **三個合併（15000）** | 0 | — | **+0.10pp [+0.02pp, +0.17pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9、13、14 節。ForwardAgent 每個種子約 231 萬個決策（2,306,347 / 2,321,533 / 2,314,218）、0 次 fallback。）
+
+讀法：三個開關只在好人座位（派西 R1、好人任務牌防護）與刺殺 fallback（正式預設走模型，不會觸發）讀，所以紅方立場逐局相同、差恆為 0；藍方立場略強、區間不含 0。依第一關的規則：不變量 INV-R1NT / INV-Q1 / INV-A1 為 0 → 採用；強度只回報。
+
+**這一節用到的種子**：111222、222333、333444。之後要加種子，避開以上全部與第 14 節的。
+
+## 16. 邏輯第一原理 第 1C 批：信念（2026-10-22；`beliefCertainFacts`、`rule3PostLakeOnly`、`beliefChainProjection`、`forcedVoteZeroBits`）
+
+**來由**：`logic_first.md` 第 6 節（S1-1 確定事實進入信念、S1-2 硬3 只看湖後、S1-3 湖鏈投影、S1-9a 強制票 0 bit）。四個開關全部預設開，legacy 全關。不變量：INV-B1 / B2 / B3 / H3a / H3b / F0 在 1970 局重播與 2000 局自我對打上 0 違規（`logic_first.md` 6.2）；一致性見 `agreement_benchmark.md` 第 7 節末與 `logic_first.md` 6.4。本節是強度，**只回報**（第一關的修改；變弱時開補償工作單，不回退）。
+
+**對照組 = 第 15 節的 variant**（`r7/ai-base` 正式預設的 16 個開關）；variant = 同樣 16 個再加本批四個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個新種子 444555 / 555666 / 666777（沒有出現在本文件、`agreement_benchmark.md`、`logic_first.md`、scripts 或 src；第 15 節用掉的避開）；沒有預先選版本的種子，三個都是確認種子（版本在跑之前定案，沒有在種子上挑）。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 444555（5000） | 87.36%（88.46%） | **−1.10pp [−2.01pp, −0.19pp]** | 13.08%（11.54%） | **+1.54pp [+0.41pp, +2.67pp]** | 50.22% | 78.08% / 74.72% / 79.50% | 42.3% (1096) / 48.3% (1264) / 43.7% (1025) |
+| 555666（5000） | 87.44%（88.70%） | **−1.26pp [−2.14pp, −0.38pp]** | 14.12%（11.30%） | **+2.82pp [+1.71pp, +3.93pp]** | 50.78% | 78.00% / 74.42% / 80.32% | 42.9% (1100) / 44.8% (1279) / 42.6% (984) |
+| 666777（5000） | 88.50%（90.10%） | **−1.60pp [−2.48pp, −0.72pp]** | 13.38%（9.90%） | **+3.48pp [+2.38pp, +4.58pp]** | 50.94% | 78.98% / 74.02% / 80.68% | 45.3% (1051) / 48.5% (1299) / 48.8% (966) |
+| **三個合併（15000）** | — | **−1.33pp [−1.84pp, −0.81pp]** | — | **+2.63pp [+1.99pp, +3.27pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權。ForwardAgent 每個種子約 226 萬個決策（2,265,595 / 2,257,050 / 2,252,504）、0 次 fallback。variant 當紅方時紅方持湖湖隊友 99.6%（對照 100%）：湖隊友的規則沒變，少掉的那 0.4% 是確定性層把奧伯倫推成「確定紅」之後的候選變化。）
+
+讀法：
+
+- **藍方立場變強**（合併區間整個在 0 以上）：好人信念裡確定紅 / 確定藍釘住、硬3 不再把誠實持湖者釘紅、鏈序與強制票修正，派隊與投票直接受益；三紅率 variant 當藍方時從約 80% 降到約 74.5%。
+- **紅方立場變弱**（合併區間整個在 0 以下）：紅方座位同樣讀這四個開關。依第一關的規則**照樣採用**，開一張第三關的**紅方補償工作單**（`logic_first.md` 6.7：候選原因是藍方變強本身、紅方的隊伍訊號把推得出的確定紅（奧伯倫）當成隊友、湖後硬3 概似比 6 讓紅方言行一致的自保變小；補償在紅方策略做，種子協定判定）。
+- 紅方 variant 與對照不是逐局相同（和第 14、15 節不同）：紅方的信念也變了，所以紅方差不恆為 0。
+
+**這一節用到的種子**：444555、555666、666777。之後要加種子，避開本文件全部各節的。
+
+重跑（原始輸出不進版本庫）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 444555 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax --flag goodVouchFollowUp \
+  --flag teamReuse --flag redR1Teammate --flag percivalNoThumbsR1 --flag percivalR1ThumbOnThumb --flag goodQuestSuccessGuard --flag assassinHeuristicVisibility \
+  --flag beliefCertainFacts --flag rule3PostLakeOnly --flag beliefChainProjection --flag forcedVoteZeroBits \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax --base goodVouchFollowUp \
+  --base teamReuse --base redR1Teammate --base percivalNoThumbsR1 --base percivalR1ThumbOnThumb --base goodQuestSuccessGuard --base assassinHeuristicVisibility
+# 換 --seed 555666 / 666777
+```

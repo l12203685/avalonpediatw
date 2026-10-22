@@ -85,6 +85,17 @@
  *     INV-Q1）、`assassinHeuristicVisibility`（舊刺殺啟發式的視野修正：梅林
  *     看得到刺客自己、奧伯倫與兩位隊友中的一位，看不到莫德雷德；只在
  *     `assassinModel` 關掉時跑，INV-A1）。
+ *   - 2026-10-22 邏輯第一第 1C 批（信念；`docs/ai/logic_first.md` 第 1C 節；
+ *     四個開關各做一件事，legacy 全關，不變量歸零後預設開）：
+ *     `beliefCertainFacts`（S1-1：確定事實進入金字塔 —— 確定性層的確定紅 /
+ *     確定藍釘 1 / 0，只靠 A0 的釘 1−ε / ε；第 2 層依失敗張數 C2 計數；所有
+ *     信念讀 `failCount` 而不是 `result`，R4 成功帶失敗牌也算；INV-B2、
+ *     INV-B3）、`rule3PostLakeOnly`（S1-2：硬3 只看湖後、嚴格支配、刪 (b)、
+ *     概似比 6 的勝算更新取代 0.85 下限；派隊沿用的防護只用確定紅；
+ *     INV-H3a、INV-H3b）、`beliefChainProjection`（S1-3 信念部分：宣藍鏈上
+ *     s(C) ≤ s(B) ≤ s(A)、宣紅的一對 s(A) + s(B) ≥ 1 的投影；INV-B1）、
+ *     `forcedVoteZeroBits`（S1-9a：第 5 次強制提議的合成票不算資訊；INV-F0）。
+ *     細節見 `belief/BeliefOptions.ts`。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -211,6 +222,37 @@ export interface AgentTuning {
    * fallback 與 legacy。
    */
   assassinHeuristicVisibility: boolean;
+  /**
+   * S1-1（2026-10-22，第 1C 批，INV-B2 / INV-B3）：確定事實進入信念。金字塔
+   * 第 1 層把確定性層（`belief/Certainty.ts`）在 L0（規則 + 自己的視野 +
+   * 失敗張數 + 自己湖到的結果）確定的紅 / 藍釘在 1 / 0，只靠 A0（好人持湖者
+   * 說實話）才確定的釘在 1−ε / ε（ε = 0.01，GM 決定 D1）；第 2 層改依每次
+   * 任務的失敗張數（C2：x 張失敗 ⇒ 至少 x 紅，扣掉已確定的紅，平分給不確定
+   * 的隊員）而不是「失敗隊每人 +0.15」；所有信念讀 `failCount`，R4 成功但帶
+   * 失敗牌的任務也算（C5）。
+   */
+  beliefCertainFacts: boolean;
+  /**
+   * S1-2（2026-10-22，第 1C 批，INV-H3a / INV-H3b）：硬3 只看湖後。持湖者 A
+   * 宣 B 藍之後，A 自己帶的隊沒放 B、而且隊上有人在 A（若為好人）當時的視角
+   * 下不是確定藍（嚴格支配，critique X2 / X4）才算；湖前帶的隊不算（時序
+   * T1 / T3）；刪掉「帶過失敗隊 +0.5」的 (b) 款；旗標改成概似比 6 的勝算更新
+   * （GM 決定 D10）而不是 0.85 下限；`TeamReuse` 防護的「好人隊長視為紅」
+   * 只用確定性層的確定紅。
+   */
+  rule3PostLakeOnly: boolean;
+  /**
+   * S1-3 信念部分（2026-10-22，第 1C 批，INV-B1）：分層算完之後把分數投影到
+   * 湖鏈的約束上 —— 宣藍的 A→B（鏈 A→B→C）要 s(B) ≤ s(A)、s(C) ≤ s(B)
+   * （K1 / K3），宣紅的一對要 s(A) + s(B) ≥ 1（K2）；被釘住的座位不動。
+   */
+  beliefChainProjection: boolean;
+  /**
+   * S1-9a（2026-10-22，第 1C 批，INV-F0）：第 5 次強制提議沒有投票（引擎合成
+   * 全員贊成），被強迫的行動帶 0 bit：所有讀投票紀錄的信念（第 4 層的外白 /
+   * 內黑、記憶、派西的梅林辨識、宣告者投票偏差）略過 `attempt >= 5` 的紀錄。
+   */
+  forcedVoteZeroBits: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -234,6 +276,10 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'percivalR1ThumbOnThumb',
   'goodQuestSuccessGuard',
   'assassinHeuristicVisibility',
+  'beliefCertainFacts',
+  'rule3PostLakeOnly',
+  'beliefChainProjection',
+  'forcedVoteZeroBits',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -256,6 +302,10 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   percivalR1ThumbOnThumb: false,
   goodQuestSuccessGuard: false,
   assassinHeuristicVisibility: false,
+  beliefCertainFacts: false,
+  rule3PostLakeOnly: false,
+  beliefChainProjection: false,
+  forcedVoteZeroBits: false,
 });
 
 /**
@@ -378,6 +428,11 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     優先，強度只量測回報、不用來回退）：`percivalR1ThumbOnThumb`、
  *     `goodQuestSuccessGuard`、`assassinHeuristicVisibility` 預設開（不變量
  *     INV-R1NT / INV-Q1 / INV-A1 為 0）；強度見 strength_benchmark.md 第 15 節。
+ *   - 2026-10-22 第 1C 批（信念，`logic_first.md` 第 6 節）：`beliefCertainFacts`、
+ *     `rule3PostLakeOnly`、`beliefChainProjection`、`forcedVoteZeroBits` 預設開
+ *     （INV-B1 / B2 / B3 / H3a / H3b / F0 在 1970 局重播與 2000 局自我對打上為 0）。
+ *     強度只回報（strength_benchmark.md 第 16 節）：藍方立場變強、紅方立場變弱
+ *     （區間整個在 0 以下）→ 依第一關的規則照樣採用，紅方補償另開工作單。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -404,6 +459,10 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   percivalR1ThumbOnThumb: true,
   goodQuestSuccessGuard: true,
   assassinHeuristicVisibility: true,
+  beliefCertainFacts: true,
+  rule3PostLakeOnly: true,
+  beliefChainProjection: true,
+  forcedVoteZeroBits: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -426,6 +485,10 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   percivalR1ThumbOnThumb: 'AVALON_TUNING_PERCIVAL_R1_THUMB_ON_THUMB',
   goodQuestSuccessGuard: 'AVALON_TUNING_GOOD_QUEST_SUCCESS_GUARD',
   assassinHeuristicVisibility: 'AVALON_TUNING_ASSASSIN_HEURISTIC_VISIBILITY',
+  beliefCertainFacts: 'AVALON_TUNING_BELIEF_CERTAIN_FACTS',
+  rule3PostLakeOnly: 'AVALON_TUNING_RULE3_POST_LAKE_ONLY',
+  beliefChainProjection: 'AVALON_TUNING_BELIEF_CHAIN_PROJECTION',
+  forcedVoteZeroBits: 'AVALON_TUNING_FORCED_VOTE_ZERO_BITS',
 });
 
 function parseBool(raw: string): boolean | undefined {

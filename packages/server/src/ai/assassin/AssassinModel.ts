@@ -19,6 +19,7 @@
  */
 
 import type { PlayerObservation, VoteRecord } from '../types';
+import { missionFailed } from '../missionFacts';
 import { ASSASSIN_MODEL_WEIGHTS } from './assassinModelWeights';
 
 export interface AssassinModelWeights {
@@ -112,7 +113,8 @@ export function assassinCandidateFeatures(obs: PlayerObservation, candidateId: s
   let lastSuccessRound = 0;
   for (const q of quests) {
     const on = q.team.includes(c);
-    if (q.result === 'fail') {
+    // The public outcome: the features were fitted on it (Stage 2 retrains with fail cards).
+    if (missionFailed(q)) {
       anyFail = true;
       if (on) failMissions++;
     } else {
@@ -172,7 +174,7 @@ export function assassinCandidateFeatures(obs: PlayerObservation, candidateId: s
       const q = questByRound.get(v.round);
       if (q) {
         missionVotes++;
-        if ((vote && q.result === 'success') || (!vote && q.result === 'fail')) outcomeAgree++;
+        if (vote !== missionFailed(q)) outcomeAgree++;
       }
     }
     const mine = v.votes[me];

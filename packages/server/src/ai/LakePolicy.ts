@@ -25,6 +25,8 @@ import {
 } from './priors/EvActionPriors';
 import { AVALON_CONFIG } from '@avalon/shared';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
+import { beliefOptionsFrom, defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
+import { beliefFailCards, missionFailed } from './missionFacts';
 import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 
 type Camp = 'good' | 'evil';
@@ -215,7 +217,7 @@ export function pickLakeTargetForTeam(
     if (tuning.goodLakeTargetMostSuspicious) {
       return rankByDescendingScore(
         unknownCandidates,
-        id => estimateSuspicionFromHistory(id, obs),
+        id => estimateSuspicionFromHistory(id, obs, beliefOptionsFrom(tuning)),
         obs.allPlayerIds,
       )[0];
     }
@@ -226,7 +228,7 @@ export function pickLakeTargetForTeam(
     // 建信任鏈 (硬規則 4 transitive blue chain)。
     return rankByAscendingScore(
       unknownCandidates,
-      id => estimateSuspicionFromHistory(id, obs),
+      id => estimateSuspicionFromHistory(id, obs, beliefOptionsFrom(tuning)),
       obs.allPlayerIds,
     )[0];
   }
@@ -237,10 +239,10 @@ export function pickLakeTargetForTeam(
   // flag) when on. Deterministic; no Math.random calls, so the legacy
   // call order is untouched when the switch is off.
   if (tuning.evilLakeHumanStrategy) {
-    return pickEvilLakeTargetHuman(obs, validTargets, evilLakeHumanOptionsFor(tuning));
+    return pickEvilLakeTargetHuman(obs, validTargets, evilLakeHumanOptionsFor(tuning), beliefOptionsFrom(tuning));
   }
 
-  return pickEvilLakeTargetLegacy(obs, validTargets);
+  return pickEvilLakeTargetLegacy(obs, validTargets, beliefOptionsFrom(tuning));
 }
 
 /**
@@ -253,6 +255,7 @@ export function pickLakeTargetForTeam(
 export function pickEvilLakeTargetLegacy(
   obs: PlayerObservation,
   validTargets: string[],
+  belief: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): string {
   const knownEvilSet = new Set(obs.knownEvils);
   // Evil branch — Edward 2026-04-22 12:39 +08 correction.
@@ -265,21 +268,21 @@ export function pickEvilLakeTargetLegacy(
     // (allies publicly look risky → washing them with "good" declaration has high payoff).
     const bestOpponent = opponents.length === 0 ? null : rankByDescendingScore(
       opponents,
-      id => estimateMerlinLikenessFromHistory(id, obs),
+      id => estimateMerlinLikenessFromHistory(id, obs, belief),
       obs.allPlayerIds,
     )[0];
     const mostPressuredAlly = allies.length === 0 ? null : rankByDescendingScore(
       allies,
-      id => estimateSuspicionFromHistory(id, obs),
+      id => estimateSuspicionFromHistory(id, obs, belief),
       obs.allPlayerIds,
     )[0];
 
     const opponentScore = bestOpponent === null
       ? Number.NEGATIVE_INFINITY
-      : estimateMerlinLikenessFromHistory(bestOpponent, obs);
+      : estimateMerlinLikenessFromHistory(bestOpponent, obs, belief);
     const allyPressure = mostPressuredAlly === null
       ? Number.NEGATIVE_INFINITY
-      : estimateSuspicionFromHistory(mostPressuredAlly, obs);
+      : estimateSuspicionFromHistory(mostPressuredAlly, obs, belief);
 
     // Heuristic: if an ally is visibly under suspicion (positive pressure)
     // and the best opponent does not read strongly as Merlin
@@ -309,7 +312,7 @@ export function pickEvilLakeTargetLegacy(
   }
   return rankByDescendingScore(
     unknownCandidates,
-    id => estimateMerlinLikenessFromHistory(id, obs),
+    id => estimateMerlinLikenessFromHistory(id, obs, belief),
     obs.allPlayerIds,
   )[0];
 }
@@ -361,9 +364,9 @@ export function decideLakeClaimForTeam(
   if (tuning.evilLakeClaimAlwaysGood) return 'good';
   // ── AgentTuning.evilLakeHumanStrategy (Edward 2026-10-13 ruling) ──
   if (tuning.evilLakeHumanStrategy) {
-    return decideEvilLakeClaimHuman(obs, targetId, actualTargetTeam, evilLakeHumanOptionsFor(tuning));
+    return decideEvilLakeClaimHuman(obs, targetId, actualTargetTeam, evilLakeHumanOptionsFor(tuning), beliefOptionsFrom(tuning));
   }
-  return decideEvilLakeClaimLegacy(obs, targetId, actualTargetTeam);
+  return decideEvilLakeClaimLegacy(obs, targetId, actualTargetTeam, beliefOptionsFrom(tuning));
 }
 
 /**
@@ -376,6 +379,7 @@ export function decideEvilLakeClaimLegacy(
   obs: PlayerObservation,
   targetId: string,
   actualTargetTeam: Camp | undefined,
+  belief: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): Camp {
   const holderTeam: Camp = 'evil';
   const knownEvilSet = new Set(obs.knownEvils);
@@ -385,7 +389,7 @@ export function decideEvilLakeClaimLegacy(
   }
   // Opponent branch: score Merlin-likeness; if Merlin-like, call them good to
   // disguise the intel. Otherwise call them evil to muddy the water.
-  const merlinScore = estimateMerlinLikenessFromHistory(targetId, obs);
+  const merlinScore = estimateMerlinLikenessFromHistory(targetId, obs, belief);
   const baseDecision: Camp = merlinScore > 0 ? 'good' : 'evil';
 
   // ── EV-prior nudge (2026-04-25 ship · Hook 5 lakeDeclare_lie_Prior) ──
@@ -642,12 +646,17 @@ export function humanFrameRate(obs: PlayerObservation, targetId: string): number
  * at the others. Votes are ignored (they say little about camp from his
  * seat). Higher = more likely a red.
  */
-export function oberonTeammateEvidence(id: string, obs: PlayerObservation): number {
+export function oberonTeammateEvidence(
+  id: string,
+  obs: PlayerObservation,
+  belief: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): number {
   let score = 0;
   for (const q of obs.questHistory) {
-    if (q.result !== 'fail' || !q.team.includes(id) || id === obs.myPlayerId) continue;
+    // S1-1: every fail card points at a red (an R4 success with one included).
+    const fails = beliefFailCards(q, belief.certainFacts);
+    if (fails === 0 || !q.team.includes(id) || id === obs.myPlayerId) continue;
     const meOn = q.team.includes(obs.myPlayerId);
-    const fails = Math.max(1, q.failCount ?? 1);
     const otherFails = meOn ? fails - 1 : fails;
     const others = q.team.length - (meOn ? 1 : 0);
     if (otherFails > 0 && others > 0) score += otherFails / others;
@@ -658,7 +667,7 @@ export function oberonTeammateEvidence(id: string, obs: PlayerObservation): numb
 /** Holder and `targetId` were both on at least one failed mission. */
 function sharedFailedMission(obs: PlayerObservation, targetId: string): boolean {
   return obs.questHistory.some(
-    (q) => q.result === 'fail' && q.team.includes(obs.myPlayerId) && q.team.includes(targetId),
+    (q) => missionFailed(q) && q.team.includes(obs.myPlayerId) && q.team.includes(targetId),
   );
 }
 
@@ -721,11 +730,12 @@ export function pickEvilLakeTargetHuman(
   obs: PlayerObservation,
   validTargets: readonly string[],
   options: Readonly<EvilLakeHumanOptions> = activeEvilLakeHumanOptions,
+  belief: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): string {
   if (validTargets.length === 0) return '';
-  if (legacyParts(obs, options).target) return pickEvilLakeTargetLegacy(obs, [...validTargets]);
+  if (legacyParts(obs, options).target) return pickEvilLakeTargetLegacy(obs, [...validTargets], belief);
   const visible = new Set(obs.knownEvils);
-  const suspicion = (id: string): number => estimateSuspicionFromHistory(id, obs);
+  const suspicion = (id: string): number => estimateSuspicionFromHistory(id, obs, belief);
   const ledTeams = obs.voteHistory.filter((v) => v.leader === obs.myPlayerId);
   const leftOff = (id: string): number => ledTeams.filter((v) => !v.team.includes(id)).length;
   // Most suspected first (ties by seat order); with `vouch: 'consistent'`
@@ -747,7 +757,7 @@ export function pickEvilLakeTargetHuman(
     const order = vouchOrder(others);
     const rank = new Map(order.map((id, i) => [id, i]));
     return [...order].sort((a, b) => {
-      const diff = oberonTeammateEvidence(b, obs) - oberonTeammateEvidence(a, obs);
+      const diff = oberonTeammateEvidence(b, obs, belief) - oberonTeammateEvidence(a, obs, belief);
       if (diff !== 0) return diff;
       return (rank.get(a) ?? 0) - (rank.get(b) ?? 0);
     })[0];
@@ -797,8 +807,9 @@ export function decideEvilLakeClaimHuman(
   targetId: string,
   actualTargetTeam: Camp | undefined,
   options: Readonly<EvilLakeHumanOptions> = activeEvilLakeHumanOptions,
+  belief: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): Camp {
-  if (legacyParts(obs, options).claim) return decideEvilLakeClaimLegacy(obs, targetId, actualTargetTeam);
+  if (legacyParts(obs, options).claim) return decideEvilLakeClaimLegacy(obs, targetId, actualTargetTeam, belief);
   if (obs.knownEvils.includes(targetId)) return 'good';
   if (actualTargetTeam === 'evil') return 'good';
   switch (options.chaos) {
@@ -821,19 +832,26 @@ export function decideEvilLakeClaimHuman(
  *   -0.5 per appearance on a successful quest
  *   -0.3 per reject of a team in a round whose quest failed
  */
-export function estimateSuspicionFromHistory(playerId: string, obs: PlayerObservation): number {
+export function estimateSuspicionFromHistory(
+  playerId: string,
+  obs: PlayerObservation,
+  belief: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): number {
   let score = 0;
   const failedRounds = new Set<number>();
   for (const q of obs.questHistory) {
-    if (q.result === 'fail') {
+    // S1-1 (C5): a mission that showed a fail card is not exculpatory.
+    if (beliefFailCards(q, belief.certainFacts) > 0) {
       failedRounds.add(q.round);
       if (q.team.includes(playerId)) score += 2;
-    } else if (q.result === 'success' && q.team.includes(playerId)) {
+    } else if (q.team.includes(playerId)) {
       score -= 0.5;
     }
   }
   for (const v of obs.voteHistory) {
     if (!failedRounds.has(v.round)) continue;
+    // S1-9a: the forced fifth proposal holds no vote.
+    if (belief.forcedVotesZero && isForcedVoteRecord(v)) continue;
     const approved = v.votes[playerId];
     if (approved === true)  score += 1;
     if (approved === false) score -= 0.3;
@@ -846,12 +864,18 @@ export function estimateSuspicionFromHistory(playerId: string, obs: PlayerObserv
  * teams containing knownEvils, and never appeared on fail quests. Higher =
  * stronger Merlin suspicion.
  */
-export function estimateMerlinLikenessFromHistory(playerId: string, obs: PlayerObservation): number {
+export function estimateMerlinLikenessFromHistory(
+  playerId: string,
+  obs: PlayerObservation,
+  belief: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): number {
   let score = 0;
   const knownEvilSet = new Set(obs.knownEvils);
 
   // Rejected teams containing knownEvils → Merlin signal
+  // (S1-9a: the forced fifth proposal holds no vote).
   for (const v of obs.voteHistory) {
+    if (belief.forcedVotesZero && isForcedVoteRecord(v)) continue;
     const teamHasKnownEvil = v.team.some(id => knownEvilSet.has(id));
     if (!teamHasKnownEvil) continue;
     const approved = v.votes[playerId];
@@ -859,9 +883,9 @@ export function estimateMerlinLikenessFromHistory(playerId: string, obs: PlayerO
     if (approved === true)  score -= 0.5;
   }
 
-  // Appeared on fail quests → NOT Merlin
+  // Appeared on a mission that showed a fail card → NOT Merlin (S1-1)
   for (const q of obs.questHistory) {
-    if (q.result === 'fail' && q.team.includes(playerId)) score -= 2;
+    if (beliefFailCards(q, belief.certainFacts) > 0 && q.team.includes(playerId)) score -= 2;
   }
 
   return score;

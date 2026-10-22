@@ -63,9 +63,12 @@ function obs(partial: Partial<PlayerObservation>): PlayerObservation {
 // off / on pair isolates this one. `teamReuse` alone also puts P5 back on the
 // R3 team below (it reuses the successful R2 team and swaps the leader in), so
 // the "off" picks would no longer show the gap; `redR1Teammate` only acts on
-// R1 red leaders and is turned off for the same isolation. The full current
-// default is checked separately.
-const LANE_BASE: AgentTuning = { ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false };
+// R1 red leaders and is turned off for the same isolation. Batch 1C's
+// `beliefCertainFacts` (2026-10-22) also puts P5 on every team here on its
+// own — the holder saw P5 blue, so the certainty layer pins P5 good in the
+// beliefs — and is turned off for the same reason (asserted in the full
+// current default test below). The full current default is checked separately.
+const LANE_BASE: AgentTuning = { ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false, beliefCertainFacts: false };
 const PROD_OFF: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false };
 const PROD_ON: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: true };
 
@@ -217,6 +220,10 @@ describe('GoodLakeFollowUp — ForwardAgent wiring', () => {
     expect(d.reasoningTrace.usedFallback).toBe(false);
     expect(teamOf(d)).toHaveLength(4);
     expect(teamOf(d)).toEqual(expect.arrayContaining(['P1', 'P5']));
+    // Batch 1C (S1-1): the holder's own lake result reaches its beliefs, so
+    // P5 (seen blue) is on the team even with the vouch switch off.
+    const beliefsOnly: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodVouchFollowUp: false, teamReuse: false };
+    expect(teamOf(forward(beliefsOnly).decide(obs({})))).toEqual(expect.arrayContaining(['P1', 'P5']));
   });
 
   it('7 players: Percival with too few seats left never puts back the seat he declared red (review 2026-10-13)', () => {

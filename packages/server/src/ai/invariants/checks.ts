@@ -6,6 +6,10 @@
  * for diagnostic columns and for choosing which holders are "honest blue"
  * (INV-H3b) — never to decide what a seat could have known.
  *
+ * Every check that reads the pyramid or the 硬3 rule takes the belief
+ * switches of the tuning under test (`BeliefOptions`, batch 1C), so the
+ * harness measures the agent it runs.
+ *
  * Besides the catalog tallies the checks keep diagnostic counters named
  * after `logic_audit.md`'s script (`T.*`, `V.*`, `O.*`, `R3.*`, `L.*`,
  * `A.*`, `Q.*`, `B.*`, `order.*`, `X5chk.*`). They are computed with the
@@ -22,6 +26,7 @@ import {
   setRule3DiagnosticOptions,
 } from '../baseline/lakeChainTracker';
 import {
+  CERTAINTY_EPS,
   CertaintyView,
   certaintyParamsFor,
   claimPossibleForGoodHolder,
@@ -29,6 +34,7 @@ import {
   enumerateWorlds,
   popcount,
 } from '../belief/Certainty';
+import { defaultBeliefOptions, type BeliefOptions } from '../belief/BeliefOptions';
 import { goodLakeAvoidSet } from '../LakePolicy';
 import {
   PERCIVAL_NO_THUMBS_R1_MAX_PLAYERS,
@@ -41,14 +47,15 @@ import type { DecisionRecord } from './AuditAgent';
 import { certaintyOf, cutAtLake, isForcedProposal, publicCertaintyOf, type Truth } from './context';
 import type { Ledger } from './ledger';
 
-/** ε of INV-B2: certain facts must be pinned to within 0.01 of 0 / 1. */
-export const CERTAINTY_EPS = 0.01;
+/** ε of INV-B2 (the pin value of `pyramidScorer` and the check share `Certainty.CERTAINTY_EPS`). */
+export { CERTAINTY_EPS };
 
 const rb = (round: number): string => (round <= 2 ? 'R1-2' : 'R3+');
 const R12 = 'R1-R2 normal vote (D3)';
 const FORCED = 'forced 5th proposal';
 const TWO_FAILS = 'two fails needed (R4)';
 const L1_EMPTY = 'L1 empty (L0 fallback)';
+const PINNED = 'pinned by a certainty';
 
 // ── The audit's world model (diagnostics only) ─────────────────
 
@@ -154,7 +161,12 @@ function checkWorlds(obs: PlayerObservation, L: Ledger, truth?: Truth): Certaint
  * Check one recorded decision. Returns whether the seat's L1 was empty (the
  * source logs INV-W2 per game).
  */
-export function checkDecision(rec: DecisionRecord, L: Ledger, truth?: Truth): boolean {
+export function checkDecision(
+  rec: DecisionRecord,
+  L: Ledger,
+  truth?: Truth,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): boolean {
   const obs = rec.obs;
   const view = checkWorlds(obs, L, truth);
   const good = obs.myTeam === 'good';
@@ -228,7 +240,7 @@ export function checkDecision(rec: DecisionRecord, L: Ledger, truth?: Truth): bo
         }
       }
 
-      teamSelectDiagnostics(rec, team, L, truth);
+      teamSelectDiagnostics(rec, team, L, truth, opts);
       break;
     }
 
@@ -318,7 +330,13 @@ export function checkDecision(rec: DecisionRecord, L: Ledger, truth?: Truth): bo
 
 // ── Diagnostics (reproduce logic_audit.md) ─────────────────────
 
-function teamSelectDiagnostics(rec: DecisionRecord, team: readonly string[], L: Ledger, truth?: Truth): void {
+function teamSelectDiagnostics(
+  rec: DecisionRecord,
+  team: readonly string[],
+  L: Ledger,
+  truth: Truth | undefined,
+  opts: Readonly<BeliefOptions>,
+): void {
   const obs = rec.obs;
   const round = obs.currentRound;
   const role = obs.myRole;
@@ -350,7 +368,7 @@ function teamSelectDiagnostics(rec: DecisionRecord, team: readonly string[], L: 
     }
   }
   if (role === 'percival') {
-    const inferred = inferRedsFromTaskFails(obs);
+    const inferred = inferRedsFromTaskFails(obs, opts);
     L.inc('T.percival.decisions');
     if (inferred.length > 0) L.inc('T.percival.inferDecisions');
     for (const s of inferred) {
@@ -368,7 +386,7 @@ function teamSelectDiagnostics(rec: DecisionRecord, team: readonly string[], L: 
   }
   // Pyramid order on the leader's own picture (audit O.*), R3+.
   if (round >= 3) {
-    const pyr = computePyramidScores(obs);
+    const pyr = computePyramidScores(obs, opts);
     for (const l of declaredLakes(obs.lakeHistory)) {
       const a = l.holderId;
       const b = l.targetId;
@@ -480,12 +498,17 @@ function redClaimDiagnostics(rec: DecisionRecord, L: Ledger): void {
  * Belief, metamorphic and privacy checks on one seat's observation at the
  * opening of a round (R2+). `truth` drives INV-OBS and the diagnostics.
  */
-export function checkObservation(obs: PlayerObservation, L: Ledger, truth?: Truth): void {
+export function checkObservation(
+  obs: PlayerObservation,
+  L: Ledger,
+  truth?: Truth,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): void {
   checkWorlds(obs, L, truth);
   if (truth) checkPrivacy(obs, L, truth);
   if (obs.myTeam !== 'good') return;
   const view = certaintyOf(obs);
-  const pyr = computePyramidScores(obs);
+  const pyr = computePyramidScores(obs, opts);
   const score = (id: string): number => pyr.scores.get(id) ?? 0.5;
   const me = obs.myPlayerId;
   const role = obs.myRole;
@@ -524,10 +547,14 @@ export function checkObservation(obs: PlayerObservation, L: Ledger, truth?: Trut
     }
   }
 
-  // INV-B1
+  // INV-B1: the order of the *uncertain* seats. A pair with a seat the
+  // certainty layer pins is settled there (K5 reversals, ε pins of L1-only
+  // facts against exact L0 pins) and is counted as exempt.
+  const pinned = (id: string): boolean => view.isCertRed(id, 'L1*') || view.isCertGood(id, 'L1*');
   for (const l of declaredLakes(obs.lakeHistory)) {
     if (l.declaredClaim !== 'good' || l.holderId === me || l.targetId === me) continue;
     if (view.l1Empty) { L.record('INV-B1', { exempt: L1_EMPTY }); continue; }
+    if (pinned(l.holderId) || pinned(l.targetId)) { L.record('INV-B1', { exempt: PINNED }); continue; }
     L.record('INV-B1', { violated: score(l.targetId) > score(l.holderId) + 1e-9 });
   }
 
@@ -539,7 +566,7 @@ export function checkObservation(obs: PlayerObservation, L: Ledger, truth?: Trut
         ? { ...v, votes: Object.fromEntries(Object.entries(v.votes).map(([id, x]) => [id, !x])) }
         : v)),
     };
-    const alt = computePyramidScores(flipped);
+    const alt = computePyramidScores(flipped, opts);
     const changed = obs.allPlayerIds.some((id) => Math.abs((alt.scores.get(id) ?? 0.5) - score(id)) > 1e-9);
     L.record('INV-F0', { violated: changed });
   }
@@ -580,10 +607,15 @@ function checkPrivacy(obs: PlayerObservation, L: Ledger, truth: Truth): void {
 
 // ── Public checks at a round opening (rule 3) ──────────────────
 
-function ruleThreeScores(obs: PlayerObservation, postLakeOnly: boolean): Map<string, number> {
-  setRule3DiagnosticOptions(postLakeOnly ? { postLakeOnly: true } : undefined);
+/**
+ * The 硬3 scores under `opts`; `postLakeOnly` = the post-lake reading (the
+ * S1-2 rule when it is on, the legacy rule cut at the declaration otherwise;
+ * diagnostics column).
+ */
+function ruleThreeScores(obs: PlayerObservation, opts: Readonly<BeliefOptions>, postLakeOnly: boolean): Map<string, number> {
+  setRule3DiagnosticOptions(postLakeOnly && !opts.rule3PostLake ? { postLakeOnly: true } : undefined);
   try {
-    return findRule3Violators(analyzeLakeChain(obs), obs);
+    return findRule3Violators(analyzeLakeChain(obs), obs, opts);
   } finally {
     setRule3DiagnosticOptions(undefined);
   }
@@ -594,12 +626,17 @@ function ruleThreeScores(obs: PlayerObservation, postLakeOnly: boolean): Map<str
  * (R3+): INV-H3a (pre-lake leader records must not matter) and INV-H3b
  * (an honest blue holder is flagged only by a post-lake omission).
  */
-export function checkPublicRound(obs: PlayerObservation, L: Ledger, truth?: Truth): void {
+export function checkPublicRound(
+  obs: PlayerObservation,
+  L: Ledger,
+  truth?: Truth,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): void {
   const chain = analyzeLakeChain(obs);
   if (chain.declaredBlueByHolder.size === 0) return;
   const round = obs.currentRound;
-  const def = ruleThreeScores(obs, false);
-  const post = ruleThreeScores(obs, true);
+  const def = ruleThreeScores(obs, opts, false);
+  const post = ruleThreeScores(obs, opts, true);
   for (const [holder, targets] of chain.declaredBlueByHolder) {
     const declRound = Math.min(...chain.records.filter((r) => r.holderId === holder && r.declaredClaim === 'good').map((r) => r.round));
     const d = def.get(holder) ?? 0;
@@ -611,7 +648,7 @@ export function checkPublicRound(obs: PlayerObservation, L: Ledger, truth?: Trut
         ...obs,
         voteHistory: obs.voteHistory.filter((v) => !(v.leader === holder && v.round <= declRound)),
       };
-      const alt = ruleThreeScores(without, false);
+      const alt = ruleThreeScores(without, opts, false);
       L.record('INV-H3a', { violated: Math.abs((alt.get(holder) ?? 0) - d) > 1e-9 });
     }
     // Diagnostics (audit R3.*), camp by truth.

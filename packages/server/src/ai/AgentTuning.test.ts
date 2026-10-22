@@ -180,13 +180,36 @@ describe('AgentTuning — flags', () => {
     expect(AGENT_TUNING_ENV.percivalR1ThumbOnThumb).toBe('AVALON_TUNING_PERCIVAL_R1_THUMB_ON_THUMB');
     expect(AGENT_TUNING_ENV.goodQuestSuccessGuard).toBe('AVALON_TUNING_GOOD_QUEST_SUCCESS_GUARD');
     expect(AGENT_TUNING_ENV.assassinHeuristicVisibility).toBe('AVALON_TUNING_ASSASSIN_HEURISTIC_VISIBILITY');
+    // Batch 1C (logic_first.md 第 1C 節, 2026-10-22): the four belief switches; baseline of its
+    // strength run = the 16 switches of 1A/1B, variant = the full default below.
+    const LOGIC_1C = ['beliefCertainFacts', 'rule3PostLakeOnly', 'beliefChainProjection', 'forcedVoteZeroBits'] as const;
+    for (const key of LOGIC_1C) {
+      expect(DEFAULT_AGENT_TUNING[key]).toBe(true);
+      expect(LEGACY_AGENT_TUNING[key]).toBe(false);
+      expect(tuningFromEnv({ [AGENT_TUNING_ENV[key]]: '0' })).toEqual({ [key]: false });
+      expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, [key]: true })).toBe(key);
+    }
+    expect(AGENT_TUNING_ENV.beliefCertainFacts).toBe('AVALON_TUNING_BELIEF_CERTAIN_FACTS');
+    expect(AGENT_TUNING_ENV.rule3PostLakeOnly).toBe('AVALON_TUNING_RULE3_POST_LAKE_ONLY');
+    expect(AGENT_TUNING_ENV.beliefChainProjection).toBe('AVALON_TUNING_BELIEF_CHAIN_PROJECTION');
+    expect(AGENT_TUNING_ENV.forcedVoteZeroBits).toBe('AVALON_TUNING_FORCED_VOTE_ZERO_BITS');
     expect(describeAgentTuning(DEFAULT_AGENT_TUNING)).toBe(
+      'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
+        'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
+        'goodVouchFollowUp,teamReuse,redR1Teammate,percivalNoThumbsR1,' +
+        'percivalR1ThumbOnThumb,goodQuestSuccessGuard,assassinHeuristicVisibility,' +
+        'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits',
+    );
+    const before1C = {
+      ...DEFAULT_AGENT_TUNING, beliefCertainFacts: false, rule3PostLakeOnly: false, beliefChainProjection: false, forcedVoteZeroBits: false,
+    };
+    expect(describeAgentTuning(before1C)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
         'goodVouchFollowUp,teamReuse,redR1Teammate,percivalNoThumbsR1,' +
         'percivalR1ThumbOnThumb,goodQuestSuccessGuard,assassinHeuristicVisibility',
     );
-    const before1AB = { ...DEFAULT_AGENT_TUNING, percivalR1ThumbOnThumb: false, goodQuestSuccessGuard: false, assassinHeuristicVisibility: false };
+    const before1AB = { ...before1C, percivalR1ThumbOnThumb: false, goodQuestSuccessGuard: false, assassinHeuristicVisibility: false };
     expect(describeAgentTuning(before1AB)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +

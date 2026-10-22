@@ -7,7 +7,12 @@
  * The scan lists every line under `src/ai` (tests, the agreement benchmark's
  * own baselines and this harness excluded) that compares a `.result` with
  * 'fail' / 'success' and does not mention `failCount` on the same line.
- * Batch 1C (S1-1) rewrites these readers; the count is the ratchet until then.
+ * Batch 1C (S1-1, 2026-10-22) rewrote every reader: the fail cards come
+ * from `missionFacts.failCards` / `beliefFailCards`, and the public outcome
+ * (the score, display text, trained-model features) from
+ * `missionFacts.missionFailed` — so `missionFacts.ts`, the one sanctioned
+ * definition of the outcome read, is the only file left out of the scan.
+ * The rule is enforced at 0.
  */
 
 import * as fs from 'fs';
@@ -20,6 +25,9 @@ export interface StaticHit {
 }
 
 const RESULT_READ = /\.result\s*(===|!==|==|!=)\s*'(fail|success)'/;
+
+/** The single place the outcome read is defined (see the module comment). */
+const SANCTIONED_FILES: ReadonlySet<string> = new Set(['missionFacts.ts']);
 
 function walk(dir: string, out: string[]): void {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -39,10 +47,12 @@ export function staticResultReads(aiDir: string): StaticHit[] {
   walk(aiDir, files);
   const hits: StaticHit[] = [];
   for (const f of files.sort()) {
+    const rel = path.relative(aiDir, f).split(path.sep).join('/');
+    if (SANCTIONED_FILES.has(rel)) continue;
     const lines = fs.readFileSync(f, 'utf8').split('\n');
     lines.forEach((text, i) => {
       if (RESULT_READ.test(text) && !text.includes('failCount')) {
-        hits.push({ file: path.relative(aiDir, f).split(path.sep).join('/'), line: i + 1 });
+        hits.push({ file: rel, line: i + 1 });
       }
     });
   }

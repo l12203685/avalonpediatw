@@ -54,6 +54,15 @@ import { evilCountFor, popcount } from '../worlds';
 // 讓既有的 import 不用改。
 export { evilCountFor, popcount };
 
+/**
+ * ε of the probability layer (GM decision D1, 2026-10-14): a fact that
+ * holds only under A0 ("a good lake holder tells the truth") is pinned to
+ * 1 − ε / ε in the beliefs (S1-1), and INV-B2 requires certain reds at
+ * ≥ 1 − ε and certain goods at ≤ ε. One constant, so the pin and the check
+ * are bit-identical.
+ */
+export const CERTAINTY_EPS = 0.01;
+
 export interface CertaintyParams {
   playerCount: number;
   /** Reds in this game (public lobby setup). */

@@ -60,6 +60,8 @@ import type {
 } from '../types';
 import { HeuristicAgent } from '../HeuristicAgent';
 import { humanQuestCardRule } from '../AgentTuning';
+import { beliefOptionsFrom, defaultBeliefOptions, type BeliefOptions } from '../belief/BeliefOptions';
+import { beliefFailCards } from '../missionFacts';
 import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } from '../RedLakeFollowUp';
 import { goodVouchTeamConstraint, goodVouchVoteRule } from '../GoodLakeFollowUp';
 import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan, teamReuseScorer } from '../TeamReuse';
@@ -196,8 +198,12 @@ function canonicalSeatStringForward(
  * Returns the seat IDs to HARD-exclude. Empty array when no failed
  * quests yet (R1+ no result) or no seat crosses the threshold.
  */
-export function inferRedsFromTaskFails(obs: PlayerObservation): string[] {
-  const failedQuests = obs.questHistory.filter((q) => q.result === 'fail');
+export function inferRedsFromTaskFails(
+  obs: PlayerObservation,
+  opts: Readonly<Pick<BeliefOptions, 'certainFacts'>> = defaultBeliefOptions(),
+): string[] {
+  // S1-1: a mission "failed" for this attribution when it showed a fail card.
+  const failedQuests = obs.questHistory.filter((q) => beliefFailCards(q, opts.certainFacts) > 0);
   if (failedQuests.length === 0) return [];
   const totalFails = failedQuests.length;
   const failsOnTeam = new Map<string, number>();
@@ -612,9 +618,18 @@ export class ForwardAgent implements AvalonAgent {
    */
   private lastExclusions: ReadonlyMap<string, number> = new Map();
 
+  /**
+   * The belief switches of this agent's tuning (logic-first batch 1C,
+   * `belief/BeliefOptions.ts`), passed to every pyramid / interpretation /
+   * role-signal / team-reuse call so a legacy and a default agent in the
+   * same process never share a belief setting.
+   */
+  private readonly belief: Readonly<BeliefOptions>;
+
   constructor(agentId: string, baseline?: HeuristicAgent) {
     this.agentId = agentId;
     this.baseline = baseline ?? new HeuristicAgent(agentId);
+    this.belief = beliefOptionsFrom(this.baseline.tuning);
   }
 
   onGameStart(obs: PlayerObservation): void {
@@ -974,7 +989,7 @@ export class ForwardAgent implements AvalonAgent {
 
     let interp: InterpretationResult;
     try {
-      interp = interpret(obs);
+      interp = interpret(obs, this.belief);
     } catch (error: unknown) {
       return this.fallback(obs, decisionType, 'interpret() threw');
     }
@@ -1003,7 +1018,7 @@ export class ForwardAgent implements AvalonAgent {
     // unchanged. Spec: staging/subagent_results/six_roles_strategy_spec_2026-05-03.md
     let roleSignals: RoleSignals;
     try {
-      roleSignals = getRoleSignals(obs);
+      roleSignals = getRoleSignals(obs, this.belief);
     } catch (error: unknown) {
       return this.fallback(obs, decisionType, 'getRoleSignals() threw');
     }
@@ -1082,9 +1097,9 @@ export class ForwardAgent implements AvalonAgent {
     // Off → no change.
     const reusePlan =
       decisionType === 'team_select' && teamReuseActive(this.baseline.tuning, obs)
-        ? teamReusePlan(obs)
+        ? teamReusePlan(obs, this.belief)
         : null;
-    const reuseGuard = reusePlan ? teamReuseGuard(obs) : null;
+    const reuseGuard = reusePlan ? teamReuseGuard(obs, undefined, this.belief) : null;
     const reuseBonus = reusePlan && reuseGuard ? teamReuseScorer(reusePlan, obs, reuseGuard) : null;
     const priorAttemptTeams = new Set<string>();
     if (decisionType === 'team_select') {
@@ -1275,7 +1290,7 @@ export class ForwardAgent implements AvalonAgent {
     interp: InterpretationResult,
     r1Plan: RedR1TeamPlan | null = null,
   ): Candidate[] {
-    const pyramid = computePyramidScores(obs);
+    const pyramid = computePyramidScores(obs, this.belief);
     switch (decisionType) {
       case 'team_select':
         return this.generateTeamSelectCandidates(obs, interp, pyramid, r1Plan);
@@ -1299,7 +1314,7 @@ export class ForwardAgent implements AvalonAgent {
     // Compute inferred-red list once per call so percival's hard-exclude
     // path below can stack it on top of the inferred-Morgana wizard
     // exclusion. See `inferRedsFromTaskFails` doc for attribution algo.
-    const inferredReds = inferRedsFromTaskFails(obs);
+    const inferredReds = inferRedsFromTaskFails(obs, this.belief);
 
     const allIds = obs.allPlayerIds;
     if (allIds.length < teamSize) return [];
@@ -1560,12 +1575,12 @@ export class ForwardAgent implements AvalonAgent {
     // them to score; teams the reuse guard refuses are not added. Off → no
     // change.
     if (teamReuseActive(this.baseline.tuning, obs)) {
-      const plan = teamReusePlan(obs);
+      const plan = teamReusePlan(obs, this.belief);
       if (plan && plan.refs.length > 0) {
         const have = new Set(
           candidates.map((c) => (c.action.type === 'team_select' ? [...c.action.teamIds].sort().join(',') : '')),
         );
-        const accepts = teamReuseGuard(obs, pyramid);
+        const accepts = teamReuseGuard(obs, pyramid, this.belief);
         for (const team of teamReuseCandidateTeams(plan, obs, otherRanked, teamSize, accepts)) {
           if (have.has([...team].sort().join(','))) continue;
           candidates.push(this.makeTeamSelectCandidate(team, obs, interp, pyramid));
@@ -2064,7 +2079,13 @@ function buildTeamSignals(
   let includesKnownEvil = false;
   let includesSelf = false;
   let knownEvilCount = 0;
-  const knownEvilSet = new Set(obs.knownEvils);
+  // S1-1 (`beliefCertainFacts`, batch 1C): a red the viewer can *prove*
+  // (the pyramid's layer-1 pins — role sight plus the certainty layer's
+  // certain reds, the viewer itself aside) counts like a red it can see;
+  // off, only the role sight.
+  const knownEvilSet = pyramid.certainty
+    ? new Set([...pyramid.hardRed].filter((id) => id !== obs.myPlayerId))
+    : new Set(obs.knownEvils);
   for (const id of teamIds) {
     const s = pyramid.scores.get(id) ?? 0.5;
     sum += s;
