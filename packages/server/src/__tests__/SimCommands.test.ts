@@ -59,6 +59,12 @@ describe('/模擬', () => {
     expect(parseSimCommand(text)).toMatchObject({ kind: 'usage', command: 'start' });
   });
 
+  // 2026-10-22：玩家問「還有什麼指令可以玩」→ /模擬 說明（幫助、指令、? 也可以）。
+  it.each(['/模擬 說明', '/模擬說明', '／模擬　幫助', '/模擬 指令', '/模擬 ?', '/模擬 ？', '/模擬瓦 help'])('help for %s', (text) => {
+    expect(parseSimCommand(text)).toEqual({ kind: 'help' });
+    expect(isSimCommandText(text)).toBe(true);
+  });
+
   // Edward 2026-10-14 審查修正：沒有角色、座位、題號的 /模擬… 是聊天，不回。
   it.each(['/模擬 xyz', '/模擬什麼時候可以玩', '/模擬 德州撲克', '／模擬 排行榜'])('chat, not a command: %s', (text) => {
     expect(parseSimCommand(text)).toBeNull();

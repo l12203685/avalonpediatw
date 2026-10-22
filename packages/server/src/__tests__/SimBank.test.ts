@@ -30,6 +30,8 @@ import {
   exerciseIdOf,
   firstDecision,
   publicEvents,
+  sightFor,
+  sightSeats,
   viewAt,
 } from '../bots/simulation/scenario';
 import { maskOf, seatBit, teamDigits } from '../bots/simulation/seats';
@@ -249,15 +251,15 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
       return r?.text ?? '';
     };
     await say('/模擬 題 01RH8-3');
-    expect(await say('/派 140')).toContain('・對 1家 367：延伸（1 3），回選 1 → 都對：只剩紅 2589');
+    expect(await say('/派 140')).toMatch(/・跟 1家 367 比：延伸（(有 2 人以上一樣：)?1 3），回選 1（把前面的隊長派進隊裡）→ 兩次都對（兩次派票的人全是好人）時只剩紅 2589（紅方就只能是這幾個）/u);
     await say('/模擬 題 046Z5-6');
     const fb = await say('/派 2569');
-    expect(fb).toContain('・對 2家 139：延伸（2 9），回選 2');
+    expect(fb).toMatch(/・跟 2家 139 比：延伸（(有 2 人以上一樣：)?2 9），回選 2/u);
     expect(fb).not.toMatch(/派 2560 會跟 2家 139 打對邊/);
     await say('/模擬 題 046Z5-2');
     await say('/下一步');
     await say('/下一步');
-    expect(await say('/派 23678')).toContain('0家 13689 讀全好：連你在內 7 個好人＞6 → 不成立');
+    expect(await say('/派 23678')).toMatch(/0家 13689 的全好讀法(（[^）]*）)?不成立：連你在內會有 7 個好人，超過 6 個/u);
     await say('/模擬 題 00VG7-2');
     expect(await say('/下一步')).toContain('1家 2480（票沒記全） → 出發');
   });
@@ -273,7 +275,8 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
       for (let seat = 1; seat <= 10; seat++) {
         // 每一局每一家都跑 LINE；Discord（多了 code block）每 4 局跑一次。
         for (const platform of gi % 4 === 0 ? (['line', 'discord'] as const) : (['line'] as const)) {
-          const req = { platform, chatId: 'C', userId: `U${seat}` };
+          // A group (shared): the longest form, with the 「別人也能幫忙答」 line at the end of the start and /派 replies.
+          const req = { platform, chatId: 'C', userId: `U${seat}`, shared: true };
           const run = async (cmd: string): Promise<string | null> => {
             // 回傳回覆的種類（不是文字）。
             now += 1000;
@@ -306,5 +309,62 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     expect(starts).toBeGreaterThan(15_000);
     expect(replies).toBeGreaterThan(100_000);
     expect(longest).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
+  }, 300_000);
+
+  it('no reply before /公布 depends on a role the viewer cannot see: shuffling those roles changes nothing, byte for byte (non-interference, every 5th game)', async () => {
+    // 2026-10-22 review fix (the ② count used to drop every proposal of this game in the viewer's bucket,
+    // other seats' included, so it told how many of this round's leaders share your role).
+    // The variant keeps the record, the viewer's own role and what the viewer sees: within each class
+    // (red or good) × (in the viewer's sight or not), the other seats' roles are rotated by one.
+    const games2 = [...bank.games];
+    const bank2 = { ...bank, games: games2 };
+    let now = 1_000_000;
+    const real = new SimEngine({ bank: async () => bank, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const shuffled = new SimEngine({ bank: async () => bank2, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const isRedRole = (r: string): boolean => ['assassin', 'morgana', 'mordred', 'oberon'].includes(r);
+    let compared = 0;
+    let variants = 0;
+    for (let gi = 0; gi < bank.games.length; gi += 5) {
+      const g = bank.games[gi];
+      for (let seat = 1; seat <= 10; seat++) {
+        const seen = new Set(sightSeats(sightFor(g, seat)));
+        const classes = new Map<string, number[]>();
+        for (let s = 1; s <= 10; s++) {
+          if (s === seat) continue;
+          const k = `${isRedRole(g.seatRoles[s - 1])}|${seen.has(s)}`;
+          classes.set(k, [...(classes.get(k) ?? []), s]);
+        }
+        const roles = [...g.seatRoles];
+        for (const seats of classes.values()) seats.forEach((s, i) => { roles[s - 1] = g.seatRoles[seats[(i + 1) % seats.length] - 1]; });
+        if (roles.every((r, i) => r === g.seatRoles[i])) continue;
+        const variant = { ...g, seatRoles: roles };
+        expect(sightFor(variant, seat)).toEqual(sightFor(g, seat));
+        variants++;
+        games2[gi] = variant;
+        const req = { platform: 'line' as const, chatId: 'NI', userId: 'U', shared: true };
+        const both = async (cmd: string): Promise<string | undefined> => {
+          now += 1000;
+          const a = await real.handleText(cmd, req);
+          const b = await shuffled.handleText(cmd, req);
+          a?.commit();
+          b?.commit();
+          if (a?.text !== b?.text) throw new Error(`${g.id}-${seat} ${cmd}: a reply depends on a hidden role`);
+          compared++;
+          return a?.kind;
+        };
+        if ((await both(`/模擬 題 ${exerciseIdOf(g.id, seat)}`)) === 'start') {
+          for (const d of decisionsOf(g, seat)) {
+            if (d < (firstDecision(g, seat) ?? 0)) continue;
+            await both(`/派 ${teamDigits(g.proposals[d].teamSeats)}`);
+            await both('/區間 789=2 460=1');
+            await both('/下一步');
+          }
+          await both('/結束');
+        }
+        games2[gi] = g;
+      }
+    }
+    expect(variants).toBeGreaterThan(2_000);
+    expect(compared).toBeGreaterThan(20_000);
   }, 300_000);
 });

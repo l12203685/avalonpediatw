@@ -7,6 +7,7 @@
  *   - the rate limit covers malformed commands too (no endless public usage replies);
  *   - /help and the LINE /指令 list /模擬 only while SIM_COMMANDS_ENABLED is on;
  *   - public everywhere when SIM_DISCORD_PUBLIC_CHANNEL_IDS is empty, else public only there;
+ *   - co-answering (2026-10-22) only where the replies are public; /模擬 說明:True gets the Discord wording;
  *   - a bot reply in the sync channel is never mirrored (bots are ignored by the mirror);
  *   - errors are logged as codes only.
  * Hand-rolled interaction mock; invented bank (fixtures/simGames.ts).
@@ -22,7 +23,7 @@ import { SIM_CONFIG, SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
 import { handleSimCommand, simCommandFromInteraction, simReplyIsPublic, SIM_ERROR_TEXT } from '../bots/simulation/discordCommand';
 import { __setSimForTests } from '../bots/simulation';
 import { SimEngine } from '../bots/simulation/session';
-import { NO_SESSION_TEXT } from '../bots/simulation/replies';
+import { CO_ANSWER_MARK, NO_SESSION_TEXT, SIM_HELP_TEXT, SIM_HELP_TEXT_DISCORD, sharedNote } from '../bots/simulation/replies';
 import { formatStatsHelp } from '../bots/stats/statsReplies';
 import { fixtureBank } from './fixtures/simGames';
 
@@ -33,10 +34,11 @@ vi.mock('../bots/stats/statsQueries', async (importOriginal) => ({
 
 const BANK = fixtureBank();
 
-function makeInteraction(commandName: string, options: Record<string, string | number> = {}, channelId = 'CH-1', userId = 'u-1') {
+function makeInteraction(commandName: string, options: Record<string, string | number | boolean> = {}, channelId = 'CH-1', userId = 'u-1', guildId: string | null = 'G-1') {
   const fake = {
     commandName,
     channelId,
+    guildId,
     user: { id: userId, username: 'user-1' },
     deferred: false,
     replied: false,
@@ -59,6 +61,10 @@ function makeInteraction(commandName: string, options: Record<string, string | n
         const v = options[name];
         return v === undefined ? null : Number(v);
       }),
+      getBoolean: vi.fn((name: string) => {
+        const v = options[name];
+        return v === undefined ? null : Boolean(v);
+      }),
     },
   };
   return fake;
@@ -76,8 +82,8 @@ function content(it1: Fake): { content: string; allowedMentions?: unknown } {
   return payload;
 }
 
-async function run(name: string, options: Record<string, string | number> = {}, channelId?: string, userId?: string): Promise<string> {
-  const it1 = makeInteraction(name, options, channelId, userId);
+async function run(name: string, options: Record<string, string | number | boolean> = {}, channelId?: string, userId?: string, guildId?: string | null): Promise<string> {
+  const it1 = makeInteraction(name, options, channelId, userId, guildId);
   await handleSimCommand(it1 as never);
   return content(it1).content;
 }
@@ -106,7 +112,7 @@ describe('registration', () => {
       expect(c.description.length).toBeLessThanOrEqual(100);
     }
     const sim = json.find((c) => c.name === COMMANDS.SIM);
-    expect(sim?.options?.map((o) => [o.name, o.required ?? false])).toEqual([[SIM_OPTIONS.ROLE, false], [SIM_OPTIONS.SEAT, false], [SIM_OPTIONS.ID, false]]);
+    expect(sim?.options?.map((o) => [o.name, o.required ?? false])).toEqual([[SIM_OPTIONS.ROLE, false], [SIM_OPTIONS.SEAT, false], [SIM_OPTIONS.ID, false], [SIM_OPTIONS.HELP, false]]);
     const role = sim?.options?.[0] as { choices?: { name: string; value: string }[] };
     expect(role.choices?.map((c) => c.value)).toEqual([...SIM_ROLE_CHOICES]);
     const seat = sim?.options?.[1] as { min_value?: number; max_value?: number };
@@ -124,7 +130,9 @@ describe('registration', () => {
     const field = (await helpFields()).find((f) => f.name.includes('模擬瓦'));
     expect(field?.value).toContain('/模擬 [角色] [座位]');
     expect(field?.value).toContain('/派 /區間 /下一步 /公布 /結束');
+    expect(field?.value).toContain('/模擬 說明:True');
     expect(formatStatsHelp('line')).toContain('/模擬 [角色] [座位]\u3000模擬瓦：練派票資訊的釋放與解讀');
+    expect(formatStatsHelp('line')).toContain('/模擬 說明 看全部指令');
     expect(formatStatsHelp('discord')).toContain('/模擬 [角色] [座位]');
 
     SIM_CONFIG.commandsEnabled = false;
@@ -145,6 +153,8 @@ describe('options → command', () => {
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '紅' })).toEqual({ kind: 'start', role: 'red' });
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.SEAT]: 10 })).toEqual({ kind: 'start', seat: 10 });
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: 'w0001-4' })).toEqual({ kind: 'start', exerciseId: 'W0001-4' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.HELP]: true })).toEqual({ kind: 'help' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.HELP]: false, [SIM_OPTIONS.SEAT]: 4 })).toEqual({ kind: 'start', seat: 4 });
     expect(m(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '４ ６ ０' })).toEqual({ kind: 'propose', team: [4, 6, 10] });
     expect(m(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '7 8 9 *2' })).toEqual({ kind: 'interval', groups: [{ seats: [7, 8, 9], min: 2, max: 2 }] });
     expect(m(COMMANDS.SIM_NEXT)).toEqual({ kind: 'next' });
@@ -162,19 +172,71 @@ describe('handlers', () => {
     expect(start).toContain('【模擬瓦 W0000-4】你是 4家・忠臣（沒有額外資訊）');
     expect(start).toContain('```\n1家 460 1+\n2家 279\n3家 370\n```');
 
-    expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' })).toContain('① 實際這位 4家派：469（跟你一樣）→ 否決');
-    expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('・789=2：可能（留 45/126 種）');
+    expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' })).toContain('① 當時真人怎麼派：4家 派 469（跟你一樣）→ 被否決');
+    expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('・789=2（7 8 9 裡有 2 紅）：可能，126 種裡有 45 種符合');
     expect(await run(COMMANDS.SIM_NEXT)).toContain('輪到你派 4 人（第 3 局第 4 次）。');
     expect(await run(COMMANDS.SIM_REVEAL)).toContain('角色：梅林1 派西維爾2 莫德雷德3 莫甘娜5 刺客7 奧伯倫9；忠臣 4 6 8 0');
     expect(await run(COMMANDS.SIM_END)).toBe(NO_SESSION_TEXT);
     expect(engine.counts.started.discord).toBe(1);
   });
 
-  it('each user in each channel has their own exercise', async () => {
-    await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-1', 'a');
-    expect(await run(COMMANDS.SIM_NEXT, {}, 'CH-1', 'b')).toContain('你目前沒有進行中的模擬');
+  it('a DM (no guild) is not shared: no co-answer note on the start reply and no co-answering', async () => {
+    const start = await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'DM-1', 'a', null);
+    expect(start).toContain('【模擬瓦 W0000-4】');
+    expect(start).not.toContain(sharedNote('discord'));
+    const other = await run(COMMANDS.SIM_NEXT, {}, 'DM-1', 'b', null);
+    expect(other).toContain('你目前沒有進行中的模擬');
+    expect(engine.counts.coAnswers).toBe(0);
+  });
+
+  it('each user in each channel has their own exercise; a user without one co-answers the newest in the channel (marked 代答)', async () => {
+    const start = await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-1', 'a');
+    // Public channel: the owner is told others may help and that /公布 or /結束 ends it for everyone.
+    expect(start.split('\n').at(-1)).toBe(sharedNote('discord'));
+    expect(sharedNote('discord')).toContain('頻道裡');
+    const co = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }, 'CH-1', 'b');
+    expect(co.split('\n').slice(0, 2)).toEqual([CO_ANSWER_MARK, '【W0000-4・4家忠臣】你派 469']);
+    expect(co.split('\n').at(-1)).toBe(sharedNote('discord'));
+    expect(co).not.toContain('u-1');
+    expect(co.length).toBeLessThanOrEqual(900);
+    // A malformed /派 from someone without an exercise is answered with the usage only (never a co-answer).
+    const bad = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '西 2' }, 'CH-1', 'b');
+    expect(bad).toContain('用法：/派');
+    expect(bad).not.toContain(CO_ANSWER_MARK);
     expect(await run(COMMANDS.SIM_NEXT, {}, 'CH-2', 'a')).toContain('你目前沒有進行中的模擬');
-    expect(await run(COMMANDS.SIM_NEXT, {}, 'CH-1', 'a')).toContain('下一步】');
+    const own = await run(COMMANDS.SIM_NEXT, {}, 'CH-1', 'a');
+    expect(own).toContain('下一步】');
+    expect(own).not.toContain(CO_ANSWER_MARK);
+    expect(engine.counts.coAnswers).toBe(1);
+  });
+
+  it('no co-answering where sim replies are only-you (SIM_DISCORD_PUBLIC_CHANNEL_IDS set): the others never saw the exercise', async () => {
+    process.env.SIM_DISCORD_PUBLIC_CHANNEL_IDS = 'CH-SIM';
+    const start = await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-1', 'a');
+    expect(start).not.toContain('幫忙答');
+    for (const [name, opts] of [[COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }], [COMMANDS.SIM_NEXT, {}], [COMMANDS.SIM_REVEAL, {}], [COMMANDS.SIM_END, {}]] as const) {
+      expect(await run(name, opts, 'CH-1', 'b')).toBe(NO_SESSION_TEXT);
+    }
+    expect(engine.activeSessions()).toBe(1);
+    expect(await run(COMMANDS.SIM_REVEAL, {}, 'CH-1', 'a')).toContain('你這題沒有作答。');
+    // The public channel still co-answers.
+    await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-SIM', 'a');
+    expect((await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }, 'CH-SIM', 'b')).split('\n')[0]).toBe(CO_ANSWER_MARK);
+    expect(engine.counts.coAnswers).toBe(1);
+  });
+
+  it('/模擬 說明:True → the Discord command list (slash option names), without opening an exercise', async () => {
+    const help = await run(COMMANDS.SIM, { [SIM_OPTIONS.HELP]: true });
+    expect(help).toBe(SIM_HELP_TEXT_DISCORD);
+    expect(help).not.toBe(SIM_HELP_TEXT);
+    expect(help).toContain(`/${COMMANDS.SIM_PROPOSE} ${SIM_OPTIONS.TEAM}:469`);
+    expect(help).toContain(`/${COMMANDS.SIM_INTERVAL} ${SIM_OPTIONS.CONTENT}:789=2 460=1`);
+    expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.ROLE}:派西維爾 ${SIM_OPTIONS.SEAT}:2`);
+    expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.ID}:K7Q2M-4`);
+    expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.HELP}:True`);
+    expect(help).not.toContain('/解答'); // LINE only
+    expect(engine.activeSessions()).toBe(0);
+    expect(engine.counts.help).toBe(1);
   });
 
   it('SIM_DISCORD_PUBLIC_CHANNEL_IDS set → public there, only-you elsewhere', async () => {

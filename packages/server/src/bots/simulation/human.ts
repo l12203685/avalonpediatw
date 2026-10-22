@@ -1,8 +1,9 @@
 /**
  * 模擬瓦（2026-10-14）— 「同位置真人」：題庫裡同樣處境的真人怎麼派，純函式。
  *
- * 分組：第 1、2 局用（角色, 局, 座位），第 3 局起用（角色, 局）。比較時把這一題這一局
- * 本身拿掉，n 一定印出來，少於 SIM_HUMAN_SMALL_SAMPLE 註明樣本少。特徵都相對於隊長自己的資訊：
+ * 分組：第 1、2 局用（角色, 局, 座位），第 3 局起用（角色, 局）。比較時把這一局裡你自己的派票
+ * 拿掉（2026-10-22 起只拿你自己的：拿掉別的座位的會洩漏他們的角色，見 aggWithout），n 一定印出來，
+ * 少於 SIM_HUMAN_SMALL_SAMPLE 註明樣本少。特徵都相對於隊長自己的資訊：
  *   - 有沒有派自己；
  *   - 私人資訊命中：梅林派了幾個看到的紅；派西派了幾根拇指；刺客／莫甘娜／莫德雷德派了幾個隊友；
  *   - 跟上一次派票重疊幾人（照人數分，不再併成「2 人以上」：4、5 人隊伍時那一格會吃掉全部）；
@@ -194,19 +195,27 @@ function copyAgg(base: HumanAgg): HumanAgg {
   return { ...base, hits: [...base.hits], prev: [...base.prev], mission: [...base.mission], shapes: { ...base.shapes } };
 }
 
-/** `key` 這一組，扣掉 `game` 這一局本身。 */
-function aggWithout(aggs: ReadonlyMap<string, HumanAgg>, key: string, game: SimGame): HumanAgg {
+/**
+ * `key` 這一組，扣掉這一局裡**你自己（viewerSeat）**的派票。
+ *
+ * 2026-10-22 審查修正（main 上就有的洩漏）：以前扣掉這一局裡落在這一組的**每一次**派票，包括別的座位
+ * （角色還沒公布）的派票。第 3 局起的組不分座位，所以印出來的次數 = 整個題庫的總數 − 這一局這一局數
+ * 同角色隊長的派票數；公布過一題就算得出總數，之後每一題都等於在 /公布 前告訴你這一局有幾個隊長跟你同角色。
+ * 現在只扣你自己的派票（你知道自己的角色、座位是公開的），其他座位的照樣留在統計裡：
+ * ② 只看得到公開資訊和你自己的資訊。
+ */
+function aggWithout(aggs: ReadonlyMap<string, HumanAgg>, key: string, game: SimGame, viewerSeat: number): HumanAgg {
   const agg = copyAgg(aggs.get(key) ?? emptyAgg());
   for (const p of game.proposals) {
-    if (keyOf(game, p.globalIndex) === key) addFeatures(agg, proposalFeatures(game, p.globalIndex), -1);
+    if (p.leaderSeat === viewerSeat && keyOf(game, p.globalIndex) === key) addFeatures(agg, proposalFeatures(game, p.globalIndex), -1);
   }
   return agg;
 }
 
-/** 這一題要比較的真人：同一組，扣掉這一局本身。 */
+/** 這一題要比較的真人：同一組，扣掉這一局裡你自己的派票（見 aggWithout）。 */
 export function humanAggFor(aggs: ReadonlyMap<string, HumanAgg>, game: SimGame, proposalIndex: number): { key: string; agg: HumanAgg } {
   const key = keyOf(game, proposalIndex);
-  return { key, agg: aggWithout(aggs, key, game) };
+  return { key, agg: aggWithout(aggs, key, game, game.proposals[proposalIndex].leaderSeat) };
 }
 
 /** 角色的陣營（Avalon.md：r1 梅林、r2 壞人、r3 好人＋派西）。 */
@@ -227,7 +236,7 @@ export interface CampShare {
 
 /**
  * 「這樣派會不會漏角色」：同樣處境（同一局、第 1、2 局再加同座位）的梅林／好人／紅方，
- * 各有多少比例派出跟你同一個派法。扣掉這一局本身。
+ * 各有多少比例派出跟你同一個派法。只扣這一局裡你自己的派票（只會落在你自己角色那一組；見 aggWithout）。
  */
 export function campShares(aggs: ReadonlyMap<string, HumanAgg>, game: SimGame, proposalIndex: number, shape: string): CampShare[] {
   const p = game.proposals[proposalIndex];
@@ -235,7 +244,7 @@ export function campShares(aggs: ReadonlyMap<string, HumanAgg>, game: SimGame, p
     let n = 0;
     let same = 0;
     for (const role of CAMP_ROLES[camp]) {
-      const agg = aggWithout(aggs, aggKey(role, p.round, p.leaderSeat), game);
+      const agg = aggWithout(aggs, aggKey(role, p.round, p.leaderSeat), game, p.leaderSeat);
       n += agg.n;
       same += agg.shapes[shape] ?? 0;
     }

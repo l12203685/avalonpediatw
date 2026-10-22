@@ -94,6 +94,8 @@ export const SIM_OPTIONS = {
   ID: '題號',
   TEAM: '隊伍',
   CONTENT: '內容',
+  /** /模擬 說明:True → the command list (2026-10-22; the Discord wording uses these option names). */
+  HELP: '說明',
 } as const;
 
 /** /模擬 角色 choices (value = the LINE alias the parser reads). */

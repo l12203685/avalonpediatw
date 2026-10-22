@@ -115,6 +115,9 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
       )
       .addStringOption((o) =>
         o.setName(SIM_OPTIONS.ID).setDescription('題號，例如 K7Q2M-4（大家做同一題）/ Exercise id').setRequired(false).setMaxLength(12)
+      )
+      .addBooleanOption((o) =>
+        o.setName(SIM_OPTIONS.HELP).setDescription('看全部指令的說明（不開題）/ Show the command list').setRequired(false)
       ),
 
     new SlashCommandBuilder()

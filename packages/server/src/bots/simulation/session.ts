@@ -12,16 +12,30 @@
  *   - 不存檔：部署或重啟就清空（每天約 03:47 +08 快取更新會重新部署）。
  *   - **送出後才算數**：handle() 回 `{ text, commit }`，呼叫端確定回覆送出後才呼叫 commit()，
  *     回覆失敗不會跳過一步。
- *   - **同一題一次只處理一個指令**：呼叫端用 withLock() 把「算回覆 → 送出 → commit」包起來
+ *   - **同一個聊天室一次只處理一個指令**：呼叫端用 withLock() 把「算回覆 → 送出 → commit」包起來
  *     （LINE 的 webhook、Discord 的 interaction 都可能同時進來），不會出現「回覆說走了一步、狀態卻沒走」。
- *   - LINE 重送（同一個事件）：上一次的回覆已經送出（commit 過）就不再回；沒送出才重算。
+ *     2026-10-22 審查修正：以前照「要動的那一題」排隊，排隊時那一題結束了、代答改指到別題，就會在沒排隊的
+ *     題目上寫入（其中一個 commit 被版本檢查丟掉，回覆卻說記下了）；現在整個聊天室排一條隊。
+ *   - LINE 重送（同一個事件）：上一次的回覆已經送出（commit 過）就不再回；沒送出才重算。送出過的事件記在
+ *     store 上（不是題目上），所以 /公布、/結束 把題目結束之後的重送也認得出來，不會改指到別題
+ *     （2026-10-22 審查修正）；重送也一律不代答。
  *   - 打的字、答案、區間只在這裡的記憶體；log 只有固定文字（這個檔案沒有 log）。
+ *   - **代答**（2026-10-22，第一批真人的問題「要本人回答還是別人也可以答」）：自己在這個聊天室沒有開著的題目
+ *     的人，打寫對的 /派 /區間 /下一步 /公布 /結束 會作用在這個聊天室**最新開的那一題**上，回覆第一行標「代答」
+ *     （不寫名字）；自己有題目的人還是只動自己的。每人的限流、每題的閒置期限都不變。審查修正：
+ *       - 只在大家都看得到回覆的地方（LINE 群組、模擬回覆公開的 Discord 頻道：`shared`）；1 對 1 和只有
+ *         本人看得到回覆的 Discord 頻道不代答；
+ *       - 看不懂的 /派、/區間 不代答（不回、照舊同步、不延長別人的題目）；LINE 重送不代答；
+ *       - 自己的題目剛過期／被擠掉時先講一次是哪一題、怎麼重開；之後在打別的指令之前，/公布 /結束 不代答
+ *         （不會一句「我的題目呢」就把別人的題目公布掉）；
+ *       - 代答寫的 /區間，題主之後的回覆寫「這題目前的區間」（不是「你寫的」）；/公布 列出的派票裡，
+ *         代答派的標「（代答）」。
  */
 
 import type { Role } from '@avalon/shared';
 import { seededRandom } from '../../ai/benchmark/agreement';
 import type { SimBank } from './bank';
-import { parseSimCommand, type IntervalGroup, type SimCommand } from './commands';
+import { isCoAnswerable, isFollowUpCommand, parseSimCommand, type IntervalGroup, type SimCommand } from './commands';
 import {
   SIM_CONFIG,
   SIM_LOCK_WAIT_MS,
@@ -51,9 +65,11 @@ import {
   formatStart,
   noDecisionText,
   noMoreDecisionsText,
+  simHelpText,
   thinPoolText,
   unknownIdText,
   usageText,
+  withCoAnswerMark,
   wrongSizeText,
   type SimPlatform,
 } from './replies';
@@ -75,8 +91,14 @@ export type SimPhase = 'answering' | 'answered' | 'no-more-decisions';
 
 /** 同一個決定點最多記幾次 /派（公布時全部列出）。 */
 export const SIM_ANSWERS_PER_DECISION = 5;
-/** 記住幾個已經回過的 LINE 事件（重送判斷）。 */
-const ANSWERED_EVENTS_MAX = 10;
+/** 記住幾個已經送出回覆的 LINE 事件（重送判斷；LINE 的重送在幾分鐘內）。 */
+const ANSWERED_EVENTS_MAX = 5000;
+
+/** 一次 /派：隊伍，以及是不是代答派的（/公布 時標「（代答）」）。 */
+export interface SimAnswer {
+  team: number[];
+  coAnswer: boolean;
+}
 
 export interface SimSession {
   key: string;
@@ -92,9 +114,11 @@ export interface SimSession {
   decision: number;
   /** 已經顯示的公開事件數。 */
   cursor: number;
-  /** 決定 → 你派過的隊伍（照順序，最後一個是最後的答案）。 */
-  answers: Map<number, number[][]>;
+  /** 決定 → 這題派過的隊伍（照順序，最後一個是最後的答案）。 */
+  answers: Map<number, SimAnswer[]>;
   interval?: IntervalGroup[];
+  /** 最後一次 /區間 是代答寫的（題主之後的回覆寫「這題目前的區間」）。 */
+  intervalByCoAnswer?: boolean;
   /** 最後一次 /區間 留下的世界（公布時對答案）。 */
   intervalWorlds?: number[];
   /** ③ 邏輯面板已經在這個決定點的 /派 回覆裡完整印過。 */
@@ -102,8 +126,6 @@ export interface SimSession {
   phase: SimPhase;
   /** 「之後照實際對局進行」已經講過。 */
   notedReplay: boolean;
-  /** 已經送出回覆的 LINE 事件（重送時不再回）。 */
-  answeredEvents: string[];
   startedAt: number;
   lastActiveAt: number;
   /** 每次 commit 加一；過期的轉移不會蓋掉較新的狀態。 */
@@ -120,6 +142,11 @@ export interface SimRequest {
   /** 這是 LINE 對同一個事件的重送。 */
   duplicate?: boolean;
   /**
+   * 這個聊天室裡大家都看得到模擬的回覆（LINE 群組；回覆公開的 Discord 頻道）。只有這種地方可以代答；
+   * 沒給 = 不代答（1 對 1、只有本人看得到回覆的 Discord 頻道）。
+   */
+  shared?: boolean;
+  /**
    * 明確的指令（Discord slash）：看不懂的 /派、/區間 沒有題目時也給用法（LINE 打字時當聊天不回）。
    * 一樣受限流管。
    */
@@ -128,7 +155,7 @@ export interface SimRequest {
 
 export type SimReplyKind =
   | 'start' | 'propose' | 'interval' | 'next' | 'reveal' | 'end'
-  | 'usage' | 'no-session' | 'bank' | 'select' | 'rate-limited' | 'no-more';
+  | 'usage' | 'no-session' | 'bank' | 'select' | 'rate-limited' | 'no-more' | 'help';
 
 export interface SimReply {
   text: string;
@@ -142,6 +169,19 @@ export interface SimReply {
 export function sessionKeyFor(req: Pick<SimRequest, 'platform' | 'chatId' | 'userId'>): string {
   return `${req.platform}:${req.chatId}:${req.userId ?? '*'}`;
 }
+
+export function chatKeyFor(req: Pick<SimRequest, 'platform' | 'chatId'>): string {
+  return `${req.platform}:${req.chatId}`;
+}
+
+/** 一個指令要動的題目：自己的，或代答的（這個聊天室最新開的一題）。 */
+interface SimTarget {
+  key: string;
+  session: SimSession | null;
+  coAnswer: boolean;
+}
+
+type TargetRequest = Pick<SimRequest, 'platform' | 'chatId' | 'userId' | 'shared' | 'duplicate'>;
 
 // ─── 儲存 ─────────────────────────────────────────────────────────────────
 
@@ -162,6 +202,10 @@ const ENDED_MEMORY_MAX = 1000;
 export class SimSessionStore {
   private readonly sessions = new Map<string, SimSession>();
   private readonly ended = new Map<string, { exerciseId: string; reason: EndedReason }>();
+  /** 已經送出回覆（commit 過）的 LINE 事件；題目結束了也記得（重送不會改指到別題）。 */
+  private readonly answeredEvents = new Set<string>();
+  /** 剛聽過「你的題目已經結束」的人：打別的指令之前，/公布 /結束 不代答。 */
+  private readonly noticed = new Set<string>();
 
   constructor(private readonly opts: SimStoreOptions, private readonly onExpire: () => void = () => undefined) {}
 
@@ -207,10 +251,45 @@ export class SimSessionStore {
     return this.ended.get(key) ?? null;
   }
 
+  /** 已經告訴本人了（之後的後續指令改成代答；/公布 /結束 要等本人先打別的指令）。 */
+  forgetEnded(key: string): void {
+    this.ended.delete(key);
+    capped(this.noticed, key, ENDED_MEMORY_MAX);
+  }
+
+  /** 剛聽過結束的說明、還沒打別的指令。 */
+  wasNoticed(key: string): boolean {
+    return this.noticed.has(key);
+  }
+
+  clearNoticed(key: string): void {
+    this.noticed.delete(key);
+  }
+
+  /** 這個 LINE 事件的回覆已經送出過。 */
+  eventAnswered(eventKey: string): boolean {
+    return this.answeredEvents.has(eventKey);
+  }
+
+  noteAnsweredEvent(eventKey: string): void {
+    capped(this.answeredEvents, eventKey, ANSWERED_EVENTS_MAX);
+  }
+
+  /** 這個聊天室裡最新開的一題（代答的對象）；同時開的取最近使用的。沒有就是 null。 */
+  newestInChat(chatKey: string, now: number): SimSession | null {
+    this.sweep(now);
+    let newest: SimSession | null = null;
+    for (const s of this.sessions.values()) {
+      if (s.chatKey === chatKey && (!newest || s.startedAt >= newest.startedAt)) newest = s;
+    }
+    return newest;
+  }
+
   /** 放進去（放到最後 = 最近使用）；超過上限就結束最久沒動的。 */
   set(session: SimSession): void {
     this.sessions.delete(session.key);
     this.ended.delete(session.key);
+    this.noticed.delete(session.key);
     this.sessions.set(session.key, session);
     const sameChat = [...this.sessions.values()].filter((s) => s.chatKey === session.chatKey);
     for (let i = 0; i < sameChat.length - this.opts.maxPerChat; i++) this.evict(sameChat[i].key);
@@ -231,6 +310,17 @@ export class SimSessionStore {
 
   size(): number {
     return this.sessions.size;
+  }
+}
+
+/** 放進一個有上限的集合（最舊的先丟）。 */
+function capped(set: Set<string>, value: string, max: number): void {
+  set.delete(value);
+  set.add(value);
+  while (set.size > max) {
+    const oldest = set.values().next().value;
+    if (oldest === undefined) break;
+    set.delete(oldest);
   }
 }
 
@@ -316,6 +406,34 @@ export class SimEngine {
     return this.store.get(sessionKeyFor(req), this.now()) !== null;
   }
 
+  /**
+   * 這個後續指令（/派 /區間 /下一步 /公布 /結束，含看不懂的 /派、/區間）會有題目接：自己的，或代答
+   * 這個聊天室最新開的一題（只有寫對的指令、只在 `shared` 的聊天室）。鏡像群不同步就看這個。
+   */
+  answersFollowUp(req: TargetRequest, cmd: SimCommand): boolean {
+    return isFollowUpCommand(cmd) && this.targetFor(cmd, req, this.now()).session !== null;
+  }
+
+  /**
+   * 這個指令要動哪一題：自己的；自己沒有、而這是大家都看得到回覆的聊天室（`shared`）、指令寫對了、
+   * 這個聊天室有別人開的題目，就代答最新開的那一題。不代答的情況：
+   *   - 自己的題目剛過期／被擠掉、還沒告訴本人（這一次回結束的說明，見 handle()）；
+   *   - LINE 重送（`skippedDuplicate`：第一次的回覆可能已經送出，不能改指到別題，什麼都不回）；
+   *   - 剛聽過結束的說明、還沒打別的指令時的 /公布 /結束（當成自己沒有題目）。
+   */
+  private targetFor(cmd: SimCommand | null | undefined, req: TargetRequest, now: number): SimTarget & { endedNotice: boolean; skippedDuplicate: boolean } {
+    const key = sessionKeyFor(req);
+    const own = this.store.get(key, now);
+    const mine = { key, session: own, coAnswer: false, endedNotice: false, skippedDuplicate: false };
+    if (own || !cmd || !isCoAnswerable(cmd) || !req.shared) return mine;
+    const newest = this.store.newestInChat(chatKeyFor(req), now);
+    if (!newest) return mine;
+    if (this.store.endedInfo(key)) return { ...mine, endedNotice: true };
+    if (req.duplicate) return { ...mine, skippedDuplicate: true };
+    if ((cmd.kind === 'reveal' || cmd.kind === 'end') && this.store.wasNoticed(key)) return mine;
+    return { key: newest.key, session: newest, coAnswer: true, endedNotice: false, skippedDuplicate: false };
+  }
+
   get beliefModelId(): string {
     return this.model.id;
   }
@@ -326,11 +444,13 @@ export class SimEngine {
   }
 
   /**
-   * 同一題（同一個 session key）的「算回覆 → 送出 → commit」一次只跑一個。前一個最久等
-   * lockWaitMs（送出卡住也不會把這個人永遠卡住）。`fn` 丟出的錯照樣往外丟。
+   * 同一個聊天室（platform:chatId）的「算回覆 → 送出 → commit」一次只跑一個。前一個最久等
+   * lockWaitMs（送出卡住也不會把這個聊天室永遠卡住）。`fn` 丟出的錯照樣往外丟。
+   * 整個聊天室排一條隊（2026-10-22 審查修正）：代答要動哪一題是輪到它時才決定的（handle()），
+   * 所以不會在排隊期間改指到另一題、又沒排那一題的隊。
    */
-  async withLock<T>(req: Pick<SimRequest, 'platform' | 'chatId' | 'userId'>, fn: () => Promise<T>): Promise<T> {
-    const key = sessionKeyFor(req);
+  async withLock<T>(req: Pick<SimRequest, 'platform' | 'chatId'>, fn: () => Promise<T>): Promise<T> {
+    const key = chatKeyFor(req);
     const prev = this.locks.get(key) ?? Promise.resolve();
     let release: () => void = NOOP;
     const mine = new Promise<void>((resolve) => { release = resolve; });
@@ -361,14 +481,36 @@ export class SimEngine {
    */
   async handle(cmd: SimCommand, req: SimRequest): Promise<SimReply | null> {
     if (!SIM_CONFIG.commandsEnabled) return null;
+    // LINE 重送同一個事件，而第一次的回覆已經送出：不再回（也不走第二步）。在決定要動哪一題之前看：
+    // 第一次的 /公布、/結束 已經把題目結束掉時，重送不會改指到這個聊天室的別題。
+    if (req.duplicate && req.eventKey && this.store.eventAnswered(req.eventKey)) return null;
+    const reply = await this.compute(cmd, req);
+    if (!reply) return null;
+    const ownKey = sessionKeyFor(req);
+    const { eventKey } = req;
+    const commit = reply.commit;
+    return {
+      ...reply,
+      commit: (): void => {
+        // 打了 /公布 /結束 以外的指令：之後的 /公布 /結束 又可以代答（見 targetFor()）。
+        if (cmd.kind !== 'reveal' && cmd.kind !== 'end') this.store.clearNoticed(ownKey);
+        commit();
+        if (eventKey) this.store.noteAnsweredEvent(eventKey);
+      },
+    };
+  }
+
+  private async compute(cmd: SimCommand, req: SimRequest): Promise<SimReply | null> {
     const now = this.now();
-    const key = sessionKeyFor(req);
-    const session = this.store.get(key, now);
+    const ownKey = sessionKeyFor(req);
+    const t = this.targetFor(cmd, req, now);
+    const { session, coAnswer } = t;
 
-    // LINE 重送同一個事件，而第一次的回覆已經送出：不再回（也不走第二步）。
-    if (req.duplicate && req.eventKey && session?.answeredEvents.includes(req.eventKey)) return null;
+    // LINE 重送、第一次沒送出，而這個人自己沒有題目：不代答（第一次可能是代答，也可能不是；不能改指到別題）。
+    if (t.skippedDuplicate) return null;
 
-    // 看不懂的 /派、/區間 又沒有題目：LINE 打字當作一般聊天（例如 /派西 2）；Discord slash 給用法。
+    // 看不懂的 /派、/區間 又沒有自己的題目：LINE 打字當作一般聊天（例如 /派西 2）；Discord slash 給用法。
+    // 看不懂的指令不代答（targetFor），所以聊天室裡有別人的題目也一樣。
     if (cmd.kind === 'usage' && cmd.command !== 'start' && !session && !req.explicit) return null;
 
     const rate = this.limiter.hit(`${req.platform}:${req.userId ?? req.chatId}`, now);
@@ -377,16 +519,24 @@ export class SimEngine {
       return rate === 'notify' ? { text: RATE_LIMITED_TEXT, kind: 'rate-limited', commit: NOOP, sessionOpen: !!session } : null;
     }
 
-    if (cmd.kind === 'start') return this.start(cmd, req, key, session, now);
+    if (cmd.kind === 'help') {
+      return { text: simHelpText(req.platform), kind: 'help', commit: (): void => { this.counts.help += 1; }, sessionOpen: !!session };
+    }
+    // 開題和 /模擬 的用法只看自己的題目（targetFor 對非後續指令回的就是自己的）。
+    if (cmd.kind === 'start') return this.start(cmd, req, ownKey, session, now);
     if (cmd.kind === 'usage' && (cmd.command === 'start' || !session)) {
-      return this.reply(usageText(cmd.command, cmd.problem), 'usage', session, req, now, () => { this.counts.usage += 1; });
+      return this.reply(usageText(cmd.command, cmd.problem), 'usage', t, now, () => { this.counts.usage += 1; });
     }
     if (!session) {
-      const ended = this.store.endedInfo(key);
+      const ended = this.store.endedInfo(ownKey);
       return {
         text: ended ? endedNoticeText(ended.exerciseId, ended.reason) : NO_SESSION_TEXT,
         kind: 'no-session',
-        commit: (): void => { this.counts.noSession += 1; },
+        commit: (): void => {
+          this.counts.noSession += 1;
+          // 講過一次自己的題目怎麼結束的；聊天室裡有別人的題目時，下一個指令起代答。
+          if (t.endedNotice) this.store.forgetEnded(ownKey);
+        },
         sessionOpen: false,
       };
     }
@@ -395,43 +545,48 @@ export class SimEngine {
       return { text: BANK_NOT_READY_TEXT, kind: 'bank', commit: NOOP, sessionOpen: true };
     }
     const game = bank.games[session.game];
+    const target: SimTarget & { session: SimSession } = { key: session.key, session, coAnswer };
     switch (cmd.kind) {
       case 'usage':
-        return this.reply(usageText(cmd.command, cmd.problem), 'usage', session, req, now, () => { this.counts.usage += 1; });
+        return this.reply(usageText(cmd.command, cmd.problem), 'usage', target, now, () => { this.counts.usage += 1; });
       case 'propose':
-        return this.propose(cmd.team, bank, game, session, req, now);
+        return this.propose(cmd.team, bank, game, target, req, now);
       case 'interval':
-        return this.interval(cmd.groups, game, session, req, now);
+        return this.interval(cmd.groups, game, target, now);
       case 'next':
-        return this.next(game, session, req, now);
+        return this.next(game, target, req, now);
       case 'reveal':
-        return this.reveal(game, session);
+        return this.reveal(game, target);
       case 'end':
         return {
-          text: endedText(session.exerciseId),
+          text: withCoAnswerMark(endedText(session.exerciseId), coAnswer),
           kind: 'end',
           sessionOpen: false,
           commit: (): void => {
-            if (this.store.get(key, this.now())?.version !== session.version) return;
-            this.store.delete(key);
+            if (this.store.get(session.key, this.now())?.version !== session.version) return;
+            this.store.delete(session.key);
             this.counts.ended += 1;
+            if (coAnswer) this.counts.coAnswers += 1;
           },
         };
     }
   }
 
-  /** 綁在一題上的回覆：commit 時更新 lastActiveAt / answeredEvents（以及 `update` 的狀態）。 */
+  /**
+   * 綁在一題上的回覆：commit 時更新 lastActiveAt（以及 `update` 的狀態）；送出過的事件由 handle() 記。
+   * 代答的文字由呼叫端標好（算在長度裡）；這裡只計數。
+   */
   private reply(
     text: string,
     kind: SimReplyKind,
-    session: SimSession | null,
-    req: SimRequest,
+    t: SimTarget,
     now: number,
     count: () => void,
     update?: (s: SimSession) => Partial<SimSession>,
   ): SimReply {
+    const { session, coAnswer } = t;
     return {
-      text,
+      text: kind === 'usage' || kind === 'no-more' ? withCoAnswerMark(text, coAnswer) : text,
       kind,
       sessionOpen: !!session,
       commit: (): void => {
@@ -440,11 +595,11 @@ export class SimEngine {
         // 這段回覆算出來之後，這一題已經變了（呼叫端沒有用 withLock 時才可能）：不再套用，也不計數。
         if (!current || current.version !== session.version) return;
         count();
+        if (coAnswer) this.counts.coAnswers += 1;
         this.store.set({
           ...current,
           ...(update ? update(current) : {}),
           lastActiveAt: now,
-          answeredEvents: req.eventKey ? [...current.answeredEvents, req.eventKey].slice(-ANSWERED_EVENTS_MAX) : current.answeredEvents,
           version: current.version + 1,
         });
       },
@@ -477,6 +632,7 @@ export class SimEngine {
       decision: events[cursor] as ProposalEvent,
       platform: req.platform,
       replacedId: previous?.exerciseId,
+      shared: !!req.shared,
     });
     const role = game.seatRoles[picked.seat - 1];
     return {
@@ -497,7 +653,6 @@ export class SimEngine {
           answers: new Map(),
           phase: 'answering',
           notedReplay: false,
-          answeredEvents: req.eventKey ? [req.eventKey] : [],
           startedAt: now,
           lastActiveAt: now,
           version: (previous?.version ?? 0) + 1,
@@ -508,15 +663,16 @@ export class SimEngine {
     };
   }
 
-  private propose(team: number[], bank: SimBank, game: SimGame, session: SimSession, req: SimRequest, now: number): SimReply {
+  private propose(team: number[], bank: SimBank, game: SimGame, t: SimTarget & { session: SimSession }, req: SimRequest, now: number): SimReply {
+    const { session } = t;
     if (session.phase === 'no-more-decisions') {
-      return this.reply(noMoreDecisionsText(session.exerciseId), 'no-more', session, req, now, NOOP);
+      return this.reply(noMoreDecisionsText(session.exerciseId), 'no-more', t, now, NOOP);
     }
     const events = publicEvents(game);
     const decision = events[session.cursor] as ProposalEvent;
     const size = TEAM_SIZES[decision.round - 1];
     if (team.length !== size) {
-      return this.reply(wrongSizeText(size, team.length), 'usage', session, req, now, () => { this.counts.usage += 1; });
+      return this.reply(wrongSizeText(size, team.length), 'usage', t, now, () => { this.counts.usage += 1; });
     }
     const view = viewAt(game, session.seat, session.cursor, events);
     const realQuest = decision.approved
@@ -542,34 +698,46 @@ export class SimEngine {
         release: releasePanel(view, team, logic.analysis),
         platform: req.platform,
         showLogic: session.logicShownFor !== session.decision,
-        ...(own ? { ownInterval: { worlds: own.jointWorlds.length, clean: teamCleanUnder(own.jointWorlds, team) } } : {}),
+        ...(own ? {
+          ownInterval: {
+            worlds: own.jointWorlds.length,
+            clean: teamCleanUnder(own.jointWorlds, team),
+            // 你自己寫的才說「你寫的」：代答寫的、或這次是代答，都說「這題目前的區間」。
+            yours: !t.coAnswer && !session.intervalByCoAnswer,
+          },
+        } : {}),
+        coAnswer: t.coAnswer,
+        shared: !!req.shared,
       },
       { sight: view.sight, shown: view.events, ownLakes: view.ownLakes },
     );
     const same = maskOf(team) === maskOf(decision.teamSeats);
-    return this.reply(text, 'propose', session, req, now, () => {
+    return this.reply(text, 'propose', t, now, () => {
       this.counts.answers += 1;
       if (same) this.counts.sameAsReal += 1;
     }, (s) => {
       const answers = new Map(s.answers);
-      answers.set(s.decision, [...(answers.get(s.decision) ?? []), [...team]].slice(-SIM_ANSWERS_PER_DECISION));
+      answers.set(s.decision, [...(answers.get(s.decision) ?? []), { team: [...team], coAnswer: t.coAnswer }].slice(-SIM_ANSWERS_PER_DECISION));
       return { answers, phase: 'answered', logicShownFor: s.decision };
     });
   }
 
-  private interval(groups: IntervalGroup[], game: SimGame, session: SimSession, req: SimRequest, now: number): SimReply {
+  private interval(groups: IntervalGroup[], game: SimGame, t: SimTarget & { session: SimSession }, now: number): SimReply {
+    const { session } = t;
     const view = viewAt(game, session.seat, session.cursor);
     const ev = evaluateInterval(view, groups, this.model);
-    const text = formatInterval(session.exerciseId, ev, this.model, view.seat);
-    return this.reply(text, 'interval', session, req, now, () => { this.counts.intervals += 1; }, () => ({
+    const text = formatInterval(session.exerciseId, ev, this.model, view.seat, t.coAnswer);
+    return this.reply(text, 'interval', t, now, () => { this.counts.intervals += 1; }, () => ({
       interval: groups.map((g) => ({ ...g, seats: [...g.seats] })),
       intervalWorlds: ev.jointWorlds,
+      intervalByCoAnswer: t.coAnswer,
     }));
   }
 
-  private next(game: SimGame, session: SimSession, req: SimRequest, now: number): SimReply {
+  private next(game: SimGame, t: SimTarget & { session: SimSession }, req: SimRequest, now: number): SimReply {
+    const { session } = t;
     if (session.phase === 'no-more-decisions') {
-      return this.reply(noMoreDecisionsText(session.exerciseId), 'no-more', session, req, now, NOOP);
+      return this.reply(noMoreDecisionsText(session.exerciseId), 'no-more', t, now, NOOP);
     }
     const events = publicEvents(game);
     const nextIndex = nextDecision(game, session.seat, session.decision);
@@ -583,15 +751,17 @@ export class SimEngine {
       shownAll: events.slice(0, nextCursor),
       showNote: !session.notedReplay,
       platform: req.platform,
+      coAnswer: t.coAnswer,
     });
-    return this.reply(text, 'next', session, req, now, () => { this.counts.steps += 1; }, () => (
+    return this.reply(text, 'next', t, now, () => { this.counts.steps += 1; }, () => (
       nextIndex === null
         ? { cursor: events.length, phase: 'no-more-decisions', notedReplay: true }
         : { cursor: nextCursor, decision: nextIndex, phase: 'answering', notedReplay: true }
     ));
   }
 
-  private reveal(game: SimGame, session: SimSession): SimReply {
+  private reveal(game: SimGame, t: SimTarget & { session: SimSession }): SimReply {
+    const { session } = t;
     const events = publicEvents(game);
     const decisionCursor = eventIndexOfProposal(events, session.decision);
     // 從題目開頭看過的每一次派票，到最後一個決定點為止（沒有下一次了就是整局）。
@@ -607,7 +777,11 @@ export class SimEngine {
       answers,
       interval: session.interval,
       intervalWorlds: session.intervalWorlds,
+      // 標「（代答）」看誰寫的；「你的／這題目前的」看誰在看（代答者看到的一律是「這題目前的」）。
+      intervalYours: !t.coAnswer && !session.intervalByCoAnswer,
+      intervalByCoAnswer: !!session.intervalByCoAnswer,
       proposals: seen,
+      coAnswer: t.coAnswer,
     });
     const redMask = maskOf(game.seatRoles.map((r, i) => (isRed(r) ? i + 1 : 0)).filter(Boolean));
     return {
@@ -619,6 +793,7 @@ export class SimEngine {
         if (!current || current.version !== session.version) return;
         this.store.delete(session.key);
         this.counts.reveals += 1;
+        if (t.coAnswer) this.counts.coAnswers += 1;
         for (const g of session.interval ?? []) {
           this.counts.intervalGroupsTotal += 1;
           if (intervalGroupTrue(g, redMask)) this.counts.intervalGroupsRight += 1;

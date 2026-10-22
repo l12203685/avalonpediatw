@@ -881,7 +881,7 @@ export function formatStatsHelp(platform: StatsPlatform, scope: string | null = 
   ];
   // 模擬瓦 (2026-10-14 review fix): advertised only while SIM_COMMANDS_ENABLED is on.
   if (SIM_CONFIG.commandsEnabled) {
-    lines.push(`${STATS_COMMAND_USAGE.simulation}\u3000模擬瓦：練派票資訊的釋放與解讀（接著用 ${SIM_HELP_FOLLOW_UP}）`);
+    lines.push(`${STATS_COMMAND_USAGE.simulation}\u3000模擬瓦：練派票資訊的釋放與解讀（接著用 ${SIM_HELP_FOLLOW_UP}；/模擬 說明 看全部指令）`);
   }
   if (platform === 'line') lines.push('/指令\u3000顯示這份說明');
   lines.push('每週一 12:00 會自動貼出本週排行。');

@@ -180,6 +180,11 @@ interface LeadContext {
   eventKey?: string;
   /** An allow-listed practice group (SIM_LINE_GROUP_IDS): 模擬 commands only. */
   simOnly?: boolean;
+  /**
+   * A group: everyone sees the 模擬 replies, so a member without an exercise may
+   * co-answer the newest one there (2026-10-22). Never set in 1:1 chats.
+   */
+  shared?: boolean;
 }
 
 /** LINE's dedupe key of an event (webhookEventId, else the message id). */
@@ -314,8 +319,8 @@ export class LineBotClient {
             const textMessage = event.message as { id: string; text: string };
             const groupId = source.groupId;
             const userId = source.userId;
-            const sim = { platform: 'line' as const, chatId: groupId, userId };
-            // 模擬瓦 (2026-10-14 review fix): one 模擬 command per person at a
+            const sim = { platform: 'line' as const, chatId: groupId, userId, shared: true };
+            // 模擬瓦 (2026-10-14 review fix): one 模擬 command per chat at a
             // time — compute → reply → commit — so a second command never
             // reads a step that is still being sent.
             await withSimLock(sim, textMessage.text, async () => {
@@ -332,6 +337,7 @@ export class LineBotClient {
                 userId,
                 quoteToken: quoteTokenOf(event.message),
                 eventKey: eventKeyOf(event),
+                shared: true,
               });
               if (replyToken) await this.drainQueuedReplies(replyToken, lead);
             });
@@ -365,7 +371,7 @@ export class LineBotClient {
         // player names are case-sensitive (Sin / SIN / sin are different people).
         if (source.type === 'user') {
           const userId = source.userId;
-          const answered = await withSimLock({ platform: 'line', chatId: userId, userId }, textMessage.text, async () => {
+          const answered = await withSimLock({ platform: 'line', chatId: userId }, textMessage.text, async () => {
             const lead = await this.leadReplyFor(textMessage.text, {
               duplicate,
               chatId: userId,
@@ -388,7 +394,7 @@ export class LineBotClient {
         if (simGroup && source.type === 'group') {
           const groupId = source.groupId;
           const userId = source.userId;
-          await withSimLock({ platform: 'line', chatId: groupId, userId }, textMessage.text, async () => {
+          await withSimLock({ platform: 'line', chatId: groupId }, textMessage.text, async () => {
             const lead = await this.leadReplyFor(textMessage.text, {
               duplicate,
               chatId: groupId,
@@ -396,6 +402,7 @@ export class LineBotClient {
               quoteToken: quoteTokenOf(messageEvent.message),
               eventKey: eventKeyOf(event),
               simOnly: true,
+              shared: true,
             });
             if (lead !== null) await this.replyLead(messageEvent.replyToken, lead, false);
           });
@@ -553,6 +560,7 @@ export class LineBotClient {
         userId: ctx.userId,
         eventKey: ctx.eventKey,
         duplicate: ctx.duplicate,
+        shared: ctx.shared,
       });
       if (!reply) return null;
       return { kind: 'sim', text: reply.text, commit: reply.commit, quoteToken: ctx.quoteToken, quickReply: reply.sessionOpen };

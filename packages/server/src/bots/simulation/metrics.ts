@@ -22,6 +22,10 @@ export interface SimCounts {
   usage: number;
   noSession: number;
   rateLimited: number;
+  /** /模擬 說明 的次數。 */
+  help: number;
+  /** 幫別人開的題目作答（代答）的指令次數。 */
+  coAnswers: number;
 }
 
 export const COUNTED_ROLES: readonly Role[] = ['merlin', 'percival', 'loyal', 'assassin', 'morgana', 'mordred', 'oberon'];
@@ -42,6 +46,8 @@ export function emptySimCounts(): SimCounts {
     usage: 0,
     noSession: 0,
     rateLimited: 0,
+    help: 0,
+    coAnswers: 0,
   };
 }
 
