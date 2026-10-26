@@ -117,6 +117,8 @@
 
 ## 5. 操作備忘（事實）
 
+- 改機器人或可見性前，先對照 `docs/ai/rules_checklist.md`（規則、鐵邏輯、Edward 裁定、自我檢查）。
+
 - 私人聊天紀錄與練習回報在 Edward 的 Google 試算表（機器人寫入，私人）；只能從 Drive 讀，內容不能進 repo。
 - 雲端容器無法直接連 Google Drive／Googleapis 下載。
 - 巢狀 worktree 裡跑 ESLint 要加 `--no-eslintrc -c ../../.eslintrc.json`。
