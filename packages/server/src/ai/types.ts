@@ -81,6 +81,13 @@ export interface PlayerObservation {
    * the 7-player setup: Mordred, 2026-10-26 fix).
    */
   allEvilIds?:   string[];
+  /**
+   * Edward 2026-10-26「刺殺階段紅方會開牌相認」: at the assassination the reds
+   * show each other their cards, so the assassinator knows every red's ROLE
+   * (which one is Morgana, Oberon, Mordred). Same scope as `allEvilIds`
+   * (assassinator, assassination phase); id → role.
+   */
+  allEvilRoles?: Record<string, Role>;
 
   // Dynamic game state
   currentRound:  number;

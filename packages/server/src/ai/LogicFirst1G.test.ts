@@ -108,6 +108,23 @@ describe('batch 1G — what Merlin surely sees, from the assassin', () => {
     expect(classifyTeamForAssassin(['P5', 'P6', 'P7'], sight)).toBe('none');
   });
 
+  it('with the reds\' cards shown (刺殺階段開牌相認, Edward 2026-10-26) Merlin\'s sight is exact: every red but Mordred', () => {
+    const o: PlayerObservation = {
+      ...assassinationObs([
+        vote(2, 2, 'P5', ['P5', 'P2', 'P6', 'P8'], [], false), // Morgana alone on it: seen → flagged
+        vote(2, 3, 'P8', ['P8', 'P3', 'P6', 'P9'], [], false), // Mordred alone on it: unseen → clean
+      ]),
+      allEvilRoles: { P1: 'assassin', P2: 'morgana', P3: 'mordred', P4: 'oberon' },
+    };
+    const sight = merlinSightFromAssassin(o);
+    expect([...sight.certain].sort()).toEqual(['P1', 'P2', 'P4']);
+    expect(sight.ambiguous).toEqual([]);
+    const ev = visibleRedEvidence(o, CANDIDATES);
+    expect(ev.get('P5')).toMatchObject({ tier: 1, certainRounds: [2], ambiguousRounds: [] });
+    expect(ev.get('P8')).toMatchObject({ tier: 0, certainRounds: [] });
+    expect(tierCandidates(CANDIDATES, ev)).toEqual(['P6', 'P8', 'P9', 'P10']); // P7 led Oberon, P5 Morgana
+  });
+
   it('counts every proposal from R1 on, the forced fifth too (Edward 2026-10-26); the soft factor only non-forced ones', () => {
     const o = assassinationObs([
       vote(1, 2, 'P9', ['P9', 'P1', 'P5'], [], false), // R1, non-forced, the assassin on it → counts (R1 is not exempt)

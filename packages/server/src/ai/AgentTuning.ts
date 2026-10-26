@@ -368,6 +368,12 @@ export interface AgentTuning {
    * 交叉驗證後沒有增益（`assassinVisibleRedStudy.ts` (c)）。
    */
   assassinVisibleRedLikelihood: boolean;
+  /**
+   * 還湖（Edward 2026-10-26）：上一個湖宣告持湖者是紅，而可以湖的人裡有公開確定是好人的
+   * （例：兩局失敗後成功的任務隊員），持湖者把湖交給其中一位（座位序第一位）。好人、紅方都這樣做 ——
+   * 不還湖 = 認壞（確定性層 A2）。
+   */
+  returnLake: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -403,6 +409,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'redPossibleClaimsOnly',
   'assassinVisibleRedTier',
   'assassinVisibleRedLikelihood',
+  'returnLake',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -437,6 +444,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redPossibleClaimsOnly: false,
   assassinVisibleRedTier: false,
   assassinVisibleRedLikelihood: false,
+  returnLake: false,
 });
 
 /**
@@ -577,6 +585,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     1970 局重播與 2000 局自我對打上為 0；審查後歸為第二關的規則，依重播的
  *     刺中率與一致性保留）；`assassinVisibleRedLikelihood` 審查後預設關。強度
  *     見 strength_benchmark.md 第 19、20 節。
+ *   - 2026-10-26 Edward 裁定：`returnLake`（還湖）預設開；刺殺階段紅方開牌相認
+ *     （`allEvilRoles`，梅林看得到的紅 = 莫德雷德以外的紅方）；第 5 次強制提議也算。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -615,6 +625,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redPossibleClaimsOnly: true,
   assassinVisibleRedTier: true,
   assassinVisibleRedLikelihood: false,
+  returnLake: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -649,6 +660,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   redPossibleClaimsOnly: 'AVALON_TUNING_RED_POSSIBLE_CLAIMS_ONLY',
   assassinVisibleRedTier: 'AVALON_TUNING_ASSASSIN_VISIBLE_RED_TIER',
   assassinVisibleRedLikelihood: 'AVALON_TUNING_ASSASSIN_VISIBLE_RED_LIKELIHOOD',
+  returnLake: 'AVALON_TUNING_RETURN_LAKE',
 });
 
 function parseBool(raw: string): boolean | undefined {

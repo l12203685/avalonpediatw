@@ -76,14 +76,22 @@ export function mordredInLobby(obs: Pick<PlayerObservation, 'lobbyRoles' | 'play
 }
 
 /**
- * Merlin sees every red but Mordred. The assassinator knows the whole roster
- * at the assassination (`allEvilIds`) but not which seen teammate is
- * Mordred. Whether a Mordred is dealt at all comes from the lobby roles
+ * Merlin sees every red but Mordred. At the assassination the reds show
+ * each other their cards (`allEvilRoles`, Edward 2026-10-26), so the
+ * assassinator knows exactly who Merlin sees. Without the roles (older
+ * observations) it knows the whole roster (`allEvilIds`) but not which seen
+ * teammate is Mordred — the fallback below. Whether a Mordred is dealt at all comes from the lobby roles
  * (2026-10-26; it came from the standard table, so with Mordred switched off
  * both seen teammates were treated as ambiguous).
  * (Moved from `HeuristicAgent.merlinSightFromAssassin`, 2026-10-14 S1-11.)
  */
 export function merlinSightFromAssassin(obs: PlayerObservation): MerlinSight {
+  // 刺殺階段紅方開牌相認 (Edward 2026-10-26): the assassinator knows every red's role, so Merlin's
+  // sight is exact — every red but Mordred. Nothing is ambiguous.
+  if (obs.allEvilRoles) {
+    const certain = new Set(Object.entries(obs.allEvilRoles).filter(([, role]) => role !== 'mordred').map(([id]) => id));
+    return { certain, ambiguous: [] };
+  }
   const self = obs.myPlayerId;
   const teammates = obs.knownEvils.filter((id) => id !== self);
   const all = new Set<string>(obs.allEvilIds ?? [...teammates, self]);

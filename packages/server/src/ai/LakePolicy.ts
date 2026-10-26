@@ -28,7 +28,7 @@ import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { beliefOptionsFrom, defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
 import { beliefFailCards, missionFailed } from './missionFacts';
 import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
-import { claimPossibleForGoodHolder } from './belief/Certainty';
+import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
 
 type Camp = 'good' | 'evil';
 
@@ -184,6 +184,15 @@ export function pickLakeTargetForTeam(
   validTargets: string[],
   tuning: AgentTuning = getDefaultAgentTuning(),
 ): string {
+  // ── AgentTuning.returnLake（還湖，Edward 2026-10-26）──
+  // The previous lake declared this holder red and a publicly certain-good seat may be laked: return
+  // the lake to it (first by seat order). Not doing so admits being red (Certainty A2), so a red holder
+  // does it too.
+  if (tuning.returnLake) {
+    const back = returnLakeOptions(obs, obs.myPlayerId, validTargets);
+    if (back.length > 0) return back[0];
+  }
+
   if (!isSmartLakeEnabled()) {
     // Legacy: good picks knownEvils[0] (useless), evil picks random.
     if (holderTeam === 'good') {

@@ -222,6 +222,10 @@ export function buildReplayObservation(
   const allEvilIds = isAssassinator(role, game.seatRoles) && point.kind === 'assassination'
     ? game.seatRoles.map((r, i) => (EVIL_ROLES.has(r) ? seatId(i + 1) : null)).filter((x): x is string => x !== null)
     : undefined;
+  // 刺殺階段紅方開牌相認 (Edward 2026-10-26): each red's role too.
+  const allEvilRoles = allEvilIds
+    ? Object.fromEntries(game.seatRoles.flatMap((r, i) => (EVIL_ROLES.has(r) ? [[seatId(i + 1), r as Role]] : [])))
+    : undefined;
 
   return {
     myPlayerId: seatId(seat),
@@ -232,6 +236,7 @@ export function buildReplayObservation(
     knownEvils: knowledge.knownEvils,
     knownWizards: knowledge.knownWizards,
     allEvilIds,
+    allEvilRoles,
     currentRound,
     currentLeader,
     failCount,

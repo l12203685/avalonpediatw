@@ -86,6 +86,18 @@ const vote = (o: PlayerObservation, tuning: AgentTuning): boolean => {
   return a.vote;
 };
 
+
+/**
+ * The r5_must_fail_reuse fixture with R1 turned into a success. In the recorded game R1 and R2 failed, so since
+ * A1 (Edward 2026-10-26: no stalling after two fails) R3's four are certainly good, P5 is R4's red and the
+ * gates-off bot no longer re-proposes the R4 team. With one failed mission before R3, A1 does not apply and the
+ * fixture shows the breach the gates bar, as recorded.
+ */
+function withoutNoStall(o: PlayerObservation): PlayerObservation {
+  const quests = o.questHistory.map((q, i) => (i === 0 ? { ...q, result: 'success' as const, failCount: 0 } : q));
+  return { ...o, questHistory: quests, questResults: quests.map((q) => q.result) };
+}
+
 describe('S1-4 must-fail vote gate (INV-V1)', () => {
   // Practice report 2026-10 (a): Percival on an R4 team the missions already
   // prove failable. Percival P6 (thumbs P1 / P9) sat on R1 {P6, P3, P4} with
@@ -284,7 +296,7 @@ describe('S1-3 / S1-4 on proposals (INV-T1, INV-K1, INV-K2)', () => {
     const fx = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../__tests__/fixtures/logic_gates/r5_must_fail_reuse.json'), 'utf8')) as {
       seed: string; botTeamGatesOff: string[]; obs: PlayerObservation;
     };
-    const o = fx.obs;
+    const o = withoutNoStall(fx.obs);
     const view = buildCertainty(o);
     const run = (tuning: AgentTuning): string[] => {
       const base = new HeuristicAgent(o.myPlayerId, undefined, undefined, tuning);

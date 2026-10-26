@@ -399,6 +399,10 @@ export class SelfPlayEngine {
           .filter(([, t]) => t === 'evil')
           .map(([id]) => id)
       : undefined;
+    // 刺殺階段紅方開牌相認 (Edward 2026-10-26): each red's role too.
+    const allEvilRoles = allEvilIds
+      ? Object.fromEntries(allEvilIds.map((id) => [id, roleMap.get(id) as Role]))
+      : undefined;
 
     // Public-only Lake history (`publicLakeHistory`): declared records, plus
     // finished undeclared ones as 'none' (S1-9c); the pending lake (used,
@@ -417,6 +421,7 @@ export class SelfPlayEngine {
       knownEvils,
       knownWizards,
       allEvilIds,
+      allEvilRoles,
       currentRound:  room.currentRound,
       currentLeader: this.getCurrentLeader(room),
       failCount:     room.failCount,

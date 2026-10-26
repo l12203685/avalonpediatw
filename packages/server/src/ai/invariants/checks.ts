@@ -188,6 +188,15 @@ function multisetPermutations(items: readonly string[]): string[][] {
  * `null` when the roster does not fit the lobby (counted, not checked).
  */
 function a2FlaggedIndependently(obs: PlayerObservation, candidates: readonly string[]): Set<string> | null {
+  // 刺殺階段紅方開牌相認 (Edward 2026-10-26): with the reds' roles known, a lead certainly holds a red
+  // Merlin sees iff it holds a red who is not Mordred.
+  if (obs.allEvilRoles) {
+    const seen = new Set(Object.entries(obs.allEvilRoles).filter(([, r]) => r !== 'mordred').map(([id]) => id));
+    const flagged = new Set<string>();
+    const cand = new Set(candidates);
+    for (const v of obs.voteHistory) if (cand.has(v.leader) && v.team.some((id) => seen.has(id))) flagged.add(v.leader);
+    return flagged;
+  }
   const me = obs.myPlayerId;
   const reds = new Set<string>([...(obs.allEvilIds ?? []), ...obs.knownEvils, me]);
   const mates = obs.knownEvils.filter((id) => id !== me);

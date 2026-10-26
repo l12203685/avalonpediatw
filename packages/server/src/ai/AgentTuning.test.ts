@@ -244,9 +244,14 @@ describe('AgentTuning — flags', () => {
         'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
         'teamDominanceGate,mustFailGate,' +
         'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly,' +
-        'assassinVisibleRedTier',
+        'assassinVisibleRedTier,returnLake',
     );
-    const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false };
+    // 還湖 (Edward 2026-10-26): on by default, off in the legacy table, with its own switch.
+    expect(DEFAULT_AGENT_TUNING.returnLake).toBe(true);
+    expect(LEGACY_AGENT_TUNING.returnLake).toBe(false);
+    expect(AGENT_TUNING_ENV.returnLake).toBe('AVALON_TUNING_RETURN_LAKE');
+    expect(tuningFromEnv({ AVALON_TUNING_RETURN_LAKE: '0' })).toEqual({ returnLake: false });
+    const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false, returnLake: false };
     expect(describeAgentTuning(before1G)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +

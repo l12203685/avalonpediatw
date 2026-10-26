@@ -27,6 +27,15 @@
  *        When A0 leaves no world (a human good holder lied, or the record
  *        is wrong; about 0.8% of the 牌譜 games) the caller falls back to
  *        L0 (`l1Empty`, level `'L1*'`) and the invariant harness logs it.
+ *        Two more table conventions live at L1 (Edward 2026-10-26):
+ *        - A1 "no stalling": once two missions have failed, reds who can
+ *          fail a mission do (the third fail wins), so a later success
+ *          holds fewer reds than that round's fails required (one-fail
+ *          rounds: no red at all);
+ *        - A2 "return the lake" (還湖): a holder the previous lake declared
+ *          red, who could lake a publicly certain-good seat and lakes
+ *          someone else, admits being red (認壞). It says nothing about
+ *          the accuser (`returnLakeOptions`).
  *
  * Parameters (critique M8): player count, number of reds (the lobby's role
  * setup — `obs.evilCount` when the server provides it, otherwise the
@@ -186,9 +195,18 @@ export function enumerateWorlds(
       .filter((l) => l.holder !== 0 && l.target !== 0)
     : [];
 
+  // A1 / A2 (L1, Edward 2026-10-26): caps on successful missions after two fails; admitted reds.
+  const caps = opts.lakes ? noStallCaps(obs, params).map((c) => ({ mask: c.team.reduce((m, id) => m | bit(id), 0), max: c.max })) : [];
+  // A2 is the table's inference: a good viewer it would name knows better (a human holder who did not
+  // return the lake), so it never applies to the viewer's own good seat.
+  if (opts.lakes) {
+    for (const id of admittedReds(obs)) if (!(selfMode === 'good' && id === obs.myPlayerId)) requiredMask |= bit(id);
+  }
+
   const out: number[] = [];
   for (const mask of candidates) {
     if ((mask & requiredMask) !== requiredMask) continue;
+    if (caps.some((c) => popcount(mask & c.mask) > c.max)) continue;
     // Percival: two thumbs = Merlin + Morgana → exactly one red; one thumb
     // (Morgana off in the lobby) = Merlin → good.
     if (wizardCount >= 2 && popcount(mask & wizardMask) !== 1) continue;
@@ -207,6 +225,73 @@ export function enumerateWorlds(
       if (((mask & l.target) !== 0) !== l.saysEvil) { ok = false; break; }
     }
     if (ok) out.push(mask);
+  }
+  return out;
+}
+
+/**
+ * A1 "no stalling" (Edward 2026-10-26「任務已經兩局失敗 … 因為不會刻意拖延遊戲, CDEF 必為四好」): every
+ * successful mission played after two failed ones holds at most `failsRequired − 1` reds.
+ */
+export function noStallCaps(
+  obs: Pick<PlayerObservation, 'questHistory'>,
+  params: Pick<CertaintyParams, 'failsRequired'>,
+): Array<{ team: readonly string[]; max: number }> {
+  const out: Array<{ team: readonly string[]; max: number }> = [];
+  let failed = 0;
+  for (const q of [...obs.questHistory].sort((a, b) => a.round - b.round)) {
+    // Failed = enough fail cards for its round (INV-B3: never the result field alone; R4 needs two).
+    const required = params.failsRequired[q.round - 1] ?? 1;
+    const didFail = (q.failCount ?? 0) >= required;
+    if (!didFail && failed >= 2) out.push({ team: q.team, max: required - 1 });
+    if (didFail) failed += 1;
+  }
+  return out;
+}
+
+/** What the table publicly knew right before lake `k` (missions up to its round, the lakes before it). */
+function publicObsBeforeLake(obs: PlayerObservation, k: number): PlayerObservation {
+  const lakes = obs.lakeHistory ?? [];
+  const round = lakes[k].round;
+  return {
+    ...obs,
+    knownEvils: [],
+    knownWizards: undefined,
+    myLakeResults: [],
+    allEvilIds: undefined,
+    allEvilRoles: undefined,
+    questHistory: obs.questHistory.filter((q) => q.round <= round),
+    lakeHistory: lakes.slice(0, k),
+  };
+}
+
+/**
+ * 還湖 (Edward 2026-10-26): when the holder about to choose was declared red by the previous lake,
+ * the publicly certain-good seats it may lake (`validTargets`); empty = nothing to return the lake to.
+ */
+export function returnLakeOptions(obs: PlayerObservation, holderId: string, validTargets: readonly string[]): string[] {
+  const lakes = obs.lakeHistory ?? [];
+  const last = lakes[lakes.length - 1];
+  if (!last || last.declaredClaim !== 'evil' || last.targetId !== holderId) return [];
+  const good = new Set(buildPublicCertainty(obs).certGood('L1*'));
+  return validTargets.filter((id) => good.has(id));
+}
+
+/**
+ * A2: holders who did not return the lake when they could (the previous lake declared them red and a
+ * publicly certain-good seat was a valid target) — red at L1.
+ */
+export function admittedReds(obs: PlayerObservation): string[] {
+  const lakes = obs.lakeHistory ?? [];
+  const out: string[] = [];
+  for (let k = 1; k < lakes.length; k += 1) {
+    const prev = lakes[k - 1];
+    const cur = lakes[k];
+    if (prev.declaredClaim !== 'evil' || prev.targetId !== cur.holderId) continue;
+    const used = new Set(lakes.slice(0, k).flatMap((l) => [l.holderId, l.targetId]));
+    const valid = obs.allPlayerIds.filter((id) => id !== cur.holderId && !used.has(id));
+    const options = returnLakeOptions(publicObsBeforeLake(obs, k), cur.holderId, valid);
+    if (options.length > 0 && !options.includes(cur.targetId)) out.push(cur.holderId);
   }
   return out;
 }

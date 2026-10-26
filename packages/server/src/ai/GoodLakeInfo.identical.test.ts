@@ -8,9 +8,16 @@
  * games, the 1913 lake-legal ones included), for the full legal target list
  * and for the thumb-free list Percival's caller passes.
  *
- * The digest below is the SHA-256 of the same dump produced at lane/r6-percival
+ * The digest was the SHA-256 of the same dump produced at lane/r6-percival
  * 7c005d7 (before the refactor): 7442 decision points, 10 of them with no
- * consistent world (`null`, unchanged).
+ * consistent world (`null`, unchanged) — c7bc6137…fad8.
+ *
+ * 2026-10-26 (Edward: A1 no stalling after two fails, A2 還湖 at L1): the dump
+ * changes exactly where a convention applies. Checked once against the dump
+ * before A1 / A2 (which still matched c7bc6137…): 1508 of the 7442 points
+ * changed (659 picks), every one of them at a decision point where
+ * `noStallCaps` or `admittedReds` is non-empty; none elsewhere. The digest
+ * below is the dump after A1 / A2.
  */
 import { describe, expect, it } from 'vitest';
 import * as crypto from 'crypto';
@@ -20,7 +27,7 @@ import { rowsFromSheet, parseReplayGame } from './benchmark/sheetsReplay';
 import { buildReplayObservation, seatId, validLakeTargetSeats } from './benchmark/replayObservation';
 import { analyzeGoodLake, pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 
-const DIGEST_BEFORE_REFACTOR = 'c7bc61376ef68dbd000ed8de7eefeaef27685eec8bd637e9bc0c7c4fd1b2fad8';
+const DIGEST_BEFORE_REFACTOR = '1965add6d17f58828fccc92e50bde6698b96612d121e688e5315107912831fe7';
 
 describe('GoodLakeInfo — identical analyses after the certainty-layer refactor', () => {
   it('every lake decision point of the 牌譜 reproduces the pre-refactor analysis exactly', () => {

@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTimerMultiplier } from '@avalon/shared';
+import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTimerMultiplier, type Role } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
@@ -1968,6 +1968,10 @@ export class GameServer {
           .filter(([, p]) => p.team === 'evil')
           .map(([id]) => id)
       : undefined;
+    // 刺殺階段紅方開牌相認 (Edward 2026-10-26): the assassinator also knows each red's role.
+    const allEvilRoles = allEvilIds
+      ? Object.fromEntries(allEvilIds.map((id) => [id, r.players[id].role as Role]))
+      : undefined;
 
     // Public-only Lake history: declared records, plus finished undeclared
     // ones as 'none' (S1-9c, 2026-10-14) — the pending lake stays hidden so
@@ -1985,6 +1989,7 @@ export class GameServer {
       knownEvils,
       knownWizards,
       allEvilIds,
+      allEvilRoles,
       currentRound:  r.currentRound,
       currentLeader: engine.getCurrentLeaderId(),
       failCount:     r.failCount,

@@ -26,7 +26,7 @@ import { computePyramidScores } from './baseline';
 import { missionFailed } from './missionFacts';
 import { ForwardAgent, USE_FORWARD_REASONING, interpret } from './forward';
 import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory, goodLakeAvoidSet } from './LakePolicy';
-import { claimPossibleForGoodHolder } from './belief/Certainty';
+import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
 import { anyGate, certaintyFor, gateOptionsFrom, teamGateBreach } from './LogicGates';
 import { analyzeGoodLake } from './GoodLakeInfo';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
@@ -570,6 +570,17 @@ export function explainLakeTarget(
   tuning: AgentTuning = getDefaultAgentTuning(),
 ): DecisionExplanation {
   const candidates = eligible.filter((id) => id !== obs.myPlayerId);
+  // 還湖 (Edward 2026-10-26, `returnLake`): the previous lake declared this holder red and a publicly
+  // certain-good seat could be laked — the pick returns the lake (not returning it = 認壞).
+  const back = tuning.returnLake ? returnLakeOptions(obs, obs.myPlayerId, candidates) : [];
+  if (back.includes(targetId)) {
+    return {
+      reason: `湖 ${seatTxt(obs, targetId)}：上一個湖宣告自己是紅，${seatsTxt(obs, back)} 照公開紀錄確定是好人，把湖交給其中一位（還湖）。`,
+      rule: '還湖：被上一個湖說壞的人，把湖交給確定是好人的玩家；不還湖等於認壞',
+      knowledge: describeKnowledge(obs),
+      suspects: [],
+    };
+  }
   const parts: string[] = [`候選 ${candidates.length} 人`];
   parts.push(`${seatTxt(obs, targetId)} ${questRecordTxt(obs, targetId)}`);
   if (obs.myTeam === 'evil' && !isOberon(obs)) {

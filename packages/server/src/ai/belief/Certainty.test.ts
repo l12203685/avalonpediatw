@@ -19,6 +19,7 @@ import {
   claimPossibleForGoodHolder,
   evilCountFor,
   popcount,
+  returnLakeOptions,
 } from './Certainty';
 import { seededRandom } from '../benchmark/agreement';
 
@@ -217,15 +218,26 @@ function randomGame(n: number, rnd: () => number, evilCount?: number): RandomGam
   const rounds = 1 + Math.floor(rnd() * 5);
   let holder = all[n - 1];
   const used = new Set<string>([holder]);
+  let failed = 0;
   for (let r = 1; r <= rounds; r++) {
     const size = cfg.questTeams[r - 1];
     const pool = [...all].sort(() => rnd() - 0.5).slice(0, size);
     const reds = pool.filter((id) => EVIL.has(roles[all.indexOf(id)])).length;
-    const fails = Math.floor(rnd() * (reds + 1));
+    // A1 (Edward 2026-10-26): after two failed missions the reds on a team all fail it (no stalling).
+    const fails = failed >= 2 ? reds : Math.floor(rnd() * (reds + 1));
     quests.push(quest(r, pool, fails));
+    if (fails > 0) failed += 1;
     if (n >= 7 && r >= 2 && r <= 4 && r < rounds) {
       const targets = all.filter((id) => !used.has(id));
-      const target = targets[Math.floor(rnd() * targets.length)];
+      // 還湖 / A2 (Edward 2026-10-26): a good holder the previous lake declared red returns the lake to a
+      // publicly certainly-good seat when there is one (a red holder does what it likes: refusing only
+      // admits what is true).
+      const publicSoFar = obs({
+        playerCount: n, allPlayerIds: all, myPlayerId: holder, evilCount, questHistory: [...quests],
+        lakeHistory: lakes.map(({ round, holderId, targetId, declaredClaim }) => ({ round, holderId, targetId, declaredClaim })),
+      });
+      const back = EVIL.has(roles[all.indexOf(holder)]) ? [] : returnLakeOptions(publicSoFar, holder, targets);
+      const target = back.length > 0 ? back[0] : targets[Math.floor(rnd() * targets.length)];
       const result: 'good' | 'evil' = EVIL.has(roles[all.indexOf(target)]) ? 'evil' : 'good';
       const holderRed = EVIL.has(roles[all.indexOf(holder)]);
       const claim: 'good' | 'evil' | 'none' = holderRed

@@ -66,6 +66,18 @@ function goodObs(p: {
 
 // ── The assassinator ───────────────────────────────────────────
 
+
+/**
+ * The r5_must_fail_reuse fixture with R1 turned into a success. In the recorded game R1 and R2 failed, so since
+ * A1 (Edward 2026-10-26: no stalling after two fails) R3's four are certainly good, P5 is R4's red and the
+ * gates-off bot no longer re-proposes the R4 team. With one failed mission before R3, A1 does not apply and the
+ * fixture shows the breach the gates bar, as recorded.
+ */
+function withoutNoStall(o: PlayerObservation): PlayerObservation {
+  const quests = o.questHistory.map((q, i) => (i === 0 ? { ...q, result: 'success' as const, failCount: 0 } : q));
+  return { ...o, questHistory: quests, questResults: quests.map((q) => q.result) };
+}
+
 describe('review: the assassinator is Mordred at 7 players, Morgana when neither is dealt', () => {
   const r7: Role[] = ['merlin', 'percival', 'loyal', 'loyal', 'morgana', 'mordred', 'oberon'];
 
@@ -300,9 +312,10 @@ describe('review: practice-review texts', () => {
     const fx = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../__tests__/fixtures/logic_gates/r5_must_fail_reuse.json'), 'utf8')) as {
       seed: string; obs: PlayerObservation;
     };
-    const agent = new HeuristicAgent(fx.obs.myPlayerId, undefined, undefined, ON);
-    const view = buildCertainty(fx.obs);
-    const r = withSeededRandom(fx.seed, () => replayRule(fx.obs, agent, { type: 'team_select', teamIds: [] }, { forwardActive: true }));
+    const o = withoutNoStall(fx.obs);
+    const agent = new HeuristicAgent(o.myPlayerId, undefined, undefined, ON);
+    const view = buildCertainty(o);
+    const r = withSeededRandom(fx.seed, () => replayRule(o, agent, { type: 'team_select', teamIds: [] }, { forwardActive: true }));
     expect(r?.rule).toMatch(/^邏輯閘門（好人隊長）：前向推理原本最高分的隊 .*（必敗隊） → 不派/);
     expect(view.l1Empty).toBe(false);
   });
