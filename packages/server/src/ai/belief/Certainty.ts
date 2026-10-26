@@ -233,6 +233,8 @@ export class CertaintyView {
   private readonly index: Map<string, number>;
   private readonly declaredBlue: Array<{ holder: string; target: string }>;
   private readonly allDeclaredBlue: Set<string>;
+  /** `holder>target` of the viewer's own red declarations its private lake result contradicts. */
+  private readonly ownRedContradicted: Set<string>;
   private readonly cache = new Map<string, { and: number; or: number }>();
 
   constructor(obs: PlayerObservation, l0: number[], l1: number[], params: CertaintyParams) {
@@ -256,6 +258,23 @@ export class CertaintyView {
       .filter((l) => l.declaredClaim === 'good')
       .filter((l) => !(l.holderId === obs.myPlayerId && sawRed.has(`${l.round}|${l.targetId}`)))
       .map((l) => ({ holder: l.holderId, target: l.targetId }));
+    // The same for a declared-red pair ("A good ⇒ B red", 2026-10-26 review):
+    // the viewer's own red declaration of a seat it privately saw blue binds nothing.
+    const sawBlue = new Set((obs.myLakeResults ?? [])
+      .filter((r) => r.result === 'good')
+      .map((r) => `${r.round}|${r.targetId}`));
+    this.ownRedContradicted = new Set(declaredLakes(obs.lakeHistory)
+      .filter((l) => l.declaredClaim === 'evil' && l.holderId === obs.myPlayerId && sawBlue.has(`${l.round}|${l.targetId}`))
+      .map((l) => `${l.holderId}>${l.targetId}`));
+  }
+
+  /**
+   * Whether `holder` declaring `target` red binds in this view (L1: holder
+   * good ⇒ target red). False only for the viewer's own declaration that its
+   * private lake result contradicts (the declared-red twin of `vouches`).
+   */
+  redPairBinds(holder: string, target: string): boolean {
+    return !this.ownRedContradicted.has(`${holder}>${target}`);
   }
 
   /**

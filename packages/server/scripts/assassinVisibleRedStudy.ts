@@ -25,7 +25,16 @@
  *       candidates ever certainly proposed a visible red on a non-forced
  *       proposal (from R2, and from R1), the share among Merlins and among the
  *       other blues, where the human assassin's target fell, and the human
- *       hit rate by tier.
+ *       hit rate by tier;
+ *   (c) the soft factor on top of the assassination model, at the same
+ *       assassinations: Merlin hit (all, and on the model's own held-out 30%
+ *       of games), agreement with the human target and the mean ln P(Merlin)
+ *       for the model alone, the tier, the tier + the batch-1G factor, the
+ *       tier + the measured ambiguous-lead LR in-sample and 2-fold
+ *       cross-fitted (rates from the other half of the games), and the tier
+ *       + the residual β·ln LR given the model's score (conditional logit with
+ *       the score as offset, β fitted on the other half) — whether the factor
+ *       adds anything the model's own leader features do not already carry.
  *
  * Every rate is printed with n and a Wilson 95% interval. Output is aggregate
  * only (no names, no game ids).
@@ -34,6 +43,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { rowsFromSheet, parseReplayGame, type ReplayGame, type ReplayProposal } from '../src/ai/benchmark/sheetsReplay';
+import { buildReplayObservation, seatId } from '../src/ai/benchmark/replayObservation';
+import { scoreAssassinCandidates } from '../src/ai/assassin/AssassinModel';
+import { tierCandidates, visibleRedEvidence } from '../src/ai/assassin/VisibleRedProposals';
 
 interface Args { json?: string; cache: string }
 
@@ -113,8 +125,8 @@ function assassinClass(team: readonly number[], s: Seats): Klass {
 
 type Group = 'merlin' | 'percival' | 'loyal';
 
-interface Cell { n: number; visible: number; certain: number; ambiguous: number; none: number }
-const emptyCell = (): Cell => ({ n: 0, visible: 0, certain: 0, ambiguous: 0, none: 0 });
+interface Cell { n: number; visible: number; certain: number; ambiguous: number; none: number; ambSeen: number; ambUnseen: number }
+const emptyCell = (): Cell => ({ n: 0, visible: 0, certain: 0, ambiguous: 0, none: 0, ambSeen: 0, ambUnseen: 0 });
 
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
@@ -137,7 +149,11 @@ function main(): void {
     const c = cell(key);
     c.n++;
     if (truthVisible(p.teamSeats, s)) c.visible++;
-    c[assassinClass(p.teamSeats, s)]++;
+    const k = assassinClass(p.teamSeats, s);
+    c[k]++;
+    if (k === 'ambiguous') {
+      if (p.teamSeats.includes(s.morgana)) c.ambSeen++; else c.ambUnseen++;
+    }
   };
   let skipped = 0;
   for (const g of games) {
@@ -161,6 +177,7 @@ function main(): void {
   const rounds = ['R1', 'R2', 'R3', 'R4', 'R5', 'R2+', 'all'];
   const lrTable: Record<string, Record<string, Ratio & { merlin: Rate; other: Rate }>> = {};
   const mixTable: Record<string, number> = {};
+  const rateTable: Record<string, Record<string, { merlinSeen: number; merlinUnseen: number; otherSeen: number; otherUnseen: number }>> = {};
   for (const kind of ['nonforced', 'forced']) {
     console.log(`\n  ${kind === 'forced' ? 'forced 5th proposals' : 'non-forced proposals (attempts 1-4)'}`);
     for (const r of rounds) {
@@ -178,13 +195,21 @@ function main(): void {
       (lrTable[`${kind}|visible`] ??= {})[r] = {
         ...rateRatio(m.visible, m.n, o.visible, o.n), merlin: wilsonRate(m.visible, m.n), other: wilsonRate(o.visible, o.n),
       };
-      // The soft likelihood of an ambiguous lead (the assassin's view: the one
-      // teammate on it is seen with probability 1/2): 1/2 LR(seen) + 1/2 LR(not seen).
-      const lrSeen = (m.visible / m.n) / (o.visible / o.n);
-      const lrUnseen = (1 - m.visible / m.n) / (1 - o.visible / o.n);
-      const mix = 0.5 * lrSeen + 0.5 * lrUnseen;
+      // The soft likelihood of an ambiguous lead (exactly one of the two
+      // teammates on the team, nothing certain): the assassin cannot tell
+      // whether it is Morgana (seen) or Mordred (unseen), so its likelihood
+      // ratio is the ratio of the two MIXED RATES, p = 1/2 —
+      //   (p·m_seen + (1−p)·m_unseen) / (p·o_seen + (1−p)·o_unseen)
+      // which at p = 1/2 is exactly LR(ambiguous) above. (Batch 1G averaged
+      // two whole-team ratios instead, 1/2 LR(visible) + 1/2 LR(not visible);
+      // withdrawn 2026-10-26.)
+      const rate = (k: number, n: number): number => (n === 0 ? 0 : k / n);
+      const mS = rate(m.ambSeen, m.n), mU = rate(m.ambUnseen, m.n), oS = rate(o.ambSeen, o.n), oU = rate(o.ambUnseen, o.n);
+      const mix = (0.5 * mS + 0.5 * mU) / (0.5 * oS + 0.5 * oU);
       mixTable[`${kind}|${r}`] = mix;
-      console.log(`       ambiguous-lead multiplier 1/2 LR(seen) + 1/2 LR(not seen) = 1/2 × ${lrSeen.toFixed(3)} + 1/2 × ${lrUnseen.toFixed(3)} = ${mix.toFixed(3)}`);
+      (rateTable[kind] ??= {})[r] = { merlinSeen: mS, merlinUnseen: mU, otherSeen: oS, otherUnseen: oU };
+      console.log(`       ambiguous split  Morgana-only Merlin ${fmtRate(wilsonRate(m.ambSeen, m.n))} other ${fmtRate(wilsonRate(o.ambSeen, o.n))}; Mordred-only Merlin ${fmtRate(wilsonRate(m.ambUnseen, m.n))} other ${fmtRate(wilsonRate(o.ambUnseen, o.n))}`);
+      console.log(`       ambiguous-lead multiplier (p = 1/2) = (${mS.toFixed(4)} + ${mU.toFixed(4)}) / (${oS.toFixed(4)} + ${oU.toFixed(4)}) = ${mix.toFixed(3)}`);
     }
   }
 
@@ -240,18 +265,174 @@ function main(): void {
     console.log(`    human hit rate        all ${fmtRate(wilsonRate(t.hits, t.picks))}; target flagged ${fmtRate(wilsonRate(t.hitsFlaggedPick, t.pickFlagged))}; target unflagged ${fmtRate(wilsonRate(t.hitsUnflaggedPick, t.picks - t.pickFlagged))}`);
   }
 
+  const softFactor = sectionC(games);
+
   if (args.json) {
     const out = {
+      softFactor,
       generatedBy: 'packages/server/scripts/assassinVisibleRedStudy.ts',
       games: games.length,
       cells: Object.fromEntries(cells),
       lr: lrTable,
       ambiguousLeadMultiplier: mixTable,
+      ambiguousLeadRates: rateTable,
       assassination: tiers,
     };
     fs.writeFileSync(path.resolve(args.json), JSON.stringify(out, null, 2));
     console.log(`\nwrote ${path.resolve(args.json)}`);
   }
+}
+
+// ── (c) the soft factor on top of the assassination model ─────────────
+
+/** FNV-1a (the split hash of scripts/assassinModel.ts). */
+function fnv1a(input: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+type RateRow = { mS: number; mU: number; oS: number; oU: number };
+
+/** Non-forced ambiguous-lead rates by round over `games` (the table of `AMBIGUOUS_LEAD_RATES`). */
+function ambiguousRates(games: readonly ReplayGame[]): Map<number, RateRow> {
+  const c = new Map<number, { m: number; mS: number; mU: number; o: number; oS: number; oU: number }>();
+  for (const g of games) {
+    const s = redSeats(g);
+    if (!s) continue;
+    for (const p of g.proposals) {
+      if (p.forced) continue;
+      const role = g.seatRoles[p.leaderSeat - 1] as string;
+      if (role !== 'merlin' && role !== 'percival' && role !== 'loyal') continue;
+      let x = c.get(p.round);
+      if (!x) { x = { m: 0, mS: 0, mU: 0, o: 0, oS: 0, oU: 0 }; c.set(p.round, x); }
+      const amb = assassinClass(p.teamSeats, s) === 'ambiguous';
+      const seen = amb && p.teamSeats.includes(s.morgana);
+      if (role === 'merlin') { x.m++; if (amb) { if (seen) x.mS++; else x.mU++; } } else { x.o++; if (amb) { if (seen) x.oS++; else x.oU++; } }
+    }
+  }
+  const out = new Map<number, RateRow>();
+  for (const [r, x] of c) out.set(r, { mS: x.mS / Math.max(1, x.m), mU: x.mU / Math.max(1, x.m), oS: x.oS / Math.max(1, x.o), oU: x.oU / Math.max(1, x.o) });
+  return out;
+}
+
+const mixedLr = (t: RateRow | undefined): number => (t && t.oS + t.oU > 0 && t.mS + t.mU > 0 ? (t.mS + t.mU) / (t.oS + t.oU) : 1);
+
+interface AssassinationCase {
+  game: ReplayGame;
+  merlin: string;
+  human: string;
+  /** Model-test game (the assassination model's 30% held-out split). */
+  modelTest: boolean;
+  fold: number;
+  pool: string[];
+  all: string[];
+  score: Map<string, number>;
+  ambRounds: Map<string, number[]>;
+  oneG: Map<string, number>;
+}
+
+function sectionC(games: readonly ReplayGame[]): Record<string, unknown> {
+  console.log('\n(c) The soft factor on top of the assassination model (human assassination states; the model\'s own score as the base)');
+  const cases: AssassinationCase[] = [];
+  for (const g of games) {
+    if (g.assassinTargetSeat === undefined || !redSeats(g)) continue;
+    const aSeat = g.seatRoles.indexOf('assassin' as never) + 1;
+    const mSeat = g.seatRoles.indexOf('merlin' as never) + 1;
+    if (aSeat === 0 || mSeat === 0) continue;
+    const obs = buildReplayObservation(g, aSeat, { kind: 'assassination' });
+    const evil = new Set([...(obs.allEvilIds ?? []), ...obs.knownEvils, obs.myPlayerId]);
+    const all = obs.allPlayerIds.filter((id) => !evil.has(id));
+    const ev = visibleRedEvidence(obs, all);
+    // The batch-1G factor (withdrawn): 1/2 LR(visible) + 1/2 LR(not visible), from the study's own table.
+    const oneGTable: Record<number, number> = { 1: 1.181, 2: 1.171, 3: 0.981, 4: 1.005, 5: 0.699 };
+    const oneG = new Map(all.map((id) => [id, (ev.get(id)?.ambiguousRounds ?? []).reduce((a, r) => a + Math.log(oneGTable[r] ?? 1), 0)]));
+    cases.push({
+      game: g,
+      merlin: seatId(mSeat),
+      human: seatId(g.assassinTargetSeat),
+      modelTest: fnv1a(`assassin|${g.id}`) % 100 >= 70,
+      fold: fnv1a(`xfit|${g.id}`) % 2,
+      pool: tierCandidates(all, ev),
+      all,
+      score: scoreAssassinCandidates(obs, all),
+      ambRounds: new Map(all.map((id) => [id, ev.get(id)?.ambiguousRounds ?? []])),
+      oneG,
+    });
+  }
+  const tables = [0, 1].map((f) => ambiguousRates(games.filter((g) => fnv1a(`xfit|${g.id}`) % 2 !== f)));
+  const full = ambiguousRates(games);
+  const llOf = (c: AssassinationCase, id: string, t: Map<number, RateRow>): number =>
+    (c.ambRounds.get(id) ?? []).reduce((a, r) => a + Math.log(mixedLr(t.get(r))), 0);
+
+  // Residual of the factor given the model's score: conditional logit with the
+  // score as offset, one coefficient β on the factor's ln-likelihood, fitted on
+  // the other fold (Newton), within the tier pool.
+  const fitBeta = (train: readonly AssassinationCase[], t: Map<number, RateRow>): number => {
+    let beta = 0;
+    for (let it = 0; it < 30; it++) {
+      let grad = 0, hess = 0;
+      for (const c of train) {
+        if (!c.pool.includes(c.merlin)) continue;
+        const xs = c.pool.map((id) => llOf(c, id, t));
+        const ss = c.pool.map((id, i) => (c.score.get(id) ?? 0) + beta * xs[i]);
+        const mx = Math.max(...ss);
+        const es = ss.map((v) => Math.exp(v - mx));
+        const z = es.reduce((a, b) => a + b, 0);
+        const ex = xs.reduce((a, x, i) => a + x * es[i] / z, 0);
+        const ex2 = xs.reduce((a, x, i) => a + x * x * es[i] / z, 0);
+        grad += xs[c.pool.indexOf(c.merlin)] - ex;
+        hess -= ex2 - ex * ex;
+      }
+      if (hess > -1e-9) break;
+      const step = grad / hess;
+      beta -= step;
+      if (Math.abs(step) < 1e-7) break;
+    }
+    return beta;
+  };
+  const betas = [0, 1].map((f) => fitBeta(cases.filter((c) => c.fold !== f), tables[f]));
+  const betaFull = fitBeta(cases, full);
+
+  type Variant = { label: string; pool: (c: AssassinationCase) => string[]; adj: (c: AssassinationCase, id: string) => number };
+  const variants: Variant[] = [
+    { label: 'model alone', pool: (c) => c.all, adj: () => 0 },
+    { label: 'tier', pool: (c) => c.pool, adj: () => 0 },
+    { label: 'tier + 1G factor (1/2 LR(vis) + 1/2 LR(not), in-sample)', pool: (c) => c.pool, adj: (c, id) => c.oneG.get(id) ?? 0 },
+    { label: 'tier + measured ambiguous LR (in-sample)', pool: (c) => c.pool, adj: (c, id) => llOf(c, id, full) },
+    { label: 'tier + measured ambiguous LR (2-fold cross-fit)', pool: (c) => c.pool, adj: (c, id) => llOf(c, id, tables[c.fold]) },
+    { label: 'tier + residual β·ln LR given the model (2-fold cross-fit)', pool: (c) => c.pool, adj: (c, id) => betas[c.fold] * llOf(c, id, tables[c.fold]) },
+  ];
+  const out: Record<string, unknown> = { betaFold: betas, betaFull, n: cases.length, modelTest: cases.filter((c) => c.modelTest).length };
+  console.log(`  ${cases.length} assassinations (${cases.filter((c) => c.modelTest).length} in the model's held-out 30%); residual β (fold 0 / fold 1 / all) ${betas.map((b) => b.toFixed(3)).join(' / ')} / ${betaFull.toFixed(3)}`);
+  for (const v of variants) {
+    let hit = 0, hitTest = 0, agree = 0, lp = 0, lpN = 0;
+    for (const c of cases) {
+      const pool = v.pool(c);
+      const sc = pool.map((id) => (c.score.get(id) ?? 0) + v.adj(c, id));
+      const order = c.game.seatRoles.map((_, i) => seatId(i + 1));
+      let best = 0;
+      for (let i = 1; i < pool.length; i++) {
+        if (sc[i] > sc[best] || (sc[i] === sc[best] && order.indexOf(pool[i]) < order.indexOf(pool[best]))) best = i;
+      }
+      if (pool[best] === c.merlin) { hit++; if (c.modelTest) hitTest++; }
+      if (pool[best] === c.human) agree++;
+      const mi = pool.indexOf(c.merlin);
+      if (mi >= 0) {
+        const mx = Math.max(...sc);
+        const z = sc.reduce((a, s) => a + Math.exp(s - mx), 0);
+        lp += sc[mi] - mx - Math.log(z);
+        lpN++;
+      }
+    }
+    const nTest = cases.filter((c) => c.modelTest).length;
+    console.log(`  ${v.label.padEnd(62)} Merlin hit ${fmtRate(wilsonRate(hit, cases.length))}; model held-out ${fmtRate(wilsonRate(hitTest, nTest))}; same target as the human ${fmtRate(wilsonRate(agree, cases.length))}; mean ln P(Merlin | in pool) ${(lp / Math.max(1, lpN)).toFixed(4)} (n ${lpN})`);
+    out[v.label] = { hit, hitTest, agree, n: cases.length, nTest, meanLogP: lp / Math.max(1, lpN), nLogP: lpN };
+  }
+  return out;
 }
 
 main();

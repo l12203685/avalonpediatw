@@ -8,7 +8,8 @@
  *   - Merlin sees every evil except Mordred; assassin / Morgana / Mordred
  *     see each other (not Oberon); Oberon, loyal and Percival get
  *     `knownEvils = []`; Percival gets `knownWizards = [Merlin, Morgana]`;
- *   - the assassin additionally gets `allEvilIds` in the assassination phase;
+ *   - the assassinator (the assassin; Mordred / Morgana when no assassin is
+ *     dealt) additionally gets `allEvilIds` in the assassination phase;
  *   - forced 5th proposals appear as unanimous-approve vote records (what
  *     GameEngine synthesises), other proposals carry the reconstructed votes;
  *   - `lakeHistory` holds the lakes of earlier rounds; an undeclared one
@@ -16,10 +17,13 @@
  *     dropped);
  *   - `myLakeResults` holds what this seat saw with the lake (S1-9b,
  *     2026-10-14: the holder's private result; nobody else gets it);
- *   - `evilCount` = the number of reds of the game.
+ *   - `evilCount` = the number of reds of the game; `lobbyRoles` = the roles
+ *     dealt (the public setup).
  */
 
+import type { Role } from '@avalon/shared';
 import type { PlayerObservation, QuestRecord, VoteRecord, LakePublicRecord, PrivateLakeResult } from '../types';
+import { isAssassinator } from '../../game/assassinator';
 import {
   campOf,
   EVIL_ROLES,
@@ -215,7 +219,7 @@ export function buildReplayObservation(
   }
 
   const knowledge = roleKnowledge(game, seat);
-  const allEvilIds = role === 'assassin' && point.kind === 'assassination'
+  const allEvilIds = isAssassinator(role, game.seatRoles) && point.kind === 'assassination'
     ? game.seatRoles.map((r, i) => (EVIL_ROLES.has(r) ? seatId(i + 1) : null)).filter((x): x is string => x !== null)
     : undefined;
 
@@ -239,6 +243,7 @@ export function buildReplayObservation(
     lakeHistory,
     myLakeResults,
     evilCount: game.seatRoles.filter((r) => EVIL_ROLES.has(r)).length,
+    lobbyRoles: [...game.seatRoles] as Role[],
   };
 }
 

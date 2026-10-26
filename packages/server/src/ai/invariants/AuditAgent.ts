@@ -38,6 +38,13 @@ export interface DecisionRecord {
   validTargets?: readonly string[];
   /** lake_target, good holder: the avoid set the deciding agent's tuning uses (INV-PL, structural). */
   lakeAvoid?: readonly string[];
+  /**
+   * lake_target, Percival: the target the same lake policy picks, under the
+   * same draws, for a LOYAL holding Percival's built-in fact (the same
+   * observation with the role loyal, the thumbs kept as the "exactly one is
+   * red" constraint) — INV-PL2, the behavioural check of the blue lake.
+   */
+  lakeAsLoyal?: string;
   /** lake_claim: the public claim (`null` = no declaration). */
   lakeClaim?: 'good' | 'evil' | null;
   /** lake_claim: the target's real camp (what the holder saw). */
@@ -127,6 +134,10 @@ export class AuditAgent implements AvalonAgent {
       validTargets: validTargets ? [...validTargets] : undefined,
       lakeAvoid: obs.myTeam === 'good' ? [...goodLakeAvoidSet(obs, this.base.tuning)] : undefined,
     };
+    if (obs.myRole === 'percival') {
+      const asLoyal: PlayerObservation = { ...obs, myRole: 'loyal' };
+      rec.lakeAsLoyal = withSeededRandom(seed, () => this.base.pickLakeTarget(asLoyal, validTargets));
+    }
     this.records.push(rec);
     return rec;
   }

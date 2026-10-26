@@ -281,7 +281,9 @@ export function declaredBlueClosure(
  *     needed (R4) a single certain red is the probability layer's (D2).
  * Nothing is certain at the K level when A0 leaves no world (L1 empty): no
  * entry then; a declaration the viewer itself made but privately saw
- * contradicted binds nothing either (`CertaintyView.vouches`). Checked pair by pair, a chain closes by itself (a team with A
+ * contradicted binds nothing either (`CertaintyView.vouches` for a
+ * declared-blue pair, `CertaintyView.redPairBinds` for a declared-red one).
+ * Checked pair by pair, a chain closes by itself (a team with A
  * and B but without C breaches B→C); the closure entries tell a fixer every
  * seat it must add. One rule-1 entry exists iff
  * `CertaintyView.strictlyDominated(team)` is non-null (the INV-K1 check).
@@ -312,7 +314,7 @@ function strictTeamHardRuleViolations(
     }
     if (view.failsRequired(ctx.round) === 1) {
       for (const t of state.declaredRedByHolder.get(holder) ?? []) {
-        if (teamSet.has(t)) out.push({ rule: 2, holderId: holder, targetId: t });
+        if (teamSet.has(t) && view.redPairBinds(holder, t)) out.push({ rule: 2, holderId: holder, targetId: t });
       }
     }
   }

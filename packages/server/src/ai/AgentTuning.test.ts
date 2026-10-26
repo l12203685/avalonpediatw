@@ -221,13 +221,17 @@ describe('AgentTuning — flags', () => {
     expect(AGENT_TUNING_ENV.percivalBlueLake).toBe('AVALON_TUNING_PERCIVAL_BLUE_LAKE');
     expect(AGENT_TUNING_ENV.redPossibleClaimsOnly).toBe('AVALON_TUNING_RED_POSSIBLE_CLAIMS_ONLY');
     // Batch 1G (logic_first.md 第 9 節, 2026-10-26): the assassination tier for
-    // candidates who certainly proposed a red Merlin sees, and the soft likelihood.
+    // candidates who certainly proposed a red Merlin sees (default on, a tier-2
+    // rule since the review), and the soft likelihood (default off since the
+    // review: it double-counts the model's leader features).
     const LOGIC_1G = ['assassinVisibleRedTier', 'assassinVisibleRedLikelihood'] as const;
+    expect(DEFAULT_AGENT_TUNING.assassinVisibleRedTier).toBe(true);
+    expect(DEFAULT_AGENT_TUNING.assassinVisibleRedLikelihood).toBe(false);
     for (const key of LOGIC_1G) {
-      expect(DEFAULT_AGENT_TUNING[key]).toBe(true);
       expect(LEGACY_AGENT_TUNING[key]).toBe(false);
       expect(parseTuningFlag(key)).toEqual({ [key]: true });
       expect(tuningFromEnv({ [AGENT_TUNING_ENV[key]]: '0' })).toEqual({ [key]: false });
+      expect(tuningFromEnv({ [AGENT_TUNING_ENV[key]]: '1' })).toEqual({ [key]: true });
       expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, [key]: true })).toBe(key);
     }
     expect(AGENT_TUNING_ENV.assassinVisibleRedTier).toBe('AVALON_TUNING_ASSASSIN_VISIBLE_RED_TIER');
@@ -240,7 +244,7 @@ describe('AgentTuning — flags', () => {
         'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
         'teamDominanceGate,mustFailGate,' +
         'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly,' +
-        'assassinVisibleRedTier,assassinVisibleRedLikelihood',
+        'assassinVisibleRedTier',
     );
     const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false };
     expect(describeAgentTuning(before1G)).toBe(

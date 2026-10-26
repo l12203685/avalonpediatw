@@ -1,55 +1,84 @@
 /**
- * VisibleRedProposals — the assassination tier of logic-first batch 1G
- * (2026-10-26; practice report (b); docs/ai/logic_first.md 第 9 節).
+ * VisibleRedProposals — the assassination tier of batch 1G (2026-10-26;
+ * practice report (b); docs/ai/logic_first.md 第 9 節), reclassified by the
+ * 2026-10-26 review as a TIER-2 rule (human-likeness: a strong human
+ * regularity, not an absolutely-true constraint — a real Merlin can, and
+ * human Merlins sometimes do, put a red they see on their own team).
  *
- * At the assassination the assassin knows every red seat (`allEvilIds`,
- * Oberon included) but not which of its two seen teammates is Mordred, the
- * one red Merlin does not see. A blue captain who put a red that Merlin
- * surely sees on their own team has acted against what Merlin knows: human
- * Merlins do it on 2.2% (R5) to 19.7% (R4) of their non-forced proposals,
- * loyal / Percival captains on 17.8–51.1% (likelihood ratio 0.12–0.46 by
- * round; `scripts/assassinVisibleRedStudy.ts`).
+ * At the assassination the assassinator (the assassin; Mordred / Morgana
+ * when no assassin is dealt, `game/assassinator.ts`) knows every red seat
+ * (`allEvilIds`, Oberon included) but not which of its seen teammates is
+ * Mordred, the one red Merlin does not see. Human Merlins put a red they see
+ * on their own team on 2.2% (R5) to 19.7% (R4) of their non-forced
+ * proposals, loyal / Percival captains on 17.8–51.1% (likelihood ratio
+ * 0.12–0.46 by round); at the assassination 10.5% of human Merlins carry the
+ * flag against 39.5% of the other blues (LR 0.27;
+ * `scripts/assassinVisibleRedStudy.ts`).
  *
- *   - `certain`   — the team holds the assassin or Oberon, or more of the
- *                   seen teammates than could all be Mordred (both of them):
- *                   in every role assignment the lobby allows, the team holds
- *                   a red Merlin sees;
- *   - `ambiguous` — the team holds exactly one seen teammate and nothing
- *                   certain: Morgana (seen) or Mordred (unseen), the assassin
- *                   cannot tell;
- *   - `none`      — no red the assassin could call seen.
+ *   - `certain`   — the team holds the assassinator itself (unless it is
+ *                   Mordred), Oberon, or more seen teammates than could all
+ *                   be Mordred: in every role assignment the LOBBY allows
+ *                   (`obs.lobbyRoles`; the standard table when absent) the
+ *                   team holds a red Merlin sees;
+ *   - `ambiguous` — exactly one seen teammate and nothing certain: Morgana
+ *                   (seen) or Mordred (unseen), the assassinator cannot tell;
+ *   - `none`      — no red the assassinator could call seen.
  *
  * `assassinVisibleRedTier` ranks every candidate who, as captain on a
- * non-forced proposal (the forced fifth proposal is excluded; R1 counts —
- * human Merlins avoid seen reds in R1 too, LR 0.12), proposed a `certain`
- * team strictly below every candidate who never did: a lexicographic tier on
- * top of the scores, never a hard exclusion (when every candidate did it,
- * the scores decide alone). `assassinVisibleRedLikelihood` multiplies a
- * candidate's probability, for each non-forced `ambiguous` proposal they led,
- * by the measured likelihood ratio mixed over what the assassin cannot tell:
- * p·LR_seen(round) + (1 − p)·LR_unseen(round), where p = the chance the one
- * teammate on the team is seen (½ with two seen teammates, exactly one of
- * them Mordred) and LR_seen / LR_unseen = P(team holds / does not hold a seen
- * red | Merlin captain) / P(same | loyal or Percival captain)
- * (`VISIBLE_RED_LEAD_LR`).
+ * non-forced proposal (the forced fifth proposal is excluded; R1 counts),
+ * proposed a `certain` team strictly below every candidate who never did: a
+ * lexicographic tier on top of the scores, never a hard exclusion (when
+ * every candidate did it, the scores decide alone).
  *
- * Pure functions of the assassin's own observation; no ground truth.
+ * `assassinVisibleRedLikelihood` (soft): each non-forced `ambiguous` lead
+ * multiplies the candidate's odds by the likelihood ratio of exactly that
+ * event, the ratio of the two MIXED RATES —
+ *   (p·m_seen + (1 − p)·m_unseen) / (p·o_seen + (1 − p)·o_unseen),
+ * m / o = the rate of a lead holding exactly the Morgana (seen) / exactly
+ * the Mordred (unseen) among Merlin / loyal-or-Percival captains, p = the
+ * chance the teammate is the seen one ((k − 1) / k with k seen teammates,
+ * exactly one of them Mordred). At p = ½ (the standard roster) it is the
+ * measured LR of the ambiguous class (R1 1.25, R2 1.64, R3 1.03, R4 1.51,
+ * R5 1.01). Batch 1G averaged two whole-team ratios instead (½ LR(visible) +
+ * ½ LR(not visible): R1 1.18 … R5 0.70); withdrawn 2026-10-26.
+ *
+ * Default OFF since the 2026-10-26 review: the assassination model already
+ * has features for exactly these leads (`ledWithAllyRate`, `ledCleanCount`),
+ * so an unconditional ratio on top counts the same evidence twice, and out
+ * of sample it adds nothing to the tier (study (c), docs 第 9 節: 2-fold
+ * cross-fitted mean ln P(Merlin) −1.2825 vs −1.2796 for the tier alone; the
+ * residual β given the model's score is unstable, 0.20 / 0.97 by fold). When
+ * switched on it adds ln LR to the model's linear score (a log-probability
+ * up to a constant); the legacy heuristic, whose score has no fitted scale,
+ * never applies it. It stays for the Stage-2 retrain, where the split
+ * Morgana / Mordred lead becomes a model feature.
+ *
+ * Pure functions of the assassinator's own observation; no ground truth.
  */
 
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { PlayerObservation, VoteRecord } from '../types';
 
-/** What Merlin sees, from the assassin's seat. */
+/** What Merlin sees, from the assassinator's seat. */
 export interface MerlinSight {
-  /** Reds Merlin surely sees (the assassin itself, Oberon; every teammate when no Mordred can hide among them). */
+  /** Reds Merlin surely sees (the assassinator unless Mordred, Oberon; every teammate when no Mordred can hide among them). */
   certain: ReadonlySet<string>;
   /** Seen teammates among whom exactly one (Mordred) is invisible to Merlin. */
   ambiguous: readonly string[];
 }
 
+/** Whether a Mordred is dealt: the lobby roles when known, else the standard table. */
+export function mordredInLobby(obs: Pick<PlayerObservation, 'lobbyRoles' | 'playerCount'>): boolean {
+  if (obs.lobbyRoles && obs.lobbyRoles.length > 0) return obs.lobbyRoles.includes('mordred');
+  return AVALON_CONFIG[obs.playerCount]?.roles.includes('mordred') ?? false;
+}
+
 /**
- * Merlin sees every red but Mordred. The assassin knows the whole roster at
- * the assassination (`allEvilIds`) but not which seen teammate is Mordred.
+ * Merlin sees every red but Mordred. The assassinator knows the whole roster
+ * at the assassination (`allEvilIds`) but not which seen teammate is
+ * Mordred. Whether a Mordred is dealt at all comes from the lobby roles
+ * (2026-10-26; it came from the standard table, so with Mordred switched off
+ * both seen teammates were treated as ambiguous).
  * (Moved from `HeuristicAgent.merlinSightFromAssassin`, 2026-10-14 S1-11.)
  */
 export function merlinSightFromAssassin(obs: PlayerObservation): MerlinSight {
@@ -60,8 +89,7 @@ export function merlinSightFromAssassin(obs: PlayerObservation): MerlinSight {
   const selfIsMordred = (obs.myRole as string) === 'mordred';
   if (!selfIsMordred) certain.add(self);
   for (const id of all) if (id !== self && !teammates.includes(id)) certain.add(id); // Oberon
-  const mordredInGame = AVALON_CONFIG[obs.playerCount]?.roles.includes('mordred') ?? false;
-  if (!mordredInGame || selfIsMordred) {
+  if (!mordredInLobby(obs) || selfIsMordred) {
     for (const id of teammates) certain.add(id);
     return { certain, ambiguous: [] };
   }
@@ -83,26 +111,34 @@ export function classifyTeamForAssassin(team: readonly string[], sight: MerlinSi
 export const VISIBLE_RED_FIRST_ROUND = 1;
 
 /**
- * Likelihood ratios, per round, of a non-forced lead by a Merlin captain vs a
- * loyal or Percival captain: `seen` = the team holds a red Merlin sees
- * (assassin, Morgana, Oberon), `unseen` = it does not. Human replays (1970
- * games, `scripts/assassinVisibleRedStudy.ts`, 2026-10-26); Merlin / other
- * seen rates R1 7.6% / 58.6%, R2 18.9% / 60.0%, R3 8.4% / 48.8%,
- * R4 22.8% / 50.5%, R5 2.9% / 23.9%.
+ * Non-forced blue leads holding exactly one of the assassin's two teammates
+ * and nothing certain, by which one (human replays, 1970 10-player games,
+ * `scripts/assassinVisibleRedStudy.ts` (a), 2026-10-26): `seen` = the
+ * Morgana, `unseen` = the Mordred, `n` = all non-forced leads of the group;
+ * `merlin` = Merlin captains, `other` = loyal and Percival captains.
  */
-export const VISIBLE_RED_LEAD_LR: Readonly<Record<number, { seen: number; unseen: number }>> = Object.freeze({
-  1: { seen: 0.130, unseen: 2.231 },
-  2: { seen: 0.314, unseen: 2.028 },
-  3: { seen: 0.172, unseen: 1.790 },
-  4: { seen: 0.453, unseen: 1.558 },
-  5: { seen: 0.120, unseen: 1.277 },
+export const AMBIGUOUS_LEAD_RATES: Readonly<Record<number, {
+  merlin: { seen: number; unseen: number; n: number };
+  other: { seen: number; unseen: number; n: number };
+}>> = Object.freeze({
+  1: { merlin: { seen: 30, unseen: 468, n: 1546 }, other: { seen: 452, unseen: 559, n: 3913 } },
+  2: { merlin: { seen: 58, unseen: 532, n: 1538 }, other: { seen: 340, unseen: 550, n: 3811 } },
+  3: { merlin: { seen: 14, unseen: 298, n: 1214 }, other: { seen: 291, unseen: 486, n: 3128 } },
+  4: { merlin: { seen: 16, unseen: 136, n: 508 }, other: { seen: 92, unseen: 143, n: 1189 } },
+  5: { merlin: { seen: 2, unseen: 48, n: 278 }, other: { seen: 39, unseen: 75, n: 639 } },
 });
 
-/** The soft factor of one ambiguous lead in `round` when its teammate is seen with probability `pSeen`. */
+/**
+ * The likelihood ratio of one ambiguous lead in `round` when its teammate is
+ * the seen one with probability `pSeen`: the ratio of the mixed rates (module
+ * doc). 1 for an unknown round.
+ */
 export function ambiguousLeadMultiplier(round: number, pSeen: number): number {
-  const lr = VISIBLE_RED_LEAD_LR[round];
-  if (!lr) return 1;
-  return pSeen * lr.seen + (1 - pSeen) * lr.unseen;
+  const t = AMBIGUOUS_LEAD_RATES[round];
+  if (!t) return 1;
+  const m = (pSeen * t.merlin.seen + (1 - pSeen) * t.merlin.unseen) / t.merlin.n;
+  const o = (pSeen * t.other.seen + (1 - pSeen) * t.other.unseen) / t.other.n;
+  return o > 0 && m > 0 ? m / o : 1;
 }
 
 export interface VisibleRedEvidence {
@@ -112,7 +148,7 @@ export interface VisibleRedEvidence {
   ambiguousRounds: number[];
   /** 1 = certainly proposed a seen red (ranked below every 0). */
   tier: 0 | 1;
-  /** ln of the product of `ambiguousLeadMultiplier` over `ambiguousRounds`. */
+  /** ln of the product of `ambiguousLeadMultiplier` over `ambiguousRounds` (ln-odds). */
   logLikelihood: number;
 }
 
@@ -120,7 +156,7 @@ function counts(v: VoteRecord): boolean {
   return v.attempt < 5 && v.round >= VISIBLE_RED_FIRST_ROUND;
 }
 
-/** Per-candidate evidence from the assassin's observation. */
+/** Per-candidate evidence from the assassinator's observation. */
 export function visibleRedEvidence(
   obs: PlayerObservation,
   candidates: readonly string[],
@@ -147,6 +183,7 @@ export function visibleRedEvidence(
 
 export interface VisibleRedOptions {
   tier: boolean;
+  /** Add `logLikelihood` to the scores (a log-probability scale: the model path only). */
   likelihood: boolean;
 }
 
@@ -163,15 +200,15 @@ export function tierCandidates(
 }
 
 /**
- * Pick among `candidates` by `logScores` (a log-probability up to a constant:
- * the model's linear score, or the heuristic's Merlin score read the same
- * way) with the batch-1G adjustments: the likelihood adds
- * `logLikelihood`, the tier restricts to `tierCandidates`. Ties: seat order.
+ * Pick among `candidates` by `scores` (the model's linear score, a
+ * log-probability up to a constant) with the batch-1G adjustments: the soft
+ * factor adds `logLikelihood`, the tier restricts to `tierCandidates`.
+ * Ties: seat order.
  */
 export function pickWithVisibleRed(
   obs: PlayerObservation,
   candidates: readonly string[],
-  logScores: ReadonlyMap<string, number>,
+  scores: ReadonlyMap<string, number>,
   opts: VisibleRedOptions,
 ): string {
   if (candidates.length === 0) throw new Error('pickWithVisibleRed: no candidates');
@@ -179,7 +216,7 @@ export function pickWithVisibleRed(
   const pool = opts.tier ? tierCandidates(candidates, evidence) : [...candidates];
   const order = new Map(obs.allPlayerIds.map((id, i) => [id, i]));
   const score = (id: string): number =>
-    (logScores.get(id) ?? 0) + (opts.likelihood ? evidence.get(id)?.logLikelihood ?? 0 : 0);
+    (scores.get(id) ?? 0) + (opts.likelihood ? evidence.get(id)?.logLikelihood ?? 0 : 0);
   let best = pool[0];
   for (const id of pool.slice(1)) {
     const a = score(id);
@@ -189,7 +226,7 @@ export function pickWithVisibleRed(
   return best;
 }
 
-/** Softmax of `logScores` over `candidates` with the likelihood adjustment (for the explanation text). */
+/** Softmax of `logScores` over `candidates`, optionally with the soft factor (for the explanation text). */
 export function adjustedProbabilities(
   obs: PlayerObservation,
   candidates: readonly string[],

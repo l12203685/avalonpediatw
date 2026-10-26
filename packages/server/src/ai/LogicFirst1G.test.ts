@@ -7,7 +7,10 @@
  * assassination model the ForwardAgent delegates to, and the legacy
  * heuristic) — and a lead with one seen teammate (Morgana or Mordred, the
  * assassin cannot tell) carries the measured soft likelihood
- * (`assassinVisibleRedLikelihood`). INV-A2.
+ * (`assassinVisibleRedLikelihood`). INV-A2. The 2026-10-26 review made the
+ * tier a tier-2 (human-likeness) rule, the soft factor the ratio of the
+ * measured rates, model path only and off by default, and Mordred's presence
+ * a lobby-role fact.
  *
  * Fake 10-player game, seat ids only: assassin P1 sees teammates P2 / P3
  * (Morgana and Mordred, roles unknown to it); Oberon P4; candidates P5..P10.
@@ -18,7 +21,7 @@ import { HeuristicAgent } from './HeuristicAgent';
 import { ForwardAgent } from './forward/ForwardAgent';
 import { ASSASSIN_FEATURE_NAMES, type AssassinModelWeights } from './assassin/AssassinModel';
 import {
-  VISIBLE_RED_LEAD_LR,
+  AMBIGUOUS_LEAD_RATES,
   ambiguousLeadMultiplier,
   classifyTeamForAssassin,
   merlinSightFromAssassin,
@@ -116,7 +119,7 @@ describe('batch 1G — what Merlin surely sees, from the assassin', () => {
     expect(ev.get('P9')).toMatchObject({ tier: 1, certainRounds: [1] });
     expect(ev.get('P10')).toMatchObject({ tier: 0, certainRounds: [] });
     expect(ev.get('P5')).toMatchObject({ tier: 0, ambiguousRounds: [2] });
-    expect(ev.get('P5')?.logLikelihood).toBeCloseTo(Math.log(0.5 * VISIBLE_RED_LEAD_LR[2].seen + 0.5 * VISIBLE_RED_LEAD_LR[2].unseen), 12);
+    expect(ev.get('P5')?.logLikelihood).toBeCloseTo(Math.log(ambiguousLeadMultiplier(2, 0.5)), 12);
     expect(tierCandidates(CANDIDATES, ev)).toEqual(['P5', 'P6', 'P8', 'P10']);
   });
 
@@ -129,14 +132,56 @@ describe('batch 1G — what Merlin surely sees, from the assassin', () => {
     expect(pickWithVisibleRed(o, CANDIDATES, scores, { tier: true, likelihood: false })).toBe('P7');
   });
 
-  it('the soft multiplier mixes the measured ratios over what the assassin cannot tell', () => {
+  it('the soft multiplier is the ratio of the mixed rates — the measured LR of the ambiguous class at p = 1/2 (review fix)', () => {
+    // The study's "ambiguous" rows (scripts/assassinVisibleRedStudy.ts (a)); the
+    // batch-1G formula 1/2 LR(visible) + 1/2 LR(not visible) gave 1.18 / 1.17 /
+    // 0.98 / 1.00 / 0.70 instead.
+    const measured: Record<number, number> = { 1: 1.25, 2: 1.64, 3: 1.03, 4: 1.51, 5: 1.01 };
     for (const r of [1, 2, 3, 4, 5]) {
-      const lr = VISIBLE_RED_LEAD_LR[r];
-      expect(lr.seen).toBeLessThan(1); // human Merlins avoid seen reds in every round, R1 included
-      expect(lr.unseen).toBeGreaterThan(1);
-      expect(ambiguousLeadMultiplier(r, 0.5)).toBeCloseTo(0.5 * lr.seen + 0.5 * lr.unseen, 12);
+      const t = AMBIGUOUS_LEAD_RATES[r];
+      expect(ambiguousLeadMultiplier(r, 0.5)).toBeCloseTo(measured[r], 2);
+      expect(ambiguousLeadMultiplier(r, 0.5)).toBeCloseTo(
+        ((t.merlin.seen + t.merlin.unseen) / t.merlin.n) / ((t.other.seen + t.other.unseen) / t.other.n), 12);
+      // Seen for sure (Morgana): human Merlins avoid it; unseen for sure (Mordred): they do not.
+      expect(ambiguousLeadMultiplier(r, 1)).toBeLessThan(1);
+      expect(ambiguousLeadMultiplier(r, 0)).toBeGreaterThan(1);
     }
+    expect(ambiguousLeadMultiplier(5, 0.5)).toBeGreaterThan(1); // R5 was penalised x0.70 by the withdrawn formula
     expect(ambiguousLeadMultiplier(9, 0.5)).toBe(1);
+  });
+
+  it('Mordred presence comes from the lobby roles (review fix): Mordred off → both seen teammates are certain', () => {
+    const lobbyOff = ['merlin', 'percival', 'loyal', 'loyal', 'loyal', 'loyal', 'assassin', 'morgana', 'minion', 'oberon'] as PlayerObservation['lobbyRoles'];
+    const o = { ...assassinationObs([vote(2, 2, 'P5', ['P5', 'P2', 'P6', 'P8'], [], false)]), lobbyRoles: lobbyOff };
+    const sight = merlinSightFromAssassin(o);
+    expect([...sight.certain].sort()).toEqual(['P1', 'P2', 'P3', 'P4']);
+    expect(sight.ambiguous).toEqual([]);
+    expect(classifyTeamForAssassin(['P5', 'P2', 'P6'], sight)).toBe('certain');
+    expect(visibleRedEvidence(o, CANDIDATES).get('P5')).toMatchObject({ tier: 1, certainRounds: [2], ambiguousRounds: [] });
+    // The standard lobby (Mordred dealt), given or from the table: one teammate stays ambiguous.
+    const std = ['merlin', 'percival', 'loyal', 'loyal', 'loyal', 'loyal', 'assassin', 'morgana', 'mordred', 'oberon'] as PlayerObservation['lobbyRoles'];
+    for (const lobbyRoles of [std, undefined]) {
+      const s2 = merlinSightFromAssassin({ ...o, lobbyRoles });
+      expect(classifyTeamForAssassin(['P5', 'P2', 'P6'], s2)).toBe('ambiguous');
+    }
+  });
+
+  it('a Mordred assassinator (7 players) is not seen; Morgana and Oberon are', () => {
+    const IDS7 = IDS.slice(0, 7);
+    const o: PlayerObservation = {
+      ...assassinationObs(), myPlayerId: 'P1', myRole: 'mordred', playerCount: 7, allPlayerIds: IDS7,
+      knownEvils: ['P2'], allEvilIds: ['P1', 'P2', 'P3'],
+      lobbyRoles: ['merlin', 'percival', 'loyal', 'loyal', 'morgana', 'mordred', 'oberon'],
+      voteHistory: [
+        vote(1, 1, 'P4', ['P4', 'P1'], [], false), // holds only the Mordred: Merlin could do it
+        vote(1, 2, 'P5', ['P5', 'P3'], [], false), // Oberon
+        vote(1, 3, 'P6', ['P6', 'P2'], [], false), // Morgana
+      ].map((v) => ({ ...v, votes: Object.fromEntries(IDS7.map((id) => [id, false])) })),
+    };
+    const sight = merlinSightFromAssassin(o);
+    expect([...sight.certain].sort()).toEqual(['P2', 'P3']);
+    const ev = visibleRedEvidence(o, ['P4', 'P5', 'P6', 'P7']);
+    expect(['P4', 'P5', 'P6', 'P7'].map((id) => ev.get(id)?.tier)).toEqual([0, 1, 1, 0]);
   });
 });
 
@@ -168,7 +213,20 @@ describe('batch 1G — the practice report (b) fixture', () => {
     expect(visibleRedEvidence(o, CANDIDATES).get('P5')?.tier).toBe(1);
     expect(forwardAssassinate(o, { ...TIER_OFF, assassinModel: false })).toBe('P5');
     expect(forwardAssassinate(o, { ...ON, assassinModel: false })).not.toBe('P5');
-    expect(forwardAssassinate(o, { ...ON, assassinModel: false, assassinVisibleRedLikelihood: false })).not.toBe('P5');
+    // The soft factor never touches the heuristic score (no fitted scale; review fix).
+    expect(forwardAssassinate(o, { ...ON, assassinModel: false, assassinVisibleRedLikelihood: true }))
+      .toBe(forwardAssassinate(o, { ...ON, assassinModel: false, assassinVisibleRedLikelihood: false }));
+  });
+
+  it('the soft factor is off by default and, when on, adds ln LR to the model score only (review fix: double counting)', () => {
+    expect(ON.assassinVisibleRedLikelihood).toBe(false);
+    // P5 and P8 tie on the model; P5 led one ambiguous R2 team (LR 1.64 > 1).
+    const o = assassinationObs([vote(2, 2, 'P5', ['P5', 'P2', 'P6', 'P8'], [], false)]);
+    const weights = seatOnlyWeights({ P5: 0.16, P6: 0.14, P7: 0.36, P8: 0.16, P9: 0.14, P10: 0.04 });
+    expect(forwardAssassinate(o, ON, weights)).toBe('P5'); // tie → seat order
+    const o2 = assassinationObs([vote(2, 2, 'P8', ['P8', 'P2', 'P6', 'P9'], [], false)]);
+    expect(forwardAssassinate(o2, ON, weights)).toBe('P5'); // off: the ambiguous lead changes nothing
+    expect(forwardAssassinate(o2, { ...ON, assassinVisibleRedLikelihood: true }, weights)).toBe('P8');
   });
 
   it('the practice review states the reason when the tier applies', () => {
@@ -176,7 +234,8 @@ describe('batch 1G — the practice report (b) fixture', () => {
     const ex = explainAssassination(o, 'P8', undefined, ON);
     expect(ex.reason).toContain('7家當隊長時把梅林一定看得到的紅');
     expect(ex.reason).toContain('排在其餘 5 人之後');
-    expect(ex.rule).toMatch(/^刺殺：當隊長時確定把梅林看得到的紅放進自己隊的人排在後面/);
+    expect(ex.rule).toMatch(/^刺殺（像真人的規則）：當隊長時確定把梅林看得到的紅放進自己隊的人排在後面/);
+    expect(ex.reason).toContain('真人梅林很少這樣派');
     expect(ex.suspectsLabel).toBe('刺殺模型機率');
     const off = explainAssassination(o, 'P7', undefined, TIER_OFF);
     expect(off.reason).not.toContain('一定看得到的紅');

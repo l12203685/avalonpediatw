@@ -231,6 +231,37 @@ export interface SelfPlayOptions {
   games: number;
   playerCount: number;
   observationChecks: boolean;
+  /** Lobby role switches (e.g. `{ mordred: false }`); the standard setup when absent. */
+  roleToggles?: RoleToggles;
+}
+
+/**
+ * Lobby role switches the engine accepts. Only Percival can be switched off
+ * (he becomes a loyal servant): switching Morgana, Oberon or Mordred off
+ * deals a 'minion', which the engine's canonical 7-role lock refuses
+ * (`GameEngine.assignRoles` throws `CanonicalRoleLockError`), so no live
+ * game can have them off.
+ */
+export type RoleToggles = Partial<Record<'percival', boolean>>;
+
+/** `"percival=0"` → `{ percival: false }`; `"std"` / `""` → `{}`. */
+export function parseRoleToggles(spec: string): RoleToggles {
+  const out: RoleToggles = {};
+  if (spec === '' || spec === 'std') return out;
+  for (const part of spec.split(',')) {
+    const [name, v = '0'] = part.split('=');
+    if (name !== 'percival') {
+      throw new Error(`role switch ${name}: only percival can be switched off (a minion breaks the engine's canonical 7-role lock)`);
+    }
+    out.percival = !['0', 'false', 'off'].includes(v);
+  }
+  return out;
+}
+
+/** Label of a role-switch set (`std` when nothing is switched off). */
+export function roleTogglesLabel(t: RoleToggles | undefined): string {
+  const off = Object.entries(t ?? {}).filter(([, v]) => v === false).map(([k]) => `${k}Off`);
+  return off.length > 0 ? off.join('+') : 'std';
 }
 
 /** Bot-vs-bot games, every decision recorded and checked. */
@@ -251,7 +282,7 @@ export async function auditSelfPlay(opts: SelfPlayOptions, result: HarnessResult
     // eslint-disable-next-line no-console
     console.log = (): void => undefined;
     try {
-      await engine.runGame(agents, false);
+      await engine.runGame(agents, false, opts.roleToggles);
     } finally {
       Math.random = originalRandom;
       // eslint-disable-next-line no-console
@@ -259,6 +290,7 @@ export async function auditSelfPlay(opts: SelfPlayOptions, result: HarnessResult
     }
     result.l1EmptyGames.selfplayGames++;
     L.inc(`games.${opts.playerCount}p`);
+    if (roleTogglesLabel(opts.roleToggles) !== 'std') L.inc(`games.${opts.playerCount}p.${roleTogglesLabel(opts.roleToggles)}`);
     const roles = new Map<string, Role>();
     for (const a of agents) if (a.role) roles.set(a.agentId, a.role);
     const truth = truthFromRoles(roles);

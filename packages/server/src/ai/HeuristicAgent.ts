@@ -2628,14 +2628,16 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'assassinate', targetId: allIds.find(id => id !== obs.myPlayerId) ?? allIds[0] };
     }
 
-    // Logic-first batch 1G (2026-10-26, practice report (b), INV-A2):
-    // `assassinVisibleRedTier` ranks every candidate who, as captain on a
-    // non-forced proposal, certainly put a red Merlin sees on the team
-    // strictly below every candidate who never did (a lexicographic tier on
-    // top of the scores; when every candidate did, the scores decide alone);
-    // `assassinVisibleRedLikelihood` multiplies by the measured likelihood
-    // of each lead with one seen teammate (Morgana or Mordred, the assassin
-    // cannot tell). Both on both paths (`assassin/VisibleRedProposals.ts`).
+    // Batch 1G (2026-10-26, practice report (b), INV-A2; a tier-2 —
+    // human-likeness — rule since the review): `assassinVisibleRedTier`
+    // ranks every candidate who, as captain on a non-forced proposal,
+    // certainly put a red Merlin sees on the team strictly below every
+    // candidate who never did (a lexicographic tier on top of the scores;
+    // when every candidate did, the scores decide alone), on both paths.
+    // `assassinVisibleRedLikelihood` (default off: it double-counts the
+    // model's leader features, study (c)) multiplies by the measured
+    // likelihood ratio of each lead with one seen teammate — on the model
+    // path only, whose score is a log-probability (`assassin/VisibleRedProposals.ts`).
     const visibleRed = {
       tier: this.tuning.assassinVisibleRedTier,
       likelihood: this.tuning.assassinVisibleRedLikelihood,
@@ -2763,15 +2765,6 @@ export class HeuristicAgent implements AvalonAgent {
         id,
         rawScore + seatBoost + h9SeatBoost + loyalPenalty + pyramidBoost,
       );
-    }
-
-    // Batch 1G likelihood: the heuristic score read as a log-odds, so the
-    // measured multiplier of each ambiguous lead adds its logarithm.
-    if (visibleRed.likelihood) {
-      const evidence = visibleRedEvidence(obs, candidatePool);
-      for (const id of candidatePool) {
-        merlinScore.set(id, (merlinScore.get(id) ?? 0) + (evidence.get(id)?.logLikelihood ?? 0));
-      }
     }
 
     const target = candidatePool.reduce((best, id) =>

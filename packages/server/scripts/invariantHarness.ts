@@ -4,7 +4,7 @@
  *
  *   USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/invariantHarness.ts \
  *     [--replays all|N] [--no-probe] [--no-observations] \
- *     [--selfplay N --seed S [--seed S2 ...] [--players 10]] \
+ *     [--selfplay N --seed S [--seed S2 ...] [--players 10] [--roles percival=0]] \
  *     [--flag NAME[=V] ...] [--legacy] [--json out.json] [--md out.md] [--diag]
  *
  * Options:
@@ -16,6 +16,11 @@
  *   --selfplay N       N self-play games per seed (default 0)
  *   --seed S           self-play master seed (repeatable)
  *   --players P        self-play player count (default 10; repeatable)
+ *   --roles SPEC       self-play lobby role switch: `percival=0` (Percival
+ *                      becomes a loyal) or `std` (default); repeatable. The
+ *                      engine's canonical 7-role lock refuses a minion, so
+ *                      Morgana / Oberon / Mordred cannot be switched off; the
+ *                      size-changing options are not offered either
  *   --flag NAME[=V]    AgentTuning switch on top of the production default
  *                      (or of legacy with --legacy); repeatable
  *   --json / --md      write the full result
@@ -39,7 +44,14 @@ import {
   type AgentTuning,
 } from '../src/ai/AgentTuning';
 import { rowsFromSheet, parseReplayGame, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
-import { auditReplayGame, auditSelfPlay, emptyResult } from '../src/ai/invariants/sources';
+import {
+  auditReplayGame,
+  auditSelfPlay,
+  emptyResult,
+  parseRoleToggles,
+  roleTogglesLabel,
+  type RoleToggles,
+} from '../src/ai/invariants/sources';
 import { staticResultReads } from '../src/ai/invariants/staticScan';
 
 interface Args {
@@ -49,6 +61,7 @@ interface Args {
   selfplay: number;
   seeds: number[];
   players: number[];
+  roles: RoleToggles[];
   flags: Partial<AgentTuning>;
   legacy: boolean;
   json?: string;
@@ -59,7 +72,7 @@ interface Args {
 
 function parseArgs(argv: string[]): Args {
   const a: Args = {
-    replays: 'all', probe: true, observations: true, selfplay: 0, seeds: [], players: [],
+    replays: 'all', probe: true, observations: true, selfplay: 0, seeds: [], players: [], roles: [],
     flags: {}, legacy: false, diag: false, cache: path.resolve(__dirname, '../sheets_cache.json'),
   };
   for (let i = 0; i < argv.length; i++) {
@@ -76,6 +89,7 @@ function parseArgs(argv: string[]): Args {
       case '--selfplay': a.selfplay = Number.parseInt(next(), 10); break;
       case '--seed': a.seeds.push(Number.parseInt(next(), 10)); break;
       case '--players': a.players.push(Number.parseInt(next(), 10)); break;
+      case '--roles': a.roles.push(parseRoleToggles(next())); break;
       case '--flag': Object.assign(a.flags, parseTuningFlag(next())); break;
       case '--legacy': a.legacy = true; break;
       case '--json': a.json = next(); break;
@@ -90,6 +104,7 @@ function parseArgs(argv: string[]): Args {
     }
   }
   if (a.players.length === 0) a.players.push(10);
+  if (a.roles.length === 0) a.roles.push({});
   return a;
 }
 
@@ -124,13 +139,17 @@ async function main(): Promise<void> {
     }
   }
   for (const players of args.players) {
-    for (const seed of args.seeds) {
-      if (args.selfplay <= 0) continue;
-      await auditSelfPlay({ tuning, seed, games: args.selfplay, playerCount: players, observationChecks: args.observations }, result);
-      process.stderr.write(`  self-play ${players}p seed ${seed}: ${args.selfplay} games, ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
+    for (const roleToggles of args.roles) {
+      for (const seed of args.seeds) {
+        if (args.selfplay <= 0) continue;
+        await auditSelfPlay({ tuning, seed, games: args.selfplay, playerCount: players, observationChecks: args.observations, roleToggles }, result);
+        process.stderr.write(`  self-play ${players}p ${roleTogglesLabel(roleToggles)} seed ${seed}: ${args.selfplay} games, ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
+      }
     }
   }
-  if (args.selfplay > 0) out.push(`self-play: ${args.selfplay} games × seeds [${args.seeds.join(', ')}] × players [${args.players.join(', ')}]`);
+  if (args.selfplay > 0) {
+    out.push(`self-play: ${args.selfplay} games × seeds [${args.seeds.join(', ')}] × players [${args.players.join(', ')}] × roles [${args.roles.map(roleTogglesLabel).join(', ')}]`);
+  }
 
   // INV-B3 (static): belief code reading a mission result without its fail count.
   const scan = staticResultReads(path.resolve(__dirname, '../src/ai'));

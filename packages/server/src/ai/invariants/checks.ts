@@ -42,7 +42,8 @@ import {
   percivalR1IncludedThumb,
 } from '../PercivalThumbs';
 import { inferRedsFromTaskFails } from '../forward/ForwardAgent';
-import { visibleRedEvidence } from '../assassin/VisibleRedProposals';
+import { AVALON_CONFIG } from '@avalon/shared';
+import { isAssassinator } from '../../game/assassinator';
 import type { PlayerObservation } from '../types';
 import type { DecisionRecord } from './AuditAgent';
 import { certaintyOf, cutAtLake, isForcedProposal, publicCertaintyOf, type Truth } from './context';
@@ -156,6 +157,66 @@ function checkWorlds(obs: PlayerObservation, L: Ledger, truth?: Truth): Certaint
   return view;
 }
 
+// ── INV-A2's own classifier ────────────────────────────────────
+
+const EVIL_ROLE_NAMES: ReadonlySet<string> = new Set(['assassin', 'morgana', 'mordred', 'oberon', 'minion']);
+
+/** Distinct orderings of a multiset (small: at most four reds). */
+function multisetPermutations(items: readonly string[]): string[][] {
+  if (items.length <= 1) return [[...items]];
+  const out: string[][] = [];
+  const seen = new Set<string>();
+  items.forEach((x, i) => {
+    if (seen.has(x)) return;
+    seen.add(x);
+    for (const rest of multisetPermutations([...items.slice(0, i), ...items.slice(i + 1)])) out.push([x, ...rest]);
+  });
+  return out;
+}
+
+/**
+ * The candidates INV-A2 flags, computed WITHOUT the agent's classifier
+ * (2026-10-26 review: the check used `visibleRedEvidence`, so 0 violations
+ * only showed that the tier is wired in). Written from the game rules: the
+ * assassinator sees its teammates (every red but Oberon) without their roles
+ * and, at the assassination, the whole red roster (`allEvilIds`); Merlin sees
+ * every red but Mordred. Every assignment of the lobby's red roles
+ * (`lobbyRoles`, else the standard table) to the seen teammates is
+ * enumerated; a lead certainly holds a red Merlin sees iff it does in every
+ * assignment. Leads count from R1 on non-forced proposals (attempts 1–4).
+ * `null` when the roster does not fit the lobby (counted, not checked).
+ */
+function a2FlaggedIndependently(obs: PlayerObservation, candidates: readonly string[]): Set<string> | null {
+  const me = obs.myPlayerId;
+  const reds = new Set<string>([...(obs.allEvilIds ?? []), ...obs.knownEvils, me]);
+  const mates = obs.knownEvils.filter((id) => id !== me);
+  const hidden = [...reds].filter((id) => id !== me && !mates.includes(id));
+  const pool = [...(obs.lobbyRoles ?? AVALON_CONFIG[obs.playerCount]?.roles ?? [])].filter((r) => EVIL_ROLE_NAMES.has(r));
+  const drop = (role: string): boolean => {
+    const i = pool.indexOf(role as never);
+    if (i < 0) return false;
+    pool.splice(i, 1);
+    return true;
+  };
+  if (!drop(obs.myRole)) return null;
+  for (let i = 0; i < hidden.length; i++) if (!drop('oberon')) return null;
+  if (pool.length !== mates.length) return null;
+  const visibleSets = multisetPermutations(pool.map(String)).map((roles) => {
+    const vis = new Set<string>();
+    if (obs.myRole !== 'mordred') vis.add(me);
+    for (const id of hidden) vis.add(id); // Oberon: Merlin sees him
+    mates.forEach((id, i) => { if (roles[i] !== 'mordred') vis.add(id); });
+    return vis;
+  });
+  const flagged = new Set<string>();
+  const cand = new Set(candidates);
+  for (const v of obs.voteHistory) {
+    if (v.attempt >= 5 || !cand.has(v.leader)) continue;
+    if (visibleSets.every((vis) => v.team.some((id) => vis.has(id)))) flagged.add(v.leader);
+  }
+  return flagged;
+}
+
 // ── Decision checks ────────────────────────────────────────────
 
 /**
@@ -207,7 +268,11 @@ export function checkDecision(
       }
 
       // INV-K2
-      const redPairs = declaredLakes(obs.lakeHistory).filter((l) => l.declaredClaim === 'evil');
+      // Only pairs that bind in this view (2026-10-26: the viewer's own red
+      // declaration of a seat it privately saw blue binds nothing — the
+      // declared-red twin of INV-K1's `vouches` exception).
+      const redPairs = declaredLakes(obs.lakeHistory)
+        .filter((l) => l.declaredClaim === 'evil' && view.redPairBinds(l.holderId, l.targetId));
       if (redPairs.length > 0) {
         const both = (t: readonly string[]): boolean => redPairs.some((l) => t.includes(l.holderId) && t.includes(l.targetId));
         if (both(team) && view.failsRequired(round) !== 1) L.record('INV-K2', { exempt: TWO_FAILS });
@@ -326,14 +391,17 @@ export function checkDecision(
       L.record('INV-A1', { violated: hit });
       L.inc('A.n');
       if (truth?.evil.has(target)) L.inc('A.targetEvil');
-      // INV-A2 (batch 1G): a candidate who, as captain on a non-forced
-      // proposal, certainly put a red Merlin sees on the team is never
-      // preferred over one who never did (opportunity = some candidate did;
-      // every candidate did = exempt, the scores decide).
+      // INV-A2 (batch 1G; a tier-2 policy since the review): a candidate who,
+      // as captain on a non-forced proposal, certainly put a red Merlin sees
+      // on the team is not preferred over one who never did (opportunity =
+      // some candidate did; every candidate did = exempt, the scores decide).
+      // Classified by the harness's own brute force (`a2FlaggedIndependently`).
       const candidates = obs.allPlayerIds.filter((id) => !known.has(id));
-      const evidence = visibleRedEvidence(obs, candidates);
-      const flagged = candidates.filter((id) => evidence.get(id)?.tier === 1);
+      const flaggedSet = a2FlaggedIndependently(obs, candidates);
+      if (flaggedSet === null) L.inc('A2.rosterMismatch');
+      const flagged = candidates.filter((id) => flaggedSet?.has(id) ?? false);
       const humanTarget = rec.human?.target;
+      L.inc(`A.${obs.playerCount}p.${obs.myRole}`);
       if (flagged.length > 0) {
         if (flagged.length === candidates.length) L.record('INV-A2', { exempt: 'every candidate proposed a seen red' });
         else {
@@ -344,7 +412,10 @@ export function checkDecision(
       if (truth) {
         const merlin = [...truth.roles].find(([, r]) => r === 'merlin')?.[0];
         if (target === merlin) L.inc('A.hitMerlin');
-        if (merlin !== undefined && flagged.includes(merlin)) L.inc('A2.merlinFlagged');
+        // Recorded with 0 too, so a source where Merlin is never flagged says so
+        // (self-play: bot Merlins never propose a red they see, INV-M1).
+        L.inc('A2.merlinFlagged', merlin !== undefined && flagged.includes(merlin) ? 1 : 0);
+        if (merlin !== undefined && flagged.includes(merlin) && target === merlin) L.inc('A2.merlinFlaggedButHit');
         if (humanTarget !== undefined) {
           L.inc('A.human.n');
           if (humanTarget === merlin) L.inc('A.human.hitMerlin');
@@ -396,6 +467,11 @@ export function checkDecision(
           if (truth?.roles.get(rec.human.target) === 'merlin') L.inc('PL.humanLakedThumb.merlin');
         }
         if (rec.human?.target && rec.lakeTarget === rec.human.target) L.inc('PL.sameTargetAsHuman');
+      }
+      // INV-PL2 (2026-10-26 review, behavioural): Percival lakes the seat a
+      // loyal holding the thumb constraint would lake (same draws).
+      if (rec.lakeAsLoyal !== undefined && rec.lakeTarget !== undefined) {
+        L.record('INV-PL2', { violated: rec.lakeAsLoyal !== rec.lakeTarget });
       }
       break;
     }
@@ -670,7 +746,11 @@ function checkPrivacy(obs: PlayerObservation, L: Ledger, truth: Truth): void {
     const wiz = [...truth.roles].filter(([, r]) => r === 'merlin' || r === 'morgana').map(([id]) => id);
     ok = ok && sorted(obs.knownWizards) === sorted(wiz);
   } else ok = ok && obs.knownWizards === undefined;
-  if (obs.allEvilIds !== undefined) ok = ok && role === 'assassin' && obs.gamePhase === 'assassination';
+  // The red roster reaches the assassinator only (the assassin; Mordred /
+  // Morgana when no assassin is dealt — 2026-10-26: the 7-player Mordred).
+  if (obs.allEvilIds !== undefined) ok = ok && isAssassinator(role, truth.roles.values()) && obs.gamePhase === 'assassination';
+  // The lobby roles are public, but must be the roles actually dealt.
+  if (obs.lobbyRoles !== undefined) ok = ok && sorted(obs.lobbyRoles) === sorted([...truth.roles.values()]);
   for (const r of obs.myLakeResults ?? []) {
     const camp = truth.evil.has(r.targetId) ? 'evil' : 'good';
     if (r.result !== camp) ok = false;

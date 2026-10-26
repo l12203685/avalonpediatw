@@ -10,8 +10,10 @@
  * `kind`:
  *   - `hard`        — a decision checked against what the deciding seat can
  *                     prove from its own observation;
- *   - `policy`      — counted and logged, not a violation (a registered
- *                     exception or a pure log);
+ *   - `policy`      — a registered exception, a pure log, or a tier-2
+ *                     (human-likeness) behaviour rule: not a logical
+ *                     constraint; when `enforced` the CI keeps it at 0 only so
+ *                     the switch that implements it stays wired (INV-A2);
  *   - `metamorphic` — change an input that must not matter, compare;
  *   - `structural`  — a property of the code path itself;
  *   - `static`      — a source-code scan.
@@ -37,7 +39,20 @@
  * PL and R1 to 0 on the replays and the self-play games; every rule of the
  * catalog is enforced from then on. Batch 1G (2026-10-26, 第 9 節, practice
  * report (b): `assassinVisibleRedTier`) added INV-A2 and brought it to 0 on
- * the replays and the self-play games — enforced.
+ * the replays and the self-play games. The same day's review reclassified it:
+ * a tier-2 (human-likeness) rule, kind `policy` — human Merlins carry the
+ * flag in 10.5% of the assassinations, so it is a strong regularity, not a
+ * constraint — still kept at 0 (enforced) so the switch stays wired, and
+ * classified by the harness's own brute force (not the agent's function).
+ * The review also added INV-PL2 (the behavioural twin of INV-PL).
+ *
+ * Which checks are independent of the code the bots decide with: INV-W1
+ * (the true red set is always among the L0 worlds), INV-OBS, INV-A2 (own
+ * classifier since 2026-10-26) and the metamorphic rules. INV-T1, V1, K1,
+ * K1V call the same `provablyFailable` / `strictlyDominated` as
+ * `LogicGates.ts`, and INV-PL reads the avoid set the agent used: on their
+ * own, 0 violations there show the gate is switched on; their correctness
+ * rests on INV-W1 and the certainty layer's unit tests.
  */
 
 export type InvariantKind = 'hard' | 'policy' | 'metamorphic' | 'structural' | 'static';
@@ -51,6 +66,12 @@ export interface InvariantSpec {
   status: string;
   /** Who the rule binds. */
   side: 'good' | 'red' | 'all';
+  /**
+   * The adoption tier of the behaviour the rule checks (owner 2026-10-14):
+   * 1 = logical correctness (an absolutely-true constraint or an owner
+   * ruling; the default), 2 = human-likeness (a measured human regularity).
+   */
+  tier?: 1 | 2;
   rule: string;
 }
 
@@ -95,12 +116,14 @@ export const INVARIANTS: readonly InvariantSpec[] = [
     rule: '6-10p Percival captain with two thumbs, no mission result yet: no thumb on the team, except the D5 thumb-on-thumb exception' },
   { id: 'INV-PL', refs: ['owner 2026-10-14'], kind: 'structural', status: 'enforced', side: 'good',
     rule: 'Percival\'s lake candidate set equals a loyal\'s (no thumb avoid list; checked on the avoid set the deciding agent used)' },
+  { id: 'INV-PL2', refs: ['owner 2026-10-14', 'D4'], kind: 'metamorphic', status: 'enforced', side: 'good',
+    rule: 'Percival lakes the seat the same lake policy picks for a loyal holding Percival\'s built-in fact (same observation, role loyal, the thumbs kept as "exactly one is red"; same draws) — the behavioural check of INV-PL (2026-10-26 review)' },
   { id: 'INV-M1', refs: ['M1'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'Merlin never proposes, and from R3 never approves, a team holding a visible red (R1-R2 votes = policy)' },
   { id: 'INV-A1', refs: ['A1'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'the assassin never targets a known red' },
-  { id: 'INV-A2', refs: ['A1', 'M1', 'owner report (b)'], kind: 'hard', status: 'enforced', side: 'red',
-    rule: 'the assassin never prefers a candidate who, as captain on a non-forced proposal, certainly put a red Merlin sees on the team (assassin, Oberon, or both seen teammates) over a candidate who never did (every candidate did = exempt)' },
+  { id: 'INV-A2', refs: ['player report (b)', 'human data 第 9.1 節'], kind: 'policy', status: 'enforced', side: 'red', tier: 2,
+    rule: 'TIER 2 (human-likeness; a strong human regularity, LR 0.27 — not an absolutely-true constraint): the assassinator does not prefer a candidate who, as captain on a non-forced proposal, certainly put a red Merlin sees on the team (the assassinator unless Mordred, Oberon, or more seen teammates than could all be Mordred, from the lobby roles) over a candidate who never did (every candidate did = exempt). Kept at 0 so the switch stays wired; classified by the harness\'s own brute force over the lobby\'s role assignments' },
   { id: 'INV-R1', refs: ['C8', 'K5'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'a red holder never makes a claim that cannot be true for a good holder (public L1)' },
   { id: 'INV-R2', refs: ['K5'], kind: 'hard', status: 'enforced', side: 'good',

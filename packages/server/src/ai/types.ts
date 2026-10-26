@@ -71,12 +71,14 @@ export interface PlayerObservation {
   knownEvils:    string[];    // IDs of players I know are evil (my role's knowledge)
   knownWizards?: string[];   // IDs that look like Merlin/Morgana to Percival (can't tell which)
   /**
-   * Edward 2026-04-24 batch 3 fix — assassin POV only: the full evil
+   * Edward 2026-04-24 batch 3 fix — assassinator POV only: the full evil
    * roster (including Oberon/Mordred that `knownEvils` hides mid-game).
    * Populated by the harness when `gamePhase === 'assassination'` so the
    * assassin can hard-filter the candidate pool to loyal good only (no
    * targeting Oberon/Mordred as "good"). `undefined` in all other phases
-   * and for all other roles.
+   * and for all other roles. The assassinator is the `assassin`, or
+   * Mordred / Morgana when no assassin is dealt (`game/assassinator.ts`;
+   * the 7-player setup: Mordred, 2026-10-26 fix).
    */
   allEvilIds?:   string[];
 
@@ -114,6 +116,15 @@ export interface PlayerObservation {
    * differs from the table in the 9-player Oberon variants.
    */
   evilCount?:    number;
+  /**
+   * The roles dealt this game — the public lobby setup (role toggles, the
+   * 9-player variants), one entry per seat, unordered; never who holds
+   * which. Optional; readers fall back to the standard table
+   * (`AVALON_CONFIG[playerCount].roles`). Added 2026-10-26 so the
+   * assassination tier knows whether a Mordred can hide among the
+   * assassin's teammates when the host switched Mordred off.
+   */
+  lobbyRoles?:   Role[];
 }
 
 // ── Actions ────────────────────────────────────────────────────

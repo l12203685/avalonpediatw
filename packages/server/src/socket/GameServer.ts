@@ -4,6 +4,8 @@ import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTime
 import { RoomManager } from '../game/RoomManager';
 import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
+import { assassinatorRole, isAssassinator } from '../game/assassinator';
+import { fitTeamToSize } from '../game/teamSize';
 import { getAsyncNotifier } from '../services/AsyncNotifier';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { hasLakeApi } from '../ai/LakePolicy';
@@ -1958,7 +1960,10 @@ export class GameServer {
     // in all other phases and roles. Wave C 2026-04-29 prod fix
     // (audit `staging/subagent_results/round4_audit_3items_2026-04-29.md`
     // §其他 #7).
-    const allEvilIds = myRole === 'assassin' && gamePhase === 'assassination'
+    // The assassinator: the assassin, or Mordred (7 players) / Morgana when
+    // no assassin is dealt (`game/assassinator.ts`, 2026-10-26 fix).
+    const dealtRoles = Object.values(r.players).map((p) => p.role);
+    const allEvilIds = isAssassinator(myRole, dealtRoles) && gamePhase === 'assassination'
       ? Object.entries(r.players)
           .filter(([, p]) => p.team === 'evil')
           .map(([id]) => id)
@@ -1991,6 +1996,8 @@ export class GameServer {
       lakeHistory,
       myLakeResults,
       evilCount:     Object.values(r.players).filter((p) => p.team === 'evil').length,
+      // The public lobby setup (which roles are dealt, never who holds them).
+      lobbyRoles:    dealtRoles.filter((x): x is NonNullable<typeof x> => x !== null && x !== undefined),
     };
   }
 
@@ -2028,15 +2035,14 @@ export class GameServer {
             // wrong action type, illegal teamIds, etc.) we MUST still advance the
             // game. The previous code silently `return`ed and left the room
             // hanging on the bot leader's turn — #bug "AI 選人卡住" (2026-04-24).
-            const pickFallbackTeam = (): string[] => {
-              const pcount = Object.keys(r.players).length;
-              const cfg = AVALON_CONFIG[pcount];
-              const size = cfg?.questTeams[r.currentRound - 1] ?? 2;
-              const ids = Object.keys(r.players);
-              // Leader goes first so the team is at least plausible.
-              const ordered = [leaderId, ...ids.filter(id => id !== leaderId)];
-              return ordered.slice(0, size);
-            };
+            // The engine's own quest sizes (swapR1R2 and the 9-player variant
+            // change them; 2026-10-26 fix — the AVALON_CONFIG size made the
+            // fallback fail too and left the room hanging).
+            const roundSize = (): number =>
+              engine.getEffectiveQuestSizes()[r.currentRound - 1]
+                ?? AVALON_CONFIG[Object.keys(r.players).length]?.questTeams[r.currentRound - 1] ?? 2;
+            const pickFallbackTeam = (preferred: readonly string[] = []): string[] =>
+              fitTeamToSize(preferred, roundSize(), leaderId, Object.keys(r.players));
 
             let chosenTeam: string[] | null = null;
             const leaderAgent = this.botAgents.get(leaderId);
@@ -2080,7 +2086,8 @@ export class GameServer {
             } catch (selectErr) {
               // selectQuestTeam can throw on wrong size / unknown id. Retry with fallback.
               console.error(`[bot] selectQuestTeam rejected AI pick for ${leaderId} in room ${roomId}:`, selectErr);
-              const safe = pickFallbackTeam();
+              // Keep as much of the agent's pick as fits the engine's size.
+              const safe = pickFallbackTeam(chosenTeam);
               try {
                 const safeTrace = traceTeam(safe, 'fallback');
                 engine.selectQuestTeam(safe);
@@ -2383,7 +2390,9 @@ export class GameServer {
           }
         } else if (r.state === 'discussion') {
           // Find assassin — if bot, use HeuristicAgent to pick the most Merlin-like target
-          const assassinEntry = Object.entries(r.players).find(([, p]) => p.role === 'assassin');
+          // The assassinator (assassin; Mordred at 7 players; Morgana when neither is dealt).
+          const killer = assassinatorRole(Object.values(r.players).map((p) => p.role));
+          const assassinEntry = killer ? Object.entries(r.players).find(([, p]) => p.role === killer) : undefined;
           if (assassinEntry && r.players[assassinEntry[0]]?.isBot) {
             const assassinId = assassinEntry[0];
             const agent = this.botAgents.get(assassinId);
@@ -2905,7 +2914,8 @@ export class GameServer {
                 const playerIds = Object.keys(r.players);
                 const config = AVALON_CONFIG[playerIds.length];
                 if (config) {
-                  const teamSize = config.questTeams[r.currentRound - 1];
+                  // The engine's sizes (swapR1R2 / the 9-player variant change them).
+                  const teamSize = engine.getEffectiveQuestSizes()[r.currentRound - 1] ?? config.questTeams[r.currentRound - 1];
                   const candidates = playerIds.filter(id => id !== playerId);
                   const team = candidates.slice(0, teamSize);
                   if (team.length === teamSize) {
@@ -2918,7 +2928,8 @@ export class GameServer {
                 }
               } else if (r.state === 'discussion') {
                 // Disconnected assassin — auto-target a random good player
-                const assassinId = Object.keys(r.players).find(id => r.players[id].role === 'assassin');
+                const killer = assassinatorRole(Object.values(r.players).map((p) => p.role));
+                const assassinId = killer ? Object.keys(r.players).find(id => r.players[id].role === killer) : undefined;
                 if (assassinId === playerId) {
                   const goodPlayers = Object.keys(r.players).filter(id => id !== playerId && r.players[id].team === 'good');
                   if (goodPlayers.length > 0) {

@@ -3,7 +3,12 @@
  *
  * 60 fixed replay games (the first 60 replayable games of the 牌譜, with the
  * loyal-leader probe) and 30 self-play games (seeds 7101 / 7102 / 7103, ten
- * games each), production default tuning. Asserts:
+ * games each), production default tuning; since the 2026-10-26 review also
+ * 5-, 7- and 9-player self-play (seeds 7101 / 7102, five games each) and
+ * 8-player games with Percival switched off in the lobby (seeds 7101 / 7102,
+ * five games each; the only role switch the engine's canonical 7-role lock
+ * accepts) — the plan's M8 coverage (the 7-player games exercise the Mordred
+ * assassinator). Asserts:
  *   - every `enforced` invariant has 0 violations (the static INV-B3 scan
  *     included);
  *   - every `pending:<batch>` invariant has no more violations than the
@@ -41,7 +46,15 @@ import { staticResultReads } from './staticScan';
  * brought T1 / V1 / K1 / K2 / P3 / L1, the new K1V and Pe1 to 0 on this
  * sample and on the full run (all 1970 replays, the probe, 2000 self-play
  * games) — all enforced now. Self-play INV-PL (batch 1E's) reads 7 when this
- * file runs alone and 6 inside the full vitest run; the ratchet kept 7.
+ * file runs alone and 6 inside the full vitest run; the ratchet kept 7
+ * (2026-10-26 review: not reproducible. The file alone and inside the full
+ * vitest run print the same INV-PL counts at the batch-1D commit (7 and 7)
+ * and at the batch-1E / 1F commit (6 opportunities, 0 violations, both), and
+ * identical tables on the review commit, with or without
+ * USE_FORWARD_REASONING — vitest isolates each file and the AuditAgent calls
+ * the ForwardAgent directly. The "6" most likely came from a full run on the
+ * 1E / 1F working tree while its Percival switches were already in, not from
+ * state leaking between tests; docs/ai/logic_first.md 第 10 節).
  * Batch 1D left replay Pe2 149 / PL 20 / R1 0, self-play Pe2 49 / PL 7 /
  * R1 4; batches 1E / 1F (Percival = loyal + thumb constraint, blue lake;
  * red possible claims only) brought all three to 0 here and on the full
@@ -76,12 +89,19 @@ describe('invariant harness — CI sample', () => {
     for (const seed of [7101, 7102, 7103]) {
       await auditSelfPlay({ tuning, seed, games: 10, playerCount: 10, observationChecks: true }, result);
     }
+    // Plan M8 (2026-10-26 review): other player counts and a lobby role switch.
+    for (const playerCount of [5, 7, 9]) {
+      for (const seed of [7101, 7102]) await auditSelfPlay({ tuning, seed, games: 5, playerCount, observationChecks: true }, result);
+    }
+    for (const seed of [7101, 7102]) {
+      await auditSelfPlay({ tuning, seed, games: 5, playerCount: 8, observationChecks: true, roleToggles: { percival: false } }, result);
+    }
 
     // Aggregates only.
     process.stdout.write(`${[
       result.replay.formatTable('CI replay (60 games)', true),
       result.probe.formatTable('CI probe', false),
-      result.selfplay.formatTable('CI self-play (30 games)', false),
+      result.selfplay.formatTable('CI self-play (30 ten-player games + 5/7/9-player and 8-player Percival-off games)', false),
       `L1-empty games: replay ${result.l1EmptyGames.replay}/${result.l1EmptyGames.replayGames}, self-play ${result.l1EmptyGames.selfplay}/${result.l1EmptyGames.selfplayGames}`,
     ].join('\n\n')}\n`);
 
@@ -116,9 +136,19 @@ describe('invariant harness — CI sample', () => {
     // proposed a seen red, not every one did) on the replays and in self-play.
     expect(result.replay.tallies.get('INV-A2')?.opportunities ?? 0, 'replay INV-A2 opportunities').toBeGreaterThan(0);
     expect(result.selfplay.tallies.get('INV-A2')?.opportunities ?? 0, 'self-play INV-A2 opportunities').toBeGreaterThan(0);
+    // Review 2026-10-26: the 7-player Mordred assassinates (it used to be
+    // skipped), the other player counts and the Mordred-off lobby ran, and
+    // Percival's lake has a behavioural check (INV-PL2).
+    expect(result.selfplay.get('A.7p.mordred'), '7-player Mordred assassinations').toBeGreaterThan(0);
+    for (const k of ['games.5p', 'games.7p', 'games.9p', 'games.8p.percivalOff']) expect(result.selfplay.get(k), k).toBeGreaterThan(0);
+    expect(result.selfplay.get('A2.rosterMismatch')).toBe(0);
+    expect(result.replay.get('A2.rosterMismatch')).toBe(0);
+    for (const src of ['replay', 'selfplay'] as const) {
+      expect(result[src].tallies.get('INV-PL2')?.opportunities ?? 0, `${src} INV-PL2 opportunities`).toBeGreaterThan(0);
+    }
     const pe2 = result.replay.tallies.get('INV-Pe2');
     expect((pe2?.opportunities ?? 0) - Object.values(pe2?.exempt ?? {}).reduce((a, b) => a + b, 0), 'replay INV-Pe2 non-exempt').toBeGreaterThan(0);
     // INV-B3 (static), enforced since batch 1C: no agent code reads a mission result without its fail count.
     expect(staticResultReads(path.resolve(__dirname, '..'))).toEqual([]);
-  }, 120_000);
+  }, 300_000);
 });
