@@ -286,6 +286,28 @@ export function checkDecision(
           if (!exempt && humanVote !== undefined) L.human('INV-Pe1', humanVote);
         }
       }
+      // Percival on the team (not leading), non-forced R3+ (batch 1E): how
+      // often the bot and the human at the same point reject — all teams,
+      // teams holding a certain red (L1*), teams with no thumb (the dropped
+      // "no thumb ⇒ reject" rule).
+      if (
+        obs.myRole === 'percival' && round >= 3 && !isForcedProposal(obs) &&
+        team.includes(me) && obs.currentLeader !== me
+      ) {
+        const thumbs = obs.knownWizards ?? [];
+        const cells = ['all'];
+        if (team.some((id) => id !== me && view.isCertRed(id))) cells.push('certRed');
+        if (!team.some((id) => thumbs.includes(id))) cells.push('noThumb');
+        if (view.failsRequired(round) !== 1) cells.push('twoFails');
+        for (const c of cells) {
+          L.inc(`Pe.onTeam.${c}.n`);
+          if (!approve) L.inc(`Pe.onTeam.${c}.botReject`);
+          if (humanVote !== undefined && !unreliable) {
+            L.inc(`Pe.onTeam.${c}.humanN`);
+            if (!humanVote) L.inc(`Pe.onTeam.${c}.humanReject`);
+          }
+        }
+      }
       // INV-M1 (votes)
       if (obs.myRole === 'merlin' && team.some((id) => obs.knownEvils.includes(id))) {
         const exempt = voteExemption(obs, view, false);
@@ -312,6 +334,13 @@ export function checkDecision(
         if (claim !== null) {
           const possible = claimPossibleForGoodHolder(obs, me, target, claim);
           L.record('INV-R1', { violated: !possible });
+        } else {
+          // Batch 1F: a holder already publicly certain red has no possible
+          // claim and leaves the lake undeclared.
+          L.inc('R1.undeclared');
+          if (!claimPossibleForGoodHolder(obs, me, target, 'good') && !claimPossibleForGoodHolder(obs, me, target, 'evil')) {
+            L.inc('R1.undeclared.noPossibleClaim');
+          }
         }
         const humanClaim = rec.human?.claim;
         if (humanClaim) L.human('INV-R1', !claimPossibleForGoodHolder(obs, me, target, humanClaim));
@@ -325,10 +354,20 @@ export function checkDecision(
       const thumbs = obs.knownWizards ?? [];
       const legalThumb = (rec.validTargets ?? []).some((id) => thumbs.includes(id));
       if (thumbs.length >= 1 && legalThumb) {
-        const avoid = goodLakeAvoidSet(obs);
+        // Structural: the avoid set the deciding agent's tuning used (the
+        // AuditAgent records it); the production default's when absent.
+        const avoid = new Set(rec.lakeAvoid ?? goodLakeAvoidSet(obs));
         L.record('INV-PL', { violated: thumbs.some((id) => avoid.has(id)) });
-        if (rec.lakeTarget && thumbs.includes(rec.lakeTarget)) L.inc('PL.botLakedThumb');
-        if (rec.human?.target && thumbs.includes(rec.human.target)) L.inc('PL.humanLakedThumb');
+        L.inc('PL.n');
+        if (rec.lakeTarget && thumbs.includes(rec.lakeTarget)) {
+          L.inc('PL.botLakedThumb');
+          if (truth?.roles.get(rec.lakeTarget) === 'merlin') L.inc('PL.botLakedThumb.merlin');
+        }
+        if (rec.human?.target && thumbs.includes(rec.human.target)) {
+          L.inc('PL.humanLakedThumb');
+          if (truth?.roles.get(rec.human.target) === 'merlin') L.inc('PL.humanLakedThumb.merlin');
+        }
+        if (rec.human?.target && rec.lakeTarget === rec.human.target) L.inc('PL.sameTargetAsHuman');
       }
       break;
     }

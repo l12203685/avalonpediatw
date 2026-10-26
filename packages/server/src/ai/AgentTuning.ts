@@ -106,6 +106,18 @@
  *     的 minReds ≥ 該局所需失敗數」的隊；R1–R2 照桌規（D3 定案）；在所有角色
  *     的「在隊上一律贊成」捷徑之前執行；持湖者在隊上時，一張失敗就夠而隊上有
  *     自己宣紅的人 → 反對（P2）；INV-T1、V1、K2、P3、L1）。
+ *   - 2026-10-26 邏輯第一第 1E / 1F 批（派西 = 帶「兩拇指恰好一紅」內建資訊
+ *     的忠臣；紅方不做不可能為真的湖宣告；`docs/ai/logic_first.md` 第 8 節；
+ *     四個開關各做一件事，legacy 全關，不變量歸零後預設開）：
+ *     `percivalLoyalVote`（S1-6 投票：拿掉派西「在隊上一律贊成」與「隊上沒有
+ *     拇指就反對」兩條捷徑，改走一般好人投票；R3 起非強制、一張失敗就夠的
+ *     回合兩拇指同隊 → 反對；莫甘娜自己的紅方規則不動；INV-Pe1）、
+ *     `percivalCertainExclusion`（S1-6 派隊：派西只硬排除確定性層的確定紅 ——
+ *     `inferRedsFromTaskFails` 只留確定紅、「鐵咬」只在那根拇指確定是紅時硬
+ *     排除，兩根拇指同分時不依座位序選邊；INV-Pe2）、`percivalBlueLake`
+ *     （S1-8：派西的湖是藍方湖，避開名單只剩 `knownEvils`；INV-PL）、
+ *     `redPossibleClaimsOnly`（S1-10：紅方持湖者不做「好人持湖者不可能為真」
+ *     的宣告，改宣另一邊，兩邊都不可能時不宣告；INV-R1）。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -286,6 +298,41 @@ export interface AgentTuning {
    * 在 L1 是確定紅（S1-5），含他的隊在一張失敗就夠的回合是必敗隊。
    */
   mustFailGate: boolean;
+  /**
+   * S1-6 派西的投票（2026-10-26，第 1E 批，INV-Pe1）：派西 = 帶「兩拇指恰好
+   * 一紅」內建資訊的忠臣，投票走一般好人邏輯（忠臣的邏輯 + 拇指限制 +
+   * 第 1D 批的必敗閘門 + 機率層）。拿掉「派西在隊上一律贊成」（ForwardAgent
+   * 與 HeuristicAgent 兩條路徑；莫甘娜自己的紅方規則不動）與「隊上沒有拇指
+   * 就反對」（沒有拇指的隊不提供任何紅藍資訊，Pe1）；R3 起、非強制提議、
+   * 一張失敗就夠的回合，兩拇指同隊（必有一紅）→ 反對；R1–R2 照桌規（D3
+   * 定案），R4 兩張失敗交給機率層。
+   */
+  percivalLoyalVote: boolean;
+  /**
+   * S1-6 派西的派隊（2026-10-26，第 1E 批，INV-Pe2）：派西只硬排除確定性層
+   * L1* 的確定紅。`inferRedsFromTaskFails`（「每次失敗任務都在場」= 紅）只留
+   * 確定紅；「鐵咬」（金字塔分數較高的拇指 = 莫甘娜）只在那根拇指確定是紅時
+   * 硬排除，否則留在候選裡照嫌疑排序（軟性）；兩根拇指分數相同時不依座位序
+   * 指定誰是梅林 / 莫甘娜。R1 不放拇指的裁定不變（第 1A 批）。HeuristicAgent
+   * （fallback）R2 起的派西派隊改走忠臣的派隊。
+   */
+  percivalCertainExclusion: boolean;
+  /**
+   * S1-8 派西的湖 = 藍方湖（2026-10-26，第 1E 批，Edward 2026-10-14 裁定、D4；
+   * INV-PL）：好人持湖者的避開名單只剩 `knownEvils`（梅林看得到的紅），不再
+   * 包含派西的兩根拇指；目標由 `GoodLakeInfo` 用持湖者信念（派西：兩拇指
+   * 恰好一紅）挑。湖到拇指後確定性層用自己的湖結果同時解出兩根拇指。
+   */
+  percivalBlueLake: boolean;
+  /**
+   * S1-10 紅方不做不可能為真的宣告（2026-10-26，第 1F 批，C8 / K5，INV-R1）：
+   * 紅方持湖者選好的宣告如果在公開的 L1（A0；L1 為空時 L0）裡沒有任何
+   * 「持湖者是好人而且宣告為真」的世界 —— 宣告本身就證明持湖者是紅 ——
+   * 就改宣另一邊；兩邊都不可能時（持湖者在公開的局面上已經確定是紅）不宣告
+   * （湖以 `declaredClaim: 'none'` 結束）。藍方看到這種宣告會把持湖者
+   * 放進確定紅（確定性層自動做到，INV-R2）。
+   */
+  redPossibleClaimsOnly: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -315,6 +362,10 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'forcedVoteZeroBits',
   'teamDominanceGate',
   'mustFailGate',
+  'percivalLoyalVote',
+  'percivalCertainExclusion',
+  'percivalBlueLake',
+  'redPossibleClaimsOnly',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -343,6 +394,10 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   forcedVoteZeroBits: false,
   teamDominanceGate: false,
   mustFailGate: false,
+  percivalLoyalVote: false,
+  percivalCertainExclusion: false,
+  percivalBlueLake: false,
+  redPossibleClaimsOnly: false,
 });
 
 /**
@@ -473,6 +528,11 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *   - 2026-10-22 第 1D 批（決策閘門，`logic_first.md` 第 7 節）：`teamDominanceGate`、
  *     `mustFailGate` 預設開（INV-T1 / V1 / K1 / K2 / P3 / L1 在 1970 局重播、探針與
  *     2000 局自我對打上為 0）。強度只回報（strength_benchmark.md 第 17 節）。
+ *   - 2026-10-26 第 1E / 1F 批（派西 = 忠臣 + 拇指限制、派西藍方湖、紅方只做
+ *     可能為真的宣告；`logic_first.md` 第 8 節）：`percivalLoyalVote`、
+ *     `percivalCertainExclusion`、`percivalBlueLake`、`redPossibleClaimsOnly`
+ *     預設開（INV-Pe2 / PL / R1 在 1970 局重播與 2000 局自我對打上為 0）。
+ *     強度只回報（strength_benchmark.md 第 18 節）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -505,6 +565,10 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   forcedVoteZeroBits: true,
   teamDominanceGate: true,
   mustFailGate: true,
+  percivalLoyalVote: true,
+  percivalCertainExclusion: true,
+  percivalBlueLake: true,
+  redPossibleClaimsOnly: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -533,6 +597,10 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   forcedVoteZeroBits: 'AVALON_TUNING_FORCED_VOTE_ZERO_BITS',
   teamDominanceGate: 'AVALON_TUNING_TEAM_DOMINANCE_GATE',
   mustFailGate: 'AVALON_TUNING_MUST_FAIL_GATE',
+  percivalLoyalVote: 'AVALON_TUNING_PERCIVAL_LOYAL_VOTE',
+  percivalCertainExclusion: 'AVALON_TUNING_PERCIVAL_CERTAIN_EXCLUSION',
+  percivalBlueLake: 'AVALON_TUNING_PERCIVAL_BLUE_LAKE',
+  redPossibleClaimsOnly: 'AVALON_TUNING_RED_POSSIBLE_CLAIMS_ONLY',
 });
 
 function parseBool(raw: string): boolean | undefined {

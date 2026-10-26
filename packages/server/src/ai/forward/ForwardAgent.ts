@@ -66,7 +66,7 @@ import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } f
 import { goodVouchTeamConstraint, goodVouchVoteRule } from '../GoodLakeFollowUp';
 import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan, teamReuseScorer } from '../TeamReuse';
 import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
-import { percivalNoThumbsR1Active, percivalR1ThumbException } from '../PercivalThumbs';
+import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from '../PercivalThumbs';
 import {
   anyGate,
   certaintyFor,
@@ -236,6 +236,22 @@ export function inferRedsFromTaskFails(
     }
   }
   return inferred;
+}
+
+/**
+ * Percival's role signals with the thumb split removed when the two thumbs'
+ * Merlin scores tie (logic-first batch 1E, `AgentTuning.
+ * percivalCertainExclusion`): `getRoleSignals` keeps `knownWizards[0]` as A
+ * on a tie, i.e. the split falls back to seat order. Other roles and strict
+ * orders pass through unchanged.
+ */
+export function percivalSignalsWithoutTie(signals: RoleSignals): RoleSignals {
+  const { percivalA: a, percivalB: b, wizardMerlinScores } = signals;
+  if (!a || !b) return signals;
+  const sa = wizardMerlinScores.get(a) ?? 0;
+  const sb = wizardMerlinScores.get(b) ?? 0;
+  if (Math.abs(sa - sb) > 1e-9) return signals;
+  return { ...signals, percivalA: undefined, percivalB: undefined, merlinHidingFromAssassin: false, morganaBetrayal: false };
 }
 
 // ── Telemetry counters (Wave E PR3 verification) ────────────────
@@ -852,6 +868,43 @@ export class ForwardAgent implements AvalonAgent {
       }
     }
 
+    // ── AgentTuning.percivalLoyalVote (logic-first batch 1E, S1-6, Pe1) ──
+    // Percival = a loyal + "exactly one thumb is red": both thumbs on a
+    // non-forced R3+ team that one fail card decides put a certain red on
+    // it → reject (`PercivalThumbs.percivalBothThumbsReject`; R1–R2 keep the
+    // table rule above, R4 two fails = probability layer). Otherwise
+    // Percival votes through the general good-vote logic below — the
+    // "Percival on the team ⇒ approve" shortcut that follows is Morgana's
+    // only with the switch on.
+    if (decisionType === 'team_vote' && percivalBothThumbsReject(this.baseline.tuning, obs)) {
+      const action: AgentAction = { type: 'team_vote', vote: false };
+      const ruleCandidate: Candidate = {
+        action,
+        description: 'percival both thumbs reject',
+        signals: {
+          avgSuspicion: 0,
+          maxSuspicion: 0,
+          includesKnownEvil: false,
+          includesSelf: (obs.proposedTeam ?? []).includes(obs.myPlayerId),
+          violatesLakeRules: false,
+          numKnownEvilOnTeam: 1,
+          merlinProbForTarget: 0,
+        },
+      };
+      return {
+        action,
+        reasoningTrace: {
+          decisionType,
+          purposes: zeroPurposeVector(),
+          candidatesEvaluated: 1,
+          chosen: ruleCandidate,
+          chosenScore: 0,
+          usedFallback: false,
+          summary: `${decisionType} → percival both thumbs reject (round=${obs.currentRound ?? 1})`,
+        },
+      };
+    }
+
     // ── Edward 2026-05-06 16:09 — 派西 / 莫甘娜 on-team approve hard rule ─
     //
     // Edward 16:09 verbatim:
@@ -870,11 +923,20 @@ export class ForwardAgent implements AvalonAgent {
     //
     // R1-R2 path above already covers (force-normal on-team approve);
     // this gate adds R3+ on-team approve for these two roles.
+    //
+    // Logic-first batch 1E (AgentTuning.percivalLoyalVote, S1-6): Percival
+    // leaves this shortcut. A 2026-10 practice report had the bot Percival
+    // approve, on the team, an R4 team holding a seat the first two
+    // missions and the lake declarations had already proved red — "on the
+    // team" says nothing about the other members. Percival is a loyal with
+    // one more fact and votes as one (the gates above, the both-thumbs rule,
+    // then the scorer). Morgana's own red-side rule is untouched.
+    const percivalShortcut = !this.baseline.tuning.percivalLoyalVote;
     if (decisionType === 'team_vote' && (obs.currentRound ?? 1) >= 3) {
       const proposedTeam = obs.proposedTeam ?? [];
       const onTeam = proposedTeam.includes(obs.myPlayerId);
       const role = obs.myRole as string;
-      if (onTeam && (role === 'percival' || role === 'morgana')) {
+      if (onTeam && ((role === 'percival' && percivalShortcut) || role === 'morgana')) {
         const action = this.baseline.actDirect(obs);
         const delegateCandidate: Candidate = {
           action,
@@ -1087,6 +1149,13 @@ export class ForwardAgent implements AvalonAgent {
       roleSignals = getRoleSignals(obs, this.belief);
     } catch (error: unknown) {
       return this.fallback(obs, decisionType, 'getRoleSignals() threw');
+    }
+    // ── AgentTuning.percivalCertainExclusion (logic-first batch 1E, S1-6) ──
+    // Which thumb is Merlin is a probability, never a seat-order fact: when
+    // the two thumbs score the same, neither is "A" (likely Merlin) or "B"
+    // (likely Morgana) — the old split made the lower-seated thumb A.
+    if (this.baseline.tuning.percivalCertainExclusion) {
+      roleSignals = percivalSignalsWithoutTie(roleSignals);
     }
     // ── AgentTuning.percivalNoThumbsR1 (2026-10-14) ──
     // R1 Percival leader: no bonus for a team with thumb A only (the
@@ -1380,7 +1449,14 @@ export class ForwardAgent implements AvalonAgent {
     // Compute inferred-red list once per call so percival's hard-exclude
     // path below can stack it on top of the inferred-Morgana wizard
     // exclusion. See `inferRedsFromTaskFails` doc for attribution algo.
-    const inferredReds = inferRedsFromTaskFails(obs, this.belief);
+    // AgentTuning.percivalCertainExclusion (logic-first batch 1E, S1-6,
+    // INV-Pe2): "on every failed mission" is not "red" (C2 / C3: x fail
+    // cards prove at least x reds, not the whole team) — keep only the seats
+    // the certainty layer proves red.
+    const certainOnly = this.baseline.tuning.percivalCertainExclusion;
+    const inferredReds = certainOnly
+      ? inferRedsFromTaskFails(obs, this.belief).filter((id) => certaintyFor(obs).isCertRed(id))
+      : inferRedsFromTaskFails(obs, this.belief);
 
     const allIds = obs.allPlayerIds;
     if (allIds.length < teamSize) return [];
@@ -1443,6 +1519,20 @@ export class ForwardAgent implements AvalonAgent {
         const excluded = wizards.filter((id) => id !== keep);
         for (const id of excluded) markExcluded(id, 2);
         ranked = ranked.filter((id) => !excluded.includes(id));
+      } else if (wizards.length === 2 && certainOnly) {
+        // AgentTuning.percivalCertainExclusion (logic-first batch 1E, S1-6,
+        // INV-Pe2): 鐵咬 hard-excludes a thumb only when the certainty layer
+        // proves it red (then the other thumb is certainly Merlin); which
+        // thumb is Morgana is otherwise a probability, so both stay in the
+        // pool and the suspicion ranking (soft) and the Percival bias decide.
+        // No seat-order tie-break: a thumb is excluded for what is proved
+        // about it, never for where it sits.
+        for (const id of wizards) {
+          if (certaintyFor(obs).isCertRed(id)) {
+            markExcluded(id, 2);
+            ranked = ranked.filter((x) => x !== id);
+          }
+        }
       } else if (wizards.length === 2) {
         // Use the same A/B split as RoleStrategy.getRoleSignals (without
         // re-running scoreWizardAsMerlin here — pyramid score is the

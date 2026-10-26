@@ -164,7 +164,7 @@ describe('AgentTuning — flags', () => {
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, percivalNoThumbsR1: true })).toBe('percivalNoThumbsR1');
   });
 
-  it('round-3 integrated default (strength_benchmark.md 第 13 節) + percivalNoThumbsR1 (第 14 節) + logic-first 1A/1B / 1C / 1D (第 15–17 節)', () => {
+  it('round-3 integrated default (strength_benchmark.md 第 13 節) + percivalNoThumbsR1 (第 14 節) + logic-first 1A/1B / 1C / 1D / 1E+1F (第 15–18 節)', () => {
     // 第 13 節: the combined self-play variant = the round-3 default (red +3.18pp, blue
     // +4.89pp pooled over the old default); its baseline = that set minus the three
     // round-3 switches. 第 14 節: baseline = the round-3 default (12 switches), variant =
@@ -205,7 +205,34 @@ describe('AgentTuning — flags', () => {
     }
     expect(AGENT_TUNING_ENV.teamDominanceGate).toBe('AVALON_TUNING_TEAM_DOMINANCE_GATE');
     expect(AGENT_TUNING_ENV.mustFailGate).toBe('AVALON_TUNING_MUST_FAIL_GATE');
+    // Batches 1E / 1F (logic_first.md 第 8 節, 2026-10-26): Percival = loyal + thumb
+    // constraint (vote, team exclusions, blue lake) and the red possible-claim guard;
+    // baseline of the strength run = the 22 switches of 1D, variant = the full default.
+    const LOGIC_1EF = ['percivalLoyalVote', 'percivalCertainExclusion', 'percivalBlueLake', 'redPossibleClaimsOnly'] as const;
+    for (const key of LOGIC_1EF) {
+      expect(DEFAULT_AGENT_TUNING[key]).toBe(true);
+      expect(LEGACY_AGENT_TUNING[key]).toBe(false);
+      expect(parseTuningFlag(key)).toEqual({ [key]: true });
+      expect(tuningFromEnv({ [AGENT_TUNING_ENV[key]]: '0' })).toEqual({ [key]: false });
+      expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, [key]: true })).toBe(key);
+    }
+    expect(AGENT_TUNING_ENV.percivalLoyalVote).toBe('AVALON_TUNING_PERCIVAL_LOYAL_VOTE');
+    expect(AGENT_TUNING_ENV.percivalCertainExclusion).toBe('AVALON_TUNING_PERCIVAL_CERTAIN_EXCLUSION');
+    expect(AGENT_TUNING_ENV.percivalBlueLake).toBe('AVALON_TUNING_PERCIVAL_BLUE_LAKE');
+    expect(AGENT_TUNING_ENV.redPossibleClaimsOnly).toBe('AVALON_TUNING_RED_POSSIBLE_CLAIMS_ONLY');
     expect(describeAgentTuning(DEFAULT_AGENT_TUNING)).toBe(
+      'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
+        'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
+        'goodVouchFollowUp,teamReuse,redR1Teammate,percivalNoThumbsR1,' +
+        'percivalR1ThumbOnThumb,goodQuestSuccessGuard,assassinHeuristicVisibility,' +
+        'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
+        'teamDominanceGate,mustFailGate,' +
+        'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly',
+    );
+    const before1EF = {
+      ...DEFAULT_AGENT_TUNING, percivalLoyalVote: false, percivalCertainExclusion: false, percivalBlueLake: false, redPossibleClaimsOnly: false,
+    };
+    expect(describeAgentTuning(before1EF)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
         'goodVouchFollowUp,teamReuse,redR1Teammate,percivalNoThumbsR1,' +
@@ -213,7 +240,7 @@ describe('AgentTuning — flags', () => {
         'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
         'teamDominanceGate,mustFailGate',
     );
-    const before1D = { ...DEFAULT_AGENT_TUNING, teamDominanceGate: false, mustFailGate: false };
+    const before1D = { ...before1EF, teamDominanceGate: false, mustFailGate: false };
     expect(describeAgentTuning(before1D)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +

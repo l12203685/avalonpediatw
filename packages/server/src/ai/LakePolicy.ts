@@ -28,6 +28,7 @@ import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { beliefOptionsFrom, defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
 import { beliefFailCards, missionFailed } from './missionFacts';
 import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
+import { claimPossibleForGoodHolder } from './belief/Certainty';
 
 type Camp = 'good' | 'evil';
 
@@ -105,14 +106,23 @@ export function deriveValidLakeTargets(
 
 /**
  * Seats a good holder never lakes (`pickLakeTargetForTeam`, smart path):
- * `knownEvils` ∪ `knownWizards` — Merlin's visible reds, and both of
- * Percival's thumbs. Exported for the invariant harness (INV-PL, structural:
- * the owner ruled 2026-10-14 that Percival's lake is a blue lake, so the
- * thumbs leave this set in batch 1E / S1-8).
+ * `knownEvils` — Merlin's visible reds (laking a seat already known red
+ * wastes the lake). Before logic-first batch 1E (`percivalBlueLake` off)
+ * also both of Percival's thumbs (`knownWizards`). The owner ruled
+ * 2026-10-14 that Percival's lake is a blue lake (D4, S1-8): Percival is a
+ * loyal with one more fact ("exactly one thumb is red"), so his candidate
+ * set is a loyal's and `GoodLakeInfo` scores it with that fact. Exported for
+ * the invariant harness (INV-PL, structural: the AuditAgent records the set
+ * the deciding agent used).
  */
-export function goodLakeAvoidSet(obs: PlayerObservation): Set<string> {
+export function goodLakeAvoidSet(
+  obs: PlayerObservation,
+  tuning: Pick<AgentTuning, 'percivalBlueLake'> = getDefaultAgentTuning(),
+): Set<string> {
   const avoidSet = new Set<string>(obs.knownEvils);
-  for (const wizardId of obs.knownWizards ?? []) avoidSet.add(wizardId);
+  if (!tuning.percivalBlueLake) {
+    for (const wizardId of obs.knownWizards ?? []) avoidSet.add(wizardId);
+  }
   return avoidSet;
 }
 
@@ -191,11 +201,15 @@ export function pickLakeTargetForTeam(
     //                lake-probe still allowed for Mordred)
     //   • percival — knownWizards = [merlin, morgana] (ambiguous — can't
     //                distinguish); avoid both so we never waste the lake.
+    //                AgentTuning.percivalBlueLake (logic-first batch 1E,
+    //                owner ruling 2026-10-14, S1-8): Percival's lake is a
+    //                blue lake — no thumb avoid list; GoodLakeInfo scores
+    //                the thumbs with "exactly one of them is red".
     //   • loyal    — knownEvils = [], knownWizards = undefined → no
     //                filter (loyal must rely on suspicion ranking alone).
-    // The filter set is knownEvils ∪ knownWizards so each role's view
-    // is honoured without branching on myRole.
-    const avoidSet = goodLakeAvoidSet(obs);
+    // The filter set is knownEvils (∪ knownWizards with the switch off) so
+    // each role's view is honoured without branching on myRole.
+    const avoidSet = goodLakeAvoidSet(obs, tuning);
     const unknownCandidates = validTargets.filter(id => !avoidSet.has(id));
     if (unknownCandidates.length === 0) {
       return validTargets[0];
@@ -354,6 +368,35 @@ export function decideLakeClaimForTeam(
     return null;
   }
 
+  const claim = decideEvilLakeClaim(targetId, obs, actualTargetTeam, tuning);
+  // ── AgentTuning.redPossibleClaimsOnly (logic-first batch 1F, S1-10) ──
+  // C8 / K5: a claim that cannot be true for a good holder — no public L1
+  // world (L0 when A0 leaves none) has the holder good and the target's
+  // camp equal to the claim — proves the holder red to every blue (the
+  // certainty layer pins it, INV-R2). A red holder never makes one: it
+  // takes the other claim. When neither claim is possible the holder is
+  // already publicly certain red (every public world has it red), so any
+  // declaration would be one that cannot be true — it declares nothing
+  // (`null`: the lake ends undeclared, `declaredClaim: 'none'`; the table
+  // learns nothing it did not already know). After the claim rule, so the
+  // rule's own Math.random draws are unchanged.
+  if (
+    tuning.redPossibleClaimsOnly &&
+    !claimPossibleForGoodHolder(obs, obs.myPlayerId, targetId, claim)
+  ) {
+    const other: Camp = claim === 'good' ? 'evil' : 'good';
+    return claimPossibleForGoodHolder(obs, obs.myPlayerId, targetId, other) ? other : null;
+  }
+  return claim;
+}
+
+/** The evil holder's claim before the batch-1F guard (see `decideLakeClaimForTeam`). */
+function decideEvilLakeClaim(
+  targetId: string,
+  obs: PlayerObservation,
+  actualTargetTeam: Camp | undefined,
+  tuning: AgentTuning,
+): Camp {
   // Evil holder.
   // ── AgentTuning.evilLakeClaimAlwaysGood (2026-10-12) ──
   // 一致性基準第 7 節：ED 當紅方 14 次有 13 次說實話、top 群也偏向宣

@@ -14,6 +14,8 @@ import { describe, it, expect } from 'vitest';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { PlayerObservation, VoteRecord } from '../types';
 import { ForwardAgent } from './ForwardAgent';
+import { HeuristicAgent } from '../HeuristicAgent';
+import { DEFAULT_AGENT_TUNING } from '../AgentTuning';
 import { SelfPlayEngine } from '../SelfPlayEngine';
 
 const IDS_5P = ['P1', 'P2', 'P3', 'P4', 'P5'];
@@ -84,7 +86,11 @@ describe('ForwardAgent — team size invariant (self-play crash regression)', ()
   ] as const) {
     it(`Percival fills a legal 3-member team when 鐵咬 empties the pool (${label})`, () => {
       const obs = crashObservation([...knownEvils]);
-      const decision = new ForwardAgent('P3').decide(obs);
+      // The legacy hard exclusions that emptied the pool (wizard B and every
+      // "inferred red"); logic-first batch 1E keeps only certain reds
+      // (`percivalCertainExclusion`) — the default case is checked below.
+      const legacy = new HeuristicAgent('P3', undefined, undefined, { ...DEFAULT_AGENT_TUNING, percivalCertainExclusion: false });
+      const decision = new ForwardAgent('P3', legacy).decide(obs);
       expect(decision.action.type).toBe('team_select');
       if (decision.action.type !== 'team_select') return;
       const team = decision.action.teamIds;
@@ -95,6 +101,18 @@ describe('ForwardAgent — team size invariant (self-play crash regression)', ()
       expect(team).toContain('P1');
       // Forward pipeline handled it itself (no illegal-team fallback).
       expect(decision.reasoningTrace.usedFallback).toBe(false);
+    });
+
+    it(`Percival (production default, batch 1E) excludes no uncertain seat and fills a legal team (${label})`, () => {
+      const fwd = new ForwardAgent('P3');
+      const decision = fwd.decide(crashObservation([...knownEvils]));
+      expect(decision.action.type).toBe('team_select');
+      if (decision.action.type !== 'team_select') return;
+      expect(decision.action.teamIds).toHaveLength(AVALON_CONFIG[5].questTeams[3]);
+      expect(decision.action.teamIds).toContain('P3');
+      expect(decision.reasoningTrace.usedFallback).toBe(false);
+      // No seat on the failed mission is certainly red (one fail, three seats).
+      expect([...fwd.lastTeamExclusions().keys()]).toEqual([]);
     });
   }
 

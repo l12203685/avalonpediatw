@@ -30,7 +30,12 @@
  * brought INV-T1, V1, K1, K2, P3, L1 and the new INV-K1V to 0 on the
  * replays, the probe and the self-play games — and INV-Pe1 with them (both
  * thumbs on a one-fail team is a must-fail team; batch 1E still owns the
- * Percival rules themselves); all enforced from then on.
+ * Percival rules themselves); all enforced from then on. Batches 1E / 1F
+ * (2026-10-26, 第 8 節: Percival = a loyal + "exactly one thumb is red" —
+ * `percivalLoyalVote`, `percivalCertainExclusion`, `percivalBlueLake` — and
+ * the red possible-claim guard `redPossibleClaimsOnly`) brought INV-Pe2,
+ * PL and R1 to 0 on the replays and the self-play games; every rule of the
+ * catalog is enforced from then on.
  */
 
 export type InvariantKind = 'hard' | 'policy' | 'metamorphic' | 'structural' | 'static';
@@ -81,18 +86,18 @@ export const INVARIANTS: readonly InvariantSpec[] = [
   { id: 'INV-L1', refs: ['P2'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'a good holder never approves a non-forced team holding its own declared red when one fail suffices' },
   { id: 'INV-Pe1', refs: ['Pe1'], kind: 'hard', status: 'enforced', side: 'good',
-    rule: 'Percival never approves a non-forced R3+ team holding both thumbs when one fail suffices (R1-R2 = the table rule; at 0 since batch 1D: such a team must fail)' },
-  { id: 'INV-Pe2', refs: ['Pe1', 'C3'], kind: 'hard', status: 'pending:1E', side: 'good',
+    rule: 'Percival never approves a non-forced R3+ team holding both thumbs when one fail suffices (R1-R2 = the table rule; at 0 since batch 1D: such a team must fail; batch 1E: Percival\'s own vote rule)' },
+  { id: 'INV-Pe2', refs: ['Pe1', 'C3'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'Percival never hard-excludes a seat that is not certRed (the R1 no-thumb owner ruling is exempt)' },
   { id: 'INV-R1NT', refs: ['owner 2026-10-14', 'D5'], kind: 'hard', status: 'enforced', side: 'good',
     rule: '6-10p Percival captain with two thumbs, no mission result yet: no thumb on the team, except the D5 thumb-on-thumb exception' },
-  { id: 'INV-PL', refs: ['owner 2026-10-14'], kind: 'structural', status: 'pending:1E', side: 'good',
-    rule: 'Percival\'s lake candidate set equals a loyal\'s (no thumb avoid list)' },
+  { id: 'INV-PL', refs: ['owner 2026-10-14'], kind: 'structural', status: 'enforced', side: 'good',
+    rule: 'Percival\'s lake candidate set equals a loyal\'s (no thumb avoid list; checked on the avoid set the deciding agent used)' },
   { id: 'INV-M1', refs: ['M1'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'Merlin never proposes, and from R3 never approves, a team holding a visible red (R1-R2 votes = policy)' },
   { id: 'INV-A1', refs: ['A1'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'the assassin never targets a known red' },
-  { id: 'INV-R1', refs: ['C8', 'K5'], kind: 'hard', status: 'pending:1F', side: 'red',
+  { id: 'INV-R1', refs: ['C8', 'K5'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'a red holder never makes a claim that cannot be true for a good holder (public L1)' },
   { id: 'INV-R2', refs: ['K5'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'after an impossible declaration every blue has the holder in certRed (L1; the L0 fallback is counted as exempt)' },

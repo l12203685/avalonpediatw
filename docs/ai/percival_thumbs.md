@@ -484,3 +484,11 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/perciva
 USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin [--flag percivalNoThumbsR1=0]
 # 強度與十座位同設定：指令見 strength_benchmark.md 第 14 節
 ```
+
+## 12. 之後的變更：派西 = 帶拇指限制的忠臣（2026-10-26，邏輯第一原理第 1E 批）
+
+細節在 `logic_first.md` 第 8 節；這裡只記和本文件相關的三點。
+
+1. **R2 起的派隊**：`percivalCertainExclusion` 之後派西只硬排除確定紅（「每次失敗任務都在場」只留確定紅；鐵咬只在那根拇指確定是紅時排除；兩根拇指同分時不依座位序指定 A / B）。第 11.5 節第 3 點（候選池與評分的 A / B 分法不一致）因此少了一半：候選池不再用 A / B 硬排除，只剩評分的軟性偏好。R1 不放拇指（第 9、11 節）不變。
+2. **投票**：`percivalLoyalVote` 拿掉「派西在隊上一律贊成」與「隊上沒有拇指就反對」。重播上派西在隊上（不是隊長、R3 起非強制）真人反對 30.5%（1225 / 4019 可信票）；隊上有確定紅時 69.7%（23 / 33），機器人 75.0% → 100%；隊上沒有拇指時真人 35.5%（446 / 1255），機器人 100% → 3.0%（像真人的部分列為後續，機率層處理）。
+3. **湖**（第 11.5 節第 4 點）：Edward 2026-10-14 裁定派西的湖是藍方湖（D4），`percivalBlueLake` 拿掉避開名單。派西湖到拇指 0 → 21.9%（真人 21.8%），湖到的拇指是梅林 50%（真人 82.6%），與真人同目標 108 → 96 / 393。

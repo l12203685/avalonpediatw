@@ -421,9 +421,16 @@ function biasForMerlin(
  *          if "梅躲刺" → distrust A too (don't include);
  *          if "娜出賣隊友" → optionally include B.
  *   voteOnTeam:
- *     team ∩ B → reject (default — not trust B);
+ *     team ∩ B → reject-leaning (default — not trust B; soft: B is only the
+ *       likelier Morgana);
  *     team 高 pyramid 疑紅 → reject;
- *     team has both wizards (intersection) → reject.
+ *     team has both wizards (intersection) → it holds a certain red. When one
+ *       fail decides (non-forced R3+) that is a hard reject outside this
+ *       bias: `PercivalThumbs.percivalBothThumbsReject` (logic-first batch
+ *       1E, `AgentTuning.percivalLoyalVote`) and the 1D must-fail gate; in R4
+ *       (two fails) the B term below leans reject (probability layer, D2).
+ *     With `percivalCertainExclusion` a tie between the thumbs leaves A / B
+ *     unset (no seat-order split), so neither term fires.
  *   voteOnQuest:
  *     on-team success (good faction).
  *

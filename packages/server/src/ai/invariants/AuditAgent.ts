@@ -22,6 +22,7 @@ import { HeuristicAgent } from '../HeuristicAgent';
 import { ForwardAgent } from '../forward/ForwardAgent';
 import { withSeededRandom } from '../benchmark/agreement';
 import type { AgentTuning } from '../AgentTuning';
+import { goodLakeAvoidSet } from '../LakePolicy';
 import type { AgentAction, AvalonAgent, PlayerObservation } from '../types';
 
 export type DecisionKind = 'team_select' | 'team_vote' | 'quest_vote' | 'assassinate' | 'lake_target' | 'lake_claim';
@@ -35,6 +36,8 @@ export interface DecisionRecord {
   lakeTarget?: string;
   /** lake_target: the legal targets offered. */
   validTargets?: readonly string[];
+  /** lake_target, good holder: the avoid set the deciding agent's tuning uses (INV-PL, structural). */
+  lakeAvoid?: readonly string[];
   /** lake_claim: the public claim (`null` = no declaration). */
   lakeClaim?: 'good' | 'evil' | null;
   /** lake_claim: the target's real camp (what the holder saw). */
@@ -117,7 +120,13 @@ export class AuditAgent implements AvalonAgent {
 
   pickLakeTargetSeeded(obs: PlayerObservation, validTargets: readonly string[] | undefined, seed: string): DecisionRecord {
     const target = withSeededRandom(seed, () => this.base.pickLakeTarget(obs, validTargets));
-    const rec: DecisionRecord = { kind: 'lake_target', obs, lakeTarget: target, validTargets: validTargets ? [...validTargets] : undefined };
+    const rec: DecisionRecord = {
+      kind: 'lake_target',
+      obs,
+      lakeTarget: target,
+      validTargets: validTargets ? [...validTargets] : undefined,
+      lakeAvoid: obs.myTeam === 'good' ? [...goodLakeAvoidSet(obs, this.base.tuning)] : undefined,
+    };
     this.records.push(rec);
     return rec;
   }

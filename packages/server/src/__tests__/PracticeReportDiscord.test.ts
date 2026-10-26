@@ -47,7 +47,7 @@ const ROW: PracticeFlagRow = {
   botRole: 'morgana',
   kind: 'team_vote',
   decision: '贊成',
-  reason: '贊成：自己在隊上。 規則：派西維爾／莫甘娜在隊上一律贊成',
+  reason: '贊成：自己在隊上。 規則：莫甘娜在隊上一律贊成（紅方規則）',
   note: '這票怪怪的',
 };
 
@@ -93,13 +93,13 @@ describe('the post', () => {
     expect(formatPracticeReportForward(ROW)).toBe([
       '🧪 練習回報「這步怪怪的」｜PRACTICE-ABCDEF1234｜第 2 回合・第 3 次派隊',
       '機器人 0家 莫甘娜｜投票：贊成',
-      '理由：贊成：自己在隊上。 規則：派西維爾／莫甘娜在隊上一律贊成',
+      '理由：贊成：自己在隊上。 規則：莫甘娜在隊上一律贊成（紅方規則）',
       '玩家備註：這票怪怪的',
     ].join('\n'));
     expect(formatPracticeReportForward({ ...ROW, note: '', roomId: '' })).toBe([
       '🧪 練習回報「這步怪怪的」｜第 2 回合・第 3 次派隊',
       '機器人 0家 莫甘娜｜投票：贊成',
-      '理由：贊成：自己在隊上。 規則：派西維爾／莫甘娜在隊上一律贊成',
+      '理由：贊成：自己在隊上。 規則：莫甘娜在隊上一律贊成（紅方規則）',
       '玩家備註：（沒寫）',
     ].join('\n'));
   });

@@ -26,7 +26,7 @@ import {
   type AgentTuning,
 } from './AgentTuning';
 import { pickAssassinTargetByModel, type AssassinModelWeights } from './assassin/AssassinModel';
-import { percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
+import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
 import { beliefFailCards, missionFailed } from './missionFacts';
 import {
@@ -1415,7 +1415,15 @@ export class HeuristicAgent implements AvalonAgent {
       // Wave B legacy (dual-thumb intersection + smart Merlin pick) is
       // preserved INSIDE selectPercivalTeam; flag-stable for emergency
       // rollback by toggling USE_PYRAMID_BASELINE.
-      if (knownWizards && knownWizards.length > 0) {
+      // AgentTuning.percivalCertainExclusion (logic-first batch 1E, S1-6):
+      // from R2 on Percival builds his team as a loyal (no 鐵咬 on a
+      // predicted Morgana; the beliefs carry the thumb constraint); the R1
+      // no-thumb rulings (`selectPercivalTeam`'s R1 branch) still apply.
+      const percivalR1Rule =
+        (currentRound ?? 1) === 1 &&
+        (obs.voteHistory.length === 0 || percivalNoThumbsR1Active(this.tuning, obs));
+      const percivalAsLoyalTeam = this.tuning.percivalCertainExclusion && !percivalR1Rule;
+      if (knownWizards && knownWizards.length > 0 && !percivalAsLoyalTeam) {
         const percivalTeam = this.selectPercivalTeam(
           obs, teamSize, filteredCandidates, pyramid,
         );
@@ -1843,10 +1851,21 @@ export class HeuristicAgent implements AvalonAgent {
         return { type: 'team_vote', vote: false };
       }
 
+      // ── AgentTuning.percivalLoyalVote (logic-first batch 1E, S1-6) ──
+      // Percival = a loyal + "exactly one thumb is red" (Pe1): both thumbs on
+      // a non-forced R3+ team that one fail decides → reject; a team with no
+      // thumb says nothing about camps, so the "no thumb ⇒ reject" rule and
+      // the "on the team ⇒ approve" shortcut below no longer apply — Percival
+      // falls through to the loyal team-aware thresholds.
+      const percivalAsLoyal = this.tuning.percivalLoyalVote;
+      if (percivalBothThumbsReject(this.tuning, obs)) {
+        return { type: 'team_vote', vote: false };
+      }
+
       // Percival: skeptical of teams without any wizard candidate (Merlin/Morgana).
       // Edward 2026-04-29 unified-hard rollout: no wizard on team → unconditional reject
       // (was: 'hard' rejected outright, 'normal' rolled a 65% reject — now both gone).
-      if (knownWizards && knownWizards.length > 0 && proposedTeam.length >= 3) {
+      if (!percivalAsLoyal && knownWizards && knownWizards.length > 0 && proposedTeam.length >= 3) {
         const hasWizard = proposedTeam.some(id => knownWizards.includes(id));
         if (!hasWizard) {
           return { type: 'team_vote', vote: false };
@@ -1871,7 +1890,7 @@ export class HeuristicAgent implements AvalonAgent {
       //   3. innerBlackBonus EV table 對派西 R2 = 0.105, 但 R1-R2 已 force
       //      normal, R3+ 派西的 hard rule = on-team approve (即使 R2 EV
       //      table 有 entry 也不該 fire).
-      if ((obs.myRole as string) === 'percival' && proposedTeam.includes(myPlayerId)) {
+      if (!percivalAsLoyal && (obs.myRole as string) === 'percival' && proposedTeam.includes(myPlayerId)) {
         return { type: 'team_vote', vote: true };
       }
 

@@ -8,8 +8,8 @@
  *     included);
  *   - every `pending:<batch>` invariant has no more violations than the
  *     baseline below (a ratchet: the batch that fixes it lowers the number to
- *     0 and flips the catalog entry to `enforced`; after batch 1D only the
- *     batch-1E / 1F rules are pending);
+ *     0 and flips the catalog entry to `enforced`; since batches 1E / 1F
+ *     no rule is pending — the ratchet stays for the next new rule);
  *   - the registered exemptions are counted (the R1–R2 normal-vote rule);
  *   - 0 ForwardAgent fallbacks.
  * The full run (all 1970 replays + 2000 self-play games) is
@@ -41,12 +41,16 @@ import { staticResultReads } from './staticScan';
  * brought T1 / V1 / K1 / K2 / P3 / L1, the new K1V and Pe1 to 0 on this
  * sample and on the full run (all 1970 replays, the probe, 2000 self-play
  * games) — all enforced now. Self-play INV-PL (batch 1E's) reads 7 when this
- * file runs alone and 6 inside the full vitest run; the ratchet keeps 7.
+ * file runs alone and 6 inside the full vitest run; the ratchet kept 7.
+ * Batch 1D left replay Pe2 149 / PL 20 / R1 0, self-play Pe2 49 / PL 7 /
+ * R1 4; batches 1E / 1F (Percival = loyal + thumb constraint, blue lake;
+ * red possible claims only) brought all three to 0 here and on the full
+ * run — enforced. Nothing is pending now.
  */
 const PENDING_BASELINE: Record<'replay' | 'probe' | 'selfplay', Record<string, number>> = {
-  replay: { 'INV-Pe2': 149, 'INV-PL': 20, 'INV-R1': 0 },
-  probe: { 'INV-Pe2': 0, 'INV-PL': 0, 'INV-R1': 0 },
-  selfplay: { 'INV-Pe2': 49, 'INV-PL': 7, 'INV-R1': 4 },
+  replay: {},
+  probe: {},
+  selfplay: {},
 };
 
 function loadGames(n: number): ReplayGame[] {
@@ -100,6 +104,14 @@ describe('invariant harness — CI sample', () => {
       expect(result.replay.tallies.get(id)?.opportunities ?? 0, `replay ${id} opportunities`).toBeGreaterThan(0);
     }
     expect(result.selfplay.tallies.get('INV-M1')?.exempt['R1-R2 normal vote (D3)'] ?? 0).toBeGreaterThan(0);
+    // The batch-1E / 1F rules have opportunities on this sample (Percival's
+    // team exclusions and lakes, red claims), not only exemptions.
+    for (const id of ['INV-PL', 'INV-R1']) {
+      expect(result.replay.tallies.get(id)?.opportunities ?? 0, `replay ${id} opportunities`).toBeGreaterThan(0);
+      expect(result.selfplay.tallies.get(id)?.opportunities ?? 0, `self-play ${id} opportunities`).toBeGreaterThan(0);
+    }
+    const pe2 = result.replay.tallies.get('INV-Pe2');
+    expect((pe2?.opportunities ?? 0) - Object.values(pe2?.exempt ?? {}).reduce((a, b) => a + b, 0), 'replay INV-Pe2 non-exempt').toBeGreaterThan(0);
     // INV-B3 (static), enforced since batch 1C: no agent code reads a mission result without its fail count.
     expect(staticResultReads(path.resolve(__dirname, '..'))).toEqual([]);
   }, 120_000);

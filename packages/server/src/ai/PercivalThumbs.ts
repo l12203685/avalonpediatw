@@ -36,9 +36,10 @@
  *     below, which keeps the included thumb in the pool and treats it as A;
  *   - baseline (`selectPercivalTeam`, fallback / forward reasoning off): the
  *     R1-P1 no-thumb branch covers R1-P2..P5 too.
- * From R2 on nothing changes (the current identification: inferred Morgana
- * excluded, inferred Merlin rewarded), never both thumbs, and Percival's lake
- * still avoids the thumbs (`LakePolicy.pickLakeTargetForTeam`).
+ * From R2 on nothing changes here (the identification: inferred Merlin
+ * rewarded; since logic-first batch 1E the inferred Morgana is hard-excluded
+ * only when certainly red, `AgentTuning.percivalCertainExclusion`), and
+ * Percival's lake is a blue lake (`AgentTuning.percivalBlueLake`).
  *
  * Player counts 6–10 (`PERCIVAL_NO_THUMBS_R1_MIN_PLAYERS`..`_MAX_PLAYERS`;
  * 2026-10-14 GM decision D5, `docs/ai/logic_first.md`): the first version
@@ -75,6 +76,7 @@
  * strength_benchmark.md 第 15 節.
  */
 
+import { AVALON_CONFIG } from '@avalon/shared';
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 
@@ -131,4 +133,31 @@ export function percivalR1ThumbException(
 ): string | null {
   if (!tuning.percivalR1ThumbOnThumb || !percivalNoThumbsR1Active(tuning, obs)) return null;
   return percivalR1IncludedThumb(obs);
+}
+
+/**
+ * Logic-first batch 1E (`AgentTuning.percivalLoyalVote`, S1-6, Pe1): Percival
+ * is a loyal with one more fact — exactly one of his two thumbs is red. Both
+ * thumbs on a team therefore put a certain red on it, so when one fail card
+ * decides the round the team must fail: reject it. Non-forced R3+ proposals
+ * only — R1–R2 keep the normal-vote table rule (owner's final ruling on D3:
+ * Percival's only R1–R2 certainty is exactly this, and rejecting it would sell
+ * Merlin), the forced fifth proposal holds no vote, and a round needing two
+ * fails (R4 of 7+ players) goes to the probability layer (D2). The 1D
+ * must-fail gate reaches the same verdict through the certainty layer; this
+ * rule is Percival's own reading of the fact, so the switch stands alone.
+ */
+export function percivalBothThumbsReject(
+  tuning: Pick<AgentTuning, 'percivalLoyalVote'>,
+  obs: PlayerObservation,
+): boolean {
+  if (!tuning.percivalLoyalVote || obs.myRole !== 'percival' || obs.myTeam !== 'good') return false;
+  const round = obs.currentRound ?? 1;
+  if (round <= 2 || obs.failCount >= 4) return false;
+  const thumbs = obs.knownWizards ?? [];
+  if (thumbs.length !== 2) return false;
+  const team = obs.proposedTeam ?? [];
+  if (!thumbs.every((id) => team.includes(id))) return false;
+  const failsRequired = AVALON_CONFIG[obs.playerCount]?.questFailsRequired[round - 1] ?? 1;
+  return failsRequired === 1;
 }

@@ -1186,6 +1186,9 @@ describe('HeuristicAgent · Percival thumb identification (Fix #4)', () => {
   // regardless of signals. Proves the escape hatch works.
   it('regression · legacy path picks wizards[0] when flag is off', () => {
     HeuristicAgent._setSmartPercivalForTesting(false);
+    // The Percival-specific team path itself (logic-first batch 1E routes an
+    // R2+ Percival leader through the loyal path: `percivalCertainExclusion`).
+    agent = new HeuristicAgent('P1', 'hard', undefined, { percivalCertainExclusion: false });
 
     const obs = baseObs({
       myPlayerId:    'P1',

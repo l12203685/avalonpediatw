@@ -59,8 +59,10 @@
  *      lake only happens if red wins the next mission; λ is not scaled by
  *      that chance (docs/ai/strength_benchmark.md 7.5, open item).
  *   4. **Pick.** argmax ΔH(c) + T(c) over the legal candidates the caller
- *      passes (the existing avoid-set — Merlin never lakes a known red,
- *      Percival skips both thumbs — is applied by the caller); ties
+ *      passes (the existing avoid-set — Merlin never lakes a known red;
+ *      before logic-first batch 1E Percival also skipped both thumbs, now
+ *      his lake is a blue lake, `AgentTuning.percivalBlueLake` — is applied
+ *      by the caller); ties
  *      (|diff| < 1e-9) by seat order. Deterministic, no Math.random.
  *
  * Returns `null` when no world is consistent with the record (inconsistent
@@ -124,8 +126,12 @@ interface World {
  * 2026-10-14 (S1-0): the 0/1 part — which red sets are possible at all — now
  * comes from the shared certainty layer (`belief/Certainty.enumerateWorlds`,
  * holder assumed good, role sight when `usePrivate`, A0 on the declared
- * lakes when `useLakes`; the holder's own lake results are not used, as
- * before). This function only adds the weights: the mission likelihood and
+ * lakes when `useLakes`). The holder belief also reads the holder's own
+ * private lake results (`myLakeResults`, logic-first batch 1E / S1-8: a
+ * Percival who laked a thumb knows both thumbs). Under the lake rule a seat
+ * holds the lake at most once, so a holder has no own result yet when it
+ * picks and this changes no pick; it keeps the belief right for any variant
+ * that lets a seat hold twice. This function only adds the weights: the mission likelihood and
  * ½ for an earlier red holder's claim. Same worlds in the same order with
  * the same weights as before, so every pick is unchanged
  * (`GoodLakeInfo.identical.test.ts`, all lake-legal replays).
@@ -140,7 +146,7 @@ function buildWorlds(obs: PlayerObservation, usePrivate: boolean, useLakes: bool
   };
   const masks = enumerateWorlds(
     obs,
-    { self: 'good', sight: usePrivate, ownLakeResults: false, lakes: useLakes },
+    { self: 'good', sight: usePrivate, ownLakeResults: usePrivate, lakes: useLakes },
     certaintyParamsFor(obs),
   );
   const quests = obs.questHistory.map((q) => ({

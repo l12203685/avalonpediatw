@@ -90,21 +90,24 @@ function r2(thumbs: [string, string], r1Team: string[], result: 'success' | 'fai
 }
 
 /** Production default with the switch on / off; the D5 exception off unless asked for. */
-const tuned = (on: boolean, thumbOnThumb = false): Partial<AgentTuning> => ({
+const tuned = (on: boolean, thumbOnThumb = false, extra: Partial<AgentTuning> = {}): Partial<AgentTuning> => ({
   ...DEFAULT_AGENT_TUNING,
   percivalNoThumbsR1: on,
   percivalR1ThumbOnThumb: thumbOnThumb,
+  ...extra,
 });
 
-function forwardDecision(o: PlayerObservation, on: boolean, thumbOnThumb = false): ReturnType<ForwardAgent['decide']> {
-  const base = new HeuristicAgent(o.myPlayerId, undefined, undefined, tuned(on, thumbOnThumb));
+function forwardDecision(
+  o: PlayerObservation, on: boolean, thumbOnThumb = false, extra: Partial<AgentTuning> = {},
+): ReturnType<ForwardAgent['decide']> {
+  const base = new HeuristicAgent(o.myPlayerId, undefined, undefined, tuned(on, thumbOnThumb, extra));
   const a = new ForwardAgent(o.myPlayerId, base);
   a.onGameStart(o);
   return a.decide(o);
 }
 
-function forwardTeam(o: PlayerObservation, on: boolean, thumbOnThumb = false): string[] {
-  const d = forwardDecision(o, on, thumbOnThumb);
+function forwardTeam(o: PlayerObservation, on: boolean, thumbOnThumb = false, extra: Partial<AgentTuning> = {}): string[] {
+  const d = forwardDecision(o, on, thumbOnThumb, extra);
   expect(d.reasoningTrace.usedFallback).toBe(false);
   if (d.action.type !== 'team_select') throw new Error('expected a team');
   return d.action.teamIds;
@@ -186,8 +189,10 @@ describe('percivalNoThumbsR1Active', () => {
 
 describe('ForwardAgent — percivalNoThumbsR1', () => {
   it('switch off (the old behaviour): with no vote yet the R1-P1 team holds the lower-seated thumb', () => {
+    // The old behaviour also needs the seat-order thumb split that batch 1E
+    // removed (`percivalCertainExclusion`: a tie names neither thumb A).
     for (const thumbs of thumbPairs(1)) {
-      const team = forwardTeam(r1(thumbs, 1), false);
+      const team = forwardTeam(r1(thumbs, 1), false, false, { percivalCertainExclusion: false });
       expect(team).toContain(thumbs[0]);
       expect(team).not.toContain(thumbs[1]);
     }

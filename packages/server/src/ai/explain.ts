@@ -375,8 +375,19 @@ export function replayRule(
     if (desc === 'baseline R1-R2 force normal') {
       return { rule: 'R1–R2 只投正常票（在隊上贊成、不在隊上反對）', mismatch: false };
     }
+    if (desc === 'percival both thumbs reject') {
+      return {
+        rule: '派西兩拇指同隊：梅林與莫甘娜恰好一紅，兩根拇指都在隊上就一定有紅，這一局一張失敗就夠（R3 起、非強制局） → 反對',
+        mismatch: !sameAction(action, real),
+      };
+    }
+    if (desc === 'baseline morgana on-team approve hard rule') {
+      return { rule: '莫甘娜在隊上一律贊成（紅方規則）', mismatch: false };
+    }
     if (desc.endsWith('on-team approve hard rule')) {
-      return { rule: '派西維爾／莫甘娜在隊上一律贊成', mismatch: false };
+      // Only with AgentTuning.percivalLoyalVote off (legacy tuning): the
+      // production Percival votes as a loyal since logic-first batch 1E.
+      return { rule: '舊版捷徑（percivalLoyalVote 關閉時）：在隊上就贊成', mismatch: false };
     }
     if (desc === 'blue vouch follow-up reject') {
       return {

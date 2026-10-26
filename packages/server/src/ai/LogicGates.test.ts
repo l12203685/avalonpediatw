@@ -22,7 +22,9 @@ import type { LakePublicRecord, PlayerObservation, QuestRecord, VoteRecord } fro
 
 const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
 const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING };
-const OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, teamDominanceGate: false, mustFailGate: false };
+// Gates off — and Percival's own batch-1E vote rule off, so the old
+// "Percival on the team ⇒ approve" shortcut is what the gate is shown against.
+const OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, teamDominanceGate: false, mustFailGate: false, percivalLoyalVote: false };
 const GATES = { teamDominance: true, mustFail: true };
 
 function quest(round: number, team: string[], failCount: number): QuestRecord {

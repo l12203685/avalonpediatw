@@ -1737,3 +1737,44 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
   --base beliefCertainFacts --base rule3PostLakeOnly --base beliefChainProjection --base forcedVoteZeroBits
 # 換 --seed 888999 / 135791
 ```
+
+## 18. 邏輯第一原理 第 1E / 1F 批：派西 = 帶拇指限制的忠臣、紅方只做可能為真的宣告（2026-10-26；`percivalLoyalVote`、`percivalCertainExclusion`、`percivalBlueLake`、`redPossibleClaimsOnly`）
+
+**來由**：`logic_first.md` 第 8 節（S1-6 派西 = 忠臣 + 「兩根拇指恰好一紅」：拿掉「派西在隊上一律贊成」與「沒有拇指就反對」，R3 起一張失敗就夠時兩拇指同隊反對，只硬排除確定紅、同分不依座位序；S1-8 派西的湖 = 藍方湖；S1-10 紅方持湖者不做好人不可能為真的宣告，兩邊都不可能時不宣告）。四個開關預設開，legacy 全關。不變量：INV-Pe2 / PL / R1 在 1970 局重播與 2000 局自我對打上 0 違規（`logic_first.md` 8.2）；一致性見 `agreement_benchmark.md` 第 7 節末與 `logic_first.md` 8.4。本節是強度，**只回報**（第一關的修改；變弱時開補償工作單，不回退）。
+
+**對照組 = 第 17 節的 variant**（`lane/r7-ai-1d` 正式預設的 22 個開關：第 17 節的 20 個再加 `teamDominanceGate`、`mustFailGate`）；variant = 同樣 22 個再加本批四個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個新種子 246802 / 357913 / 468024（沒有出現在本文件、`agreement_benchmark.md`、`logic_first.md`、scripts、src、r7 的計畫文件，也不在 main 與各 lane 分支上；第 15–17 節用掉的九個避開）；沒有選版本的種子，三個都是確認種子（版本在跑之前定案；第一次跑完發現「兩邊都不可能」的紅方宣告還會照原宣告，改成不宣告之後三個種子整組重跑，本節是重跑的數字）。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 246802（5000） | 86.76%（86.52%） | +0.24pp [−0.06pp, +0.54pp] | 14.52%（13.48%） | **+1.04pp [+0.33pp, +1.75pp]** | 50.64% | 75.16% / 73.70% / 74.54% | 46.7% (1242) / 44.8% (1315) / 47.1% (1273) |
+| 357913（5000） | 85.80%（85.54%） | +0.26pp [−0.02pp, +0.54pp] | 15.54%（14.46%） | **+1.08pp [+0.35pp, +1.81pp]** | 50.67% | 74.46% / 72.60% / 74.04% | 44.4% (1277) / 43.3% (1370) / 44.3% (1298) |
+| 468024（5000） | 86.60%（86.16%） | **+0.44pp [+0.11pp, +0.77pp]** | 15.42%（13.84%） | **+1.58pp [+0.82pp, +2.34pp]** | 51.01% | 74.94% / 72.66% / 73.96% | 46.5% (1253) / 43.6% (1367) / 46.9% (1302) |
+| **三個合併（15000）** | — | **+0.30pp [+0.13pp, +0.48pp]** | — | **+1.22pp [+0.80pp, +1.64pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9、13–17 節。ForwardAgent 每個種子約 211 萬個決策（2,108,971 / 2,120,123 / 2,125,062）、0 次 fallback。）
+
+讀法：
+
+- **藍方立場變強**（三個種子與合併區間都在 0 以上）：派西不再硬排除「在失敗任務上」的整隊與不確定的拇指（候選更好）、在隊上不再自動贊成含確定紅的隊、對兩拇指同隊的一張失敗隊反對；三紅率 variant 當藍方時再降約 1 點。
+- **紅方立場略強**（合併區間在 0 以上）：紅方座位只讀 `redPossibleClaimsOnly`。不做會自我證明是紅的宣告（例如替公開確定紅的隊友洗白、說同在一個失敗張數夠多的任務上的藍方是藍）之後，藍方少了一個把紅方持湖者釘成確定紅的機會。副作用：紅方湖到藍方時宣紅的比例（variant 當紅方 vs 對照）30.7 → 38.9%、27.6 → 36.4%、30.1 → 38.2%（真人 25.9%）—— 原本宣好的宣告有一部分在公開局面上不可能為真，只能宣紅；嫁禍率離真人更遠，屬第 2 階段。
+- 本批沒有任何立場的區間整個在 0 以下 → **沒有新的補償工作單**；第 16 節開的紅方補償工作單（`logic_first.md` 6.7）仍開著。
+
+**這一節用到的種子**：246802、357913、468024。之後要加種子，避開本文件全部各節的。
+
+重跑（原始輸出不進版本庫）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 246802 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax --flag goodVouchFollowUp \
+  --flag teamReuse --flag redR1Teammate --flag percivalNoThumbsR1 --flag percivalR1ThumbOnThumb --flag goodQuestSuccessGuard --flag assassinHeuristicVisibility \
+  --flag beliefCertainFacts --flag rule3PostLakeOnly --flag beliefChainProjection --flag forcedVoteZeroBits \
+  --flag teamDominanceGate --flag mustFailGate \
+  --flag percivalLoyalVote --flag percivalCertainExclusion --flag percivalBlueLake --flag redPossibleClaimsOnly \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax --base goodVouchFollowUp \
+  --base teamReuse --base redR1Teammate --base percivalNoThumbsR1 --base percivalR1ThumbOnThumb --base goodQuestSuccessGuard --base assassinHeuristicVisibility \
+  --base beliefCertainFacts --base rule3PostLakeOnly --base beliefChainProjection --base forcedVoteZeroBits \
+  --base teamDominanceGate --base mustFailGate
+# 換 --seed 357913 / 468024
+```
