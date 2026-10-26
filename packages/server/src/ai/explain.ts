@@ -23,12 +23,18 @@
 import type { AgentAction, AvalonAgent, PlayerObservation } from './types';
 import { HeuristicAgent } from './HeuristicAgent';
 import { computePyramidScores } from './baseline';
+import { missionFailed } from './missionFacts';
 import { ForwardAgent, USE_FORWARD_REASONING, interpret } from './forward';
-import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory } from './LakePolicy';
+import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory, goodLakeAvoidSet } from './LakePolicy';
+import { claimPossibleForGoodHolder } from './belief/Certainty';
+import { anyGate, certaintyFor, gateOptionsFrom, teamGateBreach } from './LogicGates';
 import { analyzeGoodLake } from './GoodLakeInfo';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { redR1TeamPlanDraws, replayBothDraws, visibleTeammatesOn } from './RedR1Teammate';
+import { percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { AVALON_CONFIG } from '@avalon/shared';
+import { scoreAssassinCandidates } from './assassin/AssassinModel';
+import { adjustedProbabilities, visibleRedEvidence } from './assassin/VisibleRedProposals';
 
 export interface ExplainedSuspect {
   seat: number;
@@ -262,7 +268,8 @@ function questRecordTxt(obs: PlayerObservation, id: string): string {
   let bad = 0;
   for (const q of obs.questHistory) {
     if (!q.team.includes(id)) continue;
-    if (q.result === 'success') ok += 1;
+    // The public outcome, as the table reads it (the review shows the score, not the cards).
+    if (!missionFailed(q)) ok += 1;
     else bad += 1;
   }
   if (ok + bad === 0) return '還沒出過任務';
@@ -349,11 +356,42 @@ export function replayRule(
     if (trace.usedFallback) {
       return { rule: `前向推理出錯（${trace.fallbackReason ?? '未知'}），改用基準策略`, mismatch: false };
     }
+    if (obs.gamePhase === 'team_select' && percivalR1ThumbException(shadow.tuning, obs)) {
+      return {
+        rule: '派西首局不放拇指的例外：先前有一根拇指當隊長時把另一根放進自己的隊，被放的那根（多半是梅林）可以進派西的隊，另一根不放',
+        mismatch: !sameAction(action, real),
+      };
+    }
+    if (obs.gamePhase === 'team_select' && percivalNoThumbsR1Active(shadow.tuning, obs)) {
+      return {
+        rule: '派西首局不放拇指：第一個任務結果出來之前，兩根拇指（梅林／莫甘娜候選）都不放，其餘照前向推理評分',
+        mismatch: !sameAction(action, real),
+      };
+    }
+    if (desc.startsWith('logic gate reject')) {
+      const why = desc.includes('mustFail')
+        ? '依任務失敗張數、自己的視野、湖的結果（好人持湖者說實話），這隊每一種可能的紅方組合都有足夠讓任務失敗的紅'
+        : desc.includes('dominated')
+          ? '隊上有某人、卻沒有他宣藍的人（湖鏈 A→B→C：選 A 必選 B 必選 C），而且隊上另有人可能是唯一的紅 —— 換成被宣藍的人一定不會更差'
+          : '自己在隊上，隊上有自己湖到並宣紅的人，這一局一張失敗就夠';
+      return { rule: `邏輯閘門（R3 起、非強制局）：${why} → 反對`, mismatch: !sameAction(action, real) };
+    }
     if (desc === 'baseline R1-R2 force normal') {
       return { rule: 'R1–R2 只投正常票（在隊上贊成、不在隊上反對）', mismatch: false };
     }
+    if (desc === 'percival both thumbs reject') {
+      return {
+        rule: '派西兩拇指同隊：梅林與莫甘娜恰好一紅，兩根拇指都在隊上就一定有紅，這一局一張失敗就夠（R3 起、非強制局） → 反對',
+        mismatch: !sameAction(action, real),
+      };
+    }
+    if (desc === 'baseline morgana on-team approve hard rule') {
+      return { rule: '莫甘娜在隊上一律贊成（紅方規則）', mismatch: false };
+    }
     if (desc.endsWith('on-team approve hard rule')) {
-      return { rule: '派西維爾／莫甘娜在隊上一律贊成', mismatch: false };
+      // Only with AgentTuning.percivalLoyalVote off (legacy tuning): the
+      // production Percival votes as a loyal since logic-first batch 1E.
+      return { rule: '舊版規則（「派西維爾照忠臣投票」關閉時）：派西維爾在隊上一律贊成', mismatch: false };
     }
     if (desc === 'blue vouch follow-up reject') {
       return {
@@ -374,6 +412,26 @@ export function replayRule(
       return { rule: '基準刺殺評分（梅林特徵與刺殺模型）', mismatch: false };
     }
     const purposes = topPurposes(trace.purposes as unknown as Record<string, number>);
+    // A good leader's team gates (batch 1D): replay with both gates off; when
+    // that pick is barred, the gates replaced it (2026-10-26 review).
+    if (obs.gamePhase === 'team_select' && obs.myTeam === 'good' && anyGate(gateOptionsFrom(shadow.tuning))) {
+      const ungated = new HeuristicAgent(obs.myPlayerId, undefined, undefined, {
+        ...shadow.tuning, teamDominanceGate: false, mustFailGate: false,
+      });
+      const alt = new ForwardAgent(obs.myPlayerId, ungated).decide(obs).action;
+      const breach = alt.type === 'team_select'
+        ? teamGateBreach(obs, certaintyFor(obs), alt.teamIds, obs.currentRound ?? 1, gateOptionsFrom(shadow.tuning))
+        : null;
+      if (alt.type === 'team_select' && breach !== null && !sameAction(alt, action)) {
+        const why = breach === 'mustFail'
+          ? '依任務失敗張數、自己的視野與湖的結果，這隊每一種可能的紅方組合都有足夠讓任務失敗的紅（必敗隊）'
+          : '隊上有某人、卻沒有他宣藍的人（湖鏈 A→B→C：選 A 必選 B 必選 C），而且隊上另有人可能是唯一的紅（被支配的隊）';
+        return {
+          rule: `邏輯閘門（好人隊長）：前向推理原本最高分的隊 ${seatsTxt(obs, alt.teamIds)} ${why} → 不派，改從其餘的隊裡取分數最高者`,
+          mismatch: !sameAction(action, real),
+        };
+      }
+    }
     return {
       rule: `前向推理：評估 ${trace.candidatesEvaluated} 個選項，取分數最高者（${fmt(trace.chosenScore)}）`
         + (purposes ? `；目標權重 ${purposes}` : ''),
@@ -531,7 +589,13 @@ export function explainLakeTarget(
     };
   }
   if (isOberon(obs)) parts.push(OBERON_NOTE);
-  const avoid = new Set([...obs.knownEvils, ...(obs.knownWizards ?? [])]);
+  // The avoid set the pick itself uses (2026-10-26 review): a good holder's is
+  // `goodLakeAvoidSet` — Percival's blue lake (`percivalBlueLake`, D4) avoids
+  // the known reds only, never the thumbs (Percival cannot tell Merlin from
+  // Morgana, so lake a thumb DOES give new information).
+  const avoid = obs.myTeam === 'good'
+    ? goodLakeAvoidSet(obs, tuning)
+    : new Set([...obs.knownEvils, ...(obs.knownWizards ?? [])]);
   // A good holder under `goodLakeInfoMax` (2026-10-13 default) picks with
   // GoodLakeInfo.ts — show that model's numbers, not a proxy score.
   if (obs.myTeam === 'good' && tuning.goodLakeInfoMax && !avoid.has(targetId)) {
@@ -569,6 +633,7 @@ export function explainLakeClaim(
   targetId: string,
   actual: 'good' | 'evil' | undefined,
   claim: 'good' | 'evil' | null,
+  tuning: AgentTuning = getDefaultAgentTuning(),
 ): DecisionExplanation {
   const seen = actual === 'good' ? '好人' : actual === 'evil' ? '壞人' : '（未知）';
   const parts: string[] = [];
@@ -583,15 +648,38 @@ export function explainLakeClaim(
   } else if (isOberon(obs)) {
     parts.push('奧伯倫不認識隊友，看到紅方也不知道是誰');
   }
+  // A red holder who declares nothing because both claims would prove it red
+  // (batch 1F, `redPossibleClaimsOnly`): say so (2026-10-26 review).
+  let rule: string | undefined = obs.myTeam === 'good' ? '好人照實宣告' : undefined;
+  if (obs.myTeam === 'evil' && claim === null && tuning.redPossibleClaimsOnly
+    && !claimPossibleForGoodHolder(obs, obs.myPlayerId, targetId, 'good')
+    && !claimPossibleForGoodHolder(obs, obs.myPlayerId, targetId, 'evil')) {
+    rule = '紅方只做可能為真的宣告：照公開紀錄，好人持湖者宣「好人」或「壞人」都不可能，兩種宣告都會證明自己是紅 → 不宣告';
+  }
   return {
     reason: `${parts.join('；')}。`,
-    rule: obs.myTeam === 'good' ? '好人照實宣告' : undefined,
+    rule,
     knowledge: describeKnowledge(obs),
     ...campSuspects(obs),
   };
 }
 
-export function explainAssassination(obs: PlayerObservation, targetId: string, agent?: AvalonAgent): DecisionExplanation {
+/**
+ * The assassination. Since logic-first batch 1G (2026-10-26, practice report
+ * (b)) the text states the visible-red tier whenever it applies: the
+ * candidates who, as captain on a non-forced proposal, certainly put a red
+ * Merlin sees on their team, ranked below everyone who never did
+ * (`assassin/VisibleRedProposals.ts`). With the assassination model on, the
+ * ranked list is the model's probability (what the pick uses, with the
+ * batch-1G likelihood when that switch is on); the ToM Merlin probability
+ * stays in the text as a second opinion.
+ */
+export function explainAssassination(
+  obs: PlayerObservation,
+  targetId: string,
+  agent?: AvalonAgent,
+  tuning: AgentTuning = agent instanceof HeuristicAgent ? agent.tuning : getDefaultAgentTuning(),
+): DecisionExplanation {
   const evil = new Set([...(obs.allEvilIds ?? []), ...obs.knownEvils, obs.myPlayerId]);
   const candidates = obs.allPlayerIds.filter((id) => !evil.has(id));
   let tom: Ranked[] = [];
@@ -603,16 +691,43 @@ export function explainAssassination(obs: PlayerObservation, targetId: string, a
   } catch {
     tom = [];
   }
+  let model: Ranked[] = [];
+  if (tuning.assassinModel && candidates.length > 0) {
+    const probs = adjustedProbabilities(obs, candidates, scoreAssassinCandidates(obs, candidates), tuning.assassinVisibleRedLikelihood);
+    model = candidates
+      .map((id) => ({ id, score: probs.get(id) ?? 0 }))
+      .sort((a, b) => b.score - a.score || seatOfId(obs, a.id) - seatOfId(obs, b.id));
+  }
   const like = rankMerlinLike(obs, candidates);
   const parts: string[] = [`候選 ${candidates.length} 人（排除紅方）`];
+  let rule: string | undefined;
+  if (tuning.assassinVisibleRedTier && candidates.length > 0) {
+    const evidence = visibleRedEvidence(obs, candidates);
+    const flagged = candidates.filter((id) => evidence.get(id)?.tier === 1);
+    if (flagged.length > 0 && flagged.length < candidates.length) {
+      parts.push(
+        `${seatsTxt(obs, flagged)}當隊長時把梅林一定看得到的紅（刺殺者自己、奧伯倫，或兩位隊友都在、其中一位一定是莫甘娜）放進自己的隊（非強制提議），`
+          + `真人梅林很少這樣派（刺殺時約一成的梅林有過、其他好人約四成），排在其餘 ${candidates.length - flagged.length} 人之後`,
+      );
+      rule = '刺殺（像真人的規則）：當隊長時確定把梅林看得到的紅放進自己隊的人排在後面，其餘再看分數';
+    } else if (flagged.length === candidates.length) {
+      parts.push('每位候選當隊長時都曾把梅林一定看得到的紅放進自己的隊，改照分數');
+    }
+  }
+  if (model.length > 0) {
+    parts.push(scoreTxt(model, targetId, '刺殺模型機率', '高', 0, `前三：${rankedTxt(obs, model)}`));
+  }
   if (tom.length > 0) {
     parts.push(scoreTxt(tom, targetId, 'ToM 梅林機率', '高', 0, `前三：${rankedTxt(obs, tom)}`));
   }
   parts.push(scoreTxt(like, targetId, '像梅林分數', '高', 0));
+  const ranked = model.length > 0 ? model : tom.length > 0 ? tom : like;
+  const label = model.length > 0 ? '刺殺模型機率' : tom.length > 0 ? '梅林機率' : '像梅林';
   const base: DecisionExplanation = {
     reason: `刺 ${seatTxt(obs, targetId)}：${parts.join('；')}。`,
     knowledge: describeKnowledge(obs),
-    ...suspectsOf(obs, tom.length > 0 ? '梅林機率' : '像梅林', tom.length > 0 ? tom : like),
+    ...suspectsOf(obs, label, ranked),
   };
-  return withReplay(base, replayRule(obs, agent, { type: 'assassinate', targetId }));
+  const replayed = withReplay(base, replayRule(obs, agent, { type: 'assassinate', targetId }));
+  return rule ? { ...replayed, rule: replayed.rule ? `${rule}（${replayed.rule}）` : rule } : replayed;
 }

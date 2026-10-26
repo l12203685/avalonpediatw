@@ -1,4 +1,5 @@
 import { Room, Role, AVALON_CONFIG, Player, GameState, VoteRecord, QuestRecord, LadyOfTheLakeRecord, CANONICAL_ROLES, isCanonicalRole, TimerMultiplier, PendingDecision, RoomMode } from '@avalon/shared';
+import { assassinatorRole, isAssassinator } from './assassinator';
 
 /**
  * Error thrown when a role outside the canonical 7-role Avalon scope is
@@ -303,10 +304,14 @@ export class GameEngine {
       // Edward 2026-05-11: 7p 配置 mordred 兼任 assassin (莫德雷德帶有刺客劍).
       // Resolve assassinator: prefer 'assassin' role; if absent (e.g. 7p config
       // has no plain assassin), fall back to 'mordred' as the kill-vote holder.
+      // 2026-10-26: one rule with startDiscussionPhase / submitAssassination
+      // (`assassinatorRole`: assassin > mordred > morgana) — the pending
+      // actor was empty when neither assassin nor Mordred was dealt.
       const findByRole = (role: Role) =>
         Object.entries(this.room.players).find(([_, p]) => p.role === role) ??
         Array.from(this.roleAssignments.entries()).find(([_, r]) => r === role);
-      const assassinEntry = findByRole('assassin') ?? findByRole('mordred');
+      const killer = assassinatorRole(this.roleAssignments.values());
+      const assassinEntry = killer ? findByRole(killer) : undefined;
       if (assassinEntry) actors = [assassinEntry[0]];
     }
 
@@ -1397,9 +1402,8 @@ export class GameEngine {
       Array.from(this.roleAssignments.entries()).find(([_, r]) => r === role)?.[0];
     // Edward 2026-05-11: 7p 配置 = morgana + mordred (兼刺) + oberon, 沒 plain assassin.
     // Priority: assassin role > mordred (7p kill holder) > morgana (fallback).
-    const assassinId = findByRoleAssignment('assassin')
-      ?? findByRoleAssignment('mordred')
-      ?? findByRoleAssignment('morgana');
+    const killer = assassinatorRole(this.roleAssignments.values());
+    const assassinId = killer ? findByRoleAssignment(killer) : undefined;
 
     this.logEvent('discussion_phase_started', {
       assassinId,
@@ -1436,12 +1440,7 @@ export class GameEngine {
     // no plain `assassin`, the kill-vote falls to the `mordred` holder
     // (with `morgana` as a further fallback for opt-out cases).
     const assassinRole = this.room.players[assassinId]?.role ?? this.roleAssignments.get(assassinId);
-    const allRoles = Array.from(this.roleAssignments.values());
-    const hasAssassinRole = allRoles.some((r) => r === 'assassin');
-    const hasMordredRole = allRoles.some((r) => r === 'mordred');
-    const isLegalAssassinator = assassinRole === 'assassin'
-      || (!hasAssassinRole && assassinRole === 'mordred')
-      || (!hasAssassinRole && !hasMordredRole && assassinRole === 'morgana');
+    const isLegalAssassinator = isAssassinator(assassinRole, this.roleAssignments.values());
     if (!isLegalAssassinator) {
       throw new Error(`Player ${assassinId} is not the assassin`);
     }

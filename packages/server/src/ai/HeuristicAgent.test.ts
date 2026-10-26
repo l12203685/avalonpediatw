@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { HeuristicAgent } from './HeuristicAgent';
-import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING } from './AgentTuning';
+import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, type AgentTuning } from './AgentTuning';
 
 /** Pre-2026-10-12 behaviour — tests that pin the legacy decision layers use this. */
 const LEGACY_TUNING = { ...LEGACY_AGENT_TUNING };
@@ -1186,6 +1186,9 @@ describe('HeuristicAgent · Percival thumb identification (Fix #4)', () => {
   // regardless of signals. Proves the escape hatch works.
   it('regression · legacy path picks wizards[0] when flag is off', () => {
     HeuristicAgent._setSmartPercivalForTesting(false);
+    // The Percival-specific team path itself (logic-first batch 1E routes an
+    // R2+ Percival leader through the loyal path: `percivalCertainExclusion`).
+    agent = new HeuristicAgent('P1', 'hard', undefined, { percivalCertainExclusion: false });
 
     const obs = baseObs({
       myPlayerId:    'P1',
@@ -2100,10 +2103,12 @@ describe('HeuristicAgent · team-aware vote rewire (Edward 2026-04-30)', () => {
   // batch 7 fix #4 (BLUE_R3_PLUS_APPROVE_FLOOR), which capped clean-team
   // approves at 3% — a global-ranking artefact that broke team-aware
   // reasoning.
-  function approveRate(obs: PlayerObservation, samples: number): number {
+  /** Batch 1D's decision gates off (the pyramid thresholds alone). */
+  const GATES_OFF: Partial<AgentTuning> = { mustFailGate: false, teamDominanceGate: false };
+  function approveRate(obs: PlayerObservation, samples: number, tuning?: Partial<AgentTuning>): number {
     let approves = 0;
     for (let i = 0; i < samples; i++) {
-      const agent = new HeuristicAgent(obs.myPlayerId, 'hard');
+      const agent = new HeuristicAgent(obs.myPlayerId, 'hard', undefined, tuning);
       agent.onGameStart(obs);
       agent._ingestForTesting(obs);
       const action = agent.act({ ...obs, gamePhase: 'team_vote' });
@@ -2142,7 +2147,12 @@ describe('HeuristicAgent · team-aware vote rewire (Edward 2026-04-30)', () => {
         quest(2, ['P3', 'P4'], 'success', 0),
       ],
     });
-    const rate = approveRate(obs, 500);
+    // Logic-first batch 1D (`mustFailGate`): in this 5-player fixture any
+    // 3-seat team without the (good) voter holds at least one of the two
+    // reds, so in R3 (one fail decides) it must fail and the gate rejects it.
+    // The pyramid thresholds under test are measured with the gates off.
+    expect(approveRate(obs, 20)).toBe(0);
+    const rate = approveRate(obs, 500, GATES_OFF);
     // Team looks clean (pyramid neutral, no anomalies) → approve dominates.
     expect(rate).toBeGreaterThan(0.85);
   });
@@ -2167,7 +2177,9 @@ describe('HeuristicAgent · team-aware vote rewire (Edward 2026-04-30)', () => {
         quest(1, ['P2', 'P3'], 'success', 0),
       ],
     });
-    const rate = approveRate(obs, 500);
+    // R4 of a 5-player game needs one fail: the same must-fail team as above (batch 1D gate).
+    expect(approveRate(obs, 20)).toBe(0);
+    const rate = approveRate(obs, 500, GATES_OFF);
     // Mid-clean team, all members under TEAM_RED_MID_MAX → approve.
     expect(rate).toBeGreaterThan(0.85);
   });

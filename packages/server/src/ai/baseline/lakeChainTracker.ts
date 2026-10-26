@@ -11,9 +11,9 @@
  *
  * Pyramid layer 3: 湖中宣告 (declarations) — public but defeatable
  * by built-in or mission ground truth. Within layer 3, declarations
- * ARE constrained by these 4 hard rules; declarations that violate
- * one (e.g. cycle of mutual blue claims that cannot all be true) tag
- * the violator with high suspicion (≥0.85).
+ * ARE constrained by these 4 hard rules. (The old "cycle of mutual
+ * claims" violator tagging was removed 2026-10-14: the lake path rule
+ * makes such cycles impossible — see `analyzeLakeChain`.)
  *
  * Pure module: input is `obs.lakeHistory`; output is a struct of
  * derived facts (declarationsAsBlue, declarationsAsRed, violators).
@@ -24,7 +24,10 @@
  * does not enforce policy — it surfaces violators.
  */
 
-import type { PlayerObservation, LakePublicRecord } from '../types';
+import type { PlayerObservation, LakePublicRecord, VoteRecord } from '../types';
+import { CertaintyView, certaintyParamsFor, enumerateWorlds } from '../belief/Certainty';
+import { defaultBeliefOptions, type BeliefOptions } from '../belief/BeliefOptions';
+import { missionFailed } from '../missionFacts';
 
 // ── Derived chain state ─────────────────────────────────────────
 /**
@@ -40,9 +43,8 @@ export interface LakeChainState {
   /** targetId → set of holderIds who declared this target red. */
   declaredRedByTarget: Map<string, Set<string>>;
   /**
-   * Players whose declarations are inconsistent with at least one
-   * other declaration in the chain (cycle SAT failure / hard-rule
-   * violation). Suspicion boost ≥0.85 for these.
+   * Always empty since 2026-10-14 (S1-11): declarations cannot contradict
+   * each other under the lake path rule; kept for the existing readers.
    */
   violators: Set<string>;
   /** All public declarations in chronological order. */
@@ -61,20 +63,24 @@ const EMPTY_STATE: LakeChainState = {
 // ── Analyze ────────────────────────────────────────────────────
 /**
  * Build the full chain state from `obs.lakeHistory` (Wave A schema).
+ * Undeclared lakes (`declaredClaim: 'none'`, S1-9c) carry no claim and
+ * are left out, exactly as before they appeared in the observation.
  *
- * Cycle SAT detection: if `A 湖 B 宣藍` AND `B 湖 A 宣紅` exists, at
- * least one of (A, B) is lying. Conservative: tag both. Same for
- * a 3-cycle where transitivity demands "all blue" but a chain of
- * blues includes one declared-red. The detection here is a simple
- * pairwise + triangle scan — sufficient for Avalon's small lake
- * count (≤4 declarations per game) without a full SAT solver.
+ * 2026-10-14 (S1-11, logic_audit.md F13): the "cycle SAT" detection that
+ * used to fill `violators` is gone. It could not fire — a lake target can
+ * never be an earlier holder (path rule C7; 0 of 1970 replayed games) —
+ * and its three-step rule was wrong anyway ("A→B blue, B→C blue, C→A red"
+ * is consistent with A red, B and C blue, so tagging C was unfounded).
+ * Contradictions with the fail counts, the role sight and A0 are now the
+ * certainty layer's job (`belief/Certainty.ts`, the L1-empty fallback).
+ * `violators` stays in the state (always empty) for the existing readers.
  *
  * `undefined` / empty `lakeHistory` returns the empty state.
  */
 export function analyzeLakeChain(
   obs: PlayerObservation,
 ): LakeChainState {
-  const records = obs.lakeHistory ?? [];
+  const records = (obs.lakeHistory ?? []).filter((rec) => rec.declaredClaim !== 'none');
   if (records.length === 0) return EMPTY_STATE;
 
   const declaredBlueByHolder = new Map<string, Set<string>>();
@@ -102,46 +108,12 @@ export function analyzeLakeChain(
     }
   }
 
-  // Cycle SAT — pairwise mutual-contradiction scan.
-  // If A→B blue AND B→A red, at least one lies. Conservative: both.
-  // If A→B red AND B→A blue, mirror.
-  const violators = new Set<string>();
-  for (const rec of records) {
-    const opposite =
-      rec.declaredClaim === 'good'
-        ? declaredRedByHolder.get(rec.targetId)
-        : declaredBlueByHolder.get(rec.targetId);
-    if (opposite && opposite.has(rec.holderId)) {
-      violators.add(rec.holderId);
-      violators.add(rec.targetId);
-    }
-  }
-
-  // 3-step: A→B blue, B→C blue, but C→A red is inconsistent
-  // (transitivity says A and C should both be blue from A's view).
-  // If A claimed blue on B and B claimed blue on C, C claiming A red
-  // contradicts the implied blue-chain — tag C as the violator.
-  for (const rec1 of records) {
-    if (rec1.declaredClaim !== 'good') continue;
-    const middle = rec1.targetId;
-    const blueFromMiddle = declaredBlueByHolder.get(middle);
-    if (!blueFromMiddle) continue;
-    for (const tail of blueFromMiddle) {
-      const tailRedFollowups = declaredRedByHolder.get(tail);
-      if (!tailRedFollowups) continue;
-      if (tailRedFollowups.has(rec1.holderId)) {
-        // tail (C) declares the chain-head (A) red, breaking transitivity.
-        violators.add(tail);
-      }
-    }
-  }
-
   return {
     declaredBlueByHolder,
     declaredRedByHolder,
     declaredBlueByTarget,
     declaredRedByTarget,
-    violators,
+    violators: new Set<string>(),
     records,
   };
 }
@@ -234,7 +206,9 @@ export function findHardRuleViolations(
 export function findTeamHardRuleViolations(
   state: LakeChainState,
   proposedTeam: readonly string[],
+  strict?: StrictTeamRuleContext,
 ): Array<{ rule: 1 | 2; holderId: string; targetId: string }> {
+  if (strict) return strictTeamHardRuleViolations(state, proposedTeam, strict);
   const out: Array<{ rule: 1 | 2; holderId: string; targetId: string }> = [];
   const teamSet = new Set(proposedTeam);
 
@@ -255,7 +229,112 @@ export function findTeamHardRuleViolations(
   return out;
 }
 
+/**
+ * The deciding seat's picture for the strict reading of 硬1 / 硬2
+ * (logic-first batch 1D, S1-3 team gate; plan §2.1, critique X1 / X4).
+ */
+export interface StrictTeamRuleContext {
+  /** The deciding seat's own certainty view (L1 = A0 hard, GM decision D1). */
+  view: CertaintyView;
+  /** The round the team is for (fails required: R4 of 7+ players needs two). */
+  round: number;
+}
+
+/**
+ * Seats `holder` vouches for through declared-blue chains: B when the
+ * holder declared B blue, C when B then declared C blue, and so on (A0:
+ * A good ⇒ B good ⇒ C good — K3, "choosing A ⇒ must choose B ⇒ must choose
+ * C"). Chronological order, no duplicates, the holder itself left out.
+ */
+export function declaredBlueClosure(
+  state: LakeChainState,
+  holder: string,
+  binds: (holder: string, target: string) => boolean = () => true,
+): string[] {
+  const out: string[] = [];
+  const queue = [holder];
+  const seen = new Set([holder]);
+  while (queue.length > 0) {
+    const h = queue.shift() as string;
+    for (const t of state.declaredBlueByHolder.get(h) ?? []) {
+      if (seen.has(t) || !binds(h, t)) continue;
+      seen.add(t);
+      out.push(t);
+      queue.push(t);
+    }
+  }
+  return out;
+}
+
+/**
+ * Strict 硬1 / 硬2 (S1-3 team gate, `AgentTuning.teamDominanceGate`): only
+ * what is certain from the deciding seat's own view under A0.
+ *   - 硬1 with chain closure and strict dominance (K1′ / K3, X4): a member A
+ *     vouches (directly or along a declared-blue chain) for a seat B that is
+ *     not on the team, and some member X ≠ A is the only red of the team in
+ *     some consistent L1 world — swapping X for B then raises P(team all
+ *     good) strictly under every belief on L1 (A good ⇒ B good). A team of
+ *     seats the viewer can prove good without B is a tie, not a breach.
+ *   - 硬2 (K2): both members of a declared-red pair on the team in a round
+ *     one fail card decides — at least one of them is red under A0, so the
+ *     team must fail (the must-fail gate covers it too). With two fails
+ *     needed (R4) a single certain red is the probability layer's (D2).
+ * Nothing is certain at the K level when A0 leaves no world (L1 empty): no
+ * entry then; a declaration the viewer itself made but privately saw
+ * contradicted binds nothing either (`CertaintyView.vouches` for a
+ * declared-blue pair, `CertaintyView.redPairBinds` for a declared-red one).
+ * Checked pair by pair, a chain closes by itself (a team with A
+ * and B but without C breaches B→C); the closure entries tell a fixer every
+ * seat it must add. One rule-1 entry exists iff
+ * `CertaintyView.strictlyDominated(team)` is non-null (the INV-K1 check).
+ */
+function strictTeamHardRuleViolations(
+  state: LakeChainState,
+  proposedTeam: readonly string[],
+  ctx: StrictTeamRuleContext,
+): Array<{ rule: 1 | 2; holderId: string; targetId: string }> {
+  const out: Array<{ rule: 1 | 2; holderId: string; targetId: string }> = [];
+  const { view } = ctx;
+  if (view.l1Empty) return out;
+  const teamSet = new Set(proposedTeam);
+  const teamMask = view.maskOf(proposedTeam);
+  // Members that are the team's only red in some L1 world.
+  const soleRed = new Set(proposedTeam.filter((x) => {
+    const xb = view.bitOf(x);
+    if (xb === 0) return false;
+    const rest = teamMask & ~xb;
+    return view.l1.some((w) => (w & xb) !== 0 && (w & rest) === 0);
+  }));
+  for (const holder of teamSet) {
+    const swappable = [...soleRed].some((x) => x !== holder);
+    if (swappable) {
+      for (const t of declaredBlueClosure(state, holder, (h, t2) => view.vouches(h, t2))) {
+        if (!teamSet.has(t)) out.push({ rule: 1, holderId: holder, targetId: t });
+      }
+    }
+    if (view.failsRequired(ctx.round) === 1) {
+      for (const t of state.declaredRedByHolder.get(holder) ?? []) {
+        if (teamSet.has(t) && view.redPairBinds(holder, t)) out.push({ rule: 2, holderId: holder, targetId: t });
+      }
+    }
+  }
+  return out;
+}
+
 // ── 硬3 rank check ─────────────────────────────────────────────
+/** The marker value of a 硬3 flag in `findRule3Violators` (rule (a)). */
+export const RULE3_FLAG = 0.85;
+/** Legacy only: the weak clause (b) marker. */
+export const RULE3_WEAK_FLAG = 0.5;
+/**
+ * S1-2 (GM decision D10): the likelihood ratio of a post-lake omission —
+ * P(omission | red holder) / P(omission | blue holder). Point estimate on
+ * the 牌譜 about 18 (critique §3 row 7: 3 of 398 blue-led post-lake teams
+ * vs 38 of 285 red-led), 95% interval about 6–86; the conservative lower
+ * bound is used (`pyramidScorer` turns it into an odds update).
+ */
+export const RULE3_LIKELIHOOD_RATIO = 6;
+
 /**
  * 硬3 (替 B 背書 → A 較低層): if A declared B blue, A's tier ≤ B's
  * tier. We approximate "tier" as suspicion direction — if A is later
@@ -263,20 +342,39 @@ export function findTeamHardRuleViolations(
  * teams or rejecting clean ones) while having endorsed B, that's a
  * 硬3 violation.
  *
- * Implementation: returns set of holderIds (A) who declared blue on
- * any target B AND whose own subsequent leader behaviour shows them
- * proposing teams that contradict their endorsement. Specifically:
- *   - A endorsed B as blue
- *   - A is later leader and either:
- *       (a) excludes B from a team where space exists (硬1 already
- *           catches this — but 硬3 is the suspicion side-effect)
- *       (b) leads a team whose mission later failed
+ * Returns holderIds (A) who declared blue on any target B and whose own
+ * subsequent leader behaviour contradicts the endorsement, mapped to a
+ * marker: `RULE3_FLAG` (0.85) for rule (a), `RULE3_WEAK_FLAG` (0.5) for
+ * the legacy clause (b). The pyramid turns the marker into a score.
  *
- * Tag (a) cases at +0.85, (b) at +0.5 so the caller can stack.
+ * **`opts.rule3PostLake` on (S1-2, 2026-10-22, logic_audit.md F1 / F2,
+ * critique X2 / X4 / X5; INV-H3a / INV-H3b):**
+ *   - only teams A led *after* the declaration count — the cut is the
+ *     declaration's round (before the lake A did not know B's camp, T1 /
+ *     T3; pre-lake omissions have a likelihood ratio of 1.16 on the 牌譜,
+ *     post-lake ones about 18);
+ *   - the omission must be strictly dominated from A's own seat at that
+ *     moment: the team holds, besides A, a seat A (if good) could not be
+ *     sure was good — then swapping that seat for B (whom A saw blue)
+ *     raises P(team all good) strictly. A team of seats A can prove good
+ *     without B is a tie, not a violation (X4). Whether A itself was on
+ *     the team does not matter (X2). "What A could be sure of" is the
+ *     public record cut at that proposal plus A's own declarations as A's
+ *     lake results, under A0 (L1; L0 when A0 leaves no world);
+ *   - clause (b) ("led a team that later failed", unrelated to the
+ *     endorsement and double-counted with layer 4) is gone.
+ *
+ * **Off (legacy, before 2026-10-22):** every team A ever led counts, (a)
+ * fires on any omission, (b) marks a holder who led a team that failed.
+ *
+ * `setRule3DiagnosticOptions` (benchmark scripts): `off` and
+ * `holderFilter` apply to both paths; `postLakeOnly` only changes the
+ * legacy path (the cut is built in on the new one).
  */
 export function findRule3Violators(
   state: LakeChainState,
   obs: PlayerObservation,
+  opts: Readonly<Pick<BeliefOptions, 'rule3PostLake' | 'certainFacts'>> = defaultBeliefOptions(),
 ): Map<string, number> {
   const score = new Map<string, number>();
   const diag = rule3Diagnostics;
@@ -284,22 +382,31 @@ export function findRule3Violators(
   for (const [holder, blueSet] of state.declaredBlueByHolder) {
     if (diag?.holderFilter && !diag.holderFilter(holder)) continue;
     for (const target of blueSet) {
+      const declaredRound = Math.min(...state.records
+        .filter((r) => r.holderId === holder && r.targetId === target && r.declaredClaim === 'good')
+        .map((r) => r.round));
+      if (opts.rule3PostLake) {
+        for (const rec of obs.voteHistory) {
+          if (rec.leader !== holder || rec.round <= declaredRound || rec.team.includes(target)) continue;
+          if (omissionStrictlyDominated(state, obs, holder, rec)) {
+            score.set(holder, RULE3_FLAG);
+            break;
+          }
+        }
+        continue;
+      }
       // (b) holder later led a team that failed — endorsed B but led
       // a tainted team → semantic 硬3 weak violation.
-      const declaredRound = diag?.postLakeOnly
-        ? Math.min(...state.records
-          .filter((r) => r.holderId === holder && r.targetId === target)
-          .map((r) => r.round))
-        : Number.NEGATIVE_INFINITY;
+      const cutRound = diag?.postLakeOnly ? declaredRound : Number.NEGATIVE_INFINITY;
       const leaderRecords = obs.voteHistory.filter(
-        (v) => v.leader === holder && v.round > declaredRound,
+        (v) => v.leader === holder && v.round > cutRound,
       );
       for (const rec of leaderRecords) {
         const failedQ = obs.questHistory.find(
-          (q) => q.round === rec.round && q.result === 'fail',
+          (q) => q.round === rec.round && missionFailed(q),
         );
         if (failedQ && failedQ.team.every((id) => rec.team.includes(id))) {
-          score.set(holder, Math.max(score.get(holder) ?? 0, 0.5));
+          score.set(holder, Math.max(score.get(holder) ?? 0, RULE3_WEAK_FLAG));
         }
       }
       // (a) A is leader and excluded the endorsed B from their team
@@ -307,12 +414,52 @@ export function findRule3Violators(
       // the holder's suspicion to ≥0.85 per pyramid spec.
       for (const rec of leaderRecords) {
         if (rec.team.length >= 1 && !rec.team.includes(target)) {
-          score.set(holder, Math.max(score.get(holder) ?? 0, 0.85));
+          score.set(holder, Math.max(score.get(holder) ?? 0, RULE3_FLAG));
         }
       }
     }
   }
   return score;
+}
+
+/**
+ * S1-2 strict dominance (X2 / X4) at the time of `rec`: does the team
+ * `holder` led hold a seat other than the holder that the holder — taken
+ * as a good player with the public record as it stood before that
+ * proposal and its own declarations as its lake results — could not be
+ * sure was good? Everything the viewer knows privately is left out: this
+ * is a judgement about what the holder knew (T1).
+ */
+function omissionStrictlyDominated(
+  state: LakeChainState,
+  obs: PlayerObservation,
+  holder: string,
+  rec: VoteRecord,
+): boolean {
+  const asHolder: PlayerObservation = {
+    ...obs,
+    myPlayerId: holder,
+    myRole: 'loyal',
+    myTeam: 'good',
+    knownEvils: [],
+    knownWizards: undefined,
+    allEvilIds: undefined,
+    currentRound: rec.round,
+    voteHistory: obs.voteHistory.filter((v) => v.round < rec.round || (v.round === rec.round && v.attempt < rec.attempt)),
+    questHistory: obs.questHistory.filter((q) => q.round < rec.round),
+    questResults: obs.questResults.slice(0, Math.max(0, rec.round - 1)),
+    lakeHistory: (obs.lakeHistory ?? []).filter((l) => l.round < rec.round),
+    myLakeResults: state.records
+      .filter((l) => l.holderId === holder && l.round < rec.round && l.declaredClaim !== 'none')
+      .map((l) => ({ round: l.round, targetId: l.targetId, result: l.declaredClaim as 'good' | 'evil' })),
+  };
+  const params = certaintyParamsFor(asHolder);
+  let worlds = enumerateWorlds(asHolder, { self: 'good', sight: false, ownLakeResults: true, lakes: true }, params);
+  if (worlds.length === 0) {
+    worlds = enumerateWorlds(asHolder, { self: 'good', sight: false, ownLakeResults: true, lakes: false }, params);
+  }
+  const view = new CertaintyView(asHolder, worlds, worlds, params);
+  return rec.team.some((id) => id !== holder && !view.isCertGood(id, 'L1'));
 }
 
 // ── Diagnostic ablations (benchmark scripts only) ───────────────

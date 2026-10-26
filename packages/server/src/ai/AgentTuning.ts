@@ -65,6 +65,72 @@
  *                                   以真人比例 48.0% 放一位隊友（原本 0%）；第五次
  *                                   強制局照舊不放。只在 10 人局。細節見
  *                                   `RedR1Teammate.ts`。
+ *   - `percivalNoThumbsR1`         （2026-10-14，**預設開**）派西 R1（第一個
+ *                                   任務結果出來之前，五次提議含強制局）當隊長
+ *                                   時兩根拇指都不放，不分配置、座位；R2 起不變，
+ *                                   湖的避開名單不變；只在 10 人局。Edward
+ *                                   2026-10-14「一開始在沒任何資訊時先預設不派」，
+ *                                   真人資料與預先登記的規則見
+ *                                   `docs/ai/percival_thumbs.md` 第 9、11 節，
+ *                                   強度見 `strength_benchmark.md` 第 14 節，
+ *                                   細節見 `PercivalThumbs.ts`。2026-10-14 依
+ *                                   GM 決定 D5 修正：只在看得到兩根拇指時作用
+ *                                   （大廳關掉莫甘娜時唯一的拇指確定是梅林）、
+ *                                   擴到 6–9 人局（5 人局仍不適用）。
+ *   - 2026-10-14 邏輯第一（`docs/ai/logic_first.md`，第 1A / 1B 批；每個開關
+ *     只做一件事，legacy 全關，不變量 0 違規後預設開）：
+ *     `percivalR1ThumbOnThumb`（D5 (b) 例外：R1 一根拇指當隊長時把另一根
+ *     放進自己的隊，被放的那根可以進派西的隊，`PercivalThumbs.ts`）、
+ *     `goodQuestSuccessGuard`（好人任務牌一律成功的防護，ForwardAgent 開頭；
+ *     INV-Q1）、`assassinHeuristicVisibility`（舊刺殺啟發式的視野修正：梅林
+ *     看得到刺客自己、奧伯倫與兩位隊友中的一位，看不到莫德雷德；只在
+ *     `assassinModel` 關掉時跑，INV-A1）。
+ *   - 2026-10-22 邏輯第一第 1C 批（信念；`docs/ai/logic_first.md` 第 1C 節；
+ *     四個開關各做一件事，legacy 全關，不變量歸零後預設開）：
+ *     `beliefCertainFacts`（S1-1：確定事實進入金字塔 —— 確定性層的確定紅 /
+ *     確定藍釘 1 / 0，只靠 A0 的釘 1−ε / ε；第 2 層依失敗張數 C2 計數；所有
+ *     信念讀 `failCount` 而不是 `result`，R4 成功帶失敗牌也算；INV-B2、
+ *     INV-B3）、`rule3PostLakeOnly`（S1-2：硬3 只看湖後、嚴格支配、刪 (b)、
+ *     概似比 6 的勝算更新取代 0.85 下限；派隊沿用的防護只用確定紅；
+ *     INV-H3a、INV-H3b）、`beliefChainProjection`（S1-3 信念部分：宣藍鏈上
+ *     s(C) ≤ s(B) ≤ s(A)、宣紅的一對 s(A) + s(B) ≥ 1 的投影；INV-B1）、
+ *     `forcedVoteZeroBits`（S1-9a：第 5 次強制提議的合成票不算資訊；INV-F0）。
+ *     細節見 `belief/BeliefOptions.ts`。環境變數：
+ *     AVALON_TUNING_BELIEF_CERTAIN_FACTS、AVALON_TUNING_RULE3_POST_LAKE_ONLY、
+ *     AVALON_TUNING_BELIEF_CHAIN_PROJECTION、AVALON_TUNING_FORCED_VOTE_ZERO_BITS。
+ *   - 2026-10-22 邏輯第一第 1D 批（建在修正後信念上的決策閘門；
+ *     `docs/ai/logic_first.md` 第 7 節；兩個開關各做一件事，legacy 全關，
+ *     不變量歸零後預設開，細節見 `LogicGates.ts`）：
+ *     `teamDominanceGate`（S1-3 派隊閘門：好人隊長不派、好人 R3+ 不贊成「嚴格
+ *     被支配」的隊 —— A 在隊上、A 宣藍的 B 不在、隊上另有人可能是唯一的紅，
+ *     逐對檢查所以湖鏈 A→B→C 自動閉合；INV-K1）、`mustFailGate`（S1-4 + S1-5
+ *     必敗隊閘門：好人隊長不派、好人在非強制的 R3+ 提議不贊成「確定性層 L1*
+ *     的 minReds ≥ 該局所需失敗數」的隊；R1–R2 照桌規（D3 定案）；在所有角色
+ *     的「在隊上一律贊成」捷徑之前執行；持湖者在隊上時，一張失敗就夠而隊上有
+ *     自己宣紅的人 → 反對（P2）；INV-T1、V1、K2、P3、L1）。環境變數：
+ *     AVALON_TUNING_TEAM_DOMINANCE_GATE、AVALON_TUNING_MUST_FAIL_GATE。
+ *   - 2026-10-26 邏輯第一第 1E / 1F 批（派西 = 帶「兩拇指恰好一紅」內建資訊
+ *     的忠臣；紅方不做不可能為真的湖宣告；`docs/ai/logic_first.md` 第 8 節；
+ *     四個開關各做一件事，legacy 全關，不變量歸零後預設開）：
+ *     `percivalLoyalVote`（S1-6 投票：拿掉派西「在隊上一律贊成」與「隊上沒有
+ *     拇指就反對」兩條捷徑，改走一般好人投票；R3 起非強制、一張失敗就夠的
+ *     回合兩拇指同隊 → 反對；莫甘娜自己的紅方規則不動；INV-Pe1）、
+ *     `percivalCertainExclusion`（S1-6 派隊：派西只硬排除確定性層的確定紅 ——
+ *     `inferRedsFromTaskFails` 只留確定紅、「鐵咬」只在那根拇指確定是紅時硬
+ *     排除，兩根拇指同分時不依座位序選邊；INV-Pe2）、`percivalBlueLake`
+ *     （S1-8：派西的湖是藍方湖，避開名單只剩 `knownEvils`；INV-PL）、
+ *     `redPossibleClaimsOnly`（S1-10：紅方持湖者不做「好人持湖者不可能為真」
+ *     的宣告，改宣另一邊，兩邊都不可能時不宣告；INV-R1）。
+ *   - 2026-10-26 第 1G 批（刺殺；練習回報 (b)；`docs/ai/logic_first.md` 第 9 節；
+ *     同日審查後歸為**第二關（像真人）**的規則 —— 真人的強規律、不是絕對正確的
+ *     約束）：`assassinVisibleRedTier`（**預設開**；非強制提議當隊長時確定把
+ *     梅林看得到的紅放進隊的候選，排在每一位從沒這樣做過的候選之後；字典序的
+ *     層級、不是硬排除；兩條刺殺路徑都適用；INV-A2，policy 類）、
+ *     `assassinVisibleRedLikelihood`（**預設關**，審查後；隊上只有一位看得到的
+ *     隊友 —— 莫甘娜或莫德雷德、刺客分不出 —— 的非強制提議，乘上真人資料量到
+ *     的概似比；只在模型路徑；和模型的隊長特徵重複計算、交叉驗證沒有增益）。
+ *     `assassin/VisibleRedProposals.ts`。環境變數：
+ *     AVALON_TUNING_ASSASSIN_VISIBLE_RED_TIER、AVALON_TUNING_ASSASSIN_VISIBLE_RED_LIKELIHOOD。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -156,6 +222,152 @@ export interface AgentTuning {
    * `RedR1Teammate.ts`。R2+ 不變。
    */
   redR1Teammate: boolean;
+  /**
+   * 派西首局不放拇指（2026-10-14，`docs/ai/percival_thumbs.md` 第 9 節）：
+   * 派西 R1（第一個任務結果出來之前；五次提議都算，含強制局）當隊長時，
+   * 兩根拇指（梅林 / 莫甘娜，分不出誰是誰）都不放進隊，不分配置（拇指在
+   * 派西之前派過幾次隊）、不分派西或拇指的座位；人數不夠時才依 2026-10-10
+   * 的補位順序放回。R2 起照原本的辨識邏輯，湖的避開名單不變。原本只有
+   * R1 第一次提議（而且只在 fallback 的 baseline 路徑）不放，正式路徑的
+   * ForwardAgent 在 R1 一律放座位較小的那根。只在 10 人局。2026-10-14 依
+   * 預先登記的規則採用（strength_benchmark.md 第 14 節）。細節見
+   * `PercivalThumbs.ts`。
+   */
+  percivalNoThumbsR1: boolean;
+  /**
+   * 派西首局不放拇指的例外（2026-10-14，GM 決定 D5 (b)，`docs/ai/logic_first.md`）：
+   * R1 在派西之前，一根拇指當隊長時把另一根拇指放進自己的隊，被放的那根
+   * 可以進派西的隊（真人資料：被放的那根 87.9% 是梅林，真人派西 73.9% 會放
+   * 她）；兩根互相放過則訊號抵銷、不例外。只在 `percivalNoThumbsR1` 生效時
+   * 有作用。細節見 `PercivalThumbs.percivalR1ThumbException`。
+   */
+  percivalR1ThumbOnThumb: boolean;
+  /**
+   * 好人任務牌防護（2026-10-14，S1-11，INV-Q1）：好人機器人被要求出任務牌
+   * 時，`ForwardAgent.decide` 一開始就回「成功」，不進評分。好人本來就 0 次
+   * 出失敗（22995 次），這是防護，不改行為。
+   */
+  goodQuestSuccessGuard: boolean;
+  /**
+   * 舊刺殺啟發式的視野修正（2026-10-14，S1-11，INV-A1、M1）：`assassinModel`
+   * 關掉時才跑的 `getMistakeCount` / `getPercivalLikenessPenalty` 把刺客的
+   * `knownEvils`（莫甘娜 + 莫德雷德）當成「梅林看得到的紅」；正確的是刺客
+   * 自己、奧伯倫確定看得到，莫甘娜與莫德雷德之中梅林只看得到莫甘娜（刺客
+   * 分不出隊友角色時 = 兩位隊友中恰一位）。正式預設的刺殺走模型，所以只影響
+   * fallback 與 legacy。
+   */
+  assassinHeuristicVisibility: boolean;
+  /**
+   * S1-1（2026-10-22，第 1C 批，INV-B2 / INV-B3）：確定事實進入信念。金字塔
+   * 第 1 層把確定性層（`belief/Certainty.ts`）在 L0（規則 + 自己的視野 +
+   * 失敗張數 + 自己湖到的結果）確定的紅 / 藍釘在 1 / 0，只靠 A0（好人持湖者
+   * 說實話）才確定的釘在 1−ε / ε（ε = 0.01，GM 決定 D1）；第 2 層改依每次
+   * 任務的失敗張數（C2：x 張失敗 ⇒ 至少 x 紅，扣掉已確定的紅，平分給不確定
+   * 的隊員）而不是「失敗隊每人 +0.15」；所有信念讀 `failCount`，R4 成功但帶
+   * 失敗牌的任務也算（C5）。
+   */
+  beliefCertainFacts: boolean;
+  /**
+   * S1-2（2026-10-22，第 1C 批，INV-H3a / INV-H3b）：硬3 只看湖後。持湖者 A
+   * 宣 B 藍之後，A 自己帶的隊沒放 B、而且隊上有人在 A（若為好人）當時的視角
+   * 下不是確定藍（嚴格支配，critique X2 / X4）才算；湖前帶的隊不算（時序
+   * T1 / T3）；刪掉「帶過失敗隊 +0.5」的 (b) 款；旗標改成概似比 6 的勝算更新
+   * （GM 決定 D10）而不是 0.85 下限；`TeamReuse` 防護的「好人隊長視為紅」
+   * 只用確定性層的確定紅。
+   */
+  rule3PostLakeOnly: boolean;
+  /**
+   * S1-3 信念部分（2026-10-22，第 1C 批，INV-B1）：分層算完之後把分數投影到
+   * 湖鏈的約束上 —— 宣藍的 A→B（鏈 A→B→C）要 s(B) ≤ s(A)、s(C) ≤ s(B)
+   * （K1 / K3），宣紅的一對要 s(A) + s(B) ≥ 1（K2）；被釘住的座位不動。
+   */
+  beliefChainProjection: boolean;
+  /**
+   * S1-9a（2026-10-22，第 1C 批，INV-F0）：第 5 次強制提議沒有投票（引擎合成
+   * 全員贊成），被強迫的行動帶 0 bit：所有讀投票紀錄的信念（第 4 層的外白 /
+   * 內黑、記憶、派西的梅林辨識、宣告者投票偏差）略過 `attempt >= 5` 的紀錄。
+   */
+  forcedVoteZeroBits: boolean;
+  /**
+   * S1-3 派隊閘門（2026-10-22，第 1D 批，INV-K1）：好人隊長的候選隊先過
+   * 「嚴格支配」檢查（確定性層 L1、A0 為硬規則）：隊上有 A、A 宣藍的 B 不在、
+   * 而且隊上有 A 以外的人在某個一致的世界裡是隊上唯一的紅（把他換成 B 會讓
+   * P(全隊藍) 嚴格變大，critique X4）的隊不派 —— 有合格候選時丟掉不合格的，
+   * 沒有時從全部含自己的隊裡挑合格的（一定存在）；逐對檢查，所以 A→B→C 的
+   * 鏈自動閉合（選 A 必選 B 必選 C，Edward 第一原理例 (ii)）。好人在非強制的
+   * R3+ 提議也不贊成這種隊（硬1 在正式路徑生效）。L1 為空（A0 被違反）時不
+   * 適用。只動好人座位。
+   */
+  teamDominanceGate: boolean;
+  /**
+   * S1-4 + S1-5 必敗隊閘門（2026-10-22，第 1D 批，INV-T1 / V1 / K2 / P3 / L1）：
+   * 「必敗」= 確定性層 L1*（L1 為空時退回 L0）的每個一致世界裡，隊上的紅都
+   * 不少於該局所需的失敗數（GM 決定 D2；R4 要確定兩紅）。好人隊長不派（任何
+   * 回合、含強制局；沒有合格候選時從全部含自己的隊裡挑）；好人在非強制的 R3+
+   * 提議不贊成 —— 在派西 / 莫甘娜「在隊上一律贊成」等所有角色捷徑之前執行；
+   * R1–R2 照「一律正常票」桌規（Edward 2026-10-14 對 D3 的定案裁定：維持、
+   * 無例外、不建替代開關）。持湖者在隊上時，一張失敗就夠而隊上有自己宣紅的
+   * 人 → 反對（`GoodLakeFollowUp` 的在隊上條款，P2）。指控者（宣我紅的人）
+   * 在 L1 是確定紅（S1-5），含他的隊在一張失敗就夠的回合是必敗隊。
+   */
+  mustFailGate: boolean;
+  /**
+   * S1-6 派西的投票（2026-10-26，第 1E 批，INV-Pe1）：派西 = 帶「兩拇指恰好
+   * 一紅」內建資訊的忠臣，投票走一般好人邏輯（忠臣的邏輯 + 拇指限制 +
+   * 第 1D 批的必敗閘門 + 機率層）。拿掉「派西在隊上一律贊成」（ForwardAgent
+   * 與 HeuristicAgent 兩條路徑；莫甘娜自己的紅方規則不動）與「隊上沒有拇指
+   * 就反對」（沒有拇指的隊不提供任何紅藍資訊，Pe1）；R3 起、非強制提議、
+   * 一張失敗就夠的回合，兩拇指同隊（必有一紅）→ 反對；R1–R2 照桌規（D3
+   * 定案），R4 兩張失敗交給機率層。
+   */
+  percivalLoyalVote: boolean;
+  /**
+   * S1-6 派西的派隊（2026-10-26，第 1E 批，INV-Pe2）：派西只硬排除確定性層
+   * L1* 的確定紅。`inferRedsFromTaskFails`（「每次失敗任務都在場」= 紅）只留
+   * 確定紅；「鐵咬」（金字塔分數較高的拇指 = 莫甘娜）只在那根拇指確定是紅時
+   * 硬排除，否則留在候選裡照嫌疑排序（軟性）；兩根拇指分數相同時不依座位序
+   * 指定誰是梅林 / 莫甘娜。R1 不放拇指的裁定不變（第 1A 批）。HeuristicAgent
+   * （fallback）R2 起的派西派隊改走忠臣的派隊。
+   */
+  percivalCertainExclusion: boolean;
+  /**
+   * S1-8 派西的湖 = 藍方湖（2026-10-26，第 1E 批，Edward 2026-10-14 裁定、D4；
+   * INV-PL）：好人持湖者的避開名單只剩 `knownEvils`（梅林看得到的紅），不再
+   * 包含派西的兩根拇指；目標由 `GoodLakeInfo` 用持湖者信念（派西：兩拇指
+   * 恰好一紅）挑。湖到拇指後確定性層用自己的湖結果同時解出兩根拇指。
+   */
+  percivalBlueLake: boolean;
+  /**
+   * S1-10 紅方不做不可能為真的宣告（2026-10-26，第 1F 批，C8 / K5，INV-R1）：
+   * 紅方持湖者選好的宣告如果在公開的 L1（A0；L1 為空時 L0）裡沒有任何
+   * 「持湖者是好人而且宣告為真」的世界 —— 宣告本身就證明持湖者是紅 ——
+   * 就改宣另一邊；兩邊都不可能時（持湖者在公開的局面上已經確定是紅）不宣告
+   * （湖以 `declaredClaim: 'none'` 結束）。藍方看到這種宣告會把持湖者
+   * 放進確定紅（確定性層自動做到，INV-R2）。
+   */
+  redPossibleClaimsOnly: boolean;
+  /**
+   * 刺殺的「看得到的紅」層級（2026-10-26，第 1G 批，練習回報 (b)，INV-A2；
+   * 審查後歸為第二關 —— 像真人 —— 的規則，不是邏輯約束）：刺殺時刺殺者知道
+   * 全部紅方（含奧伯倫），但分不出兩位隊友誰是莫德雷德（梅林唯一看不到的紅；
+   * 大廳有沒有莫德雷德看 `lobbyRoles`）。候選人在 R1 起的非強制提議當隊長時，
+   * 隊上「一定有」梅林看得到的紅（刺殺者自己、奧伯倫，或兩位隊友都在）→ 排在
+   * 每一位從沒這樣做過的候選之後（字典序層級，分數只在同一層裡比；全部候選都
+   * 做過時照分數）。真人梅林這樣派的比例 2.2–19.7%（依回合），忠臣 / 派西
+   * 17.8–51.1%，概似比 0.12–0.46；刺殺時真梅林被標記 10.5%、其他藍 39.5%。
+   * 模型與舊啟發式都適用。
+   */
+  assassinVisibleRedTier: boolean;
+  /**
+   * 刺殺的軟性概似（2026-10-26，第 1G 批；審查後**預設關**）：候選人當隊長的
+   * 非強制提議，隊上只有一位看得到的隊友（莫甘娜或莫德雷德，刺客分不出、各 ½）
+   * 時，勝算乘上「恰好這種隊」的概似比 —— 兩個混合比例的比值（依回合，真人
+   * 資料：R1 1.25、R2 1.64、R3 1.03、R4 1.51、R5 1.01；第 1G 批原本用兩個
+   * 比值的平均 ½·LR(有) + ½·LR(沒有)，已撤回）。只在模型路徑（加在線性分數上）；
+   * 預設關：模型本來就有這類提議的特徵（`ledWithAllyRate`、`ledCleanCount`），
+   * 交叉驗證後沒有增益（`assassinVisibleRedStudy.ts` (c)）。
+   */
+  assassinVisibleRedLikelihood: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -175,6 +387,22 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodVouchFollowUp',
   'teamReuse',
   'redR1Teammate',
+  'percivalNoThumbsR1',
+  'percivalR1ThumbOnThumb',
+  'goodQuestSuccessGuard',
+  'assassinHeuristicVisibility',
+  'beliefCertainFacts',
+  'rule3PostLakeOnly',
+  'beliefChainProjection',
+  'forcedVoteZeroBits',
+  'teamDominanceGate',
+  'mustFailGate',
+  'percivalLoyalVote',
+  'percivalCertainExclusion',
+  'percivalBlueLake',
+  'redPossibleClaimsOnly',
+  'assassinVisibleRedTier',
+  'assassinVisibleRedLikelihood',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -193,6 +421,22 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodVouchFollowUp: false,
   teamReuse: false,
   redR1Teammate: false,
+  percivalNoThumbsR1: false,
+  percivalR1ThumbOnThumb: false,
+  goodQuestSuccessGuard: false,
+  assassinHeuristicVisibility: false,
+  beliefCertainFacts: false,
+  rule3PostLakeOnly: false,
+  beliefChainProjection: false,
+  forcedVoteZeroBits: false,
+  teamDominanceGate: false,
+  mustFailGate: false,
+  percivalLoyalVote: false,
+  percivalCertainExclusion: false,
+  percivalBlueLake: false,
+  redPossibleClaimsOnly: false,
+  assassinVisibleRedTier: false,
+  assassinVisibleRedLikelihood: false,
 });
 
 /**
@@ -298,6 +542,41 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     新預設的機器人自打自（seed 404040）藍勝 7.42%→11.32%。一致性基準
  *     只有派隊（R1、R2+）與 R3+ 投票改變（派隊 Jaccard R2+ ED 39.2→49.0、
  *     Sin 42.5→57.1、top 40.2→52.5、population 41.2→53.2），其他逐項相同。
+ *   - `percivalNoThumbsR1`（2026-10-14，strength_benchmark.md 第 14 節、
+ *     percival_thumbs.md 第 9、11 節；對照組 = 上面第三輪整合後的正式預設；
+ *     只在 10 人局）：Edward「一開始在沒任何資訊時先預設不派」。規則與門檻
+ *     在跑任何種子之前預先登記。一致性：派西派隊「拇指組合與真人相同」
+ *     population 40.4→58.4%、top 40.7→59.0%、Sin 40.8→57.0%（ED 22/47→
+ *     29/47）；一致性基準只有 R1 派西隊長的派隊列改變（R1 派西完全相同
+ *     population 0.9→3.4%、top 0.7→4.4%、Sin 0→0%，Jaccard 29.8→34.6、
+ *     29.2→36.3、30.6→35.5%），其他每一列（含 R2+ 派隊、投票、任務牌、湖、
+ *     刺殺）逐項相同。自我對打藍方立場 515151 +0.16pp [−0.37pp, +0.69pp]、
+ *     新種子 626262 +0.02pp [−0.54pp, +0.58pp]、737373 −0.18pp [−0.74pp,
+ *     +0.38pp]，三個合併 +0.01pp [−0.31pp, +0.32pp]、兩個確認種子合併
+ *     −0.08pp [−0.47pp, +0.32pp]；紅方立場恆為 0；0 次 fallback → 不算
+ *     變弱 → **採用**（AVALON_TUNING_PERCIVAL_NO_THUMBS_R1=0 可關掉）。
+ *   - 2026-10-14 邏輯第一（`docs/ai/logic_first.md`，新的採用順序：邏輯正確
+ *     優先，強度只量測回報、不用來回退）：`percivalR1ThumbOnThumb`、
+ *     `goodQuestSuccessGuard`、`assassinHeuristicVisibility` 預設開（不變量
+ *     INV-R1NT / INV-Q1 / INV-A1 為 0）；強度見 strength_benchmark.md 第 15 節。
+ *   - 2026-10-22 第 1C 批（信念，`logic_first.md` 第 6 節）：`beliefCertainFacts`、
+ *     `rule3PostLakeOnly`、`beliefChainProjection`、`forcedVoteZeroBits` 預設開
+ *     （INV-B1 / B2 / B3 / H3a / H3b / F0 在 1970 局重播與 2000 局自我對打上為 0）。
+ *     強度只回報（strength_benchmark.md 第 16 節）：藍方立場變強、紅方立場變弱
+ *     （區間整個在 0 以下）→ 依第一關的規則照樣採用，紅方補償另開工作單。
+ *   - 2026-10-22 第 1D 批（決策閘門，`logic_first.md` 第 7 節）：`teamDominanceGate`、
+ *     `mustFailGate` 預設開（INV-T1 / V1 / K1 / K2 / P3 / L1 在 1970 局重播、探針與
+ *     2000 局自我對打上為 0）。強度只回報（strength_benchmark.md 第 17 節）。
+ *   - 2026-10-26 第 1E / 1F 批（派西 = 忠臣 + 拇指限制、派西藍方湖、紅方只做
+ *     可能為真的宣告；`logic_first.md` 第 8 節）：`percivalLoyalVote`、
+ *     `percivalCertainExclusion`、`percivalBlueLake`、`redPossibleClaimsOnly`
+ *     預設開（INV-Pe2 / PL / R1 在 1970 局重播與 2000 局自我對打上為 0）。
+ *     強度只回報（strength_benchmark.md 第 18 節）。
+ *   - 2026-10-26 第 1G 批（刺殺：確定把梅林看得到的紅放進自己隊的隊長排在後面；
+ *     `logic_first.md` 第 9 節）：`assassinVisibleRedTier` 預設開（INV-A2 在
+ *     1970 局重播與 2000 局自我對打上為 0；審查後歸為第二關的規則，依重播的
+ *     刺中率與一致性保留）；`assassinVisibleRedLikelihood` 審查後預設關。強度
+ *     見 strength_benchmark.md 第 19、20 節。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -320,6 +599,22 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodVouchFollowUp: true,
   teamReuse: true,
   redR1Teammate: true,
+  percivalNoThumbsR1: true,
+  percivalR1ThumbOnThumb: true,
+  goodQuestSuccessGuard: true,
+  assassinHeuristicVisibility: true,
+  beliefCertainFacts: true,
+  rule3PostLakeOnly: true,
+  beliefChainProjection: true,
+  forcedVoteZeroBits: true,
+  teamDominanceGate: true,
+  mustFailGate: true,
+  percivalLoyalVote: true,
+  percivalCertainExclusion: true,
+  percivalBlueLake: true,
+  redPossibleClaimsOnly: true,
+  assassinVisibleRedTier: true,
+  assassinVisibleRedLikelihood: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -338,6 +633,22 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodVouchFollowUp: 'AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP',
   teamReuse: 'AVALON_TUNING_TEAM_REUSE',
   redR1Teammate: 'AVALON_TUNING_RED_R1_TEAMMATE',
+  percivalNoThumbsR1: 'AVALON_TUNING_PERCIVAL_NO_THUMBS_R1',
+  percivalR1ThumbOnThumb: 'AVALON_TUNING_PERCIVAL_R1_THUMB_ON_THUMB',
+  goodQuestSuccessGuard: 'AVALON_TUNING_GOOD_QUEST_SUCCESS_GUARD',
+  assassinHeuristicVisibility: 'AVALON_TUNING_ASSASSIN_HEURISTIC_VISIBILITY',
+  beliefCertainFacts: 'AVALON_TUNING_BELIEF_CERTAIN_FACTS',
+  rule3PostLakeOnly: 'AVALON_TUNING_RULE3_POST_LAKE_ONLY',
+  beliefChainProjection: 'AVALON_TUNING_BELIEF_CHAIN_PROJECTION',
+  forcedVoteZeroBits: 'AVALON_TUNING_FORCED_VOTE_ZERO_BITS',
+  teamDominanceGate: 'AVALON_TUNING_TEAM_DOMINANCE_GATE',
+  mustFailGate: 'AVALON_TUNING_MUST_FAIL_GATE',
+  percivalLoyalVote: 'AVALON_TUNING_PERCIVAL_LOYAL_VOTE',
+  percivalCertainExclusion: 'AVALON_TUNING_PERCIVAL_CERTAIN_EXCLUSION',
+  percivalBlueLake: 'AVALON_TUNING_PERCIVAL_BLUE_LAKE',
+  redPossibleClaimsOnly: 'AVALON_TUNING_RED_POSSIBLE_CLAIMS_ONLY',
+  assassinVisibleRedTier: 'AVALON_TUNING_ASSASSIN_VISIBLE_RED_TIER',
+  assassinVisibleRedLikelihood: 'AVALON_TUNING_ASSASSIN_VISIBLE_RED_LIKELIHOOD',
 });
 
 function parseBool(raw: string): boolean | undefined {

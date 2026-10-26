@@ -63,9 +63,19 @@ function obs(partial: Partial<PlayerObservation>): PlayerObservation {
 // off / on pair isolates this one. `teamReuse` alone also puts P5 back on the
 // R3 team below (it reuses the successful R2 team and swaps the leader in), so
 // the "off" picks would no longer show the gap; `redR1Teammate` only acts on
-// R1 red leaders and is turned off for the same isolation. The full current
-// default is checked separately.
-const LANE_BASE: AgentTuning = { ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false };
+// R1 red leaders and is turned off for the same isolation. Batch 1C's
+// `beliefCertainFacts` (2026-10-22) also puts P5 on every team here on its
+// own — the holder saw P5 blue, so the certainty layer pins P5 good in the
+// beliefs — and is turned off for the same reason (asserted in the full
+// current default test below). So are batch 1D's gates (2026-10-22,
+// `LogicGates.ts`): `teamDominanceGate` keeps P5 on any team with the holder
+// and an uncertain seat (K1′), and `mustFailGate` keeps a seat the leader
+// declared red off a one-fail team — each enforces the word on its own. The
+// full current default is checked separately.
+const LANE_BASE: AgentTuning = {
+  ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false, beliefCertainFacts: false,
+  teamDominanceGate: false, mustFailGate: false,
+};
 const PROD_OFF: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false };
 const PROD_ON: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: true };
 
@@ -217,6 +227,15 @@ describe('GoodLakeFollowUp — ForwardAgent wiring', () => {
     expect(d.reasoningTrace.usedFallback).toBe(false);
     expect(teamOf(d)).toHaveLength(4);
     expect(teamOf(d)).toEqual(expect.arrayContaining(['P1', 'P5']));
+    // Batch 1C (S1-1): the holder's own lake result reaches its beliefs, so
+    // P5 (seen blue) is on the team even with the vouch switch off.
+    const beliefsOnly: AgentTuning = {
+      ...DEFAULT_AGENT_TUNING, goodVouchFollowUp: false, teamReuse: false, teamDominanceGate: false, mustFailGate: false,
+    };
+    expect(teamOf(forward(beliefsOnly).decide(obs({})))).toEqual(expect.arrayContaining(['P1', 'P5']));
+    // Batch 1D (S1-3 team gate): the dominance gate alone keeps the word too.
+    const gateOnly: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false, teamDominanceGate: true };
+    expect(teamOf(forward(gateOnly).decide(obs({})))).toEqual(expect.arrayContaining(['P1', 'P5']));
   });
 
   it('7 players: Percival with too few seats left never puts back the seat he declared red (review 2026-10-13)', () => {

@@ -24,9 +24,17 @@
  *
  * Wave A schema dependency: none. Wave B does NOT read `lakeHistory`
  * here — lake reasoning lives in `lakeChainTracker.ts`.
+ *
+ * 2026-10-22 (logic-first batch 1C, `belief/BeliefOptions.ts`): the
+ * functions take the belief switches. `certainFacts` (S1-1) counts a
+ * mission by its fail cards (`missionFacts.beliefFailCards`, so an R4
+ * success with a card is a failed-mission signal, C5); `forcedVotesZero`
+ * (S1-9a) skips the synthetic votes of the forced fifth proposal.
  */
 
 import type { PlayerObservation } from '../types';
+import { beliefFailCards } from '../missionFacts';
+import { defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from '../belief/BeliefOptions';
 
 // ── Failed-mission suspect set (batch 2 fix #9) ─────────────────
 /**
@@ -43,10 +51,11 @@ import type { PlayerObservation } from '../types';
  */
 export function getFailedMissionSuspects(
   obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): Set<string> {
   const suspects = new Set<string>();
   for (const quest of obs.questHistory) {
-    if (quest.result !== 'fail') continue;
+    if (beliefFailCards(quest, opts.certainFacts) === 0) continue;
     for (const pid of quest.team) suspects.add(pid);
   }
   return suspects;
@@ -67,9 +76,11 @@ export function getFailedMissionSuspects(
  */
 export function getOuterWhiteApprovers(
   obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): Set<string> {
   const approvers = new Set<string>();
   for (const record of obs.voteHistory) {
+    if (opts.forcedVotesZero && isForcedVoteRecord(record)) continue;
     for (const [pid, approved] of Object.entries(record.votes)) {
       if (pid === obs.myPlayerId) continue;
       if (approved !== true) continue;
@@ -100,10 +111,11 @@ export function getOuterWhiteApprovers(
  */
 export function getLoyalSuspectSet(
   obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): Set<string> {
-  const suspects = getFailedMissionSuspects(obs);
+  const suspects = getFailedMissionSuspects(obs, opts);
   // Add outer-white approvers — Oberon-like signature.
-  for (const pid of getOuterWhiteApprovers(obs)) suspects.add(pid);
+  for (const pid of getOuterWhiteApprovers(obs, opts)) suspects.add(pid);
   // Self never on the baseline suspect set.
   suspects.delete(obs.myPlayerId);
   return suspects;

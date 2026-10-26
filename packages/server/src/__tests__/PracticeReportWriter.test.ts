@@ -64,7 +64,7 @@ const ROW: PracticeFlagRow = {
   botRole: 'morgana',
   kind: 'team_vote',
   decision: '贊成',
-  reason: '贊成：自己在隊上。 規則：派西維爾／莫甘娜在隊上一律贊成',
+  reason: '贊成：自己在隊上。 規則：莫甘娜在隊上一律贊成（紅方規則）',
   note: '=HYPERLINK("x") 這票怪怪的',
 };
 

@@ -17,9 +17,21 @@
  * Vote-vs-pick conflict: when both layer-4 sub-signals (vote behaviour
  * and team-pick behaviour) flag a player, the vote signal weighs 1.5x
  * the pick signal (Q10 verbatim).
+ *
+ * 2026-10-22 (logic-first batch 1C, `belief/BeliefOptions.ts`):
+ *   - `forcedVotesZero` (S1-9a, INV-F0): the forced fifth proposal holds
+ *     no vote — the engine writes a synthetic unanimous approve — so its
+ *     record carries 0 bits and is skipped by the vote-pattern signal
+ *     (the time weights are computed over the remaining records). The
+ *     team-pick signal keeps it: the leader did choose that team.
+ *   - `certainFacts` (S1-1, C5): "led a team that later failed" reads the
+ *     fail cards (`missionFacts.beliefFailCards`), so an R4 success with a
+ *     fail card counts as a tainted team.
  */
 
 import type { PlayerObservation } from '../types';
+import { beliefFailCards } from '../missionFacts';
+import { defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from '../belief/BeliefOptions';
 
 // ── Constants ──────────────────────────────────────────────────
 /** Time-decay base (newer / older). Edward 2026-04-28: 1.5. */
@@ -62,12 +74,16 @@ function timeWeight(indexFromOldest: number, total: number): number {
  */
 export function scoreFromVotePattern(
   obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): Map<string, number> {
   const score = new Map<string, number>();
-  const total = obs.voteHistory.length;
+  const records = opts.forcedVotesZero
+    ? obs.voteHistory.filter((record) => !isForcedVoteRecord(record))
+    : obs.voteHistory;
+  const total = records.length;
   if (total === 0) return score;
 
-  obs.voteHistory.forEach((record, idx) => {
+  records.forEach((record, idx) => {
     const w = timeWeight(idx, total);
     for (const [pid, approved] of Object.entries(record.votes)) {
       if (pid === obs.myPlayerId) continue;
@@ -95,6 +111,7 @@ export function scoreFromVotePattern(
  */
 export function scoreFromTeamPick(
   obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): Map<string, number> {
   const score = new Map<string, number>();
   const total = obs.voteHistory.length;
@@ -103,7 +120,7 @@ export function scoreFromTeamPick(
   obs.voteHistory.forEach((record, idx) => {
     const w = timeWeight(idx, total);
     const failedQ = obs.questHistory.find(
-      (q) => q.round === record.round && q.result === 'fail',
+      (q) => q.round === record.round && beliefFailCards(q, opts.certainFacts) > 0,
     );
     if (!failedQ) return;
     if (!failedQ.team.every((id) => record.team.includes(id))) return;
@@ -142,8 +159,11 @@ export function combineLayer4(
  * Convenience entry: compute the full layer-4 score for an
  * observation. Used by `pyramidScorer.ts`.
  */
-export function layer4Score(obs: PlayerObservation): Map<string, number> {
-  const v = scoreFromVotePattern(obs);
-  const p = scoreFromTeamPick(obs);
+export function layer4Score(
+  obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): Map<string, number> {
+  const v = scoreFromVotePattern(obs, opts);
+  const p = scoreFromTeamPick(obs, opts);
   return combineLayer4(v, p);
 }

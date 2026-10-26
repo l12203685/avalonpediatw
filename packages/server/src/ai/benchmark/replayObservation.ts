@@ -8,16 +8,22 @@
  *   - Merlin sees every evil except Mordred; assassin / Morgana / Mordred
  *     see each other (not Oberon); Oberon, loyal and Percival get
  *     `knownEvils = []`; Percival gets `knownWizards = [Merlin, Morgana]`;
- *   - the assassin additionally gets `allEvilIds` in the assassination phase;
+ *   - the assassinator (the assassin; Mordred / Morgana when no assassin is
+ *     dealt) additionally gets `allEvilIds` in the assassination phase;
  *   - forced 5th proposals appear as unanimous-approve vote records (what
  *     GameEngine synthesises), other proposals carry the reconstructed votes;
- *   - `lakeHistory` holds only declared lakes from earlier rounds.
- *
- * Production gives the lake holder no private record of what they saw, so
- * neither does the replay.
+ *   - `lakeHistory` holds the lakes of earlier rounds; an undeclared one
+ *     carries `declaredClaim: 'none'` (S1-9c, 2026-10-14 — it used to be
+ *     dropped);
+ *   - `myLakeResults` holds what this seat saw with the lake (S1-9b,
+ *     2026-10-14: the holder's private result; nobody else gets it);
+ *   - `evilCount` = the number of reds of the game; `lobbyRoles` = the roles
+ *     dealt (the public setup).
  */
 
-import type { PlayerObservation, QuestRecord, VoteRecord, LakePublicRecord } from '../types';
+import type { Role } from '@avalon/shared';
+import type { PlayerObservation, QuestRecord, VoteRecord, LakePublicRecord, PrivateLakeResult } from '../types';
+import { isAssassinator } from '../../game/assassinator';
 import {
   campOf,
   EVIL_ROLES,
@@ -157,14 +163,19 @@ export function buildReplayObservation(
   const cut = cutFor(game, point);
   const voteHistory = game.proposals.slice(0, cut.votesUntil).map((p) => toVoteRecord(game, p));
   const quests = game.quests.filter((q) => q.round < cut.questsBefore);
-  const lakeHistory: LakePublicRecord[] = game.lakes
-    .slice(0, cut.lakesUntil)
-    .filter((l) => l.claim !== null)
+  const visibleLakes = game.lakes.slice(0, cut.lakesUntil);
+  const lakeHistory: LakePublicRecord[] = visibleLakes.map((l) => ({
+    round: l.round,
+    holderId: seatId(l.holderSeat),
+    targetId: seatId(l.targetSeat),
+    declaredClaim: l.claim ?? 'none',
+  }));
+  const myLakeResults: PrivateLakeResult[] = visibleLakes
+    .filter((l) => l.holderSeat === seat)
     .map((l) => ({
       round: l.round,
-      holderId: seatId(l.holderSeat),
       targetId: seatId(l.targetSeat),
-      declaredClaim: l.claim as 'good' | 'evil',
+      result: campOf(game.seatRoles[l.targetSeat - 1]),
     }));
 
   let currentRound: number;
@@ -208,7 +219,7 @@ export function buildReplayObservation(
   }
 
   const knowledge = roleKnowledge(game, seat);
-  const allEvilIds = role === 'assassin' && point.kind === 'assassination'
+  const allEvilIds = isAssassinator(role, game.seatRoles) && point.kind === 'assassination'
     ? game.seatRoles.map((r, i) => (EVIL_ROLES.has(r) ? seatId(i + 1) : null)).filter((x): x is string => x !== null)
     : undefined;
 
@@ -230,6 +241,9 @@ export function buildReplayObservation(
     questHistory: quests.map(toQuestRecord),
     proposedTeam,
     lakeHistory,
+    myLakeResults,
+    evilCount: game.seatRoles.filter((r) => EVIL_ROLES.has(r)).length,
+    lobbyRoles: [...game.seatRoles] as Role[],
   };
 }
 

@@ -343,6 +343,7 @@ function analyseGame(ctx: GameContext): void {
     return fails >= 2 || (round === 5 && fails >= 1);
   };
   for (const l of obs.lakeHistory ?? []) {
+    if (l.declaredClaim === 'none') continue;
     const later = obs.voteHistory.filter((v) => v.round > l.round);
     const led = later.filter((v) => v.leader === l.holderId);
     const incl = led.filter((v) => v.team.includes(l.targetId)).length;

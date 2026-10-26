@@ -16,6 +16,7 @@ import { ForwardAgent } from './forward/ForwardAgent';
 import { HeuristicAgent } from './HeuristicAgent';
 import { DEFAULT_AGENT_TUNING } from './AgentTuning';
 import { computePyramidScores } from './baseline/pyramidScorer';
+import { LEGACY_BELIEF_OPTIONS } from './belief/BeliefOptions';
 import type { LadyOfTheLakeRecord, PlayerObservation, QuestRecord, VoteRecord } from './types';
 
 function v(round: number, attempt: number, leader: string, team: string, approved: boolean, yes: string): VoteRecord {
@@ -174,22 +175,27 @@ function certainReds(o: PlayerObservation): Set<string> {
 }
 
 describe('TeamReuse guard — deduced reds', () => {
-  it('refuses a mission-certain red and a seat the pyramid scores at or above the threshold', () => {
+  it('refuses a mission-certain red; the pyramid-score threshold is legacy only (batch 1C keeps facts)', () => {
     const o = POS.deduced7; // loyal P5; R1 [P5, P1] failed with one card → P1 is red
-    const guard = teamReuseGuard(o);
+    const guard = teamReuseGuard(o); // production default: `rule3PostLakeOnly` on → certain reds only
     expect(guard(['P5', 'P4', 'P1'])).toBe(false);
     expect(guard(['P5', 'P4', 'P6'])).toBe(true);
     const plan = teamReusePlan(o)!;
     expect(teamReuseScorer(plan, o)(['P5', 'P4', 'P1'])).toBe(0); // P1's own rejected team: no bonus
     // P2 (on the R2 mission that failed with two cards out of three) is scored ≥ 0.85
-    // by the pyramid without a certain deduction: refused on that score alone.
-    const pyr = computePyramidScores(o);
+    // by the legacy pyramid without a certain deduction. Legacy guard: refused on that
+    // score alone. 1C guard: a probability is not a fact — accepted.
+    const pyr = computePyramidScores(o, LEGACY_BELIEF_OPTIONS);
     expect(certainReds(o).has('P2')).toBe(false);
     expect(pyr.scores.get('P2')).toBeGreaterThanOrEqual(GUARD_RED_SUSPICION);
-    expect(guard(['P5', 'P4', 'P2'])).toBe(false);
+    expect(guard(['P5', 'P4', 'P2'])).toBe(true);
+    expect(teamReuseGuard(o, pyr, LEGACY_BELIEF_OPTIONS)(['P5', 'P4', 'P2'])).toBe(false);
     const capped = { ...pyr, scores: new Map([...pyr.scores].map(([id, s]) => [id, Math.min(s, 0.8)] as const)) };
-    expect(teamReuseGuard(o, capped)(['P5', 'P4', 'P2'])).toBe(true);
-    expect(teamReuseGuard(o, capped)(['P5', 'P4', 'P1'])).toBe(false); // still a certain red
+    expect(teamReuseGuard(o, capped, LEGACY_BELIEF_OPTIONS)(['P5', 'P4', 'P2'])).toBe(true);
+    expect(teamReuseGuard(o, capped, LEGACY_BELIEF_OPTIONS)(['P5', 'P4', 'P1'])).toBe(false); // still a certain red
+    // 1C: P3 and P6 are proven good (the three reds are P1 and two of the R2
+    // trio), so that team is accepted.
+    expect(guard(['P5', 'P6', 'P3'])).toBe(true);
   });
 
   it('red leaders: only 硬1 / 硬2 count (they know who is red)', () => {

@@ -26,6 +26,7 @@
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { AgentAction, PlayerObservation } from '../types';
 import { estimateMerlinLikenessFromHistory } from '../LakePolicy';
+import { LEGACY_BELIEF_OPTIONS } from '../belief/BeliefOptions';
 import {
   campOf,
   type Camp,
@@ -251,8 +252,10 @@ export function ruleAssassinate(obs: PlayerObservation): string {
   const cands = obs.allPlayerIds.filter((id) => id !== obs.myPlayerId && !evil.has(id));
   const failCounts = (id: string): number =>
     obs.questHistory.filter((q) => q.result === 'fail' && q.team.includes(id)).length;
+  // The rule baseline is a fixed yardstick: the pre-2026-10-22 reading of the
+  // history (every vote, failed missions by outcome), whatever the agents' tuning.
   return [...cands].sort(
-    (a, b) => estimateMerlinLikenessFromHistory(b, obs) - estimateMerlinLikenessFromHistory(a, obs)
+    (a, b) => estimateMerlinLikenessFromHistory(b, obs, LEGACY_BELIEF_OPTIONS) - estimateMerlinLikenessFromHistory(a, obs, LEGACY_BELIEF_OPTIONS)
       || failCounts(a) - failCounts(b)
       || obs.allPlayerIds.indexOf(a) - obs.allPlayerIds.indexOf(b),
   )[0];

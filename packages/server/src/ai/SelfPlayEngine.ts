@@ -13,9 +13,10 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { Room, AVALON_CONFIG, Role } from '@avalon/shared';
+import { Room, AVALON_CONFIG, Role, type RoleOptions } from '@avalon/shared';
 import { GameEngine } from '../game/GameEngine';
 import { RoomManager } from '../game/RoomManager';
+import { assassinatorRole, isAssassinator } from '../game/assassinator';
 import { saveGameEvents } from '../services/supabase';
 import {
   AvalonAgent,
@@ -27,6 +28,7 @@ import {
 import { declarerPostActionConsistencyPrior } from './priors/EvActionPriors';
 import { pickLakeTargetForTeam, decideLakeClaimForTeam, hasLakeApi } from './LakePolicy';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
+import { privateLakeResults, publicLakeHistory } from './lakeRecords';
 
 export class SelfPlayEngine {
   private roomManager = new RoomManager();
@@ -36,7 +38,19 @@ export class SelfPlayEngine {
    * @param agents  Array of agents (length must be 5–10)
    * @param persist Whether to save events to Supabase
    */
-  async runGame(agents: AvalonAgent[], persist = true): Promise<SelfPlayResult> {
+  /**
+   * `roleToggles` (2026-10-26, harness coverage of the lobby role switches):
+   * switch Percival off the way a host does (he becomes a loyal;
+   * `GameEngine.assignRoles`). Morgana / Oberon / Mordred off would deal a
+   * 'minion', which the engine's canonical 7-role lock refuses; the
+   * size-changing options (swapR1R2, the 9-player variants) are not offered
+   * either: the bots plan with the standard team sizes.
+   */
+  async runGame(
+    agents: AvalonAgent[],
+    persist = true,
+    roleToggles?: Partial<Pick<RoleOptions, 'percival'>>,
+  ): Promise<SelfPlayResult> {
     const playerCount = agents.length;
     if (playerCount < 5 || playerCount > 10) {
       throw new Error(`Invalid player count: ${playerCount}`);
@@ -59,6 +73,7 @@ export class SelfPlayEngine {
       };
     }
 
+    if (roleToggles) room.roleOptions = { ...room.roleOptions, ...roleToggles };
     const engine = new GameEngine(room);
     engine.startGame();
 
@@ -211,9 +226,13 @@ export class SelfPlayEngine {
 
       // ── Assassination phase ─────────────────────────────────
       if (room.state === 'discussion') {
-        const assassin = agents.find(a => roleMap.get(a.agentId) === 'assassin');
+        // The assassinator: the assassin, or Mordred / Morgana when no
+        // assassin is dealt (the 7-player setup: Mordred; `game/assassinator.ts`,
+        // 2026-10-26 fix — 7-player self-play used to skip the assassination).
+        const killer = assassinatorRole(roleMap.values());
+        const assassin = killer ? agents.find(a => roleMap.get(a.agentId) === killer) : undefined;
         if (!assassin) {
-          // No assassin role (shouldn't happen) — resolve to good win
+          // No assassinator dealt (no assassin, Mordred or Morgana) — resolve to good win
           break;
         }
         const obs    = this.buildObservation(assassin.agentId, room, roleMap, teamMap, voteHistory, questHistory);
@@ -375,24 +394,19 @@ export class SelfPlayEngine {
     // assassin cannot pick Oberon/Mordred (hidden from `knownEvils`
     // mid-game). Narrow-scope field — `undefined` in all other phases
     // and roles.
-    const allEvilIds = myRole === 'assassin' && this.getPhase(room) === 'assassination'
+    const allEvilIds = isAssassinator(myRole, roleMap.values()) && this.getPhase(room) === 'assassination'
       ? Array.from(teamMap.entries())
           .filter(([, t]) => t === 'evil')
           .map(([id]) => id)
       : undefined;
 
-    // Public-only Lake history. Only declared records are exposed to
-    // readers; pending lake (used but not yet declared) is filtered out
-    // to avoid leaking the holder's intermediate state. The private
-    // `result` field stays out — only `declaredClaim` is public.
-    const lakeHistory = (room.ladyOfTheLakeHistory ?? [])
-      .filter((rec) => rec.declared === true && rec.declaredClaim !== undefined)
-      .map((rec) => ({
-        round:         rec.round,
-        holderId:      rec.holderId,
-        targetId:      rec.targetId,
-        declaredClaim: rec.declaredClaim as 'good' | 'evil',
-      }));
+    // Public-only Lake history (`publicLakeHistory`): declared records, plus
+    // finished undeclared ones as 'none' (S1-9c); the pending lake (used,
+    // declaration still open) is filtered out to avoid leaking the holder's
+    // intermediate state. The private `result` reaches the holder only, via
+    // `myLakeResults` (S1-9b).
+    const lakeHistory = publicLakeHistory(room);
+    const myLakeResults = privateLakeResults(room, playerId);
 
     return {
       myPlayerId:    playerId,
@@ -412,6 +426,9 @@ export class SelfPlayEngine {
       questHistory:  [...questHistory],
       proposedTeam:  [...room.questTeam],
       lakeHistory,
+      myLakeResults,
+      evilCount:     Array.from(teamMap.values()).filter((t) => t === 'evil').length,
+      lobbyRoles:    Array.from(roleMap.values()),
     };
   }
 
