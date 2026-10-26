@@ -108,19 +108,21 @@ describe('batch 1G — what Merlin surely sees, from the assassin', () => {
     expect(classifyTeamForAssassin(['P5', 'P6', 'P7'], sight)).toBe('none');
   });
 
-  it('counts non-forced proposals from R1 on, never the forced fifth proposal', () => {
+  it('counts every proposal from R1 on, the forced fifth too (Edward 2026-10-26); the soft factor only non-forced ones', () => {
     const o = assassinationObs([
       vote(1, 2, 'P9', ['P9', 'P1', 'P5'], [], false), // R1, non-forced, the assassin on it → counts (R1 is not exempt)
-      vote(2, 5, 'P10', ['P10', 'P4', 'P5', 'P6'], IDS, true), // forced fifth: excluded
+      vote(2, 5, 'P10', ['P10', 'P4', 'P5', 'P6'], IDS, true), // forced fifth with Oberon on it → counts
       vote(2, 2, 'P5', ['P5', 'P2', 'P6', 'P8'], [], false), // one teammate only: ambiguous
+      vote(3, 5, 'P8', ['P8', 'P2', 'P6', 'P9'], IDS, true), // forced fifth, ambiguous: no soft factor
     ]);
     const ev = visibleRedEvidence(o, CANDIDATES);
     expect(ev.get('P7')).toMatchObject({ tier: 1, certainRounds: [3] });
     expect(ev.get('P9')).toMatchObject({ tier: 1, certainRounds: [1] });
-    expect(ev.get('P10')).toMatchObject({ tier: 0, certainRounds: [] });
+    expect(ev.get('P10')).toMatchObject({ tier: 1, certainRounds: [2] });
     expect(ev.get('P5')).toMatchObject({ tier: 0, ambiguousRounds: [2] });
     expect(ev.get('P5')?.logLikelihood).toBeCloseTo(Math.log(ambiguousLeadMultiplier(2, 0.5)), 12);
-    expect(tierCandidates(CANDIDATES, ev)).toEqual(['P5', 'P6', 'P8', 'P10']);
+    expect(ev.get('P8')).toMatchObject({ tier: 0, ambiguousRounds: [], logLikelihood: 0 });
+    expect(tierCandidates(CANDIDATES, ev)).toEqual(['P5', 'P6', 'P8']);
   });
 
   it('the tier is never a hard exclusion: when every candidate did it, the scores decide', () => {

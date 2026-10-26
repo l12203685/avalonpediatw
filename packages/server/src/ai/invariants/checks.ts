@@ -183,7 +183,8 @@ function multisetPermutations(items: readonly string[]): string[][] {
  * every red but Mordred. Every assignment of the lobby's red roles
  * (`lobbyRoles`, else the standard table) to the seen teammates is
  * enumerated; a lead certainly holds a red Merlin sees iff it does in every
- * assignment. Leads count from R1 on non-forced proposals (attempts 1–4).
+ * assignment. Leads count from R1 on every proposal, the forced fifth included
+ * (Edward 2026-10-26).
  * `null` when the roster does not fit the lobby (counted, not checked).
  */
 function a2FlaggedIndependently(obs: PlayerObservation, candidates: readonly string[]): Set<string> | null {
@@ -211,7 +212,7 @@ function a2FlaggedIndependently(obs: PlayerObservation, candidates: readonly str
   const flagged = new Set<string>();
   const cand = new Set(candidates);
   for (const v of obs.voteHistory) {
-    if (v.attempt >= 5 || !cand.has(v.leader)) continue;
+    if (!cand.has(v.leader)) continue;
     if (visibleSets.every((vis) => v.team.some((id) => vis.has(id)))) flagged.add(v.leader);
   }
   return flagged;
@@ -392,7 +393,7 @@ export function checkDecision(
       L.inc('A.n');
       if (truth?.evil.has(target)) L.inc('A.targetEvil');
       // INV-A2 (batch 1G; a tier-2 policy since the review): a candidate who,
-      // as captain on a non-forced proposal, certainly put a red Merlin sees
+      // as captain on any proposal (the forced fifth too), certainly put a red Merlin sees
       // on the team is not preferred over one who never did (opportunity =
       // some candidate did; every candidate did = exempt, the scores decide).
       // Classified by the harness's own brute force (`a2FlaggedIndependently`).

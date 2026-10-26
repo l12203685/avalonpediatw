@@ -706,7 +706,7 @@ export function explainAssassination(
     const flagged = candidates.filter((id) => evidence.get(id)?.tier === 1);
     if (flagged.length > 0 && flagged.length < candidates.length) {
       parts.push(
-        `${seatsTxt(obs, flagged)}當隊長時把梅林一定看得到的紅（刺殺者自己、奧伯倫，或兩位隊友都在、其中一位一定是莫甘娜）放進自己的隊（非強制提議），`
+        `${seatsTxt(obs, flagged)}當隊長時把梅林一定看得到的紅（刺殺者自己、奧伯倫，或兩位隊友都在、其中一位一定是莫甘娜）放進自己的隊（第 5 次強制提議也算），`
           + `真人梅林很少這樣派（刺殺時約一成的梅林有過、其他好人約四成），排在其餘 ${candidates.length - flagged.length} 人之後`,
       );
       rule = '刺殺（像真人的規則）：當隊長時確定把梅林看得到的紅放進自己隊的人排在後面，其餘再看分數';

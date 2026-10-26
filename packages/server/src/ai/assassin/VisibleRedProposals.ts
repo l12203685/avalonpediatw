@@ -24,8 +24,10 @@
  *                   (seen) or Mordred (unseen), the assassinator cannot tell;
  *   - `none`      — no red the assassinator could call seen.
  *
- * `assassinVisibleRedTier` ranks every candidate who, as captain on a
- * non-forced proposal (the forced fifth proposal is excluded; R1 counts),
+ * `assassinVisibleRedTier` ranks every candidate who, as captain on any
+ * proposal (R1 counts; the forced fifth proposal counts too since Edward
+ * 2026-10-26「先把派了可見紅方的人排除在選項外」— a forced captain still picks
+ * the team, and human Merlins avoid seen reds there too, LR 0.18),
  * proposed a `certain` team strictly below every candidate who never did: a
  * lexicographic tier on top of the scores, never a hard exclusion (when
  * every candidate did it, the scores decide alone).
@@ -152,8 +154,14 @@ export interface VisibleRedEvidence {
   logLikelihood: number;
 }
 
-function counts(v: VoteRecord): boolean {
-  return v.attempt < 5 && v.round >= VISIBLE_RED_FIRST_ROUND;
+/** Leads the tier counts: every proposal from R1 on, the forced fifth included (Edward 2026-10-26). */
+function countsForTier(v: VoteRecord): boolean {
+  return v.round >= VISIBLE_RED_FIRST_ROUND;
+}
+
+/** Leads the soft factor counts: non-forced only (its rates were measured on non-forced leads). */
+function countsForLikelihood(v: VoteRecord): boolean {
+  return v.attempt < 5 && countsForTier(v);
 }
 
 /** Per-candidate evidence from the assassinator's observation. */
@@ -166,12 +174,12 @@ export function visibleRedEvidence(
   for (const id of candidates) out.set(id, { certainRounds: [], ambiguousRounds: [], tier: 0, logLikelihood: 0 });
   for (const v of obs.voteHistory) {
     const e = out.get(v.leader);
-    if (!e || !counts(v)) continue;
+    if (!e || !countsForTier(v)) continue;
     const k = classifyTeamForAssassin(v.team, sight);
     if (k === 'certain') {
       e.certainRounds.push(v.round);
       e.tier = 1;
-    } else if (k === 'ambiguous') {
+    } else if (k === 'ambiguous' && countsForLikelihood(v)) {
       e.ambiguousRounds.push(v.round);
       // One of k seen teammates, exactly one of whom is Mordred: seen with (k − 1) / k.
       const pSeen = (sight.ambiguous.length - 1) / sight.ambiguous.length;

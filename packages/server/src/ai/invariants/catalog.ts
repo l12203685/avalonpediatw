@@ -123,7 +123,7 @@ export const INVARIANTS: readonly InvariantSpec[] = [
   { id: 'INV-A1', refs: ['A1'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'the assassin never targets a known red' },
   { id: 'INV-A2', refs: ['player report (b)', 'human data 第 9.1 節'], kind: 'policy', status: 'enforced', side: 'red', tier: 2,
-    rule: 'TIER 2 (human-likeness; a strong human regularity, LR 0.27 — not an absolutely-true constraint): the assassinator does not prefer a candidate who, as captain on a non-forced proposal, certainly put a red Merlin sees on the team (the assassinator unless Mordred, Oberon, or more seen teammates than could all be Mordred, from the lobby roles) over a candidate who never did (every candidate did = exempt). Kept at 0 so the switch stays wired; classified by the harness\'s own brute force over the lobby\'s role assignments' },
+    rule: 'TIER 2 (human-likeness; a strong human regularity, LR 0.27 — not an absolutely-true constraint): the assassinator does not prefer a candidate who, as captain on any proposal (the forced fifth too, Edward 2026-10-26), certainly put a red Merlin sees on the team (the assassinator unless Mordred, Oberon, or more seen teammates than could all be Mordred, from the lobby roles) over a candidate who never did (every candidate did = exempt). Kept at 0 so the switch stays wired; classified by the harness\'s own brute force over the lobby\'s role assignments' },
   { id: 'INV-R1', refs: ['C8', 'K5'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'a red holder never makes a claim that cannot be true for a good holder (public L1)' },
   { id: 'INV-R2', refs: ['K5'], kind: 'hard', status: 'enforced', side: 'good',
