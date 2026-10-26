@@ -2178,12 +2178,26 @@ class LeaderboardTest(unittest.TestCase):
     def test_newcomers_board_is_the_exception(self) -> None:
         board = self.boards["newcomers"]
         self.assertEqual((board["period"], board["minGames"], board["windowDays"], board["allGames"]),
-                         ("2026-07-15 ～ 2026-10-12 首次出賽", 10, 90, True))
+                         ("2026-07-15 ～ 2026-10-12 打滿 10 場", 10, 90, True))
         self.assertIn("例外", board["note"])
-        self.assertEqual([(r["name"], r["games"], r["firstPlayed"]) for r in board["rows"]], [("新人", 13, "2026-07-19")])
+        self.assertIn("第一次累積到 10 場", board["note"])
+        self.assertEqual([(r["name"], r["games"], r["firstPlayed"], r["qualifiedOn"]) for r in board["rows"]],
+                         [("新人", 13, "2026-07-19", "2026-07-24")])  # 10th game: S106
         row = board["rows"][0]
         self.assertEqual({k: row[k] for k in self.theory_fields("新人", "career")}, self.theory_fields("新人", "career"))
         self.assertEqual(row["finalWinRate"], 53.8)  # 忠臣 in S97..S109: 7 of 13 are 三藍活
+
+    def test_newcomers_go_by_the_day_they_reach_the_threshold(self) -> None:
+        """Edward 2026-10-26「以初次超過門檻場數當作標準」: a few games long ago, then back and over 10 games
+        within the 90 days = a newcomer (firstPlayed stays the real first game); 10 games long ago = not one."""
+        log = leaderboard_log()
+        log += [dated(f"R{i}", f"2024-03-0{i + 1}", "三紅", ["回鍋"] + PASSERS) for i in range(3)]
+        log += [dated(f"Q{i}", f"2026-08-{i + 1:02d}", "三藍活", ["回鍋"] + PASSERS) for i in range(7)]
+        log += [dated(f"V{i}", f"2024-05-{i + 1:02d}", "三紅", ["老手"] + PASSERS) for i in range(10)]
+        log += [dated("V10", "2026-08-20", "三紅", ["老手"] + PASSERS)]
+        board = next(b for b in build_fresh(log)["leaderboard"]["boards"] if b["id"] == "newcomers")
+        rows = {r["name"]: (r["games"], r["firstPlayed"], r["qualifiedOn"]) for r in board["rows"]}
+        self.assertEqual(rows, {"新人": (13, "2026-07-19", "2026-07-24"), "回鍋": (10, "2024-03-01", "2026-08-07")})
 
     def test_role_titles(self) -> None:
         board = self.boards["roleTitles"]
@@ -3285,8 +3299,11 @@ class SnapshotShapeTest(unittest.TestCase):
         self.assertEqual(lb["dates"], {"parsed": 2083, "unparsed": 63, "earliest": "2017-02-13", "latest": "2026-02-27"})
         boards = {b["id"]: b for b in lb["boards"]}
         # 32 players active since 2025-12-02 (171 in all): 22 of them have full role windows (35 in all),
-        # 23 have 100 career games, 18 have 250 (24 in all); no newcomer has 10 games.
-        self.assertEqual(list(boards), ["main", "position", "overall", "improved", "assassin", "roleTitles"])
+        # 23 have 100 career games, 18 have 250 (24 in all). One newcomer: first game 2025-09-12, before the
+        # 90 days, but the 10th game on 2025-12-18 (Edward 2026-10-26: newcomers go by the day they reach 10).
+        self.assertEqual(list(boards), ["main", "position", "overall", "improved", "assassin", "newcomers", "roleTitles"])
+        self.assertEqual([(r["games"], r["firstPlayed"], r["qualifiedOn"]) for r in boards["newcomers"]["rows"]],
+                         [(21, "2025-09-12", "2025-12-18")])
         rows = {p["name"]: p for p in self.cache["players"]["players"]}
         self.assertEqual(sum(p["theory"]["roleWindows"]["fullWindows"] for p in rows.values()), 35)
         for board_id in ("main", "position", "overall"):

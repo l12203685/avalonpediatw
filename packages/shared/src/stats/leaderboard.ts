@@ -6,7 +6,7 @@
  * 各人自己的最近 N 場；新人榜是唯一例外。篩選（Edward 2026-10-14）另外可以：
  *   hidden       只從榜上拿掉（全排名算完後拿掉、依原排序補滿 topN、重編名次；角色王的候選排除他們）
  *   isActive     改寫「近 activeDays 天有出賽」的判斷（看全部局，或不限）
- *   newcomer     改寫新人的「首局在近 newcomerDays 天、每局都有日期」判斷；'none' = 不出新人榜
+ *   newcomer     改寫新人的「第 newcomerMinGames 場在近 newcomerDays 天、每局都有日期」判斷；'none' = 不出新人榜
  * 都不給時與 Python 完全相同。
  */
 import { ALL_ROLES, OUTCOME_BLUE_ALIVE, OUTCOME_BLUE_DEAD, isFinalWin } from './constants';
@@ -135,8 +135,11 @@ export interface LeaderboardOptions {
   hidden?: ReadonlySet<string>;
   /** 誰算「近期有出賽」（預設：時間線上最後一個有日期的局在近 activeDays 天內，as-of 當天也算）。 */
   isActive?: (name: string, seats: readonly PlayerSeat[]) => boolean;
-  /** 誰算新人（取代「首局在近 newcomerDays 天、每局都有日期」；場數門檻仍看 `games`）；'none' = 不出新人榜。 */
-  newcomer?: 'none' | ((name: string, seats: readonly PlayerSeat[]) => { firstPlayed: string } | null);
+  /**
+   * 誰算新人（取代「第 newcomerMinGames 場在近 newcomerDays 天、每局都有日期」；場數門檻仍看 `games`）；
+   * 'none' = 不出新人榜。
+   */
+  newcomer?: 'none' | ((name: string, seats: readonly PlayerSeat[]) => { firstPlayed: string; qualifiedOn: string } | null);
   /** 已經算好的 playerTimelines(games)（省一次計算；必須是同一組局的）。 */
   timelines?: Map<string, PlayerSeat[]>;
 }
@@ -288,7 +291,8 @@ export function computeLeaderboard(
     ranked(assassinRows, topN), { windowGames: aN },
   ));
 
-  // newcomers（例外）：首局在近 newcomerDays 天的人的全部場次。
+  // newcomers（例外）：第一次累積到 newcomerMinGames 場在近 newcomerDays 天的人的全部場次（Edward 2026-10-26
+  // 「以初次超過門檻場數當作標準」：很久以前打過幾場、最近才打滿門檻的人也是新人）。
   const d = cfg.newcomerDays;
   const m = cfg.newcomerMinGames;
   const newStart = windowStart(asOf, d);
@@ -297,26 +301,32 @@ export function computeLeaderboard(
     for (const [name, seats] of timelines) {
       if (hidden.has(name) || seats.length < Math.max(m, 1)) continue;
       let first: string;
+      let qualified: string;
       if (typeof options.newcomer === 'function') {
         const who = options.newcomer(name, seats);
         if (!who) continue;
         first = who.firstPlayed;
+        qualified = who.qualifiedOn;
       } else {
         if (seats.some((s) => !s.date)) continue;
-        first = seats.reduce((a, s) => (s.date < a ? s.date : a), seats[0].date);
-        if (newStart !== null && first < newStart) continue;
+        const dates = seats.map((s) => s.date).sort();
+        first = dates[0];
+        qualified = dates[Math.max(m, 1) - 1];
+        if (newStart !== null && qualified < newStart) continue;
       }
       const career = window(seats, 0);
-      newcomerRows.push({ ...roleRow(name, roleWindows(seats), career, career, seats.length), firstPlayed: first });
+      newcomerRows.push({
+        ...roleRow(name, roleWindows(seats), career, career, seats.length), firstPlayed: first, qualifiedOn: qualified,
+      });
     }
   }
   const periodStart = newStart ?? '';
   boards.push(board(
     'newcomers', 'roleTheory', '新人榜', 'Newcomers',
-    `${periodStart} ～ ${asOf} 首次出賽`, `First game ${periodStart} to ${asOf}`, m,
-    `首次出賽在近 ${d} 天內、至少 ${m} 場；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 ${k} 場、`
+    `${periodStart} ～ ${asOf} 打滿 ${m} 場`, `Reached ${m} games ${periodStart} to ${asOf}`, m,
+    `第一次累積到 ${m} 場是在近 ${d} 天內（以前打過幾場也算新人）；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 ${k} 場、`
     + `忠臣 ${kl} 場），位置理論與最終勝率用他的全部場次，場數越少越接近全體平均；${legend}`,
-    `First game within the last ${d} days, at least ${m} games; the exception: a newcomer has few games, so role `
+    `Reached ${m} games for the first time within the last ${d} days (a few earlier games still count as new); the exception: a newcomer has few games, so role `
     + `theory takes all of their games in each role (at most the last ${k}, ${kl} as Loyal Servant) and position theory `
     + `and final win rate all of their games; the fewer there are the closer the numbers stay to the population; `
     + `${legendEn}`,

@@ -316,31 +316,42 @@ function leaderboardActivity(
   const cfg = decoded.config.leaderboard;
   const activeFrom = windowStart(asOf, cfg.activeDays);
   const newStart = windowStart(asOf, cfg.newcomerDays);
-  // 全部局（日期晚於 asOf 的局不算）上每人的最後 / 第一個日期、有沒有無日期的局。
+  // 全部局（日期晚於 asOf 的局不算）上每人的最後 / 第一個日期、有沒有無日期的局、三種結果的局的日期
+  // （新人 = 第 newcomerMinGames 場在近 newcomerDays 天，與 Python 的時間線同樣只算三種結果的局）。
   const last = new Map<string, string>();
   const first = new Map<string, string>();
   const undated = new Set<string>();
+  const played = new Map<string, string[]>();
   for (const g of all) {
     if (g.date && g.date > asOf) continue;
+    const counted = g.outcome === '三紅' || g.outcome === '三藍死' || g.outcome === '三藍活';
     for (const n of g.seatPlayers) {
       if (!n) continue;
       if (!g.date) {
-        if (g.outcome === '三紅' || g.outcome === '三藍死' || g.outcome === '三藍活') undated.add(n);
+        if (counted) undated.add(n);
         continue;
       }
       if (!last.has(n) || g.date > (last.get(n) as string)) last.set(n, g.date);
       if (!first.has(n) || g.date < (first.get(n) as string)) first.set(n, g.date);
+      if (counted) {
+        if (!played.has(n)) played.set(n, []);
+        (played.get(n) as string[]).push(g.date);
+      }
     }
   }
+  const m = Math.max(cfg.newcomerMinGames, 1);
   return {
     isActive: (name: string): boolean => {
       const d = last.get(name);
       return Boolean(d) && (activeFrom === null || (d as string) >= activeFrom);
     },
-    newcomer: (name: string, _seats: readonly PlayerSeat[]): { firstPlayed: string } | null => {
+    newcomer: (name: string, _seats: readonly PlayerSeat[]): { firstPlayed: string; qualifiedOn: string } | null => {
       const d = first.get(name);
-      if (!d || undated.has(name) || (newStart !== null && d < newStart)) return null;
-      return { firstPlayed: d };
+      const dates = [...(played.get(name) ?? [])].sort();
+      if (!d || undated.has(name) || dates.length < m) return null;
+      const qualifiedOn = dates[m - 1];
+      if (newStart !== null && qualifiedOn < newStart) return null;
+      return { firstPlayed: d, qualifiedOn };
     },
   };
 }

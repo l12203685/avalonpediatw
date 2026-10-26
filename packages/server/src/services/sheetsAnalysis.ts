@@ -467,6 +467,8 @@ export interface LeaderboardRow {
   attempts?: number;
   // newcomers
   firstPlayed?: string;
+  /** The day the player first reached newcomerMinGames games (Edward 2026-10-26: newcomers go by it). */
+  qualifiedOn?: string;
   // roleTitles
   /**
    * `roleTitles` only: the role this row is the title holder of. Since 2026-10-14 (Edward: ties 各給)
@@ -487,7 +489,7 @@ export interface LeaderboardBoard {
   metric?: LeaderboardMetric | (string & Record<never, never>);
   title: string;
   titleEn?: string;
-  /** e.g. "各人最近 100 場"; newcomers: "2026-07-15 ～ 2026-10-12 首次出賽". */
+  /** e.g. "各人最近 100 場"; newcomers: "2026-07-15 ～ 2026-10-12 打滿 10 場" (before 2026-10-26: "… 首次出賽"). */
   period: string;
   periodEn?: string;
   /** Last-N-games window (position 100, assassin 20, roleTitles 20; schemaVersion 3: main 100, last50 50, improved 50). */

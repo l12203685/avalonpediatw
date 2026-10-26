@@ -196228,11 +196228,11 @@
         "metric": "roleTheory",
         "title": "新人榜",
         "titleEn": "Newcomers",
-        "period": "2026-07-28 ～ 2026-10-25 首次出賽",
-        "periodEn": "First game 2026-07-28 to 2026-10-25",
+        "period": "2026-07-28 ～ 2026-10-25 打滿 10 場",
+        "periodEn": "Reached 10 games 2026-07-28 to 2026-10-25",
         "minGames": 10,
-        "note": "首次出賽在近 90 天內、至少 10 場；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 10 場、忠臣 40 場），位置理論與最終勝率用他的全部場次，場數越少越接近全體平均；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論；不到 5 場的角色或位置，用全體的最終勝率補到 5 場",
-        "noteEn": "First game within the last 90 days, at least 10 games; the exception: a newcomer has few games, so role theory takes all of their games in each role (at most the last 10, 40 as Loyal Servant) and position theory and final win rate all of their games; the fewer there are the closer the numbers stay to the population; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their whole career; a role or seat with fewer than 5 games is topped up to 5 at the population's final win rate",
+        "note": "第一次累積到 10 場是在近 90 天內（以前打過幾場也算新人）；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 10 場、忠臣 40 場），位置理論與最終勝率用他的全部場次，場數越少越接近全體平均；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論；不到 5 場的角色或位置，用全體的最終勝率補到 5 場",
+        "noteEn": "Reached 10 games for the first time within the last 90 days (a few earlier games still count as new); the exception: a newcomer has few games, so role theory takes all of their games in each role (at most the last 10, 40 as Loyal Servant) and position theory and final win rate all of their games; the fewer there are the closer the numbers stay to the population; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their whole career; a role or seat with fewer than 5 games is topped up to 5 at the population's final win rate",
         "windowDays": 90,
         "allGames": true,
         "rows": [
@@ -196250,10 +196250,45 @@
             "to": "2026-10-23",
             "sparseRoles": 4,
             "sparseSeats": 7,
-            "firstPlayed": "2026-08-15"
+            "firstPlayed": "2026-08-15",
+            "qualifiedOn": "2026-08-30"
           },
           {
             "rank": 2,
+            "name": "健一",
+            "value": 45.0,
+            "roleTheory": 45.0,
+            "positionTheory": 42.8,
+            "overallTheory": 45.0,
+            "finalWinRate": 39.1,
+            "games": 23,
+            "careerGames": 23,
+            "from": "2022-03-05",
+            "to": "2026-10-22",
+            "sparseRoles": 5,
+            "sparseSeats": 9,
+            "firstPlayed": "2022-03-05",
+            "qualifiedOn": "2026-08-15"
+          },
+          {
+            "rank": 3,
+            "name": "Fish",
+            "value": 44.2,
+            "roleTheory": 44.2,
+            "positionTheory": 47.2,
+            "overallTheory": 44.2,
+            "finalWinRate": 48.5,
+            "games": 33,
+            "careerGames": 33,
+            "from": "2024-01-05",
+            "to": "2026-10-23",
+            "sparseRoles": 4,
+            "sparseSeats": 8,
+            "firstPlayed": "2024-01-05",
+            "qualifiedOn": "2026-10-09"
+          },
+          {
+            "rank": 4,
             "name": "小米",
             "value": 38.1,
             "roleTheory": 38.1,
@@ -196266,10 +196301,11 @@
             "to": "2026-10-23",
             "sparseRoles": 6,
             "sparseSeats": 10,
-            "firstPlayed": "2026-10-09"
+            "firstPlayed": "2026-10-09",
+            "qualifiedOn": "2026-10-10"
           },
           {
-            "rank": 3,
+            "rank": 5,
             "name": "abbfg78",
             "value": 34.4,
             "roleTheory": 34.4,
@@ -196282,7 +196318,8 @@
             "to": "2026-10-23",
             "sparseRoles": 6,
             "sparseSeats": 10,
-            "firstPlayed": "2026-10-22"
+            "firstPlayed": "2026-10-22",
+            "qualifiedOn": "2026-10-23"
           }
         ]
       },

@@ -1099,6 +1099,8 @@ export interface AnalysisLeaderboardRow {
   attempts?: number;
   // newcomers
   firstPlayed?: string;
+  /** 第一次累積到門檻場數 (newcomerMinGames) 的日期 (Edward 2026-10-26：新人以這天為準)；舊快取沒有。 */
+  qualifiedOn?: string;
   // roleTitles
   role?: string;
   wins?: number;
@@ -1115,7 +1117,7 @@ export interface AnalysisLeaderboardBoard {
   metric?: 'roleTheory' | 'positionTheory' | 'overallTheory' | 'roleTheoryDelta' | 'hitRate' | 'finalWinRate' | (string & Record<never, never>);
   title: string;
   titleEn?: string;
-  /** 例：「各人最近 100 場」；新人榜：「2026-07-15 ～ 2026-10-12 首次出賽」。 */
+  /** 例：「各人最近 100 場」；新人榜：「2026-07-15 ～ 2026-10-12 打滿 10 場」(舊快取：「… 首次出賽」)。 */
   period: string;
   periodEn?: string;
   /**
@@ -1125,7 +1127,7 @@ export interface AnalysisLeaderboardBoard {
   windowGames?: number;
   /** schemaVersion 4 的 main / improved：各角色的視窗 {角色: 場數}，取代 windowGames。 */
   roleWindowGames?: Record<string, number>;
-  /** 新人榜：首次出賽要在近 N 天內 (舊快取：日期視窗)。 */
+  /** 新人榜：第一次打滿門檻場數要在近 N 天內 (2026-10-26 前的快取：首次出賽在近 N 天內)。 */
   windowDays?: number;
   /** 新人榜：看全部場次 (例外)。 */
   allGames?: boolean;

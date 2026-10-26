@@ -290,7 +290,7 @@ LEADERBOARD_CONFIG: dict[str, Any] = {
     "overallMinGames": 250,         # 整體理論 (career role theory): the overall board needs N career games
     "assassinAttempts": 20,         # assassin: the last N assassinations as 刺客 (刺客 games that reached 三藍)
     "assassinMinAttempts": 10,
-    "newcomerDays": 90,             # newcomers (the exception): first game in the last N days, all their games
+    "newcomerDays": 90,             # newcomers (the exception): reached newcomerMinGames games in the last N days, all their games
     "newcomerMinGames": 10,
     "roleTitleMinGames": 20,        # roleTitles: at least N career games in the role ...
     "roleTitleGames": 20,           # ... scored on the last N games in it
@@ -3104,8 +3104,10 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
 #               role; active, >= 2 x K_r games in every role; improvers only
 #   assassin    hit rate over the last assassinAttempts assassinations as 刺客 (刺客 games that
 #               reached 三藍); active, >= assassinMinAttempts of them
-#   newcomers   first game within newcomerDays, every game dated, >= newcomerMinGames: 角色理論 over
-#               the per-role windows of their games (few games: windows not full, cells topped up)
+#   newcomers   reached newcomerMinGames games (the date of their newcomerMinGames-th game) within
+#               newcomerDays, every game dated (Edward 2026-10-26: the day a player first reaches the
+#               threshold, not their first game -- a few games long ago do not keep a player off):
+#               角色理論 over the per-role windows of their games (few games: windows not full, cells topped up)
 #   roleTitles  per role, the active players (>= roleTitleMinGames career games in it) with the best
 #               final win rate over their last roleTitleGames games in it: every player tied at that
 #               (rounded) rate gets the title (Edward 2026-10-14「各給」), so a role can have several
@@ -3293,25 +3295,28 @@ def compute_leaderboard(
         _ranked(assassin_rows, top_n), windowGames=a_n,
     ))
 
-    # newcomers (the exception): all games of players whose first game is recent.
+    # newcomers (the exception): all games of players who first reached m games recently (Edward 2026-10-26
+    # 「以初次超過門檻場數當作標準」: a few games long ago, then back and over the threshold = a newcomer).
     d, m = cfg["newcomerDays"], cfg["newcomerMinGames"]
     new_start = window_start(as_of, d)
     newcomer_rows = []
     for name, seats in timelines.items():
         if len(seats) < max(m, 1) or any(not s.date for s in seats):
             continue
-        first = min(s.date for s in seats)
-        if new_start is not None and first < new_start.isoformat():
+        dates = sorted(s.date for s in seats)
+        qualified = dates[max(m, 1) - 1]
+        if new_start is not None and qualified < new_start.isoformat():
             continue
         career = window(seats, 0)
-        newcomer_rows.append({**_role_row(name, role_windows(seats), career, career, len(seats)), "firstPlayed": first})
+        newcomer_rows.append({**_role_row(name, role_windows(seats), career, career, len(seats)),
+                              "firstPlayed": dates[0], "qualifiedOn": qualified})
     period_start = new_start.isoformat() if new_start else ""
     boards.append(_board(
         "newcomers", "roleTheory", "新人榜", "Newcomers",
-        f"{period_start} ～ {as_of.isoformat()} 首次出賽", f"First game {period_start} to {as_of.isoformat()}", m,
-        f"首次出賽在近 {d} 天內、至少 {m} 場；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 {k} 場、"
+        f"{period_start} ～ {as_of.isoformat()} 打滿 {m} 場", f"Reached {m} games {period_start} to {as_of.isoformat()}", m,
+        f"第一次累積到 {m} 場是在近 {d} 天內（以前打過幾場也算新人）；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 {k} 場、"
         f"忠臣 {kl} 場），位置理論與最終勝率用他的全部場次，場數越少越接近全體平均；{legend}",
-        f"First game within the last {d} days, at least {m} games; the exception: a newcomer has few games, so role "
+        f"Reached {m} games for the first time within the last {d} days (a few earlier games still count as new); the exception: a newcomer has few games, so role "
         f"theory takes all of their games in each role (at most the last {k}, {kl} as Loyal Servant) and position theory "
         f"and final win rate all of their games; the fewer there are the closer the numbers stay to the population; "
         f"{legend_en}",

@@ -227,7 +227,7 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
 | `overall` 整體理論勝率排行 | `overallTheory` = 生涯角色理論 | 近 90 天有出賽、生涯 ≥ 250 場（`overallMinGames`） | 生涯全部場次 | `overallTheory`、`positionTheory`（生涯）、`finalWinRate`（生涯）、`games`（= 生涯場數）、`careerGames`、`from`、`to`、`sparseRoles`、`sparseSeats` |
 | `improved` 進步榜 | `roleTheoryDelta` = 角色視窗的角色理論 − 每個角色再之前同樣場數的角色理論 | 近 90 天有出賽、六個特殊角色各 ≥ 20 場、忠臣 ≥ 80 場（兩段都打滿）；只列有進步（> 0）的人 | 每個角色：最近 10 場（忠臣 40）vs 再之前 10 場（忠臣 40） | `recentRoleTheory`、`priorRoleTheory`、`recentGames`、`priorGames`、`careerGames`；`roleWindowGames` |
 | `assassin` 刺客刺中率 | `hitRate` = 三藍死 /（三藍死 + 三藍活） | 近 90 天有出賽、至少 10 次刺殺 | 各人當刺客、任務做到三藍的最近 20 局（三紅沒有刺殺） | `hits`、`attempts`（= `games`）、`careerGames`、`from`、`to` |
-| `newcomers` 新人榜（例外） | `roleTheory`（角色視窗） | 首次出賽在近 90 天內、每局都有日期、≥ 10 場 | 他的全部場次：角色理論每個角色用全部場次（最多近 10 場、忠臣 40；通常打不滿，不到 5 場補值），位置理論與最終勝率用全部場次（`allGames: true`，`windowDays: 90`） | 同 `main`，加 `firstPlayed` |
+| `newcomers` 新人榜（例外） | `roleTheory`（角色視窗） | 第一次累積到 10 場的日子（第 10 場的日期）在近 90 天內、每局都有日期（Edward 2026-10-26：以初次超過門檻場數為準，以前打過幾場的人也算新人） | 他的全部場次：角色理論每個角色用全部場次（最多近 10 場、忠臣 40；通常打不滿，不到 5 場補值），位置理論與最終勝率用全部場次（`allGames: true`，`windowDays: 90`） | 同 `main`，加 `firstPlayed`（真正的首次出賽）與 `qualifiedOn`（打滿 10 場的日子） |
 | `roleTitles` 角色王 | `finalWinRate` | 每個角色：近 90 天有出賽、生涯該角色 ≥ 20 場 | 各人該角色最近 20 場 | `role`、`wins`、`careerRoleGames`；每個角色列最高的勝率，同率的人並列、各得稱號（一個角色可以有好幾列；2026-10-14 起） |
 
 - 排序：value 高 → 低，同分看 `games` 多的、再看 `careerGames` 多的、再看名字。每榜最多 `topN`（10）列（角色王除外：每位稱號持有人一列，不截斷）；做不出來的榜（沒有人符合）就不放。`rank` 是列號（1、2、3…）；角色王的 `rank` 只是列的順序，不是角色之間的名次。

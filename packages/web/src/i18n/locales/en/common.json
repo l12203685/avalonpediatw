@@ -1106,6 +1106,7 @@
           "windowGames": "Window games",
           "careerGames": "Career games",
           "firstPlayed": "First game",
+          "qualifiedOn": "Reached threshold",
           "delta": "Gain (pts)",
           "recentRoleTheory": "Recent role theory",
           "priorRoleTheory": "Prior role theory",

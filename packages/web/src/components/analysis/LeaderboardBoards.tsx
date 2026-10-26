@@ -552,6 +552,10 @@ function boardColumns(
     ...(rows.some(r => r.firstPlayed)
       ? [{ key: 'firstPlayed', label: label('firstPlayed'), className: 'text-zinc-400' }]
       : []),
+    // 新人以第一次打滿門檻場數的日子為準 (Edward 2026-10-26)；舊快取沒有這欄
+    ...(rows.some(r => r.qualifiedOn)
+      ? [{ key: 'qualifiedOn', label: label('qualifiedOn'), className: 'text-zinc-400' }]
+      : []),
   ];
   // 表上有補值 (變淡) 的格子才放註腳。
   const shown = THEORY_FIELDS.filter(f => f === field || columns.some(c => c.key === f));
